@@ -25,7 +25,7 @@
 .gantt-scale span { position: absolute; top: 0; bottom: 0; padding: 9px 6px 0; border-left: 1px solid var(--line-soft); color: var(--muted); font-size: var(--fs-2xs); white-space: nowrap; overflow: hidden; text-overflow: clip; }
 .gantt-scale span.current { color: var(--blue-text); font-weight: 650; background: var(--blue-soft); }
 
-.gantt-row { min-height: 38px; border-bottom: 1px solid var(--line-soft); }
+.gantt-row { position: relative; min-height: 38px; border-bottom: 1px solid var(--line-soft); }
 .gantt-row:hover { background: var(--n-25); }
 .gantt-row.project, .gantt-row.phase { background: var(--n-50); }
 .gantt-row.project:hover, .gantt-row.phase:hover { background: var(--n-100); }
@@ -43,7 +43,7 @@
 .gantt-resizer:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; border-radius: var(--r-xs); }
 .gantt.resizing, .gantt.resizing * { cursor: col-resize; user-select: none; }
 .gantt-toggle, .gantt-toggle-spacer { flex: none; width: 22px; height: 22px; }
-/* A movable row's grip (GanttRowSpec.movable): drag it up or down, or move it with the arrow keys. */
+/* A movable row's grip (GanttRowSpec.movable): drag it up or down, sideways out of or into a level, or use the arrow keys. */
 .gantt-grip { flex: none; display: grid; place-items: center; width: 16px; height: 22px; margin-left: -6px; padding: 0; border: 0; border-radius: var(--r-xs); background: none; color: var(--n-400); cursor: grab; touch-action: none; opacity: 0.45; }
 .gantt-grip .icon { width: 14px; height: 14px; }
 .gantt-row:hover .gantt-grip, .gantt-grip:focus-visible { opacity: 1; }
@@ -51,8 +51,12 @@
 .gantt-grip:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
 .gantt-row.row-moving { opacity: 0.55; }
 .gantt-row.row-moving .gantt-grip, .gantt.moving-row, .gantt.moving-row * { cursor: grabbing; user-select: none; }
-.gantt-row.drop-before { box-shadow: inset 0 2px 0 var(--blue); }
-.gantt-row.drop-after { box-shadow: inset 0 -2px 0 var(--blue); }
+/* Where it would land: a line at the indent of its new level, and the row it would go under lit. */
+.gantt-drop-line { position: absolute; right: 0; height: 3px; border-radius: var(--r-pill); background: var(--blue); pointer-events: none; z-index: 5; }
+.gantt-drop-line.before { top: -2px; }
+.gantt-drop-line.after { bottom: -2px; }
+.gantt-drop-line::before { content: ""; position: absolute; top: -3px; left: -4px; width: 9px; height: 9px; border-radius: var(--r-pill); background: var(--blue); }
+.gantt-row.drop-into, .gantt-row.phase.drop-into { background: var(--blue-soft); box-shadow: inset 3px 0 0 var(--blue); }
 .gantt-toggle { display: grid; place-items: center; border: 0; border-radius: var(--r-xs); background: none; color: var(--muted); cursor: pointer; padding: 0; }
 .gantt-toggle:hover { background: var(--n-150); color: var(--ink); }
 .gantt-toggle .icon { width: 14px; height: 14px; }
@@ -71,7 +75,10 @@ button.gantt-label:focus-visible { outline: 2px solid var(--blue); outline-offse
 .gantt-insert:hover { background: var(--blue-soft); }
 .gantt-insert:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
 @media (hover: none) { .gantt-insert { opacity: 1; } }
-/* The row being typed in after a +: a plain input in place of the row name. */
+/* The row being typed in after a + (GanttRowSpec.editor): boxes across the whole row in place of its name and bar. */
+.gantt-row.editing { display: block; background: var(--blue-soft); }
+.gantt-row.editing:hover { background: var(--blue-soft); }
+.gantt-editor { padding: 6px 10px 6px 8px; }
 
 .gantt-track { position: relative; min-width: 0; overflow: hidden; }
 .gantt-gridline { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--line-soft); }

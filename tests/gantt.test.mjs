@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { GANTT_ZOOMS, draggedPlan, ganttDragDays, ganttFitWindow, ganttLanes, ganttLinkPath, ganttPoint, ganttShift, ganttSlip, ganttSpan, ganttWindow, linkedStart, nextWorkDay, planDatesLoop, shiftGanttAnchor } from "../lib/gantt.ts";
+import { GANTT_ZOOMS, draggedPlan, ganttDragDays, ganttDropChoices, ganttDropParent, ganttFitWindow, ganttLanes, ganttLinkPath, ganttPoint, ganttShift, ganttSlip, ganttSpan, ganttWindow, linkedStart, nextWorkDay, planDatesLoop, shiftGanttAnchor } from "../lib/gantt.ts";
 
 const close = (actual, expected, message) => assert.ok(Math.abs(actual - expected) < 1e-9, `${message ?? ""} ${actual} ≠ ${expected}`);
 
@@ -141,4 +141,24 @@ test("a link runs out of the predecessor's end into the successor's start, stepp
   assert.equal(ganttLinkPath({ x: 100, y: 19 }, { x: 160, y: 57 }, 19), "M100 19H106V57H160");
   assert.equal(ganttLinkPath({ x: 100, y: 19 }, { x: 104, y: 57 }, 19), "M100 19H106V38H98V57H104");
   assert.equal(ganttLinkPath({ x: 100, y: 95 }, { x: 90, y: 57 }, 19), "M100 95H106V76H84V57H90", "a successor drawn above");
+});
+
+test("a dragged row lands between two rows at the level its sideways drag asks for, within what the rows around the gap allow", () => {
+  // H1 > T1 > F1, H1 > T2, H2 with nothing under it yet, H3 > T3.
+  const rows = [["H1", 0], ["T1", 1], ["F1", 2], ["T2", 1], ["H2", 0], ["H3", 0], ["T3", 1]].map(([key, depth]) => ({ key, depth }));
+  const at = (key) => rows.findIndex((row) => row.key === key);
+  const landing = (choices) => choices.map((drop) => [drop.depth, ganttDropParent(rows, drop), drop.below]);
+  // T2 held where it is: straight across it stays under H1; dragged one level right it goes under T1, after F1.
+  assert.deepEqual(landing(ganttDropChoices(rows, at("T2"), at("T2"), 1)), [[1, "H1", "H2"], [0, null, "H2"], [2, "T1", "H2"], [3, "F1", "H2"]]);
+  assert.equal(ganttDropChoices(rows, at("T2"), at("T2"), 2)[0].depth, 2);
+  // Dragged down just under H2, a heading with nothing under it yet: it goes into H2, or to the top if dragged left.
+  assert.deepEqual(landing(ganttDropChoices(rows, at("T2"), 4, 1)), [[1, "H2", "H3"], [0, null, "H3"]]);
+  // F1 dragged left where it is comes out to the level of T1, just before T2.
+  assert.deepEqual(landing(ganttDropChoices(rows, at("F1"), at("F1"), 1)), [[1, "H1", "T2"], [2, "T1", "T2"]]);
+  // Between a row and its first child the only place is its first child.
+  assert.deepEqual(landing(ganttDropChoices(rows, at("T3"), 1, 0)), [[1, "H1", "T1"]]);
+  // A heading takes the rows under it along; past the last row it may go at any level down to one under T3.
+  assert.deepEqual(ganttDropChoices(rows, at("H1"), 3, 0).map((drop) => [drop.above, drop.below, drop.depth]), [["T3", null, 0], ["T3", null, 1], ["T3", null, 2]]);
+  assert.deepEqual(ganttDropChoices(rows, at("H1"), 4, 0), [], "past the end");
+  assert.deepEqual(ganttDropChoices(rows, 99, 0, 0), [], "no such row");
 });

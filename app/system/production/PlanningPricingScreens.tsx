@@ -1950,8 +1950,6 @@ const MAX_PLAN_DEPTH = 5;
 const canTakeSubTasks = (task: ScheduleTask, rows: ScheduleTask[]) => task.kind === "task" && task.depth < MAX_PLAN_DEPTH
   && !rows.some((child) => child.parentId === task.id && child.kind === "detail")
   && (task.children.length > 0 || (task.status === "Not Started" && Number(task.percentComplete) === 0 && !task.actualStart && !task.managedByResourcePlan));
-type QuickPlanKind = "phase" | "task" | "sub";
-type ScheduleRowInitial = { kind: QuickPlanKind; parentId: number | null; beforeId: number | null; start?: string };
 
 /** A main heading's own dates are the customer's (the Master Plan); its bar follows the rows under it. */
 const customerPeriod = (task: ScheduleTask) => task.kind === "phase" && task.parentId === null && task.storedPlanStart
@@ -1959,8 +1957,6 @@ const customerPeriod = (task: ScheduleTask) => task.kind === "phase" && task.par
 const periodDays = (start: string, finish: string) => Math.round((Date.parse(`${finish}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86_400_000) + 1;
 /** A heading's customer dates come as a pair or not at all. */
 const customerPeriodReady = (period: { start: string; finish: string }) => (!period.start && !period.finish) || Boolean(period.start && period.finish && period.finish >= period.start);
-/** A function starts with its task's people (the API does the same when none are named). */
-const picsOf = (rows: ScheduleTask[], id: number | null) => (rows.find((row) => row.id === id && row.kind === "task")?.pics ?? []).filter((pic) => pic.active !== false).map((pic) => pic.id);
 
 function CustomerPeriodFields({ value, onChange }: { value: { start: string; finish: string }; onChange: (value: { start: string; finish: string }) => void }) {
   const t = useUiText();
@@ -1971,167 +1967,81 @@ function CustomerPeriodFields({ value, onChange }: { value: { start: string; fin
   </>;
 }
 
-function scheduleRowPosition(schedule: ProjectSchedule, task: ScheduleTask, kind: QuickPlanKind): ScheduleRowInitial {
-  const rows = flattenTasks(schedule.tasks), byId = new Map(rows.map((row) => [row.id, row]));
-  let anchor = task;
-  if (kind === "phase") while (anchor.parentId !== null) anchor = byId.get(anchor.parentId)!;
-  const child = kind === "task" && task.kind === "phase" || kind === "sub";
-  const parentId = child ? task.id : anchor.parentId;
-  const siblings = parentId === null ? schedule.tasks : byId.get(parentId)?.children ?? [];
-  return { kind, parentId, beforeId: child ? kind === "sub" ? null : task.children[0]?.id ?? null
-    : siblings[siblings.findIndex((row) => row.id === anchor.id) + 1]?.id ?? null };
+/**
+ * A row being typed in place on the plan (the + on a row, or Add main heading): the row it goes under (none: a main
+ * heading), the sibling it goes before (none: last), and what has been typed so far.
+ */
+type PlanDraft = { parentId: number | null; beforeId: number | null; name: string; memberId: number | null; start: string; finish: string; error: string };
+
+/** The dates a new row starts with: its heading's customer dates or its task's dates; a new main heading has none. */
+function draftDates(parent: ScheduleTask | null, today: string): { start: string; finish: string } {
+  if (!parent) return { start: "", finish: "" };
+  return customerPeriod(parent) ?? (parent.planStart && parent.planFinish ? { start: parent.planStart, finish: parent.planFinish } : { start: today, finish: today });
 }
 
-function CreateScheduleTaskModal({ bootstrap, schedule, initial, anchor, notify, onClose, onCreated, onConflict }: {
-  bootstrap: BootstrapData;
-  schedule: ProjectSchedule;
-  initial?: ScheduleRowInitial;
-  anchor?: ScheduleTask;
-  notify: (message: string) => void;
-  onClose: () => void;
-  onCreated: (parentId: number | null) => Promise<void>;
-  onConflict?: () => Promise<void>;
+/**
+ * The draft moved one level out (just after the row it sat under) or in (under the row just above it), or null where
+ * it cannot go: in only under a heading or a task that may take sub tasks, and never under a row waiting on a day request.
+ */
+function draftLevel(tasks: ScheduleTask[], rows: ScheduleTask[], draft: PlanDraft, step: -1 | 1, waiting: ReadonlySet<number | null>): Pick<PlanDraft, "parentId" | "beforeId"> | null {
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  const childrenOf = (id: number | null) => (id === null ? tasks : byId.get(id)?.children ?? []);
+  if (step < 0) {
+    const parent = draft.parentId === null ? null : byId.get(draft.parentId);
+    if (!parent || (parent.parentId !== null && waiting.has(parent.parentId))) return null;
+    const siblings = childrenOf(parent.parentId);
+    return { parentId: parent.parentId, beforeId: siblings[siblings.indexOf(parent) + 1]?.id ?? null };
+  }
+  const siblings = childrenOf(draft.parentId);
+  const above = draft.beforeId === null ? siblings.at(-1) : siblings[siblings.findIndex((row) => row.id === draft.beforeId) - 1];
+  return above && (above.kind === "phase" || canTakeSubTasks(above, rows)) && !waiting.has(above.id) ? { parentId: above.id, beforeId: null } : null;
+}
+
+/**
+ * The boxes a + opens in the plan, across the row where the new one will land: its level, name, the member a task
+ * under a heading needs (a function has its task's unless another is picked), and its dates. Enter saves and opens the
+ * next box just below; Esc closes. A main heading's dates are the customer's and may be left for later.
+ */
+function PlanRowDraftEditor({ bootstrap, draft, parent, planPeople, busy, canOut, canIn, onChange, onLevel, onSave, onClose }: {
+  bootstrap: BootstrapData; draft: PlanDraft; parent: ScheduleTask | null; planPeople: Set<number>; busy: boolean; canOut: boolean; canIn: boolean;
+  onChange: (patch: Partial<PlanDraft>) => void; onLevel: (step: -1 | 1) => void; onSave: () => void; onClose: () => void;
 }) {
   const t = useUiText();
-  const [kind, setKind] = useState<QuickPlanKind>(initial?.kind ?? "task");
-  // The top of the plan holds headings only, so a task starts under the row it was added from, or the first heading.
-  const [parentId, setParentId] = useState(() => initial?.parentId != null ? String(initial.parentId)
-    : initial?.kind === "phase" ? "" : String(schedule.tasks.find((row) => row.kind === "phase")?.id ?? ""));
-  const [beforeId, setBeforeId] = useState<number | null>(initial?.beforeId ?? null);
-  const [insertionAnchorId, setInsertionAnchorId] = useState(anchor?.id);
+  const kind = !parent ? "heading" : parent.kind === "phase" ? "task" : "function";
   const nameInput = useRef<HTMLInputElement>(null);
-  useEffect(() => { const frame = window.requestAnimationFrame(() => nameInput.current?.focus()); return () => window.cancelAnimationFrame(frame); }, []);
-  const [name, setName] = useState("");
-  const [start, setStart] = useState<StartDraft>(() => ({ ...startDraftOf(null), ...(initial?.start ? { planStart: initial.start } : {}) }));
-  const [planDays, setPlanDays] = useState(1);
-  const [visibility, setVisibility] = useState(anchor?.visibility ?? "Internal");
-  const [picUserIds, setPicUserIds] = useState<number[]>(() => picsOf(flattenTasks(schedule.tasks), initial?.parentId ?? null));
-  const [picExternal, setPicExternal] = useState("");
-  const [planManDays, setPlanManDays] = useState(0);
-  const [milestone, setMilestone] = useState(false);
-  const [customer, setCustomer] = useState({ start: "", finish: "" });
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const allRows = flattenTasks(schedule.tasks);
-  const pendingTaskIds = new Set(schedule.recentUpdates.filter((update) => update.field === "request" && update.requestDays > 0 && !update.answer).map((update) => update.taskId));
-  const subParents = allRows.filter((task) => canTakeSubTasks(task, allRows) && !pendingTaskIds.has(task.id));
-  const taskParents = allRows.filter((task) => task.kind === "phase" || subParents.includes(task));
-  const parents = kind === "sub" ? subParents : taskParents;
-  const insertionAnchor = allRows.find((row) => row.id === insertionAnchorId);
-  const subReason = insertionAnchor ? insertionAnchor.kind === "phase" ? "Plan.subUseTask"
-    : insertionAnchor.depth >= MAX_PLAN_DEPTH ? "Plan.maxDepth"
-      : insertionAnchor.children.some((child) => child.kind === "detail") ? "Plan.subHasDetails"
-        : !subParents.includes(insertionAnchor) ? "Plan.subInUse" : null
-    : !subParents.length ? "Plan.noSubParent" : null;
-  const selectedParent = kind === "phase" ? null : parentId ? Number(parentId) : null;
-  const parentRow = allRows.find((row) => row.id === selectedParent);
-  // A task under a heading needs a member (owner, 2026-11-03); a function has its task's unless others are named.
-  const needsMember = kind !== "phase" && parentRow?.kind === "phase" && !picUserIds.length;
-  const sortOrder = Math.max(0, ...allRows.filter((task) => task.parentId === selectedParent).map((task) => task.sortOrder)) + 10;
-  const invalid = !name.trim() || (kind !== "phase" && (!parentRow || !startReady(start) || planDays < 1 || planManDays < 0)) || needsMember
-    || (kind === "phase" && !customerPeriodReady(customer))
-    || (kind === "sub" && !subParents.some((row) => row.id === selectedParent));
-  const pickParent = (next: number | null) => {
-    setParentId(next == null ? "" : String(next));
-    if (!picUserIds.length) setPicUserIds(picsOf(allRows, next));
-  };
-  const chooseKind = (value: QuickPlanKind) => {
-    const position = insertionAnchor ? scheduleRowPosition(schedule, insertionAnchor, value) : null;
-    const choices = value === "sub" ? subParents : taskParents;
-    const preferred = position ? position.parentId : null;
-    const nextParent = value === "phase" ? null : choices.some((row) => row.id === preferred) ? preferred : choices[0]?.id ?? null;
-    setKind(value); pickParent(nextParent);
-    setBeforeId(position?.parentId === nextParent ? position.beforeId : null);
-  };
-  const submit = async (addNext = false) => {
-    if (busy || invalid) return;
-    setBusy(true); setError("");
-    try {
-      if (kind !== "phase") await ensureScheduleMembers(schedule.projectId, schedule.managerId, picUserIds);
-      const finish = draftSpan(schedule, start, planDays, milestone).to;
-      const created = await apiRequest<{ id: number }>(`/api/v1/projects/${schedule.projectId}/schedule/tasks`, {
-        method: "POST",
-        body: JSON.stringify(kind === "phase" ? {
-          scheduleVersion: schedule.scheduleVersion,
-          parentId: null,
-          sortOrder,
-          ...(beforeId === null ? {} : { beforeId }),
-          kind: "phase",
-          name: name.trim(),
-          isMilestone: false,
-          visibility,
-          planStart: customer.start || null,
-          planDays: customer.start && customer.finish ? periodDays(customer.start, customer.finish) : 1,
-          startMode: "manual",
-          predecessorId: null,
-          lagDays: 0,
-          picUserIds: [],
-          picExternal: "",
-          planManDays: 0,
-        } : {
-          scheduleVersion: schedule.scheduleVersion,
-          parentId: selectedParent,
-          sortOrder,
-          ...(beforeId === null ? {} : { beforeId }),
-          kind: "task",
-          name: name.trim(),
-          isMilestone: milestone,
-          visibility,
-          ...startBody(start, null),
-          planDays: milestone ? 1 : planDays,
-          picUserIds,
-          picExternal: picExternal.trim(),
-          planManDays,
-        }),
-      });
-      notify(`${schedule.projectNo} · ${name.trim()} ${t("Plan.quickAdded")}`);
-      if (addNext) {
-        setName(""); setInsertionAnchorId(created.id);
-        if (kind === "phase") { setKind("task"); setParentId(String(created.id)); setBeforeId(null); setCustomer({ start: "", finish: "" }); }
-        else setStart({ mode: "manual", planStart: linkedStart(finish, 0, new Set(schedule.holidays ?? [])) ?? start.planStart, predecessorId: "", lagDays: 0 });
-      }
-      await onCreated(selectedParent);
-      if (addNext) window.requestAnimationFrame(() => nameInput.current?.focus());
-      else onClose();
-    } catch (requestError) {
-      if (isConcurrencyConflict(requestError) && onConflict) {
-        try {
-          await onConflict();
-          onClose();
-        } catch (reloadError) {
-          setError(toError(reloadError));
-        }
-        return;
-      }
-      setError(toError(requestError));
-    } finally {
-      setBusy(false);
-    }
-  };
-  return <Modal title="Add schedule row" subtitle={`${schedule.projectNo} · บันทึกแผนลงฐานข้อมูลจริง`} size="lg" onClose={onClose} footer={<>
-    <button className="btn ghost" type="button" onClick={onClose} disabled={busy}><LocalizedText text={"Cancel"} /></button>
-    <button className="btn ghost" type="button" disabled={busy || invalid} onClick={() => { void submit(); }}><LocalizedText text={"Save"} /></button>
-    <button className="btn primary" type="button" data-guide="plan.save" disabled={busy || invalid} onClick={() => { void submit(true); }}><Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : t("Plan.saveNext")}</button>
-  </>}>
-    {error ? <LoadError message={error} retry={() => { void submit(); }} /> : null}
-    <div className="form-grid two">
-      <div className="field span-2" data-guide="plan.quickKind"><span>{t("Plan.rowLevel")}</span><div className="seg-control">
-        {(["phase", "task", "sub"] as const).map((value) => <button key={value} type="button" className={kind === value ? "on" : ""} aria-pressed={kind === value} disabled={busy || value === "sub" && Boolean(subReason)} title={value === "sub" && subReason ? t(subReason) : undefined} onClick={() => chooseKind(value)}>{t(value === "phase" ? "Plan.quickKindHeading" : value === "sub" ? insertionAnchor ? "Plan.quickKindSub" : "Plan.quickKindSubStandalone" : insertionAnchor?.kind === "task" ? "Plan.quickKindTask" : "Plan.quickKindTaskStandalone")}</button>)}
-      </div>{subReason ? <small className="muted">{t(subReason)}</small> : null}</div>
-      <label className="field"><span><LocalizedText text={"Visibility *"} /></span><select value={visibility} onChange={(event) => setVisibility(event.target.value)}><option value={"Internal"}><LocalizedText text={"Internal"} /></option><option value={"Customer"}><LocalizedText text={"Customer"} /></option></select></label>
-      <label className="field span-2" data-guide="plan.rowName"><span><LocalizedText text={"Name *"} /></span><input ref={nameInput} data-guide="plan.quickName" maxLength={500} value={name} readOnly={busy} onChange={(event) => setName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) { event.preventDefault(); void submit(true); } }} /></label>
-      {kind !== "phase" ? <>
-        <label className="field"><span><LocalizedText text={"Plan.wbsName"} /></span><select value={parentId} disabled={busy} onChange={(event) => { pickParent(event.target.value ? Number(event.target.value) : null); setBeforeId(null); }}>{parentRow ? null : <option value="">{t("Plan.pickParent")}</option>}{parents.map((parent) => <option key={parent.id} value={parent.id}>{"　".repeat(parent.depth)}{parent.wbs} {parent.name}</option>)}</select></label>
-        <PlanStartFields schedule={schedule} taskId={null} parentId={selectedParent} value={start} onChange={setStart} />
-        <label className="field" data-guide="plan.rowDays"><span><LocalizedText text={"Plan days *"} /></span><input type="number" min="1" max="3650" value={milestone ? 1 : planDays} disabled={milestone} onChange={(event) => setPlanDays(Number(event.target.value))} /></label>
-        <label className="field"><span><LocalizedText text={"Plan man-days"} /></span><input type="number" min="0" max="1000000" step="0.25" value={planManDays} onChange={(event) => setPlanManDays(Number(event.target.value))} /></label>
-        <PicFieldsWithLoad bootstrap={bootstrap} span={draftSpan(schedule, start, planDays, milestone)} taskId={null} value={picUserIds} onChange={setPicUserIds} manDays={planManDays} />
-        {needsMember ? <p className="muted span-2" role="status" data-guide="plan.memberRequired">{t("Plan.memberRequired")}</p> : null}
-        <label className="field"><span><LocalizedText text={"External PIC"} /></span><input maxLength={300} value={picExternal} onChange={(event) => setPicExternal(event.target.value)} /></label>
-        <label className="checkbox-row span-2"><input type="checkbox" checked={milestone} onChange={(event) => setMilestone(event.target.checked)} /><LocalizedText text={"Milestone (1 day)"} /></label>
-      </> : <CustomerPeriodFields value={customer} onChange={setCustomer} />}
-    </div>
-  </Modal>;
+  // Back to the name when the box opens, after each save and when its level changes.
+  useEffect(() => { if (!busy) nameInput.current?.focus(); }, [busy, draft.parentId, draft.beforeId]);
+  const escape = (event: { key: string; preventDefault: () => void }) => { if (event.key === "Escape") { event.preventDefault(); onClose(); } };
+  const onPlan = bootstrap.team.filter((member) => planPeople.has(member.id)), others = bootstrap.team.filter((member) => !planPeople.has(member.id));
+  const inherited = parent?.pics.filter((pic) => pic.active !== false).map((pic) => pic.name).join(", ") ?? "";
+  const nameLabel = kind === "heading" ? "Plan.headingName" : kind === "task" ? "CRM.taskName" : "CRM.functionName";
+  const person = (member: BootstrapData["team"][number]) => <option key={member.id} value={member.id}>{member.name}{member.department ? ` · ${member.department}` : ""}</option>;
+  return <form className="plan-draft" data-guide="plan.draft" aria-label={t(nameLabel)} onSubmit={(event) => { event.preventDefault(); onSave(); }}>
+    <span className="plan-draft-level" role="group" aria-label={t("Plan.draftLevel")} data-guide="plan.quickLevel">
+      <button type="button" className="icon-btn" disabled={busy || !canOut} aria-label={t("Plan.levelOut")} title={t("Plan.levelOut")} onClick={() => onLevel(-1)}><Icon name="chevronLeft" /></button>
+      <button type="button" className="icon-btn" disabled={busy || !canIn} aria-label={t("Plan.levelIn")} title={t("Plan.levelIn")} onClick={() => onLevel(1)}><Icon name="chevronRight" /></button>
+    </span>
+    <Badge tone={kind === "heading" ? "violet" : kind === "task" ? "blue" : "slate"}>{t(kind === "heading" ? "Plan.quickKindHeading" : kind === "task" ? "Plan.kindTask" : "Plan.kindFunction")}</Badge>
+    <input ref={nameInput} className="plan-draft-name" data-guide="plan.quickName" maxLength={500} placeholder={t(nameLabel)} aria-label={t(nameLabel)}
+      value={draft.name} readOnly={busy} onChange={(event) => onChange({ name: event.target.value })} onKeyDown={escape} />
+    {kind === "heading" ? null : <select className="plan-draft-member" data-guide="plan.quickMember" aria-label={t("Schedule.pics")} value={draft.memberId ?? ""} disabled={busy}
+      onChange={(event) => onChange({ memberId: event.target.value ? Number(event.target.value) : null })} onKeyDown={escape}>
+      <option value="">{kind === "task" ? `${t("CRM.selectMember")} *` : `${t("CRM.sameAsTask")}${inherited ? ` · ${inherited}` : ""}`}</option>
+      {onPlan.length ? <optgroup label={t("Plan.peopleOnPlan")}>{onPlan.map(person)}</optgroup> : null}
+      <optgroup label={t("Plan.everyoneElse")}>{others.map(person)}</optgroup>
+    </select>}
+    <span className="plan-draft-dates">
+      <input type="date" aria-label={t(kind === "heading" ? "Plan.customerStart" : "CRM.planStart")} title={t(kind === "heading" ? "Plan.customerStart" : "CRM.planStart")}
+        value={draft.start} readOnly={busy} onChange={(event) => onChange({ start: event.target.value, ...(draft.finish && event.target.value > draft.finish ? { finish: event.target.value } : {}) })} onKeyDown={escape} />
+      <span aria-hidden="true">–</span>
+      <input type="date" aria-label={t(kind === "heading" ? "Plan.customerFinish" : "CRM.planFinish")} title={t(kind === "heading" ? "Plan.customerFinish" : "CRM.planFinish")}
+        min={draft.start || undefined} value={draft.finish} readOnly={busy} onChange={(event) => onChange({ finish: event.target.value })} onKeyDown={escape} />
+    </span>
+    <button type="submit" className="btn primary sm" data-guide="plan.save" disabled={busy || !draft.name.trim()}><Icon name="check" />{t(busy ? "Saving…" : "Save")}</button>
+    <button type="button" className="icon-btn" aria-label={t("Close")} title={t("Close")} onClick={onClose}><Icon name="x" /></button>
+    <small className="plan-draft-hint">{t("Plan.draftHint")}</small>
+    {draft.error ? <small className="plan-draft-error" role="alert">{draft.error}</small> : null}
+  </form>;
 }
 
 /*
@@ -2389,9 +2299,9 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
   const masterView = level === "master";
   const [collapsed, setCollapsed] = useState<Set<number>>(() => new Set());
   const [drawerTaskId, setDrawerTaskId] = useState<number | null>(preferredTaskId ?? linkedTaskId);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [createInitial, setCreateInitial] = useState<ScheduleRowInitial>();
-  const [createAnchor, setCreateAnchor] = useState<ScheduleTask>();
+  // The row being typed in place (PlanRowDraftEditor), and whether it is saving.
+  const [draft, setDraft] = useState<PlanDraft | null>(null);
+  const [draftBusy, setDraftBusy] = useState(false);
   const [baselineOpen, setBaselineOpen] = useState(false);
   // Dialogs keep the row they opened on, so a background reload never swaps in a newer version unseen.
   const [progressTask, setProgressTask] = useState<ScheduleTask | null>(null);
@@ -2462,7 +2372,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
   const selectProject = (nextId: number | null) => {
     scheduleRequestId.current += 1;
     setSchedule(null); setDrawerTaskId(null); setFilter(null); setCollapsed(new Set()); setZoom("fit");
-    setCreateOpen(false); setBaselineOpen(false); setProgressTask(null); setEditTask(null); setAnswerRequest(null); setDrawerError(""); setMovePending(null); setLastMove(null); setCreateInitial(undefined); setCreateAnchor(undefined);
+    setDraft(null); setBaselineOpen(false); setProgressTask(null); setEditTask(null); setAnswerRequest(null); setDrawerError(""); setMovePending(null); setLastMove(null);
     setLoadingSchedule(Boolean(nextId));
     setSelectedId(nextId);
     try { if (nextId) window.localStorage.setItem(storageKey, String(nextId)); } catch { /* Remembering the project is a convenience. */ }
@@ -2497,19 +2407,59 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
   const visibleIds = new Set(visible.map((task) => task.id));
   const links: GanttLink[] = visible.filter((task) => task.startMode === "linked" && task.predecessorId !== null && visibleIds.has(task.predecessorId))
     .map((task) => ({ from: `task:${task.predecessorId}`, to: `task:${task.id}` }));
-  /** A + is offered on every row but a member's own detail row, while nothing else is saving and no quick filter hides rows. */
-  const canQuickAdd = (task: ScheduleTask) => canPlan && !filter && !movePending && !saving && task.kind !== "detail"
-    && !pendingTaskIds.has(task.kind === "phase" ? task.id : task.parentId ?? -1);
-  const openAddRow = (task: ScheduleTask) => {
-    if (!activeSchedule) return;
-    const start = task.kind === "phase" ? task.planStart ?? today
-      : (task.planFinish ? linkedStart(task.planFinish, 0, new Set(activeSchedule.holidays ?? [])) : null) ?? task.planStart ?? today;
-    setCreateInitial({ ...scheduleRowPosition(activeSchedule, task, "task"), start }); setCreateAnchor(task); setCreateOpen(true);
+  /** Opens the boxes for a new row under `parentId` (none: a main heading), before `beforeId` (none: last), with that row open. */
+  const openDraft = (parentId: number | null, beforeId: number | null) => {
+    if (parentId !== null) setCollapsed((current) => { if (!current.has(parentId)) return current; const next = new Set(current); next.delete(parentId); return next; });
+    setFilter(null);
+    setDraft({ parentId, beforeId, name: "", memberId: null, ...draftDates(parentId === null ? null : taskById.get(parentId) ?? null, today), error: "" });
+  };
+  /**
+   * The + on a row, offered while nothing else is saving and no quick filter hides rows: on a heading it adds a task under
+   * it, on a task that may take sub tasks a function under it, on any other task a row just below; never on a member's
+   * own detail row, nor under a row waiting on a day request.
+   */
+  const plusFor = (task: ScheduleTask): GanttRowSpec["insert"] => {
+    if (!canPlan || filter || movePending || saving || draftBusy || task.kind === "detail" || !activeSchedule) return undefined;
+    if (task.kind === "phase" || (canTakeSubTasks(task, rows) && !pendingTaskIds.has(task.id))) {
+      return { label: uiText(task.kind === "phase" ? "Plan.addSubRow" : "Plan.addFunction"), onInsert: () => openDraft(task.id, null) };
+    }
+    if (task.parentId === null || pendingTaskIds.has(task.parentId)) return undefined;
+    const siblings = taskById.get(task.parentId)?.children ?? [];
+    return { label: uiText("Plan.insertRow"), onInsert: () => openDraft(task.parentId, siblings[siblings.indexOf(task) + 1]?.id ?? null) };
+  };
+  const saveDraft = async () => {
+    const current = draft;
+    if (!current || !activeSchedule || draftBusy || !current.name.trim()) return;
+    const name = current.name.trim(), parent = current.parentId === null ? null : taskById.get(current.parentId) ?? null;
+    const refuse = (message: string) => setDraft((value) => value && { ...value, error: message });
+    if (current.parentId !== null && !parent) { setDraft(null); return; }
+    // A task under a heading needs a member (owner, 2026-11-03); a row's dates come as a pair, a heading's may wait.
+    if (parent?.kind === "phase" && current.memberId === null) { refuse(uiText("Plan.memberRequired")); return; }
+    const dated = Boolean(current.start && current.finish && current.finish >= current.start);
+    if (parent ? !dated : (current.start || current.finish) && !dated) { refuse(uiText("Plan.draftDates")); return; }
+    const memberIds = current.memberId === null ? [] : [current.memberId];
+    setDraftBusy(true); setError("");
+    try {
+      if (parent) await ensureScheduleMembers(activeSchedule.projectId, activeSchedule.managerId, memberIds);
+      await apiRequest(`/api/v1/projects/${activeSchedule.projectId}/schedule/tasks`, { method: "POST", body: JSON.stringify({
+        scheduleVersion: activeSchedule.scheduleVersion, parentId: current.parentId, beforeId: current.beforeId, sortOrder: 0, kind: parent ? "task" : "phase", name,
+        isMilestone: false, visibility: parent ? "Internal" : "Customer", planStart: dated ? current.start : null, planDays: dated ? periodDays(current.start, current.finish) : 1,
+        startMode: "manual", predecessorId: null, lagDays: 0, picUserIds: memberIds, picExternal: "", planManDays: 0,
+      }) });
+      notify(`${activeSchedule.projectNo} · ${name} ${uiText("Plan.quickAdded")}`);
+      // The next box opens just below the new row, keeping the member and dates.
+      setDraft((value) => value && { ...value, name: "", error: "" });
+      await loadSchedule();
+    } catch (failure) {
+      // The typed row stays in the boxes; Enter tries again on the reloaded plan.
+      if (isConcurrencyConflict(failure)) { notify(`${activeSchedule.projectNo} · ${uiText("Plan.changedReloaded")}`); await loadSchedule(); }
+      else refuse(toError(failure));
+    } finally { setDraftBusy(false); }
   };
   const ganttRows: GanttRowSpec[] = visible.map((task) => {
-    const summaryRow = task.kind === "phase" || task.children.length > 0;
+    const summaryRow = task.kind === "phase" || task.children.length > 0, insert = plusFor(task);
     const dropped = movePending?.taskId === task.id ? movePending : null;
-    const movable = canPlan && !filter && !movePending && !saving;
+    const movable = canPlan && !filter && !movePending && !saving && !draftBusy;
     // A heading with nothing under it yet, or whose rows run past the customer's dates, says so.
     const committed = customerPeriod(task);
     const headingMark = task.kind !== "phase" || task.parentId !== null ? null : !task.children.length ? <Badge tone="amber">{uiText("Plan.notBrokenDown")}</Badge>
@@ -2531,7 +2481,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
       ...(task.children.length && !filter ? { expandable: true, expanded: !collapsed.has(task.id), onToggle: () => toggleRow(task.id) } : {}),
       onOpen: () => setDrawerTaskId(task.id),
       ...(movable ? { movable: true } : {}),
-      ...(canQuickAdd(task) ? { insert: { label: uiText(task.kind === "phase" ? "Plan.addSubRow" : "Plan.insertRow"), onInsert: () => openAddRow(task) } } : {}),
+      ...(insert ? { insert } : {}),
       ...(canReschedule(task) ? { reschedule: { resize: !task.isMilestone, onChange: (start: string, finish: string) => { void moveTask(task, start, finish); } } } : {}),
       start: dropped?.start ?? task.planStart, finish: dropped?.finish ?? task.planFinish, progress: Number(task.percentComplete), tone: scheduleTone(task, today),
       baselineStart: task.baselineStart, baselineFinish: task.baselineFinish, forecastFinish: task.forecastFinish,
@@ -2539,6 +2489,31 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
       title: `${task.wbs} ${task.name} · ${task.planStart ?? "—"} → ${task.planFinish ?? "—"} · ${Math.round(Number(task.percentComplete))}%`,
     };
   });
+  // The draft is drawn where its row will land: before the row it goes before, else after the rows under its parent.
+  const draftParent = draft?.parentId == null ? null : taskById.get(draft.parentId) ?? null;
+  const draftAt = !draft || !canPlan || (draft.parentId !== null && !draftParent) ? -1 : draft.beforeId !== null ? visible.findIndex((task) => task.id === draft.beforeId)
+    : !draftParent ? visible.length : (() => {
+      const at = visible.indexOf(draftParent);
+      let end = at + 1;
+      while (at >= 0 && end < visible.length && visible[end]!.depth > draftParent.depth) end++;
+      return at < 0 ? -1 : end;
+    })();
+  if (draft && draftAt >= 0 && activeSchedule) {
+    const levelOf = (step: -1 | 1) => draftLevel(activeSchedule.tasks, rows, draft, step, pendingTaskIds);
+    ganttRows.splice(draftAt, 0, {
+      key: "draft", depth: draftParent ? draftParent.depth + 1 : 0, kind: draftParent ? "task" : "phase", label: null, start: null, finish: null, tone: "blue", title: "",
+      editor: <PlanRowDraftEditor bootstrap={bootstrap} draft={draft} parent={draftParent} busy={draftBusy}
+        planPeople={new Set(rows.flatMap((task) => task.pics.map((pic) => pic.id)))} canOut={!masterView && levelOf(-1) !== null} canIn={!masterView && levelOf(1) !== null}
+        onChange={(patch) => setDraft((current) => current && { ...current, ...patch, error: "" })}
+        onLevel={(step) => {
+          const place = levelOf(step);
+          if (!place) return;
+          if (place.parentId !== null) setCollapsed((current) => { if (!current.has(place.parentId!)) return current; const next = new Set(current); next.delete(place.parentId!); return next; });
+          setDraft((current) => current && { ...current, ...place, ...draftDates(place.parentId === null ? null : taskById.get(place.parentId) ?? null, today), error: "" });
+        }}
+        onSave={() => { void saveDraft(); }} onClose={() => setDraft(null)} />,
+    });
+  }
   const drawerTask = drawerTaskId === null ? null : taskById.get(drawerTaskId) ?? null;
   const filteredProjects = projects.filter((project) => project.id === selectedId || !projectQuery.trim()
     || `${project.number} ${project.name} ${project.customerName}`.toLocaleLowerCase().includes(projectQuery.trim().toLocaleLowerCase()));
@@ -2607,33 +2582,28 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
     finally { await loadSchedule(); setSaving(false); }
   };
   /**
-   * Where a row dropped beside another lands: its parent and the sibling it goes before (null: last). Just after a
-   * row whose children are showing, a row that may sit under it becomes its first child. Null when the row may not
-   * go there (a phase only at the top, at most six planning levels, details under a task without sub tasks; never under itself;
-   * a Resource Plan row or one waiting on a day request only up or down where it is) or when it would not move.
+   * Where a dropped row lands: under the row one level out above the gap, before the row below it when that one is at
+   * the same level, else last. Null when the row may not go there (main headings only at the top; a task under a
+   * heading or a task that may take sub tasks, at most six levels; details under a task without sub tasks; never under
+   * itself; a Resource Plan row or one waiting on a day request only up or down where it is) or when it would not move.
    */
   const placeFor = (drop: GanttRowDrop): { task: ScheduleTask; parentId: number | null; beforeId: number | null } | null => {
-    const task = taskById.get(Number(drop.key.replace("task:", ""))), target = taskById.get(Number(drop.target.replace("task:", "")));
-    if (!activeSchedule || !task || !target || task.id === target.id) return null;
-    const childrenOf = (parentId: number | null) => (parentId === null ? activeSchedule.tasks : taskById.get(parentId)?.children ?? []);
+    const rowOf = (key: string | null) => (key === null ? null : taskById.get(Number(key.replace("task:", ""))) ?? null);
+    const task = rowOf(drop.key), above = rowOf(drop.above), below = rowOf(drop.below);
+    if (!activeSchedule || !task) return null;
+    let parent = drop.depth > 0 ? above : null;
+    while (parent && parent.depth > drop.depth - 1) parent = parent.parentId === null ? null : taskById.get(parent.parentId) ?? null;
+    if (drop.depth > 0 && parent?.depth !== drop.depth - 1) return null;
+    const parentId = parent?.id ?? null;
+    const beforeId = below && below.depth === drop.depth && below.parentId === parentId ? below.id : null;
+    const childrenOf = (id: number | null) => (id === null ? activeSchedule.tasks : taskById.get(id)?.children ?? []);
     const taskHeight = Math.max(0, ...flattenTasks(task.children).filter((row) => row.kind === "task").map((row) => row.depth - task.depth));
-    const fits = (parent: ScheduleTask | null) => task.kind === "phase" ? parent === null : task.kind === "task"
-      ? (parent === null || parent.kind === "phase" || canTakeSubTasks(parent, rows)) && (parent ? parent.depth + 1 : 0) + taskHeight <= MAX_PLAN_DEPTH
-      : parent?.kind === "task" && !parent.children.some((child) => child.kind === "task");
-    let parentId: number | null, beforeId: number | null;
-    if (drop.place === "after" && target.children.length > 0 && !collapsed.has(target.id) && fits(target)) {
-      parentId = target.id; beforeId = target.children[0]!.id;
-    } else {
-      parentId = target.parentId;
-      const siblings = childrenOf(parentId);
-      beforeId = drop.place === "before" ? target.id : siblings[siblings.findIndex((row) => row.id === target.id) + 1]?.id ?? null;
-    }
-    const parent = parentId === null ? null : taskById.get(parentId) ?? null;
+    const fits = (into: ScheduleTask | null) => task.kind === "phase" ? into === null : task.kind === "task"
+      ? into !== null && (into.kind === "phase" || canTakeSubTasks(into, rows)) && into.depth + 1 + taskHeight <= MAX_PLAN_DEPTH
+      : into?.kind === "task" && !into.children.some((child) => child.kind === "task");
     if (!fits(parent)) return null;
     for (let up: ScheduleTask | null = parent; up; up = up.parentId === null ? null : taskById.get(up.parentId) ?? null) if (up.id === task.id) return null;
     if (parentId !== task.parentId && (task.managedByResourcePlan || pendingTaskIds.has(task.id) || (parentId !== null && pendingTaskIds.has(parentId)))) return null;
-    // Before itself is just after its previous sibling: where it already is.
-    if (beforeId === task.id) beforeId = childrenOf(parentId)[childrenOf(parentId).findIndex((row) => row.id === task.id) + 1]?.id ?? null;
     if (parentId === task.parentId) {
       const siblings = childrenOf(parentId), at = siblings.findIndex((row) => row.id === task.id);
       if ((siblings[at + 1]?.id ?? null) === beforeId) return null;
@@ -2649,6 +2619,8 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
         scheduleVersion: activeSchedule.scheduleVersion, rowVersion: placed.task.rowVersion, parentId: placed.parentId, beforeId: placed.beforeId,
       }) });
       notify(`${activeSchedule.projectNo} · ${placed.task.wbs} ${placed.task.name} ${uiText("Plan.rowMoved")}`);
+      // Dropped into a folded row: open it, so the row is seen where it landed.
+      if (placed.parentId !== null) setCollapsed((current) => { if (!current.has(placed.parentId!)) return current; const next = new Set(current); next.delete(placed.parentId!); return next; });
     } catch (failure) { await moveFailed(placed.task, failure); }
     finally { await loadSchedule(); setSaving(false); }
   };
@@ -2677,7 +2649,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
         }), scheduleWorkbookName(activeSchedule.projectNo, exportedOn));
       }}><Icon name="download" />{uiText("Schedule.exportExcel")}</button> : null}
       {canPlan ? <button className="btn default" type="button" disabled={!rows.length} onClick={() => setBaselineOpen(true)}><Icon name="gitBranch" /><LocalizedText text={"Create baseline"} /></button> : null}
-      {canPlan ? <button className="btn primary" type="button" data-guide="plan.add" onClick={() => { setCreateInitial(undefined); setCreateAnchor(undefined); setCreateOpen(true); }}><Icon name="plus" /><LocalizedText text={"Add schedule row"} /></button> : null}
+      {canPlan && activeSchedule ? <button className="btn primary" type="button" data-guide="plan.add" disabled={draftBusy} onClick={() => openDraft(null, null)}><Icon name="plus" />{uiText("Plan.addHeading")}</button> : null}
     </Toolbar>
     {error ? <LoadError message={error} retry={() => { void (selectedId ? loadSchedule() : loadProjects()); }} /> : null}
     {activeSchedule && summary ? <>
@@ -2692,7 +2664,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
         {loadingSchedule ? <span className="plan-summary-loading" role="status"><span className="spinner" />{uiText("Plan.refreshing")}</span> : null}
       </section>
       <Panel title={`${activeSchedule.projectNo} · ${activeSchedule.projectName}`} subtitle={`${rows.length} ${uiText("Plan.rows")} · ${uiText(activeSchedule.projectStatus)}`} flush>
-        {rows.length ? <div className="plan-gantt" data-guide="plan.gantt">
+        {rows.length || draftAt >= 0 ? <div className="plan-gantt" data-guide="plan.gantt">
           <div className="plan-gantt-controls">
             <div className="seg-control" role="group" aria-label={uiText("Plan.levelLabel")} data-guide="plan.level">
               {(["team", "master"] as const).map((value) => <button key={value} type="button" className={level === value ? "on" : ""} aria-pressed={level === value} onClick={() => setLevel(value)}>{uiText(value === "master" ? "Plan.levelMaster" : "Plan.levelTeam")}</button>)}
@@ -2705,10 +2677,11 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
             <button className="btn ghost sm" type="button" disabled={saving || loadingSchedule} onClick={() => { void undoMove(); }}><Icon name="refresh" />{uiText("Plan.undo")}</button>
             <button className="icon-btn" type="button" aria-label={uiText("Close")} title={uiText("Close")} onClick={() => setLastMove(null)}><Icon name="x" /></button>
           </div> : null}
-          {visible.length ? <GanttChart rows={ganttRows} range={range} today={today} sideHeader="Gantt.taskColumn" label="Gantt.planLabel" links={links}
+          {ganttRows.length ? <GanttChart rows={ganttRows} range={range} today={today} sideHeader="Gantt.taskColumn" label="Gantt.planLabel" links={links}
             onMoveRow={(drop) => { void moveRow(drop); }} canMoveRow={(drop) => placeFor(drop) !== null} />
             : <EmptyState icon="filter" title="Plan.noMatch" message="Plan.noMatchHint" action={<button className="btn ghost sm" type="button" onClick={() => setFilter(null)}><Icon name="x" />{uiText("Portfolio.clearFilters")}</button>} />}
-        </div> : loadingSchedule ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading…"} /></div> : <EmptyState icon="calendar" title={uiText("This project has no schedule yet")} message={canPlan ? "สร้าง Phase หรือ Task แรกเพื่อเริ่มแผนโครงการ" : "Project Manager หรือ Engineering Manager เป็นผู้สร้างแผน"} />}
+        </div> : loadingSchedule ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading…"} /></div> : <EmptyState icon="calendar" title={uiText("This project has no schedule yet")} message={canPlan ? "Plan.startWithHeading" : "Project Manager หรือ Engineering Manager เป็นผู้สร้างแผน"}
+          action={canPlan ? <button className="btn primary sm" type="button" onClick={() => openDraft(null, null)}><Icon name="plus" />{uiText("Plan.addHeading")}</button> : undefined} />}
       </Panel>
       {(() => {
         const projectHistory = activeSchedule.recentUpdates.filter((update) => (update.taskId === null || !taskById.has(update.taskId)) && historyShown(update)).slice(0, 20);
@@ -2740,7 +2713,6 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
       onImportDrawing={() => setDrawingTask({ projectId: activeSchedule.projectId, taskId: drawerTask.id })}
       onReview={setAnswerRequest}
     /> : null}
-    {createOpen && activeSchedule ? <CreateScheduleTaskModal bootstrap={bootstrap} schedule={activeSchedule} initial={createInitial} anchor={createAnchor} notify={notify} onClose={() => setCreateOpen(false)} onCreated={async (parentId) => { if (parentId !== null) setCollapsed((current) => { const next = new Set(current); next.delete(parentId); return next; }); await loadSchedule(); }} onConflict={async () => { notify(`${activeSchedule.projectNo} schedule changed by another user; reloaded latest data`); await loadSchedule(); }} /> : null}
     {editTask && activeSchedule ? <EditScheduleTaskModal bootstrap={bootstrap} schedule={activeSchedule} task={editTask} onClose={() => setEditTask(null)}
       onSaved={async () => { notify(`${activeSchedule.projectNo} · ${editTask.wbs} ${uiText("Schedule.rowSaved")}`); await loadSchedule(); }}
       onDeleted={async () => { notify(`${activeSchedule.projectNo} · ${editTask.name} ${uiText("Plan.rowDeleted")}`); setDrawerTaskId(null); await loadSchedule(); }}

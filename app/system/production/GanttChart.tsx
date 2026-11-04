@@ -5,10 +5,11 @@
    The label column's edge can be dragged (or moved with the arrow keys on its grip) to show longer
    names; each chart remembers its width in this browser, and a double-click on the grip resets it.
    A row that may be rescheduled has a bar that drags to new dates (and stretches from its end), and
-   links between rows are drawn as finish-to-start arrows over the track. */
+   links between rows are drawn as finish-to-start arrows over the track. A movable row's grip drags it up
+   or down, and sideways out of or into a level. */
 
 import { useId, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
-import { GANTT_ZOOMS, dayNumber, ganttDragDays, ganttLanes, ganttLinkPath, ganttPoint, ganttShift, ganttSlip, ganttSpan, type GanttWindow, type GanttZoom } from "../../../lib/gantt";
+import { GANTT_ZOOMS, dayNumber, ganttDragDays, ganttDropChoices, ganttDropParent, ganttLanes, ganttLinkPath, ganttPoint, ganttShift, ganttSlip, ganttSpan, type GanttDrop, type GanttWindow, type GanttZoom } from "../../../lib/gantt";
 import { currentLocale, useT } from "../i18n";
 import { Icon, type Tone } from "../ui";
 import "./gantt.css";
@@ -44,13 +45,19 @@ export type GanttRowSpec = {
   segments?: GanttSegment[];
   /** The bar drags to new dates by whole days; `resize` also lets its end be pulled. onChange gets the dropped dates. */
   reschedule?: { resize: boolean; onChange: (start: string, finish: string) => void };
-  /** The row has a grip to drag it up or down the chart (GanttChart onMoveRow). */
+  /** The row has a grip to drag it up or down the chart, and sideways out of or into a level (GanttChart onMoveRow). */
   movable?: boolean;
-  /** A + on the row that adds a row just below it; label is already translated. */
+  /** A + on the row that adds a row under or below it; label is already translated. */
   insert?: { label: string; onInsert: () => void };
+  /** Drawn across the whole row in place of its name and bar, e.g. the boxes a + opens; never a drop place. */
+  editor?: ReactNode;
 };
-/** Where a dragged row is dropped: just before or just after the row `target`. */
-export type GanttRowDrop = { key: string; target: string; place: "before" | "after" };
+/** Where a dragged row is dropped: between two rows, some levels in (lib/gantt.ts ganttDropChoices). */
+export type GanttRowDrop = GanttDrop;
+/** Pixels of sideways drag that move a row one level out or in. */
+const LEVEL_DRAG = 24;
+/** The drop line starts where a row's name would at that depth: the side padding, then the grip and the toggle. */
+const dropIndent = (depth: number) => 8 + Math.min(depth, 6) * 16 + 22;
 /** A finish-to-start link, by row key: `to` starts after `from` finishes. */
 export type GanttLink = { from: string; to: string };
 export type GanttSegment = { key: string; start: string | null; finish: string | null; tone: Tone; title: string; onOpen?: () => void };
@@ -211,24 +218,37 @@ export function GanttChart({ rows, range, today, sideHeader, label, links = [], 
     target.addEventListener("pointermove", move); target.addEventListener("pointerup", up); target.addEventListener("pointercancel", cancel);
   };
   const open = (row: GanttRowSpec) => { if (!dragged.current) row.onOpen?.(); };
-  // A row dragged by its grip: the drop place is shown as a line on the row it would land beside.
+  // A row dragged by its grip: up or down picks the gap it lands in, sideways the level (out to the left, in to the
+  // right). The drop place is a line at that level's indent, and the row it would go under is lit.
+  const plain = rows.filter((row) => !row.editor);
   const [rowDrop, setRowDrop] = useState<{ key: string; drop: GanttRowDrop | null } | null>(null);
+  const firstDrop = (choices: GanttRowDrop[]) => choices.find((choice) => !canMoveRow || canMoveRow(choice)) ?? null;
   const startRowDrag = (event: ReactPointerEvent<HTMLButtonElement>, row: GanttRowSpec) => {
-    const chart = chartRef.current;
-    if (event.button !== 0 || !onMoveRow || !chart) return;
+    const chart = chartRef.current, index = plain.indexOf(row);
+    if (event.button !== 0 || !onMoveRow || !chart || index < 0) return;
     event.preventDefault(); event.stopPropagation();
     const grip = event.currentTarget;
     grip.setPointerCapture(event.pointerId);
-    let drop: GanttRowDrop | null = null, y = event.clientY, frame = 0;
-    const locate = (x: number) => {
-      const element = document.elementFromPoint(x, y)?.closest<HTMLElement>("[data-gantt-row]");
+    let end = index + 1;
+    while (end < plain.length && plain[end]!.depth > row.depth) end++;
+    const lifted = new Set(plain.slice(index, end).map((item) => item.key));
+    const others = plain.filter((item) => !lifted.has(item.key));
+    let drop: GanttRowDrop | null = null, x = event.clientX, y = event.clientY, frame = 0;
+    const x0 = event.clientX;
+    const locate = () => {
+      // Rows are found in the name column, so a drag far to the left or right still reads the row it is level with.
+      const probe = chart.getBoundingClientRect().left + 12;
+      const element = document.elementFromPoint(probe, y)?.closest<HTMLElement>("[data-gantt-row]");
       const target = element?.dataset.ganttRow;
-      if (!element || !target || target === row.key) return null;
+      if (!element || !target) return null;
+      const at = others.findIndex((item) => item.key === target);
+      if (!lifted.has(target) && at < 0) return null;
       const box = element.getBoundingClientRect();
-      const next: GanttRowDrop = { key: row.key, target, place: y < box.top + box.height / 2 ? "before" : "after" };
-      return canMoveRow && !canMoveRow(next) ? null : next;
+      // Over itself or its own rows it stays in its gap, so a sideways drag there only changes its level.
+      const gap = lifted.has(target) ? index : y < box.top + box.height / 2 ? at : at + 1;
+      return firstDrop(ganttDropChoices(plain, index, gap, row.depth + Math.round((x - x0) / LEVEL_DRAG)));
     };
-    const move = (moveEvent: PointerEvent) => { y = moveEvent.clientY; drop = locate(moveEvent.clientX); setRowDrop({ key: row.key, drop }); };
+    const move = (moveEvent: PointerEvent) => { x = moveEvent.clientX; y = moveEvent.clientY; drop = locate(); setRowDrop({ key: row.key, drop }); };
     // Near the top or bottom of a long plan, the chart scrolls while the row is held there.
     const scroll = () => {
       const box = chart.getBoundingClientRect();
@@ -247,15 +267,20 @@ export function GanttChart({ rows, range, today, sideHeader, label, links = [], 
     grip.addEventListener("pointermove", move); grip.addEventListener("pointerup", up); grip.addEventListener("pointercancel", cancel); window.addEventListener("keydown", escape);
     setRowDrop({ key: row.key, drop: null });
   };
-  // The arrow keys on a grip move the row past its neighbour, for those who do not drag.
-  const moveRowByKey = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+  // The arrow keys on a grip, for those who do not drag: up and down move the row past its neighbour, left and right
+  // move it out of or into a level where it is.
+  const moveRowByKey = (event: KeyboardEvent<HTMLButtonElement>, row: GanttRowSpec) => {
+    const index = plain.indexOf(row);
     const step = event.key === "ArrowUp" ? -1 : event.key === "ArrowDown" ? 1 : 0;
-    const neighbour = rows[index + step], row = rows[index];
-    if (!step || !neighbour || !row || !onMoveRow) return;
+    const level = event.key === "ArrowLeft" ? -1 : event.key === "ArrowRight" ? 1 : 0;
+    if ((!step && !level) || index < 0 || !onMoveRow) return;
     event.preventDefault();
-    const drop: GanttRowDrop = { key: row.key, target: neighbour.key, place: step < 0 ? "before" : "after" };
-    if (!canMoveRow || canMoveRow(drop)) onMoveRow(drop);
+    const choices = ganttDropChoices(plain, index, index + step, row.depth + level);
+    const drop = firstDrop(level ? choices.filter((choice) => choice.depth === row.depth + level) : choices);
+    if (drop) onMoveRow(drop);
   };
+  const dropping = rowDrop?.drop ?? null;
+  const dropParent = dropping ? ganttDropParent(plain, dropping) : null;
   // Links are drawn after layout and again whenever the chart or its label column changes size.
   useLayoutEffect(() => {
     const chart = chartRef.current, svg = linkSvg.current, layer = linkLayer.current;
@@ -325,7 +350,7 @@ export function GanttChart({ rows, range, today, sideHeader, label, links = [], 
         })}
       </div>
     </div>
-    {rows.map((row, index) => {
+    {rows.map((row) => {
       // While its bar is dragged, a row is drawn at the dates it would be dropped on.
       const shift = drag?.key === row.key ? drag : null;
       const start = shift?.mode === "move" && row.start ? ganttShift(row.start, shift.days) : row.start;
@@ -345,11 +370,16 @@ export function GanttChart({ rows, range, today, sideHeader, label, links = [], 
       const dropLabel = shift && start && finish && end !== null && end !== undefined
         ? <span className="gantt-drop-label" style={end > 75 ? { right: `calc(${100 - (bar ? bar.left : end)}% + 8px)` } : { left: `calc(${end}% + 8px)` }}>
           {row.milestone || start === finish ? dayLabel(finish) : `${dayLabel(start)} → ${dayLabel(finish)}`}</span> : null;
-      const dropHere = rowDrop?.drop?.target === row.key ? ` drop-${rowDrop.drop.place}` : "";
-      return <div key={row.key} data-gantt-row={row.key} className={`gantt-row ${row.kind}${row.selected ? " selected" : ""}${dropHere}${rowDrop?.key === row.key ? " row-moving" : ""}`}>
+      if (row.editor) return <div key={row.key} className={`gantt-row ${row.kind} editing`}>
+        <div className="gantt-editor" style={{ paddingLeft: 8 + Math.min(row.depth, 6) * 16 }}>{row.editor}</div>
+      </div>;
+      // The line goes above the row below the gap, or under the last row; the row it would land under is lit.
+      const dropLine = !dropping ? null : dropping.below === row.key ? "before" : dropping.below === null && dropping.above === row.key ? "after" : null;
+      return <div key={row.key} data-gantt-row={row.key} className={`gantt-row ${row.kind}${row.selected ? " selected" : ""}${dropParent === row.key ? " drop-into" : ""}${rowDrop?.key === row.key ? " row-moving" : ""}`}>
+        {dropLine && dropping ? <i className={`gantt-drop-line ${dropLine}`} style={{ left: dropIndent(dropping.depth) }} aria-hidden="true" /> : null}
         <div className="gantt-side" style={{ paddingLeft: 8 + Math.min(row.depth, 6) * 16 }}>
-          {row.movable && onMoveRow ? <button type="button" className="gantt-grip" aria-label={`${t("Gantt.moveRow")} · ${row.title}`} title={t("Gantt.moveRowHint")}
-            onPointerDown={(event) => startRowDrag(event, row)} onKeyDown={(event) => moveRowByKey(event, index)}><Icon name="grip" /></button> : null}
+          {row.movable && onMoveRow ? <button type="button" className="gantt-grip" data-guide="plan.moveRow" aria-label={`${t("Gantt.moveRow")} · ${row.title}`} title={t("Gantt.moveRowHint")}
+            onPointerDown={(event) => startRowDrag(event, row)} onKeyDown={(event) => moveRowByKey(event, row)}><Icon name="grip" /></button> : null}
           {row.expandable
             ? <button type="button" className="gantt-toggle" aria-expanded={Boolean(row.expanded)} aria-label={t(row.expanded ? "Collapse" : "Expand")} onClick={row.onToggle}><Icon name={row.expanded ? "chevronDown" : "chevronRight"} /></button>
             : <span className="gantt-toggle-spacer" />}
