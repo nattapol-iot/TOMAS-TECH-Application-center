@@ -883,14 +883,14 @@ const PROJECT_PLAN: Guide = {
       missing: { th: "ปุ่ม + ขึ้นสำหรับผู้วางแผนของโปรเจกต์นี้เมื่อแผนมีแถวแล้ว และไม่ได้กรองแถวอยู่ กด 'ถัดไป'", en: "The + shows for this project's planners once the plan has rows and no quick filter is on. Press Next.", jp: "+ はこの案件の計画担当者に、計画に行があり絞り込みをしていないときに表示されます。「次へ」を押します。" },
     },
     {
-      target: "plan.delete", action: "next", view: "projects",
-      title: { th: "ลบแถวที่พิมพ์ผิด", en: "Delete a row added by mistake", jp: "誤って追加した行を削除" },
+      target: "plan.remove", action: "next", view: "projects",
+      title: { th: "ลบแถวด้วยถังขยะ", en: "Delete a row with the bin", jp: "ごみ箱で行を削除" },
       body: {
-        th: "คลิกแถว แล้วกดแก้ไข จากนั้นกด 'ลบแถว' และยืนยันชื่อกับจำนวนแถวลูกที่จะลบ แถวที่มีความคืบหน้าหรืองานอ้างอิงลบไม่ได้",
-        en: "Click a row, then Edit, and press Delete row. Confirm its name and the number of descendant rows to remove. Rows with progress or linked work cannot be deleted.",
-        jp: "行をクリックして編集を開き、「行を削除」を押します。名前と配下の削除行数を確認してください。進捗や参照先のある行は削除できません。",
+        th: "กดถังขยะท้ายแถว แล้วยืนยันชื่อกับจำนวนแถวข้างใต้ที่จะถูกลบไปด้วย ถังขยะขึ้นเฉพาะแถวที่ยังลบได้ คือแถวนั้นและแถวข้างใต้ยังไม่มีความคืบหน้า ไม่มีงานส่วนตัวของสมาชิก และไม่มีคำขอเพิ่มวันรออยู่ แถวที่มีกุญแจมาจากภาพรวมงานทีม ให้ลบที่นั่น",
+        en: "Press the bin at the end of a row and confirm its name and how many rows under it go too. The bin shows only on rows that can still be deleted: neither the row nor anything under it has progress, a member's own task or a day request waiting. A row with a lock came from the team overview; delete it there.",
+        jp: "行末のごみ箱を押し、名前と一緒に削除される配下の行数を確認します。ごみ箱は削除できる行にだけ表示されます（その行と配下に進捗・メンバーの個人作業・承認待ちの日数依頼がない行）。鍵の付いた行はチームの仕事一覧から来た行なので、そちらで削除します。",
       },
-      missing: { th: "คลิกแถวแล้วกดแก้ไขเพื่อดูปุ่มลบ หากแค่เรียนรู้ให้กดถัดไป", en: "Click a row, then Edit to see Delete row. Press Next if only browsing.", jp: "行をクリックして編集を開くと削除ボタンが表示されます。閲覧だけなら「次へ」を押してください。" },
+      missing: { th: "ถังขยะขึ้นสำหรับผู้วางแผนของโปรเจกต์นี้ บนแถวที่ยังลบได้ เมื่อไม่ได้กรองแถวอยู่ กด 'ถัดไป'", en: "The bin shows for this project's planners, on rows that can still be deleted, while no quick filter is on. Press Next.", jp: "ごみ箱は、絞り込みをしていないとき、この案件の計画担当者に削除できる行で表示されます。「次へ」を押します。" },
     },
     {
       target: "plan.add", action: "click", view: "projects",

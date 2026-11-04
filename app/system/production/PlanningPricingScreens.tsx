@@ -2456,8 +2456,37 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
       else refuse(toError(failure));
     } finally { setDraftBusy(false); }
   };
+  /**
+   * The bin on a row the plan owner may delete, with the rows under it: none has started, holds a member's own task or
+   * waits on a day request. A Resource Plan row is deleted where it was made; the server also refuses a row other work
+   * refers to, and says so.
+   */
+  const binFor = (task: ScheduleTask): GanttRowSpec["remove"] => {
+    if (!canPlan || filter || movePending || saving || draftBusy) return undefined;
+    const removing = flattenTasks([task]);
+    if (removing.some((row) => row.kind === "detail" || row.managedByResourcePlan || pendingTaskIds.has(row.id) || row.status !== "Not Started"
+      || Number(row.percentComplete) > 0 || row.actualStart || row.actualFinish || Number(row.actualManDays) > 0)) return undefined;
+    return { label: uiText("Plan.deleteRow"), onRemove: () => { void deleteRow(task, removing.map((row) => row.id)); } };
+  };
+  const deleteRow = async (task: ScheduleTask, removing: number[]) => {
+    if (!activeSchedule) return;
+    const confirmation = uiText("Plan.deleteConfirm").replace("{name}", task.name)
+      + (removing.length > 1 ? `\n${uiText("Plan.deleteChildren").replace("{count}", String(removing.length - 1))}` : "");
+    if (!window.confirm(confirmation)) return;
+    setSaving(true); setError("");
+    try {
+      await apiRequest(`/api/v1/schedule/tasks/${task.id}`, { method: "DELETE", body: JSON.stringify({ scheduleVersion: activeSchedule.scheduleVersion, rowVersion: task.rowVersion }) });
+      notify(`${activeSchedule.projectNo} · ${task.name} ${uiText("Plan.rowDeleted")}`);
+      // The drawer and the typing boxes do not stay on a row that is gone.
+      if (drawerTaskId !== null && removing.includes(drawerTaskId)) setDrawerTaskId(null);
+      setDraft((current) => current && ((current.parentId !== null && removing.includes(current.parentId)) || (current.beforeId !== null && removing.includes(current.beforeId))) ? null : current);
+    } catch (failure) {
+      if (isConcurrencyConflict(failure)) notify(`${activeSchedule.projectNo} · ${task.wbs} ${uiText("Plan.changedReloaded")}`);
+      else { setError(toError(failure)); notify(`${activeSchedule.projectNo} · ${task.wbs} ${uiText("Plan.saveFailed")}`); }
+    } finally { await loadSchedule(); setSaving(false); }
+  };
   const ganttRows: GanttRowSpec[] = visible.map((task) => {
-    const summaryRow = task.kind === "phase" || task.children.length > 0, insert = plusFor(task);
+    const summaryRow = task.kind === "phase" || task.children.length > 0, insert = plusFor(task), bin = binFor(task);
     const dropped = movePending?.taskId === task.id ? movePending : null;
     const movable = canPlan && !filter && !movePending && !saving && !draftBusy;
     // A heading with nothing under it yet, or whose rows run past the customer's dates, says so.
@@ -2482,6 +2511,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
       onOpen: () => setDrawerTaskId(task.id),
       ...(movable ? { movable: true } : {}),
       ...(insert ? { insert } : {}),
+      ...(bin ? { remove: bin } : {}),
       ...(canReschedule(task) ? { reschedule: { resize: !task.isMilestone, onChange: (start: string, finish: string) => { void moveTask(task, start, finish); } } } : {}),
       start: dropped?.start ?? task.planStart, finish: dropped?.finish ?? task.planFinish, progress: Number(task.percentComplete), tone: scheduleTone(task, today),
       baselineStart: task.baselineStart, baselineFinish: task.baselineFinish, forecastFinish: task.forecastFinish,
