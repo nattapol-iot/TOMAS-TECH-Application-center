@@ -424,6 +424,12 @@
 /* The last bar dragged to new dates, with its undo. */
 .plan-undo { margin: 0 14px; }
 .plan-undo > span { flex: 1; min-width: 0; }
+/* By member: what the amber and red marks under a person's bars mean. */
+.plan-member-note { margin: 0 14px; flex-wrap: wrap; gap: 6px 10px; }
+.plan-member-key { display: inline-block; width: 18px; height: 5px; border-radius: var(--r-pill); }
+.plan-member-key.amber { background: var(--amber); }
+.plan-member-key.red { background: var(--red); }
+.plan-member-other { margin-right: 4px; padding: 0 6px; border-radius: var(--r-pill); background: var(--n-100); color: var(--ink-soft); font-size: var(--fs-3xs); font-weight: 600; }
 /* A row typed in place after a + (PlanRowDraftEditor): level, name, member and dates on one line, wrapping when narrow. */
 .plan-draft { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 0; }
 .plan-draft input, .plan-draft select { min-height: 30px; padding: 4px 8px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); color: var(--ink); font: inherit; font-size: var(--fs-xs); }

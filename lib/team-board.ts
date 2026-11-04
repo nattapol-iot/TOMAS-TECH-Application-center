@@ -1,4 +1,4 @@
-import { dateFromDay, dayNumber, isOpenWork, workingDays, type Commitment } from "./resource-planning";
+import { dateFromDay, dayNumber, impliedEffort, isOpenWork, workGroup, workingDays, type Commitment } from "./resource-planning";
 
 // The team board's day grid (app/system/production/TeamBoard.tsx): everyone's load per working day, worked out the way
 // the weekly Workload works it out, and what falls on each day.
@@ -27,8 +27,9 @@ export type DayLoad = { date: string; manDays: number; available: number; /** Nu
 
 /**
  * A person's planned man-days on each day: every open item's effort spread evenly over its working days, as
- * planningLoad spreads it over weeks. A working day offers capacity / 5 man-days; a holiday or a weekend offers none. Leave is not
- * deducted (owner decision 2026-10-21): the board only shows it.
+ * planningLoad spreads it over weeks, and a full day for plan work with no man-days (impliedEffort). A working day offers
+ * capacity / 5 man-days; a holiday or a weekend offers none. Leave is not deducted (owner decision 2026-10-21): the board
+ * only shows it.
  */
 export function dailyLoad(items: Commitment[], days: BoardDay[], capacity: number, holidays: readonly string[] = []): DayLoad[] {
   const spread = new Map<string, number>();
@@ -39,12 +40,49 @@ export function dailyLoad(items: Commitment[], days: BoardDay[], capacity: numbe
     const share = item.manDays / span.length;
     for (const date of span) spread.set(date, (spread.get(date) ?? 0) + share);
   }
+  for (const [date, extra] of impliedEffort(items, holidays)) spread.set(date, (spread.get(date) ?? 0) + extra);
   const daily = capacity / 5;
   return days.map(({ date, holiday, weekend }) => {
     const manDays = spread.get(date) ?? 0, available = holiday || weekend ? 0 : daily;
     const utilisation = available > 0 ? (manDays / available) * 100 : manDays > 0 ? Infinity : null;
     return { date, manDays, available, utilisation };
   });
+}
+
+/** A working day on which someone has two or more pieces of work: one item for each piece. */
+export type Overlap = { date: string; work: Commitment[] };
+
+/**
+ * The working days from `from` to `to` on which someone's open, dated work comes from two or more pieces of work (owner
+ * decision 2026-11-04). A task and its functions are one piece; so are two shares of one piece. Outlook meetings and
+ * days away are not work here.
+ */
+export function overlapDays(items: readonly Commitment[], from: string, to: string, holidays: readonly string[] = []): Overlap[] {
+  const byDate = new Map<string, Map<string, Commitment>>();
+  for (const item of items) {
+    if (!isOpenWork(item) || !item.start) continue;
+    const end = item.end ?? item.start;
+    const first = item.start > from ? item.start : from, last = end < to ? end : to;
+    if (last < first) continue;
+    for (const date of workingDays(first, last, holidays)) {
+      const pieces = byDate.get(date) ?? new Map<string, Commitment>();
+      if (!pieces.has(workGroup(item))) pieces.set(workGroup(item), item);
+      byDate.set(date, pieces);
+    }
+  }
+  return [...byDate].filter(([, pieces]) => pieces.size > 1).sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, pieces]) => ({ date, work: [...pieces.values()] }));
+}
+
+/** Dates joined into runs, a run carrying on over weekends and holidays between them: one bar per run on a Gantt. */
+export function dateRuns(dates: readonly string[], holidays: readonly string[] = []): Array<{ start: string; finish: string }> {
+  const runs: Array<{ start: string; finish: string }> = [];
+  for (const date of [...dates].sort()) {
+    const last = runs.at(-1);
+    if (last && dayNumber(date) > dayNumber(last.finish) && !workingDays(dateFromDay(dayNumber(last.finish) + 1), dateFromDay(dayNumber(date) - 1), holidays).length) last.finish = date;
+    else if (!last || date > last.finish) runs.push({ start: date, finish: date });
+  }
+  return runs;
 }
 
 /** An Outlook event as the board needs it: Bangkok local start and end ("YYYY-MM-DDTHH:MM:SS"); an all-day one ends at midnight after its last day. */

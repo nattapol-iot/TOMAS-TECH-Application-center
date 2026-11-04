@@ -854,13 +854,23 @@ const PROJECT_PLAN: Guide = {
     },
     {
       target: "plan.level", action: "next", view: "projects",
-      title: { th: "Master Plan หรือ Team Plan", en: "Master Plan or Team Plan", jp: "マスタープランかチームプランか" },
+      title: { th: "Master Plan, Team Plan หรือตามสมาชิก", en: "Master Plan, Team Plan or by member", jp: "マスタープラン・チームプラン・メンバー別" },
       body: {
-        th: "Master Plan แสดงเฉพาะหัวข้อหลักตามวันที่ตกลงกับลูกค้า Team Plan แสดงงานและฟังก์ชันทั้งหมด หัวข้อที่ยังไม่มีงานขึ้น 'ยังไม่แตกแผน' และหัวข้อที่งานเลยวันลูกค้าขึ้น 'เลยวัน Master Plan'",
-        en: "Master Plan shows only the headings on the dates agreed with the customer; Team Plan shows every task and function. A heading with no task yet says Not broken down, and one whose tasks run past the customer's dates says Past the Master Plan dates.",
-        jp: "マスタープランは顧客と合意した日程の見出しだけを、チームプランはすべてのタスクと機能を表示します。タスクのない見出しには「未展開」、タスクが顧客の日程を超える見出しには「マスタープランの日程を超過」と表示されます。",
+        th: "Master Plan แสดงเฉพาะหัวข้อหลักตามวันที่ตกลงกับลูกค้า Team Plan แสดงงานและฟังก์ชันทั้งหมด หัวข้อที่ยังไม่มีงานขึ้น 'ยังไม่แตกแผน' และหัวข้อที่งานเลยวันลูกค้าขึ้น 'เลยวัน Master Plan' 'ตามสมาชิก' แสดงทีละคนว่าทำงานไหนอยู่ และงานซ้อนกันหรือไม่",
+        en: "Master Plan shows only the headings on the dates agreed with the customer; Team Plan shows every task and function. A heading with no task yet says Not broken down, and one whose tasks run past the customer's dates says Past the Master Plan dates. By member shows, person by person, what each one is on and whether their work overlaps.",
+        jp: "マスタープランは顧客と合意した日程の見出しだけを、チームプランはすべてのタスクと機能を表示します。タスクのない見出しには「未展開」、タスクが顧客の日程を超える見出しには「マスタープランの日程を超過」と表示されます。「メンバー別」は一人ずつ、今どの作業をしているか、作業が重なっていないかを表示します。",
       },
       missing: { th: "โปรเจกต์นี้ยังไม่มีแผน กด 'ถัดไป'", en: "This project has no plan yet. Press Next.", jp: "この案件にはまだ計画がありません。「次へ」を押します。" },
+    },
+    {
+      target: "plan.memberLegend", action: "next", view: "projects",
+      title: { th: "ใครทำอะไร และงานซ้อนไหม", en: "Who is on what, and does it overlap", jp: "誰が何をしているか、重なりはないか" },
+      body: {
+        th: "แต่ละแถวคือสมาชิกหนึ่งคน บอกว่าตอนนี้ทำงานไหนหรือถัดไปคืองานไหน กดขยายเพื่อดูงานของเขาในโปรเจกต์นี้ และงานนอกโปรเจกต์ (แถบสีเทา) เส้นสีส้มใต้แถว = วันที่มี 2 งานขึ้นไป เส้นสีแดง = งานเกินเวลาที่มี ชี้เมาส์ที่เส้นเพื่อดูว่าซ้อนกับงานอะไร งานที่ไม่ได้ใส่ man-days นับเต็มวัน และฟังก์ชันใต้งานเดียวกันไม่นับว่าซ้อนกัน",
+        en: "Each row is one member, with what they are on now or next. Open it to see their work in this project and their other work (grey bars). An amber line under the row marks days with two or more pieces of work; a red line, days with more work than time. Point at a line to see what overlaps. Work with no man-days counts a full day, and a task's own functions never overlap.",
+        jp: "各行がメンバー1人で、今の作業か次の作業を示します。開くとこの案件の作業と他の作業（灰色のバー）が表示されます。行の下のオレンジの線は2件以上の作業がある日、赤い線は持ち時間を超える日です。線にカーソルを合わせると何が重なっているか分かります。人日のない作業は1日として数え、同じタスクの機能同士は重複としません。",
+      },
+      missing: { th: "กด 'ตามสมาชิก' ด้านบนเพื่อดูส่วนนี้ หรือกด 'ถัดไป'", en: "Press By member above to see this, or press Next.", jp: "上の「メンバー別」を押すと表示されます。または「次へ」を押します。" },
     },
     {
       target: "plan.moveRow", action: "next", view: "projects",
@@ -957,6 +967,15 @@ const TEAM_TASK: Guide = {
     menu("resources",
       { th: "เปิดเมนูภาพรวมงานทีม", en: "Open Team overview", jp: "「チームの仕事一覧」を開く" },
       { th: "งานของทุกคนในทีมอยู่ในตารางนี้ คลิกที่เมนูที่ไฮไลต์อยู่", en: "Everyone's work is on this board. Click the highlighted menu entry.", jp: "チーム全員の作業がこの表にあります。強調表示のメニューをクリックします。" }),
+    {
+      target: "team.filters", action: "next", view: "resources",
+      title: { th: "ดูว่าใครงานซ้อนหรือเกินกำลัง", en: "See who has overlapping work or too much", jp: "作業の重複や負荷超過を確認" },
+      body: {
+        th: "ชิป 'งานซ้อน' แสดงเฉพาะคนที่มี 2 งานขึ้นไปในวันเดียวกัน ช่องที่มีมุมสีส้มคือวันที่ซ้อน ชี้เมาส์เพื่อดูว่าซ้อนกับงานอะไร สีแดงคือเกินกำลัง ในมุมมอง Gantt เส้นสีส้มและสีแดงใต้แถวของแต่ละคนบอกช่วงวันเดียวกันนี้",
+        en: "The Overlapping work chip shows only people with two or more pieces of work on one day. A cell with an amber corner is such a day; point at it to see what overlaps. Red means more work than time. On the Gantt, amber and red lines under each person mark the same days.",
+        jp: "「作業の重複」チップで、同じ日に2件以上の作業がある人だけを表示します。角がオレンジのセルが重複日で、カーソルを合わせると内容が分かります。赤は負荷超過です。ガントでは各人の行の下のオレンジと赤の線が同じ日を示します。",
+      },
+    },
     {
       target: "team.add", action: "click", view: "resources",
       title: { th: "กด 'เพิ่มงาน / นัดหมาย'", en: "Press Add work or appointment", jp: "「作業・予定を追加」を押す" },

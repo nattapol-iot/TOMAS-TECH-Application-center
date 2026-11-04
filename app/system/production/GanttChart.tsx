@@ -53,7 +53,10 @@ export type GanttRowSpec = {
   remove?: { label: string; onRemove: () => void };
   /** Drawn across the whole row in place of its name and bar, e.g. the boxes a + opens; never a drop place. */
   editor?: ReactNode;
+  /** Spans marked under the bars, e.g. the days someone's work overlaps (amber) or is more than they have (red). */
+  alerts?: GanttAlert[];
 };
+export type GanttAlert = { key: string; start: string; finish: string; tone: "amber" | "red"; title: string };
 /** Where a dragged row is dropped: between two rows, some levels in (lib/gantt.ts ganttDropChoices). */
 export type GanttRowDrop = GanttDrop;
 /** Pixels of sideways drag that move a row one level out or in. */
@@ -398,6 +401,10 @@ export function GanttChart({ rows, range, today, sideHeader, label, links = [], 
             return span ? <span key={column.start} className="gantt-gridline" style={{ left: `${span.left}%` }} aria-hidden="true" /> : null;
           })}
           {baseline ? <span className="gantt-baseline" style={{ left: `${baseline.left}%`, width: `${baseline.width}%` }} aria-hidden="true" /> : null}
+          {row.alerts?.map((alert) => {
+            const span = ganttSpan(alert.start, alert.finish, range);
+            return span ? <span key={alert.key} className={`gantt-alert ${alert.tone}`} style={{ left: `${span.left}%`, width: `${span.width}%` }} title={alert.title} /> : null;
+          })}
           {bar ? <button type="button" data-gantt-bar="" className={`gantt-bar ${row.tone}${row.kind === "task" ? "" : " summary"}${done ? " done" : ""}${bar.clippedStart ? " clip-start" : ""}${bar.clippedEnd ? " clip-end" : ""}${movable}`}
             style={{ left: `${bar.left}%`, width: `${bar.width}%` }} title={row.title} aria-label={row.title} onClick={() => open(row)} disabled={!row.onOpen && !row.reschedule} tabIndex={-1} {...grab}>
             {progress !== null ? <i style={{ width: `${progress}%` }} /> : null}

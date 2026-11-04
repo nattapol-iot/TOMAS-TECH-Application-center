@@ -223,3 +223,18 @@ test("estimate sections and tasks awaiting approval show up, and a section's eng
   assert.match(screen, /item\.effort\.kind === "EstimateSection" && item\.ownerId === bootstrap\.user\.id/);
   assert.match(queue, /canPlanEffort=\{\(item\) => item\.effort\?\.kind === "EstimateSection"\}/);
 });
+
+test("plan work with no man-days counts a full day a working day in the weekly load, once per task with its functions", () => {
+  const plan = (key, group, start, end, manDays) => ({ key, workKey: key, group, type: "Project", entityId: 1, ownerId: 7, reference: "", title: "", customer: "",
+    start, end, manDays, progress: 0, status: "Not Started" });
+  const weeks = planningWeeks("2026-11-02", 2);
+  // Two functions of task 21 with no man-days, the first week together and one into the second; task 30 has 3 MD in week two.
+  const load = planningLoad([
+    plan("Project-211", "Project-21", "2026-11-02", "2026-11-06", 0),
+    plan("Project-212", "Project-21", "2026-11-04", "2026-11-10", 0),
+    plan("Project-30", "Project-30", "2026-11-09", "2026-11-11", 3),
+  ], weeks, 5, "2026-11-02");
+  // Week one: task 21 every day, once though both functions run; week two: Monday and Tuesday of task 21, and task 30.
+  assert.deepEqual(load.weekly.map((week) => week.manDays), [5, 5]);
+  assert.equal(load.committed, 10);
+});

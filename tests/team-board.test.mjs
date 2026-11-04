@@ -9,7 +9,7 @@ const moduleUrl = (source) => "data:text/javascript;base64," + Buffer.from(
   ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText).toString("base64");
 // lib/team-board.ts imports lib/resource-planning.ts; both are compiled and the import pointed at the compiled copy.
 const planningUrl = moduleUrl(await read("lib/resource-planning.ts"));
-const { boardDays, dailyLoad, loadBand, weekTotals, spanLoad, freestOn, withExtra, defaultTaskManDays, dueGroup, covers, timeRange, tableTsv, tableHtml, outlookDates, outlookManDays, outlookLoad, withOutlook } =
+const { boardDays, dailyLoad, loadBand, weekTotals, spanLoad, freestOn, withExtra, defaultTaskManDays, dueGroup, covers, timeRange, tableTsv, tableHtml, outlookDates, outlookManDays, outlookLoad, withOutlook, overlapDays, dateRuns } =
   await import(moduleUrl((await read("lib/team-board.ts")).replace(`from "./resource-planning"`, `from "${planningUrl}"`)));
 
 const work = (change) => ({ key: "k", workKey: "k", type: "Project", entityId: 1, ownerId: 7, reference: "", title: "", customer: "",
@@ -206,4 +206,39 @@ test("a plan row's span is loaded like the grid: effort spread over working days
   // A span longer than a week from a Sunday still reaches its last day.
   assert.equal(spanLoad([], "2026-10-25", "2026-11-09", 5).available, 11);
   assert.equal(spanLoad([], "2026-10-24", "2026-10-25", 5).utilisation, null, "a weekend offers nothing");
+});
+
+test("plan work with no man-days takes a full day per working day, once per task with its functions", () => {
+  const days = boardDays("2026-11-02", 1, [], "2026-11-02");
+  // Two functions of task 21 with no man-days (Mon-Wed and Tue-Thu), and task 30 with 2 MD on Thursday and Friday.
+  const items = [
+    work({ key: "f1", workKey: "Project-211", group: "Project-21", start: "2026-11-02", end: "2026-11-04", manDays: 0 }),
+    work({ key: "f2", workKey: "Project-212", group: "Project-21", start: "2026-11-03", end: "2026-11-05", manDays: 0 }),
+    work({ key: "t3", workKey: "Project-30", group: "Project-30", start: "2026-11-05", end: "2026-11-06", manDays: 2 }),
+    // An RFQ with no effort saved stays unknown, not a full day.
+    work({ key: "rfq", workKey: "Inquiry-5", type: "Inquiry", start: "2026-11-02", end: "2026-11-06", manDays: null }),
+  ];
+  assert.deepEqual(dailyLoad(items, days, 5, []).map((day) => day.manDays), [1, 1, 1, 2, 1, 0, 0]);
+  // Once a function of the task has man-days, the task takes those on its days and no extra full day.
+  const typed = [items[0], work({ ...items[1], manDays: 3 })];
+  assert.deepEqual(dailyLoad(typed, days, 5, []).map((day) => day.manDays), [1, 1, 1, 1, 0, 0, 0]);
+});
+
+test("work overlaps on a working day when two pieces of work fall on it; a task's own functions never overlap", () => {
+  const items = [
+    work({ key: "f1", workKey: "Project-211", group: "Project-21", start: "2026-11-02", end: "2026-11-06", manDays: 0 }),
+    work({ key: "f2", workKey: "Project-212", group: "Project-21", start: "2026-11-02", end: "2026-11-06", manDays: 0 }),
+    // Another project's task over Thursday to the next Tuesday, a finished one, and an appointment on Saturday.
+    work({ key: "other", workKey: "Project-90", group: "Project-90", reference: "P-2 · 1.1", start: "2026-11-05", end: "2026-11-10", manDays: 2 }),
+    work({ key: "done", workKey: "Project-91", start: "2026-11-02", end: "2026-11-06", status: "Done" }),
+    work({ key: "sat", workKey: "TeamTask-4", type: "Task", start: "2026-11-07", end: "2026-11-07", manDays: 1 }),
+  ];
+  const overlaps = overlapDays(items, "2026-11-01", "2026-11-30", ["2026-11-06"]);
+  // Thursday only: Friday is a holiday, the weekend is not a working day, and from Monday task 21 is over.
+  assert.deepEqual(overlaps.map((day) => day.date), ["2026-11-05"]);
+  assert.deepEqual(overlaps[0].work.map((item) => item.key), ["f1", "other"]);
+  assert.deepEqual(overlapDays(items, "2026-11-06", "2026-11-30", []).map((day) => day.date), ["2026-11-06"], "the window clips the work");
+  // Runs carry on over weekends and holidays between them, so a bar is drawn once.
+  assert.deepEqual(dateRuns(["2026-11-05", "2026-11-09", "2026-11-03", "2026-11-12"], ["2026-11-06"]),
+    [{ start: "2026-11-03", finish: "2026-11-03" }, { start: "2026-11-05", finish: "2026-11-09" }, { start: "2026-11-12", finish: "2026-11-12" }]);
 });

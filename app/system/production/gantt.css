@@ -92,6 +92,10 @@ button.gantt-label:focus-visible { outline: 2px solid var(--blue); outline-offse
 .gantt-target { position: absolute; top: 4px; bottom: 4px; width: 2px; margin-left: -1px; background: var(--red); pointer-events: none; z-index: 1; }
 .gantt-target::before { content: ""; position: absolute; top: 0; left: 2px; border-left: 7px solid var(--red); border-top: 4px solid transparent; border-bottom: 4px solid transparent; }
 .gantt-baseline { position: absolute; bottom: 5px; height: 4px; border-radius: var(--r-pill); background: var(--n-300); pointer-events: none; }
+/* Days marked under a row's bars (GanttRowSpec.alerts): work that overlaps (amber) or is more than the person has (red). */
+.gantt-alert { position: absolute; bottom: 1px; min-width: 3px; height: 5px; border-radius: var(--r-pill); z-index: 1; cursor: help; }
+.gantt-alert.amber { background: var(--amber); }
+.gantt-alert.red { bottom: 7px; background: var(--red); }
 
 .gantt-bar {
   position: absolute;

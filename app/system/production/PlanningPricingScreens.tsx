@@ -13,8 +13,11 @@ import { estimateBusinessDate, estimateUxCopy } from "../../../lib/estimate-ux";
 import { useActivitySubView } from "../use-activity-presence";
 import { MyWorkQueue } from "./LazyScreens";
 import { listProjectOverview, type ProjectOverviewItem } from "../project-overview-client";
-import { draggedPlan, ganttFitWindow, ganttShift, ganttWindow, linkedStart, planDatesLoop, shiftGanttAnchor } from "../../../lib/gantt";
-import { GanttChart, GanttLegend, GanttToolbar, scheduleTone, type GanttLink, type GanttRowDrop, type GanttRowSpec, type GanttZoomChoice } from "./GanttChart";
+import { dayNumber, draggedPlan, ganttFitWindow, ganttShift, ganttWindow, linkedStart, planDatesLoop, shiftGanttAnchor } from "../../../lib/gantt";
+import { GanttChart, GanttLegend, GanttToolbar, scheduleTone, type GanttAlert, type GanttLink, type GanttRowDrop, type GanttRowSpec, type GanttZoomChoice } from "./GanttChart";
+import { loadTeamBoard, type TeamBoardData } from "../resource-workload-client";
+import { weeklyCapacity, type Commitment } from "../../../lib/resource-planning";
+import { boardDays, dailyLoad, dateRuns, outlookLoad, overlapDays, withOutlook, type Overlap } from "../../../lib/team-board";
 import { PicLoadPanel, useLoadNote, usePicLoads } from "./PlanPicLoad";
 import { choiceLink, optionalChoiceLink, placeId, useLinkedState, useScreenPlace } from "../screen-link";
 import { HealthBadge } from "./ProjectPlanFields";
@@ -2247,9 +2250,37 @@ const planProjectStorageKey = (userId: number) => `tomas-tech-plan-project:${use
 // The plan's link: "#/projects/plan/<project>/task/<task>?only=late&zoom=quarter" (screen-link.tsx).
 const PLAN_FILTER_LINK = optionalChoiceLink(PLAN_FILTERS.map((item) => item.key));
 const PLAN_ZOOM_LINK = choiceLink<GanttZoomChoice>(["fit", "month", "quarter", "half", "year"]);
-/** The whole plan (Team Plan), or only the headings on the customer's dates (Master Plan). */
-type PlanLevel = "team" | "master";
-const PLAN_LEVEL_LINK = choiceLink<PlanLevel>(["team", "master"]);
+/** The whole plan (Team Plan), only the headings on the customer's dates (Master Plan), or the plan by who does it. */
+type PlanLevel = "team" | "master" | "member";
+const PLAN_LEVEL_LINK = choiceLink<PlanLevel>(["team", "master", "member"]);
+const PLAN_LEVEL_LABEL: Record<PlanLevel, string> = { team: "Plan.levelTeam", master: "Plan.levelMaster", member: "Plan.levelMember" };
+
+/**
+ * The plan's own work the way the team board counts it (backend-node/src/resource-workload.ts): each row with nothing
+ * under it, once per person on it, its man-days shared, with the task under its heading as its piece of work.
+ */
+function planCommitments(schedule: ProjectSchedule): Commitment[] {
+  const rows = flattenTasks(schedule.tasks), byId = new Map(rows.map((row) => [row.id, row]));
+  const groupOf = (row: ScheduleTask) => {
+    let top = row;
+    for (let parent = top.parentId === null ? undefined : byId.get(top.parentId); parent && parent.kind !== "phase"; parent = top.parentId === null ? undefined : byId.get(top.parentId)) top = parent;
+    return `Project-${top.id}`;
+  };
+  return rows.filter((row) => row.kind !== "phase" && !row.children.length).flatMap((row) => {
+    const owners = row.pics.filter((pic) => pic.active !== false).map((pic) => pic.id);
+    return (owners.length ? owners : [null]).map((ownerId): Commitment => ({
+      key: `Project-${row.id}-${ownerId ?? "none"}`, workKey: `Project-${row.id}`, group: groupOf(row), type: "Project", entityId: schedule.projectId, ownerId,
+      reference: `${schedule.projectNo} · ${row.wbs}`, title: row.name, customer: "", start: row.planStart, end: row.planFinish,
+      manDays: Number(row.planManDays) / (owners.length || 1), progress: Number(row.percentComplete), status: row.status,
+    }));
+  });
+}
+/** The dates the by-member view reads everyone's other work for: the plan's own, at most the 400 days the board allows. */
+function memberWindowOf(schedule: ProjectSchedule, today: string) {
+  const from = schedule.summary.planStart ?? today, finish = schedule.summary.planFinish ?? from;
+  const to = finish < from ? from : finish > ganttShift(from, 399) ? ganttShift(from, 399) : finish;
+  return { from, to };
+}
 /** Project numbers in natural order: PJ26009 before PJ26010. */
 const byProjectNumber = (a: { number: string }, b: { number: string }) => a.number.localeCompare(b.number, "en", { numeric: true, sensitivity: "base" });
 const isLeafTask = (task: ScheduleTask) => task.kind !== "phase" && task.children.length === 0;
@@ -2268,6 +2299,101 @@ function planRows(tasks: ScheduleTask[], collapsed: Set<number>, matches: ((task
   };
   visit(tasks);
   return rows;
+}
+
+/**
+ * The plan by member (owner request 2026-11-04): one row per person on the plan, with what they are on now or next, their
+ * rows here and their other work in the plan's dates (grey), and the days their work overlaps (amber) or is more than
+ * they have (red) marked under their bars. `board` is the team board's read of everyone's work; this project's own work
+ * comes from the plan on screen, which may be newer. Rows nobody is on come last.
+ */
+function memberGanttRows({ schedule, board, span, today, closed, selectedTaskId, t, onOpenTask, onToggle }: {
+  schedule: ProjectSchedule; board: TeamBoardData | null; span: { from: string; to: string }; today: string; closed: ReadonlySet<string>;
+  selectedTaskId: number | null; t: (key: string) => string; onOpenTask: (taskId: number) => void; onToggle: (key: string) => void;
+}): GanttRowSpec[] {
+  const out: GanttRowSpec[] = [];
+  const rows = flattenTasks(schedule.tasks);
+  const holidays = schedule.holidays ?? [];
+  const planWork = planCommitments(schedule);
+  // This project's work comes from the plan on screen, which may be newer than the board's read.
+  const otherWork = (board?.items ?? []).filter((item) => !(item.type === "Project" && item.entityId === schedule.projectId));
+  const meetings = outlookLoad(board?.outlook ?? []);
+  const spanDays = boardDays(span.from, Math.ceil((dayNumber(span.to) - dayNumber(span.from)) / 7) + 2, holidays, today)
+    .filter((day) => day.date >= span.from && day.date <= span.to);
+  const people = new Map<number, string>();
+  for (const task of rows) if (task.kind !== "phase") for (const pic of task.pics) if (pic.active !== false && !people.has(pic.id)) people.set(pic.id, pic.name);
+  const overlapTitle = (day: Overlap) => `${date(day.date)} · ${day.work.map((item) => (item.hidden ? t("TeamBoard.hiddenWork") : [item.reference, item.title].filter(Boolean).join(" "))).join(" · ")}`;
+  const taskRows = (owned: ScheduleTask[], person: string) => {
+    const depthOf = new Map<number, number>();
+    return owned.map((task): GanttRowSpec => {
+      const depth = task.parentId !== null && depthOf.has(task.parentId) ? depthOf.get(task.parentId)! + 1 : 1;
+      depthOf.set(task.id, depth);
+      return {
+        key: `member:${person}:task:${task.id}`, depth, kind: task.children.length ? "phase" : "task", label: <><span className="mono">{task.wbs}</span> {task.name}</>,
+        meta: [t(task.status), `${Math.round(Number(task.percentComplete))}%`].join(" · "), onOpen: () => onOpenTask(task.id),
+        start: task.planStart, finish: task.planFinish, progress: Number(task.percentComplete), tone: scheduleTone(task, today), selected: selectedTaskId === task.id,
+        title: `${task.wbs} ${task.name} · ${task.planStart ?? "—"} → ${task.planFinish ?? "—"} · ${Math.round(Number(task.percentComplete))}%`,
+      };
+    });
+  };
+  const otherLabel = (item: Commitment) => t(item.type === "Project" ? "Plan.memberOtherProject" : item.type === "Inquiry" ? "TeamBoard.listRfq"
+    : item.type === "Estimate" ? "TeamBoard.listEst" : item.taskKind === "Appointment" ? "TeamBoard.listAppointment" : "TeamBoard.kindTask");
+  for (const [personId, name] of [...people].sort((a, b) => a[1].localeCompare(b[1]))) {
+    const key = String(personId);
+    const owned = rows.filter((task) => task.kind !== "phase" && task.pics.some((pic) => pic.id === personId && pic.active !== false));
+    const mine = planWork.filter((item) => item.ownerId === personId);
+    const others = otherWork.filter((item) => item.ownerId === personId && item.start && (item.end ?? item.start) >= span.from && item.start <= span.to)
+      .sort((a, b) => (a.start ?? "").localeCompare(b.start ?? ""));
+    const all = [...mine, ...others];
+    const overlaps = overlapDays(all, span.from, span.to, holidays);
+    const capacity = weeklyCapacity(board?.capacities.find((entry) => entry.userId === personId)?.daysPerWeek);
+    const overDates = withOutlook(dailyLoad(all, spanDays, capacity, holidays), (day) => meetings.get(`${personId}|${day}`) ?? 0)
+      .filter((day) => day.available > 0 && (day.utilisation ?? 0) > 100).map((day) => day.date);
+    // What they are on today, else what comes next.
+    const open = owned.filter((task) => !task.children.length && task.status !== "Done" && Number(task.percentComplete) < 100 && task.planStart && task.planFinish);
+    const now = open.filter((task) => task.planStart! <= today && task.planFinish! >= today);
+    const next = open.filter((task) => task.planStart! > today).sort((a, b) => a.planStart!.localeCompare(b.planStart!))[0];
+    const doing = now.length ? `${t("Plan.memberNow")} ${now.slice(0, 2).map((task) => `${task.wbs} ${task.name}`).join(", ")}${now.length > 2 ? ` +${now.length - 2}` : ""}`
+      : next ? `${t("Plan.memberNext")} ${next.wbs} ${next.name} (${date(next.planStart)})` : t("Plan.memberIdle");
+    const alerts: GanttAlert[] = [
+      ...dateRuns(overlaps.map((day) => day.date), holidays).map((run) => ({ key: `overlap-${run.start}`, ...run, tone: "amber" as const,
+        title: overlaps.filter((day) => day.date >= run.start && day.date <= run.finish).map(overlapTitle).join("\n") })),
+      ...dateRuns(overDates, holidays).map((run) => ({ key: `over-${run.start}`, ...run, tone: "red" as const,
+        title: `${t("Plan.memberOverTitle")} · ${date(run.start)}${run.finish !== run.start ? ` – ${date(run.finish)}` : ""}` })),
+    ];
+    const expanded = !closed.has(key);
+    out.push({
+      key: `member:${key}`, depth: 0, kind: "project", label: name, expandable: true, expanded, onToggle: () => onToggle(key),
+      meta: [doing, t("Plan.memberTasks").replace("{n}", String(open.length)),
+        ...(overlaps.length ? [t("Plan.memberOverlapDays").replace("{n}", String(overlaps.length))] : []),
+        ...(overDates.length ? [t("Plan.memberOverDays").replace("{n}", String(overDates.length))] : [])].join(" · "),
+      ...(overlaps.length || overDates.length ? { status: <Badge tone={overDates.length ? "red" : "amber"}>{t(overDates.length ? "Plan.memberOverBadge" : "Plan.memberOverlapBadge")}</Badge> } : {}),
+      start: null, finish: null, tone: "slate", title: `${name} · ${doing}`,
+      segments: [
+        ...mine.map((item) => ({ key: item.key, start: item.start, finish: item.end, tone: scheduleTone({ status: item.status, planFinish: item.end, percentComplete: item.progress }, today), title: `${item.reference} ${item.title}` })),
+        ...others.map((item) => ({ key: item.key, start: item.start, finish: item.end, tone: "slate" as const, title: item.hidden ? t("TeamBoard.hiddenWork") : `${otherLabel(item)} · ${item.reference} ${item.title}` })),
+      ],
+      ...(alerts.length ? { alerts } : {}),
+    });
+    if (!expanded) continue;
+    out.push(...taskRows(owned, key));
+    for (const item of others) out.push({
+      key: `member:${key}:other:${item.key}`, depth: 1, kind: "task", tone: "slate", start: item.start, finish: item.end,
+      label: <><span className="plan-member-other">{otherLabel(item)}</span> {item.hidden ? t("TeamBoard.hiddenWork") : [item.reference, item.title].filter(Boolean).join(" ")}</>,
+      ...(item.customer ? { meta: item.customer } : {}),
+      title: `${item.hidden ? t("TeamBoard.hiddenWork") : `${item.reference} ${item.title}`} · ${item.start ?? "—"} → ${item.end ?? "—"}`,
+    });
+  }
+  // Rows nobody is on yet, so they are not missed.
+  const unassigned = rows.filter((task) => task.kind !== "phase" && !task.children.length && !task.pics.some((pic) => pic.active !== false));
+  if (unassigned.length) {
+    const expanded = !closed.has("none");
+    out.push({ key: "member:none", depth: 0, kind: "project", label: t("Plan.memberUnassigned"), meta: t("Plan.memberTasks").replace("{n}", String(unassigned.length)),
+      expandable: true, expanded, onToggle: () => onToggle("none"), start: null, finish: null, tone: "slate", title: t("Plan.memberUnassigned"),
+      segments: unassigned.map((task) => ({ key: `none:${task.id}`, start: task.planStart, finish: task.planFinish, tone: scheduleTone(task, today), title: `${task.wbs} ${task.name}` })) });
+    if (expanded) out.push(...taskRows(unassigned, "none"));
+  }
+  return out;
 }
 
 /**
@@ -2369,6 +2495,21 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
   useEffect(() => {
     if (selectedId) place(["plan", selectedId, ...(drawerTaskId ? ["task", drawerTaskId] : [])], "replace");
   }, [selectedId, drawerTaskId, place]);
+  // By member: everyone's other work over the plan's dates comes from the team board, read when the view opens.
+  const [memberWork, setMemberWork] = useState<{ key: string; data: TeamBoardData | null; error: string } | null>(null);
+  const [memberClosed, setMemberClosed] = useState<Set<string>>(() => new Set());
+  const memberSpan = schedule && level === "member" ? memberWindowOf(schedule, today) : null;
+  const memberKey = schedule && memberSpan ? `${schedule.projectId}|${memberSpan.from}|${memberSpan.to}` : "";
+  useEffect(() => {
+    if (!memberKey) return;
+    const [, from, to] = memberKey.split("|");
+    let current = true;
+    const timer = window.setTimeout(() => {
+      loadTeamBoard(from!, to!).then((data) => { if (current) setMemberWork({ key: memberKey, data, error: "" }); })
+        .catch((failure: unknown) => { if (current) setMemberWork({ key: memberKey, data: null, error: toError(failure) }); });
+    }, 0);
+    return () => { current = false; window.clearTimeout(timer); };
+  }, [memberKey]);
   const selectProject = (nextId: number | null) => {
     scheduleRequestId.current += 1;
     setSchedule(null); setDrawerTaskId(null); setFilter(null); setCollapsed(new Set()); setZoom("fit");
@@ -2521,7 +2662,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
   });
   // The draft is drawn where its row will land: before the row it goes before, else after the rows under its parent.
   const draftParent = draft?.parentId == null ? null : taskById.get(draft.parentId) ?? null;
-  const draftAt = !draft || !canPlan || (draft.parentId !== null && !draftParent) ? -1 : draft.beforeId !== null ? visible.findIndex((task) => task.id === draft.beforeId)
+  const draftAt = !draft || !canPlan || level === "member" || (draft.parentId !== null && !draftParent) ? -1 : draft.beforeId !== null ? visible.findIndex((task) => task.id === draft.beforeId)
     : !draftParent ? visible.length : (() => {
       const at = visible.indexOf(draftParent);
       let end = at + 1;
@@ -2544,6 +2685,15 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
         onSave={() => { void saveDraft(); }} onClose={() => setDraft(null)} />,
     });
   }
+  // By member (owner request 2026-11-04): one row per person on the plan with their rows here, their other work faint,
+  // and the days it overlaps (amber) or is more than they have (red) marked under their bars.
+  const memberView = level === "member";
+  const memberBoard = memberWork && memberWork.key === memberKey ? memberWork : null;
+  const memberRows = memberView && activeSchedule && memberSpan ? memberGanttRows({
+    schedule: activeSchedule, board: memberBoard?.data ?? null, span: memberSpan, today, closed: memberClosed, selectedTaskId: drawerTaskId, t: uiText, onOpenTask: setDrawerTaskId,
+    onToggle: (key) => setMemberClosed((current) => { const next = new Set(current); if (next.has(key)) next.delete(key); else next.add(key); return next; }),
+  }) : [];
+  const chartRows = memberView ? memberRows : ganttRows;
   const drawerTask = drawerTaskId === null ? null : taskById.get(drawerTaskId) ?? null;
   const filteredProjects = projects.filter((project) => project.id === selectedId || !projectQuery.trim()
     || `${project.number} ${project.name} ${project.customerName}`.toLocaleLowerCase().includes(projectQuery.trim().toLocaleLowerCase()));
@@ -2697,17 +2847,22 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
         {rows.length || draftAt >= 0 ? <div className="plan-gantt" data-guide="plan.gantt">
           <div className="plan-gantt-controls">
             <div className="seg-control" role="group" aria-label={uiText("Plan.levelLabel")} data-guide="plan.level">
-              {(["team", "master"] as const).map((value) => <button key={value} type="button" className={level === value ? "on" : ""} aria-pressed={level === value} onClick={() => setLevel(value)}>{uiText(value === "master" ? "Plan.levelMaster" : "Plan.levelTeam")}</button>)}
+              {(["team", "master", "member"] as const).map((value) => <button key={value} type="button" className={level === value ? "on" : ""} aria-pressed={level === value} onClick={() => setLevel(value)}>{uiText(PLAN_LEVEL_LABEL[value])}</button>)}
             </div>
-            {masterView ? null : <FilterChips label="Plan.quickFilters" items={filterItems} active={filter} onPick={(key) => setFilter(key as PlanFilter | null)} />}
+            {masterView || memberView ? null : <FilterChips label="Plan.quickFilters" items={filterItems} active={filter} onPick={(key) => setFilter(key as PlanFilter | null)} />}
             <GanttToolbar zoom={zoom} allowFit onZoom={(next) => { setZoom(next); setAnchor(today); }} onShift={(direction) => { if (zoom !== "fit") setAnchor((value) => shiftGanttAnchor(zoom, value, direction)); }} onToday={() => { if (zoom === "fit") setZoom("quarter"); setAnchor(today); }} />
           </div>
-          <GanttLegend baseline={Boolean(activeSchedule.latestBaseline)} target={Boolean(target)} links={links.length > 0} draggable={canPlan} />
+          <GanttLegend baseline={Boolean(activeSchedule.latestBaseline)} target={Boolean(target)} links={!memberView && links.length > 0} draggable={canPlan && !memberView} />
+          {memberView ? <div className="info-strip plan-member-note" role="note" data-guide="plan.memberLegend">
+            <i className="plan-member-key amber" aria-hidden="true" /><span>{uiText("Plan.memberLegendOverlap")}</span>
+            <i className="plan-member-key red" aria-hidden="true" /><span>{uiText("Plan.memberLegendOver")}</span>
+            <span className="muted">{memberBoard?.error ? uiText("Plan.memberBoardFailed") : !memberBoard ? uiText("Plan.memberBoardLoading") : uiText("Plan.memberLegendHint")}</span>
+          </div> : null}
           {lastMove ? <div className="info-strip plan-undo" role="status"><Icon name="calendar" /><span>{lastMove.label} {uiText("Plan.movedShort")}</span>
             <button className="btn ghost sm" type="button" disabled={saving || loadingSchedule} onClick={() => { void undoMove(); }}><Icon name="refresh" />{uiText("Plan.undo")}</button>
             <button className="icon-btn" type="button" aria-label={uiText("Close")} title={uiText("Close")} onClick={() => setLastMove(null)}><Icon name="x" /></button>
           </div> : null}
-          {ganttRows.length ? <GanttChart rows={ganttRows} range={range} today={today} sideHeader="Gantt.taskColumn" label="Gantt.planLabel" links={links}
+          {chartRows.length ? <GanttChart rows={chartRows} range={range} today={today} sideHeader={memberView ? "Plan.memberColumn" : "Gantt.taskColumn"} label="Gantt.planLabel" links={memberView ? [] : links}
             onMoveRow={(drop) => { void moveRow(drop); }} canMoveRow={(drop) => placeFor(drop) !== null} />
             : <EmptyState icon="filter" title="Plan.noMatch" message="Plan.noMatchHint" action={<button className="btn ghost sm" type="button" onClick={() => setFilter(null)}><Icon name="x" />{uiText("Portfolio.clearFilters")}</button>} />}
         </div> : loadingSchedule ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading…"} /></div> : <EmptyState icon="calendar" title={uiText("This project has no schedule yet")} message={canPlan ? "Plan.startWithHeading" : "Project Manager หรือ Engineering Manager เป็นผู้สร้างแผน"}

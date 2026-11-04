@@ -4,6 +4,8 @@ export type Commitment = {
   key: string;
   /** The work itself, whoever does it (backend-node/src/resource-workload.ts); a person's work order names these. */
   workKey: string;
+  /** The piece of work it is part of: a plan task with its functions is one (Project-<task id>); absent, the work key. */
+  group?: string;
   /** Task: work added on the team board (dbo.team_tasks), whose entityId is the task's own id. */
   type: "Inquiry" | "Estimate" | "Project" | "Task";
   entityId: number;
@@ -34,6 +36,8 @@ export const weeklyCapacity = (saved: number | null | undefined) => saved ?? DEF
 export const FINISHED_WORK_STATUSES = ["Closed", "Cancelled", "Approved", "Locked", "Done", "Completed", "Reviewed", "Rejected"];
 export const isOpenWork = (item: Pick<Commitment, "progress" | "status">) =>
   item.progress < 100 && !FINISHED_WORK_STATUSES.includes(item.status);
+/** The piece of work an item belongs to: a plan task and its functions are one. */
+export const workGroup = (item: Pick<Commitment, "group" | "workKey">) => item.group ?? item.workKey;
 export const dayNumber = (value: string) =>
   Date.parse(value.slice(0, 10) + "T00:00:00Z") / DAY;
 export const dateFromDay = (value: number) =>
@@ -69,6 +73,27 @@ export function workingDays(
   }
   return result;
 }
+/**
+ * A plan row nobody gave man-days (owner decision 2026-11-04) takes a full day on each of its working days: once for
+ * each piece of work (a task with its functions is one), and only on days that piece has no man-days of its own.
+ * Man-days by date.
+ */
+export function impliedEffort(items: readonly Commitment[], holidays: readonly string[] = []): Map<string, number> {
+  const typed = new Set<string>(), implied = new Set<string>();
+  for (const item of items) {
+    if (!isOpenWork(item) || !item.start || !item.end) continue;
+    const hasEffort = item.manDays !== null && item.manDays > 0;
+    if (!hasEffort && item.type !== "Project") continue;
+    for (const date of workingDays(item.start, item.end, holidays)) (hasEffort ? typed : implied).add(`${workGroup(item)}|${date}`);
+  }
+  const byDate = new Map<string, number>();
+  for (const key of implied) {
+    if (typed.has(key)) continue;
+    const date = key.slice(key.lastIndexOf("|") + 1);
+    byDate.set(date, (byDate.get(date) ?? 0) + 1);
+  }
+  return byDate;
+}
 export function planningLoad(
   items: Commitment[],
   weeks: ReturnType<typeof planningWeeks>,
@@ -77,6 +102,7 @@ export function planningLoad(
   holidays: readonly string[] = [],
 ) {
   const open = items.filter(isOpenWork);
+  const implied = [...impliedEffort(open, holidays)];
   const entries = open.map((item) => ({
     item,
     days:
@@ -90,6 +116,8 @@ export function planningLoad(
           (item.manDays *
             days.filter((d) => d >= week.start && d <= week.end).length) /
           days.length;
+    for (const [date, extra] of implied)
+      if (date >= week.start && date <= week.end) manDays += extra;
     const available =
       capacity === null
         ? null
