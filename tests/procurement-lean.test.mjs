@@ -98,6 +98,14 @@ test("a PR goes to the requester's department head, then the final approver, who
   assert.match(editor, /\/api\/v1\/purchase-requisitions\/approval-route/);
 });
 
+test("the requester hears of every decision on their PR, by bell and email (owner 2026-11-04)", () => {
+  assert.match(requisitions, /const told = await noticeRequester\(transaction, id, actor, \{ stepId: current\.id, step: current\.name, decision, comment \}\);/);
+  assert.match(requisitions, /notifyUsers\(transaction, \[Number\(row\.requested_by\)\], "PR_DECISION"/);
+  // A fully approved PR is mailed with the ERP's answer; every other decision at once.
+  assert.match(requisitions, /if \(decided\.status !== "Approved" \|\| !erp\) await tell\(decided\.told, null\);/);
+  assert.match(requisitions, /void tell\(decided\.told, outcome\)/);
+});
+
 test("the Approvals badge counts procurement approvals, not estimates in review", () => {
   assert.match(shell, /apiRequest<\{ waiting: number \}>\("\/api\/v1\/procurement\/approvals\/attention"\)/);
   assert.match(shell, /if \(view === "approvals"\) return procurementApprovalCount;/);
