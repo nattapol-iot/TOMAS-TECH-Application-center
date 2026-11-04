@@ -1062,9 +1062,9 @@ const PR_APPROVE: Guide = {
       target: "appr.approve", action: "click", view: "approvals",
       title: { th: "อนุมัติหรือไม่อนุมัติ", en: "Approve or reject", jp: "承認または却下" },
       body: {
-        th: "กด 'อนุมัติ' หรือ 'ไม่อนุมัติ' แล้วยืนยันพร้อมความเห็น ใบที่อนุมัติครบจะส่งเข้า Pegasus ERP เอง ถ้าแค่ฝึก ให้กด 'ยกเลิก' ในหน้าต่างยืนยัน แล้วกด 'จบบทสอน'",
-        en: "Press Approve or Reject and confirm with a comment; a fully approved PR goes to Pegasus ERP by itself. Only practising? Press Cancel in the confirmation, then Finish.",
-        jp: "「承認」または「却下」を押し、コメントを付けて確定します。承認が揃うとPegasus ERPに自動送信されます。練習だけなら確認画面で「キャンセル」を押してから「完了」を押します。",
+        th: "กด 'อนุมัติ' หรือ 'ไม่อนุมัติ' แล้วยืนยันพร้อมความเห็น ผู้ขอได้แจ้งผลพร้อมความเห็นของคุณทุกครั้ง ใบที่อนุมัติครบจะส่งเข้า Pegasus ERP เอง ถ้าแค่ฝึก ให้กด 'ยกเลิก' ในหน้าต่างยืนยัน แล้วกด 'จบบทสอน'",
+        en: "Press Approve or Reject and confirm with a comment; the requester is always told, with your comment. A fully approved PR goes to Pegasus ERP by itself. Only practising? Press Cancel in the confirmation, then Finish.",
+        jp: "「承認」または「却下」を押し、コメントを付けて確定します。結果はコメントと一緒に必ず依頼者へ通知されます。承認が揃うとPegasus ERPに自動送信されます。練習だけなら確認画面で「キャンセル」を押してから「完了」を押します。",
       },
       missing: { th: "ยังไม่มีใบขอซื้อรอคุณ กด 'จบบทสอน' ได้", en: "Nothing is waiting for you. Press Finish.", jp: "承認待ちはありません。「完了」を押します。" },
     },
@@ -2058,9 +2058,9 @@ export const GUIDES: readonly Guide[] = [
         target: "pr.approvers", action: "next", view: "purchase",
         title: { th: "ใครอนุมัติ", en: "Who approves", jp: "承認者" },
         body: {
-          th: "ช่องผู้อนุมัติบอกว่าใบนี้ไปให้หัวหน้าแผนกของคุณก่อน แล้วไปที่ผู้อนุมัติขั้นสุดท้าย จากนั้นระบบส่งเข้า ERP เอง",
-          en: "The approvers box shows the PR goes to your department head first, then to the final approver, then to the ERP by itself.",
-          jp: "承認者欄のとおり、まず部門長、次に最終承認者が承認し、その後自動でERPに送られます。",
+          th: "ช่องผู้อนุมัติบอกว่าใบนี้ไปให้หัวหน้าแผนกของคุณก่อน แล้วไปที่ผู้อนุมัติขั้นสุดท้าย จากนั้นระบบส่งเข้า ERP เอง ทุกครั้งที่มีคนอนุมัติหรือไม่อนุมัติ คุณได้แจ้งเตือนที่กระดิ่งและทางอีเมล",
+          en: "The approvers box shows the PR goes to your department head first, then to the final approver, then to the ERP by itself. Each time someone approves or rejects it, you get a notification and an email.",
+          jp: "承認者欄のとおり、まず部門長、次に最終承認者が承認し、その後自動でERPに送られます。承認・却下のたびに通知とメールが届きます。",
         },
       },
       {

@@ -97,6 +97,22 @@ export type PurchaseRequisitionApprovalEmail = {
   recipients: EmailRecipient[];
 };
 
+/** How a purchase requisition was decided, for its requester: every decision, each step's included (owner 2026-11-04). */
+export type PurchaseRequisitionDecisionEmail = {
+  prNumber: string;
+  projectNumber: string;
+  projectName: string;
+  decision: "Approve" | "Reject";
+  step: string;
+  decidedBy: string;
+  comment: string;
+  /** Who the PR waits for now; "" once it is fully approved or rejected. */
+  nextApproverName: string;
+  /** What the ERP answered for the fully approved PR; null when nothing was sent (rejected, steps left, no ERP link). */
+  erp: { sent: boolean; prNo?: string; message?: string } | null;
+  recipients: EmailRecipient[];
+};
+
 /** A team-board appointment or task for one person's Outlook calendar (team-calendar.ts): a request, or its cancellation. */
 export type TeamTaskCalendarEmail = {
   method: "REQUEST" | "CANCEL";
@@ -196,7 +212,7 @@ export class EmailService {
       + `<p><a href="${escapeHtml(appUrl)}#project/${message.projectId}/task/${message.taskId}">เปิดงานนี้ใน Project ${escapeHtml(message.projectNumber)} / Open this task</a></p>`);
   }
 
-  // Only the final approver is emailed (owner 2026-11-03); purchase-requisitions.ts writes the bell rows, a department head's
+  // Of the approvers, only the final approver is emailed (owner 2026-11-03); purchase-requisitions.ts writes the bell rows, a department head's
   // included, in the same transaction and hands this message back to send after the commit.
   async sendPurchaseRequisitionApproval(message: PurchaseRequisitionApprovalEmail): Promise<EmailDeliveryResult> {
     const amount = message.amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -209,6 +225,27 @@ export class EmailService {
       + `<tr><td><strong>Requester</strong></td><td>${escapeHtml(message.requesterName)}</td></tr>`
       + `<tr><td><strong>Amount</strong></td><td>${escapeHtml(amount)} THB</td></tr>`
       + `<tr><td><strong>Step</strong></td><td>${escapeHtml(message.step)}</td></tr></table>`
+      + `<p><a href="${escapeHtml(appUrl)}#/purchase">เปิดรายการใบขอซื้อ / Open Purchase Requisitions</a></p>`);
+  }
+
+  // The requester hears of every decision on their PR (owner 2026-11-04), with the bell purchase-requisitions.ts writes; a fully
+  // approved one is mailed once the ERP has answered, so the mail says whether the PR is in the ERP or must be sent again.
+  async sendPurchaseRequisitionDecision(message: PurchaseRequisitionDecisionEmail): Promise<EmailDeliveryResult> {
+    const { erp } = message, rejected = message.decision === "Reject", waiting = !rejected && message.nextApproverName !== "";
+    const subject = rejected ? "ไม่อนุมัติ / rejected" : waiting ? `ผ่าน ${message.step} / ${message.step} approved` : "อนุมัติแล้ว / approved";
+    const summary = rejected ? "PR ของคุณไม่ได้รับอนุมัติ / Your PR was rejected."
+      : waiting ? `ผ่าน ${escapeHtml(message.step)} แล้ว รอ ${escapeHtml(message.nextApproverName)} / Approved at ${escapeHtml(message.step)}; now waiting for ${escapeHtml(message.nextApproverName)}.`
+        : !erp ? "อนุมัติครบแล้ว / Fully approved."
+          : erp.sent ? `อนุมัติครบแล้ว และอยู่ใน Pegasus ERP แล้ว เลข ${escapeHtml(erp.prNo ?? "")} / Fully approved and in the ERP as ${escapeHtml(erp.prNo ?? "")}.`
+            : "อนุมัติครบแล้ว แต่ยังไม่เข้า ERP เปิด PR แล้วกดส่งเข้า ERP / Fully approved but not in the ERP yet; open the PR and send it.";
+    return this.sendMail(message.recipients, `[Engineering Center] PR ${message.prNumber} ${subject}`, (appUrl) =>
+      `<p>${summary}</p>`
+      + `<table><tr><td><strong>PR</strong></td><td>${escapeHtml(message.prNumber)}</td></tr>`
+      + `<tr><td><strong>Project</strong></td><td>${escapeHtml(message.projectNumber)} · ${escapeHtml(message.projectName)}</td></tr>`
+      + `<tr><td><strong>Step</strong></td><td>${escapeHtml(message.step)}</td></tr>`
+      + `<tr><td><strong>Decided by</strong></td><td>${escapeHtml(message.decidedBy)}</td></tr>`
+      + (message.comment ? `<tr><td><strong>Comment</strong></td><td>${escapeHtml(message.comment)}</td></tr>` : "")
+      + (erp && !erp.sent && erp.message ? `<tr><td><strong>ERP</strong></td><td>${escapeHtml(erp.message)}</td></tr>` : "") + `</table>`
       + `<p><a href="${escapeHtml(appUrl)}#/purchase">เปิดรายการใบขอซื้อ / Open Purchase Requisitions</a></p>`);
   }
 

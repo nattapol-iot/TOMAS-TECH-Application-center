@@ -10,7 +10,7 @@ import { bodyObject, booleanQuery, oneOf, optionalBodyText, optionalPositiveLong
 import { insertMaterialAudit } from "../material-audit.js";
 import { type ApprovalRoute, approvalSteps, type BomLineForRequest, ERP_STEP, FINAL_STEP, LEGACY_PO_CREATION_STEP, MAX_PR_LINES, moduleBudgets, NO_MODULE, planPrLines, type PlannedPrLine,
   type PrLineInput, type PrLineKind, procurementRuleFlags, remainingToRequest, REQUESTING_PR_STATUSES, type RuleFlag } from "../procurement-rules.js";
-import type { EmailService, PurchaseRequisitionApprovalEmail } from "../email.js";
+import type { EmailService, PurchaseRequisitionApprovalEmail, PurchaseRequisitionDecisionEmail } from "../email.js";
 import { describeErpFailure, type ErpDepartment, type ErpFailure, type ErpGateway, type ErpLine, erpLineProblem, ERP_MAX_QUANTITY, type ErpRequest, erpRequestArguments,
   isFinalErpStatus, localStatusFor, newErpRef, suggestDepartment } from "../erp-purchasing.js";
 import { demandProjectScope, isProjectElevated } from "../project-scope.js";
@@ -189,9 +189,32 @@ async function noticeWaiting(transaction: TransactionType, prId: number, actorId
     recipients: [{ name: String(row.final_name ?? ""), email: String(row.final_email) }] };
 }
 
+/**
+ * Tells the requester how their PR was just decided, every time (owner 2026-11-04): each step's approval, the last one and a
+ * rejection. The bell now; the email it returns goes after the commit. Not when they decided it themselves.
+ */
+async function noticeRequester(transaction: TransactionType, prId: number, actor: CurrentUser, decided: { stepId: number; step: string; decision: string; comment: string | null }): Promise<PurchaseRequisitionDecisionEmail | null> {
+  const request = new sql.Request(transaction); request.input("id", sql.BigInt, prId);
+  const row = (await request.query<Record<string, unknown>>(`SELECT pr.pr_no,pr.requested_by,p.project_no,p.name project_name,ru.name requester,ru.email requester_email,
+      CASE WHEN ru.is_active=1 AND ru.deleted_at IS NULL THEN 1 ELSE 0 END requester_active,CASE WHEN pr.status=N'In Approval' THEN COALESCE(au.name,cs.approver_role) END next_approver
+    FROM dbo.mat_prs pr INNER JOIN dbo.projects p ON p.id=pr.project_id INNER JOIN dbo.users ru ON ru.id=pr.requested_by ${stepsOf()}
+    LEFT JOIN dbo.users au ON au.id=cs.approver_id WHERE pr.id=@id;`)).recordset[0];
+  if (!row || Number(row.requested_by) === actor.id) return null;
+  const next = String(row.next_approver ?? ""), comment = decided.comment ?? "", rejected = decided.decision === "Reject";
+  const title = rejected ? "ไม่อนุมัติ" : next ? `ผ่าน ${decided.step} · รอ ${next}` : "อนุมัติแล้ว";
+  await notifyUsers(transaction, [Number(row.requested_by)], "PR_DECISION", `PR ${String(row.pr_no)} ${title}`, `${String(row.project_no)} · ${actor.name}${comment ? `: ${comment}` : ""}`,
+    "PurchaseRequisition", prId, `pr-decision:${prId}:${decided.stepId}`);
+  if (!row.requester_active || !row.requester_email) return null;
+  return { prNumber: String(row.pr_no), projectNumber: String(row.project_no), projectName: String(row.project_name), decision: rejected ? "Reject" : "Approve", step: decided.step,
+    decidedBy: actor.name, comment, nextApproverName: next, erp: null, recipients: [{ name: String(row.requester ?? ""), email: String(row.requester_email) }] };
+}
+
 export function registerPurchaseRequisitionRoutes(app: FastifyInstance, config: AppConfig, database: Database, users: CurrentUserService, erp: ErpLink | null = null,
-  email: Pick<EmailService, "sendPurchaseRequisitionApproval"> | null = null): void {
+  email: Pick<EmailService, "sendPurchaseRequisitionApproval" | "sendPurchaseRequisitionDecision"> | null = null): void {
   const mail = async (message: PurchaseRequisitionApprovalEmail | null) => { if (message && email) await email.sendPurchaseRequisitionApproval(message); };
+  const tell = async (message: PurchaseRequisitionDecisionEmail | null, erpOutcome: ErpOutcome | null) => {
+    if (message && email) await email.sendPurchaseRequisitionDecision({ ...message, erp: erpOutcome && { sent: erpOutcome.sent, prNo: erpOutcome.prNo ?? "", message: erpOutcome.message ?? "" } });
+  };
   const subjectOf = async (userId: number) => String((await database.query<{ subject: string | null }>(`SELECT entra_object_id subject FROM dbo.users WHERE id=@id;`,
     (r) => r.input("id", sql.BigInt, userId))).recordset[0]?.subject ?? "");
 
@@ -435,8 +458,11 @@ export function registerPurchaseRequisitionRoutes(app: FastifyInstance, config: 
       await insertMaterialAudit(transaction, actor, `${decision} — ${current.name}`, "PR", id, h.pr_no, { step: current.name, status: h.status },
         { status: nextStatus, ...(found.for_department ? { inPlaceOf: String(found.name) } : {}) }, { projectId: Number(h.project_id), reason: comment, approverId: actor.id });
       const notice = nextStatus === "In Approval" ? await noticeWaiting(transaction, id, actor.id) : null;
-      return { id, number: h.pr_no, requestedBy: Number(h.requested_by), status: nextStatus, step: current.name, decision, rowVersion: row.row_version.toString("base64"), notice }; });
+      const told = await noticeRequester(transaction, id, actor, { stepId: current.id, step: current.name, decision, comment });
+      return { id, number: h.pr_no, requestedBy: Number(h.requested_by), status: nextStatus, step: current.name, decision, rowVersion: row.row_version.toString("base64"), notice, told }; });
     await mail(decided.notice);
+    // A fully approved PR's requester is mailed once the ERP has answered (below), so the mail says whether it is in the ERP.
+    if (decided.status !== "Approved" || !erp) await tell(decided.told, null);
     // Fully approved: send it to the ERP as the requester now. If their TMT ID session has ended (or the ERP says no), the PR
     // stays Approved and the requester is told to send it themselves. A slow ERP does not hold the approver's request: after a
     // short wait the reply goes back and the send finishes on its own, telling the requester if it failed.
@@ -447,6 +473,8 @@ export function registerPurchaseRequisitionRoutes(app: FastifyInstance, config: 
         .then(async (outcome) => {
           if (!outcome.sent) await database.transaction((transaction) => notifyUsers(transaction, [decided.requestedBy], "PR_ERP_SEND", `PR ${decided.number} อนุมัติแล้ว · กดส่งเข้า ERP`,
             outcome.message ?? "", "PurchaseRequisition", id, `pr-erp-send:${id}:${Date.now()}`)).catch((error: unknown) => request.log.error({ err: error, prId: id }, "PR ERP send notification failed"));
+          // Not awaited: the approver's reply does not wait for the mail server.
+          void tell(decided.told, outcome).catch((error: unknown) => request.log.error({ err: error, prId: id }, "PR decision email failed"));
           return outcome;
         });
       let timer: NodeJS.Timeout | undefined;

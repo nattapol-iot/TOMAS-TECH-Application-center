@@ -14,7 +14,7 @@ import { registerPurchaseRequisitionRoutes } from "../src/routes/purchase-requis
 import { registerReportRoutes } from "../src/routes/reports.js";
 import type { CurrentUser } from "../src/types.js";
 import type { ErpGateway, ErpRequest } from "../src/erp-purchasing.js";
-import type { PurchaseRequisitionApprovalEmail } from "../src/email.js";
+import type { PurchaseRequisitionApprovalEmail, PurchaseRequisitionDecisionEmail } from "../src/email.js";
 
 if (!/^\(localdb\)\\IoTProcCI_[a-f0-9]{16}$/.test(process.env.PROCUREMENT_TEST_SERVER ?? "")) throw Error("Private procurement LocalDB instance required");
 const bridge = spawn("pwsh", ["-NoProfile", "-File", fileURLToPath(new URL("./helpers/procurement-sql-bridge.ps1", import.meta.url))], { stdio: ["pipe", "pipe", "inherit"], windowsHide: true });
@@ -76,9 +76,15 @@ const gateway: ErpGateway = { async call<T>(subject: string, tool: string, args:
 } };
 const creates = () => erpCalls.filter((entry) => entry.tool === "purchase_request_create");
 
-// The final approver's emails, kept instead of sent.
-const mails: PurchaseRequisitionApprovalEmail[] = [];
-const email = { async sendPurchaseRequisitionApproval(message: PurchaseRequisitionApprovalEmail) { mails.push(message); return { status: "sent" as const, recipients: message.recipients.map((r) => r.email) }; } };
+// The final approver's emails, and the requester's after each decision, kept instead of sent.
+const mails: PurchaseRequisitionApprovalEmail[] = [], told: PurchaseRequisitionDecisionEmail[] = [];
+const email = {
+  async sendPurchaseRequisitionApproval(message: PurchaseRequisitionApprovalEmail) { mails.push(message); return { status: "sent" as const, recipients: message.recipients.map((r) => r.email) }; },
+  async sendPurchaseRequisitionDecision(message: PurchaseRequisitionDecisionEmail) { told.push(message); return { status: "sent" as const, recipients: message.recipients.map((r) => r.email) }; },
+};
+// What the requester was told about one PR: [decision, step, waiting for, the ERP's answer, to].
+const toldOf = (number: unknown) => told.filter((m) => m.prNumber === number)
+  .map((m) => [m.decision, m.step, m.nextApproverName, m.erp && (m.erp.sent ? m.erp.prNo : "not sent"), m.recipients.map((r) => r.email).join()]);
 
 const users = new CurrentUserService(database), config = { businessTimeZone: "Asia/Bangkok" } as AppConfig;
 const app = Fastify({ forceCloseConnections: true }); registerErrorHandler(app);
@@ -156,6 +162,8 @@ try {
   const approved1 = await call("POST", `/purchase-requisitions/${pr1.id}/decide`, "PM", { decision: "Approve" });
   assert.deepEqual([approved1.status, approved1.erp.sent, approved1.erp.prNo], ["Approved", true, "PR2610-0001"]);
   await call("POST", `/purchase-requisitions/${pr1.id}/decide`, "Buyer", { decision: "Approve" }, 409);
+  // The requester is told every decision: the bell, and a mail that waits for the ERP's answer.
+  assert.deepEqual(toldOf(pr1.number), [["Approve", "Project Manager Approval", "", "PR2610-0001", "procurement-ci-Requester@test.invalid"]]);
   const sent1 = creates()[0]!;
   const ref1 = String(sent1.args.external_ref);
   assert.equal(sent1.subject, "procurement-ci-Requester");
@@ -194,6 +202,9 @@ try {
   assert.deepEqual([approved2.status, approved2.erp.sent, approved2.erp.kind], ["Approved", false, "signed_out"]);
   const requesterId = actors.find((actor) => actor.name === "Requester")!.id;
   assert.equal(Number((await run(`SELECT COUNT(*) n FROM dbo.notifications WHERE user_id=${requesterId} AND kind=N'PR_ERP_SEND' AND entity_type=N'PurchaseRequisition' AND entity_id=${Number(pr2.id)}`)).recordset[0]!.n), 1);
+  const decisionBells = async (prId: number) => (await run(`SELECT title FROM dbo.notifications WHERE user_id=${requesterId} AND kind=N'PR_DECISION' AND entity_id=${prId} ORDER BY id`)).recordset.map((r) => String(r.title));
+  assert.deepEqual([await decisionBells(pr1.id), await decisionBells(pr2.id)], [[`PR ${String(pr1.number)} อนุมัติแล้ว`], [`PR ${String(pr2.number)} อนุมัติแล้ว`]]);
+  assert.deepEqual(toldOf(pr2.number).map((m) => m[3]), ["not sent"]);
   assert.equal((await call("GET", `/purchase-requisitions/${pr2.id}`, "Requester")).erp.prNo, null);
   signedOut.delete("procurement-ci-Requester");
   const sent2 = await call("POST", `/purchase-requisitions/${pr2.id}/erp-send`, "Requester", {});
@@ -202,6 +213,8 @@ try {
   // PR 3: the Engineering Manager approves after the PM. The ERP refuses it twice; the requester sends it again under the same ref.
   await call("POST", `/purchase-requisitions/${pr3.id}/decide`, "PM", { decision: "Approve", comment: "needed for the historian" });
   await call("POST", `/purchase-requisitions/${pr3.id}/decide`, "PM", { decision: "Approve", comment: "me again" }, 403);
+  assert.deepEqual(toldOf(pr3.number), [["Approve", "Project Manager Approval", "Engineering Manager", null, "procurement-ci-Requester@test.invalid"]]);
+  assert.deepEqual(await decisionBells(pr3.id), [`PR ${String(pr3.number)} ผ่าน Project Manager Approval · รอ Engineering Manager`]);
   refuseNextCreate = true;
   const approved3 = await call("POST", `/purchase-requisitions/${pr3.id}/decide`, "EM", { decision: "Approve", comment: "accepted overrun" });
   assert.deepEqual([approved3.status, approved3.erp.sent, approved3.erp.kind], ["Approved", false, "validation"]);
@@ -346,6 +359,7 @@ try {
   const steps5 = (await call("GET", `/purchase-requisitions/${pr5.id}`, "Requester")).steps as Json[];
   assert.deepEqual(steps5.map((step) => [step.name, step.status, step.approverId]),
     [["Submitted by Requester", "Completed", requesterId], ["Department Approval", "Not Required", leadId], ["Final Approval", "Completed", emId], ["Sent to ERP", "Completed", null]]);
+  assert.deepEqual(toldOf(pr5.number).map((m) => m.slice(0, 3)), [["Approve", "Final Approval", ""]]);
 
   // PR 6 (Mechanical, Electrical): the head decides first; then the final approver is told, by email too.
   await run(`UPDATE dbo.pr_department_approvers SET final_may_decide=0`);
@@ -357,6 +371,10 @@ try {
   assert.deepEqual([head6.status, head6.step], ["In Approval", "Department Approval"]);
   assert.deepEqual([await bells(pr6.id, emId), mails.length, mails.at(-1)!.prNumber, mails.at(-1)!.stepApproverName], [1, 2, pr6.number, ""]);
   assert.equal((await call("POST", `/purchase-requisitions/${pr6.id}/decide`, "EM", { decision: "Reject", comment: "use stock" })).status, "Rejected");
+  // The requester hears of the head's approval and of the rejection, with its reason.
+  assert.deepEqual(toldOf(pr6.number).map((m) => m.slice(0, 3)), [["Approve", "Department Approval", "EM"], ["Reject", "Final Approval", ""]]);
+  assert.equal(told.at(-1)!.comment, "use stock");
+  assert.deepEqual(await decisionBells(pr6.id), [`PR ${String(pr6.number)} ผ่าน Department Approval · รอ EM`, `PR ${String(pr6.number)} ไม่อนุมัติ`]);
 
   // PR 7: the final approver raises one. They may stand in for their head, and approve their own PR at the final step; nobody emails them about it.
   await run(`UPDATE dbo.pr_approval_settings SET final_approver_id=${requesterId}; UPDATE dbo.pr_department_approvers SET final_may_decide=1`);
@@ -364,6 +382,7 @@ try {
   assert.deepEqual([await bells(pr7.id, leadId), await bells(pr7.id, requesterId), mails.length], [1, 0, 2]);
   const own7 = await call("POST", `/purchase-requisitions/${pr7.id}/decide`, "Requester", { decision: "Approve", comment: "own PR at the final step" });
   assert.deepEqual([own7.status, own7.erp.sent], ["Approved", true]);
+  assert.deepEqual([toldOf(pr7.number), await decisionBells(pr7.id)], [[], []], "nobody tells the requester what they decided themselves");
   console.log(`PASS: procurement API on LocalDB (1,000-line PR in ${elapsed} ms).`);
 } finally {
   await app.close();

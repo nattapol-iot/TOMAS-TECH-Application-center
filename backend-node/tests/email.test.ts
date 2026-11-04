@@ -125,3 +125,31 @@ test("every notification link opens the record it names, not the site root", asy
   // starts on, which is My Work, and that is the bug these fragments exist to fix.
   for (const body of bodies) assert.doesNotMatch(body, /href="https:\/\/iot\.example\.com\/"/);
 });
+
+test("a PR decision tells the requester the step, who waits next, a rejection's reason and what the ERP answered", async () => {
+  const sent: Array<{ url: string; init?: RequestInit }> = [];
+  const fetcher = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+    sent.push({ url: String(input), ...(init ? { init } : {}) });
+    if (String(input).includes("/oauth2/v2.0/token")) return Response.json({ access_token: "token-1", expires_in: 3600 });
+    return new Response(null, { status: 202 });
+  }) as typeof fetch;
+  const service = new EmailService(graphConfig, fetcher);
+  const base = { prNumber: "PR-2611-0002", projectNumber: "PJ-1", projectName: "Line <C>", step: "Department Approval", decidedBy: "Warit", comment: "",
+    nextApproverName: "Nattapol", decision: "Approve" as const, erp: null, recipients: [{ name: "Requester", email: "requester@example.com" }] };
+  await service.sendPurchaseRequisitionDecision(base);
+  await service.sendPurchaseRequisitionDecision({ ...base, decision: "Reject", step: "Final Approval", nextApproverName: "", decidedBy: "Nattapol", comment: "use <stock>" });
+  await service.sendPurchaseRequisitionDecision({ ...base, step: "Final Approval", nextApproverName: "", erp: { sent: true, prNo: "PR2611-0009", message: "" } });
+  await service.sendPurchaseRequisitionDecision({ ...base, step: "Final Approval", nextApproverName: "", erp: { sent: false, prNo: "", message: "Sign in with TMT ID again." } });
+  const mails = sent.filter((call) => call.url.includes("/sendMail")).map((call) => JSON.parse(String(call.init!.body)) as { message: { subject: string; body: { content: string } } });
+  assert.deepEqual(mails.map((mail) => mail.message.subject), [
+    "[Engineering Center] PR PR-2611-0002 ผ่าน Department Approval / Department Approval approved",
+    "[Engineering Center] PR PR-2611-0002 ไม่อนุมัติ / rejected",
+    "[Engineering Center] PR PR-2611-0002 อนุมัติแล้ว / approved",
+    "[Engineering Center] PR PR-2611-0002 อนุมัติแล้ว / approved",
+  ]);
+  assert.match(mails[0]!.message.body.content, /รอ Nattapol/);
+  assert.match(mails[0]!.message.body.content, /Line &lt;C&gt;/);
+  assert.match(mails[1]!.message.body.content, /use &lt;stock&gt;/);
+  assert.match(mails[2]!.message.body.content, /in the ERP as PR2611-0009/);
+  assert.match(mails[3]!.message.body.content, /not in the ERP yet[\s\S]*Sign in with TMT ID again\./);
+});
