@@ -24,6 +24,11 @@ export type WorkloadItem = {
    * or InquiryTask-<id>. A person's work order names these.
    */
   workKey: string;
+  /**
+   * One piece of work made of several rows: a plan row's task under its heading (Project-<task id>), so a task's
+   * functions are one piece of work when the board looks for work that overlaps. Absent: the work key is the piece.
+   */
+  group?: string;
   type: "Inquiry" | "Estimate" | "Project" | "Task"; entityId: number; ownerId: number | null;
   reference: string; title: string; customer: string; start: string | null; end: string | null;
   manDays: number | null; progress: number; status: string;
@@ -192,6 +197,13 @@ export function workloadItems(sets: Row[][], holidays: ReadonlySet<string>): { i
     if (!project) continue;
     let calculation: ReturnType<typeof resolveTasks>;
     try { calculation = resolveTasks(rows, new Set(holidays)); } catch { warnings.push(project.number); continue; }
+    const rowById = new Map(rows.map((row) => [row.id, row]));
+    /** The task right under the heading that a row belongs to (itself, or the task its functions sit under). */
+    const groupOf = (task: TaskRow) => {
+      let top = task;
+      for (let parent = top.parentId === null ? undefined : rowById.get(top.parentId); parent && parent.kind !== "phase"; parent = top.parentId === null ? undefined : rowById.get(top.parentId)) top = parent;
+      return `Project-${top.id}`;
+    };
     for (const task of rows) {
       const resolved = calculation.byId.get(task.id);
       if (!resolved || task.kind === "phase" || resolved.children.length) continue;
@@ -199,7 +211,7 @@ export function workloadItems(sets: Row[][], holidays: ReadonlySet<string>): { i
       const owners = picsByTask.get(task.id) ?? [];
       const shares: Array<number | null> = owners.length ? owners : [null];
       for (const ownerId of shares) items.push({
-        key: `Project-${task.id}-${ownerId ?? "none"}`, workKey: `Project-${task.id}`, type: "Project", entityId: projectId, ownerId,
+        key: `Project-${task.id}-${ownerId ?? "none"}`, workKey: `Project-${task.id}`, group: groupOf(task), type: "Project", entityId: projectId, ownerId,
         reference: `${project.number} · ${resolved.wbs}`, title: task.name, customer: project.customer,
         start: resolved.planStart, end: resolved.planFinish, manDays: task.planManDays / shares.length,
         progress: resolved.percentComplete, status: resolved.status, ...project.scope,

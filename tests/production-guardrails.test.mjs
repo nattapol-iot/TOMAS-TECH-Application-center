@@ -196,7 +196,9 @@ test("schedule screens follow the API's progress and Resource Plan flags", async
   assert.match(schedule, /saving=\{saving \|\| loadingSchedule\}/);
   assert.match(schedule, /onImportDrawing=\{\(\) => setDrawingTask\(\{ projectId: activeSchedule\.projectId, taskId: drawerTask\.id \}\)\}/);
   // The plan is a Gantt on the shared component, and a reload keeps it on screen.
-  assert.match(schedule, /<GanttChart rows=\{ganttRows\} range=\{range\}/);
+  // The plan by row, or by member (owner request 2026-11-04).
+  assert.match(schedule, /const chartRows = memberView \? memberRows : ganttRows;/);
+  assert.match(schedule, /<GanttChart rows=\{chartRows\} range=\{range\}/);
   assert.match(schedule, /onOpen: \(\) => setDrawerTaskId\(task\.id\)/);
   assert.doesNotMatch(schedule.slice(schedule.indexOf("const loadSchedule"), schedule.indexOf("useEffect(")), /setSchedule\(null\);\s*if \(!selectedId\)/, "a reload must not blank the plan");
   // The project picker lists projects by number.

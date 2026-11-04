@@ -27,7 +27,8 @@ import {
   type TeamTaskStatus,
 } from "../resource-workload-client";
 import { dateFromDay, dayNumber, weeklyCapacity, workingDays, type Commitment } from "../../../lib/resource-planning";
-import { boardDays, covers, dailyLoad, defaultTaskManDays, dueGroup, freestOn, loadBand, outlookDates, outlookLoad, tableHtml, tableTsv, timeRange, weekTotals, withExtra, withOutlook, type DayLoad } from "../../../lib/team-board";
+import { boardDays, covers, dailyLoad, dateRuns, defaultTaskManDays, dueGroup, freestOn, loadBand, outlookDates, outlookLoad, overlapDays, tableHtml, tableTsv, timeRange, weekTotals, withExtra, withOutlook, type DayLoad, type Overlap } from "../../../lib/team-board";
+import type { GanttAlert } from "./GanttChart";
 import { choiceLink, idLink, listLink, optionalChoiceLink, textLink, useLinkedState, type LinkCodec } from "../screen-link";
 import "./team-board.css";
 
@@ -36,7 +37,7 @@ import "./team-board.css";
 
 export type TeamBoardMode = "board" | "list";
 type Category = "rfq" | "est" | "prj" | "appointment" | "task" | "away";
-type Attention = "late" | "unassigned" | "over";
+type Attention = "late" | "unassigned" | "over" | "overlap";
 type BoardEvent =
   | { kind: "rfq" | "est" | "prj"; key: string; item: Commitment; late: boolean }
   | { kind: "appointment" | "task" | "away"; key: string; task: TeamTask; late: boolean }
@@ -47,7 +48,13 @@ type ListRow = {
   key: string; category: Category; start: string | null; end: string | null; ownerIds: number[]; manDays: number | null; late: boolean;
   item?: Commitment; task?: TeamTask; visit?: BoardVisit; away?: BoardAway;
 };
-type Person = { user: BootstrapData["team"][number]; load: DayLoad[]; capacity: number; week: ReturnType<typeof weekTotals>; late: number; awayDays: number; away: (date: string) => boolean; userId: number };
+type Person = {
+  user: BootstrapData["team"][number]; load: DayLoad[]; capacity: number; week: ReturnType<typeof weekTotals>; late: number; awayDays: number; away: (date: string) => boolean; userId: number;
+  /** Days in the grid on which two or more pieces of their work fall (owner decision 2026-11-04), by date. */
+  overlapOn: Map<string, Overlap>;
+  /** The same over everything read (the Gantt scrolls past the grid), and the working days their load is over 100%. */
+  overlaps: Overlap[]; overDates: string[];
+};
 
 /** The teams a person last filtered the board by; a convenience, so blocked storage only forgets them. */
 const teamsKey = (userId: number) => `tomas-tech-team-board-teams:${userId}`;
@@ -88,7 +95,7 @@ function readView(userId: number): "grid" | "gantt" {
 }
 
 const CATEGORY_LINK = optionalChoiceLink<Category>(["rfq", "est", "prj", "appointment", "task", "away"]);
-const ATTENTION_LINK = optionalChoiceLink<Attention>(["late", "unassigned", "over"]);
+const ATTENTION_LINK = optionalChoiceLink<Attention>(["late", "unassigned", "over", "overlap"]);
 const LIST_TYPES: Record<Category, string> = {
   rfq: "TeamBoard.listRfq", est: "TeamBoard.listEst", prj: "TeamBoard.chipPrj", appointment: "TeamBoard.listAppointment", task: "TeamBoard.kindTask", away: "TeamBoard.typeAway",
 };
@@ -208,18 +215,25 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
     // Outlook meetings count by their hours (owner decision 2026-10-28), at most a day's worth per day.
     const outlookMd = outlookLoad(data.outlook ?? []);
     const lateTasks = (userId: number) => data.tasks.filter((task) => task.assigneeIds.includes(userId) && task.status === "Planned" && task.kind !== "Away" && task.endDate < today).length;
+    // Everything read, for the Gantt, which scrolls past the grid's weeks.
+    const readDays = boardDays(range.from, Math.ceil((dayNumber(range.to) - dayNumber(range.from) + 1) / 7), data.holidays, today).filter((day) => day.date <= range.to);
     return bootstrap.team.map((user) => {
       const items = data.items.filter((item) => item.ownerId === user.id);
       const capacity = weeklyCapacity(capacities.get(user.id));
+      const outlookOf = (date: string) => outlookMd.get(`${user.id}|${date}`) ?? 0;
       const load = withOutlook(dailyLoad(items, days, capacity, data.holidays), (date) => outlookMd.get(`${user.id}|${date}`) ?? 0);
       const away = (date: string) => awayOf(user.id, date);
+      const overlaps = overlapDays(items, range.from, range.to, data.holidays);
+      const shown = new Set(days.map((day) => day.date));
       return {
+        overlaps, overlapOn: new Map(overlaps.filter((day) => shown.has(day.date)).map((day) => [day.date, day])),
+        overDates: withOutlook(dailyLoad(items, readDays, capacity, data.holidays), outlookOf).filter((day) => day.available > 0 && (day.utilisation ?? 0) > 100).map((day) => day.date),
         user, userId: user.id, load, capacity, week: weekTotals(load, week.from, week.to), away,
         late: items.filter((item) => item.type !== "Task" && item.end && item.end < today).length + lateTasks(user.id),
         awayDays: days.filter((day) => day.date >= week.from && day.date <= week.to && !day.holiday && !day.weekend && away(day.date)).length,
       };
     }).sort((a, b) => a.user.department.localeCompare(b.user.department) || a.user.name.localeCompare(b.user.name));
-  }, [bootstrap.team, data, days, week, today, awayOf]);
+  }, [bootstrap.team, data, days, week, today, awayOf, range]);
   const personById = useMemo(() => new Map(people.map((person) => [person.userId, person])), [people]);
 
   // What falls on each person's day, keyed "userId|date"; 0 is the unassigned row.
@@ -291,6 +305,7 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
     && (personId === null || row.ownerIds.includes(personId))
     && (!query || rowText(row).includes(query)));
   const overPeople = people.filter((person) => (person.week.utilisation ?? 0) > 100 && inDepartment(person.userId));
+  const overlapPeople = people.filter((person) => person.overlapOn.size > 0 && inDepartment(person.userId));
   const unassignedTasks = (data?.tasks ?? []).filter((task) => !task.assigneeIds.length && task.status === "Planned");
   const counts = {
     all: scopedRows.length,
@@ -298,6 +313,7 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
     late: scopedRows.filter((row) => row.late).length,
     unassigned: scopedRows.filter((row) => row.task && !row.ownerIds.length).length,
     over: overPeople.length,
+    overlap: overlapPeople.length,
   };
   const pickCategory = (next: Category | null) => { setCategory(next); setListShown(LIST_PAGE); };
   const pickAttention = (next: Attention | null) => { setAttention(next); setListShown(LIST_PAGE); };
@@ -307,7 +323,8 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
     .filter((row) => (!category || row.category === category)
       && (attention !== "late" || row.late)
       && (attention !== "unassigned" || (row.task !== undefined && !row.ownerIds.length))
-      && (attention !== "over" || row.ownerIds.some((id) => overPeople.some((person) => person.userId === id))))
+      && (attention !== "over" || row.ownerIds.some((id) => overPeople.some((person) => person.userId === id)))
+      && (attention !== "overlap" || row.ownerIds.some((id) => overlapPeople.some((person) => person.userId === id))))
     .sort((a, b) => (a.end ?? a.start ?? "9999").localeCompare(b.end ?? b.start ?? "9999") || a.key.localeCompare(b.key));
 
   // The grid's people: the team filter, a search on name or team, and the attention chips.
@@ -316,6 +333,7 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
     && (personId === null || person.userId === personId)
     && (!query || [person.user.name, person.user.nickname, person.user.department].join(" ").toLocaleLowerCase().includes(query))
     && (attention !== "over" || (person.week.utilisation ?? 0) > 100)
+    && (attention !== "overlap" || person.overlapOn.size > 0)
     && (attention !== "late" || person.late > 0));
   const showPeople = attention !== "unassigned";
   const showUnassigned = (attention === null || attention === "unassigned") && personId === null && (unassignedTasks.length > 0 || attention === "unassigned");
@@ -399,15 +417,19 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
   const clickable = (event: BoardEvent) => event.kind === "appointment" || event.kind === "task" || event.kind === "away"
     || ((event.kind === "rfq" || event.kind === "est" || event.kind === "prj") && !event.item.hidden);
 
-  const cell = (userId: number | null, day: (typeof days)[number], load: DayLoad | null, away: boolean, name: string) => {
+  /** What overlaps on a day, named the way the list names the work. */
+  const overlapText = (overlap: Overlap) => fill(t("TeamBoard.overlapOn"), {
+    work: overlap.work.map((item) => (item.hidden ? t("TeamBoard.hiddenWork") : [item.reference, item.title].filter(Boolean).join(" "))).join(" · "),
+  });
+  const cell = (userId: number | null, day: (typeof days)[number], load: DayLoad | null, away: boolean, name: string, overlap?: Overlap) => {
     const all = (events.get(`${userId ?? 0}|${day.date}`) ?? []).filter((event) => userId !== null || event.kind === "appointment" || event.kind === "task");
     const shown = category ? all.filter((event) => categoryOf(event) === category) : all;
     const band = load ? loadBand(load.utilisation) : "none";
     // Prefixed: a bare "empty" is the app-wide EmptyState box and would turn the cell into a flex column.
     const tone = `tone-${away ? "away" : day.holiday ? "holiday" : day.weekend ? "weekend" : load && load.manDays > 0 ? band : "blank"}`;
     return (
-      <td key={day.date} className={`board-cell ${tone}${day.today ? " today" : ""}${day.weekStart ? " week-start" : ""}`}
-        title={shown.map((event) => eventLabel(event)).join("\n") || undefined}>
+      <td key={day.date} className={`board-cell ${tone}${day.today ? " today" : ""}${day.weekStart ? " week-start" : ""}${overlap ? " overlap" : ""}`}
+        title={[...(overlap ? [overlapText(overlap)] : []), ...shown.map((event) => eventLabel(event))].join("\n") || undefined}>
         {canAssignOthers || userId === me || userId === null ? (
           <button type="button" className="board-cell-add" onClick={() => setAdding({ assigneeId: userId, date: day.date })}
             aria-label={fill(t("TeamBoard.addFor"), { name, date: longDate(day.date) })}>
@@ -424,6 +446,13 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
     );
   };
 
+  // Under a person's bars: the days their work overlaps (amber) and the days it is more than they have (red).
+  const personAlerts = (person: Person): GanttAlert[] => [
+    ...dateRuns(person.overlaps.map((day) => day.date), holidays).map((run) => ({ key: `overlap-${run.start}`, ...run, tone: "amber" as const,
+      title: person.overlaps.filter((day) => day.date >= run.start && day.date <= run.finish).map((day) => `${shortDate(day.date)} · ${overlapText(day)}`).join("\n") })),
+    ...dateRuns(person.overDates, holidays).map((run) => ({ key: `over-${run.start}`, ...run, tone: "red" as const,
+      title: `${t("TeamBoard.legendOver")} · ${shortDate(run.start)}${run.finish !== run.start ? ` – ${shortDate(run.finish)}` : ""}` })),
+  ];
   // The Gantt: the same people and the same filtered work as the grid and the list.
   const ganttWork = (row: ListRow): GanttWork => ({
     key: row.key,
@@ -438,8 +467,10 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
       work: listRows.filter((row) => row.task && !row.ownerIds.length).map(ganttWork) }] : []),
     ...(showPeople ? gridPeople.map((person) => ({
       key: String(person.userId), name: person.user.name,
-      meta: `${person.user.department} · ${fmt(person.week.manDays)} / ${fmt(person.week.available)} MD`,
+      meta: [person.user.department, `${fmt(person.week.manDays)} / ${fmt(person.week.available)} MD`,
+        ...(person.overlaps.length ? [fill(t("TeamBoard.overlapDays"), { n: person.overlaps.length })] : [])].join(" · "),
       work: listRows.filter((row) => row.ownerIds.includes(person.userId)).map(ganttWork),
+      alerts: personAlerts(person),
     })) : []),
   ];
 
@@ -531,13 +562,14 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
         <button type="button" className="btn primary" data-guide="team.add" onClick={() => setAdding({ assigneeId: canAssignOthers ? null : me, date: today })}><Icon name="plus" />{t("TeamBoard.add")}</button>
       </div>
 
-      <div className="board-filters" role="group" aria-label={t("TeamBoard.chips")}>
+      <div className="board-filters" role="group" aria-label={t("TeamBoard.chips")} data-guide="team.filters">
         {chip("all", "TeamBoard.all", counts.all, category === null && attention === null, () => { pickCategory(null); pickAttention(null); })}
         {CATEGORIES.map(({ key, label, colour }) => chip(key, label, counts[key], category === key, () => pickCategory(category === key ? null : key), "", colour))}
         <span className="board-sep" aria-hidden="true" />
         {chip("late", "TeamBoard.late", counts.late, attention === "late", () => pickAttention(attention === "late" ? null : "late"), "red")}
         {chip("unassigned", "TeamBoard.unassigned", counts.unassigned, attention === "unassigned", () => pickAttention(attention === "unassigned" ? null : "unassigned"), "amber")}
         {chip("over", "TeamBoard.over", counts.over, attention === "over", () => pickAttention(attention === "over" ? null : "over"), "amber")}
+        {chip("overlap", "TeamBoard.overlap", counts.overlap, attention === "overlap", () => pickAttention(attention === "overlap" ? null : "overlap"), "amber")}
         {personId !== null ? (
           <button type="button" className="board-filter on" onClick={() => setPersonId(null)}>
             {fill(t("TeamBoard.personFilter"), { name: personName })} <Icon name="x" /><span className="sr-only">{t("TeamBoard.clearPerson")}</span>
@@ -597,10 +629,11 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
                                 {(person.week.utilisation ?? 0) > 100 ? ` · ${t("TeamBoard.overShort")}` : (person.week.utilisation ?? 0) < 50 ? ` · ${t("TeamBoard.roomShort")}` : ""}
                               </span>
                               {person.awayDays ? <small>{fill(t("TeamBoard.awayDays"), { n: person.awayDays })}</small> : null}
+                              {person.overlapOn.size ? <small className="board-overlap-note">{fill(t("TeamBoard.overlapDays"), { n: person.overlapOn.size })}</small> : null}
                             </span>
                           </button>
                         </th>
-                        {days.map((day, index) => cell(person.userId, day, person.load[index] ?? null, person.away(day.date), person.user.name))}
+                        {days.map((day, index) => cell(person.userId, day, person.load[index] ?? null, person.away(day.date), person.user.name, person.overlapOn.get(day.date)))}
                       </tr>
                     ))}
                   </GroupRows>
@@ -615,6 +648,7 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
             <span><i className="ok" />{t("TeamBoard.legendOk")}</span>
             <span><i className="full" />{t("TeamBoard.legendFull")}</span>
             <span><i className="over" />{t("TeamBoard.legendOver")}</span>
+            <span><i className="overlap" />{t("TeamBoard.legendOverlap")}</span>
             <span><i className="away" />{t("TeamBoard.legendAway")}</span>
             <span><i className="outlook" />{t("TeamBoard.legendOutlook")}</span>
             <span className="muted">{t("TeamBoard.legendHint")}</span>

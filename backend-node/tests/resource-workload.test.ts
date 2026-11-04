@@ -45,6 +45,8 @@ const schedule = [
   raw({ id: 10, kind: "phase", name: "Build", plan_start: null }),
   raw({ id: 11, parent_id: 10, name: "Wiring", plan_man_days: 8 }),
   raw({ id: 12, parent_id: 10, sort_order: 2, name: "Labels", plan_man_days: 2 }),
+  // Labels is broken into one function: the function is the work, and it belongs to Labels.
+  raw({ id: 14, parent_id: 12, name: "Print", plan_man_days: 2 }),
   raw({ id: 13, parent_id: 10, sort_order: 3, name: "Kick-off", plan_man_days: 1, percent_done: 100, status: "Done", actual_start: "2026-10-05", actual_end: "2026-10-05" }),
 ];
 const pics = [{ task_id: 11, user_id: 7 }, { task_id: 11, user_id: 9 }];
@@ -84,9 +86,12 @@ test("every open piece of work becomes one item per person, with its effort shar
   // A plan row's effort is split across its PICs; a row with none has no owner; phases and finished rows are not work.
   assert.equal(byKey.get("Project-11-7")?.manDays, 4);
   assert.equal(byKey.get("Project-11-9")?.reference, "P-1 · 1.1");
-  assert.equal(byKey.get("Project-12-none")?.ownerId, null);
-  assert.equal(byKey.get("Project-12-none")?.manDays, 2);
-  assert.ok(![...byKey.keys()].some((key) => key.startsWith("Project-10-") || key.startsWith("Project-13-")));
+  assert.equal(byKey.get("Project-14-none")?.ownerId, null);
+  assert.equal(byKey.get("Project-14-none")?.manDays, 2);
+  assert.ok(![...byKey.keys()].some((key) => key.startsWith("Project-10-") || key.startsWith("Project-12-") || key.startsWith("Project-13-")));
+  // A function is one piece of work with the task it sits under, when the board looks for work that overlaps.
+  assert.equal(byKey.get("Project-14-none")?.group, "Project-12");
+  assert.equal(byKey.get("Project-11-7")?.group, "Project-11");
   assert.equal(items.length, 9);
   // The work key names the work, not the person's share, and is the only shape a work order stores.
   assert.equal(byKey.get("Project-11-7")?.workKey, "Project-11");

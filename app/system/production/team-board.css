@@ -116,6 +116,9 @@ button.board-person:hover strong { color: var(--blue-text); text-decoration: und
 .board-cell.tone-weekend { background: var(--n-25); }
 .board-cell.tone-away { background: repeating-linear-gradient(135deg, var(--n-50) 0 6px, var(--n-100) 6px 12px); }
 .board-cell.today { box-shadow: inset 2px 0 0 var(--blue), inset -2px 0 0 var(--blue); }
+/* Two or more pieces of work on the day (owner decision 2026-11-04): an amber corner; the cell's title names them. */
+.board-cell.overlap::after { content: ""; position: absolute; top: 0; right: 0; border-top: 11px solid var(--amber); border-left: 11px solid transparent; pointer-events: none; }
+.board-person small.board-overlap-note { color: var(--amber-text); font-weight: 600; }
 .board-cell-add {
   position: absolute; inset: 0; z-index: 0; display: flex; align-items: flex-end; justify-content: flex-end; padding: 3px;
   border: 0; background: transparent; color: var(--blue-text); cursor: pointer;
@@ -154,6 +157,7 @@ button.board-chip:hover { filter: brightness(.97); text-decoration: underline; }
 .board-legend i.ok { background: var(--green-soft); }
 .board-legend i.full { background: var(--amber-soft); }
 .board-legend i.over { background: var(--red-soft); }
+.board-legend i.overlap { background: linear-gradient(225deg, var(--amber) 0 35%, var(--surface) 35%); }
 .board-legend i.away { background: repeating-linear-gradient(135deg, var(--n-50) 0 4px, var(--n-100) 4px 8px); }
 /* Outlook meetings: read from people's calendars, not changed here. */
 .board-chip.outlook { border-color: var(--violet-line); background: var(--violet-soft); color: var(--violet-text); cursor: default; }

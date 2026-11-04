@@ -10,7 +10,7 @@ import { ganttWindow, shiftGanttAnchor } from "../../../lib/gantt";
 import { useT } from "../i18n";
 import { Icon, type Tone } from "../ui";
 import { useFullscreen } from "../use-fullscreen";
-import { GanttChart, GanttToolbar, type GanttRowSpec, type GanttZoomChoice } from "./GanttChart";
+import { GanttChart, GanttToolbar, type GanttAlert, type GanttRowSpec, type GanttZoomChoice } from "./GanttChart";
 
 /** One piece of work on a person's row, already filtered and labelled by the board. */
 export type GanttWork = {
@@ -23,7 +23,7 @@ export type GanttWork = {
   tone: Tone;
   onOpen?: () => void;
 };
-export type GanttPerson = { key: string; name: string; meta: string; work: GanttWork[] };
+export type GanttPerson = { key: string; name: string; meta: string; work: GanttWork[]; /** Days their work overlaps or is too much, under their bars. */ alerts?: GanttAlert[] };
 
 /** The bar colours, as the board's rowTone sets them. */
 const LEGEND: Array<[Tone, string[]]> = [
@@ -53,6 +53,7 @@ export function TeamBoardGantt({ people, today }: { people: GanttPerson[]; today
       key: `person:${person.key}`, depth: 0, kind: "project", label: person.name, meta: person.meta,
       expandable: true, expanded: open, onToggle: () => toggle(person.key), start: null, finish: null, tone: "slate",
       segments: person.work.map((work) => ({ key: work.key, start: work.start, finish: work.end ?? work.start, tone: work.tone, title: work.title, ...(work.onOpen ? { onOpen: work.onOpen } : {}) })),
+      ...(person.alerts?.length ? { alerts: person.alerts } : {}),
       title: `${person.name} · ${person.meta}`,
     });
     if (open) for (const work of person.work)

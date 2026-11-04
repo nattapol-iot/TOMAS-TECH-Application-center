@@ -67,13 +67,13 @@ test("a task's default effort is a day for each working day, half for a morning 
   assert.equal(defaultManDays({ kind: "Task", startDate: "2026-10-22", endDate: "2026-10-26", slot: "Time", startTime: "13:00", endTime: "10:00" }, holidays), 2);
 });
 
-test("work the reader cannot open keeps its dates and effort, and loses what it is", () => {
+test("work the reader cannot open keeps its dates, effort and piece of work, and loses what it is", () => {
   const item: WorkloadItem = {
-    key: "Project-11-7", workKey: "Project-11", type: "Project", entityId: 1, ownerId: 7, reference: "P-1 · 1.1", title: "Wiring", customer: "ACME",
+    key: "Project-11-7", workKey: "Project-11", group: "Project-11", type: "Project", entityId: 1, ownerId: 7, reference: "P-1 · 1.1", title: "Wiring", customer: "ACME",
     start: "2026-10-19", end: "2026-10-23", manDays: 4, progress: 20, status: "In Progress", hidden: true,
   };
   assert.deepEqual(redactWork(item), {
-    key: "Project-11-7", workKey: "Project-11", type: "Project", entityId: 0, ownerId: 7, reference: "", title: "", customer: "",
+    key: "Project-11-7", workKey: "Project-11", group: "Project-11", type: "Project", entityId: 0, ownerId: 7, reference: "", title: "", customer: "",
     start: "2026-10-19", end: "2026-10-23", manDays: 4, progress: 20, status: "In Progress", hidden: true,
   });
   const visible: WorkloadItem = { ...item };
