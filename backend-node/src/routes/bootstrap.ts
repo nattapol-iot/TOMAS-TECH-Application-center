@@ -10,8 +10,8 @@ type CountRow = {
   employee_id: number | null; employee_no: number | null; employee_nickname: string | null;
   employee_level: string | null; employee_start_work_date: Date | string | null;
 };
-type CustomerRow = { id: number; code: string; name: string; name_th: string; name_en: string; name_ja: string; industry: string; contact: string; contact_title_th: string; contact_title_en: string; contact_title_ja: string; contact_name_th: string; contact_name_en: string; contact_name_ja: string; email: string; phone: string; site: string; department: string; position: string; inquiry_count: number; open_estimate_count: number; row_version: Buffer };
-type SupplierRow = { id: number; code: string; name: string; category: string };
+type CustomerRow = { id: number; code: string; name: string; name_th: string; name_en: string; name_ja: string; industry: string; contact: string; contact_title_th: string; contact_title_en: string; contact_title_ja: string; contact_name_th: string; contact_name_en: string; contact_name_ja: string; email: string; phone: string; site: string; department: string; position: string; inquiry_count: number; open_estimate_count: number; erp_customer_code: string | null; row_version: Buffer };
+type SupplierRow = { id: number; code: string; name: string; category: string; erp_supplier_id: string | null };
 type TeamRow = {
   id: number; name: string; email: string; role: string; department: string; level: string;
   employee_id: number; employee_no: number; nickname: string; start_work_date: Date | string; can_sign_in: boolean;
@@ -55,10 +55,10 @@ export function registerBootstrapRoutes(app: FastifyInstance, database: Database
         COALESCE(primary_contact.department,N'') department,COALESCE(primary_contact.position,N'') position,
         (SELECT COUNT_BIG(*) FROM dbo.inquiries i WHERE i.customer_id = c.id AND i.deleted_at IS NULL) AS inquiry_count,
         (SELECT COUNT_BIG(*) FROM dbo.estimates e WHERE e.customer_id = c.id AND e.deleted_at IS NULL AND e.archived_at IS NULL AND e.status NOT IN (N'Approved', N'Locked', N'Cancelled')) AS open_estimate_count,
-        c.row_version
+        c.erp_customer_code, c.row_version
       FROM dbo.customers c ${primaryCustomerContactApply} WHERE c.is_active = 1 AND c.deleted_at IS NULL ORDER BY c.name;
 
-      SELECT id, code, name, category FROM dbo.suppliers WHERE is_active = 1 AND deleted_at IS NULL ORDER BY name;
+      SELECT id, code, name, category, erp_supplier_id FROM dbo.suppliers WHERE is_active = 1 AND deleted_at IS NULL ORDER BY name;
 
       SELECT app_user.id, employee.name_en AS name, employee.email, role.code AS role,
         employee.department, employee.position AS level, employee.id AS employee_id,
@@ -102,9 +102,9 @@ export function registerBootstrapRoutes(app: FastifyInstance, database: Database
         id: Number(row.id), code: row.code, name: row.name, nameTh: row.name_th, nameEn: row.name_en, nameJa: row.name_ja, industry: row.industry, contact: row.contact,
         contactTitleTh: row.contact_title_th, contactTitleEn: row.contact_title_en, contactTitleJa: row.contact_title_ja, contactNameTh: row.contact_name_th, contactNameEn: row.contact_name_en, contactNameJa: row.contact_name_ja,
         email: row.email, phone: row.phone, site: row.site, department: row.department, position: row.position, inquiries: Number(row.inquiry_count),
-        openEstimates: Number(row.open_estimate_count), rowVersion: row.row_version.toString("base64"),
+        openEstimates: Number(row.open_estimate_count), erpCode: row.erp_customer_code ?? null, rowVersion: row.row_version.toString("base64"),
       })),
-      suppliers: suppliers.map((row) => ({ id: Number(row.id), code: row.code, name: row.name, category: row.category })),
+      suppliers: suppliers.map((row) => ({ id: Number(row.id), code: row.code, name: row.name, category: row.category, erpCode: row.erp_supplier_id ?? null })),
       team: team.map((row) => ({
         id: Number(row.id), name: row.name, email: row.email, role: row.role,
         department: row.department, level: row.level, employeeId: Number(row.employee_id),

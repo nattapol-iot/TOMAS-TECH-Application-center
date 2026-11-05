@@ -8,6 +8,7 @@ import { apiRequest, checkAdminStorage, createSalesCustomerContact, listSalesCus
 import { canManageEngineeringRates, canViewEngineeringRates } from "../../../backend-node/src/engineering-rate-access";
 import type { BusinessCardExtraction } from "../../../lib/business-card";
 import { BusinessCardScanner } from "./BusinessCardScanner";
+import { ErpMasterPanel } from "./ErpMasterPanel";
 import { listAllProjectsByNumber } from "../project-overview-client";
 import { canonicalLocalizedName, contactNameLines, localizedNameLines, localizedNamesFromCard, type ContactTitles, type LocalizedNames } from "./customer-localized-names";
 import {
@@ -259,11 +260,12 @@ export function ProductionCustomers({ bootstrap, notify, refreshBootstrap, onOpe
         {embedded && canWrite ? <button className="btn primary" type="button" onClick={() => setCreateOpen(true)}><Icon name="plus" /><LocalizedText text={"Add customer"} /></button> : null}
         <SearchInput link="q" value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder="Search customer code, name or industry…" />
       </Toolbar>
+      <ErpMasterPanel kind="customers" onChanged={refreshBootstrap} />
       <Panel title={`${customers.length} customers`} flush>
         {customers.length ? <div className="table-wrap"><TablePageSize value={pageSize} onChange={(value) => { setPageSize(value); setPage(1); }} /><table>
           <thead><tr><th><LocalizedText text={"Code"} /></th><th><LocalizedText text={"Customer"} /></th><th><LocalizedText text={"Industry"} /></th><th><LocalizedText text={"Main contact"} /></th><th><LocalizedText text={"Email"} /></th><th><LocalizedText text={"Phone"} /></th><th><LocalizedText text={"Site"} /></th><th className="num"><LocalizedText text={"Inquiries"} /></th><th className="num"><LocalizedText text={"Open estimates"} /></th><th><span className="sr-only"><LocalizedText text={"Actions"} /></span></th></tr></thead>
           <tbody>{visibleCustomers.map((customer) => <tr key={customer.id}>
-            <td><strong className="mono">{customer.code}</strong></td>
+            <td><strong className="mono">{customer.code}</strong>{customer.erpCode ? <> <span title={customer.erpCode}><Badge tone="green">{uiText("ERP")}</Badge></span></> : null}</td>
             <td><LocalizedNameStack names={customer} fallback={customer.name} /></td>
             <td>{customer.industry || "—"}</td>
             <td>{customer.contact ? <LocalizedNameStack names={{ nameTh: customer.contactNameTh, nameEn: customer.contactNameEn, nameJa: customer.contactNameJa }} titles={{ titleTh: customer.contactTitleTh, titleEn: customer.contactTitleEn, titleJa: customer.contactTitleJa }} fallback={customer.contact} /> : "—"}{customer.position || customer.department ? <div className="muted">{[customer.position, customer.department].filter(Boolean).join(" · ")}</div> : null}</td>
@@ -494,6 +496,8 @@ export function CustomerModal({ customer, onClose, onSaved }: {
   const localizeCopy = useStaticCopy();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // A customer from Pegasus ERP keeps the ERP name and address (migration 099); the server keeps them as well.
+  const fromErp = Boolean(customer?.erpCode);
   const [form, setForm] = useState({
     code: customer?.code ?? "",
     nameTh: customer?.nameTh ?? "",
@@ -581,8 +585,8 @@ export function CustomerModal({ customer, onClose, onSaved }: {
         {!customer ? <BusinessCardScanner disabled={busy} onApply={applyBusinessCard} /> : null}
         <div className="form-grid two">
           <Field label="Customer code"><input name="code" required maxLength={30} pattern="[A-Za-z0-9][A-Za-z0-9._/-]*" value={form.code} onChange={(event) => set("code", event.target.value)} /></Field>
-          <Field label="ชื่อบริษัท (ไทย)" hint={customer && !form.nameTh && !form.nameEn && !form.nameJa ? `ชื่อเดิม: ${customer.name}` : "กรอกอย่างน้อย 1 ภาษา"}><input name="nameTh" maxLength={300} value={form.nameTh} onChange={(event) => set("nameTh", event.target.value)} /></Field>
-          <Field label="Company name (English)"><input name="nameEn" maxLength={300} value={form.nameEn} onChange={(event) => set("nameEn", event.target.value)} /></Field>
+          <Field label="ชื่อบริษัท (ไทย)" hint={fromErp ? "ErpMaster.lockedHint" : customer && !form.nameTh && !form.nameEn && !form.nameJa ? `ชื่อเดิม: ${customer.name}` : "กรอกอย่างน้อย 1 ภาษา"}><input name="nameTh" maxLength={300} readOnly={fromErp} value={form.nameTh} onChange={(event) => set("nameTh", event.target.value)} /></Field>
+          <Field label="Company name (English)"><input name="nameEn" maxLength={300} readOnly={fromErp} value={form.nameEn} onChange={(event) => set("nameEn", event.target.value)} /></Field>
           <Field label="会社名 (日本語)"><input name="nameJa" maxLength={300} value={form.nameJa} onChange={(event) => set("nameJa", event.target.value)} /></Field>
           <Field label="ชื่อผู้ติดต่อ (ไทย)"><input name="contactNameTh" maxLength={200} value={form.contactNameTh} onChange={(event) => set("contactNameTh", event.target.value)} /></Field>
           <Field label="Contact name (English)" hint={customer?.contact && !form.contactNameTh && !form.contactNameEn && !form.contactNameJa ? `ชื่อเดิม: ${customer.contact}` : undefined}><input name="contactNameEn" maxLength={200} value={form.contactNameEn} onChange={(event) => set("contactNameEn", event.target.value)} /></Field>
@@ -595,7 +599,7 @@ export function CustomerModal({ customer, onClose, onSaved }: {
           <Field label="Email"><input name="email" type="email" maxLength={256} value={form.email} onChange={(event) => set("email", event.target.value)} /></Field>
           <Field label="Phone"><input name="phone" maxLength={100} value={form.phone} onChange={(event) => set("phone", event.target.value)} /></Field>
           <Field label="Industry"><input name="industry" maxLength={200} value={form.industry} onChange={(event) => set("industry", event.target.value)} /></Field>
-          <Field label="Site" span={2}><input name="site" maxLength={300} value={form.site} onChange={(event) => set("site", event.target.value)} /></Field>
+          <Field label="Site" span={2}><input name="site" maxLength={300} readOnly={fromErp} value={form.site} onChange={(event) => set("site", event.target.value)} /></Field>
         </div>
         <div className="production-document-submit"><span /><div className="row-actions"><button className="btn ghost" type="button" onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="submit" disabled={busy || !companyName}><Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : customer ? "Save changes" : "Create customer"}</button></div></div>
       </form>

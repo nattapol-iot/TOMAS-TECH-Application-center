@@ -2,26 +2,26 @@
 
 [Module](../modules/procurement.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `3d6ad051`; generated, do not edit. [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `52ffa4f1`; generated, do not edit. [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/purchase-requisitions` | 273–299 |
-| GET | `/api/v1/purchase-requisitions/approval-route` | 303–312 |
-| GET | `/api/v1/purchase-requisitions/:id` | 314–337 |
-| POST | `/api/v1/purchase-requisitions` | 339–358 |
-| PUT | `/api/v1/purchase-requisitions/:id` | 362–383 |
-| POST | `/api/v1/purchase-requisitions/:id/submit` | 385–397 |
-| POST | `/api/v1/purchase-requisitions/:id/decide` | 399–457 |
-| POST | `/api/v1/purchase-requisitions/:id/erp-send` | 460–469 |
-| POST | `/api/v1/purchase-requisitions/erp-sync` | 474–497 |
-| POST | `/api/v1/purchase-requisitions/:id/erp-sync` | 500–514 |
-| GET | `/api/v1/erp/purchasing/options` | 517–523 |
-| POST | `/api/v1/purchase-requisitions/:id/withdraw` | 552–568 |
-| POST | `/api/v1/purchase-requisitions/:id/cancel` | 572–585 |
-| GET | `/api/v1/procurement/approvals/attention` | 588–598 |
+| GET | `/api/v1/purchase-requisitions` | 296–322 |
+| GET | `/api/v1/purchase-requisitions/approval-route` | 326–335 |
+| GET | `/api/v1/purchase-requisitions/:id` | 337–360 |
+| POST | `/api/v1/purchase-requisitions` | 362–381 |
+| PUT | `/api/v1/purchase-requisitions/:id` | 385–406 |
+| POST | `/api/v1/purchase-requisitions/:id/submit` | 408–420 |
+| POST | `/api/v1/purchase-requisitions/:id/decide` | 422–485 |
+| POST | `/api/v1/purchase-requisitions/:id/erp-send` | 488–497 |
+| POST | `/api/v1/purchase-requisitions/erp-sync` | 502–525 |
+| POST | `/api/v1/purchase-requisitions/:id/erp-sync` | 528–542 |
+| GET | `/api/v1/erp/purchasing/options` | 545–551 |
+| POST | `/api/v1/purchase-requisitions/:id/withdraw` | 580–596 |
+| POST | `/api/v1/purchase-requisitions/:id/cancel` | 600–613 |
+| GET | `/api/v1/procurement/approvals/attention` | 616–626 |
 
 ## Named functions
 
@@ -41,7 +41,8 @@ Evidence: source snapshot `3d6ad051`; generated, do not edit. [backend-node/src/
 | `stepsOf` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 144–146 |
 | `demandPrScope` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 160–164 |
 | `noticeWaiting` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 171–190 |
-| `registerPurchaseRequisitionRoutes` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 192–600 |
+| `noticeRequester` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 196–210 |
+| `registerPurchaseRequisitionRoutes` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 212–628 |
 
 ## Direct local dependencies
 

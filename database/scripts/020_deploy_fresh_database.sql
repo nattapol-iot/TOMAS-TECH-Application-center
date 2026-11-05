@@ -160,6 +160,7 @@ GO
 :r database/migrations/096_draft_pr_line_edit.sql
 :r database/migrations/097_pr_approval_route.sql
 :r database/migrations/098_master_plan_headings.sql
+:r database/migrations/099_erp_customer_supplier_sync.sql
 
 USE [$(DatabaseName)];
 GO

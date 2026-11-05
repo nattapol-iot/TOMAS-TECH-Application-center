@@ -2,24 +2,24 @@
 
 [Module](../modules/crm.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `3d6ad051`; generated, do not edit. [backend-node/src/routes/crm-customers.ts](<../../../backend-node/src/routes/crm-customers.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `52ffa4f1`; generated, do not edit. [backend-node/src/routes/crm-customers.ts](<../../../backend-node/src/routes/crm-customers.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| DELETE | `/api/v1/crm/customers/:id` | 14–42 |
-| GET | `/api/v1/crm/customers` | 43–55 |
-| GET | `/api/v1/crm/customers/:id` | 56–76 |
-| PUT | `/api/v1/crm/customers/:id` | 77–93 |
-| GET | `/api/v1/crm/contacts` | 94–98 |
-| PUT | `/api/v1/crm/contacts/:id/metadata` | 99–111 |
+| DELETE | `/api/v1/crm/customers/:id` | 14–43 |
+| GET | `/api/v1/crm/customers` | 44–56 |
+| GET | `/api/v1/crm/customers/:id` | 57–77 |
+| PUT | `/api/v1/crm/customers/:id` | 78–97 |
+| GET | `/api/v1/crm/contacts` | 98–102 |
+| PUT | `/api/v1/crm/contacts/:id/metadata` | 103–115 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `registerCrmCustomerRoutes` | [backend-node/src/routes/crm-customers.ts](<../../../backend-node/src/routes/crm-customers.ts>) | 13–128 |
+| `registerCrmCustomerRoutes` | [backend-node/src/routes/crm-customers.ts](<../../../backend-node/src/routes/crm-customers.ts>) | 13–132 |
 
 ## Direct local dependencies
 

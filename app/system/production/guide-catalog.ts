@@ -1548,12 +1548,82 @@ const ASSET_REGISTER: Guide = {
 };
 
 /*
+ * Customers and suppliers from Pegasus ERP (owner decision 2026-11-05, migration 099): the screens read the ERP when they
+ * open, linked records keep the ERP name and address, and an Admin confirms the records that match doubtfully.
+ */
+const ERP_MASTER_DATA: Guide = {
+  id: "erp-customers-suppliers",
+  area: "tools",
+  title: { th: "ลูกค้าและซัพพลายเออร์จาก Pegasus ERP", en: "Customers and suppliers from Pegasus ERP", jp: "Pegasus ERPの顧客と仕入先" },
+  summary: {
+    th: "ดูว่าลูกค้ารายไหนมาจาก ERP อะไรแก้ในแอปได้ และ Admin ยืนยันรายการที่ระบบจับคู่ไม่ได้อย่างไร",
+    en: "See which customers come from the ERP, what can still be changed in the app, and how an Admin confirms what the app could not match.",
+    jp: "どの顧客がERPから来たか、アプリで変更できる項目、照合できなかったレコードをAdminが確認する方法を見ます。",
+  },
+  minutes: 2,
+  // For the people who keep customer records; engineers only read them.
+  permissions: ["crm.read", "crm.contact.write"],
+  views: ["crm-customers"],
+  browse: true,
+  steps: [
+    menu("crm-customers",
+      { th: "เปิดเมนูลูกค้า · 360°", en: "Open Customers · 360°", jp: "「顧客 · 360°」を開く" },
+      { th: "ลูกค้าทุกรายอยู่ที่นี่ คลิกที่เมนูที่ไฮไลต์อยู่", en: "Every customer is here. Click the highlighted menu entry.", jp: "すべての顧客がここにあります。強調表示のメニューをクリックします。" }),
+    {
+      target: "erp.status", action: "next", view: "crm-customers",
+      title: { th: "ข้อมูลจาก Pegasus ERP", en: "From Pegasus ERP", jp: "Pegasus ERPのデータ" },
+      body: {
+        th: "เมื่อเปิดหน้านี้ ระบบดึงทะเบียนลูกค้าจาก ERP ด้วยการเข้าสู่ระบบ TMT ID ของคุณ ทั้งระบบดึงไม่เกิน 1 ครั้งต่อ 15 นาที ลูกค้าใน ERP ที่แอปยังไม่มีจะถูกเพิ่มให้เอง แถบนี้บอกเวลาที่ดึงล่าสุด จำนวนที่ผูกกับ ERP และจำนวนที่มีเฉพาะในแอป",
+        en: "Opening this screen reads the ERP's customer register with your TMT ID sign-in, at most once every 15 minutes for the whole app. ERP customers the app lacks are added for you. The strip shows when it last read, how many are linked to the ERP and how many are only in the app.",
+        jp: "この画面を開くと、あなたのTMT IDでERPの顧客台帳を取得します（アプリ全体で15分に1回まで）。アプリにないERPの顧客は自動で追加されます。この帯には最終取得時刻、ERP連携数、アプリのみの件数が表示されます。",
+      },
+      missing: {
+        th: "ถ้าไม่เห็นแถบนี้ แปลว่าเซิร์ฟเวอร์นี้ยังไม่ได้เชื่อม ERP กด 'ถัดไป'",
+        en: "No strip means this server is not linked to the ERP. Press Next.",
+        jp: "帯が表示されない場合、このサーバーはERPと連携していません。「次へ」を押します。",
+      },
+    },
+    {
+      target: "crm.customer-list", action: "next", view: "crm-customers",
+      title: { th: "คอลัมน์รหัส ERP", en: "The ERP code column", jp: "ERPコード列" },
+      body: {
+        th: "ลูกค้าที่มีรหัส ERP มาจาก ERP ช่องที่ว่างคือลูกค้าที่มีเฉพาะในแอป เช่น ลูกค้าที่ยังอยู่ช่วงเสนองาน เมื่อ ERP เปิดรายการนั้นแล้ว ระบบจะผูกให้เอง",
+        en: "A customer with an ERP code comes from the ERP. An empty one is only in the app, such as a prospect; it is linked once the ERP opens the same customer.",
+        jp: "ERPコードがある顧客はERPのデータです。空欄はアプリのみの顧客（見込み客など）で、ERPに登録されると自動で紐付きます。",
+      },
+    },
+    {
+      action: "next", view: "crm-customers",
+      title: { th: "แก้อะไรได้บ้าง", en: "What you can still change", jp: "変更できる項目" },
+      body: {
+        th: "ลูกค้าที่มาจาก ERP: ชื่อไทยและอังกฤษ ที่อยู่ และสถานะใช้งาน แก้ได้ใน ERP เท่านั้น และลบในแอปไม่ได้ ให้ปิดใน ERP แทน ชื่อภาษาญี่ปุ่น ผู้ติดต่อ Site และผู้ดูแลลูกค้ายังแก้ในแอปได้ตามเดิม ซัพพลายเออร์ในเมนู Suppliers ทำงานแบบเดียวกัน โดยล็อกเฉพาะชื่อ",
+        en: "For a customer from the ERP, the Thai and English names, the address and whether it is active are changed in the ERP only, and it is closed there rather than removed here. The Japanese name, contacts, sites and account owner stay editable in the app. Suppliers work the same way, with only the name locked.",
+        jp: "ERPの顧客は、タイ語・英語の名称、住所、有効/無効をERPでのみ変更でき、アプリで削除せずERPで無効にします。日本語名、担当者、サイト、顧客担当はアプリで引き続き編集できます。仕入先も同様で、名称のみロックされます。",
+      },
+    },
+    {
+      target: "erp.review", action: "next", view: "crm-customers",
+      title: { th: "Admin: ยืนยันรายการที่จับคู่ไม่ได้", en: "Admin: confirm what did not match", jp: "Admin：照合できなかったものを確認" },
+      body: {
+        th: "ลูกค้าจาก ERP ที่คล้ายลูกค้าในแอปมากกว่าหนึ่งราย หรือคล้ายแต่ยังไม่แน่ใจ จะรอที่ปุ่ม 'รอยืนยัน' กดแล้วเลือกรายการในแอปที่ถูกต้อง กด 'ผูกกับรายการที่เลือก' หรือกด 'เพิ่มเป็นรายการใหม่' ถ้าเป็นลูกค้ารายใหม่จริง",
+        en: "ERP customers that resemble more than one app customer, or one only doubtfully, wait behind the 'to confirm' button. Open it, pick the right app record and press Link to the chosen one, or press Add as new when it really is a new customer.",
+        jp: "アプリの複数の顧客に似ている、または確実でないERPの顧客は「確認待ち」ボタンに入ります。開いて正しいレコードを選び「選択したものに紐付け」を押すか、本当に新規なら「新規として追加」を押します。",
+      },
+      missing: {
+        th: "ไม่มีรายการรอยืนยัน หรือบัญชีนี้ไม่ใช่ Admin จบบทสอนได้เลย",
+        en: "Nothing waits for confirmation, or this account is not an Admin. You can finish here.",
+        jp: "確認待ちがないか、このアカウントはAdminではありません。ここで終了できます。",
+      },
+    },
+  ],
+};
+
+/*
  * Menu screens with no guide, and why (owner rule 2026-11-02: a new feature updates the guides). tests/guides.test.mjs
  * fails when a menu screen has neither a guide nor an entry here, so a new screen cannot ship without one or the other.
  */
 export const NO_GUIDE: Readonly<Record<string, string>> = {
   "dashboard": "Read-only overview; each tile opens a screen that has its own guide.",
-  "crm-customers": "Customer records are looked up and added from the deal form (crm-deal-create).",
   "crm-contacts": "Contacts are searched and added from the deal form (crm-deal-create).",
   "missing": "Read-only list of estimate lines still waiting for a supplier price; prices arrive through supplier-quotation.",
   "procurement": "Read-only procurement dashboard.",
@@ -2207,6 +2277,7 @@ export const GUIDES: readonly Guide[] = [
   DOWNLOADS,
   SITE_MONITOR,
   ASSET_REGISTER,
+  ERP_MASTER_DATA,
   {
     id: "support-ticket",
     area: "tools",

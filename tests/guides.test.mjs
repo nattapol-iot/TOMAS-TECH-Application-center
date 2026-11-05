@@ -77,7 +77,10 @@ test("the catalog holds the guides the owner chose, in the order the work happen
     // An approved PR the ERP refused or deleted is taken back to Draft or cancelled (2026-11-02).
     "pr-fix",
     "my-work-progress", "site-visit-work", "report-create", "sign-document",
-    "knowledge-find", "downloads-skill", "site-monitor-check", "asset-register", "support-ticket",
+    "knowledge-find", "downloads-skill", "site-monitor-check", "asset-register",
+    // Customers and suppliers from Pegasus ERP (2026-11-05).
+    "erp-customers-suppliers",
+    "support-ticket",
   ]);
   const copies = [];
   for (const guide of GUIDES) {

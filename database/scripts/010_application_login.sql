@@ -811,4 +811,10 @@ GO
 GRANT SELECT ON OBJECT::dbo.pr_approval_settings TO [iot_team_app_role];
 GRANT SELECT ON OBJECT::dbo.pr_department_approvers TO [iot_team_app_role];
 GO
+
+-- database/migrations/099_erp_customer_supplier_sync.sql
+GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.erp_customers TO [iot_team_app_role];
+GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.erp_suppliers TO [iot_team_app_role];
+GRANT SELECT, UPDATE ON OBJECT::dbo.erp_master_sync TO [iot_team_app_role];
+GO
 -- END GENERATED MIGRATION GRANTS
