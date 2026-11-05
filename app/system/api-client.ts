@@ -95,9 +95,12 @@ export type BootstrapData = {
     site: string;
     inquiries: number;
     openEstimates: number;
+    /** The Pegasus ERP customer this record is linked to (migration 099); its name and address come from the ERP. */
+    erpCode?: string | null;
     rowVersion: string;
   }[];
-  suppliers: { id: number; code: string; name: string; category: string }[];
+  /** erpCode: the Pegasus ERP supplier this record is linked to (migration 099); its name comes from the ERP. */
+  suppliers: { id: number; code: string; name: string; category: string; erpCode?: string | null }[];
   team: {
     id: number;
     name: string;

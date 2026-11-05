@@ -302,8 +302,8 @@ export function registerMasterRoutes(app: FastifyInstance, database: Database, u
     const rowVersion = parseRowVersion(body.rowVersion);
     return database.transaction(async (transaction) => {
       const beforeRequest = new sql.Request(transaction); beforeRequest.input("id", sql.BigInt, id);
-      const before = (await beforeRequest.query<CustomerInput>(`
-        SELECT c.code,c.name,c.name_th AS nameTh,c.name_en AS nameEn,c.name_ja AS nameJa,c.contact,c.email,c.phone,c.industry,c.site,
+      const before = (await beforeRequest.query<CustomerInput & { erpCode: string | null }>(`
+        SELECT c.erp_customer_code AS erpCode,c.code,c.name,c.name_th AS nameTh,c.name_en AS nameEn,c.name_ja AS nameJa,c.contact,c.email,c.phone,c.industry,c.site,
           COALESCE(primary_contact.title_th,N'') contactTitleTh,COALESCE(primary_contact.title_en,N'') contactTitleEn,COALESCE(primary_contact.title_ja,N'') contactTitleJa,COALESCE(primary_contact.name_th,N'') contactNameTh,COALESCE(primary_contact.name_en,N'') contactNameEn,COALESCE(primary_contact.name_ja,N'') contactNameJa,
           COALESCE(primary_contact.department,N'') department,COALESCE(primary_contact.position,N'') position
         FROM dbo.customers c WITH (UPDLOCK,HOLDLOCK) ${primaryCustomerContactApply}
@@ -321,6 +321,8 @@ export function registerMasterRoutes(app: FastifyInstance, database: Database, u
       if (body.contactNameTh === undefined) input.contactNameTh = before.contactNameTh;
       if (body.contactNameEn === undefined) input.contactNameEn = before.contactNameEn;
       if (body.contactNameJa === undefined) input.contactNameJa = before.contactNameJa;
+      // A customer from the Pegasus ERP keeps the ERP name and address (migration 099); they are changed in the ERP.
+      if (before.erpCode) Object.assign(input, { name: before.name, nameTh: before.nameTh, nameEn: before.nameEn, site: before.site });
       if (!input.contact && (input.department || input.position || input.contactTitleTh || input.contactTitleEn || input.contactTitleJa)) throw validation("Enter the contact name when providing contact titles, department or position.");
       const update = new sql.Request(transaction); bindCustomer(update, input); update.input("actor", sql.BigInt, actor.id);
       update.input("id", sql.BigInt, id); update.input("row_version", sql.VarBinary(8), rowVersion);
@@ -538,7 +540,7 @@ export function registerMasterRoutes(app: FastifyInstance, database: Database, u
     const actor = await users.required(request);
     const id = positiveLong((request.params as { id?: string }).id, "Supplier id");
     const body = bodyObject(request.body);
-    const name = requiredText(body.name, 300, "Supplier name");
+    const requestedName = requiredText(body.name, 300, "Supplier name");
     const category = requiredText(body.category, 100, "Supplier category");
     const contact = optionalBodyText(body.contact, 200, "Contact") ?? "";
     const emailValue = email(body.email, false);
@@ -548,10 +550,12 @@ export function registerMasterRoutes(app: FastifyInstance, database: Database, u
     const updated = await database.transaction(async (transaction) => {
       const req = new sql.Request(transaction);
       req.input("id", sql.BigInt, id);
-      const existing = (await req.query<{ id: number; code: string }>(
-        "SELECT id, code FROM dbo.suppliers WITH (UPDLOCK, HOLDLOCK) WHERE id=@id AND is_active=1 AND deleted_at IS NULL;"
+      const existing = (await req.query<{ id: number; code: string; name: string; erp_supplier_id: string | null }>(
+        "SELECT id, code, name, erp_supplier_id FROM dbo.suppliers WITH (UPDLOCK, HOLDLOCK) WHERE id=@id AND is_active=1 AND deleted_at IS NULL;"
       )).recordset[0];
       if (!existing) throw new ApiError(404, "supplier_not_found", "Supplier not found.");
+      // A supplier from the Pegasus ERP keeps the ERP name (migration 099); it is changed in the ERP.
+      const name = existing.erp_supplier_id ? existing.name : requestedName;
 
       const upd = new sql.Request(transaction);
       upd.input("id", sql.BigInt, id); upd.input("name", sql.NVarChar(300), name);
@@ -577,10 +581,11 @@ export function registerMasterRoutes(app: FastifyInstance, database: Database, u
     await database.transaction(async (transaction) => {
       const req = new sql.Request(transaction);
       req.input("id", sql.BigInt, id);
-      const existing = (await req.query<{ id: number; code: string }>(
-        "SELECT id, code FROM dbo.suppliers WITH (UPDLOCK, HOLDLOCK) WHERE id=@id AND is_active=1 AND deleted_at IS NULL;"
+      const existing = (await req.query<{ id: number; code: string; erp_supplier_id: string | null }>(
+        "SELECT id, code, erp_supplier_id FROM dbo.suppliers WITH (UPDLOCK, HOLDLOCK) WHERE id=@id AND is_active=1 AND deleted_at IS NULL;"
       )).recordset[0];
       if (!existing) throw new ApiError(404, "supplier_not_found", "Supplier not found.");
+      if (existing.erp_supplier_id) throw new ApiError(409, "supplier_in_erp", "This supplier comes from the Pegasus ERP. Close it in the ERP instead.");
 
       const inUse = (await req.query<{ cnt: number }>(
         "SELECT COUNT(*) cnt FROM dbo.supplier_quotations WHERE supplier_id=@id;"

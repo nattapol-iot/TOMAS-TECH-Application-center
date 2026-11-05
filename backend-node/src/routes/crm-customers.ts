@@ -20,6 +20,7 @@ export function registerCrmCustomerRoutes(app: FastifyInstance,database: Databas
       const before=(await q.query("SELECT * FROM dbo.customers WITH(UPDLOCK,HOLDLOCK) WHERE id=@id AND deleted_at IS NULL")).recordset[0];
       if(!before)throw new ApiError(404,"crm_not_found","Customer not found.");
       if(!(before.row_version as Buffer).equals(version))throw new ApiError(409,"concurrency_conflict","Refresh before deleting.");
+      if(before.erp_customer_code)throw new ApiError(409,"customer_in_erp","This customer comes from the Pegasus ERP. Close it in the ERP instead.");
       // Keep historical references intact, including records already archived.
       const used=(await q.query(`SELECT CASE WHEN
         EXISTS(SELECT 1 FROM dbo.inquiries WHERE customer_id=@id OR end_user_customer_id=@id)
@@ -85,8 +86,11 @@ export function registerCrmCustomerRoutes(app: FastifyInstance,database: Databas
       if(owner){q.input("owner",sql.BigInt,owner);if(!(await q.query("SELECT id FROM dbo.users WHERE id=@owner AND is_active=1 AND deleted_at IS NULL")).recordset[0])throw new ApiError(422,"invalid_reference","Select an active owner.");}else q.input("owner",sql.BigInt,null);
       const website=crmText(body.website,500);if(website&&!/^https?:\/\//i.test(website))throw new ApiError(400,"validation_failed","Website must use HTTP or HTTPS.");
       const names=localizedNameInput(body,"","name",300,"Customer name",true);
+      // A customer from the Pegasus ERP keeps the ERP name, address and open/closed state (migration 099); the Japanese name stays the app's.
+      const erp=Boolean(before.erp_customer_code);
+      if(erp)Object.assign(names,{nameTh:String(before.name_th),nameEn:String(before.name_en),name:String(before.name_en||before.name_th||names.nameJa||before.name)});
       q.input("th",sql.NVarChar(300),names.nameTh).input("en",sql.NVarChar(300),names.nameEn).input("ja",sql.NVarChar(300),names.nameJa);
-      q.input("name",sql.NVarChar(300),names.name).input("short",sql.NVarChar(100),crmText(body.shortName,100)).input("industry",sql.NVarChar(200),crmText(body.industry,200)).input("country",sql.NVarChar(120),crmText(body.country,120)).input("website",sql.NVarChar(500),website).input("site",sql.NVarChar(300),crmText(body.site,300)).input("active",sql.Bit,body.isActive!==false);
+      q.input("name",sql.NVarChar(300),names.name).input("short",sql.NVarChar(100),crmText(body.shortName,100)).input("industry",sql.NVarChar(200),crmText(body.industry,200)).input("country",sql.NVarChar(120),crmText(body.country,120)).input("website",sql.NVarChar(500),website).input("site",sql.NVarChar(300),erp?String(before.site):crmText(body.site,300)).input("active",sql.Bit,erp?Boolean(before.is_active):body.isActive!==false);
       const row=(await q.query("UPDATE dbo.customers SET name=@name,name_th=@th,name_en=@en,name_ja=@ja,short_name=@short,industry=@industry,country=@country,website=@website,site=@site,account_owner_id=@owner,is_active=@active,updated_by=@actor,updated_at=SYSUTCDATETIME() OUTPUT inserted.* WHERE id=@id")).recordset[0]!;
       await insertAudit(tx,actor.id,"Customer",id,String(row.code),"Updated",crmDto(before),crmDto(row));return crmDto(row);
     });

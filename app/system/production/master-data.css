@@ -32,3 +32,9 @@
   font-weight: 700;
 }
 .role-grant-list{display:grid;gap:8px;margin:0 0 12px;padding:0;list-style:none}.role-grant-list li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 10px;border:1px solid var(--n-200);border-radius:8px;background:var(--n-0)}.role-grant-list li>div{display:flex;align-items:center;gap:8px;min-width:0}.role-grant-list small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Pegasus ERP strip on the customer and supplier screens (ErpMasterPanel.tsx). */
+.erp-master-strip { flex-wrap: wrap; margin-bottom: 12px; }
+.erp-master-strip > .erp-master-text { flex: 1 1 320px; min-width: 0; }
+.erp-review-options { display: grid; gap: 6px; }
+.erp-review-options label { display: flex; align-items: flex-start; gap: 6px; }
+.erp-review-options input { margin-top: 3px; }

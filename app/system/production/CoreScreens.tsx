@@ -68,6 +68,7 @@ import { EndUserCompanyField, EndUserEditModal, canEditEndUser } from "./EndUser
 import { ContactPicker, HealthBadge, MasterPlanSection, MemberOptions, NotBrokenDownNote, PaymentChecklist, TeamPlanSection, TeamSelect, planIssuesOf, planPayload, planSpanOf, projectTeamOptions,
   type PlanHeadingDraft } from "./ProjectPlanFields";
 import { ProductionCustomers, ProductionEngineeringRates } from "./AdminAnalyticsScreens";
+import { ErpMasterPanel } from "./ErpMasterPanel";
 import { SearchSelect } from "./SearchSelect";
 import { canViewEngineeringRates } from "../../../backend-node/src/engineering-rate-access";
 import { BusinessCardScanner } from "./BusinessCardScanner";
@@ -1517,7 +1518,7 @@ function SupplierMasterTab({ bootstrap, canWrite, canCreate, notify, refreshBoot
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
   const [createOpen, setCreateOpen] = useState(false);
-  const [editingSupplier, setEditingSupplier] = useState<{ id: number; code: string; name: string; category: string } | null>(null);
+  const [editingSupplier, setEditingSupplier] = useState<{ id: number; code: string; name: string; category: string; erpCode?: string | null } | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const suppliers = bootstrap.suppliers.filter((supplier) =>
     [supplier.code, supplier.name, supplier.category].join(" ").toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
@@ -1542,22 +1543,24 @@ function SupplierMasterTab({ bootstrap, canWrite, canCreate, notify, refreshBoot
     <Toolbar><SearchInput link="q" value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder="Search supplier code, name or category…" />
       {canCreate ? <button className="btn primary" type="button" onClick={() => setCreateOpen(true)}><Icon name="plus" /><LocalizedText text={"Add supplier"} /></button> : null}
     </Toolbar>
+    <ErpMasterPanel kind="suppliers" onChanged={refreshBootstrap} />
     <Panel title={suppliers.length + " suppliers"} subtitle="ข้อมูลผู้ขายชุดเดียวกันสำหรับ Cost item และ Preferred supplier" flush>
       {suppliers.length ? <div className="table-wrap"><TablePageSize value={pageSize} onChange={(value) => { setPageSize(value); setPage(1); }} /><table>
         <thead><tr><th><LocalizedText text={"Code"} /></th><th><LocalizedText text={"Supplier name"} /></th><th><LocalizedText text={"Category"} /></th>{canWrite ? <th></th> : null}</tr></thead>
         <tbody>{suppliers.slice(from - 1, to).map((supplier) => (
           <tr key={supplier.id}>
-            <td><strong className="mono">{supplier.code}</strong></td>
+            <td><strong className="mono">{supplier.code}</strong>{supplier.erpCode ? <> <span title={supplier.erpCode}><Badge tone="green"><LocalizedText text={"ERP"} /></Badge></span></> : null}</td>
             <td><strong>{supplier.name}</strong></td>
             <td><Badge>{supplier.category}</Badge></td>
             {canWrite ? (
               <td>
                 <div style={{ display: "flex", gap: 4 }}>
                   <button className="btn ghost sm" type="button" onClick={() => setEditingSupplier(supplier)}><Icon name="edit" />Edit</button>
-                  <button className="btn ghost sm" type="button" disabled={deletingId === supplier.id}
+                  {/* A supplier from Pegasus ERP is closed in the ERP, not deleted here (migration 099). */}
+                  {supplier.erpCode ? null : <button className="btn ghost sm" type="button" disabled={deletingId === supplier.id}
                     onClick={() => { void deleteSupplierRow(supplier); }} style={{ color: "#dc2626" }}>
                     <Icon name="trash" />{deletingId === supplier.id ? "Deleting…" : "Delete"}
-                  </button>
+                  </button>}
                 </div>
               </td>
             ) : null}
@@ -1583,7 +1586,7 @@ function SupplierEditModal({
   refreshBootstrap,
   onClose,
 }: {
-  supplier: { id: number; code: string; name: string; category: string };
+  supplier: { id: number; code: string; name: string; category: string; erpCode?: string | null };
   notify: (msg: string) => void;
   refreshBootstrap: () => Promise<void>;
   onClose: () => void;
@@ -1611,7 +1614,7 @@ function SupplierEditModal({
       <form onSubmit={onSubmit}>
         <div className="form-grid two">
           <label className="field"><span>Code (read-only)</span><input value={supplier.code} readOnly /></label>
-          <label className="field"><span>Name *</span><input name="name" defaultValue={supplier.name} required maxLength={300} /></label>
+          <label className="field"><span>Name *</span><input name="name" defaultValue={supplier.name} required maxLength={300} readOnly={Boolean(supplier.erpCode)} />{supplier.erpCode ? <small><LocalizedText text={"ErpMaster.supplierLockedHint"} /></small> : null}</label>
           <label className="field"><span>Category *</span><input name="category" defaultValue={supplier.category} required maxLength={100} /></label>
           <label className="field"><span>Contact</span><input name="contact" maxLength={200} /></label>
           <label className="field"><span>Email</span><input name="email" type="email" maxLength={200} /></label>
