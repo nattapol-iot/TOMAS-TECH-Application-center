@@ -6,22 +6,23 @@ import { addressLine, appParty, coreKey, customerCodeFor, masterListArguments, M
 test("a register page keeps each keyed record once, cut to the columns, with the ERP's cursor and time", () => {
   const page = readMasterPage("customers", {
     customers: [
-      { customer_code: "C-1", name_en: "  ABC   Co., Ltd. ", tax_id: "0105540000001", is_active: true, merged_into: null, updated_at: "2026-11-01T00:00:00Z" },
-      { customer_code: "C-2", name: "บริษัท สยาม จำกัด", is_active: 0, merged_into: "C-1" },
-      { customer_code: "C-1", name_en: "ABC Co., Ltd. (renamed)" },
-      { name_en: "no key" }, null, "text",
+      { customer_id: 101, customer_code: "C-1", name_en: "  ABC   Co., Ltd. ", tax_id: "0105540000001", is_active: true, merged_into: null, updated_at: "2026-11-01T00:00:00Z" },
+      { customer_id: 102, customer_code: "C-2", name: "บริษัท สยาม จำกัด", is_active: 0, merged_into: 101 },
+      { customer_id: 101, customer_code: "C-1", name_en: "ABC Co., Ltd. (renamed)" },
+      { customer_code: "C-3", name_en: "code but no id" }, { name_en: "no key" }, null, "text",
     ],
     next_cursor: "abc", server_time: "2026-11-05T05:00:00Z",
   });
-  assert.deepEqual(page.records.map((record) => [record.key, record.nameEn, record.nameTh, record.isActive, record.mergedInto]), [
-    ["C-1", "ABC Co., Ltd. (renamed)", "", true, null],
-    ["C-2", "", "บริษัท สยาม จำกัด", false, "C-1"],
+  // Keyed by customer_id: the ERP lets people edit customer_code (ERP team, 2026-11-04).
+  assert.deepEqual(page.records.map((record) => [record.key, record.code, record.nameEn, record.nameTh, record.isActive, record.mergedInto]), [
+    ["101", "C-1", "ABC Co., Ltd. (renamed)", "", true, null],
+    ["102", "C-2", "", "บริษัท สยาม จำกัด", false, "101"],
   ]);
   assert.equal(page.nextCursor, "abc"); assert.equal(page.serverTime, "2026-11-05T05:00:00Z");
   assert.match(page.records[0]!.hash, /^[0-9a-f]{64}$/);
-  assert.equal(readMasterPage("customers", { customers: [{ customer_code: "X", name_en: "A".repeat(400) }] }).records[0]!.nameEn.length, 300);
+  assert.equal(readMasterPage("customers", { customers: [{ customer_id: 9, customer_code: "X", name_en: "A".repeat(400) }] }).records[0]!.nameEn.length, 300);
   // The same record read twice has the same hash, so an unchanged record is not applied again.
-  const again = readMasterPage("customers", { customers: [{ customer_code: "C-1", name_en: "ABC Co., Ltd. (renamed)" }] });
+  const again = readMasterPage("customers", { customers: [{ customer_id: 101, customer_code: "C-1", name_en: "ABC Co., Ltd. (renamed)" }] });
   assert.equal(again.records[0]!.hash, page.records[0]!.hash);
 });
 
@@ -36,6 +37,9 @@ test("suppliers are keyed by their ERP id, numbers included, and may carry only 
 test("an answer without the register is refused whole", () => {
   assert.throws(() => readMasterPage("customers", { items: [] }), MasterShapeError);
   assert.throws(() => readMasterPage("suppliers", null), /suppliers_list without a "suppliers" list/);
+  // Records keyed only by code, as migration 099 assumed, are a shape this code no longer reads: nothing is stored.
+  assert.throws(() => readMasterPage("customers", { customers: [{ customer_code: "C-1", name_en: "ABC" }] }), /customers_list without customer_id/);
+  assert.deepEqual(readMasterPage("customers", { customers: [], next_cursor: null }).records, [], "an empty page is a page");
 });
 
 test("the first round reads everything; later rounds ask what changed since the ERP's own time, closed and merged included", () => {
@@ -80,9 +84,9 @@ test("one tax ID or one name links; several, a doubtful one or a taken one wait 
 
 test("records added from the ERP keep its code when the app can hold it, and never take a code twice", () => {
   const taken = new Set(["C-0001", "ABC-TRADING"]);
-  assert.equal(customerCodeFor({ key: "C-0002", nameEn: "ABC", nameTh: "" }, taken), "C-0002");
-  assert.equal(customerCodeFor({ key: "C-0001", nameEn: "ABC Trading Co., Ltd.", nameTh: "" }, taken), "ABC-TRADING-2");
-  assert.equal(customerCodeFor({ key: "ลูกค้า 1", nameEn: "", nameTh: "ลูกค้า" }, taken), "CUS-1");
+  assert.equal(customerCodeFor({ key: "102", code: "C-0002", nameEn: "ABC", nameTh: "" }, taken), "C-0002");
+  assert.equal(customerCodeFor({ key: "101", code: "C-0001", nameEn: "ABC Trading Co., Ltd.", nameTh: "" }, taken), "ABC-TRADING-2");
+  assert.equal(customerCodeFor({ key: "103", code: "ลูกค้า 1", nameEn: "", nameTh: "ลูกค้า" }, taken), "CUS-1");
   assert.equal(supplierCodeFor({ key: "41", code: "SUP-041", nameEn: "Omron", nameTh: "" }, taken), "SUP-041");
   assert.equal(supplierCodeFor({ key: "42", code: "", nameEn: "Misumi Thailand", nameTh: "" }, taken), "MT");
   assert.equal(supplierCodeFor({ key: "43", code: "SUP-041", nameEn: "Mitsu Trading", nameTh: "" }, taken), "MT-2");

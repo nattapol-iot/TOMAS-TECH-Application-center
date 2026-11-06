@@ -1735,6 +1735,8 @@ export const deleteScheduleTemplate = (id: number, rowVersion: string) =>
 
 export type UpdateProjectInput = {
   rowVersion: string;
+  /** Only a project still on the placeholder (PJ000000) takes the ERP number. */
+  projectNumber?: string;
   name?: string;
   projectType?: string;
   status?: string;

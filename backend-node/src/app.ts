@@ -29,6 +29,7 @@ import { ApiError, registerErrorHandler } from "./errors.js";
 import { registerEstimateRoutes } from "./routes/estimates.js";
 import { registerEstimateErpRoutes } from "./routes/estimate-erp.js";
 import { registerErpMasterDataRoutes } from "./routes/erp-master-data.js";
+import { registerErpProjectRoutes } from "./routes/erp-projects.js";
 import { registerOverheadPolicyRoutes } from "./routes/overhead-policies.js";
 import { registerEstimateWorkspaceReadRoute } from "./routes/estimate-workspace-read.js";
 import { registerEstimateOrderRoutes } from "./routes/estimate-order.js";
@@ -217,6 +218,7 @@ export async function buildApp(config: AppConfig): Promise<Application> {
   registerEstimateRoutes(app, config, database, users, erp);
   registerEstimateErpRoutes(app, database, users, erp);
   registerErpMasterDataRoutes(app, database, users, erp);
+  registerErpProjectRoutes(app, database, users, erp);
   registerOverheadPolicyRoutes(app, config, database, users);
   registerEstimateWorkspaceReadRoute(app, config, database, users);
   registerRecordPresenceRoutes(app, database, users);

@@ -69,6 +69,7 @@ import { ContactPicker, HealthBadge, MasterPlanSection, MemberOptions, NotBroken
   type PlanHeadingDraft } from "./ProjectPlanFields";
 import { ProductionCustomers, ProductionEngineeringRates } from "./AdminAnalyticsScreens";
 import { ErpMasterPanel } from "./ErpMasterPanel";
+import { ErpProjectNumberField, isPlaceholderProjectNumber } from "./ErpProjectNumber";
 import { SearchSelect } from "./SearchSelect";
 import { canViewEngineeringRates } from "../../../backend-node/src/engineering-rate-access";
 import { BusinessCardScanner } from "./BusinessCardScanner";
@@ -707,7 +708,7 @@ export function ProductionProjects({ bootstrap, notify, refreshBootstrap, teamTe
     if (next === "Closed") setClosingProject(item); else void saveStage(item, next);
   };
   const rowActions = (item: ProjectOverviewItem): PortfolioAction[] => [
-    ...(canWrite ? [{ key: "edit", label: "Edit project", icon: "edit" as const, onSelect: () => setEditingProject({ ...item, progress: item.typedProgress }) }] : []),
+    ...(canWrite ? [{ key: "edit", label: "Edit project", icon: "edit" as const, guide:"project.edit", onSelect: () => setEditingProject({ ...item, progress: item.typedProgress }) }] : []),
     ...(canPlan(item) ? [{ key: "plan", label: "CRM.editMasterPlan", icon: "calendar" as const, guide:"project.editPlan", onSelect: () => setPlanningProject(item) }] : []),
     ...(item.canChangeStatus && item.allowedStatuses.includes("Closed") ? [{ key: "close", label: "Portfolio.closeTitle", icon: "checkCircle" as const, onSelect: () => setClosingProject(item) }] : []),
     ...(canWrite && canEditEndUser(item.status) ? [{ key: "end-user", label: "Portfolio.editEndUser", icon: "user" as const, onSelect: () => setEndUserProject(item) }] : []),
@@ -1049,7 +1050,10 @@ function EditProjectModal({ bootstrap, project, onClose, onSaved }: {
     department: shownProjectTeam(project.team),
     paymentsReceived: project.paymentsReceived ?? [],
     contactIds: project.contactIds ?? [],
+    projectNumber: project.number ?? "",
   });
+  // Only a placeholder (PJ000000) gives way to the ERP's number; a real number is fixed (PUT /api/v1/projects/:id).
+  const numberable = isPlaceholderProjectNumber(project.number ?? "");
   const departments = projectTeamOptions(form.department);
   const { plan, planError, headings, setHeadings, planIssues, planBody, span } = useProjectPlan(project.id);
   const templates = useScheduleTemplates();
@@ -1081,6 +1085,7 @@ function EditProjectModal({ bootstrap, project, onClose, onSaved }: {
         department: form.department.trim() || null,
         paymentsReceived: form.paymentsReceived,
         contactIds: form.contactIds,
+        ...(numberable && form.projectNumber.trim() && form.projectNumber.trim().toUpperCase() !== project.number ? { projectNumber: form.projectNumber.trim() } : {}),
         ...planBody(),
       });
       await onSaved(saved.number);
@@ -1098,7 +1103,7 @@ function EditProjectModal({ bootstrap, project, onClose, onSaved }: {
     onClose={onClose}
     footer={<>
       <button className="btn ghost" type="button" onClick={onClose}><LocalizedText text={"Cancel"} /></button>
-      <button className="btn primary" type="button" disabled={busy || needsActualDelivery || !form.name.trim() || !form.site.trim() || !form.purchaseOrderNumber.trim() || planIssues.length > 0} onClick={() => { void submit(); }}>
+      <button className="btn primary" type="button" data-guide="project.editSave" disabled={busy || needsActualDelivery || !form.name.trim() || !form.site.trim() || !form.purchaseOrderNumber.trim() || planIssues.length > 0} onClick={() => { void submit(); }}>
         <Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : <LocalizedText text={"Save project"} />}
       </button>
     </>}
@@ -1109,6 +1114,7 @@ function EditProjectModal({ bootstrap, project, onClose, onSaved }: {
     {planIssues.length ? <p role="status">{t("CRM.missingProjectFields")}: {planIssues.join(", ")}</p> : null}
     <div className="form-grid">
       <label className="field span-2"><span><LocalizedText text={"Project name *"} /></span><input required maxLength={300} value={form.name} onChange={(event) => set("name", event.target.value)} /></label>
+      {numberable ? <ErpProjectNumberField span={2} guide="project.erpNumber" currentProjectId={project.id} disabled={busy} value={form.projectNumber} onChange={(projectNumber) => set("projectNumber", projectNumber)} /> : null}
       <TeamSelect value={form.department} departments={departments} onChange={(department) => set("department", department)} />
       <div className="field"><span>{t("CRM.planHealth")}</span><div className="project-health-cell">{project.health ? <HealthBadge health={project.health} /> : "—"}</div></div>
       <label className="field"><span><LocalizedText text={"Status"} /></span><select value={form.status} onChange={(event) => set("status", event.target.value)}>{statusChoices.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
@@ -1391,7 +1397,9 @@ export function CreateProjectModal({ bootstrap, refreshBootstrap, notify, onClos
         <label className="field span-2" data-guide="project.from"><span><LocalizedText text={"Approved estimate *"} /></span><select disabled={busy || loadingOptions || Boolean(initialEstimateId)} value={form.estimateId} onChange={(event) => {const estimate=estimates.find(item=>item.id===Number(event.target.value));const lead=engineers.some(member=>member.id===estimate?.ownerId)?Number(estimate?.ownerId):0;update({ estimateId:Number(event.target.value),leadEngineerId:lead,department:form.department||departmentOf(lead),site:estimate?.siteLocation??"",targetDelivery:estimate?.targetDelivery||form.targetDelivery,purchaseOrderNumber:estimate?.purchaseOrderNumber??"",purchaseOrderDate:estimate?.purchaseOrderDate||today(),contactIds:[] });}}><option value={0}><LocalizedText text={"Select approved estimate"} /></option>{estimates.map((item) => <option key={item.id} value={item.id}>{item.opportunityNo} · {item.number} — {item.projectName}</option>)}</select></label>
         <div className="field span-2"><span><LocalizedText text={"Customer"} /></span><div className="info-strip">{customer?.name||"—"}</div></div>
       </>}
-      <label className="field" data-guide="project.number"><span>{t("CRM.projectNoFromErp")}</span><input required maxLength={30} autoComplete="off" placeholder={t("CRM.projectNoPlaceholder")} value={form.projectNumber} onChange={(event) => update({ projectNumber: event.target.value })} /></label>
+      <ErpProjectNumberField guide="project.number" required disabled={busy} value={form.projectNumber} onChange={(projectNumber) => update({ projectNumber })}
+        onPick={(hit) => update({ projectNumber: hit.number, ...(standalone && !(form.projectName ?? "").trim() && hit.name ? { projectName: hit.name } : {}),
+          ...(standalone && !form.customerId && hit.customerId && bootstrap.customers.some((item) => item.id === hit.customerId) ? { customerId: hit.customerId, contactIds: [], endUserCustomerId: null } : {}) })} />
       {standalone ? null : <div className="field span-2"><span>{t("CRM.projectName")}</span><div className="info-strip">{selectedEstimate?.projectName||"—"}</div></div>}
       <TeamSelect value={form.department ?? ""} departments={departments} onChange={(department) => update({ department })} />
       <label className="field" data-guide="project.people"><span><LocalizedText text={"Project manager *"} /></span><select value={form.managerId} onChange={(event) => update({ managerId: Number(event.target.value) })}><option value={0}>{t("CRM.selectProjectManager")}</option>{managers.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>

@@ -701,7 +701,11 @@ const PROJECT_CREATE: Guide = {
     {
       target: "project.number", action: "next", view: "projects",
       title: { th: "เลขโปรเจกต์จาก ERP", en: "Project number from the ERP", jp: "ERPの案件番号" },
-      body: { th: "ใส่เลขโปรเจกต์ที่เปิดไว้ใน ERP เพื่อให้ PR และค่าใช้จ่ายตรงกับงานใน ERP", en: "Enter the project number opened in the ERP, so PRs and costs match the ERP job.", jp: "ERPで登録した案件番号を入力します。PRや費用がERPの案件と一致します。" },
+      body: {
+        th: "พิมพ์เลขโปรเจกต์ ชื่องาน หรือชื่อลูกค้า แล้วเลือกจากรายการที่ค้นจาก ERP ระบบใส่เลขตามที่ ERP ใช้ และบอกใต้ช่องว่าพบเลขนี้ใน ERP หรือไม่ PR และค่าใช้จ่ายจึงตรงกับงานใน ERP ถ้า ERP ยังไม่ออกเลข ใส่ PJ000000 ไว้ก่อน แล้วเปลี่ยนเป็นเลขจริงที่ 'แก้ไขโปรเจกต์'",
+        en: "Type the project number, the job name or the customer, then pick from the ERP's list: the number goes in as the ERP has it, and the line under the box says whether the ERP knows it, so PRs and costs match the ERP job. If the ERP has not issued a number yet, enter PJ000000 and set the real one later in Edit project.",
+        jp: "案件番号・案件名・顧客名を入力し、ERPの一覧から選びます。番号がERPのとおりに入り、欄の下にERPにあるかどうかが表示されるので、PRや費用がERPの案件と一致します。ERPがまだ番号を発行していない場合はPJ000000を入力し、後で「案件を編集」で正しい番号に変えます。",
+      },
     },
     {
       target: "project.people", action: "next", view: "projects",
@@ -811,6 +815,61 @@ const PROJECT_MASTER_PLAN: Guide = {
         th: "ถ้าแผนเลยวันเดิม ติ๊ก 'ปรับวันเริ่มและวันส่งมอบตามแผน' แล้วกด 'บันทึกแผน' ถ้าแค่ฝึก ให้กด 'ยกเลิก' แล้วกด 'จบบทสอน'",
         en: "If the plan moved past the old dates, tick Move the project's start and delivery, then press Save plan. Only practising? Press Cancel, then Finish.",
         jp: "計画が元の日程を超えたら「案件の開始日と納期を計画に合わせる」にチェックし、「計画を保存」を押します。練習だけなら「キャンセル」を押してから「完了」を押します。",
+      },
+    },
+  ],
+};
+
+// A project registered under PJ000000 takes its ERP number once the ERP issues it (2026-11-06).
+const PROJECT_ERP_NUMBER: Guide = {
+  id: "project-erp-number",
+  area: "project",
+  title: { th: "ใส่เลขโปรเจกต์จาก ERP ให้โปรเจกต์ที่ใช้ PJ000000", en: "Give a PJ000000 project its ERP number", jp: "PJ000000の案件にERP番号を入れる" },
+  summary: {
+    th: "เมื่อ ERP ออกเลขให้โปรเจกต์ที่สร้างไว้ด้วยเลขชั่วคราวแล้ว ค้นเลขจาก ERP แล้วบันทึก PR และ Cost Sheet ต่อจากนี้จะผูกกับโปรเจกต์ใน ERP",
+    en: "Once the ERP issues the number of a project created under the placeholder, search it from the ERP and save; PRs and Cost Sheets from then on link to the ERP project.",
+    jp: "仮番号で作成した案件にERPが番号を発行したら、ERPから検索して保存します。以後のPRとコストシートはERPの案件に紐づきます。",
+  },
+  minutes: 1,
+  permissions: ["project.read", "project.write"],
+  views: ["projects"],
+  steps: [
+    menu("projects",
+      { th: "เปิดเมนูโปรเจกต์", en: "Open Projects", jp: "「プロジェクト」を開く" },
+      { th: "รายการโปรเจกต์อยู่ในเมนูนี้ คลิกที่เมนูที่ไฮไลต์อยู่", en: "The project list is here. Click the highlighted menu entry.", jp: "案件一覧はここにあります。強調表示のメニューをクリックします。" }),
+    {
+      target: "project.rowMenu", action: "click", view: "projects",
+      title: { th: "เปิดเมนูของโปรเจกต์ PJ000000", en: "Open the PJ000000 project's menu", jp: "PJ000000の案件のメニューを開く" },
+      body: { th: "กดปุ่ม ⋯ ท้ายแถวของโปรเจกต์ที่ยังใช้เลข PJ000000", en: "Press the ⋯ button at the end of the row of the project still numbered PJ000000.", jp: "PJ000000のままの案件の行末にある ⋯ ボタンを押します。" },
+      missing: { th: "ยังไม่มีโปรเจกต์ในรายการ ลองล้างตัวกรอง หรือกด 'จบบทสอน'", en: "No project is listed. Clear the filters, or press Finish.", jp: "案件が表示されていません。絞り込みを解除するか「完了」を押します。" },
+    },
+    {
+      target: "project.edit", action: "click", view: "projects",
+      title: { th: "กด 'แก้ไขโปรเจกต์'", en: "Press Edit project", jp: "「案件を編集」を押す" },
+      body: { th: "เปิดหน้าต่างแก้ข้อมูลของโปรเจกต์นี้", en: "It opens this project's details.", jp: "この案件の情報を編集する画面が開きます。" },
+      missing: { th: "บัญชีนี้แก้โปรเจกต์ไม่ได้ กด 'จบบทสอน'", en: "This account cannot edit projects. Press Finish.", jp: "このアカウントは案件を編集できません。「完了」を押します。" },
+    },
+    {
+      target: "project.erpNumber", action: "next", view: "projects",
+      title: { th: "ค้นเลขจาก ERP", en: "Search the number in the ERP", jp: "ERPで番号を検索" },
+      body: {
+        th: "พิมพ์ชื่องานหรือชื่อลูกค้า แล้วเลือกโปรเจกต์จากรายการของ ERP ใต้ช่องจะบอกว่าพบใน ERP หรือมีโปรเจกต์อื่นในแอปใช้เลขนี้แล้ว",
+        en: "Type the job or customer name and pick the project from the ERP's list. The line under the box says whether the ERP has it, or whether another project here already uses the number.",
+        jp: "案件名か顧客名を入力し、ERPの一覧から案件を選びます。欄の下に、ERPにあるか、アプリ内の別の案件が使っているかが表示されます。",
+      },
+      missing: {
+        th: "ช่องนี้ขึ้นเฉพาะโปรเจกต์ที่ยังใช้ PJ000000 เลขจริงจาก ERP เปลี่ยนไม่ได้ กด 'ยกเลิก' แล้วกด 'จบบทสอน'",
+        en: "The box shows only for a project still on PJ000000; a real ERP number does not change. Press Cancel, then Finish.",
+        jp: "この欄はPJ000000のままの案件にだけ表示されます。ERPの番号は変更できません。「キャンセル」を押してから「完了」を押します。",
+      },
+    },
+    {
+      target: "project.editSave", action: "click", view: "projects",
+      title: { th: "บันทึก", en: "Save", jp: "保存" },
+      body: {
+        th: "กด 'บันทึกโปรเจกต์' เลขจริงเปลี่ยนอีกไม่ได้ ถ้าแค่ฝึก ให้กด 'ยกเลิก' แล้วกด 'จบบทสอน'",
+        en: "Press Save project; the real number cannot change again. Only practising? Press Cancel, then Finish.",
+        jp: "「案件を保存」を押します。正式な番号は再変更できません。練習だけなら「キャンセル」を押してから「完了」を押します。",
       },
     },
   ],
@@ -2090,6 +2149,7 @@ export const GUIDES: readonly Guide[] = [
   PROJECT_CREATE,
   PROJECT_PLAN,
   PROJECT_MASTER_PLAN,
+  PROJECT_ERP_NUMBER,
   TEAM_TASK,
   BOM_RELEASE,
   ESTIMATE_APPROVE,

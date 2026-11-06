@@ -23,10 +23,13 @@ test("column-level grants stay column-level where the API edits only some column
   assert.equal(grants.get("users").operations.has("UPDATE"), false);
   assert.deepEqual([...grants.get("users").columns.get("UPDATE")].sort(), ["role_id", "updated_at"]);
   assert.equal(grants.get("link_registered_sign_in").operations.has("EXECUTE"), true);
-  // projects: never created_by/created_at, the project number or the folder path.
+  // projects: never created_by/created_at or the folder path. The project number changes only from the PJ000000 placeholder
+  // to the ERP's number, once; PUT /api/v1/projects/:id refuses any other change (migration 100, owner decision 2026-11-06).
   const projectColumns = grants.get("projects").columns.get("UPDATE");
   assert.equal(grants.get("projects").operations.has("UPDATE"), false);
-  for (const fixed of ["project_no", "created_by", "created_at", "folder_path"]) assert.equal(projectColumns.has(fixed), false, fixed);
+  for (const fixed of ["created_by", "created_at", "folder_path"]) assert.equal(projectColumns.has(fixed), false, fixed);
+  assert.equal(projectColumns.has("project_no"), true);
+  assert.match(readFileSync(resolve(root, "backend-node/src/routes/projects.ts"), "utf8"), /if \(!isPlaceholderProjectNumber\(number\)\) throw new ApiError\(409, "project_number_fixed"/);
   // supplier quotations: the header, never the stored evidence file or its hash.
   const quotationColumns = grants.get("supplier_quotations").columns.get("UPDATE");
   assert.equal(grants.get("supplier_quotations").operations.has("UPDATE"), false);

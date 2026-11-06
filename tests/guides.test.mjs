@@ -70,6 +70,8 @@ test("the catalog holds the guides the owner chose, in the order the work happen
     "estimate-create", "supplier-quotation", "price-library", "project-create", "project-plan",
     // Editing the Master Plan of a project that already exists (2026-11-03).
     "project-master-plan",
+    // A project registered under PJ000000 takes its ERP number from the ERP project search (2026-11-06).
+    "project-erp-number",
     "team-overview-task", "bom-release",
     // Approving an estimate sends it to Pegasus ERP as a Cost Sheet (2026-11-02).
     "estimate-approve",

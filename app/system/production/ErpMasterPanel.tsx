@@ -15,7 +15,7 @@ type Register = { kind: ErpMasterKind; finishedAt: string | null; running: boole
 type Overview = { enabled: boolean; canSettle: boolean; registers: Register[] };
 type Outcome = { state: "synced" | "partial" | "fresh" | "busy" | "failed" | "signed_out" | "off"; changed: boolean; message?: string };
 type ReviewItem = { key: string; code: string; nameTh: string; nameEn: string; taxId: string; address: string; candidateIds: number[] };
-type Candidate = { id: number; code: string; name: string; taxId: string; address: string; erpKey: string | null };
+type Candidate = { id: number; code: string; name: string; taxId: string; address: string; erpKey: string | null; erpCode?: string | null };
 
 const when = (value: string) => new Date(value).toLocaleString(currentLocale(), { dateStyle: "medium", timeStyle: "short" });
 const count = (value: number) => value.toLocaleString(currentLocale());
@@ -124,7 +124,7 @@ function ErpReviewModal({ kind, onClose, onSettled }: { kind: ErpMasterKind; onC
                   onChange={() => setChosen((current) => ({ ...current, [item.key]: candidate.id }))} />
                 <span><strong>{candidate.name}</strong> <span className="mono muted">{candidate.code}</span>
                   {candidate.taxId ? <span className="muted"> · {t("ErpMaster.taxId").replace("{id}", candidate.taxId)}</span> : null}
-                  {candidate.erpKey ? <> <Badge tone="slate">{t("ErpMaster.linkedElsewhere").replace("{code}", candidate.erpKey)}</Badge></> : null}
+                  {candidate.erpKey ? <> <Badge tone="slate">{t("ErpMaster.linkedElsewhere").replace("{code}", candidate.erpCode || candidate.erpKey)}</Badge></> : null}
                   {candidate.address ? <div className="muted">{candidate.address}</div> : null}</span>
               </label>)}
             </div></td>

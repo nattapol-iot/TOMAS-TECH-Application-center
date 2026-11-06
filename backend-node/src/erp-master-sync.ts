@@ -1,4 +1,4 @@
-// Reads the Pegasus ERP's customer and supplier registers into dbo.erp_customers / dbo.erp_suppliers (migration 099) and
+// Reads the Pegasus ERP's customer and supplier registers into dbo.erp_customers / dbo.erp_suppliers (migrations 099 and 100) and
 // applies them to the app's customers and suppliers. The ERP forbids background jobs and service accounts, so a round runs
 // when someone opens those screens, with their own TMT ID token, and at most once per 15 minutes for the whole app.
 import sql from "mssql";
@@ -24,14 +24,18 @@ export type MasterSyncOutcome = { kind: MasterKind; state: "synced" | "partial" 
 export type MasterStatus = { kind: MasterKind; finishedAt: string | null; attemptedAt: string | null; running: boolean; continuing: boolean;
   error: string | null; counts: MasterCounts | null; erpActive: number; linked: number; appOnly: number; review: number };
 export type MasterReviewItem = { key: string; code: string; nameTh: string; nameEn: string; shortName: string; taxId: string; branch: string; address: string; candidateIds: number[] };
-export type MasterCandidate = { id: number; code: string; name: string; nameTh: string; nameEn: string; taxId: string; address: string; erpKey: string | null; isActive: boolean };
+export type MasterCandidate = { id: number; code: string; name: string; nameTh: string; nameEn: string; taxId: string; address: string; erpKey: string | null;
+  erpCode: string | null; isActive: boolean };
 
+// Customers link by customer_id (migration 100); erp_customer_code is the ERP code people see. Suppliers have one column for both.
 const TABLE = {
-  customers: { mirror: "dbo.erp_customers", mirrorKey: "customer_code", app: "dbo.customers", link: "erp_customer_code", entity: "Customer" },
-  suppliers: { mirror: "dbo.erp_suppliers", mirrorKey: "supplier_id", app: "dbo.suppliers", link: "erp_supplier_id", entity: "Supplier" },
+  customers: { mirror: "dbo.erp_customers", mirrorKey: "customer_id", app: "dbo.customers", link: "erp_customer_id", shown: "erp_customer_code", entity: "Customer" },
+  suppliers: { mirror: "dbo.erp_suppliers", mirrorKey: "supplier_id", app: "dbo.suppliers", link: "erp_supplier_id", shown: "erp_supplier_id", entity: "Supplier" },
 } as const;
 
-type AppRow = { id: number; code: string; name: string; name_th: string; name_en: string; name_ja: string; tax_id: string; erp_key: string | null; is_active: boolean };
+/** erp_code: a customer linked under migration 099 by code only, until a read gives it the id of the record carrying that code. */
+type AppRow = { id: number; code: string; name: string; name_th: string; name_en: string; name_ja: string; tax_id: string; erp_key: string | null;
+  erp_code: string | null; is_active: boolean };
 type MirrorRow = Record<string, unknown>;
 type Apply = { row: AppRow; record: ErpMasterRecord; erpKey: string; active: boolean };
 
@@ -41,21 +45,23 @@ const str = (value: unknown) => typeof value === "string" ? value : value === nu
 /** A mirror row back into the shape readMasterPage gives. */
 function recordOf(kind: MasterKind, row: MirrorRow): ErpMasterRecord {
   const key = str(row[TABLE[kind].mirrorKey]);
-  return { key, code: kind === "customers" ? key : str(row.supplier_code), nameTh: str(row.name_th), nameEn: str(row.name_en), shortName: str(row.short_name),
+  return { key, code: str(kind === "customers" ? row.customer_code : row.supplier_code), nameTh: str(row.name_th), nameEn: str(row.name_en), shortName: str(row.short_name),
     taxId: str(row.tax_id), branch: str(row.branch), address: str(row.address), province: str(row.province), postalCode: str(row.postal_code),
     country: str(row.country), phone: str(row.phone), email: str(row.email), website: str(row.website), contactName: str(row.contact_name),
     approvalStatus: str(row.approval_status), isActive: Boolean(row.is_active), mergedInto: row.merged_into ? str(row.merged_into) : null,
     updatedAt: row.erp_updated_at ? str(row.erp_updated_at) : null, hash: str(row.content_hash) };
 }
 
-const partyOf = (row: AppRow): AppParty => appParty(row.id, [row.name, row.name_th, row.name_en], row.tax_id, row.erp_key);
+// A customer linked by code only is not free to match another record: it waits for its own, or for an Admin.
+const partyOf = (row: AppRow): AppParty => appParty(row.id, [row.name, row.name_th, row.name_en], row.tax_id, row.erp_key ?? (row.erp_code ? `code:${row.erp_code}` : null));
 
 async function loadApp(transaction: Transaction, kind: MasterKind): Promise<{ rows: AppRow[]; codes: Set<string> }> {
   const request = new sql.Request(transaction);
   const rows = kind === "customers"
-    ? await request.query<AppRow>(`SELECT id,code,name,name_th,name_en,name_ja,N'' tax_id,erp_customer_code erp_key,is_active
+    ? await request.query<AppRow>(`SELECT id,code,name,name_th,name_en,name_ja,N'' tax_id,erp_customer_id erp_key,
+        CASE WHEN erp_customer_id IS NULL THEN erp_customer_code END erp_code,is_active
         FROM dbo.customers WITH (UPDLOCK) WHERE deleted_at IS NULL; SELECT code FROM dbo.customers;`)
-    : await request.query<AppRow>(`SELECT id,code,name,N'' name_th,N'' name_en,N'' name_ja,tax_id,erp_supplier_id erp_key,is_active
+    : await request.query<AppRow>(`SELECT id,code,name,N'' name_th,N'' name_en,N'' name_ja,tax_id,erp_supplier_id erp_key,NULL erp_code,is_active
         FROM dbo.suppliers WITH (UPDLOCK) WHERE deleted_at IS NULL; SELECT code FROM dbo.suppliers;`);
   const sets = rows.recordsets as unknown as [AppRow[], { code: string }[]];
   return { rows: sets[0].map((row) => ({ ...row, id: Number(row.id) })), codes: new Set(sets[1].map((row) => row.code.toUpperCase())) };
@@ -68,21 +74,23 @@ async function applyToApp(transaction: Transaction, kind: MasterKind, actorId: n
   if (kind === "customers") {
     request.input("rows", sql.NVarChar(sql.MAX), JSON.stringify(items.map(({ row, record, erpKey, active }) => {
       const nameTh = record.nameTh || row.name_th, nameEn = record.nameEn || row.name_en;
-      return { id: row.id, prev: row.erp_key, erpKey, name: nameEn || nameTh || row.name_ja || row.name, nameTh, nameEn, shortName: record.shortName,
-        country: record.country, website: websiteOf(record.website), site: addressLine(record), active };
+      return { id: row.id, prev: row.erp_key, erpKey, erpCode: record.code, name: nameEn || nameTh || row.name_ja || row.name, nameTh, nameEn,
+        shortName: record.shortName, country: record.country, website: websiteOf(record.website), site: addressLine(record), active };
     })));
+    // A record without a code (a merge whose surviving record is not read yet) keeps the code shown until it is.
     const done = await request.query<{ id: number }>(`
       UPDATE c SET name=j.name,name_th=j.nameTh,name_en=j.nameEn,
         short_name=CASE WHEN j.shortName<>N'' THEN j.shortName ELSE c.short_name END,
         country=CASE WHEN j.country<>N'' THEN j.country ELSE c.country END,
         website=CASE WHEN j.website<>N'' THEN j.website ELSE c.website END,
         site=CASE WHEN j.site<>N'' THEN j.site ELSE c.site END,
-        is_active=j.active,erp_customer_code=j.erpKey,updated_by=@actor,updated_at=SYSUTCDATETIME()
+        is_active=j.active,erp_customer_id=j.erpKey,erp_customer_code=CASE WHEN j.erpCode<>N'' THEN j.erpCode ELSE ISNULL(c.erp_customer_code,j.erpKey) END,
+        updated_by=@actor,updated_at=SYSUTCDATETIME()
       OUTPUT inserted.id
-      FROM dbo.customers c JOIN OPENJSON(@rows) WITH (id bigint '$.id', prev nvarchar(50) '$.prev', erpKey nvarchar(50) '$.erpKey',
+      FROM dbo.customers c JOIN OPENJSON(@rows) WITH (id bigint '$.id', prev nvarchar(50) '$.prev', erpKey nvarchar(50) '$.erpKey', erpCode nvarchar(50) '$.erpCode',
         name nvarchar(300) '$.name', nameTh nvarchar(300) '$.nameTh', nameEn nvarchar(300) '$.nameEn', shortName nvarchar(100) '$.shortName',
         country nvarchar(120) '$.country', website nvarchar(500) '$.website', site nvarchar(300) '$.site', active bit '$.active') j ON j.id=c.id
-      WHERE c.deleted_at IS NULL AND (c.erp_customer_code=j.prev OR (c.erp_customer_code IS NULL AND j.prev IS NULL));`);
+      WHERE c.deleted_at IS NULL AND (c.erp_customer_id=j.prev OR (c.erp_customer_id IS NULL AND j.prev IS NULL));`);
     return new Set(done.recordset.map((row) => Number(row.id)));
   }
   request.input("rows", sql.NVarChar(sql.MAX), JSON.stringify(items.map(({ row, record, erpKey, active }) => ({
@@ -107,14 +115,14 @@ async function createInApp(transaction: Transaction, kind: MasterKind, actorId: 
   const request = new sql.Request(transaction); request.input("actor", sql.BigInt, actorId);
   let created: { id: number; code: string; erp_key: string }[];
   if (kind === "customers") {
-    request.input("rows", sql.NVarChar(sql.MAX), JSON.stringify(records.map((record) => ({ erpKey: record.key, code: customerCodeFor(record, codes),
-      name: displayName(record).slice(0, 300), nameTh: record.nameTh, nameEn: record.nameEn, shortName: record.shortName, country: record.country || "Thailand",
-      website: websiteOf(record.website), site: addressLine(record) }))));
+    request.input("rows", sql.NVarChar(sql.MAX), JSON.stringify(records.map((record) => ({ erpKey: record.key, erpCode: record.code || record.key,
+      code: customerCodeFor(record, codes), name: displayName(record).slice(0, 300), nameTh: record.nameTh, nameEn: record.nameEn, shortName: record.shortName,
+      country: record.country || "Thailand", website: websiteOf(record.website), site: addressLine(record) }))));
     created = (await request.query<{ id: number; code: string; erp_key: string }>(`
-      INSERT dbo.customers (code,name,name_th,name_en,short_name,country,website,site,is_active,erp_customer_code,created_by,updated_by)
-      OUTPUT inserted.id,inserted.code,inserted.erp_customer_code erp_key
-      SELECT j.code,j.name,j.nameTh,j.nameEn,j.shortName,j.country,j.website,j.site,1,j.erpKey,@actor,@actor
-      FROM OPENJSON(@rows) WITH (erpKey nvarchar(50) '$.erpKey', code nvarchar(30) '$.code', name nvarchar(300) '$.name', nameTh nvarchar(300) '$.nameTh',
+      INSERT dbo.customers (code,name,name_th,name_en,short_name,country,website,site,is_active,erp_customer_id,erp_customer_code,created_by,updated_by)
+      OUTPUT inserted.id,inserted.code,inserted.erp_customer_id erp_key
+      SELECT j.code,j.name,j.nameTh,j.nameEn,j.shortName,j.country,j.website,j.site,1,j.erpKey,j.erpCode,@actor,@actor
+      FROM OPENJSON(@rows) WITH (erpKey nvarchar(50) '$.erpKey', erpCode nvarchar(50) '$.erpCode', code nvarchar(30) '$.code', name nvarchar(300) '$.name', nameTh nvarchar(300) '$.nameTh',
         nameEn nvarchar(300) '$.nameEn', shortName nvarchar(100) '$.shortName', country nvarchar(120) '$.country', website nvarchar(500) '$.website',
         site nvarchar(300) '$.site') j;`)).recordset;
   } else {
@@ -142,8 +150,8 @@ async function upsertMirror(database: Database, kind: MasterKind, records: ErpMa
   if (!records.length) return;
   const rows = JSON.stringify(records);
   const columns = kind === "customers"
-    ? { key: "customer_code", list: "name_th,name_en,short_name,tax_id,branch,address,province,postal_code,country,phone,email,website,is_active,merged_into,erp_updated_at",
-      shape: "short_name nvarchar(100) '$.shortName'," }
+    ? { key: "customer_id", list: "customer_code,name_th,name_en,short_name,tax_id,branch,address,province,postal_code,country,phone,email,website,is_active,merged_into,erp_updated_at",
+      shape: "customer_code nvarchar(50) '$.code', short_name nvarchar(100) '$.shortName'," }
     : { key: "supplier_id", list: "supplier_code,name_th,name_en,tax_id,branch,address,province,postal_code,country,phone,email,website,contact_name,approval_status,is_active,merged_into,erp_updated_at",
       shape: "supplier_code nvarchar(50) '$.code', contact_name nvarchar(200) '$.contactName', approval_status nvarchar(30) '$.approvalStatus'," };
   const names = columns.list.split(",");
@@ -187,6 +195,13 @@ async function reconcile(database: Database, kind: MasterKind, actorId: number):
       if (row.erp_key) linked.delete(row.erp_key);
       linked.set(erpKey, id); row.erp_key = erpKey; partyById.get(id)!.erpKey = erpKey;
     };
+    // Customers linked under migration 099 carry only the ERP code: each takes the id of the record carrying it, unmatched.
+    const byCode = new Map(app.rows.filter((row) => !row.erp_key && row.erp_code).map((row) => [row.erp_code!, row.id]));
+    for (const record of pending) {
+      const id = record.code && !linked.has(record.key) ? byCode.get(record.code) : undefined;
+      if (id === undefined) continue;
+      byCode.delete(record.code); linked.set(record.key, id); partyById.get(id)!.erpKey = record.key;
+    }
     // Merges first, so the record a merge points at finds the app record it now owns.
     for (const record of [...pending].sort((a, b) => Number(Boolean(b.mergedInto)) - Number(Boolean(a.mergedInto)))) {
       const own = linked.get(record.key);
@@ -194,7 +209,7 @@ async function reconcile(database: Database, kind: MasterKind, actorId: number):
         const target = linked.get(record.mergedInto);
         if (target === undefined) {
           // The app record follows the merge; the surviving record's own details arrive when it is read again.
-          link(own, { ...record, nameTh: "", nameEn: "", shortName: "", country: "", website: "", address: "", province: "", postalCode: "", taxId: "",
+          link(own, { ...record, code: "", nameTh: "", nameEn: "", shortName: "", country: "", website: "", address: "", province: "", postalCode: "", taxId: "",
             contactName: "", email: "", phone: "" }, byId.get(own)!.is_active, record.mergedInto);
           states.push({ erpKey: record.mergedInto, state: "PENDING", ids: null });
         } else if (target !== own) { link(own, record, false); counts.closed++; }
@@ -318,18 +333,20 @@ export function createErpMasterSync(database: Database, gateway: ErpGateway | nu
   }
 
   async function reviewList(kind: MasterKind): Promise<{ items: MasterReviewItem[]; candidates: MasterCandidate[] }> {
-    const { mirror, app, link } = TABLE[kind];
+    const { mirror, app, link, shown } = TABLE[kind];
     const items = (await database.query<MirrorRow>(`SELECT TOP (200) * FROM ${mirror} WHERE match_state=N'REVIEW' ORDER BY name_en,name_th;`)).recordset;
     const ids = [...new Set(items.flatMap((row) => str(row.review_ids).split(",").filter(Boolean).map(Number)))];
     const candidates = ids.length ? (await database.query<Record<string, unknown>>(`
-      SELECT a.id,a.code,a.name,${kind === "customers" ? "a.name_th,a.name_en,N'' tax_id,a.site address" : "N'' name_th,N'' name_en,a.tax_id,N'' address"},a.${link} erp_key,a.is_active
+      SELECT a.id,a.code,a.name,${kind === "customers" ? "a.name_th,a.name_en,N'' tax_id,a.site address" : "N'' name_th,N'' name_en,a.tax_id,N'' address"},
+        a.${link} erp_key,a.${shown} erp_code,a.is_active
       FROM ${app} a WHERE a.deleted_at IS NULL AND a.id IN (SELECT CONVERT(bigint,value) FROM OPENJSON(@ids));`,
     (request) => request.input("ids", sql.NVarChar(sql.MAX), JSON.stringify(ids)))).recordset : [];
     return {
       items: items.map((row) => { const record = recordOf(kind, row); return { key: record.key, code: record.code, nameTh: record.nameTh, nameEn: record.nameEn,
         shortName: record.shortName, taxId: record.taxId, branch: record.branch, address: addressLine(record), candidateIds: str(row.review_ids).split(",").filter(Boolean).map(Number) }; }),
       candidates: candidates.map((row) => ({ id: Number(row.id), code: str(row.code), name: str(row.name), nameTh: str(row.name_th), nameEn: str(row.name_en),
-        taxId: str(row.tax_id), address: str(row.address), erpKey: row.erp_key ? str(row.erp_key) : null, isActive: Boolean(row.is_active) })),
+        taxId: str(row.tax_id), address: str(row.address), erpKey: row.erp_key ? str(row.erp_key) : null, erpCode: row.erp_code ? str(row.erp_code) : null,
+        isActive: Boolean(row.is_active) })),
     };
   }
 

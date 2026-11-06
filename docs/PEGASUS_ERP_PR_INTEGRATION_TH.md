@@ -45,8 +45,9 @@ Tools ที่ใช้:
 - `purchasing_options_get`: ดึงรายชื่อแผนก เพื่อแสดงตัวเลือกและเดาแผนกของผู้ขอ
 - `purchase_request_create`: ส่ง PR
 - `purchase_request_get` (ด้วย `external_ref`): อ่านสถานะ
+- `purchasing_projects_list`: ค้นโปรเจกต์ตอนพิมพ์เลขโปรเจกต์ในหน้าสร้างและแก้ไขโปรเจกต์ (ตั้งแต่ 2026-11-06 ดู `PEGASUS_ERP_PROJECTS_TH.md`)
 
-ยังไม่ได้ใช้: `purchasing_projects_list`, `purchasing_suppliers_list`, `whoami`
+ยังไม่ได้ใช้: `purchasing_suppliers_list`, `whoami`
 
 ### การเก็บ token
 

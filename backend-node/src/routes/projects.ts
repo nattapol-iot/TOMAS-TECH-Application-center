@@ -565,6 +565,7 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
     await demandProjectScope(database, actor, id);
     const given = <T>(key: string, read: () => T, fallback: T): T => (body[key] === undefined ? fallback : read());
     const details = parseProjectDetails(body);
+    const requestedNumber = body.projectNumber === undefined ? null : parseProjectNumber(body.projectNumber);
     // The plan is sent whole, headings with their tasks and functions, or not at all.
     rejectOutdatedPlan(body);
     const plan = body.masterPlan === undefined ? null : parseInitialPlan(body);
@@ -577,6 +578,18 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
         WHERE id=@id AND deleted_at IS NULL;`)).recordset[0];
       if (!before) throw new ApiError(404, "project_not_found", "Project not found.");
       const currentStatus = String(before.status) as ProjectStatus;
+
+      // A project registered under the placeholder (PJ000000) takes the ERP's number once the ERP issues it (owner decision
+      // 2026-11-06). A real number stays: PRs and Cost Sheets already went to the ERP under it.
+      let number = String(before.project_no);
+      if (requestedNumber !== null && requestedNumber !== number) {
+        if (!isPlaceholderProjectNumber(number)) throw new ApiError(409, "project_number_fixed", "This project already has its ERP number, which does not change here.");
+        const taken = new sql.Request(transaction); taken.input("number", sql.NVarChar(30), requestedNumber);
+        if (!isPlaceholderProjectNumber(requestedNumber) && (await taken.query(`SELECT id FROM dbo.projects WITH(UPDLOCK,HOLDLOCK) WHERE project_no=@number;`)).recordset[0]) {
+          throw new ApiError(409, "project_number_taken", "This project number is already used by another project, including any in the trash. Check the number from the ERP.");
+        }
+        number = requestedNumber;
+      }
 
       const statusValue = given("status", () => {
         if (!isProjectStatus(body.status)) throw new ApiError(400, "validation_failed", "Project status is not one of the allowed values.");
@@ -633,8 +646,8 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
       update.input("po_no", sql.NVarChar(100), input.purchaseOrderNumber); update.input("po_date", sql.Date, input.purchaseOrderDate);
       update.input("start_date", sql.Date, input.startDate); update.input("target_delivery", sql.Date, input.targetDelivery);
       update.input("actual_delivery", sql.Date, input.actualDelivery); update.input("site", sql.NVarChar(300), input.site);
-      update.input("remark", sql.NVarChar(sql.MAX), input.remark);
-      const updated = (await update.query<{ row_version: Buffer }>(`UPDATE dbo.projects SET name=@name,project_type=@project_type,status=@status,progress=@progress,
+      update.input("remark", sql.NVarChar(sql.MAX), input.remark); update.input("number", sql.NVarChar(30), number);
+      const updated = (await update.query<{ row_version: Buffer }>(`UPDATE dbo.projects SET project_no=@number,name=@name,project_type=@project_type,status=@status,progress=@progress,
         manager_id=@manager_id,lead_engineer_id=@lead_id,po_no=@po_no,po_date=@po_date,start_date=@start_date,target_delivery=@target_delivery,
         actual_delivery=@actual_delivery,site=@site,remark=@remark,updated_by=@actor,updated_at=SYSUTCDATETIME()
         OUTPUT inserted.row_version WHERE id=@id AND deleted_at IS NULL AND row_version=@row_version;`)).recordset[0];
@@ -665,11 +678,13 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
       await writeProjectDetails(transaction, id, details, actor.id);
       // Writing the team moves the row version again; hand back the one the client must send next.
       const latest = (await new sql.Request(transaction).input("id", sql.BigInt, id).query<{ row_version: Buffer }>(`SELECT row_version FROM dbo.projects WHERE id=@id;`)).recordset[0]!;
-      const after = { ...input, status: statusValue, progress, ...details, ...(plan ? { masterPlan: plan.headings } : {}) };
-      await insertAudit(transaction, actor.id, "Project", id, String(before.project_no), transition.changed ? `Status ${currentStatus} to ${statusValue}` : "Updated", before, after);
+      const renumbered = number !== String(before.project_no);
+      const after = { ...input, status: statusValue, progress, ...details, ...(plan ? { masterPlan: plan.headings } : {}), ...(renumbered ? { projectNumber: number } : {}) };
+      await insertAudit(transaction, actor.id, "Project", id, number, renumbered ? `Numbered ${number} from the ERP`
+        : transition.changed ? `Status ${currentStatus} to ${statusValue}` : "Updated", before, after);
       const notices = await queueTaskAssignmentNotices(transaction, { id: actor.id, name: actor.name }, assigned);
       return {
-        id, number: String(before.project_no), ...after, scheduleVersion,
+        id, number, ...after, scheduleVersion,
         rowVersion: latest.row_version.toString("base64"), notices,
       };
     }, sql.ISOLATION_LEVEL.READ_COMMITTED);
