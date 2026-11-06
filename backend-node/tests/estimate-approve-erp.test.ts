@@ -28,6 +28,10 @@ function harness(t: { mock: { method: typeof import("node:test").mock.method } }
     if (statement.includes("UPDATE dbo.estimates SET status=@status")) { seen.approved = true; return { recordset: [{ row_version: version }] }; }
     if (statement.includes("INSERT INTO dbo.estimate_revisions")) return { recordset: [{ id: 1 }] };
     if (statement.includes("UPDATE dbo.inquiries")) return { recordset: [], rowsAffected: [1] };
+    // The listed approvers, the facts for the notices, who submitted it, and the bell rows (owner 2026-11-06).
+    if (statement.includes("dbo.estimate_approvers")) return { recordset: [{ id: 9, name: "Warit", email: "warit.c@tomastc.com" }] };
+    if (statement.includes("INNER JOIN dbo.v_estimate_totals t ON t.estimate_id=e.id WHERE e.id=@id")) return { recordset: [{ project_name: "Line 3", customer_name: "Customer", owner_name: "Owner", owner_email: "owner@tomastc.com", total: 1000 }] };
+    if (statement.includes("action=N'Submitted'") || statement.includes("dbo.notifications")) return { recordset: [] };
     if (statement.includes("audit_log") || statement.includes("activity_events")) return { recordset: [] };
     throw Error("Unexpected transaction query: " + statement);
   });
@@ -47,7 +51,7 @@ function harness(t: { mock: { method: typeof import("node:test").mock.method } }
   } as unknown as Database;
   const gateway: ErpGateway = { async call() { throw new Error("The ERP must not be called for a revision it already holds."); } };
   const users = {
-    async demandPermission(_request: unknown, permission: string) { assert.equal(permission, "estimate.approve"); },
+    async demandPermission(_request: unknown, permission: string) { assert.equal(permission, "estimate.read"); },
     async required() { return { id: 9, entraObjectId: "kc-approver", role: "Engineering Manager", roles: ["Engineering Manager"] }; },
   } as unknown as CurrentUserService;
   const app = Fastify(); registerErrorHandler(app);

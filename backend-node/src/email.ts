@@ -113,6 +113,35 @@ export type PurchaseRequisitionDecisionEmail = {
   recipients: EmailRecipient[];
 };
 
+/** An estimate sent for review, for every approver who may decide it (owner 2026-11-06). */
+export type EstimateReviewEmail = {
+  estimateId: number;
+  estimateNumber: string;
+  revision: number;
+  projectName: string;
+  customerName: string;
+  ownerName: string;
+  submittedBy: string;
+  /** Internal engineering cost of the revision, THB. */
+  total: number;
+  comment: string;
+  recipients: EmailRecipient[];
+};
+
+/** How an estimate in review was decided, for its owner and whoever submitted it (owner 2026-11-06). */
+export type EstimateDecisionEmail = {
+  estimateId: number;
+  estimateNumber: string;
+  revision: number;
+  projectName: string;
+  decision: "Approved" | "Revision requested";
+  decidedBy: string;
+  comment: string;
+  /** What the Pegasus ERP answered for an approved estimate; null when nothing was sent. */
+  erp: { sent: boolean; costSheetNo?: string | null; message?: string } | null;
+  recipients: EmailRecipient[];
+};
+
 /** A team-board appointment or task for one person's Outlook calendar (team-calendar.ts): a request, or its cancellation. */
 export type TeamTaskCalendarEmail = {
   method: "REQUEST" | "CANCEL";
@@ -247,6 +276,41 @@ export class EmailService {
       + (message.comment ? `<tr><td><strong>Comment</strong></td><td>${escapeHtml(message.comment)}</td></tr>` : "")
       + (erp && !erp.sent && erp.message ? `<tr><td><strong>ERP</strong></td><td>${escapeHtml(erp.message)}</td></tr>` : "") + `</table>`
       + `<p><a href="${escapeHtml(appUrl)}#/purchase">เปิดรายการใบขอซื้อ / Open Purchase Requisitions</a></p>`);
+  }
+
+  // Every approver of an estimate is mailed when it is submitted (owner 2026-11-06); estimates.ts writes the matching bell
+  // rows in the submitting transaction and sends this after the commit.
+  async sendEstimateReview(message: EstimateReviewEmail): Promise<EmailDeliveryResult> {
+    const revision = `R${String(message.revision).padStart(2, "0")}`;
+    const total = message.total.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return this.sendMail(message.recipients, `[Engineering Center] Estimate ${message.estimateNumber} ${revision} รออนุมัติ / waiting for approval`, (appUrl) =>
+      `<p>มี Estimate ส่งให้ตรวจ คุณหรือผู้อนุมัติคนอื่นอนุมัติหรือส่งกลับให้แก้ได้ / An estimate was sent for review; you or another approver may approve it or send it back.</p>`
+      + `<table><tr><td><strong>Estimate</strong></td><td>${escapeHtml(message.estimateNumber)} · ${revision}</td></tr>`
+      + `<tr><td><strong>Project</strong></td><td>${escapeHtml(message.projectName)}</td></tr>`
+      + `<tr><td><strong>Customer</strong></td><td>${escapeHtml(message.customerName)}</td></tr>`
+      + `<tr><td><strong>Estimate owner</strong></td><td>${escapeHtml(message.ownerName)}</td></tr>`
+      + `<tr><td><strong>Submitted by</strong></td><td>${escapeHtml(message.submittedBy)}</td></tr>`
+      + `<tr><td><strong>Total cost</strong></td><td>${escapeHtml(total)} THB</td></tr>`
+      + (message.comment ? `<tr><td><strong>Comment</strong></td><td>${escapeHtml(message.comment)}</td></tr>` : "") + `</table>`
+      + `<p><a href="${escapeHtml(appUrl)}#/estimates/${message.estimateId}">เปิด Estimate ${escapeHtml(message.estimateNumber)} / Open the estimate</a></p>`);
+  }
+
+  // The owner (and whoever submitted it) hears of the decision on their estimate; an approved one is mailed after the
+  // Pegasus ERP has answered, so the mail says whether its Cost Sheet is there.
+  async sendEstimateDecision(message: EstimateDecisionEmail): Promise<EmailDeliveryResult> {
+    const revision = `R${String(message.revision).padStart(2, "0")}`, { erp } = message, approved = message.decision === "Approved";
+    const summary = !approved ? "Estimate ของคุณถูกส่งกลับให้แก้ไข / Your estimate was sent back for revision."
+      : !erp ? "Estimate ของคุณได้รับอนุมัติแล้ว / Your estimate was approved."
+        : erp.sent ? `อนุมัติแล้ว และอยู่ใน Pegasus ERP แล้ว${erp.costSheetNo ? ` (${escapeHtml(erp.costSheetNo)})` : ""} / Approved and in the ERP${erp.costSheetNo ? ` as ${escapeHtml(erp.costSheetNo)}` : ""}.`
+          : "อนุมัติแล้ว แต่ยังไม่เข้า ERP เปิดแท็บสรุปแล้วกดส่งเข้า ERP / Approved but not in the ERP yet; open the summary tab and send it.";
+    return this.sendMail(message.recipients, `[Engineering Center] Estimate ${message.estimateNumber} ${revision} ${approved ? "อนุมัติแล้ว / approved" : "ส่งกลับให้แก้ไข / sent back"}`, (appUrl) =>
+      `<p>${summary}</p>`
+      + `<table><tr><td><strong>Estimate</strong></td><td>${escapeHtml(message.estimateNumber)} · ${revision}</td></tr>`
+      + `<tr><td><strong>Project</strong></td><td>${escapeHtml(message.projectName)}</td></tr>`
+      + `<tr><td><strong>Decided by</strong></td><td>${escapeHtml(message.decidedBy)}</td></tr>`
+      + (message.comment ? `<tr><td><strong>${approved ? "Comment" : "Reason"}</strong></td><td>${escapeHtml(message.comment)}</td></tr>` : "")
+      + (erp && !erp.sent && erp.message ? `<tr><td><strong>ERP</strong></td><td>${escapeHtml(erp.message)}</td></tr>` : "") + `</table>`
+      + `<p><a href="${escapeHtml(appUrl)}#/estimates/${message.estimateId}">เปิด Estimate ${escapeHtml(message.estimateNumber)} / Open the estimate</a></p>`);
   }
 
   /**

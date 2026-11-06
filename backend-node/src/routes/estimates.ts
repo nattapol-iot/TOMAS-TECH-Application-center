@@ -21,6 +21,9 @@ import { lockEditableEstimate } from "./estimate-cost-write.js";
 import { copyEstimateLines, copyLedgersFrom } from "./estimate-copy.js";
 import { createEstimateErpSender, type EstimateErpOutcome } from "./estimate-erp.js";
 import { parseErpSheetRows, type EstimateErpLink } from "../erp-cost-estimate.js";
+import type { EmailService, EstimateDecisionEmail, EstimateReviewEmail } from "../email.js";
+import { loadEstimateApprovers, mayDecideEstimate, recipientsOf, submitterOf, waitingApprovers } from "../estimate-review.js";
+import { notifyUsers } from "../site-visit-common.js";
 
 type EstimateRow = Record<string, unknown> & {
   id: number | string; estimate_no: string; inquiry_no: string; customer_id: number | string; customer_name: string;
@@ -325,6 +328,38 @@ export async function withdrawEstimateReview(transaction: TransactionType, id: n
   await assertEstimateTotals(transaction, id);
 }
 
+/** A mail to send once the transaction has committed: to the approvers of a submitted estimate, or to whoever is told of a decision. */
+type EstimateMail = { kind: "review"; message: EstimateReviewEmail } | { kind: "decision"; message: EstimateDecisionEmail } | null;
+const revisionCode = (revision: number) => `R${String(revision).padStart(2, "0")}`;
+
+/** What the notices say about an estimate: its project, customer, owner and current total. */
+async function estimateFacts(transaction: TransactionType, id: number) {
+  const request = new sql.Request(transaction); request.input("id", sql.BigInt, id);
+  return (await request.query<{ project_name: string; customer_name: string; owner_name: string; owner_email: string | null; total: number | string }>(`
+    SELECT e.project_name,c.name customer_name,u.name owner_name,u.email owner_email,t.total FROM dbo.estimates e
+    INNER JOIN dbo.customers c ON c.id=e.customer_id INNER JOIN dbo.users u ON u.id=e.owner_id
+    INNER JOIN dbo.v_estimate_totals t ON t.estimate_id=e.id WHERE e.id=@id;`)).recordset[0]!;
+}
+
+/* The owner and whoever submitted the revision hear of its decision, never the person who made it; one bell row each. */
+async function noticeDecision(transaction: TransactionType, id: number, estimateNo: string, revision: number, ownerId: number,
+  actor: CurrentUser, decision: "Approved" | "Revision requested", comment: string): Promise<EstimateMail> {
+  const facts = await estimateFacts(transaction, id);
+  const submitter = await submitterOf(transaction, id, revision);
+  const told = new Map<number, { name: string; email: string }>();
+  for (const person of [{ id: ownerId, name: facts.owner_name, email: facts.owner_email ?? "" }, ...(submitter ? [submitter] : [])]) {
+    if (person.id !== actor.id && !told.has(person.id)) told.set(person.id, { name: person.name, email: person.email });
+  }
+  if (!told.size) return null;
+  const approved = decision === "Approved";
+  await notifyUsers(transaction, told.keys(), "ESTIMATE_DECISION",
+    `${estimateNo} ${revisionCode(revision)} ${approved ? "อนุมัติแล้ว" : "ส่งกลับให้แก้ไข"}`,
+    [facts.project_name, `${approved ? "อนุมัติโดย" : "ส่งกลับโดย"} ${actor.name}`, comment].filter(Boolean).join(" · "),
+    "Estimate", id, `estimate-decision:${id}:r${revision}:${approved ? "approved" : "revision"}`);
+  return { kind: "decision", message: { estimateId: id, estimateNumber: estimateNo, revision, projectName: facts.project_name, decision,
+    decidedBy: actor.name, comment, erp: null, recipients: recipientsOf([...told.values()]) } };
+}
+
 async function transition(
   request: FastifyRequest,
   id: number,
@@ -339,7 +374,7 @@ async function transition(
   forbidOwner: boolean,
   database: Database,
   users: CurrentUserService,
-): Promise<object> {
+): Promise<{ response: Record<string, unknown>; mail: EstimateMail }> {
   await users.demandPermission(request, permission); const actor = await users.required(request);
   const body = bodyObject(request.body); const rowVersion = parseRowVersion(body.rowVersion);
   const comment = optionalBodyText(body.comment, 20_000, "Workflow comment");
@@ -358,6 +393,11 @@ async function transition(
     if (requireOwner && ownerId !== actor.id && !managerOverride(actor)) throw new ApiError(403, "estimate_owner_required", "Only the estimate owner, an engineering manager or an administrator can submit this estimate.");
     // Administrators may decide their own estimates; every other owner needs a second approver.
     if (forbidOwner && ownerId === actor.id && !adminSelfDecision(actor)) throw new ApiError(403, "self_approval_forbidden", "The estimate owner cannot approve their own estimate. Another approver must decide it.");
+    // Only the listed approvers decide (owner 2026-11-06); they need no estimate.approve role.
+    const approvers = await loadEstimateApprovers(transaction);
+    if (action === "Approved" && !mayDecideEstimate(actor, ownerId, approvers)) {
+      throw new ApiError(403, "estimate_approver_required", `Only ${approvers.map((approver) => approver.name).join(", ") || "an estimate approver"} can approve an estimate.`);
+    }
     await assertEstimateTotals(transaction, id);
     const issues = await validationIssues(database, id, transaction);
     if (issues.length) throw new ApiError(422, "estimate_invalid", "The estimate has critical validation errors.", issues);
@@ -385,12 +425,34 @@ async function transition(
     await insertAudit(transaction, actor.id, "Inquiry", inquiryId, current.inquiry_no, `Estimate ${action.toLowerCase()}`,
       { status: current.inquiry_status, progress: Number(current.inquiry_progress) },
       { status: inquiryStatus, progress: inquiryProgress, estimateRevision: current.revision });
-    return { id, revision: current.revision, status: targetStatus, progress: targetProgress, rowVersion: updated.row_version.toString("base64") };
+    let mail: EstimateMail = null;
+    if (action === "Submitted") {
+      // Every approver hears of it but the owner and the submitter themselves, by the bell here and by mail after the commit.
+      const waiting = waitingApprovers(approvers, ownerId, actor.id);
+      if (waiting.length) {
+        const facts = await estimateFacts(transaction, id);
+        await notifyUsers(transaction, waiting.map((approver) => approver.id), "ESTIMATE_REVIEW",
+          `${current.estimate_no} ${revisionCode(current.revision)} รออนุมัติ`, `${facts.project_name} · ส่งโดย ${actor.name}`,
+          "Estimate", id, `estimate-review:${id}:r${current.revision}`);
+        mail = { kind: "review", message: { estimateId: id, estimateNumber: current.estimate_no, revision: current.revision,
+          projectName: facts.project_name, customerName: facts.customer_name, ownerName: facts.owner_name, submittedBy: actor.name,
+          total: Number(facts.total), comment: comment ?? "", recipients: recipientsOf(waiting) } };
+      }
+    }
+    if (action === "Approved") mail = await noticeDecision(transaction, id, current.estimate_no, current.revision, ownerId, actor, "Approved", comment ?? "");
+    return { response: { id, revision: current.revision, status: targetStatus, progress: targetProgress, rowVersion: updated.row_version.toString("base64") }, mail };
   });
 }
 
-export function registerEstimateRoutes(app: FastifyInstance, config: AppConfig, database: Database, users: CurrentUserService, erp: EstimateErpLink | null = null): void {
+export function registerEstimateRoutes(app: FastifyInstance, config: AppConfig, database: Database, users: CurrentUserService, erp: EstimateErpLink | null = null,
+  email: EmailService | null = null): void {
   const erpSender = createEstimateErpSender(database, erp);
+  /* Mail goes after the commit; the bell rows written in the transaction still tell people when mail is off or Graph fails. */
+  const deliver = async (mail: EstimateMail) => {
+    if (!mail || !email || !mail.message.recipients.length) return;
+    try { await (mail.kind === "review" ? email.sendEstimateReview(mail.message) : email.sendEstimateDecision(mail.message)); }
+    catch (error) { app.log.warn({ err: error }, "Estimate review email failed"); }
+  };
   app.get("/api/v1/estimates", async (request) => {
     await users.demandPermission(request, "estimate.read"); const query = request.query as Record<string, unknown>;
     const page = clampedInteger(query.page, 1, 1, Number.MAX_SAFE_INTEGER); const pageSize = clampedInteger(query.pageSize, 25, 1, 100);
@@ -489,18 +551,26 @@ export function registerEstimateRoutes(app: FastifyInstance, config: AppConfig, 
     const issues = await validationIssues(database, id); return { estimateId: id, valid: issues.length === 0, issues };
   });
 
-  app.post("/api/v1/estimates/:id/submit", async (request) => transition(request, positiveLong((request.params as { id?: string }).id, "Estimate id"),
-    "estimate.write", "Engineering Review", 90, "Engineering Review", 90, ["Draft", "Engineering Input", "Revision Required"], "Submitted", true, false, database, users));
+  app.post("/api/v1/estimates/:id/submit", async (request) => {
+    const submitted = await transition(request, positiveLong((request.params as { id?: string }).id, "Estimate id"),
+      "estimate.write", "Engineering Review", 90, "Engineering Review", 90, ["Draft", "Engineering Input", "Revision Required"], "Submitted", true, false, database, users);
+    await deliver(submitted.mail);
+    return submitted.response;
+  });
+  // The listed approvers decide whether or not they hold estimate.approve (owner 2026-11-06); transition checks the list.
   app.post("/api/v1/estimates/:id/approve", async (request) => {
     const id = positiveLong((request.params as { id?: string }).id, "Estimate id");
-    const approved = await transition(request, id, "estimate.approve", "Approved", 100, "Approved", 100, ["Engineering Review"], "Approved", false, true, database, users);
-    if (!erpSender.enabled) return approved;
+    const { response: approved, mail } = await transition(request, id, "estimate.read", "Approved", 100, "Approved", 100, ["Engineering Review"], "Approved", false, true, database, users);
+    if (!erpSender.enabled) { await deliver(mail); return approved; }
     /* The approver is signed in right now, so their own token sends the Cost Sheet, written from the ERP sheet rows the page
        sent with the approval. A failure leaves the estimate approved; the ERP tab shows why and offers the send again. */
     const erpOutcome: EstimateErpOutcome = await (async () => {
       const rows = bodyObject(request.body).erpLines;
       return erpSender.send(id, await users.required(request), rows === undefined || rows === null ? null : parseErpSheetRows(rows));
     })().catch((error: unknown) => ({ sent: false, message: error instanceof Error ? error.message : String(error) }));
+    // The owner's mail says whether the Cost Sheet reached the ERP, so it goes after the send.
+    await deliver(mail?.kind === "decision" ? { kind: "decision", message: { ...mail.message, erp: { sent: erpOutcome.sent,
+      ...(erpOutcome.costSheetNo !== undefined ? { costSheetNo: erpOutcome.costSheetNo } : {}), ...(erpOutcome.message !== undefined ? { message: erpOutcome.message } : {}) } } } : mail);
     return { ...approved, erp: erpOutcome };
   });
 
@@ -542,7 +612,7 @@ export function registerEstimateRoutes(app: FastifyInstance, config: AppConfig, 
   });
 
   app.post("/api/v1/estimates/:id/request-revision", async (request) => {
-    await users.demandPermission(request, "estimate.approve"); const actor = await users.required(request);
+    await users.demandPermission(request, "estimate.read"); const actor = await users.required(request);
     const id = positiveLong((request.params as { id?: string }).id, "Estimate id"); const body = bodyObject(request.body);
     const rowVersion = parseRowVersion(body.rowVersion); const reason = optionalBodyText(body.comment, 100, "Revision reason");
     if (!reason) throw new ApiError(400, "validation_failed", "Revision reason is required.");
@@ -557,7 +627,13 @@ export function registerEstimateRoutes(app: FastifyInstance, config: AppConfig, 
       if (!current.row_version.equals(rowVersion)) throw new ApiError(409, "concurrency_conflict", "This estimate was changed by another user. Reload and try again.");
       if (current.status.toLowerCase() !== "engineering review") throw new ApiError(409, "invalid_transition", `Cannot request a revision while the estimate is '${current.status}'.`);
       if (Number(current.owner_id) === actor.id && !adminSelfDecision(actor)) throw new ApiError(403, "self_revision_forbidden", "The estimate owner cannot request a revision on their own estimate. Another approver must decide it.");
+      const approvers = await loadEstimateApprovers(transaction);
+      if (!mayDecideEstimate(actor, Number(current.owner_id), approvers)) {
+        throw new ApiError(403, "estimate_approver_required", `Only ${approvers.map((approver) => approver.name).join(", ") || "an estimate approver"} can send an estimate back.`);
+      }
       await assertEstimateTotals(transaction, id);
+      // Told before the revision moves on, so the notice names the revision that was sent back.
+      const mail = await noticeDecision(transaction, id, current.estimate_no, current.revision, Number(current.owner_id), actor, "Revision requested", reason);
       await snapshotRevision(transaction, id, current.revision, reason, "Revision Required", actor.id); const nextRevision = await nextEstimateRevision(transaction, id, current.revision);
       const update = new sql.Request(transaction); update.input("next_revision", sql.Int, nextRevision); update.input("actor", sql.BigInt, actor.id);
       update.input("id", sql.BigInt, id); update.input("current_revision", sql.Int, current.revision); update.input("row_version", sql.VarBinary(8), rowVersion);
@@ -573,7 +649,7 @@ export function registerEstimateRoutes(app: FastifyInstance, config: AppConfig, 
         { revision: current.revision, status: current.status, progress: Number(current.progress) }, { revision: nextRevision, status: "Revision Required", progress: 75, reason });
       await insertAudit(transaction, actor.id, "Inquiry", inquiryId, current.inquiry_no, "Estimate revision requested",
         { status: current.inquiry_status, progress: Number(current.inquiry_progress) }, { status: "Estimating", progress: 75, estimateRevision: nextRevision });
-      return { id, revision: nextRevision, status: "Revision Required", progress: 75, rowVersion: updated.row_version.toString("base64") };
-    });
+      return { response: { id, revision: nextRevision, status: "Revision Required", progress: 75, rowVersion: updated.row_version.toString("base64") }, mail };
+    }).then(async ({ response, mail }) => { await deliver(mail); return response; });
   });
 }

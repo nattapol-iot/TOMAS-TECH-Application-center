@@ -639,6 +639,8 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
     if (item.entityType === "Project" && item.entityId) openProjectSchedule(item.entityId);
     // A team task given to you opens the team board.
     if (item.entityType === "TeamTask") setView("resources");
+    // An estimate waiting for you to approve, or the decision on yours, opens that estimate.
+    if (item.entityType === "Estimate" && item.entityId) openEstimate(item.entityId);
   };
 
   const signIn = async (teamTestEmail?: string, teamTestAccessCode?: string) => {

@@ -215,7 +215,7 @@ export async function buildApp(config: AppConfig): Promise<Application> {
   app.addHook("preHandler", request => guardDocumentLifecycle(request, database, users));
   registerDocumentLifecycleRoutes(app, database, users, config);
   registerEstimateCostLookupRoutes(app, database, users);
-  registerEstimateRoutes(app, config, database, users, erp);
+  registerEstimateRoutes(app, config, database, users, erp, email);
   registerEstimateErpRoutes(app, database, users, erp);
   registerErpMasterDataRoutes(app, database, users, erp);
   registerErpProjectRoutes(app, database, users, erp);

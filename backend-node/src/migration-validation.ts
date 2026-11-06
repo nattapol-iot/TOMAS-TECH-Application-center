@@ -86,6 +86,7 @@ export const REQUIRED_MIGRATIONS: readonly MigrationIdentity[] = [
   { version: 98, fileName: "098_master_plan_headings.sql", name: "Master Plan headings" },
   { version: 99, fileName: "099_erp_customer_supplier_sync.sql", name: "Customers and suppliers from the Pegasus ERP" },
   { version: 100, fileName: "100_erp_customer_id.sql", name: "ERP customers keyed by customer_id" },
+  { version: 101, fileName: "101_estimate_approvers.sql", name: "Estimate approvers" },
 ] as const;
 
 export const REQUIRED_SCHEMA_VERSION = REQUIRED_MIGRATIONS.at(-1)!.version;

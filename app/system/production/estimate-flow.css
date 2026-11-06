@@ -93,6 +93,10 @@ button.est-issue { cursor: pointer; }
 .est-issue.red { border-color: var(--red-line); background: var(--red-soft); color: var(--red-text); }
 .est-issue.amber { border-color: var(--amber-line); background: var(--amber-soft); color: var(--amber-text); }
 .est-issue.green { border-color: var(--green-line); background: var(--green-soft); color: var(--green-text); }
+/* Who the estimate waits for, under the workflow rail (owner 2026-11-06). */
+.est-review { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px; margin: -2px 0 10px; font-size: var(--fs-xs); color: var(--muted); }
+.est-review strong { color: var(--ink); font-weight: 600; }
+.est-review.waiting .icon { color: var(--amber-text); }
 .est-costbar { display: flex; height: 12px; gap: 2px; border-radius: var(--r-pill); overflow: hidden; background: var(--n-100); }
 .est-costbar i { display: block; height: 100%; }
 .est-costbar.empty { height: 22px; align-items: center; justify-content: center; color: var(--muted); font-size: var(--fs-xs); }
