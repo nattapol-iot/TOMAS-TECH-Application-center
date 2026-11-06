@@ -27,7 +27,7 @@ import {
   type TeamTaskStatus,
 } from "../resource-workload-client";
 import { dateFromDay, dayNumber, weeklyCapacity, workingDays, type Commitment } from "../../../lib/resource-planning";
-import { boardDays, covers, dailyLoad, dateRuns, defaultTaskManDays, dueGroup, freestOn, loadBand, outlookDates, outlookLoad, overlapDays, tableHtml, tableTsv, timeRange, weekTotals, withExtra, withOutlook, type DayLoad, type Overlap } from "../../../lib/team-board";
+import { boardDays, covers, dailyLoad, dateRuns, dayWork, defaultTaskManDays, dueGroup, freestOn, loadBand, outlookDates, outlookLoad, overlapDays, tableHtml, tableTsv, timeRange, weekTotals, withExtra, withOutlook, type DayLoad, type Overlap } from "../../../lib/team-board";
 import type { GanttAlert } from "./GanttChart";
 import { choiceLink, idLink, listLink, optionalChoiceLink, textLink, useLinkedState, type LinkCodec } from "../screen-link";
 import "./team-board.css";
@@ -174,6 +174,8 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
   const [personId, setPersonId] = useLinkedState("person", null, idLink, { remember: false }), [listShown, setListShown] = useState(LIST_PAGE);
   // A new task: blank for a person and day, or a copy of one to change and save as new.
   const [adding, setAdding] = useState<{ assigneeId: number | null; date: string; copy?: TeamTask; draft?: Draft } | null>(null);
+  // A person's day opened from the grid: everything taking their time that day (owner request 2026-11-06).
+  const [dayOpen, setDayOpen] = useState<{ userId: number | null; date: string } | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [boardView, pickView] = useLinkedState<"grid" | "gantt">("layout", "grid", LAYOUT_LINK, { legacy: () => readView(bootstrap.user.id) });
   // The task open in the drawer is on the link by its id, so the link opens it once the board has read it.
@@ -430,20 +432,79 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
     return (
       <td key={day.date} className={`board-cell ${tone}${day.today ? " today" : ""}${day.weekStart ? " week-start" : ""}${overlap ? " overlap" : ""}`}
         title={[...(overlap ? [overlapText(overlap)] : []), ...shown.map((event) => eventLabel(event))].join("\n") || undefined}>
+        {overlap ? <button type="button" className="board-overlap" data-guide="team.dayWork" onClick={() => setDayOpen({ userId, date: day.date })}
+          aria-label={`${overlapText(overlap)} · ${t("TeamBoard.dayWorkOpen")}`} title={`${overlapText(overlap)} · ${t("TeamBoard.dayWorkOpen")}`} /> : null}
         {canAssignOthers || userId === me || userId === null ? (
           <button type="button" className="board-cell-add" onClick={() => setAdding({ assigneeId: userId, date: day.date })}
             aria-label={fill(t("TeamBoard.addFor"), { name, date: longDate(day.date) })}>
             <Icon name="plus" />
           </button>
         ) : null}
-        {load && !day.holiday && !day.weekend && load.manDays ? <span className="board-pct">{pct(load.utilisation)}</span> : null}
+        {load && !day.holiday && !day.weekend && load.manDays ? <button type="button" className="board-pct" data-guide="team.dayWork" onClick={() => setDayOpen({ userId, date: day.date })}
+          title={t("TeamBoard.dayWorkOpen")} aria-label={`${pct(load.utilisation)} · ${t("TeamBoard.dayWorkOpen")}`}>{pct(load.utilisation)}</button> : null}
         {shown.slice(0, 2).map((event) => clickable(event)
           ? <button key={event.key} type="button" className={`board-chip ${event.kind}${event.late ? " late" : ""}${"task" in event && event.task.status === "Done" ? " done" : ""}`}
             title={eventTitle(event)} onClick={() => openEvent(event)}>{eventLabel(event)}</button>
           : <span key={event.key} className={`board-chip ${event.kind}`} title={eventTitle(event)}>{eventLabel(event)}</span>)}
-        {shown.length > 2 ? <span className="board-more">{fill(t("TeamBoard.moreInCell"), { n: shown.length - 2 })}</span> : null}
+        {shown.length > 2 ? <button type="button" className="board-more" onClick={() => setDayOpen({ userId, date: day.date })} title={t("TeamBoard.dayWorkOpen")}>
+          {fill(t("TeamBoard.moreInCell"), { n: shown.length - 2 })}</button> : null}
       </td>
     );
+  };
+
+  /**
+   * A person's day (owner request 2026-11-06): every piece of work taking their time that day, including plan, RFQ and
+   * estimate work that only shows on the grid on the day it falls due, with what each takes that day, then their site
+   * visits, leave and Outlook meetings. Each opens its work, as a chip does.
+   */
+  const dayDrawer = (open: { userId: number | null; date: string }) => {
+    const person = open.userId === null ? null : personById.get(open.userId) ?? null;
+    const load = person ? person.load[days.findIndex((day) => day.date === open.date)] ?? null : null;
+    const pieces = dayWork((data?.items ?? []).filter((item) => item.ownerId === open.userId), open.date, holidays);
+    const others = (events.get(`${open.userId ?? 0}|${open.date}`) ?? []).filter((event) => event.kind === "visit" || event.kind === "leave" || event.kind === "outlook" || event.kind === "away");
+    const typeOf = (item: Commitment) => (item.type === "Task" ? (item.taskKind === "Appointment" ? "appointment" : "task") : itemCategory(item));
+    const opener = (item: Commitment) => {
+      if (item.type === "Task") { const task = data?.tasks.find((entry) => entry.id === item.entityId); return task ? () => { setDayOpen(null); setEditing(task); } : null; }
+      return item.hidden ? null : () => { setDayOpen(null); openItem(item); };
+    };
+    const name = person?.user.name ?? t("TeamBoard.unassignedRow");
+    const mayAdd = canAssignOthers || open.userId === me || open.userId === null;
+    return <Drawer title={`${name} · ${longDate(open.date)}`} onClose={() => setDayOpen(null)}
+      subtitle={load && load.available > 0 ? `${fmt(load.manDays)} / ${fmt(load.available)} MD · ${pct(load.utilisation)}` : undefined}
+      footer={mayAdd ? <button type="button" className="btn primary" onClick={() => { setDayOpen(null); setAdding({ assigneeId: open.userId, date: open.date }); }}><Icon name="plus" />{t("TeamBoard.dayAdd")}</button> : undefined}>
+      {pieces.length > 1 ? <div className="callout warning board-day-warning" role="status">{fill(t("TeamBoard.dayOverlap"), { n: pieces.length })}</div> : null}
+      {pieces.length ? <>
+        <h3 className="board-day-head">{t("TeamBoard.dayWork")}</h3>
+        <ul className="board-day-list">
+          {pieces.map((piece) => <li key={piece.piece} className={`board-day-piece${pieces.length > 1 ? " overlap" : ""}`}>
+            {piece.rows.map(({ item, perDay, fullDay }) => {
+              const kind = typeOf(item), action = opener(item);
+              const body = <>
+                <span className={`board-type ${kind}`}>{t(LIST_TYPES[kind])}</span>
+                <strong>{item.hidden ? t("TeamBoard.hiddenWork") : [item.reference, item.title].filter(Boolean).join(" · ")}</strong>
+                <small>{[item.customer, item.start === (item.end ?? item.start) ? shortDate(item.start) : `${shortDate(item.start)} – ${shortDate(item.end)}`,
+                  perDay !== null ? fill(t("TeamBoard.dayPerDay"), { n: fmt(perDay) }) : t(fullDay ? "TeamBoard.dayFullDay" : "TeamBoard.dayNoEffort"),
+                  item.end && item.end < today ? t("TeamBoard.late") : ""].filter(Boolean).join(" · ")}</small>
+              </>;
+              return action
+                ? <button key={item.key} type="button" className="board-day-item" onClick={action}>{body}</button>
+                : <div key={item.key} className="board-day-item">{body}</div>;
+            })}
+          </li>)}
+        </ul>
+      </> : null}
+      {others.length ? <>
+        <h3 className="board-day-head">{t("TeamBoard.dayOther")}</h3>
+        <ul className="board-day-list">
+          {others.map((event) => <li key={event.key} className="board-day-piece">
+            {clickable(event)
+              ? <button type="button" className="board-day-item" onClick={() => { setDayOpen(null); openEvent(event); }}><strong>{eventLabel(event)}</strong><small>{eventTitle(event)}</small></button>
+              : <div className="board-day-item"><strong>{eventLabel(event)}</strong><small>{eventTitle(event)}</small></div>}
+          </li>)}
+        </ul>
+      </> : null}
+      {!pieces.length && !others.length ? <EmptyState icon="calendar" title="TeamBoard.dayEmpty" message="TeamBoard.dayEmptyHint" /> : null}
+    </Drawer>;
   };
 
   // Under a person's bars: the days their work overlaps (amber) and the days it is more than they have (red).
@@ -669,6 +730,7 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
           onClose={() => setAdding(null)} onSave={async (input) => { await create(input); setAdding(null); }}
         />
       ) : null}
+      {dayOpen ? dayDrawer(dayOpen) : null}
       {editing ? (
         <TaskDrawer
           task={editing} bootstrap={bootstrap} people={people} personById={personById} days={days} holidays={holidays} longDate={longDate}

@@ -116,8 +116,11 @@ button.board-person:hover strong { color: var(--blue-text); text-decoration: und
 .board-cell.tone-weekend { background: var(--n-25); }
 .board-cell.tone-away { background: repeating-linear-gradient(135deg, var(--n-50) 0 6px, var(--n-100) 6px 12px); }
 .board-cell.today { box-shadow: inset 2px 0 0 var(--blue), inset -2px 0 0 var(--blue); }
-/* Two or more pieces of work on the day (owner decision 2026-11-04): an amber corner; the cell's title names them. */
-.board-cell.overlap::after { content: ""; position: absolute; top: 0; right: 0; border-top: 11px solid var(--amber); border-left: 11px solid transparent; pointer-events: none; }
+/* Two or more pieces of work on the day (owner decision 2026-11-04): an amber corner that opens the day's work. */
+.board-overlap { position: absolute; top: 0; right: 0; z-index: 2; width: 16px; height: 16px; padding: 0; border: 0;
+  background: linear-gradient(225deg, var(--amber) 0 50%, transparent 50%); cursor: pointer; }
+.board-overlap:hover, .board-overlap:focus-visible { background: linear-gradient(225deg, var(--amber-text) 0 50%, transparent 50%); outline: none; }
+.board-cell.overlap .board-pct { margin-right: 12px; }
 .board-person small.board-overlap-note { color: var(--amber-text); font-weight: 600; }
 .board-cell-add {
   position: absolute; inset: 0; z-index: 0; display: flex; align-items: flex-end; justify-content: flex-end; padding: 3px;
@@ -127,10 +130,13 @@ button.board-person:hover strong { color: var(--blue-text); text-decoration: und
 .board-cell-add:hover, .board-cell-add:focus-visible { background: color-mix(in srgb, var(--blue-soft) 55%, transparent); outline: none; }
 .board-cell-add:focus-visible { box-shadow: inset 0 0 0 2px var(--blue); }
 .board-cell-add:hover .icon, .board-cell-add:focus-visible .icon { opacity: 1; }
+/* The % opens the day's work (owner request 2026-11-06), so it is a button sitting right, above the cell's add button. */
 .board-pct {
-  position: relative; z-index: 1; display: block; text-align: right; font-size: var(--fs-3xs); font-weight: 700; line-height: 14px;
-  font-variant-numeric: tabular-nums; color: var(--ink-soft); pointer-events: none;
+  position: relative; z-index: 1; display: block; width: fit-content; margin-left: auto; padding: 0 2px; border: 0; border-radius: var(--r-xs);
+  background: none; font: inherit; font-size: var(--fs-3xs); font-weight: 700; line-height: 14px; text-align: right;
+  font-variant-numeric: tabular-nums; color: var(--ink-soft); cursor: pointer;
 }
+.board-pct:hover, .board-pct:focus-visible { text-decoration: underline; background: var(--surface); outline: none; }
 .board-cell.tone-ok .board-pct { color: var(--green-text); }
 .board-cell.tone-full .board-pct { color: var(--amber-text); }
 .board-cell.tone-over .board-pct { color: var(--red-text); }
@@ -149,7 +155,22 @@ button.board-chip:hover { filter: brightness(.97); text-decoration: underline; }
 .board-chip.away, .board-chip.leave { border-color: var(--n-300); background: var(--surface); color: var(--ink-soft); }
 .board-chip.late { border-color: var(--red-line); background: var(--red-soft); color: var(--red-text); }
 .board-chip.done { text-decoration: line-through; opacity: .7; }
-.board-more { position: relative; z-index: 1; display: block; margin-top: 1px; font-size: var(--fs-3xs); color: var(--muted); pointer-events: none; }
+.board-more { position: relative; z-index: 1; display: block; margin-top: 1px; padding: 0; border: 0; background: none; font: inherit; font-size: var(--fs-3xs); color: var(--blue-text); cursor: pointer; }
+.board-more:hover, .board-more:focus-visible { text-decoration: underline; outline: none; }
+/* A person's day (TeamBoard dayDrawer): each piece of work boxed, the pieces amber-edged when they overlap. */
+.board-day-warning { margin-bottom: 12px; }
+.board-day-head { margin: 14px 0 6px; font-size: var(--fs-xs); font-weight: 650; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .04em; }
+.board-day-list { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.board-day-piece { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: var(--r-md); overflow: hidden; }
+.board-day-piece.overlap { border-color: var(--amber-line); box-shadow: inset 3px 0 0 var(--amber); }
+.board-day-item { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 2px 8px; width: 100%; padding: 8px 10px; border: 0;
+  background: var(--surface); color: var(--ink); font: inherit; text-align: left; }
+.board-day-item + .board-day-item { border-top: 1px solid var(--line-soft); }
+.board-day-item strong { min-width: 0; font-size: var(--fs-sm); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.board-day-item small { grid-column: 2; color: var(--muted); font-size: var(--fs-2xs); }
+.board-day-item > strong:first-child, .board-day-item > strong:first-child + small { grid-column: 1 / -1; }
+button.board-day-item { cursor: pointer; }
+button.board-day-item:hover, button.board-day-item:focus-visible { background: var(--blue-soft); outline: none; }
 
 .board-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 10px 14px; border-top: 1px solid var(--line-soft); font-size: var(--fs-xs); color: var(--ink-soft); }
 .board-legend > span { display: inline-flex; align-items: center; gap: 6px; }

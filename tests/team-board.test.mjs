@@ -9,7 +9,7 @@ const moduleUrl = (source) => "data:text/javascript;base64," + Buffer.from(
   ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText).toString("base64");
 // lib/team-board.ts imports lib/resource-planning.ts; both are compiled and the import pointed at the compiled copy.
 const planningUrl = moduleUrl(await read("lib/resource-planning.ts"));
-const { boardDays, dailyLoad, loadBand, weekTotals, spanLoad, freestOn, withExtra, defaultTaskManDays, dueGroup, covers, timeRange, tableTsv, tableHtml, outlookDates, outlookManDays, outlookLoad, withOutlook, overlapDays, dateRuns } =
+const { boardDays, dailyLoad, loadBand, weekTotals, spanLoad, freestOn, withExtra, defaultTaskManDays, dueGroup, covers, timeRange, tableTsv, tableHtml, outlookDates, outlookManDays, outlookLoad, withOutlook, overlapDays, dateRuns, dayWork } =
   await import(moduleUrl((await read("lib/team-board.ts")).replace(`from "./resource-planning"`, `from "${planningUrl}"`)));
 
 const work = (change) => ({ key: "k", workKey: "k", type: "Project", entityId: 1, ownerId: 7, reference: "", title: "", customer: "",
@@ -241,4 +241,25 @@ test("work overlaps on a working day when two pieces of work fall on it; a task'
   // Runs carry on over weekends and holidays between them, so a bar is drawn once.
   assert.deepEqual(dateRuns(["2026-11-05", "2026-11-09", "2026-11-03", "2026-11-12"], ["2026-11-06"]),
     [{ start: "2026-11-03", finish: "2026-11-03" }, { start: "2026-11-05", finish: "2026-11-09" }, { start: "2026-11-12", finish: "2026-11-12" }]);
+});
+
+test("a day lists every piece of work spanning it, not only what falls due, with what each takes that day", () => {
+  const items = [
+    // Two functions of task 21 with no man-days, a 4 MD RFQ over Monday to Thursday, and one due tomorrow only.
+    work({ key: "f2", workKey: "Project-212", group: "Project-21", start: "2026-11-05", end: "2026-11-09", manDays: 0 }),
+    work({ key: "f1", workKey: "Project-211", group: "Project-21", start: "2026-11-02", end: "2026-11-06", manDays: 0 }),
+    work({ key: "rfq", workKey: "Inquiry-5", type: "Inquiry", start: "2026-11-02", end: "2026-11-05", manDays: 4 }),
+    work({ key: "later", workKey: "Estimate-6", type: "Estimate", start: "2026-11-06", end: "2026-11-06", manDays: null }),
+    work({ key: "done", workKey: "Project-99", start: "2026-11-02", end: "2026-11-06", status: "Done" }),
+  ];
+  const day = dayWork(items, "2026-11-05", []);
+  assert.deepEqual(day.map((piece) => [piece.piece, piece.rows.map((row) => row.item.key)]), [["Inquiry-5", ["rfq"]], ["Project-21", ["f1", "f2"]]]);
+  assert.deepEqual(day[0].rows[0].perDay, 1);
+  assert.deepEqual(day[1].rows.map((row) => [row.perDay, row.fullDay]), [[null, true], [null, true]]);
+  // An estimate with no effort saved is listed on its day with nothing assumed.
+  assert.deepEqual(dayWork(items, "2026-11-06", []).map((piece) => piece.rows.map((row) => [row.item.key, row.perDay, row.fullDay])),
+    [[["f1", null, true], ["f2", null, true]], [["later", null, false]]]);
+  // Saturday: work spanning the weekend takes none of it; an appointment put on the day still shows, with its whole effort.
+  const saturday = [...items, work({ key: "sat", workKey: "TeamTask-4", type: "Task", start: "2026-11-07", end: "2026-11-07", manDays: 1 })];
+  assert.deepEqual(dayWork(saturday, "2026-11-07", []).map((piece) => piece.rows.map((row) => [row.item.key, row.perDay])), [[["sat", 1]]]);
 });

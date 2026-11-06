@@ -74,6 +74,40 @@ export function overlapDays(items: readonly Commitment[], from: string, to: stri
     .map(([date, pieces]) => ({ date, work: [...pieces.values()] }));
 }
 
+/** One piece of work someone has on a day, with what each of its rows takes that day. */
+export type DayPiece = {
+  piece: string;
+  rows: Array<{
+    item: Commitment;
+    /** Man-days a working day (its effort spread over its working days); null when it has none. */
+    perDay: number | null;
+    /** Plan work with no man-days, which the load counts as a full day for its piece (impliedEffort). */
+    fullDay: boolean;
+  }>;
+};
+
+/**
+ * Everything taking someone's time on a day, not only what falls due (owner request 2026-11-06: overlapping work could
+ * not be seen on the grid): their open work spanning the date, by piece of work, the earliest first. Work spanning a
+ * weekend or a holiday takes none of it, as in the load; only a team task put on that day shows there.
+ */
+export function dayWork(items: readonly Commitment[], date: string, holidays: readonly string[] = []): DayPiece[] {
+  const pieces = new Map<string, DayPiece>();
+  const working = workingDays(date, date, holidays).length > 0;
+  for (const item of items) {
+    if (!isOpenWork(item) || !covers(item.start, item.end, date) || (!working && item.type !== "Task")) continue;
+    const end = item.end ?? item.start;
+    const span = item.start && end ? workingDays(item.start, end, holidays).length || dayNumber(end) - dayNumber(item.start) + 1 : 0;
+    const typed = item.manDays !== null && item.manDays > 0;
+    const piece = pieces.get(workGroup(item)) ?? { piece: workGroup(item), rows: [] };
+    piece.rows.push({ item, perDay: typed && span ? item.manDays! / span : null, fullDay: !typed && item.type === "Project" });
+    pieces.set(piece.piece, piece);
+  }
+  const startOf = (piece: DayPiece) => piece.rows.map((row) => row.item.start ?? "").sort()[0] ?? "";
+  for (const piece of pieces.values()) piece.rows.sort((a, b) => (a.item.start ?? "").localeCompare(b.item.start ?? "") || a.item.key.localeCompare(b.item.key));
+  return [...pieces.values()].sort((a, b) => startOf(a).localeCompare(startOf(b)) || a.piece.localeCompare(b.piece));
+}
+
 /** Dates joined into runs, a run carrying on over weekends and holidays between them: one bar per run on a Gantt. */
 export function dateRuns(dates: readonly string[], holidays: readonly string[] = []): Array<{ start: string; finish: string }> {
   const runs: Array<{ start: string; finish: string }> = [];
