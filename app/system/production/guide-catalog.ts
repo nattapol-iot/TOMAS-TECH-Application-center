@@ -971,10 +971,20 @@ const TEAM_TASK: Guide = {
       target: "team.filters", action: "next", view: "resources",
       title: { th: "ดูว่าใครงานซ้อนหรือเกินกำลัง", en: "See who has overlapping work or too much", jp: "作業の重複や負荷超過を確認" },
       body: {
-        th: "ชิป 'งานซ้อน' แสดงเฉพาะคนที่มี 2 งานขึ้นไปในวันเดียวกัน ช่องที่มีมุมสีส้มคือวันที่ซ้อน ชี้เมาส์เพื่อดูว่าซ้อนกับงานอะไร สีแดงคือเกินกำลัง ในมุมมอง Gantt เส้นสีส้มและสีแดงใต้แถวของแต่ละคนบอกช่วงวันเดียวกันนี้",
-        en: "The Overlapping work chip shows only people with two or more pieces of work on one day. A cell with an amber corner is such a day; point at it to see what overlaps. Red means more work than time. On the Gantt, amber and red lines under each person mark the same days.",
-        jp: "「作業の重複」チップで、同じ日に2件以上の作業がある人だけを表示します。角がオレンジのセルが重複日で、カーソルを合わせると内容が分かります。赤は負荷超過です。ガントでは各人の行の下のオレンジと赤の線が同じ日を示します。",
+        th: "ชิป 'งานซ้อน' แสดงเฉพาะคนที่มี 2 งานขึ้นไปในวันเดียวกัน ช่องที่มีมุมสีส้มคือวันที่ซ้อน สีแดงคือเกินกำลัง ในมุมมอง Gantt เส้นสีส้มและสีแดงใต้แถวของแต่ละคนบอกช่วงวันเดียวกันนี้",
+        en: "The Overlapping work chip shows only people with two or more pieces of work on one day. A cell with an amber corner is such a day; red means more work than time. On the Gantt, amber and red lines under each person mark the same days.",
+        jp: "「作業の重複」チップで、同じ日に2件以上の作業がある人だけを表示します。角がオレンジのセルが重複日、赤は負荷超過です。ガントでは各人の行の下のオレンジと赤の線が同じ日を示します。",
       },
+    },
+    {
+      target: "team.dayWork", action: "next", view: "resources",
+      title: { th: "ดูงานทั้งหมดของวันนั้น", en: "See all of someone's work on a day", jp: "その日の作業をすべて見る" },
+      body: {
+        th: "กด % หรือมุมสีส้มในช่อง จะเปิดรายการงานทั้งหมดของคนนั้นในวันนั้น รวมงานโครงการ RFQ และ Estimate ที่กินเวลาวันนั้นแม้ยังไม่ถึงวันครบกำหนด บอก MD ต่อวันของแต่ละงาน และกรอบสีส้มบอกงานที่ซ้อนกัน กดงานเพื่อเปิด หรือกด 'เพิ่มงานวันนี้'",
+        en: "Click the % or the amber corner in a cell to list everything that person has on that day, including project, RFQ and estimate work that takes the day before it falls due, with each one's man-days a day. Amber boxes are the work that overlaps. Click a piece of work to open it, or Add work on this day.",
+        jp: "セルの % かオレンジの角をクリックすると、その人のその日の作業がすべて表示されます。期限前でもその日に時間を使う案件・RFQ・見積の作業を含み、各作業の1日あたりの人日も分かります。オレンジの枠が重なっている作業です。作業をクリックすると開き、「この日に作業を追加」もできます。",
+      },
+      missing: { th: "ช่องนี้กดได้เมื่อคนนั้นมีงานในวันนั้น กด 'ถัดไป'", en: "This shows when the person has work that day. Press Next.", jp: "その人にその日の作業があるときに表示されます。「次へ」を押します。" },
     },
     {
       target: "team.add", action: "click", view: "resources",
