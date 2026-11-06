@@ -162,6 +162,7 @@ GO
 :r database/migrations/098_master_plan_headings.sql
 :r database/migrations/099_erp_customer_supplier_sync.sql
 :r database/migrations/100_erp_customer_id.sql
+:r database/migrations/101_estimate_approvers.sql
 
 USE [$(DatabaseName)];
 GO

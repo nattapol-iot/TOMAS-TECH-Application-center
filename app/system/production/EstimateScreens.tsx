@@ -873,6 +873,17 @@ Remove this module and all ${group.lines.length} cost items?`)) return;
     { key: "review", label: copy("ตรวจทาน", "Review", "レビュー"), state: approved ? "done" : inReview ? "now" : "later" },
     { key: "approve", label: copy("อนุมัติ", "Approved", "承認"), state: approved ? "done" : "later" },
   ];
+  /* Who the estimate waits for (owner 2026-11-06): one of the listed approvers decides, never on their own estimate, and
+     every one of them is told by the bell and by email when it is submitted. */
+  const review = workspace.review;
+  const deciders = (review?.approvers ?? []).filter((approver) => !approver.isOwner).map((approver) => approver.name).join(" · ") || "—";
+  const approvedBy = review?.decision === "Approved" ? review.decidedBy : header.lockedByName;
+  const approvedAt = review?.decision === "Approved" ? review.decidedAt : header.lockedAt;
+  const reviewLine = !review || header.status === "Cancelled" ? null
+    : inReview ? <><Icon name="clock" /><span>{review.submittedBy ? copy(`ส่งตรวจโดย ${review.submittedBy}`, `Sent for review by ${review.submittedBy}`, `${review.submittedBy} がレビュー依頼`) : copy("ส่งตรวจแล้ว", "Sent for review", "レビュー依頼済み")}{review.submittedAt ? ` · ${formatDateTime(review.submittedAt)}` : ""}</span>
+      <span>{copy("รออนุมัติจากคนใดคนหนึ่ง:", "Waiting for one of:", "承認待ち（いずれか1名）:")} <strong>{deciders}</strong></span></>
+      : approved ? <><Icon name="checkCircle" /><span>{copy("อนุมัติโดย", "Approved by", "承認者")} <strong>{approvedBy ?? "—"}</strong>{approvedAt ? ` · ${formatDateTime(approvedAt)}` : ""}</span></>
+        : <><Icon name="users" /><span>{copy("กดส่งตรวจแล้ว ระบบจะแจ้งผู้อนุมัติ:", "Submitting tells the approvers:", "提出すると承認者に通知:")} <strong>{deciders}</strong></span></>;
   const manDays = workspace.manhourLines.reduce((sum, line) => sum + numberOf(line.manDays) * numberOf(line.engineers), 0);
   /* The cost bar is the breakdown; each part opens the tab its lines live on. */
   const segments: { key: string; label: string; value: number; note: string; color: string; tab: WorkspaceTab }[] = [
@@ -939,6 +950,7 @@ Remove this module and all ${group.lines.length} cost items?`)) return;
             ? <button className={`est-issue ${criticalCount ? "red" : "amber"}`} type="button" onClick={() => setTab("validation")}><Icon name="alertTriangle" />{[criticalCount ? copy(`${criticalCount} ต้องแก้ก่อนส่ง`, `${criticalCount} to fix before submitting`, `提出前に${criticalCount}件修正`) : "", warningCount ? copy(`${warningCount} คำเตือน`, `${warningCount} warning(s)`, `警告${warningCount}件`) : ""].filter(Boolean).join(" · ")}</button>
             : <span className="est-issue green"><Icon name="checkCircle" />{copy("ผ่านการตรวจของระบบ", "System checks passed", "システムチェック合格")}</span>}
         </div>
+        {reviewLine ? <p className={`est-review${inReview ? " waiting" : ""}`} data-guide="estimate.review">{reviewLine}</p> : null}
         {segmentBase > 0
           ? <div className="est-costbar" role="img" aria-label={segments.filter((segment) => segment.value > 0).map((segment) => `${segment.label} ${formatMoney(segment.value)}`).join(" · ")}>{segments.map((segment) => segment.value > 0 ? <i key={segment.key} style={{ width: `${(segment.value / segmentBase) * 100}%`, background: segment.color }} /> : null)}</div>
           : <div className="est-costbar empty"><span>{copy("ยังไม่มีต้นทุน", "No cost yet", "原価なし")}</span></div>}

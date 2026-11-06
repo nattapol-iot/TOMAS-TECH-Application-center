@@ -496,6 +496,15 @@ const ESTIMATE_APPROVE: Guide = {
       },
     },
     {
+      target: "estimate.review", action: "next", view: "estimates",
+      title: { th: "รอใครอนุมัติ", en: "Who it waits for", jp: "誰の承認待ちか" },
+      body: {
+        th: "บรรทัดนี้บอกว่าใครส่งตรวจเมื่อไร และรอใครอนุมัติ คนใดคนหนึ่งในรายชื่ออนุมัติหรือส่งกลับให้แก้ได้ เจ้าของ Estimate ได้กระดิ่งและอีเมลเมื่อมีการตัดสิน",
+        en: "This line says who sent it for review and when, and who it waits for. Any one of them approves or sends it back; the estimate's owner gets a bell and an email on the decision.",
+        jp: "誰がいつレビュー依頼したか、誰の承認待ちかを示します。いずれか1名が承認または差し戻しでき、担当者には決定時に通知とメールが届きます。",
+      },
+    },
+    {
       target: "[data-tab=\"summary\"]", action: "click", view: "estimates",
       title: { th: "ดูหน้าสรุป", en: "Open the cost summary", jp: "原価サマリーを開く" },
       body: {
@@ -513,9 +522,9 @@ const ESTIMATE_APPROVE: Guide = {
         jp: "「承認」を押して確定すると見積がロックされ、あなたのTMT IDでPegasus ERPへ送られます。練習だけなら確認画面で「キャンセル」を押し、「完了」を押します。",
       },
       missing: {
-        th: "ปุ่มอนุมัติจะขึ้นเมื่อ Estimate รอตรวจ และคุณไม่ใช่เจ้าของ Estimate นั้น",
-        en: "The Approve button appears while the estimate is in review, for someone other than its owner.",
-        jp: "承認ボタンは見積がレビュー中で、担当者以外の方に表示されます。",
+        th: "ปุ่มอนุมัติขึ้นให้ผู้อนุมัติในรายชื่อ เมื่อ Estimate รอตรวจ และไม่ใช่ Estimate ของตัวเอง",
+        en: "The Approve button appears for the listed approvers while the estimate is in review, except on their own estimate.",
+        jp: "承認ボタンは、レビュー中の見積について、自分の見積を除き、登録された承認者に表示されます。",
       },
     },
     {
@@ -2132,9 +2141,9 @@ export const GUIDES: readonly Guide[] = [
         target: "estimate.submit", action: "click", view: "estimates",
         title: { th: "ส่งให้ตรวจสอบ", en: "Submit for review", jp: "レビュー依頼" },
         body: {
-          th: "เมื่อไม่มีรายการสีแดง กด 'ส่งให้ตรวจสอบ' ผู้อนุมัติจะได้รับแจ้ง ถ้ายังไม่พร้อม กด 'จบบทสอน' แล้วกลับมาส่งทีหลัง",
-          en: "With no red items left, press Submit Review and the approver is notified. Not ready yet? Press Finish and submit later.",
-          jp: "赤い項目がなくなったら「レビュー依頼」を押すと承認者に通知されます。準備ができていなければ「完了」を押し、後で提出します。",
+          th: "เมื่อไม่มีรายการสีแดง กด 'ส่งให้ตรวจสอบ' ผู้อนุมัติทุกคนจะได้กระดิ่งและอีเมล แถบใต้ขั้นตอนบอกว่ารอใครอนุมัติ ถ้ายังไม่พร้อม กด 'จบบทสอน' แล้วกลับมาส่งทีหลัง",
+          en: "With no red items left, press Submit Review: every approver gets a bell and an email, and the line under the steps shows who it waits for. Not ready yet? Press Finish and submit later.",
+          jp: "赤い項目がなくなったら「レビュー依頼」を押すと、承認者全員に通知とメールが届き、ステップの下に誰の承認待ちかが表示されます。準備ができていなければ「完了」を押し、後で提出します。",
         },
         missing: {
           th: "ปุ่มส่งจะขึ้นเมื่อคุณเป็นผู้รับผิดชอบ Estimate และยังเป็นฉบับร่าง",

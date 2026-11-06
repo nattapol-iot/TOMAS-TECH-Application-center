@@ -7,6 +7,7 @@ import type { Database } from "../db.js";
 import { ApiError } from "../errors.js";
 import { inferredDiscipline, type EstimateDiscipline } from "../estimate-disciplines.js";
 import { hasRole } from "../user-roles.js";
+import { ESTIMATE_APPROVERS_SQL, mapApprovers, mayDecideEstimate } from "../estimate-review.js";
 import { dateOnly, positiveLong } from "../http.js";
 import type { CurrentUserService } from "../users.js";
 
@@ -123,6 +124,15 @@ export function registerEstimateWorkspaceReadRoute(app: FastifyInstance, config:
         AND NOT EXISTS(SELECT 1 FROM dbo.expense_lines x WHERE x.estimate_id=e.id AND x.revision=e.revision
           AND x.expense_type IN(N'Accommodation',N'Per Diem') AND x.deleted_at IS NULL)
       ORDER BY severity,code,entity_id;
+
+      -- Who decides it and what has happened to the current revision, for the pipeline on the page (owner 2026-11-06).
+      ${ESTIMATE_APPROVERS_SQL}
+
+      SELECT a.action,u.name actor_name,a.occurred_at,COALESCE(JSON_VALUE(a.after_json,'$.comment'),JSON_VALUE(a.after_json,'$.reason')) note
+      FROM dbo.audit_log a INNER JOIN dbo.users u ON u.id=a.actor_id INNER JOIN dbo.estimates e ON e.id=a.entity_id
+      WHERE a.entity_type=N'Estimate' AND a.entity_id=@id AND a.action IN(N'Submitted',N'Approved',N'Revision requested')
+        AND TRY_CONVERT(int,JSON_VALUE(a.after_json,'$.revision'))=e.revision
+      ORDER BY a.id DESC;
     `, (sqlRequest) => { sqlRequest.input("id", sql.BigInt, id); sqlRequest.input("actor_user", sql.BigInt, actor.id);
       sqlRequest.input("stale_before", sql.Date, shiftDays(today, -180)); });
     const headerRow = (result.recordsets[0] as unknown as Array<Record<string, unknown>>)[0];
@@ -197,6 +207,18 @@ export function registerEstimateWorkspaceReadRoute(app: FastifyInstance, config:
     const otherCostLines = (result.recordsets[6] as unknown as Array<Record<string, unknown>>).map((row) => ({ id: number(row.id), category: row.category,
       description: row.description, quantity: number(row.qty), unit: row.unit, unitCost: number(row.unit_cost), lineTotal: number(row.line_total),
       remark: row.remark, rowVersion: (row.row_version as Buffer).toString("base64"), canEdit: canEditOther }));
+    /* The pipeline: who may decide, who it waits for, and the submission and decision of the current revision. */
+    const approvers = mapApprovers((result.recordsets[9] ?? []) as unknown as Array<{ id: number | string; name: string; email: string | null }>);
+    const events = (result.recordsets[10] ?? []) as unknown as Array<{ action: string; actor_name: string; occurred_at: Date | string; note: string | null }>;
+    const submitted = events.find((event) => event.action === "Submitted") ?? null;
+    // A decision counts only while it is the latest thing to happen; a resubmission after a send-back starts the review again.
+    const decided = events[0] && events[0].action !== "Submitted" ? events[0] : null;
+    const canDecide = mayDecideEstimate(actor, header.ownerId, approvers);
+    const review = {
+      approvers: approvers.map((approver) => ({ id: approver.id, name: approver.name, isOwner: approver.id === header.ownerId })),
+      submittedBy: submitted?.actor_name ?? null, submittedAt: submitted?.occurred_at ?? null,
+      decision: decided?.action ?? null, decidedBy: decided?.actor_name ?? null, decidedAt: decided?.occurred_at ?? null, note: decided?.note ?? submitted?.note ?? null,
+    };
     const revisionHistory = (result.recordsets[7] as unknown as Array<Record<string, unknown>>).map((row) => ({ id: number(row.id), revision: number(row.revision),
       code: row.code, reason: row.reason, description: row.description, createdById: number(row.created_by), createdByName: row.created_by_name,
       createdAt: row.created_at, reviewedById: nullableNumber(row.reviewed_by), reviewedByName: row.reviewed_by_name, reviewedAt: row.reviewed_at,
@@ -221,11 +243,11 @@ export function registerEstimateWorkspaceReadRoute(app: FastifyInstance, config:
       canEditAllSections: permissionRow.can_write && editable && elevated, editableSections: [...assignedSections].sort(),
       canSubmit: permissionRow.can_write && editable && elevated,
       // Admin may decide its own estimate (mirrors adminSelfDecision in routes/estimates.ts); other owners need a second approver.
-      canApprove: permissionRow.can_approve && header.status === "Engineering Review" && (actor.id !== header.ownerId || hasRole(actor, "Admin")),
-      canRequestRevision: permissionRow.can_approve && header.status === "Engineering Review" && (actor.id !== header.ownerId || hasRole(actor, "Admin")),
+      canApprove: canDecide && header.status === "Engineering Review",
+      canRequestRevision: canDecide && header.status === "Engineering Review",
       canCreateRevision: open && permissionRow.can_write && elevated && ["Approved", "Locked"].includes(header.status),
       canManageAssignments: permissionRow.can_write && editable && elevated, canUpdateContingency: permissionRow.can_write && editable && elevated,
       canEditCostItems, canEditManhour, canEditExpenses, canEditOtherCosts: canEditOther };
-    return { header, capabilities, costItems, manhourLines, expenseLines, otherCostLines, assignments, revisionHistory, validationIssues };
+    return { header, capabilities, costItems, manhourLines, expenseLines, otherCostLines, assignments, revisionHistory, validationIssues, review };
   });
 }

@@ -897,6 +897,21 @@ export type EstimateCostWorkspace = {
   assignments: EstimateAssignment[];
   revisionHistory: EstimateRevision[];
   validationIssues: EstimateValidationIssue[];
+  /** Who may decide the estimate and what has happened to its current revision (owner 2026-11-06). */
+  review?: EstimateReview;
+};
+
+export type EstimateReview = {
+  /** The listed approvers; one of them decides, never on their own estimate. */
+  approvers: Array<{ id: number; name: string; isOwner: boolean }>;
+  submittedBy: string | null;
+  submittedAt: string | null;
+  /** The latest decision on this revision, while nothing newer has happened. */
+  decision: "Approved" | "Revision requested" | null;
+  decidedBy: string | null;
+  decidedAt: string | null;
+  /** The decision's comment or reason, else the submission's comment. */
+  note: string | null;
 };
 
 export type EstimateErpCategory = "Hardware" | "Software" | "Service" | "Installation" | "License" | "Maintenance" | "Training";

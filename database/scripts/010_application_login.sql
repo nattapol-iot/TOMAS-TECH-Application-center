@@ -822,4 +822,8 @@ GO
 GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.erp_customers TO [iot_team_app_role];
 GRANT UPDATE (project_no) ON OBJECT::dbo.projects TO [iot_team_app_role];
 GO
+
+-- database/migrations/101_estimate_approvers.sql
+GRANT SELECT ON OBJECT::dbo.estimate_approvers TO [iot_team_app_role];
+GO
 -- END GENERATED MIGRATION GRANTS
