@@ -2,7 +2,7 @@
 
 ถึง: ทีม Pegasus ERP · จาก: ทีม Engineering Center (IoT Team application) · วันที่ 2026-11-02
 อ้างอิง: `PURCHASE-REQUEST-MCP-TH.md` (2026-10-27) ข้อ 1.1, 5 และ 8.4
-สถานะ (2026-11-05): ทีม ERP แจ้งว่า `customers_list`, `customer_get` และ `suppliers_list` ใช้ได้แล้ว ฝั่งเราเชื่อมแล้ว (migration 099) ดูคำตอบ สิ่งที่ทำแล้ว และเรื่องที่ยังต้องยืนยันท้ายเอกสาร
+สถานะ (2026-11-06): ทีม ERP แจ้งว่า `customers_list`, `customer_get` และ `suppliers_list` ใช้ได้แล้ว ฝั่งเราเชื่อมแล้ว (migration 099) และเปลี่ยนไปผูกลูกค้าด้วย `customer_id` ตามคำตอบของทีม ERP (migration 100) ดูคำตอบ สิ่งที่ทำแล้ว และเรื่องที่ยังต้องยืนยันท้ายเอกสาร
 
 AI agent ของทีม ERP อ่านไฟล์นี้ได้ทั้งไฟล์ การเรียก MCP (endpoint, header, JSON-RPC, การ map error) ใช้แบบเดียวกับการส่ง PR ใน `PEGASUS_ERP_PR_INTEGRATION_TH.md`
 
@@ -109,7 +109,18 @@ Argument ของ `customers_list` และ `suppliers_list`:
 
 ## คำตอบจากทีม ERP (2026-11-05)
 
-ทีม ERP ตอบทาง LINE WORKS ว่าทำ `customers_list`, `customer_get` และ `suppliers_list` แล้ว ให้โค้ดเรียกผ่าน MCP ยังไม่มีเอกสาร argument และฟิลด์ของ tool ใหม่ ฝั่งเราจึงใช้ชื่อตามที่เสนอในเอกสารนี้ และถือ `tools/list` ของ ERP เป็นรายการจริงตามข้อ 8.1 ของเอกสาร MCP คำถามทั้ง 8 ข้อด้านบนยังไม่มีคำตอบ
+ทีม ERP ตอบทาง LINE WORKS ว่าทำ `customers_list`, `customer_get` และ `suppliers_list` แล้ว ให้โค้ดเรียกผ่าน MCP
+
+ทีม ERP ส่งเอกสาร `PEGASUS_ERP_CUSTOMER_SUPPLIER_SYNC_REPLY_TH.md` (ลงวันที่ 2026-11-04) มาด้วย สาระที่ฝั่งเราใช้:
+
+- ทั้งสาม tool ใช้ได้บน prod ตั้งแต่ 2026-11-03 เวลา 11:32 น. รูปแบบอยู่ในข้อ 10 ของเอกสาร MCP ฉบับใหม่
+- ลูกค้าที่ใช้งานมี 3,114 ราย ซัพ 439 ราย ทุก role ที่มีบัญชีใน ERP เห็นทั้งสาม tool
+- **key ของลูกค้าคือ `customer_id`** (ข้อ 10.7) `customer_code` มีครบทุกรายและไม่ซ้ำ แต่แก้ได้ จึงไม่ใช้เป็น key (ตอบคำถามข้อ 2)
+- ลูกค้า 2,653 รายไม่มี `tax_id` และ 2,621 รายไม่มี `name_th` ส่วนใหญ่จึงจับคู่ด้วย `name_en` หลังตัดคำท้ายชื่ออย่าง `Co., Ltd.`, `Company Limited`, `(Thailand)`
+- error ของ tool ตอบเป็น HTTP 200 พร้อม `result.isError` ข้อมูลอยู่ที่ `result.structuredContent`
+- หน้าถัดไปต้องส่ง `next_cursor` พร้อม `updated_since`, `limit` และ `include_inactive` ชุดเดิม (ข้อ 10.3) ดึงครั้งแรกไม่ส่ง `updated_since`
+
+คำถามข้อ 1 และ 3-8 ด้านบนยังไม่มีคำตอบในเอกสารที่เรามี
 
 ## สิ่งที่ฝั่ง Engineering Center ทำแล้ว
 
@@ -126,7 +137,9 @@ Argument ของ `customers_list` และ `suppliers_list`:
   - ดึงได้ไม่เกิน 25 หน้าต่อครั้ง ส่วนที่เหลือดึงต่อจาก cursor ครั้งถัดไป
 - **ที่เก็บ:**
   - `dbo.erp_customers` และ `dbo.erp_suppliers` เก็บข้อมูลตามที่ ERP ส่งมา
-  - `customers.erp_customer_code` และ `suppliers.erp_supplier_id` ผูกรายการในแอปกับ ERP
+  - `customers.erp_customer_id` และ `suppliers.erp_supplier_id` ผูกรายการในแอปกับ ERP (ลูกค้าผูกด้วย `customer_id` ตั้งแต่ migration 100)
+  - `customers.erp_customer_code` เก็บรหัสลูกค้าใน ERP ที่แสดงบนหน้าจอ อัปเดตทุกครั้งที่ดึง ถ้า ERP แก้รหัส แอปเห็นเป็นลูกค้ารายเดิม
+  - ลูกค้าที่ผูกไว้ก่อน migration 100 (ผูกด้วย `customer_code`) ได้ `customer_id` จากรายการ ERP ที่ใช้รหัสนั้นในรอบดึงแรกหลัง deploy โดยไม่ต้องจับคู่ใหม่ migration 100 ให้ดึงทะเบียนลูกค้าใหม่ทั้งชุดหนึ่งครั้ง
   - รหัสเดิมของแอปยังใช้ต่อ
 - **การจับคู่:**
   - เลขภาษีตรงกันรายเดียวให้ผูก
@@ -146,8 +159,10 @@ Argument ของ `customers_list` และ `suppliers_list`:
 
 ## ยังต้องยืนยันกับทีม ERP
 
-1. **Argument และฟิลด์จริง:** ฝั่งเราส่งและอ่านตามชื่อที่เสนอในเอกสารนี้ ถ้า tool ใช้ชื่ออื่น แอปจะแสดง error ที่ ERP ตอบกลับบนแถบ ERP และไม่บันทึกอะไร ช่วยส่ง `inputSchema` และตัวอย่าง `structuredContent` ของทั้งสาม tool มาให้
-2. **คำถามข้อ 1-8 ด้านบน:** โดยเฉพาะสิทธิ์อ่านทะเบียนของแต่ละ role, key ถาวร และการรวมรายการ
+1. **เอกสาร MCP ฉบับล่าสุด:** คำตอบของทีม ERP อ้างข้อ 10 แต่ฉบับที่ฝั่งเรามีคือ `PURCHASE-REQUEST-MCP-TH.md` ของ 2026-10-27 ซึ่งยังไม่มีข้อ 10 ขอฉบับล่าสุด ฝั่งเราจะเทียบชื่อฟิลด์กับโค้ดอีกครั้ง
+2. **Argument และฟิลด์จริง:** ฝั่งเราอ่าน `customer_id`, `customer_code`, `supplier_id` และฟิลด์อื่นตามชื่อที่เสนอในเอกสารนี้ ถ้าชื่อไหนต่างไป แอปจะแสดง error บนแถบ ERP และไม่บันทึกอะไร
+3. **`merged_into`:** ฝั่งเราอ่านเป็น `customer_id` (หรือ `supplier_id`) ของรายการปลายทาง ถ้า ERP ส่งเป็นรหัส ช่วยแจ้ง
+4. **คำถามข้อ 1 และ 3-8 ด้านบน:** โดยเฉพาะสิทธิ์อ่านทะเบียนของแต่ละ role และการรวมรายการ
 
 ## ติดต่อ
 

@@ -296,6 +296,20 @@ try {
   const refused = await api("admin", "POST", "/api/v1/projects", { ...projectBody(reuse.id, unrelated.dueDate), projectNumber: created.number.toLowerCase() }, 409);
   assert.equal(refused.code, "project_number_taken");
   assert.equal((await database.query(`SELECT id FROM dbo.projects WHERE estimate_id=${Number(reuse.id)}`)).recordset.length, 0);
+  // A project registered under the placeholder (PJ000000) takes the ERP's number in Edit project once the ERP issues it;
+  // a taken number is refused, and a real number stays.
+  const placeholder = await api("admin", "POST", "/api/v1/projects", { ...projectBody(reuse.id, unrelated.dueDate), projectNumber: "PJ000000" }, 201);
+  assert.equal(placeholder.number, "PJ000000");
+  const versionOf = async (id: number) => Buffer.from((await database.query<{ row_version: Buffer }>(`SELECT row_version FROM dbo.projects WHERE id=${id}`)).recordset[0]!.row_version).toString("base64");
+  const renumber = (projectNumber: string, expected = 200) => versionOf(Number(placeholder.id))
+    .then((rowVersion) => api("manager", "PUT", `/api/v1/projects/${placeholder.id}`, { rowVersion, projectNumber }, expected));
+  assert.equal((await renumber(created.number, 409)).code, "project_number_taken");
+  assert.equal((await renumber("pj-carry-erp")).number, "PJ-CARRY-ERP");
+  assert.equal((await database.query<{ project_no: string }>(`SELECT project_no FROM dbo.projects WHERE id=${Number(placeholder.id)}`)).recordset[0]!.project_no, "PJ-CARRY-ERP");
+  assert.equal((await renumber("PJ-CARRY-OTHER", 409)).code, "project_number_fixed");
+  // The ERP project search answers without the ERP link on this server.
+  assert.deepEqual(await api("manager", "GET", "/api/v1/erp/projects?q=PJ26"), { enabled: false, projects: [] });
+  checks += 5;
   assert.equal(created.folderMetadataCreated, 15);
   assert.equal(created.documentsTransferred, 7);
   const folders = (await database.query<{ folder_code: string; storage_key: string }>(`SELECT folder_code,storage_key FROM dbo.project_folders WHERE project_id=${Number(created.id)} ORDER BY folder_code`)).recordset;

@@ -407,4 +407,17 @@ export const CRM_COPY: Record<string,{en:string;th:string;jp:string}> = Object.f
  ["ErpMaster.taxId", "Tax ID {id}", "เลขภาษี {id}", "税番号 {id}"],
  ["ErpMaster.lockedHint", "Name and address come from Pegasus ERP; change them in the ERP.", "ชื่อและที่อยู่มาจาก Pegasus ERP ให้แก้ใน ERP", "名称と住所はPegasus ERPのデータです。ERPで変更してください。"],
  ["ErpMaster.supplierLockedHint", "The name comes from Pegasus ERP; change it in the ERP.", "ชื่อมาจาก Pegasus ERP ให้แก้ใน ERP", "名称はPegasus ERPのデータです。ERPで変更してください。"],
+ // The project number's ERP search (ErpProjectNumber.tsx, 2026-11-06).
+ ["ErpProject.hint", "Type the number, the project or the customer to search Pegasus ERP.", "พิมพ์เลขโปรเจกต์ ชื่องาน หรือชื่อลูกค้า เพื่อค้นใน Pegasus ERP", "案件番号・案件名・顧客名を入力するとPegasus ERPを検索します。"],
+ ["ErpProject.placeholder", "Placeholder number: PRs and Cost Sheets go to the ERP without a project. Set the real number in Edit project once the ERP issues it.", "เลขชั่วคราว: PR และ Cost Sheet จะเข้า ERP โดยไม่ผูกโปรเจกต์ เมื่อ ERP ออกเลขแล้วให้เปลี่ยนเป็นเลขจริงที่ 'แก้ไขโปรเจกต์'", "仮番号です。PRとコストシートは案件なしでERPに送られます。ERPが番号を発行したら「案件を編集」で正しい番号に変えてください。"],
+ ["ErpProject.searching", "Searching Pegasus ERP…", "กำลังค้นใน Pegasus ERP…", "Pegasus ERPを検索中…"],
+ ["ErpProject.off", "This server is not linked to Pegasus ERP; check the number by hand.", "เซิร์ฟเวอร์นี้ไม่ได้เชื่อม Pegasus ERP ให้ตรวจเลขเอง", "このサーバーはPegasus ERPに接続していません。番号は手で確認してください。"],
+ ["ErpProject.failed", "Could not search Pegasus ERP ({message}). The number can still be typed.", "ค้นใน Pegasus ERP ไม่ได้ ({message}) ยังพิมพ์เลขเองได้", "Pegasus ERPを検索できません（{message}）。番号は手入力できます。"],
+ ["ErpProject.found", "In Pegasus ERP: {name}", "พบใน Pegasus ERP: {name}", "Pegasus ERPにあります：{name}"],
+ ["ErpProject.inApp", "Another project here already has this number.", "มีโปรเจกต์อื่นในแอปใช้เลขนี้แล้ว", "この番号はアプリ内の別の案件で使われています。"],
+ ["ErpProject.pick", "Pick the project from the ERP's list, or finish typing the number.", "เลือกโปรเจกต์จากรายการของ ERP หรือพิมพ์เลขให้ครบ", "ERPの一覧から案件を選ぶか、番号を最後まで入力してください。"],
+ ["ErpProject.notFound", "Not found in Pegasus ERP. Check the number: the ERP refuses a PR whose project it does not have.", "ไม่พบใน Pegasus ERP ตรวจเลขอีกครั้ง ERP จะไม่รับ PR ที่ใช้เลขโปรเจกต์ที่ไม่มีในระบบ", "Pegasus ERPに見つかりません。番号を確認してください。ERPにない案件のPRは受け付けられません。"],
+ ["ErpProject.listLabel", "Projects in Pegasus ERP", "โปรเจกต์ใน Pegasus ERP", "Pegasus ERPの案件"],
+ ["ErpProject.takenBadge", "Already in the app", "มีในแอปแล้ว", "アプリに登録済み"],
+ ["ErpProject.more", "The ERP shows at most 30. Type more to narrow the list.", "ERP แสดงได้ไม่เกิน 30 รายการ พิมพ์เพิ่มเพื่อให้แคบลง", "ERPの表示は最大30件です。さらに入力して絞り込んでください。"],
 ].map(([key,en,th,jp])=>[key,{en,th,jp}]));

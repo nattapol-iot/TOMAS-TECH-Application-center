@@ -9,7 +9,10 @@ export const MASTER_TOOLS: Readonly<Record<MasterKind, string>> = { customers: "
 /** Records per page; the ERP's default in our request, and far below its 120 calls a minute per person. */
 export const MASTER_PAGE_SIZE = 200;
 
-/** One ERP record, cut to the columns of dbo.erp_customers / dbo.erp_suppliers. key is customer_code or supplier_id. */
+/**
+ * One ERP record, cut to the columns of dbo.erp_customers / dbo.erp_suppliers. key is customer_id or supplier_id, which never
+ * change; code is customer_code or supplier_code, which the ERP lets people edit (ERP team, 2026-11-04). mergedInto is a key.
+ */
 export type ErpMasterRecord = {
   key: string; code: string; nameTh: string; nameEn: string; shortName: string; taxId: string; branch: string; address: string;
   province: string; postalCode: string; country: string; phone: string; email: string; website: string; contactName: string;
@@ -38,24 +41,31 @@ export function masterListArguments(since: string | null, cursor: string | null)
   };
 }
 
-/** One page of a register. A record without its key is skipped; an answer without the list is refused whole. */
+/** The field that keys each kind of record. */
+export const MASTER_KEYS: Readonly<Record<MasterKind, string>> = { customers: "customer_id", suppliers: "supplier_id" };
+
+/**
+ * One page of a register. A record without its key is skipped; an answer without the list, or whose records all lack the
+ * key, is refused whole, so a change on the ERP side shows on the screen instead of emptying the register.
+ */
 export function readMasterPage(kind: MasterKind, data: unknown): ErpMasterPage {
   const body = data && typeof data === "object" ? data as Record<string, unknown> : {};
   const list = body[kind];
   if (!Array.isArray(list)) throw new MasterShapeError(`The ERP answered ${MASTER_TOOLS[kind]} without a "${kind}" list.`);
   const byKey = new Map<string, ErpMasterRecord>();
+  let keyless = 0;
   for (const item of list) {
     if (!item || typeof item !== "object") continue;
     const row = item as Record<string, unknown>;
-    const key = text(kind === "customers" ? row.customer_code ?? row.code : row.supplier_id ?? row.id, 50);
-    if (!key) continue;
+    const key = text(kind === "customers" ? row.customer_id : row.supplier_id ?? row.id, 50);
+    if (!key) { keyless++; continue; }
     // suppliers_list may name a supplier the way purchasing_suppliers_list does.
     const name = text(row.name ?? row.supplier_name ?? row.customer_name, 300);
     let nameTh = text(row.name_th, 300), nameEn = text(row.name_en, 300);
     if (!nameTh && !nameEn && name) { if (/[ก-๙]/.test(name)) nameTh = name; else nameEn = name; }
     const merged = text(row.merged_into, 50);
     const record = {
-      key, code: kind === "customers" ? key : text(row.supplier_code, 50), nameTh, nameEn, shortName: text(row.short_name, 100),
+      key, code: text(kind === "customers" ? row.customer_code : row.supplier_code, 50), nameTh, nameEn, shortName: text(row.short_name, 100),
       taxId: text(row.tax_id, 20), branch: text(row.branch, 100), address: text(row.address, 1000), province: text(row.province, 120),
       postalCode: text(row.postal_code, 20), country: text(row.country, 120), phone: text(row.phone, 100), email: text(row.email, 256),
       website: text(row.website, 500), contactName: text(row.contact_name, 200), approvalStatus: text(row.approval_status, 30),
@@ -63,6 +73,7 @@ export function readMasterPage(kind: MasterKind, data: unknown): ErpMasterPage {
     };
     byKey.set(key, { ...record, hash: hashOf(record) });
   }
+  if (keyless && !byKey.size) throw new MasterShapeError(`The ERP answered ${MASTER_TOOLS[kind]} without ${MASTER_KEYS[kind]} on its records.`);
   const next = text(body.next_cursor, 1000);
   return { records: [...byKey.values()], nextCursor: next || null, serverTime: text(body.server_time, 40) || null };
 }
@@ -139,8 +150,8 @@ const unique = (base: string, taken: Set<string>) => {
 };
 
 /** The app code for a customer added from the ERP: the ERP's own code when the app can hold it, else one from the name. */
-export function customerCodeFor(record: Pick<ErpMasterRecord, "key" | "nameEn" | "nameTh">, taken: Set<string>): string {
-  const own = record.key.toUpperCase();
+export function customerCodeFor(record: Pick<ErpMasterRecord, "key" | "code" | "nameEn" | "nameTh">, taken: Set<string>): string {
+  const own = (record.code || record.key).toUpperCase();
   if (own.length <= 30 && CODE_SHAPE.test(own) && !taken.has(own)) { taken.add(own); return own; }
   return unique(customerCodeFromName(record.nameEn) || `CUS-${own.replace(/[^A-Z0-9]/g, "").slice(0, 20) || "ERP"}`, taken);
 }

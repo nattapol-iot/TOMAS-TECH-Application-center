@@ -1,5 +1,5 @@
 // Explicit SQL integration entry point (not part of the fast unit-test glob): customers and suppliers from the Pegasus ERP
-// (migration 099). The ERP is a fake gateway; everything else is the real schema, the application role and the routes.
+// (migrations 099 and 100). The ERP is a fake gateway; everything else is the real schema, the application role and the routes.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -39,6 +39,8 @@ try {
       (N'TWIN-1',N'Twin Industries',N'Twin Industries',@admin,@admin),
       (N'TWIN-2',N'TWIN INDUSTRIES CO., LTD.',N'TWIN INDUSTRIES CO., LTD.',@admin,@admin),
       (N'APP-ONLY',N'Prospect Only',N'Prospect Only',@admin,@admin);
+    -- Linked under migration 099, by the ERP code only.
+    INSERT dbo.customers(code,name,name_en,erp_customer_code,created_by,updated_by) VALUES (N'OLDLINK',N'Old Link Industries',N'Old Link Industries',N'C-0007',@admin,@admin);
     INSERT dbo.suppliers(code,name,tax_id,created_by,updated_by) VALUES
       (N'OE',N'Omron Electronics',N'0105536000000',@admin,@admin),
       (N'MS',N'Misumi',N'',@admin,@admin);`);
@@ -69,28 +71,32 @@ try {
   const calls: Call[] = [];
   const pages: Record<string, unknown[]> = { customers_list: [
     { customers: [
-      { customer_code: "C-0001", name_en: "DAIICHI JITSUGYO (THAILAND) CO., LTD.", name_th: "บริษัท ไดอิจิ จิตสึเกียว (ประเทศไทย) จำกัด", tax_id: "0105540000001",
+      { customer_id: 1, customer_code: "C-0001", name_en: "DAIICHI JITSUGYO (THAILAND) CO., LTD.", name_th: "บริษัท ไดอิจิ จิตสึเกียว (ประเทศไทย) จำกัด", tax_id: "0105540000001",
         address: "1 Rama 4 Road", province: "Bangkok", postal_code: "10110", is_active: true, merged_into: null, updated_at: "2026-11-01T00:00:00Z" },
-      { customer_code: "C-0002", name_en: "Thai Yamaha Motor Co., Ltd.", is_active: true },
-      { customer_code: "C-0003", name_en: "Twin Industries Co., Ltd.", is_active: true },
+      { customer_id: 2, customer_code: "C-0002", name_en: "Thai Yamaha Motor Co., Ltd.", is_active: true },
+      { customer_id: 3, customer_code: "C-0003", name_en: "Twin Industries Co., Ltd.", is_active: true },
+      { customer_id: 7, customer_code: "C-0007", name_en: "Old Link Industries Co., Ltd.", is_active: true },
     ], next_cursor: "p2", server_time: "2026-11-05T05:00:00Z" },
     { customers: [
-      { customer_code: "C-0004", name_th: "บริษัท สยามเทค จำกัด", is_active: true },
-      { customer_code: "C-0005", name_en: "Closed Long Ago Ltd.", is_active: false },
-      { customer_code: "C-0006", name_en: "New Customer Ltd.", website: "newcustomer.co.th", is_active: true },
-      { name_en: "No key, skipped" },
+      { customer_id: 4, customer_code: "C-0004", name_th: "บริษัท สยามเทค จำกัด", is_active: true },
+      { customer_id: 5, customer_code: "C-0005", name_en: "Closed Long Ago Ltd.", is_active: false },
+      { customer_id: 6, customer_code: "C-0006", name_en: "New Customer Ltd.", website: "newcustomer.co.th", is_active: true },
+      { customer_code: "C-0008", name_en: "No id, skipped" },
     ], next_cursor: null, server_time: "2026-11-05T05:00:03Z" },
   ] };
   let master = createErpMasterSync(database, fakeErp(pages, calls));
   const first = await master.sync("customers", actor, false);
   assert.equal(first.state, "synced", JSON.stringify(first));
-  assert.deepEqual(first.counts, { read: 6, created: 2, linked: 1, updated: 0, review: 2, closed: 0 });
+  assert.deepEqual(first.counts, { read: 7, created: 2, linked: 1, updated: 1, review: 2, closed: 0 });
   assert.deepEqual(calls.map((call) => call.args), [{ limit: 200 }, { limit: 200, cursor: "p2" }]);
   const linked = await customer("DJT");
-  assert.equal(linked.erp_customer_code, "C-0001"); assert.equal(linked.name, "DAIICHI JITSUGYO (THAILAND) CO., LTD.");
+  assert.equal(linked.erp_customer_id, "1"); assert.equal(linked.erp_customer_code, "C-0001"); assert.equal(linked.name, "DAIICHI JITSUGYO (THAILAND) CO., LTD.");
+  const adopted = await customer("OLDLINK");
+  assert.equal(adopted.erp_customer_id, "7", "a customer linked by code under 099 takes the id of the record carrying that code");
+  assert.equal(adopted.name, "Old Link Industries Co., Ltd.");
   assert.equal(linked.site, "1 Rama 4 Road Bangkok 10110");
   const thai = await customer("C-0004");
-  assert.equal(thai.name, "บริษัท สยามเทค จำกัด"); assert.equal(thai.erp_customer_code, "C-0004"); assert.equal(thai.country, "Thailand");
+  assert.equal(thai.name, "บริษัท สยามเทค จำกัด"); assert.equal(thai.erp_customer_id, "4"); assert.equal(thai.erp_customer_code, "C-0004"); assert.equal(thai.country, "Thailand");
   assert.equal((await customer("C-0006")).website, "https://newcustomer.co.th");
   assert.equal((await database.query("SELECT 1 FROM dbo.customers WHERE erp_customer_code=N'C-0005'")).recordset.length, 0, "a closed ERP customer is not added");
   const state = (await database.query<{ updated_since: string; page_cursor: string | null }>("SELECT updated_since,page_cursor FROM dbo.erp_master_sync WHERE kind=N'customers'")).recordset[0]!;
@@ -100,35 +106,37 @@ try {
   assert.equal((await master.sync("customers", actor, false)).state, "fresh");
   assert.equal(calls.length, 2);
 
-  // Changes since the last round: a rename, a merge into a record the app does not have yet, and a merge into a linked one.
+  // Changes since the last round: a rename with a new ERP code, a merge into a record the app does not have yet, and a merge into a linked one.
   pages.customers_list!.push({ customers: [
-    { customer_code: "C-0001", name_en: "DAIICHI JITSUGYO THAILAND CO., LTD.", tax_id: "0105540000001", address: "1 Rama 4 Road", province: "Bangkok", postal_code: "10110", is_active: true },
-    { customer_code: "C-0004", name_th: "บริษัท สยามเทค จำกัด", is_active: false, merged_into: "C-0099" },
-    { customer_code: "C-0006", name_en: "New Customer Ltd.", is_active: false, merged_into: "C-0001" },
+    { customer_id: 1, customer_code: "C-1001", name_en: "DAIICHI JITSUGYO THAILAND CO., LTD.", tax_id: "0105540000001", address: "1 Rama 4 Road", province: "Bangkok", postal_code: "10110", is_active: true },
+    { customer_id: 4, customer_code: "C-0004", name_th: "บริษัท สยามเทค จำกัด", is_active: false, merged_into: 99 },
+    { customer_id: 6, customer_code: "C-0006", name_en: "New Customer Ltd.", is_active: false, merged_into: 1 },
   ], next_cursor: null, server_time: "2026-11-05T06:00:00Z" });
   const second = await master.sync("customers", actor, true);
   assert.equal(second.state, "synced", JSON.stringify(second));
   assert.deepEqual(calls.at(-1)!.args, { limit: 200, updated_since: "2026-11-05T05:00:00Z", include_inactive: true });
   assert.equal((await customer("DJT")).name_en, "DAIICHI JITSUGYO THAILAND CO., LTD.");
+  assert.equal((await customer("DJT")).erp_customer_code, "C-1001", "an edited ERP code is the same customer, shown with its new code");
+  assert.equal((await database.query("SELECT 1 FROM dbo.customers WHERE erp_customer_id=N'1'")).recordset.length, 1);
   const moved = await customer("C-0004");
-  assert.equal(moved.erp_customer_code, "C-0099", "the app record follows the merge"); assert.equal(moved.is_active, true);
+  assert.equal(moved.erp_customer_id, "99", "the app record follows the merge"); assert.equal(moved.is_active, true);
   assert.equal((await customer("C-0006")).is_active, false, "merged into a customer the app already has: closed, not deleted");
   // The surviving record arrives later and takes over the moved app record.
-  pages.customers_list!.push({ customers: [{ customer_code: "C-0099", name_en: "Siam Tech Group Co., Ltd.", is_active: true }], next_cursor: null, server_time: "2026-11-05T07:00:00Z" });
+  pages.customers_list!.push({ customers: [{ customer_id: 99, customer_code: "C-0099", name_en: "Siam Tech Group Co., Ltd.", is_active: true }], next_cursor: null, server_time: "2026-11-05T07:00:00Z" });
   await master.sync("customers", actor, true);
-  assert.equal((await customer("C-0004")).name, "Siam Tech Group Co., Ltd.");
+  assert.equal((await customer("C-0004")).name, "Siam Tech Group Co., Ltd."); assert.equal((await customer("C-0004")).erp_customer_code, "C-0099");
 
   // An Admin settles what resembled more than one record, or one only doubtfully.
   const review = await master.reviewList("customers");
-  assert.deepEqual(review.items.map((item) => item.key).sort(), ["C-0002", "C-0003"]);
+  assert.deepEqual(review.items.map((item) => [item.key, item.code]).sort(), [["2", "C-0002"], ["3", "C-0003"]]);
   const yamaha = await customer("YAMAHA");
-  assert.deepEqual(review.items.find((item) => item.key === "C-0002")!.candidateIds, [Number(yamaha.id)]);
-  assert.equal(review.items.find((item) => item.key === "C-0003")!.candidateIds.length, 2);
-  await api("POST", "/api/v1/erp/master-data/customers/review/C-0002", { action: "link", id: Number(yamaha.id) });
-  assert.equal((await customer("YAMAHA")).erp_customer_code, "C-0002"); assert.equal((await customer("YAMAHA")).name, "Thai Yamaha Motor Co., Ltd.");
-  const added = await api("POST", "/api/v1/erp/master-data/customers/review/C-0003", { action: "create" });
+  assert.deepEqual(review.items.find((item) => item.key === "2")!.candidateIds, [Number(yamaha.id)]);
+  assert.equal(review.items.find((item) => item.key === "3")!.candidateIds.length, 2);
+  await api("POST", "/api/v1/erp/master-data/customers/review/2", { action: "link", id: Number(yamaha.id) });
+  assert.equal((await customer("YAMAHA")).erp_customer_id, "2"); assert.equal((await customer("YAMAHA")).erp_customer_code, "C-0002"); assert.equal((await customer("YAMAHA")).name, "Thai Yamaha Motor Co., Ltd.");
+  const added = await api("POST", "/api/v1/erp/master-data/customers/review/3", { action: "create" });
   assert.equal(added.code, "C-0003");
-  await api("POST", "/api/v1/erp/master-data/customers/review/C-0003", { action: "create" }, 409);
+  await api("POST", "/api/v1/erp/master-data/customers/review/3", { action: "create" }, 409);
   assert.equal((await api("GET", "/api/v1/erp/master-data")).registers[0].review, 0);
 
   // A linked customer keeps the ERP's name, address and state; it is closed in the ERP, not deleted here.
@@ -140,7 +148,7 @@ try {
   const removed = await app.inject({ method: "DELETE", url: `/api/v1/crm/customers/${after.id}?rowVersion=${encodeURIComponent((after.row_version as Buffer).toString("base64"))}`, headers: { "x-dev-user-id": "erp-admin" } });
   assert.equal(removed.statusCode, 409, removed.body); assert.equal(removed.json().code, "customer_in_erp");
   const appOnly = await customer("APP-ONLY");
-  assert.equal(appOnly.erp_customer_code, null, "a prospect the ERP does not have stays in the app");
+  assert.equal(appOnly.erp_customer_id, null, "a prospect the ERP does not have stays in the app");
 
   // Suppliers: a tax ID links whatever the spelling; ERP ids are numbers; there is no server_time.
   const supplierCalls: Call[] = [];
@@ -166,7 +174,7 @@ try {
   const denied = await master.sync("suppliers", actor, true);
   assert.equal(denied.state, "failed"); assert.match(denied.message!, /No purchasing access/);
   assert.equal((await master.status()).find((item) => item.kind === "suppliers")!.error, "No purchasing access.");
-  console.log("ERP MASTER DATA INTEGRATION PASSED: paged first read, 15-minute window, rename/merge/close, Admin link and add, CRM and supplier guards, tax ID match, failure kept.");
+  console.log("ERP MASTER DATA INTEGRATION PASSED: paged first read, 099 links adopted, 15-minute window, rename/code edit/merge/close, Admin link and add, CRM and supplier guards, tax ID match, failure kept.");
 } finally {
   if (application) { await application.app.close(); await application.database.close(); }
   execFileSync("sqlcmd", [...sqlArgs, "-d", "master", "-Q", `IF DB_ID(N'${name}') IS NOT NULL BEGIN ALTER DATABASE [${name}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [${name}]; END;`], sqlTest.sqlcmdOptions);
