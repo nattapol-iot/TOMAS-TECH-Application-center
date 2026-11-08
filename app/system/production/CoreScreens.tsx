@@ -657,7 +657,7 @@ export function ProductionProjects({ bootstrap, notify, refreshBootstrap, teamTe
   }, [canAnswer, overview?.loadedAt]);
   const canWrite = bootstrap.permissions.includes("project.write");
   // The API has the final say (work recorded, role); this only hides a button that could never work.
-  const canDelete = (project: ProjectSummary) => canWrite && (project.managerId === bootstrap.user.id || bootstrap.user.roles.some(role => role === "Engineering Manager" || role === "Admin"));
+  const canDelete = (project: ProjectSummary) => bootstrap.user.roles.some(role => role === "Management" || role === "Admin") || (canWrite && (project.managerId === bootstrap.user.id || bootstrap.user.roles.includes("Engineering Manager")));
   // The same people the API lets change a plan: this project's manager, an Engineering Manager or an Admin, while it is open.
   const canPlan = (project: ProjectSummary) => canWrite && bootstrap.permissions.includes("schedule.plan") && project.status !== "Closed"
     && (project.managerId === bootstrap.user.id || bootstrap.user.roles.some(role => role === "Engineering Manager" || role === "Admin"));
@@ -804,24 +804,30 @@ export function ProductionProjects({ bootstrap, notify, refreshBootstrap, teamTe
 }
 
 // Deleting is offered only after the API has confirmed nothing has been worked against the
-// project; otherwise the dialog names the work that keeps it.
+// project; otherwise the dialog names the work that keeps it. Management and Admin may still
+// hide such a project after typing its number; its rows stay in the database.
 function DeleteProjectModal({ project, onClose, onDeleted }: { project: ProjectSummary; onClose: () => void; onDeleted: (number: string) => Promise<void> }) {
   const t = useUiText();
   const [check, setCheck] = useState<ProjectDeletionCheck | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [confirmation, setConfirmation] = useState("");
   useEffect(() => { let cancelled = false; void checkProjectDeletion(project.id).then(value => { if (!cancelled) setCheck(value); }).catch(failure => { if (!cancelled) setError(toError(failure)); }); return () => { cancelled = true; }; }, [project.id]);
-  const submit = async () => { setBusy(true); setError(""); try { const deleted = await deleteProject(project.id); await onDeleted(deleted.number); } catch (failure) { setError(toError(failure)); } finally { setBusy(false); } };
+  const submit = async () => { setBusy(true); setError(""); try { const deleted = await deleteProject(project.id, check?.canForceDelete ? { force: true, confirmProjectNo: confirmation } : undefined); await onDeleted(deleted.number); } catch (failure) { setError(toError(failure)); } finally { setBusy(false); } };
   return <Modal title="CRM.deleteProject" subtitle={`${project.number} · ${project.name}`} size="sm" onClose={onClose} footer={<>
     <button className="btn ghost" type="button" onClick={onClose}><LocalizedText text={"Cancel"} /></button>
-    <button className="btn danger" type="button" disabled={busy || !check?.canDelete} onClick={() => { void submit(); }}><Icon name="trash" />{busy ? t("CRM.deletingProject") : t("CRM.deleteProject")}</button>
+    <button className="btn danger" type="button" data-guide="project.deleteConfirm" disabled={busy || !(check?.canDelete || (check?.canForceDelete && confirmation === project.number))} onClick={() => { void submit(); }}><Icon name="trash" />{busy ? t("CRM.deletingProject") : t(check?.canForceDelete ? "CRM.deleteProjectAnyway" : "CRM.deleteProject")}</button>
   </>}>
     {error ? <div className="callout danger" role="alert"><Icon name="alertTriangle" /><span>{t(error)}</span></div> : null}
     {!check && !error ? <p role="status">{t("CRM.loading")}</p> : null}
     {check?.canDelete ? <p>{t("CRM.deleteProjectConfirm")}</p> : null}
     {check && !check.canDelete ? <>
-      <p>{t("CRM.deleteProjectBlocked")}</p>
+      <p>{t(check.canForceDelete ? "CRM.deleteProjectWork" : "CRM.deleteProjectBlocked")}</p>
       <ul className="project-delete-blockers">{check.blockers.map(blocker => <li key={blocker.source}><span>{t(`ProjectWork.${blocker.source}`)}</span><strong>{blocker.count}</strong></li>)}</ul>
+    </> : null}
+    {check?.canForceDelete ? <>
+      <p className="callout danger" data-guide="project.deleteWarning">{t("CRM.deleteProjectHideWarning")}</p>
+      <label className="field"><span>{t("CRM.deleteProjectTypeNumber")}</span><input data-guide="project.deleteNumber" value={confirmation} onChange={event => setConfirmation(event.target.value)} autoComplete="off" /></label>
     </> : null}
   </Modal>;
 }

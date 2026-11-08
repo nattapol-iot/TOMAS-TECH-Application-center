@@ -826,4 +826,9 @@ GO
 -- database/migrations/101_estimate_approvers.sql
 GRANT SELECT ON OBJECT::dbo.estimate_approvers TO [iot_team_app_role];
 GO
+
+-- database/migrations/102_management_project_delete.sql
+GRANT EXECUTE ON OBJECT::dbo.delete_unstarted_project TO [iot_team_app_role];
+GRANT EXECUTE ON OBJECT::dbo.soft_delete_project TO [iot_team_app_role];
+GO
 -- END GENERATED MIGRATION GRANTS

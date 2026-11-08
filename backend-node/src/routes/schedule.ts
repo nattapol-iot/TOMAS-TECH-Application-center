@@ -12,7 +12,7 @@ import { businessToday } from "../business-date.js";
 import { normalizeBusinessTimeZone } from "../config.js";
 import { countedLeaves, scheduleLeaves, summarizeProjectSchedule } from "../project-health.js";
 import {
-  appendUpdate, calendarDays, canAnswerDayRequests, concurrency, currentScheduleVersion, demandAssignedLeaf, demandPlanOwner, demandProgressWriter,
+  appendUpdate, calendarDays, canAnswerDayRequests, concurrency, currentScheduleVersion, demandAssignedLeaf, demandPlanOwner, demandRowPlanOwner, demandMemberPlanRow, demandProgressWriter,
   hasChildren, hasNoActivePic, hasPendingRequest, isProjectMember, optionalId, permissionFor, placeInOrder, planInput, progressInput, PROGRESS_REPORT_FIELDS_SQL, readHolidays, readManagedTaskIds, readPics, readProject,
   readTask, readTasks, replacePics, resolveTasks, taskResponse, validateGraphAndHierarchy, validatePics,
   validateScheduleVersion, type PlanInput, type TaskRow,
@@ -89,13 +89,14 @@ async function projectSchedule(transaction: TransactionType, database: Database,
   const starts = calculation.roots.map((item) => item.planStart).filter((value): value is string => Boolean(value)).sort();
   const finishes = calculation.roots.map((item) => item.planFinish).filter((value): value is string => Boolean(value)).sort();
   const baselines = await readBaselines(transaction, projectId);
-  const canPlan = canPlanPermission && project.status !== "Closed" && (project.managerId === actor.id || hasRole(actor, "Engineering Manager", "Admin"));
+  const canPlan = project.status !== "Closed" && (project.leadEngineerId === actor.id || (canPlanPermission && canAnswerDayRequests(project, actor)));
   const isMember = await isProjectMember(transaction, projectId, actor.id);
-  return { projectId, projectNo: project.projectNo, projectName: project.name, managerId: project.managerId, projectStatus: project.status,
+  return { projectId, projectNo: project.projectNo, projectName: project.name, managerId: project.managerId, leadEngineerId: project.leadEngineerId, projectStatus: project.status,
     scheduleVersion: (await currentScheduleVersion(transaction, projectId))?.toString("base64") ?? null,
     canPlan,
     // The same people as canPlan (manager, Engineering Manager or Admin in any role held); migration 068 aligned the procedure.
-    canAnswerRequests: canPlan && canAnswerDayRequests(project, actor),
+    canAnswerRequests: canPlanPermission && project.status !== "Closed" && canAnswerDayRequests(project, actor),
+    canBaseline: canPlanPermission && project.status !== "Closed" && canAnswerDayRequests(project, actor),
     canUpdateProgress: canProgressPermission && project.status !== "Closed",
     summary: { planStart: starts[0] ?? null, planFinish: finishes.at(-1) ?? null,
       workDays: networkDays(starts[0] ?? null, finishes.at(-1) ?? null, holidays), percentComplete: shared.progress ?? 0,
@@ -106,7 +107,7 @@ async function projectSchedule(transaction: TransactionType, database: Database,
     holidays: [...holidays].sort(),
     tasks: calculation.roots.map((item) => taskResponse(item, new Map(tasks.map((task) => [task.id, task])), pics, {
       actorId: actor.id, managed, projectCanProgress: canProgressPermission && project.status !== "Closed", isManager: project.managerId === actor.id, isAdmin: hasRole(actor, "Admin"),
-      isMember,
+      isMember, canPlan,
       frameIds: new Set(leaves.filter((leaf) => !counted.has(leaf.id) && !leaf.rollup).map((leaf) => leaf.id)) })) };
 }
 
@@ -122,14 +123,14 @@ export function registerScheduleRoutes(app: FastifyInstance, database: Database,
   });
 
   app.post("/api/v1/projects/:projectId/schedule/tasks", async (request, reply) => {
-    await users.demandPermission(request, "schedule.plan"); const actor = await users.required(request);
+    const actor = await users.required(request);
     const projectId = positiveLong((request.params as { projectId?: string }).projectId, "Project id"); const input = planInput(request.body, false);
     // A row added in place (the + on a row of the plan) names the sibling it goes before, or null to go last; the server finds its sort order.
     const beforeId = bodyObject(request.body).beforeId === undefined ? undefined : optionalId(bodyObject(request.body).beforeId, "Place before task");
     const created = await database.transaction(async (transaction) => {
-      const project = await demandPlanOwner(transaction, projectId, actor); await validateScheduleVersion(transaction, projectId, input.scheduleVersion);
+      const { project, canPlan } = await demandMemberPlanRow(transaction, database, projectId, actor, null, input); await validateScheduleVersion(transaction, projectId, input.scheduleVersion);
       await validateGraphAndHierarchy(transaction, projectId, null, input); if (input.parentId && await hasPendingRequest(transaction, input.parentId)) throw new ApiError(409, "schedule_day_request_pending", "Answer the pending request for more days before changing this task's child rows.");
-      const picUserIds = await membersFor(transaction, projectId, input);
+      const picUserIds = !canPlan && !input.picUserIds.length ? [actor.id] : await membersFor(transaction, projectId, input);
       await validatePics(transaction, project, picUserIds);
       let sortOrder = input.sortOrder;
       if (beforeId !== undefined) {
@@ -143,9 +144,9 @@ export function registerScheduleRoutes(app: FastifyInstance, database: Database,
         }
         sortOrder = placed.sortOrder;
       }
-      const insert = new sql.Request(transaction); bindPlan(insert, projectId, { ...input, sortOrder }, actor.id);
+      const insert = new sql.Request(transaction); bindPlan(insert, projectId, { ...input, sortOrder }, actor.id); insert.input("origin", sql.NVarChar(20), canPlan ? "PM" : "Member");
       const row = (await insert.query<{ id: number | string; row_version: Buffer }>(`DECLARE @changed TABLE(id bigint,row_version binary(8)); INSERT INTO dbo.schedule_tasks(project_id,parent_id,sort_order,kind,name,is_milestone,origin,created_by,visibility,plan_start,plan_days,start_mode,predecessor_id,lag_days,pic_external,plan_man_days,updated_by)
-        OUTPUT inserted.id,inserted.row_version INTO @changed VALUES(@project,@parent,@sort,@kind,@name,@milestone,N'PM',@actor,@visibility,@plan_start,@plan_days,@start_mode,@predecessor,@lag,@pic_external,@man_days,@actor); SELECT id,row_version FROM @changed;`)).recordset[0]!;
+        OUTPUT inserted.id,inserted.row_version INTO @changed VALUES(@project,@parent,@sort,@kind,@name,@milestone,@origin,@actor,@visibility,@plan_start,@plan_days,@start_mode,@predecessor,@lag,@pic_external,@man_days,@actor); SELECT id,row_version FROM @changed;`)).recordset[0]!;
       const id = Number(row.id); const added = await replacePics(transaction, id, picUserIds); await appendUpdate(transaction, projectId, id, actor.id, "created", null, input.name, "Schedule task created");
       await insertAudit(transaction, actor.id, "Schedule Task", id, `T-${id}`, "Created", null, planAudit({ ...input, picUserIds }));
       const notices = await queueTaskAssignmentNotices(transaction, { id: actor.id, name: actor.name }, [{ taskId: id, userIds: added }]);
@@ -156,10 +157,10 @@ export function registerScheduleRoutes(app: FastifyInstance, database: Database,
   });
 
   app.put("/api/v1/schedule/tasks/:id", async (request) => {
-    await users.demandPermission(request, "schedule.plan"); const actor = await users.required(request);
+    const actor = await users.required(request);
     const id = positiveLong((request.params as { id?: string }).id, "Schedule task id"); const input = planInput(request.body, true);
     const saved = await database.transaction(async (transaction) => {
-      const existing = await readTask(transaction, id); const project = await demandPlanOwner(transaction, existing.projectId, actor);
+      const existing = await readTask(transaction, id); const { project } = await demandMemberPlanRow(transaction, database, existing.projectId, actor, existing, input);
       await validateScheduleVersion(transaction, existing.projectId, input.scheduleVersion); if (!existing.rowVersion.equals(input.rowVersion!)) throw concurrency();
       const pics = await readPics(transaction, existing.projectId); const oldPics = (pics.get(id) ?? []).map((pic) => pic.id);
       if (await hasPendingRequest(transaction, id)) throw new ApiError(409, "schedule_day_request_pending", "Answer the pending request for more days before changing this task's plan or assignment.");
@@ -183,12 +184,12 @@ export function registerScheduleRoutes(app: FastifyInstance, database: Database,
   });
 
   app.delete("/api/v1/schedule/tasks/:id", async (request) => {
-    await users.demandPermission(request, "schedule.plan"); const actor = await users.required(request);
+    const actor = await users.required(request);
     const id = positiveLong((request.params as { id?: string }).id, "Schedule task id"); const body = bodyObject(request.body);
     const expected = parseRowVersion(body.rowVersion);
     const scheduleVersion = body.scheduleVersion == null ? null : requiredText(body.scheduleVersion, 64, "Schedule version");
     return database.transaction(async (transaction) => {
-      const existing = await readTask(transaction, id); await demandPlanOwner(transaction, existing.projectId, actor);
+      const existing = await readTask(transaction, id); const { canPlan } = await demandMemberPlanRow(transaction, database, existing.projectId, actor, existing);
       await validateScheduleVersion(transaction, existing.projectId, scheduleVersion); if (!existing.rowVersion.equals(expected)) throw concurrency();
       const rows = await readTasks(transaction, existing.projectId);
       const removed: number[] = [], seen = new Set<number>();
@@ -199,6 +200,7 @@ export function registerScheduleRoutes(app: FastifyInstance, database: Database,
         removed.push(taskId);
       };
       visit(id);
+      if (!canPlan && rows.some((row) => seen.has(row.id) && row.createdBy !== actor.id)) throw new ApiError(403, "schedule_row_owner_required", "Members cannot delete rows created by someone else.");
       const removing = (await readScheduleRows(transaction, existing.projectId, removed)).filter((row) => seen.has(row.id));
       const inUse = removing.find((row) => row.started || row.kind === "detail" || row.pending || row.referenced);
       if (inUse) throw new ApiError(409, "schedule_row_in_use", `Cannot delete "${inUse.name}": the row has progress, member details, a pending day request, or linked work.`);
@@ -216,14 +218,14 @@ export function registerScheduleRoutes(app: FastifyInstance, database: Database,
   // Moves a row up or down the plan, or into another phase: its parent and its place among the new siblings. Dates,
   // effort and people stay as they are; WBS numbers follow the new order when the plan is read.
   app.post("/api/v1/schedule/tasks/:id/move", async (request) => {
-    await users.demandPermission(request, "schedule.plan"); const actor = await users.required(request);
+    const actor = await users.required(request);
     const id = positiveLong((request.params as { id?: string }).id, "Schedule task id"); const body = bodyObject(request.body);
     const parentId = optionalId(body.parentId, "Parent task"), beforeId = optionalId(body.beforeId, "Place before task");
     const expected = parseRowVersion(body.rowVersion);
     const scheduleVersion = body.scheduleVersion === null || body.scheduleVersion === undefined ? null : requiredText(body.scheduleVersion, 64, "Schedule version");
     if (parentId === id || beforeId === id) throw new ApiError(400, "schedule_self_reference", "A row cannot be placed under or before itself.");
     return database.transaction(async (transaction) => {
-      const existing = await readTask(transaction, id); const project = await demandPlanOwner(transaction, existing.projectId, actor);
+      const existing = await readTask(transaction, id); const project = await demandRowPlanOwner(transaction, database, existing.projectId, actor);
       await validateScheduleVersion(transaction, existing.projectId, scheduleVersion); if (!existing.rowVersion.equals(expected)) throw concurrency();
       if (parentId !== existing.parentId) {
         // Into another part of the plan, on the parent rules of a plan edit. A Resource Plan row may go under a heading
@@ -287,7 +289,7 @@ export function registerScheduleRoutes(app: FastifyInstance, database: Database,
     await users.demandPermission(request, "schedule.plan"); const actor = await users.required(request); const id = positiveLong((request.params as { id?: string }).id, "Day request id"); const body = bodyObject(request.body);
     const answer = requiredText(body.answer, 20, "Day request answer"); if (!["Accepted", "Rejected"].includes(answer)) throw new ApiError(400, "validation_failed", "Day request answer is invalid."); const note = optionalBodyText(body.note, 20_000, "Answer note"); const expected = parseRowVersion(body.rowVersion); const scheduleVersion = body.scheduleVersion == null ? null : requiredText(body.scheduleVersion, 64, "Schedule version");
     return database.transaction(async (transaction) => { const locate = new sql.Request(transaction); locate.input("id", sql.BigInt, id); const location = (await locate.query<{ project_id: number | string; task_id: number | string }>(`SELECT project_id,task_id FROM dbo.schedule_updates WITH (UPDLOCK,HOLDLOCK) WHERE id=@id AND task_id IS NOT NULL AND field=N'request' AND request_days>0;`)).recordset[0]; if (!location) throw new ApiError(404, "schedule_day_request_not_found", "Schedule day request not found.");
-      const projectId = Number(location.project_id), taskId = Number(location.task_id), task = await readTask(transaction, taskId); const project = await demandPlanOwner(transaction, projectId, actor); if (!canAnswerDayRequests(project, actor)) throw new ApiError(403, "schedule_day_request_answer_forbidden", "Only the project manager, an Engineering Manager or an Admin can answer this request."); if (task.projectId !== projectId) throw new ApiError(409, "schedule_day_request_invalid", "The day request no longer matches its task."); if (task.kind === "phase" || await hasChildren(transaction, taskId)) throw new ApiError(409, "schedule_day_request_not_leaf", "A day request can only be answered while its task remains a non-phase leaf row.");
+      const projectId = Number(location.project_id), taskId = Number(location.task_id), task = await readTask(transaction, taskId); const project = await demandPlanOwner(transaction, projectId, actor, false); if (!canAnswerDayRequests(project, actor)) throw new ApiError(403, "schedule_day_request_answer_forbidden", "Only the project manager, an Engineering Manager or an Admin can answer this request."); if (task.projectId !== projectId) throw new ApiError(409, "schedule_day_request_invalid", "The day request no longer matches its task."); if (task.kind === "phase" || await hasChildren(transaction, taskId)) throw new ApiError(409, "schedule_day_request_not_leaf", "A day request can only be answered while its task remains a non-phase leaf row.");
       const read = new sql.Request(transaction); read.input("id", sql.BigInt, id); const row = (await read.query<{ request_days: number; answer: string | null }>(`SELECT request_days,answer FROM dbo.schedule_updates WITH (UPDLOCK,HOLDLOCK) WHERE id=@id;`)).recordset[0]!; if (row.answer) throw new ApiError(409, "schedule_day_request_answered", "This day request has already been answered."); await validateScheduleVersion(transaction, projectId, scheduleVersion); if (!task.rowVersion.equals(expected)) throw concurrency(); if (answer === "Accepted" && task.planDays > 3650 - row.request_days) throw new ApiError(400, "validation_failed", "Accepting this request would make the task longer than 3650 calendar days.");
       const action = new sql.Request(transaction); action.input("request_id", sql.BigInt, id); action.input("task_id", sql.BigInt, taskId); action.input("project_id", sql.BigInt, projectId); action.input("answer_by", sql.BigInt, actor.id); action.input("answer", sql.NVarChar(20), answer); action.input("answer_note", sql.NVarChar(sql.MAX), note); action.input("expected_row_version", sql.VarBinary(8), expected); const changed = (await action.execute<{ task_id: number | string; row_version: Buffer }>("dbo.answer_schedule_day_request").catch((error: unknown) => { throw dayRequestAnswerError(error) ?? error; })).recordset[0]; if (!changed || Number(changed.task_id) !== taskId) throw concurrency(); const planDays = answer === "Accepted" ? task.planDays + row.request_days : task.planDays;
       if (answer === "Accepted") await appendUpdate(transaction, projectId, taskId, actor.id, "plan_days", String(task.planDays), String(planDays), note); await appendUpdate(transaction, projectId, taskId, actor.id, "request_answer", null, answer, note); await insertAudit(transaction, actor.id, "Schedule Day Request", id, `T-${taskId}/R-${id}`, "Answered day request", { requestId: id, answer: null, planDays: task.planDays }, { requestId: id, answer, answerNote: note, requestDays: row.request_days, planDays });
@@ -308,7 +310,7 @@ const insert = new sql.Request(transaction); insert.input("project", sql.BigInt,
 
   app.post("/api/v1/projects/:projectId/schedule/baseline", async (request, reply) => {
     await users.demandPermission(request, "schedule.plan"); const actor = await users.required(request); const projectId = positiveLong((request.params as { projectId?: string }).projectId, "Project id"); const body = bodyObject(request.body); const label = requiredText(body.label, 200, "Baseline label"), reason = requiredText(body.reason, 20_000, "Baseline reason"), scheduleVersion = body.scheduleVersion == null ? null : requiredText(body.scheduleVersion, 64, "Schedule version");
-    const created = await database.transaction(async (transaction) => { const project = await demandPlanOwner(transaction, projectId, actor); await validateScheduleVersion(transaction, projectId, scheduleVersion); const tasks = await readTasks(transaction, projectId); if (!tasks.length) throw new ApiError(409, "schedule_empty", "A baseline cannot be taken before the schedule has tasks."); const calculation = resolveTasks(tasks, await readHolidays(transaction)); const next = new sql.Request(transaction); next.input("project", sql.BigInt, projectId); const revision = Number((await next.query<{ value: number }>(`SELECT COALESCE(MAX(revision),0)+1 value FROM dbo.schedule_baselines WITH (UPDLOCK,HOLDLOCK) WHERE project_id=@project;`)).recordset[0]!.value); const snapshot = JSON.stringify([...calculation.byId.values()].sort((a, b) => a.wbs.localeCompare(b.wbs)).map((item) => ({ id: item.source.id, parentId: item.source.parentId, wbs: item.wbs, planStart: item.planStart, planFinish: item.planFinish, planDays: item.source.planDays, workDays: item.workDays, percentComplete: item.percentComplete, status: item.status }))); for (const task of tasks) { const item = calculation.byId.get(task.id)!; const freeze = new sql.Request(transaction); freeze.input("start", sql.Date, item.planStart); freeze.input("finish", sql.Date, item.planFinish); freeze.input("days", sql.Int, calendarDays(item.planStart, item.planFinish)); freeze.input("revision", sql.Int, revision); freeze.input("actor", sql.BigInt, actor.id); freeze.input("id", sql.BigInt, task.id); freeze.input("version", sql.VarBinary(8), task.rowVersion); const result = await freeze.query(`UPDATE dbo.schedule_tasks SET baseline_start=@start,baseline_end=@finish,baseline_days=@days,baseline_rev=@revision,updated_by=@actor,updated_at=SYSUTCDATETIME() WHERE id=@id AND deleted_at IS NULL AND row_version=@version;`); if (result.rowsAffected[0] !== 1) throw concurrency(); }
+    const created = await database.transaction(async (transaction) => { const project = await demandPlanOwner(transaction, projectId, actor, false); await validateScheduleVersion(transaction, projectId, scheduleVersion); const tasks = await readTasks(transaction, projectId); if (!tasks.length) throw new ApiError(409, "schedule_empty", "A baseline cannot be taken before the schedule has tasks."); const calculation = resolveTasks(tasks, await readHolidays(transaction)); const next = new sql.Request(transaction); next.input("project", sql.BigInt, projectId); const revision = Number((await next.query<{ value: number }>(`SELECT COALESCE(MAX(revision),0)+1 value FROM dbo.schedule_baselines WITH (UPDLOCK,HOLDLOCK) WHERE project_id=@project;`)).recordset[0]!.value); const snapshot = JSON.stringify([...calculation.byId.values()].sort((a, b) => a.wbs.localeCompare(b.wbs)).map((item) => ({ id: item.source.id, parentId: item.source.parentId, wbs: item.wbs, planStart: item.planStart, planFinish: item.planFinish, planDays: item.source.planDays, workDays: item.workDays, percentComplete: item.percentComplete, status: item.status }))); for (const task of tasks) { const item = calculation.byId.get(task.id)!; const freeze = new sql.Request(transaction); freeze.input("start", sql.Date, item.planStart); freeze.input("finish", sql.Date, item.planFinish); freeze.input("days", sql.Int, calendarDays(item.planStart, item.planFinish)); freeze.input("revision", sql.Int, revision); freeze.input("actor", sql.BigInt, actor.id); freeze.input("id", sql.BigInt, task.id); freeze.input("version", sql.VarBinary(8), task.rowVersion); const result = await freeze.query(`UPDATE dbo.schedule_tasks SET baseline_start=@start,baseline_end=@finish,baseline_days=@days,baseline_rev=@revision,updated_by=@actor,updated_at=SYSUTCDATETIME() WHERE id=@id AND deleted_at IS NULL AND row_version=@version;`); if (result.rowsAffected[0] !== 1) throw concurrency(); }
       const finishes = calculation.roots.map((item) => item.planFinish).filter((value): value is string => Boolean(value)).sort(); const promisedFinish = finishes.at(-1) ?? null; const insert = new sql.Request(transaction); insert.input("project", sql.BigInt, projectId); insert.input("revision", sql.Int, revision); insert.input("label", sql.NVarChar(200), label); insert.input("actor", sql.BigInt, actor.id); insert.input("reason", sql.NVarChar(sql.MAX), reason); insert.input("count", sql.Int, tasks.length); insert.input("finish", sql.Date, promisedFinish); insert.input("snapshot", sql.NVarChar(sql.MAX), snapshot); const baselineId = Number((await insert.query<{ id: number | string }>(`INSERT INTO dbo.schedule_baselines(project_id,revision,label,taken_by,reason,task_count,promised_finish,snapshot_json) OUTPUT inserted.id VALUES(@project,@revision,@label,@actor,@reason,@count,@finish,@snapshot);`)).recordset[0]!.id); await appendUpdate(transaction, projectId, null, actor.id, "baseline", revision > 1 ? String(revision - 1) : null, String(revision), reason); await insertAudit(transaction, actor.id, "Schedule Baseline", baselineId, `${project.projectNo}/BL-${String(revision).padStart(3, "0")}`, "Created baseline", null, { revision, label, reason, taskCount: tasks.length, promisedFinish }); return { id: baselineId, revision, taskCount: tasks.length, promisedFinish, scheduleVersion: (await currentScheduleVersion(transaction, projectId))!.toString("base64") }; }); return reply.status(201).header("Location", `/api/v1/projects/${projectId}/schedule/baseline/${created.id}`).send(created);
   });
 

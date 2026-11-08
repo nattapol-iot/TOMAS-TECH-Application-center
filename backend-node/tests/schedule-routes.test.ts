@@ -8,7 +8,7 @@ import type { Database } from "../src/db.js";
 import { ApiError, dayRequestAnswerError, registerErrorHandler } from "../src/errors.js";
 import { registerResourceTaskRoutes } from "../src/routes/resource-tasks.js";
 import { registerScheduleRoutes } from "../src/routes/schedule.js";
-import { canAnswerDayRequests, canPostProgress, datesWouldLoop, managedProgressReady, MAX_PLAN_DEPTH, placeInOrder, planInput, scheduleParentAllowed, validateGraphAndHierarchy } from "../src/schedule-service.js";
+import { isOwnPlanTask, canAnswerDayRequests, canPostProgress, datesWouldLoop, managedProgressReady, MAX_PLAN_DEPTH, placeInOrder, planInput, scheduleParentAllowed, validateGraphAndHierarchy } from "../src/schedule-service.js";
 import { resolveSchedule, type ScheduleCalculationTask } from "../src/schedule-calculator.js";
 import type { CurrentUserService } from "../src/users.js";
 
@@ -17,6 +17,138 @@ const MANAGER_ID = 20;
 const TASK_VERSION = Buffer.from("taskver1");
 const SCHEDULE_VERSION = Buffer.from("schedver");
 const NEXT_VERSION = Buffer.from("nextver1");
+
+test("isOwnPlanTask follows PIC and creator ancestry, never phases, details or another branch", () => {
+  const tasks = new Map([
+    { id: 1, parentId: null, kind: "phase", createdBy: 30 },
+    { id: 2, parentId: 1, kind: "task", createdBy: 20 },
+    { id: 3, parentId: 2, kind: "task", createdBy: 20 },
+    { id: 4, parentId: 3, kind: "task", createdBy: 20 },
+    { id: 5, parentId: 1, kind: "task", createdBy: 30 },
+    { id: 6, parentId: 1, kind: "task", createdBy: 20 },
+    { id: 7, parentId: 2, kind: "detail", createdBy: 30 },
+    { id: 8, parentId: 9, kind: "task", createdBy: 20 },
+    { id: 9, parentId: 8, kind: "task", createdBy: 20 },
+  ].map(row => [row.id, row]));
+  const pics = new Map([[2, [{ id: 30 }]]]);
+  for (const id of [2, 3, 4, 5]) assert.equal(isOwnPlanTask(id, 30, tasks, pics), true);
+  for (const id of [1, 6, 7, 8, 99]) assert.equal(isOwnPlanTask(id, 30, tasks, pics), false);
+});
+
+function memberPlanAnswers(rows: Record<string, unknown>[], options: { lead?: number; member?: boolean; pics?: Array<{ task: number; user: number }>; invalidPic?: number; status?: string; pending?: number } = {}) {
+  const base = deletionAnswers(rows, options.status);
+  return (statement: string, params: Params): Answer | undefined => {
+    if (statement.includes("SELECT id,project_no,name,manager_id,lead_engineer_id")) return { recordset: [{ ...projectRaw(options.status), lead_engineer_id: options.lead ?? 40 }] };
+    if (statement.includes("FROM dbo.projects p WHERE p.id=@project_id")) return { recordset: [{ allowed: true }] };
+    if (statement.includes("member_project.id=@project")) return { recordset: [{ value: options.member !== false }] };
+    if (statement.includes("SELECT id,parent_id,predecessor_id,kind,start_mode,")) return { recordset: rows };
+    if (statement.includes("SELECT pic.task_id,u.id")) return { recordset: (options.pics ?? []).map(pic => ({ task_id: pic.task, id: pic.user, name: "PIC", email: "pic@example.test", active: true })) };
+    if (statement.includes("FROM dbo.users u WHERE u.id=@user")) return { recordset: [{ allowed: params.user !== options.invalidPic }] };
+    if (statement.includes("request_days>0 AND answer IS NULL")) return { recordset: [{ value: params.task === options.pending }] };
+    if (statement.includes("INSERT INTO dbo.schedule_tasks")) return { recordset: [{ id: 90, row_version: NEXT_VERSION }] };
+    if (statement.includes("UPDATE dbo.schedule_tasks SET parent_id=")) return { recordset: [{ row_version: NEXT_VERSION }] };
+    if (statement.includes("SELECT id,sort_order FROM dbo.schedule_tasks")) return { recordset: [] };
+    return base(statement, params);
+  };
+}
+
+test("lead engineer creates, edits, moves and deletes without schedule.plan", async (t) => {
+  for (const action of ["create", "PUT", "move", "DELETE"] as const) await t.test(action, async (sub) => {
+    const { app } = harness({ id: 30, role: "Engineer" }, { permissions: ["schedule.progress"], deniedPermissions: ["schedule.plan"] });
+    const rows = [...hierarchyRows(2), taskRaw({ id: 11, parent_id: 2 })];
+    installSqlMock(sub, memberPlanAnswers(rows, { lead: 30 }));
+    try {
+      const response = await app.inject({ method: action === "PUT" || action === "DELETE" ? action : "POST",
+        url: action === "create" ? `/api/v1/projects/${PROJECT_ID}/schedule/tasks` : `/api/v1/schedule/tasks/11${action === "move" ? "/move" : ""}`,
+        payload: { ...planEditPayload([]), parentId: 2, beforeId: null } });
+      assert.equal(response.statusCode, action === "create" ? 201 : 200, response.body);
+    } finally { await app.close(); }
+  });
+});
+
+test("member PIC creates at depth four through ancestry or beneath their own created row", async (t) => {
+  for (const owns of ["PIC", "creator"] as const) await t.test(owns, async (sub) => {
+    const { app } = harness({ id: 30, role: "Engineer" }, { permissions: ["schedule.progress"], deniedPermissions: ["schedule.plan"] });
+    const rows = hierarchyRows(4); if (owns === "creator") rows[3]!.created_by = 30;
+    const statements = installSqlMock(sub, memberPlanAnswers(rows, { pics: owns === "PIC" ? [{ task: 2, user: 30 }] : [] }));
+    try {
+      const response = await app.inject({ method: "POST", url: `/api/v1/projects/${PROJECT_ID}/schedule/tasks`, payload: { ...planEditPayload([]), parentId: 4 } });
+      assert.equal(response.statusCode, 201, response.body);
+      const inserted = statements.find(entry => entry.statement.includes("INSERT INTO dbo.schedule_tasks"))!;
+      assert.equal(inserted.params.actor, 30); assert.equal(inserted.params.origin, "Member");
+      assert.ok(statements.some(entry => entry.statement.includes("INSERT INTO dbo.schedule_task_pics") && entry.params.user === 30));
+      const calculated = resolveSchedule([...rows, taskRaw({ id: 90, parent_id: 4 })].map(row => ({ id: Number(row.id), parentId: row.parent_id == null ? null : Number(row.parent_id), sortOrder: 1, planStart: "2027-03-01", planDays: 5, startMode: "manual", predecessorId: null, lagDays: 0, actualStart: null, actualFinish: null, forecastFinish: null, percentComplete: 0, status: "Not Started" })), new Set());
+      assert.equal(calculated.byId.get(4)!.wbs, "1.1.1.1"); assert.equal(calculated.byId.get(90)!.wbs, "1.1.1.1.1");
+    } finally { await app.close(); }
+  });
+});
+
+test("members cannot create at the top, create phases, use someone else's parent, or bypass membership and progress", async (t) => {
+  const cases = [
+    { label: "top", parentId: null }, { label: "phase", parentId: null, kind: "phase" },
+    { label: "someone else's task", parentId: 3 }, { label: "heading", parentId: 1 },
+    { label: "not a member", parentId: 2, member: false }, { label: "no progress", parentId: 2, noProgress: true },
+  ];
+  for (const item of cases) await t.test(item.label, async (sub) => {
+    const { app } = harness({ id: 30, role: "Engineer" }, { permissions: item.noProgress ? [] : ["schedule.progress"] });
+    const statements = installSqlMock(sub, memberPlanAnswers([...hierarchyRows(2), taskRaw({ id: 3, parent_id: 1 })], { member: item.member ?? true, pics: [{ task: 2, user: 30 }] }));
+    try {
+      const response = await app.inject({ method: "POST", url: `/api/v1/projects/${PROJECT_ID}/schedule/tasks`, payload: { ...planEditPayload([]), parentId: item.parentId, kind: item.kind ?? "task" } });
+      assert.equal(response.statusCode, 403, response.body);
+      assert.equal(statements.some(entry => entry.statement.includes("INSERT INTO dbo.schedule_tasks")), false);
+    } finally { await app.close(); }
+  });
+});
+
+test("member edits and deletes only their own rows, without moving or changing protected fields", async (t) => {
+  for (const action of ["PUT", "DELETE", "move"] as const) for (const own of [true, false]) await t.test(`${action} own=${own}`, async (sub) => {
+    const { app } = harness({ id: 30, role: "Engineer" }, { permissions: ["schedule.progress"] });
+    const rows = [...hierarchyRows(2), taskRaw({ id: 11, parent_id: 2, created_by: own ? 30 : 20 })];
+    installSqlMock(sub, memberPlanAnswers(rows, { pics: [{ task: 11, user: 30 }] }));
+    try {
+      const response = await app.inject({ method: action === "move" ? "POST" : action, url: `/api/v1/schedule/tasks/11${action === "move" ? "/move" : ""}`, payload: { ...planEditPayload([30]), name: "Updated", parentId: 2, beforeId: null } });
+      assert.equal(response.statusCode, own && action !== "move" ? 200 : 403, response.body);
+    } finally { await app.close(); }
+  });
+  for (const patch of [{ parentId: 1 }, { sortOrder: 5 }, { visibility: "Customer" }, { isMilestone: true, planDays: 1 }, { startMode: "linked", predecessorId: 2 }, { picExternal: "Other" }, { planManDays: 1 }]) await t.test(JSON.stringify(patch), async (sub) => {
+    const { app } = harness({ id: 30, role: "Engineer" }, { permissions: ["schedule.progress"] });
+    installSqlMock(sub, memberPlanAnswers([...hierarchyRows(2), taskRaw({ id: 11, parent_id: 2, created_by: 30 })]));
+    try {
+      const response = await app.inject({ method: "PUT", url: "/api/v1/schedule/tasks/11", payload: { ...planEditPayload([30]), parentId: 2, ...patch } });
+      assert.equal(response.statusCode, 403, response.body);
+    } finally { await app.close(); }
+  });
+});
+
+test("member cannot delete another creator's descendant or assign a non-member", async (t) => {
+  for (const action of ["DELETE", "PUT", "POST"] as const) await t.test(action, async (sub) => {
+    const { app } = harness({ id: 30, role: "Engineer" }, { permissions: ["schedule.progress"] });
+    installSqlMock(sub, memberPlanAnswers([...hierarchyRows(2), taskRaw({ id: 11, parent_id: 2, created_by: 30 }), taskRaw({ id: 12, parent_id: 11 })], { invalidPic: 99, pics: [{ task: 2, user: 30 }] }));
+    try {
+      const response = await app.inject({ method: action, url: action === "POST" ? `/api/v1/projects/${PROJECT_ID}/schedule/tasks` : "/api/v1/schedule/tasks/11", payload: { ...planEditPayload([99]), parentId: 2 } });
+      assert.equal(response.statusCode, action === "DELETE" ? 403 : 422, response.body);
+    } finally { await app.close(); }
+  });
+});
+
+test("snapshot exposes lead plan rights and member row flags without widening baseline or day answers", async (t) => {
+  for (const [lead, planPermission] of [[true, false], [true, true], [false, false]]) await t.test(`lead=${lead}, plan=${planPermission}`, async (sub) => {
+    const { app } = harness({ id: 30, role: "Engineer" }, { permissions: planPermission ? ["schedule.progress", "schedule.plan"] : ["schedule.progress"], deniedPermissions: planPermission ? [] : ["schedule.plan"] });
+    installSqlMock(sub, memberPlanAnswers([...hierarchyRows(3), taskRaw({ id: 11, parent_id: 3, created_by: 30 }), taskRaw({ id: 12, parent_id: 1 })], { lead: lead ? 30 : 40, pics: [{ task: 2, user: 30 }] }));
+    try {
+      const response = await app.inject({ method: "GET", url: `/api/v1/projects/${PROJECT_ID}/schedule` });
+      assert.equal(response.statusCode, 200, response.body);
+      const snapshot = response.json(); assert.equal(snapshot.canPlan, lead); assert.equal(snapshot.canAnswerRequests, false); assert.equal(snapshot.canBaseline, false);
+      const rows = flatten(snapshot.tasks) as unknown as Array<{ id: number; canAddChild: boolean; canEditOwn: boolean }>;
+      assert.equal(rows.find(row => row.id === 3)!.canAddChild, true);
+      assert.equal(rows.find(row => row.id === 11)!.canEditOwn, true);
+      assert.equal(rows.find(row => row.id === 12)!.canAddChild, lead);
+      assert.equal(rows.find(row => row.id === 2)!.canEditOwn, false);
+      const baseline = await app.inject({ method: "POST", url: `/api/v1/projects/${PROJECT_ID}/schedule/baseline`, payload: { label: "Baseline", reason: "Test", scheduleVersion: SCHEDULE_VERSION.toString("base64") } });
+      assert.equal(baseline.statusCode, 403, baseline.body);
+    } finally { await app.close(); }
+  });
+});
 
 type Actor = { id: number; role: string; roles?: string[] };
 type Params = Record<string, unknown>;
@@ -67,7 +199,7 @@ function harness(actor: Actor, options: { managedAssignee?: number | null; permi
     query: async (statement: string, bind?: (request: Binder) => void) => {
       const params: Params = {}; const request: Binder = { input: (name, ...rest) => { params[name] = rest.length > 1 ? rest[1] : rest[0]; return request; } };
       bind?.(request);
-      if (statement.includes("user_effective_permissions")) return { recordset: [{ allowed: permissions.has(String(params.permission)) }] };
+      if (statement.includes("user_effective_permissions")) return { recordset: [{ allowed: permissions.has(String(params.permission)) && !options.deniedPermissions?.includes(String(params.permission)) }] };
       if (statement.includes("FROM dbo.resource_tasks WHERE schedule_task_id=@id")) {
         return { recordset: options.managedAssignee == null ? [] : [{ acknowledged_at: "2026-10-01", assignee_id: options.managedAssignee, state: "Approved" }] };
       }
@@ -319,7 +451,7 @@ const managedQuery = "SELECT schedule_task_id,state,acknowledged_at,assignee_id 
 function scheduleAnswers(pics: Array<{ task: number; user: number; active?: boolean }>, status = "Design", managed: ManagedRaw = readyManaged) {
   return (statement: string): Answer | undefined => {
     if (statement.includes("FROM dbo.projects p WHERE p.id=@project_id")) return { recordset: [{ allowed: true }] };
-    if (statement.includes("SELECT id,project_no,name,manager_id,status,target_delivery FROM dbo.projects")) return { recordset: [projectRaw(status)] };
+    if (statement.includes("SELECT id,project_no,name,manager_id,lead_engineer_id,status,target_delivery FROM dbo.projects")) return { recordset: [projectRaw(status)] };
     if (statement.includes("FROM dbo.schedule_tasks WHERE project_id=@project AND deleted_at IS NULL ORDER BY")) return { recordset: scheduleRows };
     if (statement.includes("SELECT pic.task_id,u.id")) return { recordset: pics.map(({ task, user, active = true }) => ({ task_id: task, id: user, name: `User ${user}`, email: `u${user}@example.test`, active })) };
     if (statement.includes(managedQuery)) return { recordset: [{ schedule_task_id: 5, ...managed }] };
@@ -1169,8 +1301,8 @@ test("delete schedule row refuses a predecessor reference from outside the remov
 
 test("delete schedule row enforces permission, owner, closed project and both versions", async (t) => {
   const cases = [
-    { label: "permission", actor: MANAGER_ID, deniedPermissions: ["schedule.plan"], code: "permission_denied", statusCode: 403 },
-    { label: "owner", actor: 99, code: "schedule_plan_owner_required", statusCode: 403 },
+    { label: "permission", actor: MANAGER_ID, deniedPermissions: ["schedule.plan"], code: "schedule_member_required", statusCode: 403 },
+    { label: "owner", actor: 99, code: "schedule_member_required", statusCode: 403 },
     { label: "closed", actor: MANAGER_ID, status: "Closed", code: "project_closed", statusCode: 409 },
     { label: "row version", actor: MANAGER_ID, payload: { rowVersion: NEXT_VERSION.toString("base64") }, code: "concurrency_conflict", statusCode: 409 },
     { label: "schedule version", actor: MANAGER_ID, payload: { scheduleVersion: NEXT_VERSION.toString("base64") }, code: "concurrency_conflict", statusCode: 409 },

@@ -220,6 +220,8 @@ export type ScheduleTask = {
   managedByResourcePlan?: boolean;
   /** Server verdict for the signed-in user: PIC, or the PM/Admin on a row Resource Plan does not manage. */
   canProgress?: boolean;
+  canAddChild?: boolean;
+  canEditOwn?: boolean;
   /** False for a Master Plan frame leaf, which the shared summary leaves out of late and blocked counts. */
   countsTowardHealth?: boolean;
   children: ScheduleTask[];
@@ -260,6 +262,8 @@ export type ProjectSchedule = {
   projectStatus: string;
   scheduleVersion: string | null;
   canPlan: boolean;
+  canBaseline?: boolean;
+  leadEngineerId?: number | null;
   canUpdateProgress: boolean;
   /** Whether the signed-in user may answer day requests; an older API omits it and canPlan decides. */
   canAnswerRequests?: boolean;
@@ -1857,6 +1861,19 @@ async function ensureScheduleMembers(projectId: number, managerId: number, userI
   const members = new Set((await listProjectMembers(projectId)).map((member) => member.userId));
   for (const userId of userIds) if (userId !== managerId && !members.has(userId)) await addProjectMember(projectId, { userId, roleOnProject: "Member" });
 }
+/** Members may pick only people already on this project; planners can still add people. */
+function usePlanTeam(bootstrap: BootstrapData, schedule: ProjectSchedule | null) {
+  const [members, setMembers] = useState<{ projectId: number; ids: number[] } | null>(null);
+  const projectId = schedule?.projectId, canPlan = schedule?.canPlan;
+  useEffect(() => {
+    if (!projectId || canPlan) return;
+    let cancelled = false;
+    void listProjectMembers(projectId).then(rows => { if (!cancelled) setMembers({ projectId, ids: rows.map(row => row.userId) }); }).catch(() => { if (!cancelled) setMembers({ projectId, ids: [] }); });
+    return () => { cancelled = true; };
+  }, [projectId, canPlan]);
+  const ids = new Set([bootstrap.user.id, schedule?.managerId, schedule?.leadEngineerId, ...(members?.projectId === projectId ? members?.ids ?? [] : [])]);
+  return canPlan ? bootstrap : { ...bootstrap, team: bootstrap.team.filter(person => ids.has(person.id)) };
+}
 function PicPicker({ options, value, onChange }: { options: { id: number; label: string; detail?: string }[]; value: number[]; onChange: (value: number[]) => void }) {
   const t = useUiText();
   return <div className="field span-2" data-guide="plan.pic"><span>{t("Schedule.pics")}</span>
@@ -2005,8 +2022,8 @@ function draftLevel(tasks: ScheduleTask[], rows: ScheduleTask[], draft: PlanDraf
  * under a heading needs (a function has its task's unless another is picked), and its dates. Enter saves and opens the
  * next box just below; Esc closes. A main heading's dates are the customer's and may be left for later.
  */
-function PlanRowDraftEditor({ bootstrap, draft, parent, planPeople, busy, canOut, canIn, onChange, onLevel, onSave, onClose }: {
-  bootstrap: BootstrapData; draft: PlanDraft; parent: ScheduleTask | null; planPeople: Set<number>; busy: boolean; canOut: boolean; canIn: boolean;
+function PlanRowDraftEditor({ bootstrap, draft, parent, planPeople, ownOnly, busy, canOut, canIn, onChange, onLevel, onSave, onClose }: {
+  bootstrap: BootstrapData; draft: PlanDraft; parent: ScheduleTask | null; planPeople: Set<number>; ownOnly: boolean; busy: boolean; canOut: boolean; canIn: boolean;
   onChange: (patch: Partial<PlanDraft>) => void; onLevel: (step: -1 | 1) => void; onSave: () => void; onClose: () => void;
 }) {
   const t = useUiText();
@@ -2029,7 +2046,7 @@ function PlanRowDraftEditor({ bootstrap, draft, parent, planPeople, busy, canOut
       value={draft.name} readOnly={busy} onChange={(event) => onChange({ name: event.target.value })} onKeyDown={escape} />
     {kind === "heading" ? null : <select className="plan-draft-member" data-guide="plan.quickMember" aria-label={t("Schedule.pics")} value={draft.memberId ?? ""} disabled={busy}
       onChange={(event) => onChange({ memberId: event.target.value ? Number(event.target.value) : null })} onKeyDown={escape}>
-      <option value="">{kind === "task" ? `${t("CRM.selectMember")} *` : `${t("CRM.sameAsTask")}${inherited ? ` · ${inherited}` : ""}`}</option>
+      <option value="">{ownOnly ? t("Plan.creatorPicDefault") : kind === "task" ? `${t("CRM.selectMember")} *` : `${t("CRM.sameAsTask")}${inherited ? ` · ${inherited}` : ""}`}</option>
       {onPlan.length ? <optgroup label={t("Plan.peopleOnPlan")}>{onPlan.map(person)}</optgroup> : null}
       <optgroup label={t("Plan.everyoneElse")}>{others.map(person)}</optgroup>
     </select>}
@@ -2042,7 +2059,7 @@ function PlanRowDraftEditor({ bootstrap, draft, parent, planPeople, busy, canOut
     </span>
     <button type="submit" className="btn primary sm" data-guide="plan.save" disabled={busy || !draft.name.trim()}><Icon name="check" />{t(busy ? "Saving…" : "Save")}</button>
     <button type="button" className="icon-btn" aria-label={t("Close")} title={t("Close")} onClick={onClose}><Icon name="x" /></button>
-    <small className="plan-draft-hint">{t("Plan.draftHint")}</small>
+    <small className="plan-draft-hint">{t(ownOnly ? "Plan.memberDraftHint" : "Plan.draftHint")}</small>
     {draft.error ? <small className="plan-draft-error" role="alert">{draft.error}</small> : null}
   </form>;
 }
@@ -2062,6 +2079,8 @@ function EditScheduleTaskModal({ bootstrap, schedule, task, onClose, onSaved, on
   onConflict: () => Promise<void>;
 }) {
   const t = useUiText();
+  const ownOnly = !schedule.canPlan;
+  const planTeam = usePlanTeam(bootstrap, schedule);
   const isPhase = task.kind === "phase";
   const datesLocked = isPhase || task.children.length > 0;
   const [name, setName] = useState(task.name);
@@ -2079,7 +2098,7 @@ function EditScheduleTaskModal({ bootstrap, schedule, task, onClose, onSaved, on
   const parentIsHeading = task.parentId !== null && flattenTasks(schedule.tasks).find((row) => row.id === task.parentId)?.kind === "phase";
   const keepsMember = task.kind === "task" && parentIsHeading && task.pics.length > 0 && !picUserIds.length;
   const removing = flattenTasks([task]);
-  const deleteReason = removing.some((row) => row.status !== "Not Started" || Number(row.percentComplete) > 0 || row.actualStart || row.actualFinish || Number(row.actualManDays) > 0) ? "Plan.deleteProgress"
+  const deleteReason = ownOnly && removing.some(row => !row.canEditOwn) ? "Plan.deleteOthers" : removing.some((row) => row.status !== "Not Started" || Number(row.percentComplete) > 0 || row.actualStart || row.actualFinish || Number(row.actualManDays) > 0) ? "Plan.deleteProgress"
       : removing.some((row) => row.kind === "detail") ? "Plan.deleteDetail" : "";
   const remove = async () => {
     if (busy || deleteReason) return;
@@ -2101,12 +2120,12 @@ function EditScheduleTaskModal({ bootstrap, schedule, task, onClose, onSaved, on
   const submit = async () => {
     setBusy(true); setError(""); setFailedAction("save");
     try {
-      if (!isPhase) await ensureScheduleMembers(schedule.projectId, schedule.managerId, picUserIds);
+      if (!isPhase && !ownOnly) await ensureScheduleMembers(schedule.projectId, schedule.managerId, picUserIds);
       await apiRequest(`/api/v1/schedule/tasks/${task.id}`, { method: "PUT", body: JSON.stringify({
         scheduleVersion: schedule.scheduleVersion, rowVersion: task.rowVersion,
         parentId: task.parentId, sortOrder: task.sortOrder, kind: task.kind, name: name.trim(),
         isMilestone: isPhase ? false : milestone, visibility,
-        ...(isPhase ? { ...lockedStart, planStart: customer.start || null } : datesLocked ? lockedStart : startBody(start, task.storedPlanStart ?? null)),
+        ...(isPhase ? { ...lockedStart, planStart: customer.start || null } : datesLocked ? lockedStart : ownOnly ? { ...lockedStart, planStart: task.startMode === "manual" ? start.planStart : task.storedPlanStart ?? null } : startBody(start, task.storedPlanStart ?? null)),
         planDays: isPhase ? (customer.start && customer.finish ? periodDays(customer.start, customer.finish) : 1) : milestone && !datesLocked ? 1 : datesLocked ? task.planDays : planDays,
         picUserIds: isPhase ? [] : picUserIds, picExternal: isPhase ? "" : picExternal.trim(), planManDays: isPhase ? 0 : planManDays,
       }) });
@@ -2130,16 +2149,16 @@ function EditScheduleTaskModal({ bootstrap, schedule, task, onClose, onSaved, on
     {error ? <LoadError message={t(error)} retry={() => { void (failedAction === "delete" ? remove() : submit()); }} /> : null}
     <div className="form-grid two">
       <label className="field span-2"><span><LocalizedText text={"Name *"} /></span><input maxLength={500} value={name} onChange={(event) => setName(event.target.value)} /></label>
-      <label className="field"><span><LocalizedText text={"Visibility *"} /></span><select value={visibility} onChange={(event) => setVisibility(event.target.value)}><option value={"Internal"}><LocalizedText text={"Internal"} /></option><option value={"Customer"}><LocalizedText text={"Customer"} /></option></select></label>
+      {!ownOnly ? <label className="field"><span><LocalizedText text={"Visibility *"} /></span><select value={visibility} onChange={(event) => setVisibility(event.target.value)}><option value={"Internal"}><LocalizedText text={"Internal"} /></option><option value={"Customer"}><LocalizedText text={"Customer"} /></option></select></label> : null}
       {isPhase ? <CustomerPeriodFields value={customer} onChange={setCustomer} /> : <>
-        <label className="field"><span><LocalizedText text={"Plan man-days"} /></span><input type="number" min="0" max="1000000" step="0.25" value={planManDays} onChange={(event) => setPlanManDays(Number(event.target.value))} /></label>
+        {!ownOnly ? <label className="field"><span><LocalizedText text={"Plan man-days"} /></span><input type="number" min="0" max="1000000" step="0.25" value={planManDays} onChange={(event) => setPlanManDays(Number(event.target.value))} /></label> : null}
         {datesLocked ? <label className="field"><span><LocalizedText text={"Plan start *"} /></span><input type="date" value={task.planStart ?? ""} disabled /></label>
-          : <PlanStartFields schedule={schedule} taskId={task.id} parentId={task.parentId} value={start} onChange={setStart} />}
+          : ownOnly ? <label className="field"><span><LocalizedText text={"Plan start *"} /></span><input type="date" value={start.planStart} disabled={task.startMode !== "manual"} onChange={event => setStart(value => ({ ...value, planStart: event.target.value }))} /></label> : <PlanStartFields schedule={schedule} taskId={task.id} parentId={task.parentId} value={start} onChange={setStart} />}
         <label className="field"><span><LocalizedText text={"Plan days *"} /></span><input type="number" min="1" max="3650" value={datesLocked ? task.planDays : milestone ? 1 : planDays} disabled={datesLocked || milestone} onChange={(event) => setPlanDays(Number(event.target.value))} /></label>
-        {datesLocked ? <p className="muted span-2">{t("Schedule.datesDerived")}</p> : <label className="checkbox-row span-2"><input type="checkbox" checked={milestone} onChange={(event) => setMilestone(event.target.checked)} /><LocalizedText text={"Milestone (1 day)"} /></label>}
-        <PicFieldsWithLoad bootstrap={bootstrap} span={datesLocked ? { from: task.planStart, to: task.planFinish } : draftSpan(schedule, start, planDays, milestone)} taskId={task.id} value={picUserIds} onChange={setPicUserIds} manDays={planManDays} />
+        {datesLocked ? <p className="muted span-2">{t("Schedule.datesDerived")}</p> : !ownOnly ? <label className="checkbox-row span-2"><input type="checkbox" checked={milestone} onChange={(event) => setMilestone(event.target.checked)} /><LocalizedText text={"Milestone (1 day)"} /></label> : null}
+        <PicFieldsWithLoad bootstrap={planTeam} span={datesLocked ? { from: task.planStart, to: task.planFinish } : draftSpan(schedule, start, planDays, milestone)} taskId={task.id} value={picUserIds} onChange={setPicUserIds} manDays={planManDays} />
         {keepsMember ? <p className="muted span-2" role="status">{t("Plan.memberRequired")}</p> : null}
-        <label className="field span-2"><span><LocalizedText text={"External PIC"} /></span><input maxLength={300} value={picExternal} onChange={(event) => setPicExternal(event.target.value)} /></label>
+        {!ownOnly ? <label className="field span-2"><span><LocalizedText text={"External PIC"} /></span><input maxLength={300} value={picExternal} onChange={(event) => setPicExternal(event.target.value)} /></label> : null}
       </>}
     </div>
   </Modal>;
@@ -2518,12 +2537,13 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
     setSelectedId(nextId);
     try { if (nextId) window.localStorage.setItem(storageKey, String(nextId)); } catch { /* Remembering the project is a convenience. */ }
   };
+  const planTeam = usePlanTeam(bootstrap, schedule?.projectId === selectedId ? schedule : null);
   if (!allowed) return <><PageHeader eyebrow="PROJECT CONTROL" title={uiText("Plan.title")} subtitle="Plan.subtitle" /><PermissionNotice permission="schedule.read" message="ผู้ดูแลระบบต้องเพิ่มสิทธิ์ Schedule Read ให้บทบาทนี้" /></>;
   const activeSchedule = schedule?.projectId === selectedId ? schedule : null;
   const selectedProject = projects.find((project) => project.id === selectedId) ?? null;
   const rows = activeSchedule ? flattenTasks(activeSchedule.tasks) : [];
   const taskById = new Map(rows.map((task) => [task.id, task] as const));
-  const canPlan = Boolean(activeSchedule?.canPlan && bootstrap.permissions.includes("schedule.plan"));
+  const canPlan = Boolean(activeSchedule?.canPlan);
   const canAnswerRequests = activeSchedule ? canAnswerDayRequests(activeSchedule, bootstrap.permissions.includes("schedule.plan")) : false;
   const pendingDayRequests = activeSchedule?.recentUpdates.filter((update) => update.field === "request" && update.requestDays > 0 && !update.answer) ?? [];
   const pendingTaskIds = new Set(pendingDayRequests.map((request) => request.taskId));
@@ -2550,9 +2570,10 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
     .map((task) => ({ from: `task:${task.predecessorId}`, to: `task:${task.id}` }));
   /** Opens the boxes for a new row under `parentId` (none: a main heading), before `beforeId` (none: last), with that row open. */
   const openDraft = (parentId: number | null, beforeId: number | null) => {
+    if (!canPlan && (parentId === null || !taskById.get(parentId)?.canAddChild)) return;
     if (parentId !== null) setCollapsed((current) => { if (!current.has(parentId)) return current; const next = new Set(current); next.delete(parentId); return next; });
     setFilter(null);
-    setDraft({ parentId, beforeId, name: "", memberId: null, ...draftDates(parentId === null ? null : taskById.get(parentId) ?? null, today), error: "" });
+    setDraft({ parentId, beforeId, name: "", memberId: canPlan ? null : bootstrap.user.id, ...draftDates(parentId === null ? null : taskById.get(parentId) ?? null, today), error: "" });
   };
   /**
    * The + on a row, offered while nothing else is saving and no quick filter hides rows: on a heading it adds a task under
@@ -2560,11 +2581,11 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
    * own detail row, nor under a row waiting on a day request.
    */
   const plusFor = (task: ScheduleTask): GanttRowSpec["insert"] => {
-    if (!canPlan || filter || movePending || saving || draftBusy || task.kind === "detail" || !activeSchedule) return undefined;
+    if ((!canPlan && !task.canAddChild) || filter || movePending || saving || draftBusy || task.kind === "detail" || !activeSchedule) return undefined;
     if (task.kind === "phase" || (canTakeSubTasks(task, rows) && !pendingTaskIds.has(task.id))) {
       return { label: uiText(task.kind === "phase" ? "Plan.addSubRow" : "Plan.addFunction"), onInsert: () => openDraft(task.id, null) };
     }
-    if (task.parentId === null || pendingTaskIds.has(task.parentId)) return undefined;
+    if (task.parentId === null || (!canPlan && !taskById.get(task.parentId)?.canAddChild) || pendingTaskIds.has(task.parentId)) return undefined;
     const siblings = taskById.get(task.parentId)?.children ?? [];
     return { label: uiText("Plan.insertRow"), onInsert: () => openDraft(task.parentId, siblings[siblings.indexOf(task) + 1]?.id ?? null) };
   };
@@ -2581,7 +2602,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
     const memberIds = current.memberId === null ? [] : [current.memberId];
     setDraftBusy(true); setError("");
     try {
-      if (parent) await ensureScheduleMembers(activeSchedule.projectId, activeSchedule.managerId, memberIds);
+      if (parent && canPlan) await ensureScheduleMembers(activeSchedule.projectId, activeSchedule.managerId, memberIds);
       await apiRequest(`/api/v1/projects/${activeSchedule.projectId}/schedule/tasks`, { method: "POST", body: JSON.stringify({
         scheduleVersion: activeSchedule.scheduleVersion, parentId: current.parentId, beforeId: current.beforeId, sortOrder: 0, kind: parent ? "task" : "phase", name,
         isMilestone: false, visibility: parent ? "Internal" : "Customer", planStart: dated ? current.start : null, planDays: dated ? periodDays(current.start, current.finish) : 1,
@@ -2603,9 +2624,9 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
    * refers to, and says so.
    */
   const binFor = (task: ScheduleTask): GanttRowSpec["remove"] => {
-    if (!canPlan || filter || movePending || saving || draftBusy) return undefined;
+    if ((!canPlan && !task.canEditOwn) || filter || movePending || saving || draftBusy) return undefined;
     const removing = flattenTasks([task]);
-    if (removing.some((row) => row.kind === "detail" || row.managedByResourcePlan || pendingTaskIds.has(row.id) || row.status !== "Not Started"
+    if (removing.some((row) => (!canPlan && !row.canEditOwn) || row.kind === "detail" || row.managedByResourcePlan || pendingTaskIds.has(row.id) || row.status !== "Not Started"
       || Number(row.percentComplete) > 0 || row.actualStart || row.actualFinish || Number(row.actualManDays) > 0)) return undefined;
     return { label: uiText("Plan.deleteRow"), onRemove: () => { void deleteRow(task, removing.map((row) => row.id)); } };
   };
@@ -2625,6 +2646,20 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
       if (isConcurrencyConflict(failure)) notify(`${activeSchedule.projectNo} · ${task.wbs} ${uiText("Plan.changedReloaded")}`);
       else { setError(toError(failure)); notify(`${activeSchedule.projectNo} · ${task.wbs} ${uiText("Plan.saveFailed")}`); }
     } finally { await loadSchedule(); setSaving(false); }
+  };
+  // The draft is drawn where its row will land: before the row it goes before, else after the rows under its parent.
+  const draftParent = draft?.parentId == null ? null : taskById.get(draft.parentId) ?? null;
+  const draftAt = !draft || (!canPlan && !draftParent?.canAddChild) || level === "member" || (draft.parentId !== null && !draftParent) ? -1 : draft.beforeId !== null ? visible.findIndex((task) => task.id === draft.beforeId)
+    : !draftParent ? visible.length : (() => {
+      const at = visible.indexOf(draftParent);
+      let end = at + 1;
+      while (at >= 0 && end < visible.length && visible[end]!.depth > draftParent.depth) end++;
+      return at < 0 ? -1 : end;
+    })();
+  const levelOf = (step: -1 | 1) => {
+    if (!draft || !activeSchedule) return null;
+    const place = draftLevel(activeSchedule.tasks, rows, draft, step, pendingTaskIds);
+    return place && (canPlan || (place.parentId !== null && taskById.get(place.parentId)?.canAddChild)) ? place : null;
   };
   const ganttRows: GanttRowSpec[] = visible.map((task) => {
     const summaryRow = task.kind === "phase" || task.children.length > 0, insert = plusFor(task), bin = binFor(task);
@@ -2660,20 +2695,10 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
       title: `${task.wbs} ${task.name} · ${task.planStart ?? "—"} → ${task.planFinish ?? "—"} · ${Math.round(Number(task.percentComplete))}%`,
     };
   });
-  // The draft is drawn where its row will land: before the row it goes before, else after the rows under its parent.
-  const draftParent = draft?.parentId == null ? null : taskById.get(draft.parentId) ?? null;
-  const draftAt = !draft || !canPlan || level === "member" || (draft.parentId !== null && !draftParent) ? -1 : draft.beforeId !== null ? visible.findIndex((task) => task.id === draft.beforeId)
-    : !draftParent ? visible.length : (() => {
-      const at = visible.indexOf(draftParent);
-      let end = at + 1;
-      while (at >= 0 && end < visible.length && visible[end]!.depth > draftParent.depth) end++;
-      return at < 0 ? -1 : end;
-    })();
   if (draft && draftAt >= 0 && activeSchedule) {
-    const levelOf = (step: -1 | 1) => draftLevel(activeSchedule.tasks, rows, draft, step, pendingTaskIds);
     ganttRows.splice(draftAt, 0, {
       key: "draft", depth: draftParent ? draftParent.depth + 1 : 0, kind: draftParent ? "task" : "phase", label: null, start: null, finish: null, tone: "blue", title: "",
-      editor: <PlanRowDraftEditor bootstrap={bootstrap} draft={draft} parent={draftParent} busy={draftBusy}
+      editor: <PlanRowDraftEditor bootstrap={planTeam} ownOnly={!canPlan} draft={draft} parent={draftParent} busy={draftBusy}
         planPeople={new Set(rows.flatMap((task) => task.pics.map((pic) => pic.id)))} canOut={!masterView && levelOf(-1) !== null} canIn={!masterView && levelOf(1) !== null}
         onChange={(patch) => setDraft((current) => current && { ...current, ...patch, error: "" })}
         onLevel={(step) => {
@@ -2828,7 +2853,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
             actualStart: task.actualStart, actualFinish: task.actualFinish, forecastFinish: task.forecastFinish, remark: task.remark })),
         }), scheduleWorkbookName(activeSchedule.projectNo, exportedOn));
       }}><Icon name="download" />{uiText("Schedule.exportExcel")}</button> : null}
-      {canPlan ? <button className="btn default" type="button" disabled={!rows.length} onClick={() => setBaselineOpen(true)}><Icon name="gitBranch" /><LocalizedText text={"Create baseline"} /></button> : null}
+      {activeSchedule?.canBaseline ? <button className="btn default" type="button" disabled={!rows.length} onClick={() => setBaselineOpen(true)}><Icon name="gitBranch" /><LocalizedText text={"Create baseline"} /></button> : null}
       {canPlan && activeSchedule ? <button className="btn primary" type="button" data-guide="plan.add" disabled={draftBusy} onClick={() => openDraft(null, null)}><Icon name="plus" />{uiText("Plan.addHeading")}</button> : null}
     </Toolbar>
     {error ? <LoadError message={error} retry={() => { void (selectedId ? loadSchedule() : loadProjects()); }} /> : null}
@@ -2972,7 +2997,7 @@ function PlanTaskDrawer({ task, schedule: activeSchedule, bootstrap, canPlan, ca
     </section> : null}
     <div className="row-actions plan-drawer-actions">
       {leaf && canProgress ? <button className="btn sm default" type="button" disabled={saving} onClick={onDetails}><Icon name="edit" /><LocalizedText text={"Update details"} /></button> : null}
-      {canPlan && activeSchedule.projectStatus !== "Closed" && !managed ? <button className="btn sm ghost" type="button" disabled={saving} aria-label={`${uiText("Schedule.editRow")} ${task.wbs}`} onClick={onEditPlan}><Icon name="settings" />{uiText("Schedule.edit")}</button> : null}
+      {(canPlan || task.canEditOwn) && activeSchedule.projectStatus !== "Closed" && !managed ? <button className="btn sm ghost" type="button" disabled={saving} aria-label={`${uiText("Schedule.editRow")} ${task.wbs}`} onClick={onEditPlan}><Icon name="settings" />{uiText("Schedule.edit")}</button> : null}
       {canImportDrawing ? <button className="btn sm default" type="button" disabled={saving} onClick={onImportDrawing}><Icon name="upload" /><LocalizedText text={"Import Drawing"} /></button> : null}
       <CopyLinkButton notify={notify} />
     </div>

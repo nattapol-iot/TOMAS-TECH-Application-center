@@ -884,6 +884,24 @@ const PROJECT_ERP_NUMBER: Guide = {
   ],
 };
 
+const PROJECT_DELETE: Guide = {
+  id: "project-delete", area: "project", minutes: 2, permissions: ["project.read"], views: ["projects"], browse: true,
+  title: { th: "ลบโครงการ", en: "Delete a project", jp: "プロジェクトを削除" },
+  summary: { th: "ตรวจงานที่บันทึกไว้ก่อนลบ และยืนยันเลขโครงการเมื่อ Management หรือ Admin ต้องการซ่อนโครงการที่มีงาน", en: "Review recorded work before deletion; Management or Admin confirm the number to hide a project with work.", jp: "削除前に作業記録を確認します。ManagementまたはAdminは番号を確認して作業のある案件を非表示にできます。" },
+  steps: [
+    { target: "project.rowMenu", action: "next", view: "projects",
+      title: { th: "เปิดเมนูลบโครงการ", en: "Open Delete project", jp: "プロジェクト削除を開く" },
+      body: { th: "เปิด ⋯ แล้วเลือกลบโครงการ Management และ Admin ลบได้ทุกโครงการ รวมถึงโครงการที่มีงาน", en: "Open ⋯ and choose Delete project. Management and Admin may delete any project, including projects with work.", jp: "⋯ からプロジェクト削除を選びます。ManagementとAdminは作業のある案件を含め、すべての案件を削除できます。" } },
+    { target: "project.deleteNumber", action: "next", view: "projects",
+      title: { th: "ตรวจงานและพิมพ์เลขโครงการ", en: "Review work and type the number", jp: "作業を確認して番号を入力" },
+      body: { th: "เมื่อมีงาน ให้อ่านรายการและคำเตือน แล้วพิมพ์เลขโครงการให้ตรงทุกตัว โครงการและงานจะถูกซ่อน แต่ข้อมูลและไฟล์ยังอยู่ให้ผู้ดูแลฐานข้อมูลกู้คืน", en: "When work exists, review the blockers and warning, then type the exact project number. The project and its work will be hidden; records and files remain available for a database administrator to restore.", jp: "作業がある場合は一覧と警告を確認し、正確な案件番号を入力します。案件と作業は非表示になりますが、記録とファイルは管理者が復元できます。" },
+      missing: { th: "ช่องนี้แสดงเฉพาะ Management หรือ Admin เมื่อโครงการมีงาน", en: "This field appears only for Management or Admin when the project has work.", jp: "作業がある案件でManagementまたはAdminにのみ表示されます。" } },
+    { target: "project.deleteConfirm", action: "next", view: "projects",
+      title: { th: "ตรวจสอบก่อนยืนยันลบ", en: "Review before confirming deletion", jp: "削除の確定前に確認" },
+      body: { th: "ยืนยันลบแม้มีงานจะซ่อนข้อมูล โครงการที่ไม่มีงานจะถูกลบถาวร หากเพียงฝึกใช้งานให้กดยกเลิก", en: "Delete anyway hides recorded work. A project without work is permanently deleted. Press Cancel if only practising.", jp: "「作業記録があっても削除」はデータを非表示にします。作業のない案件は完全削除されます。練習の場合はキャンセルしてください。" } },
+  ],
+};
+
 const PROJECT_PLAN: Guide = {
   id: "project-plan",
   area: "project",
@@ -894,7 +912,7 @@ const PROJECT_PLAN: Guide = {
     jp: "計画をマスタープラン（顧客の日程の見出し）またはチームプラン（全行）で表示し、+ を押して計画の中で直接行を入力し、行をドラッグして移動や階層の変更を行い、ガントのバーをドラッグして日程を動かします。",
   },
   minutes: 5,
-  permissions: ["schedule.read", "schedule.plan"],
+  permissions: ["schedule.read"],
   views: ["projects"],
   steps: [
     menu("projects",
@@ -954,11 +972,11 @@ const PROJECT_PLAN: Guide = {
       target: "plan.insert", action: "next", view: "projects",
       title: { th: "เพิ่มงานในแถวด้วย +", en: "Add rows in place with +", jp: "+ でその場に行を追加" },
       body: {
-        th: "กด + ที่หัวข้อหลักเพื่อเพิ่มงานใต้หัวข้อ กด + ที่งานเพื่อเพิ่มฟังก์ชันใต้งาน ช่องพิมพ์ขึ้นในแผนตรงที่แถวใหม่จะไปอยู่ ไม่มีหน้าต่างเด้งขึ้นมา บันทึกความคืบหน้าที่แถวล่างสุด เปอร์เซ็นต์ วันที่ และสถานะจะรวมขึ้นทุกระดับ",
-        en: "Press + on a main heading to add a task under it, or on a task to add a function under it. The boxes open in the plan where the new row will sit, with no window to fill in. Enter progress on the lowest rows; percentages, dates and status roll up through every level.",
-        jp: "大見出しの + でその下にタスクを、タスクの + でその下に機能を追加します。新しい行が入る位置に入力欄が開き、別ウィンドウは出ません。進捗は最下層の行に入力し、進捗率・日程・状態はすべての階層に集計されます。",
+        th: "วิศวกรที่เป็นสมาชิกและมีสิทธิ์อัปเดตงานเพิ่มงานย่อยใต้งานที่เป็น PIC งานที่สร้างเอง และแถวลูกได้ แก้หรือลบได้เฉพาะแถวที่สร้างเอง Lead Engineer วางแผนได้เหมือน PM แต่ไม่มีสิทธิ์ baseline หรือตอบคำขอเพิ่มวันเพิ่มขึ้น กด + ที่หัวข้อหลักเพื่อเพิ่มงานใต้หัวข้อ กด + ที่งานเพื่อเพิ่มฟังก์ชันใต้งาน ช่องพิมพ์ขึ้นในแผนตรงที่แถวใหม่จะไปอยู่ ไม่มีหน้าต่างเด้งขึ้นมา บันทึกความคืบหน้าที่แถวล่างสุด เปอร์เซ็นต์ วันที่ และสถานะจะรวมขึ้นทุกระดับ",
+        en: "Engineers with project membership and progress permission can add sub tasks under their PIC tasks, their own created tasks and descendants, and edit or delete only rows they created. Lead Engineers can plan like the PM; baseline and day-request rights stay unchanged. Press + on a main heading to add a task under it, or on a task to add a function under it. The boxes open in the plan where the new row will sit, with no window to fill in. Enter progress on the lowest rows; percentages, dates and status roll up through every level.",
+        jp: "プロジェクトのメンバーで進捗権限を持つエンジニアは、担当タスク・自作タスクとその配下にサブタスクを追加し、自作行のみ編集・削除できます。リードエンジニアはPMと同様に計画できますが、ベースライン・日数依頼の権限は変わりません。大見出しの + でその下にタスクを、タスクの + でその下に機能を追加します。新しい行が入る位置に入力欄が開き、別ウィンドウは出ません。進捗は最下層の行に入力し、進捗率・日程・状態はすべての階層に集計されます。",
       },
-      missing: { th: "ปุ่ม + ขึ้นสำหรับผู้วางแผนของโปรเจกต์นี้เมื่อแผนมีแถวแล้ว และไม่ได้กรองแถวอยู่ กด 'ถัดไป'", en: "The + shows for this project's planners once the plan has rows and no quick filter is on. Press Next.", jp: "+ はこの案件の計画担当者に、計画に行があり絞り込みをしていないときに表示されます。「次へ」を押します。" },
+      missing: { th: "ปุ่ม + ขึ้นสำหรับผู้วางแผนหรือสมาชิกบนงานที่มีสิทธิ์เพิ่มงานย่อย เมื่อแผนมีแถวและไม่ได้กรองแถวอยู่ กด 'ถัดไป'", en: "The + shows for planners or members on tasks where they may add sub tasks, once the plan has rows and no quick filter is on. Press Next.", jp: "+ は計画担当者、またはサブタスクを追加できるメンバーに、行があり絞り込みをしていないときに表示されます。「次へ」を押します。" },
     },
     {
       target: "plan.remove", action: "next", view: "projects",
@@ -2156,6 +2174,7 @@ export const GUIDES: readonly Guide[] = [
   SUPPLIER_QUOTATION,
   PRICE_LIBRARY,
   PROJECT_CREATE,
+  PROJECT_DELETE,
   PROJECT_PLAN,
   PROJECT_MASTER_PLAN,
   PROJECT_ERP_NUMBER,

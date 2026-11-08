@@ -2,7 +2,7 @@
 
 [Module](../modules/projects.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `71fc052d`; generated, do not edit. [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `a014c887`; generated, do not edit. [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
@@ -12,22 +12,22 @@ Evidence: source snapshot `71fc052d`; generated, do not edit. [backend-node/src/
 | GET | `/api/v1/projects/handover/:inquiryId` | 85–108 |
 | GET | `/api/v1/projects/contact-options` | 110–120 |
 | GET | `/api/v1/projects` | 122–149 |
-| GET | `/api/v1/projects/attention` | 184–202 |
-| GET | `/api/v1/projects/overview` | 206–256 |
-| POST | `/api/v1/projects` | 258–428 |
-| GET | `/api/v1/projects/:id/members` | 430–455 |
-| POST | `/api/v1/projects/:id/members` | 457–480 |
-| DELETE | `/api/v1/projects/:id/members/:userId` | 482–503 |
-| GET | `/api/v1/projects/:id/deletion` | 523–530 |
-| DELETE | `/api/v1/projects/:id` | 532–555 |
-| PUT | `/api/v1/projects/:id` | 557–693 |
+| GET | `/api/v1/projects/attention` | 187–205 |
+| GET | `/api/v1/projects/overview` | 209–259 |
+| POST | `/api/v1/projects` | 261–431 |
+| GET | `/api/v1/projects/:id/members` | 433–458 |
+| POST | `/api/v1/projects/:id/members` | 460–483 |
+| DELETE | `/api/v1/projects/:id/members/:userId` | 485–506 |
+| GET | `/api/v1/projects/:id/deletion` | 524–532 |
+| DELETE | `/api/v1/projects/:id` | 534–569 |
+| PUT | `/api/v1/projects/:id` | 571–707 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
 | `shiftDate` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 42–47 |
-| `registerProjectRoutes` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 49–694 |
+| `registerProjectRoutes` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 49–708 |
 
 ## Direct local dependencies
 
@@ -56,7 +56,7 @@ Evidence: source snapshot `71fc052d`; generated, do not edit. [backend-node/src/
 
 ## SQL references (literal scan, not a complete schema or write-set)
 
-`dbo.crm_opportunities`, `dbo.customer_site_contacts`, `dbo.customer_sites`, `dbo.customers`, `dbo.delete_unstarted_project`, `dbo.estimates`, `dbo.inquiries`, `dbo.project_contacts`, `dbo.project_folders`, `dbo.project_members`, `dbo.project_payment_milestones`, `dbo.projects`, `dbo.roles`, `dbo.schedule_updates`, `dbo.user_effective_permissions`, `dbo.user_effective_roles`, `dbo.users`
+`dbo.crm_opportunities`, `dbo.customer_site_contacts`, `dbo.customer_sites`, `dbo.customers`, `dbo.delete_unstarted_project`, `dbo.estimates`, `dbo.inquiries`, `dbo.project_contacts`, `dbo.project_folders`, `dbo.project_members`, `dbo.project_payment_milestones`, `dbo.projects`, `dbo.roles`, `dbo.schedule_updates`, `dbo.soft_delete_project`, `dbo.user_effective_permissions`, `dbo.user_effective_roles`, `dbo.users`
 
 ## Change boundary
 

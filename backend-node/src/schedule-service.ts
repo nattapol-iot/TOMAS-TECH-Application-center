@@ -8,7 +8,7 @@ import { dateOnly } from "./http.js";
 import { resolveSchedule, type ResolvedScheduleTask, type ScheduleCalculationTask } from "./schedule-calculator.js";
 import type { CurrentUser } from "./types.js";
 
-export type ProjectRow = { id: number; projectNo: string; name: string; managerId: number; status: string; targetDelivery: string | null };
+export type ProjectRow = { id: number; projectNo: string; name: string; managerId: number; leadEngineerId?: number | null; status: string; targetDelivery: string | null };
 /** active: the PIC can still answer for the row (an active account on the project's team); a PIC who left or was taken off the team does not hold it. */
 export type PicRow = { id: number; name: string; email: string; active: boolean };
 export type TaskRow = {
@@ -127,15 +127,48 @@ export async function readTask(transaction: TransactionType, id: number): Promis
 }
 export async function readProject(transaction: TransactionType, projectId: number, lock = false): Promise<ProjectRow> {
   const request = new sql.Request(transaction); request.input("project", sql.BigInt, projectId);
-  const row = (await request.query<Record<string, unknown>>(`SELECT id,project_no,name,manager_id,status,target_delivery FROM dbo.projects${lock ? " WITH (UPDLOCK,HOLDLOCK)" : ""} WHERE id=@project AND deleted_at IS NULL;`)).recordset[0];
+  const row = (await request.query<Record<string, unknown>>(`SELECT id,project_no,name,manager_id,lead_engineer_id,status,target_delivery FROM dbo.projects${lock ? " WITH (UPDLOCK,HOLDLOCK)" : ""} WHERE id=@project AND deleted_at IS NULL;`)).recordset[0];
   if (!row) throw new ApiError(404, "project_not_found", "Project not found.");
-  return { id: Number(row.id), projectNo: String(row.project_no), name: String(row.name), managerId: Number(row.manager_id), status: String(row.status), targetDelivery: dateOnly((row.target_delivery ?? null) as Date | string | null) };
+  return { id: Number(row.id), projectNo: String(row.project_no), name: String(row.name), managerId: Number(row.manager_id), leadEngineerId: row.lead_engineer_id == null ? null : Number(row.lead_engineer_id), status: String(row.status), targetDelivery: dateOnly((row.target_delivery ?? null) as Date | string | null) };
 }
-export async function demandPlanOwner(transaction: TransactionType, projectId: number, actor: CurrentUser): Promise<ProjectRow> {
+export async function demandPlanOwner(transaction: TransactionType, projectId: number, actor: CurrentUser, allowLead = true): Promise<ProjectRow> {
   const project = await readProject(transaction, projectId, true);
   if (project.status === "Closed") throw new ApiError(409, "project_closed", "A closed project's schedule cannot be changed.");
-  if (project.managerId !== actor.id && !hasRole(actor, "Engineering Manager", "Admin")) throw new ApiError(403, "schedule_plan_owner_required", "Only this project's manager, an Engineering Manager, or an Admin can change its plan.");
+  if (project.managerId !== actor.id && !(allowLead && project.leadEngineerId === actor.id) && !hasRole(actor, "Engineering Manager", "Admin")) throw new ApiError(403, "schedule_plan_owner_required", "Only this project's plan owners can change its plan.");
   return project;
+}
+/** A task is theirs when they created it or are a PIC of it or any task ancestor. Cycles fail closed. */
+export function isOwnPlanTask(taskId: number, actorId: number, tasks: ReadonlyMap<number, Pick<TaskRow, "id" | "parentId" | "kind" | "createdBy">>, pics: ReadonlyMap<number, readonly Pick<PicRow, "id">[]>): boolean {
+  const seen = new Set<number>(); let id: number | null = taskId;
+  while (id !== null) {
+    if (seen.has(id)) return false;
+    seen.add(id); const task = tasks.get(id);
+    if (!task || task.kind !== "task") return false;
+    if (task.createdBy === actorId || pics.get(id)?.some((pic) => pic.id === actorId)) return true;
+    id = task.parentId;
+  }
+  return false;
+}
+export async function demandRowPlanOwner(transaction: TransactionType, database: Database, projectId: number, actor: CurrentUser): Promise<ProjectRow> {
+  const project = await readProject(transaction, projectId, true);
+  if (project.leadEngineerId !== actor.id && !await permissionFor(database, actor.id, "schedule.plan")) throw new ApiError(403, "permission_denied", "Schedule plan permission required.");
+  return demandPlanOwner(transaction, projectId, actor);
+}
+/** Full plan rights, or the member's narrow create/edit/delete rights. Move stays with plan owners. */
+export async function demandMemberPlanRow(transaction: TransactionType, database: Database, projectId: number, actor: CurrentUser, task: TaskRow | null, input?: PlanInput): Promise<{ project: ProjectRow; canPlan: boolean }> {
+  const project = await readProject(transaction, projectId, true);
+  if (project.status === "Closed") throw new ApiError(409, "project_closed", "A closed project's schedule cannot be changed.");
+  const canPlan = project.leadEngineerId === actor.id || (canAnswerDayRequests(project, actor) && await permissionFor(database, actor.id, "schedule.plan"));
+  if (canPlan) return { project: await demandRowPlanOwner(transaction, database, projectId, actor), canPlan };
+  if (!await permissionFor(database, actor.id, "schedule.progress") || !await isProjectMember(transaction, projectId, actor.id)) throw new ApiError(403, "schedule_member_required", "Only a project member with schedule progress permission may change their own rows.");
+  if (task) {
+    if (task.kind !== "task" || task.createdBy !== actor.id) throw new ApiError(403, "schedule_row_owner_required", "Only the creator may edit or delete this row.");
+    if (input && (["parentId", "sortOrder", "kind", "isMilestone", "visibility", "startMode", "predecessorId", "lagDays", "picExternal", "planManDays"] as const).some((key) => input[key] !== task[key])) throw new ApiError(403, "schedule_own_fields_only", "Members may change only the name, dates, days and project PICs of their own rows.");
+  } else {
+    const tasks = new Map((await readTasks(transaction, projectId)).map((row) => [row.id, row]));
+    if (!input || input.kind !== "task" || input.parentId === null || !isOwnPlanTask(input.parentId, actor.id, tasks, await readPics(transaction, projectId))) throw new ApiError(403, "schedule_own_parent_required", "Members may add tasks only beneath their own tasks.");
+  }
+  return { project, canPlan: false };
 }
 export async function readHolidays(transaction: TransactionType): Promise<Set<string>> {
   return new Set((await new sql.Request(transaction).query<{ holiday_date: Date | string }>(`SELECT holiday_date FROM dbo.holidays;`)).recordset.map((row) => dateOnly(row.holiday_date)!));
@@ -326,7 +359,7 @@ export function scheduleCalculation(tasks: TaskRow[]) {
 export type TaskAccess = {
   actorId: number; managed: Map<number, ManagedTask>; projectCanProgress: boolean; isManager: boolean; isAdmin: boolean;
   /** The reader is the manager, lead engineer or a listed member (PROJECT_MEMBER_SQL): they may update rows that have no PIC. */
-  isMember: boolean;
+  isMember: boolean; canPlan?: boolean;
   /** Master Plan frame leaves that the shared summary leaves out (project-health.ts countedLeaves); the screens' late and blocked rules skip them too. */
   frameIds?: Set<number>;
 };
@@ -334,7 +367,9 @@ export function taskResponse(resolved: ResolvedScheduleTask, tasks: Map<number, 
   const task = tasks.get(resolved.source.id)!;
   const managedTask = access?.managed.get(task.id), managed = managedTask !== undefined;
   // A managed row also needs what the resource-tasks.ts preHandler demands, or the POST is refused with acknowledgment_required.
-  const flags = access ? { managedByResourcePlan: managed, countsTowardHealth: !access.frameIds?.has(task.id), canProgress: access.projectCanProgress && (!managedTask || managedProgressReady(managedTask, access.actorId)) && canPostProgress({ isLeaf: task.kind !== "phase" && !resolved.children.length,
+  const memberPlan = Boolean(access?.projectCanProgress && access.isMember);
+  const flags = access ? { canAddChild: Boolean(access.canPlan || (memberPlan && isOwnPlanTask(task.id, access.actorId, tasks, pics))),
+    canEditOwn: memberPlan && task.kind === "task" && task.createdBy === access.actorId, managedByResourcePlan: managed, countsTowardHealth: !access.frameIds?.has(task.id), canProgress: access.projectCanProgress && (!managedTask || managedProgressReady(managedTask, access.actorId)) && canPostProgress({ isLeaf: task.kind !== "phase" && !resolved.children.length,
     isPic: (pics.get(task.id) ?? []).some((pic) => pic.id === access.actorId), isManager: access.isManager, isAdmin: access.isAdmin, managed,
     isMember: access.isMember, unassigned: hasNoActivePic(pics.get(task.id)) }) } : {};
   return { id: task.id, parentId: task.parentId, sortOrder: task.sortOrder, wbs: resolved.wbs, depth: resolved.depth, kind: task.kind, name: task.name,
