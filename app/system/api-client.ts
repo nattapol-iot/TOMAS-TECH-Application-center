@@ -1731,10 +1731,10 @@ export const createProject = (input: CreateProjectInput) =>
   apiRequest<{ id: number; number: string; rowVersion: string; notification: AssignmentNotificationResult }>("/api/v1/projects/", { method: "POST", body: JSON.stringify(input) });
 
 /** Work recorded against a project that stops it being deleted, by source ("BOM", "Purchase order", ...). */
-export type ProjectDeletionCheck = { id: number; canDelete: boolean; blockers: { source: string; count: number }[] };
+export type ProjectDeletionCheck = { id: number; canDelete: boolean; canForceDelete: boolean; blockers: { source: string; count: number }[] };
 export const checkProjectDeletion = (projectId: number) => apiRequest<ProjectDeletionCheck>(`/api/v1/projects/${projectId}/deletion`);
-export const deleteProject = (projectId: number) =>
-  apiRequest<{ id: number; number: string; deleted: true }>(`/api/v1/projects/${projectId}`, { method: "DELETE" });
+export const deleteProject = (projectId: number, confirmation?: { force: true; confirmProjectNo: string }) =>
+  apiRequest<{ id: number; number: string; deleted: true }>(`/api/v1/projects/${projectId}`, { method: "DELETE", ...(confirmation ? { body: JSON.stringify(confirmation) } : {}) });
 
 /** A reusable Master Plan. Days count from the project start; a row without them carries only its name. */
 export type ScheduleTemplateRow = { name: string; startOffsetDays: number | null; durationDays: number | null };

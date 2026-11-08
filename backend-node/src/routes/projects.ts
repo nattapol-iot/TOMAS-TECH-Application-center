@@ -138,7 +138,7 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
       ORDER BY p.updated_at DESC,p.id DESC OFFSET @offset ROWS FETCH NEXT @page_size ROWS ONLY;
     `, (sqlRequest) => {
       sqlRequest.input("status", sql.NVarChar(50), status); sqlRequest.input("search", sql.NVarChar(200), search);
-      sqlRequest.input("actor", sql.BigInt, actor.id); sqlRequest.input("elevated", sql.Bit, isProjectElevated(actor));
+      sqlRequest.input("actor", sql.BigInt, actor.id); sqlRequest.input("elevated", sql.Bit, seesAllProjects(actor));
       sqlRequest.input("offset", sql.Int, (page - 1) * pageSize); sqlRequest.input("page_size", sql.Int, pageSize);
     });
     const summaries = await loadProjectScheduleSummaries(database, result.recordset.map(projectInput), businessToday(config.businessTimeZone));
@@ -147,6 +147,9 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
       page, pageSize, total: Number(result.recordset[0]?.total_count ?? 0),
     };
   });
+
+  // Management reads every project (read-only role) so it can find and delete any of them; scope elsewhere is unchanged.
+  const seesAllProjects = (actor: CurrentUser) => isProjectElevated(actor) || hasRole(actor, "Management");
 
   // The list above and the portfolio overview below return the same row, so the portfolio can open
   // every project dialog the list opens. Scope: elevated, or the project's manager, lead or member.
@@ -189,7 +192,7 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
       ${PROJECT_SOURCE}
         AND p.status NOT IN (N'Closed',N'On Hold')
       ORDER BY p.id;
-    `, (sqlRequest) => { sqlRequest.input("actor", sql.BigInt, actor.id); sqlRequest.input("elevated", sql.Bit, isProjectElevated(actor)); });
+    `, (sqlRequest) => { sqlRequest.input("actor", sql.BigInt, actor.id); sqlRequest.input("elevated", sql.Bit, seesAllProjects(actor)); });
     const rows = result.recordset;
     if (!rows.length) return { delayed: 0, atRisk: 0, attention: 0 };
     const summaries = await loadProjectScheduleSummaries(database, rows.map(projectInput), businessToday(config.businessTimeZone));
@@ -208,7 +211,7 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
     const actor = await users.required(request);
     const query = request.query as Record<string, unknown>;
     const includeClosed = query.includeClosed === "1" || query.includeClosed === "true";
-    const elevated = isProjectElevated(actor);
+    const elevated = seesAllProjects(actor);
     const manages = isProjectManagerRole(actor);
     const result = await database.query<ProjectRow>(`
       SELECT ${PROJECT_COLUMNS}
@@ -502,17 +505,15 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
     return reply.status(204).send();
   });
 
-  // For a project created by mistake or for a trial. dbo.delete_unstarted_project refuses one
-  // with any work recorded and names that work; once deleted, the same estimate and ERP
-  // number can create the project again. The preview asks the same question without deleting.
+  // Unstarted projects are removed; Management/Admin may hide projects with work after confirming the number.
   async function projectDeletion(transaction: sql.Transaction, id: number, actor: CurrentUser, execute: boolean) {
     const lookup = new sql.Request(transaction); lookup.input("id", sql.BigInt, id);
     const project = (await lookup.query<Record<string, unknown> & { project_no: string; manager_id: number | string }>(`
       SELECT project_no,name,customer_id,inquiry_id,estimate_id,status,manager_id,lead_engineer_id,po_no,po_date,start_date,target_delivery
       FROM dbo.projects WITH(UPDLOCK,HOLDLOCK) WHERE id=@id AND deleted_at IS NULL;`)).recordset[0];
     if (!project) throw new ApiError(404, "project_not_found", "Project not found.");
-    if (Number(project.manager_id) !== actor.id && !hasRole(actor, "Engineering Manager", "Admin")) {
-      throw new ApiError(403, "project_delete_forbidden", "Only this project's manager, an Engineering Manager or an Admin can delete it.");
+    if (Number(project.manager_id) !== actor.id && !hasRole(actor, "Engineering Manager", "Management", "Admin")) {
+      throw new ApiError(403, "project_delete_forbidden", "Only this project's manager, an Engineering Manager, Management or an Admin can delete it.");
     }
     const run = new sql.Request(transaction); run.input("id", sql.BigInt, id).input("actor", sql.BigInt, actor.id).input("execute", sql.Bit, execute);
     const sets = (await run.execute("dbo.delete_unstarted_project")).recordsets as unknown as Record<string, unknown>[][];
@@ -521,26 +522,39 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
   }
 
   app.get("/api/v1/projects/:id/deletion", async (request) => {
-    await users.demandPermission(request, "project.write");
     const actor = await users.required(request);
+    const forceRole = hasRole(actor, "Management", "Admin");
+    if (!forceRole) await users.demandPermission(request, "project.write");
     const id = positiveLong((request.params as { id?: string }).id, "Project id");
-    await demandProjectScope(database, actor, id);
+    if (!forceRole) await demandProjectScope(database, actor, id);
     const { blockers } = await database.transaction((transaction) => projectDeletion(transaction, id, actor, false));
-    return { id, canDelete: blockers.length === 0, blockers };
+    return { id, canDelete: blockers.length === 0, blockers, canForceDelete: blockers.length > 0 && forceRole };
   });
 
   app.delete("/api/v1/projects/:id", async (request) => {
-    await users.demandPermission(request, "project.write");
     const actor = await users.required(request);
+    const forceRole = hasRole(actor, "Management", "Admin");
+    if (!forceRole) await users.demandPermission(request, "project.write");
     const id = positiveLong((request.params as { id?: string }).id, "Project id");
-    await demandProjectScope(database, actor, id);
+    if (!forceRole) await demandProjectScope(database, actor, id);
     const deleted = await database.transaction(async (transaction) => {
-      const { project, blockers, storageKeys } = await projectDeletion(transaction, id, actor, true);
+      const body = request.body == null ? {} : bodyObject(request.body);
+      const preview = await projectDeletion(transaction, id, actor, false);
+      const { project, blockers } = preview;
+      if (body.force === true && body.confirmProjectNo !== project.project_no) throw new ApiError(400, "project_number_mismatch", "Type the project number exactly to confirm deletion.");
+      if (blockers.length && forceRole && body.force === true) {
+        const hide = new sql.Request(transaction); hide.input("id", sql.BigInt, id).input("actor", sql.BigInt, actor.id);
+        await hide.execute("dbo.soft_delete_project");
+        await insertAudit(transaction, actor.id, "Project", id, project.project_no, "Deleted with recorded work (soft)", { project, blockers }, { deleted: true, soft: true });
+        return { number: project.project_no, storageKeys: [] as string[], soft: true };
+      }
       if (blockers.length) {
         throw new ApiError(409, "project_has_work", "This project already has work recorded against it, so it cannot be deleted.", { blockers });
       }
+      const removed = await projectDeletion(transaction, id, actor, true);
+      if (removed.blockers.length) throw new ApiError(409, "project_has_work", "This project already has work recorded against it, so it cannot be deleted.", { blockers: removed.blockers });
       await insertAudit(transaction, actor.id, "Project", id, project.project_no, "Deleted before work started", project, null);
-      return { number: project.project_no, storageKeys };
+      return { number: project.project_no, storageKeys: removed.storageKeys, soft: false };
     });
     // Files go only after the rows are gone; a file left behind is logged, never the reverse.
     for (const key of deleted.storageKeys) {
@@ -548,7 +562,7 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
         request.log.error({ err: error, storageKey: key, projectId: id }, "Could not remove a deleted project's file");
       });
     }
-    await removeEmptyStoredDirectory(config.documentStorage, `projects/${id}`).catch((error: unknown) => {
+    if (!deleted.soft) await removeEmptyStoredDirectory(config.documentStorage, `projects/${id}`).catch((error: unknown) => {
       request.log.error({ err: error, projectId: id }, "Could not remove a deleted project's folders");
     });
     return { id, number: deleted.number, deleted: true };
