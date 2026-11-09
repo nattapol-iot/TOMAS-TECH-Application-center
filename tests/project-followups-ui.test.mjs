@@ -198,11 +198,12 @@ test("the Projects menu badge counts open Delayed and At Risk projects, not ever
 test("the portfolio Timeline goes full screen, with an overlay where the browser has no element full screen", () => {
   const hook = read("app/system/use-fullscreen.ts");
   // The browser's full screen first; a refusal or a missing API falls back to the page's own overlay.
-  assert.match(hook, /if \(document\.fullscreenEnabled && typeof element\.requestFullscreen === "function"\) \{\s*try \{ await element\.requestFullscreen\(\); return; \} catch/);
+  // (A caller may ask for the overlay only: the Plan, which opens drawers and dialogs while full screen.)
+  assert.match(hook, /if \(!overlayOnly && document\.fullscreenEnabled && typeof element\.requestFullscreen === "function"\) \{\s*try \{ await element\.requestFullscreen\(\); return; \} catch/);
   assert.match(hook, /setOverlay\(true\);/);
   // State follows the browser (Esc, F11) and Escape leaves the overlay; the page under it does not scroll.
   assert.match(hook, /document\.addEventListener\("fullscreenchange", sync\)/);
-  assert.match(hook, /if \(event\.key === "Escape"\) setOverlay\(false\);/);
+  assert.match(hook, /if \(event\.key === "Escape" && !event\.defaultPrevented && !document\.querySelector\(ESCAPE_TAKEN\)\) setOverlay\(false\);/);
   assert.match(hook, /document\.body\.classList\.add\(OVERLAY_BODY_CLASS\)/);
   assert.match(hook, /document\.body\.classList\.remove\(OVERLAY_BODY_CLASS\)/);
   assert.match(read("app/globals.css"), /body\.fullscreen-overlay-open \{ overflow: hidden; \}/);
@@ -284,6 +285,30 @@ test("the Gantt dates stay above the rows, the fill follows the whole plan, and 
     for (const lang of ["EN", "TH", "JP"]) assert.notEqual(translate(key, lang), key, `${key} has no ${lang}`);
   }
   assert.equal(translate("ProjectHealth.On Track", "TH"), "ตามแผน");
+});
+
+test("the Plan folds every row at once and goes full screen over the page, with drawers and dialogs still on top", () => {
+  const plan = read("app/system/production/PlanningPricingScreens.tsx");
+  // The page's overlay, not the browser's full screen, which would hide the task drawer, dialogs and toasts.
+  assert.match(plan, /const \{ ref: fullscreenRef, active: fullscreenActive, toggle: toggleFullscreen \} = useFullscreen<HTMLDivElement>\(\{ overlayOnly: true \}\);/);
+  assert.match(plan, /<div ref=\{fullscreenRef\} className=\{`plan-gantt\$\{fullscreenActive \? " is-fullscreen" : ""\}`\} data-guide="plan\.gantt">/);
+  assert.match(plan, /<div className="gantt-nav" data-guide="plan\.view">/);
+  // Team Plan folds rows with rows under them; By member folds people; a quick filter shows matches open, so folding is off.
+  assert.match(plan, /const collapseAll = \(\) => \{ if \(memberView\) setMemberClosed\(new Set\(memberKeys\)\); else setCollapsed\(new Set\(parentIds\)\); \};/);
+  assert.match(plan, /const foldFiltered = !memberView && filter !== null;/);
+  const hook = read("app/system/use-fullscreen.ts");
+  assert.match(hook, /if \(!overlayOnly && document\.fullscreenEnabled/);
+  // Escape that closes a dialog, a drawer, an inline editor or a row drag leaves full screen alone.
+  assert.match(hook, /event\.key === "Escape" && !event\.defaultPrevented && !document\.querySelector\(ESCAPE_TAKEN\)/);
+  assert.match(hook, /const ESCAPE_TAKEN = "\.overlay, \.swal2-container, \.gantt\.moving-row";/);
+  assert.match(read("app/system/production/my-work.css"), /\.plan-gantt\.is-fullscreen \{ position: fixed; inset: 0; z-index: 90;/);
+  const { translate } = load("app/system/i18n.ts");
+  // "Expand all" is its own English; a missing entry shows as the key in Thai and Japanese.
+  for (const key of ["Expand all", "Gantt.collapseAll", "Gantt.fullScreen", "Gantt.exitFullScreen", "Plan.foldFiltered"]) {
+    for (const lang of ["TH", "JP"]) assert.notEqual(translate(key, lang), key, `${key} has no ${lang}`);
+  }
+  assert.notEqual(translate("Plan.foldFiltered", "EN"), "Plan.foldFiltered");
+  assert.equal(translate("Expand all", "TH"), "กางทั้งหมด");
 });
 
 test("every new follow-up string has English, Thai and Japanese copy", () => {

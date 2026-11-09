@@ -421,6 +421,12 @@
 .plan-gantt { display: flex; flex-direction: column; gap: 10px; padding: 12px 0 0; }
 .plan-gantt-controls, .plan-gantt > .gantt-legend { padding: 0 14px; }
 .plan-gantt-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
+/* Full screen is the page's own overlay (useFullscreen overlayOnly): above the top bar and menus, below the task
+   drawer and dialogs (.overlay, 100) and toasts (200); the chart scrolls inside it instead of stopping at 70vh. */
+.plan-gantt.is-fullscreen { position: fixed; inset: 0; z-index: 90; overflow: hidden; padding-bottom: 0; background: var(--surface); }
+.plan-gantt.is-fullscreen .gantt { flex: 1; min-height: 0; max-height: none; }
+.plan-gantt-title { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 0 14px; font-size: var(--fs-md); }
+.plan-gantt-title strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 650; }
 /* The last bar dragged to new dates, with its undo. */
 .plan-undo { margin: 0 14px; }
 .plan-undo > span { flex: 1; min-width: 0; }

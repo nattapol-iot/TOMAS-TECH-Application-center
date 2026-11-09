@@ -16,6 +16,7 @@ import { MyWorkQueue } from "./LazyScreens";
 import { listProjectOverview, type ProjectOverviewItem } from "../project-overview-client";
 import { dayNumber, draggedPlan, ganttFitWindow, ganttShift, ganttWindow, linkedStart, planDatesLoop, shiftGanttAnchor } from "../../../lib/gantt";
 import { GanttChart, GanttLegend, GanttToolbar, scheduleTone, type GanttAlert, type GanttLink, type GanttRowDrop, type GanttRowSpec, type GanttZoomChoice } from "./GanttChart";
+import { useFullscreen } from "../use-fullscreen";
 import { loadTeamBoard, type TeamBoardData } from "../resource-workload-client";
 import { weeklyCapacity, type Commitment } from "../../../lib/resource-planning";
 import { boardDays, dailyLoad, dateRuns, outlookLoad, overlapDays, withOutlook, type Overlap } from "../../../lib/team-board";
@@ -2443,6 +2444,8 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
   const [level, setLevel] = useLinkedState<PlanLevel>("level", "team", PLAN_LEVEL_LINK);
   const masterView = level === "master";
   const [collapsed, setCollapsed] = useState<Set<number>>(() => new Set());
+  // The page's own overlay rather than the browser's full screen, so the task drawer, dialogs and toasts still open over it.
+  const { ref: fullscreenRef, active: fullscreenActive, toggle: toggleFullscreen } = useFullscreen<HTMLDivElement>({ overlayOnly: true });
   const [drawerTaskId, setDrawerTaskId] = useState<number | null>(preferredTaskId ?? linkedTaskId);
   // The row being typed in place (PlanRowDraftEditor), and whether it is saving.
   const [draft, setDraft] = useState<PlanDraft | null>(null);
@@ -2719,6 +2722,15 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
     onToggle: (key) => setMemberClosed((current) => { const next = new Set(current); if (next.has(key)) next.delete(key); else next.add(key); return next; }),
   }) : [];
   const chartRows = memberView ? memberRows : ganttRows;
+  // Expand all / Collapse all fold what this view folds: the Team Plan's rows that have rows under them, or the members.
+  // A quick filter shows every match open with its parents (planRows), so folding does nothing there.
+  const parentIds = rows.filter((task) => task.children.length > 0).map((task) => task.id);
+  const memberKeys = memberRows.filter((row) => row.expandable && row.depth === 0).map((row) => row.key.slice("member:".length));
+  const anyFolded = memberView ? memberKeys.some((key) => memberClosed.has(key)) : parentIds.some((id) => collapsed.has(id));
+  const allFolded = memberView ? memberKeys.every((key) => memberClosed.has(key)) : parentIds.every((id) => collapsed.has(id));
+  const foldFiltered = !memberView && filter !== null;
+  const expandAll = () => { if (memberView) setMemberClosed(new Set()); else setCollapsed(new Set()); };
+  const collapseAll = () => { if (memberView) setMemberClosed(new Set(memberKeys)); else setCollapsed(new Set(parentIds)); };
   const drawerTask = drawerTaskId === null ? null : taskById.get(drawerTaskId) ?? null;
   const filteredProjects = projects.filter((project) => project.id === selectedId || !projectQuery.trim()
     || `${project.number} ${project.name} ${project.customerName}`.toLocaleLowerCase().includes(projectQuery.trim().toLocaleLowerCase()));
@@ -2869,13 +2881,22 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
         {loadingSchedule ? <span className="plan-summary-loading" role="status"><span className="spinner" />{uiText("Plan.refreshing")}</span> : null}
       </section>
       <Panel title={`${activeSchedule.projectNo} · ${activeSchedule.projectName}`} subtitle={`${rows.length} ${uiText("Plan.rows")} · ${uiText(activeSchedule.projectStatus)}`} flush>
-        {rows.length || draftAt >= 0 ? <div className="plan-gantt" data-guide="plan.gantt">
+        {rows.length || draftAt >= 0 ? <div ref={fullscreenRef} className={`plan-gantt${fullscreenActive ? " is-fullscreen" : ""}`} data-guide="plan.gantt">
+          {fullscreenActive ? <div className="plan-gantt-title"><strong>{activeSchedule.projectNo} · {activeSchedule.projectName}</strong><HealthBadge health={summary.health ?? selectedProject?.health ?? "No plan"} /></div> : null}
           <div className="plan-gantt-controls">
             <div className="seg-control" role="group" aria-label={uiText("Plan.levelLabel")} data-guide="plan.level">
               {(["team", "master", "member"] as const).map((value) => <button key={value} type="button" className={level === value ? "on" : ""} aria-pressed={level === value} onClick={() => setLevel(value)}>{uiText(PLAN_LEVEL_LABEL[value])}</button>)}
             </div>
             {masterView || memberView ? null : <FilterChips label="Plan.quickFilters" items={filterItems} active={filter} onPick={(key) => setFilter(key as PlanFilter | null)} />}
             <GanttToolbar zoom={zoom} allowFit onZoom={(next) => { setZoom(next); setAnchor(today); }} onShift={(direction) => { if (zoom !== "fit") setAnchor((value) => shiftGanttAnchor(zoom, value, direction)); }} onToday={() => { if (zoom === "fit") setZoom("quarter"); setAnchor(today); }} />
+            <div className="gantt-nav" data-guide="plan.view">
+              {masterView ? null : <>
+                <button type="button" className="btn ghost sm" disabled={foldFiltered || !anyFolded} title={foldFiltered ? uiText("Plan.foldFiltered") : undefined} onClick={expandAll}><Icon name="plus" />{uiText("Expand all")}</button>
+                <button type="button" className="btn ghost sm" disabled={foldFiltered || allFolded} title={foldFiltered ? uiText("Plan.foldFiltered") : undefined} onClick={collapseAll}><Icon name="minus" />{uiText("Gantt.collapseAll")}</button>
+              </>}
+              <button type="button" className="btn ghost sm" aria-pressed={fullscreenActive} title={uiText(fullscreenActive ? "Gantt.exitFullScreen" : "Gantt.fullScreen")} onClick={() => { void toggleFullscreen(); }}>
+                <Icon name={fullscreenActive ? "minimize" : "maximize"} />{uiText(fullscreenActive ? "Gantt.exitFullScreen" : "Gantt.fullScreen")}</button>
+            </div>
           </div>
           <GanttLegend baseline={Boolean(activeSchedule.latestBaseline)} target={Boolean(target)} links={!memberView && links.length > 0} draggable={canPlan && !memberView} />
           {memberView ? <div className="info-strip plan-member-note" role="note" data-guide="plan.memberLegend">

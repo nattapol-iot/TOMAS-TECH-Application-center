@@ -949,6 +949,16 @@ const PROJECT_PLAN: Guide = {
       missing: { th: "โปรเจกต์นี้ยังไม่มีแผน กด 'ถัดไป'", en: "This project has no plan yet. Press Next.", jp: "この案件にはまだ計画がありません。「次へ」を押します。" },
     },
     {
+      target: "plan.view", action: "next", view: "projects",
+      title: { th: "กาง ยุบ และเต็มจอ", en: "Expand, collapse and full screen", jp: "展開・折りたたみ・全画面" },
+      body: {
+        th: "กด 'กางทั้งหมด' หรือ 'ยุบทั้งหมด' เพื่อเปิดหรือปิดทุกหัวข้อในครั้งเดียว (ในมุมมองตามสมาชิกคือทุกคน) กด 'เต็มจอ' ให้ Gantt เต็มหน้าต่าง ยังกดแถบเพื่อเปิดรายละเอียดงานได้ตามปกติ กด Esc หรือ 'ออกจากเต็มจอ' เพื่อกลับ",
+        en: "Press Expand all or Collapse all to open or close every heading at once (every member in By member). Full screen fills the window with the Gantt; bars still open the task as usual. Press Esc or Exit full screen to come back.",
+        jp: "「すべて展開」「すべて折りたたむ」で全見出しを一度に開閉します（メンバー別では全員）。「全画面表示」でガントをウィンドウいっぱいに表示します。バーから作業を開くのは通常どおりです。Esc か「全画面を終了」で戻ります。",
+      },
+      missing: { th: "โปรเจกต์นี้ยังไม่มีแผน กด 'ถัดไป'", en: "This project has no plan yet. Press Next.", jp: "この案件にはまだ計画がありません。「次へ」を押します。" },
+    },
+    {
       target: "plan.memberLegend", action: "next", view: "projects",
       title: { th: "ใครทำอะไร และงานซ้อนไหม", en: "Who is on what, and does it overlap", jp: "誰が何をしているか、重なりはないか" },
       body: {
