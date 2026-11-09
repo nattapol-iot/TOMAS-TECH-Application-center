@@ -1,4 +1,5 @@
 "use client";
+import { confirmDialog } from "../dialogs";
 import { useT as useStaticCopy } from "../i18n";
 
 import { currentLocale, useT as useUiText } from "../i18n";
@@ -27,6 +28,7 @@ import {
   Tabs,
   Toolbar,
 } from "../ui";
+import { DateInput } from "../DateInput";
 
 export type AdminAnalyticsProps = {
   bootstrap: BootstrapData;
@@ -422,7 +424,7 @@ function CustomerContactsModal({ customer, canWrite, notify, onClose, onChanged 
   };
 
   const remove = async (contact: SalesCustomerContact) => {
-    if (!window.confirm(`ต้องการนำ ${contact.name} ออกจากรายชื่อผู้ติดต่อของ ${customer.name} หรือไม่`)) return;
+    if (!(await confirmDialog(`ต้องการนำ ${contact.name} ออกจากรายชื่อผู้ติดต่อของ ${customer.name} หรือไม่`, { danger: true }))) return;
     setBusy(true);
     setError("");
     try {
@@ -690,8 +692,8 @@ export function ProductionReports({ bootstrap }: AdminAnalyticsProps) {
       <Tabs<ReportTab> tabs={tabs} active={activeTab} onChange={setTab} />
       <Toolbar>
         {activeTab !== "project-cost" ? <>
-          {activeTab !== "inventory" ? <label className="field"><span><LocalizedText text={"From"} /></span><input type="date" value={from} max={to} onChange={(event) => setFrom(event.target.value)} /></label> : null}
-          <label className="field"><span>{activeTab === "inventory" ? "As of" : "To"}</span><input type="date" value={to} min={activeTab === "inventory" ? undefined : from} max={today()} onChange={(event) => setTo(event.target.value)} /></label>
+          {activeTab !== "inventory" ? <label className="field"><span><LocalizedText text={"From"} /></span><DateInput value={from} max={to} onChange={(event) => setFrom(event.target.value)} /></label> : null}
+          <label className="field"><span>{activeTab === "inventory" ? "As of" : "To"}</span><DateInput value={to} min={activeTab === "inventory" ? undefined : from} max={today()} onChange={(event) => setTo(event.target.value)} /></label>
         </> : <label className="select-field"><span className="sr-only"><LocalizedText text={"Project"} /></span><select value={projectId} onChange={(event) => setProjectId(Number(event.target.value))} aria-label={uiText("Project")}><option value={0}><LocalizedText text={"Select project"} /></option>{projects.map((project) => <option key={project.id} value={project.id}>{project.number} <LocalizedText text={"·"} /> {project.name}</option>)}</select><Icon name="chevronDown" /></label>}
         <button className="btn ghost" type="button" onClick={() => { void load(); }} disabled={loading || (activeTab === "project-cost" && !projectId)}><Icon name="refresh" />{loading ? <LocalizedText text={"Loading…"} /> : <LocalizedText text={"Refresh"} />}</button>
       </Toolbar>
@@ -843,7 +845,7 @@ function CreateRateModal({ team, onClose, onCreated }: { team: BootstrapData["te
       <Field label="Level"><input name="level" required maxLength={100} list="master-rate-levels" /></Field><Field label="Department"><input name="department" required maxLength={100} list="master-rate-departments" /></Field>
       <Field label="Engineering hourly"><input name="engineeringHourly" type="number" min={0} step="0.0001" required /></Field><Field label="Engineering daily"><input name="engineeringDaily" type="number" min={0} step="0.0001" required /></Field>
       <Field label="Installation hourly"><input name="installationHourly" type="number" min={0} step="0.0001" required /></Field><Field label="Installation daily"><input name="installationDaily" type="number" min={0} step="0.0001" required /></Field>
-      <Field label="Effective from"><input name="effectiveFrom" type="date" required max="9999-12-31" value={effectiveFrom} onChange={(event) => setEffectiveFrom(event.target.value)} /></Field><Field label="Effective to"><input name="effectiveTo" type="date" min={effectiveFrom} max="9999-12-31" /></Field>
+      <Field label="Effective from"><DateInput name="effectiveFrom" required max="9999-12-31" value={effectiveFrom} onChange={(event) => setEffectiveFrom(event.target.value)} /></Field><Field label="Effective to"><DateInput name="effectiveTo" min={effectiveFrom} max="9999-12-31" /></Field>
     </div><div className="production-document-submit"><span /><div className="row-actions"><button className="btn ghost" type="button" onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="submit" disabled={busy}><Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : "Create rate"}</button></div></div>
   </form></Modal>;
 }

@@ -1,4 +1,5 @@
 "use client";
+import { confirmDialog } from "../dialogs";
 import { idLink, useLinkedState } from "../screen-link";
 import { useT as useStaticCopy } from "../i18n";
 
@@ -25,6 +26,7 @@ import {
   Select,
   Toolbar,
 } from "../ui";
+import { DateInput } from "../DateInput";
 
 export type MaterialScreenProps = {
   bootstrap: BootstrapData;
@@ -614,7 +616,7 @@ function ReserveStockModal({ bomId, line, onClose, onReserved }: { bomId: number
     } catch (requestError) { setError(toError(requestError)); }
     finally { setBusy(false); }
   };
-  return <Modal title={`Reserve ${line.itemCode}`} subtitle={`${quantity(line.available)} ${line.unit} available · ${quantity(remainingDemand)} remaining BOM demand`} size="sm" onClose={onClose} footer={<><button className="btn ghost" type="button" onClick={onClose} disabled={busy}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || amount <= 0 || amount > maximum} onClick={() => { void submit(); }}><Icon name="lock" />{busy ? "Reserving…" : "Reserve stock"}</button></>}><ActionError message={error} /><Field label="Quantity"><input type="number" min="0.0001" max={maximum} step="0.0001" value={amount} onChange={(event) => setAmount(Number(event.target.value))} /></Field><Field label="Required date"><input type="date" value={requiredDate} onChange={(event) => setRequiredDate(event.target.value)} /></Field></Modal>;
+  return <Modal title={`Reserve ${line.itemCode}`} subtitle={`${quantity(line.available)} ${line.unit} available · ${quantity(remainingDemand)} remaining BOM demand`} size="sm" onClose={onClose} footer={<><button className="btn ghost" type="button" onClick={onClose} disabled={busy}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || amount <= 0 || amount > maximum} onClick={() => { void submit(); }}><Icon name="lock" />{busy ? "Reserving…" : "Reserve stock"}</button></>}><ActionError message={error} /><Field label="Quantity"><input type="number" min="0.0001" max={maximum} step="0.0001" value={amount} onChange={(event) => setAmount(Number(event.target.value))} /></Field><Field label="Required date"><DateInput value={requiredDate} onChange={(event) => setRequiredDate(event.target.value)} /></Field></Modal>;
 }
 
 function GenerateBomModal({ onClose, onCreated }: { onClose: () => void; onCreated: (number: string) => void }) {
@@ -680,7 +682,7 @@ export function ProductionPurchaseRequisitions({ bootstrap, notify }: MaterialSc
   }, [listed, reloadList]);
 
   const submit = async (item: PurchaseRequisition) => {
-    if (!window.confirm(`${uiText("Submit")} ${item.number}?`)) return;
+    if (!(await confirmDialog(`${uiText("Submit")} ${item.number}?`))) return;
     setBusyId(item.id); setActionError("");
     try {
       await apiRequest(`/api/v1/purchase-requisitions/${item.id}/submit`, body({ rowVersion: item.rowVersion, comment: "Submitted from production workspace" }));
@@ -996,7 +998,7 @@ function CreateGrnModal({ purchaseOrderId, onClose, onCreated }: { purchaseOrder
     <Modal title={`Receive ${endpoint.data?.purchaseOrder.number || "purchase order"}`} subtitle="บันทึกเป็น Draft ก่อน; stock ledger จะเปลี่ยนเมื่อกด Confirm GRN เท่านั้น" size="xl" onClose={onClose} footer={<><button className="btn ghost" type="button" onClick={onClose} disabled={busy}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || !selectedCount || invalidSplit} onClick={() => { void submit(); }}><Icon name="download" />{busy ? "Recording…" : `Record draft GRN (${selectedCount} lines)`}</button></>}>
       {endpoint.error ? <LoadError message={endpoint.error} retry={endpoint.reload} /> : null}
       <ActionError message={error} />
-      <div className="form-grid two"><Field label="Delivery note"><input maxLength={200} value={deliveryNote} onChange={(event) => setDeliveryNote(event.target.value)} placeholder={localizeCopy("Supplier delivery note")} /></Field><Field label="Received date"><input type="date" value={receivedDate} onChange={(event) => setReceivedDate(event.target.value)} /></Field></div>
+      <div className="form-grid two"><Field label="Delivery note"><input maxLength={200} value={deliveryNote} onChange={(event) => setDeliveryNote(event.target.value)} placeholder={localizeCopy("Supplier delivery note")} /></Field><Field label="Received date"><DateInput value={receivedDate} onChange={(event) => setReceivedDate(event.target.value)} /></Field></div>
       {invalidSplit ? <div className="callout warning" role="status"><Icon name="alertTriangle" /><span><strong><LocalizedText text={"Quantity split mismatch"} /></strong><LocalizedText text={"Accepted + damaged + rejected ต้องเท่ากับ received quantity ในทุกบรรทัด"} /></span></div> : null}
       {endpoint.loading ? <Loading /> : endpoint.data?.lines.length ? <div className="table-wrap tall"><table><thead><tr><th><LocalizedText text={"Use"} /></th><th><LocalizedText text={"Item"} /></th><th><LocalizedText text={"Outstanding"} /></th><th><LocalizedText text={"Received"} /></th><th><LocalizedText text={"Accepted"} /></th><th><LocalizedText text={"Damaged"} /></th><th><LocalizedText text={"Rejected"} /></th><th><LocalizedText text={"Location"} /></th><th><LocalizedText text={"QC"} /></th><th><LocalizedText text={"Over"} /></th></tr></thead><tbody>{endpoint.data.lines.map((line) => {
         const draft = draftFor(line);
@@ -1139,7 +1141,7 @@ function CreateMirModal({ onClose, onCreated }: { onClose: () => void; onCreated
   return (
     <Modal title="New material issue request" subtitle="ขอเบิกได้เฉพาะ stock line ใน released BOM และไม่เกินยอดคงเหลือของ BOM" size="xl" onClose={onClose} footer={<><button className="btn ghost" type="button" onClick={onClose} disabled={busy}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || !selectedCount} onClick={() => { void submit(); }}><Icon name="send" />{busy ? "Requesting…" : `Request material (${selectedCount} lines)`}</button></>}>
       {boms.error || workspace.error ? <LoadError message={boms.error || workspace.error} retry={() => { boms.reload(); workspace.reload(); }} /> : null}<ActionError message={error} />
-      <div className="form-grid two"><Field label="Released BOM"><select value={effectiveBomId} onChange={(event) => setBomId(Number(event.target.value))}><option value={0}><LocalizedText text={"Select BOM…"} /></option>{released.map((bom) => <option key={bom.id} value={bom.id}>{bom.number} <LocalizedText text={"·"} /> {bom.projectNumber} <LocalizedText text={"·"} /> {bom.projectName}</option>)}</select></Field><Field label="Required date"><input type="date" value={requiredDate} onChange={(event) => setRequiredDate(event.target.value)} /></Field><Field label="Purpose" span={2}><input maxLength={500} value={purpose} onChange={(event) => setPurpose(event.target.value)} placeholder={localizeCopy("Installation, assembly, FAT, site work…")} /></Field></div>
+      <div className="form-grid two"><Field label="Released BOM"><select value={effectiveBomId} onChange={(event) => setBomId(Number(event.target.value))}><option value={0}><LocalizedText text={"Select BOM…"} /></option>{released.map((bom) => <option key={bom.id} value={bom.id}>{bom.number} <LocalizedText text={"·"} /> {bom.projectNumber} <LocalizedText text={"·"} /> {bom.projectName}</option>)}</select></Field><Field label="Required date"><DateInput value={requiredDate} onChange={(event) => setRequiredDate(event.target.value)} /></Field><Field label="Purpose" span={2}><input maxLength={500} value={purpose} onChange={(event) => setPurpose(event.target.value)} placeholder={localizeCopy("Installation, assembly, FAT, site work…")} /></Field></div>
       {workspace.loading ? <Loading /> : workspace.data ? <div className="table-wrap tall"><table><thead><tr><th><LocalizedText text={"Use"} /></th><th><LocalizedText text={"Item"} /></th><th><LocalizedText text={"BOM qty"} /></th><th><LocalizedText text={"Previously issued"} /></th><th><LocalizedText text={"Remaining"} /></th><th><LocalizedText text={"On hand"} /></th><th><LocalizedText text={"Available"} /></th><th><LocalizedText text={"Request qty"} /></th><th><LocalizedText text={"Location override"} /></th></tr></thead><tbody>{workspace.data.lines.filter((line) => line.itemId !== null && !line.nonStock).map((line) => {
         const draft = draftFor(line);
         const remaining = Math.max(0, Number(line.quantityRequired) - Number(line.customerSuppliedQuantity) - Number(line.netIssued));

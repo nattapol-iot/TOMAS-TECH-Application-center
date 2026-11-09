@@ -7,6 +7,7 @@ import { apiRequest, downloadNamedFile, type BootstrapData, type EstimateCostWor
 import { Modal, Icon } from "../ui";
 import { readWorkbookSheets } from "../../../lib/import-spreadsheet";
 import { parseEstimateWorkbook, type EstimateImportPreview, type EstimateImportLine } from "../../../lib/estimate-excel-import";
+import { DateInput } from "../DateInput";
 
 const money = (n: number) => n.toLocaleString(currentLocale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 type ImportRecord = { sourceName: string; sourceHash: string; originalAvailable?: boolean; sourceRevision: string; revision: number; sourceTotal: number; references: EstimateImportLine[]; created: { kind: string; id: number }[]; alreadyImported?: boolean };
@@ -69,7 +70,7 @@ export function EstimateExcelImport({ workspace, bootstrap, sources, onClose, on
     {locked && <div className="callout warning"><LocalizedText text={"Estimate นี้ถูกล็อก กรุณาสร้าง revision ก่อนนำเข้า"} /></div>}
     {preview && <>
       <h3>{preview.project}</h3><p>{preview.customer} <LocalizedText text={"· ไฟล์"} /> {preview.sourceRevision || localizeCopy("ไม่ระบุ revision")}</p>
-      <div className="form-grid two"><label><LocalizedText text={"วันที่ราคาจากต้นฉบับ"} /><input aria-label={localizeCopy("วันที่ราคาจากต้นฉบับ")} type="date" value={date} disabled={busy} onChange={e => setDate(e.target.value)} /></label><label><LocalizedText text={"ชั่วโมงต่อวันสำหรับค่าแรง"} /><input aria-label={localizeCopy("ชั่วโมงต่อวันสำหรับค่าแรง")} type="number" min="0.01" max="24" step="0.01" value={hours} disabled={busy} onChange={e => setHours(Number(e.target.value))} /></label></div>
+      <div className="form-grid two"><label><LocalizedText text={"วันที่ราคาจากต้นฉบับ"} /><DateInput aria-label={localizeCopy("วันที่ราคาจากต้นฉบับ")} value={date} disabled={busy} onChange={e => setDate(e.target.value)} /></label><label><LocalizedText text={"ชั่วโมงต่อวันสำหรับค่าแรง"} /><input aria-label={localizeCopy("ชั่วโมงต่อวันสำหรับค่าแรง")} type="number" min="0.01" max="24" step="0.01" value={hours} disabled={busy} onChange={e => setHours(Number(e.target.value))} /></label></div>
       <div className="info-strip" style={{ margin: "16px 0" }}><strong><LocalizedText text={"Summary"} /> {money(preview.sourceTotal)} <LocalizedText text={"บาท"} /></strong><strong><LocalizedText text={"นำเข้า"} /> {money(preview.total)} <LocalizedText text={"บาท"} /></strong><span><LocalizedText text={"ส่วนต่าง"} /> {money(preview.total - preview.sourceTotal)} <LocalizedText text={"บาท"} /></span></div>
       <p><LocalizedText text={"อุปกรณ์/ค่าใช้จ่าย"} /> {preview.lines.filter(l => l.kind === "cost").length} <LocalizedText text={"· ค่าแรง"} /> {preview.lines.filter(l => l.kind === "manhour").length} <LocalizedText text={"· ลูกค้าจัดหา"} /> {preview.lines.filter(l => l.kind === "reference").length}</p>
       {preview.errors.map((e, i) => <div key={i} className="callout danger" role="alert">{e}</div>)}

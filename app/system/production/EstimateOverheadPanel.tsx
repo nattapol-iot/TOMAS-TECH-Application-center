@@ -4,6 +4,7 @@ import { apiRequest, type BootstrapData, type EstimateCostWorkspace } from "../a
 import { currentLocale } from "../i18n";
 import { estimateUxCopy } from "../../../lib/estimate-ux";
 import { Panel, Field } from "../ui";
+import { DateInput } from "../DateInput";
 
 export function EstimateOverheadPanel({ workspace, bootstrap, onSaved }: { workspace: EstimateCostWorkspace; bootstrap: BootstrapData; onSaved: () => Promise<void> }) {
   const copy = (th: string, en: string, ja: string) => estimateUxCopy(currentLocale(), th, en, ja);
@@ -44,7 +45,7 @@ export function EstimateOverheadPanel({ workspace, bootstrap, onSaved }: { works
       <div className="form-grid two">
         <Field label={copy("ค่าใช้จ่ายส่วนกลางต่อเดือน (บาท)", "Monthly shared budget (THB)", "月間共通費予算 (THB)")}><input required type="number" min="0" step="0.01" value={budget} onChange={event => setBudget(event.target.value)} /></Field>
         <Field label={copy("ชั่วโมงงานตรงปกติต่อเดือน", "Normal direct hours per month", "通常の月間直接作業時間")}><input required type="number" min="0.01" step="0.01" value={hours} onChange={event => setHours(event.target.value)} /></Field>
-        <Field label={copy("เริ่มใช้วันที่", "Effective from", "適用開始日")}><input required type="date" value={date} onChange={event => setDate(event.target.value)} /></Field>
+        <Field label={copy("เริ่มใช้วันที่", "Effective from", "適用開始日")}><DateInput required value={date} onChange={event => setDate(event.target.value)} /></Field>
         <Field label={copy("เหตุผล / ฐานข้อมูลที่ใช้", "Reason / budget basis", "理由・予算の根拠")}><input required maxLength={500} value={reason} onChange={event => setReason(event.target.value)} /></Field>
       </div>
       <p>{budget !== "" && Number(hours) > 0 ? `${money(Number(budget) / Number(hours))}/h` : "—"} · {copy("ตรวจว่าค่าแรงกลางไม่รวมค่าใช้จ่ายนี้ซ้ำ นโยบายใหม่ไม่เปลี่ยนฉบับเก่า", "Check that labor rates do not already include these costs. Existing revisions stay unchanged.", "労務単価との二重計上を確認してください。既存の版は変更されません。")}</p>

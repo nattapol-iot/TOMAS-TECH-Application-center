@@ -15,8 +15,10 @@ function mountForm(file, exportName, props) {
     },
     useRef: () => ({ current: null }), useEffect() {}, useMemo: callback => callback(),
   };
-  const jsx = (type, props) => ({ type, props });
+  const jsx = (type, props) => type?.name === "DateInput" ? type(props) : ({ type, props });
   const dependencies = {
+    "../dialogs": { confirmDialog: async () => globalThis.window?.confirm?.() ?? true, promptDialog: async () => globalThis.window?.prompt?.() ?? null, alertDialog: async () => {} },
+    "../DateInput": { DateInput: (props) => ({ type: "input", props: { ...props, type: props.withTime ? "datetime-local" : "date" } }) },
     react: hooks, "react-dom": { createPortal: value => value },
     "react/jsx-runtime": { jsx, jsxs: jsx, Fragment: "fragment" },
     "../api-client": { async apiRequest(url, options) { requests.push({ url, body: JSON.parse(options.body) }); return { code: "TEST" }; } },

@@ -85,7 +85,7 @@ test("Team overview replaces Resource Plan in the menu and opens on the board fo
   assert.match(shell, /\{ view: "resources", label: "Team overview", icon: "users", anyPermissions: \["team\.board", "schedule\.read"\] \}/);
   assert.doesNotMatch(shell, /label: "Resource Plan"|group: "PLANNING"/);
   // A team task given to someone opens the board from their notification.
-  assert.match(shell, /if \(item\.entityType === "TeamTask"\) setView\("resources"\);/);
+  assert.match(shell, /if \(item\.entityType === "TeamTask"\) (?:\(await setView\("resources"\)\)|(?:await )?setView\("resources"\));/);
   assert.match(screen, /const canBoard = bootstrap\.permissions\.includes\("team\.board"\);/);
   assert.match(screen, /<TeamBoard bootstrap=\{bootstrap\} notify=\{notify\} mode=\{tab\} onMode=\{changeTab\} today=\{todayIso\} openItem=\{open\} onChanged=\{\(\) => setData\(null\)\} \/>/);
   // Work the reader cannot open, and team tasks, never navigate away.

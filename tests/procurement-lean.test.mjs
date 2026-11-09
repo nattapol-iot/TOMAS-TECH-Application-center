@@ -36,7 +36,7 @@ test("an approved PR goes to the ERP, which picks suppliers and raises the PO; n
   assert.match(requisitions, /app\.post\("\/api\/v1\/purchase-requisitions\/erp-sync"/);
   assert.match(requisitions, /const ERP_LIST_SYNC_MINUTES = 15;/);
   assert.match(material, /apiRequest<\{ checked: number; updated: number \}>\("\/api\/v1\/purchase-requisitions\/erp-sync"/);
-  assert.match(shell, /item\.entityType === "PurchaseRequisition"\) setView\("purchase"\)/);
+  assert.match(shell, /item\.entityType === "PurchaseRequisition"\) (?:\(await setView\("purchase"\)\)|(?:await )?setView\("purchase"\))/);
 });
 
 test("a BOM line without an inventory item can still be requested", () => {

@@ -10,6 +10,7 @@ import { estimateBusinessDate } from "../../../lib/estimate-ux";
 import { asPlanned, asSubstitute, draftFromBom, draftFromPr, draftFromSheet, draftIssues, moduleStatus, payloadLines, sheetRows, templateRows,
   type PrBomLine, type PrDraftRow, type PrModuleBudget, type PrModuleStatus, type PrRowKind, type PrSavedLine } from "../../../lib/pr-spreadsheet";
 import { useEndpoint } from "./material-endpoint";
+import { DateInput } from "../DateInput";
 
 type ReleasedBom = { id: number; number: string; status: string; projectNumber: string; projectName: string };
 type ErpOptions = { enabled: boolean; departments: Array<{ value: string; label: string }>; suggestedDepartment: string | null; message?: string };
@@ -136,7 +137,7 @@ export function PurchaseRequestEditor({ released, editing, onClose, onCreated }:
           {editing ? <option value={editing.bomId}>{workspace.data ? `${workspace.data.bom.number} · ${workspace.data.bom.projectNumber} · ${workspace.data.bom.projectName}` : "…"}</option>
             : <><option value={0}>{t("Select BOM…")}</option>{released.map((bom) => <option key={bom.id} value={bom.id}>{bom.number} · {bom.projectNumber} · {bom.projectName}</option>)}</>}</select></Field>
         <Field label="Priority"><select value={priority} onChange={(event) => setPriority(event.target.value)}><option value="Normal">{t("Normal")}</option><option value="High">{t("High")}</option><option value="Emergency">{t("Emergency")}</option></select></Field>
-        <Field label="Required date" guide="pr.required"><input type="date" value={requiredDate} onChange={(event) => setRequiredDate(event.target.value)} /></Field>
+        <Field label="Required date" guide="pr.required"><DateInput value={requiredDate} onChange={(event) => setRequiredDate(event.target.value)} /></Field>
         <Field label="Purpose"><input maxLength={500} value={purpose} onChange={(event) => setPurpose(event.target.value)} placeholder={t("Project material / site requirement")} /></Field>
         {erpOptions.data?.enabled && erpOptions.data.departments.length ? <Field label="แผนกใน ERP"><select value={department} onChange={(event) => setErpDepartment(event.target.value)}>
           <option value="">{t("Select…")}</option>{erpOptions.data.departments.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></Field> : null}

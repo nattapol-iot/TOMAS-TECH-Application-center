@@ -1,4 +1,5 @@
 "use client";
+import { confirmDialog } from "../dialogs";
 import { useT as useStaticCopy } from "../i18n";
 
 import { currentLocale, useT as useUiText } from "../i18n";
@@ -90,6 +91,7 @@ import {
 } from "../../../lib/my-work";
 
 import { CrmMyWork } from "./CrmScreens";
+import { DateInput } from "../DateInput";
 
 type ProductionPlanningProps = {
   openCrmOpportunity?: (id: number) => void;
@@ -651,7 +653,7 @@ function ProgressModal({ target, latestRowVersion, onClose, onSubmit, onConflict
   const problem = progressProblem({ initialStatus: target.status, percent, status, actualStart, actualFinish, forecastFinish, remark });
   const submit = async () => {
     if (needsZeroProgressFinishConfirmation(Number(target.percentComplete), status)
-      && !window.confirm(localizeCopy("This task is at 0%. Confirm that the work is complete and finish it today?"))) return;
+      && !(await confirmDialog(localizeCopy("This task is at 0%. Confirm that the work is complete and finish it today?")))) return;
     setBusy(true); setError(""); setConflict(false);
     try {
       await onSubmit({
@@ -697,9 +699,9 @@ function ProgressModal({ target, latestRowVersion, onClose, onSubmit, onConflict
     <div className="form-grid two">
       <label className="field"><span><LocalizedText text={"Status *"} /></span><select value={status} onChange={(event) => changeStatus(event.target.value)}><option value={"Not Started"}><LocalizedText text={"Not Started"} /></option><option value={"In Progress"}><LocalizedText text={"In Progress"} /></option><option value={"Blocked"}><LocalizedText text={"Blocked"} /></option><option value={"Done"} disabled={target.status === "Blocked"}><LocalizedText text={"Done"} /></option></select></label>
       <label className="field"><span><LocalizedText text={"Percent complete *"} /></span><input type="number" min="0" max="100" step="1" value={percent} onChange={(event) => changePercent(Number(event.target.value))} /></label>
-      <label className="field"><span><LocalizedText text={"Actual start"} /></span><input type="date" value={actualStart} onChange={(event) => setActualStart(event.target.value)} /></label>
-      <label className="field"><span><LocalizedText text={"Actual finish"} /></span><input type="date" min={actualStart || undefined} value={actualFinish} onChange={(event) => setActualFinish(event.target.value)} /></label>
-      <label className="field"><span><LocalizedText text={"Forecast finish"} /></span><input type="date" min={actualStart || undefined} value={forecastFinish} onChange={(event) => setForecastFinish(event.target.value)} /></label>
+      <label className="field"><span><LocalizedText text={"Actual start"} /></span><DateInput value={actualStart} onChange={(event) => setActualStart(event.target.value)} /></label>
+      <label className="field"><span><LocalizedText text={"Actual finish"} /></span><DateInput min={actualStart || undefined} value={actualFinish} onChange={(event) => setActualFinish(event.target.value)} /></label>
+      <label className="field"><span><LocalizedText text={"Forecast finish"} /></span><DateInput min={actualStart || undefined} value={forecastFinish} onChange={(event) => setForecastFinish(event.target.value)} /></label>
       <label className="field span-2"><span>{status === "Blocked" ? <LocalizedText text={"Blocked reason *"} /> : <LocalizedText text={"Remark"} />}</span><textarea maxLength={20000} value={remark} onChange={(event) => { setRemark(event.target.value); setRemarkEdited(true); }} /></label>
     </div>
   </Modal>;
@@ -1401,7 +1403,7 @@ export function ProductionMyWork({
               onRequest={setRequestFor}
               onAdd={(item) => setPersonalTaskFor({ parentId: item.taskId })}
               onDelete={async (item) => {
-              if (!window.confirm(`${localizeCopy("Delete your task")} “${item.name}”?`)) return;
+              if (!(await confirmDialog(`${localizeCopy("Delete your task")} “${item.name}”?`, { danger: true }))) return;
               setSaving((current) => new Set(current).add(item.taskId));
               try {
                 await apiRequest(`/api/v1/schedule/tasks/${item.taskId}/details`, {
@@ -1558,19 +1560,19 @@ function QuickProgressControls({ target, editable, notify, onPatch, extra, taskN
   };
   return <div className="quick-controls">
     <div className="pct-strip" role="group" aria-label={uiText("Percent done")} data-guide="work.percent">
-      {[0, 25, 50, 75, 100].map((value) => <button key={value} type="button" aria-pressed={percent === value} disabled={!editable || (target.status === "Done" && value !== 100) || (target.status === "Blocked" && (value === 100 || !taskNotes))} className={percent === value ? "on" : undefined} onClick={() => {
+      {[0, 25, 50, 75, 100].map((value) => <button key={value} type="button" aria-pressed={percent === value} disabled={!editable || (target.status === "Done" && value !== 100) || (target.status === "Blocked" && (value === 100 || !taskNotes))} className={percent === value ? "on" : undefined} onClick={async () => {
         const patch = percentChangePatch(target, value, today);
         if (!patch) return;
         if (needsZeroProgressFinishConfirmation(percent, value === 100 ? "Done" : target.status)
-          && !window.confirm(localizeCopy("This task is at 0%. Confirm that the work is complete and finish it today?"))) return;
+          && !(await confirmDialog(localizeCopy("This task is at 0%. Confirm that the work is complete and finish it today?")))) return;
         onPatch(patch, `${target.wbs} ${localizeCopy("progress updated to")} ${value}%`);
       }}>{value}</button>)}
     </div>
-    <select disabled={!editable} value={target.status} aria-label={uiText("Status")} data-guide="work.status" onChange={(event) => {
+    <select disabled={!editable} value={target.status} aria-label={uiText("Status")} data-guide="work.status" onChange={async (event) => {
       const status = event.target.value;
       if (status === "Done" && !canFinishWork(target.status)) return;
       if (needsZeroProgressFinishConfirmation(percent, status)
-        && !window.confirm(localizeCopy("This task is at 0%. Confirm that the work is complete and finish it today?"))) return;
+        && !(await confirmDialog(localizeCopy("This task is at 0%. Confirm that the work is complete and finish it today?")))) return;
       if (status === "Blocked" && !userNote.trim()) { setBlockedReason(""); return; }
       const patch = statusChangePatch(target, status, today);
       if (patch) onPatch(patch, `${target.wbs} ${localizeCopy("status changed to")} ${localizeCopy(status)}`);
@@ -1586,16 +1588,14 @@ function QuickProgressControls({ target, editable, notify, onPatch, extra, taskN
       <button className="btn sm primary" type="button" disabled={!blockedReason.trim()} onClick={saveBlocked}><Icon name="check" />{uiText("MyWork.saveBlocked")}</button>
       <button className="btn sm ghost" type="button" onClick={() => setBlockedReason(null)}><LocalizedText text={"Cancel"} /></button>
     </span> : null}
-    {taskNotes && (late || target.forecastFinish) ? <label className="forecast-inline"><span><LocalizedText text={"Forecast"} /></span><input
+    {taskNotes && (late || target.forecastFinish) ? <label className="forecast-inline"><span><LocalizedText text={"Forecast"} /></span><DateInput
       key={`${target.key}:forecast:${target.forecastFinish ?? ""}`}
-      type="date"
       disabled={!editable}
       defaultValue={target.forecastFinish ?? ""}
       className={workNeedsForecastFor(target) ? "needs-input" : undefined}
       min={target.actualStart ?? undefined}
-      onBlur={(event) => {
-        // A half-typed date reads as empty; keep the stored forecast instead of clearing it.
-        if (event.target.validity.badInput) { event.target.value = target.forecastFinish ?? ""; return; }
+      onChange={(event) => {
+        // Only a whole date (or a cleared box) reaches here; a half-typed one keeps the stored forecast.
         const value = event.target.value || null;
         if (value === (target.forecastFinish ?? null)) return;
         onPatch({ forecastFinish: value }, `${target.wbs} ${localizeCopy("forecast updated")}`);
@@ -1925,7 +1925,7 @@ function PlanStartFields({ schedule, taskId, parentId, value, onChange }: {
         <option value="linked" disabled={!choices.length && value.mode !== "linked"}>{t("Schedule.startAfter")}</option>
       </select>
     </label>
-    {value.mode === "manual" ? <label className="field"><span><LocalizedText text={"Plan start *"} /></span><input type="date" value={value.planStart} onChange={(event) => onChange({ ...value, planStart: event.target.value })} /></label> : <>
+    {value.mode === "manual" ? <label className="field"><span><LocalizedText text={"Plan start *"} /></span><DateInput value={value.planStart} onChange={(event) => onChange({ ...value, planStart: event.target.value })} /></label> : <>
       <label className="field"><span>{t("Schedule.predecessor")} *</span>
         <select value={predecessor ? value.predecessorId : ""} onChange={(event) => onChange({ ...value, predecessorId: event.target.value })}>
           <option value="">{t("Schedule.pickPredecessor")}</option>
@@ -1981,8 +1981,8 @@ const customerPeriodReady = (period: { start: string; finish: string }) => (!per
 function CustomerPeriodFields({ value, onChange }: { value: { start: string; finish: string }; onChange: (value: { start: string; finish: string }) => void }) {
   const t = useUiText();
   return <>
-    <label className="field" data-guide="plan.customerDates"><span>{t("Plan.customerStart")}</span><input type="date" value={value.start} onChange={(event) => onChange({ ...value, start: event.target.value })} /></label>
-    <label className="field"><span>{t("Plan.customerFinish")}</span><input type="date" min={value.start || undefined} value={value.finish} onChange={(event) => onChange({ ...value, finish: event.target.value })} /></label>
+    <label className="field" data-guide="plan.customerDates"><span>{t("Plan.customerStart")}</span><DateInput value={value.start} onChange={(event) => onChange({ ...value, start: event.target.value })} /></label>
+    <label className="field"><span>{t("Plan.customerFinish")}</span><DateInput min={value.start || undefined} value={value.finish} onChange={(event) => onChange({ ...value, finish: event.target.value })} /></label>
     <div className="info-strip span-2" role="note"><Icon name="calendar" /><span>{t("Plan.headingHint")}</span></div>
   </>;
 }
@@ -2051,10 +2051,10 @@ function PlanRowDraftEditor({ bootstrap, draft, parent, planPeople, ownOnly, bus
       <optgroup label={t("Plan.everyoneElse")}>{others.map(person)}</optgroup>
     </select>}
     <span className="plan-draft-dates">
-      <input type="date" aria-label={t(kind === "heading" ? "Plan.customerStart" : "CRM.planStart")} title={t(kind === "heading" ? "Plan.customerStart" : "CRM.planStart")}
+      <DateInput aria-label={t(kind === "heading" ? "Plan.customerStart" : "CRM.planStart")} title={t(kind === "heading" ? "Plan.customerStart" : "CRM.planStart")}
         value={draft.start} readOnly={busy} onChange={(event) => onChange({ start: event.target.value, ...(draft.finish && event.target.value > draft.finish ? { finish: event.target.value } : {}) })} onKeyDown={escape} />
       <span aria-hidden="true">–</span>
-      <input type="date" aria-label={t(kind === "heading" ? "Plan.customerFinish" : "CRM.planFinish")} title={t(kind === "heading" ? "Plan.customerFinish" : "CRM.planFinish")}
+      <DateInput aria-label={t(kind === "heading" ? "Plan.customerFinish" : "CRM.planFinish")} title={t(kind === "heading" ? "Plan.customerFinish" : "CRM.planFinish")}
         min={draft.start || undefined} value={draft.finish} readOnly={busy} onChange={(event) => onChange({ finish: event.target.value })} onKeyDown={escape} />
     </span>
     <button type="submit" className="btn primary sm" data-guide="plan.save" disabled={busy || !draft.name.trim()}><Icon name="check" />{t(busy ? "Saving…" : "Save")}</button>
@@ -2104,7 +2104,7 @@ function EditScheduleTaskModal({ bootstrap, schedule, task, onClose, onSaved, on
     if (busy || deleteReason) return;
     const confirmation = t("Plan.deleteConfirm").replace("{name}", task.name)
       + (removing.length > 1 ? `\n${t("Plan.deleteChildren").replace("{count}", String(removing.length - 1))}` : "");
-    if (!window.confirm(confirmation)) return;
+    if (!(await confirmDialog(confirmation, { danger: true }))) return;
     setBusy(true); setError(""); setFailedAction("delete");
     try {
       await apiRequest(`/api/v1/schedule/tasks/${task.id}`, { method: "DELETE", body: JSON.stringify({ scheduleVersion: schedule.scheduleVersion, rowVersion: task.rowVersion }) });
@@ -2152,8 +2152,8 @@ function EditScheduleTaskModal({ bootstrap, schedule, task, onClose, onSaved, on
       {!ownOnly ? <label className="field"><span><LocalizedText text={"Visibility *"} /></span><select value={visibility} onChange={(event) => setVisibility(event.target.value)}><option value={"Internal"}><LocalizedText text={"Internal"} /></option><option value={"Customer"}><LocalizedText text={"Customer"} /></option></select></label> : null}
       {isPhase ? <CustomerPeriodFields value={customer} onChange={setCustomer} /> : <>
         {!ownOnly ? <label className="field"><span><LocalizedText text={"Plan man-days"} /></span><input type="number" min="0" max="1000000" step="0.25" value={planManDays} onChange={(event) => setPlanManDays(Number(event.target.value))} /></label> : null}
-        {datesLocked ? <label className="field"><span><LocalizedText text={"Plan start *"} /></span><input type="date" value={task.planStart ?? ""} disabled /></label>
-          : ownOnly ? <label className="field"><span><LocalizedText text={"Plan start *"} /></span><input type="date" value={start.planStart} disabled={task.startMode !== "manual"} onChange={event => setStart(value => ({ ...value, planStart: event.target.value }))} /></label> : <PlanStartFields schedule={schedule} taskId={task.id} parentId={task.parentId} value={start} onChange={setStart} />}
+        {datesLocked ? <label className="field"><span><LocalizedText text={"Plan start *"} /></span><DateInput value={task.planStart ?? ""} disabled /></label>
+          : ownOnly ? <label className="field"><span><LocalizedText text={"Plan start *"} /></span><DateInput value={start.planStart} disabled={task.startMode !== "manual"} onChange={event => setStart(value => ({ ...value, planStart: event.target.value }))} /></label> : <PlanStartFields schedule={schedule} taskId={task.id} parentId={task.parentId} value={start} onChange={setStart} />}
         <label className="field"><span><LocalizedText text={"Plan days *"} /></span><input type="number" min="1" max="3650" value={datesLocked ? task.planDays : milestone ? 1 : planDays} disabled={datesLocked || milestone} onChange={(event) => setPlanDays(Number(event.target.value))} /></label>
         {datesLocked ? <p className="muted span-2">{t("Schedule.datesDerived")}</p> : !ownOnly ? <label className="checkbox-row span-2"><input type="checkbox" checked={milestone} onChange={(event) => setMilestone(event.target.checked)} /><LocalizedText text={"Milestone (1 day)"} /></label> : null}
         <PicFieldsWithLoad bootstrap={planTeam} span={datesLocked ? { from: task.planStart, to: task.planFinish } : draftSpan(schedule, start, planDays, milestone)} taskId={task.id} value={picUserIds} onChange={setPicUserIds} manDays={planManDays} />
@@ -2634,7 +2634,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
     if (!activeSchedule) return;
     const confirmation = uiText("Plan.deleteConfirm").replace("{name}", task.name)
       + (removing.length > 1 ? `\n${uiText("Plan.deleteChildren").replace("{count}", String(removing.length - 1))}` : "");
-    if (!window.confirm(confirmation)) return;
+    if (!(await confirmDialog(confirmation, { danger: true }))) return;
     setSaving(true); setError("");
     try {
       await apiRequest(`/api/v1/schedule/tasks/${task.id}`, { method: "DELETE", body: JSON.stringify({ scheduleVersion: activeSchedule.scheduleVersion, rowVersion: task.rowVersion }) });
@@ -3758,7 +3758,7 @@ export function SupplierQuotationUploadModal({ bootstrap, defaultInquiry, onClos
           </Field>
           <div style={confWrap("receivedDate")}>
             <Field label="Received date *" hint={confHint("receivedDate")}>
-              <input type="date" value={receivedDate} onChange={(event) => {
+              <DateInput value={receivedDate} onChange={(event) => {
                 setReceivedDate(event.target.value);
                 if (event.target.value && validUntil < event.target.value) setValidUntil(addIsoDays(event.target.value, 30));
               }} />
@@ -3766,7 +3766,7 @@ export function SupplierQuotationUploadModal({ bootstrap, defaultInquiry, onClos
           </div>
           <div style={confWrap("validUntil")}>
             <Field label="Valid until *" hint={confHint("validUntil")}>
-              <input type="date" min={receivedDate || undefined} value={validUntil} onChange={(event) => setValidUntil(event.target.value)} />
+              <DateInput min={receivedDate || undefined} value={validUntil} onChange={(event) => setValidUntil(event.target.value)} />
             </Field>
           </div>
           <Field label="Currency *">
@@ -3939,10 +3939,10 @@ function EditQuotationModal({
           <input maxLength={200} value={supplierReference} onChange={(e) => setSupplierReference(e.target.value)} placeholder="e.g. QT-2609-001" />
         </Field>
         <Field label="Received date *">
-          <input type="date" value={receivedDate} onChange={(e) => { setReceivedDate(e.target.value); if (e.target.value && validUntil < e.target.value) setValidUntil(addIsoDays(e.target.value, 30)); }} />
+          <DateInput value={receivedDate} onChange={(e) => { setReceivedDate(e.target.value); if (e.target.value && validUntil < e.target.value) setValidUntil(addIsoDays(e.target.value, 30)); }} />
         </Field>
         <Field label="Valid until *">
-          <input type="date" min={receivedDate || undefined} value={validUntil} onChange={(e) => setValidUntil(e.target.value)} />
+          <DateInput min={receivedDate || undefined} value={validUntil} onChange={(e) => setValidUntil(e.target.value)} />
         </Field>
         <Field label="Currency *">
           <select value={currency} onChange={(e) => setCurrency(e.target.value as SupplierQuotationRecord["currency"])}>
@@ -4070,13 +4070,13 @@ function ReferencePriceModal({ bootstrap, onClose, onCreated }: {
           onChange={(event) => setSourceUrl(event.target.value)} />
       </Field>
       <Field label="Captured date *" hint="วันที่เปิดหน้านั้นและเห็นราคานี้">
-        <input type="date" value={capturedDate} onChange={(event) => {
+        <DateInput value={capturedDate} onChange={(event) => {
           setCapturedDate(event.target.value);
           if (event.target.value && validUntil < event.target.value) setValidUntil(addIsoDays(event.target.value, 30));
         }} />
       </Field>
       <Field label="Treat as current until *" hint="พ้นวันนี้แล้วคลังราคาจะเตือนให้เช็กใหม่">
-        <input type="date" min={capturedDate || undefined} value={validUntil} onChange={(event) => setValidUntil(event.target.value)} />
+        <DateInput min={capturedDate || undefined} value={validUntil} onChange={(event) => setValidUntil(event.target.value)} />
       </Field>
       <Field label="Currency *">
         <select value={currency} onChange={(event) => setCurrency(event.target.value as SupplierQuotationRecord["currency"])}>
@@ -4170,7 +4170,7 @@ export function ProductionSupplierQuotations({ bootstrap, notify }: ProductionPl
   };
 
   const deleteQuotation = async (record: SupplierQuotationRecord) => {
-    if (!window.confirm(`ลบ ${record.quotationNumber} (${record.supplierName}) ใช่หรือไม่?\nการลบไม่สามารถย้อนกลับได้`)) return;
+    if (!(await confirmDialog(`ลบ ${record.quotationNumber} (${record.supplierName}) ใช่หรือไม่?\nการลบไม่สามารถย้อนกลับได้`, { danger: true }))) return;
     setDeletingId(record.id);
     try {
       await deleteSupplierQuotation(record.id);

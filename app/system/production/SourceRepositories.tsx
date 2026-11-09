@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmDialog } from "../dialogs";
 import { optionalTextLink, textLink, useLinkedState } from "../screen-link";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import {
@@ -322,12 +323,12 @@ function RepositoryView({ name, notify, dateFormat, onBack }: { name: string; no
     setBusy(true);
     try { await work(); } catch (reason) { notify(errorText(reason)); } finally { setBusy(false); }
   };
-  const removeRepository = () => {
-    if (!detail || !window.confirm(t("Repos.deleteConfirm").replace("{name}", detail.name))) return;
+  const removeRepository = async () => {
+    if (!detail || !(await confirmDialog(t("Repos.deleteConfirm").replace("{name}", detail.name), { danger: true }))) return;
     void run(async () => { await deleteSourceRepository(detail.name); notify(t("Repos.deleted")); onBack(); });
   };
-  const removePath = (target: string, isFolder: boolean) => {
-    if (!window.confirm(t(isFolder ? "Repos.deleteFolderConfirm" : "Repos.deleteFileConfirm").replace("{path}", target))) return;
+  const removePath = async (target: string, isFolder: boolean) => {
+    if (!(await confirmDialog(t(isFolder ? "Repos.deleteFolderConfirm" : "Repos.deleteFileConfirm").replace("{path}", target), { danger: true }))) return;
     void run(async () => {
       await deleteRepositoryPath(name, target, "");
       if (file === target) setFile(null);

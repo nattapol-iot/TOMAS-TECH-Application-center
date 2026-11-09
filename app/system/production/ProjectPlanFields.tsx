@@ -15,6 +15,7 @@ import { Badge, Icon } from "../ui";
 import { SearchMultiPicker } from "./SearchMultiPicker";
 import { estimateBusinessDate } from "../../../lib/estimate-ux";
 import { PROJECT_TEAMS } from "../../../lib/project-portfolio";
+import { DateInput } from "../DateInput";
 
 /*
  * The parts of a project that Create project and Edit project share: its Master Plan headings,
@@ -107,14 +108,14 @@ export function MasterPlanSection({ rows, onChange, templates = [] }: { rows: Pl
     </div></div>
     {!rows.length && templates.length ? <div className="project-plan-template">
       <select aria-label={t("CRM.pickMasterSchedule")} value={templateId} onChange={(event) => setTemplateId(Number(event.target.value))}><option value={0}>{t("CRM.pickMasterSchedule")}</option>{templates.map(item => <option key={item.id} value={item.id}>{item.name} ({item.rows.length})</option>)}</select>
-      {chosen?.rows.some(row => row.startOffsetDays !== null) ? <label className="project-plan-template-start"><span>{t("CRM.masterScheduleStart")}</span><input type="date" value={templateStart} onChange={(event) => setTemplateStart(event.target.value)} /></label> : null}
+      {chosen?.rows.some(row => row.startOffsetDays !== null) ? <label className="project-plan-template-start"><span>{t("CRM.masterScheduleStart")}</span><DateInput value={templateStart} onChange={(event) => setTemplateStart(event.target.value)} /></label> : null}
       <button className="btn sm" type="button" disabled={!chosen} onClick={() => { if (chosen) onChange(() => planFromTemplate(chosen, templateStart)); }}>{t("CRM.applyMasterSchedule")}</button>
     </div> : null}
     {rows.length ? <ol className="project-plan-rows">{rows.map((row, index) => <li key={row.key} className="project-plan-row milestone">
       <span className="project-plan-index">{index + 1}.</span>
-      <input type="date" required={Boolean(row.tasks.length || row.finish)} aria-invalid={!headingPeriodValid(row)} aria-label={`${t("CRM.planStart")} ${index + 1}`} value={row.start} onChange={(event) => update(row.key, { start: event.target.value })} />
+      <DateInput required={Boolean(row.tasks.length || row.finish)} aria-invalid={!headingPeriodValid(row)} aria-label={`${t("CRM.planStart")} ${index + 1}`} value={row.start} onChange={(event) => update(row.key, { start: event.target.value })} />
       <span className="project-plan-dash" aria-hidden="true">–</span>
-      <input type="date" required={Boolean(row.tasks.length || row.start)} aria-invalid={!headingPeriodValid(row)} aria-label={`${t("CRM.planFinish")} ${index + 1}`} min={row.start || undefined} value={row.finish} onChange={(event) => update(row.key, { finish: event.target.value })} />
+      <DateInput required={Boolean(row.tasks.length || row.start)} aria-invalid={!headingPeriodValid(row)} aria-label={`${t("CRM.planFinish")} ${index + 1}`} min={row.start || undefined} value={row.finish} onChange={(event) => update(row.key, { finish: event.target.value })} />
       <input required aria-label={`${t("CRM.headingName")} ${index + 1}`} placeholder={t("CRM.headingName")} maxLength={500} value={row.name} onChange={(event) => update(row.key, { name: event.target.value })} />
       <button className="icon-btn" type="button" disabled={headingLocked(row)} aria-label={`${t("CRM.removeHeading")} ${index + 1}`} title={t(headingLocked(row) ? "CRM.rowInUse" : "CRM.removeHeading")} onClick={() => onChange(current => current.filter(item => item.key !== row.key))}><Icon name="x" /></button>
       {!row.tasks.length && !row.start && !row.finish ? <small className="project-plan-progress muted">{t("CRM.noDatesYet")}</small> : null}
@@ -170,9 +171,9 @@ export function TeamPlanSection({ rows, onChange, people }: { rows: PlanHeadingD
           <li className="project-plan-row team">
             <span className="project-plan-index">{number}</span>
             <select required aria-label={`${t("CRM.selectMember")} ${number}`} value={task.userId || ""} onChange={(event) => editTask(heading.key, task.key, current => ({ ...current, userId: Number(event.target.value) }))}><option value="">{t("CRM.selectMember")}</option><MemberOptions people={people} /></select>
-            <input type="date" required disabled={task.datesLocked} title={task.datesLocked ? t("CRM.datesFromFunctions") : undefined} aria-label={`${t("CRM.planStart")} ${number}`} value={task.start} onChange={(event) => editTask(heading.key, task.key, current => ({ ...current, start: event.target.value }))} />
+            <DateInput required disabled={task.datesLocked} title={task.datesLocked ? t("CRM.datesFromFunctions") : undefined} aria-label={`${t("CRM.planStart")} ${number}`} value={task.start} onChange={(event) => editTask(heading.key, task.key, current => ({ ...current, start: event.target.value }))} />
             <span className="project-plan-dash" aria-hidden="true">–</span>
-            <input type="date" required disabled={task.datesLocked} title={task.datesLocked ? t("CRM.datesFromFunctions") : undefined} aria-label={`${t("CRM.planFinish")} ${number}`} min={task.start || undefined} value={task.finish} onChange={(event) => editTask(heading.key, task.key, current => ({ ...current, finish: event.target.value }))} />
+            <DateInput required disabled={task.datesLocked} title={task.datesLocked ? t("CRM.datesFromFunctions") : undefined} aria-label={`${t("CRM.planFinish")} ${number}`} min={task.start || undefined} value={task.finish} onChange={(event) => editTask(heading.key, task.key, current => ({ ...current, finish: event.target.value }))} />
             <input required className="project-plan-name" aria-label={`${t("CRM.taskName")} ${number}`} placeholder={t("CRM.taskName")} maxLength={500} value={task.name} onChange={(event) => editTask(heading.key, task.key, current => ({ ...current, name: event.target.value }))} />
             <input inputMode="decimal" aria-label={`${t("CRM.planManDays")} ${number}`} placeholder={t("CRM.planManDays")} aria-invalid={!planManDaysValid(task.planManDays)} value={task.planManDays} onChange={(event) => editTask(heading.key, task.key, current => ({ ...current, planManDays: event.target.value }))} />
             <button className="icon-btn add" type="button" data-guide="project.functionAdd" disabled={task.noFunctions && !task.functions.length} aria-label={`${t("CRM.addFunction")} ${number}`} title={t(task.noFunctions && !task.functions.length ? "CRM.noFunctions" : "CRM.addFunction")}
@@ -187,9 +188,9 @@ export function TeamPlanSection({ rows, onChange, people }: { rows: PlanHeadingD
               <span className="project-plan-index">{itemNumber}</span>
               <select aria-label={`${t("CRM.selectMember")} ${itemNumber}`} value={item.userId || ""} onChange={(event) => editFunction(heading.key, task.key, item.key, { userId: Number(event.target.value) })}>
                 <option value="">{t("CRM.sameAsTask")}{task.userId ? ` · ${nameOf(task.userId)}` : ""}</option><MemberOptions people={people} /></select>
-              <input type="date" disabled={item.datesLocked} aria-label={`${t("CRM.planStart")} ${itemNumber}`} value={item.start} onChange={(event) => editFunction(heading.key, task.key, item.key, { start: event.target.value })} />
+              <DateInput disabled={item.datesLocked} aria-label={`${t("CRM.planStart")} ${itemNumber}`} value={item.start} onChange={(event) => editFunction(heading.key, task.key, item.key, { start: event.target.value })} />
               <span className="project-plan-dash" aria-hidden="true">–</span>
-              <input type="date" disabled={item.datesLocked} aria-label={`${t("CRM.planFinish")} ${itemNumber}`} aria-invalid={functionInvalid(item) && Boolean(item.name.trim())} min={item.start || undefined} value={item.finish} onChange={(event) => editFunction(heading.key, task.key, item.key, { finish: event.target.value })} />
+              <DateInput disabled={item.datesLocked} aria-label={`${t("CRM.planFinish")} ${itemNumber}`} aria-invalid={functionInvalid(item) && Boolean(item.name.trim())} min={item.start || undefined} value={item.finish} onChange={(event) => editFunction(heading.key, task.key, item.key, { finish: event.target.value })} />
               <input required className="project-plan-name" aria-label={`${t("CRM.functionName")} ${itemNumber}`} placeholder={t("CRM.functionName")} maxLength={500} value={item.name} onChange={(event) => editFunction(heading.key, task.key, item.key, { name: event.target.value })} />
               <span aria-hidden="true" />
               <span aria-hidden="true" />

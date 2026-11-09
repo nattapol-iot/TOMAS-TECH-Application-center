@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmDialog } from "../dialogs";
 import { idLink, useLinkedState } from "../screen-link";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -14,6 +15,7 @@ import { LocalizedText } from "../LocalizedText";
 import {
   Badge, Drawer, EmptyState, Field, FilterChips, Icon, Modal, PageHeader, Pagination, Panel, SearchInput, Toolbar, type FilterItem, type Tone,
 } from "../ui";
+import { DateInput } from "../DateInput";
 
 type Notify = (message: string) => void;
 
@@ -403,8 +405,8 @@ function CabinetEditor({ cabinet, preset, options, notify, onClose, onSaved }: {
     else await createAssetCabinet(value);
     notify(t(cabinet ? "Assets.cabinetSaved" : "Assets.cabinetCreated"));
   });
-  const remove = () => {
-    if (!cabinet || !window.confirm(t("Assets.cabinetDeleteConfirm").replace("{name}", cabinet.name))) return;
+  const remove = async () => {
+    if (!cabinet || !(await confirmDialog(t("Assets.cabinetDeleteConfirm").replace("{name}", cabinet.name), { danger: true }))) return;
     void run(async () => { await deleteAssetCabinet(cabinet.id); notify(t("Assets.cabinetDeleted")); });
   };
 
@@ -484,7 +486,7 @@ function AssetDrawer({ id, revision, dateFormat, notify, canSeeCredentials, onCl
     }
   };
   const remove = async () => {
-    if (!detail || !window.confirm(t("Assets.deleteConfirm").replace("{name}", `${detail.assetNo} ${detail.name}`))) return;
+    if (!detail || !(await confirmDialog(t("Assets.deleteConfirm").replace("{name}", `${detail.assetNo} ${detail.name}`), { danger: true }))) return;
     setBusy(true);
     try {
       await deleteAsset(id);
@@ -721,8 +723,8 @@ function AssetEditor({ asset, preset, options, notify, onClose, onSaved }: {
         <Field label="Assets.repository" hint="Assets.repositoryHint">
           <input value={value.repository} maxLength={100} onChange={(event) => set("repository", event.target.value.trim())} placeholder="fts-plc-collect-data" />
         </Field>
-        <Field label="Assets.installedOn"><input type="date" value={value.installedOn ?? ""} onChange={(event) => set("installedOn", event.target.value || null)} /></Field>
-        <Field label="Assets.warrantyUntil" guide="asset.warranty"><input type="date" value={value.warrantyUntil ?? ""} min={value.installedOn ?? undefined} onChange={(event) => set("warrantyUntil", event.target.value || null)} /></Field>
+        <Field label="Assets.installedOn"><DateInput value={value.installedOn ?? ""} onChange={(event) => set("installedOn", event.target.value || null)} /></Field>
+        <Field label="Assets.warrantyUntil" guide="asset.warranty"><DateInput value={value.warrantyUntil ?? ""} min={value.installedOn ?? undefined} onChange={(event) => set("warrantyUntil", event.target.value || null)} /></Field>
 
         <Field label="Assets.monitorSite" span={2} guide="asset.monitor">
           <select value={value.monitorSiteId ?? ""} onChange={(event) => setValue((current) => ({ ...current, monitorSiteId: event.target.value ? Number(event.target.value) : null, monitorProgramId: null }))}>

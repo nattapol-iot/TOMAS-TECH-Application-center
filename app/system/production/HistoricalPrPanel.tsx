@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmDialog } from "../dialogs";
 import { useCallback, useEffect, useState } from "react";
 import { apiRequest, downloadHistoricalPrSource } from "../api-client";
 import { Badge, EmptyState, Field, Icon, KpiCard, Modal, Panel } from "../ui";
@@ -152,8 +153,8 @@ function HistoryDetail({ id, canEdit, onSelect, onClose, notify }: { id: number;
     window.addEventListener("beforeunload", preventUnload);
     return () => window.removeEventListener("beforeunload", preventUnload);
   }, [dirty]);
-  const discardChanges = () => !dirty || window.confirm(t("มีการจับคู่ที่ยังไม่ได้บันทึก ต้องการออกโดยไม่บันทึกหรือไม่?"));
-  const close = () => { if (!busy && discardChanges()) onClose(); };
+  const discardChanges = async () => !dirty || (await confirmDialog(t("มีการจับคู่ที่ยังไม่ได้บันทึก ต้องการออกโดยไม่บันทึกหรือไม่?"), { danger: true }));
+  const close = async () => { if (!busy && (await discardChanges())) onClose(); };
   const staleKeys = detail?.workbook.lines.filter(line => links[line.key]?.estimateLineId && !detail.estimateLines.some(candidate => candidate.id === links[line.key]?.estimateLineId)).map(line => line.key) ?? [];
   const editable = canEdit && detail?.isCurrent && !busy && !loading;
   return <Modal title={detail?.documentReference ?? t("PR ย้อนหลัง")} subtitle={t("Historical PR · เก็บรายละเอียดต้นฉบับและประวัติ PO")} size="wide" onClose={close} footer={<>
@@ -161,10 +162,10 @@ function HistoryDetail({ id, canEdit, onSelect, onClose, notify }: { id: number;
     <button className="btn ghost" type="button" disabled={busy || loading || !detail} onClick={() => void download()}><Icon name="download" />{t("ไฟล์ต้นฉบับ")}</button>
     {canEdit && detail?.isCurrent ? <button className="btn primary" type="button" disabled={!editable || !dirty || staleKeys.length > 0} onClick={() => void save()}>{t("บันทึกการจับคู่")}</button> : null}
   </>}>
-    <ErrorMessage message={error} />{error ? <button className="btn ghost" type="button" onClick={() => { if (discardChanges()) void load(); }}>{t("ลองโหลดใหม่")}</button> : null}
+    <ErrorMessage message={error} />{error ? <button className="btn ghost" type="button" onClick={async () => { if ((await discardChanges())) void load(); }}>{t("ลองโหลดใหม่")}</button> : null}
     {loading ? <p role="status">{t("กำลังโหลด…")}</p> : detail ? <div className="historical-pr-detail">
       <div className="historical-pr-context">
-        <Field label={t("ประวัติไฟล์นำเข้า")}><select disabled={busy} value={id} onChange={e => { if (discardChanges()) onSelect(Number(e.target.value)); }}>{detail.versions.map(v => <option key={v.id} value={v.id}>{t("รุ่น")}{" "}{v.revision}{v.isCurrent ? t(" (ล่าสุด)") : t(" (ประวัติ)")} {t("·")}{" "}{date(v.createdAt)}</option>)}</select></Field>
+        <Field label={t("ประวัติไฟล์นำเข้า")}><select disabled={busy} value={id} onChange={async e => { if ((await discardChanges())) onSelect(Number(e.target.value)); }}>{detail.versions.map(v => <option key={v.id} value={v.id}>{t("รุ่น")}{" "}{v.revision}{v.isCurrent ? t(" (ล่าสุด)") : t(" (ประวัติ)")} {t("·")}{" "}{date(v.createdAt)}</option>)}</select></Field>
         <div className="historical-pr-project-summary">
           <span>{t("Project")}</span>
           <strong>{detail.workbook.projectNumber}</strong>

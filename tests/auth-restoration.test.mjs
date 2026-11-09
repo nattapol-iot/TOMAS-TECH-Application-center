@@ -95,6 +95,7 @@ function createHarness({
     get: (_target, property) => property === "default" ? "MockDefaultComponent" : String(property),
   });
   const modules = {
+    "./dialogs": { confirmDialog: async () => globalThis.window.confirm?.() ?? true },
     "../../lib/remembered-view": rememberedView,
     "../../backend-node/src/engineering-rate-access": { canViewEngineeringRates: role => DASHBOARD_ROLES.includes(role) },
     react,
@@ -510,7 +511,7 @@ test("legacy project timeline links and remembered views preserve schedule acces
           assert.equal(Boolean(timeline), permissions.length === 2);
           if (timeline) {
             assert.equal(navLeaf(tree, "Projects").props["aria-current"], "page");
-            timeline.props.openProjectSchedule(42, 8);
+            await timeline.props.openProjectSchedule(42, 8);
             const plan = findNode(harness.render(), node => node.type === "ProductionProjectSchedule");
             assert.ok(plan, "a timeline task still opens its project plan");
             assert.equal(plan.props.preferredProjectId, 42);
@@ -560,7 +561,7 @@ test("reports have distinct restored destinations and preserve the dirty exit gu
       const label=savedView==="reports"?"Operational Reports":"Summary Reports";
       assert.equal(navLeaf(tree,label).props["aria-current"],"page");
       assert.ok(findNode(tree,n=>n.type===(savedView==="reports"?"ReportScreens":"ProductionReports")));
-      if(savedView==="reports") {findNode(tree,n=>n.type==="ReportScreens").props.onDirtyChange(true);globalThis.window.confirm=()=>false;navLeaf(tree,"Summary Reports").props.onClick(plainClick());assert.ok(findNode(harness.render(),n=>n.type==="ReportScreens"));}
+      if(savedView==="reports") {findNode(tree,n=>n.type==="ReportScreens").props.onDirtyChange(true);globalThis.window.confirm=()=>false;await navLeaf(tree,"Summary Reports").props.onClick(plainClick());assert.ok(findNode(harness.render(),n=>n.type==="ReportScreens"));}
     }finally{harness.cleanup();}
   });}
 });
@@ -584,7 +585,7 @@ test("mobile leaf navigation closes the drawer only after accepting navigation",
   try {
     globalThis.window.matchMedia=()=>({matches:true});
     harness.render();harness.runMountEffects();await new Promise(resolve=>setImmediate(resolve));
-    const tree=harness.render();navLeaf(tree,"Summary Reports").props.onClick(plainClick());
+    const tree=harness.render();await navLeaf(tree,"Summary Reports").props.onClick(plainClick());
     assert.ok(findNode(harness.render(),n=>n.props.className==="app sidebar-collapsed"));
     assert.ok(findNode(harness.render(),n=>n.type==="ProductionReports"));
   }finally{harness.cleanup();}
@@ -597,12 +598,12 @@ test("a menu entry is a link: Ctrl/Cmd+Click is left to the browser, a plain cli
     assert.equal(navLeaf(harness.render(),"Summary Reports").props.href,"#/summary-reports");
     for(const modifier of ["ctrlKey","metaKey","shiftKey"]){
       const event={...plainClick(),[modifier]:true};
-      navLeaf(harness.render(),"Summary Reports").props.onClick(event);
+      await navLeaf(harness.render(),"Summary Reports").props.onClick(event);
       assert.equal(event.prevented,false,modifier);
       assert.ok(findNode(harness.render(),n=>n.type==="ReportScreens"),modifier);
     }
     const event=plainClick();
-    navLeaf(harness.render(),"Summary Reports").props.onClick(event);
+    await navLeaf(harness.render(),"Summary Reports").props.onClick(event);
     assert.equal(event.prevented,true);
     assert.ok(findNode(harness.render(),n=>n.type==="ProductionReports"));
   }finally{harness.cleanup();}

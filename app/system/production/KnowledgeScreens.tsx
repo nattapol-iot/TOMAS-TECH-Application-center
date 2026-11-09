@@ -1,5 +1,6 @@
 "use client";
 
+import { promptDialog } from "../dialogs";
 import { idLink, useLinkedState } from "../screen-link";
 import { LocalizedText } from "../LocalizedText";
 import { useT as useUiText } from "../i18n";
@@ -78,6 +79,7 @@ import {
   Toolbar,
   toneOf,
 } from "../ui";
+import { DateInput } from "../DateInput";
 
 type KnowledgeProps = {
   bootstrap: BootstrapData;
@@ -664,7 +666,7 @@ function ArticleEditorModal({ categories, bootstrap, article, onClose, onSaved }
       <Field label={t("Status")}><select value={status} onChange={(event) => setStatus(event.target.value)}>{["Draft", "In Review", "Published", "Archived"].map((value) => <option key={value}>{value}</option>)}</select></Field>
       <Field label={t("Confidentiality")}><select value={confidentiality} onChange={(event) => setConfidentiality(event.target.value)}>{["Company", "Department Only", "Project Team Only", "Management Only", "Confidential", "Restricted"].map((value) => <option key={value}>{value}</option>)}</select></Field>
       <Field label={t("Language")}><select value={language} onChange={(event) => setLanguage(event.target.value)}>{["EN", "TH", "JA"].map((value) => <option key={value}>{value}</option>)}</select></Field>
-      <Field label={t("Review date")}><input type="date" value={reviewDate} onChange={(event) => setReviewDate(event.target.value)} /></Field>
+      <Field label={t("Review date")}><DateInput value={reviewDate} onChange={(event) => setReviewDate(event.target.value)} /></Field>
       <Field label={t("Tags")} span={2}><input value={tags} maxLength={500} onChange={(event) => setTags(event.target.value)} /></Field>
     </div>
   </Modal>;
@@ -903,7 +905,7 @@ function CreateDocumentModal({
           label={t("Next review date")}
           hint={requiresReviewDate ? t("Required for a controlled document") : t("Optional")}
         >
-          <input type="date" value={nextReviewDate} onChange={(event) => setNextReviewDate(event.target.value)} />
+          <DateInput value={nextReviewDate} onChange={(event) => setNextReviewDate(event.target.value)} />
         </Field>
         <Field label={t("Tags")} span={2} hint={t("Separate with semicolons")}>
           <input value={tags} maxLength={500} onChange={(event) => setTags(event.target.value)} />
@@ -1026,8 +1028,8 @@ function DocumentDrawer({
           {myPendingStep ? (
             <>
               <button className="btn ghost" type="button" disabled={busy}
-                onClick={() => {
-                  const comment = window.prompt(t("Why are changes needed?")) ?? "";
+                onClick={async () => {
+                  const comment = (await promptDialog(t("Why are changes needed?"))) ?? "";
                   if (!comment.trim()) return;
                   void act(() => decideKnowledgeVersion(myPendingStep.versionId,
                     { decision: "Request Changes", comment }), "Changes requested");
@@ -1056,8 +1058,8 @@ function DocumentDrawer({
             </button>
           )) : null}
           {canArchive ? (
-            <button className="btn ghost" type="button" disabled={busy} onClick={() => {
-              const reason = window.prompt(document.archivedAt ? t("Reason for restoring this document") : t("Reason for archiving this document")) ?? "";
+            <button className="btn ghost" type="button" disabled={busy} onClick={async () => {
+              const reason = (await promptDialog(document.archivedAt ? t("Reason for restoring this document") : t("Reason for archiving this document"))) ?? "";
               if (!reason.trim()) return;
               void act(
                 () => document.archivedAt
@@ -1259,7 +1261,7 @@ function AcknowledgementAssignment({ versionId, bootstrap, notify, onChanged }: 
   return <Panel title={t("Read acknowledgement")} subtitle={t("Assignments are bound to this exact published revision")}>
     <div className="form-grid">
       <Field label={t("Members")} span={2}><div className="check-grid">{team.map((member) => <label className="check-inline" key={member.id}><input type="checkbox" checked={selected.includes(member.id)} onChange={(event) => setSelected((current) => event.target.checked ? [...current, member.id] : current.filter((id) => id !== member.id))} /><span>{member.name}</span></label>)}</div></Field>
-      <Field label={t("Due date")}><input type="date" value={dueAt} onChange={(event) => setDueAt(event.target.value)} /></Field>
+      <Field label={t("Due date")}><DateInput value={dueAt} onChange={(event) => setDueAt(event.target.value)} /></Field>
     </div>
     <button className="btn primary" type="button" disabled={selected.length === 0} onClick={async () => {
       try { const result = await assignKnowledgeAcknowledgement(versionId, { userIds: selected, dueAt: dueAt || undefined }); notify(`${result.assigned} acknowledgement assignment(s) added`); setSelected([]); onChanged(); }

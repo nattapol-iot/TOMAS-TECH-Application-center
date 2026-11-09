@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmDialog } from "../dialogs";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   createCredential, deleteCredential, getCredentialAccess, listCredentials, revealCredential, updateCredential,
@@ -65,7 +66,7 @@ export function AssetCredentials({ asset, notify }: { asset: InstalledAsset; not
     void navigator.clipboard?.writeText(secret).then(() => notify(t("Vault.copied")), () => notify(t("Vault.copyFailed")));
   };
   const remove = async (credential: SiteCredential) => {
-    if (!window.confirm(t("Vault.deleteConfirm").replace("{label}", credential.label))) return;
+    if (!(await confirmDialog(t("Vault.deleteConfirm").replace("{label}", credential.label), { danger: true }))) return;
     setBusy(credential.id);
     try {
       await deleteCredential(credential.id);
