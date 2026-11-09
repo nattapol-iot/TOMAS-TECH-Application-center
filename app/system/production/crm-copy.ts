@@ -329,7 +329,7 @@ export const CRM_COPY: Record<string,{en:string;th:string;jp:string}> = Object.f
  ["CRM.planSaved", "Plan saved", "บันทึกแผนแล้ว", "計画を保存しました"],
  ["CRM.followPlanDates", "Move the project's start and delivery to the plan", "ปรับวันเริ่มและวันส่งมอบของโปรเจกต์ตามแผน", "案件の開始日と納期を計画に合わせる"],
  ["CRM.currentDates", "now", "ตอนนี้", "現在"],
- ["ProjectHealth.On Track", "On Track", "On Track", "順調"],
+ ["ProjectHealth.On Track", "On Track", "ตามแผน", "順調"],
  ["ProjectHealth.At Risk", "At Risk", "เสี่ยงล่าช้า", "遅延リスク"],
  ["ProjectHealth.Delayed", "Delayed", "ล่าช้า", "遅延"],
  ["ProjectHealth.No plan", "No plan", "ยังไม่มีแผน", "計画なし"],

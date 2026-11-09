@@ -9,7 +9,7 @@
    or down, and sideways out of or into a level. */
 
 import { useId, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
-import { GANTT_ZOOMS, dayNumber, ganttDragDays, ganttDropChoices, ganttDropParent, ganttLanes, ganttLinkPath, ganttPoint, ganttShift, ganttSlip, ganttSpan, type GanttDrop, type GanttWindow, type GanttZoom } from "../../../lib/gantt";
+import { GANTT_ZOOMS, dayNumber, ganttDoneWidth, ganttDragDays, ganttDropChoices, ganttDropParent, ganttLanes, ganttLinkPath, ganttPoint, ganttShift, ganttSlip, ganttSpan, type GanttDrop, type GanttWindow, type GanttZoom } from "../../../lib/gantt";
 import { currentLocale, useT } from "../i18n";
 import { Icon, type Tone } from "../ui";
 import "./gantt.css";
@@ -112,9 +112,23 @@ export function GanttToolbar({ zoom, onZoom, onShift, onToday, allowFit = false 
   </div>;
 }
 
+/**
+ * What a bar's colour says. A project row is coloured by its health and a task row by scheduleTone(); the two
+ * use the same colours for the same meaning, so one key covers both: late, at risk, on track, done, not started or on hold.
+ */
+const TONE_KEY: ReadonlyArray<{ tone: Tone; label: string }> = [
+  { tone: "red", label: "ProjectHealth.Delayed" },
+  { tone: "amber", label: "ProjectHealth.At Risk" },
+  { tone: "blue", label: "ProjectHealth.On Track" },
+  { tone: "green", label: "ProjectHealth.Completed" },
+  { tone: "slate", label: "Gantt.toneIdle" },
+];
+
 export function GanttLegend({ baseline = false, target = false, links = false, draggable = false }: { baseline?: boolean; target?: boolean; links?: boolean; draggable?: boolean }) {
   const t = useT();
   return <ul className="gantt-legend" aria-label={t("Gantt.legend")}>
+    <li className="gantt-legend-tones">{t("Gantt.legendTone")}
+      {TONE_KEY.map(({ tone, label }) => <span key={tone}><i className={`gantt-key tone ${tone}`} aria-hidden="true" />{t(label)}</span>)}</li>
     <li><i className="gantt-key bar" aria-hidden="true" />{t("Gantt.legendPlan")}</li>
     <li><i className="gantt-key done" aria-hidden="true" />{t("Gantt.legendDone")}</li>
     <li><i className="gantt-key slip" aria-hidden="true" />{t("Gantt.legendSlip")}</li>
@@ -368,6 +382,8 @@ export function GanttChart({ rows, range, today, sideHeader, label, links = [], 
       const target = ganttPoint(row.target ?? null, range);
       const progress = row.progress === null || row.progress === undefined ? null : Math.max(0, Math.min(100, Math.round(Number(row.progress))));
       const done = progress === 100;
+      // The fill is measured along the whole plan, not the part the window shows (lib/gantt.ts ganttDoneWidth).
+      const doneWidth = progress === null ? null : ganttDoneWidth(start, finish, progress, range) ?? 0;
       const movable = row.reschedule ? ` movable${shift ? " moving" : ""}` : "";
       const grab = row.reschedule ? { onPointerDown: (event: ReactPointerEvent<HTMLElement>) => startDrag(event, row) } : {};
       // Where the dates being dropped on are written: after the bar, or before it near the right edge.
@@ -407,7 +423,7 @@ export function GanttChart({ rows, range, today, sideHeader, label, links = [], 
           })}
           {bar ? <button type="button" data-gantt-bar="" className={`gantt-bar ${row.tone}${row.kind === "task" ? "" : " summary"}${done ? " done" : ""}${bar.clippedStart ? " clip-start" : ""}${bar.clippedEnd ? " clip-end" : ""}${movable}`}
             style={{ left: `${bar.left}%`, width: `${bar.width}%` }} title={row.title} aria-label={row.title} onClick={() => open(row)} disabled={!row.onOpen && !row.reschedule} tabIndex={-1} {...grab}>
-            {progress !== null ? <i style={{ width: `${progress}%` }} /> : null}
+            {doneWidth !== null ? <i style={{ width: `${doneWidth}%` }} /> : null}
             {progress !== null && bar.width > 6 ? <span>{progress}%</span> : null}
             {row.reschedule?.resize ? <b className="gantt-bar-grip" title={t("Gantt.stretchHint")} /> : null}
           </button> : null}

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { GANTT_ZOOMS, draggedPlan, ganttDragDays, ganttDropChoices, ganttDropParent, ganttFitWindow, ganttLanes, ganttLinkPath, ganttPoint, ganttShift, ganttSlip, ganttSpan, ganttWindow, linkedStart, nextWorkDay, planDatesLoop, shiftGanttAnchor } from "../lib/gantt.ts";
+import { GANTT_ZOOMS, draggedPlan, ganttDoneWidth, ganttDragDays, ganttDropChoices, ganttDropParent, ganttFitWindow, ganttLanes, ganttLinkPath, ganttPoint, ganttShift, ganttSlip, ganttSpan, ganttWindow, linkedStart, nextWorkDay, planDatesLoop, shiftGanttAnchor } from "../lib/gantt.ts";
 
 const close = (actual, expected, message) => assert.ok(Math.abs(actual - expected) < 1e-9, `${message ?? ""} ${actual} ≠ ${expected}`);
 
@@ -39,6 +39,21 @@ test("a span is placed in percent of the window and clipped at its edges", () =>
   assert.equal(ganttSpan("2026-10-05", "2026-10-01", window), null, "reversed");
   const oneDay = ganttSpan("2026-10-06", "2026-10-06", window);
   close(oneDay.width, (1 / 42) * 100, "a one-day task (a milestone) still has a width");
+});
+
+test("the done fill is measured along the whole plan, so a clipped bar keeps its done edge on the right day", () => {
+  const window = ganttWindow("month", "2026-10-06"); // 2026-09-28 .. 2026-11-08, 42 days
+  close(ganttDoneWidth("2026-10-01", "2026-10-10", 30, window), 30, "a bar the window shows whole: progress as is");
+  // Sep 1 - Sep 30 (30 days): 50% ends on Sep 16, before the window; 95% ends half way through Sep 29.
+  close(ganttDoneWidth("2026-09-01", "2026-09-30", 50, window), 0, "done edge before the window");
+  close(ganttDoneWidth("2026-09-01", "2026-09-30", 95, window), 50, "1.5 of the 3 days that show");
+  // Nov 1 - Dec 31 (61 days): 10% is 6.1 days, of the 8 that show; 50% is past the window's end.
+  close(ganttDoneWidth("2026-11-01", "2026-12-31", 10, window), (6.1 / 8) * 100);
+  close(ganttDoneWidth("2026-11-01", "2026-12-31", 50, window), 100, "done edge past the visible end");
+  close(ganttDoneWidth("2026-10-01", "2026-10-10", 140, window), 100, "progress is capped at 100");
+  assert.equal(ganttDoneWidth("2026-12-01", "2026-12-05", 50, window), null, "outside");
+  assert.equal(ganttDoneWidth(null, "2026-10-01", 50, window), null, "undated");
+  assert.equal(ganttDoneWidth("2026-10-01", "2026-10-10", Number.NaN, window), null, "no progress");
 });
 
 test("points mark one day, and nothing outside the window", () => {
