@@ -25,7 +25,7 @@ function load(relative) {
 
 const read = (file) => readFileSync(new URL(`../${file}`, import.meta.url), "utf8");
 const screens = read("app/system/production/CoreScreens.tsx");
-const portfolio = screens.slice(screens.indexOf("const PORTFOLIO_HEALTH_TONE"), screens.indexOf("// Deleting is offered only after"));
+const portfolio = screens.slice(screens.indexOf("const PORTFOLIO_CHIP_COPY"), screens.indexOf("// Deleting is offered only after"));
 const ui = read("app/system/ui.tsx");
 
 test("the portfolio loads the unpaged overview endpoint once per closed toggle", () => {

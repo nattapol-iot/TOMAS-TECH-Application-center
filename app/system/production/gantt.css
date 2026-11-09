@@ -6,12 +6,22 @@
 
 .gantt-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; padding: 0; list-style: none; color: var(--muted); font-size: var(--fs-2xs); }
 .gantt-legend li { display: inline-flex; align-items: center; gap: 6px; }
-.gantt-key { display: inline-block; width: 18px; height: 8px; border-radius: var(--r-xs); background: var(--blue-soft); border: 1px solid var(--blue-line); }
-.gantt-key.done { background: var(--blue); border-color: var(--blue); }
+/* Bars take their row's status colour (the tone key below), so the plan and done-so-far keys are neutral shapes. */
+.gantt-key { display: inline-block; width: 18px; height: 8px; border-radius: var(--r-xs); background: var(--surface); border: 1px solid var(--n-500); }
+.gantt-key.done { background: var(--n-500); border-color: var(--n-500); }
+.gantt-legend .gantt-legend-tones { flex-wrap: wrap; gap: 4px 10px; padding-right: 14px; border-right: 1px solid var(--line); }
+.gantt-legend-tones > span { display: inline-flex; align-items: center; gap: 5px; }
+.gantt-key.tone { width: 10px; height: 10px; border: 0; border-radius: var(--r-pill); }
+.gantt-key.tone.red { background: var(--red); }
+.gantt-key.tone.amber { background: var(--amber); }
+.gantt-key.tone.blue { background: var(--blue); }
+.gantt-key.tone.green { background: var(--green); }
+.gantt-key.tone.slate { background: var(--n-400); }
 .gantt-key.slip { background: var(--amber-soft); border: 1px dashed var(--amber); }
 .gantt-key.baseline { height: 4px; background: var(--n-300); border: 0; }
 .gantt-key.milestone { width: 9px; height: 9px; border: 0; border-radius: 1px; background: var(--violet); transform: rotate(45deg); }
-.gantt-key.target { width: 2px; height: 12px; border: 0; border-radius: 0; background: var(--red); }
+.gantt-key.target { position: relative; width: 2px; height: 12px; margin-right: 7px; border: 0; border-radius: 0; background: var(--red); }
+.gantt-key.target::before { content: ""; position: absolute; top: 0; left: 2px; border-left: 7px solid var(--red); border-top: 4px solid transparent; border-bottom: 4px solid transparent; }
 .gantt-key.today { width: 2px; height: 12px; border: 0; border-radius: 0; background: var(--blue); }
 .gantt-key.link { position: relative; width: 16px; height: 0; border: 0; border-top: 1.5px solid var(--n-500); border-radius: 0; background: none; }
 .gantt-key.link::after { content: ""; position: absolute; top: -4.5px; right: -2px; border-left: 6px solid var(--n-500); border-top: 3.5px solid transparent; border-bottom: 3.5px solid transparent; }
@@ -19,7 +29,8 @@
 
 .gantt { --gantt-side: 300px; position: relative; display: flex; flex-direction: column; min-width: 0; max-height: 70vh; overflow-y: auto; font-size: var(--fs-xs); }
 .gantt-head, .gantt-row { display: grid; grid-template-columns: var(--gantt-side) minmax(0, 1fr); }
-.gantt-head { position: sticky; top: 0; z-index: 2; background: var(--surface); border-bottom: 1px solid var(--line); }
+/* Above everything a row draws (bars 2-3, drop label 4, drop line 5), so rows scroll under the dates instead of over them. */
+.gantt-head { position: sticky; top: 0; z-index: 6; background: var(--surface); border-bottom: 1px solid var(--line); }
 .gantt-side-head { padding: 8px 10px; color: var(--muted); font-size: var(--fs-2xs); font-weight: 650; text-transform: uppercase; letter-spacing: 0.04em; border-right: 1px solid var(--line); }
 .gantt-scale { position: relative; height: 32px; overflow: hidden; }
 .gantt-scale span { position: absolute; top: 0; bottom: 0; padding: 9px 6px 0; border-left: 1px solid var(--line-soft); color: var(--muted); font-size: var(--fs-2xs); white-space: nowrap; overflow: hidden; text-overflow: clip; }
@@ -113,6 +124,7 @@ button.gantt-label:focus-visible { outline: 2px solid var(--blue); outline-offse
   z-index: 2;
 }
 .gantt-bar:disabled { cursor: default; }
+.gantt-bar:not(:disabled):hover { filter: brightness(1.08); }
 .gantt-bar:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
 .gantt-bar i { position: absolute; inset: 0 auto 0 0; background: var(--blue); opacity: 0.85; }
 .gantt-bar span { position: relative; padding: 0 6px; color: var(--ink); font-size: var(--fs-3xs); font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; }

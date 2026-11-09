@@ -66,7 +66,7 @@ import { DEFAULT_PORTFOLIO_SORT, PORTFOLIO_CHIPS, PORTFOLIO_HEALTH_ORDER, PORTFO
   projectTeamOf, shownProjectTeam, type PortfolioChip, type PortfolioFilters, type PortfolioSort, type PortfolioSortKey } from "../../../lib/project-portfolio";
 import { allowedProjectTransitions, type ProjectStatus } from "../../../backend-node/src/project-lifecycle";
 import { EndUserCompanyField, EndUserEditModal, canEditEndUser } from "./EndUserCompanyField";
-import { ContactPicker, HealthBadge, MasterPlanSection, MemberOptions, NotBrokenDownNote, PaymentChecklist, TeamPlanSection, TeamSelect, planIssuesOf, planPayload, planSpanOf, projectTeamOptions,
+import { ContactPicker, HealthBadge, MasterPlanSection, MemberOptions, NotBrokenDownNote, PROJECT_HEALTH_TONE, PaymentChecklist, TeamPlanSection, TeamSelect, planIssuesOf, planPayload, planSpanOf, projectTeamOptions,
   type PlanHeadingDraft } from "./ProjectPlanFields";
 import { ProductionCustomers, ProductionEngineeringRates } from "./AdminAnalyticsScreens";
 import { ErpMasterPanel } from "./ErpMasterPanel";
@@ -485,7 +485,6 @@ export function ProductionDashboard({
   );
 }
 
-const PORTFOLIO_HEALTH_TONE: Record<ProjectHealth, Tone> = { Delayed: "red", "At Risk": "amber", "No plan": "slate", "On Track": "green", "On Hold": "slate", Completed: "blue" };
 const PORTFOLIO_CHIP_COPY: Record<PortfolioChip, { label: string; tone: Tone }> = {
   overdue: { label: "Portfolio.chipOverdue", tone: "red" }, blocked: { label: "Portfolio.chipBlocked", tone: "red" },
   waiting: { label: "Portfolio.chipWaiting", tone: "amber" }, stale: { label: "Portfolio.chipStale", tone: "slate" },
@@ -687,7 +686,7 @@ export function ProductionProjects({ bootstrap, notify, refreshBootstrap, teamTe
     try { window.localStorage.setItem(sortStorageKey, JSON.stringify(next)); } catch { /* The sort is a convenience when storage is blocked. */ }
   };
   const healthItems = PORTFOLIO_HEALTH_ORDER.filter((value) => (value !== "On Hold" && value !== "Completed") || view.healthCounts[value] > 0 || health === value)
-    .map((value) => ({ key: value, label: `ProjectHealth.${value}`, value: view.healthCounts[value], tone: PORTFOLIO_HEALTH_TONE[value] }));
+    .map((value) => ({ key: value, label: `ProjectHealth.${value}`, value: view.healthCounts[value], tone: PROJECT_HEALTH_TONE[value] }));
   const chipItems = PORTFOLIO_CHIPS.map((key) => ({ key, ...PORTFOLIO_CHIP_COPY[key], value: view.chipCounts[key] }));
   // One step along the lifecycle, saved with the row's version so a stale row is refused, not overwritten.
   const saveStage = async (item: ProjectOverviewItem, next: string, actualDelivery?: string) => {

@@ -260,6 +260,32 @@ test("the Gantt name column can be dragged wider, keyed, remembered per chart an
   }
 });
 
+test("the Gantt dates stay above the rows, the fill follows the whole plan, and the legend says what a colour means", () => {
+  const css = read("app/system/production/gantt.css");
+  // The sticky header sits above everything a row draws (bars, drop label, drop line, the column edge strip).
+  const headZ = Number(/\.gantt-head \{[^}]*z-index: (\d+);/.exec(css)?.[1]);
+  const rowLayers = [...css.matchAll(/([^{}]+)\{([^}]*)\}/g)]
+    .filter(([, selector, body]) => /z-index:/.test(body) && !/gantt-head|gantt-resizer/.test(selector))
+    .map(([, selector, body]) => [selector.trim(), Number(/z-index: (\d+)/.exec(body)[1])]);
+  assert.ok(rowLayers.length >= 5, "the row layers were found");
+  for (const [selector, z] of rowLayers) assert.ok(z < headZ, `${selector} (z-index ${z}) would draw over the dates (header ${headZ})`);
+  // The old Resource-plan Gantt rules in globals.css styled these same class names and put the name column over the dates.
+  assert.doesNotMatch(read("app/globals.css"), /^\.gantt/m);
+  assert.match(read("app/system/production/GanttChart.tsx"), /<i style=\{\{ width: `\$\{doneWidth\}%` \}\} \/>/);
+  // One health colour map for the badge, the health bar and the timeline's project bars.
+  assert.match(read("app/system/production/ProjectPlanFields.tsx"), /export const PROJECT_HEALTH_TONE[^=]*= \{\r?\n\s+"On Track": "blue", "At Risk": "amber", Delayed: "red", "No plan": "slate", "On Hold": "slate", Completed: "green",/);
+  for (const file of ["app/system/production/CoreScreens.tsx", "app/system/production/ProjectPortfolioGantt.tsx"]) {
+    const source = read(file);
+    assert.match(source, /PROJECT_HEALTH_TONE\[/, file);
+    assert.doesNotMatch(source, /HEALTH_TONE: Record/, `${file} keeps no colour map of its own`);
+  }
+  const { translate } = load("app/system/i18n.ts");
+  for (const key of ["Gantt.legendTone", "Gantt.toneIdle", "ProjectHealth.On Track", "ProjectHealth.Completed"]) {
+    for (const lang of ["EN", "TH", "JP"]) assert.notEqual(translate(key, lang), key, `${key} has no ${lang}`);
+  }
+  assert.equal(translate("ProjectHealth.On Track", "TH"), "ตามแผน");
+});
+
 test("every new follow-up string has English, Thai and Japanese copy", () => {
   const { translate } = load("app/system/i18n.ts");
   const keys = [

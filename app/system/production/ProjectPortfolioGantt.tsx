@@ -10,13 +10,11 @@ import { ganttWindow, shiftGanttAnchor } from "../../../lib/gantt";
 import { apiRequest } from "../api-client";
 import { useT } from "../i18n";
 import { searchScheduleTasks, type ProjectOverviewItem } from "../project-overview-client";
-import { Icon, type Tone } from "../ui";
+import { Icon } from "../ui";
 import { useFullscreen } from "../use-fullscreen";
 import { GanttChart, GanttLegend, GanttToolbar, scheduleTone, type GanttRowSpec, type GanttZoomChoice } from "./GanttChart";
 import type { ProjectSchedule, ScheduleTask } from "./PlanningPricingScreens";
-import { HealthBadge } from "./ProjectPlanFields";
-
-const HEALTH_TONE: Record<string, Tone> = { Delayed: "red", "At Risk": "amber", "On Track": "blue", "No plan": "slate", "On Hold": "slate", Completed: "green" };
+import { HealthBadge, PROJECT_HEALTH_TONE } from "./ProjectPlanFields";
 
 /** Loads and opens up to this many projects at once, so one click cannot fire a request per project in the company. */
 const EXPAND_LIMIT = 20;
@@ -102,7 +100,7 @@ export function ProjectPortfolioGantt({ rows, today, canReadSchedule, includeClo
       status: <HealthBadge health={item.health ?? "No plan"} />,
       expandable: canReadSchedule && item.taskCount > 0, expanded: isOpen, onToggle: () => toggle(item.id),
       ...(openPlan ? { onOpen: () => openPlan(item.id) } : {}),
-      start: item.planStart, finish: item.planFinish, progress: Number(item.progress), tone: HEALTH_TONE[item.health ?? "No plan"] ?? "slate",
+      start: item.planStart, finish: item.planFinish, progress: Number(item.progress), tone: PROJECT_HEALTH_TONE[item.health ?? "No plan"] ?? "slate",
       forecastFinish: item.forecastFinish, target: item.targetDelivery,
       title: `${item.number} · ${item.name} · ${item.planStart ?? "—"} → ${item.planFinish ?? "—"} · ${Math.round(Number(item.progress) || 0)}%`,
     });

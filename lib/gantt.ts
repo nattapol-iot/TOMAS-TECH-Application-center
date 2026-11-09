@@ -93,6 +93,22 @@ export function ganttSpan(start: string | null | undefined, finish: string | nul
   return { left: ((from - windowStart) / size) * 100, width: ((to - from) / size) * 100, clippedStart: spanStart < windowStart, clippedEnd: spanEnd > windowEnd };
 }
 
+/**
+ * How much of a bar's visible part is done, in percent of that part. Progress runs along the whole plan, so a bar
+ * the window cuts keeps its done edge on the right day: 50% of a plan that started before the window is not 50% of
+ * what shows. 0 when the done edge is before the window, 100 when it is past the visible end; null with no bar.
+ */
+export function ganttDoneWidth(start: string | null | undefined, finish: string | null | undefined, progress: number, window: GanttWindow): number | null {
+  if (!start || !finish || !Number.isFinite(progress)) return null;
+  const windowStart = dayNumber(window.start), windowEnd = dayNumber(window.end) + 1;
+  const spanStart = dayNumber(start), spanEnd = dayNumber(finish) + 1;
+  if (!Number.isFinite(spanStart) || !Number.isFinite(spanEnd) || spanEnd <= spanStart) return null;
+  const from = Math.max(spanStart, windowStart), to = Math.min(spanEnd, windowEnd);
+  if (to <= from) return null;
+  const doneEdge = spanStart + (spanEnd - spanStart) * Math.max(0, Math.min(100, progress)) / 100;
+  return Math.max(0, Math.min(1, (doneEdge - from) / (to - from))) * 100;
+}
+
 /** The left edge of one day in the window, as a percentage; null outside it. Used for today and targets. */
 export function ganttPoint(date: string | null | undefined, window: GanttWindow): number | null {
   if (!date) return null;

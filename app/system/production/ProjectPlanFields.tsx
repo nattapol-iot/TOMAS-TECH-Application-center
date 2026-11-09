@@ -257,12 +257,16 @@ export function ContactPicker({ customerId, value, onChange }: { customerId: num
   </fieldset>;
 }
 
-const HEALTH_TONE: Record<ProjectHealth, "green" | "amber" | "red" | "slate" | "blue"> = {
-  "On Track": "green", "At Risk": "amber", Delayed: "red", "No plan": "slate", "On Hold": "slate", Completed: "blue",
+/**
+ * One colour per health for the badge, the portfolio's health bar and the timeline's project bars. The colours are
+ * the schedule's own (GanttChart scheduleTone): on track is blue like work in progress, done is green.
+ */
+export const PROJECT_HEALTH_TONE: Record<ProjectHealth, "green" | "amber" | "red" | "slate" | "blue"> = {
+  "On Track": "blue", "At Risk": "amber", Delayed: "red", "No plan": "slate", "On Hold": "slate", Completed: "green",
 };
 
 /** How the plan is going, worked out from the schedule; see backend-node/src/project-health.ts. */
 export function HealthBadge({ health }: { health: ProjectHealth }) {
   const t = useT();
-  return <Badge tone={HEALTH_TONE[health]}>{t(`ProjectHealth.${health}`)}</Badge>;
+  return <Badge tone={PROJECT_HEALTH_TONE[health]}>{t(`ProjectHealth.${health}`)}</Badge>;
 }

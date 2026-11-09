@@ -2409,6 +2409,8 @@ export const DICTIONARY: Record<string, Entry> = {
   "Gantt.legendBaseline": { en: "Baseline", th: "Baseline (แผนตั้งต้น)", jp: "ベースライン" },
   "Gantt.legendMilestone": { en: "Milestone", th: "Milestone", jp: "マイルストーン" },
   "Gantt.legendTarget": { en: "Target delivery", th: "วันส่งมอบเป้าหมาย", jp: "目標納期" },
+  "Gantt.legendTone": { en: "Bar colour", th: "สีแถบ", jp: "バーの色" },
+  "Gantt.toneIdle": { en: "Not started / on hold", th: "ยังไม่เริ่ม / พักงาน", jp: "未着手・保留" },
   "Gantt.outside": { en: "Outside this range", th: "อยู่นอกช่วงที่แสดง", jp: "表示期間外" },
   "Gantt.undated": { en: "No dates yet", th: "ยังไม่มีวันที่", jp: "日付未設定" },
   "Gantt.projectColumn": { en: "Project / task", th: "โครงการ / งาน", jp: "プロジェクト / タスク" },
