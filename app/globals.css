@@ -5074,3 +5074,18 @@ tbody tr.link-row:hover td { background: var(--blue-soft); }
 .asset-credential-actions { display: flex; gap: 2px; }
 .asset-credential-secret-input { display: flex; align-items: center; gap: 4px; }
 .asset-credential-secret-input input { flex: 1; min-width: 0; font-family: var(--font-mono); }
+
+/* DateInput (app/system/DateInput.tsx): dd/mm/yyyy typed in a text box, the browser's calendar behind the button. */
+.date-input { position: relative; display: inline-flex; align-items: center; width: 100%; min-width: 0; }
+.date-input > input[type="text"] { width: 100%; min-width: 0; padding-right: 32px; font-variant-numeric: tabular-nums; }
+.date-input-pick { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); display: inline-grid; place-items: center; width: 26px; height: 26px; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--muted); cursor: pointer; }
+.date-input-pick:hover:not(:disabled) { background: var(--n-50); color: var(--ink); }
+.date-input-pick:disabled { cursor: default; opacity: .5; }
+.date-input .date-input-native { position: absolute; right: 0; bottom: 0; width: 1px; height: 1px; min-height: 0; padding: 0; border: 0; opacity: 0; pointer-events: none; }
+
+/* SweetAlert2 windows (app/system/dialogs.ts) in the app's own type, radius and buttons. */
+.swal2-container .app-dialog { font-family: var(--font-sans); border-radius: var(--r-md); padding: 20px 20px 16px; color: var(--ink); background: var(--surface); }
+.swal2-container .app-dialog .swal2-title { font-size: 18px; color: var(--ink); }
+.swal2-container .app-dialog .swal2-html-container { font-size: 14px; color: var(--ink); white-space: pre-line; }
+.swal2-container .app-dialog .swal2-actions { gap: 8px; }
+.swal2-container .app-dialog-input { font: inherit; font-size: 14px; border-radius: var(--r-sm); }

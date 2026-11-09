@@ -20,6 +20,7 @@ function harness() {
   const runtime = { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) };
   const globals = {
     require: () => runtime,
+    confirmDialog: async () => globalThis.window.confirm(),
     exports: {},
     useState: initial => {
       const index = cursor++;
@@ -32,7 +33,7 @@ function harness() {
     apiRequest: async () => [],
     createInquiry: async body => { writes.push(body); return { id: 91, number: "INQ-91" }; },
     uploadInquiryAttachment: async () => {}, assignmentDeliveryNote: () => "", toError: String,
-    ...Object.fromEntries(["Icon", "LocalizedText", "PageHeader", "LoadError", "ExistingRfqWork", "Panel", "InquiryCustomerFields", "EndUserCompanyField", "Field"].map(name => [name, name])),
+    ...Object.fromEntries(["DateInput", "Icon", "LocalizedText", "PageHeader", "LoadError", "ExistingRfqWork", "Panel", "InquiryCustomerFields", "EndUserCompanyField", "Field"].map(name => [name, name])),
   };
   new Function(...Object.keys(globals), compiled)(...Object.values(globals));
   const props = { bootstrap: { user: { id: 7, name: "Sales" }, team: [{ id: 8, name: "Engineer", role: "Engineer" }], customers: [], permissions: [] }, notify: () => {}, refreshBootstrap: async () => {}, onCreated: id => opened.push(id), onBack: () => {} };
@@ -70,15 +71,15 @@ test("clearing a selected opportunity keeps the intake but submits no CRM relati
   assert.equal("opportunityRowVersion" in app.writes[0], false);
 });
 
-test("opening a matched Inquiry respects draft confirmation and creates nothing", () => {
+test("opening a matched Inquiry respects draft confirmation and creates nothing", async () => {
   const previous = globalThis.window;
   try {
     const app = harness(); app.fill();
     globalThis.window = { confirm: () => false };
-    app.find("ExistingRfqWork").props.onOpen(77);
+    await app.find("ExistingRfqWork").props.onOpen(77);
     assert.deepEqual(app.opened, []);
     globalThis.window.confirm = () => true;
-    app.find("ExistingRfqWork").props.onOpen(77);
+    await app.find("ExistingRfqWork").props.onOpen(77);
     assert.deepEqual(app.opened, [77]);
     assert.deepEqual(app.writes, []);
   } finally { globalThis.window = previous; }

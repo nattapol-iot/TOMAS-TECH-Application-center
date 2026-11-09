@@ -133,7 +133,7 @@ test("production My Work keeps the Demo workflow on live API contracts", async (
   assert.match(screen, /expansionOwner\.current !== expansionStorageKey/);
   assert.match(screen, /window\.localStorage\.setItem\(expansionStorageKey/);
   assert.match(screen, /item\.status === "Blocked"/);
-  assert.match(screen, /window\.confirm\(localizeCopy\("This task is at 0%/);
+  assert.match(screen, /confirmDialog\(localizeCopy\("This task is at 0%/);
   // One-click progress sits on the card face (no Quick update fold, no Start/Finish today, no forecast modal);
   // the forecast date is entered inline once a task is late.
   assert.match(screen, /\{item\.canUpdate \? <ProductionWorkControls item=\{item\}/);

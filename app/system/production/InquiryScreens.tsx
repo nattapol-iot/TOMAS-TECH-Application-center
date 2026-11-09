@@ -1,4 +1,5 @@
 "use client";
+import { confirmDialog } from "../dialogs";
 import { isPlainClick, viewHash } from "../../../lib/remembered-view";
 import { DocumentLifecycleButton, DocumentHistoryButton, InquiryDeleteDialog } from "./DocumentLifecycle";
 import { ProjectHandover } from "./ProjectHandover";
@@ -58,6 +59,7 @@ import {
   Toolbar,
   toneOf,
 } from "../ui";
+import { DateInput } from "../DateInput";
 
 type Props = {
   bootstrap: BootstrapData;
@@ -248,8 +250,8 @@ function InquiryList({ bootstrap, notify, refreshBootstrap, onCreate, onOpen, op
       <Select link="priority" label="Priority" value={priority} onChange={(value) => { setPriority(value); resetPage(); }} options={["All priorities", "Urgent", "High", "Normal", "Low"]} />
       <Select link="interest" label="Customer interest" value={interestGrade} onChange={(value) => { setInterestGrade(value); resetPage(); }} options={["All grades", ...INTEREST_GRADES.map((item) => item.value)]} />
       <Select link="probability" label="Project probability" value={probabilityRange} onChange={(value) => { setProbabilityRange(value); resetPage(); }} options={PROBABILITY_RANGES.map((item) => item.label)} />
-      <label className="btn ghost"><Icon name="calendar" /><span><LocalizedText text={"Inquiry date"} /></span><input aria-label={localizeCopy("Inquiry from date")} type="date" value={inquiryFrom} onChange={(event) => { setInquiryFrom(event.target.value); resetPage(); }} /></label>
-      <label className="btn ghost"><Icon name="calendar" /><span><LocalizedText text={"Due date"} /></span><input aria-label={localizeCopy("Due through date")} type="date" value={dueTo} onChange={(event) => { setDueTo(event.target.value); resetPage(); }} /></label>
+      <label className="btn ghost"><Icon name="calendar" /><span><LocalizedText text={"Inquiry date"} /></span><DateInput aria-label={localizeCopy("Inquiry from date")} value={inquiryFrom} onChange={(event) => { setInquiryFrom(event.target.value); resetPage(); }} /></label>
+      <label className="btn ghost"><Icon name="calendar" /><span><LocalizedText text={"Due date"} /></span><DateInput aria-label={localizeCopy("Due through date")} value={dueTo} onChange={(event) => { setDueTo(event.target.value); resetPage(); }} /></label>
     </Toolbar>
     {/* The seven statuses dbo.inquiries allows. Casing matters: the tone lookup
         is exact, so "Engineering review" would silently render as slate. */}
@@ -322,7 +324,7 @@ function InquiryCreate({ bootstrap, notify, refreshBootstrap, onBack, onCreated 
     let createdInquiry: Awaited<ReturnType<typeof createInquiry>> | null = null;
     try {
       const similar=await apiRequest<Array<{referenceNo:string;projectName:string;status:string;source:string}>>(`/api/v1/inquiry-duplicates?customerId=${form.customerId}&projectName=${encodeURIComponent(form.projectName.trim())}`);
-      if(similar.length&&!window.confirm(`พบ Inquiry ที่กำลังดำเนินการและมีชื่องานคล้ายกัน ต้องการสร้างรายการใหม่ต่อหรือไม่\n\n${similar.map(item=>`${item.referenceNo} · ${item.projectName} · ${item.source}`).join("\n")}`)){setBusy(false);return;}
+      if(similar.length&&!(await confirmDialog(`พบ Inquiry ที่กำลังดำเนินการและมีชื่องานคล้ายกัน ต้องการสร้างรายการใหม่ต่อหรือไม่\n\n${similar.map(item=>`${item.referenceNo} · ${item.projectName} · ${item.source}`).join("\n")}`))){setBusy(false);return;}
       createdInquiry = await createInquiry({ ...form, targetDelivery: form.targetDelivery || undefined, ...(selectedSource?{opportunityId:Number(selectedSource.id),opportunityRowVersion:String(selectedSource.rowVersion)}:{}) });
       // One file the server refuses must not stop the others; the person sees which ones and why.
       const failed: string[] = [];
@@ -355,14 +357,14 @@ function InquiryCreate({ bootstrap, notify, refreshBootstrap, onBack, onCreated 
       <Field label="Project Name" span={2} guide="inquiry.projectName"><input required maxLength={300} value={form.projectName} readOnly={Boolean(selectedSource)} onChange={(event) => set("projectName", event.target.value)} /></Field>
       <Field label="CRM.customerRfq" hint="CRM.customerRfqHint" span={2}><input maxLength={100} value={form.rfqNo} onChange={(event) => set("rfqNo", event.target.value)} /></Field>
       <Field label="Sales Owner"><select value={form.salesOwner} disabled={Boolean(selectedSource)} onChange={(event) => set("salesOwner", event.target.value)}>{bootstrap.team.map((member) => <option key={member.id}>{member.name}</option>)}</select></Field>
-      <Field label="กำหนดตอบกลับ / Estimate due" guide="inquiry.due"><input required min={today()} type="date" value={form.dueDate} onChange={(event) => set("dueDate", event.target.value)} /></Field>
+      <Field label="กำหนดตอบกลับ / Estimate due" guide="inquiry.due"><DateInput required min={today()} value={form.dueDate} onChange={(event) => set("dueDate", event.target.value)} /></Field>
       <Field label="Customer Requirement" span={2} guide="inquiry.requirement"><textarea maxLength={20000} value={form.requirement} readOnly={Boolean(selectedSource)} onChange={(event) => set("requirement", event.target.value)} /></Field>
     </div></Panel>
     <div className="alert info" role="status" data-guide="inquiry.crm">
       <strong>{t(selectedSource ? "CRM.pendingOpportunity" : "CRM.noOpportunitySelected")}</strong>
       {selectedSource ? <><p>{String(selectedSource.opportunityNo)} · {String(selectedSource.name)}</p><p>{t("CRM.linkedIntakeHint")}</p><button type="button" className="btn default" disabled={busy} onClick={()=>setSource(null)}>{t("CRM.unlinkOpportunity")}</button></> : <p>{t("CRM.directSaveHint")}</p>}
     </div>
-    {!selectedSource ? <ExistingRfqWork bootstrap={bootstrap} customerId={form.customerId} name={form.projectName} onSelect={selectSource} onOpen={id=>{if(window.confirm(t("CRM.leaveIntake")))onCreated(id);}} disabled={busy}/> : null}
+    {!selectedSource ? <ExistingRfqWork bootstrap={bootstrap} customerId={form.customerId} name={form.projectName} onSelect={selectSource} onOpen={async id=>{if((await confirmDialog(t("CRM.leaveIntake"))))onCreated(id);}} disabled={busy}/> : null}
     <details className="panel" style={{ marginTop: 14, padding: 18 }} data-guide="inquiry.more"><summary><LocalizedText text={"รายละเอียดเพิ่มเติม · ผู้ประเมิน ประเภทงาน และข้อมูลทางเทคนิค"} /></summary>
       <p className="muted"><LocalizedText text={"ผู้ประเมินเริ่มต้น:"} /> {engineers.find((member) => member.id === form.estimateOwnerId)?.name ?? "กรุณาเลือกผู้ประเมิน"} <LocalizedText text={"· เปลี่ยนได้ในส่วนนี้"} /></p>
       <div className="form-grid">
@@ -375,7 +377,7 @@ function InquiryCreate({ bootstrap, notify, refreshBootstrap, onBack, onCreated 
       <Field label="Project Background" span={2}><textarea maxLength={20000} value={form.background} onChange={(event) => set("background", event.target.value)} /></Field>
       <Field label="Scope Summary" span={2}><textarea maxLength={20000} value={form.scopeSummary} readOnly={Boolean(selectedSource)} onChange={(event) => set("scopeSummary", event.target.value)} /></Field>
       <Field label="Technical Requirement" span={2}><textarea maxLength={20000} value={form.technical} onChange={(event) => set("technical", event.target.value)} /></Field>
-      <Field label="Target Delivery"><input type="date" min={today()} value={form.targetDelivery} onChange={(event) => set("targetDelivery", event.target.value)} /></Field>
+      <Field label="Target Delivery"><DateInput min={today()} value={form.targetDelivery} onChange={(event) => set("targetDelivery", event.target.value)} /></Field>
       <Field label="Site Location"><input maxLength={300} value={form.siteLocation} readOnly={Boolean(selectedSource)} onChange={(event) => set("siteLocation", event.target.value)} /></Field>
       <Field label="Customer Standard"><input value={form.standard} onChange={(event) => set("standard", event.target.value)} /></Field>
       <Field label="Special Requirement"><input value={form.special} onChange={(event) => set("special", event.target.value)} /></Field>
@@ -588,7 +590,7 @@ function MeetingDrawer({ bootstrap, detail, onClose, onSaved }: { bootstrap: Boo
   const set = <K extends keyof CreateInquiryMeetingInput>(key: K, value: CreateInquiryMeetingInput[K]) => setForm((current) => ({ ...current, [key]: value }));
   const save = async () => { setBusy(true); setError(""); try { await createInquiryMeeting(detail.id, { ...form, participants: participantText.split(",").map((value) => value.trim()).filter(Boolean), dueDate: form.dueDate || undefined }); await onSaved(); } catch (requestError) { setError(toError(requestError)); } finally { setBusy(false); } };
   return <Drawer title={uiText("Add Meeting Record")} subtitle="Capture the decision so the estimate revision has a traceable reason" onClose={onClose} width={560} footer={<><span className="spacer" /><button className="btn default" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || !form.meetingDate || !form.meetingType} onClick={() => { void save(); }}><Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : "Save meeting record"}</button></>}>
-    {error ? <LoadError message={error} retry={() => { void save(); }} /> : null}<div className="form-grid two"><Field label="Meeting Date"><input type="date" value={form.meetingDate} onChange={(event) => set("meetingDate", event.target.value)} /></Field><Field label="Meeting Type"><select value={form.meetingType} onChange={(event) => set("meetingType", event.target.value)}>{["Kickoff Meeting", "Technical Review", "Customer Meeting", "Site Survey", "Internal Review", "Design Review"].map((value) => <option key={value}>{value}</option>)}</select></Field><Field label="Participants" span={2} hint="Separate names with a comma"><input value={participantText} onChange={(event) => setParticipantText(event.target.value)} /></Field><Field label="Customer Requirement" span={2}><textarea value={form.requirement} onChange={(event) => set("requirement", event.target.value)} /></Field><Field label="Technical Discussion" span={2}><textarea value={form.technical} onChange={(event) => set("technical", event.target.value)} /></Field><Field label="Decision" span={2}><textarea value={form.decision} onChange={(event) => set("decision", event.target.value)} /></Field><Field label="Open Point" span={2}><textarea value={form.openPoint} onChange={(event) => set("openPoint", event.target.value)} /></Field><Field label="Action Item" span={2}><input value={form.actionItem} onChange={(event) => set("actionItem", event.target.value)} /></Field><Field label="Owner"><select value={form.ownerId} onChange={(event) => set("ownerId", Number(event.target.value))}>{bootstrap.team.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select></Field><Field label="Due Date"><input type="date" value={form.dueDate} onChange={(event) => set("dueDate", event.target.value)} /></Field></div>
+    {error ? <LoadError message={error} retry={() => { void save(); }} /> : null}<div className="form-grid two"><Field label="Meeting Date"><DateInput value={form.meetingDate} onChange={(event) => set("meetingDate", event.target.value)} /></Field><Field label="Meeting Type"><select value={form.meetingType} onChange={(event) => set("meetingType", event.target.value)}>{["Kickoff Meeting", "Technical Review", "Customer Meeting", "Site Survey", "Internal Review", "Design Review"].map((value) => <option key={value}>{value}</option>)}</select></Field><Field label="Participants" span={2} hint="Separate names with a comma"><input value={participantText} onChange={(event) => setParticipantText(event.target.value)} /></Field><Field label="Customer Requirement" span={2}><textarea value={form.requirement} onChange={(event) => set("requirement", event.target.value)} /></Field><Field label="Technical Discussion" span={2}><textarea value={form.technical} onChange={(event) => set("technical", event.target.value)} /></Field><Field label="Decision" span={2}><textarea value={form.decision} onChange={(event) => set("decision", event.target.value)} /></Field><Field label="Open Point" span={2}><textarea value={form.openPoint} onChange={(event) => set("openPoint", event.target.value)} /></Field><Field label="Action Item" span={2}><input value={form.actionItem} onChange={(event) => set("actionItem", event.target.value)} /></Field><Field label="Owner"><select value={form.ownerId} onChange={(event) => set("ownerId", Number(event.target.value))}>{bootstrap.team.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select></Field><Field label="Due Date"><DateInput value={form.dueDate} onChange={(event) => set("dueDate", event.target.value)} /></Field></div>
   </Drawer>;
 }
 

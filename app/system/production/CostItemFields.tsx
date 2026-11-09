@@ -6,6 +6,7 @@ import type { BootstrapData, CostItemInput } from "../api-client";
 import type { CostItemLookupPatch } from "../../../lib/cost-item-lookup";
 import { CostItemLookupInput, SupplierLookupInput } from "./CostItemLookup";
 import { Field } from "../ui";
+import { DateInput } from "../DateInput";
 export const COST_CATEGORIES = [
   ["01", "Hardware"], ["02", "Software"], ["03", "Electrical"], ["04", "Mechanical"], ["05", "Robot"],
   ["06", "Engineering"], ["07", "Outsource"], ["08", "Transportation"], ["09", "Accommodation"], ["10", "Other Cost"],
@@ -58,7 +59,7 @@ export function CostItemFields({ form, onChange, onLookupPick, suppliers, allowe
       <Field label="Price source *"><select value={form.priceSource} onChange={(event) => update("priceSource", event.target.value)}>{!PRICE_SOURCES.includes(form.priceSource) ? <option value={form.priceSource}>{form.priceSource || "Select price source"}</option> : null}{PRICE_SOURCES.map((source) => <option key={source}>{source}</option>)}</select></Field>
       {referenceNumberField}
       {referenceProjectField}
-      <Field label="Price date"><input type="date" value={form.priceDate ?? ""} onChange={(event) => update("priceDate", event.target.value || undefined)} /></Field>
+      <Field label="Price date"><DateInput value={form.priceDate ?? ""} onChange={(event) => update("priceDate", event.target.value || undefined)} /></Field>
       <Field label="Remark" span={4}><textarea maxLength={20000} rows={2} value={form.remark ?? ""} onChange={(event) => update("remark", event.target.value)} /></Field>
       {statusField}
     </div>;

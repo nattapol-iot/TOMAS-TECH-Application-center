@@ -4,7 +4,7 @@
 
 แก้รายงาน workflow หลักฐาน ส่งออก PDF/PPTX และ customer acknowledgment
 
-Evidence: snapshot `1024c3d5`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
+Evidence: snapshot `064219fd`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
 
 ## Read only the operation you change
 
@@ -18,33 +18,33 @@ Shared screens contain other modules: use the symbol and line range instead of r
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `errorText` | [app/system/production/ReportScreens.tsx](<../../../app/system/production/ReportScreens.tsx>) | 35–35 |
-| `today` | [app/system/production/ReportScreens.tsx](<../../../app/system/production/ReportScreens.tsx>) | 36–36 |
-| `ReportBodyEditor` | [app/system/production/ReportScreens.tsx](<../../../app/system/production/ReportScreens.tsx>) | 37–40 |
-| `ReportWorkflow` | [app/system/production/ReportScreens.tsx](<../../../app/system/production/ReportScreens.tsx>) | 42–46 |
-| `allows` | [app/system/production/ReportScreens.tsx](<../../../app/system/production/ReportScreens.tsx>) | 51–51 |
-| `json` | [app/system/production/ReportScreens.tsx](<../../../app/system/production/ReportScreens.tsx>) | 52–52 |
-| `CustomerAcknowledgmentView` | [app/system/production/ReportScreens.tsx](<../../../app/system/production/ReportScreens.tsx>) | 54–60 |
-| `ReportScreens` | [app/system/production/ReportScreens.tsx](<../../../app/system/production/ReportScreens.tsx>) | 62–107 |
-| `useReportSigners` | [app/system/production/ReportScreens.tsx](<../../../app/system/production/ReportScreens.tsx>) | 109–119 |
-| `ParticipantFields` | [app/system/production/ReportScreens.tsx](<../../../app/system/production/ReportScreens.tsx>) | 121–124 |
-| `NewReportModal` | [app/system/production/ReportScreens.tsx](<../../../app/system/production/ReportScreens.tsx>) | 126–205 |
-| `ReportCoverPage` | [app/system/production/ReportScreens.tsx](<../../../app/system/production/ReportScreens.tsx>) | 210–232 |
-| `ReportPrintInfoPage` | [app/system/production/ReportScreens.tsx](<../../../app/system/production/ReportScreens.tsx>) | 237–252 |
-| `ReportSignOffPage` | [app/system/production/ReportScreens.tsx](<../../../app/system/production/ReportScreens.tsx>) | 257–293 |
-| `ReportDocumentHeader` | [app/system/production/ReportScreens.tsx](<../../../app/system/production/ReportScreens.tsx>) | 295–303 |
-| `ReportSignatureSummary` | [app/system/production/ReportScreens.tsx](<../../../app/system/production/ReportScreens.tsx>) | 305–309 |
-| `ReportDetail` | [app/system/production/ReportScreens.tsx](<../../../app/system/production/ReportScreens.tsx>) | 311–417 |
+| `errorText` | [app/system/production/ReportScreens.tsx](<../../../app/system/production/ReportScreens.tsx>) | 37–37 |
+| `today` | [app/system/production/ReportScreens.tsx](<../../../app/system/production/ReportScreens.tsx>) | 38–38 |
+| `ReportBodyEditor` | [app/system/production/ReportScreens.tsx](<../../../app/system/production/ReportScreens.tsx>) | 39–42 |
+| `ReportWorkflow` | [app/system/production/ReportScreens.tsx](<../../../app/system/production/ReportScreens.tsx>) | 44–48 |
+| `allows` | [app/system/production/ReportScreens.tsx](<../../../app/system/production/ReportScreens.tsx>) | 53–53 |
+| `json` | [app/system/production/ReportScreens.tsx](<../../../app/system/production/ReportScreens.tsx>) | 54–54 |
+| `CustomerAcknowledgmentView` | [app/system/production/ReportScreens.tsx](<../../../app/system/production/ReportScreens.tsx>) | 56–62 |
+| `ReportScreens` | [app/system/production/ReportScreens.tsx](<../../../app/system/production/ReportScreens.tsx>) | 64–109 |
+| `useReportSigners` | [app/system/production/ReportScreens.tsx](<../../../app/system/production/ReportScreens.tsx>) | 111–121 |
+| `ParticipantFields` | [app/system/production/ReportScreens.tsx](<../../../app/system/production/ReportScreens.tsx>) | 123–126 |
+| `NewReportModal` | [app/system/production/ReportScreens.tsx](<../../../app/system/production/ReportScreens.tsx>) | 128–207 |
+| `ReportCoverPage` | [app/system/production/ReportScreens.tsx](<../../../app/system/production/ReportScreens.tsx>) | 212–234 |
+| `ReportPrintInfoPage` | [app/system/production/ReportScreens.tsx](<../../../app/system/production/ReportScreens.tsx>) | 239–254 |
+| `ReportSignOffPage` | [app/system/production/ReportScreens.tsx](<../../../app/system/production/ReportScreens.tsx>) | 259–295 |
+| `ReportDocumentHeader` | [app/system/production/ReportScreens.tsx](<../../../app/system/production/ReportScreens.tsx>) | 297–305 |
+| `ReportSignatureSummary` | [app/system/production/ReportScreens.tsx](<../../../app/system/production/ReportScreens.tsx>) | 307–311 |
+| `ReportDetail` | [app/system/production/ReportScreens.tsx](<../../../app/system/production/ReportScreens.tsx>) | 313–419 |
 | `object` | [app/system/production/ReportDocumentForm.tsx](<../../../app/system/production/ReportDocumentForm.tsx>) | 12–12 |
 | `text` | [app/system/production/ReportDocumentForm.tsx](<../../../app/system/production/ReportDocumentForm.tsx>) | 13–13 |
 | `FieldControl` | [app/system/production/ReportDocumentForm.tsx](<../../../app/system/production/ReportDocumentForm.tsx>) | 23–33 |
 | `EvidenceImage` | [app/system/production/ReportDocumentForm.tsx](<../../../app/system/production/ReportDocumentForm.tsx>) | 35–50 |
 | `EvidenceCard` | [app/system/production/ReportDocumentForm.tsx](<../../../app/system/production/ReportDocumentForm.tsx>) | 52–74 |
 | `ReportDocumentForm` | [app/system/production/ReportDocumentForm.tsx](<../../../app/system/production/ReportDocumentForm.tsx>) | 76–130 |
-| `messageOf` | [app/system/production/ReportTemplateLibrary.tsx](<../../../app/system/production/ReportTemplateLibrary.tsx>) | 16–16 |
-| `ReportTemplateLibrary` | [app/system/production/ReportTemplateLibrary.tsx](<../../../app/system/production/ReportTemplateLibrary.tsx>) | 19–51 |
-| `ReportTemplateEditor` | [app/system/production/ReportTemplateLibrary.tsx](<../../../app/system/production/ReportTemplateLibrary.tsx>) | 53–73 |
-| `ReportTemplatePicker` | [app/system/production/ReportTemplateLibrary.tsx](<../../../app/system/production/ReportTemplateLibrary.tsx>) | 75–96 |
+| `messageOf` | [app/system/production/ReportTemplateLibrary.tsx](<../../../app/system/production/ReportTemplateLibrary.tsx>) | 17–17 |
+| `ReportTemplateLibrary` | [app/system/production/ReportTemplateLibrary.tsx](<../../../app/system/production/ReportTemplateLibrary.tsx>) | 20–52 |
+| `ReportTemplateEditor` | [app/system/production/ReportTemplateLibrary.tsx](<../../../app/system/production/ReportTemplateLibrary.tsx>) | 54–74 |
+| `ReportTemplatePicker` | [app/system/production/ReportTemplateLibrary.tsx](<../../../app/system/production/ReportTemplateLibrary.tsx>) | 76–97 |
 | `RankSelect` | [app/system/production/InspectionReportBody.tsx](<../../../app/system/production/InspectionReportBody.tsx>) | 24–30 |
 | `JudgeSelect` | [app/system/production/InspectionReportBody.tsx](<../../../app/system/production/InspectionReportBody.tsx>) | 32–38 |
 | `PhotoThumb` | [app/system/production/InspectionReportBody.tsx](<../../../app/system/production/InspectionReportBody.tsx>) | 41–60 |
@@ -65,6 +65,7 @@ Shared screens contain other modules: use the symbol and line range instead of r
 - [backend-node/src/document-storage.ts](<../../../backend-node/src/document-storage.ts>)
 - [backend-node/src/unified-report-service.ts](<../../../backend-node/src/unified-report-service.ts>)
 - [backend-node/src/project-scope.ts](<../../../backend-node/src/project-scope.ts>)
+- [app/system/dialogs.ts](<../../../app/system/dialogs.ts>)
 - [app/system/screen-link.ts](<../../../app/system/screen-link.ts>)
 - [app/system/api-client.ts](<../../../app/system/api-client.ts>)
 - [app/system/ui.tsx](<../../../app/system/ui.tsx>)
@@ -84,6 +85,7 @@ Shared screens contain other modules: use the symbol and line range instead of r
 - [app/system/i18n.ts](<../../../app/system/i18n.ts>)
 - [app/system/production/report-ui-copy.ts](<../../../app/system/production/report-ui-copy.ts>)
 - [app/system/production/report-types.ts](<../../../app/system/production/report-types.ts>)
+- [app/system/DateInput.tsx](<../../../app/system/DateInput.tsx>)
 - [app/system/production/report-document.css](<../../../app/system/production/report-document.css>)
 - [app/system/production/ReportScreens.tsx](<../../../app/system/production/ReportScreens.tsx>)
 - [app/system/production/inspection-report.css](<../../../app/system/production/inspection-report.css>)

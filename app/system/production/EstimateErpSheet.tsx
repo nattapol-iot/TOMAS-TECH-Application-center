@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmDialog } from "../dialogs";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EstimateModuleEditor } from "./EstimateModuleEditor";
 import { EstimateModuleQuantityCells } from "./EstimateModuleQuantityCells";
@@ -634,10 +635,10 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify, onDirtyCha
   const runErp = async (action: "send" | "resend" | "refresh") => {
     /* The ERP keeps one revision per Cost Sheet and answers "unchanged" to the same one again, so replacing its lines means
        deleting the sheet there first; the server then gives the estimate a new reference and writes a new sheet. */
-    if (action === "resend" && !window.confirm(copy(
+    if (action === "resend" && !(await confirmDialog(copy(
       `ERP มี ${revisionLabel(workspace.header.revision)} อยู่แล้วใน Cost Sheet ${erpLink?.costSheetNo ?? ""} ถ้าต้องการแทนที่รายการ ให้ลบ Cost Sheet นี้ใน ERP ก่อน แล้วกดตกลงเพื่อส่งใหม่`,
       `The ERP already holds ${revisionLabel(workspace.header.revision)} in Cost Sheet ${erpLink?.costSheetNo ?? ""}. To replace its lines, delete that Cost Sheet in the ERP first, then press OK to send again.`,
-      `ERPのCost Sheet ${erpLink?.costSheetNo ?? ""} に ${revisionLabel(workspace.header.revision)} が既にあります。明細を置き換えるにはERPでそのCost Sheetを削除してから、OKで再送信してください。`))) return;
+      `ERPのCost Sheet ${erpLink?.costSheetNo ?? ""} に ${revisionLabel(workspace.header.revision)} が既にあります。明細を置き換えるにはERPでそのCost Sheetを削除してから、OKで再送信してください。`)))) return;
     setErpBusy(action === "refresh" ? "refresh" : "send"); setErpError("");
     try {
       const outcome = action === "refresh" ? await refreshEstimateErp(workspace.header.id) : await sendEstimateToErp(workspace.header.id, exportRows(), action === "resend");

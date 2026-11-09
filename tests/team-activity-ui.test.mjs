@@ -11,6 +11,8 @@ const overview={day:today,updatedAt:today+'T01:00:00Z',items:[{...member,day:{da
 function harness(lang){let cursor=0;const states=[],effects=[];const react={...require('react'),useState(init){const i=cursor++;if(!(i in states))states[i]=typeof init==='function'?init():init;return [states[i],v=>{states[i]=typeof v==='function'?v(states[i]):v;}];},useRef(value){return react.useState(()=>({current:value}))[0];},useEffect:f=>effects.push(f),useCallback:f=>f};
  const source=readFileSync('app/system/production/TeamActivityScreen.tsx','utf8'),code=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText,moduleObject={exports:{}};
  new Function('require','module','exports',code)(name=>{
+  if(name==='../dialogs')return { confirmDialog: async () => globalThis.window?.confirm?.() ?? true, promptDialog: async () => globalThis.window?.prompt?.() ?? null, alertDialog: async () => {} };
+  if(name==='../DateInput')return { DateInput: (props) => ({ type: "input", props: { ...props, type: props.withTime ? "datetime-local" : "date" } }) };
   if(name==='react')return react;if(name==='../i18n')return {useLanguage:()=>({lang}),localeFor:()=> 'en-GB',useT:()=>v=>v};
   if(name==='../ui')return {Icon:()=>null};if(name==='../api-client')return {};
   if(name==='../activity-client')return {bangkokDay:()=>today,activityRead:async path=>path==='meta'?meta:overview,activityModuleLabels:{}};
@@ -18,7 +20,7 @@ function harness(lang){let cursor=0;const states=[],effects=[];const react={...r
  },moduleObject,moduleObject.exports);
  return {render(){cursor=0;return moduleObject.exports.TeamActivityScreen({});},async settle(){for(const effect of effects.splice(0))effect();await new Promise(resolve=>setImmediate(resolve));}};
 }
-function nodes(tree,result=[]){if(Array.isArray(tree))tree.forEach(n=>nodes(n,result));else if(tree?.props){result.push(tree);nodes(tree.props.children,result);}return result;}
+function nodes(tree,result=[]){if(tree?.type?.name==='DateInput')tree=tree.type(tree.props);if(Array.isArray(tree))tree.forEach(n=>nodes(n,result));else if(tree?.props){result.push(tree);nodes(tree.props.children,result);}return result;}
 function text(tree){return Array.isArray(tree)?tree.map(text).join(' '):tree?.props?text(tree.props.children):typeof tree==='string'||typeof tree==='number'?String(tree):'';}
 test('activity table keeps its score header aligned with member cells in all three languages',async()=>{for(const lang of ['TH','EN','JP']){const h=harness(lang);h.render();await h.settle();const tree=h.render(),all=nodes(tree),rows=all.filter(n=>n.type==='tr');assert.equal(rows.length,2);const headers=nodes(rows[0]).filter(n=>n.type==='th'),cells=nodes(rows[1]).filter(n=>n.type==='td');assert.equal(headers.length,cells.length);assert.equal(headers.length,8);assert.ok(headers.some(n=>/คะแนนรอบนี้|Cycle score|期間スコア/.test(text(n))));assert.doesNotMatch(text(tree),/\?{3,}/);assert.match(text(tree),/TEST member/);}});
 test('staff activity surface has no policy-publishing or quality-review controls',async()=>{const h=harness('EN');h.render();await h.settle();const copy=text(h.render());assert.doesNotMatch(copy,/Configure KPI cycle|Publish selected-cycle policy|Review quality/);assert.match(copy,/My activity/);});
@@ -30,6 +32,8 @@ function componentHarness(component,{api={},confirm=()=>true}={}){
  const source=readFileSync('app/system/production/TeamActivityScreen.tsx','utf8')+'\nexport {ReportForm,MemberDialog,QualityForm};',moduleObject={exports:{}};
  const code=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText;
  new Function('require','module','exports','window','document','HTMLElement',code)(name=>{
+  if(name==='../dialogs')return { confirmDialog: async () => confirm(), promptDialog: async () => globalThis.window?.prompt?.() ?? null, alertDialog: async () => {} };
+  if(name==='../DateInput')return { DateInput: (props) => ({ type: "input", props: { ...props, type: props.withTime ? "datetime-local" : "date" } }) };
   if(name==='react')return react;if(name==='../i18n')return {useLanguage:()=>({lang:'EN'}),localeFor:()=> 'en-GB',useT:()=>value=>value};
   if(name==='../ui')return {Icon:()=>null};if(name==='../api-client')return {};
   if(name==='../activity-client')return {bangkokDay:()=>today,activityModuleLabels:{},...api};
@@ -64,10 +68,10 @@ test('switching report targets preserves a declined draft and remounts an accept
  let discard=false;const detail={member,rules:[reportRule,{...reportRule,id:2,title:'Task B',sourceId:2}],events:[],exceptions:[],days:[],startedAt:today,full:true,score:null,sources:[]};
  const h=componentHarness('MemberDialog',{api:{activityRead:async()=>detail},confirm:()=>discard}),props={userId:7,meta,cycleId:'1',initialDay:today,onClose(){},onChanged(){}};
  h.render(props);await h.settle();const buttons=()=>nodes(h.render(props)).filter(node=>node.type==='button'&&text(node)==='Report progress');
- buttons()[0].props.onClick();let form=nodes(h.render(props)).find(node=>node.type?.name==='ReportForm');assert.equal(form.key,'1');
- buttons()[1].props.onClick();form=nodes(h.render(props)).find(node=>node.type?.name==='ReportForm');assert.equal(form.key,'1');
- discard=true;buttons()[1].props.onClick();form=nodes(h.render(props)).find(node=>node.type?.name==='ReportForm');assert.equal(form.key,'2');assert.equal(form.props.rule.title,'Task B');
- const month=()=>nodes(h.render(props)).find(node=>node.type==='input'&&node.props.type==='month');discard=false;month().props.onChange({target:{value:'2026-08'}});assert.equal(month().props.value,'2026-09');discard=true;month().props.onChange({target:{value:'2026-08'}});assert.equal(month().props.value,'2026-08');assert.equal(nodes(h.render(props)).find(node=>node.type?.name==='ReportForm'),undefined);
+ await buttons()[0].props.onClick();let form=nodes(h.render(props)).find(node=>node.type?.name==='ReportForm');assert.equal(form.key,'1');
+ await buttons()[1].props.onClick();form=nodes(h.render(props)).find(node=>node.type?.name==='ReportForm');assert.equal(form.key,'1');
+ discard=true;await buttons()[1].props.onClick();form=nodes(h.render(props)).find(node=>node.type?.name==='ReportForm');assert.equal(form.key,'2');assert.equal(form.props.rule.title,'Task B');
+ const month=()=>nodes(h.render(props)).find(node=>node.type==='input'&&node.props.type==='month');discard=false;await month().props.onChange({target:{value:'2026-08'}});assert.equal(month().props.value,'2026-09');discard=true;await month().props.onChange({target:{value:'2026-08'}});assert.equal(month().props.value,'2026-08');assert.equal(nodes(h.render(props)).find(node=>node.type?.name==='ReportForm'),undefined);
 });
 
 test('zero-evidence quality submission requires zero in every scoring area',async()=>{

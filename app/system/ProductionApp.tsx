@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmDialog } from "./dialogs";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ExecutiveDashboard } from "./production/ExecutiveDashboard";
 import { DASHBOARD_ROLES } from "../../backend-node/src/executive-dashboard-model";
@@ -316,7 +317,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
   }), [language, setLanguage]);
   const t = languageValue.t;
   useActivityPresence(bootstrap?.user.id, view, Boolean(bootstrap?.permissions.includes("activity.read")));
-  const confirmReportNavigation = useCallback(() => (!reportDirty.current && !supportDirty.current) || window.confirm(supportDirty.current ? supportLabel("Discard changes?", language) : t("Discard unsaved report changes?")), [t, language]);
+  const confirmReportNavigation = useCallback(async () => (!reportDirty.current && !supportDirty.current) || (await confirmDialog(supportDirty.current ? supportLabel("Discard changes?", language) : t("Discard unsaved report changes?"), { danger: true })), [t, language]);
   /** The address identifies the open document as well as its workspace. */
   const recordId = view === "estimates" ? preferredEstimateId : view === "inquiries" ? preferredInquiryId : null;
   const address = view === "support" ? supportTicketId ? `#support/${supportTicketId}` : "#support" : viewHash(view, recordId);
@@ -339,8 +340,8 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
   const changeProjectTab = (tab: ProjectTab) => { setProjectTab(tab); placeScreen(tab === "portfolio" ? [] : [PROJECT_TAB_SEGMENT[tab]]); };
   // Returns false when the person keeps unsaved changes. A #support/<id> fragment is left for the address
   // effect to replace with the next screen's, so Back reopens that ticket.
-  const setView = useCallback((next: View) => {
-    if (next !== view && !confirmReportNavigation()) return false;
+  const setView = useCallback(async (next: View) => {
+    if (next !== view && !(await confirmReportNavigation())) return false;
     if (next !== "activity" && window.location.hash === "#activity") window.history.replaceState(null, "", window.location.pathname + window.location.search);
     if (window.matchMedia?.("(max-width: 980px)").matches) setSidebarCollapsed(true);
     setCollapsedActiveGroup(null);
@@ -355,12 +356,12 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
   }, [view, confirmReportNavigation, bootstrap]);
 
   useEffect(() => {
-    const follow = () => { if (window.location.hash === "#activity" && bootstrap?.permissions.includes("activity.read")) setView("activity"); };
+    const follow = async () => { if (window.location.hash === "#activity" && bootstrap?.permissions.includes("activity.read")) (await setView("activity")); };
     follow(); window.addEventListener("hashchange", follow); return () => window.removeEventListener("hashchange", follow);
   }, [bootstrap, setView]);
 
-  const openSupport = (id: number | null) => {
-    if (!confirmReportNavigation()) return;
+  const openSupport = async (id: number | null) => {
+    if (!(await confirmReportNavigation())) return;
     setSupportTicketId(id); setSupportCreate(false); setViewState("support");
     window.history.replaceState(null, "", window.location.pathname + window.location.search + (id ? `#support/${id}` : "#support"));
   };
@@ -372,10 +373,10 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
     return () => window.clearTimeout(timer);
   }, []);
   useEffect(() => {
-    const followSupportLink = () => {
+    const followSupportLink = async () => {
       const match = window.location.hash.match(/^#support(?:\/(\d+))?$/);
       if (!match) return;
-      if (!confirmReportNavigation()) {
+      if (!(await confirmReportNavigation())) {
         window.history.replaceState(null, "", window.location.pathname + window.location.search + address);
         return;
       }
@@ -493,7 +494,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
   // to discard, puts the open screen's address back.
   useEffect(() => {
     if (!bootstrap) return;
-    const follow = () => {
+    const follow = async () => {
       const requested = viewFromHash(window.location.hash);
       if (!requested) return;
       const target = landingView(requested as View, bootstrap.permissions);
@@ -507,7 +508,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
         }
         return;
       }
-      if (!allowedViews(bootstrap).includes(target) || !setView(target)) {
+      if (!allowedViews(bootstrap).includes(target) || !(await setView(target))) {
         window.history.replaceState(null, "", window.location.pathname + window.location.search + address);
         return;
       }
@@ -624,21 +625,21 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
     }
   };
 
-  const openNotification = (item: AppNotification) => {
+  const openNotification = async (item: AppNotification) => {
     setNotificationOpen(false);
     if (!item.isRead) {
       setNotifications((current) => current.map((entry) => entry.id === item.id ? { ...entry, isRead: true } : entry));
       void apiRequest("/api/v1/me/notifications/read", { method: "POST", body: JSON.stringify({ ids: [item.id], all: false }) })
         .catch(() => { void refreshNotifications(); });
     }
-    if (item.entityType === "GoodsReceipt") setView("receiving");
+    if (item.entityType === "GoodsReceipt") (await setView("receiving"));
     // An approved PR that could not go to the ERP by itself waits for its requester on the PR list.
-    if (item.entityType === "PurchaseRequisition") setView("purchase");
+    if (item.entityType === "PurchaseRequisition") (await setView("purchase"));
     if (item.entityType === "SupportTicket" && item.entityId) openSupport(item.entityId);
     // A new project, or a task given to you on one, opens that project's plan.
     if (item.entityType === "Project" && item.entityId) openProjectSchedule(item.entityId);
     // A team task given to you opens the team board.
-    if (item.entityType === "TeamTask") setView("resources");
+    if (item.entityType === "TeamTask") (await setView("resources"));
     // An estimate waiting for you to approve, or the decision on yours, opens that estimate.
     if (item.entityType === "Estimate" && item.entityId) openEstimate(item.entityId);
   };
@@ -669,7 +670,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
   };
 
   const signOut = async () => {
-    if (!confirmReportNavigation()) return;
+    if (!(await confirmReportNavigation())) return;
     try { if (bootstrap) window.sessionStorage.removeItem(viewStorageKey(bootstrap.user.id)); }
     catch { /* Sign-out must also work when browser storage is blocked. */ }
     setBusy(true); setAuthError("");
@@ -699,30 +700,30 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
 
   const clearPreferredSchedule = useCallback(() => { setPreferredScheduleProjectId(null); setPreferredScheduleTaskId(null); }, []);
   // Opens a project's plan, optionally on one task (a bar clicked in the portfolio timeline).
-  const openProjectSchedule = useCallback((projectId: number, taskId?: number) => {
+  const openProjectSchedule = useCallback(async (projectId: number, taskId?: number) => {
     setPreferredScheduleProjectId(projectId);
     setPreferredScheduleTaskId(taskId ?? null);
     setScheduleLinkCount((count) => count + 1);
     setProjectTab("schedule");
-    if (!setView("projects")) return;
+    if (!(await setView("projects"))) return;
     // The plan writes its own place once it opens; until then the address already names the project.
     screenLink.current = { view: "projects", path: ["plan", String(projectId), ...(taskId ? ["task", String(taskId)] : [])], params: {}, opened: {}, fromLink: true };
     if (view === "projects") window.history.pushState(null, "", window.location.pathname + window.location.search + screenHash("projects", screenLink.current.path));
     window.scrollTo({ top: 0 });
   }, [setView, view]);
-  const openSiteVisit = useCallback((visitId: number) => {
+  const openSiteVisit = useCallback(async (visitId: number) => {
     setPreferredSiteVisitId(visitId);
-    setView("site-visits");
+    (await setView("site-visits"));
     window.scrollTo({ top: 0 });
   }, [setView]);
-  const openEstimate = useCallback((estimateId: number) => {
-    if (!bootstrap?.permissions.includes("estimate.read") || !setView("estimates")) return;
+  const openEstimate = useCallback(async (estimateId: number) => {
+    if (!bootstrap?.permissions.includes("estimate.read") || !(await setView("estimates"))) return;
     setPreferredEstimateId(estimateId);
     window.scrollTo({ top: 0 });
   }, [bootstrap, setView]);
   const [startInquiryCreate, setStartInquiryCreate] = useState(false);
-  const openInquiry = useCallback((id: number) => {
-    if (!bootstrap?.permissions.includes("inquiry.read") || !setView("inquiries")) return;
+  const openInquiry = useCallback(async (id: number) => {
+    if (!bootstrap?.permissions.includes("inquiry.read") || !(await setView("inquiries"))) return;
     setStartInquiryCreate(false);
     setPreferredInquiryId(id);
     window.scrollTo({top:0});
@@ -751,7 +752,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
     return () => { window.clearTimeout(timer); window.removeEventListener("hashchange", follow); };
   }, [bootstrap, openProjectSchedule]);
 
-  const startInquiry = () => { setStartInquiryCreate(true); setPreferredInquiryId(null); setView("inquiries"); };
+  const startInquiry = async () => { setStartInquiryCreate(true); setPreferredInquiryId(null); (await setView("inquiries")); };
   const toggleNavGroup = (group: string) => {
     const active = NAV.find(section => section.group === group)?.items.some(item => item.view === navView(view));
     const isCollapsed = collapsedNavGroups.includes(group) && (!active || collapsedActiveGroup === group);
@@ -788,7 +789,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
     );
   }
 
-  const personalDashboard = <ProductionDashboard bootstrap={bootstrap} refreshBootstrap={refreshBootstrap} teamTestMode={IS_TEAM_TEST_MODE} onNavigate={(destination) => { setView(destination); window.scrollTo({ top: 0 }); }} />;
+  const personalDashboard = <ProductionDashboard bootstrap={bootstrap} refreshBootstrap={refreshBootstrap} teamTestMode={IS_TEAM_TEST_MODE} onNavigate={async (destination) => { (await setView(destination)); window.scrollTo({ top: 0 }); }} />;
   const common = { bootstrap, notify: setToast, refreshBootstrap };
   const moduleProps = {
     bootstrap,
@@ -821,7 +822,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
                 <div id={`nav-group-${sectionIndex}`} className={section.group ? "nav-group-items nav-subitems" : "nav-group-items"} hidden={collapsed}>
                   {section.items.map((item) => {
                     const label = item.view === "manual" ? employeeManualLabel(language) : t(item.label);
-                    return <a key={item.view} href={viewHash(item.view)} data-guide={`nav.${item.view}`} className={navView(view) === item.view ? "nav-item active" : "nav-item"} aria-current={navView(view) === item.view ? "page" : undefined} title={item.view === "crm-opportunities" ? `${label} · ${t("CRM.Actionable")}: ${crmActionableCount}` : label} aria-label={label} onClick={(event) => { if (!isPlainClick(event)) return; event.preventDefault(); if (item.view === "inquiries") { setPreferredInquiryId(null); setStartInquiryCreate(false); } if (item.view === "estimates") setPreferredEstimateId(null); if (item.view === "site-visits") setPreferredSiteVisitId(null); setView(item.view); window.scrollTo({ top: 0 }); }}><Icon name={item.icon} /><span>{label}</span>{(item.view === "crm-opportunities" ? crmActionableCount : badgeFor(item.view, bootstrap, myWorkUrgentCount + taskAcknowledgmentCount, projectAttentionCount, procurementApprovalCount)) ? <em>{(item.view === "crm-opportunities" ? crmActionableCount : badgeFor(item.view, bootstrap, myWorkUrgentCount + taskAcknowledgmentCount, projectAttentionCount, procurementApprovalCount))}</em> : null}</a>;
+                    return <a key={item.view} href={viewHash(item.view)} data-guide={`nav.${item.view}`} className={navView(view) === item.view ? "nav-item active" : "nav-item"} aria-current={navView(view) === item.view ? "page" : undefined} title={item.view === "crm-opportunities" ? `${label} · ${t("CRM.Actionable")}: ${crmActionableCount}` : label} aria-label={label} onClick={async (event) => { if (!isPlainClick(event)) return; event.preventDefault(); if (item.view === "inquiries") { setPreferredInquiryId(null); setStartInquiryCreate(false); } if (item.view === "estimates") setPreferredEstimateId(null); if (item.view === "site-visits") setPreferredSiteVisitId(null); (await setView(item.view)); window.scrollTo({ top: 0 }); }}><Icon name={item.icon} /><span>{label}</span>{(item.view === "crm-opportunities" ? crmActionableCount : badgeFor(item.view, bootstrap, myWorkUrgentCount + taskAcknowledgmentCount, projectAttentionCount, procurementApprovalCount)) ? <em>{(item.view === "crm-opportunities" ? crmActionableCount : badgeFor(item.view, bootstrap, myWorkUrgentCount + taskAcknowledgmentCount, projectAttentionCount, procurementApprovalCount))}</em> : null}</a>;
                   })}
                 </div>
               </div>
@@ -869,20 +870,20 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
             </div>
             <div className="menu-wrap">
               <button className="topbar-user" type="button" onClick={() => { setUserOpen((value) => !value); setNotificationOpen(false); }}><span className="avatar sm">{initials(bootstrap.user.name)}</span><span>{bootstrap.user.name}<small>{bootstrap.user.role} · {bootstrap.user.department}</small></span><Icon name="chevronDown" /></button>
-              {userOpen ? <div className="menu" role="menu"><button type="button" onClick={() => { setUserOpen(false); setView("profile"); }}><Icon name="user" />{t("My Profile")}</button><button type="button" onClick={() => { setUserOpen(false); setView("signature"); }}><Icon name="edit" />{t("My signature")}</button><button type="button" onClick={() => { setUserOpen(false); setView("manual"); }}><Icon name="book" />{employeeManualLabel(language)}</button><button type="button" disabled={busy} onClick={() => { setUserOpen(false); void signOut(); }}><Icon name="logout" />{t("Logout")}</button></div> : null}
+              {userOpen ? <div className="menu" role="menu"><button type="button" onClick={async () => { setUserOpen(false); (await setView("profile")); }}><Icon name="user" />{t("My Profile")}</button><button type="button" onClick={async () => { setUserOpen(false); (await setView("signature")); }}><Icon name="edit" />{t("My signature")}</button><button type="button" onClick={async () => { setUserOpen(false); (await setView("manual")); }}><Icon name="book" />{employeeManualLabel(language)}</button><button type="button" disabled={busy} onClick={() => { setUserOpen(false); void signOut(); }}><Icon name="logout" />{t("Logout")}</button></div> : null}
             </div>
           </div>
         </header>
         {IS_LOCAL_READ_ONLY ? <div className="local-read-only-banner" role="status"><strong>Local read-only</strong><span>Remote Team Test database · schema {CONNECTED_SCHEMA_VERSION} · changes disabled</span></div> : null}
         <ScreenLinkProvider value={screenLinkValue}>
         <main className="page" key={linkRevision}>
-          {view === "dashboard" ? DASHBOARD_ROLES.includes(bootstrap.user.role) ? <ExecutiveDashboard bootstrap={bootstrap} personal={personalDashboard} onOpen={(destination, id) => {
+          {view === "dashboard" ? DASHBOARD_ROLES.includes(bootstrap.user.role) ? <ExecutiveDashboard bootstrap={bootstrap} personal={personalDashboard} onOpen={async (destination, id) => {
             if (id && destination === "inquiries") openInquiry(id);
             else if (id && destination === "estimates") openEstimate(id);
             else if (id && destination === "projects") openProjectSchedule(id);
-            else { setView(destination); window.scrollTo({ top: 0 }); }
+            else { (await setView(destination)); window.scrollTo({ top: 0 }); }
           }} /> : personalDashboard : null}
-          {view === "my-work" ? <><div className="my-work-related-links"><button className="btn default" type="button" onClick={()=>setView("activity")}><Icon name="chart"/>{t("Team Activity")}</button>{bootstrap.permissions.includes("visit.read") ? <button className="btn default" type="button" onClick={() => setView("my-assignments")}><Icon name="truck" />{t("งานเข้าหน้างานของฉัน")}</button> : null}</div><ProductionMyWork {...moduleProps} openCrmOpportunity={openCrmOpportunity} newAssignmentCount={taskAcknowledgmentCount} onNewAssignmentChanged={() => setTaskInboxRevision(value => value + 1)} /></> : null}
+          {view === "my-work" ? <><div className="my-work-related-links"><button className="btn default" type="button" onClick={async ()=>(await setView("activity"))}><Icon name="chart"/>{t("Team Activity")}</button>{bootstrap.permissions.includes("visit.read") ? <button className="btn default" type="button" onClick={async () => (await setView("my-assignments"))}><Icon name="truck" />{t("งานเข้าหน้างานของฉัน")}</button> : null}</div><ProductionMyWork {...moduleProps} openCrmOpportunity={openCrmOpportunity} newAssignmentCount={taskAcknowledgmentCount} onNewAssignmentChanged={() => setTaskInboxRevision(value => value + 1)} /></> : null}
           {view.startsWith("crm-") && bootstrap.permissions.includes("crm.read") ? <CrmScreen refreshBootstrap={refreshBootstrap} notify={setToast} key={view} bootstrap={bootstrap} view={view as CrmView} onViewChange={setView} preferredOpportunityId={crmOpportunityId} openInquiry={openInquiry} openEstimate={openEstimate} openProject={openProjectSchedule} /> : null}
           {view === "inquiries" ? <ProductionInquiries key={preferredInquiryId ?? (startInquiryCreate ? "create" : "list")} {...common} openProject={openProjectSchedule} openOpportunity={openCrmOpportunity} openEstimate={openEstimate} openVisit={openSiteVisit} startWithCreate={startInquiryCreate} preferredInquiryId={preferredInquiryId} onSelectInquiry={(id) => { setStartInquiryCreate(false); setPreferredInquiryId(id); }} /> : null}
           {view === "estimates" ? <ProductionEstimates key={preferredEstimateId ?? "estimate-list"} {...common} initialEstimateId={preferredEstimateId} onSelectEstimate={setPreferredEstimateId} /> : null}
@@ -924,12 +925,12 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
           {view === "documents" ? <ProductionSignedDocuments bootstrap={bootstrap} notify={setToast} initialVerifyCode={initialVerifyCode} /> : null}
           {view === "stamps" ? <ProductionCompanyStamps bootstrap={bootstrap} notify={setToast} /> : null}
           {view === "signature" ? <ProductionMySignature bootstrap={bootstrap} notify={setToast} /> : null}
-          {view === "profile" ? <ProductionProfile bootstrap={bootstrap} language={language} onLanguageChange={setLanguage} onOpenMyWork={() => setView("my-work")} onOpenSignature={() => setView("signature")} /> : null}
-          {(["master", "customers", "suppliers", "employees", "material-master", "user-accounts"] as View[]).includes(view) ? <ProductionMasterData key={view} {...common} destination={view === "suppliers" ? "suppliers" : view === "employees" ? "employees" : view === "material-master" ? "inventory" : view === "user-accounts" ? "team" : "customers"} onOpenInquiries={bootstrap.permissions.includes("inquiry.read") ? () => setView("inquiries") : undefined} /> : null}
-          {view === "reports" ? <ReportScreens {...common} onDirtyChange={onReportDirtyChange} onOpenAnalytics={() => setView("summary-reports")} /> : null}
-          {view === "summary-reports" ? <><button className="btn ghost" type="button" onClick={() => setView("reports")}>{t("Back to reports")}</button><ProductionReports {...moduleProps} /></> : null}
-          {view === "activity" && bootstrap.permissions.includes("activity.read") ? <TeamActivityScreen openSource={(type,id,projectId)=>{if(projectId)openProjectSchedule(projectId);else if(type==="Inquiry")openInquiry(id);else setView("my-work");}}/> : null}
-          {view === "performance" ? <Performance currentUser={{ ...bootstrap.user, level: "" }} notify={setToast} openProjectSchedule={openProjectSchedule} openInquiry={openInquiry} openMyWork={() => setView("my-work")} /> : null}
+          {view === "profile" ? <ProductionProfile bootstrap={bootstrap} language={language} onLanguageChange={setLanguage} onOpenMyWork={async () => (await setView("my-work"))} onOpenSignature={async () => (await setView("signature"))} /> : null}
+          {(["master", "customers", "suppliers", "employees", "material-master", "user-accounts"] as View[]).includes(view) ? <ProductionMasterData key={view} {...common} destination={view === "suppliers" ? "suppliers" : view === "employees" ? "employees" : view === "material-master" ? "inventory" : view === "user-accounts" ? "team" : "customers"} onOpenInquiries={bootstrap.permissions.includes("inquiry.read") ? async () => (await setView("inquiries")) : undefined} /> : null}
+          {view === "reports" ? <ReportScreens {...common} onDirtyChange={onReportDirtyChange} onOpenAnalytics={async () => (await setView("summary-reports"))} /> : null}
+          {view === "summary-reports" ? <><button className="btn ghost" type="button" onClick={async () => (await setView("reports"))}>{t("Back to reports")}</button><ProductionReports {...moduleProps} /></> : null}
+          {view === "activity" && bootstrap.permissions.includes("activity.read") ? <TeamActivityScreen openSource={async (type,id,projectId)=>{if(projectId)openProjectSchedule(projectId);else if(type==="Inquiry")openInquiry(id);else (await setView("my-work"));}}/> : null}
+          {view === "performance" ? <Performance currentUser={{ ...bootstrap.user, level: "" }} notify={setToast} openProjectSchedule={openProjectSchedule} openInquiry={openInquiry} openMyWork={async () => (await setView("my-work"))} /> : null}
           {view === "module-templates" ? <ProductionModuleTemplates bootstrap={bootstrap} notify={setToast} /> : null}
           {view === "labor-packages" ? <LaborPackageMaster bootstrap={bootstrap} /> : null}
           {view === "schedule-templates" ? <ScheduleTemplateMaster bootstrap={bootstrap} notify={setToast} /> : null}
@@ -943,7 +944,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
         <footer className="app-footer">© 2026 {PRODUCT.company} · {PRODUCT.name} {PRODUCT.version} · {t(IS_TEAM_TEST_MODE ? "Team Test" : "Production")}</footer>
       </div>
       {toast ? <Toast message={toast} onDone={() => setToast("")} /> : null}
-      <GuideLayer view={view} permissions={bootstrap.permissions} userId={bootstrap.user.id} open={guideOpen} onOpen={() => setGuideOpen(true)} onClose={() => setGuideOpen(false)} goTo={(next) => setView(next as View)} />
+      <GuideLayer view={view} permissions={bootstrap.permissions} userId={bootstrap.user.id} open={guideOpen} onOpen={() => setGuideOpen(true)} onClose={() => setGuideOpen(false)} goTo={async (next) => (await setView(next as View))} />
       {supportCreate ? <SupportCreateDialog context={{ module: view === "manual" ? employeeManualLabel(language) : NAV.flatMap(group => group.items).find(item => item.view === navView(view))?.label ?? view }} onClose={() => setSupportCreate(false)} onCreated={() => { setSupportRevision(value => value + 1); void refreshNotifications(); }} onOpen={openSupport} /> : null}
     </div>
     </LanguageContext.Provider>

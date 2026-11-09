@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmDialog } from "../dialogs";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ApiClientError, createLaborPackage, installStandardLaborLibrary, listLaborPackages, loadLaborPackage, updateLaborPackage,
@@ -52,7 +53,7 @@ export function LaborPackageMaster({ bootstrap, initialPackageId, onClose, onBac
   const detailSequence = useRef(0);
 
   const loadDetail = useCallback(async (id: number, force = false) => {
-    if (!force && dirty && !window.confirm(t("Discard unsaved changes?"))) return;
+    if (!force && dirty && !(await confirmDialog(t("Discard unsaved changes?"), { danger: true }))) return;
     const sequence = ++detailSequence.current;
     setLoadingDetail(true);
     setError("");
@@ -172,8 +173,8 @@ export function LaborPackageMaster({ bootstrap, initialPackageId, onClose, onBac
   const editable = Boolean(!saving && draft && permission.canEditDraft && (copying || selected?.status === "Draft"));
 
 const labelStatus = (value: string) => t(value === "Active" ? "Ready to use" : value === "Retired" ? "Retired" : "Draft");
-  const close = () => { if (!dirty || window.confirm(t("Discard unsaved changes?"))) onClose?.(); };
-  const back = () => { if (!dirty || window.confirm(t("Discard unsaved changes?"))) onBack?.(); };
+  const close = async () => { if (!dirty || (await confirmDialog(t("Discard unsaved changes?"), { danger: true }))) onClose?.(); };
+  const back = async () => { if (!dirty || (await confirmDialog(t("Discard unsaved changes?"), { danger: true }))) onBack?.(); };
   const help = <details className="labor-guide">
     <summary><Icon name="book" />{t("How to create and use a package")}<Icon name="chevronDown" /></summary>
     <ol>{[
@@ -248,8 +249,8 @@ const labelStatus = (value: string) => t(value === "Active" ? "Ready to use" : v
             <div className="labor-actions">
               {saving ? <span role="status"><span className="spinner" />{t("Saving…")}</span> : null}
               {!copying && selected?.status === "Active" && permission.canEditDraft ? <button className="btn primary" type="button" disabled={saving} onClick={startCopy}><Icon name="copy" />{t("Create draft copy")}</button> : null}
-              {!copying && dirty && selected?.status === "Draft" ? <button className="btn ghost" type="button" disabled={saving} onClick={() => { if (window.confirm(t("Discard unsaved changes?"))) { setDraft(laborPackageInput(selected)); setDirty(false); } }}>{t("Discard changes")}</button> : null}
-              {copying ? <button className="btn ghost" type="button" disabled={saving} onClick={() => { if (selected && window.confirm(t("Discard unsaved changes?"))) { setDraft(laborPackageInput(selected)); setCopying(false); setDirty(false); } }}>{t("Cancel copy")}</button> : null}
+              {!copying && dirty && selected?.status === "Draft" ? <button className="btn ghost" type="button" disabled={saving} onClick={async () => { if ((await confirmDialog(t("Discard unsaved changes?"), { danger: true }))) { setDraft(laborPackageInput(selected)); setDirty(false); } }}>{t("Discard changes")}</button> : null}
+              {copying ? <button className="btn ghost" type="button" disabled={saving} onClick={async () => { if (selected && (await confirmDialog(t("Discard unsaved changes?"), { danger: true }))) { setDraft(laborPackageInput(selected)); setCopying(false); setDirty(false); } }}>{t("Cancel copy")}</button> : null}
               {editable ? <button className={`btn ${permission.canPublish && !copying ? "default" : "primary"}`} type="button" disabled={!draft.code.trim() || !draft.name.trim()} onClick={() => { void save(false); }}><Icon name="check" />{t("Save draft")}</button> : null}
               {editable && !copying && permission.canPublish ? <button className="btn primary" type="button" disabled={!draft.code.trim() || !draft.name.trim()} onClick={() => { void save(true); }}><Icon name="checkCircle" />{t("Publish for team")}</button> : null}
             </div>

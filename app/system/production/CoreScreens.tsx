@@ -1,4 +1,5 @@
 "use client";
+import { confirmDialog } from "../dialogs";
 import { useT as useStaticCopy } from "../i18n";
 
 import { currentLocale, useLanguage, useT as useUiText } from "../i18n";
@@ -100,6 +101,7 @@ import {
   type IconName,
   type Tone,
 } from "../ui";
+import { DateInput } from "../DateInput";
 
 type CommonProps = {
   bootstrap: BootstrapData;
@@ -584,7 +586,7 @@ function CloseProjectModal({ project, busy, onClose, onConfirm }: { project: Pro
   </>}>
     <p>{t("Portfolio.closeHint")}</p>
     {unfinished > 0 ? <div className="info-strip" role="note"><Icon name="alertTriangle" /><span>{t("Portfolio.closeUnfinished").replace("{open}", String(unfinished)).replace("{total}", String(project.taskCount))}</span></div> : null}
-    <label className="field"><span><LocalizedText text={"Actual delivery"} /></span><input type="date" required min={project.startDate || undefined} value={date} onChange={(event) => setDate(event.target.value)} /></label>
+    <label className="field"><span><LocalizedText text={"Actual delivery"} /></span><DateInput required min={project.startDate || undefined} value={date} onChange={(event) => setDate(event.target.value)} /></label>
   </Modal>;
 }
 
@@ -1129,10 +1131,10 @@ function EditProjectModal({ bootstrap, project, onClose, onSaved }: {
       <label className="field"><span><LocalizedText text={"Lead engineer"} /></span><select value={form.leadEngineerId} onChange={(event) => set("leadEngineerId", Number(event.target.value))}>{engineers.some((member) => member.id === project.leadEngineerId) ? null : <option value={project.leadEngineerId}>{project.leadEngineerName}</option>}{engineers.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>
       <label className="field"><span><LocalizedText text={"Project type"} /></span><input maxLength={100} value={form.projectType} onChange={(event) => set("projectType", event.target.value)} /></label>
       <label className="field"><span><LocalizedText text={"Customer PO number *"} /></span><input required maxLength={100} value={form.purchaseOrderNumber} onChange={(event) => set("purchaseOrderNumber", event.target.value)} /></label>
-      <label className="field"><span><LocalizedText text={"PO date"} /></span><input type="date" value={form.purchaseOrderDate} onChange={(event) => set("purchaseOrderDate", event.target.value)} /></label>
-      <label className="field"><span><LocalizedText text={"Actual delivery"} /></span><input type="date" min={form.startDate} value={form.actualDelivery} onChange={(event) => set("actualDelivery", event.target.value)} /></label>
-      <label className="field"><span><LocalizedText text={"Start date"} /></span><input type="date" value={form.startDate} onChange={(event) => set("startDate", event.target.value)} /></label>
-      <label className="field"><span><LocalizedText text={"Target delivery"} /></span><input type="date" min={form.startDate} value={form.targetDelivery} onChange={(event) => set("targetDelivery", event.target.value)} /></label>
+      <label className="field"><span><LocalizedText text={"PO date"} /></span><DateInput value={form.purchaseOrderDate} onChange={(event) => set("purchaseOrderDate", event.target.value)} /></label>
+      <label className="field"><span><LocalizedText text={"Actual delivery"} /></span><DateInput min={form.startDate} value={form.actualDelivery} onChange={(event) => set("actualDelivery", event.target.value)} /></label>
+      <label className="field"><span><LocalizedText text={"Start date"} /></span><DateInput value={form.startDate} onChange={(event) => set("startDate", event.target.value)} /></label>
+      <label className="field"><span><LocalizedText text={"Target delivery"} /></span><DateInput min={form.startDate} value={form.targetDelivery} onChange={(event) => set("targetDelivery", event.target.value)} /></label>
       <div className="field span-2"><span aria-hidden="true">&nbsp;</span>{span && (span.start !== form.startDate || span.finish !== form.targetDelivery)
         ? <button className="btn ghost sm" type="button" onClick={() => setForm(state => ({ ...state, startDate: span.start, targetDelivery: span.finish }))}><Icon name="calendar" />{t("CRM.usePlanDates")}: {formatDate(span.start)} – {formatDate(span.finish)}</button> : null}</div>
       <label className="field span-4"><span><LocalizedText text={"Site *"} /></span><input required maxLength={300} value={form.site} onChange={(event) => set("site", event.target.value)} /></label>
@@ -1411,7 +1413,7 @@ export function CreateProjectModal({ bootstrap, refreshBootstrap, notify, onClos
       <label className="field" data-guide="project.people"><span><LocalizedText text={"Project manager *"} /></span><select value={form.managerId} onChange={(event) => update({ managerId: Number(event.target.value) })}><option value={0}>{t("CRM.selectProjectManager")}</option>{managers.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>
       <label className="field"><span><LocalizedText text={"Lead engineer *"} /></span><select value={form.leadEngineerId} onChange={(event) => { const lead = Number(event.target.value); update({ leadEngineerId: lead, department: form.department || departmentOf(lead) }); }}><option value={0}>{t("CRM.selectLeadEngineer")}</option>{engineers.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>
       <label className="field" data-guide="project.po"><span><LocalizedText text={"Customer PO number *"} /></span><input required maxLength={100} value={form.purchaseOrderNumber} onChange={(event) => update({ purchaseOrderNumber: event.target.value })} /></label>
-      <label className="field"><span><LocalizedText text={"PO date *"} /></span><input type="date" value={form.purchaseOrderDate} onChange={(event) => update({ purchaseOrderDate: event.target.value })} /></label>
+      <label className="field"><span><LocalizedText text={"PO date *"} /></span><DateInput value={form.purchaseOrderDate} onChange={(event) => update({ purchaseOrderDate: event.target.value })} /></label>
       <label className="field span-4"><span><LocalizedText text={"Site *"} /></span><input required maxLength={300} value={form.site} onChange={(event) => update({ site: event.target.value })} /></label>
       {standalone ? <EndUserCompanyField bootstrap={bootstrap} customerId={customerId} value={form.endUserCustomerId ?? null} disabled={busy || !customerId} onChange={(endUserCustomerId) => update({ endUserCustomerId })} refreshBootstrap={refreshBootstrap} notify={notify} /> : null}
     </div>
@@ -1420,8 +1422,8 @@ export function CreateProjectModal({ bootstrap, refreshBootstrap, notify, onClos
     <TeamPlanSection rows={headings} onChange={(change) => { setSaveError(""); setHeadings(change); }} people={bootstrap.team} />
     <NotBrokenDownNote headings={headings} />
     {planned ? <div className="info-strip" role="note"><Icon name="calendar" /><span>{t("CRM.projectSpanFromPlan")}{span ? `: ${formatDate(span.start)} – ${formatDate(span.finish)}` : ""}</span></div> : <div className="form-grid two">
-      <label className="field"><span><LocalizedText text={"Start date *"} /></span><input type="date" required value={form.startDate} onChange={(event) => update({ startDate: event.target.value })} /></label>
-      <label className="field"><span><LocalizedText text={"Target delivery *"} /></span><input type="date" required min={form.startDate} value={form.targetDelivery} onChange={(event) => update({ targetDelivery: event.target.value })} /></label>
+      <label className="field"><span><LocalizedText text={"Start date *"} /></span><DateInput required value={form.startDate} onChange={(event) => update({ startDate: event.target.value })} /></label>
+      <label className="field"><span><LocalizedText text={"Target delivery *"} /></span><DateInput required min={form.startDate} value={form.targetDelivery} onChange={(event) => update({ targetDelivery: event.target.value })} /></label>
     </div>}
     <PaymentChecklist value={form.paymentsReceived ?? []} onChange={(paymentsReceived) => update({ paymentsReceived })} />
     <details><summary>{t("CRM.projectOptionalDetails")}</summary><div className="form-grid two">
@@ -1541,7 +1543,7 @@ function SupplierMasterTab({ bootstrap, canWrite, canCreate, notify, refreshBoot
   const from = suppliers.length ? (resolvedPage - 1) * pageSize + 1 : 0;
   const to = Math.min(resolvedPage * pageSize, suppliers.length);
   const deleteSupplierRow = async (supplier: { id: number; code: string; name: string }) => {
-    if (!window.confirm(`ลบ Supplier "${supplier.name}" (${supplier.code}) ใช่หรือไม่?`)) return;
+    if (!(await confirmDialog(`ลบ Supplier "${supplier.name}" (${supplier.code}) ใช่หรือไม่?`, { danger: true }))) return;
     setDeletingId(supplier.id);
     try {
       await deleteSupplier(supplier.id);
@@ -1875,7 +1877,7 @@ function EmployeeMasterTab({ canWrite, notify }: { canWrite: boolean; notify: (m
     finally { setLoading(false); }
   }, [search, activeOnly, canWrite]);
   const dismiss = async (request: SignInRequest) => {
-    if (!window.confirm(t("SignIn.dismissConfirm").replace("{name}", request.name))) return;
+    if (!(await confirmDialog(t("SignIn.dismissConfirm").replace("{name}", request.name), { danger: true }))) return;
     try { await dismissSignInRequest(request.subject); notify(t("SignIn.dismissed")); await load(); }
     catch (requestError) { setError(toError(requestError)); }
   };
@@ -2005,9 +2007,9 @@ function EmployeeModal({ employee, prefill = null, departments = [], positions =
         <label className="field"><span>{t("Department")} *</span><ChoiceSelect value={form.department} standard={EMPLOYEE_DEPARTMENTS} inUse={departments} placeholder="Employee.chooseDepartment" onChange={(value) => update("department", value)} /></label>
         <label className="field"><span>{t("Level / position")} *</span><ChoiceSelect value={form.position} standard={EMPLOYEE_LEVELS} inUse={positions} placeholder="Employee.chooseLevel" onChange={(value) => update("position", value)} /></label>
         <label className="field span-2"><span>{t("Job title")} *</span><input required maxLength={500} value={form.jobTitle} onChange={(event) => update("jobTitle", event.target.value)} /></label>
-        <label className="field"><span>{t("Birthday")}</span><input type="date" max={form.startWorkDate} value={form.birthDate ?? ""} onChange={(event) => update("birthDate", event.target.value)} /></label>
-        <label className="field"><span>{t("Start work")} *</span><input required type="date" min={form.birthDate || undefined} value={form.startWorkDate} onChange={(event) => update("startWorkDate", event.target.value)} /></label>
-        <label className="field"><span>{t("End work")}</span><input type="date" min={form.startWorkDate} value={form.endWorkDate ?? ""} onChange={(event) => update("endWorkDate", event.target.value)} /></label>
+        <label className="field"><span>{t("Birthday")}</span><DateInput max={form.startWorkDate} value={form.birthDate ?? ""} onChange={(event) => update("birthDate", event.target.value)} /></label>
+        <label className="field"><span>{t("Start work")} *</span><DateInput required min={form.birthDate || undefined} value={form.startWorkDate} onChange={(event) => update("startWorkDate", event.target.value)} /></label>
+        <label className="field"><span>{t("End work")}</span><DateInput min={form.startWorkDate} value={form.endWorkDate ?? ""} onChange={(event) => update("endWorkDate", event.target.value)} /></label>
         <label className="field"><span>{t("Uniform size")}</span><input maxLength={50} value={form.uniformSize ?? ""} onChange={(event) => update("uniformSize", event.target.value)} /></label>
         <label className="field"><span>{t("Shoe size")}</span><input maxLength={50} value={form.shoeSize ?? ""} onChange={(event) => update("shoeSize", event.target.value)} /></label>
         <label className="checkbox-row"><input type="checkbox" checked={form.isActive} onChange={(event) => update("isActive", event.target.checked)} /><span>{t("Active employee")}</span></label>

@@ -112,6 +112,7 @@ import { useT } from "../i18n";
 import { seedVisitRequest, visitNextAction } from "../../../lib/inquiry-visit-flow";
 import { canRecordSurvey, surveyAnswerComplete, reportEvidence, fillReportEvidence } from "../../../lib/site-visit-workspace";
 import "./site-visit-workspace.css";
+import { DateInput } from "../DateInput";
 
 type Props = {
   bootstrap: BootstrapData;
@@ -748,7 +749,7 @@ function IntakeEditor({ bootstrap, notify, inquiry, id, onBack, onSaved }: Props
               <input maxLength={100} value={form.customerReferenceNo ?? ""} onChange={(event) => set("customerReferenceNo", event.target.value)} />
             </Field>
             <Field label={t("Subject")} span={2}><input required maxLength={300} value={form.subject} onChange={(event) => set("subject", event.target.value)} /></Field>
-            <Field label={t("Request date")}><input type="date" value={form.requestDate ?? today()} onChange={(event) => set("requestDate", event.target.value)} /></Field>
+            <Field label={t("Request date")}><DateInput value={form.requestDate ?? today()} onChange={(event) => set("requestDate", event.target.value)} /></Field>
             <Field label={t("Sales owner")}>
               <select value={form.salesOwnerId} onChange={(event) => set("salesOwnerId", Number(event.target.value))}>
                 {bootstrap.team.map((member) => <option key={member.id} value={member.id}>{member.name} — {t(member.role)}</option>)}
@@ -764,8 +765,8 @@ function IntakeEditor({ bootstrap, notify, inquiry, id, onBack, onSaved }: Props
                 {INTAKE_SOURCES.map((source) => <option key={source}>{source}</option>)}
               </select>
             </Field>
-            <Field label={t("Required response date")}><input type="date" value={form.requiredResponseDate ?? ""} onChange={(event) => set("requiredResponseDate", event.target.value || null)} /></Field>
-            <Field label={t("Customer expected completion")}><input type="date" value={form.customerExpectedCompletion ?? ""} onChange={(event) => set("customerExpectedCompletion", event.target.value || null)} /></Field>
+            <Field label={t("Required response date")}><DateInput value={form.requiredResponseDate ?? ""} onChange={(event) => set("requiredResponseDate", event.target.value || null)} /></Field>
+            <Field label={t("Customer expected completion")}><DateInput value={form.customerExpectedCompletion ?? ""} onChange={(event) => set("customerExpectedCompletion", event.target.value || null)} /></Field>
           </div>
           {existing && existing.duplicateReferences.length > 0 ? <div className="callout warning" role="status">
             <Icon name="alertTriangle" />
@@ -882,12 +883,12 @@ function IntakeEditor({ bootstrap, notify, inquiry, id, onBack, onSaved }: Props
                   ...current,
                   windows: current.windows.map((item, position) => position === index ? { ...item, preference: Number(event.target.value) } : item),
                 }))} /></td>
-              <td><input type="datetime-local" value={toLocalInput(window.startsAt)}
+              <td><DateInput withTime value={toLocalInput(window.startsAt)}
                 onChange={(event) => setForm((current) => ({
                   ...current,
                   windows: current.windows.map((item, position) => position === index ? { ...item, startsAt: fromLocalInput(event.target.value) } : item),
                 }))} /></td>
-              <td><input type="datetime-local" value={toLocalInput(window.endsAt)}
+              <td><DateInput withTime value={toLocalInput(window.endsAt)}
                 onChange={(event) => setForm((current) => ({
                   ...current,
                   windows: current.windows.map((item, position) => position === index ? { ...item, endsAt: fromLocalInput(event.target.value) } : item),
@@ -1466,7 +1467,7 @@ function RequestVisitDrawer({ detail, master, onClose, onDone }: {
       <span><strong>{t("Customer's preferred window")}</strong>{formatDateTime(preferredWindow.startsAt)} → {formatDateTime(preferredWindow.endsAt)}</span>
     </div> : null}
     <div className="form-grid">
-      <Field label={t("Start")}><input type="datetime-local" value={start} onChange={(event) => setStart(event.target.value)} /></Field>
+      <Field label={t("Start")}><DateInput withTime value={start} onChange={(event) => setStart(event.target.value)} /></Field>
       <Field label={t("Duration (hours)")}><input type="number" min={0.5} max={72} step={0.5} value={durationHours} onChange={(event) => setDurationHours(Number(event.target.value))} /></Field>
       <Field label={t("Travel before (min)")}><input type="number" min={0} max={1440} value={travelBefore} onChange={(event) => setTravelBefore(Number(event.target.value))} /></Field>
       <Field label={t("Travel after (min)")}><input type="number" min={0} max={1440} value={travelAfter} onChange={(event) => setTravelAfter(Number(event.target.value))} /></Field>
@@ -1697,7 +1698,7 @@ function VisitCalendar({ bootstrap, onOpen }: Props & { onOpen: (id: number) => 
         </button>)}
       </div>
       <button className="btn ghost" type="button" onClick={() => shift(-1)} aria-label={t("Previous")}><Icon name="chevronLeft" /></button>
-      <label className="btn ghost"><Icon name="calendar" /><input aria-label={t("Anchor date")} type="date" value={anchor} onChange={(event) => setAnchor(event.target.value)} /></label>
+      <label className="btn ghost"><Icon name="calendar" /><DateInput aria-label={t("Anchor date")} value={anchor} onChange={(event) => setAnchor(event.target.value)} /></label>
       <button className="btn ghost" type="button" onClick={() => shift(1)} aria-label={t("Next")}><Icon name="chevronRight" /></button>
       <button className="btn ghost" type="button" onClick={() => setAnchor(today())}>{t("Today")}</button>
       <Select link="calengineer" label={t("Engineer")} value={engineer} onChange={setEngineer} options={["All engineers", ...bootstrap.team.map((item) => item.name)]} />
@@ -2373,8 +2374,8 @@ function RespondDrawer({ visit, assignment, onClose, onDone }: {
       <textarea rows={3} maxLength={2000} value={note} onChange={(event) => setNote(event.target.value)} />
     </Field>
     {response === "New Time Proposed" ? <div className="form-grid">
-      <Field label={t("Proposed start")}><input type="datetime-local" value={proposedStart} onChange={(event) => setProposedStart(event.target.value)} /></Field>
-      <Field label={t("Proposed end")}><input type="datetime-local" value={proposedEnd} onChange={(event) => setProposedEnd(event.target.value)} /></Field>
+      <Field label={t("Proposed start")}><DateInput withTime value={proposedStart} onChange={(event) => setProposedStart(event.target.value)} /></Field>
+      <Field label={t("Proposed end")}><DateInput withTime value={proposedEnd} onChange={(event) => setProposedEnd(event.target.value)} /></Field>
     </div> : null}
   </Drawer>;
 }
@@ -2464,8 +2465,8 @@ function RescheduleDrawer({ visit, onClose, onDone }: {
       <span>{t("Every assigned engineer is re-checked against the new time, and both confirmations are cleared — the parties agreed to a time, not to a visit.")}</span>
     </div>
     <div className="form-grid">
-      <Field label={t("New start")}><input type="datetime-local" value={start} onChange={(event) => setStart(event.target.value)} /></Field>
-      <Field label={t("New end")}><input type="datetime-local" value={end} onChange={(event) => setEnd(event.target.value)} /></Field>
+      <Field label={t("New start")}><DateInput withTime value={start} onChange={(event) => setStart(event.target.value)} /></Field>
+      <Field label={t("New end")}><DateInput withTime value={end} onChange={(event) => setEnd(event.target.value)} /></Field>
       <Field label={t("Travel before (min)")}><input type="number" min={0} max={1440} value={travelBefore} onChange={(event) => setTravelBefore(Number(event.target.value))} /></Field>
       <Field label={t("Travel after (min)")}><input type="number" min={0} max={1440} value={travelAfter} onChange={(event) => setTravelAfter(Number(event.target.value))} /></Field>
     </div>
@@ -2561,7 +2562,7 @@ function CreateInquiryDrawer({ visit, bootstrap, onClose, onDone }: {
           {engineers.map((member) => <option key={member.id} value={member.id}>{member.name} — {member.department}</option>)}
         </select>
       </Field>
-      <Field label={t("Estimate due date")}><input type="date" min={today()} value={dueDate} onChange={(event) => setDueDate(event.target.value)} /></Field>
+      <Field label={t("Estimate due date")}><DateInput min={today()} value={dueDate} onChange={(event) => setDueDate(event.target.value)} /></Field>
       <Field label={t("Priority")}><select value={priority} onChange={(event) => setPriority(event.target.value)}>
         {PRIORITIES.map((value) => <option key={value}>{value}</option>)}</select></Field>
       <Field label={t("Project probability")}><div className="input-suffix">
@@ -3401,7 +3402,7 @@ function ActionItemDrawer({ visit, bootstrap, onClose, onDone }: {
           {bootstrap.team.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}
         </select>
       </Field>
-      <Field label={t("Due date")}><input type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} /></Field>
+      <Field label={t("Due date")}><DateInput value={dueDate} onChange={(event) => setDueDate(event.target.value)} /></Field>
       <Field label={t("Status")}><select value={status} onChange={(event) => setStatus(event.target.value)}>
         {["Open", "In Progress", "Done", "Cancelled"].map((value) => <option key={value} value={value}>{t(value)}</option>)}</select></Field>
     </div>
@@ -3977,8 +3978,8 @@ function AvailabilityAdmin({ data, bootstrap, notify, reload }: AdminProps & { b
           {bootstrap.team.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select></Field>
         <Field label={t("Kind")}><select value={kind} onChange={(event) => setKind(event.target.value)}>
           {["Leave", "Training", "Public Holiday", "Company Holiday", "Other Assignment", "Unavailable"].map((value) => <option key={value} value={value}>{t(value)}</option>)}</select></Field>
-        <Field label={t("From")}><input type="datetime-local" value={startsAt} onChange={(event) => setStartsAt(event.target.value)} /></Field>
-        <Field label={t("To")}><input type="datetime-local" value={endsAt} onChange={(event) => setEndsAt(event.target.value)} /></Field>
+        <Field label={t("From")}><DateInput withTime value={startsAt} onChange={(event) => setStartsAt(event.target.value)} /></Field>
+        <Field label={t("To")}><DateInput withTime value={endsAt} onChange={(event) => setEndsAt(event.target.value)} /></Field>
         <Field label={t("Reason")} span={2}><input maxLength={300} value={reason} onChange={(event) => setReason(event.target.value)} /></Field>
       </div>
       <button className="btn primary" type="button" disabled={busy} onClick={() => {

@@ -65,6 +65,7 @@ import {
   Toolbar,
   type Tone,
 } from "../ui";
+import { DateInput } from "../DateInput";
 
 export type SigningScreenProps = {
   bootstrap: BootstrapData;
@@ -1837,7 +1838,7 @@ function CreateStampModal({ onClose, onCreated }: { onClose: () => void; onCreat
             ))}
           </select>
         </Field>
-        <Field label="Valid from" hint="วันที่เริ่มมีผลของตราประทับ"><input aria-label={localizeCopy("Valid from")} type="date" value={validFrom} onChange={(event) => setValidFrom(event.target.value)} /></Field>
+        <Field label="Valid from" hint="วันที่เริ่มมีผลของตราประทับ"><DateInput aria-label={localizeCopy("Valid from")} value={validFrom} onChange={(event) => setValidFrom(event.target.value)} /></Field>
       </div>
       <fieldset className="signing-stamp-form-group">
         <legend><LocalizedText text={"Scope — คลาสเอกสารที่ตรานี้ครอบคลุม"} /></legend>
@@ -1934,8 +1935,8 @@ function GrantAuthorityModal({
         </select>
       </Field>
       <div className="form-grid">
-        <Field label="Valid from"><input type="date" value={validFrom} onChange={(event) => setValidFrom(event.target.value)} /></Field>
-        <Field label="Valid to" hint="เว้นว่างคือไม่มีกำหนด"><input type="date" value={validTo} onChange={(event) => setValidTo(event.target.value)} /></Field>
+        <Field label="Valid from"><DateInput value={validFrom} onChange={(event) => setValidFrom(event.target.value)} /></Field>
+        <Field label="Valid to" hint="เว้นว่างคือไม่มีกำหนด"><DateInput value={validTo} onChange={(event) => setValidTo(event.target.value)} /></Field>
       </div>
     </Modal>
   );

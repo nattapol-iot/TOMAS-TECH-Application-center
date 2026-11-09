@@ -1,4 +1,5 @@
 "use client";
+import { confirmDialog } from "../dialogs";
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { ApiClientError, listInquiries, listProjects, type BootstrapData } from "../api-client";
 import { Drawer, EmptyState, Icon, Modal, SearchInput, type Tone } from "../ui";
@@ -37,6 +38,7 @@ import {
 import type { GanttAlert } from "./GanttChart";
 import { choiceLink, idLink, listLink, optionalChoiceLink, textLink, useLinkedState, type LinkCodec } from "../screen-link";
 import "./team-board.css";
+import { DateInput } from "../DateInput";
 
 // The team board (owner decision 2026-10-21): everyone's work on one page, a day grid coloured by load, a list of all
 // work, and work added ahead with a subject and a date, adjusted later. See lib/team-board.ts for the arithmetic.
@@ -1009,14 +1011,14 @@ function TaskFields({ draft, set, context, disabled = false, focusSubject = fals
       <div className="board-form-row">
         <label className="field" data-guide="team.date">
           <span>{t("TeamBoard.startDate")} <b className="board-req">*</b></span>
-          <input type="date" required disabled={disabled} value={draft.startDate}
+          <DateInput required disabled={disabled} value={draft.startDate}
             onChange={(event) => set({ ...draft, startDate: event.target.value, endDate: !draft.endDate || draft.endDate < event.target.value ? event.target.value : draft.endDate })} />
         </label>
         {/* A repeating task takes one day each time; it ends with its repeat. */}
         {repeating && draft.repeat ? null : (
           <label className="field">
             <span>{t("TeamBoard.endDate")}</span>
-            <input type="date" disabled={disabled} min={draft.startDate || undefined} value={draft.endDate} onChange={(event) => set({ ...draft, endDate: event.target.value })} />
+            <DateInput disabled={disabled} min={draft.startDate || undefined} value={draft.endDate} onChange={(event) => set({ ...draft, endDate: event.target.value })} />
           </label>
         )}
       </div>
@@ -1149,7 +1151,7 @@ function RepeatFields({ draft, set, disabled, holidays, longDate, lang }: {
         <div className="board-repeat-until">
           <label className="field">
             <span>{t("TeamBoard.repeatUntil")} <b className="board-req">*</b></span>
-            <input type="date" required disabled={disabled} min={draft.startDate || undefined} max={latest} value={draft.until} onChange={(event) => set({ ...draft, until: event.target.value })} />
+            <DateInput required disabled={disabled} min={draft.startDate || undefined} max={latest} value={draft.until} onChange={(event) => set({ ...draft, until: event.target.value })} />
           </label>
           <small className={dates.length ? "muted" : "red-text"}>
             {dates.length ? fill(t("TeamBoard.repeatCount"), { n: dates.length, first: longDate(dates[0]!), last: longDate(dates.at(-1)!) }) : t("TeamBoard.repeatNoMatch")}
@@ -1286,7 +1288,7 @@ function TaskDrawer({ task, canChange, onClose, onSave, onDelete, onCopy, ...con
   return (
     <Drawer title={task.title} subtitle={`${t(kindLabel)} · ${fill(t("TeamBoard.addedBy"), { name: task.createdByName, when: when(task.createdAt) })}`} onClose={onClose} width={560} footer={<>
       {canChange ? (
-        <button type="button" className="btn ghost board-delete" disabled={busy} onClick={() => { if (window.confirm(confirmDelete)) void onDelete(series ? scope : "this").catch((failure) => setError(errorText(failure))); }}>
+        <button type="button" className="btn ghost board-delete" disabled={busy} onClick={async () => { if ((await confirmDialog(confirmDelete, { danger: true }))) void onDelete(series ? scope : "this").catch((failure) => setError(errorText(failure))); }}>
           <Icon name="trash" />{t("TeamBoard.delete")}
         </button>
       ) : null}
@@ -1411,8 +1413,8 @@ function WorkList({ rows, shown, onMore, today, bootstrap, nameOf, shortDate, la
                 <SearchSelect value={draft.assigneeIds[0] ? String(draft.assigneeIds[0]) : ""} options={choosable()} onChange={(value) => setDraft({ ...draft, assigneeIds: value ? [Number(value)] : [] })} label={t("TeamBoard.assignee")}
                   placeholder={t("CRM.searchPerson")} {...copy} />
               </td>
-              <td><input type="date" aria-label={t("TeamBoard.startDate")} value={draft.startDate} onChange={(event) => setDraft({ ...draft, startDate: event.target.value, endDate: draft.endDate < event.target.value ? event.target.value : draft.endDate })} /></td>
-              <td><input type="date" aria-label={t("TeamBoard.endDate")} min={draft.startDate} value={draft.endDate} onChange={(event) => setDraft({ ...draft, endDate: event.target.value })} /></td>
+              <td><DateInput aria-label={t("TeamBoard.startDate")} value={draft.startDate} onChange={(event) => setDraft({ ...draft, startDate: event.target.value, endDate: draft.endDate < event.target.value ? event.target.value : draft.endDate })} /></td>
+              <td><DateInput aria-label={t("TeamBoard.endDate")} min={draft.startDate} value={draft.endDate} onChange={(event) => setDraft({ ...draft, endDate: event.target.value })} /></td>
               <td><input type="number" className="num" aria-label={t("TeamBoard.manDays")} min="0" max="999" step="0.5" disabled={draft.kind === "Away"} value={draft.manDays}
                 placeholder={fmt(defaultTaskManDays(draft.startDate, draft.endDate || draft.startDate, draft.slot === "Time" ? "Day" : draft.slot))} onChange={(event) => setDraft({ ...draft, manDays: event.target.value })} /></td>
               <td><span className="muted small">{t("TeamBoard.statusPlanned")}</span></td>
@@ -1444,7 +1446,7 @@ function WorkList({ rows, shown, onMore, today, bootstrap, nameOf, shortDate, la
                     </td>
                     <td>
                       {row.task && editable(row.task) ? (
-                        <><input type="date" className="board-inline" aria-label={t("TeamBoard.startDate")} value={row.task.startDate}
+                        <><DateInput className="board-inline" aria-label={t("TeamBoard.startDate")} value={row.task.startDate}
                           onChange={(event) => { const startDate = event.target.value; if (startDate) void change(row.task!, { startDate, endDate: row.task!.endDate < startDate ? startDate : row.task!.endDate }); }} />
                         {timeRange(row.task) ? <small className="board-time">{timeRange(row.task)}</small> : null}</>
                       ) : <>{shortDate(row.start)}{row.task && timeRange(row.task) ? <small className="board-time">{timeRange(row.task)}</small> : null}</>}

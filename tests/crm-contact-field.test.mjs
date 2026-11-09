@@ -66,7 +66,7 @@ test("the new-deal form asks for what matters first and folds the rest", () => {
   assert.match(screen, /const body=create&&action\?\{\.\.\.deal,nextAction:\{action,ownerId:deal\.salesOwnerId,dueDate:nextActionDue\}\}:deal;/);
   assert.match(screen, /\{key:"nextActionDue",label:"CRM\.dueDate",type:"date",required:Boolean\(text\(value\.nextActionText\)\.trim\(\)\)\}/);
   // Similar open deals show under the name while typing; no browser pop-up on save.
-  assert.doesNotMatch(screen, /window\.confirm\(`\$\{t\("CRM\.duplicateWarning"\)\}/);
+  assert.doesNotMatch(screen, /confirmDialog\(`\$\{t\("CRM\.duplicateWarning"\)\}/);
   assert.match(screen, /useCrmData<CrmRecord\[\]>\(typedName\.length>=3\?`\/api\/v1\/crm\/opportunity-duplicates\?customerId=/);
   // Both owners side by side, then the close date and (for commercial readers) the deal value; the rest is folded.
   assert.match(screen, /\{key:"salesOwnerId",required:true,searchable:true,placeholder:"CRM\.searchPerson",options:people(?:,guide:"[a-z.]+")?\},\s*\{key:"technicalOwnerId",searchable:true,placeholder:"CRM\.searchPerson",options:people\},\s*\{key:"expectedClose",type:"date"(?:,guide:"[a-z.]+")?\},\s*\.\.\.\(bootstrap\.permissions\.includes\("crm\.commercial\.read"\)\?\[\{key:"expectedValue",type:"number"\}\]:\[\]\),/);

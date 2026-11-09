@@ -76,15 +76,15 @@ test("menu entries are links to their screen and the address bar follows the ope
   const app = await readFile(new URL("../app/system/ProductionApp.tsx", import.meta.url), "utf8");
   // A <button> cannot be opened in a new tab; the entry is a link whose plain click stays in the app.
   assert.match(app, /return <a key=\{item\.view\} href=\{viewHash\(item\.view\)\}/);
-  assert.match(app, /onClick=\{\(event\) => \{ if \(!isPlainClick\(event\)\) return; event\.preventDefault\(\);/);
+  assert.match(app, /onClick=\{(?:async )?\(event\) => \{ if \(!isPlainClick\(event\)\) return; event\.preventDefault\(\);/);
   assert.doesNotMatch(app, /return <button key=\{item\.view\}/);
   // Each screen change is a history entry; the first write and a rewrite of an older link replace.
   assert.match(app, /const replace = !addressed\.current \|\| \(hashView\(hash\) === view && \(!document \|\| document\.id === recordId\)\);/);
   assert.match(app, /window\.history\[replace \? "replaceState" : "pushState"\]/);
   assert.match(app, /if \(RECORD_LINK\.test\(hash\)\) return;/);
   // Back/Forward go through setView, so permissions and the unsaved-changes prompt still apply.
-  assert.match(app, /if \(!allowedViews\(bootstrap\)\.includes\(target\) \|\| !setView\(target\)\)/);
-  assert.match(app, /if \(next !== view && !confirmReportNavigation\(\)\) return false;/);
+  assert.match(app, /if \(!allowedViews\(bootstrap\)\.includes\(target\) \|\| !(?:\(await setView\(target\)\)|setView\(target\))\)/);
+  assert.match(app, /if \(next !== view && !(?:\(await confirmReportNavigation\(\)\)|confirmReportNavigation\(\))\) return false;/);
   assert.match(app, /restoredView\(saved, allowed, window\.location\.hash, initialVerifyCode, dailyLanding, requested => landingView\(requested as View, data\.permissions\)\)/);
 });
 

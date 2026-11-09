@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmDialog } from "../dialogs";
 import { idLink, useLinkedState } from "../screen-link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiRequest, downloadReportEvidence, uploadReportEvidence, type BootstrapData, type PagedResult, type ReportEvidenceAttachment } from "../api-client";
@@ -21,6 +22,7 @@ import { LocalizedText } from "../LocalizedText";
 import { currentLocale } from "../i18n";
 import { useReportUiText as useUiText } from "./report-ui-copy";
 import { REPORT_TYPES, REPORT_STATUSES, labels, reportSections, type ReportType, type ReportBody, type InputField, type Section, type ReportRecord, type Signer } from "./report-types";
+import { DateInput } from "../DateInput";
 
 export { REPORT_TYPES, REPORT_STATUSES, labels, reportSections };
 export type { ReportType, ReportBody, InputField, Section, ReportRecord };
@@ -63,7 +65,7 @@ export function ReportScreens({ bootstrap, notify, onOpenAnalytics, onDirtyChang
   const t = useUiText();
   const workspaceDirty = useRef(false);
   const reportDirtyChange = useCallback((dirty: boolean) => { workspaceDirty.current = dirty; onDirtyChange?.(dirty); }, [onDirtyChange]);
-  const confirmWorkspaceNavigation = () => !workspaceDirty.current || window.confirm(t("Discard unsaved report changes?"));
+  const confirmWorkspaceNavigation = async () => !workspaceDirty.current || (await confirmDialog(t("Discard unsaved report changes?"), { danger: true }));
   const [workspaceTab, setWorkspaceTab] = useState<"reports" | "templates">("reports");
   const [selectedTemplate, setSelectedTemplate] = useState<ReportTemplate | null>(null);
   const [newType, setNewType] = useState<ReportType>("SERVICE");
@@ -87,11 +89,11 @@ export function ReportScreens({ bootstrap, notify, onOpenAnalytics, onDirtyChang
   }, [canRead, search, reportType, status, page, pageSize]);
   useEffect(() => { const timer = setTimeout(() => void load(), 200); return () => { clearTimeout(timer); invalidateList(); }; }, [load, invalidateList]);
   if (!canRead) return <EmptyState icon="lock" title={t("Report access required")} message={t("You need report.read to open this workspace.")} />;
-  if (selectedId !== null) return <ReportDetail onDirtyChange={reportDirtyChange} key={selectedId} id={selectedId} bootstrap={bootstrap} notify={notify} onBack={() => { if (confirmWorkspaceNavigation()) { setSelectedId(null); void load(); } }} />;
+  if (selectedId !== null) return <ReportDetail onDirtyChange={reportDirtyChange} key={selectedId} id={selectedId} bootstrap={bootstrap} notify={notify} onBack={async () => { if ((await confirmWorkspaceNavigation())) { setSelectedId(null); void load(); } }} />;
   const begin = (type: ReportType) => { setNewType(type); setSelectedTemplate(null); setCreating(true); };
   return <div className="report-workspace">
     <PageHeader eyebrow={t("CUSTOMER REPORTS")} title={t("Operational Reports")} subtitle={t("เลือกแบบฟอร์ม กรอกผลการทำงาน แล้วส่งตรวจและให้ลูกค้าเซ็น")} actions={onOpenAnalytics ? <button className="btn ghost" type="button" onClick={onOpenAnalytics}><LocalizedText text={"ดูสถิติรายงาน"} /></button> : undefined} />
-    <Tabs tabs={[{ id: "reports", label: t("รายงานทั้งหมด") }, { id: "templates", label: t("Template ของทีม") }]} active={workspaceTab} onChange={next => { if (next === workspaceTab || confirmWorkspaceNavigation()) setWorkspaceTab(next); }} />
+    <Tabs tabs={[{ id: "reports", label: t("รายงานทั้งหมด") }, { id: "templates", label: t("Template ของทีม") }]} active={workspaceTab} onChange={async next => { if (next === workspaceTab || (await confirmWorkspaceNavigation())) setWorkspaceTab(next); }} />
     {workspaceTab === "templates" ? <ReportTemplateLibrary onDirtyChange={reportDirtyChange} bootstrap={bootstrap} notify={notify} onUse={template => { setNewType(template.reportType); setSelectedTemplate(template); setCreating(true); }} /> : <>
       {bootstrap.permissions.includes("report.write") ? <section className="report-start" aria-label={t("สร้างรายงานจากแบบฟอร์ม")} data-guide="report.start">
         <div className="report-start-heading"><h2>{t("สร้างรายงานใหม่")}</h2><span>{t("เลือกแบบฟอร์มที่ตรงกับงาน")}</span></div>
@@ -138,7 +140,7 @@ function NewReportModal({ bootstrap, initialType = "SERVICE", initialTemplate = 
   const [sourceKind = "", rawId = ""] = source.split(":");
   const hasChanges = !!source || !!title.trim() || reviewerId !== null || approverId !== 0 || reportDate !== today() || locale !== (initialTemplate?.locale ?? "th");
   useReportUnsavedChanges(hasChanges, onDirtyChange);
-  const close = () => { if (!busy && (!hasChanges || window.confirm(t("Discard unsaved report changes?")))) onClose(); };
+  const close = async () => { if (!busy && (!hasChanges || (await confirmDialog(t("Discard unsaved report changes?"), { danger: true })))) onClose(); };
   const signers = useReportSigners(sourceKind, Number(rawId));
   // Creating a report saves it right away (see the submit handler below), so a
   // preparer restarting after picking the wrong source would otherwise pile up
@@ -190,7 +192,7 @@ function NewReportModal({ bootstrap, initialType = "SERVICE", initialTemplate = 
           <div className="report-selected-form"><Icon name="file" /><div><strong>{t(selectedForm.title)}</strong><small>{template ? `${template.name} · V${template.version}` : t(selectedForm.reference)}</small></div><button className="btn ghost sm" type="button" onClick={() => setStep(1)}>{t("เปลี่ยนแบบฟอร์ม")}</button></div>
           <h3 className="report-entry-heading">{t("รายงานนี้เป็นของงานใด")}</h3>
           <p className="muted">{reportType === "POC" ? t("เลือก Inquiry ที่ใช้ทดลองกับลูกค้า ยังไม่ต้องมี Project") : reportType === "INSPECTION" ? t("เลือก Inquiry หรือ Project ที่ต้องการตรวจสอบ") : t("เลือก Project ระบบจะแสดงชื่อลูกค้าและเลขที่งานบนรายงานให้")}</p>
-          <div className="report-fields"><Field label={t("ค้นหางาน")}><input aria-label={t("Find source")} value={search} onChange={event => { setSearch(event.target.value); setSourceLoading(true); resetSource(""); }} placeholder={t("เลข Inquiry / Project หรือชื่อโครงการ")} /></Field><Field label={t("Inquiry / Project *")} guide="report.source"><select required={step === 2} disabled={sourceLoading} aria-label={t("Inquiry / Project")} value={source} onChange={event => resetSource(event.target.value)}><option value="">{sourceLoading ? t("กำลังโหลดงาน…") : t("เลือกงานอ้างอิง")}</option>{sources.filter(item => permitted(item.sourceKind)).map(item => <option key={`${item.sourceKind}:${item.id}`} value={`${item.sourceKind}:${item.id}`}>{item.reference} · {item.title}</option>)}</select></Field><Field label={t("ชื่อรายงาน *")} guide="report.title"><input required={step === 2} maxLength={500} aria-label={t("Report title")} value={title} onChange={event => setTitle(event.target.value)} /></Field><Field label={t("วันที่รายงาน *")}><input type="date" required={step === 2} aria-label={t("Report date")} value={reportDate} onChange={event => setReportDate(event.target.value)} /></Field></div>
+          <div className="report-fields"><Field label={t("ค้นหางาน")}><input aria-label={t("Find source")} value={search} onChange={event => { setSearch(event.target.value); setSourceLoading(true); resetSource(""); }} placeholder={t("เลข Inquiry / Project หรือชื่อโครงการ")} /></Field><Field label={t("Inquiry / Project *")} guide="report.source"><select required={step === 2} disabled={sourceLoading} aria-label={t("Inquiry / Project")} value={source} onChange={event => resetSource(event.target.value)}><option value="">{sourceLoading ? t("กำลังโหลดงาน…") : t("เลือกงานอ้างอิง")}</option>{sources.filter(item => permitted(item.sourceKind)).map(item => <option key={`${item.sourceKind}:${item.id}`} value={`${item.sourceKind}:${item.id}`}>{item.reference} · {item.title}</option>)}</select></Field><Field label={t("ชื่อรายงาน *")} guide="report.title"><input required={step === 2} maxLength={500} aria-label={t("Report title")} value={title} onChange={event => setTitle(event.target.value)} /></Field><Field label={t("วันที่รายงาน *")}><DateInput required={step === 2} aria-label={t("Report date")} value={reportDate} onChange={event => setReportDate(event.target.value)} /></Field></div>
           {existingDrafts.length ? <div className="callout info" role="status">{t("คุณมีฉบับร่างที่ยังไม่ส่งของงานนี้ค้างอยู่แล้ว:")}{existingDrafts.map(draft => <button key={draft.id} type="button" className="btn ghost sm" onClick={() => onOpenExisting(draft.id)}>{draft.number} · {draft.title}</button>)}<small>{t("ยังเลือกที่จะสร้างรายงานใหม่แยกต่างหากได้ ถ้าตั้งใจทำมากกว่าหนึ่งฉบับ")}</small></div> : null}
           {sourceError ? <div className="callout danger" role="alert">{sourceError}<button className="btn ghost" type="button" onClick={() => { setStep(1); }}>{t("กลับไปเลือกแบบฟอร์มและลองใหม่")}</button></div> : null}
           <h3 className="report-entry-heading">{t("ทีมตรวจและอนุมัติ")}</h3><p className="muted">{t("คุณเป็นผู้จัดทำรายงาน เลือกผู้อนุมัติ แล้วเพิ่มผู้ตรวจได้หากงานนี้ต้องตรวจอีกขั้น")}</p>
@@ -298,7 +300,7 @@ function ReportDocumentHeader({ report, title, reportDate, onTitle, onDate }: { 
     <div className="report-paper-masthead">
     {/* eslint-disable-next-line @next/next/no-img-element */}
     <img className="report-paper-logo" src={`data:image/${LOGO_EXT};base64,${LOGO_BASE64}`} alt="TOMAS TECH" /><div><h2>{t(`${labels[report.reportType].toUpperCase()} REPORT`)}</h2><span>{t(report.reportType === "UAT" ? "ใบรายงานการทดสอบและตรวจรับงาน" : report.reportType === "SERVICE" ? "ใบรายงานการให้บริการ" : report.reportType === "INSPECTION" ? "ใบรายงานผลการตรวจสอบ" : "ใบรายงานผลการดำเนินงาน")}</span></div><small>{t(report.reportType === "UAT" ? "อ้างอิง TT-FRM-UAT-001 · Rev.00" : ["SERVICE", "INSTALLATION"].includes(report.reportType) ? "อ้างอิง TT-FRM-SRV-001 · Rev.00" : "แบบรายงานมาตรฐานทีม")}</small></div>
-    <div className="report-paper-meta"><div><span>{t("REPORT NO. / เลขที่")}</span><strong>{report.number}  · R{report.revision}</strong></div><div><span>{t("REPORT DATE / วันที่")}</span>{onDate ? <input aria-label={t("Report date")} type="date" required value={reportDate} onChange={event => onDate(event.target.value)} /> : <strong>{reportDate}</strong>}</div><div><span>{t("STATUS / สถานะ")}</span><strong>{t(labels[report.status] ?? report.status)}</strong></div><div className="wide"><span>{t("CUSTOMER / บริษัทผู้ว่าจ้าง")}</span><strong>{report.customer}</strong></div><div><span>{t("PROJECT / INQUIRY NO.")}</span><strong>{report.sourceReference}</strong></div>{report.endUserName ? <div className="full"><span>{t("END USER / บริษัทผู้ใช้งานปลายทาง")}</span><strong>{report.endUserName}</strong></div> : null}<div className="full"><span>{t("PROJECT / SITE / โครงการ")}</span><strong>{report.sourceTitle}</strong></div><div className="full"><span>{t("REPORT TITLE / เรื่อง")}</span>{onTitle ? <input aria-label={t("Report title")} required maxLength={500} value={title} onChange={event => onTitle(event.target.value)} /> : <strong>{title}</strong>}</div></div>
+    <div className="report-paper-meta"><div><span>{t("REPORT NO. / เลขที่")}</span><strong>{report.number}  · R{report.revision}</strong></div><div><span>{t("REPORT DATE / วันที่")}</span>{onDate ? <DateInput aria-label={t("Report date")} required value={reportDate} onChange={event => onDate(event.target.value)} /> : <strong>{reportDate}</strong>}</div><div><span>{t("STATUS / สถานะ")}</span><strong>{t(labels[report.status] ?? report.status)}</strong></div><div className="wide"><span>{t("CUSTOMER / บริษัทผู้ว่าจ้าง")}</span><strong>{report.customer}</strong></div><div><span>{t("PROJECT / INQUIRY NO.")}</span><strong>{report.sourceReference}</strong></div>{report.endUserName ? <div className="full"><span>{t("END USER / บริษัทผู้ใช้งานปลายทาง")}</span><strong>{report.endUserName}</strong></div> : null}<div className="full"><span>{t("PROJECT / SITE / โครงการ")}</span><strong>{report.sourceTitle}</strong></div><div className="full"><span>{t("REPORT TITLE / เรื่อง")}</span>{onTitle ? <input aria-label={t("Report title")} required maxLength={500} value={title} onChange={event => onTitle(event.target.value)} /> : <strong>{title}</strong>}</div></div>
   </header>;
 }
 

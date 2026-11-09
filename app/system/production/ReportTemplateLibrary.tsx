@@ -1,5 +1,6 @@
 "use client";
 
+import { confirmDialog } from "../dialogs";
 import { useReportUnsavedChanges } from "./useReportUnsavedChanges";
 import { useReportUiText as useUiText } from "./report-ui-copy";
 
@@ -57,7 +58,7 @@ export function ReportTemplateEditor({ template = null, seed, onClose, onSaved, 
   useReportUnsavedChanges(dirty, onDirtyChange);
   const editable = !template || template.canEdit && template.isActive;
   const patch = (value: Partial<TemplateSeed>) => { setDraft(current => ({ ...current, ...value })); setDirty(true); };
-  const close = () => { if (!busy && (!dirty || window.confirm(t("Discard unsaved template changes?")))) onClose(); };
+  const close = async () => { if (!busy && (!dirty || (await confirmDialog(t("Discard unsaved template changes?"), { danger: true })))) onClose(); };
   const save = async () => {
     if (busy || !editable) return;
     setBusy(true); setError("");
@@ -66,7 +67,7 @@ export function ReportTemplateEditor({ template = null, seed, onClose, onSaved, 
     finally { setBusy(false); }
   };
   return <Modal title={template ? `${t(editable ? "Edit" : "Preview")} · ${template.name}` : t("New reusable report template")} size="xl" onClose={close}><p className="callout info">{t("Keep standard instructions, equipment definitions, scenarios and expected results. Customer details, dates, team assignments, actual results, evidence and signatures belong to each report and are excluded.")}</p><p className="callout warning">{t("Review retained objectives and steps before saving. Remove customer-specific names, details and past-work wording; field filtering cannot anonymize free text.")}</p>
-    <fieldset className="report-public-fields" disabled={busy || !editable}><div className="report-fields"><Field label={t("Template name")}><input aria-label={t("Template name")} required maxLength={200} value={draft.name} onChange={event => patch({ name: event.target.value })} /></Field><Field label={t("Report type")}><select aria-label={t("Template report type")} value={draft.reportType} disabled={!!template || !!seed} onChange={event => { if (!Object.keys(draft.body).length || window.confirm(t("Changing report type clears the current template sections. Continue?"))) patch({ reportType: event.target.value as ReportType, body: {} }); }}>{REPORT_TYPES.map(type => <option key={type} value={type}>{t(type)}</option>)}</select></Field><Field label={t("Description")}><textarea aria-label={t("Template description")} maxLength={2000} value={draft.description} onChange={event => patch({ description: event.target.value })} /></Field><Field label={t("Language")}><select aria-label={t("Template language")} value={draft.locale} onChange={event => patch({ locale: event.target.value })}><option value="en">{t("English")}</option><option value="th">{t("ไทย")}</option><option value="ja">日本語</option></select></Field></div></fieldset>
+    <fieldset className="report-public-fields" disabled={busy || !editable}><div className="report-fields"><Field label={t("Template name")}><input aria-label={t("Template name")} required maxLength={200} value={draft.name} onChange={event => patch({ name: event.target.value })} /></Field><Field label={t("Report type")}><select aria-label={t("Template report type")} value={draft.reportType} disabled={!!template || !!seed} onChange={async event => { if (!Object.keys(draft.body).length || (await confirmDialog(t("Changing report type clears the current template sections. Continue?"), { danger: true }))) patch({ reportType: event.target.value as ReportType, body: {} }); }}>{REPORT_TYPES.map(type => <option key={type} value={type}>{t(type)}</option>)}</select></Field><Field label={t("Description")}><textarea aria-label={t("Template description")} maxLength={2000} value={draft.description} onChange={event => patch({ description: event.target.value })} /></Field><Field label={t("Language")}><select aria-label={t("Template language")} value={draft.locale} onChange={event => patch({ locale: event.target.value })}><option value="en">{t("English")}</option><option value="th">{t("ไทย")}</option><option value="ja">日本語</option></select></Field></div></fieldset>
     <ReportBodyEditor locale={draft.locale} reportType={draft.reportType} body={draft.body} readOnly={!editable || busy} reusableOnly onChange={body => patch({ body })} />
     {error ? <div className="callout danger" role="alert">{t(error)}</div> : null}<div className="report-actions"><button className="btn ghost" type="button" disabled={busy} onClick={close}>{editable ? t("Cancel") : t("Close")}</button>{editable ? <button className="btn primary" type="button" disabled={busy || !draft.name.trim()} onClick={() => void save()}>{busy ? t("Saving…") : t("Save template")}</button> : null}</div>
   </Modal>;

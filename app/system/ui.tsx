@@ -5,6 +5,7 @@
    modals and the small SVG charts used by the dashboard and the reports.
    ========================================================================== */
 
+import { promptDialog } from "./dialogs";
 import { useEffect, useId, useRef } from "react";
 import { useT } from "./i18n";
 import { useLinkedControl } from "./screen-link";
@@ -679,7 +680,7 @@ export function CopyLinkButton({ notify, label = true, className = "btn default 
       notify(t("Link.copied"));
     } catch {
       // No clipboard (an old browser or a blocked permission): show the link to copy by hand.
-      window.prompt(t("Link.copyPrompt"), href);
+      (await promptDialog(t("Link.copyPrompt"), { value: href, readOnly: true }));
     }
   };
   return <button className={className} type="button" onClick={() => { void copy(); }} title={t("Link.copyHint")} aria-label={t("Link.copy")}>

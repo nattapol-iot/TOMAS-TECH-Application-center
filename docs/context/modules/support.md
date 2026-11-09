@@ -4,7 +4,7 @@
 
 แจ้งปัญหา ticket การตอบรับ คู่มือ และบทสอนแบบคลิกตามบนหน้าจอจริงพร้อมความคืบหน้าของทีม
 
-Evidence: snapshot `1024c3d5`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
+Evidence: snapshot `064219fd`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
 
 ## Read only the operation you change
 
@@ -17,17 +17,17 @@ Shared screens contain other modules: use the symbol and line range instead of r
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `useCopy` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 13–13 |
-| `SelectField` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 14–14 |
-| `PageButtons` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 15–15 |
-| `SupportDialog` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 16–20 |
-| `SupportCreateDialog` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 22–47 |
-| `SupportCenter` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 49–68 |
-| `isImage` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 71–71 |
-| `SupportImage` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 72–80 |
-| `SupportTicketView` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 81–109 |
-| `SupportActionForm` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 112–119 |
-| `SupportMembers` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 121–124 |
+| `useCopy` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 14–14 |
+| `SelectField` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 15–15 |
+| `PageButtons` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 16–16 |
+| `SupportDialog` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 17–21 |
+| `SupportCreateDialog` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 23–48 |
+| `SupportCenter` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 50–69 |
+| `isImage` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 72–72 |
+| `SupportImage` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 73–81 |
+| `SupportTicketView` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 82–110 |
+| `SupportActionForm` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 113–120 |
+| `SupportMembers` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 122–125 |
 | `employeeManualLabel` | [app/system/production/EmployeeManualScreen.tsx](<../../../app/system/production/EmployeeManualScreen.tsx>) | 55–55 |
 | `EmployeeManualScreen` | [app/system/production/EmployeeManualScreen.tsx](<../../../app/system/production/EmployeeManualScreen.tsx>) | 57–101 |
 | `RUN_KEY` | [app/system/production/GuideLayer.tsx](<../../../app/system/production/GuideLayer.tsx>) | 92–92 |
@@ -51,6 +51,7 @@ Shared screens contain other modules: use the symbol and line range instead of r
 - [backend-node/src/support-rules.ts](<../../../backend-node/src/support-rules.ts>)
 - [backend-node/src/support-service.ts](<../../../backend-node/src/support-service.ts>)
 - [backend-node/src/activity-service.ts](<../../../backend-node/src/activity-service.ts>)
+- [app/system/dialogs.ts](<../../../app/system/dialogs.ts>)
 - [app/system/api-client.ts](<../../../app/system/api-client.ts>)
 - [app/system/i18n.ts](<../../../app/system/i18n.ts>)
 - [app/system/ui.tsx](<../../../app/system/ui.tsx>)

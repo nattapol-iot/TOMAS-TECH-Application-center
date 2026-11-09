@@ -47,6 +47,10 @@ const eslintConfig = defineConfig([
       react: {
         version: "detect",
       },
+      // DateInput (app/system/DateInput.tsx) renders a text input, so a <label> around it labels a control.
+      "jsx-a11y": {
+        components: { DateInput: "input" },
+      },
     },
   },
 ]);

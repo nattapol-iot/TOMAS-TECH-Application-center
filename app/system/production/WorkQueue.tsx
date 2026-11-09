@@ -11,6 +11,7 @@ import { Badge, EmptyState, Field, Icon, Modal, Panel, type Tone } from "../ui";
 import { loadWorkload, saveWorkOrder, type Workload, type WorkloadEffort } from "../resource-workload-client";
 import { orderWork, projectWork, weeklyCapacity, type Commitment } from "../../../lib/resource-planning";
 import "./workload.css";
+import { DateInput } from "../DateInput";
 
 const TONES: Record<Commitment["type"], Tone> = { Inquiry: "blue", Estimate: "violet", Project: "green", Task: "slate" };
 /** A team task is named by its kind; it has no reference of its own. */
@@ -263,10 +264,10 @@ export function EffortModal({ item, current, onClose, onSaved }: {
       >
         <p>{t(item.effort.kind === "EstimateSection" ? "Workload.sectionEffortHint" : "Total estimating effort, not project delivery effort. Shared equally between estimate assignees.")}</p>
         <Field label={t("Start date")}>
-          <input required type="date" value={start} onChange={(event) => setStart(event.target.value)} />
+          <DateInput required value={start} onChange={(event) => setStart(event.target.value)} />
         </Field>
         <Field label={t("Due date")}>
-          <input required type="date" min={start} value={end} onChange={(event) => setEnd(event.target.value)} />
+          <DateInput required min={start} value={end} onChange={(event) => setEnd(event.target.value)} />
         </Field>
         <Field label={t("Man-days")}>
           <input required type="number" min="0" max="100000" step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} />
