@@ -16,6 +16,7 @@ import {
   updateTeamTask,
   type BoardAway,
   type CalendarDelivery,
+  type MeetingMode,
   type OutlookEvent,
   type BoardVisit,
   type TeamBoardData,
@@ -23,11 +24,16 @@ import {
   type TeamTaskChange,
   type TeamTaskInput,
   type TeamTaskKind,
+  type TeamTaskRepeat,
+  type TeamTaskScope,
   type TeamTaskSlot,
   type TeamTaskStatus,
 } from "../resource-workload-client";
 import { dateFromDay, dayNumber, weeklyCapacity, workingDays, type Commitment } from "../../../lib/resource-planning";
-import { boardDays, covers, dailyLoad, dateRuns, dayWork, defaultTaskManDays, dueGroup, freestOn, loadBand, outlookDates, outlookLoad, overlapDays, tableHtml, tableTsv, timeRange, weekTotals, withExtra, withOutlook, type DayLoad, type Overlap } from "../../../lib/team-board";
+import {
+  MAX_REPEAT_DAYS, boardDays, covers, dailyLoad, dateRuns, dayWork, defaultTaskManDays, dueGroup, freestOn, isoWeekday, loadBand, monthAfter, outlookDates, outlookLoad, overlapDays,
+  repeatDays, tableHtml, tableTsv, timeRange, weekTotals, withExtra, withOutlook, type DayLoad, type Overlap,
+} from "../../../lib/team-board";
 import type { GanttAlert } from "./GanttChart";
 import { choiceLink, idLink, listLink, optionalChoiceLink, textLink, useLinkedState, type LinkCodec } from "../screen-link";
 import "./team-board.css";
@@ -121,35 +127,66 @@ type WorkType = "" | "project" | "inquiry" | "other";
 type Draft = {
   kind: TeamTaskKind; title: string; customerId: string; assigneeIds: number[]; startDate: string; endDate: string; slot: TeamTaskSlot;
   startTime: string; endTime: string; manDays: string; status: TeamTaskStatus; workType: WorkType; inquiryId: string; projectId: string; note: string;
+  /** Where an appointment is held (owner request 2026-11-09): online with a link, or offline in a room or on site. */
+  meetingMode: "" | MeetingMode; meetingPlace: string;
+  /** "" once only; otherwise every working day or the weekdays chosen (Monday 1 … Sunday 7), until a day. */
+  repeat: "" | TeamTaskRepeat["rule"]; weekdays: number[]; until: string;
 };
 const draftOf = (task: TeamTask | null, preset: { assigneeId?: number | null; date?: string } = {}): Draft => task ? {
   kind: task.kind, title: task.title, customerId: task.customerId ? String(task.customerId) : "", assigneeIds: [...task.assigneeIds],
   startDate: task.startDate, endDate: task.endDate, slot: task.slot, startTime: task.startTime ?? "", endTime: task.endTime ?? "", manDays: String(task.manDays), status: task.status,
   workType: task.projectId ? "project" : task.inquiryId ? "inquiry" : "other",
   inquiryId: task.inquiryId ? String(task.inquiryId) : "", projectId: task.projectId ? String(task.projectId) : "", note: task.note,
+  meetingMode: task.meetingMode ?? "", meetingPlace: task.meetingPlace ?? "",
+  repeat: task.repeat?.rule ?? "", weekdays: task.repeat ? [...task.repeat.weekdays] : [isoWeekday(task.startDate)], until: task.repeat?.until ?? "",
 } : {
   kind: "Appointment", title: "", customerId: "", assigneeIds: preset.assigneeId ? [preset.assigneeId] : [], startDate: preset.date ?? "",
   endDate: preset.date ?? "", slot: "Day", startTime: "", endTime: "", manDays: "", status: "Planned", workType: "", inquiryId: "", projectId: "", note: "",
+  meetingMode: "", meetingPlace: "", repeat: "", weekdays: [], until: "",
 };
-const inputOf = (draft: Draft): TeamTaskInput => ({
-  kind: draft.kind, title: draft.title.trim(), customerId: draft.customerId ? Number(draft.customerId) : null,
-  assigneeIds: draft.assigneeIds, startDate: draft.startDate, endDate: draft.endDate || draft.startDate,
-  // Times go with the Time slot only, and never with a day away.
-  slot: draft.kind === "Away" ? "Day" : draft.slot,
-  startTime: draft.kind !== "Away" && draft.slot === "Time" ? draft.startTime || null : null,
-  endTime: draft.kind !== "Away" && draft.slot === "Time" ? draft.endTime || null : null,
-  manDays: draft.kind === "Away" ? 0 : draft.manDays.trim() === "" ? null : Number(draft.manDays), status: draft.status,
-  // One link, the kind chosen; a day away is for no work.
-  inquiryId: draft.kind !== "Away" && draft.workType === "inquiry" && draft.inquiryId ? Number(draft.inquiryId) : null,
-  projectId: draft.kind !== "Away" && draft.workType === "project" && draft.projectId ? Number(draft.projectId) : null,
-  note: draft.note.trim(),
-});
+const WORKING_WEEK = [1, 2, 3, 4, 5];
+/** What the form asks to save; `repeating` is false where the repeat is not this save's to change (one day of a series). */
+const inputOf = (draft: Draft, repeating = true): TeamTaskInput => {
+  const repeat: TeamTaskRepeat | null = repeating && draft.repeat
+    ? { rule: draft.repeat, weekdays: draft.repeat === "Weekdays" ? WORKING_WEEK : [...draft.weekdays].sort((a, b) => a - b), until: draft.until } : null;
+  // Where it is held goes with an appointment only.
+  const meeting = draft.kind === "Appointment" && draft.meetingMode ? draft.meetingMode : null;
+  return {
+    kind: draft.kind, title: draft.title.trim(), customerId: draft.customerId ? Number(draft.customerId) : null,
+    // A repeating task takes one day each time.
+    assigneeIds: draft.assigneeIds, startDate: draft.startDate, endDate: repeat ? draft.startDate : draft.endDate || draft.startDate,
+    // Times go with the Time slot only, and never with a day away.
+    slot: draft.kind === "Away" ? "Day" : draft.slot,
+    startTime: draft.kind !== "Away" && draft.slot === "Time" ? draft.startTime || null : null,
+    endTime: draft.kind !== "Away" && draft.slot === "Time" ? draft.endTime || null : null,
+    manDays: draft.kind === "Away" ? 0 : draft.manDays.trim() === "" ? null : Number(draft.manDays), status: draft.status,
+    // One link, the kind chosen; a day away is for no work.
+    inquiryId: draft.kind !== "Away" && draft.workType === "inquiry" && draft.inquiryId ? Number(draft.inquiryId) : null,
+    projectId: draft.kind !== "Away" && draft.workType === "project" && draft.projectId ? Number(draft.projectId) : null,
+    note: draft.note.trim(),
+    meetingMode: meeting, meetingPlace: meeting ? draft.meetingPlace.trim() : "",
+    repeat,
+  };
+};
+/** A weekday's short name (Monday 1 … Sunday 7): 9 November 2026 was a Monday. */
+const weekdayName = (lang: Parameters<typeof localeFor>[0], day: number) =>
+  new Intl.DateTimeFormat(localeFor(lang), { weekday: "short", timeZone: "UTC" }).format(new Date(Date.UTC(2026, 10, 8 + day)));
+/** "Online meeting · <link>" or "Offline · Room 2"; empty when it does not say. */
+const meetingText = (task: Pick<TeamTask, "meetingMode" | "meetingPlace">, t: (key: string) => string) =>
+  task.meetingMode ? [t(task.meetingMode === "Online" ? "TeamBoard.meetingOnline" : "TeamBoard.meetingOffline"), task.meetingPlace].filter(Boolean).join(" · ") : "";
+/** A link that opens: http or https only. */
+const meetingUrl = (place: string) => (/^https?:\/\/\S+$/i.test(place.trim()) ? place.trim() : "");
+/** "Every working day" or "Weekly (Mon, Thu)". */
+const repeatRuleText = (repeat: Pick<TeamTaskRepeat, "rule" | "weekdays">, t: (key: string) => string, lang: Parameters<typeof localeFor>[0]) =>
+  repeat.rule === "Weekdays" ? t("TeamBoard.repeatWeekdays") : `${t("TeamBoard.repeatWeekly")} (${repeat.weekdays.map((day) => weekdayName(lang, day)).join(", ")})`;
 /** A team task as the load counts it: planned appointments and tasks only, its whole effort for each of its people. */
 const taskWork = (task: TeamTask): Commitment[] => task.status !== "Planned" || task.kind === "Away" ? [] :
   (task.assigneeIds.length ? task.assigneeIds : [null]).map((ownerId) => ({
     key: `TeamTask-${task.id}-${ownerId ?? "none"}`, workKey: `TeamTask-${task.id}`, type: "Task" as const, entityId: task.id, ownerId, reference: "",
     title: task.title, customer: task.customer, start: task.startDate, end: task.endDate, manDays: task.manDays, progress: 0, status: "Planned",
     taskKind: task.kind === "Appointment" ? "Appointment" as const : "Task" as const,
+    // A day of a repeat loads the day but overlaps nothing.
+    ...(task.seriesId !== null ? { repeat: true } : {}),
   }));
 
 export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, onChanged }: {
@@ -216,7 +253,8 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
     const capacities = new Map(data.capacities.map((entry) => [entry.userId, entry.daysPerWeek]));
     // Outlook meetings count by their hours (owner decision 2026-10-28), at most a day's worth per day.
     const outlookMd = outlookLoad(data.outlook ?? []);
-    const lateTasks = (userId: number) => data.tasks.filter((task) => task.assigneeIds.includes(userId) && task.status === "Planned" && task.kind !== "Away" && task.endDate < today).length;
+    // A past day of a repeat is history, not late.
+    const lateTasks = (userId: number) => data.tasks.filter((task) => task.assigneeIds.includes(userId) && task.status === "Planned" && task.kind !== "Away" && task.seriesId === null && task.endDate < today).length;
     // Everything read, for the Gantt, which scrolls past the grid's weeks.
     const readDays = boardDays(range.from, Math.ceil((dayNumber(range.to) - dayNumber(range.from) + 1) / 7), data.holidays, today).filter((day) => day.date <= range.to);
     return bootstrap.team.map((user) => {
@@ -255,7 +293,7 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
       const kind = task.kind === "Away" ? "away" : task.kind === "Appointment" ? "appointment" : "task";
       for (const day of days) if (covers(task.startDate, task.endDate, day.date))
         for (const userId of task.assigneeIds.length ? task.assigneeIds : [null])
-          add(userId, day.date, { kind, key: `task-${task.id}`, task, late: task.status === "Planned" && task.kind !== "Away" && task.endDate < today });
+          add(userId, day.date, { kind, key: `task-${task.id}`, task, late: task.status === "Planned" && task.kind !== "Away" && task.seriesId === null && task.endDate < today });
     }
     for (const visit of data.visits) for (const day of days) if (covers(visit.start, visit.end, day.date))
       for (const engineerId of visit.engineerIds) add(engineerId, day.date, { kind: "visit", key: `visit-${visit.id}`, visit, late: false });
@@ -273,9 +311,16 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
     const rows: ListRow[] = [];
     for (const item of data.items) if (item.type !== "Task")
       rows.push({ key: item.key, category: itemCategory(item), start: item.start, end: item.end, ownerIds: item.ownerId ? [item.ownerId] : [], manDays: item.manDays, late: Boolean(item.end && item.end < today), item });
-    for (const task of data.tasks) if (task.status === "Planned")
+    // A repeat is one row: its next day from today on (its last, once every day has passed).
+    const nextOfSeries = new Map<number, TeamTask>();
+    for (const task of data.tasks) if (task.seriesId !== null && task.status === "Planned") {
+      const kept = nextOfSeries.get(task.seriesId);
+      if (!kept || (task.startDate >= today ? kept.startDate < today || task.startDate < kept.startDate : kept.startDate < today && task.startDate > kept.startDate))
+        nextOfSeries.set(task.seriesId, task);
+    }
+    for (const task of data.tasks) if (task.status === "Planned" && (task.seriesId === null || nextOfSeries.get(task.seriesId) === task))
       rows.push({ key: `task-${task.id}`, category: task.kind === "Away" ? "away" : task.kind === "Appointment" ? "appointment" : "task", start: task.startDate, end: task.endDate,
-        ownerIds: task.assigneeIds, manDays: task.kind === "Away" ? null : task.manDays, late: task.kind !== "Away" && task.endDate < today, task });
+        ownerIds: task.assigneeIds, manDays: task.kind === "Away" ? null : task.manDays, late: task.kind !== "Away" && task.seriesId === null && task.endDate < today, task });
     for (const visit of data.visits)
       rows.push({ key: `visit-${visit.id}`, category: "appointment", start: visit.start, end: visit.end, ownerIds: visit.engineerIds, manDays: null, late: false, visit });
     for (const entry of data.away)
@@ -354,6 +399,8 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
     ...input, id: saved.id, rowVersion: saved.rowVersion, manDays: saved.manDays, customer: customerName(input.customerId),
     inquiryNo: input.inquiryId === base?.inquiryId ? base?.inquiryNo ?? "" : "", projectNo: input.projectId === base?.projectId ? base?.projectNo ?? "" : "",
     createdBy: base?.createdBy ?? me, createdByName: base?.createdByName ?? bootstrap.user.name, createdAt: base?.createdAt ?? new Date().toISOString(),
+    // A day changed on its own stays in its repeat.
+    seriesId: base?.seriesId ?? null, repeat: base?.repeat ?? null,
   });
   const conflict = async (failure: unknown) => {
     if (failure instanceof ApiClientError && (failure.status === 409 || failure.status === 404)) { notify(t("TeamBoard.conflict")); await load(); return true; }
@@ -363,12 +410,26 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
   const outlook = (calendar: CalendarDelivery) => calendar === "sent" ? ` ${t("TeamBoard.outlookSent")}` : calendar === "failed" ? ` ${t("TeamBoard.outlookFailed")}` : "";
   const create = async (input: TeamTaskInput) => {
     const saved = await createTeamTask(input);
+    // A repeat is a task on each of its days: the board reads them.
+    if (input.repeat) {
+      onChanged?.();
+      await load();
+      notify(`${fill(t("TeamBoard.addedRepeat"), { n: saved.count ?? 0 })}${outlook(saved.calendar)}`);
+      return;
+    }
     applyTask(savedTask(null, input, saved));
     notify(`${t("TeamBoard.added")}${outlook(saved.calendar)}`);
   };
-  const update = async (task: TeamTask, input: TeamTaskInput, message = "Saved") => {
+  const update = async (task: TeamTask, input: TeamTaskInput, message = "Saved", scope: TeamTaskScope = "this") => {
     try {
-      const saved = await updateTeamTask(task.id, input, task.rowVersion);
+      const saved = await updateTeamTask(task.id, input, task.rowVersion, scope);
+      // A task made to repeat, or the days of a repeat from this one on replaced: the board reads again.
+      if (saved.replaced) {
+        onChanged?.();
+        await load();
+        notify(`${saved.count ? fill(t("TeamBoard.addedRepeat"), { n: saved.count }) : t(message)}${outlook(saved.calendar)}`);
+        return null;
+      }
       const next = savedTask(task, input, saved);
       applyTask(next);
       notify(`${t(message)}${outlook(saved.calendar)}`);
@@ -378,8 +439,14 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
       throw failure;
     }
   };
-  const remove = async (task: TeamTask) => {
-    try { const removed = await deleteTeamTask(task.id, task.rowVersion); applyTask(null, task.id); notify(`${t("TeamBoard.deleted")}${outlook(removed.calendar)}`); }
+  const remove = async (task: TeamTask, scope: TeamTaskScope = "this") => {
+    try {
+      const removed = await deleteTeamTask(task.id, task.rowVersion, scope);
+      // This day of a repeat and every one after it: the board reads again.
+      if (scope === "following" && task.seriesId !== null) { onChanged?.(); await load(); }
+      else applyTask(null, task.id);
+      notify(`${t("TeamBoard.deleted")}${outlook(removed.calendar)}`);
+    }
     catch (failure) { if (!(await conflict(failure))) throw failure; }
   };
 
@@ -396,8 +463,9 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
         const what = event.kind === "prj" ? event.item.title : event.item.customer || event.item.title;
         return event.late ? `${t("TeamBoard.late")} · ${what}` : `${prefix} · ${what}`;
       }
-      case "appointment": return `${t("TeamBoard.chipAppointment")}${timeRange(event.task) ? ` ${timeRange(event.task)}` : ""} · ${event.task.title}`;
-      case "task": return timeRange(event.task) ? `${timeRange(event.task)} ${event.task.title}` : event.task.title;
+      // ↻ marks a day of a repeat.
+      case "appointment": return `${event.task.seriesId !== null ? "↻ " : ""}${t("TeamBoard.chipAppointment")}${timeRange(event.task) ? ` ${timeRange(event.task)}` : ""} · ${event.task.title}`;
+      case "task": return `${event.task.seriesId !== null ? "↻ " : ""}${timeRange(event.task) ? `${timeRange(event.task)} ${event.task.title}` : event.task.title}`;
       case "away": return event.task.title;
       case "visit": return `${t("TeamBoard.chipVisit")}${event.visit.time ? ` ${event.visit.time}` : ""}${event.visit.customer ? ` · ${event.visit.customer}` : ""}`;
       case "leave": return t(event.away.kind);
@@ -410,7 +478,8 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
     if (event.kind === "visit") return [event.visit.number, event.visit.customer].filter(Boolean).join(" · ") || t("TeamBoard.chipVisit");
     if (event.kind === "leave") return t(event.away.kind);
     if (event.kind === "outlook") return [`Outlook · ${event.event.subject ?? t("TeamBoard.outlookBusy")}`, outlookTime(event.event) || t("TeamBoard.slotDay"), event.event.location].filter(Boolean).join(" · ");
-    return "task" in event ? [event.task.title, event.task.customer].filter(Boolean).join(" · ") : "";
+    return "task" in event ? [event.task.title, event.task.customer, meetingText(event.task, t),
+      event.task.repeat ? repeatRuleText(event.task.repeat, t, lang) : ""].filter(Boolean).join(" · ") : "";
   };
   const openEvent = (event: BoardEvent) => {
     if (event.kind === "appointment" || event.kind === "task" || event.kind === "away") setEditing(event.task);
@@ -461,6 +530,9 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
     const person = open.userId === null ? null : personById.get(open.userId) ?? null;
     const load = person ? person.load[days.findIndex((day) => day.date === open.date)] ?? null : null;
     const pieces = dayWork((data?.items ?? []).filter((item) => item.ownerId === open.userId), open.date, holidays);
+    // A day of a repeat (a daily meeting) loads the day but overlaps nothing, as on the grid.
+    const overlapping = pieces.filter((piece) => !piece.rows.every((row) => row.item.repeat));
+    const overlaps = (piece: (typeof pieces)[number]) => overlapping.length > 1 && overlapping.includes(piece);
     const others = (events.get(`${open.userId ?? 0}|${open.date}`) ?? []).filter((event) => event.kind === "visit" || event.kind === "leave" || event.kind === "outlook" || event.kind === "away");
     const typeOf = (item: Commitment) => (item.type === "Task" ? (item.taskKind === "Appointment" ? "appointment" : "task") : itemCategory(item));
     const opener = (item: Commitment) => {
@@ -472,11 +544,11 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
     return <Drawer title={`${name} · ${longDate(open.date)}`} onClose={() => setDayOpen(null)}
       subtitle={load && load.available > 0 ? `${fmt(load.manDays)} / ${fmt(load.available)} MD · ${pct(load.utilisation)}` : undefined}
       footer={mayAdd ? <button type="button" className="btn primary" onClick={() => { setDayOpen(null); setAdding({ assigneeId: open.userId, date: open.date }); }}><Icon name="plus" />{t("TeamBoard.dayAdd")}</button> : undefined}>
-      {pieces.length > 1 ? <div className="callout warning board-day-warning" role="status">{fill(t("TeamBoard.dayOverlap"), { n: pieces.length })}</div> : null}
+      {overlapping.length > 1 ? <div className="callout warning board-day-warning" role="status">{fill(t("TeamBoard.dayOverlap"), { n: overlapping.length })}</div> : null}
       {pieces.length ? <>
         <h3 className="board-day-head">{t("TeamBoard.dayWork")}</h3>
         <ul className="board-day-list">
-          {pieces.map((piece) => <li key={piece.piece} className={`board-day-piece${pieces.length > 1 ? " overlap" : ""}`}>
+          {pieces.map((piece) => <li key={piece.piece} className={`board-day-piece${overlaps(piece) ? " overlap" : ""}`}>
             {piece.rows.map(({ item, perDay, fullDay }) => {
               const kind = typeOf(item), action = opener(item);
               const body = <>
@@ -520,7 +592,8 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
     label: <><span className={`board-type ${row.visit ? "visit" : row.category}`}>{t(rowTypeLabel(row))}</span> {rowTitle(row, t)}</>,
     meta: [rowCustomer(row), rowTime(row)].filter(Boolean).join(" · "),
     title: `${rowTitle(row, t)} · ${row.start ?? "—"} → ${row.end ?? row.start ?? "—"}`,
-    start: row.start, end: row.end ?? row.start, tone: rowTone(row),
+    // A repeat is one row in the list: its bar runs until its last day.
+    start: row.start, end: row.task?.repeat?.until ?? row.end ?? row.start, tone: rowTone(row),
     ...(row.task ? { onOpen: () => setEditing(row.task!) } : row.item && !row.item.hidden ? { onOpen: () => openItem(row.item!) } : {}),
   });
   const ganttPeople: GanttPerson[] = [
@@ -736,8 +809,8 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
           task={editing} bootstrap={bootstrap} people={people} personById={personById} days={days} holidays={holidays} longDate={longDate}
           canChange={canChange(editing)} assignable={assignable} onClose={() => setEditing(null)}
           // Saved, or someone else's change won and the board was reloaded: either way this copy is done.
-          onSave={async (input) => { await update(editing, input); setEditing(null); }}
-          onDelete={async () => { await remove(editing); setEditing(null); }}
+          onSave={async (input, scope) => { await update(editing, input, "Saved", scope); setEditing(null); }}
+          onDelete={async (scope) => { await remove(editing, scope); setEditing(null); }}
           onCopy={() => copyTask(editing)}
         />
       ) : null}
@@ -825,12 +898,14 @@ function useWorkOptions(bootstrap: BootstrapData, enabled: boolean) {
 }
 
 /** The fields a team task shares between adding and changing it, with the chosen person's load on its first day. */
-function TaskFields({ draft, set, context, disabled = false, focusSubject = false, original = null }: {
+function TaskFields({ draft, set, context, disabled = false, focusSubject = false, original = null, repeating = false }: {
   draft: Draft; set: (draft: Draft) => void; context: FormContext; disabled?: boolean; focusSubject?: boolean;
   /** The task as saved, when changing one: its own share is already in the load and is not counted twice. */
   original?: TeamTask | null;
+  /** Whether this save sets the repeat: a new task, a task that happens once, or a repeat from this day on. */
+  repeating?: boolean;
 }) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const copy = useSearchCopy();
   const { bootstrap, people, personById, days, holidays, longDate, assignable } = context;
   const work = useWorkOptions(bootstrap, draft.kind !== "Away");
@@ -937,10 +1012,13 @@ function TaskFields({ draft, set, context, disabled = false, focusSubject = fals
           <input type="date" required disabled={disabled} value={draft.startDate}
             onChange={(event) => set({ ...draft, startDate: event.target.value, endDate: !draft.endDate || draft.endDate < event.target.value ? event.target.value : draft.endDate })} />
         </label>
-        <label className="field">
-          <span>{t("TeamBoard.endDate")}</span>
-          <input type="date" disabled={disabled} min={draft.startDate || undefined} value={draft.endDate} onChange={(event) => set({ ...draft, endDate: event.target.value })} />
-        </label>
+        {/* A repeating task takes one day each time; it ends with its repeat. */}
+        {repeating && draft.repeat ? null : (
+          <label className="field">
+            <span>{t("TeamBoard.endDate")}</span>
+            <input type="date" disabled={disabled} min={draft.startDate || undefined} value={draft.endDate} onChange={(event) => set({ ...draft, endDate: event.target.value })} />
+          </label>
+        )}
       </div>
       {draft.kind !== "Away" ? (
         <div className="field">
@@ -964,7 +1042,32 @@ function TaskFields({ draft, set, context, disabled = false, focusSubject = fals
           ) : null}
         </div>
       ) : null}
-      {draft.kind !== "Away" && loads.length ? <p className="muted small board-outlook"><Icon name="calendar" />{t("TeamBoard.outlookHint")}</p> : null}
+      {draft.kind === "Appointment" ? (
+        <div className="field board-meeting" data-guide="team.meeting">
+          <span>{t("TeamBoard.meeting")}</span>
+          <div className="chip-select" role="group" aria-label={t("TeamBoard.meeting")}>
+            {([["", "TeamBoard.meetingNone"], ["Online", "TeamBoard.meetingOnline"], ["Offline", "TeamBoard.meetingOffline"]] as const).map(([mode, label]) => (
+              <button key={mode || "none"} type="button" disabled={disabled} className={draft.meetingMode === mode ? "chip on" : "chip"} aria-pressed={draft.meetingMode === mode}
+                onClick={() => set({ ...draft, meetingMode: mode })}>{t(label)}</button>
+            ))}
+          </div>
+          {draft.meetingMode ? (
+            <label className="field">
+              <span>{t(draft.meetingMode === "Online" ? "TeamBoard.meetingLink" : "TeamBoard.meetingPlace")}</span>
+              <input maxLength={500} disabled={disabled} value={draft.meetingPlace} inputMode={draft.meetingMode === "Online" ? "url" : undefined}
+                placeholder={t(draft.meetingMode === "Online" ? "TeamBoard.meetingLinkPlaceholder" : "TeamBoard.meetingPlacePlaceholder")}
+                onChange={(event) => set({ ...draft, meetingPlace: event.target.value })} />
+            </label>
+          ) : null}
+          {draft.meetingMode === "Online" && meetingUrl(draft.meetingPlace) ? (
+            <a className="board-meeting-join" href={meetingUrl(draft.meetingPlace)} target="_blank" rel="noopener noreferrer"><Icon name="externalLink" />{t("TeamBoard.meetingJoin")}</a>
+          ) : null}
+        </div>
+      ) : null}
+      {repeating ? (
+        <RepeatFields draft={draft} set={set} disabled={disabled} holidays={context.holidays} longDate={context.longDate} lang={lang} />
+      ) : null}
+      {draft.kind !== "Away" && loads.length ? <p className="muted small board-outlook"><Icon name="calendar" />{t(repeating && draft.repeat ? "TeamBoard.outlookRepeatHint" : "TeamBoard.outlookHint")}</p> : null}
       {draft.kind === "Away" ? (
         !draft.assigneeIds.length ? <p className="callout warning" role="status">{t("TeamBoard.awayNeedsPerson")}</p> : null
       ) : !loads.length ? (
@@ -1009,20 +1112,78 @@ function TaskFields({ draft, set, context, disabled = false, focusSubject = fals
   );
 }
 
-const draftProblem = (draft: Draft) => {
+/**
+ * How often a task repeats (owner request 2026-11-09): once, every working day, or on the weekdays chosen, until a day
+ * at most a year on. Says how many days that makes, company holidays left out.
+ */
+function RepeatFields({ draft, set, disabled, holidays, longDate, lang }: {
+  draft: Draft; set: (draft: Draft) => void; disabled: boolean; holidays: readonly string[]; longDate: (date: string) => string; lang: Parameters<typeof localeFor>[0];
+}) {
+  const { t } = useLanguage();
+  const choose = (repeat: Draft["repeat"]) => set({
+    ...draft, repeat,
+    weekdays: draft.weekdays.length ? draft.weekdays : [draft.startDate ? isoWeekday(draft.startDate) : 1],
+    until: draft.until || (draft.startDate ? monthAfter(draft.startDate) : ""),
+  });
+  const toggle = (day: number) => set({ ...draft, weekdays: draft.weekdays.includes(day) ? draft.weekdays.filter((entry) => entry !== day) : [...draft.weekdays, day] });
+  const dates = draft.repeat ? repeatDays(draft.startDate, draft.repeat === "Weekdays" ? WORKING_WEEK : draft.weekdays, draft.until, holidays) : [];
+  const latest = draft.startDate ? dateFromDay(dayNumber(draft.startDate) + MAX_REPEAT_DAYS) : undefined;
+  return (
+    <div className="field board-repeat" data-guide="team.repeat">
+      <span>{t("TeamBoard.repeat")}</span>
+      <div className="chip-select" role="group" aria-label={t("TeamBoard.repeat")}>
+        {([["", "TeamBoard.repeatNone"], ["Weekdays", "TeamBoard.repeatWeekdays"], ["Weekly", "TeamBoard.repeatWeekly"]] as const).map(([repeat, label]) => (
+          <button key={repeat || "none"} type="button" disabled={disabled} className={draft.repeat === repeat ? "chip on" : "chip"} aria-pressed={draft.repeat === repeat}
+            onClick={() => choose(repeat)}>{t(label)}</button>
+        ))}
+      </div>
+      {draft.repeat === "Weekly" ? (
+        <div className="chip-select board-weekdays" role="group" aria-label={t("TeamBoard.repeatOn")}>
+          {[1, 2, 3, 4, 5, 6, 7].map((day) => (
+            <button key={day} type="button" disabled={disabled} className={draft.weekdays.includes(day) ? "chip on" : "chip"} aria-pressed={draft.weekdays.includes(day)}
+              onClick={() => toggle(day)}>{weekdayName(lang, day)}</button>
+          ))}
+        </div>
+      ) : null}
+      {draft.repeat ? (
+        <div className="board-repeat-until">
+          <label className="field">
+            <span>{t("TeamBoard.repeatUntil")} <b className="board-req">*</b></span>
+            <input type="date" required disabled={disabled} min={draft.startDate || undefined} max={latest} value={draft.until} onChange={(event) => set({ ...draft, until: event.target.value })} />
+          </label>
+          <small className={dates.length ? "muted" : "red-text"}>
+            {dates.length ? fill(t("TeamBoard.repeatCount"), { n: dates.length, first: longDate(dates[0]!), last: longDate(dates.at(-1)!) }) : t("TeamBoard.repeatNoMatch")}
+          </small>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** What stops a save; `repeating` checks the repeat too. */
+const draftProblem = (draft: Draft, repeating = true) => {
   if (!draft.title.trim() || !draft.startDate) return "";
-  if (draft.endDate && draft.endDate < draft.startDate) return "TeamBoard.endBeforeStart";
+  if (repeating && draft.repeat) {
+    if (!draft.until) return "TeamBoard.repeatUntilNeeded";
+    if (draft.until < draft.startDate) return "TeamBoard.repeatUntilBefore";
+    if (dayNumber(draft.until) - dayNumber(draft.startDate) > MAX_REPEAT_DAYS) return "TeamBoard.repeatTooLong";
+    if (draft.repeat === "Weekly" && !draft.weekdays.length) return "TeamBoard.repeatNoDays";
+  }
+  else if (draft.endDate && draft.endDate < draft.startDate) return "TeamBoard.endBeforeStart";
   if (draft.kind === "Away") return draft.assigneeIds.length ? "" : "TeamBoard.awayNeedsPerson";
   if (draft.slot !== "Time") return "";
   if (!draft.startTime || !draft.endTime) return "TeamBoard.timeNeeded";
-  return (draft.endDate || draft.startDate) === draft.startDate && draft.endTime <= draft.startTime ? "TeamBoard.timeOrder" : "";
+  const last = repeating && draft.repeat ? draft.startDate : draft.endDate || draft.startDate;
+  return last === draft.startDate && draft.endTime <= draft.startTime ? "TeamBoard.timeOrder" : "";
 };
 /** Required fields still empty: the work it is for and its brief detail (a day away needs neither). */
 const draftMissing = (draft: Draft): string[] => draft.kind === "Away" ? [] : [
   !draft.workType || (draft.workType === "project" && !draft.projectId) || (draft.workType === "inquiry" && !draft.inquiryId) ? "TeamBoard.workFor" : "",
   draft.note.trim() ? "" : "TeamBoard.detail",
 ].filter(Boolean);
-const draftReady = (draft: Draft) => Boolean(draft.title.trim() && draft.startDate) && !draftProblem(draft) && !draftMissing(draft).length;
+const draftReady = (draft: Draft, repeating = true) => Boolean(draft.title.trim() && draft.startDate) && !draftProblem(draft, repeating) && !draftMissing(draft).length
+  // A repeat that falls on no day saves nothing.
+  && !(repeating && draft.repeat && !repeatDays(draft.startDate, draft.repeat === "Weekdays" ? WORKING_WEEK : draft.weekdays, draft.until).length);
 /** "Still needed: …" under a form whose button is off for a required field. */
 function MissingLine({ draft }: { draft: Draft }) {
   const { t } = useLanguage();
@@ -1040,7 +1201,8 @@ function AddTaskModal({ preset, copyFrom = null, initial = null, onClose, onSave
   const { t } = useLanguage();
   const formId = useId();
   const [draft, setDraft] = useState<Draft>(() => {
-    const start = copyFrom ? { ...draftOf(copyFrom), status: "Planned" as const } : initial ?? draftOf(null, preset);
+    // A copy happens once unless it is set to repeat.
+    const start = copyFrom ? { ...draftOf(copyFrom), status: "Planned" as const, repeat: "" as const } : initial ?? draftOf(null, preset);
     // Someone who may not assign others adds the work for themselves.
     const { assignable } = context;
     if (!assignable) return start;
@@ -1063,7 +1225,7 @@ function AddTaskModal({ preset, copyFrom = null, initial = null, onClose, onSave
       <form id={formId} onSubmit={(event) => { event.preventDefault(); void submit(); }}>
         {error ? <div className="callout danger" role="alert">{error}</div> : null}
         {problem && problem !== "TeamBoard.awayNeedsPerson" ? <div className="callout warning" role="status">{t(problem)}</div> : null}
-        <TaskFields draft={draft} set={setDraft} context={context} focusSubject />
+        <TaskFields draft={draft} set={setDraft} context={context} focusSubject repeating />
         <MissingLine draft={draft} />
       </form>
     </Modal>
@@ -1071,7 +1233,9 @@ function AddTaskModal({ preset, copyFrom = null, initial = null, onClose, onSave
 }
 
 function TaskDrawer({ task, canChange, onClose, onSave, onDelete, onCopy, ...context }: FormContext & {
-  task: TeamTask; canChange: boolean; onClose: () => void; onSave: (input: TeamTaskInput) => Promise<void>; onDelete: () => Promise<void>;
+  task: TeamTask; canChange: boolean; onClose: () => void;
+  /** A day of a repeat saves on its own ("this") or with every day after it ("following"). */
+  onSave: (input: TeamTaskInput, scope: TeamTaskScope) => Promise<void>; onDelete: (scope: TeamTaskScope) => Promise<void>;
   /** Starts a new task from this one; anyone on the board may. */
   onCopy: () => void;
 }) {
@@ -1079,23 +1243,34 @@ function TaskDrawer({ task, canChange, onClose, onSave, onDelete, onCopy, ...con
   const formId = useId();
   const [draft, setDraft] = useState(() => draftOf(task));
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
+  // A day of a repeat: change this day only (the default), or this day and every one after it.
+  const series = task.seriesId !== null;
+  const [scope, setScope] = useState<TeamTaskScope>("this");
+  // The repeat is this save's to set on a task that happens once, or on a repeat from this day on.
+  const repeating = canChange && (!series || scope === "following");
   const [history, setHistory] = useState<TeamTaskChange[] | null>(null);
   useEffect(() => {
     const timer = setTimeout(() => void loadTeamTaskHistory(task.id).then(setHistory, () => setHistory([])), 0);
     return () => clearTimeout(timer);
   }, [task.id]);
   const save = async (next: Draft) => {
-    if (!draftReady(next) || busy) return;
+    if (!draftReady(next, repeating) || busy) return;
     setBusy(true); setError("");
-    try { await onSave(inputOf(next)); }
+    try { await onSave(inputOf(next, repeating), series ? scope : "this"); }
     catch (failure) { setError(errorText(failure)); }
     finally { setBusy(false); }
   };
+  const confirmDelete = series
+    ? fill(t(scope === "following" ? "TeamBoard.confirmDeleteFollowing" : "TeamBoard.confirmDeleteDay"), { date: context.longDate(task.startDate) })
+    : t("TeamBoard.confirmDelete");
   const statuses: { status: TeamTaskStatus; label: string }[] = [
     { status: "Planned", label: "TeamBoard.statusPlanned" }, { status: "Done", label: "TeamBoard.statusDone" }, { status: "Cancelled", label: "TeamBoard.statusCancelled" },
   ];
   const when = (value: string) => new Intl.DateTimeFormat(localeFor(lang), { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
   const changed = (change: TeamTaskChange) => {
+    // The repeat this day belongs to: made, or ended from a day on.
+    if (change.series) return change.action === "Created" ? t("TeamBoard.historySeriesCreated")
+      : fill(t("TeamBoard.historySeriesEnded"), { date: typeof change.after?.from === "string" ? context.longDate(change.after.from) : "" });
     if (change.action === "Created") return t("TeamBoard.historyCreated");
     if (change.action === "Deleted") return t("TeamBoard.historyDeleted");
     const before = change.before ?? {}, after = change.after ?? {};
@@ -1111,7 +1286,7 @@ function TaskDrawer({ task, canChange, onClose, onSave, onDelete, onCopy, ...con
   return (
     <Drawer title={task.title} subtitle={`${t(kindLabel)} · ${fill(t("TeamBoard.addedBy"), { name: task.createdByName, when: when(task.createdAt) })}`} onClose={onClose} width={560} footer={<>
       {canChange ? (
-        <button type="button" className="btn ghost board-delete" disabled={busy} onClick={() => { if (window.confirm(t("TeamBoard.confirmDelete"))) void onDelete().catch((failure) => setError(errorText(failure))); }}>
+        <button type="button" className="btn ghost board-delete" disabled={busy} onClick={() => { if (window.confirm(confirmDelete)) void onDelete(series ? scope : "this").catch((failure) => setError(errorText(failure))); }}>
           <Icon name="trash" />{t("TeamBoard.delete")}
         </button>
       ) : null}
@@ -1119,14 +1294,27 @@ function TaskDrawer({ task, canChange, onClose, onSave, onDelete, onCopy, ...con
       <span className="board-spacer" />
       {canChange ? <>
         <button type="button" className="btn default" disabled={busy} onClick={onClose}>{t("Cancel")}</button>
-        <button type="submit" form={formId} className="btn primary" disabled={busy || !draftReady(draft)}>{t("Save")}</button>
+        <button type="submit" form={formId} className="btn primary" disabled={busy || !draftReady(draft, repeating)}>{t("Save")}</button>
       </> : <button type="button" className="btn default" onClick={onClose}>{t("Close")}</button>}
     </>}>
       <form id={formId} className="board-drawer" onSubmit={(event) => { event.preventDefault(); void save(draft); }}>
         {error ? <div className="callout danger" role="alert">{error}</div> : null}
         {!canChange ? <div className="callout info" role="status">{t("TeamBoard.readOnly")}</div> : null}
-        {draftProblem(draft) && draftProblem(draft) !== "TeamBoard.awayNeedsPerson" ? <div className="callout warning" role="status">{t(draftProblem(draft))}</div> : null}
-        <TaskFields draft={draft} set={setDraft} context={context} disabled={!canChange || busy} original={task} />
+        {series && task.repeat ? (
+          <div className="board-series" data-guide="team.scope">
+            <span className="board-series-rule"><Icon name="refresh" />{fill(t("TeamBoard.repeatSummary"), { rule: repeatRuleText(task.repeat, t, lang), until: context.longDate(task.repeat.until) })}</span>
+            {canChange ? <>
+              <div className="chip-select" role="group" aria-label={t("TeamBoard.applyTo")}>
+                {([["this", "TeamBoard.scopeThis"], ["following", "TeamBoard.scopeFollowing"]] as const).map(([value, label]) => (
+                  <button key={value} type="button" disabled={busy} className={scope === value ? "chip on" : "chip"} aria-pressed={scope === value} onClick={() => setScope(value)}>{t(label)}</button>
+                ))}
+              </div>
+              <small className="muted">{fill(t(scope === "following" ? "TeamBoard.scopeFollowingHint" : "TeamBoard.scopeThisHint"), { date: context.longDate(task.startDate) })}</small>
+            </> : null}
+          </div>
+        ) : null}
+        {draftProblem(draft, repeating) && draftProblem(draft, repeating) !== "TeamBoard.awayNeedsPerson" ? <div className="callout warning" role="status">{t(draftProblem(draft, repeating))}</div> : null}
+        <TaskFields draft={draft} set={setDraft} context={context} disabled={!canChange || busy} original={task} repeating={repeating} />
         {canChange ? <MissingLine draft={draft} /> : null}
         <div className="field">
           <span>{t("TeamBoard.status")}</span>
@@ -1166,8 +1354,10 @@ function WorkList({ rows, shown, onMore, today, bootstrap, nameOf, shortDate, la
   onUpdate: (task: TeamTask, input: TeamTaskInput, message?: string) => Promise<TeamTask | null>;
   onEdit: (task: TeamTask) => void; onCopy: (task: TeamTask) => void; openItem: (item: Commitment) => void;
 }) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const copy = useSearchCopy();
+  // A repeat is one row standing for all its days: it is changed in its drawer, not cell by cell.
+  const editable = (task: TeamTask) => canChange(task) && task.seriesId === null;
   const people = useMemo(() => peopleOptions(bootstrap.team), [bootstrap.team]);
   // Someone who may not assign others picks only themselves (or keeps whoever is already on the task).
   const choosable = (current: readonly number[] = []) => assignable === null ? people : people.filter((option) => assignable.includes(Number(option.value)) || current.includes(Number(option.value)));
@@ -1235,7 +1425,7 @@ function WorkList({ rows, shown, onMore, today, bootstrap, nameOf, shortDate, la
                   <tr key={row.key} className={row.late ? "late" : undefined}>
                     <td><span className={`board-type ${row.visit ? "visit" : row.category}`}>{t(typeLabel(row))}</span></td>
                     <td>
-                      {row.task && canChange(row.task) ? (
+                      {row.task && editable(row.task) ? (
                         <InlineText value={row.task.title} label={t("TeamBoard.subject")} onCommit={(title) => void change(row.task!, { title })} />
                       ) : (
                         <span className="board-work">
@@ -1243,16 +1433,17 @@ function WorkList({ rows, shown, onMore, today, bootstrap, nameOf, shortDate, la
                           <small>{rowCustomer(row)}</small>
                         </span>
                       )}
+                      {row.task?.repeat ? <small className="board-repeat-note"><Icon name="refresh" />{fill(t("TeamBoard.repeatSummary"), { rule: repeatRuleText(row.task.repeat, t, lang), until: shortDate(row.task.repeat.until) })}</small> : null}
                       {row.task && (row.task.inquiryNo || row.task.projectNo) ? <small className="board-links">{[row.task.inquiryNo, row.task.projectNo].filter(Boolean).join(" · ")}</small> : null}
                     </td>
                     <td>
-                      {row.task && canChange(row.task) && row.task.kind !== "Away" && row.task.assigneeIds.length <= 1 ? (
+                      {row.task && editable(row.task) && row.task.kind !== "Away" && row.task.assigneeIds.length <= 1 ? (
                         <SearchSelect value={row.task.assigneeIds[0] ? String(row.task.assigneeIds[0]) : ""} options={choosable(row.task.assigneeIds)} label={t("TeamBoard.assignee")}
                           placeholder={t("TeamBoard.unassigned")} onChange={(value) => void change(row.task!, { assigneeIds: value ? [Number(value)] : [] })} {...copy} />
                       ) : <span className={row.ownerIds.length ? "" : "board-need"}>{owners(row) || t("TeamBoard.unassigned")}</span>}
                     </td>
                     <td>
-                      {row.task && canChange(row.task) ? (
+                      {row.task && editable(row.task) ? (
                         <><input type="date" className="board-inline" aria-label={t("TeamBoard.startDate")} value={row.task.startDate}
                           onChange={(event) => { const startDate = event.target.value; if (startDate) void change(row.task!, { startDate, endDate: row.task!.endDate < startDate ? startDate : row.task!.endDate }); }} />
                         {timeRange(row.task) ? <small className="board-time">{timeRange(row.task)}</small> : null}</>
@@ -1260,7 +1451,7 @@ function WorkList({ rows, shown, onMore, today, bootstrap, nameOf, shortDate, la
                     </td>
                     <td>{row.late && row.end ? <span className="red-text">{shortDate(row.end)} · {fill(t("TeamBoard.lateDays"), { n: lateDays(row.end) })}</span> : shortDate(row.end)}</td>
                     <td className="num">
-                      {row.task && canChange(row.task) && row.task.kind !== "Away" ? (
+                      {row.task && editable(row.task) && row.task.kind !== "Away" ? (
                         <InlineNumber value={row.task.manDays} label={t("TeamBoard.manDays")} onCommit={(manDays) => void change(row.task!, { manDays })} />
                       ) : row.manDays === null ? "—" : fmt(row.manDays)}
                     </td>

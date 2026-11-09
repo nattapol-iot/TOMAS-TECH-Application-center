@@ -199,6 +199,20 @@ button.board-day-item:hover, button.board-day-item:focus-visible { background: v
 .board-form .callout { margin: 0; flex-direction: column; }
 .team-board .callout.info, .board-form .callout.info, .board-drawer .callout.info { border-color: var(--blue-line); background: var(--blue-soft); color: var(--blue-text); }
 .board-time-range { display: grid; grid-template-columns: repeat(2, minmax(0, 160px)); gap: 10px; margin-top: 8px; }
+/* A task that repeats, and where a meeting is held (owner request 2026-11-09). */
+.board-weekdays { margin-top: 8px; }
+.board-weekdays .chip { min-width: 44px; justify-content: center; }
+.board-repeat-until { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 6px 12px; margin-top: 8px; }
+.board-repeat-until .field { width: 180px; }
+.board-repeat-until small { padding-bottom: 8px; }
+.board-meeting > .field { margin-top: 8px; }
+.board-meeting-join, .board-repeat-note, .board-series-rule { display: inline-flex; align-items: center; gap: 6px; }
+.board-meeting-join { margin-top: 6px; font-size: var(--fs-xs); color: var(--blue-text); }
+.board-meeting-join .icon, .board-repeat-note .icon { width: 13px; height: 13px; flex: none; }
+.board-repeat-note { color: var(--blue-text); font-size: var(--fs-2xs); }
+.board-series { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--blue-line); border-radius: var(--r-md); background: var(--blue-soft); }
+.board-series-rule { color: var(--blue-text); font-size: var(--fs-sm); font-weight: 600; }
+.board-series-rule .icon { flex: none; }
 .board-time { display: block; color: var(--muted); font-size: var(--fs-2xs); font-variant-numeric: tabular-nums; }
 .board-loads { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 4px 0 0; padding: 0; list-style: none; }
 .board-loads li { white-space: nowrap; }

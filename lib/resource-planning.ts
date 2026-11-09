@@ -26,6 +26,11 @@ export type Commitment = {
   taskKind?: "Appointment" | "Task";
   /** On the team board only: work outside the reader's own access; it counts, with no reference, title or customer. */
   hidden?: boolean;
+  /**
+   * On the team board only: a day of a repeating team task (a daily meeting, say). Like an Outlook meeting it counts
+   * in the load, but it is not a piece of work that overlaps another.
+   */
+  repeat?: boolean;
 };
 const DAY = 86400000;
 /** Working days a week for anyone without a saved capacity: Monday to Friday. backend-node/src/resource-workload.ts holds the same default. */

@@ -12,7 +12,7 @@ import { GraphReadError, type EmailService } from "./email.js";
  * "Sync Outlook" button runs one at once. One sync at a time per API process.
  */
 
-type Graph = Pick<EmailService, "graphGet" | "graphEnabled">;
+type Graph = Pick<EmailService, "graphGet" | "graphEnabled"> & Partial<Pick<EmailService, "graphSender">>;
 export type OutlookSyncState = "never" | "running" | "ok" | "partial" | "denied" | "disabled" | "error";
 export type OutlookSyncStatus = { state: OutlookSyncState; syncedAt: string | null; message: string; people: number; failed: number };
 
@@ -24,12 +24,13 @@ const WINDOW_AHEAD_DAYS = 120;
 const CONCURRENCY = 5;
 const MAX_PAGES = 20;
 /** Invitations the board itself sends (team-calendar.ts): already on the board as team tasks. */
-const BOARD_INVITE = /^team-task-\d+@iot-team-center$/i;
+const BOARD_INVITE = /^team-(?:task|series)-\d+@iot-team-center$/i;
 const DAY = 86_400_000;
 
 export type GraphEvent = {
   id: string; iCalUId?: string; subject?: string | null; sensitivity?: string; showAs?: string; isAllDay?: boolean; isCancelled?: boolean;
   start?: { dateTime?: string }; end?: { dateTime?: string }; location?: { displayName?: string | null } | null;
+  organizer?: { emailAddress?: { address?: string | null } | null } | null;
 };
 export type OutlookRow = {
   eventId: string; subject: string | null; location: string | null; isPrivate: boolean; isAllDay: boolean; showAs: string; start: string; end: string;
@@ -38,15 +39,18 @@ export type OutlookRow = {
 /**
  * The events worth keeping: not cancelled, not "free", not one of the board's own invitations. Times are Bangkok
  * local (the Prefer header asks Graph for them) as "YYYY-MM-DDTHH:MM:SS". A private or confidential event keeps no
- * subject or place.
+ * subject or place. The board's invitations are known by their UID or by their organizer, the system mailbox (each
+ * day of a recurring one has an iCalUId of its own).
  */
-export function outlookRows(events: readonly GraphEvent[]): OutlookRow[] {
+export function outlookRows(events: readonly GraphEvent[], boardMailbox = ""): OutlookRow[] {
   const rows: OutlookRow[] = [];
+  const mailbox = boardMailbox.trim().toLowerCase();
   for (const event of events) {
     const start = event.start?.dateTime?.slice(0, 19), end = event.end?.dateTime?.slice(0, 19);
     if (!event.id || !start || !end || event.isCancelled) continue;
     const showAs = (event.showAs ?? "busy").toLowerCase();
     if (showAs === "free" || (event.iCalUId && BOARD_INVITE.test(event.iCalUId))) continue;
+    if (mailbox && (event.organizer?.emailAddress?.address ?? "").trim().toLowerCase() === mailbox) continue;
     const isPrivate = ["private", "confidential"].includes((event.sensitivity ?? "").toLowerCase());
     rows.push({
       eventId: event.id.slice(0, 400),
@@ -62,7 +66,7 @@ const bangkokToday = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ba
 const shift = (date: string, days: number) => new Date(Date.parse(`${date}T00:00:00Z`) + days * DAY).toISOString().slice(0, 10);
 
 async function readCalendar(graph: Graph, email: string, from: string, to: string): Promise<GraphEvent[]> {
-  const select = "id,iCalUId,subject,sensitivity,showAs,isAllDay,isCancelled,start,end,location";
+  const select = "id,iCalUId,subject,sensitivity,showAs,isAllDay,isCancelled,start,end,location,organizer";
   const window = `startDateTime=${encodeURIComponent(`${from}T00:00:00+07:00`)}&endDateTime=${encodeURIComponent(`${to}T23:59:59+07:00`)}`;
   let next: string | undefined = `/users/${encodeURIComponent(email)}/calendarView?${window}&$select=${select}&$top=250`;
   const events: GraphEvent[] = [];
@@ -122,7 +126,7 @@ export function syncOutlook(db: Database, graph: Graph, today = bangkokToday()):
       for (let person = queue.shift(); person; person = queue.shift()) {
         const userId = Number(person.id);
         try {
-          const rows = outlookRows(await readCalendar(graph, person.email.trim(), from, to));
+          const rows = outlookRows(await readCalendar(graph, person.email.trim(), from, to), graph.graphSender ?? "");
           await saveCalendar(db, userId, from, to, rows, null);
           done++;
         } catch (error) {

@@ -1,5 +1,5 @@
 import type { AppConfig } from "./config.js";
-import { calendarEvent, calendarMime, calendarSequence, type CalendarTask } from "./team-calendar.js";
+import { calendarEvent, calendarMime, calendarSequence, meetingLine, repeatText, type CalendarTask } from "./team-calendar.js";
 
 export type EmailRecipient = { name: string; email: string };
 export type EmailDeliveryResult = {
@@ -326,10 +326,14 @@ export class EmailService {
       const appUrl = `${this.config.applicationBaseUrl!.replace(/\/$/, "")}/`;
       const link = `${appUrl}#/resources`;
       const { task } = message;
-      const when = task.endDate === task.startDate ? task.startDate : `${task.startDate} – ${task.endDate}`;
+      // A series runs from its first day until its last.
+      const last = task.repeat?.until ?? task.endDate;
+      const when = last === task.startDate ? task.startDate : `${task.startDate} – ${last}`;
       const cancelled = message.method === "CANCEL";
       const subject = `${cancelled ? "[Engineering Center] Cancelled: " : "[Engineering Center] "}${task.title}`;
-      const rows: [string, string][] = [["Date", `${when}${task.slot === "Time" && task.startTime ? ` ${task.startTime}–${task.endTime}` : ""}`], ["Customer", task.customer], ["Note", task.note], ["Sent by", message.sentBy]];
+      const rows: [string, string][] = [["Date", `${when}${task.slot === "Time" && task.startTime ? ` ${task.startTime}–${task.endTime}` : ""}`],
+        ["Repeats", task.repeat ? repeatText(task.repeat.weekdays) : ""], ["Meeting", meetingLine(task)],
+        ["Customer", task.customer], ["Note", task.note], ["Sent by", message.sentBy]];
       const html = `<p>${cancelled ? "ยกเลิกนัดนี้แล้ว / This has been cancelled." : "นัดจากหน้าภาพรวมงานทีม / From the Team overview."}</p>`
         + `<p><strong>${escapeHtml(task.title)}</strong></p><table>`
         + rows.filter(([, value]) => value).map(([label, value]) => `<tr><td><strong>${label}</strong></td><td>${escapeHtml(value)}</td></tr>`).join("")
@@ -396,6 +400,9 @@ export class EmailService {
 
   /** Whether Microsoft Graph is set up at all (Email__Mode=MicrosoftGraph). */
   get graphEnabled(): boolean { return this.config.mode !== "Disabled"; }
+
+  /** The system mailbox: it sends, and organizes, the team board's Outlook invitations. */
+  get graphSender(): string { return this.config.senderUser ?? ""; }
 
   /**
    * A Graph GET with the app's own token: the team board reads Outlook calendars with it (application permission
