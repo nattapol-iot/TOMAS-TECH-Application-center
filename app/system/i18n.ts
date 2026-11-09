@@ -2505,6 +2505,7 @@ export const DICTIONARY: Record<string, Entry> = {
   "Plan.memberLegendOver": { en: "More work than their time", th: "งานเกินเวลาที่มี", jp: "持ち時間を超える作業" },
   "Plan.memberLegendHint": { en: "Grey bars are their work outside this project. Work with no man-days counts a full day; a task's own functions never overlap.", th: "แถบสีเทาคืองานนอกโปรเจกต์นี้ของเขา · งานที่ไม่ได้ใส่ man-days นับเต็มวัน · ฟังก์ชันใต้งานเดียวกันไม่นับว่าซ้อน", jp: "灰色のバーはこの案件以外の作業です。人日のない作業は1日として数え、同じタスクの機能同士は重複としません。" },
   "Plan.memberBoardLoading": { en: "Reading their other work…", th: "กำลังโหลดงานอื่นของสมาชิก…", jp: "他の作業を読み込み中…" },
+  "Plan.foldFiltered": { en: "A quick filter shows every match open. Clear it to fold rows.", th: "ตัวกรองด่วนแสดงงานที่ตรงแบบกางทั้งหมด ล้างตัวกรองก่อนจึงจะกางหรือยุบแถวได้", jp: "クイックフィルター中は該当行をすべて展開表示します。折りたたむにはフィルターを解除します。" },
   "Plan.memberBoardFailed": { en: "Their other work could not be read; only this project's work is shown.", th: "โหลดงานอื่นของสมาชิกไม่ได้ จึงแสดงเฉพาะงานในโปรเจกต์นี้", jp: "他の作業を読み込めないため、この案件の作業のみ表示しています。" },
   "Plan.levelMaster": { en: "Master Plan", th: "Master Plan", jp: "マスタープラン" },
   "Plan.deleteRow": { en: "Delete row", th: "ลบแถว", jp: "行を削除" },
