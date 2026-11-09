@@ -734,9 +734,9 @@ const PROJECT_CREATE: Guide = {
       target: "project.plan", action: "next", view: "projects",
       title: { th: "Master Plan: หัวข้อหลัก", en: "Master Plan: the main headings", jp: "マスタープラン：大見出し" },
       body: {
-        th: "ใส่หัวข้อหลักของแผนพร้อมวันที่ตกลงกับลูกค้า เช่น 1 Kick-off, 2 Software development หรือเลือก Master Schedule เป็นต้นแบบ ลูกค้าเห็นเฉพาะส่วนนี้ วันเริ่มและวันส่งมอบของโปรเจกต์คิดจากแผน",
-        en: "Enter the plan's main headings with the dates agreed with the customer, such as 1 Kick-off and 2 Software development, or start from a Master Schedule. The customer sees only this part; the project's start and delivery come from the plan.",
-        jp: "計画の大見出しを顧客と合意した日程とともに入力します（例：1 Kick-off、2 Software development）。マスタースケジュールから始めることもできます。顧客にはこの部分だけが表示され、案件の開始日と納期は計画から決まります。",
+        th: "ใส่หัวข้อหลักของแผนพร้อมวันที่ตกลงกับลูกค้า เช่น 1 Kick-off, 2 Software development หรือเลือก Master Schedule เป็นต้นแบบ ลูกค้าเห็นเฉพาะส่วนนี้ วันเริ่มและวันส่งมอบของโปรเจกต์คิดจากแถวที่มีวันที่ หากยังไม่มีวันที่ทุกแถวให้กรอกวันเริ่มและวันส่งมอบของโปรเจกต์เอง หัวข้อที่ยังไม่แตกเป็นงานย่อยสามารถเว้นวันที่ทั้งสองช่องไว้ แล้วกำหนดวันและแตกงานทีหลังได้",
+        en: "Enter the plan's main headings with the dates agreed with the customer, such as 1 Kick-off and 2 Software development, or start from a Master Schedule. The customer sees only this part; the project's start and delivery come from dated rows, or you enter them if all rows are undated. Headings not broken down into tasks yet may leave both dates empty and be dated and broken down later.",
+        jp: "計画の大見出しを顧客と合意した日程とともに入力します（例：1 Kick-off、2 Software development）。マスタースケジュールから始めることもできます。顧客にはこの部分だけが表示され、案件の開始日と納期は日程のある行から決まります。全行が日程未定の場合は案件の開始日と納期を入力します。まだタスクに分けていない見出しは両方の日付を空欄にし、後から日程を決めてタスクに分けられます。",
       },
     },
     {

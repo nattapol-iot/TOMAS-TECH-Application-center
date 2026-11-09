@@ -1357,9 +1357,9 @@ export function CreateProjectModal({ bootstrap, refreshBootstrap, notify, onClos
   const customerId = standalone ? form.customerId ?? 0 : selectedEstimate?.customerId ?? 0;
   const customer = bootstrap.customers.find(item=>item.id===customerId);
   const canChooseSource = !initialEstimateId && Boolean(options.canCreateWithoutEstimate);
-  // With a plan the project runs from its first row to its last, so its dates are not typed twice.
-  const planned = headings.length > 0;
+  // With dated rows the project runs from its first row to its last; otherwise its dates are typed.
   const span = planSpanOf(headings);
+  const planned = span !== null;
   const planIssues = planIssuesOf(t, headings);
   const missingFields = [
     ...(standalone ? [!form.customerId ? "Customer *" : "", !form.projectName?.trim() ? "Project name *" : "", !form.projectType ? "Project type *" : ""]
@@ -1368,7 +1368,7 @@ export function CreateProjectModal({ bootstrap, refreshBootstrap, notify, onClos
     !form.purchaseOrderDate ? "PO date *" : "", !form.managerId ? "Project manager *" : "", !form.leadEngineerId ? "Lead engineer *" : "",
     !planned && !form.startDate ? "Start date *" : "", !planned && !form.targetDelivery ? "Target delivery *" : "", !form.site.trim() ? "Site *" : "",
   ].filter(Boolean);
-  const datesInvalid = planned ? !span : !form.startDate || !form.targetDelivery || form.targetDelivery < form.startDate;
+  const datesInvalid = !planned && (!form.startDate || !form.targetDelivery || form.targetDelivery < form.startDate);
   const update = (patch: Partial<CreateProjectInput>) => { setSaveError(""); setForm(current => ({ ...current, ...patch })); };
   const submit = async () => { setBusy(true); setSaveError(""); try {
     const { customerId: chosenCustomer, projectName, projectType, estimateId, ...shared } = form;
@@ -1420,8 +1420,8 @@ export function CreateProjectModal({ bootstrap, refreshBootstrap, notify, onClos
     <TeamPlanSection rows={headings} onChange={(change) => { setSaveError(""); setHeadings(change); }} people={bootstrap.team} />
     <NotBrokenDownNote headings={headings} />
     {planned ? <div className="info-strip" role="note"><Icon name="calendar" /><span>{t("CRM.projectSpanFromPlan")}{span ? `: ${formatDate(span.start)} – ${formatDate(span.finish)}` : ""}</span></div> : <div className="form-grid two">
-      <label className="field"><span><LocalizedText text={"Start date *"} /></span><input type="date" value={form.startDate} onChange={(event) => update({ startDate: event.target.value })} /></label>
-      <label className="field"><span><LocalizedText text={"Target delivery *"} /></span><input type="date" min={form.startDate} value={form.targetDelivery} onChange={(event) => update({ targetDelivery: event.target.value })} /></label>
+      <label className="field"><span><LocalizedText text={"Start date *"} /></span><input type="date" required value={form.startDate} onChange={(event) => update({ startDate: event.target.value })} /></label>
+      <label className="field"><span><LocalizedText text={"Target delivery *"} /></span><input type="date" required min={form.startDate} value={form.targetDelivery} onChange={(event) => update({ targetDelivery: event.target.value })} /></label>
     </div>}
     <PaymentChecklist value={form.paymentsReceived ?? []} onChange={(paymentsReceived) => update({ paymentsReceived })} />
     <details><summary>{t("CRM.projectOptionalDetails")}</summary><div className="form-grid two">

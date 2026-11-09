@@ -1,10 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import Fastify from "fastify";
+import sql from "mssql";
+import { mkdtemp, rmdir } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { AppConfig } from "../src/config.js";
 import type { Database } from "../src/db.js";
 import { ApiError, registerErrorHandler } from "../src/errors.js";
-import { keptPlanRowDates, parseInitialPlan, parseProjectNumber, planAssignments, plannedRemovals, planRowsOf, planSpan, type ScheduleRow } from "../src/project-initial-plan.js";
+import { keptPlanRowDates, parseInitialPlan, parseProjectNumber, planAssignments, plannedRemovals, planRowsOf, planSpan, syncProjectPlan, type ScheduleRow } from "../src/project-initial-plan.js";
+import { removeEmptyStoredDirectory } from "../src/document-storage.js";
 import { registerProjectRoutes } from "../src/routes/projects.js";
 import type { CurrentUserService } from "../src/users.js";
 
@@ -23,6 +28,26 @@ test("an empty plan is allowed and has no span, so the typed project dates apply
   const plan = parseInitialPlan({});
   assert.deepEqual(plan, { headings: [] });
   assert.equal(planSpan(plan), null);
+});
+
+test("headings without tasks may have no dates; only dated rows set the project span", () => {
+  for (const dates of [{}, { start: "", finish: "" }, { start: null, finish: null }]) {
+    const plan = parseInitialPlan({ masterPlan: [{ name: "Development", ...dates, tasks: [] }] });
+    assert.deepEqual(plan.headings, [{ name: "Development", start: null, finish: null, tasks: [] }]);
+    assert.equal(planSpan(plan), null);
+    const dated = parseInitialPlan({ masterPlan: [{ name: "Design", start: "2026-11-01", finish: "2026-11-10", tasks: [
+      { name: "Drawing", userId: 7, start: "2026-11-02", finish: "2026-11-12" },
+    ] }] });
+    assert.deepEqual(planSpan({ headings: [...plan.headings, ...dated.headings] }), { start: "2026-11-01", finish: "2026-11-12" });
+  }
+});
+
+test("heading dates remain required with tasks, and otherwise must be both or neither", () => {
+  rejects(() => parseInitialPlan({ masterPlan: [{ name: "Development", tasks: [
+    { name: "Web", userId: 7, start: "2026-11-01", finish: "2026-11-10" },
+  ] }] }), /Master plan heading 1 start/);
+  rejects(() => parseInitialPlan({ masterPlan: [{ name: "Development", start: "2026-11-01" }] }), /Master plan heading 1 finish/);
+  rejects(() => parseInitialPlan({ masterPlan: [{ name: "Development", finish: "2026-11-10" }] }), /Master plan heading 1 start/);
 });
 
 test("the Master Plan lists headings; each holds its team's tasks and their functions, in order", () => {
@@ -110,6 +135,73 @@ test("a page still sending the team plan as its own list is told to reload, befo
   assert.equal(response.statusCode, 400);
   assert.equal(response.json().code, "plan_shape_outdated");
   assert.equal(transactions, 0);
+});
+
+test("creating a project stores an undated heading as a manual phase and uses the typed project dates", async (t) => {
+  const rootPath = await mkdtemp(join(tmpdir(), "project-undated-"));
+  const storage = { ...config.documentStorage, rootPath };
+  const calls: { statement: string; params: Record<string, unknown> }[] = [];
+  t.mock.method(sql.Request.prototype, "query", async function (this: sql.Request, statement: string) {
+    const params = Object.fromEntries(Object.entries(this.parameters).map(([key, parameter]) => [key, parameter.value]));
+    calls.push({ statement, params });
+    if (statement.includes("AS manager_role")) return { recordset: [{ manager_role: "Project Manager", lead_role: "Engineer" }] };
+    if (statement.includes("FROM dbo.customers WITH")) return { recordset: [{ id: 1 }] };
+    if (statement.includes("INSERT INTO dbo.projects(")) return { recordset: [{ id: 7, row_version: Buffer.alloc(8) }] };
+    if (statement.includes("INSERT INTO dbo.schedule_tasks(")) return { recordset: [{ id: 11 }] };
+    return { recordset: [], rowsAffected: [1] };
+  });
+  let committed = false;
+  const database = {
+    async query() { return { recordset: [{ allowed: true }] }; },
+    async transaction(work: (transaction: sql.Transaction) => Promise<unknown>) {
+      const result = await work({} as sql.Transaction); committed = true; return result;
+    },
+  } as unknown as Database;
+  const server = Fastify(); registerErrorHandler(server); registerProjectRoutes(server, { ...config, documentStorage: storage }, database, users);
+  try {
+    const date = new Date().toISOString().slice(0, 10);
+    const response = await server.inject({ method: "POST", url: "/api/v1/projects", payload: {
+      ...body, withoutEstimate: true, customerId: 1, projectName: "Line 3", projectType: "IoT",
+      purchaseOrderDate: date, startDate: date, targetDelivery: date,
+      masterPlan: [{ name: "Development", start: "", finish: "", tasks: [] }],
+    } });
+    assert.equal(response.statusCode, 201, response.body);
+    assert.equal(committed, true);
+    const phase = calls.find(call => call.statement.includes("INSERT INTO dbo.schedule_tasks("))!;
+    assert.equal(phase.params.kind, "phase");
+    assert.equal(phase.params.plan_start, null);
+    assert.equal(phase.params.plan_days, 1);
+    assert.match(phase.statement, /@plan_days,N'manual'/);
+    const project = calls.find(call => call.statement.includes("INSERT INTO dbo.projects("))!;
+    assert.equal(project.params.start_date, date);
+    assert.equal(project.params.target_delivery, date);
+  } finally {
+    await server.close();
+    await removeEmptyStoredDirectory(storage, "projects");
+    await rmdir(rootPath);
+  }
+});
+
+test("editing a heading can clear both dates or keep an undated heading", async (t) => {
+  for (const start of ["2026-11-01", null]) await t.test(String(start), async (sub) => {
+    const updates: Record<string, unknown>[] = [];
+    sub.mock.method(sql.Request.prototype, "query", async function (this: sql.Request, statement: string) {
+      if (statement.includes("CONVERT(char(10),t.plan_start")) return { recordset: [{
+        id: 11, parent_id: null, kind: "phase", name: "Development", sort_order: 1, start_mode: "manual",
+        plan_start: start, plan_days: start ? 5 : 1, plan_man_days: 0, started: 0, children: 0,
+        pending: 0, referenced: 0, pic: null, pic_count: 0, details: 0, managed: 0,
+      }] };
+      if (statement.includes("UPDATE dbo.schedule_tasks SET name=")) {
+        updates.push(Object.fromEntries(Object.entries(this.parameters).map(([key, parameter]) => [key, parameter.value])));
+      }
+      return { recordset: [], rowsAffected: [1] };
+    });
+    const plan = parseInitialPlan({ masterPlan: [{ id: 11, name: "Development later", start: "", finish: "", tasks: [] }] });
+    assert.deepEqual(await syncProjectPlan({} as sql.Transaction, 7, plan, 5), []);
+    assert.equal(updates.length, 1);
+    assert.equal(updates[0]!.start, null);
+    assert.equal(updates[0]!.days, 1);
+  });
 });
 
 const row = (id: number, parentId: number | null, change: Partial<ScheduleRow> = {}): ScheduleRow => ({

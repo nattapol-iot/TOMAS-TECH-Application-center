@@ -314,6 +314,7 @@ export const CRM_COPY: Record<string,{en:string;th:string;jp:string}> = Object.f
  ["CRM.removeHeading", "Remove the heading and the rows under it", "ลบหัวข้อหลักและงานข้างใต้", "大見出しとその下の行を削除"],
  ["CRM.headingUnnamed", "Heading without a name", "หัวข้อที่ยังไม่ตั้งชื่อ", "名前のない見出し"],
  ["CRM.notBrokenDown", "Not broken down", "ยังไม่แตกแผน", "未展開"],
+ ["CRM.noDatesYet", "No dates yet", "ยังไม่กำหนดวันที่", "日程未定"],
  ["CRM.headingsNotBrokenDown", "Headings not broken down into tasks yet (can be done later)", "หัวข้อหลักที่ยังไม่แตกเป็นงาน (แตกทีหลังได้)", "まだタスクに分けていない大見出し（後で分けられます）"],
  ["CRM.teamPlanNeedsHeadings", "Add the Master Plan headings first, then break them down here.", "เพิ่มหัวข้อหลักใน Master Plan ก่อน แล้วแตกเป็นงานที่นี่", "先にマスタープランの大見出しを追加し、ここで分けてください。"],
  ["CRM.addTask", "Add task", "เพิ่มงาน", "タスクを追加"],
