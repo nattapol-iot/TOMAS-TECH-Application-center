@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { AppConfig } from "../src/config.js";
 import { EmailService } from "../src/email.js";
-import { calendarActions, calendarEvent, calendarMime, calendarUid, eventTimes, foldLine, icsText, type CalendarState, type CalendarTask } from "../src/team-calendar.js";
+import { calendarActions, calendarEvent, calendarMime, calendarUid, eventTimes, foldLine, icsText, repeatLines, repeatText, seriesUid, type CalendarState, type CalendarTask } from "../src/team-calendar.js";
 
 /** Long lines arrive folded (CRLF and a space); reading them joins them again. */
 const unfold = (ics: string) => ics.replace(/\r\n /g, "");
@@ -112,4 +112,40 @@ test("the invitation goes through Graph sendMail as base64 MIME, and a disabled 
   const disabled = new EmailService({ mode: "Disabled" }, (async () => { disabledCalls += 1; return new Response(); }) as typeof fetch);
   assert.deepEqual(await disabled.sendTeamTaskCalendar(message), { status: "disabled", recipients: ["napa@example.com", "wichai@example.com"] });
   assert.equal(disabledCalls, 0);
+});
+
+test("a repeating task is one Outlook series: its weekdays until its last day, less the days it leaves out", () => {
+  const options = { organizer: "iot-team-center@example.com", attendees: [{ name: "Napa K.", email: "napa@example.com" }], sequence: 9, link: "", now: new Date("2026-11-09T01:00:00Z") };
+  const daily: CalendarTask = {
+    ...task, kind: "Appointment", title: "Daily update", customer: "", note: "", startDate: "2026-11-10", endDate: "2026-11-10", slot: "Time", startTime: "09:00", endTime: "09:30",
+    meetingMode: "Online", meetingPlace: "https://teams.example.com/l/meetup/abc",
+    repeat: { seriesId: 4, weekdays: [5, 1, 2, 3, 4], until: "2026-12-10", exdates: ["2026-12-07"] },
+  };
+  const ics = unfold(calendarEvent(daily, { ...options, method: "REQUEST" }));
+  // 09:00 Bangkok is 02:00 UTC: the rule ends with the last day's start, and a day left out is that day's start.
+  for (const line of [
+    `UID:${seriesUid(4)}`, "DTSTART:20261110T020000Z", "DTEND:20261110T023000Z", "RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR;UNTIL=20261210T020000Z",
+    "EXDATE:20261207T020000Z", "LOCATION:https://teams.example.com/l/meetup/abc",
+  ]) assert.ok(ics.includes(`\r\n${line}\r\n`), line);
+  assert.match(ics, /DESCRIPTION:ประชุมออนไลน์ \/ Online meeting: https:\/\/teams\.example\.com\/l\/meetup\/abc/);
+  // All day: the rule's end and the days left out are dates.
+  const allDay = unfold(calendarEvent({ ...daily, slot: "Day", startTime: null, endTime: null, meetingMode: "Offline", meetingPlace: "Room 2",
+    repeat: { seriesId: 4, weekdays: [1, 4], until: "2026-12-10", exdates: ["2026-11-16", "2026-11-19"] } }, { ...options, method: "REQUEST" }));
+  for (const line of ["RRULE:FREQ=WEEKLY;BYDAY=MO,TH;UNTIL=20261210", "EXDATE;VALUE=DATE:20261116,20261119", "LOCATION:Room 2"])
+    assert.ok(allDay.includes(`\r\n${line}\r\n`), line);
+  assert.deepEqual(repeatLines({ ...daily, repeat: null }), []);
+  assert.equal(repeatText([1, 2, 3, 4, 5]), "ทุกวันทำงาน จ.–ศ. / Every working day, Mon–Fri");
+  assert.equal(repeatText([4, 1]), "ทุกสัปดาห์ / Weekly: จ. Mon, พฤ. Thu");
+  // A single task's entry carries no rule.
+  assert.ok(!unfold(calendarEvent(task, { ...options, method: "REQUEST" })).includes("RRULE"));
+});
+
+test("a series' entry is sent again when the days it leaves out change, and a meeting's place counts as what it says", () => {
+  const state: CalendarState = { kind: "Appointment", title: "Daily update", customer: "", note: "", startDate: "2026-11-10", endDate: "2026-11-10", slot: "Day", startTime: null, endTime: null,
+    assigneeIds: [9], status: "Planned", repeat: { seriesId: 4, weekdays: [1, 2, 3, 4, 5], until: "2026-12-10", exdates: [] } };
+  assert.deepEqual(calendarActions(state, { ...state, repeat: { ...state.repeat!, exdates: ["2026-11-12"] } }), { cancel: [], request: [9] });
+  assert.deepEqual(calendarActions(state, { ...state, repeat: { ...state.repeat!, until: "2026-11-30" } }), { cancel: [], request: [9] });
+  assert.deepEqual(calendarActions(state, { ...state, meetingMode: "Online", meetingPlace: "https://meet.example.com/x" }), { cancel: [], request: [9] });
+  // No place and an empty place are the same; nothing to send.
+  assert.deepEqual(calendarActions(state, { ...state, meetingMode: null, meetingPlace: "" }), { cancel: [], request: [] });
 });

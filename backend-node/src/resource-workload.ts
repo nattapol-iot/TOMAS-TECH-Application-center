@@ -40,6 +40,8 @@ export type WorkloadItem = {
   taskKind?: "Appointment" | "Task";
   /** Read for the team board only: work outside the caller's own access. It counts, but its details are not theirs to see. */
   hidden?: boolean;
+  /** On the team board only: a day of a repeating team task; it counts in the load but overlaps nothing (lib/team-board.ts). */
+  repeat?: boolean;
 };
 
 const FINISHED_SQL = FINISHED_WORK_STATUSES.map((status) => `N'${status}'`).join(",");
@@ -110,12 +112,22 @@ export const WORKLOAD_SQL = `
       WHERE t.deleted_at IS NULL ORDER BY pic.task_id,pic.user_id;
       SELECT user_id,work_key FROM dbo.work_priorities ORDER BY user_id,sort_order;
       -- Work added on the team board: an appointment or a task takes each of its people's time (its man-days apiece)
-      -- until it is done or cancelled; one with nobody yet is one row with no person.
-      SELECT t.id,t.kind,t.title,c.name customer_name,a.user_id assignee_id,t.start_date,t.end_date,t.man_days
+      -- until it is done or cancelled; one with nobody yet is one row with no person. A repeating one is one piece of
+      -- work per person: its days from today on, their man-days summed (its past days are history).
+      SELECT t.id,t.kind,t.title,c.name customer_name,a.user_id assignee_id,t.start_date,t.end_date,t.man_days,
+        CAST(NULL AS bigint) series_id,a.sort_order
       FROM dbo.team_tasks t LEFT JOIN dbo.customers c ON c.id=t.customer_id
       LEFT JOIN dbo.team_task_assignees a ON a.task_id=t.id
-      WHERE t.deleted_at IS NULL AND t.status=N'Planned' AND t.kind IN(N'Appointment',N'Task')
-      ORDER BY t.start_date,t.id,a.sort_order;`;
+      WHERE t.deleted_at IS NULL AND t.status=N'Planned' AND t.kind IN(N'Appointment',N'Task') AND t.series_id IS NULL
+      UNION ALL
+      SELECT MIN(t.id),MIN(t.kind),MIN(t.title),MIN(c.name),a.user_id,MIN(t.start_date),MAX(t.end_date),SUM(t.man_days),
+        t.series_id,MIN(a.sort_order)
+      FROM dbo.team_tasks t LEFT JOIN dbo.customers c ON c.id=t.customer_id
+      LEFT JOIN dbo.team_task_assignees a ON a.task_id=t.id
+      WHERE t.deleted_at IS NULL AND t.status=N'Planned' AND t.kind IN(N'Appointment',N'Task') AND t.series_id IS NOT NULL
+        AND t.end_date>=CONVERT(date,SWITCHOFFSET(SYSDATETIMEOFFSET(),'+07:00'))
+      GROUP BY t.series_id,a.user_id
+      ORDER BY start_date,id,sort_order;`;
 
 type Row = Record<string, unknown>;
 const text = (row: Row, key: string) => String(row[key] ?? "");
@@ -128,7 +140,7 @@ const hiddenRow = (row: Row) => (row.visible === undefined || row.visible === nu
 const scope = (row: Row) => (hiddenRow(row) ? { hidden: true } : {});
 
 /** A work key as WorkloadItem.workKey writes it; the only shape dbo.work_priorities stores. */
-export const WORK_KEY = /^(?:Project|Estimate|EstimateSection|Inquiry|InquiryTask|TeamTask)-[1-9][0-9]{0,17}$/;
+export const WORK_KEY = /^(?:Project|Estimate|EstimateSection|Inquiry|InquiryTask|TeamTask|TeamSeries)-[1-9][0-9]{0,17}$/;
 
 /** The plan proposed for a task awaiting approval, or null when it cannot be read. */
 function proposedPlan(value: unknown, holidays: ReadonlySet<string>) {
@@ -219,9 +231,13 @@ export function workloadItems(sets: Row[][], holidays: ReadonlySet<string>): { i
     }
   }
   // Team tasks are everyone's to see: they were added on the board for the team. One row per person, each with the
-  // whole effort (a site visit for two takes both their days).
+  // whole effort (a site visit for two takes both their days). A repeat is one piece of work, TeamSeries-<series id>,
+  // whose entityId is its next day.
   for (const r of teamTasks) items.push({
-    key: `TeamTask-${id(r, "id")}-${text(r, "assignee_id") || "none"}`, workKey: `TeamTask-${id(r, "id")}`, type: "Task", entityId: id(r, "id"), ownerId: optional(r, "assignee_id"),
+    ...(optional(r, "series_id") === null
+      ? { key: `TeamTask-${id(r, "id")}-${text(r, "assignee_id") || "none"}`, workKey: `TeamTask-${id(r, "id")}` }
+      : { key: `TeamSeries-${id(r, "series_id")}-${text(r, "assignee_id") || "none"}`, workKey: `TeamSeries-${id(r, "series_id")}` }),
+    type: "Task", entityId: id(r, "id"), ownerId: optional(r, "assignee_id"),
     reference: "", title: text(r, "title"), customer: text(r, "customer_name"),
     start: day(r, "start_date"), end: day(r, "end_date"), manDays: Number(r.man_days ?? 0), progress: 0, status: "Planned",
     taskKind: r.kind === "Appointment" ? "Appointment" : "Task",

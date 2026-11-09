@@ -60,7 +60,8 @@ export type Overlap = { date: string; work: Commitment[] };
 export function overlapDays(items: readonly Commitment[], from: string, to: string, holidays: readonly string[] = []): Overlap[] {
   const byDate = new Map<string, Map<string, Commitment>>();
   for (const item of items) {
-    if (!isOpenWork(item) || !item.start) continue;
+    // A day of a repeat (a daily meeting) is routine, like an Outlook meeting: it loads the day but overlaps nothing.
+    if (!isOpenWork(item) || !item.start || item.repeat) continue;
     const end = item.end ?? item.start;
     const first = item.start > from ? item.start : from, last = end < to ? end : to;
     if (last < first) continue;
@@ -260,4 +261,30 @@ export function dueGroup(end: string | null, today: string): "late" | "thisWeek"
   if (endDay <= monday + 6) return "thisWeek";
   if (endDay <= monday + 13) return "nextWeek";
   return "later";
+}
+
+/** Monday 1 … Sunday 7. */
+export const isoWeekday = (date: string) => ((new Date(`${date}T00:00:00Z`).getUTCDay() + 6) % 7) + 1;
+/** The longest a task repeats (backend-node/src/team-task-series.ts MAX_REPEAT_DAYS): a year from its first day. */
+export const MAX_REPEAT_DAYS = 366;
+
+/**
+ * The days a repeating task falls on (owner request 2026-11-09), as the API saves them: its weekdays (Monday 1 …
+ * Sunday 7) from its first day until its last, company holidays left out.
+ */
+export function repeatDays(start: string, weekdays: readonly number[], until: string, holidays: readonly string[] = []): string[] {
+  if (!start || !until || until < start || dayNumber(until) - dayNumber(start) > MAX_REPEAT_DAYS) return [];
+  const chosen = new Set(weekdays), off = new Set(holidays), dates: string[] = [];
+  for (let day = dayNumber(start); day <= dayNumber(until); day++) {
+    const date = dateFromDay(day);
+    if (chosen.has(isoWeekday(date)) && !off.has(date)) dates.push(date);
+  }
+  return dates;
+}
+
+/** The same day a month on, or the last day of a shorter month: where a new repeat ends unless changed. */
+export function monthAfter(date: string): string {
+  const [year, month, day] = date.split("-").map(Number) as [number, number, number];
+  const last = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(year, month, Math.min(day, last))).toISOString().slice(0, 10);
 }

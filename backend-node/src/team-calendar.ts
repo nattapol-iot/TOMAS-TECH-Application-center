@@ -1,7 +1,11 @@
 // Outlook invitations for team-board work (owner decision 2026-10-22): an appointment or a task with people on it
 // reaches their calendars as one meeting request from the system mailbox, listing everyone on it. A change sends the
 // same event again (same UID, higher SEQUENCE); someone taken off it, a cancellation or a removal cancels it for them.
-// Days away are never sent.
+// Days away are never sent. A repeating task (owner request 2026-11-09) is one recurring entry for the whole series,
+// not a request for each day: its rule, less the days it does not cover (EXDATE), which are sent on their own.
+
+/** A series' entry: weekly on its weekdays (Monday 1 … Sunday 7) from its first day until `until`, less `exdates`. */
+export type CalendarRepeat = { seriesId: number; weekdays: number[]; until: string; exdates: string[] };
 
 /** The parts of a team task its calendar entry is made from. */
 export type CalendarTask = {
@@ -10,12 +14,17 @@ export type CalendarTask = {
   title: string;
   customer: string;
   note: string;
+  /** A series' entry starts on its first day; startDate and endDate are that day. */
   startDate: string;
   endDate: string;
   /** Time: the task's own range, from startTime on its first day until endTime on its last. */
   slot: "Day" | "AM" | "PM" | "Time";
   startTime: string | null;
   endTime: string | null;
+  /** Online: meetingPlace is its link. Offline: the room or site. */
+  meetingMode?: "Online" | "Offline" | null;
+  meetingPlace?: string;
+  repeat?: CalendarRepeat | null;
 };
 
 /**
@@ -30,6 +39,9 @@ const UID_DOMAIN = "iot-team-center";
 /** A whole number that grows with every change, so Outlook applies the newest copy (seconds since 2026-01-01 UTC). */
 export const calendarSequence = (now = Date.now()) => Math.max(0, Math.floor((now - Date.UTC(2026, 0, 1)) / 1000));
 export const calendarUid = (taskId: number) => `team-task-${taskId}@${UID_DOMAIN}`;
+/** One entry for a whole series of repeating days. */
+export const seriesUid = (seriesId: number) => `team-series-${seriesId}@${UID_DOMAIN}`;
+const BYDAY = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"] as const;
 
 const pad = (value: number) => String(value).padStart(2, "0");
 const minutesOf = (time: string) => Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5));
@@ -52,6 +64,36 @@ export function eventTimes(task: Pick<CalendarTask, "startDate" | "endDate" | "s
     ? { allDay: false as const, start: utcStamp(task.startDate, minutesOf(WORKING_HOURS.start)), end: utcStamp(task.startDate, minutesOf(WORKING_HOURS.noon)) }
     : { allDay: false as const, start: utcStamp(task.startDate, minutesOf(WORKING_HOURS.afternoon)), end: utcStamp(task.startDate, minutesOf(WORKING_HOURS.end)) };
 }
+
+/**
+ * A series' rule and the days it leaves out. UNTIL and EXDATE take DTSTART's form: a date for an all-day entry, and
+ * otherwise the moment the day's entry starts, in UTC.
+ */
+export function repeatLines(task: Pick<CalendarTask, "startDate" | "endDate" | "slot" | "startTime" | "endTime" | "repeat">) {
+  const repeat = task.repeat;
+  if (!repeat) return [];
+  const times = eventTimes(task);
+  const startMinutes = task.slot === "Time" && task.startTime ? minutesOf(task.startTime) : minutesOf(task.slot === "PM" ? WORKING_HOURS.afternoon : WORKING_HOURS.start);
+  const at = (date: string) => (times.allDay ? compactDate(date) : utcStamp(date, startMinutes));
+  const days = [...repeat.weekdays].sort((a, b) => a - b).map((day) => BYDAY[day - 1]).filter(Boolean).join(",");
+  return [
+    `RRULE:FREQ=WEEKLY;BYDAY=${days};UNTIL=${at(repeat.until)}`,
+    ...(repeat.exdates.length ? [`EXDATE${times.allDay ? ";VALUE=DATE" : ""}:${repeat.exdates.map(at).join(",")}`] : []),
+  ];
+}
+
+const DAY_NAMES = ["จ. Mon", "อ. Tue", "พ. Wed", "พฤ. Thu", "ศ. Fri", "ส. Sat", "อา. Sun"] as const;
+/** The days a series falls on, for its mail: every working day, or the weekdays named. */
+export const repeatText = (weekdays: readonly number[]) => {
+  const days = [...weekdays].sort((a, b) => a - b);
+  return days.join(",") === "1,2,3,4,5" ? "ทุกวันทำงาน จ.–ศ. / Every working day, Mon–Fri" : `ทุกสัปดาห์ / Weekly: ${days.map((day) => DAY_NAMES[day - 1]).join(", ")}`;
+};
+
+/** Where a meeting is held, as one line of the entry's description. */
+export const meetingLine = (task: Pick<CalendarTask, "meetingMode" | "meetingPlace">) =>
+  !task.meetingMode ? "" : task.meetingMode === "Online"
+    ? `ประชุมออนไลน์ / Online meeting${task.meetingPlace ? `: ${task.meetingPlace}` : ""}`
+    : `สถานที่ / Where${task.meetingPlace ? `: ${task.meetingPlace}` : ": -"}`;
 
 /** iCalendar TEXT: backslash, semicolon, comma and line breaks escaped. */
 export const icsText = (value: string) =>
@@ -77,7 +119,9 @@ export function calendarEvent(task: CalendarTask, options: {
 }) {
   const times = eventTimes(task);
   const busy = task.kind === "Appointment";
-  const description = [task.customer, task.note, options.link].filter(Boolean).join("\n");
+  const description = [task.customer, meetingLine(task), task.note, options.link].filter(Boolean).join("\n");
+  // The meeting's link or room when there is one, otherwise the customer.
+  const location = (task.meetingMode && task.meetingPlace) || task.customer;
   const lines = [
     "BEGIN:VCALENDAR",
     "PRODID:-//TOMAS TECH//Engineering Center Team Board//EN",
@@ -85,13 +129,14 @@ export function calendarEvent(task: CalendarTask, options: {
     "CALSCALE:GREGORIAN",
     `METHOD:${options.method}`,
     "BEGIN:VEVENT",
-    `UID:${calendarUid(task.id)}`,
+    `UID:${task.repeat ? seriesUid(task.repeat.seriesId) : calendarUid(task.id)}`,
     `SEQUENCE:${options.sequence}`,
     `DTSTAMP:${stampOf(options.now ?? new Date())}`,
     times.allDay ? `DTSTART;VALUE=DATE:${times.start}` : `DTSTART:${times.start}`,
     times.allDay ? `DTEND;VALUE=DATE:${times.end}` : `DTEND:${times.end}`,
+    ...repeatLines(task),
     `SUMMARY:${icsText(task.customer ? `${task.title} · ${task.customer}` : task.title)}`,
-    ...(task.customer ? [`LOCATION:${icsText(task.customer)}`] : []),
+    ...(location ? [`LOCATION:${icsText(location)}`] : []),
     `DESCRIPTION:${icsText(description)}`,
     `ORGANIZER;CN=Engineering Center:mailto:${options.organizer}`,
     // No replies: the organizer is the system mailbox, which nobody reads.
@@ -140,20 +185,28 @@ export const invitedPeople = (task: { kind: string; assigneeIds: readonly number
   task.kind !== "Away" && task.status !== "Cancelled" ? [...task.assigneeIds] : [];
 
 /** The fields that change what the calendar entry says; a status change to Done alone sends nothing. */
-const CALENDAR_FIELDS = ["kind", "title", "customer", "note", "startDate", "endDate", "slot", "startTime", "endTime"] as const;
+export const CALENDAR_FIELDS = ["kind", "title", "customer", "note", "startDate", "endDate", "slot", "startTime", "endTime", "meetingMode", "meetingPlace"] as const;
 
-/** A task as the calendar compares it; a day away is a state too, never sent. */
-export type CalendarState = Omit<Pick<CalendarTask, (typeof CALENDAR_FIELDS)[number]>, "kind"> & { kind: CalendarTask["kind"] | "Away"; assigneeIds: number[]; status: string };
+/** A task as the calendar compares it; a day away is a state too, never sent. A series' entry carries its rule. */
+export type CalendarState = Omit<Pick<CalendarTask, Exclude<(typeof CALENDAR_FIELDS)[number], "meetingMode" | "meetingPlace">>, "kind"> & {
+  kind: CalendarTask["kind"] | "Away"; meetingMode?: "Online" | "Offline" | null; meetingPlace?: string; assigneeIds: number[]; status: string; repeat?: CalendarRepeat | null;
+};
+/** A field as the calendar compares it: empty and absent are the same. */
+const fieldOf = (state: CalendarState | null, field: (typeof CALENDAR_FIELDS)[number]) => {
+  const value = state?.[field];
+  return value === undefined || value === "" ? null : value;
+};
 
 /**
  * What to send when a task goes from `before` (null: new) to `after` (null: removed): a cancellation for the people
  * it no longer includes, and a request for everyone still on it when anyone joined or left (their copy lists who is
- * coming) or what it says changed.
+ * coming) or what it says changed, a series' rule and the days it leaves out included.
  */
 export function calendarActions(before: CalendarState | null, after: CalendarState | null) {
   const had = before ? invitedPeople(before) : [], has = after ? invitedPeople(after) : [];
   const cancel = had.filter((id) => !has.includes(id));
   const joined = has.some((id) => !had.includes(id));
-  const changed = CALENDAR_FIELDS.some((field) => (before?.[field] ?? null) !== (after?.[field] ?? null));
+  const changed = CALENDAR_FIELDS.some((field) => fieldOf(before, field) !== fieldOf(after, field))
+    || JSON.stringify(before?.repeat ?? null) !== JSON.stringify(after?.repeat ?? null);
   return { cancel, request: has.length && (joined || cancel.length > 0 || changed) ? has : [] };
 }

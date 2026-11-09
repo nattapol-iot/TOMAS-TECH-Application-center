@@ -831,4 +831,8 @@ GO
 GRANT EXECUTE ON OBJECT::dbo.delete_unstarted_project TO [iot_team_app_role];
 GRANT EXECUTE ON OBJECT::dbo.soft_delete_project TO [iot_team_app_role];
 GO
+
+-- database/migrations/103_team_task_repeat.sql
+GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.team_task_series TO [iot_team_app_role];
+GO
 -- END GENERATED MIGRATION GRANTS

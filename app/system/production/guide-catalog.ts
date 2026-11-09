@@ -1098,6 +1098,25 @@ const TEAM_TASK: Guide = {
       body: { th: "วันที่ และวันสิ้นสุดถ้าหลายวัน เลือกทั้งวัน ช่วงเช้า ช่วงบ่าย หรือระบุเวลาได้", en: "The date, and an end date for several days; a whole day, morning, afternoon or set times.", jp: "日付と、複数日の場合は終了日を入れます。終日・午前・午後・時間指定を選べます。" },
     },
     {
+      target: "team.meeting", action: "next", view: "resources",
+      title: { th: "ประชุมออนไลน์หรือออฟไลน์", en: "Online or in person", jp: "オンラインか対面か" },
+      body: {
+        th: "สำหรับนัดหมาย เลือก 'ออนไลน์' แล้ววางลิงก์ Teams / Zoom หรือ 'ออฟไลน์' แล้วใส่สถานที่ ลิงก์หรือสถานที่จะอยู่ในนัดของ Outlook ด้วย",
+        en: "For an appointment, choose Online and paste the Teams or Zoom link, or Offline and write the place. The link or place goes into the Outlook meeting too.",
+        jp: "予定の場合、「オンライン」を選んでTeams・Zoomのリンクを貼るか、「対面」を選んで場所を入力します。リンクや場所はOutlookの会議にも入ります。",
+      },
+      missing: { th: "ช่องนี้มีเฉพาะประเภทนัดหมาย กด 'ถัดไป'", en: "This shows for an appointment. Press Next.", jp: "予定の場合に表示されます。「次へ」を押します。" },
+    },
+    {
+      target: "team.repeat", action: "next", view: "resources",
+      title: { th: "งานที่ทำซ้ำ เช่น ประชุมทุกวัน", en: "Work that repeats, such as a daily meeting", jp: "繰り返す作業（毎日の会議など）" },
+      body: {
+        th: "เลือก 'ทุกวันทำงาน' หรือ 'ทุกสัปดาห์' แล้วเลือกวัน ใส่วันที่สิ้นสุด (ไม่เกิน 1 ปี) ระบบลงงานให้ทุกวันตามรอบ ข้ามวันหยุดบริษัท และส่ง Outlook เป็นนัดประจำนัดเดียว ภายหลังเปิดงานวันไหนก็ได้ แล้วเลือกแก้หรือลบ 'เฉพาะครั้งนี้' หรือ 'ครั้งนี้และครั้งถัดไป'",
+        en: "Choose Every working day, or Weekly and the days, then the day it ends (a year at most). The task is put on each of those days, company holidays skipped, and Outlook gets one recurring meeting. Later, open any day and change or remove This day only, or This and following days.",
+        jp: "「毎営業日」か「毎週」と曜日を選び、終了日（最長1年）を入れます。会社の休日を除く各日に作業が入り、Outlookには定期的な会議が1件届きます。後でどの回を開いても「この回のみ」か「この回以降すべて」を選んで変更・削除できます。",
+      },
+    },
+    {
       target: "team.save", action: "click", view: "resources",
       title: { th: "เพิ่มงาน", en: "Add it", jp: "追加" },
       body: {

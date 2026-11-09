@@ -12,9 +12,13 @@ import { elevated } from "../resource-task-service.js";
 import { notifyUsers } from "../site-visit-common.js";
 import { WORKLOAD_SQL, workloadItems, type WorkloadItem } from "../resource-workload.js";
 import type { EmailService } from "../email.js";
-import { calendarActions, type CalendarState } from "../team-calendar.js";
+import { calendarActions, repeatText, type CalendarState } from "../team-calendar.js";
 import { boardOutlookEvents, outlookStatus, refreshOutlookIfStale, syncOutlook } from "../outlook-calendar.js";
 import { rolesOf } from "../user-roles.js";
+import {
+  maskWeekdays, ownState, parseRepeat, parseTemplate, repeatDates, ruleDates, seriesState, templateState, weekdayMask,
+  type Occurrence, type SeriesRecord, type SeriesTemplate, type TeamTaskRepeat,
+} from "../team-task-series.js";
 
 // The team board (owner decision 2026-10-21): everyone's work on one page, so that a customer who calls to book can be
 // given a day at once, and work the system does not know yet (an appointment, a task, a day away) can be added with a
@@ -26,7 +30,12 @@ export const TEAM_TASK_KINDS = ["Appointment", "Task", "Away"] as const;
 /** A whole day, a morning, an afternoon, or the task's own time range (startTime–endTime). */
 export const TEAM_TASK_SLOTS = ["Day", "AM", "PM", "Time"] as const;
 export const TEAM_TASK_STATUSES = ["Planned", "Done", "Cancelled"] as const;
+/** Online: the place is the meeting's link. Offline: the room or site. */
+export const MEETING_MODES = ["Online", "Offline"] as const;
+/** A change to one day of a series, or to that day and every one after it. */
+export const APPLY_TO = ["this", "following"] as const;
 const ENTITY = "Team Task";
+const SERIES_ENTITY = "Team Task Series";
 const DAY = 86_400_000;
 /** The longest board window, and the longest task. */
 const MAX_WINDOW_DAYS = 400;
@@ -52,6 +61,10 @@ export type TeamTaskInput = {
   inquiryId: number | null;
   projectId: number | null;
   note: string;
+  meetingMode: (typeof MEETING_MODES)[number] | null;
+  meetingPlace: string;
+  /** Null: it happens once. Otherwise a one-day task saved again on every day the repeat falls on. */
+  repeat: TeamTaskRepeat | null;
 };
 
 const dayNumber = (value: string) => Date.parse(`${value}T00:00:00Z`) / DAY;
@@ -98,6 +111,9 @@ export function parseTeamTask(value: unknown): TeamTaskInput {
       throw new ApiError(400, "validation_failed", "Man-days must be between 0 and 999 with at most two decimals.");
     manDays = amount;
   }
+  // Where a meeting is held; a day away is held nowhere.
+  const meetingMode = kind === "Away" || body.meetingMode === undefined || body.meetingMode === null || body.meetingMode === ""
+    ? null : choice(body.meetingMode, MEETING_MODES, "Online", "Meeting");
   return {
     kind,
     title: requiredText(body.title, 300, "Subject"),
@@ -114,8 +130,14 @@ export function parseTeamTask(value: unknown): TeamTaskInput {
     inquiryId: optionalId(body.inquiryId, "RFQ"),
     projectId: optionalId(body.projectId, "Project"),
     note: optionalBodyText(body.note, 2000, "Note") ?? "",
+    meetingMode,
+    meetingPlace: meetingMode ? optionalBodyText(body.meetingPlace, 500, "Meeting place") ?? "" : "",
+    repeat: parseRepeat(body.repeat, startDate, endDate),
   };
 }
+
+/** Whether a change is for one day of a series (the default) or for that day and every one after it. */
+export const parseApplyTo = (value: unknown) => choice(value, APPLY_TO, "this", "Apply to");
 
 /**
  * The effort a task takes when nobody entered one: each working day in it, whole or half (a task on a day off counts
@@ -177,8 +199,10 @@ const TEAM_TASK_COLUMNS = `t.id,t.kind,t.title,t.customer_id,c.name customer_nam
         (SELECT STRING_AGG(CONVERT(nvarchar(20),a.user_id),N',') WITHIN GROUP (ORDER BY a.sort_order,a.user_id)
           FROM dbo.team_task_assignees a WHERE a.task_id=t.id) assignee_ids,t.start_date,t.end_date,t.time_slot,
         CONVERT(char(5),t.start_time,108) start_time,CONVERT(char(5),t.end_time,108) end_time,t.man_days,t.status,t.inquiry_id,i.inquiry_no,t.project_id,p.project_no,t.note,
-        t.created_by,cu.name created_by_name,t.created_at,t.row_version
+        t.created_by,cu.name created_by_name,t.created_at,t.row_version,t.meeting_mode,t.meeting_place,
+        t.series_id,t.occurrence_date,s.repeat_rule,s.weekdays repeat_weekdays,s.until_date repeat_until
       FROM dbo.team_tasks t
+      LEFT JOIN dbo.team_task_series s ON s.id=t.series_id
       LEFT JOIN dbo.customers c ON c.id=t.customer_id
       LEFT JOIN dbo.inquiries i ON i.id=t.inquiry_id
       LEFT JOIN dbo.projects p ON p.id=t.project_id
@@ -195,8 +219,8 @@ export const TEAM_BOARD_SQL = `SET NOCOUNT ON;
       ${WORKLOAD_SQL}
       SELECT ${TEAM_TASK_COLUMNS}
       WHERE t.deleted_at IS NULL AND ((t.status<>N'Cancelled' AND t.end_date>=@from AND t.start_date<=@to)
-        -- Planned work from before the window stays in view until someone closes it.
-        OR (t.status=N'Planned' AND t.kind<>N'Away' AND t.end_date<@from))
+        -- Planned work from before the window stays in view until someone closes it; a past day of a repeat is history.
+        OR (t.status=N'Planned' AND t.kind<>N'Away' AND t.end_date<@from AND t.series_id IS NULL))
       ORDER BY t.start_date,t.id;
       SELECT v.id,v.visit_no,v.status,c.name customer_name,a.engineer_id,
         CONVERT(date,SWITCHOFFSET(v.scheduled_start,'+07:00')) start_date,
@@ -240,16 +264,24 @@ export function teamTaskDto(r: Row, can: { inquiries: boolean; projects: boolean
     createdByName: String(r.created_by_name ?? ""),
     createdAt: r.created_at,
     rowVersion: Buffer.isBuffer(r.row_version) ? r.row_version.toString("base64") : "",
+    meetingMode: r.meeting_mode ? String(r.meeting_mode) : null,
+    meetingPlace: String(r.meeting_place ?? ""),
+    /** The series a day of a repeat belongs to, and its rule; null for a task that happens once. */
+    seriesId: r.series_id === null || r.series_id === undefined ? null : Number(r.series_id),
+    repeat: r.repeat_rule ? { rule: String(r.repeat_rule), weekdays: maskWeekdays(Number(r.repeat_weekdays)), until: dateOnly(r.repeat_until as Date | string) } : null,
   };
 }
 
-/** Checks that what a task points at exists, and works out its effort when none was entered. */
+/**
+ * Checks that what a task points at exists, and works out its effort when none was entered. The holidays cover every
+ * day a repeat could fall on.
+ */
 async function prepare(transaction: TransactionType, input: TeamTaskInput) {
   const q = new sql.Request(transaction);
   q.input("customer", sql.BigInt, input.customerId).input("people", sql.NVarChar(sql.MAX), JSON.stringify(input.assigneeIds))
     .input("people_count", sql.Int, input.assigneeIds.length)
     .input("inquiry", sql.BigInt, input.inquiryId).input("project", sql.BigInt, input.projectId)
-    .input("start", sql.Date, input.startDate).input("end", sql.Date, input.endDate);
+    .input("start", sql.Date, input.startDate).input("end", sql.Date, input.repeat?.until ?? input.endDate);
   const result = await q.query<Row>(`
     SELECT CASE WHEN @customer IS NULL OR EXISTS(SELECT 1 FROM dbo.customers WHERE id=@customer) THEN 1 ELSE 0 END customer_ok,
       CASE WHEN (SELECT COUNT(*) FROM dbo.users WHERE is_active=1 AND deleted_at IS NULL
@@ -264,7 +296,7 @@ async function prepare(transaction: TransactionType, input: TeamTaskInput) {
   if (!Number(check.inquiry_ok)) throw new ApiError(400, "validation_failed", "That RFQ does not exist.");
   if (!Number(check.project_ok)) throw new ApiError(400, "validation_failed", "That project does not exist.");
   const holidays = new Set(((result.recordsets as unknown as Row[][])[1] ?? []).map((r) => dateOnly(r.holiday_date as Date)!));
-  return { ...input, manDays: input.manDays ?? defaultManDays(input, holidays) };
+  return { task: { ...input, manDays: input.manDays ?? defaultManDays(input, holidays) }, holidays };
 }
 
 const bind = (q: sql.Request, task: TeamTaskInput & { manDays: number }, actor: number) => q
@@ -274,7 +306,8 @@ const bind = (q: sql.Request, task: TeamTaskInput & { manDays: number }, actor: 
   .input("slot", sql.NVarChar(10), task.slot).input("time", sql.NVarChar(5), task.startTime).input("end_time", sql.NVarChar(5), task.endTime)
   .input("man_days", sql.Decimal(6, 2), task.manDays).input("status", sql.NVarChar(20), task.status)
   .input("inquiry", sql.BigInt, task.inquiryId).input("project", sql.BigInt, task.projectId)
-  .input("note", sql.NVarChar(2000), task.note).input("actor", sql.BigInt, actor);
+  .input("note", sql.NVarChar(2000), task.note).input("mode", sql.NVarChar(10), task.meetingMode).input("place", sql.NVarChar(500), task.meetingPlace)
+  .input("actor", sql.BigInt, actor);
 
 /** Sets a task's people, in the order chosen. */
 async function savePeople(transaction: TransactionType, id: number, assigneeIds: readonly number[]) {
@@ -291,19 +324,20 @@ async function currentPeople(transaction: TransactionType, id: number) {
   return rows.map((r) => Number(r.user_id));
 }
 
-/** Tells the people a task was given to, except whoever gave it. */
-async function tellPeople(transaction: TransactionType, actor: CurrentUser, id: number, task: TeamTaskInput, userIds: readonly number[]) {
+/** Tells the people a task was given to, except whoever gave it; `when` says it for a repeat. */
+async function tellPeople(transaction: TransactionType, actor: CurrentUser, id: number, task: TeamTaskInput, userIds: readonly number[], when = "") {
   const recipients = userIds.filter((userId) => userId !== actor.id);
   if (!recipients.length || task.status !== "Planned") return;
-  const when = task.endDate === task.startDate ? task.startDate : `${task.startDate} → ${task.endDate}`;
+  const days = when || (task.endDate === task.startDate ? task.startDate : `${task.startDate} → ${task.endDate}`);
   await notifyUsers(transaction, recipients, "TEAM_TASK_ASSIGNED", task.title.slice(0, 300),
-    `${when}${task.startTime ? ` ${task.startTime}–${task.endTime}` : ""} · ${actor.name}`, "TeamTask", id, `team-task-${id}-${task.startDate}`);
+    `${days}${task.startTime ? ` ${task.startTime}–${task.endTime}` : ""} · ${actor.name}`, "TeamTask", id, `team-task-${id}-${task.startDate}`);
 }
 
 /** A task's state as the calendar sees it; the customer by id, so a rename elsewhere sends nothing. */
-const calendarState = (task: { kind: string; title: string; customerId: number | null; note: string; startDate: string; endDate: string; slot: string; startTime: string | null; endTime: string | null; assigneeIds: number[]; status: string }): CalendarState => ({
+const calendarState = (task: { kind: string; title: string; customerId: number | null; note: string; startDate: string; endDate: string; slot: string; startTime: string | null; endTime: string | null; assigneeIds: number[]; status: string; meetingMode: string | null; meetingPlace: string }): CalendarState => ({
   kind: task.kind as CalendarState["kind"], title: task.title, customer: task.customerId === null ? "" : String(task.customerId), note: task.note,
   startDate: task.startDate, endDate: task.endDate, slot: task.slot as CalendarState["slot"], startTime: task.startTime, endTime: task.endTime, assigneeIds: task.assigneeIds, status: task.status,
+  meetingMode: (task.meetingMode as CalendarState["meetingMode"]) ?? null, meetingPlace: task.meetingPlace,
 });
 /** A time(0) column as HH:MM; the driver returns it as a Date on 1970-01-01 UTC. */
 const clock = (value: unknown) => (value ? (value instanceof Date ? value.toISOString().slice(11, 16) : String(value).slice(0, 5)) : null);
@@ -311,16 +345,19 @@ const rowState = (r: Row, assigneeIds: number[]) => calendarState({
   kind: String(r.kind), title: String(r.title), customerId: r.customer_id === null || r.customer_id === undefined ? null : Number(r.customer_id), note: String(r.note ?? ""),
   startDate: dateOnly(r.start_date as Date)!, endDate: dateOnly(r.end_date as Date)!, slot: String(r.time_slot ?? "Day"),
   startTime: clock(r.start_time), endTime: clock(r.end_time),
-  assigneeIds, status: String(r.status),
+  assigneeIds, status: String(r.status), meetingMode: r.meeting_mode ? String(r.meeting_mode) : null, meetingPlace: String(r.meeting_place ?? ""),
 });
+const seriesOf = (r: Row) => (r.series_id === null || r.series_id === undefined ? null : Number(r.series_id));
 
 /** What the person's Outlook got: "none" when nothing needed sending. */
 export type CalendarDelivery = "none" | "sent" | "disabled" | "failed";
+/** One Outlook entry, from what it said before a change (null: new) to what it says after (null: removed). */
+type Delivery = { id: number; before: CalendarState | null; after: CalendarState | null };
 
 /**
  * Sends the Outlook messages a change calls for, after it is saved: one request to everyone on the task, carrying it
  * as it is now, and one cancellation to whoever it no longer includes, carrying it as they had it. Delivery never
- * undoes the save.
+ * undoes the save. A series' entry (its state carries the rule) goes under the series' own UID.
  */
 async function deliverCalendar(db: Database, email: Pick<EmailService, "sendTeamTaskCalendar">, id: number, before: CalendarState | null, after: CalendarState | null, sentBy: string): Promise<CalendarDelivery> {
   const { cancel, request } = calendarActions(before, after);
@@ -346,18 +383,173 @@ async function deliverCalendar(db: Database, email: Pick<EmailService, "sendTeam
     const result = await email.sendTeamTaskCalendar({
       method, recipients, sentBy,
       task: { id, kind: state.kind === "Appointment" ? "Appointment" : "Task", title: state.title, customer: customerName(state.customer), note: state.note,
-        startDate: state.startDate, endDate: state.endDate, slot: state.slot, startTime: state.startTime, endTime: state.endTime },
+        startDate: state.startDate, endDate: state.endDate, slot: state.slot, startTime: state.startTime, endTime: state.endTime,
+        meetingMode: state.meetingMode ?? null, meetingPlace: state.meetingPlace ?? "", repeat: state.repeat ?? null },
     });
     results.push(result.status);
   }
-  return results.includes("failed") ? "failed" : results.includes("disabled") ? "disabled" : results.length ? "sent" : "none";
+  return worst(results);
+}
+const worst = (results: readonly CalendarDelivery[]): CalendarDelivery =>
+  results.includes("failed") ? "failed" : results.includes("disabled") ? "disabled" : results.includes("sent") ? "sent" : "none";
+
+/** Every entry a change touched, one after another; the result is the worst of them. */
+async function deliverAll(db: Database, email: Pick<EmailService, "sendTeamTaskCalendar">, deliveries: readonly Delivery[], sentBy: string) {
+  const results: CalendarDelivery[] = [];
+  for (const delivery of deliveries) results.push(await deliverCalendar(db, email, delivery.id, delivery.before, delivery.after, sentBy));
+  return worst(results);
 }
 
-type BoardMail = Pick<EmailService, "sendTeamTaskCalendar"> & Partial<Pick<EmailService, "graphGet" | "graphEnabled">>;
+/** A series and its days as saved, for its Outlook entry before and after a change. */
+async function readSeries(transaction: TransactionType, seriesId: number): Promise<{ series: SeriesRecord; days: Occurrence[] } | null> {
+  const result = await new sql.Request(transaction).input("series", sql.BigInt, seriesId).query<Row>(`
+    SELECT id,weekdays,first_date,until_date,template_json FROM dbo.team_task_series WITH(UPDLOCK,HOLDLOCK) WHERE id=@series;
+    SELECT t.id,t.kind,t.title,t.customer_id,t.note,t.start_date,t.end_date,t.time_slot,t.start_time,t.end_time,t.status,t.occurrence_date,t.meeting_mode,t.meeting_place,
+      (SELECT STRING_AGG(CONVERT(nvarchar(20),a.user_id),N',') WITHIN GROUP (ORDER BY a.sort_order,a.user_id)
+        FROM dbo.team_task_assignees a WHERE a.task_id=t.id) assignee_ids
+    FROM dbo.team_tasks t WHERE t.series_id=@series AND t.deleted_at IS NULL ORDER BY t.occurrence_date,t.id;`);
+  const [seriesRows = [], dayRows = []] = result.recordsets as unknown as Row[][];
+  const r = seriesRows[0];
+  if (!r) return null;
+  return {
+    series: { id: Number(r.id), weekdays: maskWeekdays(Number(r.weekdays)), firstDate: dateOnly(r.first_date as Date)!, until: dateOnly(r.until_date as Date)!, template: parseTemplate(r.template_json) },
+    days: dayRows.map((day) => ({ ...rowState(day, idList(day.assignee_ids)), id: Number(day.id), occurrenceDate: dateOnly(day.occurrence_date as Date)! })),
+  };
+}
+
+/** The series' entry and one day's own entry, from before a change to after it. */
+function seriesDeliveries(before: { series: SeriesRecord; days: Occurrence[] } | null, after: { series: SeriesRecord; days: Occurrence[] } | null, dayIds: readonly number[]): Delivery[] {
+  const template = before?.series.template ?? after?.series.template ?? null;
+  const seriesId = before?.series.id ?? after?.series.id;
+  const day = (state: { days: Occurrence[] } | null, id: number) => state?.days.find((entry) => entry.id === id);
+  return [
+    ...(seriesId === undefined ? [] : [{ id: seriesId, before: before ? seriesState(before.series, before.days) : null, after: after ? seriesState(after.series, after.days) : null }]),
+    ...dayIds.map((id) => {
+      const was = day(before, id), now = day(after, id);
+      return { id, before: was ? ownState(template, was) : null, after: now ? ownState(template, now) : null };
+    }),
+  ];
+}
+
+/** Adds a task that happens once. */
+async function createSingle(transaction: TransactionType, actor: CurrentUser, input: TeamTaskInput) {
+  const { task } = await prepare(transaction, input);
+  const insert = bind(new sql.Request(transaction), task, actor.id);
+  const row = (await insert.query<Row>(`
+    INSERT dbo.team_tasks(kind,title,customer_id,start_date,end_date,time_slot,start_time,end_time,man_days,status,inquiry_id,project_id,note,meeting_mode,meeting_place,created_by)
+    OUTPUT inserted.id,inserted.row_version
+    VALUES(@kind,@title,@customer,@start,@end,@slot,CONVERT(time(0),@time),CONVERT(time(0),@end_time),@man_days,@status,@inquiry,@project,@note,@mode,@place,@actor);`)).recordset[0]!;
+  const id = Number(row.id);
+  await savePeople(transaction, id, task.assigneeIds);
+  await insertAudit(transaction, actor.id, ENTITY, id, "", "Created", null, task);
+  await tellPeople(transaction, actor, id, task, task.assigneeIds);
+  return {
+    result: { id, rowVersion: (row.row_version as Buffer).toString("base64"), manDays: task.manDays },
+    deliveries: [{ id, before: null, after: calendarState(input) }] as Delivery[],
+  };
+}
+
+/**
+ * Adds a repeating task: its series, then the task again on every day the repeat falls on (company holidays and the
+ * days in `skip` left out), each with the same people. The people are told once, and Outlook gets one entry.
+ */
+async function createSeries(transaction: TransactionType, actor: CurrentUser, input: TeamTaskInput, skip: ReadonlySet<string> = new Set()) {
+  const repeat = input.repeat!;
+  const { task, holidays } = await prepare(transaction, input);
+  const dates = repeatDates(input.startDate, repeat, holidays).filter((date) => !skip.has(date));
+  if (!dates.length) throw new ApiError(400, "validation_failed", "No working day from the start until the repeat ends falls on the days chosen.");
+  // Outlook's series starts on the rule's first day, even a holiday (that day is left out of it).
+  const firstDate = ruleDates(input.startDate, repeat.until, repeat.weekdays)[0]!;
+  const template: SeriesTemplate = {
+    kind: task.kind, title: task.title, customerId: task.customerId, assigneeIds: task.assigneeIds, slot: task.slot, startTime: task.startTime, endTime: task.endTime,
+    manDays: task.manDays, inquiryId: task.inquiryId, projectId: task.projectId, note: task.note, meetingMode: task.meetingMode, meetingPlace: task.meetingPlace,
+  };
+  const rows = (await bind(new sql.Request(transaction), task, actor.id)
+    .input("rule", sql.NVarChar(10), repeat.rule).input("weekdays", sql.TinyInt, weekdayMask(repeat.weekdays))
+    .input("first", sql.Date, firstDate).input("until", sql.Date, repeat.until)
+    .input("template", sql.NVarChar(sql.MAX), JSON.stringify(template))
+    .input("dates", sql.NVarChar(sql.MAX), JSON.stringify(dates))
+    .input("people", sql.NVarChar(sql.MAX), JSON.stringify(task.assigneeIds))
+    .query<Row>(`
+    DECLARE @series TABLE(id bigint NOT NULL);
+    DECLARE @made TABLE(id bigint NOT NULL);
+    INSERT dbo.team_task_series(repeat_rule,weekdays,first_date,until_date,template_json,created_by)
+    OUTPUT inserted.id INTO @series
+    VALUES(@rule,@weekdays,@first,@until,@template,@actor);
+    INSERT dbo.team_tasks(kind,title,customer_id,start_date,end_date,time_slot,start_time,end_time,man_days,status,inquiry_id,project_id,note,meeting_mode,meeting_place,series_id,occurrence_date,created_by)
+    OUTPUT inserted.id INTO @made
+    SELECT @kind,@title,@customer,d.[day],d.[day],@slot,CONVERT(time(0),@time),CONVERT(time(0),@end_time),@man_days,@status,@inquiry,@project,@note,@mode,@place,
+      (SELECT id FROM @series),d.[day],@actor
+    FROM OPENJSON(@dates) WITH ([day] date '$') d;
+    INSERT dbo.team_task_assignees(task_id,user_id,sort_order)
+    SELECT m.id,CONVERT(bigint,people.[value]),CONVERT(int,people.[key])+1 FROM @made m CROSS JOIN OPENJSON(@people) people;
+    SELECT (SELECT id FROM @series) series_id,t.id,t.occurrence_date,t.row_version
+    FROM dbo.team_tasks t JOIN @made m ON m.id=t.id ORDER BY t.occurrence_date;`)).recordset;
+  const first = rows[0];
+  if (!first) throw new ApiError(500, "team_task_series_failed", "The repeating task could not be saved.");
+  const seriesId = Number(first.series_id);
+  await insertAudit(transaction, actor.id, SERIES_ENTITY, seriesId, "", "Created", null, { ...template, repeat, days: dates.length });
+  await tellPeople(transaction, actor, Number(first.id), task, task.assigneeIds, `${dates[0]} → ${dates.at(-1)} · ${repeatText(repeat.weekdays)}`);
+  const series: SeriesRecord = { id: seriesId, weekdays: repeat.weekdays, firstDate, until: repeat.until, template };
+  const days: Occurrence[] = rows.map((r) => {
+    const date = dateOnly(r.occurrence_date as Date)!;
+    return { ...templateState(template, date), status: task.status, id: Number(r.id), occurrenceDate: date };
+  });
+  return {
+    result: { id: Number(first.id), rowVersion: (first.row_version as Buffer).toString("base64"), manDays: task.manDays, seriesId, count: rows.length },
+    deliveries: [{ id: seriesId, before: null, after: seriesState(series, days) }] as Delivery[],
+  };
+}
+
+/** Removes a task (it stays in the database with its people, as its audit trail does). */
+async function removeTask(transaction: TransactionType, actor: CurrentUser, id: number, title: unknown, people: readonly number[]) {
+  await new sql.Request(transaction).input("id", sql.BigInt, id).input("actor", sql.BigInt, actor.id)
+    .query("UPDATE dbo.team_tasks SET deleted_at=SYSUTCDATETIME(),updated_by=@actor,updated_at=SYSUTCDATETIME() WHERE id=@id;");
+  await insertAudit(transaction, actor.id, ENTITY, id, "", "Deleted", { title, assigneeIds: people }, null);
+}
+
+/**
+ * Ends a series before a day: that day and every later one go (one already done stays, unless it is `selfId`), and
+ * the series now ends on its last day left. Returns what Outlook needs and the done days kept, which a series added in
+ * its place leaves out.
+ */
+async function endSeries(transaction: TransactionType, actor: CurrentUser, seriesId: number, from: string, selfId: number) {
+  const before = await readSeries(transaction, seriesId);
+  const goes = (day: Occurrence) => day.occurrenceDate >= from && (day.status !== "Done" || day.id === selfId);
+  const removed = (before?.days ?? []).filter(goes);
+  await new sql.Request(transaction).input("series", sql.BigInt, seriesId).input("from", sql.Date, from).input("self", sql.BigInt, selfId).input("actor", sql.BigInt, actor.id).query(`
+    UPDATE dbo.team_tasks SET deleted_at=SYSUTCDATETIME(),updated_by=@actor,updated_at=SYSUTCDATETIME()
+    WHERE series_id=@series AND deleted_at IS NULL AND occurrence_date>=@from AND (status<>N'Done' OR id=@self);
+    UPDATE s SET until_date=COALESCE(last_day.[day],s.until_date),updated_by=@actor,updated_at=SYSUTCDATETIME()
+    FROM dbo.team_task_series s
+    OUTER APPLY (SELECT MAX(t.occurrence_date) [day] FROM dbo.team_tasks t WHERE t.series_id=s.id AND t.deleted_at IS NULL) last_day
+    WHERE s.id=@series;`);
+  await insertAudit(transaction, actor.id, SERIES_ENTITY, seriesId, "", "Ended", { until: before?.series.until ?? null }, { from, removed: removed.length });
+  const after = await readSeries(transaction, seriesId);
+  return {
+    deliveries: seriesDeliveries(before, after, removed.map((day) => day.id)),
+    kept: new Set((before?.days ?? []).filter((day) => day.occurrenceDate >= from && !goes(day)).map((day) => day.occurrenceDate)),
+  };
+}
+
+type BoardMail = Pick<EmailService, "sendTeamTaskCalendar"> & Partial<Pick<EmailService, "graphGet" | "graphEnabled" | "graphSender">>;
 /** The Graph reads for Outlook calendars; a mail service without them (a test harness) has Outlook switched off. */
-const graphOf = (email: BoardMail): Pick<EmailService, "graphGet" | "graphEnabled"> =>
-  typeof email.graphGet === "function" ? email as Pick<EmailService, "graphGet" | "graphEnabled">
+const graphOf = (email: BoardMail): Pick<EmailService, "graphGet" | "graphEnabled"> & Partial<Pick<EmailService, "graphSender">> =>
+  typeof email.graphGet === "function" ? email as Pick<EmailService, "graphGet" | "graphEnabled"> & Partial<Pick<EmailService, "graphSender">>
     : { graphEnabled: false, graphGet: () => Promise.reject(new Error("Microsoft Graph is not configured.")) };
+
+/** The days of repeats on the board, each counted on its own day for each of its people (the workload counts a series as one piece of work). */
+export function seriesDayItems(taskRows: readonly Row[]): WorkloadItem[] {
+  return taskRows.filter((r) => seriesOf(r) !== null && r.status === "Planned" && (r.kind === "Appointment" || r.kind === "Task")).flatMap((r) => {
+    const people = idList(r.assignee_ids);
+    return (people.length ? people : [null]).map((ownerId): WorkloadItem => ({
+      key: `TeamTask-${Number(r.id)}-${ownerId ?? "none"}`, workKey: `TeamTask-${Number(r.id)}`, type: "Task", entityId: Number(r.id), ownerId,
+      reference: "", title: String(r.title ?? ""), customer: String(r.customer_name ?? ""),
+      start: dateOnly(r.start_date as Date), end: dateOnly(r.end_date as Date), manDays: Number(r.man_days ?? 0), progress: 0, status: "Planned",
+      taskKind: r.kind === "Appointment" ? "Appointment" : "Task", repeat: true,
+    }));
+  });
+}
 
 export function registerTeamBoardRoutes(app: FastifyInstance, db: Database, users: CurrentUserService, email: BoardMail) {
   const graph = graphOf(email);
@@ -403,7 +595,8 @@ export function registerTeamBoardRoutes(app: FastifyInstance, db: Database, user
     return {
       capacities: (sets[0] ?? []).map((r) => ({ userId: Number(r.user_id), daysPerWeek: Number(r.days_per_week) })),
       holidays,
-      items: work.items.map(redactWork),
+      // A repeat counts day by day here, on the days in the window.
+      items: [...work.items.filter((item) => !item.workKey.startsWith("TeamSeries-")), ...seriesDayItems(taskRows)].map(redactWork),
       warnings: work.warnings,
       tasks: taskRows.map((r) => teamTaskDto(r, can)),
       visits: [...visits.values()],
@@ -430,22 +623,10 @@ export function registerTeamBoardRoutes(app: FastifyInstance, db: Database, user
     assertMayAssign(actor, input.assigneeIds);
     // Owner decision 2026-10-28: new work says briefly what it is; a day away needs no detail.
     if (input.kind !== "Away" && !input.note.trim()) throw new ApiError(400, "validation_failed", "Describe the work briefly.");
-    const created = await db.transaction(async (transaction) => {
-      const task = await prepare(transaction, input);
-      const insert = bind(new sql.Request(transaction), task, actor.id);
-      const row = (await insert.query<Row>(`
-        INSERT dbo.team_tasks(kind,title,customer_id,start_date,end_date,time_slot,start_time,end_time,man_days,status,inquiry_id,project_id,note,created_by)
-        OUTPUT inserted.id,inserted.row_version
-        VALUES(@kind,@title,@customer,@start,@end,@slot,CONVERT(time(0),@time),CONVERT(time(0),@end_time),@man_days,@status,@inquiry,@project,@note,@actor);`)).recordset[0]!;
-      const id = Number(row.id);
-      await savePeople(transaction, id, task.assigneeIds);
-      await insertAudit(transaction, actor.id, ENTITY, id, "", "Created", null, task);
-      await tellPeople(transaction, actor, id, task, task.assigneeIds);
-      return { id, rowVersion: (row.row_version as Buffer).toString("base64"), manDays: task.manDays };
-    });
-    const calendar = await deliverCalendar(db, email, created.id, null, calendarState(input), actor.name);
+    const created = await db.transaction((transaction) => (input.repeat ? createSeries(transaction, actor, input) : createSingle(transaction, actor, input)));
+    const calendar = await deliverAll(db, email, created.deliveries, actor.name);
     reply.code(201);
-    return { ...created, calendar };
+    return { ...created.result, calendar };
   });
 
   app.put("/api/v1/team-tasks/:id", async (request) => {
@@ -454,6 +635,7 @@ export function registerTeamBoardRoutes(app: FastifyInstance, db: Database, user
     const id = positiveLong((request.params as { id?: string }).id, "Task id");
     const body = bodyObject(request.body);
     const expected = parseRowVersion(body.rowVersion);
+    const applyTo = parseApplyTo(body.applyTo);
     const input = parseTeamTask(body);
     const saved = await db.transaction(async (transaction) => {
       const current = (await new sql.Request(transaction).input("id", sql.BigInt, id).query<Row>(
@@ -466,35 +648,62 @@ export function registerTeamBoardRoutes(app: FastifyInstance, db: Database, user
       assertMayAssign(actor, input.assigneeIds, people);
       if (!(current.row_version as Buffer).equals(expected))
         throw new ApiError(409, "concurrency_conflict", "Someone changed this task. Reload before saving.");
-      const task = await prepare(transaction, input);
-      const update = bind(new sql.Request(transaction), task, actor.id).input("id", sql.BigInt, id);
-      const row = (await update.query<Row>(`
-        UPDATE dbo.team_tasks SET kind=@kind,title=@title,customer_id=@customer,start_date=@start,end_date=@end,
-          time_slot=@slot,start_time=CONVERT(time(0),@time),end_time=CONVERT(time(0),@end_time),man_days=@man_days,status=@status,inquiry_id=@inquiry,project_id=@project,note=@note,
-          updated_by=@actor,updated_at=SYSUTCDATETIME()
-        OUTPUT inserted.row_version WHERE id=@id;`)).recordset[0]!;
-      await savePeople(transaction, id, task.assigneeIds);
-      const before = {
-        kind: current.kind, title: current.title, customerId: current.customer_id, assigneeIds: people,
-        startDate: dateOnly(current.start_date as Date), endDate: dateOnly(current.end_date as Date), slot: current.time_slot, startTime: clock(current.start_time), endTime: clock(current.end_time),
-        manDays: Number(current.man_days), status: current.status, inquiryId: current.inquiry_id, projectId: current.project_id, note: current.note,
-      };
-      await insertAudit(transaction, actor.id, ENTITY, id, "", "Updated", before, task);
-      // Tell the people who joined; everyone, when the day moved.
-      await tellPeople(transaction, actor, id, task,
-        before.startDate !== task.startDate ? task.assigneeIds : task.assigneeIds.filter((userId) => !people.includes(userId)));
-      return { id, rowVersion: (row.row_version as Buffer).toString("base64"), manDays: task.manDays, before: rowState(current, people) };
+      const seriesId = seriesOf(current);
+
+      // This day only: the task itself changes (a day of a repeat keeps its place in the series).
+      if (!(applyTo === "following" && seriesId !== null) && !(seriesId === null && input.repeat)) {
+        const before = seriesId === null ? null : await readSeries(transaction, seriesId);
+        const { task } = await prepare(transaction, { ...input, repeat: null });
+        const update = bind(new sql.Request(transaction), task, actor.id).input("id", sql.BigInt, id);
+        const row = (await update.query<Row>(`
+          UPDATE dbo.team_tasks SET kind=@kind,title=@title,customer_id=@customer,start_date=@start,end_date=@end,
+            time_slot=@slot,start_time=CONVERT(time(0),@time),end_time=CONVERT(time(0),@end_time),man_days=@man_days,status=@status,inquiry_id=@inquiry,project_id=@project,note=@note,
+            meeting_mode=@mode,meeting_place=@place,updated_by=@actor,updated_at=SYSUTCDATETIME()
+          OUTPUT inserted.row_version WHERE id=@id;`)).recordset[0]!;
+        await savePeople(transaction, id, task.assigneeIds);
+        const was = {
+          kind: current.kind, title: current.title, customerId: current.customer_id, assigneeIds: people,
+          startDate: dateOnly(current.start_date as Date), endDate: dateOnly(current.end_date as Date), slot: current.time_slot, startTime: clock(current.start_time), endTime: clock(current.end_time),
+          manDays: Number(current.man_days), status: current.status, inquiryId: current.inquiry_id, projectId: current.project_id, note: current.note,
+          meetingMode: current.meeting_mode ?? null, meetingPlace: current.meeting_place ?? "",
+        };
+        await insertAudit(transaction, actor.id, ENTITY, id, "", "Updated", was, task);
+        // Tell the people who joined; everyone, when the day moved.
+        await tellPeople(transaction, actor, id, task,
+          was.startDate !== task.startDate ? task.assigneeIds : task.assigneeIds.filter((userId) => !people.includes(userId)));
+        const deliveries = seriesId === null
+          ? [{ id, before: rowState(current, people), after: calendarState(task) }]
+          : seriesDeliveries(before, await readSeries(transaction, seriesId), [id]);
+        return { result: { id, rowVersion: (row.row_version as Buffer).toString("base64"), manDays: task.manDays }, deliveries };
+      }
+
+      // A task made to repeat, or a change to this day of a repeat and every one after it: the old ones end here, and
+      // the change is added in their place, as a new series (or a single task, when it no longer repeats).
+      const deliveries: Delivery[] = [];
+      let skip: ReadonlySet<string> = new Set();
+      if (seriesId === null) {
+        await removeTask(transaction, actor, id, current.title, people);
+        deliveries.push({ id, before: rowState(current, people), after: null });
+      } else {
+        const ended = await endSeries(transaction, actor, seriesId, dateOnly(current.occurrence_date as Date)!, id);
+        deliveries.push(...ended.deliveries);
+        skip = ended.kept;
+      }
+      const created = input.repeat ? await createSeries(transaction, actor, input, skip) : await createSingle(transaction, actor, input);
+      return { result: { ...created.result, replaced: true }, deliveries: [...deliveries, ...created.deliveries] };
     });
-    const calendar = await deliverCalendar(db, email, id, saved.before, calendarState(input), actor.name);
-    return { id, rowVersion: saved.rowVersion, manDays: saved.manDays, calendar };
+    const calendar = await deliverAll(db, email, saved.deliveries, actor.name);
+    return { ...saved.result, calendar };
   });
 
   app.delete("/api/v1/team-tasks/:id", async (request) => {
     await users.demandPermission(request, "team.board");
     const actor = await users.required(request);
     const id = positiveLong((request.params as { id?: string }).id, "Task id");
-    const expected = parseRowVersion((request.query as Record<string, unknown>).rowVersion);
-    const before = await db.transaction(async (transaction) => {
+    const query = request.query as Record<string, unknown>;
+    const expected = parseRowVersion(query.rowVersion);
+    const applyTo = parseApplyTo(query.applyTo);
+    const deliveries = await db.transaction(async (transaction) => {
       const current = (await new sql.Request(transaction).input("id", sql.BigInt, id).query<Row>(
         "SELECT * FROM dbo.team_tasks WITH(UPDLOCK,HOLDLOCK) WHERE id=@id AND deleted_at IS NULL;")).recordset[0];
       if (!current) throw new ApiError(404, "team_task_not_found", "That task no longer exists.");
@@ -503,26 +712,36 @@ export function registerTeamBoardRoutes(app: FastifyInstance, db: Database, user
         throw new ApiError(403, "team_task_forbidden", "Only whoever added the task, someone it is for, or a manager can remove it.");
       if (!(current.row_version as Buffer).equals(expected))
         throw new ApiError(409, "concurrency_conflict", "Someone changed this task. Reload before removing it.");
-      // The people stay recorded on the removed task, as its audit trail does.
-      await new sql.Request(transaction).input("id", sql.BigInt, id).input("actor", sql.BigInt, actor.id)
-        .query("UPDATE dbo.team_tasks SET deleted_at=SYSUTCDATETIME(),updated_by=@actor,updated_at=SYSUTCDATETIME() WHERE id=@id;");
-      await insertAudit(transaction, actor.id, ENTITY, id, "", "Deleted", { title: current.title, assigneeIds: people }, null);
-      return rowState(current, people);
+      const seriesId = seriesOf(current);
+      if (seriesId === null) {
+        await removeTask(transaction, actor, id, current.title, people);
+        return [{ id, before: rowState(current, people), after: null }] as Delivery[];
+      }
+      // This day and every one after it: the repeat ends before it.
+      if (applyTo === "following") return (await endSeries(transaction, actor, seriesId, dateOnly(current.occurrence_date as Date)!, id)).deliveries;
+      const before = await readSeries(transaction, seriesId);
+      await removeTask(transaction, actor, id, current.title, people);
+      return seriesDeliveries(before, await readSeries(transaction, seriesId), [id]);
     });
-    const calendar = await deliverCalendar(db, email, id, before, null, actor.name);
+    const calendar = await deliverAll(db, email, deliveries, actor.name);
     return { id, deleted: true, calendar };
   });
 
-  // Who added and changed a task, newest first, from the audit log.
+  // Who added and changed a task, newest first, from the audit log; a day of a repeat includes its series' entries.
   app.get("/api/v1/team-tasks/:id/history", async (request) => {
     await users.demandPermission(request, "team.board");
     const id = positiveLong((request.params as { id?: string }).id, "Task id");
     const rows = (await db.query<Row>(`
-      SELECT TOP(50) a.id,a.action,a.before_json,a.after_json,a.occurred_at,u.name actor_name
+      SELECT TOP(50) a.id,a.entity_type,a.action,a.before_json,a.after_json,a.occurred_at,u.name actor_name
       FROM dbo.audit_log a JOIN dbo.users u ON u.id=a.actor_id
-      WHERE a.entity_type=@type AND a.entity_id=@id ORDER BY a.occurred_at DESC,a.id DESC;`,
-    (q) => q.input("type", sql.NVarChar(50), ENTITY).input("id", sql.BigInt, id))).recordset;
+      WHERE (a.entity_type=@type AND a.entity_id=@id)
+        OR (a.entity_type=@series_type AND a.entity_id=(SELECT t.series_id FROM dbo.team_tasks t WHERE t.id=@id))
+      ORDER BY a.occurred_at DESC,a.id DESC;`,
+    (q) => q.input("type", sql.NVarChar(50), ENTITY).input("series_type", sql.NVarChar(50), SERIES_ENTITY).input("id", sql.BigInt, id))).recordset;
     const json = (value: unknown) => { try { return value ? JSON.parse(String(value)) : null; } catch { return null; } };
-    return rows.map((r) => ({ id: Number(r.id), action: String(r.action), actor: String(r.actor_name ?? ""), at: r.occurred_at, before: json(r.before_json), after: json(r.after_json) }));
+    return rows.map((r) => ({
+      id: Number(r.id), action: String(r.action), actor: String(r.actor_name ?? ""), at: r.occurred_at, before: json(r.before_json), after: json(r.after_json),
+      ...(r.entity_type === SERIES_ENTITY ? { series: true } : {}),
+    }));
   });
 }

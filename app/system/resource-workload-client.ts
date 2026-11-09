@@ -34,6 +34,15 @@ export type TeamTaskKind = "Appointment" | "Task" | "Away";
 /** A whole day, a morning (08:30–12:00), an afternoon (13:00–17:30), or its own time range. */
 export type TeamTaskSlot = "Day" | "AM" | "PM" | "Time";
 export type TeamTaskStatus = "Planned" | "Done" | "Cancelled";
+/**
+ * A task that repeats (owner request 2026-11-09): every working day (Monday to Friday) or the weekdays chosen (Monday
+ * 1 … Sunday 7), until a day at most a year on. Each day it falls on is a team task of its own.
+ */
+export type TeamTaskRepeat = { rule: "Weekdays" | "Weekly"; weekdays: number[]; until: string };
+/** Online: the place is the meeting's link. Offline: the room or site. */
+export type MeetingMode = "Online" | "Offline";
+/** A change to one day of a repeat, or to that day and every one after it. */
+export type TeamTaskScope = "this" | "following";
 /** Work added on the team board (dbo.team_tasks, backend-node/src/routes/team-board.ts). */
 export type TeamTask = {
   id: number;
@@ -62,9 +71,19 @@ export type TeamTask = {
   createdByName: string;
   createdAt: string;
   rowVersion: string;
+  meetingMode: MeetingMode | null;
+  meetingPlace: string;
+  /** The repeat a day of a series belongs to; null for a task that happens once. */
+  seriesId: number | null;
+  repeat: TeamTaskRepeat | null;
 };
-/** What a save sends; the server works out the man-days when they are left empty. */
-export type TeamTaskInput = Omit<TeamTask, "id" | "customer" | "inquiryNo" | "projectNo" | "createdBy" | "createdByName" | "createdAt" | "rowVersion" | "manDays"> & { manDays: number | null };
+/**
+ * What a save sends; the server works out the man-days when they are left empty. `repeat` asks for a series: on a new
+ * task, a task made to repeat, or (with applyTo "following") the days of a series from this one on.
+ */
+export type TeamTaskInput = Omit<TeamTask, "id" | "customer" | "inquiryNo" | "projectNo" | "createdBy" | "createdByName" | "createdAt" | "rowVersion" | "manDays" | "seriesId"> & { manDays: number | null };
+/** What a save returns; a repeat also says its series and how many days it put the task on. */
+export type TeamTaskSaved = { id: number; rowVersion: string; manDays: number; calendar: CalendarDelivery; seriesId?: number; count?: number; replaced?: boolean };
 /** A site visit on the board, once per visit with every engineer on it; number and customer are empty without visit.read. */
 export type BoardVisit = { id: number; number: string; status: string; customer: string; start: string | null; end: string | null; time: string | null; engineerIds: number[] };
 /** Leave or another absence recorded for Site Visit planning (dbo.engineer_availability). */
@@ -92,7 +111,8 @@ export type TeamBoardData = {
   outlook: OutlookEvent[];
   outlookSync: OutlookSyncStatus;
 };
-export type TeamTaskChange = { action: string; actor: string; at: string; before: Record<string, unknown> | null; after: Record<string, unknown> | null };
+/** One entry of a task's history; `series` marks an entry of the repeat it belongs to. */
+export type TeamTaskChange = { action: string; actor: string; at: string; before: Record<string, unknown> | null; after: Record<string, unknown> | null; series?: boolean };
 
 /** What the person's Outlook got from a save (an invitation, an update or a cancellation); "none" when nothing was due. */
 export type CalendarDelivery = "none" | "sent" | "disabled" | "failed";
@@ -101,14 +121,18 @@ export const loadTeamBoard = (from: string, to: string) =>
 /** Reads everyone's Outlook calendar now (or returns the read of a minute ago). */
 export const syncOutlookCalendars = () => apiRequest<OutlookSyncStatus>("/api/v1/team-board/outlook-sync", { method: "POST", body: "{}" });
 export const createTeamTask = (task: TeamTaskInput) =>
-  apiRequest<{ id: number; rowVersion: string; manDays: number; calendar: CalendarDelivery }>("/api/v1/team-tasks", { method: "POST", body: JSON.stringify(task) });
-export const updateTeamTask = (id: number, task: TeamTaskInput, rowVersion: string) =>
-  apiRequest<{ id: number; rowVersion: string; manDays: number; calendar: CalendarDelivery }>(`/api/v1/team-tasks/${id}`, { method: "PUT", body: JSON.stringify({ ...task, rowVersion }) });
-export const deleteTeamTask = (id: number, rowVersion: string) =>
-  apiRequest<{ id: number; deleted: true; calendar: CalendarDelivery }>(`/api/v1/team-tasks/${id}?rowVersion=${encodeURIComponent(rowVersion)}`, { method: "DELETE" });
+  apiRequest<TeamTaskSaved>("/api/v1/team-tasks", { method: "POST", body: JSON.stringify(task) });
+/** A day of a repeat changes on its own ("this"), or with every day after it ("following"). */
+export const updateTeamTask = (id: number, task: TeamTaskInput, rowVersion: string, applyTo: TeamTaskScope = "this") =>
+  apiRequest<TeamTaskSaved>(`/api/v1/team-tasks/${id}`, { method: "PUT", body: JSON.stringify({ ...task, rowVersion, applyTo }) });
+export const deleteTeamTask = (id: number, rowVersion: string, applyTo: TeamTaskScope = "this") =>
+  apiRequest<{ id: number; deleted: true; calendar: CalendarDelivery }>(`/api/v1/team-tasks/${id}?rowVersion=${encodeURIComponent(rowVersion)}&applyTo=${applyTo}`, { method: "DELETE" });
 export const loadTeamTaskHistory = (id: number) => apiRequest<TeamTaskChange[]>(`/api/v1/team-tasks/${id}/history`);
 /** A saved task back into the shape a save sends. */
 export const teamTaskInput = (task: TeamTask): TeamTaskInput => ({
   kind: task.kind, title: task.title, customerId: task.customerId, assigneeIds: [...task.assigneeIds], startDate: task.startDate, endDate: task.endDate,
   slot: task.slot, startTime: task.startTime, endTime: task.endTime, manDays: task.manDays, status: task.status, inquiryId: task.inquiryId, projectId: task.projectId, note: task.note,
+  meetingMode: task.meetingMode ?? null, meetingPlace: task.meetingPlace ?? "",
+  // A change to this day alone; a repeat is asked for only when making one.
+  repeat: null,
 });
