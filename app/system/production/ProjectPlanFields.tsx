@@ -39,6 +39,7 @@ export type PlanTaskDraft = {
 export type PlanHeadingDraft = { key: string; id?: number; locked?: boolean; name: string; start: string; finish: string; tasks: PlanTaskDraft[] };
 
 export const planPeriodValid = (row: { start: string; finish: string }) => Boolean(row.start && row.finish && row.finish >= row.start);
+const headingPeriodValid = (row: PlanHeadingDraft) => (!row.tasks.length && !row.start && !row.finish) || planPeriodValid(row);
 export const planManDaysValid = (value: string) => !value.trim() || /^\d{1,6}(\.\d{1,2})?$/.test(value.trim());
 const shiftIsoDate = (iso: string, days: number) => { const date = new Date(`${iso}T00:00:00Z`); date.setUTCDate(date.getUTCDate() + days); return date.toISOString().slice(0, 10); };
 
@@ -53,11 +54,12 @@ export const planFromTemplate = (template: ScheduleTemplate, start: string): Pla
   return { key: crypto.randomUUID(), name: row.name, start: first, finish: first && row.durationDays ? shiftIsoDate(first, row.durationDays - 1) : "", tasks: [] };
 });
 
-/** First start and last finish over every dated row, or null while a heading or a task is undated. */
+/** First start and last finish over dated rows; headings without tasks may stay undated. */
 export function planSpanOf(headings: PlanHeadingDraft[]) {
-  const required = headings.flatMap((heading): { start: string; finish: string }[] => [heading, ...heading.tasks]);
-  if (!required.length || !required.every(planPeriodValid)) return null;
+  const required = headings.flatMap((heading): { start: string; finish: string }[] => heading.tasks.length ? [heading, ...heading.tasks] : []);
+  if (!required.every(planPeriodValid)) return null;
   const dated = headings.flatMap((heading): { start: string; finish: string }[] => [heading, ...heading.tasks.flatMap((task) => [task, ...task.functions])]).filter(planPeriodValid);
+  if (!dated.length) return null;
   return { start: dated.map(row => row.start).sort()[0]!, finish: dated.map(row => row.finish).sort().at(-1)! };
 }
 
@@ -66,7 +68,7 @@ const functionInvalid = (row: PlanFunctionDraft) => !row.name.trim() || (Boolean
 
 /** Counted, not listed: a template fills many rows at once and every row would otherwise be named. */
 export function planIssuesOf(t: (key: string) => string, headings: PlanHeadingDraft[]): string[] {
-  const missing = headings.filter(row => !row.name.trim() || !planPeriodValid(row)).length;
+  const missing = headings.filter(row => !row.name.trim() || !headingPeriodValid(row)).length;
   const team = headings.flatMap(heading => heading.tasks).filter(taskInvalid).length
     + headings.flatMap(heading => heading.tasks.flatMap(task => task.functions)).filter(functionInvalid).length;
   return [...(missing ? [`${t("CRM.masterPlanIncomplete")}: ${missing}`] : []), ...(team ? [`${t("CRM.teamPlanIncomplete")}: ${team}`] : [])];
@@ -110,11 +112,12 @@ export function MasterPlanSection({ rows, onChange, templates = [] }: { rows: Pl
     </div> : null}
     {rows.length ? <ol className="project-plan-rows">{rows.map((row, index) => <li key={row.key} className="project-plan-row milestone">
       <span className="project-plan-index">{index + 1}.</span>
-      <input type="date" required aria-label={`${t("CRM.planStart")} ${index + 1}`} value={row.start} onChange={(event) => update(row.key, { start: event.target.value })} />
+      <input type="date" required={Boolean(row.tasks.length || row.finish)} aria-invalid={!headingPeriodValid(row)} aria-label={`${t("CRM.planStart")} ${index + 1}`} value={row.start} onChange={(event) => update(row.key, { start: event.target.value })} />
       <span className="project-plan-dash" aria-hidden="true">–</span>
-      <input type="date" required aria-label={`${t("CRM.planFinish")} ${index + 1}`} min={row.start || undefined} value={row.finish} onChange={(event) => update(row.key, { finish: event.target.value })} />
+      <input type="date" required={Boolean(row.tasks.length || row.start)} aria-invalid={!headingPeriodValid(row)} aria-label={`${t("CRM.planFinish")} ${index + 1}`} min={row.start || undefined} value={row.finish} onChange={(event) => update(row.key, { finish: event.target.value })} />
       <input required aria-label={`${t("CRM.headingName")} ${index + 1}`} placeholder={t("CRM.headingName")} maxLength={500} value={row.name} onChange={(event) => update(row.key, { name: event.target.value })} />
       <button className="icon-btn" type="button" disabled={headingLocked(row)} aria-label={`${t("CRM.removeHeading")} ${index + 1}`} title={t(headingLocked(row) ? "CRM.rowInUse" : "CRM.removeHeading")} onClick={() => onChange(current => current.filter(item => item.key !== row.key))}><Icon name="x" /></button>
+      {!row.tasks.length && !row.start && !row.finish ? <small className="project-plan-progress muted">{t("CRM.noDatesYet")}</small> : null}
     </li>)}</ol> : <p className="muted">{t("CRM.masterPlanEmpty")}</p>}
   </section>;
 }

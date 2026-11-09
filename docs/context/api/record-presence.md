@@ -2,7 +2,7 @@
 
 [Module](../modules/platform.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `a014c887`; generated, do not edit. [backend-node/src/routes/record-presence.ts](<../../../backend-node/src/routes/record-presence.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `1024c3d5`; generated, do not edit. [backend-node/src/routes/record-presence.ts](<../../../backend-node/src/routes/record-presence.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 

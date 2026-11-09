@@ -32,7 +32,7 @@ const MAX_PLAN_DAYS = 3650;
 /** A function may leave out its dates and its member: it then has its task's. */
 export type PlanFunction = { id?: number; name: string; userId: number | null; start: string | null; finish: string | null };
 export type PlanTask = { id?: number; name: string; userId: number; start: string; finish: string; planManDays: number; functions: PlanFunction[] };
-export type PlanHeading = { id?: number; name: string; start: string; finish: string; tasks: PlanTask[] };
+export type PlanHeading = { id?: number; name: string; start: string | null; finish: string | null; tasks: PlanTask[] };
 export type InitialPlan = { headings: PlanHeading[] };
 
 /** The ERP project number, as typed from the ERP, in one canonical spelling. */
@@ -105,7 +105,7 @@ export function parseInitialPlan(body: Record<string, unknown>): InitialPlan {
       };
     });
     count += 1;
-    return { ...rowId(heading, label), name: requiredText(heading.name, 500, `${label} name`), ...period(heading, label), tasks };
+    return { ...rowId(heading, label), name: requiredText(heading.name, 500, `${label} name`), ...(tasks.length ? period(heading, label) : optionalPeriod(heading, label)), tasks };
   });
   if (count > MAX_PLAN_ROWS) throw new ApiError(400, "validation_failed", `A plan cannot have more than ${MAX_PLAN_ROWS} rows.`);
   return { headings };
@@ -149,9 +149,9 @@ async function insertRow(transaction: TransactionType, projectId: number, actorI
 const CREATED = "Created with the project", ADDED = "Added in Edit project";
 
 /** A heading is shown to the customer: it is the Master Plan. */
-const insertHeading = (transaction: TransactionType, projectId: number, actorId: number, sortOrder: number, heading: { name: string; start: string; finish: string }, note: string) =>
+const insertHeading = (transaction: TransactionType, projectId: number, actorId: number, sortOrder: number, heading: PlanHeading, note: string) =>
   insertRow(transaction, projectId, actorId, { parentId: null, sortOrder, kind: "phase", name: heading.name, visibility: "Customer",
-    planStart: heading.start, planDays: calendarDays(heading.start, heading.finish), planManDays: 0 }, note);
+    planStart: heading.start, planDays: heading.start && heading.finish ? calendarDays(heading.start, heading.finish) : 1, planManDays: 0 }, note);
 
 async function insertFunction(transaction: TransactionType, projectId: number, actorId: number, taskId: number, sortOrder: number, item: PlanFunction,
   task: { userId: number; start: string; finish: string }, note: string): Promise<NewPics> {
@@ -363,7 +363,7 @@ export async function syncProjectPlan(transaction: TransactionType, projectId: n
     let headingId: number;
     if (current) {
       headingId = current.id;
-      const planDays = calendarDays(heading.start, heading.finish);
+      const planDays = heading.start && heading.finish ? calendarDays(heading.start, heading.finish) : 1;
       // A heading's own dates are the customer's, whatever the rows under it say.
       if (current.name !== heading.name || current.planStart !== heading.start || current.planDays !== planDays || current.sortOrder !== index + 1) {
         await updateRow(transaction, projectId, actorId, current, { name: heading.name, planStart: heading.start, planDays, planManDays: 0, sortOrder: index + 1 });
