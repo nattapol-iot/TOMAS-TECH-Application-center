@@ -311,6 +311,23 @@ test("the Plan folds every row at once and goes full screen over the page, with 
   assert.equal(translate("Expand all", "TH"), "กางทั้งหมด");
 });
 
+test("a project's Plan draws its delivery flag once, in the date header, with a plain line through the rows", () => {
+  const chart = read("app/system/production/GanttChart.tsx");
+  assert.match(chart, /const deliveryAt = ganttPoint\(deliveryTarget, range\);/);
+  // One flag in the header, outside the row loop; each row only a line.
+  const scale = chart.slice(chart.indexOf('<div className="gantt-scale">'), chart.indexOf("{rows.map((row) => {"));
+  assert.match(scale, /\{deliveryAt !== null \? <i className="gantt-scale-target" style=\{\{ left: `\$\{deliveryAt\}%` \}\} aria-hidden="true" \/> : null\}/);
+  assert.match(chart, /\{deliveryAt !== null \? <span className="gantt-target line" style=\{\{ left: `\$\{deliveryAt\}%` \}\} aria-hidden="true" \/> : null\}/);
+  const css = read("app/system/production/gantt.css");
+  assert.match(css, /\.gantt-target\.line::before \{ content: none; \}/);
+  assert.match(css, /\.gantt-scale-target::before \{ content: "";/);
+  // The Plan hands the date to the chart, not to every row; the portfolio keeps one flag per project (each has its own date).
+  const plan = read("app/system/production/PlanningPricingScreens.tsx");
+  assert.match(plan, /label="Gantt\.planLabel" deliveryTarget=\{target\}/);
+  assert.doesNotMatch(plan, /, target, selected: drawerTaskId === task\.id/);
+  assert.match(read("app/system/production/ProjectPortfolioGantt.tsx"), /forecastFinish: item\.forecastFinish, target: item\.targetDelivery,/);
+});
+
 test("every new follow-up string has English, Thai and Japanese copy", () => {
   const { translate } = load("app/system/i18n.ts");
   const keys = [

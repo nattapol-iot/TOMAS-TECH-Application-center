@@ -2678,7 +2678,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
       meta: [uiText(task.status), `${Math.round(Number(task.percentComplete))}%`].join(" · "), ...(lock ? { status: lock } : {}),
       onOpen: () => setDrawerTaskId(task.id), start: committed?.start ?? task.planStart, finish: committed?.finish ?? task.planFinish,
       progress: Number(task.percentComplete), tone: scheduleTone(task, today), baselineStart: task.baselineStart, baselineFinish: task.baselineFinish,
-      forecastFinish: task.planFinish, milestone: false, target, selected: drawerTaskId === task.id,
+      forecastFinish: task.planFinish, milestone: false, selected: drawerTaskId === task.id,
       title: `${task.wbs} ${task.name} · ${committed?.start ?? task.planStart ?? "—"} → ${committed?.finish ?? task.planFinish ?? "—"} · ${Math.round(Number(task.percentComplete))}%`,
     };
     return {
@@ -2694,7 +2694,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
       ...(canReschedule(task) ? { reschedule: { resize: !task.isMilestone, onChange: (start: string, finish: string) => { void moveTask(task, start, finish); } } } : {}),
       start: dropped?.start ?? task.planStart, finish: dropped?.finish ?? task.planFinish, progress: Number(task.percentComplete), tone: scheduleTone(task, today),
       baselineStart: task.baselineStart, baselineFinish: task.baselineFinish, forecastFinish: task.forecastFinish,
-      milestone: task.isMilestone, target, selected: drawerTaskId === task.id,
+      milestone: task.isMilestone, selected: drawerTaskId === task.id,
       title: `${task.wbs} ${task.name} · ${task.planStart ?? "—"} → ${task.planFinish ?? "—"} · ${Math.round(Number(task.percentComplete))}%`,
     };
   });
@@ -2908,7 +2908,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
             <button className="btn ghost sm" type="button" disabled={saving || loadingSchedule} onClick={() => { void undoMove(); }}><Icon name="refresh" />{uiText("Plan.undo")}</button>
             <button className="icon-btn" type="button" aria-label={uiText("Close")} title={uiText("Close")} onClick={() => setLastMove(null)}><Icon name="x" /></button>
           </div> : null}
-          {chartRows.length ? <GanttChart rows={chartRows} range={range} today={today} sideHeader={memberView ? "Plan.memberColumn" : "Gantt.taskColumn"} label="Gantt.planLabel" links={memberView ? [] : links}
+          {chartRows.length ? <GanttChart rows={chartRows} range={range} today={today} sideHeader={memberView ? "Plan.memberColumn" : "Gantt.taskColumn"} label="Gantt.planLabel" deliveryTarget={target} links={memberView ? [] : links}
             onMoveRow={(drop) => { void moveRow(drop); }} canMoveRow={(drop) => placeFor(drop) !== null} />
             : <EmptyState icon="filter" title="Plan.noMatch" message="Plan.noMatchHint" action={<button className="btn ghost sm" type="button" onClick={() => setFilter(null)}><Icon name="x" />{uiText("Portfolio.clearFilters")}</button>} />}
         </div> : loadingSchedule ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading…"} /></div> : <EmptyState icon="calendar" title={uiText("This project has no schedule yet")} message={canPlan ? "Plan.startWithHeading" : "Project Manager หรือ Engineering Manager เป็นผู้สร้างแผน"}
