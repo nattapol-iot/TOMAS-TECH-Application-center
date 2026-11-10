@@ -1,9 +1,40 @@
 /* Team board (TeamBoard.tsx): the day grid coloured by load, the list of all work, and the task form. */
 .team-board { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 
-.board-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.board-toolbar .search-field { flex: 1 1 240px; max-width: 360px; }
-.board-toolbar > .btn.primary { margin-left: auto; }
+/* Copy, refresh, Outlook and Add: in the page header's actions (ResourcePlanningScreen), or above the board without one. */
+.board-page-actions, .board-actions-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.board-actions-row { justify-content: flex-end; }
+
+/* The week at a glance (2026-11-10 mockup): four facts in one row, not KPI cards; two of them are attention filters. */
+.board-sum { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.board-sum-item { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); }
+.board-sum-label { color: var(--muted); font-size: var(--fs-xs); }
+.board-sum-value {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; color: var(--ink); font-size: var(--fs-xl); font-weight: 660;
+  letter-spacing: -.02em; line-height: 1; font-variant-numeric: tabular-nums;
+}
+.board-sum-value small { color: var(--muted); font-size: var(--fs-xs); font-weight: 500; letter-spacing: 0; }
+.board-sum-value .icon { align-self: center; width: 16px; height: 16px; }
+.board-sum-value.over { color: var(--red-text); }
+.board-sum-value.overlap { color: var(--amber-text); }
+.board-sum-link { padding: 0; border: 0; background: none; color: var(--blue-text); font: inherit; text-decoration: underline; cursor: pointer; }
+.board-sum-link:hover { color: var(--blue-hover); }
+.board-sum-link[aria-pressed="true"] { font-weight: 650; text-decoration-thickness: 2px; }
+
+/* The filters stay under the top bar while the page scrolls (2026-11-10 mockup). */
+.board-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.board-toolbar.board-sticky {
+  position: sticky; top: calc(var(--topbar-h) + 8px); z-index: 20; padding: 10px 12px; border: 1px solid var(--line);
+  border-radius: var(--r-lg); background: var(--surface); box-shadow: var(--shadow-xs);
+}
+.board-toolbar .search-field { flex: 1 1 220px; max-width: 360px; margin-left: auto; }
+/* The chips start beside the teams and wrap within the rest of the row. */
+.board-toolbar .board-filters { flex: 1 1 420px; }
+.board-toolbar .board-filters.own-row { flex-basis: 100%; }
+/* The teams with their head counts (extends .seg-control). */
+.board-team-seg { flex-wrap: wrap; }
+.board-team-seg button { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 0 10px; font-size: var(--fs-xs); color: var(--ink-soft); }
+.board-team-seg button:hover { color: var(--ink); }
 .board-gantt { display: flex; flex-direction: column; gap: 8px; padding: 10px 14px 14px; background: var(--surface); }
 .board-gantt-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .board-gantt-note { font-size: var(--fs-xs); }
@@ -28,21 +59,9 @@
 .board-gantt-key.amber { background: var(--amber); }
 .board-gantt-key.red { background: var(--red); }
 .board-gantt .board-type { height: 16px; margin-right: 4px; padding: 0 5px; font-size: var(--fs-3xs); vertical-align: middle; }
-.board-team-filter { position: relative; }
-.board-team-filter > summary { list-style: none; cursor: pointer; }
-.board-team-filter > summary::-webkit-details-marker { display: none; }
-.board-team-label { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.board-team-menu {
-  position: absolute; top: calc(100% + 4px); left: 0; z-index: 20; display: flex; flex-direction: column; min-width: 240px; max-height: 360px;
-  overflow: auto; padding: 6px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); box-shadow: 0 12px 28px rgb(15 23 42 / 0.14);
-}
-.board-team-option { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: var(--r-sm); font-size: var(--fs-sm); cursor: pointer; }
-.board-team-option:hover { background: var(--n-50); }
-.board-team-option.all { border-bottom: 1px solid var(--line-soft); border-radius: 0; margin-bottom: 4px; padding-bottom: 8px; }
-.board-team-option span { flex: 1; }
-.board-team-option small { color: var(--muted); font-variant-numeric: tabular-nums; }
-.board-window { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.board-range { font-weight: 600; color: var(--ink); font-size: var(--fs-sm); padding: 0 4px; white-space: nowrap; }
+.board-window { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.board-window .chip-select { margin-left: 6px; }
+.board-range { font-weight: 600; color: var(--ink); font-size: var(--fs-sm); padding: 0 6px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 
 .board-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .board-filter {
@@ -59,68 +78,93 @@
 .board-filter.red.on, .board-filter.amber.on { box-shadow: 0 0 0 2px var(--blue-line); }
 .board-sep { width: 1px; height: 20px; background: var(--line); margin: 0 4px; }
 
-/* The day grid: names pinned on the left, days in the header pinned on top. */
+/* The day grid (2026-11-10 mockup): the member and their week pinned on the left, the days pinned on top. */
 .board-panel { padding: 0; overflow: hidden; }
-.board-scroll { overflow: auto; max-height: calc(100vh - 230px); min-height: 280px; }
-.board-grid { width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 0; }
-.board-grid .board-who-col { width: 220px; }
+.board-panel-head { flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.board-panel-head h2 { margin: 0; }
+.board-panel-legend { flex-wrap: wrap; gap: 4px 14px; color: var(--ink-soft); font-size: var(--fs-xs); }
+.board-panel-legend > span { display: inline-flex; align-items: center; gap: 6px; }
+.board-panel-legend i { width: 10px; height: 10px; border: 1px solid var(--red-line); border-radius: 2px; background: var(--red-soft); }
+.board-panel-legend .icon { width: 14px; height: 14px; color: var(--amber-text); }
+/* Fits below the sticky filter bar (TeamBoard measures it into --board-toolbar-h), so the days stay in sight. */
+.board-scroll { overflow: auto; max-height: calc(100vh - var(--topbar-h) - var(--board-toolbar-h, 120px) - 32px); min-height: 320px; scrollbar-width: thin; }
+.board-grid { --board-who-w: 200px; --board-week-w: 150px; width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 0; }
+.board-grid .board-who-col { width: var(--board-who-w); }
+.board-grid .board-week-col { width: var(--board-week-w); }
 .board-grid th, .board-grid td { border-bottom: 1px solid var(--line-soft); border-right: 1px solid var(--line-soft); }
 .board-grid thead th {
-  position: sticky; top: 0; z-index: 3; height: 42px; padding: 2px 4px; background: var(--n-25); color: var(--muted);
-  font-size: var(--fs-2xs); font-weight: 600; text-align: center; white-space: nowrap;
+  position: sticky; top: 0; z-index: 3; height: 44px; padding: 6px 8px; border-bottom-color: var(--line); background: var(--n-50);
+  color: var(--n-600); font-size: var(--fs-2xs); font-weight: 600; text-align: left; white-space: nowrap; vertical-align: middle;
 }
-.board-grid thead th small { display: block; font-size: var(--fs-3xs); font-weight: 700; }
-.board-grid thead th.today { background: var(--blue-soft); color: var(--blue-text); }
-.board-grid thead th.holiday { background: var(--n-100); }
+.board-grid thead .board-who, .board-grid thead .board-week { text-transform: uppercase; letter-spacing: .04em; }
+/* A day: its weekday in bold, the date under it; today in blue across the header and every cell below. */
+.board-grid thead .board-day b { display: block; color: var(--ink); font-size: var(--fs-sm); font-weight: 600; line-height: 1.25; }
+.board-grid thead .board-day b em { margin-left: 4px; font-style: normal; }
+.board-grid thead .board-day span { display: block; color: var(--n-600); font-size: var(--fs-2xs); font-weight: 500; line-height: 1.3; }
+.board-grid.weeks-4 thead .board-day { padding: 6px 4px; }
+.board-grid.weeks-4 thead .board-day b em { display: block; margin-left: 0; font-size: var(--fs-3xs); }
+.board-grid thead .board-day.today { background: var(--blue-soft); }
+.board-grid thead .board-day.today b, .board-grid thead .board-day.today span { color: var(--blue-text); }
+.board-grid thead .board-day.holiday { background: var(--n-100); }
 /* Saturday and Sunday (2026-10-24): narrower, shaded, no load; a weekend appointment still shows and can be added. */
 .board-grid.weeks-2 col.weekend { width: 64px; }
 .board-grid.weeks-4 col.weekend { width: 40px; }
-.board-grid thead th.weekend { background: var(--n-50); white-space: normal; overflow: hidden; line-height: 1.2; }
+.board-grid thead .board-day.weekend { background: var(--n-100); white-space: normal; overflow: hidden; text-align: center; }
 .board-grid .week-start { border-left: 2px solid var(--n-300); }
 .board-grid .board-who { position: sticky; left: 0; z-index: 2; background: var(--surface); text-align: left; padding: 0; }
-.board-grid thead .board-who { z-index: 4; padding: 0 12px; background: var(--n-25); text-align: left; }
-.board-grid tr.board-group th {
-  position: sticky; left: 0; height: 28px; padding: 0 12px; background: var(--n-50); color: var(--ink-soft);
-  font-size: var(--fs-2xs); font-weight: 700; letter-spacing: .03em; text-align: left; text-transform: uppercase;
+/* The week column is pinned right after the member, with a line along its right edge. */
+.board-grid .board-week {
+  position: sticky; left: var(--board-who-w); z-index: 2; padding: 8px 12px; background: var(--surface); vertical-align: middle;
+  box-shadow: 1px 0 0 var(--line);
 }
-.board-unassigned .board-who { background: var(--amber-soft); }
+.board-grid thead .board-who, .board-grid thead .board-week { z-index: 4; padding: 6px 12px; background: var(--n-50); }
+/* A team's band: its name over the two pinned columns, so it stays in sight when the days scroll sideways. */
+.board-grid tr.board-group th {
+  position: sticky; left: 0; z-index: 2; height: 28px; padding: 0 12px; background: var(--n-50); color: var(--ink-soft);
+  font-size: var(--fs-2xs); font-weight: 700; letter-spacing: .03em; text-align: left; text-transform: uppercase; box-shadow: 1px 0 0 var(--line);
+}
+.board-grid tr.board-group td { background: var(--n-50); }
+.board-unassigned .board-who, .board-unassigned .board-week { background: var(--amber-soft); }
 
 .board-person {
-  display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; padding: 6px 8px 6px 12px; border: 0; background: none;
+  display: flex; align-items: center; gap: 10px; width: 100%; min-width: 0; padding: 8px 10px 8px 12px; border: 0; background: none;
   text-align: left; font: inherit; color: inherit; cursor: pointer;
 }
 button.board-person:hover strong { color: var(--blue-text); text-decoration: underline; }
-.board-person > span:last-child { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.board-person > span:last-child { display: flex; flex-direction: column; gap: 1px; min-width: 0; line-height: 1.25; }
 .board-person strong { font-size: var(--fs-sm); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.board-person small { color: var(--muted); font-size: var(--fs-2xs); }
+.board-person small { color: var(--n-600); font-size: var(--fs-2xs); }
+.board-person small.board-person-meta { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .board-avatar {
   display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex: none; border-radius: 999px;
   background: var(--blue-soft); color: var(--blue-text); font-size: var(--fs-2xs); font-weight: 700;
 }
 .board-avatar.small { width: 22px; height: 22px; font-size: var(--fs-3xs); }
 .board-avatar.warn { background: var(--amber-soft); color: var(--amber-text); }
-.board-load {
-  align-self: flex-start; display: inline-flex; align-items: center; height: 18px; padding: 0 6px; border: 1px solid var(--line);
-  border-radius: var(--r-pill); font-size: var(--fs-2xs); font-weight: 650; white-space: nowrap; color: var(--ink-soft); background: var(--n-25);
+/* Planned against available MD this week, a flag in words when over or with room, and a bar (reuses .progress). */
+.board-week-figures {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 2px 6px; font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
 }
-.board-load.ok { border-color: var(--green-line); background: var(--green-soft); color: var(--green-text); }
-.board-load.full { border-color: var(--amber-line); background: var(--amber-soft); color: var(--amber-text); }
-.board-load.over { border-color: var(--red-line); background: var(--red-soft); color: var(--red-text); }
+.board-week-figures b { font-weight: 600; }
+.board-week-flag { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-2xs); font-weight: 600; }
+.board-week-flag .icon { width: 12px; height: 12px; }
+.board-week-flag.over { color: var(--red-text); }
+.board-week-flag.free { color: var(--green-text); }
+.progress.board-week-bar { display: block; margin-top: 6px; }
 
-/* One person's day: its colour is that day's load; clicking the empty part adds work for them that day. */
-.board-cell { position: relative; height: 64px; padding: 4px 5px; vertical-align: top; background: var(--surface); }
-.board-cell.tone-ok { background: color-mix(in srgb, var(--green-soft) 70%, var(--surface)); }
-.board-cell.tone-full { background: var(--amber-soft); }
-.board-cell.tone-over { background: var(--red-soft); }
-.board-cell.tone-holiday { background: var(--n-50); }
+/* One person's day: its MD figure, its work, and the empty part adds work for them that day. */
+/* isolation: what is layered inside a day (its corner, chips, add button) stays under the pinned columns when it scrolls. */
+.board-cell { position: relative; isolation: isolate; height: 72px; padding: 6px; vertical-align: top; background: var(--surface); }
 .board-cell.tone-weekend { background: var(--n-25); }
+.board-cell.tone-holiday { background: var(--n-50); }
+.board-cell.today { background: var(--blue-soft); }
+.board-cell.tone-over { background: var(--red-soft); }
 .board-cell.tone-away { background: repeating-linear-gradient(135deg, var(--n-50) 0 6px, var(--n-100) 6px 12px); }
-.board-cell.today { box-shadow: inset 2px 0 0 var(--blue), inset -2px 0 0 var(--blue); }
 /* Two or more pieces of work on the day (owner decision 2026-11-04): an amber corner that opens the day's work. */
 .board-overlap { position: absolute; top: 0; right: 0; z-index: 2; width: 16px; height: 16px; padding: 0; border: 0;
   background: linear-gradient(225deg, var(--amber) 0 50%, transparent 50%); cursor: pointer; }
 .board-overlap:hover, .board-overlap:focus-visible { background: linear-gradient(225deg, var(--amber-text) 0 50%, transparent 50%); outline: none; }
-.board-cell.overlap .board-pct { margin-right: 12px; }
 .board-person small.board-overlap-note { color: var(--amber-text); font-weight: 600; }
 .board-cell-add {
   position: absolute; inset: 0; z-index: 0; display: flex; align-items: flex-end; justify-content: flex-end; padding: 3px;
@@ -130,32 +174,42 @@ button.board-person:hover strong { color: var(--blue-text); text-decoration: und
 .board-cell-add:hover, .board-cell-add:focus-visible { background: color-mix(in srgb, var(--blue-soft) 55%, transparent); outline: none; }
 .board-cell-add:focus-visible { box-shadow: inset 0 0 0 2px var(--blue); }
 .board-cell-add:hover .icon, .board-cell-add:focus-visible .icon { opacity: 1; }
-/* The % opens the day's work (owner request 2026-11-06), so it is a button sitting right, above the cell's add button. */
-.board-pct {
-  position: relative; z-index: 1; display: block; width: fit-content; margin-left: auto; padding: 0 2px; border: 0; border-radius: var(--r-xs);
-  background: none; font: inherit; font-size: var(--fs-3xs); font-weight: 700; line-height: 14px; text-align: right;
-  font-variant-numeric: tabular-nums; color: var(--ink-soft); cursor: pointer;
+/* The day's MD opens the day's work (owner request 2026-11-06); over the day's capacity it turns red with a warning. */
+.board-md {
+  position: relative; z-index: 1; display: flex; align-items: center; gap: 4px; width: fit-content; padding: 0 4px; border: 0; border-radius: var(--r-xs);
+  background: none; color: var(--n-600); font: inherit; font-size: var(--fs-3xs); line-height: 14px; font-variant-numeric: tabular-nums; cursor: pointer;
 }
-.board-pct:hover, .board-pct:focus-visible { text-decoration: underline; background: var(--surface); outline: none; }
-.board-cell.tone-ok .board-pct { color: var(--green-text); }
-.board-cell.tone-full .board-pct { color: var(--amber-text); }
-.board-cell.tone-over .board-pct { color: var(--red-text); }
+.board-md:hover { text-decoration: underline; background: var(--surface); }
+.board-md:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+.board-md.over { color: var(--red-text); font-weight: 700; }
+.board-md .icon { width: 12px; height: 12px; }
+/* A piece of work: one row, its kind as the stripe on the left (the filter chips' colours), its time first. */
 .board-chip {
-  position: relative; z-index: 1; display: block; width: 100%; margin-top: 2px; height: 18px; padding: 0 5px; border: 1px solid var(--line);
-  border-radius: var(--r-xs); background: var(--surface); color: var(--ink-soft); font: inherit; font-size: var(--fs-3xs); font-weight: 600;
-  line-height: 16px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  --kind: var(--n-400);
+  position: relative; z-index: 1; display: flex; align-items: center; gap: 6px; width: 100%; min-height: 28px; margin-top: 4px; padding: 3px 6px;
+  border: 1px solid var(--line); border-left: 3px solid var(--kind); border-radius: var(--r-xs); background: var(--surface); color: var(--ink);
+  font: inherit; font-size: var(--fs-2xs); font-weight: 500; line-height: 1.3; text-align: left;
 }
-button.board-chip { cursor: pointer; }
-button.board-chip:hover { filter: brightness(.97); text-decoration: underline; }
-.board-chip.rfq { border-color: var(--blue-line); background: var(--blue-soft); color: var(--blue-text); }
-.board-chip.est { border-color: var(--green-line); background: var(--green-soft); color: var(--green-text); }
-.board-chip.prj { border-color: var(--violet-line); background: var(--violet-soft); color: var(--violet-text); }
-.board-chip.appointment, .board-chip.visit { border-color: var(--amber-line); background: var(--amber-soft); color: var(--amber-text); }
-.board-chip.task { border-color: var(--n-300); background: var(--surface); color: var(--ink); }
-.board-chip.away, .board-chip.leave { border-color: var(--n-300); background: var(--surface); color: var(--ink-soft); }
-.board-chip.late { border-color: var(--red-line); background: var(--red-soft); color: var(--red-text); }
+.board-chip-time { flex: none; color: var(--n-600); font-variant-numeric: tabular-nums; }
+/* Four weeks leave a chip room for its words only; the time stays in its tooltip. */
+.board-grid.weeks-4 .board-chip-time { display: none; }
+.board-chip-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.board-chip-warn { display: inline-flex; flex: none; color: var(--amber-text); }
+.board-chip-warn .icon { width: 12px; height: 12px; }
+button.board-chip { cursor: pointer; transition: border-color 150ms ease; }
+button.board-chip:hover { border-color: var(--n-400); border-left-color: var(--kind); }
+button.board-chip:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+.board-chip.rfq { --kind: var(--blue); }
+.board-chip.est { --kind: var(--green); }
+.board-chip.prj { --kind: var(--violet); }
+.board-chip.appointment, .board-chip.visit, .board-chip.outlook { --kind: var(--amber); }
+.board-chip.task { --kind: var(--n-500); }
+.board-chip.away, .board-chip.leave { --kind: var(--n-300); color: var(--ink-soft); }
+/* Site visits and Outlook meetings are read here, not changed: a grey chip. */
+.board-chip.visit, .board-chip.outlook { background: var(--n-50); }
+.board-chip.late { --kind: var(--red); border-color: var(--red-line); border-left-color: var(--kind); background: var(--red-soft); color: var(--red-text); }
 .board-chip.done { text-decoration: line-through; opacity: .7; }
-.board-more { position: relative; z-index: 1; display: block; margin-top: 1px; padding: 0; border: 0; background: none; font: inherit; font-size: var(--fs-3xs); color: var(--blue-text); cursor: pointer; }
+.board-more { position: relative; z-index: 1; display: block; margin-top: 4px; padding: 0 4px; border: 0; background: none; font: inherit; font-size: var(--fs-2xs); color: var(--blue-text); cursor: pointer; }
 .board-more:hover, .board-more:focus-visible { text-decoration: underline; outline: none; }
 /* A person's day (TeamBoard dayDrawer): each piece of work boxed, the pieces amber-edged when they overlap. */
 .board-day-warning { margin-bottom: 12px; }
@@ -175,14 +229,10 @@ button.board-day-item:hover, button.board-day-item:focus-visible { background: v
 .board-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 10px 14px; border-top: 1px solid var(--line-soft); font-size: var(--fs-xs); color: var(--ink-soft); }
 .board-legend > span { display: inline-flex; align-items: center; gap: 6px; }
 .board-legend i { width: 14px; height: 14px; border: 1px solid var(--line); border-radius: 3px; }
-.board-legend i.ok { background: var(--green-soft); }
-.board-legend i.full { background: var(--amber-soft); }
-.board-legend i.over { background: var(--red-soft); }
 .board-legend i.overlap { background: linear-gradient(225deg, var(--amber) 0 35%, var(--surface) 35%); }
 .board-legend i.away { background: repeating-linear-gradient(135deg, var(--n-50) 0 4px, var(--n-100) 4px 8px); }
 /* Outlook meetings: read from people's calendars, not changed here. */
-.board-chip.outlook { border-color: var(--violet-line); background: var(--violet-soft); color: var(--violet-text); cursor: default; }
-.board-legend i.outlook { background: var(--violet-soft); border-color: var(--violet-line); }
+.board-legend i.outlook { border-left: 3px solid var(--amber); background: var(--n-50); }
 .board-work-for .chip-select { flex-wrap: wrap; }
 .board-work-for > small { display: block; margin-top: 4px; }
 .board-missing { margin: 8px 0 0; }
@@ -274,9 +324,19 @@ button.board-day-item:hover, button.board-day-item:focus-visible { background: v
 .board-list-foot { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--line-soft); }
 .board-list-foot .btn { margin-left: auto; }
 
+@media (max-width: 980px) {
+  .board-sum { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .board-grid { --board-who-w: 170px; --board-week-w: 128px; }
+}
 @media (max-width: 720px) {
   .board-form-row, .board-form-row.three { grid-template-columns: minmax(0, 1fr); }
-  .board-grid .board-who-col { width: 150px; }
+  .board-grid { --board-who-w: 140px; --board-week-w: 112px; }
   .board-legend .muted { margin-left: 0; }
-  .board-toolbar > .btn.primary { margin-left: 0; }
+  /* A filter bar several rows tall would cover a phone's screen: it scrolls away there. */
+  .board-toolbar.board-sticky { position: static; }
+  .board-scroll { max-height: calc(100vh - var(--topbar-h) - 24px); }
+  .board-toolbar .search-field { margin-left: 0; }
+}
+@media (max-width: 620px) {
+  .board-sum { grid-template-columns: minmax(0, 1fr); }
 }

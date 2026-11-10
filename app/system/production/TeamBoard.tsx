@@ -1,6 +1,7 @@
 "use client";
 import { confirmDialog } from "../dialogs";
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { ApiClientError, listInquiries, listProjects, type BootstrapData } from "../api-client";
 import { Drawer, EmptyState, Icon, Modal, SearchInput, type Tone } from "../ui";
 import { localeFor, useLanguage } from "../i18n";
@@ -191,7 +192,7 @@ const taskWork = (task: TeamTask): Commitment[] => task.status !== "Planned" || 
     ...(task.seriesId !== null ? { repeat: true } : {}),
   }));
 
-export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, onChanged }: {
+export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, onChanged, actionsSlot }: {
   bootstrap: BootstrapData;
   notify: (message: string) => void;
   mode: TeamBoardMode;
@@ -201,8 +202,14 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
   openItem: (item: Commitment) => void;
   /** A team task was added, changed or removed: the weekly workload reads again. */
   onChanged?: () => void;
+  /**
+   * The page header's action area (2026-11-10 mockup: copy, refresh, Outlook and Add sit beside the title). Left out,
+   * the board shows its actions above itself; null while the header has not mounted yet.
+   */
+  actionsSlot?: HTMLElement | null;
 }) {
   const { t, lang } = useLanguage();
+  const uid = useId();
   const [start, setStart] = useLinkedState("from", mondayOf(today), textLink, { remember: false });
   const [weeks, setWeeks] = useLinkedState("weeks", 2, WEEKS_LINK);
   const [data, setData] = useState<TeamBoardData | null>(null);
@@ -228,6 +235,15 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
     finally { setLoading(false); }
   }, [range]);
   useEffect(() => { const timer = setTimeout(() => void load(), 0); return () => clearTimeout(timer); }, [load]);
+  // The sticky filter bar's height, as a CSS variable, so the grid's own scroll box fits below it (team-board.css).
+  const boardRef = useRef<HTMLDivElement>(null), toolbarRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const host = boardRef.current, bar = toolbarRef.current;
+    if (!host || !bar || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => host.style.setProperty("--board-toolbar-h", `${bar.offsetHeight}px`));
+    observer.observe(bar);
+    return () => observer.disconnect();
+  }, []);
 
   const me = bootstrap.user.id;
   const editing = editingId === null ? null : data?.tasks.find((task) => task.id === editingId) ?? null;
@@ -386,6 +402,14 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
     && (attention !== "late" || person.late > 0));
   const showPeople = attention !== "unassigned";
   const showUnassigned = (attention === null || attention === "unassigned") && personId === null && (unassignedTasks.length > 0 || attention === "unassigned");
+  // The summary strip (2026-11-10 mockup): the people on the grid and their week, following the filters and the window.
+  const shownPeople = showPeople ? gridPeople : [];
+  const teamSize = people.filter((person) => inDepartment(person.userId)).length;
+  const weekPlanned = shownPeople.reduce((sum, person) => sum + person.week.manDays, 0);
+  const weekAvailable = shownPeople.reduce((sum, person) => sum + person.week.available, 0);
+  // What a person's bar is measured against: one figure when everyone shown has the same week, otherwise their own.
+  const weekSizes = new Set(shownPeople.map((person) => person.week.available));
+  const weekSize = weekSizes.size === 1 ? [...weekSizes][0]! : null;
 
   // Saved changes update the board in place: no full reload after each edit.
   const applyTask = (task: TeamTask | null, removedId?: number) => { onChanged?.(); setData((current) => {
@@ -452,8 +476,11 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
     catch (failure) { if (!(await conflict(failure))) throw failure; }
   };
 
-  // The narrow weekday ("ส", "อา") fits the slim weekend columns of four weeks.
-  const dayLabel = (date: string, narrow = false) => new Intl.DateTimeFormat(localeFor(lang), { weekday: narrow ? "narrow" : "short", day: "numeric", timeZone: "UTC" }).format(new Date(`${date}T00:00:00Z`));
+  // A day's header: the weekday on top, the date under it. The narrow weekday ("ส", "อา") and the day alone fit the slim
+  // weekend columns of four weeks.
+  const weekdayOf = (date: string, narrow = false) => new Intl.DateTimeFormat(localeFor(lang), { weekday: narrow ? "narrow" : "short", timeZone: "UTC" }).format(new Date(`${date}T00:00:00Z`));
+  const dayOnly = (date: string) => new Intl.DateTimeFormat(localeFor(lang), { day: "numeric", timeZone: "UTC" }).format(new Date(`${date}T00:00:00Z`));
+  const yearDate = (date: string) => new Intl.DateTimeFormat(localeFor(lang), { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(`${date}T00:00:00Z`));
   const longDate = (date: string) => new Intl.DateTimeFormat(localeFor(lang), { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${date}T00:00:00Z`));
   const shortDate = (date: string | null) => (date ? new Intl.DateTimeFormat(localeFor(lang), { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${date}T00:00:00Z`)) : "—");
   const lateDays = (end: string) => workingDays(dateFromDay(dayNumber(end) + 1), today, holidays).length || 1;
@@ -494,33 +521,84 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
   const overlapText = (overlap: Overlap) => fill(t("TeamBoard.overlapOn"), {
     work: overlap.work.map((item) => (item.hidden ? t("TeamBoard.hiddenWork") : [item.reference, item.title].filter(Boolean).join(" "))).join(" · "),
   });
+  /** A chip's time, shown first (2026-11-10 mockup): when it starts; the whole range is in the tooltip. */
+  const eventTime = (event: BoardEvent) => event.kind === "appointment" || event.kind === "task" ? (event.task.slot === "Time" && event.task.startTime ? event.task.startTime : "")
+    : event.kind === "visit" ? event.visit.time || "" : event.kind === "outlook" ? (event.event.allDay ? "" : event.event.start.slice(11, 16)) : "";
+  /** A chip's words after its time; its kind is the stripe on its left, its full text the tooltip. */
+  const chipText = (event: BoardEvent) => {
+    switch (event.kind) {
+      case "rfq": case "est": case "prj": {
+        // Work the reader cannot open shows its kind only.
+        if (event.item.hidden) return t(event.kind === "rfq" ? "TeamBoard.chipRfq" : event.kind === "est" ? "TeamBoard.chipEst" : "TeamBoard.chipPrj");
+        const what = event.kind === "prj" ? event.item.title : [event.item.reference, event.item.customer || event.item.title].filter(Boolean).join(" ");
+        return event.late ? `${t("TeamBoard.late")} · ${what}` : what;
+      }
+      // ↻ marks a day of a repeat.
+      case "appointment": case "task": return `${event.task.seriesId !== null ? "↻ " : ""}${event.task.title}`;
+      case "away": return event.task.title;
+      case "visit": return [t("TeamBoard.chipVisit"), event.visit.customer].filter(Boolean).join(" · ");
+      case "leave": return t(event.away.kind);
+      case "outlook": return `Outlook · ${event.event.subject ?? t("TeamBoard.outlookBusy")}`;
+    }
+  };
+  /** Whether a chip is one of the pieces of work overlapping on its day. */
+  const overlapping = (event: BoardEvent, overlap?: Overlap) => Boolean(overlap) && (
+    "item" in event ? overlap!.work.some((work) => work.key === event.item.key)
+      : "task" in event ? overlap!.work.some((work) => work.workKey === `TeamTask-${event.task.id}`) : false);
+  const chipOf = (event: BoardEvent, overlap?: Overlap) => {
+    const time = eventTime(event);
+    const className = `board-chip ${event.kind}${event.late ? " late" : ""}${"task" in event && event.task.status === "Done" ? " done" : ""}`;
+    const body = <>
+      {time ? <span className="board-chip-time">{time}</span> : null}
+      <span className="board-chip-label">{chipText(event)}</span>
+      {overlapping(event, overlap) ? <span className="board-chip-warn" role="img" aria-label={t("TeamBoard.overlapTime")}><Icon name="alertTriangle" /></span> : null}
+    </>;
+    return clickable(event)
+      ? <button key={event.key} type="button" className={className} title={eventTitle(event)} onClick={() => openEvent(event)}>{body}</button>
+      : <span key={event.key} className={className} title={eventTitle(event)}>{body}</span>;
+  };
   const cell = (userId: number | null, day: (typeof days)[number], load: DayLoad | null, away: boolean, name: string, overlap?: Overlap) => {
     const all = (events.get(`${userId ?? 0}|${day.date}`) ?? []).filter((event) => userId !== null || event.kind === "appointment" || event.kind === "task");
     const shown = category ? all.filter((event) => categoryOf(event) === category) : all;
-    const band = load ? loadBand(load.utilisation) : "none";
+    // More planned than the day offers: the cell turns red and its MD figure carries a warning.
+    const over = Boolean(load && load.available > 0 && (load.utilisation ?? 0) > 100);
     // Prefixed: a bare "empty" is the app-wide EmptyState box and would turn the cell into a flex column.
-    const tone = `tone-${away ? "away" : day.holiday ? "holiday" : day.weekend ? "weekend" : load && load.manDays > 0 ? band : "blank"}`;
+    const tone = `tone-${away ? "away" : day.holiday ? "holiday" : day.weekend ? "weekend" : over ? "over" : "blank"}`;
+    const md = load ? fill(t("TeamBoard.dayMd"), { n: fmt(load.manDays) }) : "";
     return (
       <td key={day.date} className={`board-cell ${tone}${day.today ? " today" : ""}${day.weekStart ? " week-start" : ""}${overlap ? " overlap" : ""}`}
         title={[...(overlap ? [overlapText(overlap)] : []), ...shown.map((event) => eventLabel(event))].join("\n") || undefined}>
         {overlap ? <button type="button" className="board-overlap" data-guide="team.dayWork" onClick={() => setDayOpen({ userId, date: day.date })}
           aria-label={`${overlapText(overlap)} · ${t("TeamBoard.dayWorkOpen")}`} title={`${overlapText(overlap)} · ${t("TeamBoard.dayWorkOpen")}`} /> : null}
+        {load && !day.holiday && !day.weekend && load.manDays ? <button type="button" className={`board-md${over ? " over" : ""}`} data-guide="team.dayWork" onClick={() => setDayOpen({ userId, date: day.date })}
+          title={t("TeamBoard.dayWorkOpen")} aria-label={[md, pct(load.utilisation), over ? t("TeamBoard.legendOver") : "", t("TeamBoard.dayWorkOpen")].filter(Boolean).join(" · ")}>
+          {md}{over ? <Icon name="alertTriangle" /> : null}</button> : null}
+        {shown.slice(0, 2).map((event) => chipOf(event, overlap))}
+        {shown.length > 2 ? <button type="button" className="board-more" onClick={() => setDayOpen({ userId, date: day.date })} title={t("TeamBoard.dayWorkOpen")}>
+          {fill(t("TeamBoard.moreInCell"), { n: shown.length - 2 })}</button> : null}
+        {/* Last, so the keyboard reaches the day's work first; it covers the empty part of the cell. */}
         {canAssignOthers || userId === me || userId === null ? (
           <button type="button" className="board-cell-add" onClick={() => setAdding({ assigneeId: userId, date: day.date })}
             aria-label={fill(t("TeamBoard.addFor"), { name, date: longDate(day.date) })}>
             <Icon name="plus" />
           </button>
         ) : null}
-        {load && !day.holiday && !day.weekend && load.manDays ? <button type="button" className="board-pct" data-guide="team.dayWork" onClick={() => setDayOpen({ userId, date: day.date })}
-          title={t("TeamBoard.dayWorkOpen")} aria-label={`${pct(load.utilisation)} · ${t("TeamBoard.dayWorkOpen")}`}>{pct(load.utilisation)}</button> : null}
-        {shown.slice(0, 2).map((event) => clickable(event)
-          ? <button key={event.key} type="button" className={`board-chip ${event.kind}${event.late ? " late" : ""}${"task" in event && event.task.status === "Done" ? " done" : ""}`}
-            title={eventTitle(event)} onClick={() => openEvent(event)}>{eventLabel(event)}</button>
-          : <span key={event.key} className={`board-chip ${event.kind}`} title={eventTitle(event)}>{eventLabel(event)}</span>)}
-        {shown.length > 2 ? <button type="button" className="board-more" onClick={() => setDayOpen({ userId, date: day.date })} title={t("TeamBoard.dayWorkOpen")}>
-          {fill(t("TeamBoard.moreInCell"), { n: shown.length - 2 })}</button> : null}
       </td>
     );
+  };
+  /** A person's week beside their name: planned against available MD, a flag when over or with room, and a bar. */
+  const weekLoad = (week: Person["week"]) => {
+    const use = week.utilisation;
+    const flag = use !== null && use > 100 ? <span className="board-week-flag over"><Icon name="alertTriangle" />{fill(t("TeamBoard.loadOver"), { n: fmt(week.manDays - week.available) })}</span>
+      : use !== null && use <= 60 ? <span className="board-week-flag free">{fill(t("TeamBoard.loadFree"), { n: fmt(week.available - week.manDays) })}</span> : null;
+    // Green up to 60%, blue to 90%, amber to 100%, red over it; the figures above always say the same in words.
+    const tone = use === null ? "slate" : use > 100 ? "red" : use > 90 ? "amber" : use > 60 ? "blue" : "green";
+    return <>
+      <span className="board-week-figures"><b>{fill(t("TeamBoard.weekMd"), { planned: fmt(week.manDays), available: fmt(week.available) })}</b>{flag}</span>
+      <span className="progress board-week-bar" role="img" aria-label={pct(use)}>
+        <b className={tone} style={{ width: `${use === null ? 0 : Math.min(100, Math.max(0, use))}%` }} />
+      </span>
+    </>;
   };
 
   /**
@@ -665,52 +743,91 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
     </button>
   );
 
+  // Copy, refresh, Outlook and Add: beside the page title when the page gives them a place.
+  const actions = <>
+    <button type="button" className="btn default" disabled={!data} onClick={() => void copyTable()} title={t("TeamBoard.copyTableHint")}><Icon name="copy" />{t("TeamBoard.copyTable")}</button>
+    <button type="button" className="btn default" disabled={loading} onClick={() => void load()}><Icon name="refresh" />{t("Refresh")}</button>
+    {data?.outlookSync && data.outlookSync.state !== "disabled" ? (
+      <button type="button" className="btn default" disabled={syncing || data.outlookSync.state === "running"} onClick={() => void syncOutlook()} title={outlookStatusText}>
+        <Icon name="calendar" />{syncing || data.outlookSync.state === "running" ? t("TeamBoard.outlookSyncing") : t("TeamBoard.outlookSync")}
+      </button>
+    ) : null}
+    <button type="button" className="btn primary" data-guide="team.add" onClick={() => setAdding({ assigneeId: canAssignOthers ? null : me, date: today })}><Icon name="plus" />{t("TeamBoard.add")}</button>
+  </>;
+  const searchBox = <SearchInput value={search} onChange={(value) => { setSearch(value); setListShown(LIST_PAGE); }} placeholder={mode === "board" ? "TeamBoard.searchPeople" : "TeamBoard.searchWork"} />;
+  // A fact in the summary strip that is also the attention filter it counts.
+  const summaryLink = (key: "over" | "overlap") => (
+    <button type="button" className="board-sum-link" aria-pressed={attention === key} onClick={() => pickAttention(attention === key ? null : key)}>{t("TeamBoard.sumSee")}</button>
+  );
+
   return (
-    <div className="team-board">
-      <div className="board-toolbar">
-        <SearchInput value={search} onChange={(value) => { setSearch(value); setListShown(LIST_PAGE); }} placeholder={mode === "board" ? "TeamBoard.searchPeople" : "TeamBoard.searchWork"} />
-        <TeamFilter departments={departments} counts={teamCounts} value={teams} onChange={pickTeams} />
-        {mode === "board" ? (
-          <div className="chip-select" role="group" aria-label={t("TeamBoard.view")}>
-            <button type="button" className={boardView === "grid" ? "chip on" : "chip"} aria-pressed={boardView === "grid"} onClick={() => pickView("grid")}><Icon name="table" />{t("TeamBoard.viewGrid")}</button>
-            <button type="button" className={boardView === "gantt" ? "chip on" : "chip"} aria-pressed={boardView === "gantt"} onClick={() => pickView("gantt")}><Icon name="calendar" />{t("TeamBoard.viewGantt")}</button>
+    <div className="team-board" ref={boardRef}>
+      {actionsSlot === undefined ? <div className="board-actions-row">{actions}</div> : actionsSlot ? createPortal(actions, actionsSlot) : null}
+
+      {data && mode === "board" && boardView === "grid" ? (
+        <div className="board-sum" role="group" aria-label={t("TeamBoard.sumLabel")}>
+          <div className="board-sum-item">
+            <span className="board-sum-label">{t("TeamBoard.sumShown")}</span>
+            <span className="board-sum-value">{shownPeople.length}<small>{fill(t("TeamBoard.sumShownOf"), { n: teamSize })}</small></span>
           </div>
-        ) : null}
+          <div className="board-sum-item">
+            <span className="board-sum-label">{t("TeamBoard.sumLoad")}</span>
+            <span className="board-sum-value">{fmt(weekPlanned)}<small>{fill(t("TeamBoard.sumLoadOf"), { n: fmt(weekAvailable) })}</small></span>
+          </div>
+          <div className="board-sum-item">
+            <span className="board-sum-label">{t("TeamBoard.sumOver")}</span>
+            <span className={`board-sum-value${counts.over ? " over" : ""}`}>
+              {counts.over ? <Icon name="alertTriangle" /> : null}{counts.over}<small>{t("TeamBoard.sumPeopleUnit")} · {summaryLink("over")}</small>
+            </span>
+          </div>
+          <div className="board-sum-item">
+            <span className="board-sum-label">{t("TeamBoard.overlapTime")}</span>
+            <span className={`board-sum-value${counts.overlap ? " overlap" : ""}`}>
+              {counts.overlap ? <Icon name="alertTriangle" /> : null}{counts.overlap}<small>{t("TeamBoard.sumPeopleUnit")} · {summaryLink("overlap")}</small>
+            </span>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Stays at the top of the page while the board scrolls (2026-11-10 mockup). */}
+      <div className="board-toolbar board-sticky" ref={toolbarRef}>
         {mode === "board" && boardView === "grid" ? (
           <div className="board-window" role="group" aria-label={t("TeamBoard.window")}>
             <button type="button" className="icon-btn" aria-label={t("Previous period")} title={t("Previous period")} onClick={() => setStart(dateFromDay(dayNumber(start) - weeks * 7))}><Icon name="chevronLeft" /></button>
-            <button type="button" className="btn default sm" onClick={() => setStart(mondayOf(today))}>{t("Today")}</button>
+            <span className="board-range">{shortDate(days[0]?.date ?? start)} – {yearDate(days.at(-1)?.date ?? start)}</span>
             <button type="button" className="icon-btn" aria-label={t("Next period")} title={t("Next period")} onClick={() => setStart(dateFromDay(dayNumber(start) + weeks * 7))}><Icon name="chevronRight" /></button>
-            <span className="board-range">{shortDate(days[0]?.date ?? start)} – {shortDate(days.at(-1)?.date ?? start)}</span>
+            <button type="button" className="btn default sm" onClick={() => setStart(mondayOf(today))}>{t("Today")}</button>
             <div className="chip-select">
               <button type="button" className={weeks === 2 ? "chip on" : "chip"} aria-pressed={weeks === 2} onClick={() => setWeeks(2)}>{t("TeamBoard.twoWeeks")}</button>
               <button type="button" className={weeks === 4 ? "chip on" : "chip"} aria-pressed={weeks === 4} onClick={() => setWeeks(4)}>{t("TeamBoard.fourWeeks")}</button>
             </div>
           </div>
         ) : null}
-        <button type="button" className="btn default" disabled={!data} onClick={() => void copyTable()} title={t("TeamBoard.copyTableHint")}><Icon name="copy" />{t("TeamBoard.copyTable")}</button>
-        <button type="button" className="btn default" disabled={loading} onClick={() => void load()}><Icon name="refresh" />{t("Refresh")}</button>
-        {data?.outlookSync && data.outlookSync.state !== "disabled" ? (
-          <button type="button" className="btn default" disabled={syncing || data.outlookSync.state === "running"} onClick={() => void syncOutlook()} title={outlookStatusText}>
-            <Icon name="calendar" />{syncing || data.outlookSync.state === "running" ? t("TeamBoard.outlookSyncing") : t("TeamBoard.outlookSync")}
-          </button>
+        {mode === "board" ? (
+          <div className="chip-select" role="group" aria-label={t("TeamBoard.view")}>
+            <button type="button" className={boardView === "grid" ? "chip on" : "chip"} aria-pressed={boardView === "grid"} onClick={() => pickView("grid")}><Icon name="table" />{t("TeamBoard.viewGrid")}</button>
+            <button type="button" className={boardView === "gantt" ? "chip on" : "chip"} aria-pressed={boardView === "gantt"} onClick={() => pickView("gantt")}><Icon name="calendar" />{t("TeamBoard.viewGantt")}</button>
+          </div>
         ) : null}
-        <button type="button" className="btn primary" data-guide="team.add" onClick={() => setAdding({ assigneeId: canAssignOthers ? null : me, date: today })}><Icon name="plus" />{t("TeamBoard.add")}</button>
-      </div>
-
-      <div className="board-filters" role="group" aria-label={t("TeamBoard.chips")} data-guide="team.filters">
-        {chip("all", "TeamBoard.all", counts.all, category === null && attention === null, () => { pickCategory(null); pickAttention(null); })}
-        {CATEGORIES.map(({ key, label, colour }) => chip(key, label, counts[key], category === key, () => pickCategory(category === key ? null : key), "", colour))}
-        <span className="board-sep" aria-hidden="true" />
-        {chip("late", "TeamBoard.late", counts.late, attention === "late", () => pickAttention(attention === "late" ? null : "late"), "red")}
-        {chip("unassigned", "TeamBoard.unassigned", counts.unassigned, attention === "unassigned", () => pickAttention(attention === "unassigned" ? null : "unassigned"), "amber")}
-        {chip("over", "TeamBoard.over", counts.over, attention === "over", () => pickAttention(attention === "over" ? null : "over"), "amber")}
-        {chip("overlap", "TeamBoard.overlap", counts.overlap, attention === "overlap", () => pickAttention(attention === "overlap" ? null : "overlap"), "amber")}
-        {personId !== null ? (
-          <button type="button" className="board-filter on" onClick={() => setPersonId(null)}>
-            {fill(t("TeamBoard.personFilter"), { name: personName })} <Icon name="x" /><span className="sr-only">{t("TeamBoard.clearPerson")}</span>
-          </button>
-        ) : null}
+        {/* On the board the search ends the first row, so the teams and the chips share the rows below; the list has
+            the teams and the search on one row and the chips on their own. */}
+        {mode === "board" ? searchBox : null}
+        <TeamFilter departments={departments} counts={teamCounts} value={teams} onChange={pickTeams} />
+        {mode === "board" ? null : searchBox}
+        <div className={`board-filters${mode === "board" ? "" : " own-row"}`} role="group" aria-label={t("TeamBoard.chips")} data-guide="team.filters">
+          {chip("all", "TeamBoard.all", counts.all, category === null && attention === null, () => { pickCategory(null); pickAttention(null); })}
+          {CATEGORIES.map(({ key, label, colour }) => chip(key, label, counts[key], category === key, () => pickCategory(category === key ? null : key), "", colour))}
+          <span className="board-sep" aria-hidden="true" />
+          {chip("late", "TeamBoard.late", counts.late, attention === "late", () => pickAttention(attention === "late" ? null : "late"), "red")}
+          {chip("unassigned", "TeamBoard.unassigned", counts.unassigned, attention === "unassigned", () => pickAttention(attention === "unassigned" ? null : "unassigned"), "amber")}
+          {chip("over", "TeamBoard.over", counts.over, attention === "over", () => pickAttention(attention === "over" ? null : "over"), "amber")}
+          {chip("overlap", "TeamBoard.overlap", counts.overlap, attention === "overlap", () => pickAttention(attention === "overlap" ? null : "overlap"), "amber")}
+          {personId !== null ? (
+            <button type="button" className="board-filter on" onClick={() => setPersonId(null)}>
+              {fill(t("TeamBoard.personFilter"), { name: personName })} <Icon name="x" /><span className="sr-only">{t("TeamBoard.clearPerson")}</span>
+            </button>
+          ) : null}
+        </div>
       </div>
 
       {error ? <div className="callout danger" role="alert">{error} <button type="button" className="btn ghost sm" onClick={() => void load()}>{t("Refresh")}</button></div> : null}
@@ -724,16 +841,28 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
       ) : mode === "board" && boardView === "gantt" ? (
         <section className="panel board-panel"><TeamBoardGantt people={ganttPeople} today={today} /></section>
       ) : mode === "board" ? (
-        <section className="panel board-panel">
+        <section className="panel board-panel" aria-labelledby={`${uid}-board`}>
+          <div className="panel-head board-panel-head">
+            <div>
+              <h2 id={`${uid}-board`}>{t("TeamBoard.person")}</h2>
+              <p>{weekSize !== null ? fill(t("TeamBoard.boardSub"), { n: fmt(weekSize) }) : t("TeamBoard.boardSubMixed")}</p>
+            </div>
+            <div className="panel-actions board-panel-legend">
+              <span><i className="over" aria-hidden="true" />{t("TeamBoard.legendDayOver")}</span>
+              <span><Icon name="alertTriangle" />{t("TeamBoard.overlapTime")}</span>
+            </div>
+          </div>
           <div className="board-scroll">
-            <table className={`board-grid weeks-${weeks}`} style={{ minWidth: 220 + days.reduce((sum, day) => sum + (weeks === 2 ? (day.weekend ? 64 : 84) : (day.weekend ? 40 : 52)), 0) }}>
-              <colgroup><col className="board-who-col" />{days.map((day) => <col key={day.date} className={day.weekend ? "weekend" : undefined} />)}</colgroup>
+            <table className={`board-grid weeks-${weeks}`} style={{ minWidth: 350 + days.reduce((sum, day) => sum + (weeks === 2 ? (day.weekend ? 64 : 112) : (day.weekend ? 40 : 52)), 0) }}>
+              <colgroup><col className="board-who-col" /><col className="board-week-col" />{days.map((day) => <col key={day.date} className={day.weekend ? "weekend" : undefined} />)}</colgroup>
               <thead>
                 <tr>
-                  <th scope="col" className="board-who">{t("TeamBoard.person")}</th>
+                  <th scope="col" className="board-who">{t("TeamBoard.colMember")}</th>
+                  <th scope="col" className="board-week">{t("TeamBoard.colLoad")}</th>
                   {days.map((day) => (
-                    <th key={day.date} scope="col" className={`${day.today ? "today" : ""}${day.holiday ? " holiday" : ""}${day.weekend ? " weekend" : ""}${day.weekStart ? " week-start" : ""}`}>
-                      {dayLabel(day.date, weeks === 4 && day.weekend)}{day.today ? <small>{t("TeamBoard.today")}</small> : day.holiday ? <small>{t("TeamBoard.holiday")}</small> : null}
+                    <th key={day.date} scope="col" className={`board-day${day.today ? " today" : ""}${day.holiday ? " holiday" : ""}${day.weekend ? " weekend" : ""}${day.weekStart ? " week-start" : ""}`}>
+                      <b>{weekdayOf(day.date, weeks === 4 && day.weekend)}{day.today ? <em>{t("TeamBoard.today")}</em> : day.holiday ? <em>{t("TeamBoard.holiday")}</em> : null}</b>
+                      <span>{weeks === 4 && day.weekend ? dayOnly(day.date) : shortDate(day.date)}</span>
                     </th>
                   ))}
                 </tr>
@@ -741,18 +870,19 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
               <tbody>
                 {showUnassigned ? (
                   <>
-                    <tr className="board-group"><th colSpan={days.length + 1} scope="colgroup">{t("TeamBoard.unassigned")} · {unassignedTasks.length}</th></tr>
+                    <tr className="board-group"><th colSpan={2} scope="colgroup">{t("TeamBoard.unassigned")} · {unassignedTasks.length}</th><td colSpan={days.length} /></tr>
                     <tr className="board-unassigned">
                       <th scope="row" className="board-who">
                         <span className="board-person"><span className="board-avatar warn" aria-hidden="true">?</span>
                           <span><strong>{t("TeamBoard.unassignedRow")}</strong><small>{t("TeamBoard.unassignedHint")}</small></span></span>
                       </th>
+                      <td className="board-week" />
                       {days.map((day) => cell(null, day, null, false, t("TeamBoard.unassigned")))}
                     </tr>
                   </>
                 ) : null}
                 {showPeople ? [...groups].map(([group, members]) => (
-                  <GroupRows key={group} label={`${group} · ${members.length}`} span={days.length + 1}>
+                  <GroupRows key={group} label={`${group} · ${members.length}`} span={days.length + 2} pinned>
                     {members.map((person) => (
                       <tr key={person.userId}>
                         <th scope="row" className="board-who">
@@ -760,30 +890,26 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
                             <span className="board-avatar" aria-hidden="true">{initials(person.user.name)}</span>
                             <span>
                               <strong>{person.user.name}</strong>
-                              <span className={`board-load ${loadBand(person.week.utilisation)}`}>
-                                {fmt(person.week.manDays)} / {fmt(person.week.available)} MD
-                                {(person.week.utilisation ?? 0) > 100 ? ` · ${t("TeamBoard.overShort")}` : (person.week.utilisation ?? 0) < 50 ? ` · ${t("TeamBoard.roomShort")}` : ""}
-                              </span>
+                              <small className="board-person-meta">{[person.user.department, person.user.role].filter(Boolean).join(" · ")}</small>
                               {person.awayDays ? <small>{fill(t("TeamBoard.awayDays"), { n: person.awayDays })}</small> : null}
                               {person.overlapOn.size ? <small className="board-overlap-note">{fill(t("TeamBoard.overlapDays"), { n: person.overlapOn.size })}</small> : null}
                             </span>
                           </button>
                         </th>
+                        <td className="board-week">{weekLoad(person.week)}</td>
                         {days.map((day, index) => cell(person.userId, day, person.load[index] ?? null, person.away(day.date), person.user.name, person.overlapOn.get(day.date)))}
                       </tr>
                     ))}
                   </GroupRows>
                 )) : null}
                 {showPeople && !gridPeople.length ? (
-                  <tr><td colSpan={days.length + 1}><EmptyState icon="users" title="Nobody matches the filter" message="Clear the department or search filter to see the team again." /></td></tr>
+                  <tr><td colSpan={days.length + 2}><EmptyState icon="users" title="Nobody matches the filter" message="Clear the department or search filter to see the team again." /></td></tr>
                 ) : null}
               </tbody>
             </table>
           </div>
           <div className="board-legend">
-            <span><i className="ok" />{t("TeamBoard.legendOk")}</span>
-            <span><i className="full" />{t("TeamBoard.legendFull")}</span>
-            <span><i className="over" />{t("TeamBoard.legendOver")}</span>
+            <span>{fill(t("TeamBoard.shownPeople"), { n: shownPeople.length })}</span>
             <span><i className="overlap" />{t("TeamBoard.legendOverlap")}</span>
             <span><i className="away" />{t("TeamBoard.legendAway")}</span>
             <span><i className="outlook" />{t("TeamBoard.legendOutlook")}</span>
@@ -820,45 +946,34 @@ export function TeamBoard({ bootstrap, notify, mode, onMode, today, openItem, on
   );
 }
 
-/** Pick one or more teams; none ticked is everyone. Closes when the reader clicks elsewhere or presses Escape. */
+/**
+ * The teams as a segmented control with each one's head count (2026-11-10 mockup). Several can be pressed at once;
+ * none pressed, or "All teams", is everyone.
+ */
 function TeamFilter({ departments, counts, value, onChange }: { departments: string[]; counts: Map<string, number>; value: string[]; onChange: (teams: string[]) => void }) {
   const { t } = useLanguage();
-  const box = useRef<HTMLDetailsElement>(null);
-  const [open, setOpen] = useState(false);
-  useEffect(() => {
-    if (!open) return;
-    const outside = (event: MouseEvent) => { if (box.current && !box.current.contains(event.target as Node)) box.current.open = false; };
-    const escape = (event: KeyboardEvent) => { if (event.key === "Escape" && box.current) box.current.open = false; };
-    document.addEventListener("mousedown", outside);
-    document.addEventListener("keydown", escape);
-    return () => { document.removeEventListener("mousedown", outside); document.removeEventListener("keydown", escape); };
-  }, [open]);
-  const label = !value.length ? t("TeamBoard.allTeams") : value.length === 1 ? value[0]! : fill(t("TeamBoard.teamsChosen"), { n: value.length });
-  const toggle = (team: string, on: boolean) => onChange(on ? departments.filter((name) => name === team || value.includes(name)) : value.filter((name) => name !== team));
+  const everyone = [...counts.values()].reduce((sum, n) => sum + n, 0);
+  const toggle = (team: string) => onChange(value.includes(team) ? value.filter((name) => name !== team) : departments.filter((name) => name === team || value.includes(name)));
   return (
-    <details ref={box} className="board-team-filter" onToggle={(event) => setOpen(event.currentTarget.open)}>
-      <summary className="btn default" aria-label={`${t("TeamBoard.team")}: ${label}`}>
-        <Icon name="users" /><span className="board-team-label">{label}</span><Icon name="chevronDown" />
-      </summary>
-      <div className="board-team-menu" role="group" aria-label={t("TeamBoard.team")}>
-        <label className="board-team-option all">
-          <input type="checkbox" checked={!value.length} onChange={() => onChange([])} />
-          <span>{t("TeamBoard.allTeams")}</span>
-        </label>
-        {departments.map((name) => (
-          <label key={name} className="board-team-option">
-            <input type="checkbox" checked={value.includes(name)} onChange={(event) => toggle(name, event.target.checked)} />
-            <span>{name}</span><small>{counts.get(name) ?? 0}</small>
-          </label>
-        ))}
-      </div>
-    </details>
+    <div className="seg-control board-team-seg" role="group" aria-label={t("TeamBoard.team")}>
+      <button type="button" className={value.length ? undefined : "on"} aria-pressed={!value.length} onClick={() => onChange([])}>
+        {t("TeamBoard.allTeams")}<span className="cnt">{everyone}</span>
+      </button>
+      {departments.map((name) => (
+        <button key={name} type="button" className={value.includes(name) ? "on" : undefined} aria-pressed={value.includes(name)} onClick={() => toggle(name)}>
+          {name}<span className="cnt">{counts.get(name) ?? 0}</span>
+        </button>
+      ))}
+    </div>
   );
 }
 
-function GroupRows({ label, span, children }: { label: string; span: number; children: ReactNode }) {
+/** A band naming the rows under it. `pinned` (the day grid): the name sits over the two pinned columns and stays in sight. */
+function GroupRows({ label, span, pinned = false, children }: { label: string; span: number; pinned?: boolean; children: ReactNode }) {
   return <>
-    <tr className="board-group"><th colSpan={span} scope="colgroup">{label}</th></tr>
+    {pinned
+      ? <tr className="board-group"><th colSpan={2} scope="colgroup">{label}</th><td colSpan={span - 2} /></tr>
+      : <tr className="board-group"><th colSpan={span} scope="colgroup">{label}</th></tr>}
     {children}
   </>;
 }
