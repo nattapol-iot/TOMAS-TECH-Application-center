@@ -87,7 +87,10 @@ test("Team overview replaces Resource Plan in the menu and opens on the board fo
   // A team task given to someone opens the board from their notification.
   assert.match(shell, /if \(item\.entityType === "TeamTask"\) (?:\(await setView\("resources"\)\)|(?:await )?setView\("resources"\));/);
   assert.match(screen, /const canBoard = bootstrap\.permissions\.includes\("team\.board"\);/);
-  assert.match(screen, /<TeamBoard bootstrap=\{bootstrap\} notify=\{notify\} mode=\{tab\} onMode=\{changeTab\} today=\{todayIso\} openItem=\{open\} onChanged=\{\(\) => setData\(null\)\} \/>/);
+  assert.match(screen, /<TeamBoard bootstrap=\{bootstrap\} notify=\{notify\} mode=\{tab\} onMode=\{changeTab\} today=\{todayIso\} openItem=\{open\} onChanged=\{\(\) => setData\(null\)\} actionsSlot=\{boardActions\} \/>/);
+  // The board's actions sit beside the page title (2026-11-10 mockup), through a slot the page header keeps.
+  assert.match(screen, /<div className="board-page-actions" ref=\{setBoardActions\} \/>/);
+  assert.match(board, /actionsSlot === undefined \? <div className="board-actions-row">\{actions\}<\/div> : actionsSlot \? createPortal\(actions, actionsSlot\) : null/);
   // Work the reader cannot open, and team tasks, never navigate away.
   assert.match(screen, /item\.type === "Task" \|\| item\.hidden\s+\? undefined/);
   assert.match(client, /apiRequest<TeamBoardData>\(`\/api\/v1\/team-board\?from=\$\{from\}&to=\$\{to\}`\)/);
@@ -151,6 +154,27 @@ test("Team overview replaces Resource Plan in the menu and opens on the board fo
   assert.match(client, /export type TeamTaskSaved = \{ id: number; rowVersion: string; manDays: number; calendar: CalendarDelivery;/);
   assert.match(client, /apiRequest<TeamTaskSaved>\("\/api\/v1\/team-tasks"/);
   assert.match(board, /import "\.\/team-board\.css";/);
+});
+
+test("the board follows the 2026-11-10 mockup: summary strip, sticky filters, pinned member and week, MD per day", async () => {
+  const [board, css] = await Promise.all([read("app/system/production/TeamBoard.tsx"), read("app/system/production/team-board.css")]);
+  // The over and overlap facts of the summary are the attention filters they count.
+  assert.match(board, /onClick=\{\(\) => pickAttention\(attention === key \? null : key\)\}>\{t\("TeamBoard\.sumSee"\)\}/);
+  assert.match(board, /\{counts\.over\}<small>\{t\("TeamBoard\.sumPeopleUnit"\)\} · \{summaryLink\("over"\)\}<\/small>/);
+  assert.match(board, /\{counts\.overlap\}<small>\{t\("TeamBoard\.sumPeopleUnit"\)\} · \{summaryLink\("overlap"\)\}<\/small>/);
+  // The filter bar stays under the top bar; the teams are a segmented control with head counts, several at once.
+  assert.match(css, /\.board-toolbar\.board-sticky \{\s*position: sticky; top: calc\(var\(--topbar-h\) \+ 8px\);/);
+  assert.match(board, /<div className="seg-control board-team-seg" role="group" aria-label=\{t\("TeamBoard\.team"\)\}>/);
+  assert.match(board, /aria-pressed=\{value\.includes\(name\)\} onClick=\{\(\) => toggle\(name\)\}/);
+  // The member and their week are pinned on the left, the week right after the member.
+  assert.match(css, /\.board-grid \.board-week \{\s*position: sticky; left: var\(--board-who-w\);/);
+  assert.match(board, /<td className="board-week">\{weekLoad\(person\.week\)\}<\/td>/);
+  // The day's MD opens the day's work and warns in red when over; an overlapping piece carries a labelled warning.
+  assert.match(board, /className=\{`board-md\$\{over \? " over" : ""\}`\} data-guide="team\.dayWork"/);
+  assert.match(board, /<span className="board-chip-warn" role="img" aria-label=\{t\("TeamBoard\.overlapTime"\)\}>/);
+  assert.match(css, /\.board-md\.over \{ color: var\(--red-text\); font-weight: 700; \}/);
+  // Today is tinted down the whole column, below an over-capacity day's red.
+  assert.ok(css.indexOf(".board-cell.today { background: var(--blue-soft); }") < css.indexOf(".board-cell.tone-over { background: var(--red-soft); }"));
 });
 
 test("every team board string has English, Thai and Japanese, and no key is short enough to hijack the alias map", async () => {

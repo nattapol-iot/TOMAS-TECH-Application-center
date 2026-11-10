@@ -133,6 +133,8 @@ export function ProductionResourcePlan({
   // Team Activity sees which Resource Plan tab is open (keys follow the tab ids).
   useActivitySubView(`resources-${tab}`);
   const [data, setData] = useState<Workload | null>(null);
+  // Where the team board puts its actions: beside the page title (2026-11-10 mockup). Set by the element's ref.
+  const [boardActions, setBoardActions] = useState<HTMLDivElement | null>(null);
   const [loading, setLoading] = useState(false),
     [error, setError] = useState("");
   // The weekly workload's filters ("w…", apart from the board's) are on the link; the person whose drawer is open too, not remembered.
@@ -325,6 +327,8 @@ export function ProductionResourcePlan({
                 {t("Refresh")}
               </button>
             </>
+          ) : onBoard ? (
+            <div className="board-page-actions" ref={setBoardActions} />
           ) : null
         }
       />
@@ -338,7 +342,7 @@ export function ProductionResourcePlan({
         ]}
       />
       {onBoard ? (
-        <TeamBoard bootstrap={bootstrap} notify={notify} mode={tab} onMode={changeTab} today={todayIso} openItem={open} onChanged={() => setData(null)} />
+        <TeamBoard bootstrap={bootstrap} notify={notify} mode={tab} onMode={changeTab} today={todayIso} openItem={open} onChanged={() => setData(null)} actionsSlot={boardActions} />
       ) : tab === "tasks" ? (
         <ResourceTaskWorkspace bootstrap={bootstrap} notify={notify} linked onChanged={() => setData(null)} openProjectSchedule={openProjectSchedule} />
       ) : (

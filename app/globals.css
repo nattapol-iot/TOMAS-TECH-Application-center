@@ -3274,6 +3274,10 @@ tbody tr.row-late:hover td { background: #fadada; }
   cursor: pointer;
 }
 .seg-control button.on { background: var(--surface); color: var(--blue-text); box-shadow: var(--shadow-xs); }
+.seg-control button:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+/* A count beside a segment's label (the team board's teams). */
+.seg-control .cnt { padding: 1px 6px; border-radius: var(--r-pill); background: var(--n-150); color: var(--n-600); font-size: var(--fs-2xs); font-weight: 600; font-variant-numeric: tabular-nums; }
+.seg-control button.on .cnt { background: var(--blue-soft); color: var(--blue-text); }
 
 /* The two header bands: PLAN belongs to the PM, PROGRESS to the task owner */
 .schedule-sheet thead .band-head th {
