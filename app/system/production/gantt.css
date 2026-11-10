@@ -102,6 +102,12 @@ button.gantt-label:focus-visible { outline: 2px solid var(--blue); outline-offse
 .gantt-today { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--blue); opacity: 0.55; pointer-events: none; z-index: 1; }
 .gantt-target { position: absolute; top: 4px; bottom: 4px; width: 2px; margin-left: -1px; background: var(--red); pointer-events: none; z-index: 1; }
 .gantt-target::before { content: ""; position: absolute; top: 0; left: 2px; border-left: 7px solid var(--red); border-top: 4px solid transparent; border-bottom: 4px solid transparent; }
+/* One delivery date for the whole chart (GanttChart deliveryTarget): the flag once, low in the date header under the
+   month names, and a plain line through every row so it reads as one pole. */
+.gantt-target.line { top: 0; bottom: 0; }
+.gantt-target.line::before { content: none; }
+.gantt-scale-target { position: absolute; top: 22px; bottom: 0; width: 2px; margin-left: -1px; background: var(--red); pointer-events: none; z-index: 1; }
+.gantt-scale-target::before { content: ""; position: absolute; top: 0; left: 2px; border-left: 7px solid var(--red); border-top: 4px solid transparent; border-bottom: 4px solid transparent; }
 .gantt-baseline { position: absolute; bottom: 5px; height: 4px; border-radius: var(--r-pill); background: var(--n-300); pointer-events: none; }
 /* Days marked under a row's bars (GanttRowSpec.alerts): work that overlaps (amber) or is more than the person has (red). */
 .gantt-alert { position: absolute; bottom: 1px; min-width: 3px; height: 5px; border-radius: var(--r-pill); z-index: 1; cursor: help; }

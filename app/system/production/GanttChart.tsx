@@ -184,10 +184,15 @@ function saveSide(label: string, value: number | null) {
   } catch { /* storage blocked: the width lasts for this visit only */ }
 }
 
-export function GanttChart({ rows, range, today, sideHeader, label, links = [], onMoveRow, canMoveRow }: {
+export function GanttChart({ rows, range, today, sideHeader, label, links = [], onMoveRow, canMoveRow, deliveryTarget = null }: {
   rows: GanttRowSpec[];
   range: GanttWindow;
   today: string;
+  /**
+   * One delivery date for the whole chart (a project's Plan): its flag once in the date header and a plain line
+   * through every row. A chart whose rows have their own dates (the portfolio) sets GanttRowSpec.target instead.
+   */
+  deliveryTarget?: string | null;
   /** Dictionary key for the label column's heading. */
   sideHeader: string;
   /** Dictionary key naming the chart for assistive technology. */
@@ -203,6 +208,7 @@ export function GanttChart({ rows, range, today, sideHeader, label, links = [], 
   const columnLabel = (start: string, kind: "week" | "month") => new Intl.DateTimeFormat(locale, kind === "week" ? { day: "numeric", month: "short", timeZone: "UTC" } : { month: "short", year: "2-digit", timeZone: "UTC" }).format(new Date(`${start}T00:00:00Z`));
   const dayLabel = (date: string) => new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${date}T00:00:00Z`));
   const todayAt = ganttPoint(today, range);
+  const deliveryAt = ganttPoint(deliveryTarget, range);
   const chartRef = useRef<HTMLDivElement>(null);
   const linkSvg = useRef<SVGSVGElement>(null), linkLayer = useRef<SVGGElement>(null);
   const markerId = `gantt-arrow-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
@@ -367,6 +373,7 @@ export function GanttChart({ rows, range, today, sideHeader, label, links = [], 
           const current = today >= column.start && today <= column.end;
           return span ? <span key={column.start} className={current ? "current" : undefined} style={{ left: `${span.left}%`, width: `${span.width}%` }}>{columnLabel(column.start, column.kind)}</span> : null;
         })}
+        {deliveryAt !== null ? <i className="gantt-scale-target" style={{ left: `${deliveryAt}%` }} aria-hidden="true" /> : null}
       </div>
     </div>
     {rows.map((row) => {
@@ -435,6 +442,7 @@ export function GanttChart({ rows, range, today, sideHeader, label, links = [], 
           {diamond !== null ? <button type="button" data-gantt-bar="" className={`gantt-diamond ${row.tone}${done ? " done" : ""}${movable}`} style={{ left: `${diamond}%` }} title={row.title} aria-label={row.title} onClick={() => open(row)} disabled={!row.onOpen && !row.reschedule} tabIndex={-1} {...grab} /> : null}
           {dropLabel}
           {target !== null ? <span className="gantt-target" style={{ left: `${target}%` }} title={`${t("Gantt.legendTarget")} ${row.target}`} aria-hidden="true" /> : null}
+          {deliveryAt !== null ? <span className="gantt-target line" style={{ left: `${deliveryAt}%` }} aria-hidden="true" /> : null}
           {todayAt !== null ? <span className="gantt-today" style={{ left: `${todayAt}%` }} aria-hidden="true" /> : null}
           {!bar && diamond === null && !segments?.shown.length ? <span className="gantt-undated">{row.placeholder ?? (row.start || row.finish ? t("Gantt.outside") : t("Gantt.undated"))}</span> : null}
         </div>
