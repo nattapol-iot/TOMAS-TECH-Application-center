@@ -1,7 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import sql from "mssql";
 import type { Database } from "../db.js";
-import { dateOnly } from "../http.js";
+import { ApiError } from "../errors.js";
+import { bodyObject, dateOnly } from "../http.js";
 import type { CurrentUserService } from "../users.js";
 import { primaryCustomerContactApply } from "./sales-customers.js";
 
@@ -18,13 +19,64 @@ type TeamRow = {
   effective_roles: string | null; row_version: Buffer;
 };
 type PermissionRow = { code: string };
+type FavoriteRow = { view_key: string };
+
+/*
+ * Menu favourites: the entries of the left menu a person starred, shown first in the sidebar
+ * (dbo.user_menu_favorites, migration 104). The names are the frontend's menu views, NAV in
+ * app/system/ProductionApp.tsx; tests/menu-favorites.test.mjs keeps the two lists the same.
+ * Which entries a person may open is decided by the frontend's menu rule, so a stored name the
+ * person can no longer open is simply not drawn there and leaves the list on their next save.
+ */
+export const MENU_FAVORITE_LIMIT = 8;
+export const MENU_VIEWS: readonly string[] = [
+  "dashboard", "my-work", "resources", "inquiries", "estimates", "projects", "knowledge", "downloads", "site-monitor", "installed-base",
+  "crm-dashboard", "crm-customers", "crm-contacts", "crm-opportunities", "crm-activities", "site-visits", "my-assignments",
+  "price", "quotations", "missing",
+  "procurement", "boms", "purchase", "pos", "inventory", "receiving", "issues", "approvals",
+  "reports", "signing", "documents", "stamps",
+  "activity", "performance", "summary-reports",
+  "customers", "suppliers", "employees", "material-master", "visit-master", "schedule-templates",
+  "module-templates", "labor-packages", "rates",
+  "user-accounts", "audit", "settings",
+  "manual", "support",
+];
+
+/** The list a person saves: at most eight menu views, each once, in the order they were starred. */
+export function menuFavoritesInput(value: unknown): string[] {
+  const invalid = (message: string) => new ApiError(400, "menu_favorites_validation", message);
+  const views = bodyObject(value).views;
+  if (!Array.isArray(views)) throw invalid("views is the list of starred menu entries.");
+  if (views.length > MENU_FAVORITE_LIMIT) throw invalid(`At most ${MENU_FAVORITE_LIMIT} menu entries can be starred.`);
+  for (const view of views) if (typeof view !== "string" || !MENU_VIEWS.includes(view)) throw invalid("views names menu entries, such as estimates.");
+  if (new Set(views).size !== views.length) throw invalid("A menu entry can be starred once.");
+  return views as string[];
+}
+
+/* The whole list is replaced under a range lock, so two tabs saving at once cannot both insert a row. */
+export const MENU_FAVORITES_REPLACE = `
+  DELETE FROM dbo.user_menu_favorites WITH (UPDLOCK, SERIALIZABLE) WHERE user_id=@user;
+  INSERT INTO dbo.user_menu_favorites(user_id, view_key, position)
+  SELECT @user, item.[value], CONVERT(int, item.[key]) FROM OPENJSON(@views) item;
+  SELECT view_key FROM dbo.user_menu_favorites WHERE user_id=@user ORDER BY position;`;
 
 export function registerBootstrapRoutes(app: FastifyInstance, database: Database, users: CurrentUserService): void {
   app.get("/api/v1/me", async (request) => users.required(request));
 
+  app.put("/api/v1/me/menu-favorites", async (request) => {
+    const actor = await users.required(request);
+    const views = menuFavoritesInput(request.body);
+    const rows = await database.transaction(async (transaction) => {
+      const query = new sql.Request(transaction);
+      query.input("user", sql.BigInt, actor.id).input("views", sql.NVarChar(sql.MAX), JSON.stringify(views));
+      return (await query.query<FavoriteRow>(MENU_FAVORITES_REPLACE)).recordset;
+    });
+    return { views: rows.map((row) => row.view_key) };
+  });
+
   app.get("/api/v1/bootstrap", async (request) => {
     const user = await users.required(request);
-    const result = await database.query<CountRow | CustomerRow | SupplierRow | TeamRow | PermissionRow>(`
+    const result = await database.query<CountRow | CustomerRow | SupplierRow | TeamRow | PermissionRow | FavoriteRow>(`
       ;WITH granted AS (
         SELECT code FROM dbo.user_effective_permissions WHERE user_id = @user_id
       )
@@ -74,6 +126,8 @@ export function registerBootstrapRoutes(app: FastifyInstance, database: Database
       ORDER BY employee.employee_no;
 
       SELECT code FROM dbo.user_effective_permissions WHERE user_id = @user_id ORDER BY code;
+
+      SELECT view_key FROM dbo.user_menu_favorites WHERE user_id = @user_id ORDER BY position;
     `, (sqlRequest) => sqlRequest.input("user_id", sql.BigInt, user.id));
 
     const counts = result.recordsets[0] as unknown as CountRow[];
@@ -81,6 +135,7 @@ export function registerBootstrapRoutes(app: FastifyInstance, database: Database
     const suppliers = result.recordsets[2] as unknown as SupplierRow[];
     const team = result.recordsets[3] as unknown as TeamRow[];
     const permissions = result.recordsets[4] as unknown as PermissionRow[];
+    const favorites = result.recordsets[5] as unknown as FavoriteRow[];
     const count = counts[0];
     const employment = count?.employee_id == null || count.employee_start_work_date == null ? null : {
       employeeId: Number(count.employee_id),
@@ -114,6 +169,7 @@ export function registerBootstrapRoutes(app: FastifyInstance, database: Database
         rowVersion: row.row_version.toString("base64"),
       })),
       permissions: permissions.map((row) => row.code),
+      menuFavorites: favorites.map((row) => row.view_key),
     };
   });
 }

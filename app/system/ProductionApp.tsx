@@ -12,7 +12,7 @@ import { estimateBusinessDate } from "../../lib/estimate-ux";
 import { myWorkNeedsAttention as needsAttention } from "../../lib/my-work";
 import { BrandLockup, BrandMark } from "./Brand";
 import { IS_ENTRA_CONFIGURED, restoreAccount, signInWithMicrosoft, signOutMicrosoft } from "./auth-client";
-import { ApiClientError, apiRequest, IS_API_CONFIGURED, loadBootstrap, type BootstrapData } from "./api-client";
+import { ApiClientError, apiRequest, IS_API_CONFIGURED, loadBootstrap, saveMenuFavorites, type BootstrapData } from "./api-client";
 import { clearTeamTestSession, getTeamTestSession, IS_TEAM_TEST_MODE, saveTeamTestSession } from "./team-test-client";
 import { IS_TMT_ID_MODE } from "./tmt-id.constants";
 import { currentAppPath, loadTmtIdSession, redirectToTmtIdLogin, redirectToTmtIdLogout } from "./tmt-id-client";
@@ -234,6 +234,8 @@ const projectTabOf = (hash: string): ProjectTab => {
   return segment === "plan" ? "schedule" : segment === "punchlist" ? "punchlist" : "portfolio";
 };
 const SIDEBAR_STORAGE_KEY = "tomas-tech-sidebar-collapsed";
+/** The most menu entries a person may star; the API enforces the same number (backend-node/src/routes/bootstrap.ts). */
+const MENU_FAVORITE_LIMIT = 8;
 
 export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode?: string } = {}) {
   const [bootstrap, setBootstrap] = useState<BootstrapData | null>(null);
@@ -308,6 +310,11 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
   const [navGroupsReady, setNavGroupsReady] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarReady, setSidebarReady] = useState(false);
+  // The starred menu entries as the person last clicked them; until then the list is the one bootstrap brought.
+  const [favoriteEdit, setFavoriteEdit] = useState<{ userId: number; views: string[] } | null>(null);
+  const favoriteSaved = useRef<{ userId: number; views: string[] } | null>(null);
+  const favoriteQueue = useRef<Promise<void>>(Promise.resolve());
+  const favoriteTurn = useRef(0);
   const canLoadMyWork = Boolean(bootstrap?.permissions.includes("schedule.read")
     && bootstrap.permissions.includes("schedule.progress"));
   const languageValue = useMemo(() => ({
@@ -698,6 +705,42 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
     }))
     .filter((section) => section.items.length > 0), [bootstrap]);
 
+  /*
+   * Menu favourites (owner request 2026-11-10): the entries the person starred, shown first in the sidebar. The list is
+   * kept on the server (GET /bootstrap menuFavorites, PUT /me/menu-favorites) so it follows the person to every
+   * device. A click shows at once and is saved behind it; when the save fails the last saved list comes back with a
+   * toast. An entry the person may no longer open is neither drawn nor counted, and leaves the list on the next save.
+   */
+  const storedFavorites = bootstrap && favoriteEdit?.userId === bootstrap.user.id ? favoriteEdit.views : bootstrap?.menuFavorites ?? [];
+  const favoriteEntries = storedFavorites.flatMap((favorite) => {
+    const favoriteSection = allowedNav.find((candidate) => candidate.items.some((item) => item.view === favorite));
+    const favoriteItem = favoriteSection?.items.find((candidate) => candidate.view === favorite);
+    return favoriteItem ? [{ item: favoriteItem, group: favoriteSection?.group }] : [];
+  });
+  const favoriteViews = favoriteEntries.map((entry) => entry.item.view);
+  const favoritesFull = favoriteViews.length >= MENU_FAVORITE_LIMIT;
+  const toggleFavorite = (target: View) => {
+    if (!bootstrap) return;
+    const userId = bootstrap.user.id;
+    const starred = favoriteViews.includes(target);
+    if (!starred && favoritesFull) return;
+    const nextFavorites = starred ? favoriteViews.filter((favorite) => favorite !== target) : [...favoriteViews, target];
+    const loadedFavorites = bootstrap.menuFavorites ?? [];
+    const saveTurn = ++favoriteTurn.current;
+    setFavoriteEdit({ userId, views: nextFavorites });
+    // Saves go one after another, so the server always ends on the list of the last click.
+    favoriteQueue.current = favoriteQueue.current.then(async () => {
+      try {
+        favoriteSaved.current = { userId, views: (await saveMenuFavorites(nextFavorites)).views };
+      } catch {
+        // A later click is still on its way: its result decides what is shown.
+        if (saveTurn !== favoriteTurn.current) return;
+        setFavoriteEdit({ userId, views: favoriteSaved.current?.userId === userId ? favoriteSaved.current.views : loadedFavorites });
+        setToast("Nav.favSaveFailed");
+      }
+    });
+  };
+
   const clearPreferredSchedule = useCallback(() => { setPreferredScheduleProjectId(null); setPreferredScheduleTaskId(null); }, []);
   // Opens a project's plan, optionally on one task (a bar clicked in the portfolio timeline).
   const openProjectSchedule = useCallback(async (projectId: number, taskId?: number) => {
@@ -801,6 +844,25 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
     openEstimate,
     onMyWorkUrgentCountChange: setMyWorkUrgentCount,
   };
+  /*
+   * One menu entry: the link, and beside it (never inside it, so a click on the star does not navigate) the star that
+   * adds it to the favourites or takes it out. The copy drawn under Favourites names its group (an entry of the
+   * ungrouped top of the menu has none) and is marked
+   * nav.fav.<view>, so a guide step aimed at nav.<view> still finds exactly one element.
+   */
+  const navRow = (item: NavItem, favorite?: { group?: string }) => {
+    const label = item.view === "manual" ? employeeManualLabel(language) : t(item.label);
+    const isCurrent = navView(view) === item.view;
+    const menuBadge = item.view === "crm-opportunities" ? crmActionableCount : badgeFor(item.view, bootstrap, myWorkUrgentCount + taskAcknowledgmentCount, projectAttentionCount, procurementApprovalCount);
+    const starred = favoriteViews.includes(item.view);
+    const starLabel = starred ? t("Nav.favRemove").replace("{menu}", label) : favoritesFull ? t("Nav.favFull") : t("Nav.favAdd").replace("{menu}", label);
+    return (
+      <div key={item.view} className={starred ? "nav-row starred" : "nav-row"} data-guide={!favorite && item.view === "dashboard" ? "nav.star" : undefined}>
+        <a href={viewHash(item.view)} data-guide={favorite ? `nav.fav.${item.view}` : `nav.${item.view}`} className={isCurrent ? "nav-item active" : "nav-item"} aria-current={isCurrent ? "page" : undefined} title={item.view === "crm-opportunities" ? `${label} · ${t("CRM.Actionable")}: ${crmActionableCount}` : label} aria-label={label} onClick={async (event) => { if (!isPlainClick(event)) return; event.preventDefault(); if (item.view === "inquiries") { setPreferredInquiryId(null); setStartInquiryCreate(false); } if (item.view === "estimates") setPreferredEstimateId(null); if (item.view === "site-visits") setPreferredSiteVisitId(null); (await setView(item.view)); window.scrollTo({ top: 0 }); }}><Icon name={item.icon} /><span>{label}</span>{favorite?.group ? <small className="nav-fav-group">{t(favorite.group)}</small> : null}{menuBadge ? <em>{menuBadge}</em> : null}</a>
+        <button type="button" className="nav-star" aria-pressed={starred} disabled={!starred && favoritesFull} aria-label={starLabel} title={starLabel} onClick={() => toggleFavorite(item.view)}><Icon name="star" /></button>
+      </div>
+    );
+  };
   return (
     <LanguageContext.Provider value={languageValue}>
     <div className={sidebarCollapsed ? "app sidebar-collapsed" : "app"}>
@@ -809,6 +871,12 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
         <div className="brand"><BrandMark size={34} tone="dark" /><div><strong>{PRODUCT.company}</strong><span>{PRODUCT.name}</span></div></div>
         <nav className="nav" aria-label={t("Main navigation")}>
           <p className="nav-label">{t(WORKSPACE_LABEL)}</p>
+          <div className={favoriteEntries.length ? "nav-favorites" : "nav-favorites no-favorites"} role="group" aria-label={t("Nav.favorites")} data-guide="nav.favorites">
+            <p className="nav-favorites-head"><Icon name="star" /><span>{t("Nav.favorites")}</span><small>{favoriteEntries.length}/{MENU_FAVORITE_LIMIT}</small></p>
+            {favoriteEntries.length
+              ? favoriteEntries.map((entry) => navRow(entry.item, { group: entry.group }))
+              : <p className="nav-favorites-empty"><strong>{t("Nav.favEmptyTitle")}</strong>{t("Nav.favEmptyHint")}</p>}
+          </div>
           {allowedNav.map((section, sectionIndex) => {
             const activeGroup = section.items.some(item => item.view === navView(view));
             const collapsed = Boolean(section.group && collapsedNavGroups.includes(section.group) && (!activeGroup || collapsedActiveGroup === section.group));
@@ -820,10 +888,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
                   </button>
                 ) : null}
                 <div id={`nav-group-${sectionIndex}`} className={section.group ? "nav-group-items nav-subitems" : "nav-group-items"} hidden={collapsed}>
-                  {section.items.map((item) => {
-                    const label = item.view === "manual" ? employeeManualLabel(language) : t(item.label);
-                    return <a key={item.view} href={viewHash(item.view)} data-guide={`nav.${item.view}`} className={navView(view) === item.view ? "nav-item active" : "nav-item"} aria-current={navView(view) === item.view ? "page" : undefined} title={item.view === "crm-opportunities" ? `${label} · ${t("CRM.Actionable")}: ${crmActionableCount}` : label} aria-label={label} onClick={async (event) => { if (!isPlainClick(event)) return; event.preventDefault(); if (item.view === "inquiries") { setPreferredInquiryId(null); setStartInquiryCreate(false); } if (item.view === "estimates") setPreferredEstimateId(null); if (item.view === "site-visits") setPreferredSiteVisitId(null); (await setView(item.view)); window.scrollTo({ top: 0 }); }}><Icon name={item.icon} /><span>{label}</span>{(item.view === "crm-opportunities" ? crmActionableCount : badgeFor(item.view, bootstrap, myWorkUrgentCount + taskAcknowledgmentCount, projectAttentionCount, procurementApprovalCount)) ? <em>{(item.view === "crm-opportunities" ? crmActionableCount : badgeFor(item.view, bootstrap, myWorkUrgentCount + taskAcknowledgmentCount, projectAttentionCount, procurementApprovalCount))}</em> : null}</a>;
-                  })}
+                  {section.items.map((item) => navRow(item))}
                 </div>
               </div>
             );

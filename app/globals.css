@@ -4439,6 +4439,67 @@ tbody tr.link-row:hover td { background: var(--blue-soft); }
   .app:not(.sidebar-collapsed) .sidebar .nav-subitems { margin-left: 10px; padding-left: 6px; border-left: 1px solid var(--blue-line); }
 }
 
+/* Menu favourites: a star beside every entry; starred entries repeat under a section at the top of the menu. */
+.nav-row { position: relative; display: flex; align-items: center; }
+.nav-row > .nav-item { flex: 1; min-width: 0; padding-right: 30px; }
+.nav-star {
+  position: absolute; top: 50%; right: 2px; transform: translateY(-50%);
+  display: inline-grid; place-items: center; width: 28px; height: 28px;
+  border-radius: var(--r-sm); color: var(--tpl-grey); opacity: 0;
+  transition: opacity 120ms ease, background 120ms ease, color 120ms ease;
+}
+.nav-star .icon { font-size: 15px; }
+.nav-row:hover .nav-star, .nav-row:focus-within .nav-star, .nav-star[aria-pressed="true"] { opacity: 1; }
+.nav-star:hover:not(:disabled) { background: var(--tpl-line-soft); color: var(--tpl-ink); }
+.nav-star:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+.nav-star:disabled { cursor: not-allowed; }
+.nav-row:hover .nav-star:disabled, .nav-row:focus-within .nav-star:disabled { opacity: 0.4; }
+.nav-item.active + .nav-star { color: var(--n-0); }
+.nav-item.active + .nav-star:hover:not(:disabled) { background: rgb(255 255 255 / 0.18); color: var(--n-0); }
+.nav-star[aria-pressed="true"], .nav-item.active + .nav-star[aria-pressed="true"] { color: var(--brand-gold); }
+.nav-star[aria-pressed="true"] .icon { fill: currentColor; }
+/* A touch screen has no hover to reveal the star. */
+@media (hover: none) { .nav-star { opacity: 1; } }
+
+.nav-favorites { margin-bottom: 6px; padding-bottom: 8px; border-bottom: 1px solid var(--tpl-line-soft); }
+.nav-favorites-head {
+  display: flex; align-items: center; gap: 6px; padding: 8px 12px 6px;
+  color: var(--tpl-title); font-size: var(--fs-2xs); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+}
+.nav-favorites-head .icon { font-size: 12px; color: var(--brand-gold); fill: currentColor; }
+.nav-favorites-head small { margin-left: auto; font-size: inherit; font-weight: 500; letter-spacing: 0; }
+.nav-favorites-empty {
+  margin: 0 4px 2px; padding: 8px 10px; border: 1px dashed var(--tpl-line); border-radius: var(--r-sm);
+  color: var(--tpl-grey); font-size: var(--fs-2xs); line-height: 1.45;
+}
+.nav-favorites-empty strong { display: block; color: var(--tpl-ink); font-weight: 600; }
+/* A favourite stays on one line: the group name gives way first, then the label is cut with an ellipsis. */
+.nav-favorites .nav-item > span { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nav-fav-group {
+  flex: 0 100 auto; min-width: 0; max-width: 76px; margin-left: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--tpl-grey); font-size: var(--fs-3xs); font-weight: 400;
+}
+.nav-item.active .nav-fav-group { color: rgb(255 255 255 / 0.8); }
+.nav-item .nav-fav-group + em { margin-left: 6px; }
+
+/* The icon-only sidebar keeps the favourite icons as shortcuts and drops the stars and the words. */
+.sidebar-collapsed .nav-star,
+.sidebar-collapsed .nav-fav-group,
+.sidebar-collapsed .nav-favorites-head,
+.sidebar-collapsed .nav-favorites-empty,
+.sidebar-collapsed .nav-favorites.no-favorites { display: none; }
+.sidebar-collapsed .nav-row > .nav-item { padding-right: 9px; }
+@media (max-width: 980px) {
+  /* The open drawer pins a badge to the entry's corner: keep it clear of the star. */
+  .app:not(.sidebar-collapsed) .sidebar .nav-row > .nav-item em { right: 32px; }
+  /* Under Favourites the corner would be the group name's place: the badge stays in the line there. */
+  .app:not(.sidebar-collapsed) .sidebar .nav-favorites .nav-item em { position: static; margin-left: auto; }
+  .app:not(.sidebar-collapsed) .sidebar .nav-favorites .nav-fav-group + em { margin-left: 6px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nav-star { transition: none; }
+}
+
 /* Cost list & ERP: collapsible sections, ERP column, category tiles. */
 .cost-breakdown tr.cb-section { cursor: pointer; user-select: none; }
 .cost-breakdown tbody tr.cb-section:hover td { background: rgb(37 99 235 / 0.16); }

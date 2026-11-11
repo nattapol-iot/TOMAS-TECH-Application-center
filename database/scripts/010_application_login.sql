@@ -835,4 +835,8 @@ GO
 -- database/migrations/103_team_task_repeat.sql
 GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.team_task_series TO [iot_team_app_role];
 GO
+
+-- database/migrations/104_user_menu_favorites.sql
+GRANT SELECT, INSERT, DELETE ON OBJECT::dbo.user_menu_favorites TO [iot_team_app_role];
+GO
 -- END GENERATED MIGRATION GRANTS
