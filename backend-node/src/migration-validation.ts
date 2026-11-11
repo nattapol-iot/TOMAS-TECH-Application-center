@@ -89,6 +89,7 @@ export const REQUIRED_MIGRATIONS: readonly MigrationIdentity[] = [
   { version: 101, fileName: "101_estimate_approvers.sql", name: "Estimate approvers" },
   { version: 102, fileName: "102_management_project_delete.sql", name: "Management project deletion with recoverable recorded work" },
   { version: 103, fileName: "103_team_task_repeat.sql", name: "Repeating team tasks and meeting place" },
+  { version: 104, fileName: "104_user_menu_favorites.sql", name: "Menu favourites per person" },
 ] as const;
 
 export const REQUIRED_SCHEMA_VERSION = REQUIRED_MIGRATIONS.at(-1)!.version;

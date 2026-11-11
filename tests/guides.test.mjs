@@ -15,6 +15,8 @@ const marked = new Set(screens.flatMap(({ text }) => [...text.matchAll(/(?:data-
 const crm = read("app/system/production/CrmScreens.tsx");
 // Screens a guide may name that are not menu entries of their own.
 const subViews = new Set(["sales-intake", "crm-pipeline"]);
+// Parts of the side menu itself: the star on an entry and the Favourites section (menu-favorites guide).
+const menuParts = new Set(["nav.star", "nav.favorites"]);
 
 test("every guide step points at something a screen still marks", () => {
   const missing = [];
@@ -28,7 +30,9 @@ test("every guide step points at something a screen still marks", () => {
       continue;
     }
     assert.ok(!step.target.startsWith("["), `${where}: only data-tab selectors are expected, use a data-guide name`);
-    if (step.target.startsWith("nav.")) {
+    if (menuParts.has(step.target)) {
+      if (!shell.includes(`"${step.target}"`)) missing.push(`${where}: the menu does not mark ${step.target}`);
+    } else if (step.target.startsWith("nav.")) {
       if (!views.has(step.target.slice(4))) missing.push(`${where}: no menu entry ${step.target}`);
     } else if (step.target.startsWith("intake.to.")) {
       if (!read("app/system/production/SiteVisitScreens.tsx").includes(`"${step.target.slice(10)}"`)) missing.push(`${where}: no intake status ${step.target}`);
@@ -38,7 +42,8 @@ test("every guide step points at something a screen still marks", () => {
     } else if (!marked.has(step.target)) missing.push(`${where}: nothing marked ${step.target}`);
   }
   assert.deepEqual(missing, []);
-  assert.match(shell, /data-guide=\{`nav\.\$\{item\.view\}`\}/);
+  // The copy of an entry under Favourites is marked nav.fav.<view>, so nav.<view> names one element.
+  assert.match(shell, /data-guide=\{favorite \? `nav\.fav\.\$\{item\.view\}` : `nav\.\$\{item\.view\}`\}/);
   assert.match(read("app/system/production/SiteVisitScreens.tsx"), /data-guide=\{`intake\.to\.\$\{target\}`\}/);
   // CRM forms mark a field through Field.guide and a group of fields through Fields' guide.
   assert.match(crm, /<div className="crm-form-grid" data-guide=\{guide\}>/);
@@ -82,6 +87,8 @@ test("the catalog holds the guides the owner chose, in the order the work happen
     "knowledge-find", "downloads-skill", "site-monitor-check", "asset-register",
     // Customers and suppliers from Pegasus ERP (2026-11-05).
     "erp-customers-suppliers",
+    // Starring menu entries into the Favourites section (2026-11-10).
+    "menu-favorites",
     "support-ticket",
   ]);
   const copies = [];
@@ -105,16 +112,16 @@ test("the catalog holds the guides the owner chose, in the order the work happen
 });
 
 test("a guide is offered only to people who can do the task", () => {
-  // Everyone can download files and report a problem.
-  assert.deepEqual(guidesFor([]).map((guide) => guide.id), ["downloads-skill", "support-ticket"]);
-  assert.deepEqual(guidesFor(["inquiry.read", "estimate.write"]).map((guide) => guide.id), ["estimate-create", "downloads-skill", "support-ticket"]);
+  // Everyone can download files, star menu entries and report a problem.
+  assert.deepEqual(guidesFor([]).map((guide) => guide.id), ["downloads-skill", "menu-favorites", "support-ticket"]);
+  assert.deepEqual(guidesFor(["inquiry.read", "estimate.write"]).map((guide) => guide.id), ["estimate-create", "downloads-skill", "menu-favorites", "support-ticket"]);
   assert.ok(guidesFor(["inquiry.write", "inquiry.read", "intake.read", "intake.write"]).some((guide) => guide.id === "site-visit-request"));
   // Engineers hold inquiry.write since 094_engineer_inquiry_write.sql: they receive RFQs and attach files.
-  assert.deepEqual(guidesFor(["inquiry.write"]).map((guide) => guide.id), ["inquiry-create", "inquiry-attach", "downloads-skill", "support-ticket"]);
+  assert.deepEqual(guidesFor(["inquiry.write"]).map((guide) => guide.id), ["inquiry-create", "inquiry-attach", "downloads-skill", "menu-favorites", "support-ticket"]);
   // An engineer reads CRM and logs activities (053_crm.sql); sales also write deals and send them for estimating.
-  assert.deepEqual(guidesFor(["crm.read", "crm.activity.write"]).map((guide) => guide.id), ["crm-activity-followup", "downloads-skill", "support-ticket"]);
+  assert.deepEqual(guidesFor(["crm.read", "crm.activity.write"]).map((guide) => guide.id), ["crm-activity-followup", "downloads-skill", "menu-favorites", "support-ticket"]);
   assert.deepEqual(guidesFor(["crm.read", "crm.write", "crm.activity.write", "crm.convert"]).map((guide) => guide.id),
-    ["crm-deal-create", "crm-activity-followup", "crm-send-estimate", "crm-proposal-won", "downloads-skill", "support-ticket"]);
+    ["crm-deal-create", "crm-activity-followup", "crm-send-estimate", "crm-proposal-won", "downloads-skill", "menu-favorites", "support-ticket"]);
   // A planner sees the plan guide; a head who approves PRs sees the approval guide.
   assert.ok(guidesFor(["schedule.read", "schedule.plan"]).some((guide) => guide.id === "project-plan"));
   assert.ok(guidesFor(["procurement.approve"]).some((guide) => guide.id === "pr-approve"));

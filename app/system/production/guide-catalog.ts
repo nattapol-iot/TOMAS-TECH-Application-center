@@ -1743,6 +1743,58 @@ const ERP_MASTER_DATA: Guide = {
   ],
 };
 
+/* Starring a menu entry (owner request 2026-11-10): the star beside each entry and the Favourites section it fills. */
+const menuHidden: GuideCopy = {
+  th: "ถ้าเมนูด้านซ้ายย่อเหลือแต่ไอคอน ให้กดปุ่มขยายเมนูที่มุมซ้ายบนก่อน แล้วรูปดาวจะขึ้น",
+  en: "If the side menu shows icons only, open it with the menu button at the top left first; the stars then appear.",
+  jp: "左のメニューがアイコンだけの場合は、先に左上のメニューボタンで開くと星が表示されます。",
+};
+const MENU_FAVORITES: Guide = {
+  id: "menu-favorites",
+  area: "tools",
+  title: { th: "ติดดาวเมนูที่ใช้บ่อย", en: "Star the menu entries you use most", jp: "よく使うメニューに星を付ける" },
+  summary: {
+    th: "กดรูปดาวที่เมนูด้านซ้าย เมนูนั้นจะขึ้นไปอยู่ใต้ 'รายการโปรด' บนสุดของเมนู ได้สูงสุด 8 รายการ และตามไปทุกเครื่องที่เข้าใช้งาน",
+    en: "Press the star on a side-menu entry and it appears under Favourites at the top of the menu: up to 8, on every device you sign in from.",
+    jp: "左メニューの星を押すと、メニュー最上部の「お気に入り」に表示されます。最大8件で、サインインするどの端末でも同じです。",
+  },
+  minutes: 1,
+  permissions: [],
+  views: [],
+  browse: true,
+  steps: [
+    {
+      target: "nav.star", action: "next", view: "my-work",
+      title: { th: "ชี้ที่เมนู แล้วกดรูปดาว", en: "Point at an entry and press its star", jp: "メニューに合わせて星を押す" },
+      body: {
+        th: "เมื่อชี้ที่เมนูใดก็ได้ จะมีรูปดาวขึ้นทางขวาของเมนูนั้น กดรูปดาวเพื่อเพิ่มเมนูในรายการโปรด ดาวที่ติดแล้วเป็นสีเหลืองและแสดงค้างไว้",
+        en: "Point at any menu entry and a star appears on its right. Press it to add the entry to your favourites; a starred entry keeps a yellow star.",
+        jp: "メニューにカーソルを合わせると右側に星が表示されます。押すとお気に入りに追加され、星は黄色のまま表示されます。",
+      },
+      missing: menuHidden,
+    },
+    {
+      target: "nav.favorites", action: "next", view: "my-work",
+      title: { th: "รายการโปรด", en: "Favourites", jp: "お気に入り" },
+      body: {
+        th: "เมนูที่ติดดาวจะเรียงที่นี่ตามลำดับที่กด พร้อมตัวเลขแจ้งเตือนเหมือนเมนูเดิม คลิกเพื่อเปิดหน้านั้นได้ทันที เมนูเดิมยังอยู่ในกลุ่มของมันเหมือนเดิม",
+        en: "Starred entries line up here in the order you starred them, with the same counts as the original entry. Click one to open its screen. The original stays in its group.",
+        jp: "星を付けたメニューが押した順にここに並び、元のメニューと同じ件数が表示されます。クリックでその画面が開きます。元のメニューはグループに残ります。",
+      },
+      missing: menuHidden,
+    },
+    {
+      action: "next", view: "my-work",
+      title: { th: "เอาออก และจำนวนสูงสุด", en: "Removing, and the limit", jp: "外し方と上限" },
+      body: {
+        th: "กดรูปดาวสีเหลืองอีกครั้งเพื่อเอาเมนูออกจากรายการโปรด ติดดาวได้สูงสุด 8 เมนู เมื่อครบแล้วต้องเอาออกก่อนจึงจะเพิ่มใหม่ได้ รายการโปรดเป็นของแต่ละคนและเหมือนกันทุกเครื่อง",
+        en: "Press a yellow star again to take the entry out. You can star up to 8 entries; when the list is full, remove one before adding another. Favourites are your own and the same on every device.",
+        jp: "黄色の星をもう一度押すとお気に入りから外れます。星は最大8件で、上限のときは1件外してから追加します。お気に入りは自分専用で、どの端末でも同じです。",
+      },
+    },
+  ],
+};
+
 /*
  * Menu screens with no guide, and why (owner rule 2026-11-02: a new feature updates the guides). tests/guides.test.mjs
  * fails when a menu screen has neither a guide nor an entry here, so a new screen cannot ship without one or the other.
@@ -2405,6 +2457,7 @@ export const GUIDES: readonly Guide[] = [
   SITE_MONITOR,
   ASSET_REGISTER,
   ERP_MASTER_DATA,
+  MENU_FAVORITES,
   {
     id: "support-ticket",
     area: "tools",

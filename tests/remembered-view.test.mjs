@@ -75,7 +75,7 @@ test("Ctrl, Cmd, Shift, Alt and middle clicks are left to the browser", () => {
 test("menu entries are links to their screen and the address bar follows the open screen", async () => {
   const app = await readFile(new URL("../app/system/ProductionApp.tsx", import.meta.url), "utf8");
   // A <button> cannot be opened in a new tab; the entry is a link whose plain click stays in the app.
-  assert.match(app, /return <a key=\{item\.view\} href=\{viewHash\(item\.view\)\}/);
+  assert.match(app, /<a href=\{viewHash\(item\.view\)\} data-guide=\{favorite \? `nav\.fav\.\$\{item\.view\}` : `nav\.\$\{item\.view\}`\}/);
   assert.match(app, /onClick=\{(?:async )?\(event\) => \{ if \(!isPlainClick\(event\)\) return; event\.preventDefault\(\);/);
   assert.doesNotMatch(app, /return <button key=\{item\.view\}/);
   // Each screen change is a history entry; the first write and a rewrite of an older link replace.

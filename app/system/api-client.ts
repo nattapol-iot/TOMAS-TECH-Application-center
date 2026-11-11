@@ -118,6 +118,8 @@ export type BootstrapData = {
     rowVersion: string;
   }[];
   permissions: string[];
+  /** The menu entries the person starred, in the order starred (migration 104); an older API build omits it. */
+  menuFavorites?: string[];
 };
 
 export type PerformanceCycle = {
@@ -1219,6 +1221,12 @@ export async function uploadReportExport(reportId: number, format: "pdf" | "pptx
 }
 
 export const loadBootstrap = () => apiRequest<BootstrapData>("/api/v1/bootstrap");
+
+/** Replaces the person's starred menu entries (at most eight, in the order starred) and returns the saved list. */
+export const saveMenuFavorites = (views: readonly string[]) => apiRequest<{ views: string[] }>("/api/v1/me/menu-favorites", {
+  method: "PUT",
+  body: JSON.stringify({ views }),
+});
 
 export async function downloadSupportAttachment(ticketId: number, attachmentId: number) {
   return (await authorizedFetch(`/api/v1/support/tickets/${ticketId}/attachments/${attachmentId}/content`, { headers: { Accept: "application/octet-stream" } }, 120_000)).blob();
