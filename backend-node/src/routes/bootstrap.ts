@@ -30,16 +30,13 @@ type FavoriteRow = { view_key: string };
  */
 export const MENU_FAVORITE_LIMIT = 8;
 export const MENU_VIEWS: readonly string[] = [
-  "dashboard", "my-work", "resources", "inquiries", "estimates", "projects", "knowledge", "downloads", "site-monitor", "installed-base",
-  "crm-dashboard", "crm-customers", "crm-contacts", "crm-opportunities", "crm-activities", "site-visits", "my-assignments",
-  "price", "quotations", "missing",
-  "procurement", "boms", "purchase", "pos", "inventory", "receiving", "issues", "approvals",
-  "reports", "signing", "documents", "stamps",
-  "activity", "performance", "summary-reports",
-  "customers", "suppliers", "employees", "material-master", "visit-master", "schedule-templates",
-  "module-templates", "labor-packages", "rates",
-  "user-accounts", "audit", "settings",
-  "manual", "support",
+  "dashboard", "my-work", "resources",
+  "crm-dashboard", "crm-customers", "crm-contacts", "crm-opportunities", "crm-activities", "inquiries", "site-visits", "my-assignments", "visit-master", "customers",
+  "estimates", "price", "quotations", "missing", "module-templates", "labor-packages", "rates",
+  "projects", "reports", "signing", "documents", "stamps", "schedule-templates", "installed-base", "site-monitor",
+  "procurement", "boms", "purchase", "pos", "approvals", "inventory", "receiving", "issues", "material-master",
+  "activity", "performance", "summary-reports", "knowledge", "downloads",
+  "user-accounts", "employees", "suppliers", "audit", "settings",
 ];
 
 /** The list a person saves: at most eight menu views, each once, in the order they were starred. */
@@ -169,7 +166,8 @@ export function registerBootstrapRoutes(app: FastifyInstance, database: Database
         rowVersion: row.row_version.toString("base64"),
       })),
       permissions: permissions.map((row) => row.code),
-      menuFavorites: favorites.map((row) => row.view_key),
+      // A stored name that is no longer a menu entry (the help screens left the sidebar on 2026-11-12) is dropped here.
+      menuFavorites: favorites.map((row) => row.view_key).filter((view) => MENU_VIEWS.includes(view)),
     };
   });
 }

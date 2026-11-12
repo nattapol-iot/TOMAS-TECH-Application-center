@@ -114,77 +114,73 @@ type AppNotification = {
   isRead: boolean;
   createdAt: string;
 };
+/*
+ * The left menu, in the order the work flows: sales, estimating, projects, procurement, team, system (lean menu
+ * phase 1, owner request 2026-11-12). Only the grouping changed: every view keeps its screen and its permission rule.
+ * A group name is a dictionary key (NavGroup.*). Folding screens into tabbed screens is phase 2.
+ */
 const NAV: { group?: string; items: NavItem[] }[] = [
   { items: [
     { view: "dashboard", label: "Dashboard", icon: "grid" },
     { view: "my-work", label: "My Work", icon: "user", anyPermissions: ["schedule.progress", "crm.read"] },
     // Everyone's work on one page, with the weekly workload inside it (owner decision 2026-10-21).
     { view: "resources", label: "Team overview", icon: "users", anyPermissions: ["team.board", "schedule.read"] },
-    { view: "inquiries", label: "RFQ intake & estimating", icon: "inbox", permission: "inquiry.read" },
-    { view: "estimates", label: "Estimate Cost", icon: "file", permission: "estimate.read" },
-    { view: "projects", label: "Projects", icon: "folder", permission: "project.read" },
-    { view: "knowledge", label: "Knowledge Hub", icon: "book", permission: "knowledge.view" },
-    { view: "downloads", label: "Download Center", icon: "download" },
-    { view: "site-monitor", label: "Site Monitor", icon: "cpu", permission: "monitor.read" },
-    { view: "installed-base", label: "Installed Base", icon: "layers", permission: "asset.read" },
   ] },
-  { group: "CRM & SALES", items: [
+  { group: "NavGroup.sales", items: [
     { view: "crm-dashboard", label: "CRM Dashboard", icon: "grid", permission: "crm.read" },
     { view: "crm-customers", label: "CRM Customers", icon: "users", permission: "crm.read" },
     { view: "crm-contacts", label: "CRM Contacts", icon: "user", permission: "crm.read" },
     { view: "crm-opportunities", label: "CRM Opportunities", icon: "folder", permission: "crm.read" },
     { view: "crm-activities", label: "CRM Activities", icon: "calendar", permission: "crm.read" },
-
+    { view: "inquiries", label: "RFQ intake & estimating", icon: "inbox", permission: "inquiry.read" },
     { view: "site-visits", label: "Site Visit", icon: "truck", permission: "visit.read" },
     { view: "my-assignments", label: "My Assignments", icon: "play", permission: "visit.read" },
+    {"view":"visit-master","label":"Site Visit Reference Data","icon":"layers","permission":"visit.read"},
+    {"view":"customers","label":"Customers","icon":"users","permission":"master.read","unlessPermission":"crm.read"},
   ] },
-  { group: "PRICE & SUPPLIER", items: [
+  { group: "NavGroup.estimating", items: [
+    { view: "estimates", label: "Estimate Cost", icon: "file", permission: "estimate.read" },
     { view: "price", label: "Price Library", icon: "book", permission: "estimate.read" },
     { view: "quotations", label: "Supplier Quotation", icon: "quote", permission: "estimate.read" },
     { view: "missing", label: "Waiting Supplier Price", icon: "clock", permission: "estimate.read" },
-  ] },
-  { group: "MATERIAL & PROCUREMENT", items: [
-    { view: "procurement", label: "Procurement Dashboard", icon: "trendingUp", permission: "procurement.read" },
-    { view: "boms", label: "BOM", icon: "layers", permission: "procurement.read" },
-    { view: "purchase", label: "Purchase Requisition", icon: "package", permission: "procurement.read" },
-    { view: "pos", label: "Purchase Orders", icon: "truck", permission: "procurement.read" },
-    { view: "inventory", label: "Inventory", icon: "database", permission: "inventory.read" },
-    { view: "receiving", label: "Goods Receiving", icon: "download", permission: "inventory.read" },
-    { view: "issues", label: "Material Issues", icon: "upload", permission: "inventory.read" },
-    { view: "approvals", label: "Approvals", icon: "checkCircle", permission: "procurement.approve" },
-  ] },
-  { group: "DOCUMENTS & SIGNING", items: [
-    {"view":"reports","label":"Operational Reports","icon":"file","permission":"report.read"},
-    {"view":"signing","label":"Sign Inbox","icon":"edit","permission":"signing.read"},
-    {"view":"documents","label":"Signed Documents","icon":"shield","permission":"signing.read"},
-    {"view":"stamps","label":"Company Stamps","icon":"lock","permission":"signing.read"},
-  ] },
-  { group: "TEAM & PERFORMANCE", items: [
-    {"view":"activity","label":"Team Activity & Workload","icon":"chart","permission":"activity.read"},
-    {"view":"performance","label":"KPI & Growth","icon":"trendingUp","permission":"performance.read"},
-    {"view":"summary-reports","label":"Summary Reports","icon":"chart","permission":"report.read"},
-  ] },
-  { group: "MASTER DATA", items: [
-    {"view":"customers","label":"Customers","icon":"users","permission":"master.read","unlessPermission":"crm.read"},
-    {"view":"suppliers","label":"Suppliers","icon":"truck","permission":"master.read"},
-    {"view":"employees","label":"Employees","icon":"user","permission":"master.read"},
-    {"view":"material-master","label":"Inventory items","icon":"package","permission":"master.read"},
-    {"view":"visit-master","label":"Site Visit Reference Data","icon":"layers","permission":"visit.read"},
-    {"view":"schedule-templates","label":"Master Schedule","icon":"calendar"},
-  ] },
-  { group: "ESTIMATING LIBRARY", items: [
     {"view":"module-templates","label":"Module Templates","icon":"package","permission":"estimate.read"},
     {"view":"labor-packages","label":"Labor Packages","icon":"layers","permission":"estimate.read"},
     {"view":"rates","label":"Engineering rates","icon":"chart","permission":"master.read","rateAccess":true},
   ] },
-  { group: "ADMINISTRATION", items: [
+  { group: "NavGroup.projects", items: [
+    { view: "projects", label: "Projects", icon: "folder", permission: "project.read" },
+    {"view":"reports","label":"Operational Reports","icon":"file","permission":"report.read"},
+    {"view":"signing","label":"Sign Inbox","icon":"edit","permission":"signing.read"},
+    {"view":"documents","label":"Signed Documents","icon":"shield","permission":"signing.read"},
+    {"view":"stamps","label":"Company Stamps","icon":"lock","permission":"signing.read"},
+    {"view":"schedule-templates","label":"Master Schedule","icon":"calendar"},
+    { view: "installed-base", label: "Installed Base", icon: "layers", permission: "asset.read" },
+    { view: "site-monitor", label: "Site Monitor", icon: "cpu", permission: "monitor.read" },
+  ] },
+  { group: "NavGroup.procurement", items: [
+    { view: "procurement", label: "Procurement Dashboard", icon: "trendingUp", permission: "procurement.read" },
+    { view: "boms", label: "BOM", icon: "layers", permission: "procurement.read" },
+    { view: "purchase", label: "Purchase Requisition", icon: "package", permission: "procurement.read" },
+    { view: "pos", label: "Purchase Orders", icon: "truck", permission: "procurement.read" },
+    { view: "approvals", label: "Approvals", icon: "checkCircle", permission: "procurement.approve" },
+    { view: "inventory", label: "Inventory", icon: "database", permission: "inventory.read" },
+    { view: "receiving", label: "Goods Receiving", icon: "download", permission: "inventory.read" },
+    { view: "issues", label: "Material Issues", icon: "upload", permission: "inventory.read" },
+    {"view":"material-master","label":"Inventory items","icon":"package","permission":"master.read"},
+  ] },
+  { group: "NavGroup.team", items: [
+    {"view":"activity","label":"Team Activity & Workload","icon":"chart","permission":"activity.read"},
+    {"view":"performance","label":"KPI & Growth","icon":"trendingUp","permission":"performance.read"},
+    {"view":"summary-reports","label":"Summary Reports","icon":"chart","permission":"report.read"},
+    { view: "knowledge", label: "Knowledge Hub", icon: "book", permission: "knowledge.view" },
+    { view: "downloads", label: "Download Center", icon: "download" },
+  ] },
+  { group: "NavGroup.system", items: [
     {"view":"user-accounts","label":"User Accounts & Permissions","icon":"users","permission":"master.read"},
+    {"view":"employees","label":"Employees","icon":"user","permission":"master.read"},
+    {"view":"suppliers","label":"Suppliers","icon":"truck","permission":"master.read"},
     {"view":"audit","label":"Audit Log","icon":"shield","permission":"audit.read"},
     {"view":"settings","label":"System Settings","icon":"settings","permission":"master.read"},
-  ] },
-  { group: "HELP", items: [
-    {"view":"manual","label":"Employee Manual","icon":"book"},
-    {"view":"support","label":"Report & Track Issues","icon":"inbox"},
   ] },
 ];
 
@@ -205,12 +201,18 @@ function landingView(next: View, permissions: readonly string[]): View {
 /** Board and Timeline modes highlight the menu of their parent workspace. */
 const navView = (view: View): View => view === "crm-pipeline" ? "crm-opportunities" : view === "project-timeline" ? "projects" : view;
 
+/** Help screens: open to everyone from the "?" menu in the top bar, not from the sidebar, and so not starrable. */
+const HELP_NAV: NavItem[] = [
+  {"view":"manual","label":"Employee Manual","icon":"book"},
+  {"view":"support","label":"Report & Track Issues","icon":"inbox"},
+];
+
 /** The views a refresh, a link or Back may open: the person's menu entries plus the screens reached from inside them. */
 function allowedViews(data: BootstrapData): View[] {
   const allowed: View[] = NAV.flatMap(section => section.items)
     .filter(item => navItemAllowed(item, data.permissions, data.user.role))
     .map(item => item.view);
-  allowed.push("profile", "signature");
+  allowed.push("profile", "signature", ...HELP_NAV.map(item => item.view));
   if (data.permissions.includes("inquiry.read")) allowed.push("sales-intake");
   if (data.permissions.includes("crm.read")) allowed.push("crm-pipeline");
   // Older bookmarks still open Timeline mode, with the permissions its former menu required.
@@ -223,8 +225,11 @@ const IS_LOCAL_READ_ONLY = process.env.NEXT_PUBLIC_LOCAL_READ_ONLY === "true";
 const CONNECTED_SCHEMA_VERSION = process.env.NEXT_PUBLIC_CONNECTED_SCHEMA_VERSION ?? "unknown";
 const WORKSPACE_LABEL = IS_LOCAL_READ_ONLY ? "LOCAL READ ONLY" : IS_TEAM_TEST_MODE ? "TEAM TEST" : "PRODUCTION";
 const LANGUAGE_STORAGE_KEY = "tomas-tech-language";
-const NAV_GROUP_STORAGE_KEY = "tomas-tech-collapsed-nav-groups-v2";
-const DEFAULT_COLLAPSED_GROUPS = ["MASTER DATA", "ESTIMATING LIBRARY", "ADMINISTRATION", "HELP", "TEAM & PERFORMANCE", "DOCUMENTS & SIGNING"];
+// v3: the groups were renamed on 2026-11-12, so names stored under the older keys no longer exist and are not read.
+const NAV_GROUP_STORAGE_KEY = "tomas-tech-collapsed-nav-groups-v3";
+const NAV_GROUPS = NAV.flatMap(section => section.group ? [section.group] : []);
+/** Every group starts closed; the group of the open screen always shows open. */
+const DEFAULT_COLLAPSED_GROUPS = NAV_GROUPS;
 type ProjectTab = "portfolio" | "schedule" | "punchlist";
 /** The Projects tabs as their addresses name them: "#/projects" (overview), "#/projects/plan/<project>…", "#/projects/punchlist". */
 const PROJECT_TAB_SEGMENT: Record<ProjectTab, string> = { portfolio: "", schedule: "plan", punchlist: "punchlist" };
@@ -249,6 +254,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
   const [unregistered, setUnregistered] = useState<TmtIdUser | null>(null);
   const [toast, setToast] = useState("");
   const [userOpen, setUserOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [projectTab, setProjectTab] = useState<ProjectTab>(() => (typeof window === "undefined" ? "portfolio" : projectTabOf(window.location.hash)));
@@ -414,9 +420,9 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
     const timer = window.setTimeout(() => {
       try {
         const stored = window.localStorage.getItem(NAV_GROUP_STORAGE_KEY);
-        const previous = stored === null ? JSON.parse(window.localStorage.getItem("tomas-tech-collapsed-nav-groups") ?? "[]") : [];
-        const saved = stored === null ? [...new Set([...DEFAULT_COLLAPSED_GROUPS, ...(Array.isArray(previous) ? previous : [])])] : JSON.parse(stored);
-        if (Array.isArray(saved)) setCollapsedNavGroups(saved.filter((group): group is string => typeof group === "string"));
+        const saved = stored === null ? DEFAULT_COLLAPSED_GROUPS : JSON.parse(stored);
+        if (Array.isArray(saved)) setCollapsedNavGroups(saved.filter((group): group is string => NAV_GROUPS.includes(group)));
+        for (const older of ["tomas-tech-collapsed-nav-groups", "tomas-tech-collapsed-nav-groups-v2"]) window.localStorage.removeItem(older);
       } catch {
         window.localStorage.removeItem(NAV_GROUP_STORAGE_KEY);
       }
@@ -451,6 +457,16 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, []);
+
+  // The "?" menu closes on Escape and on a press anywhere outside it.
+  useEffect(() => {
+    if (!helpOpen) return;
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setHelpOpen(false); };
+    const onPress = (event: PointerEvent) => { if (!(event.target instanceof Element) || !event.target.closest('[data-menu="help"]')) setHelpOpen(false); };
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("pointerdown", onPress);
+    return () => { window.removeEventListener("keydown", onKey); window.removeEventListener("pointerdown", onPress); };
+  }, [helpOpen]);
 
   const refreshBootstrap = async () => {
     setBootstrap(await loadBootstrap());
@@ -884,7 +900,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
               <div className={activeGroup ? "nav-group active-group" : "nav-group"} key={section.group ?? `primary-${sectionIndex}`}>
                 {section.group ? (
                   <button className="nav-label nav-group-toggle" type="button" aria-expanded={!collapsed} aria-controls={`nav-group-${sectionIndex}`} title={t(section.group)} aria-label={t(section.group)} onClick={() => toggleNavGroup(section.group!)}>
-                    <span>{t(section.group)}</span><Icon name="chevronDown" />
+                    <span>{t(section.group)}</span><small>{section.items.length}</small><Icon name="chevronDown" />
                   </button>
                 ) : null}
                 <div id={`nav-group-${sectionIndex}`} className={section.group ? "nav-group-items nav-subitems" : "nav-group-items"} hidden={collapsed}>
@@ -918,8 +934,17 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
                 <button key={code} type="button" className={language === code ? "active" : ""} aria-pressed={language === code} onClick={() => setLanguage(code)}>{code}</button>
               ))}
             </div>
+            <div className="menu-wrap" data-menu="help">
+              <button className="icon-btn" type="button" data-guide="nav.help" aria-haspopup="menu" aria-expanded={helpOpen} aria-label={t("Nav.help")} title={t("Nav.help")} onClick={() => { setHelpOpen((value) => !value); setUserOpen(false); setNotificationOpen(false); }}><Icon name="help" /></button>
+              {helpOpen ? <div className="menu" role="menu" aria-label={t("Nav.help")}>
+                <button type="button" role="menuitem" data-guide="nav.manual" onClick={async () => { setHelpOpen(false); (await setView("manual")); }}><Icon name="book" />{employeeManualLabel(language)}</button>
+                <button type="button" role="menuitem" onClick={() => { setHelpOpen(false); setGuideOpen(true); }}><Icon name="play" />{t("Guide.open")}</button>
+                <button type="button" role="menuitem" data-guide="nav.support" onClick={() => { setHelpOpen(false); void openSupport(null); }}><Icon name="inbox" />{t("Report & Track Issues")}</button>
+                <button type="button" role="menuitem" onClick={async () => { setHelpOpen(false); (await setView("downloads")); }}><Icon name="download" />{t("Download Center")}</button>
+              </div> : null}
+            </div>
             <div className="menu-wrap">
-              <button className="icon-btn" type="button" aria-label={t("Notifications")} aria-expanded={notificationOpen} onClick={() => { setNotificationOpen((value) => !value); setUserOpen(false); void refreshNotifications(); }}>
+              <button className="icon-btn" type="button" aria-label={t("Notifications")} aria-expanded={notificationOpen} onClick={() => { setNotificationOpen((value) => !value); setUserOpen(false); setHelpOpen(false); void refreshNotifications(); }}>
                 <Icon name="bell" />
                 {notifications.some((item) => !item.isRead) ? <b>{Math.min(99, notifications.filter((item) => !item.isRead).length)}</b> : null}
               </button>
@@ -934,7 +959,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
               </div> : null}
             </div>
             <div className="menu-wrap">
-              <button className="topbar-user" type="button" onClick={() => { setUserOpen((value) => !value); setNotificationOpen(false); }}><span className="avatar sm">{initials(bootstrap.user.name)}</span><span>{bootstrap.user.name}<small>{bootstrap.user.role} · {bootstrap.user.department}</small></span><Icon name="chevronDown" /></button>
+              <button className="topbar-user" type="button" onClick={() => { setUserOpen((value) => !value); setNotificationOpen(false); setHelpOpen(false); }}><span className="avatar sm">{initials(bootstrap.user.name)}</span><span>{bootstrap.user.name}<small>{bootstrap.user.role} · {bootstrap.user.department}</small></span><Icon name="chevronDown" /></button>
               {userOpen ? <div className="menu" role="menu"><button type="button" onClick={async () => { setUserOpen(false); (await setView("profile")); }}><Icon name="user" />{t("My Profile")}</button><button type="button" onClick={async () => { setUserOpen(false); (await setView("signature")); }}><Icon name="edit" />{t("My signature")}</button><button type="button" onClick={async () => { setUserOpen(false); (await setView("manual")); }}><Icon name="book" />{employeeManualLabel(language)}</button><button type="button" disabled={busy} onClick={() => { setUserOpen(false); void signOut(); }}><Icon name="logout" />{t("Logout")}</button></div> : null}
             </div>
           </div>

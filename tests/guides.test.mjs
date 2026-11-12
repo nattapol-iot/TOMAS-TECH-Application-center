@@ -15,8 +15,9 @@ const marked = new Set(screens.flatMap(({ text }) => [...text.matchAll(/(?:data-
 const crm = read("app/system/production/CrmScreens.tsx");
 // Screens a guide may name that are not menu entries of their own.
 const subViews = new Set(["sales-intake", "crm-pipeline"]);
-// Parts of the side menu itself: the star on an entry and the Favourites section (menu-favorites guide).
-const menuParts = new Set(["nav.star", "nav.favorites"]);
+// Parts of the menus themselves: the star on an entry and the Favourites section (menu-favorites guide), and the
+// "?" help button in the top bar (support-ticket guide).
+const menuParts = new Set(["nav.star", "nav.favorites", "nav.help"]);
 
 test("every guide step points at something a screen still marks", () => {
   const missing = [];

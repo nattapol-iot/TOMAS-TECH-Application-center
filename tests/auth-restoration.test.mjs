@@ -542,7 +542,16 @@ test("non-admin estimators see libraries and help without rate or account access
   const harness=createHarness({mode:"team-test",loadBootstrap:async()=>({...bootstrap,permissions:["estimate.read"]})});
   try {
     harness.render();harness.runMountEffects();await new Promise(resolve=>setImmediate(resolve));const tree=harness.render();
-    for(const label of ["Module Templates","Labor Packages","Employee Manual","Report & Track Issues"]) assert.ok(navLeaf(tree,label),label);
+    for(const label of ["Module Templates","Labor Packages"]) assert.ok(navLeaf(tree,label),label);
+    // The manual and the issue list left the sidebar for the "?" menu in the top bar (lean menu phase 1).
+    for(const label of ["Employee Manual","Report & Track Issues"]) assert.equal(navLeaf(tree,label),undefined,label);
+    const help=tree=>findNode(tree,n=>n.type==="button"&&n.props["data-guide"]==="nav.help");
+    assert.equal(help(tree).props["aria-expanded"],false);
+    assert.equal(findNode(tree,n=>n.props["data-guide"]==="nav.manual"),undefined);
+    help(tree).props.onClick();
+    const opened=harness.render();
+    assert.equal(help(opened).props["aria-expanded"],true);
+    for(const mark of ["nav.manual","nav.support"]) assert.equal(findNode(opened,n=>n.props["data-guide"]===mark).props.role,"menuitem",mark);
     for(const label of ["Engineering rates","User Accounts & Permissions","Customers"]) assert.equal(navLeaf(tree,label),undefined,label);
   } finally {harness.cleanup();}
 });
@@ -570,7 +579,7 @@ test("active groups can collapse and reopen without changing destination",async(
   const harness=createHarness({mode:"team-test",savedView:"suppliers",loadBootstrap:async()=>({...bootstrap,permissions:["master.read"]})});
   try {
     harness.render();harness.runMountEffects();await new Promise(resolve=>setImmediate(resolve));
-    const heading=tree=>findNode(tree,n=>n.type==="button"&&n.props.title==="MASTER DATA");
+    const heading=tree=>findNode(tree,n=>n.type==="button"&&n.props.title==="NavGroup.system");
     assert.equal(heading(harness.render()).props["aria-expanded"],true);
     heading(harness.render()).props.onClick();
     assert.equal(heading(harness.render()).props["aria-expanded"],false);
