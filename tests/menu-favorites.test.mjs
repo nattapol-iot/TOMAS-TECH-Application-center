@@ -47,7 +47,8 @@ test("the API keeps one list per person: known menu views only, at most 8, each 
   assert.match(route, /app\.put\("\/api\/v1\/me\/menu-favorites", async \(request\) => \{/);
   assert.match(route, /export const MENU_FAVORITE_LIMIT = 8;/);
   assert.match(route, /if \(views\.length > MENU_FAVORITE_LIMIT\) throw invalid/);
-  assert.match(route, /menuFavorites: favorites\.map\(\(row\) => row\.view_key\),/);
+  // A stored name that stopped being a menu entry is not handed back.
+  assert.match(route, /menuFavorites: favorites\.map\(\(row\) => row\.view_key\)\.filter\(\(view\) => MENU_VIEWS\.includes\(view\)\),/);
   // The API's menu views are the frontend's menu entries, nothing more and nothing less.
   const menu = shell.slice(shell.indexOf("const NAV"), shell.indexOf("/** The one rule for which menu entries"));
   const menuViews = [...menu.matchAll(/\{ view: "([a-z-]+)"|\{"view":"([a-z-]+)"/g)].map((match) => match[1] ?? match[2]);
@@ -55,7 +56,7 @@ test("the API keeps one list per person: known menu views only, at most 8, each 
   assert.ok(menuViews.length > 40);
   assert.deepEqual(apiViews, menuViews);
   // Screens reached from inside another screen are not menu entries and cannot be starred.
-  for (const view of ["profile", "signature", "crm-pipeline", "project-timeline", "sales-intake"]) assert.ok(!apiViews.includes(view), view);
+  for (const view of ["profile", "signature", "crm-pipeline", "project-timeline", "sales-intake", "manual", "support"]) assert.ok(!apiViews.includes(view), view);
   assert.match(migration, /CREATE TABLE dbo\.user_menu_favorites \(\s*user_id bigint NOT NULL,\s*view_key nvarchar\(64\) NOT NULL,\s*position int NOT NULL,/);
   assert.match(migration, /CONSTRAINT PK_user_menu_favorites PRIMARY KEY \(user_id, view_key\)/);
   assert.match(migration, /FOREIGN KEY \(user_id\) REFERENCES dbo\.users\(id\)/);

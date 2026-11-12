@@ -14,7 +14,7 @@ try {
  await page.locator('button[type="submit"]').click();
  const nav=page.locator("button.nav-item").filter({hasText:"Signed Documents"});
  await nav.waitFor({state:"attached"});
- if(!await nav.isVisible()) await page.locator("button.nav-group-toggle").filter({hasText:"DOCUMENTS & SIGNING"}).click();
+ if(!await nav.isVisible()) await page.locator("button.nav-group-toggle").filter({hasText:"PROJECTS & DELIVERY"}).click();
  await nav.click();
  const row=page.locator("tbody tr").filter({hasText:"DWG-2609-0001"});await row.getByRole("button",{name:"Open",exact:true}).click();
  await page.getByRole("button",{name:"Preview file & signatures",exact:true}).click();

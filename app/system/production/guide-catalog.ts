@@ -58,9 +58,9 @@ export type Guide = {
 const menu = (view: string, title: GuideCopy, body: GuideCopy): GuideStep => ({
   target: `nav.${view}`, action: "click", view, canGo: true, title, body,
   missing: {
-    th: "ถ้าไม่เห็นเมนูด้านซ้าย ให้กด 'ไปที่หน้านี้'",
-    en: "If the side menu is hidden, press Go to this screen.",
-    jp: "左のメニューが見えない場合は「この画面へ」を押します。",
+    th: "ถ้าไม่เห็นเมนูนี้ ให้กดชื่อกลุ่มในเมนูด้านซ้ายเพื่อกางออก หรือกด 'ไปที่หน้านี้'",
+    en: "If you cannot see this entry, press its group heading in the side menu to open the group, or press Go to this screen.",
+    jp: "このメニューが見えない場合は、左メニューのグループ名を押して開くか、「この画面へ」を押します。",
   },
 });
 
@@ -1824,7 +1824,7 @@ export const NO_GUIDE: Readonly<Record<string, string>> = {
   "user-accounts": "Admin-only account and role management.",
   "audit": "Admin-only audit log.",
   "settings": "Admin-only settings.",
-  "manual": "The full illustrated manual; the guide list links to it.",
+  "manual": "The full illustrated manual, opened from the ? menu in the top bar; the guide list links to it.",
 };
 
 export const GUIDES: readonly Guide[] = [
@@ -2463,15 +2463,24 @@ export const GUIDES: readonly Guide[] = [
     area: "tools",
     title: { th: "แจ้งปัญหาการใช้งาน", en: "Report a problem", jp: "問題を報告" },
     summary: {
-      th: "แจ้งปัญหาหรือข้อเสนอแนะพร้อมรูปหน้าจอ แล้วติดตามคำตอบได้ที่เมนูแจ้งปัญหาและติดตาม",
-      en: "Report a problem or suggestion with a screenshot, then follow the answer under Report & Track Issues.",
-      jp: "スクリーンショット付きで問題や提案を報告し、「問題の報告と追跡」で回答を確認します。",
+      th: "แจ้งปัญหาหรือข้อเสนอแนะพร้อมรูปหน้าจอ แล้วติดตามคำตอบได้ที่ 'แจ้งปัญหาและติดตาม' ในปุ่ม ? บนแถบด้านบน",
+      en: "Report a problem or suggestion with a screenshot, then follow the answer under Report & Track Issues in the ? menu of the top bar.",
+      jp: "スクリーンショット付きで問題や提案を報告し、上部バーの「?」メニューにある「問題の報告と追跡」で回答を確認します。",
     },
     minutes: 2,
     permissions: [],
     views: ["support"],
     invite: "support",
     steps: [
+      {
+        target: "nav.help", action: "next", view: "support",
+        title: { th: "ปุ่ม ? ช่วยเหลือ", en: "The ? help button", jp: "「?」ヘルプボタン" },
+        body: {
+          th: "ปุ่ม ? บนแถบด้านบนรวมเรื่องช่วยเหลือไว้ที่เดียว: คู่มือพนักงาน สอนการใช้งาน แจ้งปัญหาและติดตาม และศูนย์ดาวน์โหลด คู่มือพนักงานและแจ้งปัญหาและติดตามเคยอยู่ในเมนูด้านซ้าย",
+          en: "The ? button in the top bar holds the help in one place: Employee Manual, How-to guides, Report & Track Issues and Download Center. The manual and the issue list used to sit in the side menu.",
+          jp: "上部バーの「?」ボタンにヘルプがまとまっています:従業員マニュアル、使い方ガイド、問題の報告と追跡、ダウンロードセンター。マニュアルと問題一覧は以前は左メニューにありました。",
+        },
+      },
       {
         target: "topbar.report", action: "click", view: "support",
         title: { th: "กด 'แจ้งปัญหา'", en: "Press Report a problem", jp: "「問題を報告」を押す" },
@@ -2521,9 +2530,9 @@ export const GUIDES: readonly Guide[] = [
         target: "support.submit", action: "click", view: "support",
         title: { th: "ส่งเรื่อง", en: "Send it", jp: "報告を送信" },
         body: {
-          th: "กด 'ส่งเรื่อง' ทีมจะตอบกลับและคุณจะได้รับแจ้งเตือน ติดตามได้ที่เมนู 'แจ้งปัญหาและติดตาม' ถ้าแค่ฝึก ให้กด 'ปิด' แล้วกด 'จบบทสอน'",
-          en: "Press Submit ticket. The team answers and you are notified; follow it under Report & Track Issues. Only practising? Press Close, then Finish.",
-          jp: "「報告を送信」を押すとチームが回答し、通知が届きます。「問題の報告と追跡」で確認できます。練習だけなら「閉じる」を押してから「完了」を押します。",
+          th: "กด 'ส่งเรื่อง' ทีมจะตอบกลับและคุณจะได้รับแจ้งเตือน ติดตามได้ที่ปุ่ม ? บนแถบด้านบน > 'แจ้งปัญหาและติดตาม' ถ้าแค่ฝึก ให้กด 'ปิด' แล้วกด 'จบบทสอน'",
+          en: "Press Submit ticket. The team answers and you are notified; follow it under the ? button in the top bar > Report & Track Issues. Only practising? Press Close, then Finish.",
+          jp: "「報告を送信」を押すとチームが回答し、通知が届きます。上部バーの「?」>「問題の報告と追跡」で確認できます。練習だけなら「閉じる」を押してから「完了」を押します。",
         },
       },
     ],

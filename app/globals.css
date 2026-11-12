@@ -4439,6 +4439,14 @@ tbody tr.link-row:hover td { background: var(--blue-soft); }
   .app:not(.sidebar-collapsed) .sidebar .nav-subitems { margin-left: 10px; padding-left: 6px; border-left: 1px solid var(--blue-line); }
 }
 
+/* A group heading carries the number of entries the person has in it. */
+.nav-group-toggle small { margin-left: auto; margin-right: 6px; font-size: inherit; font-weight: 500; letter-spacing: 0; opacity: 0.8; }
+.sidebar-collapsed .nav-group-toggle small { display: none; }
+@media (max-width: 980px) {
+  .nav-group-toggle small { display: none; }
+  .app:not(.sidebar-collapsed) .sidebar .nav-group-toggle small { display: inline; }
+}
+
 /* Menu favourites: a star beside every entry; starred entries repeat under a section at the top of the menu. */
 .nav-row { position: relative; display: flex; align-items: center; }
 .nav-row > .nav-item { flex: 1; min-width: 0; padding-right: 30px; }

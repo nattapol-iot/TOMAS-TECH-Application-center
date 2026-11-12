@@ -25,7 +25,7 @@ try {
   const navigation = page.locator("button.nav-item").filter({ hasText: "Signed Documents" });
   await navigation.waitFor({ state: "attached" });
   if (!await navigation.isVisible()) {
-    await page.locator("button.nav-group-toggle").filter({ hasText: "DOCUMENTS & SIGNING" }).click();
+    await page.locator("button.nav-group-toggle").filter({ hasText: "PROJECTS & DELIVERY" }).click();
   }
   await navigation.click();
   await page.getByRole("button", { name: "New signable document", exact: true }).click();
