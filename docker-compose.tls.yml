@@ -54,6 +54,9 @@ services:
       SITE_ORIGIN: ${DEV_SITE_ORIGIN:?set DEV_SITE_ORIGIN to the https site origin}
     ports: !override
       - "127.0.0.1:3000:3000"
+    # Like the api and caddy: back by itself when the colima VM restarts. Without it the site
+    # answered 502 after the Mac mini's reboot on 2026-11-15 while everything else came back.
+    restart: unless-stopped
     # 'vinext start' serves prebuilt files; the 3g in the dev file was for 'npm ci' plus Vite.
     mem_limit: 1g
 
