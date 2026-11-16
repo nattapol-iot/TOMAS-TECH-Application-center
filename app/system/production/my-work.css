@@ -429,6 +429,8 @@
 .plan-manhours-bar i { display: block; height: 100%; border-radius: var(--r-pill); background: var(--blue); }
 .plan-manhours-bar.over i { background: var(--red); }
 .plan-manhours > .over strong, .plan-manhours > .over small { color: var(--red); }
+/* Edit row: the note under Plan man-days once the row takes the plan over the budget (.field small is muted by default). */
+.field small.plan-manhours-over { color: var(--red-text); font-weight: 650; }
 .plan-manhours > .plan-manhours-warn { align-items: center; color: var(--amber-text); }
 .plan-manhours > .plan-manhours-none { color: var(--muted); }
 .plan-manhours > .plan-manhours-split { gap: 4px 12px; flex-wrap: wrap; color: var(--ink-soft); font-size: var(--fs-2xs); }
