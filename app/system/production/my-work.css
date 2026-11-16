@@ -418,6 +418,22 @@
 .plan-summary em { color: var(--muted); font-style: normal; font-size: var(--fs-2xs); }
 .plan-summary em.late { color: var(--red); font-weight: 650; }
 .plan-summary-loading { margin-left: auto; color: var(--muted); }
+/* The man-hour budget line under the summary (PlanManHours.tsx): estimated against planned man-days, one bar and a few figures. */
+.plan-manhours { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 20px; margin: -4px 0 12px; padding: 8px 14px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); font-size: var(--fs-xs); }
+.plan-manhours > span { display: inline-flex; align-items: baseline; gap: 6px; }
+.plan-manhours small { color: var(--muted); font-size: var(--fs-2xs); }
+.plan-manhours strong { font-variant-numeric: tabular-nums; }
+.plan-manhours em { color: var(--muted); font-style: normal; font-size: var(--fs-2xs); }
+.plan-manhours > .plan-manhours-title { align-items: center; font-weight: 650; }
+.plan-manhours > .plan-manhours-bar { align-self: center; width: 160px; height: 8px; overflow: hidden; border-radius: var(--r-pill); background: var(--n-150); }
+.plan-manhours-bar i { display: block; height: 100%; border-radius: var(--r-pill); background: var(--blue); }
+.plan-manhours-bar.over i { background: var(--red); }
+.plan-manhours > .over strong, .plan-manhours > .over small { color: var(--red); }
+.plan-manhours > .plan-manhours-warn { align-items: center; color: var(--amber-text); }
+.plan-manhours > .plan-manhours-none { color: var(--muted); }
+.plan-manhours > .plan-manhours-split { gap: 4px 12px; flex-wrap: wrap; color: var(--ink-soft); font-size: var(--fs-2xs); }
+.plan-manhours > .plan-manhours-source { align-items: center; margin-left: auto; }
+@media (max-width: 720px) { .plan-manhours > .plan-manhours-source { margin-left: 0; } }
 .plan-gantt { display: flex; flex-direction: column; gap: 10px; padding: 12px 0 0; }
 .plan-gantt-controls, .plan-gantt > .gantt-legend { padding: 0 14px; }
 .plan-gantt-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }

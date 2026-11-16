@@ -23,6 +23,8 @@ import { boardDays, dailyLoad, dateRuns, outlookLoad, overlapDays, withOutlook, 
 import { PicLoadPanel, useLoadNote, usePicLoads } from "./PlanPicLoad";
 import { choiceLink, optionalChoiceLink, placeId, useLinkedState, useScreenPlace } from "../screen-link";
 import { HealthBadge } from "./ProjectPlanFields";
+import { PlanManHours, type PlanManHoursData } from "./PlanManHours";
+import { remainingForRow } from "../../../lib/manhour-budget";
 import "./my-work.css";
 import {
   ApiClientError,
@@ -270,6 +272,8 @@ export type ProjectSchedule = {
   canUpdateProgress: boolean;
   /** Whether the signed-in user may answer day requests; an older API omits it and canPlan decides. */
   canAnswerRequests?: boolean;
+  /** Estimated against planned man-days (backend-node/src/manhour-budget.ts); an older API omits it. */
+  manHours?: PlanManHoursData;
   summary: {
     planStart: string | null;
     planFinish: string | null;
@@ -2090,6 +2094,8 @@ function EditScheduleTaskModal({ bootstrap, schedule, task, onClose, onSaved, on
   const [planDays, setPlanDays] = useState(task.planDays);
   const [milestone, setMilestone] = useState(task.isMilestone);
   const [planManDays, setPlanManDays] = useState(task.planManDays);
+  // What the man-hour budget has left once this row is saved; only for a row with no sub rows, whose own figure is the one counted.
+  const budgetLeft = schedule.manHours && !task.children.length ? remainingForRow(schedule.manHours, Number(task.planManDays), planManDays) : null;
   const [picUserIds, setPicUserIds] = useState<number[]>(task.pics.map((pic) => pic.id));
   const [picExternal, setPicExternal] = useState(task.picExternal);
   const [customer, setCustomer] = useState(() => customerPeriod(task) ?? { start: "", finish: "" });
@@ -2152,7 +2158,7 @@ function EditScheduleTaskModal({ bootstrap, schedule, task, onClose, onSaved, on
       <label className="field span-2"><span><LocalizedText text={"Name *"} /></span><input maxLength={500} value={name} onChange={(event) => setName(event.target.value)} /></label>
       {!ownOnly ? <label className="field"><span><LocalizedText text={"Visibility *"} /></span><select value={visibility} onChange={(event) => setVisibility(event.target.value)}><option value={"Internal"}><LocalizedText text={"Internal"} /></option><option value={"Customer"}><LocalizedText text={"Customer"} /></option></select></label> : null}
       {isPhase ? <CustomerPeriodFields value={customer} onChange={setCustomer} /> : <>
-        {!ownOnly ? <label className="field"><span><LocalizedText text={"Plan man-days"} /></span><input type="number" min="0" max="1000000" step="0.25" value={planManDays} onChange={(event) => setPlanManDays(Number(event.target.value))} /></label> : null}
+        {!ownOnly ? <label className="field"><span><LocalizedText text={"Plan man-days"} /></span><input type="number" min="0" max="1000000" step="0.25" value={planManDays} onChange={(event) => setPlanManDays(Number(event.target.value))} />{budgetLeft !== null ? <small className={budgetLeft < 0 ? "danger-text" : undefined} data-guide="plan.manhoursRow">{t(budgetLeft < 0 ? "Plan.mhOver" : "Plan.mhRowLeft")} {number(Math.abs(budgetLeft))} {t("MD")}</small> : null}</label> : null}
         {datesLocked ? <label className="field"><span><LocalizedText text={"Plan start *"} /></span><DateInput value={task.planStart ?? ""} disabled /></label>
           : ownOnly ? <label className="field"><span><LocalizedText text={"Plan start *"} /></span><DateInput value={start.planStart} disabled={task.startMode !== "manual"} onChange={event => setStart(value => ({ ...value, planStart: event.target.value }))} /></label> : <PlanStartFields schedule={schedule} taskId={task.id} parentId={task.parentId} value={start} onChange={setStart} />}
         <label className="field"><span><LocalizedText text={"Plan days *"} /></span><input type="number" min="1" max="3650" value={datesLocked ? task.planDays : milestone ? 1 : planDays} disabled={datesLocked || milestone} onChange={(event) => setPlanDays(Number(event.target.value))} /></label>
@@ -2880,6 +2886,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
         <span><small>{uiText("Baseline")}</small><strong>{activeSchedule.latestBaseline ? `R${activeSchedule.latestBaseline.revision}` : "—"}</strong></span>
         {loadingSchedule ? <span className="plan-summary-loading" role="status"><span className="spinner" />{uiText("Plan.refreshing")}</span> : null}
       </section>
+      {activeSchedule.manHours ? <PlanManHours projectId={activeSchedule.projectId} data={activeSchedule.manHours} onChanged={loadSchedule} /> : null}
       <Panel title={`${activeSchedule.projectNo} · ${activeSchedule.projectName}`} subtitle={`${rows.length} ${uiText("Plan.rows")} · ${uiText(activeSchedule.projectStatus)}`} flush>
         {rows.length || draftAt >= 0 ? <div ref={fullscreenRef} className={`plan-gantt${fullscreenActive ? " is-fullscreen" : ""}`} data-guide="plan.gantt">
           {fullscreenActive ? <div className="plan-gantt-title"><strong>{activeSchedule.projectNo} · {activeSchedule.projectName}</strong><HealthBadge health={summary.health ?? selectedProject?.health ?? "No plan"} /></div> : null}

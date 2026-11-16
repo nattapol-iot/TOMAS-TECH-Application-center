@@ -1,0 +1,104 @@
+import sql from "mssql";
+import type { Transaction as TransactionType } from "mssql";
+
+/**
+ * The man-hour budget of a project, shown on Projects > Plan (owner request 2026-11-16).
+ *
+ * Budget: the internal labor man-days of the linked Estimate cost (current revision), by
+ * discipline. Supplier labor is somebody else's hours and is left out. A project with no
+ * Estimate, or an Estimate with no internal labor, takes a budget typed by a manager
+ * (dbo.projects.manhour_budget_days, migration 105).
+ *
+ * Planned: the man-days typed on the plan rows. Money is never part of this.
+ */
+
+/** Hours shown per man-day. The plan and the estimate both count man-days; hours are a display. */
+export const HOURS_PER_MAN_DAY = 8;
+export const MAXIMUM_BUDGET_MAN_DAYS = 100000;
+
+export type BudgetPlanRow = { id: number; parentId: number | null; kind: string; planManDays: number; isMilestone: boolean };
+export type PlannedEffort = { manDays: number; unplannedRows: number };
+export type BudgetSource = "estimate" | "manual" | "none";
+export type ManHourBudget = {
+  source: BudgetSource; estimateNo: string | null; budgetManDays: number | null;
+  disciplines: { discipline: string; manDays: number }[];
+  plannedManDays: number; unplannedRows: number; hoursPerManDay: number; canSetBudget: boolean;
+};
+
+const round = (value: number): number => Math.round(value * 100) / 100;
+
+/**
+ * Man-days the plan holds, without counting a piece of work twice: a row whose sub rows carry
+ * man-days counts those, otherwise its own figure. Headings (phases) only add up what is under
+ * them. unplannedRows counts the pieces of work (a task with its sub rows is one) that have no
+ * man-days at all; milestones are left out because they are a date, not work.
+ */
+export function plannedEffort(rows: readonly BudgetPlanRow[]): PlannedEffort {
+  const ids = new Set(rows.map((row) => row.id)), children = new Map<number | null, BudgetPlanRow[]>();
+  for (const row of rows) {
+    const parent = row.parentId !== null && ids.has(row.parentId) ? row.parentId : null;
+    children.set(parent, [...(children.get(parent) ?? []), row]);
+  }
+  let unplannedRows = 0;
+  const seen = new Set<number>();
+  const effort = (row: BudgetPlanRow, insideWork: boolean): number => {
+    if (seen.has(row.id)) return 0;
+    seen.add(row.id);
+    const isHeading = row.kind === "phase";
+    const below = (children.get(row.id) ?? []).reduce((sum, child) => sum + effort(child, insideWork || !isHeading), 0);
+    if (isHeading) return below;
+    const own = Number.isFinite(row.planManDays) && row.planManDays > 0 ? row.planManDays : 0;
+    const total = below > 0 ? below : own;
+    if (!insideWork && total === 0 && !row.isMilestone) unplannedRows += 1;
+    return total;
+  };
+  const manDays = (children.get(null) ?? []).reduce((sum, row) => sum + effort(row, false), 0);
+  return { manDays: round(manDays), unplannedRows };
+}
+
+/** Which figure is the budget: the estimate's own labor first, a typed budget only when it has none. */
+export function budgetSource(estimateManDays: number, manualManDays: number | null): BudgetSource {
+  return estimateManDays > 0 ? "estimate" : manualManDays !== null ? "manual" : "none";
+}
+
+/** A typed budget: null clears it; otherwise more than 0 and at most MAXIMUM_BUDGET_MAN_DAYS, kept to 2 decimals. */
+export function parseBudgetManDays(value: unknown): number | null | undefined {
+  if (value === null) return null;
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0 || value > MAXIMUM_BUDGET_MAN_DAYS) return undefined;
+  return round(value);
+}
+
+export type StoredBudget = { estimateNo: string | null; estimateManDays: number; manualManDays: number | null; disciplines: { discipline: string; manDays: number }[] };
+
+export async function readStoredBudget(transaction: TransactionType, projectId: number): Promise<StoredBudget> {
+  const request = new sql.Request(transaction); request.input("project", sql.BigInt, projectId);
+  const project = (await request.query<Record<string, unknown>>(`SELECT p.manhour_budget_days,e.estimate_no
+    FROM dbo.projects p LEFT JOIN dbo.estimates e ON e.id=p.estimate_id
+    WHERE p.id=@project AND p.deleted_at IS NULL;`)).recordset[0];
+  const lines = (await request.query<Record<string, unknown>>(`SELECT COALESCE(l.discipline,N'Other') discipline,SUM(l.engineers*l.man_days) man_days
+    FROM dbo.projects p INNER JOIN dbo.estimates e ON e.id=p.estimate_id
+    INNER JOIN dbo.manhour_lines l ON l.estimate_id=e.id AND l.revision=e.revision AND l.deleted_at IS NULL AND l.provider=N'Internal'
+    WHERE p.id=@project AND p.deleted_at IS NULL
+    GROUP BY COALESCE(l.discipline,N'Other');`)).recordset;
+  const order = ["Electrical", "Mechanical", "Software", "Installation", "Other"];
+  const disciplines = lines.map((row) => ({ discipline: String(row.discipline), manDays: round(Number(row.man_days ?? 0)) }))
+    .filter((row) => row.manDays > 0)
+    .sort((left, right) => order.indexOf(left.discipline) - order.indexOf(right.discipline));
+  return {
+    estimateNo: project?.estimate_no == null ? null : String(project.estimate_no),
+    estimateManDays: round(disciplines.reduce((sum, row) => sum + row.manDays, 0)),
+    manualManDays: project?.manhour_budget_days == null ? null : Number(project.manhour_budget_days),
+    disciplines,
+  };
+}
+
+export function manHourBudget(stored: StoredBudget, rows: readonly BudgetPlanRow[], canManage: boolean): ManHourBudget {
+  const source = budgetSource(stored.estimateManDays, stored.manualManDays), planned = plannedEffort(rows);
+  return {
+    source, estimateNo: stored.estimateNo,
+    budgetManDays: source === "estimate" ? stored.estimateManDays : source === "manual" ? stored.manualManDays : null,
+    disciplines: source === "estimate" ? stored.disciplines : [],
+    plannedManDays: planned.manDays, unplannedRows: planned.unplannedRows, hoursPerManDay: HOURS_PER_MAN_DAY,
+    canSetBudget: canManage && source !== "estimate",
+  };
+}
