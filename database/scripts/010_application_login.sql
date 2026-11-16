@@ -839,4 +839,8 @@ GO
 -- database/migrations/104_user_menu_favorites.sql
 GRANT SELECT, INSERT, DELETE ON OBJECT::dbo.user_menu_favorites TO [iot_team_app_role];
 GO
+
+-- database/migrations/105_project_manhour_budget.sql
+GRANT UPDATE (manhour_budget_days) ON OBJECT::dbo.projects TO [iot_team_app_role];
+GO
 -- END GENERATED MIGRATION GRANTS

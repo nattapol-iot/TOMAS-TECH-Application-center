@@ -2,40 +2,41 @@
 
 [Module](../modules/planning.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `781d8326`; generated, do not edit. [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `412099a1`; generated, do not edit. [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/projects/:projectId/schedule` | 117–123 |
-| POST | `/api/v1/projects/:projectId/schedule/tasks` | 125–157 |
-| PUT | `/api/v1/schedule/tasks/:id` | 159–184 |
-| DELETE | `/api/v1/schedule/tasks/:id` | 186–216 |
-| POST | `/api/v1/schedule/tasks/:id/move` | 220–257 |
-| POST | `/api/v1/schedule/tasks/:id/updates` | 259–275 |
-| POST | `/api/v1/schedule/tasks/:id/day-requests` | 277–286 |
-| POST | `/api/v1/schedule/day-requests/:id/answer` | 288–298 |
-| POST | `/api/v1/schedule/tasks/:id/details` | 300–304 |
-| DELETE | `/api/v1/schedule/tasks/:id/details` | 306–309 |
-| POST | `/api/v1/projects/:projectId/schedule/baseline` | 311–315 |
-| GET | `/api/v1/schedule/day-requests/pending` | 319–341 |
-| GET | `/api/v1/schedule/search` | 346–365 |
-| GET | `/api/v1/me/work` | 367–375 |
-| GET | `/api/v1/me/work/updates` | 377–380 |
+| GET | `/api/v1/projects/:projectId/schedule` | 121–127 |
+| POST | `/api/v1/projects/:projectId/schedule/tasks` | 129–161 |
+| PUT | `/api/v1/schedule/tasks/:id` | 163–188 |
+| DELETE | `/api/v1/schedule/tasks/:id` | 190–220 |
+| POST | `/api/v1/schedule/tasks/:id/move` | 224–261 |
+| POST | `/api/v1/schedule/tasks/:id/updates` | 263–279 |
+| POST | `/api/v1/schedule/tasks/:id/day-requests` | 281–290 |
+| POST | `/api/v1/schedule/day-requests/:id/answer` | 292–302 |
+| POST | `/api/v1/schedule/tasks/:id/details` | 304–308 |
+| DELETE | `/api/v1/schedule/tasks/:id/details` | 310–313 |
+| POST | `/api/v1/projects/:projectId/schedule/baseline` | 315–319 |
+| PUT | `/api/v1/projects/:projectId/manhour-budget` | 324–341 |
+| GET | `/api/v1/schedule/day-requests/pending` | 343–365 |
+| GET | `/api/v1/schedule/search` | 370–389 |
+| GET | `/api/v1/me/work` | 391–399 |
+| GET | `/api/v1/me/work/updates` | 401–404 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `membersFor` | [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>) | 27–32 |
-| `bindPlan` | [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>) | 34–43 |
-| `planAudit` | [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>) | 45–50 |
-| `existingPlan` | [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>) | 52–56 |
-| `readBaselines` | [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>) | 60–66 |
-| `readUpdates` | [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>) | 68–79 |
-| `projectSchedule` | [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>) | 81–112 |
-| `registerScheduleRoutes` | [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>) | 115–381 |
+| `membersFor` | [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>) | 28–33 |
+| `bindPlan` | [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>) | 35–44 |
+| `planAudit` | [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>) | 46–51 |
+| `existingPlan` | [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>) | 53–57 |
+| `readBaselines` | [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>) | 61–67 |
+| `readUpdates` | [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>) | 69–80 |
+| `projectSchedule` | [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>) | 82–116 |
+| `registerScheduleRoutes` | [backend-node/src/routes/schedule.ts](<../../../backend-node/src/routes/schedule.ts>) | 119–405 |
 
 ## Direct local dependencies
 
@@ -45,6 +46,7 @@ Evidence: source snapshot `781d8326`; generated, do not edit. [backend-node/src/
 - [backend-node/src/user-roles.ts](<../../../backend-node/src/user-roles.ts>)
 - [backend-node/src/http.ts](<../../../backend-node/src/http.ts>)
 - [backend-node/src/project-scope.ts](<../../../backend-node/src/project-scope.ts>)
+- [backend-node/src/manhour-budget.ts](<../../../backend-node/src/manhour-budget.ts>)
 - [backend-node/src/schedule-calculator.ts](<../../../backend-node/src/schedule-calculator.ts>)
 - [backend-node/src/business-date.ts](<../../../backend-node/src/business-date.ts>)
 - [backend-node/src/config.ts](<../../../backend-node/src/config.ts>)

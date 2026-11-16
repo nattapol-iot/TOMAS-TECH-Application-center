@@ -6,7 +6,8 @@ import type { Database } from "../db.js";
 import { ApiError, dayRequestAnswerError } from "../errors.js";
 import { hasRole } from "../user-roles.js";
 import { bodyObject, optionalBodyText, parseRowVersion, positiveLong, requiredInteger, requiredText } from "../http.js";
-import { demandProjectScope, isMyWorkElevated, isProjectElevated } from "../project-scope.js";
+import { demandProjectScope, isMyWorkElevated, isProjectElevated, isProjectManagerRole } from "../project-scope.js";
+import { manHourBudget, MAXIMUM_BUDGET_MAN_DAYS, parseBudgetManDays, readStoredBudget } from "../manhour-budget.js";
 import { networkDays } from "../schedule-calculator.js";
 import { businessToday } from "../business-date.js";
 import { normalizeBusinessTimeZone } from "../config.js";
@@ -91,6 +92,8 @@ async function projectSchedule(transaction: TransactionType, database: Database,
   const baselines = await readBaselines(transaction, projectId);
   const canPlan = project.status !== "Closed" && (project.leadEngineerId === actor.id || (canPlanPermission && canAnswerDayRequests(project, actor)));
   const isMember = await isProjectMember(transaction, projectId, actor.id);
+  // Estimated against planned man-days (manhour-budget.ts); a manager types the budget when the Estimate has no labor.
+  const manHours = manHourBudget(await readStoredBudget(transaction, projectId), tasks, isProjectManagerRole(actor) && project.status !== "Closed");
   return { projectId, projectNo: project.projectNo, projectName: project.name, managerId: project.managerId, leadEngineerId: project.leadEngineerId, projectStatus: project.status,
     scheduleVersion: (await currentScheduleVersion(transaction, projectId))?.toString("base64") ?? null,
     canPlan,
@@ -98,6 +101,7 @@ async function projectSchedule(transaction: TransactionType, database: Database,
     canAnswerRequests: canPlanPermission && project.status !== "Closed" && canAnswerDayRequests(project, actor),
     canBaseline: canPlanPermission && project.status !== "Closed" && canAnswerDayRequests(project, actor),
     canUpdateProgress: canProgressPermission && project.status !== "Closed",
+    manHours,
     summary: { planStart: starts[0] ?? null, planFinish: finishes.at(-1) ?? null,
       workDays: networkDays(starts[0] ?? null, finishes.at(-1) ?? null, holidays), percentComplete: shared.progress ?? 0,
       taskCount: shared.taskCount, doneCount: shared.doneCount, blockedCount: shared.blockedCount,
@@ -316,6 +320,26 @@ const insert = new sql.Request(transaction); insert.input("project", sql.BigInt,
 
   // Day requests waiting for this user's answer, across the projects they may answer for: the projects
   // they manage, plus every project in their scope for an Engineering Manager or Admin (any role held).
+  // The typed man-hour budget, for a project with no Estimate or an Estimate with no internal labor. Empty clears it.
+  app.put("/api/v1/projects/:projectId/manhour-budget", async (request) => {
+    await users.demandPermission(request, "schedule.read"); const actor = await users.required(request);
+    const projectId = positiveLong((request.params as { projectId?: string }).projectId, "Project id");
+    if (!isProjectManagerRole(actor)) throw new ApiError(403, "manhour_budget_forbidden", "Only an Admin, an Engineering Manager or a Project Manager sets a project's man-hour budget.");
+    const manDays = parseBudgetManDays(bodyObject(request.body).manDays);
+    if (manDays === undefined) throw new ApiError(400, "validation_failed", `Man-days must be more than 0 and at most ${MAXIMUM_BUDGET_MAN_DAYS}. Leave it empty to clear the budget.`);
+    return database.transaction(async (transaction) => {
+      await demandProjectScope(database, actor, projectId, transaction);
+      const project = await readProject(transaction, projectId, true);
+      if (project.status === "Closed") throw new ApiError(409, "project_closed", "A closed project keeps its man-hour budget.");
+      const stored = await readStoredBudget(transaction, projectId);
+      if (stored.estimateManDays > 0) throw new ApiError(409, "manhour_budget_from_estimate", "This project's man-hour budget comes from its Estimate cost. Change the labor there.");
+      const update = new sql.Request(transaction); update.input("project", sql.BigInt, projectId).input("days", sql.Decimal(9, 2), manDays).input("actor", sql.BigInt, actor.id);
+      await update.query(`UPDATE dbo.projects SET manhour_budget_days=@days,updated_by=@actor,updated_at=SYSUTCDATETIME() WHERE id=@project AND deleted_at IS NULL;`);
+      await insertAudit(transaction, actor.id, "Project", projectId, project.projectNo, "Set man-hour budget", { manDays: stored.manualManDays }, { manDays });
+      return { manDays };
+    });
+  });
+
   app.get("/api/v1/schedule/day-requests/pending", async (request) => {
     await users.demandPermission(request, "schedule.read"); await users.demandPermission(request, "schedule.plan"); const actor = await users.required(request);
     return database.transaction(async (transaction) => {

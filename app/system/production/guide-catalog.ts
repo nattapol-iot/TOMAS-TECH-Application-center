@@ -929,6 +929,16 @@ const PROJECT_PLAN: Guide = {
       body: { th: "เลือกโปรเจกต์จากรายการ พิมพ์ในช่องค้นหาด้านซ้ายเพื่อหาเร็วขึ้น", en: "Pick the project; type in the search on the left to find it faster.", jp: "案件を選びます。左の検索欄で早く探せます。" },
     },
     {
+      target: "plan.manhours", action: "next", view: "projects",
+      title: { th: "งบ Man-hour ของโปรเจกต์", en: "The project's man-hour budget", jp: "案件の工数予算" },
+      body: {
+        th: "แถบนี้เทียบชั่วโมงที่ประเมินไว้ใน Estimate cost กับชั่วโมงที่วางในแผน และบอกว่าเหลือให้วางอีกเท่าไร สีแดงคือวางเกินงบ ตัวเลขสีเหลืองคือจำนวนงานที่ยังไม่ใส่ Man-day โปรเจกต์ที่ไม่มีค่าแรงประเมินไว้ ผู้จัดการกด 'ตั้งงบ' เพื่อกำหนดเองได้ และตอนแก้แถวงาน ใต้ช่อง Plan man-days จะบอกงบคงเหลือหลังแถวนั้น",
+        en: "This line compares the hours estimated in Estimate cost with the hours placed in the plan, and shows what is left to plan. Red means the plan is over the budget; the amber figure counts tasks that have no man-days yet. For a project with no estimated labor, a manager presses Set budget to type one. When you edit a row, the budget left after that row shows under Plan man-days.",
+        jp: "この行は見積原価の見積時間と計画に入れた時間を比べ、残りを表示します。赤は予算超過、黄色の数字は工数未入力のタスク数です。見積工数のない案件は、管理者が「予算を設定」で入力できます。行の編集時は、計画人日の下にその行の後の残り予算が表示されます。",
+      },
+      missing: { th: "ยังไม่ได้เลือกโปรเจกต์ กด 'ถัดไป'", en: "No project is chosen yet. Press Next.", jp: "案件がまだ選ばれていません。「次へ」を押します。" },
+    },
+    {
       target: "plan.gantt", action: "next", view: "projects",
       title: { th: "อ่าน Gantt", en: "Reading the Gantt", jp: "ガントの見方" },
       body: {
