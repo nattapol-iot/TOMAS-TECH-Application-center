@@ -35,6 +35,9 @@ test("Projects > Plan shows the man-hour budget line under the summary, and Edit
   assert.match(screen, /manHours\?: PlanManHoursData;/);
   assert.match(screen, /const budgetLeft = schedule\.manHours && !task\.children\.length \? remainingForRow\(schedule\.manHours, Number\(task\.planManDays\), planManDays\) : null;/);
   assert.match(screen, /data-guide="plan\.manhoursRow"/);
+  // Over the budget the note is red: it needs its own rule, because .field small is muted and outranks a bare class.
+  assert.match(screen, /<small className=\{budgetLeft < 0 \? "plan-manhours-over" : undefined\}/);
+  assert.match(await source("app/system/production/my-work.css"), /\.field small\.plan-manhours-over \{ color: var\(--red-text\);/);
   assert.match(line, /className="plan-manhours" data-guide="plan\.manhours"/);
   // Only a manager on a project with no estimated labor gets the button; the server decides (canSetBudget).
   assert.match(line, /\{data\.canSetBudget \? <button className="btn default sm" type="button" data-guide="plan\.manhoursSet"/);
