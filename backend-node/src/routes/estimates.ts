@@ -1,6 +1,7 @@
 import { withoutLegacyDuplicateErrors } from "../estimate-duplicate-policy.js";
 import { booleanQuery } from "../http.js";
 import { laborCategorySql } from "../estimate-labor-category.js";
+import { ESTIMATE_OVERHEAD_ENABLED } from "../feature-flags.js";
 import { createHash } from "node:crypto";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import sql from "mssql";
@@ -230,26 +231,46 @@ async function cloneRevisionLines(transaction: TransactionType, estimateId: numb
     VALUES(source.estimate_id,@next_revision,source.category,source.description,source.qty,source.unit,source.unit_cost,source.remark,@actor,@actor,source.sort_order)
     OUTPUT source.id,inserted.id INTO @copiedOtherCosts;
 
-    INSERT dbo.estimate_erp_mappings(estimate_id,revision,source_type,source_id,erp_category,copied_from_mapping_id,copied_from_revision,created_by,updated_by)
-    SELECT @estimate_id,@next_revision,N'CostItem',copied.new_id,m.erp_category,m.id,@current_revision,@actor,@actor
+    INSERT dbo.estimate_erp_mappings(estimate_id,revision,source_type,source_id,erp_category,manual_override,copied_from_mapping_id,copied_from_revision,created_by,updated_by)
+    SELECT @estimate_id,@next_revision,N'CostItem',copied.new_id,m.erp_category,m.manual_override,m.id,@current_revision,@actor,@actor
     FROM dbo.estimate_erp_mappings m INNER JOIN @copiedCosts copied ON copied.old_id=m.source_id
     WHERE m.estimate_id=@estimate_id AND m.revision=@current_revision AND m.source_type=N'CostItem';
-    INSERT dbo.estimate_erp_mappings(estimate_id,revision,source_type,source_id,erp_category,copied_from_mapping_id,copied_from_revision,created_by,updated_by)
-    SELECT @estimate_id,@next_revision,N'ManhourLine',copied.new_id,m.erp_category,m.id,@current_revision,@actor,@actor
+    INSERT dbo.estimate_erp_mappings(estimate_id,revision,source_type,source_id,erp_category,manual_override,copied_from_mapping_id,copied_from_revision,created_by,updated_by)
+    SELECT @estimate_id,@next_revision,N'ManhourLine',copied.new_id,m.erp_category,m.manual_override,m.id,@current_revision,@actor,@actor
     FROM dbo.estimate_erp_mappings m INNER JOIN @copiedManhours copied ON copied.old_id=m.source_id
     WHERE m.estimate_id=@estimate_id AND m.revision=@current_revision AND m.source_type=N'ManhourLine';
-    INSERT dbo.estimate_erp_mappings(estimate_id,revision,source_type,source_id,erp_category,copied_from_mapping_id,copied_from_revision,created_by,updated_by)
-    SELECT @estimate_id,@next_revision,N'ExpenseLine',copied.new_id,m.erp_category,m.id,@current_revision,@actor,@actor
+    INSERT dbo.estimate_erp_mappings(estimate_id,revision,source_type,source_id,erp_category,manual_override,copied_from_mapping_id,copied_from_revision,created_by,updated_by)
+    SELECT @estimate_id,@next_revision,N'ExpenseLine',copied.new_id,m.erp_category,m.manual_override,m.id,@current_revision,@actor,@actor
     FROM dbo.estimate_erp_mappings m INNER JOIN @copiedExpenses copied ON copied.old_id=m.source_id
     WHERE m.estimate_id=@estimate_id AND m.revision=@current_revision AND m.source_type=N'ExpenseLine';
-    INSERT dbo.estimate_erp_mappings(estimate_id,revision,source_type,source_id,erp_category,copied_from_mapping_id,copied_from_revision,created_by,updated_by)
-    SELECT @estimate_id,@next_revision,N'OtherCostLine',copied.new_id,m.erp_category,m.id,@current_revision,@actor,@actor
+    INSERT dbo.estimate_erp_mappings(estimate_id,revision,source_type,source_id,erp_category,manual_override,copied_from_mapping_id,copied_from_revision,created_by,updated_by)
+    SELECT @estimate_id,@next_revision,N'OtherCostLine',copied.new_id,m.erp_category,m.manual_override,m.id,@current_revision,@actor,@actor
     FROM dbo.estimate_erp_mappings m INNER JOIN @copiedOtherCosts copied ON copied.old_id=m.source_id
     WHERE m.estimate_id=@estimate_id AND m.revision=@current_revision AND m.source_type=N'OtherCostLine';
-    INSERT dbo.estimate_erp_mappings(estimate_id,revision,source_type,source_id,erp_category,copied_from_mapping_id,copied_from_revision,created_by,updated_by)
-    SELECT @estimate_id,@next_revision,m.source_type,NULL,m.erp_category,m.id,@current_revision,@actor,@actor
+    INSERT dbo.estimate_erp_mappings(estimate_id,revision,source_type,source_id,erp_category,manual_override,copied_from_mapping_id,copied_from_revision,created_by,updated_by)
+    SELECT @estimate_id,@next_revision,m.source_type,NULL,m.erp_category,m.manual_override,m.id,@current_revision,@actor,@actor
     FROM dbo.estimate_erp_mappings m
     WHERE m.estimate_id=@estimate_id AND m.revision=@current_revision AND m.source_type=N'Contingency';
+
+    -- Merged ERP lines follow their members to the copies (owner 2026-11-18), in the order they were made.
+    -- A member whose line was removed has no copy and is left out; a merged line with no member left is not carried.
+    INSERT dbo.estimate_erp_groups(estimate_id,revision,title,quantity,unit,members,created_by,updated_by)
+    SELECT @estimate_id,@next_revision,g.title,g.quantity,g.unit,moved.members,@actor,@actor
+    FROM dbo.estimate_erp_groups g
+    CROSS APPLY (SELECT (
+      SELECT copied.source_type sourceType,copied.new_id sourceId
+      FROM OPENJSON(g.members) member
+      INNER JOIN (
+        SELECT N'CostItem' source_type,old_id,new_id FROM @copiedCosts
+        UNION ALL SELECT N'ManhourLine',old_id,new_id FROM @copiedManhours
+        UNION ALL SELECT N'ExpenseLine',old_id,new_id FROM @copiedExpenses
+        UNION ALL SELECT N'OtherCostLine',old_id,new_id FROM @copiedOtherCosts
+      -- member.type 5 is a JSON object; anything else in a hand-edited list is skipped rather than failing the whole copy.
+      ) copied ON copied.source_type=CASE WHEN member.type=5 THEN JSON_VALUE(member.value,'$.sourceType') END
+        AND copied.old_id=CASE WHEN member.type=5 THEN TRY_CONVERT(bigint,JSON_VALUE(member.value,'$.sourceId')) END
+      ORDER BY TRY_CONVERT(int,member.[key]) FOR JSON PATH) members) moved
+    WHERE g.estimate_id=@estimate_id AND g.revision=@current_revision AND moved.members IS NOT NULL
+    ORDER BY g.id;
   `);
 }
 
@@ -777,7 +798,18 @@ export function registerEstimateRoutes(app: FastifyInstance, config: AppConfig, 
         contingency_rate=COALESCE(@contingency_rate,contingency_rate),locked_at=NULL,locked_by=NULL,updated_by=@actor,updated_at=SYSUTCDATETIME() OUTPUT inserted.row_version
         WHERE id=@id AND revision=@current_revision AND row_version=@row_version;`)).recordset[0];
       if (!updated) throw new ApiError(409, "concurrency_conflict", "This estimate was changed by another user. Reload and try again.");
-      await snapshotOverheadPolicy(transaction, id, nextRevision, actor.id, todayIn(config.businessTimeZone));
+      // The new revision is costed with the overhead policy of the revision it copies, not today's, so its total is that
+      // revision's total (owner 2026-11-18). A source that had no policy gives a revision with none.
+      const sourcePolicy = (await new sql.Request(transaction).input("id", sql.BigInt, id).input("revision", sql.Int, fromRevision)
+        .query<{ policy_id: number | string }>(`SELECT policy_id FROM dbo.estimate_overhead_snapshots WHERE estimate_id=@id AND revision=@revision;`)).recordset[0];
+      if (sourcePolicy) {
+        const applied = await snapshotOverheadPolicy(transaction, id, nextRevision, actor.id, todayIn(config.businessTimeZone), Number(sourcePolicy.policy_id));
+        // Policies are append-only, so this always holds; a silent miss would change the total without a word.
+        if (Number(applied?.policy_id) !== Number(sourcePolicy.policy_id)) throw new ApiError(409, "overhead_policy_unavailable", "The overhead policy of that revision could not be applied. Nothing was changed.");
+      } else if (ESTIMATE_OVERHEAD_ENABLED) {
+        // With overhead in use, an approved estimate without a policy cannot be sent to the ERP, so the policy of the day stands in.
+        await snapshotOverheadPolicy(transaction, id, nextRevision, actor.id, todayIn(config.businessTimeZone));
+      }
       await cloneRevisionLines(transaction, id, fromRevision, nextRevision, actor.id);
       await assertEstimateTotals(transaction, id);
       await insertAudit(transaction, actor.id, "Estimate", id, current.estimate_no, "Revision restored",

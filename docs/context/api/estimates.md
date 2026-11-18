@@ -2,54 +2,55 @@
 
 [Module](../modules/estimate.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `a9ef3d91`; generated, do not edit. [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `4ccf591f`; generated, do not edit. [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/estimates` | 479–516 |
-| POST | `/api/v1/estimates` | 518–567 |
-| GET | `/api/v1/estimates/:id/validation` | 569–575 |
-| POST | `/api/v1/estimates/:id/submit` | 577–582 |
-| POST | `/api/v1/estimates/:id/approve` | 584–598 |
-| POST | `/api/v1/estimates/:id/create-revision` | 600–635 |
-| POST | `/api/v1/estimates/:id/request-revision` | 637–677 |
-| GET | `/api/v1/estimates/:id/revisions/:revision` | 681–739 |
-| POST | `/api/v1/estimates/:id/restore-revision` | 743–795 |
+| GET | `/api/v1/estimates` | 500–537 |
+| POST | `/api/v1/estimates` | 539–588 |
+| GET | `/api/v1/estimates/:id/validation` | 590–596 |
+| POST | `/api/v1/estimates/:id/submit` | 598–603 |
+| POST | `/api/v1/estimates/:id/approve` | 605–619 |
+| POST | `/api/v1/estimates/:id/create-revision` | 621–656 |
+| POST | `/api/v1/estimates/:id/request-revision` | 658–698 |
+| GET | `/api/v1/estimates/:id/revisions/:revision` | 702–760 |
+| POST | `/api/v1/estimates/:id/restore-revision` | 764–827 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `todayIn` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 38–42 |
-| `addYears` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 44–46 |
-| `optionalNonnegativeInteger` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 48–52 |
-| `percentage` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 54–62 |
-| `managerOverride` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 64–66 |
-| `nextEstimateRevision` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 69–77 |
-| `adminSelfDecision` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 80–82 |
-| `validationIssues` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 84–95 |
-| `snapshotSubmission` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 97–143 |
-| `snapshotRevision` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 145–176 |
-| `updateInquiry` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 178–183 |
-| `ensureRevisionSnapshot` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 185–191 |
-| `cloneRevisionLines` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 193–254 |
-| `materializeErpMappings` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 256–317 |
-| `withdrawEstimateReview` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 320–329 |
-| `revisionCode` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 333–333 |
-| `restoreRevisionPlan` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 345–350 |
-| `restoreRevisionReason` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 353–356 |
-| `estimateFacts` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 359–365 |
-| `noticeDecision` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 368–384 |
-| `transition` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 386–468 |
-| `registerEstimateRoutes` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 470–796 |
+| `todayIn` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 39–43 |
+| `addYears` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 45–47 |
+| `optionalNonnegativeInteger` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 49–53 |
+| `percentage` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 55–63 |
+| `managerOverride` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 65–67 |
+| `nextEstimateRevision` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 70–78 |
+| `adminSelfDecision` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 81–83 |
+| `validationIssues` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 85–96 |
+| `snapshotSubmission` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 98–144 |
+| `snapshotRevision` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 146–177 |
+| `updateInquiry` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 179–184 |
+| `ensureRevisionSnapshot` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 186–192 |
+| `cloneRevisionLines` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 194–275 |
+| `materializeErpMappings` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 277–338 |
+| `withdrawEstimateReview` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 341–350 |
+| `revisionCode` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 354–354 |
+| `restoreRevisionPlan` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 366–371 |
+| `restoreRevisionReason` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 374–377 |
+| `estimateFacts` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 380–386 |
+| `noticeDecision` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 389–405 |
+| `transition` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 407–489 |
+| `registerEstimateRoutes` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 491–828 |
 
 ## Direct local dependencies
 
 - [backend-node/src/estimate-duplicate-policy.ts](<../../../backend-node/src/estimate-duplicate-policy.ts>)
 - [backend-node/src/http.ts](<../../../backend-node/src/http.ts>)
 - [backend-node/src/estimate-labor-category.ts](<../../../backend-node/src/estimate-labor-category.ts>)
+- [backend-node/src/feature-flags.ts](<../../../backend-node/src/feature-flags.ts>)
 - [backend-node/src/config.ts](<../../../backend-node/src/config.ts>)
 - [backend-node/src/audit.ts](<../../../backend-node/src/audit.ts>)
 - [backend-node/src/db.ts](<../../../backend-node/src/db.ts>)
@@ -72,7 +73,7 @@ Evidence: source snapshot `a9ef3d91`; generated, do not edit. [backend-node/src/
 
 ## SQL references (literal scan, not a complete schema or write-set)
 
-`dbo.audit_log`, `dbo.cost_items`, `dbo.customers`, `dbo.document_lifecycle_events`, `dbo.estimate_assignments`, `dbo.estimate_erp_mappings`, `dbo.estimate_module_details`, `dbo.estimate_overhead_snapshots`, `dbo.estimate_revisions`, `dbo.estimate_submission_snapshots`, `dbo.estimates`, `dbo.expense_lines`, `dbo.fn_estimate_validation`, `dbo.inquiries`, `dbo.inquiry_attachments`, `dbo.manhour_lines`, `dbo.other_cost_lines`, `dbo.roles`, `dbo.suppliers`, `dbo.users`, `dbo.v_estimate_cost_amounts`, `dbo.v_estimate_totals`
+`dbo.audit_log`, `dbo.cost_items`, `dbo.customers`, `dbo.document_lifecycle_events`, `dbo.estimate_assignments`, `dbo.estimate_erp_groups`, `dbo.estimate_erp_mappings`, `dbo.estimate_module_details`, `dbo.estimate_overhead_snapshots`, `dbo.estimate_revisions`, `dbo.estimate_submission_snapshots`, `dbo.estimates`, `dbo.expense_lines`, `dbo.fn_estimate_validation`, `dbo.inquiries`, `dbo.inquiry_attachments`, `dbo.manhour_lines`, `dbo.other_cost_lines`, `dbo.roles`, `dbo.suppliers`, `dbo.users`, `dbo.v_estimate_cost_amounts`, `dbo.v_estimate_totals`
 
 ## Change boundary
 

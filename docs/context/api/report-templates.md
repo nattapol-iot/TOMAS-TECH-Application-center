@@ -2,7 +2,7 @@
 
 [Module](../modules/reports.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `a9ef3d91`; generated, do not edit. [backend-node/src/routes/report-templates.ts](<../../../backend-node/src/routes/report-templates.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `4ccf591f`; generated, do not edit. [backend-node/src/routes/report-templates.ts](<../../../backend-node/src/routes/report-templates.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 

@@ -616,9 +616,9 @@ const ESTIMATE_REVISION_BACK: Guide = {
       target: "estimate.revisionRestore", action: "click", view: "estimates",
       title: { th: "ใช้ Revision นี้ทำต่อ", en: "Continue from this revision", jp: "この改訂から続ける" },
       body: {
-        th: "กดเมื่อต้องการย้อนกลับ ระบบจะถามยืนยันก่อน แล้วเปิด Revision ใหม่ที่คัดลอกรายการจาก Revision นี้ งานที่ทำอยู่ตอนนี้ยังอยู่ในประวัติ กลับไปใช้ได้อีก ถ้าแค่ฝึก ให้กด 'ย้อนกลับ' ในหน้ายืนยัน แล้วกด 'จบบทสอน'",
-        en: "Press it to go back. After you confirm, a new revision opens holding a copy of this one's lines; the work in hand stays in the history and can be gone back to. Only practising? Press Back in the confirmation, then Finish.",
-        jp: "戻したいときに押します。確認後、この改訂の明細をコピーした新しい改訂が開き、作業中の内容は履歴に残ってあとで戻せます。練習だけなら確認画面で「戻る」を押し、「完了」を押します。",
+        th: "กดเมื่อต้องการย้อนกลับ ระบบจะถามยืนยันก่อน แล้วเปิด Revision ใหม่ที่เหมือน Revision นี้ทุกอย่าง ทั้งรายการ ราคา อัตราสำรอง และการจัดหน้าสรุป ERP งานที่ทำอยู่ตอนนี้ยังอยู่ในประวัติ กลับไปใช้ได้อีก ถ้าแค่ฝึก ให้กด 'ย้อนกลับ' ในหน้ายืนยัน แล้วกด 'จบบทสอน'",
+        en: "Press it to go back. After you confirm, a new revision opens as this one was, with its lines, prices, contingency rate and ERP summary layout; the work in hand stays in the history and can be gone back to. Only practising? Press Back in the confirmation, then Finish.",
+        jp: "戻したいときに押します。確認後、この改訂と同じ内容（明細、単価、予備費率、ERPサマリーの構成）の新しい改訂が開き、作業中の内容は履歴に残ってあとで戻せます。練習だけなら確認画面で「戻る」を押し、「完了」を押します。",
       },
       missing: {
         th: "ปุ่มนี้ขึ้นให้เจ้าของ Estimate หรือผู้จัดการ เมื่อ Estimate อนุมัติแล้วหรือกำลังแก้ไข ระหว่างรอตรวจให้ถอนการส่งก่อน",
