@@ -83,8 +83,15 @@ if [[ "$DOCUMENT_MODE" == "Nas" ]]; then
     NAS_DOCUMENT_DIR="${NAS_DOCUMENT_DIR:-/private/tmp/iot-team-center-nas/IoT Team Center}"
     nas_probe=".iot-team-center-vm-probe"
     nas_token="deploy-$(date +%s)-$$"
-    mkdir -p "$NAS_DOCUMENT_DIR"
-    printf '%s' "$nas_token" > "$NAS_DOCUMENT_DIR/$nas_probe"
+    write_nas_probe() { mkdir -p "$NAS_DOCUMENT_DIR" 2>/dev/null && printf '%s' "$nas_token" > "$NAS_DOCUMENT_DIR/$nas_probe" 2>/dev/null; }
+    if ! write_nas_probe; then
+      # The Mac's own SMB mount is listed but no longer writable (a dead session after a NAS or
+      # network hiccup); mount-nas.sh skips a listed mount, so drop it and mount again.
+      log "The Mac's NAS mount is not writable; mounting it again"
+      /usr/bin/perl -e 'alarm 30; exec @ARGV' /sbin/umount -f /private/tmp/iot-team-center-nas || true
+      DEV_NAS_USERNAME="$DEV_NAS_USERNAME" bash "$SOURCE/scripts/macos/mount-nas.sh"
+      write_nas_probe || die "The NAS is mounted on the Mac but '$NAS_DOCUMENT_DIR' is not writable."
+    fi
     vm_sees_nas() {
       [[ "$(/usr/bin/perl -e 'alarm 20; exec @ARGV' colima ssh -p iot -- cat "$NAS_DOCUMENT_DIR/$nas_probe" 2>/dev/null || true)" == "$nas_token" ]]
     }
