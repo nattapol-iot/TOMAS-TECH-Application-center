@@ -1,5 +1,6 @@
 import { dateOnly } from "./http.js";
 import { planDates, type TaskPlan } from "./resource-task-math.js";
+import { peopleShares } from "./plan-people.js";
 import { resolveTasks, taskRow, type TaskRow } from "./schedule-service.js";
 
 // The Resource Plan's Workload in one read: every open piece of work in the caller's scope, with the person it
@@ -42,6 +43,8 @@ export type WorkloadItem = {
   hidden?: boolean;
   /** On the team board only: a day of a repeating team task; it counts in the load but overlaps nothing (lib/team-board.ts). */
   repeat?: boolean;
+  /** A plan row with people typed per day: this person's man-days on each date (plan-people.ts peopleShares); manDays is their total. */
+  byDay?: Record<string, number>;
 };
 
 const FINISHED_SQL = FINISHED_WORK_STATUSES.map((status) => `N'${status}'`).join(",");
@@ -222,11 +225,16 @@ export function workloadItems(sets: Row[][], holidays: ReadonlySet<string>): { i
       // Effort is split across the PICs; a row with none is listed once, with no owner.
       const owners = picsByTask.get(task.id) ?? [];
       const shares: Array<number | null> = owners.length ? owners : [null];
+      // People typed per day (the People table) load each PIC with their share of each day. Outsourced manpower is the
+      // supplier's: the row's man-days are not its PIC's, who keeps it as plan work with no man-days of their own.
+      const outsourced = task.laborSource === "Outsourced", people = task.peopleByDay ?? [];
+      const byDay = !outsourced && people.length && resolved.planStart ? peopleShares(resolved.planStart, people, shares.length) : null;
+      const manDays = outsourced ? null : byDay ? Math.round(Object.values(byDay).reduce((sum, share) => sum + share, 0) * 100) / 100 : task.planManDays / shares.length;
       for (const ownerId of shares) items.push({
         key: `Project-${task.id}-${ownerId ?? "none"}`, workKey: `Project-${task.id}`, group: groupOf(task), type: "Project", entityId: projectId, ownerId,
         reference: `${project.number} · ${resolved.wbs}`, title: task.name, customer: project.customer,
-        start: resolved.planStart, end: resolved.planFinish, manDays: task.planManDays / shares.length,
-        progress: resolved.percentComplete, status: resolved.status, ...project.scope,
+        start: resolved.planStart, end: resolved.planFinish, manDays,
+        progress: resolved.percentComplete, status: resolved.status, ...(byDay ? { byDay } : {}), ...project.scope,
       });
     }
   }

@@ -3,14 +3,19 @@
    people on each day typed like a spreadsheet, and each row marked as our own staff or outsourced manpower.
    Click a day and type; drag over several days and type once; Delete clears; a block copied from Excel pastes in.
    A row's man-days are the people typed on it. A figure is labor for the day and may be a share: one person on two
-   tasks a day is 0.5 on each; a day where the same PIC adds up to more than one man-day gets an amber edge. Edits save by themselves a moment after typing stops, every touched
+   tasks a day is 0.5 on each. A day where a PIC is given more than they have gets an amber edge: their share of the
+   rows here plus what the team board has for them elsewhere that day (other projects, estimates, team tasks,
+   meetings), against their own daily capacity. Edits save by themselves a moment after typing stops, every touched
    row in one call (PUT /projects/:id/schedule/people). The rules for a row's span are in lib/plan-people.ts. */
 
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ApiClientError, apiRequest } from "../api-client";
 import { currentLocale, useT } from "../i18n";
 import { Icon } from "../ui";
-import { addDays, applyPeople, figureText, fillPeople, isWorkDay, mondayOf, overbookedDays, parsePastedBlock, peopleManDays, peopleOn, sameSpan, tenth, usualPeople, weekDay, type PeopleSpan } from "../../../lib/plan-people";
+import { addDays, applyPeople, figureText, fillPeople, isWorkDay, mondayOf, overbookedDays, parsePastedBlock, peopleManDays, peopleOn, sameSpan, tenth, usualPeople, weekDay, type Overbooked, type PeopleSpan } from "../../../lib/plan-people";
+import { weeklyCapacity } from "../../../lib/resource-planning";
+import { boardDays, dailyLoad, outlookLoad, withOutlook } from "../../../lib/team-board";
+import { loadTeamBoard, type TeamBoardData } from "../resource-workload-client";
 
 export type PeopleTask = {
   id: number; wbs: string; depth: number; kind: string; name: string; isMilestone: boolean;
@@ -25,8 +30,8 @@ type RowModel = {
   task: PeopleTask; type: "heading" | "rollup" | "work"; editIndex: number; outsourced: boolean; supplier: string;
   /** People per shown day: null outside the row's dates, 0 inside them with nobody set. */
   cells: (number | null)[]; manDays: number; usual: number | null;
-  /** Days where one of the row's PICs is on several rows for more than one man-day in all (lib/plan-people.ts overbookedDays). */
-  clash: ReadonlyMap<number, { name: string; total: number }> | null;
+  /** Days where one of the row's PICs is given more than they have (lib/plan-people.ts overbookedDays). */
+  clash: ReadonlyMap<number, Overbooked> | null;
 };
 type Selection = { ar: number; ac: number; fr: number; fc: number };
 
@@ -59,6 +64,35 @@ export function PlanPeopleGrid({ projectId, scheduleVersion, tasks, holidays, ca
   const days = useMemo(() => Array.from({ length: DAYS }, (_, index) => addDays(anchor, index)), [anchor]);
   const dayClass = useMemo(() => days.map((day) => `${weekDay(day) === 0 || weekDay(day) === 6 ? " we" : ""}${holidaySet.has(day) ? " hol" : ""}${day === today ? " today" : ""}${weekDay(day) === 0 ? " sun" : ""}`), [days, holidaySet, today]);
 
+  // Everyone's other work over the shown weeks, read from the team board when the view opens, moves or saves, so a
+  // person is checked against all their projects and their own capacity. Without it the check stays inside this plan.
+  const boardKey = `${anchor}|${scheduleVersion ?? ""}`;
+  const [board, setBoard] = useState<{ key: string; data: TeamBoardData | null } | null>(null);
+  useEffect(() => {
+    let current = true;
+    const from = boardKey.slice(0, 10);
+    loadTeamBoard(from, addDays(from, DAYS - 1)).then((data) => { if (current) setBoard({ key: boardKey, data }); })
+      .catch(() => { if (current) setBoard({ key: boardKey, data: null }); });
+    return () => { current = false; };
+  }, [boardKey]);
+  const boardData = board && board.key === boardKey ? board.data : null;
+  const boardFailed = Boolean(board && board.key === boardKey && !board.data);
+  const elsewhere = useMemo(() => {
+    if (!boardData) return null;
+    const grid = boardDays(days[0]!, WEEKS, boardData.holidays, today), meetings = outlookLoad(boardData.outlook);
+    const people = new Set<number>();
+    const visit = (task: PeopleTask) => { for (const pic of task.pics ?? []) people.add(pic.id); task.children.forEach(visit); };
+    tasks.forEach(visit);
+    const byPerson = new Map<number, { other: number[]; daily: number }>();
+    for (const id of people) {
+      const capacity = weeklyCapacity(boardData.capacities.find((entry) => entry.userId === id)?.daysPerWeek);
+      const others = boardData.items.filter((item) => item.ownerId === id && !(item.type === "Project" && item.entityId === projectId));
+      const load = withOutlook(dailyLoad(others, grid, capacity, boardData.holidays), (day) => meetings.get(`${id}|${day}`) ?? 0);
+      byPerson.set(id, { other: load.map((day) => day.manDays), daily: capacity / 5 });
+    }
+    return byPerson;
+  }, [boardData, days, tasks, projectId, today]);
+
   const model = useMemo(() => {
     const rows: RowModel[] = [], total = Array<number>(DAYS).fill(0), own = Array<number>(DAYS).fill(0), out = Array<number>(DAYS).fill(0);
     let ownManDays = 0, outManDays = 0, editIndex = 0;
@@ -90,10 +124,11 @@ export function PlanPeopleGrid({ projectId, scheduleVersion, tasks, holidays, ca
     };
     tasks.forEach(visit);
     // Our own rows only: the people of an outsourced row are the supplier's, not its PIC.
-    const clashes = overbookedDays(rows.map((row) => ({ people: row.type === "work" && !row.outsourced ? row.task.pics ?? [] : [], cells: row.cells })));
+    const clashes = overbookedDays(rows.map((row) => ({ people: row.type === "work" && !row.outsourced ? row.task.pics ?? [] : [], cells: row.cells })),
+      elsewhere ? { other: (id, day) => elsewhere.get(id)?.other[day] ?? 0, available: (id) => elsewhere.get(id)?.daily ?? 1 } : undefined);
     for (const [index, days] of clashes) rows[index]!.clash = days;
     return { rows, total, own, out, ownManDays, outManDays, editRows: rows.filter((row) => row.editIndex >= 0) };
-  }, [tasks, drafts, days, canEdit, lockedIds]);
+  }, [tasks, drafts, days, canEdit, lockedIds, elsewhere]);
 
   // Every handler below reads the latest state through this, so the row components keep stable props.
   const live = useRef({ model, drafts, selection, days, scheduleVersion, notify, onReload, t });
@@ -309,6 +344,7 @@ export function PlanPeopleGrid({ projectId, scheduleVersion, tasks, holidays, ca
       <span><i className="people-key own" />{t("People.own")}</span><span><i className="people-key out" />{t("People.out")}</span>
       <span><i className="people-key unset" />{t("People.unset")}</span><span><i className="people-key we" />{t("People.weekend")}</span>
       <span><i className="people-key hol" />{t("People.holiday")}</span><span><i className="people-key clash" />{t("People.clash")}</span>
+      {boardFailed ? <span className="people-board-off">{t("People.boardOff")}</span> : null}
       {canEdit ? <span className="people-tips">{t("People.tipType")} · {t("People.tipRange")} · {t("People.tipHalf")} · {t("People.tipFill")} · {t("People.tipKeys")} · {t("People.tipPaste")}</span> : null}
     </div>
     <div className="people-scroll" ref={scroller}>
@@ -378,7 +414,7 @@ const PeopleRow = memo(function PeopleRow({ row, dayClass, days, holidays, canEd
       const state = !work ? (value !== null ? " span" : "") : task.isMilestone ? "" : value ? (row.outsourced ? " out" : " own") : unset ? " unset" : "";
       const over = row.clash?.get(index), text = shown(value);
       return <td key={index} className={`people-day${dayClass[index]}${state}${selected ? " sel" : ""}${editable ? " edit" : ""}${over ? " clash" : ""}${text.length > 3 ? " long" : ""}`}
-        title={over ? t("People.clashHint").replace("{name}", over.name).replace("{total}", String(over.total)) : undefined} {...(editable ? { "data-row": row.editIndex, "data-column": index } : {})}>
+        title={over ? t("People.clashHint").replace("{name}", over.name).replace("{here}", String(over.here)).replace("{other}", String(over.other)).replace("{total}", String(over.total)).replace("{available}", String(over.available)) : undefined} {...(editable ? { "data-row": row.editIndex, "data-column": index } : {})}>
         {active === index
           ? <input ref={input} className="people-cell" inputMode="decimal" maxLength={5} autoComplete="off" defaultValue={text} aria-label={`${task.wbs} ${days[index]}`}
               onFocus={(event) => event.currentTarget.select()} onKeyDown={onKeyDown} onInput={onInput} onPaste={onPaste} onBlur={onBlur} />

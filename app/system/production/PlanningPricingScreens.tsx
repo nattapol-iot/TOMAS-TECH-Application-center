@@ -25,6 +25,7 @@ import { choiceLink, optionalChoiceLink, placeId, useLinkedState, useScreenPlace
 import { HealthBadge } from "./ProjectPlanFields";
 import { PlanManHours, type PlanManHoursData } from "./PlanManHours";
 import { PlanPeopleGrid } from "./PlanPeopleGrid";
+import { peopleShares, sharesTotal } from "../../../lib/plan-people";
 import { remainingForRow } from "../../../lib/manhour-budget";
 import "./my-work.css";
 import {
@@ -2299,10 +2300,15 @@ function planCommitments(schedule: ProjectSchedule): Commitment[] {
   };
   return rows.filter((row) => row.kind !== "phase" && !row.children.length).flatMap((row) => {
     const owners = row.pics.filter((pic) => pic.active !== false).map((pic) => pic.id);
+    // As backend-node/src/resource-workload.ts builds them: people typed per day load each PIC with their share of each
+    // day, and outsourced manpower is the supplier's, so its row carries no man-days for its PIC.
+    const outsourced = row.laborSource === "Outsourced", people = row.peopleByDay ?? [];
+    const byDay = !outsourced && people.length && row.planStart ? peopleShares(row.planStart, people, owners.length || 1) : null;
     return (owners.length ? owners : [null]).map((ownerId): Commitment => ({
       key: `Project-${row.id}-${ownerId ?? "none"}`, workKey: `Project-${row.id}`, group: groupOf(row), type: "Project", entityId: schedule.projectId, ownerId,
       reference: `${schedule.projectNo} · ${row.wbs}`, title: row.name, customer: "", start: row.planStart, end: row.planFinish,
-      manDays: Number(row.planManDays) / (owners.length || 1), progress: Number(row.percentComplete), status: row.status,
+      manDays: outsourced ? null : byDay ? sharesTotal(byDay) : Number(row.planManDays) / (owners.length || 1), progress: Number(row.percentComplete), status: row.status,
+      ...(byDay ? { byDay } : {}),
     }));
   });
 }

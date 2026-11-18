@@ -191,7 +191,7 @@ export function redactWork(item: WorkloadItem): WorkloadItem {
   return {
     key: item.key, workKey: item.workKey, ...(item.group ? { group: item.group } : {}), type: item.type, entityId: 0, ownerId: item.ownerId, reference: "", title: "", customer: "",
     start: item.start, end: item.end, manDays: item.manDays, progress: item.progress, status: item.status, hidden: true,
-    ...(item.tentative ? { tentative: true } : {}),
+    ...(item.tentative ? { tentative: true } : {}), ...(item.byDay ? { byDay: item.byDay } : {}),
   };
 }
 

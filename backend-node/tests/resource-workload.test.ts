@@ -57,6 +57,20 @@ const priorities = [
 ];
 const workSets = [inquiries, tasks, estimates, sections, projects, schedule, pics, priorities];
 
+test("a plan row with people per day loads each PIC with their share of each day; outsourced manpower loads nobody", () => {
+  const rows = [
+    raw({ id: 10, kind: "phase", name: "Build", plan_start: null }),
+    raw({ id: 21, parent_id: 10, name: "Wiring", plan_start: "2026-10-05", plan_days: 3, plan_man_days: 3.5, people_by_day: "[3,0,0.5]", labor_source: "Own", labor_supplier: "" }),
+    raw({ id: 22, parent_id: 10, sort_order: 2, name: "Hired crew", plan_start: "2026-10-05", plan_days: 2, plan_man_days: 12, people_by_day: "[6,6]", labor_source: "Outsourced", labor_supplier: "ACME" }),
+  ];
+  const { items } = workloadItems([[], [], [], [], projects, rows, [{ task_id: 21, user_id: 7 }, { task_id: 21, user_id: 9 }, { task_id: 22, user_id: 7 }], []], new Set());
+  const wiring = items.find((item) => item.key === "Project-21-7")!, hired = items.find((item) => item.key === "Project-22-7")!;
+  assert.deepEqual(wiring.byDay, { "2026-10-05": 1, "2026-10-07": 0.25 }, "three people over two PICs is one each; half a day over two is a quarter");
+  assert.equal(wiring.manDays, 1.25);
+  assert.equal(hired.manDays, null, "the supplier's man-days are not the PIC's");
+  assert.equal(hired.byDay, undefined);
+});
+
 test("every open piece of work becomes one item per person, with its effort shared", () => {
   const { items, warnings } = workloadItems(workSets, new Set());
   assert.deepEqual(warnings, []);

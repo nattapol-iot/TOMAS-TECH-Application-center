@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { addDays, applyPeople, dayDiff, figureText, fillPeople, isWorkDay, mondayOf, overbookedDays, parsePastedBlock, peopleManDays, peopleOn, sameSpan, usualPeople } from "../lib/plan-people.ts";
+import { addDays, applyPeople, dayDiff, figureText, fillPeople, isWorkDay, mondayOf, overbookedDays, parsePastedBlock, peopleManDays, peopleOn, peopleShares, sameSpan, sharesTotal, usualPeople } from "../lib/plan-people.ts";
 
 const root = new URL("../", import.meta.url);
 const source = async (path) => (await readFile(new URL(path, root), "utf8")).replace(/\r\n/g, "\n");
@@ -75,9 +75,23 @@ test("overbookedDays: the same PIC on several rows for more than one man-day on 
   ]);
   assert.deepEqual([...found.keys()].sort(), [0, 1]);
   assert.deepEqual([...found.get(0).keys()], [0, 2], "1 + 0.5 and 1 + 1 are over; 0.5 + 0.25 is not");
-  assert.deepEqual(found.get(0).get(0), { name: "Somchai", total: 1.5 });
+  assert.deepEqual(found.get(0).get(0), { name: "Somchai", total: 1.5, here: 1.5, other: 0, available: 1 });
   assert.deepEqual([...found.get(1).keys()], [0, 2]);
   assert.equal(overbookedDays([{ people: [somchai], cells: [0.5] }, { people: [somchai], cells: [0.5] }]).size, 0, "half and half is one day");
+});
+
+test("overbookedDays with the team board: work elsewhere and the person's own capacity decide", () => {
+  const somchai = { id: 1, name: "Somchai" }, rows = [{ people: [somchai], cells: [0.5, 0.5, 1, 0.5] }];
+  const found = overbookedDays(rows, { other: (id, day) => [0.5, 0.6, 0, 0][day], available: (id, day) => (day === 3 ? 0.4 : 1) });
+  assert.deepEqual([...found.get(0).keys()], [1, 3], "half here and half elsewhere fits; 0.5 + 0.6 does not; a half-time person cannot take 0.5");
+  assert.deepEqual(found.get(0).get(1), { name: "Somchai", total: 1.1, here: 0.5, other: 0.6, available: 1 });
+  assert.equal(overbookedDays([{ people: [somchai], cells: [null, 0] }], { other: () => 5, available: () => 1 }).size, 0, "a day with nobody typed here is not this plan's to flag");
+});
+
+test("peopleShares: each PIC's man-days by date, one a day at most", () => {
+  const shares = peopleShares("2026-12-05", [3, 0, 0.5], 2);                  // Sat 5 Dec: a crew of three, two PICs
+  assert.deepEqual(shares, { "2026-12-05": 1, "2026-12-07": 0.25 });
+  assert.equal(sharesTotal(shares), 1.25);
 });
 
 test("Plan screen: the People table is a view of Projects > Plan and locks man-days that come from it", async () => {

@@ -78,25 +78,50 @@ export function figureText(text: string): string {
 }
 
 /**
- * The same person on several rows on one day for more than one man-day in all. A PIC's share of a row is its
- * figure over its PICs, one at most (a PIC leading a crew of three is one of them). Returns, by row index, the
- * days that are over with the person and their total, so the screen can point at them.
+ * A PIC's share of a row's day: the day's figure over the row's PICs, one at most (a PIC leading a crew of three is
+ * one of them). backend-node/src/plan-people.ts holds the same rule for the team load.
  */
-export function overbookedDays(rows: readonly { people: readonly { id: number; name: string }[]; cells: readonly (number | null)[] }[]): Map<number, Map<number, { name: string; total: number }>> {
+export const personShare = (figure: number, owners: number): number => Math.round(Math.min(1, figure / Math.max(1, owners)) * 100) / 100;
+
+/** What a row's people mean for one of its PICs, by date: the team load reads this instead of spreading the row's man-days evenly. */
+export function peopleShares(planStart: string, people: readonly number[], owners: number): Record<string, number> {
+  const shares: Record<string, number> = {};
+  people.forEach((figure, offset) => { if (figure > 0) shares[addDays(planStart, offset)] = personShare(figure, owners); });
+  return shares;
+}
+export const sharesTotal = (shares: Record<string, number>): number => Math.round(Object.values(shares).reduce((sum, share) => sum + share, 0) * 100) / 100;
+
+/** What else a person has on a day, and what they can give: from the team board, over every project. */
+export type DayLimits = {
+  /** Man-days the person already has that day outside these rows (other projects, estimates, team tasks, meetings). */
+  other: (personId: number, day: number) => number;
+  /** Man-days the person can give on a day: their weekly capacity over five. */
+  available: (personId: number, day: number) => number;
+};
+export type Overbooked = { name: string; total: number; here: number; other: number; available: number };
+
+/**
+ * The days a person is given more than they have: their shares of these rows (personShare), plus what they have
+ * elsewhere that day, against what they can give. Without limits it looks at these rows only, against one man-day.
+ * Returns, by row index, the days that are over with the person and the sums, so the screen can point at them.
+ */
+export function overbookedDays(rows: readonly { people: readonly { id: number; name: string }[]; cells: readonly (number | null)[] }[], limits?: DayLimits): Map<number, Map<number, Overbooked>> {
   const byPerson = new Map<number, { name: string; totals: number[]; shares: { row: number; share: number[] }[] }>();
   rows.forEach((row, index) => {
     if (!row.people.length) return;
-    const share = row.cells.map((value) => (value ? Math.min(1, value / row.people.length) : 0));
+    const share = row.cells.map((value) => (value ? personShare(value, row.people.length) : 0));
     for (const one of row.people) {
       const person = byPerson.get(one.id) ?? { name: one.name, totals: [], shares: [] };
       share.forEach((value, day) => { person.totals[day] = (person.totals[day] ?? 0) + value; });
       person.shares.push({ row: index, share }); byPerson.set(one.id, person);
     }
   });
-  const found = new Map<number, Map<number, { name: string; total: number }>>();
-  for (const person of byPerson.values()) person.totals.forEach((total, day) => {
-    if (total <= 1.001) return;
-    for (const { row, share } of person.shares) if (share[day]) found.set(row, (found.get(row) ?? new Map<number, { name: string; total: number }>()).set(day, { name: person.name, total: tenth(total) }));
+  const found = new Map<number, Map<number, Overbooked>>();
+  for (const [id, person] of byPerson) person.totals.forEach((here, day) => {
+    const other = limits?.other(id, day) ?? 0, available = limits?.available(id, day) ?? 1;
+    if (!here || here + other <= available + 0.001) return;
+    const over: Overbooked = { name: person.name, total: tenth(here + other), here: tenth(here), other: tenth(other), available: tenth(available) };
+    for (const { row, share } of person.shares) if (share[day]) found.set(row, (found.get(row) ?? new Map<number, Overbooked>()).set(day, over));
   });
   return found;
 }
