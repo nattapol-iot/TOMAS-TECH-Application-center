@@ -76,9 +76,34 @@ if [[ "$DOCUMENT_MODE" == "Nas" ]]; then
   DEV_NAS_USERNAME="$DEV_NAS_USERNAME" bash "$SOURCE/scripts/macos/mount-nas.sh"
   if [[ "$DOCKER_CONTEXT" == "colima-iot" ]]; then
     log "Checking NAS visibility inside the isolated iot VM"
-    if ! /usr/bin/perl -e 'alarm 20; exec @ARGV' colima ssh -p iot -- test -d /private/tmp/iot-team-center-nas; then
-      # A host SMB reconnect invalidates the existing virtiofs descriptor. Only
-      # this application's VM may restart; preserve the operator's default context.
+    # 'test -d' is not enough: after a host SMB reconnect the VM can keep an old view of the
+    # mount point (the directory exists, the NAS content does not), so the API silently reads
+    # and writes somewhere else. Write a probe through the Mac's SMB mount and read it in the VM.
+    NAS_DOCUMENT_DIR="$(grep -E '^DEV_DOCUMENT_STORAGE_PATH=' "$DEPLOY_DIR/.env" | cut -d= -f2- || true)"
+    NAS_DOCUMENT_DIR="${NAS_DOCUMENT_DIR:-/private/tmp/iot-team-center-nas/IoT Team Center}"
+    nas_probe=".iot-team-center-vm-probe"
+    nas_token="deploy-$(date +%s)-$$"
+    mkdir -p "$NAS_DOCUMENT_DIR"
+    printf '%s' "$nas_token" > "$NAS_DOCUMENT_DIR/$nas_probe"
+    vm_sees_nas() {
+      [[ "$(/usr/bin/perl -e 'alarm 20; exec @ARGV' colima ssh -p iot -- cat "$NAS_DOCUMENT_DIR/$nas_probe" 2>/dev/null || true)" == "$nas_token" ]]
+    }
+    if ! vm_sees_nas; then
+      # Anything the API wrote while the VM had the old view is kept: copy it out of the VM
+      # before the restart and add it back to the NAS without overwriting a file there.
+      rescue_dir="$HOME/iot-team-center/nas-rescue-$(date +%Y%m%d-%H%M%S)"
+      mkdir -p "$rescue_dir"
+      vm_view_mb="$(/usr/bin/perl -e 'alarm 120; exec @ARGV' colima ssh -p iot -- du -sm "$NAS_DOCUMENT_DIR" 2>/dev/null | cut -f1 || true)"
+      if [[ ! "$vm_view_mb" =~ ^[0-9]+$ ]] || (( vm_view_mb > 4096 )); then
+        # Too large (or unreadable) to be writes from a short stale period: do not copy it.
+        echo "::warning title=NAS rescue::Skipped copying the iot VM's view of the document folder (${vm_view_mb:-unreadable} MB); check it by hand if uploads went missing"
+      elif /usr/bin/perl -e 'alarm 600; exec @ARGV' colima ssh -p iot -- \
+          tar -C "$NAS_DOCUMENT_DIR" --exclude "./$nas_probe" -cf - . > "$rescue_dir/vm-view.tar" 2>/dev/null; then
+        log "Saved the iot VM's view of the document folder to $rescue_dir ($(tar -tf "$rescue_dir/vm-view.tar" | grep -vc '/$' || true) files)"
+      else
+        echo "::warning title=NAS rescue::Could not copy the iot VM's view of the document folder before the restart; see $rescue_dir"
+      fi
+      # Only this application's VM may restart; preserve the operator's default context.
       log "Refreshing stale NAS sharing in the isolated iot VM"
       (
         previous_context="$(docker context show)"
@@ -86,9 +111,17 @@ if [[ "$DOCUMENT_MODE" == "Nas" ]]; then
         /usr/bin/perl -e 'alarm 90; exec @ARGV' colima stop -p iot
         /usr/bin/perl -e 'alarm 180; exec @ARGV' colima start -p iot
       )
-      /usr/bin/perl -e 'alarm 20; exec @ARGV' colima ssh -p iot -- test -d /private/tmp/iot-team-center-nas \
-        || die "NAS is mounted on the Mac but is still unavailable in the iot VM."
+      vm_sees_nas || die "NAS is mounted on the Mac but the iot VM still does not see its content."
+      if [[ -s "$rescue_dir/vm-view.tar" ]]; then
+        mkdir -p "$rescue_dir/files"
+        tar -C "$rescue_dir/files" -xf "$rescue_dir/vm-view.tar"
+        added="$(rsync -a --ignore-existing --out-format='%n' "$rescue_dir/files/" "$NAS_DOCUMENT_DIR/" | grep -vc '/$' || true)"
+        log "Added $added files the API wrote during the stale view back to the NAS (existing files untouched)"
+        [[ "$added" == "0" ]] || echo "::warning title=NAS rescue::$added files written during the stale NAS view were added back to the NAS; kept in $rescue_dir"
+      fi
     fi
+    rm -f "$NAS_DOCUMENT_DIR/$nas_probe"
+    log "The iot VM sees the NAS content"
   fi
 fi
 
