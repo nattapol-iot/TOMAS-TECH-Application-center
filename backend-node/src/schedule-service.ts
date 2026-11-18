@@ -8,6 +8,7 @@ import { dateOnly } from "./http.js";
 import { resolveSchedule, type ResolvedScheduleTask, type ScheduleCalculationTask } from "./schedule-calculator.js";
 import type { CurrentUser } from "./types.js";
 
+import { fitPeople, storedPeople } from "./plan-people.js";
 export type ProjectRow = { id: number; projectNo: string; name: string; managerId: number; leadEngineerId?: number | null; status: string; targetDelivery: string | null };
 /** active: the PIC can still answer for the row (an active account on the project's team); a PIC who left or was taken off the team does not hold it. */
 export type PicRow = { id: number; name: string; email: string; active: boolean };
@@ -18,6 +19,8 @@ export type TaskRow = {
   baselineFinish: string | null; baselineDays: number; baselineRevision: number; actualStart: string | null;
   actualFinish: string | null; forecastFinish: string | null; percentComplete: number; status: string;
   blockedReason: string | null; remark: string | null; actualManDays: number; updatedBy: number; updatedAt: unknown; rowVersion: Buffer;
+  /** The People table (plan-people.ts): our own staff or outsourced manpower, its supplier, and people per day from the plan start. */
+  laborSource?: string; laborSupplier?: string; peopleByDay?: number[];
 };
 export type PlanInput = {
   scheduleVersion: string | null; rowVersion: Buffer | null; parentId: number | null; sortOrder: number; kind: string; name: string;
@@ -107,13 +110,15 @@ export function taskRow(row: Record<string, unknown> & { row_version: Buffer }):
     forecastFinish: dateOnly(row.forecast_end as Date | string | null), percentComplete: Number(row.percent_done), status: String(row.status),
     blockedReason: row.blocked_reason === null ? null : String(row.blocked_reason), remark: row.note === null ? null : String(row.note),
     actualManDays: Number(row.actual_man_days), updatedBy: Number(row.updated_by), updatedAt: row.updated_at, rowVersion: row.row_version,
+    laborSource: row.labor_source == null ? "Own" : String(row.labor_source), laborSupplier: row.labor_supplier == null ? "" : String(row.labor_supplier),
+    peopleByDay: fitPeople(storedPeople(row.people_by_day), Number(row.plan_days)),
   };
 }
 
 const TASK_COLUMNS = `id,project_id,parent_id,sort_order,kind,name,is_milestone,origin,created_by,visibility,
  plan_start,plan_days,start_mode,predecessor_id,lag_days,pic_external,plan_man_days,baseline_start,baseline_end,
  baseline_days,baseline_rev,actual_start,actual_end,forecast_end,percent_done,status,blocked_reason,note,actual_man_days,
- updated_by,updated_at,row_version`;
+ updated_by,updated_at,row_version,labor_source,labor_supplier,people_by_day`;
 
 export async function readTasks(transaction: TransactionType, projectId: number): Promise<TaskRow[]> {
   const request = new sql.Request(transaction); request.input("project", sql.BigInt, projectId);
@@ -381,6 +386,7 @@ export function taskResponse(resolved: ResolvedScheduleTask, tasks: Map<number, 
     baselineFinish: task.baselineFinish, baselineDays: task.baselineDays, baselineRevision: task.baselineRevision, actualStart: resolved.actualStart,
     actualFinish: resolved.actualFinish, forecastFinish: resolved.forecastFinish, percentComplete: resolved.percentComplete, status: resolved.status,
     remark: task.remark, actualManDays: task.actualManDays, rowVersion: task.rowVersion.toString("base64"), updatedAt: task.updatedAt,
+    laborSource: task.laborSource ?? "Own", laborSupplier: task.laborSupplier ?? "", peopleByDay: task.peopleByDay ?? [],
     updatedBy: task.updatedBy, ...flags, children: resolved.children.map((child) => taskResponse(child, tasks, pics, access)) };
 }
 export function resolveTasks(tasks: TaskRow[], holidays: Set<string>) { return resolveSchedule(scheduleCalculation(tasks), holidays); }

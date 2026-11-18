@@ -167,6 +167,7 @@ GO
 :r database/migrations/103_team_task_repeat.sql
 :r database/migrations/104_user_menu_favorites.sql
 :r database/migrations/105_project_manhour_budget.sql
+:r database/migrations/106_schedule_people_plan.sql
 
 USE [$(DatabaseName)];
 GO

@@ -9,6 +9,7 @@ import { bodyObject, optionalBodyText, parseRowVersion, positiveLong, requiredIn
 import { demandProjectScope, isMyWorkElevated, isProjectElevated, isProjectManagerRole } from "../project-scope.js";
 import { manHourBudget, MAXIMUM_BUDGET_MAN_DAYS, parseBudgetManDays, readStoredBudget } from "../manhour-budget.js";
 import { networkDays } from "../schedule-calculator.js";
+import { fitPeople, peopleChange, peopleEdits, peopleJson, peopleManDays } from "../plan-people.js";
 import { businessToday } from "../business-date.js";
 import { normalizeBusinessTimeZone } from "../config.js";
 import { countedLeaves, scheduleLeaves, summarizeProjectSchedule } from "../project-health.js";
@@ -176,8 +177,11 @@ export function registerScheduleRoutes(app: FastifyInstance, database: Database,
       if (existing.kind === "task" && existing.parentId !== null && !input.picUserIds.length && oldPics.length && (await readTask(transaction, existing.parentId)).kind === "phase") throw new ApiError(400, "schedule_member_required", "A task under a main heading keeps at least one member.");
       // A heading's own dates are the customer's, so they change whatever rows sit under it.
       if (existing.kind !== "phase" && await hasChildren(transaction, id) && (existing.planStart !== input.planStart || existing.planDays !== input.planDays || existing.startMode !== input.startMode || existing.predecessorId !== input.predecessorId || existing.lagDays !== input.lagDays)) throw new ApiError(400, "schedule_rollup_plan_derived", "A roll-up row's dates and dependency are calculated from its children and cannot be changed directly.");
-      const update = new sql.Request(transaction); bindPlan(update, existing.projectId, input, actor.id); update.input("id", sql.BigInt, id); update.input("version", sql.VarBinary(8), input.rowVersion);
-      const row = (await update.query<{ row_version: Buffer }>(`DECLARE @changed TABLE(row_version binary(8)); UPDATE dbo.schedule_tasks SET parent_id=@parent,sort_order=@sort,kind=@kind,name=@name,is_milestone=@milestone,visibility=@visibility,plan_start=@plan_start,plan_days=@plan_days,start_mode=@start_mode,predecessor_id=@predecessor,lag_days=@lag,pic_external=@pic_external,plan_man_days=@man_days,updated_by=@actor,updated_at=SYSUTCDATETIME() OUTPUT inserted.row_version INTO @changed WHERE id=@id AND project_id=@project AND deleted_at IS NULL AND row_version=@version; SELECT row_version FROM @changed;`)).recordset[0];
+      // People typed in the People table stay with the row: cut to its new length, and its man-days stay theirs (plan-people.ts).
+      const people = fitPeople(existing.peopleByDay ?? [], input.kind === "phase" || input.isMilestone ? 0 : input.planDays);
+      if (people.length) input.planManDays = peopleManDays(people);
+      const update = new sql.Request(transaction); bindPlan(update, existing.projectId, input, actor.id); update.input("id", sql.BigInt, id); update.input("version", sql.VarBinary(8), input.rowVersion); update.input("people", sql.NVarChar(sql.MAX), peopleJson(people));
+      const row = (await update.query<{ row_version: Buffer }>(`DECLARE @changed TABLE(row_version binary(8)); UPDATE dbo.schedule_tasks SET parent_id=@parent,sort_order=@sort,kind=@kind,name=@name,is_milestone=@milestone,visibility=@visibility,plan_start=@plan_start,plan_days=@plan_days,start_mode=@start_mode,predecessor_id=@predecessor,lag_days=@lag,pic_external=@pic_external,plan_man_days=@man_days,people_by_day=@people,updated_by=@actor,updated_at=SYSUTCDATETIME() OUTPUT inserted.row_version INTO @changed WHERE id=@id AND project_id=@project AND deleted_at IS NULL AND row_version=@version; SELECT row_version FROM @changed;`)).recordset[0];
       if (!row) throw concurrency(); const added = await replacePics(transaction, id, input.picUserIds); const before = existingPlan(existing, oldPics), after = planAudit(input);
       await appendUpdate(transaction, existing.projectId, id, actor.id, "plan", JSON.stringify(before), JSON.stringify(after), null); await insertAudit(transaction, actor.id, "Schedule Task", id, `T-${id}`, "Updated plan", before, after);
       const notices = await queueTaskAssignmentNotices(transaction, { id: actor.id, name: actor.name }, [{ taskId: id, userIds: added }]);
@@ -216,6 +220,41 @@ export function registerScheduleRoutes(app: FastifyInstance, database: Database,
       }
       await insertAudit(transaction, actor.id, "Schedule Task", id, `T-${id}`, "Deleted schedule row", removing.map((row) => ({ id: row.id, name: row.name })), null);
       return { removed, scheduleVersion: (await currentScheduleVersion(transaction, existing.projectId))!.toString("base64") };
+    });
+  });
+
+  // The People table of Projects > Plan (owner request 2026-11-18): how many people work on a row each day, typed like a
+  // spreadsheet, and whether they are our own staff or outsourced manpower. One call saves every row the user touched;
+  // the rules are in plan-people.ts.
+  app.put("/api/v1/projects/:projectId/schedule/people", async (request) => {
+    const actor = await users.required(request);
+    const projectId = positiveLong((request.params as { projectId?: string }).projectId, "Project id"); const body = bodyObject(request.body);
+    const scheduleVersion = body.scheduleVersion == null ? null : requiredText(body.scheduleVersion, 64, "Schedule version");
+    const edits = peopleEdits(body.rows);
+    return database.transaction(async (transaction) => {
+      await demandRowPlanOwner(transaction, database, projectId, actor); await validateScheduleVersion(transaction, projectId, scheduleVersion);
+      const tasks = await readTasks(transaction, projectId), byId = new Map(tasks.map((task) => [task.id, task]));
+      const resolved = resolveTasks(tasks, await readHolidays(transaction)).byId, managed = await readManagedTaskIds(transaction, projectId);
+      for (const edit of edits) {
+        const task = byId.get(edit.taskId);
+        if (!task) throw new ApiError(404, "schedule_task_not_found", "Schedule task not found.");
+        const change = peopleChange(task, resolved.get(task.id)?.planStart ?? null, edit, { hasChildren: tasks.some((row) => row.parentId === task.id), managed: managed.has(task.id) });
+        if (edit.plan && await hasPendingRequest(transaction, task.id)) throw new ApiError(409, "schedule_day_request_pending", "Answer the pending request for more days before changing this task's plan.");
+        const update = new sql.Request(transaction); update.input("id", sql.BigInt, task.id); update.input("project", sql.BigInt, projectId); update.input("version", sql.VarBinary(8), task.rowVersion);
+        update.input("plan_start", sql.Date, change.planStart); update.input("plan_days", sql.Int, change.planDays); update.input("start_mode", sql.NVarChar(20), change.startMode);
+        update.input("predecessor", sql.BigInt, change.predecessorId); update.input("lag", sql.Int, change.lagDays); update.input("man_days", sql.Decimal(9, 2), change.planManDays);
+        update.input("source", sql.NVarChar(20), change.laborSource); update.input("supplier", sql.NVarChar(200), change.laborSupplier);
+        update.input("people", sql.NVarChar(sql.MAX), peopleJson(change.people)); update.input("actor", sql.BigInt, actor.id);
+        const result = await update.query(`UPDATE dbo.schedule_tasks SET plan_start=@plan_start,plan_days=@plan_days,start_mode=@start_mode,predecessor_id=@predecessor,lag_days=@lag,plan_man_days=@man_days,labor_source=@source,labor_supplier=@supplier,people_by_day=@people,updated_by=@actor,updated_at=SYSUTCDATETIME() WHERE id=@id AND project_id=@project AND deleted_at IS NULL AND row_version=@version;`);
+        if (result.rowsAffected[0] !== 1) throw concurrency();
+        const before = { planStart: task.planStart, planDays: task.planDays, startMode: task.startMode, predecessorId: task.predecessorId, lagDays: task.lagDays, planManDays: task.planManDays,
+          laborSource: task.laborSource ?? "Own", laborSupplier: task.laborSupplier ?? "", people: task.peopleByDay ?? [] };
+        const after = { planStart: change.planStart, planDays: change.planDays, startMode: change.startMode, predecessorId: change.predecessorId, lagDays: change.lagDays, planManDays: change.planManDays,
+          laborSource: change.laborSource, laborSupplier: change.laborSupplier, people: change.people };
+        await appendUpdate(transaction, projectId, task.id, actor.id, "people", `${before.laborSource} · ${before.planManDays} MD`, `${after.laborSource}${after.laborSupplier ? ` (${after.laborSupplier})` : ""} · ${after.planManDays} MD`, "Edited in the People table");
+        await insertAudit(transaction, actor.id, "Schedule Task", task.id, `T-${task.id}`, "Updated people plan", before, after);
+      }
+      return { saved: edits.length, scheduleVersion: (await currentScheduleVersion(transaction, projectId))!.toString("base64") };
     });
   });
 

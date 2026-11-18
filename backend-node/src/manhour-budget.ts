@@ -9,20 +9,23 @@ import type { Transaction as TransactionType } from "mssql";
  * Estimate, or an Estimate with no internal labor, takes a budget typed by a manager
  * (dbo.projects.manhour_budget_days, migration 105).
  *
- * Planned: the man-days typed on the plan rows. Money is never part of this.
+ * Planned: the man-days typed on the plan rows. Rows marked as outsourced manpower (the People
+ * table, plan-people.ts) are somebody else's hours too: they are counted apart and stay out of
+ * the comparison with the budget. Money is never part of this.
  */
 
 /** Hours shown per man-day. The plan and the estimate both count man-days; hours are a display. */
 export const HOURS_PER_MAN_DAY = 8;
 export const MAXIMUM_BUDGET_MAN_DAYS = 100000;
 
-export type BudgetPlanRow = { id: number; parentId: number | null; kind: string; planManDays: number; isMilestone: boolean };
-export type PlannedEffort = { manDays: number; unplannedRows: number };
+export type BudgetPlanRow = { id: number; parentId: number | null; kind: string; planManDays: number; isMilestone: boolean; laborSource?: string | undefined };
+/** manDays is our own staff's; outsourcedManDays is the rows marked Outsourced. */
+export type PlannedEffort = { manDays: number; outsourcedManDays: number; unplannedRows: number };
 export type BudgetSource = "estimate" | "manual" | "none";
 export type ManHourBudget = {
   source: BudgetSource; estimateNo: string | null; budgetManDays: number | null;
   disciplines: { discipline: string; manDays: number }[];
-  plannedManDays: number; unplannedRows: number; hoursPerManDay: number; canSetBudget: boolean;
+  plannedManDays: number; outsourcedManDays: number; unplannedRows: number; hoursPerManDay: number; canSetBudget: boolean;
 };
 
 const round = (value: number): number => Math.round(value * 100) / 100;
@@ -31,7 +34,8 @@ const round = (value: number): number => Math.round(value * 100) / 100;
  * Man-days the plan holds, without counting a piece of work twice: a row whose sub rows carry
  * man-days counts those, otherwise its own figure. Headings (phases) only add up what is under
  * them. unplannedRows counts the pieces of work (a task with its sub rows is one) that have no
- * man-days at all; milestones are left out because they are a date, not work.
+ * man-days at all; milestones are left out because they are a date, not work. A row's own figure
+ * is outsourced when the row is marked so; figures from its sub rows keep each sub row's mark.
  */
 export function plannedEffort(rows: readonly BudgetPlanRow[]): PlannedEffort {
   const ids = new Set(rows.map((row) => row.id)), children = new Map<number | null, BudgetPlanRow[]>();
@@ -41,19 +45,21 @@ export function plannedEffort(rows: readonly BudgetPlanRow[]): PlannedEffort {
   }
   let unplannedRows = 0;
   const seen = new Set<number>();
-  const effort = (row: BudgetPlanRow, insideWork: boolean): number => {
-    if (seen.has(row.id)) return 0;
+  type Split = { own: number; outsourced: number };
+  const add = (left: Split, right: Split): Split => ({ own: left.own + right.own, outsourced: left.outsourced + right.outsourced });
+  const effort = (row: BudgetPlanRow, insideWork: boolean): Split => {
+    if (seen.has(row.id)) return { own: 0, outsourced: 0 };
     seen.add(row.id);
     const isHeading = row.kind === "phase";
-    const below = (children.get(row.id) ?? []).reduce((sum, child) => sum + effort(child, insideWork || !isHeading), 0);
+    const below = (children.get(row.id) ?? []).reduce((sum, child) => add(sum, effort(child, insideWork || !isHeading)), { own: 0, outsourced: 0 });
     if (isHeading) return below;
-    const own = Number.isFinite(row.planManDays) && row.planManDays > 0 ? row.planManDays : 0;
-    const total = below > 0 ? below : own;
-    if (!insideWork && total === 0 && !row.isMilestone) unplannedRows += 1;
+    const typed = Number.isFinite(row.planManDays) && row.planManDays > 0 ? row.planManDays : 0;
+    const total = below.own + below.outsourced > 0 ? below : row.laborSource === "Outsourced" ? { own: 0, outsourced: typed } : { own: typed, outsourced: 0 };
+    if (!insideWork && total.own + total.outsourced === 0 && !row.isMilestone) unplannedRows += 1;
     return total;
   };
-  const manDays = (children.get(null) ?? []).reduce((sum, row) => sum + effort(row, false), 0);
-  return { manDays: round(manDays), unplannedRows };
+  const planned = (children.get(null) ?? []).reduce((sum, row) => add(sum, effort(row, false)), { own: 0, outsourced: 0 });
+  return { manDays: round(planned.own), outsourcedManDays: round(planned.outsourced), unplannedRows };
 }
 
 /** Which figure is the budget: the estimate's own labor first, a typed budget only when it has none. */
@@ -98,7 +104,7 @@ export function manHourBudget(stored: StoredBudget, rows: readonly BudgetPlanRow
     source, estimateNo: stored.estimateNo,
     budgetManDays: source === "estimate" ? stored.estimateManDays : source === "manual" ? stored.manualManDays : null,
     disciplines: source === "estimate" ? stored.disciplines : [],
-    plannedManDays: planned.manDays, unplannedRows: planned.unplannedRows, hoursPerManDay: HOURS_PER_MAN_DAY,
+    plannedManDays: planned.manDays, outsourcedManDays: planned.outsourcedManDays, unplannedRows: planned.unplannedRows, hoursPerManDay: HOURS_PER_MAN_DAY,
     canSetBudget: canManage && source !== "estimate",
   };
 }
