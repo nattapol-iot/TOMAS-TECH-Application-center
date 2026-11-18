@@ -1051,11 +1051,11 @@ const PROJECT_PLAN: Guide = {
     },
     {
       target: "plan.view", action: "next", view: "projects",
-      title: { th: "กาง ยุบ และเต็มจอ", en: "Expand, collapse and full screen", jp: "展開・折りたたみ・全画面" },
+      title: { th: "กาง ยุบ คำอธิบายสี และเมนูเพิ่มเติม", en: "Expand, collapse, the colour key and More", jp: "展開・折りたたみ・色の説明・その他メニュー" },
       body: {
-        th: "กด 'กางทั้งหมด' หรือ 'ยุบทั้งหมด' เพื่อเปิดหรือปิดทุกหัวข้อในครั้งเดียว (ในมุมมองตามสมาชิกคือทุกคน) กด 'เต็มจอ' ให้ Gantt เต็มหน้าต่าง ยังกดแถบเพื่อเปิดรายละเอียดงานได้ตามปกติ กด Esc หรือ 'ออกจากเต็มจอ' เพื่อกลับ",
-        en: "Press Expand all or Collapse all to open or close every heading at once (every member in By member). Full screen fills the window with the Gantt; bars still open the task as usual. Press Esc or Exit full screen to come back.",
-        jp: "「すべて展開」「すべて折りたたむ」で全見出しを一度に開閉します（メンバー別では全員）。「全画面表示」でガントをウィンドウいっぱいに表示します。バーから作業を開くのは通常どおりです。Esc か「全画面を終了」で戻ります。",
+        th: "ปุ่มเดียวสลับระหว่าง 'กางทั้งหมด' กับ 'ยุบทั้งหมด' เพื่อเปิดหรือปิดทุกหัวข้อในครั้งเดียว (ในมุมมองตามสมาชิกคือทุกคน) กด 'คำอธิบายสี' เพื่อดูว่าสีและสัญลักษณ์ใน Gantt หมายถึงอะไร ระบบจำว่าเปิดหรือปิดไว้ ส่วน Export Excel, Create baseline, เต็มจอ และ Refresh อยู่ในปุ่ม 'เพิ่มเติม' ข้างปุ่มเพิ่มหัวข้อ ตอนเต็มจอ กด Esc หรือ 'ออกจากเต็มจอ' เพื่อกลับ",
+        en: "One button flips between Expand all and Collapse all, opening or closing every heading at once (every member in By member). Colour key shows what the colours and marks on the Gantt mean, and stays the way you left it. Export Excel, Create baseline, Full screen and Refresh are under More, beside Add heading. In full screen, press Esc or Exit full screen to come back.",
+        jp: "1つのボタンで「すべて展開」と「すべて折りたたむ」を切り替え、全見出しを一度に開閉します（メンバー別では全員）。「色の説明」でガントの色と記号の意味を表示し、開閉の状態は記憶されます。Excel 出力・ベースライン作成・全画面表示・更新は、見出し追加の隣の「その他」にあります。全画面では Esc か「全画面を終了」で戻ります。",
       },
       missing: { th: "โปรเจกต์นี้ยังไม่มีแผน กด 'ถัดไป'", en: "This project has no plan yet. Press Next.", jp: "この案件にはまだ計画がありません。「次へ」を押します。" },
     },

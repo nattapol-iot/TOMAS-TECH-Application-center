@@ -25,6 +25,8 @@ import { choiceLink, optionalChoiceLink, placeId, useLinkedState, useScreenPlace
 import { HealthBadge } from "./ProjectPlanFields";
 import { PlanManHours, type PlanManHoursData } from "./PlanManHours";
 import { PlanPeopleGrid } from "./PlanPeopleGrid";
+import { RowDisclosure, type PortfolioAction } from "./CoreScreens";
+import { SearchSelect } from "./SearchSelect";
 import { peopleShares, sharesTotal } from "../../../lib/plan-people";
 import { remainingForRow } from "../../../lib/manhour-budget";
 import "./my-work.css";
@@ -2283,6 +2285,13 @@ const planProjectStorageKey = (userId: number) => `tomas-tech-plan-project:${use
 const PLAN_FILTER_LINK = optionalChoiceLink(PLAN_FILTERS.map((item) => item.key));
 const PLAN_ZOOM_LINK = choiceLink<GanttZoomChoice>(["fit", "month", "quarter", "half", "year"]);
 /** The whole plan (Team Plan), only the headings on the customer's dates (Master Plan), or the plan by who does it. */
+const LEGEND_KEY = "tomas-tech-plan-legend";
+function readLegendOpen(): boolean {
+  try { return window.localStorage.getItem(LEGEND_KEY) === "1"; } catch { return false; }
+}
+function saveLegendOpen(open: boolean) {
+  try { window.localStorage.setItem(LEGEND_KEY, open ? "1" : "0"); } catch { /* storage blocked: the choice lasts for this visit only */ }
+}
 type PlanLevel = "team" | "master" | "member" | "people";
 const PLAN_LEVEL_LINK = choiceLink<PlanLevel>(["team", "master", "member", "people"]);
 const PLAN_LEVEL_LABEL: Record<PlanLevel, string> = { team: "Plan.levelTeam", master: "Plan.levelMaster", member: "Plan.levelMember", people: "People.view" };
@@ -2445,7 +2454,6 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
   const storageKey = planProjectStorageKey(bootstrap.user.id);
   const today = isoToday();
   const [projects, setProjects] = useState<ProjectOverviewItem[]>([]);
-  const [projectQuery, setProjectQuery] = useState("");
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [schedule, setSchedule] = useState<ProjectSchedule | null>(null);
   const [loadingProjects, setLoadingProjects] = useState(allowed);
@@ -2465,6 +2473,9 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
   const [collapsed, setCollapsed] = useState<Set<number>>(() => new Set());
   // The page's own overlay rather than the browser's full screen, so the task drawer, dialogs and toasts still open over it.
   const { ref: fullscreenRef, active: fullscreenActive, toggle: toggleFullscreen } = useFullscreen<HTMLDivElement>({ overlayOnly: true });
+  // The colour key is closed until asked for, and stays the way the reader left it.
+  const [legendOpen, setLegendOpen] = useState(() => typeof window !== "undefined" && readLegendOpen());
+  const toggleLegend = () => setLegendOpen((open) => { saveLegendOpen(!open); return !open; });
   const [drawerTaskId, setDrawerTaskId] = useState<number | null>(preferredTaskId ?? linkedTaskId);
   // The row being typed in place (PlanRowDraftEditor), and whether it is saving.
   const [draft, setDraft] = useState<PlanDraft | null>(null);
@@ -2746,13 +2757,10 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
   const parentIds = rows.filter((task) => task.children.length > 0).map((task) => task.id);
   const memberKeys = memberRows.filter((row) => row.expandable && row.depth === 0).map((row) => row.key.slice("member:".length));
   const anyFolded = memberView ? memberKeys.some((key) => memberClosed.has(key)) : parentIds.some((id) => collapsed.has(id));
-  const allFolded = memberView ? memberKeys.every((key) => memberClosed.has(key)) : parentIds.every((id) => collapsed.has(id));
   const foldFiltered = !memberView && filter !== null;
   const expandAll = () => { if (memberView) setMemberClosed(new Set()); else setCollapsed(new Set()); };
   const collapseAll = () => { if (memberView) setMemberClosed(new Set(memberKeys)); else setCollapsed(new Set(parentIds)); };
   const drawerTask = drawerTaskId === null ? null : taskById.get(drawerTaskId) ?? null;
-  const filteredProjects = projects.filter((project) => project.id === selectedId || !projectQuery.trim()
-    || `${project.number} ${project.name} ${project.customerName}`.toLocaleLowerCase().includes(projectQuery.trim().toLocaleLowerCase()));
   const saveTaskProgress = async (task: ScheduleTask, patch: Partial<MyWorkProgressInput>, message: string) => {
     if (!activeSchedule) return;
     setSaving(true); setDrawerError("");
@@ -2860,47 +2868,54 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
     } catch (failure) { await moveFailed(placed.task, failure); }
     finally { await loadSchedule(); setSaving(false); }
   };
+  const exportPlan = () => {
+    if (!activeSchedule) return;
+    const exportedOn = isoToday();
+    downloadErpEstimateWorkbookBytes(buildScheduleWorkbook({
+      projectNo: activeSchedule.projectNo, projectName: activeSchedule.projectName, exportedOn,
+      planStart: activeSchedule.summary.planStart, planFinish: activeSchedule.summary.planFinish, percentComplete: Number(activeSchedule.summary.percentComplete),
+      labels: { title: uiText("Schedule.exportTitle"), project: uiText("Project"), exported: uiText("Schedule.exportedOn"), planPeriod: uiText("Plan period"), progress: uiText("Progress"),
+        columns: ["WBS", uiText("Task"), uiText("Schedule.kind"), uiText("Visibility"), uiText("Schedule.planStart"), uiText("Schedule.planFinish"), uiText("Work days"), uiText("PIC"),
+          uiText("Plan man-days"), uiText("Schedule.actualManDays"), uiText("Progress"), uiText("Status"), uiText("Schedule.actualStart"), uiText("Schedule.actualFinish"), uiText("Schedule.forecastFinish"), uiText("Remark")] },
+      rows: rows.map((task) => ({ wbs: task.wbs, depth: task.depth, kind: task.kind, name: task.name, visibility: task.visibility,
+        planStart: task.planStart, planFinish: task.planFinish, workDays: task.workDays,
+        pics: [...task.pics.map((pic) => pic.name), task.picExternal].filter(Boolean).join(", "),
+        planManDays: Number(task.planManDays), actualManDays: Number(task.actualManDays), percentComplete: Number(task.percentComplete), status: task.status,
+        actualStart: task.actualStart, actualFinish: task.actualFinish, forecastFinish: task.forecastFinish, remark: task.remark })),
+    }), scheduleWorkbookName(activeSchedule.projectNo, exportedOn));
+  };
+  // Used now and then, so behind one button: the Gantt keeps the room (owner, 2026-11-18).
+  const moreActions: PortfolioAction[] = [
+    ...(activeSchedule && rows.length ? [{ key: "export", label: "Schedule.exportExcel", icon: "download" as const, onSelect: exportPlan }] : []),
+    ...(activeSchedule?.canBaseline && rows.length ? [{ key: "baseline", label: activeSchedule.latestBaseline ? `${uiText("Create baseline")} · R${activeSchedule.latestBaseline.revision}` : "Create baseline", icon: "gitBranch" as const, onSelect: () => setBaselineOpen(true) }] : []),
+    ...(activeSchedule && (rows.length || draftAt >= 0) ? [{ key: "fullscreen", label: "Gantt.fullScreen", icon: "maximize" as const, onSelect: () => { void toggleFullscreen(); } }] : []),
+    { key: "refresh", label: "Refresh", icon: "refresh" as const, onSelect: () => { void Promise.all([loadProjects(), loadSchedule()]); } },
+  ];
   const summary = activeSchedule?.summary;
   const planned = summary?.plannedProgress === null || summary?.plannedProgress === undefined ? null : Math.round(summary.plannedProgress);
   const slip = summary?.slipDays ?? selectedProject?.slipDays ?? null;
   return <>
-    <PageHeader eyebrow="PROJECT CONTROL" title={uiText("Plan.title")} subtitle="Plan.subtitle" actions={<button className="btn ghost" type="button" disabled={loadingProjects || loadingSchedule} onClick={() => { void Promise.all([loadProjects(), loadSchedule()]); }}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button>} />
     <Toolbar>
-      <SearchInput value={projectQuery} onChange={setProjectQuery} placeholder="Plan.findProject" />
-      <label className="select-field plan-project-picker" data-guide="plan.project"><select value={selectedId ?? ""} onChange={(event) => selectProject(event.target.value ? Number(event.target.value) : null)} aria-label={uiText("Project")}><option value=""><LocalizedText text={"Select project…"} /></option>{filteredProjects.map((project) => <option key={project.id} value={project.id}>{project.number} · {project.name}{project.status === "Closed" ? ` (${uiText("Closed")})` : ""}</option>)}</select><Icon name="chevronDown" /></label>
+      {/* One box to find and pick the project: typed search over number, name and customer. */}
+      <div className="plan-project-picker" data-guide="plan.project"><SearchSelect value={selectedId === null ? "" : String(selectedId)} label={uiText("Project")} placeholder={uiText("Plan.findProject")}
+        options={projects.map((project) => ({ value: String(project.id), label: `${project.number} · ${project.name}${project.status === "Closed" ? ` (${uiText("Closed")})` : ""}`, detail: project.customerName }))}
+        onChange={(value) => selectProject(value ? Number(value) : null)} noMatchText={uiText("CRM.noMatch")} clearLabel={uiText("CRM.clearChoice")} showLabel={uiText("CRM.showOptions")} moreText={uiText("CRM.listCut")} /></div>
+      {/* The plan in brief, beside the project it belongs to. Late and blocked counts are on the quick filters below. */}
+      {activeSchedule && summary ? <span className="plan-brief" aria-label={uiText("Plan.summary")}>
+        <HealthBadge health={summary.health ?? selectedProject?.health ?? "No plan"} />
+        <strong title={`${uiText("Progress")}${planned !== null ? ` · ${uiText("Portfolio.plannedToday")} ${planned}%` : ""}`}>{number(Number(summary.percentComplete), 0)}%</strong>
+        <span className="muted" title={uiText("Plan period")}>{summary.planStart ? `${date(summary.planStart)} – ${date(summary.planFinish)}` : uiText("Not planned")}</span>
+        <span>{uiText("Target delivery")} <strong>{target ? date(target) : "—"}</strong>{slip !== null ? <em className={slip > 0 ? "late" : undefined}>{uiText("Portfolio.slipDays").replace("{n}", slip > 0 ? `+${slip}` : String(slip))}</em> : null}</span>
+        {loadingSchedule ? <span className="plan-brief-loading" role="status"><span className="spinner" />{uiText("Plan.refreshing")}</span> : null}
+      </span> : null}
       <span className="spacer" />
-      {activeSchedule ? <button className="btn default" type="button" disabled={!rows.length} onClick={() => {
-        const exportedOn = isoToday();
-        downloadErpEstimateWorkbookBytes(buildScheduleWorkbook({
-          projectNo: activeSchedule.projectNo, projectName: activeSchedule.projectName, exportedOn,
-          planStart: activeSchedule.summary.planStart, planFinish: activeSchedule.summary.planFinish, percentComplete: Number(activeSchedule.summary.percentComplete),
-          labels: { title: uiText("Schedule.exportTitle"), project: uiText("Project"), exported: uiText("Schedule.exportedOn"), planPeriod: uiText("Plan period"), progress: uiText("Progress"),
-            columns: ["WBS", uiText("Task"), uiText("Schedule.kind"), uiText("Visibility"), uiText("Schedule.planStart"), uiText("Schedule.planFinish"), uiText("Work days"), uiText("PIC"),
-              uiText("Plan man-days"), uiText("Schedule.actualManDays"), uiText("Progress"), uiText("Status"), uiText("Schedule.actualStart"), uiText("Schedule.actualFinish"), uiText("Schedule.forecastFinish"), uiText("Remark")] },
-          rows: rows.map((task) => ({ wbs: task.wbs, depth: task.depth, kind: task.kind, name: task.name, visibility: task.visibility,
-            planStart: task.planStart, planFinish: task.planFinish, workDays: task.workDays,
-            pics: [...task.pics.map((pic) => pic.name), task.picExternal].filter(Boolean).join(", "),
-            planManDays: Number(task.planManDays), actualManDays: Number(task.actualManDays), percentComplete: Number(task.percentComplete), status: task.status,
-            actualStart: task.actualStart, actualFinish: task.actualFinish, forecastFinish: task.forecastFinish, remark: task.remark })),
-        }), scheduleWorkbookName(activeSchedule.projectNo, exportedOn));
-      }}><Icon name="download" />{uiText("Schedule.exportExcel")}</button> : null}
-      {activeSchedule?.canBaseline ? <button className="btn default" type="button" disabled={!rows.length} onClick={() => setBaselineOpen(true)}><Icon name="gitBranch" /><LocalizedText text={"Create baseline"} /></button> : null}
       {canPlan && activeSchedule ? <button className="btn primary" type="button" data-guide="plan.add" disabled={draftBusy} onClick={() => openDraft(null, null)}><Icon name="plus" />{uiText("Plan.addHeading")}</button> : null}
+      <RowDisclosure label={uiText("Plan.more")} triggerClassName="btn default" guide="plan.more" trigger={<><Icon name="more" />{uiText("Plan.more")}</>} actions={moreActions} />
     </Toolbar>
     {error ? <LoadError message={error} retry={() => { void (selectedId ? loadSchedule() : loadProjects()); }} /> : null}
     {activeSchedule && summary ? <>
-      <section className="plan-summary" aria-label={uiText("Plan.summary")}>
-        <HealthBadge health={summary.health ?? selectedProject?.health ?? "No plan"} />
-        <span><small>{uiText("Progress")}</small><strong>{number(Number(summary.percentComplete), 0)}%</strong>{planned !== null ? <em>{uiText("Portfolio.plannedToday")} {planned}%</em> : null}</span>
-        <span><small>{uiText("Plan period")}</small><strong>{summary.planStart ? `${date(summary.planStart)} – ${date(summary.planFinish)}` : uiText("Not planned")}</strong></span>
-        <span><small>{uiText("Target delivery")}</small><strong>{target ? date(target) : "—"}</strong>{slip !== null ? <em className={slip > 0 ? "late" : undefined}>{uiText("Portfolio.slipDays").replace("{n}", slip > 0 ? `+${slip}` : String(slip))}</em> : null}</span>
-        <span><small>{uiText("Plan.overdue")}</small><strong className={summary.overdueCount ? "danger-text" : undefined}>{summary.overdueCount ?? "—"}</strong></span>
-        <span><small>{uiText("Blocked")}</small><strong className={summary.blockedCount ? "danger-text" : undefined}>{summary.blockedCount}</strong></span>
-        <span><small>{uiText("Baseline")}</small><strong>{activeSchedule.latestBaseline ? `R${activeSchedule.latestBaseline.revision}` : "—"}</strong></span>
-        {loadingSchedule ? <span className="plan-summary-loading" role="status"><span className="spinner" />{uiText("Plan.refreshing")}</span> : null}
-      </section>
       {activeSchedule.manHours ? <PlanManHours projectId={activeSchedule.projectId} data={activeSchedule.manHours} onChanged={loadSchedule} /> : null}
-      <Panel title={`${activeSchedule.projectNo} · ${activeSchedule.projectName}`} subtitle={`${rows.length} ${uiText("Plan.rows")} · ${uiText(activeSchedule.projectStatus)}`} flush>
+      <Panel flush>
         {rows.length || draftAt >= 0 ? <div ref={fullscreenRef} className={`plan-gantt${fullscreenActive ? " is-fullscreen" : ""}`} data-guide="plan.gantt">
           {fullscreenActive ? <div className="plan-gantt-title"><strong>{activeSchedule.projectNo} · {activeSchedule.projectName}</strong><HealthBadge health={summary.health ?? selectedProject?.health ?? "No plan"} /></div> : null}
           <div className="plan-gantt-controls">
@@ -2908,17 +2923,17 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
               {(["team", "master", "member", "people"] as const).map((value) => <button key={value} type="button" className={level === value ? "on" : ""} aria-pressed={level === value} onClick={() => setLevel(value)}>{uiText(PLAN_LEVEL_LABEL[value])}</button>)}
             </div>
             {masterView || memberView || peopleView ? null : <FilterChips label="Plan.quickFilters" items={filterItems} active={filter} onPick={(key) => setFilter(key as PlanFilter | null)} />}
-            {peopleView ? null : <GanttToolbar zoom={zoom} allowFit onZoom={(next) => { setZoom(next); setAnchor(today); }} onShift={(direction) => { if (zoom !== "fit") setAnchor((value) => shiftGanttAnchor(zoom, value, direction)); }} onToday={() => { if (zoom === "fit") setZoom("quarter"); setAnchor(today); }} />}
+            {peopleView ? null : <GanttToolbar zoom={zoom} allowFit compact onZoom={(next) => { setZoom(next); setAnchor(today); }} onShift={(direction) => { if (zoom !== "fit") setAnchor((value) => shiftGanttAnchor(zoom, value, direction)); }} onToday={() => { if (zoom === "fit") setZoom("quarter"); setAnchor(today); }} />}
             <div className="gantt-nav" data-guide="plan.view">
-              {masterView || peopleView ? null : <>
-                <button type="button" className="btn ghost sm" disabled={foldFiltered || !anyFolded} title={foldFiltered ? uiText("Plan.foldFiltered") : undefined} onClick={expandAll}><Icon name="plus" />{uiText("Expand all")}</button>
-                <button type="button" className="btn ghost sm" disabled={foldFiltered || allFolded} title={foldFiltered ? uiText("Plan.foldFiltered") : undefined} onClick={collapseAll}><Icon name="minus" />{uiText("Gantt.collapseAll")}</button>
-              </>}
-              <button type="button" className="btn ghost sm" aria-pressed={fullscreenActive} title={uiText(fullscreenActive ? "Gantt.exitFullScreen" : "Gantt.fullScreen")} onClick={() => { void toggleFullscreen(); }}>
-                <Icon name={fullscreenActive ? "minimize" : "maximize"} />{uiText(fullscreenActive ? "Gantt.exitFullScreen" : "Gantt.fullScreen")}</button>
+              {/* One button that flips: expand while anything is folded, otherwise collapse. */}
+              {masterView || peopleView ? null : <button type="button" className="btn ghost sm" disabled={foldFiltered} title={foldFiltered ? uiText("Plan.foldFiltered") : undefined} onClick={anyFolded ? expandAll : collapseAll}>
+                <Icon name={anyFolded ? "plus" : "minus"} />{uiText(anyFolded ? "Expand all" : "Gantt.collapseAll")}</button>}
+              {peopleView ? null : <button type="button" className="btn ghost sm" aria-expanded={legendOpen} onClick={toggleLegend}><Icon name="help" />{uiText("Plan.legendToggle")}</button>}
+              {/* Full screen opens from More; the way back stays here, where the Gantt covers the page. */}
+              {fullscreenActive ? <button type="button" className="btn ghost sm" title={uiText("Gantt.exitFullScreen")} onClick={() => { void toggleFullscreen(); }}><Icon name="minimize" />{uiText("Gantt.exitFullScreen")}</button> : null}
             </div>
           </div>
-          {peopleView ? null : <GanttLegend baseline={Boolean(activeSchedule.latestBaseline)} target={Boolean(target)} links={!memberView && links.length > 0} draggable={canPlan && !memberView} />}
+          {peopleView || !legendOpen ? null : <GanttLegend baseline={Boolean(activeSchedule.latestBaseline)} target={Boolean(target)} links={!memberView && links.length > 0} draggable={canPlan && !memberView} />}
           {memberView ? <div className="info-strip plan-member-note" role="note" data-guide="plan.memberLegend">
             <i className="plan-member-key amber" aria-hidden="true" /><span>{uiText("Plan.memberLegendOverlap")}</span>
             <i className="plan-member-key red" aria-hidden="true" /><span>{uiText("Plan.memberLegendOver")}</span>
