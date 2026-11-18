@@ -458,6 +458,7 @@
 .people-key.unset { border-color: var(--line); background: repeating-linear-gradient(135deg, var(--n-300) 0 3px, transparent 3px 6px); }
 .people-key.we { border-color: var(--line); background: var(--n-100); }
 .people-key.hol { background: var(--amber-line); }
+.people-key.clash { border: 2px solid var(--amber); background: var(--surface); }
 .people-legend > .people-tips { flex-basis: 100%; color: var(--muted); }
 .people-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); }
 .people-table { width: max-content; border-collapse: separate; border-spacing: 0; font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
@@ -487,6 +488,8 @@
 .people-table .people-row.work td.people-day.own { background: var(--people-own); color: #fff; font-weight: 600; }
 .people-table .people-row.work td.people-day.out { background: var(--people-out); color: #fff; font-weight: 600; }
 .people-table .people-row.work td.people-day.unset { background: repeating-linear-gradient(135deg, var(--n-300) 0 3px, var(--surface) 3px 6px); }
+.people-table td.people-day.clash { outline: 2px solid var(--amber); outline-offset: -2px; }
+.people-table .people-day.long { font-size: var(--fs-3xs); letter-spacing: -0.03em; }
 .people-table td.people-day.sel { box-shadow: inset 0 0 0 1px var(--blue-hover); }
 .people-table td.people-day.sel::after { content: ""; position: absolute; inset: 0; background: rgb(37 99 235 / 0.16); pointer-events: none; }
 .people-cell { position: absolute; inset: 0; z-index: 1; box-sizing: border-box; width: 100%; height: 100%; margin: 0; padding: 0; border: 0; border-radius: 0; outline: 2px solid var(--blue-hover); outline-offset: -2px; background: var(--surface); color: var(--ink); font: inherit; font-weight: 700; text-align: center; }

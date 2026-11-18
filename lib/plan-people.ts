@@ -1,11 +1,13 @@
 /* The People table of Projects > Plan (owner request 2026-11-18): how many people work on a plan row each day,
    typed like a spreadsheet. A row is a span of days (its plan start and length) with a figure per day; 0 means
-   nobody is set for that day. The API side and the stored shape are in backend-node/src/plan-people.ts. */
+   nobody is set for that day. A figure is labor for the day, to one decimal place: one person doing two tasks on
+   a day is 0.5 on each. The API side and the stored shape are in backend-node/src/plan-people.ts. */
 
 export type PeopleSpan = { start: string; days: number; people: number[] };
 
 export const MAXIMUM_PEOPLE_PER_DAY = 999;
 const MAXIMUM_SPAN_DAYS = 3650, DAY = 86_400_000;
+export const tenth = (value: number): number => Math.round(value * 10) / 10;
 
 const stamp = (iso: string): number => Date.parse(`${iso}T00:00:00Z`);
 export const addDays = (iso: string, count: number): string => new Date(stamp(iso) + count * DAY).toISOString().slice(0, 10);
@@ -22,7 +24,7 @@ export function peopleOn(span: PeopleSpan | null, iso: string): number | null {
   return offset < 0 || offset >= span.days ? null : span.people[offset] ?? 0;
 }
 
-export const peopleManDays = (people: readonly number[]): number => people.reduce((sum, count) => sum + (count > 0 ? count : 0), 0);
+export const peopleManDays = (people: readonly number[]): number => tenth(people.reduce((sum, count) => sum + (count > 0 ? count : 0), 0));
 
 /** The figure most days of the row carry, for its People/day box; null when no day has one. */
 export function usualPeople(people: readonly number[]): number | null {
@@ -51,7 +53,7 @@ export function applyPeople(span: PeopleSpan | null, edits: ReadonlyMap<string, 
   if (start === null || end === null || dayDiff(start, end) >= MAXIMUM_SPAN_DAYS) return span;
   const value = (day: string): number => {
     const typed = edits.get(day);
-    return typed !== undefined ? Math.max(0, Math.min(MAXIMUM_PEOPLE_PER_DAY, Math.trunc(typed))) : peopleOn(span, day) ?? 0;
+    return typed !== undefined ? Math.max(0, Math.min(MAXIMUM_PEOPLE_PER_DAY, tenth(typed))) : peopleOn(span, day) ?? 0;
   };
   const cleared = (day: string): boolean => (edits.get(day) ?? 1) <= 0;
   while (start < end && cleared(start)) start = addDays(start, 1);
@@ -70,10 +72,39 @@ export const sameSpan = (left: PeopleSpan | null, right: PeopleSpan | null): boo
   left === right || (left !== null && right !== null && left.start === right.start && left.days === right.days
     && trimmed(left.people).join() === trimmed(right.people).join());
 
-/** A block copied from a spreadsheet: rows of tab-separated cells; a cell that is not a whole number is left as it is (null). */
+/** What may be typed in a day: up to three digits and one decimal place; a comma counts as the decimal point. */
+export function figureText(text: string): string {
+  return /^\d{0,3}(?:\.\d?)?/.exec(text.replace(/,/g, ".").replace(/[^\d.]/g, ""))?.[0] ?? "";
+}
+
+/**
+ * The same person on several rows on one day for more than one man-day in all. A PIC's share of a row is its
+ * figure over its PICs, one at most (a PIC leading a crew of three is one of them). Returns, by row index, the
+ * days that are over with the person and their total, so the screen can point at them.
+ */
+export function overbookedDays(rows: readonly { people: readonly { id: number; name: string }[]; cells: readonly (number | null)[] }[]): Map<number, Map<number, { name: string; total: number }>> {
+  const byPerson = new Map<number, { name: string; totals: number[]; shares: { row: number; share: number[] }[] }>();
+  rows.forEach((row, index) => {
+    if (!row.people.length) return;
+    const share = row.cells.map((value) => (value ? Math.min(1, value / row.people.length) : 0));
+    for (const one of row.people) {
+      const person = byPerson.get(one.id) ?? { name: one.name, totals: [], shares: [] };
+      share.forEach((value, day) => { person.totals[day] = (person.totals[day] ?? 0) + value; });
+      person.shares.push({ row: index, share }); byPerson.set(one.id, person);
+    }
+  });
+  const found = new Map<number, Map<number, { name: string; total: number }>>();
+  for (const person of byPerson.values()) person.totals.forEach((total, day) => {
+    if (total <= 1.001) return;
+    for (const { row, share } of person.shares) if (share[day]) found.set(row, (found.get(row) ?? new Map<number, { name: string; total: number }>()).set(day, { name: person.name, total: tenth(total) }));
+  });
+  return found;
+}
+
+/** A block copied from a spreadsheet: rows of tab-separated cells; a cell that is not a figure is left as it is (null). */
 export function parsePastedBlock(text: string): (number | null)[][] {
   return text.replace(/\r/g, "").replace(/\n+$/, "").split("\n").map((line) => line.split("\t").map((cell) => {
     const value = cell.trim();
-    return /^\d{1,3}$/.test(value) ? Number(value) : null;
+    return /^\d{1,3}(?:[.,]\d)?$/.test(value) ? Number(value.replace(",", ".")) : null;
   }));
 }

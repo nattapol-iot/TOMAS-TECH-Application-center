@@ -8,6 +8,9 @@ import { ApiError } from "./errors.js";
  * they are our own staff or outsourced manpower (labor_source, labor_supplier; migration 106).
  * The figures move with the row when its start moves. A row that carries people has its plan
  * man-days from them: one person for one day is one man-day.
+ *
+ * A figure is labor for the day, not a head count, and may be a share to one decimal place: one
+ * person doing two tasks on a day is 0.5 on each, so nothing is counted twice (owner, 2026-11-18).
  */
 
 export const LABOR_SOURCES = ["Own", "Outsourced"] as const;
@@ -27,7 +30,8 @@ export type PeopleChange = {
 };
 
 const invalid = (message: string): ApiError => new ApiError(400, "validation_failed", message);
-const isCount = (value: unknown): value is number => typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= MAXIMUM_PEOPLE_PER_DAY;
+const tenth = (value: number): number => Math.round(value * 10) / 10;
+const isCount = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= MAXIMUM_PEOPLE_PER_DAY && Math.abs(value - tenth(value)) < 1e-9;
 
 /** People per day cut to the row's length, without the empty days at its end. */
 export function fitPeople(people: readonly number[], planDays: number): number[] {
@@ -36,7 +40,7 @@ export function fitPeople(people: readonly number[], planDays: number): number[]
   return fitted;
 }
 
-/** What the column holds, read leniently: anything that is not a list of whole numbers counts as nobody set. */
+/** What the column holds, read leniently: anything that is not a list of figures to one decimal place counts as nobody set. */
 export function storedPeople(value: unknown): number[] {
   if (typeof value !== "string" || !value) return [];
   try {
@@ -45,7 +49,7 @@ export function storedPeople(value: unknown): number[] {
   } catch { return []; }
 }
 
-export const peopleManDays = (people: readonly number[]): number => people.reduce((sum, count) => sum + count, 0);
+export const peopleManDays = (people: readonly number[]): number => tenth(people.reduce((sum, count) => sum + count, 0));
 /** The column value: NULL for a row with nobody set. */
 export const peopleJson = (people: readonly number[]): string | null => (people.some((count) => count > 0) ? JSON.stringify(people) : null);
 
@@ -77,8 +81,8 @@ export function peopleEdits(value: unknown): PeopleEdit[] {
     if (row.planStart !== undefined || row.planDays !== undefined || row.people !== undefined) {
       const planStart = isoDate(row.planStart), planDays = row.planDays, people = row.people;
       if (typeof planDays !== "number" || !Number.isInteger(planDays) || planDays < 1 || planDays > MAXIMUM_PLAN_DAYS) throw invalid(`Plan days must be a whole number from 1 to ${MAXIMUM_PLAN_DAYS}.`);
-      if (!Array.isArray(people) || people.length > planDays || !people.every(isCount)) throw invalid(`People per day must be whole numbers from 0 to ${MAXIMUM_PEOPLE_PER_DAY}, one for each plan day at most.`);
-      edit.plan = { planStart, planDays, people: fitPeople(people, planDays) };
+      if (!Array.isArray(people) || people.length > planDays || !people.every(isCount)) throw invalid(`People per day must be numbers from 0 to ${MAXIMUM_PEOPLE_PER_DAY} with one decimal place at most, one for each plan day at most.`);
+      edit.plan = { planStart, planDays, people: fitPeople(people.map(tenth), planDays) };
     }
     if (edit.laborSource === undefined && edit.laborSupplier === undefined && !edit.plan) throw invalid("A row needs something to change.");
     return edit;
