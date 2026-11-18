@@ -516,13 +516,13 @@ function PortfolioProgress({ item }: { item: ProjectOverviewItem }) {
   </div>;
 }
 
-type PortfolioAction = { key: string; label: string; icon?: IconName; danger?: boolean; guide?: string; onSelect: () => void };
+export type PortfolioAction = { key: string; label: string; icon?: IconName; danger?: boolean; guide?: string; onSelect: () => void };
 // A row's choices (the overflow actions, the next stages) open as a disclosure: a button with
 // aria-expanded and a group of plain buttons that Tab walks through, so arrow keys never commit
 // anything. The group is position: fixed from the trigger's box, which keeps the table's scroll
 // area and the panel from clipping it; it flips above the trigger when the room below is short and
 // closes on scroll or resize instead of drifting away from its row.
-function RowDisclosure({ label, trigger, triggerClassName, disabled = false, actions, guide }: { label: string; trigger: ReactNode; triggerClassName: string; disabled?: boolean; actions: PortfolioAction[]; guide?: string }) {
+export function RowDisclosure({ label, trigger, triggerClassName, disabled = false, actions, guide }: { label: string; trigger: ReactNode; triggerClassName: string; disabled?: boolean; actions: PortfolioAction[]; guide?: string }) {
   const t = useUiText();
   const [open, setOpen] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);

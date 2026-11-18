@@ -95,15 +95,19 @@ export type GanttZoomChoice = GanttZoom | "fit";
 const ZOOM_LABEL: Record<GanttZoomChoice, string> = { month: "Gantt.month", quarter: "Gantt.quarter", half: "Gantt.half", year: "Gantt.year", fit: "Gantt.fit" };
 
 /** Zoom presets, earlier / later and back to today. "Fit" shows a project's whole plan. */
-export function GanttToolbar({ zoom, onZoom, onShift, onToday, allowFit = false }: {
+export function GanttToolbar({ zoom, onZoom, onShift, onToday, allowFit = false, compact = false }: {
   zoom: GanttZoomChoice; onZoom: (zoom: GanttZoomChoice) => void; onShift: (direction: -1 | 1) => void; onToday: () => void; allowFit?: boolean;
+  /** One list instead of a button per range, where the row of controls is short of room (Projects > Plan). */
+  compact?: boolean;
 }) {
   const t = useT();
   const choices: GanttZoomChoice[] = allowFit ? ["fit", ...GANTT_ZOOMS] : [...GANTT_ZOOMS];
   return <div className="gantt-toolbar" role="group" aria-label={t("Gantt.zoom")}>
-    <div className="chip-select" role="group" aria-label={t("Gantt.zoom")}>
-      {choices.map((choice) => <button key={choice} type="button" className={zoom === choice ? "chip on" : "chip"} aria-pressed={zoom === choice} onClick={() => onZoom(choice)}>{t(ZOOM_LABEL[choice])}</button>)}
-    </div>
+    {compact ? <label className="select-field gantt-zoom-select"><select value={zoom} aria-label={t("Gantt.zoom")} onChange={(event) => onZoom(event.target.value as GanttZoomChoice)}>
+      {choices.map((choice) => <option key={choice} value={choice}>{t(ZOOM_LABEL[choice])}</option>)}</select><Icon name="chevronDown" /></label>
+      : <div className="chip-select" role="group" aria-label={t("Gantt.zoom")}>
+        {choices.map((choice) => <button key={choice} type="button" className={zoom === choice ? "chip on" : "chip"} aria-pressed={zoom === choice} onClick={() => onZoom(choice)}>{t(ZOOM_LABEL[choice])}</button>)}
+      </div>}
     <div className="gantt-nav">
       <button type="button" className="icon-btn" disabled={zoom === "fit"} onClick={() => onShift(-1)} aria-label={t("Gantt.earlier")} title={t("Gantt.earlier")}><Icon name="chevronLeft" /></button>
       <button type="button" className="btn ghost sm" onClick={onToday}><Icon name="calendar" />{t("Gantt.today")}</button>

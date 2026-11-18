@@ -30,7 +30,7 @@ test("the bar fills with the planned share and stops at the budget", () => {
 
 test("Projects > Plan shows the man-hour budget line under the summary, and Edit row shows what is left", async () => {
   const [screen, line] = await Promise.all([source("app/system/production/PlanningPricingScreens.tsx"), source("app/system/production/PlanManHours.tsx")]);
-  assert.match(screen, /<\/section>\n\s*\{activeSchedule\.manHours \? <PlanManHours projectId=\{activeSchedule\.projectId\} data=\{activeSchedule\.manHours\} onChanged=\{loadSchedule\} \/> : null\}/);
+  assert.match(screen, /\{activeSchedule && summary \? <>\n\s*\{activeSchedule\.manHours \? <PlanManHours projectId=\{activeSchedule\.projectId\} data=\{activeSchedule\.manHours\} onChanged=\{loadSchedule\} \/> : null\}/);
   // An older API sends no manHours: the line is simply left out.
   assert.match(screen, /manHours\?: PlanManHoursData;/);
   assert.match(screen, /const budgetLeft = schedule\.manHours && !task\.children\.length \? remainingForRow\(schedule\.manHours, Number\(task\.planManDays\), planManDays\) : null;/);

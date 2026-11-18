@@ -399,25 +399,14 @@
 .progress-problem .icon { width: 14px; height: 14px; }
 
 /* Projects > Plan: a compact summary line over the Gantt, not a row of KPI cards. */
-.plan-project-picker { min-width: 280px; }
-.plan-project-picker select { width: 100%; max-width: 520px; }
-.plan-summary {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 22px;
-  margin: 0 0 12px;
-  padding: 10px 14px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-md);
-  background: var(--surface);
-}
-.plan-summary > span { display: inline-flex; align-items: baseline; gap: 6px; font-size: var(--fs-xs); }
-.plan-summary small { color: var(--muted); font-size: var(--fs-2xs); }
-.plan-summary strong { font-variant-numeric: tabular-nums; }
-.plan-summary em { color: var(--muted); font-style: normal; font-size: var(--fs-2xs); }
-.plan-summary em.late { color: var(--red); font-weight: 650; }
-.plan-summary-loading { margin-left: auto; color: var(--muted); }
+.plan-project-picker { flex: 0 1 380px; min-width: 240px; }
+/* The plan in brief, on the picker's row: health, progress, period and delivery. */
+.plan-brief { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-size: var(--fs-xs); }
+.plan-brief strong { font-variant-numeric: tabular-nums; }
+.plan-brief em { margin-left: 6px; color: var(--muted); font-size: var(--fs-2xs); font-style: normal; }
+.plan-brief em.late { color: var(--red); font-weight: 650; }
+.plan-brief-loading { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
+.gantt-zoom-select select { height: 28px; font-size: var(--fs-xs); }
 /* The man-hour budget line under the summary (PlanManHours.tsx): estimated against planned man-days, one bar and a few figures. */
 .plan-manhours { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 20px; margin: -4px 0 12px; padding: 8px 14px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); font-size: var(--fs-xs); }
 .plan-manhours > span { display: inline-flex; align-items: baseline; gap: 6px; }
