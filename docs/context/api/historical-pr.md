@@ -2,7 +2,7 @@
 
 [Module](../modules/procurement.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `412099a1`; generated, do not edit. [backend-node/src/routes/historical-pr.ts](<../../../backend-node/src/routes/historical-pr.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `c4c7e8cb`; generated, do not edit. [backend-node/src/routes/historical-pr.ts](<../../../backend-node/src/routes/historical-pr.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 

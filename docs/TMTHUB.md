@@ -44,6 +44,21 @@ git push tmthub --tags
 
 หรือใช้เมนู **+ → New Migration** ในหน้าเว็บเพื่อดึงจาก GitHub ทั้ง issue และ PR
 
+## Mirror จาก GitHub (Tomas-TC) อัตโนมัติ
+
+ทุก repo ใน GitHub org `Tomas-TC` เป็น **pull mirror** ใน `TMT` (read-only บน TMTHub แก้ที่ GitHub แล้วรอ sync)
+
+- Workflow **TMTHub mirror** (`.github/workflows/tmthub-mirror.yml`) รันทุกวัน 02:30 บน runner ของ Mac mini
+  และกด **Run workflow** เองได้ — script `scripts/macos/tmthub-mirror.sh`
+  - repo ใหม่บน GitHub → สร้าง mirror (private, sync ทุก 1 ชม.)
+  - mirror เดิม → ใส่ token ปัจจุบันใน remote แล้ว sync ทันที (token หมดอายุ = ทุก mirror ขึ้น `Repository not found`)
+  - repo ใน TMT ชื่อเดียวกันที่ไม่ใช่ mirror (มีงานที่ push เข้า TMTHub เอง) → **ไม่แตะ ไม่ลบ** แสดงชื่อท้าย log
+  - ข้าม `cpf-pegasus` (บน TMT คือ `cpf`) และ `alpha-ht`
+- ต้องมี repository secret **`TMTHUB_MIRROR_GITHUB_TOKEN`**: fine-grained token, Resource owner = `Tomas-TC`,
+  All repositories, สิทธิ์ **Contents: Read** และ **Metadata: Read** — ตั้งด้วย
+  `gh secret set TMTHUB_MIRROR_GITHUB_TOKEN -R pattana1902/IoT-Team-Center` (วาง token ตอนที่ถาม) เมื่อหมดอายุให้ตั้งใหม่แล้วกด Run workflow
+- แทน script เดิมใน repo `TMT/tmthub-mirror-bridge` (ใช้ credential ในเครื่องคนรัน และลบ repo ที่ไม่ใช่ mirror)
+
 ## การทำงานเบื้องหลัง (สำหรับผู้ดูแล)
 
 - Service `tmthub` และ `tmthub-backup` อยู่ใน `docker-compose.tls.yml`; Caddy เปิด site

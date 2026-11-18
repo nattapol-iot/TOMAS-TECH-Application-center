@@ -1,0 +1,30 @@
+name: TMTHub mirror
+
+# Daily: every repository of the GitHub organisation Tomas-TC as a pull mirror in TMTHub (org TMT),
+# with the current GitHub token in each mirror. Runs on the Mac mini runner because TMTHub is on
+# the tailnet only. See scripts/macos/tmthub-mirror.sh and docs/TMTHUB.md.
+
+on:
+  schedule:
+    - cron: "30 19 * * *" # 02:30 Asia/Bangkok
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tmthub-mirror
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    name: Mirror Tomas-TC into TMTHub
+    runs-on: [self-hosted, iot-team-center-macmini]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - name: Mirror
+        env:
+          # Fine-grained token on the Tomas-TC organisation, read-only Contents and Metadata.
+          GH_TOKEN: ${{ secrets.TMTHUB_MIRROR_GITHUB_TOKEN }}
+        run: scripts/macos/tmthub-mirror.sh
