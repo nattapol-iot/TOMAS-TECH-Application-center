@@ -17,7 +17,9 @@ const refused = (run: () => unknown, code: string) => assert.throws(run, (error:
 
 test("people per day: stored leniently, cut to the row's length, empty days at the end dropped", () => {
   assert.deepEqual(storedPeople("[3,3,0,2,0,0]"), [3, 3, 0, 2]);
-  for (const bad of [null, "", "x", "{}", "[1,-1]", "[1.5]", "[1000]", 5]) assert.deepEqual(storedPeople(bad), []);
+  for (const bad of [null, "", "x", "{}", "[1,-1]", "[1.55]", "[1000]", 5]) assert.deepEqual(storedPeople(bad), []);
+  assert.deepEqual(storedPeople("[0.5,1.5,0]"), [0.5, 1.5], "a share of a day is kept to one decimal place");
+  assert.equal(peopleManDays([0.1, 0.2, 0.5, 0.5]), 1.3, "shares add up without float noise");
   assert.deepEqual(fitPeople([3, 3, 0, 2, 4], 3), [3, 3]);
   assert.equal(peopleManDays([3, 3, 0, 2]), 8);
   assert.equal(peopleJson([0, 0]), null);
@@ -29,7 +31,7 @@ test("peopleEdits: each row names a task once and carries something valid to cha
     [{ taskId: 5, laborSource: "Outsourced", laborSupplier: "ACME Manpower" }, { taskId: 6, plan: { planStart: "2026-12-05", planDays: 3, people: [6, 6] } }]);
   for (const bad of [null, [], [{}], [{ taskId: 5 }], [{ taskId: 5, laborSource: "Supplier" }], [{ taskId: 5, laborSource: "Own" }, { taskId: 5, laborSource: "Own" }],
     [{ taskId: 5, planStart: "2026-02-30", planDays: 1, people: [] }], [{ taskId: 5, planStart: "2026-12-05", planDays: 0, people: [] }],
-    [{ taskId: 5, planStart: "2026-12-05", planDays: 2, people: [1, 1, 1] }], [{ taskId: 5, planStart: "2026-12-05", planDays: 2, people: [1.5] }],
+    [{ taskId: 5, planStart: "2026-12-05", planDays: 2, people: [1, 1, 1] }], [{ taskId: 5, planStart: "2026-12-05", planDays: 2, people: [1.55] }],
     [{ taskId: 5, planStart: "2026-12-05", people: [1] }], [{ taskId: 5, laborSupplier: "x".repeat(201) }]]) refused(() => peopleEdits(bad), "validation_failed");
 });
 
@@ -40,6 +42,12 @@ test("peopleChange: people give the row its man-days; clearing them all leaves n
   assert.equal(cleared.planManDays, 0);
   const datesOnly = peopleChange(work(), "2026-12-07", { taskId: 1, plan: { planStart: "2026-12-07", planDays: 3, people: [] } }, free);
   assert.deepEqual([datesOnly.planManDays, datesOnly.planDays], [4, 3]);
+});
+
+test("peopleChange: one person on two tasks a day is half on each, and the man-days add up to one", () => {
+  const edit = (people: number[]) => peopleEdits([{ taskId: 1, planStart: "2026-12-07", planDays: 2, people }])[0]!;
+  const first = peopleChange(work(), "2026-12-07", edit([0.5, 0.5]), free), second = peopleChange(work(), "2026-12-07", edit([0.5, 0.5]), free);
+  assert.deepEqual([first.people, first.planManDays, first.planManDays + second.planManDays], [[0.5, 0.5], 1, 2]);
 });
 
 test("peopleChange: a new first day unlinks a row that started after another; the same day keeps the link", () => {

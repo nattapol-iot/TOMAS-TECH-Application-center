@@ -2,19 +2,21 @@
 /* Projects > Plan, the People table (owner request 2026-11-18): the plan rows against the days, with the number of
    people on each day typed like a spreadsheet, and each row marked as our own staff or outsourced manpower.
    Click a day and type; drag over several days and type once; Delete clears; a block copied from Excel pastes in.
-   A row's man-days are the people typed on it. Edits save by themselves a moment after typing stops, every touched
+   A row's man-days are the people typed on it. A figure is labor for the day and may be a share: one person on two
+   tasks a day is 0.5 on each; a day where the same PIC adds up to more than one man-day gets an amber edge. Edits save by themselves a moment after typing stops, every touched
    row in one call (PUT /projects/:id/schedule/people). The rules for a row's span are in lib/plan-people.ts. */
 
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ApiClientError, apiRequest } from "../api-client";
 import { currentLocale, useT } from "../i18n";
 import { Icon } from "../ui";
-import { addDays, applyPeople, fillPeople, isWorkDay, mondayOf, parsePastedBlock, peopleManDays, peopleOn, sameSpan, usualPeople, weekDay, type PeopleSpan } from "../../../lib/plan-people";
+import { addDays, applyPeople, figureText, fillPeople, isWorkDay, mondayOf, overbookedDays, parsePastedBlock, peopleManDays, peopleOn, sameSpan, tenth, usualPeople, weekDay, type PeopleSpan } from "../../../lib/plan-people";
 
 export type PeopleTask = {
   id: number; wbs: string; depth: number; kind: string; name: string; isMilestone: boolean;
   planStart: string | null; planDays: number; planManDays: number;
   laborSource?: string; laborSupplier?: string; peopleByDay?: number[]; managedByResourcePlan?: boolean;
+  pics?: { id: number; name: string }[];
   children: PeopleTask[];
 };
 
@@ -23,6 +25,8 @@ type RowModel = {
   task: PeopleTask; type: "heading" | "rollup" | "work"; editIndex: number; outsourced: boolean; supplier: string;
   /** People per shown day: null outside the row's dates, 0 inside them with nobody set. */
   cells: (number | null)[]; manDays: number; usual: number | null;
+  /** Days where one of the row's PICs is on several rows for more than one man-day in all (lib/plan-people.ts overbookedDays). */
+  clash: ReadonlyMap<number, { name: string; total: number }> | null;
 };
 type Selection = { ar: number; ac: number; fr: number; fc: number };
 
@@ -30,6 +34,8 @@ const WEEKS = 12, DAYS = WEEKS * 7, SAVE_DELAY_MS = 700;
 const savedSpan = (task: PeopleTask): PeopleSpan | null => (task.planStart ? { start: task.planStart, days: task.planDays, people: task.peopleByDay ?? [] } : null);
 const isConflict = (error: unknown) => error instanceof ApiClientError && error.status === 409 && error.code === "concurrency_conflict";
 const figure = (value: number) => new Intl.NumberFormat(currentLocale(), { maximumFractionDigits: 2 }).format(value);
+/** A day's figure as the cell shows it: nothing for nobody, one decimal place at most. */
+const shown = (value: number | null) => (value ? String(tenth(value)) : "");
 
 export function PlanPeopleGrid({ projectId, scheduleVersion, tasks, holidays, canEdit, lockedIds, today, notify, onReload, onOpenTask }: {
   projectId: number; scheduleVersion: string | null; tasks: PeopleTask[]; holidays: string[]; canEdit: boolean;
@@ -60,7 +66,7 @@ export function PlanPeopleGrid({ projectId, scheduleVersion, tasks, holidays, ca
       const draft = drafts.get(task.id), outsourced = (draft?.laborSource ?? task.laborSource ?? "Own") === "Outsourced";
       const supplier = outsourced ? draft?.laborSupplier ?? task.laborSupplier ?? "" : "";
       if (task.kind === "phase" || task.children.length) {
-        const row: RowModel = { task, type: task.kind === "phase" ? "heading" : "rollup", editIndex: -1, outsourced, supplier, cells: Array<number | null>(DAYS).fill(null), manDays: 0, usual: null };
+        const row: RowModel = { task, type: task.kind === "phase" ? "heading" : "rollup", editIndex: -1, outsourced, supplier, cells: Array<number | null>(DAYS).fill(null), manDays: 0, usual: null, clash: null };
         rows.push(row);
         for (const child of task.children) {
           const below = visit(child);
@@ -78,11 +84,14 @@ export function PlanPeopleGrid({ projectId, scheduleVersion, tasks, holidays, ca
       const mine = outsourced ? out : own;
       cells.forEach((value, index) => { if (value) { total[index] = (total[index] ?? 0) + value; mine[index] = (mine[index] ?? 0) + value; } });
       if (outsourced) outManDays += manDays; else ownManDays += manDays;
-      const row: RowModel = { task, type: "work", editIndex: editable ? editIndex++ : -1, outsourced, supplier, cells, manDays, usual: usualPeople(span?.people ?? []) };
+      const row: RowModel = { task, type: "work", editIndex: editable ? editIndex++ : -1, outsourced, supplier, cells, manDays, usual: usualPeople(span?.people ?? []), clash: null };
       rows.push(row);
       return row;
     };
     tasks.forEach(visit);
+    // Our own rows only: the people of an outsourced row are the supplier's, not its PIC.
+    const clashes = overbookedDays(rows.map((row) => ({ people: row.type === "work" && !row.outsourced ? row.task.pics ?? [] : [], cells: row.cells })));
+    for (const [index, days] of clashes) rows[index]!.clash = days;
     return { rows, total, own, out, ownManDays, outManDays, editRows: rows.filter((row) => row.editIndex >= 0) };
   }, [tasks, drafts, days, canEdit, lockedIds]);
 
@@ -160,7 +169,7 @@ export function PlanPeopleGrid({ projectId, scheduleVersion, tasks, holidays, ca
     if (!dirty.current || !live.current.selection) return;
     dirty.current = false;
     const text = input.current?.value.trim() ?? "";
-    setRange(text === "" ? 0 : Math.min(999, Number.parseInt(text, 10) || 0));
+    setRange(text === "" ? 0 : Math.min(999, Number.parseFloat(text) || 0));
   }, [setRange]);
   /** Enter on untouched cells: the empty days of the selection take each row's People/day. */
   const fillUsual = useCallback(() => {
@@ -196,7 +205,7 @@ export function PlanPeopleGrid({ projectId, scheduleVersion, tasks, holidays, ca
       event.preventDefault(); field.value = ""; dirty.current = false; setRange(0);
     }
   }, [commit, fillUsual, move, setRange]);
-  const onInput = useCallback((event: React.FormEvent<HTMLInputElement>) => { event.currentTarget.value = event.currentTarget.value.replace(/\D/g, ""); dirty.current = true; }, []);
+  const onInput = useCallback((event: React.FormEvent<HTMLInputElement>) => { event.currentTarget.value = figureText(event.currentTarget.value); dirty.current = true; }, []);
   const onPaste = useCallback((event: React.ClipboardEvent<HTMLInputElement>) => {
     const text = event.clipboardData.getData("text"), target = live.current.selection;
     if (!target || !/[\t\n]/.test(text.trim())) return;
@@ -299,8 +308,8 @@ export function PlanPeopleGrid({ projectId, scheduleVersion, tasks, holidays, ca
     <div className="people-legend">
       <span><i className="people-key own" />{t("People.own")}</span><span><i className="people-key out" />{t("People.out")}</span>
       <span><i className="people-key unset" />{t("People.unset")}</span><span><i className="people-key we" />{t("People.weekend")}</span>
-      <span><i className="people-key hol" />{t("People.holiday")}</span>
-      {canEdit ? <span className="people-tips">{t("People.tipType")} · {t("People.tipRange")} · {t("People.tipFill")} · {t("People.tipKeys")} · {t("People.tipPaste")}</span> : null}
+      <span><i className="people-key hol" />{t("People.holiday")}</span><span><i className="people-key clash" />{t("People.clash")}</span>
+      {canEdit ? <span className="people-tips">{t("People.tipType")} · {t("People.tipRange")} · {t("People.tipHalf")} · {t("People.tipFill")} · {t("People.tipKeys")} · {t("People.tipPaste")}</span> : null}
     </div>
     <div className="people-scroll" ref={scroller}>
       <table className="people-table" aria-label={t("People.view")}>
@@ -316,7 +325,7 @@ export function PlanPeopleGrid({ projectId, scheduleVersion, tasks, holidays, ca
         <tbody>
           {totals.map((row) => <tr key={row.key} className={`people-total ${row.key}`}>
             <td className="people-wbs" /><td className="people-name">{t(row.label)}</td><td className="people-src" /><td className="people-ppl" /><td className="people-md">{figure(row.manDays)}</td>
-            {row.cells.map((value, index) => <td key={index} className={`people-day${dayClass[index]}`}>{value || ""}</td>)}
+            {row.cells.map((value, index) => <td key={index} className={`people-day${dayClass[index]}${shown(value).length > 3 ? " long" : ""}`}>{shown(value)}</td>)}
           </tr>)}
           {model.rows.map((row) => {
             const inside = area && row.editIndex >= area.r0 && row.editIndex <= area.r1;
@@ -358,20 +367,22 @@ const PeopleRow = memo(function PeopleRow({ row, dayClass, days, holidays, canEd
         </span>
       : <span className={`people-mark ${row.outsourced ? "out" : "own"}`}>{t(row.outsourced ? "People.outShort" : "People.ownShort")}</span> : null}</td>
     <td className="people-ppl">{editable
-      ? <input key={row.usual ?? "none"} className="people-usual" inputMode="numeric" maxLength={3} defaultValue={row.usual ?? ""} aria-label={`${t("People.perDay")} ${task.wbs}`}
-          onInput={(event) => { event.currentTarget.value = event.currentTarget.value.replace(/\D/g, ""); }}
+      ? <input key={row.usual ?? "none"} className="people-usual" inputMode="decimal" maxLength={5} defaultValue={row.usual ?? ""} aria-label={`${t("People.perDay")} ${task.wbs}`}
+          onInput={(event) => { event.currentTarget.value = figureText(event.currentTarget.value); }}
           onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }}
-          onBlur={(event) => { const count = Number.parseInt(event.currentTarget.value, 10); if (count > 0 && count !== row.usual) onPeople(task.id, count); }} />
+          onBlur={(event) => { const count = tenth(Number.parseFloat(event.currentTarget.value)); if (count > 0 && count !== row.usual) onPeople(task.id, count); }} />
       : work && row.usual ? row.usual : null}</td>
     <td className="people-md">{row.manDays ? figure(row.manDays) : ""}</td>
     {row.cells.map((value, index) => {
       const selected = index >= from && index <= to, unset = work && value === 0 && isWorkDay(days[index]!, holidays);
       const state = !work ? (value !== null ? " span" : "") : task.isMilestone ? "" : value ? (row.outsourced ? " out" : " own") : unset ? " unset" : "";
-      return <td key={index} className={`people-day${dayClass[index]}${state}${selected ? " sel" : ""}${editable ? " edit" : ""}`} {...(editable ? { "data-row": row.editIndex, "data-column": index } : {})}>
+      const over = row.clash?.get(index), text = shown(value);
+      return <td key={index} className={`people-day${dayClass[index]}${state}${selected ? " sel" : ""}${editable ? " edit" : ""}${over ? " clash" : ""}${text.length > 3 ? " long" : ""}`}
+        title={over ? t("People.clashHint").replace("{name}", over.name).replace("{total}", String(over.total)) : undefined} {...(editable ? { "data-row": row.editIndex, "data-column": index } : {})}>
         {active === index
-          ? <input ref={input} className="people-cell" inputMode="numeric" maxLength={3} autoComplete="off" defaultValue={value || ""} aria-label={`${task.wbs} ${days[index]}`}
+          ? <input ref={input} className="people-cell" inputMode="decimal" maxLength={5} autoComplete="off" defaultValue={text} aria-label={`${task.wbs} ${days[index]}`}
               onFocus={(event) => event.currentTarget.select()} onKeyDown={onKeyDown} onInput={onInput} onPaste={onPaste} onBlur={onBlur} />
-          : value || ""}
+          : text}
       </td>;
     })}
   </tr>;

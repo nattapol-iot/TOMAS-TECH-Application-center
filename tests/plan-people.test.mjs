@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { addDays, applyPeople, dayDiff, fillPeople, isWorkDay, mondayOf, parsePastedBlock, peopleManDays, peopleOn, sameSpan, usualPeople } from "../lib/plan-people.ts";
+import { addDays, applyPeople, dayDiff, figureText, fillPeople, isWorkDay, mondayOf, overbookedDays, parsePastedBlock, peopleManDays, peopleOn, sameSpan, usualPeople } from "../lib/plan-people.ts";
 
 const root = new URL("../", import.meta.url);
 const source = async (path) => (await readFile(new URL(path, root), "utf8")).replace(/\r\n/g, "\n");
@@ -55,8 +55,29 @@ test("fillPeople: People/day goes on every work day and on days that already hav
   assert.equal(sameSpan({ start: "2026-12-05", days: 2, people: [1, 0] }, { start: "2026-12-05", days: 2, people: [1] }), true);
 });
 
-test("parsePastedBlock: rows and tabs from a spreadsheet; anything that is not a whole number is skipped", () => {
+test("parsePastedBlock: rows and tabs from a spreadsheet; anything that is not a figure is skipped", () => {
   assert.deepEqual(parsePastedBlock("3\t3\t\r\n6\tx\t10\r\n"), [[3, 3, null], [6, null, 10]]);
+  assert.deepEqual(parsePastedBlock("0.5\t0,5\t1.25"), [[0.5, 0.5, null]]);
+});
+
+test("shares: one person on two tasks a day is 0.5 on each, kept to one decimal place", () => {
+  assert.deepEqual(applyPeople(week, edits({ "2026-12-07": 0.5, "2026-12-08": 0.26 })), { start: "2026-12-07", days: 5, people: [0.5, 0.3] });
+  assert.equal(peopleManDays([0.1, 0.2, 0.5, 0.5]), 1.3);
+  assert.deepEqual(["0.5", "0,5", "12.55", "1.2.3", "ab", ".5", "1234"].map(figureText), ["0.5", "0.5", "12.5", "1.2", "", ".5", "123"]);
+});
+
+test("overbookedDays: the same PIC on several rows for more than one man-day on a day, and only then", () => {
+  const somchai = { id: 1, name: "Somchai" }, wanida = { id: 2, name: "Wanida" };
+  const found = overbookedDays([
+    { people: [somchai], cells: [1, 0.5, 3, null] },          // leads a crew of three on the third day: he is one of them
+    { people: [somchai, wanida], cells: [1, 0.5, 2, 1] },     // two PICs share the row's figure
+    { people: [], cells: [5, 5, 5, 5] },                      // no PIC, or an outsourced row: nobody to double-book
+  ]);
+  assert.deepEqual([...found.keys()].sort(), [0, 1]);
+  assert.deepEqual([...found.get(0).keys()], [0, 2], "1 + 0.5 and 1 + 1 are over; 0.5 + 0.25 is not");
+  assert.deepEqual(found.get(0).get(0), { name: "Somchai", total: 1.5 });
+  assert.deepEqual([...found.get(1).keys()], [0, 2]);
+  assert.equal(overbookedDays([{ people: [somchai], cells: [0.5] }, { people: [somchai], cells: [0.5] }]).size, 0, "half and half is one day");
 });
 
 test("Plan screen: the People table is a view of Projects > Plan and locks man-days that come from it", async () => {
