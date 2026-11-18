@@ -27,14 +27,20 @@ export type DayLoad = { date: string; manDays: number; available: number; /** Nu
 
 /**
  * A person's planned man-days on each day: every open item's effort spread evenly over its working days, as
- * planningLoad spreads it over weeks, and a full day for plan work with no man-days (impliedEffort). A working day offers
- * capacity / 5 man-days; a holiday or a weekend offers none. Leave is not deducted (owner decision 2026-10-21): the board
- * only shows it.
+ * planningLoad spreads it over weeks, and a full day for plan work with no man-days (impliedEffort). A plan row with
+ * people typed per day (byDay, the People table) loads exactly those days instead. A working day offers capacity / 5
+ * man-days; a holiday or a weekend offers none, unless people were typed on it: then the person works that day and it
+ * offers a day's capacity. Leave is not deducted (owner decision 2026-10-21): the board only shows it.
  */
 export function dailyLoad(items: Commitment[], days: BoardDay[], capacity: number, holidays: readonly string[] = []): DayLoad[] {
-  const spread = new Map<string, number>();
+  const spread = new Map<string, number>(), typedDays = new Set<string>();
   for (const item of items) {
-    if (!isOpenWork(item) || item.manDays === null || !item.manDays || !item.start || !item.end) continue;
+    if (!isOpenWork(item)) continue;
+    if (item.byDay) {
+      for (const [date, share] of Object.entries(item.byDay)) if (share > 0) { spread.set(date, (spread.get(date) ?? 0) + share); typedDays.add(date); }
+      continue;
+    }
+    if (item.manDays === null || !item.manDays || !item.start || !item.end) continue;
     const span = workingDays(item.start, item.end, holidays);
     if (!span.length) continue;
     const share = item.manDays / span.length;
@@ -43,7 +49,7 @@ export function dailyLoad(items: Commitment[], days: BoardDay[], capacity: numbe
   for (const [date, extra] of impliedEffort(items, holidays)) spread.set(date, (spread.get(date) ?? 0) + extra);
   const daily = capacity / 5;
   return days.map(({ date, holiday, weekend }) => {
-    const manDays = spread.get(date) ?? 0, available = holiday || weekend ? 0 : daily;
+    const manDays = spread.get(date) ?? 0, available = (holiday || weekend) && !typedDays.has(date) ? 0 : daily;
     const utilisation = available > 0 ? (manDays / available) * 100 : manDays > 0 ? Infinity : null;
     return { date, manDays, available, utilisation };
   });
@@ -66,6 +72,8 @@ export function overlapDays(items: readonly Commitment[], from: string, to: stri
     const first = item.start > from ? item.start : from, last = end < to ? end : to;
     if (last < first) continue;
     for (const date of workingDays(first, last, holidays)) {
+      // A row with people typed per day is on a day only when someone is typed on it.
+      if (item.byDay && !((item.byDay[date] ?? 0) > 0)) continue;
       const pieces = byDate.get(date) ?? new Map<string, Commitment>();
       if (!pieces.has(workGroup(item))) pieces.set(workGroup(item), item);
       byDate.set(date, pieces);
@@ -96,12 +104,14 @@ export function dayWork(items: readonly Commitment[], date: string, holidays: re
   const pieces = new Map<string, DayPiece>();
   const working = workingDays(date, date, holidays).length > 0;
   for (const item of items) {
-    if (!isOpenWork(item) || !covers(item.start, item.end, date) || (!working && item.type !== "Task")) continue;
+    // People typed per day: the row takes what was typed on this date, a weekend included, and nothing on its other days.
+    const typedShare = item.byDay ? item.byDay[date] ?? 0 : null;
+    if (!isOpenWork(item) || !covers(item.start, item.end, date) || typedShare === 0 || (!working && item.type !== "Task" && !typedShare)) continue;
     const end = item.end ?? item.start;
     const span = item.start && end ? workingDays(item.start, end, holidays).length || dayNumber(end) - dayNumber(item.start) + 1 : 0;
     const typed = item.manDays !== null && item.manDays > 0;
     const piece = pieces.get(workGroup(item)) ?? { piece: workGroup(item), rows: [] };
-    piece.rows.push({ item, perDay: typed && span ? item.manDays! / span : null, fullDay: !typed && item.type === "Project" });
+    piece.rows.push({ item, perDay: typedShare !== null ? typedShare : typed && span ? item.manDays! / span : null, fullDay: !typed && item.type === "Project" });
     pieces.set(piece.piece, piece);
   }
   const startOf = (piece: DayPiece) => piece.rows.map((row) => row.item.start ?? "").sort()[0] ?? "";

@@ -460,6 +460,7 @@
 .people-key.hol { background: var(--amber-line); }
 .people-key.clash { border: 2px solid var(--amber); background: var(--surface); }
 .people-legend > .people-tips { flex-basis: 100%; color: var(--muted); }
+.people-legend > .people-board-off { color: var(--amber-text); }
 .people-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); }
 .people-table { width: max-content; border-collapse: separate; border-spacing: 0; font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
 .people-table th, .people-table td { box-sizing: border-box; height: 28px; padding: 0; border-right: 1px solid var(--line-soft); border-bottom: 1px solid var(--line-soft); background: var(--surface); font-weight: 400; }

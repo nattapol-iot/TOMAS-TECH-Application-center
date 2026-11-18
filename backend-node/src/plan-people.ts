@@ -59,6 +59,19 @@ function isoDate(value: unknown): string {
   return value;
 }
 
+/**
+ * What a row's people mean for one of its PICs, by date: the day's figure over the row's PICs, one at most (a PIC
+ * leading a crew of three is one of them). The team load reads this instead of spreading the row's man-days evenly
+ * (resource-workload.ts); lib/plan-people.ts holds the same rule for the screen.
+ */
+export function peopleShares(planStart: string, people: readonly number[], owners: number): Record<string, number> {
+  const first = Date.parse(`${planStart}T00:00:00Z`), shares: Record<string, number> = {};
+  people.forEach((figure, offset) => {
+    if (figure > 0) shares[new Date(first + offset * 86_400_000).toISOString().slice(0, 10)] = Math.round(Math.min(1, figure / Math.max(1, owners)) * 100) / 100;
+  });
+  return shares;
+}
+
 /** The rows of one save, checked: each names a task once and carries a labor source, a supplier, a plan, or several of them. */
 export function peopleEdits(value: unknown): PeopleEdit[] {
   if (!Array.isArray(value) || !value.length || value.length > MAXIMUM_ROWS) throw invalid(`Rows must be a list of 1 to ${MAXIMUM_ROWS} plan rows.`);

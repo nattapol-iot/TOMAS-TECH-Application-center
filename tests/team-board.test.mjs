@@ -312,3 +312,16 @@ test("a repeat falls on its weekdays until its last day, company holidays left o
   assert.deepEqual(overlapDays([{ ...day, repeat: false }, plan], "2026-11-09", "2026-11-13").map((entry) => entry.date), ["2026-11-11"]);
   assert.equal(dailyLoad([day, plan], [{ date: "2026-11-11", holiday: false }], 5, [])[0].manDays, 1.25);
 });
+
+test("team load: people typed per day load exactly those days, a weekend included, and overlap only where typed", () => {
+  const item = (key, patch) => work({ key, workKey: key, start: "2026-12-04", end: "2026-12-08", manDays: 1.5, status: "Not Started", ...patch });
+  const typed = item("Project-1", { byDay: { "2026-12-04": 0.5, "2026-12-05": 1 } }), even = item("Project-2", { manDays: 3 });
+  const days = boardDays("2026-11-30", 2, [], "2026-12-01"), at = (load, date) => load.find((day) => day.date === date);
+  const load = dailyLoad([typed, even], days, 5);
+  assert.deepEqual([at(load, "2026-12-04").manDays, at(load, "2026-12-07").manDays], [1.5, 1], "0.5 typed + 3 MD over three work days; nothing typed on the 7th");
+  assert.deepEqual([at(load, "2026-12-05").manDays, at(load, "2026-12-05").available], [1, 1], "a Saturday with people typed is a working day for them");
+  assert.equal(at(load, "2026-12-06").available, 0, "the Sunday nobody typed stays closed");
+  assert.deepEqual(overlapDays([typed, even], "2026-12-01", "2026-12-12").map((day) => day.date), ["2026-12-04"]);
+  assert.deepEqual(dayWork([typed], "2026-12-05").map((piece) => piece.rows[0].perDay), [1]);
+  assert.equal(dayWork([typed], "2026-12-08").length, 0);
+});

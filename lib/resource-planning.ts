@@ -31,6 +31,11 @@ export type Commitment = {
    * in the load, but it is not a piece of work that overlaps another.
    */
   repeat?: boolean;
+  /**
+   * A plan row with people typed per day (the People table): this person's man-days on each date, weekends included.
+   * The daily load reads these instead of spreading manDays evenly; manDays is their total.
+   */
+  byDay?: Record<string, number>;
 };
 const DAY = 86400000;
 /** Working days a week for anyone without a saved capacity: Monday to Friday. backend-node/src/resource-workload.ts holds the same default. */
