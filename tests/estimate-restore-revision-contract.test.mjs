@@ -85,3 +85,41 @@ test("an earlier revision's cost items group by category and module and show wha
   ]);
   assert.deepEqual(revisionCostGroups([]), []);
 });
+
+test("a copied revision keeps the ERP summary as it was laid out, and going back keeps the overhead policy (owner 2026-11-18)", async () => {
+  const routes = await source("backend-node/src/routes/estimates.ts");
+  const start = routes.indexOf("async function cloneRevisionLines");
+  const clone = routes.slice(start, routes.indexOf("async function materializeErpMappings", start));
+  // A category a person chose by hand stays chosen on the copy: every mapping copy carries manual_override.
+  assert.equal(clone.split("INSERT dbo.estimate_erp_mappings(estimate_id,revision,source_type,source_id,erp_category,manual_override,copied_from_mapping_id,copied_from_revision,created_by,updated_by)").length - 1, 5);
+  assert.equal(clone.split("m.erp_category,m.manual_override,m.id,@current_revision,@actor,@actor").length - 1, 5);
+  assert.doesNotMatch(clone, /source_id,erp_category,copied_from_mapping_id/);
+  // Merged ERP lines follow their members to the copied lines of all four ledgers, in their own order.
+  const groups = clone.slice(clone.indexOf("INSERT dbo.estimate_erp_groups("));
+  assert.ok(groups.length > 0 && clone.indexOf("INSERT dbo.estimate_erp_groups(") > clone.indexOf("@copiedOtherCosts TABLE"), "groups are copied after the lines");
+  for (const table of ["@copiedCosts", "@copiedManhours", "@copiedExpenses", "@copiedOtherCosts"]) assert.ok(groups.includes(`FROM ${table}`), table);
+  for (const type of ["CostItem", "ManhourLine", "ExpenseLine", "OtherCostLine"]) assert.ok(groups.includes(`N'${type}'`), type);
+  assert.match(groups, /copied\.source_type sourceType,copied\.new_id sourceId/);
+  assert.match(groups, /ORDER BY TRY_CONVERT\(int,member\.\[key\]\) FOR JSON PATH/);
+  // The member is matched on its type and its old id together, so ids of different ledgers never collide,
+  // and an entry that is not an object (a hand-edited list) is skipped instead of failing the copy.
+  assert.match(groups, /copied\.source_type=CASE WHEN member\.type=5 THEN JSON_VALUE\(member\.value,'\$\.sourceType'\) END/);
+  assert.match(groups, /copied\.old_id=CASE WHEN member\.type=5 THEN TRY_CONVERT\(bigint,JSON_VALUE\(member\.value,'\$\.sourceId'\)\) END/);
+  assert.match(groups, /moved\.members IS NOT NULL\s+ORDER BY g\.id;/);
+  assert.match(groups, /g\.revision=@current_revision AND moved\.members IS NOT NULL/);
+  // Going back takes the overhead policy of the revision it copies; Create Revision still takes the policy of the day.
+  const restore = routes.slice(routes.indexOf('app.post("/api/v1/estimates/:id/restore-revision"'));
+  assert.match(restore, /SELECT policy_id FROM dbo\.estimate_overhead_snapshots WHERE estimate_id=@id AND revision=@revision;/);
+  assert.match(restore, /const applied = await snapshotOverheadPolicy\(transaction, id, nextRevision, actor\.id, todayIn\(config\.businessTimeZone\), Number\(sourcePolicy\.policy_id\)\);/);
+  // A policy that could not be applied stops the restore; it never passes with a different total.
+  assert.match(restore, /Number\(applied\?\.policy_id\) !== Number\(sourcePolicy\.policy_id\)\) throw new ApiError\(409, "overhead_policy_unavailable"/);
+  // A source with no policy gives a revision with none, unless overhead is in use: then the policy of the day stands in.
+  assert.match(restore, /\} else if \(ESTIMATE_OVERHEAD_ENABLED\) \{\s+\/\/[^\n]*\n\s+await snapshotOverheadPolicy\(transaction, id, nextRevision, actor\.id, todayIn\(config\.businessTimeZone\)\);/);
+  assert.equal(restore.split("snapshotOverheadPolicy(").length - 1, 2);
+  // Send back and withdraw keep the policy of the day, as Create Revision does.
+  const sendBack = routes.slice(routes.indexOf('app.post("/api/v1/estimates/:id/request-revision"'), routes.indexOf('app.get("/api/v1/estimates/:id/revisions/:revision"'));
+  assert.match(sendBack, /snapshotOverheadPolicy\(transaction,id,nextRevision,actor\.id,todayIn\(config\.businessTimeZone\)\);/);
+  assert.match(routes, /await snapshotOverheadPolicy\(transaction, id, next, actorId, todayIn\(timeZone\)\);/);
+  const create = routes.slice(routes.indexOf('app.post("/api/v1/estimates/:id/create-revision"'), routes.indexOf('app.post("/api/v1/estimates/:id/request-revision"'));
+  assert.match(create, /snapshotOverheadPolicy\(transaction,id,nextRevision,actor\.id,todayIn\(config\.businessTimeZone\)\);/);
+});

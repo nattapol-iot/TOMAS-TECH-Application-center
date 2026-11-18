@@ -1,6 +1,6 @@
 "use client";
 /* One revision from the history, read-only, and the way back to it (owner 2026-11-18).
-   Going back never rewrites history: the server opens a new revision holding a copy of this one's lines,
+   Going back never rewrites history: the server opens a new revision as this one was (lines, contingency rate, ERP layout, overhead policy),
    and the revision in hand stays in the history, so going back twice returns to where one was. */
 import { useEffect, useState } from "react";
 import { ApiClientError, loadEstimateRevision, restoreEstimateRevision, type EstimateRevision, type EstimateRevisionDetail } from "../api-client";
@@ -77,9 +77,9 @@ export function EstimateRevisionView({ estimateId, estimateNumber, revision, cur
     {error ? <div className="callout danger" role="alert"><Icon name="alertTriangle" /><span>{error}</span></div> : null}
     {confirming ? <div className="stack">
       <div className="info-strip amber"><Icon name="alertTriangle" /><ul className="est-rev-points">
-        <li>{copy(`ระบบจะเปิด Revision ใหม่ที่คัดลอกรายการจาก ${code}`, `A new revision opens holding a copy of the lines of ${code}.`, `${code} の明細をコピーした新しい改訂を開きます。`)}</li>
+        <li>{copy(`ระบบจะเปิด Revision ใหม่ที่เหมือน ${code} ทุกอย่าง: รายการ ราคา อัตราสำรอง และการจัดหน้าสรุป ERP`, `A new revision opens as ${code} was: its lines, prices, contingency rate and ERP summary layout.`, `${code} と同じ内容の新しい改訂を開きます：明細、単価、予備費率、ERPサマリーの構成。`)}</li>
         <li>{copy(`${currentCode} ที่ทำอยู่ตอนนี้ยังเก็บไว้ในประวัติ กลับไปใช้ได้อีก`, `${currentCode}, the one in hand, stays in the history and can be gone back to.`, `作業中の ${currentCode} は履歴に残り、あとで戻せます。`)}</li>
-        <li>{copy(`Revision ใหม่ต้องส่งอนุมัติตามปกติ ยอดรวมอาจต่างจาก ${code} เดิม เพราะใช้อัตรา Overhead ของวันนี้`, `The new revision is sent for approval as usual. Its total may differ from ${code} because it takes today's overhead rate.`, `新しい改訂は通常どおり承認依頼が必要です。本日の間接費レートを使うため、合計が ${code} と異なる場合があります。`)}</li>
+        <li>{copy("Revision ใหม่ต้องส่งอนุมัติตามปกติ", "The new revision is sent for approval as usual.", "新しい改訂は通常どおり承認依頼が必要です。")}</li>
       </ul></div>
       <label className="field"><span>{copy("เหตุผล (ไม่บังคับ)", "Reason (optional)", "理由（任意）")}</span>
         <input value={note} maxLength={NOTE_MAX} disabled={busy} onChange={(event) => setNote(event.target.value)} placeholder={copy("เช่น ลูกค้ากลับไปใช้ขอบเขตเดิม", "e.g. the customer returned to the earlier scope", "例：顧客が以前の範囲に戻した")} /></label>
