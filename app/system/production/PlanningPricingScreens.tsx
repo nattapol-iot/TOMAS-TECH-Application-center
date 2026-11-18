@@ -9,6 +9,9 @@ import { CreateSignableDocumentModal } from "./SigningScreens";
 import { ResourceTaskWorkspace, type ResourceTask } from "./ResourceTaskWorkspace";
 import { SearchMultiPicker } from "./SearchMultiPicker";
 import { buildScheduleWorkbook, scheduleWorkbookName } from "../../../lib/schedule-workbook";
+import { MyIssuesPanel } from "./MyIssues";
+import { loadProjectIssues, type ProjectIssue } from "./issue-batch-client";
+import type { IssueState } from "../../../lib/issue-batches";
 import { downloadErpEstimateWorkbookBytes } from "../../../lib/erp-estimate-workbook";
 import { estimateBusinessDate, estimateUxCopy } from "../../../lib/estimate-ux";
 import { useActivitySubView } from "../use-activity-presence";
@@ -115,6 +118,8 @@ type ProductionPlanningProps = {
   onMyWorkUrgentCountChange?: (count: number) => void;
   newAssignmentCount?: number;
   onNewAssignmentChanged?: () => void;
+  /** Opens a customer issue batch on Projects > Punchlist. */
+  openIssueBatch?: (batchId: number) => void;
 };
 
 type MyWorkItem = {
@@ -1070,6 +1075,7 @@ export function ProductionMyWork({
   newAssignmentCount = 0,
   onNewAssignmentChanged,
   openCrmOpportunity,
+  openIssueBatch,
 }: ProductionPlanningProps) {
   const localizeCopy = useStaticCopy();
   const uiText = useUiText();
@@ -1368,6 +1374,7 @@ export function ProductionMyWork({
 
     {tab === "active" ? <>
       {(sourceFilter === "all" || sourceFilter === "crm") && bootstrap.permissions.includes("crm.read") ? <CrmMyWork openOpportunity={openCrmOpportunity} /> : null}
+      {sourceFilter === "all" || sourceFilter === "project" ? <MyIssuesPanel notify={notify} openIssueBatch={openIssueBatch} /> : null}
       {sourceFilter !== "crm" ? <>
       <Panel
         title={taskFilter === "attention" ? uiText("Needs your update") : `${activeWorkGroups.length} ${uiText("work groups")}`}
@@ -1474,7 +1481,7 @@ export function ProductionMyWork({
       </> : null}
     </> : null}
 
-    {tab === "queue" ? <MyWorkQueue bootstrap={bootstrap} notify={notify} openProjectSchedule={openProjectSchedule} openEstimate={openEstimate} /> : null}
+    {tab === "queue" ? <MyWorkQueue bootstrap={bootstrap} notify={notify} openProjectSchedule={openProjectSchedule} openEstimate={openEstimate} openIssueBatch={openIssueBatch} /> : null}
     {tab === "updates" ? <Panel title={uiText("My Updates")} subtitle={uiText("What you reported, in order")} flush>
       <div className="panel-body feed">
         {visibleUpdates.slice(0, 40).map((entry) => <div className="feed-row" key={entry.id}>
@@ -2447,7 +2454,10 @@ function memberGanttRows({ schedule, board, span, today, closed, selectedTaskId,
  * bar or a row opens the task drawer, where the PIC, the PM or an Admin updates progress (canProgress)
  * and the plan owner edits the row. Reloads keep the plan on screen instead of blanking it.
  */
-export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectId, preferredTaskId, onPreferredConsumed }: ProductionPlanningProps) {
+/** Customer issues on the Plan Gantt, coloured like their badges on the Punchlist. */
+const PLAN_ISSUE_TONE: Record<IssueState, "amber" | "slate" | "blue" | "green" | "red"> = { Approval: "amber", Open: "slate", Doing: "blue", Done: "green", Cancelled: "slate", Rejected: "red" };
+
+export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectId, preferredTaskId, onPreferredConsumed, openIssueBatch }: ProductionPlanningProps) {
   const uiText = useUiText();
   useActivitySubView("projects-schedule");
   const allowed = bootstrap.permissions.includes("schedule.read");
@@ -2517,6 +2527,10 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
     finally { setLoadingProjects(false); }
   }, [allowed, preferredProjectId, preferredTaskId, linkedProjectId, onPreferredConsumed, storageKey]);
   // A reload keeps the current plan on screen; only switching projects clears it.
+  // Customer issues of the project (Punchlist batches, owner 2026-11-18): drawn under the plan, apart from it. They
+  // never count in the plan's progress, health or dates; they are read again whenever the plan is.
+  const [planIssues, setPlanIssues] = useState<{ projectId: number; items: ProjectIssue[] } | null>(null);
+  const [issuesOpen, setIssuesOpen] = useState(true);
   const loadSchedule = useCallback(async () => {
     const requestId = ++scheduleRequestId.current;
     if (!selectedId) { setSchedule(null); setLoadingSchedule(false); return; }
@@ -2543,6 +2557,14 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
       scheduleRequestId.current += 1;
     };
   }, [loadSchedule]);
+  useEffect(() => {
+    if (!selectedId || !allowed) return;
+    let live = true;
+    loadProjectIssues(selectedId)
+      .then((result) => { if (live) setPlanIssues({ projectId: selectedId, items: result.items }); })
+      .catch(() => { if (live) setPlanIssues({ projectId: selectedId, items: [] }); });
+    return () => { live = false; };
+  }, [selectedId, allowed, schedule]);
   // The address names the open project and task, so it is a link to them.
   useEffect(() => {
     if (selectedId) place(["plan", selectedId, ...(drawerTaskId ? ["task", drawerTaskId] : [])], "replace");
@@ -2746,12 +2768,34 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
   // By member (owner request 2026-11-04): one row per person on the plan with their rows here, their other work faint,
   // and the days it overlaps (amber) or is more than they have (red) marked under their bars.
   const memberView = level === "member";
+  const projectIssues = planIssues && planIssues.projectId === selectedId ? planIssues.items : [];
+  const issueStarts = projectIssues.map((issue) => issue.planStart).filter((day): day is string => Boolean(day)).sort();
+  const issueEnds = projectIssues.map((issue) => issue.planEnd ?? issue.planStart).filter((day): day is string => Boolean(day)).sort();
+  const issueRows: GanttRowSpec[] = masterView || filter || !projectIssues.length ? [] : [
+    {
+      key: "issues", depth: 0, kind: "phase", label: <>{uiText("Plan.issuesGroup")} <Badge tone="amber">{projectIssues.length}</Badge></>,
+      meta: uiText("Plan.issuesMeta"), expandable: true, expanded: issuesOpen, onToggle: () => setIssuesOpen((open) => !open),
+      start: issueStarts[0] ?? null, finish: issueEnds[issueEnds.length - 1] ?? null, tone: "amber", progress: null,
+      title: `${uiText("Plan.issuesGroup")} · ${projectIssues.length}`,
+    },
+    ...(issuesOpen ? projectIssues.map((issue): GanttRowSpec => {
+      const what = issue.functionName || (issue.description.length > 60 ? `${issue.description.slice(0, 59)}…` : issue.description);
+      return {
+        key: `issue:${issue.id}`, depth: 1, kind: "task", label: <><span className="mono">{issue.batchNo} #{issue.lineNo}</span> {what}</>,
+        meta: [issue.assigneeName, uiText(`Issues.state.${issue.state}`), issue.planHours === null ? "" : `${issue.planHours} h`].filter(Boolean).join(" · "),
+        ...(openIssueBatch ? { onOpen: () => openIssueBatch(issue.batchId) } : {}),
+        start: issue.planStart, finish: issue.planEnd ?? issue.planStart, progress: issue.state === "Done" ? 100 : null, tone: PLAN_ISSUE_TONE[issue.state],
+        ...(issue.planStart ? {} : { placeholder: uiText("Plan.issueUnplanned") }),
+        title: `${issue.batchNo} #${issue.lineNo} ${what} · ${issue.planStart ?? "—"} → ${issue.planEnd ?? issue.planStart ?? "—"}`,
+      };
+    }) : []),
+  ];
   const memberBoard = memberWork && memberWork.key === memberKey ? memberWork : null;
   const memberRows = memberView && activeSchedule && memberSpan ? memberGanttRows({
     schedule: activeSchedule, board: memberBoard?.data ?? null, span: memberSpan, today, closed: memberClosed, selectedTaskId: drawerTaskId, t: uiText, onOpenTask: setDrawerTaskId,
     onToggle: (key) => setMemberClosed((current) => { const next = new Set(current); if (next.has(key)) next.delete(key); else next.add(key); return next; }),
   }) : [];
-  const chartRows = memberView ? memberRows : ganttRows;
+  const chartRows = memberView ? memberRows : [...ganttRows, ...issueRows];
   // Expand all / Collapse all fold what this view folds: the Team Plan's rows that have rows under them, or the members.
   // A quick filter shows every match open with its parents (planRows), so folding does nothing there.
   const parentIds = rows.filter((task) => task.children.length > 0).map((task) => task.id);

@@ -30,7 +30,8 @@ export type WorkloadItem = {
    * functions are one piece of work when the board looks for work that overlaps. Absent: the work key is the piece.
    */
   group?: string;
-  type: "Inquiry" | "Estimate" | "Project" | "Task"; entityId: number; ownerId: number | null;
+  /** Issue: a customer issue from a Punchlist batch (migration 107), whose entityId is its batch's id. */
+  type: "Inquiry" | "Estimate" | "Project" | "Task" | "Issue"; entityId: number; ownerId: number | null;
   reference: string; title: string; customer: string; start: string | null; end: string | null;
   manDays: number | null; progress: number; status: string;
   /** Absent where the effort lives in the work's own plan (plan tasks, Resource Plan tasks, team tasks). */
@@ -50,8 +51,9 @@ export type WorkloadItem = {
 const FINISHED_SQL = FINISHED_WORK_STATUSES.map((status) => `N'${status}'`).join(",");
 
 /**
- * Nine recordsets, after the caller's planning recordsets: whole inquiries, inquiry tasks, whole estimates, estimate
- * sections, projects, their schedule rows and PICs, every person's work order and the team board's tasks. Binds @actor,
+ * Ten recordsets, after the caller's planning recordsets: whole inquiries, inquiry tasks, whole estimates, estimate
+ * sections, projects, their schedule rows and PICs, every person's work order, the team board's tasks and the customer
+ * issues being worked on. Binds @actor,
  * @project_elevated, @task_elevated and @all_work. Visibility follows the screens the Resource Plan used to read:
  * inquiries and estimates as their lists show them to inquiry.read / estimate.read, inquiry tasks as
  * GET /resource-tasks/commitments scopes them (managers see all), projects as GET /projects lists them. With @all_work
@@ -130,7 +132,23 @@ export const WORKLOAD_SQL = `
       WHERE t.deleted_at IS NULL AND t.status=N'Planned' AND t.kind IN(N'Appointment',N'Task') AND t.series_id IS NOT NULL
         AND t.end_date>=CONVERT(date,SWITCHOFFSET(SYSDATETIMEOFFSET(),'+07:00'))
       GROUP BY t.series_id,a.user_id
-      ORDER BY start_date,id,sort_order;`;
+      ORDER BY start_date,id,sort_order;
+      -- Customer issues (Punchlist batches, migration 107) take their PIC's time from approval until they are done:
+      -- their plan hours as man-days, 8 hours to the day. They stay off the project's plan, so they never move its
+      -- progress or dates. Seen in detail as the Punchlist shows them: project-wide roles, a batch of a project this
+      -- system does not have, the project's manager, lead and members, the batch's author and the issue's PIC.
+      SELECT i.id,i.batch_id,b.batch_no,i.line_no,i.category,i.function_name,i.description,i.assignee_id,i.plan_start,i.plan_end,i.plan_hours,i.state,
+        COALESCE(p.project_no,b.external_project) project_ref,COALESCE(c.name,b.customer_name) customer_name,
+        CAST(CASE WHEN @project_elevated=1 OR b.project_id IS NULL OR b.created_by=@actor OR i.assignee_id=@actor
+          OR p.manager_id=@actor OR p.lead_engineer_id=@actor
+          OR EXISTS(SELECT 1 FROM dbo.project_members m WHERE m.project_id=b.project_id AND m.user_id=@actor) THEN 1 ELSE 0 END AS bit) visible
+      FROM dbo.issue_items i JOIN dbo.issue_batches b ON b.id=i.batch_id
+      LEFT JOIN dbo.projects p ON p.id=b.project_id LEFT JOIN dbo.customers c ON c.id=p.customer_id
+      WHERE i.state IN(N'Open',N'Doing') AND i.assignee_id IS NOT NULL AND i.plan_start IS NOT NULL
+        AND (@all_work=1 OR @project_elevated=1 OR b.project_id IS NULL OR b.created_by=@actor OR i.assignee_id=@actor
+          OR p.manager_id=@actor OR p.lead_engineer_id=@actor
+          OR EXISTS(SELECT 1 FROM dbo.project_members m WHERE m.project_id=b.project_id AND m.user_id=@actor))
+      ORDER BY i.plan_start,i.id;`;
 
 type Row = Record<string, unknown>;
 const text = (row: Row, key: string) => String(row[key] ?? "");
@@ -143,7 +161,7 @@ const hiddenRow = (row: Row) => (row.visible === undefined || row.visible === nu
 const scope = (row: Row) => (hiddenRow(row) ? { hidden: true } : {});
 
 /** A work key as WorkloadItem.workKey writes it; the only shape dbo.work_priorities stores. */
-export const WORK_KEY = /^(?:Project|Estimate|EstimateSection|Inquiry|InquiryTask|TeamTask|TeamSeries)-[1-9][0-9]{0,17}$/;
+export const WORK_KEY = /^(?:Project|Estimate|EstimateSection|Inquiry|InquiryTask|TeamTask|TeamSeries|Issue)-[1-9][0-9]{0,17}$/;
 
 /** The plan proposed for a task awaiting approval, or null when it cannot be read. */
 function proposedPlan(value: unknown, holidays: ReadonlySet<string>) {
@@ -161,7 +179,7 @@ function proposedPlan(value: unknown, holidays: ReadonlySet<string>) {
  * warnings; orderRows are the saved work orders, for workOrders.
  */
 export function workloadItems(sets: Row[][], holidays: ReadonlySet<string>): { items: WorkloadItem[]; warnings: string[]; orderRows: Row[] } {
-  const [inquiries = [], tasks = [], estimates = [], sections = [], projects = [], scheduleRows = [], pics = [], orderRows = [], teamTasks = []] = sets;
+  const [inquiries = [], tasks = [], estimates = [], sections = [], projects = [], scheduleRows = [], pics = [], orderRows = [], teamTasks = [], issues = []] = sets;
   const items: WorkloadItem[] = [];
   const warnings: string[] = [];
   for (const r of inquiries) items.push({
@@ -250,6 +268,20 @@ export function workloadItems(sets: Row[][], holidays: ReadonlySet<string>): { i
     start: day(r, "start_date"), end: day(r, "end_date"), manDays: Number(r.man_days ?? 0), progress: 0, status: "Planned",
     taskKind: r.kind === "Appointment" ? "Appointment" : "Task",
   });
+  // A customer issue is its PIC's: plan hours as man-days (8 h = 1 MD); one with no hours yet loads nothing. Its
+  // entityId is the batch, which the Punchlist opens.
+  for (const r of issues) {
+    const hours = optional(r, "plan_hours"), what = text(r, "description").replace(/\s+/g, " ").trim();
+    const start = day(r, "plan_start");
+    items.push({
+      key: `Issue-${id(r, "id")}`, workKey: `Issue-${id(r, "id")}`, type: "Issue", entityId: id(r, "batch_id"), ownerId: optional(r, "assignee_id"),
+      reference: `${text(r, "batch_no")} #${id(r, "line_no")}`,
+      title: [text(r, "function_name"), what.length > 120 ? `${what.slice(0, 119)}…` : what].filter(Boolean).join(" · "),
+      customer: [text(r, "project_ref"), text(r, "customer_name")].filter(Boolean).join(" · "),
+      start, end: day(r, "plan_end") ?? start, manDays: hours === null ? null : Math.round((hours / 8) * 100) / 100,
+      progress: 0, status: r.state === "Doing" ? "In Progress" : "Not Started", ...scope(r),
+    });
+  }
   return { items: items.filter(isOpenWork), warnings, orderRows };
 }
 

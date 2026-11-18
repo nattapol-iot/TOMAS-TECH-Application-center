@@ -6,8 +6,11 @@ export type Commitment = {
   workKey: string;
   /** The piece of work it is part of: a plan task with its functions is one (Project-<task id>); absent, the work key. */
   group?: string;
-  /** Task: work added on the team board (dbo.team_tasks), whose entityId is the task's own id. */
-  type: "Inquiry" | "Estimate" | "Project" | "Task";
+  /**
+   * Task: work added on the team board (dbo.team_tasks), whose entityId is the task's own id. Issue: a customer issue
+   * from a Punchlist batch, whose entityId is the batch's id.
+   */
+  type: "Inquiry" | "Estimate" | "Project" | "Task" | "Issue";
   entityId: number;
   ownerId: number | null;
   reference: string;

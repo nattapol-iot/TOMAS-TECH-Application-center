@@ -9,7 +9,7 @@ const source = (path) => readFile(new URL(path, root), "utf8");
 const LAZY = [
   "InquiryScreens", "ResourcePlanningScreen", "ReportScreens", "EstimateScreens",
   "MaterialScreens", "KnowledgeScreens", "ModuleTemplateScreens", "LaborPackageMaster", "ScheduleTemplateMaster",
-  "PerformanceScreen", "SiteVisitScreens", "TeamActivityScreen", "WorkQueue", "GuideLayer",
+  "PerformanceScreen", "SiteVisitScreens", "TeamActivityScreen", "WorkQueue", "GuideLayer", "IssueBatchScreen",
 ];
 /** The first-load graph: the shell and what Dashboard and My Work import statically. */
 const EAGER = [

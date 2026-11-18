@@ -1211,6 +1211,16 @@ export async function downloadReportEvidence(reportId: number, attachmentId: num
   return (await authorizedFetch(`/api/v1/reports/workspace/${reportId}/evidence/${attachmentId}/content`,{headers:{Accept:"image/*"}},120_000)).blob();
 }
 
+/** A screenshot for a customer issue (Projects > Punchlist): downscaled to JPEG like report evidence. */
+export async function uploadIssueImage<T>(itemId: number, file: File): Promise<T> {
+  const body = new FormData(); body.set("file", await prepareReportEvidenceImage(file));
+  return (await authorizedFetch(`/api/v1/issue-items/${itemId}/images`, { method: "POST", body }, 120_000)).json() as Promise<T>;
+}
+
+export async function downloadIssueImage(itemId: number, imageId: number): Promise<Blob> {
+  return (await authorizedFetch(`/api/v1/issue-items/${itemId}/images/${imageId}/content`, { headers: { Accept: "image/*" } }, 60_000)).blob();
+}
+
 export type ReportExportRecord = {
   id: number; revision: number; format: "pdf" | "pptx"; fileName: string;
   contentType: string; sizeBytes: number; sha256: string; createdAt: string;

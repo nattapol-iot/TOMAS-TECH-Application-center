@@ -29,7 +29,6 @@ import {
   ProductionMasterData,
   ProductionProjects,
 } from "./production/CoreScreens";
-import { ResourceTaskWorkspace } from "./production/ResourceTaskWorkspace";
 import {
   ProductionMyWork,
   ProductionPriceLibrary,
@@ -77,6 +76,7 @@ import {
   ProductionResourcePlan,
   ProductionSalesIntake,
   ProductionSiteVisits,
+  IssueBatchScreen,
   ProductionVisitMasterData,
   ReportScreens,
   ScheduleTemplateMaster,
@@ -263,6 +263,8 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
   const [preferredScheduleTaskId, setPreferredScheduleTaskId] = useState<number | null>(null);
   // Bumped by every deep link: the Plan remounts for a link, not when the link is cleared after use.
   const [scheduleLinkCount, setScheduleLinkCount] = useState(0);
+  // An issue batch opened from My Work, the Plan or Team overview; the Punchlist remounts on it.
+  const [preferredIssueBatch, setPreferredIssueBatch] = useState<{ id: number; count: number } | null>(null);
   const [preferredEstimateId, setPreferredEstimateId] = useState<number | null>(null);
   const [preferredInquiryId, setPreferredInquiryId] = useState<number | null>(null);
   const [preferredSiteVisitId, setPreferredSiteVisitId] = useState<number | null>(null);
@@ -770,6 +772,15 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
     if (view === "projects") window.history.pushState(null, "", window.location.pathname + window.location.search + screenHash("projects", screenLink.current.path));
     window.scrollTo({ top: 0 });
   }, [setView, view]);
+  // Opens a customer issue batch on Projects > Punchlist.
+  const openIssueBatch = useCallback(async (batchId: number) => {
+    setPreferredIssueBatch((current) => ({ id: batchId, count: (current?.count ?? 0) + 1 }));
+    setProjectTab("punchlist");
+    if (!(await setView("projects"))) return;
+    screenLink.current = { view: "projects", path: ["punchlist", String(batchId)], params: {}, opened: {}, fromLink: true };
+    if (view === "projects") window.history.pushState(null, "", window.location.pathname + window.location.search + screenHash("projects", screenLink.current.path));
+    window.scrollTo({ top: 0 });
+  }, [setView, view]);
   const openSiteVisit = useCallback(async (visitId: number) => {
     setPreferredSiteVisitId(visitId);
     (await setView("site-visits"));
@@ -859,6 +870,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
     onPreferredConsumed: clearPreferredSchedule,
     openEstimate,
     onMyWorkUrgentCountChange: setMyWorkUrgentCount,
+    openIssueBatch,
   };
   /*
    * One menu entry: the link, and beside it (never inside it, so a click on the star does not navigate) the star that
@@ -981,7 +993,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
             {/* Plan and Punchlist read the schedule; without schedule.read only the Overview is offered. */}
             {bootstrap.permissions.includes("schedule.read") ? <Tabs tabs={[{ id: "portfolio", label: "Projects.tabOverview" }, { id: "schedule", label: "Projects.tabPlan" }, { id: "punchlist", label: "Projects.tabPunchlist" }]} active={projectTab} onChange={changeProjectTab} link={null} /> : null}
             <div style={{ marginTop: 14 }}>
-              {projectTab === "portfolio" || !bootstrap.permissions.includes("schedule.read") ? <ProductionProjects {...common} teamTestMode={IS_TEAM_TEST_MODE} openProjectSchedule={bootstrap.permissions.includes("schedule.read") ? openProjectSchedule : undefined} /> : projectTab === "punchlist" ? <ResourceTaskWorkspace {...common} issues linked openProjectSchedule={openProjectSchedule} /> : <ProductionProjectSchedule key={`plan:${scheduleLinkCount}`} {...moduleProps} />}
+              {projectTab === "portfolio" || !bootstrap.permissions.includes("schedule.read") ? <ProductionProjects {...common} teamTestMode={IS_TEAM_TEST_MODE} openProjectSchedule={bootstrap.permissions.includes("schedule.read") ? openProjectSchedule : undefined} /> : projectTab === "punchlist" ? <IssueBatchScreen key={`issues:${preferredIssueBatch?.count ?? 0}`} {...common} initialBatchId={preferredIssueBatch?.id ?? null} openProjectSchedule={openProjectSchedule} /> : <ProductionProjectSchedule key={`plan:${scheduleLinkCount}`} {...moduleProps} />}
             </div>
           </> : null}
           {view === "knowledge" ? <ProductionKnowledgeHub bootstrap={bootstrap} notify={setToast} /> : null}

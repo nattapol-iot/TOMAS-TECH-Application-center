@@ -573,8 +573,8 @@ export function registerTeamBoardRoutes(app: FastifyInstance, db: Database, user
     refreshOutlookIfStale(db, graph);
     const outlook = graph.graphEnabled ? await boardOutlookEvents(db, from, to) : [];
     const holidays = (sets[1] ?? []).map((r) => dateOnly(r.holiday_date as Date)!);
-    const work = workloadItems(sets.slice(2, 11), new Set(holidays));
-    const [taskRows = [], visitRows = [], awayRows = [], permissionRows = []] = sets.slice(11);
+    const work = workloadItems(sets.slice(2, 12), new Set(holidays));
+    const [taskRows = [], visitRows = [], awayRows = [], permissionRows = []] = sets.slice(12);
     const granted = new Set(permissionRows.map((r) => String(r.code)));
     const can = { inquiries: granted.has("inquiry.read"), projects: granted.has("project.read") };
     // One visit with two engineers is one row per engineer; the board shows it on each of their rows.

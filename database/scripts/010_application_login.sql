@@ -843,4 +843,10 @@ GO
 -- database/migrations/105_project_manhour_budget.sql
 GRANT UPDATE (manhour_budget_days) ON OBJECT::dbo.projects TO [iot_team_app_role];
 GO
+
+-- database/migrations/107_issue_batches.sql
+GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.issue_batches TO [iot_team_app_role];
+GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.issue_items TO [iot_team_app_role];
+GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.issue_item_images TO [iot_team_app_role];
+GO
 -- END GENERATED MIGRATION GRANTS

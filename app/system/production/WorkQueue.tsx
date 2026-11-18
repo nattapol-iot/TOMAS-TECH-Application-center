@@ -13,9 +13,9 @@ import { orderWork, projectWork, weeklyCapacity, type Commitment } from "../../.
 import "./workload.css";
 import { DateInput } from "../DateInput";
 
-const TONES: Record<Commitment["type"], Tone> = { Inquiry: "blue", Estimate: "violet", Project: "green", Task: "slate" };
+const TONES: Record<Commitment["type"], Tone> = { Inquiry: "blue", Estimate: "violet", Project: "green", Task: "slate", Issue: "amber" };
 /** A team task is named by its kind; it has no reference of its own. */
-const typeLabel = (item: Commitment) => item.type !== "Task" ? item.type : item.taskKind === "Appointment" ? "TeamBoard.kindAppointment" : "TeamBoard.kindTask";
+const typeLabel = (item: Commitment) => item.type === "Issue" ? "Issues.typeLabel" : item.type !== "Task" ? item.type : item.taskKind === "Appointment" ? "TeamBoard.kindAppointment" : "TeamBoard.kindTask";
 const fmt = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 1 });
 const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 /** The schedule task behind a plan task's work key (Project-<task id>). */
@@ -280,11 +280,12 @@ export function EffortModal({ item, current, onClose, onSaved }: {
 }
 
 /** My Work's "My work order": the signed-in person's own queue, read with the Workload's own rules. */
-export function MyWorkQueue({ bootstrap, notify, openProjectSchedule, openEstimate }: {
+export function MyWorkQueue({ bootstrap, notify, openProjectSchedule, openEstimate, openIssueBatch }: {
   bootstrap: BootstrapData;
   notify: (message: string) => void;
   openProjectSchedule?: (id: number) => void;
   openEstimate?: (id: number) => void;
+  openIssueBatch?: (batchId: number) => void;
 }) {
   const { t } = useLanguage();
   const me = bootstrap.user.id;
@@ -308,9 +309,9 @@ export function MyWorkQueue({ bootstrap, notify, openProjectSchedule, openEstima
     return () => clearTimeout(timer);
   }, [load]);
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: process.env.NEXT_PUBLIC_BUSINESS_TIME_ZONE ?? "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
-  const open = (item: Commitment) => (item.type === "Project" ? openProjectSchedule?.(item.entityId) : openEstimate?.(item.entityId));
-  // My Work opens plans and estimates; an inquiry opens from its own screen.
-  const canOpen = (item: Commitment) => (item.type === "Project" ? Boolean(openProjectSchedule) : item.type === "Estimate" && Boolean(openEstimate));
+  const open = (item: Commitment) => (item.type === "Project" ? openProjectSchedule?.(item.entityId) : item.type === "Issue" ? openIssueBatch?.(item.entityId) : openEstimate?.(item.entityId));
+  // My Work opens plans, estimates and issue batches; an inquiry opens from its own screen.
+  const canOpen = (item: Commitment) => (item.type === "Project" ? Boolean(openProjectSchedule) : item.type === "Issue" ? Boolean(openIssueBatch) : item.type === "Estimate" && Boolean(openEstimate));
   return (
     <Panel
       title="WorkQueue.myTitle"

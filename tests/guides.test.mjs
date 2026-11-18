@@ -78,6 +78,8 @@ test("the catalog holds the guides the owner chose, in the order the work happen
     "project-master-plan",
     // A project registered under PJ000000 takes its ERP number from the ERP project search (2026-11-06).
     "project-erp-number",
+    // Customer issue batches on the Punchlist: record one, then start and close its issues (2026-11-18).
+    "punchlist-issues", "punchlist-close-issue",
     "team-overview-task", "bom-release",
     // Approving an estimate sends it to Pegasus ERP as a Cost Sheet (2026-11-02).
     "estimate-approve",
