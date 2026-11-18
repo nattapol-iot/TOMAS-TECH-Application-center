@@ -89,9 +89,14 @@ if [[ "$DOCUMENT_MODE" == "Nas" ]]; then
       # network hiccup); mount-nas.sh skips a listed mount, so drop it and mount again.
       log "The Mac's NAS mount is not writable; mounting it again"
       /usr/bin/perl -e 'alarm 30; exec @ARGV' /sbin/umount -f /private/tmp/iot-team-center-nas || true
-      DEV_NAS_USERNAME="$DEV_NAS_USERNAME" bash "$SOURCE/scripts/macos/mount-nas.sh"
-      write_nas_probe || die "The NAS is mounted on the Mac but '$NAS_DOCUMENT_DIR' is not writable."
+      DEV_NAS_USERNAME="$DEV_NAS_USERNAME" bash "$SOURCE/scripts/macos/mount-nas.sh" || true
     fi
+    if ! write_nas_probe; then
+      # Do not block the release on this: report what the runner sees so a person can fix the host.
+      log "Runner user: $(id -un); NAS mount: $(/sbin/mount | grep -F ' on /private/tmp/iot-team-center-nas ' || echo 'not mounted')"
+      ls -ldO /private/tmp/iot-team-center-nas "$NAS_DOCUMENT_DIR" 2>&1 | sed 's/^/    /' || true
+      echo "::warning title=NAS not writable::The runner cannot write to '$NAS_DOCUMENT_DIR' or remount the NAS; documents and Download Center may be unavailable. Fix the Mac mini NAS mount by hand (docs/MACMINI_HANDOFF.md)."
+    else
     vm_sees_nas() {
       [[ "$(/usr/bin/perl -e 'alarm 20; exec @ARGV' colima ssh -p iot -- cat "$NAS_DOCUMENT_DIR/$nas_probe" 2>/dev/null || true)" == "$nas_token" ]]
     }
@@ -129,6 +134,7 @@ if [[ "$DOCUMENT_MODE" == "Nas" ]]; then
     fi
     rm -f "$NAS_DOCUMENT_DIR/$nas_probe"
     log "The iot VM sees the NAS content"
+    fi
   fi
 fi
 
