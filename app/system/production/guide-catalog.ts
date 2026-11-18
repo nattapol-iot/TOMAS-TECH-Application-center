@@ -548,6 +548,87 @@ const ESTIMATE_APPROVE: Guide = {
   ],
 };
 
+/* Going back to an earlier revision (owner 2026-11-18): the Revision tab opens any revision in the history read-only,
+   and a new revision can be opened from it. Nothing is overwritten, so the guide can be practised up to the last press. */
+const ESTIMATE_REVISION_BACK: Guide = {
+  id: "estimate-revision-back",
+  area: "estimate",
+  title: { th: "ดู Revision เก่า และกลับไปใช้ทำต่อ", en: "Open an earlier revision and continue from it", jp: "以前の改訂を開き、そこから続ける" },
+  summary: {
+    th: "เปิดดูรายการของ Revision เก่าแบบอ่านอย่างเดียว แล้วเปิด Revision ใหม่จาก Revision นั้นเมื่อต้องการย้อนกลับ งานที่ทำอยู่ยังเก็บไว้ในประวัติ",
+    en: "Open the lines of an earlier revision read-only, then open a new revision from it when you need to go back. The work in hand stays in the history.",
+    jp: "以前の改訂の明細を読み取り専用で開き、戻したいときはそこから新しい改訂を開きます。作業中の内容は履歴に残ります。",
+  },
+  minutes: 2,
+  permissions: ["estimate.read", "estimate.write"],
+  views: ["estimates"],
+  steps: [
+    menu("estimates",
+      { th: "เปิดเมนู Estimate Cost", en: "Open Estimate Cost", jp: "「Estimate Cost」を開く" },
+      { th: "Estimate ทุกใบอยู่ที่เมนูนี้ คลิกที่เมนูที่ไฮไลต์อยู่", en: "Every estimate is here. Click the highlighted menu entry.", jp: "すべての見積はここにあります。強調表示されたメニューをクリックします。" }),
+    {
+      target: "estimate.list", action: "click", clickOn: "tbody tr", view: "estimates",
+      title: { th: "เปิด Estimate ที่มีมากกว่าหนึ่ง Revision", en: "Open an estimate with more than one revision", jp: "改訂が2つ以上ある見積を開く" },
+      body: {
+        th: "เลือก Estimate ที่เคยอนุมัติ ถูกส่งกลับ หรือเปิด Revision ใหม่มาแล้ว เลข Revision อยู่ในคอลัมน์ของรายการ",
+        en: "Pick an estimate that was approved, sent back or revised before. The list shows each estimate's revision.",
+        jp: "承認、差し戻し、または改訂されたことのある見積を選びます。一覧に改訂番号が表示されます。",
+      },
+      missing: {
+        th: "รอให้รายการโหลดสักครู่ ถ้ายังเปิด Estimate อื่นอยู่ ให้กดย้อนกลับด้านบนของหน้า",
+        en: "Wait a moment for the list to load. If another estimate is open, go back at the top of the page.",
+        jp: "一覧の読み込みを少し待ちます。別の見積を開いている場合は、ページ上部から戻ります。",
+      },
+    },
+    {
+      target: "[data-tab=\"revision\"]", action: "click", view: "estimates",
+      title: { th: "เปิดแท็บ Revision", en: "Open the Revision tab", jp: "「改訂履歴」タブを開く" },
+      body: {
+        th: "แท็บนี้เก็บทุก Revision ของ Estimate ใบนี้ไว้ถาวร",
+        en: "This tab keeps every revision of the estimate for good.",
+        jp: "このタブには見積のすべての改訂が残っています。",
+      },
+    },
+    {
+      target: "estimate.revisions", action: "next", view: "estimates",
+      title: { th: "ประวัติ Revision", en: "The revision history", jp: "改訂履歴" },
+      body: {
+        th: "แต่ละแถวคือหนึ่ง Revision พร้อมเหตุผล สถานะ และยอดรวม 'พักไว้' คืองานที่ทำค้างตอนมีคนกลับไปใช้ Revision เก่า 'คัดลอกจาก R..' บอกว่า Revision นั้นเปิดมาจาก Revision ไหน",
+        en: "Each row is one revision with its reason, status and total. Set aside is the work that was in hand when someone went back to an earlier revision; Copied from R.. says which revision a revision was opened from.",
+        jp: "各行が1つの改訂で、理由・状態・合計を示します。「保留」は以前の改訂に戻したときに作業中だった内容、「R.. からコピー」はどの改訂から開いたかを示します。",
+      },
+    },
+    {
+      target: "estimate.revisionOpen", action: "click", view: "estimates",
+      title: { th: "กด 'ดูรายการ'", en: "Press View lines", jp: "「明細を見る」を押す" },
+      body: {
+        th: "เปิดดูรายการต้นทุน ค่าแรง และค่าใช้จ่ายของ Revision นั้นตามที่บันทึกไว้ อ่านอย่างเดียว แก้ไม่ได้",
+        en: "It opens that revision's cost items, labor and expenses as they were recorded. Read-only; nothing can be changed there.",
+        jp: "その改訂の原価明細・労務・経費を記録どおりに開きます。読み取り専用で変更はできません。",
+      },
+      missing: {
+        th: "ปุ่มนี้ขึ้นที่แถวของ Revision เก่า Estimate ที่มี Revision เดียวยังไม่มีให้ดู กด 'จบบทสอน' ได้เลย",
+        en: "The button shows on the rows of earlier revisions. An estimate with one revision has none yet. Press Finish.",
+        jp: "このボタンは以前の改訂の行に表示されます。改訂が1つだけの見積にはまだありません。「完了」を押します。",
+      },
+    },
+    {
+      target: "estimate.revisionRestore", action: "click", view: "estimates",
+      title: { th: "ใช้ Revision นี้ทำต่อ", en: "Continue from this revision", jp: "この改訂から続ける" },
+      body: {
+        th: "กดเมื่อต้องการย้อนกลับ ระบบจะถามยืนยันก่อน แล้วเปิด Revision ใหม่ที่คัดลอกรายการจาก Revision นี้ งานที่ทำอยู่ตอนนี้ยังอยู่ในประวัติ กลับไปใช้ได้อีก ถ้าแค่ฝึก ให้กด 'ย้อนกลับ' ในหน้ายืนยัน แล้วกด 'จบบทสอน'",
+        en: "Press it to go back. After you confirm, a new revision opens holding a copy of this one's lines; the work in hand stays in the history and can be gone back to. Only practising? Press Back in the confirmation, then Finish.",
+        jp: "戻したいときに押します。確認後、この改訂の明細をコピーした新しい改訂が開き、作業中の内容は履歴に残ってあとで戻せます。練習だけなら確認画面で「戻る」を押し、「完了」を押します。",
+      },
+      missing: {
+        th: "ปุ่มนี้ขึ้นให้เจ้าของ Estimate หรือผู้จัดการ เมื่อ Estimate อนุมัติแล้วหรือกำลังแก้ไข ระหว่างรอตรวจให้ถอนการส่งก่อน",
+        en: "The button shows for the estimate's owner or a manager while the estimate is approved or being edited. Withdraw a review first.",
+        jp: "このボタンは、見積が承認済みまたは編集中のとき、担当者または管理者に表示されます。レビュー中は先に取り下げます。",
+      },
+    },
+  ],
+};
+
 /* Guides for the rest of the app (owner request 2026-11-02): estimating sources, projects and plans, work on site,
    reports and signing, BOM and approvals, and the knowledge and tool screens. */
 const SUPPLIER_QUOTATION: Guide = {
@@ -2282,6 +2363,7 @@ export const GUIDES: readonly Guide[] = [
   TEAM_TASK,
   BOM_RELEASE,
   ESTIMATE_APPROVE,
+  ESTIMATE_REVISION_BACK,
   {
     id: "purchase-request",
     area: "purchase",
