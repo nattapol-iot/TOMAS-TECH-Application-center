@@ -1,6 +1,6 @@
 import { createReadStream } from "node:fs";
 import { readdir, readFile, stat } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import sql from "mssql";
 import type { AppConfig } from "../config.js";
@@ -97,14 +97,22 @@ async function readInfo(folderPath: string): Promise<FolderInfo> {
   }
 }
 
-/** Reads the published categories and files. A missing download-center folder is simply empty. */
+/**
+ * Reads the published categories and files. A missing folder is an error, never an empty list:
+ * when the NAS mount drops, the folder vanishes and an empty page would hide the outage.
+ */
 export async function readDownloadCatalog(rootPath: string): Promise<DownloadCategory[]> {
   let folders;
   try {
     folders = await readdir(rootPath, { withFileTypes: true });
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
-    throw new ApiError(503, "document_storage_unavailable", "The Download Center folder could not be read.");
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      const storageReachable = await stat(dirname(rootPath)).then((entry) => entry.isDirectory(), () => false);
+      if (storageReachable) {
+        throw new ApiError(503, "download_center_folder_missing", "The download-center folder was not found on the NAS.");
+      }
+    }
+    throw new ApiError(503, "document_storage_unavailable", "The Download Center folder could not be read. The NAS may be disconnected.");
   }
 
   const categories: DownloadCategory[] = [];

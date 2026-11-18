@@ -41,6 +41,16 @@ export const DOWNLOAD_CENTER_COPY: Record<string, { th: string; en: string; jp: 
     en: "No files have been placed in the download-center folder on the NAS yet.",
     jp: "NAS の download-center フォルダーにまだファイルがありません。",
   },
+  "Downloads.folderMissing": {
+    th: "ไม่พบโฟลเดอร์ download-center บน NAS กรุณาแจ้งผู้ดูแลให้สร้างโฟลเดอร์ IoT Team Center\\download-center",
+    en: "The download-center folder was not found on the NAS. Ask an admin to create IoT Team Center\\download-center.",
+    jp: "NAS に download-center フォルダーが見つかりません。管理者に IoT Team Center\\download-center の作成を依頼してください。",
+  },
+  "Downloads.storageUnavailable": {
+    th: "เชื่อมต่อ NAS ไม่ได้ ระบบจึงอ่านรายการไฟล์ไม่ได้ กรุณาแจ้งผู้ดูแลระบบให้ตรวจการเชื่อมต่อ NAS",
+    en: "The NAS cannot be reached, so the file list could not be read. Ask an admin to check the NAS connection.",
+    jp: "NAS に接続できないため、ファイル一覧を読み込めません。管理者に NAS 接続の確認を依頼してください。",
+  },
   "Downloads.noMatchTitle": { th: "ไม่พบไฟล์ที่ค้นหา", en: "No matching files", jp: "該当するファイルはありません" },
   "Downloads.noMatchMessage": { th: "ลองใช้คำค้นอื่น", en: "Try a different search.", jp: "別のキーワードで検索してください。" },
   "Downloads.file": { th: "ไฟล์", en: "File", jp: "ファイル" },

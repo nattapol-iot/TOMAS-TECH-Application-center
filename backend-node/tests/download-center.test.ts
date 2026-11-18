@@ -25,7 +25,9 @@ test("download center tolerates a hand-written or broken _info.json", () => {
 test("download center lists categories and files with their metadata", async () => {
   const root = await mkdtemp(join(tmpdir(), "download-center-"));
   try {
-    assert.deepEqual(await readDownloadCatalog(join(root, "missing")), []);
+    // A missing folder is reported, not shown as an empty list: a dropped NAS mount looks exactly like this.
+    await assert.rejects(readDownloadCatalog(join(root, "missing")), { code: "download_center_folder_missing", statusCode: 503 });
+    await assert.rejects(readDownloadCatalog(join(root, "unmounted", "download-center")), { code: "document_storage_unavailable", statusCode: 503 });
 
     const software = join(root, "Software");
     await mkdir(software);
