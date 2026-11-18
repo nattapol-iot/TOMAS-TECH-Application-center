@@ -21,7 +21,7 @@ test("plannedEffort: sub rows with man-days replace the task's own figure, so a 
     row(6, 1, "task", 5),           // sub rows without man-days: its own 5
     row(7, 6, "task", 0),
   ];
-  assert.deepEqual(plannedEffort(rows), { manDays: 14, unplannedRows: 0 });
+  assert.deepEqual(plannedEffort(rows), { manDays: 14, outsourcedManDays: 0, unplannedRows: 0 });
 });
 
 test("plannedEffort: counts the pieces of work with no man-days, not their sub rows, headings or milestones", () => {
@@ -34,12 +34,12 @@ test("plannedEffort: counts the pieces of work with no man-days, not their sub r
     row(6, 1, "task", 1.5),
     row(7, 99, "task", 0),          // parent gone: stands on its own, unplanned
   ];
-  assert.deepEqual(plannedEffort(rows), { manDays: 1.5, unplannedRows: 2 });
+  assert.deepEqual(plannedEffort(rows), { manDays: 1.5, outsourcedManDays: 0, unplannedRows: 2 });
 });
 
 test("plannedEffort: an empty plan and a parent loop do not break it", () => {
-  assert.deepEqual(plannedEffort([]), { manDays: 0, unplannedRows: 0 });
-  assert.deepEqual(plannedEffort([row(1, 2, "task", 1), row(2, 1, "task", 1)]), { manDays: 0, unplannedRows: 0 });
+  assert.deepEqual(plannedEffort([]), { manDays: 0, outsourcedManDays: 0, unplannedRows: 0 });
+  assert.deepEqual(plannedEffort([row(1, 2, "task", 1), row(2, 1, "task", 1)]), { manDays: 0, outsourcedManDays: 0, unplannedRows: 0 });
 });
 
 test("budgetSource: the estimate's own labor wins; a typed budget only fills in when it has none", () => {
@@ -59,7 +59,7 @@ test("manHourBudget: from the estimate with its disciplines; a manager may type 
   const fromEstimate: StoredBudget = { estimateNo: "EST-26-001", estimateManDays: 20, manualManDays: 99, disciplines: [{ discipline: "Electrical", manDays: 12 }, { discipline: "Software", manDays: 8 }] };
   assert.deepEqual(manHourBudget(fromEstimate, plan, true), {
     source: "estimate", estimateNo: "EST-26-001", budgetManDays: 20, disciplines: fromEstimate.disciplines,
-    plannedManDays: 8, unplannedRows: 1, hoursPerManDay: 8, canSetBudget: false,
+    plannedManDays: 8, outsourcedManDays: 0, unplannedRows: 1, hoursPerManDay: 8, canSetBudget: false,
   });
   const typed: StoredBudget = { estimateNo: null, estimateManDays: 0, manualManDays: 15, disciplines: [] };
   const manual = manHourBudget(typed, plan, true);
@@ -171,7 +171,7 @@ test("GET schedule: carries the man-hour budget from the estimate, by discipline
     assert.deepEqual(response.json().manHours, {
       source: "estimate", estimateNo: "EST-26-001", budgetManDays: 32,
       disciplines: [{ discipline: "Electrical", manDays: 2 }, { discipline: "Software", manDays: 30 }],
-      plannedManDays: 0, unplannedRows: 0, hoursPerManDay: 8, canSetBudget: false,
+      plannedManDays: 0, outsourcedManDays: 0, unplannedRows: 0, hoursPerManDay: 8, canSetBudget: false,
     });
   } finally { await app.close(); }
 });

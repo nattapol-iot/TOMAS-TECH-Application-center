@@ -91,6 +91,7 @@ export const REQUIRED_MIGRATIONS: readonly MigrationIdentity[] = [
   { version: 103, fileName: "103_team_task_repeat.sql", name: "Repeating team tasks and meeting place" },
   { version: 104, fileName: "104_user_menu_favorites.sql", name: "Menu favourites per person" },
   { version: 105, fileName: "105_project_manhour_budget.sql", name: "Project man-hour budget" },
+  { version: 106, fileName: "106_schedule_people_plan.sql", name: "Plan people per day" },
 ] as const;
 
 export const REQUIRED_SCHEMA_VERSION = REQUIRED_MIGRATIONS.at(-1)!.version;

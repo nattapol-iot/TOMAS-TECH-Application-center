@@ -436,6 +436,79 @@
 .plan-manhours > .plan-manhours-split { gap: 4px 12px; flex-wrap: wrap; color: var(--ink-soft); font-size: var(--fs-2xs); }
 .plan-manhours > .plan-manhours-source { align-items: center; margin-left: auto; }
 @media (max-width: 720px) { .plan-manhours > .plan-manhours-source { margin-left: 0; } }
+.plan-manhours > .plan-manhours-outsourced strong { color: var(--green-text); }
+
+/* Projects > Plan, People table (PlanPeopleGrid.tsx): the plan rows against the days, people per day typed like a spreadsheet. */
+.people-grid { --people-own: var(--blue); --people-out: #15803d; display: grid; gap: 8px; min-width: 0; padding: 10px 12px 12px; }
+.people-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; font-size: var(--fs-xs); }
+.people-sum { display: inline-flex; align-items: baseline; gap: 6px; }
+.people-sum small, .people-sum em { color: var(--muted); font-size: var(--fs-2xs); font-style: normal; }
+.people-sum strong { font-size: var(--fs-md); font-variant-numeric: tabular-nums; }
+.people-sum strong.own { color: var(--blue-text); }
+.people-sum strong.out { color: var(--green-text); }
+.people-state { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: var(--fs-2xs); }
+.people-state em { font-style: normal; }
+.people-error { color: var(--red-text); }
+.people-bar .gantt-nav { margin-left: auto; }
+.people-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; color: var(--ink-soft); font-size: var(--fs-2xs); }
+.people-legend > span { display: inline-flex; align-items: center; gap: 5px; }
+.people-key { width: 14px; height: 12px; border: 1px solid transparent; border-radius: 3px; }
+.people-key.own { background: var(--people-own); }
+.people-key.out { background: var(--people-out); }
+.people-key.unset { border-color: var(--line); background: repeating-linear-gradient(135deg, var(--n-300) 0 3px, transparent 3px 6px); }
+.people-key.we { border-color: var(--line); background: var(--n-100); }
+.people-key.hol { background: var(--amber-line); }
+.people-legend > .people-tips { flex-basis: 100%; color: var(--muted); }
+.people-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); }
+.people-table { width: max-content; border-collapse: separate; border-spacing: 0; font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
+.people-table th, .people-table td { box-sizing: border-box; height: 28px; padding: 0; border-right: 1px solid var(--line-soft); border-bottom: 1px solid var(--line-soft); background: var(--surface); font-weight: 400; }
+.people-table thead th { height: 22px; background: var(--n-50); color: var(--ink-soft); font-size: var(--fs-2xs); font-weight: 600; text-align: center; white-space: nowrap; }
+.people-table thead th.people-week { padding-left: 6px; border-right-color: var(--line); text-align: left; }
+.people-table .people-wbs, .people-table .people-name, .people-table .people-src, .people-table .people-ppl, .people-table .people-md { position: sticky; z-index: 2; }
+.people-table .people-wbs { left: 0; width: 52px; min-width: 52px; color: var(--muted); text-align: center; }
+.people-table .people-name { left: 52px; width: 270px; min-width: 270px; max-width: 270px; padding: 3px 8px; text-align: left; }
+.people-table .people-src { left: 322px; width: 104px; min-width: 104px; text-align: center; }
+.people-table .people-ppl { left: 426px; width: 50px; min-width: 50px; text-align: center; }
+.people-table .people-md { left: 476px; width: 60px; min-width: 60px; padding-right: 8px; border-right: 2px solid var(--line); font-weight: 600; text-align: right; }
+.people-table thead .people-name, .people-table thead .people-md { padding: 0; text-align: center; }
+.people-table .people-day { position: relative; width: 24px; min-width: 24px; max-width: 24px; text-align: center; }
+.people-table .people-day.we { background: var(--n-100); }
+.people-table .people-day.hol { background: var(--amber-soft); }
+.people-table .people-day.sun { border-right-color: var(--line); }
+.people-table .people-day.today { box-shadow: inset 2px 0 0 var(--red); }
+.people-table .people-total td { background: var(--n-50); font-weight: 700; }
+.people-table .people-total.own td { color: var(--blue-text); font-weight: 600; }
+.people-table .people-total.out td { border-bottom: 2px solid var(--line); color: var(--green-text); font-weight: 600; }
+.people-table .people-row.heading td { background: var(--n-150); font-weight: 700; }
+.people-table .people-row.rollup td { background: var(--n-50); font-weight: 600; }
+.people-table .people-row.heading td.span { background: var(--n-300); }
+.people-table .people-row.rollup td.span { background: var(--n-200); }
+.people-table .people-row.work td.people-day.edit { cursor: cell; }
+.people-table .people-row.work td.people-day.own { background: var(--people-own); color: #fff; font-weight: 600; }
+.people-table .people-row.work td.people-day.out { background: var(--people-out); color: #fff; font-weight: 600; }
+.people-table .people-row.work td.people-day.unset { background: repeating-linear-gradient(135deg, var(--n-300) 0 3px, var(--surface) 3px 6px); }
+.people-table td.people-day.sel { box-shadow: inset 0 0 0 1px var(--blue-hover); }
+.people-table td.people-day.sel::after { content: ""; position: absolute; inset: 0; background: rgb(37 99 235 / 0.16); pointer-events: none; }
+.people-cell { position: absolute; inset: 0; z-index: 1; box-sizing: border-box; width: 100%; height: 100%; margin: 0; padding: 0; border: 0; border-radius: 0; outline: 2px solid var(--blue-hover); outline-offset: -2px; background: var(--surface); color: var(--ink); font: inherit; font-weight: 700; text-align: center; }
+.people-task { display: block; width: 100%; white-space: normal; padding: 0; border: 0; background: none; color: inherit; font: inherit; line-height: 1.35; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
+.people-task:hover { color: var(--blue-text); }
+.people-task:focus-visible { border-radius: 3px; outline: 2px solid var(--blue); outline-offset: 1px; }
+.people-row.work .people-task { color: var(--ink-soft); }
+.people-supplier { box-sizing: border-box; width: 100%; height: 20px; margin-top: 2px; padding: 0 6px; border: 1px dashed var(--line); border-radius: var(--r-xs); background: transparent; color: var(--green-text); font: inherit; font-size: var(--fs-2xs); }
+.people-supplier-text { display: block; color: var(--green-text); font-size: var(--fs-2xs); }
+.people-seg { display: inline-flex; overflow: hidden; border: 1px solid var(--line); border-radius: var(--r-sm); }
+.people-seg button { padding: 2px 7px; border: 0; background: var(--surface); color: var(--muted); font: inherit; font-size: var(--fs-2xs); line-height: 1.5; cursor: pointer; }
+.people-seg button + button { border-left: 1px solid var(--line); }
+.people-seg button.on.own, .people-mark.own { background: var(--blue-soft); color: var(--blue-text); font-weight: 700; }
+.people-seg button.on.out, .people-mark.out { background: var(--green-soft); color: var(--green-text); font-weight: 700; }
+.people-seg button:focus-visible, .people-usual:focus, .people-supplier:focus { outline: 2px solid var(--blue); outline-offset: -1px; }
+.people-mark { padding: 2px 8px; border-radius: var(--r-pill); font-size: var(--fs-2xs); }
+.people-usual { box-sizing: border-box; width: 34px; height: 22px; padding: 0; border: 1px solid var(--line-soft); border-radius: var(--r-xs); background: var(--surface); color: var(--ink); font: inherit; text-align: center; }
+@media (max-width: 760px) {
+  .people-table .people-wbs { display: none; }
+  .people-table .people-name { left: 0; width: 150px; min-width: 150px; max-width: 150px; }
+  .people-table .people-src, .people-table .people-ppl, .people-table .people-md { position: static; }
+}
 .plan-gantt { display: flex; flex-direction: column; gap: 10px; padding: 12px 0 0; }
 .plan-gantt-controls, .plan-gantt > .gantt-legend { padding: 0 14px; }
 .plan-gantt-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }

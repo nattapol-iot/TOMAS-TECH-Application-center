@@ -24,6 +24,7 @@ import { PicLoadPanel, useLoadNote, usePicLoads } from "./PlanPicLoad";
 import { choiceLink, optionalChoiceLink, placeId, useLinkedState, useScreenPlace } from "../screen-link";
 import { HealthBadge } from "./ProjectPlanFields";
 import { PlanManHours, type PlanManHoursData } from "./PlanManHours";
+import { PlanPeopleGrid } from "./PlanPeopleGrid";
 import { remainingForRow } from "../../../lib/manhour-budget";
 import "./my-work.css";
 import {
@@ -229,6 +230,10 @@ export type ScheduleTask = {
   canEditOwn?: boolean;
   /** False for a Master Plan frame leaf, which the shared summary leaves out of late and blocked counts. */
   countsTowardHealth?: boolean;
+  /** The People table (PlanPeopleGrid.tsx): our own staff or outsourced manpower, the supplier, and people per day from the plan start. */
+  laborSource?: string;
+  laborSupplier?: string;
+  peopleByDay?: number[];
   children: ScheduleTask[];
 };
 
@@ -2158,7 +2163,7 @@ function EditScheduleTaskModal({ bootstrap, schedule, task, onClose, onSaved, on
       <label className="field span-2"><span><LocalizedText text={"Name *"} /></span><input maxLength={500} value={name} onChange={(event) => setName(event.target.value)} /></label>
       {!ownOnly ? <label className="field"><span><LocalizedText text={"Visibility *"} /></span><select value={visibility} onChange={(event) => setVisibility(event.target.value)}><option value={"Internal"}><LocalizedText text={"Internal"} /></option><option value={"Customer"}><LocalizedText text={"Customer"} /></option></select></label> : null}
       {isPhase ? <CustomerPeriodFields value={customer} onChange={setCustomer} /> : <>
-        {!ownOnly ? <label className="field"><span><LocalizedText text={"Plan man-days"} /></span><input type="number" min="0" max="1000000" step="0.25" value={planManDays} onChange={(event) => setPlanManDays(Number(event.target.value))} />{budgetLeft !== null ? <small className={budgetLeft < 0 ? "plan-manhours-over" : undefined} data-guide="plan.manhoursRow">{t(budgetLeft < 0 ? "Plan.mhOver" : "Plan.mhRowLeft")} {number(Math.abs(budgetLeft))} {t("MD")}</small> : null}</label> : null}
+        {!ownOnly ? <label className="field"><span><LocalizedText text={"Plan man-days"} /></span><input type="number" min="0" max="1000000" step="0.25" value={planManDays} disabled={Boolean(task.peopleByDay?.length)} onChange={(event) => setPlanManDays(Number(event.target.value))} />{task.peopleByDay?.length ? <small>{t("Plan.mhFromPeople")}</small> : null}{budgetLeft !== null ? <small className={budgetLeft < 0 ? "plan-manhours-over" : undefined} data-guide="plan.manhoursRow">{t(budgetLeft < 0 ? "Plan.mhOver" : "Plan.mhRowLeft")} {number(Math.abs(budgetLeft))} {t("MD")}</small> : null}</label> : null}
         {datesLocked ? <label className="field"><span><LocalizedText text={"Plan start *"} /></span><DateInput value={task.planStart ?? ""} disabled /></label>
           : ownOnly ? <label className="field"><span><LocalizedText text={"Plan start *"} /></span><DateInput value={start.planStart} disabled={task.startMode !== "manual"} onChange={event => setStart(value => ({ ...value, planStart: event.target.value }))} /></label> : <PlanStartFields schedule={schedule} taskId={task.id} parentId={task.parentId} value={start} onChange={setStart} />}
         <label className="field"><span><LocalizedText text={"Plan days *"} /></span><input type="number" min="1" max="3650" value={datesLocked ? task.planDays : milestone ? 1 : planDays} disabled={datesLocked || milestone} onChange={(event) => setPlanDays(Number(event.target.value))} /></label>
@@ -2277,9 +2282,9 @@ const planProjectStorageKey = (userId: number) => `tomas-tech-plan-project:${use
 const PLAN_FILTER_LINK = optionalChoiceLink(PLAN_FILTERS.map((item) => item.key));
 const PLAN_ZOOM_LINK = choiceLink<GanttZoomChoice>(["fit", "month", "quarter", "half", "year"]);
 /** The whole plan (Team Plan), only the headings on the customer's dates (Master Plan), or the plan by who does it. */
-type PlanLevel = "team" | "master" | "member";
-const PLAN_LEVEL_LINK = choiceLink<PlanLevel>(["team", "master", "member"]);
-const PLAN_LEVEL_LABEL: Record<PlanLevel, string> = { team: "Plan.levelTeam", master: "Plan.levelMaster", member: "Plan.levelMember" };
+type PlanLevel = "team" | "master" | "member" | "people";
+const PLAN_LEVEL_LINK = choiceLink<PlanLevel>(["team", "master", "member", "people"]);
+const PLAN_LEVEL_LABEL: Record<PlanLevel, string> = { team: "Plan.levelTeam", master: "Plan.levelMaster", member: "Plan.levelMember", people: "People.view" };
 
 /**
  * The plan's own work the way the team board counts it (backend-node/src/resource-workload.ts): each row with nothing
@@ -2449,6 +2454,8 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
   const [filter, setFilter] = useLinkedState<PlanFilter | null>("only", null, PLAN_FILTER_LINK);
   const [level, setLevel] = useLinkedState<PlanLevel>("level", "team", PLAN_LEVEL_LINK);
   const masterView = level === "master";
+  // The People table: the same rows against the days, people per day typed like a spreadsheet (PlanPeopleGrid.tsx).
+  const peopleView = level === "people";
   const [collapsed, setCollapsed] = useState<Set<number>>(() => new Set());
   // The page's own overlay rather than the browser's full screen, so the task drawer, dialogs and toasts still open over it.
   const { ref: fullscreenRef, active: fullscreenActive, toggle: toggleFullscreen } = useFullscreen<HTMLDivElement>({ overlayOnly: true });
@@ -2892,12 +2899,12 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
           {fullscreenActive ? <div className="plan-gantt-title"><strong>{activeSchedule.projectNo} · {activeSchedule.projectName}</strong><HealthBadge health={summary.health ?? selectedProject?.health ?? "No plan"} /></div> : null}
           <div className="plan-gantt-controls">
             <div className="seg-control" role="group" aria-label={uiText("Plan.levelLabel")} data-guide="plan.level">
-              {(["team", "master", "member"] as const).map((value) => <button key={value} type="button" className={level === value ? "on" : ""} aria-pressed={level === value} onClick={() => setLevel(value)}>{uiText(PLAN_LEVEL_LABEL[value])}</button>)}
+              {(["team", "master", "member", "people"] as const).map((value) => <button key={value} type="button" className={level === value ? "on" : ""} aria-pressed={level === value} onClick={() => setLevel(value)}>{uiText(PLAN_LEVEL_LABEL[value])}</button>)}
             </div>
-            {masterView || memberView ? null : <FilterChips label="Plan.quickFilters" items={filterItems} active={filter} onPick={(key) => setFilter(key as PlanFilter | null)} />}
-            <GanttToolbar zoom={zoom} allowFit onZoom={(next) => { setZoom(next); setAnchor(today); }} onShift={(direction) => { if (zoom !== "fit") setAnchor((value) => shiftGanttAnchor(zoom, value, direction)); }} onToday={() => { if (zoom === "fit") setZoom("quarter"); setAnchor(today); }} />
+            {masterView || memberView || peopleView ? null : <FilterChips label="Plan.quickFilters" items={filterItems} active={filter} onPick={(key) => setFilter(key as PlanFilter | null)} />}
+            {peopleView ? null : <GanttToolbar zoom={zoom} allowFit onZoom={(next) => { setZoom(next); setAnchor(today); }} onShift={(direction) => { if (zoom !== "fit") setAnchor((value) => shiftGanttAnchor(zoom, value, direction)); }} onToday={() => { if (zoom === "fit") setZoom("quarter"); setAnchor(today); }} />}
             <div className="gantt-nav" data-guide="plan.view">
-              {masterView ? null : <>
+              {masterView || peopleView ? null : <>
                 <button type="button" className="btn ghost sm" disabled={foldFiltered || !anyFolded} title={foldFiltered ? uiText("Plan.foldFiltered") : undefined} onClick={expandAll}><Icon name="plus" />{uiText("Expand all")}</button>
                 <button type="button" className="btn ghost sm" disabled={foldFiltered || allFolded} title={foldFiltered ? uiText("Plan.foldFiltered") : undefined} onClick={collapseAll}><Icon name="minus" />{uiText("Gantt.collapseAll")}</button>
               </>}
@@ -2905,7 +2912,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
                 <Icon name={fullscreenActive ? "minimize" : "maximize"} />{uiText(fullscreenActive ? "Gantt.exitFullScreen" : "Gantt.fullScreen")}</button>
             </div>
           </div>
-          <GanttLegend baseline={Boolean(activeSchedule.latestBaseline)} target={Boolean(target)} links={!memberView && links.length > 0} draggable={canPlan && !memberView} />
+          {peopleView ? null : <GanttLegend baseline={Boolean(activeSchedule.latestBaseline)} target={Boolean(target)} links={!memberView && links.length > 0} draggable={canPlan && !memberView} />}
           {memberView ? <div className="info-strip plan-member-note" role="note" data-guide="plan.memberLegend">
             <i className="plan-member-key amber" aria-hidden="true" /><span>{uiText("Plan.memberLegendOverlap")}</span>
             <i className="plan-member-key red" aria-hidden="true" /><span>{uiText("Plan.memberLegendOver")}</span>
@@ -2915,7 +2922,9 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
             <button className="btn ghost sm" type="button" disabled={saving || loadingSchedule} onClick={() => { void undoMove(); }}><Icon name="refresh" />{uiText("Plan.undo")}</button>
             <button className="icon-btn" type="button" aria-label={uiText("Close")} title={uiText("Close")} onClick={() => setLastMove(null)}><Icon name="x" /></button>
           </div> : null}
-          {chartRows.length ? <GanttChart rows={chartRows} range={range} today={today} sideHeader={memberView ? "Plan.memberColumn" : "Gantt.taskColumn"} label="Gantt.planLabel" deliveryTarget={target} links={memberView ? [] : links}
+          {peopleView ? <PlanPeopleGrid projectId={activeSchedule.projectId} scheduleVersion={activeSchedule.scheduleVersion} tasks={activeSchedule.tasks} holidays={activeSchedule.holidays ?? []}
+            canEdit={canPlan} lockedIds={pendingTaskIds} today={today} notify={notify} onReload={loadSchedule} onOpenTask={setDrawerTaskId} />
+            : chartRows.length ? <GanttChart rows={chartRows} range={range} today={today} sideHeader={memberView ? "Plan.memberColumn" : "Gantt.taskColumn"} label="Gantt.planLabel" deliveryTarget={target} links={memberView ? [] : links}
             onMoveRow={(drop) => { void moveRow(drop); }} canMoveRow={(drop) => placeFor(drop) !== null} />
             : <EmptyState icon="filter" title="Plan.noMatch" message="Plan.noMatchHint" action={<button className="btn ghost sm" type="button" onClick={() => setFilter(null)}><Icon name="x" />{uiText("Portfolio.clearFilters")}</button>} />}
         </div> : loadingSchedule ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading…"} /></div> : <EmptyState icon="calendar" title={uiText("This project has no schedule yet")} message={canPlan ? "Plan.startWithHeading" : "Project Manager หรือ Engineering Manager เป็นผู้สร้างแผน"}

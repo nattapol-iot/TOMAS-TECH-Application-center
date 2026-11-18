@@ -16,6 +16,8 @@ export type PlanManHoursData = {
   budgetManDays: number | null;
   disciplines: { discipline: string; manDays: number }[];
   plannedManDays: number;
+  /** Man-days on rows marked as outsourced manpower in the People table; they stay out of the comparison with the budget. */
+  outsourcedManDays?: number;
   unplannedRows: number;
   hoursPerManDay: number;
   canSetBudget: boolean;
@@ -37,6 +39,7 @@ export function PlanManHours({ projectId, data, onChanged }: { projectId: number
       <span><small>{t("Plan.mhEstimated")}</small>{amount(budget)}</span>
     </>}
     <span><small>{t("Plan.mhPlanned")}</small>{amount(data.plannedManDays)}</span>
+    {data.outsourcedManDays ? <span className="plan-manhours-outsourced"><small>{t("Plan.mhOutsourced")}</small>{amount(data.outsourcedManDays)}</span> : null}
     {left !== null ? <span className={over ? "over" : undefined}><small>{t(over ? "Plan.mhOver" : "Plan.mhLeft")}</small>{amount(Math.abs(left))}</span> : null}
     {data.unplannedRows > 0 ? <span className="plan-manhours-warn" title={t("Plan.mhUnplannedHint")}><Icon name="alertTriangle" />{figure(data.unplannedRows, 0)} {t("Plan.mhUnplanned")}</span> : null}
     {data.disciplines.length > 1 ? <span className="plan-manhours-split">{data.disciplines.map((row) => <span key={row.discipline}>{t(`Plan.mhDiscipline.${row.discipline}`)} <strong>{figure(row.manDays)}</strong></span>)}<em>{t("MD")}</em></span> : null}
