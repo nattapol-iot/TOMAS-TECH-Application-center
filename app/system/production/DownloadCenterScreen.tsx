@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { downloadCenterFile, getDownloadCenter, type DownloadCenterCategory, type DownloadCenterFile } from "../api-client";
+import { ApiClientError, downloadCenterFile, getDownloadCenter, type DownloadCenterCategory, type DownloadCenterFile } from "../api-client";
 import { localeFor, useLanguage, useT } from "../i18n";
 import { LocalizedText } from "../LocalizedText";
 import { Badge, EmptyState, Icon, PageHeader, Panel, SearchInput, Tabs, Toolbar } from "../ui";
@@ -23,6 +23,13 @@ function matches(file: DownloadCenterFile, category: DownloadCenterCategory, que
   return haystack.includes(query);
 }
 
+/** NAS problems get a translated explanation; anything else shows the API's own message. */
+function loadErrorText(reason: unknown): string {
+  if (reason instanceof ApiClientError && reason.code === "download_center_folder_missing") return "Downloads.folderMissing";
+  if (reason instanceof ApiClientError && reason.code === "document_storage_unavailable") return "Downloads.storageUnavailable";
+  return reason instanceof Error ? reason.message : String(reason);
+}
+
 /**
  * Department software and files published from the NAS share (download-center folder). Names,
  * titles and descriptions come from the share and are shown as written, never through the
@@ -42,7 +49,7 @@ export function DownloadCenterScreen({ canManage, canManageRepositories, notify 
     let active = true;
     getDownloadCenter()
       .then((result) => { if (active) { setCategories(result.categories); setError(null); } })
-      .catch((reason: unknown) => { if (active) setError(reason instanceof Error ? reason.message : String(reason)); });
+      .catch((reason: unknown) => { if (active) setError(loadErrorText(reason)); });
     return () => { active = false; };
   }, [revision]);
 
