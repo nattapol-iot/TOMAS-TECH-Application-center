@@ -16,6 +16,7 @@ import { ESTIMATE_ASSIGNMENT_SECTIONS } from "../../../lib/estimate-sections";
 import { insertCostLine, moveModule, moveSibling, placeModule, type ReorderEstimate } from "../../../lib/estimate-order";
 
 import { EstimateErpSheetPanel } from "./EstimateErpSheet";
+import { EstimateRevisionView } from "./EstimateRevisionView";
 import "./estimate-flow.css";
 import { ALL_START_LEDGERS, EstimateSourcePicker, StartFromChoice, anyStartLedger, startFromCreatedMessage, startFromInput, type StartLedgers } from "./EstimateStartFrom";
 import { EstimateLaborTab, defaultWorkPackage, disciplineLabel, disciplineRates, useEngineeringRateOptions, type LaborExpenseSeed, type LaborSeed } from "./EstimateLaborSheet";
@@ -1092,7 +1093,8 @@ Remove this module and all ${group.lines.length} cost items?`, { danger: true })
       if (expense?.canEdit) { setExpenseSeed({}); setExpenseEditor(expense); }
       if (other && capabilities.canEditOtherCosts) setOtherEditor(other);
     }} /> : null}
-    {tab === "revision" ? <div className="stack"><EstimateImportHistory key={header.rowVersion} estimateId={header.id} /><EstimateRevisionTab revisions={workspace.revisionHistory} currentRevision={header.revision} currentTotal={numberOf(totals.total)} /><div><EstimateCompareTab revisions={workspace.revisionHistory} currentRevision={header.revision} currentTotal={numberOf(totals.total)} /></div></div> : null}
+    {tab === "revision" ? <div className="stack"><EstimateImportHistory key={header.rowVersion} estimateId={header.id} /><EstimateRevisionTab revisions={workspace.revisionHistory} sources={workspace.revisionSources ?? []} currentRevision={header.revision} currentTotal={numberOf(totals.total)}
+      estimateId={header.id} estimateNumber={header.number} rowVersion={header.rowVersion} canRestore={capabilities.canRestoreRevision === true} onRestored={afterMutation} /><div><EstimateCompareTab revisions={workspace.revisionHistory} currentRevision={header.revision} currentTotal={numberOf(totals.total)} /></div></div> : null}
 
 
     {costEditor ? <CostItemEditor bootstrap={bootstrap} workspace={workspace} line={costEditor === "new" ? null : costEditor} seed={costSeed} busy={busy} onClose={() => { setCostEditor(null); setCostSeed({}); }} onSave={async (input, lineId) => {
@@ -2118,30 +2120,49 @@ function revisionStatusView(revision: EstimateRevision, currentRevision: number)
   if (revision.status === "Approved" || revision.status === "Locked") return { label: estimateCopy("อนุมัติแล้ว", "Approved", "承認済み"), tone: "green" };
   if (revision.status === "Revision Required") return { label: estimateCopy("ส่งกลับแก้ไข", "Returned for revision", "差し戻し"), tone: "amber" };
   if (revision.status === "Withdrawn") return { label: estimateCopy("ถอนการส่งตรวจ", "Review withdrawn", "提出取り下げ"), tone: "slate" };
+  // The working revision someone left when they went back to an earlier one; it is still there to go back to.
+  if (revision.status === "Superseded") return { label: estimateCopy("พักไว้", "Set aside", "保留"), tone: "slate" };
   return { label: revision.status, tone: "slate" };
 }
+/* "Went back to R01 · note" is written by restoreRevisionReason in backend-node/src/routes/estimates.ts. */
+const wentBackReason = (reason: string) => {
+  const match = /^Went back to (R\d+)(?: · (.*))?$/.exec(reason);
+  if (!match) return null;
+  const note = match[2] ? ` · ${match[2]}` : "";
+  return estimateCopy(`กลับไปใช้ ${match[1]}${note}`, `Went back to ${match[1]}${note}`, `${match[1]} に戻した${note}`);
+};
 const revisionReasonText = (reason: string) => reason === "Approved" ? estimateCopy("อนุมัติ", "Approved", "承認")
   : reason === "Current revision" ? estimateCopy("Revision ที่กำลังทำ", "Current revision", "作業中の改訂")
-    : reason === "Review withdrawn" ? estimateCopy("ถอนการส่งตรวจ", "Review withdrawn", "提出取り下げ") : reason;
+    : reason === "Review withdrawn" ? estimateCopy("ถอนการส่งตรวจ", "Review withdrawn", "提出取り下げ") : wentBackReason(reason) ?? reason;
 
-function EstimateRevisionTab({ revisions, currentRevision, currentTotal }: { revisions: EstimateRevision[]; currentRevision: number; currentTotal: number }) {
+function EstimateRevisionTab({ revisions, sources, currentRevision, currentTotal, estimateId, estimateNumber, rowVersion, canRestore, onRestored }: {
+  revisions: EstimateRevision[]; sources: Array<{ revision: number; fromRevision: number; note?: string | null }>; currentRevision: number; currentTotal: number;
+  estimateId: number; estimateNumber: string; rowVersion: string; canRestore: boolean; onRestored: (message: string) => Promise<void>;
+}) {
   const rows = revisionWithCurrent(revisions, currentRevision, currentTotal);
   const copy = estimateCopy;
-  return <Panel title={copy("ประวัติ Revision", "Revision Control", "改訂管理")} subtitle={copy("ทุก Revision ถูกเก็บถาวร แก้ไม่ได้ · เปิด Revision ใหม่จากปุ่มบนหัวหน้าเมื่ออนุมัติแล้ว", "Revision history is an immutable record; open a new revision from the header once approved", "改訂履歴は変更不可の記録です。承認後はヘッダーから新しい改訂を開きます")} flush>{rows.length ? <div className="table-wrap"><table className="estimate-revision-table">
-    <thead><tr><th><LocalizedText text={"Revision"} /></th><th><LocalizedText text={"Reason"} /></th><th><LocalizedText text={"Status"} /></th><th><LocalizedText text={"Created by"} /></th><th><LocalizedText text={"Reviewed by"} /></th><th className="num"><LocalizedText text={"Total"} /></th><th><LocalizedText text={"Description"} /></th></tr></thead>
+  const [opened, setOpened] = useState<EstimateRevision | null>(null);
+  const copiedFrom = new Map(sources.map((source) => [source.revision, source]));
+  return <Panel guide="estimate.revisions" title={copy("ประวัติ Revision", "Revision Control", "改訂管理")} subtitle={copy("ทุก Revision ถูกเก็บถาวร แก้ไม่ได้ · กด 'ดูรายการ' เพื่อเปิดดู Revision เก่า หรือกลับไปใช้ Revision นั้นทำต่อ", "Revision history is an immutable record. Press View lines to open an earlier revision, or to continue from it.", "改訂履歴は変更不可の記録です。「明細を見る」で以前の改訂を開き、そこから続けることもできます。")} flush>{rows.length ? <div className="table-wrap"><table className="estimate-revision-table">
+    <thead><tr><th><LocalizedText text={"Revision"} /></th><th><LocalizedText text={"Reason"} /></th><th><LocalizedText text={"Status"} /></th><th><LocalizedText text={"Created by"} /></th><th><LocalizedText text={"Reviewed by"} /></th><th className="num"><LocalizedText text={"Total"} /></th><th><LocalizedText text={"Description"} /></th><th aria-label={copy("ดูรายการ", "View lines", "明細を見る")} /></tr></thead>
     <tbody>{rows.map((revision) => {
       const view = revisionStatusView(revision, currentRevision);
+      const from = copiedFrom.get(revision.revision);
       return <tr key={revision.id}>
-        <td><span className="pill blue">{revision.code || revisionCode(revision.revision)}</span></td>
+        <td><span className="pill blue">{revision.code || revisionCode(revision.revision)}</span>{from ? <div className="est-sub">{copy(`คัดลอกจาก ${revisionCode(from.fromRevision)}`, `Copied from ${revisionCode(from.fromRevision)}`, `${revisionCode(from.fromRevision)} からコピー`)}{from.note ? ` · ${from.note}` : ""}</div> : null}</td>
         <td className="wrap"><strong>{revisionReasonText(revision.reason)}</strong></td>
         <td><Badge tone={view.tone}><span>{view.label}</span></Badge></td>
         <td>{revision.createdByName}<div className="est-sub">{formatDateTime(revision.createdAt)}</div></td>
         <td>{revision.reviewedByName ?? "—"}{revision.reviewedAt ? <div className="est-sub">{formatDateTime(revision.reviewedAt)}</div> : null}</td>
         <td className="num"><strong>{formatMoney(revision.total)}</strong></td>
         <td className="wrap"><RevisionDescription text={revision.description} /></td>
+        {/* The current revision is the workspace itself; only the ones in the history open here. */}
+        <td>{revision.id !== -1 && revision.revision !== currentRevision ? <button className="btn ghost sm" type="button" data-guide="estimate.revisionOpen" onClick={() => setOpened(revision)}><Icon name="eye" />{copy("ดูรายการ", "View lines", "明細を見る")}</button> : null}</td>
       </tr>;
     })}</tbody>
-  </table></div> : <EmptyState icon="gitBranch" title="No revision history" message="ยังไม่มี revision record ที่ API ส่งกลับ" />}</Panel>;
+  </table></div> : <EmptyState icon="gitBranch" title="No revision history" message="ยังไม่มี revision record ที่ API ส่งกลับ" />}
+    {opened ? <EstimateRevisionView key={opened.revision} estimateId={estimateId} estimateNumber={estimateNumber} revision={opened} currentRevision={currentRevision} rowVersion={rowVersion}
+      canRestore={canRestore} onClose={() => setOpened(null)} onRestored={async (message) => { setOpened(null); await onRestored(message); }} /> : null}</Panel>;
 }
 
 function EstimateCompareTab({ revisions, currentRevision, currentTotal }: { revisions: EstimateRevision[]; currentRevision: number; currentTotal: number }) {

@@ -332,6 +332,29 @@ export async function withdrawEstimateReview(transaction: TransactionType, id: n
 type EstimateMail = { kind: "review"; message: EstimateReviewEmail } | { kind: "decision"; message: EstimateDecisionEmail } | null;
 const revisionCode = (revision: number) => `R${String(revision).padStart(2, "0")}`;
 
+/** Longest note a person may add when going back: the reason column holds 100 characters and the revision code comes first. */
+export const RESTORE_COMMENT_MAX = 80;
+/** Revision numbers are SQL int; anything larger is a bad request, not a server error. */
+const SQL_INT_MAX = 2_147_483_647;
+
+/**
+ * How the header moves when an estimate goes back to an earlier revision (owner 2026-11-18).
+ * An approved estimate reopens as a revision, exactly as Create Revision does. An estimate being edited keeps its
+ * status, and the revision in hand is kept in the history as "Superseded". Null while it cannot go back (in review, cancelled).
+ */
+export function restoreRevisionPlan(status: string): { closedAs: string; reopens: boolean } | null {
+  const known = status.toLowerCase();
+  if (known === "approved" || known === "locked") return { closedAs: status, reopens: true };
+  if (["draft", "engineering input", "revision required"].includes(known)) return { closedAs: "Superseded", reopens: false };
+  return null;
+}
+
+/** The reason kept on the revision that was set aside. The Revision tab reads the code back out of it. */
+export function restoreRevisionReason(fromRevision: number, comment: string | null): string {
+  const base = `Went back to ${revisionCode(fromRevision)}`;
+  return (comment ? `${base} · ${comment}` : base).slice(0, 100);
+}
+
 /** What the notices say about an estimate: its project, customer, owner and current total. */
 async function estimateFacts(transaction: TransactionType, id: number) {
   const request = new sql.Request(transaction); request.input("id", sql.BigInt, id);
@@ -651,5 +674,123 @@ export function registerEstimateRoutes(app: FastifyInstance, config: AppConfig, 
         { status: current.inquiry_status, progress: Number(current.inquiry_progress) }, { status: "Estimating", progress: 75, estimateRevision: nextRevision });
       return { response: { id, revision: nextRevision, status: "Revision Required", progress: 75, rowVersion: updated.row_version.toString("base64") }, mail };
     }).then(async ({ response, mail }) => { await deliver(mail); return response; });
+  });
+
+  /* The lines of one revision in the history, read-only: what the estimate held before someone goes back to it.
+     Amounts are the ones that counted then (line total times the module multiplier of that revision). */
+  app.get("/api/v1/estimates/:id/revisions/:revision", async (request) => {
+    await users.demandPermission(request, "estimate.read");
+    const params = request.params as { id?: string; revision?: string };
+    const id = positiveLong(params.id, "Estimate id"); const revision = optionalNonnegativeInteger(params.revision, "Revision");
+    if (revision === null || revision > SQL_INT_MAX) throw new ApiError(400, "validation_failed", "Revision is invalid.");
+    const result = await database.query<Record<string, unknown>>(`
+      SELECT r.revision,r.code,r.reason,r.status,r.total,r.created_at,
+        CASE WHEN ISJSON(r.description)=1 THEN JSON_QUERY(r.description,'$.totals') END totals_json,
+        TRY_CONVERT(decimal(9,4),JSON_VALUE(CASE WHEN ISJSON(r.description)=1 THEN r.description END,'$.contingencyRate')) contingency_rate
+      FROM dbo.estimate_revisions r INNER JOIN dbo.estimates e ON e.id=r.estimate_id AND e.deleted_at IS NULL
+      WHERE r.estimate_id=@id AND r.revision=@revision;
+
+      SELECT ci.id,ci.category_code,ci.category,ci.module,ci.item_code,ci.description,ci.brand,ci.model,s.name supplier_name,
+        ci.qty,ci.unit,ci.unit_cost,ci.line_total,amounts.amount
+      FROM dbo.cost_items ci INNER JOIN dbo.v_estimate_cost_amounts amounts ON amounts.id=ci.id
+      LEFT JOIN dbo.suppliers s ON s.id=ci.supplier_id
+      WHERE ci.estimate_id=@id AND ci.revision=@revision AND ci.deleted_at IS NULL
+      ORDER BY ci.category_code,MIN(ci.sort_order) OVER(PARTITION BY ci.category_code,ci.module),ci.module,ci.sort_order,ci.id;
+
+      SELECT l.id,l.package,l.activity,l.discipline,l.provider,s.name supplier_name,l.engineers,l.man_days,l.hours_per_day,l.daily_rate,l.line_cost
+      FROM dbo.manhour_lines l LEFT JOIN dbo.suppliers s ON s.id=l.supplier_id
+      WHERE l.estimate_id=@id AND l.revision=@revision AND l.deleted_at IS NULL
+      ORDER BY MIN(l.sort_order) OVER(PARTITION BY l.package),l.package,l.sort_order,l.id;
+
+      SELECT l.id,l.package,l.expense_type,l.description,l.qty,l.unit,l.unit_cost,l.line_total
+      FROM dbo.expense_lines l WHERE l.estimate_id=@id AND l.revision=@revision AND l.deleted_at IS NULL
+      ORDER BY MIN(l.sort_order) OVER(PARTITION BY l.package),l.package,l.sort_order,l.id;
+
+      SELECT l.id,l.category,l.description,l.qty,l.unit,l.unit_cost,l.line_total
+      FROM dbo.other_cost_lines l WHERE l.estimate_id=@id AND l.revision=@revision AND l.deleted_at IS NULL
+      ORDER BY MIN(l.sort_order) OVER(PARTITION BY l.category),l.category,l.sort_order,l.id;
+    `, (sqlRequest) => { sqlRequest.input("id", sql.BigInt, id); sqlRequest.input("revision", sql.Int, revision); });
+    const sets = result.recordsets as unknown as Array<Array<Record<string, unknown>>>;
+    const head = sets[0]?.[0];
+    if (!head) throw new ApiError(404, "revision_not_found", "That revision is not in this estimate's history.");
+    const number = (value: unknown) => Number(value ?? 0);
+    const text = (value: unknown) => value === null || value === undefined ? "" : String(value);
+    // Snapshots written before the totals were archived carry only the grand total.
+    let totals: Record<string, number | null> | null = null;
+    try {
+      const parsed = head.totals_json ? JSON.parse(String(head.totals_json)) as Record<string, unknown> : null;
+      if (parsed) totals = Object.fromEntries(["material", "engineering", "outsource", "transportation", "accommodation", "other", "subtotal", "overhead", "contingency", "total"]
+        .map((key) => [key, parsed[key] === null || parsed[key] === undefined ? null : Number(parsed[key])]));
+    } catch { totals = null; }
+    return {
+      estimateId: id, revision: number(head.revision), code: text(head.code), reason: text(head.reason), status: text(head.status), total: number(head.total),
+      createdAt: head.created_at, contingencyRate: head.contingency_rate === null || head.contingency_rate === undefined ? null : Number(head.contingency_rate), totals,
+      costItems: (sets[1] ?? []).map((row) => ({ id: number(row.id), categoryCode: text(row.category_code), category: text(row.category), module: text(row.module),
+        itemCode: text(row.item_code), description: text(row.description), brand: text(row.brand), model: text(row.model), supplierName: row.supplier_name === null ? null : text(row.supplier_name),
+        quantity: number(row.qty), unit: text(row.unit), unitCost: number(row.unit_cost), lineTotal: number(row.line_total), amount: number(row.amount) })),
+      manhourLines: (sets[2] ?? []).map((row) => ({ id: number(row.id), package: text(row.package), activity: text(row.activity), discipline: row.discipline === null ? null : text(row.discipline),
+        provider: text(row.provider), supplierName: row.supplier_name === null ? null : text(row.supplier_name), engineers: number(row.engineers), manDays: number(row.man_days),
+        hoursPerDay: number(row.hours_per_day), dailyRate: number(row.daily_rate), lineCost: number(row.line_cost) })),
+      expenseLines: (sets[3] ?? []).map((row) => ({ id: number(row.id), package: text(row.package), expenseType: text(row.expense_type), description: text(row.description),
+        quantity: number(row.qty), unit: text(row.unit), unitCost: number(row.unit_cost), lineTotal: number(row.line_total) })),
+      otherCostLines: (sets[4] ?? []).map((row) => ({ id: number(row.id), category: text(row.category), description: text(row.description),
+        quantity: number(row.qty), unit: text(row.unit), unitCost: number(row.unit_cost), lineTotal: number(row.line_total) })),
+    };
+  });
+
+  /* Going back to an earlier revision never rewrites history (owner 2026-11-18): the revision in hand is kept as it is,
+     and a new revision opens holding a copy of the chosen revision's lines. Going back twice returns to where one was. */
+  app.post("/api/v1/estimates/:id/restore-revision", async (request) => {
+    await users.demandPermission(request, "estimate.write"); const actor = await users.required(request);
+    const id = positiveLong((request.params as { id?: string }).id, "Estimate id"); const body = bodyObject(request.body);
+    const rowVersion = parseRowVersion(body.rowVersion); const fromRevision = requiredInteger(body.fromRevision, "Source revision", 0, SQL_INT_MAX);
+    const comment = optionalBodyText(body.comment, RESTORE_COMMENT_MAX, "Reason");
+    return database.transaction(async (transaction) => {
+      const lookup = new sql.Request(transaction); lookup.input("id", sql.BigInt, id);
+      const current = (await lookup.query<{ estimate_no: string; status: string; progress: number | string; revision: number; inquiry_id: number | string; row_version: Buffer; inquiry_no: string; inquiry_status: string; inquiry_progress: number | string; owner_id: number | string; contingency_rate: number | string }>(`
+        SELECT e.estimate_no,e.status,e.progress,e.revision,e.inquiry_id,e.row_version,i.inquiry_no,i.status inquiry_status,i.progress inquiry_progress,e.owner_id,e.contingency_rate
+        FROM dbo.estimates e WITH(UPDLOCK,HOLDLOCK) INNER JOIN dbo.inquiries i WITH(UPDLOCK,HOLDLOCK) ON i.id=e.inquiry_id
+        WHERE e.id=@id AND e.deleted_at IS NULL AND i.deleted_at IS NULL AND e.archived_at IS NULL AND i.archived_at IS NULL AND i.status<>N'Cancelled';
+      `)).recordset[0];
+      if (!current) throw new ApiError(404, "estimate_not_found", "Estimate or its linked inquiry was not found.");
+      if (!current.row_version.equals(rowVersion)) throw new ApiError(409, "concurrency_conflict", "This estimate was changed by another user. Reload and try again.");
+      const plan = restoreRevisionPlan(current.status);
+      if (!plan) throw new ApiError(409, "invalid_transition", `Cannot go back to an earlier revision while the estimate is '${current.status}'.`);
+      if (Number(current.owner_id) !== actor.id && !managerOverride(actor)) throw new ApiError(403, "estimate_owner_required", "Only the estimate owner, an engineering manager or an administrator can go back to an earlier revision.");
+      if (fromRevision === current.revision) throw new ApiError(400, "validation_failed", "Choose a revision other than the current one.");
+      // Only a revision in the history can be a source; a discarded draft has no snapshot and is not offered.
+      const source = (await new sql.Request(transaction).input("id", sql.BigInt, id).input("revision", sql.Int, fromRevision)
+        .query<{ contingency_rate: number | string | null }>(`SELECT TRY_CONVERT(decimal(9,4),JSON_VALUE(CASE WHEN ISJSON(description)=1 THEN description END,'$.contingencyRate')) contingency_rate
+          FROM dbo.estimate_revisions WITH(HOLDLOCK) WHERE estimate_id=@id AND revision=@revision;`)).recordset[0];
+      if (!source) throw new ApiError(404, "revision_not_found", "That revision is not in this estimate's history.");
+      await assertEstimateTotals(transaction, id);
+      await ensureRevisionSnapshot(transaction, id, current.revision, restoreRevisionReason(fromRevision, comment), plan.closedAs, actor.id);
+      const nextRevision = await nextEstimateRevision(transaction, id, current.revision);
+      const nextStatus = plan.reopens ? "Revision Required" : current.status; const nextProgress = plan.reopens ? 75 : Number(current.progress);
+      const update = new sql.Request(transaction); update.input("next_revision", sql.Int, nextRevision); update.input("actor", sql.BigInt, actor.id);
+      update.input("status", sql.NVarChar(50), nextStatus); update.input("progress", sql.Decimal(5, 2), nextProgress);
+      // The contingency rate lives on the header, so it goes back with the lines when the source snapshot recorded it.
+      const restoredRate = source.contingency_rate === null ? null : Number(source.contingency_rate);
+      update.input("contingency_rate", sql.Decimal(9, 4), restoredRate);
+      update.input("id", sql.BigInt, id); update.input("current_revision", sql.Int, current.revision); update.input("row_version", sql.VarBinary(8), rowVersion);
+      const updated = (await update.query<{ row_version: Buffer }>(`UPDATE dbo.estimates SET revision=@next_revision,status=@status,progress=@progress,
+        contingency_rate=COALESCE(@contingency_rate,contingency_rate),locked_at=NULL,locked_by=NULL,updated_by=@actor,updated_at=SYSUTCDATETIME() OUTPUT inserted.row_version
+        WHERE id=@id AND revision=@current_revision AND row_version=@row_version;`)).recordset[0];
+      if (!updated) throw new ApiError(409, "concurrency_conflict", "This estimate was changed by another user. Reload and try again.");
+      await snapshotOverheadPolicy(transaction, id, nextRevision, actor.id, todayIn(config.businessTimeZone));
+      await cloneRevisionLines(transaction, id, fromRevision, nextRevision, actor.id);
+      await assertEstimateTotals(transaction, id);
+      await insertAudit(transaction, actor.id, "Estimate", id, current.estimate_no, "Revision restored",
+        { revision: current.revision, status: current.status, progress: Number(current.progress), contingencyRate: Number(current.contingency_rate) },
+        // `reason` is what the ERP Cost Sheet carries as the revision description (estimate-erp.ts); `comment` is the person's own note.
+        { revision: nextRevision, fromRevision, status: nextStatus, progress: nextProgress, contingencyRate: restoredRate ?? Number(current.contingency_rate),
+          reason: restoreRevisionReason(fromRevision, comment), comment });
+      if (plan.reopens) {
+        const inquiryId = Number(current.inquiry_id); await updateInquiry(transaction, inquiryId, "Estimating", 75, actor.id);
+        await insertAudit(transaction, actor.id, "Inquiry", inquiryId, current.inquiry_no, "Estimate revision created",
+          { status: current.inquiry_status, progress: Number(current.inquiry_progress) }, { status: "Estimating", progress: 75, estimateRevision: nextRevision });
+      }
+      return { id, revision: nextRevision, fromRevision, status: nextStatus, progress: nextProgress, rowVersion: updated.row_version.toString("base64") };
+    });
   });
 }

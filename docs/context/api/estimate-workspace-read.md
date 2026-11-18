@@ -2,13 +2,13 @@
 
 [Module](../modules/estimate.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `30721076`; generated, do not edit. [backend-node/src/routes/estimate-workspace-read.ts](<../../../backend-node/src/routes/estimate-workspace-read.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `a9ef3d91`; generated, do not edit. [backend-node/src/routes/estimate-workspace-read.ts](<../../../backend-node/src/routes/estimate-workspace-read.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/estimates/:id/cost-workspace` | 31–252 |
+| GET | `/api/v1/estimates/:id/cost-workspace` | 31–262 |
 
 ## Named functions
 
@@ -16,7 +16,7 @@ Evidence: source snapshot `30721076`; generated, do not edit. [backend-node/src/
 |---|---|---|
 | `todayIn` | [backend-node/src/routes/estimate-workspace-read.ts](<../../../backend-node/src/routes/estimate-workspace-read.ts>) | 16–20 |
 | `shiftDays` | [backend-node/src/routes/estimate-workspace-read.ts](<../../../backend-node/src/routes/estimate-workspace-read.ts>) | 22–24 |
-| `registerEstimateWorkspaceReadRoute` | [backend-node/src/routes/estimate-workspace-read.ts](<../../../backend-node/src/routes/estimate-workspace-read.ts>) | 30–253 |
+| `registerEstimateWorkspaceReadRoute` | [backend-node/src/routes/estimate-workspace-read.ts](<../../../backend-node/src/routes/estimate-workspace-read.ts>) | 30–263 |
 
 ## Direct local dependencies
 

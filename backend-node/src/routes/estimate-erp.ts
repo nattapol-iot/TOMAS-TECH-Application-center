@@ -314,7 +314,7 @@ export function createEstimateErpSender(database: Database, erp: EstimateErpLink
       }>(`SELECT e.estimate_no,e.revision,e.status,e.project_name,e.locked_at,c.name customer_name,c.short_name,u.email owner_email,
           (SELECT TOP(1) p.project_no FROM dbo.projects p WHERE p.estimate_id=e.id AND p.deleted_at IS NULL) project_no,
           (SELECT TOP(1) JSON_VALUE(a.after_json,'$.reason') FROM dbo.audit_log a WHERE a.entity_type=N'Estimate' AND a.entity_id=e.id
-            AND a.action IN(N'Revision created',N'Revision requested') AND TRY_CONVERT(int,JSON_VALUE(a.after_json,'$.revision'))=e.revision
+            AND a.action IN(N'Revision created',N'Revision requested',N'Revision restored') AND TRY_CONVERT(int,JSON_VALUE(a.after_json,'$.revision'))=e.revision
             ORDER BY a.id DESC) revision_reason,
           link.erp_revision,link.cost_sheet_no
         FROM dbo.estimates e INNER JOIN dbo.customers c ON c.id=e.customer_id INNER JOIN dbo.users u ON u.id=e.owner_id

@@ -133,6 +133,10 @@ export function registerEstimateWorkspaceReadRoute(app: FastifyInstance, config:
       WHERE a.entity_type=N'Estimate' AND a.entity_id=@id AND a.action IN(N'Submitted',N'Approved',N'Revision requested')
         AND TRY_CONVERT(int,JSON_VALUE(a.after_json,'$.revision'))=e.revision
       ORDER BY a.id DESC;
+
+      -- Which revision each "went back" revision was copied from, for the Revision tab (owner 2026-11-18).
+      SELECT TRY_CONVERT(int,JSON_VALUE(a.after_json,'$.revision')) revision,TRY_CONVERT(int,JSON_VALUE(a.after_json,'$.fromRevision')) from_revision,JSON_VALUE(a.after_json,'$.comment') note
+      FROM dbo.audit_log a WHERE a.entity_type=N'Estimate' AND a.entity_id=@id AND a.action=N'Revision restored' ORDER BY a.id;
     `, (sqlRequest) => { sqlRequest.input("id", sql.BigInt, id); sqlRequest.input("actor_user", sql.BigInt, actor.id);
       sqlRequest.input("stale_before", sql.Date, shiftDays(today, -180)); });
     const headerRow = (result.recordsets[0] as unknown as Array<Record<string, unknown>>)[0];
@@ -246,8 +250,14 @@ export function registerEstimateWorkspaceReadRoute(app: FastifyInstance, config:
       canApprove: canDecide && header.status === "Engineering Review",
       canRequestRevision: canDecide && header.status === "Engineering Review",
       canCreateRevision: open && permissionRow.can_write && elevated && ["Approved", "Locked"].includes(header.status),
+      // Mirrors restoreRevisionPlan in routes/estimates.ts: approved or being edited, never while in review.
+      canRestoreRevision: open && permissionRow.can_write && elevated && (EDITABLE.has(header.status) || ["Approved", "Locked"].includes(header.status)),
       canManageAssignments: permissionRow.can_write && editable && elevated, canUpdateContingency: permissionRow.can_write && editable && elevated,
       canEditCostItems, canEditManhour, canEditExpenses, canEditOtherCosts: canEditOther };
-    return { header, capabilities, costItems, manhourLines, expenseLines, otherCostLines, assignments, revisionHistory, validationIssues, review };
+    const revisionSources = ((result.recordsets[11] ?? []) as unknown as Array<{ revision: number | null; from_revision: number | null; note: string | null }>)
+      // Whole numbers only, so a row that is not one of these never becomes a NaN entry.
+      .filter((row) => Number.isInteger(row.revision) && Number.isInteger(row.from_revision))
+      .map((row) => ({ revision: Number(row.revision), fromRevision: Number(row.from_revision), note: row.note ?? null }));
+    return { header, capabilities, costItems, manhourLines, expenseLines, otherCostLines, assignments, revisionHistory, revisionSources, validationIssues, review };
   });
 }

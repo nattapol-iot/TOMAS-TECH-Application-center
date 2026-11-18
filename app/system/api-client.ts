@@ -841,6 +841,8 @@ export type EstimateWorkspaceCapabilities = {
   canApprove: boolean;
   canRequestRevision: boolean;
   canCreateRevision: boolean;
+  /** May open a new revision from an earlier one: owner or manager, while approved or being edited. */
+  canRestoreRevision?: boolean;
   canManageAssignments: boolean;
   canUpdateContingency: boolean;
   canEditCostItems: boolean;
@@ -898,6 +900,8 @@ export type EstimateCostWorkspace = {
   otherCostLines: EstimateOtherCostLine[];
   assignments: EstimateAssignment[];
   revisionHistory: EstimateRevision[];
+  /** Revisions opened by going back to an earlier one, and which one each was copied from. */
+  revisionSources?: Array<{ revision: number; fromRevision: number; note?: string | null }>;
   validationIssues: EstimateValidationIssue[];
   /** Who may decide the estimate and what has happened to its current revision (owner 2026-11-06). */
   review?: EstimateReview;
@@ -1568,6 +1572,30 @@ export const estimateWorkflow = (id: number, action: "submit" | "approve" | "req
 
 export const loadEstimateCostWorkspace = (id: number) =>
   apiRequest<EstimateCostWorkspace>(`/api/v1/estimates/${id}/cost-workspace`);
+
+/** The lines of one revision in the history, as they counted then. Read-only. */
+export type EstimateRevisionDetail = {
+  estimateId: number; revision: number; code: string; reason: string; status: string; total: number; createdAt: string;
+  contingencyRate: number | null;
+  /** Null for snapshots written before the breakdown was archived; `total` is always there. */
+  totals: Record<"material" | "engineering" | "outsource" | "transportation" | "accommodation" | "other" | "subtotal" | "overhead" | "contingency" | "total", number | null> | null;
+  costItems: Array<{ id: number; categoryCode: string; category: string; module: string; itemCode: string; description: string; brand: string; model: string;
+    supplierName: string | null; quantity: number; unit: string; unitCost: number; lineTotal: number; amount: number }>;
+  manhourLines: Array<{ id: number; package: string; activity: string; discipline: string | null; provider: string; supplierName: string | null;
+    engineers: number; manDays: number; hoursPerDay: number; dailyRate: number; lineCost: number }>;
+  expenseLines: Array<{ id: number; package: string; expenseType: string; description: string; quantity: number; unit: string; unitCost: number; lineTotal: number }>;
+  otherCostLines: Array<{ id: number; category: string; description: string; quantity: number; unit: string; unitCost: number; lineTotal: number }>;
+};
+
+export const loadEstimateRevision = (id: number, revision: number) =>
+  apiRequest<EstimateRevisionDetail>(`/api/v1/estimates/${id}/revisions/${revision}`);
+
+/** Opens a new revision holding a copy of an earlier one; the revision in hand stays in the history. */
+export const restoreEstimateRevision = (id: number, fromRevision: number, rowVersion: string, comment = "") =>
+  apiRequest<{ id: number; revision: number; fromRevision: number; status: string; rowVersion: string }>(`/api/v1/estimates/${id}/restore-revision`, {
+    method: "POST",
+    body: JSON.stringify({ fromRevision, rowVersion, ...(comment.trim() ? { comment: comment.trim() } : {}) }),
+  });
 
 /** One heartbeat of an open workspace: who else is here, and whether anything changed. */
 export const syncEstimate = (id: number, since: string, editingKey: string | null) =>

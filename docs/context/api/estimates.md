@@ -2,19 +2,21 @@
 
 [Module](../modules/estimate.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `30721076`; generated, do not edit. [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `a9ef3d91`; generated, do not edit. [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/estimates` | 456–493 |
-| POST | `/api/v1/estimates` | 495–544 |
-| GET | `/api/v1/estimates/:id/validation` | 546–552 |
-| POST | `/api/v1/estimates/:id/submit` | 554–559 |
-| POST | `/api/v1/estimates/:id/approve` | 561–575 |
-| POST | `/api/v1/estimates/:id/create-revision` | 577–612 |
-| POST | `/api/v1/estimates/:id/request-revision` | 614–654 |
+| GET | `/api/v1/estimates` | 479–516 |
+| POST | `/api/v1/estimates` | 518–567 |
+| GET | `/api/v1/estimates/:id/validation` | 569–575 |
+| POST | `/api/v1/estimates/:id/submit` | 577–582 |
+| POST | `/api/v1/estimates/:id/approve` | 584–598 |
+| POST | `/api/v1/estimates/:id/create-revision` | 600–635 |
+| POST | `/api/v1/estimates/:id/request-revision` | 637–677 |
+| GET | `/api/v1/estimates/:id/revisions/:revision` | 681–739 |
+| POST | `/api/v1/estimates/:id/restore-revision` | 743–795 |
 
 ## Named functions
 
@@ -36,10 +38,12 @@ Evidence: source snapshot `30721076`; generated, do not edit. [backend-node/src/
 | `materializeErpMappings` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 256–317 |
 | `withdrawEstimateReview` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 320–329 |
 | `revisionCode` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 333–333 |
-| `estimateFacts` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 336–342 |
-| `noticeDecision` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 345–361 |
-| `transition` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 363–445 |
-| `registerEstimateRoutes` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 447–655 |
+| `restoreRevisionPlan` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 345–350 |
+| `restoreRevisionReason` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 353–356 |
+| `estimateFacts` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 359–365 |
+| `noticeDecision` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 368–384 |
+| `transition` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 386–468 |
+| `registerEstimateRoutes` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 470–796 |
 
 ## Direct local dependencies
 
@@ -68,7 +72,7 @@ Evidence: source snapshot `30721076`; generated, do not edit. [backend-node/src/
 
 ## SQL references (literal scan, not a complete schema or write-set)
 
-`dbo.audit_log`, `dbo.cost_items`, `dbo.customers`, `dbo.document_lifecycle_events`, `dbo.estimate_assignments`, `dbo.estimate_erp_mappings`, `dbo.estimate_module_details`, `dbo.estimate_overhead_snapshots`, `dbo.estimate_revisions`, `dbo.estimate_submission_snapshots`, `dbo.estimates`, `dbo.expense_lines`, `dbo.fn_estimate_validation`, `dbo.inquiries`, `dbo.inquiry_attachments`, `dbo.manhour_lines`, `dbo.other_cost_lines`, `dbo.roles`, `dbo.users`, `dbo.v_estimate_totals`
+`dbo.audit_log`, `dbo.cost_items`, `dbo.customers`, `dbo.document_lifecycle_events`, `dbo.estimate_assignments`, `dbo.estimate_erp_mappings`, `dbo.estimate_module_details`, `dbo.estimate_overhead_snapshots`, `dbo.estimate_revisions`, `dbo.estimate_submission_snapshots`, `dbo.estimates`, `dbo.expense_lines`, `dbo.fn_estimate_validation`, `dbo.inquiries`, `dbo.inquiry_attachments`, `dbo.manhour_lines`, `dbo.other_cost_lines`, `dbo.roles`, `dbo.suppliers`, `dbo.users`, `dbo.v_estimate_cost_amounts`, `dbo.v_estimate_totals`
 
 ## Change boundary
 

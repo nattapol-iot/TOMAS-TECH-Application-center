@@ -81,6 +81,8 @@ test("the catalog holds the guides the owner chose, in the order the work happen
     "team-overview-task", "bom-release",
     // Approving an estimate sends it to Pegasus ERP as a Cost Sheet (2026-11-02).
     "estimate-approve",
+    // Opening an earlier estimate revision and continuing from it (2026-11-18).
+    "estimate-revision-back",
     "purchase-request", "pr-approve",
     // An approved PR the ERP refused or deleted is taken back to Draft or cancelled (2026-11-02).
     "pr-fix",

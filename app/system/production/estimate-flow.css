@@ -358,6 +358,18 @@ select.est-unmapped { border-color: var(--amber-line); background-color: var(--a
 /* ---------- Revision history ---------- */
 .est-snapshot > summary { cursor: pointer; color: var(--blue-text); font-size: var(--fs-xs); }
 .est-snapshot pre { max-height: 320px; overflow: auto; margin: 8px 0 0; }
+/* One earlier revision, read-only (EstimateRevisionView.tsx). */
+.est-rev-totals { display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-md); }
+.est-rev-total { display: flex; flex-direction: column; gap: 2px; }
+.est-rev-total > small { color: var(--muted); font-size: var(--fs-xs); }
+.est-rev-total.grand { margin-left: auto; text-align: right; }
+.est-rev-heading { margin: 0 0 6px; font-size: var(--fs-sm); }
+.est-rev-points { margin: 0; padding-left: 18px; }
+/* The four ledgers sit under each other, so their columns line up. */
+.est-rev-table { table-layout: fixed; width: 100%; }
+.est-rev-table th:nth-child(2) { width: 22%; }
+.est-rev-table th.num { width: 14%; }
+.est-rev-table .est-rev-group > td { background: var(--surface-2, rgba(127, 127, 127, .08)); }
 .est-approved .link-btn { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
 
 @media (max-width: 980px) {
