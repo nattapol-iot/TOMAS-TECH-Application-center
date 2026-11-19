@@ -353,6 +353,21 @@ export async function withdrawEstimateReview(transaction: TransactionType, id: n
 type EstimateMail = { kind: "review"; message: EstimateReviewEmail } | { kind: "decision"; message: EstimateDecisionEmail } | null;
 const revisionCode = (revision: number) => `R${String(revision).padStart(2, "0")}`;
 
+/**
+ * The estimate list's rows and every filter but the status (GET /api/v1/estimates). The page adds the status filter;
+ * the V2 summary groups by status over the same rows, so its counts are what pressing each status lists.
+ */
+const ESTIMATE_LIST_FROM = `FROM dbo.estimates e INNER JOIN dbo.inquiries i ON i.id=e.inquiry_id INNER JOIN dbo.customers c ON c.id=e.customer_id
+      INNER JOIN dbo.users u ON u.id=e.owner_id INNER JOIN dbo.v_estimate_totals t ON t.estimate_id=e.id
+      WHERE e.deleted_at IS NULL AND e.archived_at IS NULL AND (@customer_id IS NULL OR e.customer_id=@customer_id)
+        AND (@project_type IS NULL OR e.project_type=@project_type) AND (@owner_id IS NULL OR e.owner_id=@owner_id)
+        AND (@mine_id IS NULL OR e.owner_id=@mine_id OR EXISTS (
+          SELECT 1 FROM dbo.estimate_assignments a WHERE a.estimate_id=e.id
+            AND (a.owner_id=@mine_id OR a.support_id=@mine_id)))
+        AND (@department IS NULL OR u.department=@department) AND (@revision IS NULL OR e.revision=@revision)
+        AND (@search IS NULL OR e.estimate_no LIKE N'%'+@search+N'%' OR i.inquiry_no LIKE N'%'+@search+N'%'
+          OR e.project_name LIKE N'%'+@search+N'%' OR c.name LIKE N'%'+@search+N'%')`;
+
 /** Longest note a person may add when going back: the reason column holds 100 characters and the revision code comes first. */
 export const RESTORE_COMMENT_MAX = 80;
 /** Revision numbers are SQL int; anything larger is a bad request, not a server error. */
@@ -505,22 +520,16 @@ export function registerEstimateRoutes(app: FastifyInstance, config: AppConfig, 
     const ownerId = optionalPositiveLong(query.ownerId, "Owner id"); const department = optionalText(query.department, 100, "Department");
     const revision = optionalNonnegativeInteger(query.revision, "Revision");
     const mineId = booleanQuery(query.mine) ? (await users.required(request)).id : null;
+    // ?summary=1 (the V2 list) adds one row per status over every filter but the status itself, for its summary bar.
+    const summary = booleanQuery(query.summary);
     const result = await database.query<EstimateRow>(`
       SELECT e.id,e.estimate_no,i.inquiry_no,i.site_location,i.target_delivery,e.customer_id,c.name customer_name,e.project_name,e.project_type,
         e.owner_id,u.name owner_name,e.revision,e.due_date,e.status,e.progress,t.material_total,t.engineering_total,
         t.outsource_total,t.transportation_total,t.accommodation_total,t.other_total,t.overhead_state,t.overhead_total,t.contingency_total,t.total,
         e.created_date,e.updated_at,e.row_version,COUNT_BIG(*) OVER() total_count
-      FROM dbo.estimates e INNER JOIN dbo.inquiries i ON i.id=e.inquiry_id INNER JOIN dbo.customers c ON c.id=e.customer_id
-      INNER JOIN dbo.users u ON u.id=e.owner_id INNER JOIN dbo.v_estimate_totals t ON t.estimate_id=e.id
-      WHERE e.deleted_at IS NULL AND e.archived_at IS NULL AND (@status IS NULL OR e.status=@status) AND (@customer_id IS NULL OR e.customer_id=@customer_id)
-        AND (@project_type IS NULL OR e.project_type=@project_type) AND (@owner_id IS NULL OR e.owner_id=@owner_id)
-        AND (@mine_id IS NULL OR e.owner_id=@mine_id OR EXISTS (
-          SELECT 1 FROM dbo.estimate_assignments a WHERE a.estimate_id=e.id
-            AND (a.owner_id=@mine_id OR a.support_id=@mine_id)))
-        AND (@department IS NULL OR u.department=@department) AND (@revision IS NULL OR e.revision=@revision)
-        AND (@search IS NULL OR e.estimate_no LIKE N'%'+@search+N'%' OR i.inquiry_no LIKE N'%'+@search+N'%'
-          OR e.project_name LIKE N'%'+@search+N'%' OR c.name LIKE N'%'+@search+N'%')
+      ${ESTIMATE_LIST_FROM} AND (@status IS NULL OR e.status=@status)
       ORDER BY e.updated_at DESC,e.id DESC OFFSET @offset ROWS FETCH NEXT @page_size ROWS ONLY;
+      ${summary ? `SELECT e.status,COUNT_BIG(*) estimate_count,SUM(t.total) total_cost ${ESTIMATE_LIST_FROM} GROUP BY e.status;` : ""}
     `, (sqlRequest) => { sqlRequest.input("status", sql.NVarChar(50), status); sqlRequest.input("search", sql.NVarChar(200), search);
       sqlRequest.input("customer_id", sql.BigInt, customerId); sqlRequest.input("project_type", sql.NVarChar(100), projectType);
       sqlRequest.input("mine_id", sql.BigInt, mineId); sqlRequest.input("owner_id", sql.BigInt, ownerId); sqlRequest.input("department", sql.NVarChar(100), department);
@@ -533,7 +542,9 @@ export function registerEstimateRoutes(app: FastifyInstance, config: AppConfig, 
       outsourceTotal: Number(row.outsource_total), transportationTotal: Number(row.transportation_total), accommodationTotal: Number(row.accommodation_total),
       otherTotal: Number(row.other_total), contingencyTotal: Number(row.contingency_total), total: Number(row.total), updatedAt: row.updated_at,
       overheadState: row.overhead_state, overheadTotal: row.overhead_total === null ? null : Number(row.overhead_total),
-      rowVersion: row.row_version.toString("base64") })), page, pageSize, total: Number(result.recordset[0]?.total_count ?? 0) };
+      rowVersion: row.row_version.toString("base64") })), page, pageSize, total: Number(result.recordset[0]?.total_count ?? 0),
+      ...(summary ? { statusSummary: ((result.recordsets as unknown as Array<Array<{ status: string; estimate_count: number | string; total_cost: number | string | null }>>)[1] ?? [])
+        .map((row) => ({ status: row.status, count: Number(row.estimate_count), total: Number(row.total_cost ?? 0) })) } : {}) };
   });
 
   app.post("/api/v1/estimates", async (request, reply) => {

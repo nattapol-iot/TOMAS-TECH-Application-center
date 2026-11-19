@@ -2072,6 +2072,82 @@ export const NO_GUIDE: Readonly<Record<string, string>> = {
   "manual": "The full illustrated manual, opened from the ? menu in the top bar; the guide list links to it.",
 };
 
+/* V1 / V2 look of the Estimating screens (owner 2026-11-19): everyone starts on V1; V2 is the Pegasus ERP look. */
+const ESTIMATE_LOOK_V2: Guide = {
+  id: "estimate-look-v2",
+  area: "estimate",
+  title: { th: "ใช้หน้าจอ Estimate แบบ V2 (Pegasus)", en: "Use the V2 (Pegasus) look of Estimate Cost", jp: "Estimate Cost の V2（Pegasus）表示を使う" },
+  summary: {
+    th: "สลับหน้าจอกลุ่ม Estimating เป็นแบบ V2 หน้าตาเดียวกับ Pegasus ERP ข้อมูลและปุ่มทำงานเหมือน V1 ทุกอย่าง กลับไป V1 ได้ทุกเมื่อ",
+    en: "Switch the Estimating screens to V2, the Pegasus ERP look. The data and every action are the same as in V1, and you can go back to V1 at any time.",
+    jp: "Estimating グループの画面を Pegasus ERP と同じ V2 表示に切り替えます。データと操作は V1 と同じで、いつでも V1 に戻せます。",
+  },
+  minutes: 2,
+  permissions: ["estimate.read"],
+  views: ["estimates"],
+  browse: true,
+  steps: [
+    menu("estimates",
+      { th: "เปิดเมนู Estimate Cost", en: "Open Estimate Cost", jp: "「Estimate Cost」を開く" },
+      { th: "ปุ่มสลับ V1 / V2 อยู่ทุกหน้าในกลุ่ม Estimating คลิกที่เมนูที่ไฮไลต์อยู่", en: "Every screen of the Estimating group has the V1 / V2 switch. Click the highlighted menu.", jp: "Estimating グループのすべての画面に V1 / V2 の切り替えがあります。強調表示のメニューをクリックします。" }),
+    {
+      target: "estimate.lookV2", action: "click", view: "estimates",
+      title: { th: "กด V2", en: "Press V2", jp: "「V2」を押す" },
+      body: {
+        th: "หน้าจอเปลี่ยนเป็นแบบ Pegasus ทันที ระบบจำตัวเลือกไว้ในเครื่องนี้ ครั้งหน้าที่เปิดจะเป็น V2",
+        en: "The screen changes to the Pegasus look at once. The choice is kept on this computer, so the screen opens in V2 next time.",
+        jp: "画面がすぐに Pegasus 表示に変わります。選択はこのコンピューターに保存され、次回も V2 で開きます。",
+      },
+    },
+    {
+      target: "estimate.summary", action: "next", view: "estimates",
+      title: { th: "แถบสรุปตามสถานะ", en: "The status summary bar", jp: "ステータスのサマリーバー" },
+      body: {
+        th: "แต่ละช่องคือสถานะหนึ่ง พร้อมจำนวน Estimate และต้นทุนรวม ตามตัวกรองที่ตั้งไว้ กดช่องไหนรายการด้านล่างจะแสดงเฉพาะสถานะนั้น",
+        en: "Each cell is one status with its number of estimates and their total cost under the filters you set. Press a cell to list only that status.",
+        jp: "各セルが1つのステータスで、設定中のフィルターでの見積件数と原価合計を示します。セルを押すとそのステータスだけを一覧表示します。",
+      },
+      missing: {
+        th: "ถ้ายังเปิด Estimate ใบหนึ่งอยู่ ให้กดชื่อเมนูในแถบนำทางด้านบนเพื่อกลับไปที่รายการ",
+        en: "If an estimate is open, press the menu name in the trail at the top to go back to the list.",
+        jp: "見積を開いている場合は、上部のパンくずのメニュー名を押して一覧に戻ります。",
+      },
+    },
+    {
+      target: "estimate.list", action: "click", clickOn: "tbody tr", view: "estimates",
+      title: { th: "เปิด Estimate", en: "Open an estimate", jp: "見積を開く" },
+      body: {
+        th: "สถานะอยู่คอลัมน์แรก กดแถวหรือเลข Estimate เพื่อเปิด",
+        en: "The status is the first column. Press a row or the estimate number to open it.",
+        jp: "ステータスは最初の列です。行または見積番号を押して開きます。",
+      },
+    },
+    {
+      target: "estimate.moreActions", action: "next", view: "estimates",
+      title: { th: "ปุ่มหลักหนึ่งปุ่ม ที่เหลืออยู่ใน 'การทำงานอื่น'", en: "One main button; the rest are under More actions", jp: "メインボタンは1つ、他は「その他の操作」に" },
+      body: {
+        th: "ปุ่มสีน้ำเงินด้านขวาคือขั้นตอนที่ต้องทำตอนนี้ เช่น ส่งให้ตรวจสอบ หรืออนุมัติ ส่วน Export Excel รีเฟรช สร้าง Revision และจัดการเอกสาร อยู่ใน 'การทำงานอื่น' แถบตัวเลขใต้หัวข้อคือต้นทุนแยกตามหมวด กดช่องไหนจะเปิดแท็บของรายการนั้น",
+        en: "The blue button on the right is the step to take now, such as Submit Review or Approve. Export Excel, Refresh, Create Revision and Manage document are under More actions. The figures under the title are the cost by part; press one to open the tab that holds its lines.",
+        jp: "右の青いボタンが今行う手順（レビュー依頼や承認など）です。Excel出力、更新、改訂作成、文書管理は「その他の操作」にあります。タイトル下の数字は区分別の原価で、押すとその明細のタブが開きます。",
+      },
+      missing: {
+        th: "เปิด Estimate ใบหนึ่งก่อน แล้วกด 'ถัดไป'",
+        en: "Open an estimate first, then press Next.",
+        jp: "先に見積を開いてから「次へ」を押します。",
+      },
+    },
+    {
+      target: "estimate.look", action: "next", view: "estimates",
+      title: { th: "กลับไปแบบเดิมได้ทุกเมื่อ", en: "Go back to V1 at any time", jp: "いつでも V1 に戻せます" },
+      body: {
+        th: "กด V1 เพื่อกลับไปหน้าตาเดิม งานที่เปิดอยู่ไม่หายและไม่ต้องบันทึกใหม่ เพราะ V1 กับ V2 ใช้ข้อมูลชุดเดียวกัน",
+        en: "Press V1 to return to the look you know. The work you have open stays as it is, because V1 and V2 use the same data.",
+        jp: "V1 を押すと従来の表示に戻ります。V1 と V2 は同じデータを使うので、開いている作業はそのまま残ります。",
+      },
+    },
+  ],
+};
+
 export const GUIDES: readonly Guide[] = [
   CRM_DEAL_CREATE,
   CRM_ACTIVITY,
@@ -2510,6 +2586,7 @@ export const GUIDES: readonly Guide[] = [
   BOM_RELEASE,
   ESTIMATE_APPROVE,
   ESTIMATE_REVISION_BACK,
+  ESTIMATE_LOOK_V2,
   {
     id: "purchase-request",
     area: "purchase",

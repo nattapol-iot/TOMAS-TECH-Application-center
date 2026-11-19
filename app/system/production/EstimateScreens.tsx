@@ -17,6 +17,9 @@ import { insertCostLine, moveModule, moveSibling, placeModule, type ReorderEstim
 
 import { EstimateErpSheetPanel } from "./EstimateErpSheet";
 import { EstimateRevisionView } from "./EstimateRevisionView";
+import { useEstimateLook } from "./EstimateLook";
+import { EstimateHeaderV2, EstimateStatusSummary, PegasusSummaryBar, type HeaderAction } from "./EstimateV2Parts";
+import { estimatePrimaryAction, type EstimateHeaderAction } from "../../../lib/estimate-look";
 import "./estimate-flow.css";
 import { ALL_START_LEDGERS, EstimateSourcePicker, StartFromChoice, anyStartLedger, startFromCreatedMessage, startFromInput, type StartLedgers } from "./EstimateStartFrom";
 import { EstimateLaborTab, defaultWorkPackage, disciplineLabel, disciplineRates, useEngineeringRateOptions, type LaborExpenseSeed, type LaborSeed } from "./EstimateLaborSheet";
@@ -76,6 +79,7 @@ import {
   type EstimateCopyResult,
   type EstimateCostItem,
   type EstimateCostWorkspace,
+  type EstimateStatusCount,
   type EstimateErpSheetRow,
   type EstimateExpenseInput,
   type EstimateExpenseLine,
@@ -363,12 +367,14 @@ export function ProductionEstimates({ bootstrap, notify, refreshBootstrap, initi
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
+  const v2 = useEstimateLook() === "v2";
+  const [statusSummary, setStatusSummary] = useState<EstimateStatusCount[] | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      setResult(await listEstimates({
+      const next = await listEstimates({
         page,
         pageSize,
         search,
@@ -379,13 +385,16 @@ export function ProductionEstimates({ bootstrap, notify, refreshBootstrap, initi
         ownerId: ownerId === "All owners" ? undefined : Number(ownerId),
         department: department === "All departments" ? undefined : department,
         revision: revision === "All revisions" ? undefined : Number(revision),
-      }));
+        summary: v2 || undefined,
+      });
+      setResult(next);
+      setStatusSummary(next.statusSummary ?? null);
     } catch (requestError) {
       setError(toError(requestError));
     } finally {
       setLoading(false);
     }
-  }, [customerId, department, mine, ownerId, page, pageSize, projectType, revision, search, status]);
+  }, [customerId, department, mine, ownerId, page, pageSize, projectType, revision, search, status, v2]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => { void load(); }, 200);
@@ -465,20 +474,24 @@ export function ProductionEstimates({ bootstrap, notify, refreshBootstrap, initi
       <button className="btn ghost sm" type="button" onClick={clearFilters}>{copy("ล้างทั้งหมด", "Clear all", "すべてクリア")}</button>
     </div> : null}
     {error ? <LoadError message={error} retry={() => { void load(); }} /> : null}
+    {/* V2: the status tabs become a summary bar whose cells are the same filters, with each status's count and cost. */}
+    {v2 ? <EstimateStatusSummary tabs={ESTIMATE_STATUS_TABS} counts={statusSummary} status={status} onStatus={(value) => { setStatus(value); resetPage(); }} formatMoney={formatMoney} /> : null}
     <section className="panel est-list-panel" data-guide="estimate.list">
-      <div className="tabs est-status-tabs" role="tablist" aria-label={copy("สถานะ", "Status", "ステータス")}>
+      {v2 ? null : <div className="tabs est-status-tabs" role="tablist" aria-label={copy("สถานะ", "Status", "ステータス")}>
         {ESTIMATE_STATUS_TABS.map(([value, th, en, ja]) => <button key={value} type="button" role="tab" aria-selected={status === value} className={status === value ? "tab active" : "tab"} onClick={() => { setStatus(value); resetPage(); }}>{copy(th, en, ja)}</button>)}
-      </div>
+      </div>}
       {result.items.length ? <div className="table-wrap"><table className="est-list-table">
         <thead><tr>
+          {/* V2 (DESIGN.md 0.3): status first; the estimate number is the link that opens it, so no open arrow at the end. */}
+          {v2 ? <th className="est-status-col">{copy("สถานะ", "Status", "ステータス")}</th> : null}
           <th>Estimate</th>
           <th>{copy("งาน / ลูกค้า", "Project / customer", "案件 / 顧客")}</th>
           <th>{copy("ผู้ประเมิน", "Estimator", "見積担当")}</th>
           <th>{copy("กำหนดส่ง", "Due", "期限")}</th>
           <th className="num"><span className="est-cost-key">{costKey.map((key) => <span key={key.label}><i style={{ background: key.color }} />{key.label}</span>)}</span>{copy("ต้นทุนรวม", "Total cost", "原価合計")}</th>
-          <th>{copy("สถานะ", "Status", "ステータス")}</th>
+          {v2 ? null : <th>{copy("สถานะ", "Status", "ステータス")}</th>}
           <th>{copy("อัปเดต", "Updated", "更新")}</th>
-          <th aria-label={uiText("Action")} />
+          {v2 ? null : <th aria-label={uiText("Action")} />}
         </tr></thead>
         <tbody>{result.items.map((item) => {
           const closed = isClosedEstimateStatus(item.status);
@@ -487,15 +500,17 @@ export function ProductionEstimates({ bootstrap, notify, refreshBootstrap, initi
           const parts = [numberOf(item.materialTotal), numberOf(item.engineeringTotal), numberOf(item.outsourceTotal), numberOf(item.transportationTotal) + numberOf(item.accommodationTotal) + numberOf(item.otherTotal) + numberOf(item.contingencyTotal)];
           const base = parts.reduce((sum, value) => sum + Math.max(0, value), 0);
           const breakdown = costKey.map((key, index) => `${key.label} ${formatMoney(parts[index])}`).join(" · ");
+          const statusCell = <td><Badge tone={view.tone}><span>{view.label}</span></Badge><span className="est-progress" aria-hidden="true"><i style={{ width: `${Math.min(100, Math.max(0, numberOf(item.progress)))}%` }} /></span></td>;
           return <tr key={item.id} className={`clickable${late ? " row-late" : ""}`} onClick={() => setSelectedEstimateId(item.id)}>
+            {v2 ? statusCell : null}
             <td><a className="mono est-no" href={viewHash("estimates", item.id)} onClick={(event) => { event.stopPropagation(); if (!isPlainClick(event)) return; event.preventDefault(); setSelectedEstimateId(item.id); }}>{item.number}</a><span className="pill">{revisionCode(item.revision)}</span><div className="est-sub mono">{item.inquiryNumber}</div></td>
             <td className="wrap est-project"><strong>{item.projectName}</strong><div className="est-sub">{item.customerName} · {item.projectType}</div></td>
             <td>{item.ownerName}</td>
             <td>{formatDate(item.dueDate)}{closed ? null : <div className={late ? "est-sub red-text" : "est-sub"}>{dueDistance(item.dueDate, todayIso)}</div>}</td>
             <td className="num">{base > 0 ? <><strong>{formatMoney(item.total)}</strong><span className="est-stack" title={breakdown}>{parts.map((value, index) => value > 0 ? <i key={costKey[index].label} style={{ width: `${(value / base) * 100}%`, background: costKey[index].color }} /> : null)}</span></> : <span className="est-sub">{copy("ยังไม่มีต้นทุน", "No cost yet", "原価なし")}</span>}</td>
-            <td><Badge tone={view.tone}><span>{view.label}</span></Badge><span className="est-progress" aria-hidden="true"><i style={{ width: `${Math.min(100, Math.max(0, numberOf(item.progress)))}%` }} /></span></td>
+            {v2 ? null : statusCell}
             <td className="est-sub">{formatDateTime(item.updatedAt)}</td>
-            <td><button className="row-action" type="button" aria-label={`Open ${item.number}`} onClick={(event) => { event.stopPropagation(); setSelectedEstimateId(item.id); }}><Icon name="chevronRight" /></button></td>
+            {v2 ? null : <td><button className="row-action" type="button" aria-label={`Open ${item.number}`} onClick={(event) => { event.stopPropagation(); setSelectedEstimateId(item.id); }}><Icon name="chevronRight" /></button></td>}
           </tr>;
         })}</tbody>
       </table></div>
@@ -626,6 +641,8 @@ function CreateEstimateModal({ bootstrap, onClose, onCreated }: { bootstrap: Boo
 }
 
 function ProductionEstimateWorkspace({ estimateId, tab, setTab, bootstrap, notify, refreshBootstrap, onBack, onListChanged }: Props & { estimateId: number; tab: WorkspaceTab; setTab: (tab: WorkspaceTab) => void; onBack: () => void; onListChanged: () => Promise<void> }) {
+  const v2 = useEstimateLook() === "v2";
+  const uiText = useUiText();
   const [workspace, setWorkspace] = useState<EstimateCostWorkspace | null>(null);
   const [classificationDirty, setClassificationDirty] = useState(false);
   /* In review the summary is the reviewer's overview; the ERP sheet opens below it on request. */
@@ -907,34 +924,73 @@ Remove this module and all ${group.lines.length} cost items?`, { danger: true })
     ? copy(`แก้ ${criticalCount} ข้อผิดพลาดก่อนส่งตรวจ`, `Resolve ${criticalCount} error(s) before submitting`, `提出前に${criticalCount}件のエラーを修正`)
     : classificationDirty ? copy("บันทึกการจัดหมวดก่อนส่งตรวจ", "Save the category changes before submitting", "提出前に分類を保存") : undefined;
 
+  /* V2 (DESIGN.md 0.4): one filled button for the step that moves the estimate forward, the others under More actions. */
+  const v2Actions: Record<EstimateHeaderAction, HeaderAction | null> = {
+    approve: capabilities.canApprove ? { key: "approve", label: uiText("Approve"), icon: "check", guide: "estimate.approve", disabled: busy || criticalCount > 0 || classificationDirty, onClick: () => setWorkflowAction("approve") } : null,
+    submit: capabilities.canSubmit ? { key: "submit", label: uiText("Submit Review"), icon: "send", guide: "estimate.submit", disabled: busy || criticalCount > 0 || classificationDirty, title: submitBlocker, onClick: () => setWorkflowAction("submit") } : null,
+    "export-erp": approved ? { key: "export-erp", label: copy("Export ไป ERP", "Export to ERP", "ERPへ出力"), icon: "download", disabled: busy || !erpExport, title: erpExport ? undefined : copy("ดูสิ่งที่ยังขาดได้ในแท็บสรุป", "The summary tab shows what is still missing", "不足点はサマリーで確認できます"), onClick: () => erpExport?.run() } : null,
+    "create-revision": capabilities.canCreateRevision ? { key: "create-revision", label: uiText("Create Revision"), icon: "gitBranch", disabled: busy, onClick: () => setWorkflowAction("create-revision") } : null,
+    "request-revision": capabilities.canRequestRevision ? { key: "request-revision", label: uiText("Request Revision"), icon: "arrowLeft", disabled: busy, onClick: () => setWorkflowAction("request-revision") } : null,
+  };
+  const v2PrimaryKey = estimatePrimaryAction({ approve: Boolean(v2Actions.approve), submit: Boolean(v2Actions.submit), exportErp: Boolean(v2Actions["export-erp"]), createRevision: Boolean(v2Actions["create-revision"]), requestRevision: Boolean(v2Actions["request-revision"]) });
+  const v2Primary = v2PrimaryKey ? v2Actions[v2PrimaryKey] : null;
+  const v2More: HeaderAction[] = [
+    ...(["submit", "approve", "request-revision", "create-revision", "export-erp"] as const).map((key) => v2Actions[key]).filter((action): action is HeaderAction => action !== null && action.key !== v2PrimaryKey),
+    { key: "export-excel", label: uiText("Export Excel"), icon: "download", disabled: header.status !== "Approved", title: header.status !== "Approved" ? uiText("Approve the estimate before export") : undefined, onClick: exportWorkspace },
+    { key: "refresh", label: uiText("Refresh"), icon: "refresh", disabled: loading || busy, onClick: () => { void load(); } },
+  ];
+  const railList = <ol className="est-rail" aria-label={copy("ขั้นตอน", "Workflow", "ワークフロー")}>
+            {rail.map((step, index) => <li key={step.key} className={`est-step ${step.state}`} aria-current={step.state === "now" ? "step" : undefined}><span className="est-dot">{step.state === "done" ? <Icon name="check" /> : index + 1}</span>{step.label}</li>)}
+          </ol>;
+  const checksChip = validationCount
+            ? <button className={`est-issue ${criticalCount ? "red" : "amber"}`} type="button" onClick={() => setTab("validation")}><Icon name="alertTriangle" />{[criticalCount ? copy(`${criticalCount} ต้องแก้ก่อนส่ง`, `${criticalCount} to fix before submitting`, `提出前に${criticalCount}件修正`) : "", warningCount ? copy(`${warningCount} คำเตือน`, `${warningCount} warning(s)`, `警告${warningCount}件`) : ""].filter(Boolean).join(" · ")}</button>
+            : <span className="est-issue green"><Icon name="checkCircle" />{copy("ผ่านการตรวจของระบบ", "System checks passed", "システムチェック合格")}</span>;
+  const reviewNote = reviewLine ? <p className={`est-review${inReview ? " waiting" : ""}`} data-guide="estimate.review">{reviewLine}</p> : null;
   return <DraftHoldProvider value={holds}><div ref={workspaceRoot} className="estimate-live-root est-workspace">
     <div className="breadcrumb"><button type="button" onClick={onBack}><LocalizedText text={"Estimate Cost"} /></button><Icon name="chevronRight" /><span>{header.number}</span></div>
-    <header className="est-head">
-      <div className="est-head-text">
-        <div className="est-title"><h1>{header.projectName}</h1><Badge tone={statusView.tone}><span>{statusView.label}</span></Badge></div>
-        <div className="est-meta">
-          <span className="mono"><strong>{header.number} · {revisionCode(header.revision)}</strong></span>
-          <span>{header.customerCode} — {header.customerName}</span>
-          <span className="mono">Inquiry {header.inquiryNumber}</span>
-          <span><LocalizedText text="Estimate owner" />: <strong>{header.ownerName}</strong></span>
-          <span><LocalizedText text="Due" />: <strong className={currentLate ? "red-text" : undefined}>{formatDate(header.dueDate)}</strong>{isClosedEstimateStatus(header.status) ? null : <em className={currentLate ? "red-text" : undefined}> · {dueDistance(header.dueDate, businessDate())}</em>}</span>
+    {v2 ? <EstimateHeaderV2
+      title={header.projectName}
+      badges={<><Badge tone={statusView.tone}><span>{statusView.label}</span></Badge><span className="pill mono">{revisionCode(header.revision)}</span></>}
+      meta={<>
+        <span className="mono"><strong>{header.number}</strong></span>
+        <span>{header.customerCode} — {header.customerName}</span>
+        <span className="mono">Inquiry {header.inquiryNumber}</span>
+        <span><LocalizedText text="Estimate owner" />: <strong>{header.ownerName}</strong></span>
+        <span><LocalizedText text="Due" />: <strong className={currentLate ? "red-text" : undefined}>{formatDate(header.dueDate)}</strong>{isClosedEstimateStatus(header.status) ? null : <em className={currentLate ? "red-text" : undefined}> · {dueDistance(header.dueDate, businessDate())}</em>}</span>
+      </>}
+      viewers={<RecordViewers viewers={viewers} describe={describeLine} />}
+      primary={v2Primary}
+      more={v2More}
+      moreMeta={<><LocalizedText text="Created" />: {formatDate(header.createdDate)}</>}
+      destructive={<DocumentLifecycleButton kind="estimates" id={header.id} notify={notify} onChanged={async () => { onBack(); await refreshBootstrap(); }} />}
+    /> : <>
+      <header className="est-head">
+        <div className="est-head-text">
+          <div className="est-title"><h1>{header.projectName}</h1><Badge tone={statusView.tone}><span>{statusView.label}</span></Badge></div>
+          <div className="est-meta">
+            <span className="mono"><strong>{header.number} · {revisionCode(header.revision)}</strong></span>
+            <span>{header.customerCode} — {header.customerName}</span>
+            <span className="mono">Inquiry {header.inquiryNumber}</span>
+            <span><LocalizedText text="Estimate owner" />: <strong>{header.ownerName}</strong></span>
+            <span><LocalizedText text="Due" />: <strong className={currentLate ? "red-text" : undefined}>{formatDate(header.dueDate)}</strong>{isClosedEstimateStatus(header.status) ? null : <em className={currentLate ? "red-text" : undefined}> · {dueDistance(header.dueDate, businessDate())}</em>}</span>
+          </div>
         </div>
-      </div>
-      <div className="est-head-actions">
-        <RecordViewers viewers={viewers} describe={describeLine} />
-        <details className="estimate-more est-menu"><summary className="btn default est-icon-btn" aria-label={copy("ตัวเลือกเพิ่มเติม", "More options", "その他の操作")} title={copy("ตัวเลือกเพิ่มเติม", "More options", "その他の操作")}><Icon name="more" /></summary><div className="estimate-more-content">
-          <div className="estimate-document-meta"><span><LocalizedText text="Created" />: {formatDate(header.createdDate)}</span></div>
-          <button className="btn default" type="button" disabled={header.status !== "Approved"} title={header.status !== "Approved" ? "Approve the estimate before export" : undefined} onClick={exportWorkspace}><Icon name="download" /><LocalizedText text={"Export Excel"} /></button>
-          <button className="btn default" type="button" disabled={loading || busy} onClick={() => { void load(); }}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button>
-          <DocumentLifecycleButton kind="estimates" id={header.id} notify={notify} onChanged={async () => { onBack(); await refreshBootstrap(); }} />
-        </div></details>
-        {capabilities.canSubmit ? <button className="btn primary" type="button" data-guide="estimate.submit" disabled={busy || criticalCount > 0 || classificationDirty} title={submitBlocker} onClick={() => setWorkflowAction("submit")}><Icon name="send" /><LocalizedText text={"Submit Review"} /></button> : null}
-        {capabilities.canRequestRevision ? <button className="btn warn" type="button" disabled={busy} onClick={() => setWorkflowAction("request-revision")}><Icon name="refresh" /><LocalizedText text={"Request Revision"} /></button> : null}
-        {capabilities.canCreateRevision ? <button className="btn default" type="button" disabled={busy} onClick={() => setWorkflowAction("create-revision")}><Icon name="gitBranch" /><LocalizedText text={"Create Revision"} /></button> : null}
-        {approved ? <button className="btn primary" type="button" disabled={busy || !erpExport} title={erpExport ? undefined : copy("ดูสิ่งที่ยังขาดได้ในแท็บสรุป", "The summary tab shows what is still missing", "不足点はサマリーで確認できます")} onClick={() => erpExport?.run()}><Icon name="download" />{copy("Export ไป ERP", "Export to ERP", "ERPへ出力")}</button> : null}
-        {capabilities.canApprove ? <button className="btn success" type="button" data-guide="estimate.approve" disabled={busy || criticalCount > 0 || classificationDirty} onClick={() => setWorkflowAction("approve")}><Icon name="checkCircle" /><LocalizedText text={"Approve"} /></button> : null}
-      </div>
-    </header>
+        <div className="est-head-actions">
+          <RecordViewers viewers={viewers} describe={describeLine} />
+          <details className="estimate-more est-menu"><summary className="btn default est-icon-btn" aria-label={copy("ตัวเลือกเพิ่มเติม", "More options", "その他の操作")} title={copy("ตัวเลือกเพิ่มเติม", "More options", "その他の操作")}><Icon name="more" /></summary><div className="estimate-more-content">
+            <div className="estimate-document-meta"><span><LocalizedText text="Created" />: {formatDate(header.createdDate)}</span></div>
+            <button className="btn default" type="button" disabled={header.status !== "Approved"} title={header.status !== "Approved" ? "Approve the estimate before export" : undefined} onClick={exportWorkspace}><Icon name="download" /><LocalizedText text={"Export Excel"} /></button>
+            <button className="btn default" type="button" disabled={loading || busy} onClick={() => { void load(); }}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button>
+            <DocumentLifecycleButton kind="estimates" id={header.id} notify={notify} onChanged={async () => { onBack(); await refreshBootstrap(); }} />
+          </div></details>
+          {capabilities.canSubmit ? <button className="btn primary" type="button" data-guide="estimate.submit" disabled={busy || criticalCount > 0 || classificationDirty} title={submitBlocker} onClick={() => setWorkflowAction("submit")}><Icon name="send" /><LocalizedText text={"Submit Review"} /></button> : null}
+          {capabilities.canRequestRevision ? <button className="btn warn" type="button" disabled={busy} onClick={() => setWorkflowAction("request-revision")}><Icon name="refresh" /><LocalizedText text={"Request Revision"} /></button> : null}
+          {capabilities.canCreateRevision ? <button className="btn default" type="button" disabled={busy} onClick={() => setWorkflowAction("create-revision")}><Icon name="gitBranch" /><LocalizedText text={"Create Revision"} /></button> : null}
+          {approved ? <button className="btn primary" type="button" disabled={busy || !erpExport} title={erpExport ? undefined : copy("ดูสิ่งที่ยังขาดได้ในแท็บสรุป", "The summary tab shows what is still missing", "不足点はサマリーで確認できます")} onClick={() => erpExport?.run()}><Icon name="download" />{copy("Export ไป ERP", "Export to ERP", "ERPへ出力")}</button> : null}
+          {capabilities.canApprove ? <button className="btn success" type="button" data-guide="estimate.approve" disabled={busy || criticalCount > 0 || classificationDirty} onClick={() => setWorkflowAction("approve")}><Icon name="checkCircle" /><LocalizedText text={"Approve"} /></button> : null}
+        </div>
+      </header>
+    </>}
     {header.archived ? <div className="info-strip"><Icon name="lock" /><LocalizedText text="Archived document — read only" /></div> : null}
     {waitingOn ? <div className="info-strip amber" role="status"><Icon name="refresh" /><span><strong>{waitingOn.length
       ? `${liveCopy("แก้ไขโดย", "Changed by", "変更者：")} ${waitingOn.join(", ")}`
@@ -943,37 +999,45 @@ Remove this module and all ${group.lines.length} cost items?`, { danger: true })
     {sentBack ? <div className="info-strip amber est-sentback" role="status"><Icon name="alertTriangle" /><span><strong>{[sentBack.reviewedByName, sentBack.reviewedAt ? formatDate(sentBack.reviewedAt) : ""].filter(Boolean).join(" · ") || copy("ผู้ตรวจ", "Reviewer", "レビュー担当")}</strong>{" · "}{copy("ส่งกลับให้แก้:", "returned it:", "差し戻し理由:")} “{sentBack.reason.trim() || copy("ไม่ได้ระบุเหตุผล", "No reason was given", "理由の記載なし")}”</span><span className="spacer" /><button className="link-btn" type="button" onClick={() => setTab("revision")}>{copy("ดูประวัติ Revision", "Open revision history", "改訂履歴を開く")}<Icon name="arrowRight" /></button></div> : null}
     {classificationDirty ? <div className="info-strip amber"><Icon name="alertTriangle" /><span>{copy("มีการจัดหมวดที่ยังไม่บันทึก กรุณาบันทึกก่อนส่งตรวจ", "Save category changes before submitting for review.", "提出前に分類の変更を保存してください。")}</span><button className="link-btn" type="button" onClick={() => setTab("summary")}>{copy("กลับไปบันทึก", "Return to save", "保存へ戻る")}</button></div> : null}
     {error ? <LoadError message={error} retry={() => { void load(); }} /> : null}
-    <section className="panel est-overview" aria-label={copy("ภาพรวมต้นทุน", "Cost overview", "原価概要")}>
-      <div className="est-overview-main">
-        <div className="est-overview-top">
-          <ol className="est-rail" aria-label={copy("ขั้นตอน", "Workflow", "ワークフロー")}>
-            {rail.map((step, index) => <li key={step.key} className={`est-step ${step.state}`} aria-current={step.state === "now" ? "step" : undefined}><span className="est-dot">{step.state === "done" ? <Icon name="check" /> : index + 1}</span>{step.label}</li>)}
-          </ol>
-          {validationCount
-            ? <button className={`est-issue ${criticalCount ? "red" : "amber"}`} type="button" onClick={() => setTab("validation")}><Icon name="alertTriangle" />{[criticalCount ? copy(`${criticalCount} ต้องแก้ก่อนส่ง`, `${criticalCount} to fix before submitting`, `提出前に${criticalCount}件修正`) : "", warningCount ? copy(`${warningCount} คำเตือน`, `${warningCount} warning(s)`, `警告${warningCount}件`) : ""].filter(Boolean).join(" · ")}</button>
-            : <span className="est-issue green"><Icon name="checkCircle" />{copy("ผ่านการตรวจของระบบ", "System checks passed", "システムチェック合格")}</span>}
+    {v2 ? <>
+      <section className="pge-flow" aria-label={copy("ขั้นตอน", "Workflow", "ワークフロー")}>{railList}{checksChip}{reviewNote}</section>
+      <PegasusSummaryBar label={copy("ภาพรวมต้นทุน", "Cost overview", "原価概要")} cells={[
+        ...segments.map((segment) => ({ key: segment.key, label: segment.label, color: segment.color, value: formatMoney(segment.value), onClick: () => setTab(segment.tab),
+          hint: segmentBase > 0 && segment.value > 0 ? `${Math.round((segment.value / segmentBase) * 100)}%` : undefined, note: segment.note || undefined })),
+        { key: "total", total: true, label: copy("ต้นทุนรวม", "Total cost", "原価合計"), value: formatMoney(totals.total), hint: revisionCode(header.revision),
+          note: previousTotal === null ? copy("ต้นทุนภายใน", "Internal cost", "社内原価") : revisionDelta === 0
+            ? copy(`เท่ากับ ${revisionCode(header.revision - 1)}`, `Same as ${revisionCode(header.revision - 1)}`, `${revisionCode(header.revision - 1)} と同額`)
+            : `${revisionDelta > 0 ? "+" : "−"}${formatMoney(Math.abs(revisionDelta))} ${copy("จาก", "vs", "前版比")} ${revisionCode(header.revision - 1)}` },
+      ]} />
+    </> : <>
+      <section className="panel est-overview" aria-label={copy("ภาพรวมต้นทุน", "Cost overview", "原価概要")}>
+        <div className="est-overview-main">
+          <div className="est-overview-top">
+            {railList}
+            {checksChip}
+          </div>
+          {reviewNote}
+          {segmentBase > 0
+            ? <div className="est-costbar" role="img" aria-label={segments.filter((segment) => segment.value > 0).map((segment) => `${segment.label} ${formatMoney(segment.value)}`).join(" · ")}>{segments.map((segment) => segment.value > 0 ? <i key={segment.key} style={{ width: `${(segment.value / segmentBase) * 100}%`, background: segment.color }} /> : null)}</div>
+            : <div className="est-costbar empty"><span>{copy("ยังไม่มีต้นทุน", "No cost yet", "原価なし")}</span></div>}
+          <div className="est-legend">
+            {segments.map((segment) => <button key={segment.key} type="button" className="est-legend-item" onClick={() => setTab(segment.tab)}>
+              <span><i style={{ background: segment.color }} />{segment.label}</span>
+              <strong>{formatMoney(segment.value)}</strong>
+              {segment.note ? <em>{segment.note}</em> : null}
+            </button>)}
+          </div>
         </div>
-        {reviewLine ? <p className={`est-review${inReview ? " waiting" : ""}`} data-guide="estimate.review">{reviewLine}</p> : null}
-        {segmentBase > 0
-          ? <div className="est-costbar" role="img" aria-label={segments.filter((segment) => segment.value > 0).map((segment) => `${segment.label} ${formatMoney(segment.value)}`).join(" · ")}>{segments.map((segment) => segment.value > 0 ? <i key={segment.key} style={{ width: `${(segment.value / segmentBase) * 100}%`, background: segment.color }} /> : null)}</div>
-          : <div className="est-costbar empty"><span>{copy("ยังไม่มีต้นทุน", "No cost yet", "原価なし")}</span></div>}
-        <div className="est-legend">
-          {segments.map((segment) => <button key={segment.key} type="button" className="est-legend-item" onClick={() => setTab(segment.tab)}>
-            <span><i style={{ background: segment.color }} />{segment.label}</span>
-            <strong>{formatMoney(segment.value)}</strong>
-            {segment.note ? <em>{segment.note}</em> : null}
-          </button>)}
+        <div className="est-total">
+          <span>{copy("ต้นทุนรวมโดยประมาณ", "Total estimated cost", "見積原価合計")}</span>
+          <strong>{formatMoney(totals.total)}</strong>
+          {previousTotal !== null ? <span className={revisionDelta > 0 ? "est-delta up" : revisionDelta < 0 ? "est-delta down" : "est-delta"}>{revisionDelta === 0
+            ? copy(`เท่ากับ ${revisionCode(header.revision - 1)}`, `Same as ${revisionCode(header.revision - 1)}`, `${revisionCode(header.revision - 1)} と同額`)
+            : `${revisionDelta > 0 ? "+" : "−"}${formatMoney(Math.abs(revisionDelta))} ${copy("จาก", "vs", "前版比")} ${revisionCode(header.revision - 1)}`}</span> : null}
+          <span>{copy("ต้นทุนภายใน", "Internal cost", "社内原価")} · {revisionCode(header.revision)}</span>
         </div>
-      </div>
-      <div className="est-total">
-        <span>{copy("ต้นทุนรวมโดยประมาณ", "Total estimated cost", "見積原価合計")}</span>
-        <strong>{formatMoney(totals.total)}</strong>
-        {previousTotal !== null ? <span className={revisionDelta > 0 ? "est-delta up" : revisionDelta < 0 ? "est-delta down" : "est-delta"}>{revisionDelta === 0
-          ? copy(`เท่ากับ ${revisionCode(header.revision - 1)}`, `Same as ${revisionCode(header.revision - 1)}`, `${revisionCode(header.revision - 1)} と同額`)
-          : `${revisionDelta > 0 ? "+" : "−"}${formatMoney(Math.abs(revisionDelta))} ${copy("จาก", "vs", "前版比")} ${revisionCode(header.revision - 1)}`}</span> : null}
-        <span>{copy("ต้นทุนภายใน", "Internal cost", "社内原価")} · {revisionCode(header.revision)}</span>
-      </div>
-    </section>
+      </section>
+    </>}
     {approved ? <section className="panel est-handoff" aria-label={copy("ส่งต่อ", "Hand-off", "引き継ぎ")}>
       <div className="est-handoff-title"><strong>{copy("ส่งต่อ", "Hand-off", "引き継ぎ")}</strong><span className="muted">{copy(`ใช้ต้นทุน ${revisionCode(header.revision)} ต่อ · Revision นี้ล็อกแล้ว แก้ไขผ่านการสร้าง Revision ใหม่`, `Carry the ${revisionCode(header.revision)} cost forward · this revision is locked; changes go through a new revision`, `${revisionCode(header.revision)} の原価を引き継ぎ · この改訂はロック済み`)}</span></div>
       <div className="est-handoff-card"><div className="est-handoff-head"><Icon name="file" /><strong>{copy("ไฟล์ ERP", "ERP file", "ERPファイル")}</strong>{erpUnclassified === 0 ? <Badge tone="green"><span>{copy("จัดหมวดครบ", "Classified", "分類済み")}</span></Badge> : erpUnclassified ? <Badge tone="amber"><span>{copy(`ยังไม่จัดหมวด ${erpUnclassified}`, `${erpUnclassified} unclassified`, `未分類 ${erpUnclassified}`)}</span></Badge> : null}<span className="spacer" />{erpExport ? <button className="link-btn" type="button" onClick={() => erpExport.run()}>Export</button> : null}</div>

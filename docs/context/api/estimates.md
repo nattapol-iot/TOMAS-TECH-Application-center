@@ -2,21 +2,21 @@
 
 [Module](../modules/estimate.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `a0407b46`; generated, do not edit. [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `af039832`; generated, do not edit. [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/estimates` | 500–537 |
-| POST | `/api/v1/estimates` | 539–588 |
-| GET | `/api/v1/estimates/:id/validation` | 590–596 |
-| POST | `/api/v1/estimates/:id/submit` | 598–603 |
-| POST | `/api/v1/estimates/:id/approve` | 605–619 |
-| POST | `/api/v1/estimates/:id/create-revision` | 621–656 |
-| POST | `/api/v1/estimates/:id/request-revision` | 658–698 |
-| GET | `/api/v1/estimates/:id/revisions/:revision` | 702–760 |
-| POST | `/api/v1/estimates/:id/restore-revision` | 764–827 |
+| GET | `/api/v1/estimates` | 515–548 |
+| POST | `/api/v1/estimates` | 550–599 |
+| GET | `/api/v1/estimates/:id/validation` | 601–607 |
+| POST | `/api/v1/estimates/:id/submit` | 609–614 |
+| POST | `/api/v1/estimates/:id/approve` | 616–630 |
+| POST | `/api/v1/estimates/:id/create-revision` | 632–667 |
+| POST | `/api/v1/estimates/:id/request-revision` | 669–709 |
+| GET | `/api/v1/estimates/:id/revisions/:revision` | 713–771 |
+| POST | `/api/v1/estimates/:id/restore-revision` | 775–838 |
 
 ## Named functions
 
@@ -38,12 +38,12 @@ Evidence: source snapshot `a0407b46`; generated, do not edit. [backend-node/src/
 | `materializeErpMappings` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 277–338 |
 | `withdrawEstimateReview` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 341–350 |
 | `revisionCode` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 354–354 |
-| `restoreRevisionPlan` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 366–371 |
-| `restoreRevisionReason` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 374–377 |
-| `estimateFacts` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 380–386 |
-| `noticeDecision` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 389–405 |
-| `transition` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 407–489 |
-| `registerEstimateRoutes` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 491–828 |
+| `restoreRevisionPlan` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 381–386 |
+| `restoreRevisionReason` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 389–392 |
+| `estimateFacts` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 395–401 |
+| `noticeDecision` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 404–420 |
+| `transition` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 422–504 |
+| `registerEstimateRoutes` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 506–839 |
 
 ## Direct local dependencies
 

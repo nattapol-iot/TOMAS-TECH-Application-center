@@ -1,0 +1,338 @@
+/*
+ * Estimating screens, V2: the Pegasus ERP look (owner 2026-11-19, "เอา skill นี้มาใช้ในฟีเจอร์ Estimate cost ... เก็บของเดิมไว้
+ * เป็น V1 และอันใหม่เป็น V2"). Built from the pegasus-design kit spec (DESIGN.md B.1 tokens, B.2 type, B.4 radius and
+ * borders, C.1.7 page header, C.2 summary bar, C.6 empty state, D.1 button, D.2 inputs, D.4 segmented radio, D.5 badge,
+ * D.6 tabs, D.7 table, D.8 dialogs, D.9 menus, E rules), not the @tomas-tc/ui package, whose global stylesheet would
+ * restyle the whole app.
+ *
+ * Every rule sits under .pge (EstimateLook.tsx puts it around an Estimating screen opened in V2) or under
+ * html[data-est-look="v2"] for the few menus portalled to <body>. V1 has no .pge, so nothing here reaches it or any
+ * other screen. Most of the look comes from re-pointing the app's own tokens inside .pge; the rules after that fix
+ * sizes and shapes the tokens cannot reach (the template layer of globals.css hard-codes some colours).
+ * The Punchlist page (issue-batch.css, .pg) is a separate Pegasus page with its own class names; the two do not share rules.
+ */
+
+.est-look-v1 { display: contents; }
+
+/* ---------- The V1 / V2 switch (both looks) ---------- */
+.est-look-bar { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-bottom: -6px; }
+.est-look-label { color: var(--muted); font-size: var(--fs-xs); }
+.est-look-switch { display: inline-flex; padding: 2px; gap: 2px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--n-100); }
+.est-look-switch button { min-width: 36px; height: 24px; padding: 0 8px; border: 0; border-radius: var(--r-xs); background: none; color: var(--muted); font-size: var(--fs-xs); font-weight: 600; cursor: pointer; }
+.est-look-switch button[aria-checked="true"] { background: var(--surface); color: var(--blue-text); box-shadow: var(--shadow-xs); }
+.est-look-switch button:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+
+/* ---------- Tokens (B.1): the app's names, Pegasus values ---------- */
+.pge, html[data-est-look="v2"] .lookup-menu {
+  --pg-primary: hsl(205 100% 38%);
+  --pg-accent: hsl(205 100% 96%);
+  --pg-muted: hsl(0 0% 96.1%);
+  --pg-muted-fg: hsl(0 0% 45.1%);
+  --pg-fg: hsl(0 0% 3.9%);
+  --pg-border: hsl(0 0% 92.8%);
+  --pg-input: hsl(0 0% 89.8%);
+  --pg-destructive: hsl(1 77% 55%);
+  --pg-divider: hsl(0 0% 91% / 0.7);
+  --pg-row-line: hsl(0 0% 91% / 0.4);
+  --pg-canvas: #F6F7F9;
+  --pg-ring: 0 0 0 2px #fff, 0 0 0 4px hsl(205 100% 38%);
+  --pg-ease: cubic-bezier(0.22, 1, 0.36, 1);
+
+  --n-0: #ffffff; --n-25: #fcfcfc; --n-50: #f7f7f7; --n-100: #f2f2f2; --n-150: #ededed; --n-200: #e5e5e5;
+  --n-300: #d4d4d4; --n-400: #a3a3a3; --n-500: #737373; --n-600: #525252; --n-700: #404040; --n-800: #262626; --n-900: #0a0a0a;
+  --ink: var(--pg-fg); --ink-soft: hsl(0 0% 20%); --muted: var(--pg-muted-fg);
+  --line: var(--pg-border); --line-soft: hsl(0 0% 91% / 0.55); --canvas: var(--pg-canvas); --surface: #fff;
+
+  --blue: var(--pg-primary); --blue-hover: hsl(205 100% 34%); --blue-soft: hsl(205 100% 38% / 0.1);
+  --blue-line: hsl(205 100% 38% / 0.3); --blue-text: var(--pg-primary);
+  --green: #059669; --green-soft: rgb(16 185 129 / 0.1); --green-line: rgb(16 185 129 / 0.3); --green-text: #047857;
+  --amber: #f59e0b; --amber-soft: rgb(245 158 11 / 0.1); --amber-line: rgb(245 158 11 / 0.35); --amber-text: #b45309;
+  --red: var(--pg-destructive); --red-soft: rgb(239 68 68 / 0.1); --red-line: rgb(239 68 68 / 0.3); --red-text: #b91c1c;
+  --violet: #8b5cf6; --violet-soft: rgb(139 92 246 / 0.1); --violet-line: rgb(139 92 246 / 0.3); --violet-text: #6d28d9;
+  --slate-soft: rgb(100 116 139 / 0.15); --slate-line: rgb(100 116 139 / 0.25); --slate-text: #334155;
+  /* Cost colours: the primary blue for material, then the kit's chart tokens (B.1 --chart-1..5), grey for contingency. */
+  --c1: var(--pg-primary); --c2: #2a9d90; --c3: #274754; --c4: #f4a462; --c5: #e8c468; --c6: #e76e50; --c7: #274754; --c8: #a3a3a3;
+
+  --tpl-blue: var(--pg-primary); --tpl-blue-dark: hsl(205 100% 30%); --tpl-primary: var(--pg-primary);
+  --tpl-line: var(--pg-input); --tpl-line-soft: hsl(0 0% 91% / 0.55); --tpl-head: #fff; --tpl-canvas: var(--pg-canvas);
+  --tpl-ink: var(--pg-fg); --tpl-title: var(--pg-fg);
+
+  --r-xs: 4px; --r-sm: 6px; --r-md: 6px; --r-lg: 8px;
+  --shadow-xs: 0 1px 2px rgb(0 0 0 / 0.05); --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --shadow-xl: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --fs-2xs: 12px; --fs-xs: 12px; --fs-sm: 14px; --fs-md: 14px; --fs-lg: 16px; --fs-xl: 18px; --fs-2xl: 18px;
+}
+
+/* ---------- Page (B.4, C.1) ---------- */
+.page:has(> .pge) { background: var(--pg-canvas); }
+.pge { display: flex; flex-direction: column; gap: 8px; min-width: 0; color: var(--pg-fg); font-size: 14px; letter-spacing: 0.01em; }
+.pge > * { min-width: 0; }
+.pge .est-look-bar { margin-bottom: 0; }
+.pge .est-look-switch { padding: 3px; border: 0; border-radius: 6px; background: var(--pg-muted); }
+.pge .est-look-switch button { height: 26px; border-radius: 4px; font-size: 13px; font-weight: 500; color: var(--pg-muted-fg); }
+.pge .est-look-switch button[aria-checked="true"] { color: var(--pg-fg); box-shadow: 0 1px 2px rgb(0 0 0 / 0.08); }
+.pge ::selection { background: hsl(205 100% 85%); color: hsl(205 100% 20%); }
+.pge :is(button, a, input, select, textarea, summary, [tabindex]):focus-visible { outline: none; box-shadow: var(--pg-ring); }
+
+/* Sticky page header on the canvas, title 18px / 600 on a 36px line (C.1.7). */
+/* A dialog opened from a sticky header (Manage document, Document history) renders inside it; while one is open the
+   header is lifted over the top bar so the dialog's backdrop covers the whole window. */
+.pge .page-header:has(.overlay), .pge .pge-head:has(.overlay) { z-index: 60; }
+.pge .page-header { position: sticky; top: var(--topbar-h); z-index: 20; align-items: center; gap: 12px; margin: 0 -24px; padding: 12px 24px 8px; background: var(--pg-canvas); }
+.pge .page-header h1 { font-size: 18px; font-weight: 600; line-height: 36px; letter-spacing: 0.01em; color: var(--pg-fg); }
+.pge .page-sub { margin-top: 0; color: var(--pg-muted-fg); font-size: 14px; }
+.pge .eyebrow { color: var(--pg-muted-fg); }
+.pge .page-actions { gap: 8px; }
+.pge .breadcrumb, .pge .back-link { color: var(--pg-muted-fg); font-size: 14px; }
+.pge .breadcrumb button:hover, .pge .back-link:hover { color: var(--pg-primary); }
+
+/* Flat white panels on the grey canvas, no shadow (C.1.9, E.1). */
+.pge .panel { border: 1px solid var(--pg-divider); border-radius: 8px; box-shadow: none; background: #fff; }
+.pge .panel-head { padding: 12px 16px; border-bottom: 1px solid var(--pg-divider); align-items: center; }
+.pge .panel-head h2 { font-size: 14px; font-weight: 600; color: var(--pg-fg); letter-spacing: 0.01em; }
+.pge .panel-head p { font-size: 13px; color: var(--pg-muted-fg); }
+.pge .panel-body { padding: 16px; }
+.pge .panel-body.flush { padding: 0; }
+.pge .toolbar { border: 1px solid var(--pg-divider); border-radius: 8px; box-shadow: none; }
+
+/* ---------- Buttons (D.1) ---------- */
+.pge .btn { height: 36px; padding: 0 16px; gap: 8px; border: 1px solid transparent; border-radius: 6px; font-size: 14px; font-weight: 500; letter-spacing: 0.01em; transition: background-color 150ms var(--pg-ease), color 150ms var(--pg-ease); }
+.pge .btn .icon { font-size: 16px; }
+.pge .btn:disabled { opacity: 0.5; }
+.pge .btn.sm { height: 32px; padding: 0 12px; font-size: 12px; }
+.pge .btn.sm .icon { font-size: 14px; }
+.pge .btn.primary, .pge .btn.success { background: var(--pg-primary); border-color: var(--pg-primary); color: #fff; box-shadow: 0 1px 3px rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1); }
+.pge .btn.primary:hover:not(:disabled), .pge .btn.success:hover:not(:disabled) { background: hsl(205 100% 38% / 0.9); border-color: transparent; }
+.pge .btn.default, .pge .btn.warn, .pge .btn.teal { background: #fff; border-color: var(--pg-input); color: var(--pg-fg); box-shadow: 0 1px 2px rgb(0 0 0 / 0.05); }
+.pge .btn.default:hover:not(:disabled), .pge .btn.warn:hover:not(:disabled), .pge .btn.teal:hover:not(:disabled) { background: var(--pg-accent); border-color: var(--pg-input); color: var(--pg-fg); }
+.pge .btn.default.active { background: var(--pg-accent); color: var(--pg-primary); }
+.pge .btn.ghost { color: var(--pg-fg); }
+.pge .btn.ghost:hover:not(:disabled) { background: var(--pg-accent); }
+/* Delete and discard: quiet destructive text (D.1 destructive-ghost); the filled red is for confirm dialogs. */
+.pge .btn.danger { background: none; border-color: transparent; color: var(--pg-destructive); box-shadow: none; }
+.pge .btn.danger:hover:not(:disabled) { background: rgb(229 55 52 / 0.1); color: var(--pg-destructive); }
+.pge .icon-btn, .pge .row-action { width: 32px; height: 32px; border-radius: 6px; color: var(--pg-muted-fg); }
+.pge .icon-btn:hover, .pge .row-action:hover { background: var(--pg-accent); color: var(--pg-fg); }
+.pge .est-icon-btn { width: 36px; padding: 0; }
+.pge .link-btn { color: var(--pg-primary); font-size: 14px; font-weight: 500; }
+.pge .link-btn:hover { color: var(--pg-primary); text-decoration: underline; text-underline-offset: 4px; }
+
+/* ---------- Inputs and selects (D.2, D.3) ---------- */
+.pge .field { gap: 6px; }
+.pge .field label, .pge .est-filter-field > span { font-size: 14px; font-weight: 500; color: var(--pg-fg); line-height: 1.2; }
+.pge .field small { font-size: 12px; color: var(--pg-muted-fg); }
+.pge .field input, .pge .field select, .pge .field textarea, .pge .sheet input, .pge .sheet select {
+  border-color: var(--pg-input); border-radius: 6px; font-size: 14px; color: var(--pg-fg);
+}
+.pge .field input, .pge .field select { min-height: 36px; padding: 6px 12px; }
+.pge .field textarea { box-shadow: 0 1px 2px rgb(0 0 0 / 0.05); }
+.pge .field input:focus, .pge .field select:focus, .pge .field textarea:focus { border-color: var(--pg-input); box-shadow: var(--pg-ring); }
+.pge .field input:read-only { background: hsl(0 0% 96.1% / 0.5); color: var(--pg-fg); }
+.pge .field input::placeholder, .pge .field textarea::placeholder, .pge .search-field input::placeholder { color: var(--pg-muted-fg); }
+.pge .form-grid { gap: 16px; }
+.pge .search-field { height: 36px; border-color: var(--pg-input); border-radius: 6px; background: #fff; }
+.pge .search-field:focus-within { border-color: var(--pg-input); box-shadow: var(--pg-ring); }
+.pge .search-field > .icon { color: var(--pg-muted-fg); font-size: 16px; }
+.pge .search-field input { font-size: 14px; }
+.pge .select-field select { height: 36px; padding: 0 30px 0 12px; border-color: var(--pg-input); border-radius: 6px; font-size: 14px; color: var(--pg-fg); box-shadow: 0 1px 2px rgb(0 0 0 / 0.05); }
+.pge .chip { border-radius: 999px; border-color: var(--pg-input); font-weight: 500; }
+.pge .chip.on { background: var(--pg-accent); border-color: var(--blue-line); color: var(--pg-primary); }
+.pge .check-inline input[type="checkbox"], .pge input[type="checkbox"], .pge input[type="radio"] { accent-color: var(--pg-primary); }
+
+/* Segmented control (D.6 SegmentedTabs, default variant). */
+.pge .seg-control { padding: 3px; gap: 2px; border: 0; border-radius: 6px; background: var(--pg-muted); }
+.pge .seg-control button { height: 28px; padding: 0 12px; border-radius: 4px; font-size: 14px; font-weight: 500; color: var(--pg-muted-fg); }
+.pge .seg-control button.on { background: #fff; color: var(--pg-fg); box-shadow: 0 1px 2px rgb(0 0 0 / 0.08); }
+.pge .seg-control .cnt { background: hsl(0 0% 92%); color: var(--pg-muted-fg); }
+.pge .seg-control button.on .cnt { background: hsl(205 100% 38% / 0.1); color: var(--pg-primary); }
+
+/* ---------- Badges and pills (D.5) ---------- */
+.pge .badge { gap: 4px; padding: 3px 8px; border: 1px solid transparent; border-radius: 999px; font-size: 12px; font-weight: 500; line-height: 1; }
+.pge .badge.green { background: var(--green-soft); border-color: transparent; color: var(--green-text); }
+.pge .badge.amber { background: var(--amber-soft); border-color: transparent; color: var(--amber-text); }
+.pge .badge.red { background: var(--red-soft); border-color: transparent; color: var(--red-text); }
+.pge .badge.blue { background: var(--blue-soft); border-color: transparent; color: var(--blue-text); }
+.pge .badge.violet { background: var(--violet-soft); border-color: transparent; color: var(--violet-text); }
+.pge .badge.slate { background: var(--slate-soft); border-color: transparent; color: var(--slate-text); }
+.pge .pill { padding: 2px 6px; border: 1px solid var(--pg-border); border-radius: 999px; background: #fff; color: var(--pg-fg); font-size: 12px; font-weight: 500; letter-spacing: 0; }
+.pge .pill.blue { background: var(--blue-soft); border-color: transparent; color: var(--blue-text); }
+.pge .pill.green { background: var(--green-soft); border-color: transparent; color: var(--green-text); }
+.pge .pill.amber { background: var(--amber-soft); border-color: transparent; color: var(--amber-text); }
+.pge .pill.red { background: var(--red-soft); border-color: transparent; color: var(--red-text); }
+.pge .pill.violet { background: var(--violet-soft); border-color: transparent; color: var(--violet-text); }
+
+/* ---------- Tabs, underline style (D.6) ---------- */
+.pge .tabs { gap: 24px; border-bottom: 1px solid var(--pg-divider); }
+.pge .tab { position: relative; margin-bottom: -1px; padding: 4px 4px 10px; border-bottom: 2px solid transparent; color: var(--pg-muted-fg); font-size: 14px; font-weight: 500; transition: color 150ms var(--pg-ease); }
+.pge .tab:hover { color: var(--pg-fg); }
+.pge .tab.active { color: var(--pg-fg); border-bottom-color: var(--pg-primary); font-weight: 500; }
+.pge .tab em { min-width: 20px; padding: 2px 6px; border-radius: 999px; background: hsl(0 0% 92%); color: var(--pg-muted-fg); font-size: 12px; font-style: normal; font-weight: 500; line-height: 1; }
+.pge .tab.active em { background: hsl(205 100% 38% / 0.1); color: var(--pg-primary); }
+
+/* ---------- Tables (D.7) ---------- */
+.pge table { font-size: 14px; }
+.pge thead th { padding: 8px 12px; background: #fff; border-bottom: 1px solid var(--pg-divider); color: var(--pg-muted-fg); font-size: 12px; font-weight: 500; letter-spacing: 0.05em; text-transform: uppercase; }
+.pge tbody td { padding: 8px 12px; border-bottom: 1px solid var(--pg-row-line); color: var(--pg-fg); }
+.pge tbody tr:hover td { background: hsl(0 0% 96.1% / 0.4); }
+.pge tbody tr.selected td { background: var(--pg-accent); }
+.pge td strong { color: var(--pg-fg); }
+.pge .cell-primary span { color: var(--pg-muted-fg); font-size: 12px; }
+.pge .clickable:hover .cell-primary strong { color: var(--pg-primary); }
+.pge tbody tr.row-late td { background: rgb(239 68 68 / 0.05); }
+.pge tbody tr.row-late:hover td { background: rgb(239 68 68 / 0.08); }
+.pge tbody tr.row-ok td { background: rgb(16 185 129 / 0.05); }
+.pge tbody tr.row-wait td { background: rgb(245 158 11 / 0.06); }
+.pge .subtotal-row td, .pge tbody tr.subtotal-row:hover td { background: hsl(0 0% 96.1% / 0.6); border-color: var(--pg-divider); }
+/* Spreadsheet-style editors keep their density; only the frame and the header follow the kit (D.7 grid cells). */
+.pge .sheet { font-size: 13px; }
+.pge .sheet thead th { background: hsl(0 0% 96.1% / 0.5); text-transform: none; letter-spacing: 0.01em; font-size: 12px; }
+.pge .sheet tbody td { padding: 0; border-right-color: var(--pg-row-line); }
+.pge .grid-controls { border-bottom-color: var(--pg-divider); color: var(--pg-muted-fg); font-size: 14px; }
+.pge .grid-controls select { height: 32px; border-color: var(--pg-input); border-radius: 6px; }
+
+/* Pagination: "Showing x-y of n" on the left, quiet page buttons (D.7). */
+.pge .pagination { padding: 10px 16px; border-top: 1px solid var(--pg-divider); }
+.pge .pagination-info { color: var(--pg-muted-fg); font-size: 14px; }
+.pge .pagination-info strong { color: var(--pg-fg); font-weight: 500; }
+.pge .pager-btn { min-width: 32px; height: 32px; padding: 0 8px; border-color: var(--pg-input); border-radius: 6px; color: var(--pg-fg); font-size: 14px; }
+.pge .pager-btn:hover:not(:disabled) { background: var(--pg-accent); border-color: var(--pg-input); color: var(--pg-fg); }
+.pge .pager-btn.page.active { background: var(--pg-primary); border-color: var(--pg-primary); color: #fff; font-weight: 500; }
+
+/* ---------- Summary bar (C.2) over the old KPI tiles ---------- */
+.pge .kpi-grid, .pge .summary-strip { gap: 1px; padding: 0; overflow: hidden; border: 1px solid var(--pg-divider); border-radius: 8px; background: var(--pg-divider); }
+.pge .kpi, .pge .summary-tile { gap: 2px; padding: 10px 16px; border: 0; border-radius: 0; background: #fff; box-shadow: none; }
+.pge button.kpi:hover { background: var(--pg-accent); }
+.pge .kpi-icon { display: none; }
+.pge .kpi-label, .pge .summary-tile span { color: var(--pg-fg); font-size: 14px; font-weight: 600; }
+.pge .kpi-value, .pge .summary-tile strong { font-size: 16px; font-weight: 600; letter-spacing: 0; font-variant-numeric: tabular-nums; color: var(--pg-fg); }
+.pge .kpi-note, .pge .summary-tile em { color: var(--pg-muted-fg); font-size: 12px; }
+.pge .summary-tile.strong { background: #fff; }
+.pge .summary-tile.strong span, .pge .summary-tile.strong em { color: var(--pg-muted-fg); }
+.pge .summary-tile.strong strong { color: var(--pg-primary); font-size: 16px; }
+.pge .summary-block { border: 1px solid var(--pg-divider); border-top-width: 1px; border-radius: 8px; box-shadow: none; }
+
+/* ---------- Notes, empty state, spinner (C.6) ---------- */
+.pge .info-strip { border: 1px solid var(--pg-divider); border-radius: 8px; background: #fff; color: var(--pg-fg); font-size: 14px; }
+.pge .info-strip.amber { background: var(--amber-soft); border-color: transparent; color: var(--amber-text); }
+.pge .info-strip.red { background: var(--red-soft); border-color: transparent; color: var(--red-text); }
+.pge .info-strip.green { background: var(--green-soft); border-color: transparent; color: var(--green-text); }
+.pge .callout { border-radius: 8px; }
+.pge .empty { border: 1px dashed var(--pg-divider); border-radius: 8px; color: var(--pg-muted-fg); }
+.pge .panel .empty { margin: 16px; }
+.pge .empty strong { font-size: 14px; font-weight: 500; color: var(--pg-fg); }
+.pge .empty p { font-size: 14px; color: var(--pg-muted-fg); }
+.pge .empty-icon { display: none; }
+.pge .spinner { border-color: hsl(205 100% 38% / 0.2); border-top-color: var(--pg-primary); }
+.pge .sticky-foot { background: #fff; color: var(--pg-fg); border-top: 1px solid var(--pg-divider); box-shadow: 0 -6px 8px -6px rgb(0 0 0 / 0.12); }
+.pge .sticky-foot .foot-item span, .pge .sticky-foot .foot-total span { color: var(--pg-muted-fg); }
+.pge .sticky-foot .foot-total strong { color: var(--pg-fg); font-size: 18px; font-weight: 600; }
+
+/* ---------- Menus and popovers (D.9) ---------- */
+.pge .menu, .pge .est-filter-pop, html[data-est-look="v2"] .lookup-menu { border: 1px solid var(--pg-border); border-radius: 6px; box-shadow: var(--shadow-md); background: #fff; }
+.pge .menu button { border-radius: 4px; padding: 6px 8px; font-size: 14px; color: var(--pg-fg); }
+.pge .menu button:hover { background: var(--pg-accent); }
+
+/* ---------- Dialogs (D.8): divided header and footer, body scrolls, widths by content (0.8) ---------- */
+.pge .overlay { background: rgb(0 0 0 / 0.6); backdrop-filter: none; }
+.pge .modal { border: 1px solid var(--pg-border); border-radius: 8px; box-shadow: var(--shadow-lg); max-height: 90vh; }
+.pge .modal.sm { max-width: 28rem; }
+.pge .modal.md { max-width: 42rem; }
+.pge .modal.lg { max-width: 56rem; }
+.pge .modal.xl { max-width: 72rem; }
+.pge .modal.wide { width: 95vw; max-height: 90vh; }
+.pge .overlay-head { padding: 16px 24px; border-bottom: 1px solid var(--pg-divider); align-items: center; }
+.pge .overlay-head h2 { font-size: 18px; font-weight: 600; letter-spacing: 0; line-height: 1.2; }
+.pge .overlay-head p { font-size: 14px; color: var(--pg-muted-fg); }
+.pge .overlay-head .icon-btn { opacity: 0.7; }
+.pge .overlay-head .icon-btn:hover { opacity: 1; }
+.pge .overlay-body { padding: 16px 24px; }
+.pge .overlay-foot { padding: 16px 24px; border-top: 1px solid var(--pg-divider); background: #fff; justify-content: flex-end; }
+.pge .drawer { border-left-color: var(--pg-border); box-shadow: var(--shadow-lg); }
+
+/* Muted 4px scrollbars (D.11). */
+.pge ::-webkit-scrollbar { width: 8px; height: 8px; }
+.pge ::-webkit-scrollbar-thumb { border: 2px solid transparent; border-radius: 999px; background: hsl(0 0% 45.1% / 0.35); background-clip: padding-box; }
+.pge ::-webkit-scrollbar-track { background: transparent; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pge *, .pge *::before, .pge *::after { transition: none !important; animation: none !important; }
+}
+
+/* =====================================================================
+   V2 layout of the Estimate Cost screen (EstimateScreens.tsx, look === "v2")
+   ===================================================================== */
+
+/* List: the status summary bar replaces the status tabs; each cell is a filter (C.2). */
+.pge .est-list { display: flex; flex-direction: column; gap: 8px; }
+.pge .est-list .page-header { margin-bottom: 0; }
+.pge .est-toolbar { margin-bottom: 0; gap: 8px; }
+.pge .est-chips { margin: 0; }
+.pge .est-chip { height: 28px; background: var(--pg-accent); border-color: transparent; color: var(--pg-primary); font-weight: 500; }
+.pge .est-list-panel { border-radius: 12px; box-shadow: 0 1px 2px rgb(0 0 0 / 0.05); }
+.pge .est-sub { color: var(--pg-muted-fg); font-size: 12px; }
+.pge .est-list-table .est-status-col { width: 1%; }
+.pge .est-no { color: var(--pg-primary); font-weight: 500; text-decoration: none; }
+.pge .est-no:hover { text-decoration: underline; text-underline-offset: 4px; }
+
+.pge .pge-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; margin: 0; overflow: hidden; border: 1px solid var(--pg-divider); border-radius: 8px; background: var(--pg-divider); }
+@media (min-width: 1024px) { .pge .pge-summary { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); } }
+.pge .pge-cell { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 10px 16px; border: 0; background: #fff; color: var(--pg-fg); text-align: left; font: inherit; letter-spacing: inherit; }
+.pge button.pge-cell { cursor: pointer; transition: background-color 150ms var(--pg-ease); }
+.pge button.pge-cell:hover, .pge .pge-cell[aria-pressed="true"] { background: var(--pg-accent); }
+.pge .pge-cell-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.pge .pge-cell-label { display: inline-flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; font-size: 14px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.pge .pge-cell-label i { flex: none; width: 8px; height: 8px; border-radius: 999px; }
+.pge .pge-cell-hint { flex: none; color: var(--pg-muted-fg); font-size: 12px; font-variant-numeric: tabular-nums; }
+.pge .pge-cell-value { margin-top: auto; font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.pge .pge-cell[aria-pressed="true"] .pge-cell-value { color: var(--pg-primary); }
+.pge .pge-cell-note { color: var(--pg-muted-fg); font-size: 12px; font-variant-numeric: tabular-nums; }
+.pge .pge-cell.total .pge-cell-value { color: var(--pg-primary); }
+
+/* Workspace: one sticky header, one filled action, the rest under More actions (C.1.7, 0.4). */
+.pge .est-workspace { display: flex; flex-direction: column; gap: 8px; }
+.pge .pge-head { position: sticky; top: var(--topbar-h); z-index: 20; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 0 -24px; padding: 12px 24px 8px; background: var(--pg-canvas); }
+.pge .pge-head-title { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; min-width: 0; }
+.pge .pge-head-title h1 { margin: 0; font-size: 18px; font-weight: 600; line-height: 36px; letter-spacing: 0.01em; }
+.pge .pge-head-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; margin-left: auto; }
+.pge .pge-meta { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: -4px 0 0; color: var(--pg-muted-fg); font-size: 14px; }
+.pge .pge-meta strong { color: var(--pg-fg); font-weight: 500; }
+.pge .pge-more { position: relative; }
+.pge .pge-more > summary { list-style: none; }
+.pge .pge-more > summary::-webkit-details-marker { display: none; }
+.pge .pge-more-menu { position: absolute; top: calc(100% + 4px); right: 0; z-index: 40; display: flex; flex-direction: column; min-width: 220px; padding: 4px; border: 1px solid var(--pg-border); border-radius: 6px; background: #fff; box-shadow: var(--shadow-md); }
+.pge .pge-more-menu > .btn { justify-content: flex-start; width: 100%; height: 32px; padding: 0 8px; border: 0; border-radius: 4px; background: none; box-shadow: none; color: var(--pg-fg); font-weight: 400; }
+.pge .pge-more-menu > .btn:hover:not(:disabled) { background: var(--pg-accent); }
+.pge .pge-more-menu > .btn .icon { color: var(--pg-muted-fg); }
+.pge .pge-more-menu > hr { margin: 4px -4px; border: 0; border-top: 1px solid var(--pg-border); }
+.pge .pge-more-menu > .pge-more-meta { padding: 6px 8px; color: var(--pg-muted-fg); font-size: 12px; }
+/* Only the trigger: the Manage document dialog it opens renders inside this item and keeps its own buttons. */
+.pge .pge-more-menu .pge-destructive > .btn { justify-content: flex-start; width: 100%; height: 32px; padding: 0 8px; border: 0; border-radius: 4px; background: none; box-shadow: none; color: var(--pg-destructive); font-weight: 400; }
+.pge .pge-more-menu .pge-destructive > .btn:hover { background: rgb(229 55 52 / 0.1); }
+
+/* The workflow line: steps, checks and the review note in one flat panel. */
+.pge .pge-flow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 10px 16px; border: 1px solid var(--pg-divider); border-radius: 8px; background: #fff; }
+.pge .pge-flow .est-rail { flex: 1 1 auto; margin: 0; }
+.pge .pge-flow .est-review { flex-basis: 100%; margin: 0; }
+.pge .est-step { color: var(--pg-muted-fg); }
+.pge .est-step.now { color: var(--pg-fg); }
+.pge .est-dot { border-color: var(--pg-input); }
+.pge .est-step.done .est-dot { background: var(--pg-primary); border-color: var(--pg-primary); color: #fff; }
+.pge .est-step.now .est-dot { border-color: var(--pg-primary); color: var(--pg-primary); }
+.pge .est-issue { border-radius: 999px; font-weight: 500; }
+.pge .est-handoff { border-radius: 8px; box-shadow: none; }
+.pge .est-handoff-card { border-color: var(--pg-divider); border-radius: 8px; background: #fff; }
+.pge .estimate-start-panel, .pge .est-start { border-radius: 8px; }
+.pge .estimate-secondary > summary { color: var(--pg-muted-fg); font-size: 14px; }
+
+/* Narrow screens: the page gutter may shrink to 12px (globals.css 720px rule), so the sticky headers reach out less
+   and never cause a sideways scroll. */
+@media (max-width: 720px) {
+  .pge .page-header, .pge .pge-head { margin: 0 -12px; padding-inline: 12px; }
+}
+
+@media print {
+  .est-look-bar { display: none; }
+  .pge .page-header, .pge .pge-head { position: static; }
+}
