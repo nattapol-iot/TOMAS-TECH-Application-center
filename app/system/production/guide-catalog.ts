@@ -1269,6 +1269,16 @@ const PROJECT_PLAN: Guide = {
       missing: { th: "ช่องนี้ขึ้นเมื่อแถวใหม่เป็นงานหรือฟังก์ชัน กด › ให้แถวเข้าไปอยู่ใต้หัวข้อข้างบน หรือกด 'ถัดไป'", en: "This shows when the new row is a task or a function. Press › to put it under the heading above, or press Next.", jp: "新しい行がタスクか機能のときに表示されます。› で上の見出しの下に入れるか、「次へ」を押します。" },
     },
     {
+      target: "plan.workDays", action: "next", view: "projects",
+      title: { th: "จำนวนวันตามแผนนับวันทำงาน", en: "Plan days count working days", jp: "計画日数は稼働日で数える" },
+      body: {
+        th: "เมื่อเปิดแก้งานในแผน ช่อง 'จำนวนวันตามแผน' นับเฉพาะวันจันทร์–ศุกร์ ไม่นับวันหยุดบริษัท เช่น เริ่ม 17 ต.ค. 8 วัน จะจบ 28 ต.ค. แผนเดิมจะไม่ขยับจนกว่าจะแก้จำนวนวันหรือวันเริ่มของงานนั้น",
+        en: "When you edit a plan row, Plan days count Monday–Friday without company holidays: start 17 Oct with 8 days finishes 28 Oct. Existing rows keep their dates until you change their days or start.",
+        jp: "計画の行を編集するとき、計画日数は会社の休日を除く月～金で数えます。例：10月17日開始・8日なら10月28日終了。既存の行は日数か開始日を変えるまで日付が変わりません。",
+      },
+      missing: { th: "ช่องนี้อยู่ในหน้าต่างแก้งาน เปิดแถวงานแล้วกดแก้ไข หรือกด 'ถัดไป'", en: "This box is in the edit window of a plan row. Open a row and press Edit, or press Next.", jp: "この欄は行の編集画面にあります。行を開いて編集を押すか、「次へ」を押します。" },
+    },
+    {
       target: "plan.save", action: "click", view: "projects",
       title: { th: "บันทึกแล้วเพิ่มต่อ", en: "Save and add the next", jp: "保存して次を追加" },
       body: {

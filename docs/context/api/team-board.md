@@ -2,58 +2,58 @@
 
 [Module](../modules/planning.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `2be07181`; generated, do not edit. [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `a0407b46`; generated, do not edit. [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/team-board` | 556–611 |
-| POST | `/api/v1/team-board/outlook-sync` | 614–617 |
-| POST | `/api/v1/team-tasks` | 619–630 |
-| PUT | `/api/v1/team-tasks/:id` | 632–697 |
-| DELETE | `/api/v1/team-tasks/:id` | 699–728 |
-| GET | `/api/v1/team-tasks/:id/history` | 731–746 |
+| GET | `/api/v1/team-board` | 555–610 |
+| POST | `/api/v1/team-board/outlook-sync` | 613–616 |
+| POST | `/api/v1/team-tasks` | 618–629 |
+| PUT | `/api/v1/team-tasks/:id` | 631–696 |
+| DELETE | `/api/v1/team-tasks/:id` | 698–727 |
+| GET | `/api/v1/team-tasks/:id/history` | 730–745 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `dayNumber` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 70–70 |
-| `choice` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 71–76 |
-| `optionalId` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 78–79 |
-| `parseTeamTask` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 82–137 |
-| `parseApplyTo` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 140–140 |
-| `defaultManDays` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 147–158 |
-| `minutesOf` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 160–160 |
-| `timeRangeManDays` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 162–166 |
-| `canAssignOthers` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 173–173 |
-| `assertMayAssign` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 176–180 |
-| `canChangeTeamTask` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 182–183 |
-| `idList` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 186–186 |
-| `redactWork` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 189–196 |
-| `teamTaskDto` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 243–273 |
-| `prepare` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 279–300 |
-| `bind` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 302–310 |
-| `savePeople` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 313–318 |
-| `currentPeople` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 321–325 |
-| `tellPeople` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 328–334 |
-| `calendarState` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 337–341 |
-| `clock` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 343–343 |
-| `rowState` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 344–349 |
-| `seriesOf` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 350–350 |
-| `deliverCalendar` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 362–392 |
-| `worst` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 393–394 |
-| `deliverAll` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 397–401 |
-| `readSeries` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 404–418 |
-| `seriesDeliveries` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 421–432 |
-| `createSingle` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 435–450 |
-| `createSeries` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 456–502 |
-| `removeTask` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 505–509 |
-| `endSeries` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 516–533 |
-| `graphOf` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 537–539 |
-| `seriesDayItems` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 542–552 |
-| `registerTeamBoardRoutes` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 554–747 |
+| `dayNumber` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 69–69 |
+| `choice` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 70–75 |
+| `optionalId` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 77–78 |
+| `parseTeamTask` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 81–136 |
+| `parseApplyTo` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 139–139 |
+| `defaultManDays` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 146–157 |
+| `minutesOf` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 159–159 |
+| `timeRangeManDays` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 161–165 |
+| `canAssignOthers` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 172–172 |
+| `assertMayAssign` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 175–179 |
+| `canChangeTeamTask` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 181–182 |
+| `idList` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 185–185 |
+| `redactWork` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 188–195 |
+| `teamTaskDto` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 242–272 |
+| `prepare` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 278–299 |
+| `bind` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 301–309 |
+| `savePeople` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 312–317 |
+| `currentPeople` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 320–324 |
+| `tellPeople` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 327–333 |
+| `calendarState` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 336–340 |
+| `clock` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 342–342 |
+| `rowState` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 343–348 |
+| `seriesOf` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 349–349 |
+| `deliverCalendar` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 361–391 |
+| `worst` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 392–393 |
+| `deliverAll` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 396–400 |
+| `readSeries` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 403–417 |
+| `seriesDeliveries` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 420–431 |
+| `createSingle` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 434–449 |
+| `createSeries` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 455–501 |
+| `removeTask` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 504–508 |
+| `endSeries` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 515–532 |
+| `graphOf` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 536–538 |
+| `seriesDayItems` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 541–551 |
+| `registerTeamBoardRoutes` | [backend-node/src/routes/team-board.ts](<../../../backend-node/src/routes/team-board.ts>) | 553–746 |
 
 ## Direct local dependencies
 
@@ -70,7 +70,6 @@ Evidence: source snapshot `2be07181`; generated, do not edit. [backend-node/src/
 - [backend-node/src/email.ts](<../../../backend-node/src/email.ts>)
 - [backend-node/src/team-calendar.ts](<../../../backend-node/src/team-calendar.ts>)
 - [backend-node/src/outlook-calendar.ts](<../../../backend-node/src/outlook-calendar.ts>)
-- [backend-node/src/user-roles.ts](<../../../backend-node/src/user-roles.ts>)
 - [backend-node/src/team-task-series.ts](<../../../backend-node/src/team-task-series.ts>)
 
 ## SQL references (literal scan, not a complete schema or write-set)
