@@ -108,10 +108,14 @@ try {
 
   // A legacy BOM after 074: the labour line it was generated with is hidden; ordered PR lines still cover their BOM lines.
   const old = await call("GET", `/boms/${legacy}`, "Requester");
-  assert.deepEqual(old.lines.map((line: Json) => [line.itemCode, line.requested, line.purchaseRequired]).sort(), [["CBL-01", 60, 40], ["PLC-01", 1, 1], ["SCADA-LIC", 0, 1]]);
-  assert.deepEqual(old.modules.map((m: Json) => [m.module, m.budget, m.requested]), [["Panel", 25000, 9000 + 3000], ["Software", 30000, 0]]);
+  // Its two Outsource lines (migration 108: one shown again, one added) can be requested and carry their module's budget.
+  assert.deepEqual(old.lines.map((line: Json) => [line.itemCode, line.requested, line.purchaseRequired]).sort(),
+    [["CBL-01", 60, 40], ["OUT-01", 0, 1], ["OUT-02", 0, 5], ["PLC-01", 1, 1], ["SCADA-LIC", 0, 1]]);
+  assert.deepEqual(old.lines.filter((line: Json) => line.sectionCode === "OUT").map((line: Json) => [line.itemCode, line.module, line.nonStock, line.budget]).sort(),
+    [["OUT-01", "Install", true, 12000], ["OUT-02", "Install", true, 15000]]);
+  assert.deepEqual(old.modules.map((m: Json) => [m.module, m.budget, m.requested]), [["Install", 27000, 0], ["Panel", 25000, 9000 + 3000], ["Software", 30000, 0]]);
 
-  // A new BOM takes only the material categories; every line can be requested, inventory item or not.
+  // A new BOM takes the material and outsource categories (this estimate has no outsource); every line can be requested, inventory item or not.
   const bom = await call("POST", "/boms", "Requester", { projectId: fresh }, 201);
   assert.equal(bom.lineCount, 3);
   await call("POST", `/boms/${bom.id}/release`, "PM", { rowVersion: bom.rowVersion, comment: "released for the test" });
@@ -383,6 +387,13 @@ try {
   const own7 = await call("POST", `/purchase-requisitions/${pr7.id}/decide`, "Requester", { decision: "Approve", comment: "own PR at the final step" });
   assert.deepEqual([own7.status, own7.erp.sent], ["Approved", true]);
   assert.deepEqual([toldOf(pr7.number), await decisionBells(pr7.id)], [[], []], "nobody tells the requester what they decided themselves");
+  // A BOM generated now takes the estimate's Outsource lines with its material, and still leaves engineering hours out.
+  const legacyProject = Number((await run(`SELECT project_id FROM dbo.boms WHERE id=${legacy}`)).recordset[0]!.project_id);
+  await run(`UPDATE dbo.boms SET deleted_at=SYSUTCDATETIME() WHERE id=${legacy}`);
+  const regenerated = await call("POST", "/boms", "Requester", { projectId: legacyProject }, 201);
+  assert.equal(regenerated.lineCount, 5);
+  assert.deepEqual((await call("GET", `/boms/${regenerated.id}`, "Requester")).lines.map((line: Json) => [line.itemCode, line.sectionCode, line.nonStock]).sort(),
+    [["CBL-01", "HW.EL", true], ["OUT-01", "OUT", true], ["OUT-02", "OUT", true], ["PLC-01", "HW.STD", false], ["SCADA-LIC", "SW", true]]);
   console.log(`PASS: procurement API on LocalDB (1,000-line PR in ${elapsed} ms).`);
 } finally {
   await app.close();

@@ -4,7 +4,7 @@ import Fastify from "fastify";
 import type { AppConfig } from "../src/config.js";
 import type { Database } from "../src/db.js";
 import { ApiError, registerErrorHandler } from "../src/errors.js";
-import { approvalSteps, type BomLineForRequest, DEPARTMENT_STEP, FINAL_STEP, MATERIAL_CATEGORY_CODES, MAX_PR_LINES, moduleBudgetFlags, ERP_STEP, planPrLines, type PrLineInput,
+import { approvalSteps, type BomLineForRequest, BOM_CATEGORY_CODES, DEPARTMENT_STEP, FINAL_STEP, MATERIAL_CATEGORY_CODES, OUTSOURCE_SECTION, MAX_PR_LINES, moduleBudgetFlags, ERP_STEP, planPrLines, type PrLineInput,
   remainingToRequest, type RuleFlag } from "../src/procurement-rules.js";
 import { registerPurchaseRequisitionRoutes } from "../src/routes/purchase-requisitions.js";
 import type { CurrentUserService } from "../src/users.js";
@@ -87,8 +87,11 @@ test("every request covering a BOM line counts, ordered or not, and stock covers
   assert.equal(remainingToRequest({ ...line, requested: 12 }), 0);
 });
 
-test("a BOM takes only the material categories of an estimate", () => {
+test("a BOM takes the material categories of an estimate and its outsource (owner 2026-11-19)", () => {
   assert.deepEqual([...MATERIAL_CATEGORY_CODES], ["01", "02", "03", "04", "05"]);
+  // 07 Outsource is bought on a PR too. 06 Engineering, 08 Transportation, 09 Accommodation and 10 Other Cost are not.
+  assert.deepEqual([...BOM_CATEGORY_CODES], ["01", "02", "03", "04", "05", "07"]);
+  assert.equal(OUTSOURCE_SECTION, "OUT");
 });
 
 const bomLine = (id: number, overrides: Partial<BomLineForRequest> = {}): BomLineForRequest => ({ id, itemId: 40 + id, itemCode: `IT-${id}`, partNumber: `PN-${id}`,

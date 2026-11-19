@@ -1398,7 +1398,7 @@ const BOM_RELEASE: Guide = {
     {
       target: "bom.generate", action: "click", view: "purchase",
       title: { th: "กด 'สร้างรายการวัสดุ'", en: "Press Generate BOM", jp: "「BOMを作成」を押す" },
-      body: { th: "สร้าง BOM จาก Estimate ที่อนุมัติและล็อกแล้วของโปรเจกต์", en: "It builds the BOM from the project's approved, locked estimate.", jp: "案件の承認・ロック済み見積からBOMを作ります。" },
+      body: { th: "สร้าง BOM จาก Estimate ที่อนุมัติและล็อกแล้วของโปรเจกต์ ได้ทั้งรายการวัสดุและงานจ้างภายนอก (Outsource)", en: "It builds the BOM from the project's approved, locked estimate: its material lines and its outsourced work.", jp: "案件の承認・ロック済み見積からBOMを作ります。資材明細と外注作業（Outsource）が入ります。" },
       missing: { th: "ถ้าไม่มีปุ่มนี้ แปลว่าบัญชีนี้ยังไม่มีสิทธิ์สร้าง BOM", en: "If the button never appears, this account cannot generate BOMs.", jp: "ボタンが表示されない場合、このアカウントには作成権限がありません。" },
     },
     {

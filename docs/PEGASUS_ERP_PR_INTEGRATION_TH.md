@@ -77,6 +77,7 @@ Tools ที่ใช้:
 
 รูปแบบของ `lines[].remark`:
 
+- งานจ้างภายนอก (หมวด 07 Outsource ของ Estimate ซึ่งอยู่ใน BOM ตั้งแต่ 2026-11-19): ขึ้นต้นด้วย `Outsource · Module <ชื่อ> · …` เพื่อให้ฝ่ายจัดซื้อรู้ว่าเป็นค่าแรงหรือบริการ ไม่ใช่สินค้า
 - รายการที่เปลี่ยนรุ่นจาก Estimate: `Substitute for <code เดิม> · Module Panel · …`
 - รายการนอก Estimate: `Not in the estimate · Module Panel · …`
 - ERP ไม่มีแนวคิด Module และรายการทดแทน เราจึงใส่ข้อมูลนี้ไว้ใน remark

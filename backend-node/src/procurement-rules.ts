@@ -23,8 +23,14 @@ export type PlannedPrLine = { lineType: PrLineKind; bomLineId: number | null; it
   brand: string; unit: string; quantity: number; coveredQuantity: number; unitPrice: number; estimatedQuantity: number; estimatedUnitCost: number;
   budgetModule: string; priceSource: string; supplierId: number | null; remark: string | null };
 
-/** Estimate categories bought on a PR: Hardware, Software, Electrical, Mechanical, Robot. Engineering, outsource, travel and other costs are not material. */
+/** Estimate categories that are material: Hardware, Software, Electrical, Mechanical, Robot. */
 export const MATERIAL_CATEGORY_CODES = ["01", "02", "03", "04", "05"] as const;
+/** Outsource: outside labour and services hired for the project. Bought on a PR like material (owner 2026-11-19). */
+export const OUTSOURCE_CATEGORY_CODE = "07";
+/** A BOM line of the Outsource category. SVC is what older BOMs called every non-material line; those stay hidden. */
+export const OUTSOURCE_SECTION = "OUT";
+/** What a BOM takes from an estimate and a PR can request. Engineering (our own hours), travel and other costs are not bought on a PR. */
+export const BOM_CATEGORY_CODES = [...MATERIAL_CATEGORY_CODES, OUTSOURCE_CATEGORY_CODE] as const;
 /** The last step: the system sends the approved PR to the Pegasus ERP, where Purchasing collects quotes and raises the PO. */
 export const ERP_STEP = "Sent to ERP";
 /** The owner's route: the requester's department head, then the final approver on the Engineer side. */

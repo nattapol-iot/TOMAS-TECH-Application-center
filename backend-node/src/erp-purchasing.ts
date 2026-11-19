@@ -83,7 +83,9 @@ export function createErpGateway(client: PegasusMcp, tokens: TokenSource): ErpGa
 export type ErpHeader = { pr_no: string; erp_ref: string; erp_department: string; required_date: Date | string; purpose: string | null; project_no: string;
   project_name: string; bom_no: string };
 export type ErpLine = { line_type: string; item_code: string; part_no: string; description: string; brand: string; qty: number; unit: string; unit_price: number;
-  remark: string | null; budget_module: string; original_code: string | null };
+  remark: string | null; budget_module: string; original_code: string | null;
+  /** The line is the estimate's Outsource category: outside labour or a service, not goods. */
+  outsource?: boolean };
 
 /** PJ000000 and the like: a project that has no real number yet, which the ERP must not be sent. */
 export const isPlaceholder = (number: string) => number.includes("0") && !/[1-9]/.test(number);
@@ -94,7 +96,7 @@ const dateOnly = (value: Date | string) => value instanceof Date ? value.toISOSt
  * module and what it replaces travel in its remark; fields longer than the ERP allows are shortened, never dropped.
  */
 export function erpRequestArguments(header: ErpHeader, lines: ErpLine[], appBaseUrl: string): Record<string, unknown> {
-  const describe = (line: ErpLine) => [line.line_type === "Substitute" && line.original_code ? `Substitute for ${line.original_code}` : line.line_type === "Unplanned" ? "Not in the estimate" : "",
+  const describe = (line: ErpLine) => [line.outsource ? "Outsource" : "", line.line_type === "Substitute" && line.original_code ? `Substitute for ${line.original_code}` : line.line_type === "Unplanned" ? "Not in the estimate" : "",
     `Module ${line.budget_module}`, line.item_code && line.item_code !== line.part_no ? `Item ${line.item_code}` : "", line.remark ?? ""].filter(Boolean).join(" · ");
   return {
     external_ref: header.erp_ref,

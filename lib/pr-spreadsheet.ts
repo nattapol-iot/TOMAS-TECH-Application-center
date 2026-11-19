@@ -3,7 +3,9 @@
 
 export type PrRowKind = "Planned" | "Substitute" | "Unplanned";
 export type PrBomLine = { id: number; module: string; itemCode: string; partNumber: string; description: string; brand: string; unit: string;
-  remaining: number; estimatedUnitCost: number };
+  remaining: number; estimatedUnitCost: number;
+  /** The BOM section of the line; OUT is the estimate's Outsource category (outside labour or a service). */
+  sectionCode?: string };
 export type PrModuleBudget = { module: string; budget: number; requested: number };
 export type PrDraftRow = { key: string; selected: boolean; lineType: PrRowKind; bomLineId: number | null; module: string; itemCode: string; partNumber: string;
   description: string; brand: string; unit: string; quantity: number; coveredQuantity: number | null; unitPrice: number; remark: string };

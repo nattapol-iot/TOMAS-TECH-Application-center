@@ -46,8 +46,9 @@ test("a BOM line without an inventory item can still be requested", () => {
   assert.doesNotMatch(requisitions, /"stock_available"/);
 });
 
-test("a BOM is generated from the material categories only", () => {
-  assert.match(boms, /ci\.category_code IN\(\$\{MATERIAL_CATEGORIES\}\)/);
+test("a BOM is generated from the material categories and Outsource, nothing else", () => {
+  assert.match(boms, /ci\.category_code IN\(\$\{BOM_CATEGORIES\}\)/);
+  assert.match(boms, /WHEN '\$\{OUTSOURCE_CATEGORY_CODE\}' THEN N'\$\{OUTSOURCE_SECTION\}' ELSE N'SVC' END/);
   assert.match(boms, /AND \$\{MATERIAL_LINE\} ORDER BY l\.section_code/);
 });
 
@@ -144,4 +145,19 @@ test("the PR sheet's lines are an ERP grid: fixed columns, controls filling thei
   // The sheet's blocks keep one gap, and its tables are framed.
   assert.match(skin, /\.pg-skin \.panel-body:not\(\.flush\) > \* \+ \* \{ margin-top: 12px; \}/);
   assert.match(skin, /\.pg-skin \.panel-body:not\(\.flush\) > \.table-wrap \{ border: 1px solid var\(--pg-divider\); border-radius: 8px;/);
+});
+
+test("outsource is bought on a PR like material: on the BOM, marked on the screens, named to the ERP (owner 2026-11-19)", () => {
+  const migration = read("database/migrations/108_bom_outsource_lines.sql");
+  // Existing BOMs: the old hidden SVC lines of category 07 show again, and the missing ones are added once.
+  assert.match(migration, /SET bl.section_code = N'OUT'[^;]+WHERE bl.section_code = N'SVC'[^;]+AND ci.category_code = N'07';/);
+  assert.match(migration, /AND b.status IN [(]N'Draft', N'Released'[)]/);
+  assert.match(migration, /AND NOT EXISTS [(]SELECT 1 FROM dbo.bom_lines existing WHERE existing.bom_id = s.bom_id AND existing.estimate_line_id = ci.id[)];/);
+  assert.match(migration, /VALUES [(]108, N'Outsource lines on BOMs'[)];/);
+  // The ERP is told the line is outside labour or a service.
+  assert.match(requisitions, /CASE WHEN bl.section_code=N'[$][{]OUTSOURCE_SECTION[}]' THEN 1 ELSE 0 END outsource/);
+  assert.match(read("backend-node/src/erp-purchasing.ts"), /line.outsource [?] "Outsource" : ""/);
+  // The PR sheet and the BOM mark an outsource line.
+  assert.match(editor, /line[?]?.sectionCode === "OUT"/);
+  assert.match(material, /line.sectionCode === "OUT"/);
 });
