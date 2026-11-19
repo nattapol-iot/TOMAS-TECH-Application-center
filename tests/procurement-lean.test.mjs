@@ -131,3 +131,17 @@ test("the PR sheet takes many items and sends the PR in one press (owner 2026-11
   assert.match(editor, /onClick=\{\(\) => \{ void submit\(false\); \}\}><LocalizedText text=\{"Save Draft"\} \/>/);
   assert.match(material, /saved\.submitted \? uiText\("ส่งขออนุมัติแล้ว"\)/);
 });
+
+test("the PR sheet's lines are an ERP grid: fixed columns, controls filling their cells, framed (owner 2026-11-19)", () => {
+  const skin = read("app/system/production/pegasus-skin.css");
+  // Thirteen columns; only the description (0) takes what is left, so the table never grows past its frame on its own.
+  assert.match(editor, /<colgroup>\{\[36, 80, 120, 130, 0, 84, 130, 92, 54, 100, 110, 110, 40\]\.map/);
+  assert.match(skin, /\.pg-skin \.pr-plan-table \{ table-layout: fixed; min-width: 1270px; border-collapse: collapse; \}/);
+  assert.match(skin, /\.pg-skin \.pr-plan-table td\.pg-in :is\(input, select\) \{ display: block; width: 100%;/);
+  // No inline widths on the controls any more: the column decides.
+  assert.doesNotMatch(editor, /<input \{\.\.\.grid\} style=/);
+  assert.match(editor, /<td className="pg-in num"><div className="pg-qty">/);
+  // The sheet's blocks keep one gap, and its tables are framed.
+  assert.match(skin, /\.pg-skin \.panel-body:not\(\.flush\) > \* \+ \* \{ margin-top: 12px; \}/);
+  assert.match(skin, /\.pg-skin \.panel-body:not\(\.flush\) > \.table-wrap \{ border: 1px solid var\(--pg-divider\); border-radius: 8px;/);
+});
