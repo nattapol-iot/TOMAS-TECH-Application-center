@@ -6,7 +6,7 @@ import { useT as useStaticCopy } from "../i18n";
 import { currentLocale, useT as useUiText } from "../i18n";
 import { LocalizedText } from "../LocalizedText";
 import { HistoricalPrPanel } from "./HistoricalPrPanel";
-import { type PrEditing, PurchaseRequestEditor } from "./PurchaseRequestEditor";
+import { type PrEditing, type PrSaved, PurchaseRequestEditor } from "./PurchaseRequestEditor";
 import { newestProjectFirst, projectOverviewPath } from "../project-overview-client";
 import { estimateBusinessDate } from "../../../lib/estimate-ux";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -25,6 +25,7 @@ import {
   Panel,
   SearchInput,
   Select,
+  Tabs,
   Toolbar,
 } from "../ui";
 import { DateInput } from "../DateInput";
@@ -582,12 +583,13 @@ export function ProductionProcurementDashboard({ bootstrap }: MaterialScreenProp
   );
 }
 
-export function ProductionBoms({ bootstrap, notify }: MaterialScreenProps) {
+/** The BOM list. `embedded` is the BOM tab of the Purchase Requisition screen: no page header of its own, and link names that do not meet the PR list's. */
+export function ProductionBoms({ bootstrap, notify, embedded }: MaterialScreenProps & { embedded?: boolean }) {
   const uiText = useUiText();
   const endpoint = useEndpoint<BomSummary[]>("/api/v1/boms/", EMPTY);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("All status");
-  const [selectedId, setSelectedId] = useLinkedState("open", null, idLink, { remember: false });
+  const [selectedId, setSelectedId] = useLinkedState(embedded ? "bom" : "open", null, idLink, { remember: false });
   const [generateOpen, setGenerateOpen] = useState(false);
   const [action, setAction] = useState<BomSummary | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
@@ -610,11 +612,12 @@ export function ProductionBoms({ bootstrap, notify }: MaterialScreenProps) {
     finally { setActionBusy(false); }
   };
 
+  const generate = canGenerate ? <button className={embedded ? "btn ghost" : "btn primary"} type="button" data-guide="bom.generate" onClick={() => setGenerateOpen(true)}><Icon name="plus" /><LocalizedText text={"Generate BOM"} /></button> : undefined;
   return (
     <div className="pg-skin">
-      <PageHeader eyebrow="MATERIAL CONTROL" title={uiText("Bill of Materials")} subtitle="BOM ถูกสร้างจาก Estimate ที่อนุมัติและล็อกแล้ว พร้อมแสดง balance / shortage แบบ live" actions={canGenerate ? <button className="btn primary" type="button" data-guide="bom.generate" onClick={() => setGenerateOpen(true)}><Icon name="plus" /><LocalizedText text={"Generate BOM"} /></button> : undefined} />
+      {embedded ? null : <PageHeader eyebrow="MATERIAL CONTROL" title={uiText("Bill of Materials")} subtitle="BOM ถูกสร้างจาก Estimate ที่อนุมัติและล็อกแล้ว พร้อมแสดง balance / shortage แบบ live" actions={generate} />}
       <StatusSummary statuses={["Draft", "Released", "Superseded"]} rows={searched} value={status} onChange={setStatus} />
-      <Toolbar><SearchInput link="q" value={search} onChange={setSearch} placeholder="Search BOM, project or estimate…" /><RefreshButton loading={endpoint.loading} reload={endpoint.reload} /></Toolbar>
+      <Toolbar><SearchInput link={embedded ? "bq" : "q"} value={search} onChange={setSearch} placeholder="Search BOM, project or estimate…" /><RefreshButton loading={endpoint.loading} reload={endpoint.reload} />{embedded && generate ? <><span className="spacer" />{generate}</> : null}</Toolbar>
       {endpoint.error ? <LoadError message={endpoint.error} retry={endpoint.reload} /> : null}
       <ActionError message={actionError} />
       <Panel guide="bom.list" title={`${visible.length} BOM revisions`} subtitle={endpoint.loading ? "Loading from production API…" : "Live SQL Server data"} flush>
@@ -697,6 +700,8 @@ export function ProductionPurchaseRequisitions({ bootstrap, notify }: MaterialSc
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("All status");
   const [creating, setCreating] = useState(false);
+  // The one procurement screen an engineer needs: the PR list, the BOMs a PR starts from, and the imported PR history.
+  const [tab, setTab] = useState<"requests" | "boms" | "history">("requests");
   const boms = useEndpoint<BomSummary[]>(creating ? "/api/v1/boms/" : null, EMPTY);
   const [detailId, setDetailId] = useLinkedState("open", null, idLink, { remember: false });
   const [decision, setDecision] = useState<PrAction | null>(null);
@@ -772,11 +777,13 @@ export function ProductionPurchaseRequisitions({ bootstrap, notify }: MaterialSc
     finally { setBusyId(null); }
   };
 
+  const savedNote = (saved: PrSaved) => `${saved.number}: ${saved.submitted ? uiText("ส่งขออนุมัติแล้ว") : saved.submitError ? `${uiText("บันทึกเป็นฉบับร่างแล้ว แต่ส่งขออนุมัติไม่สำเร็จ")} · ${saved.submitError}` : uiText("บันทึกเป็นฉบับร่างแล้ว")}`;
+
   if (editing) return (
     <div className="pg-skin">
       <PageHeader eyebrow="PROCURE TO PAY" title={uiText("Purchase Requisitions")} subtitle="แก้ไข PR ฉบับร่าง" />
       <PurchaseRequestEditor bootstrap={bootstrap} released={EMPTY} editing={editing}
-        onClose={() => setEditing(null)} onCreated={(number) => { setEditing(null); notify(`${number} saved`); endpoint.reload(); }} />
+        onClose={() => setEditing(null)} onCreated={(saved) => { setEditing(null); notify(savedNote(saved)); endpoint.reload(); }} />
     </div>
   );
 
@@ -785,14 +792,15 @@ export function ProductionPurchaseRequisitions({ bootstrap, notify }: MaterialSc
       <PageHeader eyebrow="PROCURE TO PAY" title={uiText("Purchase Requisitions")} subtitle="สร้าง PR จาก BOM ที่ release แล้ว" />
       {boms.error ? <LoadError message={boms.error} retry={boms.reload} /> : null}
       {boms.loading && !boms.data.length ? <Loading /> : <PurchaseRequestEditor bootstrap={bootstrap} released={boms.data.filter((item) => item.status === "Released")}
-        onClose={() => setCreating(false)} onCreated={(number) => { setCreating(false); notify(`${number} created`); endpoint.reload(); }} />}
+        onClose={() => setCreating(false)} onCreated={(saved) => { setCreating(false); notify(savedNote(saved)); endpoint.reload(); }} />}
     </div>
   );
 
   return (
     <div className="pg-skin">
       <PageHeader eyebrow="PROCURE TO PAY" title={uiText("Purchase Requisitions")} subtitle="ขอซื้อจาก BOM อนุมัติตามงบของ Module แล้วส่งเข้า ERP ให้ฝ่ายจัดซื้อเลือก Supplier และออก PO" actions={canRequest ? <button className="btn primary" type="button" data-guide="pr.new" onClick={() => setCreating(true)}><Icon name="plus" /><LocalizedText text={"New PR"} /></button> : undefined} />
-      <HistoricalPrPanel canImport={canRequest} notify={notify} />
+      <Tabs tabs={[{ id: "requests", label: "Purchase Requisitions", count: endpoint.data.length }, { id: "boms", label: "Bill of Materials" }, { id: "history", label: "PR ย้อนหลัง" }]} active={tab} onChange={setTab} />
+      {tab === "boms" ? <ProductionBoms bootstrap={bootstrap} notify={notify} embedded /> : tab === "history" ? <HistoricalPrPanel canImport={canRequest} notify={notify} /> : <>
       <StatusSummary statuses={["Draft", "In Approval", "Approved", "Converted to PO", "Rejected"]} rows={searched} value={status} onChange={setStatus} label={prStatusLabel} />
       <Toolbar><SearchInput link="q" value={search} onChange={setSearch} placeholder="Search PR, project, BOM or requester…" /><RefreshButton loading={endpoint.loading} reload={endpoint.reload} /></Toolbar>
       {endpoint.error ? <LoadError message={endpoint.error} retry={endpoint.reload} /> : null}
@@ -807,6 +815,7 @@ export function ProductionPurchaseRequisitions({ bootstrap, notify }: MaterialSc
           return <tr key={item.id}><td className="pg-acts"><div className="table-actions">{isOwnDraft ? <><RowAction icon="edit" label="Edit" disabled={busyId === item.id} onClick={() => { void openEditor(item.id); }} /><RowAction icon="send" label="Submit" disabled={busyId === item.id} onClick={() => { void submit(item); }} /><RowAction icon="x" label="Cancel PR" danger disabled={busyId === item.id} onClick={() => { setActionError(""); setCancelItem(item); }} /></> : null}{isCurrentApprover ? <><RowAction icon="check" label="Approve" disabled={busyId === item.id} onClick={() => setDecision({ item, decision: "Approve" })} /><RowAction icon="x" label="Reject" danger disabled={busyId === item.id} onClick={() => setDecision({ item, decision: "Reject" })} /></> : null}{item.status === "Approved" && !item.erp.prNo && item.requestedById === bootstrap.user.id ? <RowAction icon="send" label="ส่งเข้า ERP" onClick={() => setDetailId(item.id)} /> : null}</div></td><td><StatusBadge status={item.status} label={prStatusLabel(item.status)} tone={item.status === "In Approval" && item.currentStep === "Final Approval" ? "violet" : undefined} />{item.erpPoRef ? <small className="muted mono">{item.erpPoRef}</small> : null}</td><td><button className="pg-doclink mono" type="button" onClick={() => setDetailId(item.id)}>{item.number}</button><small className="muted">{item.priority}</small></td><td><div className="cell-primary"><strong>{item.projectNumber}</strong><span>{item.projectName} <LocalizedText text={"·"} /> {item.bomNumber}</span></div></td><td>{item.requestedByName}</td><td>{date(item.requiredDate)}</td><td className="num">{item.lineCount}{mix ? <small className="muted">{mix}</small> : null}</td><td className="num"><strong>{money(item.amount)}</strong><small className="muted"><LocalizedText text={"Budget"} /> {money(item.estimateAmount)}</small></td><td><ErpCell erp={item.erp} status={item.status} /></td><td>{item.currentStep || "—"}<small className="muted">{item.currentApproverName || item.currentApproverRole || ""}</small></td></tr>;
         })}</tbody></table></div> : endpoint.loading ? <Loading /> : <EmptyState icon="package" title="No purchase requisition found" message="Release a BOM, then create a requisition for its shortage lines" />}
       </Panel>
+      </>}
       {detailId ? <PrDetailModal id={detailId} bootstrap={bootstrap} notify={notify} onChanged={endpoint.reload} onEdit={(id) => { void openEditor(id); }} onClose={() => setDetailId(null)} /> : null}
       {decision ? <CommentPrompt title={`${decision.decision}: ${decision.item.number}`} description={`${decision.item.currentStep || "Current approval step"} · ใส่เหตุผลเพื่อให้ audit trail ครบทุก approval rule`} confirmLabel={decision.decision} requireComment={decision.decision === "Reject"} busy={busyId === decision.item.id} error={actionError} onClose={() => { setDecision(null); setActionError(""); }} onConfirm={(comment) => { void decide(comment); }} /> : null}
       {cancelItem ? <CommentPrompt title={`${uiText("Cancel PR")} ${cancelItem.number}`} description="PR ร่างนี้จะถูกยกเลิก และไม่นับเป็น PR ที่ค้างอยู่ของ BOM อีก" confirmLabel={uiText("Cancel PR")} busy={busyId === cancelItem.id} error={actionError} onClose={() => { setCancelItem(null); setActionError(""); }} onConfirm={(reason) => { void cancel(reason); }} /> : null}
@@ -1247,8 +1256,9 @@ export function ProductionApprovals({ bootstrap, notify }: MaterialScreenProps) 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const reload = () => { prs.reload(); mirs.reload(); adjustments.reload(); };
-  const total = prs.data.length + mirs.data.filter((item) => item.requestedById !== bootstrap.user.id).length
-    + adjustments.data.filter((item) => item.requestedById !== bootstrap.user.id).length;
+  // Material issues and stock adjustments are done in the ERP now (owner 2026-10-08); their panels show only while one still waits.
+  const waitingMirs = mirs.data.filter((item) => item.requestedById !== bootstrap.user.id), waitingAdjustments = adjustments.data.filter((item) => item.requestedById !== bootstrap.user.id);
+  const total = prs.data.length + waitingMirs.length + waitingAdjustments.length;
   const decide = async (comment: string) => {
     if (!action) return;
     setBusy(true); setError("");
@@ -1265,15 +1275,15 @@ export function ProductionApprovals({ bootstrap, notify }: MaterialScreenProps) 
   return (
     <div className="pg-skin">
       <PageHeader eyebrow="CONTROL & GOVERNANCE" title={uiText("Approvals")} subtitle="แสดงเฉพาะรายการจริงที่ role / user ปัจจุบันมีสิทธิ์ตัดสินใจ และห้าม self-approval" actions={<RefreshButton loading={prs.loading || mirs.loading || adjustments.loading} reload={reload} />} />
-      <div className="kpi-grid three"><KpiCard label="Waiting for me" value={total} icon="checkCircle" tone={total ? "amber" : "green"} /><KpiCard label="Purchase requisitions" value={prs.data.length} icon="package" tone="blue" /><KpiCard label="Stock controls" value={adjustments.data.length} note={`${mirs.data.length} material issue requests`} icon="shield" tone="violet" /></div>
+      <div className="kpi-grid three"><KpiCard label="Waiting for me" value={total} icon="checkCircle" tone={total ? "amber" : "green"} /><KpiCard label="Purchase requisitions" value={prs.data.length} icon="package" tone="blue" />{waitingMirs.length + waitingAdjustments.length ? <KpiCard label="Stock controls" value={adjustments.data.length} note={`${mirs.data.length} material issue requests`} icon="shield" tone="violet" /> : null}</div>
       {prs.error || mirs.error || adjustments.error ? <LoadError message={prs.error || mirs.error || adjustments.error} retry={reload} /> : null}<ActionError message={error} />
       <Panel guide="appr.pr" title="Purchase requisition approvals" subtitle="Approval route and current approver are calculated by the API" flush>
         {prs.data.length ? <div className="table-wrap"><table><thead><tr><th className="pg-acts"><LocalizedText text={"Actions"} /></th><th><LocalizedText text={"PR"} /></th><th><LocalizedText text={"Project"} /></th><th><LocalizedText text={"Requester"} /></th><th className="num"><LocalizedText text={"Amount"} /></th><th><LocalizedText text={"Variance"} /></th><th><LocalizedText text={"Current step"} /></th><th><LocalizedText text={"Required"} /></th></tr></thead><tbody>{prs.data.map((item) => <tr key={item.id}><td className="pg-acts"><div className="table-actions"><RowAction icon="check" label="Approve" guide="appr.approve" onClick={() => setAction({ source: "PR", id: item.id, number: item.number, decision: "Approve" })} /><RowAction icon="x" label="Reject" danger onClick={() => setAction({ source: "PR", id: item.id, number: item.number, decision: "Reject" })} /></div></td><td><button className="pg-doclink mono" type="button" onClick={() => setDetailId(item.id)}>{item.number}</button></td><td>{item.projectNumber} <LocalizedText text={"·"} /> {item.projectName}</td><td>{item.requestedByName}</td><td className="num"><strong>{money(item.amount)}</strong></td><td>{Number(item.variancePercent) > 0 ? <Badge tone="amber">+{quantity(item.variancePercent)}%</Badge> : <Badge tone="green">{quantity(item.variancePercent)}%</Badge>}</td><td>{item.currentStep}<small className="muted">{item.currentApproverName || item.currentApproverRole}</small></td><td>{date(item.requiredDate)}</td></tr>)}</tbody></table></div> : prs.loading ? <Loading /> : <EmptyState icon="checkCircle" title="No purchase requisition waiting" message="ไม่มี PR ที่กำลังรอ user / role ปัจจุบัน" />}
       </Panel>
-      <Panel title="Material issue approvals" subtitle="Requester cannot approve their own MIR" flush>
+      {waitingMirs.length ? <Panel title="Material issue approvals" subtitle="Requester cannot approve their own MIR" flush>
         {mirs.data.filter((item) => item.requestedById !== bootstrap.user.id).length ? <div className="table-wrap"><table><thead><tr><th className="pg-acts"><LocalizedText text={"Actions"} /></th><th>MIR</th><th><LocalizedText text={"Project"} /></th><th><LocalizedText text={"Requester"} /></th><th><LocalizedText text={"Required"} /></th><th className="num"><LocalizedText text={"Lines"} /></th><th className="num"><LocalizedText text={"Quantity"} /></th></tr></thead><tbody>{mirs.data.filter((item) => item.requestedById !== bootstrap.user.id).map((item) => <tr key={item.id}><td className="pg-acts"><div className="table-actions"><RowAction icon="check" label="Approve" onClick={() => setAction({ source: "MIR", id: item.id, number: item.number, decision: "Approve" })} /><RowAction icon="x" label="Reject" danger onClick={() => setAction({ source: "MIR", id: item.id, number: item.number, decision: "Reject" })} /></div></td><td><strong className="mono">{item.number}</strong></td><td>{item.projectNumber} <LocalizedText text={"·"} /> {item.projectName}</td><td>{item.requestedByName}</td><td>{date(item.requiredDate)}</td><td className="num">{item.lineCount}</td><td className="num">{quantity(item.requestedQuantity)}</td></tr>)}</tbody></table></div> : mirs.loading ? <Loading /> : <EmptyState icon="upload" title="No material issue waiting" message="ไม่มี MIR ที่รออนุมัติจากผู้ใช้ปัจจุบัน" />}
-      </Panel>
-      {canAdjust ? <Panel title="Stock adjustment approvals" subtitle="Stock changes only after Inventory Controller approval" flush>
+      </Panel> : null}
+      {canAdjust && waitingAdjustments.length ? <Panel title="Stock adjustment approvals" subtitle="Stock changes only after Inventory Controller approval" flush>
         {adjustments.data.filter((item) => item.requestedById !== bootstrap.user.id).length ? <div className="table-wrap"><table><thead><tr><th className="pg-acts"><LocalizedText text={"Actions"} /></th><th><LocalizedText text={"Adjustment"} /></th><th><LocalizedText text={"Item"} /></th><th className="num"><LocalizedText text={"Current usable"} /></th><th className="num"><LocalizedText text={"Change"} /></th><th><LocalizedText text={"Reason"} /></th><th><LocalizedText text={"Requester"} /></th></tr></thead><tbody>{adjustments.data.filter((item) => item.requestedById !== bootstrap.user.id).map((item) => <tr key={item.id}><td className="pg-acts"><div className="table-actions"><RowAction icon="check" label="Approve" onClick={() => setAction({ source: "ADJUSTMENT", id: item.id, number: item.number, decision: "Approve" })} /><RowAction icon="x" label="Reject" danger onClick={() => setAction({ source: "ADJUSTMENT", id: item.id, number: item.number, decision: "Reject" })} /></div></td><td><strong className="mono">{item.number}</strong></td><td><strong>{item.itemCode}</strong><small className="muted">{item.description}</small></td><td className="num">{quantity(item.currentUsable)}</td><td className="num"><Badge tone={Number(item.quantityChange) >= 0 ? "green" : "red"}>{Number(item.quantityChange) >= 0 ? "+" : ""}{quantity(item.quantityChange)}</Badge></td><td>{item.reason}</td><td>{item.requestedByName}</td></tr>)}</tbody></table></div> : adjustments.loading ? <Loading /> : <EmptyState icon="database" title="No stock adjustment waiting" message="ไม่มี stock discrepancy ที่รอ Inventory Controller" />}
       </Panel> : null}
       {action ? <CommentPrompt title={`${action.decision}: ${action.number}`} description={`${action.source} decision · ข้อความจะถูกเก็บใน audit trail`} confirmLabel={action.decision} requireComment={action.decision === "Reject"} busy={busy} error={error} onClose={() => { setAction(null); setError(""); }} onConfirm={(comment) => { void decide(comment); }} /> : null}

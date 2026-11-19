@@ -111,3 +111,23 @@ test("the Approvals badge counts procurement approvals, not estimates in review"
   assert.match(shell, /if \(view === "approvals"\) return procurementApprovalCount;/);
   assert.doesNotMatch(shell, /if \(view === "approvals"\) return bootstrap\.counts\.approvals;/);
 });
+
+test("the PR sheet takes many items and sends the PR in one press (owner 2026-11-19)", () => {
+  // Rows copied from Excel land in the sheet from the paste box or from any cell; one value pasted into a cell stays a value.
+  assert.match(editor, /const read = draftFromPaste\(pasted, \[\.\.\.lines\.values\(\)\], modules, newRowModule\);/);
+  assert.match(editor, /setRows\(addPastedRows\(rows, read\.rows, String\(Date\.now\(\)\)\)\);/);
+  assert.ok(editor.includes(String.raw`if (!/[\t\n]/.test(pasted.trim())) return;`));
+  assert.match(editor, /const grid = \{ onKeyDown: moveDown, onPaste: pasteCells \};/);
+  assert.equal((editor.match(/<input \{\.\.\.grid\}/g) ?? []).length, 4);
+  // Blank rows are added in bulk and are not part of the PR: checks, budget, totals and the request body leave them out.
+  assert.match(editor, /onClick=\{\(\) => addUnplanned\(10\)\}/);
+  assert.match(editor, /const live = useMemo\(\(\) => rows\.filter\(\(row\) => !isBlankPrRow\(row\)\), \[rows\]\);/);
+  assert.match(editor, /draftIssues\(live, lines, modules\)/);
+  assert.match(editor, /lines: payloadLines\(live\)/);
+  // One press saves the draft and submits it with the row version the save returned; a failed submit leaves the draft and says so.
+  assert.match(editor, /await apiRequest\(`\/api\/v1\/purchase-requisitions\/\$\{saved\.id\}\/submit`, \{ method: "POST", body: JSON\.stringify\(\{ rowVersion: saved\.rowVersion,/);
+  assert.match(editor, /onCreated\(\{ number: saved\.number, submitted: false, submitError:/);
+  assert.match(editor, /data-guide="pr\.submit" disabled=\{busy \|\| !selected\.length \|\| issues\.size > 0\} onClick=\{\(\) => \{ void submit\(true\); \}\}/);
+  assert.match(editor, /onClick=\{\(\) => \{ void submit\(false\); \}\}><LocalizedText text=\{"Save Draft"\} \/>/);
+  assert.match(material, /saved\.submitted \? uiText\("ส่งขออนุมัติแล้ว"\)/);
+});

@@ -513,14 +513,14 @@ C('punchlist', 'Punchlist: customer issue batches through to closed || Punchlist
   ], 'Every closed issue has its actual date, hours and fix. || 完了した課題すべてに実績日・時間・対応内容があります。',
     'Issues recorded one at a time the old way can still be opened under Team overview → Tasks and in My Work. System, equipment, data and internal coordination problems go to the Support Center. || 従来の1件ずつの課題は「チームの仕事一覧 → タスク」とマイワークで引き続き開けます。システム・機器・データ・社内調整の問題はSupport Centerで報告します。'))
 
-C('procurement', 'Procurement Dashboard and BOM || 購買DashboardとBOM', 'Procurement Dashboard / BOM || Procurement Dashboard / BOM', 'Purchasing / PM / material controllers || 購買・PM・資材管理',
-  P('20.1 Read material queues and budgets || 20.1 資材の処理待ちと予算を見る', [
-    'Open Procurement Dashboard and review live totals and queues within your permissions. || Procurement Dashboardで権限内の実データ集計と処理待ちを確認します。',
-    'Distinguish Budget, Commitment and Actual before comparing; do not add the same underlying amount twice. || 予算、発注確約、実績を区別して比較し、同じ元金額を二重加算しないでください。',
-    'Review pending PR approvals, open PO receipts and exceptions, then open the source module to act. || PR承認待ち、PO未入庫、例外を確認して元モジュールで処理します。'
-  ], 'Each follow-up total or queue can be traced to its source documents. || フォロー対象の集計・待ち項目を元書類まで追跡できます。') +
+C('procurement', 'BOM: bills of materials inside Purchase Requisition || BOM：Purchase Requisition内の部品表', 'Purchase Requisition → Bill of Materials tab || Purchase Requisition → 部品表 (BOM) タブ', 'Purchasing / PM / material controllers || 購買・PM・資材管理',
+  P('20.1 Open the BOMs and read their status || 20.1 BOMを開いて状態を見る', [
+    'Open Purchase Requisition and press the <b>Bill of Materials</b> tab. The procurement menu now holds only Purchase Requisition and Approvals. || Purchase Requisitionを開き<b>部品表 (BOM)</b>タブを押します。購買メニューはPurchase RequisitionとApprovalsだけになりました。',
+    'The summary bar counts the BOMs in each status; press a status to filter, and again to clear. || 上部の集計バーは状態ごとのBOM件数を示します。状態を押すと絞り込み、もう一度押すと解除します。',
+    'Press a BOM number to open it and check quantities, budget and what has been requested. || BOM番号を押して開き、数量・予算・申請済み数量を確認します。'
+  ], 'You see the project’s BOMs and which revision is Released and ready for purchasing. || ProjectのBOMと、Released済みで購買に使える版が分かります。') +
   P('20.2 Generate and release a BOM || 20.2 BOMの生成とRelease', [
-    'Open BOM → Generate BOM and select a project with an approved/locked estimate. || BOM → Generate BOMで承認済み・Locked見積を持つProjectを選びます。',
+    'Open Purchase Requisition → <b>Bill of Materials</b> tab → Generate BOM and select a project with an approved/locked estimate. || Purchase Requisition → <b>部品表 (BOM)</b>タブ → Generate BOMで承認済み・Locked見積を持つProjectを選びます。',
     'Verify estimate number/revision and generate the BOM. Only material lines (categories 01-05) enter the BOM; labor, outsource and travel do not. || 見積番号・版を確認してBOMを生成します。BOMには資材行（区分01-05）のみが入り、労務、外注、旅費は入りません。',
     'Open View and inspect modules, items, quantities, reference budgets, stock and shortages. || ViewでModule、項目、数量、参照予算、在庫、不足を確認します。',
     'An authorized user selects Release once complete, with any required note. || 完全性確認後、権限者が必要メモを付けてReleaseします。',
@@ -538,11 +538,11 @@ C('pr', 'Purchase Requisition: request, approve and send to the ERP || Purchase 
   P('21.1 Create a PR from a released BOM || 21.1 Released BOMからPRを作成', [
     'Open Purchase Requisition → <b>New PR</b> and select the project’s <b>Released BOM</b>. || Purchase Requisition → <b>PRを作成</b>でProjectの<b>Released BOM</b>を選びます。',
     'Set priority, required date and purpose, then check the <b>ERP department</b> preselected from your own department; change it if it is wrong. || 優先度、必要日、目的を設定し、自分の部門から選ばれた<b>ERP部門</b>を確認します。違う場合は変更します。',
-    'In the lines table, use <b>Buy everything still needed</b> or pick rows, then edit Qty and Unit price. Do not choose a supplier: Purchasing chooses it in the ERP. || 明細表で<b>残り全てを購入</b>を使うか行を選び、数量と単価を修正します。仕入先は選びません。購買がERPで選びます。',
+    'In the lines table, tick the box in the column heading to buy everything still needed, or pick rows, then edit Qty and Unit price. Do not choose a supplier: Purchasing chooses it in the ERP. || 明細表で列見出しのチェックを入れて残り全てを購入するか、行を選び、数量と単価を修正します。仕入先は選びません。購買がERPで選びます。',
     'To buy another model instead of an estimate item, use <b>Use another item</b> (<b>Back to estimate item</b> undoes it). For something not in the estimate, use <b>Add Unplanned Item</b> and choose the module whose budget it uses. || 見積品目の代わりに別機種を買う場合は<b>別品目に変更</b>（<b>見積品目に戻す</b>で元に戻ります）。見積にない品は<b>計画外品目を追加</b>で予算を使うModuleを選びます。',
-    'For many lines (up to 2,000 per PR), use <b>Download Excel</b>, fill in the file and <b>Import Excel</b>. The TOMAS PR form can be imported too. || 明細が多い場合（1件の申請で最大2,000行）は<b>Excelをダウンロード</b>してファイルに記入し、<b>Excel取込</b>で戻します。TOMAS PR書式も取り込めます。',
-    'Check each module’s budget (Estimate budget, Earlier PRs, This PR, Left after this PR), fix every row with red text, then press <b>New PR</b>. || Module別予算（見積予算、先行の購買申請、この購買申請、この申請後の残額）を確認し、赤字の行を全て直してから<b>PRを作成</b>を押します。',
-    'The new PR is a Draft. Open it from the list and press <b>Submit</b> to send it for approval. || 作成したPRはDraftです。一覧から開き<b>Submit</b>で承認へ送ります。'
+    'For many lines (up to 2,000 per PR), copy the rows in Excel, press <b>Paste from Excel</b> and Ctrl+V, or paste into any cell of the table. Items that match the BOM update their rows; the rest become unplanned lines. Press <b>Add 10 rows</b> to type them in (Enter moves to the next row; rows left empty are not saved), or use <b>Download Excel</b> and <b>Import Excel</b>. The TOMAS PR form can be imported too. || 明細が多い場合（1件の申請で最大2,000行）は、Excelで行をコピーし<b>Excelから貼り付け</b>を押してCtrl+V、または表のセルに直接貼り付けます。BOMと一致する品目はその行を更新し、残りは計画外明細になります。手入力は<b>10行追加</b>を押します（Enterで次の行へ移り、空の行は保存されません）。<b>Excelをダウンロード</b>と<b>Excel取込</b>も使えます。TOMAS PR書式も取り込めます。',
+    'Check each module’s budget (Estimate budget, Earlier PRs, This PR, Left after this PR), fix every row with red text, then press <b>Submit for approval</b>: the PR is saved and sent for approval in one step. || Module別予算（見積予算、先行の購買申請、この購買申請、この申請後の残額）を確認し、赤字の行を全て直してから<b>承認申請</b>を押します。保存と承認申請が一度に行われます。',
+    'Not ready to send? Press <b>Save Draft</b>, then later press the send button (Submit) at the left of its row in the list. || まだ送らない場合は<b>下書き保存</b>を押し、後で一覧の行の左の送信ボタン（Submit）を押します。'
   ], 'The PR has a number and an approval route: the requester’s department head, then the final approver. || PR番号と承認経路（依頼者の部門長、次に最終承認者）が設定されます。',
     'A Draft PR can be withdrawn with <b>Cancel PR</b>, and its module budget is released. Substitutes and unplanned items within a module’s budget need no extra approval. || Draftの申請は<b>購買申請を取消</b>で取り消せ、Module予算が戻ります。Module予算内の代替品・計画外品に追加承認は不要です。') +
   P('21.2 Approve a PR: department head, then the final approver || 21.2 PRを承認：部門長、次に最終承認者', [
@@ -580,7 +580,7 @@ C('historical-pr', 'Historical PR: import, archive and compare || 過去PR：取
   ], 'Variance covers mapped Active rows in that document, with traceable history. || その書類の紐付け済み有効行の差異と履歴を確認できます。',
     'Blank actual cost means unknown, not zero. Blank/zero estimate budget does not prove overspend. A newly imported source version starts without mappings; this view is not total project expenditure. || 実績原価の空欄は不明であり0ではありません。予算の空欄・0だけで超過とは断定できません。新しい取込版の紐付けは初期化され、この画面はProject全支出ではありません。'))
 
-C('po', 'Purchase Orders: earlier in-app POs and POs from the ERP || Purchase Orders：アプリ内の旧POとERPのPO', 'Purchase Orders || Purchase Orders', 'Purchasing / PM / requesters || 購買・PM・申請者',
+C('po', 'Purchase Orders: earlier in-app POs and POs from the ERP || Purchase Orders：アプリ内の旧POとERPのPO', 'No longer in the menu (this work is done in Pegasus ERP); the screen and its data are kept || メニューから外れました（この業務はPegasus ERPで行います）。画面とデータは残っています', 'Purchasing / PM / requesters || 購買・PM・申請者',
   P('23.1 Follow the PO of a PR sent to the ERP || 23.1 ERPへ送信したPRのPOを確認', [
     'New POs are raised only in Pegasus ERP; this app no longer has a Create PO button. || 新しいPOはPegasus ERPでのみ発行されます。このアプリにCreate POボタンはありません。',
     'See a PR’s PO number in Purchase Requisition: the Status column shows <b>Ordered in ERP</b> with the PO number, or open the PR and read its ERP strip. || PRのPO番号はPurchase Requisitionで確認します。Status列に<b>ERPで発注済み</b>とPO番号が表示されます。PRを開いてERP欄でも確認できます。',
@@ -589,7 +589,7 @@ C('po', 'Purchase Orders: earlier in-app POs and POs from the ERP || Purchase Or
   ], 'You know a PR’s PO number and order status from the ERP without entering it again in the app. || PRのPO番号と発注状況をアプリへ再入力せずにERPから確認できます。',
     'Receiving and stock for POs raised in the ERP are handled in the ERP, following Purchasing and warehouse procedures. || ERPで発行したPOの入庫と在庫は、購買・倉庫の手順に従いERPで処理します。'))
 
-C('receiving', 'Goods Receiving: full and partial receipts || Goods Receiving：全量・分納入庫', 'Purchase Orders → Receive / Goods Receiving || Purchase Orders → Receive / Goods Receiving', 'Receiving staff / warehouse || 入庫担当・倉庫',
+C('receiving', 'Goods Receiving: full and partial receipts || Goods Receiving：全量・分納入庫', 'No longer in the menu (this work is done in Pegasus ERP); the screen and its data are kept || メニューから外れました（この業務はPegasus ERPで行います）。画面とデータは残っています', 'Receiving staff / warehouse || 入庫担当・倉庫',
   P('24.1 Record a GRN for goods actually received || 24.1 実際の到着品でGRNを記録', [
     'Open the PO’s receive action and match PO number/supplier with the delivery note. || POの入庫操作を開き、納品書とPO番号・仕入先を照合します。',
     'Enter delivery note reference and received date. || 納品書番号と受領日を入力します。',
@@ -604,7 +604,7 @@ C('receiving', 'Goods Receiving: full and partial receipts || Goods Receiving：
     'For incorrect confirmed receipts, report PO/GRN numbers and facts to the controller, then use the permitted stock-correction process. || 確定入庫の誤りはPO・GRN番号と事実を管理者へ伝え、許可された在庫修正手順を使います。'
   ], 'Received and usable quantities remain distinct, with references for corrections. || 受領数量と使用可能数量が区別され、修正の参照記録が残ります。'))
 
-C('inventory', 'Inventory: balances, adjustments and quarantine || 在庫：残高・調整・隔離品', 'Inventory → Stock Balances / Adjustments & Quarantine || Inventory → Stock Balances / Adjustments & Quarantine', 'Warehouse / controllers / stock readers || 倉庫・在庫管理者・閲覧権限者',
+C('inventory', 'Inventory: balances, adjustments and quarantine || 在庫：残高・調整・隔離品', 'No longer in the menu (this work is done in Pegasus ERP); the screen and its data are kept || メニューから外れました（この業務はPegasus ERPで行います）。画面とデータは残っています', 'Warehouse / controllers / stock readers || 倉庫・在庫管理者・閲覧権限者',
   P('25.1 Read balances and trace movements || 25.1 在庫残高と移動元を確認', [
     'Open Stock Balances and search item, part number, description or brand; use reorder filters when needed. || Stock Balancesで品目、部品番号、説明、ブランドを検索し、必要なら再発注対象を絞ります。',
     'Distinguish usable, quarantined, reserved, available and on-order quantities; inspect average cost and value. || 使用可能、隔離、引当済み、引当可能、発注中を区別し、平均単価と評価額を確認します。',
@@ -625,7 +625,7 @@ C('inventory', 'Inventory: balances, adjustments and quarantine || 在庫：残�
     'Check the remaining quarantine and resulting usable stock or outbound movement. || 隔離残高と処理後の使用可能在庫・出庫を確認します。'
   ], 'The decision is traceable and quarantine is not treated as available material before acceptance. || 処置を追跡でき、合格処理前の隔離品を使用可能在庫に含めていません。'))
 
-C('issues', 'Material Issues: request, issue, receive and return || 資材出庫：申請・払出・受領・返却', 'Material Issues || Material Issues', 'Requesters / approvers / warehouse / recipients || 申請者・承認者・倉庫・受領者',
+C('issues', 'Material Issues: request, issue, receive and return || 資材出庫：申請・払出・受領・返却', 'No longer in the menu (this work is done in Pegasus ERP); the screen and its data are kept || メニューから外れました（この業務はPegasus ERPで行います）。画面とデータは残っています', 'Requesters / approvers / warehouse / recipients || 申請者・承認者・倉庫・受領者',
   P('26.1 Request material with an MIR || 26.1 MIRで資材を申請', [
     'Open Material Issues → New MIR and select the project/released BOM. || Material Issues → New MIRでProject・Released BOMを選びます。',
     'Set the required date, recipient or purpose as offered and select material lines. || 必要日、受領者、用途などを入力し、資材行を選びます。',

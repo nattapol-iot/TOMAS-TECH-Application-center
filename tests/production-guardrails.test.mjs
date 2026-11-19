@@ -70,14 +70,14 @@ test("production workspace exposes API-backed menus with Inquiry as the intake e
     "Price Library", "Supplier Quotation", "Waiting Supplier Price",
     // Team overview replaced Resource Plan (2026-10-21) and sits under My Work; the weekly workload is a tab in it.
     "Team overview",
-    "Procurement Dashboard", "BOM", "Purchase Requisition", "Purchase Orders", "Inventory",
-    "Goods Receiving", "Material Issues", "Approvals",
+    // Lean procurement (2026-11-19): BOM is a tab of Purchase Requisition; orders, receiving and stock are done in Pegasus ERP.
+    "Purchase Requisition", "Approvals",
     // Document signing (DSN-TC-005). "My signature" is deliberately not here:
     // a specimen is a preference, reached from the user menu, because putting it
     // in the sidebar would imply the image is what authorises.
     "Operational Reports", "Sign Inbox", "Signed Documents", "Company Stamps",
     "Team Activity & Workload", "KPI & Growth", "Summary Reports",
-    "Customers", "Suppliers", "Employees", "Inventory items", "Site Visit Reference Data", "Master Schedule",
+    "Customers", "Suppliers", "Employees", "Site Visit Reference Data", "Master Schedule",
     "Module Templates", "Labor Packages", "Engineering rates",
     "User Accounts & Permissions", "Audit Log", "System Settings",
     "Employee Manual", "Report & Track Issues",

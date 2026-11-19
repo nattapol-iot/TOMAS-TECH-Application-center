@@ -526,7 +526,7 @@ test("legacy project timeline links and remembered views preserve schedule acces
 });
 
 test("master leaves restore directly and legacy master still opens customers", async (t) => {
-  for (const [savedView, destination] of [["master", "customers"], ["suppliers", "suppliers"], ["employees", "employees"], ["material-master", "inventory"], ["user-accounts", "team"]]) {
+  for (const [savedView, destination] of [["master", "customers"], ["suppliers", "suppliers"], ["employees", "employees"], ["user-accounts", "team"]]) {
     await t.test(savedView, async () => {
       const harness = createHarness({mode:"team-test",savedView,loadBootstrap:async()=>({...bootstrap,permissions:["master.read"]})});
       try {

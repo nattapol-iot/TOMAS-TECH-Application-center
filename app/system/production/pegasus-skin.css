@@ -213,3 +213,22 @@
   .pg-skin .overlay, .pg-skin .modal { animation: none; }
   .pg-skin .btn, .pg-skin .pg-act, .pg-skin .pg-cell { transition: none; }
 }
+
+/* Tabs (D.6): underline tabs on the canvas, the count as a neutral pill that turns primary on the active tab. */
+.pg-skin .tabs { gap: 24px; border-bottom-color: var(--pg-divider); }
+.pg-skin .tab { gap: 6px; margin-bottom: -1px; padding: 4px 4px 10px; color: var(--pg-muted-fg); font-size: 14px; font-weight: 500; transition: color 150ms var(--pg-ease); }
+.pg-skin .tab:hover { color: var(--pg-foreground); }
+.pg-skin .tab.active { border-bottom-color: var(--pg-primary); color: var(--pg-foreground); font-weight: 500; }
+.pg-skin .tab:focus-visible { outline: none; box-shadow: var(--pg-focus); }
+.pg-skin .tab em { min-width: 20px; padding: 2px 6px; background: rgb(0 0 0 / 0.07); color: var(--pg-muted-fg); font-size: 12px; font-weight: 500; line-height: 16px; text-align: center; font-variant-numeric: tabular-nums; }
+.pg-skin .tab.active em { background: var(--pg-primary-10); color: var(--pg-primary); }
+
+/* The PR sheet's paste box: rows copied from Excel land here, or in any cell of the table. */
+.pg-skin .pr-paste { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+.pg-skin .pr-paste textarea { width: 100%; min-height: 56px; padding: 10px 12px; border: 1px dashed var(--pg-input); border-radius: 8px; background: color-mix(in srgb, var(--pg-accent) 50%, var(--pg-background)); color: var(--pg-foreground); font: inherit; resize: none; cursor: text; }
+.pg-skin .pr-paste textarea:focus { border-color: var(--pg-primary); outline: none; box-shadow: var(--pg-focus); }
+.pg-skin .pr-paste small { color: var(--pg-muted-fg); font-size: 12px; }
+.pg-skin .callout select { height: 32px; margin-left: auto; padding: 0 8px; border: 1px solid var(--pg-input); border-radius: 6px; background: var(--pg-background); color: var(--pg-foreground); font-size: 14px; }
+/* The PR sheet's toolbar holds seven actions: tighter buttons and a shorter search keep it on one row at desktop width. */
+.pg-skin .panel .toolbar .btn { padding: 0 12px; }
+.pg-skin .panel .toolbar .search-field { flex: 1 1 200px; min-width: 180px; max-width: 320px; }

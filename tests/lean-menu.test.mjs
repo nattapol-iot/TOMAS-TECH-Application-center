@@ -11,14 +11,15 @@ const GROUPS = [
   ["NavGroup.sales", ["crm-dashboard", "crm-customers", "crm-contacts", "crm-opportunities", "crm-activities", "inquiries", "site-visits", "my-assignments", "visit-master", "customers"]],
   ["NavGroup.estimating", ["estimates", "price", "quotations", "missing", "module-templates", "labor-packages", "rates"]],
   ["NavGroup.projects", ["projects", "reports", "signing", "documents", "stamps", "schedule-templates", "installed-base", "site-monitor"]],
-  ["NavGroup.procurement", ["procurement", "boms", "purchase", "pos", "approvals", "inventory", "receiving", "issues", "material-master"]],
+  // Lean procurement (owner 2026-11-19): the PR list and Approvals; BOM is a tab of the PR screen, the rest is done in Pegasus ERP.
+  ["NavGroup.procurement", ["purchase", "approvals"]],
   ["NavGroup.team", ["activity", "performance", "summary-reports", "knowledge", "downloads"]],
   ["NavGroup.system", ["user-accounts", "employees", "suppliers", "audit", "settings"]],
 ];
 const HELP = ["manual", "support"];
 const viewsIn = (text) => [...text.matchAll(/\{ view: "([a-z-]+)"|\{"view":"([a-z-]+)"/g)].map((match) => match[1] ?? match[2]);
 
-test("the sidebar holds the 47 entries in seven work-order groups; nothing is lost and nothing is twice", async () => {
+test("the sidebar holds the 40 entries in seven work-order groups; nothing is twice", async () => {
   const shell = await source("app/system/ProductionApp.tsx");
   const nav = shell.slice(shell.indexOf("const NAV:"), shell.indexOf("/** The one rule for which menu entries"));
   const sections = nav.split(/\n {2}\{ (?=items: \[|group: ")/).slice(1);
@@ -28,13 +29,13 @@ test("the sidebar holds the 47 entries in seven work-order groups; nothing is lo
     assert.deepEqual(viewsIn(sections[index]), views, group ?? "top");
   }
   const all = viewsIn(nav);
-  assert.equal(all.length, 47);
-  assert.equal(new Set(all).size, 47);
+  assert.equal(all.length, 40);
+  assert.equal(new Set(all).size, 40);
   // The two help screens are entries of the "?" menu, and stay open to everyone.
   const help = shell.slice(shell.indexOf("const HELP_NAV"), shell.indexOf("function allowedViews"));
   assert.deepEqual(viewsIn(help), HELP);
   assert.match(shell, /allowed\.push\("profile", "signature", \.\.\.HELP_NAV\.map\(item => item\.view\)\);/);
-  // Every one of the 49 is still a view the shell knows.
+  // Every one of the 42 is still a view the shell knows.
   const viewType = shell.slice(shell.indexOf("type View = CrmView"), shell.indexOf("/** unlessPermission hides"));
   for (const view of [...all, ...HELP]) assert.ok(view.startsWith("crm-") || viewType.includes(`"${view}"`), `unknown view ${view}`);
 });
@@ -57,7 +58,6 @@ test("moving an entry kept its permission rule", async () => {
     '{ view: "installed-base", label: "Installed Base", icon: "layers", permission: "asset.read" }',
     '{ view: "site-monitor", label: "Site Monitor", icon: "cpu", permission: "monitor.read" }',
     '{ view: "approvals", label: "Approvals", icon: "checkCircle", permission: "procurement.approve" }',
-    '{"view":"material-master","label":"Inventory items","icon":"package","permission":"master.read"}',
     '{ view: "knowledge", label: "Knowledge Hub", icon: "book", permission: "knowledge.view" }',
     '{ view: "downloads", label: "Download Center", icon: "download" }',
     '{"view":"employees","label":"Employees","icon":"user","permission":"master.read"}',
@@ -101,4 +101,24 @@ test("the top bar ? menu opens the manual, the guides, the issue list and the do
   // The profile menu keeps its four entries.
   assert.match(shell, /\{userOpen \? <div className="menu" role="menu">[\s\S]{0,200}t\("My Profile"\)[\s\S]{0,200}t\("My signature"\)[\s\S]{0,200}employeeManualLabel\(language\)[\s\S]{0,200}t\("Logout"\)/);
   assert.match(ui, /help: <><circle cx="12" cy="12" r="10" \/>/);
+});
+
+test("procurement is one menu entry for engineers: BOM and PR history are tabs of it, and an old BOM link lands there (owner 2026-11-19)", async () => {
+  const [shell, material, api] = await Promise.all([source("app/system/ProductionApp.tsx"), source("app/system/production/MaterialScreens.tsx"), source("backend-node/src/routes/bootstrap.ts")]);
+  const nav = shell.slice(shell.indexOf("const NAV:"), shell.indexOf("/** The one rule for which menu entries"));
+  for (const gone of ["procurement", "boms", "pos", "inventory", "receiving", "issues", "material-master"]) {
+    assert.ok(!viewsIn(nav).includes(gone), gone);
+    assert.doesNotMatch(api.slice(api.indexOf("export const MENU_VIEWS"), api.indexOf("];", api.indexOf("export const MENU_VIEWS"))), new RegExp(`"${gone}"`));
+  }
+  assert.match(shell, /const target = next === "master" \? "customers" : next === "boms" \? "purchase" : next;/);
+  // The screens themselves are kept, so an entry put back in the menu opens again.
+  assert.match(shell, /\{view === "pos" \? <ProductionPurchaseOrders \{\.\.\.moduleProps\} \/> : null\}/);
+  assert.match(material, /\{ id: "requests", label: "Purchase Requisitions", count: endpoint\.data\.length \}, \{ id: "boms", label: "Bill of Materials" \}, \{ id: "history", label: "PR ย้อนหลัง" \}/);
+  assert.match(material, /tab === "boms" \? <ProductionBoms bootstrap=\{bootstrap\} notify=\{notify\} embedded \/>/);
+  // The BOM tab keeps its own link names, so the PR list's search and open record do not leak into it.
+  assert.match(material, /useLinkedState\(embedded \? "bom" : "open", null, idLink/);
+  assert.match(material, /<SearchInput link=\{embedded \? "bq" : "q"\}/);
+  // Stock approvals moved to the ERP: their panels show only while something still waits.
+  assert.match(material, /\{waitingMirs\.length \? <Panel title="Material issue approvals"/);
+  assert.match(material, /\{canAdjust && waitingAdjustments\.length \? <Panel title="Stock adjustment approvals"/);
 });
