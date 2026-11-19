@@ -59,10 +59,10 @@ function dateHarness(initial, withTime = false) {
     },
     useRef: (initialValue) => refs[refIndex++] ?? (refs[refIndex - 1] = { current: initialValue }),
   };
-  const module = { exports: {} };
+  const loaded = { exports: {} };
   new Function("require", "module", "exports", compile(read("app/system/DateInput.tsx")))(
     (id) => id === "react" ? hooks : id === "./i18n" ? { useT: () => (key) => key }
-      : id === "./ui" ? { Icon: () => null } : require(id), module, module.exports,
+      : id === "./ui" ? { Icon: () => null } : require(id), loaded, loaded.exports,
   );
   class NativeInput {
     get value() { return this.iso; }
@@ -72,7 +72,7 @@ function dateHarness(initial, withTime = false) {
   const native = new NativeInput();
   function render() {
     stateIndex = 0; refIndex = 0;
-    tree = module.exports.DateInput({ value, withTime, onChange: (event) => { value = event.target.value; changes.push(value); } });
+    tree = loaded.exports.DateInput({ value, withTime, onChange: (event) => { value = event.target.value; changes.push(value); } });
     tree.props.children[2].props.ref.current = native;
     return tree.props.children[0].props;
   }
