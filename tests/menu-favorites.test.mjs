@@ -53,7 +53,7 @@ test("the API keeps one list per person: known menu views only, at most 8, each 
   const menu = shell.slice(shell.indexOf("const NAV"), shell.indexOf("/** The one rule for which menu entries"));
   const menuViews = [...menu.matchAll(/\{ view: "([a-z-]+)"|\{"view":"([a-z-]+)"/g)].map((match) => match[1] ?? match[2]);
   const apiViews = [...route.slice(route.indexOf("export const MENU_VIEWS"), route.indexOf("];", route.indexOf("export const MENU_VIEWS"))).matchAll(/"([a-z-]+)"/g)].map((match) => match[1]);
-  assert.ok(menuViews.length > 40);
+  assert.ok(menuViews.length >= 40);
   assert.deepEqual(apiViews, menuViews);
   // Screens reached from inside another screen are not menu entries and cannot be starred.
   for (const view of ["profile", "signature", "crm-pipeline", "project-timeline", "sales-intake", "manual", "support"]) assert.ok(!apiViews.includes(view), view);

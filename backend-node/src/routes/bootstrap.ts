@@ -34,7 +34,7 @@ export const MENU_VIEWS: readonly string[] = [
   "crm-dashboard", "crm-customers", "crm-contacts", "crm-opportunities", "crm-activities", "inquiries", "site-visits", "my-assignments", "visit-master", "customers",
   "estimates", "price", "quotations", "missing", "module-templates", "labor-packages", "rates",
   "projects", "reports", "signing", "documents", "stamps", "schedule-templates", "installed-base", "site-monitor",
-  "procurement", "boms", "purchase", "pos", "approvals", "inventory", "receiving", "issues", "material-master",
+  "purchase", "approvals",
   "activity", "performance", "summary-reports", "knowledge", "downloads",
   "user-accounts", "employees", "suppliers", "audit", "settings",
 ];

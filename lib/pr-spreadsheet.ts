@@ -207,3 +207,66 @@ export function draftFromSheet(rows: Cell[][], lines: PrBomLine[], modules: stri
   });
   return { rows: result, format, skipped };
 }
+
+/** An unplanned row nobody has typed into yet: the sheet adds these in bulk, and a save leaves them out. */
+export const isBlankPrRow = (row: PrDraftRow) => row.lineType === "Unplanned" && !row.itemCode && !row.partNumber && !row.description && !row.brand && !row.remark && !row.unitPrice;
+
+/** Cells copied from Excel or Google Sheets: rows on line breaks, cells on tabs; the empty line a copy ends with is dropped. */
+export function clipboardRows(pasted: string): Cell[][] {
+  const rows = pasted.replace(/\r\n?/g, "\n").split("\n").map((line) => line.split("\t").map((cell) => cell.trim()));
+  while (rows.length && rows.at(-1)!.every((cell) => !cell)) rows.pop();
+  return rows;
+}
+
+/**
+ * The header a pasted block would have had, worked out from its columns when it was copied without one. The first column that is
+ * mostly numbers and has text before it is the quantity. Before it: the description alone, or part number + description, then
+ * brand, with an item code first when there are four. After it: the unit when it is text, the next number as the unit price,
+ * then a remark.
+ */
+function guessedHeader(rows: Cell[][]): Cell[] | null {
+  const width = Math.max(0, ...rows.map((row) => row.length));
+  const numeric = Array.from({ length: width }, (_, column) => {
+    const filled = rows.map((row) => text(row[column])).filter(Boolean);
+    return filled.length > 0 && filled.filter((cell) => number(cell) !== null).length / filled.length >= 0.8;
+  });
+  const qty = numeric.findIndex((isNumber, column) => isNumber && column > 0 && numeric.slice(0, column).some((before) => !before));
+  if (qty < 0) return null;
+  const header: Cell[] = Array.from({ length: width }, () => "");
+  // A column of numbers before the quantity (a running No.) names nothing.
+  const before = Array.from({ length: qty }, (_, column) => column).filter((column) => !numeric[column]).slice(-4);
+  const names = [["description"], ["part no.", "description"], ["part no.", "description", "brand"], ["item code", "part no.", "description", "brand"]][before.length - 1] ?? [];
+  before.forEach((column, index) => { header[column] = names[index]!; });
+  header[qty] = "qty";
+  let next = qty + 1;
+  if (next < width && !numeric[next]) { header[next] = "unit"; next += 1; }
+  if (next < width && numeric[next]) { header[next] = "unit price"; next += 1; }
+  if (next < width && !numeric[next]) header[next] = "remark";
+  return header;
+}
+
+/**
+ * Rows pasted from a spreadsheet, read like an imported file: by their header row when the copy has one, else by guessedHeader.
+ * An unplanned row the paste gave no module takes `module` (the sheet's module filter, or the BOM's only module).
+ */
+export function draftFromPaste(pasted: string, lines: PrBomLine[], modules: string[], module: string): SheetImport | null {
+  const rows = clipboardRows(pasted);
+  if (!rows.length) return null;
+  const read = draftFromSheet(rows, lines, modules) ?? (() => { const header = guessedHeader(rows); return header ? draftFromSheet([header, ...rows], lines, modules) : null; })();
+  if (!read) return null;
+  return { ...read, rows: read.rows.map((row) => row.lineType === "Unplanned" ? { ...row, module: row.module || module, unit: row.unit || "pcs" } : row) };
+}
+
+/**
+ * Adds pasted rows to the sheet instead of replacing it. A planned row for a BOM line the sheet already holds updates that row
+ * (ticked, with the pasted quantity, price and remark); substitutes and unplanned items are appended. `stamp` keeps the new keys apart.
+ */
+export function addPastedRows(rows: PrDraftRow[], pasted: PrDraftRow[], stamp: string): PrDraftRow[] {
+  const next = rows.filter((row) => !isBlankPrRow(row));
+  pasted.forEach((row, index) => {
+    const held = row.lineType === "Planned" ? next.findIndex((item) => item.lineType === "Planned" && item.bomLineId === row.bomLineId) : -1;
+    if (held >= 0) next[held] = { ...next[held]!, selected: true, quantity: row.quantity, unitPrice: row.unitPrice, remark: row.remark || next[held]!.remark };
+    else next.push({ ...row, key: `paste-${stamp}-${index}`, selected: true });
+  });
+  return next;
+}

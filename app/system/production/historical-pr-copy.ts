@@ -679,11 +679,6 @@ export const HISTORICAL_PR_COPY: Record<string, { th: string; en: string; jp: st
     "en": "Everything on this BOM is requested",
     "jp": "このBOMは全て申請済み"
   },
-  "ใช้ 'เพิ่มรายการนอกแผน' หรือนำเข้า Excel หากต้องซื้อของเพิ่ม": {
-    "th": "ใช้ 'เพิ่มรายการนอกแผน' หรือนำเข้า Excel หากต้องซื้อของเพิ่ม",
-    "en": "Use 'Add unplanned item' or import Excel to buy more",
-    "jp": "追加購入は「見積外品目を追加」またはExcel取込で"
-  },
   "ตรงแผน": {
     "th": "ตรงแผน",
     "en": "Planned",
@@ -864,11 +859,6 @@ export const HISTORICAL_PR_COPY: Record<string, { th: string; en: string; jp: st
     "en": "Edit the draft PR",
     "jp": "下書きPRを編集"
   },
-  "แก้ไข PR ฉบับร่าง กด 'บันทึก PR' แล้วกด 'ส่ง' ที่รายการ PR เพื่อขออนุมัติใหม่": {
-    "th": "แก้ไข PR ฉบับร่าง กด 'บันทึก PR' แล้วกด 'ส่ง' ที่รายการ PR เพื่อขออนุมัติใหม่",
-    "en": "Edit the draft PR, press Save PR, then Submit in the PR list to ask for approval again",
-    "jp": "下書きPRを編集して「PRを保存」を押し、PR一覧で「提出」を押して再承認を依頼します"
-  },
   "กำลังส่ง ERP · แจ้งผู้ขอถ้าไม่สำเร็จ": {
     "th": "กำลังส่ง ERP · แจ้งผู้ขอถ้าไม่สำเร็จ",
     "en": "Sending to the ERP · the requester is told if it fails",
@@ -903,5 +893,70 @@ export const HISTORICAL_PR_COPY: Record<string, { th: string; en: string; jp: st
     "th": "ERP รับได้สูงสุด 1,000,000 ต่อรายการ",
     "en": "The ERP takes at most 1,000,000 on one line",
     "jp": "ERPは1明細あたり最大1,000,000まで"
+  },
+  "เพิ่ม 10 แถว": {
+    "th": "เพิ่ม 10 แถว",
+    "en": "Add 10 rows",
+    "jp": "10行追加"
+  },
+  "วางจาก Excel": {
+    "th": "วางจาก Excel",
+    "en": "Paste from Excel",
+    "jp": "Excelから貼り付け"
+  },
+  "คลิกที่นี่แล้วกด Ctrl+V เพื่อวางแถวที่คัดลอกจาก Excel": {
+    "th": "คลิกที่นี่แล้วกด Ctrl+V เพื่อวางแถวที่คัดลอกจาก Excel",
+    "en": "Click here and press Ctrl+V to paste rows copied from Excel",
+    "jp": "ここをクリックしてCtrl+Vで、Excelからコピーした行を貼り付けます"
+  },
+  "คัดลอกหัวคอลัมน์มาด้วยก็ได้ (Description, Part No., Qty, Unit, Unit price, Brand, Remark) ถ้าไม่มีหัวคอลัมน์ ให้เรียง Part No. · รายละเอียด · ยี่ห้อ · จำนวน · หน่วย · ราคาต่อหน่วย · หมายเหตุ หรือวางลงในช่องใดของตารางก็ได้": {
+    "th": "คัดลอกหัวคอลัมน์มาด้วยก็ได้ (Description, Part No., Qty, Unit, Unit price, Brand, Remark) ถ้าไม่มีหัวคอลัมน์ ให้เรียง Part No. · รายละเอียด · ยี่ห้อ · จำนวน · หน่วย · ราคาต่อหน่วย · หมายเหตุ หรือวางลงในช่องใดของตารางก็ได้",
+    "en": "You may copy the header row too (Description, Part No., Qty, Unit, Unit price, Brand, Remark). Without one, order the columns Part No. · Description · Brand · Qty · Unit · Unit price · Remark. You can also paste into any cell of the table.",
+    "jp": "見出し行ごとコピーしても構いません（Description, Part No., Qty, Unit, Unit price, Brand, Remark）。見出しがない場合は Part No. · 品名 · メーカー · 数量 · 単位 · 単価 · 備考 の順に並べます。表のどのセルに貼り付けても構いません。"
+  },
+  "แถวนอกแผนยังไม่ได้เลือก Module": {
+    "th": "แถวนอกแผนยังไม่ได้เลือก Module",
+    "en": "unplanned rows have no module yet",
+    "jp": "行の計画外明細にモジュールが未設定です"
+  },
+  "ตั้ง Module ให้ทุกแถวที่ยังว่าง": {
+    "th": "ตั้ง Module ให้ทุกแถวที่ยังว่าง",
+    "en": "Set the module for every row without one",
+    "jp": "未設定の行すべてにモジュールを設定"
+  },
+  "ไม่พบรายการในข้อมูลที่วาง ต้องมีคอลัมน์รายละเอียดหรือ Part No. และคอลัมน์จำนวน": {
+    "th": "ไม่พบรายการในข้อมูลที่วาง ต้องมีคอลัมน์รายละเอียดหรือ Part No. และคอลัมน์จำนวน",
+    "en": "No items were found in what you pasted. It needs a description or part number column, and a quantity column.",
+    "jp": "貼り付けた内容に明細が見つかりません。品名または品番の列と、数量の列が必要です。"
+  },
+  "วางแล้ว": {
+    "th": "วางแล้ว",
+    "en": "Pasted",
+    "jp": "貼り付け済み"
+  },
+  "แก้ไข PR ฉบับร่าง แล้วกด 'ส่งขออนุมัติ' หรือ 'บันทึกร่าง' ไว้ก่อน": {
+    "th": "แก้ไข PR ฉบับร่าง แล้วกด 'ส่งขออนุมัติ' หรือ 'บันทึกร่าง' ไว้ก่อน",
+    "en": "Edit the draft PR, then press Submit for approval, or Save Draft to keep it for later",
+    "jp": "下書きPRを編集し、「承認申請」を押すか、「下書き保存」で保存しておきます"
+  },
+  "ใช้ 'เพิ่มรายการนอกแผน' 'วางจาก Excel' หรือนำเข้า Excel หากต้องซื้อของเพิ่ม": {
+    "th": "ใช้ 'เพิ่มรายการนอกแผน' 'วางจาก Excel' หรือนำเข้า Excel หากต้องซื้อของเพิ่ม",
+    "en": "Add an unplanned line, paste from Excel or import Excel if more must be bought",
+    "jp": "追加で購入する場合は、計画外追加、Excelから貼り付け、またはExcelインポートを使います"
+  },
+  "ส่งขออนุมัติแล้ว": {
+    "th": "ส่งขออนุมัติแล้ว",
+    "en": "submitted for approval",
+    "jp": "承認申請しました"
+  },
+  "บันทึกเป็นฉบับร่างแล้ว": {
+    "th": "บันทึกเป็นฉบับร่างแล้ว",
+    "en": "saved as a draft",
+    "jp": "下書きとして保存しました"
+  },
+  "บันทึกเป็นฉบับร่างแล้ว แต่ส่งขออนุมัติไม่สำเร็จ": {
+    "th": "บันทึกเป็นฉบับร่างแล้ว แต่ส่งขออนุมัติไม่สำเร็จ",
+    "en": "saved as a draft, but it could not be submitted",
+    "jp": "下書きとして保存しましたが、承認申請できませんでした"
   }
 };

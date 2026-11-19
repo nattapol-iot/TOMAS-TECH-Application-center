@@ -158,16 +158,12 @@ const NAV: { group?: string; items: NavItem[] }[] = [
     { view: "installed-base", label: "Installed Base", icon: "layers", permission: "asset.read" },
     { view: "site-monitor", label: "Site Monitor", icon: "cpu", permission: "monitor.read" },
   ] },
+  // Lean procurement (owner 2026-11-19): one entry for everyone, Approvals for approvers. BOM is a tab of the PR screen. The
+  // dashboard, purchase orders, inventory, receiving, material issues and inventory items left the menu because that work is
+  // done in Pegasus ERP; their screens and data are kept, and an entry put back here opens its screen again.
   { group: "NavGroup.procurement", items: [
-    { view: "procurement", label: "Procurement Dashboard", icon: "trendingUp", permission: "procurement.read" },
-    { view: "boms", label: "BOM", icon: "layers", permission: "procurement.read" },
     { view: "purchase", label: "Purchase Requisition", icon: "package", permission: "procurement.read" },
-    { view: "pos", label: "Purchase Orders", icon: "truck", permission: "procurement.read" },
     { view: "approvals", label: "Approvals", icon: "checkCircle", permission: "procurement.approve" },
-    { view: "inventory", label: "Inventory", icon: "database", permission: "inventory.read" },
-    { view: "receiving", label: "Goods Receiving", icon: "download", permission: "inventory.read" },
-    { view: "issues", label: "Material Issues", icon: "upload", permission: "inventory.read" },
-    {"view":"material-master","label":"Inventory items","icon":"package","permission":"master.read"},
   ] },
   { group: "NavGroup.team", items: [
     {"view":"activity","label":"Team Activity & Workload","icon":"chart","permission":"activity.read"},
@@ -196,7 +192,8 @@ function navItemAllowed(item: NavItem, permissions: readonly string[], role: str
 
 /** CRM users keep customers in CRM; the old Master destination still resolves. */
 function landingView(next: View, permissions: readonly string[]): View {
-  const target = next === "master" ? "customers" : next;
+  // BOM became a tab of the PR screen (2026-11-19); an old BOM link opens that screen.
+  const target = next === "master" ? "customers" : next === "boms" ? "purchase" : next;
   return target === "customers" && permissions.includes("crm.read") ? "crm-customers" : target;
 }
 /** Board and Timeline modes highlight the menu of their parent workspace. */

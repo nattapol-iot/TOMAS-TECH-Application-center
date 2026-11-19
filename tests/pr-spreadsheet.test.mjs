@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { asPlanned, asSubstitute, draftFromBom, draftFromPr, draftFromSheet, draftIssues, moduleStatus, payloadLines, PR_TEMPLATE_HEADER_ROW, sheetRows, templateRows } from "../lib/pr-spreadsheet.ts";
+import { addPastedRows, asPlanned, asSubstitute, clipboardRows, draftFromBom, draftFromPaste, draftFromPr, draftFromSheet, draftIssues, isBlankPrRow, moduleStatus, payloadLines, PR_TEMPLATE_HEADER_ROW, sheetRows, templateRows } from "../lib/pr-spreadsheet.ts";
 
 const bom = [
   { id: 1, module: "Panel", itemCode: "PLC-01", partNumber: "6ES7-1", description: "PLC controller", brand: "Siemens", unit: "pcs", remaining: 2, estimatedUnitCost: 10000 },
@@ -98,4 +98,41 @@ test("a workbook's cells become rows; a sheet with no recognisable table is not 
   assert.deepEqual(rows[1], ["Bracket", 3]);
   assert.equal(rows.length, 4);
   assert.equal(draftFromSheet([["Hello"], ["World"]], bom, modules), null);
+});
+
+test("rows pasted from Excel are read by their header, or by their columns when copied without one (owner 2026-11-19)", () => {
+  // Excel ends a copy with a line break, and Windows separates rows with CRLF.
+  assert.deepEqual(clipboardRows("a\tb\r\nc\td\r\n"), [["a", "b"], ["c", "d"]]);
+  // With a header: columns by name in any order; an item of the BOM is tied to its line.
+  const named = draftFromPaste("Qty\tDescription\tPart No.\tUnit price\n3\tTouch panel\tHMI-7IN\t15000\n1\tPLC\t6ES7-1\t9000\n", bom, modules, "Panel");
+  assert.deepEqual(named.rows.map((row) => [row.lineType, row.bomLineId, row.module, row.partNumber, row.description, row.quantity, row.unit, row.unitPrice]),
+    [["Unplanned", null, "Panel", "HMI-7IN", "Touch panel", 3, "pcs", 15000], ["Planned", 1, "Panel", "6ES7-1", "PLC controller", 1, "pcs", 9000]]);
+  // Without one: the first mostly-number column after some text is the quantity.
+  const shape = (pasted) => draftFromPaste(pasted, bom, modules, "Software").rows.map((row) => [row.itemCode, row.partNumber, row.description, row.brand, row.quantity, row.unit, row.unitPrice, row.remark, row.module]);
+  assert.deepEqual(shape("Bracket\t4\nGland M20\t10\n"), [["", "", "Bracket", "", 4, "pcs", 0, "", "Software"], ["", "", "Gland M20", "", 10, "pcs", 0, "", "Software"]]);
+  assert.deepEqual(shape("Bracket\t4\tset\t1,250.50\tfor door\n"), [["", "", "Bracket", "", 4, "set", 1250.5, "for door", "Software"]]);
+  assert.deepEqual(shape("XS-1\tSensor\t2\t800\n"), [["", "XS-1", "Sensor", "", 2, "pcs", 800, "", "Software"]]);
+  assert.deepEqual(shape("XS-1\tSensor\tOmron\t2\tpcs\t800\n"), [["", "XS-1", "Sensor", "Omron", 2, "pcs", 800, "", "Software"]]);
+  assert.deepEqual(shape("IT-9\tXS-1\tSensor\tOmron\t2\tpcs\t800\turgent\n"), [["IT-9", "XS-1", "Sensor", "Omron", 2, "pcs", 800, "urgent", "Software"]]);
+  // A running No. column is not the quantity and names nothing; a row without a quantity is skipped and counted.
+  const numbered = draftFromPaste("1\tBracket\t4\n2\tGland\t\n3\tLabel\t7\n", bom, modules, "Panel");
+  assert.deepEqual([numbered.rows.map((row) => [row.description, row.quantity]), numbered.skipped], [[["Bracket", 4], ["Label", 7]], 1]);
+  // Nothing that looks like a quantity: not read.
+  assert.equal(draftFromPaste("just some words\nand more\n", bom, modules, "Panel"), null);
+  assert.equal(draftFromPaste("", bom, modules, "Panel"), null);
+});
+
+test("pasted rows join the sheet: a BOM line already there is updated, new items are appended, untouched blank rows go", () => {
+  const sheet = draftFromBom(bom);
+  const blank = { key: "new-1", selected: true, lineType: "Unplanned", bomLineId: null, module: "Panel", itemCode: "", partNumber: "", description: "", brand: "", unit: "pcs", quantity: 1, coveredQuantity: null, unitPrice: 0, remark: "" };
+  assert.equal(isBlankPrRow(blank), true);
+  assert.equal(isBlankPrRow({ ...blank, description: "Bracket" }), false);
+  assert.equal(isBlankPrRow(sheet[0]), false);
+  const pasted = draftFromPaste("Part No.\tDescription\tQty\tUnit price\n6ES7-1\tPLC\t1\t9000\nHMI-7IN\tTouch panel\t3\t15000\n", bom, modules, "Panel").rows;
+  const next = addPastedRows([{ ...sheet[0], selected: false }, ...sheet.slice(1), blank], pasted, "t1");
+  assert.equal(next.length, sheet.length + 1);
+  assert.deepEqual([next[0].key, next[0].selected, next[0].quantity, next[0].unitPrice], [sheet[0].key, true, 1, 9000]);
+  assert.deepEqual([next.at(-1).key, next.at(-1).lineType, next.at(-1).partNumber, next.at(-1).quantity], ["paste-t1-1", "Unplanned", "HMI-7IN", 3]);
+  assert.ok(!next.some((row) => row.key === "new-1"));
+  assert.equal(draftIssues(next, lines, modules).size, 0);
 });

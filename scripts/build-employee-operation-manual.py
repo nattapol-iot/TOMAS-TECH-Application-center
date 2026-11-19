@@ -428,17 +428,17 @@ chapter('punchlist', 'Punchlist: ใบแจ้ง Issue ของลูกค�
     ], 'ทุก Issue ที่ปิดแล้วมีวันที่และชั่วโมงจริงพร้อมวิธีแก้', 'Issue ที่บันทึกทีละข้อแบบเดิมยังเปิดดูได้ที่ ภาพรวมงานทีม → Tasks และใน My Work ส่วนปัญหาระบบ อุปกรณ์ ข้อมูล และการประสานงานภายใน ให้แจ้งที่ Support Center'),
     'app/system/production/IssueBatchScreen.tsx app/system/production/MyIssues.tsx')
 
-chapter('procurement', 'Procurement Dashboard และ BOM', 'Procurement Dashboard / BOM', 'Purchasing / PM / ผู้ควบคุมวัสดุ',
-    proc('20.1 อ่านคิวและงบวัสดุ', [
-        'เปิด Procurement Dashboard ตรวจยอดและคิวเอกสารจากข้อมูลจริงตามสิทธิ์',
-        'แยกความหมาย Budget, Commitment และ Actual ก่อนเปรียบเทียบ ไม่บวกยอดอ้างอิงเดียวกันซ้ำ',
-        'ตรวจ PR รออนุมัติ PO รอรับ และเหตุผิดปกติที่แสดง แล้วเปิดโมดูลต้นทางเพื่อดำเนินการ'
-    ], 'ระบุได้ว่ายอดหรือคิวใดต้องติดตามและเอกสารใดเป็นต้นทาง') +
+chapter('procurement', 'BOM: รายการวัสดุในหน้า Purchase Requisition', 'Purchase Requisition → แท็บ รายการวัสดุ (BOM)', 'Purchasing / PM / ผู้ควบคุมวัสดุ',
+    proc('20.1 เปิด BOM และดูสถานะ', [
+        'เปิดเมนู Purchase Requisition แล้วกดแท็บ <b>รายการวัสดุ (BOM)</b> เมนูกลุ่มจัดซื้อเหลือ Purchase Requisition และ Approvals เท่านั้น',
+        'แถบสรุปด้านบนบอกจำนวน BOM แต่ละสถานะ กดช่องสถานะเพื่อกรอง และกดอีกครั้งเพื่อยกเลิก',
+        'กดเลข BOM เพื่อเปิดรายการ ตรวจจำนวน งบ และยอดที่ขอซื้อไปแล้ว'
+    ], 'เห็น BOM ของโครงการและรู้ว่าฉบับใด Released พร้อมใช้ขอซื้อ') +
     proc('20.2 สร้างและ Release BOM', [
-        'เปิด BOM → <b>Generate BOM</b> เลือก Project ที่มี Estimate อนุมัติหรือ Locked',
+        'เปิด Purchase Requisition → แท็บ <b>รายการวัสดุ (BOM)</b> → <b>Generate BOM</b> เลือก Project ที่มี Estimate อนุมัติหรือ Locked',
         'ตรวจเลข Estimate/revision และสร้าง BOM ระบบนำเฉพาะรายการวัสดุ (หมวด 01-05) เข้า BOM ค่าแรง Outsource และค่าเดินทางไม่อยู่ใน BOM',
-        'เปิด View ตรวจ Module, Item, จำนวน งบอ้างอิง สต็อกและ Shortage',
-        'ผู้มีสิทธิ์เลือก <b>Release</b> เมื่อรายการครบ พร้อมบันทึกหมายเหตุตามงาน',
+        'กดเลข BOM ตรวจ Module, Item, จำนวน งบอ้างอิง สต็อกและ Shortage',
+        'ผู้มีสิทธิ์กดปุ่มกุญแจ (<b>Release</b>) ทางซ้ายของแถวเมื่อรายการครบ พร้อมบันทึกหมายเหตุตามงาน',
         'ใช้ BOM ที่ Released เป็นฐานในการสร้าง PR และ MIR'
     ], 'สถานะ BOM เป็น Released และ revision ถูกตรึงสำหรับการเบิก/ซื้อ') +
     proc('20.3 จองสต็อกให้โครงการ', [
@@ -453,11 +453,11 @@ chapter('pr', 'Purchase Requisition: ขอซื้อ อนุมัติ �
     proc('21.1 สร้าง PR จาก Released BOM', [
         'เปิด Purchase Requisition → <b>สร้าง PR</b> แล้วเลือก <b>Released BOM</b> ของโครงการ',
         'กำหนด Priority, Required date และ Purpose แล้วตรวจ <b>แผนกใน ERP</b> ที่ระบบเลือกจากแผนกของผู้ขอไว้ให้ เปลี่ยนได้ถ้าไม่ตรง',
-        'ในตารางรายการที่ซื้อ ใช้ <b>ซื้อทั้งหมดที่เหลือ</b> หรือเลือกเฉพาะแถว แล้วแก้ Qty และ Unit price ไม่ต้องเลือก Supplier เพราะฝ่ายจัดซื้อเลือกใน ERP',
+        'ในตารางรายการที่ซื้อ ติ๊กช่องที่หัวคอลัมน์เพื่อซื้อทั้งหมดที่เหลือ หรือเลือกเฉพาะแถว แล้วแก้ Qty และ Unit price ไม่ต้องเลือก Supplier เพราะฝ่ายจัดซื้อเลือกใน ERP',
         'ถ้าต้องซื้อรุ่นอื่นแทนรายการใน Estimate ให้กด <b>เปลี่ยนรุ่น</b> (กลับเป็นรายการเดิมด้วย <b>ใช้ตาม Estimate</b>) ถ้าเป็นของที่ไม่มีใน Estimate ให้กด <b>เพิ่มรายการนอกแผน</b> แล้วเลือก Module ที่จะใช้งบ',
-        'ถ้ารายการมาก (สูงสุด 2,000 แถวต่อ PR) ใช้ <b>ดาวน์โหลด Excel</b> กรอกในไฟล์ แล้ว <b>นำเข้า Excel</b> กลับมา ไฟล์แบบฟอร์ม TOMAS PR ก็นำเข้าได้',
-        'ตรวจงบราย Module (งบ Estimate, PR ก่อนหน้า, PR นี้ และคงเหลือหลัง PR นี้) แก้แถวที่มีข้อความสีแดงให้หมด แล้วกด <b>สร้าง PR</b>',
-        'PR ที่สร้างเป็น Draft เปิดตรวจจากรายการแล้วกด <b>Submit</b> เพื่อส่งอนุมัติ'
+        'ถ้ารายการมาก (สูงสุด 2,000 แถวต่อ PR) คัดลอกแถวจาก Excel แล้วกด <b>วางจาก Excel</b> และ Ctrl+V หรือวางลงในช่องของตารางได้เลย รายการที่ตรงกับ BOM จะอัปเดตแถวเดิม ที่เหลือเป็นรายการนอกแผน กด <b>เพิ่ม 10 แถว</b> เพื่อพิมพ์เอง (Enter ลงแถวถัดไป แถวที่ไม่ได้พิมพ์ไม่ถูกบันทึก) หรือใช้ <b>ดาวน์โหลด Excel</b> แล้ว <b>นำเข้า Excel</b> ไฟล์แบบฟอร์ม TOMAS PR ก็นำเข้าได้',
+        'ตรวจงบราย Module (งบ Estimate, PR ก่อนหน้า, PR นี้ และคงเหลือหลัง PR นี้) แก้แถวที่มีข้อความสีแดงให้หมด แล้วกด <b>ส่งขออนุมัติ</b> ระบบบันทึกและส่งอนุมัติในครั้งเดียว',
+        'ถ้ายังไม่พร้อมส่ง กด <b>บันทึกร่าง</b> แล้วกดปุ่มส่ง (Submit) ทางซ้ายของแถวในรายการภายหลัง'
     ], 'มีเลข PR และเส้นทางอนุมัติ: หัวหน้าแผนกของผู้ขอ แล้วผู้อนุมัติขั้นสุดท้าย', 'PR ที่ยังเป็น Draft ยกเลิกได้ด้วย <b>ยกเลิก PR</b> และงบของ Module จะคืนกลับ เปลี่ยนรุ่นหรือซื้อนอกแผนภายในงบของ Module ไม่ต้องขออนุมัติเพิ่ม') +
     proc('21.2 อนุมัติ PR: หัวหน้าแผนก แล้วผู้อนุมัติขั้นสุดท้าย', [
         'เมื่อผู้ขอกด Submit PR ไปที่หัวหน้าแผนกของผู้ขอก่อน และหัวหน้าได้แจ้งเตือนในแอป หัวหน้าเปิด Purchase Requisition หรือ Approvals แล้วตรวจว่า PR อยู่ที่ขั้นของตน',
@@ -492,7 +492,7 @@ chapter('historical-pr', 'PR ย้อนหลัง: นำเข้า เก
     ], 'เห็นส่วนต่างเฉพาะรายการ Active ที่จับคู่ในเอกสารนั้น พร้อมประวัติที่ตรวจย้อนกลับได้', 'ช่องต้นทุนจริงว่างคือยังไม่ทราบ ไม่ใช่ศูนย์; งบ Estimate ว่างหรือศูนย์ไม่ใช่หลักฐานว่าเกินงบ; เวอร์ชันนำเข้าใหม่เริ่มโดยยังไม่มี mapping และไม่ใช่ยอดใช้จ่ายทั้งโครงการ'),
     'docs/historical-pr-import.md app/system/production/HistoricalPrPanel.tsx backend-node/src/routes/historical-pr.ts')
 
-chapter('po', 'Purchase Orders: PO เดิมในแอปและ PO จาก ERP', 'Purchase Orders', 'Purchasing / PM / ผู้ขอซื้อ',
+chapter('po', 'Purchase Orders: PO เดิมในแอปและ PO จาก ERP', 'ออกจากเมนูแล้ว (งานส่วนนี้ทำใน Pegasus ERP) · หน้าจอและข้อมูลเดิมยังเก็บไว้', 'Purchasing / PM / ผู้ขอซื้อ',
     proc('23.1 ติดตาม PO ของ PR ที่ส่งเข้า ERP', [
         'PO ใหม่ออกใน Pegasus ERP เท่านั้น แอปนี้ไม่มีปุ่ม Create PO แล้ว',
         'ดูเลข PO ของ PR ได้ที่ Purchase Requisition คอลัมน์ Status จะแสดง <b>สั่งซื้อใน ERP แล้ว</b> พร้อมเลข PO หรือเปิด PR แล้วดูแถบข้อมูล ERP',
@@ -501,7 +501,7 @@ chapter('po', 'Purchase Orders: PO เดิมในแอปและ PO จ�
     ], 'รู้เลข PO และสถานะการสั่งซื้อของ PR จาก ERP โดยไม่ต้องบันทึกซ้ำในแอป', 'การรับของและสต็อกของ PO ที่ออกใน ERP ทำใน ERP ตามขั้นตอนของฝ่ายจัดซื้อและคลัง'),
     'app/system/production/MaterialScreens.tsx backend-node/src/routes/purchase-requisitions.ts', 'pos')
 
-chapter('receiving', 'Goods Receiving: รับของเต็มและบางส่วน', 'Purchase Orders → Receive / Goods Receiving', 'เจ้าหน้าที่รับของ / คลัง',
+chapter('receiving', 'Goods Receiving: รับของเต็มและบางส่วน', 'ออกจากเมนูแล้ว (งานส่วนนี้ทำใน Pegasus ERP) · หน้าจอและข้อมูลเดิมยังเก็บไว้', 'เจ้าหน้าที่รับของ / คลัง',
     proc('24.1 บันทึก GRN จากของที่มาถึงจริง', [
         'เปิด PO ที่ต้องรับ เลือกคำสั่งรับของ ตรวจเลข PO และผู้ขายกับใบส่งของ',
         'กรอก Delivery note และ Received date',
@@ -516,7 +516,7 @@ chapter('receiving', 'Goods Receiving: รับของเต็มและ�
     ], 'ยอดรับและยอดพร้อมใช้แยกกันชัดเจน พร้อมเอกสารอ้างอิงการแก้ไข'),
     'app/system/production/MaterialScreens.tsx backend-node/src/routes/goods-receipts.ts', 'receiving')
 
-chapter('inventory', 'Inventory: ยอดคงเหลือ ปรับยอด และ Quarantine', 'Inventory → Stock Balances / Adjustments & Quarantine', 'คลัง / Inventory Controller / ผู้มีสิทธิ์อ่านสต็อก',
+chapter('inventory', 'Inventory: ยอดคงเหลือ ปรับยอด และ Quarantine', 'ออกจากเมนูแล้ว (งานส่วนนี้ทำใน Pegasus ERP) · หน้าจอและข้อมูลเดิมยังเก็บไว้', 'คลัง / Inventory Controller / ผู้มีสิทธิ์อ่านสต็อก',
     proc('25.1 อ่านสต็อกและประวัติการเคลื่อนไหว', [
         'เปิด Stock Balances ค้นหารหัสสินค้า/คำอธิบาย ตรวจหน่วยและสถานที่จัดเก็บ',
         'แยกยอดที่หน้าแสดง: Usable, Quarantine, Reserved, Available, On order และ Avg. cost',
@@ -537,7 +537,7 @@ chapter('inventory', 'Inventory: ยอดคงเหลือ ปรับย�
     ], 'ของที่ผ่านถูกย้ายเข้าส่วนพร้อมใช้ หรือมีประวัติส่งคืน/ทำลายตามผลตัดสิน'),
     'app/system/production/CoreScreens.tsx app/system/production/MaterialScreens.tsx backend-node/src/routes/inventory.ts backend-node/src/routes/stock-control.ts', 'inventory')
 
-chapter('issues', 'Material Issues: ขอเบิก จ่าย รับ และคืน', 'Material Issues', 'ผู้ขอเบิก / ผู้อนุมัติ / คลัง / ผู้รับวัสดุ',
+chapter('issues', 'Material Issues: ขอเบิก จ่าย รับ และคืน', 'ออกจากเมนูแล้ว (งานส่วนนี้ทำใน Pegasus ERP) · หน้าจอและข้อมูลเดิมยังเก็บไว้', 'ผู้ขอเบิก / ผู้อนุมัติ / คลัง / ผู้รับวัสดุ',
     proc('26.1 ขอเบิกวัสดุด้วย MIR', [
         'เปิด Material Issues → สร้างคำขอ เลือก Released BOM ของโครงการ',
         'ระบุ Required date และ Purpose เช่น ประกอบ ติดตั้งหรือทดสอบ',
