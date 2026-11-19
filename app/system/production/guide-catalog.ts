@@ -965,6 +965,140 @@ const PROJECT_ERP_NUMBER: Guide = {
   ],
 };
 
+const PUNCHLIST_ISSUES: Guide = {
+  id: "punchlist-issues",
+  area: "project",
+  title: { th: "บันทึกใบแจ้ง Issue ของลูกค้า", en: "Record a customer's issue batch", jp: "顧客の課題票を記録" },
+  summary: {
+    th: "ลูกค้าแจ้งปัญหาหนึ่งครั้ง = หนึ่งใบ พิมพ์หลาย Issue ในตารางแบบ Excel (วางจาก Excel ได้) แนบภาพหน้าจอ เลือกผู้รับผิดชอบ วันและชั่วโมงตามแผน Problem เริ่มได้ทันที Requirement ที่ Engineer พิมพ์จะรอ PM / Lead อนุมัติ ใช้กับโปรเจกต์ที่ปิดแล้วหรือไม่มีในระบบได้",
+    en: "One customer report is one batch. Type its issues in an Excel-like grid (or paste rows from Excel), attach screenshots, pick the PIC, plan dates and hours. Problems start at once; a Requirement typed by an engineer waits for the PM / Lead. Works for closed projects and ones not in the system.",
+    jp: "顧客の報告1回が1枚の票です。Excelのような表に課題を入力（Excelから貼り付けも可）し、スクリーンショットを添付、担当者・計画日・時間を入れます。Problemはすぐ着手、エンジニアが入力したRequirementはPM/リーダーの承認待ちです。完了案件やシステム外の案件にも使えます。",
+  },
+  minutes: 3,
+  permissions: ["schedule.read"],
+  views: ["projects"],
+  steps: [
+    menu("projects",
+      { th: "เปิดเมนูโปรเจกต์", en: "Open Projects", jp: "「プロジェクト」を開く" },
+      { th: "Punchlist อยู่ในเมนูนี้ คลิกที่เมนูที่ไฮไลต์อยู่", en: "The Punchlist is here. Click the highlighted menu entry.", jp: "パンチリストはここにあります。ハイライトされたメニューをクリックします。" }),
+    {
+      target: "[data-tab=\"punchlist\"]", action: "click", view: "projects",
+      title: { th: "แท็บ Punchlist", en: "The Punchlist tab", jp: "「パンチリスト」タブ" },
+      body: { th: "คลิกแท็บ 'Punchlist · Issue ลูกค้า'", en: "Click the Punchlist · Customer issues tab.", jp: "「パンチリスト・顧客課題」タブをクリックします。" },
+    },
+    {
+      target: "issues.summary", action: "next", view: "projects",
+      title: { th: "แถบสรุปคือตัวกรอง", en: "The summary bar is the filter", jp: "サマリーバーがフィルター" },
+      body: {
+        th: "กดช่องใดก็ได้เพื่อดูใบตามสถานะ: ยังเปิดอยู่ รออนุมัติ ของฉัน หรือปิดแล้ว ใบจะปิดเองเมื่อทุกข้อเสร็จ ยกเลิก หรือไม่อนุมัติ",
+        en: "Press any cell to list the batches in that state: open, waiting approval, mine or closed. A batch closes itself once every issue is done, cancelled or rejected.",
+        jp: "セルを押すとその状態の票が表示されます（未完了・承認待ち・自分の担当・完了）。全件が完了・取消・却下になると票は自動で完了します。",
+      },
+    },
+    {
+      target: "issues.old", action: "next", view: "projects",
+      title: { th: "Issue แบบเดิม", en: "Old single issues", jp: "旧形式の課題" },
+      body: {
+        th: "Issue ที่บันทึกทีละข้อแบบเดิมยังอยู่ครบในแท็บนี้ ใบแจ้งใหม่ให้สร้างจากปุ่มด้านขวา",
+        en: "Issues recorded one at a time the old way are all still in this tab. New ones go in a batch, from the button on the right.",
+        jp: "従来の1件ずつの課題はこのタブにすべて残っています。新しいものは右のボタンから票で作成します。",
+      },
+    },
+    {
+      target: "issues.create", action: "click", view: "projects",
+      title: { th: "สร้างใบแจ้ง Issue", en: "Create an issue batch", jp: "課題票を作成" },
+      body: { th: "กด 'สร้างใบแจ้ง Issue'", en: "Press New issue batch.", jp: "「課題票を作成」を押します。" },
+      missing: { th: "บัญชีนี้ไม่มีสิทธิ์วางแผนหรืออัปเดตงาน จึงสร้างใบไม่ได้ กด 'จบบทสอน'", en: "This account cannot plan or update work, so it cannot create batches. Press Finish.", jp: "このアカウントには計画・進捗の権限がないため票を作成できません。「完了」を押します。" },
+    },
+    {
+      target: "issues.header", action: "next", view: "projects",
+      title: { th: "ใบนี้ของโปรเจกต์ไหน", en: "Which project the batch is for", jp: "どの案件の票か" },
+      body: {
+        th: "เลือกโปรเจกต์ (โปรเจกต์ที่ปิดแล้วก็เลือกได้) หรือกด 'ไม่มีในระบบ' แล้วพิมพ์ชื่อโปรเจกต์กับลูกค้าเอง ใส่วันที่ลูกค้าแจ้งและชื่อผู้แจ้ง",
+        en: "Pick the project (closed ones too), or press Not in the system and type the project and customer. Add the day the customer reported and who reported it.",
+        jp: "案件を選ぶ（完了案件も可）か、「システム外」を押して案件名と顧客を入力します。報告日と報告者を入れます。",
+      },
+    },
+    {
+      target: "issues.grid", action: "next", view: "projects",
+      title: { th: "พิมพ์ Issue แบบ Excel", en: "Type the issues like Excel", jp: "Excelのように課題を入力" },
+      body: {
+        th: "หนึ่งบรรทัดต่อหนึ่ง Issue: ประเภท ฟังก์ชัน รายละเอียด ผู้รับผิดชอบ วันเริ่ม/เสร็จ และชั่วโมง (8 ชม. = 1 คน-วัน) คัดลอกแถวจาก Excel มาวางได้ วางภาพหน้าจอ (Ctrl+V) ในบรรทัดเพื่อแนบรูป บรรทัดว่างไม่ถูกบันทึก",
+        en: "One line per issue: category, function, description, PIC, start / end and hours (8 h = 1 man-day). Rows copied from Excel can be pasted; paste a screenshot (Ctrl+V) into a line to attach it. Empty lines are not saved.",
+        jp: "1行に1件：区分・機能・内容・担当者・開始/終了・時間（8時間=1人日）。Excelからコピーした行を貼り付けられます。行にスクリーンショットを貼り付け（Ctrl+V）ると添付されます。空の行は保存されません。",
+      },
+    },
+    {
+      target: "issues.load", action: "next", view: "projects",
+      title: { th: "ดูภาระงานก่อนมอบหมาย", en: "Check the load before assigning", jp: "割り当て前に負荷を確認" },
+      body: {
+        th: "แถบด้านขวาบอกชั่วโมงที่แต่ละคนมีงานอยู่แล้วในสัปดาห์นั้น บวกชั่วโมงจากใบนี้ เทียบกับกำลังของเขา สีแดงคือเกิน",
+        en: "The side panel shows the hours each PIC already has that week plus the hours from this batch, against what they have. Red means over.",
+        jp: "右のパネルに、その週の担当者の既存の時間とこの票の時間の合計が、稼働可能時間と比べて表示されます。赤は超過です。",
+      },
+      missing: { th: "ยังไม่ได้เปิดหน้าต่างสร้างใบ กด 'สร้างใบแจ้ง Issue' ก่อน", en: "The new batch window is not open. Press New issue batch first.", jp: "作成画面が開いていません。先に「課題票を作成」を押します。" },
+    },
+    {
+      target: "issues.save", action: "click", view: "projects",
+      title: { th: "บันทึกใบแจ้ง", en: "Save the batch", jp: "票を保存" },
+      body: {
+        th: "กด 'บันทึกใบแจ้ง' ระบบออกเลข IS-ปีเดือน-ลำดับ และ Issue จะไปอยู่ใน My Work ของผู้รับผิดชอบ ภาระงานทีม และ Gantt ของโปรเจกต์ ถ้าแค่ฝึก ให้กด 'ยกเลิก' (ร่างที่พิมพ์ไว้ยังเก็บไว้ให้)",
+        en: "Press Save batch. It gets a number IS-yearmonth-sequence, and the issues show in the PICs' My Work, the team's load and the project's Gantt. Only practising? Press Cancel (what you typed stays as a draft).",
+        jp: "「票を保存」を押すと IS-年月-連番 が付き、課題は担当者のマイワーク・チームの負荷・案件のガントに表示されます。練習だけなら「キャンセル」を押します（入力内容は下書きとして残ります）。",
+      },
+    },
+  ],
+};
+
+const PUNCHLIST_CLOSE: Guide = {
+  id: "punchlist-close-issue",
+  area: "project",
+  title: { th: "เริ่มและปิดงาน Issue ลูกค้า", en: "Start and close a customer issue", jp: "顧客課題の着手と完了" },
+  summary: {
+    th: "ผู้รับผิดชอบกด 'เริ่มทำ' แล้วปิดงานด้วยวันที่เสร็จจริง ชั่วโมงที่ใช้จริง และสิ่งที่แก้ไข PM / Lead อนุมัติหรือไม่อนุมัติ Requirement ได้จากหน้าเดียวกัน",
+    en: "The PIC presses Start, then closes the issue with the actual end, the hours it really took and what was done. PM / Lead approve or reject Requirements in the same place.",
+    jp: "担当者は「着手」を押し、実績終了日・実績時間・対応内容で完了にします。PM/リーダーは同じ画面でRequirementを承認・却下できます。",
+  },
+  minutes: 2,
+  permissions: ["schedule.read"],
+  views: ["projects", "my-work"],
+  steps: [
+    menu("projects",
+      { th: "เปิดเมนูโปรเจกต์", en: "Open Projects", jp: "「プロジェクト」を開く" },
+      { th: "Punchlist อยู่ในเมนูนี้ (Issue ของคุณยังขึ้นใน My Work ด้วย)", en: "The Punchlist is here (your issues also show in My Work).", jp: "パンチリストはここにあります（担当の課題はマイワークにも表示されます）。" }),
+    {
+      target: "[data-tab=\"punchlist\"]", action: "click", view: "projects",
+      title: { th: "แท็บ Punchlist", en: "The Punchlist tab", jp: "「パンチリスト」タブ" },
+      body: { th: "คลิกแท็บ 'Punchlist · Issue ลูกค้า'", en: "Click the Punchlist · Customer issues tab.", jp: "「パンチリスト・顧客課題」タブをクリックします。" },
+    },
+    {
+      target: "issues.summary", action: "next", view: "projects",
+      title: { th: "กด 'ของฉัน' หรือ 'รออนุมัติ'", en: "Press Mine or Waiting approval", jp: "「自分の担当」か「承認待ち」を押す" },
+      body: {
+        th: "'ของฉัน' คือใบที่คุณเป็นผู้รับผิดชอบ Issue ที่ยังเปิด 'รออนุมัติ' คือ Requirement ที่รอ PM / Lead",
+        en: "Mine lists the batches where you are the PIC of an open issue; Waiting approval lists Requirements for a PM / Lead.",
+        jp: "「自分の担当」は未完了の課題を担当している票、「承認待ち」はPM/リーダーの承認を待つRequirementです。",
+      },
+    },
+    {
+      target: "issues.batch", action: "click", view: "projects",
+      title: { th: "เปิดใบแจ้ง", en: "Open a batch", jp: "票を開く" },
+      body: { th: "กดเลขใบแจ้ง (IS-…)", en: "Press the batch number (IS-…).", jp: "票番号（IS-…）を押します。" },
+      missing: { th: "ยังไม่มีใบในรายการนี้ ลองกด 'ทั้งหมด' หรือกด 'จบบทสอน'", en: "No batch in this list. Try All, or press Finish.", jp: "この一覧に票がありません。「すべて」を試すか「完了」を押します。" },
+    },
+    {
+      target: "issues.itemActions", action: "click", view: "projects",
+      title: { th: "ปุ่มอยู่ด้านซ้ายของแต่ละข้อ", en: "Each issue's buttons are on its left", jp: "各課題のボタンは左側" },
+      body: {
+        th: "ผู้รับผิดชอบกด 'เริ่มทำ' และเมื่อเสร็จกด 'ปิดงาน' แล้วใส่วันที่เสร็จจริง ชั่วโมงที่ใช้จริง และสิ่งที่แก้ไข PM / Lead จะเห็นปุ่ม 'อนุมัติ' / 'ไม่อนุมัติ' ที่ Requirement ที่รอ ถ้าแค่ฝึก ให้กด 'ยกเลิก' ในหน้าต่างที่เปิดขึ้น",
+        en: "The PIC presses Start, and Close issue when it is done, then types the actual end, the hours it really took and what was done. A PM / Lead sees Approve / Reject on a waiting Requirement. Only practising? Press Cancel in the window that opens.",
+        jp: "担当者は「着手」を押し、終わったら「完了にする」を押して実績終了日・実績時間・対応内容を入力します。PM/リーダーには承認待ちのRequirementに「承認」「却下」が表示されます。練習だけなら開いた画面で「キャンセル」を押します。",
+      },
+      missing: { th: "ไม่มีปุ่มให้คุณในใบนี้ (คุณไม่ใช่ผู้รับผิดชอบหรือผู้อนุมัติ) กด 'จบบทสอน'", en: "There is nothing for you to press in this batch (you are not its PIC or an approver). Press Finish.", jp: "この票にはあなたが押せるボタンがありません（担当者でも承認者でもありません）。「完了」を押します。" },
+    },
+  ],
+};
+
 const PROJECT_DELETE: Guide = {
   id: "project-delete", area: "project", minutes: 2, permissions: ["project.read"], views: ["projects"], browse: true,
   title: { th: "ลบโครงการ", en: "Delete a project", jp: "プロジェクトを削除" },
@@ -2360,6 +2494,8 @@ export const GUIDES: readonly Guide[] = [
   PROJECT_PLAN,
   PROJECT_MASTER_PLAN,
   PROJECT_ERP_NUMBER,
+  PUNCHLIST_ISSUES,
+  PUNCHLIST_CLOSE,
   TEAM_TASK,
   BOM_RELEASE,
   ESTIMATE_APPROVE,

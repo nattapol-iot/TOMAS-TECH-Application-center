@@ -126,6 +126,9 @@ test("the board reads everyone's work for team.board, and names only what the re
     // One row per person: both spend the half day.
     [{ id: 21, kind: "Appointment", title: "Site survey", customer_name: "ACME", assignee_id: 7, start_date: "2026-10-22", end_date: "2026-10-22", man_days: 0.5 },
       { id: 21, kind: "Appointment", title: "Site survey", customer_name: "ACME", assignee_id: 9, start_date: "2026-10-22", end_date: "2026-10-22", man_days: 0.5 }],
+    // A customer issue being worked on: 12 plan hours are 1.5 MD of person 9's; its batch is not this reader's to see.
+    [{ id: 31, batch_id: 6, batch_no: "IS-202610-0001", line_no: 2, category: "Problem", function_name: "Packing list", description: "Gross weight wrong",
+      assignee_id: 9, plan_start: "2026-10-20", plan_end: "2026-10-21", plan_hours: 12, state: "Doing", project_ref: "PJ250029", customer_name: "NTMV", visible: false }],
   ];
   const task = {
     id: 21, kind: "Appointment", title: "Site survey", customer_id: 4, customer_name: "ACME", assignee_ids: "7,9", start_date: new Date("2026-10-22T00:00:00Z"),
@@ -156,6 +159,9 @@ test("the board reads everyone's work for team.board, and names only what the re
     assert.deepEqual([inquiry.hidden, inquiry.reference, inquiry.title, inquiry.customer, inquiry.manDays, inquiry.ownerId], [true, "", "", "", 4, 7]);
     assert.deepEqual(body.items.filter((item: WorkloadItem) => item.workKey === "TeamTask-21").map((item: WorkloadItem) => [item.key, item.ownerId, item.manDays]),
       [["TeamTask-21-7", 7, 0.5], ["TeamTask-21-9", 9, 0.5]]);
+    const issue = body.items.find((item: WorkloadItem) => item.key === "Issue-31");
+    assert.deepEqual([issue.type, issue.entityId, issue.ownerId, issue.manDays, issue.start, issue.end, issue.status, issue.hidden, issue.reference, issue.title],
+      ["Issue", 0, 9, 1.5, "2026-10-20", "2026-10-21", "In Progress", true, "", ""]);
     assert.deepEqual(body.tasks[0].assigneeIds, [7, 9]);
     // The linked RFQ number needs inquiry.read; this reader has none.
     assert.equal(body.tasks[0].inquiryNo, "");

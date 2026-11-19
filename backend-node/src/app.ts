@@ -13,6 +13,7 @@ import { registerPerformanceRoutes } from "./routes/performance.js";
 import { registerResourcePlanningRoutes } from "./routes/resource-planning.js";
 import { registerTeamBoardRoutes } from "./routes/team-board.js";
 import { registerResourceTaskRoutes } from "./routes/resource-tasks.js";
+import { registerIssueBatchRoutes } from "./routes/issue-batches.js";
 import multipart from "@fastify/multipart";
 import rateLimit from "@fastify/rate-limit";
 import Fastify, { type FastifyInstance } from "fastify";
@@ -270,6 +271,7 @@ export async function buildApp(config: AppConfig): Promise<Application> {
   registerResourcePlanningRoutes(app, database, users);
   registerTeamBoardRoutes(app, database, users, email);
   registerResourceTaskRoutes(app, database, users, email);
+  registerIssueBatchRoutes(app, config, database, users);
   registerSalesIntakeRoutes(app, config, database, users);
   registerSiteVisitReadRoutes(app, config, database, users);
   registerSiteVisitWorkflowRoutes(app, config, database, users);

@@ -45,6 +45,8 @@ type Props = {
   openProjectSchedule?: (id: number) => void;
   openEstimate?: (id: number) => void;
   openInquiry?: (id: number) => void;
+  /** Opens a customer issue's batch on Projects > Punchlist. */
+  openIssueBatch?: (batchId: number) => void;
   /** Accepted for the shell's shared props; inquiry ownership is assigned on the Inquiry screen. */
   refreshBootstrap?: () => Promise<void>;
 };
@@ -67,6 +69,7 @@ const tones: Record<Commitment["type"], Tone> = {
   Estimate: "violet",
   Project: "green",
   Task: "slate",
+  Issue: "amber",
 };
 const initials = (s: string) =>
   s
@@ -117,6 +120,7 @@ export function ProductionResourcePlan({
   openProjectSchedule,
   openEstimate,
   openInquiry,
+  openIssueBatch,
 }: Props) {
   const { t } = useLanguage();
   const canRead =
@@ -237,7 +241,9 @@ export function ProductionResourcePlan({
       ? undefined
       : item.type === "Project"
         ? openProjectSchedule?.(item.entityId)
-        : item.type === "Estimate"
+        : item.type === "Issue"
+          ? openIssueBatch?.(item.entityId)
+          : item.type === "Estimate"
           ? openEstimate?.(item.entityId)
           : openInquiry?.(item.entityId);
   // Whole-inquiry and estimate effort is planned here; tasks and plan rows carry their own effort.
@@ -593,7 +599,7 @@ function WorkList({
       {[...items].sort(byDueDate).map((item) => (
         <li key={item.key}>
           <div className="workload-item-head">
-            <Badge tone={tones[item.type]}>{t(item.type === "Task" ? (item.taskKind === "Appointment" ? "TeamBoard.kindAppointment" : "TeamBoard.kindTask") : item.type)}</Badge>
+            <Badge tone={tones[item.type]}>{t(item.type === "Task" ? (item.taskKind === "Appointment" ? "TeamBoard.kindAppointment" : "TeamBoard.kindTask") : item.type === "Issue" ? "Issues.typeLabel" : item.type)}</Badge>
             {item.type === "Task" ? null : (
               <button type="button" className="workload-item-link" onClick={() => onOpen(item)}>
                 {item.reference}
