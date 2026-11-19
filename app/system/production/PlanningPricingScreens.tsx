@@ -612,7 +612,7 @@ function usePrices(enabled: boolean) {
 /** The first rule a progress entry breaks, as a dictionary key; null when it can be saved. Mirrors progressInput() on the server. */
 function progressProblem(input: { initialStatus: string; percent: number; status: string; actualStart: string; actualFinish: string; forecastFinish: string; remark: string }): string | null {
   const { percent, status, actualStart, actualFinish, forecastFinish } = input;
-  if (!Number.isFinite(percent) || percent < 0 || percent > 100) return "Progress.percentRange";
+  if (!Number.isInteger(percent) || percent < 0 || percent > 100) return "Progress.percentRange";
   if (status === "Done" && !canFinishWork(input.initialStatus)) return "Progress.doneWhileBlocked";
   if (status === "Done" && (percent !== 100 || !actualStart || !actualFinish)) return "Progress.doneNeeds";
   if (status === "Not Started" && (percent !== 0 || actualStart || actualFinish)) return "Progress.notStartedNeeds";
@@ -634,7 +634,7 @@ function ProgressModal({ target, latestRowVersion, onClose, onSubmit, onConflict
 }) {
   const localizeCopy = useStaticCopy();
   const uiText = useUiText();
-  const [percent, setPercent] = useState(Number(target.percentComplete));
+  const [percent, setPercent] = useState<number | "">(Number(target.percentComplete));
   const [status, setStatus] = useState(target.status);
   const [actualStart, setActualStart] = useState(target.actualStart ?? "");
   const [actualFinish, setActualFinish] = useState(target.actualFinish ?? "");
@@ -660,22 +660,23 @@ function ProgressModal({ target, latestRowVersion, onClose, onSubmit, onConflict
     }
   };
   // A typed percent moves the status with it, the way the one-click strip does.
-  const changePercent = (value: number) => {
+  const changePercent = (value: number | "") => {
     setPercent(value);
+    if (value === "") return;
     if (value === 100 && status !== "Blocked" && canFinishWork(target.status)) {
       setStatus("Done"); setActualStart((current) => current || isoToday()); setActualFinish((current) => current || isoToday());
     } else if (value > 0 && value < 100 && (status === "Not Started" || status === "Done")) {
       setStatus("In Progress"); setActualStart((current) => current || isoToday()); setActualFinish("");
     }
   };
-  const problem = progressProblem({ initialStatus: target.status, percent, status, actualStart, actualFinish, forecastFinish, remark });
+  const problem = progressProblem({ initialStatus: target.status, percent: percent === "" ? Number.NaN : percent, status, actualStart, actualFinish, forecastFinish, remark });
   const submit = async () => {
     if (needsZeroProgressFinishConfirmation(Number(target.percentComplete), status)
       && !(await confirmDialog(localizeCopy("This task is at 0%. Confirm that the work is complete and finish it today?")))) return;
     setBusy(true); setError(""); setConflict(false);
     try {
       await onSubmit({
-        percentComplete: percent,
+        percentComplete: Number(percent),
         status,
         actualStart: actualStart || null,
         actualFinish: actualFinish || null,
@@ -716,7 +717,7 @@ function ProgressModal({ target, latestRowVersion, onClose, onSubmit, onConflict
     {error ? <LoadError message={error} retry={() => { void submit(); }} /> : null}
     <div className="form-grid two">
       <label className="field"><span><LocalizedText text={"Status *"} /></span><select value={status} onChange={(event) => changeStatus(event.target.value)}><option value={"Not Started"}><LocalizedText text={"Not Started"} /></option><option value={"In Progress"}><LocalizedText text={"In Progress"} /></option><option value={"Blocked"}><LocalizedText text={"Blocked"} /></option><option value={"Done"} disabled={target.status === "Blocked"}><LocalizedText text={"Done"} /></option></select></label>
-      <label className="field"><span><LocalizedText text={"Percent complete *"} /></span><input type="number" min="0" max="100" step="1" value={percent} onChange={(event) => changePercent(Number(event.target.value))} /></label>
+      <label className="field"><span><LocalizedText text={"Percent complete *"} /></span><input type="number" min="0" max="100" step="1" value={percent} onChange={(event) => changePercent(event.target.value === "" ? "" : Number(event.target.value))} /></label>
       <label className="field"><span><LocalizedText text={"Actual start"} /></span><DateInput value={actualStart} onChange={(event) => setActualStart(event.target.value)} /></label>
       <label className="field"><span><LocalizedText text={"Actual finish"} /></span><DateInput min={actualStart || undefined} value={actualFinish} onChange={(event) => setActualFinish(event.target.value)} /></label>
       <label className="field"><span><LocalizedText text={"Forecast finish"} /></span><DateInput min={actualStart || undefined} value={forecastFinish} onChange={(event) => setForecastFinish(event.target.value)} /></label>

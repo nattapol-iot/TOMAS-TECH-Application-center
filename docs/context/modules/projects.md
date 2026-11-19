@@ -4,7 +4,7 @@
 
 ทะเบียนโครงการ end user เลขโครงการค้นจาก Pegasus ERP และรับส่งเอกสารจาก inquiry/site visit
 
-Evidence: snapshot `2e5a9e0e`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
+Evidence: snapshot `d0be658f`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
 
 ## Read only the operation you change
 
@@ -125,8 +125,11 @@ Shared screens contain other modules: use the symbol and line range instead of r
 ## Candidate regression tests
 
 - [tests/end-user-ui.test.mjs](<../../../tests/end-user-ui.test.mjs>)
+- [tests/project-closed-health.test.mjs](<../../../tests/project-closed-health.test.mjs>)
 - [tests/project-edit-contract.test.mjs](<../../../tests/project-edit-contract.test.mjs>)
 - [tests/project-followups-ui.test.mjs](<../../../tests/project-followups-ui.test.mjs>)
+- [tests/project-input-editing.test.mjs](<../../../tests/project-input-editing.test.mjs>)
+- [tests/project-plan-add-child.test.mjs](<../../../tests/project-plan-add-child.test.mjs>)
 - [tests/project-portfolio-ui.test.mjs](<../../../tests/project-portfolio-ui.test.mjs>)
 - [tests/project-portfolio.test.mjs](<../../../tests/project-portfolio.test.mjs>)
 - [tests/project-without-estimate.test.mjs](<../../../tests/project-without-estimate.test.mjs>)

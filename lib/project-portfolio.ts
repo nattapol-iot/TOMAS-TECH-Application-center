@@ -15,6 +15,10 @@ export type PortfolioRow = {
 /** Worst first: the order the portfolio opens in and the order of the health bar. */
 export const PORTFOLIO_HEALTH_ORDER: readonly PortfolioHealth[] = ["Delayed", "At Risk", "No plan", "On Track", "On Hold", "Completed"];
 
+/** Closing locks unfinished tasks; their old health must not flag the project for attention. */
+export const portfolioHealth = (row: Pick<PortfolioRow, "status" | "health">): PortfolioHealth =>
+  row.status === "Closed" ? "Completed" : row.health ?? "No plan";
+
 /** The teams a project belongs to (owner, 2026-10-14). */
 export const PROJECT_TEAMS = ["IoT Team", "Mechanical Team", "Application Team"] as const;
 
@@ -66,7 +70,7 @@ function compareTail(a: PortfolioRow, b: PortfolioRow) {
 
 export function comparePortfolio(a: PortfolioRow, b: PortfolioRow, sort: PortfolioSort = DEFAULT_PORTFOLIO_SORT): number {
   const direction = sort.direction === "asc" ? 1 : -1;
-  const primary = sort.key === "health" ? (healthRank(a.health) - healthRank(b.health)) * direction
+  const primary = sort.key === "health" ? (healthRank(portfolioHealth(a)) - healthRank(portfolioHealth(b))) * direction
     : sort.key === "number" ? byText(a.number, b.number) * direction
     : sort.key === "name" ? byText(a.name, b.name) * direction
     : sort.key === "pm" ? compareNullable(a.managerName, b.managerName, byText, direction)
@@ -121,6 +125,7 @@ export function isProgressStale(row: PortfolioRow, nowMs: number): boolean {
 }
 
 export function matchesPortfolioChip(row: PortfolioRow, chip: PortfolioChip, nowMs: number): boolean {
+  if (row.status === "Closed") return false;
   switch (chip) {
     case "overdue": return row.overdueCount > 0;
     case "blocked": return row.blockedCount > 0;
@@ -165,11 +170,11 @@ export type PortfolioView<T extends PortfolioRow> = {
 
 export function portfolioView<T extends PortfolioRow>(rows: readonly T[], filters: PortfolioFilters, nowMs: number): PortfolioView<T> {
   const scoped = scopePortfolio(rows, filters);
-  const byHealth = (row: T) => filters.health === null || (row.health ?? "No plan") === filters.health;
+  const byHealth = (row: T) => filters.health === null || portfolioHealth(row) === filters.health;
   const byChip = (row: T) => filters.chip === null || matchesPortfolioChip(row, filters.chip, nowMs);
   const forBar = scoped.filter(byChip), forChips = scoped.filter(byHealth);
   const healthCounts = Object.fromEntries(PORTFOLIO_HEALTH_ORDER.map((health) => [health, 0])) as Record<PortfolioHealth, number>;
-  for (const row of forBar) healthCounts[row.health ?? "No plan"] += 1;
+  for (const row of forBar) healthCounts[portfolioHealth(row)] += 1;
   const chipCounts = Object.fromEntries(PORTFOLIO_CHIPS.map((chip) => [chip, forChips.filter((row) => matchesPortfolioChip(row, chip, nowMs)).length])) as Record<PortfolioChip, number>;
   return { rows: forBar.filter(byHealth), healthCounts, chipCounts, barTotal: forBar.length };
 }

@@ -123,6 +123,7 @@ export const TEAM_BOARD_COPY: Record<string, { en: string; th: string; jp: strin
   ["TeamBoard.loadOutside", "That day is outside the weeks shown.", "วันนั้นอยู่นอกช่วงที่แสดง", "表示中の期間外です。"],
   ["TeamBoard.swapFor", "Swap {name} for someone with more room:", "เปลี่ยน {name} เป็นคนที่ว่างกว่า:", "{name}の代わりに余裕のある人："],
   ["TeamBoard.people", "Who does it (one or more)", "ผู้รับผิดชอบ (เลือกได้หลายคน)", "担当者（複数可）"],
+  ["TeamBoard.assignSelfOnly", "You can add yourself only. Only Admins, Managers and Leaders can add other people; existing assignees can stay.", "คุณเพิ่มได้เฉพาะตัวเอง เฉพาะ Admin, Manager และ Leader เท่านั้นที่เพิ่มคนอื่นได้ โดยคงผู้รับผิดชอบเดิมไว้ได้", "追加できるのは自分だけです。他の人を追加できるのは Admin・Manager・Leader のみです。既存の担当者は維持できます。"],
   ["TeamBoard.noAssigneeHint", "Without a person, it waits on the \"Nobody yet\" row.", "ไม่ใส่คนรับ งานจะไปอยู่แถว \"ยังไม่มีคนรับ\"", "担当者なしの場合は「担当者未定」の行に表示されます。"],
   ["TeamBoard.awayNeedsPerson", "Choose who is away.", "เลือกคนที่ลา", "不在の人を選んでください。"],
   ["TeamBoard.endBeforeStart", "The end date cannot be before the start date.", "วันที่สิ้นสุดต้องไม่ก่อนวันที่เริ่ม", "終了日は開始日より前にできません。"],

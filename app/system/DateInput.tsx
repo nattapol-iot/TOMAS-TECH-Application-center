@@ -50,6 +50,7 @@ export function DateInput({ value: given, defaultValue = "", onChange, withTime 
   const [own, setOwn] = useState(defaultValue);
   const value = given ?? own;
   const native = useRef<HTMLInputElement>(null);
+  const typingEvent = useRef(false);
   // What the person is typing, until it is a whole date; null shows the value as given.
   const [typing, setTyping] = useState<string | null>(null);
   const shown = typing ?? displayDate(value, withTime);
@@ -65,7 +66,9 @@ export function DateInput({ value: given, defaultValue = "", onChange, withTime 
     const input = native.current;
     if (!input || iso === value) return;
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, iso);
-    input.dispatchEvent(new Event("input", { bubbles: true }));
+    typingEvent.current = true;
+    try { input.dispatchEvent(new Event("input", { bubbles: true })); }
+    finally { typingEvent.current = false; }
   };
 
   return <span className={`date-input${className ? ` ${className}` : ""}`}>
@@ -77,15 +80,18 @@ export function DateInput({ value: given, defaultValue = "", onChange, withTime 
         const text = event.target.value;
         setTyping(text);
         const iso = text.trim() ? parseDisplayDate(text, withTime) : "";
-        if (iso !== null) emit(iso);
+        const complete = withTime
+          ? /^\d{2}[/.-]?\d{2}[/.-]?\d{4}[ T]+\d{2}[:.]?\d{2}$/.test(text.trim())
+          : /^\d{2}[/.-]?\d{2}[/.-]?\d{4}$/.test(text.trim());
+        if (iso !== null && (!text.trim() || complete)) emit(iso);
       }}
-      onBlur={(event) => { if (parsed !== null) setTyping(null); rest.onBlur?.(event); }} />
+      onBlur={(event) => { if (parsed !== null) { emit(parsed); setTyping(null); } rest.onBlur?.(event); }} />
     <button type="button" className="date-input-pick" tabIndex={-1} disabled={disabled || readOnly} aria-label={t("Date.pick")} title={t("Date.pick")}
       onClick={() => { setTyping(null); try { native.current?.showPicker(); } catch { native.current?.focus(); } }}>
       <Icon name="calendar" />
     </button>
     <input ref={native} className="date-input-native" type={withTime ? "datetime-local" : "date"} tabIndex={-1} aria-hidden="true"
       name={name} form={form} value={value} min={low || undefined} max={high || undefined} disabled={disabled}
-      onChange={(event) => { setTyping(null); if (given === undefined) setOwn(event.target.value); onChange?.(event); }} />
+      onChange={(event) => { if (!typingEvent.current) setTyping(null); if (given === undefined) setOwn(event.target.value); onChange?.(event); }} />
   </span>;
 }

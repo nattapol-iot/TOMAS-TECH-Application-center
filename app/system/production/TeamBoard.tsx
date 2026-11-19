@@ -1120,8 +1120,10 @@ function TaskFields({ draft, set, context, disabled = false, focusSubject = fals
           <span className="board-people-names">{loads.map((load) => load.person.user.name).join(", ") || t("TeamBoard.unassigned")}</span>
         ) : (
           <SearchMultiPicker options={personOptions} value={draft.assigneeIds} onChange={(assigneeIds) => set({ ...draft, assigneeIds })} label={t("TeamBoard.people")}
-            placeholder={t("Schedule.searchPeople")} removeLabel={t("Schedule.removePic")} noMatchText={t("Schedule.noPersonMatch")} allChosenText={t("Schedule.everyoneChosen")} />
+            placeholder={t("Schedule.searchPeople")} removeLabel={t("Schedule.removePic")} noMatchText={t("Schedule.noPersonMatch")}
+            allChosenText={t(assignable === null ? "Schedule.everyoneChosen" : "TeamBoard.assignSelfOnly")} />
         )}
+        {!disabled && assignable !== null ? <small className="muted">{t("TeamBoard.assignSelfOnly")}</small> : null}
       </div>
       <div className="board-form-row">
         <label className="field" data-guide="team.date">
