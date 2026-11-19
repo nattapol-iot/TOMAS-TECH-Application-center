@@ -89,6 +89,9 @@ button.gantt-label:focus-visible { outline: 2px solid var(--blue); outline-offse
 .gantt-remove { flex: none; display: grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: var(--r-pill); background: none; color: var(--n-500); cursor: pointer; opacity: 0.35; }
 .gantt-remove .icon { width: 13px; height: 13px; }
 .gantt-row:hover .gantt-remove, .gantt-remove:focus-visible { opacity: 1; }
+/* A row that cannot be deleted keeps a faint bin that says why on hover or click. */
+.gantt-remove.blocked { cursor: help; }
+.gantt-row:hover .gantt-remove.blocked, .gantt-remove.blocked:focus-visible { opacity: 0.5; }
 .gantt-remove:hover { background: var(--red-soft); color: var(--red-text); }
 .gantt-remove:focus-visible { outline: 2px solid var(--red); outline-offset: 1px; }
 @media (hover: none) { .gantt-insert, .gantt-remove { opacity: 1; } }

@@ -266,7 +266,8 @@ export const PROJECT_HEALTH_TONE: Record<ProjectHealth, "green" | "amber" | "red
 };
 
 /** How the plan is going, worked out from the schedule; see backend-node/src/project-health.ts. */
-export function HealthBadge({ health }: { health: ProjectHealth }) {
+export function HealthBadge({ health, status }: { health: ProjectHealth; status?: string }) {
   const t = useT();
-  return <Badge tone={PROJECT_HEALTH_TONE[health]}>{t(`ProjectHealth.${health}`)}</Badge>;
+  const shown = status === "Closed" ? "Completed" : health;
+  return <Badge tone={PROJECT_HEALTH_TONE[shown]}>{t(`ProjectHealth.${shown}`)}</Badge>;
 }

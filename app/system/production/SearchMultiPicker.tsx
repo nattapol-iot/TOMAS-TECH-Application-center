@@ -25,6 +25,7 @@ export function SearchMultiPicker({ options, value, onChange, label, placeholder
   const [active, setActive] = useState(0);
   const [anchor, setAnchor] = useState<HTMLInputElement | null>(null);
   const chosen = value.map(id => options.find(option => option.id === id)).filter((option): option is PickerOption => Boolean(option));
+  const allChosen = options.length > 0 && options.every(option => value.includes(option.id));
   const needle = query.trim().toLocaleLowerCase();
   const matches = options.filter(option => !value.includes(option.id)
     && (!needle || `${option.label} ${option.detail ?? ""} ${option.searchText ?? ""}`.toLocaleLowerCase().includes(needle))).slice(0, MATCH_LIMIT);
@@ -48,7 +49,7 @@ export function SearchMultiPicker({ options, value, onChange, label, placeholder
         <div className="lookup-main"><strong>{option.label}</strong></div>
         {option.detail ? <div className="lookup-meta"><span>{option.detail}</span></div> : null}
       </button>)}
-      {!matches.length ? <div className="lookup-status">{value.length && value.length >= options.length ? allChosenText : noMatchText}</div> : null}
+      {!matches.length ? <div className="lookup-status">{allChosen ? allChosenText : noMatchText}</div> : null}
     </LookupMenu> : null}
   </div>;
 }

@@ -138,11 +138,11 @@ export function summarizeProjectSchedule(
   return {
     health, progress, plannedProgress,
     planStart: earliest(counted.map((leaf) => leaf.planStart)), planFinish: latest(counted.map((leaf) => leaf.planFinish)), forecastFinish,
-    slipDays: forecastFinish !== null && project.targetDelivery !== null ? Math.round(dayNumber(forecastFinish) - dayNumber(project.targetDelivery)) : null,
+    slipDays: !closed && forecastFinish !== null && project.targetDelivery !== null ? Math.round(dayNumber(forecastFinish) - dayNumber(project.targetDelivery)) : null,
     taskCount: counted.length, doneCount: counted.filter((leaf) => leaf.status === "Done").length,
-    overdueCount: counted.filter((leaf) => leaf.status !== "Done" && leaf.planFinish !== null && leaf.planFinish < today).length,
-    blockedCount: counted.filter((leaf) => leaf.status === "Blocked").length,
-    slippedCount: counted.filter((leaf) => { const end = endOf(leaf); return leaf.baselineFinish !== null && end !== null && end > leaf.baselineFinish; }).length,
-    nextMilestone: milestone ? { name: milestone.name, date: milestone.planFinish! } : null,
+    overdueCount: closed ? 0 : counted.filter((leaf) => leaf.status !== "Done" && leaf.planFinish !== null && leaf.planFinish < today).length,
+    blockedCount: closed ? 0 : counted.filter((leaf) => leaf.status === "Blocked").length,
+    slippedCount: closed ? 0 : counted.filter((leaf) => { const end = endOf(leaf); return leaf.baselineFinish !== null && end !== null && end > leaf.baselineFinish; }).length,
+    nextMilestone: !closed && milestone ? { name: milestone.name, date: milestone.planFinish! } : null,
   };
 }

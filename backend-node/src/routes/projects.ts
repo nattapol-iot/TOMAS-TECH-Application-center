@@ -250,7 +250,7 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
           taskCount: summary?.taskCount ?? 0, doneCount: summary?.doneCount ?? 0, overdueCount: summary?.overdueCount ?? 0,
           blockedCount: summary?.blockedCount ?? 0, slippedCount: summary?.slippedCount ?? 0, nextMilestone: summary?.nextMilestone ?? null,
           scheduleError: summary?.scheduleError ?? false,
-          pendingRequests: Number(counts?.pending_requests ?? 0), lastProgressAt: counts?.last_progress_at ?? null,
+          pendingRequests: row.status === "Closed" ? 0 : Number(counts?.pending_requests ?? 0), lastProgressAt: counts?.last_progress_at ?? null,
           canChangeStatus: canWrite && (manages || Number(row.manager_id) === actor.id || Number(row.lead_engineer_id) === actor.id),
           allowedStatuses: isProjectStatus(row.status) ? allowedProjectTransitions(row.status, manages) : [],
         };

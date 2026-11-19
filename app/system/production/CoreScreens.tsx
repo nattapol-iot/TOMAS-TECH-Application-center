@@ -769,7 +769,7 @@ export function ProductionProjects({ bootstrap, notify, refreshBootstrap, teamTe
         <PortfolioSortHeader column="progress" label="Portfolio.colProgress" sort={sort} onSort={changeSort} />
         <PortfolioSortHeader column="lastUpdate" label="Portfolio.colLastUpdate" sort={sort} onSort={changeSort} />
       </tr></thead><tbody>{paged.map((item) => {
-        const slip = formatSlip(item.slipDays);
+        const slip = formatSlip(item.status === "Closed" ? null : item.slipDays);
         const customerLine = [item.customerName, item.endUserName].filter(Boolean).join(" / ");
         return <tr key={item.id}>
           <td className="portfolio-col-menu"><RowDisclosure label={`${uiText("Portfolio.more")} ${item.number}`} triggerClassName="row-action" guide="project.rowMenu" trigger={<Icon name="more" />} actions={rowActions(item)} /></td>
@@ -777,7 +777,7 @@ export function ProductionProjects({ bootstrap, notify, refreshBootstrap, teamTe
             ? <RowDisclosure label={`${uiText("Portfolio.changeStage")} ${item.number} · ${uiText(item.status)}`} triggerClassName="portfolio-stage-trigger" disabled={stageBusy !== null}
               trigger={<><span>{uiText(item.status)}</span><Icon name="chevronDown" /></>} actions={item.allowedStatuses.map((value) => ({ key: value, label: value, onSelect: () => changeStage(item, value) }))} />
             : <Badge>{item.status}</Badge>}</td>
-          <td><HealthBadge health={item.health ?? "No plan"} />{item.scheduleError ? <small className="portfolio-schedule-error" title={uiText("Portfolio.scheduleErrorHint")}>{uiText("Portfolio.scheduleError")}</small> : null}</td>
+          <td><HealthBadge health={item.health ?? "No plan"} status={item.status} />{item.status !== "Closed" && item.scheduleError ? <small className="portfolio-schedule-error" title={uiText("Portfolio.scheduleErrorHint")}>{uiText("Portfolio.scheduleError")}</small> : null}</td>
           <td><strong className="mono">{item.number}</strong></td>
           <td className="portfolio-col-project"><div className="portfolio-project">
             {openProjectSchedule ? <button type="button" className="portfolio-project-link" onClick={() => openProjectSchedule(item.id)}><strong>{item.name}</strong></button> : <strong>{item.name}</strong>}
@@ -785,7 +785,7 @@ export function ProductionProjects({ bootstrap, notify, refreshBootstrap, teamTe
           </div></td>
           <td className="portfolio-col-pm">{item.managerName}</td>
           <td>{item.targetDelivery ? formatDate(item.targetDelivery) : "—"}</td>
-          <td className={`portfolio-col-slip portfolio-slip${(item.slipDays ?? 0) > 0 ? " late" : ""}`}>{slip === null ? "–" : uiText("Portfolio.slipDays").replace("{n}", slip)}</td>
+          <td className={`portfolio-col-slip portfolio-slip${item.status !== "Closed" && (item.slipDays ?? 0) > 0 ? " late" : ""}`}>{slip === null ? "–" : uiText("Portfolio.slipDays").replace("{n}", slip)}</td>
           <td><PortfolioProgress item={item} /></td>
           <td className="muted">{item.lastProgressAt ? formatDay(item.lastProgressAt) : "—"}</td>
         </tr>;
@@ -1045,7 +1045,7 @@ function EditProjectModal({ bootstrap, project, onClose, onSaved }: {
     name: project.name ?? "",
     projectType: project.projectType ?? "",
     status: project.status,
-    progress: Number(project.progress ?? 0),
+    progress: Number(project.progress ?? 0) as number | "",
     managerId: project.managerId ?? 0,
     leadEngineerId: project.leadEngineerId ?? 0,
     purchaseOrderNumber: project.purchaseOrderNumber ?? "",
@@ -1080,7 +1080,7 @@ function EditProjectModal({ bootstrap, project, onClose, onSaved }: {
         name: form.name.trim(),
         projectType: form.projectType.trim(),
         status: form.status,
-        progress: form.progress,
+        progress: Number(form.progress),
         managerId: form.managerId,
         leadEngineerId: form.leadEngineerId,
         purchaseOrderNumber: form.purchaseOrderNumber.trim(),
@@ -1111,7 +1111,7 @@ function EditProjectModal({ bootstrap, project, onClose, onSaved }: {
     onClose={onClose}
     footer={<>
       <button className="btn ghost" type="button" onClick={onClose}><LocalizedText text={"Cancel"} /></button>
-      <button className="btn primary" type="button" data-guide="project.editSave" disabled={busy || needsActualDelivery || !form.name.trim() || !form.site.trim() || !form.purchaseOrderNumber.trim() || planIssues.length > 0} onClick={() => { void submit(); }}>
+      <button className="btn primary" type="button" data-guide="project.editSave" disabled={busy || (!closing && (form.progress === "" || !Number.isInteger(form.progress) || form.progress < 0 || form.progress > 100)) || needsActualDelivery || !form.name.trim() || !form.site.trim() || !form.purchaseOrderNumber.trim() || planIssues.length > 0} onClick={() => { void submit(); }}>
         <Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : <LocalizedText text={"Save project"} />}
       </button>
     </>}
@@ -1124,9 +1124,9 @@ function EditProjectModal({ bootstrap, project, onClose, onSaved }: {
       <label className="field span-2"><span><LocalizedText text={"Project name *"} /></span><input required maxLength={300} value={form.name} onChange={(event) => set("name", event.target.value)} /></label>
       {numberable ? <ErpProjectNumberField span={2} guide="project.erpNumber" currentProjectId={project.id} disabled={busy} value={form.projectNumber} onChange={(projectNumber) => set("projectNumber", projectNumber)} /> : null}
       <TeamSelect value={form.department} departments={departments} onChange={(department) => set("department", department)} />
-      <div className="field"><span>{t("CRM.planHealth")}</span><div className="project-health-cell">{project.health ? <HealthBadge health={project.health} /> : "—"}</div></div>
+      <div className="field"><span>{t("CRM.planHealth")}</span><div className="project-health-cell">{project.health ? <HealthBadge health={project.health} status={project.status} /> : "—"}</div></div>
       <label className="field"><span><LocalizedText text={"Status"} /></span><select value={form.status} onChange={(event) => set("status", event.target.value)}>{statusChoices.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
-      <label className="field"><span><LocalizedText text={"Portfolio.typedProgress"} /></span><input type="number" min={0} max={100} step={1} disabled={closing} value={closing ? 100 : form.progress} onChange={(event) => set("progress", Number(event.target.value))} /></label>
+      <label className="field"><span><LocalizedText text={"Portfolio.typedProgress"} /></span><input type="number" min={0} max={100} step={1} disabled={closing} value={closing ? 100 : form.progress} onChange={(event) => set("progress", event.target.value === "" ? "" : Number(event.target.value))} /></label>
       <label className="field"><span><LocalizedText text={"Project manager"} /></span><select value={form.managerId} onChange={(event) => set("managerId", Number(event.target.value))}>{managers.some((member) => member.id === project.managerId) ? null : <option value={project.managerId}>{project.managerName}</option>}{managers.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>
       <label className="field"><span><LocalizedText text={"Lead engineer"} /></span><select value={form.leadEngineerId} onChange={(event) => set("leadEngineerId", Number(event.target.value))}>{engineers.some((member) => member.id === project.leadEngineerId) ? null : <option value={project.leadEngineerId}>{project.leadEngineerName}</option>}{engineers.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>
       <label className="field"><span><LocalizedText text={"Project type"} /></span><input maxLength={100} value={form.projectType} onChange={(event) => set("projectType", event.target.value)} /></label>

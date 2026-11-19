@@ -265,20 +265,19 @@ test("someone else's task cannot be changed, and a stale copy is refused", async
   }
 });
 
-test("only Admins, Managers and Leaders add work for someone else, and new work says what it is", async (t) => {
+test("everyone may add work for colleagues (SUP-2026-00010), and new work says what it is", async (t) => {
   t.mock.method(sql.Request.prototype, "query", async function (statement: string) {
     if (statement.includes("customer_ok")) return { recordset: [], recordsets: [[{ customer_ok: 1, assignee_ok: 1, inquiry_ok: 1, project_ok: 1 }], []] };
     if (statement.includes("INSERT dbo.team_tasks")) return { recordset: [{ id: 41, row_version: Buffer.alloc(8, 5) }] };
     return { recordset: [] };
   });
-  assert.deepEqual([["Engineer"], ["Leader"], ["Admin"], ["Engineering Manager"], ["Project Manager"], ["Sales Engineer"]].map((roles) => canAssignOthers(user(1, roles))),
-    [false, true, true, true, true, false]);
+  assert.deepEqual([["Engineer"], ["Leader"], ["Admin"], ["Engineering Manager"], ["Project Manager"], ["Sales Engineer"]].map(() => canAssignOthers()),
+    [true, true, true, true, true, true]);
+  assert.doesNotThrow(() => assertMayAssign(user(9, ["Engineer"]), [7, 9]));
   const engineer = boardServer(user(9, ["Engineer"]));
   try {
     const base = { kind: "Task", title: "Commissioning", note: "Line 2 PLC test", startDate: "2026-10-22" };
-    const forOthers = await engineer.app.inject({ method: "POST", url: "/api/v1/team-tasks", payload: { ...base, assigneeIds: [7] } });
-    assert.equal(forOthers.statusCode, 403);
-    assert.equal(forOthers.json().code, "team_task_assign_forbidden");
+    assert.equal((await engineer.app.inject({ method: "POST", url: "/api/v1/team-tasks", payload: { ...base, assigneeIds: [7] } })).statusCode, 201, "for a colleague");
     assert.equal((await engineer.app.inject({ method: "POST", url: "/api/v1/team-tasks", payload: { ...base, assigneeIds: [9] } })).statusCode, 201);
     assert.equal((await engineer.app.inject({ method: "POST", url: "/api/v1/team-tasks", payload: { ...base, assigneeIds: [] } })).statusCode, 201, "for nobody yet");
     const noDetail = await engineer.app.inject({ method: "POST", url: "/api/v1/team-tasks", payload: { ...base, note: " ", assigneeIds: [9] } });
@@ -288,9 +287,8 @@ test("only Admins, Managers and Leaders add work for someone else, and new work 
   } finally {
     await engineer.app.close();
   }
-  // People already on a task stay when someone without the right saves it; adding another does not.
-  assert.doesNotThrow(() => assertMayAssign(user(9, ["Engineer"]), [9, 7], [7]));
-  assert.throws(() => assertMayAssign(user(9, ["Engineer"]), [9, 7, 3], [7]), /Only Admins, Managers and Leaders/);
+  // Saving a task that adds another colleague is allowed too.
+  assert.doesNotThrow(() => assertMayAssign(user(9, ["Engineer"]), [9, 7, 3], [7]));
 });
 
 test("Outlook events keep busy time, hide private subjects and skip what the board already sent", () => {

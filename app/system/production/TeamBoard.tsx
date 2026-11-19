@@ -996,8 +996,14 @@ type FormContext = {
 /** An Outlook event's time on the board ("09:00–10:30"); empty for an all-day one. */
 const outlookTime = (event: OutlookEvent) => (event.allDay ? "" : `${event.start.slice(11, 16)}–${event.end.slice(11, 16)}`);
 
-/** The projects and RFQs work can be for, read once a form opens; each lists only what the reader may open. */
+/**
+ * The projects and RFQs work can be for, read once a form opens; each lists only what the reader may open.
+ * Closed projects are read on their own and listed after the open ones, marked closed, so support work for a
+ * finished customer project can still be logged (SUP-2026-00017) without recent open projects crowding them out.
+ */
 function useWorkOptions(bootstrap: BootstrapData, enabled: boolean) {
+  const { t } = useLanguage();
+  const closedMark = t("TeamBoard.projectClosed");
   const canInquiries = bootstrap.permissions.includes("inquiry.read"), canProjects = bootstrap.permissions.includes("project.read");
   const [inquiries, setInquiries] = useState<(SearchSelectOption & { customerId: number })[]>([]);
   const [projects, setProjects] = useState<(SearchSelectOption & { customerId: number })[]>([]);
@@ -1006,11 +1012,13 @@ function useWorkOptions(bootstrap: BootstrapData, enabled: boolean) {
     const timer = setTimeout(() => {
       if (canInquiries) void listInquiries({ pageSize: 100 })
         .then((page) => setInquiries(page.items.filter((inquiry) => inquiry.status !== "Cancelled").map((inquiry) => ({ value: String(inquiry.id), label: `${inquiry.number} · ${inquiry.projectName}`, detail: inquiry.customerName, customerId: inquiry.customerId }))), () => undefined);
-      if (canProjects) void listProjects({ pageSize: 100 })
-        .then((page) => setProjects(page.items.filter((project) => project.status !== "Closed").map((project) => ({ value: String(project.id), label: `${project.number} · ${project.name}`, detail: project.customerName, customerId: project.customerId ?? 0 }))), () => undefined);
+      if (canProjects) void Promise.all([listProjects({ pageSize: 100 }), listProjects({ pageSize: 100, status: "Closed" }).catch(() => null)])
+        .then(([page, closed]) => setProjects([...page.items.filter((project) => project.status !== "Closed"), ...(closed?.items ?? [])].map((project) => ({
+          value: String(project.id), label: `${project.number} · ${project.name}${project.status === "Closed" ? ` (${closedMark})` : ""}`, detail: project.customerName, customerId: project.customerId ?? 0,
+        }))), () => undefined);
     }, 0);
     return () => clearTimeout(timer);
-  }, [enabled, canInquiries, canProjects]);
+  }, [enabled, canInquiries, canProjects, closedMark]);
   return { inquiries, projects, canInquiries, canProjects };
 }
 
@@ -1120,8 +1128,10 @@ function TaskFields({ draft, set, context, disabled = false, focusSubject = fals
           <span className="board-people-names">{loads.map((load) => load.person.user.name).join(", ") || t("TeamBoard.unassigned")}</span>
         ) : (
           <SearchMultiPicker options={personOptions} value={draft.assigneeIds} onChange={(assigneeIds) => set({ ...draft, assigneeIds })} label={t("TeamBoard.people")}
-            placeholder={t("Schedule.searchPeople")} removeLabel={t("Schedule.removePic")} noMatchText={t("Schedule.noPersonMatch")} allChosenText={t("Schedule.everyoneChosen")} />
+            placeholder={t("Schedule.searchPeople")} removeLabel={t("Schedule.removePic")} noMatchText={t("Schedule.noPersonMatch")}
+            allChosenText={t(assignable === null ? "Schedule.everyoneChosen" : "TeamBoard.assignSelfOnly")} />
         )}
+        {!disabled && assignable !== null ? <small className="muted">{t("TeamBoard.assignSelfOnly")}</small> : null}
       </div>
       <div className="board-form-row">
         <label className="field" data-guide="team.date">
