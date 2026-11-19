@@ -1387,8 +1387,12 @@ export const listEstimates = (values: {
   confidentiality?: string;
   language?: string;
   revision?: number;
+  /** The V2 list's summary bar: adds statusSummary, one row per status over every filter but the status. */
+  summary?: boolean;
 }) =>
-  apiRequest<PagedResult<EstimateSummary>>(`/api/v1/estimates/${queryString(values)}`);
+  apiRequest<PagedResult<EstimateSummary> & { statusSummary?: EstimateStatusCount[] }>(`/api/v1/estimates/${queryString(values)}`);
+
+export type EstimateStatusCount = { status: string; count: number; total: number };
 
 export type CostItemLookupField = "itemCode" | "description" | "brand" | "supplier";
 export type CostItemLookupRecord = {

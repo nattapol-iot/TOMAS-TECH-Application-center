@@ -85,6 +85,8 @@ test("the catalog holds the guides the owner chose, in the order the work happen
     "estimate-approve",
     // Opening an earlier estimate revision and continuing from it (2026-11-18).
     "estimate-revision-back",
+    // The V1 / V2 switch of the Estimating screens; V2 is the Pegasus ERP look (2026-11-19).
+    "estimate-look-v2",
     "purchase-request", "pr-approve",
     // An approved PR the ERP refused or deleted is taken back to Draft or cancelled (2026-11-02).
     "pr-fix",

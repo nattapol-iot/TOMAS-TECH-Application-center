@@ -52,6 +52,7 @@ import { ProductionProfile } from "./production/ProfileScreen";
 import { SupportCenter, SupportCreateDialog } from "./production/SupportScreens";
 import { EmployeeManualScreen, employeeManualLabel } from "./production/EmployeeManualScreen";
 import { supportLabel } from "./support-copy";
+import { EstimateLookScope } from "./production/EstimateLook";
 // Screens off the landing path load on first visit; LazyScreens.tsx says which stay eager and why.
 import {
   LaborPackageMaster,
@@ -988,7 +989,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
           {view === "my-work" ? <><div className="my-work-related-links"><button className="btn default" type="button" onClick={async ()=>(await setView("activity"))}><Icon name="chart"/>{t("Team Activity")}</button>{bootstrap.permissions.includes("visit.read") ? <button className="btn default" type="button" onClick={async () => (await setView("my-assignments"))}><Icon name="truck" />{t("งานเข้าหน้างานของฉัน")}</button> : null}</div><ProductionMyWork {...moduleProps} openCrmOpportunity={openCrmOpportunity} newAssignmentCount={taskAcknowledgmentCount} onNewAssignmentChanged={() => setTaskInboxRevision(value => value + 1)} /></> : null}
           {view.startsWith("crm-") && bootstrap.permissions.includes("crm.read") ? <CrmScreen refreshBootstrap={refreshBootstrap} notify={setToast} key={view} bootstrap={bootstrap} view={view as CrmView} onViewChange={setView} preferredOpportunityId={crmOpportunityId} openInquiry={openInquiry} openEstimate={openEstimate} openProject={openProjectSchedule} /> : null}
           {view === "inquiries" ? <ProductionInquiries key={preferredInquiryId ?? (startInquiryCreate ? "create" : "list")} {...common} openProject={openProjectSchedule} openOpportunity={openCrmOpportunity} openEstimate={openEstimate} openVisit={openSiteVisit} startWithCreate={startInquiryCreate} preferredInquiryId={preferredInquiryId} onSelectInquiry={(id) => { setStartInquiryCreate(false); setPreferredInquiryId(id); }} /> : null}
-          {view === "estimates" ? <ProductionEstimates key={preferredEstimateId ?? "estimate-list"} {...common} initialEstimateId={preferredEstimateId} onSelectEstimate={setPreferredEstimateId} /> : null}
+          {view === "estimates" ? <EstimateLookScope userId={bootstrap.user.id}><ProductionEstimates key={preferredEstimateId ?? "estimate-list"} {...common} initialEstimateId={preferredEstimateId} onSelectEstimate={setPreferredEstimateId} /></EstimateLookScope> : null}
           {view === "projects" ? <>
             {/* Plan and Punchlist read the schedule; without schedule.read only the Overview is offered. */}
             {bootstrap.permissions.includes("schedule.read") ? <Tabs tabs={[{ id: "portfolio", label: "Projects.tabOverview" }, { id: "schedule", label: "Projects.tabPlan" }, { id: "punchlist", label: "Projects.tabPunchlist" }]} active={projectTab} onChange={changeProjectTab} link={null} /> : null}
@@ -1004,9 +1005,9 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
           {view === "site-visits" ? <ProductionSiteVisits key={preferredSiteVisitId ?? "site-visit-list"} {...common} initialVisitId={preferredSiteVisitId} openInquiry={openInquiry} startInquiry={startInquiry} /> : null}
           {view === "my-assignments" ? <ProductionMyAssignments {...common} /> : null}
           {view === "visit-master" ? <ProductionVisitMasterData {...common} /> : null}
-          {view === "price" ? <ProductionPriceLibrary {...moduleProps} /> : null}
-          {view === "quotations" ? <ProductionSupplierQuotations {...moduleProps} /> : null}
-          {view === "missing" ? <ProductionWaitingSupplierPrice {...moduleProps} /> : null}
+          {view === "price" ? <EstimateLookScope userId={bootstrap.user.id}><ProductionPriceLibrary {...moduleProps} /></EstimateLookScope> : null}
+          {view === "quotations" ? <EstimateLookScope userId={bootstrap.user.id}><ProductionSupplierQuotations {...moduleProps} /></EstimateLookScope> : null}
+          {view === "missing" ? <EstimateLookScope userId={bootstrap.user.id}><ProductionWaitingSupplierPrice {...moduleProps} /></EstimateLookScope> : null}
           {/* Compatibility for old bookmarks; new navigation uses Projects > Timeline. */}
           {view === "project-timeline" ? <ProductionProjects key="project-timeline" {...common} teamTestMode={IS_TEAM_TEST_MODE} initialMode="timeline" openProjectSchedule={openProjectSchedule} /> : null}
           {view === "resources" ? <ProductionResourcePlan {...moduleProps} refreshBootstrap={refreshBootstrap} openInquiry={openInquiry} openEstimate={openEstimate} /> : null}
@@ -1033,8 +1034,8 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
           {view === "summary-reports" ? <><button className="btn ghost" type="button" onClick={async () => (await setView("reports"))}>{t("Back to reports")}</button><ProductionReports {...moduleProps} /></> : null}
           {view === "activity" && bootstrap.permissions.includes("activity.read") ? <TeamActivityScreen openSource={async (type,id,projectId)=>{if(projectId)openProjectSchedule(projectId);else if(type==="Inquiry")openInquiry(id);else (await setView("my-work"));}}/> : null}
           {view === "performance" ? <Performance currentUser={{ ...bootstrap.user, level: "" }} notify={setToast} openProjectSchedule={openProjectSchedule} openInquiry={openInquiry} openMyWork={async () => (await setView("my-work"))} /> : null}
-          {view === "module-templates" ? <ProductionModuleTemplates bootstrap={bootstrap} notify={setToast} /> : null}
-          {view === "labor-packages" ? <LaborPackageMaster bootstrap={bootstrap} /> : null}
+          {view === "module-templates" ? <EstimateLookScope userId={bootstrap.user.id}><ProductionModuleTemplates bootstrap={bootstrap} notify={setToast} /></EstimateLookScope> : null}
+          {view === "labor-packages" ? <EstimateLookScope userId={bootstrap.user.id}><LaborPackageMaster bootstrap={bootstrap} /></EstimateLookScope> : null}
           {view === "schedule-templates" ? <ScheduleTemplateMaster bootstrap={bootstrap} notify={setToast} /> : null}
           {view === "rates" ? <ProductionEngineeringRates {...common} /> : null}
           {view === "audit" ? <ProductionAuditLog {...moduleProps} /> : null}
