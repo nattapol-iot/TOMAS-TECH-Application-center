@@ -1,0 +1,215 @@
+/*
+ * Procurement in the Pegasus ERP look (owner 2026-11-19, "หน้าจัดซื้อ / PR"): BOM, Purchase Requisition and Approvals, with their
+ * dialogs and the PR sheet, are what Purchasing compares with the ERP. Built from the pegasus-design spec (DESIGN.md B.1 tokens,
+ * B.2 type, C.1.7 page header, C.1.9 panels, C.2 summary bar, C.6 empty state, D.1 button, D.2 inputs, D.5 badge, D.7 data table
+ * and grid cells, D.8 dialogs) over the app's own components, so the screens keep their behaviour and guide marks.
+ * Every rule sits under .pg-skin with --pg-* tokens (the same values as the Punchlist's .pg), so nothing reaches another screen.
+ * The app is light only, so the dark tokens are left out.
+ */
+.pg-skin {
+  --pg-background: #ffffff; --pg-foreground: hsl(0 0% 3.9%);
+  --pg-primary: hsl(205 100% 38%); --pg-primary-fg: #ffffff;
+  --pg-muted: hsl(0 0% 96.1%); --pg-muted-fg: hsl(0 0% 45.1%);
+  --pg-accent: hsl(205 100% 96%); --pg-accent-fg: hsl(0 0% 9%);
+  --pg-destructive: hsl(1 77% 55%);
+  --pg-border: hsl(0 0% 92.8%); --pg-input: hsl(0 0% 89.8%); --pg-ring: hsl(205 100% 38%);
+  --pg-sidebar-border: hsl(0 0% 91%);
+  --pg-emerald-fg: #047857; --pg-red-fg: #b91c1c; --pg-amber-fg: #b45309; --pg-slate-fg: #334155; --pg-violet-fg: #6d28d9; --pg-pink-fg: #be185d;
+  --pg-success-bg: rgb(16 185 129 / 0.10); --pg-danger-bg: rgb(239 68 68 / 0.10); --pg-warning-bg: rgb(245 158 11 / 0.10);
+  --pg-neutral-bg: rgb(100 116 139 / 0.15); --pg-violet-bg: rgb(139 92 246 / 0.10); --pg-pink-bg: rgb(236 72 153 / 0.10);
+  --pg-scrim: rgb(0 0 0 / 0.6);
+  --pg-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --pg-divider: color-mix(in srgb, var(--pg-sidebar-border) 70%, transparent);
+  --pg-row-line: color-mix(in srgb, var(--pg-sidebar-border) 40%, transparent);
+  --pg-primary-10: color-mix(in srgb, var(--pg-primary) 10%, transparent);
+  --pg-row-hover: color-mix(in srgb, var(--pg-muted) 40%, var(--pg-background));
+  --pg-focus: 0 0 0 2px var(--pg-background), 0 0 0 4px var(--pg-ring);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  color: var(--pg-foreground);
+  font-size: 14px;
+  line-height: 1.5;
+  letter-spacing: 0.01em;
+}
+
+/* Page header (C.1.7): 18px title on a 36px line, actions right-aligned with the primary one right-most. */
+.pg-skin .page-header { align-items: center; gap: 12px; }
+.pg-skin .page-header .eyebrow { display: none; }
+.pg-skin .page-header h1 { font-size: 18px; font-weight: 600; line-height: 36px; letter-spacing: 0; }
+.pg-skin .page-sub { margin-top: 0; color: var(--pg-muted-fg); font-size: 14px; }
+.pg-skin .page-actions { margin-left: auto; gap: 8px; }
+
+/* Buttons (D.1). The app's ghost and default buttons are the ERP's outline; success is the one filled primary action of a row. */
+.pg-skin .btn { height: 36px; gap: 8px; padding: 0 16px; border: 1px solid transparent; border-radius: 6px; font-size: 14px; font-weight: 500; letter-spacing: inherit; transition: background-color 150ms var(--pg-ease), color 150ms var(--pg-ease); }
+.pg-skin .btn .icon { font-size: 16px; }
+.pg-skin .btn:disabled { opacity: 0.5; }
+.pg-skin .btn:focus-visible, .pg-skin .pg-act:focus-visible, .pg-skin .pg-doclink:focus-visible, .pg-skin .pg-cell:focus-visible { outline: none; box-shadow: var(--pg-focus); }
+.pg-skin .btn.primary, .pg-skin .btn.success { background: var(--pg-primary); color: var(--pg-primary-fg); box-shadow: 0 1px 3px rgb(0 0 0 / 0.1); }
+.pg-skin .btn.primary:hover:not(:disabled), .pg-skin .btn.success:hover:not(:disabled) { background: color-mix(in srgb, var(--pg-primary) 90%, var(--pg-background)); }
+.pg-skin .btn.ghost, .pg-skin .btn.default { border-color: var(--pg-input); background: var(--pg-background); color: var(--pg-foreground); box-shadow: 0 1px 2px rgb(0 0 0 / 0.05); }
+.pg-skin .btn.ghost:hover:not(:disabled), .pg-skin .btn.default:hover:not(:disabled) { border-color: var(--pg-input); background: var(--pg-accent); color: var(--pg-accent-fg); }
+.pg-skin .btn.danger, .pg-skin .btn.warn { border-color: transparent; background: transparent; color: var(--pg-destructive); box-shadow: none; }
+.pg-skin .btn.danger:hover:not(:disabled), .pg-skin .btn.warn:hover:not(:disabled) { background: var(--pg-danger-bg); }
+.pg-skin .btn.sm { height: 32px; gap: 6px; padding: 0 12px; font-size: 12px; }
+.pg-skin .btn.sm .icon { font-size: 14px; }
+.pg-skin .table-actions { gap: 4px; }
+
+/* Row actions (D.7): quiet 32px icon buttons in the Actions column on the left; the name shows on hover. */
+.pg-skin .pg-acts { width: 1%; text-align: center; }
+.pg-skin .pg-acts .table-actions { justify-content: center; flex-wrap: nowrap; }
+.pg-skin .pg-act { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--pg-muted-fg); font-size: 16px; cursor: pointer; transition: background-color 150ms var(--pg-ease), color 150ms var(--pg-ease); }
+.pg-skin .pg-act:hover:not(:disabled) { background: var(--pg-accent); color: var(--pg-foreground); }
+.pg-skin .pg-act.danger:hover:not(:disabled) { background: none; color: var(--pg-destructive); }
+.pg-skin .pg-act:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* A document number opens its record (0.2). */
+.pg-skin .pg-doclink { padding: 0; border: 0; border-radius: 3px; background: none; color: var(--pg-primary); font: inherit; font-weight: 500; cursor: pointer; }
+.pg-skin .pg-doclink:hover { text-decoration: underline; text-underline-offset: 4px; }
+
+/* Summary bar (C.2) used as the status filter: every cell counts its status and sets the filter. */
+.pg-skin .pg-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; overflow: hidden; border: 1px solid var(--pg-divider); border-radius: 8px; background: var(--pg-divider); }
+.pg-skin .pg-cell { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 10px 16px; border: 0; background: var(--pg-background); color: inherit; font: inherit; text-align: left; cursor: pointer; transition: background-color 150ms var(--pg-ease); }
+.pg-skin .pg-cell:hover, .pg-skin .pg-cell[aria-pressed="true"] { background: var(--pg-accent); }
+.pg-skin .pg-cell-label { font-size: 14px; font-weight: 600; }
+.pg-skin .pg-cell-value { margin-top: auto; font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.pg-skin .pg-cell[aria-pressed="true"] .pg-cell-value { color: var(--pg-primary); }
+/* KPI cards inside these screens read as the same summary bar. */
+.pg-skin .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; overflow: hidden; border: 1px solid var(--pg-divider); border-radius: 8px; background: var(--pg-divider); }
+.pg-skin .kpi { align-items: stretch; padding: 10px 16px; border: 0; border-radius: 0; background: var(--pg-background); box-shadow: none; }
+.pg-skin .kpi-icon { display: none; }
+.pg-skin .kpi-body { gap: 2px; width: 100%; }
+.pg-skin .kpi-label { color: var(--pg-foreground); font-size: 14px; font-weight: 600; }
+.pg-skin .kpi-value { margin-top: auto; font-size: 16px; font-weight: 600; letter-spacing: 0; font-variant-numeric: tabular-nums; }
+.pg-skin .kpi-note { color: var(--pg-muted-fg); font-size: 12px; }
+.pg-skin .pr-plan-summary { gap: 1px; overflow: hidden; border: 1px solid var(--pg-divider); border-radius: 8px; background: var(--pg-divider); }
+.pg-skin .pr-plan-summary > div { min-height: 0; gap: 2px; padding: 10px 16px; border: 0; border-radius: 0; background: var(--pg-background); }
+.pg-skin .pr-plan-summary span { color: var(--pg-foreground); font-size: 14px; font-weight: 600; }
+.pg-skin .pr-plan-summary strong { color: var(--pg-foreground); font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.pg-skin .pr-plan-summary small { color: var(--pg-muted-fg); font-size: 12px; }
+.pg-skin .pr-plan-summary .accent { border: 0; background: var(--pg-accent); }
+.pg-skin .pr-plan-summary .accent strong { color: var(--pg-primary); }
+@media (min-width: 1024px) {
+  .pg-skin .pg-summary, .pg-skin .kpi-grid { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
+}
+
+/* Toolbar: one search box and the refresh, on the canvas rather than in a card (0.3). */
+.pg-skin .toolbar { padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; gap: 8px; }
+.pg-skin .search-field { flex: 0 1 320px; min-width: 220px; height: 36px; gap: 8px; padding: 0 10px; border-color: var(--pg-input); border-radius: 6px; background: var(--pg-background); }
+.pg-skin .search-field:focus-within { border-color: var(--pg-input); background: var(--pg-background); box-shadow: var(--pg-focus); }
+.pg-skin .search-field > .icon { color: var(--pg-muted-fg); font-size: 16px; }
+.pg-skin .search-field input { font-size: 14px; }
+.pg-skin .search-field input::placeholder { color: var(--pg-muted-fg); }
+.pg-skin .toolbar > input { flex: 0 1 320px; min-width: 220px; height: 36px; padding: 0 12px; border: 1px solid var(--pg-input); border-radius: 6px; background: var(--pg-background); color: var(--pg-foreground); font-size: 14px; }
+.pg-skin .toolbar > input:focus { outline: none; box-shadow: var(--pg-focus); }
+.pg-skin .select-field select { height: 36px; padding: 0 30px 0 12px; border-color: var(--pg-input); border-radius: 6px; color: var(--pg-foreground); font-size: 14px; font-weight: 400; box-shadow: 0 1px 2px rgb(0 0 0 / 0.05); }
+
+/* Filter chips (the PR sheet's budget by module) as the ERP's pill switcher: outline when idle, a primary tint when chosen. */
+.pg-skin .filter-chip { height: 28px; gap: 6px; padding: 0 10px; border-color: var(--pg-input); background: var(--pg-background); color: var(--pg-foreground); font-size: 12px; font-weight: 500; }
+.pg-skin .filter-chip:hover:not(:disabled) { border-color: var(--pg-input); background: var(--pg-accent); }
+.pg-skin .filter-chip:focus-visible { outline: none; box-shadow: var(--pg-focus); }
+.pg-skin .filter-chip.active { border-color: transparent; background: var(--pg-primary-10); color: var(--pg-primary); font-weight: 600; }
+.pg-skin .filter-chip.amber { color: var(--pg-amber-fg); }
+.pg-skin .filter-chip.red { color: var(--pg-red-fg); }
+.pg-skin .filter-chip.amber.active { background: var(--pg-warning-bg); color: var(--pg-amber-fg); }
+.pg-skin .filter-chip.red.active { background: var(--pg-danger-bg); color: var(--pg-red-fg); }
+
+/* Fields and grid inputs (D.2): label above, 36px controls, a blue focus ring and no red borders. */
+.pg-skin .field { gap: 6px; }
+.pg-skin .field label { color: var(--pg-foreground); font-size: 14px; font-weight: 500; }
+.pg-skin .field small { color: var(--pg-muted-fg); font-size: 12px; }
+.pg-skin .field :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea),
+.pg-skin .overlay-body > select, .pg-skin .info-strip select {
+  min-height: 36px; padding: 6px 12px; border: 1px solid var(--pg-input); border-radius: 6px; background: var(--pg-background); color: var(--pg-foreground); font-size: 14px;
+}
+.pg-skin .field textarea { box-shadow: 0 1px 2px rgb(0 0 0 / 0.05); }
+.pg-skin .field :is(input, select, textarea):focus, .pg-skin .info-strip select:focus { border-color: var(--pg-input); outline: none; box-shadow: var(--pg-focus); }
+.pg-skin .field input:read-only { background: color-mix(in srgb, var(--pg-muted) 50%, var(--pg-background)); color: var(--pg-foreground); }
+.pg-skin :is(input, select, textarea)::placeholder { color: var(--pg-muted-fg); }
+.pg-skin input[type="checkbox"] { accent-color: var(--pg-primary); width: 16px; height: 16px; }
+.pg-skin .pr-plan-table :is(input:not([type="checkbox"]), select) { height: 32px; padding: 0 8px; border: 1px solid var(--pg-input); border-radius: 6px; background: var(--pg-background); color: var(--pg-foreground); font-size: 14px; }
+.pg-skin .pr-plan-table :is(input, select):focus { border-color: var(--pg-input); outline: none; box-shadow: inset 0 0 0 1px var(--pg-ring); }
+.pg-skin .pr-plan-table :is(input, select):disabled { background: color-mix(in srgb, var(--pg-muted) 50%, var(--pg-background)); color: var(--pg-muted-fg); cursor: not-allowed; }
+.pg-skin .pr-plan-table input[type="number"] { text-align: right; font-variant-numeric: tabular-nums; }
+.pg-skin .red-text { color: var(--pg-red-fg); }
+
+/* Panels hold the page tables (C.1.9, D.7): white, a soft divider edge, 12px corners. */
+.pg-skin .panel { border-color: var(--pg-divider); border-radius: 12px; background: var(--pg-background); box-shadow: 0 1px 2px rgb(0 0 0 / 0.05); }
+.pg-skin .panel-head { align-items: center; padding: 12px 16px; border-bottom-color: var(--pg-divider); }
+.pg-skin .panel-head h2 { color: var(--pg-foreground); font-size: 14px; font-weight: 600; letter-spacing: 0; }
+.pg-skin .panel-head p { margin-top: 0; color: var(--pg-muted-fg); font-size: 13px; }
+.pg-skin .panel-body { padding: 16px; }
+.pg-skin .panel-body.flush { padding: 0; }
+
+/* Data table (D.7). */
+.pg-skin table { font-size: 14px; }
+.pg-skin thead th { padding: 8px 12px; border-bottom: 1px solid var(--pg-divider); background: var(--pg-background); color: var(--pg-muted-fg); font-size: 12px; font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; }
+.pg-skin tbody td { padding: 8px 12px; border-bottom: 1px solid var(--pg-row-line); color: var(--pg-foreground); }
+.pg-skin tbody tr:hover td { background: var(--pg-row-hover); }
+.pg-skin tbody tr.row-muted td { color: var(--pg-muted-fg); }
+.pg-skin td strong { color: var(--pg-foreground); font-weight: 500; }
+.pg-skin td small { display: block; color: var(--pg-muted-fg); font-size: 12px; }
+.pg-skin .cell-primary strong { font-size: 14px; font-weight: 500; }
+.pg-skin .cell-primary span { color: var(--pg-muted-fg); font-size: 12px; }
+.pg-skin td.num, .pg-skin th.num { font-variant-numeric: tabular-nums; }
+/* Tables inside a dialog are embedded ones: a framed box with a muted header in normal case. */
+.pg-skin .overlay-body > .table-wrap { border: 1px solid var(--pg-divider); border-radius: 6px; }
+.pg-skin .overlay-body thead th { background: var(--pg-muted); letter-spacing: 0.02em; text-transform: none; }
+.pg-skin .overlay-body .panel { box-shadow: none; border-radius: 8px; }
+
+/* Badges (D.5): pills with a 10% tint. The app's tones map onto the ERP's; .pg-* carry the ERP's status meanings. */
+.pg-skin .badge { gap: 4px; padding: 2px 8px; border: 1px solid transparent; font-size: 12px; font-weight: 500; line-height: 16px; }
+.pg-skin .badge.pg-outline { border-color: var(--pg-border); background: var(--pg-background); color: var(--pg-foreground); }
+.pg-skin .badge.blue, .pg-skin .badge.pg-soft { border-color: transparent; background: var(--pg-primary-10); color: var(--pg-primary); }
+.pg-skin .badge.amber, .pg-skin .badge.pg-warning { border-color: transparent; background: var(--pg-warning-bg); color: var(--pg-amber-fg); }
+.pg-skin .badge.violet, .pg-skin .badge.pg-violet { border-color: transparent; background: var(--pg-violet-bg); color: var(--pg-violet-fg); }
+.pg-skin .badge.pg-pink { border-color: transparent; background: var(--pg-pink-bg); color: var(--pg-pink-fg); }
+.pg-skin .badge.green, .pg-skin .badge.pg-success { border-color: transparent; background: var(--pg-success-bg); color: var(--pg-emerald-fg); }
+.pg-skin .badge.red, .pg-skin .badge.pg-danger { border-color: transparent; background: var(--pg-danger-bg); color: var(--pg-red-fg); }
+.pg-skin .badge.slate, .pg-skin .badge.pg-neutral { border-color: transparent; background: var(--pg-neutral-bg); color: var(--pg-slate-fg); }
+
+/* Empty state (C.6): a dashed box with one short line, no icon. */
+.pg-skin .empty { gap: 4px; margin: 12px; padding: 32px; border: 1px dashed var(--pg-divider); border-radius: 8px; color: var(--pg-muted-fg); font-size: 14px; }
+.pg-skin .empty-icon { display: none; }
+.pg-skin .empty strong { color: var(--pg-foreground); font-size: 14px; font-weight: 500; }
+.pg-skin .empty p { color: var(--pg-muted-fg); font-size: 14px; }
+
+/* Messages: an error reads like the ERP's error bubble, a note like its tinted strip. */
+.pg-skin .callout { border-radius: 8px; border-color: var(--pg-divider); background: var(--pg-background); color: var(--pg-foreground); font-size: 14px; }
+.pg-skin .callout.danger { border-color: color-mix(in srgb, var(--pg-destructive) 40%, transparent); background: var(--pg-background); color: var(--pg-foreground); box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
+.pg-skin .callout.danger > .icon { color: var(--pg-destructive); }
+.pg-skin .callout.warning { border-color: transparent; background: var(--pg-warning-bg); color: var(--pg-amber-fg); }
+.pg-skin .callout.success { border-color: transparent; background: var(--pg-success-bg); color: var(--pg-emerald-fg); }
+.pg-skin .info-strip { border-color: transparent; border-radius: 8px; background: var(--pg-accent); color: var(--pg-foreground); font-size: 14px; }
+.pg-skin .info-strip.amber { border-color: transparent; background: var(--pg-warning-bg); color: var(--pg-amber-fg); }
+.pg-skin .info-strip.red { border-color: transparent; background: var(--pg-danger-bg); color: var(--pg-red-fg); }
+.pg-skin .info-strip.green { border-color: transparent; background: var(--pg-success-bg); color: var(--pg-emerald-fg); }
+.pg-skin a { color: var(--pg-primary); }
+
+/* Pagination (D.7). */
+.pg-skin .pagination { gap: 12px; padding: 10px 12px; font-size: 14px; }
+.pg-skin .pagination-info { color: var(--pg-muted-fg); font-size: 14px; }
+.pg-skin .pagination-info strong { color: var(--pg-foreground); font-weight: 500; }
+.pg-skin .pager-btn { height: 32px; min-width: 32px; border: 1px solid var(--pg-input); border-radius: 6px; background: var(--pg-background); color: var(--pg-foreground); font-size: 12px; font-weight: 500; }
+.pg-skin .pager-btn:hover:not(:disabled) { border-color: var(--pg-input); background: var(--pg-accent); color: var(--pg-accent-fg); }
+.pg-skin .pager-btn.page.active { border-color: var(--pg-primary); background: var(--pg-primary); color: var(--pg-primary-fg); }
+
+/* Dialogs (D.8): divided header and footer, only the body scrolls, buttons right-aligned with the primary one last. */
+.pg-skin .overlay { background: var(--pg-scrim); backdrop-filter: none; animation: pg-fade 250ms var(--pg-ease); }
+.pg-skin .modal { max-height: 90vh; border: 1px solid var(--pg-border); border-radius: 8px; background: var(--pg-background); box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1); animation: pg-pop 250ms var(--pg-ease); }
+.pg-skin .overlay-head { padding: 16px 24px; border-bottom-color: var(--pg-divider); }
+.pg-skin .overlay-head h2 { font-size: 18px; font-weight: 600; line-height: 1.2; letter-spacing: -0.01em; }
+.pg-skin .overlay-head p { margin-top: 6px; color: var(--pg-muted-fg); font-size: 14px; }
+.pg-skin .overlay-head .icon-btn { width: 28px; height: 28px; border-radius: 4px; background: none; color: var(--pg-foreground); opacity: 0.7; }
+.pg-skin .overlay-head .icon-btn:hover { background: none; opacity: 1; }
+.pg-skin .overlay-body { padding: 16px 24px; }
+/* A dialog opened from this one (reserve stock from a BOM) is fixed to the viewport, so it takes no gap. */
+.pg-skin .overlay-body > :not(.overlay) + :not(.overlay) { margin-top: 12px; }
+.pg-skin .overlay-foot { justify-content: flex-end; padding: 16px 24px; border-top-color: var(--pg-divider); background: var(--pg-background); }
+@keyframes pg-fade { from { opacity: 0; } }
+@keyframes pg-pop { from { opacity: 0; scale: 0.96; } }
+@media (prefers-reduced-motion: reduce) {
+  .pg-skin .overlay, .pg-skin .modal { animation: none; }
+  .pg-skin .btn, .pg-skin .pg-act, .pg-skin .pg-cell { transition: none; }
+}
