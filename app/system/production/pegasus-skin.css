@@ -130,7 +130,7 @@
 .pg-skin input[type="checkbox"] { accent-color: var(--pg-primary); width: 16px; height: 16px; }
 /* The PR sheet's lines as an ERP line grid (D.7 grid cells): fixed columns so nothing runs past the frame, hairlines between
    cells, and a control that fills its cell with the focus ring inside it. Narrower than its columns, the frame scrolls sideways. */
-.pg-skin .pr-plan-table { table-layout: fixed; min-width: 1270px; border-collapse: collapse; }
+.pg-skin .pr-plan-table { table-layout: fixed; min-width: 1290px; border-collapse: collapse; }
 .pg-skin .pr-plan-table th { padding: 8px 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pg-skin .pr-plan-table td { height: 40px; padding: 10px; vertical-align: top; white-space: normal; overflow-wrap: anywhere; line-height: 20px; }
 .pg-skin .pr-plan-table :is(th, td) + :is(th, td) { border-left: 1px solid var(--pg-row-line); }
@@ -258,3 +258,15 @@
 /* A table standing in a panel among other blocks is an embedded one: framed, with a muted header in normal case. */
 .pg-skin .panel-body:not(.flush) > .table-wrap { border: 1px solid var(--pg-divider); border-radius: 8px; background: var(--pg-background); }
 .pg-skin .panel-body:not(.flush) > .table-wrap thead th { background: var(--pg-muted); letter-spacing: 0.02em; text-transform: none; }
+
+/* The estimate's lines beside the PR sheet, for reference: a framed list, short enough to leave the sheet in view. */
+.pg-skin .pr-estimate { border: 1px solid var(--pg-divider); border-radius: 8px; background: var(--pg-background); overflow: hidden; }
+.pg-skin .pr-estimate-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 8px 12px; border-bottom: 1px solid var(--pg-divider); background: var(--pg-muted); }
+.pg-skin .pr-estimate-head strong { font-size: 14px; font-weight: 600; }
+.pg-skin .pr-estimate-head small { color: var(--pg-muted-fg); font-size: 12px; }
+.pg-skin .pr-estimate-head .spacer { flex: 1 1 auto; }
+.pg-skin .pr-estimate .table-wrap { max-height: 232px; }
+.pg-skin .pr-estimate thead th { background: var(--pg-background); letter-spacing: 0.02em; text-transform: none; }
+.pg-skin .pr-estimate td.wrap { white-space: normal; overflow-wrap: anywhere; }
+.pg-skin .pr-estimate .pg-acts .btn { height: 28px; padding: 0 10px; }
+.pg-skin .pr-plan-table td .muted { font-size: 12px; }

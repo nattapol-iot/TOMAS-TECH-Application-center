@@ -135,9 +135,9 @@ test("the PR sheet takes many items and sends the PR in one press (owner 2026-11
 
 test("the PR sheet's lines are an ERP grid: fixed columns, controls filling their cells, framed (owner 2026-11-19)", () => {
   const skin = read("app/system/production/pegasus-skin.css");
-  // Thirteen columns; only the description (0) takes what is left, so the table never grows past its frame on its own.
-  assert.match(editor, /<colgroup>\{\[36, 80, 120, 130, 0, 84, 130, 92, 54, 100, 110, 110, 40\]\.map/);
-  assert.match(skin, /\.pg-skin \.pr-plan-table \{ table-layout: fixed; min-width: 1270px; border-collapse: collapse; \}/);
+  // Twelve columns; only the description (0) takes what is left, so the table never grows past its frame on its own.
+  assert.ok(editor.includes("<colgroup>{[84, 120, 130, 0, 84, 130, 92, 54, 104, 110, 110, 68].map"));
+  assert.ok(skin.includes(".pg-skin .pr-plan-table { table-layout: fixed; min-width: 1290px; border-collapse: collapse; }"));
   assert.match(skin, /\.pg-skin \.pr-plan-table td\.pg-in :is\(input, select\) \{ display: block; width: 100%;/);
   // No inline widths on the controls any more: the column decides.
   assert.doesNotMatch(editor, /<input \{\.\.\.grid\} style=/);
@@ -160,4 +160,25 @@ test("outsource is bought on a PR like material: on the BOM, marked on the scree
   // The PR sheet and the BOM mark an outsource line.
   assert.match(editor, /line[?]?.sectionCode === "OUT"/);
   assert.match(material, /line.sectionCode === "OUT"/);
+});
+
+test("a new PR starts empty; the estimate is a reference to pull from, and prices are approximate (owner 2026-11-19)", () => {
+  // Ten rows to type into, not the estimate's lines ticked.
+  assert.ok(editor.includes('editing ? draftFromPr(editing.lines, [...lines.values()]) : blankPrRows(10, onlyModule, "start")'));
+  assert.ok(!editor.includes("draftFromBom("));
+  // The estimate's lines sit in their own panel; one is brought in by a press, and all that are still to buy by another.
+  assert.ok(editor.includes('<div className="pr-estimate">'));
+  assert.ok(editor.includes("onClick={() => pull([line])}"));
+  assert.ok(editor.includes("onClick={() => pull(pullable)}"));
+  // Every cell of a row can be typed over; a row from the estimate then buys something in that line's place.
+  assert.ok(editor.includes("afterEdit({ ...row, ...patch }, row.bomLineId === null ? undefined : lines.get(row.bomLineId), ITEM_FIELDS.some((field) => field in patch))"));
+  assert.ok(!editor.includes("disabled={!row.selected}"));
+  assert.ok(!editor.includes('type="checkbox"'));
+  // A row with no module yet is asked for one, and is not shown as a budget overrun meanwhile.
+  assert.ok(editor.includes("moduleStatus(live.filter((row) => modules.some((name) => name.toLocaleLowerCase() === row.module.toLocaleLowerCase()))"));
+  // The price is an approximate one, in the sheet and on the PR.
+  assert.ok(editor.includes('<LocalizedText text={"ราคาประมาณ"} />'));
+  assert.ok(editor.includes('<LocalizedText text={"ยอดขอซื้อ (ประมาณ)"} />'));
+  assert.ok(material.includes('<th className="num"><LocalizedText text={"ราคาประมาณ"} /></th>'));
+  assert.ok(material.includes('const PR_KIND_TONE = { Planned: "blue", Substitute: "violet", Unplanned: "slate" } as const;'));
 });
