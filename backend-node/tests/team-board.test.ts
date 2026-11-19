@@ -271,7 +271,7 @@ test("everyone may add work for colleagues (SUP-2026-00010), and new work says w
     if (statement.includes("INSERT dbo.team_tasks")) return { recordset: [{ id: 41, row_version: Buffer.alloc(8, 5) }] };
     return { recordset: [] };
   });
-  assert.deepEqual([["Engineer"], ["Leader"], ["Admin"], ["Engineering Manager"], ["Project Manager"], ["Sales Engineer"]].map((roles) => canAssignOthers(user(1, roles))),
+  assert.deepEqual([["Engineer"], ["Leader"], ["Admin"], ["Engineering Manager"], ["Project Manager"], ["Sales Engineer"]].map(() => canAssignOthers()),
     [true, true, true, true, true, true]);
   assert.doesNotThrow(() => assertMayAssign(user(9, ["Engineer"]), [7, 9]));
   const engineer = boardServer(user(9, ["Engineer"]));

@@ -14,7 +14,6 @@ import { WORKLOAD_SQL, workloadItems, type WorkloadItem } from "../resource-work
 import type { EmailService } from "../email.js";
 import { calendarActions, repeatText, type CalendarState } from "../team-calendar.js";
 import { boardOutlookEvents, outlookStatus, refreshOutlookIfStale, syncOutlook } from "../outlook-calendar.js";
-import { rolesOf } from "../user-roles.js";
 import {
   maskWeekdays, ownState, parseRepeat, parseTemplate, repeatDates, ruleDates, seriesState, templateState, weekdayMask,
   type Occurrence, type SeriesRecord, type SeriesTemplate, type TeamTaskRepeat,
@@ -170,11 +169,11 @@ export function timeRangeManDays(startTime: string, endTime: string) {
  * Who may put work on someone else's row. Owner decision 2026-11-19 (ticket SUP-2026-00010): everyone who can add
  * team work may tag colleagues on it. This replaces the 2026-10-28 rule that limited it to Admins, Leaders and managers.
  */
-export const canAssignOthers = (_actor: CurrentUser) => true;
+export const canAssignOthers = () => true;
 
 /** Refuses a save that puts someone new on a task, other than the actor, unless the actor may assign others. */
 export function assertMayAssign(actor: CurrentUser, assigneeIds: readonly number[], already: readonly number[] = []) {
-  if (canAssignOthers(actor)) return;
+  if (canAssignOthers()) return;
   if (assigneeIds.some((id) => id !== actor.id && !already.includes(id)))
     throw new ApiError(403, "team_task_assign_forbidden", "Only Admins, Managers and Leaders can add work for someone else. Add it for yourself.");
 }
@@ -604,7 +603,7 @@ export function registerTeamBoardRoutes(app: FastifyInstance, db: Database, user
       /** Admin, Engineering and Project Managers may change anyone's team task. */
       canChangeAll: isProjectManagerRole(actor),
       /** Admins, Leaders and managers may add work for someone else; everyone else for themselves. */
-      canAssignOthers: canAssignOthers(actor),
+      canAssignOthers: canAssignOthers(),
       outlook,
       outlookSync: outlookStatus(),
     };

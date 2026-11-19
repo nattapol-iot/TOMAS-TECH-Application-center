@@ -44,7 +44,7 @@ test("restricted users can add themselves and retain existing assignees, with an
   const copy = TEAM_BOARD_COPY["TeamBoard.assignSelfOnly"];
   for (const language of ["en", "th", "jp"]) assert.ok(copy[language]?.trim(), language);
   const api = read("backend-node/src/routes/team-board.ts");
-  assert.match(api, /canAssignOthers: canAssignOthers\(actor\)/);
+  assert.match(api, /canAssignOthers: canAssignOthers\(\)/);
   assert.match(api, /assertMayAssign\(actor, input.assigneeIds\)/);
   assert.match(board, /const canAssignOthers = Boolean\(data\?\.canAssignOthers\)/);
   assert.match(board, /canAssignOthers \? null : \[me\]/);
