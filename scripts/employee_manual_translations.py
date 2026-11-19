@@ -521,7 +521,7 @@ C('procurement', 'BOM: bills of materials inside Purchase Requisition || BOM：P
   ], 'You see the project’s BOMs and which revision is Released and ready for purchasing. || ProjectのBOMと、Released済みで購買に使える版が分かります。') +
   P('20.2 Generate and release a BOM || 20.2 BOMの生成とRelease', [
     'Open Purchase Requisition → <b>Bill of Materials</b> tab → Generate BOM and select a project with an approved/locked estimate. || Purchase Requisition → <b>部品表 (BOM)</b>タブ → Generate BOMで承認済み・Locked見積を持つProjectを選びます。',
-    'Verify estimate number/revision and generate the BOM. Only material lines (categories 01-05) enter the BOM; labor, outsource and travel do not. || 見積番号・版を確認してBOMを生成します。BOMには資材行（区分01-05）のみが入り、労務、外注、旅費は入りません。',
+    'Verify estimate number/revision and generate the BOM. Material lines (categories 01-05) and outsourced work (category 07 Outsource) enter the BOM so they can be requested on a PR; our own labor, travel, accommodation and other costs do not. || 見積番号・版を確認してBOMを生成します。BOMには資材行（区分01-05）と外注作業（区分07 Outsource）が入り、PRで申請できます。自社の労務、旅費、宿泊費、その他の費用は入りません。',
     'Open View and inspect modules, items, quantities, reference budgets, stock and shortages. || ViewでModule、項目、数量、参照予算、在庫、不足を確認します。',
     'An authorized user selects Release once complete, with any required note. || 完全性確認後、権限者が必要メモを付けてReleaseします。',
     'Use the released BOM as the source for PR and MIR. || Released BOMをPRとMIRの元データに使います。'

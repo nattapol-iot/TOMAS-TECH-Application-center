@@ -2,27 +2,27 @@
 
 [Module](../modules/procurement.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `389b1627`; generated, do not edit. [backend-node/src/routes/boms.ts](<../../../backend-node/src/routes/boms.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `fef692fa`; generated, do not edit. [backend-node/src/routes/boms.ts](<../../../backend-node/src/routes/boms.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/boms` | 35–50 |
-| GET | `/api/v1/boms/:id` | 52–97 |
-| POST | `/api/v1/boms` | 99–125 |
-| POST | `/api/v1/boms/:id/release` | 127–136 |
-| POST | `/api/v1/boms/:id/reservations` | 138–164 |
-| POST | `/api/v1/boms/:id/reservations/:reservationId/release` | 166–175 |
+| GET | `/api/v1/boms` | 36–51 |
+| GET | `/api/v1/boms/:id` | 53–98 |
+| POST | `/api/v1/boms` | 100–126 |
+| POST | `/api/v1/boms/:id/release` | 128–137 |
+| POST | `/api/v1/boms/:id/reservations` | 139–165 |
+| POST | `/api/v1/boms/:id/reservations/:reservationId/release` | 167–176 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `todayIn` | [backend-node/src/routes/boms.ts](<../../../backend-node/src/routes/boms.ts>) | 19–22 |
-| `quantity` | [backend-node/src/routes/boms.ts](<../../../backend-node/src/routes/boms.ts>) | 23–27 |
-| `header` | [backend-node/src/routes/boms.ts](<../../../backend-node/src/routes/boms.ts>) | 28–32 |
-| `registerBomRoutes` | [backend-node/src/routes/boms.ts](<../../../backend-node/src/routes/boms.ts>) | 34–176 |
+| `todayIn` | [backend-node/src/routes/boms.ts](<../../../backend-node/src/routes/boms.ts>) | 20–23 |
+| `quantity` | [backend-node/src/routes/boms.ts](<../../../backend-node/src/routes/boms.ts>) | 24–28 |
+| `header` | [backend-node/src/routes/boms.ts](<../../../backend-node/src/routes/boms.ts>) | 29–33 |
+| `registerBomRoutes` | [backend-node/src/routes/boms.ts](<../../../backend-node/src/routes/boms.ts>) | 35–177 |
 
 ## Direct local dependencies
 

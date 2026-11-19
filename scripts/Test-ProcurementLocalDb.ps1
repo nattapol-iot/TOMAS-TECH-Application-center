@@ -23,6 +23,8 @@ $erpMigration = Join-Path $repoRoot 'database/migrations/090_pegasus_erp_purchas
 $draftEditMigration = Join-Path $repoRoot 'database/migrations/096_draft_pr_line_edit.sql'
 $routeMigration = Join-Path $repoRoot 'database/migrations/097_pr_approval_route.sql'
 $routeFixture = Join-Path $repoRoot 'database/tests/pr-approval-route-097.sql'
+$outsourceMigration = Join-Path $repoRoot 'database/migrations/108_bom_outsource_lines.sql'
+$outsourceFixture = Join-Path $repoRoot 'database/tests/bom-outsource-108.sql'
 $baselineFile = Join-Path ([IO.Path]::GetTempPath()) ('iot-procurement-baseline-' + $testSuffix + '.sql')
 $instanceCreated = $false
 
@@ -70,6 +72,14 @@ try {
     Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-i', $routeFixture)
     Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-i', $routeMigration)
     Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-Q', "DECLARE @final bigint=(SELECT id FROM dbo.users WHERE email=N'nattapol.p@tomastc.com'); IF NOT EXISTS (SELECT 1 FROM dbo.pr_approval_settings WHERE id=1 AND final_approver_id=@final) OR NOT EXISTS (SELECT 1 FROM dbo.mat_pr_approval_steps s JOIN dbo.mat_prs pr ON pr.id=s.pr_id WHERE pr.pr_no=N'PR-PC-ROUTE' AND s.sequence=2 AND s.name=N'Final Approval' AND s.approver_id=@final AND s.approver_role IS NULL AND s.status=N'Current') OR EXISTS (SELECT 1 FROM dbo.pr_department_approvers) OR COL_LENGTH(N'dbo.mat_pr_approval_steps',N'final_may_decide') IS NULL OR NOT EXISTS (SELECT 1 FROM dbo.schema_versions WHERE version=97) THROW 51999, 'Migration 097 did not seed the final approver or move the waiting step.', 1; DELETE dbo.pr_approval_settings; UPDATE dbo.mat_prs SET deleted_at=SYSUTCDATETIME() WHERE pr_no=N'PR-PC-ROUTE';")
+
+    # 108 found no outsource lines the first time. Give the legacy estimate two (one already on its BOM as a hidden SVC line,
+    # one not on the BOM), run 108 twice more: both are OUT lines of the BOM, once each, and the engineering line stays hidden.
+    Write-Output 'Checking migration 108 again after the legacy estimate gets outsource lines.'
+    Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-i', $outsourceFixture)
+    Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-i', $outsourceMigration)
+    Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-i', $outsourceMigration)
+    Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-Q', "DECLARE @bom bigint=(SELECT id FROM dbo.boms WHERE bom_no=N'BOM-PC-LEGACY'); IF (SELECT COUNT(*) FROM dbo.bom_lines bl JOIN dbo.cost_items ci ON ci.id=bl.estimate_line_id WHERE bl.bom_id=@bom AND bl.section_code=N'OUT' AND ci.item_code IN(N'OUT-01',N'OUT-02'))<>2 OR (SELECT COUNT(*) FROM dbo.bom_lines WHERE bom_id=@bom AND section_code=N'OUT')<>2 OR NOT EXISTS (SELECT 1 FROM dbo.bom_lines bl JOIN dbo.cost_items ci ON ci.id=bl.estimate_line_id WHERE bl.bom_id=@bom AND ci.item_code=N'ENG-01' AND bl.section_code=N'SVC') OR EXISTS (SELECT 1 FROM dbo.bom_lines bl JOIN dbo.cost_items ci ON ci.id=bl.estimate_line_id WHERE bl.bom_id=@bom AND ci.item_code=N'OUT-02' AND (bl.non_stock<>1 OR bl.item_id IS NOT NULL OR bl.qty_required<>5 OR bl.est_unit_cost<>3000)) THROW 51999, 'Migration 108 did not show the old outsource line and add the missing one, once each.', 1;")
 
     Write-Output 'Checking the PR API on the upgraded database.'
     $env:PROCUREMENT_TEST_SERVER = $serverName

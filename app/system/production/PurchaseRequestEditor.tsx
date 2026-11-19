@@ -183,7 +183,7 @@ export function PurchaseRequestEditor({ released, editing, onClose, onCreated }:
   };
 
   return (
-    <Panel title={editing ? editing.number : "ขอซื้อ (PR)"} subtitle={editing ? "แก้ไข PR ฉบับร่าง แล้วกด 'ส่งขออนุมัติ' หรือ 'บันทึกร่าง' ไว้ก่อน" : "เริ่มจากรายการที่ BOM ยังต้องซื้อ เปลี่ยนรุ่นหรือเพิ่มของนอกแผนได้ ภายในงบของ Module ไม่ต้องขออนุมัติเพิ่ม · อนุมัติแล้วส่งเข้า ERP ให้ฝ่ายจัดซื้อ"}
+    <Panel title={editing ? editing.number : "ขอซื้อ (PR)"} subtitle={editing ? "แก้ไข PR ฉบับร่าง แล้วกด 'ส่งขออนุมัติ' หรือ 'บันทึกร่าง' ไว้ก่อน" : "เริ่มจากรายการที่ BOM ยังต้องซื้อ ทั้งวัสดุและงานจ้างภายนอก เปลี่ยนรุ่นหรือเพิ่มของนอกแผนได้ ภายในงบของ Module ไม่ต้องขออนุมัติเพิ่ม · อนุมัติแล้วส่งเข้า ERP ให้ฝ่ายจัดซื้อ"}
       actions={<button className="btn ghost" type="button" onClick={onClose} disabled={busy}><Icon name="arrowLeft" /><LocalizedText text={"กลับไปรายการ PR"} /></button>}>
       <div className="form-grid two">
         <Field label="Released BOM" guide="pr.bom"><select value={effectiveBomId} disabled={Boolean(editing)} onChange={(event) => { setBomId(Number(event.target.value)); setModule(null); setPage(1); setNotice(""); setServerIssue(null); }}>
@@ -245,7 +245,7 @@ export function PurchaseRequestEditor({ released, editing, onClose, onCreated }:
             const rowAction = (icon: "refresh" | "trash", label: string, onClick: () => void) => <button className={icon === "trash" ? "pg-act danger" : "pg-act"} type="button" title={t(label)} aria-label={t(label)} onClick={onClick}><Icon name={icon} /></button>;
             return <tr key={row.key} data-row={row.key} className={row.selected ? undefined : "row-muted"}>
               <td className="pg-check"><input type="checkbox" checked={row.selected} onChange={(event) => update(row.key, { selected: event.target.checked })} aria-label={t("ซื้อรายการนี้")} /></td>
-              <td><Badge tone={KIND_TONE[row.lineType]}>{t(KIND_LABEL[row.lineType])}</Badge>{row.lineType === "Substitute" && line ? <small className="muted"><LocalizedText text={"แทน"} /> {line.itemCode || line.partNumber || line.description}</small> : null}</td>
+              <td><Badge tone={KIND_TONE[row.lineType]}>{t(KIND_LABEL[row.lineType])}</Badge>{line?.sectionCode === "OUT" ? <small className="muted"><LocalizedText text={"Outsource"} /></small> : null}{row.lineType === "Substitute" && line ? <small className="muted"><LocalizedText text={"แทน"} /> {line.itemCode || line.partNumber || line.description}</small> : null}</td>
               {cell("itemCode", 100)}{cell("partNumber", 200)}{cell("description", 500)}{cell("brand", 200)}
               {row.lineType === "Unplanned" ? <td className="pg-in"><select value={row.module} disabled={!row.selected} aria-label={t("Module")} onChange={(event) => update(row.key, { module: event.target.value })}>
                 <option value="">{t("Select…")}</option>{modules.map((name) => <option key={name} value={name}>{name}</option>)}</select></td> : <td>{row.module}</td>}

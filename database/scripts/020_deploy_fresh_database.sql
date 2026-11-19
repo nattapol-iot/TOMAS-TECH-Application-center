@@ -169,6 +169,7 @@ GO
 :r database/migrations/105_project_manhour_budget.sql
 :r database/migrations/106_schedule_people_plan.sql
 :r database/migrations/107_issue_batches.sql
+:r database/migrations/108_bom_outsource_lines.sql
 
 USE [$(DatabaseName)];
 GO

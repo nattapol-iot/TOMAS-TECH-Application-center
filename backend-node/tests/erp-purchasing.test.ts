@@ -75,6 +75,9 @@ test("the ERP request carries the PR, its project and every line, shortened to t
   assert.equal(String(substitute!.item_description).length, 2000); assert.equal(String(substitute!.unit).length, 20); assert.equal(String(substitute!.brand).length, 100);
   assert.match(String(substitute!.remark), /^Substitute for PLC-01 · Module Panel/);
   assert.deepEqual([unplanned!.part_number, unplanned!.remark], [undefined, "Not in the estimate · Module Panel · for site A"]);
+  // Outside labour or a service (the estimate's Outsource category) says so first.
+  const hired = (erpRequestArguments(header, [line({ outsource: true, remark: "two weeks" })], "https://eng.test").lines as Array<Record<string, unknown>>)[0]!;
+  assert.match(String(hired.remark), /^Outsource · Module Panel · /); assert.match(String(hired.remark), / · two weeks$/);
   // A long remark is cut to the ERP's length; the module and what a line replaces lead it, so they survive.
   const long = (erpRequestArguments(header, [line({ remark: "r".repeat(5000) })], "https://eng.test").lines as Array<Record<string, unknown>>)[0]!;
   assert.equal(String(long.remark).length, ERP_MAX_REMARK); assert.match(String(long.remark), /^Module Panel · Item PLC-01 · r/);

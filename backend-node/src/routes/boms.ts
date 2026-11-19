@@ -7,14 +7,15 @@ import { issueDocumentNumber } from "../document-number.js";
 import { ApiError } from "../errors.js";
 import { bodyObject, optionalBodyText, optionalPositiveLong, parseDateOnly, parseRowVersion, positiveLong, requiredInteger } from "../http.js";
 import { insertMaterialAudit } from "../material-audit.js";
-import { MATERIAL_CATEGORY_CODES, NO_MODULE, remainingToRequest, REQUESTING_PR_STATUSES } from "../procurement-rules.js";
+import { BOM_CATEGORY_CODES, NO_MODULE, OUTSOURCE_CATEGORY_CODE, OUTSOURCE_SECTION, remainingToRequest, REQUESTING_PR_STATUSES } from "../procurement-rules.js";
 import { demandProjectScope, isProjectElevated } from "../project-scope.js";
 import type { CurrentUserService } from "../users.js";
 
 type BomHeader = { id: number | string; bom_no: string; revision: number; status: string; project_id: number | string; estimate_id: number | string };
-// BOMs generated before only material categories were copied still carry engineering, travel and other costs as SVC lines.
+// BOMs generated before only bought categories were copied still carry engineering, travel and other costs as SVC lines.
+// Outsource lines are OUT (migration 108 moved the old SVC ones of that category), so they are among the lines shown.
 const MATERIAL_LINE = "l.section_code<>N'SVC'";
-const MATERIAL_CATEGORIES = MATERIAL_CATEGORY_CODES.map((code) => `'${code}'`).join(",");
+const BOM_CATEGORIES = BOM_CATEGORY_CODES.map((code) => `'${code}'`).join(",");
 
 function todayIn(timeZone: string): string {
   const parts = new Intl.DateTimeFormat("en-GB", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
@@ -114,11 +115,11 @@ export function registerBomRoutes(app: FastifyInstance, config: AppConfig, datab
         OUTPUT inserted.id,inserted.row_version VALUES(@number,1,@project,@estimate,N'Draft',@actor,@actor);`)).recordset[0]!; const id = Number(bom.id);
       const copy = new sql.Request(transaction); copy.input("bom", sql.BigInt, id); copy.input("estimate", sql.BigInt, Number(estimate.id)); copy.input("revision", sql.Int, estimate.revision); copy.input("actor", sql.BigInt, actor.id);
       const copied = await copy.query(`INSERT INTO dbo.bom_lines(bom_id,section_code,sort_order,item_id,estimate_line_id,description,qty_required,unit,est_unit_cost,customer_supplied_qty,owner_id,non_stock,created_by,updated_by)
-        SELECT @bom,CASE ci.category_code WHEN '01' THEN N'HW.STD' WHEN '02' THEN N'SW' WHEN '03' THEN N'HW.EL' WHEN '04' THEN N'HW.ME' WHEN '05' THEN N'HW.STD' ELSE N'SVC' END,
+        SELECT @bom,CASE ci.category_code WHEN '01' THEN N'HW.STD' WHEN '02' THEN N'SW' WHEN '03' THEN N'HW.EL' WHEN '04' THEN N'HW.ME' WHEN '05' THEN N'HW.STD' WHEN '${OUTSOURCE_CATEGORY_CODE}' THEN N'${OUTSOURCE_SECTION}' ELSE N'SVC' END,
         ROW_NUMBER() OVER(ORDER BY ci.category_code,ci.id),mi.id,ci.id,ci.description,ci.qty,ci.unit,ci.unit_cost,0,ci.owner_id,CASE WHEN mi.id IS NULL THEN 1 ELSE 0 END,@actor,@actor
         FROM dbo.cost_items ci INNER JOIN dbo.estimates e ON e.id=ci.estimate_id AND e.revision=ci.revision LEFT JOIN dbo.mat_items mi ON mi.item_code=ci.item_code AND mi.deleted_at IS NULL AND mi.is_active=1
-        WHERE ci.estimate_id=@estimate AND ci.revision=@revision AND ci.deleted_at IS NULL AND ci.qty>0 AND ci.category_code IN(${MATERIAL_CATEGORIES});`); const lineCount = copied.rowsAffected[0] ?? 0;
-      if (!lineCount) throw new ApiError(409, "estimate_has_no_lines", "The finalized estimate revision has no material lines (hardware, software, electrical, mechanical or robot) to generate a BOM from.");
+        WHERE ci.estimate_id=@estimate AND ci.revision=@revision AND ci.deleted_at IS NULL AND ci.qty>0 AND ci.category_code IN(${BOM_CATEGORIES});`); const lineCount = copied.rowsAffected[0] ?? 0;
+      if (!lineCount) throw new ApiError(409, "estimate_has_no_lines", "The finalized estimate revision has no material or outsource lines (hardware, software, electrical, mechanical, robot or outsource) to generate a BOM from.");
       await insertMaterialAudit(transaction, actor, "Generated BOM from estimate", "BOM", id, number, null, { estimate: estimate.estimate_no, estimateRevision: estimate.revision, lines: lineCount }, { projectId });
       return { id, number, revision: 1, status: "Draft", lineCount, rowVersion: bom.row_version.toString("base64") }; });
     return reply.status(201).header("Location", `/api/v1/boms/${created.id}`).send(created);

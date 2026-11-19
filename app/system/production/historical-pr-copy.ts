@@ -779,10 +779,10 @@ export const HISTORICAL_PR_COPY: Record<string, { th: string; en: string; jp: st
     "en": "ERP department",
     "jp": "ERP部門"
   },
-  "เริ่มจากรายการที่ BOM ยังต้องซื้อ เปลี่ยนรุ่นหรือเพิ่มของนอกแผนได้ ภายในงบของ Module ไม่ต้องขออนุมัติเพิ่ม · อนุมัติแล้วส่งเข้า ERP ให้ฝ่ายจัดซื้อ": {
-    "th": "เริ่มจากรายการที่ BOM ยังต้องซื้อ เปลี่ยนรุ่นหรือเพิ่มของนอกแผนได้ ภายในงบของ Module ไม่ต้องขออนุมัติเพิ่ม · อนุมัติแล้วส่งเข้า ERP ให้ฝ่ายจัดซื้อ",
-    "en": "Start from what the BOM still needs. Change a make or add unplanned items; within the module budget no extra approval is needed · Once approved it goes to the ERP for Purchasing",
-    "jp": "BOMの未購入品から開始。型式変更や計画外品の追加が可能で、モジュール予算内なら追加承認は不要・承認後ERPへ送り購買部が処理"
+  "เริ่มจากรายการที่ BOM ยังต้องซื้อ ทั้งวัสดุและงานจ้างภายนอก เปลี่ยนรุ่นหรือเพิ่มของนอกแผนได้ ภายในงบของ Module ไม่ต้องขออนุมัติเพิ่ม · อนุมัติแล้วส่งเข้า ERP ให้ฝ่ายจัดซื้อ": {
+    "th": "เริ่มจากรายการที่ BOM ยังต้องซื้อ ทั้งวัสดุและงานจ้างภายนอก เปลี่ยนรุ่นหรือเพิ่มของนอกแผนได้ ภายในงบของ Module ไม่ต้องขออนุมัติเพิ่ม · อนุมัติแล้วส่งเข้า ERP ให้ฝ่ายจัดซื้อ",
+    "en": "Start from what the BOM still needs, material and outsourced work alike. Change a make or add unplanned items; within the module budget no extra approval is needed · Once approved it goes to the ERP for Purchasing",
+    "jp": "BOMの未購入品（資材と外注作業）から開始。型式変更や計画外品の追加が可能で、モジュール予算内なら追加承認は不要・承認後ERPへ送り購買部が処理"
   },
   "แล้วส่งเข้า ERP อัตโนมัติ": {
     "th": "แล้วส่งเข้า ERP อัตโนมัติ",

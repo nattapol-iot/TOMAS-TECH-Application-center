@@ -8,7 +8,7 @@ import { ApiError } from "../errors.js";
 import { hasRole } from "../user-roles.js";
 import { bodyObject, booleanQuery, oneOf, optionalBodyText, optionalPositiveLong, optionalText, parseDateOnly, parseRowVersion, positiveLong, requiredInteger, requiredText } from "../http.js";
 import { insertMaterialAudit } from "../material-audit.js";
-import { type ApprovalRoute, approvalSteps, type BomLineForRequest, ERP_STEP, FINAL_STEP, LEGACY_PO_CREATION_STEP, MAX_PR_LINES, moduleBudgets, NO_MODULE, planPrLines, type PlannedPrLine,
+import { type ApprovalRoute, approvalSteps, type BomLineForRequest, ERP_STEP, FINAL_STEP, LEGACY_PO_CREATION_STEP, MAX_PR_LINES, moduleBudgets, NO_MODULE, OUTSOURCE_SECTION, planPrLines, type PlannedPrLine,
   type PrLineInput, type PrLineKind, procurementRuleFlags, remainingToRequest, REQUESTING_PR_STATUSES, type RuleFlag } from "../procurement-rules.js";
 import type { EmailService, PurchaseRequisitionApprovalEmail, PurchaseRequisitionDecisionEmail } from "../email.js";
 import { describeErpFailure, type ErpDepartment, type ErpFailure, type ErpGateway, type ErpLine, erpLineProblem, ERP_MAX_QUANTITY, type ErpRequest, erpRequestArguments,
@@ -274,14 +274,15 @@ export function registerPurchaseRequisitionRoutes(app: FastifyInstance, config: 
       await database.query(`UPDATE dbo.mat_prs SET erp_department=@department WHERE id=@id;`, (r) => { r.input("department", sql.NVarChar(50), erpDepartment); r.input("id", sql.BigInt, prId); });
     }
     const detail = (await database.query<Record<string, unknown>>(`SELECT p.project_no,p.name project_name,b.bom_no FROM dbo.mat_prs pr INNER JOIN dbo.projects p ON p.id=pr.project_id INNER JOIN dbo.boms b ON b.id=pr.bom_id WHERE pr.id=@id;
-      SELECT l.line_type,l.item_code,l.part_no,l.description,l.brand,l.qty,l.unit,l.unit_price,l.remark,l.budget_module,COALESCE(bi.item_code,ci.item_code,bl.description) original_code
+      SELECT l.line_type,l.item_code,l.part_no,l.description,l.brand,l.qty,l.unit,l.unit_price,l.remark,l.budget_module,COALESCE(bi.item_code,ci.item_code,bl.description) original_code,
+        CASE WHEN bl.section_code=N'${OUTSOURCE_SECTION}' THEN 1 ELSE 0 END outsource
       FROM dbo.mat_pr_lines l LEFT JOIN dbo.bom_lines bl ON bl.id=l.bom_line_id LEFT JOIN dbo.mat_items bi ON bi.id=bl.item_id LEFT JOIN dbo.cost_items ci ON ci.id=bl.estimate_line_id
       WHERE l.pr_id=@id ORDER BY l.id;`, (r) => r.input("id", sql.BigInt, prId)));
     const project = (detail.recordsets[0]?.[0] ?? {}) as Record<string, unknown>;
     const lines = (detail.recordsets[1] ?? []).map((row) => { const line = row as Record<string, unknown>; return { line_type: String(line.line_type), item_code: String(line.item_code ?? ""),
       part_no: String(line.part_no ?? ""), description: String(line.description ?? ""), brand: String(line.brand ?? ""), qty: Number(line.qty), unit: String(line.unit ?? ""),
       unit_price: Number(line.unit_price), remark: line.remark === null ? null : String(line.remark), budget_module: String(line.budget_module ?? ""),
-      original_code: line.original_code === null ? null : String(line.original_code) } satisfies ErpLine; });
+      original_code: line.original_code === null ? null : String(line.original_code), outsource: Boolean(line.outsource) } satisfies ErpLine; });
     const problem = erpLineProblem(lines);
     if (problem) { await recordError(prId, problem); return { sent: false, kind: "validation", message: problem }; }
     const args = erpRequestArguments({ pr_no: prepared.h.pr_no, erp_ref: prepared.ref, erp_department: erpDepartment, required_date: prepared.h.required_date, purpose: prepared.h.purpose,
