@@ -87,6 +87,21 @@ export function workingDays(
   return result;
 }
 /**
+ * The finish date of a row that lasts `days` working days from `start` (Mon–Fri, holidays excluded), the way
+ * people count plan days (SUP-2026-00013). A start on a weekend or holiday begins on the next working day.
+ * Null for a bad date or a count outside 1–3650.
+ */
+export function workingDayFinish(start: string, days: number, holidays: readonly string[] = []): string | null {
+  const from = dayNumber(start), closed = new Set(holidays);
+  if (!Number.isFinite(from) || !Number.isInteger(days) || days < 1 || days > 3650) return null;
+  let remaining = days;
+  for (let d = from; d <= from + days * 3 + closed.size + 14; d++) {
+    const weekday = new Date(d * DAY).getUTCDay();
+    if (weekday !== 0 && weekday !== 6 && !closed.has(dateFromDay(d)) && --remaining === 0) return dateFromDay(d);
+  }
+  return null;
+}
+/**
  * A plan row nobody gave man-days (owner decision 2026-11-04) takes a full day on each of its working days: once for
  * each piece of work (a task with its functions is one), and only on days that piece has no man-days of its own.
  * Man-days by date.

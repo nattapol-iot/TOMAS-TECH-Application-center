@@ -2532,6 +2532,7 @@ export const DICTIONARY: Record<string, Entry> = {
   "Plan.deletePending": { en: "This row or a descendant waits on a request for more days. Answer the request first.", th: "แถวนี้หรือแถวลูกมีคำขอเพิ่มวันรออยู่ ตอบคำขอก่อนจึงลบได้", jp: "この行または配下に日数追加の依頼が保留中です。先に依頼に回答してください。" },
   "Plan.deleteResourcePlan": { en: "This row came from the team's work overview. Delete it there.", th: "แถวนี้มาจากภาพรวมงานทีม ให้ลบที่หน้านั้น", jp: "この行はチームの仕事一覧から来ています。そちらで削除してください。" },
   "Plan.deleteFiltered": { en: "Clear the filter to delete rows.", th: "ล้างตัวกรองก่อนจึงลบแถวได้", jp: "行を削除するには絞り込みを解除してください。" },
+  "Plan.workDaysHint": { en: "Working days: Monday–Friday, company holidays not counted.", th: "นับเฉพาะวันทำงาน จันทร์–ศุกร์ ไม่นับวันหยุดบริษัท", jp: "稼働日（月～金、会社の休日を除く）で数えます。" },
   "Plan.deleteDetail": { en: "This row contains member details and cannot be deleted here.", th: "แถวนี้มีงานส่วนตัวของสมาชิก จึงลบที่นี่ไม่ได้", jp: "メンバーの詳細作業を含む行はここでは削除できません。" },
   "Date.pick": { en: "Choose a date", th: "เลือกวันที่", jp: "日付を選択" },
   "Date.format": { en: "Type the date as {format}", th: "พิมพ์วันที่แบบ {format}", jp: "{format} の形式で入力してください" },

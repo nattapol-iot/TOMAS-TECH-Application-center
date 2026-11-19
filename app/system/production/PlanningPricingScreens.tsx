@@ -21,7 +21,7 @@ import { dayNumber, draggedPlan, ganttFitWindow, ganttShift, ganttWindow, linked
 import { GanttChart, GanttLegend, GanttToolbar, scheduleTone, type GanttAlert, type GanttLink, type GanttRowDrop, type GanttRowSpec, type GanttZoomChoice } from "./GanttChart";
 import { useFullscreen } from "../use-fullscreen";
 import { loadTeamBoard, type TeamBoardData } from "../resource-workload-client";
-import { weeklyCapacity, type Commitment } from "../../../lib/resource-planning";
+import { weeklyCapacity, workingDayFinish, type Commitment } from "../../../lib/resource-planning";
 import { boardDays, dailyLoad, dateRuns, outlookLoad, overlapDays, withOutlook, type Overlap } from "../../../lib/team-board";
 import { PicLoadPanel, useLoadNote, usePicLoads } from "./PlanPicLoad";
 import { choiceLink, optionalChoiceLink, placeId, useLinkedState, useScreenPlace } from "../screen-link";
@@ -1963,10 +1963,15 @@ function PlanStartFields({ schedule, taskId, parentId, value, onChange }: {
 }
 
 /** The dates a form's row would take, to read its PICs' load over them. */
-function draftSpan(schedule: ProjectSchedule, start: StartDraft, planDays: number, milestone: boolean): { from: string | null; to: string | null } {
+/**
+ * The dates a typed row covers. Plan days are typed as working days (Mon–Fri, holidays excluded; SUP-2026-00013),
+ * so the finish skips weekends and holidays. The API stores the calendar span from start to that finish, so rows
+ * nobody edits keep their dates.
+ */
+function draftSpan(schedule: ProjectSchedule, start: StartDraft, workDays: number, milestone: boolean): { from: string | null; to: string | null } {
   const predecessor = start.mode === "linked" ? flattenTasks(schedule.tasks).find((row) => String(row.id) === start.predecessorId) ?? null : null;
   const from = start.mode === "linked" ? linkedStart(predecessor?.planFinish ?? null, start.lagDays, new Set(schedule.holidays ?? [])) : start.planStart || null;
-  return { from, to: from ? ganttShift(from, Math.max(1, milestone ? 1 : planDays) - 1) : null };
+  return { from, to: !from ? null : milestone ? from : workingDayFinish(from, Math.max(1, workDays), schedule.holidays ?? []) ?? ganttShift(from, Math.max(1, workDays) - 1) };
 }
 
 /** The PIC list with each person's load over the row's dates beside their department, and the chosen ones' load below it. */
@@ -2107,7 +2112,10 @@ function EditScheduleTaskModal({ bootstrap, schedule, task, onClose, onSaved, on
   const [name, setName] = useState(task.name);
   const [visibility, setVisibility] = useState(task.visibility);
   const [start, setStart] = useState<StartDraft>(() => startDraftOf(task));
-  const [planDays, setPlanDays] = useState(task.planDays);
+  // Plan days are typed as working days; a row saved with its days and start untouched keeps its stored span.
+  const storedWorkDays = Math.max(1, Number(task.workDays) || task.planDays);
+  const [planDays, setPlanDays] = useState(storedWorkDays);
+  const [initialStart] = useState<StartDraft>(() => startDraftOf(task));
   const [milestone, setMilestone] = useState(task.isMilestone);
   const [planManDays, setPlanManDays] = useState(task.planManDays);
   // What the man-hour budget has left once this row is saved; only for a row with no sub rows, whose own figure is the one counted.
@@ -2140,6 +2148,12 @@ function EditScheduleTaskModal({ bootstrap, schedule, task, onClose, onSaved, on
   };
   // Locked dates go back exactly as stored, so the API sees them unchanged.
   const lockedStart = { startMode: task.startMode, predecessorId: task.predecessorId, lagDays: task.lagDays, planStart: task.storedPlanStart ?? null };
+  // Typed working days become the calendar span the API stores; an untouched row sends its stored span back.
+  const calendarDays = () => {
+    if (planDays === storedWorkDays && !task.isMilestone && JSON.stringify(start) === JSON.stringify(initialStart)) return task.planDays;
+    const span = draftSpan(schedule, start, planDays, false);
+    return span.from && span.to ? Math.max(1, periodDays(span.from, span.to)) : planDays;
+  };
   const submit = async () => {
     setBusy(true); setError(""); setFailedAction("save");
     try {
@@ -2149,7 +2163,7 @@ function EditScheduleTaskModal({ bootstrap, schedule, task, onClose, onSaved, on
         parentId: task.parentId, sortOrder: task.sortOrder, kind: task.kind, name: name.trim(),
         isMilestone: isPhase ? false : milestone, visibility,
         ...(isPhase ? { ...lockedStart, planStart: customer.start || null } : datesLocked ? lockedStart : ownOnly ? { ...lockedStart, planStart: task.startMode === "manual" ? start.planStart : task.storedPlanStart ?? null } : startBody(start, task.storedPlanStart ?? null)),
-        planDays: isPhase ? (customer.start && customer.finish ? periodDays(customer.start, customer.finish) : 1) : milestone && !datesLocked ? 1 : datesLocked ? task.planDays : planDays,
+        planDays: isPhase ? (customer.start && customer.finish ? periodDays(customer.start, customer.finish) : 1) : milestone && !datesLocked ? 1 : datesLocked ? task.planDays : calendarDays(),
         picUserIds: isPhase ? [] : picUserIds, picExternal: isPhase ? "" : picExternal.trim(), planManDays: isPhase ? 0 : planManDays,
       }) });
       await onSaved();
@@ -2177,7 +2191,7 @@ function EditScheduleTaskModal({ bootstrap, schedule, task, onClose, onSaved, on
         {!ownOnly ? <label className="field"><span><LocalizedText text={"Plan man-days"} /></span><input type="number" min="0" max="1000000" step="0.25" value={planManDays} disabled={Boolean(task.peopleByDay?.length)} onChange={(event) => setPlanManDays(Number(event.target.value))} />{task.peopleByDay?.length ? <small>{t("Plan.mhFromPeople")}</small> : null}{budgetLeft !== null ? <small className={budgetLeft < 0 ? "plan-manhours-over" : undefined} data-guide="plan.manhoursRow">{t(budgetLeft < 0 ? "Plan.mhOver" : "Plan.mhRowLeft")} {number(Math.abs(budgetLeft))} {t("MD")}</small> : null}</label> : null}
         {datesLocked ? <label className="field"><span><LocalizedText text={"Plan start *"} /></span><DateInput value={task.planStart ?? ""} disabled /></label>
           : ownOnly ? <label className="field"><span><LocalizedText text={"Plan start *"} /></span><DateInput value={start.planStart} disabled={task.startMode !== "manual"} onChange={event => setStart(value => ({ ...value, planStart: event.target.value }))} /></label> : <PlanStartFields schedule={schedule} taskId={task.id} parentId={task.parentId} value={start} onChange={setStart} />}
-        <label className="field"><span><LocalizedText text={"Plan days *"} /></span><input type="number" min="1" max="3650" value={datesLocked ? task.planDays : milestone ? 1 : planDays} disabled={datesLocked || milestone} onChange={(event) => setPlanDays(Number(event.target.value))} /></label>
+        <label className="field" data-guide="plan.workDays"><span><LocalizedText text={"Plan days *"} /></span><input type="number" min="1" max="3650" value={datesLocked ? storedWorkDays : milestone ? 1 : planDays} disabled={datesLocked || milestone} onChange={(event) => setPlanDays(Number(event.target.value))} /><small className="muted">{t("Plan.workDaysHint")}</small></label>
         {datesLocked ? <p className="muted span-2">{t("Schedule.datesDerived")}</p> : !ownOnly ? <label className="checkbox-row span-2"><input type="checkbox" checked={milestone} onChange={(event) => setMilestone(event.target.checked)} /><LocalizedText text={"Milestone (1 day)"} /></label> : null}
         <PicFieldsWithLoad bootstrap={planTeam} span={datesLocked ? { from: task.planStart, to: task.planFinish } : draftSpan(schedule, start, planDays, milestone)} taskId={task.id} value={picUserIds} onChange={setPicUserIds} manDays={planManDays} />
         {keepsMember ? <p className="muted span-2" role="status">{t("Plan.memberRequired")}</p> : null}
