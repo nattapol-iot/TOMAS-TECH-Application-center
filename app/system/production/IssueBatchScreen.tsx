@@ -8,7 +8,6 @@ import { localeFor, useLanguage, useT } from "../i18n";
 import { Icon, type IconName } from "../ui";
 import { choiceLink, textLink, useLinkedState, useScreenPlace } from "../screen-link";
 import { useActivitySubView } from "../use-activity-presence";
-import { ResourceTaskWorkspace } from "./ResourceTaskWorkspace";
 import { downloadErpEstimateWorkbookBytes } from "../../../lib/erp-estimate-workbook";
 import { buildIssueWorkbook, issueWorkbookName } from "../../../lib/issue-workbook";
 import {
@@ -818,16 +817,12 @@ function ExportDialog({ batches, onClose }: { batches: IssueBatch[]; onClose: ()
 // ── The page ──
 
 const BATCH_TAB_LINK = choiceLink<IssueBatchTab>(TABS);
-const VIEW_LINK = choiceLink<"batches" | "old">(["batches", "old"]);
 
 export function IssueBatchScreen({ bootstrap, notify, openProjectSchedule, initialBatchId = null }: Props) {
   const t = useT();
   const dates = useDates();
   const [opened, place] = useScreenPlace();
-  const [view, setView] = useLinkedState("issueview", "batches", VIEW_LINK);
-  // The old tab reports its own sub-view (ResourceTaskWorkspace).
-  const showingOld = view === "old";
-  useActivitySubView(showingOld ? null : "projects-punchlist");
+  useActivitySubView("projects-punchlist");
   const [tab, setTab] = useLinkedState<IssueBatchTab>("issuetab", "open", BATCH_TAB_LINK);
   const [search, setSearch] = useLinkedState("issueq", "", textLink, { remember: false });
   const [page, setPage] = useState(1);
@@ -843,7 +838,7 @@ export function IssueBatchScreen({ bootstrap, notify, openProjectSchedule, initi
   const canRead = bootstrap.permissions.includes("schedule.read");
 
   const load = useCallback(async () => {
-    if (!canRead || view === "old") return;
+    if (!canRead) return;
     const current = ++requestId.current;
     setLoading(true);
     try {
@@ -851,7 +846,7 @@ export function IssueBatchScreen({ bootstrap, notify, openProjectSchedule, initi
       if (current === requestId.current) { setList(data); setError(""); }
     } catch (failure) { if (current === requestId.current) setError(errorText(failure)); }
     finally { if (current === requestId.current) setLoading(false); }
-  }, [canRead, view, tab, search, page]);
+  }, [canRead, tab, search, page]);
   useEffect(() => { const timer = window.setTimeout(() => void load(), 200); return () => window.clearTimeout(timer); }, [load]);
   useEffect(() => { const timer = window.setInterval(() => void load(), 60_000); return () => window.clearInterval(timer); }, [load]);
 
@@ -871,71 +866,65 @@ export function IssueBatchScreen({ bootstrap, notify, openProjectSchedule, initi
   const pageCount = list ? Math.max(1, Math.ceil(list.total / list.pageSize)) : 1;
   const allOnPage = list?.items.length ? list.items.every((batch) => selected.has(batch.id)) : false;
   return <div className="pg pg-page" data-guide="issues.page">
-    <div className="utabs" role="tablist" aria-label={t("Issues.views")}>
-      <button type="button" role="tab" className="utab" aria-selected={view === "batches"} onClick={() => setView("batches")}>{t("Issues.viewBatches")}{tabs?.approval ? <span className="count todo">{tabs.approval}</span> : null}</button>
-      <button type="button" role="tab" className="utab" aria-selected={view === "old"} data-guide="issues.old" onClick={() => setView("old")}>{t("Issues.viewOld")}</button>
+    <div className="pg-head">
+      <div><h2>{t("Issues.title")}</h2><p>{t("Issues.subtitle")}</p></div>
+      <div className="pg-head-actions">
+        {list?.canWrite ? <button type="button" className="pg-btn btn-primary" data-guide="issues.create" onClick={() => setCreating(true)}><Icon name="plus" className="pg-icon" />{t("Issues.create")}</button> : null}
+      </div>
     </div>
-    {view === "old" ? <ResourceTaskWorkspace bootstrap={bootstrap} notify={notify} issues linked openProjectSchedule={openProjectSchedule} /> : <>
-      <div className="pg-head">
-        <div><h2>{t("Issues.title")}</h2><p>{t("Issues.subtitle")}</p></div>
-        <div className="pg-head-actions">
-          {list?.canWrite ? <button type="button" className="pg-btn btn-primary" data-guide="issues.create" onClick={() => setCreating(true)}><Icon name="plus" className="pg-icon" />{t("Issues.create")}</button> : null}
-        </div>
+    <div className="summary" role="group" aria-label={t("Issues.filterBy")} data-guide="issues.summary">
+      {TABS.map((key) => <button key={key} type="button" className="cell" aria-pressed={tab === key} onClick={() => pickTab(key)}>
+        <span className="pg-label">{t(`Issues.tab.${key}`)}</span>
+        <span className={`value${key === "approval" && tabs?.approval ? " pg-warn" : ""}`}>{tabs ? tabs[key] : "—"}</span>
+        <span className="sub">{t(`Issues.tabSub.${key}`)}</span>
+      </button>)}
+    </div>
+    <div className="gcard">
+      <div className="pg-toolbar">
+        <label className="search"><Icon name="search" className="pg-icon" /><span className="sr-only">{t("Issues.search")}</span>
+          <input type="search" value={search} placeholder={t("Issues.search")} onChange={(event) => { setSearch(event.target.value); setPage(1); }} /></label>
+        <span className="pg-spacer" />
+        <button type="button" className="pg-icon-btn" aria-label={t("Issues.refresh")} title={t("Issues.refresh")} onClick={() => void load()}><Icon name="refresh" className="pg-icon" /></button>
       </div>
-      <div className="summary" role="group" aria-label={t("Issues.filterBy")} data-guide="issues.summary">
-        {TABS.map((key) => <button key={key} type="button" className="cell" aria-pressed={tab === key} onClick={() => pickTab(key)}>
-          <span className="pg-label">{t(`Issues.tab.${key}`)}</span>
-          <span className={`value${key === "approval" && tabs?.approval ? " pg-warn" : ""}`}>{tabs ? tabs[key] : "—"}</span>
-          <span className="sub">{t(`Issues.tabSub.${key}`)}</span>
-        </button>)}
-      </div>
-      <div className="gcard">
-        <div className="pg-toolbar">
-          <label className="search"><Icon name="search" className="pg-icon" /><span className="sr-only">{t("Issues.search")}</span>
-            <input type="search" value={search} placeholder={t("Issues.search")} onChange={(event) => { setSearch(event.target.value); setPage(1); }} /></label>
-          <span className="pg-spacer" />
-          <button type="button" className="pg-icon-btn" aria-label={t("Issues.refresh")} title={t("Issues.refresh")} onClick={() => void load()}><Icon name="refresh" className="pg-icon" /></button>
-        </div>
-        {error ? <div className="error-line" role="alert">{error}<button type="button" className="pg-btn btn-outline btn-sm" onClick={() => void load()}>{t("Issues.retry")}</button></div> : null}
-        {loading && !list ? <div className="pg-empty">{t("Issues.loading")}</div> : list && !list.items.length ? <div className="pg-empty">{search ? t("Issues.noMatch") : t(`Issues.empty.${tab}`)}</div> : list ? <div className="dt-scroll"><table className="dt">
-          <thead><tr>
-            <th className="cb"><input type="checkbox" className="cbx" aria-label={t("Issues.selectPage")} checked={allOnPage} onChange={() => setSelected(allOnPage ? new Set() : new Set(list.items.map((batch) => batch.id)))} /></th>
-            <th className="acts-col">{t("Issues.actions")}</th><th>{t("Issues.batchNo")}</th><th>{t("Issues.project")}</th><th>{t("Issues.reportedOn")}</th>
-            <th>{t("Issues.progress")}</th><th className="r">{t("Issues.hoursPlanActual")}</th><th>{t("Issues.status")}</th>
-          </tr></thead>
-          <tbody>{list.items.map((batch) => {
-            const progress = batchProgress(batch);
-            return <tr key={batch.id} className={selected.has(batch.id) ? "sel" : ""}>
-              <td className="cb"><input type="checkbox" className="cbx" aria-label={fill(t("Issues.selectBatch"), { no: batch.batchNo })} checked={selected.has(batch.id)} onChange={() => toggle(batch.id)} /></td>
-              <td className="acts-col"><div className="acts">
-                <button type="button" className="pg-icon-btn" aria-label={fill(t("Issues.openBatch"), { no: batch.batchNo })} title={t("Issues.open")} onClick={() => openBatch(batch.id)}><Icon name="eye" className="pg-icon" /></button>
-                <button type="button" className="pg-icon-btn" aria-label={fill(t("Issues.exportBatch"), { no: batch.batchNo })} title={t("Issues.export")} onClick={() => void exportSelected([batch.id])}><Icon name="download" className="pg-icon" /></button>
-              </div></td>
-              <td><button type="button" className="doclink" data-guide="issues.batch" onClick={() => openBatch(batch.id)}>{batch.batchNo}</button></td>
-              <td className="pj"><b>{batch.projectId ? `${batch.projectNo} · ${batch.projectName}` : batch.externalProject}</b>
-                <span>{[batch.customerName, batch.projectId ? (batch.projectClosed ? t("Issues.projectClosed") : "") : t("Issues.projectOutsideShort")].filter(Boolean).join(" · ")}</span></td>
-              <td className="pj"><b className="tnum">{dates.day(batch.reportedOn)}</b><span>{batch.reportedBy || batch.createdByName}</span></td>
-              <td><div className="prog"><span className="meter"><i className={progress.percent === 100 ? "ok" : ""} style={{ width: `${progress.percent}%` }} /></span><span className="tnum hint">{progress.finished}/{progress.total}</span></div></td>
-              <td className="r tnum">{hoursText(batch.planHours)} / {hoursText(batch.actualHours)}</td>
-              <td><div className="acts">
-                {batch.closedAt ? <span className="pg-badge b-success">{t("Issues.batchClosed")}</span> : null}
-                {batch.approvalCount ? <span className="pg-badge b-warning">{fill(t("Issues.waitingCount"), { n: batch.approvalCount })}</span> : null}
-                {batch.doingCount ? <span className="pg-badge b-soft">{fill(t("Issues.doingCount"), { n: batch.doingCount })}</span> : null}
-                {batch.openCount ? <span className="pg-badge b-outline">{fill(t("Issues.openCount"), { n: batch.openCount })}</span> : null}
-              </div></td>
-            </tr>;
-          })}</tbody>
-        </table></div> : null}
-        {list && list.total > list.pageSize ? <div className="pg-pager"><span className="tnum">{fill(t("Issues.pageOf"), { from: (list.page - 1) * list.pageSize + 1, to: Math.min(list.page * list.pageSize, list.total), total: list.total })}</span>
-          <div><button type="button" className="pg-btn btn-outline btn-sm" onClick={() => setPage(Math.max(1, page - 1))} aria-disabled={page <= 1}>{t("Issues.prev")}</button>
-            <button type="button" className="pg-btn btn-outline btn-sm" onClick={() => setPage(Math.min(pageCount, page + 1))} aria-disabled={page >= pageCount}>{t("Issues.next")}</button></div></div> : null}
-      </div>
-      {selected.size ? <div className="selbar"><div>
-        <span className="n">{fill(t("Issues.selected"), { n: selected.size })}</span><span className="sep" />
-        <button type="button" className="pg-btn btn-primary btn-sm" onClick={() => void exportSelected([...selected])}><Icon name="download" className="pg-icon" />{t("Issues.export")}</button>
-        <button type="button" className="pg-icon-btn" aria-label={t("Issues.clearSelection")} onClick={() => setSelected(new Set())}><Icon name="x" className="pg-icon" /></button>
-      </div></div> : null}
-    </>}
+      {error ? <div className="error-line" role="alert">{error}<button type="button" className="pg-btn btn-outline btn-sm" onClick={() => void load()}>{t("Issues.retry")}</button></div> : null}
+      {loading && !list ? <div className="pg-empty">{t("Issues.loading")}</div> : list && !list.items.length ? <div className="pg-empty">{search ? t("Issues.noMatch") : t(`Issues.empty.${tab}`)}</div> : list ? <div className="dt-scroll"><table className="dt">
+        <thead><tr>
+          <th className="cb"><input type="checkbox" className="cbx" aria-label={t("Issues.selectPage")} checked={allOnPage} onChange={() => setSelected(allOnPage ? new Set() : new Set(list.items.map((batch) => batch.id)))} /></th>
+          <th className="acts-col">{t("Issues.actions")}</th><th>{t("Issues.batchNo")}</th><th>{t("Issues.project")}</th><th>{t("Issues.reportedOn")}</th>
+          <th>{t("Issues.progress")}</th><th className="r">{t("Issues.hoursPlanActual")}</th><th>{t("Issues.status")}</th>
+        </tr></thead>
+        <tbody>{list.items.map((batch) => {
+          const progress = batchProgress(batch);
+          return <tr key={batch.id} className={selected.has(batch.id) ? "sel" : ""}>
+            <td className="cb"><input type="checkbox" className="cbx" aria-label={fill(t("Issues.selectBatch"), { no: batch.batchNo })} checked={selected.has(batch.id)} onChange={() => toggle(batch.id)} /></td>
+            <td className="acts-col"><div className="acts">
+              <button type="button" className="pg-icon-btn" aria-label={fill(t("Issues.openBatch"), { no: batch.batchNo })} title={t("Issues.open")} onClick={() => openBatch(batch.id)}><Icon name="eye" className="pg-icon" /></button>
+              <button type="button" className="pg-icon-btn" aria-label={fill(t("Issues.exportBatch"), { no: batch.batchNo })} title={t("Issues.export")} onClick={() => void exportSelected([batch.id])}><Icon name="download" className="pg-icon" /></button>
+            </div></td>
+            <td><button type="button" className="doclink" data-guide="issues.batch" onClick={() => openBatch(batch.id)}>{batch.batchNo}</button></td>
+            <td className="pj"><b>{batch.projectId ? `${batch.projectNo} · ${batch.projectName}` : batch.externalProject}</b>
+              <span>{[batch.customerName, batch.projectId ? (batch.projectClosed ? t("Issues.projectClosed") : "") : t("Issues.projectOutsideShort")].filter(Boolean).join(" · ")}</span></td>
+            <td className="pj"><b className="tnum">{dates.day(batch.reportedOn)}</b><span>{batch.reportedBy || batch.createdByName}</span></td>
+            <td><div className="prog"><span className="meter"><i className={progress.percent === 100 ? "ok" : ""} style={{ width: `${progress.percent}%` }} /></span><span className="tnum hint">{progress.finished}/{progress.total}</span></div></td>
+            <td className="r tnum">{hoursText(batch.planHours)} / {hoursText(batch.actualHours)}</td>
+            <td><div className="acts">
+              {batch.closedAt ? <span className="pg-badge b-success">{t("Issues.batchClosed")}</span> : null}
+              {batch.approvalCount ? <span className="pg-badge b-warning">{fill(t("Issues.waitingCount"), { n: batch.approvalCount })}</span> : null}
+              {batch.doingCount ? <span className="pg-badge b-soft">{fill(t("Issues.doingCount"), { n: batch.doingCount })}</span> : null}
+              {batch.openCount ? <span className="pg-badge b-outline">{fill(t("Issues.openCount"), { n: batch.openCount })}</span> : null}
+            </div></td>
+          </tr>;
+        })}</tbody>
+      </table></div> : null}
+      {list && list.total > list.pageSize ? <div className="pg-pager"><span className="tnum">{fill(t("Issues.pageOf"), { from: (list.page - 1) * list.pageSize + 1, to: Math.min(list.page * list.pageSize, list.total), total: list.total })}</span>
+        <div><button type="button" className="pg-btn btn-outline btn-sm" onClick={() => setPage(Math.max(1, page - 1))} aria-disabled={page <= 1}>{t("Issues.prev")}</button>
+          <button type="button" className="pg-btn btn-outline btn-sm" onClick={() => setPage(Math.min(pageCount, page + 1))} aria-disabled={page >= pageCount}>{t("Issues.next")}</button></div></div> : null}
+    </div>
+    {selected.size ? <div className="selbar"><div>
+      <span className="n">{fill(t("Issues.selected"), { n: selected.size })}</span><span className="sep" />
+      <button type="button" className="pg-btn btn-primary btn-sm" onClick={() => void exportSelected([...selected])}><Icon name="download" className="pg-icon" />{t("Issues.export")}</button>
+      <button type="button" className="pg-icon-btn" aria-label={t("Issues.clearSelection")} onClick={() => setSelected(new Set())}><Icon name="x" className="pg-icon" /></button>
+    </div></div> : null}
     {creating ? <IssueGridDialog bootstrap={bootstrap} batch={null} onClose={() => setCreating(false)} onSaved={(batch, message) => { setCreating(false); notify(message); void load(); openBatch(batch.id); }} /> : null}
     {openId ? <BatchDialog key={openId} batchId={openId} bootstrap={bootstrap} notify={notify} onClose={() => openBatch(null)} onChanged={() => void load()}
       onExport={(batches) => setExporting(batches)} openProjectSchedule={openProjectSchedule} /> : null}

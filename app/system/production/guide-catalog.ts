@@ -996,15 +996,6 @@ const PUNCHLIST_ISSUES: Guide = {
       },
     },
     {
-      target: "issues.old", action: "next", view: "projects",
-      title: { th: "Issue แบบเดิม", en: "Old single issues", jp: "旧形式の課題" },
-      body: {
-        th: "Issue ที่บันทึกทีละข้อแบบเดิมยังอยู่ครบในแท็บนี้ ใบแจ้งใหม่ให้สร้างจากปุ่มด้านขวา",
-        en: "Issues recorded one at a time the old way are all still in this tab. New ones go in a batch, from the button on the right.",
-        jp: "従来の1件ずつの課題はこのタブにすべて残っています。新しいものは右のボタンから票で作成します。",
-      },
-    },
-    {
       target: "issues.create", action: "click", view: "projects",
       title: { th: "สร้างใบแจ้ง Issue", en: "Create an issue batch", jp: "課題票を作成" },
       body: { th: "กด 'สร้างใบแจ้ง Issue'", en: "Press New issue batch.", jp: "「課題票を作成」を押します。" },

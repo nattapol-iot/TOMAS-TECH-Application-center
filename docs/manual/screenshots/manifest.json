@@ -561,30 +561,6 @@
       "bytes": 143418
     },
     {
-      "key": "punchlist",
-      "language": "th",
-      "file": "punchlist-th.jpg",
-      "caption": "Punchlist · รายการ Issue ลูกค้าของโครงการ",
-      "sha256": "9b81da9bf11e4e0d4e6864e2bd913146a5d656c75f9a42fc746903e7eb78769e",
-      "bytes": 92107
-    },
-    {
-      "key": "punchlist",
-      "language": "en",
-      "file": "punchlist-en.jpg",
-      "caption": "Punchlist · project customer issues",
-      "sha256": "258184477bfe49067b9a610e52dceda5b9f6c07f102b4d4c6398dac39f456d28",
-      "bytes": 100673
-    },
-    {
-      "key": "punchlist",
-      "language": "ja",
-      "file": "punchlist-jp.jpg",
-      "caption": "Punchlist・プロジェクトの顧客課題",
-      "sha256": "63aaa3bc2ec3dd693eeedb4f04859a79cdadddbcdb37d743c3bc7cd2e97dc639",
-      "bytes": 95309
-    },
-    {
       "key": "quotations",
       "language": "th",
       "file": "quotations-th.jpg",

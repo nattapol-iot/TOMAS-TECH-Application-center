@@ -498,15 +498,20 @@ C('my-work', 'My Work and Team Activity: accept, report and review scores || My 
   ], 'Reporting commitments are scheduled in advance and the KPI cycle shows the correct mode and dates. || 報告対象業務が事前設定され、KPI期間に正しいモードと日付が表示されます。',
     'A score requires at least 10 assessed days. When data is insufficient, the existing KPI keeps its full weight. || スコアには最低10日の評価対象日が必要です。データ不足の場合は従来KPIを100%使用します。'))
 
-C('punchlist', 'Punchlist: resolve customer issues || Punchlist：顧客課題を完了まで追跡', 'Projects → Punchlist · customer issues || Projects → Punchlist・顧客課題', 'PM / planners / issue assignees || PM・計画担当・課題担当',
-  P('19.1 Turn a customer issue into accountable work || 19.1 顧客課題を担当業務にする', [
-    'Choose the project and add a customer issue with reporter, customer and reference. || Projectで顧客課題を追加し、報告者、顧客、参照を記録します。',
-    'Describe the symptom or unmet expectation, expected deliverable and priority. || 症状・期待との差、必要な成果物、優先度を記載します。',
-    'Select assignee, start, duration and MD. Check workload and submit the plan for approval. || 担当、開始日、期間、MDを設定し、負荷確認後に計画承認へ提出します。',
-    'After approval, the member accepts and updates progress until Done. || 承認後、担当者が受諾してDoneまで進捗を更新します。',
-    'The planner verifies the fix, records acceptance notes and closes the issue. || 計画担当が修正結果を検収し、確認メモを残して完了にします。'
-  ], 'The issue has a reporter, linked work, dates and verification evidence. || 報告者、紐づく業務、日付、検収証拠が揃います。',
-    'Punchlist is for customer project issues. Support Center is for system, equipment, data and team coordination problems under its categories. || Punchlistは顧客プロジェクト課題用です。システム・機器・データ・社内調整の問題はSupport Centerの分類で報告します。'))
+C('punchlist', 'Punchlist: customer issue batches through to closed || Punchlist：顧客の課題票を完了まで', 'Projects → Punchlist · customer issues || Projects → Punchlist・顧客課題', 'PM / Lead / issue PICs || PM・リーダー・課題担当',
+  P('19.1 Record a customer issue batch || 19.1 顧客の課題票を記録する', [
+    'Press <b>New issue batch</b>. Pick the project (closed ones too), or press <b>Not in the system</b> and type the project and customer. Add the day the customer reported and who reported it. || <b>課題票を作成</b>を押します。案件を選ぶ（完了案件も可）か、<b>システム外</b>を押して案件名と顧客を入力します。報告日と報告者を入れます。',
+    'Type one line per issue: category (Problem / Requirement), function, description, PIC, start / end and hours (8 h = 1 man-day). Rows copied from Excel can be pasted; paste a screenshot (Ctrl+V) into a line to attach it. || 1行に1件ずつ入力します：区分（Problem / Requirement）・機能・内容・担当者・開始/終了・時間（8時間=1人日）。Excelからコピーした行を貼り付けられ、行にスクリーンショットを貼り付け（Ctrl+V）ると添付されます。',
+    'Check the PICs\' load for that week in the side panel, then press <b>Save batch</b>. It gets a number IS-yearmonth-sequence. || 横のパネルで担当者のその週の負荷を確認し、<b>票を保存</b>を押します。IS-年月-連番 が付きます。',
+    'Problems start at once; a Requirement typed by an engineer waits for the PM / Lead to approve it. || Problemはすぐ着手できます。エンジニアが入力したRequirementはPM/リーダーの承認待ちになります。'
+  ], 'The batch has an IS- number and its issues show in the PICs\' My Work, the team\'s load and the project\'s Gantt, without delaying the project plan. || 票にIS-番号が付き、課題は担当者のマイワーク・チームの負荷・案件のガントに表示され、案件計画は遅延扱いになりません。')
+  + P('19.2 Start, close and report to the customer || 19.2 着手・完了と顧客への報告', [
+    'The PIC presses <b>Start</b> on the issue in My Work or in the batch. || 担当者がマイワークまたは票の課題で<b>着手</b>を押します。',
+    'When it is fixed, press <b>Close issue</b> and enter the actual finish date, the hours actually spent and the fix. || 修正後に<b>完了にする</b>を押し、実際の完了日・実績時間・対応内容を入力します。',
+    'An issue that will not be done is closed with <b>Cancel issue</b> or <b>Reject</b> and a reason. A batch closes itself once every issue is done, cancelled or rejected. || 対応しない課題は理由を添えて<b>課題を取消</b>または<b>却下</b>にします。全件が完了・取消・却下になると票は自動で完了します。',
+    'Select batches of one project and press <b>Export Excel</b> for the Issues Table file to send the customer. || 同じ案件の票を選んで<b>Excel出力</b>を押すと、顧客に送るIssues Tableのファイルができます。'
+  ], 'Every closed issue has its actual date, hours and fix. || 完了した課題すべてに実績日・時間・対応内容があります。',
+    'Issues recorded one at a time the old way can still be opened under Team overview → Tasks and in My Work. System, equipment, data and internal coordination problems go to the Support Center. || 従来の1件ずつの課題は「チームの仕事一覧 → タスク」とマイワークで引き続き開けます。システム・機器・データ・社内調整の問題はSupport Centerで報告します。'))
 
 C('procurement', 'Procurement Dashboard and BOM || 購買DashboardとBOM', 'Procurement Dashboard / BOM || Procurement Dashboard / BOM', 'Purchasing / PM / material controllers || 購買・PM・資材管理',
   P('20.1 Read material queues and budgets || 20.1 資材の処理待ちと予算を見る', [

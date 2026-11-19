@@ -112,12 +112,15 @@ test("the export is the team's Issues Table: three title lines, a two-row headin
   assert.equal(issueWorkbookName("Old line 3/2019", "2026-11-18"), "Old-line-3-2019_issues_20261118.xlsx");
 });
 
-test("the Punchlist is the issue batch page, Pegasus-styled on this page only, with the old issues in their own tab", async () => {
+test("the Punchlist is the issue batch page alone, Pegasus-styled on this page only", async () => {
   const shell = await source("app/system/ProductionApp.tsx");
   assert.match(shell, /projectTab === "punchlist" \? <IssueBatchScreen /);
   assert.doesNotMatch(shell, /import \{ ResourceTaskWorkspace \}/);
   const screen = await source("app/system/production/IssueBatchScreen.tsx");
-  assert.match(screen, /<ResourceTaskWorkspace bootstrap=\{bootstrap\} notify=\{notify\} issues linked/);
+  // The old single-issue tab is gone (owner 2026-11-19); old is_issue tasks still list with the team's other tasks.
+  assert.doesNotMatch(screen, /ResourceTaskWorkspace|issueview|role="tablist"/);
+  const workspace = await source("app/system/production/ResourceTaskWorkspace.tsx");
+  assert.doesNotMatch(workspace, /issues\?:boolean|isIssue:issue|issues:String\(issues\)/);
   assert.match(screen, /import "\.\/issue-batch\.css";/);
   // Dialogs are portalled into a layer of their own that carries the scope.
   assert.match(screen, /createPortal\(<div className="pg pg-layer">/);
