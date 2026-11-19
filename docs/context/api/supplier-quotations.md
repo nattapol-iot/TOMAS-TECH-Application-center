@@ -2,7 +2,7 @@
 
 [Module](../modules/pricing.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `d0be658f`; generated, do not edit. [backend-node/src/routes/supplier-quotations.ts](<../../../backend-node/src/routes/supplier-quotations.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `11733693`; generated, do not edit. [backend-node/src/routes/supplier-quotations.ts](<../../../backend-node/src/routes/supplier-quotations.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 

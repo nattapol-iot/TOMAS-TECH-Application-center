@@ -167,10 +167,10 @@ export function timeRangeManDays(startTime: string, endTime: string) {
 
 /** Who may change or remove a team task: whoever added it, anyone it is for, and Admin / Engineering / Project Managers. */
 /**
- * Who may put work on someone else's row (owner decision 2026-10-28): Admins, Leaders and managers (any role named
- * "... Manager"). Everyone else adds work for themselves, or for nobody yet.
+ * Who may put work on someone else's row. Owner decision 2026-11-19 (ticket SUP-2026-00010): everyone who can add
+ * team work may tag colleagues on it. This replaces the 2026-10-28 rule that limited it to Admins, Leaders and managers.
  */
-export const canAssignOthers = (actor: CurrentUser) => rolesOf(actor).some((role) => role === "Admin" || role === "Leader" || /manager$/i.test(role));
+export const canAssignOthers = (_actor: CurrentUser) => true;
 
 /** Refuses a save that puts someone new on a task, other than the actor, unless the actor may assign others. */
 export function assertMayAssign(actor: CurrentUser, assigneeIds: readonly number[], already: readonly number[] = []) {
