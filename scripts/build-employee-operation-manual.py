@@ -413,15 +413,20 @@ chapter('my-work', 'My Work และ Team Activity: รับงาน รา�
     ], 'ความคืบหน้าใน My Work และ Project Schedule ของงานเดียวกันสอดคล้องกัน', 'Task inbox, งานใน Project schedule และ Site Visit assignments มีขั้นตอบรับ/แก้แผนต่างกัน ให้ใช้ปุ่มของชนิดงานนั้น'),
     'app/system/production/ResourceTaskWorkspace.tsx app/system/production/PlanningPricingScreens.tsx app/system/production/TeamActivityScreen.tsx app/system/ProductionApp.tsx', 'my-work activity')
 
-chapter('punchlist', 'Punchlist: ติดตาม Issue ของลูกค้าจนปิด', 'Projects → Punchlist · Issue ลูกค้า', 'PM / Planner / ผู้แก้ปัญหา',
-    proc('19.1 เปลี่ยน Issue ลูกค้าเป็นงานที่รับผิดชอบได้', [
-        'เลือก Project → เพิ่ม Issue ลูกค้า ระบุผู้แจ้ง/ลูกค้า/เลขอ้างอิง',
-        'เขียนอาการหรือสิ่งที่ไม่เป็นไปตามคาด พร้อมผลลัพธ์ที่ต้องส่งมอบและความสำคัญ',
-        'เลือกผู้รับผิดชอบ วันเริ่ม ระยะเวลาและ MD ตรวจ Workload แล้วส่งแผนอนุมัติ',
-        'หลังอนุมัติ สมาชิกตอบรับ อัปเดตความคืบหน้าและทำงานจนเสร็จ',
-        'ผู้วางแผนตรวจผลแก้ไข บันทึกหมายเหตุรับงานแล้วปิด Issue'
-    ], 'Issue มีผู้แจ้ง งานที่เชื่อม วันที่และหลักฐานการตรวจรับให้ติดตาม', 'Punchlist ใช้กับประเด็นงานลูกค้าในโครงการ ส่วน Support Center ใช้แจ้งปัญหาระบบ อุปกรณ์ ข้อมูลและการประสานงานตามหมวดของทีม'),
-    'app/system/production/ResourceTaskWorkspace.tsx docs/resource-task-workflow.md')
+chapter('punchlist', 'Punchlist: ใบแจ้ง Issue ของลูกค้าจนปิด', 'Projects → Punchlist · Issue ลูกค้า', 'PM / Lead / ผู้รับผิดชอบ Issue',
+    proc('19.1 บันทึกใบแจ้ง Issue ของลูกค้า', [
+        'กด <b>สร้างใบแจ้ง Issue</b> เลือกโปรเจกต์ (โปรเจกต์ที่ปิดแล้วก็เลือกได้) หรือกด <b>ไม่มีในระบบ</b> แล้วพิมพ์ชื่อโปรเจกต์และลูกค้าเอง ใส่วันที่ลูกค้าแจ้งและชื่อผู้แจ้ง',
+        'พิมพ์หนึ่งบรรทัดต่อหนึ่ง Issue: ประเภท (Problem / Requirement) ฟังก์ชัน รายละเอียด ผู้รับผิดชอบ วันเริ่ม/เสร็จ และชั่วโมง (8 ชม. = 1 คน-วัน) คัดลอกแถวจาก Excel มาวางได้ และวางภาพหน้าจอ (Ctrl+V) ในบรรทัดเพื่อแนบรูป',
+        'ดูภาระงานของผู้รับผิดชอบในสัปดาห์นั้นที่แถบด้านข้าง แล้วกด <b>บันทึกใบแจ้ง</b> ระบบออกเลข IS-ปีเดือน-ลำดับ',
+        'Problem เริ่มได้ทันที ส่วน Requirement ที่ Engineer พิมพ์จะรอ PM / Lead อนุมัติก่อน'
+    ], 'ใบมีเลข IS- และ Issue ขึ้นใน My Work ของผู้รับผิดชอบ ภาระงานทีม และ Gantt ของโปรเจกต์ โดยไม่ทำให้แผนโปรเจกต์ล่าช้า')
+    + proc('19.2 เริ่ม ปิด และส่งรายการให้ลูกค้า', [
+        'ผู้รับผิดชอบกด <b>เริ่มทำ</b> ที่ Issue ใน My Work หรือในใบแจ้ง',
+        'แก้เสร็จแล้วกด <b>ปิดงาน</b> ใส่วันที่เสร็จจริง ชั่วโมงที่ใช้จริง และวิธีแก้',
+        'Issue ที่ไม่ต้องทำต่อให้กด <b>ยกเลิก Issue</b> หรือ <b>ไม่อนุมัติ</b> พร้อมเหตุผล ใบจะปิดเองเมื่อทุกข้อเสร็จ ยกเลิก หรือไม่อนุมัติ',
+        'เลือกใบของโปรเจกต์เดียวกันแล้วกด <b>Export Excel</b> เพื่อได้ไฟล์ Issues Table ส่งลูกค้า'
+    ], 'ทุก Issue ที่ปิดแล้วมีวันที่และชั่วโมงจริงพร้อมวิธีแก้', 'Issue ที่บันทึกทีละข้อแบบเดิมยังเปิดดูได้ที่ ภาพรวมงานทีม → Tasks และใน My Work ส่วนปัญหาระบบ อุปกรณ์ ข้อมูล และการประสานงานภายใน ให้แจ้งที่ Support Center'),
+    'app/system/production/IssueBatchScreen.tsx app/system/production/MyIssues.tsx')
 
 chapter('procurement', 'Procurement Dashboard และ BOM', 'Procurement Dashboard / BOM', 'Purchasing / PM / ผู้ควบคุมวัสดุ',
     proc('20.1 อ่านคิวและงบวัสดุ', [

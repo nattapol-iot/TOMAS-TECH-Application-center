@@ -20,7 +20,7 @@ Renderer and localized captions: `scripts/employee_manual_illustrated.py`.
 Capture provenance and hashes: `docs/manual/screenshots/manifest.json`.
 Application integration: `docs/employee-manual-integration.md`.
 
-The build verifies 43 chapters and matching identifiers for all 110 procedures in
+The build verifies 43 chapters and matching identifiers for all 111 procedures in
 each language. Screenshots were captured in Chrome from the real Team Test app
 on 2026-09-06, in TH/EN/JP. No business transactions were submitted for capture.
 Source UI strings that remain untranslated are preserved in the screenshots.
@@ -46,7 +46,7 @@ Images show accessible pages, not proof that every transaction was exercised.
 | 16 แผนงานโครงการ (Plan) และ Baseline | Projects → Plan | `app/system/production/PlanningPricingScreens.tsx`, `app/system/production/GanttChart.tsx`, `docs/resource-task-workflow.md` |
 | 17 Resource Plan และ Project Timeline | resources, project-timeline | `app/system/production/ResourcePlanningScreen.tsx`, `app/system/production/ResourceTaskWorkspace.tsx`, `app/system/production/ProjectPortfolioGantt.tsx`, `app/system/production/GanttChart.tsx`, `docs/resource-planning.md`, `docs/resource-task-workflow.md` |
 | 18 My Work และ Team Activity: รับงาน รายงาน และติดตามคะแนน | my-work, activity | `app/system/production/ResourceTaskWorkspace.tsx`, `app/system/production/PlanningPricingScreens.tsx`, `app/system/production/TeamActivityScreen.tsx`, `app/system/ProductionApp.tsx` |
-| 19 Punchlist: ติดตาม Issue ของลูกค้าจนปิด | Projects → Punchlist · Issue ลูกค้า | `app/system/production/ResourceTaskWorkspace.tsx`, `docs/resource-task-workflow.md` |
+| 19 Punchlist: ใบแจ้ง Issue ของลูกค้าจนปิด | Projects → Punchlist · Issue ลูกค้า | `app/system/production/IssueBatchScreen.tsx`, `app/system/production/MyIssues.tsx` |
 | 20 Procurement Dashboard และ BOM | procurement, boms | `app/system/production/MaterialScreens.tsx`, `backend-node/src/routes/boms.ts`, `backend-node/src/routes/stock-control.ts` |
 | 21 Purchase Requisition: ขอซื้อ อนุมัติ และส่งเข้า ERP | purchase | `app/system/production/MaterialScreens.tsx`, `app/system/production/PurchaseRequestEditor.tsx`, `backend-node/src/procurement-rules.ts`, `backend-node/src/routes/purchase-requisitions.ts`, `backend-node/src/erp-purchasing.ts`, `docs/PEGASUS_ERP_PR_INTEGRATION_TH.md` |
 | 22 PR ย้อนหลัง: นำเข้า เก็บประวัติ และเทียบงบ | Purchase Requisition → PR ย้อนหลัง | `docs/historical-pr-import.md`, `app/system/production/HistoricalPrPanel.tsx`, `backend-node/src/routes/historical-pr.ts` |
