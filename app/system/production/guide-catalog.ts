@@ -2630,9 +2630,9 @@ export const GUIDES: readonly Guide[] = [
         target: "pr.lines", action: "next", view: "purchase",
         title: { th: "เลือกรายการที่จะซื้อ", en: "Choose what to buy", jp: "購入品を選ぶ" },
         body: {
-          th: "ติ๊กช่องหน้ารายการที่จะซื้อ แก้จำนวนและราคาได้ กด 'เปลี่ยนรุ่น' ถ้าจะซื้อรุ่นอื่น หรือ 'เพิ่มรายการนอกแผน' สำหรับของที่ไม่อยู่ใน BOM",
-          en: "Tick the lines to buy and adjust quantity and price. Use the change model button for another model, or add an unplanned line for anything not in the BOM.",
-          jp: "購入する明細にチェックし、数量と価格を調整します。別型式は型式変更、BOMにない品は計画外追加を使います。",
+          th: "ติ๊กช่องหน้ารายการที่จะซื้อ ช่องสีฟ้าอ่อนคือช่องที่พิมพ์แก้ได้ เช่น จำนวนและราคา กดปุ่มลูกศรวนท้ายแถว (เปลี่ยนรุ่น) ถ้าจะซื้อรุ่นอื่น หรือ 'เพิ่มรายการนอกแผน' สำหรับของที่ไม่อยู่ใน BOM",
+          en: "Tick the lines to buy. The lightly tinted cells are the ones you can type in, such as quantity and price. Use the change model button at the end of a row for another model, or add an unplanned line for anything not in the BOM.",
+          jp: "購入する明細にチェックします。薄く色の付いたセル（数量・単価など）は入力できます。別型式は行末の型式変更ボタン、BOMにない品は計画外追加を使います。",
         },
         missing: {
           th: "ถ้า BOM นี้ขอซื้อครบแล้ว ใช้ 'เพิ่มรายการนอกแผน' 'วางจาก Excel' หรือนำเข้า Excel",

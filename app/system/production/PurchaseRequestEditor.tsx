@@ -223,40 +223,44 @@ export function PurchaseRequestEditor({ released, editing, onClose, onCreated }:
           <tbody>{statuses.filter((status) => status.thisRequest > 0).map((status) => <tr key={status.module}><td><strong>{status.module}</strong></td><td className="num">{money(status.budget)}</td>
             <td className="num">{money(status.requested)}</td><td className="num">{money(status.thisRequest)}</td><td className="num">{money(status.budget - status.requested - status.thisRequest)}</td>
             <td><Badge tone={LEVEL_TONE[status.level]}>{t(budgetNote(status, Boolean(approvers)))}{status.level !== "ok" && Number.isFinite(status.percent) ? ` (${status.percent.toFixed(1)}%)` : ""}</Badge></td></tr>)}</tbody></table></div> : null}
-        {rows.length ? <div className="table-wrap tall" data-guide="pr.lines" ref={sheet}><table className="pr-plan-table"><thead><tr>
+        {rows.length ? <div className="table-wrap tall" data-guide="pr.lines" ref={sheet}><table className="pr-plan-table">
+          {/* An ERP line grid: fixed columns, the description takes what is left, and a control fills its cell. */}
+          <colgroup>{[36, 80, 120, 130, 0, 84, 130, 92, 54, 100, 110, 110, 40].map((width, index) => <col key={index} style={width ? { width } : undefined} />)}</colgroup>
+          <thead><tr>
           {/* Ticks or clears every row: what the two toolbar buttons did. */}
-          <th><input type="checkbox" checked={live.length > 0 && selected.length === live.length} aria-label={t("ซื้อทั้งหมดที่เหลือ")} title={t("ซื้อทั้งหมดที่เหลือ")}
+          <th className="pg-check"><input type="checkbox" checked={live.length > 0 && selected.length === live.length} aria-label={t("ซื้อทั้งหมดที่เหลือ")} title={t("ซื้อทั้งหมดที่เหลือ")}
             onChange={(event) => setRows(rows.map((row) => ({ ...row, selected: event.target.checked })))} /></th><th><LocalizedText text={"ประเภท"} /></th>
           <th><LocalizedText text={"Item code"} /></th><th><LocalizedText text={"Part No."} /></th><th><LocalizedText text={"Description"} /></th><th><LocalizedText text={"Brand"} /></th>
           <th><LocalizedText text={"Module"} /></th><th className="num"><LocalizedText text={"Qty"} /></th><th><LocalizedText text={"Unit"} /></th><th className="num"><LocalizedText text={"Unit price"} /></th>
-          <th className="num"><LocalizedText text={"มูลค่า"} /></th><th><LocalizedText text={"Remark"} /></th><th><LocalizedText text={"Action"} /></th></tr></thead>
+          <th className="num"><LocalizedText text={"มูลค่า"} /></th><th><LocalizedText text={"Remark"} /></th><th><span className="sr-only"><LocalizedText text={"Action"} /></span></th></tr></thead>
           <tbody>{shown.map((row) => {
             const line = row.bomLineId === null ? undefined : lines.get(row.bomLineId);
             const issue = (serverIssue?.key === row.key ? serverIssue.message : undefined) ?? (row.selected ? issues.get(row.key) : undefined);
             const editable = row.lineType !== "Planned";
-            const cell = (field: "itemCode" | "partNumber" | "description" | "brand" | "unit", width: number, maxLength: number) => editable
-              ? <input {...grid} style={{ width }} maxLength={maxLength} disabled={!row.selected} value={row[field]} aria-label={t(FIELD_LABEL[field])} onChange={(event) => update(row.key, { [field]: event.target.value })} />
-              : <span>{row[field] || "—"}</span>;
+            // What is wrong with the row shows under its description.
+            const note = (field: string) => field === "description" && issue ? <small className="red-text" role="alert">{t(issue)}</small> : null;
+            const cell = (field: "itemCode" | "partNumber" | "description" | "brand" | "unit", maxLength: number) => editable
+              ? <td className="pg-in"><input {...grid} maxLength={maxLength} disabled={!row.selected} value={row[field]} aria-label={t(FIELD_LABEL[field])} onChange={(event) => update(row.key, { [field]: event.target.value })} />{note(field)}</td>
+              : <td>{row[field] || "—"}{note(field)}</td>;
+            const rowAction = (icon: "refresh" | "trash", label: string, onClick: () => void) => <button className={icon === "trash" ? "pg-act danger" : "pg-act"} type="button" title={t(label)} aria-label={t(label)} onClick={onClick}><Icon name={icon} /></button>;
             return <tr key={row.key} data-row={row.key} className={row.selected ? undefined : "row-muted"}>
-              <td><input type="checkbox" checked={row.selected} onChange={(event) => update(row.key, { selected: event.target.checked })} aria-label={t("ซื้อรายการนี้")} /></td>
+              <td className="pg-check"><input type="checkbox" checked={row.selected} onChange={(event) => update(row.key, { selected: event.target.checked })} aria-label={t("ซื้อรายการนี้")} /></td>
               <td><Badge tone={KIND_TONE[row.lineType]}>{t(KIND_LABEL[row.lineType])}</Badge>{row.lineType === "Substitute" && line ? <small className="muted"><LocalizedText text={"แทน"} /> {line.itemCode || line.partNumber || line.description}</small> : null}</td>
-              <td>{cell("itemCode", 110, 100)}</td><td>{cell("partNumber", 120, 200)}</td>
-              <td>{cell("description", 220, 500)}{issue ? <small className="red-text" role="alert">{t(issue)}</small> : null}</td>
-              <td>{cell("brand", 100, 200)}</td>
-              <td>{row.lineType === "Unplanned" ? <select value={row.module} disabled={!row.selected} aria-label={t("Module")} onChange={(event) => update(row.key, { module: event.target.value })}>
-                <option value="">{t("Select…")}</option>{modules.map((name) => <option key={name} value={name}>{name}</option>)}</select> : row.module}</td>
-              <td className="num"><input {...grid} style={{ width: 88 }} type="number" min="0" step="0.0001" disabled={!row.selected} value={row.quantity} aria-label={t("Qty")}
-                onChange={(event) => update(row.key, { quantity: Number(event.target.value) })} />{row.lineType === "Planned" && line ? <small className="muted">/ {quantity(line.remaining)}</small> : null}</td>
-              <td>{cell("unit", 64, 50)}</td>
-              <td className="num"><input {...grid} style={{ width: 110 }} type="number" min="0" step="0.0001" disabled={!row.selected} value={row.unitPrice} aria-label={t("Unit price")}
+              {cell("itemCode", 100)}{cell("partNumber", 200)}{cell("description", 500)}{cell("brand", 200)}
+              {row.lineType === "Unplanned" ? <td className="pg-in"><select value={row.module} disabled={!row.selected} aria-label={t("Module")} onChange={(event) => update(row.key, { module: event.target.value })}>
+                <option value="">{t("Select…")}</option>{modules.map((name) => <option key={name} value={name}>{name}</option>)}</select></td> : <td>{row.module}</td>}
+              <td className="pg-in num"><div className="pg-qty"><input {...grid} type="number" min="0" step="0.0001" disabled={!row.selected} value={row.quantity} aria-label={t("Qty")}
+                onChange={(event) => update(row.key, { quantity: Number(event.target.value) })} />{row.lineType === "Planned" && line ? <small className="muted">/ {quantity(line.remaining)}</small> : null}</div></td>
+              {cell("unit", 50)}
+              <td className="pg-in num"><input {...grid} type="number" min="0" step="0.0001" disabled={!row.selected} value={row.unitPrice} aria-label={t("Unit price")}
                 onChange={(event) => update(row.key, { unitPrice: Number(event.target.value) })} /></td>
               <td className="num">{money(row.quantity * row.unitPrice)}</td>
-              <td><input {...grid} style={{ width: 140 }} maxLength={500} disabled={!row.selected} value={row.remark} aria-label={t("Remark")} onChange={(event) => update(row.key, { remark: event.target.value })} /></td>
-              <td><div className="table-actions">
-                {row.lineType === "Planned" ? <button className="btn ghost sm" type="button" onClick={() => update(row.key, asSubstitute(row))}><Icon name="refresh" /><LocalizedText text={"เปลี่ยนรุ่น"} /></button> : null}
-                {row.lineType === "Substitute" && line ? <button className="btn ghost sm" type="button" onClick={() => update(row.key, asPlanned(row, line))}><Icon name="refresh" /><LocalizedText text={"ใช้ตาม Estimate"} /></button> : null}
-                {row.lineType === "Unplanned" ? <button className="btn ghost sm" type="button" onClick={() => setRows(rows.filter((item) => item.key !== row.key))}><Icon name="x" /><LocalizedText text={"ลบแถว"} /></button> : null}
-              </div></td>
+              <td className="pg-in"><input {...grid} maxLength={500} disabled={!row.selected} value={row.remark} aria-label={t("Remark")} onChange={(event) => update(row.key, { remark: event.target.value })} /></td>
+              <td className="pg-acts">
+                {row.lineType === "Planned" ? rowAction("refresh", "เปลี่ยนรุ่น", () => update(row.key, asSubstitute(row))) : null}
+                {row.lineType === "Substitute" && line ? rowAction("refresh", "ใช้ตาม Estimate", () => update(row.key, asPlanned(row, line))) : null}
+                {row.lineType === "Unplanned" ? rowAction("trash", "ลบแถว", () => setRows(rows.filter((item) => item.key !== row.key))) : null}
+              </td>
             </tr>;
           })}</tbody></table></div> : <EmptyState icon="layers" title="BOM นี้ขอซื้อครบแล้ว" message="ใช้ 'เพิ่มรายการนอกแผน' 'วางจาก Excel' หรือนำเข้า Excel หากต้องซื้อของเพิ่ม" />}
         {visible.length > pageSize ? <Pagination page={currentPage} pageCount={pageCount} from={(currentPage - 1) * pageSize + 1} to={Math.min(currentPage * pageSize, visible.length)} total={visible.length} onPage={setPage} /> : null}

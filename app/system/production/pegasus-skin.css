@@ -128,10 +128,29 @@
 .pg-skin .field input:read-only { background: color-mix(in srgb, var(--pg-muted) 50%, var(--pg-background)); color: var(--pg-foreground); }
 .pg-skin :is(input, select, textarea)::placeholder { color: var(--pg-muted-fg); }
 .pg-skin input[type="checkbox"] { accent-color: var(--pg-primary); width: 16px; height: 16px; }
-.pg-skin .pr-plan-table :is(input:not([type="checkbox"]), select) { height: 32px; padding: 0 8px; border: 1px solid var(--pg-input); border-radius: 6px; background: var(--pg-background); color: var(--pg-foreground); font-size: 14px; }
-.pg-skin .pr-plan-table :is(input, select):focus { border-color: var(--pg-input); outline: none; box-shadow: inset 0 0 0 1px var(--pg-ring); }
-.pg-skin .pr-plan-table :is(input, select):disabled { background: color-mix(in srgb, var(--pg-muted) 50%, var(--pg-background)); color: var(--pg-muted-fg); cursor: not-allowed; }
-.pg-skin .pr-plan-table input[type="number"] { text-align: right; font-variant-numeric: tabular-nums; }
+/* The PR sheet's lines as an ERP line grid (D.7 grid cells): fixed columns so nothing runs past the frame, hairlines between
+   cells, and a control that fills its cell with the focus ring inside it. Narrower than its columns, the frame scrolls sideways. */
+.pg-skin .pr-plan-table { table-layout: fixed; min-width: 1270px; border-collapse: collapse; }
+.pg-skin .pr-plan-table th { padding: 8px 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pg-skin .pr-plan-table td { height: 40px; padding: 10px; vertical-align: top; white-space: normal; overflow-wrap: anywhere; line-height: 20px; }
+.pg-skin .pr-plan-table :is(th, td) + :is(th, td) { border-left: 1px solid var(--pg-row-line); }
+.pg-skin .pr-plan-table .pg-check { padding: 12px 0 0; text-align: center; }
+.pg-skin .pr-plan-table th.pg-check { padding-top: 8px; }
+/* A cell that takes typing carries a faint tint, so it reads apart from the BOM's own values. */
+.pg-skin .pr-plan-table td.pg-in { padding: 0; background: color-mix(in srgb, var(--pg-accent) 40%, var(--pg-background)); }
+.pg-skin .pr-plan-table tr.row-muted td.pg-in { background: none; }
+.pg-skin .pr-plan-table td.pg-in :is(input, select) { display: block; width: 100%; min-width: 0; height: 40px; margin: 0; padding: 0 10px; border: 0; border-radius: 0; background: transparent; color: var(--pg-foreground); font: inherit; font-size: 14px; outline: none; }
+.pg-skin .pr-plan-table td.pg-in select { padding: 0 6px; cursor: pointer; }
+.pg-skin .pr-plan-table td.pg-in :is(input, select):focus { background: var(--pg-background); box-shadow: inset 0 0 0 2px var(--pg-ring); }
+.pg-skin .pr-plan-table td.pg-in :is(input, select):disabled { color: var(--pg-muted-fg); cursor: not-allowed; }
+.pg-skin .pr-plan-table td.pg-in input[type="number"] { text-align: right; font-variant-numeric: tabular-nums; appearance: textfield; -moz-appearance: textfield; }
+.pg-skin .pr-plan-table td.pg-in input[type="number"]::-webkit-outer-spin-button, .pg-skin .pr-plan-table td.pg-in input[type="number"]::-webkit-inner-spin-button { margin: 0; -webkit-appearance: none; }
+.pg-skin .pr-plan-table td.pg-in > small { padding: 0 10px 8px; }
+/* The quantity with what the BOM still needs beside it, on one line. */
+.pg-skin .pr-plan-table .pg-qty { display: flex; align-items: center; }
+.pg-skin .pr-plan-table .pg-qty input { flex: 1 1 auto; }
+.pg-skin .pr-plan-table .pg-qty small { display: inline; flex: none; padding: 0 10px 0 0; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.pg-skin .pr-plan-table td.pg-acts { width: auto; padding: 4px 0 0; text-align: center; }
 .pg-skin .red-text { color: var(--pg-red-fg); }
 
 /* Panels hold the page tables (C.1.9, D.7): white, a soft divider edge, 12px corners. */
@@ -232,3 +251,10 @@
 /* The PR sheet's toolbar holds seven actions: tighter buttons and a shorter search keep it on one row at desktop width. */
 .pg-skin .panel .toolbar .btn { padding: 0 12px; }
 .pg-skin .panel .toolbar .search-field { flex: 1 1 200px; min-width: 180px; max-width: 320px; }
+
+/* Blocks inside a panel (the PR sheet's fields, toolbar, chips, tables and totals) keep one gap between them. */
+.pg-skin .panel-body:not(.flush) > * + * { margin-top: 12px; }
+.pg-skin .panel-body:not(.flush) > .pr-plan-summary { margin-bottom: 0; }
+/* A table standing in a panel among other blocks is an embedded one: framed, with a muted header in normal case. */
+.pg-skin .panel-body:not(.flush) > .table-wrap { border: 1px solid var(--pg-divider); border-radius: 8px; background: var(--pg-background); }
+.pg-skin .panel-body:not(.flush) > .table-wrap thead th { background: var(--pg-muted); letter-spacing: 0.02em; text-transform: none; }
