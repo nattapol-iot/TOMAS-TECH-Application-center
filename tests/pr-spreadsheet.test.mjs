@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { addPastedRows, asPlanned, asSubstitute, clipboardRows, draftFromBom, draftFromPaste, draftFromPr, draftFromSheet, draftIssues, isBlankPrRow, moduleStatus, payloadLines, PR_TEMPLATE_HEADER_ROW, sheetRows, templateRows } from "../lib/pr-spreadsheet.ts";
+import { addPastedRows, afterEdit, asPlanned, asSubstitute, blankPrRows, clipboardRows, draftFromBom, draftFromPaste, draftFromPr, draftFromSheet, draftIssues, isBlankPrRow, moduleStatus, rowFromBomLine, payloadLines, PR_TEMPLATE_HEADER_ROW, sheetRows, templateRows } from "../lib/pr-spreadsheet.ts";
 
 const bom = [
   { id: 1, module: "Panel", itemCode: "PLC-01", partNumber: "6ES7-1", description: "PLC controller", brand: "Siemens", unit: "pcs", remaining: 2, estimatedUnitCost: 10000 },
@@ -135,4 +135,27 @@ test("pasted rows join the sheet: a BOM line already there is updated, new items
   assert.deepEqual([next.at(-1).key, next.at(-1).lineType, next.at(-1).partNumber, next.at(-1).quantity], ["paste-t1-1", "Unplanned", "HMI-7IN", 3]);
   assert.ok(!next.some((row) => row.key === "new-1"));
   assert.equal(draftIssues(next, lines, modules).size, 0);
+});
+
+test("a new PR starts as empty rows; an estimate line is brought in when wanted, and typing over it buys something in its place (owner 2026-11-19)", () => {
+  const blank = blankPrRows(3, "Panel", "t");
+  assert.deepEqual(blank.map((row) => [row.key, row.lineType, row.module, isBlankPrRow(row)]), [["new-t-0", "Unplanned", "Panel", true], ["new-t-1", "Unplanned", "Panel", true], ["new-t-2", "Unplanned", "Panel", true]]);
+  // Nothing typed, nothing to send or to check.
+  assert.deepEqual(payloadLines(blank.filter((row) => !isBlankPrRow(row))), []);
+
+  // The first time, the row is tied to the estimate line with what it still needs and the estimate's price.
+  const plc = rowFromBomLine(bom[0], blank, "t");
+  assert.deepEqual([plc.key, plc.lineType, plc.bomLineId, plc.quantity, plc.unitPrice, plc.module], ["bom-1", "Planned", 1, 2, 10000, "Panel"]);
+  // Brought in again, or once the estimate line is fully requested, it is a free copy.
+  const again = rowFromBomLine(bom[0], [plc], "t2");
+  assert.deepEqual([again.key, again.lineType, again.bomLineId, again.quantity], ["copy-1-t2", "Unplanned", null, 1]);
+  assert.deepEqual([rowFromBomLine(bom[3], [], "t3").lineType, rowFromBomLine(bom[3], [], "t3").bomLineId], ["Unplanned", null]);
+
+  // Untouched, or with a smaller quantity or another price, it is still the estimate's item.
+  assert.equal(afterEdit({ ...plc, quantity: 1, unitPrice: 9000 }, bom[0], false).lineType, "Planned");
+  // Another part, or more than the estimate still needs: it replaces the estimate's line.
+  assert.deepEqual([afterEdit({ ...plc, partNumber: "S7-1500" }, bom[0], true).lineType, afterEdit({ ...plc, quantity: 3 }, bom[0], false).lineType], ["Substitute", "Substitute"]);
+  assert.equal(draftIssues([afterEdit({ ...plc, partNumber: "S7-1500", quantity: 3 }, bom[0], true)], lines, modules).size, 0);
+  // A typed row has no estimate line and stays as it is.
+  assert.equal(afterEdit({ ...blank[0], description: "Bracket" }, undefined, true).lineType, "Unplanned");
 });

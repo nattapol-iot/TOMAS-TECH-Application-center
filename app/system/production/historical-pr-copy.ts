@@ -958,5 +958,90 @@ export const HISTORICAL_PR_COPY: Record<string, { th: string; en: string; jp: st
     "th": "บันทึกเป็นฉบับร่างแล้ว แต่ส่งขออนุมัติไม่สำเร็จ",
     "en": "saved as a draft, but it could not be submitted",
     "jp": "下書きとして保存しましたが、承認申請できませんでした"
+  },
+  "เพิ่มแถว": {
+    "th": "เพิ่มแถว",
+    "en": "Add row",
+    "jp": "行を追加"
+  },
+  "รายการใน Estimate": {
+    "th": "รายการใน Estimate",
+    "en": "Estimate items",
+    "jp": "見積の明細"
+  },
+  "ใช้อ้างอิง กด 'ดึงมาใช้' เพื่อใส่ลงตาราง แล้วพิมพ์ทับเป็นของที่ซื้อจริงได้": {
+    "th": "ใช้อ้างอิง กด 'ดึงมาใช้' เพื่อใส่ลงตาราง แล้วพิมพ์ทับเป็นของที่ซื้อจริงได้",
+    "en": "For reference. Press Use to put a line in the table, then type what is really bought over it.",
+    "jp": "参考用です。「使う」を押すと表に入り、実際に購入する品を上書きできます。"
+  },
+  "ดึงทั้งหมดที่เหลือ": {
+    "th": "ดึงทั้งหมดที่เหลือ",
+    "en": "Use all still to buy",
+    "jp": "未購入をすべて使う"
+  },
+  "ดึงมาใช้": {
+    "th": "ดึงมาใช้",
+    "en": "Use",
+    "jp": "使う"
+  },
+  "เหลือต้องซื้อ": {
+    "th": "เหลือต้องซื้อ",
+    "en": "Still to buy",
+    "jp": "未購入数"
+  },
+  "ราคา Estimate": {
+    "th": "ราคา Estimate",
+    "en": "Estimate price",
+    "jp": "見積単価"
+  },
+  "ขอซื้อครบแล้ว": {
+    "th": "ขอซื้อครบแล้ว",
+    "en": "Fully requested",
+    "jp": "申請済み"
+  },
+  "อยู่ในใบนี้แล้ว": {
+    "th": "อยู่ในใบนี้แล้ว",
+    "en": "Already on this PR",
+    "jp": "このPRに入っています"
+  },
+  "กรอกเอง": {
+    "th": "กรอกเอง",
+    "en": "Typed in",
+    "jp": "手入力"
+  },
+  "ราคาประมาณ/หน่วย": {
+    "th": "ราคาประมาณ/หน่วย",
+    "en": "Approx. unit price",
+    "jp": "概算単価"
+  },
+  "ยอดขอซื้อ (ประมาณ)": {
+    "th": "ยอดขอซื้อ (ประมาณ)",
+    "en": "Requested value (approx.)",
+    "jp": "申請額（概算）"
+  },
+  "แถวยังไม่ได้เลือก Module ที่ใช้งบ": {
+    "th": "แถวยังไม่ได้เลือก Module ที่ใช้งบ",
+    "en": "rows have no module to charge yet",
+    "jp": "行に予算を使うモジュールが未設定です"
+  },
+  "พิมพ์หรือวางรายการที่จะซื้อจริง แล้วเลือก Module ที่ใช้งบ รายการใน Estimate ใช้อ้างอิงและดึงมาใช้ได้ · ราคาเป็นราคาประมาณเพื่อเทียบงบ ราคาจริงฝ่ายจัดซื้อหาใน ERP": {
+    "th": "พิมพ์หรือวางรายการที่จะซื้อจริง แล้วเลือก Module ที่ใช้งบ รายการใน Estimate ใช้อ้างอิงและดึงมาใช้ได้ · ราคาเป็นราคาประมาณเพื่อเทียบงบ ราคาจริงฝ่ายจัดซื้อหาใน ERP",
+    "en": "Type or paste what you will really buy, then choose the module that pays. The estimate's items are a reference you can pull from · Prices are approximate, for checking the budget; Purchasing finds the real price in the ERP",
+    "jp": "実際に購入する品を入力または貼り付け、予算を使うモジュールを選びます。見積の明細は参考用で、表に取り込めます・単価は予算確認用の概算で、実際の価格は購買部がERPで決めます"
+  },
+  "ยังไม่มีรายการในใบนี้": {
+    "th": "ยังไม่มีรายการในใบนี้",
+    "en": "Nothing on this PR yet",
+    "jp": "このPRにはまだ明細がありません"
+  },
+  "กด 'เพิ่มแถว' 'วางจาก Excel' หรือดึงจากรายการใน Estimate": {
+    "th": "กด 'เพิ่มแถว' 'วางจาก Excel' หรือดึงจากรายการใน Estimate",
+    "en": "Press Add row or Paste from Excel, or pull from the estimate items",
+    "jp": "「行を追加」「Excelから貼り付け」を押すか、見積の明細から取り込みます"
+  },
+  "ราคาประมาณ": {
+    "th": "ราคาประมาณ",
+    "en": "Approx. price",
+    "jp": "概算単価"
   }
 };

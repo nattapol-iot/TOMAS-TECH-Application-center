@@ -272,3 +272,29 @@ export function addPastedRows(rows: PrDraftRow[], pasted: PrDraftRow[], stamp: s
   });
   return next;
 }
+
+/** Empty rows to type into: what a new PR's sheet starts with, since most of what is bought is not the estimate's own item (owner 2026-11-19). */
+export function blankPrRows(count: number, module: string, stamp: string): PrDraftRow[] {
+  return Array.from({ length: count }, (_, index) => ({ key: `new-${stamp}-${index}`, selected: true, lineType: "Unplanned" as const, bomLineId: null, module,
+    itemCode: "", partNumber: "", description: "", brand: "", unit: "pcs", quantity: 1, coveredQuantity: null, unitPrice: 0, remark: "" }));
+}
+
+/**
+ * An estimate line brought into the sheet. While the line is still to request and not in the sheet already, the row stays tied to it
+ * (Planned), so the BOM knows it was bought. Otherwise it is a free copy, for buying more of the same.
+ */
+export function rowFromBomLine(line: PrBomLine, rows: PrDraftRow[], stamp: string): PrDraftRow {
+  const tied = line.remaining > 0 && !rows.some((row) => row.bomLineId === line.id);
+  return { key: tied ? `bom-${line.id}` : `copy-${line.id}-${stamp}`, selected: true, lineType: tied ? "Planned" : "Unplanned", bomLineId: tied ? line.id : null, module: line.module,
+    itemCode: line.itemCode, partNumber: line.partNumber, description: line.description, brand: line.brand, unit: line.unit, quantity: tied ? line.remaining : 1,
+    coveredQuantity: null, unitPrice: line.estimatedUnitCost, remark: "" };
+}
+
+/**
+ * A row tied to an estimate line, after an edit: once it names another item, or asks for more than the line still needs, it buys
+ * something in the line's place (Substitute). The engineer types over a row; no button turns it first.
+ */
+export function afterEdit(row: PrDraftRow, line: PrBomLine | undefined, itemEdited: boolean): PrDraftRow {
+  if (row.lineType !== "Planned" || !line) return row;
+  return itemEdited || row.quantity > line.remaining ? { ...row, lineType: "Substitute", coveredQuantity: null } : row;
+}
