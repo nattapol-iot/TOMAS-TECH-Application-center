@@ -189,18 +189,23 @@ test("row menus open below their trigger, flip up when only the space above fits
   const viewport = { width: 1280, height: 800 };
   // Plenty of room below.
   assert.deepEqual(rowMenuPlacement({ top: 100, bottom: 130, right: 1200 }, viewport, 180),
-    { top: 134, bottom: null, right: 80, maxHeight: null });
+    { top: 134, bottom: null, left: null, right: 80, maxHeight: null });
   // Near the bottom: 800 - 700 - 12 = 88px below, 688px above, so it opens upwards from the trigger's top.
   assert.deepEqual(rowMenuPlacement({ top: 670, bottom: 700, right: 1200 }, viewport, 180),
-    { top: null, bottom: 134, right: 80, maxHeight: null });
+    { top: null, bottom: 134, left: null, right: 80, maxHeight: null });
   // A short window where neither side fits: the roomier side, with a scrolling cap.
   const short = { width: 1280, height: 300 };
   assert.deepEqual(rowMenuPlacement({ top: 100, bottom: 130, right: 1200 }, short, 400),
-    { top: 134, bottom: null, right: 80, maxHeight: 158 });
+    { top: 134, bottom: null, left: null, right: 80, maxHeight: 158 });
   assert.deepEqual(rowMenuPlacement({ top: 200, bottom: 230, right: 1200 }, short, 400),
-    { top: null, bottom: 104, right: 80, maxHeight: 188 });
+    { top: null, bottom: 104, left: null, right: 80, maxHeight: 188 });
   // A trigger hard against the right edge keeps the menu inside the margin.
   assert.equal(rowMenuPlacement({ top: 100, bottom: 130, right: 1279 }, viewport, 100).right, 8);
+  // A trigger in the row's first columns opens from its own left edge, so the menu stays on screen.
+  assert.deepEqual(rowMenuPlacement({ top: 100, bottom: 130, left: 40, right: 72 }, viewport, 180),
+    { top: 134, bottom: null, left: 40, right: null, maxHeight: null });
+  assert.equal(rowMenuPlacement({ top: 100, bottom: 130, left: 2, right: 30 }, viewport, 100).left, 8);
+  assert.equal(rowMenuPlacement({ top: 100, bottom: 130, left: 1100, right: 1200 }, viewport, 100).left, null);
 });
 
 test("the name column sorts by project name, separately from the number", () => {

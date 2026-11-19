@@ -866,7 +866,7 @@ const PROJECT_MASTER_PLAN: Guide = {
     {
       target: "project.rowMenu", action: "click", view: "projects",
       title: { th: "เปิดเมนูของโปรเจกต์", en: "Open the project's menu", jp: "案件のメニューを開く" },
-      body: { th: "กดปุ่ม ⋯ ท้ายแถวของโปรเจกต์ที่ต้องการแก้", en: "Press the ⋯ button at the end of the project's row.", jp: "対象案件の行末にある ⋯ ボタンを押します。" },
+      body: { th: "กดปุ่ม ⋯ หน้าสุดของแถวโปรเจกต์ที่ต้องการแก้", en: "Press the ⋯ button at the start of the project's row.", jp: "対象案件の行頭にある ⋯ ボタンを押します。" },
       missing: { th: "ยังไม่มีโปรเจกต์ในรายการ ลองล้างตัวกรอง หรือกด 'จบบทสอน'", en: "No project is listed. Clear the filters, or press Finish.", jp: "案件が表示されていません。絞り込みを解除するか「完了」を押します。" },
     },
     {
@@ -930,7 +930,7 @@ const PROJECT_ERP_NUMBER: Guide = {
     {
       target: "project.rowMenu", action: "click", view: "projects",
       title: { th: "เปิดเมนูของโปรเจกต์ PJ000000", en: "Open the PJ000000 project's menu", jp: "PJ000000の案件のメニューを開く" },
-      body: { th: "กดปุ่ม ⋯ ท้ายแถวของโปรเจกต์ที่ยังใช้เลข PJ000000", en: "Press the ⋯ button at the end of the row of the project still numbered PJ000000.", jp: "PJ000000のままの案件の行末にある ⋯ ボタンを押します。" },
+      body: { th: "กดปุ่ม ⋯ หน้าสุดของแถวโปรเจกต์ที่ยังใช้เลข PJ000000", en: "Press the ⋯ button at the start of the row of the project still numbered PJ000000.", jp: "PJ000000のままの案件の行頭にある ⋯ ボタンを押します。" },
       missing: { th: "ยังไม่มีโปรเจกต์ในรายการ ลองล้างตัวกรอง หรือกด 'จบบทสอน'", en: "No project is listed. Clear the filters, or press Finish.", jp: "案件が表示されていません。絞り込みを解除するか「完了」を押します。" },
     },
     {

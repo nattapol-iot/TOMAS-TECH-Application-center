@@ -198,6 +198,15 @@ test("Overview has a List | Timeline toggle on the shared Gantt, remembered per 
   assert.doesNotMatch(shell, /ProductionProjectTimeline/);
 });
 
+test("the row menu and stage come before the project name, so a small screen needs no sideways scroll to reach them", () => {
+  const head = portfolio.slice(portfolio.indexOf('<table className="portfolio-table">'), portfolio.indexOf("</tr></thead>", portfolio.indexOf('<table className="portfolio-table">')));
+  assert.ok(head.indexOf('className="portfolio-col-menu"') < head.indexOf("Portfolio.colStage"));
+  assert.ok(head.indexOf("Portfolio.colStage") < head.indexOf('column="name"'));
+  const row = portfolio.slice(portfolio.indexOf("return <tr key={item.id}>"), portfolio.indexOf("</tr>;", portfolio.indexOf("return <tr key={item.id}>")));
+  assert.ok(row.indexOf('guide="project.rowMenu"') < row.indexOf('triggerClassName="portfolio-stage-trigger"'));
+  assert.ok(row.indexOf('triggerClassName="portfolio-stage-trigger"') < row.indexOf("portfolio-project-link"));
+});
+
 test("the portfolio's PM and slip columns give way on a phone", () => {
   const css = read("app/system/production/project-portfolio.css");
   assert.match(css, /@media \(max-width: 720px\) \{[\s\S]*\.portfolio-col-pm, \.portfolio-table \.portfolio-col-slip \{ display: none; \}/);
