@@ -2677,13 +2677,25 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
   /**
    * The bin on a row the plan owner may delete, with the rows under it: none has started, holds a member's own task or
    * waits on a day request. A Resource Plan row is deleted where it was made; the server also refuses a row other work
-   * refers to, and says so.
+   * refers to, and says so. A row that cannot be deleted keeps a dimmed bin that says why (SUP-2026-00014), for anyone
+   * who may change the plan; readers see no bin.
    */
-  const binFor = (task: ScheduleTask): GanttRowSpec["remove"] => {
-    if ((!canPlan && !task.canEditOwn) || filter || movePending || saving || draftBusy) return undefined;
+  // Whoever may add or change any row of this plan sees bins; a reader does not.
+  const changesPlan = canPlan || Boolean(activeSchedule && flattenTasks(activeSchedule.tasks).some((row) => row.canEditOwn));
+  const deleteBlock = (task: ScheduleTask): string => {
     const removing = flattenTasks([task]);
-    if (removing.some((row) => (!canPlan && !row.canEditOwn) || row.kind === "detail" || row.managedByResourcePlan || pendingTaskIds.has(row.id) || row.status !== "Not Started"
-      || Number(row.percentComplete) > 0 || row.actualStart || row.actualFinish || Number(row.actualManDays) > 0)) return undefined;
+    if (removing.some((row) => !canPlan && !row.canEditOwn)) return "Plan.deleteOthers";
+    if (removing.some((row) => row.status !== "Not Started" || Number(row.percentComplete) > 0 || row.actualStart || row.actualFinish || Number(row.actualManDays) > 0)) return "Plan.deleteProgress";
+    if (removing.some((row) => row.kind === "detail")) return "Plan.deleteDetail";
+    if (removing.some((row) => pendingTaskIds.has(row.id))) return "Plan.deletePending";
+    if (removing.some((row) => row.managedByResourcePlan)) return "Plan.deleteResourcePlan";
+    return filter ? "Plan.deleteFiltered" : "";
+  };
+  const binFor = (task: ScheduleTask): GanttRowSpec["remove"] => {
+    if (!changesPlan || movePending || saving || draftBusy) return undefined;
+    const block = deleteBlock(task);
+    if (block) { const reason = uiText(block); return { label: uiText("Plan.deleteRow"), reason, onRemove: () => notify(`${task.wbs} ${task.name} · ${reason}`) }; }
+    const removing = flattenTasks([task]);
     return { label: uiText("Plan.deleteRow"), onRemove: () => { void deleteRow(task, removing.map((row) => row.id)); } };
   };
   const deleteRow = async (task: ScheduleTask, removing: number[]) => {

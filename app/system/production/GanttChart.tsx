@@ -49,8 +49,11 @@ export type GanttRowSpec = {
   movable?: boolean;
   /** A + on the row that adds a row under or below it; label is already translated. */
   insert?: { label: string; onInsert: () => void };
-  /** A bin on the row that deletes it; label is already translated. */
-  remove?: { label: string; onRemove: () => void };
+  /**
+   * A bin on the row that deletes it; label is already translated. With a reason (translated) the bin is dimmed and
+   * explains why the row cannot be deleted instead of disappearing (SUP-2026-00014); onRemove then only explains.
+   */
+  remove?: { label: string; onRemove: () => void; reason?: string };
   /** Drawn across the whole row in place of its name and bar, e.g. the boxes a + opens; never a drop place. */
   editor?: ReactNode;
   /** Spans marked under the bars, e.g. the days someone's work overlaps (amber) or is more than they have (red). */
@@ -420,7 +423,8 @@ export function GanttChart({ rows, range, today, sideHeader, label, links = [], 
             : <span className="gantt-label" title={row.title}><span className="gantt-label-main">{row.label}</span>{row.meta ? <small>{row.meta}</small> : null}</span>}
           {row.status ? <span className="gantt-status">{row.status}</span> : null}
           {row.insert ? <button type="button" className="gantt-insert" data-guide="plan.insert" aria-label={`${row.insert.label} · ${row.title}`} title={row.insert.label} onClick={row.insert.onInsert}><Icon name="plus" /></button> : null}
-          {row.remove ? <button type="button" className="gantt-remove" data-guide="plan.remove" aria-label={`${row.remove.label} · ${row.title}`} title={row.remove.label} onClick={row.remove.onRemove}><Icon name="trash" /></button> : null}
+          {row.remove ? <button type="button" className={`gantt-remove${row.remove.reason ? " blocked" : ""}`} data-guide="plan.remove" aria-disabled={row.remove.reason ? true : undefined}
+            aria-label={`${row.remove.label} · ${row.title}${row.remove.reason ? ` · ${row.remove.reason}` : ""}`} title={row.remove.reason ?? row.remove.label} onClick={row.remove.onRemove}><Icon name="trash" /></button> : null}
         </div>
         <div className="gantt-track" style={segments && segments.count > 1 ? { minHeight: 14 + segments.count * 10 } : undefined}>
           {range.columns.map((column) => {

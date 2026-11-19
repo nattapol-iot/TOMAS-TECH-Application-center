@@ -4,7 +4,7 @@
 
 ทะเบียนโครงการ end user เลขโครงการค้นจาก Pegasus ERP และรับส่งเอกสารจาก inquiry/site visit
 
-Evidence: snapshot `11733693`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
+Evidence: snapshot `2be07181`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
 
 ## Read only the operation you change
 
@@ -133,6 +133,7 @@ Shared screens contain other modules: use the symbol and line range instead of r
 - [tests/project-portfolio-ui.test.mjs](<../../../tests/project-portfolio-ui.test.mjs>)
 - [tests/project-portfolio.test.mjs](<../../../tests/project-portfolio.test.mjs>)
 - [tests/project-without-estimate.test.mjs](<../../../tests/project-without-estimate.test.mjs>)
+- [tests/team-board-closed-projects.test.mjs](<../../../tests/team-board-closed-projects.test.mjs>)
 - [backend-node/tests/end-user.test.ts](<../../../backend-node/tests/end-user.test.ts>)
 - [backend-node/tests/erp-projects.test.ts](<../../../backend-node/tests/erp-projects.test.ts>)
 - [backend-node/tests/project-documents-withdraw.test.ts](<../../../backend-node/tests/project-documents-withdraw.test.ts>)

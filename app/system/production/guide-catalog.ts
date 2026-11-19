@@ -1227,11 +1227,11 @@ const PROJECT_PLAN: Guide = {
       target: "plan.remove", action: "next", view: "projects",
       title: { th: "ลบแถวด้วยถังขยะ", en: "Delete a row with the bin", jp: "ごみ箱で行を削除" },
       body: {
-        th: "กดถังขยะท้ายแถว แล้วยืนยันชื่อกับจำนวนแถวข้างใต้ที่จะถูกลบไปด้วย ถังขยะขึ้นเฉพาะแถวที่ยังลบได้ คือแถวนั้นและแถวข้างใต้ยังไม่มีความคืบหน้า ไม่มีงานส่วนตัวของสมาชิก และไม่มีคำขอเพิ่มวันรออยู่ แถวที่มีกุญแจมาจากภาพรวมงานทีม ให้ลบที่นั่น",
-        en: "Press the bin at the end of a row and confirm its name and how many rows under it go too. The bin shows only on rows that can still be deleted: neither the row nor anything under it has progress, a member's own task or a day request waiting. A row with a lock came from the team overview; delete it there.",
-        jp: "行末のごみ箱を押し、名前と一緒に削除される配下の行数を確認します。ごみ箱は削除できる行にだけ表示されます（その行と配下に進捗・メンバーの個人作業・承認待ちの日数依頼がない行）。鍵の付いた行はチームの仕事一覧から来た行なので、そちらで削除します。",
+        th: "กดถังขยะท้ายแถว แล้วยืนยันชื่อกับจำนวนแถวข้างใต้ที่จะถูกลบไปด้วย ลบได้เฉพาะแถวที่แถวนั้นและแถวข้างใต้ยังไม่มีความคืบหน้า ไม่มีงานส่วนตัวของสมาชิก และไม่มีคำขอเพิ่มวันรออยู่ แถวที่ลบไม่ได้จะมีถังขยะจางๆ ชี้หรือกดเพื่อดูเหตุผล แถวที่มีกุญแจมาจากภาพรวมงานทีม ให้ลบที่นั่น",
+        en: "Press the bin at the end of a row and confirm its name and how many rows under it go too. A row can be deleted only while neither it nor anything under it has progress, a member's own task or a day request waiting. A row that cannot be deleted shows a faint bin; point at it or press it to see why. A row with a lock came from the team overview; delete it there.",
+        jp: "行末のごみ箱を押し、名前と一緒に削除される配下の行数を確認します。削除できるのは、その行と配下に進捗・メンバーの個人作業・承認待ちの日数依頼がない行だけです。削除できない行には薄いごみ箱が表示され、ポイントするか押すと理由が分かります。鍵の付いた行はチームの仕事一覧から来た行なので、そちらで削除します。",
       },
-      missing: { th: "ถังขยะขึ้นสำหรับผู้วางแผนของโปรเจกต์นี้ บนแถวที่ยังลบได้ เมื่อไม่ได้กรองแถวอยู่ กด 'ถัดไป'", en: "The bin shows for this project's planners, on rows that can still be deleted, while no quick filter is on. Press Next.", jp: "ごみ箱は、絞り込みをしていないとき、この案件の計画担当者に削除できる行で表示されます。「次へ」を押します。" },
+      missing: { th: "ถังขยะขึ้นสำหรับคนที่แก้แผนของโปรเจกต์นี้ได้ กด 'ถัดไป'", en: "The bin shows for people who can change this project's plan. Press Next.", jp: "ごみ箱は、この案件の計画を変更できる人に表示されます。「次へ」を押します。" },
     },
     {
       target: "plan.add", action: "click", view: "projects",
@@ -1330,7 +1330,7 @@ const TEAM_TASK: Guide = {
     {
       target: "team.subject", action: "next", view: "resources",
       title: { th: "เรื่องและรายละเอียด", en: "Subject and detail", jp: "件名と内容" },
-      body: { th: "บอกสั้นๆ ว่าทำอะไร และใส่รายละเอียดงานเบื้องต้นด้านล่าง เลือกลูกค้าได้ถ้าเกี่ยวกับลูกค้า", en: "Say briefly what it is and describe it below; pick the customer if one is involved.", jp: "何をするかを短く書き、下に内容を入力します。顧客が関わる場合は顧客を選びます。" },
+      body: { th: "บอกสั้นๆ ว่าทำอะไร และใส่รายละเอียดงานเบื้องต้นด้านล่าง เลือกลูกค้าได้ถ้าเกี่ยวกับลูกค้า งานซัพพอตของโปรเจกต์ที่ปิดแล้วก็เลือกโปรเจกต์นั้นได้ (ท้ายรายการ มีคำว่า ปิดแล้ว)", en: "Say briefly what it is and describe it below; pick the customer if one is involved. Support work for a finished project can pick that project too (at the end of the list, marked closed).", jp: "何をするかを短く書き、下に内容を入力します。顧客が関わる場合は顧客を選びます。完了済み案件のサポート作業もその案件を選べます（一覧の末尾に「完了済み」と表示）。" },
     },
     {
       target: "team.people", action: "next", view: "resources",
