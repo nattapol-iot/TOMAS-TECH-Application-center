@@ -539,7 +539,8 @@ export function RowDisclosure({ label, trigger, triggerClassName, disabled = fal
     const px = (value: number | null) => value === null ? "auto" : `${value}px`;
     menu.style.top = px(place.top);
     menu.style.bottom = px(place.bottom);
-    menu.style.right = `${place.right}px`;
+    menu.style.left = px(place.left);
+    menu.style.right = px(place.right);
     menu.style.maxHeight = place.maxHeight === null ? "" : `${place.maxHeight}px`;
   }, [open]);
   useEffect(() => {
@@ -758,6 +759,7 @@ export function ProductionProjects({ bootstrap, notify, refreshBootstrap, teamTe
           </div>} />
       </>
         : sorted.length ? <div className="table-wrap"><TablePageSize value={pageSize} onChange={(value) => { setPageSize(value); setPage(1); }} /><table className="portfolio-table"><thead><tr>
+        <th className="portfolio-col-menu"><span className="sr-only">{uiText("Actions")}</span></th><th>{uiText("Portfolio.colStage")}</th>
         <PortfolioSortHeader column="health" label="Portfolio.colHealth" sort={sort} onSort={changeSort} />
         <PortfolioSortHeader column="number" label="Portfolio.colNumber" sort={sort} onSort={changeSort} />
         <PortfolioSortHeader column="name" label="Portfolio.colProject" sort={sort} onSort={changeSort} className="portfolio-col-project" />
@@ -766,11 +768,15 @@ export function ProductionProjects({ bootstrap, notify, refreshBootstrap, teamTe
         <PortfolioSortHeader column="slip" label="Portfolio.colSlip" sort={sort} onSort={changeSort} className="portfolio-col-slip" />
         <PortfolioSortHeader column="progress" label="Portfolio.colProgress" sort={sort} onSort={changeSort} />
         <PortfolioSortHeader column="lastUpdate" label="Portfolio.colLastUpdate" sort={sort} onSort={changeSort} />
-        <th>{uiText("Portfolio.colStage")}</th><th><span className="sr-only">{uiText("Actions")}</span></th>
       </tr></thead><tbody>{paged.map((item) => {
         const slip = formatSlip(item.slipDays);
         const customerLine = [item.customerName, item.endUserName].filter(Boolean).join(" / ");
         return <tr key={item.id}>
+          <td className="portfolio-col-menu"><RowDisclosure label={`${uiText("Portfolio.more")} ${item.number}`} triggerClassName="row-action" guide="project.rowMenu" trigger={<Icon name="more" />} actions={rowActions(item)} /></td>
+          <td>{item.canChangeStatus && item.allowedStatuses.length
+            ? <RowDisclosure label={`${uiText("Portfolio.changeStage")} ${item.number} · ${uiText(item.status)}`} triggerClassName="portfolio-stage-trigger" disabled={stageBusy !== null}
+              trigger={<><span>{uiText(item.status)}</span><Icon name="chevronDown" /></>} actions={item.allowedStatuses.map((value) => ({ key: value, label: value, onSelect: () => changeStage(item, value) }))} />
+            : <Badge>{item.status}</Badge>}</td>
           <td><HealthBadge health={item.health ?? "No plan"} />{item.scheduleError ? <small className="portfolio-schedule-error" title={uiText("Portfolio.scheduleErrorHint")}>{uiText("Portfolio.scheduleError")}</small> : null}</td>
           <td><strong className="mono">{item.number}</strong></td>
           <td className="portfolio-col-project"><div className="portfolio-project">
@@ -782,11 +788,6 @@ export function ProductionProjects({ bootstrap, notify, refreshBootstrap, teamTe
           <td className={`portfolio-col-slip portfolio-slip${(item.slipDays ?? 0) > 0 ? " late" : ""}`}>{slip === null ? "–" : uiText("Portfolio.slipDays").replace("{n}", slip)}</td>
           <td><PortfolioProgress item={item} /></td>
           <td className="muted">{item.lastProgressAt ? formatDay(item.lastProgressAt) : "—"}</td>
-          <td>{item.canChangeStatus && item.allowedStatuses.length
-            ? <RowDisclosure label={`${uiText("Portfolio.changeStage")} ${item.number} · ${uiText(item.status)}`} triggerClassName="portfolio-stage-trigger" disabled={stageBusy !== null}
-              trigger={<><span>{uiText(item.status)}</span><Icon name="chevronDown" /></>} actions={item.allowedStatuses.map((value) => ({ key: value, label: value, onSelect: () => changeStage(item, value) }))} />
-            : <Badge>{item.status}</Badge>}</td>
-          <td><RowDisclosure label={`${uiText("Portfolio.more")} ${item.number}`} triggerClassName="row-action" guide="project.rowMenu" trigger={<Icon name="more" />} actions={rowActions(item)} /></td>
         </tr>;
       })}</tbody></table><Pagination page={currentPage} pageCount={pageCount} from={(currentPage - 1) * pageSize + 1} to={Math.min(currentPage * pageSize, sorted.length)} total={sorted.length} onPage={setPage} /></div>
         : loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Portfolio.loading"} /></div>

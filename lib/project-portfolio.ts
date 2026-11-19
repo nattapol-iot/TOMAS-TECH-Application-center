@@ -195,15 +195,17 @@ export function effectiveStatusFilter(status: string, includeClosed: boolean): s
   return status === "Closed" && !includeClosed ? null : status;
 }
 
-export type MenuPlacement = { top: number | null; bottom: number | null; right: number; maxHeight: number | null };
+export type MenuPlacement = { top: number | null; bottom: number | null; left: number | null; right: number | null; maxHeight: number | null };
 
 /**
  * Where a row's fixed-position menu goes: under its trigger when it fits, above it when only the
  * space above does, otherwise on the roomier side with a scrolling cap. Fixed positioning keeps the
- * table's own scroll box from clipping the menu.
+ * table's own scroll box from clipping the menu. A trigger in the left half of the viewport (a
+ * row's first columns) opens its menu from its own left edge so the menu cannot run off the left
+ * side; otherwise the menu lines up with the trigger's right edge.
  */
 export function rowMenuPlacement(
-  anchor: { top: number; bottom: number; right: number },
+  anchor: { top: number; bottom: number; right: number; left?: number },
   viewport: { width: number; height: number },
   menuHeight: number,
   gap = 4,
@@ -211,9 +213,11 @@ export function rowMenuPlacement(
 ): MenuPlacement {
   const below = viewport.height - anchor.bottom - gap - margin;
   const above = anchor.top - gap - margin;
-  const right = Math.max(margin, viewport.width - anchor.right);
+  const fromLeft = anchor.left !== undefined && anchor.left < viewport.width / 2;
+  const left = fromLeft ? Math.max(margin, anchor.left ?? 0) : null;
+  const right = fromLeft ? null : Math.max(margin, viewport.width - anchor.right);
   if (menuHeight <= below || (menuHeight > above && below >= above)) {
-    return { top: anchor.bottom + gap, bottom: null, right, maxHeight: menuHeight <= below ? null : Math.max(0, below) };
+    return { top: anchor.bottom + gap, bottom: null, left, right, maxHeight: menuHeight <= below ? null : Math.max(0, below) };
   }
-  return { top: null, bottom: viewport.height - anchor.top + gap, right, maxHeight: menuHeight <= above ? null : Math.max(0, above) };
+  return { top: null, bottom: viewport.height - anchor.top + gap, left, right, maxHeight: menuHeight <= above ? null : Math.max(0, above) };
 }

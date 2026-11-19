@@ -12,6 +12,8 @@
 }
 
 .portfolio-table th { vertical-align: bottom; }
+/* The row menu and stage come first so a narrow screen reaches them without scrolling past the name. */
+.portfolio-table .portfolio-col-menu { width: 1%; padding-right: 0; }
 .th-sort {
   display: inline-flex;
   align-items: center;
