@@ -1,7 +1,7 @@
 # ตัวอ่าน PR-Form และ Dry run การนำเข้าข้อมูลเก่า
 
 ส่วนแรกของ phase (f) ในแผนเลิกใช้ Excel PR-Form (owner brief 2026-11-20): อ่านไฟล์ PR-Form ทั้งหมดใน
-"Purchase - PR-Requests" แล้วรายงานว่าถ้านำเข้าจะได้อะไร และไฟล์ไหนมีปัญหาอะไร **ไม่เขียนอะไรเลย**
+"Purchase - PR-Requests" แล้วรายงานว่าถ้านำเข้าจะได้อะไร และไฟล์ไหนมีปัญหาอะไร **ไม่แก้ไฟล์ที่อ่าน**
 ไม่แตะฐานข้อมูล ไม่เรียก ERP ไม่ใช้ network
 
 - ตัวอ่าน: `lib/pr-form.ts` (pure, ไม่มี import) ใช้ร่วมกับการนำเข้าใบขอซื้อจาก PR-Form ในขั้นถัดไป
@@ -16,7 +16,19 @@ node scripts/pr-form-dry-run.mjs "C:\Users\<you>\OneDrive - <company>\Purchase -
 
 # บาง folder หรือบางไฟล์ เก็บ JSON ไว้ดูละเอียด แสดงปัญหาไฟล์ละ 40 รายการ
 node scripts/pr-form-dry-run.mjs "<folder>" "<file.xlsx>" --json report.json --issues 40
+
+# Workbook สำหรับตรวจ: Projects, Forms, Issues, Lines
+node scripts/pr-form-dry-run.mjs "<folder>" --xlsx "dry-run-review.xlsx"
 ```
+
+Workbook สำหรับตรวจมี 4 sheet ทุก sheet ตรึงหัวตารางและเปิด filter ไว้:
+
+- **Projects**: ยอดต่อโครงการ แยก discipline
+- **Forms**: หนึ่งแถวต่อ sheet ฟอร์ม คอลัมน์แรก **Import (Y/N)** ให้ผู้ตรวจกรอกว่าจะนำเข้าหรือไม่ ฟอร์มที่เป็น copy ใส่ N ไว้ให้แล้ว
+- **Issues**: ปัญหาทุกรายการ พร้อมไฟล์ sheet และแถว
+- **Lines**: ทุกบรรทัดตามที่อ่านได้ (Rev., part, material, จำนวน, ราคา, PO, สถานะ, แถวแม่ของชิ้นส่วน)
+
+ชื่อไฟล์รายงานห้ามขึ้นต้นด้วย `PR` เพราะการรันครั้งถัดไปจะอ่านไฟล์นั้นเป็น PR-Form และห้ามเก็บไว้ใน library ที่ sync กับ SharePoint
 
 อ่านเฉพาะไฟล์ `.xlsx` ที่ชื่อขึ้นต้นด้วย `PR` (ข้าม quotation, drawing, lock file `~$` และ template เปล่า
 `PR-[Customer]-[PJ_Number]-YYYYMMDD-001.xlsx`) ไฟล์ใหญ่เกิน 20 MB หรือเกิน 80 MB หลังแตก zip จะขึ้นเป็น unreadable

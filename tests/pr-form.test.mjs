@@ -5,7 +5,9 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { formatPrFormReport, isPrFormPoNumber, leadDaysOf, parsePrFormFileName, prFormPoState, prFormReport, prFormUnit, readPrForm } from "../lib/pr-form.ts";
+import { strFromU8, unzipSync } from "fflate";
+import { XMLValidator } from "fast-xml-parser";
+import { formatPrFormReport, isPrFormPoNumber, leadDaysOf, parsePrFormFileName, prFormPoState, prFormReport, prFormReportSheets, prFormUnit, readPrForm } from "../lib/pr-form.ts";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const TODAY = new Date("2026-11-20T00:00:00Z");
@@ -235,11 +237,34 @@ test("a form copied into a later file, or a later file that adds to it, is count
   assert.match(report.perFile.find((file) => file.path === FILE).issues.at(-1).message, /^A copy of PR-\[ME\]-\[PJ260091\]-20260901-014/);
 });
 
-test("the dry run only reads: no database, no ERP, no network, and one optional file of its own", () => {
+test("the dry run as a workbook to review: projects, forms with an Import column (copies start at N), issues and every line", () => {
+  const first = readPrForm([formSheet()], FILE, TODAY), later = readPrForm([formSheet()], "PR-[ME]-[PJ260091]-20260901-014_MZ08-U001-MASTER VALVE UNIT.xlsx", TODAY);
+  const report = prFormReport([first, later]);
+  const sheets = prFormReportSheets(report, [first, later]);
+  assert.deepEqual(sheets.map((sheet) => [sheet.name, sheet.rows.length]), [["Projects", 1], ["Forms", 2], ["Issues", first.issues.length + later.issues.length + 1], ["Lines", 14]]);
+  const [projects, forms, issues, lines] = sheets;
+  for (const sheet of sheets) assert.ok(sheet.rows.every((row) => row.length === sheet.columns.length), sheet.name);
+  assert.deepEqual(projects.rows[0].slice(0, 8), ["PJ260091", "ROBOT HANDLING MACHINE", "OILES (THAILAND) LTD.", 1, 1, 1, 2, 7]);
+  assert.deepEqual(forms.columns[0].header, "Import (Y/N)");
+  assert.deepEqual(forms.rows.map((row) => [row[0], row[1], row[13] === null]), [["N", FILE, false], [null, "PR-[ME]-[PJ260091]-20260901-014_MZ08-U001-MASTER VALVE UNIT.xlsx", true]]);
+  assert.ok(issues.rows.some((row) => row[3] === "duplicate_form"));
+  const valve = lines.rows.find((row) => row[8] === "VALVE-1");
+  assert.deepEqual([valve[4], valve[14], valve[27], valve[28]], ["△1", 4, "Approved", 9]);
+  assert.deepEqual(lines.rows.filter((row) => row[30] === "Y").length, 7, "the lines of the copy are marked");
+});
+
+test("the dry run only reads: no database, no ERP, no network, and only the report files it is told to write", () => {
   const script = readFileSync(path.join(root, "scripts/pr-form-dry-run.mjs"), "utf8"), reader = readFileSync(path.join(root, "lib/pr-form.ts"), "utf8");
   assert.doesNotMatch(script + reader, /mssql|fetch\(|https?\.request|backend-node|erp-|unlinkSync|rmSync|renameSync|appendFileSync/);
-  assert.equal(script.match(/writeFileSync\(/g).length, 1);
+  assert.equal(script.match(/writeFileSync\(/g).length, 2);
   assert.match(script, /if \(jsonPath\) \{ writeFileSync\(jsonPath,/);
+  assert.match(script, /if \(xlsxPath\) \{ writeFileSync\(xlsxPath, workbookOf\(/);
+  // A report named PR... would be read as a PR-Form by the next run, so it is refused before anything is read.
+  const empty = mkdtempSync(path.join(tmpdir(), "pr-form-empty-"));
+  try {
+    assert.throws(() => execFileSync(process.execPath, [path.join(root, "scripts/pr-form-dry-run.mjs"), empty, "--xlsx", path.join(empty, "PR-review.xlsx")], { cwd: root, stdio: "pipe" }),
+      (error) => error.status === 2 && /must not start with PR/.test(String(error.stderr)));
+  } finally { rmSync(empty, { recursive: true, force: true }); }
   assert.doesNotMatch(reader, /^import /m);
 });
 
@@ -247,9 +272,9 @@ test("the dry run only reads: no database, no ERP, no network, and one optional 
 // repository, so this runs only on a machine that has them in the project folder.
 const samples = ["PR-[EE]-[PJ260091]-20260717-001.xlsx", "PR-[ME]-[PJ260091]-20260813-012_MZ01-U001-WIRE DUCT UNIT.xlsx", "PR-[ME]-[PJ260091]-20260813-013_MZ08-U001-MASTER VALVE UNIT.xlsx"].map((name) => path.join(root, name));
 test("PJ260091's own workbooks give the figures on the forms", { skip: samples.every((file) => existsSync(file)) ? false : "the sample workbooks are not on this machine" }, () => {
-  const folder = mkdtempSync(path.join(tmpdir(), "pr-form-")), json = path.join(folder, "report.json");
+  const folder = mkdtempSync(path.join(tmpdir(), "pr-form-")), json = path.join(folder, "report.json"), xlsx = path.join(folder, "review.xlsx");
   try {
-    const printed = execFileSync(process.execPath, [path.join(root, "scripts/pr-form-dry-run.mjs"), ...samples, "--json", json], { cwd: root, encoding: "utf8" });
+    const printed = execFileSync(process.execPath, [path.join(root, "scripts/pr-form-dry-run.mjs"), ...samples, "--json", json, "--xlsx", xlsx], { cwd: root, encoding: "utf8" });
     assert.match(printed, /Nothing was written/);
     const { report, files } = JSON.parse(readFileSync(json, "utf8"));
     assert.deepEqual([report.files, report.unreadable.length, report.forms.length, report.projects.length], [3, 0, 3, 1]);
@@ -265,5 +290,10 @@ test("PJ260091's own workbooks give the figures on the forms", { skip: samples.e
     assert.deepEqual(project.disciplines.map((item) => [item.discipline, item.estimate, item.sharedEstimate]), [["EE", 271000, false], ["ME", 947815, true]]);
     assert.equal(files.find((file) => file.fileName.includes("-013_")).forms[0].totals.children > 0, true);
     assert.equal(report.issueCounts.ref_error, undefined);
+    // The workbook to review opens as four valid sheets.
+    const parts = unzipSync(new Uint8Array(readFileSync(xlsx)));
+    for (const [name, bytes] of Object.entries(parts)) assert.equal(XMLValidator.validate(strFromU8(bytes)), true, name);
+    assert.deepEqual([...strFromU8(parts["xl/workbook.xml"]).matchAll(/<sheet name="([^"]+)"/g)].map((match) => match[1]), ["Projects", "Forms", "Issues", "Lines"]);
+    assert.match(strFromU8(parts["xl/worksheets/sheet4.xml"]), /MZ01-U001-001/);
   } finally { rmSync(folder, { recursive: true, force: true }); }
 });
