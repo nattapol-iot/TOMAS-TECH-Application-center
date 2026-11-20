@@ -6,9 +6,10 @@ import { LocalizedText } from "../LocalizedText";
 import { Badge, EmptyState, Field, FilterChips, Icon, Pagination, Panel, SearchInput, TablePageSize, Toolbar, type FilterItem } from "../ui";
 import { exportXlsx } from "../../../lib/export-xlsx";
 import { readWorkbookSheets } from "../../../lib/import-spreadsheet";
+import { readPrForm } from "../../../lib/pr-form";
 import { estimateBusinessDate } from "../../../lib/estimate-ux";
 import { type PurchaseUnits, unitLabel, unitOnSheet } from "../../../lib/purchase-units";
-import { addPastedRows, afterEdit, asPlanned, blankPrRows, draftFromPaste, draftFromPr, draftFromSheet, draftIssues, insertBlankPrRow, isBlankPrRow, moduleStatus, payloadLines, rowFromBomLine, sheetRows, startingPrRows, templateRows,
+import { addPastedRows, afterEdit, asPlanned, blankPrRows, draftFromPaste, draftFromPr, draftFromPrForm, draftFromSheet, draftIssues, insertBlankPrRow, isBlankPrRow, moduleStatus, payloadLines, rowFromBomLine, sheetRows, startingPrRows, templateRows,
   type PrBomLine, type PrDraftRow, type PrModuleBudget, type PrModuleStatus, type PrRowKind, type PrSavedLine } from "../../../lib/pr-spreadsheet";
 import { useEndpoint } from "./material-endpoint";
 import { DateInput } from "../DateInput";
@@ -199,11 +200,15 @@ export function PurchaseRequestEditor({ released, editing, start, onClose, onCre
     setError(""); setNotice("");
     try {
       const sheets = await readWorkbookSheets(file);
-      const read = sheets.map((sheet) => draftFromSheet(sheetRows(sheet.cells), [...lines.values()], modules)).find((result) => result && result.rows.length);
-      if (!read) { setError(t("ไม่พบตารางรายการในไฟล์ (ต้องมีหัวคอลัมน์ Description หรือ Part No. และ Qty หรือเป็นฟอร์ม TOMAS PR)")); return; }
+      // The team's PR-Form is read by its labels; of a workbook with a sheet per Unit, the sheet of the chosen Unit's drawing.
+      const forms = readPrForm(sheets, file.name).forms;
+      const form = forms.find((item) => unit?.drawingNo && item.drawingNo.toLocaleLowerCase() === unit.drawingNo.toLocaleLowerCase()) ?? forms[0];
+      const read = form ? draftFromPrForm(form, [...lines.values()], modules, unit?.module ?? "")
+        : sheets.map((sheet) => draftFromSheet(sheetRows(sheet.cells), [...lines.values()], modules)).find((result) => result && result.rows.length);
+      if (!read || !read.rows.length) { setError(t("ไม่พบตารางรายการในไฟล์ (ต้องมีหัวคอลัมน์ Description หรือ Part No. และ Qty หรือเป็นฟอร์ม TOMAS PR)")); return; }
       setRows(read.rows.filter((row) => row.selected)); setModule(null); setSearch(""); setPage(1); setServerIssue(null);
       const count = (kind: PrRowKind) => read.rows.filter((row) => row.lineType === kind).length;
-      setNotice(`${t("นำเข้าแล้ว")} ${read.rows.length} · ${t(KIND_LABEL.Planned)} ${count("Planned")} · ${t(KIND_LABEL.Substitute)} ${count("Substitute")} · ${t(KIND_LABEL.Unplanned)} ${count("Unplanned")}${read.skipped ? ` · ${t("ข้ามแถวที่ไม่มีจำนวน")} ${read.skipped}` : ""}`);
+      setNotice(`${form ? `${t("อ่านจาก sheet")} ${form.sheet} · ` : ""}${t("นำเข้าแล้ว")} ${read.rows.length} · ${t(KIND_LABEL.Planned)} ${count("Planned")} · ${t(KIND_LABEL.Substitute)} ${count("Substitute")} · ${t(KIND_LABEL.Unplanned)} ${count("Unplanned")}${read.skipped ? ` · ${t("ข้ามแถวที่ไม่มีจำนวน")} ${read.skipped}` : ""}${read.cancelled ? ` · ${t("ข้ามรายการที่ยกเลิก")} ${read.cancelled}` : ""}`);
     } catch (readError) { setError(readError instanceof Error ? readError.message : String(readError)); }
     finally { if (fileInput.current) fileInput.current.value = ""; }
   };
@@ -259,7 +264,7 @@ export function PurchaseRequestEditor({ released, editing, start, onClose, onCre
           <button className="btn ghost" type="button" data-guide="pr.estimate" aria-expanded={showEstimate} disabled={!lines.size} onClick={() => setShowEstimate(!showEstimate)}><Icon name="layers" /><LocalizedText text={"รายการใน Estimate"} /> ({lines.size})</button>
           <span className="spacer" />
           <button className="btn ghost" type="button" onClick={download}><Icon name="download" /><LocalizedText text={"ดาวน์โหลด Excel"} /></button>
-          <button className="btn ghost" type="button" onClick={() => fileInput.current?.click()}><Icon name="upload" /><LocalizedText text={"นำเข้า Excel"} /></button>
+          <button className="btn ghost" type="button" data-guide="pr.import" onClick={() => fileInput.current?.click()}><Icon name="upload" /><LocalizedText text={"นำเข้า Excel"} /></button>
           <input ref={fileInput} type="file" accept=".xlsx" hidden onChange={(event) => { void upload(event.target.files?.[0]); }} />
         </Toolbar>
         {pasting ? <div className="pr-paste">

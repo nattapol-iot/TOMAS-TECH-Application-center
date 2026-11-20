@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { addPastedRows, afterEdit, asPlanned, asSubstitute, blankPrRows, clipboardRows, draftFromBom, draftFromPaste, draftFromPr, draftFromSheet, draftIssues, insertBlankPrRow, isBlankPrRow, moduleStatus, rowFromBomLine, payloadLines, PR_TEMPLATE_HEADER_ROW, sheetRows, startingPrRows, templateRows } from "../lib/pr-spreadsheet.ts";
+import { readPrForm } from "../lib/pr-form.ts";
+import { addPastedRows, afterEdit, asPlanned, asSubstitute, blankPrRows, clipboardRows, draftFromBom, draftFromPaste, draftFromPr, draftFromPrForm, draftFromSheet, draftIssues, insertBlankPrRow, isBlankPrRow, moduleStatus, rowFromBomLine, payloadLines, PR_TEMPLATE_HEADER_ROW, sheetRows, startingPrRows, templateRows } from "../lib/pr-spreadsheet.ts";
 
 const bom = [
   { id: 1, module: "Panel", itemCode: "PLC-01", partNumber: "6ES7-1", description: "PLC controller", brand: "Siemens", unit: "pcs", remaining: 2, estimatedUnitCost: 10000 },
@@ -80,17 +81,57 @@ test("the template round-trips through the reader, and its layout matches lib/ex
     [["Planned", 1, "Panel", "6ES7-1", 2, "pcs", 10000, true], ["Substitute", 2, "Panel", "CBL-ALT", 1, "roll", 4500, true], ["Unplanned", null, "Software", "DONGLE", 2, "pcs", 800, false]]);
 });
 
-test("the team's TOMAS PR form is read by its columns and matched to the BOM by part number or item code", () => {
-  const form = [];
-  form[7] = []; form[7][4] = "Model/Part Number"; form[7][21] = "PO Number";
-  form[8] = []; Object.assign(form[8], { 4: "6es7-1", 5: "PLC", 6: "controller", 11: 2, 12: "pcs", 13: "Siemens", 17: 9500, 23: "urgent" });
-  form[9] = []; Object.assign(form[9], { 4: "HMI-7IN", 5: "Touch panel", 11: 1, 12: "pcs", 17: 15000 });
-  form[10] = []; Object.assign(form[10], { 4: "NO-QTY", 5: "Skipped", 17: 1 });
-  const read = draftFromSheet(form, bom, modules);
-  assert.equal(read.format, "tomas");
-  assert.equal(read.skipped, 1);
-  assert.deepEqual(read.rows.map((row) => [row.lineType, row.bomLineId, row.quantity, row.unitPrice, row.remark]), [["Planned", 1, 2, 9500, "urgent"], ["Unplanned", null, 1, 15000, ""]]);
-  assert.match(draftIssues(read.rows, lines, modules).get(read.rows[1].key), /module/);
+/**
+ * A PR-Form sheet: header labels on row 8 from column `from`, then one row per line. Columns are named, so both versions of the form can be drawn;
+ * a name starting with "|" is a column whose heading the form leaves empty.
+ */
+function prFormSheet(name, headings, rows, from = 2) {
+  const column = (index) => { let label = ""; for (let n = index; n > 0; n = Math.floor((n - 1) / 26)) label = String.fromCharCode(65 + ((n - 1) % 26)) + label; return label; };
+  const cells = { C2: { value: "Project Number" }, F2: { value: "PJ260091" }, C5: { value: "Drawing No." }, F5: { value: name.drawing } };
+  headings.forEach((heading, index) => { if (heading && !heading.startsWith("|")) cells[`${column(from + index)}8`] = { value: heading }; });
+  rows.forEach((values, offset) => headings.forEach((heading, index) => { const value = values[heading.replace(/^\|/, "")]; if (value !== undefined && value !== null && value !== "") cells[`${column(from + index)}${9 + offset}`] = { value }; }));
+  return { name: name.sheet, cells };
+}
+const FORM_2026 = ["Rev.", "No.", "Item", "Model/Part Number", "Discription", "Material", "Treatment", "Detail", "Quantity", "Total", "Unit", "Brand", "Supplier", "Lead time", "Quotation No.", "Unit price", "Total price", "Unit", "Actual cost", "PO Number", "PO status", "Remark"];
+// The 2025 form: one column further right (a blank merged column after the description), quantity to buy in L, PO Number in V and its status
+// beside it under no heading.
+const FORM_2025 = ["Rev.", "No.", "Item", "Model/Part Number", "Discription", "", "Material", "Treatment", "Detail", "Quantity", "Total", "Unit", "Brand", "Supplier", "QT No.", "Lead time", "Unit price", "Total price", "Unit", "Remark", "Actual cost", "PO Number", "|PO status"];
+const FORM_LINES = [
+  { "Rev.": "△1", "No.": 1, "Item": "A", "Model/Part Number": "6es7-1", "Discription": "PLC", "Material": "-", "Quantity": 1, "Total": 2, "Unit": "Pcs.", "Brand": "Siemens", "Unit price": 9500, "Remark": "urgent" },
+  { "Model/Part Number": "IO-16", "Quantity": 2, "Total": 4, "Unit": "Pcs.", "Brand": "Siemens", "Unit price": 1200 },
+  { "Rev.": "△1", "No.": 3, "Item": "B", "Model/Part Number": "BRKT-7", "Discription": "Bracket", "Material": "SS400", "Treatment": "Zinc", "Detail": "t=3", "Quantity": 1, "Total": 6, "Unit": "Pcs.", "Brand": "FAB", "Unit price": 300 },
+  { "Rev.": "△2", "No.": 4, "Item": "C", "Model/Part Number": "OLD-1", "Discription": "Dropped", "Quantity": 1, "Total": 1, "Unit": "Pcs.", "Unit price": 50, "PO status": "Cancelled" },
+  { "Rev.": "△2", "No.": 5, "Item": "D", "Model/Part Number": "NO-QTY", "Discription": "No quantity", "Unit price": 10 },
+];
+
+test("the team's PR-Form, 2026 or 2025 drawing, is read by its labels and matched to the BOM by part number (owner 2026-11-20)", () => {
+  for (const [headings, from] of [[FORM_2026, 2], [FORM_2025, 2]]) {
+    const workbook = readPrForm([{ name: "001_Summary cost", cells: { C8: { value: "Item" }, D8: { value: "Model/Part Number" }, K8: { value: "Quantity" }, J8: { value: "Unit price" } } },
+      prFormSheet({ sheet: "001_EE", drawing: "-" }, headings, FORM_LINES, from)], "PR-[EE]-[PJ260091]-20260717-001.xlsx");
+    assert.deepEqual(workbook.forms.map((form) => form.sheet), ["001_EE"]);
+    const read = draftFromPrForm(workbook.forms[0], bom, modules, "Panel");
+    assert.equal(read.format, "prform");
+    assert.deepEqual([read.skipped, read.cancelled], [1, 1]);
+    assert.deepEqual(read.rows.map((row) => [row.lineType, row.bomLineId, row.module, row.partNumber, row.description, row.quantity, row.unit, row.unitPrice, row.remark]), [
+      ["Planned", 1, "Panel", "6ES7-1", "PLC controller", 2, "pcs", 9500, "urgent"],
+      ["Unplanned", null, "Panel", "IO-16", "IO-16", 4, "Pcs", 1200, "Part of 6es7-1"],
+      ["Unplanned", null, "Panel", "BRKT-7", "Bracket", 6, "Pcs", 300, "Material SS400 · Treatment Zinc · Detail t=3"],
+    ]);
+    assert.deepEqual(draftIssues(read.rows, lines, modules), new Map());
+  }
+  // With no Unit chosen, a line the BOM does not have still needs its module.
+  const loose = draftFromPrForm(readPrForm([prFormSheet({ sheet: "001_EE", drawing: "-" }, FORM_2026, FORM_LINES)], "x.xlsx").forms[0], bom, modules);
+  assert.match(draftIssues(loose.rows, lines, modules).get(loose.rows[1].key), /module/);
+});
+
+test("the PR sheet imports a PR-Form through the reader, choosing the sheet of the Unit's drawing", () => {
+  const editor = readFileSync(new URL("../app/system/production/PurchaseRequestEditor.tsx", import.meta.url), "utf8");
+  assert.match(editor, /const forms = readPrForm\(sheets, file\.name\)\.forms;/);
+  assert.match(editor, /forms\.find\(\(item\) => unit\?\.drawingNo && item\.drawingNo\.toLocaleLowerCase\(\) === unit\.drawingNo\.toLocaleLowerCase\(\)\) \?\? forms\[0\]/);
+  assert.match(editor, /draftFromPrForm\(form, \[\.\.\.lines\.values\(\)\], modules, unit\?\.module \?\? ""\)/);
+  assert.match(editor, /data-guide="pr\.import"/);
+  const two = readPrForm([prFormSheet({ sheet: "MA11-U001", drawing: "MA11-U001" }, FORM_2026, FORM_LINES.slice(0, 1)), prFormSheet({ sheet: "MA11-U002", drawing: "MA11-U002" }, FORM_2026, FORM_LINES.slice(2, 3))], "x.xlsx").forms;
+  assert.deepEqual(two.map((form) => form.drawingNo), ["MA11-U001", "MA11-U002"]);
 });
 
 test("a workbook's cells become rows; a sheet with no recognisable table is not read", () => {

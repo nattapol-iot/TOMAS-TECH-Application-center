@@ -2675,6 +2675,16 @@ export const GUIDES: readonly Guide[] = [
         missing: { th: "ปุ่มนี้ขึ้นเมื่อเลือก BOM แล้ว", en: "The button appears once a BOM is chosen.", jp: "BOMを選ぶとボタンが表示されます。" },
       },
       {
+        target: "pr.import", action: "next", view: "purchase",
+        title: { th: "นำเข้า PR-Form เดิม", en: "Import an existing PR-Form", jp: "既存のPR-Formを取り込む" },
+        body: {
+          th: "ถ้ารายการอยู่ในไฟล์ PR-Form (Excel) อยู่แล้ว กด 'นำเข้า Excel' แล้วเลือกไฟล์ ระบบหาคอลัมน์จากหัวตาราง อ่านได้ทั้งฟอร์มปี 2025 และ 2026 ไฟล์ที่มีหลาย sheet จะอ่าน sheet ที่ Drawing No. ตรงกับ Unit ที่เลือก รายการที่ยกเลิกไม่ถูกนำเข้า ส่วน Material / Treatment / Detail เก็บไว้ในหมายเหตุ ตรวจรายการก่อนส่งทุกครั้ง",
+          en: "If the items are already in a PR-Form workbook, press Import Excel and pick the file. The columns are found by their headings, so the 2025 and the 2026 form both read. Of a workbook with several sheets, the sheet whose Drawing No. matches the chosen Unit is read. Cancelled lines are left out; material, treatment and detail go into the remark. Check the lines before you submit.",
+          jp: "明細がPR-Form（Excel）にある場合は「Excel取込」を押してファイルを選びます。列は見出しで判別するため、2025年版と2026年版のどちらも読めます。複数シートのブックでは、選んだUnitの図番と一致するシートを読みます。取消済みの明細は取り込まれず、材質・表面処理・詳細は備考に入ります。申請前に明細を確認してください。",
+        },
+        missing: { th: "ปุ่มนี้ขึ้นเมื่อเลือก BOM แล้ว", en: "The button appears once a BOM is chosen.", jp: "BOMを選ぶとボタンが表示されます。" },
+      },
+      {
         target: "pr.summary", action: "next", view: "purchase",
         title: { th: "ตรวจยอดและผู้อนุมัติ", en: "Check the total and approvers", jp: "合計と承認者を確認" },
         body: {
