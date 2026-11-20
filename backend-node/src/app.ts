@@ -78,6 +78,7 @@ import { registerEstimateCostLookupRoutes } from "./routes/estimate-cost-lookup.
 import { registerProjectRoutes } from "./routes/projects.js";
 import { registerProjectDocumentRoutes } from "./routes/project-documents.js";
 import { registerPurchaseRequisitionRoutes } from "./routes/purchase-requisitions.js";
+import { registerPurchaseUnitRoutes } from "./routes/purchase-units.js";
 import { registerReportRoutes } from "./routes/reports.js";
 import { registerScheduleRoutes } from "./routes/schedule.js";
 import { registerScheduleTemplateRoutes } from "./routes/schedule-templates.js";
@@ -264,6 +265,7 @@ export async function buildApp(config: AppConfig): Promise<Application> {
   registerSigningRoutes(app, config, database, users);
   registerSignatureMasterRoutes(app, config, database, users);
   registerPurchaseRequisitionRoutes(app, config, database, users, erp, email);
+  registerPurchaseUnitRoutes(app, database, users);
   registerHistoricalPrRoutes(app, database, users);
   registerReportRoutes(app, config, database, users);
   registerScheduleRoutes(app, database, users, config.businessTimeZone, email);

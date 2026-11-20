@@ -2,48 +2,49 @@
 
 [Module](../modules/procurement.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `ac5c6ebd`; generated, do not edit. [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `a619f63a`; generated, do not edit. [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/purchase-requisitions` | 368–394 |
-| GET | `/api/v1/purchase-requisitions/approval-route` | 398–407 |
-| GET | `/api/v1/purchase-requisitions/:id` | 409–443 |
-| POST | `/api/v1/purchase-requisitions` | 445–464 |
-| PUT | `/api/v1/purchase-requisitions/:id` | 468–489 |
-| POST | `/api/v1/purchase-requisitions/:id/submit` | 491–503 |
-| POST | `/api/v1/purchase-requisitions/:id/decide` | 505–569 |
-| POST | `/api/v1/purchase-requisitions/:id/erp-send` | 572–581 |
-| POST | `/api/v1/purchase-requisitions/erp-sync` | 586–616 |
-| POST | `/api/v1/purchase-requisitions/:id/erp-sync` | 619–648 |
-| GET | `/api/v1/erp/purchasing/options` | 651–657 |
-| POST | `/api/v1/purchase-requisitions/:id/withdraw` | 694–713 |
-| POST | `/api/v1/purchase-requisitions/:id/cancel` | 717–730 |
-| POST | `/api/v1/purchase-requisitions/:id/request-list-uploaded` | 734–742 |
-| GET | `/api/v1/procurement/approvals/attention` | 745–755 |
+| GET | `/api/v1/purchase-requisitions` | 379–407 |
+| GET | `/api/v1/purchase-requisitions/approval-route` | 411–420 |
+| GET | `/api/v1/purchase-requisitions/:id` | 422–458 |
+| POST | `/api/v1/purchase-requisitions` | 460–479 |
+| PUT | `/api/v1/purchase-requisitions/:id` | 483–504 |
+| POST | `/api/v1/purchase-requisitions/:id/submit` | 506–518 |
+| POST | `/api/v1/purchase-requisitions/:id/decide` | 520–584 |
+| POST | `/api/v1/purchase-requisitions/:id/erp-send` | 587–596 |
+| POST | `/api/v1/purchase-requisitions/erp-sync` | 601–631 |
+| POST | `/api/v1/purchase-requisitions/:id/erp-sync` | 634–663 |
+| GET | `/api/v1/erp/purchasing/options` | 666–672 |
+| POST | `/api/v1/purchase-requisitions/:id/withdraw` | 709–728 |
+| POST | `/api/v1/purchase-requisitions/:id/cancel` | 732–745 |
+| POST | `/api/v1/purchase-requisitions/:id/request-list-uploaded` | 749–757 |
+| GET | `/api/v1/procurement/approvals/attention` | 760–770 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `erpView` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 39–42 |
-| `todayIn` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 44–45 |
-| `decimal` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 46–47 |
-| `readHeader` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 48–50 |
-| `parseLines` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 53–72 |
-| `parseRequestFields` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 75–78 |
-| `requestableBomLines` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 81–98 |
-| `assertActiveSuppliers` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 100–105 |
-| `insertLines` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 108–120 |
-| `approvalRoute` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 123–134 |
-| `buildApprovalRoute` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 136–145 |
-| `stepsOf` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 148–150 |
-| `demandPrScope` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 164–168 |
-| `noticeWaiting` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 175–194 |
-| `noticeRequester` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 200–214 |
-| `registerPurchaseRequisitionRoutes` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 216–757 |
+| `erpView` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 40–43 |
+| `todayIn` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 45–46 |
+| `decimal` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 47–48 |
+| `readHeader` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 49–51 |
+| `parseLines` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 54–73 |
+| `parseRequestFields` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 76–81 |
+| `assertUnitOfProject` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 84–89 |
+| `requestableBomLines` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 92–109 |
+| `assertActiveSuppliers` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 111–116 |
+| `insertLines` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 119–131 |
+| `approvalRoute` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 134–145 |
+| `buildApprovalRoute` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 147–156 |
+| `stepsOf` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 159–161 |
+| `demandPrScope` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 175–179 |
+| `noticeWaiting` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 186–205 |
+| `noticeRequester` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 211–225 |
+| `registerPurchaseRequisitionRoutes` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 227–772 |
 
 ## Direct local dependencies
 
@@ -55,6 +56,7 @@ Evidence: source snapshot `ac5c6ebd`; generated, do not edit. [backend-node/src/
 - [backend-node/src/http.ts](<../../../backend-node/src/http.ts>)
 - [backend-node/src/material-audit.ts](<../../../backend-node/src/material-audit.ts>)
 - [backend-node/src/procurement-rules.ts](<../../../backend-node/src/procurement-rules.ts>)
+- [backend-node/src/procurement-rules.ts](<../../../backend-node/src/procurement-rules.ts>)
 - [backend-node/src/email.ts](<../../../backend-node/src/email.ts>)
 - [backend-node/src/erp-purchasing.ts](<../../../backend-node/src/erp-purchasing.ts>)
 - [backend-node/src/erp-request-list.ts](<../../../backend-node/src/erp-request-list.ts>)
@@ -65,7 +67,7 @@ Evidence: source snapshot `ac5c6ebd`; generated, do not edit. [backend-node/src/
 
 ## SQL references (literal scan, not a complete schema or write-set)
 
-`dbo.bom_lines`, `dbo.boms`, `dbo.cost_items`, `dbo.mat_items`, `dbo.mat_pr_approval_steps`, `dbo.mat_pr_line_erp_orders`, `dbo.mat_pr_lines`, `dbo.mat_prs`, `dbo.mir_lines`, `dbo.mirs`, `dbo.pr_approval_settings`, `dbo.pr_department_approvers`, `dbo.project_members`, `dbo.projects`, `dbo.reservations`, `dbo.stock_adjustments`, `dbo.suppliers`, `dbo.user_effective_permissions`, `dbo.user_effective_roles`, `dbo.users`
+`dbo.bom_lines`, `dbo.boms`, `dbo.cost_items`, `dbo.mat_items`, `dbo.mat_pr_approval_steps`, `dbo.mat_pr_line_erp_orders`, `dbo.mat_pr_lines`, `dbo.mat_prs`, `dbo.mir_lines`, `dbo.mirs`, `dbo.pr_approval_settings`, `dbo.pr_department_approvers`, `dbo.project_members`, `dbo.project_purchase_units`, `dbo.projects`, `dbo.reservations`, `dbo.stock_adjustments`, `dbo.suppliers`, `dbo.user_effective_permissions`, `dbo.user_effective_roles`, `dbo.users`
 
 ## Change boundary
 

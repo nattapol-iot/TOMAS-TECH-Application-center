@@ -7,6 +7,7 @@ import { currentLocale, useT as useUiText } from "../i18n";
 import { LocalizedText } from "../LocalizedText";
 import { HistoricalPrPanel } from "./HistoricalPrPanel";
 import { type PrEditing, type PrSaved, type PrStart, PurchaseRequestEditor } from "./PurchaseRequestEditor";
+import { PurchaseUnitsPanel } from "./PurchaseUnitsPanel";
 import { newestProjectFirst, projectOverviewPath } from "../project-overview-client";
 import { estimateBusinessDate } from "../../../lib/estimate-ux";
 import { bomSheetRows, toBuyValue } from "../../../lib/bom-sheet";
@@ -128,6 +129,9 @@ type PurchaseRequisition = {
   erpPoRef: string | null;
   lineCount: number;
   erp: { prNo: string | null; status: string | null; statusLabel: string | null; url: string | null; error: string | null; target?: string | null };
+  /** The Unit the request is for: "ME · MZ08-U001 MASTER VALVE UNIT". */
+  unitId?: number | null;
+  unitLabel?: string | null;
   substituteLines: number;
   unplannedLines: number;
   amount: number;
@@ -154,6 +158,8 @@ type LineErpView = { lineRef: string | null; status: string | null; statusLabel:
 type ErpOptions = { enabled: boolean; departments: Array<{ value: string; label: string }>; suggestedDepartment: string | null; message?: string };
 
 type PurchaseRequisitionDetail = {
+  /** The Unit the request is for, with its budget, what earlier requests took of it, and what this one takes. */
+  unit?: { id: number; module: string; discipline: string; drawingNo: string; unitName: string; budget: number; requestedElsewhere: number; thisRequest: number } | null;
   purchaseRequisition: {
     id: number;
     number: string;
@@ -688,6 +694,7 @@ function BomDetailModal({ id, bootstrap, notify, onClose, onRequest }: { id: num
         <div className="kpi-grid four"><KpiCard label="Lines" value={lines.length} icon="layers" tone="blue" /><KpiCard label="Budget" value={money(bom.bomBudget)} icon="chart" tone="violet" />
           <KpiCard label="ขอซื้อแล้ว" value={money(requestedValue)} icon="package" tone="green" />
           <KpiCard label="ยังต้องซื้อ" value={money(toBuy.reduce((sum, line) => sum + toBuyValue(line), 0))} note={`${toBuy.length} ${t("รายการ")}`} icon="package" tone="amber" /></div>
+        {bom.projectId ? <PurchaseUnitsPanel projectId={bom.projectId} canEdit={canReserve && bom.status !== "Superseded"} notify={notify} /> : null}
         <Toolbar>
           <select value={module} aria-label={t("Module")} onChange={(event) => setModule(event.target.value)}><option value="">{t("All modules")}</option>{modules.map((name) => <option key={name} value={name}>{name}</option>)}</select>
           <select value={section} aria-label={t("Section")} onChange={(event) => setSection(event.target.value)}><option value="">{t("ทุกหมวด")}</option>{sections.map((code) => <option key={code} value={code}>{code}</option>)}</select>
@@ -825,7 +832,7 @@ export function ProductionPurchaseRequisitions({ bootstrap, notify }: MaterialSc
       const pr = detail.purchaseRequisition;
       setDetailId(null);
       setEditing({ id: pr.id, number: pr.number, rowVersion: pr.rowVersion, bomId: pr.bomId, priority: pr.priority, requiredDate: String(pr.requiredDate),
-        purpose: pr.purpose ?? "", erpDepartment: detail.erp.department, lines: detail.lines });
+        purpose: pr.purpose ?? "", erpDepartment: detail.erp.department, unitId: detail.unit?.id ?? null, lines: detail.lines });
     } catch (error) { setActionError(toError(error)); }
     finally { setBusyId(null); }
   };
@@ -877,7 +884,7 @@ export function ProductionPurchaseRequisitions({ bootstrap, notify }: MaterialSc
           const isCurrentApprover = item.canDecide;
           const isOwnDraft = canRequest && item.status === "Draft" && (item.requestedById === bootstrap.user.id || isAdmin);
           const mix = [item.substituteLines ? `${uiText(PR_KIND_LABEL.Substitute)} ${item.substituteLines}` : "", item.unplannedLines ? `${uiText(PR_KIND_LABEL.Unplanned)} ${item.unplannedLines}` : ""].filter(Boolean).join(" · ");
-          return <tr key={item.id}><td className="pg-acts"><div className="table-actions">{isOwnDraft ? <><RowAction icon="edit" label="Edit" disabled={busyId === item.id} onClick={() => { void openEditor(item.id); }} /><RowAction icon="send" label="Submit" disabled={busyId === item.id} onClick={() => { void submit(item); }} /><RowAction icon="x" label="Cancel PR" danger disabled={busyId === item.id} onClick={() => { setActionError(""); setCancelItem(item); }} /></> : null}{isCurrentApprover ? <><RowAction icon="check" label="Approve" disabled={busyId === item.id} onClick={() => setDecision({ item, decision: "Approve" })} /><RowAction icon="x" label="Reject" danger disabled={busyId === item.id} onClick={() => setDecision({ item, decision: "Reject" })} /></> : null}{item.status === "Approved" && !item.erp.prNo && item.requestedById === bootstrap.user.id ? <RowAction icon="send" label="ส่งเข้า ERP" onClick={() => setDetailId(item.id)} /> : null}</div></td><td><StatusBadge status={item.status} label={prStatusLabel(item.status)} tone={item.status === "In Approval" && item.currentStep === "Final Approval" ? "violet" : undefined} />{item.erpPoRef ? <small className="muted mono">{item.erpPoRef}</small> : null}</td><td><button className="pg-doclink mono" type="button" onClick={() => setDetailId(item.id)}>{item.number}</button><small className="muted">{item.priority}</small></td><td><div className="cell-primary"><strong>{item.projectNumber}</strong><span>{item.projectName} <LocalizedText text={"·"} /> {item.bomNumber}</span></div></td><td>{item.requestedByName}</td><td>{date(item.requiredDate)}</td><td className="num">{item.lineCount}{mix ? <small className="muted">{mix}</small> : null}</td><td className="num"><strong>{money(item.amount)}</strong><small className="muted"><LocalizedText text={"Budget"} /> {money(item.estimateAmount)}</small></td><td><ErpCell erp={item.erp} status={item.status} /></td><td>{item.currentStep || "—"}<small className="muted">{item.currentApproverName || item.currentApproverRole || ""}</small></td></tr>;
+          return <tr key={item.id}><td className="pg-acts"><div className="table-actions">{isOwnDraft ? <><RowAction icon="edit" label="Edit" disabled={busyId === item.id} onClick={() => { void openEditor(item.id); }} /><RowAction icon="send" label="Submit" disabled={busyId === item.id} onClick={() => { void submit(item); }} /><RowAction icon="x" label="Cancel PR" danger disabled={busyId === item.id} onClick={() => { setActionError(""); setCancelItem(item); }} /></> : null}{isCurrentApprover ? <><RowAction icon="check" label="Approve" disabled={busyId === item.id} onClick={() => setDecision({ item, decision: "Approve" })} /><RowAction icon="x" label="Reject" danger disabled={busyId === item.id} onClick={() => setDecision({ item, decision: "Reject" })} /></> : null}{item.status === "Approved" && !item.erp.prNo && item.requestedById === bootstrap.user.id ? <RowAction icon="send" label="ส่งเข้า ERP" onClick={() => setDetailId(item.id)} /> : null}</div></td><td><StatusBadge status={item.status} label={prStatusLabel(item.status)} tone={item.status === "In Approval" && item.currentStep === "Final Approval" ? "violet" : undefined} />{item.erpPoRef ? <small className="muted mono">{item.erpPoRef}</small> : null}</td><td><button className="pg-doclink mono" type="button" onClick={() => setDetailId(item.id)}>{item.number}</button><small className="muted">{item.priority}</small></td><td><div className="cell-primary"><strong>{item.projectNumber}</strong><span>{item.projectName} <LocalizedText text={"·"} /> {item.bomNumber}</span>{item.unitLabel ? <span className="muted">{item.unitLabel}</span> : null}</div></td><td>{item.requestedByName}</td><td>{date(item.requiredDate)}</td><td className="num">{item.lineCount}{mix ? <small className="muted">{mix}</small> : null}</td><td className="num"><strong>{money(item.amount)}</strong><small className="muted"><LocalizedText text={"Budget"} /> {money(item.estimateAmount)}</small></td><td><ErpCell erp={item.erp} status={item.status} /></td><td>{item.currentStep || "—"}<small className="muted">{item.currentApproverName || item.currentApproverRole || ""}</small></td></tr>;
         })}</tbody></table></div> : endpoint.loading ? <Loading /> : <EmptyState icon="package" title="No purchase requisition found" message="Release a BOM, then create a requisition for its shortage lines" />}
       </Panel>
       </>}
@@ -1048,6 +1055,10 @@ function PrDetailModal({ id, bootstrap, notify, onChanged, onEdit, onClose }: { 
             <span><strong><LocalizedText text={"ยังไม่ได้ส่งเข้า ERP"} /></strong> {erp.error ?? (canSend ? t("กดส่งเข้า ERP เพื่อให้ฝ่ายจัดซื้อออก PO") : t("รอผู้ขอซื้อส่งเข้า ERP"))}</span>
             {showDepartment ? <><span className="spacer" /><select value={chosenDepartment} onChange={(event) => setDepartment(event.target.value)} aria-label={t("แผนกใน ERP")}>
               <option value="">{t("แผนกใน ERP")}</option>{(options.data?.departments ?? []).map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></> : null}</div> : null}
+        {detail.unit ? (() => { const left = detail.unit.budget - detail.unit.requestedElsewhere - detail.unit.thisRequest; return <div className={`info-strip ${left < 0 ? "red" : ""}`} data-guide="pr.unit-budget"><Icon name="layers" />
+          <span><strong>Unit {detail.unit.discipline} · {[detail.unit.drawingNo, detail.unit.unitName].filter(Boolean).join(" ")}</strong> <small className="muted">{detail.unit.module}</small>
+            {" · "}<LocalizedText text={"งบของ Unit"} /> {money(detail.unit.budget)} · <LocalizedText text={"PR ก่อนหน้า"} /> {money(detail.unit.requestedElsewhere)} · <LocalizedText text={"PR นี้"} /> {money(detail.unit.thisRequest)}
+            {" · "}<LocalizedText text={"คงเหลือ"} /> <strong>{money(left)}</strong></span></div>; })() : null}
         {detail.ruleFlags.length ? <div className="callout warning" role="status"><Icon name="alertTriangle" /><span><strong><LocalizedText text={"Approval rules triggered"} /></strong>{detail.ruleFlags.map((flag) => flag.text).join(" · ")}</span></div> : null}
         {detail.modules.length ? <div className="table-wrap"><table><thead><tr><th><LocalizedText text={"Module"} /></th><th className="num"><LocalizedText text={"งบ Estimate"} /></th><th className="num"><LocalizedText text={"PR ก่อนหน้า"} /></th><th className="num"><LocalizedText text={"PR นี้"} /></th><th className="num"><LocalizedText text={"คงเหลือหลัง PR นี้"} /></th></tr></thead>
           <tbody>{detail.modules.map((module) => { const left = module.budget - module.requestedElsewhere - module.thisRequest; return <tr key={module.module}><td><strong>{module.module}</strong></td><td className="num">{money(module.budget)}</td><td className="num">{money(module.requestedElsewhere)}</td><td className="num">{money(module.thisRequest)}</td><td className="num">{left < 0 ? <Badge tone="red">{money(left)}</Badge> : money(left)}</td></tr>; })}</tbody></table></div> : null}

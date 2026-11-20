@@ -30,6 +30,8 @@ $requestListMigration = Join-Path $repoRoot 'database/migrations/111_erp_request
 $requestListRollback = Join-Path $repoRoot 'database/rollback/111_erp_request_list.rollback.sql'
 $lineGrantsMigration = Join-Path $repoRoot 'database/migrations/112_request_list_line_grants.sql'
 $lineGrantsRollback = Join-Path $repoRoot 'database/rollback/112_request_list_line_grants.rollback.sql'
+$unitsMigration = Join-Path $repoRoot 'database/migrations/113_purchase_units.sql'
+$unitsRollback = Join-Path $repoRoot 'database/rollback/113_purchase_units.rollback.sql'
 $baselineFile = Join-Path ([IO.Path]::GetTempPath()) ('iot-procurement-baseline-' + $testSuffix + '.sql')
 $instanceCreated = $false
 
@@ -94,7 +96,13 @@ try {
     # 111 marked the legacy PRs the ERP already holds as PR and added the Request List columns and the orders table.
     # Its rollback script takes them away again, and 111 puts them back: both are run here so neither is untested SQL.
     # 112 only grants the app role the new line columns. Rollbacks go newest first: 111's refuses while 112 is applied.
-    Write-Output 'Checking migrations 111 and 112 again, their rollback scripts, and both once more.'
+    Write-Output 'Checking migrations 111 to 113 again, their rollback scripts (newest first), and all three once more.'
+    $unitsCheck = "IF OBJECT_ID(N'dbo.project_purchase_units',N'U') IS NULL OR COL_LENGTH(N'dbo.mat_prs',N'unit_id') IS NULL OR OBJECT_ID(N'dbo.FK_mat_prs_unit',N'F') IS NULL OR NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name=N'UX_project_purchase_units_drawing') OR NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name=N'UX_project_purchase_units_general') OR NOT EXISTS (SELECT 1 FROM dbo.schema_versions WHERE version=113) THROW 51999, 'Migration 113 is missing its table, the unit column, its key, an index or its version.', 1;"
+    Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-i', $unitsMigration)
+    Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-Q', $unitsCheck)
+    Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-i', $unitsRollback)
+    Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-Q', "IF OBJECT_ID(N'dbo.project_purchase_units',N'U') IS NOT NULL OR COL_LENGTH(N'dbo.mat_prs',N'unit_id') IS NOT NULL OR EXISTS (SELECT 1 FROM dbo.schema_versions WHERE version=113) OR (SELECT COUNT(*) FROM dbo.mat_prs)=0 THROW 51999, 'The rollback of 113 left something behind, or took the requests with it.', 1;")
+    Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-i', $unitsRollback)
     $requestListCheck = "IF COL_LENGTH(N'dbo.mat_prs',N'erp_target') IS NULL OR COL_LENGTH(N'dbo.mat_prs',N'erp_cancel_pending') IS NULL OR COL_LENGTH(N'dbo.mat_pr_lines',N'erp_line_ref') IS NULL OR COL_LENGTH(N'dbo.mat_pr_lines',N'erp_line_url') IS NULL OR OBJECT_ID(N'dbo.mat_pr_line_erp_orders',N'U') IS NULL OR OBJECT_ID(N'dbo.CK_mat_pr_lines_erp_line_status',N'C') IS NULL OR OBJECT_ID(N'dbo.CK_mat_prs_erp_target',N'C') IS NULL OR NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name=N'UX_mat_pr_lines_erp_line_ref') OR EXISTS (SELECT 1 FROM dbo.mat_prs WHERE erp_pr_no IS NOT NULL AND erp_target IS NULL) OR NOT EXISTS (SELECT 1 FROM dbo.schema_versions WHERE version=111) THROW 51999, 'Migration 111 is missing a column, the orders table, a check, the index, the PR mark or its version.', 1;"
     Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-i', $requestListMigration)
     Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-Q', $requestListCheck)
@@ -108,6 +116,8 @@ try {
     Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-Q', $requestListCheck)
     Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-i', $lineGrantsMigration)
     Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-Q', "IF NOT EXISTS (SELECT 1 FROM dbo.schema_versions WHERE version=112) THROW 51999, 'Migration 112 did not record its version.', 1;")
+    Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-i', $unitsMigration)
+    Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-Q', $unitsCheck)
 
     Write-Output 'Checking the PR API on the upgraded database.'
     $env:PROCUREMENT_TEST_SERVER = $serverName

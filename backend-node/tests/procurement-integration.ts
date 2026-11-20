@@ -10,6 +10,7 @@ import type { AppConfig } from "../src/config.js";
 import { CurrentUserService } from "../src/users.js";
 import { registerErrorHandler } from "../src/errors.js";
 import { registerBomRoutes } from "../src/routes/boms.js";
+import { registerPurchaseUnitRoutes } from "../src/routes/purchase-units.js";
 import { registerPurchaseRequisitionRoutes } from "../src/routes/purchase-requisitions.js";
 import { registerReportRoutes } from "../src/routes/reports.js";
 import type { CurrentUser } from "../src/types.js";
@@ -99,7 +100,7 @@ const app = Fastify({ forceCloseConnections: true }); registerErrorHandler(app);
 let actors: CurrentUser[] = [];
 app.addHook("onRequest", async (request) => { const actor = actors.find((a) => a.name === request.headers["x-test-actor"]); if (actor) request.currentUser = actor; });
 app.addHook("onError", async (_request, _reply, error) => { if (!error.statusCode || error.statusCode >= 500) console.error("Procurement test route error:", error.message); });
-registerBomRoutes(app, config, database, users); registerPurchaseRequisitionRoutes(app, config, database, users, { gateway, appBaseUrl: "https://eng.test" }, email); registerReportRoutes(app, config, database, users);
+registerBomRoutes(app, config, database, users); registerPurchaseUnitRoutes(app, database, users); registerPurchaseRequisitionRoutes(app, config, database, users, { gateway, appBaseUrl: "https://eng.test" }, email); registerReportRoutes(app, config, database, users);
 // The same PR routes with the server told to use the ERP's Request List: by tool, and as a sheet its requester uploads.
 const modeApp = (pegasusRequestList: "tool" | "excel") => { const other = Fastify({ forceCloseConnections: true }); registerErrorHandler(other);
   other.addHook("onRequest", async (request) => { const actor = actors.find((a) => a.name === request.headers["x-test-actor"]); if (actor) request.currentUser = actor; });
@@ -529,6 +530,70 @@ try {
   // With the switch off again, a request the Request List holds is not turned into an ERP PR by another send.
   const prsNow = creates().length;
   assert.deepEqual([(await call("POST", `/purchase-requisitions/${pr11.id}/erp-send`, "Requester", {})).requestList, creates().length], [true, prsNow]);
+  // ---- Purchase Units under a Module (migration 113, owner 2026-11-20).
+  const unitsOf = (project: number) => call("GET", `/projects/${project}/purchase-units`, "Requester");
+  let units = await unitsOf(fresh);
+  assert.deepEqual(units.modules.map((m: Json) => [m.module, m.budget, m.given, m.ungiven]), [["Panel", 25000, 0, 25000], ["Software", 30000, 0, 30000]]);
+  assert.deepEqual([units.units, units.disciplines], [[], []]);
+  // A Unit takes a share of its Module's budget: a drawing number and a name, or the Module's one general Unit.
+  const valve = await call("POST", `/projects/${fresh}/purchase-units`, "Requester", { module: "panel", discipline: "ME", drawingNo: "MZ08-U001", unitName: "MASTER VALVE UNIT", budget: 15000 }, 201);
+  assert.deepEqual([valve.module, valve.discipline, valve.drawingNo, valve.unitName, valve.isGeneral, valve.budget], ["Panel", "ME", "MZ08-U001", "MASTER VALVE UNIT", false, 15000]);
+  assert.equal((await call("POST", `/projects/${fresh}/purchase-units`, "Requester", { module: "Panel", discipline: "ME", drawingNo: "MZ08-U001", unitName: "Again", budget: 1 }, 409)).code, "unit_exists");
+  const general = await call("POST", `/projects/${fresh}/purchase-units`, "Requester", { module: "Panel", discipline: "ME", isGeneral: true, budget: 10000 }, 201);
+  assert.deepEqual([general.unitName, general.drawingNo, general.isGeneral], ["General / Common", "", true]);
+  assert.equal((await call("POST", `/projects/${fresh}/purchase-units`, "Requester", { module: "Panel", discipline: "ME", isGeneral: true, budget: 0 }, 409)).code, "unit_exists");
+  // The Units of a Module cannot be given more than the Module has: 15,000 + 10,000 is all of Panel's 25,000.
+  const tooMuch = await call("POST", `/projects/${fresh}/purchase-units`, "Requester", { module: "Panel", discipline: "EE", drawingNo: "EZ01", unitName: "Panel wiring", budget: 1 }, 422);
+  assert.equal(tooMuch.code, "unit_budget_over_module"); assert.match(tooMuch.message, /THB 0\.00 is left for this Unit/);
+  assert.equal((await call("POST", `/projects/${fresh}/purchase-units`, "Requester", { module: "Nowhere", discipline: "ME", drawingNo: "X1", unitName: "X", budget: 1 }, 422)).code, "unit_module_unknown");
+  await call("POST", `/projects/${fresh}/purchase-units`, "Requester", { module: "Panel", discipline: "QA", drawingNo: "X1", unitName: "X", budget: 1 }, 400);
+  await call("POST", `/projects/${fresh}/purchase-units`, "Requester", { module: "Software", discipline: "SW", unitName: "No drawing", budget: 1 }, 400);
+  // The budget is corrected within what the Module still has.
+  assert.equal((await call("PUT", `/purchase-units/${general.id}`, "Requester", { drawingNo: "", unitName: "General / Common", budget: 12000, rowVersion: general.rowVersion }, 422)).code, "unit_budget_over_module");
+  const general9 = await call("PUT", `/purchase-units/${general.id}`, "Requester", { unitName: "Common parts", budget: 9000, rowVersion: general.rowVersion });
+  assert.deepEqual([general9.unitName, general9.budget, general9.module, general9.discipline], ["Common parts", 9000, "Panel", "ME"]);
+  await call("PUT", `/purchase-units/${general.id}`, "Requester", { unitName: "Stale", budget: 1, rowVersion: general.rowVersion }, 409);
+
+  // A request is raised for a Unit. Raised within the Unit's budget it carries no Unit flag.
+  const forUnit = (price: number) => call("POST", "/purchase-requisitions", "Requester", { bomId: bom.id, unitId: valve.id, priority: "Normal", requiredDate: "2099-03-01", erpDepartment: "APPENG",
+    lines: [{ lineType: "Unplanned", module: "Panel", description: "Valve block", unit: "pcs", quantity: 1, unitPrice: price }] }, 201);
+  const pr12 = await forUnit(12000);
+  let unit12 = await detailOf(pr12.id);
+  assert.deepEqual(unit12.unit, { id: valve.id, module: "Panel", discipline: "ME", drawingNo: "MZ08-U001", unitName: "MASTER VALVE UNIT", budget: 15000, requestedElsewhere: 0, thisRequest: 12000 });
+  assert.ok(!unit12.ruleFlags.some((flag: Json) => flag.code === "over_unit_budget"));
+  assert.deepEqual((await call("GET", "/purchase-requisitions", "Requester")).filter((item: Json) => item.id === pr12.id).map((item: Json) => [item.unitId, item.unitLabel]), [[valve.id, "ME · MZ08-U001 MASTER VALVE UNIT"]]);
+  // The next one takes the Unit 2,000 over what it was given: its approver is told, as for a module over its budget.
+  const pr13 = await forUnit(5000);
+  const unit13 = await detailOf(pr13.id);
+  assert.deepEqual([unit13.unit.requestedElsewhere, unit13.unit.thisRequest], [12000, 5000]);
+  assert.deepEqual(unit13.ruleFlags.filter((flag: Json) => flag.code === "over_unit_budget").map((flag: Json) => [flag.level, flag.text]), [["manager", "Unit MZ08-U001 MASTER VALVE UNIT: 2,000 THB over its budget"]]);
+  // The earlier request stays within the Unit: the one that takes it over carries the overrun.
+  unit12 = await detailOf(pr12.id);
+  assert.ok(!unit12.ruleFlags.some((flag: Json) => flag.code === "over_unit_budget"));
+  // An edit moves a draft to another Unit, or to none.
+  const moved = await call("PUT", `/purchase-requisitions/${pr13.id}`, "Requester", { rowVersion: pr13.rowVersion, unitId: general.id, priority: "Normal", requiredDate: "2099-03-01",
+    lines: [{ lineType: "Unplanned", module: "Panel", description: "Valve block", unit: "pcs", quantity: 1, unitPrice: 5000 }] });
+  assert.deepEqual([(await detailOf(pr13.id)).unit.id, (await detailOf(pr13.id)).unit.unitName], [general.id, "Common parts"]);
+  await call("PUT", `/purchase-requisitions/${pr13.id}`, "Requester", { rowVersion: moved.rowVersion, priority: "Normal", requiredDate: "2099-03-01",
+    lines: [{ lineType: "Unplanned", module: "Panel", description: "Valve block", unit: "pcs", quantity: 1, unitPrice: 5000 }] });
+  assert.equal((await detailOf(pr13.id)).unit, null);
+
+  // The project's picture: each Unit, each Module's share given out, and each discipline's total.
+  units = await unitsOf(fresh);
+  assert.deepEqual(units.units.map((unit: Json) => [unit.discipline, unit.drawingNo, unit.unitName, unit.budget, unit.requests, unit.requested, unit.approved, unit.ordered, unit.remaining]),
+    [["ME", "", "Common parts", 9000, 0, 0, 0, 0, 9000], ["ME", "MZ08-U001", "MASTER VALVE UNIT", 15000, 1, 12000, 0, 0, 3000]]);
+  assert.deepEqual(units.modules.map((m: Json) => [m.module, m.budget, m.given, m.ungiven]), [["Panel", 25000, 24000, 1000], ["Software", 30000, 0, 30000]]);
+  assert.deepEqual(units.disciplines, [{ discipline: "ME", units: 2, budget: 24000, requested: 12000, approved: 0, ordered: 0, remaining: 12000 }]);
+
+  // A Unit belongs to one project, and one with requests cannot be removed.
+  const elsewhere = await call("POST", `/projects/${legacyProject}/purchase-units`, "Requester", { module: "Install", discipline: "IN", drawingNo: "IN-01", unitName: "Site work", budget: 1000 }, 201);
+  assert.equal((await call("POST", "/purchase-requisitions", "Requester", { bomId: bom.id, unitId: elsewhere.id, priority: "Normal", requiredDate: "2099-03-01",
+    lines: [{ lineType: "Unplanned", module: "Panel", description: "Wrong unit", unit: "pcs", quantity: 1, unitPrice: 1 }] }, 422)).code, "unit_not_in_project");
+  assert.equal((await call("POST", `/purchase-units/${valve.id}/remove`, "Requester", { rowVersion: valve.rowVersion }, 409)).code, "unit_in_use");
+  assert.equal((await call("POST", `/purchase-units/${elsewhere.id}/remove`, "Requester", { rowVersion: elsewhere.rowVersion })).removed, true);
+  assert.deepEqual((await unitsOf(legacyProject)).units, []);
+  // Its drawing number is free again for a new Unit.
+  await call("POST", `/projects/${legacyProject}/purchase-units`, "Requester", { module: "Install", discipline: "IN", drawingNo: "IN-01", unitName: "Site work again", budget: 500 }, 201);
   console.log(`PASS: procurement API on LocalDB (1,000-line PR in ${elapsed} ms).`);
 } finally {
   await app.close(); await toolApp.close(); await excelApp.close();

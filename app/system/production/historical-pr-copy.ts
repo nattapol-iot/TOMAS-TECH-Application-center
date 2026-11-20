@@ -1143,5 +1143,110 @@ export const HISTORICAL_PR_COPY: Record<string, { th: string; en: string; jp: st
     "th": "ยกเลิกใน ERP",
     "en": "Cancelled in the ERP",
     "jp": "ERPでキャンセル済み"
+  },
+  "Unit ของโครงการ": {
+    "th": "Unit ของโครงการ",
+    "en": "Project Units",
+    "jp": "案件のUnit"
+  },
+  "Unit อยู่ใต้ Module และแบ่งงบจาก Module นั้น ใบขอซื้อออกให้ Unit": {
+    "th": "Unit อยู่ใต้ Module และแบ่งงบจาก Module นั้น ใบขอซื้อออกให้ Unit",
+    "en": "A Unit sits under a Module and takes a share of its budget; a request is raised for a Unit",
+    "jp": "UnitはModuleの下にあり、そのModuleの予算を分けます。購買申請はUnitに対して作成します"
+  },
+  "เพิ่ม Unit": {
+    "th": "เพิ่ม Unit",
+    "en": "Add Unit",
+    "jp": "Unitを追加"
+  },
+  "เหลือแบ่ง": {
+    "th": "เหลือแบ่ง",
+    "en": "left to give",
+    "jp": "配分可能"
+  },
+  "Unit ทั่วไป (ไม่มี Drawing)": {
+    "th": "Unit ทั่วไป (ไม่มี Drawing)",
+    "en": "General Unit (no drawing)",
+    "jp": "共通Unit（図面なし）"
+  },
+  "ชื่อ Unit": {
+    "th": "ชื่อ Unit",
+    "en": "Unit name",
+    "jp": "Unit名"
+  },
+  "งบของ Unit": {
+    "th": "งบของ Unit",
+    "en": "Unit budget",
+    "jp": "Unit予算"
+  },
+  "Module นี้ให้ได้อีก": {
+    "th": "Module นี้ให้ได้อีก",
+    "en": "This Module can still give",
+    "jp": "このModuleの残り配分額"
+  },
+  "เลือก Module": {
+    "th": "เลือก Module",
+    "en": "Choose a Module",
+    "jp": "Moduleを選択してください"
+  },
+  "ใส่ Drawing No.": {
+    "th": "ใส่ Drawing No.",
+    "en": "Enter the drawing number",
+    "jp": "図面番号を入力してください"
+  },
+  "ใส่ชื่อ Unit": {
+    "th": "ใส่ชื่อ Unit",
+    "en": "Enter the Unit name",
+    "jp": "Unit名を入力してください"
+  },
+  "ใส่งบของ Unit": {
+    "th": "ใส่งบของ Unit",
+    "en": "Enter the Unit's budget",
+    "jp": "Unit予算を入力してください"
+  },
+  "งบของ Unit เกินงบที่เหลือของ Module": {
+    "th": "งบของ Unit เกินงบที่เหลือของ Module",
+    "en": "The Unit's budget is more than the Module has left",
+    "jp": "Unit予算がModuleの残額を超えています"
+  },
+  "อนุมัติแล้ว": {
+    "th": "อนุมัติแล้ว",
+    "en": "Approved",
+    "jp": "承認済み"
+  },
+  "สั่งซื้อแล้ว (ประมาณ)": {
+    "th": "สั่งซื้อแล้ว (ประมาณ)",
+    "en": "Ordered (estimated)",
+    "jp": "発注済み（概算）"
+  },
+  "คงเหลือ": {
+    "th": "คงเหลือ",
+    "en": "Remaining",
+    "jp": "残額"
+  },
+  "ลบ Unit": {
+    "th": "ลบ Unit",
+    "en": "Remove Unit",
+    "jp": "Unitを削除"
+  },
+  "ยังไม่มี Unit ใบขอซื้อของโครงการนี้คุมงบตาม Module อย่างเดียว เพิ่ม Unit เมื่อต้องการแบ่งงบของ Module ตาม Drawing": {
+    "th": "ยังไม่มี Unit ใบขอซื้อของโครงการนี้คุมงบตาม Module อย่างเดียว เพิ่ม Unit เมื่อต้องการแบ่งงบของ Module ตาม Drawing",
+    "en": "No Units yet: this project's requests are held to the Module budgets only. Add a Unit to split a Module's budget by drawing.",
+    "jp": "Unitはまだありません。この案件の申請はModule予算のみで管理されます。Moduleの予算を図面ごとに分けるにはUnitを追加します。"
+  },
+  "ไม่ระบุ Unit": {
+    "th": "ไม่ระบุ Unit",
+    "en": "No Unit",
+    "jp": "Unitなし"
+  },
+  "เกินงบของ Unit ผู้อนุมัติต้องใส่เหตุผล": {
+    "th": "เกินงบของ Unit ผู้อนุมัติต้องใส่เหตุผล",
+    "en": "Over the Unit's budget: the approver must give a reason",
+    "jp": "Unit予算を超えています。承認者は理由の入力が必要です"
+  },
+  "Unit ที่ขอซื้อให้": {
+    "th": "Unit ที่ขอซื้อให้",
+    "en": "Unit this PR is for",
+    "jp": "このPRの対象Unit"
   }
 };

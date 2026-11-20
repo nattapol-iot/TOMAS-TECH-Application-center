@@ -286,3 +286,17 @@
 
 /* What the ERP did with a line (status, then each PR / PO it was ordered on): it wraps instead of pushing the table off its frame. */
 .pg-skin td.pg-line-erp { min-width: 220px; white-space: normal; overflow-wrap: anywhere; }
+
+/* A project's Units in its BOM: the add / edit form in one wrapping row, and the Unit's budget line on the PR sheet. */
+.pg-skin .pr-unit-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 12px; padding: 12px; border-bottom: 1px solid var(--pg-divider); background: var(--pg-muted); }
+.pg-skin .pr-unit-form label { display: flex; flex-direction: column; gap: 4px; min-width: 150px; font-size: 12px; color: var(--pg-muted-fg); }
+.pg-skin .pr-unit-form label.wide { flex: 1 1 220px; }
+.pg-skin .pr-unit-form label.check { flex-direction: row; align-items: center; gap: 6px; min-width: 0; height: 36px; color: var(--pg-foreground); font-size: 13px; }
+.pg-skin .pr-unit-form :is(input:not([type="checkbox"]), select) { height: 36px; padding: 0 10px; border: 1px solid var(--pg-input); border-radius: 6px; background: var(--pg-background); color: var(--pg-foreground); font: inherit; font-size: 14px; }
+.pg-skin .pr-unit-form :is(input, select):focus { outline: none; box-shadow: var(--pg-focus); }
+.pg-skin .pr-unit-form :is(input, select):disabled { color: var(--pg-muted-fg); background: var(--pg-muted); }
+.pg-skin .pr-unit-form .actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.pg-skin .pr-unit-empty { margin: 0; padding: 12px; font-size: 13px; }
+.pg-skin .pr-unit-budget { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; padding: 8px 12px; border: 1px solid var(--pg-divider); border-radius: 8px; background: var(--pg-muted); font-size: 13px; }
+.pg-skin .pr-unit-budget.over { border-color: var(--pg-destructive); color: var(--pg-destructive); background: color-mix(in srgb, var(--pg-destructive) 8%, var(--pg-background)); }
+.pg-skin .pr-unit-budget small { flex-basis: 100%; font-size: 12px; }

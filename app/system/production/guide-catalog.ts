@@ -1414,7 +1414,7 @@ const BOM_RELEASE: Guide = {
     {
       target: "bom.list", action: "next", view: "purchase",
       title: { th: "BOM ทุก revision", en: "Every BOM revision", jp: "全BOMリビジョン" },
-      body: { th: "กดเลข BOM เพื่อตรวจรายการ งบ ยอดที่ขอซื้อแล้ว และยอดที่ยังต้องซื้อ กรองตาม Module หรือหมวดได้ และดาวน์โหลดเป็น Excel ได้ ใน BOM ที่ Release แล้ว ติ๊กรายการที่จะซื้อ แล้วกด 'สร้าง PR จากรายการที่เลือก' หรือกดปุ่ม + ที่แถวของ BOM เพื่อเปิดใบขอซื้อเปล่าของ BOM นั้น", en: "Press a BOM number to check its lines, budget, what has been requested and what is still to buy. Filter by module or section, and download it as Excel. On a released BOM, tick the lines to buy and press Create PR from selected lines, or press + on the BOM's row for an empty PR sheet on that BOM.", jp: "BOM番号を押して明細、予算、申請済み額、未購入額を確認します。モジュールや区分で絞り込み、Excelでダウンロードできます。リリース済みBOMでは購入する明細にチェックを入れて「選択した明細でPRを作成」を押すか、BOMの行の＋でそのBOMの空のPRシートを開きます。" },
+      body: { th: "กดเลข BOM เพื่อตรวจรายการ งบ ยอดที่ขอซื้อแล้ว และยอดที่ยังต้องซื้อ กรองตาม Module หรือหมวดได้ และดาวน์โหลดเป็น Excel ได้ ใน BOM ที่ Release แล้ว ติ๊กรายการที่จะซื้อ แล้วกด 'สร้าง PR จากรายการที่เลือก' หรือกดปุ่ม + ที่แถวของ BOM เพื่อเปิดใบขอซื้อเปล่าของ BOM นั้น ในหน้า BOM ยังมีแผง 'Unit ของโครงการ' สำหรับแบ่งงบของ Module เป็น Unit ตาม Drawing (กด 'เพิ่ม Unit') และดูยอดขอซื้อของแต่ละ Unit กับแต่ละ Discipline", en: "Press a BOM number to check its lines, budget, what has been requested and what is still to buy. Filter by module or section, and download it as Excel. On a released BOM, tick the lines to buy and press Create PR from selected lines, or press + on the BOM's row for an empty PR sheet on that BOM. The BOM also has the Project Units panel: split a module's budget into Units by drawing (Add Unit), and see what each Unit and each discipline has requested.", jp: "BOM番号を押して明細、予算、申請済み額、未購入額を確認します。モジュールや区分で絞り込み、Excelでダウンロードできます。リリース済みBOMでは購入する明細にチェックを入れて「選択した明細でPRを作成」を押すか、BOMの行の＋でそのBOMの空のPRシートを開きます。BOM画面には「案件のUnit」パネルもあり、モジュール予算を図面ごとのUnitに分け（「Unitを追加」）、Unitごと・Disciplineごとの申請額を確認できます。" },
     },
     {
       target: "bom.release", action: "click", view: "purchase",
@@ -2601,6 +2601,20 @@ export const GUIDES: readonly Guide[] = [
           th: "ถ้าไม่มีปุ่มนี้ แปลว่าบัญชีนี้ยังไม่มีสิทธิ์ขอซื้อ",
           en: "If the button never appears, this account cannot raise requisitions.",
           jp: "ボタンが表示されない場合、このアカウントには申請権限がありません。",
+        },
+      },
+      {
+        target: "pr.unit", action: "next", view: "purchase",
+        title: { th: "เลือก Unit (ถ้ามี)", en: "Choose the Unit, if there is one", jp: "Unitを選ぶ（ある場合）" },
+        body: {
+          th: "ถ้าโครงการแบ่งงบของ Module เป็น Unit ตาม Drawing ไว้ ให้เลือก Unit ที่ใบนี้ซื้อให้ ระบบจะแสดงงบของ Unit ยอดที่ขอซื้อไปแล้ว ยอดของใบนี้ และยอดคงเหลือ ถ้าเกินงบของ Unit ผู้อนุมัติต้องใส่เหตุผล",
+          en: "If the project splits a module's budget into Units by drawing, pick the Unit this PR buys for. The sheet then shows the Unit's budget, what was already requested, this PR and what is left. Over the Unit's budget, the approver must give a reason.",
+          jp: "案件がモジュール予算を図面ごとのUnitに分けている場合、このPRの対象Unitを選びます。Unitの予算、申請済み額、このPRの額、残額が表示されます。Unit予算を超えると承認者は理由の入力が必要です。",
+        },
+        missing: {
+          th: "ช่อง Unit ขึ้นเมื่อโครงการมี Unit แล้ว เพิ่ม Unit ได้ในหน้า BOM ของโครงการ (กดเลข BOM ที่แท็บ BOM แล้วกด 'เพิ่ม Unit') ถ้าไม่มี Unit ใบนี้คุมงบตาม Module เหมือนเดิม",
+          en: "The Unit field shows once the project has Units. Add them in the project's BOM (press the BOM number on the BOM tab, then Add Unit). With no Units, the PR is held to the module budgets as before.",
+          jp: "Unit欄は案件にUnitがあると表示されます。Unitは案件のBOM画面で追加します（BOMタブでBOM番号を押し、「Unitを追加」）。Unitがない場合、PRは従来どおりモジュール予算で管理されます。",
         },
       },
       {
