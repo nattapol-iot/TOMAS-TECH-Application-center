@@ -2708,9 +2708,9 @@ export const GUIDES: readonly Guide[] = [
         target: "pr.summary", action: "next", view: "purchase",
         title: { th: "ตรวจยอดและผู้อนุมัติ", en: "Check the total and approvers", jp: "合計と承認者を確認" },
         body: {
-          th: "ดูยอดขอซื้อ (ราคาประมาณ) เทียบงบของ Module แถวที่มีข้อความสีแดงต้องแก้ก่อนส่ง เช่น ยังไม่ได้เลือก Module ถ้า Module เกินงบ ผู้อนุมัติต้องใส่เหตุผลตอนอนุมัติ",
-          en: "Compare the total (at approximate prices) with the module budgets. Rows with red text must be fixed first, such as a row with no module yet. Over a module's budget, the approver gives a reason.",
-          jp: "申請額（概算単価）をモジュール予算と比べます。赤字の行（モジュール未選択など）は先に修正します。予算超過の場合、承認者が承認時に理由を記入します。",
+          th: "แถบขั้นตอนบนสุดของใบบอกจำนวนรายการ แถวที่ต้องแก้ ผู้อนุมัติตามลำดับ และยอดขอซื้อ ขั้นที่เป็นสีแดงต้องแก้ก่อนส่ง ดูยอดขอซื้อ (ราคาประมาณ) เทียบงบของ Module แถวที่มีข้อความสีแดงต้องแก้ก่อนส่ง เช่น ยังไม่ได้เลือก Module ถ้า Module เกินงบ ผู้อนุมัติต้องใส่เหตุผลตอนอนุมัติ",
+          en: "The steps on top of the sheet show the lines, the rows to fix, the approvers in turn and the total; a red step must be fixed before sending. Compare the total (at approximate prices) with the module budgets. Rows with red text must be fixed first, such as a row with no module yet. Over a module's budget, the approver gives a reason.",
+          jp: "上部のステップ表示で、明細数・修正が必要な行・承認者の順番・申請額を確認できます。赤いステップは送信前に修正します。申請額（概算単価）をモジュール予算と比べます。赤字の行（モジュール未選択など）は先に修正します。予算超過の場合、承認者が承認時に理由を記入します。",
         },
       },
       {

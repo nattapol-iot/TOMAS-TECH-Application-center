@@ -734,6 +734,16 @@ export const HISTORICAL_PR_COPY: Record<string, { th: string; en: string; jp: st
     "en": "Unit price cannot be negative",
     "jp": "単価は負にできません"
   },
+  "พร้อมส่ง": {
+    "th": "พร้อมส่ง",
+    "en": "Ready to send",
+    "jp": "送信可能"
+  },
+  "อัตโนมัติหลังอนุมัติ": {
+    "th": "อัตโนมัติหลังอนุมัติ",
+    "en": "Automatic after approval",
+    "jp": "承認後に自動"
+  },
   "Choose the module that pays for it": {
     "th": "เลือก Module ที่ใช้งบ",
     "en": "Choose the module that pays for it",
