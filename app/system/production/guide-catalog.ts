@@ -2621,9 +2621,9 @@ export const GUIDES: readonly Guide[] = [
         target: "pr.bom", action: "next", view: "purchase",
         title: { th: "เลือก BOM", en: "Choose the BOM", jp: "BOMを選ぶ" },
         body: {
-          th: "เลือก BOM ที่เผยแพร่แล้วของโครงการ ใบนี้จะใช้งบของ Module จาก BOM นั้น และเห็นรายการใน Estimate เป็นข้อมูลอ้างอิง",
-          en: "Pick the project's released BOM: the PR uses its module budgets, and its estimate items show as a reference.",
-          jp: "案件のリリース済みBOMを選びます。PRはそのモジュール予算を使い、見積の明細が参考として表示されます。",
+          th: "เลือก BOM ที่เผยแพร่แล้วของโครงการ พิมพ์เลข BOM เลขโครงการ หรือชื่อโครงการเพื่อค้นหา ใบนี้จะใช้งบของ Module จาก BOM นั้น และเห็นรายการใน Estimate เป็นข้อมูลอ้างอิง",
+          en: "Pick the project's released BOM; type its number, the project's number or name to search. The PR uses its module budgets, and its estimate items show as a reference.",
+          jp: "案件のリリース済みBOMを選びます。BOM番号・プロジェクト番号・名称を入力して検索できます。PRはそのモジュール予算を使い、見積の明細が参考として表示されます。",
         },
         missing: {
           th: "ถ้ายังไม่มี BOM ที่เผยแพร่แล้ว ให้ PM เผยแพร่ BOM ที่แท็บ BOM ของหน้านี้ก่อน",

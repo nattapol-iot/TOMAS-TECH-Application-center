@@ -13,6 +13,7 @@ import { addPastedRows, afterEdit, asPlanned, blankPrRows, draftFromPaste, draft
   togglePart, withoutRows, type PrBomLine, type PrDraftRow, type PrModuleBudget, type PrModuleStatus, type PrRowKind, type PrSavedLine } from "../../../lib/pr-spreadsheet";
 import { useEndpoint } from "./material-endpoint";
 import { DateInput } from "../DateInput";
+import { SearchSelect } from "./SearchSelect";
 
 type ReleasedBom = { id: number; number: string; status: string; projectNumber: string; projectName: string };
 type ErpOptions = { enabled: boolean; departments: Array<{ value: string; label: string }>; suggestedDepartment: string | null; message?: string };
@@ -256,9 +257,13 @@ export function PurchaseRequestEditor({ released, editing, start, onClose, onCre
       </ol>
       {/* The request's header on one line where the screen allows (owner 2026-11-20); it wraps on a narrow one. */}
       <div className="pr-head">
-        <Field label="Released BOM" guide="pr.bom"><select value={effectiveBomId} disabled={Boolean(editing)} onChange={(event) => { setBomId(Number(event.target.value)); setModule(null); setPage(1); setNotice(""); setServerIssue(null); }}>
-          {editing ? <option value={editing.bomId}>{workspace.data ? `${workspace.data.bom.number} · ${workspace.data.bom.projectNumber} · ${workspace.data.bom.projectName}` : "…"}</option>
-            : <><option value={0}>{t("Select BOM…")}</option>{released.map((bom) => <option key={bom.id} value={bom.id}>{bom.number} · {bom.projectNumber} · {bom.projectName}</option>)}</>}</select></Field>
+        {/* Typed to search: a BOM by its number, its project's number or the project's name (owner 2026-11-20). */}
+        <Field label="Released BOM" guide="pr.bom"><SearchSelect value={effectiveBomId ? String(effectiveBomId) : ""} disabled={Boolean(editing)} clearable={false}
+          options={editing ? [{ value: String(editing.bomId), label: workspace.data ? `${workspace.data.bom.number} · ${workspace.data.bom.projectNumber} · ${workspace.data.bom.projectName}` : "…" }]
+            : released.map((bom) => ({ value: String(bom.id), label: `${bom.number} · ${bom.projectNumber} · ${bom.projectName}` }))}
+          onChange={(value) => { setBomId(Number(value) || 0); setModule(null); setPage(1); setNotice(""); setServerIssue(null); }}
+          label={t("Released BOM")} placeholder={t("ค้นหาเลข BOM / เลขหรือชื่อโครงการ…")} noMatchText={t("CRM.noMatch")} clearLabel={t("CRM.clearChoice")}
+          showLabel={t("CRM.showOptions")} moreText={t("CRM.listCut")} /></Field>
         {units.data?.units.length ? <Field label="Unit ที่ขอซื้อให้" guide="pr.unit" hint={unit ? `Module ${unit.module}` : undefined}><select value={unitId ?? 0} onChange={(event) => chooseUnit(Number(event.target.value) || null)}>
           <option value={0}>{t("ไม่ระบุ Unit")}</option>{units.data.units.map((item) => <option key={item.id} value={item.id}>{unitLabel(item)} ({item.module})</option>)}</select></Field> : null}
         <Field label="Priority" guide="pr.priority"><select value={priority} onChange={(event) => setPriority(event.target.value)}><option value="Normal">{t("Normal")}</option><option value="High">{t("High")}</option><option value="Emergency">{t("Emergency")}</option></select></Field>
