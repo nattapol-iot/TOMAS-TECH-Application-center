@@ -243,17 +243,18 @@ export function PurchaseRequestEditor({ released, editing, start, onClose, onCre
   return (
     <Panel title={editing ? editing.number : "ขอซื้อ (PR)"} subtitle={editing ? "แก้ไข PR ฉบับร่าง แล้วกด 'ส่งขออนุมัติ' หรือ 'บันทึกร่าง' ไว้ก่อน" : "พิมพ์หรือวางรายการที่จะซื้อจริง แล้วเลือก Module ที่ใช้งบ รายการใน Estimate ใช้อ้างอิงและดึงมาใช้ได้ · ราคาเป็นราคาประมาณเพื่อเทียบงบ ราคาจริงฝ่ายจัดซื้อหาใน ERP"}
       actions={<button className="btn ghost" type="button" onClick={onClose} disabled={busy}><Icon name="arrowLeft" /><LocalizedText text={"กลับไปรายการ PR"} /></button>}>
-      <div className="form-grid two">
+      {/* The request's header on one line where the screen allows (owner 2026-11-20); it wraps on a narrow one. */}
+      <div className="pr-head">
         <Field label="Released BOM" guide="pr.bom"><select value={effectiveBomId} disabled={Boolean(editing)} onChange={(event) => { setBomId(Number(event.target.value)); setModule(null); setPage(1); setNotice(""); setServerIssue(null); }}>
           {editing ? <option value={editing.bomId}>{workspace.data ? `${workspace.data.bom.number} · ${workspace.data.bom.projectNumber} · ${workspace.data.bom.projectName}` : "…"}</option>
             : <><option value={0}>{t("Select BOM…")}</option>{released.map((bom) => <option key={bom.id} value={bom.id}>{bom.number} · {bom.projectNumber} · {bom.projectName}</option>)}</>}</select></Field>
         {units.data?.units.length ? <Field label="Unit ที่ขอซื้อให้" guide="pr.unit" hint={unit ? `Module ${unit.module}` : undefined}><select value={unitId ?? 0} onChange={(event) => chooseUnit(Number(event.target.value) || null)}>
           <option value={0}>{t("ไม่ระบุ Unit")}</option>{units.data.units.map((item) => <option key={item.id} value={item.id}>{unitLabel(item)} ({item.module})</option>)}</select></Field> : null}
-        <Field label="Priority"><select value={priority} onChange={(event) => setPriority(event.target.value)}><option value="Normal">{t("Normal")}</option><option value="High">{t("High")}</option><option value="Emergency">{t("Emergency")}</option></select></Field>
+        <Field label="Priority" guide="pr.priority"><select value={priority} onChange={(event) => setPriority(event.target.value)}><option value="Normal">{t("Normal")}</option><option value="High">{t("High")}</option><option value="Emergency">{t("Emergency")}</option></select></Field>
         <Field label="Required date" guide="pr.required"><DateInput value={requiredDate} onChange={(event) => setRequiredDate(event.target.value)} /></Field>
-        <Field label="Purpose"><input maxLength={500} value={purpose} onChange={(event) => setPurpose(event.target.value)} placeholder={t("Project material / site requirement")} /></Field>
-        {erpOptions.data?.enabled && erpOptions.data.departments.length ? <Field label="แผนกใน ERP"><select value={department} onChange={(event) => setErpDepartment(event.target.value)}>
+        {erpOptions.data?.enabled && erpOptions.data.departments.length ? <Field label="แผนกใน ERP" guide="pr.department"><select value={department} onChange={(event) => setErpDepartment(event.target.value)}>
           <option value="">{t("Select…")}</option>{erpOptions.data.departments.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></Field> : null}
+        <Field label="Purpose" guide="pr.purpose"><input maxLength={500} value={purpose} onChange={(event) => setPurpose(event.target.value)} placeholder={t("Project material / site requirement")} /></Field>
       </div>
       {workspace.error ? <div className="callout danger" role="alert"><Icon name="alertTriangle" /><span>{workspace.error}</span></div> : null}
       {error ? <div className="callout danger" role="alert"><Icon name="alertTriangle" /><span><strong><LocalizedText text={"ดำเนินการไม่สำเร็จ"} /></strong>{error}</span></div> : null}

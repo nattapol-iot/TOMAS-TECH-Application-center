@@ -275,6 +275,16 @@
 .pg-skin .pr-plan-table tfoot td { height: auto; padding: 0; border-top: 1px solid var(--pg-row-line); }
 .pg-skin .pr-add-line { display: flex; align-items: center; gap: 6px; width: 100%; height: 36px; padding: 0 12px; border: 0; background: none; color: var(--pg-muted-fg); font: inherit; font-size: 14px; cursor: pointer; }
 .pg-skin .pr-add-line:hover { background: var(--pg-accent); color: var(--pg-foreground); }
+/* The request's header on one line where the screen allows: the BOM and the Unit take the room, the short fields keep their
+   width, the purpose fills what is left; a narrow screen wraps it. */
+.pg-skin .pr-head { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px 12px; }
+.pg-skin .pr-head > .field { flex: 1 1 180px; min-width: 0; }
+.pg-skin .pr-head > [data-guide="pr.bom"] { flex: 2.4 1 320px; }
+.pg-skin .pr-head > [data-guide="pr.unit"] { flex: 1.8 1 240px; }
+.pg-skin .pr-head > [data-guide="pr.priority"] { flex: 0 0 120px; }
+.pg-skin .pr-head > [data-guide="pr.required"] { flex: 0 0 160px; }
+.pg-skin .pr-head > [data-guide="pr.department"] { flex: 1 1 170px; }
+.pg-skin .pr-head > [data-guide="pr.purpose"] { flex: 2 1 260px; }
 /* The PR-Form's own columns widen the sheet, which then scrolls sideways; a part sits indented under the line it belongs to. */
 .pg-skin .pr-plan-table.with-form { min-width: 1986px; }
 .pg-skin .pr-plan-table tr.pr-part > td:nth-child(3) { padding-left: 26px; box-shadow: inset 3px 0 0 var(--pg-primary-10); }
