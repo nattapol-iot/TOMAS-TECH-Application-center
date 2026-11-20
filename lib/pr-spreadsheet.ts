@@ -386,9 +386,10 @@ export function rowFromBomLine(line: PrBomLine, rows: PrDraftRow[], stamp: strin
  * then empty rows to type into. With nothing ticked it is the empty table.
  */
 export function startingPrRows(lines: PrBomLine[], lineIds: number[], module: string, stamp: string): PrDraftRow[] {
+  // The sheet starts short (owner 2026-11-20): the lines ticked on the BOM, or one empty row; + and Add row add more.
   const rows: PrDraftRow[] = [];
   for (const line of lines) if (lineIds.includes(line.id) && line.remaining > 0) rows.push(rowFromBomLine(line, rows, stamp));
-  return [...rows, ...blankPrRows(rows.length ? 5 : 10, module, stamp)];
+  return rows.length ? rows : blankPrRows(1, module, stamp);
 }
 
 /**

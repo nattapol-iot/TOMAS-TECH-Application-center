@@ -2644,9 +2644,9 @@ export const GUIDES: readonly Guide[] = [
         target: "pr.estimate", action: "next", view: "purchase",
         title: { th: "รายการใน Estimate", en: "The estimate items", jp: "見積の明細" },
         body: {
-          th: "ปุ่มนี้เปิดหรือปิดรายการของ Estimate ซึ่งใช้อ้างอิงเท่านั้น ถ้าจะซื้อตามรายการไหน กด 'ดึงมาใช้' ที่รายการนั้น หรือ 'ดึงทั้งหมดที่เหลือ' แล้วพิมพ์ทับเป็นของที่ซื้อจริงได้",
-          en: "This button shows or hides the estimate's items, which are a reference only. To buy one, press Use on it, or Use all still to buy, then type what you really buy over it.",
-          jp: "このボタンで見積の明細を表示・非表示にします。参考用です。購入する明細は「使う」、または「未購入をすべて使う」を押し、実際に購入する品を上書きします。",
+          th: "รายการของ Estimate ซ่อนไว้ก่อน กดปุ่มนี้เพื่อแสดงหรือซ่อน ใช้อ้างอิงเท่านั้น ถ้าจะซื้อตามรายการไหน กด 'ดึงมาใช้' ที่รายการนั้น หรือ 'ดึงทั้งหมดที่เหลือ' แล้วพิมพ์ทับเป็นของที่ซื้อจริงได้",
+          en: "The estimate's items stay hidden until you press this button, which shows or hides them. They are a reference only. To buy one, press Use on it, or Use all still to buy, then type what you really buy over it.",
+          jp: "見積の明細は最初は非表示です。このボタンで表示・非表示を切り替えます。参考用です。購入する明細は「使う」、または「未購入をすべて使う」を押し、実際に購入する品を上書きします。",
         },
         missing: { th: "ปุ่มนี้ขึ้นเมื่อเลือก BOM แล้ว", en: "The button appears once a BOM is chosen.", jp: "BOMを選ぶとボタンが表示されます。" },
       },
@@ -2654,9 +2654,9 @@ export const GUIDES: readonly Guide[] = [
         target: "pr.lines", action: "next", view: "purchase",
         title: { th: "พิมพ์ของที่จะซื้อจริง", en: "Type what you will really buy", jp: "実際に購入する品を入力" },
         body: {
-          th: "ตารางเริ่มเป็นแถวว่าง พิมพ์ Part No. รายละเอียด ยี่ห้อ จำนวน หน่วย และราคาประมาณ แล้วเลือก Module ที่ใช้งบ ราคาในใบนี้เป็นราคาประมาณเพื่อเทียบงบ ราคาจริงฝ่ายจัดซื้อหาใน ERP กด + ท้ายแถวเพื่อแทรกแถวว่างใต้แถวนั้น หรือกด 'เพิ่มแถว' ที่บรรทัดสุดท้ายของตาราง ถ้าไม่ซื้อแถวไหน กดปุ่มถังขยะท้ายแถว",
-          en: "The table starts as empty rows. Type the part number, description, brand, quantity, unit and an approximate price, then choose the module that pays. Prices here are approximate, for checking the budget; Purchasing finds the real price in the ERP. Press + at the end of a row for an empty row under it, or Add row on the table's last line. To drop a row, press the bin at its end.",
-          jp: "表は空の行から始まります。品番、品名、メーカー、数量、単位、概算単価を入力し、予算を使うモジュールを選びます。単価は予算確認用の概算で、実際の価格は購買部がERPで決めます。行末の＋でその下に空の行を追加でき、表の最終行の「行を追加」でも追加できます。不要な行は行末のごみ箱ボタンで削除します。",
+          th: "ตารางเริ่มที่แถวว่างแถวเดียว (หรือรายการที่ติ๊กมาจาก BOM) พิมพ์ Part No. รายละเอียด ยี่ห้อ จำนวน หน่วย และราคาประมาณ แล้วเลือก Module ที่ใช้งบ ราคาในใบนี้เป็นราคาประมาณเพื่อเทียบงบ ราคาจริงฝ่ายจัดซื้อหาใน ERP กด + ท้ายแถวเพื่อแทรกแถวว่างใต้แถวนั้น หรือกด 'เพิ่มแถว' ที่บรรทัดสุดท้ายของตาราง ถ้าไม่ซื้อแถวไหน กดปุ่มถังขยะท้ายแถว",
+          en: "The table starts with one empty row (or the lines ticked on the BOM). Type the part number, description, brand, quantity, unit and an approximate price, then choose the module that pays. Prices here are approximate, for checking the budget; Purchasing finds the real price in the ERP. Press + at the end of a row for an empty row under it, or Add row on the table's last line. To drop a row, press the bin at its end.",
+          jp: "表は空の行1行（またはBOMで選んだ明細）から始まります。品番、品名、メーカー、数量、単位、概算単価を入力し、予算を使うモジュールを選びます。単価は予算確認用の概算で、実際の価格は購買部がERPで決めます。行末の＋でその下に空の行を追加でき、表の最終行の「行を追加」でも追加できます。不要な行は行末のごみ箱ボタンで削除します。",
         },
         missing: {
           th: "ถ้าลบแถวจนหมด กด 'เพิ่มแถว' 'วางจาก Excel' หรือดึงจากรายการใน Estimate",

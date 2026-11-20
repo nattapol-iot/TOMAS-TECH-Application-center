@@ -61,10 +61,10 @@ export function PurchaseRequestEditor({ released, editing, start, onClose, onCre
   const modules = useMemo(() => (workspace.data?.modules ?? EMPTY).map((module) => module.module), [workspace.data]);
   // A BOM with one module charges every typed row to it; with several, the engineer says which.
   const onlyModule = modules.length === 1 ? modules[0]! : "";
-  // A new sheet is empty rows, or the lines ticked on the BOM it was started from followed by empty rows.
+  // A new sheet is one empty row, or the lines ticked on the BOM it was started from.
   const startingRows = useMemo(() => editing ? draftFromPr(editing.lines, [...lines.values()])
     : startingPrRows([...lines.values()], start && start.bomId === effectiveBomId ? start.lineIds : [], onlyModule, "start"), [editing, lines, onlyModule, start, effectiveBomId]);
-  // The rows the engineer has touched, for this BOM only; until then a new sheet is empty rows to type into.
+  // The rows the engineer has touched, for this BOM only; until then a new sheet is its starting rows.
   const [draft, setDraft] = useState<{ bomId: number; rows: PrDraftRow[] } | null>(null);
   const rows = draft && draft.bomId === effectiveBomId ? draft.rows : startingRows;
   const setRows = (next: PrDraftRow[]) => setDraft({ bomId: effectiveBomId, rows: next });
@@ -97,8 +97,8 @@ export function PurchaseRequestEditor({ released, editing, start, onClose, onCre
   const [serverIssue, setServerIssue] = useState<{ key: string; message: string } | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const [pasting, setPasting] = useState(false);
-  // The estimate's lines, for reference: open on a new PR, closed on a draft being corrected.
-  const [showEstimate, setShowEstimate] = useState(!editing);
+  // The estimate's lines, for reference: hidden until asked for (owner 2026-11-20).
+  const [showEstimate, setShowEstimate] = useState(false);
   // The PR-Form's own columns (material, treatment, detail, need-by, link): shown on demand, and open on a draft that has any.
   const [formChoice, setFormChoice] = useState<boolean | null>(null);
   const showForm = formChoice ?? Boolean(editing?.lines.some((line) => line.material || line.treatment || line.detail || line.needBy || line.attachmentUrl));
