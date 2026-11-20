@@ -283,3 +283,6 @@
 .pg-skin .toolbar > .muted { font-size: 12px; color: var(--pg-muted-fg); }
 .pg-skin :is(th, td).pg-check { width: 36px; padding-left: 12px; padding-right: 0; text-align: center; }
 .pg-skin .pg-check input { width: 16px; height: 16px; margin: 0; accent-color: var(--pg-primary); cursor: pointer; }
+
+/* What the ERP did with a line (status, then each PR / PO it was ordered on): it wraps instead of pushing the table off its frame. */
+.pg-skin td.pg-line-erp { min-width: 220px; white-space: normal; overflow-wrap: anywhere; }

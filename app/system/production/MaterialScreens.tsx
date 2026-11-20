@@ -10,6 +10,7 @@ import { type PrEditing, type PrSaved, type PrStart, PurchaseRequestEditor } fro
 import { newestProjectFirst, projectOverviewPath } from "../project-overview-client";
 import { estimateBusinessDate } from "../../../lib/estimate-ux";
 import { bomSheetRows, toBuyValue } from "../../../lib/bom-sheet";
+import { REQUEST_LIST_SHEET, requestListSheetRows } from "../../../lib/request-list-sheet";
 import { exportXlsx } from "../../../lib/export-xlsx";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { apiRequest, type BootstrapData } from "../api-client";
@@ -126,7 +127,7 @@ type PurchaseRequisition = {
   submittedAt: string | null;
   erpPoRef: string | null;
   lineCount: number;
-  erp: { prNo: string | null; status: string | null; statusLabel: string | null; url: string | null; error: string | null };
+  erp: { prNo: string | null; status: string | null; statusLabel: string | null; url: string | null; error: string | null; target?: string | null };
   substituteLines: number;
   unplannedLines: number;
   amount: number;
@@ -142,8 +143,14 @@ type PurchaseRequisition = {
 };
 
 type ErpView = { ref: string | null; department: string | null; prNo: string | null; status: string | null; statusLabel: string | null; url: string | null;
-  revisionNo: number | null; rejectionReason: string | null; poNo: string | null; syncedAt: string | null; error: string | null };
-type ErpOutcome = { sent: boolean; prNo?: string; message?: string; pending?: boolean; kind?: string };
+  revisionNo: number | null; rejectionReason: string | null; poNo: string | null; syncedAt: string | null; error: string | null;
+  /** Where the request went in the ERP: one PR, or the project's Request List; null while it is not sent. */
+  target?: string | null; cancelPending?: boolean };
+type ErpOutcome = { sent: boolean; prNo?: string; requestList?: boolean; message?: string; pending?: boolean; kind?: string };
+type ErpSync = { synced: boolean; cached?: boolean; status?: string; message?: string; erp: ErpView };
+/** What the ERP did with one line of a request in the project's Request List. */
+type LineErpView = { lineRef: string | null; status: string | null; statusLabel: string | null; cancelledReason: string | null; url: string | null;
+  orders: Array<{ prNo: string | null; poNo: string | null; quantity: number | null; supplierName: string | null; url: string | null }> };
 type ErpOptions = { enabled: boolean; departments: Array<{ value: string; label: string }>; suggestedDepartment: string | null; message?: string };
 
 type PurchaseRequisitionDetail = {
@@ -159,8 +166,12 @@ type PurchaseRequisitionDetail = {
     purpose: string | null;
     erpPoRef: string | null;
     rowVersion: string;
+    projectNumber?: string | null;
+    projectName?: string | null;
+    requestedByName?: string | null;
   };
-  erp: ErpView & { enabled: boolean };
+  /** `requestList`: what the server does with an approved request (one ERP PR, a sheet to upload, or Request List lines). */
+  erp: ErpView & { enabled: boolean; requestList?: "off" | "excel" | "tool" };
   lines: Array<{
     id: number;
     lineType: "Planned" | "Substitute" | "Unplanned";
@@ -183,6 +194,8 @@ type PurchaseRequisitionDetail = {
     lineTotal: number;
     estimateTotal: number;
     original: { itemCode: string; description: string; unit: string } | null;
+    sectionCode?: string | null;
+    erp?: LineErpView;
   }>;
   steps: Array<{
     id: number;
@@ -882,11 +895,28 @@ const ERP_TONE: Record<string, PgTone> = { QUOTES_PENDING: "soft", PENDING_MANAG
 
 /** Where the PR stands in the ERP: its ERP number (a link into the ERP) and status, or that it still has to be sent. */
 function ErpCell({ erp, status }: { erp: PurchaseRequisition["erp"]; status: string }) {
+  // In the project's Request List there is no single ERP PR number: Purchasing raises PRs per supplier from its lines.
+  if (erp.target === "REQUEST_LIST") return <><span className="mono">Request List</span>{erp.error && status === "Approved" ? <StatusBadge status="" label="ถูกลบใน ERP" tone="danger" /> : <small className="muted">{erp.statusLabel ?? ""}</small>}</>;
   // An error beside an ERP number is the ERP having deleted the PR: the requester can take it back.
   if (erp.prNo) return <>{erp.url ? <a className="mono" href={erp.url} target="_blank" rel="noreferrer">{erp.prNo}</a> : <span className="mono">{erp.prNo}</span>}
     {erp.error && status === "Approved" ? <StatusBadge status="" label="ถูกลบใน ERP" tone="danger" /> : <small className="muted">{erp.statusLabel ?? erp.status}</small>}</>;
   if (status !== "Approved") return <span className="muted">—</span>;
   return erp.error ? <StatusBadge status="" label="ส่ง ERP ไม่สำเร็จ" tone="danger" /> : <StatusBadge status="" label="รอส่ง ERP" tone="warning" />;
+}
+
+const LINE_ERP_TONE: Record<string, PgTone> = { WAITING: "neutral", IN_PR: "soft", ORDERED: "success", CANCELLED: "danger" };
+const LINE_ERP_LABEL: Record<string, string> = { WAITING: "รอจัดซื้อ", IN_PR: "อยู่ใน PR ของ ERP", ORDERED: "สั่งซื้อแล้ว", CANCELLED: "ยกเลิกใน ERP" };
+
+/** What the ERP did with one line of a request in the project's Request List: its status, then every ERP PR and PO it was ordered on. */
+function LineErp({ erp }: { erp: LineErpView | undefined }) {
+  // No answer from the ERP for this line (its sheet is not uploaded yet, or was uploaded by hand): nothing is claimed.
+  if (!erp?.status) return <span className="muted">—</span>;
+  const status = erp.status;
+  return <><StatusBadge status="" label={LINE_ERP_LABEL[status] ?? erp.statusLabel ?? status} tone={LINE_ERP_TONE[status] ?? "neutral"} />
+    {erp.orders.map((order, index) => <small className="muted" key={index}>{[order.prNo ? `PR ${order.prNo}` : "", order.poNo ? `PO ${order.poNo}` : "", order.supplierName ?? "",
+      order.quantity === null ? "" : `× ${quantity(order.quantity)}`].filter(Boolean).join(" · ")}</small>)}
+    {erp.cancelledReason ? <small className="muted">{erp.cancelledReason}</small> : null}
+    {erp.url ? <small><a href={erp.url} target="_blank" rel="noreferrer">ERP</a></small> : null}</>;
 }
 
 function PrDetailModal({ id, bootstrap, notify, onChanged, onEdit, onClose }: { id: number; bootstrap: BootstrapData; notify: (message: string) => void; onChanged: () => void; onEdit: (id: number) => void; onClose: () => void }) {
@@ -899,7 +929,10 @@ function PrDetailModal({ id, bootstrap, notify, onChanged, onEdit, onClose }: { 
   const [syncNote, setSyncNote] = useState("");
   const erp = detail?.erp;
   // Only the requester sends the PR: the ERP names whoever's token sends it as the requester.
-  const canSend = Boolean(erp?.enabled && !erp.prNo) && detail?.purchaseRequisition.status === "Approved" && detail.purchaseRequisition.requestedBy === bootstrap.user.id;
+  // The project's Request List: the request is in it already, or the server offers a sheet to upload instead of sending.
+  const inRequestList = erp?.target === "REQUEST_LIST";
+  const listMode = erp?.requestList ?? "off";
+  const canSend = Boolean(erp?.enabled && !erp.prNo && !inRequestList && listMode !== "excel") && detail?.purchaseRequisition.status === "Approved" && detail.purchaseRequisition.requestedBy === bootstrap.user.id;
   const [askDepartment, setAskDepartment] = useState(false);
   // After any refusal the department can be changed too: the ERP may have refused the one chosen when the PR was made.
   const wantDepartment = canSend && (askDepartment || !erp?.department || Boolean(erp?.error));
@@ -920,28 +953,64 @@ function PrDetailModal({ id, bootstrap, notify, onChanged, onEdit, onClose }: { 
   // The ERP sends no webhook, so its status is also read when someone opens the PR, with their own token.
   const synced = useRef(false);
   const { reload } = endpoint;
+  const prStatus = pr?.status;
   useEffect(() => {
-    if (synced.current || !erp?.enabled || !erp.prNo || ERP_FINAL.includes(erp.status ?? "")) return;
+    // A request in the Request List is read the same way while Purchasing still has lines to order. The server asks the ERP at
+    // most once in 15 minutes for a request; inside that it answers with what it read last, and nothing is reloaded.
+    const listOpen = erp?.target === "REQUEST_LIST" && erp.requestList === "tool" && prStatus === "Approved";
+    if (synced.current || !erp?.enabled || !(listOpen || (erp.prNo && !ERP_FINAL.includes(erp.status ?? "")))) return;
     synced.current = true;
-    void apiRequest<{ synced: boolean; status?: string; message?: string; erp: ErpView }>(`/api/v1/purchase-requisitions/${id}/erp-sync`, { method: "POST", body: "{}" })
+    void apiRequest<ErpSync>(`/api/v1/purchase-requisitions/${id}/erp-sync`, { method: "POST", body: "{}" })
       .then((result) => {
         if (!result.synced) { setSyncNote(result.message ?? ""); return; }
-        if (result.erp.status !== erp.status || result.erp.poNo !== erp.poNo) { reload(); onChanged(); }
+        if (listOpen ? !result.cached : result.erp.status !== erp.status || result.erp.poNo !== erp.poNo) { reload(); onChanged(); }
       })
       .catch((syncError: unknown) => setSyncNote(toError(syncError)));
-  }, [erp, id, reload, onChanged]);
+  }, [erp, id, reload, onChanged, prStatus]);
 
   const send = async () => {
     setBusy(true); setError("");
     try {
       const result = await apiRequest<ErpOutcome>(`/api/v1/purchase-requisitions/${id}/erp-send`, body({ department: chosenDepartment || undefined }));
-      if (result.sent) { notify(`${detail?.purchaseRequisition.number}: ERP ${result.prNo}`); reload(); onChanged(); return; }
+      if (result.sent) { notify(`${detail?.purchaseRequisition.number}: ${result.requestList ? "ERP Request List" : `ERP ${result.prNo}`}`); reload(); onChanged(); return; }
       if (result.kind === "department_required") setAskDepartment(true);
       setError(result.kind === "signed_out" ? t("เข้าสู่ระบบด้วย TMT ID อีกครั้ง แล้วกดส่งเข้า ERP") : result.message ?? t("ส่ง ERP ไม่สำเร็จ"));
       reload();
     } catch (sendError) { setError(toError(sendError)); }
     finally { setBusy(false); }
   };
+  // "Refresh" on a request in the Request List: the same read, pressed by hand. Inside the 15 minutes it says so.
+  const refresh = async () => {
+    setBusy(true); setError("");
+    try {
+      const result = await apiRequest<ErpSync>(`/api/v1/purchase-requisitions/${id}/erp-sync`, { method: "POST", body: "{}" });
+      setSyncNote(!result.synced ? result.message ?? "" : result.cached ? t("อ่านสถานะจาก ERP ได้ทุก 15 นาที ตอนนี้แสดงผลล่าสุด") : "");
+      if (result.synced && !result.cached) { reload(); onChanged(); }
+    } catch (refreshError) { setSyncNote(toError(refreshError)); }
+    finally { setBusy(false); }
+  };
+  // The sheet for the ERP's Request List page: every line with its line_ref, in the layout of lib/request-list-sheet.ts.
+  const hasLineRefs = lines.some((line) => line.erp?.lineRef);
+  // The ERP column is there once the ERP has answered for a line.
+  const hasLineAnswers = lines.some((line) => line.erp?.status);
+  // "Request List · 2/5 ordered" from the server, said in the reader's language.
+  const orderedOf = /(\d+)\/(\d+) ordered/.exec(erp?.statusLabel ?? "");
+  const downloadSheet = () => {
+    if (!detail || !pr) return;
+    exportXlsx(requestListSheetRows({ number: pr.number, projectNumber: pr.projectNumber ?? "", neededBy: String(pr.requiredDate).slice(0, 10), requester: pr.requestedByName ?? "" },
+      detail.lines.map((line) => ({ lineRef: line.erp?.lineRef ?? null, lineType: line.lineType, itemCode: line.itemCode, partNumber: line.partNumber, description: line.description, brand: line.brand,
+        quantity: line.quantity, unit: line.unit, unitPrice: line.unitPrice, module: line.module, remark: line.remark, outsource: line.sectionCode === "OUT", originalCode: line.original?.itemCode || line.original?.description || null }))),
+      `RequestList_${pr.number}.xlsx`, REQUEST_LIST_SHEET.sheetName, true);
+  };
+  // Sheet mode: the requester says the sheet is in the ERP. The app cannot see that itself.
+  const markUploaded = async () => {
+    setBusy(true); setError("");
+    try { await apiRequest(`/api/v1/purchase-requisitions/${id}/request-list-uploaded`, { method: "POST", body: "{}" }); notify(`${pr?.number}: ERP Request List`); reload(); onChanged(); }
+    catch (markError) { setError(toError(markError)); }
+    finally { setBusy(false); }
+  };
+  const mayAct = Boolean(pr && (pr.requestedBy === bootstrap.user.id || bootstrap.user.roles.includes("Admin")) && hasPermission(bootstrap, "procurement.request"));
+  const sheetButton = hasLineRefs && listMode !== "off" ? <button className="btn ghost sm" type="button" data-guide="pr.request-list-excel" onClick={downloadSheet}><Icon name="download" /><LocalizedText text={"ดาวน์โหลด Excel สำหรับ Request List"} /></button> : null;
   const takeBackNow = async (reason: string) => {
     if (!takeBack || !pr) return;
     setBusy(true); setError("");
@@ -963,10 +1032,18 @@ function PrDetailModal({ id, bootstrap, notify, onChanged, onEdit, onClose }: { 
       {endpoint.error ? <LoadError message={endpoint.error} retry={endpoint.reload} /> : null}
       <ActionError message={error} />
       {endpoint.loading && !detail ? <Loading /> : detail && erp ? <>
-        {erp.prNo ? <div className={`info-strip ${erp.status === "CONVERTED" ? "green" : erp.status === "REJECTED" || erp.status === "CANCELLED" ? "red" : ""}`}><Icon name="truck" />
+        {inRequestList ? <div className={`info-strip ${detail.purchaseRequisition.status === "Converted to PO" ? "green" : detail.purchaseRequisition.status === "Rejected" ? "red" : ""}`} data-guide="pr.request-list"><Icon name="truck" />
+          <span><strong><LocalizedText text={"อยู่ใน Request List ของโครงการใน ERP"} /></strong>{orderedOf ? <> · <LocalizedText text={"สั่งซื้อแล้ว"} /> {orderedOf[1]}/{orderedOf[2]}</> : null}
+            {erp.cancelPending ? <> · <strong><LocalizedText text={"ขอยกเลิกแล้ว รอฝ่ายจัดซื้อยกเลิกใน ERP"} /></strong></> : null}{erp.error ? <> · <strong>{erp.error}</strong></> : null}</span>
+          <span className="spacer" /><small className="muted">{syncNote || (erp.syncedAt ? `${t("อัปเดตจาก ERP")} ${dateTime(erp.syncedAt)}` : "")}</small>{sheetButton}
+          {listMode === "tool" && detail.purchaseRequisition.status === "Approved" && erp.enabled ? <button className="btn ghost sm" type="button" disabled={busy} onClick={() => { void refresh(); }}><Icon name="refresh" /><LocalizedText text={"รีเฟรชจาก ERP"} /></button> : null}</div>
+        : erp.prNo ? <div className={`info-strip ${erp.status === "CONVERTED" ? "green" : erp.status === "REJECTED" || erp.status === "CANCELLED" ? "red" : ""}`}><Icon name="truck" />
           <span><strong>ERP {erp.url ? <a className="mono" href={erp.url} target="_blank" rel="noreferrer">{erp.prNo}</a> : erp.prNo}</strong> <StatusBadge status={erp.status ?? ""} label={erp.statusLabel ?? erp.status ?? ""} tone={ERP_TONE[erp.status ?? ""] ?? "soft"} />
             {erp.poNo ? <> · PO <strong className="mono">{erp.poNo}</strong></> : null}{erp.rejectionReason ? <> · {erp.rejectionReason}</> : null}{erp.error ? <> · <strong>{erp.error}</strong></> : null}</span>
           <span className="spacer" /><small className="muted">{syncNote || (erp.syncedAt ? `${t("อัปเดตจาก ERP")} ${dateTime(erp.syncedAt)}` : "")}</small></div>
+          : listMode === "excel" && detail.purchaseRequisition.status === "Approved" ? <div className="info-strip amber" data-guide="pr.request-list"><Icon name="alertTriangle" />
+            <span><strong><LocalizedText text={"อนุมัติแล้ว ดาวน์โหลด Excel แล้วอัปโหลดเข้า Request List ของโครงการใน ERP"} /></strong></span><span className="spacer" />{sheetButton}
+            {mayAct && hasLineRefs ? <button className="btn ghost sm" type="button" disabled={busy} onClick={() => { void markUploaded(); }}><Icon name="check" /><LocalizedText text={"อัปโหลดเข้า ERP แล้ว"} /></button> : null}</div>
           : detail.purchaseRequisition.status === "Approved" && erp.enabled ? <div className={`info-strip ${erp.error ? "red" : "amber"}`}><Icon name="alertTriangle" />
             <span><strong><LocalizedText text={"ยังไม่ได้ส่งเข้า ERP"} /></strong> {erp.error ?? (canSend ? t("กดส่งเข้า ERP เพื่อให้ฝ่ายจัดซื้อออก PO") : t("รอผู้ขอซื้อส่งเข้า ERP"))}</span>
             {showDepartment ? <><span className="spacer" /><select value={chosenDepartment} onChange={(event) => setDepartment(event.target.value)} aria-label={t("แผนกใน ERP")}>
@@ -974,11 +1051,12 @@ function PrDetailModal({ id, bootstrap, notify, onChanged, onEdit, onClose }: { 
         {detail.ruleFlags.length ? <div className="callout warning" role="status"><Icon name="alertTriangle" /><span><strong><LocalizedText text={"Approval rules triggered"} /></strong>{detail.ruleFlags.map((flag) => flag.text).join(" · ")}</span></div> : null}
         {detail.modules.length ? <div className="table-wrap"><table><thead><tr><th><LocalizedText text={"Module"} /></th><th className="num"><LocalizedText text={"งบ Estimate"} /></th><th className="num"><LocalizedText text={"PR ก่อนหน้า"} /></th><th className="num"><LocalizedText text={"PR นี้"} /></th><th className="num"><LocalizedText text={"คงเหลือหลัง PR นี้"} /></th></tr></thead>
           <tbody>{detail.modules.map((module) => { const left = module.budget - module.requestedElsewhere - module.thisRequest; return <tr key={module.module}><td><strong>{module.module}</strong></td><td className="num">{money(module.budget)}</td><td className="num">{money(module.requestedElsewhere)}</td><td className="num">{money(module.thisRequest)}</td><td className="num">{left < 0 ? <Badge tone="red">{money(left)}</Badge> : money(left)}</td></tr>; })}</tbody></table></div> : null}
-        <Panel title={`${detail.lines.length} lines`} subtitle="ประเภท ตรงแผน / ทดแทน / นอกแผน และ Module ที่ใช้งบ" flush><div className="table-wrap"><table><thead><tr><th><LocalizedText text={"ประเภท"} /></th><th><LocalizedText text={"Item"} /></th><th><LocalizedText text={"Description"} /></th><th><LocalizedText text={"Module"} /></th><th className="num"><LocalizedText text={"Qty"} /></th><th className="num"><LocalizedText text={"ราคาประมาณ"} /></th><th className="num"><LocalizedText text={"Total"} /></th><th className="num"><LocalizedText text={"Estimate"} /></th></tr></thead><tbody>{shown.map((line) => <tr key={line.id}>
+        <Panel title={`${detail.lines.length} lines`} subtitle="ประเภท ตรงแผน / ทดแทน / นอกแผน และ Module ที่ใช้งบ" flush><div className="table-wrap"><table><thead><tr><th><LocalizedText text={"ประเภท"} /></th><th><LocalizedText text={"Item"} /></th><th><LocalizedText text={"Description"} /></th><th><LocalizedText text={"Module"} /></th><th className="num"><LocalizedText text={"Qty"} /></th><th className="num"><LocalizedText text={"ราคาประมาณ"} /></th><th className="num"><LocalizedText text={"Total"} /></th><th className="num"><LocalizedText text={"Estimate"} /></th>{hasLineAnswers ? <th><LocalizedText text={"สถานะใน ERP"} /></th> : null}</tr></thead><tbody>{shown.map((line) => <tr key={line.id}>
           <td><Badge tone={PR_KIND_TONE[line.lineType]}>{t(PR_KIND_LABEL[line.lineType])}</Badge>{line.lineType === "Substitute" && line.original ? <small className="muted"><LocalizedText text={"แทน"} /> {line.original.itemCode || line.original.description} × {quantity(line.coveredQuantity)} {line.original.unit}</small> : null}</td>
           <td><strong className="mono">{line.itemCode || line.partNumber || "—"}</strong><small className="muted">{[line.partNumber, line.brand].filter(Boolean).join(" · ")}</small></td>
           <td>{line.description}{line.remark ? <small className="muted">{line.remark}</small> : null}</td><td>{line.module}</td>
           <td className="num">{quantity(line.quantity)} {line.unit}</td><td className="num">{money(line.unitPrice)}</td><td className="num"><strong>{money(line.lineTotal)}</strong></td><td className="num">{money(line.estimateTotal)}</td>
+          {hasLineAnswers ? <td className="pg-line-erp"><LineErp erp={line.erp} /></td> : null}
         </tr>)}</tbody></table></div>
           {lines.length > PR_DETAIL_PAGE ? <Pagination page={currentPage} pageCount={pageCount} from={(currentPage - 1) * PR_DETAIL_PAGE + 1} to={Math.min(currentPage * PR_DETAIL_PAGE, lines.length)} total={lines.length} onPage={setPage} /> : null}</Panel>
         <Panel title="Approval route" subtitle="อนุมัติตามลำดับในตาราง · หัวหน้าแผนกของผู้ขอ แล้วผู้อนุมัติขั้นสุดท้าย · แล้วส่งเข้า ERP" flush><div className="table-wrap"><table><thead><tr><th>#</th><th><LocalizedText text={"Step"} /></th><th><LocalizedText text={"Approver"} /></th><th><LocalizedText text={"Rule"} /></th><th><LocalizedText text={"Status"} /></th><th><LocalizedText text={"Decision"} /></th><th><LocalizedText text={"Comment"} /></th><th><LocalizedText text={"Acted"} /></th></tr></thead><tbody>{detail.steps.map((step) => <tr key={step.id}><td>{step.sequence}</td><td><strong>{step.name}</strong></td><td>{step.approverName || step.approverRole || "—"}</td><td>{step.ruleCode || "—"}</td><td><StatusBadge status={step.status} label={step.status === "Current" ? "In Approval" : step.status} /></td><td>{step.decision || "—"}</td><td>{step.comment || "—"}</td><td>{dateTime(step.actedAt)}</td></tr>)}</tbody></table></div></Panel>

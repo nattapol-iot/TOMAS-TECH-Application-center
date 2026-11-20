@@ -1489,9 +1489,9 @@ const PR_FIX: Guide = {
       target: "pr.erp", action: "next", view: "purchase",
       title: { th: "ดูคอลัมน์ ERP", en: "Look at the ERP column", jp: "ERP列を見る" },
       body: {
-        th: "ใบที่ขึ้น 'ส่ง ERP ไม่สำเร็จ' หรือ 'ถูกลบใน ERP' คือใบที่ ERP ไม่ได้รับไว้ กดเลข PR ของใบนั้นเพื่อดูข้อความจาก ERP",
-        en: "A PR marked as a failed ERP send, or as deleted in the ERP, is one the ERP does not hold. Press its PR number to read the ERP's message.",
-        jp: "「ERP送信失敗」または「ERPで削除済み」のPRはERPに登録されていません。そのPR番号を押してERPのメッセージを確認します。",
+        th: "ใบที่ขึ้น 'ส่ง ERP ไม่สำเร็จ' หรือ 'ถูกลบใน ERP' คือใบที่ ERP ไม่ได้รับไว้ กดเลข PR ของใบนั้นเพื่อดูข้อความจาก ERP ใบที่ขึ้น 'Request List' คือรายการของใบนั้นอยู่ใน Request List ของโครงการใน ERP ฝ่ายจัดซื้อจะออก PR แยกตาม Supplier เอง กดเลข PR เพื่อดูสถานะของแต่ละรายการ (รอจัดซื้อ อยู่ใน PR สั่งซื้อแล้ว หรือยกเลิก) และดาวน์โหลด Excel สำหรับ Request List ได้",
+        en: "A PR marked as a failed ERP send, or as deleted in the ERP, is one the ERP does not hold. Press its PR number to read the ERP's message. A PR marked Request List has its lines in the project's Request List in the ERP, where Purchasing raises PRs per supplier. Press its PR number to see each line's status (waiting, in a PR, ordered or cancelled) and to download the Excel for the Request List.",
+        jp: "「ERP送信失敗」または「ERPで削除済み」のPRはERPに登録されていません。そのPR番号を押してERPのメッセージを確認します。「Request List」と表示されるPRは、明細がERPの案件Request Listにあり、購買部が仕入先ごとにPRを作成します。PR番号を押すと明細ごとの状態（購買待ち、PR作成済み、発注済み、キャンセル）を確認でき、Request List用のExcelもダウンロードできます。",
       },
     },
     {

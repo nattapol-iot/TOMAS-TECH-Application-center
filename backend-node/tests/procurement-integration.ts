@@ -57,6 +57,8 @@ const database = {
 type ErpCall = { subject: string; tool: string; args: Record<string, unknown> };
 const erpCalls: ErpCall[] = [], erpRequests = new Map<string, ErpRequest>(), signedOut = new Set<string>(), deletedRefs = new Set<string>();
 let refuseNextCreate = false;
+// The project Request Lists the fake ERP holds, by external_ref: one item per line, as project_request_list_add answered.
+const requestLists = new Map<string, Array<Record<string, unknown>>>();
 const gateway: ErpGateway = { async call<T>(subject: string, tool: string, args: Record<string, unknown>) {
   erpCalls.push({ subject, tool, args });
   const ok = (data: unknown) => ({ ok: true as const, data: data as T });
@@ -64,6 +66,12 @@ const gateway: ErpGateway = { async call<T>(subject: string, tool: string, args:
   if (tool === "purchasing_options_get") return ok({ departments: [{ value: "APPENG", label: "Application Engineer" }, { value: "IOTENG", label: "IoT Engineer" }] });
   if (deletedRefs.has(String(args.external_ref))) return { ok: false, kind: "ref_deleted", message: "This request was deleted in the ERP." };
   if (tool === "purchase_request_get") { const found = erpRequests.get(String(args.external_ref)); return found ? ok({ request: found }) : { ok: false, kind: "not_found", message: "Not found." }; }
+  if (tool === "project_request_list_add") { const listRef = String(args.external_ref), held = requestLists.get(listRef);
+    if (held) return ok({ created: false, items: held });
+    const items = (args.lines as Array<Record<string, unknown>>).map((line, index) => ({ line_ref: line.line_ref, item_id: 900 + requestLists.size * 10 + index, status: "WAITING",
+      status_label: "Waiting for Purchasing", orders: [], cancelled_reason: null, url: `https://erp.test/request-list/${requestLists.size}/${index}` }));
+    requestLists.set(listRef, items); return ok({ created: true, items }); }
+  if (tool === "project_request_list_get") { const items = requestLists.get(String(args.external_ref)); return items ? ok({ external_ref: args.external_ref, items }) : { ok: false, kind: "not_found", message: "Not found." }; }
   if (tool !== "purchase_request_create") return { ok: false, kind: "error", message: `Unexpected tool ${tool}` };
   if (refuseNextCreate) { refuseNextCreate = false; return { ok: false, kind: "validation", message: "The given data was invalid.", errors: { department: ["Unknown department."] } }; }
   const ref = String(args.external_ref), existing = erpRequests.get(ref);
@@ -92,9 +100,17 @@ let actors: CurrentUser[] = [];
 app.addHook("onRequest", async (request) => { const actor = actors.find((a) => a.name === request.headers["x-test-actor"]); if (actor) request.currentUser = actor; });
 app.addHook("onError", async (_request, _reply, error) => { if (!error.statusCode || error.statusCode >= 500) console.error("Procurement test route error:", error.message); });
 registerBomRoutes(app, config, database, users); registerPurchaseRequisitionRoutes(app, config, database, users, { gateway, appBaseUrl: "https://eng.test" }, email); registerReportRoutes(app, config, database, users);
+// The same PR routes with the server told to use the ERP's Request List: by tool, and as a sheet its requester uploads.
+const modeApp = (pegasusRequestList: "tool" | "excel") => { const other = Fastify({ forceCloseConnections: true }); registerErrorHandler(other);
+  other.addHook("onRequest", async (request) => { const actor = actors.find((a) => a.name === request.headers["x-test-actor"]); if (actor) request.currentUser = actor; });
+  other.addHook("onError", async (_request, _reply, error) => { if (!error.statusCode || error.statusCode >= 500) console.error(`Procurement test route error (${pegasusRequestList}):`, error.message); });
+  registerPurchaseRequisitionRoutes(other, { ...config, pegasusRequestList } as AppConfig, database, users, { gateway, appBaseUrl: "https://eng.test" }, email); return other; };
+const toolApp = modeApp("tool"), excelApp = modeApp("excel");
+/** The app the calls below go to: the default (one ERP PR), or one of the two above. */
+let target = app;
 type Json = Record<string, unknown> & { [key: string]: any }; // eslint-disable-line @typescript-eslint/no-explicit-any
 async function call(method: "GET" | "POST" | "PUT", url: string, actor: string, body?: unknown, status = 200): Promise<Json> {
-  const response = await app.inject({ method, url: `/api/v1${url}`, headers: { "x-test-actor": actor }, ...(body ? { payload: body as object } : {}) });
+  const response = await target.inject({ method, url: `/api/v1${url}`, headers: { "x-test-actor": actor }, ...(body ? { payload: body as object } : {}) });
   assert.equal(response.statusCode, status, `${method} ${url} as ${actor}: ${response.body}`);
   return response.json() as Json;
 }
@@ -425,8 +441,96 @@ try {
   const small = await call("POST", "/boms", "Admin", { projectId: legacyProject }, 201);
   assert.equal((await call("GET", "/boms", "Admin")).find((item: Json) => item.id === small.id).needsSecondReleaser, false);
   await call("POST", `/boms/${small.id}/release`, "Admin", { rowVersion: small.rowVersion, comment: "under the threshold" });
+  // ---- The ERP's project Request List (docs/PEGASUS_ERP_REQUEST_LIST_TH.md), behind PEGASUS_REQUEST_LIST.
+  // By tool: after the final approval the lines go to the project's Request List as the requester; no ERP PR is opened.
+  const prsBefore = creates().length;
+  const listGets = () => erpCalls.filter((entry) => entry.tool === "project_request_list_get").length;
+  const detailOf = (id: unknown) => call("GET", `/purchase-requisitions/${Number(id)}`, "Requester");
+  const lastSync = (id: unknown, minutes: number) => run(`UPDATE dbo.mat_prs SET erp_synced_at=DATEADD(minute,-${minutes},SYSUTCDATETIME()) WHERE id=${Number(id)}`);
+  target = toolApp;
+  const pr8 = await raise("Request list by tool");
+  const sent8 = await call("POST", `/purchase-requisitions/${pr8.id}/decide`, "Requester", { decision: "Approve", comment: "to the request list" });
+  assert.deepEqual([sent8.status, sent8.erp.sent, sent8.erp.requestList, sent8.erp.prNo], ["Approved", true, true, undefined]);
+  assert.equal(creates().length, prsBefore, "no ERP PR is opened");
+  const add8 = erpCalls.filter((entry) => entry.tool === "project_request_list_add").at(-1)!, ref8 = String(add8.args.external_ref);
+  assert.match(ref8, /^ENGAPP-PR-[0-9a-f-]{36}$/);
+  assert.deepEqual([add8.subject, add8.args.project_no, add8.args.department, (add8.args.lines as Json[]).map((line) => [line.line_ref, line.item_description, line.quantity, line.remark])],
+    ["procurement-ci-Requester", "PC-FRESH", "APPENG", [[`${ref8}-1`, "Request list by tool", 1, "Not in the estimate · Module Panel"]]]);
+  let list8 = await detailOf(pr8.id);
+  assert.deepEqual([list8.erp.target, list8.erp.prNo, list8.erp.statusLabel, list8.erp.requestList, list8.erp.cancelPending], ["REQUEST_LIST", null, "Request List · 0/1 ordered", "tool", false]);
+  assert.deepEqual(list8.lines.map((line: Json) => [line.erp.lineRef, line.erp.status, line.erp.statusLabel, line.erp.orders]), [[`${ref8}-1`, "WAITING", "Waiting for Purchasing", []]]);
+  assert.deepEqual([list8.steps.at(-1).name, list8.steps.at(-1).status, list8.steps.at(-1).comment], ["Sent to ERP", "Completed", "Request List"]);
+  assert.equal((await call("GET", "/purchase-requisitions", "Requester")).find((item: Json) => item.id === pr8.id).erp.target, "REQUEST_LIST");
+  // A second send (a double press, a retry after a timeout) adds nothing: the request is already there.
+  assert.deepEqual([(await call("POST", `/purchase-requisitions/${pr8.id}/erp-send`, "Requester", {})).requestList, erpCalls.filter((entry) => entry.tool === "project_request_list_add").length], [true, 1]);
+  // Purchasing orders the line. Inside 15 minutes of the last read the ERP is not asked again, whoever opens the request.
+  requestLists.get(ref8)![0] = { ...requestLists.get(ref8)![0], status: "ORDERED", status_label: "Ordered", orders: [{ pr_no: "PR2611-0001", po_no: "PO2611-0003", quantity: 1, supplier_name: "Keyence" }] };
+  assert.deepEqual([(await call("POST", `/purchase-requisitions/${pr8.id}/erp-sync`, "Requester")).cached, listGets()], [true, 0]);
+  await lastSync(pr8.id, 16);
+  const read8 = await call("POST", `/purchase-requisitions/${pr8.id}/erp-sync`, "PM");
+  assert.deepEqual([read8.synced, read8.status, listGets(), erpCalls.at(-1)!.subject, erpCalls.at(-1)!.args.external_ref], [true, "Converted to PO", 1, "procurement-ci-PM", ref8]);
+  list8 = await detailOf(pr8.id);
+  // Every line ordered or cancelled: the request is fully ordered, and it is not read again.
+  assert.deepEqual([list8.purchaseRequisition.status, list8.erp.statusLabel], ["Converted to PO", "Request List · 1/1 ordered"]);
+  assert.deepEqual(list8.lines[0].erp.orders, [{ prNo: "PR2611-0001", poNo: "PO2611-0003", quantity: 1, supplierName: "Keyence", url: null }]);
+  await lastSync(pr8.id, 16);
+  assert.deepEqual([(await call("POST", `/purchase-requisitions/${pr8.id}/erp-sync`, "PM")).synced, listGets()], [true, 1]);
+
+  // A recall after sending: the ERP has no cancel tool, so the request is marked and Purchasing cancels its line in the ERP.
+  const pr9 = await raise("Request list recall");
+  await call("POST", `/purchase-requisitions/${pr9.id}/decide`, "Requester", { decision: "Approve", comment: "to the request list" });
+  let list9 = await detailOf(pr9.id);
+  const recall = await call("POST", `/purchase-requisitions/${pr9.id}/withdraw`, "Requester", { rowVersion: list9.purchaseRequisition.rowVersion, reason: "wrong part" }, 409);
+  assert.equal(recall.code, "erp_cancel_pending");
+  list9 = await detailOf(pr9.id);
+  assert.deepEqual([list9.purchaseRequisition.status, list9.erp.cancelPending, list9.erp.target], ["Approved", true, "REQUEST_LIST"]);
+  // The PR list's read finds the cancelled line, and the request closes by itself.
+  const ref9 = String(list9.erp.ref);
+  requestLists.get(ref9)![0] = { ...requestLists.get(ref9)![0], status: "CANCELLED", status_label: "Cancelled", cancelled_reason: "Requester asked" };
+  await lastSync(pr9.id, 16);
+  const swept = await call("POST", "/purchase-requisitions/erp-sync", "Requester");
+  assert.ok(swept.checked >= 1 && swept.updated >= 1, JSON.stringify(swept));
+  list9 = await detailOf(pr9.id);
+  assert.deepEqual([list9.purchaseRequisition.status, list9.erp.cancelPending, list9.lines[0].erp.status, list9.lines[0].erp.cancelledReason], ["Rejected", false, "CANCELLED", "Requester asked"]);
+
+  // A project still on its placeholder number is stopped before the ERP is asked: the Request List belongs to a project.
+  await run(`UPDATE dbo.projects SET project_no=N'PJ000000' WHERE id=${fresh}`);
+  const pr10 = await raise("Placeholder project");
+  const addsBefore = erpCalls.filter((entry) => entry.tool === "project_request_list_add").length;
+  const held10 = await call("POST", `/purchase-requisitions/${pr10.id}/decide`, "Requester", { decision: "Approve", comment: "to the request list" });
+  assert.deepEqual([held10.status, held10.erp.sent, held10.erp.kind], ["Approved", false, "validation"]);
+  assert.match(held10.erp.message, /placeholder number PJ000000/);
+  assert.equal(erpCalls.filter((entry) => entry.tool === "project_request_list_add").length, addsBefore);
+  assert.match((await detailOf(pr10.id)).erp.error, /placeholder number PJ000000/);
+  await run(`UPDATE dbo.projects SET project_no=N'PC-FRESH' WHERE id=${fresh}`);
+  // With its real number, its requester sends it.
+  assert.deepEqual([(await call("POST", `/purchase-requisitions/${pr10.id}/erp-send`, "Requester", {})).requestList, (await detailOf(pr10.id)).erp.error], [true, null]);
+
+  // As a sheet: the ERP is asked nothing. The approved request gets its reference and line keys for the download.
+  target = excelApp;
+  const pr11 = await raise("Request list by sheet");
+  const callsBefore = erpCalls.length;
+  const sheet11 = await call("POST", `/purchase-requisitions/${pr11.id}/decide`, "Requester", { decision: "Approve", comment: "to the request list" });
+  assert.deepEqual([sheet11.status, sheet11.erp.sent, sheet11.erp.kind], ["Approved", false, "excel"]);
+  assert.equal(erpCalls.length, callsBefore, "the ERP is asked nothing");
+  let list11 = await detailOf(pr11.id);
+  assert.match(String(list11.erp.ref), /^ENGAPP-PR-/);
+  assert.deepEqual([list11.erp.requestList, list11.erp.target, list11.erp.error, list11.lines[0].erp.lineRef, list11.lines[0].erp.status], ["excel", null, null, `${list11.erp.ref}-1`, null]);
+  // Its requester says the sheet is uploaded; from then on it counts as sent. Nobody else may say so, and not twice.
+  await call("POST", `/purchase-requisitions/${pr11.id}/request-list-uploaded`, "PM", undefined, 403);
+  const uploaded11 = await call("POST", `/purchase-requisitions/${pr11.id}/request-list-uploaded`, "Requester");
+  assert.deepEqual([uploaded11.erp.target, uploaded11.erp.statusLabel], ["REQUEST_LIST", "Request List"]);
+  await call("POST", `/purchase-requisitions/${pr11.id}/request-list-uploaded`, "Requester", undefined, 409);
+  list11 = await detailOf(pr11.id);
+  assert.deepEqual([list11.purchaseRequisition.status, list11.steps.at(-1).status], ["Approved", "Completed"]);
+  // An uploaded sheet cannot be read back, so opening the request asks the ERP nothing.
+  assert.deepEqual([(await call("POST", `/purchase-requisitions/${pr11.id}/erp-sync`, "Requester")).synced, erpCalls.length], [false, callsBefore]);
+  target = app;
+  // With the switch off again, a request the Request List holds is not turned into an ERP PR by another send.
+  const prsNow = creates().length;
+  assert.deepEqual([(await call("POST", `/purchase-requisitions/${pr11.id}/erp-send`, "Requester", {})).requestList, creates().length], [true, prsNow]);
   console.log(`PASS: procurement API on LocalDB (1,000-line PR in ${elapsed} ms).`);
 } finally {
-  await app.close();
+  await app.close(); await toolApp.close(); await excelApp.close();
   bridge.stdin.end();
 }

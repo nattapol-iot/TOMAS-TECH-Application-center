@@ -1083,5 +1083,65 @@ export const HISTORICAL_PR_COPY: Record<string, { th: string; en: string; jp: st
     "th": "BOM นี้ถึงเกณฑ์ตรวจ ต้องให้ผู้อนุมัติคนอื่นที่ไม่ใช่ผู้สร้าง Release",
     "en": "This BOM is at or over the review threshold: an approver other than the person who generated it must release it",
     "jp": "このBOMは確認基準額以上です。作成者以外の承認者がリリースしてください"
+  },
+  "อยู่ใน Request List ของโครงการใน ERP": {
+    "th": "อยู่ใน Request List ของโครงการใน ERP",
+    "en": "In the project's Request List in the ERP",
+    "jp": "ERPの案件Request Listに登録済み"
+  },
+  "ขอยกเลิกแล้ว รอฝ่ายจัดซื้อยกเลิกใน ERP": {
+    "th": "ขอยกเลิกแล้ว รอฝ่ายจัดซื้อยกเลิกใน ERP",
+    "en": "Cancel requested: waiting for Purchasing to cancel it in the ERP",
+    "jp": "キャンセル依頼済み：購買部によるERPでのキャンセル待ち"
+  },
+  "รีเฟรชจาก ERP": {
+    "th": "รีเฟรชจาก ERP",
+    "en": "Refresh from the ERP",
+    "jp": "ERPから更新"
+  },
+  "อ่านสถานะจาก ERP ได้ทุก 15 นาที ตอนนี้แสดงผลล่าสุด": {
+    "th": "อ่านสถานะจาก ERP ได้ทุก 15 นาที ตอนนี้แสดงผลล่าสุด",
+    "en": "The ERP is read once in 15 minutes; this is the latest answer",
+    "jp": "ERPの読み取りは15分に1回です。最新の結果を表示しています"
+  },
+  "อนุมัติแล้ว ดาวน์โหลด Excel แล้วอัปโหลดเข้า Request List ของโครงการใน ERP": {
+    "th": "อนุมัติแล้ว ดาวน์โหลด Excel แล้วอัปโหลดเข้า Request List ของโครงการใน ERP",
+    "en": "Approved. Download the Excel and upload it to the project's Request List in the ERP",
+    "jp": "承認済み。Excelをダウンロードし、ERPの案件Request Listにアップロードしてください"
+  },
+  "ดาวน์โหลด Excel สำหรับ Request List": {
+    "th": "ดาวน์โหลด Excel สำหรับ Request List",
+    "en": "Download Excel for Request List",
+    "jp": "Request List用Excelをダウンロード"
+  },
+  "อัปโหลดเข้า ERP แล้ว": {
+    "th": "อัปโหลดเข้า ERP แล้ว",
+    "en": "Uploaded to the ERP",
+    "jp": "ERPにアップロード済み"
+  },
+  "สถานะใน ERP": {
+    "th": "สถานะใน ERP",
+    "en": "ERP status",
+    "jp": "ERPステータス"
+  },
+  "รอจัดซื้อ": {
+    "th": "รอจัดซื้อ",
+    "en": "Waiting for Purchasing",
+    "jp": "購買待ち"
+  },
+  "อยู่ใน PR ของ ERP": {
+    "th": "อยู่ใน PR ของ ERP",
+    "en": "In an ERP PR",
+    "jp": "ERPのPR作成済み"
+  },
+  "สั่งซื้อแล้ว": {
+    "th": "สั่งซื้อแล้ว",
+    "en": "Ordered",
+    "jp": "発注済み"
+  },
+  "ยกเลิกใน ERP": {
+    "th": "ยกเลิกใน ERP",
+    "en": "Cancelled in the ERP",
+    "jp": "ERPでキャンセル済み"
   }
 };

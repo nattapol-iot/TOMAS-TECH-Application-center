@@ -857,4 +857,8 @@ GO
 -- database/migrations/111_erp_request_list.sql
 GRANT SELECT, INSERT, DELETE ON OBJECT::dbo.mat_pr_line_erp_orders TO [iot_team_app_role];
 GO
+
+-- database/migrations/112_request_list_line_grants.sql
+GRANT UPDATE (erp_line_ref, erp_item_id, erp_line_status, erp_line_status_label, erp_cancelled_reason, erp_line_url) ON OBJECT::dbo.mat_pr_lines TO [iot_team_app_role];
+GO
 -- END GENERATED MIGRATION GRANTS
