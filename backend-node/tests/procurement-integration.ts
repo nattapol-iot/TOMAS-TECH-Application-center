@@ -654,6 +654,26 @@ try {
   formIds = formedDetail.lines.map((line: Json) => line.id);
   assert.deepEqual(formedDetail.lines.map((line: Json) => [line.partNumber, line.parentLineId]), [["MANIFOLD-8", null], ["VALVE-A", formIds[0]], ["SILENCER", null]]);
   await call("POST", `/purchase-requisitions/${formed.id}/cancel`, "Requester", { rowVersion: reworked.rowVersion, reason: "only for the form fields check" });
+  // Migration 116 (owner 2026-11-20): a request for a Unit goes to the head of the Unit's discipline, whoever raised it; a Unit of a
+  // discipline with no head goes to the final approver alone; a request with no Unit keeps the requester's department head.
+  await run(`INSERT dbo.users(entra_object_id,email,name,role_id,department) SELECT N'procurement-ci-MechHead',N'procurement-ci-MechHead@test.invalid',N'MechHead',r.id,N'Mechanical Engineer Dept.' FROM dbo.roles r WHERE r.code=N'Engineer'`);
+  const mechHeadId = Number((await run(`SELECT id FROM dbo.users WHERE email=N'procurement-ci-MechHead@test.invalid'`)).recordset[0]!.id);
+  actors.push({ id: mechHeadId, name: "MechHead", email: "procurement-ci-MechHead@test.invalid", department: "Mechanical Engineer Dept.", role: "Engineer", roles: ["Engineer"], entraObjectId: "procurement-ci-MechHead", isActive: true });
+  await run(`INSERT dbo.pr_discipline_approvers(discipline,approver_id,final_may_decide) VALUES(N'ME',${mechHeadId},0)`);
+  const routeFor = async (unitId?: number) => (await call("GET", `/purchase-requisitions/approval-route${unitId ? `?unitId=${unitId}` : ""}`, "Requester")).approvers;
+  // Whoever the final approver is by now (earlier steps of this test change it).
+  const finalRow = (await run(`SELECT u.id,u.name FROM dbo.pr_approval_settings s INNER JOIN dbo.users u ON u.id=s.final_approver_id WHERE s.id=1`)).recordset[0]!;
+  const [finalId, finalName] = [Number(finalRow.id), String(finalRow.name)];
+  assert.deepEqual(await routeFor(Number(valve.id)), [{ step: "Department Approval", name: "MechHead" }, { step: "Final Approval", name: finalName }]);
+  assert.deepEqual(await routeFor(), [{ step: "Department Approval", name: "Lead" }, { step: "Final Approval", name: finalName }]);
+  const install = await call("POST", `/projects/${fresh}/purchase-units`, "Requester", { module: "panel", discipline: "IN", drawingNo: "IN-02", unitName: "Site install", budget: 100 }, 201);
+  assert.deepEqual(await routeFor(Number(install.id)), [{ step: "Final Approval", name: finalName }]);
+  const mech = await call("POST", "/purchase-requisitions", "Requester", { bomId: bom.id, unitId: valve.id, priority: "Normal", requiredDate: "2099-03-01", erpDepartment: "APPENG",
+    lines: [{ lineType: "Unplanned", module: "Panel", description: "Valve fittings", unit: "pcs", quantity: 1, unitPrice: 10 }] }, 201);
+  await call("POST", `/purchase-requisitions/${mech.id}/submit`, "Requester", { rowVersion: mech.rowVersion, justification: "over budget in this test" });
+  assert.deepEqual(((await call("GET", `/purchase-requisitions/${mech.id}`, "Requester")).steps as Json[]).map((step) => [step.name, step.approverId]),
+    [["Submitted by Requester", requesterId], ["Department Approval", mechHeadId], ["Final Approval", finalId], ["Sent to ERP", null]]);
+  assert.equal(await bells(Number(mech.id), mechHeadId), 1);
   console.log(`PASS: procurement API on LocalDB (1,000-line PR in ${elapsed} ms).`);
 } finally {
   await app.close(); await toolApp.close(); await excelApp.close();

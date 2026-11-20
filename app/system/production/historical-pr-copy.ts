@@ -924,10 +924,10 @@ export const HISTORICAL_PR_COPY: Record<string, { th: string; en: string; jp: st
     "en": "Waiting for the requester to send it to the ERP",
     "jp": "依頼者のERP送信待ち"
   },
-  "อนุมัติตามลำดับในตาราง · หัวหน้าแผนกของผู้ขอ แล้วผู้อนุมัติขั้นสุดท้าย · แล้วส่งเข้า ERP": {
-    "th": "อนุมัติตามลำดับในตาราง · หัวหน้าแผนกของผู้ขอ แล้วผู้อนุมัติขั้นสุดท้าย · แล้วส่งเข้า ERP",
-    "en": "Approved in the order shown · the requester's department head, then the final approver · then sent to the ERP",
-    "jp": "表の順に承認・依頼者の部門長、次に最終承認者・その後ERPへ送信"
+  "อนุมัติตามลำดับในตาราง · หัวหน้าของ discipline ของ Unit (หรือแผนกของผู้ขอ) แล้วผู้อนุมัติขั้นสุดท้าย · แล้วส่งเข้า ERP": {
+    "th": "อนุมัติตามลำดับในตาราง · หัวหน้าของ discipline ของ Unit (หรือแผนกของผู้ขอ) แล้วผู้อนุมัติขั้นสุดท้าย · แล้วส่งเข้า ERP",
+    "en": "Approved in the order shown · the head of the Unit's discipline (or of the requester's department), then the final approver · then sent to the ERP",
+    "jp": "表の順に承認・Unitの分野の責任者（または依頼者の部門長）、次に最終承認者・その後ERPへ送信"
   },
   "บันทึก PR": {
     "th": "บันทึก PR",

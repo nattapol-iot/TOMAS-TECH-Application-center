@@ -177,6 +177,7 @@ GO
 :r database/migrations/113_purchase_units.sql
 :r database/migrations/114_request_numbers.sql
 :r database/migrations/115_pr_line_form_fields.sql
+:r database/migrations/116_pr_discipline_approvers.sql
 
 USE [$(DatabaseName)];
 GO

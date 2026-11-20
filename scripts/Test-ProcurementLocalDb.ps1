@@ -36,6 +36,8 @@ $numbersMigration = Join-Path $repoRoot 'database/migrations/114_request_numbers
 $numbersRollback = Join-Path $repoRoot 'database/rollback/114_request_numbers.rollback.sql'
 $formMigration = Join-Path $repoRoot 'database/migrations/115_pr_line_form_fields.sql'
 $formRollback = Join-Path $repoRoot 'database/rollback/115_pr_line_form_fields.rollback.sql'
+$disciplineMigration = Join-Path $repoRoot 'database/migrations/116_pr_discipline_approvers.sql'
+$disciplineRollback = Join-Path $repoRoot 'database/rollback/116_pr_discipline_approvers.rollback.sql'
 $baselineFile = Join-Path ([IO.Path]::GetTempPath()) ('iot-procurement-baseline-' + $testSuffix + '.sql')
 $instanceCreated = $false
 
@@ -104,6 +106,13 @@ try {
     # 115 added the PR-Form line fields and part lines. A legacy line is given a field and made a part of another line of its
     # request first, so the rollback is run on data it must take away.
     $formCheck = "IF COL_LENGTH(N'dbo.mat_pr_lines',N'material') IS NULL OR COL_LENGTH(N'dbo.mat_pr_lines',N'need_by') IS NULL OR COL_LENGTH(N'dbo.mat_pr_lines',N'parent_line_id') IS NULL OR OBJECT_ID(N'dbo.FK_mat_pr_lines_parent',N'F') IS NULL OR OBJECT_ID(N'dbo.CK_mat_pr_lines_form_fields',N'C') IS NULL OR NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name=N'UX_mat_pr_lines_id_pr') OR NOT EXISTS (SELECT 1 FROM dbo.schema_versions WHERE version=115) THROW 51999, 'Migration 115 is missing part of its change.', 1;"
+    # 116 maps each discipline to its head. Its rollback runs first (rollbacks go newest first), then 116 again.
+    $disciplineCheck = "IF OBJECT_ID(N'dbo.pr_discipline_approvers',N'U') IS NULL OR NOT EXISTS (SELECT 1 FROM dbo.schema_versions WHERE version=116) THROW 51999, 'Migration 116 is missing part of its change.', 1;"
+    Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-i', $disciplineMigration)
+    Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-Q', $disciplineCheck)
+    Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-i', $disciplineRollback)
+    Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-Q', "IF OBJECT_ID(N'dbo.pr_discipline_approvers',N'U') IS NOT NULL OR EXISTS (SELECT 1 FROM dbo.schema_versions WHERE version=116) THROW 51999, 'The rollback of 116 left something behind.', 1;")
+    Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-i', $disciplineRollback)
     Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-i', $formMigration)
     Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-Q', $formCheck)
     Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-Q', "DECLARE @pr bigint=(SELECT TOP(1) pr_id FROM dbo.mat_pr_lines GROUP BY pr_id HAVING COUNT(*)>1 ORDER BY pr_id); IF @pr IS NULL THROW 51999, 'No legacy request has two lines to make a part.', 1; UPDATE dbo.mat_pr_lines SET material=N'SS400', parent_line_id=(SELECT MIN(id) FROM dbo.mat_pr_lines WHERE pr_id=@pr) WHERE id=(SELECT MAX(id) FROM dbo.mat_pr_lines WHERE pr_id=@pr); IF @@ROWCOUNT<>1 THROW 51999, 'The legacy part was not set.', 1;")
@@ -142,6 +151,9 @@ try {
     Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-i', $formMigration)
     Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-i', $formMigration)
     Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-Q', $formCheck)
+    Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-i', $disciplineMigration)
+    Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-i', $disciplineMigration)
+    Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-Q', $disciplineCheck)
 
     Write-Output 'Checking the PR API on the upgraded database.'
     $env:PROCUREMENT_TEST_SERVER = $serverName

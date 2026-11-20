@@ -869,4 +869,8 @@ GO
 -- database/migrations/115_pr_line_form_fields.sql
 GRANT UPDATE (parent_line_id) ON OBJECT::dbo.mat_pr_lines TO [iot_team_app_role];
 GO
+
+-- database/migrations/116_pr_discipline_approvers.sql
+GRANT SELECT ON OBJECT::dbo.pr_discipline_approvers TO [iot_team_app_role];
+GO
 -- END GENERATED MIGRATION GRANTS
