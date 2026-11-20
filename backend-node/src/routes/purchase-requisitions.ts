@@ -8,6 +8,7 @@ import { ApiError } from "../errors.js";
 import { hasRole } from "../user-roles.js";
 import { bodyObject, booleanQuery, oneOf, optionalBodyText, optionalPositiveLong, optionalText, parseDateOnly, parseRowVersion, positiveLong, requiredInteger, requiredText } from "../http.js";
 import { insertMaterialAudit } from "../material-audit.js";
+import { unitBudgetOf } from "../procurement-rules.js";
 import { type ApprovalRoute, approvalSteps, type BomLineForRequest, ERP_STEP, FINAL_STEP, LEGACY_PO_CREATION_STEP, MAX_PR_LINES, moduleBudgets, NO_MODULE, OUTSOURCE_SECTION, planPrLines, type PlannedPrLine,
   type PrLineInput, type PrLineKind, procurementRuleFlags, remainingToRequest, REQUESTING_PR_STATUSES, type RuleFlag } from "../procurement-rules.js";
 import type { EmailService, PurchaseRequisitionApprovalEmail, PurchaseRequisitionDecisionEmail } from "../email.js";
@@ -74,7 +75,17 @@ function parseLines(value: unknown): PrLineInput[] {
 /** What a new PR and an edited draft both carry. */
 function parseRequestFields(body: Record<string, unknown>) {
   return { priority: oneOf(requiredText(body.priority, 30, "Priority"), "Priority", ["Normal", "High", "Emergency"]), requiredDate: parseDateOnly(body.requiredDate, "Required date")!,
-    purpose: optionalBodyText(body.purpose, 20_000, "Purpose"), lines: parseLines(body.lines), erpDepartment: optionalBodyText(body.erpDepartment, 50, "ERP department") };
+    purpose: optionalBodyText(body.purpose, 20_000, "Purpose"), lines: parseLines(body.lines), erpDepartment: optionalBodyText(body.erpDepartment, 50, "ERP department"),
+    // The Unit the request is for (migration 113); none for a request that belongs to no Unit.
+    unitId: body.unitId === undefined || body.unitId === null || body.unitId === "" || body.unitId === 0 ? null : requiredInteger(body.unitId, "Unit", 1) };
+}
+
+/** The request's Unit must be a live Unit of the same project. */
+async function assertUnitOfProject(transaction: TransactionType, unitId: number | null, projectId: number): Promise<void> {
+  if (unitId === null) return;
+  const request = new sql.Request(transaction); request.input("unit", sql.BigInt, unitId); request.input("project", sql.BigInt, projectId);
+  const found = (await request.query<{ id: number | string }>(`SELECT id FROM dbo.project_purchase_units WHERE id=@unit AND project_id=@project AND deleted_at IS NULL;`)).recordset[0];
+  if (!found) throw new ApiError(422, "unit_not_in_project", "That Unit is not a Unit of this request's project.");
 }
 
 /** Every material line of a BOM with what it still needs requested, read while the BOM row is locked so two PRs cannot both take the same need. */
@@ -370,6 +381,7 @@ export function registerPurchaseRequisitionRoutes(app: FastifyInstance, config: 
     const result = await database.query<Record<string, unknown> & { row_version: Buffer }>(`${APPROVE_HELD}
       SELECT pr.id,pr.pr_no,pr.project_id,p.project_no,p.name project_name,pr.bom_id,b.bom_no,pr.requested_by,ru.name requested_by_name,
       pr.priority,pr.required_date,pr.status,pr.submitted_at,pr.erp_po_ref,pr.erp_pr_no,pr.erp_status,pr.erp_status_label,pr.erp_url,pr.erp_error,pr.erp_target,
+      pr.unit_id,(SELECT pu.discipline+N' · '+CASE WHEN pu.drawing_no=N'' THEN N'' ELSE pu.drawing_no+N' ' END+pu.unit_name FROM dbo.project_purchase_units pu WHERE pu.id=pr.unit_id) unit_label,
       lines.line_count,lines.amount,lines.estimate_amount,lines.substitutes,lines.unplanned,
       cs.name current_step,cs.approver_role,cs.approver_id,au.name approver_name,pr.row_version,
       CASE WHEN ${WAITING_FOR_ACTOR} OR (@admin=1 AND @approve=1 AND pr.status=N'In Approval' AND cs.id IS NOT NULL AND pr.requested_by<>@actor) THEN 1 ELSE 0 END can_decide
@@ -388,6 +400,7 @@ export function registerPurchaseRequisitionRoutes(app: FastifyInstance, config: 
       requiredDate: row.required_date, status: row.status, submittedAt: row.submitted_at, erpPoRef: row.erp_po_ref, lineCount: Number(row.line_count), amount, estimateAmount: estimate,
       substituteLines: Number(row.substitutes ?? 0), unplannedLines: Number(row.unplanned ?? 0),
       erp: { prNo: row.erp_pr_no ?? null, status: row.erp_status ?? null, statusLabel: row.erp_status_label ?? null, url: row.erp_url ?? null, error: row.erp_error ?? null, target: row.erp_target ?? null },
+      unitId: row.unit_id === null || row.unit_id === undefined ? null : Number(row.unit_id), unitLabel: row.unit_label ?? null,
       variancePercent: estimate > 0 ? Math.round(((amount - estimate) / estimate * 100) * 100) / 100 : 0, currentStep: row.current_step, currentApproverRole: row.approver_role,
       currentApproverId: row.approver_id === null ? null : Number(row.approver_id), currentApproverName: row.approver_name, canDecide: Boolean(row.can_decide),
       rowVersion: row.row_version.toString("base64") }; });
@@ -437,24 +450,26 @@ export function registerPurchaseRequisitionRoutes(app: FastifyInstance, config: 
         approverId: row.approver_id === null ? null : Number(row.approver_id), approverName: row.approver_name, ruleCode: row.rule_code, status: row.status, decision: row.decision, comment: row.comment, actedAt: row.acted_at }; });
       const modules = (await moduleBudgets(transaction, Number(h.bom_id), id)).filter((module) => module.thisRequest > 0);
       const flags = await procurementRuleFlags(transaction, id);
-      return { purchaseRequisition: { id: Number(h.id), number: h.pr_no, projectId: Number(h.project_id), bomId: Number(h.bom_id), requestedBy: Number(h.requested_by), status: h.status,
+      // The Unit the request is for, with its budget, what earlier requests took of it, and what this one takes.
+      const unit = await unitBudgetOf(transaction, id);
+      return { unit, purchaseRequisition: { id: Number(h.id), number: h.pr_no, projectId: Number(h.project_id), bomId: Number(h.bom_id), requestedBy: Number(h.requested_by), status: h.status,
         priority: h.priority, requiredDate: h.required_date, purpose: h.purpose, erpPoRef: h.erp_po_ref, rowVersion: h.row_version.toString("base64"),
         projectNumber: about.project_no ?? null, projectName: about.project_name ?? null, requestedByName: about.requester_name ?? null }, erp: { ...erpView(h), enabled: Boolean(erp), requestList }, lines, steps, modules, ruleFlags: flags }; });
   });
 
   app.post("/api/v1/purchase-requisitions", async (request, reply) => { await users.demandPermission(request, "procurement.request"); const actor = await users.required(request); const body = bodyObject(request.body);
-    const bomId = requiredInteger(body.bomId, "BOM", 1); const { priority, requiredDate, purpose, lines, erpDepartment } = parseRequestFields(body); const today = todayIn(config.businessTimeZone);
+    const bomId = requiredInteger(body.bomId, "BOM", 1); const { priority, requiredDate, purpose, lines, erpDepartment, unitId } = parseRequestFields(body); const today = todayIn(config.businessTimeZone);
     const created = await database.transaction(async (transaction) => { const lookup = new sql.Request(transaction); lookup.input("bom", sql.BigInt, bomId); const bom = (await lookup.query<{ project_id: number | string; status: string }>(`SELECT project_id,status FROM dbo.boms WITH (UPDLOCK,HOLDLOCK) WHERE id=@bom AND deleted_at IS NULL;`)).recordset[0];
       if (!bom) throw new ApiError(404, "bom_not_found", "BOM not found."); if (bom.status !== "Released") throw new ApiError(409, "bom_not_released", `A requisition can only be raised against a released BOM; this one is '${bom.status}'.`);
-      const projectId = Number(bom.project_id); await demandProjectScope(database, actor, projectId, transaction);
+      const projectId = Number(bom.project_id); await demandProjectScope(database, actor, projectId, transaction); await assertUnitOfProject(transaction, unitId, projectId);
       const requestable = await requestableBomLines(transaction, bomId); const planned = planPrLines(lines, requestable.lines, requestable.modules);
       await assertActiveSuppliers(transaction, planned.flatMap((line) => line.supplierId === null ? [] : [line.supplierId]));
       const number = await issueDocumentNumber(transaction, "PR", today); const insert = new sql.Request(transaction);
       insert.input("number", sql.NVarChar(30), number); insert.input("project", sql.BigInt, projectId); insert.input("bom", sql.BigInt, bomId); insert.input("actor", sql.BigInt, actor.id);
       insert.input("priority", sql.NVarChar(30), priority); insert.input("required", sql.Date, requiredDate); insert.input("purpose", sql.NVarChar(sql.MAX), purpose);
-      insert.input("department", sql.NVarChar(50), erpDepartment);
-      const pr = (await insert.query<{ id: number | string; row_version: Buffer }>(`INSERT INTO dbo.mat_prs(pr_no,project_id,bom_id,requested_by,priority,required_date,purpose,status,created_by,updated_by,erp_department)
-        OUTPUT inserted.id,inserted.row_version VALUES(@number,@project,@bom,@actor,@priority,@required,@purpose,N'Draft',@actor,@actor,@department);`)).recordset[0]!; const id = Number(pr.id);
+      insert.input("department", sql.NVarChar(50), erpDepartment); insert.input("unit", sql.BigInt, unitId);
+      const pr = (await insert.query<{ id: number | string; row_version: Buffer }>(`INSERT INTO dbo.mat_prs(pr_no,project_id,bom_id,requested_by,priority,required_date,purpose,status,created_by,updated_by,erp_department,unit_id)
+        OUTPUT inserted.id,inserted.row_version VALUES(@number,@project,@bom,@actor,@priority,@required,@purpose,N'Draft',@actor,@actor,@department,@unit);`)).recordset[0]!; const id = Number(pr.id);
       await insertLines(transaction, id, bomId, planned); const totalRequest = new sql.Request(transaction); totalRequest.input("id", sql.BigInt, id);
       const total = Number((await totalRequest.query<{ total: number | string }>(`SELECT COALESCE(SUM(line_total),0) total FROM dbo.mat_pr_lines WHERE pr_id=@id;`)).recordset[0]!.total);
       const kinds = Object.fromEntries(lineTypes.map((kind) => [kind, planned.filter((line) => line.lineType === kind).length]));
@@ -466,16 +481,16 @@ export function registerPurchaseRequisitionRoutes(app: FastifyInstance, config: 
   // A draft's requester (or an Admin) rewrites its header and lines: a PR taken back from the ERP is corrected here, then submitted again.
   // Its old lines go first, so what the BOM still needs is counted without them, under the same BOM lock as a new PR.
   app.put("/api/v1/purchase-requisitions/:id", async (request) => { await users.demandPermission(request, "procurement.request"); const actor = await users.required(request); const id = positiveLong((request.params as { id?: string }).id, "Purchase requisition id");
-    const body = bodyObject(request.body); const version = parseRowVersion(body.rowVersion); const { priority, requiredDate, purpose, lines, erpDepartment } = parseRequestFields(body);
-    return database.transaction(async (transaction) => { const h = await readHeader(transaction, id); await demandProjectScope(database, actor, Number(h.project_id), transaction);
+    const body = bodyObject(request.body); const version = parseRowVersion(body.rowVersion); const { priority, requiredDate, purpose, lines, erpDepartment, unitId } = parseRequestFields(body);
+    return database.transaction(async (transaction) => { const h = await readHeader(transaction, id); await demandProjectScope(database, actor, Number(h.project_id), transaction); await assertUnitOfProject(transaction, unitId, Number(h.project_id));
       if (h.status !== "Draft") throw new ApiError(409, "pr_not_draft", `Only a draft requisition can be edited; this one is '${h.status}'.`);
       if (Number(h.requested_by) !== actor.id && !hasRole(actor, "Admin")) throw new ApiError(403, "requester_required", "Only the requester can edit this requisition.");
       const bomId = Number(h.bom_id); const lookup = new sql.Request(transaction); lookup.input("bom", sql.BigInt, bomId);
       const bom = (await lookup.query<{ status: string }>(`SELECT status FROM dbo.boms WITH (UPDLOCK,HOLDLOCK) WHERE id=@bom AND deleted_at IS NULL;`)).recordset[0];
       if (!bom) throw new ApiError(404, "bom_not_found", "BOM not found."); if (bom.status !== "Released") throw new ApiError(409, "bom_not_released", `A requisition can only be raised against a released BOM; this one is '${bom.status}'.`);
       const update = new sql.Request(transaction); update.input("actor", sql.BigInt, actor.id); update.input("id", sql.BigInt, id); update.input("version", sql.VarBinary(8), version);
-      update.input("priority", sql.NVarChar(30), priority); update.input("required", sql.Date, requiredDate); update.input("purpose", sql.NVarChar(sql.MAX), purpose); update.input("department", sql.NVarChar(50), erpDepartment);
-      const row = (await update.query<{ row_version: Buffer }>(`UPDATE dbo.mat_prs SET priority=@priority,required_date=@required,purpose=@purpose,erp_department=COALESCE(@department,erp_department),
+      update.input("priority", sql.NVarChar(30), priority); update.input("required", sql.Date, requiredDate); update.input("purpose", sql.NVarChar(sql.MAX), purpose); update.input("department", sql.NVarChar(50), erpDepartment); update.input("unit", sql.BigInt, unitId);
+      const row = (await update.query<{ row_version: Buffer }>(`UPDATE dbo.mat_prs SET priority=@priority,required_date=@required,purpose=@purpose,erp_department=COALESCE(@department,erp_department),unit_id=@unit,
           updated_by=@actor,updated_at=SYSUTCDATETIME() OUTPUT inserted.row_version WHERE id=@id AND status=N'Draft' AND deleted_at IS NULL AND row_version=@version;`)).recordset[0];
       if (!row) throw new ApiError(409, "concurrency_conflict", "This requisition changed. Reload and try again.");
       const clear = new sql.Request(transaction); clear.input("id", sql.BigInt, id); await clear.query(`DELETE FROM dbo.mat_pr_lines WHERE pr_id=@id;`);

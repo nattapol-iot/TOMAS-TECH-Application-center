@@ -63,6 +63,24 @@ export function remainingToRequest(line: { required: number; customerSupplied: n
   return Math.max(0, round(line.required - covered - line.customerSupplied - line.requested, 4));
 }
 
+/** The discipline a purchase Unit belongs to, as the PR-Form files were named: Mechanical, Electrical, Software, Installation. */
+export const PURCHASE_DISCIPLINES = ["ME", "EE", "SW", "IN"] as const;
+export type PurchaseDiscipline = (typeof PURCHASE_DISCIPLINES)[number];
+/** A Unit's budget, what earlier live requests already spend of it, and what this request spends. */
+export type UnitBudget = { budget: number; requestedElsewhere: number; thisRequest: number };
+/** How a Unit is named to a person: its drawing number, then its name; the general Unit has only a name. */
+export const unitLabel = (unit: { drawingNo: string; unitName: string }): string => [unit.drawingNo, unit.unitName].filter(Boolean).join(" ");
+/**
+ * A request that takes its Unit over the budget the Unit was given: the approver decides, with a comment, as for a module up
+ * to 10% over. The module's own budget stays the harder limit (moduleBudgetFlags).
+ */
+export function unitBudgetFlags(unit: ({ drawingNo: string; unitName: string } & UnitBudget) | null): RuleFlag[] {
+  if (!unit || unit.thisRequest <= 0) return [];
+  const over = round(unit.requestedElsewhere + unit.thisRequest - unit.budget, 2);
+  if (over <= 0) return [];
+  return [{ code: "over_unit_budget", level: "manager", text: `Unit ${unitLabel(unit)}: ${Math.round(over).toLocaleString("en-US")} THB over its budget` }];
+}
+
 /** A module whose PRs, this one included, cost more than its estimate: up to 10% over is the PM's decision, beyond that Management's. */
 export function moduleBudgetFlags(modules: ModuleBudget[]): RuleFlag[] {
   return modules.flatMap((module) => {
@@ -168,6 +186,22 @@ export async function moduleBudgets(transaction: TransactionType, bomId: number,
   return rows.map((row) => ({ module: row.module, budget: Number(row.budget), requestedElsewhere: Number(row.elsewhere), thisRequest: Number(row.this_request) }));
 }
 
+/**
+ * The Unit a request is for, with its budget, what requests raised before this one already spend of it, and what this one spends.
+ * As with a module, only earlier requests count against it, so the request that takes the Unit over carries the overrun.
+ */
+export async function unitBudgetOf(transaction: TransactionType, prId: number): Promise<({ id: number; module: string; discipline: string; drawingNo: string; unitName: string } & UnitBudget) | null> {
+  const request = new sql.Request(transaction); request.input("pr", sql.BigInt, prId);
+  const row = (await request.query<Record<string, unknown>>(`SELECT u.id,u.module,u.discipline,u.drawing_no,u.unit_name,u.budget,
+      COALESCE((SELECT SUM(l.line_total) FROM dbo.mat_pr_lines l WHERE l.pr_id=pr.id),0) this_request,
+      COALESCE((SELECT SUM(l.line_total) FROM dbo.mat_pr_lines l INNER JOIN dbo.mat_prs other ON other.id=l.pr_id AND other.deleted_at IS NULL AND other.status IN(${REQUESTING_PR_STATUSES})
+        WHERE other.unit_id=u.id AND other.id<pr.id),0) elsewhere
+    FROM dbo.mat_prs pr INNER JOIN dbo.project_purchase_units u ON u.id=pr.unit_id WHERE pr.id=@pr AND pr.deleted_at IS NULL;`)).recordset[0];
+  if (!row) return null;
+  return { id: Number(row.id), module: String(row.module), discipline: String(row.discipline), drawingNo: String(row.drawing_no), unitName: String(row.unit_name),
+    budget: Number(row.budget), requestedElsewhere: Number(row.elsewhere), thisRequest: Number(row.this_request) };
+}
+
 export async function budgetPicture(transaction: TransactionType, projectId: number, excludePrId: number | null): Promise<BudgetPicture> {
   const request = new sql.Request(transaction); request.input("project", sql.BigInt, projectId); request.input("exclude", sql.BigInt, excludePrId);
   const row = (await request.query<Record<string, number | string>>(`SELECT
@@ -198,6 +232,7 @@ export async function procurementRuleFlags(transaction: TransactionType, prId: n
     COALESCE((SELECT SUM(l.line_total) FROM dbo.mat_pr_lines l WHERE l.pr_id=pr.id),0) amount FROM dbo.mat_prs pr WHERE pr.id=@pr AND pr.deleted_at IS NULL;`)).recordset[0];
   if (!header) throw new ApiError(404, "pr_not_found", "Purchase requisition not found.");
   const flags = moduleBudgetFlags(await moduleBudgets(transaction, Number(header.bom_id), prId));
+  flags.push(...unitBudgetFlags(await unitBudgetOf(transaction, prId)));
   if (Number(header.amount) > 1_000_000) flags.push({ code: "high_value", level: "management", text: "Requisition value exceeds 1,000,000 THB" });
   if (header.priority === "Emergency") flags.push({ code: "emergency", level: "management", text: "Emergency purchase" });
   return flags;

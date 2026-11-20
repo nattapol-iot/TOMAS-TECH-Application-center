@@ -7,6 +7,7 @@ import { Badge, EmptyState, Field, FilterChips, Icon, Pagination, Panel, SearchI
 import { exportXlsx } from "../../../lib/export-xlsx";
 import { readWorkbookSheets } from "../../../lib/import-spreadsheet";
 import { estimateBusinessDate } from "../../../lib/estimate-ux";
+import { type PurchaseUnits, unitLabel, unitOnSheet } from "../../../lib/purchase-units";
 import { addPastedRows, afterEdit, asPlanned, blankPrRows, draftFromPaste, draftFromPr, draftFromSheet, draftIssues, insertBlankPrRow, isBlankPrRow, moduleStatus, payloadLines, rowFromBomLine, sheetRows, startingPrRows, templateRows,
   type PrBomLine, type PrDraftRow, type PrModuleBudget, type PrModuleStatus, type PrRowKind, type PrSavedLine } from "../../../lib/pr-spreadsheet";
 import { useEndpoint } from "./material-endpoint";
@@ -14,10 +15,10 @@ import { DateInput } from "../DateInput";
 
 type ReleasedBom = { id: number; number: string; status: string; projectNumber: string; projectName: string };
 type ErpOptions = { enabled: boolean; departments: Array<{ value: string; label: string }>; suggestedDepartment: string | null; message?: string };
-type Workspace = { bom: { id: number; number: string; projectNumber: string; projectName: string }; lines: Array<PrBomLine & { purchaseRequired: number }>; modules: PrModuleBudget[] };
+type Workspace = { bom: { id: number; number: string; projectId: number; projectNumber: string; projectName: string }; lines: Array<PrBomLine & { purchaseRequired: number }>; modules: PrModuleBudget[] };
 /** A draft PR reopened in the sheet: its header, its saved lines and the row version the save must still match. */
 export type PrEditing = { id: number; number: string; rowVersion: string; bomId: number; priority: string; requiredDate: string; purpose: string;
-  erpDepartment: string | null; lines: PrSavedLine[] };
+  erpDepartment: string | null; unitId?: number | null; lines: PrSavedLine[] };
 
 const EMPTY: never[] = [];
 const money = (value: number) => new Intl.NumberFormat(currentLocale(), { style: "currency", currency: "THB", maximumFractionDigits: 2 }).format(Number(value));
@@ -47,7 +48,7 @@ function budgetNote(status: PrModuleStatus, routed: boolean): string {
  * the save when unused, Enter moves down a column, and one button saves the PR and sends it for approval.
  */
 /** A PR started from a BOM: the BOM, and the lines ticked on it (none = an empty sheet for that BOM). */
-export type PrStart = { bomId: number; lineIds: number[] };
+export type PrStart = { bomId: number; lineIds: number[]; unitId?: number | null };
 export type PrSaved = { number: string; submitted: boolean; submitError?: string };
 export function PurchaseRequestEditor({ released, editing, start, onClose, onCreated }: { bootstrap: BootstrapData; released: ReleasedBom[]; editing?: PrEditing; start?: PrStart; onClose: () => void; onCreated: (saved: PrSaved) => void }) {
   const t = useT();
@@ -69,6 +70,12 @@ export function PurchaseRequestEditor({ released, editing, start, onClose, onCre
   // Typing another item over a row from the estimate, or more than the estimate still needs, makes it a purchase in that line's place.
   const update = (key: string, patch: Partial<PrDraftRow>) => setRows(rows.map((row) => row.key !== key ? row
     : afterEdit({ ...row, ...patch }, row.bomLineId === null ? undefined : lines.get(row.bomLineId), ITEM_FIELDS.some((field) => field in patch))));
+  // The Unit the request is for (a drawing number and a name under one of the BOM's modules); none for a request that belongs to no Unit.
+  const projectId = workspace.data?.bom.projectId ?? 0;
+  const units = useEndpoint<PurchaseUnits | null>(projectId ? `/api/v1/projects/${projectId}/purchase-units` : null, null);
+  const [unitChoice, setUnitChoice] = useState<{ bomId: number; unitId: number | null } | null>(null);
+  const unitId = unitChoice && unitChoice.bomId === effectiveBomId ? unitChoice.unitId : editing?.unitId ?? (start && start.bomId === effectiveBomId ? start.unitId ?? null : null);
+  const unit = units.data?.units.find((item) => item.id === unitId) ?? null;
   const [priority, setPriority] = useState(editing?.priority ?? "Normal");
   const [requiredDate, setRequiredDate] = useState(editing ? editing.requiredDate.slice(0, 10) : inDays(14));
   const [purpose, setPurpose] = useState(editing?.purpose ?? "");
@@ -110,8 +117,17 @@ export function PurchaseRequestEditor({ released, editing, start, onClose, onCre
   const chips: FilterItem[] = statuses.map((status) => ({ key: status.module, label: status.module, value: status.lines, tone: LEVEL_TONE[status.level] }));
   const kinds = (kind: PrRowKind) => selected.filter((row) => row.lineType === kind).length;
 
-  // The module a new row is charged to until the engineer says otherwise: the filter in use, or the BOM's only one.
-  const newRowModule = module ?? onlyModule;
+  // The module a new row is charged to until the engineer says otherwise: the filter in use, the Unit's module, or the BOM's only one.
+  const newRowModule = module ?? (unit?.module || onlyModule);
+  // The Unit's budget with this sheet counted. A draft being edited is already among the Unit's requests, so what it had saved comes out first.
+  const ownSaved = editing && editing.unitId === unit?.id ? editing.lines.reduce((sum, line) => sum + Number(line.quantity) * Number(line.unitPrice), 0) : 0;
+  const unitBudget = unit ? unitOnSheet(unit, total, ownSaved) : null;
+  // Choosing a Unit charges the rows that have no module yet to the Unit's module.
+  const chooseUnit = (next: number | null) => {
+    setUnitChoice({ bomId: effectiveBomId, unitId: next });
+    const chosen = units.data?.units.find((item) => item.id === next);
+    if (chosen) setRows(rows.map((row) => row.lineType === "Unplanned" && !row.module ? { ...row, module: chosen.module } : row));
+  };
   // After a new row is drawn: its cell in the column the person was in (its part number by default).
   const focusRow = (key: string, column = 2) => window.setTimeout(() => {
     const row = sheet.current?.querySelector<HTMLTableRowElement>(`tr[data-row="${key}"]`);
@@ -192,7 +208,7 @@ export function PurchaseRequestEditor({ released, editing, start, onClose, onCre
   const submit = async (send: boolean) => {
     setBusy(true); setError(""); setServerIssue(null);
     try {
-      const fields = { priority, requiredDate, purpose: purpose || undefined, erpDepartment: department || undefined, lines: payloadLines(live) };
+      const fields = { priority, requiredDate, purpose: purpose || undefined, erpDepartment: department || undefined, unitId, lines: payloadLines(live) };
       type Saved = { id: number; number: string; rowVersion: string };
       const saved = editing
         ? await apiRequest<Saved>(`/api/v1/purchase-requisitions/${editing.id}`, { method: "PUT", body: JSON.stringify({ ...fields, rowVersion: editing.rowVersion }) })
@@ -219,6 +235,8 @@ export function PurchaseRequestEditor({ released, editing, start, onClose, onCre
         <Field label="Released BOM" guide="pr.bom"><select value={effectiveBomId} disabled={Boolean(editing)} onChange={(event) => { setBomId(Number(event.target.value)); setModule(null); setPage(1); setNotice(""); setServerIssue(null); }}>
           {editing ? <option value={editing.bomId}>{workspace.data ? `${workspace.data.bom.number} · ${workspace.data.bom.projectNumber} · ${workspace.data.bom.projectName}` : "…"}</option>
             : <><option value={0}>{t("Select BOM…")}</option>{released.map((bom) => <option key={bom.id} value={bom.id}>{bom.number} · {bom.projectNumber} · {bom.projectName}</option>)}</>}</select></Field>
+        {units.data?.units.length ? <Field label="Unit ที่ขอซื้อให้" guide="pr.unit" hint={unit ? `Module ${unit.module}` : undefined}><select value={unitId ?? 0} onChange={(event) => chooseUnit(Number(event.target.value) || null)}>
+          <option value={0}>{t("ไม่ระบุ Unit")}</option>{units.data.units.map((item) => <option key={item.id} value={item.id}>{unitLabel(item)} ({item.module})</option>)}</select></Field> : null}
         <Field label="Priority"><select value={priority} onChange={(event) => setPriority(event.target.value)}><option value="Normal">{t("Normal")}</option><option value="High">{t("High")}</option><option value="Emergency">{t("Emergency")}</option></select></Field>
         <Field label="Required date" guide="pr.required"><DateInput value={requiredDate} onChange={(event) => setRequiredDate(event.target.value)} /></Field>
         <Field label="Purpose"><input maxLength={500} value={purpose} onChange={(event) => setPurpose(event.target.value)} placeholder={t("Project material / site requirement")} /></Field>
@@ -265,6 +283,10 @@ export function PurchaseRequestEditor({ released, editing, start, onClose, onCre
           <tbody>{statuses.filter((status) => status.thisRequest > 0).map((status) => <tr key={status.module}><td><strong>{status.module}</strong></td><td className="num">{money(status.budget)}</td>
             <td className="num">{money(status.requested)}</td><td className="num">{money(status.thisRequest)}</td><td className="num">{money(status.budget - status.requested - status.thisRequest)}</td>
             <td><Badge tone={LEVEL_TONE[status.level]}>{t(budgetNote(status, Boolean(approvers)))}{status.level !== "ok" && Number.isFinite(status.percent) ? ` (${status.percent.toFixed(1)}%)` : ""}</Badge></td></tr>)}</tbody></table></div> : null}
+        {unit && unitBudget ? <div className={`pr-unit-budget${unitBudget.over ? " over" : ""}`} role="status" data-guide="pr.unit-budget">
+          <strong>Unit {unitLabel(unit)}</strong><span><LocalizedText text={"งบของ Unit"} /> {money(unitBudget.budget)}</span><span><LocalizedText text={"PR ก่อนหน้า"} /> {money(unitBudget.requestedElsewhere)}</span>
+          <span><LocalizedText text={"PR นี้"} /> {money(unitBudget.thisRequest)}</span><span><LocalizedText text={"คงเหลือ"} /> <strong>{money(unitBudget.remaining)}</strong></span>
+          {unitBudget.over ? <small><LocalizedText text={"เกินงบของ Unit ผู้อนุมัติต้องใส่เหตุผล"} /></small> : null}</div> : null}
         {rows.length ? <div className="table-wrap tall" data-guide="pr.lines" ref={sheet}><table className="pr-plan-table">
           {/* An ERP line grid: fixed columns, the description takes what is left, and a control fills its cell. */}
           <colgroup>{[84, 120, 130, 0, 84, 130, 92, 54, 104, 110, 110, 104].map((width, index) => <col key={index} style={width ? { width } : undefined} />)}</colgroup>
