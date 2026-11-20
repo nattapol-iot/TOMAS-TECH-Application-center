@@ -279,6 +279,14 @@ export function blankPrRows(count: number, module: string, stamp: string): PrDra
     itemCode: "", partNumber: "", description: "", brand: "", unit: "pcs", quantity: 1, coveredQuantity: null, unitPrice: 0, remark: "" }));
 }
 
+/** An empty row right under the row with this key (at the end when the key is gone): an item is typed where it belongs in the list (owner 2026-11-20). */
+export function insertBlankPrRow(rows: PrDraftRow[], afterKey: string, module: string, stamp: string): { rows: PrDraftRow[]; key: string } {
+  const blank = blankPrRows(1, module, `${stamp}-in`)[0]!;
+  const at = rows.findIndex((row) => row.key === afterKey);
+  const index = at < 0 ? rows.length : at + 1;
+  return { rows: [...rows.slice(0, index), blank, ...rows.slice(index)], key: blank.key };
+}
+
 /**
  * An estimate line brought into the sheet. While the line is still to request and not in the sheet already, the row stays tied to it
  * (Planned), so the BOM knows it was bought. Otherwise it is a free copy, for buying more of the same.

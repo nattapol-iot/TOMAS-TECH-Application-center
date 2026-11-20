@@ -130,7 +130,7 @@
 .pg-skin input[type="checkbox"] { accent-color: var(--pg-primary); width: 16px; height: 16px; }
 /* The PR sheet's lines as an ERP line grid (D.7 grid cells): fixed columns so nothing runs past the frame, hairlines between
    cells, and a control that fills its cell with the focus ring inside it. Narrower than its columns, the frame scrolls sideways. */
-.pg-skin .pr-plan-table { table-layout: fixed; min-width: 1290px; border-collapse: collapse; }
+.pg-skin .pr-plan-table { table-layout: fixed; min-width: 1326px; border-collapse: collapse; }
 .pg-skin .pr-plan-table th { padding: 8px 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pg-skin .pr-plan-table td { height: 40px; padding: 10px; vertical-align: top; white-space: normal; overflow-wrap: anywhere; line-height: 20px; }
 .pg-skin .pr-plan-table :is(th, td) + :is(th, td) { border-left: 1px solid var(--pg-row-line); }
@@ -150,7 +150,7 @@
 .pg-skin .pr-plan-table .pg-qty { display: flex; align-items: center; }
 .pg-skin .pr-plan-table .pg-qty input { flex: 1 1 auto; }
 .pg-skin .pr-plan-table .pg-qty small { display: inline; flex: none; padding: 0 10px 0 0; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.pg-skin .pr-plan-table td.pg-acts { width: auto; padding: 4px 0 0; text-align: center; }
+.pg-skin .pr-plan-table td.pg-acts { width: auto; padding: 4px 0 0 3px; text-align: left; white-space: nowrap; }
 .pg-skin .red-text { color: var(--pg-red-fg); }
 
 /* Panels hold the page tables (C.1.9, D.7): white, a soft divider edge, 12px corners. */
@@ -270,3 +270,9 @@
 .pg-skin .pr-estimate td.wrap { white-space: normal; overflow-wrap: anywhere; }
 .pg-skin .pr-estimate .pg-acts .btn { height: 28px; padding: 0 10px; }
 .pg-skin .pr-plan-table td .muted { font-size: 12px; }
+
+/* The sheet's last line adds a row: quiet until pointed at, as wide as the table. */
+.pg-skin .pr-plan-table tfoot td { height: auto; padding: 0; border-top: 1px solid var(--pg-row-line); }
+.pg-skin .pr-add-line { display: flex; align-items: center; gap: 6px; width: 100%; height: 36px; padding: 0 12px; border: 0; background: none; color: var(--pg-muted-fg); font: inherit; font-size: 14px; cursor: pointer; }
+.pg-skin .pr-add-line:hover { background: var(--pg-accent); color: var(--pg-foreground); }
+.pg-skin .pr-add-line:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--pg-ring); }

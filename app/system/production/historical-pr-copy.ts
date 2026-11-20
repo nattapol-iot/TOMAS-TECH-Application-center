@@ -1043,5 +1043,10 @@ export const HISTORICAL_PR_COPY: Record<string, { th: string; en: string; jp: st
     "th": "ราคาประมาณ",
     "en": "Approx. price",
     "jp": "概算単価"
+  },
+  "แทรกแถวใต้แถวนี้": {
+    "th": "แทรกแถวใต้แถวนี้",
+    "en": "Add a row below",
+    "jp": "下に行を追加"
   }
 };

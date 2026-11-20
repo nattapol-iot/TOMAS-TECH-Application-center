@@ -136,8 +136,8 @@ test("the PR sheet takes many items and sends the PR in one press (owner 2026-11
 test("the PR sheet's lines are an ERP grid: fixed columns, controls filling their cells, framed (owner 2026-11-19)", () => {
   const skin = read("app/system/production/pegasus-skin.css");
   // Twelve columns; only the description (0) takes what is left, so the table never grows past its frame on its own.
-  assert.ok(editor.includes("<colgroup>{[84, 120, 130, 0, 84, 130, 92, 54, 104, 110, 110, 68].map"));
-  assert.ok(skin.includes(".pg-skin .pr-plan-table { table-layout: fixed; min-width: 1290px; border-collapse: collapse; }"));
+  assert.ok(editor.includes("<colgroup>{[84, 120, 130, 0, 84, 130, 92, 54, 104, 110, 110, 104].map"));
+  assert.ok(skin.includes(".pg-skin .pr-plan-table { table-layout: fixed; min-width: 1326px; border-collapse: collapse; }"));
   assert.match(skin, /\.pg-skin \.pr-plan-table td\.pg-in :is\(input, select\) \{ display: block; width: 100%;/);
   // No inline widths on the controls any more: the column decides.
   assert.doesNotMatch(editor, /<input \{\.\.\.grid\} style=/);
@@ -181,4 +181,20 @@ test("a new PR starts empty; the estimate is a reference to pull from, and price
   assert.ok(editor.includes('<LocalizedText text={"ยอดขอซื้อ (ประมาณ)"} />'));
   assert.ok(material.includes('<th className="num"><LocalizedText text={"ราคาประมาณ"} /></th>'));
   assert.ok(material.includes('const PR_KIND_TONE = { Planned: "blue", Substitute: "violet", Unplanned: "slate" } as const;'));
+});
+
+test("a row is added from inside the PR sheet's table: + on a row, and an add-row line under the last one (owner 2026-11-20)", () => {
+  const skin = read("app/system/production/pegasus-skin.css");
+  // The + opens an empty row under its own row, in that row's module, and puts the cursor in it.
+  assert.ok(editor.includes('aria-label={t("แทรกแถวใต้แถวนี้")} onClick={() => insertBelow(row)}><Icon name="plus" /></button>'));
+  assert.ok(editor.includes("insertBlankPrRow(rows, row.key, module ?? (row.module || onlyModule), String(Date.now()))"));
+  assert.ok(editor.includes("focusRow(next.key);"));
+  // Add and remove keep their place on every row; the way back to the estimate's item comes after them.
+  assert.ok(editor.indexOf("insertBelow(row)}>") < editor.indexOf('rowAction("trash"') && editor.indexOf('rowAction("trash"') < editor.indexOf('rowAction("refresh"'));
+  assert.ok(skin.includes(".pg-skin .pr-plan-table td.pg-acts { width: auto; padding: 4px 0 0 3px; text-align: left; white-space: nowrap; }"));
+  // The add-row line is the table's foot, so Enter on the last row still finds no row under it and opens one.
+  assert.ok(editor.includes('<tfoot><tr><td colSpan={12}><button className="pr-add-line" type="button" onClick={() => addUnplanned(1)}>'));
+  assert.ok(skin.includes(".pg-skin .pr-add-line {"));
+  const copy = read("app/system/production/historical-pr-copy.ts");
+  assert.ok(copy.includes('"en": "Add a row below"') && copy.includes('"jp": "下に行を追加"'));
 });
