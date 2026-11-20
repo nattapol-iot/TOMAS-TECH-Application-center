@@ -86,7 +86,8 @@ export function PurchaseRequestEditor({ released, editing, start, onClose, onCre
   const [erpDepartment, setErpDepartment] = useState<string | null>(editing?.erpDepartment ?? null);
   const department = erpDepartment ?? erpOptions.data?.suggestedDepartment ?? "";
   // Who approves: the person's department head and the final approver; null on a server still on the PM / Engineering Manager route.
-  const route = useEndpoint<{ approvers: { step: string; name: string }[] | null } | null>("/api/v1/purchase-requisitions/approval-route", null);
+  // The route depends on the chosen Unit: its discipline names the first approver (migration 116).
+  const route = useEndpoint<{ approvers: { step: string; name: string }[] | null } | null>(`/api/v1/purchase-requisitions/approval-route${unitId ? `?unitId=${unitId}` : ""}`, null);
   const approvers = route.data?.approvers ?? null;
   const [module, setModule] = useState<string | null>(null);
   const [search, setSearch] = useState("");

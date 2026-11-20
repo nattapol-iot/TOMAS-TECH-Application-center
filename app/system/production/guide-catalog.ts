@@ -1450,9 +1450,9 @@ const PR_APPROVE: Guide = {
       target: "appr.pr", action: "next", view: "approvals",
       title: { th: "ใบขอซื้อที่รอคุณ", en: "Requisitions waiting for you", jp: "承認待ちの購買申請" },
       body: {
-        th: "ระบบคำนวณว่าใบไหนต้องให้ใครอนุมัติ: หัวหน้าแผนกของผู้ขอก่อน แล้วผู้อนุมัติขั้นสุดท้าย ซึ่งได้อีเมลเมื่อมีใบรอ ใบที่เกินงบของ Module ต้องใส่เหตุผลตอนอนุมัติ",
-        en: "The app works out who approves each one: the requester's department head, then the final approver, who is emailed when one waits. A PR over a module budget needs a reason when approved.",
-        jp: "誰が承認するかはシステムが決めます。依頼者の部門長、次に最終承認者で、最終承認者には承認待ちがあるとメールが届きます。モジュール予算を超えるPRは承認時に理由が必要です。",
+        th: "ระบบคำนวณว่าใบไหนต้องให้ใครอนุมัติ: หัวหน้าของ discipline ของ Unit ในใบ (ME, EE, SW; ใบที่ไม่ได้เลือก Unit ใช้หัวหน้าแผนกของผู้ขอ) ก่อน แล้วผู้อนุมัติขั้นสุดท้าย ซึ่งได้อีเมลเมื่อมีใบรอ ใบที่เกินงบของ Module ต้องใส่เหตุผลตอนอนุมัติ",
+        en: "The app works out who approves each one: the head of the discipline of the request's Unit (ME, EE, SW; a request with no Unit goes to the requester's department head), then the final approver, who is emailed when one waits. A PR over a module budget needs a reason when approved.",
+        jp: "誰が承認するかはシステムが決めます。PRのUnitの分野（ME・EE・SW）の責任者（Unit未指定のPRは依頼者の部門長）、次に最終承認者で、最終承認者には承認待ちがあるとメールが届きます。モジュール予算を超えるPRは承認時に理由が必要です。",
       },
     },
     {
@@ -2607,9 +2607,9 @@ export const GUIDES: readonly Guide[] = [
         target: "pr.unit", action: "next", view: "purchase",
         title: { th: "เลือก Unit (ถ้ามี)", en: "Choose the Unit, if there is one", jp: "Unitを選ぶ（ある場合）" },
         body: {
-          th: "ถ้าโครงการแบ่งงบของ Module เป็น Unit ตาม Drawing ไว้ ให้เลือก Unit ที่ใบนี้ซื้อให้ ระบบจะแสดงงบของ Unit ยอดที่ขอซื้อไปแล้ว ยอดของใบนี้ และยอดคงเหลือ ถ้าเกินงบของ Unit ผู้อนุมัติต้องใส่เหตุผล",
-          en: "If the project splits a module's budget into Units by drawing, pick the Unit this PR buys for. The sheet then shows the Unit's budget, what was already requested, this PR and what is left. Over the Unit's budget, the approver must give a reason.",
-          jp: "案件がモジュール予算を図面ごとのUnitに分けている場合、このPRの対象Unitを選びます。Unitの予算、申請済み額、このPRの額、残額が表示されます。Unit予算を超えると承認者は理由の入力が必要です。",
+          th: "ถ้าโครงการแบ่งงบของ Module เป็น Unit ตาม Drawing ไว้ ให้เลือก Unit ที่ใบนี้ซื้อให้ ระบบจะแสดงงบของ Unit ยอดที่ขอซื้อไปแล้ว ยอดของใบนี้ และยอดคงเหลือ ถ้าเกินงบของ Unit ผู้อนุมัติต้องใส่เหตุผล และ discipline ของ Unit กำหนดผู้อนุมัติขั้นแรกด้วย",
+          en: "If the project splits a module's budget into Units by drawing, pick the Unit this PR buys for. The sheet then shows the Unit's budget, what was already requested, this PR and what is left. Over the Unit's budget, the approver must give a reason. The Unit's discipline also names the first approver.",
+          jp: "案件がモジュール予算を図面ごとのUnitに分けている場合、このPRの対象Unitを選びます。Unitの予算、申請済み額、このPRの額、残額が表示されます。Unit予算を超えると承認者は理由の入力が必要です。Unitの分野によって最初の承認者が決まります。",
         },
         missing: {
           th: "ช่อง Unit ขึ้นเมื่อโครงการมี Unit แล้ว เพิ่ม Unit ได้ในหน้า BOM ของโครงการ (กดเลข BOM ที่แท็บ BOM แล้วกด 'เพิ่ม Unit') ถ้าไม่มี Unit ใบนี้คุมงบตาม Module เหมือนเดิม",

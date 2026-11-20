@@ -188,14 +188,23 @@ async function insertLines(transaction: TransactionType, prId: number, bomId: nu
     INNER JOIN placed head ON head.n=j.parent;`);
 }
 
-/** The owner's route for a requester (migration 097): their department's head and the final approver, or null without a final approver. Inactive people are left out. */
-async function approvalRoute(transaction: TransactionType, requesterId: number): Promise<ApprovalRoute | null> {
-  const request = new sql.Request(transaction); request.input("requester", sql.BigInt, requesterId);
-  const row = (await request.query<{ final_id: number | string; head_id: number | string | null; final_may_decide: boolean | null }>(`SELECT s.final_approver_id final_id,d.approver_id head_id,d.final_may_decide
+/**
+ * The owner's route for a request: a head, then the final approver; null without a final approver. Inactive people are left out.
+ * A request for a Unit goes to the head of the Unit's discipline (migration 116, owner 2026-11-20: ME Warit, EE Taweesak, SW
+ * Tachapon), whoever raised it; a Unit of a discipline with no head (Installation) goes to the final approver alone. A request
+ * with no Unit goes to the head of its requester's department (migration 097).
+ */
+async function approvalRoute(transaction: TransactionType, requesterId: number, unitId: number | null): Promise<ApprovalRoute | null> {
+  const request = new sql.Request(transaction); request.input("requester", sql.BigInt, requesterId); request.input("unit", sql.BigInt, unitId);
+  const row = (await request.query<{ final_id: number | string; head_id: number | string | null; final_may_decide: boolean | null }>(`SELECT s.final_approver_id final_id,
+      CASE WHEN u.id IS NOT NULL THEN da.approver_id ELSE d.approver_id END head_id,CASE WHEN u.id IS NOT NULL THEN da.final_may_decide ELSE d.final_may_decide END final_may_decide
     FROM dbo.pr_approval_settings s INNER JOIN dbo.users f ON f.id=s.final_approver_id AND f.is_active=1 AND f.deleted_at IS NULL
     LEFT JOIN dbo.users r ON r.id=@requester
     LEFT JOIN dbo.pr_department_approvers d ON d.department=LTRIM(RTRIM(r.department))
       AND EXISTS(SELECT 1 FROM dbo.users h WHERE h.id=d.approver_id AND h.is_active=1 AND h.deleted_at IS NULL)
+    LEFT JOIN dbo.project_purchase_units u ON u.id=@unit AND u.deleted_at IS NULL
+    LEFT JOIN dbo.pr_discipline_approvers da ON da.discipline=u.discipline
+      AND EXISTS(SELECT 1 FROM dbo.users h WHERE h.id=da.approver_id AND h.is_active=1 AND h.deleted_at IS NULL)
     WHERE s.id=1;`)).recordset[0];
   if (!row) return null;
   const head = row.head_id === null ? null : Number(row.head_id);
@@ -205,7 +214,9 @@ async function approvalRoute(transaction: TransactionType, requesterId: number):
 async function buildApprovalRoute(transaction: TransactionType, prId: number, projectId: number, actor: CurrentUser, requesterId: number, flags: RuleFlag[]): Promise<void> {
   const project = new sql.Request(transaction); project.input("id", sql.BigInt, projectId); const row = (await project.query<{ manager_id: number | string | null }>(`SELECT manager_id FROM dbo.projects WHERE id=@id AND deleted_at IS NULL;`)).recordset[0]!;
   const clear = new sql.Request(transaction); clear.input("pr", sql.BigInt, prId); await clear.query(`DELETE FROM dbo.mat_pr_approval_steps WHERE pr_id=@pr;`);
-  const steps = approvalSteps(actor.id, row.manager_id === null ? null : Number(row.manager_id), flags, await approvalRoute(transaction, requesterId));
+  const unit = new sql.Request(transaction); unit.input("pr", sql.BigInt, prId);
+  const unitId = (await unit.query<{ unit_id: number | string | null }>(`SELECT unit_id FROM dbo.mat_prs WHERE id=@pr;`)).recordset[0]?.unit_id ?? null;
+  const steps = approvalSteps(actor.id, row.manager_id === null ? null : Number(row.manager_id), flags, await approvalRoute(transaction, requesterId, unitId === null ? null : Number(unitId)));
   for (let index = 0; index < steps.length; index++) { const step = steps[index]!; const insert = new sql.Request(transaction); insert.input("pr", sql.BigInt, prId); insert.input("sequence", sql.Int, index + 1);
     insert.input("name", sql.NVarChar(100), step.name); insert.input("role", sql.NVarChar(50), step.role); insert.input("approver", sql.BigInt, step.approver); insert.input("rule", sql.NVarChar(100), step.rule);
     insert.input("status", sql.NVarChar(30), step.status); insert.input("finalMay", sql.Bit, Boolean(step.finalMayDecide));
@@ -471,11 +482,12 @@ export function registerPurchaseRequisitionRoutes(app: FastifyInstance, config: 
       rowVersion: row.row_version.toString("base64") }; });
   });
 
-  // Who the signed-in person's PR goes to, for the PR sheet: their department's head and the final approver (migration 097), or
-  // null while no final approver is set and the PM / Engineering Manager route applies.
+  // Who the signed-in person's PR goes to, for the PR sheet: the head of the chosen Unit's discipline (migration 116) or of their
+  // department (migration 097), then the final approver; null while no final approver is set and the PM / Engineering Manager route applies.
   app.get("/api/v1/purchase-requisitions/approval-route", async (request) => { await users.demandPermission(request, "procurement.request"); const actor = await users.required(request);
+    const unitId = optionalPositiveLong((request.query as { unitId?: string }).unitId, "Unit") ?? null;
     return database.transaction(async (transaction) => {
-      const route = await approvalRoute(transaction, actor.id); if (!route) return { approvers: null };
+      const route = await approvalRoute(transaction, actor.id, unitId); if (!route) return { approvers: null };
       const steps = approvalSteps(actor.id, null, [], route).filter((step) => step.status !== "Completed" && step.approver !== null);
       const names = new sql.Request(transaction); names.input("ids", sql.NVarChar(sql.MAX), JSON.stringify(steps.map((step) => step.approver)));
       const found = new Map((await names.query<{ id: number | string; name: string }>(`SELECT u.id,u.name FROM dbo.users u INNER JOIN OPENJSON(@ids) WITH (id bigint '$') j ON j.id=u.id;`)).recordset
