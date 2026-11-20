@@ -1,5 +1,6 @@
 // The PR editor's rows and their Excel round trip: the template this app writes, and the TOMAS PR form the team already fills in.
-// Pure functions, no imports, so the root tests load this file directly.
+// Pure functions; the one import is a type, so the root tests load this file directly.
+import type { PrFormData } from "./pr-form";
 
 export type PrRowKind = "Planned" | "Substitute" | "Unplanned";
 export type PrBomLine = { id: number; module: string; itemCode: string; partNumber: string; description: string; brand: string; unit: string;
@@ -162,41 +163,34 @@ function headerColumns(row: Cell[]): Record<string, number> | null {
   return columns.qty !== undefined && (columns.description !== undefined || columns.partNumber !== undefined) ? columns : null;
 }
 
-export type SheetImport = { rows: PrDraftRow[]; format: "template" | "tomas" | "table"; skipped: number };
+export type SheetImport = { rows: PrDraftRow[]; format: "template" | "prform" | "table"; skipped: number;
+  /** PR-Form lines whose PO status says cancelled or rejected: left out. */
+  cancelled?: number };
+
+/** One row read from a file, before it is tied to the BOM. */
+type SheetRecord = { key: string; buy: string; type: string; bomLine: number | null; module: string; itemCode: string; partNumber: string; description: string;
+  brand: string; quantity: number | null; unit: string; unitPrice: number | null; remark: string };
 
 /**
- * Reads a sheet into editor rows. The TOMAS PR form (header "Model/Part Number" in E8) and any table whose header row has a description or part
- * number and a quantity are read; a row is tied to a BOM line by the BOM line column, or else by an exact item code or part number. A tied row whose
- * item differs from the estimate's becomes a substitute; an untied one is unplanned and needs a module if the file did not name one.
+ * File rows as editor rows. A row is tied to a BOM line by the BOM line column, or else by an exact item code or part number. A tied row whose item
+ * differs from the estimate's becomes a substitute; an untied one is unplanned and needs a module if the file did not name one.
  */
-export function draftFromSheet(rows: Cell[][], lines: PrBomLine[], modules: string[]): SheetImport | null {
+function draftFromRecords(records: SheetRecord[], lines: PrBomLine[], modules: string[], format: SheetImport["format"]): SheetImport {
   const byId = new Map(lines.map((line) => [line.id, line]));
   const byCode = (code: string) => { const matches = code ? lines.filter((line) => same(line.itemCode, code) || same(line.partNumber, code)) : []; return matches.length === 1 ? matches[0] : undefined; };
   const moduleName = (value: string) => modules.find((module) => same(module, value)) ?? "";
-  let format: SheetImport["format"]; let start: number; let columns: Record<string, number>;
-  if (same(text(rows[7]?.[4]), "Model/Part Number")) {
-    // TOMAS PR form: E part number, F+G description, L quantity, M unit, N brand, R unit price, X remark.
-    format = "tomas"; start = 8; columns = { partNumber: 4, description: 5, qty: 11, unit: 12, brand: 13, unitPrice: 17, remark: 23 };
-  } else {
-    const headerIndex = rows.slice(0, 20).findIndex((row) => headerColumns(row) !== null);
-    if (headerIndex < 0) return null;
-    columns = headerColumns(rows[headerIndex]!)!; start = headerIndex + 1; format = columns.bomLine !== undefined ? "template" : "table";
-  }
-  const value = (row: Cell[], field: string) => columns[field] === undefined ? "" : text(row[columns[field]!]);
   const result: PrDraftRow[] = []; let skipped = 0;
-  rows.slice(start).forEach((row, offset) => {
-    const description = format === "tomas" ? [text(row[5]), text(row[6])].filter(Boolean).join(" ") : value(row, "description");
-    const partNumber = value(row, "partNumber"), itemCode = value(row, "itemCode"), quantity = number(row[columns.qty!]);
-    if (!description && !partNumber && !itemCode) return;
-    if (quantity === null || quantity <= 0) { skipped += 1; return; }
-    const declared = kindOf(value(row, "type"));
-    const tied = byId.get(number(row[columns.bomLine ?? -1]) ?? -1) ?? (declared === "Unplanned" ? undefined : byCode(itemCode) ?? byCode(partNumber));
-    const price = number(row[columns.unitPrice ?? -1]);
-    const base = { key: `xl-${start + offset + 1}`, selected: !["n", "no", "ไม่"].includes(value(row, "buy").toLocaleLowerCase()), remark: value(row, "remark"),
-      quantity, brand: value(row, "brand"), unit: value(row, "unit") };
+  for (const record of records) {
+    const { partNumber, itemCode, description, quantity } = record;
+    if (!description && !partNumber && !itemCode) continue;
+    if (quantity === null || quantity <= 0) { skipped += 1; continue; }
+    const declared = kindOf(record.type);
+    const tied = byId.get(record.bomLine ?? -1) ?? (declared === "Unplanned" ? undefined : byCode(itemCode) ?? byCode(partNumber));
+    const price = record.unitPrice;
+    const base = { key: record.key, selected: !["n", "no", "ไม่"].includes(record.buy.toLocaleLowerCase()), remark: record.remark, quantity, brand: record.brand, unit: record.unit };
     if (!tied) {
-      result.push({ ...base, lineType: "Unplanned", bomLineId: null, module: moduleName(value(row, "module")), itemCode, partNumber, description, unitPrice: price ?? 0, coveredQuantity: null });
-      return;
+      result.push({ ...base, lineType: "Unplanned", bomLineId: null, module: moduleName(record.module), itemCode, partNumber, description, unitPrice: price ?? 0, coveredQuantity: null });
+      continue;
     }
     const differs = (itemCode && !same(itemCode, tied.itemCode)) || (partNumber && !same(partNumber, tied.partNumber) && !same(partNumber, tied.itemCode))
       || (format === "template" && description && !same(description, tied.description));
@@ -206,8 +200,43 @@ export function draftFromSheet(rows: Cell[][], lines: PrBomLine[], modules: stri
         brand: tied.brand, unit: tied.unit, unitPrice: price ?? tied.estimatedUnitCost, coveredQuantity: null }
       : { ...base, lineType, bomLineId: tied.id, module: tied.module, itemCode, partNumber, description: description || tied.description,
         unit: base.unit || tied.unit, unitPrice: price ?? tied.estimatedUnitCost, coveredQuantity: null });
-  });
+  }
   return { rows: result, format, skipped };
+}
+
+/**
+ * Reads a sheet into editor rows: any table whose header row has a description or part number and a quantity, the template this app writes among
+ * them. The team's PR-Form is read by lib/pr-form.ts and draftFromPrForm instead, because its columns moved between versions of the form.
+ */
+export function draftFromSheet(rows: Cell[][], lines: PrBomLine[], modules: string[]): SheetImport | null {
+  const headerIndex = rows.slice(0, 20).findIndex((row) => headerColumns(row) !== null);
+  if (headerIndex < 0) return null;
+  const columns = headerColumns(rows[headerIndex]!)!, start = headerIndex + 1;
+  const value = (row: Cell[], field: string) => columns[field] === undefined ? "" : text(row[columns[field]!]);
+  const records = rows.slice(start).map((row, offset): SheetRecord => ({ key: `xl-${start + offset + 1}`, buy: value(row, "buy"), type: value(row, "type"),
+    bomLine: number(row[columns.bomLine ?? -1]), module: value(row, "module"), itemCode: value(row, "itemCode"), partNumber: value(row, "partNumber"),
+    description: value(row, "description"), brand: value(row, "brand"), quantity: number(row[columns.qty!]), unit: value(row, "unit"),
+    unitPrice: number(row[columns.unitPrice ?? -1]), remark: value(row, "remark") }));
+  return draftFromRecords(records, lines, modules, columns.bomLine !== undefined ? "template" : "table");
+}
+
+/**
+ * A PR-Form sheet, as lib/pr-form.ts reads it, as editor rows: every line that asks for something and is not cancelled or rejected, tied to the BOM
+ * by its part number like any other import. A line the BOM does not have goes to `module` (the chosen Unit's Module) when there is one. What a
+ * request has no field for yet (material, treatment, detail, and the line a part belongs to) is kept in the remark.
+ */
+export function draftFromPrForm(form: Pick<PrFormData, "lines">, lines: PrBomLine[], modules: string[], module = ""): SheetImport {
+  const byRow = new Map(form.lines.map((line) => [line.row, line]));
+  let cancelled = 0;
+  const records = form.lines.flatMap((line): SheetRecord[] => {
+    if (line.poState === "Cancelled" || line.poState === "Rejected") { cancelled += 1; return []; }
+    const parent = line.parentRow === null ? undefined : byRow.get(line.parentRow);
+    const remark = [line.remark, line.material && `Material ${line.material}`, line.treatment && `Treatment ${line.treatment}`, line.detail && `Detail ${line.detail}`,
+      parent && `Part of ${parent.partNumber || parent.description}`].filter(Boolean).join(" · ");
+    return [{ key: `pf-${line.row}`, buy: "", type: "", bomLine: null, module, itemCode: "", partNumber: line.partNumber, description: line.description || line.partNumber,
+      brand: line.brand, quantity: line.quantity, unit: line.unit, unitPrice: line.unitPrice, remark }];
+  });
+  return { ...draftFromRecords(records, lines, modules, "prform"), cancelled };
 }
 
 /** An unplanned row nobody has typed into yet: the sheet adds these in bulk, and a save leaves them out. */

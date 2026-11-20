@@ -654,6 +654,16 @@ export const HISTORICAL_PR_COPY: Record<string, { th: string; en: string; jp: st
     "en": "rows without a quantity skipped",
     "jp": "数量のない行をスキップ"
   },
+  "อ่านจาก sheet": {
+    "th": "อ่านจาก sheet",
+    "en": "Read from sheet",
+    "jp": "読み込んだシート"
+  },
+  "ข้ามรายการที่ยกเลิก": {
+    "th": "ข้ามรายการที่ยกเลิก",
+    "en": "cancelled lines skipped",
+    "jp": "取消済みの明細をスキップ"
+  },
   "ซื้อรายการนี้": {
     "th": "ซื้อรายการนี้",
     "en": "Buy this line",
