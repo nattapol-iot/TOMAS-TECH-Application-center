@@ -243,6 +243,17 @@ export function PurchaseRequestEditor({ released, editing, start, onClose, onCre
   return (
     <Panel title={editing ? editing.number : "ขอซื้อ (PR)"} subtitle={editing ? "แก้ไข PR ฉบับร่าง แล้วกด 'ส่งขออนุมัติ' หรือ 'บันทึกร่าง' ไว้ก่อน" : "พิมพ์หรือวางรายการที่จะซื้อจริง แล้วเลือก Module ที่ใช้งบ รายการใน Estimate ใช้อ้างอิงและดึงมาใช้ได้ · ราคาเป็นราคาประมาณเพื่อเทียบงบ ราคาจริงฝ่ายจัดซื้อหาใน ERP"}
       actions={<button className="btn ghost" type="button" onClick={onClose} disabled={busy}><Icon name="arrowLeft" /><LocalizedText text={"กลับไปรายการ PR"} /></button>}>
+      {/* Where the request stands, on top of the sheet (owner 2026-11-20): its lines, what to fix, who approves in turn, the ERP, then the total. */}
+      <ol className="pr-pipe" aria-label={t("Purchase plan summary")} data-guide="pr.summary">
+        <li className={selected.length ? "on" : undefined}><span><LocalizedText text={"รายการที่ซื้อ"} /></span><strong>{selected.length}</strong>
+          <small>{t(KIND_LABEL.Planned)} {kinds("Planned")} · {t(KIND_LABEL.Substitute)} {kinds("Substitute")} · {t(KIND_LABEL.Unplanned)} {kinds("Unplanned")}</small></li>
+        <li className={!selected.length ? undefined : issues.size ? "bad" : "ok"}><span><LocalizedText text={"ต้องแก้ก่อนส่ง"} /></span><strong>{issues.size}</strong>
+          <small><LocalizedText text={selected.length && !issues.size ? "พร้อมส่ง" : "แถวที่มีข้อความสีแดง"} /></small></li>
+        {approvers ? approvers.map((approver, index) => <li key={approver.step} data-guide={index === 0 ? "pr.approvers" : undefined}><span>{t(approver.step)}</span><strong>{approver.name}</strong></li>)
+          : <li data-guide="pr.approvers"><span><LocalizedText text={"ผู้อนุมัติ"} /></span><strong>{needsManagement ? "PM + EM" : "PM"}</strong></li>}
+        <li><span><LocalizedText text={"ส่งเข้า ERP"} /></span><small><LocalizedText text={"อัตโนมัติหลังอนุมัติ"} /></small></li>
+        <li className="total"><span><LocalizedText text={"ยอดขอซื้อ (ประมาณ)"} /></span><strong>{money(total)}</strong></li>
+      </ol>
       {/* The request's header on one line where the screen allows (owner 2026-11-20); it wraps on a narrow one. */}
       <div className="pr-head">
         <Field label="Released BOM" guide="pr.bom"><select value={effectiveBomId} disabled={Boolean(editing)} onChange={(event) => { setBomId(Number(event.target.value)); setModule(null); setPage(1); setNotice(""); setServerIssue(null); }}>
@@ -353,16 +364,11 @@ export function PurchaseRequestEditor({ released, editing, start, onClose, onCre
           {modules.length && currentPage === pageCount ? <tfoot><tr><td colSpan={showForm ? 17 : 12}><button className="pr-add-line" type="button" onClick={() => addUnplanned(1)}><Icon name="plus" /><LocalizedText text={"เพิ่มแถว"} /></button></td></tr></tfoot> : null}
           </table></div> : <EmptyState icon="layers" title="ยังไม่มีรายการในใบนี้" message="กด 'เพิ่มแถว' 'วางจาก Excel' หรือดึงจากรายการใน Estimate" />}
         {visible.length > pageSize ? <Pagination page={currentPage} pageCount={pageCount} from={(currentPage - 1) * pageSize + 1} to={Math.min(currentPage * pageSize, visible.length)} total={visible.length} onPage={setPage} /> : null}
-        <div className="pr-plan-summary" aria-label={t("Purchase plan summary")} data-guide="pr.summary">
-          <div><span><LocalizedText text={"รายการที่ซื้อ"} /></span><strong>{selected.length}</strong><small>{t(KIND_LABEL.Planned)} {kinds("Planned")} · {t(KIND_LABEL.Substitute)} {kinds("Substitute")} · {t(KIND_LABEL.Unplanned)} {kinds("Unplanned")}</small></div>
-          <div><span><LocalizedText text={"ต้องแก้ก่อนส่ง"} /></span><strong>{issues.size}</strong><small><LocalizedText text={"แถวที่มีข้อความสีแดง"} /></small></div>
-          <div><span><LocalizedText text={"ผู้อนุมัติ"} /></span><strong data-guide="pr.approvers">{approvers ? approvers.map((approver) => approver.name).join(" → ") : needsManagement ? "PM + EM" : "PM"}</strong><small><LocalizedText text={"แล้วส่งเข้า ERP อัตโนมัติ"} /></small></div>
-          <div className="accent"><span><LocalizedText text={"ยอดขอซื้อ (ประมาณ)"} /></span><strong>{money(total)}</strong><TablePageSize value={pageSize} onChange={(size) => { setPageSize(size); setPage(1); }} /></div>
-        </div>
         {overBudget ? <label className={`pr-over-reason${needsReason ? " missing" : ""}`} data-guide="pr.over-reason">
           <span><Icon name="alertTriangle" /><LocalizedText text={"ใบนี้เกินงบ ใส่เหตุผลให้ผู้อนุมัติอ่านก่อนส่งขออนุมัติ"} /></span>
           <textarea rows={2} maxLength={2000} value={justification} onChange={(event) => setJustification(event.target.value)} placeholder={t("เช่น ราคาขึ้นจากตอนประเมิน หรือลูกค้าขอเพิ่มงาน")} /></label> : null}
         <Toolbar>
+          <TablePageSize value={pageSize} onChange={(size) => { setPageSize(size); setPage(1); }} />
           <span className="spacer" />
           <button className="btn ghost" type="button" onClick={onClose} disabled={busy}><LocalizedText text={"Cancel"} /></button>
           <button className="btn ghost" type="button" disabled={busy || !selected.length || issues.size > 0} onClick={() => { void submit(false); }}><LocalizedText text={"Save Draft"} /></button>
