@@ -178,8 +178,15 @@ try {
   // Raised first, PR 1 stays within budget even though later PRs overrun the same modules.
   assert.deepEqual((await call("GET", `/purchase-requisitions/${pr1.id}`, "Requester")).ruleFlags, []);
   const submitted1 = await call("POST", `/purchase-requisitions/${pr1.id}/submit`, "Requester", { rowVersion: pr1.rowVersion });
-  const submitted2 = await call("POST", `/purchase-requisitions/${pr2.id}/submit`, "Requester", { rowVersion: pr2.rowVersion });
-  const submitted3 = await call("POST", `/purchase-requisitions/${pr3.id}/submit`, "Requester", { rowVersion: pr3.rowVersion });
+  // The app's own numbers do not read like an ERP PR: REQ-<project>-<round> for a request that belongs to no Unit (migration 114).
+  assert.deepEqual([pr1.number, pr2.number, pr3.number], ["REQ-PC-FRESH-01", "REQ-PC-FRESH-02", "REQ-PC-FRESH-03"]);
+  // A request that goes over budget is not submitted without its requester's reason; the approvers then read it.
+  const unexplained = await call("POST", `/purchase-requisitions/${pr2.id}/submit`, "Requester", { rowVersion: pr2.rowVersion }, 422);
+  assert.equal(unexplained.code, "justification_required"); assert.match(unexplained.message, /Panel: 2,000 THB over budget \(8\.0%\)/);
+  const submitted2 = await call("POST", `/purchase-requisitions/${pr2.id}/submit`, "Requester", { rowVersion: pr2.rowVersion, justification: "Terminals were left out of the estimate" });
+  const submitted3 = await call("POST", `/purchase-requisitions/${pr3.id}/submit`, "Requester", { rowVersion: pr3.rowVersion, justification: "Customer asked for the historian" });
+  assert.deepEqual([(await call("GET", `/purchase-requisitions/${pr1.id}`, "Requester")).purchaseRequisition.overBudgetReason, (await call("GET", `/purchase-requisitions/${pr2.id}`, "Requester")).purchaseRequisition.overBudgetReason],
+    [null, "Terminals were left out of the estimate"]);
   assert.deepEqual(submitted1.ruleFlags, []);
   assert.deepEqual(submitted2.ruleFlags.map((flag: Json) => [flag.level, flag.text]), [["manager", "Panel: 2,000 THB over budget (8.0%)"]]);
   assert.deepEqual(submitted3.ruleFlags.map((flag: Json) => [flag.level, flag.text]), [["management", "Software: 5,000 THB over budget (16.7%)"]]);
@@ -293,7 +300,7 @@ try {
   // corrects it and submits it again; the route is built from the new lines and the next send carries a new external_ref.
   const pr4 = await call("POST", "/purchase-requisitions", "Requester", { bomId: bom.id, priority: "Normal", requiredDate: "2099-03-01", erpDepartment: "APPENG",
     lines: [{ lineType: "Unplanned", module: "Panel", description: "Cable ties", unit: "bag", quantity: 1, unitPrice: 300 }] }, 201);
-  await call("POST", `/purchase-requisitions/${pr4.id}/submit`, "Requester", { rowVersion: pr4.rowVersion });
+  await call("POST", `/purchase-requisitions/${pr4.id}/submit`, "Requester", { rowVersion: pr4.rowVersion, justification: "over budget in this test" });
   refuseNextCreate = true;
   const approved4 = await call("POST", `/purchase-requisitions/${pr4.id}/decide`, "PM", { decision: "Approve", comment: "ties for the panel" });
   assert.deepEqual([approved4.status, approved4.erp.sent, approved4.erp.kind], ["Approved", false, "validation"]);
@@ -317,6 +324,7 @@ try {
   assert.deepEqual([detail4.purchaseRequisition.priority, detail4.purchaseRequisition.purpose, detail4.lines.map((line: Json) => [line.description, line.quantity])],
     ["High", "Panel wiring", [["Cable ties, UV resistant", 2]]]);
   // With the earlier PRs Panel is now 10.4% over, so the route built on the second submit adds the Engineering Manager.
+  // Its reason was given the first time; it is kept, so the corrected request goes again without asking twice.
   const resubmitted = await call("POST", `/purchase-requisitions/${pr4.id}/submit`, "Requester", { rowVersion: edited.rowVersion });
   assert.deepEqual(resubmitted.ruleFlags.map((flag: Json) => flag.level), ["management"]);
   assert.deepEqual(await steps(pr4.id), ["Submitted by Requester", "Project Manager Approval", "Management Approval", "Sent to ERP"]);
@@ -367,7 +375,7 @@ try {
   const raise = async (description: string) => {
     const pr = await call("POST", "/purchase-requisitions", "Requester", { bomId: bom.id, priority: "Normal", requiredDate: "2099-03-01", erpDepartment: "APPENG",
       lines: [{ lineType: "Unplanned", module: "Panel", description, unit: "pcs", quantity: 1, unitPrice: 10 }] }, 201);
-    await call("POST", `/purchase-requisitions/${pr.id}/submit`, "Requester", { rowVersion: pr.rowVersion });
+    await call("POST", `/purchase-requisitions/${pr.id}/submit`, "Requester", { rowVersion: pr.rowVersion, justification: "over budget in this test" });
     return pr;
   };
   const bells = async (prId: number, userId: number) => Number((await run(`SELECT COUNT(*) n FROM dbo.notifications WHERE user_id=${userId} AND kind=N'PR_APPROVAL' AND entity_id=${prId}`)).recordset[0]!.n);
@@ -558,12 +566,15 @@ try {
   const forUnit = (price: number) => call("POST", "/purchase-requisitions", "Requester", { bomId: bom.id, unitId: valve.id, priority: "Normal", requiredDate: "2099-03-01", erpDepartment: "APPENG",
     lines: [{ lineType: "Unplanned", module: "Panel", description: "Valve block", unit: "pcs", quantity: 1, unitPrice: price }] }, 201);
   const pr12 = await forUnit(12000);
+  // Its number says what it is for: discipline, project, drawing, and the round for that Unit.
+  assert.equal(pr12.number, "REQ-ME-PC-FRESH-MZ08-U001-01");
   let unit12 = await detailOf(pr12.id);
   assert.deepEqual(unit12.unit, { id: valve.id, module: "Panel", discipline: "ME", drawingNo: "MZ08-U001", unitName: "MASTER VALVE UNIT", budget: 15000, requestedElsewhere: 0, thisRequest: 12000 });
   assert.ok(!unit12.ruleFlags.some((flag: Json) => flag.code === "over_unit_budget"));
   assert.deepEqual((await call("GET", "/purchase-requisitions", "Requester")).filter((item: Json) => item.id === pr12.id).map((item: Json) => [item.unitId, item.unitLabel]), [[valve.id, "ME · MZ08-U001 MASTER VALVE UNIT"]]);
   // The next one takes the Unit 2,000 over what it was given: its approver is told, as for a module over its budget.
   const pr13 = await forUnit(5000);
+  assert.equal(pr13.number, "REQ-ME-PC-FRESH-MZ08-U001-02");
   const unit13 = await detailOf(pr13.id);
   assert.deepEqual([unit13.unit.requestedElsewhere, unit13.unit.thisRequest], [12000, 5000]);
   assert.deepEqual(unit13.ruleFlags.filter((flag: Json) => flag.code === "over_unit_budget").map((flag: Json) => [flag.level, flag.text]), [["manager", "Unit MZ08-U001 MASTER VALVE UNIT: 2,000 THB over its budget"]]);
@@ -574,9 +585,21 @@ try {
   const moved = await call("PUT", `/purchase-requisitions/${pr13.id}`, "Requester", { rowVersion: pr13.rowVersion, unitId: general.id, priority: "Normal", requiredDate: "2099-03-01",
     lines: [{ lineType: "Unplanned", module: "Panel", description: "Valve block", unit: "pcs", quantity: 1, unitPrice: 5000 }] });
   assert.deepEqual([(await detailOf(pr13.id)).unit.id, (await detailOf(pr13.id)).unit.unitName], [general.id, "Common parts"]);
+  // Moved to the general Unit, the draft takes that Unit's number; moved to no Unit, the project's next one.
+  assert.deepEqual([moved.number, (await detailOf(pr13.id)).purchaseRequisition.number], ["REQ-ME-PC-FRESH-GEN-01", "REQ-ME-PC-FRESH-GEN-01"]);
   await call("PUT", `/purchase-requisitions/${pr13.id}`, "Requester", { rowVersion: moved.rowVersion, priority: "Normal", requiredDate: "2099-03-01",
     lines: [{ lineType: "Unplanned", module: "Panel", description: "Valve block", unit: "pcs", quantity: 1, unitPrice: 5000 }] });
   assert.equal((await detailOf(pr13.id)).unit, null);
+  assert.match(String((await detailOf(pr13.id)).purchaseRequisition.number), /^REQ-PC-FRESH-[0-9]{2}$/);
+  // The Unit's next request does not reuse a round a moved or cancelled request once held.
+  const pr14 = await forUnit(1);
+  assert.equal(pr14.number, "REQ-ME-PC-FRESH-MZ08-U001-02");
+  // A request over its Unit's budget needs its reason too.
+  await call("POST", `/purchase-requisitions/${pr14.id}/cancel`, "Requester", { rowVersion: pr14.rowVersion, reason: "only for the number" });
+  const pr15 = await forUnit(5000);
+  assert.equal(pr15.number, "REQ-ME-PC-FRESH-MZ08-U001-03");
+  assert.match((await call("POST", `/purchase-requisitions/${pr15.id}/submit`, "Requester", { rowVersion: pr15.rowVersion }, 422)).message, /Unit MZ08-U001 MASTER VALVE UNIT: 2,000 THB over its budget/);
+  await call("POST", `/purchase-requisitions/${pr15.id}/cancel`, "Requester", { rowVersion: pr15.rowVersion, reason: "only for the reason check" });
 
   // The project's picture: each Unit, each Module's share given out, and each discipline's total.
   units = await unitsOf(fresh);

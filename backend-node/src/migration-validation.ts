@@ -99,6 +99,7 @@ export const REQUIRED_MIGRATIONS: readonly MigrationIdentity[] = [
   { version: 111, fileName: "111_erp_request_list.sql", name: "ERP request list line status" },
   { version: 112, fileName: "112_request_list_line_grants.sql", name: "Request list line grants" },
   { version: 113, fileName: "113_purchase_units.sql", name: "Purchase units under a module" },
+  { version: 114, fileName: "114_request_numbers.sql", name: "Request numbers and over-budget reason" },
 ] as const;
 
 export const REQUIRED_SCHEMA_VERSION = REQUIRED_MIGRATIONS.at(-1)!.version;

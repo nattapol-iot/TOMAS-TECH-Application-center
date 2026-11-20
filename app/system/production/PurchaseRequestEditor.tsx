@@ -18,7 +18,7 @@ type ErpOptions = { enabled: boolean; departments: Array<{ value: string; label:
 type Workspace = { bom: { id: number; number: string; projectId: number; projectNumber: string; projectName: string }; lines: Array<PrBomLine & { purchaseRequired: number }>; modules: PrModuleBudget[] };
 /** A draft PR reopened in the sheet: its header, its saved lines and the row version the save must still match. */
 export type PrEditing = { id: number; number: string; rowVersion: string; bomId: number; priority: string; requiredDate: string; purpose: string;
-  erpDepartment: string | null; unitId?: number | null; lines: PrSavedLine[] };
+  erpDepartment: string | null; unitId?: number | null; overBudgetReason?: string | null; lines: PrSavedLine[] };
 
 const EMPTY: never[] = [];
 const money = (value: number) => new Intl.NumberFormat(currentLocale(), { style: "currency", currency: "THB", maximumFractionDigits: 2 }).format(Number(value));
@@ -122,6 +122,10 @@ export function PurchaseRequestEditor({ released, editing, start, onClose, onCre
   // The Unit's budget with this sheet counted. A draft being edited is already among the Unit's requests, so what it had saved comes out first.
   const ownSaved = editing && editing.unitId === unit?.id ? editing.lines.reduce((sum, line) => sum + Number(line.quantity) * Number(line.unitPrice), 0) : 0;
   const unitBudget = unit ? unitOnSheet(unit, total, ownSaved) : null;
+  // More than the Unit or a Module has: the requester says why before the request can be sent for approval.
+  const overBudget = Boolean(unitBudget?.over) || statuses.some((status) => status.level !== "ok" && status.thisRequest > 0);
+  const [justification, setJustification] = useState(editing?.overBudgetReason ?? "");
+  const needsReason = overBudget && !justification.trim();
   // Choosing a Unit charges the rows that have no module yet to the Unit's module.
   const chooseUnit = (next: number | null) => {
     setUnitChoice({ bomId: effectiveBomId, unitId: next });
@@ -215,7 +219,7 @@ export function PurchaseRequestEditor({ released, editing, start, onClose, onCre
         : await apiRequest<Saved>("/api/v1/purchase-requisitions/", { method: "POST", body: JSON.stringify({ bomId: effectiveBomId, ...fields }) });
       if (!send) { onCreated({ number: saved.number, submitted: false }); return; }
       try {
-        await apiRequest(`/api/v1/purchase-requisitions/${saved.id}/submit`, { method: "POST", body: JSON.stringify({ rowVersion: saved.rowVersion, comment: "Submitted from the PR sheet" }) });
+        await apiRequest(`/api/v1/purchase-requisitions/${saved.id}/submit`, { method: "POST", body: JSON.stringify({ rowVersion: saved.rowVersion, comment: "Submitted from the PR sheet", justification: overBudget ? justification.trim() : undefined }) });
         onCreated({ number: saved.number, submitted: true });
       } catch (sendError) { onCreated({ number: saved.number, submitted: false, submitError: sendError instanceof Error ? sendError.message : String(sendError) }); }
     } catch (submitError) {
@@ -333,11 +337,14 @@ export function PurchaseRequestEditor({ released, editing, start, onClose, onCre
           <div><span><LocalizedText text={"ผู้อนุมัติ"} /></span><strong data-guide="pr.approvers">{approvers ? approvers.map((approver) => approver.name).join(" → ") : needsManagement ? "PM + EM" : "PM"}</strong><small><LocalizedText text={"แล้วส่งเข้า ERP อัตโนมัติ"} /></small></div>
           <div className="accent"><span><LocalizedText text={"ยอดขอซื้อ (ประมาณ)"} /></span><strong>{money(total)}</strong><TablePageSize value={pageSize} onChange={(size) => { setPageSize(size); setPage(1); }} /></div>
         </div>
+        {overBudget ? <label className={`pr-over-reason${needsReason ? " missing" : ""}`} data-guide="pr.over-reason">
+          <span><Icon name="alertTriangle" /><LocalizedText text={"ใบนี้เกินงบ ใส่เหตุผลให้ผู้อนุมัติอ่านก่อนส่งขออนุมัติ"} /></span>
+          <textarea rows={2} maxLength={2000} value={justification} onChange={(event) => setJustification(event.target.value)} placeholder={t("เช่น ราคาขึ้นจากตอนประเมิน หรือลูกค้าขอเพิ่มงาน")} /></label> : null}
         <Toolbar>
           <span className="spacer" />
           <button className="btn ghost" type="button" onClick={onClose} disabled={busy}><LocalizedText text={"Cancel"} /></button>
           <button className="btn ghost" type="button" disabled={busy || !selected.length || issues.size > 0} onClick={() => { void submit(false); }}><LocalizedText text={"Save Draft"} /></button>
-          <button className="btn primary" type="button" data-guide="pr.submit" disabled={busy || !selected.length || issues.size > 0} onClick={() => { void submit(true); }}>
+          <button className="btn primary" type="button" data-guide="pr.submit" disabled={busy || !selected.length || issues.size > 0 || needsReason} onClick={() => { void submit(true); }}>
             <Icon name="send" />{busy ? <LocalizedText text={"Saving…"} /> : <>{t("ส่งขออนุมัติ")} ({selected.length})</>}</button>
         </Toolbar>
       </> : <EmptyState icon="layers" title="No released BOM" message="Release a BOM before creating a requisition" />}

@@ -241,3 +241,20 @@ test("a BOM at or over the review threshold needs a second person to release it"
   assert.equal(needsSecondReleaser(1, 0, 7, 7), true, "a threshold of zero reviews every BOM");
   assert.equal(needsSecondReleaser(150_000, null, 7, 7), true, "no settings row: the default applies");
 });
+
+test("the app's request number says what the request is for and cannot be read as an ERP PR", async () => {
+  const { overBudgetFlags, REQUEST_NUMBER_MAX, requestNumber } = await import("../src/procurement-rules.js");
+  // The owner's example (2026-11-20).
+  assert.equal(requestNumber("PJ260091", { discipline: "ME", drawingNo: "MZ08-U001", isGeneral: false }, 3), "REQ-ME-PJ260091-MZ08-U001-03");
+  assert.equal(requestNumber("PJ260091", { discipline: "EE", drawingNo: "", isGeneral: true }, 1), "REQ-EE-PJ260091-GEN-01");
+  assert.equal(requestNumber("PJ260091", null, 12), "REQ-PJ260091-12");
+  // Spaces, slashes and lower case in a drawing number do not reach the number.
+  assert.equal(requestNumber("pj260091", { discipline: "ME", drawingNo: " mz08 / u-001 ", isGeneral: false }, 1), "REQ-ME-PJ260091-MZ08-U-001-01");
+  // A long drawing number is cut, never the round, so the whole fits the column.
+  const long = requestNumber("PJ260091", { discipline: "ME", drawingNo: "MZ08-U001-" + "X".repeat(80), isGeneral: false }, 104);
+  assert.ok(long.length <= REQUEST_NUMBER_MAX && long.endsWith("-104") && long.startsWith("REQ-ME-PJ260091-MZ08-U001-X"), long);
+  assert.doesNotMatch(requestNumber("PJ000000", null, 1), /^PR/);
+  // Only going over a Unit's or a Module's budget asks the requester for a reason.
+  const flags = [{ code: "over_unit_budget", level: "manager" as const, text: "u" }, { code: "over_module_budget", level: "management" as const, text: "m" }, { code: "emergency", level: "management" as const, text: "e" }];
+  assert.deepEqual(overBudgetFlags(flags).map((flag) => flag.code), ["over_unit_budget", "over_module_budget"]);
+});

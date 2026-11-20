@@ -2693,6 +2693,20 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
+        target: "pr.over-reason", action: "next", view: "purchase",
+        title: { th: "ถ้าเกินงบ ใส่เหตุผล", en: "Over budget? Give the reason", jp: "予算超過なら理由を入力" },
+        body: {
+          th: "เมื่อยอดของใบนี้เกินงบของ Unit หรือของ Module ช่องนี้จะขึ้นมา พิมพ์เหตุผลให้ผู้อนุมัติอ่าน เช่น ราคาขึ้นจากตอนประเมิน ถ้ายังไม่ใส่ จะกด 'ส่งขออนุมัติ' ไม่ได้ แต่บันทึกร่างได้",
+          en: "When this PR takes its Unit or a Module over budget, this box appears. Type the reason for the approvers, for example that the price rose since the estimate. Without it, Submit for approval stays off; Save Draft still works.",
+          jp: "このPRがUnitまたはモジュールの予算を超えると、この欄が表示されます。承認者が読む理由（見積時より価格が上がった等）を入力します。未入力では「承認申請」は押せませんが、下書き保存はできます。",
+        },
+        missing: {
+          th: "ช่องนี้ขึ้นเฉพาะเมื่อใบนี้เกินงบ ถ้าอยู่ในงบ ไม่ต้องใส่อะไร",
+          en: "The box shows only when this PR is over budget. Within budget there is nothing to fill in.",
+          jp: "この欄は予算超過のときだけ表示されます。予算内であれば入力は不要です。",
+        },
+      },
+      {
         target: "pr.submit", action: "click", view: "purchase",
         title: { th: "ส่งขออนุมัติ", en: "Submit for approval", jp: "承認申請" },
         body: {

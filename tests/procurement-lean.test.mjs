@@ -128,7 +128,7 @@ test("the PR sheet takes many items and sends the PR in one press (owner 2026-11
   // One press saves the draft and submits it with the row version the save returned; a failed submit leaves the draft and says so.
   assert.match(editor, /await apiRequest\(`\/api\/v1\/purchase-requisitions\/\$\{saved\.id\}\/submit`, \{ method: "POST", body: JSON\.stringify\(\{ rowVersion: saved\.rowVersion,/);
   assert.match(editor, /onCreated\(\{ number: saved\.number, submitted: false, submitError:/);
-  assert.match(editor, /data-guide="pr\.submit" disabled=\{busy \|\| !selected\.length \|\| issues\.size > 0\} onClick=\{\(\) => \{ void submit\(true\); \}\}/);
+  assert.match(editor, /data-guide="pr\.submit" disabled=\{busy \|\| !selected\.length \|\| issues\.size > 0 \|\| needsReason\} onClick=\{\(\) => \{ void submit\(true\); \}\}/);
   assert.match(editor, /onClick=\{\(\) => \{ void submit\(false\); \}\}><LocalizedText text=\{"Save Draft"\} \/>/);
   assert.match(material, /saved\.submitted \? uiText\("ส่งขออนุมัติแล้ว"\)/);
 });

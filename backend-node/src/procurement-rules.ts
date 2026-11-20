@@ -63,6 +63,24 @@ export function remainingToRequest(line: { required: number; customerSupplied: n
   return Math.max(0, round(line.required - covered - line.customerSupplied - line.requested, 4));
 }
 
+/** dbo.mat_prs.pr_no after migration 114. */
+export const REQUEST_NUMBER_MAX = 50;
+const numberPart = (value: string) => value.toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+/**
+ * The app's own number for a request. It must not read like an ERP PR (PR2611-0001), and it says what the request is for:
+ * REQ-<discipline>-<project>-<drawing>-<round>, as the PR-Form files were named. The general Unit's drawing is GEN; a request
+ * that belongs to no Unit is REQ-<project>-<round>. A long drawing number is cut so the whole fits the column.
+ */
+export function requestNumber(projectNumber: string, unit: { discipline: string; drawingNo: string; isGeneral: boolean } | null, round: number): string {
+  const project = numberPart(projectNumber) || "PROJECT", tail = String(round).padStart(2, "0");
+  if (!unit) return `REQ-${project.slice(0, REQUEST_NUMBER_MAX - 5 - tail.length)}-${tail}`;
+  const head = `REQ-${unit.discipline}-${project.slice(0, 20)}-`;
+  const drawing = unit.isGeneral ? "GEN" : numberPart(unit.drawingNo) || "UNIT";
+  return `${head}${drawing.slice(0, REQUEST_NUMBER_MAX - head.length - tail.length - 1).replace(/-+$/, "")}-${tail}`;
+}
+/** The flags that mean the request asks for more than its Unit or a Module has: its requester gives a reason when submitting. */
+export const overBudgetFlags = (flags: RuleFlag[]): RuleFlag[] => flags.filter((flag) => flag.code === "over_unit_budget" || flag.code === "over_module_budget");
+
 /** The discipline a purchase Unit belongs to, as the PR-Form files were named: Mechanical, Electrical, Software, Installation. */
 export const PURCHASE_DISCIPLINES = ["ME", "EE", "SW", "IN"] as const;
 export type PurchaseDiscipline = (typeof PURCHASE_DISCIPLINES)[number];
