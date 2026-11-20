@@ -7,7 +7,7 @@ import { Badge, EmptyState, Field, FilterChips, Icon, Pagination, Panel, SearchI
 import { exportXlsx } from "../../../lib/export-xlsx";
 import { readWorkbookSheets } from "../../../lib/import-spreadsheet";
 import { estimateBusinessDate } from "../../../lib/estimate-ux";
-import { addPastedRows, afterEdit, asPlanned, blankPrRows, draftFromPaste, draftFromPr, draftFromSheet, draftIssues, isBlankPrRow, moduleStatus, payloadLines, rowFromBomLine, sheetRows, templateRows,
+import { addPastedRows, afterEdit, asPlanned, blankPrRows, draftFromPaste, draftFromPr, draftFromSheet, draftIssues, insertBlankPrRow, isBlankPrRow, moduleStatus, payloadLines, rowFromBomLine, sheetRows, templateRows,
   type PrBomLine, type PrDraftRow, type PrModuleBudget, type PrModuleStatus, type PrRowKind, type PrSavedLine } from "../../../lib/pr-spreadsheet";
 import { useEndpoint } from "./material-endpoint";
 import { DateInput } from "../DateInput";
@@ -108,16 +108,24 @@ export function PurchaseRequestEditor({ released, editing, onClose, onCreated }:
 
   // The module a new row is charged to until the engineer says otherwise: the filter in use, or the BOM's only one.
   const newRowModule = module ?? onlyModule;
+  // After a new row is drawn: its cell in the column the person was in (its part number by default).
+  const focusRow = (key: string, column = 2) => window.setTimeout(() => {
+    const row = sheet.current?.querySelector<HTMLTableRowElement>(`tr[data-row="${key}"]`);
+    row?.cells[column]?.querySelector<HTMLInputElement>("input, select")?.focus(); row?.scrollIntoView({ block: "nearest" });
+  }, 0);
   const addUnplanned = (count: number, focusColumn?: number) => {
     const added = blankPrRows(count, newRowModule, String(Date.now()));
     setRows([...rows, ...added]);
     setSearch(""); setPage(Math.ceil((visible.length + 1) / pageSize));
-    // After the new rows are drawn: the first one's cell in the column the person was in (its part number by default).
-    window.setTimeout(() => {
-      const row = sheet.current?.querySelector<HTMLTableRowElement>(`tr[data-row="${added[0]!.key}"]`);
-      const cell = row?.cells[focusColumn ?? 2]?.querySelector<HTMLInputElement>("input, select");
-      cell?.focus(); row?.scrollIntoView({ block: "nearest" });
-    }, 0);
+    focusRow(added[0]!.key, focusColumn);
+  };
+  // The + at the end of a row opens an empty row right under it, charged to the same module (owner 2026-11-20).
+  const insertBelow = (row: PrDraftRow) => {
+    const next = insertBlankPrRow(rows, row.key, module ?? (row.module || onlyModule), String(Date.now()));
+    setRows(next.rows); setSearch("");
+    const inView = next.rows.filter((item) => !module || item.module.toLocaleLowerCase() === module.toLocaleLowerCase());
+    setPage(Math.floor(inView.findIndex((item) => item.key === next.key) / pageSize) + 1);
+    focusRow(next.key);
   };
   // An estimate line goes into the sheet above the empty rows, prefilled; the engineer then types what is really bought over it.
   const pull = (pulled: PrBomLine[]) => {
@@ -255,7 +263,7 @@ export function PurchaseRequestEditor({ released, editing, onClose, onCreated }:
             <td><Badge tone={LEVEL_TONE[status.level]}>{t(budgetNote(status, Boolean(approvers)))}{status.level !== "ok" && Number.isFinite(status.percent) ? ` (${status.percent.toFixed(1)}%)` : ""}</Badge></td></tr>)}</tbody></table></div> : null}
         {rows.length ? <div className="table-wrap tall" data-guide="pr.lines" ref={sheet}><table className="pr-plan-table">
           {/* An ERP line grid: fixed columns, the description takes what is left, and a control fills its cell. */}
-          <colgroup>{[84, 120, 130, 0, 84, 130, 92, 54, 104, 110, 110, 68].map((width, index) => <col key={index} style={width ? { width } : undefined} />)}</colgroup>
+          <colgroup>{[84, 120, 130, 0, 84, 130, 92, 54, 104, 110, 110, 104].map((width, index) => <col key={index} style={width ? { width } : undefined} />)}</colgroup>
           <thead><tr><th><LocalizedText text={"Source"} /></th>
           <th><LocalizedText text={"Item code"} /></th><th><LocalizedText text={"Part No."} /></th><th><LocalizedText text={"Description"} /></th><th><LocalizedText text={"Brand"} /></th>
           <th><LocalizedText text={"Module"} /></th><th className="num"><LocalizedText text={"Qty"} /></th><th><LocalizedText text={"Unit"} /></th><th className="num"><LocalizedText text={"ราคาประมาณ"} /></th>
@@ -281,12 +289,17 @@ export function PurchaseRequestEditor({ released, editing, onClose, onCreated }:
                 onChange={(event) => update(row.key, { unitPrice: Number(event.target.value) })} /></td>
               <td className="num">{money(row.quantity * row.unitPrice)}</td>
               <td className="pg-in"><input {...grid} maxLength={500} value={row.remark} aria-label={t("Remark")} onChange={(event) => update(row.key, { remark: event.target.value })} /></td>
+              {/* Add and remove sit in the same place on every row; the way back to the estimate's item follows when there is one. */}
               <td className="pg-acts">
-                {row.lineType === "Substitute" && line ? rowAction("refresh", "ใช้ตาม Estimate", () => setRows(rows.map((item) => item.key === row.key ? asPlanned(row, line) : item))) : null}
+                <button className="pg-act" type="button" title={t("แทรกแถวใต้แถวนี้")} aria-label={t("แทรกแถวใต้แถวนี้")} onClick={() => insertBelow(row)}><Icon name="plus" /></button>
                 {rowAction("trash", "ลบแถว", () => setRows(rows.filter((item) => item.key !== row.key)))}
+                {row.lineType === "Substitute" && line ? rowAction("refresh", "ใช้ตาม Estimate", () => setRows(rows.map((item) => item.key === row.key ? asPlanned(row, line) : item))) : null}
               </td>
             </tr>;
-          })}</tbody></table></div> : <EmptyState icon="layers" title="ยังไม่มีรายการในใบนี้" message="กด 'เพิ่มแถว' 'วางจาก Excel' หรือดึงจากรายการใน Estimate" />}
+          })}</tbody>
+          {/* The table ends in an add-row line, so a new line is one press from where the engineer is typing. */}
+          {modules.length && currentPage === pageCount ? <tfoot><tr><td colSpan={12}><button className="pr-add-line" type="button" onClick={() => addUnplanned(1)}><Icon name="plus" /><LocalizedText text={"เพิ่มแถว"} /></button></td></tr></tfoot> : null}
+          </table></div> : <EmptyState icon="layers" title="ยังไม่มีรายการในใบนี้" message="กด 'เพิ่มแถว' 'วางจาก Excel' หรือดึงจากรายการใน Estimate" />}
         {visible.length > pageSize ? <Pagination page={currentPage} pageCount={pageCount} from={(currentPage - 1) * pageSize + 1} to={Math.min(currentPage * pageSize, visible.length)} total={visible.length} onPage={setPage} /> : null}
         <div className="pr-plan-summary" aria-label={t("Purchase plan summary")} data-guide="pr.summary">
           <div><span><LocalizedText text={"รายการที่ซื้อ"} /></span><strong>{selected.length}</strong><small>{t(KIND_LABEL.Planned)} {kinds("Planned")} · {t(KIND_LABEL.Substitute)} {kinds("Substitute")} · {t(KIND_LABEL.Unplanned)} {kinds("Unplanned")}</small></div>

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { addPastedRows, afterEdit, asPlanned, asSubstitute, blankPrRows, clipboardRows, draftFromBom, draftFromPaste, draftFromPr, draftFromSheet, draftIssues, isBlankPrRow, moduleStatus, rowFromBomLine, payloadLines, PR_TEMPLATE_HEADER_ROW, sheetRows, templateRows } from "../lib/pr-spreadsheet.ts";
+import { addPastedRows, afterEdit, asPlanned, asSubstitute, blankPrRows, clipboardRows, draftFromBom, draftFromPaste, draftFromPr, draftFromSheet, draftIssues, insertBlankPrRow, isBlankPrRow, moduleStatus, rowFromBomLine, payloadLines, PR_TEMPLATE_HEADER_ROW, sheetRows, templateRows } from "../lib/pr-spreadsheet.ts";
 
 const bom = [
   { id: 1, module: "Panel", itemCode: "PLC-01", partNumber: "6ES7-1", description: "PLC controller", brand: "Siemens", unit: "pcs", remaining: 2, estimatedUnitCost: 10000 },
@@ -158,4 +158,21 @@ test("a new PR starts as empty rows; an estimate line is brought in when wanted,
   assert.equal(draftIssues([afterEdit({ ...plc, partNumber: "S7-1500", quantity: 3 }, bom[0], true)], lines, modules).size, 0);
   // A typed row has no estimate line and stays as it is.
   assert.equal(afterEdit({ ...blank[0], description: "Bracket" }, undefined, true).lineType, "Unplanned");
+});
+
+test("an empty row opens right under the row it was asked from (owner 2026-11-20)", () => {
+  const rows = blankPrRows(3, "Panel", "t").map((row, index) => ({ ...row, description: `Item ${index}` }));
+  const middle = insertBlankPrRow(rows, "new-t-1", "Field", "s");
+  assert.deepEqual(middle.rows.map((row) => row.key), ["new-t-0", "new-t-1", "new-s-in-0", "new-t-2"]);
+  assert.equal(middle.key, "new-s-in-0");
+  const added = middle.rows[2];
+  assert.deepEqual([added.lineType, added.module, added.bomLineId, isBlankPrRow(added)], ["Unplanned", "Field", null, true]);
+  // The rows it was given are left as they were.
+  assert.equal(rows.length, 3);
+  // Under the last row, and at the end when the row is gone by then.
+  assert.deepEqual(insertBlankPrRow(rows, "new-t-2", "", "s").rows.map((row) => row.key), ["new-t-0", "new-t-1", "new-t-2", "new-s-in-0"]);
+  assert.deepEqual(insertBlankPrRow(rows, "gone", "", "s").rows.map((row) => row.key), ["new-t-0", "new-t-1", "new-t-2", "new-s-in-0"]);
+  // A second one under the same row gets its own key.
+  const twice = insertBlankPrRow(middle.rows, "new-t-1", "Field", "s2");
+  assert.equal(new Set(twice.rows.map((row) => row.key)).size, 5);
 });
