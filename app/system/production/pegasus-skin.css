@@ -270,7 +270,7 @@
 /* Where the request stands, on top of the sheet: its lines, what to fix, who approves in turn, the ERP, then the total. Steps
    are chevrons; one that is done is green, one that holds the request up is red, the rest wait in grey. */
 .pg-skin .pr-pipe { display: flex; gap: 0; min-width: 0; margin: 0; padding: 0; overflow-x: auto; list-style: none; }
-.pg-skin .pr-pipe > li { position: relative; display: flex; flex: 1 1 0; flex-direction: column; justify-content: center; gap: 1px; min-width: 130px; margin-left: -8px;
+.pg-skin .pr-pipe > li { position: relative; display: flex; flex: 1 1 0; flex-direction: column; justify-content: center; gap: 1px; min-width: 130px; margin-left: -5px;
   padding: 6px 16px 6px 24px; background: var(--pg-muted); clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 50%, calc(100% - 12px) 100%, 0 100%, 12px 50%); }
 .pg-skin .pr-pipe > li:first-child { margin-left: 0; padding-left: 14px; border-radius: 8px 0 0 8px; clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 50%, calc(100% - 12px) 100%, 0 100%); }
 .pg-skin .pr-pipe > li:last-child { flex: 1.2 1 0; padding-right: 14px; border-radius: 0 8px 8px 0; clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%, 12px 50%); }
