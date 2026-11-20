@@ -179,13 +179,15 @@ log "Building images"
 compose build
 # Apply additive schema changes before replacing the currently running API.
 # A migration failure stops deployment here, leaving the old containers running.
-log "Applying database migrations before container replacement"
+log "Applying database migrations before container replacement (a pending migration is preceded by a database backup)"
 # Migrations alter the schema, which the iot_team_app login cannot. The owner login from .env goes
 # to this one-off container only, never to the long-running API; unset, migrations reuse the API's.
 migrations_connection="$(sed -n 's/^DEV_MIGRATIONS_CONNECTION_STRING=//p' .env 2>/dev/null | tail -n 1)"
 migrations_connection="${migrations_connection%\"}"; migrations_connection="${migrations_connection#\"}"
 export ConnectionStrings__Migrations="$migrations_connection"
-compose run --rm --no-deps -e ConnectionStrings__Migrations api node --input-type=module -e 'import { loadConfig } from "./dist/src/config.js"; import { runConfiguredMigrations } from "./dist/src/startup-migrations.js"; const config = loadConfig(); if (config.database.runMigrations === false) throw new Error("Deployment requires database migrations to be enabled"); await runConfiguredMigrations(config, console.log);'
+# Database__BackupBeforeMigrations: when a migration is pending, the runner first writes a COPY_ONLY backup to the SQL Server's
+# default backup directory and stops, with nothing migrated, if it cannot (owner rule 2026-11-20). No pending migration, no backup.
+compose run --rm --no-deps -e ConnectionStrings__Migrations -e Database__BackupBeforeMigrations=true api node --input-type=module -e 'import { loadConfig } from "./dist/src/config.js"; import { runConfiguredMigrations } from "./dist/src/startup-migrations.js"; const config = loadConfig(); if (config.database.runMigrations === false) throw new Error("Deployment requires database migrations to be enabled"); await runConfiguredMigrations(config, console.log);'
 unset ConnectionStrings__Migrations
 # A Caddyfile Caddy cannot load would leave every site down after the recreate below; check it
 # first, with the same image and environment, while the running containers still serve.
