@@ -120,9 +120,10 @@ const TASK_COLUMNS = `id,project_id,parent_id,sort_order,kind,name,is_milestone,
  baseline_days,baseline_rev,actual_start,actual_end,forecast_end,percent_done,status,blocked_reason,note,actual_man_days,
  updated_by,updated_at,row_version,labor_source,labor_supplier,people_by_day`;
 
+const TASKS_SQL = `SELECT ${TASK_COLUMNS} FROM dbo.schedule_tasks WHERE project_id=@project AND deleted_at IS NULL ORDER BY parent_id,sort_order,id;`;
 export async function readTasks(transaction: TransactionType, projectId: number): Promise<TaskRow[]> {
   const request = new sql.Request(transaction); request.input("project", sql.BigInt, projectId);
-  return (await request.query<Record<string, unknown> & { row_version: Buffer }>(`SELECT ${TASK_COLUMNS} FROM dbo.schedule_tasks WHERE project_id=@project AND deleted_at IS NULL ORDER BY parent_id,sort_order,id;`)).recordset.map(taskRow);
+  return (await request.query<Record<string, unknown> & { row_version: Buffer }>(TASKS_SQL)).recordset.map(taskRow);
 }
 export async function readTask(transaction: TransactionType, id: number): Promise<TaskRow> {
   const request = new sql.Request(transaction); request.input("id", sql.BigInt, id);
@@ -184,7 +185,10 @@ const ACTIVE_PIC_SQL = "u.is_active=1 AND u.deleted_at IS NULL AND EXISTS(SELECT
 export const hasNoActivePic = (pics: PicRow[] | undefined): boolean => !(pics ?? []).some((pic) => pic.active);
 export async function readPics(transaction: TransactionType, projectId: number): Promise<Map<number, PicRow[]>> {
   const request = new sql.Request(transaction); request.input("project", sql.BigInt, projectId);
-  const rows = (await request.query<Record<string, unknown>>(`SELECT pic.task_id,u.id,u.name,u.email,CAST(CASE WHEN ${ACTIVE_PIC_SQL} THEN 1 ELSE 0 END AS bit) active FROM dbo.schedule_task_pics pic INNER JOIN dbo.schedule_tasks t ON t.id=pic.task_id INNER JOIN dbo.users u ON u.id=pic.user_id WHERE t.project_id=@project AND t.deleted_at IS NULL ORDER BY pic.task_id,u.name,u.id;`)).recordset;
+  return picsByTask((await request.query<Record<string, unknown>>(PICS_SQL)).recordset);
+}
+const PICS_SQL = `SELECT pic.task_id,u.id,u.name,u.email,CAST(CASE WHEN ${ACTIVE_PIC_SQL} THEN 1 ELSE 0 END AS bit) active FROM dbo.schedule_task_pics pic INNER JOIN dbo.schedule_tasks t ON t.id=pic.task_id INNER JOIN dbo.users u ON u.id=pic.user_id WHERE t.project_id=@project AND t.deleted_at IS NULL ORDER BY pic.task_id,u.name,u.id;`;
+function picsByTask(rows: Record<string, unknown>[]): Map<number, PicRow[]> {
   const result = new Map<number, PicRow[]>();
   for (const row of rows) { const id = Number(row.task_id); const list = result.get(id) ?? []; list.push({ id: Number(row.id), name: String(row.name), email: String(row.email), active: row.active !== false }); result.set(id, list); }
   return result;
@@ -267,8 +271,45 @@ export type ManagedTask = { state: string; acknowledged: boolean; assigneeId: nu
 /** Schedule rows a Resource Plan task manages: their plan and progress go through Resource Plan approval. */
 export async function readManagedTaskIds(transaction: TransactionType, projectId: number): Promise<Map<number, ManagedTask>> {
   const request = new sql.Request(transaction); request.input("project", sql.BigInt, projectId);
-  const rows = (await request.query<{ schedule_task_id: number | string; state: string; acknowledged_at: unknown; assignee_id: number | string }>(`SELECT schedule_task_id,state,acknowledged_at,assignee_id FROM dbo.resource_tasks WHERE project_id=@project AND schedule_task_id IS NOT NULL;`)).recordset;
-  return new Map(rows.map((row) => [Number(row.schedule_task_id), { state: String(row.state), acknowledged: row.acknowledged_at != null, assigneeId: Number(row.assignee_id) }]));
+  return managedByTask((await request.query<ManagedRow>(MANAGED_SQL)).recordset);
+}
+type ManagedRow = { schedule_task_id: number | string; state: string; acknowledged_at: unknown; assignee_id: number | string };
+const MANAGED_SQL = `SELECT schedule_task_id,state,acknowledged_at,assignee_id FROM dbo.resource_tasks WHERE project_id=@project AND schedule_task_id IS NOT NULL;`;
+const managedByTask = (rows: ManagedRow[]): Map<number, ManagedTask> =>
+  new Map(rows.map((row) => [Number(row.schedule_task_id), { state: String(row.state), acknowledged: row.acknowledged_at != null, assigneeId: Number(row.assignee_id) }]));
+
+/** Between the statements of one batch; the route tests split a batch on it to answer each statement. */
+export const BATCH_SEPARATOR = "\n/* next */\n";
+export type ProjectWork = {
+  tasks: TaskRow[]; pics: Map<number, PicRow[]>; managed: Map<number, ManagedTask>; version: Buffer | null;
+  /** Open requests for more days, newest first. */
+  pendingRows: Record<string, unknown>[];
+  /** Resource Plan tasks approved for this person and not yet acknowledged. */
+  acknowledgmentRows: { schedule_task_id: number | string }[];
+  /** The last progress report per task: quiet days count from it, not from updated_at, which plan edits and baselines also touch. */
+  progressRows: { task_id: number | string; last_at: unknown }[];
+};
+const PROJECT_WORK_SQL = [
+  TASKS_SQL,
+  PICS_SQL,
+  `SELECT id,task_id,actor_id,request_days,comment,occurred_at FROM dbo.schedule_updates WHERE project_id=@project AND task_id IS NOT NULL AND field=N'request' AND request_days>0 AND answer IS NULL ORDER BY occurred_at DESC,id DESC;`,
+  `SELECT schedule_task_id FROM dbo.resource_tasks WHERE project_id=@project AND assignee_id=@actor AND state=N'Approved' AND acknowledged_at IS NULL AND schedule_task_id IS NOT NULL;`,
+  `SELECT task_id,MAX(occurred_at) last_at FROM dbo.schedule_updates WHERE project_id=@project AND task_id IS NOT NULL AND field IN (${PROGRESS_REPORT_FIELDS_SQL}) GROUP BY task_id;`,
+  MANAGED_SQL,
+  `SELECT TOP(1) row_version FROM dbo.schedule_tasks WHERE project_id=@project ORDER BY row_version DESC;`,
+].join(BATCH_SEPARATOR);
+/**
+ * Everything My Work reads of one project, in one round trip. Under the application role the API holds a single database
+ * connection, so the seven reads per project, one after another, took seconds for someone on many projects.
+ */
+export async function readProjectWork(transaction: TransactionType, projectId: number, actorId: number): Promise<ProjectWork> {
+  const request = new sql.Request(transaction); request.input("project", sql.BigInt, projectId); request.input("actor", sql.BigInt, actorId);
+  // One record set per statement, in the batch's order. (No generic arrow function: a test parses this file as TSX.)
+  const sets = (await request.query(PROJECT_WORK_SQL)).recordsets as unknown as unknown[][];
+  const set = (index: number): unknown[] => sets[index] ?? [];
+  return { tasks: (set(0) as Array<Record<string, unknown> & { row_version: Buffer }>).map(taskRow), pics: picsByTask(set(1) as Record<string, unknown>[]),
+    pendingRows: set(2) as Record<string, unknown>[], acknowledgmentRows: set(3) as ProjectWork["acknowledgmentRows"], progressRows: set(4) as ProjectWork["progressRows"],
+    managed: managedByTask(set(5) as ManagedRow[]), version: (set(6) as Array<{ row_version: Buffer }>)[0]?.row_version ?? null };
 }
 /** The resource-tasks.ts preHandler's rule for progress on a managed row: an Approved task its assignee has acknowledged. */
 export function managedProgressReady(managed: ManagedTask, actorId: number): boolean {

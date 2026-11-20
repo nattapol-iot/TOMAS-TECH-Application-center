@@ -8,7 +8,7 @@ import type { Database } from "../src/db.js";
 import { ApiError, dayRequestAnswerError, registerErrorHandler } from "../src/errors.js";
 import { registerResourceTaskRoutes } from "../src/routes/resource-tasks.js";
 import { registerScheduleRoutes } from "../src/routes/schedule.js";
-import { isOwnPlanTask, canAnswerDayRequests, canPostProgress, datesWouldLoop, managedProgressReady, MAX_PLAN_DEPTH, placeInOrder, planInput, scheduleParentAllowed, validateGraphAndHierarchy } from "../src/schedule-service.js";
+import { BATCH_SEPARATOR, isOwnPlanTask, canAnswerDayRequests, canPostProgress, datesWouldLoop, managedProgressReady, MAX_PLAN_DEPTH, placeInOrder, planInput, scheduleParentAllowed, validateGraphAndHierarchy } from "../src/schedule-service.js";
 import { resolveSchedule, type ScheduleCalculationTask } from "../src/schedule-calculator.js";
 import type { CurrentUserService } from "../src/users.js";
 
@@ -178,6 +178,8 @@ function installSqlMock(t: TestContext, answer: (statement: string, params: Para
   });
   const run = (self: object, statement: string, execute: boolean) => {
     const params = { ...(bags.get(self) ?? {}) }; statements.push({ statement, params, execute });
+    // A batch (My Work reads a project in one round trip) is answered statement by statement, as SQL Server returns one set each.
+    if (statement.includes(BATCH_SEPARATOR)) { const recordsets = statement.split(BATCH_SEPARATOR).map((part) => answer(part, params, execute)?.recordset ?? []); return { recordset: recordsets[0], recordsets, rowsAffected: [1] }; }
     return answer(statement, params, execute) ?? { recordset: [], rowsAffected: [1] };
   };
   t.mock.method(sql.Request.prototype, "query", async function (this: object, statement: string) { return run(this, statement, false); });
@@ -610,6 +612,28 @@ test("GET me/work: a Resource Plan row cannot add details or request days", asyn
     assert.deepEqual([byId[5]!.managedByResourcePlan, byId[5]!.canAddDetail, byId[5]!.canRequestDays], [true, false, false]);
     assert.deepEqual([byId[8]!.managedByResourcePlan, byId[8]!.canAddDetail, byId[8]!.canRequestDays], [false, true, true]);
     assert.deepEqual([byId[9]!.managedByResourcePlan, byId[9]!.canAddDetail, byId[9]!.canRequestDays], [false, false, false]);
+  } finally { await app.close(); }
+});
+
+test("GET me/work reads each project in one round trip (owner 2026-11-20: My Work took 2.4 s)", async (t) => {
+  const actor = { id: 30, role: "Engineer" };
+  const { app } = harness(actor);
+  const project = (id: number) => ({ id, project_no: `P-26-00${id}`, name: `Project ${id}`, manager_id: MANAGER_ID, manager_name: "PM", status: "Design", can_update: true });
+  const statements = installSqlMock(t, (statement, params) => {
+    if (statement.includes("SELECT DISTINCT p.id,p.project_no")) return { recordset: [project(7), project(8), project(9)] };
+    if (statement.includes("FROM dbo.schedule_tasks WHERE project_id=@project AND deleted_at IS NULL ORDER BY")) return { recordset: [taskRaw({ id: Number(params.project) * 10, project_id: params.project, plan_start: "2027-03-01" })] };
+    if (statement.includes("SELECT pic.task_id,u.id")) return { recordset: [{ task_id: Number(params.project) * 10, id: actor.id, name: "Me", email: "me@example.test" }] };
+    if (statement.includes("SELECT TOP(1) row_version FROM dbo.schedule_tasks")) return { recordset: [{ row_version: SCHEDULE_VERSION }] };
+    return undefined;
+  });
+  try {
+    const response = await app.inject({ method: "GET", url: "/api/v1/me/work" });
+    assert.equal(response.statusCode, 200, response.body);
+    assert.deepEqual((response.json() as Array<Record<string, unknown>>).map((item) => item.taskId).sort(), [70, 80, 90]);
+    // Seven reads per project went one after another on the API's single connection. Now: one batch of seven statements each.
+    const batches = statements.filter((item) => item.statement.includes(BATCH_SEPARATOR));
+    assert.deepEqual(batches.map((item) => [item.params.project, item.params.actor, item.statement.split(BATCH_SEPARATOR).length]), [[7, 30, 7], [8, 30, 7], [9, 30, 7]]);
+    assert.equal(statements.filter((item) => !item.statement.includes(BATCH_SEPARATOR) && item.statement.includes("@project")).length, 0, "no other per-project read");
   } finally { await app.close(); }
 });
 

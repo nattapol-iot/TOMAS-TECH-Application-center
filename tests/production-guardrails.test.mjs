@@ -240,7 +240,8 @@ test("My Work exposes schedule effort without changing the audited update path",
   ]);
   assert.match(nodeRoute, /planManDays: task\.planManDays, actualManDays: task\.actualManDays/);
   assert.match(nodeRoute, /pendingAcknowledgmentTaskIds/);
-  assert.match(nodeRoute, /acknowledged_at IS NULL/);
+  // My Work reads a project in one batch (schedule-service readProjectWork); the unacknowledged-task read is one of its statements.
+  assert.match(await readFile(new URL("backend-node/src/schedule-service.ts", root), "utf8"), /assignee_id=@actor AND state=N'Approved' AND acknowledged_at IS NULL/);
   assert.match(nodeRoute, /!pendingAcknowledgmentTaskIds\.has\(item\.id\)/);
   assert.match(nodeRoute, /await appendUpdate\(transaction/);
   assert.match(nodeRoute, /await insertAudit\(transaction/);
@@ -1470,4 +1471,13 @@ test("the summary sheet shows what one Hardware set costs, on screen only", asyn
   // The ERP workbook is imported into another system; its layout does not change.
   const workbook = await readFile(new URL("lib/erp-estimate-workbook.ts", root), "utf8");
   assert.doesNotMatch(workbook, /Unit cost|unitCostPerSet/);
+});
+
+test("the app and API sites compress what they send; the git site is left alone (owner 2026-11-20)", async () => {
+  const caddy = await readFile(new URL("deploy/caddy/Caddyfile", root), "utf8");
+  const site = (start) => caddy.slice(caddy.indexOf(start), caddy.indexOf("\n}", caddy.indexOf(start)));
+  assert.match(site("{$PUBLIC_HOST}:{$TLS_FRONTEND_PORT} {"), /\n\tencode zstd gzip\r?\n/);
+  assert.match(site("{$PUBLIC_HOST}:{$TLS_API_PORT} {"), /\n\tencode zstd gzip\r?\n/);
+  // A git push is a full-duplex stream of an already packed body.
+  assert.doesNotMatch(site("{$TMTHUB_HOST}:{$TMTHUB_PORT} {"), /encode/);
 });
