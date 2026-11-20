@@ -27,7 +27,7 @@ test("an approved PR goes to the ERP, which picks suppliers and raises the PO; n
   assert.doesNotMatch(material, /\/convert`/);
   assert.doesNotMatch(requisitions, /purchase-requisitions\/:id\/convert|INSERT INTO dbo\.mat_pos/);
   // Final approval sends it as the requester; the requester can send it again, and opening it reads the ERP's status.
-  assert.match(requisitions, /decided\.status === "Approved" && erp\)[\s\S]*sendToErp\(id, decided\.requestedBy/);
+  assert.match(requisitions, /decided\.status === "Approved" && goesOn\)[\s\S]*sendToErp\(id, decided\.requestedBy/);
   assert.match(requisitions, /notifyUsers\(transaction, \[decided\.requestedBy\], "PR_ERP_SEND"/);
   assert.match(material, /\/api\/v1\/purchase-requisitions\/\$\{id\}\/erp-send`/);
   assert.match(material, /\/api\/v1\/purchase-requisitions\/\$\{id\}\/erp-sync`/);
@@ -103,7 +103,7 @@ test("the requester hears of every decision on their PR, by bell and email (owne
   assert.match(requisitions, /const told = await noticeRequester\(transaction, id, actor, \{ stepId: current\.id, step: current\.name, decision, comment \}\);/);
   assert.match(requisitions, /notifyUsers\(transaction, \[Number\(row\.requested_by\)\], "PR_DECISION"/);
   // A fully approved PR is mailed with the ERP's answer; every other decision at once.
-  assert.match(requisitions, /if \(decided\.status !== "Approved" \|\| !erp\) await tell\(decided\.told, null\);/);
+  assert.match(requisitions, /if \(decided\.status !== "Approved" \|\| !goesOn\) await tell\(decided\.told, null\);/);
   assert.match(requisitions, /void tell\(decided\.told, outcome\)/);
 });
 
@@ -235,7 +235,7 @@ test("the BOM's lines can be filtered, exported and ticked to start a PR; empty 
   assert.ok(material.includes("start={start ?? undefined} onClose={() => { setCreating(false); setStart(null); }}"));
   assert.ok(editor.includes("const [bomId, setBomId] = useState(start?.bomId ?? 0);"));
   // The ERP workbook's sheet name stays the default of the shared writer.
-  assert.ok(read("lib/export-xlsx.ts").includes('export function exportXlsx(rows:CellValue[][],filename:string,sheetName="Summary cost") {'));
+  assert.ok(read("lib/export-xlsx.ts").includes('export function exportXlsx(rows:CellValue[][],filename:string,sheetName="Summary cost",plain=false) {'));
 });
 
 test("BOM revisions count from zero and show as R<n>, like the estimate's (migration 109)", () => {
@@ -276,7 +276,7 @@ test("the ERP Request List: its tool names live in one file, and migration 111 k
   // A rename by the ERP team is a change in one file: no other source spells the tool names.
   for (const tool of ["project_request_list_add", "project_request_list_get", "project_request_list_cancel"]) {
     assert.ok(adapter.includes(`"${tool}"`), tool);
-    for (const other of ["backend-node/src/routes/purchase-requisitions.ts", "backend-node/src/erp-purchasing.ts", "backend-node/src/app.ts"]) assert.ok(!read(other).includes(tool), `${tool} in ${other}`);
+    for (const other of ["backend-node/src/routes/purchase-requisitions.ts", "backend-node/src/erp-purchasing.ts", "backend-node/src/app.ts", "app/system/production/MaterialScreens.tsx"]) assert.ok(!read(other).includes(tool), `${tool} in ${other}`);
   }
   const migration = read("database/migrations/111_erp_request_list.sql");
   assert.match(migration, /THROW 51111, 'Migration 110 must be applied before migration 111\.', 1;/);
@@ -289,4 +289,34 @@ test("the ERP Request List: its tool names live in one file, and migration 111 k
   assert.match(read("database/rollback/111_erp_request_list.rollback.sql"), /DROP TABLE dbo\.mat_pr_line_erp_orders;[^]*DELETE FROM dbo\.schema_versions WHERE version = 111;/);
   assert.ok(read("backend-node/src/migration-validation.ts").includes('{ version: 111, fileName: "111_erp_request_list.sql", name: "ERP request list line status" }'));
   assert.ok(read("database/scripts/020_deploy_fresh_database.sql").includes(":r database/migrations/111_erp_request_list.sql"));
+});
+
+test("an approved request goes to the ERP as the server is told: one PR, a sheet, or Request List lines (owner 2026-11-20)", () => {
+  // The default is unchanged: with the switch off, the send is purchase_request_create as before.
+  assert.ok(requisitions.includes('const requestList: RequestListMode = config.pegasusRequestList ?? "off";'));
+  assert.ok(requisitions.includes('if (requestList === "excel") return prepareForUpload(prId);'));
+  assert.ok(requisitions.includes('if (requestList === "tool") {'));
+  // The Request List belongs to a project: a placeholder number is stopped before the ERP is asked.
+  assert.match(requisitions, /const blocked = requestListProblem\(erpHeader\);\s+if \(blocked\) \{ await recordError\(prId, blocked\); return \{ sent: false, kind: "validation", message: blocked \}; \}/);
+  // The line keys are kept before the call, and the tool is named only through the adapter.
+  assert.ok(requisitions.indexOf("await assignLineRefs(prId, prepared.ref);\n      const added".replace("\n", requisitions.includes("\r\n") ? "\r\n" : "\n")) > 0);
+  assert.ok(requisitions.includes("erp.gateway.call<unknown>(subject, REQUEST_LIST_TOOLS.add,"));
+  // One read per request per 15 minutes, whoever asks; inside that the last answer is shown.
+  assert.ok(requisitions.includes("Date.now() - new Date(header.erp_synced_at).getTime() < ERP_LIST_SYNC_MINUTES * 60_000) return { synced: true, cached: true, erp: erpView(header) };"));
+  // A recall after sending marks the request; it is never taken back while the ERP's list holds it.
+  assert.match(requisitions, /UPDATE dbo\.mat_prs SET erp_cancel_pending=1 WHERE id=@id AND erp_target=N'REQUEST_LIST' AND deleted_at IS NULL;[^]*throw new ApiError\(409, "erp_cancel_pending"/);
+  // The screen: where the request is, each line's answer, a refresh, and the sheet.
+  assert.ok(material.includes('if (erp.target === "REQUEST_LIST") return <><span className="mono">Request List</span>'));
+  assert.ok(material.includes('{hasLineAnswers ? <td className="pg-line-erp"><LineErp erp={line.erp} /></td> : null}'));
+  // A line the ERP has not answered for shows no status: a sheet waiting to be uploaded is not "waiting for Purchasing".
+  assert.ok(material.includes('if (!erp?.status) return <span className="muted">—</span>;'));
+  assert.ok(material.includes('`RequestList_${pr.number}.xlsx`, REQUEST_LIST_SHEET.sheetName, true);'));
+  assert.ok(material.includes('data-guide="pr.request-list"') && material.includes('data-guide="pr.request-list-excel"'));
+  // Sending by hand is not offered where the server gives a sheet, or once the list holds the request.
+  assert.ok(material.includes('const canSend = Boolean(erp?.enabled && !erp.prNo && !inRequestList && listMode !== "excel")'));
+  // The shared workbook writer keeps the cost workbook's styling unless told the sheet is plain data.
+  assert.ok(read("lib/export-xlsx.ts").includes('export function exportXlsx(rows:CellValue[][],filename:string,sheetName="Summary cost",plain=false) {'));
+  // The app role may write a line's ERP answer (migration 112); without it, taking a request back would be refused.
+  assert.match(read("database/migrations/112_request_list_line_grants.sql"), /GRANT UPDATE \(erp_line_ref, erp_item_id, erp_line_status, erp_line_status_label, erp_cancelled_reason, erp_line_url\) ON OBJECT::dbo\.mat_pr_lines TO \[iot_team_app_role\];/);
+  assert.ok(read("backend-node/src/migration-validation.ts").includes('{ version: 112, fileName: "112_request_list_line_grants.sql", name: "Request list line grants" }'));
 });

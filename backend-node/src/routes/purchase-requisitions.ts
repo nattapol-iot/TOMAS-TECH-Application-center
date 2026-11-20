@@ -13,13 +13,15 @@ import { type ApprovalRoute, approvalSteps, type BomLineForRequest, ERP_STEP, FI
 import type { EmailService, PurchaseRequisitionApprovalEmail, PurchaseRequisitionDecisionEmail } from "../email.js";
 import { describeErpFailure, type ErpDepartment, type ErpFailure, type ErpGateway, type ErpLine, erpLineProblem, ERP_MAX_QUANTITY, type ErpRequest, erpRequestArguments,
   isFinalErpStatus, localStatusFor, newErpRef, suggestDepartment } from "../erp-purchasing.js";
+import { parseRequestListItems, REQUEST_LIST_TOOLS, requestListAddArguments, requestListLineRef, requestListProblem, requestStatusFor, type RequestListItem, type RequestListMode } from "../erp-request-list.js";
 import { demandProjectScope, isProjectElevated } from "../project-scope.js";
 import { notifyUsers } from "../site-visit-common.js";
 import type { CurrentUser } from "../types.js";
 import type { CurrentUserService } from "../users.js";
 
 export type ErpLink = { gateway: ErpGateway; appBaseUrl: string };
-export type ErpOutcome = { sent: boolean; prNo?: string; message?: string; pending?: boolean; kind?: ErpFailure["kind"] | "department_required" | "not_configured" };
+/** `requestList`: the lines went to the project's Request List, so there is no ERP PR number. `kind: "excel"`: nothing is sent; the requester uploads a sheet. */
+export type ErpOutcome = { sent: boolean; prNo?: string; requestList?: boolean; message?: string; pending?: boolean; kind?: ErpFailure["kind"] | "department_required" | "not_configured" | "excel" };
 
 // "Estimate" is the estimate's own unit cost: the planner's default, and honest about where the price came from.
 const priceSources = ["Estimate", "Price Library", "Supplier Quotation", "Previous Purchase", "Manual"];
@@ -32,10 +34,12 @@ const ERP_APPROVE_WAIT_MS = 20_000;
 type PrHeader = { id: number | string; pr_no: string; project_id: number | string; bom_id: number | string; requested_by: number | string; status: string; priority: string;
   required_date: Date | string; erp_po_ref: string | null; purpose: string | null; erp_ref: string | null; erp_department: string | null; erp_pr_no: string | null;
   erp_status: string | null; erp_status_label: string | null; erp_url: string | null; erp_revision_no: number | null; erp_rejection_reason: string | null;
-  erp_synced_at: Date | string | null; erp_error: string | null; row_version: Buffer };
-const HEADER_COLUMNS = "id,pr_no,project_id,bom_id,requested_by,status,priority,required_date,erp_po_ref,purpose,erp_ref,erp_department,erp_pr_no,erp_status,erp_status_label,erp_url,erp_revision_no,erp_rejection_reason,erp_synced_at,erp_error,row_version";
+  erp_synced_at: Date | string | null; erp_error: string | null; erp_target: string | null; erp_cancel_pending: boolean | null; row_version: Buffer };
+const HEADER_COLUMNS = "id,pr_no,project_id,bom_id,requested_by,status,priority,required_date,erp_po_ref,purpose,erp_ref,erp_department,erp_pr_no,erp_status,erp_status_label,erp_url,erp_revision_no,erp_rejection_reason,erp_synced_at,erp_error,erp_target,erp_cancel_pending,row_version";
 const erpView = (h: PrHeader) => ({ ref: h.erp_ref, department: h.erp_department, prNo: h.erp_pr_no, status: h.erp_status, statusLabel: h.erp_status_label, url: h.erp_url,
-  revisionNo: h.erp_revision_no, rejectionReason: h.erp_rejection_reason, poNo: h.erp_po_ref, syncedAt: h.erp_synced_at, error: h.erp_error });
+  revisionNo: h.erp_revision_no, rejectionReason: h.erp_rejection_reason, poNo: h.erp_po_ref, syncedAt: h.erp_synced_at, error: h.erp_error,
+  // Where it went in the ERP (PR, REQUEST_LIST, or not sent yet), and whether its requester asked to cancel it after that.
+  target: h.erp_target ?? null, cancelPending: Boolean(h.erp_cancel_pending) });
 
 function todayIn(timeZone: string): string { const p = new Intl.DateTimeFormat("en-GB", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
   const v = Object.fromEntries(p.map((x) => [x.type, x.value])); return `${v.year}-${v.month}-${v.day}`; }
@@ -237,6 +241,56 @@ export function registerPurchaseRequisitionRoutes(app: FastifyInstance, config: 
   };
   const recordError = (prId: number, message: string) => database.query(`UPDATE dbo.mat_prs SET erp_error=@error WHERE id=@id;`, (r) => {
     r.input("error", sql.NVarChar(500), message.slice(0, 500)); r.input("id", sql.BigInt, prId); });
+  // What an approved request becomes in the ERP: one PR (off, as since 2026-10-28), a sheet its requester uploads to the
+  // project's Request List (excel), or Request List lines sent by tool. A request already sent as a PR stays a PR.
+  const requestList: RequestListMode = config.pegasusRequestList ?? "off";
+  /** Gives each line its key in the ERP (<external_ref>-<n>, in line order). The sheet for the Request List and the add call both carry it. */
+  const assignLineRefs = (prId: number, ref: string) => database.query(`UPDATE l SET l.erp_line_ref=CONCAT(@ref,N'-',o.n) FROM dbo.mat_pr_lines l
+      INNER JOIN (SELECT x.id,ROW_NUMBER() OVER(ORDER BY x.id) n FROM dbo.mat_pr_lines x WHERE x.pr_id=@id) o ON o.id=l.id
+      WHERE l.pr_id=@id AND (l.erp_line_ref IS NULL OR l.erp_line_ref<>CONCAT(@ref,N'-',o.n));`, (r) => { r.input("id", sql.BigInt, prId); r.input("ref", sql.NVarChar(100), ref); });
+  /**
+   * Writes what the ERP said about each line of a request in its project's Request List: status, reason, link, and the ERP PRs
+   * and POs it was ordered on (a line can be split over several). Our status moves when every line is ordered or cancelled.
+   * Only while the request still carries the reference the ERP was asked about.
+   */
+  const recordRequestList = async (prId: number, current: string, ref: string, items: RequestListItem[], actorId: number): Promise<string> => {
+    const status = requestStatusFor(items, current);
+    const label = items.length ? `Request List · ${items.filter((item) => item.status === "ORDERED").length}/${items.length} ordered` : "Request List";
+    const orders = items.flatMap((item) => item.orders.map((order) => ({ lineRef: item.lineRef, ...order })));
+    await database.transaction(async (transaction) => { const write = new sql.Request(transaction);
+      write.input("id", sql.BigInt, prId); write.input("ref", sql.NVarChar(100), ref); write.input("status", sql.NVarChar(30), status); write.input("label", sql.NVarChar(50), label);
+      write.input("actor", sql.BigInt, actorId); write.input("step", sql.NVarChar(100), ERP_STEP); write.input("items", sql.NVarChar(sql.MAX), JSON.stringify(items)); write.input("orders", sql.NVarChar(sql.MAX), JSON.stringify(orders));
+      await write.query(`IF EXISTS(SELECT 1 FROM dbo.mat_prs WHERE id=@id AND deleted_at IS NULL AND erp_ref=@ref)
+      BEGIN
+        UPDATE dbo.mat_prs SET erp_target=N'REQUEST_LIST',erp_status_label=@label,erp_synced_at=SYSUTCDATETIME(),erp_error=NULL,status=@status,
+          erp_cancel_pending=CASE WHEN @status=N'Rejected' THEN 0 ELSE erp_cancel_pending END,updated_by=@actor,updated_at=SYSUTCDATETIME() WHERE id=@id;
+        UPDATE dbo.mat_pr_approval_steps SET status=N'Completed',decision=N'Sent',comment=N'Request List',acted_at=COALESCE(acted_at,SYSUTCDATETIME()) WHERE pr_id=@id AND name=@step AND status<>N'Completed';
+        UPDATE l SET l.erp_item_id=j.itemId,l.erp_line_status=j.status,l.erp_line_status_label=j.statusLabel,l.erp_cancelled_reason=j.cancelledReason,l.erp_line_url=j.url
+          FROM dbo.mat_pr_lines l INNER JOIN OPENJSON(@items) WITH (lineRef nvarchar(120),itemId bigint,status nvarchar(20),statusLabel nvarchar(100),cancelledReason nvarchar(1000),url nvarchar(500)) j ON j.lineRef=l.erp_line_ref
+          WHERE l.pr_id=@id;
+        DELETE o FROM dbo.mat_pr_line_erp_orders o INNER JOIN dbo.mat_pr_lines l ON l.id=o.pr_line_id WHERE l.pr_id=@id;
+        INSERT INTO dbo.mat_pr_line_erp_orders(pr_line_id,pr_no,po_no,quantity,supplier_name,url)
+          SELECT l.id,j.prNo,j.poNo,j.quantity,j.supplierName,j.url FROM OPENJSON(@orders) WITH (lineRef nvarchar(120),prNo nvarchar(50),poNo nvarchar(50),quantity decimal(19,4),supplierName nvarchar(300),url nvarchar(500)) j
+          INNER JOIN dbo.mat_pr_lines l ON l.erp_line_ref=j.lineRef AND l.pr_id=@id;
+      END;`); });
+    return status;
+  };
+  /**
+   * Excel mode: the ERP is asked nothing. The approved request gets its reference and line keys, and its requester downloads the
+   * sheet and uploads it to the project's Request List in the ERP.
+   */
+  const prepareForUpload = async (prId: number): Promise<ErpOutcome> => {
+    const prepared = await database.transaction(async (transaction) => { const h = await readHeader(transaction, prId);
+      if (h.status !== "Approved") throw new ApiError(409, "pr_not_approved", `Only an approved requisition goes to the ERP; this one is '${h.status}'.`);
+      if (h.erp_pr_no || h.erp_target === "REQUEST_LIST") return { h, ref: h.erp_ref ?? "" };
+      const ref = h.erp_ref ?? newErpRef(); const update = new sql.Request(transaction); update.input("ref", sql.NVarChar(100), ref); update.input("id", sql.BigInt, prId);
+      await update.query(`UPDATE dbo.mat_prs SET erp_ref=@ref,erp_error=NULL WHERE id=@id;`);
+      return { h: { ...h, erp_ref: ref }, ref }; });
+    if (prepared.h.erp_pr_no) return { sent: true, prNo: prepared.h.erp_pr_no };
+    if (prepared.h.erp_target === "REQUEST_LIST") return { sent: true, requestList: true };
+    await assignLineRefs(prId, prepared.ref);
+    return { sent: false, kind: "excel", message: "Approved. Download the Excel for the Request List from the request, then upload it in the ERP." };
+  };
   // A PR the ERP deleted cannot be ordered any more; saying so offers its requester to take it back to Draft or cancel it.
   const DELETED_IN_ERP = "The ERP has deleted this requisition. Take it back to Draft to correct and submit it again, or cancel it.";
 
@@ -253,17 +307,19 @@ export function registerPurchaseRequisitionRoutes(app: FastifyInstance, config: 
     finally { sending.delete(prId); }
   };
   const sendOnce = async (prId: number, requesterId: number, actorId: number, department: string | null): Promise<ErpOutcome> => {
+    if (requestList === "excel") return prepareForUpload(prId);
     if (!erp) return { sent: false, kind: "not_configured", message: "The ERP connection is not configured on this server." };
     const subject = await subjectOf(requesterId);
     const prepared = await database.transaction(async (transaction) => {
       const h = await readHeader(transaction, prId);
       if (h.status !== "Approved") throw new ApiError(409, "pr_not_approved", `Only an approved requisition goes to the ERP; this one is '${h.status}'.`);
-      if (h.erp_pr_no) return { h, ref: h.erp_ref! };
+      if (h.erp_pr_no || h.erp_target === "REQUEST_LIST") return { h, ref: h.erp_ref! };
       const ref = h.erp_ref ?? newErpRef(); const update = new sql.Request(transaction); update.input("ref", sql.NVarChar(100), ref); update.input("department", sql.NVarChar(50), department); update.input("id", sql.BigInt, prId);
       await update.query(`UPDATE dbo.mat_prs SET erp_ref=@ref,erp_department=COALESCE(@department,erp_department) WHERE id=@id;`);
       return { h: { ...h, erp_ref: ref, erp_department: department ?? h.erp_department }, ref };
     });
     if (prepared.h.erp_pr_no) return { sent: true, prNo: prepared.h.erp_pr_no };
+    if (prepared.h.erp_target === "REQUEST_LIST") return { sent: true, requestList: true };
     let erpDepartment = prepared.h.erp_department;
     if (!erpDepartment) {
       const options = await erp.gateway.call<{ departments?: ErpDepartment[] }>(subject, "purchasing_options_get", {});
@@ -285,8 +341,23 @@ export function registerPurchaseRequisitionRoutes(app: FastifyInstance, config: 
       original_code: line.original_code === null ? null : String(line.original_code), outsource: Boolean(line.outsource) } satisfies ErpLine; });
     const problem = erpLineProblem(lines);
     if (problem) { await recordError(prId, problem); return { sent: false, kind: "validation", message: problem }; }
-    const args = erpRequestArguments({ pr_no: prepared.h.pr_no, erp_ref: prepared.ref, erp_department: erpDepartment, required_date: prepared.h.required_date, purpose: prepared.h.purpose,
-      project_no: String(project.project_no ?? ""), project_name: String(project.project_name ?? ""), bom_no: String(project.bom_no ?? "") }, lines, erp.appBaseUrl);
+    const erpHeader = { pr_no: prepared.h.pr_no, erp_ref: prepared.ref, erp_department: erpDepartment, required_date: prepared.h.required_date, purpose: prepared.h.purpose,
+      project_no: String(project.project_no ?? ""), project_name: String(project.project_name ?? ""), bom_no: String(project.bom_no ?? "") };
+    if (requestList === "tool") {
+      // The Request List belongs to a project in the ERP, so a project still on its placeholder number is stopped here.
+      const blocked = requestListProblem(erpHeader);
+      if (blocked) { await recordError(prId, blocked); return { sent: false, kind: "validation", message: blocked }; }
+      // The keys are kept before the call, like the reference: a timeout or a second press sends the same lines again, and the ERP answers with the ones it has.
+      await assignLineRefs(prId, prepared.ref);
+      const added = await erp.gateway.call<unknown>(subject, REQUEST_LIST_TOOLS.add, requestListAddArguments(erpHeader, lines.map((line, index) => ({ ...line, line_ref: requestListLineRef(prepared.ref, index) })), erp.appBaseUrl));
+      if (!added.ok) { await recordError(prId, describeErpFailure(added)); return { sent: false, kind: added.kind, message: describeErpFailure(added) }; }
+      const items = parseRequestListItems(added.data);
+      await recordRequestList(prId, "Approved", prepared.ref, items, actorId);
+      await database.transaction((transaction) => insertMaterialAudit(transaction, { id: actorId, role: "System" } as CurrentUser, "Sent to the ERP Request List", "PR", prId, prepared.h.pr_no, null,
+        { lines: lines.length, erpItems: items.length }, { projectId: Number(prepared.h.project_id) }));
+      return { sent: true, requestList: true };
+    }
+    const args = erpRequestArguments(erpHeader, lines, erp.appBaseUrl);
     const created = await erp.gateway.call<{ created: boolean; request: ErpRequest }>(subject, "purchase_request_create", args);
     if (!created.ok) { await recordError(prId, describeErpFailure(created)); return { sent: false, kind: created.kind, message: describeErpFailure(created) }; }
     await recordErp(prId, "Approved", prepared.ref, created.data.request, actorId);
@@ -298,7 +369,7 @@ export function registerPurchaseRequisitionRoutes(app: FastifyInstance, config: 
     const projectId = optionalPositiveLong(q.projectId, "Project id"); const status = optionalText(q.status, 30, "Status"); const waiting = booleanQuery(q.waitingForMe, false);
     const result = await database.query<Record<string, unknown> & { row_version: Buffer }>(`${APPROVE_HELD}
       SELECT pr.id,pr.pr_no,pr.project_id,p.project_no,p.name project_name,pr.bom_id,b.bom_no,pr.requested_by,ru.name requested_by_name,
-      pr.priority,pr.required_date,pr.status,pr.submitted_at,pr.erp_po_ref,pr.erp_pr_no,pr.erp_status,pr.erp_status_label,pr.erp_url,pr.erp_error,
+      pr.priority,pr.required_date,pr.status,pr.submitted_at,pr.erp_po_ref,pr.erp_pr_no,pr.erp_status,pr.erp_status_label,pr.erp_url,pr.erp_error,pr.erp_target,
       lines.line_count,lines.amount,lines.estimate_amount,lines.substitutes,lines.unplanned,
       cs.name current_step,cs.approver_role,cs.approver_id,au.name approver_name,pr.row_version,
       CASE WHEN ${WAITING_FOR_ACTOR} OR (@admin=1 AND @approve=1 AND pr.status=N'In Approval' AND cs.id IS NOT NULL AND pr.requested_by<>@actor) THEN 1 ELSE 0 END can_decide
@@ -316,7 +387,7 @@ export function registerPurchaseRequisitionRoutes(app: FastifyInstance, config: 
       projectName: row.project_name, bomId: Number(row.bom_id), bomNumber: row.bom_no, requestedById: Number(row.requested_by), requestedByName: row.requested_by_name, priority: row.priority,
       requiredDate: row.required_date, status: row.status, submittedAt: row.submitted_at, erpPoRef: row.erp_po_ref, lineCount: Number(row.line_count), amount, estimateAmount: estimate,
       substituteLines: Number(row.substitutes ?? 0), unplannedLines: Number(row.unplanned ?? 0),
-      erp: { prNo: row.erp_pr_no ?? null, status: row.erp_status ?? null, statusLabel: row.erp_status_label ?? null, url: row.erp_url ?? null, error: row.erp_error ?? null },
+      erp: { prNo: row.erp_pr_no ?? null, status: row.erp_status ?? null, statusLabel: row.erp_status_label ?? null, url: row.erp_url ?? null, error: row.erp_error ?? null, target: row.erp_target ?? null },
       variancePercent: estimate > 0 ? Math.round(((amount - estimate) / estimate * 100) * 100) / 100 : 0, currentStep: row.current_step, currentApproverRole: row.approver_role,
       currentApproverId: row.approver_id === null ? null : Number(row.approver_id), currentApproverName: row.approver_name, canDecide: Boolean(row.can_decide),
       rowVersion: row.row_version.toString("base64") }; });
@@ -339,11 +410,19 @@ export function registerPurchaseRequisitionRoutes(app: FastifyInstance, config: 
     return database.transaction(async (transaction) => { const h = await readHeader(transaction, id); await demandPrScope(database, transaction, actor, h); const query = new sql.Request(transaction); query.input("id", sql.BigInt, id);
       const result = await query.query<Record<string, unknown> & { row_version?: Buffer }>(`SELECT l.id,l.line_type,l.bom_line_id,l.item_id,l.item_code,l.part_no,l.description,l.brand,l.supplier_id,s.name supplier_name,l.qty,l.unit,l.unit_price,
         l.est_qty,l.est_unit_cost,l.covered_qty,l.budget_module,l.price_source,l.remark,l.line_total,l.estimate_total,l.row_version,
+        l.erp_line_ref,l.erp_line_status,l.erp_line_status_label,l.erp_cancelled_reason,l.erp_line_url,
         bl.section_code,bl.estimate_line_id,COALESCE(bi.item_code,ci.item_code,N'') original_item_code,bl.description original_description,bl.unit original_unit
         FROM dbo.mat_pr_lines l LEFT JOIN dbo.suppliers s ON s.id=l.supplier_id LEFT JOIN dbo.bom_lines bl ON bl.id=l.bom_line_id
         LEFT JOIN dbo.mat_items bi ON bi.id=bl.item_id LEFT JOIN dbo.cost_items ci ON ci.id=bl.estimate_line_id WHERE l.pr_id=@id ORDER BY l.id;
         SELECT s.id,s.sequence,s.name,s.approver_role,s.approver_id,u.name approver_name,s.rule_code,s.status,s.decision,s.comment,s.acted_at
-        FROM dbo.mat_pr_approval_steps s LEFT JOIN dbo.users u ON u.id=s.approver_id WHERE s.pr_id=@id ORDER BY s.sequence;`);
+        FROM dbo.mat_pr_approval_steps s LEFT JOIN dbo.users u ON u.id=s.approver_id WHERE s.pr_id=@id ORDER BY s.sequence;
+        SELECT o.pr_line_id,o.pr_no,o.po_no,o.quantity,o.supplier_name,o.url FROM dbo.mat_pr_line_erp_orders o INNER JOIN dbo.mat_pr_lines l ON l.id=o.pr_line_id WHERE l.pr_id=@id ORDER BY o.id;
+        SELECT p.project_no,p.name project_name,u.name requester_name FROM dbo.mat_prs pr INNER JOIN dbo.projects p ON p.id=pr.project_id INNER JOIN dbo.users u ON u.id=pr.requested_by WHERE pr.id=@id;`);
+      const about = (result.recordsets[3]?.[0] ?? {}) as Record<string, unknown>;
+      // The ERP PRs and POs each line was ordered on (a line in the Request List can be split over several).
+      const ordersByLine = new Map<number, Array<{ prNo: unknown; poNo: unknown; quantity: number | null; supplierName: unknown; url: unknown }>>();
+      for (const raw of result.recordsets[2] ?? []) { const row = raw as Record<string, unknown>; const lineId = Number(row.pr_line_id); const list = ordersByLine.get(lineId) ?? [];
+        list.push({ prNo: row.pr_no ?? null, poNo: row.po_no ?? null, quantity: row.quantity === null || row.quantity === undefined ? null : Number(row.quantity), supplierName: row.supplier_name ?? null, url: row.url ?? null }); ordersByLine.set(lineId, list); }
       const lines = (result.recordsets[0] ?? []).map((raw) => { const row = raw as Record<string, unknown> & { row_version: Buffer }; return { id: Number(row.id), lineType: row.line_type,
         bomLineId: row.bom_line_id === null ? null : Number(row.bom_line_id), itemId: row.item_id === null ? null : Number(row.item_id), itemCode: row.item_code, partNumber: row.part_no,
         description: row.description, brand: row.brand, supplierId: row.supplier_id === null ? null : Number(row.supplier_id), supplierName: row.supplier_name ?? null,
@@ -351,13 +430,16 @@ export function registerPurchaseRequisitionRoutes(app: FastifyInstance, config: 
         coveredQuantity: Number(row.covered_qty), module: row.budget_module, priceSource: row.price_source, remark: row.remark, lineTotal: Number(row.line_total),
         estimateTotal: Number(row.estimate_total), rowVersion: row.row_version.toString("base64"), sectionCode: row.section_code ?? null,
         estimateLineId: row.estimate_line_id === null || row.estimate_line_id === undefined ? null : Number(row.estimate_line_id),
-        original: row.bom_line_id === null ? null : { itemCode: row.original_item_code, description: row.original_description, unit: row.original_unit } }; });
+        original: row.bom_line_id === null ? null : { itemCode: row.original_item_code, description: row.original_description, unit: row.original_unit },
+        erp: { lineRef: row.erp_line_ref ?? null, status: row.erp_line_status ?? null, statusLabel: row.erp_line_status_label ?? null, cancelledReason: row.erp_cancelled_reason ?? null,
+          url: row.erp_line_url ?? null, orders: ordersByLine.get(Number(row.id)) ?? [] } }; });
       const steps = (result.recordsets[1] ?? []).map((raw) => { const row = raw as Record<string, unknown>; return { id: Number(row.id), sequence: Number(row.sequence), name: row.name, approverRole: row.approver_role,
         approverId: row.approver_id === null ? null : Number(row.approver_id), approverName: row.approver_name, ruleCode: row.rule_code, status: row.status, decision: row.decision, comment: row.comment, actedAt: row.acted_at }; });
       const modules = (await moduleBudgets(transaction, Number(h.bom_id), id)).filter((module) => module.thisRequest > 0);
       const flags = await procurementRuleFlags(transaction, id);
       return { purchaseRequisition: { id: Number(h.id), number: h.pr_no, projectId: Number(h.project_id), bomId: Number(h.bom_id), requestedBy: Number(h.requested_by), status: h.status,
-        priority: h.priority, requiredDate: h.required_date, purpose: h.purpose, erpPoRef: h.erp_po_ref, rowVersion: h.row_version.toString("base64") }, erp: { ...erpView(h), enabled: Boolean(erp) }, lines, steps, modules, ruleFlags: flags }; });
+        priority: h.priority, requiredDate: h.required_date, purpose: h.purpose, erpPoRef: h.erp_po_ref, rowVersion: h.row_version.toString("base64"),
+        projectNumber: about.project_no ?? null, projectName: about.project_name ?? null, requestedByName: about.requester_name ?? null }, erp: { ...erpView(h), enabled: Boolean(erp), requestList }, lines, steps, modules, ruleFlags: flags }; });
   });
 
   app.post("/api/v1/purchase-requisitions", async (request, reply) => { await users.demandPermission(request, "procurement.request"); const actor = await users.required(request); const body = bodyObject(request.body);
@@ -463,16 +545,17 @@ export function registerPurchaseRequisitionRoutes(app: FastifyInstance, config: 
       return { id, number: h.pr_no, requestedBy: Number(h.requested_by), status: nextStatus, step: current.name, decision, rowVersion: row.row_version.toString("base64"), notice, told }; });
     await mail(decided.notice);
     // A fully approved PR's requester is mailed once the ERP has answered (below), so the mail says whether it is in the ERP.
-    if (decided.status !== "Approved" || !erp) await tell(decided.told, null);
+    const goesOn = Boolean(erp) || requestList === "excel";
+    if (decided.status !== "Approved" || !goesOn) await tell(decided.told, null);
     // Fully approved: send it to the ERP as the requester now. If their TMT ID session has ended (or the ERP says no), the PR
     // stays Approved and the requester is told to send it themselves. A slow ERP does not hold the approver's request: after a
     // short wait the reply goes back and the send finishes on its own, telling the requester if it failed.
     let erpOutcome: ErpOutcome | null = null;
-    if (decided.status === "Approved" && erp) {
+    if (decided.status === "Approved" && goesOn) {
       const sent = sendToErp(id, decided.requestedBy, actor.id, null)
         .catch((error: unknown): ErpOutcome => ({ sent: false, message: error instanceof Error ? error.message : String(error) }))
         .then(async (outcome) => {
-          if (!outcome.sent) await database.transaction((transaction) => notifyUsers(transaction, [decided.requestedBy], "PR_ERP_SEND", `PR ${decided.number} อนุมัติแล้ว · กดส่งเข้า ERP`,
+          if (!outcome.sent) await database.transaction((transaction) => notifyUsers(transaction, [decided.requestedBy], "PR_ERP_SEND", outcome.kind === "excel" ? `PR ${decided.number} อนุมัติแล้ว · ดาวน์โหลด Excel สำหรับ Request List` : `PR ${decided.number} อนุมัติแล้ว · กดส่งเข้า ERP`,
             outcome.message ?? "", "PurchaseRequisition", id, `pr-erp-send:${id}:${Date.now()}`)).catch((error: unknown) => request.log.error({ err: error, prId: id }, "PR ERP send notification failed"));
           // Not awaited: the approver's reply does not wait for the mail server.
           void tell(decided.told, outcome).catch((error: unknown) => request.log.error({ err: error, prId: id }, "PR decision email failed"));
@@ -488,7 +571,7 @@ export function registerPurchaseRequisitionRoutes(app: FastifyInstance, config: 
   // The approved PR's requester sends it (again) to the ERP, choosing the ERP department when it could not be matched.
   app.post("/api/v1/purchase-requisitions/:id/erp-send", async (request) => { await users.demandPermission(request, "procurement.request"); const actor = await users.required(request); const id = positiveLong((request.params as { id?: string }).id, "Purchase requisition id");
     const body = bodyObject(request.body ?? {}); const department = optionalBodyText(body.department, 50, "ERP department");
-    if (!erp) throw new ApiError(503, "erp_not_configured", "The ERP connection is not configured on this server.");
+    if (!erp && requestList !== "excel") throw new ApiError(503, "erp_not_configured", "The ERP connection is not configured on this server.");
     const header = await database.transaction(async (transaction) => { const h = await readHeader(transaction, id); await demandProjectScope(database, actor, Number(h.project_id), transaction); return h; });
     // The ERP names whoever's token sends the PR as its requester, so only the requester may send it.
     if (Number(header.requested_by) !== actor.id) throw new ApiError(403, "requester_required", "Only the requester can send this requisition to the ERP: the ERP names the sender as the requester.");
@@ -503,15 +586,20 @@ export function registerPurchaseRequisitionRoutes(app: FastifyInstance, config: 
   app.post("/api/v1/purchase-requisitions/erp-sync", async (request) => { await users.demandPermission(request, "procurement.read"); const actor = await users.required(request);
     if (!erp) return { checked: 0, updated: 0 };
     const now = Date.now(); for (const [prId, at] of listChecked) if (now - at >= ERP_LIST_SYNC_MINUTES * 60_000) listChecked.delete(prId);
-    const due = (await database.query<{ id: number | string; status: string; erp_ref: string; erp_status: string | null; erp_po_ref: string | null }>(`SELECT TOP(100) pr.id,pr.status,pr.erp_ref,pr.erp_status,pr.erp_po_ref
-      FROM dbo.mat_prs pr INNER JOIN dbo.projects p ON p.id=pr.project_id WHERE pr.deleted_at IS NULL AND pr.erp_ref IS NOT NULL AND pr.erp_pr_no IS NOT NULL
-        AND (pr.erp_status IS NULL OR pr.erp_status NOT IN(N'CONVERTED',N'REJECTED',N'CANCELLED')) AND (pr.erp_error IS NULL OR pr.erp_error<>@deleted) AND (pr.erp_synced_at IS NULL OR pr.erp_synced_at<DATEADD(minute,-@minutes,SYSUTCDATETIME()))
+    const due = (await database.query<{ id: number | string; status: string; erp_ref: string; erp_status: string | null; erp_po_ref: string | null; erp_target: string | null }>(`SELECT TOP(100) pr.id,pr.status,pr.erp_ref,pr.erp_status,pr.erp_po_ref,pr.erp_target
+      FROM dbo.mat_prs pr INNER JOIN dbo.projects p ON p.id=pr.project_id WHERE pr.deleted_at IS NULL AND pr.erp_ref IS NOT NULL
+        AND ((pr.erp_pr_no IS NOT NULL AND (pr.erp_status IS NULL OR pr.erp_status NOT IN(N'CONVERTED',N'REJECTED',N'CANCELLED')))
+          OR (@request_list=1 AND pr.erp_target=N'REQUEST_LIST' AND pr.status=N'Approved')) AND (pr.erp_error IS NULL OR pr.erp_error<>@deleted) AND (pr.erp_synced_at IS NULL OR pr.erp_synced_at<DATEADD(minute,-@minutes,SYSUTCDATETIME()))
         AND (@elevated=1 OR p.manager_id=@actor OR p.lead_engineer_id=@actor OR EXISTS(SELECT 1 FROM dbo.project_members m WHERE m.project_id=p.id AND m.user_id=@actor)) ORDER BY pr.erp_synced_at,pr.id;`, (r) => {
-      r.input("minutes", sql.Int, ERP_LIST_SYNC_MINUTES); r.input("deleted", sql.NVarChar(500), DELETED_IN_ERP); r.input("actor", sql.BigInt, actor.id); r.input("elevated", sql.Bit, isProjectElevated(actor)); }))
+      r.input("minutes", sql.Int, ERP_LIST_SYNC_MINUTES); r.input("deleted", sql.NVarChar(500), DELETED_IN_ERP); r.input("actor", sql.BigInt, actor.id); r.input("elevated", sql.Bit, isProjectElevated(actor));
+      // Request List lines can be read back only through the ERP team's tool; a sheet uploaded by hand tells this app nothing.
+      r.input("request_list", sql.Bit, requestList === "tool"); }))
       .recordset.filter((row) => !listChecked.has(Number(row.id))).slice(0, ERP_LIST_SYNC_BATCH);
     let checked = 0, updated = 0;
     for (const row of due) { const prId = Number(row.id); listChecked.set(prId, Date.now()); checked += 1;
-      const result = await erp.gateway.call<{ request: ErpRequest }>(actor.entraObjectId, "purchase_request_get", { external_ref: row.erp_ref });
+      const inRequestList = row.erp_target === "REQUEST_LIST";
+      const result = inRequestList ? await erp.gateway.call<unknown>(actor.entraObjectId, REQUEST_LIST_TOOLS.get, { external_ref: row.erp_ref })
+        : await erp.gateway.call<{ request: ErpRequest }>(actor.entraObjectId, "purchase_request_get", { external_ref: row.erp_ref });
       if (!result.ok) {
         // The viewer's sign-in failed, not the PR: leave it for the next viewer. An ERP that is down keeps the mark, so it is not asked again on every open.
         if (result.kind === "signed_out" || result.kind === "unauthorized") { listChecked.delete(prId); break; }
@@ -519,8 +607,10 @@ export function registerPurchaseRequisitionRoutes(app: FastifyInstance, config: 
         if (result.kind === "ref_deleted") { await recordError(prId, DELETED_IN_ERP); updated += 1; }
         continue;
       }
-      const status = await recordErp(prId, row.status, row.erp_ref, result.data.request, actor.id);
-      if (status !== row.status || result.data.request.status !== row.erp_status || (result.data.request.po_no ?? row.erp_po_ref) !== row.erp_po_ref) updated += 1;
+      if (inRequestList) { await recordRequestList(prId, row.status, row.erp_ref, parseRequestListItems(result.data), actor.id); updated += 1; continue; }
+      const answered = (result.data as { request: ErpRequest }).request;
+      const status = await recordErp(prId, row.status, row.erp_ref, answered, actor.id);
+      if (status !== row.status || answered.status !== row.erp_status || (answered.po_no ?? row.erp_po_ref) !== row.erp_po_ref) updated += 1;
     }
     return { checked, updated };
   });
@@ -529,6 +619,21 @@ export function registerPurchaseRequisitionRoutes(app: FastifyInstance, config: 
   app.post("/api/v1/purchase-requisitions/:id/erp-sync", async (request) => { await users.demandPermission(request, "procurement.read"); const actor = await users.required(request); const id = positiveLong((request.params as { id?: string }).id, "Purchase requisition id");
     if (!erp) throw new ApiError(503, "erp_not_configured", "The ERP connection is not configured on this server.");
     const header = await database.transaction(async (transaction) => { const h = await readHeader(transaction, id); await demandPrScope(database, transaction, actor, h); return h; });
+    if (header.erp_target === "REQUEST_LIST") {
+      // A sheet uploaded by hand cannot be read back; neither can anything while the tool is switched off.
+      if (requestList !== "tool" || !header.erp_ref) return { synced: false, erp: erpView(header) };
+      if (header.status !== "Approved") return { synced: true, erp: erpView(header) };
+      // One read per request per 15 minutes, whoever asks (the ERP team's rule). Inside that, what was read last is shown.
+      if (header.erp_synced_at && Date.now() - new Date(header.erp_synced_at).getTime() < ERP_LIST_SYNC_MINUTES * 60_000) return { synced: true, cached: true, erp: erpView(header) };
+      const read = await erp.gateway.call<unknown>(actor.entraObjectId, REQUEST_LIST_TOOLS.get, { external_ref: header.erp_ref });
+      if (!read.ok) {
+        if (read.kind !== "ref_deleted" && read.kind !== "not_found") return { synced: false, message: read.message, kind: read.kind, erp: erpView(header) };
+        await recordError(id, DELETED_IN_ERP);
+        return { synced: false, message: DELETED_IN_ERP, kind: read.kind, erp: erpView(await database.transaction((transaction) => readHeader(transaction, id))) };
+      }
+      const listStatus = await recordRequestList(id, header.status, header.erp_ref, parseRequestListItems(read.data), actor.id);
+      return { synced: true, status: listStatus, erp: erpView(await database.transaction((transaction) => readHeader(transaction, id))) };
+    }
     if (!header.erp_ref || !header.erp_pr_no) return { synced: false, erp: erpView(header) };
     if (isFinalErpStatus(header.erp_status)) return { synced: true, erp: erpView(header) };
     const result = await erp.gateway.call<{ request: ErpRequest }>(actor.entraObjectId, "purchase_request_get", { external_ref: header.erp_ref });
@@ -558,7 +663,15 @@ export function registerPurchaseRequisitionRoutes(app: FastifyInstance, config: 
   const assertNotInErp = async (h: PrHeader, actor: CurrentUser): Promise<void> => {
     const id = Number(h.id);
     if (sending.has(id)) throw new ApiError(409, "pr_erp_sending", "This requisition is being sent to the ERP now. Wait a moment, then try again.");
+    if (h.erp_target === "REQUEST_LIST") {
+      // The ERP has no cancel tool for the Request List yet (question 5 to the ERP team; REQUEST_LIST_TOOLS.cancel is its place).
+      // Until it has, the request is marked and Purchasing cancels its lines in the ERP. Once every line reads CANCELLED it closes by itself.
+      await database.query(`UPDATE dbo.mat_prs SET erp_cancel_pending=1 WHERE id=@id AND erp_target=N'REQUEST_LIST' AND deleted_at IS NULL;`, (r) => r.input("id", sql.BigInt, id));
+      throw new ApiError(409, "erp_cancel_pending", "This request is in the ERP's Request List. Ask Purchasing to cancel its lines in the ERP; the request is now marked as waiting for that.");
+    }
     if (!h.erp_ref) return;
+    // Excel mode with no ERP connection: the request only carries a reference for the sheet, and nothing was sent.
+    if (!erp && requestList === "excel") return;
     if (!erp) throw new ApiError(409, "erp_check_failed", "The ERP connection is off, so it cannot be confirmed that the ERP does not hold this requisition.");
     const result = await erp.gateway.call<{ request: ErpRequest }>(actor.entraObjectId, "purchase_request_get", { external_ref: h.erp_ref });
     if (result.ok) {
@@ -586,9 +699,12 @@ export function registerPurchaseRequisitionRoutes(app: FastifyInstance, config: 
     return database.transaction(async (transaction) => { const h = await readHeader(transaction, id);
       const update = new sql.Request(transaction); update.input("actor", sql.BigInt, actor.id); update.input("id", sql.BigInt, id); update.input("version", sql.VarBinary(8), version);
       const row = (await update.query<{ row_version: Buffer }>(`UPDATE dbo.mat_prs SET status=N'Draft',submitted_at=NULL,erp_ref=NULL,erp_pr_id=NULL,erp_pr_no=NULL,erp_status=NULL,
-          erp_status_label=NULL,erp_url=NULL,erp_revision_no=NULL,erp_rejection_reason=NULL,erp_synced_at=NULL,erp_error=NULL,updated_by=@actor,updated_at=SYSUTCDATETIME()
+          erp_status_label=NULL,erp_url=NULL,erp_revision_no=NULL,erp_rejection_reason=NULL,erp_synced_at=NULL,erp_error=NULL,erp_target=NULL,erp_cancel_pending=0,updated_by=@actor,updated_at=SYSUTCDATETIME()
         OUTPUT inserted.row_version WHERE id=@id AND status=N'Approved' AND deleted_at IS NULL AND row_version=@version;`)).recordset[0];
       if (!row) throw new ApiError(409, "concurrency_conflict", "This requisition changed. Reload and try again.");
+      // The line keys go with the reference they were made from; the next send makes new ones.
+      const refs = new sql.Request(transaction); refs.input("id", sql.BigInt, id);
+      await refs.query(`UPDATE dbo.mat_pr_lines SET erp_line_ref=NULL,erp_item_id=NULL,erp_line_status=NULL,erp_line_status_label=NULL,erp_cancelled_reason=NULL,erp_line_url=NULL WHERE pr_id=@id AND erp_line_ref IS NOT NULL;`);
       // The route is built again when it is submitted; until then a draft shows none.
       const steps = new sql.Request(transaction); steps.input("id", sql.BigInt, id); await steps.query(`DELETE FROM dbo.mat_pr_approval_steps WHERE pr_id=@id;`);
       await insertMaterialAudit(transaction, actor, "Took purchase requisition back to Draft", "PR", id, h.pr_no, { status: "Approved", erpRef: h.erp_ref, erpPrNo: h.erp_pr_no, erpError: h.erp_error },
@@ -611,6 +727,18 @@ export function registerPurchaseRequisitionRoutes(app: FastifyInstance, config: 
       await insertMaterialAudit(transaction, actor, h.status === "Draft" ? "Cancelled draft purchase requisition" : "Cancelled approved purchase requisition the ERP does not hold", "PR", id, h.pr_no,
         { status: h.status, ...(h.erp_ref ? { erpRef: h.erp_ref, erpPrNo: h.erp_pr_no, erpError: h.erp_error } : {}) }, { status: "Cancelled" }, { projectId: Number(h.project_id), reason });
       return { id, status: "Cancelled" }; });
+  });
+
+  // Excel mode: the requester says the sheet is uploaded to the project's Request List. The app cannot see that itself, so from
+  // here the request counts as sent, and its lines' statuses stay unknown until the ERP team's read tool is switched on.
+  app.post("/api/v1/purchase-requisitions/:id/request-list-uploaded", async (request) => { await users.demandPermission(request, "procurement.request"); const actor = await users.required(request); const id = positiveLong((request.params as { id?: string }).id, "Purchase requisition id");
+    const header = await takeBackHeader(id, actor, "mark as uploaded");
+    if (header.status !== "Approved") throw new ApiError(409, "pr_not_approved", `Only an approved requisition goes to the ERP; this one is '${header.status}'.`);
+    if (header.erp_pr_no || header.erp_target) throw new ApiError(409, "pr_in_erp", "This requisition is already in the ERP.");
+    if (requestList === "off" || !header.erp_ref) throw new ApiError(409, "request_list_not_ready", "Download the Excel for the Request List first.");
+    await recordRequestList(id, header.status, header.erp_ref, [], actor.id);
+    await database.transaction((transaction) => insertMaterialAudit(transaction, actor, "Marked as uploaded to the ERP Request List", "PR", id, header.pr_no, null, { erpRef: header.erp_ref }, { projectId: Number(header.project_id) }));
+    return { id, erp: erpView(await database.transaction((transaction) => readHeader(transaction, id))) };
   });
 
   // The Approvals menu badge: exactly what the Approvals screen lists for this user (PRs waiting for them, others' material issues and stock adjustments).

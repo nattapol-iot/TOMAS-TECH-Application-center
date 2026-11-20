@@ -28,6 +28,8 @@ $outsourceFixture = Join-Path $repoRoot 'database/tests/bom-outsource-108.sql'
 $revisionMigration = Join-Path $repoRoot 'database/migrations/109_bom_revision_zero_based.sql'
 $requestListMigration = Join-Path $repoRoot 'database/migrations/111_erp_request_list.sql'
 $requestListRollback = Join-Path $repoRoot 'database/rollback/111_erp_request_list.rollback.sql'
+$lineGrantsMigration = Join-Path $repoRoot 'database/migrations/112_request_list_line_grants.sql'
+$lineGrantsRollback = Join-Path $repoRoot 'database/rollback/112_request_list_line_grants.rollback.sql'
 $baselineFile = Join-Path ([IO.Path]::GetTempPath()) ('iot-procurement-baseline-' + $testSuffix + '.sql')
 $instanceCreated = $false
 
@@ -91,15 +93,21 @@ try {
 
     # 111 marked the legacy PRs the ERP already holds as PR and added the Request List columns and the orders table.
     # Its rollback script takes them away again, and 111 puts them back: both are run here so neither is untested SQL.
-    Write-Output 'Checking migration 111 again, its rollback script, and 111 once more.'
+    # 112 only grants the app role the new line columns. Rollbacks go newest first: 111's refuses while 112 is applied.
+    Write-Output 'Checking migrations 111 and 112 again, their rollback scripts, and both once more.'
     $requestListCheck = "IF COL_LENGTH(N'dbo.mat_prs',N'erp_target') IS NULL OR COL_LENGTH(N'dbo.mat_prs',N'erp_cancel_pending') IS NULL OR COL_LENGTH(N'dbo.mat_pr_lines',N'erp_line_ref') IS NULL OR COL_LENGTH(N'dbo.mat_pr_lines',N'erp_line_url') IS NULL OR OBJECT_ID(N'dbo.mat_pr_line_erp_orders',N'U') IS NULL OR OBJECT_ID(N'dbo.CK_mat_pr_lines_erp_line_status',N'C') IS NULL OR OBJECT_ID(N'dbo.CK_mat_prs_erp_target',N'C') IS NULL OR NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name=N'UX_mat_pr_lines_erp_line_ref') OR EXISTS (SELECT 1 FROM dbo.mat_prs WHERE erp_pr_no IS NOT NULL AND erp_target IS NULL) OR NOT EXISTS (SELECT 1 FROM dbo.schema_versions WHERE version=111) THROW 51999, 'Migration 111 is missing a column, the orders table, a check, the index, the PR mark or its version.', 1;"
     Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-i', $requestListMigration)
     Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-Q', $requestListCheck)
+    Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-i', $lineGrantsMigration)
+    Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-i', $lineGrantsRollback)
+    Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-Q', "IF EXISTS (SELECT 1 FROM dbo.schema_versions WHERE version=112) THROW 51999, 'The rollback of 112 left its version.', 1;")
     Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-i', $requestListRollback)
     Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-Q', "IF COL_LENGTH(N'dbo.mat_prs',N'erp_target') IS NOT NULL OR COL_LENGTH(N'dbo.mat_pr_lines',N'erp_line_ref') IS NOT NULL OR OBJECT_ID(N'dbo.mat_pr_line_erp_orders',N'U') IS NOT NULL OR EXISTS (SELECT 1 FROM dbo.schema_versions WHERE version=111) OR (SELECT COUNT(*) FROM dbo.mat_prs)=0 THROW 51999, 'The rollback of 111 left something behind, or took the requests with it.', 1;")
     Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-i', $requestListRollback)
     Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-i', $requestListMigration)
     Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-Q', $requestListCheck)
+    Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-i', $lineGrantsMigration)
+    Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-Q', "IF NOT EXISTS (SELECT 1 FROM dbo.schema_versions WHERE version=112) THROW 51999, 'Migration 112 did not record its version.', 1;")
 
     Write-Output 'Checking the PR API on the upgraded database.'
     $env:PROCUREMENT_TEST_SERVER = $serverName
