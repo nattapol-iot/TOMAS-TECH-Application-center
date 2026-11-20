@@ -391,3 +391,49 @@ export function formatPrFormReport(report: PrFormReport, detail = 12): string {
   for (const file of report.unreadable) out.push(`  ${file.path}`, `    [unreadable] ${file.error}`);
   return out.join("\n");
 }
+
+export type PrFormReportSheet = { name: string; columns: { header: string; width: number }[]; rows: (string | number | null)[][] };
+
+/**
+ * The dry run as a workbook to review and mark up: the projects, each form (with an Import column the reviewer fills in; copies
+ * start at N), every issue, and every line as read. Cells only: lib-free, so the script writes it with any xlsx writer.
+ */
+export function prFormReportSheets(report: PrFormReport, files: PrFormFile[]): PrFormReportSheet[] {
+  const column = (header: string, width = 14) => ({ header, width });
+  const money = (value: number | null) => value === null ? null : round2(value);
+  const copyOf = new Map(report.forms.map((form) => [`${form.path} › ${form.sheet}`, form.copyOf]));
+  const projects: PrFormReportSheet = {
+    name: "Projects",
+    columns: [column("Project", 12), column("Name", 40), column("Customer", 32), column("Files", 7), column("Forms", 7), column("Units", 7), column("Requests (△)", 12),
+      column("Lines", 8), column("Estimate"), column("Total price"), column("Actual cost"), column("Committed"), column("Remain"), column("By discipline", 60)],
+    rows: report.projects.map((project) => [project.projectNumber, project.projectName, project.customer, project.files, project.forms, project.units, project.requests, project.lines,
+      money(project.estimate), money(project.totalPrice), money(project.actualCost), money(project.committed), project.estimate > 0 ? money(project.estimate - project.committed) : null,
+      project.disciplines.map((item) => `${item.discipline || "?"} ${round2(item.estimate).toLocaleString("en-US")}${item.sharedEstimate ? " (shared)" : ""} / committed ${round2(item.committed).toLocaleString("en-US")}`).join(" · ")]),
+  };
+  const issuesOf = new Map(report.perFile.map((file) => [file.path, file.issues]));
+  const forms: PrFormReportSheet = {
+    name: "Forms",
+    columns: [column("Import (Y/N)", 11), column("File", 60), column("Sheet", 24), column("Discipline", 10), column("Project", 12), column("Drawing No.", 14), column("Unit name", 30),
+      column("Requests (△)", 12), column("Lines", 8), column("Estimate"), column("Total price"), column("Actual cost"), column("Committed"), column("Copy of", 60), column("Issues", 8)],
+    rows: report.forms.map((form) => [form.copyOf ? "N" : null, form.path, form.sheet, form.discipline, form.projectNumber, form.drawingNo, form.unitName, form.rounds, form.lines,
+      money(form.estimate), money(form.totalPrice), money(form.actualCost), money(form.committed), form.copyOf,
+      (issuesOf.get(form.path) ?? []).filter((issue) => !issue.sheet || issue.sheet === form.sheet).length]),
+  };
+  const issues: PrFormReportSheet = {
+    name: "Issues",
+    columns: [column("File", 60), column("Sheet", 24), column("Row", 7), column("Kind", 18), column("Message", 110)],
+    rows: report.perFile.flatMap((file) => file.issues.map((issue) => [file.path, issue.sheet, issue.row, issue.code, issue.message])),
+  };
+  const lines: PrFormReportSheet = {
+    name: "Lines",
+    columns: [column("File", 50), column("Sheet", 20), column("Project", 12), column("Drawing No.", 14), column("Rev.", 7), column("Row", 7), column("No.", 6), column("Item", 6),
+      column("Part number", 28), column("Description", 36), column("Material", 12), column("Treatment", 12), column("Detail", 20), column("Qty / set", 9), column("Qty", 8),
+      column("Unit", 8), column("Brand", 14), column("Supplier", 20), column("Lead time", 10), column("Quotation", 18), column("Unit price"), column("Total price"), column("Currency", 9),
+      column("Actual cost"), column("PO number", 16), column("PO note", 14), column("PO status", 16), column("State", 10), column("Part of row", 10), column("Remark", 30), column("Copy", 6)],
+    rows: files.flatMap((file) => file.forms.flatMap((form) => { const copy = copyOf.get(`${file.path} › ${form.sheet}`) ? "Y" : null;
+      return form.lines.map((line) => [file.path, form.sheet, form.projectNumber, form.drawingNo, line.revision, line.row, line.no, line.item, line.partNumber, line.description,
+        line.material, line.treatment, line.detail, line.quantityPerSet, line.quantity, line.unit, line.brand, line.supplier, line.leadTime, line.quotation, line.unitPrice,
+        line.totalPrice, line.currency, line.actualCost, line.poNumber, line.poNote, line.poStatus, line.poState, line.parentRow, line.remark, copy]); })),
+  };
+  return [projects, forms, issues, lines];
+}
