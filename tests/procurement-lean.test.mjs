@@ -119,7 +119,8 @@ test("the PR sheet takes many items and sends the PR in one press (owner 2026-11
   assert.match(editor, /setRows\(addPastedRows\(rows, read\.rows, String\(Date\.now\(\)\)\)\);/);
   assert.ok(editor.includes(String.raw`if (!/[\t\n]/.test(pasted.trim())) return;`));
   assert.match(editor, /const grid = \{ onKeyDown: moveDown, onPaste: pasteCells \};/);
-  assert.equal((editor.match(/<input \{\.\.\.grid\}/g) ?? []).length, 4);
+  // Text fields, quantity, price and remark, plus the PR-Form's text fields and need-by date (migration 115).
+  assert.equal((editor.match(/<input \{\.\.\.grid\}/g) ?? []).length, 6);
   // Blank rows are added in bulk and are not part of the PR: checks, budget, totals and the request body leave them out.
   assert.match(editor, /onClick=\{\(\) => addUnplanned\(10\)\}/);
   assert.match(editor, /const live = useMemo\(\(\) => rows\.filter\(\(row\) => !isBlankPrRow\(row\)\), \[rows\]\);/);
@@ -136,7 +137,7 @@ test("the PR sheet takes many items and sends the PR in one press (owner 2026-11
 test("the PR sheet's lines are an ERP grid: fixed columns, controls filling their cells, framed (owner 2026-11-19)", () => {
   const skin = read("app/system/production/pegasus-skin.css");
   // Twelve columns; only the description (0) takes what is left, so the table never grows past its frame on its own.
-  assert.ok(editor.includes("<colgroup>{[84, 120, 130, 0, 84, 130, 92, 54, 104, 110, 110, 104].map"));
+  assert.ok(editor.includes("<colgroup>{[84, 120, 130, 0, 84, 130, 92, 54, 104, 110, ...(showForm ? [110, 110, 150, 140, 150] : []), 110, 128].map"));
   assert.ok(skin.includes(".pg-skin .pr-plan-table { table-layout: fixed; min-width: 1326px; border-collapse: collapse; }"));
   assert.match(skin, /\.pg-skin \.pr-plan-table td\.pg-in :is\(input, select\) \{ display: block; width: 100%;/);
   // No inline widths on the controls any more: the column decides.
@@ -193,7 +194,7 @@ test("a row is added from inside the PR sheet's table: + on a row, and an add-ro
   assert.ok(editor.indexOf("insertBelow(row)}>") < editor.indexOf('rowAction("trash"') && editor.indexOf('rowAction("trash"') < editor.indexOf('rowAction("refresh"'));
   assert.ok(skin.includes(".pg-skin .pr-plan-table td.pg-acts { width: auto; padding: 4px 0 0 3px; text-align: left; white-space: nowrap; }"));
   // The add-row line is the table's foot, so Enter on the last row still finds no row under it and opens one.
-  assert.ok(editor.includes('<tfoot><tr><td colSpan={12}><button className="pr-add-line" type="button" onClick={() => addUnplanned(1)}>'));
+  assert.ok(editor.includes('<tfoot><tr><td colSpan={showForm ? 17 : 12}><button className="pr-add-line" type="button" onClick={() => addUnplanned(1)}>'));
   assert.ok(skin.includes(".pg-skin .pr-add-line {"));
   const copy = read("app/system/production/historical-pr-copy.ts");
   assert.ok(copy.includes('"en": "Add a row below"') && copy.includes('"jp": "下に行を追加"'));
@@ -299,7 +300,8 @@ test("an approved request goes to the ERP as the server is told: one PR, a sheet
   // The Request List belongs to a project: a placeholder number is stopped before the ERP is asked.
   assert.match(requisitions, /const blocked = requestListProblem\(erpHeader\);\s+if \(blocked\) \{ await recordError\(prId, blocked\); return \{ sent: false, kind: "validation", message: blocked \}; \}/);
   // The line keys are kept before the call, and the tool is named only through the adapter.
-  assert.ok(requisitions.indexOf("await assignLineRefs(prId, prepared.ref);\n      const added".replace("\n", requisitions.includes("\r\n") ? "\r\n" : "\n")) > 0);
+  assert.ok(requisitions.indexOf("await assignLineRefs(prId, prepared.ref);") > 0
+    && requisitions.indexOf("await assignLineRefs(prId, prepared.ref);") < requisitions.indexOf("const added = await erp.gateway.call<unknown>(subject, REQUEST_LIST_TOOLS.add,"));
   assert.ok(requisitions.includes("erp.gateway.call<unknown>(subject, REQUEST_LIST_TOOLS.add,"));
   // One read per request per 15 minutes, whoever asks; inside that the last answer is shown.
   assert.ok(requisitions.includes("Date.now() - new Date(header.erp_synced_at).getTime() < ERP_LIST_SYNC_MINUTES * 60_000) return { synced: true, cached: true, erp: erpView(header) };"));

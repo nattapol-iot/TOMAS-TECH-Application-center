@@ -31,7 +31,9 @@ export type RequestListExtras = { drawingNo?: string | null; unitName?: string |
 const EXTRA_KEYS: readonly (readonly [keyof RequestListExtras, string])[] = [["drawingNo", "DWG"], ["unitName", "UNIT"], ["material", "MAT"], ["treatment", "TRT"], ["attachmentUrl", "URL"]];
 export function requestListRemark(line: ErpLine, extras: RequestListExtras = {}): string {
   const pairs = EXTRA_KEYS.map(([field, key]) => { const value = (extras[field] ?? "").trim().replace(/;/g, ","); return value ? `${key}=${value}` : ""; }).filter(Boolean).join("; ");
-  return cut([erpLineRemark(line), pairs].filter(Boolean).join(" · "), ERP_MAX_REMARK);
+  // Material and treatment travel as MAT= and TRT= pairs when given, so the readable remark does not say them twice.
+  const said = { ...line, material: extras.material ? null : line.material ?? null, treatment: extras.treatment ? null : line.treatment ?? null };
+  return cut([erpLineRemark(said), pairs].filter(Boolean).join(" · "), ERP_MAX_REMARK);
 }
 
 export type RequestListLine = ErpLine & { line_ref: string; extras?: RequestListExtras; suggested_supplier_id?: number | null };

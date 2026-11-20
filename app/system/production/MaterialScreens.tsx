@@ -204,6 +204,9 @@ type PurchaseRequisitionDetail = {
     original: { itemCode: string; description: string; unit: string } | null;
     sectionCode?: string | null;
     erp?: LineErpView;
+    /** What the PR-Form says of the line (migration 115), and the line of this request it is a part of. */
+    material?: string | null; treatment?: string | null; detail?: string | null; quantityPerSet?: number | null; needBy?: string | null; attachmentUrl?: string | null;
+    parentLineId?: number | null;
   }>;
   steps: Array<{
     id: number;
@@ -1008,7 +1011,9 @@ function PrDetailModal({ id, bootstrap, notify, onChanged, onEdit, onClose }: { 
     if (!detail || !pr) return;
     exportXlsx(requestListSheetRows({ number: pr.number, projectNumber: pr.projectNumber ?? "", neededBy: String(pr.requiredDate).slice(0, 10), requester: pr.requestedByName ?? "" },
       detail.lines.map((line) => ({ lineRef: line.erp?.lineRef ?? null, lineType: line.lineType, itemCode: line.itemCode, partNumber: line.partNumber, description: line.description, brand: line.brand,
-        quantity: line.quantity, unit: line.unit, unitPrice: line.unitPrice, module: line.module, remark: line.remark, outsource: line.sectionCode === "OUT", originalCode: line.original?.itemCode || line.original?.description || null }))),
+        quantity: line.quantity, unit: line.unit, unitPrice: line.unitPrice, module: line.module, remark: line.remark, outsource: line.sectionCode === "OUT", originalCode: line.original?.itemCode || line.original?.description || null,
+        material: line.material, treatment: line.treatment, detail: line.detail, needBy: line.needBy,
+        partOf: (() => { const parent = line.parentLineId ? detail.lines.find((item) => item.id === line.parentLineId) : undefined; return parent ? parent.partNumber || parent.itemCode || parent.description : null; })() }))),
       `RequestList_${pr.number}.xlsx`, REQUEST_LIST_SHEET.sheetName, true);
   };
   // Sheet mode: the requester says the sheet is in the ERP. The app cannot see that itself.
@@ -1066,13 +1071,21 @@ function PrDetailModal({ id, bootstrap, notify, onChanged, onEdit, onClose }: { 
         {detail.ruleFlags.length ? <div className="callout warning" role="status"><Icon name="alertTriangle" /><span><strong><LocalizedText text={"Approval rules triggered"} /></strong>{detail.ruleFlags.map((flag) => flag.text).join(" · ")}</span></div> : null}
         {detail.modules.length ? <div className="table-wrap"><table><thead><tr><th><LocalizedText text={"Module"} /></th><th className="num"><LocalizedText text={"งบ Estimate"} /></th><th className="num"><LocalizedText text={"PR ก่อนหน้า"} /></th><th className="num"><LocalizedText text={"PR นี้"} /></th><th className="num"><LocalizedText text={"คงเหลือหลัง PR นี้"} /></th></tr></thead>
           <tbody>{detail.modules.map((module) => { const left = module.budget - module.requestedElsewhere - module.thisRequest; return <tr key={module.module}><td><strong>{module.module}</strong></td><td className="num">{money(module.budget)}</td><td className="num">{money(module.requestedElsewhere)}</td><td className="num">{money(module.thisRequest)}</td><td className="num">{left < 0 ? <Badge tone="red">{money(left)}</Badge> : money(left)}</td></tr>; })}</tbody></table></div> : null}
-        <Panel title={`${detail.lines.length} lines`} subtitle="ประเภท ตรงแผน / ทดแทน / นอกแผน และ Module ที่ใช้งบ" flush><div className="table-wrap"><table><thead><tr><th><LocalizedText text={"ประเภท"} /></th><th><LocalizedText text={"Item"} /></th><th><LocalizedText text={"Description"} /></th><th><LocalizedText text={"Module"} /></th><th className="num"><LocalizedText text={"Qty"} /></th><th className="num"><LocalizedText text={"ราคาประมาณ"} /></th><th className="num"><LocalizedText text={"Total"} /></th><th className="num"><LocalizedText text={"Estimate"} /></th>{hasLineAnswers ? <th><LocalizedText text={"สถานะใน ERP"} /></th> : null}</tr></thead><tbody>{shown.map((line) => <tr key={line.id}>
+        <Panel title={`${detail.lines.length} lines`} subtitle="ประเภท ตรงแผน / ทดแทน / นอกแผน และ Module ที่ใช้งบ" flush><div className="table-wrap"><table><thead><tr><th><LocalizedText text={"ประเภท"} /></th><th><LocalizedText text={"Item"} /></th><th><LocalizedText text={"Description"} /></th><th><LocalizedText text={"Module"} /></th><th className="num"><LocalizedText text={"Qty"} /></th><th className="num"><LocalizedText text={"ราคาประมาณ"} /></th><th className="num"><LocalizedText text={"Total"} /></th><th className="num"><LocalizedText text={"Estimate"} /></th>{hasLineAnswers ? <th><LocalizedText text={"สถานะใน ERP"} /></th> : null}</tr></thead><tbody>{shown.map((line) => { const partOf = line.parentLineId ? lines.find((item) => item.id === line.parentLineId) : undefined;
+          return <tr key={line.id} className={partOf ? "pr-part" : undefined}>
           <td><Badge tone={PR_KIND_TONE[line.lineType]}>{t(PR_KIND_LABEL[line.lineType])}</Badge>{line.lineType === "Substitute" && line.original ? <small className="muted"><LocalizedText text={"แทน"} /> {line.original.itemCode || line.original.description} × {quantity(line.coveredQuantity)} {line.original.unit}</small> : null}</td>
-          <td><strong className="mono">{line.itemCode || line.partNumber || "—"}</strong><small className="muted">{[line.partNumber, line.brand].filter(Boolean).join(" · ")}</small></td>
-          <td>{line.description}{line.remark ? <small className="muted">{line.remark}</small> : null}</td><td>{line.module}</td>
+          <td><strong className="mono">{line.itemCode || line.partNumber || "—"}</strong><small className="muted">{[line.partNumber, line.brand].filter(Boolean).join(" · ")}</small>
+            {partOf ? <small className="pr-part-of"><LocalizedText text={"ส่วนของ"} /> {partOf.partNumber || partOf.itemCode || partOf.description}</small> : null}</td>
+          <td>{line.description}
+            {/* What the PR-Form says of it: material, treatment, detail, per set, need-by date, and its drawing or quotation. */}
+            {line.material || line.treatment || line.detail || line.quantityPerSet || line.needBy ? <small className="muted">{[line.material ? `${t("วัสดุ")} ${line.material}` : "",
+              line.treatment ? `${t("การชุบ/ผิว")} ${line.treatment}` : "", line.detail ? `${t("รายละเอียดเพิ่ม")} ${line.detail}` : "", line.quantityPerSet ? `${quantity(line.quantityPerSet)} / set` : "",
+              line.needBy ? `${t("ต้องการภายใน")} ${date(line.needBy)}` : ""].filter(Boolean).join(" · ")}</small> : null}
+            {line.attachmentUrl ? <small><a href={line.attachmentUrl} target="_blank" rel="noopener noreferrer"><Icon name="externalLink" /> <LocalizedText text={"Link แบบ/ใบเสนอราคา"} /></a></small> : null}
+            {line.remark ? <small className="muted">{line.remark}</small> : null}</td><td>{line.module}</td>
           <td className="num">{quantity(line.quantity)} {line.unit}</td><td className="num">{money(line.unitPrice)}</td><td className="num"><strong>{money(line.lineTotal)}</strong></td><td className="num">{money(line.estimateTotal)}</td>
           {hasLineAnswers ? <td className="pg-line-erp"><LineErp erp={line.erp} /></td> : null}
-        </tr>)}</tbody></table></div>
+        </tr>; })}</tbody></table></div>
           {lines.length > PR_DETAIL_PAGE ? <Pagination page={currentPage} pageCount={pageCount} from={(currentPage - 1) * PR_DETAIL_PAGE + 1} to={Math.min(currentPage * PR_DETAIL_PAGE, lines.length)} total={lines.length} onPage={setPage} /> : null}</Panel>
         <Panel title="Approval route" subtitle="อนุมัติตามลำดับในตาราง · หัวหน้าแผนกของผู้ขอ แล้วผู้อนุมัติขั้นสุดท้าย · แล้วส่งเข้า ERP" flush><div className="table-wrap"><table><thead><tr><th>#</th><th><LocalizedText text={"Step"} /></th><th><LocalizedText text={"Approver"} /></th><th><LocalizedText text={"Rule"} /></th><th><LocalizedText text={"Status"} /></th><th><LocalizedText text={"Decision"} /></th><th><LocalizedText text={"Comment"} /></th><th><LocalizedText text={"Acted"} /></th></tr></thead><tbody>{detail.steps.map((step) => <tr key={step.id}><td>{step.sequence}</td><td><strong>{step.name}</strong></td><td>{step.approverName || step.approverRole || "—"}</td><td>{step.ruleCode || "—"}</td><td><StatusBadge status={step.status} label={step.status === "Current" ? "In Approval" : step.status} /></td><td>{step.decision || "—"}</td><td>{step.comment || "—"}</td><td>{dateTime(step.actedAt)}</td></tr>)}</tbody></table></div></Panel>
       </> : null}

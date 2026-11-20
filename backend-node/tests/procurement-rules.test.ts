@@ -4,7 +4,7 @@ import Fastify from "fastify";
 import type { AppConfig } from "../src/config.js";
 import type { Database } from "../src/db.js";
 import { ApiError, registerErrorHandler } from "../src/errors.js";
-import { approvalSteps, type BomLineForRequest, BOM_CATEGORY_CODES, DEPARTMENT_STEP, FINAL_STEP, MATERIAL_CATEGORY_CODES, OUTSOURCE_SECTION, MAX_PR_LINES, moduleBudgetFlags, ERP_STEP, planPrLines, type PrLineInput,
+import { approvalSteps, type BomLineForRequest, BOM_CATEGORY_CODES, partLineProblem, NO_LINE_FORM, DEPARTMENT_STEP, FINAL_STEP, MATERIAL_CATEGORY_CODES, OUTSOURCE_SECTION, MAX_PR_LINES, moduleBudgetFlags, ERP_STEP, planPrLines, type PrLineInput,
   remainingToRequest, type RuleFlag } from "../src/procurement-rules.js";
 import { registerPurchaseRequisitionRoutes } from "../src/routes/purchase-requisitions.js";
 import type { CurrentUserService } from "../src/users.js";
@@ -174,6 +174,17 @@ test("input mistakes are refused before any database work, and name the line", a
         payload: { bomId: 1, priority: "Normal", requiredDate: "2099-01-01", lines: [line, line, { ...line, quantity: -1 }] } },
       { method: "POST", url: "/api/v1/purchase-requisitions", status: 400, message: /^Line 1: Line type/,
         payload: { bomId: 1, priority: "Normal", requiredDate: "2099-01-01", lines: [{ ...line, lineType: "Alternative" }] } },
+      // The PR-Form fields of a line (migration 115): a link is a web link, a part belongs to a line above it that is not itself a part.
+      { method: "POST", url: "/api/v1/purchase-requisitions", status: 400, message: /^Line 2: Link must be a web link/,
+        payload: { bomId: 1, priority: "Normal", requiredDate: "2099-01-01", lines: [line, { ...line, attachmentUrl: "javascript:alert(1)" }] } },
+      { method: "POST", url: "/api/v1/purchase-requisitions", status: 400, message: /^Line 1: a part belongs to a line above it/,
+        payload: { bomId: 1, priority: "Normal", requiredDate: "2099-01-01", lines: [{ ...line, parentIndex: 0 }, line] } },
+      { method: "POST", url: "/api/v1/purchase-requisitions", status: 400, message: /^Line 3: line 2 is itself a part of another line/,
+        payload: { bomId: 1, priority: "Normal", requiredDate: "2099-01-01", lines: [line, { ...line, parentIndex: 0 }, { ...line, parentIndex: 1 }] } },
+      { method: "POST", url: "/api/v1/purchase-requisitions", status: 400, message: /^Line 1: Need-by date/,
+        payload: { bomId: 1, priority: "Normal", requiredDate: "2099-01-01", lines: [{ ...line, needBy: "31/12/2099" }] } },
+      { method: "POST", url: "/api/v1/purchase-requisitions", status: 400, message: /^Line 1: Quantity per set/,
+        payload: { bomId: 1, priority: "Normal", requiredDate: "2099-01-01", lines: [{ ...line, quantityPerSet: -2 }] } },
     ];
     for (const item of cases) {
       const response = await server.inject({ method: item.method, url: item.url, payload: item.payload as object });
@@ -257,4 +268,12 @@ test("the app's request number says what the request is for and cannot be read a
   // Only going over a Unit's or a Module's budget asks the requester for a reason.
   const flags = [{ code: "over_unit_budget", level: "manager" as const, text: "u" }, { code: "over_module_budget", level: "management" as const, text: "m" }, { code: "emergency", level: "management" as const, text: "e" }];
   assert.deepEqual(overBudgetFlags(flags).map((flag) => flag.code), ["over_unit_budget", "over_module_budget"]);
+});
+
+test("a part belongs to a line above it in the same request, one level deep (migration 115)", () => {
+  const form = (parentIndex: number | null) => ({ ...NO_LINE_FORM, parentIndex });
+  assert.equal(partLineProblem([form(null), form(0), form(0), undefined]), null);
+  assert.deepEqual(partLineProblem([form(null), form(1)]), { line: 2, message: "a part belongs to a line above it in the same request." });
+  assert.deepEqual(partLineProblem([form(null), form(5)]), { line: 2, message: "a part belongs to a line above it in the same request." });
+  assert.deepEqual(partLineProblem([form(null), form(0), form(1)]), { line: 3, message: "line 2 is itself a part of another line; a part cannot have parts." });
 });

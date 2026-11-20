@@ -34,3 +34,11 @@ test("the sheet's remark is the one the API sends the ERP", () => {
   assert.match(api, /export const erpLineRemark = \(line: ErpLine\): string => \[line\.outsource \? "Outsource" : "", line\.line_type === "Substitute" && line\.original_code \? `Substitute for \$\{line\.original_code\}` : line\.line_type === "Unplanned" \? "Not in the estimate" : "",/);
   assert.equal(requestListSheetRemark(line({ lineType: "Substitute", originalCode: "CBL-01", itemCode: "CBL-ALT", partNumber: "CBL-ALT" })), "Substitute for CBL-01 · Module Panel");
 });
+
+test("a line's PR-Form fields go into the sheet as the API sends them: the line's own need-by date, and the remark (migration 115)", () => {
+  const formed = line({ partNumber: "VALVE-A", itemCode: "", material: "SS400", treatment: "Zinc", detail: "t=3", needBy: "2026-11-30", partOf: "MANIFOLD-8" });
+  const [, row] = requestListSheetRows(request, [formed]);
+  assert.equal(row[8], "2026-11-30");
+  assert.equal(row[9], "Module Panel · Part of MANIFOLD-8 · Material SS400 · Treatment Zinc · Detail t=3 · Need by 2026-11-30");
+  assert.equal(requestListSheetRemark(line({ material: null })), "Module Panel · Item PLC-01");
+});

@@ -739,6 +739,61 @@ export const HISTORICAL_PR_COPY: Record<string, { th: string; en: string; jp: st
     "en": "Choose the module that pays for it",
     "jp": "予算を使うモジュールを選択"
   },
+  "ช่อง PR-Form": {
+    "th": "ช่อง PR-Form",
+    "en": "PR-Form fields",
+    "jp": "PR-Form項目"
+  },
+  "วัสดุ": {
+    "th": "วัสดุ",
+    "en": "Material",
+    "jp": "材質"
+  },
+  "การชุบ/ผิว": {
+    "th": "การชุบ/ผิว",
+    "en": "Treatment",
+    "jp": "表面処理"
+  },
+  "รายละเอียดเพิ่ม": {
+    "th": "รายละเอียดเพิ่ม",
+    "en": "Detail",
+    "jp": "詳細"
+  },
+  "ต้องการภายใน": {
+    "th": "ต้องการภายใน",
+    "en": "Needed by",
+    "jp": "必要日"
+  },
+  "Link แบบ/ใบเสนอราคา": {
+    "th": "Link แบบ/ใบเสนอราคา",
+    "en": "Drawing / quotation link",
+    "jp": "図面・見積リンク"
+  },
+  "ส่วนของ": {
+    "th": "ส่วนของ",
+    "en": "Part of",
+    "jp": "所属"
+  },
+  "เป็นชิ้นส่วนของแถวบน": {
+    "th": "เป็นชิ้นส่วนของแถวบน",
+    "en": "Make a part of the line above",
+    "jp": "上の行の部品にする"
+  },
+  "แยกเป็นรายการหลัก": {
+    "th": "แยกเป็นรายการหลัก",
+    "en": "Make a line of its own",
+    "jp": "独立した行に戻す"
+  },
+  "A link must start with http:// or https://": {
+    "th": "Link ต้องขึ้นต้นด้วย http:// หรือ https://",
+    "en": "A link must start with http:// or https://",
+    "jp": "リンクは http:// または https:// で始めてください"
+  },
+  "The line this part belongs to is not on this request": {
+    "th": "รายการหลักของชิ้นส่วนนี้ไม่อยู่ในใบนี้",
+    "en": "The line this part belongs to is not on this request",
+    "jp": "この部品の親行がこの申請にありません"
+  },
   "Describe the item": {
     "th": "ใส่รายละเอียดสินค้า",
     "en": "Describe the item",

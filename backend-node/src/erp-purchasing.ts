@@ -85,15 +85,22 @@ export type ErpHeader = { pr_no: string; erp_ref: string; erp_department: string
 export type ErpLine = { line_type: string; item_code: string; part_no: string; description: string; brand: string; qty: number; unit: string; unit_price: number;
   remark: string | null; budget_module: string; original_code: string | null;
   /** The line is the estimate's Outsource category: outside labour or a service, not goods. */
-  outsource?: boolean };
+  outsource?: boolean;
+  /** The PR-Form fields (migration 115), and the part number of the line this one is a part of. */
+  material?: string | null; treatment?: string | null; detail?: string | null; need_by?: string | null; part_of?: string | null };
 
 /** PJ000000 and the like: a project that has no real number yet, which the ERP must not be sent. */
 export const isPlaceholder = (number: string) => number.includes("0") && !/[1-9]/.test(number);
 const dateOnly = (value: Date | string) => value instanceof Date ? value.toISOString().slice(0, 10) : String(value).slice(0, 10);
 
-/** What the ERP has no field for, in a line's remark: outsource, what it replaces, its module, its item code, then the requester's own note. */
+/**
+ * What the ERP has no field for, in a line's remark: outsource, what it replaces, its module, its item code, the line it is a part of,
+ * what the PR-Form says of it (material, treatment, detail, need-by date), then the requester's own note.
+ */
 export const erpLineRemark = (line: ErpLine): string => [line.outsource ? "Outsource" : "", line.line_type === "Substitute" && line.original_code ? `Substitute for ${line.original_code}` : line.line_type === "Unplanned" ? "Not in the estimate" : "",
-  `Module ${line.budget_module}`, line.item_code && line.item_code !== line.part_no ? `Item ${line.item_code}` : "", line.remark ?? ""].filter(Boolean).join(" · ");
+  `Module ${line.budget_module}`, line.item_code && line.item_code !== line.part_no ? `Item ${line.item_code}` : "", line.part_of ? `Part of ${line.part_of}` : "",
+  line.material ? `Material ${line.material}` : "", line.treatment ? `Treatment ${line.treatment}` : "", line.detail ? `Detail ${line.detail}` : "",
+  line.need_by ? `Need by ${line.need_by}` : "", line.remark ?? ""].filter(Boolean).join(" · ");
 
 /**
  * The purchase_request_create arguments for one approved requisition. The ERP has no modules or substitutes, so a line's

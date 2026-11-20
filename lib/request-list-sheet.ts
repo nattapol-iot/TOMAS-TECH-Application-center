@@ -21,12 +21,19 @@ export const REQUEST_LIST_SHEET: { sheetName: string; columns: readonly { key: R
 
 export type RequestListSheetRequest = { number: string; projectNumber: string; neededBy: string; requester: string };
 export type RequestListSheetLine = { lineRef: string | null; lineType: string; itemCode: string; partNumber: string; description: string; brand: string; quantity: number; unit: string;
-  unitPrice: number; module: string; remark: string | null; outsource: boolean; originalCode: string | null };
+  unitPrice: number; module: string; remark: string | null; outsource: boolean; originalCode: string | null;
+  /** The PR-Form fields (migration 115) and the part number of the line this one is a part of. */
+  material?: string | null; treatment?: string | null; detail?: string | null; needBy?: string | null; partOf?: string | null };
 
-/** The same remark the API sends the ERP for the line: outsource, what it replaces, its module, its item code, then the requester's note. */
+/**
+ * The same remark the API sends the ERP for the line (erpLineRemark): outsource, what it replaces, its module, its item code, the line it is a
+ * part of, material, treatment, detail and need-by date, then the requester's note.
+ */
 export const requestListSheetRemark = (line: RequestListSheetLine): string => [line.outsource ? "Outsource" : "",
   line.lineType === "Substitute" && line.originalCode ? `Substitute for ${line.originalCode}` : line.lineType === "Unplanned" ? "Not in the estimate" : "",
-  `Module ${line.module}`, line.itemCode && line.itemCode !== line.partNumber ? `Item ${line.itemCode}` : "", line.remark ?? ""].filter(Boolean).join(" · ");
+  `Module ${line.module}`, line.itemCode && line.itemCode !== line.partNumber ? `Item ${line.itemCode}` : "", line.partOf ? `Part of ${line.partOf}` : "",
+  line.material ? `Material ${line.material}` : "", line.treatment ? `Treatment ${line.treatment}` : "", line.detail ? `Detail ${line.detail}` : "",
+  line.needBy ? `Need by ${line.needBy}` : "", line.remark ?? ""].filter(Boolean).join(" · ");
 
 /** The header row, then one row per line that has its ERP key. A line without one (the request is not approved yet) is left out. */
 export function requestListSheetRows(request: RequestListSheetRequest, lines: RequestListSheetLine[], columns = REQUEST_LIST_SHEET.columns): Cell[][] {
@@ -40,7 +47,7 @@ export function requestListSheetRows(request: RequestListSheetRequest, lines: Re
       case "quantity": return line.quantity;
       case "unit": return line.unit || "PCS";
       case "unitPrice": return line.unitPrice;
-      case "neededBy": return request.neededBy;
+      case "neededBy": return line.needBy || request.neededBy;
       case "remark": return requestListSheetRemark(line);
       case "requestNumber": return request.number;
       case "requester": return request.requester;

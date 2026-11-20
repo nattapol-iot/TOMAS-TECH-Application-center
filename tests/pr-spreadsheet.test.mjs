@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { readPrForm } from "../lib/pr-form.ts";
-import { addPastedRows, afterEdit, asPlanned, asSubstitute, blankPrRows, clipboardRows, draftFromBom, draftFromPaste, draftFromPr, draftFromPrForm, draftFromSheet, draftIssues, insertBlankPrRow, isBlankPrRow, moduleStatus, rowFromBomLine, payloadLines, PR_TEMPLATE_HEADER_ROW, sheetRows, startingPrRows, templateRows } from "../lib/pr-spreadsheet.ts";
+import { addPastedRows, afterEdit, asPlanned, asSubstitute, blankPrRows, clipboardRows, draftFromBom, draftFromPaste, draftFromPr, draftFromPrForm, draftFromSheet, draftIssues, togglePart, withoutRows, insertBlankPrRow, isBlankPrRow, moduleStatus, rowFromBomLine, payloadLines, PR_TEMPLATE_HEADER_ROW, sheetRows, startingPrRows, templateRows } from "../lib/pr-spreadsheet.ts";
 
 const bom = [
   { id: 1, module: "Panel", itemCode: "PLC-01", partNumber: "6ES7-1", description: "PLC controller", brand: "Siemens", unit: "pcs", remaining: 2, estimatedUnitCost: 10000 },
@@ -114,14 +114,60 @@ test("the team's PR-Form, 2026 or 2025 drawing, is read by its labels and matche
     assert.deepEqual([read.skipped, read.cancelled], [1, 1]);
     assert.deepEqual(read.rows.map((row) => [row.lineType, row.bomLineId, row.module, row.partNumber, row.description, row.quantity, row.unit, row.unitPrice, row.remark]), [
       ["Planned", 1, "Panel", "6ES7-1", "PLC controller", 2, "pcs", 9500, "urgent"],
-      ["Unplanned", null, "Panel", "IO-16", "IO-16", 4, "Pcs", 1200, "Part of 6es7-1"],
-      ["Unplanned", null, "Panel", "BRKT-7", "Bracket", 6, "Pcs", 300, "Material SS400 · Treatment Zinc · Detail t=3"],
+      ["Unplanned", null, "Panel", "IO-16", "IO-16", 4, "Pcs", 1200, ""],
+      ["Unplanned", null, "Panel", "BRKT-7", "Bracket", 6, "Pcs", 300, ""],
     ]);
+    // The form's own fields come along, and the part keeps the line it belongs to (migration 115).
+    assert.deepEqual(read.rows.map((row) => [row.material, row.treatment, row.detail, row.quantityPerSet, row.parentKey]), [
+      ["", "", "", 1, null], ["", "", "", 2, "pf-9"], ["SS400", "Zinc", "t=3", 1, null]]);
+    assert.deepEqual(payloadLines(read.rows).map((line) => [line.parentIndex, line.material, line.quantityPerSet]), [[undefined, undefined, 1], [0, undefined, 2], [undefined, "SS400", 1]]);
     assert.deepEqual(draftIssues(read.rows, lines, modules), new Map());
   }
   // With no Unit chosen, a line the BOM does not have still needs its module.
   const loose = draftFromPrForm(readPrForm([prFormSheet({ sheet: "001_EE", drawing: "-" }, FORM_2026, FORM_LINES)], "x.xlsx").forms[0], bom, modules);
   assert.match(draftIssues(loose.rows, lines, modules).get(loose.rows[1].key), /module/);
+});
+
+test("a line can be a part of the line above it, one level deep, as on the PR-Form (owner 2026-11-20)", () => {
+  const typed = (key, partNumber, extra = {}) => ({ key, selected: true, lineType: "Unplanned", bomLineId: null, module: "Panel", itemCode: "", partNumber, description: partNumber,
+    brand: "", unit: "pcs", quantity: 1, coveredQuantity: null, unitPrice: 10, remark: "", ...extra });
+  let rows = [typed("a", "MANIFOLD"), typed("b", "VALVE-1"), typed("c", "VALVE-2")];
+  assert.equal(togglePart(rows, "a"), rows, "the first row has no line above it");
+  rows = togglePart(togglePart(rows, "b"), "c");
+  assert.deepEqual(rows.map((row) => row.parentKey ?? null), [null, "a", "a"]);
+  // A row with parts cannot become a part; a part pressed again is a line of its own.
+  assert.equal(togglePart(rows, "a"), rows);
+  assert.deepEqual(togglePart(rows, "c").map((row) => row.parentKey ?? null), [null, "a", null]);
+  assert.deepEqual(payloadLines(rows).map((line) => line.parentIndex), [undefined, 0, 0]);
+  assert.deepEqual(draftIssues(rows, lines, modules), new Map());
+  // The line a part belongs to must be on the request, above it.
+  const unticked = rows.map((row) => row.key === "a" ? { ...row, selected: false } : row);
+  assert.deepEqual([...draftIssues(unticked, lines, modules).values()], ["The line this part belongs to is not on this request", "The line this part belongs to is not on this request"]);
+  assert.deepEqual(payloadLines(unticked).map((line) => line.parentIndex), [undefined, undefined]);
+  // Removing the line makes its parts lines of their own.
+  assert.deepEqual(withoutRows(rows, new Set(["a"])).map((row) => [row.key, row.parentKey]), [["b", null], ["c", null]]);
+  // A link is a web link.
+  assert.deepEqual([...draftIssues([typed("d", "X", { attachmentUrl: "file://server/drawing.pdf" })], lines, modules).values()], ["A link must start with http:// or https://"]);
+  assert.deepEqual(draftIssues([typed("d", "X", { attachmentUrl: "https://tomastech275.sharepoint.com/x" })], lines, modules), new Map());
+});
+
+test("a saved draft brings its form fields and parts back, and the template carries them both ways", () => {
+  const saved = [
+    { id: 41, lineType: "Unplanned", bomLineId: null, module: "Panel", itemCode: "", partNumber: "MANIFOLD", description: "Manifold", brand: "SMC", unit: "pcs", quantity: 1, coveredQuantity: 0, unitPrice: 900, remark: null,
+      material: "A5052", treatment: null, detail: "8 stations", quantityPerSet: 1, needBy: "2026-12-01", attachmentUrl: "https://example.com/m.pdf", parentLineId: null },
+    { id: 42, lineType: "Unplanned", bomLineId: null, module: "Panel", itemCode: "", partNumber: "VALVE-1", description: "Valve", brand: "SMC", unit: "pcs", quantity: 8, coveredQuantity: 0, unitPrice: 50, remark: null,
+      quantityPerSet: 8, parentLineId: 41 },
+  ];
+  const rows = draftFromPr(saved, []);
+  assert.deepEqual(rows.map((row) => [row.key, row.material, row.detail, row.needBy, row.attachmentUrl, row.quantityPerSet, row.parentKey]),
+    [["pr-41", "A5052", "8 stations", "2026-12-01", "https://example.com/m.pdf", 1, null], ["pr-42", "", "", "", "", 8, "pr-41"]]);
+  assert.deepEqual(payloadLines(rows)[1], { lineType: "Unplanned", bomLineId: undefined, module: "Panel", itemCode: undefined, partNumber: "VALVE-1", description: "Valve", brand: "SMC",
+    unit: "pcs", quantity: 8, coveredQuantity: undefined, unitPrice: 50, priceSource: "Manual", remark: undefined, material: undefined, treatment: undefined, detail: undefined,
+    quantityPerSet: 8, needBy: undefined, attachmentUrl: undefined, parentIndex: 0 });
+  const sheet = templateRows("PR", rows, lines);
+  assert.deepEqual(sheet[PR_TEMPLATE_HEADER_ROW].slice(15), ["Material", "Treatment", "Detail", "Need by", "Link"]);
+  const back = draftFromSheet(sheet, bom, modules);
+  assert.deepEqual(back.rows.map((row) => [row.material, row.detail, row.needBy, row.attachmentUrl]), [["A5052", "8 stations", "2026-12-01", "https://example.com/m.pdf"], ["", "", "", ""]]);
 });
 
 test("the PR sheet imports a PR-Form through the reader, choosing the sheet of the Unit's drawing", () => {

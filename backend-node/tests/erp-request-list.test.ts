@@ -81,3 +81,12 @@ test("the server keeps sending one ERP PR until it is told otherwise", () => {
   assert.equal(loadConfig({ ...base, PEGASUS_REQUEST_LIST: "tool" }).pegasusRequestList, "tool");
   assert.throws(() => loadConfig({ ...base, PEGASUS_REQUEST_LIST: "on" }), /PEGASUS_REQUEST_LIST must be off, excel or tool/);
 });
+
+test("a line's PR-Form fields reach the ERP: in the remark of an ERP PR, as MAT= and TRT= pairs in the Request List (migration 115)", async () => {
+  const { erpLineRemark } = await import("../src/erp-purchasing.js");
+  const formed = line({ material: "SS400", treatment: "Zinc", detail: "t=3", need_by: "2026-12-01", part_of: "MANIFOLD-1" });
+  assert.equal(erpLineRemark(formed), "Module Panel · Item PLC-01 · Part of MANIFOLD-1 · Material SS400 · Treatment Zinc · Detail t=3 · Need by 2026-12-01");
+  // In the Request List, material and treatment travel as pairs and are not said twice.
+  assert.equal(requestListRemark(formed, { material: "SS400", treatment: "Zinc" }), "Module Panel · Item PLC-01 · Part of MANIFOLD-1 · Detail t=3 · Need by 2026-12-01 · MAT=SS400; TRT=Zinc");
+  assert.equal(erpLineRemark(line()), "Module Panel · Item PLC-01");
+});

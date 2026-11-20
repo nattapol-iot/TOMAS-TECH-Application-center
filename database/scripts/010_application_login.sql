@@ -865,4 +865,8 @@ GO
 -- database/migrations/113_purchase_units.sql
 GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.project_purchase_units TO [iot_team_app_role];
 GO
+
+-- database/migrations/115_pr_line_form_fields.sql
+GRANT UPDATE (parent_line_id) ON OBJECT::dbo.mat_pr_lines TO [iot_team_app_role];
+GO
 -- END GENERATED MIGRATION GRANTS

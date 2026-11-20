@@ -14,14 +14,36 @@ export type ApprovalStepPlan = { name: string; role: string | null; approver: nu
 export type ApprovalRoute = { finalApproverId: number; departmentApproverId: number | null; finalMayDecide: boolean };
 export type ModuleBudget = { module: string; budget: number; requestedElsewhere: number; thisRequest: number };
 export type PrLineKind = "Planned" | "Substitute" | "Unplanned";
+/**
+ * What the team's PR-Form says of a line besides what is bought (migration 115): material, surface treatment, a detail, how many go
+ * into one set, when it is needed, and a drawing or quotation link. `parentIndex` is the line of the same request this one is a part
+ * of, by its place in the request; a part has no parts of its own.
+ */
+export type PrLineForm = { material: string | null; treatment: string | null; detail: string | null; quantityPerSet: number | null; needBy: string | null;
+  attachmentUrl: string | null; parentIndex: number | null };
+export const NO_LINE_FORM: PrLineForm = { material: null, treatment: null, detail: null, quantityPerSet: null, needBy: null, attachmentUrl: null, parentIndex: null };
 export type PrLineInput = { lineType: PrLineKind; bomLineId: number | null; module: string | null; itemCode: string | null; partNumber: string | null;
   description: string | null; brand: string | null; unit: string | null; quantity: number; coveredQuantity: number | null; unitPrice: number;
-  priceSource: string; supplierId: number | null; remark: string | null };
+  priceSource: string; supplierId: number | null; remark: string | null; form?: PrLineForm };
 export type BomLineForRequest = { id: number; itemId: number | null; itemCode: string; partNumber: string; description: string; brand: string; unit: string;
   estimatedUnitCost: number; module: string; remaining: number };
 export type PlannedPrLine = { lineType: PrLineKind; bomLineId: number | null; itemId: number | null; itemCode: string; partNumber: string; description: string;
   brand: string; unit: string; quantity: number; coveredQuantity: number; unitPrice: number; estimatedQuantity: number; estimatedUnitCost: number;
-  budgetModule: string; priceSource: string; supplierId: number | null; remark: string | null };
+  budgetModule: string; priceSource: string; supplierId: number | null; remark: string | null; form?: PrLineForm };
+
+/**
+ * Why a request's part lines cannot stand, or null. A part names a line above it in the same request, and that line is not itself a
+ * part: the PR-Form has one level (a manifold and its valves), and so do the ERP remark and the request page.
+ */
+export function partLineProblem(forms: (PrLineForm | undefined)[]): { line: number; message: string } | null {
+  for (const [index, form] of forms.entries()) {
+    const parent = form?.parentIndex ?? null;
+    if (parent === null) continue;
+    if (!Number.isInteger(parent) || parent < 0 || parent >= index) return { line: index + 1, message: "a part belongs to a line above it in the same request." };
+    if ((forms[parent]?.parentIndex ?? null) !== null) return { line: index + 1, message: `line ${parent + 1} is itself a part of another line; a part cannot have parts.` };
+  }
+  return null;
+}
 
 /** Estimate categories that are material: Hardware, Software, Electrical, Mechanical, Robot. */
 export const MATERIAL_CATEGORY_CODES = ["01", "02", "03", "04", "05"] as const;
@@ -154,7 +176,7 @@ export function planPrLines(inputs: PrLineInput[], bomLines: Map<number, BomLine
     throw new ApiError(status, code, `Line ${index + 1}: ${message}`, { line: index + 1, ...details });
   };
   return inputs.map((input, index) => {
-    const base = { priceSource: input.priceSource, supplierId: input.supplierId, remark: input.remark, unitPrice: input.unitPrice, quantity: input.quantity };
+    const base = { priceSource: input.priceSource, supplierId: input.supplierId, remark: input.remark, unitPrice: input.unitPrice, quantity: input.quantity, form: input.form ?? NO_LINE_FORM };
     if (input.lineType === "Unplanned") {
       if (input.bomLineId !== null) fail(400, "validation_failed", index, "an unplanned item has no BOM line.");
       const charged = modulesByKey.get(moduleName(input.module).toLocaleLowerCase());
