@@ -25,10 +25,12 @@ Shared screens contain other modules: use the symbol and line range instead of r
 
 ## Candidate regression tests
 
+- [tests/migration-backup.test.mjs](<../../../tests/migration-backup.test.mjs>)
 - [tests/network-origin.test.mjs](<../../../tests/network-origin.test.mjs>)
 - [backend-node/tests/audit.test.ts](<../../../backend-node/tests/audit.test.ts>)
 - [backend-node/tests/database-read-only.test.ts](<../../../backend-node/tests/database-read-only.test.ts>)
 - [backend-node/tests/http.test.ts](<../../../backend-node/tests/http.test.ts>)
+- [backend-node/tests/migration-backup.test.ts](<../../../backend-node/tests/migration-backup.test.ts>)
 - [backend-node/tests/migration-connection.test.ts](<../../../backend-node/tests/migration-connection.test.ts>)
 - [backend-node/tests/migration-validation.test.ts](<../../../backend-node/tests/migration-validation.test.ts>)
 - [backend-node/tests/startup-migrations.test.ts](<../../../backend-node/tests/startup-migrations.test.ts>)
