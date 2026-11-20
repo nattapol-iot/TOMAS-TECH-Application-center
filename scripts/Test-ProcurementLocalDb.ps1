@@ -25,6 +25,7 @@ $routeMigration = Join-Path $repoRoot 'database/migrations/097_pr_approval_route
 $routeFixture = Join-Path $repoRoot 'database/tests/pr-approval-route-097.sql'
 $outsourceMigration = Join-Path $repoRoot 'database/migrations/108_bom_outsource_lines.sql'
 $outsourceFixture = Join-Path $repoRoot 'database/tests/bom-outsource-108.sql'
+$revisionMigration = Join-Path $repoRoot 'database/migrations/109_bom_revision_zero_based.sql'
 $baselineFile = Join-Path ([IO.Path]::GetTempPath()) ('iot-procurement-baseline-' + $testSuffix + '.sql')
 $instanceCreated = $false
 
@@ -80,6 +81,11 @@ try {
     Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-i', $outsourceMigration)
     Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-i', $outsourceMigration)
     Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-Q', "DECLARE @bom bigint=(SELECT id FROM dbo.boms WHERE bom_no=N'BOM-PC-LEGACY'); IF (SELECT COUNT(*) FROM dbo.bom_lines bl JOIN dbo.cost_items ci ON ci.id=bl.estimate_line_id WHERE bl.bom_id=@bom AND bl.section_code=N'OUT' AND ci.item_code IN(N'OUT-01',N'OUT-02'))<>2 OR (SELECT COUNT(*) FROM dbo.bom_lines WHERE bom_id=@bom AND section_code=N'OUT')<>2 OR NOT EXISTS (SELECT 1 FROM dbo.bom_lines bl JOIN dbo.cost_items ci ON ci.id=bl.estimate_line_id WHERE bl.bom_id=@bom AND ci.item_code=N'ENG-01' AND bl.section_code=N'SVC') OR EXISTS (SELECT 1 FROM dbo.bom_lines bl JOIN dbo.cost_items ci ON ci.id=bl.estimate_line_id WHERE bl.bom_id=@bom AND ci.item_code=N'OUT-02' AND (bl.non_stock<>1 OR bl.item_id IS NOT NULL OR bl.qty_required<>5 OR bl.est_unit_cost<>3000)) THROW 51999, 'Migration 108 did not show the old outsource line and add the missing one, once each.', 1;")
+
+    # 109 moved the legacy BOM (seeded at revision 1) to revision 0. Run again, it must stay there.
+    Write-Output 'Checking migration 109 again: BOM revisions count from zero, once.'
+    Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-i', $revisionMigration)
+    Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-Q', "IF (SELECT revision FROM dbo.boms WHERE bom_no=N'BOM-PC-LEGACY')<>0 OR EXISTS (SELECT 1 FROM dbo.boms b WHERE NOT EXISTS (SELECT 1 FROM dbo.boms z WHERE z.bom_no=b.bom_no AND z.revision=0)) OR NOT EXISTS (SELECT 1 FROM dbo.schema_versions WHERE version=109) THROW 51999, 'Migration 109 did not leave every BOM number with a revision 0, or its version is missing.', 1;")
 
     Write-Output 'Checking the PR API on the upgraded database.'
     $env:PROCUREMENT_TEST_SERVER = $serverName

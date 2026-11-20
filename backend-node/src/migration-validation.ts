@@ -94,6 +94,7 @@ export const REQUIRED_MIGRATIONS: readonly MigrationIdentity[] = [
   { version: 106, fileName: "106_schedule_people_plan.sql", name: "Plan people per day" },
   { version: 107, fileName: "107_issue_batches.sql", name: "Customer issue batches" },
   { version: 108, fileName: "108_bom_outsource_lines.sql", name: "Outsource lines on BOMs" },
+  { version: 109, fileName: "109_bom_revision_zero_based.sql", name: "BOM revisions count from zero" },
 ] as const;
 
 export const REQUIRED_SCHEMA_VERSION = REQUIRED_MIGRATIONS.at(-1)!.version;

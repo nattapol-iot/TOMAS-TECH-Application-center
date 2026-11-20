@@ -121,10 +121,13 @@ try {
   assert.equal(old.lines.reduce((sum: number, line: Json) => sum + line.budget, 0), old.bom.bomBudget);
   const legacyRow = (await call("GET", "/boms", "Requester")).find((item: Json) => item.id === legacy);
   assert.equal(legacyRow.bomBudget, old.bom.bomBudget);
+  // Migration 109: the BOM seeded at revision 1 counts from 0 now, like its estimate.
+  assert.deepEqual([old.bom.revision, legacyRow.revision], [0, 0]);
 
   // A new BOM takes the material and outsource categories (this estimate has no outsource); every line can be requested, inventory item or not.
   const bom = await call("POST", "/boms", "Requester", { projectId: fresh }, 201);
   assert.equal(bom.lineCount, 3);
+  assert.equal(bom.revision, 0);
   await call("POST", `/boms/${bom.id}/release`, "PM", { rowVersion: bom.rowVersion, comment: "released for the test" });
   const workspace = await call("GET", `/boms/${bom.id}`, "Requester");
   const byCode = Object.fromEntries(workspace.lines.map((line: Json) => [line.itemCode, line])) as Record<string, Json>;

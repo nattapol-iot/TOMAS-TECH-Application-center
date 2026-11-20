@@ -221,7 +221,7 @@ test("the BOM's lines can be filtered, exported and ticked to start a PR; empty 
   const detail = material.slice(material.indexOf("function BomDetailModal("), material.indexOf("function ReserveStockModal("));
   assert.ok(detail.includes('aria-label={t("Module")} onChange={(event) => setModule(event.target.value)}'));
   assert.ok(detail.includes('aria-label={t("Section")} onChange={(event) => setSection(event.target.value)}'));
-  assert.ok(detail.includes('exportXlsx(bomSheetRows(bom, shown, estimateBusinessDate()), `BOM_${bom.number}.xlsx`, "BOM")'));
+  assert.ok(detail.includes('exportXlsx(bomSheetRows(bom, shown, estimateBusinessDate()), `BOM_${bom.number}_R${bom.revision}.xlsx`, "BOM")'));
   // Only a released BOM's lines that still need buying can be ticked, by someone who may request.
   assert.ok(detail.includes('const canRequest = Boolean(onRequest) && canReserve && bom.status === "Released";'));
   assert.ok(detail.includes('data-guide="bom.create-pr" disabled={!chosen.length} onClick={() => onRequest?.({ bomId: id, lineIds: chosen })}'));
@@ -235,4 +235,19 @@ test("the BOM's lines can be filtered, exported and ticked to start a PR; empty 
   assert.ok(editor.includes("const [bomId, setBomId] = useState(start?.bomId ?? 0);"));
   // The ERP workbook's sheet name stays the default of the shared writer.
   assert.ok(read("lib/export-xlsx.ts").includes('export function exportXlsx(rows:CellValue[][],filename:string,sheetName="Summary cost") {'));
+});
+
+test("BOM revisions count from zero and show as R<n>, like the estimate's (migration 109)", () => {
+  assert.ok(boms.includes("VALUES(@number,0,@project,@estimate,N'Draft',@actor,@actor);"));
+  assert.ok(material.includes('<small className="muted">R{item.revision}</small>'));
+  assert.ok(!material.includes('<LocalizedText text={"Rev."} />'));
+  const migration = read("database/migrations/109_bom_revision_zero_based.sql");
+  assert.match(migration, /THROW 51109, 'Migration 108 must be applied before migration 109\.', 1;/);
+  // A BOM number that already has a revision 0 is left alone, so a second run changes nothing.
+  assert.match(migration, /SET b\.revision = b\.revision - 1\s+FROM dbo\.boms b\s+WHERE NOT EXISTS \(SELECT 1 FROM dbo\.boms z WHERE z\.bom_no = b\.bom_no AND z\.revision = 0\);/);
+  assert.match(migration, /VALUES \(109, N'BOM revisions count from zero'\);/);
+  const rollback = read("database/rollback/109_bom_revision_zero_based.rollback.sql");
+  assert.match(rollback, /UPDATE dbo\.boms SET revision = revision \+ 1;\s+DELETE FROM dbo\.schema_versions WHERE version = 109;/);
+  assert.ok(read("backend-node/src/migration-validation.ts").includes('{ version: 109, fileName: "109_bom_revision_zero_based.sql", name: "BOM revisions count from zero" }'));
+  assert.ok(read("database/scripts/020_deploy_fresh_database.sql").includes(":r database/migrations/109_bom_revision_zero_based.sql"));
 });
