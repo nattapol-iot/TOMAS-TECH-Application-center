@@ -606,7 +606,14 @@ try {
   assert.deepEqual(units.units.map((unit: Json) => [unit.discipline, unit.drawingNo, unit.unitName, unit.budget, unit.requests, unit.requested, unit.approved, unit.ordered, unit.remaining]),
     [["ME", "", "Common parts", 9000, 0, 0, 0, 0, 9000], ["ME", "MZ08-U001", "MASTER VALVE UNIT", 15000, 1, 12000, 0, 0, 3000]]);
   assert.deepEqual(units.modules.map((m: Json) => [m.module, m.budget, m.given, m.ungiven]), [["Panel", 25000, 24000, 1000], ["Software", 30000, 0, 30000]]);
-  assert.deepEqual(units.disciplines, [{ discipline: "ME", units: 2, budget: 24000, requested: 12000, approved: 0, ordered: 0, remaining: 12000 }]);
+  // What still waits to be ordered, the earliest date it is needed by, and each Unit's requests for the drill-down (cached ERP status only).
+  assert.deepEqual(units.disciplines, [{ discipline: "ME", units: 2, budget: 24000, requested: 12000, approved: 0, ordered: 0, remaining: 12000, waitingLines: 1, nearestNeedBy: "2099-03-01" }]);
+  assert.deepEqual(units.units.map((unit: Json) => [unit.unitName, unit.waitingLines, unit.nearestNeedBy, unit.requestList.map((item: Json) => [item.number, item.status, item.requiredDate, item.amount, item.lines, item.waitingLines])]),
+    [["Common parts", 0, null, []], ["MASTER VALVE UNIT", 1, "2099-03-01", [["REQ-ME-PC-FRESH-MZ08-U001-01", "Draft", "2099-03-01", 12000, 1, 1]]]]);
+  // A line the ERP has ordered no longer waits; a cancelled one neither.
+  await run(`UPDATE dbo.mat_pr_lines SET erp_line_status=N'ORDERED' WHERE pr_id=${Number(pr12.id)}`);
+  assert.deepEqual((await unitsOf(fresh)).units.map((unit: Json) => [unit.unitName, unit.waitingLines, unit.nearestNeedBy, unit.ordered]), [["Common parts", 0, null, 0], ["MASTER VALVE UNIT", 0, null, 12000]]);
+  await run(`UPDATE dbo.mat_pr_lines SET erp_line_status=NULL WHERE pr_id=${Number(pr12.id)}`);
 
   // A Unit belongs to one project, and one with requests cannot be removed.
   const elsewhere = await call("POST", `/projects/${legacyProject}/purchase-units`, "Requester", { module: "Install", discipline: "IN", drawingNo: "IN-01", unitName: "Site work", budget: 1000 }, 201);

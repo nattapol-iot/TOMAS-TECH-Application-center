@@ -307,3 +307,7 @@
 .pg-skin .pr-over-reason > span { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--pg-destructive); }
 .pg-skin .pr-over-reason textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--pg-input); border-radius: 6px; background: var(--pg-background); color: var(--pg-foreground); font: inherit; font-size: 14px; resize: vertical; }
 .pg-skin .pr-over-reason textarea:focus { outline: none; box-shadow: var(--pg-focus); }
+
+/* Under a Unit's row: its requests, set back a little; and the line that adds every Unit up. */
+.pg-skin tr.pr-unit-request td { background: var(--pg-muted); font-size: 13px; }
+.pg-skin tr.pr-unit-total td { border-top: 2px solid var(--pg-divider); }

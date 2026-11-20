@@ -6,10 +6,12 @@ import { currentLocale, useT } from "../i18n";
 import { LocalizedText } from "../LocalizedText";
 import { Badge, Icon, Panel } from "../ui";
 import { useEndpoint } from "./material-endpoint";
-import { DISCIPLINE_NAME, moduleRoom, PURCHASE_DISCIPLINES, type PurchaseUnit, type PurchaseUnits } from "../../../lib/purchase-units";
+import { DISCIPLINE_NAME, isOverdue, moduleRoom, PURCHASE_DISCIPLINES, type PurchaseUnit, type PurchaseUnits, unitTotals } from "../../../lib/purchase-units";
+import { estimateBusinessDate } from "../../../lib/estimate-ux";
 
 const money = (value: number) => new Intl.NumberFormat(currentLocale(), { style: "currency", currency: "THB", maximumFractionDigits: 2 }).format(Number(value) || 0);
 const toError = (error: unknown) => error instanceof Error ? error.message : "The request could not be completed.";
+const day = (value: string | null | undefined) => value ? new Intl.DateTimeFormat(currentLocale(), { day: "numeric", month: "short", year: "numeric" }).format(new Date(`${String(value).slice(0, 10)}T00:00:00`)) : "—";
 type Draft = { id: number | null; rowVersion: string; module: string; discipline: string; drawingNo: string; unitName: string; isGeneral: boolean; budget: string };
 const EMPTY: Draft = { id: null, rowVersion: "", module: "", discipline: "ME", drawingNo: "", unitName: "", isGeneral: false, budget: "" };
 
@@ -23,6 +25,12 @@ export function PurchaseUnitsPanel({ projectId, canEdit, notify }: { projectId: 
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // The Unit whose requests are listed under its row.
+  const [open, setOpen] = useState<number | null>(null);
+  const today = estimateBusinessDate();
+  // What is still waiting to be ordered, and the earliest date one of those lines is needed by; red once that date has passed.
+  const waiting = (lines: number | undefined, needBy: string | null | undefined) => <>{lines ? <span>{lines} <LocalizedText text={"รายการ"} /></span> : <span className="muted">—</span>}
+    {lines && needBy ? <small className={isOverdue(needBy, today) ? "red-text" : "muted"}>{day(needBy)}{isOverdue(needBy, today) ? <> · <LocalizedText text={"เกินกำหนด"} /></> : null}</small> : null}</>;
   const data = endpoint.data;
   if (!data) return endpoint.error ? <div className="callout danger" role="alert"><Icon name="alertTriangle" /><span>{endpoint.error}</span></div> : null;
   const editing = draft?.id ? data.units.find((unit) => unit.id === draft.id) : undefined;
@@ -68,18 +76,26 @@ export function PurchaseUnitsPanel({ projectId, canEdit, notify }: { projectId: 
           <button className="btn primary sm" type="button" disabled={busy || Boolean(problem)} onClick={() => { void save(); }}><Icon name="check" /><LocalizedText text={draft.id ? "Save" : "เพิ่ม Unit"} /></button></span>
       </div> : null}
       {data.disciplines.length ? <div className="table-wrap"><table><thead><tr><th><LocalizedText text={"Discipline"} /></th><th className="num">Unit</th><th className="num"><LocalizedText text={"Budget"} /></th>
-        <th className="num"><LocalizedText text={"ขอซื้อแล้ว"} /></th><th className="num"><LocalizedText text={"อนุมัติแล้ว"} /></th><th className="num"><LocalizedText text={"สั่งซื้อแล้ว (ประมาณ)"} /></th><th className="num"><LocalizedText text={"คงเหลือ"} /></th></tr></thead>
+        <th className="num"><LocalizedText text={"ขอซื้อแล้ว"} /></th><th className="num"><LocalizedText text={"อนุมัติแล้ว"} /></th><th className="num"><LocalizedText text={"สั่งซื้อแล้ว (ประมาณ)"} /></th><th className="num"><LocalizedText text={"คงเหลือ"} /></th><th><LocalizedText text={"รอสั่งซื้อ"} /></th></tr></thead>
         <tbody>{data.disciplines.map((item) => <tr key={item.discipline}><td><strong>{item.discipline}</strong> <small className="muted">{DISCIPLINE_NAME[item.discipline]}</small></td><td className="num">{item.units}</td><td className="num">{money(item.budget)}</td>
           <td className="num">{money(item.requested)}</td><td className="num">{money(item.approved)}</td><td className="num">{money(item.ordered)}</td>
-          <td className="num">{item.remaining < 0 ? <Badge tone="red">{money(item.remaining)}</Badge> : money(item.remaining)}</td></tr>)}</tbody></table></div> : null}
+          <td className="num">{item.remaining < 0 ? <Badge tone="red">{money(item.remaining)}</Badge> : money(item.remaining)}</td><td>{waiting(item.waitingLines, item.nearestNeedBy)}</td></tr>)}</tbody></table></div> : null}
       {data.units.length ? <div className="table-wrap"><table><thead><tr>{canEdit ? <th className="pg-acts"><span className="sr-only"><LocalizedText text={"Actions"} /></span></th> : null}<th>Module</th><th><LocalizedText text={"Discipline"} /></th><th>Drawing No.</th><th>Unit</th>
-        <th className="num"><LocalizedText text={"Budget"} /></th><th className="num"><LocalizedText text={"ขอซื้อแล้ว"} /></th><th className="num"><LocalizedText text={"สั่งซื้อแล้ว (ประมาณ)"} /></th><th className="num"><LocalizedText text={"คงเหลือ"} /></th></tr></thead>
-        <tbody>{data.units.map((unit) => <tr key={unit.id}>{canEdit ? <td className="pg-acts"><div className="table-actions">
+        <th className="num"><LocalizedText text={"Budget"} /></th><th className="num"><LocalizedText text={"ขอซื้อแล้ว"} /></th><th className="num"><LocalizedText text={"สั่งซื้อแล้ว (ประมาณ)"} /></th><th className="num"><LocalizedText text={"คงเหลือ"} /></th><th><LocalizedText text={"รอสั่งซื้อ"} /></th></tr></thead>
+        <tbody>{data.units.flatMap((unit) => [<tr key={unit.id}>{canEdit ? <td className="pg-acts"><div className="table-actions">
           <button className="pg-act" type="button" title={t("Edit")} aria-label={t("Edit")} disabled={busy} onClick={() => edit(unit)}><Icon name="edit" /></button>
           {unit.requests ? null : <button className="pg-act danger" type="button" title={t("ลบ Unit")} aria-label={t("ลบ Unit")} disabled={busy} onClick={() => { void remove(unit); }}><Icon name="trash" /></button>}</div></td> : null}
-          <td>{unit.module}</td><td>{unit.discipline}</td><td className="mono">{unit.drawingNo || "—"}</td><td>{unit.unitName}{unit.requests ? <small className="muted">{unit.requests} PR</small> : null}</td>
+          <td>{unit.module}</td><td>{unit.discipline}</td><td className="mono">{unit.drawingNo || "—"}</td>
+          <td>{unit.unitName}{unit.requestList?.length ? <small><button className="pg-doclink" type="button" aria-expanded={open === unit.id} onClick={() => setOpen(open === unit.id ? null : unit.id)}>{unit.requestList.length} <LocalizedText text={"ใบขอซื้อ"} /></button></small> : null}</td>
           <td className="num">{money(unit.budget)}</td><td className="num">{money(unit.requested)}</td><td className="num">{money(unit.ordered)}</td>
-          <td className="num">{unit.remaining < 0 ? <Badge tone="red">{money(unit.remaining)}</Badge> : money(unit.remaining)}</td></tr>)}</tbody></table></div>
+          <td className="num">{unit.remaining < 0 ? <Badge tone="red">{money(unit.remaining)}</Badge> : money(unit.remaining)}</td><td>{waiting(unit.waitingLines, unit.nearestNeedBy)}</td></tr>,
+          // The Unit's requests, under its row: what each asked for, when it is needed, and how many of its lines still wait.
+          ...(open === unit.id ? (unit.requestList ?? []).map((item) => <tr key={`${unit.id}-${item.id}`} className="pr-unit-request">{canEdit ? <td /> : null}<td colSpan={2} className="muted"><LocalizedText text={item.status} /></td>
+            <td colSpan={2} className="mono">{item.number}</td><td className="num muted">{item.lines} <LocalizedText text={"รายการ"} /></td><td className="num">{money(item.amount)}</td><td /><td />
+            <td>{waiting(item.waitingLines, item.requiredDate)}</td></tr>) : [])])}
+          {data.units.length > 1 ? (() => { const all = unitTotals(data.units); return <tr className="pr-unit-total"><td colSpan={canEdit ? 5 : 4}><strong><LocalizedText text={"รวมทุก Unit"} /></strong></td>
+            <td className="num"><strong>{money(all.budget)}</strong></td><td className="num"><strong>{money(all.requested)}</strong></td><td className="num"><strong>{money(all.ordered)}</strong></td>
+            <td className="num">{all.remaining < 0 ? <Badge tone="red">{money(all.remaining)}</Badge> : <strong>{money(all.remaining)}</strong>}</td><td>{waiting(all.waitingLines, all.nearestNeedBy)}</td></tr>; })() : null}</tbody></table></div>
         : draft ? null : <p className="pr-unit-empty muted"><LocalizedText text={"ยังไม่มี Unit ใบขอซื้อของโครงการนี้คุมงบตาม Module อย่างเดียว เพิ่ม Unit เมื่อต้องการแบ่งงบของ Module ตาม Drawing"} /></p>}
     </Panel>
   );

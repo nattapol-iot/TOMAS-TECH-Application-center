@@ -3,7 +3,7 @@ import sql from "mssql";
 import type { Transaction as TransactionType } from "mssql";
 import type { Database } from "../db.js";
 import { ApiError } from "../errors.js";
-import { bodyObject, oneOf, optionalBodyText, parseRowVersion, positiveLong, requiredText } from "../http.js";
+import { bodyObject, dateOnly, oneOf, optionalBodyText, parseRowVersion, positiveLong, requiredText } from "../http.js";
 import { insertMaterialAudit } from "../material-audit.js";
 import { NO_MODULE, PURCHASE_DISCIPLINES, REQUESTING_PR_STATUSES, unitLabel } from "../procurement-rules.js";
 import { demandProjectScope } from "../project-scope.js";
@@ -77,16 +77,34 @@ export function registerPurchaseUnitRoutes(app: FastifyInstance, database: Datab
             SUM(CASE WHEN l.erp_line_status=N'ORDERED' OR (l.erp_line_status IS NULL AND pr.status=N'Converted to PO') THEN l.line_total ELSE 0 END) ordered
           FROM dbo.mat_prs pr INNER JOIN dbo.mat_pr_lines l ON l.pr_id=pr.id WHERE pr.unit_id=u.id AND pr.deleted_at IS NULL AND pr.status IN(${REQUESTING_PR_STATUSES})) r
         WHERE u.project_id=@project AND u.deleted_at IS NULL ORDER BY u.module,u.discipline,u.is_general DESC,u.drawing_no,u.id;`)).recordset;
+      // Each Unit's live requests, for the drill-down. A line is still waiting while its request is not closed and the ERP has
+      // no PO for it; that is read from what was last synced, never by asking the ERP here.
+      const lists = new sql.Request(transaction); lists.input("project", sql.BigInt, projectId);
+      const requestRows = (await lists.query<Record<string, unknown>>(`SELECT pr.id,pr.unit_id,pr.pr_no,pr.status,pr.required_date,COALESCE(SUM(l.line_total),0) amount,COUNT(l.id) lines,
+          COALESCE(SUM(CASE WHEN pr.status IN(N'Draft',N'In Approval',N'Approved') AND (l.erp_line_status IS NULL OR l.erp_line_status IN(N'WAITING',N'IN_PR')) THEN 1 ELSE 0 END),0) waiting
+        FROM dbo.mat_prs pr INNER JOIN dbo.project_purchase_units u ON u.id=pr.unit_id LEFT JOIN dbo.mat_pr_lines l ON l.pr_id=pr.id
+        WHERE u.project_id=@project AND u.deleted_at IS NULL AND pr.deleted_at IS NULL AND pr.status IN(${REQUESTING_PR_STATUSES})
+        GROUP BY pr.id,pr.unit_id,pr.pr_no,pr.status,pr.required_date ORDER BY pr.unit_id,pr.id;`)).recordset;
+      type UnitRequest = { id: number; number: string; status: string; requiredDate: string | null; amount: number; lines: number; waitingLines: number };
+      const requestsOf = new Map<number, UnitRequest[]>();
+      for (const row of requestRows) { const unitId = Number(row.unit_id); const list = requestsOf.get(unitId) ?? [];
+        list.push({ id: Number(row.id), number: String(row.pr_no), status: String(row.status), requiredDate: dateOnly(row.required_date as Date | string | null), amount: Number(row.amount), lines: Number(row.lines), waitingLines: Number(row.waiting) });
+        requestsOf.set(unitId, list); }
+      // The earliest date something still waiting is needed by: the one to chase first.
+      const nearest = (list: UnitRequest[]) => list.filter((item) => item.waitingLines > 0 && item.requiredDate).map((item) => item.requiredDate!).sort()[0] ?? null;
       const units = rows.map((row) => { const budget = Number(row.budget), requested = Number(row.requested);
         return { id: Number(row.id), module: String(row.module), discipline: String(row.discipline), drawingNo: String(row.drawing_no), unitName: String(row.unit_name), isGeneral: Boolean(row.is_general),
-          budget, requests: Number(row.requests), requested, approved: Number(row.approved), ordered: Number(row.ordered), remaining: round2(budget - requested), rowVersion: row.row_version.toString("base64") }; });
+          budget, requests: Number(row.requests), requested, approved: Number(row.approved), ordered: Number(row.ordered), remaining: round2(budget - requested),
+          waitingLines: (requestsOf.get(Number(row.id)) ?? []).reduce((sum, item) => sum + item.waitingLines, 0), nearestNeedBy: nearest(requestsOf.get(Number(row.id)) ?? []),
+          requestList: requestsOf.get(Number(row.id)) ?? [], rowVersion: row.row_version.toString("base64") }; });
       return { projectId, units,
         modules: [...modules].sort(([a], [b]) => a.localeCompare(b)).map(([module, budget]) => { const given = round2(units.filter((unit) => unit.module === module).reduce((sum, unit) => sum + unit.budget, 0));
           return { module, budget: round2(budget), given, ungiven: round2(budget - given) }; }),
         // By discipline: what the PR-Form files of one discipline (ME, EE, ...) added up to, which nobody could see across thirteen files.
         disciplines: PURCHASE_DISCIPLINES.flatMap((discipline) => { const own = units.filter((unit) => unit.discipline === discipline); if (!own.length) return [];
           const sum = (pick: (unit: (typeof units)[number]) => number) => round2(own.reduce((total, unit) => total + pick(unit), 0));
-          return [{ discipline, units: own.length, budget: sum((unit) => unit.budget), requested: sum((unit) => unit.requested), approved: sum((unit) => unit.approved), ordered: sum((unit) => unit.ordered), remaining: sum((unit) => unit.remaining) }]; }) }; });
+          return [{ discipline, units: own.length, budget: sum((unit) => unit.budget), requested: sum((unit) => unit.requested), approved: sum((unit) => unit.approved), ordered: sum((unit) => unit.ordered), remaining: sum((unit) => unit.remaining),
+            waitingLines: own.reduce((total, unit) => total + unit.waitingLines, 0), nearestNeedBy: own.map((unit) => unit.nearestNeedBy).filter((value): value is string => Boolean(value)).sort()[0] ?? null }]; }) }; });
   });
 
   app.post("/api/v1/projects/:projectId/purchase-units", async (request, reply) => {
