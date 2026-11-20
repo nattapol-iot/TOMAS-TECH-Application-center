@@ -32,6 +32,8 @@ $lineGrantsMigration = Join-Path $repoRoot 'database/migrations/112_request_list
 $lineGrantsRollback = Join-Path $repoRoot 'database/rollback/112_request_list_line_grants.rollback.sql'
 $unitsMigration = Join-Path $repoRoot 'database/migrations/113_purchase_units.sql'
 $unitsRollback = Join-Path $repoRoot 'database/rollback/113_purchase_units.rollback.sql'
+$numbersMigration = Join-Path $repoRoot 'database/migrations/114_request_numbers.sql'
+$numbersRollback = Join-Path $repoRoot 'database/rollback/114_request_numbers.rollback.sql'
 $baselineFile = Join-Path ([IO.Path]::GetTempPath()) ('iot-procurement-baseline-' + $testSuffix + '.sql')
 $instanceCreated = $false
 
@@ -96,7 +98,13 @@ try {
     # 111 marked the legacy PRs the ERP already holds as PR and added the Request List columns and the orders table.
     # Its rollback script takes them away again, and 111 puts them back: both are run here so neither is untested SQL.
     # 112 only grants the app role the new line columns. Rollbacks go newest first: 111's refuses while 112 is applied.
-    Write-Output 'Checking migrations 111 to 113 again, their rollback scripts (newest first), and all three once more.'
+    Write-Output 'Checking migrations 111 to 114 again, their rollback scripts (newest first), and all four once more.'
+    $numbersCheck = "IF COL_LENGTH(N'dbo.mat_prs',N'pr_no')<>100 OR COL_LENGTH(N'dbo.mat_prs',N'over_budget_reason') IS NULL OR OBJECT_ID(N'dbo.UQ_mat_prs_no',N'UQ') IS NULL OR NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name=N'IX_mat_prs_project_status') OR NOT EXISTS (SELECT 1 FROM dbo.schema_versions WHERE version=114) THROW 51999, 'Migration 114 did not widen pr_no to 50 characters, add the reason, keep the unique number or record its version.', 1;"
+    Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-i', $numbersMigration)
+    Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-Q', $numbersCheck)
+    Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-i', $numbersRollback)
+    Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-Q', "IF COL_LENGTH(N'dbo.mat_prs',N'pr_no')<>60 OR COL_LENGTH(N'dbo.mat_prs',N'over_budget_reason') IS NOT NULL OR OBJECT_ID(N'dbo.UQ_mat_prs_no',N'UQ') IS NULL OR NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name=N'IX_mat_prs_project_status') OR NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name=N'IX_mat_prs_bom_status') OR EXISTS (SELECT 1 FROM dbo.schema_versions WHERE version=114) OR (SELECT COUNT(*) FROM dbo.mat_prs)=0 THROW 51999, 'The rollback of 114 did not put pr_no back to 30 characters with its unique number and indexes, or took the requests with it.', 1;")
+    Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-i', $numbersRollback)
     $unitsCheck = "IF OBJECT_ID(N'dbo.project_purchase_units',N'U') IS NULL OR COL_LENGTH(N'dbo.mat_prs',N'unit_id') IS NULL OR OBJECT_ID(N'dbo.FK_mat_prs_unit',N'F') IS NULL OR NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name=N'UX_project_purchase_units_drawing') OR NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name=N'UX_project_purchase_units_general') OR NOT EXISTS (SELECT 1 FROM dbo.schema_versions WHERE version=113) THROW 51999, 'Migration 113 is missing its table, the unit column, its key, an index or its version.', 1;"
     Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-i', $unitsMigration)
     Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-Q', $unitsCheck)
@@ -118,6 +126,8 @@ try {
     Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-Q', "IF NOT EXISTS (SELECT 1 FROM dbo.schema_versions WHERE version=112) THROW 51999, 'Migration 112 did not record its version.', 1;")
     Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-i', $unitsMigration)
     Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-Q', $unitsCheck)
+    Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-i', $numbersMigration)
+    Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-Q', $numbersCheck)
 
     Write-Output 'Checking the PR API on the upgraded database.'
     $env:PROCUREMENT_TEST_SERVER = $serverName

@@ -175,6 +175,8 @@ type PurchaseRequisitionDetail = {
     projectNumber?: string | null;
     projectName?: string | null;
     requestedByName?: string | null;
+    /** Why the requester asks for more than the Unit or a Module has. */
+    overBudgetReason?: string | null;
   };
   /** `requestList`: what the server does with an approved request (one ERP PR, a sheet to upload, or Request List lines). */
   erp: ErpView & { enabled: boolean; requestList?: "off" | "excel" | "tool" };
@@ -832,7 +834,7 @@ export function ProductionPurchaseRequisitions({ bootstrap, notify }: MaterialSc
       const pr = detail.purchaseRequisition;
       setDetailId(null);
       setEditing({ id: pr.id, number: pr.number, rowVersion: pr.rowVersion, bomId: pr.bomId, priority: pr.priority, requiredDate: String(pr.requiredDate),
-        purpose: pr.purpose ?? "", erpDepartment: detail.erp.department, unitId: detail.unit?.id ?? null, lines: detail.lines });
+        purpose: pr.purpose ?? "", erpDepartment: detail.erp.department, unitId: detail.unit?.id ?? null, overBudgetReason: pr.overBudgetReason ?? null, lines: detail.lines });
     } catch (error) { setActionError(toError(error)); }
     finally { setBusyId(null); }
   };
@@ -1059,6 +1061,8 @@ function PrDetailModal({ id, bootstrap, notify, onChanged, onEdit, onClose }: { 
           <span><strong>Unit {detail.unit.discipline} · {[detail.unit.drawingNo, detail.unit.unitName].filter(Boolean).join(" ")}</strong> <small className="muted">{detail.unit.module}</small>
             {" · "}<LocalizedText text={"งบของ Unit"} /> {money(detail.unit.budget)} · <LocalizedText text={"PR ก่อนหน้า"} /> {money(detail.unit.requestedElsewhere)} · <LocalizedText text={"PR นี้"} /> {money(detail.unit.thisRequest)}
             {" · "}<LocalizedText text={"คงเหลือ"} /> <strong>{money(left)}</strong></span></div>; })() : null}
+        {detail.purchaseRequisition.overBudgetReason ? <div className="callout danger" role="status" data-guide="pr.over-reason"><Icon name="alertTriangle" />
+          <span><strong><LocalizedText text={"เกินงบ · เหตุผลของผู้ขอ"} /></strong>{detail.purchaseRequisition.overBudgetReason}</span></div> : null}
         {detail.ruleFlags.length ? <div className="callout warning" role="status"><Icon name="alertTriangle" /><span><strong><LocalizedText text={"Approval rules triggered"} /></strong>{detail.ruleFlags.map((flag) => flag.text).join(" · ")}</span></div> : null}
         {detail.modules.length ? <div className="table-wrap"><table><thead><tr><th><LocalizedText text={"Module"} /></th><th className="num"><LocalizedText text={"งบ Estimate"} /></th><th className="num"><LocalizedText text={"PR ก่อนหน้า"} /></th><th className="num"><LocalizedText text={"PR นี้"} /></th><th className="num"><LocalizedText text={"คงเหลือหลัง PR นี้"} /></th></tr></thead>
           <tbody>{detail.modules.map((module) => { const left = module.budget - module.requestedElsewhere - module.thisRequest; return <tr key={module.module}><td><strong>{module.module}</strong></td><td className="num">{money(module.budget)}</td><td className="num">{money(module.requestedElsewhere)}</td><td className="num">{money(module.thisRequest)}</td><td className="num">{left < 0 ? <Badge tone="red">{money(left)}</Badge> : money(left)}</td></tr>; })}</tbody></table></div> : null}

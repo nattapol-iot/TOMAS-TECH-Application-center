@@ -3,12 +3,11 @@ import sql from "mssql";
 import type { Transaction as TransactionType } from "mssql";
 import type { AppConfig } from "../config.js";
 import type { Database } from "../db.js";
-import { issueDocumentNumber } from "../document-number.js";
 import { ApiError } from "../errors.js";
 import { hasRole } from "../user-roles.js";
 import { bodyObject, booleanQuery, oneOf, optionalBodyText, optionalPositiveLong, optionalText, parseDateOnly, parseRowVersion, positiveLong, requiredInteger, requiredText } from "../http.js";
 import { insertMaterialAudit } from "../material-audit.js";
-import { unitBudgetOf } from "../procurement-rules.js";
+import { overBudgetFlags, requestNumber, unitBudgetOf } from "../procurement-rules.js";
 import { type ApprovalRoute, approvalSteps, type BomLineForRequest, ERP_STEP, FINAL_STEP, LEGACY_PO_CREATION_STEP, MAX_PR_LINES, moduleBudgets, NO_MODULE, OUTSOURCE_SECTION, planPrLines, type PlannedPrLine,
   type PrLineInput, type PrLineKind, procurementRuleFlags, remainingToRequest, REQUESTING_PR_STATUSES, type RuleFlag } from "../procurement-rules.js";
 import type { EmailService, PurchaseRequisitionApprovalEmail, PurchaseRequisitionDecisionEmail } from "../email.js";
@@ -35,15 +34,14 @@ const ERP_APPROVE_WAIT_MS = 20_000;
 type PrHeader = { id: number | string; pr_no: string; project_id: number | string; bom_id: number | string; requested_by: number | string; status: string; priority: string;
   required_date: Date | string; erp_po_ref: string | null; purpose: string | null; erp_ref: string | null; erp_department: string | null; erp_pr_no: string | null;
   erp_status: string | null; erp_status_label: string | null; erp_url: string | null; erp_revision_no: number | null; erp_rejection_reason: string | null;
-  erp_synced_at: Date | string | null; erp_error: string | null; erp_target: string | null; erp_cancel_pending: boolean | null; row_version: Buffer };
-const HEADER_COLUMNS = "id,pr_no,project_id,bom_id,requested_by,status,priority,required_date,erp_po_ref,purpose,erp_ref,erp_department,erp_pr_no,erp_status,erp_status_label,erp_url,erp_revision_no,erp_rejection_reason,erp_synced_at,erp_error,erp_target,erp_cancel_pending,row_version";
+  erp_synced_at: Date | string | null; erp_error: string | null; erp_target: string | null; erp_cancel_pending: boolean | null;
+  unit_id: number | string | null; over_budget_reason: string | null; row_version: Buffer };
+const HEADER_COLUMNS = "id,pr_no,project_id,bom_id,requested_by,status,priority,required_date,erp_po_ref,purpose,erp_ref,erp_department,erp_pr_no,erp_status,erp_status_label,erp_url,erp_revision_no,erp_rejection_reason,erp_synced_at,erp_error,erp_target,erp_cancel_pending,unit_id,over_budget_reason,row_version";
 const erpView = (h: PrHeader) => ({ ref: h.erp_ref, department: h.erp_department, prNo: h.erp_pr_no, status: h.erp_status, statusLabel: h.erp_status_label, url: h.erp_url,
   revisionNo: h.erp_revision_no, rejectionReason: h.erp_rejection_reason, poNo: h.erp_po_ref, syncedAt: h.erp_synced_at, error: h.erp_error,
   // Where it went in the ERP (PR, REQUEST_LIST, or not sent yet), and whether its requester asked to cancel it after that.
   target: h.erp_target ?? null, cancelPending: Boolean(h.erp_cancel_pending) });
 
-function todayIn(timeZone: string): string { const p = new Intl.DateTimeFormat("en-GB", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
-  const v = Object.fromEntries(p.map((x) => [x.type, x.value])); return `${v.year}-${v.month}-${v.day}`; }
 function decimal(value: unknown, minimum: number, maximum: number, label: string): number { if (typeof value !== "number" || !Number.isFinite(value) || value < minimum || value > maximum) throw new ApiError(400, "validation_failed", `${label} is outside the supported range.`);
   if (!value.toString().toLowerCase().includes("e") && (value.toString().split(".")[1]?.length ?? 0) > 4) throw new ApiError(400, "validation_failed", `${label} cannot have more than 4 decimal places.`); return value; }
 async function readHeader(transaction: TransactionType, id: number): Promise<PrHeader> { const request = new sql.Request(transaction); request.input("id", sql.BigInt, id);
@@ -78,6 +76,26 @@ function parseRequestFields(body: Record<string, unknown>) {
     purpose: optionalBodyText(body.purpose, 20_000, "Purpose"), lines: parseLines(body.lines), erpDepartment: optionalBodyText(body.erpDepartment, 50, "ERP department"),
     // The Unit the request is for (migration 113); none for a request that belongs to no Unit.
     unitId: body.unitId === undefined || body.unitId === null || body.unitId === "" || body.unitId === 0 ? null : requiredInteger(body.unitId, "Unit", 1) };
+}
+
+/**
+ * The next free number for a request of this project and Unit. Rounds count every request ever raised for the Unit, cancelled
+ * ones included, so a number is not handed out twice; one another project already holds is skipped (projects still on the
+ * placeholder PJ000000 share a prefix). Called under the BOM's lock, which a new request and an edit both take.
+ */
+async function issueRequestNumber(transaction: TransactionType, projectId: number, unitId: number | null): Promise<string> {
+  const read = new sql.Request(transaction); read.input("project", sql.BigInt, projectId); read.input("unit", sql.BigInt, unitId);
+  const row = (await read.query<Record<string, unknown>>(`SELECT p.project_no,u.discipline,u.drawing_no,u.is_general,
+      (SELECT COUNT(*) FROM dbo.mat_prs pr WHERE pr.project_id=p.id AND pr.pr_no LIKE N'REQ-%' AND ((@unit IS NULL AND pr.unit_id IS NULL) OR pr.unit_id=@unit)) raised
+    FROM dbo.projects p LEFT JOIN dbo.project_purchase_units u ON u.id=@unit WHERE p.id=@project;`)).recordset[0];
+  if (!row) throw new ApiError(404, "project_not_found", "Project not found.");
+  const unit = unitId === null ? null : { discipline: String(row.discipline), drawingNo: String(row.drawing_no ?? ""), isGeneral: Boolean(row.is_general) };
+  for (let round = Number(row.raised) + 1, tries = 0; tries < 500; round += 1, tries += 1) {
+    const candidate = requestNumber(String(row.project_no ?? ""), unit, round);
+    const taken = new sql.Request(transaction); taken.input("number", sql.NVarChar(50), candidate);
+    if (!(await taken.query<{ id: number | string }>(`SELECT TOP(1) id FROM dbo.mat_prs WITH (UPDLOCK,HOLDLOCK) WHERE pr_no=@number;`)).recordset[0]) return candidate;
+  }
+  throw new ApiError(409, "request_number_unavailable", "No free request number was found for this Unit. Try again.");
 }
 
 /** The request's Unit must be a live Unit of the same project. */
@@ -454,18 +472,18 @@ export function registerPurchaseRequisitionRoutes(app: FastifyInstance, config: 
       const unit = await unitBudgetOf(transaction, id);
       return { unit, purchaseRequisition: { id: Number(h.id), number: h.pr_no, projectId: Number(h.project_id), bomId: Number(h.bom_id), requestedBy: Number(h.requested_by), status: h.status,
         priority: h.priority, requiredDate: h.required_date, purpose: h.purpose, erpPoRef: h.erp_po_ref, rowVersion: h.row_version.toString("base64"),
-        projectNumber: about.project_no ?? null, projectName: about.project_name ?? null, requestedByName: about.requester_name ?? null }, erp: { ...erpView(h), enabled: Boolean(erp), requestList }, lines, steps, modules, ruleFlags: flags }; });
+        overBudgetReason: h.over_budget_reason ?? null, projectNumber: about.project_no ?? null, projectName: about.project_name ?? null, requestedByName: about.requester_name ?? null }, erp: { ...erpView(h), enabled: Boolean(erp), requestList }, lines, steps, modules, ruleFlags: flags }; });
   });
 
   app.post("/api/v1/purchase-requisitions", async (request, reply) => { await users.demandPermission(request, "procurement.request"); const actor = await users.required(request); const body = bodyObject(request.body);
-    const bomId = requiredInteger(body.bomId, "BOM", 1); const { priority, requiredDate, purpose, lines, erpDepartment, unitId } = parseRequestFields(body); const today = todayIn(config.businessTimeZone);
+    const bomId = requiredInteger(body.bomId, "BOM", 1); const { priority, requiredDate, purpose, lines, erpDepartment, unitId } = parseRequestFields(body);
     const created = await database.transaction(async (transaction) => { const lookup = new sql.Request(transaction); lookup.input("bom", sql.BigInt, bomId); const bom = (await lookup.query<{ project_id: number | string; status: string }>(`SELECT project_id,status FROM dbo.boms WITH (UPDLOCK,HOLDLOCK) WHERE id=@bom AND deleted_at IS NULL;`)).recordset[0];
       if (!bom) throw new ApiError(404, "bom_not_found", "BOM not found."); if (bom.status !== "Released") throw new ApiError(409, "bom_not_released", `A requisition can only be raised against a released BOM; this one is '${bom.status}'.`);
       const projectId = Number(bom.project_id); await demandProjectScope(database, actor, projectId, transaction); await assertUnitOfProject(transaction, unitId, projectId);
       const requestable = await requestableBomLines(transaction, bomId); const planned = planPrLines(lines, requestable.lines, requestable.modules);
       await assertActiveSuppliers(transaction, planned.flatMap((line) => line.supplierId === null ? [] : [line.supplierId]));
-      const number = await issueDocumentNumber(transaction, "PR", today); const insert = new sql.Request(transaction);
-      insert.input("number", sql.NVarChar(30), number); insert.input("project", sql.BigInt, projectId); insert.input("bom", sql.BigInt, bomId); insert.input("actor", sql.BigInt, actor.id);
+      const number = await issueRequestNumber(transaction, projectId, unitId); const insert = new sql.Request(transaction);
+      insert.input("number", sql.NVarChar(50), number); insert.input("project", sql.BigInt, projectId); insert.input("bom", sql.BigInt, bomId); insert.input("actor", sql.BigInt, actor.id);
       insert.input("priority", sql.NVarChar(30), priority); insert.input("required", sql.Date, requiredDate); insert.input("purpose", sql.NVarChar(sql.MAX), purpose);
       insert.input("department", sql.NVarChar(50), erpDepartment); insert.input("unit", sql.BigInt, unitId);
       const pr = (await insert.query<{ id: number | string; row_version: Buffer }>(`INSERT INTO dbo.mat_prs(pr_no,project_id,bom_id,requested_by,priority,required_date,purpose,status,created_by,updated_by,erp_department,unit_id)
@@ -490,7 +508,10 @@ export function registerPurchaseRequisitionRoutes(app: FastifyInstance, config: 
       if (!bom) throw new ApiError(404, "bom_not_found", "BOM not found."); if (bom.status !== "Released") throw new ApiError(409, "bom_not_released", `A requisition can only be raised against a released BOM; this one is '${bom.status}'.`);
       const update = new sql.Request(transaction); update.input("actor", sql.BigInt, actor.id); update.input("id", sql.BigInt, id); update.input("version", sql.VarBinary(8), version);
       update.input("priority", sql.NVarChar(30), priority); update.input("required", sql.Date, requiredDate); update.input("purpose", sql.NVarChar(sql.MAX), purpose); update.input("department", sql.NVarChar(50), erpDepartment); update.input("unit", sql.BigInt, unitId);
-      const row = (await update.query<{ row_version: Buffer }>(`UPDATE dbo.mat_prs SET priority=@priority,required_date=@required,purpose=@purpose,erp_department=COALESCE(@department,erp_department),unit_id=@unit,
+      // A draft moved to another Unit (or to none) is renumbered for it: the number says which Unit the request is for.
+      const sameUnit = (h.unit_id === null || h.unit_id === undefined ? null : Number(h.unit_id)) === unitId;
+      const number = sameUnit ? h.pr_no : await issueRequestNumber(transaction, Number(h.project_id), unitId); update.input("number", sql.NVarChar(50), number);
+      const row = (await update.query<{ row_version: Buffer }>(`UPDATE dbo.mat_prs SET pr_no=@number,priority=@priority,required_date=@required,purpose=@purpose,erp_department=COALESCE(@department,erp_department),unit_id=@unit,
           updated_by=@actor,updated_at=SYSUTCDATETIME() OUTPUT inserted.row_version WHERE id=@id AND status=N'Draft' AND deleted_at IS NULL AND row_version=@version;`)).recordset[0];
       if (!row) throw new ApiError(409, "concurrency_conflict", "This requisition changed. Reload and try again.");
       const clear = new sql.Request(transaction); clear.input("id", sql.BigInt, id); await clear.query(`DELETE FROM dbo.mat_pr_lines WHERE pr_id=@id;`);
@@ -499,19 +520,25 @@ export function registerPurchaseRequisitionRoutes(app: FastifyInstance, config: 
       await insertLines(transaction, id, bomId, planned); const totalRequest = new sql.Request(transaction); totalRequest.input("id", sql.BigInt, id);
       const total = Number((await totalRequest.query<{ total: number | string }>(`SELECT COALESCE(SUM(line_total),0) total FROM dbo.mat_pr_lines WHERE pr_id=@id;`)).recordset[0]!.total);
       const kinds = Object.fromEntries(lineTypes.map((kind) => [kind, planned.filter((line) => line.lineType === kind).length]));
-      await insertMaterialAudit(transaction, actor, "Edited purchase requisition", "PR", id, h.pr_no, { status: "Draft" }, { lines: planned.length, ...kinds, amount: total, priority }, { projectId: Number(h.project_id), reason: purpose });
-      return { id, number: h.pr_no, status: "Draft", lineCount: planned.length, amount: total, rowVersion: row.row_version.toString("base64") }; });
+      await insertMaterialAudit(transaction, actor, "Edited purchase requisition", "PR", id, number, { status: "Draft", ...(sameUnit ? {} : { number: h.pr_no }) }, { lines: planned.length, ...kinds, amount: total, priority }, { projectId: Number(h.project_id), reason: purpose });
+      return { id, number, status: "Draft", lineCount: planned.length, amount: total, rowVersion: row.row_version.toString("base64") }; });
   });
 
   app.post("/api/v1/purchase-requisitions/:id/submit", async (request) => { await users.demandPermission(request, "procurement.request"); const actor = await users.required(request); const id = positiveLong((request.params as { id?: string }).id, "Purchase requisition id");
-    const body = bodyObject(request.body); const version = parseRowVersion(body.rowVersion); const comment = optionalBodyText(body.comment, 20_000, "Workflow comment"); const submitted = await database.transaction(async (transaction) => { const h = await readHeader(transaction, id);
+    const body = bodyObject(request.body); const version = parseRowVersion(body.rowVersion); const comment = optionalBodyText(body.comment, 20_000, "Workflow comment"); const justification = optionalBodyText(body.justification, 2000, "Reason for going over budget");
+    const submitted = await database.transaction(async (transaction) => { const h = await readHeader(transaction, id);
       await demandProjectScope(database, actor, Number(h.project_id), transaction); if (h.status !== "Draft") throw new ApiError(409, "pr_not_draft", `Only a draft requisition can be submitted; this one is '${h.status}'.`);
       if (Number(h.requested_by) !== actor.id && !isProjectElevated(actor)) throw new ApiError(403, "requester_required", "Only the requester can submit this requisition."); const countRequest = new sql.Request(transaction); countRequest.input("id", sql.BigInt, id);
       if (Number((await countRequest.query<{ count: number }>(`SELECT COUNT(*) count FROM dbo.mat_pr_lines WHERE pr_id=@id;`)).recordset[0]!.count) === 0) throw new ApiError(409, "pr_empty", "A requisition needs at least one line before it can be submitted.");
-      const flags = await procurementRuleFlags(transaction, id); await buildApprovalRoute(transaction, id, Number(h.project_id), actor, Number(h.requested_by), flags); const update = new sql.Request(transaction); update.input("actor", sql.BigInt, actor.id); update.input("id", sql.BigInt, id); update.input("version", sql.VarBinary(8), version);
-      const row = (await update.query<{ row_version: Buffer }>(`UPDATE dbo.mat_prs SET status=N'In Approval',submitted_at=SYSUTCDATETIME(),updated_by=@actor,updated_at=SYSUTCDATETIME()
+      const flags = await procurementRuleFlags(transaction, id);
+      // More than the Unit or a Module has: the requester says why, and the approvers read it with the request (owner 2026-11-20).
+      const over = overBudgetFlags(flags); const reason = over.length ? justification ?? h.over_budget_reason : null;
+      if (over.length && !reason?.trim()) throw new ApiError(422, "justification_required", `This request goes over budget (${over.map((flag) => flag.text).join("; ")}). Give the reason for it, then submit.`);
+      await buildApprovalRoute(transaction, id, Number(h.project_id), actor, Number(h.requested_by), flags); const update = new sql.Request(transaction); update.input("actor", sql.BigInt, actor.id); update.input("id", sql.BigInt, id); update.input("version", sql.VarBinary(8), version);
+      update.input("reason", sql.NVarChar(2000), reason?.trim() || null);
+      const row = (await update.query<{ row_version: Buffer }>(`UPDATE dbo.mat_prs SET status=N'In Approval',submitted_at=SYSUTCDATETIME(),over_budget_reason=@reason,updated_by=@actor,updated_at=SYSUTCDATETIME()
         OUTPUT inserted.row_version WHERE id=@id AND deleted_at IS NULL AND row_version=@version;`)).recordset[0]; if (!row) throw new ApiError(409, "concurrency_conflict", "This requisition changed. Reload and try again.");
-      await insertMaterialAudit(transaction, actor, "Submitted purchase requisition", "PR", id, h.pr_no, { status: "Draft" }, { status: "In Approval", ruleFlags: flags.map((x) => x.text) }, { projectId: Number(h.project_id), reason: comment });
+      await insertMaterialAudit(transaction, actor, "Submitted purchase requisition", "PR", id, h.pr_no, { status: "Draft" }, { status: "In Approval", ruleFlags: flags.map((x) => x.text), ...(reason ? { overBudgetReason: reason.trim() } : {}) }, { projectId: Number(h.project_id), reason: comment });
       return { result: { id, status: "In Approval", rowVersion: row.row_version.toString("base64"), ruleFlags: flags }, notice: await noticeWaiting(transaction, id, actor.id) }; });
     await mail(submitted.notice);
     return submitted.result;

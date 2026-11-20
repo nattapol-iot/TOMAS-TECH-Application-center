@@ -300,3 +300,10 @@
 .pg-skin .pr-unit-budget { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; padding: 8px 12px; border: 1px solid var(--pg-divider); border-radius: 8px; background: var(--pg-muted); font-size: 13px; }
 .pg-skin .pr-unit-budget.over { border-color: var(--pg-destructive); color: var(--pg-destructive); background: color-mix(in srgb, var(--pg-destructive) 8%, var(--pg-background)); }
 .pg-skin .pr-unit-budget small { flex-basis: 100%; font-size: 12px; }
+
+/* The requester's reason for going over budget, asked on the sheet before the request can be sent. */
+.pg-skin .pr-over-reason { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid var(--pg-divider); border-radius: 8px; background: var(--pg-background); }
+.pg-skin .pr-over-reason.missing { border-color: var(--pg-destructive); }
+.pg-skin .pr-over-reason > span { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--pg-destructive); }
+.pg-skin .pr-over-reason textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--pg-input); border-radius: 6px; background: var(--pg-background); color: var(--pg-foreground); font: inherit; font-size: 14px; resize: vertical; }
+.pg-skin .pr-over-reason textarea:focus { outline: none; box-shadow: var(--pg-focus); }

@@ -1248,5 +1248,20 @@ export const HISTORICAL_PR_COPY: Record<string, { th: string; en: string; jp: st
     "th": "Unit ที่ขอซื้อให้",
     "en": "Unit this PR is for",
     "jp": "このPRの対象Unit"
+  },
+  "ใบนี้เกินงบ ใส่เหตุผลให้ผู้อนุมัติอ่านก่อนส่งขออนุมัติ": {
+    "th": "ใบนี้เกินงบ ใส่เหตุผลให้ผู้อนุมัติอ่านก่อนส่งขออนุมัติ",
+    "en": "This request is over budget: give the approver the reason before you send it",
+    "jp": "この申請は予算超過です。承認申請の前に、承認者が読む理由を入力してください"
+  },
+  "เช่น ราคาขึ้นจากตอนประเมิน หรือลูกค้าขอเพิ่มงาน": {
+    "th": "เช่น ราคาขึ้นจากตอนประเมิน หรือลูกค้าขอเพิ่มงาน",
+    "en": "For example: the price rose since the estimate, or the customer asked for more work",
+    "jp": "例：見積時より価格が上がった、顧客から追加作業の依頼があった"
+  },
+  "เกินงบ · เหตุผลของผู้ขอ": {
+    "th": "เกินงบ · เหตุผลของผู้ขอ",
+    "en": "Over budget · the requester's reason",
+    "jp": "予算超過・申請者の理由"
   }
 };
