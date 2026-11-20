@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { moduleRoom, PURCHASE_DISCIPLINES, unitLabel, unitOnSheet } from "../lib/purchase-units.ts";
+import { isOverdue, moduleRoom, PURCHASE_DISCIPLINES, unitLabel, unitOnSheet, unitTotals } from "../lib/purchase-units.ts";
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 
@@ -62,4 +62,20 @@ test("Units split a Module's budget, a request is raised for a Unit, and going o
   assert.ok(editor.includes('<Field label="Unit ที่ขอซื้อให้" guide="pr.unit"') && editor.includes('data-guide="pr.unit-budget"'));
   assert.ok(editor.includes("erpDepartment: department || undefined, unitId, lines: payloadLines(live) };"));
   assert.ok(material.includes("{item.unitLabel ? <span className=\"muted\">{item.unitLabel}</span> : null}"));
+});
+
+test("the project's picture per Unit: what still waits, when it is needed, and the total of every Unit (owner 2026-11-20)", () => {
+  assert.equal(isOverdue("2026-11-19", "2026-11-20"), true);
+  assert.equal(isOverdue("2026-11-20", "2026-11-20"), false, "needed today is not late yet");
+  assert.equal(isOverdue("2026-11-19T00:00:00.000Z", "2026-11-20"), true);
+  assert.equal(isOverdue(null, "2026-11-20"), false);
+  const unit = (over) => ({ id: 1, module: "Panel", discipline: "ME", drawingNo: "D", unitName: "U", isGeneral: false, budget: 0, requests: 0, requested: 0, approved: 0, ordered: 0, remaining: 0, rowVersion: "", ...over });
+  assert.deepEqual(unitTotals([unit({ budget: 15000, requested: 17500.5, approved: 12000, ordered: 6000, remaining: -2500.5, waitingLines: 3, nearestNeedBy: "2026-12-05" }),
+    unit({ budget: 9000, requested: 0, remaining: 9000 }), unit({ budget: 1000.25, requested: 500, approved: 500, ordered: 0, remaining: 500.25, waitingLines: 1, nearestNeedBy: "2026-11-30" })]),
+    { budget: 25000.25, requested: 18000.5, approved: 12500, ordered: 6000, remaining: 6999.75, waitingLines: 4, nearestNeedBy: "2026-11-30" });
+  const routes = read("backend-node/src/routes/purchase-units.ts"), panel = read("app/system/production/PurchaseUnitsPanel.tsx");
+  // Waiting is read from what was last synced: this endpoint never asks the ERP.
+  assert.ok(!routes.includes("gateway") && !routes.includes("erp-request-list"));
+  assert.ok(routes.includes("(l.erp_line_status IS NULL OR l.erp_line_status IN(N'WAITING',N'IN_PR')) THEN 1 ELSE 0 END),0) waiting"));
+  assert.ok(panel.includes("isOverdue(needBy, today)") && panel.includes("unitTotals(data.units)"));
 });

@@ -1263,5 +1263,25 @@ export const HISTORICAL_PR_COPY: Record<string, { th: string; en: string; jp: st
     "th": "เกินงบ · เหตุผลของผู้ขอ",
     "en": "Over budget · the requester's reason",
     "jp": "予算超過・申請者の理由"
+  },
+  "รอสั่งซื้อ": {
+    "th": "รอสั่งซื้อ",
+    "en": "Waiting to be ordered",
+    "jp": "発注待ち"
+  },
+  "เกินกำหนด": {
+    "th": "เกินกำหนด",
+    "en": "overdue",
+    "jp": "期限超過"
+  },
+  "ใบขอซื้อ": {
+    "th": "ใบขอซื้อ",
+    "en": "requests",
+    "jp": "件の申請"
+  },
+  "รวมทุก Unit": {
+    "th": "รวมทุก Unit",
+    "en": "All Units",
+    "jp": "全Unit合計"
   }
 };
