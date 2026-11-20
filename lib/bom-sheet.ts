@@ -17,7 +17,7 @@ export const toBuyValue = (line: Pick<BomSheetLine, "purchaseRequired" | "estima
 export function bomSheetRows(bom: BomSheetHeader, lines: BomSheetLine[], exportedOn: string): Cell[][] {
   const open = lines.filter((line) => line.purchaseRequired > 0);
   return [
-    [`BOM ${bom.number} · ${bom.projectNumber} ${bom.projectName}`],
+    [`BOM ${bom.number} R${bom.revision} · ${bom.projectNumber} ${bom.projectName}`],
     [`Estimate ${bom.estimateNumber} R${bom.estimateRevision} · exported ${exportedOn}`],
     [`Lines ${lines.length} · Budget THB ${thb(lines.reduce((sum, line) => sum + line.budget, 0))}`],
     [`Still to buy ${open.length} lines · THB ${thb(open.reduce((sum, line) => sum + toBuyValue(line), 0))}`],

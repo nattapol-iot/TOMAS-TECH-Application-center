@@ -12,7 +12,7 @@ test("a BOM exports as one sheet: notes, the header on the sixth row, then its l
     line({ itemCode: null, estimateItemCode: "SET-A", partNumber: null, brand: null, description: "Equipment Set A", unit: "set", quantityRequired: 1, estimatedUnitCost: 150000, budget: 150000, requested: 1, purchaseRequired: 0 }),
     line({ sectionCode: "OUT", module: "Install", itemCode: null, estimateItemCode: null, description: "Site wiring", unit: "lot", quantityRequired: 1, estimatedUnitCost: 100000.555, budget: 100000.555, purchaseRequired: 1 }),
   ], "2026-11-20");
-  assert.equal(rows[0][0], "BOM BOM-2611-0002 · PJ260017 AMR fleet");
+  assert.equal(rows[0][0], "BOM BOM-2611-0002 R0 · PJ260017 AMR fleet");
   assert.equal(rows[1][0], "Estimate EST-2611-0004 R0 · exported 2026-11-20");
   // Money is added up; quantities are not, because pcs, set and lot do not add.
   assert.equal(rows[2][0], "Lines 3 · Budget THB 252000.56");

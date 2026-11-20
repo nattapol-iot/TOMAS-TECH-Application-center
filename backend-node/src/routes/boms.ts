@@ -115,7 +115,7 @@ export function registerBomRoutes(app: FastifyInstance, config: AppConfig, datab
       const number = await issueDocumentNumber(transaction, "BOM", today); const insert = new sql.Request(transaction);
       insert.input("number", sql.NVarChar(30), number); insert.input("project", sql.BigInt, projectId); insert.input("estimate", sql.BigInt, Number(estimate.id)); insert.input("actor", sql.BigInt, actor.id);
       const bom = (await insert.query<{ id: number | string; row_version: Buffer }>(`INSERT INTO dbo.boms(bom_no,revision,project_id,estimate_id,status,created_by,updated_by)
-        OUTPUT inserted.id,inserted.row_version VALUES(@number,1,@project,@estimate,N'Draft',@actor,@actor);`)).recordset[0]!; const id = Number(bom.id);
+        OUTPUT inserted.id,inserted.row_version VALUES(@number,0,@project,@estimate,N'Draft',@actor,@actor);`)).recordset[0]!; const id = Number(bom.id);
       const copy = new sql.Request(transaction); copy.input("bom", sql.BigInt, id); copy.input("estimate", sql.BigInt, Number(estimate.id)); copy.input("revision", sql.Int, estimate.revision); copy.input("actor", sql.BigInt, actor.id);
       const copied = await copy.query(`INSERT INTO dbo.bom_lines(bom_id,section_code,sort_order,item_id,estimate_line_id,description,qty_required,unit,est_unit_cost,customer_supplied_qty,owner_id,non_stock,created_by,updated_by)
         SELECT @bom,CASE ci.category_code WHEN '01' THEN N'HW.STD' WHEN '02' THEN N'SW' WHEN '03' THEN N'HW.EL' WHEN '04' THEN N'HW.ME' WHEN '05' THEN N'HW.STD' WHEN '${OUTSOURCE_CATEGORY_CODE}' THEN N'${OUTSOURCE_SECTION}' ELSE N'SVC' END,
@@ -124,7 +124,7 @@ export function registerBomRoutes(app: FastifyInstance, config: AppConfig, datab
         WHERE ci.estimate_id=@estimate AND ci.revision=@revision AND ci.deleted_at IS NULL AND ci.qty>0 AND ci.category_code IN(${BOM_CATEGORIES});`); const lineCount = copied.rowsAffected[0] ?? 0;
       if (!lineCount) throw new ApiError(409, "estimate_has_no_lines", "The finalized estimate revision has no material or outsource lines (hardware, software, electrical, mechanical, robot or outsource) to generate a BOM from.");
       await insertMaterialAudit(transaction, actor, "Generated BOM from estimate", "BOM", id, number, null, { estimate: estimate.estimate_no, estimateRevision: estimate.revision, lines: lineCount }, { projectId });
-      return { id, number, revision: 1, status: "Draft", lineCount, rowVersion: bom.row_version.toString("base64") }; });
+      return { id, number, revision: 0, status: "Draft", lineCount, rowVersion: bom.row_version.toString("base64") }; });
     return reply.status(201).header("Location", `/api/v1/boms/${created.id}`).send(created);
   });
 
