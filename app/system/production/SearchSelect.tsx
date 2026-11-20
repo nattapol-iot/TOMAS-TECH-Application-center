@@ -16,13 +16,15 @@ import { LookupMenu, handleMenuKeys, type MenuKeys } from "./CostItemLookup";
 export type SearchSelectOption = { value: string; label: string; detail?: string; searchText?: string };
 const MATCH_LIMIT = 50;
 
-export function SearchSelect({ value, options, onChange, label, placeholder, noMatchText, clearLabel, showLabel, moreText, required, disabled, addLabel, onAdd }: {
+export function SearchSelect({ value, options, onChange, label, placeholder, noMatchText, clearLabel, showLabel, moreText, required, disabled, clearable = true, addLabel, onAdd }: {
   value: string; options: SearchSelectOption[]; onChange: (value: string) => void;
   /** Already translated: the caller owns its copy. */
   label: string; placeholder: string; noMatchText: string; clearLabel: string; showLabel: string;
   /** Shown when the list is cut; "{shown}" and "{total}" are filled in. */
   moreText: string;
   required?: boolean; disabled?: boolean;
+  /** False for a choice that cannot be left empty: no clear button. */
+  clearable?: boolean;
   /** A last row that adds a new entry from what was typed (empty when nothing was). */
   addLabel?: (typed: string) => string; onAdd?: (typed: string) => void;
 }) {
@@ -65,7 +67,7 @@ export function SearchSelect({ value, options, onChange, label, placeholder, noM
         // Enter while searching never submits the form around the box.
         if (event.key === "Enter" && query !== null) event.preventDefault();
       }} />
-    {value && !disabled ? <button type="button" className="search-select-clear" aria-label={clearLabel} title={clearLabel}
+    {value && !disabled && clearable ? <button type="button" className="search-select-clear" aria-label={clearLabel} title={clearLabel}
       onMouseDown={(event) => event.preventDefault()} onClick={() => { onChange(""); setQuery(null); anchor?.focus(); }}><Icon name="x" /></button> : null}
     <button type="button" className="search-select-toggle" tabIndex={-1} aria-label={showLabel} title={showLabel} disabled={disabled}
       onMouseDown={(event) => event.preventDefault()} onClick={() => { if (open) close(); else show(); }}><Icon name="chevronDown" /></button>

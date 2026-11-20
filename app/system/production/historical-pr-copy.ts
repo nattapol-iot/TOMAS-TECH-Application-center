@@ -744,6 +744,11 @@ export const HISTORICAL_PR_COPY: Record<string, { th: string; en: string; jp: st
     "en": "Automatic after approval",
     "jp": "承認後に自動"
   },
+  "ค้นหาเลข BOM / เลขหรือชื่อโครงการ…": {
+    "th": "ค้นหาเลข BOM / เลขหรือชื่อโครงการ…",
+    "en": "Search by BOM number, project number or name…",
+    "jp": "BOM番号・プロジェクト番号・名称で検索…"
+  },
   "Choose the module that pays for it": {
     "th": "เลือก Module ที่ใช้งบ",
     "en": "Choose the module that pays for it",
