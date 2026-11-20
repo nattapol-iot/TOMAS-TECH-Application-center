@@ -4,7 +4,7 @@
 
 ลูกค้า supplier (ดึงจาก Pegasus ERP) พนักงาน role audit และ settings
 
-Evidence: snapshot `c56ffc0c`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
+Evidence: snapshot `ce939391`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
 
 ## Read only the operation you change
 

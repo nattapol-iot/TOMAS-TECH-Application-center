@@ -853,4 +853,8 @@ GO
 -- database/migrations/110_bom_review_threshold.sql
 GRANT SELECT ON OBJECT::dbo.procurement_settings TO [iot_team_app_role];
 GO
+
+-- database/migrations/111_erp_request_list.sql
+GRANT SELECT, INSERT, DELETE ON OBJECT::dbo.mat_pr_line_erp_orders TO [iot_team_app_role];
+GO
 -- END GENERATED MIGRATION GRANTS

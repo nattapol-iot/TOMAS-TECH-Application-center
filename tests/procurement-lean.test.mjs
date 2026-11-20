@@ -270,3 +270,23 @@ test("a BOM at or over the review threshold is released by a second person (migr
   assert.ok(read("backend-node/src/migration-validation.ts").includes('{ version: 110, fileName: "110_bom_review_threshold.sql", name: "BOM review threshold" }'));
   assert.ok(read("database/scripts/020_deploy_fresh_database.sql").includes(":r database/migrations/110_bom_review_threshold.sql"));
 });
+
+test("the ERP Request List: its tool names live in one file, and migration 111 keeps each line's answer (owner 2026-11-20)", () => {
+  const adapter = read("backend-node/src/erp-request-list.ts");
+  // A rename by the ERP team is a change in one file: no other source spells the tool names.
+  for (const tool of ["project_request_list_add", "project_request_list_get", "project_request_list_cancel"]) {
+    assert.ok(adapter.includes(`"${tool}"`), tool);
+    for (const other of ["backend-node/src/routes/purchase-requisitions.ts", "backend-node/src/erp-purchasing.ts", "backend-node/src/app.ts"]) assert.ok(!read(other).includes(tool), `${tool} in ${other}`);
+  }
+  const migration = read("database/migrations/111_erp_request_list.sql");
+  assert.match(migration, /THROW 51111, 'Migration 110 must be applied before migration 111\.', 1;/);
+  assert.match(migration, /erp_line_status IN \(N''WAITING'', N''IN_PR'', N''ORDERED'', N''CANCELLED''\)/);
+  // One line can be ordered on several ERP PRs and POs.
+  assert.match(migration, /CREATE TABLE dbo\.mat_pr_line_erp_orders \([^]*pr_line_id\s+bigint\s+NOT NULL CONSTRAINT FK_mat_pr_line_erp_orders_line FOREIGN KEY REFERENCES dbo\.mat_pr_lines\(id\) ON DELETE CASCADE/);
+  // Requests the ERP already holds as one PR stay on purchase_request_get.
+  assert.match(migration, /UPDATE dbo\.mat_prs SET erp_target = N''PR'' WHERE erp_target IS NULL AND erp_pr_no IS NOT NULL;/);
+  assert.match(migration, /VALUES \(111, N'ERP request list line status'\);/);
+  assert.match(read("database/rollback/111_erp_request_list.rollback.sql"), /DROP TABLE dbo\.mat_pr_line_erp_orders;[^]*DELETE FROM dbo\.schema_versions WHERE version = 111;/);
+  assert.ok(read("backend-node/src/migration-validation.ts").includes('{ version: 111, fileName: "111_erp_request_list.sql", name: "ERP request list line status" }'));
+  assert.ok(read("database/scripts/020_deploy_fresh_database.sql").includes(":r database/migrations/111_erp_request_list.sql"));
+});

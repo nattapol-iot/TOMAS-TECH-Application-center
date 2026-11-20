@@ -23,7 +23,7 @@ export const ERP_MAX_REMARK = 1000;
 export const newErpRef = () => `${ERP_REF_PREFIX}${randomUUID()}`;
 
 const text = (value: unknown) => typeof value === "string" ? value : "";
-const cut = (value: string, max: number) => value.length > max ? `${value.slice(0, max - 1)}…` : value;
+export const cut = (value: string, max: number) => value.length > max ? `${value.slice(0, max - 1)}…` : value;
 
 export class PegasusMcp {
   constructor(private readonly url: string, private readonly fetchImpl: typeof fetch = fetch, private readonly timeoutMs = 90_000) {}
@@ -91,13 +91,16 @@ export type ErpLine = { line_type: string; item_code: string; part_no: string; d
 export const isPlaceholder = (number: string) => number.includes("0") && !/[1-9]/.test(number);
 const dateOnly = (value: Date | string) => value instanceof Date ? value.toISOString().slice(0, 10) : String(value).slice(0, 10);
 
+/** What the ERP has no field for, in a line's remark: outsource, what it replaces, its module, its item code, then the requester's own note. */
+export const erpLineRemark = (line: ErpLine): string => [line.outsource ? "Outsource" : "", line.line_type === "Substitute" && line.original_code ? `Substitute for ${line.original_code}` : line.line_type === "Unplanned" ? "Not in the estimate" : "",
+  `Module ${line.budget_module}`, line.item_code && line.item_code !== line.part_no ? `Item ${line.item_code}` : "", line.remark ?? ""].filter(Boolean).join(" · ");
+
 /**
  * The purchase_request_create arguments for one approved requisition. The ERP has no modules or substitutes, so a line's
  * module and what it replaces travel in its remark; fields longer than the ERP allows are shortened, never dropped.
  */
 export function erpRequestArguments(header: ErpHeader, lines: ErpLine[], appBaseUrl: string): Record<string, unknown> {
-  const describe = (line: ErpLine) => [line.outsource ? "Outsource" : "", line.line_type === "Substitute" && line.original_code ? `Substitute for ${line.original_code}` : line.line_type === "Unplanned" ? "Not in the estimate" : "",
-    `Module ${line.budget_module}`, line.item_code && line.item_code !== line.part_no ? `Item ${line.item_code}` : "", line.remark ?? ""].filter(Boolean).join(" · ");
+  const describe = erpLineRemark;
   return {
     external_ref: header.erp_ref,
     department: header.erp_department,
