@@ -523,7 +523,7 @@ C('procurement', 'BOM: bills of materials inside Purchase Requisition || BOM：P
     'Open Purchase Requisition → <b>Bill of Materials</b> tab → Generate BOM and select a project with an approved/locked estimate. || Purchase Requisition → <b>部品表 (BOM)</b>タブ → Generate BOMで承認済み・Locked見積を持つProjectを選びます。',
     'Verify estimate number/revision and generate the BOM. Material lines (categories 01-05) and outsourced work (category 07 Outsource) enter the BOM so they can be requested on a PR; our own labor, travel, accommodation and other costs do not. || 見積番号・版を確認してBOMを生成します。BOMには資材行（区分01-05）と外注作業（区分07 Outsource）が入り、PRで申請できます。自社の労務、旅費、宿泊費、その他の費用は入りません。',
     'Open View and inspect modules, items, quantities, reference budgets, stock and shortages. || ViewでModule、項目、数量、参照予算、在庫、不足を確認します。',
-    'An authorized user selects Release once complete, with any required note. || 完全性確認後、権限者が必要メモを付けてReleaseします。',
+    'An authorized user selects Release once complete, with any required note. A BOM at or over the review threshold (THB 100,000 to start with) cannot be released by the person who generated it: another approver releases it. || 完全性確認後、権限者が必要メモを付けてReleaseします。確認基準額（初期値100,000バーツ）以上のBOMは作成者自身ではReleaseできず、別の承認者がReleaseします。',
     'Use the released BOM as the source for PR and MIR. || Released BOMをPRとMIRの元データに使います。'
   ], 'The BOM is Released and its revision is frozen for purchase/issue work. || BOMがReleasedになり、購買・出庫用の版が固定されます。') +
   P('20.3 Reserve stock for a project || 20.3 プロジェクト用に在庫を引当', [

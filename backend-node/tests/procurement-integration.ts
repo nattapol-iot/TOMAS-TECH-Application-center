@@ -404,6 +404,27 @@ try {
   assert.equal(regenerated.lineCount, 5);
   assert.deepEqual((await call("GET", `/boms/${regenerated.id}`, "Requester")).lines.map((line: Json) => [line.itemCode, line.sectionCode, line.nonStock]).sort(),
     [["CBL-01", "HW.EL", true], ["OUT-01", "OUT", true], ["OUT-02", "OUT", true], ["PLC-01", "HW.STD", false], ["SCADA-LIC", "SW", true]]);
+  // Bug 4 (migration 110): at or over the review threshold, the person who generated a BOM cannot release it.
+  await run(`UPDATE dbo.boms SET deleted_at=SYSUTCDATETIME() WHERE id=${Number(regenerated.id)}`);
+  const own = await call("POST", "/boms", "Admin", { projectId: legacyProject }, 201);
+  assert.equal(Number((await run(`SELECT bom_review_threshold t FROM dbo.procurement_settings WHERE id=1`)).recordset[0]!.t), 100000);
+  // THB 82,000 is under the starting threshold of 100,000: one person may do both. Lower the threshold to see the rule.
+  await run(`UPDATE dbo.procurement_settings SET bom_review_threshold=82000 WHERE id=1`);
+  const asCreator = (await call("GET", "/boms", "Admin")).find((item: Json) => item.id === own.id);
+  assert.deepEqual([asCreator.bomBudget, asCreator.needsSecondReleaser], [82000, true]);
+  assert.equal((await call("GET", "/boms", "PM")).find((item: Json) => item.id === own.id).needsSecondReleaser, false);
+  const refused = await call("POST", `/boms/${own.id}/release`, "Admin", { rowVersion: own.rowVersion, comment: "my own" }, 403);
+  assert.equal(refused.code, "bom_self_release_forbidden");
+  assert.match(refused.message, /THB 82,000\.00, at or over the review threshold of THB 82,000\.00/);
+  assert.equal((await run(`SELECT status FROM dbo.boms WHERE id=${Number(own.id)}`)).recordset[0]!.status, "Draft");
+  // Another approver releases it.
+  await call("POST", `/boms/${own.id}/release`, "PM", { rowVersion: own.rowVersion, comment: "reviewed" });
+  assert.equal((await run(`SELECT status FROM dbo.boms WHERE id=${Number(own.id)}`)).recordset[0]!.status, "Released");
+  // Under the threshold, the person who generated a BOM may release it.
+  await run(`UPDATE dbo.boms SET deleted_at=SYSUTCDATETIME() WHERE id=${Number(own.id)}; UPDATE dbo.procurement_settings SET bom_review_threshold=100000 WHERE id=1;`);
+  const small = await call("POST", "/boms", "Admin", { projectId: legacyProject }, 201);
+  assert.equal((await call("GET", "/boms", "Admin")).find((item: Json) => item.id === small.id).needsSecondReleaser, false);
+  await call("POST", `/boms/${small.id}/release`, "Admin", { rowVersion: small.rowVersion, comment: "under the threshold" });
   console.log(`PASS: procurement API on LocalDB (1,000-line PR in ${elapsed} ms).`);
 } finally {
   await app.close();
