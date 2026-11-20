@@ -517,7 +517,7 @@ C('procurement', 'BOM: bills of materials inside Purchase Requisition || BOM：P
   P('20.1 Open the BOMs and read their status || 20.1 BOMを開いて状態を見る', [
     'Open Purchase Requisition and press the <b>Bill of Materials</b> tab. The procurement menu now holds only Purchase Requisition and Approvals. || Purchase Requisitionを開き<b>部品表 (BOM)</b>タブを押します。購買メニューはPurchase RequisitionとApprovalsだけになりました。',
     'The summary bar counts the BOMs in each status; press a status to filter, and again to clear. || 上部の集計バーは状態ごとのBOM件数を示します。状態を押すと絞り込み、もう一度押すと解除します。',
-    'Press a BOM number to open it and check quantities, budget and what has been requested. || BOM番号を押して開き、数量・予算・申請済み数量を確認します。'
+    'Press a BOM number to open it and check quantities, budget, what has been requested and what is still to buy (in THB). Filter by module or section, and press <b>Download Excel</b>. On a released BOM, tick the lines to buy and press <b>Create PR from selected lines</b>. || BOM番号を押して開き、数量・予算・申請済み額・未購入額（THB）を確認します。モジュールや区分で絞り込み、<b>Excelをダウンロード</b>できます。リリース済みBOMでは購入する明細にチェックを入れ、<b>選択した明細でPRを作成</b>を押します。'
   ], 'You see the project’s BOMs and which revision is Released and ready for purchasing. || ProjectのBOMと、Released済みで購買に使える版が分かります。') +
   P('20.2 Generate and release a BOM || 20.2 BOMの生成とRelease', [
     'Open Purchase Requisition → <b>Bill of Materials</b> tab → Generate BOM and select a project with an approved/locked estimate. || Purchase Requisition → <b>部品表 (BOM)</b>タブ → Generate BOMで承認済み・Locked見積を持つProjectを選びます。',

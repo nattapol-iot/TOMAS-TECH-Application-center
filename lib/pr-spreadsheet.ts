@@ -299,6 +299,16 @@ export function rowFromBomLine(line: PrBomLine, rows: PrDraftRow[], stamp: strin
 }
 
 /**
+ * What a new sheet opens with: the BOM lines the engineer ticked on the BOM (each tied to its line, with what it still needs),
+ * then empty rows to type into. With nothing ticked it is the empty table.
+ */
+export function startingPrRows(lines: PrBomLine[], lineIds: number[], module: string, stamp: string): PrDraftRow[] {
+  const rows: PrDraftRow[] = [];
+  for (const line of lines) if (lineIds.includes(line.id) && line.remaining > 0) rows.push(rowFromBomLine(line, rows, stamp));
+  return [...rows, ...blankPrRows(rows.length ? 5 : 10, module, stamp)];
+}
+
+/**
  * A row tied to an estimate line, after an edit: once it names another item, or asks for more than the line still needs, it buys
  * something in the line's place (Substitute). The engineer types over a row; no button turns it first.
  */

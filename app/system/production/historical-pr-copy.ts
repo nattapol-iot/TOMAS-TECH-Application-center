@@ -1048,5 +1048,35 @@ export const HISTORICAL_PR_COPY: Record<string, { th: string; en: string; jp: st
     "th": "แทรกแถวใต้แถวนี้",
     "en": "Add a row below",
     "jp": "下に行を追加"
+  },
+  "ยังต้องซื้อ": {
+    "th": "ยังต้องซื้อ",
+    "en": "Still to buy",
+    "jp": "未購入"
+  },
+  "ทุกหมวด": {
+    "th": "ทุกหมวด",
+    "en": "All sections",
+    "jp": "すべての区分"
+  },
+  "สร้าง PR จากรายการที่เลือก": {
+    "th": "สร้าง PR จากรายการที่เลือก",
+    "en": "Create PR from selected lines",
+    "jp": "選択した明細でPRを作成"
+  },
+  "สร้าง PR": {
+    "th": "สร้าง PR",
+    "en": "Create PR",
+    "jp": "PRを作成"
+  },
+  "เลือกรายการที่ยังต้องซื้อทั้งหมด": {
+    "th": "เลือกรายการที่ยังต้องซื้อทั้งหมด",
+    "en": "Select every line still to buy",
+    "jp": "未購入の明細をすべて選択"
+  },
+  "เลือกรายการนี้": {
+    "th": "เลือกรายการนี้",
+    "en": "Select this line",
+    "jp": "この明細を選択"
   }
 };

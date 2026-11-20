@@ -164,7 +164,7 @@ test("outsource is bought on a PR like material: on the BOM, marked on the scree
 
 test("a new PR starts empty; the estimate is a reference to pull from, and prices are approximate (owner 2026-11-19)", () => {
   // Ten rows to type into, not the estimate's lines ticked.
-  assert.ok(editor.includes('editing ? draftFromPr(editing.lines, [...lines.values()]) : blankPrRows(10, onlyModule, "start")'));
+  assert.ok(editor.includes('startingPrRows([...lines.values()], start && start.bomId === effectiveBomId ? start.lineIds : [], onlyModule, "start")'));
   assert.ok(!editor.includes("draftFromBom("));
   // The estimate's lines sit in their own panel; one is brought in by a press, and all that are still to buy by another.
   assert.ok(editor.includes('<div className="pr-estimate">'));
@@ -197,4 +197,42 @@ test("a row is added from inside the PR sheet's table: + on a row, and an add-ro
   assert.ok(skin.includes(".pg-skin .pr-add-line {"));
   const copy = read("app/system/production/historical-pr-copy.ts");
   assert.ok(copy.includes('"en": "Add a row below"') && copy.includes('"jp": "下に行を追加"'));
+});
+
+test("a BOM has one budget figure: the list and the BOM itself both add up its lines (owner 2026-11-20)", () => {
+  // The list once summed the BOM lines (outsource included) while the BOM showed the estimate's material total (no outsource,
+  // any revision): THB 955,902.64 against 855,902.64 for one BOM.
+  assert.match(boms, /const BOM_BUDGET = `\(SELECT COALESCE\(SUM\(l\.qty_required\*l\.est_unit_cost\),0\) FROM dbo\.bom_lines l WHERE l\.bom_id=b\.id AND l\.deleted_at IS NULL AND \$\{MATERIAL_LINE\}\)`;/);
+  assert.equal(boms.split("${BOM_BUDGET} bom_budget").length - 1, 2);
+  assert.ok(!boms.includes("v_estimate_totals") && !boms.includes("material_total") && !boms.includes("approvedMaterialBudget"));
+  assert.ok(boms.includes("bomBudget: Number(h.bom_budget ?? 0)"));
+  assert.ok(material.includes('<KpiCard label="Budget" value={money(bom.bomBudget)}'));
+  assert.ok(!material.includes("approvedMaterialBudget") && !material.includes("Approved budget"));
+});
+
+test("the BOM shows money and line counts, never quantities added across units (owner 2026-11-20)", () => {
+  const detail = material.slice(material.indexOf("function BomDetailModal("), material.indexOf("function ReserveStockModal("));
+  assert.ok(detail.includes('<KpiCard label="ยังต้องซื้อ" value={money(toBuy.reduce((sum, line) => sum + toBuyValue(line), 0))} note={`${toBuy.length} ${t("รายการ")}`}'));
+  assert.ok(detail.includes('<KpiCard label="ขอซื้อแล้ว" value={money(requestedValue)}'));
+  assert.doesNotMatch(detail, /KpiCard[^>]*value=\{quantity\(/);
+});
+
+test("the BOM's lines can be filtered, exported and ticked to start a PR; empty Actions columns are gone (owner 2026-11-20)", () => {
+  const detail = material.slice(material.indexOf("function BomDetailModal("), material.indexOf("function ReserveStockModal("));
+  assert.ok(detail.includes('aria-label={t("Module")} onChange={(event) => setModule(event.target.value)}'));
+  assert.ok(detail.includes('aria-label={t("Section")} onChange={(event) => setSection(event.target.value)}'));
+  assert.ok(detail.includes('exportXlsx(bomSheetRows(bom, shown, estimateBusinessDate()), `BOM_${bom.number}.xlsx`, "BOM")'));
+  // Only a released BOM's lines that still need buying can be ticked, by someone who may request.
+  assert.ok(detail.includes('const canRequest = Boolean(onRequest) && canReserve && bom.status === "Released";'));
+  assert.ok(detail.includes('data-guide="bom.create-pr" disabled={!chosen.length} onClick={() => onRequest?.({ bomId: id, lineIds: chosen })}'));
+  // The Reserve column shows only when a line has stock to reserve; the list's Actions column only when a row has an action.
+  assert.ok(detail.includes('{anyReservable ? <th><LocalizedText text={"Action"} /></th> : null}'));
+  assert.ok(material.includes('{showActions ? <th className="pg-acts"><LocalizedText text={"Actions"} /></th> : null}'));
+  assert.ok(material.includes('<RowAction icon="plus" label="สร้าง PR" onClick={() => onRequest?.({ bomId: item.id, lineIds: [] })} />'));
+  // The PR screen opens the sheet on that BOM with the ticked lines.
+  assert.ok(material.includes("embedded onRequest={(from) => { setStart(from); setCreating(true); }} />"));
+  assert.ok(material.includes("start={start ?? undefined} onClose={() => { setCreating(false); setStart(null); }}"));
+  assert.ok(editor.includes("const [bomId, setBomId] = useState(start?.bomId ?? 0);"));
+  // The ERP workbook's sheet name stays the default of the shared writer.
+  assert.ok(read("lib/export-xlsx.ts").includes('export function exportXlsx(rows:CellValue[][],filename:string,sheetName="Summary cost") {'));
 });

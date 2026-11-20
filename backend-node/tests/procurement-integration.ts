@@ -114,6 +114,13 @@ try {
   assert.deepEqual(old.lines.filter((line: Json) => line.sectionCode === "OUT").map((line: Json) => [line.itemCode, line.module, line.nonStock, line.budget]).sort(),
     [["OUT-01", "Install", true, 12000], ["OUT-02", "Install", true, 15000]]);
   assert.deepEqual(old.modules.map((m: Json) => [m.module, m.budget, m.requested]), [["Install", 27000, 0], ["Panel", 25000, 9000 + 3000], ["Software", 30000, 0]]);
+  // One budget figure (owner 2026-11-20): the BOM, its row in the list and its modules all add up the same lines, outsource
+  // included. The BOM once showed the estimate's material total instead, 27,000 short here (955,902.64 against 855,902.64 live).
+  assert.equal(old.bom.bomBudget, 27000 + 25000 + 30000);
+  assert.equal(old.bom.approvedMaterialBudget, undefined);
+  assert.equal(old.lines.reduce((sum: number, line: Json) => sum + line.budget, 0), old.bom.bomBudget);
+  const legacyRow = (await call("GET", "/boms", "Requester")).find((item: Json) => item.id === legacy);
+  assert.equal(legacyRow.bomBudget, old.bom.bomBudget);
 
   // A new BOM takes the material and outsource categories (this estimate has no outsource); every line can be requested, inventory item or not.
   const bom = await call("POST", "/boms", "Requester", { projectId: fresh }, 201);

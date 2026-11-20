@@ -1414,7 +1414,7 @@ const BOM_RELEASE: Guide = {
     {
       target: "bom.list", action: "next", view: "purchase",
       title: { th: "BOM ทุก revision", en: "Every BOM revision", jp: "全BOMリビジョン" },
-      body: { th: "กดเลข BOM เพื่อตรวจรายการ จำนวน และจองของที่มีในสต็อก", en: "Press a BOM number to check the lines and quantities, and reserve stock on hand.", jp: "BOM番号を押して明細と数量を確認し、在庫を引き当てます。" },
+      body: { th: "กดเลข BOM เพื่อตรวจรายการ งบ ยอดที่ขอซื้อแล้ว และยอดที่ยังต้องซื้อ กรองตาม Module หรือหมวดได้ และดาวน์โหลดเป็น Excel ได้ ใน BOM ที่ Release แล้ว ติ๊กรายการที่จะซื้อ แล้วกด 'สร้าง PR จากรายการที่เลือก' หรือกดปุ่ม + ที่แถวของ BOM เพื่อเปิดใบขอซื้อเปล่าของ BOM นั้น", en: "Press a BOM number to check its lines, budget, what has been requested and what is still to buy. Filter by module or section, and download it as Excel. On a released BOM, tick the lines to buy and press Create PR from selected lines, or press + on the BOM's row for an empty PR sheet on that BOM.", jp: "BOM番号を押して明細、予算、申請済み額、未購入額を確認します。モジュールや区分で絞り込み、Excelでダウンロードできます。リリース済みBOMでは購入する明細にチェックを入れて「選択した明細でPRを作成」を押すか、BOMの行の＋でそのBOMの空のPRシートを開きます。" },
     },
     {
       target: "bom.release", action: "click", view: "purchase",
