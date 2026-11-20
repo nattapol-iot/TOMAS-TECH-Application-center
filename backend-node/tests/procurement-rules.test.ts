@@ -229,3 +229,15 @@ test("the Approvals badge counts what the Approvals screen lists for the user", 
     assert.doesNotMatch(statement, /dbo\.estimates/);
   } finally { await server.close(); }
 });
+
+test("a BOM at or over the review threshold needs a second person to release it", async () => {
+  const { BOM_REVIEW_THRESHOLD_DEFAULT, needsSecondReleaser } = await import("../src/procurement-rules.js");
+  assert.equal(BOM_REVIEW_THRESHOLD_DEFAULT, 100_000);
+  // The owner's case: THB 955,902.64, generated and released by the same person.
+  assert.equal(needsSecondReleaser(955_902.64, 100_000, 7, 7), true);
+  assert.equal(needsSecondReleaser(955_902.64, 100_000, 7, 8), false, "another approver may release it");
+  assert.equal(needsSecondReleaser(99_999.99, 100_000, 7, 7), false, "under the threshold one person may do both");
+  assert.equal(needsSecondReleaser(100_000, 100_000, 7, 7), true, "at the threshold counts");
+  assert.equal(needsSecondReleaser(1, 0, 7, 7), true, "a threshold of zero reviews every BOM");
+  assert.equal(needsSecondReleaser(150_000, null, 7, 7), true, "no settings row: the default applies");
+});

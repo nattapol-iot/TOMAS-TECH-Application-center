@@ -41,6 +41,14 @@ export const LEGACY_PO_CREATION_STEP = "PO Creation";
 export const SYSTEM_STEPS = [ERP_STEP, LEGACY_PO_CREATION_STEP];
 /** An overrun up to this share of the module's budget is the PM's call; beyond it the Engineering Manager approves too. */
 export const MANAGEMENT_OVERRUN_PERCENT = 10;
+/** The review threshold until dbo.procurement_settings says otherwise (migration 110 starts it at the same figure). */
+export const BOM_REVIEW_THRESHOLD_DEFAULT = 100_000;
+/**
+ * A BOM at or over the threshold is released by someone other than the person who generated it (owner's bug list, 2026-11-20:
+ * a THB 955,000 BOM was generated and released by one person within a minute). There is no exemption by role.
+ */
+export const needsSecondReleaser = (bomBudget: number, threshold: number | null | undefined, createdBy: number, actorId: number): boolean =>
+  createdBy === actorId && bomBudget >= (threshold ?? BOM_REVIEW_THRESHOLD_DEFAULT);
 export const MAX_PR_LINES = 2000;
 export const NO_MODULE = "(No module)";
 /** PRs whose lines spend a module's budget and cover their BOM lines: everything not rejected or cancelled. */

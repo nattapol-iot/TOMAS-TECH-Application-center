@@ -849,4 +849,8 @@ GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.issue_batches TO [iot_team_app_role]
 GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.issue_items TO [iot_team_app_role];
 GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.issue_item_images TO [iot_team_app_role];
 GO
+
+-- database/migrations/110_bom_review_threshold.sql
+GRANT SELECT ON OBJECT::dbo.procurement_settings TO [iot_team_app_role];
+GO
 -- END GENERATED MIGRATION GRANTS

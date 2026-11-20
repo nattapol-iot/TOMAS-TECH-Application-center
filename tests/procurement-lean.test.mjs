@@ -203,7 +203,8 @@ test("a BOM has one budget figure: the list and the BOM itself both add up its l
   // The list once summed the BOM lines (outsource included) while the BOM showed the estimate's material total (no outsource,
   // any revision): THB 955,902.64 against 855,902.64 for one BOM.
   assert.match(boms, /const BOM_BUDGET = `\(SELECT COALESCE\(SUM\(l\.qty_required\*l\.est_unit_cost\),0\) FROM dbo\.bom_lines l WHERE l\.bom_id=b\.id AND l\.deleted_at IS NULL AND \$\{MATERIAL_LINE\}\)`;/);
-  assert.equal(boms.split("${BOM_BUDGET} bom_budget").length - 1, 2);
+  // The list, the opened BOM, and the release check against the review threshold.
+  assert.equal(boms.split("${BOM_BUDGET} bom_budget").length - 1, 3);
   assert.ok(!boms.includes("v_estimate_totals") && !boms.includes("material_total") && !boms.includes("approvedMaterialBudget"));
   assert.ok(boms.includes("bomBudget: Number(h.bom_budget ?? 0)"));
   assert.ok(material.includes('<KpiCard label="Budget" value={money(bom.bomBudget)}'));
@@ -250,4 +251,22 @@ test("BOM revisions count from zero and show as R<n>, like the estimate's (migra
   assert.match(rollback, /UPDATE dbo\.boms SET revision = revision \+ 1;\s+DELETE FROM dbo\.schema_versions WHERE version = 109;/);
   assert.ok(read("backend-node/src/migration-validation.ts").includes('{ version: 109, fileName: "109_bom_revision_zero_based.sql", name: "BOM revisions count from zero" }'));
   assert.ok(read("database/scripts/020_deploy_fresh_database.sql").includes(":r database/migrations/109_bom_revision_zero_based.sql"));
+});
+
+test("a BOM at or over the review threshold is released by a second person (migration 110, owner 2026-11-20)", () => {
+  // The refusal is in the release itself, not only in what the screen offers.
+  assert.match(boms, /if \(reviewed && needsSecondReleaser\(Number\(reviewed\.bom_budget\), threshold\(reviewed\.review_threshold\), Number\(reviewed\.created_by\), actor\.id\)\)\s+throw new ApiError\(403, "bom_self_release_forbidden"/);
+  assert.ok(boms.includes('needsSecondReleaser: row.status === "Draft" && needsSecondReleaser(Number(row.bom_budget), threshold(row.review_threshold), Number(row.created_by), actor.id),'));
+  // The budget it compares is the one figure the screens show.
+  assert.ok(boms.includes("`SELECT ${BOM_BUDGET} bom_budget,b.created_by,${REVIEW_THRESHOLD} review_threshold FROM dbo.boms b WHERE b.id=@id;`"));
+  assert.ok(material.includes('item.needsSecondReleaser'));
+  assert.ok(material.includes('guide="bom.release" disabled onClick={() => undefined} />'));
+  const migration = read("database/migrations/110_bom_review_threshold.sql");
+  assert.match(migration, /THROW 51110, 'Migration 109 must be applied before migration 110\.', 1;/);
+  assert.match(migration, /bom_review_threshold decimal\(19,4\)\s+NOT NULL CONSTRAINT DF_procurement_settings_bom_review DEFAULT 100000/);
+  assert.match(migration, /GRANT SELECT ON OBJECT::dbo\.procurement_settings TO \[iot_team_app_role\];/);
+  assert.match(migration, /VALUES \(110, N'BOM review threshold'\);/);
+  assert.match(read("database/rollback/110_bom_review_threshold.rollback.sql"), /DROP TABLE dbo\.procurement_settings;\s+DELETE FROM dbo\.schema_versions WHERE version = 110;/);
+  assert.ok(read("backend-node/src/migration-validation.ts").includes('{ version: 110, fileName: "110_bom_review_threshold.sql", name: "BOM review threshold" }'));
+  assert.ok(read("database/scripts/020_deploy_fresh_database.sql").includes(":r database/migrations/110_bom_review_threshold.sql"));
 });

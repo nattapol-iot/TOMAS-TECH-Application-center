@@ -1424,7 +1424,7 @@ const BOM_RELEASE: Guide = {
         en: "Once checked, press the lock button (Release) at the left of the row: the lines freeze and become the base for PRs and material issues. Only practising? Press Cancel in the confirmation, then Finish.",
         jp: "確認後、行の左の鍵ボタン（リリース）を押すと明細が固定され、PRと出庫の基準になります。練習だけなら確認画面で「キャンセル」を押してから「完了」を押します。",
       },
-      missing: { th: "Release ได้เฉพาะ BOM ฉบับร่าง และผู้มีสิทธิ์อนุมัติ", en: "Only a draft BOM can be released, by someone who may approve.", jp: "リリースできるのは下書きBOMのみで、承認権限が必要です。" },
+      missing: { th: "Release ได้เฉพาะ BOM ฉบับร่าง และผู้มีสิทธิ์อนุมัติ ถ้าปุ่มกุญแจเป็นสีจาง แปลว่า BOM ที่คุณสร้างมีมูลค่าถึงเกณฑ์ตรวจ (เริ่มต้น 100,000 บาท) ต้องให้ผู้อนุมัติคนอื่น Release", en: "Only a draft BOM can be released, by someone who may approve. A greyed-out lock means a BOM you generated is at or over the review threshold (THB 100,000 to start with): another approver must release it.", jp: "リリースできるのは下書きBOMのみで、承認権限が必要です。鍵ボタンが薄い場合、自分で作成したBOMが確認基準額（初期値100,000バーツ）以上のため、別の承認者がリリースする必要があります。" },
     },
   ],
 };

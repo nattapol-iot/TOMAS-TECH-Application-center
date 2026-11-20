@@ -2,27 +2,28 @@
 
 [Module](../modules/procurement.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `a09153ad`; generated, do not edit. [backend-node/src/routes/boms.ts](<../../../backend-node/src/routes/boms.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `c56ffc0c`; generated, do not edit. [backend-node/src/routes/boms.ts](<../../../backend-node/src/routes/boms.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/boms` | 39–54 |
-| GET | `/api/v1/boms/:id` | 56–101 |
-| POST | `/api/v1/boms` | 103–129 |
-| POST | `/api/v1/boms/:id/release` | 131–140 |
-| POST | `/api/v1/boms/:id/reservations` | 142–168 |
-| POST | `/api/v1/boms/:id/reservations/:reservationId/release` | 170–179 |
+| GET | `/api/v1/boms` | 42–60 |
+| GET | `/api/v1/boms/:id` | 62–107 |
+| POST | `/api/v1/boms` | 109–135 |
+| POST | `/api/v1/boms/:id/release` | 137–152 |
+| POST | `/api/v1/boms/:id/reservations` | 154–180 |
+| POST | `/api/v1/boms/:id/reservations/:reservationId/release` | 182–191 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `todayIn` | [backend-node/src/routes/boms.ts](<../../../backend-node/src/routes/boms.ts>) | 23–26 |
-| `quantity` | [backend-node/src/routes/boms.ts](<../../../backend-node/src/routes/boms.ts>) | 27–31 |
-| `header` | [backend-node/src/routes/boms.ts](<../../../backend-node/src/routes/boms.ts>) | 32–36 |
-| `registerBomRoutes` | [backend-node/src/routes/boms.ts](<../../../backend-node/src/routes/boms.ts>) | 38–180 |
+| `threshold` | [backend-node/src/routes/boms.ts](<../../../backend-node/src/routes/boms.ts>) | 24–24 |
+| `todayIn` | [backend-node/src/routes/boms.ts](<../../../backend-node/src/routes/boms.ts>) | 26–29 |
+| `quantity` | [backend-node/src/routes/boms.ts](<../../../backend-node/src/routes/boms.ts>) | 30–34 |
+| `header` | [backend-node/src/routes/boms.ts](<../../../backend-node/src/routes/boms.ts>) | 35–39 |
+| `registerBomRoutes` | [backend-node/src/routes/boms.ts](<../../../backend-node/src/routes/boms.ts>) | 41–192 |
 
 ## Direct local dependencies
 
@@ -38,7 +39,7 @@ Evidence: source snapshot `a09153ad`; generated, do not edit. [backend-node/src/
 
 ## SQL references (literal scan, not a complete schema or write-set)
 
-`dbo.bom_lines`, `dbo.boms`, `dbo.cost_items`, `dbo.estimates`, `dbo.mat_items`, `dbo.mat_pr_lines`, `dbo.mat_prs`, `dbo.mir_lines`, `dbo.mirs`, `dbo.project_members`, `dbo.projects`, `dbo.reservations`, `dbo.stock_txns`, `dbo.users`, `dbo.v_item_balances`
+`dbo.bom_lines`, `dbo.boms`, `dbo.cost_items`, `dbo.estimates`, `dbo.mat_items`, `dbo.mat_pr_lines`, `dbo.mat_prs`, `dbo.mir_lines`, `dbo.mirs`, `dbo.procurement_settings`, `dbo.project_members`, `dbo.projects`, `dbo.reservations`, `dbo.stock_txns`, `dbo.users`, `dbo.v_item_balances`
 
 ## Change boundary
 

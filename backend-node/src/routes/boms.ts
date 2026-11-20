@@ -7,7 +7,7 @@ import { issueDocumentNumber } from "../document-number.js";
 import { ApiError } from "../errors.js";
 import { bodyObject, optionalBodyText, optionalPositiveLong, parseDateOnly, parseRowVersion, positiveLong, requiredInteger } from "../http.js";
 import { insertMaterialAudit } from "../material-audit.js";
-import { BOM_CATEGORY_CODES, NO_MODULE, OUTSOURCE_CATEGORY_CODE, OUTSOURCE_SECTION, remainingToRequest, REQUESTING_PR_STATUSES } from "../procurement-rules.js";
+import { BOM_CATEGORY_CODES, BOM_REVIEW_THRESHOLD_DEFAULT, needsSecondReleaser, NO_MODULE, OUTSOURCE_CATEGORY_CODE, OUTSOURCE_SECTION, remainingToRequest, REQUESTING_PR_STATUSES } from "../procurement-rules.js";
 import { demandProjectScope, isProjectElevated } from "../project-scope.js";
 import type { CurrentUserService } from "../users.js";
 
@@ -19,6 +19,9 @@ const MATERIAL_LINE = "l.section_code<>N'SVC'";
 // the BOM itself once read two sources (the lines, and the estimate's material total without outsource) and disagreed.
 const BOM_BUDGET = `(SELECT COALESCE(SUM(l.qty_required*l.est_unit_cost),0) FROM dbo.bom_lines l WHERE l.bom_id=b.id AND l.deleted_at IS NULL AND ${MATERIAL_LINE})`;
 const BOM_CATEGORIES = BOM_CATEGORY_CODES.map((code) => `'${code}'`).join(",");
+// The company's review threshold (migration 110): at or over it, a BOM is released by a second person.
+const REVIEW_THRESHOLD = "(SELECT bom_review_threshold FROM dbo.procurement_settings WHERE id=1)";
+const threshold = (value: unknown) => value === null || value === undefined ? BOM_REVIEW_THRESHOLD_DEFAULT : Number(value);
 
 function todayIn(timeZone: string): string {
   const parts = new Intl.DateTimeFormat("en-GB", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
@@ -41,7 +44,7 @@ export function registerBomRoutes(app: FastifyInstance, config: AppConfig, datab
     const result = await database.query<Record<string, unknown> & { row_version: Buffer }>(`SELECT b.id,b.bom_no,b.revision,b.status,b.project_id,p.project_no,p.name project_name,
       b.estimate_id,e.estimate_no,e.revision estimate_revision,b.created_at,cu.name created_by_name,b.released_at,ru.name released_by_name,
       (SELECT COUNT(*) FROM dbo.bom_lines l WHERE l.bom_id=b.id AND l.deleted_at IS NULL AND ${MATERIAL_LINE}) line_count,
-      ${BOM_BUDGET} bom_budget,b.row_version
+      ${BOM_BUDGET} bom_budget,b.created_by,${REVIEW_THRESHOLD} review_threshold,b.row_version
       FROM dbo.boms b INNER JOIN dbo.projects p ON p.id=b.project_id INNER JOIN dbo.estimates e ON e.id=b.estimate_id
       INNER JOIN dbo.users cu ON cu.id=b.created_by LEFT JOIN dbo.users ru ON ru.id=b.released_by WHERE b.deleted_at IS NULL
       AND (@project IS NULL OR b.project_id=@project) AND (@elevated=1 OR p.manager_id=@actor OR p.lead_engineer_id=@actor
@@ -50,7 +53,10 @@ export function registerBomRoutes(app: FastifyInstance, config: AppConfig, datab
     return result.recordset.map((row) => ({ id: Number(row.id), number: row.bom_no, revision: Number(row.revision), status: row.status, projectId: Number(row.project_id),
       projectNumber: row.project_no, projectName: row.project_name, estimateId: Number(row.estimate_id), estimateNumber: row.estimate_no, estimateRevision: Number(row.estimate_revision),
       createdAt: row.created_at, createdByName: row.created_by_name, releasedAt: row.released_at, releasedByName: row.released_by_name,
-      lineCount: Number(row.line_count), bomBudget: Number(row.bom_budget), rowVersion: row.row_version.toString("base64") }));
+      lineCount: Number(row.line_count), bomBudget: Number(row.bom_budget),
+      // A draft this reader generated, at or over the review threshold: another approver releases it.
+      needsSecondReleaser: row.status === "Draft" && needsSecondReleaser(Number(row.bom_budget), threshold(row.review_threshold), Number(row.created_by), actor.id),
+      rowVersion: row.row_version.toString("base64") }));
   });
 
   app.get("/api/v1/boms/:id", async (request) => {
@@ -132,6 +138,12 @@ export function registerBomRoutes(app: FastifyInstance, config: AppConfig, datab
     const id = positiveLong((request.params as { id?: string }).id, "BOM id"); const body = bodyObject(request.body); const version = parseRowVersion(body.rowVersion); const comment = optionalBodyText(body.comment, 20_000, "Comment");
     return database.transaction(async (transaction) => { const current = await header(transaction, id); await demandProjectScope(database, actor, Number(current.project_id), transaction);
       if (current.status !== "Draft") throw new ApiError(409, "bom_not_draft", `Only a draft BOM can be released; this one is '${current.status}'.`);
+      // The review step: at or over the threshold, the person who generated the BOM cannot be the one who releases it.
+      const review = new sql.Request(transaction); review.input("id", sql.BigInt, id);
+      const reviewed = (await review.query<{ bom_budget: number | string; created_by: number | string; review_threshold: number | string | null }>(
+        `SELECT ${BOM_BUDGET} bom_budget,b.created_by,${REVIEW_THRESHOLD} review_threshold FROM dbo.boms b WHERE b.id=@id;`)).recordset[0];
+      if (reviewed && needsSecondReleaser(Number(reviewed.bom_budget), threshold(reviewed.review_threshold), Number(reviewed.created_by), actor.id))
+        throw new ApiError(403, "bom_self_release_forbidden", `This BOM is THB ${Number(reviewed.bom_budget).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}, at or over the review threshold of THB ${threshold(reviewed.review_threshold).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}. Someone other than the person who generated it must release it.`);
       const update = new sql.Request(transaction); update.input("actor", sql.BigInt, actor.id); update.input("id", sql.BigInt, id); update.input("version", sql.VarBinary(8), version);
       const row = (await update.query<{ row_version: Buffer }>(`UPDATE dbo.boms SET status=N'Released',released_at=SYSUTCDATETIME(),released_by=@actor,updated_by=@actor,updated_at=SYSUTCDATETIME()
         OUTPUT inserted.row_version WHERE id=@id AND deleted_at IS NULL AND row_version=@version;`)).recordset[0]; if (!row) throw new ApiError(409, "concurrency_conflict", "This BOM changed. Reload and try again.");

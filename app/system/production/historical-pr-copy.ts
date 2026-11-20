@@ -1078,5 +1078,10 @@ export const HISTORICAL_PR_COPY: Record<string, { th: string; en: string; jp: st
     "th": "เลือกรายการนี้",
     "en": "Select this line",
     "jp": "この明細を選択"
+  },
+  "BOM นี้ถึงเกณฑ์ตรวจ ต้องให้ผู้อนุมัติคนอื่นที่ไม่ใช่ผู้สร้าง Release": {
+    "th": "BOM นี้ถึงเกณฑ์ตรวจ ต้องให้ผู้อนุมัติคนอื่นที่ไม่ใช่ผู้สร้าง Release",
+    "en": "This BOM is at or over the review threshold: an approver other than the person who generated it must release it",
+    "jp": "このBOMは確認基準額以上です。作成者以外の承認者がリリースしてください"
   }
 };
