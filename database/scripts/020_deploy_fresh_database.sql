@@ -172,6 +172,7 @@ GO
 :r database/migrations/108_bom_outsource_lines.sql
 :r database/migrations/109_bom_revision_zero_based.sql
 :r database/migrations/110_bom_review_threshold.sql
+:r database/migrations/111_erp_request_list.sql
 
 USE [$(DatabaseName)];
 GO

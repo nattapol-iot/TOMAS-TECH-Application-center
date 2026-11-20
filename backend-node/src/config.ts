@@ -75,6 +75,11 @@ export type AppConfig = {
   siteMonitor?: SiteMonitorConfig;
   /** The Pegasus ERP MCP endpoint approved requisitions are sent to (PEGASUS_MCP_URL; "off" disables). */
   pegasusMcpUrl?: string;
+  /**
+   * What an approved request becomes in the ERP (PEGASUS_REQUEST_LIST): "off" one ERP PR as before (the default), "excel" a
+   * download for the project's Request List, "tool" lines sent to the Request List. See erp-request-list.ts.
+   */
+  pegasusRequestList?: "off" | "excel" | "tool";
 };
 
 export type SiteMonitorConfig = {
@@ -527,6 +532,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const credentialVault = parseVaultKeys(env.CREDENTIAL_VAULT_KEYS);
   const pegasusRaw = optional(env, "PEGASUS_MCP_URL") ?? "https://pegasus-erp.tomastc.com/mcp";
   if (pegasusRaw !== "off" && !/^https:\/\/[^\s/]+\/\S*$/.test(pegasusRaw)) throw new Error("PEGASUS_MCP_URL must be an https URL, or off.");
+  const requestListRaw = optional(env, "PEGASUS_REQUEST_LIST") ?? "off";
+  if (requestListRaw !== "off" && requestListRaw !== "excel" && requestListRaw !== "tool") throw new Error("PEGASUS_REQUEST_LIST must be off, excel or tool.");
   return {
     environment,
     host: optional(env, "HOST") ?? "127.0.0.1",
@@ -576,5 +583,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     ...(credentialVault ? { credentialVault } : {}),
     ...(siteMonitor ? { siteMonitor } : {}),
     ...(pegasusRaw !== "off" ? { pegasusMcpUrl: pegasusRaw } : {}),
+    pegasusRequestList: requestListRaw,
   };
 }
