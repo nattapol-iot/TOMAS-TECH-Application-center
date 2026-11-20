@@ -445,6 +445,23 @@ There are no down migrations in the current baseline. Never manually delete prod
 
 For every future schema change, add a new forward-only numbered migration and a deployment runner that first verifies the currently expected schema version. Take and verify a recovery point before applying it. Treat code and schema compatibility as one release decision.
 
+#### Backup before a migration (2026-11-20)
+
+The deploy (`scripts/macos/deploy.sh`) runs migrations in a one-off container with `Database__BackupBeforeMigrations=true`. When a migration is pending, the runner (`backend-node/src/migration-backup.ts`) first writes a full backup:
+
+- **Where:** the SQL Server's default backup directory on the database host, or beside the database's data file when the instance has none. The deploy log prints the full path.
+- **Name:** `<database>_before_migration_<first pending version>_<UTC time>.bak`.
+- **Kind:** `COPY_ONLY` with `CHECKSUM`, so a scheduled backup chain is not disturbed. A `RESTORE VERIFYONLY` follows; a login that may not run it gets a note in the log, and the deploy goes on.
+- **If it fails:** nothing is migrated, the deploy stops, and the old containers keep running. The migration login needs the right to back up the database (`db_owner` or `db_backupoperator`).
+- **No pending migration:** no backup is written.
+- **Retention:** the files are not removed by the deploy. Clear old ones on the database host.
+
+This backup is for undoing a migration. It does not replace scheduled backups.
+
+#### Rollback scripts
+
+A migration that changes data in a way a script can undo carries one in `database/rollback/<version>_<name>.rollback.sql`. Run it by hand, after a backup, together with an API release from before that migration. The deploy never runs these files.
+
 ## 10. Handover records
 
 Record the following in the team's controlled operations system, not in this repository:

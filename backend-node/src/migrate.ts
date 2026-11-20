@@ -33,6 +33,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import sql from "mssql";
 import type { AppConfig } from "./config.js";
+import { backupBeforeMigrations } from "./migration-backup.js";
 import {
   validateAppliedMigrationIdentities,
   validateMigrationFiles,
@@ -42,6 +43,9 @@ import {
 // Default: /app/migrations (set in Dockerfile ENV; override via env var for dev)
 const DEFAULT_MIGRATIONS_DIR = process.env.MIGRATIONS_DIR
   ?? join(fileURLToPath(new URL(".", import.meta.url)), "../../migrations");
+
+// A full backup of a grown database takes longer than a DDL batch.
+const BACKUP_TIMEOUT_MS = 30 * 60_000;
 
 function connectionConfig(config: AppConfig["database"]): sql.config {
   const parsed = sql.ConnectionPool.parseConnectionString(config.migrationConnectionString ?? config.connectionString);
@@ -109,6 +113,25 @@ export async function runPendingMigrations(
   }
 
   log(`[migrate] ${pending.length} pending migration(s): ${pending.join(", ")}`);
+
+  // Nothing changes the schema or its data before a backup exists (owner rule, 2026-11-20). A deploy asks for it; a backup
+  // that cannot be written stops here, before the first migration.
+  if (config.database.backupBeforeMigrations) {
+    const pool = await new sql.ConnectionPool({ ...connectionConfig(config.database), requestTimeout: BACKUP_TIMEOUT_MS }).connect();
+    try {
+      await backupBeforeMigrations(async (statement, suffix) => {
+        const request = new sql.Request(pool); request.input("suffix", sql.NVarChar(200), suffix);
+        const sets = (await request.query(statement)).recordsets as unknown as Record<string, unknown>[][];
+        return sets.at(-1)?.[0];
+      }, parseInt(pending[0]!.slice(0, 3), 10), log);
+    } catch (err) {
+      log("[migrate] ✗ Backup before migration FAILED. No migration was applied.");
+      log(`[migrate] Error: ${String(err)}`);
+      throw err;
+    } finally {
+      await pool.close();
+    }
+  }
 
   for (const file of pending) {
     const version = parseInt(file.slice(0, 3), 10);

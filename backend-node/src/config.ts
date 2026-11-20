@@ -45,6 +45,8 @@ export type AppConfig = {
     migrationConnectionString?: string;
     trustServerCertificate: boolean;
     runMigrations?: boolean;
+    /** A full COPY_ONLY backup before the first pending migration; the deploy's migration run sets it. */
+    backupBeforeMigrations?: boolean;
     readOnly?: boolean;
     applicationRoleName?: string;
     applicationRolePassword?: string;
@@ -457,6 +459,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   // When the API connects as that login, they run with this owner connection instead.
   const migrationConnectionString = optional(env, "ConnectionStrings__Migrations");
   const runMigrations = optionalBoolean(env, "Database__RunMigrations", true);
+  const backupBeforeMigrations = optionalBoolean(env, "Database__BackupBeforeMigrations", false);
   const readOnly = optionalBoolean(env, "Database__ReadOnly", false);
   if ((!runMigrations || readOnly) && environment === "production") {
     throw new Error("Database migration and read-only overrides are not allowed in production.");
@@ -549,6 +552,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       trustServerCertificate:
         environment === "development" || trustTeamTestCertificate,
       runMigrations,
+      ...(backupBeforeMigrations ? { backupBeforeMigrations } : {}),
       readOnly,
       ...(roleName ? { applicationRoleName: roleName } : {}),
       ...(rolePassword ? { applicationRolePassword: rolePassword } : {}),
