@@ -171,7 +171,8 @@ test("review fixes: one quiet-days clock, Inquiry cards that only offer what the
 test("review fixes: one progress-report definition, a locked signing read and a guarded, indexed 069", () => {
   const service = read("backend-node/src/schedule-service.ts");
   assert.match(service, /export const PROGRESS_REPORT_FIELDS_SQL = \["percent_complete", "status", "actual_start", "actual_finish", "forecast_finish", "blocked_reason", "remark", "progress"\]/);
-  assert.match(read("backend-node/src/routes/schedule.ts"), /field IN \(\$\{PROGRESS_REPORT_FIELDS_SQL\}\) GROUP BY task_id/);
+  // My Work's last-progress read is a statement of the service's one-batch project read since 2026-11-20.
+  assert.match(service, /field IN \(\$\{PROGRESS_REPORT_FIELDS_SQL\}\) GROUP BY task_id/);
   assert.match(read("backend-node/src/routes/projects.ts"), /u\.field IN\(\$\{PROGRESS_REPORT_FIELDS_SQL\}\) THEN u\.occurred_at END\) last_progress_at/);
   assert.match(read("backend-node/src/routes/signing.ts"), /FROM dbo\.project_docs d\$\{transaction \? " WITH \(UPDLOCK, HOLDLOCK\)" : ""\}/);
   const migration = read("database/migrations/069_withdraw_project_document.sql");
