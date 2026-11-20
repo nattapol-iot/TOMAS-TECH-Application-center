@@ -264,15 +264,15 @@ test("an empty row opens right under the row it was asked from (owner 2026-11-20
   assert.equal(new Set(twice.rows.map((row) => row.key)).size, 5);
 });
 
-test("a PR started from a BOM opens with the ticked lines, then empty rows (owner 2026-11-20)", () => {
+test("a PR started from a BOM opens with the ticked lines only; a new PR with one empty row (owner 2026-11-20)", () => {
   // Lines 1 and 3 were ticked; line 4 needs nothing more, so it is not brought in even if asked for.
   const rows = startingPrRows(bom, [3, 1, 4], "", "s");
   assert.deepEqual(rows.filter((row) => !isBlankPrRow(row)).map((row) => [row.key, row.lineType, row.bomLineId, row.quantity, row.unitPrice, row.module]),
     [["bom-1", "Planned", 1, 2, 10000, "Panel"], ["bom-3", "Planned", 3, 1, 30000, "Software"]]);
-  assert.equal(rows.filter(isBlankPrRow).length, 5);
+  assert.equal(rows.filter(isBlankPrRow).length, 0);
   assert.equal(draftIssues(rows.filter((row) => !isBlankPrRow(row)), lines, modules).size, 0);
-  // Nothing ticked: the empty table a new PR always started with.
+  // Nothing ticked: one empty row to type into.
   const empty = startingPrRows(bom, [], "Panel", "s");
-  assert.equal(empty.length, 10);
+  assert.equal(empty.length, 1);
   assert.ok(empty.every((row) => isBlankPrRow(row) && row.module === "Panel"));
 });
