@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { addPastedRows, afterEdit, asPlanned, asSubstitute, blankPrRows, clipboardRows, draftFromBom, draftFromPaste, draftFromPr, draftFromSheet, draftIssues, insertBlankPrRow, isBlankPrRow, moduleStatus, rowFromBomLine, payloadLines, PR_TEMPLATE_HEADER_ROW, sheetRows, templateRows } from "../lib/pr-spreadsheet.ts";
+import { addPastedRows, afterEdit, asPlanned, asSubstitute, blankPrRows, clipboardRows, draftFromBom, draftFromPaste, draftFromPr, draftFromSheet, draftIssues, insertBlankPrRow, isBlankPrRow, moduleStatus, rowFromBomLine, payloadLines, PR_TEMPLATE_HEADER_ROW, sheetRows, startingPrRows, templateRows } from "../lib/pr-spreadsheet.ts";
 
 const bom = [
   { id: 1, module: "Panel", itemCode: "PLC-01", partNumber: "6ES7-1", description: "PLC controller", brand: "Siemens", unit: "pcs", remaining: 2, estimatedUnitCost: 10000 },
@@ -175,4 +175,17 @@ test("an empty row opens right under the row it was asked from (owner 2026-11-20
   // A second one under the same row gets its own key.
   const twice = insertBlankPrRow(middle.rows, "new-t-1", "Field", "s2");
   assert.equal(new Set(twice.rows.map((row) => row.key)).size, 5);
+});
+
+test("a PR started from a BOM opens with the ticked lines, then empty rows (owner 2026-11-20)", () => {
+  // Lines 1 and 3 were ticked; line 4 needs nothing more, so it is not brought in even if asked for.
+  const rows = startingPrRows(bom, [3, 1, 4], "", "s");
+  assert.deepEqual(rows.filter((row) => !isBlankPrRow(row)).map((row) => [row.key, row.lineType, row.bomLineId, row.quantity, row.unitPrice, row.module]),
+    [["bom-1", "Planned", 1, 2, 10000, "Panel"], ["bom-3", "Planned", 3, 1, 30000, "Software"]]);
+  assert.equal(rows.filter(isBlankPrRow).length, 5);
+  assert.equal(draftIssues(rows.filter((row) => !isBlankPrRow(row)), lines, modules).size, 0);
+  // Nothing ticked: the empty table a new PR always started with.
+  const empty = startingPrRows(bom, [], "Panel", "s");
+  assert.equal(empty.length, 10);
+  assert.ok(empty.every((row) => isBlankPrRow(row) && row.module === "Panel"));
 });

@@ -6,9 +6,11 @@ import { useT as useStaticCopy } from "../i18n";
 import { currentLocale, useT as useUiText } from "../i18n";
 import { LocalizedText } from "../LocalizedText";
 import { HistoricalPrPanel } from "./HistoricalPrPanel";
-import { type PrEditing, type PrSaved, PurchaseRequestEditor } from "./PurchaseRequestEditor";
+import { type PrEditing, type PrSaved, type PrStart, PurchaseRequestEditor } from "./PurchaseRequestEditor";
 import { newestProjectFirst, projectOverviewPath } from "../project-overview-client";
 import { estimateBusinessDate } from "../../../lib/estimate-ux";
+import { bomSheetRows, toBuyValue } from "../../../lib/bom-sheet";
+import { exportXlsx } from "../../../lib/export-xlsx";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { apiRequest, type BootstrapData } from "../api-client";
 import { useEndpoint } from "./material-endpoint";
@@ -100,7 +102,7 @@ type BomWorkspace = {
     estimateNumber: string;
     estimateRevision: number;
     rowVersion: string;
-    approvedMaterialBudget: number;
+    bomBudget: number;
   };
   lines: BomLine[];
   modules: Array<{ module: string; budget: number; requested: number }>;
@@ -584,7 +586,7 @@ export function ProductionProcurementDashboard({ bootstrap }: MaterialScreenProp
 }
 
 /** The BOM list. `embedded` is the BOM tab of the Purchase Requisition screen: no page header of its own, and link names that do not meet the PR list's. */
-export function ProductionBoms({ bootstrap, notify, embedded }: MaterialScreenProps & { embedded?: boolean }) {
+export function ProductionBoms({ bootstrap, notify, embedded, onRequest }: MaterialScreenProps & { embedded?: boolean; onRequest?: (start: PrStart) => void }) {
   const uiText = useUiText();
   const endpoint = useEndpoint<BomSummary[]>("/api/v1/boms/", EMPTY);
   const [search, setSearch] = useState("");
@@ -599,6 +601,10 @@ export function ProductionBoms({ bootstrap, notify, embedded }: MaterialScreenPr
   // The summary bar counts what the search leaves; its cells then filter by status.
   const searched = useMemo(() => endpoint.data.filter((item) => !search.trim() || contains(`${item.number} ${item.projectNumber} ${item.projectName} ${item.estimateNumber}`, search)), [endpoint.data, search]);
   const visible = useMemo(() => searched.filter((item) => status === "All status" || item.status === status), [searched, status]);
+
+  // A released BOM starts a PR from its row; the Actions column is there only when some row has something to press.
+  const canStart = Boolean(onRequest) && canGenerate;
+  const showActions = visible.some((item) => (canRelease && item.status === "Draft") || (canStart && item.status === "Released"));
 
   const release = async (comment: string) => {
     if (!action) return;
@@ -621,23 +627,62 @@ export function ProductionBoms({ bootstrap, notify, embedded }: MaterialScreenPr
       {endpoint.error ? <LoadError message={endpoint.error} retry={endpoint.reload} /> : null}
       <ActionError message={actionError} />
       <Panel guide="bom.list" title={`${visible.length} BOM revisions`} subtitle={endpoint.loading ? "Loading from production API…" : "Live SQL Server data"} flush>
-        {visible.length ? <div className="table-wrap"><table><thead><tr><th className="pg-acts"><LocalizedText text={"Actions"} /></th><th><LocalizedText text={"Status"} /></th><th><LocalizedText text={"BOM"} /></th><th><LocalizedText text={"Project"} /></th><th><LocalizedText text={"Estimate"} /></th><th className="num"><LocalizedText text={"Lines"} /></th><th className="num"><LocalizedText text={"Budget"} /></th><th><LocalizedText text={"Created"} /></th><th><LocalizedText text={"Released"} /></th></tr></thead><tbody>{visible.map((item) => <tr key={item.id}><td className="pg-acts"><div className="table-actions">{canRelease && item.status === "Draft" ? <RowAction icon="lock" label="Release" guide="bom.release" onClick={() => { setActionError(""); setAction(item); }} /> : null}</div></td><td><StatusBadge status={item.status} /></td><td><button className="pg-doclink mono" type="button" onClick={() => setSelectedId(item.id)}>{item.number}</button><small className="muted"><LocalizedText text={"Rev."} /> {item.revision}</small></td><td><div className="cell-primary"><strong>{item.projectNumber}</strong><span>{item.projectName}</span></div></td><td>{item.estimateNumber} · R{item.estimateRevision}</td><td className="num">{item.lineCount}</td><td className="num">{money(item.bomBudget)}</td><td>{dateTime(item.createdAt)}<small className="muted">{item.createdByName}</small></td><td>{item.releasedAt ? <>{dateTime(item.releasedAt)}<small className="muted">{item.releasedByName}</small></> : "—"}</td></tr>)}</tbody></table></div> : endpoint.loading ? <Loading /> : <EmptyState icon="layers" title="No BOM found" message="Generate BOM from a project whose estimate is approved or locked" />}
+        {visible.length ? <div className="table-wrap"><table><thead><tr>{showActions ? <th className="pg-acts"><LocalizedText text={"Actions"} /></th> : null}<th><LocalizedText text={"Status"} /></th><th><LocalizedText text={"BOM"} /></th><th><LocalizedText text={"Project"} /></th><th><LocalizedText text={"Estimate"} /></th><th className="num"><LocalizedText text={"Lines"} /></th><th className="num"><LocalizedText text={"Budget"} /></th><th><LocalizedText text={"Created"} /></th><th><LocalizedText text={"Released"} /></th></tr></thead><tbody>{visible.map((item) => <tr key={item.id}>{showActions ? <td className="pg-acts"><div className="table-actions">{canRelease && item.status === "Draft" ? <RowAction icon="lock" label="Release" guide="bom.release" onClick={() => { setActionError(""); setAction(item); }} /> : null}{canStart && item.status === "Released" ? <RowAction icon="plus" label="สร้าง PR" onClick={() => onRequest?.({ bomId: item.id, lineIds: [] })} /> : null}</div></td> : null}<td><StatusBadge status={item.status} /></td><td><button className="pg-doclink mono" type="button" onClick={() => setSelectedId(item.id)}>{item.number}</button><small className="muted"><LocalizedText text={"Rev."} /> {item.revision}</small></td><td><div className="cell-primary"><strong>{item.projectNumber}</strong><span>{item.projectName}</span></div></td><td>{item.estimateNumber} · R{item.estimateRevision}</td><td className="num">{item.lineCount}</td><td className="num">{money(item.bomBudget)}</td><td>{dateTime(item.createdAt)}<small className="muted">{item.createdByName}</small></td><td>{item.releasedAt ? <>{dateTime(item.releasedAt)}<small className="muted">{item.releasedByName}</small></> : "—"}</td></tr>)}</tbody></table></div> : endpoint.loading ? <Loading /> : <EmptyState icon="layers" title="No BOM found" message="Generate BOM from a project whose estimate is approved or locked" />}
       </Panel>
-      {selectedId ? <BomDetailModal id={selectedId} bootstrap={bootstrap} notify={notify} onClose={() => setSelectedId(null)} /> : null}
+      {selectedId ? <BomDetailModal id={selectedId} bootstrap={bootstrap} notify={notify} onClose={() => setSelectedId(null)} onRequest={canStart ? (start) => { setSelectedId(null); onRequest?.(start); } : undefined} /> : null}
       {generateOpen ? <GenerateBomModal onClose={() => setGenerateOpen(false)} onCreated={(number) => { setGenerateOpen(false); notify(`${number} generated`); endpoint.reload(); }} /> : null}
       {action ? <CommentPrompt title={`Release ${action.number}`} description="หลัง release รายการจะถูก freeze และใช้เป็นฐานของ PR / MIR" confirmLabel="Release BOM" busy={actionBusy} onClose={() => setAction(null)} onConfirm={(comment) => { void release(comment); }} /> : null}
     </div>
   );
 }
 
-function BomDetailModal({ id, bootstrap, notify, onClose }: { id: number; bootstrap: BootstrapData; notify: (message: string) => void; onClose: () => void }) {
-  const endpoint = useEndpoint<BomWorkspace>(`/api/v1/boms/${id}`, { bom: { id, number: "", revision: 0, status: "", projectId: 0, projectNumber: "", projectName: "", estimateId: 0, estimateNumber: "", estimateRevision: 0, rowVersion: "", approvedMaterialBudget: 0 }, lines: [], modules: [] });
+function BomDetailModal({ id, bootstrap, notify, onClose, onRequest }: { id: number; bootstrap: BootstrapData; notify: (message: string) => void; onClose: () => void; onRequest?: (start: PrStart) => void }) {
+  const t = useUiText();
+  const endpoint = useEndpoint<BomWorkspace>(`/api/v1/boms/${id}`, { bom: { id, number: "", revision: 0, status: "", projectId: 0, projectNumber: "", projectName: "", estimateId: 0, estimateNumber: "", estimateRevision: 0, rowVersion: "", bomBudget: 0 }, lines: [], modules: [] });
   const [reserveLine, setReserveLine] = useState<BomLine | null>(null);
+  const [module, setModule] = useState("");
+  const [section, setSection] = useState("");
+  const [picked, setPicked] = useState<number[]>([]);
   const canReserve = hasPermission(bootstrap, "procurement.request");
+  const { bom, lines } = endpoint.data;
+  const modules = useMemo(() => [...new Set(lines.map((line) => line.module))].sort((a, b) => a.localeCompare(b)), [lines]);
+  const sections = useMemo(() => [...new Set(lines.map((line) => line.sectionCode))].sort(), [lines]);
+  const shown = lines.filter((line) => (!module || line.module === module) && (!section || line.sectionCode === section));
+  // A line can go on a PR while a released BOM still needs some of it.
+  const open = (line: BomLine) => Number(line.purchaseRequired) > 0;
+  const canRequest = Boolean(onRequest) && canReserve && bom.status === "Released";
+  const pickable = canRequest ? shown.filter(open) : [];
+  const chosen = picked.filter((lineId) => lines.some((line) => line.id === lineId && open(line)));
+  const allPicked = pickable.length > 0 && pickable.every((line) => chosen.includes(line.id));
+  const pickAll = () => setPicked(allPicked ? chosen.filter((lineId) => !pickable.some((line) => line.id === lineId)) : [...new Set([...chosen, ...pickable.map((line) => line.id)])]);
+  const pick = (lineId: number) => setPicked(chosen.includes(lineId) ? chosen.filter((item) => item !== lineId) : [...chosen, lineId]);
+  // Money, not quantities: a BOM's lines are in pieces, sets and lots, and those do not add up.
+  const toBuy = lines.filter(open);
+  const requestedValue = endpoint.data.modules.reduce((sum, item) => sum + Number(item.requested), 0);
+  const reservable = (line: BomLine) => canReserve && bom.status === "Released" && line.itemId !== null && !line.nonStock && Number(line.available) > 0;
+  const anyReservable = shown.some(reservable);
+  const download = () => exportXlsx(bomSheetRows(bom, shown, estimateBusinessDate()), `BOM_${bom.number}.xlsx`, "BOM");
   return (
-    <Modal title={endpoint.data.bom.number || "BOM workspace"} subtitle={endpoint.data.bom.projectNumber ? `${endpoint.data.bom.projectNumber} · ${endpoint.data.bom.projectName}` : "Loading from production API…"} size="xl" onClose={onClose} footer={<button className="btn ghost" type="button" onClick={onClose}><LocalizedText text={"Close"} /></button>}>
+    <Modal title={bom.number || "BOM workspace"} subtitle={bom.projectNumber ? `${bom.projectNumber} · ${bom.projectName}` : "Loading from production API…"} size="xl" onClose={onClose}
+      footer={<><button className="btn ghost" type="button" onClick={onClose}><LocalizedText text={"Close"} /></button>
+        {canRequest ? <button className="btn primary" type="button" data-guide="bom.create-pr" disabled={!chosen.length} onClick={() => onRequest?.({ bomId: id, lineIds: chosen })}><Icon name="plus" />{t("สร้าง PR จากรายการที่เลือก")} ({chosen.length})</button> : null}</>}>
       {endpoint.error ? <LoadError message={endpoint.error} retry={endpoint.reload} /> : null}
-      {endpoint.loading && !endpoint.data.lines.length ? <Loading /> : endpoint.data.lines.length ? <><div className="kpi-grid four"><KpiCard label="Lines" value={endpoint.data.lines.length} icon="layers" tone="blue" /><KpiCard label="Approved budget" value={money(endpoint.data.bom.approvedMaterialBudget)} icon="chart" tone="violet" /><KpiCard label="Purchase required" value={quantity(endpoint.data.lines.reduce((sum, line) => sum + Number(line.purchaseRequired), 0))} icon="package" tone="amber" /><KpiCard label="Available" value={quantity(endpoint.data.lines.reduce((sum, line) => sum + Number(line.available), 0))} icon="database" tone="green" /></div><div className="table-wrap tall"><table><thead><tr><th><LocalizedText text={"Section / item"} /></th><th><LocalizedText text={"Description"} /></th><th><LocalizedText text={"Required"} /></th><th><LocalizedText text={"Available"} /></th><th><LocalizedText text={"Reserved"} /></th><th><LocalizedText text={"ขอซื้อแล้ว"} /></th><th><LocalizedText text={"Issued"} /></th><th><LocalizedText text={"Purchase required"} /></th><th><LocalizedText text={"Budget"} /></th><th><LocalizedText text={"Action"} /></th></tr></thead><tbody>{endpoint.data.lines.map((line) => <tr key={line.id}><td><strong className="mono">{line.itemCode || line.estimateItemCode || (line.sectionCode === "OUT" ? "OUTSOURCE" : "NON-STOCK")}</strong><small className="muted">{line.module} <LocalizedText text={"·"} /> {line.sectionCode === "OUT" ? <LocalizedText text={"Outsource"} /> : line.partNumber || "—"}</small></td><td>{line.description}<small className="muted">{line.ownerName}</small></td><td className="num">{quantity(line.quantityRequired)} {line.unit}</td><td className="num">{quantity(line.available)}</td><td className="num">{quantity(line.activeReserved)}</td><td className="num">{quantity(line.requested)}</td><td className="num">{quantity(line.netIssued)}</td><td className="num">{Number(line.purchaseRequired) > 0 ? <Badge tone="amber">{quantity(line.purchaseRequired)} {line.unit}</Badge> : <Badge tone="green"><LocalizedText text={"Covered"} /></Badge>}</td><td className="num">{money(line.budget)}</td><td>{canReserve && endpoint.data.bom.status === "Released" && line.itemId !== null && !line.nonStock && Number(line.available) > 0 ? <button className="btn ghost sm" type="button" onClick={() => setReserveLine(line)}><Icon name="lock" /><LocalizedText text={"Reserve"} /></button> : "—"}</td></tr>)}</tbody></table></div></> : !endpoint.error ? <EmptyState icon="layers" title="BOM has no lines" message="The linked estimate did not produce material lines" /> : null}
+      {endpoint.loading && !lines.length ? <Loading /> : lines.length ? <>
+        <div className="kpi-grid four"><KpiCard label="Lines" value={lines.length} icon="layers" tone="blue" /><KpiCard label="Budget" value={money(bom.bomBudget)} icon="chart" tone="violet" />
+          <KpiCard label="ขอซื้อแล้ว" value={money(requestedValue)} icon="package" tone="green" />
+          <KpiCard label="ยังต้องซื้อ" value={money(toBuy.reduce((sum, line) => sum + toBuyValue(line), 0))} note={`${toBuy.length} ${t("รายการ")}`} icon="package" tone="amber" /></div>
+        <Toolbar>
+          <select value={module} aria-label={t("Module")} onChange={(event) => setModule(event.target.value)}><option value="">{t("All modules")}</option>{modules.map((name) => <option key={name} value={name}>{name}</option>)}</select>
+          <select value={section} aria-label={t("Section")} onChange={(event) => setSection(event.target.value)}><option value="">{t("ทุกหมวด")}</option>{sections.map((code) => <option key={code} value={code}>{code}</option>)}</select>
+          <span className="muted">{shown.length} / {lines.length} {t("รายการ")}</span>
+          <span className="spacer" />
+          <button className="btn ghost" type="button" data-guide="bom.export" onClick={download}><Icon name="download" /><LocalizedText text={"ดาวน์โหลด Excel"} /></button>
+        </Toolbar>
+        <div className="table-wrap tall"><table><thead><tr>{canRequest ? <th className="pg-check"><input type="checkbox" checked={allPicked} disabled={!pickable.length} aria-label={t("เลือกรายการที่ยังต้องซื้อทั้งหมด")} onChange={pickAll} /></th> : null}
+          <th><LocalizedText text={"Section / item"} /></th><th><LocalizedText text={"Description"} /></th><th><LocalizedText text={"Required"} /></th><th><LocalizedText text={"Available"} /></th><th><LocalizedText text={"Reserved"} /></th><th><LocalizedText text={"ขอซื้อแล้ว"} /></th><th><LocalizedText text={"Issued"} /></th><th><LocalizedText text={"Purchase required"} /></th><th><LocalizedText text={"Budget"} /></th>{anyReservable ? <th><LocalizedText text={"Action"} /></th> : null}</tr></thead>
+          <tbody>{shown.map((line) => <tr key={line.id}>{canRequest ? <td className="pg-check">{open(line) ? <input type="checkbox" checked={chosen.includes(line.id)} aria-label={`${t("เลือกรายการนี้")} ${line.description}`} onChange={() => pick(line.id)} /> : null}</td> : null}
+            <td><strong className="mono">{line.itemCode || line.estimateItemCode || (line.sectionCode === "OUT" ? "OUTSOURCE" : "NON-STOCK")}</strong><small className="muted">{line.module} <LocalizedText text={"·"} /> {line.sectionCode === "OUT" ? <LocalizedText text={"Outsource"} /> : line.partNumber || "—"}</small></td><td>{line.description}<small className="muted">{line.ownerName}</small></td><td className="num">{quantity(line.quantityRequired)} {line.unit}</td><td className="num">{quantity(line.available)}</td><td className="num">{quantity(line.activeReserved)}</td><td className="num">{quantity(line.requested)}</td><td className="num">{quantity(line.netIssued)}</td><td className="num">{open(line) ? <Badge tone="amber">{quantity(line.purchaseRequired)} {line.unit}</Badge> : <Badge tone="green"><LocalizedText text={"Covered"} /></Badge>}</td><td className="num">{money(line.budget)}</td>
+            {anyReservable ? <td>{reservable(line) ? <button className="btn ghost sm" type="button" onClick={() => setReserveLine(line)}><Icon name="lock" /><LocalizedText text={"Reserve"} /></button> : "—"}</td> : null}</tr>)}</tbody></table></div></> : !endpoint.error ? <EmptyState icon="layers" title="BOM has no lines" message="The linked estimate has no material or outsource lines" /> : null}
       {reserveLine ? <ReserveStockModal bomId={id} line={reserveLine} onClose={() => setReserveLine(null)} onReserved={(amount) => { setReserveLine(null); notify(`${quantity(amount)} ${reserveLine.unit} of ${reserveLine.itemCode} reserved`); endpoint.reload(); }} /> : null}
     </Modal>
   );
@@ -701,6 +746,8 @@ export function ProductionPurchaseRequisitions({ bootstrap, notify }: MaterialSc
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("All status");
   const [creating, setCreating] = useState(false);
+  // A PR started from a BOM (its row, or lines ticked in it) opens the sheet on that BOM with those lines.
+  const [start, setStart] = useState<PrStart | null>(null);
   // The one procurement screen an engineer needs: the PR list, the BOMs a PR starts from, and the imported PR history.
   const [tab, setTab] = useState<"requests" | "boms" | "history">("requests");
   const boms = useEndpoint<BomSummary[]>(creating ? "/api/v1/boms/" : null, EMPTY);
@@ -793,7 +840,7 @@ export function ProductionPurchaseRequisitions({ bootstrap, notify }: MaterialSc
       <PageHeader eyebrow="PROCURE TO PAY" title={uiText("Purchase Requisitions")} subtitle="สร้าง PR จาก BOM ที่ release แล้ว" />
       {boms.error ? <LoadError message={boms.error} retry={boms.reload} /> : null}
       {boms.loading && !boms.data.length ? <Loading /> : <PurchaseRequestEditor bootstrap={bootstrap} released={boms.data.filter((item) => item.status === "Released")}
-        onClose={() => setCreating(false)} onCreated={(saved) => { setCreating(false); notify(savedNote(saved)); endpoint.reload(); }} />}
+        start={start ?? undefined} onClose={() => { setCreating(false); setStart(null); }} onCreated={(saved) => { setCreating(false); setStart(null); notify(savedNote(saved)); endpoint.reload(); }} />}
     </div>
   );
 
@@ -801,7 +848,7 @@ export function ProductionPurchaseRequisitions({ bootstrap, notify }: MaterialSc
     <div className="pg-skin">
       <PageHeader eyebrow="PROCURE TO PAY" title={uiText("Purchase Requisitions")} subtitle="ขอซื้อจาก BOM อนุมัติตามงบของ Module แล้วส่งเข้า ERP ให้ฝ่ายจัดซื้อเลือก Supplier และออก PO" actions={canRequest ? <button className="btn primary" type="button" data-guide="pr.new" onClick={() => setCreating(true)}><Icon name="plus" /><LocalizedText text={"New PR"} /></button> : undefined} />
       <Tabs tabs={[{ id: "requests", label: "Purchase Requisitions", count: endpoint.data.length }, { id: "boms", label: "Bill of Materials" }, { id: "history", label: "PR ย้อนหลัง" }]} active={tab} onChange={setTab} />
-      {tab === "boms" ? <ProductionBoms bootstrap={bootstrap} notify={notify} embedded /> : tab === "history" ? <HistoricalPrPanel canImport={canRequest} notify={notify} /> : <>
+      {tab === "boms" ? <ProductionBoms bootstrap={bootstrap} notify={notify} embedded onRequest={(from) => { setStart(from); setCreating(true); }} /> : tab === "history" ? <HistoricalPrPanel canImport={canRequest} notify={notify} /> : <>
       <StatusSummary statuses={["Draft", "In Approval", "Approved", "Converted to PO", "Rejected"]} rows={searched} value={status} onChange={setStatus} label={prStatusLabel} />
       <Toolbar><SearchInput link="q" value={search} onChange={setSearch} placeholder="Search PR, project, BOM or requester…" /><RefreshButton loading={endpoint.loading} reload={endpoint.reload} /></Toolbar>
       {endpoint.error ? <LoadError message={endpoint.error} retry={endpoint.reload} /> : null}

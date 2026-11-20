@@ -7,7 +7,7 @@ import { Badge, EmptyState, Field, FilterChips, Icon, Pagination, Panel, SearchI
 import { exportXlsx } from "../../../lib/export-xlsx";
 import { readWorkbookSheets } from "../../../lib/import-spreadsheet";
 import { estimateBusinessDate } from "../../../lib/estimate-ux";
-import { addPastedRows, afterEdit, asPlanned, blankPrRows, draftFromPaste, draftFromPr, draftFromSheet, draftIssues, insertBlankPrRow, isBlankPrRow, moduleStatus, payloadLines, rowFromBomLine, sheetRows, templateRows,
+import { addPastedRows, afterEdit, asPlanned, blankPrRows, draftFromPaste, draftFromPr, draftFromSheet, draftIssues, insertBlankPrRow, isBlankPrRow, moduleStatus, payloadLines, rowFromBomLine, sheetRows, startingPrRows, templateRows,
   type PrBomLine, type PrDraftRow, type PrModuleBudget, type PrModuleStatus, type PrRowKind, type PrSavedLine } from "../../../lib/pr-spreadsheet";
 import { useEndpoint } from "./material-endpoint";
 import { DateInput } from "../DateInput";
@@ -46,10 +46,12 @@ function budgetNote(status: PrModuleStatus, routed: boolean): string {
  * Many items at once (owner 2026-11-19): rows copied from Excel are pasted straight in, blank rows are added ten at a time and left out of
  * the save when unused, Enter moves down a column, and one button saves the PR and sends it for approval.
  */
+/** A PR started from a BOM: the BOM, and the lines ticked on it (none = an empty sheet for that BOM). */
+export type PrStart = { bomId: number; lineIds: number[] };
 export type PrSaved = { number: string; submitted: boolean; submitError?: string };
-export function PurchaseRequestEditor({ released, editing, onClose, onCreated }: { bootstrap: BootstrapData; released: ReleasedBom[]; editing?: PrEditing; onClose: () => void; onCreated: (saved: PrSaved) => void }) {
+export function PurchaseRequestEditor({ released, editing, start, onClose, onCreated }: { bootstrap: BootstrapData; released: ReleasedBom[]; editing?: PrEditing; start?: PrStart; onClose: () => void; onCreated: (saved: PrSaved) => void }) {
   const t = useT();
-  const [bomId, setBomId] = useState(0);
+  const [bomId, setBomId] = useState(start?.bomId ?? 0);
   const effectiveBomId = editing?.bomId ?? (bomId || released[0]?.id || 0);
   // An edited draft's own lines are left out of what the BOM has requested, so they show as still open to it.
   const workspace = useEndpoint<Workspace | null>(effectiveBomId ? `/api/v1/boms/${effectiveBomId}${editing ? `?exceptPr=${editing.id}` : ""}` : null, null);
@@ -57,7 +59,9 @@ export function PurchaseRequestEditor({ released, editing, onClose, onCreated }:
   const modules = useMemo(() => (workspace.data?.modules ?? EMPTY).map((module) => module.module), [workspace.data]);
   // A BOM with one module charges every typed row to it; with several, the engineer says which.
   const onlyModule = modules.length === 1 ? modules[0]! : "";
-  const startingRows = useMemo(() => editing ? draftFromPr(editing.lines, [...lines.values()]) : blankPrRows(10, onlyModule, "start"), [editing, lines, onlyModule]);
+  // A new sheet is empty rows, or the lines ticked on the BOM it was started from followed by empty rows.
+  const startingRows = useMemo(() => editing ? draftFromPr(editing.lines, [...lines.values()])
+    : startingPrRows([...lines.values()], start && start.bomId === effectiveBomId ? start.lineIds : [], onlyModule, "start"), [editing, lines, onlyModule, start, effectiveBomId]);
   // The rows the engineer has touched, for this BOM only; until then a new sheet is empty rows to type into.
   const [draft, setDraft] = useState<{ bomId: number; rows: PrDraftRow[] } | null>(null);
   const rows = draft && draft.bomId === effectiveBomId ? draft.rows : startingRows;

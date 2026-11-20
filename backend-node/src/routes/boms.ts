@@ -15,6 +15,9 @@ type BomHeader = { id: number | string; bom_no: string; revision: number; status
 // BOMs generated before only bought categories were copied still carry engineering, travel and other costs as SVC lines.
 // Outsource lines are OUT (migration 108 moved the old SVC ones of that category), so they are among the lines shown.
 const MATERIAL_LINE = "l.section_code<>N'SVC'";
+// One figure for a BOM's budget wherever it is shown: its own lines at the estimate's cost, outsource included. The list and
+// the BOM itself once read two sources (the lines, and the estimate's material total without outsource) and disagreed.
+const BOM_BUDGET = `(SELECT COALESCE(SUM(l.qty_required*l.est_unit_cost),0) FROM dbo.bom_lines l WHERE l.bom_id=b.id AND l.deleted_at IS NULL AND ${MATERIAL_LINE})`;
 const BOM_CATEGORIES = BOM_CATEGORY_CODES.map((code) => `'${code}'`).join(",");
 
 function todayIn(timeZone: string): string {
@@ -38,7 +41,7 @@ export function registerBomRoutes(app: FastifyInstance, config: AppConfig, datab
     const result = await database.query<Record<string, unknown> & { row_version: Buffer }>(`SELECT b.id,b.bom_no,b.revision,b.status,b.project_id,p.project_no,p.name project_name,
       b.estimate_id,e.estimate_no,e.revision estimate_revision,b.created_at,cu.name created_by_name,b.released_at,ru.name released_by_name,
       (SELECT COUNT(*) FROM dbo.bom_lines l WHERE l.bom_id=b.id AND l.deleted_at IS NULL AND ${MATERIAL_LINE}) line_count,
-      (SELECT COALESCE(SUM(l.qty_required*l.est_unit_cost),0) FROM dbo.bom_lines l WHERE l.bom_id=b.id AND l.deleted_at IS NULL AND ${MATERIAL_LINE}) bom_budget,b.row_version
+      ${BOM_BUDGET} bom_budget,b.row_version
       FROM dbo.boms b INNER JOIN dbo.projects p ON p.id=b.project_id INNER JOIN dbo.estimates e ON e.id=b.estimate_id
       INNER JOIN dbo.users cu ON cu.id=b.created_by LEFT JOIN dbo.users ru ON ru.id=b.released_by WHERE b.deleted_at IS NULL
       AND (@project IS NULL OR b.project_id=@project) AND (@elevated=1 OR p.manager_id=@actor OR p.lead_engineer_id=@actor
@@ -58,8 +61,8 @@ export function registerBomRoutes(app: FastifyInstance, config: AppConfig, datab
     const projectId = scoped.recordset[0] ? Number(scoped.recordset[0].project_id) : 0; if (!projectId) throw new ApiError(404, "bom_not_found", "BOM not found.");
     await demandProjectScope(database, actor, projectId);
     const result = await database.query<Record<string, unknown> & { row_version: Buffer }>(`SELECT b.bom_no,b.revision,b.status,b.project_id,p.project_no,p.name project_name,b.estimate_id,
-      e.estimate_no,e.revision estimate_revision,b.row_version,t.material_total FROM dbo.boms b INNER JOIN dbo.projects p ON p.id=b.project_id
-      INNER JOIN dbo.estimates e ON e.id=b.estimate_id LEFT JOIN dbo.v_estimate_totals t ON t.estimate_id=e.id WHERE b.id=@id AND b.deleted_at IS NULL;
+      e.estimate_no,e.revision estimate_revision,b.row_version,${BOM_BUDGET} bom_budget FROM dbo.boms b INNER JOIN dbo.projects p ON p.id=b.project_id
+      INNER JOIN dbo.estimates e ON e.id=b.estimate_id WHERE b.id=@id AND b.deleted_at IS NULL;
       SELECT l.id,l.section_code,l.item_id,COALESCE(i.item_code,ci.item_code,N'') item_code,COALESCE(i.part_no,N'') part_no,l.description,COALESCE(i.brand,N'') brand,l.qty_required,l.unit,l.est_unit_cost,l.customer_supplied_qty,l.non_stock,
         l.estimate_line_id,ci.item_code estimate_item_code,COALESCE(NULLIF(LTRIM(RTRIM(ci.module)),N''),@none) module,l.owner_id,u.name owner_name,l.sort_order,l.row_version,
         COALESCE(vb.usable,0) usable,COALESCE(vb.reserved,0) reserved,COALESCE(vb.available,0) available,COALESCE(vb.quarantine,0) quarantine,
@@ -93,7 +96,7 @@ export function registerBomRoutes(app: FastifyInstance, config: AppConfig, datab
       const entry = modules.get(row.module) ?? { module: row.module, budget: 0, requested: 0 }; entry.requested += Number(row.requested); modules.set(row.module, entry); }
     return { bom: { id, number: h.bom_no, revision: Number(h.revision), status: h.status, projectId: Number(h.project_id), projectNumber: h.project_no,
       projectName: h.project_name, estimateId: Number(h.estimate_id), estimateNumber: h.estimate_no, estimateRevision: Number(h.estimate_revision),
-      rowVersion: h.row_version.toString("base64"), approvedMaterialBudget: Number(h.material_total ?? 0) }, lines,
+      rowVersion: h.row_version.toString("base64"), bomBudget: Number(h.bom_budget ?? 0) }, lines,
       modules: [...modules.values()].sort((a, b) => a.module.localeCompare(b.module)) };
   });
 

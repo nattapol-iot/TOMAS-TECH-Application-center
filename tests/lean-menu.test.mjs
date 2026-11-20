@@ -114,7 +114,7 @@ test("procurement is one menu entry for engineers: BOM and PR history are tabs o
   // The screens themselves are kept, so an entry put back in the menu opens again.
   assert.match(shell, /\{view === "pos" \? <ProductionPurchaseOrders \{\.\.\.moduleProps\} \/> : null\}/);
   assert.match(material, /\{ id: "requests", label: "Purchase Requisitions", count: endpoint\.data\.length \}, \{ id: "boms", label: "Bill of Materials" \}, \{ id: "history", label: "PR ย้อนหลัง" \}/);
-  assert.match(material, /tab === "boms" \? <ProductionBoms bootstrap=\{bootstrap\} notify=\{notify\} embedded \/>/);
+  assert.match(material, /tab === "boms" \? <ProductionBoms bootstrap=\{bootstrap\} notify=\{notify\} embedded onRequest=/);
   // The BOM tab keeps its own link names, so the PR list's search and open record do not leak into it.
   assert.match(material, /useLinkedState\(embedded \? "bom" : "open", null, idLink/);
   assert.match(material, /<SearchInput link=\{embedded \? "bq" : "q"\}/);
