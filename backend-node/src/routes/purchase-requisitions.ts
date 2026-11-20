@@ -7,7 +7,7 @@ import { ApiError } from "../errors.js";
 import { hasRole } from "../user-roles.js";
 import { bodyObject, booleanQuery, oneOf, optionalBodyText, optionalPositiveLong, optionalText, parseDateOnly, parseRowVersion, positiveLong, requiredInteger, requiredText } from "../http.js";
 import { insertMaterialAudit } from "../material-audit.js";
-import { overBudgetFlags, requestNumber, unitBudgetOf } from "../procurement-rules.js";
+import { overBudgetFlags, partLineProblem, type PrLineForm, requestNumber, unitBudgetOf } from "../procurement-rules.js";
 import { type ApprovalRoute, approvalSteps, type BomLineForRequest, ERP_STEP, FINAL_STEP, LEGACY_PO_CREATION_STEP, MAX_PR_LINES, moduleBudgets, NO_MODULE, OUTSOURCE_SECTION, planPrLines, type PlannedPrLine,
   type PrLineInput, type PrLineKind, procurementRuleFlags, remainingToRequest, REQUESTING_PR_STATUSES, type RuleFlag } from "../procurement-rules.js";
 import type { EmailService, PurchaseRequisitionApprovalEmail, PurchaseRequisitionDecisionEmail } from "../email.js";
@@ -37,6 +37,8 @@ type PrHeader = { id: number | string; pr_no: string; project_id: number | strin
   erp_synced_at: Date | string | null; erp_error: string | null; erp_target: string | null; erp_cancel_pending: boolean | null;
   unit_id: number | string | null; over_budget_reason: string | null; row_version: Buffer };
 const HEADER_COLUMNS = "id,pr_no,project_id,bom_id,requested_by,status,priority,required_date,erp_po_ref,purpose,erp_ref,erp_department,erp_pr_no,erp_status,erp_status_label,erp_url,erp_revision_no,erp_rejection_reason,erp_synced_at,erp_error,erp_target,erp_cancel_pending,unit_id,over_budget_reason,row_version";
+/** A nullable text column as text, or null when it is empty. */
+const textOrNull = (value: unknown): string | null => value === null || value === undefined || String(value).trim() === "" ? null : String(value);
 const erpView = (h: PrHeader) => ({ ref: h.erp_ref, department: h.erp_department, prNo: h.erp_pr_no, status: h.erp_status, statusLabel: h.erp_status_label, url: h.erp_url,
   revisionNo: h.erp_revision_no, rejectionReason: h.erp_rejection_reason, poNo: h.erp_po_ref, syncedAt: h.erp_synced_at, error: h.erp_error,
   // Where it went in the ERP (PR, REQUEST_LIST, or not sent yet), and whether its requester asked to cancel it after that.
@@ -48,11 +50,30 @@ async function readHeader(transaction: TransactionType, id: number): Promise<PrH
   const row = (await request.query<PrHeader>(`SELECT ${HEADER_COLUMNS} FROM dbo.mat_prs WITH (UPDLOCK,HOLDLOCK) WHERE id=@id AND deleted_at IS NULL;`)).recordset[0];
   if (!row) throw new ApiError(404, "pr_not_found", "Purchase requisition not found."); return row; }
 
+/** A drawing or quotation link on a line: http or https only, so a line cannot carry a script or a file path. */
+function optionalLink(value: unknown, label: string): string | null {
+  const text = optionalBodyText(value, 500, label);
+  if (text === null) return null;
+  let url: URL;
+  try { url = new URL(text); } catch { throw new ApiError(400, "validation_failed", `${label} must be a web link (http or https).`); }
+  if (url.protocol !== "http:" && url.protocol !== "https:") throw new ApiError(400, "validation_failed", `${label} must be a web link (http or https).`);
+  return text;
+}
+
+/** The PR-Form fields of a line (migration 115). `parentIndex` 0 is the first line, so it is not "absent". */
+function parseLineForm(body: Record<string, unknown>): PrLineForm {
+  const missing = (field: unknown) => field === undefined || field === null || field === "";
+  return { material: optionalBodyText(body.material, 200, "Material"), treatment: optionalBodyText(body.treatment, 200, "Treatment"), detail: optionalBodyText(body.detail, 500, "Detail"),
+    quantityPerSet: missing(body.quantityPerSet) ? null : decimal(body.quantityPerSet, 0.0001, ERP_MAX_QUANTITY, "Quantity per set"),
+    needBy: missing(body.needBy) ? null : parseDateOnly(body.needBy, "Need-by date"), attachmentUrl: optionalLink(body.attachmentUrl, "Link"),
+    parentIndex: missing(body.parentIndex) ? null : requiredInteger(body.parentIndex, "Part of line", 0, MAX_PR_LINES) };
+}
+
 /** A rejected field names its line: with a thousand lines, "Quantity is outside the supported range" alone is no help. */
 function parseLines(value: unknown): PrLineInput[] {
   if (!Array.isArray(value) || !value.length) throw new ApiError(400, "validation_failed", "At least one line is required.");
   if (value.length > MAX_PR_LINES) throw new ApiError(400, "validation_failed", `A requisition carries at most ${MAX_PR_LINES} lines; put the rest on another PR.`);
-  return value.map((raw, index) => {
+  const lines = value.map((raw, index): PrLineInput => {
     try {
       const body = bodyObject(raw); const absent = (field: unknown) => field === undefined || field === null || field === "" || field === 0;
       return { lineType: absent(body.lineType) ? "Planned" : oneOf(String(body.lineType), "Line type", lineTypes) as PrLineKind,
@@ -62,12 +83,16 @@ function parseLines(value: unknown): PrLineInput[] {
         quantity: decimal(body.quantity, 0.0001, ERP_MAX_QUANTITY, "Quantity"), coveredQuantity: absent(body.coveredQuantity) ? null : decimal(body.coveredQuantity, 0.0001, 1_000_000_000, "Replaced quantity"),
         unitPrice: decimal(body.unitPrice, 0, 1_000_000_000, "Unit price"),
         priceSource: absent(body.priceSource) ? "Estimate" : oneOf(requiredText(body.priceSource, 100, "Price source"), "Price source", priceSources),
-        supplierId: absent(body.supplierId) ? null : requiredInteger(body.supplierId, "Supplier", 1), remark: optionalBodyText(body.remark, 20_000, "Remark") };
+        supplierId: absent(body.supplierId) ? null : requiredInteger(body.supplierId, "Supplier", 1), remark: optionalBodyText(body.remark, 20_000, "Remark"),
+        form: parseLineForm(body) };
     } catch (error) {
       if (error instanceof ApiError) throw new ApiError(error.statusCode, error.code, `Line ${index + 1}: ${error.message}`, { line: index + 1 });
       throw error;
     }
   });
+  const parts = partLineProblem(lines.map((line) => line.form));
+  if (parts) throw new ApiError(400, "validation_failed", `Line ${parts.line}: ${parts.message}`, { line: parts.line });
+  return lines;
 }
 
 /** What a new PR and an edited draft both carry. */
@@ -133,19 +158,34 @@ async function assertActiveSuppliers(transaction: TransactionType, supplierIds: 
   if (found !== unique.length) throw new ApiError(400, "validation_failed", "A selected supplier is inactive or does not exist.");
 }
 
-/** One statement for every line: a thousand-line PR is one round trip, not three per line. */
+/**
+ * One statement for every line: a thousand-line PR is one round trip, not three per line. The lines are the request's only lines when this
+ * runs (a new request, or an edited draft whose lines were just removed), and take their ids in order, so a part finds the line it belongs
+ * to by place: the n-th line of the request is the line with the n-th id.
+ */
 async function insertLines(transaction: TransactionType, prId: number, bomId: number, lines: PlannedPrLine[]): Promise<void> {
   const request = new sql.Request(transaction); request.input("pr", sql.BigInt, prId); request.input("bom", sql.BigInt, bomId);
   request.input("lines", sql.NVarChar(sql.MAX), JSON.stringify(lines.map((line, order) => ({ ...line, order }))));
   await request.query(`INSERT INTO dbo.mat_pr_lines(pr_id,bom_id,bom_line_id,item_id,item_code,part_no,description,brand,supplier_id,qty,unit,unit_price,est_qty,est_unit_cost,
-      price_source,stock_snapshot,is_unplanned,buy_despite_stock,remark,line_type,budget_module,covered_qty)
+      price_source,stock_snapshot,is_unplanned,buy_despite_stock,remark,line_type,budget_module,covered_qty,material,treatment,detail,qty_per_set,need_by,attachment_url)
     SELECT @pr,@bom,j.bom_line_id,j.item_id,j.item_code,j.part_no,j.description,j.brand,j.supplier_id,j.qty,j.unit,j.unit_price,j.est_qty,j.est_unit_cost,
-      j.price_source,0,CASE WHEN j.line_type=N'Unplanned' THEN 1 ELSE 0 END,0,j.remark,j.line_type,j.budget_module,j.covered_qty
+      j.price_source,0,CASE WHEN j.line_type=N'Unplanned' THEN 1 ELSE 0 END,0,j.remark,j.line_type,j.budget_module,j.covered_qty,
+      j.material,j.treatment,j.detail,j.qty_per_set,j.need_by,j.attachment_url
     FROM OPENJSON(@lines) WITH (ord int '$.order', bom_line_id bigint '$.bomLineId', item_id bigint '$.itemId', item_code nvarchar(100) '$.itemCode',
       part_no nvarchar(200) '$.partNumber', description nvarchar(500) '$.description', brand nvarchar(200) '$.brand', supplier_id bigint '$.supplierId',
       qty decimal(19,4) '$.quantity', unit nvarchar(50) '$.unit', unit_price decimal(19,4) '$.unitPrice', est_qty decimal(19,4) '$.estimatedQuantity',
       est_unit_cost decimal(19,4) '$.estimatedUnitCost', price_source nvarchar(100) '$.priceSource', remark nvarchar(max) '$.remark', line_type nvarchar(20) '$.lineType',
-      budget_module nvarchar(200) '$.budgetModule', covered_qty decimal(19,4) '$.coveredQuantity') j ORDER BY j.ord;`);
+      budget_module nvarchar(200) '$.budgetModule', covered_qty decimal(19,4) '$.coveredQuantity', material nvarchar(200) '$.form.material',
+      treatment nvarchar(200) '$.form.treatment', detail nvarchar(500) '$.form.detail', qty_per_set decimal(19,4) '$.form.quantityPerSet', need_by date '$.form.needBy',
+      attachment_url nvarchar(500) '$.form.attachmentUrl') j ORDER BY j.ord;`);
+  const placed = lines.flatMap((line, order) => line.form?.parentIndex === null || line.form?.parentIndex === undefined ? [] : [{ order, parent: line.form.parentIndex }]);
+  if (!placed.length) return;
+  const parts = new sql.Request(transaction); parts.input("pr", sql.BigInt, prId); parts.input("parts", sql.NVarChar(sql.MAX), JSON.stringify(placed));
+  await parts.query(`WITH placed AS (SELECT id,ROW_NUMBER() OVER(ORDER BY id)-1 n FROM dbo.mat_pr_lines WHERE pr_id=@pr)
+    UPDATE child SET child.parent_line_id=head.id
+    FROM OPENJSON(@parts) WITH (ord int '$.order', parent int '$.parent') j
+    INNER JOIN placed c ON c.n=j.ord INNER JOIN dbo.mat_pr_lines child ON child.id=c.id
+    INNER JOIN placed head ON head.n=j.parent;`);
 }
 
 /** The owner's route for a requester (migration 097): their department's head and the final approver, or null without a final approver. Inactive people are left out. */
@@ -358,16 +398,21 @@ export function registerPurchaseRequisitionRoutes(app: FastifyInstance, config: 
       if (!erpDepartment) { const message = "Choose the ERP department for this PR, then send it."; await recordError(prId, message); return { sent: false, kind: "department_required", message }; }
       await database.query(`UPDATE dbo.mat_prs SET erp_department=@department WHERE id=@id;`, (r) => { r.input("department", sql.NVarChar(50), erpDepartment); r.input("id", sql.BigInt, prId); });
     }
-    const detail = (await database.query<Record<string, unknown>>(`SELECT p.project_no,p.name project_name,b.bom_no FROM dbo.mat_prs pr INNER JOIN dbo.projects p ON p.id=pr.project_id INNER JOIN dbo.boms b ON b.id=pr.bom_id WHERE pr.id=@id;
+    const detail = (await database.query<Record<string, unknown>>(`SELECT p.project_no,p.name project_name,b.bom_no,u.drawing_no,u.unit_name FROM dbo.mat_prs pr INNER JOIN dbo.projects p ON p.id=pr.project_id
+        INNER JOIN dbo.boms b ON b.id=pr.bom_id LEFT JOIN dbo.project_purchase_units u ON u.id=pr.unit_id WHERE pr.id=@id;
       SELECT l.line_type,l.item_code,l.part_no,l.description,l.brand,l.qty,l.unit,l.unit_price,l.remark,l.budget_module,COALESCE(bi.item_code,ci.item_code,bl.description) original_code,
-        CASE WHEN bl.section_code=N'${OUTSOURCE_SECTION}' THEN 1 ELSE 0 END outsource
+        CASE WHEN bl.section_code=N'${OUTSOURCE_SECTION}' THEN 1 ELSE 0 END outsource,l.material,l.treatment,l.detail,CONVERT(char(10),l.need_by,23) need_by,l.attachment_url,
+        COALESCE(NULLIF(pl.part_no,N''),pl.item_code,pl.description) part_of
       FROM dbo.mat_pr_lines l LEFT JOIN dbo.bom_lines bl ON bl.id=l.bom_line_id LEFT JOIN dbo.mat_items bi ON bi.id=bl.item_id LEFT JOIN dbo.cost_items ci ON ci.id=bl.estimate_line_id
+        LEFT JOIN dbo.mat_pr_lines pl ON pl.id=l.parent_line_id
       WHERE l.pr_id=@id ORDER BY l.id;`, (r) => r.input("id", sql.BigInt, prId)));
     const project = (detail.recordsets[0]?.[0] ?? {}) as Record<string, unknown>;
     const lines = (detail.recordsets[1] ?? []).map((row) => { const line = row as Record<string, unknown>; return { line_type: String(line.line_type), item_code: String(line.item_code ?? ""),
       part_no: String(line.part_no ?? ""), description: String(line.description ?? ""), brand: String(line.brand ?? ""), qty: Number(line.qty), unit: String(line.unit ?? ""),
       unit_price: Number(line.unit_price), remark: line.remark === null ? null : String(line.remark), budget_module: String(line.budget_module ?? ""),
-      original_code: line.original_code === null ? null : String(line.original_code), outsource: Boolean(line.outsource) } satisfies ErpLine; });
+      original_code: line.original_code === null ? null : String(line.original_code), outsource: Boolean(line.outsource),
+      material: textOrNull(line.material), treatment: textOrNull(line.treatment), detail: textOrNull(line.detail), need_by: textOrNull(line.need_by), part_of: textOrNull(line.part_of),
+      attachment_url: textOrNull(line.attachment_url) } satisfies ErpLine & { attachment_url: string | null }; });
     const problem = erpLineProblem(lines);
     if (problem) { await recordError(prId, problem); return { sent: false, kind: "validation", message: problem }; }
     const erpHeader = { pr_no: prepared.h.pr_no, erp_ref: prepared.ref, erp_department: erpDepartment, required_date: prepared.h.required_date, purpose: prepared.h.purpose,
@@ -378,7 +423,9 @@ export function registerPurchaseRequisitionRoutes(app: FastifyInstance, config: 
       if (blocked) { await recordError(prId, blocked); return { sent: false, kind: "validation", message: blocked }; }
       // The keys are kept before the call, like the reference: a timeout or a second press sends the same lines again, and the ERP answers with the ones it has.
       await assignLineRefs(prId, prepared.ref);
-      const added = await erp.gateway.call<unknown>(subject, REQUEST_LIST_TOOLS.add, requestListAddArguments(erpHeader, lines.map((line, index) => ({ ...line, line_ref: requestListLineRef(prepared.ref, index) })), erp.appBaseUrl));
+      // The Request List keeps the drawing, the Unit, material, treatment and the link as key=value pairs of each line (docs/PEGASUS_ERP_REQUEST_LIST_TH.md).
+      const extrasOf = (line: (typeof lines)[number]) => ({ drawingNo: textOrNull(project.drawing_no), unitName: textOrNull(project.unit_name), material: line.material, treatment: line.treatment, attachmentUrl: line.attachment_url });
+      const added = await erp.gateway.call<unknown>(subject, REQUEST_LIST_TOOLS.add, requestListAddArguments(erpHeader, lines.map((line, index) => ({ ...line, line_ref: requestListLineRef(prepared.ref, index), extras: extrasOf(line) })), erp.appBaseUrl));
       if (!added.ok) { await recordError(prId, describeErpFailure(added)); return { sent: false, kind: added.kind, message: describeErpFailure(added) }; }
       const items = parseRequestListItems(added.data);
       await recordRequestList(prId, "Approved", prepared.ref, items, actorId);
@@ -442,6 +489,7 @@ export function registerPurchaseRequisitionRoutes(app: FastifyInstance, config: 
       const result = await query.query<Record<string, unknown> & { row_version?: Buffer }>(`SELECT l.id,l.line_type,l.bom_line_id,l.item_id,l.item_code,l.part_no,l.description,l.brand,l.supplier_id,s.name supplier_name,l.qty,l.unit,l.unit_price,
         l.est_qty,l.est_unit_cost,l.covered_qty,l.budget_module,l.price_source,l.remark,l.line_total,l.estimate_total,l.row_version,
         l.erp_line_ref,l.erp_line_status,l.erp_line_status_label,l.erp_cancelled_reason,l.erp_line_url,
+        l.material,l.treatment,l.detail,l.qty_per_set,CONVERT(char(10),l.need_by,23) need_by,l.attachment_url,l.parent_line_id,
         bl.section_code,bl.estimate_line_id,COALESCE(bi.item_code,ci.item_code,N'') original_item_code,bl.description original_description,bl.unit original_unit
         FROM dbo.mat_pr_lines l LEFT JOIN dbo.suppliers s ON s.id=l.supplier_id LEFT JOIN dbo.bom_lines bl ON bl.id=l.bom_line_id
         LEFT JOIN dbo.mat_items bi ON bi.id=bl.item_id LEFT JOIN dbo.cost_items ci ON ci.id=bl.estimate_line_id WHERE l.pr_id=@id ORDER BY l.id;
@@ -462,6 +510,10 @@ export function registerPurchaseRequisitionRoutes(app: FastifyInstance, config: 
         estimateTotal: Number(row.estimate_total), rowVersion: row.row_version.toString("base64"), sectionCode: row.section_code ?? null,
         estimateLineId: row.estimate_line_id === null || row.estimate_line_id === undefined ? null : Number(row.estimate_line_id),
         original: row.bom_line_id === null ? null : { itemCode: row.original_item_code, description: row.original_description, unit: row.original_unit },
+        // What the PR-Form says of the line (migration 115), and the line of this request it is a part of.
+        material: textOrNull(row.material), treatment: textOrNull(row.treatment), detail: textOrNull(row.detail),
+        quantityPerSet: row.qty_per_set === null || row.qty_per_set === undefined ? null : Number(row.qty_per_set), needBy: textOrNull(row.need_by),
+        attachmentUrl: textOrNull(row.attachment_url), parentLineId: row.parent_line_id === null || row.parent_line_id === undefined ? null : Number(row.parent_line_id),
         erp: { lineRef: row.erp_line_ref ?? null, status: row.erp_line_status ?? null, statusLabel: row.erp_line_status_label ?? null, cancelledReason: row.erp_cancelled_reason ?? null,
           url: row.erp_line_url ?? null, orders: ordersByLine.get(Number(row.id)) ?? [] } }; });
       const steps = (result.recordsets[1] ?? []).map((raw) => { const row = raw as Record<string, unknown>; return { id: Number(row.id), sequence: Number(row.sequence), name: row.name, approverRole: row.approver_role,

@@ -6,7 +6,8 @@ export const PURCHASE_DISCIPLINES = ["ME", "EE", "SW", "IN"] as const;
 export const DISCIPLINE_NAME: Record<string, string> = { ME: "Mechanical", EE: "Electrical", SW: "Software", IN: "Installation" };
 
 /** One live request raised for a Unit. `waitingLines`: lines the ERP has no PO for yet, as last synced. */
-export type PurchaseUnitRequest = { id: number; number: string; status: string; requiredDate: string | null; amount: number; lines: number; waitingLines: number };
+/** `needBy`: the earliest date a line still waiting is needed by (a line's own date, else the request's). */
+export type PurchaseUnitRequest = { id: number; number: string; status: string; requiredDate: string | null; needBy?: string | null; amount: number; lines: number; waitingLines: number };
 export type PurchaseUnit = { id: number; module: string; discipline: string; drawingNo: string; unitName: string; isGeneral: boolean; budget: number;
   requests: number; requested: number; approved: number; ordered: number; remaining: number;
   /** Lines still waiting to be ordered, and the earliest date one of them is needed by. */

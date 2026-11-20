@@ -624,6 +624,36 @@ try {
   assert.deepEqual((await unitsOf(legacyProject)).units, []);
   // Its drawing number is free again for a new Unit.
   await call("POST", `/projects/${legacyProject}/purchase-units`, "Requester", { module: "Install", discipline: "IN", drawingNo: "IN-01", unitName: "Site work again", budget: 500 }, 201);
+  // The PR-Form's line fields and part lines (migration 115, owner 2026-11-20): a manifold and its valves on one request for the Unit.
+  // The parts keep the line they belong to through an edit, and a valve needed early brings the Unit's need-by date forward.
+  const formLines = [
+    { lineType: "Unplanned", module: "Panel", partNumber: "MANIFOLD-8", description: "Valve manifold", unit: "pcs", quantity: 1, unitPrice: 100, material: "A5052", treatment: "Anodize",
+      detail: "8 stations", quantityPerSet: 1, attachmentUrl: "https://example.sharepoint.com/sites/eng/drawing.pdf" },
+    { lineType: "Unplanned", module: "Panel", partNumber: "VALVE-A", description: "Valve", unit: "pcs", quantity: 8, unitPrice: 10, quantityPerSet: 8, needBy: "2099-02-01", parentIndex: 0 },
+    { lineType: "Unplanned", module: "Panel", partNumber: "SILENCER", description: "Silencer", unit: "pcs", quantity: 2, unitPrice: 5, parentIndex: 0 },
+  ];
+  const formed = await call("POST", "/purchase-requisitions", "Requester", { bomId: bom.id, unitId: valve.id, priority: "Normal", requiredDate: "2099-03-01", lines: formLines }, 201);
+  let formedDetail = await call("GET", `/purchase-requisitions/${formed.id}`, "Requester");
+  let formIds = formedDetail.lines.map((line: Json) => line.id);
+  assert.deepEqual(formedDetail.lines.map((line: Json) => [line.partNumber, line.material, line.treatment, line.detail, line.quantityPerSet, line.needBy, line.attachmentUrl, line.parentLineId]), [
+    ["MANIFOLD-8", "A5052", "Anodize", "8 stations", 1, null, "https://example.sharepoint.com/sites/eng/drawing.pdf", null],
+    ["VALVE-A", null, null, null, 8, "2099-02-01", null, formIds[0]],
+    ["SILENCER", null, null, null, null, null, null, formIds[0]]]);
+  assert.equal((await unitsOf(fresh)).units.find((unit: Json) => unit.unitName === "MASTER VALVE UNIT").nearestNeedBy, "2099-02-01");
+  // A part of a part, and a link that is not a web link, are refused; the database keeps a part on a line of the same request, not itself.
+  await call("POST", "/purchase-requisitions", "Requester", { bomId: bom.id, priority: "Normal", requiredDate: "2099-03-01",
+    lines: [formLines[0], formLines[1], { ...formLines[2], parentIndex: 1 }] }, 400);
+  await call("POST", "/purchase-requisitions", "Requester", { bomId: bom.id, priority: "Normal", requiredDate: "2099-03-01",
+    lines: [{ ...formLines[0], attachmentUrl: "file://server/drawing.pdf" }] }, 400);
+  await assert.rejects(run(`UPDATE dbo.mat_pr_lines SET parent_line_id=${formIds[0]} WHERE id=${formIds[0]}`), /CK_mat_pr_lines_form_fields/);
+  await assert.rejects(run(`UPDATE dbo.mat_pr_lines SET parent_line_id=${formIds[0]} WHERE id=(SELECT MIN(id) FROM dbo.mat_pr_lines WHERE pr_id=${Number(pr12.id)})`), /FK_mat_pr_lines_parent/);
+  // Editing the draft replaces its lines, parts included: the silencer becomes a line of its own.
+  const reworked = await call("PUT", `/purchase-requisitions/${formed.id}`, "Requester", { rowVersion: formed.rowVersion, priority: "Normal", requiredDate: "2099-03-01",
+    lines: [formLines[0], formLines[1], { ...formLines[2], parentIndex: null }] });
+  formedDetail = await call("GET", `/purchase-requisitions/${formed.id}`, "Requester");
+  formIds = formedDetail.lines.map((line: Json) => line.id);
+  assert.deepEqual(formedDetail.lines.map((line: Json) => [line.partNumber, line.parentLineId]), [["MANIFOLD-8", null], ["VALVE-A", formIds[0]], ["SILENCER", null]]);
+  await call("POST", `/purchase-requisitions/${formed.id}/cancel`, "Requester", { rowVersion: reworked.rowVersion, reason: "only for the form fields check" });
   console.log(`PASS: procurement API on LocalDB (1,000-line PR in ${elapsed} ms).`);
 } finally {
   await app.close(); await toolApp.close(); await excelApp.close();

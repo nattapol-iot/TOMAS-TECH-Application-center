@@ -275,6 +275,13 @@
 .pg-skin .pr-plan-table tfoot td { height: auto; padding: 0; border-top: 1px solid var(--pg-row-line); }
 .pg-skin .pr-add-line { display: flex; align-items: center; gap: 6px; width: 100%; height: 36px; padding: 0 12px; border: 0; background: none; color: var(--pg-muted-fg); font: inherit; font-size: 14px; cursor: pointer; }
 .pg-skin .pr-add-line:hover { background: var(--pg-accent); color: var(--pg-foreground); }
+/* The PR-Form's own columns widen the sheet, which then scrolls sideways; a part sits indented under the line it belongs to. */
+.pg-skin .pr-plan-table.with-form { min-width: 1986px; }
+.pg-skin .pr-plan-table tr.pr-part > td:nth-child(3) { padding-left: 26px; box-shadow: inset 3px 0 0 var(--pg-primary-10); }
+.pg-skin .pr-plan-table tr.pr-part > td.pg-in:nth-child(3) input { padding-left: 16px; }
+.pg-skin table:not(.pr-plan-table) tr.pr-part > td:nth-child(2) { padding-left: 26px; box-shadow: inset 3px 0 0 var(--pg-primary-10); }
+.pg-skin .pr-part-of { display: block; color: var(--pg-primary); font-size: 12px; line-height: 16px; overflow-wrap: anywhere; }
+.pg-skin .pg-act.on { background: var(--pg-primary-10); color: var(--pg-primary); }
 .pg-skin .pr-add-line:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--pg-ring); }
 
 /* The BOM's lines: a filter by module and section above them, and a tick column for the lines a PR should start with. */

@@ -2685,6 +2685,26 @@ export const GUIDES: readonly Guide[] = [
         missing: { th: "ปุ่มนี้ขึ้นเมื่อเลือก BOM แล้ว", en: "The button appears once a BOM is chosen.", jp: "BOMを選ぶとボタンが表示されます。" },
       },
       {
+        target: "pr.form-fields", action: "next", view: "purchase",
+        title: { th: "ช่องแบบ PR-Form", en: "The PR-Form's fields", jp: "PR-Formの項目" },
+        body: {
+          th: "กด 'ช่อง PR-Form' เพื่อเปิดคอลัมน์ วัสดุ การชุบ/ผิว รายละเอียดเพิ่ม วันที่ต้องการ และ Link แบบหรือใบเสนอราคา ของแต่ละรายการ วันที่ต้องการใส่เมื่อรายการนั้นต้องได้ก่อนวันที่ของใบ ภาพรวม Unit จะไล่ตามวันที่เร็วที่สุด ฝ่ายจัดซื้อเห็นช่องเหล่านี้ใน ERP",
+          en: "Press PR-Form fields to show each line's material, treatment, detail, needed-by date and a link to its drawing or quotation. Give a needed-by date when a line is needed before the request's date; the Unit overview chases the earliest one. Purchasing sees these fields in the ERP.",
+          jp: "「PR-Form項目」を押すと、各明細の材質・表面処理・詳細・必要日・図面または見積のリンク欄が表示されます。申請日より前に必要な明細には必要日を入れます。Unitの概要は最も早い日付を追います。購買はERPでこれらを確認できます。",
+        },
+        missing: { th: "ปุ่มนี้ขึ้นเมื่อเลือก BOM แล้ว", en: "The button appears once a BOM is chosen.", jp: "BOMを選ぶとボタンが表示されます。" },
+      },
+      {
+        target: "pr.part", action: "next", view: "purchase",
+        title: { th: "ชิ้นส่วนของรายการบน", en: "Parts of a line", jp: "上の行の部品" },
+        body: {
+          th: "เหมือนใน PR-Form รายการหนึ่งเป็นชิ้นส่วนของรายการด้านบนได้ เช่น valve ใต้ manifold กดปุ่มกิ่งท้ายแถว แถวจะเยื้องเข้าและบอกว่าเป็นส่วนของรายการไหน กดอีกครั้งเพื่อแยกออก ชิ้นส่วนยังมีจำนวนและราคาของตัวเองและถูกซื้อตามปกติ ชิ้นส่วนมีชิ้นส่วนซ้อนอีกไม่ได้",
+          en: "As on the PR-Form, a line can be a part of the line above it, such as valves under their manifold. Press the branch button at the end of the row: the row indents and says which line it belongs to. Press it again to make it a line of its own. A part keeps its own quantity and price and is bought like any other line; a part cannot have parts.",
+          jp: "PR-Formと同様に、明細を上の行の部品にできます（例：マニホールドの下のバルブ）。行末の分岐ボタンを押すと行が字下げされ、どの行の部品かが表示されます。もう一度押すと独立した行に戻ります。部品にも数量と価格があり通常どおり購入されます。部品の下に部品は付けられません。",
+        },
+        missing: { th: "ปุ่มนี้อยู่ท้ายแต่ละแถว เพิ่มแถวก่อน", en: "The button is at the end of every row; add a row first.", jp: "ボタンは各行の末尾にあります。先に行を追加してください。" },
+      },
+      {
         target: "pr.summary", action: "next", view: "purchase",
         title: { th: "ตรวจยอดและผู้อนุมัติ", en: "Check the total and approvers", jp: "合計と承認者を確認" },
         body: {

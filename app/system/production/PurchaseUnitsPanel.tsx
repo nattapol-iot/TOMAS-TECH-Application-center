@@ -92,7 +92,7 @@ export function PurchaseUnitsPanel({ projectId, canEdit, notify }: { projectId: 
           // The Unit's requests, under its row: what each asked for, when it is needed, and how many of its lines still wait.
           ...(open === unit.id ? (unit.requestList ?? []).map((item) => <tr key={`${unit.id}-${item.id}`} className="pr-unit-request">{canEdit ? <td /> : null}<td colSpan={2} className="muted"><LocalizedText text={item.status} /></td>
             <td colSpan={2} className="mono">{item.number}</td><td className="num muted">{item.lines} <LocalizedText text={"รายการ"} /></td><td className="num">{money(item.amount)}</td><td /><td />
-            <td>{waiting(item.waitingLines, item.requiredDate)}</td></tr>) : [])])}
+            <td>{waiting(item.waitingLines, item.needBy ?? item.requiredDate)}</td></tr>) : [])])}
           {data.units.length > 1 ? (() => { const all = unitTotals(data.units); return <tr className="pr-unit-total"><td colSpan={canEdit ? 5 : 4}><strong><LocalizedText text={"รวมทุก Unit"} /></strong></td>
             <td className="num"><strong>{money(all.budget)}</strong></td><td className="num"><strong>{money(all.requested)}</strong></td><td className="num"><strong>{money(all.ordered)}</strong></td>
             <td className="num">{all.remaining < 0 ? <Badge tone="red">{money(all.remaining)}</Badge> : <strong>{money(all.remaining)}</strong>}</td><td>{waiting(all.waitingLines, all.nearestNeedBy)}</td></tr>; })() : null}</tbody></table></div>

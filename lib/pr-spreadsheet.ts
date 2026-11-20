@@ -9,7 +9,12 @@ export type PrBomLine = { id: number; module: string; itemCode: string; partNumb
   sectionCode?: string };
 export type PrModuleBudget = { module: string; budget: number; requested: number };
 export type PrDraftRow = { key: string; selected: boolean; lineType: PrRowKind; bomLineId: number | null; module: string; itemCode: string; partNumber: string;
-  description: string; brand: string; unit: string; quantity: number; coveredQuantity: number | null; unitPrice: number; remark: string };
+  description: string; brand: string; unit: string; quantity: number; coveredQuantity: number | null; unitPrice: number; remark: string } & PrRowForm;
+/**
+ * What the team's PR-Form says of a line besides what is bought (migration 115). `parentKey` is the row this one is a part of: a row
+ * above it that is not itself a part.
+ */
+export type PrRowForm = { material?: string; treatment?: string; detail?: string; quantityPerSet?: number | null; needBy?: string; attachmentUrl?: string; parentKey?: string | null };
 export type PrModuleStatus = PrModuleBudget & { thisRequest: number; over: number; percent: number; level: "ok" | "manager" | "management"; lines: number };
 type Cell = string | number | null | undefined;
 
@@ -19,7 +24,7 @@ export const PR_MANAGEMENT_OVERRUN_PERCENT = 10;
 export const PR_MAX_QUANTITY = 1_000_000;
 export const PR_TEMPLATE_HEADER_ROW = 5;
 export const PR_TEMPLATE_HEADERS = ["Buy (Y/N)", "Item code", "Description", "Part No.", "Brand", "Module", "Type", "Qty", "Unit", "Unit price", "Remark",
-  "BOM line", "Estimate item", "Still to request", "Estimate unit price"];
+  "BOM line", "Estimate item", "Still to request", "Estimate unit price", "Material", "Treatment", "Detail", "Need by", "Link"];
 
 const text = (value: Cell) => value === null || value === undefined ? "" : String(value).trim();
 const same = (a: string, b: string) => a.trim().toLocaleLowerCase() === b.trim().toLocaleLowerCase();
@@ -31,6 +36,11 @@ const number = (value: Cell): number | null => {
   const parsed = Number(cleaned);
   return Number.isFinite(parsed) ? parsed : null;
 };
+/** A date cell as yyyy-mm-dd: Excel's day number (counted from 1899-12-30) or text already in that form; anything else is left out. */
+const dateText = (value: Cell): string => {
+  if (typeof value === "number" && value > 20000 && value < 80000) return new Date(Date.UTC(1899, 11, 30) + Math.floor(value) * 86_400_000).toISOString().slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}/.exec(text(value))?.[0] ?? "";
+};
 
 /** What the engineer starts from: every BOM line that still needs requesting, as its own estimate item, all ticked. */
 export function draftFromBom(lines: PrBomLine[]): PrDraftRow[] {
@@ -41,13 +51,17 @@ export function draftFromBom(lines: PrBomLine[]): PrDraftRow[] {
 
 /** A line of a saved PR, as GET /purchase-requisitions/:id returns it. */
 export type PrSavedLine = { id: number; lineType: PrRowKind; bomLineId: number | null; module: string; itemCode: string; partNumber: string; description: string;
-  brand: string; unit: string; quantity: number; coveredQuantity: number; unitPrice: number; remark: string | null };
+  brand: string; unit: string; quantity: number; coveredQuantity: number; unitPrice: number; remark: string | null;
+  material?: string | null; treatment?: string | null; detail?: string | null; quantityPerSet?: number | null; needBy?: string | null; attachmentUrl?: string | null;
+  parentLineId?: number | null };
 
 /** A draft reopened for editing: its own lines ticked as they were saved, then the BOM lines it does not request yet, unticked. */
 export function draftFromPr(saved: PrSavedLine[], lines: PrBomLine[]): PrDraftRow[] {
   const own: PrDraftRow[] = saved.map((line) => ({ key: `pr-${line.id}`, selected: true, lineType: line.lineType, bomLineId: line.bomLineId, module: line.module,
     itemCode: line.itemCode ?? "", partNumber: line.partNumber ?? "", description: line.description ?? "", brand: line.brand ?? "", unit: line.unit ?? "",
-    quantity: line.quantity, coveredQuantity: line.lineType === "Substitute" ? line.coveredQuantity : null, unitPrice: line.unitPrice, remark: line.remark ?? "" }));
+    quantity: line.quantity, coveredQuantity: line.lineType === "Substitute" ? line.coveredQuantity : null, unitPrice: line.unitPrice, remark: line.remark ?? "",
+    material: line.material ?? "", treatment: line.treatment ?? "", detail: line.detail ?? "", quantityPerSet: line.quantityPerSet ?? null, needBy: line.needBy ?? "",
+    attachmentUrl: line.attachmentUrl ?? "", parentKey: line.parentLineId ? `pr-${line.parentLineId}` : null }));
   const planned = new Set(saved.filter((line) => line.lineType === "Planned").map((line) => line.bomLineId));
   return [...own, ...draftFromBom(lines.filter((line) => !planned.has(line.id))).map((row) => ({ ...row, selected: false }))];
 }
@@ -83,6 +97,15 @@ export function draftIssues(rows: PrDraftRow[], lines: Map<number, PrBomLine>, m
     if (row.lineType === "Substitute" && !row.description && !row.partNumber && !row.itemCode) { issues.set(row.key, "Describe the substitute item"); continue; }
     covered.set(line.id, (covered.get(line.id) ?? 0) + takes);
   }
+  // A part needs the line it belongs to on the same request, above it; and a link is a web link.
+  const ticked = rows.filter((row) => row.selected);
+  ticked.forEach((row, index) => {
+    if (issues.has(row.key)) return;
+    if (row.attachmentUrl && !/^https?:\/\/\S+$/i.test(row.attachmentUrl.trim())) { issues.set(row.key, "A link must start with http:// or https://"); return; }
+    if (!row.parentKey) return;
+    const at = ticked.findIndex((item) => item.key === row.parentKey);
+    if (at < 0 || at >= index || ticked[at]!.parentKey) issues.set(row.key, "The line this part belongs to is not on this request");
+  });
   return issues;
 }
 
@@ -103,14 +126,40 @@ export function moduleStatus(rows: PrDraftRow[], budgets: PrModuleBudget[]): PrM
   }).sort((a, b) => a.module.localeCompare(b.module));
 }
 
-/** The request body's lines, ticked rows only, in screen order (the server's "Line n" counts these). */
+/**
+ * The request body's lines, ticked rows only, in screen order (the server's "Line n" counts these). A part names the line it belongs to by
+ * its place among these lines.
+ */
 export function payloadLines(rows: PrDraftRow[]) {
-  return rows.filter((row) => row.selected).map((row) => row.lineType === "Planned"
-    ? { lineType: "Planned", bomLineId: row.bomLineId, quantity: row.quantity, unitPrice: row.unitPrice, priceSource: "Estimate", remark: row.remark || undefined }
-    : { lineType: row.lineType, bomLineId: row.lineType === "Substitute" ? row.bomLineId : undefined, module: row.lineType === "Unplanned" ? row.module : undefined,
-      itemCode: row.itemCode || undefined, partNumber: row.partNumber || undefined, description: row.description || undefined, brand: row.brand || undefined,
-      unit: row.unit || undefined, quantity: row.quantity, coveredQuantity: row.lineType === "Substitute" ? row.coveredQuantity ?? undefined : undefined,
-      unitPrice: row.unitPrice, priceSource: "Manual", remark: row.remark || undefined });
+  const ticked = rows.filter((row) => row.selected), place = new Map(ticked.map((row, index) => [row.key, index]));
+  return ticked.map((row, index) => {
+    const parent = row.parentKey ? place.get(row.parentKey) : undefined;
+    const form = { material: row.material?.trim() || undefined, treatment: row.treatment?.trim() || undefined, detail: row.detail?.trim() || undefined,
+      quantityPerSet: row.quantityPerSet && row.quantityPerSet > 0 ? row.quantityPerSet : undefined, needBy: row.needBy || undefined, attachmentUrl: row.attachmentUrl?.trim() || undefined,
+      parentIndex: parent !== undefined && parent < index ? parent : undefined };
+    return row.lineType === "Planned"
+      ? { lineType: "Planned", bomLineId: row.bomLineId, quantity: row.quantity, unitPrice: row.unitPrice, priceSource: "Estimate", remark: row.remark || undefined, ...form }
+      : { lineType: row.lineType, bomLineId: row.lineType === "Substitute" ? row.bomLineId : undefined, module: row.lineType === "Unplanned" ? row.module : undefined,
+        itemCode: row.itemCode || undefined, partNumber: row.partNumber || undefined, description: row.description || undefined, brand: row.brand || undefined,
+        unit: row.unit || undefined, quantity: row.quantity, coveredQuantity: row.lineType === "Substitute" ? row.coveredQuantity ?? undefined : undefined,
+        unitPrice: row.unitPrice, priceSource: "Manual", remark: row.remark || undefined, ...form };
+  });
+}
+
+/** Rows a part belonged to are gone: their parts become lines of their own. */
+export function withoutRows(rows: PrDraftRow[], keys: Set<string>): PrDraftRow[] {
+  return rows.filter((row) => !keys.has(row.key)).map((row) => row.parentKey && keys.has(row.parentKey) ? { ...row, parentKey: null } : row);
+}
+
+/** Makes a row a part of the nearest row above it that is not a part itself, or makes a part a line of its own again. */
+export function togglePart(rows: PrDraftRow[], key: string): PrDraftRow[] {
+  const at = rows.findIndex((row) => row.key === key);
+  if (at < 0) return rows;
+  if (rows[at]!.parentKey) return rows.map((row, index) => index === at ? { ...row, parentKey: null } : row);
+  // A row that has parts of its own cannot become a part: the form has one level.
+  if (rows.some((row) => row.parentKey === key)) return rows;
+  const parent = rows.slice(0, at).reverse().find((row) => !row.parentKey);
+  return parent ? rows.map((row, index) => index === at ? { ...row, parentKey: parent.key } : row) : rows;
 }
 
 /**
@@ -128,7 +177,8 @@ export function templateRows(title: string, rows: PrDraftRow[], lines: Map<numbe
   const body = rows.map((row) => {
     const line = row.bomLineId === null ? undefined : lines.get(row.bomLineId);
     return [row.selected ? "Y" : "N", row.itemCode, row.description, row.partNumber, row.brand, row.module, row.lineType, row.quantity, row.unit, row.unitPrice, row.remark,
-      row.bomLineId ?? "", line ? (line.itemCode || line.partNumber || line.description) : "", line ? line.remaining : "", line ? line.estimatedUnitCost : ""];
+      row.bomLineId ?? "", line ? (line.itemCode || line.partNumber || line.description) : "", line ? line.remaining : "", line ? line.estimatedUnitCost : "",
+      row.material ?? "", row.treatment ?? "", row.detail ?? "", row.needBy ?? "", row.attachmentUrl ?? ""];
   });
   return [...notes, PR_TEMPLATE_HEADERS, ...body];
 }
@@ -150,6 +200,8 @@ const HEADER_ALIASES: Record<string, string[]> = {
   itemCode: ["item code", "item", "code", "รหัสสินค้า", "รหัส"], partNumber: ["part no.", "part no", "part number", "model/part number", "model", "part"],
   description: ["description", "item description", "รายละเอียด", "รายการ"], brand: ["brand", "maker", "ยี่ห้อ"], qty: ["qty", "quantity", "จำนวน"],
   unit: ["unit", "หน่วย"], unitPrice: ["unit price", "price", "ราคา/หน่วย", "ราคาต่อหน่วย"], remark: ["remark", "remarks", "note", "หมายเหตุ"],
+  material: ["material", "วัสดุ"], treatment: ["treatment", "surface treatment", "การชุบ"], detail: ["detail", "รายละเอียดเพิ่ม"], needBy: ["need by", "need-by", "need date", "วันที่ต้องการ"],
+  attachmentUrl: ["link", "url", "drawing link"],
 };
 const KIND_ALIASES: Record<PrRowKind, string[]> = { Planned: ["planned", "ตรงแผน"], Substitute: ["substitute", "ทดแทน"], Unplanned: ["unplanned", "นอกแผน"] };
 const kindOf = (value: Cell): PrRowKind | null => (Object.keys(KIND_ALIASES) as PrRowKind[]).find((kind) => KIND_ALIASES[kind].some((alias) => same(alias, text(value)))) ?? null;
@@ -169,7 +221,7 @@ export type SheetImport = { rows: PrDraftRow[]; format: "template" | "prform" | 
 
 /** One row read from a file, before it is tied to the BOM. */
 type SheetRecord = { key: string; buy: string; type: string; bomLine: number | null; module: string; itemCode: string; partNumber: string; description: string;
-  brand: string; quantity: number | null; unit: string; unitPrice: number | null; remark: string };
+  brand: string; quantity: number | null; unit: string; unitPrice: number | null; remark: string; form?: PrRowForm };
 
 /**
  * File rows as editor rows. A row is tied to a BOM line by the BOM line column, or else by an exact item code or part number. A tied row whose item
@@ -187,7 +239,7 @@ function draftFromRecords(records: SheetRecord[], lines: PrBomLine[], modules: s
     const declared = kindOf(record.type);
     const tied = byId.get(record.bomLine ?? -1) ?? (declared === "Unplanned" ? undefined : byCode(itemCode) ?? byCode(partNumber));
     const price = record.unitPrice;
-    const base = { key: record.key, selected: !["n", "no", "ไม่"].includes(record.buy.toLocaleLowerCase()), remark: record.remark, quantity, brand: record.brand, unit: record.unit };
+    const base = { key: record.key, selected: !["n", "no", "ไม่"].includes(record.buy.toLocaleLowerCase()), remark: record.remark, quantity, brand: record.brand, unit: record.unit, ...record.form };
     if (!tied) {
       result.push({ ...base, lineType: "Unplanned", bomLineId: null, module: moduleName(record.module), itemCode, partNumber, description, unitPrice: price ?? 0, coveredQuantity: null });
       continue;
@@ -216,14 +268,15 @@ export function draftFromSheet(rows: Cell[][], lines: PrBomLine[], modules: stri
   const records = rows.slice(start).map((row, offset): SheetRecord => ({ key: `xl-${start + offset + 1}`, buy: value(row, "buy"), type: value(row, "type"),
     bomLine: number(row[columns.bomLine ?? -1]), module: value(row, "module"), itemCode: value(row, "itemCode"), partNumber: value(row, "partNumber"),
     description: value(row, "description"), brand: value(row, "brand"), quantity: number(row[columns.qty!]), unit: value(row, "unit"),
-    unitPrice: number(row[columns.unitPrice ?? -1]), remark: value(row, "remark") }));
+    unitPrice: number(row[columns.unitPrice ?? -1]), remark: value(row, "remark"),
+    form: { material: value(row, "material"), treatment: value(row, "treatment"), detail: value(row, "detail"), needBy: dateText(row[columns.needBy ?? -1]), attachmentUrl: value(row, "attachmentUrl") } }));
   return draftFromRecords(records, lines, modules, columns.bomLine !== undefined ? "template" : "table");
 }
 
 /**
  * A PR-Form sheet, as lib/pr-form.ts reads it, as editor rows: every line that asks for something and is not cancelled or rejected, tied to the BOM
- * by its part number like any other import. A line the BOM does not have goes to `module` (the chosen Unit's Module) when there is one. What a
- * request has no field for yet (material, treatment, detail, and the line a part belongs to) is kept in the remark.
+ * by its part number like any other import. A line the BOM does not have goes to `module` (the chosen Unit's Module) when there is one. Material,
+ * treatment, detail, quantity per set and the line a part belongs to come with it.
  */
 export function draftFromPrForm(form: Pick<PrFormData, "lines">, lines: PrBomLine[], modules: string[], module = ""): SheetImport {
   const byRow = new Map(form.lines.map((line) => [line.row, line]));
@@ -231,16 +284,17 @@ export function draftFromPrForm(form: Pick<PrFormData, "lines">, lines: PrBomLin
   const records = form.lines.flatMap((line): SheetRecord[] => {
     if (line.poState === "Cancelled" || line.poState === "Rejected") { cancelled += 1; return []; }
     const parent = line.parentRow === null ? undefined : byRow.get(line.parentRow);
-    const remark = [line.remark, line.material && `Material ${line.material}`, line.treatment && `Treatment ${line.treatment}`, line.detail && `Detail ${line.detail}`,
-      parent && `Part of ${parent.partNumber || parent.description}`].filter(Boolean).join(" · ");
+    const kept = parent && parent.poState !== "Cancelled" && parent.poState !== "Rejected";
     return [{ key: `pf-${line.row}`, buy: "", type: "", bomLine: null, module, itemCode: "", partNumber: line.partNumber, description: line.description || line.partNumber,
-      brand: line.brand, quantity: line.quantity, unit: line.unit, unitPrice: line.unitPrice, remark }];
+      brand: line.brand, quantity: line.quantity, unit: line.unit, unitPrice: line.unitPrice, remark: line.remark,
+      form: { material: line.material, treatment: line.treatment, detail: line.detail, quantityPerSet: line.quantityPerSet, parentKey: kept ? `pf-${parent.row}` : null } }];
   });
   return { ...draftFromRecords(records, lines, modules, "prform"), cancelled };
 }
 
 /** An unplanned row nobody has typed into yet: the sheet adds these in bulk, and a save leaves them out. */
-export const isBlankPrRow = (row: PrDraftRow) => row.lineType === "Unplanned" && !row.itemCode && !row.partNumber && !row.description && !row.brand && !row.remark && !row.unitPrice;
+export const isBlankPrRow = (row: PrDraftRow) => row.lineType === "Unplanned" && !row.itemCode && !row.partNumber && !row.description && !row.brand && !row.remark && !row.unitPrice
+  && !row.material && !row.treatment && !row.detail && !row.attachmentUrl;
 
 /** Cells copied from Excel or Google Sheets: rows on line breaks, cells on tabs; the empty line a copy ends with is dropped. */
 export function clipboardRows(pasted: string): Cell[][] {

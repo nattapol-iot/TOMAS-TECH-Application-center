@@ -34,6 +34,8 @@ $unitsMigration = Join-Path $repoRoot 'database/migrations/113_purchase_units.sq
 $unitsRollback = Join-Path $repoRoot 'database/rollback/113_purchase_units.rollback.sql'
 $numbersMigration = Join-Path $repoRoot 'database/migrations/114_request_numbers.sql'
 $numbersRollback = Join-Path $repoRoot 'database/rollback/114_request_numbers.rollback.sql'
+$formMigration = Join-Path $repoRoot 'database/migrations/115_pr_line_form_fields.sql'
+$formRollback = Join-Path $repoRoot 'database/rollback/115_pr_line_form_fields.rollback.sql'
 $baselineFile = Join-Path ([IO.Path]::GetTempPath()) ('iot-procurement-baseline-' + $testSuffix + '.sql')
 $instanceCreated = $false
 
@@ -98,7 +100,16 @@ try {
     # 111 marked the legacy PRs the ERP already holds as PR and added the Request List columns and the orders table.
     # Its rollback script takes them away again, and 111 puts them back: both are run here so neither is untested SQL.
     # 112 only grants the app role the new line columns. Rollbacks go newest first: 111's refuses while 112 is applied.
-    Write-Output 'Checking migrations 111 to 114 again, their rollback scripts (newest first), and all four once more.'
+    Write-Output 'Checking migrations 111 to 115 again, their rollback scripts (newest first), and all five once more.'
+    # 115 added the PR-Form line fields and part lines. A legacy line is given a field and made a part of another line of its
+    # request first, so the rollback is run on data it must take away.
+    $formCheck = "IF COL_LENGTH(N'dbo.mat_pr_lines',N'material') IS NULL OR COL_LENGTH(N'dbo.mat_pr_lines',N'need_by') IS NULL OR COL_LENGTH(N'dbo.mat_pr_lines',N'parent_line_id') IS NULL OR OBJECT_ID(N'dbo.FK_mat_pr_lines_parent',N'F') IS NULL OR OBJECT_ID(N'dbo.CK_mat_pr_lines_form_fields',N'C') IS NULL OR NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name=N'UX_mat_pr_lines_id_pr') OR NOT EXISTS (SELECT 1 FROM dbo.schema_versions WHERE version=115) THROW 51999, 'Migration 115 is missing part of its change.', 1;"
+    Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-i', $formMigration)
+    Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-Q', $formCheck)
+    Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-Q', "DECLARE @pr bigint=(SELECT TOP(1) pr_id FROM dbo.mat_pr_lines GROUP BY pr_id HAVING COUNT(*)>1 ORDER BY pr_id); IF @pr IS NULL THROW 51999, 'No legacy request has two lines to make a part.', 1; UPDATE dbo.mat_pr_lines SET material=N'SS400', parent_line_id=(SELECT MIN(id) FROM dbo.mat_pr_lines WHERE pr_id=@pr) WHERE id=(SELECT MAX(id) FROM dbo.mat_pr_lines WHERE pr_id=@pr); IF @@ROWCOUNT<>1 THROW 51999, 'The legacy part was not set.', 1;")
+    Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-i', $formRollback)
+    Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-Q', "IF COL_LENGTH(N'dbo.mat_pr_lines',N'material') IS NOT NULL OR COL_LENGTH(N'dbo.mat_pr_lines',N'parent_line_id') IS NOT NULL OR OBJECT_ID(N'dbo.FK_mat_pr_lines_parent',N'F') IS NOT NULL OR EXISTS (SELECT 1 FROM sys.indexes WHERE name=N'UX_mat_pr_lines_id_pr') OR EXISTS (SELECT 1 FROM dbo.schema_versions WHERE version=115) OR (SELECT COUNT(*) FROM dbo.mat_pr_lines)=0 THROW 51999, 'The rollback of 115 left something behind or removed lines.', 1;")
+    Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-i', $formRollback)
     $numbersCheck = "IF COL_LENGTH(N'dbo.mat_prs',N'pr_no')<>100 OR COL_LENGTH(N'dbo.mat_prs',N'over_budget_reason') IS NULL OR OBJECT_ID(N'dbo.UQ_mat_prs_no',N'UQ') IS NULL OR NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name=N'IX_mat_prs_project_status') OR NOT EXISTS (SELECT 1 FROM dbo.schema_versions WHERE version=114) THROW 51999, 'Migration 114 did not widen pr_no to 50 characters, add the reason, keep the unique number or record its version.', 1;"
     Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-i', $numbersMigration)
     Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-Q', $numbersCheck)
@@ -128,6 +139,9 @@ try {
     Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-Q', $unitsCheck)
     Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-i', $numbersMigration)
     Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-Q', $numbersCheck)
+    Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-i', $formMigration)
+    Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-i', $formMigration)
+    Invoke-TestSql -SqlArguments @('-d', $upgradeDatabase, '-Q', $formCheck)
 
     Write-Output 'Checking the PR API on the upgraded database.'
     $env:PROCUREMENT_TEST_SERVER = $serverName

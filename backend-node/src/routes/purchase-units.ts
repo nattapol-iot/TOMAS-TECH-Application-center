@@ -81,17 +81,19 @@ export function registerPurchaseUnitRoutes(app: FastifyInstance, database: Datab
       // no PO for it; that is read from what was last synced, never by asking the ERP here.
       const lists = new sql.Request(transaction); lists.input("project", sql.BigInt, projectId);
       const requestRows = (await lists.query<Record<string, unknown>>(`SELECT pr.id,pr.unit_id,pr.pr_no,pr.status,pr.required_date,COALESCE(SUM(l.line_total),0) amount,COUNT(l.id) lines,
-          COALESCE(SUM(CASE WHEN pr.status IN(N'Draft',N'In Approval',N'Approved') AND (l.erp_line_status IS NULL OR l.erp_line_status IN(N'WAITING',N'IN_PR')) THEN 1 ELSE 0 END),0) waiting
+          COALESCE(SUM(CASE WHEN pr.status IN(N'Draft',N'In Approval',N'Approved') AND (l.erp_line_status IS NULL OR l.erp_line_status IN(N'WAITING',N'IN_PR')) THEN 1 ELSE 0 END),0) waiting,
+          -- A line may be needed before its request's date (its own need-by, migration 115); the earliest of what still waits counts.
+          MIN(CASE WHEN pr.status IN(N'Draft',N'In Approval',N'Approved') AND (l.erp_line_status IS NULL OR l.erp_line_status IN(N'WAITING',N'IN_PR')) THEN COALESCE(l.need_by,pr.required_date) END) need_by
         FROM dbo.mat_prs pr INNER JOIN dbo.project_purchase_units u ON u.id=pr.unit_id LEFT JOIN dbo.mat_pr_lines l ON l.pr_id=pr.id
         WHERE u.project_id=@project AND u.deleted_at IS NULL AND pr.deleted_at IS NULL AND pr.status IN(${REQUESTING_PR_STATUSES})
         GROUP BY pr.id,pr.unit_id,pr.pr_no,pr.status,pr.required_date ORDER BY pr.unit_id,pr.id;`)).recordset;
-      type UnitRequest = { id: number; number: string; status: string; requiredDate: string | null; amount: number; lines: number; waitingLines: number };
+      type UnitRequest = { id: number; number: string; status: string; requiredDate: string | null; needBy: string | null; amount: number; lines: number; waitingLines: number };
       const requestsOf = new Map<number, UnitRequest[]>();
       for (const row of requestRows) { const unitId = Number(row.unit_id); const list = requestsOf.get(unitId) ?? [];
-        list.push({ id: Number(row.id), number: String(row.pr_no), status: String(row.status), requiredDate: dateOnly(row.required_date as Date | string | null), amount: Number(row.amount), lines: Number(row.lines), waitingLines: Number(row.waiting) });
+        list.push({ id: Number(row.id), number: String(row.pr_no), status: String(row.status), requiredDate: dateOnly(row.required_date as Date | string | null), needBy: dateOnly(row.need_by as Date | string | null), amount: Number(row.amount), lines: Number(row.lines), waitingLines: Number(row.waiting) });
         requestsOf.set(unitId, list); }
       // The earliest date something still waiting is needed by: the one to chase first.
-      const nearest = (list: UnitRequest[]) => list.filter((item) => item.waitingLines > 0 && item.requiredDate).map((item) => item.requiredDate!).sort()[0] ?? null;
+      const nearest = (list: UnitRequest[]) => list.filter((item) => item.waitingLines > 0 && (item.needBy ?? item.requiredDate)).map((item) => (item.needBy ?? item.requiredDate)!).sort()[0] ?? null;
       const units = rows.map((row) => { const budget = Number(row.budget), requested = Number(row.requested);
         return { id: Number(row.id), module: String(row.module), discipline: String(row.discipline), drawingNo: String(row.drawing_no), unitName: String(row.unit_name), isGeneral: Boolean(row.is_general),
           budget, requests: Number(row.requests), requested, approved: Number(row.approved), ordered: Number(row.ordered), remaining: round2(budget - requested),

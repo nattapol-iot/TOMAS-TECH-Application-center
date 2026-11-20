@@ -10,7 +10,7 @@ import { readPrForm } from "../../../lib/pr-form";
 import { estimateBusinessDate } from "../../../lib/estimate-ux";
 import { type PurchaseUnits, unitLabel, unitOnSheet } from "../../../lib/purchase-units";
 import { addPastedRows, afterEdit, asPlanned, blankPrRows, draftFromPaste, draftFromPr, draftFromPrForm, draftFromSheet, draftIssues, insertBlankPrRow, isBlankPrRow, moduleStatus, payloadLines, rowFromBomLine, sheetRows, startingPrRows, templateRows,
-  type PrBomLine, type PrDraftRow, type PrModuleBudget, type PrModuleStatus, type PrRowKind, type PrSavedLine } from "../../../lib/pr-spreadsheet";
+  togglePart, withoutRows, type PrBomLine, type PrDraftRow, type PrModuleBudget, type PrModuleStatus, type PrRowKind, type PrSavedLine } from "../../../lib/pr-spreadsheet";
 import { useEndpoint } from "./material-endpoint";
 import { DateInput } from "../DateInput";
 
@@ -99,6 +99,9 @@ export function PurchaseRequestEditor({ released, editing, start, onClose, onCre
   const [pasting, setPasting] = useState(false);
   // The estimate's lines, for reference: open on a new PR, closed on a draft being corrected.
   const [showEstimate, setShowEstimate] = useState(!editing);
+  // The PR-Form's own columns (material, treatment, detail, need-by, link): shown on demand, and open on a draft that has any.
+  const [formChoice, setFormChoice] = useState<boolean | null>(null);
+  const showForm = formChoice ?? Boolean(editing?.lines.some((line) => line.material || line.treatment || line.detail || line.needBy || line.attachmentUrl));
   const sheet = useRef<HTMLDivElement>(null);
 
   // Blank rows wait to be typed into; they are not part of the PR until someone does.
@@ -261,6 +264,7 @@ export function PurchaseRequestEditor({ released, editing, start, onClose, onCre
           <button className="btn ghost" type="button" onClick={() => addUnplanned(1)} disabled={!modules.length}><Icon name="plus" /><LocalizedText text={"เพิ่มแถว"} /></button>
           <button className="btn ghost" type="button" onClick={() => addUnplanned(10)} disabled={!modules.length}><Icon name="plus" /><LocalizedText text={"เพิ่ม 10 แถว"} /></button>
           <button className="btn ghost" type="button" data-guide="pr.paste" aria-expanded={pasting} disabled={!modules.length} onClick={() => { setPasting(!pasting); window.setTimeout(() => pasteBox.current?.focus(), 0); }}><Icon name="copy" /><LocalizedText text={"วางจาก Excel"} /></button>
+          <button className="btn ghost" type="button" data-guide="pr.form-fields" aria-pressed={showForm} onClick={() => setFormChoice(!showForm)}><Icon name="table" /><LocalizedText text={"ช่อง PR-Form"} /></button>
           <button className="btn ghost" type="button" data-guide="pr.estimate" aria-expanded={showEstimate} disabled={!lines.size} onClick={() => setShowEstimate(!showEstimate)}><Icon name="layers" /><LocalizedText text={"รายการใน Estimate"} /> ({lines.size})</button>
           <span className="spacer" />
           <button className="btn ghost" type="button" onClick={download}><Icon name="download" /><LocalizedText text={"ดาวน์โหลด Excel"} /></button>
@@ -296,13 +300,16 @@ export function PurchaseRequestEditor({ released, editing, start, onClose, onCre
           <strong>Unit {unitLabel(unit)}</strong><span><LocalizedText text={"งบของ Unit"} /> {money(unitBudget.budget)}</span><span><LocalizedText text={"PR ก่อนหน้า"} /> {money(unitBudget.requestedElsewhere)}</span>
           <span><LocalizedText text={"PR นี้"} /> {money(unitBudget.thisRequest)}</span><span><LocalizedText text={"คงเหลือ"} /> <strong>{money(unitBudget.remaining)}</strong></span>
           {unitBudget.over ? <small><LocalizedText text={"เกินงบของ Unit ผู้อนุมัติต้องใส่เหตุผล"} /></small> : null}</div> : null}
-        {rows.length ? <div className="table-wrap tall" data-guide="pr.lines" ref={sheet}><table className="pr-plan-table">
+        {rows.length ? <div className="table-wrap tall" data-guide="pr.lines" ref={sheet}><table className={`pr-plan-table${showForm ? " with-form" : ""}`}>
           {/* An ERP line grid: fixed columns, the description takes what is left, and a control fills its cell. */}
-          <colgroup>{[84, 120, 130, 0, 84, 130, 92, 54, 104, 110, 110, 104].map((width, index) => <col key={index} style={width ? { width } : undefined} />)}</colgroup>
+          <colgroup>{[84, 120, 130, 0, 84, 130, 92, 54, 104, 110, ...(showForm ? [110, 110, 150, 140, 150] : []), 110, 128].map((width, index) => <col key={index} style={width ? { width } : undefined} />)}</colgroup>
           <thead><tr><th><LocalizedText text={"Source"} /></th>
           <th><LocalizedText text={"Item code"} /></th><th><LocalizedText text={"Part No."} /></th><th><LocalizedText text={"Description"} /></th><th><LocalizedText text={"Brand"} /></th>
           <th><LocalizedText text={"Module"} /></th><th className="num"><LocalizedText text={"Qty"} /></th><th><LocalizedText text={"Unit"} /></th><th className="num"><LocalizedText text={"ราคาประมาณ"} /></th>
-          <th className="num"><LocalizedText text={"มูลค่า"} /></th><th><LocalizedText text={"Remark"} /></th><th><span className="sr-only"><LocalizedText text={"Action"} /></span></th></tr></thead>
+          <th className="num"><LocalizedText text={"มูลค่า"} /></th>
+          {showForm ? <><th><LocalizedText text={"วัสดุ"} /></th><th><LocalizedText text={"การชุบ/ผิว"} /></th><th><LocalizedText text={"รายละเอียดเพิ่ม"} /></th>
+            <th><LocalizedText text={"ต้องการภายใน"} /></th><th><LocalizedText text={"Link แบบ/ใบเสนอราคา"} /></th></> : null}
+          <th><LocalizedText text={"Remark"} /></th><th><span className="sr-only"><LocalizedText text={"Action"} /></span></th></tr></thead>
           <tbody>{shown.map((row) => {
             const line = row.bomLineId === null ? undefined : lines.get(row.bomLineId);
             const issue = (serverIssue?.key === row.key ? serverIssue.message : undefined) ?? issues.get(row.key);
@@ -310,10 +317,14 @@ export function PurchaseRequestEditor({ released, editing, start, onClose, onCre
             const note = (field: string) => field === "description" && issue ? <small className="red-text" role="alert">{t(issue)}</small> : null;
             const cell = (field: "itemCode" | "partNumber" | "description" | "brand" | "unit", maxLength: number) =>
               <td className="pg-in"><input {...grid} maxLength={maxLength} value={row[field]} aria-label={t(FIELD_LABEL[field])} onChange={(event) => update(row.key, { [field]: event.target.value })} />{note(field)}</td>;
+            // The PR-Form's own fields, typed like the rest of the row.
+            const formCell = (field: "material" | "treatment" | "detail" | "attachmentUrl", maxLength: number, label: string) =>
+              <td className="pg-in"><input {...grid} maxLength={maxLength} value={row[field] ?? ""} aria-label={t(label)} onChange={(event) => update(row.key, { [field]: event.target.value })} /></td>;
+            const parent = row.parentKey ? rows.find((item) => item.key === row.parentKey) : undefined;
             const rowAction = (icon: "refresh" | "trash", label: string, onClick: () => void) => <button className={icon === "trash" ? "pg-act danger" : "pg-act"} type="button" title={t(label)} aria-label={t(label)} onClick={onClick}><Icon name={icon} /></button>;
-            return <tr key={row.key} data-row={row.key}>
+            return <tr key={row.key} data-row={row.key} className={parent ? "pr-part" : undefined}>
               {/* Where the row came from: typed in, or an estimate line (still its own item, or something bought in its place). */}
-              <td>{row.lineType === "Unplanned" ? (isBlankPrRow(row) ? null : <span className="muted"><LocalizedText text={"กรอกเอง"} /></span>) : <Badge tone={KIND_TONE[row.lineType]}>{t(KIND_LABEL[row.lineType])}</Badge>}{line?.sectionCode === "OUT" ? <small className="muted"><LocalizedText text={"Outsource"} /></small> : null}{row.lineType === "Substitute" && line ? <small className="muted"><LocalizedText text={"แทน"} /> {line.itemCode || line.partNumber || line.description}</small> : null}</td>
+              <td>{row.lineType === "Unplanned" ? (isBlankPrRow(row) ? null : <span className="muted"><LocalizedText text={"กรอกเอง"} /></span>) : <Badge tone={KIND_TONE[row.lineType]}>{t(KIND_LABEL[row.lineType])}</Badge>}{line?.sectionCode === "OUT" ? <small className="muted"><LocalizedText text={"Outsource"} /></small> : null}{row.lineType === "Substitute" && line ? <small className="muted"><LocalizedText text={"แทน"} /> {line.itemCode || line.partNumber || line.description}</small> : null}{parent ? <small className="pr-part-of"><LocalizedText text={"ส่วนของ"} /> {parent.partNumber || parent.description || parent.itemCode}</small> : null}</td>
               {cell("itemCode", 100)}{cell("partNumber", 200)}{cell("description", 500)}{cell("brand", 200)}
               {row.lineType === "Unplanned" ? <td className="pg-in"><select value={row.module} aria-label={t("Module")} onChange={(event) => update(row.key, { module: event.target.value })}>
                 <option value="">{t("Select…")}</option>{modules.map((name) => <option key={name} value={name}>{name}</option>)}</select></td> : <td>{row.module}</td>}
@@ -323,17 +334,22 @@ export function PurchaseRequestEditor({ released, editing, start, onClose, onCre
               <td className="pg-in num"><input {...grid} type="number" min="0" step="0.0001" value={row.unitPrice} aria-label={t("ราคาประมาณ/หน่วย")}
                 onChange={(event) => update(row.key, { unitPrice: Number(event.target.value) })} /></td>
               <td className="num">{money(row.quantity * row.unitPrice)}</td>
+              {showForm ? <>{formCell("material", 200, "วัสดุ")}{formCell("treatment", 200, "การชุบ/ผิว")}{formCell("detail", 500, "รายละเอียดเพิ่ม")}
+                <td className="pg-in"><input {...grid} type="date" value={row.needBy ?? ""} aria-label={t("ต้องการภายใน")} onChange={(event) => update(row.key, { needBy: event.target.value })} /></td>
+                {formCell("attachmentUrl", 500, "Link แบบ/ใบเสนอราคา")}</> : null}
               <td className="pg-in"><input {...grid} maxLength={500} value={row.remark} aria-label={t("Remark")} onChange={(event) => update(row.key, { remark: event.target.value })} /></td>
               {/* Add and remove sit in the same place on every row; the way back to the estimate's item follows when there is one. */}
               <td className="pg-acts">
                 <button className="pg-act" type="button" title={t("แทรกแถวใต้แถวนี้")} aria-label={t("แทรกแถวใต้แถวนี้")} onClick={() => insertBelow(row)}><Icon name="plus" /></button>
-                {rowAction("trash", "ลบแถว", () => setRows(rows.filter((item) => item.key !== row.key)))}
+                {/* A row becomes a part of the line above it (valves under their manifold), as on the PR-Form; pressed again it is a line of its own. */}
+                <button className={`pg-act${parent ? " on" : ""}`} type="button" data-guide="pr.part" aria-pressed={Boolean(parent)} title={t(parent ? "แยกเป็นรายการหลัก" : "เป็นชิ้นส่วนของแถวบน")} aria-label={t(parent ? "แยกเป็นรายการหลัก" : "เป็นชิ้นส่วนของแถวบน")} onClick={() => setRows(togglePart(rows, row.key))}><Icon name="gitBranch" /></button>
+                {rowAction("trash", "ลบแถว", () => setRows(withoutRows(rows, new Set([row.key]))))}
                 {row.lineType === "Substitute" && line ? rowAction("refresh", "ใช้ตาม Estimate", () => setRows(rows.map((item) => item.key === row.key ? asPlanned(row, line) : item))) : null}
               </td>
             </tr>;
           })}</tbody>
           {/* The table ends in an add-row line, so a new line is one press from where the engineer is typing. */}
-          {modules.length && currentPage === pageCount ? <tfoot><tr><td colSpan={12}><button className="pr-add-line" type="button" onClick={() => addUnplanned(1)}><Icon name="plus" /><LocalizedText text={"เพิ่มแถว"} /></button></td></tr></tfoot> : null}
+          {modules.length && currentPage === pageCount ? <tfoot><tr><td colSpan={showForm ? 17 : 12}><button className="pr-add-line" type="button" onClick={() => addUnplanned(1)}><Icon name="plus" /><LocalizedText text={"เพิ่มแถว"} /></button></td></tr></tfoot> : null}
           </table></div> : <EmptyState icon="layers" title="ยังไม่มีรายการในใบนี้" message="กด 'เพิ่มแถว' 'วางจาก Excel' หรือดึงจากรายการใน Estimate" />}
         {visible.length > pageSize ? <Pagination page={currentPage} pageCount={pageCount} from={(currentPage - 1) * pageSize + 1} to={Math.min(currentPage * pageSize, visible.length)} total={visible.length} onPage={setPage} /> : null}
         <div className="pr-plan-summary" aria-label={t("Purchase plan summary")} data-guide="pr.summary">

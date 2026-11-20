@@ -2,16 +2,16 @@
 
 [Module](../modules/procurement.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `60ea74be`; generated, do not edit. [backend-node/src/routes/purchase-units.ts](<../../../backend-node/src/routes/purchase-units.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `ab865b7c`; generated, do not edit. [backend-node/src/routes/purchase-units.ts](<../../../backend-node/src/routes/purchase-units.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/projects/:projectId/purchase-units` | 66–108 |
-| POST | `/api/v1/projects/:projectId/purchase-units` | 110–124 |
-| PUT | `/api/v1/purchase-units/:id` | 131–147 |
-| POST | `/api/v1/purchase-units/:id/remove` | 150–163 |
+| GET | `/api/v1/projects/:projectId/purchase-units` | 66–110 |
+| POST | `/api/v1/projects/:projectId/purchase-units` | 112–126 |
+| PUT | `/api/v1/purchase-units/:id` | 133–149 |
+| POST | `/api/v1/purchase-units/:id/remove` | 152–165 |
 
 ## Named functions
 
@@ -24,7 +24,7 @@ Evidence: source snapshot `60ea74be`; generated, do not edit. [backend-node/src/
 | `assertFits` | [backend-node/src/routes/purchase-units.ts](<../../../backend-node/src/routes/purchase-units.ts>) | 42–52 |
 | `assertNotTaken` | [backend-node/src/routes/purchase-units.ts](<../../../backend-node/src/routes/purchase-units.ts>) | 54–61 |
 | `duplicate` | [backend-node/src/routes/purchase-units.ts](<../../../backend-node/src/routes/purchase-units.ts>) | 62–62 |
-| `registerPurchaseUnitRoutes` | [backend-node/src/routes/purchase-units.ts](<../../../backend-node/src/routes/purchase-units.ts>) | 64–164 |
+| `registerPurchaseUnitRoutes` | [backend-node/src/routes/purchase-units.ts](<../../../backend-node/src/routes/purchase-units.ts>) | 64–166 |
 
 ## Direct local dependencies
 
