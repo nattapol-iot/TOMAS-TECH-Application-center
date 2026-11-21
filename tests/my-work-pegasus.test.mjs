@@ -46,7 +46,7 @@ test("a work group's header is its toggle, the focus task opens its update, and 
 
 test("the guide explains the summary bar, and the card rules use the Pegasus tokens", () => {
   const guides = read("app/system/production/guide-catalog.ts");
-  assert.match(guides, /target: "work\.summary", action: "next", view: "my-work"/);
+  assert.match(guides, /target: "work\.summary",\s*action: "next",\s*view: "my-work"/);
   const css = read("app/system/production/my-work.css");
   const pegasus = css.slice(css.indexOf("My Work in the Pegasus look"));
   assert.ok(pegasus.length > 1000);

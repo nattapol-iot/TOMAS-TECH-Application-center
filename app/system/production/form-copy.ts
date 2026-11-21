@@ -29,5 +29,11 @@ export const FORM_COPY: Record<string, { en: string; th: string; jp: string }> =
     ["Form.select", "Select", "เลือก", "選択"],
     ["Form.search", "Search...", "ค้นหา...", "検索..."],
     ["Form.noResults", "No results.", "ไม่พบรายการ", "該当する項目がありません"],
+    // The header funnel of a list (D.7 column filter, ColumnFilter.tsx); "{column}" is the column's name.
+    ["Form.filterColumn", "Filter {column}", "กรอง {column}", "{column}で絞り込む"],
+    ["Form.filterSearch", "Search {column}", "ค้นหา {column}", "{column}を検索"],
+    ["Form.filterAll", "All", "ทั้งหมด", "すべて"],
+    ["Form.filterClear", "Clear", "ล้างตัวกรอง", "クリア"],
+    ["Form.filterBlank", "(blank)", "(ว่าง)", "（空欄）"],
   ].map(([key, en, th, jp]) => [key, { en, th, jp }]),
 );

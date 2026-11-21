@@ -6,36 +6,109 @@ import type { Database } from "../db.js";
 import { canManageEngineeringRates } from "../engineering-rate-access.js";
 import { rolesOf } from "../user-roles.js";
 import { ApiError } from "../errors.js";
-import {
-  bodyObject,
-  booleanQuery,
-  dateOnly,
-  optionalBodyText,
-  optionalText,
-  parseDateOnly,
-  parseRowVersion,
-  positiveLong,
-  requiredInteger,
-  requiredText,
-} from "../http.js";
+import { bodyObject, booleanQuery, clampedInteger, dateOnly, optionalBodyText, optionalText, parseDateOnly, parseRowVersion, oneOf, positiveLong, requiredInteger, requiredText } from "../http.js";
 import type { CurrentUserService } from "../users.js";
 import { contactTitleInput, localizedNameInput, primaryCustomerContactApply, syncPrimaryCustomerContact } from "./sales-customers.js";
 
 type EmployeeRow = Record<string, unknown> & {
-  id: number | string; employee_no: number; name_en: string; name_th: string; department: string;
-  job_title: string; mobile: string; email: string; nickname: string; birth_date: Date | string | null;
-  uniform_size: string; shoe_size: string; start_work_date: Date | string | null; end_work_date: Date | string | null;
-  position: string; is_active: boolean; user_id: number | string | null; application_role: string | null;
-  account_active: boolean | null; daily_rate: number | string | null; updated_at: Date | string; row_version: Buffer; master_linked: boolean;
+  id: number | string;
+  employee_no: number;
+  name_en: string;
+  name_th: string;
+  department: string;
+  job_title: string;
+  mobile: string;
+  email: string;
+  nickname: string;
+  birth_date: Date | string | null;
+  uniform_size: string;
+  shoe_size: string;
+  start_work_date: Date | string | null;
+  end_work_date: Date | string | null;
+  position: string;
+  is_active: boolean;
+  user_id: number | string | null;
+  application_role: string | null;
+  account_active: boolean | null;
+  daily_rate: number | string | null;
+  updated_at: Date | string;
+  row_version: Buffer;
+  master_linked: boolean;
+};
+
+/**
+ * A column filter from the query (Pegasus 0.3, the header funnel): ?department=A&department=B arrives as an array. It goes to
+ * SQL as a JSON array for OPENJSON, or null when the column is not filtered. A blank value is a real value (a blank field).
+ */
+export function filterValues(value: unknown, maxLength: number, label: string): string | null {
+  const values = (Array.isArray(value) ? value : value === undefined || value === null ? [] : [value]).map((item) => String(item ?? "").trim());
+  if (!values.length) return null;
+  if (values.length > 100) throw new ApiError(400, "validation_failed", `${label} takes at most 100 values.`);
+  for (const item of values) if (item.length > maxLength) throw new ApiError(400, "validation_failed", `${label} cannot exceed ${maxLength} characters.`);
+  return JSON.stringify(values);
+}
+
+function filterChoices(value: unknown, label: string, allowed: readonly string[]): string | null {
+  const json = filterValues(value, 20, label);
+  if (json) for (const item of JSON.parse(json) as string[]) oneOf(item, label, allowed);
+  return json;
+}
+
+type FacetRow = { facet: string; value: string; count: number | string };
+const facetsOf = (rows: FacetRow[], names: readonly string[]) =>
+  Object.fromEntries(names.map((name) => [name, rows.filter((row) => row.facet === name).map((row) => ({ value: row.value, count: Number(row.count) }))]));
+
+type SupplierListRow = {
+  id: number | string;
+  code: string;
+  name: string;
+  category: string;
+  contact: string;
+  email: string;
+  phone: string;
+  brands_json: string;
+  erp_supplier_id: string | null;
+  total_count: number | string;
 };
 
 type EmployeeInput = {
-  employeeNo: number; nameEn: string; nameTh: string; department: string; jobTitle: string; mobile: string;
-  email: string; nickname: string; birthDate: string | null; uniformSize: string; shoeSize: string;
-  startWorkDate: string; endWorkDate: string | null; position: string; isActive: boolean;
+  employeeNo: number;
+  nameEn: string;
+  nameTh: string;
+  department: string;
+  jobTitle: string;
+  mobile: string;
+  email: string;
+  nickname: string;
+  birthDate: string | null;
+  uniformSize: string;
+  shoeSize: string;
+  startWorkDate: string;
+  endWorkDate: string | null;
+  position: string;
+  isActive: boolean;
 };
 
-type CustomerInput = { contactTitleTh: string; contactTitleEn: string; contactTitleJa: string; code: string; name: string; nameTh: string; nameEn: string; nameJa: string; contact: string; contactNameTh: string; contactNameEn: string; contactNameJa: string; email: string; phone: string; industry: string; site: string; department: string; position: string };
+type CustomerInput = {
+  contactTitleTh: string;
+  contactTitleEn: string;
+  contactTitleJa: string;
+  code: string;
+  name: string;
+  nameTh: string;
+  nameEn: string;
+  nameJa: string;
+  contact: string;
+  contactNameTh: string;
+  contactNameEn: string;
+  contactNameJa: string;
+  email: string;
+  phone: string;
+  industry: string;
+  site: string;
+  department: string;
+  position: string;
+};
 const EXCLUSIVE_MAXIMUM_DECIMAL_19_SCALE_4 = 1_000_000_000_000_000;
 
 function validation(message: string): ApiError {
@@ -52,7 +125,7 @@ function requiredCode(value: unknown, label: string, maximumLength: number): str
 
 function email(value: unknown, required: boolean): string {
   const normalized = required ? requiredText(value, 256, "Email").toLowerCase() : (optionalBodyText(value, 256, "Email") ?? "");
-  if (normalized && (!/^[^\s<>(),;:@]+(?:\.[^\s<>(),;:@]+)*@[^\s<>(),;:@]+(?:\.[^\s<>(),;:@]+)+$/.test(normalized))) {
+  if (normalized && !/^[^\s<>(),;:@]+(?:\.[^\s<>(),;:@]+)*@[^\s<>(),;:@]+(?:\.[^\s<>(),;:@]+)+$/.test(normalized)) {
     throw validation("Email must be a valid address without a display name.");
   }
   return normalized;
@@ -68,7 +141,7 @@ function nonnegativeDecimal(value: unknown, label: string): number {
   if (value < 0) throw validation(`${label} cannot be negative.`);
   if (value >= EXCLUSIVE_MAXIMUM_DECIMAL_19_SCALE_4) throw validation(`${label} exceeds the supported amount.`);
   const text = value.toString();
-  const fraction = text.includes(".") ? text.split(".")[1] ?? "" : "";
+  const fraction = text.includes(".") ? (text.split(".")[1] ?? "") : "";
   if (!text.includes("e") && fraction.length > 4) throw validation(`${label} cannot have more than four decimal places.`);
   return value;
 }
@@ -81,7 +154,10 @@ function normalizedBrands(value: unknown): string[] {
   for (const item of value) {
     const brand = requiredText(item, 100, "Brand");
     const key = brand.toLocaleLowerCase("en-US");
-    if (!seen.has(key)) { seen.add(key); values.push(brand); }
+    if (!seen.has(key)) {
+      seen.add(key);
+      values.push(brand);
+    }
   }
   return values;
 }
@@ -113,23 +189,33 @@ function employeeInput(body: Record<string, unknown>): EmployeeInput {
 }
 
 function bindEmployee(request: SqlRequestType, input: EmployeeInput, userId: number | null): void {
-  request.input("employee_no", sql.Int, input.employeeNo); request.input("name_en", sql.NVarChar(200), input.nameEn);
-  request.input("name_th", sql.NVarChar(200), input.nameTh); request.input("department", sql.NVarChar(100), input.department);
-  request.input("job_title", sql.NVarChar(500), input.jobTitle); request.input("mobile", sql.NVarChar(50), input.mobile);
-  request.input("email", sql.NVarChar(256), input.email); request.input("nickname", sql.NVarChar(100), input.nickname);
-  request.input("birth_date", sql.Date, input.birthDate); request.input("uniform_size", sql.NVarChar(50), input.uniformSize);
-  request.input("shoe_size", sql.NVarChar(50), input.shoeSize); request.input("start_work_date", sql.Date, input.startWorkDate);
-  request.input("end_work_date", sql.Date, input.endWorkDate); request.input("position", sql.NVarChar(100), input.position);
-  request.input("user_id", sql.BigInt, userId); request.input("is_active", sql.Bit, input.isActive);
+  request.input("employee_no", sql.Int, input.employeeNo);
+  request.input("name_en", sql.NVarChar(200), input.nameEn);
+  request.input("name_th", sql.NVarChar(200), input.nameTh);
+  request.input("department", sql.NVarChar(100), input.department);
+  request.input("job_title", sql.NVarChar(500), input.jobTitle);
+  request.input("mobile", sql.NVarChar(50), input.mobile);
+  request.input("email", sql.NVarChar(256), input.email);
+  request.input("nickname", sql.NVarChar(100), input.nickname);
+  request.input("birth_date", sql.Date, input.birthDate);
+  request.input("uniform_size", sql.NVarChar(50), input.uniformSize);
+  request.input("shoe_size", sql.NVarChar(50), input.shoeSize);
+  request.input("start_work_date", sql.Date, input.startWorkDate);
+  request.input("end_work_date", sql.Date, input.endWorkDate);
+  request.input("position", sql.NVarChar(100), input.position);
+  request.input("user_id", sql.BigInt, userId);
+  request.input("is_active", sql.Bit, input.isActive);
 }
 
 async function syncEmployeeDirectoryUser(transaction: TransactionType, employeeId: number): Promise<Buffer> {
   const request = new sql.Request(transaction);
   request.input("employee_id", sql.BigInt, employeeId);
-  const row = (await request.query<{ row_version: Buffer }>(`
+  const row = (
+    await request.query<{ row_version: Buffer }>(`
     EXEC dbo.sync_employee_directory_user @employee_id=@employee_id;
     SELECT row_version FROM dbo.employees WHERE id=@employee_id AND deleted_at IS NULL;
-  `)).recordset[0];
+  `)
+  ).recordset[0];
   if (!row) throw new Error("The synchronized employee was not found.");
   return row.row_version;
 }
@@ -144,8 +230,13 @@ export function customerInput(body: Record<string, unknown>): CustomerInput {
   const input = {
     code: requiredCode(body.code, "Customer code", 30),
     ...companyNames,
-    contactTitleTh: titles.titleTh, contactTitleEn: titles.titleEn, contactTitleJa: titles.titleJa,
-    contact: contactNames.name, contactNameTh: contactNames.nameTh, contactNameEn: contactNames.nameEn, contactNameJa: contactNames.nameJa,
+    contactTitleTh: titles.titleTh,
+    contactTitleEn: titles.titleEn,
+    contactTitleJa: titles.titleJa,
+    contact: contactNames.name,
+    contactNameTh: contactNames.nameTh,
+    contactNameEn: contactNames.nameEn,
+    contactNameJa: contactNames.nameJa,
     email: email(body.email, false),
     phone: optionalBodyText(body.phone, 100, "Phone") ?? "",
     industry: optionalBodyText(body.industry, 200, "Industry") ?? "",
@@ -153,15 +244,21 @@ export function customerInput(body: Record<string, unknown>): CustomerInput {
     department: optionalBodyText(body.department, 200, "Department") ?? "",
     position: optionalBodyText(body.position, 200, "Position") ?? "",
   };
-  if (!input.contact && (input.department || input.position || input.contactTitleTh || input.contactTitleEn || input.contactTitleJa)) throw validation("Enter the contact name when providing contact titles, department or position.");
+  if (!input.contact && (input.department || input.position || input.contactTitleTh || input.contactTitleEn || input.contactTitleJa))
+    throw validation("Enter the contact name when providing contact titles, department or position.");
   return input;
 }
 
 function bindCustomer(request: SqlRequestType, input: CustomerInput): void {
-  request.input("code", sql.NVarChar(30), input.code); request.input("name", sql.NVarChar(300), input.name);
-  request.input("name_th", sql.NVarChar(300), input.nameTh); request.input("name_en", sql.NVarChar(300), input.nameEn); request.input("name_ja", sql.NVarChar(300), input.nameJa);
-  request.input("contact", sql.NVarChar(200), input.contact); request.input("email", sql.NVarChar(256), input.email);
-  request.input("phone", sql.NVarChar(100), input.phone); request.input("industry", sql.NVarChar(200), input.industry);
+  request.input("code", sql.NVarChar(30), input.code);
+  request.input("name", sql.NVarChar(300), input.name);
+  request.input("name_th", sql.NVarChar(300), input.nameTh);
+  request.input("name_en", sql.NVarChar(300), input.nameEn);
+  request.input("name_ja", sql.NVarChar(300), input.nameJa);
+  request.input("contact", sql.NVarChar(200), input.contact);
+  request.input("email", sql.NVarChar(256), input.email);
+  request.input("phone", sql.NVarChar(100), input.phone);
+  request.input("industry", sql.NVarChar(200), input.industry);
   request.input("site", sql.NVarChar(300), input.site);
 }
 
@@ -172,7 +269,16 @@ export function registerMasterRoutes(app: FastifyInstance, database: Database, u
     const query = request.query as Record<string, unknown>;
     const search = optionalText(query.search, 200, "Search") ?? "";
     const activeOnly = booleanQuery(query.activeOnly, false);
-    const result = await database.query<EmployeeRow>(`
+    // The Employees screen asks for one page at a time with its column filters (Pegasus 0.3); the screens that pick a
+    // person still read the whole register (no page parameter) and get the plain list.
+    const paged = query.page !== undefined;
+    const page = clampedInteger(query.page, 1, 1, 1_000_000);
+    const pageSize = clampedInteger(query.pageSize, 50, 1, 100);
+    const statuses = paged ? filterChoices(query.status, "Status", ["active", "inactive"]) : null;
+    const departments = paged ? filterValues(query.department, 200, "Department") : null;
+    const positions = paged ? filterValues(query.position, 200, "Level") : null;
+    const result = await database.query<EmployeeRow & { total_count: number | string }>(
+      `
       DECLARE @include_private bit=CASE WHEN EXISTS(
         SELECT 1 FROM dbo.user_effective_permissions
         WHERE user_id=@actor AND code=N'master.write') THEN 1 ELSE 0 END;
@@ -191,7 +297,8 @@ export function registerMasterRoutes(app: FastifyInstance, database: Database, u
         app_user.is_active AS account_active,
         rate.engineering_daily AS daily_rate,
         employee.updated_at,employee.row_version,
-        CONVERT(bit, CASE WHEN employee.master_lineworks_id IS NULL THEN 0 ELSE 1 END) AS master_linked
+        CONVERT(bit, CASE WHEN employee.master_lineworks_id IS NULL THEN 0 ELSE 1 END) AS master_linked,
+        COUNT_BIG(*) OVER() AS total_count
       FROM dbo.employees employee
       LEFT JOIN dbo.users app_user ON app_user.deleted_at IS NULL AND
         ((employee.user_id IS NOT NULL AND app_user.id=employee.user_id) OR (employee.user_id IS NULL AND app_user.email=employee.email))
@@ -206,22 +313,71 @@ export function registerMasterRoutes(app: FastifyInstance, database: Database, u
           OR employee.nickname LIKE N'%'+@search+N'%' OR employee.email LIKE N'%'+@search+N'%'
           OR employee.department LIKE N'%'+@search+N'%' OR employee.position LIKE N'%'+@search+N'%'
           OR CONVERT(nvarchar(20),employee.employee_no)=@search)
-      ORDER BY employee.is_active DESC,employee.employee_no;
-    `, (sqlRequest) => {
-      sqlRequest.input("search", sql.NVarChar(200), search);
-      sqlRequest.input("active_only", sql.Bit, activeOnly);
-      sqlRequest.input("actor", sql.BigInt, actor.id);
-    });
-    return result.recordset.map((row) => ({
-      id: Number(row.id), employeeNo: row.employee_no, nameEn: row.name_en, nameTh: row.name_th,
-      department: row.department, jobTitle: row.job_title, mobile: row.mobile, email: row.email,
-      nickname: row.nickname, birthDate: dateOnly(row.birth_date), uniformSize: row.uniform_size,
-      shoeSize: row.shoe_size, startWorkDate: dateOnly(row.start_work_date), endWorkDate: dateOnly(row.end_work_date),
-      position: row.position, isActive: Boolean(row.is_active), userId: row.user_id === null ? null : Number(row.user_id),
-      applicationRole: row.application_role, accountActive: row.account_active === null ? null : Boolean(row.account_active),
-      dailyRate: row.daily_rate === null ? null : Number(row.daily_rate), updatedAt: row.updated_at,
-      rowVersion: row.row_version.toString("base64"), masterLinked: Boolean(row.master_linked),
+        AND (@statuses IS NULL OR (CASE WHEN employee.is_active=1 THEN N'active' ELSE N'inactive' END)
+          IN (SELECT value FROM OPENJSON(@statuses) WITH (value nvarchar(20) '$')))
+        AND (@departments IS NULL OR employee.department IN (SELECT value FROM OPENJSON(@departments) WITH (value nvarchar(200) '$')))
+        AND (@positions IS NULL OR employee.position IN (SELECT value FROM OPENJSON(@positions) WITH (value nvarchar(200) '$')))
+      ORDER BY employee.is_active DESC,employee.employee_no${paged ? ",employee.id OFFSET @offset ROWS FETCH NEXT @page_size ROWS ONLY" : ""};
+      ${
+        paged
+          ? `SELECT N'status' AS facet, CASE WHEN is_active=1 THEN N'active' ELSE N'inactive' END AS value, COUNT_BIG(*) AS count
+        FROM dbo.employees WHERE deleted_at IS NULL GROUP BY is_active
+      UNION ALL SELECT N'department', department, COUNT_BIG(*) FROM dbo.employees WHERE deleted_at IS NULL GROUP BY department
+      UNION ALL SELECT N'position', position, COUNT_BIG(*) FROM dbo.employees WHERE deleted_at IS NULL GROUP BY position
+      UNION ALL SELECT N'account', account, COUNT_BIG(*) FROM (
+        SELECT CASE WHEN EXISTS(SELECT 1 FROM dbo.users app_user WHERE app_user.deleted_at IS NULL AND
+          ((employee.user_id IS NOT NULL AND app_user.id=employee.user_id) OR (employee.user_id IS NULL AND app_user.email=employee.email)))
+          THEN N'linked' ELSE N'none' END AS account
+        FROM dbo.employees employee WHERE employee.deleted_at IS NULL) accounts GROUP BY account
+      ORDER BY facet, value;`
+          : ""
+      }
+    `,
+      (sqlRequest) => {
+        sqlRequest.input("search", sql.NVarChar(200), search);
+        sqlRequest.input("active_only", sql.Bit, activeOnly);
+        sqlRequest.input("actor", sql.BigInt, actor.id);
+        sqlRequest.input("statuses", sql.NVarChar(sql.MAX), statuses);
+        sqlRequest.input("departments", sql.NVarChar(sql.MAX), departments);
+        sqlRequest.input("positions", sql.NVarChar(sql.MAX), positions);
+        sqlRequest.input("offset", sql.BigInt, (page - 1) * pageSize);
+        sqlRequest.input("page_size", sql.Int, pageSize);
+      },
+    );
+    const items = result.recordset.map((row) => ({
+      id: Number(row.id),
+      employeeNo: row.employee_no,
+      nameEn: row.name_en,
+      nameTh: row.name_th,
+      department: row.department,
+      jobTitle: row.job_title,
+      mobile: row.mobile,
+      email: row.email,
+      nickname: row.nickname,
+      birthDate: dateOnly(row.birth_date),
+      uniformSize: row.uniform_size,
+      shoeSize: row.shoe_size,
+      startWorkDate: dateOnly(row.start_work_date),
+      endWorkDate: dateOnly(row.end_work_date),
+      position: row.position,
+      isActive: Boolean(row.is_active),
+      userId: row.user_id === null ? null : Number(row.user_id),
+      applicationRole: row.application_role,
+      accountActive: row.account_active === null ? null : Boolean(row.account_active),
+      dailyRate: row.daily_rate === null ? null : Number(row.daily_rate),
+      updatedAt: row.updated_at,
+      rowVersion: row.row_version.toString("base64"),
+      masterLinked: Boolean(row.master_linked),
     }));
+    if (!paged) return items;
+    const facets = ((result.recordsets as unknown as unknown[][])[1] as FacetRow[] | undefined) ?? [];
+    return {
+      items,
+      total: Number(result.recordset[0]?.total_count ?? 0),
+      page,
+      pageSize,
+      facets: facetsOf(facets, ["status", "department", "position", "account"]),
+    };
   });
 
   app.post("/api/v1/master/employees", async (request, reply) => {
@@ -229,14 +385,18 @@ export function registerMasterRoutes(app: FastifyInstance, database: Database, u
     const actor = await users.required(request);
     const input = employeeInput(bodyObject(request.body));
     const created = await database.transaction(async (transaction) => {
-      const insert = new sql.Request(transaction); bindEmployee(insert, input, null); insert.input("actor", sql.BigInt, actor.id);
-      const row = (await insert.query<{ id: number | string; row_version: Buffer }>(`
+      const insert = new sql.Request(transaction);
+      bindEmployee(insert, input, null);
+      insert.input("actor", sql.BigInt, actor.id);
+      const row = (
+        await insert.query<{ id: number | string; row_version: Buffer }>(`
         INSERT INTO dbo.employees (employee_no,name_en,name_th,department,job_title,mobile,email,nickname,birth_date,
           uniform_size,shoe_size,start_work_date,end_work_date,position,user_id,is_active,created_by,updated_by)
         OUTPUT inserted.id,inserted.row_version VALUES (@employee_no,@name_en,@name_th,@department,@job_title,@mobile,
           @email,@nickname,@birth_date,@uniform_size,@shoe_size,@start_work_date,@end_work_date,@position,@user_id,
           @is_active,@actor,@actor);
-      `)).recordset[0]!;
+      `)
+      ).recordset[0]!;
       const id = Number(row.id);
       const synchronizedRowVersion = await syncEmployeeDirectoryUser(transaction, id);
       await insertAudit(transaction, actor.id, "Employee", id, String(input.employeeNo), "Created", null, input);
@@ -253,23 +413,31 @@ export function registerMasterRoutes(app: FastifyInstance, database: Database, u
     const input = employeeInput(body);
     const rowVersion = parseRowVersion(body.rowVersion);
     return database.transaction(async (transaction) => {
-      const beforeRequest = new sql.Request(transaction); beforeRequest.input("id", sql.BigInt, id);
-      const before = (await beforeRequest.query<EmployeeInput & Record<string, unknown>>(`
+      const beforeRequest = new sql.Request(transaction);
+      beforeRequest.input("id", sql.BigInt, id);
+      const before = (
+        await beforeRequest.query<EmployeeInput & Record<string, unknown>>(`
         SELECT employee_no AS employeeNo,name_en AS nameEn,name_th AS nameTh,department,job_title AS jobTitle,
           mobile,email,nickname,birth_date AS birthDate,uniform_size AS uniformSize,shoe_size AS shoeSize,
           start_work_date AS startWorkDate,end_work_date AS endWorkDate,position,is_active AS isActive
         FROM dbo.employees WITH (UPDLOCK,HOLDLOCK) WHERE id=@id AND deleted_at IS NULL;
-      `)).recordset[0];
+      `)
+      ).recordset[0];
       if (!before) throw new ApiError(404, "employee_not_found", "Employee was not found.");
-      const update = new sql.Request(transaction); bindEmployee(update, input, null);
-      update.input("actor", sql.BigInt, actor.id); update.input("id", sql.BigInt, id); update.input("row_version", sql.VarBinary(8), rowVersion);
-      const updated = (await update.query<{ row_version: Buffer }>(`
+      const update = new sql.Request(transaction);
+      bindEmployee(update, input, null);
+      update.input("actor", sql.BigInt, actor.id);
+      update.input("id", sql.BigInt, id);
+      update.input("row_version", sql.VarBinary(8), rowVersion);
+      const updated = (
+        await update.query<{ row_version: Buffer }>(`
         UPDATE dbo.employees SET employee_no=@employee_no,name_en=@name_en,name_th=@name_th,department=@department,
           job_title=@job_title,mobile=@mobile,email=@email,nickname=@nickname,birth_date=@birth_date,
           uniform_size=@uniform_size,shoe_size=@shoe_size,start_work_date=@start_work_date,end_work_date=@end_work_date,
           position=@position,is_active=@is_active,updated_by=@actor,updated_at=SYSUTCDATETIME()
         OUTPUT inserted.row_version WHERE id=@id AND deleted_at IS NULL AND row_version=@row_version;
-      `)).recordset[0];
+      `)
+      ).recordset[0];
       if (!updated) throw new ApiError(409, "concurrency_conflict", "This employee changed. Reload and try again.");
       const synchronizedRowVersion = await syncEmployeeDirectoryUser(transaction, id);
       await insertAudit(transaction, actor.id, "Employee", id, String(input.employeeNo), "Updated", before, input);
@@ -282,16 +450,48 @@ export function registerMasterRoutes(app: FastifyInstance, database: Database, u
     const actor = await users.required(request);
     const input = customerInput(bodyObject(request.body));
     const created = await database.transaction(async (transaction) => {
-      const insert = new sql.Request(transaction); bindCustomer(insert, input); insert.input("actor", sql.BigInt, actor.id);
-      const row = (await insert.query<{ id: number | string; code: string; name: string; row_version: Buffer }>(`
+      const insert = new sql.Request(transaction);
+      bindCustomer(insert, input);
+      insert.input("actor", sql.BigInt, actor.id);
+      const row = (
+        await insert.query<{ id: number | string; code: string; name: string; row_version: Buffer }>(`
         INSERT INTO dbo.customers (code,name,name_th,name_en,name_ja,contact,email,phone,industry,site,created_by,updated_by)
         OUTPUT inserted.id,inserted.code,inserted.name,inserted.row_version
         VALUES (@code,@name,@name_th,@name_en,@name_ja,@contact,@email,@phone,@industry,@site,@actor,@actor);
-      `)).recordset[0]!;
+      `)
+      ).recordset[0]!;
       const id = Number(row.id);
-      await syncPrimaryCustomerContact(transaction, actor.id, id, { name: input.contact, titleTh: input.contactTitleTh, titleEn: input.contactTitleEn, titleJa: input.contactTitleJa, nameTh: input.contactNameTh, nameEn: input.contactNameEn, nameJa: input.contactNameJa, email: input.email, phone: input.phone, department: input.department, position: input.position });
+      await syncPrimaryCustomerContact(transaction, actor.id, id, {
+        name: input.contact,
+        titleTh: input.contactTitleTh,
+        titleEn: input.contactTitleEn,
+        titleJa: input.contactTitleJa,
+        nameTh: input.contactNameTh,
+        nameEn: input.contactNameEn,
+        nameJa: input.contactNameJa,
+        email: input.email,
+        phone: input.phone,
+        department: input.department,
+        position: input.position,
+      });
       await insertAudit(transaction, actor.id, "Customer", id, row.code, "Created", null, input);
-      return { id, code: row.code, name: row.name, nameTh: input.nameTh, nameEn: input.nameEn, nameJa: input.nameJa, contactTitleTh: input.contactTitleTh, contactTitleEn: input.contactTitleEn, contactTitleJa: input.contactTitleJa, contactNameTh: input.contactNameTh, contactNameEn: input.contactNameEn, contactNameJa: input.contactNameJa, department: input.department, position: input.position, rowVersion: row.row_version.toString("base64") };
+      return {
+        id,
+        code: row.code,
+        name: row.name,
+        nameTh: input.nameTh,
+        nameEn: input.nameEn,
+        nameJa: input.nameJa,
+        contactTitleTh: input.contactTitleTh,
+        contactTitleEn: input.contactTitleEn,
+        contactTitleJa: input.contactTitleJa,
+        contactNameTh: input.contactNameTh,
+        contactNameEn: input.contactNameEn,
+        contactNameJa: input.contactNameJa,
+        department: input.department,
+        position: input.position,
+        rowVersion: row.row_version.toString("base64"),
+      };
     }, sql.ISOLATION_LEVEL.READ_COMMITTED);
     return reply.status(201).header("Location", `/api/v1/master/customers/${created.id}`).send(created);
   });
@@ -304,14 +504,17 @@ export function registerMasterRoutes(app: FastifyInstance, database: Database, u
     const input = customerInput(body);
     const rowVersion = parseRowVersion(body.rowVersion);
     return database.transaction(async (transaction) => {
-      const beforeRequest = new sql.Request(transaction); beforeRequest.input("id", sql.BigInt, id);
-      const before = (await beforeRequest.query<CustomerInput & { erpCode: string | null }>(`
+      const beforeRequest = new sql.Request(transaction);
+      beforeRequest.input("id", sql.BigInt, id);
+      const before = (
+        await beforeRequest.query<CustomerInput & { erpCode: string | null }>(`
         SELECT c.erp_customer_code AS erpCode,c.code,c.name,c.name_th AS nameTh,c.name_en AS nameEn,c.name_ja AS nameJa,c.contact,c.email,c.phone,c.industry,c.site,
           COALESCE(primary_contact.title_th,N'') contactTitleTh,COALESCE(primary_contact.title_en,N'') contactTitleEn,COALESCE(primary_contact.title_ja,N'') contactTitleJa,COALESCE(primary_contact.name_th,N'') contactNameTh,COALESCE(primary_contact.name_en,N'') contactNameEn,COALESCE(primary_contact.name_ja,N'') contactNameJa,
           COALESCE(primary_contact.department,N'') department,COALESCE(primary_contact.position,N'') position
         FROM dbo.customers c WITH (UPDLOCK,HOLDLOCK) ${primaryCustomerContactApply}
         WHERE c.id=@id AND c.deleted_at IS NULL;
-      `)).recordset[0];
+      `)
+      ).recordset[0];
       if (!before) throw new ApiError(404, "customer_not_found", "Customer was not found.");
       if (body.department === undefined) input.department = before.department;
       if (body.position === undefined) input.position = before.position;
@@ -326,21 +529,118 @@ export function registerMasterRoutes(app: FastifyInstance, database: Database, u
       if (body.contactNameJa === undefined) input.contactNameJa = before.contactNameJa;
       // A customer from the Pegasus ERP keeps the ERP name and address (migration 099); they are changed in the ERP.
       if (before.erpCode) Object.assign(input, { name: before.name, nameTh: before.nameTh, nameEn: before.nameEn, site: before.site });
-      if (!input.contact && (input.department || input.position || input.contactTitleTh || input.contactTitleEn || input.contactTitleJa)) throw validation("Enter the contact name when providing contact titles, department or position.");
-      const update = new sql.Request(transaction); bindCustomer(update, input); update.input("actor", sql.BigInt, actor.id);
-      update.input("id", sql.BigInt, id); update.input("row_version", sql.VarBinary(8), rowVersion);
-      const updated = (await update.query<{ row_version: Buffer }>(`
+      if (!input.contact && (input.department || input.position || input.contactTitleTh || input.contactTitleEn || input.contactTitleJa))
+        throw validation("Enter the contact name when providing contact titles, department or position.");
+      const update = new sql.Request(transaction);
+      bindCustomer(update, input);
+      update.input("actor", sql.BigInt, actor.id);
+      update.input("id", sql.BigInt, id);
+      update.input("row_version", sql.VarBinary(8), rowVersion);
+      const updated = (
+        await update.query<{ row_version: Buffer }>(`
         UPDATE dbo.customers SET code=@code,name=@name,name_th=@name_th,name_en=@name_en,name_ja=@name_ja,contact=@contact,email=@email,phone=@phone,industry=@industry,
           site=@site,updated_by=@actor,updated_at=SYSUTCDATETIME()
         OUTPUT inserted.row_version WHERE id=@id AND deleted_at IS NULL AND row_version=@row_version;
-      `)).recordset[0];
+      `)
+      ).recordset[0];
       if (!updated) throw new ApiError(409, "concurrency_conflict", "This customer changed. Reload and try again.");
       if (input.contact) {
-        await syncPrimaryCustomerContact(transaction, actor.id, id, { name: input.contact, titleTh: input.contactTitleTh, titleEn: input.contactTitleEn, titleJa: input.contactTitleJa, nameTh: input.contactNameTh, nameEn: input.contactNameEn, nameJa: input.contactNameJa, email: input.email, phone: input.phone, department: input.department, position: input.position }, before.contact);
+        await syncPrimaryCustomerContact(
+          transaction,
+          actor.id,
+          id,
+          {
+            name: input.contact,
+            titleTh: input.contactTitleTh,
+            titleEn: input.contactTitleEn,
+            titleJa: input.contactTitleJa,
+            nameTh: input.contactNameTh,
+            nameEn: input.contactNameEn,
+            nameJa: input.contactNameJa,
+            email: input.email,
+            phone: input.phone,
+            department: input.department,
+            position: input.position,
+          },
+          before.contact,
+        );
       }
       await insertAudit(transaction, actor.id, "Customer", id, input.code, "Updated", before, input);
-      return { id, code: input.code, name: input.name, nameTh: input.nameTh, nameEn: input.nameEn, nameJa: input.nameJa, contactTitleTh: input.contactTitleTh, contactTitleEn: input.contactTitleEn, contactTitleJa: input.contactTitleJa, contactNameTh: input.contactNameTh, contactNameEn: input.contactNameEn, contactNameJa: input.contactNameJa, department: input.department, position: input.position, rowVersion: updated.row_version.toString("base64") };
+      return {
+        id,
+        code: input.code,
+        name: input.name,
+        nameTh: input.nameTh,
+        nameEn: input.nameEn,
+        nameJa: input.nameJa,
+        contactTitleTh: input.contactTitleTh,
+        contactTitleEn: input.contactTitleEn,
+        contactTitleJa: input.contactTitleJa,
+        contactNameTh: input.contactNameTh,
+        contactNameEn: input.contactNameEn,
+        contactNameJa: input.contactNameJa,
+        department: input.department,
+        position: input.position,
+        rowVersion: updated.row_version.toString("base64"),
+      };
     }, sql.ISOLATION_LEVEL.READ_COMMITTED);
+  });
+
+  // The Suppliers screen (Pegasus 0.3): searched, filtered and paged on the server, with the values each header funnel
+  // offers. The pickers elsewhere keep the short list in bootstrap.
+  app.get("/api/v1/master/suppliers", async (request) => {
+    await users.demandPermission(request, "master.read");
+    const query = request.query as Record<string, unknown>;
+    const page = clampedInteger(query.page, 1, 1, 1_000_000);
+    const pageSize = clampedInteger(query.pageSize, 50, 1, 100);
+    const search = optionalText(query.search, 200, "Search") ?? "";
+    const categories = filterValues(query.category, 100, "Category");
+    const sources = filterChoices(query.source, "Source", ["erp", "local"]);
+    const filters = `supplier.is_active=1 AND supplier.deleted_at IS NULL
+        AND (@search=N'' OR supplier.code LIKE N'%'+@search+N'%' OR supplier.name LIKE N'%'+@search+N'%' OR supplier.category LIKE N'%'+@search+N'%')
+        AND (@categories IS NULL OR supplier.category IN (SELECT value FROM OPENJSON(@categories) WITH (value nvarchar(100) '$')))
+        AND (@sources IS NULL OR (CASE WHEN supplier.erp_supplier_id IS NULL THEN N'local' ELSE N'erp' END)
+          IN (SELECT value FROM OPENJSON(@sources) WITH (value nvarchar(20) '$')))`;
+    const result = await database.query<SupplierListRow>(
+      `
+      SELECT supplier.id, supplier.code, supplier.name, supplier.category, supplier.contact, supplier.email, supplier.phone,
+        supplier.brands_json, supplier.erp_supplier_id, COUNT_BIG(*) OVER() AS total_count
+      FROM dbo.suppliers supplier
+      WHERE ${filters}
+      ORDER BY supplier.name, supplier.id
+      OFFSET @offset ROWS FETCH NEXT @page_size ROWS ONLY;
+      SELECT N'category' AS facet, category AS value, COUNT_BIG(*) AS count
+        FROM dbo.suppliers WHERE is_active=1 AND deleted_at IS NULL GROUP BY category
+      UNION ALL SELECT N'source', CASE WHEN erp_supplier_id IS NULL THEN N'local' ELSE N'erp' END, COUNT_BIG(*)
+        FROM dbo.suppliers WHERE is_active=1 AND deleted_at IS NULL GROUP BY CASE WHEN erp_supplier_id IS NULL THEN N'local' ELSE N'erp' END
+      ORDER BY facet, value;
+    `,
+      (sqlRequest) => {
+        sqlRequest.input("search", sql.NVarChar(200), search);
+        sqlRequest.input("categories", sql.NVarChar(sql.MAX), categories);
+        sqlRequest.input("sources", sql.NVarChar(sql.MAX), sources);
+        sqlRequest.input("offset", sql.BigInt, (page - 1) * pageSize);
+        sqlRequest.input("page_size", sql.Int, pageSize);
+      },
+    );
+    const facets = ((result.recordsets as unknown as unknown[][])[1] as FacetRow[] | undefined) ?? [];
+    return {
+      items: result.recordset.map((row) => ({
+        id: Number(row.id),
+        code: row.code,
+        name: row.name,
+        category: row.category,
+        contact: row.contact,
+        email: row.email,
+        phone: row.phone,
+        brands: JSON.parse(row.brands_json || "[]") as string[],
+        erpCode: row.erp_supplier_id ?? null,
+      })),
+      total: Number(result.recordset[0]?.total_count ?? 0),
+      page,
+      pageSize,
+      facets: facetsOf(facets, ["category", "source"]),
+    };
   });
 
   app.post("/api/v1/master/suppliers", async (request, reply) => {
@@ -360,15 +660,21 @@ export function registerMasterRoutes(app: FastifyInstance, database: Database, u
     };
     const created = await database.transaction(async (transaction) => {
       const insert = new sql.Request(transaction);
-      insert.input("code", sql.NVarChar(30), input.code); insert.input("name", sql.NVarChar(300), input.name);
-      insert.input("category", sql.NVarChar(100), input.category); insert.input("contact", sql.NVarChar(200), input.contact);
-      insert.input("email", sql.NVarChar(256), input.email); insert.input("phone", sql.NVarChar(100), input.phone);
-      insert.input("brands_json", sql.NVarChar(sql.MAX), JSON.stringify(input.brands)); insert.input("actor", sql.BigInt, actor.id);
-      const row = (await insert.query<{ id: number | string; code: string; name: string; row_version: Buffer }>(`
+      insert.input("code", sql.NVarChar(30), input.code);
+      insert.input("name", sql.NVarChar(300), input.name);
+      insert.input("category", sql.NVarChar(100), input.category);
+      insert.input("contact", sql.NVarChar(200), input.contact);
+      insert.input("email", sql.NVarChar(256), input.email);
+      insert.input("phone", sql.NVarChar(100), input.phone);
+      insert.input("brands_json", sql.NVarChar(sql.MAX), JSON.stringify(input.brands));
+      insert.input("actor", sql.BigInt, actor.id);
+      const row = (
+        await insert.query<{ id: number | string; code: string; name: string; row_version: Buffer }>(`
         INSERT INTO dbo.suppliers (code,name,category,contact,email,phone,brands_json,created_by,updated_by)
         OUTPUT inserted.id,inserted.code,inserted.name,inserted.row_version
         VALUES (@code,@name,@category,@contact,@email,@phone,@brands_json,@actor,@actor);
-      `)).recordset[0]!;
+      `)
+      ).recordset[0]!;
       const id = Number(row.id);
       await insertAudit(transaction, actor.id, "Supplier", id, row.code, "Created", null, input);
       return { id, code: row.code, name: row.name, rowVersion: row.row_version.toString("base64") };
@@ -380,8 +686,7 @@ export function registerMasterRoutes(app: FastifyInstance, database: Database, u
     await users.demandPermission(request, "master.write");
     const actor = await users.required(request);
     const body = bodyObject(request.body);
-    const preferredSupplierId = body.preferredSupplierId === undefined || body.preferredSupplierId === null
-      ? null : requiredInteger(body.preferredSupplierId, "Preferred supplier id", 1);
+    const preferredSupplierId = body.preferredSupplierId === undefined || body.preferredSupplierId === null ? null : requiredInteger(body.preferredSupplierId, "Preferred supplier id", 1);
     const input = {
       itemCode: requiredCode(body.itemCode, "Item code", 100),
       partNumber: optionalBodyText(body.partNumber, 200, "Part number") ?? "",
@@ -396,28 +701,37 @@ export function registerMasterRoutes(app: FastifyInstance, database: Database, u
     };
     const created = await database.transaction(async (transaction) => {
       if (preferredSupplierId !== null) {
-        const supplierRequest = new sql.Request(transaction); supplierRequest.input("supplier_id", sql.BigInt, preferredSupplierId);
-        const allowed = (await supplierRequest.query<{ allowed: boolean }>(`
+        const supplierRequest = new sql.Request(transaction);
+        supplierRequest.input("supplier_id", sql.BigInt, preferredSupplierId);
+        const allowed = (
+          await supplierRequest.query<{ allowed: boolean }>(`
           SELECT CASE WHEN EXISTS(SELECT 1 FROM dbo.suppliers WHERE id=@supplier_id AND is_active=1 AND deleted_at IS NULL)
             THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END AS allowed;
-        `)).recordset[0]?.allowed;
+        `)
+        ).recordset[0]?.allowed;
         if (!allowed) throw new ApiError(400, "invalid_supplier", "Preferred supplier must reference an active supplier.");
       }
       const insert = new sql.Request(transaction);
-      insert.input("code", sql.NVarChar(100), input.itemCode); insert.input("part_number", sql.NVarChar(200), input.partNumber);
-      insert.input("description", sql.NVarChar(500), input.description); insert.input("brand", sql.NVarChar(100), input.brand);
-      insert.input("unit", sql.NVarChar(50), input.unit); insert.input("location", sql.NVarChar(100), input.location);
+      insert.input("code", sql.NVarChar(100), input.itemCode);
+      insert.input("part_number", sql.NVarChar(200), input.partNumber);
+      insert.input("description", sql.NVarChar(500), input.description);
+      insert.input("brand", sql.NVarChar(100), input.brand);
+      insert.input("unit", sql.NVarChar(50), input.unit);
+      insert.input("location", sql.NVarChar(100), input.location);
       insert.input("reorder_level", sql.Decimal(19, 4), input.reorderLevel);
       insert.input("average_unit_cost", sql.Decimal(19, 4), input.averageUnitCost);
-      insert.input("lead_time_days", sql.Int, input.leadTimeDays); insert.input("preferred_supplier_id", sql.BigInt, preferredSupplierId);
+      insert.input("lead_time_days", sql.Int, input.leadTimeDays);
+      insert.input("preferred_supplier_id", sql.BigInt, preferredSupplierId);
       insert.input("actor", sql.BigInt, actor.id);
-      const row = (await insert.query<{ id: number | string; code: string; name: string; row_version: Buffer }>(`
+      const row = (
+        await insert.query<{ id: number | string; code: string; name: string; row_version: Buffer }>(`
         INSERT INTO dbo.mat_items (item_code,part_no,description,brand,unit,location,reorder_level,avg_unit_cost,
           lead_time_days,preferred_supplier_id,created_by,updated_by)
         OUTPUT inserted.id,inserted.item_code AS code,inserted.description AS name,inserted.row_version
         VALUES (@code,@part_number,@description,@brand,@unit,@location,@reorder_level,@average_unit_cost,
           @lead_time_days,@preferred_supplier_id,@actor,@actor);
-      `)).recordset[0]!;
+      `)
+      ).recordset[0]!;
       const id = Number(row.id);
       await insertAudit(transaction, actor.id, "InventoryItem", id, String(id), "Created", null, input);
       return { id, code: row.code, name: row.name, rowVersion: row.row_version.toString("base64") };
@@ -445,25 +759,32 @@ export function registerMasterRoutes(app: FastifyInstance, database: Database, u
     if (input.effectiveTo && input.effectiveTo < input.effectiveFrom) throw validation("Effective-to date cannot be earlier than effective-from date.");
     const created = await database.transaction(async (transaction) => {
       const overlapRequest = new sql.Request(transaction);
-      overlapRequest.input("level", sql.NVarChar(100), input.level); overlapRequest.input("department", sql.NVarChar(100), input.department);
-      overlapRequest.input("effective_from", sql.Date, input.effectiveFrom); overlapRequest.input("effective_to", sql.Date, input.effectiveTo);
-      const overlap = (await overlapRequest.query<{ overlaps: boolean }>(`
+      overlapRequest.input("level", sql.NVarChar(100), input.level);
+      overlapRequest.input("department", sql.NVarChar(100), input.department);
+      overlapRequest.input("effective_from", sql.Date, input.effectiveFrom);
+      overlapRequest.input("effective_to", sql.Date, input.effectiveTo);
+      const overlap = (
+        await overlapRequest.query<{ overlaps: boolean }>(`
         SELECT CASE WHEN EXISTS(SELECT 1 FROM dbo.engineering_rates WITH (UPDLOCK,HOLDLOCK,INDEX(IX_engineering_rates_effective_range))
           WHERE is_active=1 AND level=@level AND department=@department
             AND effective_from<=ISNULL(@effective_to,CONVERT(date,'99991231',112))
             AND @effective_from<=ISNULL(effective_to,CONVERT(date,'99991231',112)))
           THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END AS overlaps;
-      `)).recordset[0]?.overlaps;
+      `)
+      ).recordset[0]?.overlaps;
       if (overlap) throw new ApiError(409, "engineering_rate_overlap", "An active engineering rate already covers part of this level, department and date range.");
       const insert = new sql.Request(transaction);
-      insert.input("level", sql.NVarChar(100), input.level); insert.input("department", sql.NVarChar(100), input.department);
+      insert.input("level", sql.NVarChar(100), input.level);
+      insert.input("department", sql.NVarChar(100), input.department);
       insert.input("engineering_hourly", sql.Decimal(19, 4), input.engineeringHourly);
       insert.input("engineering_daily", sql.Decimal(19, 4), input.engineeringDaily);
       insert.input("installation_hourly", sql.Decimal(19, 4), input.installationHourly);
       insert.input("installation_daily", sql.Decimal(19, 4), input.installationDaily);
-      insert.input("effective_from", sql.Date, input.effectiveFrom); insert.input("effective_to", sql.Date, input.effectiveTo);
+      insert.input("effective_from", sql.Date, input.effectiveFrom);
+      insert.input("effective_to", sql.Date, input.effectiveTo);
       insert.input("actor", sql.BigInt, actor.id);
-      const row = (await insert.query<{ id: number | string; level: string; department: string; row_version: Buffer }>(`
+      const row = (
+        await insert.query<{ id: number | string; level: string; department: string; row_version: Buffer }>(`
         DECLARE @created TABLE (
           id bigint NOT NULL,
           level nvarchar(100) NOT NULL,
@@ -477,7 +798,8 @@ export function registerMasterRoutes(app: FastifyInstance, database: Database, u
         VALUES (@level,@department,@engineering_hourly,@engineering_daily,@installation_hourly,@installation_daily,
           @effective_from,@effective_to,@actor);
         SELECT id,level,department,row_version FROM @created;
-      `)).recordset[0]!;
+      `)
+      ).recordset[0]!;
       const id = Number(row.id);
       await insertAudit(transaction, actor.id, "EngineeringRate", id, String(id), "Created", null, input);
       return { id, level: row.level, department: row.department, rowVersion: row.row_version.toString("base64") };
@@ -499,23 +821,33 @@ export function registerMasterRoutes(app: FastifyInstance, database: Database, u
       const find = new sql.Request(transaction);
       find.input("name", sql.NVarChar(300), name.trim());
       find.input("taxId", sql.NVarChar(20), taxId.trim());
-      const existing = (await find.query<{ id: number | string; name: string }>(`
+      const existing = (
+        await find.query<{ id: number | string; name: string }>(`
         SELECT TOP 1 id, name FROM dbo.suppliers
         WHERE deleted_at IS NULL AND is_active = 1
           AND ((@taxId != N'' AND REPLACE(tax_id, N'-', N'') = REPLACE(@taxId, N'-', N''))
                OR LOWER(LTRIM(RTRIM(name))) = LOWER(LTRIM(RTRIM(@name))))
         ORDER BY id;
-      `)).recordset[0];
+      `)
+      ).recordset[0];
       if (existing) return { id: Number(existing.id), name: String(existing.name), created: false };
 
       // Auto-generate a code from the name (uppercase initials, max 10 chars)
-      const codeBase = name.trim().replace(/[^A-Za-zก-๙0-9]/g, " ").split(/\s+/)
-        .map((w) => w[0]?.toUpperCase() ?? "").join("").slice(0, 8) || "SUP";
+      const codeBase =
+        name
+          .trim()
+          .replace(/[^A-Za-zก-๙0-9]/g, " ")
+          .split(/\s+/)
+          .map((w) => w[0]?.toUpperCase() ?? "")
+          .join("")
+          .slice(0, 8) || "SUP";
       const suffix = new sql.Request(transaction);
       suffix.input("base", sql.NVarChar(10), codeBase);
-      const taken = (await suffix.query<{ code: string }>(`
+      const taken = (
+        await suffix.query<{ code: string }>(`
         SELECT code FROM dbo.suppliers WHERE code LIKE @base + N'%';
-      `)).recordset.map((r) => r.code);
+      `)
+      ).recordset.map((r) => r.code);
       let code = codeBase;
       for (let i = 2; taken.includes(code); i++) code = `${codeBase}${i}`;
 
@@ -526,11 +858,13 @@ export function registerMasterRoutes(app: FastifyInstance, database: Database, u
       insert.input("category", sql.NVarChar(100), category);
       insert.input("brands_json", sql.NVarChar(sql.MAX), "[]");
       insert.input("actor", sql.BigInt, actor.id);
-      const row = (await insert.query<{ id: number | string; name: string }>(`
+      const row = (
+        await insert.query<{ id: number | string; name: string }>(`
         INSERT INTO dbo.suppliers (code,name,tax_id,category,contact,email,phone,brands_json,created_by,updated_by)
         OUTPUT inserted.id, inserted.name
         VALUES (@code,@name,@taxId,@category,N'',N'',N'',@brands_json,@actor,@actor);
-      `)).recordset[0]!;
+      `)
+      ).recordset[0]!;
       await insertAudit(transaction, actor.id, "Supplier", Number(row.id), code, "Created", null, { name, taxId, category, source: "PDF import" });
       return { id: Number(row.id), name: String(row.name), created: true };
     }, sql.ISOLATION_LEVEL.SERIALIZABLE);
@@ -553,23 +887,28 @@ export function registerMasterRoutes(app: FastifyInstance, database: Database, u
     const updated = await database.transaction(async (transaction) => {
       const req = new sql.Request(transaction);
       req.input("id", sql.BigInt, id);
-      const existing = (await req.query<{ id: number; code: string; name: string; erp_supplier_id: string | null }>(
-        "SELECT id, code, name, erp_supplier_id FROM dbo.suppliers WITH (UPDLOCK, HOLDLOCK) WHERE id=@id AND is_active=1 AND deleted_at IS NULL;"
-      )).recordset[0];
+      const existing = (
+        await req.query<{ id: number; code: string; name: string; erp_supplier_id: string | null }>(
+          "SELECT id, code, name, erp_supplier_id FROM dbo.suppliers WITH (UPDLOCK, HOLDLOCK) WHERE id=@id AND is_active=1 AND deleted_at IS NULL;",
+        )
+      ).recordset[0];
       if (!existing) throw new ApiError(404, "supplier_not_found", "Supplier not found.");
       // A supplier from the Pegasus ERP keeps the ERP name (migration 099); it is changed in the ERP.
       const name = existing.erp_supplier_id ? existing.name : requestedName;
 
       const upd = new sql.Request(transaction);
-      upd.input("id", sql.BigInt, id); upd.input("name", sql.NVarChar(300), name);
-      upd.input("category", sql.NVarChar(100), category); upd.input("contact", sql.NVarChar(200), contact);
-      upd.input("email", sql.NVarChar(256), emailValue); upd.input("phone", sql.NVarChar(100), phone);
-      upd.input("brands", sql.NVarChar(sql.MAX), JSON.stringify(brands)); upd.input("actor", sql.BigInt, actor.id);
+      upd.input("id", sql.BigInt, id);
+      upd.input("name", sql.NVarChar(300), name);
+      upd.input("category", sql.NVarChar(100), category);
+      upd.input("contact", sql.NVarChar(200), contact);
+      upd.input("email", sql.NVarChar(256), emailValue);
+      upd.input("phone", sql.NVarChar(100), phone);
+      upd.input("brands", sql.NVarChar(sql.MAX), JSON.stringify(brands));
+      upd.input("actor", sql.BigInt, actor.id);
       await upd.query(`UPDATE dbo.suppliers SET name=@name, category=@category, contact=@contact,
         email=@email, phone=@phone, brands_json=@brands, updated_by=@actor WHERE id=@id;`);
 
-      await insertAudit(transaction, actor.id, "Supplier", id, existing.code, "Updated", null,
-        { name, category, contact, email: emailValue, phone, brands });
+      await insertAudit(transaction, actor.id, "Supplier", id, existing.code, "Updated", null, { name, category, contact, email: emailValue, phone, brands });
       return { id };
     }, sql.ISOLATION_LEVEL.READ_COMMITTED);
 
@@ -584,19 +923,20 @@ export function registerMasterRoutes(app: FastifyInstance, database: Database, u
     await database.transaction(async (transaction) => {
       const req = new sql.Request(transaction);
       req.input("id", sql.BigInt, id);
-      const existing = (await req.query<{ id: number; code: string; erp_supplier_id: string | null }>(
-        "SELECT id, code, erp_supplier_id FROM dbo.suppliers WITH (UPDLOCK, HOLDLOCK) WHERE id=@id AND is_active=1 AND deleted_at IS NULL;"
-      )).recordset[0];
+      const existing = (
+        await req.query<{ id: number; code: string; erp_supplier_id: string | null }>(
+          "SELECT id, code, erp_supplier_id FROM dbo.suppliers WITH (UPDLOCK, HOLDLOCK) WHERE id=@id AND is_active=1 AND deleted_at IS NULL;",
+        )
+      ).recordset[0];
       if (!existing) throw new ApiError(404, "supplier_not_found", "Supplier not found.");
       if (existing.erp_supplier_id) throw new ApiError(409, "supplier_in_erp", "This supplier comes from the Pegasus ERP. Close it in the ERP instead.");
 
-      const inUse = (await req.query<{ cnt: number }>(
-        "SELECT COUNT(*) cnt FROM dbo.supplier_quotations WHERE supplier_id=@id;"
-      )).recordset[0]!.cnt;
+      const inUse = (await req.query<{ cnt: number }>("SELECT COUNT(*) cnt FROM dbo.supplier_quotations WHERE supplier_id=@id;")).recordset[0]!.cnt;
       if (inUse > 0) throw new ApiError(409, "supplier_in_use", `ไม่สามารถลบได้ — Supplier นี้มี ${inUse} Quotation อ้างอิงอยู่`);
 
       const del = new sql.Request(transaction);
-      del.input("id", sql.BigInt, id); del.input("actor", sql.BigInt, actor.id);
+      del.input("id", sql.BigInt, id);
+      del.input("actor", sql.BigInt, actor.id);
       await del.query("UPDATE dbo.suppliers SET is_active=0, deleted_at=GETUTCDATE(), updated_by=@actor WHERE id=@id;");
       await insertAudit(transaction, actor.id, "Supplier", id, existing.code, "Deleted", null, null);
     }, sql.ISOLATION_LEVEL.READ_COMMITTED);
