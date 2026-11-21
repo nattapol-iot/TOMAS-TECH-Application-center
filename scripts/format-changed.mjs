@@ -16,5 +16,6 @@ const files = [...new Set(`${committed}\n${working}`.split("\n").map((file) => f
 if (files.length === 0) {
   console.log("No changed files to format.");
 } else {
-  await $`bun x oxfmt ${check ? ["--check"] : []} ${files}`;
+  const { exitCode } = await $`bun x oxfmt ${check ? ["--check"] : []} ${files}`.nothrow();
+  process.exitCode = exitCode;
 }
