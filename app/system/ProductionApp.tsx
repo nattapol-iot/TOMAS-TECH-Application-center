@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ExecutiveDashboard } from "./production/ExecutiveDashboard";
 import { DASHBOARD_ROLES } from "../../backend-node/src/executive-dashboard-model";
 import { canViewEngineeringRates } from "../../backend-node/src/engineering-rate-access";
+import { canViewProjectCost } from "../../backend-node/src/project-cost-model";
 import { useActivityPresence } from "./use-activity-presence";
 import { baseHash, documentRoute, hashView, isPlainClick, parseScreenHash, RECORD_LINK, restoredView, screenHash, screenPlace, screenTail, viewFromHash, viewHash, viewStorageKey } from "../../lib/remembered-view";
 import { ScreenLinkProvider, type ScreenLinkState } from "./screen-link";
@@ -79,6 +80,7 @@ import {
   ProductionSalesIntake,
   ProductionSiteVisits,
   IssueBatchScreen,
+  ProjectCostScreen,
   ProductionVisitMasterData,
   ReportScreens,
   ScheduleTemplateMaster,
@@ -231,13 +233,13 @@ const NAV_GROUP_STORAGE_KEY = "tomas-tech-collapsed-nav-groups-v3";
 const NAV_GROUPS = NAV.flatMap(section => section.group ? [section.group] : []);
 /** Every group starts closed; the group of the open screen always shows open. */
 const DEFAULT_COLLAPSED_GROUPS = NAV_GROUPS;
-type ProjectTab = "portfolio" | "schedule" | "punchlist";
-/** The Projects tabs as their addresses name them: "#/projects" (overview), "#/projects/plan/<project>…", "#/projects/punchlist". */
-const PROJECT_TAB_SEGMENT: Record<ProjectTab, string> = { portfolio: "", schedule: "plan", punchlist: "punchlist" };
+type ProjectTab = "portfolio" | "schedule" | "punchlist" | "cost";
+/** The Projects tabs as their addresses name them: "#/projects" (overview), "#/projects/plan/<project>…", "#/projects/punchlist", "#/projects/cost/<project>". */
+const PROJECT_TAB_SEGMENT: Record<ProjectTab, string> = { portfolio: "", schedule: "plan", punchlist: "punchlist", cost: "cost" };
 const projectTabOf = (hash: string): ProjectTab => {
   const address = parseScreenHash(hash);
   const segment = address?.view === "projects" ? address.path[0] : undefined;
-  return segment === "plan" ? "schedule" : segment === "punchlist" ? "punchlist" : "portfolio";
+  return segment === "plan" ? "schedule" : segment === "punchlist" ? "punchlist" : segment === "cost" ? "cost" : "portfolio";
 };
 const SIDEBAR_STORAGE_KEY = "tomas-tech-sidebar-collapsed";
 /** The most menu entries a person may star; the API enforces the same number (backend-node/src/routes/bootstrap.ts). */
@@ -866,6 +868,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
 
   const personalDashboard = <ProductionDashboard bootstrap={bootstrap} refreshBootstrap={refreshBootstrap} teamTestMode={IS_TEAM_TEST_MODE} onNavigate={async (destination) => { (await setView(destination)); window.scrollTo({ top: 0 }); }} />;
   const common = { bootstrap, notify: setToast, refreshBootstrap };
+  const seesProjectCost = canViewProjectCost(bootstrap.user.roles ?? [bootstrap.user.role]);
   const moduleProps = {
     bootstrap,
     notify: setToast,
@@ -1000,9 +1003,10 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
           {view === "estimates" ? <EstimateLookScope userId={bootstrap.user.id}><ProductionEstimates key={preferredEstimateId ?? "estimate-list"} {...common} initialEstimateId={preferredEstimateId} onSelectEstimate={setPreferredEstimateId} /></EstimateLookScope> : null}
           {view === "projects" ? <>
             {/* Plan and Punchlist read the schedule; without schedule.read only the Overview is offered. */}
-            {bootstrap.permissions.includes("schedule.read") ? <Tabs tabs={[{ id: "portfolio", label: "Projects.tabOverview" }, { id: "schedule", label: "Projects.tabPlan" }, { id: "punchlist", label: "Projects.tabPunchlist" }]} active={projectTab} onChange={changeProjectTab} link={null} /> : null}
+            {/* Cost is for Leaders and above (project-cost-model.ts); the API refuses everyone else. */}
+            {bootstrap.permissions.includes("schedule.read") ? <Tabs tabs={[{ id: "portfolio" as ProjectTab, label: "Projects.tabOverview" }, { id: "schedule" as ProjectTab, label: "Projects.tabPlan" }, { id: "punchlist" as ProjectTab, label: "Projects.tabPunchlist" }, ...(seesProjectCost ? [{ id: "cost" as ProjectTab, label: "Projects.tabCost" }] : [])]} active={projectTab === "cost" && !seesProjectCost ? "portfolio" : projectTab} onChange={changeProjectTab} link={null} /> : null}
             <div style={{ marginTop: 14 }}>
-              {projectTab === "portfolio" || !bootstrap.permissions.includes("schedule.read") ? <ProductionProjects {...common} teamTestMode={IS_TEAM_TEST_MODE} openProjectSchedule={bootstrap.permissions.includes("schedule.read") ? openProjectSchedule : undefined} /> : projectTab === "punchlist" ? <IssueBatchScreen key={`issues:${preferredIssueBatch?.count ?? 0}`} {...common} initialBatchId={preferredIssueBatch?.id ?? null} openProjectSchedule={openProjectSchedule} /> : <ProductionProjectSchedule key={`plan:${scheduleLinkCount}`} {...moduleProps} />}
+              {projectTab === "cost" && seesProjectCost && bootstrap.permissions.includes("schedule.read") ? <ProjectCostScreen bootstrap={bootstrap} openProjectSchedule={openProjectSchedule} /> : projectTab === "portfolio" || projectTab === "cost" || !bootstrap.permissions.includes("schedule.read") ? <ProductionProjects {...common} teamTestMode={IS_TEAM_TEST_MODE} openProjectSchedule={bootstrap.permissions.includes("schedule.read") ? openProjectSchedule : undefined} /> : projectTab === "punchlist" ? <IssueBatchScreen key={`issues:${preferredIssueBatch?.count ?? 0}`} {...common} initialBatchId={preferredIssueBatch?.id ?? null} openProjectSchedule={openProjectSchedule} /> : <ProductionProjectSchedule key={`plan:${scheduleLinkCount}`} {...moduleProps} />}
             </div>
           </> : null}
           {view === "knowledge" ? <ProductionKnowledgeHub bootstrap={bootstrap} notify={setToast} /> : null}

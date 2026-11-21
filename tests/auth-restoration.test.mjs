@@ -100,6 +100,7 @@ function createHarness({
     "../../lib/remembered-view": rememberedView,
     "../../lib/notification-rows": notificationRows,
     "../../backend-node/src/engineering-rate-access": { canViewEngineeringRates: role => DASHBOARD_ROLES.includes(role) },
+    "../../backend-node/src/project-cost-model": { canViewProjectCost: () => false },
     react,
     "react/jsx-runtime": jsxRuntime,
     "./auth-client": {
