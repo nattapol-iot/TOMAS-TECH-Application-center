@@ -20,6 +20,7 @@ import {
 // The Pegasus ERP look (owner 2026-11-21): pegasus-skin.css for the shared parts, pegasus-screens.css for the performance-* ones.
 import "./pegasus-skin.css";
 import "./pegasus-screens.css";
+import { checkFields, failureDialog } from "./form-bubbles";
 
 type TeamMember = {
   id: string | number;
@@ -536,27 +537,31 @@ function AssessmentModal({ member, review, isManager, workEvidence, onClose, onS
   const [summary, setSummary] = useState(isManager ? review.managerSummary : review.selfSummary);
   const [developmentGoal, setDevelopmentGoal] = useState(review.developmentGoal);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const editor = useRef<HTMLDivElement>(null);
   const weighted = scoreAverage(scores, areas);
   const valid = canSubmitPerformanceScores(scores, evidence, areas.length);
+  // Every area needs a rating, and a rating of 1, 2 or 5 needs its evidence (canSubmitPerformanceScores); each gap gets a bubble.
+  const rules = areas.flatMap((_, index) => [
+    { invalid: !scores[index], at: `[data-bubble-anchor="rating-${index}"]`, message: t("Form.choose") },
+    { invalid: [1, 2, 5].includes(scores[index]) && !evidence[index]?.trim(), at: `[data-bubble-anchor="evidence-${index}"]`, message: t("Form.required") },
+  ]);
   const save = async (submit: boolean) => {
-    if (submit && !valid) { setError(t(`Rate all ${areas.length} areas and add evidence for every rating of 1, 2 or 5.`)); return; }
-    setBusy(true); setError("");
+    if (submit && (!checkFields(editor.current, t, rules) || !valid)) return;
+    setBusy(true);
     try { await onSave(scores, evidence, submit, summary, developmentGoal); }
-    catch (caught) { setError(caught instanceof Error ? caught.message : t("The assessment could not be saved.")); setBusy(false); }
+    catch (caught) { void failureDialog(caught instanceof Error ? caught.message : t("The assessment could not be saved."), t("Form.errorTitle")); setBusy(false); }
   };
   return (
-    <Modal title={`${t(isManager ? "Manager assessment" : "Self review")} · ${member.name}`} subtitle="Rate demonstrated impact and add a specific example where it helps." size="xl" onClose={() => { if (!busy) onClose(); }} footer={<><button className="btn default" type="button" disabled={busy} onClick={() => { void save(false); }}><LocalizedText text={"Save draft"} /></button><button className="btn primary" type="button" disabled={busy || !valid} onClick={() => { void save(true); }}><Icon name="send" />{busy ? <LocalizedText text={"Saving…"} /> : t(isManager ? "Send to calibration" : "Submit self review")}</button></>}>
-      {error ? <div className="callout error" role="alert"><Icon name="alertTriangle" /><span>{error}</span></div> : null}
+    <Modal title={`${t(isManager ? "Manager assessment" : "Self review")} · ${member.name}`} subtitle="Rate demonstrated impact and add a specific example where it helps." size="xl" onClose={() => { if (!busy) onClose(); }} footer={<><button className="btn default" type="button" disabled={busy} onClick={() => { void save(false); }}><LocalizedText text={"Save draft"} /></button><button className="btn primary" type="button" disabled={busy} onClick={() => { void save(true); }}><Icon name="send" />{busy ? <LocalizedText text={"Saving…"} /> : t(isManager ? "Send to calibration" : "Submit self review")}</button></>}>
       <div className="performance-modal-summary"><div className="performance-score-ring compact" style={{ ["--score" as string]: `${weighted * 20}%` }}><strong>{performanceScoreText(weighted)}</strong><span>/ 5.0</span></div><div><strong>{t(ratingLabel(weighted))}</strong><p><LocalizedText text={"Weighted score updates as you rate each area."} /></p></div></div>
-      <div className="performance-score-editor">
+      <div className="performance-score-editor" ref={editor}>
         {areas.map((area, index) => {
           const suggestion = workEvidence?.areas.find((entry) => entry.areaCode === area.code);
           return <section key={area.name}>
             <div className="performance-score-title"><span className={`performance-area-icon ${area.tone}`}><Icon name={area.icon} /></span><div><strong>{t(area.name)}</strong><small>{area.weight}% · {t(area.description)}</small>{isManager && review.selfEvidence[index] ? <em className="performance-employee-evidence"><LocalizedText text={"Employee evidence:"} /> {review.selfEvidence[index]}</em> : null}</div></div>
-            <div className="performance-rating-buttons" role="radiogroup" aria-label={`${t(area.name)} ${t("rating")}`}>{[1,2,3,4,5].map((value) => <button key={value} type="button" role="radio" aria-checked={scores[index] === value} className={scores[index] === value ? "active" : undefined} onClick={() => setScores((current) => current.map((score, scoreIndex) => scoreIndex === index ? value : score))}><b>{value}</b><small>{t(value === 1 ? "Critical" : value === 2 ? "Developing" : value === 3 ? "Strong" : value === 4 ? "Exceeds" : "Exceptional")}</small></button>)}</div>
+            <div className="performance-rating-buttons" data-bubble-anchor={`rating-${index}`} role="radiogroup" aria-label={`${t(area.name)} ${t("rating")}`}>{[1,2,3,4,5].map((value) => <button key={value} type="button" role="radio" aria-checked={scores[index] === value} className={scores[index] === value ? "active" : undefined} onClick={() => setScores((current) => current.map((score, scoreIndex) => scoreIndex === index ? value : score))}><b>{value}</b><small>{t(value === 1 ? "Critical" : value === 2 ? "Developing" : value === 3 ? "Strong" : value === 4 ? "Exceeds" : "Exceptional")}</small></button>)}</div>
             {suggestion ? <div className="performance-evidence-suggestion"><span><Icon name="database" /><span><strong>{suggestion.suggestedScore !== null ? `${t("Measured signal")} ${suggestion.suggestedScore.toFixed(1)}/5` : <LocalizedText text={"Context signal only"} />}</strong><small>{performanceEvidenceText(suggestion.evidenceText, lang, t)}</small></span></span><button type="button" onClick={() => setEvidence((current) => current.map((item, evidenceIndex) => evidenceIndex === index ? suggestion.evidenceText : item))}><LocalizedText text={"Use evidence"} /></button></div> : null}
-            <label className="performance-area-evidence"><span>{isManager ? <LocalizedText text={"Manager evidence"} /> : <LocalizedText text={"Work evidence"} />}{[1, 2, 5].includes(scores[index]) ? <LocalizedText text="· required for this rating" /> : <LocalizedText text="· optional" />}</span><textarea value={evidence[index]} onChange={(event) => setEvidence((current) => current.map((item, evidenceIndex) => evidenceIndex === index ? event.target.value : item))} rows={2} maxLength={1000} placeholder={t(isSalesRole(member.role) ? "Link the rating to an Inquiry, customer meeting, estimate outcome or Project handover…" : "Link the rating to a milestone, quality signal, technical contribution or team outcome…")} /></label>
+            <label className="performance-area-evidence" data-bubble-anchor={`evidence-${index}`}><span>{isManager ? <LocalizedText text={"Manager evidence"} /> : <LocalizedText text={"Work evidence"} />}{[1, 2, 5].includes(scores[index]) ? <LocalizedText text="· required for this rating" /> : <LocalizedText text="· optional" />}</span><textarea value={evidence[index]} onChange={(event) => setEvidence((current) => current.map((item, evidenceIndex) => evidenceIndex === index ? event.target.value : item))} rows={2} maxLength={1000} placeholder={t(isSalesRole(member.role) ? "Link the rating to an Inquiry, customer meeting, estimate outcome or Project handover…" : "Link the rating to a milestone, quality signal, technical contribution or team outcome…")} /></label>
           </section>;
         })}
       </div>
@@ -570,16 +575,15 @@ function CalibrationModal({ member, onClose, onComplete }: { member: TeamMember;
   const t = useT();
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const decision = useRef<HTMLLabelElement>(null);
   const complete = async () => {
-    if (!note.trim()) { setError(t("Record the calibration decision before completing the review.")); return; }
-    setBusy(true); setError("");
+    if (!checkFields(decision.current, t, [{ invalid: !note.trim(), at: "textarea", message: t("Record the calibration decision before completing the review.") }])) return;
+    setBusy(true);
     try { await onComplete(note); }
-    catch (caught) { setError(caught instanceof Error ? caught.message : t("The review could not be completed.")); setBusy(false); }
+    catch (caught) { void failureDialog(caught instanceof Error ? caught.message : t("The review could not be completed."), t("Form.errorTitle")); setBusy(false); }
   };
-  return <Modal title={`${t("Complete calibration")} · ${member.name}`} subtitle="This freezes the final manager scores and written feedback." size="sm" onClose={onClose} footer={<><button className="btn default" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn success" type="button" disabled={busy || !note.trim()} onClick={() => { void complete(); }}><Icon name="checkCircle" />{busy ? <LocalizedText text={"Completing…"} /> : <LocalizedText text={"Complete review"} />}</button></>}>
-    {error ? <div className="callout error" role="alert"><Icon name="alertTriangle" /><span>{error}</span></div> : null}
+  return <Modal title={`${t("Complete calibration")} · ${member.name}`} subtitle="This freezes the final manager scores and written feedback." size="sm" onClose={onClose} footer={<><button className="btn default" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn success" type="button" disabled={busy} onClick={() => { void complete(); }}><Icon name="checkCircle" />{busy ? <LocalizedText text={"Completing…"} /> : <LocalizedText text={"Complete review"} />}</button></>}>
     <div className="performance-rule"><Icon name="lock" /><p><strong><LocalizedText text={"Final review"} /></strong>  <LocalizedText text={"Completed assessments are immutable and remain available in the audit history."} /></p></div>
-    <label className="performance-comment"><span><LocalizedText text={"Calibration decision"} /></span><textarea value={note} onChange={(event) => setNote(event.target.value)} rows={4} maxLength={1000} placeholder={t("Summarise the evidence considered and the agreed final outcome…")} /><small>{note.length}/1000</small></label>
+    <label className="performance-comment" ref={decision}><span><LocalizedText text={"Calibration decision"} /></span><textarea value={note} onChange={(event) => setNote(event.target.value)} rows={4} maxLength={1000} placeholder={t("Summarise the evidence considered and the agreed final outcome…")} /><small>{note.length}/1000</small></label>
   </Modal>;
 }

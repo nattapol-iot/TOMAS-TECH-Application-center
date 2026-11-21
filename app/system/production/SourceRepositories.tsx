@@ -2,7 +2,7 @@
 
 import { confirmDialog } from "../dialogs";
 import { optionalTextLink, textLink, useLinkedState } from "../screen-link";
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import {
   createSourceRepository, deleteRepositoryPath, deleteSourceRepository, downloadRepositoryArchive, downloadRepositoryFile,
   fetchRepositoryFileBlob, getRepositoryBlob, getRepositoryTree, getSourceRepository, listProjects, listSourceRepositories,
@@ -12,6 +12,7 @@ import {
 import { localeFor, useLanguage, useT } from "../i18n";
 import { LocalizedText } from "../LocalizedText";
 import { Badge, EmptyState, Field, Icon, Modal, Panel, SearchInput, Tabs, Toolbar } from "../ui";
+import { checkFields } from "./form-bubbles";
 
 type Notify = (message: string) => void;
 
@@ -267,8 +268,16 @@ function CreateRepositoryModal({ onClose, onCreated, notify }: { onClose: () => 
   const [description, setDescription] = useState("");
   const [project, setProject] = useState<ProjectSummary | null>(null);
   const [busy, setBusy] = useState(false);
-  const valid = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/.test(name) && !name.endsWith(".") && project !== null;
+  const t = useT();
+  const fields = useRef<HTMLDivElement>(null);
+  const nameValid = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/.test(name) && !name.endsWith(".");
+  const valid = nameValid && project !== null;
   const save = async () => {
+    if (!checkFields(fields.current, t, [
+      { invalid: !name, at: '[name="repoName"]', message: t("Form.required") },
+      { invalid: Boolean(name) && !nameValid, at: '[name="repoName"]', message: t("Form.pattern") },
+      { invalid: project === null, at: '[data-bubble-anchor="repo-project"]', message: t("Form.choose") },
+    ])) return;
     if (!valid || !project) return;
     setBusy(true);
     try {
@@ -283,13 +292,13 @@ function CreateRepositoryModal({ onClose, onCreated, notify }: { onClose: () => 
     <Modal title="Repos.new" subtitle="Repos.newHint" onClose={onClose}
       footer={<>
         <button className="btn default" type="button" onClick={onClose}><LocalizedText text={"Cancel"} /></button>
-        <button className="btn primary" type="button" disabled={!valid || busy} onClick={() => void save()}><Icon name="plus" /><LocalizedText text={"Repos.create"} /></button>
+        <button className="btn primary" type="button" disabled={busy} onClick={() => void save()}><Icon name="plus" /><LocalizedText text={"Repos.create"} /></button>
       </>}>
-      <div className="form-grid two">
+      <div className="form-grid two" ref={fields}>
         <Field label="Repos.name" hint="Repos.nameHint" span={2}>
-          <input value={name} maxLength={100} onChange={(event) => setName(event.target.value.replace(/\s+/g, "-"))} placeholder="tmt-gateway-firmware" />
+          <input name="repoName" value={name} maxLength={100} onChange={(event) => setName(event.target.value.replace(/\s+/g, "-"))} placeholder="tmt-gateway-firmware" />
         </Field>
-        <Field label="Repos.project" span={2}><ProjectPicker value={project} onChange={setProject} /></Field>
+        <Field label="Repos.project" span={2}><div data-bubble-anchor="repo-project"><ProjectPicker value={project} onChange={setProject} /></div></Field>
         <Field label="Repos.description" span={2}>
           <textarea rows={3} maxLength={1000} value={description} onChange={(event) => setDescription(event.target.value)} />
         </Field>
@@ -704,10 +713,15 @@ function UploadModal({ repo, path, maxBytes, cloneUrl, notify, onClose, onDone }
   const [stripRoot, setStripRoot] = useState(true);
   const [progress, setProgress] = useState<number | null>(null);
   const t = useT();
+  const fields = useRef<HTMLDivElement>(null);
   const hasZip = files.some((file) => /\.zip$/i.test(file.name));
   const canReplace = hasZip && extract && files.length === 1 && !target.trim();
 
   const start = async () => {
+    if (!checkFields(fields.current, t, [
+      { invalid: files.length === 0, at: '[name="repoFiles"]', message: t("Form.choose") },
+      { invalid: tooLarge.length > 0, at: '[name="repoFiles"]', message: t("Repos.tooLargeUpload") },
+    ])) return;
     setProgress(0);
     let written = 0;
     let skipped = 0;
@@ -732,13 +746,13 @@ function UploadModal({ repo, path, maxBytes, cloneUrl, notify, onClose, onDone }
     <Modal title="Repos.upload" subtitle="Repos.uploadHint" onClose={progress === null ? onClose : () => undefined}
       footer={<>
         <button className="btn default" type="button" disabled={progress !== null} onClick={onClose}><LocalizedText text={"Cancel"} /></button>
-        <button className="btn primary" type="button" disabled={files.length === 0 || tooLarge.length > 0 || progress !== null} onClick={() => void start()}>
+        <button className="btn primary" type="button" disabled={progress !== null} onClick={() => void start()}>
           <Icon name="upload" />{progress === null ? <LocalizedText text={"Repos.upload"} /> : <>{progress} / {files.length}</>}
         </button>
       </>}>
-      <div className="form-grid two">
+      <div className="form-grid two" ref={fields}>
         <Field label="Repos.chooseFiles" span={2}>
-          <input type="file" multiple onChange={(event) => setFiles([...(event.target.files ?? [])])} />
+          <input name="repoFiles" type="file" multiple onChange={(event) => setFiles([...(event.target.files ?? [])])} />
           {maxBytes ? (
             <small className="repo-upload-limit">
               <LocalizedText text={"Repos.uploadLimit"} /> {formatRepositorySize(maxBytes)} · <LocalizedText text={"Repos.uploadLimitGit"} />

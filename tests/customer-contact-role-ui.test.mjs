@@ -26,6 +26,7 @@ function mountForm(file, exportName, props) {
     "./ErpMasterPanel": { ErpMasterPanel: "erp-master-panel" },
     "./PegasusScreen": { PegasusScreen: "pegasus-screen" },
     "../tmt-id.constants": { IS_TMT_ID_MODE: false },
+    "./form-bubbles": { checkFields: () => true, failureDialog: async () => {} },
     "./SearchSelect": { SearchSelect: "search-select" },
     "../project-overview-client": { listAllProjectsByNumber: async () => [] },
     "../ui": new Proxy({}, { get: (_, name) => name }),

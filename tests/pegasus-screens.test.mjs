@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { ADMIN_SCREENS_COPY } from "../app/system/production/admin-screens-copy.ts";
+import { FORM_COPY } from "../app/system/production/form-copy.ts";
+import { createRequire } from "node:module";
+import ts from "typescript-api";
 
 // The Team & Knowledge and System menus in the Pegasus ERP look (owner 2026-11-21): a screen wears "pg-skin pg-screen"
 // (PegasusScreen), pegasus-skin.css draws the shared parts and pegasus-screens.css the rest.
@@ -166,7 +169,7 @@ test("the Add supplier dialog is titled New supplier and saves from its footer",
   const form = core.slice(core.indexOf("function SupplierCreateForm"), core.indexOf("function InventoryItemMasterTab"));
   assert.match(form, /<Modal title="Supplier\.new" subtitle="ใช้ใน Cost item และ Preferred supplier" size="md" onClose=\{onClose\} footer=\{<>/);
   assert.match(form, /<button className="btn primary" type="submit" form="supplier-create-form" disabled=\{busy\}>\{localizeCopy\(busy \? "Saving…" : "Save"\)\}<\/button>/);
-  assert.match(form, /<form id="supplier-create-form" onSubmit=\{onSubmit\}>/);
+  assert.match(form, /<form id="supplier-create-form" noValidate onSubmit=\{onSubmit\}>/);
   assert.doesNotMatch(form, /Create supplier|<Panel title="Add supplier"/);
   // Name is the record's identity: full width, after the short code and the category.
   assert.ok(form.indexOf('"Category *"') < form.indexOf('"Supplier name *"'));
@@ -178,4 +181,89 @@ test("a read-only detail captions only each pair's label, so names and badges ke
   assert.match(css, /\.pg-screen \.detail-grid span \{[^}]*text-transform: none;/);
   assert.match(css, /\.pg-screen \.detail-grid > div > span:first-child \{ color: var\(--pg-muted-fg\); font-size: 12px; font-weight: 500; \}/);
   assert.doesNotMatch(css, /callout > span > br/, "no rule hides line breaks: two text nodes would run together");
+});
+
+// Pegasus 0.5 and D.2 on the ten screens: a save is never disabled because the form is incomplete; pressing it shows a
+// bubble on each field that is missing, and a failed save opens the error dialog instead of red text on the page.
+const SCREEN_FILES = ["CoreScreens", "AdminAnalyticsScreens", "TeamActivityScreen", "PerformanceScreen", "KnowledgeScreens", "SourceRepositories"]
+  .map((name) => `app/system/production/${name}.tsx`);
+
+test("no save on the ten screens is disabled because a field is still empty", async () => {
+  const sources = Object.fromEntries(await Promise.all(SCREEN_FILES.map(async (file) => [file, await read(file)])));
+  const all = Object.values(sources).join("\n");
+  for (const gate of [
+    "disabled={busy || !valid}", "disabled={busy||!source||!mask}", "disabled={busy||(!ids.length&&values.some(value=>value!==0))}",
+    "disabled={busy || !note.trim()}", "disabled={selected.length === 0}", "disabled={!Number(entityId)}", "disabled={busy || !content.trim()}",
+    "disabled={busy || !reviewerId || !approverId}", "disabled={busy || !file || !summary.trim()}", "!form.server || !form.share",
+    "!extraCode || !extraReason.trim() || extraBusy", "disabled={!valid || busy}", "disabled={files.length === 0",
+  ]) assert.ok(!all.includes(gate), `still gated: ${gate}`);
+  // Each screen checks its fields with the shared helper, and the forms that submit natively leave the checking to it.
+  for (const file of SCREEN_FILES) assert.match(sources[file], /from "\.\/form-bubbles";|from '\.\/form-bubbles';/, `${file} uses form-bubbles`);
+  assert.equal((all.match(/checkFields\(/g) ?? []).length >= 20, true, "every save checks its fields");
+  for (const form of all.matchAll(/<form [^>]*onSubmit=\{[^>]*>/g)) {
+    if (form[0].includes("production-document-form") || form[0].includes("onSubmit={(event) => { void submit(event); }}")) continue;
+    if (/supplier-|employee-master-form|activity-/.test(form[0])) assert.match(form[0], /noValidate/, form[0].slice(0, 120));
+  }
+  // What the browser cannot check is a rule with its own bubble.
+  assert.match(sources["app/system/production/TeamActivityScreen.tsx"], /\{invalid:!mask,at:'\[data-bubble-anchor="weekdays"\]',message:t\('Form\.chooseOne'\)\}/);
+  assert.match(sources["app/system/production/PerformanceScreen.tsx"], /if \(submit && \(!checkFields\(editor\.current, t, rules\) \|\| !valid\)\) return;/);
+  assert.match(sources["app/system/production/KnowledgeScreens.tsx"], /\{ invalid: selected\.length === 0, at: "\.check-grid", message: t\("Form\.chooseOne"\) \}/);
+});
+
+test("a failed save on these screens opens the error dialog, not a red box on the page", async () => {
+  const sources = Object.fromEntries(await Promise.all(SCREEN_FILES.map(async (file) => [file, await read(file)])));
+  const core = sources["app/system/production/CoreScreens.tsx"];
+  const master = core.slice(core.indexOf("function SupplierMasterTab"), core.indexOf("function InventoryItemMasterTab"))
+    + core.slice(core.indexOf("function EmployeeModal"));
+  assert.doesNotMatch(master, /<MasterFormError|callout danger/);
+  assert.match(core, /const fail = \(message: string\) => \{ if \(failureTitle\) void failureDialog\(message, failureTitle\); else setError\(message\); \};/);
+  const activity = sources["app/system/production/TeamActivityScreen.tsx"];
+  // Only the two load errors (the screen and a member's dialog) stay on the page; no form shows one.
+  assert.equal((activity.match(/className="activity-error"/g) ?? []).length, 2);
+  assert.doesNotMatch(sources["app/system/production/PerformanceScreen.tsx"], /className="callout error"/);
+  const settings = sources["app/system/production/AdminAnalyticsScreens.tsx"].slice(sources["app/system/production/AdminAnalyticsScreens.tsx"].indexOf("function StorageCheckPanel"));
+  assert.doesNotMatch(settings, /callout error|setErr\(/);
+  const knowledge = sources["app/system/production/KnowledgeScreens.tsx"];
+  for (const name of ["ArticleEditorModal", "CategoryEditorModal", "SequenceEditorModal", "CreateDocumentModal"]) {
+    const start = knowledge.indexOf(`function ${name}`);
+    const body = knowledge.slice(start, knowledge.indexOf("\nfunction ", start + 10));
+    assert.doesNotMatch(body, /callout error|setError\(/, name);
+    assert.match(body, /failureDialog\(errorText\(requestError\), t\("Form\.errorTitle"\)\)/, name);
+  }
+});
+
+test("the bubble helper decides by its rules without a DOM, and every message exists in three languages", async () => {
+  const require = createRequire(import.meta.url);
+  const source = await read("app/system/production/form-bubbles.ts");
+  const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+  const mod = { exports: {} }, opened = [];
+  new Function("require", "module", "exports", code)((name) => name === "../dialogs" ? { alertDialog: async (text, options) => { opened.push({ text, ...options }); } } : require(name), mod, mod.exports);
+  const { checkFields, failureDialog } = mod.exports;
+  const t = (key) => key;
+  assert.equal(checkFields(null, t), true);
+  assert.equal(checkFields(null, t, [{ invalid: false, at: "x", message: "m" }]), true);
+  assert.equal(checkFields(null, t, [{ invalid: false, at: "x", message: "m" }, { invalid: true, at: "y", message: "n" }]), false);
+  await failureDialog("Server said no", "Could not complete");
+  assert.deepEqual(opened, [{ text: "Server said no", tone: "error", title: "Could not complete" }]);
+  // The bubble anchors on the field's wrapper, never on an input (which has no ::after), and dismisses on the next gesture.
+  assert.match(source, /const ANCHORS = "\[data-bubble-anchor\], \.field, \.activity-field, \.performance-area-evidence, \.performance-comment";/);
+  for (const event of ["focusin", "pointerdown", "keydown"]) assert.ok(source.includes(`addEventListener("${event}"`), event);
+  // DateInput's hidden calendar input repeats the visible one's check, so it is skipped.
+  assert.match(source, /control\.getAttribute\("aria-hidden"\) === "true"/);
+
+  const css = withoutComments(await read("app/system/production/pegasus-screens.css"));
+  assert.match(css, /\.pg-screen \[data-invalid\]::after \{\s*content: attr\(data-invalid\); position: absolute; z-index: 40; top: calc\(100% \+ 8px\);/);
+  assert.match(css, /\.pg-screen \[data-shake\] \{ animation: pgs-shake 280ms ease-in-out; \}/);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{\s*\.pg-screen \[data-invalid\]::after, \.pg-screen \[data-invalid\]::before, \.pg-screen \[data-shake\] \{ animation: none; \}/);
+
+  const asked = new Set();
+  for (const file of [...SCREEN_FILES, "app/system/production/form-bubbles.ts"]) for (const match of (await read(file)).matchAll(/["'](Form\.[A-Za-z]+)["']/g)) asked.add(match[1]);
+  assert.ok(asked.size >= 8, `keys were found (${asked.size})`);
+  for (const key of asked) {
+    const entry = FORM_COPY[key];
+    assert.ok(entry, `${key} has an entry`);
+    for (const lang of ["en", "th", "jp"]) assert.ok(entry[lang]?.trim(), `${key} has ${lang}`);
+    for (const [placeholder] of entry.en.matchAll(/\{[a-z]+\}/g)) assert.ok(entry.th.includes(placeholder) && entry.jp.includes(placeholder), `${key} keeps ${placeholder}`);
+  }
+  assert.match(await read("app/system/i18n.ts"), /\.\.\.FORM_COPY,/);
 });

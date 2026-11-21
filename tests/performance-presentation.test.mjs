@@ -40,16 +40,19 @@ test('real production component renders only API-authorized people and never dem
  assert.match(copy,/Authorized Sales/);assert.doesNotMatch(copy,/Unauthorized Engineer|Bootstrap Sample Sales|4\.4/);assert.match(copy,/—/);assert.doesNotMatch(copy,/0\.0/);
  const h2=harness({assessments:[],cycles:[cycle],selectedCycle:cycle,canManage:true});h2.render(h2.screen.default,props);await h2.settle();const empty=text(h2.render(h2.screen.default,props));assert.doesNotMatch(empty,/Unauthorized Engineer|Bootstrap Sample Sales|4\.4/);
 });
-test('real assessment modal saves an incomplete draft while submission stays disabled',async()=>{
+// Pegasus 0.5: submission is never disabled for an incomplete form; pressing it with unrated areas sends nothing.
+test('real assessment modal saves an incomplete draft and refuses to submit it',async()=>{
  const h=harness(null),member=bootstrap[1],review=h.screen.emptyReview(member),saved=[];
  const tree=h.render(h.screen.AssessmentModal,{member,review,isManager:false,workEvidence:null,onClose:()=>{},onSave:async(...args)=>saved.push(args)});
- const buttons=nodes(tree.props.footer).filter(n=>n.type==='button');assert.equal(buttons[0].props.disabled,false);assert.equal(buttons[1].props.disabled,true);assert.doesNotMatch(text(tree),/0\.0/);
+ const buttons=nodes(tree.props.footer).filter(n=>n.type==='button');assert.equal(buttons[0].props.disabled,false);assert.equal(buttons[1].props.disabled,false);assert.doesNotMatch(text(tree),/0\.0/);
+ buttons[1].props.onClick();await Promise.resolve();assert.equal(saved.length,0,'an incomplete assessment is not submitted');
  buttons[0].props.onClick();await Promise.resolve();assert.equal(saved.length,1);assert.deepEqual(saved[0][0],[0,0,0,0,0]);assert.equal(saved[0][2],false);
 });
 test('an independent manager assessment starts blank despite complete self-ratings',()=>{
  const h=harness(null),member=bootstrap[1],review={...h.screen.emptyReview(member),selfScores:[5,5,5,5,5],scores:[5,5,5,5,5]};
  const tree=h.render(h.screen.AssessmentModal,{member,review,isManager:true,workEvidence:null,onClose:()=>{},onSave:async()=>{}});
- assert.ok(nodes(tree).filter(n=>n.props.role==='radio').every(n=>n.props['aria-checked']===false));assert.equal(nodes(tree.props.footer).filter(n=>n.type==='button')[1].props.disabled,true);
+ assert.ok(nodes(tree).filter(n=>n.props.role==='radio').every(n=>n.props['aria-checked']===false));assert.equal(nodes(tree.props.footer).filter(n=>n.type==='button')[1].props.disabled,false);
+ let sent=0;const blank=h.render(h.screen.AssessmentModal,{member,review,isManager:true,workEvidence:null,onClose:()=>{},onSave:async()=>{sent++;}});nodes(blank.props.footer).filter(n=>n.type==='button')[1].props.onClick();assert.equal(sent,0,'the self-ratings are not submitted as the manager scores');
 });
 test('missing and partial scores remain unrated; a complete weighted score remains correct',()=>{
  assert.equal(presentation.weightedPerformanceScore([5,0,4],[30,30,40]),0);assert.equal(presentation.performanceScoreText(0),'—');assert.equal(presentation.performanceScoreText(NaN),'—');

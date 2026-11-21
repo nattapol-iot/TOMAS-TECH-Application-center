@@ -31,6 +31,7 @@ import {
 import { DateInput } from "../DateInput";
 import { PegasusScreen } from "./PegasusScreen";
 import { IS_TMT_ID_MODE } from "../tmt-id.constants";
+import { checkFields, failureDialog } from "./form-bubbles";
 
 export type AdminAnalyticsProps = {
   bootstrap: BootstrapData;
@@ -918,7 +919,9 @@ function StorageCheckPanel({ canWrite, notify }: { canWrite: boolean; notify: (m
   const [connection, setConnection] = useState<NasConnectionTestResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [err, setErr] = useState("");
+  const nasFields = useRef<HTMLDivElement>(null);
+  const failureTitle = uiText("Form.errorTitle");
+  const fail = (error: unknown) => { void failureDialog(String(error instanceof Error ? error.message : error), failureTitle); };
   const uncPreview = form.server && form.share
     ? `\\\\${form.server}\\${form.share}${form.destinationPath ? `\\${form.destinationPath.replaceAll("/", "\\")}` : ""}`
     : "";
@@ -927,49 +930,55 @@ function StorageCheckPanel({ canWrite, notify }: { canWrite: boolean; notify: (m
     void loadNasSettings().then((value) => {
       setSettings(value);
       if (value.draft) setForm({ server: value.draft.server, share: value.draft.share, destinationPath: value.draft.destinationPath, username: value.draft.username });
-    }).catch((error) => setErr(String(error instanceof Error ? error.message : error)));
-  }, []);
+    }).catch((error) => { void failureDialog(String(error instanceof Error ? error.message : error), failureTitle); });
+  }, [failureTitle]);
 
   const run = async () => {
-    setBusy(true); setErr(""); setResult(null);
+    setBusy(true); setResult(null);
     try { setResult(await checkAdminStorage()); }
-    catch (e) { setErr(String(e instanceof Error ? e.message : e)); }
+    catch (e) { fail(e); }
     finally { setBusy(false); }
   };
 
   const set = (key: keyof NasSettingsInput, value: string) => { setForm((current) => ({ ...current, [key]: value })); setConnection(null); };
   const test = async () => {
-    setBusy(true); setErr(""); setConnection(null);
-    try { setConnection(await testNasConnection(form)); }
-    catch (e) { setErr(String(e instanceof Error ? e.message : e)); }
+    if (!checkFields(nasFields.current, uiText)) return;
+    setBusy(true); setConnection(null);
+    try {
+      const outcome = await testNasConnection(form);
+      // A connection that fails is a failed action, so it opens the error dialog; a good one stays on the page with its path.
+      if (outcome.ok) setConnection(outcome); else fail(outcome.error ?? uiText("Settings.failed"));
+    }
+    catch (e) { fail(e); }
     finally { setBusy(false); }
   };
   const save = async () => {
-    setSaving(true); setErr("");
+    if (!checkFields(nasFields.current, uiText)) return;
+    setSaving(true);
     try {
       const draft = await saveNasSettings(form);
       setSettings((current) => ({ active: current?.active ?? { mode: "Local", rootPath: "" }, draft }));
       notify("Settings.saved");
-    } catch (e) { setErr(String(e instanceof Error ? e.message : e)); }
+    } catch (e) { fail(e); }
     finally { setSaving(false); }
   };
 
   return (
     <>
     <Panel title="NAS connection & destination" subtitle="Settings.nasSubtitle">
-      <div className="form-grid two">
-        <Field label="Settings.server"><input value={form.server} placeholder="100.64.0.53" onChange={(event) => set("server", event.target.value)} /></Field>
-        <Field label="Share name"><input value={form.share} placeholder="IoT Department" onChange={(event) => set("share", event.target.value)} /></Field>
-        <Field label="Destination path" span={2} hint="Settings.pathHint"><input value={form.destinationPath} placeholder="IoT Team Center" onChange={(event) => set("destinationPath", event.target.value)} /></Field>
-        <Field label="NAS username"><input value={form.username} autoComplete="username" onChange={(event) => set("username", event.target.value)} /></Field>
+      <div className="form-grid two" ref={nasFields}>
+        <Field label="Settings.server"><input required value={form.server} placeholder="100.64.0.53" onChange={(event) => set("server", event.target.value)} /></Field>
+        <Field label="Share name"><input required value={form.share} placeholder="IoT Department" onChange={(event) => set("share", event.target.value)} /></Field>
+        <Field label="Destination path" span={2} hint="Settings.pathHint"><input required value={form.destinationPath} placeholder="IoT Team Center" onChange={(event) => set("destinationPath", event.target.value)} /></Field>
+        <Field label="NAS username"><input required value={form.username} autoComplete="username" onChange={(event) => set("username", event.target.value)} /></Field>
         <Field label="Password"><input value={uiText("Settings.passwordValue")} disabled aria-label={uiText("Settings.passwordLabel")} /></Field>
       </div>
       {uncPreview ? <div className="info-strip" style={{ marginTop: 14 }}><Icon name="folder" /><span><strong>{uiText("Settings.target")}</strong><br /><small style={{ wordBreak: "break-all" }}>{uncPreview}</small></span></div> : null}
       <div className="row-actions" style={{ justifyContent: "flex-end", marginTop: 14 }}>
-        <button className="btn ghost" type="button" disabled={busy || !form.server || !form.share || !form.destinationPath || !form.username} onClick={() => { void test(); }}><Icon name="refresh" />{uiText(busy ? "Settings.testing" : "Settings.testServer")}</button>
-        <button className="btn primary" type="button" disabled={!canWrite || saving || !form.server || !form.share || !form.destinationPath || !form.username} onClick={() => { void save(); }}><Icon name="check" />{uiText(saving ? "Saving…" : "Settings.saveSettings")}</button>
+        <button className="btn ghost" type="button" disabled={busy || saving} onClick={() => { void test(); }}><Icon name="refresh" />{uiText(busy ? "Settings.testing" : "Settings.testServer")}</button>
+        <button className="btn primary" type="button" disabled={!canWrite || saving || busy} onClick={() => { void save(); }}><Icon name="check" />{uiText(saving ? "Saving…" : "Settings.saveSettings")}</button>
       </div>
-      {connection ? <div className={`callout ${connection.ok ? "info" : "error"}`} style={{ marginTop: 12 }}><Icon name={connection.ok ? "checkCircle" : "alertTriangle"} /><span>{connection.ok ? <><span>{uiText("Settings.connected").replace("{ms}", String(connection.durationMs))}</span><small>{connection.uncPath}</small></> : connection.error}</span></div> : null}
+      {connection?.ok ? <div className="callout info" style={{ marginTop: 12 }}><Icon name="checkCircle" /><span><span>{uiText("Settings.connected").replace("{ms}", String(connection.durationMs))}</span><small>{connection.uncPath}</small></span></div> : null}
       {settings?.draft ? <div className="callout info" style={{ marginTop: 12 }}><Icon name="clock" /><span><strong>{uiText("Settings.draftSaved")}</strong><small>{uiText("Settings.draftBy").replace("{name}", settings.draft.updatedByName).replace("{when}", formatDateTime(settings.draft.updatedAt))}</small></span></div> : null}
       <div className="info-strip" style={{ marginTop: 14 }}><Icon name="shield" /><span>{uiText("Settings.passwordNote")}</span></div>
     </Panel>
@@ -982,14 +991,12 @@ function StorageCheckPanel({ canWrite, notify }: { canWrite: boolean; notify: (m
         {result ? (<>
           <div>
             <span className={`setting-icon ${result.ok ? "green" : "red"}`}><Icon name={result.ok ? "database" : "alertTriangle"} /></span>
-            <span><strong>{uiText(result.mode === "Nas" ? "Settings.modeNas" : "Settings.modeLocal")}</strong><small style={{ wordBreak: "break-all" }}>{result.rootPath}</small></span>
+            <span><strong>{uiText(result.mode === "Nas" ? "Settings.modeNas" : "Settings.modeLocal")}</strong><small style={{ wordBreak: "break-all" }}>{result.rootPath}</small>{result.error ? <small style={{ overflowWrap: "anywhere" }}>{result.error}</small> : null}</span>
             <Badge tone={result.ok ? "green" : "red"}>{result.ok ? uiText("Settings.ok").replace("{ms}", String(result.durationMs)) : uiText("Settings.failed")}</Badge>
           </div>
-          {result.error && <div className="callout error" style={{ marginTop: 8 }}><Icon name="alertTriangle" /><span>{result.error}</span></div>}
         </>) : (
           <div><span className="setting-icon slate"><Icon name="database" /></span><span><strong>{uiText("Settings.notTested")}</strong><small>{uiText("Settings.notTestedHint")}</small></span></div>
         )}
-        {err && <div className="callout error"><Icon name="alertTriangle" /><span>{err}</span></div>}
       </div>
     </Panel>
     </>

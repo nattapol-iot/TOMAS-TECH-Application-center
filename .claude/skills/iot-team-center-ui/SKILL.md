@@ -42,6 +42,11 @@ Audit a stylesheet you touched: `grep -c "#[0-9a-fA-F]\{3,6\}" <file>` should be
 prototype (2026-10-05) because no production screen used them; restore one from git history
 rather than writing a second version.
 
+Screens in the Pegasus look (Team & Knowledge and System menus) wear `PegasusScreen` (`production/PegasusScreen.tsx`).
+Their forms never disable a save because a field is empty: the form gets `noValidate`, and the save calls `checkFields`
+from `production/form-bubbles.ts`. A failed save goes to its `failureDialog`, never to red text on the page. Reuse both
+rather than adding a second validation style.
+
 `Modal` sizes: `sm` 460 · `md` 640 · `lg` 940 · `xl` 1240 · `wide` 92vw · `full`. A dialog with an
 editable table of more than about six columns needs `xl`; `lg` puts the arithmetic behind a
 horizontal scrollbar.
