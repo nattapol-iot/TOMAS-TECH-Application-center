@@ -4,7 +4,7 @@ import { promptDialog } from "../dialogs";
 import { idLink, useLinkedState } from "../screen-link";
 import { LocalizedText } from "../LocalizedText";
 import { useT as useUiText } from "../i18n";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ApiClientError,
   acknowledgeKnowledge,
@@ -81,6 +81,7 @@ import {
 } from "../ui";
 import { DateInput } from "../DateInput";
 import { PegasusScreen } from "./PegasusScreen";
+import { checkFields, failureDialog } from "./form-bubbles";
 
 type KnowledgeProps = {
   bootstrap: BootstrapData;
@@ -637,27 +638,30 @@ function ArticleEditorModal({ categories, bootstrap, article, onClose, onSaved }
   const [tags, setTags] = useState(article?.tags ?? "");
   const [reviewDate, setReviewDate] = useState(article?.reviewDate ?? "");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const fields = useRef<HTMLDivElement>(null);
   const save = async () => {
-    if (!title.trim() || !content.trim() || !categoryId) { setError("Title, content and category are required."); return; }
-    setBusy(true); setError("");
+    if (!checkFields(fields.current, t, [
+      { invalid: !title.trim(), at: '[name="title"]', message: t("Form.required") },
+      { invalid: !content.trim(), at: '[name="content"]', message: t("Form.required") },
+      { invalid: !categoryId, at: '[name="categoryId"]', message: t("Form.choose") },
+    ])) return;
+    setBusy(true);
     const input = { title: title.trim(), summary: summary.trim(), content: content.trim(), articleType, categoryId,
       ownerId: article?.ownerId ?? bootstrap.user.id, status, confidentiality, language, tags: tags.trim(), reviewDate: reviewDate || undefined };
     try {
       if (article) { await updateKnowledgeArticle(article.id, input); onSaved(article.id); }
       else { const created = await createKnowledgeArticle(input); onSaved(created.id); }
-    } catch (requestError) { setError(errorText(requestError)); }
+    } catch (requestError) { void failureDialog(errorText(requestError), t("Form.errorTitle")); }
     finally { setBusy(false); }
   };
   return <Modal title={article ? t("Edit knowledge article") : t("New knowledge article")} subtitle={t("Content is stored as safe plain text/Markdown; HTML is never injected")}
     onClose={onClose} footer={<><button className="btn ghost" type="button" onClick={onClose}>{t("Cancel")}</button><button className="btn primary" type="button" disabled={busy} onClick={() => { void save(); }}>{busy ? t("Saving…") : t("Save article")}</button></>}>
-    {error ? <div className="callout error" role="alert">{error}</div> : null}
-    <div className="form-grid">
-      <Field label={t("Title")} span={2}><input value={title} maxLength={300} onChange={(event) => setTitle(event.target.value)} /></Field>
+    <div className="form-grid" ref={fields}>
+      <Field label={t("Title")} span={2}><input name="title" value={title} maxLength={300} onChange={(event) => setTitle(event.target.value)} /></Field>
       <Field label={t("Article type")}><select value={articleType} onChange={(event) => setArticleType(event.target.value)}>{ARTICLE_TYPES.slice(1).map((value) => <option key={value}>{value}</option>)}</select></Field>
-      <Field label={t("Category")}><select value={categoryId} onChange={(event) => setCategoryId(Number(event.target.value))}>{categories.map((category) => <option key={category.id} value={category.id}>{category.nameEn}</option>)}</select></Field>
+      <Field label={t("Category")}><select name="categoryId" value={categoryId} onChange={(event) => setCategoryId(Number(event.target.value))}>{categories.map((category) => <option key={category.id} value={category.id}>{category.nameEn}</option>)}</select></Field>
       <Field label={t("Summary")} span={2}><textarea rows={2} value={summary} maxLength={1000} onChange={(event) => setSummary(event.target.value)} /></Field>
-      <Field label={t("Content")} span={2} hint={t("Headings, lists, links, tables and code blocks can be written in Markdown")}><textarea rows={14} value={content} onChange={(event) => setContent(event.target.value)} /></Field>
+      <Field label={t("Content")} span={2} hint={t("Headings, lists, links, tables and code blocks can be written in Markdown")}><textarea name="content" rows={14} value={content} onChange={(event) => setContent(event.target.value)} /></Field>
       <Field label={t("Status")}><select value={status} onChange={(event) => setStatus(event.target.value)}>{["Draft", "In Review", "Published", "Archived"].map((value) => <option key={value}>{value}</option>)}</select></Field>
       <Field label={t("Confidentiality")}><select value={confidentiality} onChange={(event) => setConfidentiality(event.target.value)}>{["Company", "Department Only", "Project Team Only", "Management Only", "Confidential", "Restricted"].map((value) => <option key={value}>{value}</option>)}</select></Field>
       <Field label={t("Language")}><select value={language} onChange={(event) => setLanguage(event.target.value)}>{["EN", "TH", "JA"].map((value) => <option key={value}>{value}</option>)}</select></Field>
@@ -738,17 +742,18 @@ function CategoryEditorModal({ category, categories, onClose, onSaved }: {
   const [confidentiality, setConfidentiality] = useState(category?.defaultConfidentiality ?? "Company");
   const [sortOrder, setSortOrder] = useState(category?.sortOrder ?? 100);
   const [active, setActive] = useState(category?.isActive ?? true);
-  const [error, setError] = useState("");
+  const fields = useRef<HTMLDivElement>(null);
   const save = async () => {
+    if (!checkFields(fields.current, t)) return;
     try {
       const input = { parentId: parentId || undefined, code: code.trim().toUpperCase(), nameEn: nameEn.trim(), nameTh: nameTh.trim(), nameJa: nameJa.trim(),
         defaultDocumentType: documentType || undefined, defaultConfidentiality: confidentiality, sortOrder, isActive: active };
       if (category) await updateKnowledgeCategory(category.id, input); else await createKnowledgeCategory(input);
       onSaved();
-    } catch (requestError) { setError(errorText(requestError)); }
+    } catch (requestError) { void failureDialog(errorText(requestError), t("Form.errorTitle")); }
   };
   return <Modal title={category ? t("Edit category") : t("New category")} onClose={onClose} footer={<><button className="btn ghost" type="button" onClick={onClose}>{t("Cancel")}</button><button className="btn primary" type="button" onClick={() => { void save(); }}>{t("Save")}</button></>}>
-    {error ? <div className="callout error">{error}</div> : null}<div className="form-grid">
+    <div className="form-grid" ref={fields}>
       <Field label={t("Code")}><input value={code} maxLength={40} onChange={(event) => setCode(event.target.value)} /></Field>
       <Field label={t("Display order")}><input type="number" value={sortOrder} onChange={(event) => setSortOrder(Number(event.target.value))} /></Field>
       <Field label={t("English name")} span={2}><input value={nameEn} maxLength={200} onChange={(event) => setNameEn(event.target.value)} /></Field>
@@ -772,17 +777,18 @@ function SequenceEditorModal({ sequence, onClose, onSaved }: {
   const [lastNumber, setLastNumber] = useState(sequence?.lastNumber ?? 0);
   const [padding, setPadding] = useState(sequence?.padding ?? 4);
   const [active, setActive] = useState(sequence?.isActive ?? true);
-  const [error, setError] = useState("");
+  const fields = useRef<HTMLDivElement>(null);
   const save = async () => {
+    if (!checkFields(fields.current, t)) return;
     try {
       const input = { prefix: prefix.trim().toUpperCase(), scopeCode: scopeCode.trim().toUpperCase(), scopeName: scopeName.trim(), lastNumber, padding, isActive: active };
       if (sequence) await updateKnowledgeNumberSequence(sequence.id, input); else await createKnowledgeNumberSequence(input);
       onSaved();
-    } catch (requestError) { setError(errorText(requestError)); }
+    } catch (requestError) { void failureDialog(errorText(requestError), t("Form.errorTitle")); }
   };
   return <Modal title={sequence ? t("Edit number sequence") : t("New number sequence")} subtitle={t("The last number cannot move backwards")} onClose={onClose}
     footer={<><button className="btn ghost" type="button" onClick={onClose}>{t("Cancel")}</button><button className="btn primary" type="button" onClick={() => { void save(); }}>{t("Save")}</button></>}>
-    {error ? <div className="callout error">{error}</div> : null}<div className="form-grid">
+    <div className="form-grid" ref={fields}>
       <Field label={t("Prefix")}><input value={prefix} disabled={Boolean(sequence)} maxLength={10} onChange={(event) => setPrefix(event.target.value)} /></Field>
       <Field label={t("Scope code")}><input value={scopeCode} disabled={Boolean(sequence)} maxLength={20} onChange={(event) => setScopeCode(event.target.value)} /></Field>
       <Field label={t("Scope description")} span={2}><input value={scopeName} maxLength={200} onChange={(event) => setScopeName(event.target.value)} /></Field>
@@ -813,18 +819,16 @@ function CreateDocumentModal({
   const [tags, setTags] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const fields = useRef<HTMLDivElement>(null);
 
   const requiresReviewDate = documentType === "Controlled Document";
 
   const submit = async () => {
-    setError("");
-    if (!title.trim()) { setError("A title is required."); return; }
-    if (!categoryId) { setError("A category is required."); return; }
-    if (requiresReviewDate && !nextReviewDate) {
-      setError("A controlled document needs a next review date.");
-      return;
-    }
+    if (!checkFields(fields.current, t, [
+      { invalid: !title.trim(), at: '[name="title"]', message: t("Form.required") },
+      { invalid: !categoryId, at: '[name="categoryId"]', message: t("Form.choose") },
+      { invalid: requiresReviewDate && !nextReviewDate, at: '[data-bubble-target="next-review"]', message: t("Date.required") },
+    ])) return;
     setBusy(true);
     try {
       const created = await createKnowledgeDocument({
@@ -842,7 +846,7 @@ function CreateDocumentModal({
       });
       onCreated(created.documentNumber, created.id);
     } catch (requestError) {
-      setError(errorText(requestError));
+      void failureDialog(errorText(requestError), t("Form.errorTitle"));
     } finally {
       setBusy(false);
     }
@@ -862,10 +866,9 @@ function CreateDocumentModal({
         </>
       }
     >
-      {error ? <div className="callout error" role="alert"><Icon name="alertTriangle" /><span>{error}</span></div> : null}
-      <div className="form-grid">
+      <div className="form-grid" ref={fields}>
         <Field label={t("Title")} span={2}>
-          <input value={title} maxLength={300} onChange={(event) => setTitle(event.target.value)} />
+          <input name="title" value={title} maxLength={300} onChange={(event) => setTitle(event.target.value)} />
         </Field>
         <Field label={t("Document type")}>
           <select value={documentType} onChange={(event) => setDocumentType(event.target.value)}>
@@ -873,7 +876,7 @@ function CreateDocumentModal({
           </select>
         </Field>
         <Field label={t("Category")}>
-          <select value={categoryId} onChange={(event) => setCategoryId(Number(event.target.value))}>
+          <select name="categoryId" value={categoryId} onChange={(event) => setCategoryId(Number(event.target.value))}>
             {categories.map((category) => (
               <option key={category.id} value={category.id}>{category.nameEn}</option>
             ))}
@@ -900,7 +903,7 @@ function CreateDocumentModal({
           label={t("Next review date")}
           hint={requiresReviewDate ? t("Required for a controlled document") : t("Optional")}
         >
-          <DateInput value={nextReviewDate} onChange={(event) => setNextReviewDate(event.target.value)} />
+          <DateInput data-bubble-target="next-review" required={requiresReviewDate} value={nextReviewDate} onChange={(event) => setNextReviewDate(event.target.value)} />
         </Field>
         <Field label={t("Tags")} span={2} hint={t("Separate with semicolons")}>
           <input value={tags} maxLength={500} onChange={(event) => setTags(event.target.value)} />
@@ -940,15 +943,18 @@ function DocumentDrawer({
   const [comments, setComments] = useState<KnowledgeComment[]>([]);
   const [permissions, setPermissions] = useState<KnowledgePermission[]>([]);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const failureTitle = t("Form.errorTitle");
+  // A document that could not be opened says so in the drawer (plain text) after the error dialog, instead of loading forever.
+  const [loadFailed, setLoadFailed] = useState(false);
 
   const reload = useCallback(async () => {
     try {
       setDetail(await getKnowledgeDocument(documentId));
     } catch (requestError) {
-      setError(errorText(requestError));
+      setLoadFailed(true);
+      void failureDialog(errorText(requestError), failureTitle);
     }
-  }, [documentId]);
+  }, [documentId, failureTitle]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => { void reload(); }, 0);
@@ -969,14 +975,13 @@ function DocumentDrawer({
 
   const act = async (work: () => Promise<unknown>, message: string) => {
     setBusy(true);
-    setError("");
     try {
       await work();
       notify(message);
       await reload();
       onChanged();
     } catch (requestError) {
-      setError(errorText(requestError));
+      void failureDialog(errorText(requestError), failureTitle);
     } finally {
       setBusy(false);
     }
@@ -985,7 +990,7 @@ function DocumentDrawer({
   if (!detail) {
     return (
       <Drawer title={t("Loading…")} onClose={onClose}>
-        <p>{error || t("Loading document…")}</p>
+        <p>{loadFailed ? t("Could not load") : t("Loading document…")}</p>
       </Drawer>
     );
   }
@@ -1069,8 +1074,6 @@ function DocumentDrawer({
         </>
       }
     >
-      {error ? <div className="callout error" role="alert"><Icon name="alertTriangle" /><span>{error}</span></div> : null}
-
       {/* Rule 8: an obsolete revision must say so, loudly, wherever it is read. */}
       {document.status === "Superseded" || document.status === "Archived" ? (
         <div className="callout warning" role="status">
@@ -1253,12 +1256,14 @@ function AcknowledgementAssignment({ versionId, bootstrap, notify, onChanged }: 
   const team = bootstrap.team ?? [];
   const [selected, setSelected] = useState<number[]>([]);
   const [dueAt, setDueAt] = useState("");
+  const fields = useRef<HTMLDivElement>(null);
   return <Panel title={t("Read acknowledgement")} subtitle={t("Assignments are bound to this exact published revision")}>
-    <div className="form-grid">
+    <div className="form-grid" ref={fields}>
       <Field label={t("Members")} span={2}><div className="check-grid">{team.map((member) => <label className="check-inline" key={member.id}><input type="checkbox" checked={selected.includes(member.id)} onChange={(event) => setSelected((current) => event.target.checked ? [...current, member.id] : current.filter((id) => id !== member.id))} /><span>{member.name}</span></label>)}</div></Field>
       <Field label={t("Due date")}><DateInput value={dueAt} onChange={(event) => setDueAt(event.target.value)} /></Field>
     </div>
-    <button className="btn primary" type="button" disabled={selected.length === 0} onClick={async () => {
+    <button className="btn primary" type="button" onClick={async () => {
+      if (!checkFields(fields.current, t, [{ invalid: selected.length === 0, at: ".check-grid", message: t("Form.chooseOne") }])) return;
       try { const result = await assignKnowledgeAcknowledgement(versionId, { userIds: selected, dueAt: dueAt || undefined }); notify(`${result.assigned} acknowledgement assignment(s) added`); setSelected([]); onChanged(); }
       catch (error) { notify(errorText(error)); }
     }}><Icon name="checkCircle" />{t("Assign acknowledgement")}</button>
@@ -1273,14 +1278,15 @@ function DocumentRelations({ documentId, relations, canEdit, notify, onChanged }
   const [entityType, setEntityType] = useState("Project");
   const [entityId, setEntityId] = useState("");
   const [relationType, setRelationType] = useState("Reference");
+  const fields = useRef<HTMLDivElement>(null);
   return <div className="stack">
     {canEdit ? <Panel title={t("Link document")} subtitle={t("Link one document to many records without copying the file")}>
-      <div className="form-grid">
+      <div className="form-grid" ref={fields}>
         <Field label={t("Record type")}><select value={entityType} onChange={(event) => setEntityType(event.target.value)}>{["Inquiry", "Project", "Estimate", "BOM", "PR", "PO", "GoodsReceipt", "MaterialIssue", "ItemMaster", "Supplier", "Customer"].map((value) => <option key={value}>{value}</option>)}</select></Field>
-        <Field label={t("Record ID")}><input type="number" min={1} value={entityId} onChange={(event) => setEntityId(event.target.value)} /></Field>
+        <Field label={t("Record ID")}><input name="entityId" type="number" min={1} value={entityId} onChange={(event) => setEntityId(event.target.value)} /></Field>
         <Field label={t("Relation type")}><select value={relationType} onChange={(event) => setRelationType(event.target.value)}>{["Reference", "Attachment", "Deliverable", "Standard Applied", "Supersedes", "Related"].map((value) => <option key={value}>{value}</option>)}</select></Field>
       </div>
-      <button className="btn primary" type="button" disabled={!Number(entityId)} onClick={async () => { try { await linkKnowledgeDocument(documentId, { entityType, entityId: Number(entityId), relationType }); setEntityId(""); notify("Document linked"); onChanged(); } catch (error) { notify(errorText(error)); } }}><Icon name="gitBranch" />{t("Link record")}</button>
+      <button className="btn primary" type="button" onClick={async () => { if (!checkFields(fields.current, t, [{ invalid: !Number(entityId), at: '[name="entityId"]', message: t("Form.required") }])) return; try { await linkKnowledgeDocument(documentId, { entityType, entityId: Number(entityId), relationType }); setEntityId(""); notify("Document linked"); onChanged(); } catch (error) { notify(errorText(error)); } }}><Icon name="gitBranch" />{t("Link record")}</button>
     </Panel> : null}
     {relations.length === 0 ? <EmptyState icon="gitBranch" title="Not linked yet" message="Link this document to an inquiry, project, estimate, BOM, PR or PO to make it findable from that record." /> : <ul className="link-list">{relations.map((relation) => <li key={relation.id}><Pill>{relation.entityType}</Pill><span className="mono">#{relation.entityId}</span><span>{relation.relationType}</span><small>{relation.createdByName}</small>{canEdit ? <button className="btn ghost sm" type="button" onClick={async () => { try { await unlinkKnowledgeDocument(documentId, relation.id); notify("Document unlinked"); onChanged(); } catch (error) { notify(errorText(error)); } }}><Icon name="trash" /></button> : null}</li>)}</ul>}
   </div>;
@@ -1299,8 +1305,9 @@ function DocumentComments({
   const t = useT();
   const [content, setContent] = useState("");
   const [replyTo, setReplyTo] = useState<number | undefined>();
+  const box = useRef<HTMLDivElement>(null);
   const submit = async () => {
-    if (!content.trim()) return;
+    if (!checkFields(box.current, t, [{ invalid: !content.trim(), at: "textarea", message: t("Form.required") }])) return;
     try {
       await createKnowledgeComment(documentId, { content: content.trim(), versionId, parentCommentId: replyTo });
       setContent(""); setReplyTo(undefined); notify("Comment added"); onChanged();
@@ -1309,11 +1316,11 @@ function DocumentComments({
   return (
     <div className="stack">
       <Panel title={replyTo ? t("Reply to comment") : t("Add comment")} subtitle={t("Comments stay linked to this document revision")}>
-        <textarea rows={3} maxLength={4000} value={content} onChange={(event) => setContent(event.target.value)}
-          placeholder={t("Write a comment or review note…")} />
+        <div ref={box}><textarea rows={3} maxLength={4000} value={content} onChange={(event) => setContent(event.target.value)}
+          placeholder={t("Write a comment or review note…")} /></div>
         <div className="button-row">
           {replyTo ? <button className="btn ghost" type="button" onClick={() => setReplyTo(undefined)}>{t("Cancel reply")}</button> : null}
-          <button className="btn primary" type="button" disabled={busy || !content.trim()} onClick={() => { void submit(); }}>
+          <button className="btn primary" type="button" disabled={busy} onClick={() => { void submit(); }}>
             <Icon name="send" />{t("Post comment")}
           </button>
         </div>
@@ -1408,6 +1415,7 @@ function SubmitForReviewForm({
   const others = team.filter((member) => member.id !== bootstrap.user.id);
   const [reviewerId, setReviewerId] = useState(others[0]?.id ?? 0);
   const [approverId, setApproverId] = useState(others[1]?.id ?? others[0]?.id ?? 0);
+  const fields = useRef<HTMLDivElement>(null);
 
   if (others.length === 0) {
     return (
@@ -1420,14 +1428,14 @@ function SubmitForReviewForm({
 
   return (
     <Panel title={t("Submit for review")} subtitle={t("The author cannot be the final approver")}>
-      <div className="form-grid">
+      <div className="form-grid" ref={fields}>
         <Field label={t("Reviewer")}>
-          <select value={reviewerId} onChange={(event) => setReviewerId(Number(event.target.value))}>
+          <select name="reviewerId" value={reviewerId} onChange={(event) => setReviewerId(Number(event.target.value))}>
             {others.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}
           </select>
         </Field>
         <Field label={t("Approver")}>
-          <select value={approverId} onChange={(event) => setApproverId(Number(event.target.value))}>
+          <select name="approverId" value={approverId} onChange={(event) => setApproverId(Number(event.target.value))}>
             {others.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}
           </select>
         </Field>
@@ -1435,8 +1443,14 @@ function SubmitForReviewForm({
       <button
         className="btn primary"
         type="button"
-        disabled={busy || !reviewerId || !approverId}
-        onClick={() => onSubmit({ reviewerIds: [reviewerId], approverId })}
+        disabled={busy}
+        onClick={() => {
+          if (!checkFields(fields.current, t, [
+            { invalid: !reviewerId, at: '[name="reviewerId"]', message: t("Form.choose") },
+            { invalid: !approverId, at: '[name="approverId"]', message: t("Form.choose") },
+          ])) return;
+          onSubmit({ reviewerIds: [reviewerId], approverId });
+        }}
       >
         <Icon name="send" />{t("Submit for review")}
       </button>
@@ -1456,10 +1470,11 @@ function UploadRevisionForm({
   const [file, setFile] = useState<File | null>(null);
   const [summary, setSummary] = useState("");
   const [changeType, setChangeType] = useState<"Major" | "Minor">("Major");
+  const fields = useRef<HTMLDivElement>(null);
 
   return (
     <Panel title={t("Upload a new revision")} subtitle={t("A published revision is never overwritten; this creates the next one")}>
-      <div className="form-grid">
+      <div className="form-grid" ref={fields}>
         <Field label={t("Change type")}>
           <select value={changeType} onChange={(event) => setChangeType(event.target.value as "Major" | "Minor")}>
             <option value="Major">{t("Major")}</option>
@@ -1468,20 +1483,27 @@ function UploadRevisionForm({
         </Field>
         <Field label={t("File")}>
           <input
+            name="revisionFile"
             type="file"
             accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.png,.jpg,.jpeg"
             onChange={(event) => setFile(event.target.files?.[0] ?? null)}
           />
         </Field>
         <Field label={t("Change summary")} span={2} hint={t("Required — it becomes part of the revision history")}>
-          <input value={summary} maxLength={2000} onChange={(event) => setSummary(event.target.value)} />
+          <input name="changeSummary" value={summary} maxLength={2000} onChange={(event) => setSummary(event.target.value)} />
         </Field>
       </div>
       <button
         className="btn primary"
         type="button"
-        disabled={busy || !file || !summary.trim()}
-        onClick={() => file && onUpload({ file, changeSummary: summary.trim(), changeType })}
+        disabled={busy}
+        onClick={() => {
+          if (!checkFields(fields.current, t, [
+            { invalid: !file, at: '[name="revisionFile"]', message: t("Form.choose") },
+            { invalid: !summary.trim(), at: '[name="changeSummary"]', message: t("Form.required") },
+          ]) || !file) return;
+          onUpload({ file, changeSummary: summary.trim(), changeType });
+        }}
       >
         <Icon name="upload" />{t("Upload revision")}
       </button>

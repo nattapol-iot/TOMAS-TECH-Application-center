@@ -8,7 +8,7 @@ const today='2026-09-07';
 const member={id:7,name:'TEST member',department:'TEST team',role:'Engineer',canSignIn:true};
 const meta={members:[member],selfId:7,canManage:false,canReview:false,canConfigure:false,startedAt:today+'T00:00:00Z',projects:[],cycles:[{id:1,code:'TEST cycle',name:'TEST cycle',periodStart:'2026-07-01',periodEnd:'2026-12-31',status:'OPEN',mode:'TRIAL',configured:false}]};
 const overview={day:today,updatedAt:today+'T01:00:00Z',items:[{...member,day:{day:today,status:'PENDING',expected:2,updated:0},entered:true,accessVisible:true,sessions:1,firstAt:today+'T01:00:00Z',lastAt:today+'T01:00:00Z',updatedTasks:0,projectOnly:false,score:{automatic:null,total:null,eligible:false,mode:'TRIAL'}}]};
-function harness(lang){let cursor=0;const states=[],effects=[];const react={...require('react'),useState(init){const i=cursor++;if(!(i in states))states[i]=typeof init==='function'?init():init;return [states[i],v=>{states[i]=typeof v==='function'?v(states[i]):v;}];},useRef(value){return react.useState(()=>({current:value}))[0];},useEffect:f=>effects.push(f),useCallback:f=>f};
+function harness(lang){let cursor=0;const states=[],effects=[],failures=[];const react={...require('react'),useState(init){const i=cursor++;if(!(i in states))states[i]=typeof init==='function'?init():init;return [states[i],v=>{states[i]=typeof v==='function'?v(states[i]):v;}];},useRef(value){return react.useState(()=>({current:value}))[0];},useEffect:f=>effects.push(f),useCallback:f=>f};
  const source=readFileSync('app/system/production/TeamActivityScreen.tsx','utf8'),code=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText,moduleObject={exports:{}};
  new Function('require','module','exports',code)(name=>{
   if(name==='../dialogs')return { confirmDialog: async () => globalThis.window?.confirm?.() ?? true, promptDialog: async () => globalThis.window?.prompt?.() ?? null, alertDialog: async () => {} };
@@ -16,6 +16,8 @@ function harness(lang){let cursor=0;const states=[],effects=[];const react={...r
   if(name==='react')return react;if(name==='../i18n')return {useLanguage:()=>({lang}),localeFor:()=> 'en-GB',useT:()=>v=>v};
   if(name==='../ui')return {Icon:()=>null};if(name==='../api-client')return {};
   if(name==='../activity-client')return {bangkokDay:()=>today,activityRead:async path=>path==='meta'?meta:overview,activityModuleLabels:{}};
+  // The form helper without a DOM: rules decide, and a failure is recorded instead of opening a dialog.
+  if(name==='./form-bubbles')return {checkFields:(container,t,rules=[])=>!rules.some(rule=>rule.invalid),failureDialog:async message=>{failures.push(message);}};
   if(name.endsWith('.css'))return {};return require(name);
  },moduleObject,moduleObject.exports);
  return {render(){cursor=0;return moduleObject.exports.TeamActivityScreen({});},async settle(){for(const effect of effects.splice(0))effect();await new Promise(resolve=>setImmediate(resolve));}};
@@ -27,7 +29,7 @@ test('staff activity surface has no policy-publishing or quality-review controls
 
 
 function componentHarness(component,{api={},confirm=()=>true}={}){
- let cursor=0;const states=[],effects=[];
+ let cursor=0;const states=[],effects=[],failures=[];
  const react={...require('react'),useState(init){const i=cursor++;if(!(i in states))states[i]=typeof init==='function'?init():init;return [states[i],value=>{states[i]=typeof value==='function'?value(states[i]):value;}];},useRef(value){return react.useState(()=>({current:value}))[0];},useEffect:effect=>effects.push(effect),useCallback:fn=>fn};
  const source=readFileSync('app/system/production/TeamActivityScreen.tsx','utf8')+'\nexport {ReportForm,MemberDialog,QualityForm};',moduleObject={exports:{}};
  const code=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText;
@@ -37,9 +39,11 @@ function componentHarness(component,{api={},confirm=()=>true}={}){
   if(name==='react')return react;if(name==='../i18n')return {useLanguage:()=>({lang:'EN'}),localeFor:()=> 'en-GB',useT:()=>value=>value};
   if(name==='../ui')return {Icon:()=>null};if(name==='../api-client')return {};
   if(name==='../activity-client')return {bangkokDay:()=>today,activityModuleLabels:{},...api};
+  // The form helper without a DOM: rules decide, and a failure is recorded instead of opening a dialog.
+  if(name==='./form-bubbles')return {checkFields:(container,t,rules=[])=>!rules.some(rule=>rule.invalid),failureDialog:async message=>{failures.push(message);}};
   if(name.endsWith('.css'))return {};return require(name);
  },moduleObject,moduleObject.exports,{confirm},{activeElement:null},class Element{});
- return {render(props){cursor=0;return moduleObject.exports[component](props);},async settle(){for(const effect of effects.splice(0))effect();await new Promise(resolve=>setImmediate(resolve));}};
+ return {failures,render(props){cursor=0;return moduleObject.exports[component](props);},async settle(){for(const effect of effects.splice(0))effect();await new Promise(resolve=>setImmediate(resolve));}};
 }
 const reportRule={id:1,userId:7,sourceType:'Schedule Task',sourceId:1,projectId:1,title:'Task A',startsOn:'2026-09-01',endsOn:'2026-10-01',stoppedOn:null,weekdayMask:62,cutoffMinute:1020,rowVersion:'v1'};
 
@@ -54,7 +58,7 @@ test('activity request UUID works when LAN HTTP exposes getRandomValues without 
 test('report shows request-key failures and restores save and cancel controls',async()=>{
  let writes=0;const h=componentHarness('ReportForm',{api:{activityRequestKey(){throw new Error('Random source unavailable');},activityWrite:async()=>{writes++;}}}),props={rule:reportRule,onSaved(){},onCancel(){}};
  await h.render(props).props.onSubmit({preventDefault(){}});
- const result=h.render(props);assert.match(text(result),/Random source unavailable/);assert.equal(writes,0);assert.ok(nodes(result).filter(node=>node.type==='button').every(node=>!node.props.disabled));
+ const result=h.render(props);assert.deepEqual(h.failures,['Random source unavailable']);assert.doesNotMatch(text(result),/Random source unavailable/);assert.equal(writes,0);assert.ok(nodes(result).filter(node=>node.type==='button').every(node=>!node.props.disabled));
 });
 
 test('unchanged report retry keeps its idempotency key and a changed draft gets a new key',async()=>{
@@ -76,8 +80,9 @@ test('switching report targets preserves a declined draft and remounts an accept
 
 test('zero-evidence quality submission requires zero in every scoring area',async()=>{
  let submitted;const data={member,events:[],score:{cycleId:1,periodStart:'2026-07-01',periodEnd:'2026-12-31',qualityReview:null}},h=componentHarness('QualityForm',{api:{activityWrite:async(path,body)=>{submitted={path,...body};}}}),props={data,onSaved(){}};
- let tree=h.render(props);assert.equal(nodes(tree).find(node=>node.type==='button').props.disabled,true);
- for(const select of nodes(tree).filter(node=>node.type==='select'))select.props.onChange({target:{value:'0'}});
+ let tree=h.render(props);assert.equal(nodes(tree).find(node=>node.type==='button').props.disabled,false);
+ await tree.props.onSubmit({preventDefault(){}});assert.equal(submitted,undefined,'scores above 0 with no supporting report are not sent');
+ for(const select of nodes(h.render(props)).filter(node=>node.type==='select'))select.props.onChange({target:{value:'0'}});
  tree=h.render(props);assert.equal(nodes(tree).find(node=>node.type==='button').props.disabled,false);
  nodes(tree).find(node=>node.type==='textarea').props.onChange({target:{value:'No updates throughout this review cycle.'}});
  await h.render(props).props.onSubmit({preventDefault(){}});assert.equal(submitted.path,'quality');assert.deepEqual(submitted.evidenceIds,[]);assert.equal(submitted.clarity+submitted.nextStep+submitted.evidence,0);assert.ok(submitted.note);

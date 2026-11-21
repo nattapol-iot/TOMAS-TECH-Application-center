@@ -171,7 +171,27 @@
 .pg-screen .setting-icon:is(.slate) { background: var(--pg-muted); color: var(--pg-muted-fg); }
 .pg-screen .chip-select { gap: 6px; }
 
+/* Validation bubbles (D.2), set by form-bubbles.ts as data-invalid on a field's wrapper: a white box with a red edge and an
+   alert icon, 8px under the field with its arrow on the left, over whatever is below. The field shakes once. No red border. */
+.pg-screen [data-invalid] { position: relative; }
+.pg-screen [data-invalid]::after {
+  content: attr(data-invalid); position: absolute; z-index: 40; top: calc(100% + 8px); left: 0; width: max-content; max-width: 20rem;
+  padding: 8px 12px 8px 34px; border: 1px solid color-mix(in srgb, var(--pg-destructive) 40%, transparent); border-radius: 8px;
+  background: var(--pg-background) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23e53734' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cline x1='12' x2='12' y1='8' y2='12'/%3E%3Cline x1='12' x2='12.01' y1='16' y2='16'/%3E%3C/svg%3E") no-repeat 12px 50% / 16px 16px;
+  color: var(--pg-foreground); font-size: 14px; font-weight: 400; line-height: 1.4; letter-spacing: 0; text-align: left; text-transform: none; white-space: normal;
+  box-shadow: var(--pgs-shadow-lg); pointer-events: none; transform-origin: 20px -6px; animation: pgs-bubble 150ms ease-out;
+}
+.pg-screen [data-invalid]::before {
+  content: ""; position: absolute; z-index: 41; top: calc(100% + 2px); left: 20px; width: 12px; height: 12px; rotate: 45deg;
+  border-top: 1px solid color-mix(in srgb, var(--pg-destructive) 40%, transparent); border-left: 1px solid color-mix(in srgb, var(--pg-destructive) 40%, transparent);
+  border-radius: 2px 0 0 0; background: var(--pg-background); pointer-events: none; animation: pgs-bubble 150ms ease-out;
+}
+.pg-screen [data-shake] { animation: pgs-shake 280ms ease-in-out; }
+@keyframes pgs-bubble { from { opacity: 0; scale: 0.98; } }
+@keyframes pgs-shake { 25% { translate: 6px 0; } 50% { translate: -6px 0; } 75% { translate: 4px 0; } }
+
 @media (prefers-reduced-motion: reduce) {
+  .pg-screen [data-invalid]::after, .pg-screen [data-invalid]::before, .pg-screen [data-shake] { animation: none; }
   .pg-screen .drawer { animation: none; }
   .pg-screen :is(.icon-btn, .row-action) { transition: none; }
 }
