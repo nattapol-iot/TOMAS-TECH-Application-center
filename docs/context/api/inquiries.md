@@ -2,31 +2,31 @@
 
 [Module](../modules/inquiry.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `830d4f23`; generated, do not edit. [backend-node/src/routes/inquiries.ts](<../../../backend-node/src/routes/inquiries.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `65a519ae`; generated, do not edit. [backend-node/src/routes/inquiries.ts](<../../../backend-node/src/routes/inquiries.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/inquiries` | 142–238 |
-| GET | `/api/v1/inquiries/:id` | 240–333 |
-| GET | `/api/v1/inquiry-duplicates` | 335–343 |
-| POST | `/api/v1/inquiries` | 345–478 |
-| PUT | `/api/v1/inquiries/:id/assignment` | 480–533 |
-| PUT | `/api/v1/inquiries/:id/qualification` | 535–570 |
-| POST | `/api/v1/inquiries/:id/meetings` | 572–622 |
+| GET | `/api/v1/inquiries` | 143–247 |
+| GET | `/api/v1/inquiries/:id` | 249–342 |
+| GET | `/api/v1/inquiry-duplicates` | 344–352 |
+| POST | `/api/v1/inquiries` | 354–487 |
+| PUT | `/api/v1/inquiries/:id/assignment` | 489–542 |
+| PUT | `/api/v1/inquiries/:id/qualification` | 544–579 |
+| POST | `/api/v1/inquiries/:id/meetings` | 581–631 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `optionalInteger` | [backend-node/src/routes/inquiries.ts](<../../../backend-node/src/routes/inquiries.ts>) | 79–86 |
-| `nullableNumber` | [backend-node/src/routes/inquiries.ts](<../../../backend-node/src/routes/inquiries.ts>) | 88–90 |
-| `todayIn` | [backend-node/src/routes/inquiries.ts](<../../../backend-node/src/routes/inquiries.ts>) | 92–98 |
-| `addYears` | [backend-node/src/routes/inquiries.ts](<../../../backend-node/src/routes/inquiries.ts>) | 100–104 |
-| `queueAssignmentNotice` | [backend-node/src/routes/inquiries.ts](<../../../backend-node/src/routes/inquiries.ts>) | 115–127 |
-| `deliverAssignmentEmail` | [backend-node/src/routes/inquiries.ts](<../../../backend-node/src/routes/inquiries.ts>) | 129–132 |
-| `registerInquiryRoutes` | [backend-node/src/routes/inquiries.ts](<../../../backend-node/src/routes/inquiries.ts>) | 134–623 |
+| `optionalInteger` | [backend-node/src/routes/inquiries.ts](<../../../backend-node/src/routes/inquiries.ts>) | 80–87 |
+| `nullableNumber` | [backend-node/src/routes/inquiries.ts](<../../../backend-node/src/routes/inquiries.ts>) | 89–91 |
+| `todayIn` | [backend-node/src/routes/inquiries.ts](<../../../backend-node/src/routes/inquiries.ts>) | 93–99 |
+| `addYears` | [backend-node/src/routes/inquiries.ts](<../../../backend-node/src/routes/inquiries.ts>) | 101–105 |
+| `queueAssignmentNotice` | [backend-node/src/routes/inquiries.ts](<../../../backend-node/src/routes/inquiries.ts>) | 116–128 |
+| `deliverAssignmentEmail` | [backend-node/src/routes/inquiries.ts](<../../../backend-node/src/routes/inquiries.ts>) | 130–133 |
+| `registerInquiryRoutes` | [backend-node/src/routes/inquiries.ts](<../../../backend-node/src/routes/inquiries.ts>) | 135–632 |
 
 ## Direct local dependencies
 

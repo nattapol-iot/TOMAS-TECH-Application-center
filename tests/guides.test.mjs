@@ -73,6 +73,8 @@ test("the catalog holds the guides the owner chose, in the order the work happen
   // attaching a file to an existing inquiry (2026-11-02, when engineers got inquiry.write in migration 094).
   assert.deepEqual(GUIDES.map((guide) => guide.id), [
     "crm-deal-create", "crm-activity-followup", "crm-send-estimate", "inquiry-create", "inquiry-attach", "site-visit-request", "crm-proposal-won",
+    // The V1 / V2 switch of the Sales screens; V2 is the Pegasus ERP look (2026-11-21).
+    "sales-look-v2",
     "estimate-create", "supplier-quotation", "price-library", "project-create", "project-delete", "project-cost", "my-hours-confirm", "project-plan",
     // Editing the Master Plan of a project that already exists (2026-11-03).
     "project-master-plan",
@@ -128,9 +130,9 @@ test("a guide is offered only to people who can do the task", () => {
   // Engineers hold inquiry.write since 094_engineer_inquiry_write.sql: they receive RFQs and attach files.
   assert.deepEqual(guidesFor(["inquiry.write"]).map((guide) => guide.id), ["inquiry-create", "inquiry-attach", "downloads-skill", "menu-favorites", "support-ticket", "support-follow"]);
   // An engineer reads CRM and logs activities (053_crm.sql); sales also write deals and send them for estimating.
-  assert.deepEqual(guidesFor(["crm.read", "crm.activity.write"]).map((guide) => guide.id), ["crm-activity-followup", "downloads-skill", "menu-favorites", "support-ticket", "support-follow"]);
+  assert.deepEqual(guidesFor(["crm.read", "crm.activity.write"]).map((guide) => guide.id), ["crm-activity-followup", "sales-look-v2", "downloads-skill", "menu-favorites", "support-ticket", "support-follow"]);
   assert.deepEqual(guidesFor(["crm.read", "crm.write", "crm.activity.write", "crm.convert"]).map((guide) => guide.id),
-    ["crm-deal-create", "crm-activity-followup", "crm-send-estimate", "crm-proposal-won", "downloads-skill", "menu-favorites", "support-ticket", "support-follow"]);
+    ["crm-deal-create", "crm-activity-followup", "crm-send-estimate", "crm-proposal-won", "sales-look-v2", "downloads-skill", "menu-favorites", "support-ticket", "support-follow"]);
   // A planner sees the plan guide; a head who approves PRs sees the approval guide.
   assert.ok(guidesFor(["schedule.read", "schedule.plan"]).some((guide) => guide.id === "project-plan"));
   assert.ok(guidesFor(["procurement.approve"]).some((guide) => guide.id === "pr-approve"));

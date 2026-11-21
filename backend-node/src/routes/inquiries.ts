@@ -8,6 +8,7 @@ import { ApiError } from "../errors.js";
 import { endUserCustomerId, registerEndUserUpdateRoute, validateEndUser } from "../end-user.js";
 import {
   bodyObject,
+  booleanQuery,
   clampedInteger,
   dateOnly,
   firstQueryValue,
@@ -170,21 +171,16 @@ export function registerInquiryRoutes(
       throw new ApiError(400, "validation_failed", "Date filter ranges are invalid.");
     }
 
-    const result = await database.query<InquiryRow>(`
-      SELECT i.id, i.inquiry_no, i.inquiry_date, i.customer_id, c.name AS customer_name,
-        i.end_user_customer_id,eu.name AS end_user_name,eu.code AS end_user_code,
-        i.project_name, i.project_type, i.sales_owner, i.estimate_owner_id, u.name AS estimate_owner_name,
-        i.due_date, i.priority, i.status, i.progress, i.revision, i.updated_at, i.row_version, i.estimate_id,
-        (SELECT CASE WHEN e.deleted_at IS NOT NULL THEN N'Deleted' ELSE e.status END FROM dbo.estimates e WHERE e.inquiry_id=i.id) estimate_status,
-        i.project_probability, i.customer_interest_grade, i.opportunity_id, o.opportunity_no, o.stage opportunity_stage, o.proposal_sent_on, o.won_on,
-        (SELECT COUNT_BIG(*) FROM dbo.projects p WHERE p.inquiry_id=i.id AND p.deleted_at IS NULL) project_count, COUNT_BIG(*) OVER() AS total_count
+    // ?summary=true (the Sales V2 list) adds one row per status over every filter but the status itself, for its summary bar, so a
+    // cell counts exactly what pressing it lists. The rows and the counts read the same FROM and WHERE.
+    const summary = booleanQuery(query.summary);
+    const listFrom = `
       FROM dbo.inquiries i
       INNER JOIN dbo.customers c ON c.id = i.customer_id
       LEFT JOIN dbo.customers eu ON eu.id=i.end_user_customer_id
       LEFT JOIN dbo.crm_opportunities o ON o.id=i.opportunity_id AND @crmRead=1 AND ${CRM_SCOPE}
       INNER JOIN dbo.users u ON u.id = i.estimate_owner_id
       WHERE i.deleted_at IS NULL AND i.archived_at IS NULL
-        AND (@status IS NULL OR i.status = @status)
         AND (@customer_id IS NULL OR i.customer_id = @customer_id)
         AND (@project_type IS NULL OR i.project_type = @project_type)
         AND (@owner_id IS NULL OR i.estimate_owner_id = @owner_id)
@@ -199,9 +195,20 @@ export function registerInquiryRoutes(
         AND (@search IS NULL OR i.inquiry_no LIKE N'%' + @search + N'%'
              OR i.project_name LIKE N'%' + @search + N'%' OR c.name LIKE N'%' + @search + N'%'
              OR eu.name LIKE N'%' + @search + N'%' OR eu.code LIKE N'%' + @search + N'%'
-             OR i.rfq_no LIKE N'%' + @search + N'%')
+             OR i.rfq_no LIKE N'%' + @search + N'%')`;
+    const result = await database.query<InquiryRow>(`
+      SELECT i.id, i.inquiry_no, i.inquiry_date, i.customer_id, c.name AS customer_name,
+        i.end_user_customer_id,eu.name AS end_user_name,eu.code AS end_user_code,
+        i.project_name, i.project_type, i.sales_owner, i.estimate_owner_id, u.name AS estimate_owner_name,
+        i.due_date, i.priority, i.status, i.progress, i.revision, i.updated_at, i.row_version, i.estimate_id,
+        (SELECT CASE WHEN e.deleted_at IS NOT NULL THEN N'Deleted' ELSE e.status END FROM dbo.estimates e WHERE e.inquiry_id=i.id) estimate_status,
+        i.project_probability, i.customer_interest_grade, i.opportunity_id, o.opportunity_no, o.stage opportunity_stage, o.proposal_sent_on, o.won_on,
+        (SELECT COUNT_BIG(*) FROM dbo.projects p WHERE p.inquiry_id=i.id AND p.deleted_at IS NULL) project_count, COUNT_BIG(*) OVER() AS total_count
+      ${listFrom}
+        AND (@status IS NULL OR i.status = @status)
       ORDER BY i.updated_at DESC, i.id DESC
       OFFSET @offset ROWS FETCH NEXT @page_size ROWS ONLY;
+      ${summary ? `SELECT i.status, COUNT_BIG(*) AS inquiry_count ${listFrom} GROUP BY i.status;` : ""}
     `, (sqlRequest) => {
       bindAccess(sqlRequest,crmActor).input("crmRead",sql.Bit,crmActor.permissions.includes("crm.read"));
       sqlRequest.input("status", sql.NVarChar(50), status);
@@ -234,6 +241,8 @@ export function registerInquiryRoutes(
         hasOpportunity: row.opportunity_id != null, opportunityStage: row.opportunity_stage as string | null, proposalSentOn: row.proposal_sent_on ? dateOnly(row.proposal_sent_on as Date) : null, wonOn: row.won_on ? dateOnly(row.won_on as Date) : null, hasProject: Number(row.project_count)>0,
       })),
       page, pageSize, total: Number(result.recordset[0]?.total_count ?? 0),
+      ...(summary ? { statusSummary: ((result.recordsets as unknown as Array<Array<{ status: string; inquiry_count: number | string }>>)[1] ?? [])
+        .map((row) => ({ status: row.status, count: Number(row.inquiry_count) })) } : {}),
     };
   });
 

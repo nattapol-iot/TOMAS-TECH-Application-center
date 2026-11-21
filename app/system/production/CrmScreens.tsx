@@ -13,6 +13,8 @@ import "./crm.css";
 import { ProjectHandover } from "./ProjectHandover";
 import { SearchSelect } from "./SearchSelect";
 import { CRM_COPY } from "./crm-copy";
+import { useSalesLook } from "./SalesLook";
+import { dealSummaryCells, type DealSummaryCell } from "../../../lib/sales-look";
 
 export type CrmRecord = Record<string, unknown>;
 type Page = {items:CrmRecord[];total:number;page:number;pageSize:number};
@@ -100,23 +102,40 @@ function Records({rows,columns,onOpen,onEdit,onRemove,page,onPage,onPageSize,ope
 }
 /* The deal list as it is presented (owner request 2026-10-25): the ten fields of a deal in five columns of two lines,
    so the table fits the screen instead of scrolling sideways. The name opens the deal, the inquiry number the inquiry. */
+/* In the V2 (Pegasus) look the row action sits on the left as a quiet icon and the stage comes first, the ERP's column order
+   (actions, status, document); the cells themselves are the same as V1's. */
 function DealTable({rows,commercial,onOpen,onEdit,page,onPage,onPageSize,openInquiry}:{rows:CrmRecord[];commercial:boolean;onOpen:(r:CrmRecord)=>void;onEdit?:(r:CrmRecord)=>void;page?:Page|null;onPage:(v:number)=>void;onPageSize:(v:number)=>void;openInquiry?:(id:number)=>void}) {
-  const t=useT();
+  const t=useT(),v2=useSalesLook()==="v2";
   if(!rows.length)return <EmptyState icon="inbox" title="CRM.empty" message="CRM.emptyHint"/>;
   const label=(value:string)=>CRM_COPY[`CRM.${value}`]?t(`CRM.${value}`):value;
   return <div className="table-wrap">{page?<TablePageSize value={page.pageSize} onChange={onPageSize}/>:null}<table className={`crm-deal-table${commercial?" with-value":""}${onEdit?" with-edit":""}`}>
-    <colgroup><col className="crm-col-deal"/><col className="crm-col-customer"/><col className="crm-col-stage"/><col className="crm-col-value"/><col className="crm-col-owner"/>{onEdit?<col className="crm-col-edit"/>:null}</colgroup>
-    <thead><tr><th>{t("CRM.dealColumn")}</th><th>{t("CRM.customerName")}</th><th>{t("CRM.salesStage")}</th><th className="num">{t(commercial?"CRM.valueCloseColumn":"CRM.expectedClose")}</th><th>{t("CRM.ownerNextColumn")}</th>{onEdit?<th><span className="sr-only">{t("Actions")}</span></th>:null}</tr></thead>
+    {v2?<colgroup>{onEdit?<col className="crm-col-act"/>:null}<col className="crm-col-stage"/><col className="crm-col-deal"/><col className="crm-col-customer"/><col className="crm-col-value"/><col className="crm-col-owner"/></colgroup>
+      :<colgroup><col className="crm-col-deal"/><col className="crm-col-customer"/><col className="crm-col-stage"/><col className="crm-col-value"/><col className="crm-col-owner"/>{onEdit?<col className="crm-col-edit"/>:null}</colgroup>}
+    <thead>{v2?<tr>{onEdit?<th className="pg-acts"><span className="sr-only">{t("Actions")}</span></th>:null}<th>{t("CRM.salesStage")}</th><th>{t("CRM.dealColumn")}</th><th>{t("CRM.customerName")}</th><th className="num">{t(commercial?"CRM.valueCloseColumn":"CRM.expectedClose")}</th><th>{t("CRM.ownerNextColumn")}</th></tr>
+      :<tr><th>{t("CRM.dealColumn")}</th><th>{t("CRM.customerName")}</th><th>{t("CRM.salesStage")}</th><th className="num">{t(commercial?"CRM.valueCloseColumn":"CRM.expectedClose")}</th><th>{t("CRM.ownerNextColumn")}</th>{onEdit?<th><span className="sr-only">{t("Actions")}</span></th>:null}</tr>}</thead>
     <tbody>{rows.map(r=>{const stage=text(r.stage),status=text(r.inquiryStatus),action=text(r.nextAction),flags=(r.attention as string[]??[]).filter(a=>a!=="Scheduled"&&a!=="NoNextAction");
+      const dealCell=<td><button type="button" className="crm-link crm-deal-name" title={text(r.name)} onClick={()=>onOpen(r)}>{text(r.name)||"—"}</button><small className="crm-deal-sub" title={text(r.opportunityNo)}>{text(r.opportunityNo)}</small></td>;
+      const customerCell=<td><span className="crm-deal-clamp" title={text(r.customerName)}>{text(r.customerName)||"—"}</span></td>;
+      const stageCell=<td>{stage?<Badge tone={toneFor(stage)}>{label(stage)}</Badge>:"—"}{["PROPOSAL","NEGOTIATION"].includes(stage)&&!r.proposalSentOn?<small className="crm-deal-sub">{t("CRM.unverifiedProposal")}</small>:stage==="WON"&&!r.wonOn?<small className="crm-deal-sub">{t("CRM.unverifiedWon")}</small>:null}
+          {r.inquiryNo?<small className="crm-deal-sub">{r.inquiryId&&openInquiry?<button type="button" className="crm-link" onClick={()=>openInquiry(Number(r.inquiryId))}>{text(r.inquiryNo)}</button>:text(r.inquiryNo)}{status?` · ${t(status==="Approved"?"CRM.costApproved":status)}`:""}</small>:null}</td>;
       return <tr key={text(r.id)}>
-        <td><button type="button" className="crm-link crm-deal-name" title={text(r.name)} onClick={()=>onOpen(r)}>{text(r.name)||"—"}</button><small className="crm-deal-sub" title={text(r.opportunityNo)}>{text(r.opportunityNo)}</small></td>
-        <td><span className="crm-deal-clamp" title={text(r.customerName)}>{text(r.customerName)||"—"}</span></td>
-        <td>{stage?<Badge tone={toneFor(stage)}>{label(stage)}</Badge>:"—"}{["PROPOSAL","NEGOTIATION"].includes(stage)&&!r.proposalSentOn?<small className="crm-deal-sub">{t("CRM.unverifiedProposal")}</small>:stage==="WON"&&!r.wonOn?<small className="crm-deal-sub">{t("CRM.unverifiedWon")}</small>:null}
-          {r.inquiryNo?<small className="crm-deal-sub">{r.inquiryId&&openInquiry?<button type="button" className="crm-link" onClick={()=>openInquiry(Number(r.inquiryId))}>{text(r.inquiryNo)}</button>:text(r.inquiryNo)}{status?` · ${t(status==="Approved"?"CRM.costApproved":status)}`:""}</small>:null}</td>
+        {v2?<>{onEdit?<td className="pg-acts"><button type="button" className="pg-act" title={t("Edit")} aria-label={`${t("Edit")}: ${text(r.name)}`} onClick={()=>onEdit(r)}><Icon name="edit"/></button></td>:null}{stageCell}{dealCell}{customerCell}</>:<>{dealCell}{customerCell}{stageCell}</>}
         <td className="num">{commercial&&r.expectedValue!=null?<><strong className="crm-deal-value">{money(r.expectedValue)}</strong><small className="crm-deal-sub">{date(r.expectedClose)||"—"}</small></>:date(r.expectedClose)||"—"}</td>
         <td><span className="crm-deal-ownerline"><span className="crm-deal-owner">{text(r.salesOwnerName)||"—"}</span>{flags.slice(0,2).map(a=><Badge key={a} tone={toneFor(a)}>{t(`CRM.${a}`)}</Badge>)}</span><small className="crm-deal-sub crm-deal-clamp" title={action||undefined}>{action?`${action}${r.nextDue?` · ${date(r.nextDue)}`:""}`:t("CRM.NoNextAction")}</small></td>
-        {onEdit?<td><button type="button" className="btn default sm" onClick={()=>onEdit(r)}>{t("Edit")}</button></td>:null}
+        {onEdit&&!v2?<td><button type="button" className="btn default sm" onClick={()=>onEdit(r)}>{t("Edit")}</button></td>:null}
       </tr>;})}</tbody></table><PageBar page={page} onPage={onPage}/></div>;
+}
+
+/* The V2 deal list's summary bar (Pegasus C.2): every cell counts its stage over the whole book, as the pipeline bar does,
+   and sets the filter it names; pressed again it lists every deal. */
+function DealSummary({cells,stage,onlyOpen,labelOf,onPick}:{cells:DealSummaryCell[];stage:string;onlyOpen:boolean;labelOf:(code:string)=>string;onPick:(cell:DealSummaryCell|null)=>void}) {
+  const t=useT();
+  return <div className="pg-summary crm-deal-summary" role="group" aria-label={t("CRM.salesStage")} data-guide="crm.summary">
+    {cells.map(cell=>{const pressed=cell.stage===stage&&(cell.stage!==""||onlyOpen);return <button key={cell.key} type="button" className="pg-cell" aria-pressed={pressed} onClick={()=>onPick(pressed?null:cell)}>
+      <span className="pg-cell-label">{cell.stage?labelOf(cell.stage):t("CRM.open")}</span>
+      <strong className="pg-cell-value">{cell.count.toLocaleString("en-US")}</strong>
+    </button>;})}
+  </div>;
 }
 function LocalRecords({rows,columns,onOpen}:{rows:CrmRecord[];columns:string[];onOpen?:(r:CrmRecord)=>void}){const [page,setPage]=useState(1),[pageSize,setPageSize]=useState(10),pageCount=Math.max(1,Math.ceil(rows.length/pageSize)),resolvedPage=Math.min(page,pageCount),paged=rows.slice((resolvedPage-1)*pageSize,resolvedPage*pageSize);return <Records rows={paged} columns={columns} onOpen={onOpen} page={{items:paged,total:rows.length,page:resolvedPage,pageSize}} onPage={setPage} onPageSize={size=>{setPageSize(size);setPage(1);}}/>;}
 
@@ -185,7 +204,7 @@ export function CrmScreen(props:Props) {
 
 function OpportunityList({bootstrap,mode,options,open,openInquiry}:{bootstrap:BootstrapData;mode:CrmView;options:CrmRecord[];open:(id:number)=>void;openInquiry:(id:number)=>void}) {
   const t=useT(),choice=useOptions(options),[search,setSearch]=useState(""),[stage,setStage]=useState(""),[attention,setAttention]=useState(""),[page,setPage]=useState(1),[pageSize,setPageSize]=useState(10),[owner,setOwner]=useState(""),[onlyOpen,setOnlyOpen]=useState(mode!=="crm-opportunities"),[sort,setSort]=useState("updated"),[edit,setEdit]=useState<CrmRecord|null>(null),[createStage,setCreateStage]=useState<string|null>(null);
-  const write=bootstrap.permissions.includes("crm.write");
+  const write=bootstrap.permissions.includes("crm.write"),v2=useSalesLook()==="v2";
   const [drag,setDrag]=useState<{id:number;from:string}|null>(null),[over,setOver]=useState(""),[moved,setMoved]=useState<{id:number;stage:string}|null>(null),[moveError,setMoveError]=useState("");
   const list=useCrmData<Page>(`/api/v1/crm/opportunities?${new URLSearchParams({search,stage,attention,open:String(onlyOpen),ownerId:owner,page:String(page),pageSize:String(mode==="crm-pipeline"?100:pageSize),sort})}`);
   const dashboard=useCrmData<CrmRecord>("/api/v1/crm/dashboard");
@@ -214,8 +233,12 @@ function OpportunityList({bootstrap,mode,options,open,openInquiry}:{bootstrap:Bo
   };
   const card=(r:CrmRecord)=><button className={`crm-opportunity-card${drag?.id===Number(r.id)?" dragging":""}`} key={text(r.id)} draggable={write&&mode==="crm-pipeline"} onDragStart={event=>{event.dataTransfer.effectAllowed="move";event.dataTransfer.setData("text/plain",text(r.id));setDrag({id:Number(r.id),from:text(r.stage)});}} onDragEnd={()=>{setDrag(null);setOver("");}} onClick={()=>open(Number(r.id))}><strong>{text(r.name)}</strong><span className="crm-card-customer">{text(r.customerName)}</span>{bootstrap.permissions.includes("crm.commercial.read")?<span className="crm-card-value">{money(r.expectedValue)}</span>:null}<span className="crm-card-value">{date(r.expectedClose)||"—"}</span><small>{text(r.nextAction)||t("CRM.NoNextAction")} {date(r.nextDue)}</small><div className="crm-flags">{(r.attention as string[]??[]).filter(a=>a!=="Scheduled").map(a=><Badge key={a} tone={toneFor(a)}>{t(`CRM.${a}`)}</Badge>)}</div></button>;
   const dash=dashboard.data;
+  // V2 lists (not the dashboard, whose overview carries the follow-up chips and the funnel) open on the ERP's summary bar.
+  const summary=v2&&mode!=="crm-dashboard";
+  const pickCell=(cell:DealSummaryCell|null)=>{setSearch("");setOwner("");setAttention("");setStage(cell?.stage??"");setOnlyOpen(cell?.open??false);setPage(1);};
   return <><Notice error={dashboard.error||list.error} loading={list.loading}/>
-    <Panel title="CRM.pipelineOverview" subtitle="CRM.allScopeHint">
+    {summary?<DealSummary cells={dealSummaryCells(OPEN_STAGES,(dash?.stages as Record<string,number>|undefined)??{},Number(dash?.open??0))} stage={stage} onlyOpen={onlyOpen} labelOf={label} onPick={pickCell}/>:null}
+    {summary?null:<Panel title="CRM.pipelineOverview" subtitle="CRM.allScopeHint">
       <div className="crm-overview">
         <ul className="filter-chips">{[{key:"totalOpportunities",count:dash?.totalOpportunities,open:false,attention:""},{key:"open",count:dash?.open,open:true,attention:""},{key:"Actionable",count:dash?.actionable,open:true,attention:"Actionable"}].map(item=><li key={item.key}><button type="button" className="filter-chip slate" onClick={()=>{setSearch("");setOwner("");setStage("");setOnlyOpen(item.open);setAttention(item.attention);setPage(1);}}>{t(`CRM.${item.key}`)} <strong>{Number(item.count??0)}</strong></button></li>)}</ul>
         <PipelineBar counts={(dash?.stages as Record<string,number>|undefined)??{}} labelOf={label} active={stage} onPick={code=>{setSearch("");setOwner("");setOnlyOpen(true);setStage(code);setAttention("");setPage(1);}}/>
@@ -223,7 +246,7 @@ function OpportunityList({bootstrap,mode,options,open,openInquiry}:{bootstrap:Bo
         <ConversionFunnel total={Number(dash?.totalOpportunities??0)} steps={[{label:"CRM.convertedToInquiry",value:Number(dash?.convertedToInquiry??0)},{label:"CRM.convertedToEstimate",value:Number(dash?.convertedToEstimate??0)},{label:"CRM.convertedToProject",value:Number(dash?.convertedToProject??0)}]}/>
         <p className="crm-muted">{t("CRM.directInquiries")}: <strong>{Number(dash?.directInquiries??0)}</strong> · {t("CRM.directInquiriesHint")}</p></>:null}
       </div>
-    </Panel>
+    </Panel>}
 
     <div className="toolbar crm-filters"><SearchInput link="q" value={search} onChange={v=>{setSearch(v);setPage(1);}} placeholder="CRM.search"/><FilterSelect label="CRM.stage" value={stage} onChange={v=>{setStage(v);setPage(1);}} options={[{value:"",label:t("CRM.allStages")},...choice("stage")]}/><FilterSelect label="CRM.ownerId" value={owner} onChange={v=>{setOwner(v);setPage(1);}} options={[{value:"",label:t("CRM.allOwners")},...teamOptions(bootstrap)]}/><FilterSelect label="CRM.sort" value={sort} onChange={setSort} options={[{value:"updated",label:t("Last updated")},{value:"close",label:t("CRM.expectedClose")}]}/><FilterSelect label="CRM.Actionable" value={attention} onChange={v=>{setAttention(v);setPage(1);}} options={[{value:"",label:t("CRM.allFollowups")},...["Actionable",...ATTENTION_KEYS].map(key=>({value:key,label:t(`CRM.${key}`)}))]}/><label><input type="checkbox" checked={onlyOpen} onChange={e=>{setOnlyOpen(e.target.checked);setPage(1);}}/>{t("CRM.open")}</label><span className="spacer"/><button className="btn default" onClick={()=>{list.refresh();dashboard.refresh();}}><Icon name="refresh"/>{t("Refresh")}</button></div>
     

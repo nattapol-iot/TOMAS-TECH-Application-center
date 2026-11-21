@@ -4,7 +4,7 @@
 
 เมนู ภาษา session bootstrap และโปรไฟล์
 
-Evidence: snapshot `830d4f23`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
+Evidence: snapshot `65a519ae`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
 
 ## Read only the operation you change
 
@@ -17,16 +17,16 @@ Shared screens contain other modules: use the symbol and line range instead of r
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `navItemAllowed` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 190–196 |
-| `landingView` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 199–203 |
-| `navView` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 205–205 |
-| `allowedViews` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 214–224 |
-| `projectTabOf` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 239–243 |
-| `ProductionApp` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 248–1067 |
-| `ProductionLogin` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 1069–1127 |
-| `initials` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 1129–1131 |
-| `myWorkNeedsAttention` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 1134–1136 |
-| `badgeFor` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 1139–1146 |
+| `navItemAllowed` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 191–197 |
+| `landingView` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 200–204 |
+| `navView` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 206–206 |
+| `allowedViews` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 215–225 |
+| `projectTabOf` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 240–244 |
+| `ProductionApp` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 249–1069 |
+| `ProductionLogin` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 1071–1129 |
+| `initials` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 1131–1133 |
+| `myWorkNeedsAttention` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 1136–1138 |
+| `badgeFor` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 1141–1148 |
 | `ScreenLoading` | [app/system/production/LazyScreens.tsx](<../../../app/system/production/LazyScreens.tsx>) | 27–53 |
 | `initials` | [app/system/production/ProfileScreen.tsx](<../../../app/system/production/ProfileScreen.tsx>) | 25–27 |
 | `permissionVerb` | [app/system/production/ProfileScreen.tsx](<../../../app/system/production/ProfileScreen.tsx>) | 29–32 |
@@ -77,6 +77,7 @@ Shared screens contain other modules: use the symbol and line range instead of r
 - [app/system/production/EmployeeManualScreen.tsx](<../../../app/system/production/EmployeeManualScreen.tsx>)
 - [app/system/support-copy.ts](<../../../app/system/support-copy.ts>)
 - [app/system/production/EstimateLook.tsx](<../../../app/system/production/EstimateLook.tsx>)
+- [app/system/production/SalesLook.tsx](<../../../app/system/production/SalesLook.tsx>)
 - [app/system/production/LazyScreens.tsx](<../../../app/system/production/LazyScreens.tsx>)
 - [app/system/production/CrmScreens.tsx](<../../../app/system/production/CrmScreens.tsx>)
 - [app/system/LocalizedText.tsx](<../../../app/system/LocalizedText.tsx>)
