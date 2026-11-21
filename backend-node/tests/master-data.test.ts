@@ -95,7 +95,7 @@ test("the own-record reader retries once with a fresh token, caches, and falls b
   assert.equal(await reader.entryDate(""), null);
 });
 
-test("the holiday sync runs once an hour and never writes from an empty calendar", async () => {
+test("a request refreshes the holidays at most every five minutes and never writes from an empty calendar", async () => {
   let now = 0;
   const writes: Record<string, unknown>[] = [];
   const database = {
@@ -112,17 +112,18 @@ test("the holiday sync runs once an hour and never writes from an empty calendar
   const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
   const sync = createHolidaySync(client, database, (error) => { throw error; }, () => now);
 
-  sync.kick(7); await settle();
-  assert.equal(writes.length, 0);
+  sync.refresh(); await settle();
+  assert.equal(writes.length, 0, "an empty calendar never writes");
 
   calendar = [{ holiday_date: "2026-04-13", holiday_name: "Songkran", holiday_type: "NATIONAL" }];
-  sync.kick(7); await settle();
-  assert.equal(writes.length, 0, "a second kick within the hour does nothing");
+  now = 4 * 60_000;
+  sync.refresh(); await settle();
+  assert.equal(writes.length, 0, "a request within five minutes of the last sync does not sync again");
 
-  now = 61 * 60_000;
-  sync.kick(7); await settle();
+  now = 5 * 60_000;
+  sync.refresh(); await settle();
   assert.equal(writes.length, 1);
   assert.equal(writes[0]!.holidays, JSON.stringify([{ date: "2026-04-13", name: "Songkran" }]));
   assert.equal(writes[0]!.years, "[2026]");
-  assert.equal(writes[0]!.actor, 7);
+  assert.equal("actor" in writes[0]!, false, "rows from master carry no app author");
 });
