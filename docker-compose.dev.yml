@@ -66,15 +66,15 @@ services:
     logging: *dev-logging
 
   frontend:
-    image: node:24-slim
+    image: oven/bun:1.4.5-slim
     working_dir: /app
-    # Bind-mounts the repo source for hot reload; 'npm run dev' never runs
+    # Bind-mounts the repo source for hot reload; 'bun run dev' never runs
     # scripts/validate-production-env.mjs, so no HTTPS/Entra values are required to start
     # (login itself still needs a real Entra SPA client id -- see .env.dev.example).
     # 'vinext dev' only reads CLI flags (no PORT/HOST env fallback, unlike 'start'), and
     # its hostname flag is '--hostname'/'-H', not '--host' -- it defaults to binding only
     # 'localhost', which Docker's port mapping cannot reach from outside the container.
-    command: sh -c "npm ci && npm run dev -- --hostname 0.0.0.0 --port 3000"
+    command: sh -c "bun install --frozen-lockfile && bun run dev -- --hostname 0.0.0.0 --port 3000"
     environment:
       NEXT_PUBLIC_APP_MODE: development
       NEXT_PUBLIC_AUTH_MODE: ${DEV_FRONTEND_AUTH_MODE:-entra}
@@ -92,7 +92,7 @@ services:
       - "3000:3000"
     depends_on:
       - api
-    # 'npm ci' plus the vite dev server spike well past the API's needs.
+    # 'bun install' plus the vite dev server spike well past the API's needs.
     mem_limit: 3g
     logging: *dev-logging
 

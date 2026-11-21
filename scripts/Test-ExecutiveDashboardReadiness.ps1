@@ -20,7 +20,7 @@ try {
     $env:DASHBOARD_CHECK_ORIGIN = if ($Live) { "http://127.0.0.1:$($dashboardSettings.ApiPort)" } else { $null }
     $env:DASHBOARD_CHECK_SIGNING_KEY = if ($Live) { Unlock-DashboardSecret $dashboardSecrets.TeamTestSigningKey } else { $null }
     Push-Location (Join-Path (Split-Path -Parent $PSScriptRoot) 'backend-node')
-    try { & node --import tsx tests/executive-dashboard-readiness.ts; if ($LASTEXITCODE -ne 0) { throw 'Executive dashboard read-only validation failed.' } }
+    try { & bun tests/executive-dashboard-readiness.ts; if ($LASTEXITCODE -ne 0) { throw 'Executive dashboard read-only validation failed.' } }
     finally { Pop-Location }
 }
 finally {

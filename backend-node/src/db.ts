@@ -6,6 +6,7 @@ import type {
   config as SqlConfig,
 } from "mssql";
 import type { AppConfig } from "./config.js";
+import { encryptedTransport } from "./sql-transport.js";
 
 const { ConnectionPool, Request, Transaction } = sql;
 type Executor = ConnectionPoolType | TransactionType;
@@ -63,8 +64,7 @@ export class Database {
     const parsed = ConnectionPool.parseConnectionString(this.config.connectionString);
     parsed.options = {
       ...parsed.options,
-      encrypt: true,
-      trustServerCertificate: this.config.trustServerCertificate,
+      ...encryptedTransport(parsed.server, this.config.trustServerCertificate),
       useUTC: true,
       appName: "IoTTeamCenter.NodeApi",
     } as NonNullable<SqlConfig["options"]>;

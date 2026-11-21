@@ -30,18 +30,18 @@ Use an isolated checkout for builds and release validation. Do not build into a 
 
 ## Local verification
 
-Node >=22.13.0 is required by package manifests. Use npm.cmd instead of npm on Windows when PowerShell blocks npm.ps1.
+Bun >=1.4.5 installs, runs and tests both packages (`bun install`; the lockfiles are `bun.lock`). The production containers run on the `oven/bun` image.
 
 ~~~powershell
 # Frontend static checks
-npm.cmd run lint
-npm.cmd run typecheck
+bun run lint
+bun run typecheck
 # Explicitly skip SQL integration for a source-only review:
 $env:IOT_SKIP_SQL_INTEGRATION = '1'
-node --test --test-isolation=none tests/*.test.mjs
+bun test ./tests/
 # Node API (run within backend-node)
-npm.cmd run typecheck
-npm.cmd test
+bun run typecheck
+bun run test
 ~~~
 
 Root checks exclude temporary/generated/nested checkout paths in this candidate. Passing unit tests alone does not prove SQL, browser UAT or Production readiness. Required Node SQL integration must run without skipping on an isolated release candidate.

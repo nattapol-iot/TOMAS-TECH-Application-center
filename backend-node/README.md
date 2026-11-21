@@ -15,12 +15,16 @@ SQL Server remains the single source of truth; no production data is copied.
 ## Commands
 
 ```powershell
-npm install
-npm run typecheck
-npm test
-npm run build
+bun install
+bun run typecheck
+bun run test
+bun run build
 .\scripts\Start-TeamTestNode.ps1
 ```
+
+The API runs on Bun (`oven/bun` image, `bun dist/src/server.js`); tests use `bun test`, which runs the
+`node:test` suites unchanged. SQL connections that trust the server certificate and name the server by IP
+address send a placeholder TLS server name (`src/sql-transport.ts`), because Bun rejects an IP address there.
 
 The default Team Test origin is `http://127.0.0.1:5105`. Real secrets are loaded
 from the existing DPAPI-protected Team Test runtime and are never written to an

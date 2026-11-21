@@ -1,5 +1,5 @@
 // Prints a T-SQL batch that runs the Installed Base route's own statements against a real schema:
-//   node --import tsx tests/sql/installed-assets-smoke.ts > smoke.sql
+//   bun tests/sql/installed-assets-smoke.ts > smoke.sql
 //   sqlcmd -S <server> -d <database> -b -i smoke.sql
 // Used by scripts/Test-SqlSmokeLocalDb.ps1 on a private LocalDB instance. Each statement is
 // the exported constant the route sends, with its parameters declared, so a typo in a column, a

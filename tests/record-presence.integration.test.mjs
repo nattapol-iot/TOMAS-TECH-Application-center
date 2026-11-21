@@ -29,7 +29,7 @@ async function dumpRouteSql(directory) {
     const { writeFileSync } = await import("node:fs");
     writeFileSync(${JSON.stringify(join(directory, "estimate-changes.sql"))}, m.ESTIMATE_CHANGES);
     writeFileSync(${JSON.stringify(join(directory, "presence-beat-estimate.sql"))}, m.PRESENCE_BEAT.Estimate);`;
-  await execFileAsync(process.execPath, ["--import", "tsx", "--input-type=module", "-e", script], {
+  await execFileAsync(process.execPath, ["-e", script], {
     cwd: fileURLToPath(new URL("backend-node/", root)), timeout: 60_000, windowsHide: true,
   });
 }

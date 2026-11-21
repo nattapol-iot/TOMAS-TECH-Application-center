@@ -28,15 +28,15 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v6
+      - uses: oven-sh/setup-bun@v2
         with:
-          node-version: 24.x
+          bun-version: 1.4.5
 
       - name: Install frontend dependencies
-        run: npm ci
+        run: bun install --frozen-lockfile
 
       - name: Lint, typecheck, and unit tests
-        run: npm test
+        run: bun run test
 
   backend-compile:
     name: Node API typecheck, unit tests and build
@@ -45,17 +45,17 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v6
+      - uses: oven-sh/setup-bun@v2
         with:
-          node-version: 24.x
+          bun-version: 1.4.5
 
       - name: Install Node API dependencies
         working-directory: backend-node
-        run: npm ci
+        run: bun install --frozen-lockfile
 
       - name: Verify Node API
         working-directory: backend-node
         run: |
-          npm run typecheck
-          npm test
-          npm run build
+          bun run typecheck
+          bun run test
+          bun run build
