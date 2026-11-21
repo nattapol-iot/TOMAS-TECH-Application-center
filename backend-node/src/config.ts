@@ -75,6 +75,8 @@ export type AppConfig = {
   siteMonitor?: SiteMonitorConfig;
   /** The Pegasus ERP MCP endpoint approved requisitions are sent to (PEGASUS_MCP_URL; "off" disables). */
   pegasusMcpUrl?: string;
+  /** Copilot's OCR API that reads business cards and supplier quotations (COPILOT_OCR_URL; "off" disables). */
+  copilotOcrUrl?: string;
   /**
    * What an approved request becomes in the ERP (PEGASUS_REQUEST_LIST): "off" one ERP PR as before (the default), "excel" a
    * download for the project's Request List, "tool" lines sent to the Request List. See erp-request-list.ts.
@@ -534,6 +536,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const credentialVault = parseVaultKeys(env.CREDENTIAL_VAULT_KEYS);
   const pegasusRaw = optional(env, "PEGASUS_MCP_URL") ?? "https://pegasus-erp.tomastc.com/mcp";
   if (pegasusRaw !== "off" && !/^https:\/\/[^\s/]+\/\S*$/.test(pegasusRaw)) throw new Error("PEGASUS_MCP_URL must be an https URL, or off.");
+  const copilotOcrRaw = optional(env, "COPILOT_OCR_URL") ?? "https://copilot.tomastc.com/api/v1/ocr";
+  if (copilotOcrRaw !== "off" && !/^https:\/\/[^\s/]+\/\S*$/.test(copilotOcrRaw)) throw new Error("COPILOT_OCR_URL must be an https URL, or off.");
   const requestListRaw = optional(env, "PEGASUS_REQUEST_LIST") ?? "off";
   if (requestListRaw !== "off" && requestListRaw !== "excel" && requestListRaw !== "tool") throw new Error("PEGASUS_REQUEST_LIST must be off, excel or tool.");
   return {
@@ -585,6 +589,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     ...(credentialVault ? { credentialVault } : {}),
     ...(siteMonitor ? { siteMonitor } : {}),
     ...(pegasusRaw !== "off" ? { pegasusMcpUrl: pegasusRaw } : {}),
+    ...(copilotOcrRaw !== "off" ? { copilotOcrUrl: copilotOcrRaw.replace(/\/$/, "") } : {}),
     pegasusRequestList: requestListRaw,
   };
 }

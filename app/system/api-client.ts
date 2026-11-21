@@ -5,6 +5,7 @@ import { acquireApiToken } from "./auth-client";
 import { getTeamTestSession, IS_TEAM_TEST_MODE } from "./team-test-client";
 import { IS_TMT_ID_MODE } from "./tmt-id.constants";
 import { isTrustedWebProtocol } from "./network-origin";
+import type { BusinessCardExtraction } from "../../lib/business-card";
 import type { ErpGroup } from "../../lib/erp-estimate-groups";
 import type { RecordViewer, SyncBeat } from "../../lib/record-live-sync";
 import type { EstimateDiscipline } from "../../lib/estimate-disciplines";
@@ -1576,17 +1577,21 @@ export type ParsedQuotationResult = {
   confidence: Record<string, "high" | "low" | "none">;
 };
 
+// Copilot reads documents on one shared GPU queue; the API gives up at 280 s, so the browser waits a little longer than that.
+const COPILOT_SCAN_TIMEOUT_MS = 300_000;
+
 export async function parsePdfViaBackend(file: File): Promise<ParsedQuotationResult> {
   const form = new FormData();
   form.append("file", file, file.name);
-  // authorizedFetch injects auth headers and throws ApiClientError on non-2xx.
-  // FormData body lets the browser set the correct multipart/form-data boundary automatically.
-  const response = await authorizedFetch(
-    "/api/v1/supplier-quotations/parse-pdf",
-    { method: "POST", body: form },
-    120_000, // OCR on large scanned PDFs can take up to 2 minutes
-  );
+  const response = await authorizedFetch("/api/v1/supplier-quotations/parse-pdf", { method: "POST", body: form }, COPILOT_SCAN_TIMEOUT_MS);
   return response.json() as Promise<ParsedQuotationResult>;
+}
+
+export async function scanBusinessCardViaBackend(image: Blob, fileName: string): Promise<BusinessCardExtraction> {
+  const form = new FormData();
+  form.append("file", image, fileName);
+  const response = await authorizedFetch("/api/v1/business-cards/scan", { method: "POST", body: form }, COPILOT_SCAN_TIMEOUT_MS);
+  return response.json() as Promise<BusinessCardExtraction>;
 }
 
 export const createEstimate = (input: CreateEstimateInput) =>

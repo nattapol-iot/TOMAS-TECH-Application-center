@@ -4,10 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "prepare:ocr": "bun scripts/prepare-ocr-assets.mjs",
-    "dev": "bun run prepare:ocr && bun --bun vinext dev",
-    "build": "bun scripts/guard-running-frontend-build.mjs && bun run prepare:ocr && bun scripts/validate-production-env.mjs && bun --bun vinext build",
-    "build:local": "bun scripts/guard-running-frontend-build.mjs && bun run prepare:ocr && bun --bun vinext build",
+    "dev": "bun --bun vinext dev",
+    "build": "bun scripts/guard-running-frontend-build.mjs && bun scripts/validate-production-env.mjs && bun --bun vinext build",
+    "build:local": "bun scripts/guard-running-frontend-build.mjs && bun --bun vinext build",
     "start": "bun --bun vinext start",
     "test": "bun run lint && bun run typecheck && bun test ./tests/",
     "typecheck": "bun --bun tsc --noEmit",
@@ -17,15 +16,11 @@
   },
   "dependencies": {
     "@azure/msal-browser": "5.20.0",
-    "@tesseract.js-data/eng": "1.0.0",
-    "@tesseract.js-data/jpn": "1.0.0",
-    "@tesseract.js-data/tha": "1.0.0",
     "fflate": "^0.7.4",
     "pdfjs-dist": "6.3.289",
     "react": "19.2.6",
     "react-dom": "19.2.6",
-    "sweetalert2": "11.26.25",
-    "tesseract.js": "7.0.0"
+    "sweetalert2": "11.26.25"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "1.37.1",

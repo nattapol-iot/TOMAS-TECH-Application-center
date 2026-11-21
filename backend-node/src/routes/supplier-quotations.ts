@@ -19,6 +19,9 @@ import { issueDocumentNumber } from "../document-number.js";
 import { ApiError } from "../errors.js";
 import { bodyObject, clampedInteger, dateOnly, oneOf, optionalPositiveLong, optionalText, parseDateOnly, positiveLong, requiredInteger, requiredText } from "../http.js";
 import type { CurrentUserService } from "../users.js";
+import { ocrApiError } from "../copilot-ocr/errors.js";
+import { QUOTATION_SCHEMA, quotationFromScan } from "../copilot-ocr/quotation.js";
+import type { CopilotOcr } from "../copilot-ocr/types.js";
 
 function todayIn(timeZone: string): string {
   const parts = new Intl.DateTimeFormat("en-GB", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
@@ -92,6 +95,7 @@ export function registerSupplierQuotationRoutes(
   config: AppConfig,
   database: Database,
   users: CurrentUserService,
+  ocr: CopilotOcr | null = null,
 ): void {
   app.get("/api/v1/supplier-quotations", async (request) => {
     await users.demandPermission(request, "estimate.read");
@@ -401,12 +405,11 @@ export function registerSupplierQuotationRoutes(
     }));
   });
 
-  // ── PDF parsing proxy → Python pdf-parser service ──────────────────────
-  // Accepts a PDF file upload and proxies it to the Python service for
-  // text + OCR extraction. Keeps the Python service off the public internet.
-
+  // A quotation PDF is read by copilot's OCR API as the signed-in person when it is connected (production), otherwise by the
+  // Python pdf-parser service on the internal Docker network.
   app.post("/api/v1/supplier-quotations/parse-pdf", async (request, reply) => {
     await users.demandPermission(request, "estimate.read");
+    const actor = await users.required(request);
 
     // readMultipartUpload saves the file to a temp path; read its bytes then clean up
     const { readFile, unlink } = await import("node:fs/promises");
@@ -425,7 +428,18 @@ export function registerSupplierQuotationRoutes(
       await unlink(file.filepath).catch(() => undefined);
     }
 
-    // Forward to the Python pdf-parser service (internal Docker network)
+    if (ocr) {
+      try {
+        const document = await ocr.scan(actor.entraObjectId, {
+          kind: "quotation", schema: QUOTATION_SCHEMA, files: [{ name: file.filename || "quotation.pdf", type: "application/pdf", bytes: pdfBytes }],
+        });
+        if (!document.custom) throw new ApiError(422, "copilot_unreadable", document.customError || "Copilot read the PDF but could not fill the quotation fields.");
+        return reply.status(200).send(quotationFromScan(document));
+      } catch (error) {
+        throw ocrApiError(error);
+      }
+    }
+
     const parserUrl = config.pdfParserUrl.replace(/\/$/, "");
     let response: Response;
     try {

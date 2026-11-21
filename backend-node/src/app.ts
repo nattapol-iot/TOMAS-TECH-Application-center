@@ -94,6 +94,8 @@ import { registerSiteVisitReportRoutes } from "./routes/site-visit-reports.js";
 import { registerSiteVisitWorkflowRoutes } from "./routes/site-visits-workflow.js";
 import { registerStockControlRoutes } from "./routes/stock-control.js";
 import { registerSupplierQuotationRoutes } from "./routes/supplier-quotations.js";
+import { registerBusinessCardRoutes } from "./routes/business-cards.js";
+import { createCopilotOcr } from "./copilot-ocr/client.js";
 import { registerVisitMasterRoutes } from "./routes/visit-master.js";
 import { rateLimitedError, requestAllowance } from "./rate-limits.js";
 import { CurrentUserService } from "./users.js";
@@ -202,9 +204,9 @@ export async function buildApp(config: AppConfig): Promise<Application> {
     app.log.warn("TMT_ID_DEFAULT_ROLE_CODE is ignored: only people registered in Employee Master can sign in.");
   }
   // A read-only API cannot link anyone; people already linked still sign in.
-  // The Pegasus ERP takes a requisition only with its requester's own TMT ID token, and master data answers /me only for the
-  // token's own person, so sign-in keeps their refresh token when either is connected.
-  const tokenVault = tmtId && config.credentialVault && !config.database.readOnly && (config.pegasusMcpUrl || tmtId.settings.masterDataUrl)
+  // The Pegasus ERP takes a requisition only with its requester's own TMT ID token, master data answers /me only for the token's
+  // own person, and copilot's OCR scans as the person, so sign-in keeps their refresh token when any of them is connected.
+  const tokenVault = tmtId && config.credentialVault && !config.database.readOnly && (config.pegasusMcpUrl || tmtId.settings.masterDataUrl || config.copilotOcrUrl)
     ? new TmtIdTokenVault(database, config.credentialVault, tmtId.provider, (error) => app.log.warn({ err: error }, "TMT ID token refresh failed"))
     : null;
   const masterData = tmtId && !config.database.readOnly
@@ -219,6 +221,7 @@ export async function buildApp(config: AppConfig): Promise<Application> {
   const erp = tokenVault && tmtId && config.pegasusMcpUrl
     ? { gateway: createErpGateway(new PegasusMcp(config.pegasusMcpUrl), tokenVault), appBaseUrl: tmtId.settings.appBaseUrl }
     : null;
+  const copilotOcr = tokenVault && config.copilotOcrUrl ? createCopilotOcr(config.copilotOcrUrl, tokenVault) : null;
   if (tmtId) {
     registerTmtIdAuthRoutes(app, tmtId, config.database.readOnly ? null : createUserProvisioning(database, tmtId.settings.autoRegisterDomains), tokenVault);
   }
@@ -298,7 +301,8 @@ export async function buildApp(config: AppConfig): Promise<Application> {
   registerSiteVisitWorkflowRoutes(app, config, database, users);
   registerSiteVisitReportRoutes(app, config, database, users);
   registerStockControlRoutes(app, config, database, users);
-  registerSupplierQuotationRoutes(app, config, database, users);
+  registerSupplierQuotationRoutes(app, config, database, users, copilotOcr);
+  registerBusinessCardRoutes(app, users, copilotOcr);
   registerVisitMasterRoutes(app, database, users);
   registerAdminRoutes(app, config, database, users);
   registerUnifiedReportRoutes(app, config, database, users);
