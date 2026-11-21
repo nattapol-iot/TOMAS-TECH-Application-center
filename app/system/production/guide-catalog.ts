@@ -1108,6 +1108,67 @@ const PROJECT_DELETE: Guide = {
   ],
 };
 
+const PROJECT_COST: Guide = {
+  id: "project-cost", area: "project", minutes: 2, permissions: ["project.read", "schedule.read"], views: ["projects"], browse: true,
+  title: { th: "ดูต้นทุนโครงการ (Hardware และคน)", en: "Check project cost (hardware and people)", jp: "プロジェクトコストを確認（ハードウェアと人員）" },
+  summary: {
+    th: "สำหรับ Leader ขึ้นไป: ดูงบจาก Estimate cost เทียบกับใบขอซื้อ Hardware / Outsource และ Man-day ของคนตามแผน ของทุกโครงการในหน้าเดียว แล้วเปิดรายละเอียดรายโครงการ",
+    en: "For Leaders and above: see every project's Estimate cost against its hardware and outsource purchase requests and the planned man-days on one page, then open one project's breakdown.",
+    jp: "リーダー以上向け：全プロジェクトの見積原価と、ハードウェア・外注の購入依頼および計画人日を1ページで確認し、案件ごとの内訳を開きます。",
+  },
+  steps: [
+    menu("projects",
+      { th: "เปิดเมนูโปรเจกต์", en: "Open Projects", jp: "「プロジェクト」を開く" },
+      { th: "ต้นทุนอยู่ในเมนูนี้ คลิกที่เมนูที่ไฮไลต์อยู่", en: "Cost is here. Click the highlighted menu entry.", jp: "コストはここにあります。ハイライトされたメニューをクリックします。" }),
+    { target: "[data-tab=\"cost\"]", action: "click", view: "projects",
+      title: { th: "แท็บต้นทุน", en: "The Cost tab", jp: "「コスト」タブ" },
+      body: { th: "คลิกแท็บ 'ต้นทุน'", en: "Click the Cost tab.", jp: "「コスト」タブをクリックします。" },
+      missing: { th: "แท็บนี้แสดงเฉพาะ Leader ขึ้นไป (Leader ผู้จัดการ Management และ Admin)", en: "This tab is shown to Leaders and above only (Leader, managers, Management and Admin).", jp: "このタブはリーダー以上（リーダー・マネージャー・Management・Admin）にのみ表示されます。" } },
+    { target: "cost.totals", action: "next", view: "projects",
+      title: { th: "ยอดรวมของโครงการที่แสดง", en: "Totals of the projects shown", jp: "表示中プロジェクトの合計" },
+      body: {
+        th: "Hardware และ Outsource แสดง 'ขอซื้อแล้ว / งบ' ส่วนคนแสดง 'Man-day ตามแผน / งบ' ยอดรวมนับทุกแถวที่ผ่านตัวกรอง ไม่ใช่แค่หน้าที่เห็น ชี้ที่ตัวเลขย่อเพื่อดูจำนวนเต็ม ต้นทุนคนเป็นจำนวนเงินแสดงเฉพาะระดับบริหาร",
+        en: "Hardware and Outsource read requested / budget; People reads planned man-days / budget. The totals cover every row that passes the filters, not only the page in view. Hover a short figure for the exact amount. People cost in money is shown to management roles only.",
+        jp: "ハードウェアと外注は「依頼済み / 予算」、人員は「計画人日 / 予算」です。合計は表示ページだけでなく、フィルター後の全行が対象です。短縮表示にカーソルを合わせると正確な金額が出ます。人件費の金額は管理職のみに表示されます。",
+      },
+      missing: { th: "รอให้ข้อมูลโหลดเสร็จก่อน", en: "Wait for the figures to load.", jp: "データの読み込みを待ちます。" } },
+    { target: "cost.filter", action: "next", view: "projects",
+      title: { th: "กรองตามสถานะงบ", en: "Filter by budget state", jp: "予算の状態で絞り込む" },
+      body: {
+        th: "กด 'เกินงบ' หรือ 'ใกล้เต็มงบ' (ใช้ไป 90% ขึ้นไป) เพื่อดูเฉพาะโครงการที่ต้องตาม โครงการนับตามกลุ่มที่แย่ที่สุดของมัน กดซ้ำเพื่อล้างตัวกรอง",
+        en: "Press Over budget or Near budget (90% used or more) to list only the projects to chase. A project counts by its worst group. Press again to clear.",
+        jp: "「予算超過」または「予算間近」（90%以上使用）を押すと、対応が必要な案件だけが表示されます。案件は最も悪いグループで数えます。もう一度押すと解除します。",
+      } },
+    { target: "cost.table", action: "next", view: "projects",
+      title: { th: "อ่านแถวของโครงการ", en: "Read a project's row", jp: "プロジェクトの行を読む" },
+      body: {
+        th: "แต่ละกลุ่มแสดง 'ใช้ไป / งบ' พร้อมแถบ: น้ำเงินอยู่ในงบ เหลืองใกล้เต็ม แดงเกินงบ ขีดบนแถบของคนคือ Man-day ที่แผนวางไว้ถึงวันนี้ (ยังไม่มีการบันทึกชั่วโมงจริง) กดหัวคอลัมน์เพื่อเรียง",
+        en: "Each group shows used / budget with a bar: blue within budget, amber near it, red over it. The mark on the People bar is the man-days the plan puts on or before today (actual hours are not recorded yet). Press a column heading to sort.",
+        jp: "各グループは「使用 / 予算」とバーで表示されます。青は予算内、黄は間近、赤は超過です。人員のバー上の印は、計画上本日までの人日です（実績時間は未記録）。列見出しを押すと並べ替えます。",
+      } },
+    { target: "cost.open", action: "click", view: "projects",
+      title: { th: "เปิดรายละเอียดโครงการ", en: "Open a project's breakdown", jp: "案件の内訳を開く" },
+      body: { th: "คลิกเลขโครงการ รายละเอียดเปิดเป็นหน้าต่างทับรายการ ตัวกรองของคุณยังอยู่", en: "Click a project number. The breakdown opens over the list, so your filters stay.", jp: "案件番号をクリックします。内訳は一覧の上に開くので、フィルターはそのままです。" },
+      missing: { th: "ยังไม่มีโครงการในรายการ ล้างตัวกรองก่อน", en: "No project in the list. Clear the filters first.", jp: "一覧に案件がありません。先にフィルターを解除してください。" } },
+    { target: "cost.hardware", action: "next", view: "projects",
+      title: { th: "Hardware และ Outsource แยกตาม Module", en: "Hardware and outsource by module", jp: "モジュール別のハードウェア・外注" },
+      body: {
+        th: "งบของแต่ละ Module มาจาก Estimate cost ยอดขอซื้อ อนุมัติ และสั่งซื้อมาจากใบขอซื้อที่ยังใช้งานอยู่ 'สั่งซื้อแล้ว' คือรายการที่ ERP ออก PO แล้ว คิดที่ราคาโดยประมาณในใบขอซื้อ ด้านล่างคือรายการใบขอซื้อของโครงการ",
+        en: "Each Module's budget comes from the Estimate cost; requested, approved and ordered come from the live purchase requests. Ordered is what the ERP has a PO for, at the request's approximate price. The project's requests are listed below.",
+        jp: "各モジュールの予算は見積原価から、依頼・承認・発注は有効な購入依頼からです。「発注済み」はERPでPOが発行された明細で、依頼時の概算価格で計算します。下に案件の購入依頼が並びます。",
+      },
+      missing: { th: "รอให้รายละเอียดโหลดเสร็จก่อน", en: "Wait for the breakdown to load.", jp: "内訳の読み込みを待ちます。" } },
+    { target: "cost.people", action: "next", view: "projects",
+      title: { th: "คนแยกตามสายงานและตามแผน", en: "People by discipline and by plan", jp: "分野別・計画別の人員" },
+      body: {
+        th: "ตารางบนคือ Man-day ที่ประเมินไว้ใน Estimate cost แยกสายงาน ตารางล่างคือ Man-day ในแผนงานใต้หัวข้อหลักแต่ละแถว พร้อมส่วนที่ถึงกำหนดแล้วถึงวันนี้ กด 'เปิดแผนงาน' เพื่อไปแก้แผน หรือกด 'ปิด' เพื่อกลับไปที่รายการ",
+        en: "The first table is the man-days estimated in the Estimate cost by discipline. The second is the man-days on the plan under each top row, with the part due up to today. Press Open plan to change the plan, or Close to return to the list.",
+        jp: "上の表は見積原価の分野別見積人日、下の表は各トップ行配下の計画人日と本日までの分です。「計画を開く」で計画を修正、「閉じる」で一覧に戻ります。",
+      },
+      missing: { th: "รอให้รายละเอียดโหลดเสร็จก่อน", en: "Wait for the breakdown to load.", jp: "内訳の読み込みを待ちます。" } },
+  ],
+};
+
 const PROJECT_PLAN: Guide = {
   id: "project-plan",
   area: "project",
@@ -2566,6 +2627,7 @@ export const GUIDES: readonly Guide[] = [
   PRICE_LIBRARY,
   PROJECT_CREATE,
   PROJECT_DELETE,
+  PROJECT_COST,
   PROJECT_PLAN,
   PROJECT_MASTER_PLAN,
   PROJECT_ERP_NUMBER,

@@ -2,7 +2,7 @@
 
 [Module](../modules/planning.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `a76f1408`; generated, do not edit. [backend-node/src/routes/issue-batches.ts](<../../../backend-node/src/routes/issue-batches.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `6e12ca05`; generated, do not edit. [backend-node/src/routes/issue-batches.ts](<../../../backend-node/src/routes/issue-batches.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 

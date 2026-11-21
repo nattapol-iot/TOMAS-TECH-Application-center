@@ -38,6 +38,19 @@ const round = (value: number): number => Math.round(value * 100) / 100;
  * is outsourced when the row is marked so; figures from its sub rows keep each sub row's mark.
  */
 export function plannedEffort(rows: readonly BudgetPlanRow[]): PlannedEffort {
+  const { counted, unplannedRows } = countedEffort(rows);
+  const sum = (outsourced: boolean) => round(counted.reduce((total, item) => total + (item.outsourced === outsourced ? item.manDays : 0), 0));
+  return { manDays: sum(false), outsourcedManDays: sum(true), unplannedRows };
+}
+
+/** A row whose own man-days count towards the plan, the top row it sits under, and whether it is outsourced manpower. */
+export type CountedEffort = { id: number; rootId: number; manDays: number; outsourced: boolean };
+
+/**
+ * The rows plannedEffort() adds up, one entry per figure that counts, so another view (the cost overview) can weigh
+ * each figure by its own row's dates without restating the rule.
+ */
+export function countedEffort(rows: readonly BudgetPlanRow[]): { counted: CountedEffort[]; unplannedRows: number } {
   const ids = new Set(rows.map((row) => row.id)), children = new Map<number | null, BudgetPlanRow[]>();
   for (const row of rows) {
     const parent = row.parentId !== null && ids.has(row.parentId) ? row.parentId : null;
@@ -45,21 +58,18 @@ export function plannedEffort(rows: readonly BudgetPlanRow[]): PlannedEffort {
   }
   let unplannedRows = 0;
   const seen = new Set<number>();
-  type Split = { own: number; outsourced: number };
-  const add = (left: Split, right: Split): Split => ({ own: left.own + right.own, outsourced: left.outsourced + right.outsourced });
-  const effort = (row: BudgetPlanRow, insideWork: boolean): Split => {
-    if (seen.has(row.id)) return { own: 0, outsourced: 0 };
+  const effort = (row: BudgetPlanRow, insideWork: boolean, rootId: number): CountedEffort[] => {
+    if (seen.has(row.id)) return [];
     seen.add(row.id);
     const isHeading = row.kind === "phase";
-    const below = (children.get(row.id) ?? []).reduce((sum, child) => add(sum, effort(child, insideWork || !isHeading)), { own: 0, outsourced: 0 });
+    const below = (children.get(row.id) ?? []).flatMap((child) => effort(child, insideWork || !isHeading, rootId));
     if (isHeading) return below;
     const typed = Number.isFinite(row.planManDays) && row.planManDays > 0 ? row.planManDays : 0;
-    const total = below.own + below.outsourced > 0 ? below : row.laborSource === "Outsourced" ? { own: 0, outsourced: typed } : { own: typed, outsourced: 0 };
-    if (!insideWork && total.own + total.outsourced === 0 && !row.isMilestone) unplannedRows += 1;
+    const total = below.length ? below : typed > 0 ? [{ id: row.id, rootId, manDays: typed, outsourced: row.laborSource === "Outsourced" }] : [];
+    if (!insideWork && total.length === 0 && !row.isMilestone) unplannedRows += 1;
     return total;
   };
-  const planned = (children.get(null) ?? []).reduce((sum, row) => add(sum, effort(row, false)), { own: 0, outsourced: 0 });
-  return { manDays: round(planned.own), outsourcedManDays: round(planned.outsourced), unplannedRows };
+  return { counted: (children.get(null) ?? []).flatMap((row) => effort(row, false, row.id)), unplannedRows };
 }
 
 /** Which figure is the budget: the estimate's own labor first, a typed budget only when it has none. */

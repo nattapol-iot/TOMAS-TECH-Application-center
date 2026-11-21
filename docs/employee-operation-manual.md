@@ -20,7 +20,7 @@ Renderer and localized captions: `scripts/employee_manual_illustrated.py`.
 Capture provenance and hashes: `docs/manual/screenshots/manifest.json`.
 Application integration: `docs/employee-manual-integration.md`.
 
-The build verifies 43 chapters and matching identifiers for all 111 procedures in
+The build verifies 43 chapters and matching identifiers for all 112 procedures in
 each language. Screenshots were captured in Chrome from the real Team Test app
 on 2026-09-06, in TH/EN/JP. No business transactions were submitted for capture.
 Source UI strings that remain untranslated are preserved in the screenshots.
@@ -42,7 +42,7 @@ Images show accessible pages, not proof that every transaction was exercised.
 | 12 นำเข้า Excel Estimate และใช้ Module Templates | module-templates | `docs/estimate-excel-import.md`, `app/system/production/EstimateExcelImport.tsx`, `app/system/production/ModuleTemplateScreens.tsx`, `app/system/production/ModuleTemplateEditor.tsx` |
 | 13 มอบหมาย ตรวจสอบ อนุมัติ และ Revision ของ Estimate | Estimate → Assignment / Validation / Engineering Review | `app/system/production/EstimateScreens.tsx`, `docs/estimate-assignment-email.md`, `backend-node/src/routes/estimates.ts` |
 | 14 ราคาอ้างอิงและใบเสนอราคาผู้ขาย | price, quotations, missing | `app/system/production/PlanningPricingScreens.tsx` |
-| 15 Projects และเอกสารโครงการ | projects | `app/system/production/CoreScreens.tsx`, `app/system/production/ProjectPortfolioGantt.tsx`, `app/system/api-client.ts` |
+| 15 Projects และเอกสารโครงการ | projects | `app/system/production/CoreScreens.tsx`, `app/system/production/ProjectPortfolioGantt.tsx`, `app/system/production/ProjectCostScreen.tsx`, `app/system/api-client.ts` |
 | 16 แผนงานโครงการ (Plan) และ Baseline | Projects → Plan | `app/system/production/PlanningPricingScreens.tsx`, `app/system/production/GanttChart.tsx`, `docs/resource-task-workflow.md` |
 | 17 Resource Plan และ Project Timeline | resources, project-timeline | `app/system/production/ResourcePlanningScreen.tsx`, `app/system/production/ResourceTaskWorkspace.tsx`, `app/system/production/ProjectPortfolioGantt.tsx`, `app/system/production/GanttChart.tsx`, `docs/resource-planning.md`, `docs/resource-task-workflow.md` |
 | 18 My Work และ Team Activity: รับงาน รายงาน และติดตามคะแนน | my-work, activity | `app/system/production/ResourceTaskWorkspace.tsx`, `app/system/production/PlanningPricingScreens.tsx`, `app/system/production/TeamActivityScreen.tsx`, `app/system/ProductionApp.tsx` |

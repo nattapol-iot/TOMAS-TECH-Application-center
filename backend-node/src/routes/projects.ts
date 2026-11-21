@@ -14,10 +14,15 @@ import { allowedProjectTransitions, checkProjectTransition, isProjectStatus, pro
 import { insertInitialPlan, isPlaceholderProjectNumber, parseInitialPlan, parseProjectDetails, parseProjectNumber, planAssignments, planSpan, rejectOutdatedPlan, syncProjectPlan, writeProjectDetails } from "../project-initial-plan.js";
 import type { ProjectHealth } from "../project-health.js";
 import { loadProjectScheduleSummaries } from "../project-overview.js";
+import { canViewEngineeringRates } from "../engineering-rate-access.js";
+import { HOURS_PER_MAN_DAY } from "../manhour-budget.js";
+import { BOUGHT_CATEGORIES, averageDailyRate, loadProjectCostFigures, projectCost } from "../project-cost.js";
+import { canViewProjectCost, round2, type CostAccess } from "../project-cost-model.js";
+import { NO_MODULE, REQUESTING_PR_STATUSES } from "../procurement-rules.js";
 import { deliverProjectNotices, queueProjectCreatedNotices, queueTaskAssignmentNotices, type NewPics, type ProjectNotice } from "../project-notices.js";
 import { canCreateWithoutEstimate, demandProjectScope, isProjectElevated, isProjectManagerRole } from "../project-scope.js";
 import { currentScheduleVersion, PROGRESS_REPORT_FIELDS_SQL, permissionFor, validateScheduleVersion } from "../schedule-service.js";
-import { hasRole } from "../user-roles.js";
+import { hasRole, rolesOf } from "../user-roles.js";
 import type { CurrentUser } from "../types.js";
 import type { CurrentUserService } from "../users.js";
 import type { EmailService } from "../email.js";
@@ -255,6 +260,93 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
           allowedStatuses: isProjectStatus(row.status) ? allowedProjectTransitions(row.status, manages) : [],
         };
       }),
+    };
+  });
+
+  // The cost overview (project-cost-model.ts): a Leader and everyone above. Estimate figures need estimate.read, request
+  // amounts procurement.read, and people cost in money the roles that see the engineering rates.
+  async function costViewer(request: Parameters<typeof users.required>[0]): Promise<{ actor: CurrentUser; access: CostAccess }> {
+    await users.demandPermission(request, "project.read");
+    const actor = await users.required(request);
+    if (!canViewProjectCost(rolesOf(actor))) throw new ApiError(403, "project_cost_forbidden", "The project cost overview is for Leaders and above.");
+    return { actor, access: {
+      budget: await permissionFor(database, actor.id, "estimate.read"),
+      purchases: await permissionFor(database, actor.id, "procurement.read"),
+      laborMoney: rolesOf(actor).some(canViewEngineeringRates),
+    } };
+  }
+  const costRow = (row: ProjectRow) => ({ id: Number(row.id), number: row.project_no, name: row.name, customerName: row.customer_name,
+    managerId: Number(row.manager_id), managerName: row.manager_name, team: (row.team as string | null) ?? null, status: row.status });
+
+  // Every project in scope with its cost figures, unpaged, for the screen to sort and filter in memory.
+  app.get("/api/v1/projects/cost-overview", async (request) => {
+    const { actor, access } = await costViewer(request);
+    const query = request.query as Record<string, unknown>;
+    const includeClosed = query.includeClosed === "1" || query.includeClosed === "true";
+    const rows = (await database.query<ProjectRow>(`
+      SELECT ${PROJECT_COLUMNS}
+      ${PROJECT_SOURCE}
+        AND (@include_closed=1 OR p.status<>N'Closed')
+      ORDER BY p.project_no,p.id;
+    `, (sqlRequest) => {
+      sqlRequest.input("actor", sql.BigInt, actor.id); sqlRequest.input("elevated", sql.Bit, seesAllProjects(actor));
+      sqlRequest.input("include_closed", sql.Bit, includeClosed);
+    })).recordset;
+    const today = businessToday(config.businessTimeZone);
+    const figures = await loadProjectCostFigures(database, rows.map((row) => Number(row.id)), today, access);
+    return { today, hoursPerManDay: HOURS_PER_MAN_DAY, access, items: rows.map((row) => ({ ...costRow(row), ...projectCost(Number(row.id), figures, access) })) };
+  });
+
+  // One project's cost: bought cost by Module, its purchase requests, people by discipline and by the plan's top rows.
+  // The project is read through the list's own scope rule, so a project outside it is "not found" here too.
+  app.get("/api/v1/projects/:id/cost", async (request) => {
+    const { actor, access } = await costViewer(request);
+    const id = positiveLong((request.params as { id?: string }).id, "Project id");
+    const bind = (sqlRequest: InstanceType<typeof sql.Request>) => { sqlRequest.input("project", sql.BigInt, id); sqlRequest.input("none", sql.NVarChar(200), NO_MODULE); };
+    const row = (await database.query<ProjectRow>(`SELECT ${PROJECT_COLUMNS} ${PROJECT_SOURCE} AND p.id=@project;`, (sqlRequest) => {
+      sqlRequest.input("project", sql.BigInt, id); sqlRequest.input("actor", sql.BigInt, actor.id); sqlRequest.input("elevated", sql.Bit, seesAllProjects(actor));
+    })).recordset[0];
+    if (!row) throw new ApiError(404, "project_not_found", "Project not found.");
+    const today = businessToday(config.businessTimeZone);
+    const figures = await loadProjectCostFigures(database, [id], today, access);
+    const amount = (value: unknown) => (value == null ? 0 : round2(Number(value)));
+    // By the estimate's Module: what the estimate gave it (hardware and outsource) and what the requests charge to it.
+    const budgets = access.budget ? (await database.query<Record<string, unknown>>(`SELECT COALESCE(NULLIF(LTRIM(RTRIM(ci.module)),N''),@none) module,SUM(a.amount) budget
+      FROM dbo.projects p INNER JOIN dbo.estimates e ON e.id=p.estimate_id
+      INNER JOIN dbo.v_estimate_cost_amounts a ON a.estimate_id=e.id AND a.revision=e.revision AND a.category_code IN(${BOUGHT_CATEGORIES.map((code) => `N'${code}'`).join(",")})
+      INNER JOIN dbo.cost_items ci ON ci.id=a.id
+      WHERE p.id=@project AND p.deleted_at IS NULL GROUP BY COALESCE(NULLIF(LTRIM(RTRIM(ci.module)),N''),@none);`, bind)).recordset : [];
+    const charged = access.purchases ? (await database.query<Record<string, unknown>>(`SELECT COALESCE(NULLIF(LTRIM(RTRIM(l.budget_module)),N''),@none) module,SUM(l.line_total) requested,
+        SUM(CASE WHEN pr.status IN(N'Approved',N'Converted to PO') THEN l.line_total ELSE 0 END) approved,
+        SUM(CASE WHEN l.erp_line_status=N'ORDERED' OR (l.erp_line_status IS NULL AND pr.status=N'Converted to PO') THEN l.line_total ELSE 0 END) ordered
+      FROM dbo.mat_prs pr INNER JOIN dbo.mat_pr_lines l ON l.pr_id=pr.id
+      WHERE pr.project_id=@project AND pr.deleted_at IS NULL AND pr.status IN(${REQUESTING_PR_STATUSES})
+      GROUP BY COALESCE(NULLIF(LTRIM(RTRIM(l.budget_module)),N''),@none);`, bind)).recordset : [];
+    const requests = access.purchases ? (await database.query<Record<string, unknown>>(`SELECT pr.id,pr.pr_no,pr.status,pr.required_date,
+        CASE WHEN u.id IS NULL THEN NULL ELSE CONCAT(u.discipline,N' · ',LTRIM(CONCAT(u.drawing_no,N' ',u.unit_name))) END unit,
+        COALESCE((SELECT SUM(l.line_total) FROM dbo.mat_pr_lines l WHERE l.pr_id=pr.id),0) amount,(SELECT COUNT(*) FROM dbo.mat_pr_lines l WHERE l.pr_id=pr.id) lines
+      FROM dbo.mat_prs pr LEFT JOIN dbo.project_purchase_units u ON u.id=pr.unit_id
+      WHERE pr.project_id=@project AND pr.deleted_at IS NULL AND pr.status IN(${REQUESTING_PR_STATUSES}) ORDER BY pr.id DESC;`, bind)).recordset : [];
+    const labor = (await database.query<Record<string, unknown>>(`SELECT COALESCE(l.discipline,N'Other') discipline,SUM(l.engineers*l.man_days) man_days,SUM(l.line_cost) cost
+      FROM dbo.projects p INNER JOIN dbo.estimates e ON e.id=p.estimate_id
+      INNER JOIN dbo.manhour_lines l ON l.estimate_id=e.id AND l.revision=e.revision AND l.deleted_at IS NULL AND l.provider=N'Internal'
+      WHERE p.id=@project AND p.deleted_at IS NULL GROUP BY COALESCE(l.discipline,N'Other');`, bind)).recordset;
+    // Modules by name; what belongs to no module comes last.
+    const moduleNames = [...new Set([...budgets, ...charged].map((item) => String(item.module)))]
+      .sort((left, right) => Number(left === NO_MODULE) - Number(right === NO_MODULE) || left.localeCompare(right, "en", { numeric: true }));
+    const rate = access.laborMoney ? averageDailyRate(figures.estimates.get(id)) : null;
+    const order = ["Electrical", "Mechanical", "Software", "Installation", "Other"];
+    return {
+      today, hoursPerManDay: HOURS_PER_MAN_DAY, access,
+      project: { ...costRow(row), ...projectCost(id, figures, access) },
+      modules: moduleNames.map((module) => { const budget = budgets.find((item) => item.module === module), used = charged.find((item) => item.module === module);
+        return { module, budget: access.budget ? amount(budget?.budget) : null, requested: access.purchases ? amount(used?.requested) : null,
+          approved: access.purchases ? amount(used?.approved) : null, ordered: access.purchases ? amount(used?.ordered) : null }; }),
+      requests: requests.map((item) => ({ id: Number(item.id), number: String(item.pr_no), status: String(item.status), requiredDate: dateOnly(item.required_date as Date | string | null),
+        unit: item.unit == null ? null : String(item.unit), amount: amount(item.amount), lines: Number(item.lines) })),
+      disciplines: labor.map((item) => ({ discipline: String(item.discipline), manDays: amount(item.man_days), cost: access.laborMoney ? amount(item.cost) : null }))
+        .filter((item) => item.manDays > 0).sort((left, right) => order.indexOf(left.discipline) - order.indexOf(right.discipline)),
+      plan: (figures.plans.get(id)?.rows ?? []).map((item) => ({ ...item, plannedCost: rate === null ? null : round2(item.plannedManDays * rate) })),
     };
   });
 
