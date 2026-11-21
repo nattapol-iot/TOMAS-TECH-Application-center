@@ -1588,7 +1588,7 @@ function SupplierMasterTab({ bootstrap, canWrite, canCreate, notify, refreshBoot
         ))}</tbody>
       </table><Pagination page={resolvedPage} pageCount={pageCount} from={from} to={to} total={suppliers.length} onPage={setPage} /></div> : <EmptyState icon="truck" title="No supplier found" message="ลองเปลี่ยนคำค้นหา หรือกด Add supplier เพื่อเพิ่มผู้ขาย" />}
     </Panel>
-    {createOpen ? <Modal title="Add supplier" size="lg" onClose={() => setCreateOpen(false)}><SupplierCreateForm notify={(message) => { setCreateOpen(false); notify(message); }} refreshBootstrap={refreshBootstrap} /></Modal> : null}
+    {createOpen ? <SupplierCreateForm onClose={() => setCreateOpen(false)} notify={(message) => { setCreateOpen(false); notify(message); }} refreshBootstrap={refreshBootstrap} /> : null}
     {editingSupplier ? (
       <SupplierEditModal
         supplier={editingSupplier}
@@ -1652,7 +1652,7 @@ function SupplierEditModal({
 
 const BLANK_SUPPLIER = { code: "", name: "", category: "", contact: "", email: "", phone: "", brands: "" };
 
-function SupplierCreateForm({ notify, refreshBootstrap }: Pick<CommonProps, "notify" | "refreshBootstrap">) {
+function SupplierCreateForm({ notify, refreshBootstrap, onClose }: Pick<CommonProps, "notify" | "refreshBootstrap"> & { onClose: () => void }) {
   const localizeCopy = useStaticCopy();
   const { busy, error, submit } = useMasterForm(refreshBootstrap, notify);
   // Controlled so a scanned card can fill the blanks the person has not typed yet.
@@ -1699,22 +1699,24 @@ function SupplierCreateForm({ notify, refreshBootstrap }: Pick<CommonProps, "not
     }, `Supplier ${input.code.toUpperCase()} created`, () => setForm({ ...BLANK_SUPPLIER }));
   };
 
-  return <Panel title="Add supplier" subtitle="ใช้ใน Cost item และ Preferred supplier">
-    <form onSubmit={onSubmit}>
+  return <Modal title="Supplier.new" subtitle="ใช้ใน Cost item และ Preferred supplier" size="md" onClose={onClose} footer={<>
+    <button className="btn ghost" type="button" disabled={busy} onClick={onClose}>{localizeCopy("Cancel")}</button>
+    <button className="btn primary" type="submit" form="supplier-create-form" disabled={busy}>{localizeCopy(busy ? "Saving…" : "Save")}</button>
+  </>}>
+    <form id="supplier-create-form" onSubmit={onSubmit}>
       <MasterFormError message={error} />
       <BusinessCardScanner disabled={busy} onApply={applyBusinessCard} />
       <div className="form-grid two">
         <label className="field"><span><LocalizedText text={"Supplier code *"} /></span><input name="code" required maxLength={30} pattern="[A-Za-z0-9][A-Za-z0-9._/-]*" autoCapitalize="characters" autoComplete="off" placeholder="SUP-001" value={form.code} onChange={(event) => update("code", event.target.value)} /></label>
-        <label className="field"><span><LocalizedText text={"Supplier name *"} /></span><input name="name" required maxLength={300} autoComplete="organization" value={form.name} onChange={(event) => update("name", event.target.value)} /></label>
         <label className="field"><span><LocalizedText text={"Category *"} /></span><input name="category" required maxLength={100} placeholder={localizeCopy("Automation equipment")} value={form.category} onChange={(event) => update("category", event.target.value)} /></label>
+        <label className="field span-2"><span><LocalizedText text={"Supplier name *"} /></span><input name="name" required maxLength={300} autoComplete="organization" value={form.name} onChange={(event) => update("name", event.target.value)} /></label>
         <label className="field"><span><LocalizedText text={"Contact person"} /></span><input name="contact" maxLength={200} autoComplete="name" value={form.contact} onChange={(event) => update("contact", event.target.value)} /></label>
-        <label className="field"><span><LocalizedText text={"Email"} /></span><input name="email" type="email" maxLength={256} autoComplete="email" value={form.email} onChange={(event) => update("email", event.target.value)} /></label>
         <label className="field"><span><LocalizedText text={"Phone"} /></span><input name="phone" type="tel" maxLength={100} autoComplete="tel" value={form.phone} onChange={(event) => update("phone", event.target.value)} /></label>
+        <label className="field span-2"><span><LocalizedText text={"Email"} /></span><input name="email" type="email" maxLength={256} autoComplete="email" value={form.email} onChange={(event) => update("email", event.target.value)} /></label>
         <label className="field span-2"><span><LocalizedText text={"Brands"} /></span><input name="brands" maxLength={10099} placeholder="Siemens, Omron, SMC" value={form.brands} onChange={(event) => update("brands", event.target.value)} /><small><LocalizedText text={"คั่นแต่ละ Brand ด้วย comma; สูงสุด 100 รายการ และรายการละ 100 ตัวอักษร"} /></small></label>
       </div>
-      <div className="row" style={{ justifyContent: "flex-end", marginTop: 14 }}><button className="btn primary" type="submit" disabled={busy}><Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : "Create supplier"}</button></div>
     </form>
-  </Panel>;
+  </Modal>;
 }
 
 function InventoryItemMasterTab({ bootstrap, canWrite, notify, refreshBootstrap }: MasterTabProps) {
