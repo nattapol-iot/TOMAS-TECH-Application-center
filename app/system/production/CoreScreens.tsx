@@ -307,9 +307,8 @@ export function ProductionDashboard({
     employeeNo: currentEmployee.employeeNo,
     nickname: currentEmployee.nickname,
     level: currentEmployee.level,
-    startWorkDate: null,
   } : null);
-  const startWorkDate = employment?.startWorkDate;
+  const startWorkDate = bootstrap.startWorkDate;
   const tenure = dashboardTenure(startWorkDate, todayKey);
   const startWorkDateLabel = startWorkDate
     ? new Intl.DateTimeFormat(lang === "TH" ? "th-TH" : lang === "JP" ? "ja-JP" : "en-GB", { day: "numeric", month: "short", year: "numeric" }).format(new Date(`${startWorkDate}T00:00:00`))
@@ -385,7 +384,8 @@ export function ProductionDashboard({
         <div className="dashboard-tenure-intro">
           <small>{t("เส้นทางของคุณกับ TOMAS TECH")}</small>
           <strong>{tenure ? `${t("ร่วมทีมมาแล้ว")} ${tenure.years} ${t("ปี")} ${tenure.months} ${t("เดือน")} ${tenure.days} ${t("วัน")}` : t("ยังไม่ระบุวันเริ่มงาน")}</strong>
-          <span>{employment ? `${t("พนักงานเลขที่")} ${employment.employeeNo} · ${employment.level}` : t("ไม่พบบัญชีผู้ใช้นี้ใน Employee Master")}</span>
+          {employment ? <span>{`${t("พนักงานเลขที่")} ${employment.employeeNo} · ${employment.level}`}</span>
+            : startWorkDate ? null : <span>{t("ไม่พบบัญชีผู้ใช้นี้ใน Employee Master")}</span>}
         </div>
         <div className="dashboard-tenure-stat">
           <small>{t("เริ่มงาน")}</small>

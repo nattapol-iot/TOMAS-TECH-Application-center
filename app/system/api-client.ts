@@ -70,9 +70,9 @@ export type BootstrapData = {
     employeeNo: number;
     nickname: string;
     level: string;
-    /** The signed-in person's own start date only; nobody else's is sent. */
-    startWorkDate: string | null;
   } | null;
+  /** The signed-in person's own start date only, from master data when it is connected; nobody else's is sent. */
+  startWorkDate: string | null;
   counts: { inquiries: number; estimates: number; activeProjects: number; approvals: number };
   customers: {
     id: number;

@@ -2,7 +2,7 @@
 
 [Module](../modules/shell.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `4e791abf`; generated, do not edit. [backend-node/src/routes/bootstrap.ts](<../../../backend-node/src/routes/bootstrap.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `5cb810fc`; generated, do not edit. [backend-node/src/routes/bootstrap.ts](<../../../backend-node/src/routes/bootstrap.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
@@ -10,14 +10,14 @@ Evidence: source snapshot `4e791abf`; generated, do not edit. [backend-node/src/
 |---|---|---|
 | GET | `/api/v1/me` | 62–62 |
 | PUT | `/api/v1/me/menu-favorites` | 64–73 |
-| GET | `/api/v1/bootstrap` | 75–176 |
+| GET | `/api/v1/bootstrap` | 75–177 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
 | `menuFavoritesInput` | [backend-node/src/routes/bootstrap.ts](<../../../backend-node/src/routes/bootstrap.ts>) | 44–52 |
-| `registerBootstrapRoutes` | [backend-node/src/routes/bootstrap.ts](<../../../backend-node/src/routes/bootstrap.ts>) | 61–177 |
+| `registerBootstrapRoutes` | [backend-node/src/routes/bootstrap.ts](<../../../backend-node/src/routes/bootstrap.ts>) | 61–178 |
 
 ## Direct local dependencies
 
