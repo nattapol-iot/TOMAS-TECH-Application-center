@@ -2189,6 +2189,78 @@ export const NO_GUIDE: Readonly<Record<string, string>> = {
   "manual": "The full illustrated manual, opened from the ? menu in the top bar; the guide list links to it.",
 };
 
+/* V1 / V2 look of the Sales screens (owner 2026-11-21): the same switch as Estimating, kept apart from it; everyone starts on V1. */
+const SALES_LOOK_V2: Guide = {
+  id: "sales-look-v2",
+  area: "sales",
+  title: { th: "ใช้หน้าจอ Sales แบบ V2 (Pegasus)", en: "Use the V2 (Pegasus) look of the Sales screens", jp: "Sales 画面の V2（Pegasus）表示を使う" },
+  summary: {
+    th: "สลับหน้าจอกลุ่มงานขาย (CRM, RFQ, Site Visit) เป็นแบบ V2 หน้าตาเดียวกับ Pegasus ERP ข้อมูลและปุ่มทำงานเหมือน V1 ทุกอย่าง กลับไป V1 ได้ทุกเมื่อ",
+    en: "Switch the Sales screens (CRM, RFQ intake, Site Visit) to V2, the Pegasus ERP look. The data and every action are the same as in V1, and you can go back to V1 at any time.",
+    jp: "営業グループの画面（CRM、RFQ、Site Visit）を Pegasus ERP と同じ V2 表示に切り替えます。データと操作は V1 と同じで、いつでも V1 に戻せます。",
+  },
+  minutes: 2,
+  permissions: ["crm.read"],
+  views: ["crm-opportunities"],
+  browse: true,
+  steps: [
+    menu("crm-opportunities",
+      { th: "เปิดเมนูโอกาสขาย", en: "Open CRM Opportunities", jp: "「CRM Opportunities」を開く" },
+      { th: "ปุ่มสลับ V1 / V2 อยู่ทุกหน้าในกลุ่มงานขาย รวมถึง RFQ และ Site Visit คลิกที่เมนูที่ไฮไลต์อยู่", en: "Every screen of the Sales group, RFQ intake and Site Visit included, has the V1 / V2 switch. Click the highlighted menu.", jp: "営業グループのすべての画面（RFQ と Site Visit を含む）に V1 / V2 の切り替えがあります。強調表示のメニューをクリックします。" }),
+    {
+      target: "sales.lookV2", action: "click", view: "crm-opportunities",
+      title: { th: "กด V2", en: "Press V2", jp: "「V2」を押す" },
+      body: {
+        th: "หน้าจอเปลี่ยนเป็นแบบ Pegasus ทันที ระบบจำตัวเลือกไว้ในเครื่องนี้ แยกจากของกลุ่ม Estimating ครั้งหน้าที่เปิดหน้างานขายจะเป็น V2",
+        en: "The screen changes to the Pegasus look at once. The choice is kept on this computer, apart from the Estimating one, so the Sales screens open in V2 next time.",
+        jp: "画面がすぐに Pegasus 表示に変わります。選択は Estimating とは別にこのコンピューターに保存され、次回も営業画面は V2 で開きます。",
+      },
+      missing: {
+        th: "ถ้ายังเปิดดีลอยู่ ให้กด 'กลับ' ด้านบนของหน้า ปุ่ม V1 / V2 อยู่มุมขวาบน",
+        en: "If a deal is open, press Back at the top of the page. The V1 / V2 switch is at the top right.",
+        jp: "商談を開いている場合は、ページ上部の「戻る」を押します。V1 / V2 の切り替えは右上にあります。",
+      },
+    },
+    {
+      target: "crm.summary", action: "next", view: "crm-opportunities",
+      title: { th: "แถบสรุปตามขั้นของดีล", en: "The stage summary bar", jp: "段階のサマリーバー" },
+      body: {
+        th: "ช่องแรกคือดีลที่ยังเปิดอยู่ ถัดไปคือแต่ละขั้นของการขาย แล้วปิดท้ายด้วยได้งานและไม่ได้งาน กดช่องไหนรายการด้านล่างจะแสดงเฉพาะดีลกลุ่มนั้น กดซ้ำเพื่อดูทั้งหมด หน้า RFQ มีแถบแบบเดียวกันตามสถานะ",
+        en: "The first cell is every open deal, then each sales stage, then Won and Lost. Press a cell to list only those deals, and press it again to see them all. RFQ intake has the same bar by status.",
+        jp: "最初のセルは進行中の商談、続いて各営業段階、最後に受注と失注です。セルを押すとその商談だけを一覧表示し、もう一度押すとすべて表示します。RFQ 画面にもステータス別の同じバーがあります。",
+      },
+      missing: {
+        th: "กด V2 ก่อน แถบนี้มีเฉพาะหน้าตาแบบ V2",
+        en: "Press V2 first; this bar is part of the V2 look.",
+        jp: "先に「V2」を押します。このバーは V2 表示にだけあります。",
+      },
+    },
+    {
+      target: "crm.deals", action: "next", view: "crm-opportunities",
+      title: { th: "ขั้นของดีลอยู่คอลัมน์แรก", en: "The stage is the first column", jp: "段階は最初の列です" },
+      body: {
+        th: "ปุ่มดินสอทางซ้ายคือแก้ไขดีล กดชื่อดีลเพื่อเปิด และกดเลข Inquiry ใต้ขั้นเพื่อเปิดงานประเมินราคา",
+        en: "The pencil on the left edits the deal. Press the deal's name to open it, and the inquiry number under the stage to open its RFQ.",
+        jp: "左の鉛筆で商談を編集します。商談名を押すと開き、段階の下の引合番号を押すと RFQ を開きます。",
+      },
+      missing: {
+        th: "ถ้าอยู่ที่มุมมองบอร์ด ให้กดแท็บรายการก่อน",
+        en: "If the board is showing, press the list tab first.",
+        jp: "ボード表示の場合は、先に一覧タブを押します。",
+      },
+    },
+    {
+      target: "sales.look", action: "next", view: "crm-opportunities",
+      title: { th: "กลับไปแบบเดิมได้ทุกเมื่อ", en: "Go back to V1 at any time", jp: "いつでも V1 に戻せます" },
+      body: {
+        th: "กด V1 เพื่อกลับไปหน้าตาเดิม งานที่เปิดอยู่ไม่หายและไม่ต้องบันทึกใหม่ เพราะ V1 กับ V2 ใช้ข้อมูลชุดเดียวกัน",
+        en: "Press V1 to return to the look you know. The work you have open stays as it is, because V1 and V2 use the same data.",
+        jp: "V1 を押すと従来の表示に戻ります。V1 と V2 は同じデータを使うので、開いている作業はそのまま残ります。",
+      },
+    },
+  ],
+};
+
 /* V1 / V2 look of the Estimating screens (owner 2026-11-19): everyone starts on V1; V2 is the Pegasus ERP look. */
 const ESTIMATE_LOOK_V2: Guide = {
   id: "estimate-look-v2",
@@ -2563,6 +2635,7 @@ export const GUIDES: readonly Guide[] = [
     ],
   },
   CRM_PROPOSAL_WON,
+  SALES_LOOK_V2,
   {
     id: "estimate-create",
     area: "estimate",

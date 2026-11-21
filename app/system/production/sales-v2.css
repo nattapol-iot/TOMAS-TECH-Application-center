@@ -1,0 +1,151 @@
+/*
+ * Sales screens, V2: the Pegasus ERP look (owner 2026-11-21, "ใช้ UI นี้ปรับส่วนของฟีเจอร์ Sales หน่อย แต่อยากให้มีปุ่ม V1,V2").
+ * SalesLook.tsx wraps a Sales screen opened in V2 in "pg-skin pg-screen sales-v2". pegasus-skin.css and pegasus-screens.css
+ * already draw the shared parts (page header, buttons, panels, tables, badges, tabs, dialogs, summary bar) and set the app's
+ * tokens to Pegasus values, so most of crm.css and globals.css takes the look without a rule here. This file holds only what
+ * the Sales screens add: the V1 / V2 switch, the deal list and board, the CRM forms, the RFQ list, and the Site Visit parts
+ * that site-visit-workspace.css draws with fixed colours.
+ *
+ * The switch's own rules (.sales-look-*) apply in both looks; every other rule sits under .sales-v2, so nothing here reaches
+ * a screen opened in V1 or any other screen. Built from the pegasus-design spec (DESIGN.md B.1 tokens, B.2 type, B.4 radius,
+ * C.1.9 flat panels, C.2 summary bar, D.2 inputs, D.4 segmented, D.7 table).
+ */
+
+/* ---------- The V1 / V2 switch (both looks) ---------- */
+.sales-look-v1 { display: contents; }
+.sales-look-bar { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-bottom: -6px; }
+.sales-look-label { color: var(--muted); font-size: var(--fs-xs); }
+.sales-look-switch { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--n-100); }
+.sales-look-switch button { min-width: 36px; height: 24px; padding: 0 8px; border: 0; border-radius: var(--r-xs); background: none; color: var(--muted); font-size: var(--fs-xs); font-weight: 600; cursor: pointer; }
+.sales-look-switch button[aria-checked="true"] { background: var(--surface); color: var(--blue-text); box-shadow: var(--shadow-xs); }
+.sales-look-switch button:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+
+/* In V2 the switch is the ERP's muted segmented control (D.4). */
+.sales-v2 .sales-look-bar { margin-bottom: 0; }
+.sales-v2 .sales-look-label { color: var(--pg-muted-fg); font-size: 12px; }
+.sales-v2 .sales-look-switch { padding: 3px; border: 0; border-radius: 6px; background: var(--pg-muted); }
+.sales-v2 .sales-look-switch button { height: 26px; border-radius: 4px; color: var(--pg-muted-fg); font-size: 13px; font-weight: 500; }
+.sales-v2 .sales-look-switch button[aria-checked="true"] { background: var(--pg-background); color: var(--pg-foreground); box-shadow: 0 1px 2px rgb(0 0 0 / 0.08); }
+.sales-v2 .sales-look-switch button:focus-visible { outline: none; box-shadow: var(--pg-focus); }
+
+/* ---------- Page rhythm ---------- */
+/* The CRM workspace and the screens under it keep the skin's 12px gap. */
+.sales-v2 .crm-workspace { gap: 12px; color: var(--pg-foreground); }
+.sales-v2 .crm-muted { color: var(--pg-muted-fg); font-size: 12px; }
+
+/* One primary action per header, placed last (D.1): CRM Dashboard lists New opportunity before CRM configuration. */
+.sales-v2 .page-actions > .btn.primary { order: 1; }
+
+/* A bare checkbox filter in the deal toolbar sits on the controls' line. */
+.sales-v2 .crm-filters > label:has(> input[type="checkbox"]) { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; align-self: flex-end; color: var(--pg-foreground); font-size: 14px; }
+.sales-v2 .crm-filters > label > input[type="checkbox"] { width: 16px; height: 16px; margin: 0; accent-color: var(--pg-primary); }
+
+/* Segmented view switches (My work / Team work, list / calendar). */
+.sales-v2 .seg-control { gap: 2px; padding: 3px; border: 0; border-radius: 6px; background: var(--pg-muted); }
+.sales-v2 .seg-control button { border-radius: 4px; color: var(--pg-muted-fg); font-size: 14px; font-weight: 500; }
+.sales-v2 .seg-control button.on { background: var(--pg-background); color: var(--pg-foreground); box-shadow: 0 1px 2px rgb(0 0 0 / 0.08); }
+.sales-v2 .seg-control button:focus-visible { outline: none; box-shadow: var(--pg-focus); }
+
+/* Text that opens a record is the ERP's link: primary, medium, underlined on hover (0.2). */
+.sales-v2 :is(.crm-link, td .back-link, .crm-field-link) { color: var(--pg-primary); font-weight: 500; }
+.sales-v2 :is(.crm-link, td .back-link, .crm-field-link):hover { text-decoration: underline; text-underline-offset: 4px; }
+.sales-v2 :is(.crm-link, td .back-link):focus-visible { border-radius: 3px; outline: none; box-shadow: var(--pg-focus); }
+
+/* ---------- Summary bars (C.2) ---------- */
+/* The deal bar has nine cells and the RFQ bar eight: two columns on a narrow screen, one row from 1024px (the skin). A long
+   label wraps rather than hiding its end; the value stays on the bottom line of every cell. */
+.sales-v2 :is(.crm-deal-summary, .inquiry-summary) .pg-cell-label { overflow-wrap: anywhere; line-height: 1.3; }
+@media (max-width: 1023.98px) {
+  .sales-v2 :is(.crm-deal-summary, .inquiry-summary) > .pg-cell:last-child:nth-child(odd) { grid-column: 1 / -1; }
+}
+
+/* ---------- Deal list (DealTable) ---------- */
+.sales-v2 .crm-deal-table .crm-col-act { width: 48px; }
+.sales-v2 .crm-deal-table .pg-acts { padding-right: 0; vertical-align: top; }
+.sales-v2 .crm-deal-name { font-size: 14px; }
+.sales-v2 .crm-deal-sub { color: var(--pg-muted-fg); font-size: 12px; }
+.sales-v2 .crm-deal-owner { color: var(--pg-foreground); font-weight: 500; }
+.sales-v2 .crm-deal-value { color: var(--pg-foreground); font-size: 14px; font-weight: 500; }
+
+/* ---------- Pipeline board ---------- */
+/* Columns are muted lanes with a divided header and the count as a neutral pill, like the ERP's tab count (D.6). */
+.sales-v2 .crm-pipeline > section { border-color: var(--pg-divider); border-radius: 8px; background: var(--pg-muted); }
+.sales-v2 .crm-pipeline > section > header { border-bottom-color: var(--pg-divider); }
+.sales-v2 .crm-pipeline > section > header h3 { color: var(--pg-foreground); font-size: 14px; font-weight: 600; }
+.sales-v2 .crm-pipeline > section > header strong { padding: 2px 6px; background: rgb(0 0 0 / 0.07); color: var(--pg-muted-fg); font-size: 12px; font-weight: 500; line-height: 16px; }
+.sales-v2 .crm-pipeline > section.drop-target { border-color: var(--pg-primary); background: var(--pg-accent); }
+.sales-v2 .crm-pipeline-add { border-color: var(--pg-input); border-radius: 6px; color: var(--pg-muted-fg); font-size: 12px; }
+.sales-v2 .crm-pipeline-add:hover { border-color: var(--pg-primary); background: var(--pg-accent); color: var(--pg-primary); }
+.sales-v2 .crm-pipeline-add:focus-visible { outline: none; box-shadow: var(--pg-focus); }
+/* Cards: flat white records with a soft edge; hover tints instead of lifting. */
+.sales-v2 .crm-opportunity-card { border-color: var(--pg-divider); border-radius: 8px; background: var(--pg-background); box-shadow: 0 1px 2px rgb(0 0 0 / 0.05); color: var(--pg-foreground); transition: background-color 150ms var(--pg-ease), border-color 150ms var(--pg-ease); }
+.sales-v2 button.crm-opportunity-card:hover { border-color: var(--pg-input); background: var(--pg-row-hover); box-shadow: 0 1px 2px rgb(0 0 0 / 0.05); transform: none; }
+.sales-v2 button.crm-opportunity-card:focus-visible { outline: none; box-shadow: var(--pg-focus); }
+.sales-v2 .crm-opportunity-card > strong { color: var(--pg-foreground); font-size: 14px; font-weight: 500; }
+.sales-v2 :is(.crm-card-customer, .crm-opportunity-card small) { color: var(--pg-muted-fg); font-size: 12px; }
+.sales-v2 .crm-card-value { color: var(--pg-foreground); font-size: 12px; }
+
+/* ---------- Deal record ---------- */
+.sales-v2 .crm-stagebar span { background: var(--pg-muted); color: var(--pg-muted-fg); font-size: 12px; font-weight: 500; }
+.sales-v2 .crm-stagebar span.done { background: var(--pg-primary-10); color: var(--pg-primary); }
+.sales-v2 .crm-stagebar span.active { background: var(--pg-primary); color: var(--pg-primary-fg); }
+.sales-v2 .crm-details dt { color: var(--pg-muted-fg); font-size: 14px; font-weight: 400; }
+.sales-v2 .crm-details dd { color: var(--pg-foreground); font-size: 14px; }
+.sales-v2 .crm-details > div, .sales-v2 .crm-action, .sales-v2 .crm-timeline article { border-bottom-color: var(--pg-row-line); }
+.sales-v2 .crm-action strong, .sales-v2 .crm-timeline article h3 { color: var(--pg-foreground); font-size: 14px; font-weight: 500; }
+.sales-v2 :is(.crm-action p, .crm-action span, .crm-timeline article > small) { color: var(--pg-muted-fg); font-size: 12px; }
+.sales-v2 .crm-timeline summary { color: var(--pg-primary); font-weight: 500; }
+.sales-v2 .crm-timeline pre { border-radius: 6px; background: var(--pg-muted); font-size: 12px; }
+.sales-v2 .crm-customer-identity > span { border-radius: 8px; background: var(--pg-accent); color: var(--pg-primary); font-weight: 600; }
+.sales-v2 .crm-customer-identity strong { color: var(--pg-foreground); font-size: 16px; font-weight: 600; }
+.sales-v2 .crm-funnel-track { background: var(--pg-muted); }
+
+/* ---------- CRM forms (D.2) ---------- */
+/* Labels above 36px controls, the ERP's input border and its focus ring. */
+.sales-v2 .crm-form-grid { gap: 16px; }
+.sales-v2 .crm-form-grid label > span { color: var(--pg-foreground); font-size: 14px; font-weight: 500; }
+.sales-v2 :is(.crm-form-grid input:not([type="checkbox"]), .crm-form-grid select, .crm-form-grid textarea, .crm-customer-identity input) {
+  min-height: 36px; padding: 6px 12px; border-color: var(--pg-input); border-radius: 6px; background: var(--pg-background); color: var(--pg-foreground); font-size: 14px; box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
+}
+.sales-v2 :is(.crm-form-grid input, .crm-form-grid select, .crm-form-grid textarea, .crm-customer-identity input):focus { border-color: var(--pg-input); outline: 0; box-shadow: var(--pg-focus); }
+.sales-v2 .crm-form-grid .crm-check-field { border-color: var(--pg-divider); border-radius: 6px; background: var(--pg-background); }
+.sales-v2 .crm-form-grid .crm-check-field input { accent-color: var(--pg-primary); box-shadow: none; }
+.sales-v2 .crm-editor-actions { border-top-color: var(--pg-divider); }
+.sales-v2 :is(.crm-editor > summary, .crm-editor details > summary) { color: var(--pg-primary); font-size: 14px; font-weight: 500; }
+.sales-v2 .crm-quick-add { border-color: transparent; border-radius: 8px; background: var(--pg-accent); }
+.sales-v2 .alert { border-radius: 8px; font-size: 14px; }
+.sales-v2 .alert.danger { border-color: color-mix(in srgb, var(--pg-destructive) 40%, transparent); background: var(--pg-background); color: var(--pg-foreground); box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
+
+/* ---------- RFQ list ---------- */
+/* The queue scope strip reads as a quiet line on the canvas, not a blue box. */
+.sales-v2 .info-strip:has(> .seg-control) { padding: 0; background: none; color: var(--pg-muted-fg); }
+/* Late, ready and waiting rows keep their meaning through the status badge; the row tints are the app's, not the ERP's. */
+.sales-v2 tbody tr:is(.row-late, .row-ok, .row-wait) td { background: var(--pg-background); }
+.sales-v2 tbody tr:is(.row-late, .row-ok, .row-wait):hover td { background: var(--pg-row-hover); }
+.sales-v2 .pg-acts .icon-btn.danger:hover:not(:disabled) { background: none; color: var(--pg-destructive); }
+
+/* ---------- Site Visit (site-visit-workspace.css draws these with fixed colours) ---------- */
+.sales-v2 .visit-stage-guide { margin: 0; border-color: transparent; border-radius: 8px; background: var(--pg-accent); color: var(--pg-foreground); }
+.sales-v2 .visit-stage-guide span { color: var(--pg-muted-fg); }
+.sales-v2 .visit-extra { margin: 0; color: var(--pg-muted-fg); }
+.sales-v2 :is(.visit-extra, .visit-report-details) summary { color: var(--pg-foreground); font-weight: 500; }
+.sales-v2 .visit-action-menu { border-color: var(--pg-divider); }
+.sales-v2 .visit-check-heading { border-color: var(--pg-divider); border-radius: 8px; background: var(--pg-background); color: var(--pg-foreground); font-weight: 500; }
+.sales-v2 .visit-check-heading:hover { background: var(--pg-row-hover); }
+.sales-v2 .visit-check-heading:focus-visible { outline: none; box-shadow: var(--pg-focus); }
+.sales-v2 .visit-check-heading span { color: var(--pg-muted-fg); }
+.sales-v2 .site-exec .check-input textarea, .sales-v2 .site-exec .check-input input:not([type="checkbox"]) { border-color: var(--pg-input); background: var(--pg-background); color: var(--pg-foreground); font-size: 14px; }
+.sales-v2 .site-exec .check-input textarea:focus, .sales-v2 .site-exec .check-input input:not([type="checkbox"]):focus { outline: none; box-shadow: var(--pg-focus); }
+.sales-v2 .visit-answer { border-left-color: var(--pg-primary-10); background: var(--pg-muted); }
+.sales-v2 .visit-answer p { color: var(--pg-muted-fg); }
+.sales-v2 .visit-report-reading { color: var(--pg-foreground); font-size: 14px; }
+.sales-v2 .visit-report-reading section { border-bottom-color: var(--pg-row-line); }
+.sales-v2 .visit-report-reading h3 { color: var(--pg-foreground); font-size: 14px; font-weight: 600; }
+.sales-v2 .visit-report-meta { border-bottom: 1px solid var(--pg-divider); }
+.sales-v2 .visit-report-meta span { color: var(--pg-muted-fg); }
+.sales-v2 .visit-report-details { border-top-color: var(--pg-divider); }
+.sales-v2 .visit-evidence { border-color: var(--pg-divider); background: var(--pg-background); }
+
+@media (prefers-reduced-motion: reduce) {
+  .sales-v2 .crm-opportunity-card { transition: none; }
+}

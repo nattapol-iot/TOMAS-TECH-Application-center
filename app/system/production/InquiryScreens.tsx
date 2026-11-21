@@ -19,6 +19,8 @@ import { ProductionSalesIntake } from "./SiteVisitScreens";
 import { EndUserCompanyField, EndUserEditModal, canEditEndUser } from "./EndUserCompanyField";
 import { InquiryCustomerFields } from "./InquiryCustomerFields";
 import { defaultInquiryQueueScope, inquiryNextAction, type InquiryNextAction, type InquiryQueueScope } from "../../../lib/inquiry-queue";
+import { INQUIRY_STATUSES, inquiryStatusCell } from "../../../lib/sales-look";
+import { useSalesLook } from "./SalesLook";
 import {
   assignInquiryOwner,
   assignmentDeliveryNote,
@@ -37,6 +39,7 @@ import {
   type CreateInquiryMeetingInput,
   type InquiryAttachment,
   type InquiryDetail,
+  type InquiryStatusCount,
   type InquirySummary,
   type PagedResult,
 } from "../api-client";
@@ -142,6 +145,9 @@ function InquiryList({ bootstrap, notify, refreshBootstrap, onCreate, onOpen, op
   const uiText = useUiText();
   const { lang } = useLanguage();
   const [result, setResult] = useState(EMPTY_PAGE);
+  // The V2 (Pegasus) list opens on a status summary bar; its counts come with the page (?summary=true).
+  const v2 = useSalesLook() === "v2";
+  const [statusCounts, setStatusCounts] = useState<InquiryStatusCount[] | null>(null);
   const [deleteInquiryId, setDeleteInquiryId] = useState<number | null>(null);
   const isAdmin = (bootstrap.user.roles?.length ? bootstrap.user.roles : [bootstrap.user.role]).includes("Admin");
   const [page, setPage] = useState(1);
@@ -167,7 +173,7 @@ function InquiryList({ bootstrap, notify, refreshBootstrap, onCreate, onOpen, op
   const load = useCallback(async () => {
     setLoading(true); setError("");
     try {
-      setResult(await listInquiries({
+      const found = await listInquiries({
         page, pageSize, search,
         customerId,
         projectType: projectType === "All project types" ? undefined : projectType,
@@ -179,10 +185,13 @@ function InquiryList({ bootstrap, notify, refreshBootstrap, onCreate, onOpen, op
         probabilityTo: selectedProbabilityRange.to,
         inquiryFrom: inquiryFrom || undefined,
         dueTo: dueTo || undefined,
-      }));
+        summary: v2 || undefined,
+      });
+      setResult(found);
+      setStatusCounts(found.statusSummary ?? null);
     } catch (requestError) { setError(toError(requestError)); }
     finally { setLoading(false); }
-  }, [page, pageSize, search, customerId, projectType, ownerId, status, priority, interestGrade, selectedProbabilityRange.from, selectedProbabilityRange.to, inquiryFrom, dueTo]);
+  }, [page, pageSize, search, customerId, projectType, ownerId, status, priority, interestGrade, selectedProbabilityRange.from, selectedProbabilityRange.to, inquiryFrom, dueTo, v2]);
 
   useEffect(() => { const timer = window.setTimeout(() => { void load(); }, 220); return () => window.clearTimeout(timer); }, [load]);
   const resetPage = () => setPage(1);
@@ -232,6 +241,13 @@ function InquiryList({ bootstrap, notify, refreshBootstrap, onCreate, onOpen, op
 
   return <>
     <PageHeader eyebrow="SALES TO ENGINEERING" title="CRM.rfqTitle" subtitle="CRM.rfqSubtitle" actions={<><DocumentHistoryButton kind="inquiries" notify={notify} onOpen={onOpen} onChanged={async () => { await load(); await refreshBootstrap(); }} />{canWrite ? <button className="btn primary" type="button" data-guide="inquiry.receive" onClick={onCreate}><Icon name="plus" /><LocalizedText text="CRM.receiveRfq" /></button> : null}</>} />
+    {/* Pegasus C.2: each cell counts one status under the other filters and sets the status filter; pressed again it clears. */}
+    {v2 ? <div className="pg-summary inquiry-summary" role="group" aria-label={uiText("Status")} data-guide="inquiry.summary">
+      {["All status", ...INQUIRY_STATUSES].map((cell) => <button key={cell} type="button" className="pg-cell" aria-pressed={status === cell} onClick={() => { setStatus(status === cell || cell === "All status" ? "All status" : cell); resetPage(); }}>
+        <span className="pg-cell-label">{uiText(cell === "Approved" ? "CRM.costApproved" : cell)}</span>
+        <strong className="pg-cell-value">{statusCounts ? inquiryStatusCell(statusCounts, cell).toLocaleString("en-US") : "—"}</strong>
+      </button>)}
+    </div> : null}
     <div className="info-strip" role="region" aria-label={queueCopy.team} style={{ marginBottom: 12, flexWrap: "wrap" }}>
       <Icon name="users" />
       <div className="seg-control" role="group" aria-label={queueCopy.team}>
@@ -255,7 +271,7 @@ function InquiryList({ bootstrap, notify, refreshBootstrap, onCreate, onOpen, op
     </Toolbar>
     {/* The seven statuses dbo.inquiries allows. Casing matters: the tone lookup
         is exact, so "Engineering review" would silently render as slate. */}
-    <StatusLegend items={[
+    {v2 ? null : <StatusLegend items={[
       { label: "New" },
       { label: "Estimating" },
       { label: "Waiting Supplier Price" },
@@ -263,25 +279,29 @@ function InquiryList({ bootstrap, notify, refreshBootstrap, onCreate, onOpen, op
       { label: "Engineering Review" },
       { label: "Approved" },
       { label: "Cancelled" },
-    ]} />
+    ]} />}
     {error ? <LoadError message={error} retry={() => { void load(); }} /> : null}
     <Panel title={`${result.total} ${uiText("inquiries")}`} flush guide="inquiry.list">
       <GridControls hideSearch pageSize={pageSize} onPageSize={(size) => { setPageSize(size); setPage(1); }} search={search} onSearch={(value) => { setSearch(value); setPage(1); }} />
       {result.items.length ? <div className="table-wrap"><table>
-        <thead><tr><th><LocalizedText text={"Inquiry / งาน"} /></th><th><LocalizedText text={"Customer"} /></th><th><LocalizedText text={"Owner / due"} /></th><th><LocalizedText text={"Next action"} /></th><th><LocalizedText text={"Priority"} /></th><th><LocalizedText text={"CRM.inquiryStatus"} /></th><th aria-label={uiText("Action")} /></tr></thead>
+        <thead>{v2 ? <tr>{isAdmin ? <th className="pg-acts" aria-label={uiText("Action")} /> : null}<th><LocalizedText text={"CRM.inquiryStatus"} /></th><th><LocalizedText text={"Inquiry / งาน"} /></th><th><LocalizedText text={"Customer"} /></th><th><LocalizedText text={"Owner / due"} /></th><th><LocalizedText text={"Next action"} /></th><th><LocalizedText text={"Priority"} /></th></tr>
+          : <tr><th><LocalizedText text={"Inquiry / งาน"} /></th><th><LocalizedText text={"Customer"} /></th><th><LocalizedText text={"Owner / due"} /></th><th><LocalizedText text={"Next action"} /></th><th><LocalizedText text={"Priority"} /></th><th><LocalizedText text={"CRM.inquiryStatus"} /></th><th aria-label={uiText("Action")} /></tr>}</thead>
         <tbody>{result.items.map((item) => {
           const customerItem = bootstrap.customers.find((entry) => entry.id === item.customerId);
           const late = item.dueDate < today() && item.status !== "Approved" && item.status !== "Cancelled";
           const rowClass = late ? "row-late" : item.status === "Approved" || item.status === "Estimate Completed" ? "row-ok" : item.status === "Waiting Supplier Price" ? "row-wait" : "";
+          const statusCell = <td><Badge tone={toneOf(item.status)}>{item.status==="Approved"?uiText("CRM.costApproved"):item.status}</Badge><ProgressCell value={Number(item.progress)} /></td>;
+          const deleteButton = isAdmin ? <button className="icon-btn danger" type="button" title={uiText("Delete inquiry")} aria-label={`${uiText("Delete inquiry")}: ${item.number}`}
+              onClick={event => { event.stopPropagation(); setDeleteInquiryId(item.id); }}><Icon name="trash" /></button> : null;
           return <tr key={item.id} className={`clickable ${rowClass}`} onClick={() => onOpen(item.id)}>
+            {v2 ? <>{isAdmin ? <td className="pg-acts">{deleteButton}</td> : null}{statusCell}</> : null}
             <td><a className="back-link" href={viewHash("inquiries", item.id)} onClick={(event) => { event.stopPropagation(); if (!isPlainClick(event)) return; event.preventDefault(); onOpen(item.id); }}>{item.projectName}</a><div className="muted">{item.number} <LocalizedText text={"·"} /> {item.projectType}</div><small className="muted">{item.opportunityNo&&openOpportunity ? <button type="button" className="back-link" onClick={event=>{event.stopPropagation();openOpportunity(Number(item.opportunityId));}}>{item.opportunityNo} · {uiText(`CRM.${item.opportunityStage}`)}</button> : uiText(item.hasOpportunity?"CRM.sourceOpportunity":"CRM.directInquiries")}</small></td>
             <td><div className="cell-primary"><strong>{customerItem?.code ?? "—"}</strong><span>{item.customerName}</span><small><LocalizedText text={"End user:"} /> {item.endUserName || "ยังไม่ระบุ / Not specified"}</small></div></td>
             <td><div className="cell-primary"><Person initials={initials(item.estimateOwnerName)} name={item.estimateOwnerName} /><small className={late ? "red-text" : undefined}>{late ? "⚠ " : ""}<LocalizedText text={"Due"} /> {formatDate(item.dueDate)}</small><small><LocalizedText text={"Sales"} />: {item.salesOwner || "—"}</small></div></td>
             <td><strong>{nextActionCopy[inquiryNextAction(item.status, Boolean(item.estimateId), item.estimateStatus, {stage:item.opportunityStage,proposalSentOn:item.proposalSentOn,wonOn:item.wonOn,hasProject:item.hasProject})]}</strong></td>
-            <td><Badge tone={priorityTone(item.priority)}>{item.priority}</Badge></td><td><Badge tone={toneOf(item.status)}>{item.status==="Approved"?uiText("CRM.costApproved"):item.status}</Badge><ProgressCell value={Number(item.progress)} /></td>
-            <td><div className="row-actions">{isAdmin ? <button className="icon-btn danger" type="button" title={uiText("Delete inquiry")} aria-label={`${uiText("Delete inquiry")}: ${item.number}`}
-              onClick={event => { event.stopPropagation(); setDeleteInquiryId(item.id); }}><Icon name="trash" /></button> : null}
-              <span className="row-action"><Icon name="chevronRight" /></span></div></td>
+            <td><Badge tone={priorityTone(item.priority)}>{item.priority}</Badge></td>
+            {v2 ? null : <>{statusCell}<td><div className="row-actions">{deleteButton}
+              <span className="row-action"><Icon name="chevronRight" /></span></div></td></>}
           </tr>;
         })}</tbody>
       </table><Pagination page={result.page} pageCount={pageCount} from={(result.page - 1) * result.pageSize + 1} to={Math.min(result.page * result.pageSize, result.total)} total={result.total} onPage={setPage} /></div>

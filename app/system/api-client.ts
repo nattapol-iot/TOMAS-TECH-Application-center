@@ -1304,6 +1304,9 @@ const queryString = (values: Record<string, string | number | boolean | undefine
   return result ? `?${result}` : "";
 };
 
+/** How many inquiries carry one status, over the list's other filters (GET /api/v1/inquiries?summary=true). */
+export type InquiryStatusCount = { status: string; count: number };
+
 export const listInquiries = (values: {
   page?: number;
   pageSize?: number;
@@ -1320,8 +1323,10 @@ export const listInquiries = (values: {
   inquiryTo?: string;
   dueFrom?: string;
   dueTo?: string;
+  /** The Sales V2 list's summary bar: adds statusSummary, one row per status over every filter but the status. */
+  summary?: boolean;
 }) =>
-  apiRequest<PagedResult<InquirySummary>>(`/api/v1/inquiries/${queryString(values)}`);
+  apiRequest<PagedResult<InquirySummary> & { statusSummary?: InquiryStatusCount[] }>(`/api/v1/inquiries/${queryString(values)}`);
 
 export const createInquiry = (input: CreateInquiryInput) =>
   apiRequest<{ id: number; number: string; rowVersion: string; notification: AssignmentNotificationResult }>(
