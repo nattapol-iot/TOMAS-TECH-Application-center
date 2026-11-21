@@ -7,10 +7,15 @@
  *  - Requested / approved / ordered: the lines of the project's live purchase requests, by the rule the Project Units
  *    panel uses (routes/purchase-units.ts). A line on a BOM row of section OUT is outsource; every other line is hardware.
  *    Ordered is what the ERP has a PO for at this app's price: the ERP does not return PO prices.
- *  - People budget: manhour-budget.ts (the estimate's internal labor, or a figure typed by a manager).
+ *  - People budget: manhour-budget.ts (the estimate's internal labor, or a figure typed by a manager), and by discipline
+ *    the estimate's own split of that labor (dbo.manhour_lines.discipline).
  *  - People planned: manhour-budget.ts countedEffort(). To date: each counted figure times the part of its row's
  *    span that is on or before today; a row marked Done has used all of it.
- *  - People money: man-days times the estimate's average internal rate (internal labor cost / internal man-days).
+ *  - People planned by discipline: a plan row has no discipline of its own, so it takes one from where it sits and who
+ *    does it (rowDisciplines below): Installation under a heading that names installation, otherwise the discipline
+ *    of each PIC's department, otherwise Unassigned.
+ *  - People money: man-days times the discipline's own rate in the estimate (its labor cost / its man-days), and the
+ *    estimate's average internal rate for a discipline the estimate has no labor for.
  */
 
 import sql from "mssql";
@@ -19,7 +24,10 @@ import type { Database } from "./db.js";
 import { dateOnly } from "./http.js";
 import { budgetSource, countedEffort, type BudgetPlanRow } from "./manhour-budget.js";
 import { REQUESTING_PR_STATUSES } from "./procurement-rules.js";
-import { round2, type CostAccess, type CostPlanRow, type LaborCost, type PurchaseCost } from "./project-cost-model.js";
+import {
+  disciplineOfDepartment, LABOR_DISCIPLINES, namesInstallation, round2,
+  type CostAccess, type CostPlanRow, type LaborCost, type LaborDiscipline, type LaborDisciplineCost, type PurchaseCost,
+} from "./project-cost-model.js";
 import { calendarDays, resolveTasks, taskRow, type TaskRow } from "./schedule-service.js";
 
 /** BOM section of outsourced work (migration 108). */
@@ -27,13 +35,23 @@ const OUTSOURCE_SECTION = "OUT";
 /** Estimate categories bought through purchase requests: hardware 01-05 and outsource 07. */
 export const BOUGHT_CATEGORIES = ["01", "02", "03", "04", "05", "07"] as const;
 
+/** The estimate's internal labor of one discipline. */
+export type EstimateDisciplineFigures = { discipline: LaborDiscipline; manDays: number; cost: number };
 export type EstimateFigures = {
   estimateNo: string | null; materialTotal: number; outsourceTotal: number; total: number | null;
   internalCost: number; internalManDays: number; manualManDays: number | null;
+  disciplines: EstimateDisciplineFigures[];
 };
 export type PurchaseFigures = { requests: number; hardware: Omit<PurchaseCost, "budget">; outsource: Omit<PurchaseCost, "budget"> };
 export type RowSpan = { planStart: string | null; planFinish: string | null; status: string; percentComplete: number };
-export type PlanFigures = { plannedManDays: number; outsourcedManDays: number; toDateManDays: number | null; unplannedRows: number; rows: Omit<CostPlanRow, "plannedCost">[] };
+export type PlanDisciplineFigures = { discipline: LaborDiscipline; plannedManDays: number; toDateManDays: number | null };
+export type PlanFigures = {
+  plannedManDays: number; outsourcedManDays: number; toDateManDays: number | null; unplannedRows: number;
+  /** Own-staff man-days by discipline; only the disciplines the plan has man-days for. */
+  disciplines: PlanDisciplineFigures[];
+  rows: Omit<CostPlanRow, "plannedCost">[];
+};
+type PlanRow = BudgetPlanRow & { name: string };
 
 /** The part of a row's span on or before today, in calendar days: 0 before it starts, 1 from its last day on. A finished row has used all of it. */
 export function elapsedShare(span: RowSpan | undefined, today: string): number {
@@ -46,12 +64,32 @@ export function elapsedShare(span: RowSpan | undefined, today: string): number {
 }
 
 /**
- * The plan's man-days: planned in all, and what falls on or before today. `spans` holds the resolved dates of the
- * rows; null when the schedule could not be resolved, and then nothing is said about "to date".
+ * The disciplines a plan row's man-days go to, one entry per equal share. A row under a heading that names
+ * installation is Installation work, whoever does it (the estimate counts installation by the work, not the person).
+ * Otherwise each PIC's department names a discipline; a row without PICs takes those of the nearest row above it,
+ * because a function inherits its task's member. Nobody we can place: Unassigned.
  */
-export function planFigures(rows: readonly (BudgetPlanRow & { name: string })[], spans: ReadonlyMap<number, RowSpan> | null, today: string): PlanFigures {
+export function rowDisciplines(id: number, rows: ReadonlyMap<number, PlanRow>, departments: ReadonlyMap<number, readonly string[]>): LaborDiscipline[] {
+  let people: readonly string[] | undefined;
+  const seen = new Set<number>();
+  for (let row = rows.get(id); row && !seen.has(row.id); row = row.parentId === null ? undefined : rows.get(row.parentId)) {
+    seen.add(row.id);
+    if (row.kind === "phase" && namesInstallation(row.name)) return ["Installation"];
+    if (!people && departments.get(row.id)?.length) people = departments.get(row.id);
+  }
+  return people?.length ? people.map(disciplineOfDepartment) : ["Unassigned"];
+}
+
+/**
+ * The plan's man-days: planned in all, and what falls on or before today. `spans` holds the resolved dates of the
+ * rows; null when the schedule could not be resolved, and then nothing is said about "to date". `departments` holds
+ * the departments of each row's PICs, for the split by discipline.
+ */
+export function planFigures(rows: readonly PlanRow[], spans: ReadonlyMap<number, RowSpan> | null, today: string, departments: ReadonlyMap<number, readonly string[]> = new Map()): PlanFigures {
   const { counted, unplannedRows } = countedEffort(rows);
+  const byId = new Map(rows.map((row) => [row.id, row]));
   const byRoot = new Map<number, { planned: number; outsourced: number; toDate: number }>();
+  const byDiscipline = new Map<LaborDiscipline, { planned: number; toDate: number }>();
   let planned = 0, outsourced = 0, toDate = 0;
   for (const item of counted) {
     const sums = byRoot.get(item.rootId) ?? { planned: 0, outsourced: 0, toDate: 0 };
@@ -59,14 +97,21 @@ export function planFigures(rows: readonly (BudgetPlanRow & { name: string })[],
     else {
       const used = spans ? item.manDays * elapsedShare(spans.get(item.id), today) : 0;
       planned += item.manDays; toDate += used; sums.planned += item.manDays; sums.toDate += used;
+      const shares = rowDisciplines(item.id, byId, departments);
+      for (const discipline of shares) {
+        const split = byDiscipline.get(discipline) ?? { planned: 0, toDate: 0 };
+        split.planned += item.manDays / shares.length; split.toDate += used / shares.length;
+        byDiscipline.set(discipline, split);
+      }
     }
     byRoot.set(item.rootId, sums);
   }
-  const names = new Map(rows.map((row) => [row.id, row.name]));
   return {
     plannedManDays: round2(planned), outsourcedManDays: round2(outsourced), toDateManDays: spans ? round2(toDate) : null, unplannedRows,
+    disciplines: LABOR_DISCIPLINES.flatMap((discipline) => { const split = byDiscipline.get(discipline);
+      return split ? [{ discipline, plannedManDays: round2(split.planned), toDateManDays: spans ? round2(split.toDate) : null }] : []; }),
     rows: [...byRoot].map(([id, sums]) => { const span = spans?.get(id);
-      return { id, name: names.get(id) ?? "", planStart: span?.planStart ?? null, planFinish: span?.planFinish ?? null, percentComplete: span?.percentComplete ?? 0,
+      return { id, name: byId.get(id)?.name ?? "", planStart: span?.planStart ?? null, planFinish: span?.planFinish ?? null, percentComplete: span?.percentComplete ?? 0,
         plannedManDays: round2(sums.planned), outsourcedManDays: round2(sums.outsourced), toDateManDays: spans ? round2(sums.toDate) : null }; }),
   };
 }
@@ -75,18 +120,44 @@ export function planFigures(rows: readonly (BudgetPlanRow & { name: string })[],
 export const averageDailyRate = (figures: Pick<EstimateFigures, "internalCost" | "internalManDays"> | undefined): number | null =>
   figures && figures.internalManDays > 0 && figures.internalCost > 0 ? figures.internalCost / figures.internalManDays : null;
 
-/** People cost of one project, with money only for a viewer who may see it. */
+/** A discipline's own rate in the estimate, or the estimate's average for a discipline it has no labor for. */
+export function disciplineRate(estimate: EstimateFigures | undefined, discipline: LaborDiscipline): number | null {
+  const own = estimate?.disciplines.find((item) => item.discipline === discipline);
+  return own && own.manDays > 0 && own.cost > 0 ? own.cost / own.manDays : averageDailyRate(estimate);
+}
+
+/** People cost of one project, in all and by discipline, with money only for a viewer who may see it. */
 export function laborCost(estimate: EstimateFigures | undefined, plan: PlanFigures, access: CostAccess): LaborCost {
   const estimateManDays = round2(estimate?.internalManDays ?? 0), manual = estimate?.manualManDays ?? null;
   const source = budgetSource(estimateManDays, manual);
-  const rate = access.laborMoney ? averageDailyRate(estimate) : null;
-  const money = (manDays: number | null) => (rate === null || manDays === null ? null : round2(manDays * rate));
+  const average = access.laborMoney ? averageDailyRate(estimate) : null;
+  const disciplines: LaborDisciplineCost[] = LABOR_DISCIPLINES.flatMap((discipline) => {
+    const estimated = source === "estimate" ? estimate!.disciplines.find((item) => item.discipline === discipline) : undefined;
+    const planned = plan.disciplines.find((item) => item.discipline === discipline);
+    if (!estimated && !planned) return [];
+    const rate = access.laborMoney ? disciplineRate(estimate, discipline) : null;
+    const toDate = planned ? planned.toDateManDays : plan.toDateManDays === null ? null : 0;
+    // The estimate gave a named discipline nothing: its budget is zero. Man-days nobody could place have no budget to stand against.
+    const budget = estimated ? round2(estimated.manDays) : source === "estimate" && discipline !== "Unassigned" ? 0 : null;
+    return [{
+      discipline,
+      budgetManDays: budget,
+      plannedManDays: planned?.plannedManDays ?? 0, toDateManDays: toDate,
+      budgetCost: average !== null && budget !== null ? round2(estimated?.cost ?? 0) : null,
+      plannedCost: rate === null ? null : round2((planned?.plannedManDays ?? 0) * rate),
+      toDateCost: rate === null || toDate === null ? null : round2(toDate * rate),
+    }];
+  });
+  // The project's money is the sum of its disciplines, so the split always adds up to the line above it.
+  const sum = (pick: (item: LaborDisciplineCost) => number | null): number | null =>
+    average === null || disciplines.some((item) => pick(item) === null) ? null : round2(disciplines.reduce((total, item) => total + pick(item)!, 0));
   return {
     source, budgetManDays: source === "estimate" ? estimateManDays : source === "manual" ? manual : null,
     plannedManDays: plan.plannedManDays, outsourcedManDays: plan.outsourcedManDays, toDateManDays: plan.toDateManDays, unplannedRows: plan.unplannedRows,
-    dailyRate: rate === null ? null : round2(rate),
-    budgetCost: rate !== null && source === "estimate" ? round2(estimate!.internalCost) : null,
-    plannedCost: money(plan.plannedManDays), toDateCost: money(plan.toDateManDays),
+    dailyRate: average === null ? null : round2(average),
+    budgetCost: average !== null && source === "estimate" ? round2(estimate!.internalCost) : null,
+    plannedCost: sum((item) => item.plannedCost), toDateCost: plan.toDateManDays === null ? null : sum((item) => item.toDateCost),
+    disciplines,
   };
 }
 
@@ -106,21 +177,37 @@ async function run(source: Database | TransactionType, statement: string, ids: r
   return result.recordsets as unknown as Record<string, unknown>[][];
 }
 
-/** The estimate figures of each project that has an Estimate cost or a typed man-day budget. */
+/** A labor line's discipline as the overview names it; a line that names none is Unassigned. */
+const estimateDiscipline = (value: unknown): LaborDiscipline =>
+  LABOR_DISCIPLINES.find((discipline) => discipline !== "Unassigned" && discipline === value) ?? "Unassigned";
+
+/** The estimate figures of each project that has an Estimate cost or a typed man-day budget, with its internal labor by discipline. */
 export async function loadEstimateFigures(source: Database | TransactionType, ids: readonly number[]): Promise<Map<number, EstimateFigures>> {
   if (!ids.length) return new Map();
-  const [rows = []] = await run(source, `SELECT p.id project_id,p.manhour_budget_days,e.estimate_no,t.material_total,t.outsource_total,t.total,labor.internal_cost,labor.internal_days
+  const [rows = [], labor = []] = await run(source, `SELECT p.id project_id,p.manhour_budget_days,e.estimate_no,t.material_total,t.outsource_total,t.total
     FROM dbo.projects p LEFT JOIN dbo.estimates e ON e.id=p.estimate_id
     LEFT JOIN dbo.v_estimate_totals t ON t.estimate_id=e.id
-    OUTER APPLY (SELECT SUM(l.line_cost) internal_cost,SUM(l.engineers*l.man_days) internal_days FROM dbo.manhour_lines l
-      WHERE l.estimate_id=e.id AND l.revision=e.revision AND l.deleted_at IS NULL AND l.provider=N'Internal') labor
-    WHERE p.id IN(${ID_LIST}) AND p.deleted_at IS NULL AND (p.estimate_id IS NOT NULL OR p.manhour_budget_days IS NOT NULL);`, ids);
-  return new Map(rows.map((row) => [Number(row.project_id), {
-    estimateNo: row.estimate_no == null ? null : String(row.estimate_no),
-    materialTotal: Number(row.material_total ?? 0), outsourceTotal: Number(row.outsource_total ?? 0), total: row.total == null ? null : Number(row.total),
-    internalCost: Number(row.internal_cost ?? 0), internalManDays: Number(row.internal_days ?? 0),
-    manualManDays: row.manhour_budget_days == null ? null : Number(row.manhour_budget_days),
-  }]));
+    WHERE p.id IN(${ID_LIST}) AND p.deleted_at IS NULL AND (p.estimate_id IS NOT NULL OR p.manhour_budget_days IS NOT NULL);
+    SELECT p.id project_id,l.discipline,SUM(l.engineers*l.man_days) man_days,SUM(l.line_cost) cost
+    FROM dbo.projects p INNER JOIN dbo.estimates e ON e.id=p.estimate_id
+    INNER JOIN dbo.manhour_lines l ON l.estimate_id=e.id AND l.revision=e.revision AND l.deleted_at IS NULL AND l.provider=N'Internal'
+    WHERE p.id IN(${ID_LIST}) AND p.deleted_at IS NULL GROUP BY p.id,l.discipline;`, ids);
+  const byProject = new Map<number, EstimateDisciplineFigures[]>();
+  for (const row of labor) {
+    const projectId = Number(row.project_id), discipline = estimateDiscipline(row.discipline), list = byProject.get(projectId) ?? [];
+    const found = list.find((item) => item.discipline === discipline);
+    if (found) { found.manDays += Number(row.man_days ?? 0); found.cost += Number(row.cost ?? 0); }
+    else list.push({ discipline, manDays: Number(row.man_days ?? 0), cost: Number(row.cost ?? 0) });
+    byProject.set(projectId, list);
+  }
+  return new Map(rows.map((row) => { const disciplines = (byProject.get(Number(row.project_id)) ?? []).filter((item) => item.manDays > 0);
+    return [Number(row.project_id), {
+      estimateNo: row.estimate_no == null ? null : String(row.estimate_no),
+      materialTotal: Number(row.material_total ?? 0), outsourceTotal: Number(row.outsource_total ?? 0), total: row.total == null ? null : Number(row.total),
+      internalCost: disciplines.reduce((sum, item) => sum + item.cost, 0), internalManDays: disciplines.reduce((sum, item) => sum + item.manDays, 0),
+      manualManDays: row.manhour_budget_days == null ? null : Number(row.manhour_budget_days),
+      disciplines,
+    }]; }));
 }
 
 /** The live purchase requests of each project, hardware and outsource apart. */
@@ -148,11 +235,15 @@ export async function loadPlanFigures(source: Database | TransactionType, ids: r
   if (!ids.length) return new Map();
   // taskRow() reads by column name, so every column is selected, as project-overview.ts does.
   const sets = await run(source, `SELECT t.* FROM dbo.schedule_tasks t WHERE t.project_id IN(${ID_LIST}) AND t.deleted_at IS NULL ORDER BY t.project_id,t.parent_id,t.sort_order,t.id;
-    SELECT holiday_date FROM dbo.holidays;`, ids);
+    SELECT holiday_date FROM dbo.holidays;
+    SELECT pic.task_id,u.department FROM dbo.schedule_task_pics pic INNER JOIN dbo.schedule_tasks t ON t.id=pic.task_id INNER JOIN dbo.users u ON u.id=pic.user_id
+    WHERE t.project_id IN(${ID_LIST}) AND t.deleted_at IS NULL ORDER BY pic.task_id,u.id;`, ids);
   const holidays = new Set((sets[1] ?? []).map((row) => dateOnly(row.holiday_date as Date | string)!));
+  const departments = new Map<number, string[]>();
+  for (const row of sets[2] ?? []) { const taskId = Number(row.task_id); departments.set(taskId, [...(departments.get(taskId) ?? []), String(row.department ?? "")]); }
   const byProject = new Map<number, TaskRow[]>();
   for (const row of sets[0] ?? []) { const task = taskRow(row as Record<string, unknown> & { row_version: Buffer }); byProject.set(task.projectId, [...(byProject.get(task.projectId) ?? []), task]); }
-  return new Map([...byProject].map(([projectId, tasks]) => [projectId, planFigures(tasks, resolvedSpans(tasks, holidays), today)]));
+  return new Map([...byProject].map(([projectId, tasks]) => [projectId, planFigures(tasks, resolvedSpans(tasks, holidays), today, departments)]));
 }
 
 /** The resolved dates of every row; null when the schedule cannot be resolved. */
@@ -163,7 +254,7 @@ export function resolvedSpans(tasks: TaskRow[], holidays: Set<string>): Map<numb
   } catch { return null; }
 }
 
-export const EMPTY_PLAN: PlanFigures = { plannedManDays: 0, outsourcedManDays: 0, toDateManDays: 0, unplannedRows: 0, rows: [] };
+export const EMPTY_PLAN: PlanFigures = { plannedManDays: 0, outsourcedManDays: 0, toDateManDays: 0, unplannedRows: 0, disciplines: [], rows: [] };
 
 export type ProjectCostFigures = { estimates: Map<number, EstimateFigures>; purchases: Map<number, PurchaseFigures>; plans: Map<number, PlanFigures> };
 

@@ -20,6 +20,23 @@
   .pg-skin .pc-totals { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
 }
 
+/* People by labor discipline: the same cells as the totals bar, as buttons on the list. The pressed cell is the
+   discipline the table's People columns show (the summary bar as the filter, as on the procurement screens). */
+.pg-skin .pc-labor { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; overflow: hidden; border: 1px solid var(--pg-divider); border-radius: 8px; background: var(--pg-divider); }
+.pg-skin .pc-labor-cell { border: 0; color: inherit; font: inherit; text-align: left; }
+.pg-skin .pc-labor-cell > span { display: block; }
+.pg-skin .pc-labor-cell > .pc-total-top { display: flex; }
+.pg-skin .pc-labor-label { font-size: 14px; font-weight: 600; }
+.pg-skin .pc-labor-cell .pc-total-value small { color: var(--pg-muted-fg); font-size: 12px; font-weight: 400; }
+.pg-skin button.pc-labor-cell { cursor: pointer; transition: background-color 150ms var(--pg-ease); }
+.pg-skin button.pc-labor-cell:hover, .pg-skin button.pc-labor-cell[aria-pressed="true"] { background: var(--pg-accent); }
+.pg-skin button.pc-labor-cell[aria-pressed="true"] .pc-labor-label { color: var(--pg-primary); }
+.pg-skin button.pc-labor-cell:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--pg-ring); }
+.pg-skin .overlay-body .pc-labor { margin-top: 8px; }
+@media (min-width: 1024px) {
+  .pg-skin .pc-labor { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
+}
+
 /* Filter chips on the left, the one search box on the right (0.3). */
 .pg-skin .pc-toolbar { align-items: center; flex-wrap: wrap; }
 .pg-skin .pc-toolbar .filter-chips { margin: 0; }
