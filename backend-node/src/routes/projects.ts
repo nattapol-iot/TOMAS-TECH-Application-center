@@ -14,10 +14,9 @@ import { allowedProjectTransitions, checkProjectTransition, isProjectStatus, pro
 import { insertInitialPlan, isPlaceholderProjectNumber, parseInitialPlan, parseProjectDetails, parseProjectNumber, planAssignments, planSpan, rejectOutdatedPlan, syncProjectPlan, writeProjectDetails } from "../project-initial-plan.js";
 import type { ProjectHealth } from "../project-health.js";
 import { loadProjectScheduleSummaries } from "../project-overview.js";
-import { canViewEngineeringRates } from "../engineering-rate-access.js";
 import { HOURS_PER_MAN_DAY } from "../manhour-budget.js";
 import { BOUGHT_CATEGORIES, averageDailyRate, loadProjectCostFigures, projectCost } from "../project-cost.js";
-import { canViewProjectCost, round2, type CostAccess } from "../project-cost-model.js";
+import { canViewProjectCost, FULL_COST_ACCESS, round2, type CostAccess } from "../project-cost-model.js";
 import { NO_MODULE, REQUESTING_PR_STATUSES } from "../procurement-rules.js";
 import { deliverProjectNotices, queueProjectCreatedNotices, queueTaskAssignmentNotices, type NewPics, type ProjectNotice } from "../project-notices.js";
 import { canCreateWithoutEstimate, demandProjectScope, isProjectElevated, isProjectManagerRole } from "../project-scope.js";
@@ -263,17 +262,13 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
     };
   });
 
-  // The cost overview (project-cost-model.ts): a Leader and everyone above. Estimate figures need estimate.read, request
-  // amounts procurement.read, and people cost in money the roles that see the engineering rates.
+  // The cost overview (project-cost-model.ts): a Leader and everyone above, and whoever sees it sees every figure on it,
+  // people cost in money included (owner 2026-11-21: "Leader เห็นได้ทุกอย่าง"). The role is the one gate.
   async function costViewer(request: Parameters<typeof users.required>[0]): Promise<{ actor: CurrentUser; access: CostAccess }> {
     await users.demandPermission(request, "project.read");
     const actor = await users.required(request);
     if (!canViewProjectCost(rolesOf(actor))) throw new ApiError(403, "project_cost_forbidden", "The project cost overview is for Leaders and above.");
-    return { actor, access: {
-      budget: await permissionFor(database, actor.id, "estimate.read"),
-      purchases: await permissionFor(database, actor.id, "procurement.read"),
-      laborMoney: rolesOf(actor).some(canViewEngineeringRates),
-    } };
+    return { actor, access: FULL_COST_ACCESS };
   }
   const costRow = (row: ProjectRow) => ({ id: Number(row.id), number: row.project_no, name: row.name, customerName: row.customer_name,
     managerId: Number(row.manager_id), managerName: row.manager_name, team: (row.team as string | null) ?? null, status: row.status });

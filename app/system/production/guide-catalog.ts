@@ -1135,9 +1135,9 @@ const PROJECT_COST: Guide = {
     { target: "cost.labor", action: "next", view: "projects",
       title: { th: "ค่าแรงแยกตามสายงาน", en: "Labor by discipline", jp: "分野別の労務費" },
       body: {
-        th: "แต่ละช่องคือค่าแรงทั้งหมด หรือของ Electrical, Mechanical, Software และ Installation แสดง 'Man-day ตามแผน / งบ' กับส่วนที่ถึงวันนี้ กดช่องของสายงานเพื่อให้คอลัมน์คนในตารางแสดงเฉพาะสายงานนั้น กดซ้ำเพื่อกลับไปดูทั้งหมด งบมาจาก Estimate cost ส่วน Man-day ในแผนนับตามแผนกของผู้รับผิดชอบแต่ละแถว ต้นทุนเป็นจำนวนเงินแสดงเฉพาะระดับบริหาร",
-        en: "Each cell is all labor, or Electrical, Mechanical, Software or Installation labor, as planned man-days / budget with the part due up to today. Press a discipline to make the table's People columns show it alone; press again for all labor. The budget is the Estimate cost's; plan man-days follow the department of each row's PIC. Cost in money is shown to management roles only.",
-        jp: "各セルは労務費の合計、または電気・機械・ソフトウェア・据付の労務費で、「計画人日 / 予算」と本日までの分を表示します。分野を押すと表の人員列がその分野だけになり、もう一度押すと合計に戻ります。予算は見積原価、計画人日は各行の担当者の部署で振り分けます。金額は管理職のみに表示されます。",
+        th: "แต่ละช่องคือค่าแรงทั้งหมด หรือของ Electrical, Mechanical, Software และ Installation แสดง 'Man-day ตามแผน / งบ' กับส่วนที่ถึงวันนี้ กดช่องของสายงานเพื่อให้คอลัมน์คนในตารางแสดงเฉพาะสายงานนั้น กดซ้ำเพื่อกลับไปดูทั้งหมด งบมาจาก Estimate cost ส่วน Man-day ในแผนนับตามแผนกของผู้รับผิดชอบแต่ละแถว บรรทัดต้นทุนคือค่าแรงเป็นบาท",
+        en: "Each cell is all labor, or Electrical, Mechanical, Software or Installation labor, as planned man-days / budget with the part due up to today. Press a discipline to make the table's People columns show it alone; press again for all labor. The budget is the Estimate cost's; plan man-days follow the department of each row's PIC. The Cost line is that labor in THB.",
+        jp: "各セルは労務費の合計、または電気・機械・ソフトウェア・据付の労務費で、「計画人日 / 予算」と本日までの分を表示します。分野を押すと表の人員列がその分野だけになり、もう一度押すと合計に戻ります。予算は見積原価、計画人日は各行の担当者の部署で振り分けます。「コスト」の行はその労務費（THB）です。",
       },
       missing: { th: "รอให้ข้อมูลโหลดเสร็จก่อน", en: "Wait for the figures to load.", jp: "データの読み込みを待ちます。" } },
     { target: "cost.filter", action: "next", view: "projects",

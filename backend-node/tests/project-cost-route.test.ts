@@ -24,16 +24,14 @@ const taskRow = {
 };
 
 /** A database that answers the cost routes' reads by what each statement names, and records what was asked. */
-function fakeDatabase(options: { permissions: string[]; inScope?: boolean; planned?: boolean }) {
+function fakeDatabase(options: { inScope?: boolean; planned?: boolean } = {}) {
   const statements: string[] = [];
   const database = {
     async query(text: string, bind?: (request: { input: (name: string, ...rest: unknown[]) => unknown }) => void) {
-      const params: Record<string, unknown> = {};
-      const request = { input(name: string, ...rest: unknown[]) { params[name] = rest.length > 1 ? rest[1] : rest[0]; return request; } };
+      const request = { input() { return request; } };
       bind?.(request);
       statements.push(text);
       const rows = (...sets: unknown[][]) => ({ recordset: sets[0] ?? [], recordsets: sets });
-      if (text.includes("dbo.user_effective_permissions")) return rows([{ allowed: options.permissions.includes(String(params.permission)) }]);
       if (text.includes("p.project_no,p.name")) return rows(options.inScope === false ? [] : [projectRow]);
       // The estimate's totals, then its internal labor by discipline: electrical 12 man-days at 4,000, software 8 at 4,000.
       if (text.includes("dbo.v_estimate_totals")) return rows(
@@ -45,6 +43,7 @@ function fakeDatabase(options: { permissions: string[]; inScope?: boolean; plann
       if (text.includes("dbo.v_estimate_cost_amounts")) return rows([{ module: "MZ01", budget: 70000 }, { module: "MZ08", budget: 50000 }]);
       if (text.includes("l.budget_module")) return rows([{ module: "MZ01", requested: 95000, approved: 60000, ordered: 30000 }, { module: "(No module)", requested: 25000, approved: 0, ordered: 0 }]);
       if (text.includes("pr.pr_no")) return rows([{ id: 11, pr_no: "REQ-ME-PJ260091-MZ01-001", status: "Approved", required_date: "2026-11-30", unit: "ME · MZ01-U001 WIRE DUCT UNIT", amount: 95000, lines: 12 }]);
+      // The role is the one gate: the cost routes never ask for a permission of their own.
       throw new Error(`Unexpected statement: ${text.slice(0, 120)}`);
     },
   } as unknown as Database;
@@ -64,7 +63,7 @@ function server(database: Database, roles: string[]) {
 
 test("cost overview: refused below Leader before any figure is read", async () => {
   for (const role of ["Engineer", "Sales Engineer", "Purchasing"]) {
-    const { database, statements } = fakeDatabase({ permissions: ["estimate.read", "procurement.read"] });
+    const { database, statements } = fakeDatabase();
     const app = server(database, [role]);
     try {
       for (const url of ["/api/v1/projects/cost-overview", "/api/v1/projects/7/cost"]) {
@@ -77,14 +76,14 @@ test("cost overview: refused below Leader before any figure is read", async () =
   }
 });
 
-test("cost overview: a Leader sees budgets, requests and man-days by discipline, and no people cost in money", async () => {
-  const { database } = fakeDatabase({ permissions: ["estimate.read", "procurement.read"] });
+test("cost overview: a Leader sees every figure, people cost in money included (owner 2026-11-21)", async () => {
+  const { database } = fakeDatabase();
   const app = server(database, ["Engineer", "Leader"]);
   try {
     const response = await app.inject({ method: "GET", url: "/api/v1/projects/cost-overview" });
     assert.equal(response.statusCode, 200, response.body);
     const body = response.json() as ProjectCostOverview;
-    assert.deepEqual(body.access, { budget: true, purchases: true, laborMoney: false });
+    assert.deepEqual(body.access, { budget: true, purchases: true, laborMoney: true });
     assert.equal(body.hoursPerManDay, 8);
     assert.equal(body.items.length, 1);
     const item = body.items[0]!;
@@ -92,28 +91,22 @@ test("cost overview: a Leader sees budgets, requests and man-days by discipline,
     assert.deepEqual(item.hardware, { budget: 100000, requested: 95000, approved: 60000, ordered: 30000 });
     assert.deepEqual(item.outsource, { budget: 20000, requested: 25000, approved: 0, ordered: 0 });
     assert.deepEqual(item.labor, {
-      source: "estimate", budgetManDays: 20, plannedManDays: 0, outsourcedManDays: 0, toDateManDays: 0, unplannedRows: 0, dailyRate: null, budgetCost: null, plannedCost: null, toDateCost: null,
+      source: "estimate", budgetManDays: 20, plannedManDays: 0, outsourcedManDays: 0, toDateManDays: 0, unplannedRows: 0, dailyRate: 4000, budgetCost: 80000, plannedCost: 0, toDateCost: 0,
       disciplines: [
-        { discipline: "Electrical", budgetManDays: 12, plannedManDays: 0, toDateManDays: 0, budgetCost: null, plannedCost: null, toDateCost: null },
-        { discipline: "Software", budgetManDays: 8, plannedManDays: 0, toDateManDays: 0, budgetCost: null, plannedCost: null, toDateCost: null },
+        { discipline: "Electrical", budgetManDays: 12, plannedManDays: 0, toDateManDays: 0, budgetCost: 48000, plannedCost: 0, toDateCost: 0 },
+        { discipline: "Software", budgetManDays: 8, plannedManDays: 0, toDateManDays: 0, budgetCost: 32000, plannedCost: 0, toDateCost: 0 },
       ],
     });
   } finally { await app.close(); }
 });
 
-test("cost overview: plan man-days go to the disciplines of the row's PICs, in money for a manager", async () => {
-  const { database, statements } = fakeDatabase({ permissions: ["estimate.read"], planned: true });
+test("cost overview: plan man-days go to the disciplines of the row's PICs, in man-days and in money", async () => {
+  const { database } = fakeDatabase({ planned: true });
   const app = server(database, ["Project Manager"]);
   try {
     const response = await app.inject({ method: "GET", url: "/api/v1/projects/cost-overview?includeClosed=1" });
     assert.equal(response.statusCode, 200, response.body);
-    const body = response.json() as ProjectCostOverview;
-    assert.deepEqual(body.access, { budget: true, purchases: false, laborMoney: true });
-    const item = body.items[0]!;
-    // Without procurement.read the requests are not read at all.
-    assert.deepEqual(item.hardware, { budget: 100000, requested: null, approved: null, ordered: null });
-    assert.equal(item.requests, null);
-    assert.equal(statements.some((text) => text.includes("dbo.mat_prs")), false);
+    const item = (response.json() as ProjectCostOverview).items[0]!;
     // 6 man-days held by an electrical and an IoT engineer: 3 each, all due by today, at 4,000 a day.
     assert.deepEqual([item.labor.budgetManDays, item.labor.plannedManDays, item.labor.toDateManDays, item.labor.dailyRate, item.labor.budgetCost, item.labor.plannedCost, item.labor.toDateCost], [20, 6, 6, 4000, 80000, 24000, 24000]);
     assert.deepEqual(item.labor.disciplines, [
@@ -124,13 +117,14 @@ test("cost overview: plan man-days go to the disciplines of the row's PICs, in m
 });
 
 test("project cost: one project's breakdown by module, request and plan row, with its labor by discipline", async () => {
-  const { database } = fakeDatabase({ permissions: ["estimate.read", "procurement.read"], planned: true });
-  const app = server(database, ["Engineering Manager"]);
+  const { database } = fakeDatabase({ planned: true });
+  const app = server(database, ["Leader"]);
   try {
     const response = await app.inject({ method: "GET", url: "/api/v1/projects/7/cost" });
     assert.equal(response.statusCode, 200, response.body);
     const body = response.json() as ProjectCostDetail;
     assert.equal(body.project.number, "PJ260091");
+    assert.deepEqual(body.access, { budget: true, purchases: true, laborMoney: true });
     // Modules by name, and what belongs to no module last.
     assert.deepEqual(body.modules, [
       { module: "MZ01", budget: 70000, requested: 95000, approved: 60000, ordered: 30000 },
@@ -143,18 +137,12 @@ test("project cost: one project's breakdown by module, request and plan row, wit
   } finally { await app.close(); }
 });
 
-test("project cost: a project outside the viewer's scope is not found, and a Leader gets no discipline cost", async () => {
-  const hidden = fakeDatabase({ permissions: ["estimate.read", "procurement.read"], inScope: false });
-  const first = server(hidden.database, ["Leader"]);
+test("project cost: a project outside the viewer's scope is not found, and nothing of it is read", async () => {
+  const { database, statements } = fakeDatabase({ inScope: false });
+  const app = server(database, ["Leader"]);
   try {
-    const response = await first.inject({ method: "GET", url: "/api/v1/projects/7/cost" });
+    const response = await app.inject({ method: "GET", url: "/api/v1/projects/7/cost" });
     assert.equal(response.statusCode, 404, response.body);
-    assert.equal(hidden.statements.some((text) => text.includes("dbo.v_estimate_totals")), false);
-  } finally { await first.close(); }
-  const { database } = fakeDatabase({ permissions: ["estimate.read", "procurement.read"] });
-  const second = server(database, ["Leader"]);
-  try {
-    const body = (await second.inject({ method: "GET", url: "/api/v1/projects/7/cost" })).json() as ProjectCostDetail;
-    assert.deepEqual(body.project.labor.disciplines.map((row) => [row.budgetManDays, row.budgetCost]), [[12, null], [8, null]]);
-  } finally { await second.close(); }
+    assert.equal(statements.some((text) => text.includes("dbo.v_estimate_totals")), false);
+  } finally { await app.close(); }
 });

@@ -9,15 +9,20 @@
  * Every amount is an internal cost in THB. Selling prices and margins are not part of this app.
  */
 
-/** What the viewer may see. A figure the viewer may not see is null, never zero. */
+/**
+ * What the viewer may see. A figure the viewer may not see is null, never zero. Since the owner's decision of
+ * 2026-11-21 everyone who may open the overview sees all of it (FULL_COST_ACCESS); the parts stay apart so a narrower
+ * rule can come back in the route without touching the sums or the screen.
+ */
 export type CostAccess = {
-  /** Estimate cost figures (estimate.read). */
+  /** Estimate cost figures. */
   budget: boolean;
-  /** Purchase request amounts (procurement.read). */
+  /** Purchase request amounts. */
   purchases: boolean;
-  /** People cost in money (management roles, the same people who see the engineering rates). */
+  /** People cost in money. */
   laborMoney: boolean;
 };
+export const FULL_COST_ACCESS: CostAccess = { budget: true, purchases: true, laborMoney: true };
 
 /** One bought group. Requested is every live request; approved and ordered are parts of it. */
 export type PurchaseCost = { budget: number | null; requested: number | null; approved: number | null; ordered: number | null };

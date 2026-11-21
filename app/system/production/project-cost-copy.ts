@@ -53,7 +53,6 @@ export const PROJECT_COST_COPY: Record<string, { en: string; th: string; jp: str
   ["Cost.emptyHint", "Projects you can see appear here with their cost.", "โครงการที่คุณมีสิทธิ์เห็นจะแสดงที่นี่พร้อมต้นทุน", "閲覧できるプロジェクトとそのコストがここに表示されます。"],
   ["Cost.noMatch", "No records.", "ไม่มีข้อมูล", "レコードがありません"],
   ["Cost.clearFilters", "Clear filters", "ล้างตัวกรอง", "フィルターをクリア"],
-  ["Cost.moneyHidden", "People cost in money is shown to management roles only; you see man-days.", "ต้นทุนคนเป็นจำนวนเงินแสดงเฉพาะระดับบริหาร คุณเห็นเป็น Man-day", "人件費の金額は管理職のみに表示されます。人日のみ表示しています。"],
   ["Cost.detailHardware", "Hardware and outsource by module", "Hardware และ Outsource แยกตาม Module", "モジュール別のハードウェア・外注"],
   ["Cost.detailHardwareHint", "Budget from the Estimate cost; requested from the live purchase requests charged to the module.", "งบจาก Estimate cost ยอดขอซื้อจากใบขอซื้อที่ยังใช้งานอยู่ของ Module นั้น", "予算は見積原価、依頼額はモジュールに計上された有効な購入依頼から。"],
   ["Cost.detailRequests", "Purchase requests", "ใบขอซื้อ", "購入依頼"],

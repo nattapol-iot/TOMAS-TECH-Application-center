@@ -4,7 +4,7 @@
 
 ทะเบียนโครงการ end user เลขโครงการค้นจาก Pegasus ERP และรับส่งเอกสารจาก inquiry/site visit
 
-Evidence: snapshot `021dc108`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
+Evidence: snapshot `98d130e7`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
 
 ## Read only the operation you change
 
@@ -87,7 +87,6 @@ Shared screens contain other modules: use the symbol and line range instead of r
 - [backend-node/src/project-initial-plan.ts](<../../../backend-node/src/project-initial-plan.ts>)
 - [backend-node/src/project-health.ts](<../../../backend-node/src/project-health.ts>)
 - [backend-node/src/project-overview.ts](<../../../backend-node/src/project-overview.ts>)
-- [backend-node/src/engineering-rate-access.ts](<../../../backend-node/src/engineering-rate-access.ts>)
 - [backend-node/src/manhour-budget.ts](<../../../backend-node/src/manhour-budget.ts>)
 - [backend-node/src/project-cost.ts](<../../../backend-node/src/project-cost.ts>)
 - [backend-node/src/project-cost-model.ts](<../../../backend-node/src/project-cost-model.ts>)
@@ -117,6 +116,7 @@ Shared screens contain other modules: use the symbol and line range instead of r
 - [app/system/production/ErpMasterPanel.tsx](<../../../app/system/production/ErpMasterPanel.tsx>)
 - [app/system/production/ErpProjectNumber.tsx](<../../../app/system/production/ErpProjectNumber.tsx>)
 - [app/system/production/SearchSelect.tsx](<../../../app/system/production/SearchSelect.tsx>)
+- [backend-node/src/engineering-rate-access.ts](<../../../backend-node/src/engineering-rate-access.ts>)
 - [app/system/production/BusinessCardScanner.tsx](<../../../app/system/production/BusinessCardScanner.tsx>)
 - [lib/business-card.ts](<../../../lib/business-card.ts>)
 - [lib/supplier-code.ts](<../../../lib/supplier-code.ts>)

@@ -55,7 +55,6 @@
 .pg-skin .pc-nomatch { padding: 24px 12px; color: var(--pg-muted-fg); text-align: center; }
 .pg-skin .pc-foot { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding: 8px 12px; }
 .pg-skin .pc-foot .grid-controls { margin: 0; padding: 0; border: 0; }
-.pg-skin .pc-note { margin: 0; color: var(--pg-muted-fg); font-size: 12px; }
 
 /* "used / budget" over its bar. */
 .pg-skin .pc-use { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
