@@ -50,6 +50,14 @@
 
 /* 2. Shared components -------------------------------------------------------------------------------------------------- */
 
+/* The page header stays under the top bar while the page scrolls (C.1.7). It spans the canvas: the negative margins cancel
+   the page's 20px / 24px padding and its own padding puts them back. Its background is the canvas, so content passing under it
+   is hidden, with no shadow or border when stuck. Only for a screen that opens the page, so nothing above it is covered. */
+.page > .pg-skin.pg-screen:first-child > :is(.page-header, .activity-heading):first-child {
+  position: sticky; top: var(--topbar-h); z-index: 20; margin: -20px -24px 0; padding: 16px 24px 8px; background: var(--canvas);
+}
+@media print { .page > .pg-skin.pg-screen:first-child > :is(.page-header, .activity-heading):first-child { position: static; margin: 0; padding: 0; } }
+
 /* Page header (C.1.7): the title, then its badges on the same line, the subtitle under them. */
 .pg-screen .page-header-text { display: flex; flex-wrap: wrap; align-items: center; gap: 0 12px; }
 .pg-screen .page-header-text > h1 { order: 1; color: var(--pg-foreground); }

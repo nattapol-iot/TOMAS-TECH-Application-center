@@ -21,7 +21,8 @@ test("pegasus-screens.css reaches only a screen that wears .pg-screen, and uses 
   assert.ok(heads.length > 250, `the stylesheet was read (${heads.length} rules)`);
   for (const head of heads) {
     // A comma inside :is(...) belongs to one selector.
-    for (const selector of head.split(/,(?![^()]*\))/).map((part) => part.trim())) assert.match(selector, /^(?:\.pg-skin)?\.pg-screen(?:$|[.\s:])/, selector);
+    // The sticky header rule names the page it sits in, so it starts from .page.
+    for (const selector of head.split(/,(?![^()]*\))/).map((part) => part.trim())) assert.match(selector, /^(?:\.page > )?(?:\.pg-skin)?\.pg-screen(?:$|[.\s:])/, selector);
   }
   // Its own --pgs-* values are defined in the file; a --pg-* value must be one the skin's tokens carry on the main branch
   // (pegasus-skin.css there, the shared pegasus-tokens.css once that lands).
@@ -266,4 +267,14 @@ test("the bubble helper decides by its rules without a DOM, and every message ex
     for (const [placeholder] of entry.en.matchAll(/\{[a-z]+\}/g)) assert.ok(entry.th.includes(placeholder) && entry.jp.includes(placeholder), `${key} keeps ${placeholder}`);
   }
   assert.match(await read("app/system/i18n.ts"), /\.\.\.FORM_COPY,/);
+});
+
+test("the page header stays under the top bar while the page scrolls, only when the screen opens the page", async () => {
+  const css = withoutComments(await read("app/system/production/pegasus-screens.css"));
+  assert.match(css, /\.page > \.pg-skin\.pg-screen:first-child > :is\(\.page-header, \.activity-heading\):first-child \{\s*position: sticky; top: var\(--topbar-h\); z-index: 20; margin: -20px -24px 0; padding: 16px 24px 8px; background: var\(--canvas\);\s*\}/);
+  // The negative margins match the page padding the template sets, and the top bar sits above it.
+  const globals = await read("app/globals.css");
+  assert.match(globals, /\.page \{ padding: 20px 24px 32px; gap: 16px; \}/);
+  assert.match(globals, /\.topbar \{\s*position: sticky;\s*top: 0;\s*z-index: 30;/);
+  assert.match(css, /@media print \{ \.page > \.pg-skin\.pg-screen:first-child > :is\(\.page-header, \.activity-heading\):first-child \{ position: static; margin: 0; padding: 0; \} \}/);
 });
