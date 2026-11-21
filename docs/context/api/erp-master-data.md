@@ -2,23 +2,23 @@
 
 [Module](../modules/master.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `5cb810fc`; generated, do not edit. [backend-node/src/routes/erp-master-data.ts](<../../../backend-node/src/routes/erp-master-data.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `a76f1408`; generated, do not edit. [backend-node/src/routes/erp-master-data.ts](<../../../backend-node/src/routes/erp-master-data.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/erp/master-data` | 45–49 |
-| POST | `/api/v1/erp/master-data/:kind/sync` | 51–56 |
-| GET | `/api/v1/erp/master-data/:kind/review` | 58–62 |
-| POST | `/api/v1/erp/master-data/:kind/review/:key` | 64–71 |
+| GET | `/api/v1/erp/master-data` | 48–52 |
+| POST | `/api/v1/erp/master-data/:kind/sync` | 54–59 |
+| GET | `/api/v1/erp/master-data/:kind/review` | 61–65 |
+| POST | `/api/v1/erp/master-data/:kind/review/:key` | 67–74 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `kindOf` | [backend-node/src/routes/erp-master-data.ts](<../../../backend-node/src/routes/erp-master-data.ts>) | 15–19 |
-| `registerErpMasterDataRoutes` | [backend-node/src/routes/erp-master-data.ts](<../../../backend-node/src/routes/erp-master-data.ts>) | 26–72 |
+| `kindOf` | [backend-node/src/routes/erp-master-data.ts](<../../../backend-node/src/routes/erp-master-data.ts>) | 16–20 |
+| `registerErpMasterDataRoutes` | [backend-node/src/routes/erp-master-data.ts](<../../../backend-node/src/routes/erp-master-data.ts>) | 27–75 |
 
 ## Direct local dependencies
 
@@ -28,6 +28,7 @@ Evidence: source snapshot `5cb810fc`; generated, do not edit. [backend-node/src/
 - [backend-node/src/erp-master-sync.ts](<../../../backend-node/src/erp-master-sync.ts>)
 - [backend-node/src/erp-purchasing.ts](<../../../backend-node/src/erp-purchasing.ts>)
 - [backend-node/src/http.ts](<../../../backend-node/src/http.ts>)
+- [backend-node/src/master-data/services.ts](<../../../backend-node/src/master-data/services.ts>)
 - [backend-node/src/user-roles.ts](<../../../backend-node/src/user-roles.ts>)
 - [backend-node/src/users.ts](<../../../backend-node/src/users.ts>)
 
