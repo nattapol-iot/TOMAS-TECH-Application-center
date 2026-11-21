@@ -7,7 +7,15 @@ const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf
 test("a request line keeps the PR-Form's fields and the line it is a part of (migration 115, owner 2026-11-20)", () => {
   const migration = read("database/migrations/115_pr_line_form_fields.sql");
   assert.match(migration, /THROW 51115, 'Migration 114 must be applied before migration 115\.', 1;/);
-  for (const column of ["material nvarchar(200)", "treatment nvarchar(200)", "detail nvarchar(500)", "qty_per_set decimal(19,4)", "need_by date", "attachment_url nvarchar(500)", "parent_line_id bigint"])
+  for (const column of [
+    "material nvarchar(200)",
+    "treatment nvarchar(200)",
+    "detail nvarchar(500)",
+    "qty_per_set decimal(19,4)",
+    "need_by date",
+    "attachment_url nvarchar(500)",
+    "parent_line_id bigint",
+  ])
     assert.ok(migration.includes(`ADD ${column} NULL`), column);
   // A part belongs to a line of the same request, never to itself; a link is a web link.
   assert.match(migration, /FOREIGN KEY \(parent_line_id, pr_id\) REFERENCES dbo\.mat_pr_lines\(id, pr_id\)/);
@@ -26,12 +34,15 @@ test("a request line keeps the PR-Form's fields and the line it is a part of (mi
 });
 
 test("the PR sheet shows the PR-Form's columns on demand and makes a row a part of the line above, with its guide steps", () => {
-  const editor = read("app/system/production/PurchaseRequestEditor.tsx"), guides = read("app/system/production/guide-catalog.ts");
+  const editor = read("app/system/production/PurchaseRequestEditor.tsx"),
+    guides = read("app/system/production/guide-catalog.ts");
   assert.match(editor, /data-guide="pr\.form-fields" aria-pressed=\{showForm\}/);
   assert.match(editor, /data-guide="pr\.part" aria-pressed=\{Boolean\(parent\)\}/);
   assert.match(editor, /onClick=\{\(\) => setRows\(togglePart\(rows, row\.key\)\)\}/);
   assert.match(editor, /setRows\(withoutRows\(rows, new Set\(\[row\.key\]\)\)\)/);
-  for (const target of ["pr.form-fields", "pr.part", "pr.import"]) assert.ok(guides.includes(`target: "${target}", action: "next", view: "purchase"`), target);
+  // The catalog is formatted one property per line; the step reads on one line once the line breaks are folded.
+  const flatGuides = guides.replace(/\s+/g, " ");
+  for (const target of ["pr.form-fields", "pr.part", "pr.import"]) assert.ok(flatGuides.includes(`target: "${target}", action: "next", view: "purchase"`), target);
   // The request page and the Unit overview read them too.
   assert.match(read("app/system/production/MaterialScreens.tsx"), /line\.attachmentUrl \? <small><a href=\{line\.attachmentUrl\} target="_blank" rel="noopener noreferrer">/);
   assert.match(read("backend-node/src/routes/purchase-units.ts"), /MIN\(CASE WHEN .* THEN COALESCE\(l\.need_by,pr\.required_date\) END\) need_by/);

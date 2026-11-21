@@ -2048,3 +2048,117 @@
     transition: none;
   }
 }
+
+/* D.7 column filter (ColumnFilter.tsx): a 14px funnel after the column name, at 40% until hovered, open or on (then the
+   primary colour). Its popover is the select's panel with rows that toggle, a hidden check that shows when chosen, the
+   count on the right, and a right-aligned Clear. */
+.pg-screen .pg-th {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+/* A search or filter with no hits keeps the table, so its funnels stay in reach; only this row says so (0.3). */
+.pg-screen td.pg-empty-row {
+  padding: 24px 12px;
+  color: var(--pg-muted-fg);
+  text-align: center;
+}
+.pg-screen .pg-col-filter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 2px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: inherit;
+  opacity: 0.4;
+  cursor: pointer;
+  transition: opacity 150ms var(--pg-ease);
+}
+.pg-screen .pg-col-filter:hover,
+.pg-screen .pg-col-filter[aria-expanded="true"] {
+  opacity: 1;
+}
+.pg-screen .pg-col-filter.active {
+  color: var(--pg-primary);
+  opacity: 1;
+}
+.pg-screen .pg-col-filter:focus-visible {
+  outline: none;
+  opacity: 1;
+  box-shadow: var(--pg-focus);
+}
+.pg-screen .pg-col-filter .icon {
+  width: 14px;
+  height: 14px;
+}
+.pg-skin.pg-select-panel.pg-filter-panel {
+  min-width: 176px;
+  max-width: 320px;
+}
+.pg-select-panel .pg-filter-list {
+  max-height: 224px;
+  overflow: auto;
+  padding: 4px;
+}
+.pg-select-panel .pg-filter-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  margin: 0;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+  line-height: 20px;
+  text-align: left;
+  cursor: pointer;
+}
+.pg-select-panel .pg-filter-option:hover,
+.pg-select-panel .pg-filter-option:focus-visible,
+.pg-select-panel .pg-filter-option.chosen {
+  outline: none;
+  background: var(--pg-accent);
+  color: var(--pg-accent-fg);
+}
+.pg-select-panel .pg-filter-option > .icon {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-top: 3px;
+}
+.pg-select-panel .pg-filter-option:not(.chosen) > .icon {
+  opacity: 0;
+}
+.pg-select-panel .pg-filter-count {
+  margin-left: auto;
+  padding-left: 12px;
+  color: var(--pg-muted-fg);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.pg-select-panel .pg-filter-foot {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 8px 8px;
+}
+.pg-select-panel .pg-filter-clear {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--pg-muted-fg);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.pg-select-panel .pg-filter-clear:hover,
+.pg-select-panel .pg-filter-clear:focus-visible {
+  color: var(--pg-foreground);
+}

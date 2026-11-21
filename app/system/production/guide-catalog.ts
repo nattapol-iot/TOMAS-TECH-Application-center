@@ -56,7 +56,12 @@ export type Guide = {
 };
 
 const menu = (view: string, title: GuideCopy, body: GuideCopy): GuideStep => ({
-  target: `nav.${view}`, action: "click", view, canGo: true, title, body,
+  target: `nav.${view}`,
+  action: "click",
+  view,
+  canGo: true,
+  title,
+  body,
   missing: {
     th: "ถ้าไม่เห็นเมนูนี้ ให้กดชื่อกลุ่มในเมนูด้านซ้ายเพื่อกางออก หรือกด 'ไปที่หน้านี้'",
     en: "If you cannot see this entry, press its group heading in the side menu to open the group, or press Go to this screen.",
@@ -64,12 +69,21 @@ const menu = (view: string, title: GuideCopy, body: GuideCopy): GuideStep => ({
   },
 });
 
-const inquiryMenu = menu("inquiries",
+const inquiryMenu = menu(
+  "inquiries",
   { th: "เปิดเมนูงานประเมินราคา / Inquiry", en: "Open RFQ intake & estimating", jp: "「見積作業・Inquiry」を開く" },
-  { th: "งานจากลูกค้าทุกเรื่องเริ่มที่เมนูนี้ คลิกที่เมนูที่ไฮไลต์อยู่", en: "Every customer request starts here. Click the highlighted menu entry.", jp: "顧客からの依頼はすべてここから始まります。強調表示のメニューをクリックします。" });
+  {
+    th: "งานจากลูกค้าทุกเรื่องเริ่มที่เมนูนี้ คลิกที่เมนูที่ไฮไลต์อยู่",
+    en: "Every customer request starts here. Click the highlighted menu entry.",
+    jp: "顧客からの依頼はすべてここから始まります。強調表示のメニューをクリックします。",
+  },
+);
 
 const openInquiry = (body: GuideCopy): GuideStep => ({
-  target: "inquiry.list", action: "click", clickOn: "tbody tr", view: "inquiries",
+  target: "inquiry.list",
+  action: "click",
+  clickOn: "tbody tr",
+  view: "inquiries",
   title: { th: "เปิด Inquiry", en: "Open the inquiry", jp: "引合を開く" },
   body,
   missing: {
@@ -79,12 +93,21 @@ const openInquiry = (body: GuideCopy): GuideStep => ({
   },
 });
 
-const dealsMenu = menu("crm-opportunities",
+const dealsMenu = menu(
+  "crm-opportunities",
   { th: "เปิดเมนูโอกาสขาย / ติดตามงานขาย", en: "Open Opportunities / sales follow-up", jp: "「商談・営業フォロー」を開く" },
-  { th: "ดีลทุกเรื่องของลูกค้าอยู่ที่เมนูนี้ คลิกที่เมนูที่ไฮไลต์อยู่", en: "Every customer deal lives here. Click the highlighted menu entry.", jp: "顧客の商談はすべてここにあります。強調表示のメニューをクリックします。" });
+  {
+    th: "ดีลทุกเรื่องของลูกค้าอยู่ที่เมนูนี้ คลิกที่เมนูที่ไฮไลต์อยู่",
+    en: "Every customer deal lives here. Click the highlighted menu entry.",
+    jp: "顧客の商談はすべてここにあります。強調表示のメニューをクリックします。",
+  },
+);
 
 const openDeal = (body: GuideCopy): GuideStep => ({
-  target: "crm.deals", action: "click", clickOn: ".crm-deal-name, .crm-opportunity-card", view: "crm-opportunities",
+  target: "crm.deals",
+  action: "click",
+  clickOn: ".crm-deal-name, .crm-opportunity-card",
+  view: "crm-opportunities",
   title: { th: "เปิดดีล", en: "Open the deal", jp: "商談を開く" },
   body,
   missing: {
@@ -112,7 +135,9 @@ const CRM_DEAL_CREATE: Guide = {
   steps: [
     dealsMenu,
     {
-      target: "crm.new", action: "click", view: "crm-opportunities",
+      target: "crm.new",
+      action: "click",
+      view: "crm-opportunities",
       title: { th: "กด 'เพิ่มโอกาสทางการขาย'", en: "Press New opportunity", jp: "「商談を作成」を押す" },
       body: { th: "ปุ่มอยู่มุมขวาบน เปิดฟอร์มดีลใหม่", en: "It is at the top right and opens the new deal form.", jp: "右上にあり、新しい商談のフォームが開きます。" },
       missing: {
@@ -122,7 +147,9 @@ const CRM_DEAL_CREATE: Guide = {
       },
     },
     {
-      target: "crm.deal.customer", action: "next", view: "crm-opportunities",
+      target: "crm.deal.customer",
+      action: "next",
+      view: "crm-opportunities",
       title: { th: "เลือกลูกค้า", en: "Choose the customer", jp: "顧客を選ぶ" },
       body: {
         th: "พิมพ์ชื่อหรือรหัสบริษัทแล้วเลือกจากรายการ ถ้าบริษัทที่ใช้งานจริงเป็นบริษัทอื่น เลือกในช่อง End user ข้างๆ",
@@ -131,7 +158,9 @@ const CRM_DEAL_CREATE: Guide = {
       },
     },
     {
-      target: "crm.deal.name", action: "next", view: "crm-opportunities",
+      target: "crm.deal.name",
+      action: "next",
+      view: "crm-opportunities",
       title: { th: "ตั้งชื่อดีล", en: "Name the deal", jp: "商談名を付ける" },
       body: {
         th: "ใช้ชื่อที่บอกว่าลูกค้าต้องการอะไร เช่น 'ระบบ OEE ไลน์ประกอบ 3' ถ้าลูกค้ามีดีลชื่อคล้ายกันที่ยังเปิดอยู่ จะขึ้นรายการเตือนใต้ช่องนี้ระหว่างพิมพ์",
@@ -140,7 +169,9 @@ const CRM_DEAL_CREATE: Guide = {
       },
     },
     {
-      target: "crm.deal.contact", action: "next", view: "crm-opportunities",
+      target: "crm.deal.contact",
+      action: "next",
+      view: "crm-opportunities",
       title: { th: "ผู้ติดต่อ", en: "The contact", jp: "担当者" },
       body: {
         th: "ค้นหาด้วยชื่อ ตำแหน่ง หรือแผนก ถ้ายังไม่มีในระบบ พิมพ์ชื่อแล้วเลือกแถวสุดท้าย 'เพิ่มผู้ติดต่อใหม่' เพิ่มได้ทันทีโดยไม่ต้องออกจากฟอร์ม",
@@ -149,7 +180,9 @@ const CRM_DEAL_CREATE: Guide = {
       },
     },
     {
-      target: "crm.deal.owner", action: "next", view: "crm-opportunities",
+      target: "crm.deal.owner",
+      action: "next",
+      view: "crm-opportunities",
       title: { th: "ผู้รับผิดชอบ", en: "The owners", jp: "責任者" },
       body: {
         th: "ผู้รับผิดชอบงานขายคือคนที่ติดตามลูกค้า ผู้รับผิดชอบเทคนิคคือวิศวกรที่ดูแลเนื้องาน ตอนส่งประเมินราคา ระบบตั้งเขาเป็นผู้ประเมินให้",
@@ -158,7 +191,9 @@ const CRM_DEAL_CREATE: Guide = {
       },
     },
     {
-      target: "crm.deal.close", action: "next", view: "crm-opportunities",
+      target: "crm.deal.close",
+      action: "next",
+      view: "crm-opportunities",
       title: { th: "วันที่คาดว่าจะปิดงาน", en: "Expected close", jp: "受注予定日" },
       body: {
         th: "วันที่คาดว่าลูกค้าจะตัดสินใจ ใช้เรียงดีลและดูภาพรวมงานขายรายเดือน แก้ได้ทุกเมื่อ",
@@ -167,7 +202,9 @@ const CRM_DEAL_CREATE: Guide = {
       },
     },
     {
-      target: "crm.deal.nextAction", action: "next", view: "crm-opportunities",
+      target: "crm.deal.nextAction",
+      action: "next",
+      view: "crm-opportunities",
       title: { th: "สิ่งที่ต้องทำถัดไป", en: "The next action", jp: "次のアクション" },
       body: {
         th: "ใส่สิ่งที่จะทำต่อและกำหนดเสร็จ เช่น 'นัดเข้าพบลูกค้า' ดีลที่ไม่มีสิ่งที่ต้องทำจะขึ้นเตือนในรายการ",
@@ -176,7 +213,9 @@ const CRM_DEAL_CREATE: Guide = {
       },
     },
     {
-      target: "crm.deal.more", action: "next", view: "crm-opportunities",
+      target: "crm.deal.more",
+      action: "next",
+      view: "crm-opportunities",
       title: { th: "รายละเอียดเพิ่มเติม", en: "Additional details", jp: "詳細情報" },
       body: {
         th: "กดเพื่อเปิด: ที่มาของดีล ความสำคัญ โอกาสได้งาน คู่แข่ง ความต้องการ และขอบเขตงาน ไม่บังคับ ใส่ทีหลังได้",
@@ -185,7 +224,9 @@ const CRM_DEAL_CREATE: Guide = {
       },
     },
     {
-      target: "crm.save", action: "click", view: "crm-opportunities",
+      target: "crm.save",
+      action: "click",
+      view: "crm-opportunities",
       title: { th: "บันทึกดีล", en: "Save the deal", jp: "商談を保存" },
       body: {
         th: "กด 'บันทึก' ระบบออกเลขดีลแล้วเปิดหน้าดีลให้ ถ้าแค่ฝึก ให้กด 'ยกเลิก' ข้างๆ แล้วกด 'จบบทสอน' จะไม่มีข้อมูลถูกบันทึก",
@@ -217,7 +258,9 @@ const CRM_ACTIVITY: Guide = {
       jp: "顧客と話したばかりの商談名をクリックします。上の検索で探せます。",
     }),
     {
-      target: "crm.followups", action: "next", view: "crm-opportunities",
+      target: "crm.followups",
+      action: "next",
+      view: "crm-opportunities",
       title: { th: "สิ่งที่ต้องทำ / ติดตาม", en: "Next actions / Follow-up", jp: "次のアクション・フォローアップ" },
       body: {
         th: "งานติดตามของดีลนี้อยู่ที่นี่ พร้อมผู้รับผิดชอบและกำหนดเสร็จ กด 'แก้ไข' เพื่อปิดงานที่ทำแล้ว ถ้าดีลไม่มีงานค้าง จะขึ้นเตือนสีเหลือง",
@@ -226,7 +269,9 @@ const CRM_ACTIVITY: Guide = {
       },
     },
     {
-      target: "crm.tab.activities", action: "click", view: "crm-opportunities",
+      target: "crm.tab.activities",
+      action: "click",
+      view: "crm-opportunities",
       title: { th: "แท็บกิจกรรม", en: "The Activities tab", jp: "「活動」タブ" },
       body: {
         th: "รวมทุกครั้งที่คุยกับลูกค้าของดีลนี้ เรียงจากล่าสุด คลิกแท็บนี้",
@@ -235,7 +280,9 @@ const CRM_ACTIVITY: Guide = {
       },
     },
     {
-      target: "crm.addActivity", action: "click", view: "crm-opportunities",
+      target: "crm.addActivity",
+      action: "click",
+      view: "crm-opportunities",
       title: { th: "กด 'บันทึกกิจกรรม'", en: "Press Log activity", jp: "「活動を記録」を押す" },
       body: {
         th: "เปิดฟอร์มบันทึก ลูกค้าและดีลถูกใส่ไว้ให้แล้ว",
@@ -249,7 +296,9 @@ const CRM_ACTIVITY: Guide = {
       },
     },
     {
-      target: "crm.activity.type", action: "next", view: "crm-opportunities",
+      target: "crm.activity.type",
+      action: "next",
+      view: "crm-opportunities",
       title: { th: "ประเภทและเวลา", en: "Type and time", jp: "種別と日時" },
       body: {
         th: "เลือกว่าเป็นการประชุม โทร อีเมล เข้าหน้างาน หรืออื่นๆ และแก้วันที่ / เวลาให้ตรงกับที่เกิดขึ้นจริง",
@@ -258,7 +307,9 @@ const CRM_ACTIVITY: Guide = {
       },
     },
     {
-      target: "crm.activity.summary", action: "next", view: "crm-opportunities",
+      target: "crm.activity.summary",
+      action: "next",
+      view: "crm-opportunities",
       title: { th: "สรุปสิ่งที่คุย", en: "What was discussed", jp: "話した内容" },
       body: {
         th: "สรุปสั้นๆ ว่าคุยอะไร ช่องด้านล่างใส่ข้อสรุปสำคัญและรายการที่ต้องทำ คนอื่นในทีมจะเห็นต่อจากคุณได้ทันที",
@@ -267,7 +318,9 @@ const CRM_ACTIVITY: Guide = {
       },
     },
     {
-      target: "crm.activity.next", action: "next", view: "crm-opportunities",
+      target: "crm.activity.next",
+      action: "next",
+      view: "crm-opportunities",
       title: { th: "เพิ่มสิ่งที่ต้องทำ", en: "Add the next action", jp: "次のアクションを追加" },
       body: {
         th: "กดเพื่อเปิด แล้วใส่สิ่งที่ต้องทำต่อ ผู้รับผิดชอบ และกำหนดเสร็จ จะไปขึ้นในส่วน 'สิ่งที่ต้องทำ / ติดตาม' ของดีลและแจ้งเตือนเมื่อใกล้ครบกำหนด",
@@ -276,7 +329,9 @@ const CRM_ACTIVITY: Guide = {
       },
     },
     {
-      target: "crm.save", action: "click", view: "crm-opportunities",
+      target: "crm.save",
+      action: "click",
+      view: "crm-opportunities",
       title: { th: "บันทึกกิจกรรม", en: "Save the activity", jp: "活動を保存" },
       body: {
         th: "กด 'บันทึก' กิจกรรมจะขึ้นในแท็บนี้และในเมนูกิจกรรมลูกค้า ถ้าแค่ฝึก ให้กด 'ยกเลิก' ข้างๆ แล้วกด 'จบบทสอน'",
@@ -307,7 +362,9 @@ const CRM_SEND_ESTIMATE: Guide = {
       jp: "RFQが届いた商談名をクリックします。",
     }),
     {
-      target: "crm.convert", action: "click", view: "crm-opportunities",
+      target: "crm.convert",
+      action: "click",
+      view: "crm-opportunities",
       title: { th: "กด 'ส่งประเมินราคา / สร้าง Inquiry'", en: "Press Send for estimating / create Inquiry", jp: "「見積依頼・Inquiry作成」を押す" },
       body: {
         th: "ปุ่มอยู่ด้านบนของดีล ถ้าเคยส่งไปแล้วและงานนั้นจบแล้ว ปุ่มจะเป็น 'สร้างงานประเมินเพิ่มเติม'",
@@ -321,7 +378,9 @@ const CRM_SEND_ESTIMATE: Guide = {
       },
     },
     {
-      target: "crm.convert.owner", action: "next", view: "crm-opportunities",
+      target: "crm.convert.owner",
+      action: "next",
+      view: "crm-opportunities",
       title: { th: "วิศวกรผู้ประเมิน", en: "The estimating engineer", jp: "見積担当のエンジニア" },
       body: {
         th: "คนที่จะทำราคา ระบบใส่ผู้รับผิดชอบเทคนิคของดีลไว้ให้ เปลี่ยนได้ เขาจะได้รับอีเมลแจ้งงานและเห็นงานใน 'งานของฉัน'",
@@ -330,7 +389,9 @@ const CRM_SEND_ESTIMATE: Guide = {
       },
     },
     {
-      target: "crm.convert.due", action: "next", view: "crm-opportunities",
+      target: "crm.convert.due",
+      action: "next",
+      view: "crm-opportunities",
       title: { th: "กำหนดส่งราคา", en: "Estimate due date", jp: "見積期限" },
       body: {
         th: "วันที่ต้องได้ราคาเพื่อตอบลูกค้า ค่าเริ่มต้นคืออีก 14 วัน",
@@ -339,7 +400,9 @@ const CRM_SEND_ESTIMATE: Guide = {
       },
     },
     {
-      target: "crm.convert.type", action: "next", view: "crm-opportunities",
+      target: "crm.convert.type",
+      action: "next",
+      view: "crm-opportunities",
       title: { th: "ประเภทโครงการ", en: "Project type", jp: "案件種別" },
       body: {
         th: "เลือกประเภทงาน เช่น IoT, Automation หรือ Robot ใช้จัดกลุ่มงานประเมินและรายงาน",
@@ -348,7 +411,9 @@ const CRM_SEND_ESTIMATE: Guide = {
       },
     },
     {
-      target: "crm.convert.carry", action: "next", view: "crm-opportunities",
+      target: "crm.convert.carry",
+      action: "next",
+      view: "crm-opportunities",
       title: { th: "ข้อมูลที่ตามไป", en: "What carries across", jp: "引き継がれる情報" },
       body: {
         th: "ลูกค้า ผู้ติดต่อ ความต้องการ ขอบเขตงาน และไฟล์ของดีลจะไปอยู่ใน Inquiry เอง ไม่ต้องกรอกซ้ำ",
@@ -357,7 +422,9 @@ const CRM_SEND_ESTIMATE: Guide = {
       },
     },
     {
-      target: "crm.save", action: "click", view: "crm-opportunities",
+      target: "crm.save",
+      action: "click",
+      view: "crm-opportunities",
       title: { th: "สร้าง Inquiry", en: "Create the inquiry", jp: "引合を作成" },
       body: {
         th: "กด 'บันทึก' ระบบสร้าง Inquiry แจ้งวิศวกรทางอีเมล แล้วเปิด Inquiry ให้ ติดตามราคาได้ที่แท็บ Inquiry / Estimate / Project ของดีล ถ้าแค่ฝึก ให้กด 'ยกเลิก' แล้วกด 'จบบทสอน'",
@@ -388,7 +455,9 @@ const CRM_PROPOSAL_WON: Guide = {
       jp: "見積を送った商談名をクリックします。",
     }),
     {
-      target: "crm.stagebar", action: "next", view: "crm-opportunities",
+      target: "crm.stagebar",
+      action: "next",
+      view: "crm-opportunities",
       title: { th: "ดีลอยู่ขั้นไหน", en: "Where the deal stands", jp: "商談のステージ" },
       body: {
         th: "แถบนี้บอกขั้นของดีล ตั้งแต่ใหม่จนชนะ การบันทึกในขั้นถัดไปจะเลื่อนดีลไปขั้นเสนอราคาและขั้นชนะให้เอง",
@@ -397,7 +466,9 @@ const CRM_PROPOSAL_WON: Guide = {
       },
     },
     {
-      target: "crm.recordProposal", action: "click", view: "crm-opportunities",
+      target: "crm.recordProposal",
+      action: "click",
+      view: "crm-opportunities",
       title: { th: "กด 'บันทึกส่งใบเสนอราคา'", en: "Press Record quotation dispatch", jp: "「見積送付を記録」を押す" },
       body: {
         th: "ทำเมื่อส่งใบเสนอราคาให้ลูกค้าแล้วจริง การอนุมัติต้นทุนใน Estimate ไม่ได้นับว่าส่งใบเสนอราคา",
@@ -411,7 +482,9 @@ const CRM_PROPOSAL_WON: Guide = {
       },
     },
     {
-      target: "crm.evidence", action: "next", view: "crm-opportunities",
+      target: "crm.evidence",
+      action: "next",
+      view: "crm-opportunities",
       title: { th: "วันที่และเลขใบเสนอราคา", en: "Quotation date and number", jp: "見積の日付と番号" },
       body: {
         th: "ใส่วันที่ส่งจริงและเลขใบเสนอราคาหรือหลักฐานการส่ง ต้องมีทั้งสองช่อง ทีมใช้ข้อมูลนี้นับยอดเสนอราคา",
@@ -420,7 +493,9 @@ const CRM_PROPOSAL_WON: Guide = {
       },
     },
     {
-      target: "crm.save", action: "click", view: "crm-opportunities",
+      target: "crm.save",
+      action: "click",
+      view: "crm-opportunities",
       title: { th: "บันทึกการส่งใบเสนอราคา", en: "Save the quotation", jp: "見積送付を保存" },
       body: {
         th: "กด 'บันทึก' ดีลจะเลื่อนไปขั้นเสนอราคา ถ้าแค่ฝึก ให้กด 'ยกเลิก' แล้วไปขั้นถัดไป",
@@ -429,7 +504,9 @@ const CRM_PROPOSAL_WON: Guide = {
       },
     },
     {
-      target: "crm.recordWon", action: "click", view: "crm-opportunities",
+      target: "crm.recordWon",
+      action: "click",
+      view: "crm-opportunities",
       title: { th: "กด 'บันทึกลูกค้ายืนยันสั่งซื้อ'", en: "Press Record order confirmation", jp: "「受注確認を記録」を押す" },
       body: {
         th: "ทำเมื่อลูกค้าส่ง PO หรือยืนยันสั่งซื้อเป็นลายลักษณ์อักษร ถ้าสร้างโครงการจาก Inquiry พร้อมเลข PO ไปแล้ว ระบบบันทึกส่วนนี้ให้เอง",
@@ -443,7 +520,9 @@ const CRM_PROPOSAL_WON: Guide = {
       },
     },
     {
-      target: "crm.evidence", action: "next", view: "crm-opportunities",
+      target: "crm.evidence",
+      action: "next",
+      view: "crm-opportunities",
       title: { th: "วันที่และเลข PO", en: "Order date and PO number", jp: "受注日と注文書番号" },
       body: {
         th: "ใส่วันที่ลูกค้ายืนยันสั่งซื้อ และเลข PO หรือหลักฐานที่ลูกค้ายืนยัน",
@@ -452,7 +531,9 @@ const CRM_PROPOSAL_WON: Guide = {
       },
     },
     {
-      target: "crm.save", action: "click", view: "crm-opportunities",
+      target: "crm.save",
+      action: "click",
+      view: "crm-opportunities",
       title: { th: "บันทึกการได้งาน", en: "Save the order", jp: "受注を保存" },
       body: {
         th: "กด 'บันทึก' ดีลจะเป็นชนะ ขั้นต่อไปคือส่งมอบงานให้ทีมโครงการจาก Inquiry ถ้าแค่ฝึก ให้กด 'ยกเลิก' แล้วกด 'จบบทสอน'",
@@ -478,11 +559,16 @@ const ESTIMATE_APPROVE: Guide = {
   permissions: ["estimate.read", "estimate.approve"],
   views: ["estimates"],
   steps: [
-    menu("estimates",
+    menu(
+      "estimates",
       { th: "เปิดเมนู Estimate Cost", en: "Open Estimate Cost", jp: "「Estimate Cost」を開く" },
-      { th: "Estimate ทุกใบอยู่ที่เมนูนี้ คลิกที่เมนูที่ไฮไลต์อยู่", en: "Every estimate is here. Click the highlighted menu entry.", jp: "すべての見積はここにあります。強調表示されたメニューをクリックします。" }),
+      { th: "Estimate ทุกใบอยู่ที่เมนูนี้ คลิกที่เมนูที่ไฮไลต์อยู่", en: "Every estimate is here. Click the highlighted menu entry.", jp: "すべての見積はここにあります。強調表示されたメニューをクリックします。" },
+    ),
     {
-      target: "estimate.list", action: "click", clickOn: "tbody tr", view: "estimates",
+      target: "estimate.list",
+      action: "click",
+      clickOn: "tbody tr",
+      view: "estimates",
       title: { th: "เปิด Estimate ที่รอตรวจ", en: "Open an estimate waiting for review", jp: "レビュー待ちの見積を開く" },
       body: {
         th: "เลือกแถบสถานะรอตรวจ แล้วคลิก Estimate ที่จะอนุมัติ",
@@ -496,7 +582,9 @@ const ESTIMATE_APPROVE: Guide = {
       },
     },
     {
-      target: "estimate.review", action: "next", view: "estimates",
+      target: "estimate.review",
+      action: "next",
+      view: "estimates",
       title: { th: "รอใครอนุมัติ", en: "Who it waits for", jp: "誰の承認待ちか" },
       body: {
         th: "บรรทัดนี้บอกว่าใครส่งตรวจเมื่อไร และรอใครอนุมัติ คนใดคนหนึ่งในรายชื่ออนุมัติหรือส่งกลับให้แก้ได้ เจ้าของ Estimate ได้กระดิ่งและอีเมลเมื่อมีการตัดสิน",
@@ -505,7 +593,9 @@ const ESTIMATE_APPROVE: Guide = {
       },
     },
     {
-      target: "[data-tab=\"summary\"]", action: "click", view: "estimates",
+      target: '[data-tab="summary"]',
+      action: "click",
+      view: "estimates",
       title: { th: "ดูหน้าสรุป", en: "Open the cost summary", jp: "原価サマリーを開く" },
       body: {
         th: "หน้าสรุป ERP คือสิ่งที่ส่งเข้า ERP หนึ่งแถวต่อหนึ่งโมดูลหรือบรรทัดที่รวมไว้ ตรวจหมวดและยอดก่อนอนุมัติ",
@@ -514,7 +604,9 @@ const ESTIMATE_APPROVE: Guide = {
       },
     },
     {
-      target: "estimate.approve", action: "click", view: "estimates",
+      target: "estimate.approve",
+      action: "click",
+      view: "estimates",
       title: { th: "อนุมัติ", en: "Approve", jp: "承認" },
       body: {
         th: "กด 'อนุมัติ' แล้วยืนยัน Estimate จะถูกล็อก และส่งเข้า Pegasus ERP ด้วยบัญชี TMT ID ของคุณทันที ถ้าแค่ฝึก ให้กดยกเลิกในหน้ายืนยัน แล้วกด 'เสร็จ'",
@@ -528,7 +620,9 @@ const ESTIMATE_APPROVE: Guide = {
       },
     },
     {
-      target: "estimate.erp", action: "next", view: "estimates",
+      target: "estimate.erp",
+      action: "next",
+      view: "estimates",
       title: { th: "Cost Sheet ใน ERP", en: "The Cost Sheet in the ERP", jp: "ERPのCost Sheet" },
       body: {
         th: "แถบ Pegasus ERP แสดงเลข Cost Sheet และ revision ที่ส่งไป แต่ละ revision ที่อนุมัติเป็น Cost Sheet ใบใหม่ ใบของ revision ก่อนยังอยู่ใน ERP และแสดงต่อท้ายแถบนี้ ถ้าส่งไม่สำเร็จจะบอกเหตุผล และมีปุ่ม 'ส่งเข้า ERP' 'ส่งใหม่' ใช้หลังลบ Cost Sheet ใน ERP แล้วเท่านั้น",
@@ -537,7 +631,9 @@ const ESTIMATE_APPROVE: Guide = {
       },
     },
     {
-      target: "[data-tab=\"summary\"]", action: "click", view: "estimates",
+      target: '[data-tab="summary"]',
+      action: "click",
+      view: "estimates",
       title: { th: "เสร็จแล้ว", en: "Done", jp: "完了" },
       body: {
         th: "คลิกแท็บสรุปเพื่อจบคู่มือ เปิดดูสถานะใน ERP ได้ทุกเมื่อที่แถบนี้",
@@ -563,11 +659,16 @@ const ESTIMATE_REVISION_BACK: Guide = {
   permissions: ["estimate.read", "estimate.write"],
   views: ["estimates"],
   steps: [
-    menu("estimates",
+    menu(
+      "estimates",
       { th: "เปิดเมนู Estimate Cost", en: "Open Estimate Cost", jp: "「Estimate Cost」を開く" },
-      { th: "Estimate ทุกใบอยู่ที่เมนูนี้ คลิกที่เมนูที่ไฮไลต์อยู่", en: "Every estimate is here. Click the highlighted menu entry.", jp: "すべての見積はここにあります。強調表示されたメニューをクリックします。" }),
+      { th: "Estimate ทุกใบอยู่ที่เมนูนี้ คลิกที่เมนูที่ไฮไลต์อยู่", en: "Every estimate is here. Click the highlighted menu entry.", jp: "すべての見積はここにあります。強調表示されたメニューをクリックします。" },
+    ),
     {
-      target: "estimate.list", action: "click", clickOn: "tbody tr", view: "estimates",
+      target: "estimate.list",
+      action: "click",
+      clickOn: "tbody tr",
+      view: "estimates",
       title: { th: "เปิด Estimate ที่มีมากกว่าหนึ่ง Revision", en: "Open an estimate with more than one revision", jp: "改訂が2つ以上ある見積を開く" },
       body: {
         th: "เลือก Estimate ที่เคยอนุมัติ ถูกส่งกลับ หรือเปิด Revision ใหม่มาแล้ว เลข Revision อยู่ในคอลัมน์ของรายการ",
@@ -581,7 +682,9 @@ const ESTIMATE_REVISION_BACK: Guide = {
       },
     },
     {
-      target: "[data-tab=\"revision\"]", action: "click", view: "estimates",
+      target: '[data-tab="revision"]',
+      action: "click",
+      view: "estimates",
       title: { th: "เปิดแท็บ Revision", en: "Open the Revision tab", jp: "「改訂履歴」タブを開く" },
       body: {
         th: "แท็บนี้เก็บทุก Revision ของ Estimate ใบนี้ไว้ถาวร",
@@ -590,7 +693,9 @@ const ESTIMATE_REVISION_BACK: Guide = {
       },
     },
     {
-      target: "estimate.revisions", action: "next", view: "estimates",
+      target: "estimate.revisions",
+      action: "next",
+      view: "estimates",
       title: { th: "ประวัติ Revision", en: "The revision history", jp: "改訂履歴" },
       body: {
         th: "แต่ละแถวคือหนึ่ง Revision พร้อมเหตุผล สถานะ และยอดรวม 'พักไว้' คืองานที่ทำค้างตอนมีคนกลับไปใช้ Revision เก่า 'คัดลอกจาก R..' บอกว่า Revision นั้นเปิดมาจาก Revision ไหน",
@@ -599,7 +704,9 @@ const ESTIMATE_REVISION_BACK: Guide = {
       },
     },
     {
-      target: "estimate.revisionOpen", action: "click", view: "estimates",
+      target: "estimate.revisionOpen",
+      action: "click",
+      view: "estimates",
       title: { th: "กด 'ดูรายการ'", en: "Press View lines", jp: "「明細を見る」を押す" },
       body: {
         th: "เปิดดูรายการต้นทุน ค่าแรง และค่าใช้จ่ายของ Revision นั้นตามที่บันทึกไว้ อ่านอย่างเดียว แก้ไม่ได้",
@@ -613,7 +720,9 @@ const ESTIMATE_REVISION_BACK: Guide = {
       },
     },
     {
-      target: "estimate.revisionRestore", action: "click", view: "estimates",
+      target: "estimate.revisionRestore",
+      action: "click",
+      view: "estimates",
       title: { th: "ใช้ Revision นี้ทำต่อ", en: "Continue from this revision", jp: "この改訂から続ける" },
       body: {
         th: "กดเมื่อต้องการย้อนกลับ ระบบจะถามยืนยันก่อน แล้วเปิด Revision ใหม่ที่เหมือน Revision นี้ทุกอย่าง ทั้งรายการ ราคา อัตราสำรอง และการจัดหน้าสรุป ERP งานที่ทำอยู่ตอนนี้ยังอยู่ในประวัติ กลับไปใช้ได้อีก ถ้าแค่ฝึก ให้กด 'ย้อนกลับ' ในหน้ายืนยัน แล้วกด 'จบบทสอน'",
@@ -645,17 +754,35 @@ const SUPPLIER_QUOTATION: Guide = {
   views: ["quotations", "estimates"],
   invite: "quotations",
   steps: [
-    menu("quotations",
+    menu(
+      "quotations",
       { th: "เปิดเมนูใบเสนอราคาผู้ขาย", en: "Open Supplier Quotation", jp: "「仕入先見積」を開く" },
-      { th: "ใบเสนอราคาจากผู้ขายทุกใบเก็บที่นี่ คลิกที่เมนูที่ไฮไลต์อยู่", en: "Every supplier quotation is kept here. Click the highlighted menu entry.", jp: "仕入先の見積書はすべてここに保管されます。強調表示のメニューをクリックします。" }),
+      {
+        th: "ใบเสนอราคาจากผู้ขายทุกใบเก็บที่นี่ คลิกที่เมนูที่ไฮไลต์อยู่",
+        en: "Every supplier quotation is kept here. Click the highlighted menu entry.",
+        jp: "仕入先の見積書はすべてここに保管されます。強調表示のメニューをクリックします。",
+      },
+    ),
     {
-      target: "quote.upload", action: "click", view: "quotations",
+      target: "quote.upload",
+      action: "click",
+      view: "quotations",
       title: { th: "กด 'อัปโหลดใบเสนอราคา'", en: "Press Upload quotation", jp: "「見積書をアップロード」を押す" },
-      body: { th: "เปิดหน้าต่างอัปโหลด ไฟล์ PDF อยู่ด้านขวา ข้อมูลอยู่ด้านซ้าย", en: "It opens the upload window: the PDF on the right, the details on the left.", jp: "アップロード画面が開きます。右にPDF、左に入力欄があります。" },
-      missing: { th: "ถ้าไม่มีปุ่มนี้ แปลว่าบัญชีนี้ยังไม่มีสิทธิ์อัปโหลดใบเสนอราคา", en: "If the button never appears, this account cannot upload quotations.", jp: "ボタンが表示されない場合、このアカウントにはアップロード権限がありません。" },
+      body: {
+        th: "เปิดหน้าต่างอัปโหลด ไฟล์ PDF อยู่ด้านขวา ข้อมูลอยู่ด้านซ้าย",
+        en: "It opens the upload window: the PDF on the right, the details on the left.",
+        jp: "アップロード画面が開きます。右にPDF、左に入力欄があります。",
+      },
+      missing: {
+        th: "ถ้าไม่มีปุ่มนี้ แปลว่าบัญชีนี้ยังไม่มีสิทธิ์อัปโหลดใบเสนอราคา",
+        en: "If the button never appears, this account cannot upload quotations.",
+        jp: "ボタンが表示されない場合、このアカウントにはアップロード権限がありません。",
+      },
     },
     {
-      target: "quote.file", action: "next", view: "quotations",
+      target: "quote.file",
+      action: "next",
+      view: "quotations",
       title: { th: "เลือกไฟล์", en: "Choose the file", jp: "ファイルを選ぶ" },
       body: {
         th: "เลือก PDF แล้วระบบจะอ่านผู้ขาย วันที่ ยอดรวม และรายการให้เอง ช่องที่ขึ้นสีเหลืองหรือแดงให้ตรวจกับ PDF ด้านขวา รับ Excel, CSV และรูปด้วย",
@@ -664,7 +791,9 @@ const SUPPLIER_QUOTATION: Guide = {
       },
     },
     {
-      target: "quote.supplier", action: "next", view: "quotations",
+      target: "quote.supplier",
+      action: "next",
+      view: "quotations",
       title: { th: "ผู้ขายและเลขที่ใบเสนอราคา", en: "Supplier and reference", jp: "仕入先と見積番号" },
       body: {
         th: "ตรวจชื่อผู้ขาย และเลขที่ใบเสนอราคาของผู้ขาย ใช้ค้นหาใบนี้ภายหลัง",
@@ -673,7 +802,9 @@ const SUPPLIER_QUOTATION: Guide = {
       },
     },
     {
-      target: "quote.inquiry", action: "next", view: "quotations",
+      target: "quote.inquiry",
+      action: "next",
+      view: "quotations",
       title: { th: "Inquiry ที่เกี่ยวข้อง", en: "Related inquiry", jp: "関連する引合" },
       body: {
         th: "เลือก Inquiry ที่ขอราคานี้ ใบเสนอราคาจะขึ้นในแท็บเพิ่มรายการของ Estimate ของงานนั้น ดึงหลายรายการเข้า Estimate ได้ในครั้งเดียว",
@@ -682,7 +813,9 @@ const SUPPLIER_QUOTATION: Guide = {
       },
     },
     {
-      target: "quote.lines", action: "next", view: "quotations",
+      target: "quote.lines",
+      action: "next",
+      view: "quotations",
       title: { th: "รายการและราคา", en: "Lines and prices", jp: "明細と価格" },
       body: {
         th: "ตรวจรายการ จำนวน และราคาต่อหน่วย คลังราคาได้ราคาจากรายการเหล่านี้ ถ้าเป็นเงินเยน ดอลลาร์ หรือยูโร ใส่อัตราแลกเป็นบาทด้วย กด 'ใช้อัตรากลาง' เพื่อใช้อัตราของบริษัท ณ วันที่ของใบ หรือพิมพ์เองก็ได้",
@@ -691,7 +824,9 @@ const SUPPLIER_QUOTATION: Guide = {
       },
     },
     {
-      target: "quote.save", action: "click", view: "quotations",
+      target: "quote.save",
+      action: "click",
+      view: "quotations",
       title: { th: "อัปโหลด", en: "Upload it", jp: "アップロード" },
       body: {
         th: "กด 'อัปโหลดใบเสนอราคา' ระบบออกเลขและเก็บไฟล์ไว้ ถ้าแค่ฝึก ให้กด 'ยกเลิก' ข้างๆ แล้วกด 'จบบทสอน'",
@@ -716,16 +851,26 @@ const PRICE_LIBRARY: Guide = {
   views: ["price", "estimates"],
   invite: "price",
   steps: [
-    menu("price",
+    menu(
+      "price",
       { th: "เปิดเมนูคลังราคา", en: "Open Price Library", jp: "「価格ライブラリ」を開く" },
-      { th: "ราคาจาก Estimate และราคาซื้อจริงรวมอยู่ที่นี่ คลิกที่เมนูที่ไฮไลต์อยู่", en: "Prices from estimates and from real purchases are gathered here. Click the highlighted menu entry.", jp: "見積と実購入の価格がここに集まっています。強調表示のメニューをクリックします。" }),
+      {
+        th: "ราคาจาก Estimate และราคาซื้อจริงรวมอยู่ที่นี่ คลิกที่เมนูที่ไฮไลต์อยู่",
+        en: "Prices from estimates and from real purchases are gathered here. Click the highlighted menu entry.",
+        jp: "見積と実購入の価格がここに集まっています。強調表示のメニューをクリックします。",
+      },
+    ),
     {
-      target: "price.search", action: "next", view: "price",
+      target: "price.search",
+      action: "next",
+      view: "price",
       title: { th: "ค้นหา", en: "Search", jp: "検索" },
       body: { th: "พิมพ์ชื่อสินค้า ยี่ห้อ รุ่น ผู้ขาย โปรเจกต์ หรือเลขอ้างอิง", en: "Type the item, brand, model, supplier, project or a reference.", jp: "品名・ブランド・型式・仕入先・案件・参照番号を入力します。" },
     },
     {
-      target: "price.list", action: "next", view: "price",
+      target: "price.list",
+      action: "next",
+      view: "price",
       title: { th: "ราคาและที่มา", en: "Prices and their source", jp: "価格と出所" },
       body: {
         th: "แต่ละแถวบอกว่าราคามาจาก Estimate ไหน หรือจาก PR/PO ที่ซื้อจริง ราคาซื้อจริงเชื่อถือได้มากกว่าราคาประมาณ",
@@ -734,14 +879,20 @@ const PRICE_LIBRARY: Guide = {
       },
     },
     {
-      target: "price.add", action: "click", view: "price",
+      target: "price.add",
+      action: "click",
+      view: "price",
       title: { th: "เพิ่มราคา", en: "Add a price", jp: "価格を追加" },
       body: {
         th: "ถ้ามีราคาจากเว็บไซต์หรือเอกสารภายนอก กด 'เพิ่มราคา' แล้วใส่ลิงก์ที่มา ถ้าแค่ค้นราคา กด 'จบบทสอน'",
         en: "For a price from a website or an outside document, press Add price and give the link. Only looking? Press Finish.",
         jp: "Webサイトや外部文書の価格は「価格を追加」でリンクとともに登録します。検索だけなら「完了」を押します。",
       },
-      missing: { th: "ปุ่มนี้ขึ้นสำหรับคนที่แก้ Estimate ได้ กด 'จบบทสอน' ได้เลย", en: "The button shows for people who may edit estimates. Press Finish.", jp: "見積を編集できる人に表示されます。「完了」を押します。" },
+      missing: {
+        th: "ปุ่มนี้ขึ้นสำหรับคนที่แก้ Estimate ได้ กด 'จบบทสอน' ได้เลย",
+        en: "The button shows for people who may edit estimates. Press Finish.",
+        jp: "見積を編集できる人に表示されます。「完了」を押します。",
+      },
     },
   ],
 };
@@ -760,27 +911,47 @@ const PROJECT_CREATE: Guide = {
   views: ["projects"],
   invite: "projects",
   steps: [
-    menu("projects",
+    menu(
+      "projects",
       { th: "เปิดเมนูโปรเจกต์", en: "Open Projects", jp: "「プロジェクト」を開く" },
-      { th: "งานที่ได้ PO แล้วอยู่ที่เมนูนี้ คลิกที่เมนูที่ไฮไลต์อยู่", en: "Work with a customer PO lives here. Click the highlighted menu entry.", jp: "注文書を受けた案件はここにあります。強調表示のメニューをクリックします。" }),
+      {
+        th: "งานที่ได้ PO แล้วอยู่ที่เมนูนี้ คลิกที่เมนูที่ไฮไลต์อยู่",
+        en: "Work with a customer PO lives here. Click the highlighted menu entry.",
+        jp: "注文書を受けた案件はここにあります。強調表示のメニューをクリックします。",
+      },
+    ),
     {
-      target: "project.create", action: "click", view: "projects",
+      target: "project.create",
+      action: "click",
+      view: "projects",
       title: { th: "กด 'สร้างโปรเจกต์'", en: "Press Create project", jp: "「プロジェクトを作成」を押す" },
       body: { th: "ปุ่มอยู่มุมขวาบนของหน้าโปรเจกต์", en: "It is at the top right of Projects.", jp: "プロジェクト画面の右上にあります。" },
-      missing: { th: "ถ้าไม่มีปุ่มนี้ แปลว่าบัญชีนี้ยังไม่มีสิทธิ์สร้างโปรเจกต์", en: "If the button never appears, this account cannot create projects.", jp: "ボタンが表示されない場合、このアカウントには作成権限がありません。" },
+      missing: {
+        th: "ถ้าไม่มีปุ่มนี้ แปลว่าบัญชีนี้ยังไม่มีสิทธิ์สร้างโปรเจกต์",
+        en: "If the button never appears, this account cannot create projects.",
+        jp: "ボタンが表示されない場合、このアカウントには作成権限がありません。",
+      },
     },
     {
-      target: "project.source", action: "next", view: "projects",
+      target: "project.source",
+      action: "next",
+      view: "projects",
       title: { th: "สร้างจากอะไร", en: "Where it comes from", jp: "作成元" },
       body: {
         th: "ปกติสร้างจาก Estimate ที่อนุมัติแล้ว งานที่ไม่มี Estimate เช่นงานบริการ เลือก 'ไม่มี Estimate'",
         en: "Usually from an approved estimate. For work without one, such as a service job, choose Without an estimate.",
         jp: "通常は承認済み見積から作成します。サービス案件など見積がない場合は「見積なし」を選びます。",
       },
-      missing: { th: "บัญชีนี้สร้างจาก Estimate ที่อนุมัติแล้วเท่านั้น กด 'ถัดไป'", en: "This account creates projects from approved estimates only. Press Next.", jp: "このアカウントは承認済み見積からのみ作成できます。「次へ」を押します。" },
+      missing: {
+        th: "บัญชีนี้สร้างจาก Estimate ที่อนุมัติแล้วเท่านั้น กด 'ถัดไป'",
+        en: "This account creates projects from approved estimates only. Press Next.",
+        jp: "このアカウントは承認済み見積からのみ作成できます。「次へ」を押します。",
+      },
     },
     {
-      target: "project.from", action: "next", view: "projects",
+      target: "project.from",
+      action: "next",
+      view: "projects",
       title: { th: "Estimate หรือลูกค้า", en: "The estimate or the customer", jp: "見積または顧客" },
       body: {
         th: "เลือก Estimate ที่อนุมัติแล้ว ลูกค้า ชื่องาน และวิศวกรจะมาให้เอง ถ้าไม่มี Estimate ให้ค้นหาลูกค้าและพิมพ์ชื่อโปรเจกต์",
@@ -789,7 +960,9 @@ const PROJECT_CREATE: Guide = {
       },
     },
     {
-      target: "project.number", action: "next", view: "projects",
+      target: "project.number",
+      action: "next",
+      view: "projects",
       title: { th: "เลขโปรเจกต์จาก ERP", en: "Project number from the ERP", jp: "ERPの案件番号" },
       body: {
         th: "พิมพ์เลขโปรเจกต์ ชื่องาน หรือชื่อลูกค้า แล้วเลือกจากรายการที่ค้นจาก ERP ระบบใส่เลขตามที่ ERP ใช้ และบอกใต้ช่องว่าพบเลขนี้ใน ERP หรือไม่ PR และค่าใช้จ่ายจึงตรงกับงานใน ERP ถ้า ERP ยังไม่ออกเลข ใส่ PJ000000 ไว้ก่อน แล้วเปลี่ยนเป็นเลขจริงที่ 'แก้ไขโปรเจกต์'",
@@ -798,12 +971,20 @@ const PROJECT_CREATE: Guide = {
       },
     },
     {
-      target: "project.people", action: "next", view: "projects",
+      target: "project.people",
+      action: "next",
+      view: "projects",
       title: { th: "ผู้จัดการและวิศวกรหลัก", en: "Manager and lead engineer", jp: "PMと主任技術者" },
-      body: { th: "เลือกผู้จัดการโปรเจกต์และวิศวกรหลัก ทั้งสองคนได้อีเมลแจ้งเมื่อสร้างโปรเจกต์", en: "Choose the project manager and the lead engineer; both are emailed when the project is created.", jp: "PMと主任技術者を選びます。作成時に両者へメールが届きます。" },
+      body: {
+        th: "เลือกผู้จัดการโปรเจกต์และวิศวกรหลัก ทั้งสองคนได้อีเมลแจ้งเมื่อสร้างโปรเจกต์",
+        en: "Choose the project manager and the lead engineer; both are emailed when the project is created.",
+        jp: "PMと主任技術者を選びます。作成時に両者へメールが届きます。",
+      },
     },
     {
-      target: "project.po", action: "next", view: "projects",
+      target: "project.po",
+      action: "next",
+      view: "projects",
       title: { th: "เลขที่ใบสั่งซื้อลูกค้า", en: "Customer PO", jp: "客先注文書" },
       body: {
         th: "ใส่เลข PO และวันที่ PO ถ้างานนี้มาจากดีลใน CRM ระบบบันทึกดีลเป็นชนะงานให้เอง",
@@ -812,7 +993,9 @@ const PROJECT_CREATE: Guide = {
       },
     },
     {
-      target: "project.plan", action: "next", view: "projects",
+      target: "project.plan",
+      action: "next",
+      view: "projects",
       title: { th: "Master Plan: หัวข้อหลัก", en: "Master Plan: the main headings", jp: "マスタープラン：大見出し" },
       body: {
         th: "ใส่หัวข้อหลักของแผนพร้อมวันที่ตกลงกับลูกค้า เช่น 1 Kick-off, 2 Software development หรือเลือก Master Schedule เป็นต้นแบบ ลูกค้าเห็นเฉพาะส่วนนี้ วันเริ่มและวันส่งมอบของโปรเจกต์คิดจากแถวที่มีวันที่ หากยังไม่มีวันที่ทุกแถวให้กรอกวันเริ่มและวันส่งมอบของโปรเจกต์เอง หัวข้อที่ยังไม่แตกเป็นงานย่อยสามารถเว้นวันที่ทั้งสองช่องไว้ แล้วกำหนดวันและแตกงานทีหลังได้",
@@ -821,7 +1004,9 @@ const PROJECT_CREATE: Guide = {
       },
     },
     {
-      target: "project.team", action: "next", view: "projects",
+      target: "project.team",
+      action: "next",
+      view: "projects",
       title: { th: "Team Plan: แตกหัวข้อเป็นงานและฟังก์ชัน", en: "Team Plan: tasks and functions under each heading", jp: "チームプラン：見出しをタスクと機能に分ける" },
       body: {
         th: "ใต้แต่ละหัวข้อหลัก กด 'เพิ่มงาน' แล้วใส่ชื่องาน ผู้รับผิดชอบ (ต้องมี) วันที่ และ man-days เช่น 2.1 Web App WMS จากนั้นกด + ที่แถวงานเพื่อเพิ่มฟังก์ชันที่ต้องทำ เช่น 2.1.1 Inbound ฟังก์ชันที่ไม่ใส่วันหรือผู้รับผิดชอบจะใช้ของงาน หัวข้อที่ยังไม่แตกงานขึ้นว่า 'ยังไม่แตกแผน' บันทึกได้และแตกทีหลังได้",
@@ -830,13 +1015,25 @@ const PROJECT_CREATE: Guide = {
       },
     },
     {
-      target: "project.teamAdd", action: "next", view: "projects",
+      target: "project.teamAdd",
+      action: "next",
+      view: "projects",
       title: { th: "เพิ่มงานใต้หัวข้อ", en: "Add a task under a heading", jp: "見出しにタスクを追加" },
-      body: { th: "ปุ่ม 'เพิ่มงาน' อยู่ที่แต่ละหัวข้อหลัก งานใหม่ใช้วันที่ของหัวข้อเป็นค่าเริ่มต้น", en: "Each heading has its own Add task button; a new task starts with the heading's dates.", jp: "各大見出しに「タスクを追加」があります。新しいタスクは見出しの日程から始まります。" },
-      missing: { th: "เพิ่มหัวข้อหลักใน Master Plan ก่อน ปุ่มนี้จึงจะขึ้น กด 'ถัดไป'", en: "Add a Master Plan heading first and the button appears. Press Next.", jp: "先にマスタープランの見出しを追加するとボタンが表示されます。「次へ」を押します。" },
+      body: {
+        th: "ปุ่ม 'เพิ่มงาน' อยู่ที่แต่ละหัวข้อหลัก งานใหม่ใช้วันที่ของหัวข้อเป็นค่าเริ่มต้น",
+        en: "Each heading has its own Add task button; a new task starts with the heading's dates.",
+        jp: "各大見出しに「タスクを追加」があります。新しいタスクは見出しの日程から始まります。",
+      },
+      missing: {
+        th: "เพิ่มหัวข้อหลักใน Master Plan ก่อน ปุ่มนี้จึงจะขึ้น กด 'ถัดไป'",
+        en: "Add a Master Plan heading first and the button appears. Press Next.",
+        jp: "先にマスタープランの見出しを追加するとボタンが表示されます。「次へ」を押します。",
+      },
     },
     {
-      target: "project.save", action: "click", view: "projects",
+      target: "project.save",
+      action: "click",
+      view: "projects",
       title: { th: "สร้างโปรเจกต์", en: "Create the project", jp: "プロジェクトを作成" },
       body: {
         th: "กด 'สร้างโปรเจกต์' ระบบแจ้งทีมทางอีเมล ถ้าแค่ฝึก ให้กด 'ยกเลิก' แล้วกด 'จบบทสอน'",
@@ -860,17 +1057,27 @@ const PROJECT_MASTER_PLAN: Guide = {
   permissions: ["project.write", "schedule.plan"],
   views: ["projects"],
   steps: [
-    menu("projects",
+    menu(
+      "projects",
       { th: "เปิดเมนูโปรเจกต์", en: "Open Projects", jp: "「プロジェクト」を開く" },
-      { th: "รายการโปรเจกต์อยู่ในเมนูนี้ คลิกที่เมนูที่ไฮไลต์อยู่", en: "The project list is here. Click the highlighted menu entry.", jp: "案件一覧はここにあります。強調表示のメニューをクリックします。" }),
+      { th: "รายการโปรเจกต์อยู่ในเมนูนี้ คลิกที่เมนูที่ไฮไลต์อยู่", en: "The project list is here. Click the highlighted menu entry.", jp: "案件一覧はここにあります。強調表示のメニューをクリックします。" },
+    ),
     {
-      target: "project.rowMenu", action: "click", view: "projects",
+      target: "project.rowMenu",
+      action: "click",
+      view: "projects",
       title: { th: "เปิดเมนูของโปรเจกต์", en: "Open the project's menu", jp: "案件のメニューを開く" },
       body: { th: "กดปุ่ม ⋯ หน้าสุดของแถวโปรเจกต์ที่ต้องการแก้", en: "Press the ⋯ button at the start of the project's row.", jp: "対象案件の行頭にある ⋯ ボタンを押します。" },
-      missing: { th: "ยังไม่มีโปรเจกต์ในรายการ ลองล้างตัวกรอง หรือกด 'จบบทสอน'", en: "No project is listed. Clear the filters, or press Finish.", jp: "案件が表示されていません。絞り込みを解除するか「完了」を押します。" },
+      missing: {
+        th: "ยังไม่มีโปรเจกต์ในรายการ ลองล้างตัวกรอง หรือกด 'จบบทสอน'",
+        en: "No project is listed. Clear the filters, or press Finish.",
+        jp: "案件が表示されていません。絞り込みを解除するか「完了」を押します。",
+      },
     },
     {
-      target: "project.editPlan", action: "click", view: "projects",
+      target: "project.editPlan",
+      action: "click",
+      view: "projects",
       title: { th: "กด 'แก้ไข Master Plan'", en: "Press Edit Master Plan", jp: "「マスタープランを編集」を押す" },
       body: { th: "เปิดหน้าต่างที่มีแค่แผนของโปรเจกต์นี้", en: "It opens a window with only this project's plan.", jp: "この案件の計画だけを編集する画面が開きます。" },
       missing: {
@@ -880,17 +1087,25 @@ const PROJECT_MASTER_PLAN: Guide = {
       },
     },
     {
-      target: "project.plan", action: "next", view: "projects",
+      target: "project.plan",
+      action: "next",
+      view: "projects",
       title: { th: "หัวข้อหลัก (Master Plan)", en: "The main headings (Master Plan)", jp: "大見出し（マスタープラン）" },
       body: {
         th: "แก้ชื่อหรือวันที่ตกลงกับลูกค้าได้ทุกหัวข้อ กด 'เพิ่มหัวข้อหลัก' เพื่อเพิ่ม หรือกด ✕ เพื่อลบหัวข้อพร้อมงานข้างใต้ หัวข้อที่มีงานคืบหน้าแล้วลบไม่ได้ ถ้ายังไม่มีแผน เลือก Master Schedule เป็นต้นแบบได้",
         en: "Change any heading's name or the dates agreed with the customer, add one, or remove one with ✕ together with the rows under it. A heading with work in progress under it cannot be removed. With no plan yet, start from a Master Schedule.",
         jp: "各見出しの名前や顧客と合意した日程を変更し、追加、または ✕ で配下の行とともに削除します。進行中の作業がある見出しは削除できません。計画がなければマスタースケジュールから始められます。",
       },
-      missing: { th: "บัญชีนี้แก้แผนของโปรเจกต์นี้ไม่ได้ กด 'จบบทสอน'", en: "This account cannot change this project's plan. Press Finish.", jp: "このアカウントはこの案件の計画を変更できません。「完了」を押します。" },
+      missing: {
+        th: "บัญชีนี้แก้แผนของโปรเจกต์นี้ไม่ได้ กด 'จบบทสอน'",
+        en: "This account cannot change this project's plan. Press Finish.",
+        jp: "このアカウントはこの案件の計画を変更できません。「完了」を押します。",
+      },
     },
     {
-      target: "project.team", action: "next", view: "projects",
+      target: "project.team",
+      action: "next",
+      view: "projects",
       title: { th: "งานและฟังก์ชัน (Team Plan)", en: "Tasks and functions (Team Plan)", jp: "タスクと機能（チームプラン）" },
       body: {
         th: "แต่ละหัวข้อแสดงงานของทีม กด 'เพิ่มงาน' เลือกผู้รับผิดชอบ (ต้องมี) และกด + ที่งานเพื่อเพิ่มฟังก์ชัน งานที่มีฟังก์ชันคิดวันจากฟังก์ชัน แถวที่มีความคืบหน้าแก้ชื่อได้แต่ลบไม่ได้ คนที่ถูกเพิ่มจะได้รับแจ้ง งานที่รอจัดหัวข้ออยู่ใต้ 'ยังไม่จัดหัวข้อ' ลากเข้าหัวข้อที่ถูกใน Project Schedule",
@@ -899,7 +1114,9 @@ const PROJECT_MASTER_PLAN: Guide = {
       },
     },
     {
-      target: "project.planSave", action: "click", view: "projects",
+      target: "project.planSave",
+      action: "click",
+      view: "projects",
       title: { th: "บันทึกแผน", en: "Save the plan", jp: "計画を保存" },
       body: {
         th: "ถ้าแผนเลยวันเดิม ติ๊ก 'ปรับวันเริ่มและวันส่งมอบตามแผน' แล้วกด 'บันทึกแผน' ถ้าแค่ฝึก ให้กด 'ยกเลิก' แล้วกด 'จบบทสอน'",
@@ -924,23 +1141,39 @@ const PROJECT_ERP_NUMBER: Guide = {
   permissions: ["project.read", "project.write"],
   views: ["projects"],
   steps: [
-    menu("projects",
+    menu(
+      "projects",
       { th: "เปิดเมนูโปรเจกต์", en: "Open Projects", jp: "「プロジェクト」を開く" },
-      { th: "รายการโปรเจกต์อยู่ในเมนูนี้ คลิกที่เมนูที่ไฮไลต์อยู่", en: "The project list is here. Click the highlighted menu entry.", jp: "案件一覧はここにあります。強調表示のメニューをクリックします。" }),
+      { th: "รายการโปรเจกต์อยู่ในเมนูนี้ คลิกที่เมนูที่ไฮไลต์อยู่", en: "The project list is here. Click the highlighted menu entry.", jp: "案件一覧はここにあります。強調表示のメニューをクリックします。" },
+    ),
     {
-      target: "project.rowMenu", action: "click", view: "projects",
+      target: "project.rowMenu",
+      action: "click",
+      view: "projects",
       title: { th: "เปิดเมนูของโปรเจกต์ PJ000000", en: "Open the PJ000000 project's menu", jp: "PJ000000の案件のメニューを開く" },
-      body: { th: "กดปุ่ม ⋯ หน้าสุดของแถวโปรเจกต์ที่ยังใช้เลข PJ000000", en: "Press the ⋯ button at the start of the row of the project still numbered PJ000000.", jp: "PJ000000のままの案件の行頭にある ⋯ ボタンを押します。" },
-      missing: { th: "ยังไม่มีโปรเจกต์ในรายการ ลองล้างตัวกรอง หรือกด 'จบบทสอน'", en: "No project is listed. Clear the filters, or press Finish.", jp: "案件が表示されていません。絞り込みを解除するか「完了」を押します。" },
+      body: {
+        th: "กดปุ่ม ⋯ หน้าสุดของแถวโปรเจกต์ที่ยังใช้เลข PJ000000",
+        en: "Press the ⋯ button at the start of the row of the project still numbered PJ000000.",
+        jp: "PJ000000のままの案件の行頭にある ⋯ ボタンを押します。",
+      },
+      missing: {
+        th: "ยังไม่มีโปรเจกต์ในรายการ ลองล้างตัวกรอง หรือกด 'จบบทสอน'",
+        en: "No project is listed. Clear the filters, or press Finish.",
+        jp: "案件が表示されていません。絞り込みを解除するか「完了」を押します。",
+      },
     },
     {
-      target: "project.edit", action: "click", view: "projects",
+      target: "project.edit",
+      action: "click",
+      view: "projects",
       title: { th: "กด 'แก้ไขโปรเจกต์'", en: "Press Edit project", jp: "「案件を編集」を押す" },
       body: { th: "เปิดหน้าต่างแก้ข้อมูลของโปรเจกต์นี้", en: "It opens this project's details.", jp: "この案件の情報を編集する画面が開きます。" },
       missing: { th: "บัญชีนี้แก้โปรเจกต์ไม่ได้ กด 'จบบทสอน'", en: "This account cannot edit projects. Press Finish.", jp: "このアカウントは案件を編集できません。「完了」を押します。" },
     },
     {
-      target: "project.erpNumber", action: "next", view: "projects",
+      target: "project.erpNumber",
+      action: "next",
+      view: "projects",
       title: { th: "ค้นเลขจาก ERP", en: "Search the number in the ERP", jp: "ERPで番号を検索" },
       body: {
         th: "พิมพ์ชื่องานหรือชื่อลูกค้า แล้วเลือกโปรเจกต์จากรายการของ ERP ใต้ช่องจะบอกว่าพบใน ERP หรือมีโปรเจกต์อื่นในแอปใช้เลขนี้แล้ว",
@@ -954,7 +1187,9 @@ const PROJECT_ERP_NUMBER: Guide = {
       },
     },
     {
-      target: "project.editSave", action: "click", view: "projects",
+      target: "project.editSave",
+      action: "click",
+      view: "projects",
       title: { th: "บันทึก", en: "Save", jp: "保存" },
       body: {
         th: "กด 'บันทึกโปรเจกต์' เลขจริงเปลี่ยนอีกไม่ได้ ถ้าแค่ฝึก ให้กด 'ยกเลิก' แล้วกด 'จบบทสอน'",
@@ -978,16 +1213,22 @@ const PUNCHLIST_ISSUES: Guide = {
   permissions: ["schedule.read"],
   views: ["projects"],
   steps: [
-    menu("projects",
+    menu(
+      "projects",
       { th: "เปิดเมนูโปรเจกต์", en: "Open Projects", jp: "「プロジェクト」を開く" },
-      { th: "Punchlist อยู่ในเมนูนี้ คลิกที่เมนูที่ไฮไลต์อยู่", en: "The Punchlist is here. Click the highlighted menu entry.", jp: "パンチリストはここにあります。ハイライトされたメニューをクリックします。" }),
+      { th: "Punchlist อยู่ในเมนูนี้ คลิกที่เมนูที่ไฮไลต์อยู่", en: "The Punchlist is here. Click the highlighted menu entry.", jp: "パンチリストはここにあります。ハイライトされたメニューをクリックします。" },
+    ),
     {
-      target: "[data-tab=\"punchlist\"]", action: "click", view: "projects",
+      target: '[data-tab="punchlist"]',
+      action: "click",
+      view: "projects",
       title: { th: "แท็บ Punchlist", en: "The Punchlist tab", jp: "「パンチリスト」タブ" },
       body: { th: "คลิกแท็บ 'Punchlist · Issue ลูกค้า'", en: "Click the Punchlist · Customer issues tab.", jp: "「パンチリスト・顧客課題」タブをクリックします。" },
     },
     {
-      target: "issues.summary", action: "next", view: "projects",
+      target: "issues.summary",
+      action: "next",
+      view: "projects",
       title: { th: "แถบสรุปคือตัวกรอง", en: "The summary bar is the filter", jp: "サマリーバーがフィルター" },
       body: {
         th: "กดช่องใดก็ได้เพื่อดูใบตามสถานะ: ยังเปิดอยู่ รออนุมัติ ของฉัน หรือปิดแล้ว ใบจะปิดเองเมื่อทุกข้อเสร็จ ยกเลิก หรือไม่อนุมัติ",
@@ -996,13 +1237,21 @@ const PUNCHLIST_ISSUES: Guide = {
       },
     },
     {
-      target: "issues.create", action: "click", view: "projects",
+      target: "issues.create",
+      action: "click",
+      view: "projects",
       title: { th: "สร้างใบแจ้ง Issue", en: "Create an issue batch", jp: "課題票を作成" },
       body: { th: "กด 'สร้างใบแจ้ง Issue'", en: "Press New issue batch.", jp: "「課題票を作成」を押します。" },
-      missing: { th: "บัญชีนี้ไม่มีสิทธิ์วางแผนหรืออัปเดตงาน จึงสร้างใบไม่ได้ กด 'จบบทสอน'", en: "This account cannot plan or update work, so it cannot create batches. Press Finish.", jp: "このアカウントには計画・進捗の権限がないため票を作成できません。「完了」を押します。" },
+      missing: {
+        th: "บัญชีนี้ไม่มีสิทธิ์วางแผนหรืออัปเดตงาน จึงสร้างใบไม่ได้ กด 'จบบทสอน'",
+        en: "This account cannot plan or update work, so it cannot create batches. Press Finish.",
+        jp: "このアカウントには計画・進捗の権限がないため票を作成できません。「完了」を押します。",
+      },
     },
     {
-      target: "issues.header", action: "next", view: "projects",
+      target: "issues.header",
+      action: "next",
+      view: "projects",
       title: { th: "ใบนี้ของโปรเจกต์ไหน", en: "Which project the batch is for", jp: "どの案件の票か" },
       body: {
         th: "เลือกโปรเจกต์ (โปรเจกต์ที่ปิดแล้วก็เลือกได้) หรือกด 'ไม่มีในระบบ' แล้วพิมพ์ชื่อโปรเจกต์กับลูกค้าเอง ใส่วันที่ลูกค้าแจ้งและชื่อผู้แจ้ง",
@@ -1011,7 +1260,9 @@ const PUNCHLIST_ISSUES: Guide = {
       },
     },
     {
-      target: "issues.grid", action: "next", view: "projects",
+      target: "issues.grid",
+      action: "next",
+      view: "projects",
       title: { th: "พิมพ์ Issue แบบ Excel", en: "Type the issues like Excel", jp: "Excelのように課題を入力" },
       body: {
         th: "หนึ่งบรรทัดต่อหนึ่ง Issue: ประเภท ฟังก์ชัน รายละเอียด ผู้รับผิดชอบ วันเริ่ม/เสร็จ และชั่วโมง (8 ชม. = 1 คน-วัน) คัดลอกแถวจาก Excel มาวางได้ วางภาพหน้าจอ (Ctrl+V) ในบรรทัดเพื่อแนบรูป บรรทัดว่างไม่ถูกบันทึก",
@@ -1020,17 +1271,25 @@ const PUNCHLIST_ISSUES: Guide = {
       },
     },
     {
-      target: "issues.load", action: "next", view: "projects",
+      target: "issues.load",
+      action: "next",
+      view: "projects",
       title: { th: "ดูภาระงานก่อนมอบหมาย", en: "Check the load before assigning", jp: "割り当て前に負荷を確認" },
       body: {
         th: "แถบด้านขวาบอกชั่วโมงที่แต่ละคนมีงานอยู่แล้วในสัปดาห์นั้น บวกชั่วโมงจากใบนี้ เทียบกับกำลังของเขา สีแดงคือเกิน",
         en: "The side panel shows the hours each PIC already has that week plus the hours from this batch, against what they have. Red means over.",
         jp: "右のパネルに、その週の担当者の既存の時間とこの票の時間の合計が、稼働可能時間と比べて表示されます。赤は超過です。",
       },
-      missing: { th: "ยังไม่ได้เปิดหน้าต่างสร้างใบ กด 'สร้างใบแจ้ง Issue' ก่อน", en: "The new batch window is not open. Press New issue batch first.", jp: "作成画面が開いていません。先に「課題票を作成」を押します。" },
+      missing: {
+        th: "ยังไม่ได้เปิดหน้าต่างสร้างใบ กด 'สร้างใบแจ้ง Issue' ก่อน",
+        en: "The new batch window is not open. Press New issue batch first.",
+        jp: "作成画面が開いていません。先に「課題票を作成」を押します。",
+      },
     },
     {
-      target: "issues.save", action: "click", view: "projects",
+      target: "issues.save",
+      action: "click",
+      view: "projects",
       title: { th: "บันทึกใบแจ้ง", en: "Save the batch", jp: "票を保存" },
       body: {
         th: "กด 'บันทึกใบแจ้ง' ระบบออกเลข IS-ปีเดือน-ลำดับ และ Issue จะไปอยู่ใน My Work ของผู้รับผิดชอบ ภาระงานทีม และ Gantt ของโปรเจกต์ ถ้าแค่ฝึก ให้กด 'ยกเลิก' (ร่างที่พิมพ์ไว้ยังเก็บไว้ให้)",
@@ -1054,16 +1313,26 @@ const PUNCHLIST_CLOSE: Guide = {
   permissions: ["schedule.read"],
   views: ["projects", "my-work"],
   steps: [
-    menu("projects",
+    menu(
+      "projects",
       { th: "เปิดเมนูโปรเจกต์", en: "Open Projects", jp: "「プロジェクト」を開く" },
-      { th: "Punchlist อยู่ในเมนูนี้ (Issue ของคุณยังขึ้นใน My Work ด้วย)", en: "The Punchlist is here (your issues also show in My Work).", jp: "パンチリストはここにあります（担当の課題はマイワークにも表示されます）。" }),
+      {
+        th: "Punchlist อยู่ในเมนูนี้ (Issue ของคุณยังขึ้นใน My Work ด้วย)",
+        en: "The Punchlist is here (your issues also show in My Work).",
+        jp: "パンチリストはここにあります（担当の課題はマイワークにも表示されます）。",
+      },
+    ),
     {
-      target: "[data-tab=\"punchlist\"]", action: "click", view: "projects",
+      target: '[data-tab="punchlist"]',
+      action: "click",
+      view: "projects",
       title: { th: "แท็บ Punchlist", en: "The Punchlist tab", jp: "「パンチリスト」タブ" },
       body: { th: "คลิกแท็บ 'Punchlist · Issue ลูกค้า'", en: "Click the Punchlist · Customer issues tab.", jp: "「パンチリスト・顧客課題」タブをクリックします。" },
     },
     {
-      target: "issues.summary", action: "next", view: "projects",
+      target: "issues.summary",
+      action: "next",
+      view: "projects",
       title: { th: "กด 'ของฉัน' หรือ 'รออนุมัติ'", en: "Press Mine or Waiting approval", jp: "「自分の担当」か「承認待ち」を押す" },
       body: {
         th: "'ของฉัน' คือใบที่คุณเป็นผู้รับผิดชอบ Issue ที่ยังเปิด 'รออนุมัติ' คือ Requirement ที่รอ PM / Lead",
@@ -1072,44 +1341,93 @@ const PUNCHLIST_CLOSE: Guide = {
       },
     },
     {
-      target: "issues.batch", action: "click", view: "projects",
+      target: "issues.batch",
+      action: "click",
+      view: "projects",
       title: { th: "เปิดใบแจ้ง", en: "Open a batch", jp: "票を開く" },
       body: { th: "กดเลขใบแจ้ง (IS-…)", en: "Press the batch number (IS-…).", jp: "票番号（IS-…）を押します。" },
       missing: { th: "ยังไม่มีใบในรายการนี้ ลองกด 'ทั้งหมด' หรือกด 'จบบทสอน'", en: "No batch in this list. Try All, or press Finish.", jp: "この一覧に票がありません。「すべて」を試すか「完了」を押します。" },
     },
     {
-      target: "issues.itemActions", action: "click", view: "projects",
+      target: "issues.itemActions",
+      action: "click",
+      view: "projects",
       title: { th: "ปุ่มอยู่ด้านซ้ายของแต่ละข้อ", en: "Each issue's buttons are on its left", jp: "各課題のボタンは左側" },
       body: {
         th: "ผู้รับผิดชอบกด 'เริ่มทำ' และเมื่อเสร็จกด 'ปิดงาน' แล้วใส่วันที่เสร็จจริง ชั่วโมงที่ใช้จริง และสิ่งที่แก้ไข PM / Lead จะเห็นปุ่ม 'อนุมัติ' / 'ไม่อนุมัติ' ที่ Requirement ที่รอ ถ้าแค่ฝึก ให้กด 'ยกเลิก' ในหน้าต่างที่เปิดขึ้น",
         en: "The PIC presses Start, and Close issue when it is done, then types the actual end, the hours it really took and what was done. A PM / Lead sees Approve / Reject on a waiting Requirement. Only practising? Press Cancel in the window that opens.",
         jp: "担当者は「着手」を押し、終わったら「完了にする」を押して実績終了日・実績時間・対応内容を入力します。PM/リーダーには承認待ちのRequirementに「承認」「却下」が表示されます。練習だけなら開いた画面で「キャンセル」を押します。",
       },
-      missing: { th: "ไม่มีปุ่มให้คุณในใบนี้ (คุณไม่ใช่ผู้รับผิดชอบหรือผู้อนุมัติ) กด 'จบบทสอน'", en: "There is nothing for you to press in this batch (you are not its PIC or an approver). Press Finish.", jp: "この票にはあなたが押せるボタンがありません（担当者でも承認者でもありません）。「完了」を押します。" },
+      missing: {
+        th: "ไม่มีปุ่มให้คุณในใบนี้ (คุณไม่ใช่ผู้รับผิดชอบหรือผู้อนุมัติ) กด 'จบบทสอน'",
+        en: "There is nothing for you to press in this batch (you are not its PIC or an approver). Press Finish.",
+        jp: "この票にはあなたが押せるボタンがありません（担当者でも承認者でもありません）。「完了」を押します。",
+      },
     },
   ],
 };
 
 const PROJECT_DELETE: Guide = {
-  id: "project-delete", area: "project", minutes: 2, permissions: ["project.read"], views: ["projects"], browse: true,
+  id: "project-delete",
+  area: "project",
+  minutes: 2,
+  permissions: ["project.read"],
+  views: ["projects"],
+  browse: true,
   title: { th: "ลบโครงการ", en: "Delete a project", jp: "プロジェクトを削除" },
-  summary: { th: "ตรวจงานที่บันทึกไว้ก่อนลบ และยืนยันเลขโครงการเมื่อ Management หรือ Admin ต้องการซ่อนโครงการที่มีงาน", en: "Review recorded work before deletion; Management or Admin confirm the number to hide a project with work.", jp: "削除前に作業記録を確認します。ManagementまたはAdminは番号を確認して作業のある案件を非表示にできます。" },
+  summary: {
+    th: "ตรวจงานที่บันทึกไว้ก่อนลบ และยืนยันเลขโครงการเมื่อ Management หรือ Admin ต้องการซ่อนโครงการที่มีงาน",
+    en: "Review recorded work before deletion; Management or Admin confirm the number to hide a project with work.",
+    jp: "削除前に作業記録を確認します。ManagementまたはAdminは番号を確認して作業のある案件を非表示にできます。",
+  },
   steps: [
-    { target: "project.rowMenu", action: "next", view: "projects",
+    {
+      target: "project.rowMenu",
+      action: "next",
+      view: "projects",
       title: { th: "เปิดเมนูลบโครงการ", en: "Open Delete project", jp: "プロジェクト削除を開く" },
-      body: { th: "เปิด ⋯ แล้วเลือกลบโครงการ Management และ Admin ลบได้ทุกโครงการ รวมถึงโครงการที่มีงาน", en: "Open ⋯ and choose Delete project. Management and Admin may delete any project, including projects with work.", jp: "⋯ からプロジェクト削除を選びます。ManagementとAdminは作業のある案件を含め、すべての案件を削除できます。" } },
-    { target: "project.deleteNumber", action: "next", view: "projects",
+      body: {
+        th: "เปิด ⋯ แล้วเลือกลบโครงการ Management และ Admin ลบได้ทุกโครงการ รวมถึงโครงการที่มีงาน",
+        en: "Open ⋯ and choose Delete project. Management and Admin may delete any project, including projects with work.",
+        jp: "⋯ からプロジェクト削除を選びます。ManagementとAdminは作業のある案件を含め、すべての案件を削除できます。",
+      },
+    },
+    {
+      target: "project.deleteNumber",
+      action: "next",
+      view: "projects",
       title: { th: "ตรวจงานและพิมพ์เลขโครงการ", en: "Review work and type the number", jp: "作業を確認して番号を入力" },
-      body: { th: "เมื่อมีงาน ให้อ่านรายการและคำเตือน แล้วพิมพ์เลขโครงการให้ตรงทุกตัว โครงการและงานจะถูกซ่อน แต่ข้อมูลและไฟล์ยังอยู่ให้ผู้ดูแลฐานข้อมูลกู้คืน", en: "When work exists, review the blockers and warning, then type the exact project number. The project and its work will be hidden; records and files remain available for a database administrator to restore.", jp: "作業がある場合は一覧と警告を確認し、正確な案件番号を入力します。案件と作業は非表示になりますが、記録とファイルは管理者が復元できます。" },
-      missing: { th: "ช่องนี้แสดงเฉพาะ Management หรือ Admin เมื่อโครงการมีงาน", en: "This field appears only for Management or Admin when the project has work.", jp: "作業がある案件でManagementまたはAdminにのみ表示されます。" } },
-    { target: "project.deleteConfirm", action: "next", view: "projects",
+      body: {
+        th: "เมื่อมีงาน ให้อ่านรายการและคำเตือน แล้วพิมพ์เลขโครงการให้ตรงทุกตัว โครงการและงานจะถูกซ่อน แต่ข้อมูลและไฟล์ยังอยู่ให้ผู้ดูแลฐานข้อมูลกู้คืน",
+        en: "When work exists, review the blockers and warning, then type the exact project number. The project and its work will be hidden; records and files remain available for a database administrator to restore.",
+        jp: "作業がある場合は一覧と警告を確認し、正確な案件番号を入力します。案件と作業は非表示になりますが、記録とファイルは管理者が復元できます。",
+      },
+      missing: {
+        th: "ช่องนี้แสดงเฉพาะ Management หรือ Admin เมื่อโครงการมีงาน",
+        en: "This field appears only for Management or Admin when the project has work.",
+        jp: "作業がある案件でManagementまたはAdminにのみ表示されます。",
+      },
+    },
+    {
+      target: "project.deleteConfirm",
+      action: "next",
+      view: "projects",
       title: { th: "ตรวจสอบก่อนยืนยันลบ", en: "Review before confirming deletion", jp: "削除の確定前に確認" },
-      body: { th: "ยืนยันลบแม้มีงานจะซ่อนข้อมูล โครงการที่ไม่มีงานจะถูกลบถาวร หากเพียงฝึกใช้งานให้กดยกเลิก", en: "Delete anyway hides recorded work. A project without work is permanently deleted. Press Cancel if only practising.", jp: "「作業記録があっても削除」はデータを非表示にします。作業のない案件は完全削除されます。練習の場合はキャンセルしてください。" } },
+      body: {
+        th: "ยืนยันลบแม้มีงานจะซ่อนข้อมูล โครงการที่ไม่มีงานจะถูกลบถาวร หากเพียงฝึกใช้งานให้กดยกเลิก",
+        en: "Delete anyway hides recorded work. A project without work is permanently deleted. Press Cancel if only practising.",
+        jp: "「作業記録があっても削除」はデータを非表示にします。作業のない案件は完全削除されます。練習の場合はキャンセルしてください。",
+      },
+    },
   ],
 };
 
 const MY_HOURS: Guide = {
-  id: "my-hours-confirm", area: "project", minutes: 2, permissions: ["schedule.read", "schedule.progress"], views: ["my-work"],
+  id: "my-hours-confirm",
+  area: "project",
+  minutes: 2,
+  permissions: ["schedule.read", "schedule.progress"],
+  views: ["my-work"],
   title: { th: "ยืนยันชั่วโมงทำงานรายวัน", en: "Confirm your daily hours", jp: "毎日の作業時間を確定" },
   summary: {
     th: "ระบบร่างชั่วโมงของแต่ละวันจากงานในแผน Team task Issue และนัดใน Outlook ถ้าเป็นไปตามแผนกดยืนยันครั้งเดียว ถ้าไม่ตรงเปิดวันนั้นแล้วแก้ชั่วโมง ลบหรือเพิ่มงาน ยืนยันย้อนหลังได้ 30 วัน",
@@ -1117,11 +1435,19 @@ const MY_HOURS: Guide = {
     jp: "計画タスク・チームタスク・課題・Outlookの予定から毎日の作業時間を下書きします。計画どおりならワンクリックで確定し、違う日は日付を開いて時間を直したり作業を追加・削除したりします。30日前まで遡って確定できます。",
   },
   steps: [
-    menu("my-work",
+    menu(
+      "my-work",
       { th: "เปิดงานของฉัน", en: "Open My Work", jp: "「マイワーク」を開く" },
-      { th: "แถบชั่วโมงทำงานอยู่บนสุดของหน้านี้ คลิกที่เมนูที่ไฮไลต์อยู่", en: "The hours strip is at the top of this page. Click the highlighted menu entry.", jp: "作業時間の帯はこの画面の一番上にあります。強調表示のメニューをクリックします。" }),
+      {
+        th: "แถบชั่วโมงทำงานอยู่บนสุดของหน้านี้ คลิกที่เมนูที่ไฮไลต์อยู่",
+        en: "The hours strip is at the top of this page. Click the highlighted menu entry.",
+        jp: "作業時間の帯はこの画面の一番上にあります。強調表示のメニューをクリックします。",
+      },
+    ),
     {
-      target: "hours.week", action: "next", view: "my-work",
+      target: "hours.week",
+      action: "next",
+      view: "my-work",
       title: { th: "ชั่วโมงทำงานของสัปดาห์", en: "Your week's hours", jp: "今週の作業時間" },
       body: {
         th: "แต่ละช่องคือหนึ่งวัน สีฟ้า 'รอยืนยัน' คือร่างจากแผน สีเขียวคือยืนยันแล้ว สีเหลือง 'ยังไม่ได้ลง' คือวันทำงานที่ไม่มีงานในแผน ต้องเพิ่มเอง ปุ่มลูกศรเลื่อนดูสัปดาห์ก่อนได้",
@@ -1130,7 +1456,9 @@ const MY_HOURS: Guide = {
       },
     },
     {
-      target: "hours.confirmToday", action: "next", view: "my-work",
+      target: "hours.confirmToday",
+      action: "next",
+      view: "my-work",
       title: { th: "วันที่เป็นไปตามแผน: กดครั้งเดียว", en: "A day that went as planned: one press", jp: "計画どおりの日：ワンクリック" },
       body: {
         th: "'ยืนยันวันนี้ตามแผน' บันทึกชั่วโมงตามร่างทันที ถ้ามีวันก่อนหน้าที่ยังค้าง ปุ่ม 'ยืนยันตามแผนที่ค้าง' จะยืนยันทุกวันนั้นพร้อมกัน วันที่ไม่มีงานในแผนจะไม่ถูกยืนยันให้",
@@ -1140,22 +1468,33 @@ const MY_HOURS: Guide = {
       missing: { th: "วันนี้ยืนยันแล้ว หรือวันนี้ไม่มีงานในแผน กด 'ถัดไป'", en: "Today is already confirmed or has nothing planned. Press Next.", jp: "今日は確定済みか、計画がありません。「次へ」を押します。" },
     },
     {
-      target: "hours.days", action: "click", clickOn: ".work-day", view: "my-work",
+      target: "hours.days",
+      action: "click",
+      clickOn: ".work-day",
+      view: "my-work",
       title: { th: "วันที่ไม่ตรงแผน: เปิดวันนั้น", en: "A day that went differently: open it", jp: "計画と違う日：その日を開く" },
       body: { th: "คลิกช่องของวันที่ต้องการแก้", en: "Click the day you want to change.", jp: "直したい日の枠をクリックします。" },
     },
     {
-      target: "hours.add", action: "next", view: "my-work",
+      target: "hours.add",
+      action: "next",
+      view: "my-work",
       title: { th: "แก้ชั่วโมง ลบ หรือเพิ่มงาน", en: "Change hours, remove or add work", jp: "時間の修正・作業の削除と追加" },
       body: {
         th: "แก้ตัวเลขชั่วโมงเฉพาะงานที่ไม่ตรง (ทีละ 0.25 ชม.) กด × เพื่อลบงานที่ไม่ได้ทำ และเลือกงานจากช่อง 'เพิ่มงาน' ถ้าเป็นงานนอกแผน เลือก 'งานอื่นในโครงการ' หรือ 'งานอื่น' แล้วพิมพ์ว่าทำอะไร 'กลับไปตามแผน' ล้างที่แก้ไว้",
         en: "Change the hours only where the day differed (in steps of 0.25 h), press × to remove work you did not do, and pick work from Add work. For work outside the plan choose Other work on a project or Other work and type what you did. Back to the plan undoes your changes.",
         jp: "違う作業の時間だけ直し（0.25時間単位）、しなかった作業は×で削除し、「作業を追加」から作業を選びます。計画外の作業は「プロジェクトのその他作業」か「その他の作業」を選んで内容を入力します。「計画に戻す」で変更を取り消せます。",
       },
-      missing: { th: "วันนี้แก้ไขไม่ได้ (ยังไม่ถึง หรือเกิน 30 วัน) กด 'ถัดไป'", en: "This day cannot be changed (still to come, or more than 30 days ago). Press Next.", jp: "この日は変更できません（未来の日か30日以上前）。「次へ」を押します。" },
+      missing: {
+        th: "วันนี้แก้ไขไม่ได้ (ยังไม่ถึง หรือเกิน 30 วัน) กด 'ถัดไป'",
+        en: "This day cannot be changed (still to come, or more than 30 days ago). Press Next.",
+        jp: "この日は変更できません（未来の日か30日以上前）。「次へ」を押します。",
+      },
     },
     {
-      target: "hours.save", action: "click", view: "my-work",
+      target: "hours.save",
+      action: "click",
+      view: "my-work",
       title: { th: "ยืนยันชั่วโมง", en: "Confirm the hours", jp: "時間を確定" },
       body: {
         th: "กด 'ยืนยันชั่วโมง' ชั่วโมงที่ยืนยันจะไปรวมเป็น 'ใช้จริง' ในแถบงบ Man-hour ของโครงการ แก้ซ้ำได้ภายใน 30 วัน ถ้าแค่ฝึก ให้กด 'ยกเลิก'",
@@ -1168,7 +1507,12 @@ const MY_HOURS: Guide = {
 };
 
 const PROJECT_COST: Guide = {
-  id: "project-cost", area: "project", minutes: 2, permissions: ["project.read", "schedule.read"], views: ["projects"], browse: true,
+  id: "project-cost",
+  area: "project",
+  minutes: 2,
+  permissions: ["project.read", "schedule.read"],
+  views: ["projects"],
+  browse: true,
   title: { th: "ดูต้นทุนโครงการ (Hardware และคน)", en: "Check project cost (hardware and people)", jp: "プロジェクトコストを確認（ハードウェアと人員）" },
   summary: {
     th: "สำหรับ Leader ขึ้นไป: ดูงบจาก Estimate cost เทียบกับใบขอซื้อ Hardware / Outsource และ Man-day ของคนตามแผน ของทุกโครงการในหน้าเดียว แล้วเปิดรายละเอียดรายโครงการ",
@@ -1176,63 +1520,105 @@ const PROJECT_COST: Guide = {
     jp: "リーダー以上向け：全プロジェクトの見積原価と、ハードウェア・外注の購入依頼および計画人日を1ページで確認し、案件ごとの内訳を開きます。",
   },
   steps: [
-    menu("projects",
+    menu(
+      "projects",
       { th: "เปิดเมนูโปรเจกต์", en: "Open Projects", jp: "「プロジェクト」を開く" },
-      { th: "ต้นทุนอยู่ในเมนูนี้ คลิกที่เมนูที่ไฮไลต์อยู่", en: "Cost is here. Click the highlighted menu entry.", jp: "コストはここにあります。ハイライトされたメニューをクリックします。" }),
-    { target: "[data-tab=\"cost\"]", action: "click", view: "projects",
+      { th: "ต้นทุนอยู่ในเมนูนี้ คลิกที่เมนูที่ไฮไลต์อยู่", en: "Cost is here. Click the highlighted menu entry.", jp: "コストはここにあります。ハイライトされたメニューをクリックします。" },
+    ),
+    {
+      target: '[data-tab="cost"]',
+      action: "click",
+      view: "projects",
       title: { th: "แท็บต้นทุน", en: "The Cost tab", jp: "「コスト」タブ" },
       body: { th: "คลิกแท็บ 'ต้นทุน'", en: "Click the Cost tab.", jp: "「コスト」タブをクリックします。" },
-      missing: { th: "แท็บนี้แสดงเฉพาะ Leader ขึ้นไป (Leader ผู้จัดการ Management และ Admin)", en: "This tab is shown to Leaders and above only (Leader, managers, Management and Admin).", jp: "このタブはリーダー以上（リーダー・マネージャー・Management・Admin）にのみ表示されます。" } },
-    { target: "cost.totals", action: "next", view: "projects",
+      missing: {
+        th: "แท็บนี้แสดงเฉพาะ Leader ขึ้นไป (Leader ผู้จัดการ Management และ Admin)",
+        en: "This tab is shown to Leaders and above only (Leader, managers, Management and Admin).",
+        jp: "このタブはリーダー以上（リーダー・マネージャー・Management・Admin）にのみ表示されます。",
+      },
+    },
+    {
+      target: "cost.totals",
+      action: "next",
+      view: "projects",
       title: { th: "ยอดรวมของที่ซื้อ", en: "Totals of what is bought", jp: "購入分の合計" },
       body: {
         th: "Hardware และ Outsource แสดง 'ขอซื้อแล้ว / งบ' พร้อมยอดที่สั่งซื้อแล้ว ยอดรวมนับทุกแถวที่ผ่านตัวกรอง ไม่ใช่แค่หน้าที่เห็น ชี้ที่ตัวเลขย่อเพื่อดูจำนวนเต็ม",
         en: "Hardware and Outsource read requested / budget, with what is ordered. The totals cover every row that passes the filters, not only the page in view. Hover a short figure for the exact amount.",
         jp: "ハードウェアと外注は「依頼済み / 予算」と発注済み額を表示します。合計は表示ページだけでなく、フィルター後の全行が対象です。短縮表示にカーソルを合わせると正確な金額が出ます。",
       },
-      missing: { th: "รอให้ข้อมูลโหลดเสร็จก่อน", en: "Wait for the figures to load.", jp: "データの読み込みを待ちます。" } },
-    { target: "cost.labor", action: "next", view: "projects",
+      missing: { th: "รอให้ข้อมูลโหลดเสร็จก่อน", en: "Wait for the figures to load.", jp: "データの読み込みを待ちます。" },
+    },
+    {
+      target: "cost.labor",
+      action: "next",
+      view: "projects",
       title: { th: "ค่าแรงแยกตามสายงาน", en: "Labor by discipline", jp: "分野別の労務費" },
       body: {
         th: "แต่ละช่องคือค่าแรงทั้งหมด หรือของ Electrical, Mechanical, Software และ Installation แสดง 'Man-day ตามแผน / งบ' กับส่วนที่ถึงวันนี้ กดช่องของสายงานเพื่อให้คอลัมน์คนในตารางแสดงเฉพาะสายงานนั้น กดซ้ำเพื่อกลับไปดูทั้งหมด งบมาจาก Estimate cost ส่วน Man-day ในแผนนับตามแผนกของผู้รับผิดชอบแต่ละแถว บรรทัดต้นทุนคือค่าแรงเป็นบาท",
         en: "Each cell is all labor, or Electrical, Mechanical, Software or Installation labor, as planned man-days / budget with the part due up to today. Press a discipline to make the table's People columns show it alone; press again for all labor. The budget is the Estimate cost's; plan man-days follow the department of each row's PIC. The Cost line is that labor in THB.",
         jp: "各セルは労務費の合計、または電気・機械・ソフトウェア・据付の労務費で、「計画人日 / 予算」と本日までの分を表示します。分野を押すと表の人員列がその分野だけになり、もう一度押すと合計に戻ります。予算は見積原価、計画人日は各行の担当者の部署で振り分けます。「コスト」の行はその労務費（THB）です。",
       },
-      missing: { th: "รอให้ข้อมูลโหลดเสร็จก่อน", en: "Wait for the figures to load.", jp: "データの読み込みを待ちます。" } },
-    { target: "cost.filter", action: "next", view: "projects",
+      missing: { th: "รอให้ข้อมูลโหลดเสร็จก่อน", en: "Wait for the figures to load.", jp: "データの読み込みを待ちます。" },
+    },
+    {
+      target: "cost.filter",
+      action: "next",
+      view: "projects",
       title: { th: "กรองตามสถานะงบ", en: "Filter by budget state", jp: "予算の状態で絞り込む" },
       body: {
         th: "กด 'เกินงบ' หรือ 'ใกล้เต็มงบ' (ใช้ไป 90% ขึ้นไป) เพื่อดูเฉพาะโครงการที่ต้องตาม โครงการนับตามกลุ่มที่แย่ที่สุดของมัน กดซ้ำเพื่อล้างตัวกรอง",
         en: "Press Over budget or Near budget (90% used or more) to list only the projects to chase. A project counts by its worst group. Press again to clear.",
         jp: "「予算超過」または「予算間近」（90%以上使用）を押すと、対応が必要な案件だけが表示されます。案件は最も悪いグループで数えます。もう一度押すと解除します。",
-      } },
-    { target: "cost.table", action: "next", view: "projects",
+      },
+    },
+    {
+      target: "cost.table",
+      action: "next",
+      view: "projects",
       title: { th: "อ่านแถวของโครงการ", en: "Read a project's row", jp: "プロジェクトの行を読む" },
       body: {
         th: "แต่ละกลุ่มแสดง 'ใช้ไป / งบ' พร้อมแถบ: น้ำเงินอยู่ในงบ เหลืองใกล้เต็ม แดงเกินงบ ขีดบนแถบของคนคือ Man-day ที่แผนวางไว้ถึงวันนี้ (ยังไม่มีการบันทึกชั่วโมงจริง) คอลัมน์คนแสดงสายงานที่เลือกไว้ในแถบค่าแรง กดหัวคอลัมน์เพื่อเรียง",
         en: "Each group shows used / budget with a bar: blue within budget, amber near it, red over it. The mark on the People bar is the man-days the plan puts on or before today (actual hours are not recorded yet). The People columns show the discipline chosen in the labor bar. Press a column heading to sort.",
         jp: "各グループは「使用 / 予算」とバーで表示されます。青は予算内、黄は間近、赤は超過です。人員のバー上の印は、計画上本日までの人日です（実績時間は未記録）。人員列は労務費バーで選んだ分野を表示します。列見出しを押すと並べ替えます。",
-      } },
-    { target: "cost.open", action: "click", view: "projects",
+      },
+    },
+    {
+      target: "cost.open",
+      action: "click",
+      view: "projects",
       title: { th: "เปิดรายละเอียดโครงการ", en: "Open a project's breakdown", jp: "案件の内訳を開く" },
-      body: { th: "คลิกเลขโครงการ รายละเอียดเปิดเป็นหน้าต่างทับรายการ ตัวกรองของคุณยังอยู่", en: "Click a project number. The breakdown opens over the list, so your filters stay.", jp: "案件番号をクリックします。内訳は一覧の上に開くので、フィルターはそのままです。" },
-      missing: { th: "ยังไม่มีโครงการในรายการ ล้างตัวกรองก่อน", en: "No project in the list. Clear the filters first.", jp: "一覧に案件がありません。先にフィルターを解除してください。" } },
-    { target: "cost.hardware", action: "next", view: "projects",
+      body: {
+        th: "คลิกเลขโครงการ รายละเอียดเปิดเป็นหน้าต่างทับรายการ ตัวกรองของคุณยังอยู่",
+        en: "Click a project number. The breakdown opens over the list, so your filters stay.",
+        jp: "案件番号をクリックします。内訳は一覧の上に開くので、フィルターはそのままです。",
+      },
+      missing: { th: "ยังไม่มีโครงการในรายการ ล้างตัวกรองก่อน", en: "No project in the list. Clear the filters first.", jp: "一覧に案件がありません。先にフィルターを解除してください。" },
+    },
+    {
+      target: "cost.hardware",
+      action: "next",
+      view: "projects",
       title: { th: "Hardware และ Outsource แยกตาม Module", en: "Hardware and outsource by module", jp: "モジュール別のハードウェア・外注" },
       body: {
         th: "งบของแต่ละ Module มาจาก Estimate cost ยอดขอซื้อ อนุมัติ และสั่งซื้อมาจากใบขอซื้อที่ยังใช้งานอยู่ 'สั่งซื้อแล้ว' คือรายการที่ ERP ออก PO แล้ว คิดที่ราคาโดยประมาณในใบขอซื้อ ด้านล่างคือรายการใบขอซื้อของโครงการ",
         en: "Each Module's budget comes from the Estimate cost; requested, approved and ordered come from the live purchase requests. Ordered is what the ERP has a PO for, at the request's approximate price. The project's requests are listed below.",
         jp: "各モジュールの予算は見積原価から、依頼・承認・発注は有効な購入依頼からです。「発注済み」はERPでPOが発行された明細で、依頼時の概算価格で計算します。下に案件の購入依頼が並びます。",
       },
-      missing: { th: "รอให้รายละเอียดโหลดเสร็จก่อน", en: "Wait for the breakdown to load.", jp: "内訳の読み込みを待ちます。" } },
-    { target: "cost.people", action: "next", view: "projects",
+      missing: { th: "รอให้รายละเอียดโหลดเสร็จก่อน", en: "Wait for the breakdown to load.", jp: "内訳の読み込みを待ちます。" },
+    },
+    {
+      target: "cost.people",
+      action: "next",
+      view: "projects",
       title: { th: "ค่าแรงแยกตามสายงานและตามแผน", en: "Labor by discipline and by plan", jp: "分野別・計画別の労務費" },
       body: {
         th: "ตารางบนเทียบงบกับแผนของแต่ละสายงาน: งบ Man-day ตามแผน ถึงวันนี้ และคงเหลือ (สีแดงเมื่อเกิน) ตารางล่างคือ Man-day ในแผนงานใต้หัวข้อหลักแต่ละแถว กด 'เปิดแผนงาน' เพื่อไปแก้แผน หรือกด 'ปิด' เพื่อกลับไปที่รายการ",
         en: "The first table sets each discipline's budget against the plan: budget, planned man-days, to date and what is left (red when over). The second is the man-days on the plan under each top row. Press Open plan to change the plan, or Close to return to the list.",
         jp: "上の表は分野ごとに予算と計画を比較します（予算、計画人日、本日まで、残り。超過は赤）。下の表は各トップ行配下の計画人日です。「計画を開く」で計画を修正、「閉じる」で一覧に戻ります。",
       },
-      missing: { th: "รอให้รายละเอียดโหลดเสร็จก่อน", en: "Wait for the breakdown to load.", jp: "内訳の読み込みを待ちます。" } },
+      missing: { th: "รอให้รายละเอียดโหลดเสร็จก่อน", en: "Wait for the breakdown to load.", jp: "内訳の読み込みを待ちます。" },
+    },
   ],
 };
 
@@ -1249,21 +1635,33 @@ const PROJECT_PLAN: Guide = {
   permissions: ["schedule.read"],
   views: ["projects"],
   steps: [
-    menu("projects",
+    menu(
+      "projects",
       { th: "เปิดเมนูโปรเจกต์", en: "Open Projects", jp: "「プロジェクト」を開く" },
-      { th: "แผนงานของทุกโปรเจกต์อยู่ในเมนูนี้ คลิกที่เมนูที่ไฮไลต์อยู่", en: "Every project's plan is here. Click the highlighted menu entry.", jp: "すべての案件の計画がここにあります。強調表示のメニューをクリックします。" }),
+      {
+        th: "แผนงานของทุกโปรเจกต์อยู่ในเมนูนี้ คลิกที่เมนูที่ไฮไลต์อยู่",
+        en: "Every project's plan is here. Click the highlighted menu entry.",
+        jp: "すべての案件の計画がここにあります。強調表示のメニューをクリックします。",
+      },
+    ),
     {
-      target: "[data-tab=\"schedule\"]", action: "click", view: "projects",
+      target: '[data-tab="schedule"]',
+      action: "click",
+      view: "projects",
       title: { th: "แท็บแผนงาน", en: "The Plan tab", jp: "「計画」タブ" },
       body: { th: "คลิกแท็บ 'แผนงาน'", en: "Click the Plan tab.", jp: "「計画」タブをクリックします。" },
     },
     {
-      target: "plan.project", action: "next", view: "projects",
+      target: "plan.project",
+      action: "next",
+      view: "projects",
       title: { th: "เลือกโปรเจกต์", en: "Choose the project", jp: "案件を選ぶ" },
       body: { th: "เลือกโปรเจกต์จากรายการ พิมพ์ในช่องค้นหาด้านซ้ายเพื่อหาเร็วขึ้น", en: "Pick the project; type in the search on the left to find it faster.", jp: "案件を選びます。左の検索欄で早く探せます。" },
     },
     {
-      target: "plan.manhours", action: "next", view: "projects",
+      target: "plan.manhours",
+      action: "next",
+      view: "projects",
       title: { th: "งบ Man-hour ของโปรเจกต์", en: "The project's man-hour budget", jp: "案件の工数予算" },
       body: {
         th: "แถบนี้เทียบชั่วโมงที่ประเมินไว้ใน Estimate cost กับชั่วโมงที่วางในแผน และบอกว่าเหลือให้วางอีกเท่าไร สีแดงคือวางเกินงบ ตัวเลขสีเหลืองคือจำนวนงานที่ยังไม่ใส่ Man-day เมื่อทีมกดยืนยันชั่วโมงใน My Work แล้ว จะมีช่อง 'ใช้จริง (ยืนยันแล้ว)' สีเขียวบอกชั่วโมงที่ใช้จริงและจำนวนคน โปรเจกต์ที่ไม่มีค่าแรงประเมินไว้ ผู้จัดการกด 'ตั้งงบ' เพื่อกำหนดเองได้ และตอนแก้แถวงาน ใต้ช่อง Plan man-days จะบอกงบคงเหลือหลังแถวนั้น",
@@ -1273,7 +1671,9 @@ const PROJECT_PLAN: Guide = {
       missing: { th: "ยังไม่ได้เลือกโปรเจกต์ กด 'ถัดไป'", en: "No project is chosen yet. Press Next.", jp: "案件がまだ選ばれていません。「次へ」を押します。" },
     },
     {
-      target: "plan.people", action: "next", view: "projects",
+      target: "plan.people",
+      action: "next",
+      view: "projects",
       title: { th: "ตารางคน: ใส่จำนวนคนรายวันแบบ Excel", en: "People table: people per day, typed like Excel", jp: "人員表：Excel のように日ごとの人数を入力" },
       body: {
         th: "กด 'ตารางคน' ที่แถบมุมมอง แต่ละแถวคืองานในแผน แต่ละช่องคือหนึ่งวัน คลิกช่องวันแล้วพิมพ์จำนวนคน กด Enter หรือลากคลุมหลายวันแล้วพิมพ์ครั้งเดียว กด Delete เพื่อลบ และวางตัวเลขที่คัดลอกจาก Excel ได้ ช่อง 'คน/วัน' ใส่จำนวนคนให้ทุกวันทำงานของแถวนั้น ถ้าคนเดียวทำหลายงานในวันเดียว ให้ใส่งานละเศษ เช่น 0.5 ช่องที่ขึ้นขอบเหลืองคือวันที่คนนั้นถูกใส่งานรวมทุกโปรเจกต์เกินกำลังต่อวันของเขา เลือก 'ของเรา' หรือ 'จ้างนอก' ต่อแถว ถ้าจ้างนอกให้พิมพ์ชื่อบริษัท Manpower ใต้ชื่องาน Man-day ของแถวคิดจากจำนวนคนที่ใส่ ระบบบันทึกให้เอง การเพิ่มงานยังทำในมุมมอง Team Plan เหมือนเดิม",
@@ -1283,17 +1683,25 @@ const PROJECT_PLAN: Guide = {
       missing: { th: "ยังไม่ได้เปิดมุมมอง 'ตารางคน' กด 'ถัดไป'", en: "The People table is not open yet. Press Next.", jp: "「人員表」がまだ開かれていません。「次へ」を押します。" },
     },
     {
-      target: "plan.gantt", action: "next", view: "projects",
+      target: "plan.gantt",
+      action: "next",
+      view: "projects",
       title: { th: "อ่าน Gantt", en: "Reading the Gantt", jp: "ガントの見方" },
       body: {
         th: "แต่ละแถบคือช่วงงาน ลากแถบเพื่อเลื่อนวัน ลากปลายแถบเพื่อยืดหรือหด แล้วกด 'ย้อนกลับ' ได้ถ้าพลาด เส้นโยงคืองานที่ต้องรออีกงานเสร็จ",
         en: "Each bar is a task. Drag it to move the dates, drag an end to stretch it, and undo if you slip. A line between bars means one task waits for another.",
         jp: "各バーが作業です。ドラッグで日程を移動し、端をドラッグで伸縮します。間違えたら元に戻せます。バー間の線は待ち関係です。",
       },
-      missing: { th: "โปรเจกต์นี้ยังไม่มีแผน เพิ่มแถวแรกในขั้นถัดไป", en: "This project has no plan yet; add the first row in the next step.", jp: "この案件にはまだ計画がありません。次の手順で最初の行を追加します。" },
+      missing: {
+        th: "โปรเจกต์นี้ยังไม่มีแผน เพิ่มแถวแรกในขั้นถัดไป",
+        en: "This project has no plan yet; add the first row in the next step.",
+        jp: "この案件にはまだ計画がありません。次の手順で最初の行を追加します。",
+      },
     },
     {
-      target: "plan.level", action: "next", view: "projects",
+      target: "plan.level",
+      action: "next",
+      view: "projects",
       title: { th: "Master Plan, Team Plan หรือตามสมาชิก", en: "Master Plan, Team Plan or by member", jp: "マスタープラン・チームプラン・メンバー別" },
       body: {
         th: "Master Plan แสดงเฉพาะหัวข้อหลักตามวันที่ตกลงกับลูกค้า Team Plan แสดงงานและฟังก์ชันทั้งหมด หัวข้อที่ยังไม่มีงานขึ้น 'ยังไม่แตกแผน' และหัวข้อที่งานเลยวันลูกค้าขึ้น 'เลยวัน Master Plan' 'ตามสมาชิก' แสดงทีละคนว่าทำงานไหนอยู่ และงานซ้อนกันหรือไม่",
@@ -1303,7 +1711,9 @@ const PROJECT_PLAN: Guide = {
       missing: { th: "โปรเจกต์นี้ยังไม่มีแผน กด 'ถัดไป'", en: "This project has no plan yet. Press Next.", jp: "この案件にはまだ計画がありません。「次へ」を押します。" },
     },
     {
-      target: "plan.view", action: "next", view: "projects",
+      target: "plan.view",
+      action: "next",
+      view: "projects",
       title: { th: "กาง ยุบ คำอธิบายสี และเมนูเพิ่มเติม", en: "Expand, collapse, the colour key and More", jp: "展開・折りたたみ・色の説明・その他メニュー" },
       body: {
         th: "ปุ่มเดียวสลับระหว่าง 'กางทั้งหมด' กับ 'ยุบทั้งหมด' เพื่อเปิดหรือปิดทุกหัวข้อในครั้งเดียว (ในมุมมองตามสมาชิกคือทุกคน) กด 'คำอธิบายสี' เพื่อดูว่าสีและสัญลักษณ์ใน Gantt หมายถึงอะไร ระบบจำว่าเปิดหรือปิดไว้ ส่วน Export Excel, Create baseline, เต็มจอ และ Refresh อยู่ในปุ่ม 'เพิ่มเติม' ข้างปุ่มเพิ่มหัวข้อ ตอนเต็มจอ กด Esc หรือ 'ออกจากเต็มจอ' เพื่อกลับ",
@@ -1313,7 +1723,9 @@ const PROJECT_PLAN: Guide = {
       missing: { th: "โปรเจกต์นี้ยังไม่มีแผน กด 'ถัดไป'", en: "This project has no plan yet. Press Next.", jp: "この案件にはまだ計画がありません。「次へ」を押します。" },
     },
     {
-      target: "plan.memberLegend", action: "next", view: "projects",
+      target: "plan.memberLegend",
+      action: "next",
+      view: "projects",
       title: { th: "ใครทำอะไร และงานซ้อนไหม", en: "Who is on what, and does it overlap", jp: "誰が何をしているか、重なりはないか" },
       body: {
         th: "แต่ละแถวคือสมาชิกหนึ่งคน บอกว่าตอนนี้ทำงานไหนหรือถัดไปคืองานไหน กดขยายเพื่อดูงานของเขาในโปรเจกต์นี้ และงานนอกโปรเจกต์ (แถบสีเทา) เส้นสีส้มใต้แถว = วันที่มี 2 งานขึ้นไป เส้นสีแดง = งานเกินเวลาที่มี ชี้เมาส์ที่เส้นเพื่อดูว่าซ้อนกับงานอะไร งานที่ไม่ได้ใส่ man-days นับเต็มวัน และฟังก์ชันใต้งานเดียวกันไม่นับว่าซ้อนกัน",
@@ -1323,43 +1735,65 @@ const PROJECT_PLAN: Guide = {
       missing: { th: "กด 'ตามสมาชิก' ด้านบนเพื่อดูส่วนนี้ หรือกด 'ถัดไป'", en: "Press By member above to see this, or press Next.", jp: "上の「メンバー別」を押すと表示されます。または「次へ」を押します。" },
     },
     {
-      target: "plan.moveRow", action: "next", view: "projects",
+      target: "plan.moveRow",
+      action: "next",
+      view: "projects",
       title: { th: "ลากแถวเพื่อย้ายหรือเปลี่ยนระดับ", en: "Drag a row to move it or change its level", jp: "行をドラッグして移動・階層変更" },
       body: {
         th: "จับที่ ⋮⋮ หน้าชื่อแถว ลากขึ้นลงเพื่อย้ายตำแหน่ง ลากไปทางขวาเพื่อเข้าไปอยู่ใต้แถวข้างบน ลากไปทางซ้ายเพื่อออกมาหนึ่งระดับ เส้นสีน้ำเงินบอกตำแหน่งและระดับ ส่วนแถวที่ไฮไลต์คือแถวที่จะไปอยู่ข้างใต้ ลากงานไปไว้ใต้หัวข้อที่ยังว่างได้ แถวบนสุดเป็นหัวข้อหลักเท่านั้น กดที่จับแล้วใช้ปุ่มลูกศรแทนการลากก็ได้",
         en: "Hold the ⋮⋮ in front of a row's name. Drag up or down to move it, right to put it under the row above, left to bring it one level out. The blue line shows the place and level, and the lit row is the one it will go under. A task can go under a heading that has nothing yet. The top of the plan holds main headings only. On the grip, the arrow keys do the same.",
         jp: "行名の前の ⋮⋮ をつかみます。上下にドラッグで移動、右で上の行の下へ、左で1階層外へ出します。青い線が位置と階層を、強調された行が入る先の行を示します。まだ何もない見出しの下にもタスクを入れられます。最上位は大見出しのみです。つまみの上で矢印キーでも操作できます。",
       },
-      missing: { th: "ที่จับขึ้นสำหรับผู้วางแผนของโปรเจกต์นี้ใน Team Plan เมื่อไม่ได้กรองแถวอยู่ กด 'ถัดไป'", en: "The grip shows for this project's planners in the Team Plan while no quick filter is on. Press Next.", jp: "つまみはチームプランで絞り込みをしていないとき、この案件の計画担当者に表示されます。「次へ」を押します。" },
+      missing: {
+        th: "ที่จับขึ้นสำหรับผู้วางแผนของโปรเจกต์นี้ใน Team Plan เมื่อไม่ได้กรองแถวอยู่ กด 'ถัดไป'",
+        en: "The grip shows for this project's planners in the Team Plan while no quick filter is on. Press Next.",
+        jp: "つまみはチームプランで絞り込みをしていないとき、この案件の計画担当者に表示されます。「次へ」を押します。",
+      },
     },
     {
-      target: "plan.insert", action: "next", view: "projects",
+      target: "plan.insert",
+      action: "next",
+      view: "projects",
       title: { th: "เพิ่มงานในแถวด้วย +", en: "Add rows in place with +", jp: "+ でその場に行を追加" },
       body: {
         th: "วิศวกรที่เป็นสมาชิกและมีสิทธิ์อัปเดตงานเพิ่มงานย่อยใต้งานที่เป็น PIC งานที่สร้างเอง และแถวลูกได้ แก้หรือลบได้เฉพาะแถวที่สร้างเอง Lead Engineer วางแผนได้เหมือน PM แต่ไม่มีสิทธิ์ baseline หรือตอบคำขอเพิ่มวันเพิ่มขึ้น กด + ที่หัวข้อหลักเพื่อเพิ่มงานใต้หัวข้อ กด + ที่งานเพื่อเพิ่มฟังก์ชันใต้งาน ช่องพิมพ์ขึ้นในแผนตรงที่แถวใหม่จะไปอยู่ ไม่มีหน้าต่างเด้งขึ้นมา บันทึกความคืบหน้าที่แถวล่างสุด เปอร์เซ็นต์ วันที่ และสถานะจะรวมขึ้นทุกระดับ",
         en: "Engineers with project membership and progress permission can add sub tasks under their PIC tasks, their own created tasks and descendants, and edit or delete only rows they created. Lead Engineers can plan like the PM; baseline and day-request rights stay unchanged. Press + on a main heading to add a task under it, or on a task to add a function under it. The boxes open in the plan where the new row will sit, with no window to fill in. Enter progress on the lowest rows; percentages, dates and status roll up through every level.",
         jp: "プロジェクトのメンバーで進捗権限を持つエンジニアは、担当タスク・自作タスクとその配下にサブタスクを追加し、自作行のみ編集・削除できます。リードエンジニアはPMと同様に計画できますが、ベースライン・日数依頼の権限は変わりません。大見出しの + でその下にタスクを、タスクの + でその下に機能を追加します。新しい行が入る位置に入力欄が開き、別ウィンドウは出ません。進捗は最下層の行に入力し、進捗率・日程・状態はすべての階層に集計されます。",
       },
-      missing: { th: "ปุ่ม + ขึ้นสำหรับผู้วางแผนหรือสมาชิกบนงานที่มีสิทธิ์เพิ่มงานย่อย เมื่อแผนมีแถวและไม่ได้กรองแถวอยู่ กด 'ถัดไป'", en: "The + shows for planners or members on tasks where they may add sub tasks, once the plan has rows and no quick filter is on. Press Next.", jp: "+ は計画担当者、またはサブタスクを追加できるメンバーに、行があり絞り込みをしていないときに表示されます。「次へ」を押します。" },
+      missing: {
+        th: "ปุ่ม + ขึ้นสำหรับผู้วางแผนหรือสมาชิกบนงานที่มีสิทธิ์เพิ่มงานย่อย เมื่อแผนมีแถวและไม่ได้กรองแถวอยู่ กด 'ถัดไป'",
+        en: "The + shows for planners or members on tasks where they may add sub tasks, once the plan has rows and no quick filter is on. Press Next.",
+        jp: "+ は計画担当者、またはサブタスクを追加できるメンバーに、行があり絞り込みをしていないときに表示されます。「次へ」を押します。",
+      },
     },
     {
-      target: "plan.remove", action: "next", view: "projects",
+      target: "plan.remove",
+      action: "next",
+      view: "projects",
       title: { th: "ลบแถวด้วยถังขยะ", en: "Delete a row with the bin", jp: "ごみ箱で行を削除" },
       body: {
         th: "กดถังขยะท้ายแถว แล้วยืนยันชื่อกับจำนวนแถวข้างใต้ที่จะถูกลบไปด้วย ลบได้เฉพาะแถวที่แถวนั้นและแถวข้างใต้ยังไม่มีความคืบหน้า ไม่มีงานส่วนตัวของสมาชิก และไม่มีคำขอเพิ่มวันรออยู่ แถวที่ลบไม่ได้จะมีถังขยะจางๆ ชี้หรือกดเพื่อดูเหตุผล แถวที่มีกุญแจมาจากภาพรวมงานทีม ให้ลบที่นั่น",
         en: "Press the bin at the end of a row and confirm its name and how many rows under it go too. A row can be deleted only while neither it nor anything under it has progress, a member's own task or a day request waiting. A row that cannot be deleted shows a faint bin; point at it or press it to see why. A row with a lock came from the team overview; delete it there.",
         jp: "行末のごみ箱を押し、名前と一緒に削除される配下の行数を確認します。削除できるのは、その行と配下に進捗・メンバーの個人作業・承認待ちの日数依頼がない行だけです。削除できない行には薄いごみ箱が表示され、ポイントするか押すと理由が分かります。鍵の付いた行はチームの仕事一覧から来た行なので、そちらで削除します。",
       },
-      missing: { th: "ถังขยะขึ้นสำหรับคนที่แก้แผนของโปรเจกต์นี้ได้ กด 'ถัดไป'", en: "The bin shows for people who can change this project's plan. Press Next.", jp: "ごみ箱は、この案件の計画を変更できる人に表示されます。「次へ」を押します。" },
+      missing: {
+        th: "ถังขยะขึ้นสำหรับคนที่แก้แผนของโปรเจกต์นี้ได้ กด 'ถัดไป'",
+        en: "The bin shows for people who can change this project's plan. Press Next.",
+        jp: "ごみ箱は、この案件の計画を変更できる人に表示されます。「次へ」を押します。",
+      },
     },
     {
-      target: "plan.add", action: "click", view: "projects",
+      target: "plan.add",
+      action: "click",
+      view: "projects",
       title: { th: "กด 'เพิ่มหัวข้อหลัก'", en: "Press Add main heading", jp: "「大見出しを追加」を押す" },
       body: { th: "ช่องพิมพ์หัวข้อหลักใหม่จะขึ้นท้ายแผน", en: "Boxes for a new main heading open at the end of the plan.", jp: "計画の最後に新しい大見出しの入力欄が開きます。" },
       missing: { th: "ปุ่มนี้ขึ้นสำหรับผู้วางแผนของโปรเจกต์นี้ เช่น PM", en: "The button shows for the project's planners, such as the PM.", jp: "このボタンはPMなど案件の計画担当者に表示されます。" },
     },
     {
-      target: "plan.quickName", action: "next", view: "projects",
+      target: "plan.quickName",
+      action: "next",
+      view: "projects",
       title: { th: "พิมพ์ชื่อและวันที่", en: "Type the name and dates", jp: "名前と日付を入力" },
       body: {
         th: "พิมพ์ชื่อ หัวข้อหลักใส่วันที่ตกลงกับลูกค้าได้ หรือเว้นไว้ก่อน งานและฟังก์ชันได้วันที่ของแถวแม่ไปก่อน แก้วันในช่องนี้ หรือลากแถบบน Gantt ทีหลังก็ได้",
@@ -1369,7 +1803,9 @@ const PROJECT_PLAN: Guide = {
       missing: { th: "กด + ที่แถว หรือ 'เพิ่มหัวข้อหลัก' เพื่อเปิดช่องพิมพ์", en: "Press + on a row, or Add main heading, to open the boxes.", jp: "行の + か「大見出しを追加」で入力欄を開きます。" },
     },
     {
-      target: "plan.quickLevel", action: "next", view: "projects",
+      target: "plan.quickLevel",
+      action: "next",
+      view: "projects",
       title: { th: "เปลี่ยนระดับด้วย ‹ ›", en: "Change the level with ‹ ›", jp: "‹ › で階層を変更" },
       body: {
         th: "› ย้ายแถวใหม่เข้าไปอยู่ใต้แถวข้างบน ‹ ย้ายออกมาหนึ่งระดับ แถวบนสุดเป็นหัวข้อหลัก ใต้หัวข้อเป็นงาน ใต้งานเป็นฟังก์ชัน ป้ายสีหน้าช่องชื่อบอกว่ากำลังเพิ่มอะไร",
@@ -1378,34 +1814,52 @@ const PROJECT_PLAN: Guide = {
       },
     },
     {
-      target: "plan.quickMember", action: "next", view: "projects",
+      target: "plan.quickMember",
+      action: "next",
+      view: "projects",
       title: { th: "ผู้รับผิดชอบ", en: "The member", jp: "担当者" },
       body: {
         th: "งานใต้หัวข้อหลักต้องเลือกผู้รับผิดชอบ ฟังก์ชันใช้ผู้รับผิดชอบของงานถ้าไม่เลือกคนอื่น คนที่มีงานในแผนนี้แล้วอยู่ด้านบนของรายการ ผู้รับผิดชอบได้รับอีเมลและเห็นงานใน My Work",
         en: "A task under a main heading needs a member; a function has its task's member unless you pick another. People already in this plan are at the top of the list. The member is emailed and sees the work in My Work.",
         jp: "大見出しの下のタスクには担当者が必要です。機能は別の人を選ばなければタスクの担当者になります。この計画の担当者は一覧の上にあります。担当者にはメールが届き、マイワークに表示されます。",
       },
-      missing: { th: "ช่องนี้ขึ้นเมื่อแถวใหม่เป็นงานหรือฟังก์ชัน กด › ให้แถวเข้าไปอยู่ใต้หัวข้อข้างบน หรือกด 'ถัดไป'", en: "This shows when the new row is a task or a function. Press › to put it under the heading above, or press Next.", jp: "新しい行がタスクか機能のときに表示されます。› で上の見出しの下に入れるか、「次へ」を押します。" },
+      missing: {
+        th: "ช่องนี้ขึ้นเมื่อแถวใหม่เป็นงานหรือฟังก์ชัน กด › ให้แถวเข้าไปอยู่ใต้หัวข้อข้างบน หรือกด 'ถัดไป'",
+        en: "This shows when the new row is a task or a function. Press › to put it under the heading above, or press Next.",
+        jp: "新しい行がタスクか機能のときに表示されます。› で上の見出しの下に入れるか、「次へ」を押します。",
+      },
     },
     {
-      target: "plan.workDays", action: "next", view: "projects",
+      target: "plan.workDays",
+      action: "next",
+      view: "projects",
       title: { th: "จำนวนวันตามแผนนับวันทำงาน", en: "Plan days count working days", jp: "計画日数は稼働日で数える" },
       body: {
         th: "เมื่อเปิดแก้งานในแผน ช่อง 'จำนวนวันตามแผน' นับเฉพาะวันจันทร์–ศุกร์ ไม่นับวันหยุดบริษัท เช่น เริ่ม 17 ต.ค. 8 วัน จะจบ 28 ต.ค. แผนเดิมจะไม่ขยับจนกว่าจะแก้จำนวนวันหรือวันเริ่มของงานนั้น",
         en: "When you edit a plan row, Plan days count Monday–Friday without company holidays: start 17 Oct with 8 days finishes 28 Oct. Existing rows keep their dates until you change their days or start.",
         jp: "計画の行を編集するとき、計画日数は会社の休日を除く月～金で数えます。例：10月17日開始・8日なら10月28日終了。既存の行は日数か開始日を変えるまで日付が変わりません。",
       },
-      missing: { th: "ช่องนี้อยู่ในหน้าต่างแก้งาน เปิดแถวงานแล้วกดแก้ไข หรือกด 'ถัดไป'", en: "This box is in the edit window of a plan row. Open a row and press Edit, or press Next.", jp: "この欄は行の編集画面にあります。行を開いて編集を押すか、「次へ」を押します。" },
+      missing: {
+        th: "ช่องนี้อยู่ในหน้าต่างแก้งาน เปิดแถวงานแล้วกดแก้ไข หรือกด 'ถัดไป'",
+        en: "This box is in the edit window of a plan row. Open a row and press Edit, or press Next.",
+        jp: "この欄は行の編集画面にあります。行を開いて編集を押すか、「次へ」を押します。",
+      },
     },
     {
-      target: "plan.save", action: "click", view: "projects",
+      target: "plan.save",
+      action: "click",
+      view: "projects",
       title: { th: "บันทึกแล้วเพิ่มต่อ", en: "Save and add the next", jp: "保存して次を追加" },
       body: {
         th: "กด 'บันทึก' หรือ Enter แถวจะเข้าแผนทันที และช่องพิมพ์แถวถัดไปขึ้นใต้แถวที่เพิ่งเพิ่ม โดยใช้ผู้รับผิดชอบและวันที่เดิม กด Esc หรือ × เพื่อปิด ถ้าแค่ฝึก กด Esc แล้วกด 'เสร็จ'",
         en: "Press Save, or Enter. The row goes into the plan at once and boxes for the next one open just below it, with the same member and dates. Esc or × closes them. Only practising? Press Esc, then Finish.",
         jp: "「保存」か Enter を押すと行がすぐ計画に入り、そのすぐ下に同じ担当者と日付で次の入力欄が開きます。Esc か × で閉じます。練習だけなら Esc の後に「完了」を押します。",
       },
-      missing: { th: "กด + ที่แถว หรือ 'เพิ่มหัวข้อหลัก' เพื่อเปิดช่องพิมพ์ แล้วกด 'ถัดไป'", en: "Press + on a row, or Add main heading, to open the boxes, then press Next.", jp: "行の + か「大見出しを追加」で入力欄を開き、「次へ」を押します。" },
+      missing: {
+        th: "กด + ที่แถว หรือ 'เพิ่มหัวข้อหลัก' เพื่อเปิดช่องพิมพ์ แล้วกด 'ถัดไป'",
+        en: "Press + on a row, or Add main heading, to open the boxes, then press Next.",
+        jp: "行の + か「大見出しを追加」で入力欄を開き、「次へ」を押します。",
+      },
     },
   ],
 };
@@ -1424,11 +1878,19 @@ const TEAM_TASK: Guide = {
   views: ["resources"],
   invite: "resources",
   steps: [
-    menu("resources",
+    menu(
+      "resources",
       { th: "เปิดเมนูภาพรวมงานทีม", en: "Open Team overview", jp: "「チームの仕事一覧」を開く" },
-      { th: "งานของทุกคนในทีมอยู่ในตารางนี้ คลิกที่เมนูที่ไฮไลต์อยู่", en: "Everyone's work is on this board. Click the highlighted menu entry.", jp: "チーム全員の作業がこの表にあります。強調表示のメニューをクリックします。" }),
+      {
+        th: "งานของทุกคนในทีมอยู่ในตารางนี้ คลิกที่เมนูที่ไฮไลต์อยู่",
+        en: "Everyone's work is on this board. Click the highlighted menu entry.",
+        jp: "チーム全員の作業がこの表にあります。強調表示のメニューをクリックします。",
+      },
+    ),
     {
-      target: "team.filters", action: "next", view: "resources",
+      target: "team.filters",
+      action: "next",
+      view: "resources",
       title: { th: "ดูว่าใครงานซ้อนหรือเกินกำลัง", en: "See who has overlapping work or too much", jp: "作業の重複や負荷超過を確認" },
       body: {
         th: "แถบตัวกรองนี้ค้างอยู่ด้านบนตอนเลื่อนหน้า ชิป 'งานซ้อน' แสดงเฉพาะคนที่มี 2 งานขึ้นไปในวันเดียวกัน ชิป 'งานล้นสัปดาห์นี้' แสดงคนที่งานเกินเวลา (กด 'ดูรายการ' ในแถบสรุปด้านบนได้เหมือนกัน) ในตาราง ช่องที่มีมุมสีส้มคือวันที่ซ้อน และไอคอนเตือนสีส้มบอกงานที่ซ้อนกัน ช่องสีแดงที่มีไอคอนเตือนคือวันที่เกินกำลัง ในมุมมอง Gantt เส้นสีส้มและสีแดงใต้แถวของแต่ละคนบอกช่วงวันเดียวกันนี้",
@@ -1437,7 +1899,9 @@ const TEAM_TASK: Guide = {
       },
     },
     {
-      target: "team.dayWork", action: "next", view: "resources",
+      target: "team.dayWork",
+      action: "next",
+      view: "resources",
       title: { th: "ดูงานทั้งหมดของวันนั้น", en: "See all of someone's work on a day", jp: "その日の作業をすべて見る" },
       body: {
         th: "กดตัวเลข MD บนสุดของช่อง หรือมุมสีส้ม จะเปิดรายการงานทั้งหมดของคนนั้นในวันนั้น รวมงานโครงการ RFQ และ Estimate ที่กินเวลาวันนั้นแม้ยังไม่ถึงวันครบกำหนด บอก MD ต่อวันของแต่ละงาน และกรอบสีส้มบอกงานที่ซ้อนกัน กดงานเพื่อเปิด หรือกด 'เพิ่มงานวันนี้'",
@@ -1447,32 +1911,60 @@ const TEAM_TASK: Guide = {
       missing: { th: "ช่องนี้กดได้เมื่อคนนั้นมีงานในวันนั้น กด 'ถัดไป'", en: "This shows when the person has work that day. Press Next.", jp: "その人にその日の作業があるときに表示されます。「次へ」を押します。" },
     },
     {
-      target: "team.add", action: "click", view: "resources",
+      target: "team.add",
+      action: "click",
+      view: "resources",
       title: { th: "กด 'เพิ่มงาน / นัดหมาย'", en: "Press Add work or appointment", jp: "「作業・予定を追加」を押す" },
-      body: { th: "หรือกด + ในช่องของคนและวันที่บนตาราง ระบบใส่คนและวันนั้นให้", en: "Or press + in a person's cell on a day; that person and date are filled in.", jp: "表の担当者と日付のセルの+でも追加でき、その人と日付が入ります。" },
+      body: {
+        th: "หรือกด + ในช่องของคนและวันที่บนตาราง ระบบใส่คนและวันนั้นให้",
+        en: "Or press + in a person's cell on a day; that person and date are filled in.",
+        jp: "表の担当者と日付のセルの+でも追加でき、その人と日付が入ります。",
+      },
     },
     {
-      target: "team.kind", action: "next", view: "resources",
+      target: "team.kind",
+      action: "next",
+      view: "resources",
       title: { th: "ประเภท", en: "Kind", jp: "種類" },
       body: { th: "นัดหมาย / เข้าหน้างาน, งานทั่วไป หรือ ลา / ไม่ว่าง", en: "Appointment or site visit, a task, or away.", jp: "予定・現地訪問、タスク、不在のいずれかです。" },
     },
     {
-      target: "team.subject", action: "next", view: "resources",
+      target: "team.subject",
+      action: "next",
+      view: "resources",
       title: { th: "เรื่องและรายละเอียด", en: "Subject and detail", jp: "件名と内容" },
-      body: { th: "บอกสั้นๆ ว่าทำอะไร และใส่รายละเอียดงานเบื้องต้นด้านล่าง เลือกลูกค้าได้ถ้าเกี่ยวกับลูกค้า งานซัพพอตของโปรเจกต์ที่ปิดแล้วก็เลือกโปรเจกต์นั้นได้ (ท้ายรายการ มีคำว่า ปิดแล้ว)", en: "Say briefly what it is and describe it below; pick the customer if one is involved. Support work for a finished project can pick that project too (at the end of the list, marked closed).", jp: "何をするかを短く書き、下に内容を入力します。顧客が関わる場合は顧客を選びます。完了済み案件のサポート作業もその案件を選べます（一覧の末尾に「完了済み」と表示）。" },
+      body: {
+        th: "บอกสั้นๆ ว่าทำอะไร และใส่รายละเอียดงานเบื้องต้นด้านล่าง เลือกลูกค้าได้ถ้าเกี่ยวกับลูกค้า งานซัพพอตของโปรเจกต์ที่ปิดแล้วก็เลือกโปรเจกต์นั้นได้ (ท้ายรายการ มีคำว่า ปิดแล้ว)",
+        en: "Say briefly what it is and describe it below; pick the customer if one is involved. Support work for a finished project can pick that project too (at the end of the list, marked closed).",
+        jp: "何をするかを短く書き、下に内容を入力します。顧客が関わる場合は顧客を選びます。完了済み案件のサポート作業もその案件を選べます（一覧の末尾に「完了済み」と表示）。",
+      },
     },
     {
-      target: "team.people", action: "next", view: "resources",
+      target: "team.people",
+      action: "next",
+      view: "resources",
       title: { th: "ผู้รับผิดชอบ", en: "Who does it", jp: "担当者" },
-      body: { th: "เลือกได้หลายคน ระบบบอกภาระงานของแต่ละคนในวันนั้นให้เห็นก่อนเลือก", en: "Choose one or more people; each one's load that day shows before you choose.", jp: "複数選べます。選ぶ前にその日の各自の負荷が表示されます。" },
+      body: {
+        th: "เลือกได้หลายคน ระบบบอกภาระงานของแต่ละคนในวันนั้นให้เห็นก่อนเลือก",
+        en: "Choose one or more people; each one's load that day shows before you choose.",
+        jp: "複数選べます。選ぶ前にその日の各自の負荷が表示されます。",
+      },
     },
     {
-      target: "team.date", action: "next", view: "resources",
+      target: "team.date",
+      action: "next",
+      view: "resources",
       title: { th: "วันที่", en: "When", jp: "日付" },
-      body: { th: "วันที่ และวันสิ้นสุดถ้าหลายวัน เลือกทั้งวัน ช่วงเช้า ช่วงบ่าย หรือระบุเวลาได้", en: "The date, and an end date for several days; a whole day, morning, afternoon or set times.", jp: "日付と、複数日の場合は終了日を入れます。終日・午前・午後・時間指定を選べます。" },
+      body: {
+        th: "วันที่ และวันสิ้นสุดถ้าหลายวัน เลือกทั้งวัน ช่วงเช้า ช่วงบ่าย หรือระบุเวลาได้",
+        en: "The date, and an end date for several days; a whole day, morning, afternoon or set times.",
+        jp: "日付と、複数日の場合は終了日を入れます。終日・午前・午後・時間指定を選べます。",
+      },
     },
     {
-      target: "team.meeting", action: "next", view: "resources",
+      target: "team.meeting",
+      action: "next",
+      view: "resources",
       title: { th: "ประชุมออนไลน์หรือออฟไลน์", en: "Online or in person", jp: "オンラインか対面か" },
       body: {
         th: "สำหรับนัดหมาย เลือก 'ออนไลน์' แล้ววางลิงก์ Teams / Zoom หรือ 'ออฟไลน์' แล้วใส่สถานที่ ลิงก์หรือสถานที่จะอยู่ในนัดของ Outlook ด้วย",
@@ -1482,7 +1974,9 @@ const TEAM_TASK: Guide = {
       missing: { th: "ช่องนี้มีเฉพาะประเภทนัดหมาย กด 'ถัดไป'", en: "This shows for an appointment. Press Next.", jp: "予定の場合に表示されます。「次へ」を押します。" },
     },
     {
-      target: "team.repeat", action: "next", view: "resources",
+      target: "team.repeat",
+      action: "next",
+      view: "resources",
       title: { th: "งานที่ทำซ้ำ เช่น ประชุมทุกวัน", en: "Work that repeats, such as a daily meeting", jp: "繰り返す作業（毎日の会議など）" },
       body: {
         th: "เลือก 'ทุกวันทำงาน' หรือ 'ทุกสัปดาห์' แล้วเลือกวัน ใส่วันที่สิ้นสุด (ไม่เกิน 1 ปี) ระบบลงงานให้ทุกวันตามรอบ ข้ามวันหยุดบริษัท และส่ง Outlook เป็นนัดประจำนัดเดียว ภายหลังเปิดงานวันไหนก็ได้ แล้วเลือกแก้หรือลบ 'เฉพาะครั้งนี้' หรือ 'ครั้งนี้และครั้งถัดไป'",
@@ -1491,7 +1985,9 @@ const TEAM_TASK: Guide = {
       },
     },
     {
-      target: "team.save", action: "click", view: "resources",
+      target: "team.save",
+      action: "click",
+      view: "resources",
       title: { th: "เพิ่มงาน", en: "Add it", jp: "追加" },
       body: {
         th: "กด 'เพิ่มงาน' งานขึ้นบนตารางของทีมทันที ถ้าแค่ฝึก ให้กด 'ยกเลิก' แล้วกด 'จบบทสอน'",
@@ -1515,44 +2011,90 @@ const BOM_RELEASE: Guide = {
   permissions: ["procurement.read", "procurement.request"],
   views: ["purchase"],
   steps: [
-    menu("purchase",
+    menu(
+      "purchase",
       { th: "เปิดเมนูใบขอซื้อ", en: "Open Purchase Requisition", jp: "「購買申請」を開く" },
-      { th: "BOM อยู่ในหน้าใบขอซื้อ คลิกที่เมนูที่ไฮไลต์อยู่", en: "The BOMs are inside the Purchase Requisition screen. Click the highlighted menu entry.", jp: "BOMは購買申請の画面の中にあります。強調表示のメニューをクリックします。" }),
+      {
+        th: "BOM อยู่ในหน้าใบขอซื้อ คลิกที่เมนูที่ไฮไลต์อยู่",
+        en: "The BOMs are inside the Purchase Requisition screen. Click the highlighted menu entry.",
+        jp: "BOMは購買申請の画面の中にあります。強調表示のメニューをクリックします。",
+      },
+    ),
     {
-      target: '[data-tab="boms"]', action: "click", view: "purchase",
+      target: '[data-tab="boms"]',
+      action: "click",
+      view: "purchase",
       title: { th: "เปิดแท็บ BOM", en: "Open the BOM tab", jp: "「BOM」タブを開く" },
-      body: { th: "รายการวัสดุของทุกโปรเจกต์อยู่ในแท็บนี้ คลิกที่แท็บ BOM", en: "Every project's bill of materials is on this tab. Click the BOM tab.", jp: "すべての案件のBOMはこのタブにあります。「BOM」タブをクリックします。" },
+      body: {
+        th: "รายการวัสดุของทุกโปรเจกต์อยู่ในแท็บนี้ คลิกที่แท็บ BOM",
+        en: "Every project's bill of materials is on this tab. Click the BOM tab.",
+        jp: "すべての案件のBOMはこのタブにあります。「BOM」タブをクリックします。",
+      },
     },
     {
-      target: "bom.generate", action: "click", view: "purchase",
+      target: "bom.generate",
+      action: "click",
+      view: "purchase",
       title: { th: "กด 'สร้างรายการวัสดุ'", en: "Press Generate BOM", jp: "「BOMを作成」を押す" },
-      body: { th: "สร้าง BOM จาก Estimate ที่อนุมัติและล็อกแล้วของโปรเจกต์ ได้ทั้งรายการวัสดุและงานจ้างภายนอก (Outsource)", en: "It builds the BOM from the project's approved, locked estimate: its material lines and its outsourced work.", jp: "案件の承認・ロック済み見積からBOMを作ります。資材明細と外注作業（Outsource）が入ります。" },
-      missing: { th: "ถ้าไม่มีปุ่มนี้ แปลว่าบัญชีนี้ยังไม่มีสิทธิ์สร้าง BOM", en: "If the button never appears, this account cannot generate BOMs.", jp: "ボタンが表示されない場合、このアカウントには作成権限がありません。" },
+      body: {
+        th: "สร้าง BOM จาก Estimate ที่อนุมัติและล็อกแล้วของโปรเจกต์ ได้ทั้งรายการวัสดุและงานจ้างภายนอก (Outsource)",
+        en: "It builds the BOM from the project's approved, locked estimate: its material lines and its outsourced work.",
+        jp: "案件の承認・ロック済み見積からBOMを作ります。資材明細と外注作業（Outsource）が入ります。",
+      },
+      missing: {
+        th: "ถ้าไม่มีปุ่มนี้ แปลว่าบัญชีนี้ยังไม่มีสิทธิ์สร้าง BOM",
+        en: "If the button never appears, this account cannot generate BOMs.",
+        jp: "ボタンが表示されない場合、このアカウントには作成権限がありません。",
+      },
     },
     {
-      target: "bom.project", action: "next", view: "purchase",
+      target: "bom.project",
+      action: "next",
+      view: "purchase",
       title: { th: "เลือกโปรเจกต์", en: "Choose the project", jp: "案件を選ぶ" },
-      body: { th: "เลือกโปรเจกต์ ระบบคัดลอกรายการจาก Estimate revision ที่อนุมัติแล้ว", en: "Pick the project; the lines are copied from its approved estimate revision.", jp: "案件を選ぶと、承認済み見積リビジョンの明細がコピーされます。" },
+      body: {
+        th: "เลือกโปรเจกต์ ระบบคัดลอกรายการจาก Estimate revision ที่อนุมัติแล้ว",
+        en: "Pick the project; the lines are copied from its approved estimate revision.",
+        jp: "案件を選ぶと、承認済み見積リビジョンの明細がコピーされます。",
+      },
     },
     {
-      target: "bom.create", action: "click", view: "purchase",
+      target: "bom.create",
+      action: "click",
+      view: "purchase",
       title: { th: "สร้าง BOM", en: "Generate it", jp: "BOMを作成" },
-      body: { th: "กดสร้าง BOM จะเป็นฉบับร่างจนกว่าจะ Release ถ้าแค่ฝึก ให้กด 'ยกเลิก' แล้วกด 'ข้ามขั้นนี้'", en: "Press generate; the BOM stays a draft until it is released. Only practising? Press Cancel, then Skip this step.", jp: "作成するとリリースまで下書きです。練習だけなら「キャンセル」を押してから「この手順を飛ばす」を押します。" },
+      body: {
+        th: "กดสร้าง BOM จะเป็นฉบับร่างจนกว่าจะ Release ถ้าแค่ฝึก ให้กด 'ยกเลิก' แล้วกด 'ข้ามขั้นนี้'",
+        en: "Press generate; the BOM stays a draft until it is released. Only practising? Press Cancel, then Skip this step.",
+        jp: "作成するとリリースまで下書きです。練習だけなら「キャンセル」を押してから「この手順を飛ばす」を押します。",
+      },
     },
     {
-      target: "bom.list", action: "next", view: "purchase",
+      target: "bom.list",
+      action: "next",
+      view: "purchase",
       title: { th: "BOM ทุก revision", en: "Every BOM revision", jp: "全BOMリビジョン" },
-      body: { th: "กดเลข BOM เพื่อตรวจรายการ งบ ยอดที่ขอซื้อแล้ว และยอดที่ยังต้องซื้อ กรองตาม Module หรือหมวดได้ และดาวน์โหลดเป็น Excel ได้ ใน BOM ที่ Release แล้ว ติ๊กรายการที่จะซื้อ แล้วกด 'สร้าง PR จากรายการที่เลือก' หรือกดปุ่ม + ที่แถวของ BOM เพื่อเปิดใบขอซื้อเปล่าของ BOM นั้น ในหน้า BOM ยังมีแผง 'Unit ของโครงการ' สำหรับแบ่งงบของ Module เป็น Unit ตาม Drawing (กด 'เพิ่ม Unit') และดูยอดขอซื้อของแต่ละ Unit กับแต่ละ Discipline พร้อมจำนวนรายการที่ยังรอสั่งซื้อและวันที่ต้องการเร็วสุด (ตัวแดงเมื่อเกินกำหนด) กดจำนวนใบขอซื้อใต้ชื่อ Unit เพื่อดูใบของ Unit นั้น", en: "Press a BOM number to check its lines, budget, what has been requested and what is still to buy. Filter by module or section, and download it as Excel. On a released BOM, tick the lines to buy and press Create PR from selected lines, or press + on the BOM's row for an empty PR sheet on that BOM. The BOM also has the Project Units panel: split a module's budget into Units by drawing (Add Unit), and see what each Unit and each discipline has requested, how many lines still wait to be ordered and the earliest date one is needed by (red once it has passed). Press the number of requests under a Unit's name to list them.", jp: "BOM番号を押して明細、予算、申請済み額、未購入額を確認します。モジュールや区分で絞り込み、Excelでダウンロードできます。リリース済みBOMでは購入する明細にチェックを入れて「選択した明細でPRを作成」を押すか、BOMの行の＋でそのBOMの空のPRシートを開きます。BOM画面には「案件のUnit」パネルもあり、モジュール予算を図面ごとのUnitに分け（「Unitを追加」）、Unitごと・Disciplineごとの申請額、発注待ちの明細数、最も早い必要日（期限を過ぎると赤字）を確認できます。Unit名の下の申請件数を押すと、そのUnitの申請が一覧表示されます。" },
+      body: {
+        th: "กดเลข BOM เพื่อตรวจรายการ งบ ยอดที่ขอซื้อแล้ว และยอดที่ยังต้องซื้อ กรองตาม Module หรือหมวดได้ และดาวน์โหลดเป็น Excel ได้ ใน BOM ที่ Release แล้ว ติ๊กรายการที่จะซื้อ แล้วกด 'สร้าง PR จากรายการที่เลือก' หรือกดปุ่ม + ที่แถวของ BOM เพื่อเปิดใบขอซื้อเปล่าของ BOM นั้น ในหน้า BOM ยังมีแผง 'Unit ของโครงการ' สำหรับแบ่งงบของ Module เป็น Unit ตาม Drawing (กด 'เพิ่ม Unit') และดูยอดขอซื้อของแต่ละ Unit กับแต่ละ Discipline พร้อมจำนวนรายการที่ยังรอสั่งซื้อและวันที่ต้องการเร็วสุด (ตัวแดงเมื่อเกินกำหนด) กดจำนวนใบขอซื้อใต้ชื่อ Unit เพื่อดูใบของ Unit นั้น",
+        en: "Press a BOM number to check its lines, budget, what has been requested and what is still to buy. Filter by module or section, and download it as Excel. On a released BOM, tick the lines to buy and press Create PR from selected lines, or press + on the BOM's row for an empty PR sheet on that BOM. The BOM also has the Project Units panel: split a module's budget into Units by drawing (Add Unit), and see what each Unit and each discipline has requested, how many lines still wait to be ordered and the earliest date one is needed by (red once it has passed). Press the number of requests under a Unit's name to list them.",
+        jp: "BOM番号を押して明細、予算、申請済み額、未購入額を確認します。モジュールや区分で絞り込み、Excelでダウンロードできます。リリース済みBOMでは購入する明細にチェックを入れて「選択した明細でPRを作成」を押すか、BOMの行の＋でそのBOMの空のPRシートを開きます。BOM画面には「案件のUnit」パネルもあり、モジュール予算を図面ごとのUnitに分け（「Unitを追加」）、Unitごと・Disciplineごとの申請額、発注待ちの明細数、最も早い必要日（期限を過ぎると赤字）を確認できます。Unit名の下の申請件数を押すと、そのUnitの申請が一覧表示されます。",
+      },
     },
     {
-      target: "bom.release", action: "click", view: "purchase",
+      target: "bom.release",
+      action: "click",
+      view: "purchase",
       title: { th: "Release BOM", en: "Release the BOM", jp: "BOMをリリース" },
       body: {
         th: "เมื่อตรวจแล้ว กดปุ่มกุญแจ (Release) ทางซ้ายของแถว รายการจะถูก freeze และใช้เป็นฐานของ PR และใบเบิก ถ้าแค่ฝึก ให้กด 'ยกเลิก' ในหน้าต่างยืนยัน แล้วกด 'จบบทสอน'",
         en: "Once checked, press the lock button (Release) at the left of the row: the lines freeze and become the base for PRs and material issues. Only practising? Press Cancel in the confirmation, then Finish.",
         jp: "確認後、行の左の鍵ボタン（リリース）を押すと明細が固定され、PRと出庫の基準になります。練習だけなら確認画面で「キャンセル」を押してから「完了」を押します。",
       },
-      missing: { th: "Release ได้เฉพาะ BOM ฉบับร่าง และผู้มีสิทธิ์อนุมัติ ถ้าปุ่มกุญแจเป็นสีจาง แปลว่า BOM ที่คุณสร้างมีมูลค่าถึงเกณฑ์ตรวจ (เริ่มต้น 100,000 บาท) ต้องให้ผู้อนุมัติคนอื่น Release", en: "Only a draft BOM can be released, by someone who may approve. A greyed-out lock means a BOM you generated is at or over the review threshold (THB 100,000 to start with): another approver must release it.", jp: "リリースできるのは下書きBOMのみで、承認権限が必要です。鍵ボタンが薄い場合、自分で作成したBOMが確認基準額（初期値100,000バーツ）以上のため、別の承認者がリリースする必要があります。" },
+      missing: {
+        th: "Release ได้เฉพาะ BOM ฉบับร่าง และผู้มีสิทธิ์อนุมัติ ถ้าปุ่มกุญแจเป็นสีจาง แปลว่า BOM ที่คุณสร้างมีมูลค่าถึงเกณฑ์ตรวจ (เริ่มต้น 100,000 บาท) ต้องให้ผู้อนุมัติคนอื่น Release",
+        en: "Only a draft BOM can be released, by someone who may approve. A greyed-out lock means a BOM you generated is at or over the review threshold (THB 100,000 to start with): another approver must release it.",
+        jp: "リリースできるのは下書きBOMのみで、承認権限が必要です。鍵ボタンが薄い場合、自分で作成したBOMが確認基準額（初期値100,000バーツ）以上のため、別の承認者がリリースする必要があります。",
+      },
     },
   ],
 };
@@ -1571,11 +2113,19 @@ const PR_APPROVE: Guide = {
   views: ["approvals", "purchase"],
   invite: "approvals",
   steps: [
-    menu("approvals",
+    menu(
+      "approvals",
       { th: "เปิดเมนูรออนุมัติ", en: "Open Approvals", jp: "「承認」を開く" },
-      { th: "ตัวเลขบนเมนูคือจำนวนที่รอคุณ คลิกที่เมนูที่ไฮไลต์อยู่", en: "The number on the menu is how many wait for you. Click the highlighted menu entry.", jp: "メニューの数字が自分の承認待ち件数です。強調表示のメニューをクリックします。" }),
+      {
+        th: "ตัวเลขบนเมนูคือจำนวนที่รอคุณ คลิกที่เมนูที่ไฮไลต์อยู่",
+        en: "The number on the menu is how many wait for you. Click the highlighted menu entry.",
+        jp: "メニューの数字が自分の承認待ち件数です。強調表示のメニューをクリックします。",
+      },
+    ),
     {
-      target: "appr.pr", action: "next", view: "approvals",
+      target: "appr.pr",
+      action: "next",
+      view: "approvals",
       title: { th: "ใบขอซื้อที่รอคุณ", en: "Requisitions waiting for you", jp: "承認待ちの購買申請" },
       body: {
         th: "ระบบคำนวณว่าใบไหนต้องให้ใครอนุมัติ: หัวหน้าของ discipline ของ Unit ในใบ (ME, EE, SW; ใบที่ไม่ได้เลือก Unit ใช้หัวหน้าแผนกของผู้ขอ) ก่อน แล้วผู้อนุมัติขั้นสุดท้าย ซึ่งได้อีเมลเมื่อมีใบรอ ใบที่เกินงบของ Module ต้องใส่เหตุผลตอนอนุมัติ",
@@ -1584,7 +2134,9 @@ const PR_APPROVE: Guide = {
       },
     },
     {
-      target: "appr.approve", action: "click", view: "approvals",
+      target: "appr.approve",
+      action: "click",
+      view: "approvals",
       title: { th: "อนุมัติหรือไม่อนุมัติ", en: "Approve or reject", jp: "承認または却下" },
       body: {
         th: "กดปุ่ม ✓ (อนุมัติ) หรือ ✕ (ไม่อนุมัติ) ทางซ้ายของแถว แล้วยืนยันพร้อมความเห็น กดเลข PR เพื่อดูรายการก่อนได้ ผู้ขอได้แจ้งผลพร้อมความเห็นของคุณทุกครั้ง ใบที่อนุมัติครบจะส่งเข้า Pegasus ERP เอง ถ้าแค่ฝึก ให้กด 'ยกเลิก' ในหน้าต่างยืนยัน แล้วกด 'จบบทสอน'",
@@ -1610,11 +2162,19 @@ const PR_FIX: Guide = {
   permissions: ["procurement.request"],
   views: ["purchase"],
   steps: [
-    menu("purchase",
+    menu(
+      "purchase",
       { th: "เปิดเมนูใบขอซื้อ", en: "Open Purchase Requisition", jp: "「購買申請」を開く" },
-      { th: "PR ทุกใบและสถานะใน ERP อยู่ที่นี่ คลิกที่เมนูที่ไฮไลต์อยู่", en: "Every PR and its ERP status is here. Click the highlighted menu entry.", jp: "すべてのPRとERPでの状態がここにあります。強調表示のメニューをクリックします。" }),
+      {
+        th: "PR ทุกใบและสถานะใน ERP อยู่ที่นี่ คลิกที่เมนูที่ไฮไลต์อยู่",
+        en: "Every PR and its ERP status is here. Click the highlighted menu entry.",
+        jp: "すべてのPRとERPでの状態がここにあります。強調表示のメニューをクリックします。",
+      },
+    ),
     {
-      target: "pr.erp", action: "next", view: "purchase",
+      target: "pr.erp",
+      action: "next",
+      view: "purchase",
       title: { th: "ดูคอลัมน์ ERP", en: "Look at the ERP column", jp: "ERP列を見る" },
       body: {
         th: "ใบที่ขึ้น 'ส่ง ERP ไม่สำเร็จ' หรือ 'ถูกลบใน ERP' คือใบที่ ERP ไม่ได้รับไว้ กดเลข PR ของใบนั้นเพื่อดูข้อความจาก ERP ใบที่ขึ้น 'Request List' คือรายการของใบนั้นอยู่ใน Request List ของโครงการใน ERP ฝ่ายจัดซื้อจะออก PR แยกตาม Supplier เอง กดเลข PR เพื่อดูสถานะของแต่ละรายการ (รอจัดซื้อ อยู่ใน PR สั่งซื้อแล้ว หรือยกเลิก) และดาวน์โหลด Excel สำหรับ Request List ได้",
@@ -1623,7 +2183,9 @@ const PR_FIX: Guide = {
       },
     },
     {
-      target: "pr.takeback", action: "next", view: "purchase",
+      target: "pr.takeback",
+      action: "next",
+      view: "purchase",
       title: { th: "ดึงกลับไปแก้ หรือยกเลิก", en: "Take it back, or cancel it", jp: "差し戻すか取り消す" },
       body: {
         th: "ถ้าต้องแก้ข้อมูล กด 'ดึงกลับไปแก้' PR จะกลับเป็นฉบับร่างและเปิดหน้าแก้รายการให้ ถ้าไม่ซื้อแล้ว กด 'ยกเลิก PR' ระบบถาม ERP ก่อนทุกครั้ง ถ้า ERP ยังมี PR ใบนั้นอยู่ ให้ฝ่ายจัดซื้อยกเลิกใน ERP แทน",
@@ -1637,7 +2199,9 @@ const PR_FIX: Guide = {
       },
     },
     {
-      target: "pr.submit", action: "click", view: "purchase",
+      target: "pr.submit",
+      action: "click",
+      view: "purchase",
       title: { th: "แก้รายการแล้วบันทึก", en: "Correct the lines and save", jp: "明細を直して保存" },
       body: {
         th: "แก้จำนวน ราคา หรือรายการตามข้อความจาก ERP แล้วกด 'ส่งขออนุมัติ' เพื่อบันทึกและส่งอนุมัติใหม่ ถ้าแค่ฝึก ให้กด 'ยกเลิก' แล้วกด 'จบบทสอน'",
@@ -1667,58 +2231,114 @@ const SITE_VISIT_WORK: Guide = {
   views: ["my-assignments", "site-visits"],
   invite: "my-assignments",
   steps: [
-    menu("my-assignments",
+    menu(
+      "my-assignments",
       { th: "เปิดเมนูงานที่ได้รับมอบหมาย", en: "Open My Assignments", jp: "「自分の割当」を開く" },
-      { th: "งานเข้าหน้างานที่ส่งถึงคุณอยู่ที่นี่ ใช้บนมือถือได้ คลิกที่เมนูที่ไฮไลต์อยู่", en: "Site visits assigned to you are here, phone-friendly. Click the highlighted menu entry.", jp: "自分に割り当てられた現地訪問がここにあり、スマホでも使えます。強調表示のメニューをクリックします。" }),
+      {
+        th: "งานเข้าหน้างานที่ส่งถึงคุณอยู่ที่นี่ ใช้บนมือถือได้ คลิกที่เมนูที่ไฮไลต์อยู่",
+        en: "Site visits assigned to you are here, phone-friendly. Click the highlighted menu entry.",
+        jp: "自分に割り当てられた現地訪問がここにあり、スマホでも使えます。強調表示のメニューをクリックします。",
+      },
+    ),
     {
-      target: "visit.respond", action: "next", view: "my-assignments",
+      target: "visit.respond",
+      action: "next",
+      view: "my-assignments",
       title: { th: "ตอบรับงาน", en: "Answer a new job", jp: "依頼に回答" },
-      body: { th: "งานใหม่ต้องกด 'ตอบรับหรือปฏิเสธ' ก่อน ผู้ประสานงานจะรู้ทันที", en: "A new job needs Accept or decline first; the coordinator sees your answer at once.", jp: "新しい依頼はまず「受諾・辞退」を押します。調整担当にすぐ伝わります。" },
+      body: {
+        th: "งานใหม่ต้องกด 'ตอบรับหรือปฏิเสธ' ก่อน ผู้ประสานงานจะรู้ทันที",
+        en: "A new job needs Accept or decline first; the coordinator sees your answer at once.",
+        jp: "新しい依頼はまず「受諾・辞退」を押します。調整担当にすぐ伝わります。",
+      },
       missing: { th: "ยังไม่มีงานรอตอบรับ กด 'ถัดไป'", en: "Nothing is waiting for an answer. Press Next.", jp: "回答待ちはありません。「次へ」を押します。" },
     },
     {
-      target: "visit.open", action: "click", view: "my-assignments",
+      target: "visit.open",
+      action: "click",
+      view: "my-assignments",
       title: { th: "เปิดงาน", en: "Open the visit", jp: "訪問を開く" },
-      body: { th: "กด 'เปิดงาน' ของงานที่จะไป หรือ 'ทำงานหน้างานต่อ' ถ้าเช็คอินไว้แล้ว", en: "Press Open visit on the job you are going to, or Continue on site if you have checked in.", jp: "行く訪問の「訪問を開く」、チェックイン済みなら「現地作業を続ける」を押します。" },
-      missing: { th: "ยังไม่มีงานเข้าหน้างานของคุณ เมื่อได้รับมอบหมายจะขึ้นที่นี่", en: "No visits are assigned to you yet; they show here once you are placed on one.", jp: "まだ割り当てがありません。割り当てられるとここに表示されます。" },
+      body: {
+        th: "กด 'เปิดงาน' ของงานที่จะไป หรือ 'ทำงานหน้างานต่อ' ถ้าเช็คอินไว้แล้ว",
+        en: "Press Open visit on the job you are going to, or Continue on site if you have checked in.",
+        jp: "行く訪問の「訪問を開く」、チェックイン済みなら「現地作業を続ける」を押します。",
+      },
+      missing: {
+        th: "ยังไม่มีงานเข้าหน้างานของคุณ เมื่อได้รับมอบหมายจะขึ้นที่นี่",
+        en: "No visits are assigned to you yet; they show here once you are placed on one.",
+        jp: "まだ割り当てがありません。割り当てられるとここに表示されます。",
+      },
     },
     {
-      target: "visit.checkin", action: "next", view: "my-assignments",
+      target: "visit.checkin",
+      action: "next",
+      view: "my-assignments",
       title: { th: "เช็คอิน", en: "Check in", jp: "チェックイン" },
       body: { th: "เมื่อถึงหน้างาน กด 'เช็คอิน' ระบบบันทึกเวลาเริ่มงาน", en: "On arrival press Check in; the start time is recorded.", jp: "到着したら「チェックイン」を押すと開始時刻が記録されます。" },
       missing: { th: "เช็คอินแล้ว ปุ่มนี้จึงไม่ขึ้น กด 'ถัดไป'", en: "Already checked in, so the button is gone. Press Next.", jp: "チェックイン済みのため表示されません。「次へ」を押します。" },
     },
     {
-      target: "visit.checklist", action: "next", view: "my-assignments",
+      target: "visit.checklist",
+      action: "next",
+      view: "my-assignments",
       title: { th: "รายการตรวจสอบ", en: "Checklist", jp: "チェックリスト" },
-      body: { th: "ทำทีละข้อ กดปุ่มกรองเพื่อดูเฉพาะข้อที่ยังไม่ทำ", en: "Work through it item by item; the filter button shows only what is left.", jp: "1項目ずつ進めます。絞り込みボタンで未完了だけを表示できます。" },
+      body: {
+        th: "ทำทีละข้อ กดปุ่มกรองเพื่อดูเฉพาะข้อที่ยังไม่ทำ",
+        en: "Work through it item by item; the filter button shows only what is left.",
+        jp: "1項目ずつ進めます。絞り込みボタンで未完了だけを表示できます。",
+      },
     },
     {
-      target: "visit.files", action: "next", view: "my-assignments",
+      target: "visit.files",
+      action: "next",
+      view: "my-assignments",
       title: { th: "รูป วิดีโอ และเอกสาร", en: "Photos, videos and documents", jp: "写真・動画・文書" },
-      body: { th: "เลือกหมวดแล้วถ่ายรูปหรืออัปโหลดไฟล์ รูปจากหน้างานใช้ในรายงานได้", en: "Choose a category, then take a photo or upload a file; site photos can go into the report.", jp: "カテゴリを選んで撮影またはアップロードします。現場写真は報告書に使えます。" },
+      body: {
+        th: "เลือกหมวดแล้วถ่ายรูปหรืออัปโหลดไฟล์ รูปจากหน้างานใช้ในรายงานได้",
+        en: "Choose a category, then take a photo or upload a file; site photos can go into the report.",
+        jp: "カテゴリを選んで撮影またはアップロードします。現場写真は報告書に使えます。",
+      },
     },
     {
-      target: "visit.findings", action: "next", view: "my-assignments",
+      target: "visit.findings",
+      action: "next",
+      view: "my-assignments",
       title: { th: "สิ่งที่พบ ค่าที่วัด และความเสี่ยง", en: "Findings, measurements and risks", jp: "所見・測定値・リスク" },
       body: { th: "บันทึกสิ่งที่เจอจริง ข้อมูลส่วนนี้ไปอยู่ในรายงานให้เอง", en: "Record what you actually found; it is carried into the report.", jp: "実際の所見を記録します。報告書に自動で反映されます。" },
     },
     {
-      target: "visit.checkout", action: "next", view: "my-assignments",
+      target: "visit.checkout",
+      action: "next",
+      view: "my-assignments",
       title: { th: "เช็คเอาต์", en: "Check out", jp: "チェックアウト" },
-      body: { th: "เสร็จงานแล้วกด 'เช็คเอาต์' ระบบสร้างรายงานเข้าหน้างานให้ทันที", en: "When you finish, press Check out and the visit report is created.", jp: "作業後に「チェックアウト」を押すと訪問報告書が作成されます。" },
+      body: {
+        th: "เสร็จงานแล้วกด 'เช็คเอาต์' ระบบสร้างรายงานเข้าหน้างานให้ทันที",
+        en: "When you finish, press Check out and the visit report is created.",
+        jp: "作業後に「チェックアウト」を押すと訪問報告書が作成されます。",
+      },
       missing: { th: "ปุ่มนี้ขึ้นหลังเช็คอิน และหายไปเมื่อเช็คเอาต์แล้ว", en: "It shows after check-in and disappears once you have checked out.", jp: "チェックイン後に表示され、チェックアウト後は消えます。" },
     },
     {
-      target: "visit.report", action: "next", view: "my-assignments",
+      target: "visit.report",
+      action: "next",
+      view: "my-assignments",
       title: { th: "รายงานการเข้าหน้างาน", en: "Site visit report", jp: "現地訪問報告書" },
-      body: { th: "กรอกสรุปการเข้าหน้างานและข้อสรุปของวิศวกร ต้องมีทั้งสองช่อง กด 'บันทึกฉบับร่าง' ระหว่างทำได้", en: "Fill in the visit summary and the engineer's conclusion, both required. Save draft as you go.", jp: "訪問概要と技術者の結論を入力します(両方必須)。途中で「下書き保存」できます。" },
+      body: {
+        th: "กรอกสรุปการเข้าหน้างานและข้อสรุปของวิศวกร ต้องมีทั้งสองช่อง กด 'บันทึกฉบับร่าง' ระหว่างทำได้",
+        en: "Fill in the visit summary and the engineer's conclusion, both required. Save draft as you go.",
+        jp: "訪問概要と技術者の結論を入力します(両方必須)。途中で「下書き保存」できます。",
+      },
       missing: { th: "รายงานจะถูกสร้างเมื่อเช็คเอาต์", en: "The report is created when you check out.", jp: "報告書はチェックアウト時に作成されます。" },
     },
     {
-      target: "visit.submit", action: "click", view: "my-assignments",
+      target: "visit.submit",
+      action: "click",
+      view: "my-assignments",
       title: { th: "ส่งตรวจสอบ", en: "Submit for review", jp: "レビュー依頼" },
-      body: { th: "กด 'ส่งตรวจสอบ' ก่อนครบกำหนดส่งรายงาน หัวหน้าจะตรวจและอนุมัติ ถ้ายังไม่พร้อม กด 'จบบทสอน' แล้วกลับมาส่งทีหลัง", en: "Press Submit for review before the report is due; your lead reviews and approves it. Not ready? Press Finish and submit later.", jp: "期限前に「レビュー依頼」を押すと上長が確認・承認します。準備ができていなければ「完了」を押し、後で提出します。" },
+      body: {
+        th: "กด 'ส่งตรวจสอบ' ก่อนครบกำหนดส่งรายงาน หัวหน้าจะตรวจและอนุมัติ ถ้ายังไม่พร้อม กด 'จบบทสอน' แล้วกลับมาส่งทีหลัง",
+        en: "Press Submit for review before the report is due; your lead reviews and approves it. Not ready? Press Finish and submit later.",
+        jp: "期限前に「レビュー依頼」を押すと上長が確認・承認します。準備ができていなければ「完了」を押し、後で提出します。",
+      },
     },
   ],
 };
@@ -1737,37 +2357,68 @@ const REPORT_CREATE: Guide = {
   views: ["reports"],
   invite: "reports",
   steps: [
-    menu("reports",
+    menu(
+      "reports",
       { th: "เปิดเมนูรายงานปฏิบัติงาน", en: "Open Operational Reports", jp: "「業務報告書」を開く" },
-      { th: "รายงานถึงลูกค้าทุกฉบับอยู่ที่นี่ คลิกที่เมนูที่ไฮไลต์อยู่", en: "Every report for customers is here. Click the highlighted menu entry.", jp: "顧客向けの報告書はすべてここにあります。強調表示のメニューをクリックします。" }),
+      {
+        th: "รายงานถึงลูกค้าทุกฉบับอยู่ที่นี่ คลิกที่เมนูที่ไฮไลต์อยู่",
+        en: "Every report for customers is here. Click the highlighted menu entry.",
+        jp: "顧客向けの報告書はすべてここにあります。強調表示のメニューをクリックします。",
+      },
+    ),
     {
-      target: "report.start", action: "click", clickOn: ".report-form-choice", view: "reports",
+      target: "report.start",
+      action: "click",
+      clickOn: ".report-form-choice",
+      view: "reports",
       title: { th: "เลือกแบบฟอร์ม", en: "Pick a form", jp: "フォームを選ぶ" },
-      body: { th: "คลิกแบบฟอร์มที่ตรงกับงาน เช่น รายงานบริการ หรือรายงานตรวจสอบ", en: "Click the form that fits the work, such as a service or inspection report.", jp: "作業に合うフォーム(サービス報告、点検報告など)をクリックします。" },
+      body: {
+        th: "คลิกแบบฟอร์มที่ตรงกับงาน เช่น รายงานบริการ หรือรายงานตรวจสอบ",
+        en: "Click the form that fits the work, such as a service or inspection report.",
+        jp: "作業に合うフォーム(サービス報告、点検報告など)をクリックします。",
+      },
       missing: { th: "ถ้าไม่เห็นส่วนนี้ แปลว่าบัญชีนี้ยังไม่มีสิทธิ์สร้างรายงาน", en: "If this part never shows, this account cannot create reports.", jp: "表示されない場合、このアカウントには作成権限がありません。" },
     },
     {
-      target: "report.form", action: "next", view: "reports",
+      target: "report.form",
+      action: "next",
+      view: "reports",
       title: { th: "แบบฟอร์มรายงาน", en: "The report form", jp: "報告書フォーム" },
-      body: { th: "เปลี่ยนแบบฟอร์มได้ที่นี่ หรือใช้ Template ของทีมที่เคยทำไว้", en: "Change the form here, or use one of the team's templates.", jp: "ここでフォームを変更するか、チームのテンプレートを使います。" },
+      body: {
+        th: "เปลี่ยนแบบฟอร์มได้ที่นี่ หรือใช้ Template ของทีมที่เคยทำไว้",
+        en: "Change the form here, or use one of the team's templates.",
+        jp: "ここでフォームを変更するか、チームのテンプレートを使います。",
+      },
     },
     {
-      target: "report.next", action: "click", view: "reports",
+      target: "report.next",
+      action: "click",
+      view: "reports",
       title: { th: "กด 'ถัดไป: เลือกงาน'", en: "Press Next: choose the work", jp: "「次へ:作業を選ぶ」を押す" },
       body: { th: "ไปขั้นเลือกงานที่รายงานนี้เป็นของ", en: "Move on to choosing the work this report belongs to.", jp: "この報告書の対象作業を選ぶ手順へ進みます。" },
     },
     {
-      target: "report.source", action: "next", view: "reports",
+      target: "report.source",
+      action: "next",
+      view: "reports",
       title: { th: "Inquiry หรือโปรเจกต์", en: "Inquiry or project", jp: "引合または案件" },
-      body: { th: "ค้นหาแล้วเลือก Inquiry หรือโปรเจกต์ ลูกค้าและสถานที่จะมาให้เอง", en: "Search and pick the inquiry or project; the customer and site come with it.", jp: "引合または案件を検索して選ぶと、顧客と現場が入ります。" },
+      body: {
+        th: "ค้นหาแล้วเลือก Inquiry หรือโปรเจกต์ ลูกค้าและสถานที่จะมาให้เอง",
+        en: "Search and pick the inquiry or project; the customer and site come with it.",
+        jp: "引合または案件を検索して選ぶと、顧客と現場が入ります。",
+      },
     },
     {
-      target: "report.title", action: "next", view: "reports",
+      target: "report.title",
+      action: "next",
+      view: "reports",
       title: { th: "ชื่อและผู้ตรวจ", en: "Title and reviewers", jp: "件名と確認者" },
       body: { th: "ตั้งชื่อรายงานและวันที่ แล้วเลือกผู้ตรวจและผู้อนุมัติด้านล่าง", en: "Give the title and date, then choose the reviewer and approver below.", jp: "件名と日付を入れ、下で確認者と承認者を選びます。" },
     },
     {
-      target: "report.create", action: "click", view: "reports",
+      target: "report.create",
+      action: "click",
+      view: "reports",
       title: { th: "เปิดแบบฟอร์มเพื่อกรอก", en: "Open the form to fill in", jp: "フォームを開いて入力" },
       body: {
         th: "กดปุ่มนี้ ระบบสร้างรายงานและเปิดให้กรอกผล แนบรูป แล้วกด 'ส่งตรวจสอบ' เมื่ออนุมัติแล้วส่งให้ลูกค้าเซ็นรับทราบได้ ถ้าแค่ฝึก ให้กด 'ยกเลิก' แล้วกด 'จบบทสอน'",
@@ -1792,38 +2443,72 @@ const SIGN_DOCUMENT: Guide = {
   views: ["signing", "documents"],
   invite: "signing",
   steps: [
-    menu("signing",
+    menu(
+      "signing",
       { th: "เปิดเมนูเอกสารรอลงนาม", en: "Open Sign Inbox", jp: "「署名受信箱」を開く" },
-      { th: "เอกสารทุกประเภทที่รอลายเซ็นของคุณอยู่ที่นี่ คลิกที่เมนูที่ไฮไลต์อยู่", en: "Every document waiting for your signature is here. Click the highlighted menu entry.", jp: "署名待ちの文書はすべてここにあります。強調表示のメニューをクリックします。" }),
+      {
+        th: "เอกสารทุกประเภทที่รอลายเซ็นของคุณอยู่ที่นี่ คลิกที่เมนูที่ไฮไลต์อยู่",
+        en: "Every document waiting for your signature is here. Click the highlighted menu entry.",
+        jp: "署名待ちの文書はすべてここにあります。強調表示のメニューをクリックします。",
+      },
+    ),
     {
-      target: "sign.specimen", action: "next", view: "signing",
+      target: "sign.specimen",
+      action: "next",
+      view: "signing",
       title: { th: "ลายเซ็นของคุณ", en: "Your signature", jp: "自分の署名" },
-      body: { th: "ครั้งแรกต้องกด 'สร้างลายเซ็น' วาดหรืออัปโหลดลายเซ็นไว้ใช้ทุกเอกสาร คนอื่นไม่เห็นลายเซ็นนี้", en: "The first time, press Create signature to draw or upload it for every document; nobody else can see it.", jp: "初回は「署名を作成」で署名を描くかアップロードします。他の人には見えません。" },
+      body: {
+        th: "ครั้งแรกต้องกด 'สร้างลายเซ็น' วาดหรืออัปโหลดลายเซ็นไว้ใช้ทุกเอกสาร คนอื่นไม่เห็นลายเซ็นนี้",
+        en: "The first time, press Create signature to draw or upload it for every document; nobody else can see it.",
+        jp: "初回は「署名を作成」で署名を描くかアップロードします。他の人には見えません。",
+      },
       missing: { th: "มีลายเซ็นแล้ว กด 'ถัดไป'", en: "You already have one. Press Next.", jp: "署名は作成済みです。「次へ」を押します。" },
     },
     {
-      target: "sign.waiting", action: "next", view: "signing",
+      target: "sign.waiting",
+      action: "next",
+      view: "signing",
       title: { th: "เอกสารที่รอคุณ", en: "Waiting for you", jp: "自分の署名待ち" },
-      body: { th: "เรียงตามกำหนดส่ง เก่าที่สุดขึ้นก่อน แต่ละแถวบอกว่าต้องลงนามส่วนไหนและแบบไหน", en: "Ordered by due date, oldest first; each row says which block and which mark you are asked for.", jp: "期限順(古い順)に並びます。各行にどの欄・どの印が必要かが表示されます。" },
+      body: {
+        th: "เรียงตามกำหนดส่ง เก่าที่สุดขึ้นก่อน แต่ละแถวบอกว่าต้องลงนามส่วนไหนและแบบไหน",
+        en: "Ordered by due date, oldest first; each row says which block and which mark you are asked for.",
+        jp: "期限順(古い順)に並びます。各行にどの欄・どの印が必要かが表示されます。",
+      },
     },
     {
-      target: "sign.open", action: "click", view: "signing",
+      target: "sign.open",
+      action: "click",
+      view: "signing",
       title: { th: "กด 'เปิดและลงนาม'", en: "Press Open & sign", jp: "「開いて署名」を押す" },
       body: { th: "เปิดเอกสารที่จะลงนาม", en: "It opens the document to sign.", jp: "署名する文書が開きます。" },
       missing: { th: "ยังไม่มีเอกสารรอลายเซ็นของคุณ", en: "No document is waiting for your signature.", jp: "署名待ちの文書はありません。" },
     },
     {
-      target: "sign.file", action: "next", view: "signing",
+      target: "sign.file",
+      action: "next",
+      view: "signing",
       title: { th: "ตรวจไฟล์", en: "Check the file", jp: "ファイルを確認" },
-      body: { th: "ไฟล์นี้แก้ไขไม่ได้ ถ้าต้นฉบับผิดต้องออก revision ใหม่ กดดูตัวอย่างเพื่อตรวจไฟล์และลายเซ็นที่มีอยู่", en: "This file cannot change; a wrong original needs a new revision. Use the preview to check the file and the signatures so far.", jp: "このファイルは変更できません。原本に誤りがあれば新しいリビジョンが必要です。プレビューでファイルと既存の署名を確認します。" },
+      body: {
+        th: "ไฟล์นี้แก้ไขไม่ได้ ถ้าต้นฉบับผิดต้องออก revision ใหม่ กดดูตัวอย่างเพื่อตรวจไฟล์และลายเซ็นที่มีอยู่",
+        en: "This file cannot change; a wrong original needs a new revision. Use the preview to check the file and the signatures so far.",
+        jp: "このファイルは変更できません。原本に誤りがあれば新しいリビジョンが必要です。プレビューでファイルと既存の署名を確認します。",
+      },
     },
     {
-      target: "sign.panel", action: "next", view: "signing",
+      target: "sign.panel",
+      action: "next",
+      view: "signing",
       title: { th: "ตำแหน่งลายเซ็น", en: "Where the signature goes", jp: "署名の位置" },
-      body: { th: "ดูตัวอย่าง ย้าย และย่อขยายลายเซ็นได้ ใส่หมายเหตุได้ หมายเหตุเก็บไว้ในประวัติของเอกสาร", en: "Preview, move and resize the signature, and add a note; the note is kept in the document's history.", jp: "署名をプレビュー・移動・拡大縮小でき、メモも残せます。メモは文書の履歴に保存されます。" },
+      body: {
+        th: "ดูตัวอย่าง ย้าย และย่อขยายลายเซ็นได้ ใส่หมายเหตุได้ หมายเหตุเก็บไว้ในประวัติของเอกสาร",
+        en: "Preview, move and resize the signature, and add a note; the note is kept in the document's history.",
+        jp: "署名をプレビュー・移動・拡大縮小でき、メモも残せます。メモは文書の履歴に保存されます。",
+      },
     },
     {
-      target: "sign.submit", action: "click", view: "signing",
+      target: "sign.submit",
+      action: "click",
+      view: "signing",
       title: { th: "ลงนาม", en: "Sign", jp: "署名" },
       body: {
         th: "กด 'SIGN DOCUMENT' ระบบอาจให้ยืนยันตัวตนอีกครั้ง แล้วส่งต่อให้คนถัดไป ถ้าแค่ฝึก ไม่ต้องกดปุ่มนี้ ให้กด 'จบบทสอน'",
@@ -1848,34 +2533,66 @@ const KNOWLEDGE_FIND: Guide = {
   views: ["knowledge"],
   invite: "knowledge",
   steps: [
-    menu("knowledge",
+    menu(
+      "knowledge",
       { th: "เปิดเมนูศูนย์ความรู้", en: "Open Knowledge Hub", jp: "「ナレッジハブ」を開く" },
-      { th: "มาตรฐาน คู่มือ และความรู้ของทีมอยู่ที่นี่ คลิกที่เมนูที่ไฮไลต์อยู่", en: "The team's standards, procedures and know-how are here. Click the highlighted menu entry.", jp: "チームの標準・手順・ノウハウがここにあります。強調表示のメニューをクリックします。" }),
+      {
+        th: "มาตรฐาน คู่มือ และความรู้ของทีมอยู่ที่นี่ คลิกที่เมนูที่ไฮไลต์อยู่",
+        en: "The team's standards, procedures and know-how are here. Click the highlighted menu entry.",
+        jp: "チームの標準・手順・ノウハウがここにあります。強調表示のメニューをクリックします。",
+      },
+    ),
     {
-      target: "[data-tab=\"register\"]", action: "click", view: "knowledge",
+      target: '[data-tab="register"]',
+      action: "click",
+      view: "knowledge",
       title: { th: "ทะเบียนมาตรฐาน", en: "Standards Register", jp: "標準台帳" },
-      body: { th: "Standard, SOP และ Template ทุกฉบับที่ใช้อยู่ คลิกแท็บนี้", en: "Every standard, SOP and template in force. Click this tab.", jp: "現在有効な標準・SOP・テンプレートの一覧です。このタブをクリックします。" },
+      body: {
+        th: "Standard, SOP และ Template ทุกฉบับที่ใช้อยู่ คลิกแท็บนี้",
+        en: "Every standard, SOP and template in force. Click this tab.",
+        jp: "現在有効な標準・SOP・テンプレートの一覧です。このタブをクリックします。",
+      },
     },
     {
-      target: "kh.search", action: "next", view: "knowledge",
+      target: "kh.search",
+      action: "next",
+      view: "knowledge",
       title: { th: "ค้นหา", en: "Search", jp: "検索" },
       body: { th: "พิมพ์ชื่อ เลขเอกสาร หรือคำในเนื้อหา", en: "Type a title, a document number or a word from it.", jp: "件名・文書番号・本文の語句を入力します。" },
     },
     {
-      target: "kh.register", action: "next", view: "knowledge",
+      target: "kh.register",
+      action: "next",
+      view: "knowledge",
       title: { th: "เอกสารและ revision ปัจจุบัน", en: "Documents and their current revision", jp: "文書と最新リビジョン" },
-      body: { th: "หนึ่งแถวคือหนึ่งเอกสาร แสดง revision ที่ใช้อยู่ คลิกเลขเอกสารหรือชื่อเพื่อเปิดอ่านหรือดาวน์โหลด", en: "One row per document with the revision in force; click its number or title to read or download it.", jp: "1行が1文書で、有効なリビジョンが表示されます。文書番号または件名をクリックすると閲覧・ダウンロードできます。" },
+      body: {
+        th: "หนึ่งแถวคือหนึ่งเอกสาร แสดง revision ที่ใช้อยู่ คลิกเลขเอกสารหรือชื่อเพื่อเปิดอ่านหรือดาวน์โหลด",
+        en: "One row per document with the revision in force; click its number or title to read or download it.",
+        jp: "1行が1文書で、有効なリビジョンが表示されます。文書番号または件名をクリックすると閲覧・ダウンロードできます。",
+      },
     },
     {
-      target: "[data-tab=\"acknowledgements\"]", action: "click", view: "knowledge",
+      target: '[data-tab="acknowledgements"]',
+      action: "click",
+      view: "knowledge",
       title: { th: "รายการรับทราบของฉัน", en: "My Acknowledgements", jp: "自分の確認項目" },
       body: { th: "เอกสารที่คุณต้องอ่านและกดรับทราบอยู่ที่แท็บนี้", en: "Documents you must read and acknowledge are on this tab.", jp: "読んで確認する必要がある文書はこのタブにあります。" },
     },
     {
-      target: "kh.new", action: "click", view: "knowledge",
+      target: "kh.new",
+      action: "click",
+      view: "knowledge",
       title: { th: "เพิ่มเอกสารใหม่", en: "Add a document", jp: "文書を追加" },
-      body: { th: "กด 'เอกสารใหม่' เอกสารผ่านการตรวจและอนุมัติก่อนเผยแพร่ ถ้าแค่หาเอกสาร กด 'จบบทสอน'", en: "Press New Document; it is reviewed and approved before it is published. Only looking? Press Finish.", jp: "「新規文書」を押します。レビューと承認を経て公開されます。探すだけなら「完了」を押します。" },
-      missing: { th: "ปุ่มนี้ขึ้นสำหรับคนที่เขียนเอกสารได้ กด 'จบบทสอน' ได้เลย", en: "The button shows for people who may write documents. Press Finish.", jp: "文書を作成できる人に表示されます。「完了」を押します。" },
+      body: {
+        th: "กด 'เอกสารใหม่' เอกสารผ่านการตรวจและอนุมัติก่อนเผยแพร่ ถ้าแค่หาเอกสาร กด 'จบบทสอน'",
+        en: "Press New Document; it is reviewed and approved before it is published. Only looking? Press Finish.",
+        jp: "「新規文書」を押します。レビューと承認を経て公開されます。探すだけなら「完了」を押します。",
+      },
+      missing: {
+        th: "ปุ่มนี้ขึ้นสำหรับคนที่เขียนเอกสารได้ กด 'จบบทสอน' ได้เลย",
+        en: "The button shows for people who may write documents. Press Finish.",
+        jp: "文書を作成できる人に表示されます。「完了」を押します。",
+      },
     },
   ],
 };
@@ -1894,40 +2611,82 @@ const DOWNLOADS: Guide = {
   views: ["downloads"],
   invite: "downloads",
   steps: [
-    menu("downloads",
+    menu(
+      "downloads",
       { th: "เปิดเมนูศูนย์ดาวน์โหลด", en: "Open Download Center", jp: "「ダウンロードセンター」を開く" },
-      { th: "โปรแกรม ไฟล์ และ skill ของแผนกอยู่ที่นี่ คลิกที่เมนูที่ไฮไลต์อยู่", en: "The department's software, files and skills are here. Click the highlighted menu entry.", jp: "部門のソフト・ファイル・スキルがここにあります。強調表示のメニューをクリックします。" }),
+      {
+        th: "โปรแกรม ไฟล์ และ skill ของแผนกอยู่ที่นี่ คลิกที่เมนูที่ไฮไลต์อยู่",
+        en: "The department's software, files and skills are here. Click the highlighted menu entry.",
+        jp: "部門のソフト・ファイル・スキルがここにあります。強調表示のメニューをクリックします。",
+      },
+    ),
     {
-      target: "[data-tab=\"files\"]", action: "click", view: "downloads",
+      target: '[data-tab="files"]',
+      action: "click",
+      view: "downloads",
       title: { th: "โปรแกรมและไฟล์", en: "Software & files", jp: "ソフトウェアとファイル" },
-      body: { th: "ไฟล์จากโฟลเดอร์ดาวน์โหลดบน NAS แบ่งตามหมวด คลิกแท็บนี้", en: "Files from the NAS download folder, by category. Click this tab.", jp: "NASのダウンロードフォルダのファイルがカテゴリ別に並びます。このタブをクリックします。" },
+      body: {
+        th: "ไฟล์จากโฟลเดอร์ดาวน์โหลดบน NAS แบ่งตามหมวด คลิกแท็บนี้",
+        en: "Files from the NAS download folder, by category. Click this tab.",
+        jp: "NASのダウンロードフォルダのファイルがカテゴリ別に並びます。このタブをクリックします。",
+      },
     },
     {
-      target: "dl.search", action: "next", view: "downloads",
+      target: "dl.search",
+      action: "next",
+      view: "downloads",
       title: { th: "ค้นหาไฟล์", en: "Find a file", jp: "ファイルを探す" },
       body: { th: "พิมพ์ชื่อโปรแกรมหรือไฟล์", en: "Type the program or file name.", jp: "ソフト名またはファイル名を入力します。" },
     },
     {
-      target: "dl.file", action: "next", view: "downloads",
+      target: "dl.file",
+      action: "next",
+      view: "downloads",
       title: { th: "ดาวน์โหลด", en: "Download", jp: "ダウンロード" },
-      body: { th: "กดไอคอนดาวน์โหลดหน้าชื่อไฟล์ ระบบนับจำนวนครั้งที่ดาวน์โหลดให้ทีมเห็นว่าไฟล์ไหนใช้บ่อย", en: "Press the download icon in front of the file's name; downloads are counted so the team sees what is used.", jp: "ファイル名の左にあるダウンロードアイコンを押します。回数が数えられ、よく使うファイルが分かります。" },
+      body: {
+        th: "กดไอคอนดาวน์โหลดหน้าชื่อไฟล์ ระบบนับจำนวนครั้งที่ดาวน์โหลดให้ทีมเห็นว่าไฟล์ไหนใช้บ่อย",
+        en: "Press the download icon in front of the file's name; downloads are counted so the team sees what is used.",
+        jp: "ファイル名の左にあるダウンロードアイコンを押します。回数が数えられ、よく使うファイルが分かります。",
+      },
       missing: { th: "ยังไม่มีไฟล์ในหมวดที่เปิดอยู่ กด 'ถัดไป'", en: "No file in the open category yet. Press Next.", jp: "開いているカテゴリにファイルがありません。「次へ」を押します。" },
     },
     {
-      target: "[data-tab=\"skills\"]", action: "click", view: "downloads",
+      target: '[data-tab="skills"]',
+      action: "click",
+      view: "downloads",
       title: { th: "Skill Hub", en: "Skill Hub", jp: "Skill Hub" },
-      body: { th: "skill สำหรับ Claude Code และ Codex ที่ทีมทำไว้ คลิกแท็บนี้", en: "The team's skills for Claude Code and Codex. Click this tab.", jp: "チームが作ったClaude Code・Codex用スキルです。このタブをクリックします。" },
+      body: {
+        th: "skill สำหรับ Claude Code และ Codex ที่ทีมทำไว้ คลิกแท็บนี้",
+        en: "The team's skills for Claude Code and Codex. Click this tab.",
+        jp: "チームが作ったClaude Code・Codex用スキルです。このタブをクリックします。",
+      },
     },
     {
-      target: "skill.search", action: "next", view: "downloads",
+      target: "skill.search",
+      action: "next",
+      view: "downloads",
       title: { th: "ค้นหา skill", en: "Find a skill", jp: "スキルを探す" },
-      body: { th: "พิมพ์ชื่อหรืองานที่อยากให้ AI ช่วย แล้วเลือก skill จากรายการ", en: "Type a name or the job you want help with, then pick a skill from the list.", jp: "名前や手伝ってほしい作業を入力し、一覧からスキルを選びます。" },
+      body: {
+        th: "พิมพ์ชื่อหรืองานที่อยากให้ AI ช่วย แล้วเลือก skill จากรายการ",
+        en: "Type a name or the job you want help with, then pick a skill from the list.",
+        jp: "名前や手伝ってほしい作業を入力し、一覧からスキルを選びます。",
+      },
     },
     {
-      target: "skill.install", action: "click", view: "downloads",
+      target: "skill.install",
+      action: "click",
+      view: "downloads",
       title: { th: "ติดตั้ง", en: "Install", jp: "インストール" },
-      body: { th: "กด 'ติดตั้งสำหรับ Claude' หรือ 'ติดตั้งสำหรับ Codex' ได้ไฟล์ติดตั้ง เปิดไฟล์แล้ว skill จะพร้อมใช้", en: "Press Install for Claude or Install for Codex to get the installer; run it and the skill is ready.", jp: "「Claude にインストール」または「Codex にインストール」でインストーラーを取得し、実行すると使えます。" },
-      missing: { th: "เลือก skill ในรายการก่อน แล้วปุ่มติดตั้งจะขึ้น", en: "Pick a skill from the list first; the install buttons then appear.", jp: "先に一覧からスキルを選ぶとインストールボタンが表示されます。" },
+      body: {
+        th: "กด 'ติดตั้งสำหรับ Claude' หรือ 'ติดตั้งสำหรับ Codex' ได้ไฟล์ติดตั้ง เปิดไฟล์แล้ว skill จะพร้อมใช้",
+        en: "Press Install for Claude or Install for Codex to get the installer; run it and the skill is ready.",
+        jp: "「Claude にインストール」または「Codex にインストール」でインストーラーを取得し、実行すると使えます。",
+      },
+      missing: {
+        th: "เลือก skill ในรายการก่อน แล้วปุ่มติดตั้งจะขึ้น",
+        en: "Pick a skill from the list first; the install buttons then appear.",
+        jp: "先に一覧からスキルを選ぶとインストールボタンが表示されます。",
+      },
     },
   ],
 };
@@ -1947,34 +2706,67 @@ const SITE_MONITOR: Guide = {
   invite: "site-monitor",
   browse: true,
   steps: [
-    menu("site-monitor",
+    menu(
+      "site-monitor",
       { th: "เปิดเมนู Site Monitor", en: "Open Site Monitor", jp: "「サイトモニター」を開く" },
-      { th: "ทุกไซต์ที่ติดตั้ง TMT Control Panel อยู่ที่นี่ คลิกที่เมนูที่ไฮไลต์อยู่", en: "Every site running TMT Control Panel is here. Click the highlighted menu entry.", jp: "TMT Control Panelを導入したサイトがすべてここにあります。強調表示のメニューをクリックします。" }),
+      {
+        th: "ทุกไซต์ที่ติดตั้ง TMT Control Panel อยู่ที่นี่ คลิกที่เมนูที่ไฮไลต์อยู่",
+        en: "Every site running TMT Control Panel is here. Click the highlighted menu entry.",
+        jp: "TMT Control Panelを導入したサイトがすべてここにあります。強調表示のメニューをクリックします。",
+      },
+    ),
     {
-      target: "mon.sites", action: "click", clickOn: "tbody tr", view: "site-monitor",
+      target: "mon.sites",
+      action: "click",
+      clickOn: "tbody tr",
+      view: "site-monitor",
       title: { th: "เปิดไซต์", en: "Open a site", jp: "サイトを開く" },
-      body: { th: "คลิกแถวของไซต์ที่จะดู สีบอกว่าไซต์ไหนมีปัญหา", en: "Click the site's row; the colours show which sites have problems.", jp: "確認するサイトの行をクリックします。色で問題のあるサイトが分かります。" },
+      body: {
+        th: "คลิกแถวของไซต์ที่จะดู สีบอกว่าไซต์ไหนมีปัญหา",
+        en: "Click the site's row; the colours show which sites have problems.",
+        jp: "確認するサイトの行をクリックします。色で問題のあるサイトが分かります。",
+      },
     },
     {
-      target: "mon.problems", action: "next", view: "site-monitor",
+      target: "mon.problems",
+      action: "next",
+      view: "site-monitor",
       title: { th: "ปัญหาที่ยังเปิดอยู่", en: "Open problems", jp: "未解決の問題" },
       body: { th: "ปัญหาที่ระบบเจอและยังไม่ได้แก้ เรียงจากรุนแรงที่สุด", en: "Problems found and not yet fixed, most severe first.", jp: "検出されて未解決の問題が重大度順に並びます。" },
       missing: { th: "ไซต์นี้ไม่มีปัญหาค้าง กด 'ถัดไป'", en: "No open problems at this site. Press Next.", jp: "このサイトに未解決の問題はありません。「次へ」を押します。" },
     },
     {
-      target: "mon.programs", action: "next", view: "site-monitor",
+      target: "mon.programs",
+      action: "next",
+      view: "site-monitor",
       title: { th: "โปรแกรมและ Service", en: "Programs & services", jp: "プログラムとサービス" },
-      body: { th: "สถานะของแต่ละโปรแกรม คนที่มีสิทธิ์สั่ง Start, Stop หรือ Restart จากที่นี่ได้โดยไม่ต้องไปหน้างาน", en: "Each program's state. People with control rights can Start, Stop or Restart it from here without going on site.", jp: "各プログラムの状態です。権限がある人は現地に行かずに開始・停止・再起動できます。" },
+      body: {
+        th: "สถานะของแต่ละโปรแกรม คนที่มีสิทธิ์สั่ง Start, Stop หรือ Restart จากที่นี่ได้โดยไม่ต้องไปหน้างาน",
+        en: "Each program's state. People with control rights can Start, Stop or Restart it from here without going on site.",
+        jp: "各プログラムの状態です。権限がある人は現地に行かずに開始・停止・再起動できます。",
+      },
     },
     {
-      target: "mon.responsible", action: "next", view: "site-monitor",
+      target: "mon.responsible",
+      action: "next",
+      view: "site-monitor",
       title: { th: "ผู้ดูแล", en: "Responsible people", jp: "担当者" },
-      body: { th: "ผู้ดูแลลำดับ 1-2-3 ได้อีเมลตามลำดับเมื่อมีปัญหาและยังไม่มีคนรับเรื่อง", en: "Responsible people 1, 2 and 3 are emailed in turn while a problem stays unanswered.", jp: "問題に対応がない間、担当者1・2・3の順にメールが届きます。" },
+      body: {
+        th: "ผู้ดูแลลำดับ 1-2-3 ได้อีเมลตามลำดับเมื่อมีปัญหาและยังไม่มีคนรับเรื่อง",
+        en: "Responsible people 1, 2 and 3 are emailed in turn while a problem stays unanswered.",
+        jp: "問題に対応がない間、担当者1・2・3の順にメールが届きます。",
+      },
     },
     {
-      target: "mon.logs", action: "next", view: "site-monitor",
+      target: "mon.logs",
+      action: "next",
+      view: "site-monitor",
       title: { th: "Log", en: "Logs", jp: "ログ" },
-      body: { th: "Log ที่ TMT Control Panel ส่งมา ค้นหาได้ ใช้ดูว่าเกิดอะไรก่อนมีปัญหา", en: "The logs TMT Control Panel sent, searchable, to see what happened before a problem.", jp: "TMT Control Panelから届いたログを検索でき、問題前の状況を確認できます。" },
+      body: {
+        th: "Log ที่ TMT Control Panel ส่งมา ค้นหาได้ ใช้ดูว่าเกิดอะไรก่อนมีปัญหา",
+        en: "The logs TMT Control Panel sent, searchable, to see what happened before a problem.",
+        jp: "TMT Control Panelから届いたログを検索でき、問題前の状況を確認できます。",
+      },
     },
   ],
 };
@@ -1993,49 +2785,103 @@ const ASSET_REGISTER: Guide = {
   views: ["installed-base"],
   invite: "installed-base",
   steps: [
-    menu("installed-base",
+    menu(
+      "installed-base",
       { th: "เปิดเมนูทะเบียนอุปกรณ์ลูกค้า", en: "Open Installed Base", jp: "「納入機器台帳」を開く" },
-      { th: "อุปกรณ์และซอฟต์แวร์ที่ติดตั้งให้ลูกค้าทั้งหมดอยู่ที่นี่ คลิกที่เมนูที่ไฮไลต์อยู่", en: "Everything installed for customers is here. Click the highlighted menu entry.", jp: "顧客に納入した機器とソフトがすべてここにあります。強調表示のメニューをクリックします。" }),
+      {
+        th: "อุปกรณ์และซอฟต์แวร์ที่ติดตั้งให้ลูกค้าทั้งหมดอยู่ที่นี่ คลิกที่เมนูที่ไฮไลต์อยู่",
+        en: "Everything installed for customers is here. Click the highlighted menu entry.",
+        jp: "顧客に納入した機器とソフトがすべてここにあります。強調表示のメニューをクリックします。",
+      },
+    ),
     {
-      target: "asset.new", action: "click", view: "installed-base",
+      target: "asset.new",
+      action: "click",
+      view: "installed-base",
       title: { th: "กด 'ลงทะเบียนอุปกรณ์'", en: "Press Register asset", jp: "「機器を登録」を押す" },
       body: { th: "เปิดฟอร์มอุปกรณ์ใหม่ ระบบออกเลขทะเบียนให้", en: "It opens the form for a new asset; the asset number is given for you.", jp: "新しい機器のフォームが開きます。機器番号は自動で付きます。" },
-      missing: { th: "ถ้าไม่มีปุ่มนี้ แปลว่าบัญชีนี้ยังไม่มีสิทธิ์ลงทะเบียนอุปกรณ์", en: "If the button never appears, this account cannot register assets.", jp: "ボタンが表示されない場合、このアカウントには登録権限がありません。" },
+      missing: {
+        th: "ถ้าไม่มีปุ่มนี้ แปลว่าบัญชีนี้ยังไม่มีสิทธิ์ลงทะเบียนอุปกรณ์",
+        en: "If the button never appears, this account cannot register assets.",
+        jp: "ボタンが表示されない場合、このアカウントには登録権限がありません。",
+      },
     },
     {
-      target: "asset.name", action: "next", view: "installed-base",
+      target: "asset.name",
+      action: "next",
+      view: "installed-base",
       title: { th: "ชื่อ ประเภท และสถานะ", en: "Name, category and status", jp: "名称・種別・状態" },
-      body: { th: "ตั้งชื่อที่ลูกค้าและทีมเรียกกัน แล้วเลือกประเภทและสถานะ", en: "Use the name the customer and the team call it, then pick its category and status.", jp: "顧客とチームが呼ぶ名前を付け、種別と状態を選びます。" },
+      body: {
+        th: "ตั้งชื่อที่ลูกค้าและทีมเรียกกัน แล้วเลือกประเภทและสถานะ",
+        en: "Use the name the customer and the team call it, then pick its category and status.",
+        jp: "顧客とチームが呼ぶ名前を付け、種別と状態を選びます。",
+      },
     },
     {
-      target: "asset.customer", action: "next", view: "installed-base",
+      target: "asset.customer",
+      action: "next",
+      view: "installed-base",
       title: { th: "ลูกค้าและที่ตั้ง", en: "Customer and location", jp: "顧客と設置場所" },
-      body: { th: "เลือกลูกค้าและ Site ของลูกค้า ถ้าอยู่ในตู้ เลือกตู้และตำแหน่งด้านล่าง", en: "Choose the customer and their site; if it sits in a cabinet, choose the cabinet and position below.", jp: "顧客と顧客拠点を選びます。盤内にある場合は下で盤と位置を選びます。" },
+      body: {
+        th: "เลือกลูกค้าและ Site ของลูกค้า ถ้าอยู่ในตู้ เลือกตู้และตำแหน่งด้านล่าง",
+        en: "Choose the customer and their site; if it sits in a cabinet, choose the cabinet and position below.",
+        jp: "顧客と顧客拠点を選びます。盤内にある場合は下で盤と位置を選びます。",
+      },
     },
     {
-      target: "asset.project", action: "next", view: "installed-base",
+      target: "asset.project",
+      action: "next",
+      view: "installed-base",
       title: { th: "โปรเจกต์", en: "Project", jp: "案件" },
-      body: { th: "โปรเจกต์ที่ติดตั้งอุปกรณ์นี้ ใช้ย้อนดูงานเดิมเมื่อลูกค้าแจ้งปัญหา", en: "The project that installed it, for looking back when the customer reports a problem.", jp: "この機器を納入した案件です。顧客から問題が来たときに経緯をたどれます。" },
+      body: {
+        th: "โปรเจกต์ที่ติดตั้งอุปกรณ์นี้ ใช้ย้อนดูงานเดิมเมื่อลูกค้าแจ้งปัญหา",
+        en: "The project that installed it, for looking back when the customer reports a problem.",
+        jp: "この機器を納入した案件です。顧客から問題が来たときに経緯をたどれます。",
+      },
     },
     {
-      target: "asset.serial", action: "next", view: "installed-base",
+      target: "asset.serial",
+      action: "next",
+      view: "installed-base",
       title: { th: "ข้อมูลเครื่อง", en: "Machine details", jp: "機器情報" },
-      body: { th: "ผู้ผลิต รุ่น Serial number, IP และเวอร์ชัน ใช้ตอนซ่อมหรืออัปเดต", en: "Maker, model, serial number, IP and version, for repairs and updates.", jp: "メーカー・型式・シリアル番号・IP・バージョンです。修理や更新時に使います。" },
+      body: {
+        th: "ผู้ผลิต รุ่น Serial number, IP และเวอร์ชัน ใช้ตอนซ่อมหรืออัปเดต",
+        en: "Maker, model, serial number, IP and version, for repairs and updates.",
+        jp: "メーカー・型式・シリアル番号・IP・バージョンです。修理や更新時に使います。",
+      },
     },
     {
-      target: "asset.warranty", action: "next", view: "installed-base",
+      target: "asset.warranty",
+      action: "next",
+      view: "installed-base",
       title: { th: "วันติดตั้งและประกัน", en: "Installed and warranty", jp: "設置日と保証" },
-      body: { th: "ใส่วันติดตั้งและวันหมดประกัน เพื่อรู้ว่างานซ่อมคิดเงินหรืออยู่ในประกัน", en: "Enter the installation date and warranty end, so a repair is known to be billable or under warranty.", jp: "設置日と保証期限を入れると、修理が有償か保証内かが分かります。" },
+      body: {
+        th: "ใส่วันติดตั้งและวันหมดประกัน เพื่อรู้ว่างานซ่อมคิดเงินหรืออยู่ในประกัน",
+        en: "Enter the installation date and warranty end, so a repair is known to be billable or under warranty.",
+        jp: "設置日と保証期限を入れると、修理が有償か保証内かが分かります。",
+      },
     },
     {
-      target: "asset.monitor", action: "next", view: "installed-base",
+      target: "asset.monitor",
+      action: "next",
+      view: "installed-base",
       title: { th: "Site ใน Site Monitor", en: "Site Monitor site", jp: "サイトモニターのサイト" },
-      body: { th: "ถ้าไซต์นี้มี TMT Control Panel ผูกไว้ จะเห็นสถานะเครื่องจริงจากหน้าอุปกรณ์", en: "If the site runs TMT Control Panel, link it to see the live status from the asset.", jp: "サイトにTMT Control Panelがあれば関連付けると、機器画面から稼働状態を見られます。" },
+      body: {
+        th: "ถ้าไซต์นี้มี TMT Control Panel ผูกไว้ จะเห็นสถานะเครื่องจริงจากหน้าอุปกรณ์",
+        en: "If the site runs TMT Control Panel, link it to see the live status from the asset.",
+        jp: "サイトにTMT Control Panelがあれば関連付けると、機器画面から稼働状態を見られます。",
+      },
     },
     {
-      target: "asset.save", action: "click", view: "installed-base",
+      target: "asset.save",
+      action: "click",
+      view: "installed-base",
       title: { th: "บันทึก", en: "Save", jp: "保存" },
-      body: { th: "กด 'บันทึก' อุปกรณ์จะขึ้นในทะเบียนพร้อมประวัติ ถ้าแค่ฝึก ให้กด 'ยกเลิก' แล้วกด 'จบบทสอน'", en: "Press Save and the asset joins the register with its history. Only practising? Press Cancel, then Finish.", jp: "「保存」を押すと履歴付きで台帳に載ります。練習だけなら「キャンセル」を押してから「完了」を押します。" },
+      body: {
+        th: "กด 'บันทึก' อุปกรณ์จะขึ้นในทะเบียนพร้อมประวัติ ถ้าแค่ฝึก ให้กด 'ยกเลิก' แล้วกด 'จบบทสอน'",
+        en: "Press Save and the asset joins the register with its history. Only practising? Press Cancel, then Finish.",
+        jp: "「保存」を押すと履歴付きで台帳に載ります。練習だけなら「キャンセル」を押してから「完了」を押します。",
+      },
     },
   ],
 };
@@ -2059,11 +2905,15 @@ const ERP_MASTER_DATA: Guide = {
   views: ["crm-customers"],
   browse: true,
   steps: [
-    menu("crm-customers",
+    menu(
+      "crm-customers",
       { th: "เปิดเมนูลูกค้า · 360°", en: "Open Customers · 360°", jp: "「顧客 · 360°」を開く" },
-      { th: "ลูกค้าทุกรายอยู่ที่นี่ คลิกที่เมนูที่ไฮไลต์อยู่", en: "Every customer is here. Click the highlighted menu entry.", jp: "すべての顧客がここにあります。強調表示のメニューをクリックします。" }),
+      { th: "ลูกค้าทุกรายอยู่ที่นี่ คลิกที่เมนูที่ไฮไลต์อยู่", en: "Every customer is here. Click the highlighted menu entry.", jp: "すべての顧客がここにあります。強調表示のメニューをクリックします。" },
+    ),
     {
-      target: "erp.status", action: "next", view: "crm-customers",
+      target: "erp.status",
+      action: "next",
+      view: "crm-customers",
       title: { th: "ข้อมูลจากทะเบียนกลาง", en: "From the company register", jp: "会社の台帳のデータ" },
       body: {
         th: "เมื่อเปิดหน้านี้ ระบบดึงทะเบียนลูกค้าจาก Master data ของบริษัท ทั้งระบบดึงไม่เกิน 1 ครั้งต่อ 15 นาที ลูกค้าในทะเบียนกลางที่แอปยังไม่มีจะถูกเพิ่มให้เอง แถบนี้บอกเวลาที่ดึงล่าสุด จำนวนที่ผูกกับทะเบียนกลาง และจำนวนที่มีเฉพาะในแอป",
@@ -2077,7 +2927,9 @@ const ERP_MASTER_DATA: Guide = {
       },
     },
     {
-      target: "crm.customer-list", action: "next", view: "crm-customers",
+      target: "crm.customer-list",
+      action: "next",
+      view: "crm-customers",
       title: { th: "คอลัมน์รหัส ERP", en: "The ERP code column", jp: "ERPコード列" },
       body: {
         th: "ลูกค้าที่มีรหัส ERP มาจากทะเบียนกลาง (รหัสเดียวกับใน ERP) ช่องที่ว่างคือลูกค้าที่มีเฉพาะในแอป เช่น ลูกค้าที่ยังอยู่ช่วงเสนองาน เมื่อทะเบียนกลางเปิดรายการนั้นแล้ว ระบบจะผูกให้เอง",
@@ -2086,7 +2938,8 @@ const ERP_MASTER_DATA: Guide = {
       },
     },
     {
-      action: "next", view: "crm-customers",
+      action: "next",
+      view: "crm-customers",
       title: { th: "แก้อะไรได้บ้าง", en: "What you can still change", jp: "変更できる項目" },
       body: {
         th: "ลูกค้าที่มาจากทะเบียนกลาง: ชื่อไทยและอังกฤษ ที่อยู่ และสถานะใช้งาน แก้ได้ที่ทะเบียนกลางเท่านั้น และลบในแอปไม่ได้ ให้ปิดที่ทะเบียนกลางแทน ชื่อภาษาญี่ปุ่น ผู้ติดต่อ Site และผู้ดูแลลูกค้ายังแก้ในแอปได้ตามเดิม ซัพพลายเออร์ในเมนู Suppliers ทำงานแบบเดียวกัน โดยล็อกเฉพาะชื่อ",
@@ -2095,7 +2948,9 @@ const ERP_MASTER_DATA: Guide = {
       },
     },
     {
-      target: "erp.review", action: "next", view: "crm-customers",
+      target: "erp.review",
+      action: "next",
+      view: "crm-customers",
       title: { th: "Admin: ยืนยันรายการที่จับคู่ไม่ได้", en: "Admin: confirm what did not match", jp: "Admin：照合できなかったものを確認" },
       body: {
         th: "ลูกค้าจากทะเบียนกลางที่คล้ายลูกค้าในแอปมากกว่าหนึ่งราย หรือคล้ายแต่ยังไม่แน่ใจ จะรอที่ปุ่ม 'รอยืนยัน' กดแล้วเลือกรายการในแอปที่ถูกต้อง กด 'ผูกกับรายการที่เลือก' หรือกด 'เพิ่มเป็นรายการใหม่' ถ้าเป็นลูกค้ารายใหม่จริง",
@@ -2132,7 +2987,9 @@ const MENU_FAVORITES: Guide = {
   browse: true,
   steps: [
     {
-      target: "nav.star", action: "next", view: "my-work",
+      target: "nav.star",
+      action: "next",
+      view: "my-work",
       title: { th: "ชี้ที่เมนู แล้วกดรูปดาว", en: "Point at an entry and press its star", jp: "メニューに合わせて星を押す" },
       body: {
         th: "เมื่อชี้ที่เมนูใดก็ได้ จะมีรูปดาวขึ้นทางขวาของเมนูนั้น กดรูปดาวเพื่อเพิ่มเมนูในรายการโปรด ดาวที่ติดแล้วเป็นสีเหลืองและแสดงค้างไว้",
@@ -2142,7 +2999,9 @@ const MENU_FAVORITES: Guide = {
       missing: menuHidden,
     },
     {
-      target: "nav.favorites", action: "next", view: "my-work",
+      target: "nav.favorites",
+      action: "next",
+      view: "my-work",
       title: { th: "รายการโปรด", en: "Favourites", jp: "お気に入り" },
       body: {
         th: "เมนูที่ติดดาวจะเรียงที่นี่ตามลำดับที่กด พร้อมตัวเลขแจ้งเตือนเหมือนเมนูเดิม คลิกเพื่อเปิดหน้านั้นได้ทันที เมนูเดิมยังอยู่ในกลุ่มของมันเหมือนเดิม",
@@ -2152,7 +3011,8 @@ const MENU_FAVORITES: Guide = {
       missing: menuHidden,
     },
     {
-      action: "next", view: "my-work",
+      action: "next",
+      view: "my-work",
       title: { th: "เอาออก และจำนวนสูงสุด", en: "Removing, and the limit", jp: "外し方と上限" },
       body: {
         th: "กดรูปดาวสีเหลืองอีกครั้งเพื่อเอาเมนูออกจากรายการโปรด ติดดาวได้สูงสุด 8 เมนู เมื่อครบแล้วต้องเอาออกก่อนจึงจะเพิ่มใหม่ได้ รายการโปรดเป็นของแต่ละคนและเหมือนกันทุกเครื่อง",
@@ -2168,25 +3028,79 @@ const MENU_FAVORITES: Guide = {
  * fails when a menu screen has neither a guide nor an entry here, so a new screen cannot ship without one or the other.
  */
 export const NO_GUIDE: Readonly<Record<string, string>> = {
-  "dashboard": "Read-only overview; each tile opens a screen that has its own guide.",
+  dashboard: "Read-only overview; each tile opens a screen that has its own guide.",
   "crm-contacts": "Contacts are searched and added from the deal form (crm-deal-create).",
-  "missing": "Read-only list of estimate lines still waiting for a supplier price; prices arrive through supplier-quotation.",
-  "stamps": "Company stamp authority set up by admins.",
-  "activity": "Read-only team activity for heads.",
-  "performance": "KPI reviews are written by heads in a review cycle; add a guide when that flow next changes.",
+  missing: "Read-only list of estimate lines still waiting for a supplier price; prices arrive through supplier-quotation.",
+  stamps: "Company stamp authority set up by admins.",
+  activity: "Read-only team activity for heads.",
+  performance: "KPI reviews are written by heads in a review cycle; add a guide when that flow next changes.",
   "summary-reports": "Read-only report analytics.",
-  "customers": "Master data kept by admins; staff with CRM use the CRM customer screens.",
-  "suppliers": "Master data kept by admins.",
-  "employees": "Master data kept by admins.",
+  customers: "Master data kept by admins; staff with CRM use the CRM customer screens.",
   "visit-master": "Reference data for site visits, kept by coordinators.",
   "schedule-templates": "Master schedules kept by planners; used from project-create.",
   "module-templates": "Estimate templates kept by estimating leads; used from estimate-create.",
   "labor-packages": "Labour packages are saved and applied from the estimate's labour tab (estimate-create).",
-  "rates": "Labour rate master kept by estimating leads.",
+  rates: "Labour rate master kept by estimating leads.",
   "user-accounts": "Admin-only account and role management.",
-  "audit": "Admin-only audit log.",
-  "settings": "Admin-only settings.",
-  "manual": "The full illustrated manual, opened from the ? menu in the top bar; the guide list links to it.",
+  audit: "Admin-only audit log.",
+  settings: "Admin-only settings.",
+  manual: "The full illustrated manual, opened from the ? menu in the top bar; the guide list links to it.",
+};
+
+/*
+ * The header funnel of the Pegasus lists (Suppliers and Employees, 2026-11-21): the list is searched, filtered and paged on
+ * the server, and a column is filtered from the funnel beside its name. Nothing is saved, so the last step is a note.
+ */
+const LIST_COLUMN_FILTER: Guide = {
+  id: "list-column-filter",
+  area: "tools",
+  title: { th: "กรองรายการจากหัวคอลัมน์", en: "Filter a list from its column header", jp: "列見出しから一覧を絞り込む" },
+  summary: {
+    th: "ใช้รูปกรวยข้างชื่อคอลัมน์ในหน้าผู้ขายและพนักงาน เลือกได้หลายค่า แล้วล้างตัวกรองเมื่อต้องการดูทั้งหมด",
+    en: "Use the funnel beside a column name on Suppliers and Employees: pick one or more values, then clear it to see everything again.",
+    jp: "仕入先と従業員の画面で列名の横のじょうごを使い、値を1つ以上選び、すべて表示するときは解除します。",
+  },
+  minutes: 1,
+  permissions: ["master.read"],
+  views: ["suppliers", "employees"],
+  browse: true,
+  steps: [
+    menu(
+      "suppliers",
+      { th: "เปิดเมนูผู้ขาย", en: "Open Suppliers", jp: "「仕入先」を開く" },
+      {
+        th: "รายการผู้ขายค้นหา กรอง และแบ่งหน้าที่เซิร์ฟเวอร์ คลิกที่เมนูที่ไฮไลต์อยู่",
+        en: "The supplier list is searched, filtered and paged on the server. Click the highlighted menu entry.",
+        jp: "仕入先の一覧はサーバーで検索・絞り込み・ページ分けされます。強調表示のメニューをクリックします。",
+      },
+    ),
+    {
+      target: "list.columnFilter",
+      action: "click",
+      view: "suppliers",
+      title: { th: "กดรูปกรวยข้างหัวคอลัมน์", en: "Press the funnel beside the column name", jp: "列名の横のじょうごを押す" },
+      body: {
+        th: "รูปกรวยจางๆ ข้างหัวคอลัมน์ Category คือตัวกรองของคอลัมน์นั้น กดแล้วจะเห็นค่าที่มีในทะเบียน พร้อมจำนวนรายการของแต่ละค่า",
+        en: "The faint funnel beside Category is that column's filter. Pressing it lists the values in the register with how many records carry each.",
+        jp: "Category の横の薄いじょうごがその列の絞り込みです。押すと台帳にある値と、それぞれの件数が表示されます。",
+      },
+      missing: {
+        th: "ถ้าไม่เห็นตาราง ให้ล้างคำค้นหาก่อน",
+        en: "If the table is not shown, clear the search first.",
+        jp: "表が表示されない場合は、先に検索語を消します。",
+      },
+    },
+    {
+      action: "next",
+      view: "suppliers",
+      title: { th: "เลือกค่าที่ต้องการ", en: "Pick the values you want", jp: "値を選ぶ" },
+      body: {
+        th: "กดค่าหนึ่งหรือหลายค่า รายการจะแสดงเฉพาะที่ตรง และกรวยเป็นสีน้ำเงินระหว่างที่กรองอยู่ กด 'ทั้งหมด' หรือ 'ล้างตัวกรอง' เพื่อดูทุกรายการอีกครั้ง หน้าพนักงานกรองสถานะ แผนก และระดับได้แบบเดียวกัน",
+        en: "Press one or more values: the list shows only the matches, and the funnel stays blue while the column is filtered. Press All or Clear to see everything again. Employees filters Status, Department and Level the same way.",
+        jp: "値を1つ以上押すと、一致するものだけが表示され、絞り込み中はじょうごが青くなります。「すべて」または「クリア」で全件に戻ります。従業員の画面でもステータス・部署・レベルを同じように絞り込めます。",
+      },
+    },
+  ],
 };
 
 /* V1 / V2 look of the Sales screens (owner 2026-11-21): the same switch as Estimating, kept apart from it; everyone starts on V1. */
@@ -2204,11 +3118,19 @@ const SALES_LOOK_V2: Guide = {
   views: ["crm-opportunities"],
   browse: true,
   steps: [
-    menu("crm-opportunities",
+    menu(
+      "crm-opportunities",
       { th: "เปิดเมนูโอกาสขาย", en: "Open CRM Opportunities", jp: "「CRM Opportunities」を開く" },
-      { th: "ปุ่มสลับ V1 / V2 อยู่ทุกหน้าในกลุ่มงานขาย รวมถึง RFQ และ Site Visit คลิกที่เมนูที่ไฮไลต์อยู่", en: "Every screen of the Sales group, RFQ intake and Site Visit included, has the V1 / V2 switch. Click the highlighted menu.", jp: "営業グループのすべての画面（RFQ と Site Visit を含む）に V1 / V2 の切り替えがあります。強調表示のメニューをクリックします。" }),
+      {
+        th: "ปุ่มสลับ V1 / V2 อยู่ทุกหน้าในกลุ่มงานขาย รวมถึง RFQ และ Site Visit คลิกที่เมนูที่ไฮไลต์อยู่",
+        en: "Every screen of the Sales group, RFQ intake and Site Visit included, has the V1 / V2 switch. Click the highlighted menu.",
+        jp: "営業グループのすべての画面（RFQ と Site Visit を含む）に V1 / V2 の切り替えがあります。強調表示のメニューをクリックします。",
+      },
+    ),
     {
-      target: "sales.lookV2", action: "click", view: "crm-opportunities",
+      target: "sales.lookV2",
+      action: "click",
+      view: "crm-opportunities",
       title: { th: "กด V2", en: "Press V2", jp: "「V2」を押す" },
       body: {
         th: "หน้าจอเปลี่ยนเป็นแบบ Pegasus ทันที ระบบจำตัวเลือกไว้ในเครื่องนี้ แยกจากของกลุ่ม Estimating ครั้งหน้าที่เปิดหน้างานขายจะเป็น V2",
@@ -2222,7 +3144,9 @@ const SALES_LOOK_V2: Guide = {
       },
     },
     {
-      target: "crm.summary", action: "next", view: "crm-opportunities",
+      target: "crm.summary",
+      action: "next",
+      view: "crm-opportunities",
       title: { th: "แถบสรุปตามขั้นของดีล", en: "The stage summary bar", jp: "段階のサマリーバー" },
       body: {
         th: "ช่องแรกคือดีลที่ยังเปิดอยู่ ถัดไปคือแต่ละขั้นของการขาย แล้วปิดท้ายด้วยได้งานและไม่ได้งาน กดช่องไหนรายการด้านล่างจะแสดงเฉพาะดีลกลุ่มนั้น กดซ้ำเพื่อดูทั้งหมด หน้า RFQ มีแถบแบบเดียวกันตามสถานะ",
@@ -2236,7 +3160,9 @@ const SALES_LOOK_V2: Guide = {
       },
     },
     {
-      target: "crm.deals", action: "next", view: "crm-opportunities",
+      target: "crm.deals",
+      action: "next",
+      view: "crm-opportunities",
       title: { th: "ขั้นของดีลอยู่คอลัมน์แรก", en: "The stage is the first column", jp: "段階は最初の列です" },
       body: {
         th: "ปุ่มดินสอทางซ้ายคือแก้ไขดีล กดชื่อดีลเพื่อเปิด และกดเลข Inquiry ใต้ขั้นเพื่อเปิดงานประเมินราคา",
@@ -2250,7 +3176,9 @@ const SALES_LOOK_V2: Guide = {
       },
     },
     {
-      target: "sales.look", action: "next", view: "crm-opportunities",
+      target: "sales.look",
+      action: "next",
+      view: "crm-opportunities",
       title: { th: "กลับไปแบบเดิมได้ทุกเมื่อ", en: "Go back to V1 at any time", jp: "いつでも V1 に戻せます" },
       body: {
         th: "กด V1 เพื่อกลับไปหน้าตาเดิม งานที่เปิดอยู่ไม่หายและไม่ต้องบันทึกใหม่ เพราะ V1 กับ V2 ใช้ข้อมูลชุดเดียวกัน",
@@ -2276,11 +3204,19 @@ const ESTIMATE_LOOK_V2: Guide = {
   views: ["estimates"],
   browse: true,
   steps: [
-    menu("estimates",
+    menu(
+      "estimates",
       { th: "เปิดเมนู Estimate Cost", en: "Open Estimate Cost", jp: "「Estimate Cost」を開く" },
-      { th: "ปุ่มสลับ V1 / V2 อยู่ทุกหน้าในกลุ่ม Estimating คลิกที่เมนูที่ไฮไลต์อยู่", en: "Every screen of the Estimating group has the V1 / V2 switch. Click the highlighted menu.", jp: "Estimating グループのすべての画面に V1 / V2 の切り替えがあります。強調表示のメニューをクリックします。" }),
+      {
+        th: "ปุ่มสลับ V1 / V2 อยู่ทุกหน้าในกลุ่ม Estimating คลิกที่เมนูที่ไฮไลต์อยู่",
+        en: "Every screen of the Estimating group has the V1 / V2 switch. Click the highlighted menu.",
+        jp: "Estimating グループのすべての画面に V1 / V2 の切り替えがあります。強調表示のメニューをクリックします。",
+      },
+    ),
     {
-      target: "estimate.lookV2", action: "click", view: "estimates",
+      target: "estimate.lookV2",
+      action: "click",
+      view: "estimates",
       title: { th: "กด V2", en: "Press V2", jp: "「V2」を押す" },
       body: {
         th: "หน้าจอเปลี่ยนเป็นแบบ Pegasus ทันที ระบบจำตัวเลือกไว้ในเครื่องนี้ ครั้งหน้าที่เปิดจะเป็น V2",
@@ -2289,7 +3225,9 @@ const ESTIMATE_LOOK_V2: Guide = {
       },
     },
     {
-      target: "estimate.summary", action: "next", view: "estimates",
+      target: "estimate.summary",
+      action: "next",
+      view: "estimates",
       title: { th: "แถบสรุปตามสถานะ", en: "The status summary bar", jp: "ステータスのサマリーバー" },
       body: {
         th: "แต่ละช่องคือสถานะหนึ่ง พร้อมจำนวน Estimate และต้นทุนรวม ตามตัวกรองที่ตั้งไว้ กดช่องไหนรายการด้านล่างจะแสดงเฉพาะสถานะนั้น",
@@ -2303,7 +3241,10 @@ const ESTIMATE_LOOK_V2: Guide = {
       },
     },
     {
-      target: "estimate.list", action: "click", clickOn: "tbody tr", view: "estimates",
+      target: "estimate.list",
+      action: "click",
+      clickOn: "tbody tr",
+      view: "estimates",
       title: { th: "เปิด Estimate", en: "Open an estimate", jp: "見積を開く" },
       body: {
         th: "สถานะอยู่คอลัมน์แรก กดแถวหรือเลข Estimate เพื่อเปิด",
@@ -2312,7 +3253,9 @@ const ESTIMATE_LOOK_V2: Guide = {
       },
     },
     {
-      target: "estimate.moreActions", action: "next", view: "estimates",
+      target: "estimate.moreActions",
+      action: "next",
+      view: "estimates",
       title: { th: "ปุ่มหลักหนึ่งปุ่ม ที่เหลืออยู่ใน 'การทำงานอื่น'", en: "One main button; the rest are under More actions", jp: "メインボタンは1つ、他は「その他の操作」に" },
       body: {
         th: "ปุ่มสีน้ำเงินด้านขวาคือขั้นตอนที่ต้องทำตอนนี้ เช่น ส่งให้ตรวจสอบ หรืออนุมัติ ส่วน Export Excel รีเฟรช สร้าง Revision และจัดการเอกสาร อยู่ใน 'การทำงานอื่น' แถบตัวเลขใต้หัวข้อคือต้นทุนแยกตามหมวด กดช่องไหนจะเปิดแท็บของรายการนั้น",
@@ -2326,7 +3269,9 @@ const ESTIMATE_LOOK_V2: Guide = {
       },
     },
     {
-      target: "estimate.look", action: "next", view: "estimates",
+      target: "estimate.look",
+      action: "next",
+      view: "estimates",
       title: { th: "กลับไปแบบเดิมได้ทุกเมื่อ", en: "Go back to V1 at any time", jp: "いつでも V1 に戻せます" },
       body: {
         th: "กด V1 เพื่อกลับไปหน้าตาเดิม งานที่เปิดอยู่ไม่หายและไม่ต้องบันทึกใหม่ เพราะ V1 กับ V2 ใช้ข้อมูลชุดเดียวกัน",
@@ -2357,7 +3302,9 @@ export const GUIDES: readonly Guide[] = [
     steps: [
       inquiryMenu,
       {
-        target: "inquiry.receive", action: "click", view: "inquiries",
+        target: "inquiry.receive",
+        action: "click",
+        view: "inquiries",
         title: { th: "กด 'รับ RFQ / สร้าง Inquiry'", en: "Press Receive RFQ / create inquiry", jp: "「RFQ受付・Inquiry作成」を押す" },
         body: { th: "ปุ่มนี้เปิดฟอร์มรับงานใหม่", en: "It opens the intake form for a new request.", jp: "新しい依頼の受付フォームが開きます。" },
         missing: {
@@ -2367,7 +3314,9 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
-        target: "inquiry.customer", action: "next", view: "inquiries",
+        target: "inquiry.customer",
+        action: "next",
+        view: "inquiries",
         title: { th: "เลือกลูกค้า", en: "Choose the customer", jp: "顧客を選ぶ" },
         body: {
           th: "พิมพ์รหัสหรือชื่อบริษัทเพื่อค้นหา แล้วเลือกผู้ติดต่อ ถ้ายังไม่มีในระบบ กด 'ลูกค้าใหม่' เพื่อเพิ่ม",
@@ -2376,7 +3325,9 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
-        target: "inquiry.endUser", action: "next", view: "inquiries",
+        target: "inquiry.endUser",
+        action: "next",
+        view: "inquiries",
         title: { th: "End user (ถ้ามี)", en: "End user, if different", jp: "エンドユーザー(異なる場合)" },
         body: {
           th: "บริษัทที่ใช้งานจริง ถ้าเป็นบริษัทเดียวกับผู้ว่าจ้าง กด 'บริษัทเดียวกับผู้ว่าจ้าง' หรือเว้นไว้ใส่ทีหลังก็ได้",
@@ -2385,7 +3336,9 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
-        target: "inquiry.projectName", action: "next", view: "inquiries",
+        target: "inquiry.projectName",
+        action: "next",
+        view: "inquiries",
         title: { th: "ตั้งชื่องาน", en: "Name the work", jp: "案件名を付ける" },
         body: {
           th: "ใช้ชื่อที่บอกว่าลูกค้าต้องการอะไร เช่น 'ระบบ OEE ไลน์ประกอบ 3' ถ้าลูกค้ามี Inquiry ชื่อคล้ายกันที่ยังเปิดอยู่ ระบบจะเตือนตอนบันทึก",
@@ -2394,7 +3347,9 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
-        target: "inquiry.due", action: "next", view: "inquiries",
+        target: "inquiry.due",
+        action: "next",
+        view: "inquiries",
         title: { th: "กำหนดตอบกลับ", en: "Estimate due date", jp: "回答期限" },
         body: {
           th: "วันที่ต้องส่งราคาให้ลูกค้า ผู้ประเมินจะเห็นวันนี้ในงานของเขา ค่าเริ่มต้นคืออีก 14 วัน",
@@ -2403,7 +3358,9 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
-        target: "inquiry.requirement", action: "next", view: "inquiries",
+        target: "inquiry.requirement",
+        action: "next",
+        view: "inquiries",
         title: { th: "ความต้องการของลูกค้า", en: "Customer requirement", jp: "顧客要求" },
         body: {
           th: "สรุปสิ่งที่ลูกค้าขอด้วยคำของลูกค้าเอง ผู้ประเมินใช้ข้อความนี้เริ่มทำราคา",
@@ -2412,7 +3369,9 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
-        target: "inquiry.crm", action: "next", view: "inquiries",
+        target: "inquiry.crm",
+        action: "next",
+        view: "inquiries",
         title: { th: "เชื่อมกับดีลใน CRM", en: "Link the CRM deal", jp: "CRMの商談とつなぐ" },
         body: {
           th: "ถ้างานนี้มีดีลใน CRM อยู่แล้ว เลือกจากรายการด้านล่าง ระบบจะดึงข้อมูลมาและผูกให้ ถ้าไม่มี ทำขั้นต่อไปได้เลย",
@@ -2421,7 +3380,9 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
-        target: "inquiry.more", action: "next", view: "inquiries",
+        target: "inquiry.more",
+        action: "next",
+        view: "inquiries",
         title: { th: "รายละเอียดเพิ่มเติม", en: "More details", jp: "詳細情報" },
         body: {
           th: "กดเพื่อเปิด: เปลี่ยนผู้ประเมิน ประเภทงาน ความสำคัญ โอกาสได้งาน และข้อมูลทางเทคนิค ถ้าค่าเริ่มต้นถูกแล้วข้ามได้",
@@ -2430,7 +3391,9 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
-        target: "inquiry.attach", action: "next", view: "inquiries",
+        target: "inquiry.attach",
+        action: "next",
+        view: "inquiries",
         title: { th: "แนบไฟล์ RFQ", en: "Attach the RFQ files", jp: "RFQファイルを添付" },
         body: {
           th: "ลากไฟล์มาวางหรือคลิกเพื่อเลือก (PDF, Office, DWG, STEP, อีเมล Outlook, ZIP/RAR/7z หรือรูป ไม่เกิน 50 MB ต่อไฟล์) ไฟล์จะอัปโหลดตอนกดบันทึก ถ้าไฟล์ไหนอัปโหลดไม่ผ่าน ระบบจะบอกชื่อไฟล์และเหตุผล ให้แนบใหม่ที่แท็บไฟล์แนบ",
@@ -2439,7 +3402,9 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
-        target: "inquiry.save", action: "click", view: "inquiries",
+        target: "inquiry.save",
+        action: "click",
+        view: "inquiries",
         title: { th: "บันทึก Inquiry", en: "Save the inquiry", jp: "引合を保存" },
         body: {
           th: "ตรวจข้อมูลแล้วกด 'บันทึก Inquiry' ระบบจะออกเลข Inquiry และแจ้งผู้ประเมินทางอีเมล ถ้าแค่ฝึก ให้กด 'ยกเลิก' ข้างๆ แล้วกด 'จบบทสอน' จะไม่มีข้อมูลถูกบันทึก",
@@ -2471,7 +3436,9 @@ export const GUIDES: readonly Guide[] = [
         jp: "ファイルを添付する引合の行をクリックします。",
       }),
       {
-        target: "[data-tab=\"attachments\"]", action: "click", view: "inquiries",
+        target: '[data-tab="attachments"]',
+        action: "click",
+        view: "inquiries",
         title: { th: "เปิดแท็บไฟล์แนบ", en: "Open the Attachments tab", jp: "添付ファイルタブを開く" },
         body: {
           th: "แท็บนี้แสดงไฟล์ทั้งหมดของ Inquiry พร้อมหมวด ขนาด และผู้อัปโหลด",
@@ -2480,7 +3447,9 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
-        target: "inquiry.upload", action: "click", view: "inquiries",
+        target: "inquiry.upload",
+        action: "click",
+        view: "inquiries",
         title: { th: "กด 'อัปโหลด'", en: "Press Upload", jp: "「アップロード」を押す" },
         body: {
           th: "ปุ่มอยู่มุมขวาบนของกล่องไฟล์แนบ",
@@ -2494,7 +3463,9 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
-        target: "inquiry.attachCategory", action: "next", view: "inquiries",
+        target: "inquiry.attachCategory",
+        action: "next",
+        view: "inquiries",
         title: { th: "เลือกหมวดเอกสาร", en: "Choose the document category", jp: "文書分類を選ぶ" },
         body: {
           th: "เช่น Customer RFQ, Drawing หรือ Specification หมวดนี้ใช้จัดไฟล์เมื่อส่งต่อไปที่ Project",
@@ -2503,7 +3474,9 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
-        target: "inquiry.attachFile", action: "next", view: "inquiries",
+        target: "inquiry.attachFile",
+        action: "next",
+        view: "inquiries",
         title: { th: "เลือกไฟล์", en: "Choose the file", jp: "ファイルを選ぶ" },
         body: {
           th: "รับ PDF, Office, DWG/DXF, STEP/IGES, อีเมล Outlook (.msg, .eml), ZIP/RAR/7z และรูป ไม่เกิน 50 MB ต่อไฟล์ แนบได้ครั้งละหนึ่งไฟล์",
@@ -2512,7 +3485,9 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
-        target: "inquiry.attachUpload", action: "click", view: "inquiries",
+        target: "inquiry.attachUpload",
+        action: "click",
+        view: "inquiries",
         title: { th: "อัปโหลด", en: "Upload it", jp: "アップロード" },
         body: {
           th: "กด 'อัปโหลด' ไฟล์จะขึ้นในรายการทันที ถ้าแค่ฝึก ให้กด 'ยกเลิก' ข้างๆ แล้วกด 'จบบทสอน' จะไม่มีไฟล์ถูกบันทึก",
@@ -2542,7 +3517,9 @@ export const GUIDES: readonly Guide[] = [
         jp: "現地確認が必要な引合の行をクリックします。上の検索で探せます。",
       }),
       {
-        target: "inquiry.requestVisit", action: "click", view: "inquiries",
+        target: "inquiry.requestVisit",
+        action: "click",
+        view: "inquiries",
         title: { th: "กด 'ขอเข้าหน้างาน'", en: "Press Request a site visit", jp: "「現地訪問を依頼」を押す" },
         body: {
           th: "ปุ่มอยู่ด้านบนของ Inquiry ระบบจะดึงลูกค้าและชื่องานจาก Inquiry มาให้",
@@ -2556,7 +3533,9 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
-        target: "intake.customer", action: "next", view: "inquiries",
+        target: "intake.customer",
+        action: "next",
+        view: "inquiries",
         title: { th: "ลูกค้าและสถานที่", en: "Customer and site", jp: "顧客と現場" },
         body: {
           th: "ใส่ชื่อ Site ที่อยู่ และผู้ติดต่อหน้างาน (ชื่อ และเบอร์โทรหรืออีเมล) ช่องเหล่านี้ต้องมีก่อนส่งตรวจ",
@@ -2565,7 +3544,9 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
-        target: "intake.want", action: "next", view: "inquiries",
+        target: "intake.want",
+        action: "next",
+        view: "inquiries",
         title: { th: "สิ่งที่ลูกค้าต้องการ", en: "What the customer wants", jp: "顧客の要望" },
         body: {
           th: "เขียนปัญหาที่เกิดขึ้นตอนนี้ และผลที่ลูกค้าอยากได้ อย่างละอย่างน้อย 20 ตัวอักษร",
@@ -2574,7 +3555,9 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
-        target: "intake.machine", action: "next", view: "inquiries",
+        target: "intake.machine",
+        action: "next",
+        view: "inquiries",
         title: { th: "เครื่องจักรและสภาพหน้างาน", en: "Machine and site conditions", jp: "設備と現場条件" },
         body: {
           th: "ชื่อและรุ่นเครื่อง ระบบเดิม ข้อกำหนดความปลอดภัยและการเข้าพื้นที่ ช่วยให้วิศวกรเตรียมตัวได้ถูก",
@@ -2583,7 +3566,9 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
-        target: "intake.purpose", action: "next", view: "inquiries",
+        target: "intake.purpose",
+        action: "next",
+        view: "inquiries",
         title: { th: "วัตถุประสงค์และทักษะ", en: "Purpose and skills", jp: "目的と技能" },
         body: {
           th: "เลือกวัตถุประสงค์อย่างน้อย 1 ข้อ และทักษะที่คิดว่าต้องใช้ ผู้ประสานงานปรับทีหลังได้",
@@ -2592,7 +3577,9 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
-        target: "intake.attach", action: "next", view: "inquiries",
+        target: "intake.attach",
+        action: "next",
+        view: "inquiries",
         title: { th: "แนบรูปหรือแบบ", en: "Attach photos or drawings", jp: "写真や図面を添付" },
         body: {
           th: "รูปเครื่องจริงหนึ่งรูปช่วยลดการเดาได้มาก แนบอีเมลที่ลูกค้าส่งมาด้วยก็ได้",
@@ -2601,7 +3588,9 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
-        target: "intake.readiness", action: "next", view: "inquiries",
+        target: "intake.readiness",
+        action: "next",
+        view: "inquiries",
         title: { th: "ความพร้อมของข้อมูล", en: "Readiness", jp: "情報充足度" },
         body: {
           th: "ส่วนนี้บอกว่ายังขาดอะไร ข้อที่เป็น blocker ต้องครบก่อนส่งตรวจ ส่วนคำเตือนส่งได้แต่ควรเติม",
@@ -2610,7 +3599,9 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
-        target: "intake.save", action: "click", view: "inquiries",
+        target: "intake.save",
+        action: "click",
+        view: "inquiries",
         title: { th: "บันทึกฉบับร่าง", en: "Save the draft", jp: "下書き保存" },
         body: {
           th: "กด 'บันทึกฉบับร่าง' บันทึกได้ทุกเมื่อแม้ข้อมูลยังไม่ครบ ถ้าแค่ฝึก ให้กด 'ยกเลิก' แล้วกด 'จบบทสอน'",
@@ -2619,7 +3610,9 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
-        target: "intake.to.Pending Technical Review", action: "click", view: "inquiries",
+        target: "intake.to.Pending Technical Review",
+        action: "click",
+        view: "inquiries",
         title: { th: "ส่งให้ตรวจสอบทางเทคนิค", en: "Send to technical review", jp: "技術レビューへ送る" },
         body: {
           th: "เมื่อข้อมูลครบ กด 'รอตรวจสอบทางเทคนิค' วิศวกรจะตรวจ แล้วผู้ประสานงานนัดวันเข้าหน้างาน ติดตามได้ที่แท็บ 'เข้าหน้างาน / ผลสำรวจ' ของ Inquiry",
@@ -2657,7 +3650,9 @@ export const GUIDES: readonly Guide[] = [
         jp: "見積を任された引合の行をクリックします。",
       }),
       {
-        target: "inquiry.createEstimate", action: "click", view: "inquiries",
+        target: "inquiry.createEstimate",
+        action: "click",
+        view: "inquiries",
         title: { th: "กด 'สร้างประมาณการต้นทุน'", en: "Press Create estimate", jp: "「見積を作成」を押す" },
         body: {
           th: "ปุ่มอยู่ในแถบขั้นตอนถัดไปด้านบนของ Inquiry",
@@ -2671,7 +3666,9 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
-        target: "estimate.startFrom", action: "next", view: "inquiries",
+        target: "estimate.startFrom",
+        action: "next",
+        view: "inquiries",
         title: { th: "เริ่มจากไหน", en: "Where to start from", jp: "作成方法を選ぶ" },
         body: {
           th: "เลือก Estimate เดิมที่คล้ายกันเพื่อคัดลอกรายการมาแก้ ช่วยประหยัดเวลา หรือเลือกเริ่มจากว่าง",
@@ -2680,7 +3677,9 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
-        target: "estimate.create", action: "click", view: "inquiries",
+        target: "estimate.create",
+        action: "click",
+        view: "inquiries",
         title: { th: "สร้าง Estimate", en: "Create it", jp: "見積を作成" },
         body: {
           th: "กดปุ่มสร้าง ถ้าคัดลอกจาก Estimate เดิม ระบบจะเปิดหน้า Estimate ให้ทันที",
@@ -2689,7 +3688,9 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
-        target: "inquiry.openEstimate", action: "click", view: "inquiries",
+        target: "inquiry.openEstimate",
+        action: "click",
+        view: "inquiries",
         title: { th: "เปิดประมาณการต้นทุน", en: "Open the estimate", jp: "見積を開く" },
         body: {
           th: "กด 'เปิดประมาณการต้นทุน' เพื่อเข้าไปใส่ต้นทุน",
@@ -2698,7 +3699,9 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
-        target: "[data-tab=\"cost\"]", action: "click", view: "estimates",
+        target: '[data-tab="cost"]',
+        action: "click",
+        view: "estimates",
         title: { th: "วัสดุและอุปกรณ์", en: "Cost items", jp: "原価明細" },
         body: {
           th: "คลิกแท็บนี้เพื่อใส่รายการวัสดุและอุปกรณ์ จัดเป็นกลุ่มตามโมดูล",
@@ -2707,7 +3710,9 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
-        target: "estimate.addModule", action: "next", view: "estimates",
+        target: "estimate.addModule",
+        action: "next",
+        view: "estimates",
         title: { th: "เพิ่มโมดูลและรายการ", en: "Add modules and lines", jp: "モジュールと明細を追加" },
         body: {
           th: "'เพิ่มโมดูล' สร้างกลุ่มงาน แล้วเพิ่มรายการทีละแถว หรือใช้ 'นำเข้า / คัดลอก' จาก Excel, Price Library และ Template",
@@ -2721,7 +3726,9 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
-        target: "[data-tab=\"manhour\"]", action: "click", view: "estimates",
+        target: '[data-tab="manhour"]',
+        action: "click",
+        view: "estimates",
         title: { th: "ค่าแรง", en: "Labour", jp: "労務費" },
         body: {
           th: "ใส่ man-day ของแต่ละสายงาน ระบบคิดค่าแรงจาก rate ที่ตั้งไว้",
@@ -2730,7 +3737,9 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
-        target: "[data-tab=\"other\"]", action: "click", view: "estimates",
+        target: '[data-tab="other"]',
+        action: "click",
+        view: "estimates",
         title: { th: "ค่าใช้จ่ายอื่น", en: "Other costs", jp: "その他費用" },
         body: {
           th: "ค่าเดินทาง ที่พัก และค่าใช้จ่ายอื่นของงาน",
@@ -2739,7 +3748,9 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
-        target: "[data-tab=\"validation\"]", action: "click", view: "estimates",
+        target: '[data-tab="validation"]',
+        action: "click",
+        view: "estimates",
         title: { th: "ตรวจสอบ", en: "Validation", jp: "検証" },
         body: {
           th: "ระบบตรวจสิ่งที่ยังขาด รายการสีแดงต้องแก้ก่อนส่ง สีเหลืองเป็นคำเตือน",
@@ -2748,7 +3759,9 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
-        target: "estimate.submit", action: "click", view: "estimates",
+        target: "estimate.submit",
+        action: "click",
+        view: "estimates",
         title: { th: "ส่งให้ตรวจสอบ", en: "Submit for review", jp: "レビュー依頼" },
         body: {
           th: "เมื่อไม่มีรายการสีแดง กด 'ส่งให้ตรวจสอบ' ผู้อนุมัติทุกคนจะได้กระดิ่งและอีเมล แถบใต้ขั้นตอนบอกว่ารอใครอนุมัติ ถ้ายังไม่พร้อม กด 'จบบทสอน' แล้วกลับมาส่งทีหลัง",
@@ -2793,11 +3806,15 @@ export const GUIDES: readonly Guide[] = [
     views: ["purchase"],
     invite: "purchase",
     steps: [
-      menu("purchase",
+      menu(
+        "purchase",
         { th: "เปิดเมนูใบขอซื้อ", en: "Open Purchase Requisition", jp: "「購買申請」を開く" },
-        { th: "ใบขอซื้อทุกใบอยู่ที่เมนูนี้ คลิกที่เมนูที่ไฮไลต์อยู่", en: "Every requisition lives here. Click the highlighted menu entry.", jp: "購買申請はすべてここにあります。強調表示のメニューをクリックします。" }),
+        { th: "ใบขอซื้อทุกใบอยู่ที่เมนูนี้ คลิกที่เมนูที่ไฮไลต์อยู่", en: "Every requisition lives here. Click the highlighted menu entry.", jp: "購買申請はすべてここにあります。強調表示のメニューをクリックします。" },
+      ),
       {
-        target: "pr.new", action: "click", view: "purchase",
+        target: "pr.new",
+        action: "click",
+        view: "purchase",
         title: { th: "กด 'สร้าง PR'", en: "Press New PR", jp: "「PRを作成」を押す" },
         body: { th: "ปุ่มนี้เปิดหน้าขอซื้อจาก BOM", en: "It opens the requisition sheet for a BOM.", jp: "BOMから購買申請する画面が開きます。" },
         missing: {
@@ -2807,7 +3824,9 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
-        target: "pr.unit", action: "next", view: "purchase",
+        target: "pr.unit",
+        action: "next",
+        view: "purchase",
         title: { th: "เลือก Unit (ถ้ามี)", en: "Choose the Unit, if there is one", jp: "Unitを選ぶ（ある場合）" },
         body: {
           th: "ถ้าโครงการแบ่งงบของ Module เป็น Unit ตาม Drawing ไว้ ให้เลือก Unit ที่ใบนี้ซื้อให้ ระบบจะแสดงงบของ Unit ยอดที่ขอซื้อไปแล้ว ยอดของใบนี้ และยอดคงเหลือ ถ้าเกินงบของ Unit ผู้อนุมัติต้องใส่เหตุผล และ discipline ของ Unit กำหนดผู้อนุมัติขั้นแรกด้วย",
@@ -2821,7 +3840,9 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
-        target: "pr.bom", action: "next", view: "purchase",
+        target: "pr.bom",
+        action: "next",
+        view: "purchase",
         title: { th: "เลือก BOM", en: "Choose the BOM", jp: "BOMを選ぶ" },
         body: {
           th: "เลือก BOM ที่เผยแพร่แล้วของโครงการ พิมพ์เลข BOM เลขโครงการ หรือชื่อโครงการเพื่อค้นหา ใบนี้จะใช้งบของ Module จาก BOM นั้น และเห็นรายการใน Estimate เป็นข้อมูลอ้างอิง",
@@ -2835,7 +3856,9 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
-        target: "pr.required", action: "next", view: "purchase",
+        target: "pr.required",
+        action: "next",
+        view: "purchase",
         title: { th: "วันที่ต้องการและความเร่งด่วน", en: "Required date and priority", jp: "必要日と優先度" },
         body: {
           th: "ใส่วันที่ต้องได้ของ ความเร่งด่วน และวัตถุประสงค์ (เช่น ใช้ที่ไซต์ไหน) ถ้ามีช่องแผนกใน ERP ให้เลือกด้วย",
@@ -2844,7 +3867,9 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
-        target: "pr.estimate", action: "next", view: "purchase",
+        target: "pr.estimate",
+        action: "next",
+        view: "purchase",
         title: { th: "รายการใน Estimate", en: "The estimate items", jp: "見積の明細" },
         body: {
           th: "รายการของ Estimate ซ่อนไว้ก่อน กดปุ่มนี้เพื่อแสดงหรือซ่อน ใช้อ้างอิงเท่านั้น ถ้าจะซื้อตามรายการไหน กด 'ดึงมาใช้' ที่รายการนั้น หรือ 'ดึงทั้งหมดที่เหลือ' แล้วพิมพ์ทับเป็นของที่ซื้อจริงได้",
@@ -2854,7 +3879,9 @@ export const GUIDES: readonly Guide[] = [
         missing: { th: "ปุ่มนี้ขึ้นเมื่อเลือก BOM แล้ว", en: "The button appears once a BOM is chosen.", jp: "BOMを選ぶとボタンが表示されます。" },
       },
       {
-        target: "pr.lines", action: "next", view: "purchase",
+        target: "pr.lines",
+        action: "next",
+        view: "purchase",
         title: { th: "พิมพ์ของที่จะซื้อจริง", en: "Type what you will really buy", jp: "実際に購入する品を入力" },
         body: {
           th: "ตารางเริ่มที่แถวว่างแถวเดียว (หรือรายการที่ติ๊กมาจาก BOM) พิมพ์ Part No. รายละเอียด ยี่ห้อ จำนวน หน่วย และราคาประมาณ แล้วเลือก Module ที่ใช้งบ ราคาในใบนี้เป็นราคาประมาณเพื่อเทียบงบ ราคาจริงฝ่ายจัดซื้อหาใน ERP กด + ท้ายแถวเพื่อแทรกแถวว่างใต้แถวนั้น หรือกด 'เพิ่มแถว' ที่บรรทัดสุดท้ายของตาราง ถ้าไม่ซื้อแถวไหน กดปุ่มถังขยะท้ายแถว",
@@ -2868,7 +3895,9 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
-        target: "pr.paste", action: "next", view: "purchase",
+        target: "pr.paste",
+        action: "next",
+        view: "purchase",
         title: { th: "กรอกหลายรายการ", en: "Enter many items", jp: "多くの明細を入力" },
         body: {
           th: "ถ้ามีรายการใน Excel อยู่แล้ว คัดลอกแถวมา กด 'วางจาก Excel' แล้วกด Ctrl+V หรือวางลงในช่องของตารางได้เลย รายการที่ตรงกับ Estimate จะผูกกับรายการนั้น ที่เหลือเป็นรายการที่กรอกเอง กด 'เพิ่ม 10 แถว' เพื่อพิมพ์เอง และกด Enter เพื่อลงแถวถัดไป แถวที่ไม่ได้พิมพ์จะไม่ถูกบันทึก",
@@ -2878,7 +3907,9 @@ export const GUIDES: readonly Guide[] = [
         missing: { th: "ปุ่มนี้ขึ้นเมื่อเลือก BOM แล้ว", en: "The button appears once a BOM is chosen.", jp: "BOMを選ぶとボタンが表示されます。" },
       },
       {
-        target: "pr.import", action: "next", view: "purchase",
+        target: "pr.import",
+        action: "next",
+        view: "purchase",
         title: { th: "นำเข้า PR-Form เดิม", en: "Import an existing PR-Form", jp: "既存のPR-Formを取り込む" },
         body: {
           th: "ถ้ารายการอยู่ในไฟล์ PR-Form (Excel) อยู่แล้ว กด 'นำเข้า Excel' แล้วเลือกไฟล์ ระบบหาคอลัมน์จากหัวตาราง อ่านได้ทั้งฟอร์มปี 2025 และ 2026 ไฟล์ที่มีหลาย sheet จะอ่าน sheet ที่ Drawing No. ตรงกับ Unit ที่เลือก รายการที่ยกเลิกไม่ถูกนำเข้า ส่วน Material / Treatment / Detail เก็บไว้ในหมายเหตุ ตรวจรายการก่อนส่งทุกครั้ง",
@@ -2888,7 +3919,9 @@ export const GUIDES: readonly Guide[] = [
         missing: { th: "ปุ่มนี้ขึ้นเมื่อเลือก BOM แล้ว", en: "The button appears once a BOM is chosen.", jp: "BOMを選ぶとボタンが表示されます。" },
       },
       {
-        target: "pr.form-fields", action: "next", view: "purchase",
+        target: "pr.form-fields",
+        action: "next",
+        view: "purchase",
         title: { th: "ช่องแบบ PR-Form", en: "The PR-Form's fields", jp: "PR-Formの項目" },
         body: {
           th: "กด 'ช่อง PR-Form' เพื่อเปิดคอลัมน์ วัสดุ การชุบ/ผิว รายละเอียดเพิ่ม วันที่ต้องการ และ Link แบบหรือใบเสนอราคา ของแต่ละรายการ วันที่ต้องการใส่เมื่อรายการนั้นต้องได้ก่อนวันที่ของใบ ภาพรวม Unit จะไล่ตามวันที่เร็วที่สุด ฝ่ายจัดซื้อเห็นช่องเหล่านี้ใน ERP",
@@ -2898,7 +3931,9 @@ export const GUIDES: readonly Guide[] = [
         missing: { th: "ปุ่มนี้ขึ้นเมื่อเลือก BOM แล้ว", en: "The button appears once a BOM is chosen.", jp: "BOMを選ぶとボタンが表示されます。" },
       },
       {
-        target: "pr.part", action: "next", view: "purchase",
+        target: "pr.part",
+        action: "next",
+        view: "purchase",
         title: { th: "ชิ้นส่วนของรายการบน", en: "Parts of a line", jp: "上の行の部品" },
         body: {
           th: "เหมือนใน PR-Form รายการหนึ่งเป็นชิ้นส่วนของรายการด้านบนได้ เช่น valve ใต้ manifold กดปุ่มกิ่งท้ายแถว แถวจะเยื้องเข้าและบอกว่าเป็นส่วนของรายการไหน กดอีกครั้งเพื่อแยกออก ชิ้นส่วนยังมีจำนวนและราคาของตัวเองและถูกซื้อตามปกติ ชิ้นส่วนมีชิ้นส่วนซ้อนอีกไม่ได้",
@@ -2908,7 +3943,9 @@ export const GUIDES: readonly Guide[] = [
         missing: { th: "ปุ่มนี้อยู่ท้ายแต่ละแถว เพิ่มแถวก่อน", en: "The button is at the end of every row; add a row first.", jp: "ボタンは各行の末尾にあります。先に行を追加してください。" },
       },
       {
-        target: "pr.summary", action: "next", view: "purchase",
+        target: "pr.summary",
+        action: "next",
+        view: "purchase",
         title: { th: "ตรวจยอดและผู้อนุมัติ", en: "Check the total and approvers", jp: "合計と承認者を確認" },
         body: {
           th: "แถบขั้นตอนบนสุดของใบบอกจำนวนรายการ แถวที่ต้องแก้ ผู้อนุมัติตามลำดับ และยอดขอซื้อ ขั้นที่เป็นสีแดงต้องแก้ก่อนส่ง ดูยอดขอซื้อ (ราคาประมาณ) เทียบงบของ Module แถวที่มีข้อความสีแดงต้องแก้ก่อนส่ง เช่น ยังไม่ได้เลือก Module ถ้า Module เกินงบ ผู้อนุมัติต้องใส่เหตุผลตอนอนุมัติ",
@@ -2917,7 +3954,9 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
-        target: "pr.approvers", action: "next", view: "purchase",
+        target: "pr.approvers",
+        action: "next",
+        view: "purchase",
         title: { th: "ใครอนุมัติ", en: "Who approves", jp: "承認者" },
         body: {
           th: "ช่องผู้อนุมัติบอกว่าใบนี้ไปให้หัวหน้าแผนกของคุณก่อน แล้วไปที่ผู้อนุมัติขั้นสุดท้าย จากนั้นระบบส่งเข้า ERP เอง ทุกครั้งที่มีคนอนุมัติหรือไม่อนุมัติ คุณได้แจ้งเตือนที่กระดิ่งและทางอีเมล",
@@ -2926,7 +3965,9 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
-        target: "pr.over-reason", action: "next", view: "purchase",
+        target: "pr.over-reason",
+        action: "next",
+        view: "purchase",
         title: { th: "ถ้าเกินงบ ใส่เหตุผล", en: "Over budget? Give the reason", jp: "予算超過なら理由を入力" },
         body: {
           th: "เมื่อยอดของใบนี้เกินงบของ Unit หรือของ Module ช่องนี้จะขึ้นมา พิมพ์เหตุผลให้ผู้อนุมัติอ่าน เช่น ราคาขึ้นจากตอนประเมิน ถ้ายังไม่ใส่ จะกด 'ส่งขออนุมัติ' ไม่ได้ แต่บันทึกร่างได้",
@@ -2940,7 +3981,9 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
-        target: "pr.submit", action: "click", view: "purchase",
+        target: "pr.submit",
+        action: "click",
+        view: "purchase",
         title: { th: "ส่งขออนุมัติ", en: "Submit for approval", jp: "承認申請" },
         body: {
           th: "กด 'ส่งขออนุมัติ' ระบบบันทึกและส่งใบนี้ให้หัวหน้าแผนกและผู้อนุมัติขั้นสุดท้ายในครั้งเดียว แล้วส่งเข้า ERP อัตโนมัติ ถ้ายังไม่พร้อม กด 'บันทึกร่าง' ไว้ก่อน ถ้าแค่ฝึก ให้กด 'ยกเลิก' แล้วกด 'จบบทสอน'",
@@ -2966,11 +4009,19 @@ export const GUIDES: readonly Guide[] = [
     views: ["my-work"],
     invite: "my-work",
     steps: [
-      menu("my-work",
+      menu(
+        "my-work",
         { th: "เปิดงานของฉัน", en: "Open My Work", jp: "「マイワーク」を開く" },
-        { th: "หน้านี้รวมทุกงานที่คุณรับผิดชอบจากทุกโครงการ คลิกที่เมนูที่ไฮไลต์อยู่", en: "It gathers everything you are responsible for across projects. Click the highlighted menu entry.", jp: "全案件の担当作業がまとまっています。強調表示のメニューをクリックします。" }),
+        {
+          th: "หน้านี้รวมทุกงานที่คุณรับผิดชอบจากทุกโครงการ คลิกที่เมนูที่ไฮไลต์อยู่",
+          en: "It gathers everything you are responsible for across projects. Click the highlighted menu entry.",
+          jp: "全案件の担当作業がまとまっています。強調表示のメニューをクリックします。",
+        },
+      ),
       {
-        target: "[data-tab=\"new\"]", action: "click", view: "my-work",
+        target: '[data-tab="new"]',
+        action: "click",
+        view: "my-work",
         title: { th: "งานมอบหมายใหม่", en: "New assignments", jp: "新しい割り当て" },
         body: {
           th: "งานที่เพิ่งได้รับมอบหมายอยู่ที่แท็บนี้ เปิดดูแล้วกด 'รับทราบ' เพื่อยืนยันว่ารับงานแล้ว PM จะเห็นทันที",
@@ -2979,7 +4030,9 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
-        target: "[data-tab=\"active\"]", action: "click", view: "my-work",
+        target: '[data-tab="active"]',
+        action: "click",
+        view: "my-work",
         title: { th: "งานที่กำลังรับผิดชอบ", en: "My active work", jp: "進行中の自分の作業" },
         body: {
           th: "งานที่รับแล้วจัดกลุ่มตามโครงการ งานที่เลยกำหนดขึ้นก่อน",
@@ -2988,7 +4041,9 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
-        target: "work.summary", action: "next", view: "my-work",
+        target: "work.summary",
+        action: "next",
+        view: "my-work",
         title: { th: "แถบสรุปคือตัวกรอง", en: "The summary bar is the filter", jp: "サマリーバーで絞り込む" },
         body: {
           th: "แต่ละช่องนับงานของคุณ: งานเปิดทั้งหมด เลยกำหนด ติดปัญหา ต้องอัปเดต ครบกำหนดสัปดาห์นี้ และรอ PM กดช่องไหนรายการด้านล่างจะเหลือเฉพาะงานนั้น ส่วนแหล่งงาน โครงการ การเรียง และช่องค้นหาอยู่ในแถวเดียวกันเหนือรายการ",
@@ -2997,7 +4052,9 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
-        target: "work.group", action: "next", view: "my-work",
+        target: "work.group",
+        action: "next",
+        view: "my-work",
         title: { th: "กลุ่มงานของโครงการ", en: "A project's work", jp: "案件ごとの作業" },
         body: {
           th: "แต่ละกล่องคือหนึ่งโครงการ ถ้ายังไม่เห็นงานย่อย กดที่หัวกล่องเพื่อกาง",
@@ -3011,7 +4068,9 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
-        target: "work.percent", action: "next", view: "my-work",
+        target: "work.percent",
+        action: "next",
+        view: "my-work",
         title: { th: "อัปเดตเปอร์เซ็นต์", en: "Update percent done", jp: "進捗率を更新" },
         body: {
           th: "กด 0, 25, 50, 75 หรือ 100 บันทึกทันทีโดยไม่ต้องกดเซฟ 100 หมายถึงงานเสร็จ",
@@ -3025,7 +4084,9 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
-        target: "work.status", action: "next", view: "my-work",
+        target: "work.status",
+        action: "next",
+        view: "my-work",
         title: { th: "เปลี่ยนสถานะ", en: "Change the status", jp: "ステータスを変更" },
         body: {
           th: "เลือก 'กำลังทำ' 'ติดปัญหา' หรือ 'เสร็จแล้ว' ถ้าเลือก 'ติดปัญหา' ต้องบอกว่าติดอะไร PM จะเห็นและช่วยแก้",
@@ -3034,7 +4095,9 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
-        target: "work.details", action: "next", view: "my-work",
+        target: "work.details",
+        action: "next",
+        view: "my-work",
         title: { th: "อัปเดตรายละเอียด", en: "Update details", jp: "詳細を更新" },
         body: {
           th: "ใส่วันเริ่มและเสร็จจริง วันที่คาดว่าจะเสร็จ และบันทึกถึง PM ถ้างานจะเลยกำหนด ใช้ 'ขอวันเพิ่ม' ในเมนู ⋯ ของงาน",
@@ -3043,7 +4106,9 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
-        target: "[data-tab=\"updates\"]", action: "click", view: "my-work",
+        target: '[data-tab="updates"]',
+        action: "click",
+        view: "my-work",
         title: { th: "ประวัติการอัปเดตของฉัน", en: "My updates", jp: "自分の更新履歴" },
         body: {
           th: "ทุกครั้งที่รายงานจะเก็บไว้ที่นี่ตามลำดับเวลา ใช้ตรวจย้อนหลังได้",
@@ -3061,6 +4126,7 @@ export const GUIDES: readonly Guide[] = [
   SITE_MONITOR,
   ASSET_REGISTER,
   ERP_MASTER_DATA,
+  LIST_COLUMN_FILTER,
   MENU_FAVORITES,
   {
     id: "support-ticket",
@@ -3077,7 +4143,9 @@ export const GUIDES: readonly Guide[] = [
     invite: "support",
     steps: [
       {
-        target: "nav.help", action: "next", view: "support",
+        target: "nav.help",
+        action: "next",
+        view: "support",
         title: { th: "ปุ่ม ? ช่วยเหลือ", en: "The ? help button", jp: "「?」ヘルプボタン" },
         body: {
           th: "ปุ่ม ? บนแถบด้านบนรวมเรื่องช่วยเหลือไว้ที่เดียว: คู่มือพนักงาน สอนการใช้งาน แจ้งปัญหาและติดตาม และศูนย์ดาวน์โหลด คู่มือพนักงานและแจ้งปัญหาและติดตามเคยอยู่ในเมนูด้านซ้าย",
@@ -3086,7 +4154,9 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
-        target: "topbar.report", action: "click", view: "support",
+        target: "topbar.report",
+        action: "click",
+        view: "support",
         title: { th: "กด 'แจ้งปัญหา'", en: "Press Report a problem", jp: "「問題を報告」を押す" },
         body: {
           th: "ปุ่มอยู่ที่แถบด้านบนของทุกหน้า ระบบแนบชื่อหน้าที่คุณเปิดอยู่ให้เอง จึงควรกดจากหน้าที่เจอปัญหา",
@@ -3095,7 +4165,9 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
-        target: "support.subject", action: "next", view: "support",
+        target: "support.subject",
+        action: "next",
+        view: "support",
         title: { th: "หัวข้อ", en: "Subject", jp: "件名" },
         body: {
           th: "ช่องแรกของฟอร์ม: สั้นๆ ว่าเกิดอะไร เช่น 'กดบันทึก PR แล้วขึ้น error' อย่างน้อย 5 ตัวอักษร",
@@ -3104,7 +4176,9 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
-        target: "support.kind", action: "next", view: "support",
+        target: "support.kind",
+        action: "next",
+        view: "support",
         title: { th: "ประเภทและผลกระทบ", en: "Category and impact", jp: "カテゴリと影響" },
         body: {
           th: "เลือกว่าเป็นเรื่องของแอปหรือเรื่องอื่น และกระทบงานแค่ไหน ยังทำงานได้ ติดบางส่วน หรือทำงานไม่ได้",
@@ -3113,7 +4187,9 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
-        target: "support.description", action: "next", view: "support",
+        target: "support.description",
+        action: "next",
+        view: "support",
         title: { th: "รายละเอียด", en: "Description", jp: "詳細" },
         body: {
           th: "เล่าว่ากำลังทำอะไร เห็นอะไร และควรเป็นอย่างไร ยิ่งละเอียดยิ่งแก้ได้เร็ว",
@@ -3122,7 +4198,9 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
-        target: "support.attach", action: "next", view: "support",
+        target: "support.attach",
+        action: "next",
+        view: "support",
         title: { th: "แนบรูปหน้าจอ", en: "Attach a screenshot", jp: "スクリーンショットを添付" },
         body: {
           th: "กดกรอบเส้นประเพื่อเลือกรูป (PNG, JPG) หรือ PDF เลือกเพิ่มได้หลายครั้งรวมสูงสุด 5 ไฟล์ ไฟล์ละไม่เกิน 10 MB กด X ที่ไฟล์เพื่อนำออก",
@@ -3131,7 +4209,9 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
-        target: "support.submit", action: "click", view: "support",
+        target: "support.submit",
+        action: "click",
+        view: "support",
         title: { th: "ส่งเรื่อง", en: "Send it", jp: "報告を送信" },
         body: {
           th: "กด 'ส่งเรื่อง' ทีมจะตอบกลับและคุณจะได้รับแจ้งเตือน ติดตามได้ที่ปุ่ม ? บนแถบด้านบน > 'แจ้งปัญหาและติดตาม' ถ้าแค่ฝึก ให้กด 'ปิด' แล้วกด 'จบบทสอน'",
@@ -3156,7 +4236,9 @@ export const GUIDES: readonly Guide[] = [
     browse: true,
     steps: [
       {
-        target: "nav.help", action: "click", view: "support",
+        target: "nav.help",
+        action: "click",
+        view: "support",
         title: { th: "กดปุ่ม ?", en: "Press the ? button", jp: "「?」ボタンを押す" },
         body: {
           th: "ปุ่ม ? บนแถบด้านบนรวมเรื่องช่วยเหลือไว้ รวมถึงรายการเรื่องที่คุณแจ้ง",
@@ -3165,7 +4247,9 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
-        target: "nav.support", action: "click", view: "support",
+        target: "nav.support",
+        action: "click",
+        view: "support",
         title: { th: "เปิด 'แจ้งปัญหาและติดตาม'", en: "Open Report & Track Issues", jp: "「問題の報告と追跡」を開く" },
         body: {
           th: "หน้านี้มีทุกเรื่องที่คุณแจ้ง พร้อมสถานะและคำตอบจากทีม",
@@ -3174,7 +4258,9 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
-        target: "support.tabs", action: "next", view: "support",
+        target: "support.tabs",
+        action: "next",
+        view: "support",
         title: { th: "รายการของฉัน และคิวผู้ดูแล", en: "My tickets and the support queue", jp: "自分の報告と対応待ち一覧" },
         body: {
           th: "'รายการของฉัน' คือเรื่องที่คุณแจ้ง ผู้ดูแลจะเห็น 'คิวผู้ดูแล' เพิ่ม ส่วน 'คะแนนขอบคุณของฉัน' คือคะแนนที่ทีมมอบให้คุณ",
@@ -3183,7 +4269,9 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
-        target: "support.summary", action: "next", view: "support",
+        target: "support.summary",
+        action: "next",
+        view: "support",
         title: { th: "แถบสถานะคือตัวกรอง", en: "The status bar is the filter", jp: "状態バーで絞り込む" },
         body: {
           th: "แต่ละช่องนับเรื่องในสถานะนั้นตามคำค้นและตัวกรองที่เลือก กดช่องเพื่อแสดงเฉพาะเรื่องเหล่านั้น 'รอข้อมูลจากผู้แจ้ง' คือทีมรอคำตอบจากคุณ",
@@ -3192,7 +4280,9 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
-        target: "support.list", action: "next", view: "support",
+        target: "support.list",
+        action: "next",
+        view: "support",
         title: { th: "เปิดเรื่อง", en: "Open a ticket", jp: "報告を開く" },
         body: {
           th: "กดเลขเรื่องหรือแถวเพื่อเปิด ในเรื่องนั้นปุ่มสีน้ำเงินคือขั้นถัดไป เช่น 'ยืนยันปิดเรื่อง' หรือ 'รับเรื่องนี้' งานอื่นอยู่ใต้ 'การทำงานอื่น' ตอบทีมได้ที่ช่องตอบด้านล่างการสนทนา",
@@ -3206,7 +4296,9 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
-        target: "support.rows", action: "next", view: "support",
+        target: "support.rows",
+        action: "next",
+        view: "support",
         title: { th: "จำนวนแถวต่อหน้า", en: "Rows per page", jp: "1ページあたりの行数" },
         body: {
           th: "ใต้ตาราง เลือกแสดง 10, 25, 50 หรือ 100 แถวต่อหน้า ระบบจำค่าที่เลือกไว้ในเครื่องนี้ เรื่องที่เหลือดูได้ด้วยปุ่มเลขหน้า",
@@ -3223,10 +4315,10 @@ export const GUIDES: readonly Guide[] = [
   },
 ];
 
-export const guideText = (copy: GuideCopy, lang: "TH" | "EN" | "JP") => lang === "TH" ? copy.th : lang === "JP" ? copy.jp : copy.en;
+export const guideText = (copy: GuideCopy, lang: "TH" | "EN" | "JP") => (lang === "TH" ? copy.th : lang === "JP" ? copy.jp : copy.en);
 
 /** The guides a person can do: every permission the task needs, in catalog order. */
 export const guidesFor = (permissions: readonly string[]) => GUIDES.filter((guide) => guide.permissions.every((code) => permissions.includes(code)));
 
 /** A data-guide name as a selector; a target that is already a selector (starts with "[") is used as it is. */
-export const guideSelector = (target: string) => target.startsWith("[") ? target : `[data-guide="${target.replace(/["\\]/g, "\\$&")}"]`;
+export const guideSelector = (target: string) => (target.startsWith("[") ? target : `[data-guide="${target.replace(/["\\]/g, "\\$&")}"]`);
