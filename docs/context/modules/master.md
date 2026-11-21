@@ -4,7 +4,7 @@
 
 ลูกค้า supplier (ดึงจาก Pegasus ERP) พนักงาน role audit และ settings
 
-Evidence: snapshot `111ada1b`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
+Evidence: snapshot `e57fb544`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
 
 ## Read only the operation you change
 
@@ -114,8 +114,6 @@ Shared screens contain other modules: use the symbol and line range instead of r
 - [backend-node/src/routes/sales-customers.ts](<../../../backend-node/src/routes/sales-customers.ts>)
 - [backend-node/src/erp-master-data.ts](<../../../backend-node/src/erp-master-data.ts>)
 - [backend-node/src/erp-master-sync.ts](<../../../backend-node/src/erp-master-sync.ts>)
-- [backend-node/src/erp-purchasing.ts](<../../../backend-node/src/erp-purchasing.ts>)
-- [backend-node/src/master-data/services.ts](<../../../backend-node/src/master-data/services.ts>)
 - [app/system/dialogs.ts](<../../../app/system/dialogs.ts>)
 - [app/system/i18n.ts](<../../../app/system/i18n.ts>)
 - [app/system/LocalizedText.tsx](<../../../app/system/LocalizedText.tsx>)

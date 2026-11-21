@@ -1,6 +1,7 @@
 // Reads the Pegasus ERP's customer and supplier registers into dbo.erp_customers / dbo.erp_suppliers (migrations 099 and 100) and
 // applies them to the app's customers and suppliers. The ERP forbids background jobs and service accounts, so a round runs
 // when someone opens those screens, with their own TMT ID token, and at most once per 15 minutes for the whole app.
+// When tmt-master-data answers in place of the ERP, an hourly round also runs on its own (master-data/register-sync.ts).
 import sql from "mssql";
 import type { Transaction } from "mssql";
 import { insertAudit } from "./audit.js";
@@ -246,9 +247,15 @@ async function reconcile(database: Database, kind: MasterKind, actorId: number):
   }, sql.ISOLATION_LEVEL.READ_COMMITTED);
 }
 
+/** Who a round runs as: a person opening the screens, or the master data sync account on the hourly round. */
+export type SyncActor = Pick<CurrentUser, "id" | "entraObjectId">;
+
+/** The register sync the screens use, and where it reads: tmt-master-data, or the Pegasus ERP as the fallback. */
+export type RegisterSource = { sync: ErpMasterSync; source: "master" | "erp" };
+
 export type ErpMasterSync = {
   enabled: boolean;
-  sync: (kind: MasterKind, actor: CurrentUser, force: boolean) => Promise<MasterSyncOutcome>;
+  sync: (kind: MasterKind, actor: SyncActor, force: boolean) => Promise<MasterSyncOutcome>;
   status: () => Promise<MasterStatus[]>;
   reviewList: (kind: MasterKind) => Promise<{ items: MasterReviewItem[]; candidates: MasterCandidate[] }>;
   resolve: (kind: MasterKind, erpKey: string, choice: { action: "link"; id: number } | { action: "create" }, actor: CurrentUser) => Promise<{ id: number; code: string }>;
@@ -258,7 +265,7 @@ export function createErpMasterSync(database: Database, gateway: ErpGateway | nu
   const release = (kind: MasterKind, set: string, bind: (request: sql.Request) => void = () => {}) =>
     database.query(`UPDATE dbo.erp_master_sync SET running_since=NULL${set ? `,${set}` : ""} WHERE kind=@kind;`, (request) => { request.input("kind", sql.NVarChar(20), kind); bind(request); });
 
-  async function sync(kind: MasterKind, actor: CurrentUser, force: boolean): Promise<MasterSyncOutcome> {
+  async function sync(kind: MasterKind, actor: SyncActor, force: boolean): Promise<MasterSyncOutcome> {
     if (!gateway) return { kind, state: "off", changed: false, message: "The ERP link is not configured on this server." };
     const claimed = (await database.query<{ updated_since: string | null; round_server_time: string | null; page_cursor: string | null }>(`
       UPDATE dbo.erp_master_sync SET running_since=SYSUTCDATETIME(),attempted_at=SYSUTCDATETIME(),attempted_by=@actor

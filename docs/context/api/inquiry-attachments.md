@@ -2,7 +2,7 @@
 
 [Module](../modules/inquiry.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `111ada1b`; generated, do not edit. [backend-node/src/routes/inquiry-attachments.ts](<../../../backend-node/src/routes/inquiry-attachments.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `e57fb544`; generated, do not edit. [backend-node/src/routes/inquiry-attachments.ts](<../../../backend-node/src/routes/inquiry-attachments.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
