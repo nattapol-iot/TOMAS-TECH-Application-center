@@ -1,7 +1,8 @@
 "use client";
 /* Projects > Cost (owner request 2026-11-21, for Leaders and above): one row per project with what its Estimate cost
    gave and what the work has taken - Hardware and Outsource against the purchase requests, People against the
-   man-days on the plan. Read-only. The project number opens the breakdown in a dialog, so the list stays in place.
+   man-days on the plan, in all and by labor discipline (Electrical, Mechanical, Software, Installation). Read-only.
+   The project number opens the breakdown in a dialog, so the list stays in place.
    Pegasus look (pegasus-design DESIGN.md 0.2 dialogs over navigation, 0.3 lists, C.2 summary bar, C.4 meter,
    D.5 badge, D.7 data table) through the app's own components under .pg-skin. The API side is
    backend-node/src/project-cost.ts; the shapes and the sums are in project-cost-model.ts. */
@@ -12,9 +13,9 @@ import { useT } from "../i18n";
 import { Badge, EmptyState, FilterChips, Icon, Modal, Pagination, Panel, SearchInput, TablePageSize, toneOf, type FilterItem, type Tone } from "../ui";
 import { flagLink, numberLink, optionalChoiceLink, placeId, textLink, useLinkedState, useScreenPlace } from "../screen-link";
 import {
-  BUDGET_STATES, DEFAULT_COST_SORT, budgetLeft, budgetShare, budgetState, costTotals, matchesCostSearch, nextCostSort, projectBudgetStates,
+  BUDGET_STATES, DEFAULT_COST_SORT, LABOR_DISCIPLINES, budgetLeft, budgetShare, budgetState, costTotals, laborOf, matchesCostSearch, nextCostSort, projectBudgetStates,
   shortAmount, sortCostItems, stateCounts,
-  type BudgetState, type CostSort, type CostSortKey, type ProjectCostDetail, type ProjectCostItem, type ProjectCostOverview, type PurchaseCost,
+  type BudgetState, type CostSort, type CostSortKey, type LaborDiscipline, type LaborFigures, type ProjectCostDetail, type ProjectCostItem, type ProjectCostOverview, type PurchaseCost,
 } from "../../../backend-node/src/project-cost-model";
 import "./pegasus-skin.css";
 import "./project-cost.css";
@@ -23,6 +24,7 @@ type Props = { bootstrap: BootstrapData; openProjectSchedule?: (id: number) => v
 
 const STATE_TONE: Record<BudgetState, Tone> = { over: "red", near: "amber", within: "green", none: "slate" };
 const STATE_LINK = optionalChoiceLink(BUDGET_STATES);
+const DISCIPLINE_LINK = optionalChoiceLink(LABOR_DISCIPLINES);
 /* Numbers read the same in every language: right-aligned, tabular, en-US grouping (DESIGN.md E.1). */
 const whole = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
 const exact = new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -62,11 +64,11 @@ function UseCell({ budget, used, marker, label, format, unit, notes = [] }: {
   </div>;
 }
 
-function SortHeader({ column, label, sort, onSort, className }: { column: CostSortKey; label: string; sort: CostSort; onSort: (key: CostSortKey) => void; className?: string }) {
+function SortHeader({ column, label, sort, onSort, className, suffix }: { column: CostSortKey; label: string; sort: CostSort; onSort: (key: CostSortKey) => void; className?: string; suffix?: string | undefined }) {
   const t = useT();
   const active = sort.key === column;
   return <th className={className} aria-sort={active ? (sort.descending ? "descending" : "ascending") : "none"}>
-    <button type="button" className={`th-sort${active ? " active" : ""}`} title={t("Cost.sortBy")} onClick={() => onSort(column)}>{t(label)}<Icon name="chevronDown" className={active ? (sort.descending ? "desc" : "asc") : "idle"} /></button>
+    <button type="button" className={`th-sort${active ? " active" : ""}`} title={t("Cost.sortBy")} onClick={() => onSort(column)}>{t(label)}{suffix ? ` · ${suffix}` : null}<Icon name="chevronDown" className={active ? (sort.descending ? "desc" : "asc") : "idle"} /></button>
   </th>;
 }
 
@@ -82,8 +84,8 @@ function TotalCell({ label, hint, value, exactValue, sub, tone }: { label: strin
 const shortMoney = (value: number | null) => (value === null ? DASH : shortAmount(value));
 const sharePercent = (budget: number | null, used: number | null) => (budget !== null && used !== null && budget > 0 ? `${Math.round((used / budget) * 100)}%` : undefined);
 
-/** Totals of the rows on show: bought cost as requested / budget, people as planned / budget man-days, money only when the viewer has it. */
-function TotalsBar({ items, access, guide, single }: { items: ProjectCostItem[]; access: ProjectCostOverview["access"]; guide?: string; /** One project's own bar: no count of projects. */ single?: boolean }) {
+/** Totals of the rows on show for what is bought: requested / budget, with what is ordered. People have their own bar below (LaborBar). */
+function TotalsBar({ items, guide, single }: { items: ProjectCostItem[]; guide?: string; /** One project's own bar: no count of projects. */ single?: boolean }) {
   const t = useT();
   const totals = useMemo(() => costTotals(items), [items]);
   const bought = (label: string, group: PurchaseCost) => <TotalCell label={t(label)} hint={sharePercent(group.budget, group.requested)} tone={budgetState(group.budget, group.requested)}
@@ -94,14 +96,38 @@ function TotalsBar({ items, access, guide, single }: { items: ProjectCostItem[];
     {single ? null : <TotalCell label={t("Cost.projects")} value={whole.format(totals.projects)} />}
     {bought("Cost.hardware", totals.hardware)}
     {bought("Cost.outsource", totals.outsource)}
-    <TotalCell label={t("Cost.peopleMd")} hint={sharePercent(totals.labor.budgetManDays, totals.labor.plannedManDays)} tone={budgetState(totals.labor.budgetManDays, totals.labor.plannedManDays)}
-      value={`${manDays(totals.labor.plannedManDays)} / ${manDays(totals.labor.budgetManDays)}`}
-      sub={<span title={t("Cost.toDateHint")}>{t("Cost.toDate")} {manDays(totals.labor.toDateManDays)}</span>} />
-    {access.laborMoney ? <TotalCell label={t("Cost.peopleCost")} hint={sharePercent(totals.labor.budgetCost, totals.labor.plannedCost)} tone={budgetState(totals.labor.budgetCost, totals.labor.plannedCost)}
-      value={`${shortMoney(totals.labor.plannedCost)} / ${shortMoney(totals.labor.budgetCost)}`}
-      exactValue={`${t("Cost.planned")} ${totals.labor.plannedCost === null ? DASH : exact.format(totals.labor.plannedCost)} / ${t("Cost.budget")} ${totals.labor.budgetCost === null ? DASH : exact.format(totals.labor.budgetCost)}`}
-      sub={<span title={t("Cost.toDateHint")}>{t("Cost.toDate")} {money(totals.labor.toDateCost)}</span>} /> : null}
   </dl>;
+}
+
+/**
+ * People by labor discipline (owner 2026-11-21): one cell for all labor and one per discipline, each planned / budget
+ * man-days with what the plan puts on or before today, and the same in money for a viewer who may see it. On the list
+ * a cell is also the switch for the table's People columns; pressed again it returns to all labor.
+ */
+function LaborBar({ items, access, active, onPick, guide }: {
+  items: ProjectCostItem[]; access: ProjectCostOverview["access"]; active?: LaborDiscipline | null; onPick?: ((discipline: LaborDiscipline | null) => void) | undefined; guide?: string;
+}) {
+  const t = useT();
+  const totals = useMemo(() => costTotals(items), [items]);
+  const cells: { key: LaborDiscipline | null; label: string; figures: LaborFigures }[] = [
+    { key: null, label: t("Cost.allLabor"), figures: totals.labor },
+    ...totals.disciplines.map((entry) => ({ key: entry.discipline, label: t(`Cost.discipline.${entry.discipline}`), figures: entry })),
+  ];
+  return <div className="pc-labor" role="group" aria-label={t("Cost.laborBy")} data-guide={guide}>
+    {cells.map(({ key, label, figures }) => {
+      const state = budgetState(figures.budgetManDays, figures.plannedManDays), percent = sharePercent(figures.budgetManDays, figures.plannedManDays);
+      const body = <>
+        <span className="pc-total-top"><span className="pc-labor-label">{label}</span>{percent ? <span className="pc-total-hint">{percent}</span> : null}</span>
+        <span className="pc-total-value">{manDays(figures.plannedManDays)} / {manDays(figures.budgetManDays)} <small>{t("MD")}</small></span>
+        <span className="pc-total-sub" title={t("Cost.toDateHint")}>{t("Cost.toDate")} {manDays(figures.toDateManDays)}</span>
+        {access.laborMoney ? <span className="pc-total-sub" title={`${t("Cost.planned")} ${figures.plannedCost === null ? DASH : exact.format(figures.plannedCost)} / ${t("Cost.budget")} ${figures.budgetCost === null ? DASH : exact.format(figures.budgetCost)}`}>
+          {t("Cost.cost")} {shortMoney(figures.plannedCost)} / {shortMoney(figures.budgetCost)}</span> : null}
+      </>;
+      return onPick
+        ? <button key={key ?? "all"} type="button" className={`pc-total pc-labor-cell ${state}`} aria-pressed={(active ?? null) === key} onClick={() => onPick((active ?? null) === key ? null : key)}>{body}</button>
+        : <div key={key ?? "all"} className={`pc-total pc-labor-cell ${state}`}>{body}</div>;
+    })}
+  </div>;
 }
 
 export function ProjectCostScreen({ bootstrap, openProjectSchedule }: Props) {
@@ -114,6 +140,8 @@ export function ProjectCostScreen({ bootstrap, openProjectSchedule }: Props) {
   const [state, setState] = useLinkedState<BudgetState | null>("coststate", null, STATE_LINK);
   const [includeClosed, setIncludeClosed] = useLinkedState("costclosed", false, flagLink);
   const [pageSize, setPageSize] = useLinkedState("costrows", 25, numberLink);
+  // The labor discipline the People columns show; null is all labor.
+  const [discipline, setDiscipline] = useLinkedState<LaborDiscipline | null>("costlabor", null, DISCIPLINE_LINK);
   const [sort, setSort] = useState<CostSort>(DEFAULT_COST_SORT);
   const [page, setPage] = useState(1);
   const [opened, place] = useScreenPlace();
@@ -131,8 +159,8 @@ export function ProjectCostScreen({ bootstrap, openProjectSchedule }: Props) {
 
   const items = useMemo(() => data?.items ?? [], [data]);
   const searched = useMemo(() => items.filter((item) => matchesCostSearch(item, search)), [items, search]);
-  const counts = useMemo(() => stateCounts(searched), [searched]);
-  const shown = useMemo(() => sortCostItems(state === null ? searched : searched.filter((item) => projectBudgetStates(item).worst === state), sort), [searched, state, sort]);
+  const counts = useMemo(() => stateCounts(searched, discipline), [searched, discipline]);
+  const shown = useMemo(() => sortCostItems(state === null ? searched : searched.filter((item) => projectBudgetStates(item, discipline).worst === state), sort, discipline), [searched, state, sort, discipline]);
   const pageCount = Math.max(1, Math.ceil(shown.length / pageSize)), currentPage = Math.min(page, pageCount);
   const paged = shown.slice((currentPage - 1) * pageSize, currentPage * pageSize);
   const chips: FilterItem[] = BUDGET_STATES.map((key) => ({ key, label: `Cost.state.${key}`, value: counts[key], tone: STATE_TONE[key] }));
@@ -151,7 +179,10 @@ export function ProjectCostScreen({ bootstrap, openProjectSchedule }: Props) {
     </header>
     {error ? <div className="callout danger" role="alert"><Icon name="alertTriangle" /><span><strong>{t("Could not load")}</strong> {error}</span>
       <button className="btn ghost sm" type="button" onClick={() => { void load(); }}><Icon name="refresh" />{t("Try again")}</button></div> : null}
-    {data ? <TotalsBar items={shown} access={access} guide="cost.totals" /> : loading ? <div className="pc-skeleton pc-skeleton-bar" aria-hidden="true" /> : null}
+    {data ? <>
+      <TotalsBar items={shown} guide="cost.totals" />
+      <LaborBar items={shown} access={access} active={discipline} onPick={(key) => { setDiscipline(key); setPage(1); }} guide="cost.labor" />
+    </> : loading ? <div className="pc-skeleton pc-skeleton-bar" aria-hidden="true" /> : null}
     <div className="toolbar pc-toolbar">
       <div data-guide="cost.filter"><FilterChips items={chips} active={state} onPick={(key) => { setState(key as BudgetState | null); setPage(1); }} label="Cost.stateFilter" /></div>
       <span className="pc-spacer" />
@@ -168,11 +199,11 @@ export function ProjectCostScreen({ bootstrap, openProjectSchedule }: Props) {
               <th>{t("Cost.colManager")}</th>
               <SortHeader column="hardware" label="Cost.colHardware" sort={sort} onSort={changeSort} className="pc-col-use" />
               <SortHeader column="outsource" label="Cost.colOutsource" sort={sort} onSort={changeSort} className="pc-col-use" />
-              <SortHeader column="labor" label="Cost.colPeople" sort={sort} onSort={changeSort} className="pc-col-use" />
-              {access.laborMoney ? <th className="num">{t("Cost.colPeopleCost")}</th> : null}
+              <SortHeader column="labor" label="Cost.colPeople" sort={sort} onSort={changeSort} className="pc-col-use" suffix={discipline ? t(`Cost.discipline.${discipline}`) : undefined} />
+              {access.laborMoney ? <th className="num">{t("Cost.colPeopleCost")}{discipline ? ` · ${t(`Cost.discipline.${discipline}`)}` : null}</th> : null}
             </tr></thead>
             <tbody>
-              {paged.map((item) => { const states = projectBudgetStates(item);
+              {paged.map((item) => { const states = projectBudgetStates(item, discipline), people = laborOf(item.labor, discipline);
                 return <tr key={item.id}>
                   <td className="pc-project"><button type="button" className="pg-doclink" data-guide="cost.open" onClick={() => open(item.id)}>{item.number}</button>
                     <small title={item.name}>{item.name}</small><small>{item.customerName}</small></td>
@@ -183,11 +214,11 @@ export function ProjectCostScreen({ bootstrap, openProjectSchedule }: Props) {
                     notes={[item.hardware.ordered ? <>{t("Cost.ordered")} {money(item.hardware.ordered)}</> : null]} /></td>
                   <td className="pc-col-use"><UseCell budget={item.outsource.budget} used={item.outsource.requested} label={t("Cost.outsource")} format={money}
                     notes={[item.outsource.ordered ? <>{t("Cost.ordered")} {money(item.outsource.ordered)}</> : null]} /></td>
-                  <td className="pc-col-use"><UseCell budget={item.labor.budgetManDays} used={item.labor.plannedManDays} marker={item.labor.toDateManDays} label={t("Cost.people")} format={manDays}
-                    notes={[item.labor.toDateManDays !== null ? <span title={t("Cost.toDateHint")}>{t("Cost.toDate")} {manDays(item.labor.toDateManDays)}</span> : null,
-                      item.labor.unplannedRows ? <span className="pc-warn" title={t("Cost.unplanned")}><Icon name="alertTriangle" />{whole.format(item.labor.unplannedRows)}</span> : null]} /></td>
-                  {access.laborMoney ? <td className="num">{money(item.labor.plannedCost)}{item.labor.budgetCost !== null ? <small>/ {money(item.labor.budgetCost)}</small> : null}
-                    {item.labor.toDateCost !== null ? <small title={t("Cost.toDateHint")}>{t("Cost.toDate")} {money(item.labor.toDateCost)}</small> : null}</td> : null}
+                  <td className="pc-col-use"><UseCell budget={people.budgetManDays} used={people.plannedManDays} marker={people.toDateManDays} label={t("Cost.people")} format={manDays}
+                    notes={[people.toDateManDays !== null ? <span title={t("Cost.toDateHint")}>{t("Cost.toDate")} {manDays(people.toDateManDays)}</span> : null,
+                      discipline === null && item.labor.unplannedRows ? <span className="pc-warn" title={t("Cost.unplanned")}><Icon name="alertTriangle" />{whole.format(item.labor.unplannedRows)}</span> : null]} /></td>
+                  {access.laborMoney ? <td className="num">{money(people.plannedCost)}{people.budgetCost !== null ? <small>/ {money(people.budgetCost)}</small> : null}
+                    {people.toDateCost !== null ? <small title={t("Cost.toDateHint")}>{t("Cost.toDate")} {money(people.toDateCost)}</small> : null}</td> : null}
                 </tr>; })}
               {!paged.length ? <tr><td colSpan={access.laborMoney ? 7 : 6} className="pc-nomatch">{t("Cost.noMatch")}{filtered ? <> <button type="button" className="pg-doclink" onClick={() => { setSearch(""); setState(null); setPage(1); }}>{t("Cost.clearFilters")}</button></> : null}</td></tr> : null}
             </tbody>
@@ -204,7 +235,7 @@ export function ProjectCostScreen({ bootstrap, openProjectSchedule }: Props) {
   </div>;
 }
 
-/** One project's breakdown: bought cost by Module with its purchase requests, people by discipline and by the plan's top rows. */
+/** One project's breakdown: bought cost by Module with its purchase requests, labor by discipline (budget against plan) and by the plan's top rows. */
 function ProjectCostDialog({ projectId, canOpenPlan, onOpenPlan, onClose }: { projectId: number; canOpenPlan: boolean; onOpenPlan: () => void; onClose: () => void }) {
   const t = useT();
   const [detail, setDetail] = useState<ProjectCostDetail | null>(null);
@@ -250,14 +281,17 @@ function ProjectCostDialog({ projectId, canOpenPlan, onOpenPlan, onClose }: { pr
         </> : null}
       </section>
       <section className="pc-section" data-guide="cost.people">
-        <h3>{t("Cost.detailPeople")}</h3><p>{t("Cost.detailPeopleHint")}{project.labor.source === "manual" ? ` ${t("Cost.manualBudget")}: ${manDays(project.labor.budgetManDays)} ${t("MD")}.` : ""}
+        <h3>{t("Cost.detailPeople")}</h3><p>{t("Cost.disciplineRule")}{project.labor.source === "manual" ? ` ${t("Cost.manualBudget")}: ${manDays(project.labor.budgetManDays)} ${t("MD")}.` : ""}
           {project.labor.dailyRate !== null ? ` ${t("Cost.dailyRate")}: ${money(project.labor.dailyRate)}.` : ""}</p>
-        {detail.disciplines.length ? <div className="table-wrap"><table>
-          <thead><tr><th>{t("Cost.colDiscipline")}</th><th className="num">{t("Cost.colManDays")}</th><th className="num">{t("Cost.colHours")}</th>{access.laborMoney ? <th className="num">{t("Cost.colCost")}</th> : null}</tr></thead>
-          <tbody>{detail.disciplines.map((row) => <tr key={row.discipline}><td>{t(`Cost.discipline.${row.discipline}`)}</td><td className="num">{manDays(row.manDays)}</td>
-            <td className="num">{whole.format(row.manDays * detail.hoursPerManDay)}</td>{access.laborMoney ? <td className="num">{money(row.cost)}</td> : null}</tr>)}
-            <tr className="pc-sum"><td>{t("Cost.total")}</td><td className="num">{manDays(project.labor.budgetManDays)}</td><td className="num">{project.labor.budgetManDays === null ? DASH : whole.format(project.labor.budgetManDays * detail.hoursPerManDay)}</td>
-              {access.laborMoney ? <td className="num">{money(project.labor.budgetCost)}</td> : null}</tr>
+        {project.labor.disciplines.length ? <div className="table-wrap"><table>
+          <thead><tr><th>{t("Cost.colDiscipline")}</th><th className="num">{t("Cost.colBudgetMd")}</th><th className="num">{t("Cost.colPlanned")}</th><th className="pc-col-bar" /><th className="num">{t("Cost.colToDate")}</th><th className="num">{t("Cost.colLeftMd")}</th>
+            {access.laborMoney ? <><th className="num">{t("Cost.colBudgetCost")}</th><th className="num">{t("Cost.colPlannedCost")}</th><th className="num">{t("Cost.colToDateCost")}</th></> : null}</tr></thead>
+          <tbody>{[...project.labor.disciplines.map((row) => ({ key: row.discipline as string, label: t(`Cost.discipline.${row.discipline}`), figures: row as LaborFigures, sum: false })),
+            { key: "total", label: t("Cost.total"), figures: project.labor as LaborFigures, sum: true }].map(({ key, label, figures, sum }) => { const left = budgetLeft(figures.budgetManDays, figures.plannedManDays);
+            return <tr key={key} className={sum ? "pc-sum" : undefined}><td>{label}</td><td className="num">{manDays(figures.budgetManDays)}</td><td className="num">{manDays(figures.plannedManDays)}</td>
+              <td className="pc-col-bar">{sum ? null : <Meter budget={figures.budgetManDays} used={figures.plannedManDays} marker={figures.toDateManDays} label={label} />}</td>
+              <td className="num">{manDays(figures.toDateManDays)}</td><td className={`num${left !== null && left < 0 ? " pc-over" : ""}`}>{manDays(left)}</td>
+              {access.laborMoney ? <><td className="num">{money(figures.budgetCost)}</td><td className="num">{money(figures.plannedCost)}</td><td className="num">{money(figures.toDateCost)}</td></> : null}</tr>; })}
           </tbody></table></div> : <p className="pc-empty">{t("Cost.noDisciplines")}</p>}
         <h4>{t("Cost.detailPlan")}</h4><p>{t("Cost.detailPlanHint")} {t("Cost.toDateHint")}</p>
         {detail.plan.length ? <div className="table-wrap"><table>
@@ -275,12 +309,13 @@ function ProjectCostDialog({ projectId, canOpenPlan, onOpenPlan, onClose }: { pr
   </Modal>;
 }
 
-/** The project's own totals on top of its dialog: the same cells as the list's bar, plus the estimate's whole cost. */
+/** The project's own totals on top of its dialog: the same two bars as the list, plus the estimate's whole cost. */
 function TotalsDetail({ detail }: { detail: ProjectCostDetail }) {
   const t = useT();
   const { project, access } = detail;
   return <>
-    <TotalsBar items={[project]} access={access} single />
+    <TotalsBar items={[project]} single />
+    <LaborBar items={[project]} access={access} />
     <p className="pc-detail-meta">
       {project.estimateNo ? <span>{t("Cost.estimate")} <strong>{project.estimateNo}</strong></span> : <span>{t("Cost.noEstimate")}</span>}
       {project.estimateTotal !== null ? <span title={t("Cost.estimateTotalHint")}>{t("Cost.estimateTotal")} <strong>{exact.format(project.estimateTotal)}</strong></span> : null}

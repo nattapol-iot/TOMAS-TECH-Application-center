@@ -297,7 +297,8 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
     return { today, hoursPerManDay: HOURS_PER_MAN_DAY, access, items: rows.map((row) => ({ ...costRow(row), ...projectCost(Number(row.id), figures, access) })) };
   });
 
-  // One project's cost: bought cost by Module, its purchase requests, people by discipline and by the plan's top rows.
+  // One project's cost: bought cost by Module, its purchase requests, and people by the plan's top rows. People by
+  // discipline is part of the project's own figures (project.labor.disciplines), the same as in the list.
   // The project is read through the list's own scope rule, so a project outside it is "not found" here too.
   app.get("/api/v1/projects/:id/cost", async (request) => {
     const { actor, access } = await costViewer(request);
@@ -327,15 +328,10 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
         COALESCE((SELECT SUM(l.line_total) FROM dbo.mat_pr_lines l WHERE l.pr_id=pr.id),0) amount,(SELECT COUNT(*) FROM dbo.mat_pr_lines l WHERE l.pr_id=pr.id) lines
       FROM dbo.mat_prs pr LEFT JOIN dbo.project_purchase_units u ON u.id=pr.unit_id
       WHERE pr.project_id=@project AND pr.deleted_at IS NULL AND pr.status IN(${REQUESTING_PR_STATUSES}) ORDER BY pr.id DESC;`, bind)).recordset : [];
-    const labor = (await database.query<Record<string, unknown>>(`SELECT COALESCE(l.discipline,N'Other') discipline,SUM(l.engineers*l.man_days) man_days,SUM(l.line_cost) cost
-      FROM dbo.projects p INNER JOIN dbo.estimates e ON e.id=p.estimate_id
-      INNER JOIN dbo.manhour_lines l ON l.estimate_id=e.id AND l.revision=e.revision AND l.deleted_at IS NULL AND l.provider=N'Internal'
-      WHERE p.id=@project AND p.deleted_at IS NULL GROUP BY COALESCE(l.discipline,N'Other');`, bind)).recordset;
     // Modules by name; what belongs to no module comes last.
     const moduleNames = [...new Set([...budgets, ...charged].map((item) => String(item.module)))]
       .sort((left, right) => Number(left === NO_MODULE) - Number(right === NO_MODULE) || left.localeCompare(right, "en", { numeric: true }));
     const rate = access.laborMoney ? averageDailyRate(figures.estimates.get(id)) : null;
-    const order = ["Electrical", "Mechanical", "Software", "Installation", "Other"];
     return {
       today, hoursPerManDay: HOURS_PER_MAN_DAY, access,
       project: { ...costRow(row), ...projectCost(id, figures, access) },
@@ -344,8 +340,6 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
           approved: access.purchases ? amount(used?.approved) : null, ordered: access.purchases ? amount(used?.ordered) : null }; }),
       requests: requests.map((item) => ({ id: Number(item.id), number: String(item.pr_no), status: String(item.status), requiredDate: dateOnly(item.required_date as Date | string | null),
         unit: item.unit == null ? null : String(item.unit), amount: amount(item.amount), lines: Number(item.lines) })),
-      disciplines: labor.map((item) => ({ discipline: String(item.discipline), manDays: amount(item.man_days), cost: access.laborMoney ? amount(item.cost) : null }))
-        .filter((item) => item.manDays > 0).sort((left, right) => order.indexOf(left.discipline) - order.indexOf(right.discipline)),
       plan: (figures.plans.get(id)?.rows ?? []).map((item) => ({ ...item, plannedCost: rate === null ? null : round2(item.plannedManDays * rate) })),
     };
   });
