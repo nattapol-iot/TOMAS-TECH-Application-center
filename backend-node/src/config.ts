@@ -300,7 +300,9 @@ function loadTmtIdConfig(
     throw new Error(
       "MASTER_DATA_URL and MASTER_DATA_API_KEY are required together.",
     );
-  if (masterDataUrl) validateOrigin(masterDataUrl, allowPrivateLanHttp);
+  // Master data's own certificate cannot be renewed on the headscale tailnet, so the API reaches it through a TLS-skipping
+  // proxy on its own host (the Mac mini's Caddy :8107, as orgrag does). That hop is plain HTTP to a private address.
+  if (masterDataUrl) validateOrigin(masterDataUrl, allowPrivateLanHttp || isPrivateIpv4(new URL(masterDataUrl).hostname));
   // Still parsed so an old .env keeps starting; the API only warns that it is ignored.
   const defaultRoleCode = optional(env, "TMT_ID_DEFAULT_ROLE_CODE");
   if (defaultRoleCode !== undefined && !/^[A-Za-z][A-Za-z0-9 _-]{0,49}$/.test(defaultRoleCode))

@@ -128,6 +128,11 @@ test("Authentication__Mode=TmtId fails closed when a required setting is missing
     () => loadConfig({ ...TMT_ID_ENV, MASTER_DATA_URL: "https://master.example.com" }),
     /required together/,
   );
+  assert.equal(loadConfig({ ...TMT_ID_ENV, MASTER_DATA_URL: "http://192.168.5.2:8107", MASTER_DATA_API_KEY: "key" }).tmtId?.masterDataUrl, "http://192.168.5.2:8107");
+  assert.throws(
+    () => loadConfig({ ...TMT_ID_ENV, MASTER_DATA_URL: "http://master.example.com", MASTER_DATA_API_KEY: "key" }),
+    /must use HTTPS/,
+  );
 
   const config = loadConfig(TMT_ID_ENV);
   assert.equal(config.auth.mode, "TmtId");
