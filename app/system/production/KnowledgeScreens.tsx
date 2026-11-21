@@ -82,6 +82,7 @@ import {
 import { DateInput } from "../DateInput";
 import { PegasusScreen } from "./PegasusScreen";
 import { checkFields, failureDialog } from "./form-bubbles";
+import { clearDraft, confirmLeave, draftKeys, hasDraft, leaveCopy, useDraftField } from "./form-draft";
 
 type KnowledgeProps = {
   bootstrap: BootstrapData;
@@ -139,7 +140,7 @@ export function ProductionKnowledgeHub({ bootstrap, notify }: KnowledgeProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [openDocumentId, setOpenDocumentId] = useLinkedState("doc", null, idLink, { remember: false });
-  const [creating, setCreating] = useState(false);
+  const [creating, setCreating] = useState(() => canUpload && hasDraft("knowledge:document:new"));
   const [acknowledgements, setAcknowledgements] = useState<KnowledgeAcknowledgement[]>([]);
   const [dashboard, setDashboard] = useState<KnowledgeDashboard | null>(null);
 
@@ -576,7 +577,7 @@ function ArticleLibrary({
   const [search, setSearch] = useState("");
   const [articleType, setArticleType] = useState("All article types");
   const [loading, setLoading] = useState(false);
-  const [creating, setCreating] = useState(false);
+  const [creating, setCreating] = useState(() => canUpload && hasDraft("knowledge:article:new"));
   const [openId, setOpenId] = useLinkedState("article", null, idLink, { remember: false });
   const load = useCallback(async () => {
     setLoading(true);
@@ -627,16 +628,18 @@ function ArticleEditorModal({ categories, bootstrap, article, onClose, onSaved }
   onSaved: (id: number) => void;
 }) {
   const t = useT();
-  const [title, setTitle] = useState(article?.title ?? "");
-  const [summary, setSummary] = useState(article?.summary ?? "");
-  const [content, setContent] = useState(article?.content ?? "");
-  const [articleType, setArticleType] = useState(article?.articleType ?? "Technical Note");
-  const [categoryId, setCategoryId] = useState(article?.categoryId ?? categories[0]?.id ?? 0);
-  const [status, setStatus] = useState(article?.status ?? "Draft");
-  const [confidentiality, setConfidentiality] = useState(article?.confidentiality ?? "Company");
-  const [language, setLanguage] = useState(article?.language ?? "EN");
-  const [tags, setTags] = useState(article?.tags ?? "");
-  const [reviewDate, setReviewDate] = useState(article?.reviewDate ?? "");
+  const draftKey = article ? `knowledge:article:${article.id}` : "knowledge:article:new";
+  const close = async () => { if (await confirmLeave(draftKey, leaveCopy(t))) onClose(); };
+  const [title, setTitle] = useDraftField(draftKey, "title", article?.title ?? "");
+  const [summary, setSummary] = useDraftField(draftKey, "summary", article?.summary ?? "");
+  const [content, setContent] = useDraftField(draftKey, "content", article?.content ?? "");
+  const [articleType, setArticleType] = useDraftField(draftKey, "articleType", article?.articleType ?? "Technical Note");
+  const [categoryId, setCategoryId] = useDraftField(draftKey, "categoryId", article?.categoryId ?? categories[0]?.id ?? 0);
+  const [status, setStatus] = useDraftField(draftKey, "status", article?.status ?? "Draft");
+  const [confidentiality, setConfidentiality] = useDraftField(draftKey, "confidentiality", article?.confidentiality ?? "Company");
+  const [language, setLanguage] = useDraftField(draftKey, "language", article?.language ?? "EN");
+  const [tags, setTags] = useDraftField(draftKey, "tags", article?.tags ?? "");
+  const [reviewDate, setReviewDate] = useDraftField(draftKey, "reviewDate", article?.reviewDate ?? "");
   const [busy, setBusy] = useState(false);
   const fields = useRef<HTMLDivElement>(null);
   const save = async () => {
@@ -649,13 +652,13 @@ function ArticleEditorModal({ categories, bootstrap, article, onClose, onSaved }
     const input = { title: title.trim(), summary: summary.trim(), content: content.trim(), articleType, categoryId,
       ownerId: article?.ownerId ?? bootstrap.user.id, status, confidentiality, language, tags: tags.trim(), reviewDate: reviewDate || undefined };
     try {
-      if (article) { await updateKnowledgeArticle(article.id, input); onSaved(article.id); }
-      else { const created = await createKnowledgeArticle(input); onSaved(created.id); }
+      if (article) { await updateKnowledgeArticle(article.id, input); clearDraft(draftKey); onSaved(article.id); }
+      else { const created = await createKnowledgeArticle(input); clearDraft(draftKey); onSaved(created.id); }
     } catch (requestError) { void failureDialog(errorText(requestError), t("Form.errorTitle")); }
     finally { setBusy(false); }
   };
   return <Modal title={article ? t("Edit knowledge article") : t("New knowledge article")} subtitle={t("Content is stored as safe plain text/Markdown; HTML is never injected")}
-    onClose={onClose} footer={<><button className="btn ghost" type="button" onClick={onClose}>{t("Cancel")}</button><button className="btn primary" type="button" disabled={busy} onClick={() => { void save(); }}>{busy ? t("Saving…") : t("Save article")}</button></>}>
+    onClose={() => { void close(); }} footer={<><button className="btn ghost" type="button" onClick={() => { void close(); }}>{t("Cancel")}</button><button className="btn primary" type="button" disabled={busy} onClick={() => { void save(); }}>{busy ? t("Saving…") : t("Save article")}</button></>}>
     <div className="form-grid" ref={fields}>
       <Field label={t("Title")} span={2}><input name="title" value={title} maxLength={300} onChange={(event) => setTitle(event.target.value)} /></Field>
       <Field label={t("Article type")}><select value={articleType} onChange={(event) => setArticleType(event.target.value)}>{ARTICLE_TYPES.slice(1).map((value) => <option key={value}>{value}</option>)}</select></Field>
@@ -677,7 +680,7 @@ function ArticleDrawer({ articleId, categories, bootstrap, canEdit, notify, onCl
 }) {
   const t = useT();
   const [article, setArticle] = useState<KnowledgeArticleDetail | null>(null);
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(() => canEdit && hasDraft(`knowledge:article:${articleId}`));
   const reload = useCallback(() => { void getKnowledgeArticle(articleId).then(setArticle).catch((error) => notify(errorText(error))); }, [articleId, notify]);
   useEffect(() => { const timer = window.setTimeout(reload, 0); return () => window.clearTimeout(timer); }, [reload]);
   if (!article) return <Drawer title={t("Loading…")} onClose={onClose}><span className="spinner" /></Drawer>;
@@ -703,8 +706,8 @@ function KnowledgeAdmin({ categories: activeCategories, notify, onChanged }: {
   const t = useT();
   const [categories, setCategories] = useState<KnowledgeCategory[]>(activeCategories);
   const [sequences, setSequences] = useState<KnowledgeNumberSequence[]>([]);
-  const [categoryEditor, setCategoryEditor] = useState<KnowledgeCategory | "new" | null>(null);
-  const [sequenceEditor, setSequenceEditor] = useState<KnowledgeNumberSequence | "new" | null>(null);
+  const [categoryEditor, setCategoryEditor] = useState<KnowledgeCategory | "new" | null>(() => hasDraft("knowledge:category:new") ? "new" : activeCategories.find((category) => hasDraft(`knowledge:category:${category.id}`)) ?? null);
+  const [sequenceEditor, setSequenceEditor] = useState<KnowledgeNumberSequence | "new" | null>(() => hasDraft("knowledge:sequence:new") ? "new" : null);
   const load = useCallback(async () => {
     try {
       const [categoryResult, sequenceResult] = await Promise.all([listKnowledgeCategories(true), listKnowledgeNumberSequences()]);
@@ -733,15 +736,17 @@ function CategoryEditorModal({ category, categories, onClose, onSaved }: {
   category?: KnowledgeCategory; categories: KnowledgeCategory[]; onClose: () => void; onSaved: () => void;
 }) {
   const t = useT();
-  const [code, setCode] = useState(category?.code ?? "");
-  const [nameEn, setNameEn] = useState(category?.nameEn ?? "");
-  const [nameTh, setNameTh] = useState(category?.nameTh ?? "");
-  const [nameJa, setNameJa] = useState(category?.nameJa ?? "");
-  const [parentId, setParentId] = useState(category?.parentId ?? 0);
-  const [documentType, setDocumentType] = useState(category?.defaultDocumentType ?? "");
-  const [confidentiality, setConfidentiality] = useState(category?.defaultConfidentiality ?? "Company");
-  const [sortOrder, setSortOrder] = useState(category?.sortOrder ?? 100);
-  const [active, setActive] = useState(category?.isActive ?? true);
+  const draftKey = category ? `knowledge:category:${category.id}` : "knowledge:category:new";
+  const close = async () => { if (await confirmLeave(draftKey, leaveCopy(t))) onClose(); };
+  const [code, setCode] = useDraftField(draftKey, "code", category?.code ?? "");
+  const [nameEn, setNameEn] = useDraftField(draftKey, "nameEn", category?.nameEn ?? "");
+  const [nameTh, setNameTh] = useDraftField(draftKey, "nameTh", category?.nameTh ?? "");
+  const [nameJa, setNameJa] = useDraftField(draftKey, "nameJa", category?.nameJa ?? "");
+  const [parentId, setParentId] = useDraftField(draftKey, "parentId", category?.parentId ?? 0);
+  const [documentType, setDocumentType] = useDraftField(draftKey, "documentType", category?.defaultDocumentType ?? "");
+  const [confidentiality, setConfidentiality] = useDraftField(draftKey, "confidentiality", category?.defaultConfidentiality ?? "Company");
+  const [sortOrder, setSortOrder] = useDraftField(draftKey, "sortOrder", category?.sortOrder ?? 100);
+  const [active, setActive] = useDraftField(draftKey, "active", category?.isActive ?? true);
   const fields = useRef<HTMLDivElement>(null);
   const save = async () => {
     if (!checkFields(fields.current, t)) return;
@@ -749,10 +754,11 @@ function CategoryEditorModal({ category, categories, onClose, onSaved }: {
       const input = { parentId: parentId || undefined, code: code.trim().toUpperCase(), nameEn: nameEn.trim(), nameTh: nameTh.trim(), nameJa: nameJa.trim(),
         defaultDocumentType: documentType || undefined, defaultConfidentiality: confidentiality, sortOrder, isActive: active };
       if (category) await updateKnowledgeCategory(category.id, input); else await createKnowledgeCategory(input);
+      clearDraft(draftKey);
       onSaved();
     } catch (requestError) { void failureDialog(errorText(requestError), t("Form.errorTitle")); }
   };
-  return <Modal title={category ? t("Edit category") : t("New category")} onClose={onClose} footer={<><button className="btn ghost" type="button" onClick={onClose}>{t("Cancel")}</button><button className="btn primary" type="button" onClick={() => { void save(); }}>{t("Save")}</button></>}>
+  return <Modal title={category ? t("Edit category") : t("New category")} onClose={() => { void close(); }} footer={<><button className="btn ghost" type="button" onClick={() => { void close(); }}>{t("Cancel")}</button><button className="btn primary" type="button" onClick={() => { void save(); }}>{t("Save")}</button></>}>
     <div className="form-grid" ref={fields}>
       <Field label={t("Code")}><input value={code} maxLength={40} onChange={(event) => setCode(event.target.value)} /></Field>
       <Field label={t("Display order")}><input type="number" value={sortOrder} onChange={(event) => setSortOrder(Number(event.target.value))} /></Field>
@@ -771,23 +777,26 @@ function SequenceEditorModal({ sequence, onClose, onSaved }: {
   sequence?: KnowledgeNumberSequence; onClose: () => void; onSaved: () => void;
 }) {
   const t = useT();
-  const [prefix, setPrefix] = useState(sequence?.prefix ?? "STD");
-  const [scopeCode, setScopeCode] = useState(sequence?.scopeCode ?? "EE");
-  const [scopeName, setScopeName] = useState(sequence?.scopeName ?? "");
-  const [lastNumber, setLastNumber] = useState(sequence?.lastNumber ?? 0);
-  const [padding, setPadding] = useState(sequence?.padding ?? 4);
-  const [active, setActive] = useState(sequence?.isActive ?? true);
+  const draftKey = sequence ? `knowledge:sequence:${sequence.id}` : "knowledge:sequence:new";
+  const close = async () => { if (await confirmLeave(draftKey, leaveCopy(t))) onClose(); };
+  const [prefix, setPrefix] = useDraftField(draftKey, "prefix", sequence?.prefix ?? "STD");
+  const [scopeCode, setScopeCode] = useDraftField(draftKey, "scopeCode", sequence?.scopeCode ?? "EE");
+  const [scopeName, setScopeName] = useDraftField(draftKey, "scopeName", sequence?.scopeName ?? "");
+  const [lastNumber, setLastNumber] = useDraftField(draftKey, "lastNumber", sequence?.lastNumber ?? 0);
+  const [padding, setPadding] = useDraftField(draftKey, "padding", sequence?.padding ?? 4);
+  const [active, setActive] = useDraftField(draftKey, "active", sequence?.isActive ?? true);
   const fields = useRef<HTMLDivElement>(null);
   const save = async () => {
     if (!checkFields(fields.current, t)) return;
     try {
       const input = { prefix: prefix.trim().toUpperCase(), scopeCode: scopeCode.trim().toUpperCase(), scopeName: scopeName.trim(), lastNumber, padding, isActive: active };
       if (sequence) await updateKnowledgeNumberSequence(sequence.id, input); else await createKnowledgeNumberSequence(input);
+      clearDraft(draftKey);
       onSaved();
     } catch (requestError) { void failureDialog(errorText(requestError), t("Form.errorTitle")); }
   };
-  return <Modal title={sequence ? t("Edit number sequence") : t("New number sequence")} subtitle={t("The last number cannot move backwards")} onClose={onClose}
-    footer={<><button className="btn ghost" type="button" onClick={onClose}>{t("Cancel")}</button><button className="btn primary" type="button" onClick={() => { void save(); }}>{t("Save")}</button></>}>
+  return <Modal title={sequence ? t("Edit number sequence") : t("New number sequence")} subtitle={t("The last number cannot move backwards")} onClose={() => { void close(); }}
+    footer={<><button className="btn ghost" type="button" onClick={() => { void close(); }}>{t("Cancel")}</button><button className="btn primary" type="button" onClick={() => { void save(); }}>{t("Save")}</button></>}>
     <div className="form-grid" ref={fields}>
       <Field label={t("Prefix")}><input value={prefix} disabled={Boolean(sequence)} maxLength={10} onChange={(event) => setPrefix(event.target.value)} /></Field>
       <Field label={t("Scope code")}><input value={scopeCode} disabled={Boolean(sequence)} maxLength={20} onChange={(event) => setScopeCode(event.target.value)} /></Field>
@@ -808,15 +817,17 @@ function CreateDocumentModal({
   onCreated: (documentNumber: string, id: number) => void;
 }) {
   const t = useT();
-  const [title, setTitle] = useState("");
-  const [documentType, setDocumentType] = useState("Controlled Document");
-  const [categoryId, setCategoryId] = useState(categories[0]?.id ?? 0);
-  const [prefix, setPrefix] = useState("STD");
-  const [scope, setScope] = useState("EE");
-  const [confidentiality, setConfidentiality] = useState("Company");
-  const [language, setLanguage] = useState("EN");
-  const [nextReviewDate, setNextReviewDate] = useState("");
-  const [tags, setTags] = useState("");
+  const draftKey = "knowledge:document:new";
+  const close = async () => { if (await confirmLeave(draftKey, leaveCopy(t))) onClose(); };
+  const [title, setTitle] = useDraftField(draftKey, "title", "");
+  const [documentType, setDocumentType] = useDraftField(draftKey, "documentType", "Controlled Document");
+  const [categoryId, setCategoryId] = useDraftField(draftKey, "categoryId", categories[0]?.id ?? 0);
+  const [prefix, setPrefix] = useDraftField(draftKey, "prefix", "STD");
+  const [scope, setScope] = useDraftField(draftKey, "scope", "EE");
+  const [confidentiality, setConfidentiality] = useDraftField(draftKey, "confidentiality", "Company");
+  const [language, setLanguage] = useDraftField(draftKey, "language", "EN");
+  const [nextReviewDate, setNextReviewDate] = useDraftField(draftKey, "nextReviewDate", "");
+  const [tags, setTags] = useDraftField(draftKey, "tags", "");
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const fields = useRef<HTMLDivElement>(null);
@@ -844,6 +855,7 @@ function CreateDocumentModal({
         nextReviewDate: nextReviewDate || undefined,
         file: file ?? undefined,
       });
+      clearDraft(draftKey);
       onCreated(created.documentNumber, created.id);
     } catch (requestError) {
       void failureDialog(errorText(requestError), t("Form.errorTitle"));
@@ -856,10 +868,10 @@ function CreateDocumentModal({
     <Modal
       title={t("New document")}
       subtitle={t("The document number is issued by the server when you create it")}
-      onClose={onClose}
+      onClose={() => { void close(); }}
       footer={
         <>
-          <button className="btn ghost" type="button" onClick={onClose}>{t("Cancel")}</button>
+          <button className="btn ghost" type="button" onClick={() => { void close(); }}>{t("Cancel")}</button>
           <button className="btn primary" type="button" disabled={busy} onClick={() => { void submit(); }}>
             {busy ? t("Creating…") : t("Create document")}
           </button>
@@ -944,6 +956,8 @@ function DocumentDrawer({
   const [permissions, setPermissions] = useState<KnowledgePermission[]>([]);
   const [busy, setBusy] = useState(false);
   const failureTitle = t("Form.errorTitle");
+  const draftPrefix = `knowledge:doc:${documentId}:`;
+  const closeDrawer = async () => { if (await confirmLeave(draftKeys(draftPrefix), leaveCopy(t))) onClose(); };
   // A document that could not be opened says so in the drawer (plain text) after the error dialog, instead of loading forever.
   const [loadFailed, setLoadFailed] = useState(false);
 
@@ -1009,11 +1023,11 @@ function DocumentDrawer({
     <Drawer
       title={document.title}
       subtitle={`${document.documentNumber} · ${document.categoryName}`}
-      onClose={onClose}
+      onClose={() => { void closeDrawer(); }}
       width={720}
       footer={
         <>
-          <button className="btn ghost" type="button" onClick={onClose}>{t("Close")}</button>
+          <button className="btn ghost" type="button" onClick={() => { void closeDrawer(); }}>{t("Close")}</button>
           {latest?.fileName ? (
             <>
               {latest.mimeType && (latest.mimeType === "application/pdf" || latest.mimeType.startsWith("image/") || latest.mimeType.startsWith("text/")) ? (
@@ -1141,6 +1155,7 @@ function DocumentDrawer({
           {canUpload && latest && ["Draft", "Request Changes"].includes(latest.status) ? (
             <div className="detail-full">
               <SubmitForReviewForm
+                draftKey={`${draftPrefix}review`}
                 versionId={latest.id}
                 bootstrap={bootstrap}
                 busy={busy}
@@ -1150,7 +1165,7 @@ function DocumentDrawer({
           ) : null}
           {canPublish && publishedVersion ? (
             <div className="detail-full">
-              <AcknowledgementAssignment versionId={publishedVersion.id} bootstrap={bootstrap} notify={notify} onChanged={() => { void reload(); onChanged(); }} />
+              <AcknowledgementAssignment draftKey={`${draftPrefix}ack`} versionId={publishedVersion.id} bootstrap={bootstrap} notify={notify} onChanged={() => { void reload(); onChanged(); }} />
             </div>
           ) : null}
         </div>
@@ -1193,6 +1208,7 @@ function DocumentDrawer({
           </table>
           {canUpload ? (
             <UploadRevisionForm
+              draftKey={`${draftPrefix}revision`}
               documentId={documentId}
               busy={busy}
               onUpload={(input) => act(() => uploadKnowledgeVersion(documentId, { ...input, baseVersionId: latest?.id }), "New revision uploaded")}
@@ -1202,12 +1218,13 @@ function DocumentDrawer({
       ) : null}
 
       {tab === "related" ? (
-        <DocumentRelations documentId={documentId} relations={detail.relations} canEdit={canUpload}
+        <DocumentRelations draftKey={`${draftPrefix}link`} documentId={documentId} relations={detail.relations} canEdit={canUpload}
           notify={notify} onChanged={() => { void reload(); onChanged(); }} />
       ) : null}
 
       {tab === "comments" ? (
         <DocumentComments
+          draftKey={`${draftPrefix}comment`}
           documentId={documentId}
           versionId={latest?.id}
           comments={comments}
@@ -1219,6 +1236,7 @@ function DocumentDrawer({
 
       {tab === "access" && canManagePermissions ? (
         <DocumentPermissions
+          draftKey={`${draftPrefix}permission`}
           documentId={documentId}
           permissions={permissions}
           bootstrap={bootstrap}
@@ -1249,13 +1267,13 @@ function DocumentDrawer({
   );
 }
 
-function AcknowledgementAssignment({ versionId, bootstrap, notify, onChanged }: {
-  versionId: number; bootstrap: BootstrapData; notify: (message: string) => void; onChanged: () => void;
+function AcknowledgementAssignment({ draftKey, versionId, bootstrap, notify, onChanged }: {
+  draftKey: string; versionId: number; bootstrap: BootstrapData; notify: (message: string) => void; onChanged: () => void;
 }) {
   const t = useT();
   const team = bootstrap.team ?? [];
-  const [selected, setSelected] = useState<number[]>([]);
-  const [dueAt, setDueAt] = useState("");
+  const [selected, setSelected] = useDraftField<number[]>(draftKey, "selected", []);
+  const [dueAt, setDueAt] = useDraftField(draftKey, "dueAt", "");
   const fields = useRef<HTMLDivElement>(null);
   return <Panel title={t("Read acknowledgement")} subtitle={t("Assignments are bound to this exact published revision")}>
     <div className="form-grid" ref={fields}>
@@ -1264,20 +1282,20 @@ function AcknowledgementAssignment({ versionId, bootstrap, notify, onChanged }: 
     </div>
     <button className="btn primary" type="button" onClick={async () => {
       if (!checkFields(fields.current, t, [{ invalid: selected.length === 0, at: ".check-grid", message: t("Form.chooseOne") }])) return;
-      try { const result = await assignKnowledgeAcknowledgement(versionId, { userIds: selected, dueAt: dueAt || undefined }); notify(`${result.assigned} acknowledgement assignment(s) added`); setSelected([]); onChanged(); }
+      try { const result = await assignKnowledgeAcknowledgement(versionId, { userIds: selected, dueAt: dueAt || undefined }); notify(`${result.assigned} acknowledgement assignment(s) added`); setSelected([]); clearDraft(draftKey); onChanged(); }
       catch (error) { notify(errorText(error)); }
     }}><Icon name="checkCircle" />{t("Assign acknowledgement")}</button>
   </Panel>;
 }
 
-function DocumentRelations({ documentId, relations, canEdit, notify, onChanged }: {
-  documentId: number; relations: KnowledgeDocumentDetail["relations"]; canEdit: boolean;
+function DocumentRelations({ draftKey, documentId, relations, canEdit, notify, onChanged }: {
+  draftKey: string; documentId: number; relations: KnowledgeDocumentDetail["relations"]; canEdit: boolean;
   notify: (message: string) => void; onChanged: () => void;
 }) {
   const t = useT();
-  const [entityType, setEntityType] = useState("Project");
-  const [entityId, setEntityId] = useState("");
-  const [relationType, setRelationType] = useState("Reference");
+  const [entityType, setEntityType] = useDraftField(draftKey, "entityType", "Project");
+  const [entityId, setEntityId] = useDraftField(draftKey, "entityId", "");
+  const [relationType, setRelationType] = useDraftField(draftKey, "relationType", "Reference");
   const fields = useRef<HTMLDivElement>(null);
   return <div className="stack">
     {canEdit ? <Panel title={t("Link document")} subtitle={t("Link one document to many records without copying the file")}>
@@ -1286,15 +1304,16 @@ function DocumentRelations({ documentId, relations, canEdit, notify, onChanged }
         <Field label={t("Record ID")}><input name="entityId" type="number" min={1} value={entityId} onChange={(event) => setEntityId(event.target.value)} /></Field>
         <Field label={t("Relation type")}><select value={relationType} onChange={(event) => setRelationType(event.target.value)}>{["Reference", "Attachment", "Deliverable", "Standard Applied", "Supersedes", "Related"].map((value) => <option key={value}>{value}</option>)}</select></Field>
       </div>
-      <button className="btn primary" type="button" onClick={async () => { if (!checkFields(fields.current, t, [{ invalid: !Number(entityId), at: '[name="entityId"]', message: t("Form.required") }])) return; try { await linkKnowledgeDocument(documentId, { entityType, entityId: Number(entityId), relationType }); setEntityId(""); notify("Document linked"); onChanged(); } catch (error) { notify(errorText(error)); } }}><Icon name="gitBranch" />{t("Link record")}</button>
+      <button className="btn primary" type="button" onClick={async () => { if (!checkFields(fields.current, t, [{ invalid: !Number(entityId), at: '[name="entityId"]', message: t("Form.required") }])) return; try { await linkKnowledgeDocument(documentId, { entityType, entityId: Number(entityId), relationType }); setEntityId(""); clearDraft(draftKey); notify("Document linked"); onChanged(); } catch (error) { notify(errorText(error)); } }}><Icon name="gitBranch" />{t("Link record")}</button>
     </Panel> : null}
     {relations.length === 0 ? <EmptyState icon="gitBranch" title="Not linked yet" message="Link this document to an inquiry, project, estimate, BOM, PR or PO to make it findable from that record." /> : <ul className="link-list">{relations.map((relation) => <li key={relation.id}><Pill>{relation.entityType}</Pill><span className="mono">#{relation.entityId}</span><span>{relation.relationType}</span><small>{relation.createdByName}</small>{canEdit ? <button className="btn ghost sm" type="button" onClick={async () => { try { await unlinkKnowledgeDocument(documentId, relation.id); notify("Document unlinked"); onChanged(); } catch (error) { notify(errorText(error)); } }}><Icon name="trash" /></button> : null}</li>)}</ul>}
   </div>;
 }
 
 function DocumentComments({
-  documentId, versionId, comments, busy, onChanged, notify,
+  draftKey, documentId, versionId, comments, busy, onChanged, notify,
 }: {
+  draftKey: string;
   documentId: number;
   versionId?: number;
   comments: KnowledgeComment[];
@@ -1303,7 +1322,7 @@ function DocumentComments({
   notify: (message: string) => void;
 }) {
   const t = useT();
-  const [content, setContent] = useState("");
+  const [content, setContent] = useDraftField(draftKey, "content", "");
   const [replyTo, setReplyTo] = useState<number | undefined>();
   const box = useRef<HTMLDivElement>(null);
   const submit = async () => {
@@ -1350,8 +1369,9 @@ function DocumentComments({
 }
 
 function DocumentPermissions({
-  documentId, permissions, bootstrap, busy, onChanged, notify,
+  draftKey, documentId, permissions, bootstrap, busy, onChanged, notify,
 }: {
+  draftKey: string;
   documentId: number;
   permissions: KnowledgePermission[];
   bootstrap: BootstrapData;
@@ -1361,10 +1381,10 @@ function DocumentPermissions({
 }) {
   const t = useT();
   const team = bootstrap.team ?? [];
-  const [subjectType, setSubjectType] = useState("User");
-  const [subjectId, setSubjectId] = useState(team[0]?.id ?? 0);
-  const [department, setDepartment] = useState(bootstrap.user.department);
-  const [level, setLevel] = useState("View");
+  const [subjectType, setSubjectType] = useDraftField(draftKey, "subjectType", "User");
+  const [subjectId, setSubjectId] = useDraftField(draftKey, "subjectId", team[0]?.id ?? 0);
+  const [department, setDepartment] = useDraftField(draftKey, "department", bootstrap.user.department);
+  const [level, setLevel] = useDraftField(draftKey, "level", "View");
   return (
     <div className="stack">
       <Panel title={t("Permission summary")} subtitle={t("Server-side authorization is checked again on every read and download")}>
@@ -1388,7 +1408,7 @@ function DocumentPermissions({
             await grantKnowledgePermission(documentId, {
               subjectType, subjectId: subjectType === "Department" ? undefined : subjectId,
               department: subjectType === "Department" ? department.trim() : undefined, permissionLevel: level,
-            }); notify("Permission granted"); onChanged();
+            }); clearDraft(draftKey); notify("Permission granted"); onChanged();
           } catch (error) { notify(errorText(error)); }
         }}><Icon name="plus" />{t("Grant access")}</button>
       </Panel>
@@ -1403,8 +1423,9 @@ function DocumentPermissions({
 }
 
 function SubmitForReviewForm({
-  versionId, bootstrap, busy, onSubmit,
+  draftKey, versionId, bootstrap, busy, onSubmit,
 }: {
+  draftKey: string;
   versionId: number;
   bootstrap: BootstrapData;
   busy: boolean;
@@ -1413,8 +1434,8 @@ function SubmitForReviewForm({
   const t = useT();
   const team = bootstrap.team ?? [];
   const others = team.filter((member) => member.id !== bootstrap.user.id);
-  const [reviewerId, setReviewerId] = useState(others[0]?.id ?? 0);
-  const [approverId, setApproverId] = useState(others[1]?.id ?? others[0]?.id ?? 0);
+  const [reviewerId, setReviewerId] = useDraftField(draftKey, "reviewerId", others[0]?.id ?? 0);
+  const [approverId, setApproverId] = useDraftField(draftKey, "approverId", others[1]?.id ?? others[0]?.id ?? 0);
   const fields = useRef<HTMLDivElement>(null);
 
   if (others.length === 0) {
@@ -1449,6 +1470,7 @@ function SubmitForReviewForm({
             { invalid: !reviewerId, at: '[name="reviewerId"]', message: t("Form.choose") },
             { invalid: !approverId, at: '[name="approverId"]', message: t("Form.choose") },
           ])) return;
+          clearDraft(draftKey);
           onSubmit({ reviewerIds: [reviewerId], approverId });
         }}
       >
@@ -1460,16 +1482,17 @@ function SubmitForReviewForm({
 }
 
 function UploadRevisionForm({
-  documentId, busy, onUpload,
+  draftKey, documentId, busy, onUpload,
 }: {
+  draftKey: string;
   documentId: number;
   busy: boolean;
   onUpload: (input: { file: File; changeSummary: string; changeType: "Major" | "Minor" }) => void;
 }) {
   const t = useT();
   const [file, setFile] = useState<File | null>(null);
-  const [summary, setSummary] = useState("");
-  const [changeType, setChangeType] = useState<"Major" | "Minor">("Major");
+  const [summary, setSummary] = useDraftField(draftKey, "summary", "");
+  const [changeType, setChangeType] = useDraftField<"Major" | "Minor">(draftKey, "changeType", "Major");
   const fields = useRef<HTMLDivElement>(null);
 
   return (
@@ -1502,6 +1525,7 @@ function UploadRevisionForm({
             { invalid: !file, at: '[name="revisionFile"]', message: t("Form.choose") },
             { invalid: !summary.trim(), at: '[name="changeSummary"]', message: t("Form.required") },
           ]) || !file) return;
+          clearDraft(draftKey);
           onUpload({ file, changeSummary: summary.trim(), changeType });
         }}
       >

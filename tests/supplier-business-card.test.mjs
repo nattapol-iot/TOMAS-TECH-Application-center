@@ -47,8 +47,8 @@ test("the supplier form scans a card and only fills blank fields", async () => {
   assert.doesNotMatch(form, /key: "category", value: result\./);
   // Typed values always win over scanned ones.
   assert.match(form, /fields\.filter\(\(field\) => field\.value && !form\[field\.key\]\.trim\(\)\)/);
-  // The controlled form has to be cleared explicitly after a successful save.
-  assert.match(form, /setForm\(\{ \.\.\.BLANK_SUPPLIER \}\)\)/);
+  // The controlled form has to be cleared explicitly after a successful save, and so does its draft (Pegasus 0.6).
+  assert.match(form, /\(\) => \{ setForm\(\{ \.\.\.BLANK_SUPPLIER \}\); clearDraft\("supplier:new"\); \}\)/);
 });
 
 test("the scanner accepts a dragged card everywhere it is used", async () => {

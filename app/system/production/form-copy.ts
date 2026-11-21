@@ -14,4 +14,8 @@ export const FORM_COPY: Record<string, { en: string; th: string; jp: string }> =
   ["Form.pattern", "Use the format shown.", "กรอกตามรูปแบบที่แสดง", "表示されている形式で入力してください。"],
   ["Form.invalid", "Check this value.", "ตรวจสอบค่านี้", "この値を確認してください。"],
   ["Form.errorTitle", "Could not complete", "ทำรายการไม่สำเร็จ", "処理できませんでした"],
-].map(([key, en, th, jp]) => [key, { en, th, jp }]));
+  // Leaving a form with unsaved changes (Pegasus 0.6 and D.8 UnsavedChangesDialog): exactly these two answers.
+  ["Form.unsavedTitle", "Unsaved changes", "ยังไม่ได้บันทึก", "未保存の変更"],
+  ["Form.unsavedBody", "You have unsaved changes. Keep editing, or discard them?", "มีข้อมูลที่ยังไม่ได้บันทึก จะแก้ไขต่อ หรือทิ้งการแก้ไข?", "保存されていない変更があります。編集を続けますか、それとも破棄しますか？"],
+  ["Form.keepEditing", "Keep editing", "แก้ไขต่อ", "編集を続ける"],
+  ["Form.discard", "Discard changes", "ทิ้งการแก้ไข", "変更を破棄"],].map(([key, en, th, jp]) => [key, { en, th, jp }]));

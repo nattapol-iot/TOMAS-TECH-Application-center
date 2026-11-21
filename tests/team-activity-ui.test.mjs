@@ -18,6 +18,8 @@ function harness(lang){let cursor=0;const states=[],effects=[],failures=[];const
   if(name==='../activity-client')return {bangkokDay:()=>today,activityRead:async path=>path==='meta'?meta:overview,activityModuleLabels:{}};
   // The form helper without a DOM: rules decide, and a failure is recorded instead of opening a dialog.
   if(name==='./form-bubbles')return {checkFields:(container,t,rules=[])=>!rules.some(rule=>rule.invalid),failureDialog:async message=>{failures.push(message);}};
+  // Drafts without a browser: plain state, nothing kept, and leaving a form asks the same confirm as before.
+  if(name==='./form-draft')return {useDraftField:(key,field,initial)=>react.useState(initial),clearDraft(){},hasDraft:()=>false,draftKeys:()=>[],leaveCopy:()=>({}),confirmLeave:async()=>globalThis.window?.confirm?.() ?? true};
   if(name.endsWith('.css'))return {};return require(name);
  },moduleObject,moduleObject.exports);
  return {render(){cursor=0;return moduleObject.exports.TeamActivityScreen({});},async settle(){for(const effect of effects.splice(0))effect();await new Promise(resolve=>setImmediate(resolve));}};
@@ -41,6 +43,8 @@ function componentHarness(component,{api={},confirm=()=>true}={}){
   if(name==='../activity-client')return {bangkokDay:()=>today,activityModuleLabels:{},...api};
   // The form helper without a DOM: rules decide, and a failure is recorded instead of opening a dialog.
   if(name==='./form-bubbles')return {checkFields:(container,t,rules=[])=>!rules.some(rule=>rule.invalid),failureDialog:async message=>{failures.push(message);}};
+  // Drafts without a browser: plain state, nothing kept, and leaving a form asks the same confirm as before.
+  if(name==='./form-draft')return {useDraftField:(key,field,initial)=>react.useState(initial),clearDraft(){},hasDraft:()=>false,draftKeys:()=>[],leaveCopy:()=>({}),confirmLeave:async()=>confirm()};
   if(name.endsWith('.css'))return {};return require(name);
  },moduleObject,moduleObject.exports,{confirm},{activeElement:null},class Element{});
  return {failures,render(props){cursor=0;return moduleObject.exports[component](props);},async settle(){for(const effect of effects.splice(0))effect();await new Promise(resolve=>setImmediate(resolve));}};

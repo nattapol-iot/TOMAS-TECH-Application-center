@@ -72,6 +72,7 @@ import { ProductionCustomers, ProductionEngineeringRates } from "./AdminAnalytic
 import { ErpMasterPanel } from "./ErpMasterPanel";
 import { PegasusScreen } from "./PegasusScreen";
 import { checkFields, failureDialog } from "./form-bubbles";
+import { clearDraft, confirmLeave, draftKeys, hasDraft, leaveCopy, useDraftField } from "./form-draft";
 import { ErpProjectNumberField, isPlaceholderProjectNumber } from "./ErpProjectNumber";
 import { SearchSelect } from "./SearchSelect";
 import { canViewEngineeringRates } from "../../../backend-node/src/engineering-rate-access";
@@ -1544,8 +1545,12 @@ function SupplierMasterTab({ bootstrap, canWrite, canCreate, notify, refreshBoot
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [editingSupplier, setEditingSupplier] = useState<{ id: number; code: string; name: string; category: string; erpCode?: string | null } | null>(null);
+  const [createOpen, setCreateOpen] = useState(() => canCreate && hasDraft("supplier:new"));
+  const [editingSupplier, setEditingSupplier] = useState<{ id: number; code: string; name: string; category: string; erpCode?: string | null } | null>(() => {
+    if (!canWrite) return null;
+    const ids = draftKeys("supplier:edit:").map((key) => Number(key.slice("supplier:edit:".length)));
+    return bootstrap.suppliers.find((supplier) => ids.includes(supplier.id)) ?? null;
+  });
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const suppliers = bootstrap.suppliers.filter((supplier) =>
     [supplier.code, supplier.name, supplier.category].join(" ").toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
@@ -1618,37 +1623,40 @@ function SupplierEditModal({
 }) {
   const uiText = useUiText();
   const { busy, submit } = useMasterForm(refreshBootstrap, (msg) => { onClose(); notify(msg); }, uiText("Form.errorTitle"));
+  const draftKey = `supplier:edit:${supplier.id}`;
+  const [values, setValues] = useDraftField(draftKey, "form", { category: supplier.category, name: supplier.name, contact: "", email: "", phone: "", brands: "" });
+  const update = (key: keyof typeof values, value: string) => setValues((current) => ({ ...current, [key]: value }));
+  const close = async () => { if (await confirmLeave(draftKey, leaveCopy(uiText))) onClose(); };
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = event.currentTarget;
     if (!checkFields(form, uiText)) return;
-    const data = new FormData(form);
-    const brands = (data.get("brands") as string ?? "").split(",").map((b) => b.trim()).filter(Boolean);
+    const brands = values.brands.split(",").map((b) => b.trim()).filter(Boolean);
     void submit(form, async () => {
       await updateSupplier(supplier.id, {
-        name: data.get("name") as string,
-        category: data.get("category") as string,
-        contact: (data.get("contact") as string) || undefined,
-        email: (data.get("email") as string) || undefined,
-        phone: (data.get("phone") as string) || undefined,
+        name: values.name,
+        category: values.category,
+        contact: values.contact || undefined,
+        email: values.email || undefined,
+        phone: values.phone || undefined,
         brands,
       });
-    }, `Supplier ${supplier.code} updated`);
+    }, `Supplier ${supplier.code} updated`, () => clearDraft(draftKey));
   };
   return (
-    <Modal title={`${uiText("Edit")} ${supplier.code}`} size="md" onClose={onClose} footer={<>
-      <button className="btn ghost" type="button" onClick={onClose}>{uiText("Cancel")}</button>
+    <Modal title={`${uiText("Edit")} ${supplier.code}`} size="md" onClose={() => { void close(); }} footer={<>
+      <button className="btn ghost" type="button" onClick={() => { void close(); }}>{uiText("Cancel")}</button>
       <button className="btn primary" type="submit" form="supplier-edit-form" disabled={busy}>{busy ? uiText("Saving…") : uiText("Save")}</button>
     </>}>
       <form id="supplier-edit-form" noValidate onSubmit={onSubmit}>
         <div className="form-grid two">
           <label className="field"><span>{uiText("Code")}</span><input value={supplier.code} readOnly /></label>
-          <label className="field"><span><LocalizedText text={"Category *"} /></span><input name="category" defaultValue={supplier.category} required maxLength={100} /></label>
-          <label className="field span-2"><span><LocalizedText text={"Supplier name *"} /></span><input name="name" defaultValue={supplier.name} required maxLength={300} readOnly={Boolean(supplier.erpCode)} />{supplier.erpCode ? <small><LocalizedText text={"ErpMaster.supplierLockedHint"} /></small> : null}</label>
-          <label className="field"><span><LocalizedText text={"Contact person"} /></span><input name="contact" maxLength={200} /></label>
-          <label className="field"><span><LocalizedText text={"Phone"} /></span><input name="phone" maxLength={50} /></label>
-          <label className="field span-2"><span><LocalizedText text={"Email"} /></span><input name="email" type="email" maxLength={200} /></label>
-          <label className="field span-2"><span><LocalizedText text={"Brands"} /></span><input name="brands" maxLength={2000} placeholder="Siemens, Omron, SMC" /></label>
+          <label className="field"><span><LocalizedText text={"Category *"} /></span><input name="category" value={values.category} onChange={(event) => update("category", event.target.value)} required maxLength={100} /></label>
+          <label className="field span-2"><span><LocalizedText text={"Supplier name *"} /></span><input name="name" value={values.name} onChange={(event) => update("name", event.target.value)} required maxLength={300} readOnly={Boolean(supplier.erpCode)} />{supplier.erpCode ? <small><LocalizedText text={"ErpMaster.supplierLockedHint"} /></small> : null}</label>
+          <label className="field"><span><LocalizedText text={"Contact person"} /></span><input name="contact" value={values.contact} onChange={(event) => update("contact", event.target.value)} maxLength={200} /></label>
+          <label className="field"><span><LocalizedText text={"Phone"} /></span><input name="phone" value={values.phone} onChange={(event) => update("phone", event.target.value)} maxLength={50} /></label>
+          <label className="field span-2"><span><LocalizedText text={"Email"} /></span><input name="email" type="email" value={values.email} onChange={(event) => update("email", event.target.value)} maxLength={200} /></label>
+          <label className="field span-2"><span><LocalizedText text={"Brands"} /></span><input name="brands" value={values.brands} onChange={(event) => update("brands", event.target.value)} maxLength={2000} placeholder="Siemens, Omron, SMC" /></label>
         </div>
       </form>
     </Modal>
@@ -1660,8 +1668,9 @@ const BLANK_SUPPLIER = { code: "", name: "", category: "", contact: "", email: "
 function SupplierCreateForm({ notify, refreshBootstrap, onClose }: Pick<CommonProps, "notify" | "refreshBootstrap"> & { onClose: () => void }) {
   const localizeCopy = useStaticCopy();
   const { busy, submit } = useMasterForm(refreshBootstrap, notify, localizeCopy("Form.errorTitle"));
-  // Controlled so a scanned card can fill the blanks the person has not typed yet.
-  const [form, setForm] = useState({ ...BLANK_SUPPLIER });
+  // Controlled so a scanned card can fill the blanks the person has not typed yet, and kept in a draft (Pegasus 0.6).
+  const [form, setForm] = useDraftField("supplier:new", "form", BLANK_SUPPLIER);
+  const close = async () => { if (await confirmLeave("supplier:new", leaveCopy(localizeCopy))) onClose(); };
   const update = <K extends keyof typeof BLANK_SUPPLIER>(key: K, value: string) =>
     setForm((current) => ({ ...current, [key]: value }));
 
@@ -1702,11 +1711,11 @@ function SupplierCreateForm({ notify, refreshBootstrap, onClose }: Pick<CommonPr
       if (brands.length > 100) throw new Error("Brands ใส่ได้ไม่เกิน 100 รายการ");
       if (brands.some((brand) => brand.length > 100)) throw new Error("Brand แต่ละรายการต้องยาวไม่เกิน 100 ตัวอักษร");
       await createSupplier(input);
-    }, `Supplier ${input.code.toUpperCase()} created`, () => setForm({ ...BLANK_SUPPLIER }));
+    }, `Supplier ${input.code.toUpperCase()} created`, () => { setForm({ ...BLANK_SUPPLIER }); clearDraft("supplier:new"); });
   };
 
-  return <Modal title="Supplier.new" subtitle="ใช้ใน Cost item และ Preferred supplier" size="md" onClose={onClose} footer={<>
-    <button className="btn ghost" type="button" disabled={busy} onClick={onClose}>{localizeCopy("Cancel")}</button>
+  return <Modal title="Supplier.new" subtitle="ใช้ใน Cost item และ Preferred supplier" size="md" onClose={() => { void close(); }} footer={<>
+    <button className="btn ghost" type="button" disabled={busy} onClick={() => { void close(); }}>{localizeCopy("Cancel")}</button>
     <button className="btn primary" type="submit" form="supplier-create-form" disabled={busy}>{localizeCopy(busy ? "Saving…" : "Save")}</button>
   </>}>
     <form id="supplier-create-form" noValidate onSubmit={onSubmit}>
@@ -1870,9 +1879,14 @@ function EmployeeMasterTab({ canWrite, notify }: { canWrite: boolean; notify: (m
   const [pageSize, setPageSize] = useState(50);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [editing, setEditing] = useState<EmployeeRecord | "new" | null>(null);
+  const [reopenNew] = useState(() => canWrite ? draftKeys("employee:new:")[0] : undefined);
+  const [editing, setEditing] = useState<EmployeeRecord | "new" | null>(() => reopenNew ? "new" : null);
   // Filled in from a sign-in request, so the employee is added with exactly the email that was tried.
-  const [prefill, setPrefill] = useState<Partial<EmployeeInput> | null>(null);
+  const [prefill, setPrefill] = useState<Partial<EmployeeInput> | null>(() => {
+    const email = reopenNew?.slice("employee:new:".length);
+    return email ? { email } : null;
+  });
+  const reopenedEdit = useRef(false);
   const [signInRequests, setSignInRequests] = useState<SignInRequest[]>([]);
   // Accounts the old first sign-in created (Admin, no department) that no employee record points at.
   const [unlinked, setUnlinked] = useState<UnlinkedAccount[]>([]);
@@ -1883,6 +1897,13 @@ function EmployeeMasterTab({ canWrite, notify }: { canWrite: boolean; notify: (m
         listEmployees({ search, activeOnly }), canWrite ? listSignInRequests() : Promise.resolve([]), canWrite ? listUnlinkedAccounts() : Promise.resolve([]),
       ]);
       setEmployees(list); setSignInRequests(requests); setUnlinked(accounts);
+      // An employee left with unsaved changes opens again once the list is here (only on the first load).
+      if (!reopenedEdit.current) {
+        reopenedEdit.current = true;
+        const ids = canWrite ? draftKeys("employee:edit:").map((key) => Number(key.slice("employee:edit:".length))) : [];
+        const match = list.find((employee) => ids.includes(employee.id));
+        if (match) setEditing((current) => current ?? match);
+      }
     }
     catch (requestError) { setError(toError(requestError)); }
     finally { setLoading(false); }
@@ -1974,13 +1995,15 @@ function EmployeeModal({ employee, prefill = null, departments = [], positions =
   onClose: () => void; onSaved: (message: string) => Promise<void>;
 }) {
   const { t } = useLanguage();
-  const [form, setForm] = useState<EmployeeInput>(() => employee ? {
+  const draftKey = employee ? `employee:edit:${employee.id}` : `employee:new:${prefill?.email ?? ""}`;
+  const [form, setForm] = useDraftField<EmployeeInput>(draftKey, "form", employee ? {
     employeeNo: employee.employeeNo, nameEn: employee.nameEn, nameTh: employee.nameTh,
     department: employee.department, jobTitle: employee.jobTitle, mobile: employee.mobile,
     email: employee.email, nickname: employee.nickname, birthDate: employee.birthDate ?? "",
     uniformSize: employee.uniformSize, shoeSize: employee.shoeSize, startWorkDate: employee.startWorkDate ?? "",
     endWorkDate: employee.endWorkDate ?? "", position: employee.position, isActive: employee.isActive,
   } : { ...EMPTY_EMPLOYEE, ...prefill });
+  const close = async () => { if (await confirmLeave(draftKey, leaveCopy(t))) onClose(); };
   const [busy, setBusy] = useState(false);
   const update = <K extends keyof EmployeeInput>(key: K, value: EmployeeInput[K]) => setForm((current) => ({ ...current, [key]: value }));
   const submit = async () => {
@@ -1992,6 +2015,7 @@ function EmployeeModal({ employee, prefill = null, departments = [], positions =
         endWorkDate: form.endWorkDate || undefined };
       if (employee) await updateEmployee(employee.id, { ...input, rowVersion: employee.rowVersion });
       else await createEmployee(input);
+      clearDraft(draftKey);
       await onSaved(employee ? `${form.nameEn} updated` : `${form.nameEn} created`);
     } catch (requestError) { void failureDialog(toError(requestError), t("Form.errorTitle")); }
     finally { setBusy(false); }
@@ -2002,8 +2026,8 @@ function EmployeeModal({ employee, prefill = null, departments = [], positions =
     { invalid: !form.jobTitle.trim(), at: '[name="jobTitle"]', message: t("Form.required") },
     { invalid: Boolean(form.birthDate && form.startWorkDate && form.birthDate >= form.startWorkDate), at: '[data-bubble-anchor="birthday"]', message: t("Form.invalid") },
   ];
-  return <Modal title={employee ? "Edit employee" : "New employee"} subtitle="Employee profile is separate from application login access" size="lg" onClose={onClose} footer={<>
-    <button className="btn ghost" type="button" onClick={onClose}>{t("Cancel")}</button>
+  return <Modal title={employee ? "Edit employee" : "New employee"} subtitle="Employee profile is separate from application login access" size="lg" onClose={() => { void close(); }} footer={<>
+    <button className="btn ghost" type="button" onClick={() => { void close(); }}>{t("Cancel")}</button>
     <button className="btn primary" type="submit" form="employee-master-form" disabled={busy}><Icon name="check" />{busy ? t("Saving…") : t("Save")}</button>
   </>}>
     <form id="employee-master-form" noValidate onSubmit={(event) => { event.preventDefault(); if (checkFields(event.currentTarget, t, rules)) void submit(); }}>
@@ -2034,7 +2058,7 @@ type TeamMember = BootstrapData["team"][number];
 
 function TeamReferenceTab({ bootstrap, canManageRoles, notify, refreshBootstrap }: Pick<CommonProps, "bootstrap" | "notify" | "refreshBootstrap"> & { canManageRoles: boolean }) {
   const t = useUiText();
-  const [editing, setEditing] = useState<TeamMember | null>(null);
+  const [editing, setEditing] = useState<TeamMember | null>(() => canManageRoles ? bootstrap.team.find((member) => hasDraft(`role:${member.id}`)) ?? null : null);
   return <>
     <Panel title={`${bootstrap.team.length} ${t("active user accounts")}`} subtitle={t("System accounts and permission roles, separate from the employee register in Employees")} flush>
       {bootstrap.team.length ? <div className="table-wrap"><table><thead><tr>{canManageRoles ? <th className="pg-acts"><span className="sr-only">{t("Actions")}</span></th> : null}<th><LocalizedText text={"Name"} /></th><th><LocalizedText text={"Email"} /></th><th><LocalizedText text={"Role"} /></th><th><LocalizedText text={"Department"} /></th><th><LocalizedText text={"Level"} /></th></tr></thead><tbody>{bootstrap.team.map((member) => <tr key={member.id}>{canManageRoles ? <td className="master-row-action"><button className="pg-act" type="button" title={t("Edit role")} aria-label={`${t("Edit role")} ${member.name}`} onClick={() => setEditing(member)}><Icon name="edit" /></button></td> : null}<td><div className="user-account-cell"><strong>{member.name}</strong>{member.id === bootstrap.user.id ? <small>{t("Current account")}</small> : null}</div></td><td>{member.email}</td><td><Badge tone={member.role === "Admin" ? "violet" : "blue"}>{member.role}</Badge></td><td>{member.department}</td><td>{member.level || "—"}</td></tr>)}</tbody></table></div> : <EmptyState icon="users" title="No active team member" message="Provision users before creating rate references" />}
@@ -2053,13 +2077,15 @@ function TeamReferenceTab({ bootstrap, canManageRoles, notify, refreshBootstrap 
 function UserRoleModal({ member, isCurrentAccount, onClose, onSaved, onRolesChanged }: { member: TeamMember; isCurrentAccount: boolean; onClose: () => void; onSaved: (role: string) => Promise<void>; onRolesChanged: (message: string) => Promise<void> }) {
   const t = useUiText();
   const [roles, setRoles] = useState<AccessRole[]>([]);
-  const [roleCode, setRoleCode] = useState(member.role);
+  const draftKey = `role:${member.id}`;
+  const [roleCode, setRoleCode] = useDraftField(draftKey, "roleCode", member.role);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [additional, setAdditional] = useState<UserAdditionalRole[]>([]);
-  const [extraCode, setExtraCode] = useState("");
-  const [extraReason, setExtraReason] = useState("");
+  const [extraCode, setExtraCode] = useDraftField(draftKey, "extraCode", "");
+  const [extraReason, setExtraReason] = useDraftField(draftKey, "extraReason", "");
+  const close = async () => { if (await confirmLeave(draftKey, leaveCopy(t))) onClose(); };
   const [extraBusy, setExtraBusy] = useState("");
   const grantFields = useRef<HTMLDivElement>(null);
   const failureTitle = t("Form.errorTitle");
@@ -2084,6 +2110,7 @@ function UserRoleModal({ member, isCurrentAccount, onClose, onSaved, onRolesChan
     try {
       const result = await updateUserRole(member.id, { roleCode, rowVersion: member.rowVersion });
       setSaved(true);
+      clearDraft(draftKey);
       await onSaved(result.role);
     } catch (requestError) { fail(requestError); }
     finally { setBusy(false); }
@@ -2118,8 +2145,8 @@ function UserRoleModal({ member, isCurrentAccount, onClose, onSaved, onRolesChan
   };
 
   const grantable = roles.filter((role) => role.code !== member.role && !additional.some((held) => held.code === role.code));
-  return <Modal title={t("Edit application role")} subtitle={t("Role changes update system permissions, not employee profile data")} size="md" onClose={() => { if (!busy) onClose(); }} footer={<>
-    <button className="btn ghost" type="button" disabled={busy} onClick={onClose}>{t("Cancel")}</button>
+  return <Modal title={t("Edit application role")} subtitle={t("Role changes update system permissions, not employee profile data")} size="md" onClose={() => { if (!busy) void close(); }} footer={<>
+    <button className="btn ghost" type="button" disabled={busy} onClick={() => { void close(); }}>{t("Cancel")}</button>
     <button className="btn primary" type="button" disabled={loading || busy || saved || roleCode === member.role || !selectedRole} onClick={() => { void submit(); }}><Icon name="shield" />{busy ? t("Saving…") : t("Save role")}</button>
   </>}>
     <div className="role-account-summary">
