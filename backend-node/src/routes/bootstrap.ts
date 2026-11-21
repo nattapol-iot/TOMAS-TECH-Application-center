@@ -74,7 +74,7 @@ export function registerBootstrapRoutes(app: FastifyInstance, database: Database
 
   app.get("/api/v1/bootstrap", async (request) => {
     const user = await users.required(request);
-    masterData?.holidays.kick(user.id);
+    masterData?.holidays.refresh();
     // Once master is connected it alone holds start dates, and it hands out only the signed-in person's own.
     const ownStartDate = masterData?.ownRecord?.entryDate(user.entraObjectId);
     const result = await database.query<CountRow | CustomerRow | SupplierRow | TeamRow | PermissionRow | FavoriteRow>(`

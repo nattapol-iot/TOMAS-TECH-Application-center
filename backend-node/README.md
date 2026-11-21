@@ -91,8 +91,9 @@ only by `/api/me`, never by the per-request enforcement seam.
 
 The same two values also turn on `src/master-data/` (all dormant without them):
 
-- the company calendar: `GET /api/v1/company-calendar` is copied into `dbo.holidays` at most once an hour,
-  started by a signed-in bootstrap (NATIONAL, COMPANY and SPECIAL days, company-wide or branch `BKK`);
+- the company calendar: `GET /api/v1/company-calendar` is copied into `dbo.holidays` 10 seconds after start, then
+  hourly, and on a signed-in bootstrap when the last sync is over five minutes old (NATIONAL, COMPANY and SPECIAL days,
+  company-wide or branch `BKK`; rows from master have a null `created_by`);
 - the baht rate offered on supplier quotations: `GET /api/v1/exchange-rates/thb` reads master's exchange rates;
 - the signed-in person's own start date on the dashboard: master's `GET /api/v1/me` with their TMT ID token in
   `X-User-Token`. It needs the credentials vault (the token vault keeps each person's refresh token).

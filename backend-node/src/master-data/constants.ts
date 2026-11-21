@@ -10,6 +10,8 @@ export const WORKING_CALENDAR_HOLIDAY_TYPES: readonly string[] = ["NATIONAL", "C
 export const WORKING_CALENDAR_BRANCH = "BKK";
 export const HOLIDAY_NAME_MAX = 200;
 export const HOLIDAY_SYNC_INTERVAL_MS = 60 * 60_000;
+export const HOLIDAY_SYNC_FIRST_RUN_MS = 10_000;
+export const HOLIDAY_REFRESH_MIN_GAP_MS = 5 * 60_000;
 
 export const THB = "THB";
 export const EXCHANGE_RATE_CACHE_TTL_MS = 15 * 60_000;
