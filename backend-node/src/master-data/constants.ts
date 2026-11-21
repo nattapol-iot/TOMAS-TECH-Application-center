@@ -13,6 +13,11 @@ export const EMPLOYEE_SYNC_FIRST_RUN_MS = 30_000;
 // The company has well over this many people; a directory answer this short is treated as an outage.
 export const EMPLOYEE_DIRECTORY_MIN_PEOPLE = 20;
 
+export const REGISTER_SYNC_INTERVAL_MS = 60 * 60_000;
+export const REGISTER_SYNC_FIRST_RUN_MS = 60_000;
+// Migration 122; the account can never sign in.
+export const REGISTER_SYNC_ACCOUNT_EMAIL = "master-data-sync@system.invalid";
+
 export const PROJECT_SEARCH_LIMIT = 30;
 export const PROJECT_CLOSED_STATUS = "CANCELLED";
 

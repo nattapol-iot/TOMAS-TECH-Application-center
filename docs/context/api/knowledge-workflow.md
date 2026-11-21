@@ -2,7 +2,7 @@
 
 [Module](../modules/knowledge.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `0bb11f4f`; generated, do not edit. [backend-node/src/routes/knowledge-workflow.ts](<../../../backend-node/src/routes/knowledge-workflow.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `ed9153db`; generated, do not edit. [backend-node/src/routes/knowledge-workflow.ts](<../../../backend-node/src/routes/knowledge-workflow.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 

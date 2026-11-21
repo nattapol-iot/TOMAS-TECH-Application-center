@@ -102,7 +102,9 @@ The same two values also turn on `src/master-data/` (all dormant without them):
   cancelled ones left out, in place of the ERP's 30-row `purchasing_projects_list`;
 - the customer and supplier registers: master's `GET /api/v1/customers` / `suppliers?presence=all` answer the register
   sync (`src/master-data/registers.ts`) in place of the ERP's `customers_list` / `suppliers_list`. Master keeps the
-  ERP's ids, so existing links hold; a record deleted in master is closed here.
+  ERP's ids, so existing links hold; a record deleted in master is closed here. Besides the round the screens start
+  when they open, `src/master-data/register-sync.ts` runs one a minute after start and then hourly under the
+  `Master data sync` account (migration 122; it cannot sign in), which is the actor on the rows and audit entries it writes.
 
 - the employee directory (`src/master-data/employee-sync.ts`, 30 seconds after start, then hourly): names and nicknames
   of `dbo.employees` follow master's active directory, and an employee who matched before (migration 120 keeps

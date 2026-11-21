@@ -32,6 +32,7 @@ import { ApiError, registerErrorHandler } from "./errors.js";
 import { registerEstimateRoutes } from "./routes/estimates.js";
 import { registerEstimateErpRoutes } from "./routes/estimate-erp.js";
 import { registerErpMasterDataRoutes } from "./routes/erp-master-data.js";
+import { createErpMasterSync } from "./erp-master-sync.js";
 import { registerErpProjectRoutes } from "./routes/erp-projects.js";
 import { registerOverheadPolicyRoutes } from "./routes/overhead-policies.js";
 import { registerEstimateWorkspaceReadRoute } from "./routes/estimate-workspace-read.js";
@@ -212,7 +213,8 @@ export async function buildApp(config: AppConfig): Promise<Application> {
   if (masterData) {
     masterData.holidays.start();
     masterData.employees.start();
-    app.addHook("onClose", async () => { masterData.holidays.stop(); masterData.employees.stop(); });
+    masterData.registerSchedule.start();
+    app.addHook("onClose", async () => { masterData.holidays.stop(); masterData.employees.stop(); masterData.registerSchedule.stop(); });
   }
   const erp = tokenVault && tmtId && config.pegasusMcpUrl
     ? { gateway: createErpGateway(new PegasusMcp(config.pegasusMcpUrl), tokenVault), appBaseUrl: tmtId.settings.appBaseUrl }
@@ -232,7 +234,10 @@ export async function buildApp(config: AppConfig): Promise<Application> {
   registerEstimateCostLookupRoutes(app, database, users);
   registerEstimateRoutes(app, config, database, users, erp, email);
   registerEstimateErpRoutes(app, database, users, erp);
-  registerErpMasterDataRoutes(app, database, users, erp, masterData);
+  // Master data owns customers and suppliers now (same ids as the ERP's); the ERP registers remain the fallback.
+  registerErpMasterDataRoutes(app, database, users, masterData
+    ? { sync: masterData.registers, source: "master" }
+    : { sync: createErpMasterSync(database, erp?.gateway ?? null), source: "erp" });
   registerErpProjectRoutes(app, database, users, erp, masterData);
   registerOverheadPolicyRoutes(app, config, database, users);
   registerEstimateWorkspaceReadRoute(app, config, database, users);
