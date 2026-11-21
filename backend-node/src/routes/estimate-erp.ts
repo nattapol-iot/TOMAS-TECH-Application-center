@@ -40,11 +40,15 @@ const ERP_SUMMARY_SQL = `
     CONVERT(bit,CASE WHEN EXISTS(
       SELECT 1 FROM dbo.user_effective_permissions WHERE user_id=@actor_user AND code=N'report.read'
     ) THEN 1 ELSE 0 END) can_export,
-    link.external_ref erp_ref,link.cost_sheet_no erp_cost_sheet_no,link.erp_status,link.erp_revision,link.erp_total,link.erp_url,
-    link.sent_at erp_sent_at,link.synced_at erp_synced_at,link.error erp_error
+    COALESCE(sheet.external_ref,pending.external_ref) erp_ref,sheet.cost_sheet_no erp_cost_sheet_no,sheet.erp_status,sheet.revision erp_revision,
+    sheet.erp_total,sheet.erp_url,sheet.sent_at erp_sent_at,sheet.synced_at erp_synced_at,pending.error erp_error
   FROM dbo.estimates e
   INNER JOIN dbo.v_estimate_totals t ON t.estimate_id=e.id
-  LEFT JOIN dbo.estimate_erp_links link ON link.estimate_id=e.id
+  -- Every approved revision is its own Cost Sheet (migration 119): the newest one the ERP accepted, which may be an earlier
+  -- revision's, and the current revision's own link, which carries why its send failed.
+  OUTER APPLY (SELECT TOP(1) l.external_ref,l.cost_sheet_no,l.erp_status,l.revision,l.erp_total,l.erp_url,l.sent_at,l.synced_at
+    FROM dbo.estimate_erp_links l WHERE l.estimate_id=e.id AND (l.cost_sheet_no IS NOT NULL OR l.sent_at IS NOT NULL) ORDER BY l.revision DESC) sheet
+  OUTER APPLY (SELECT l.external_ref,l.error FROM dbo.estimate_erp_links l WHERE l.estimate_id=e.id AND l.revision=e.revision) pending
   WHERE e.id=@estimate_id AND e.deleted_at IS NULL;
 
   SELECT source_type,source_id,description,internal_category,amount,erp_category,mapping_row_version,copied_from_revision,manual_override,
@@ -108,8 +112,13 @@ const ERP_SUMMARY_SQL = `
   FROM dbo.estimate_erp_groups g
   INNER JOIN dbo.estimates e ON e.id=g.estimate_id AND e.revision=g.revision
   WHERE g.estimate_id=@estimate_id AND e.deleted_at IS NULL
-  ORDER BY g.id;`;
+  ORDER BY g.id;
 
+  SELECT revision,cost_sheet_no,erp_status,erp_url,sent_at FROM dbo.estimate_erp_links
+  WHERE estimate_id=@estimate_id AND (cost_sheet_no IS NOT NULL OR sent_at IS NOT NULL)
+  ORDER BY revision DESC;`;
+
+type ErpSheetRow = { revision: number; cost_sheet_no: string | null; erp_status: string | null; erp_url: string | null; sent_at: Date | string | null };
 type ErpGroupRow = { id: number | string; title: string; quantity: number | string; unit: string; members: string; row_version: Buffer };
 type ErpGroupMember = { sourceType: ErpSourceType; sourceId: number };
 
@@ -119,7 +128,11 @@ type SummaryHeader = ErpHeaderRow & {
   erp_synced_at?: Date | string | null; erp_error?: string | null;
 };
 
-/** The Cost Sheet this estimate became in the Pegasus ERP, as last sent or read; null before the first send. */
+/**
+ * The newest Cost Sheet the ERP accepted for this estimate, as last sent or read, and why the current revision's send failed.
+ * revision is the estimate revision that sheet carries; an approved later revision is still to be sent. Null before the first
+ * attempt.
+ */
 function erpLinkView(header: SummaryHeader) {
   return header.erp_ref ? {
     ref: header.erp_ref, costSheetNo: header.erp_cost_sheet_no ?? null, status: header.erp_status ?? null,
@@ -134,7 +147,7 @@ async function loadSummary(database: Database, estimateId: number, actor: Curren
     request.input("estimate_id", sql.BigInt, estimateId);
     request.input("actor_user", sql.BigInt, actor.id);
   });
-  const recordsets = result.recordsets as unknown as [SummaryHeader[], ErpLineRow[], ErpGroupRow[]];
+  const recordsets = result.recordsets as unknown as [SummaryHeader[], ErpLineRow[], ErpGroupRow[], ErpSheetRow[]];
   const header = recordsets[0]?.[0];
   if (!header) throw new ApiError(404, "estimate_not_found", "Estimate not found.");
   const elevated = actor.id === Number(header.owner_id) || hasRole(actor, "Engineering Manager", "Admin");
@@ -146,7 +159,10 @@ async function loadSummary(database: Database, estimateId: number, actor: Curren
     members: JSON.parse(row.members) as ErpGroupMember[],
     rowVersion: row.row_version.toString("base64"),
   }));
-  return { ...summary, groups, erp: { enabled: erpEnabled, link: erpLinkView(header) } };
+  // Each approved revision's own Cost Sheet, newest first: the ERP keeps the earlier ones (owner 2026-11-21).
+  const sheets = (recordsets[3] ?? []).map((row) => ({ revision: Number(row.revision), costSheetNo: row.cost_sheet_no ?? null, status: row.erp_status ?? null,
+    url: row.erp_url ?? null, sentAt: row.sent_at ?? null }));
+  return { ...summary, groups, erp: { enabled: erpEnabled, link: erpLinkView(header), sheets } };
 }
 
 /** One lock and one permission rule for every ERP write. */
@@ -289,17 +305,19 @@ export type EstimateErpOutcome = {
  */
 export function createEstimateErpSender(database: Database, erp: EstimateErpLink | null) {
   const notConfigured: EstimateErpOutcome = { sent: false, kind: "not_configured", message: "The ERP connection is not configured on this server." };
-  const recordError = (estimateId: number, message: string) => database.query(`UPDATE dbo.estimate_erp_links SET error=@error,updated_at=SYSUTCDATETIME()
-    WHERE estimate_id=@id;`, (r) => { r.input("error", sql.NVarChar(500), message.slice(0, 500)); r.input("id", sql.BigInt, estimateId); });
-  const recordSheet = (estimateId: number, sheet: CostSheet, revision: number | null, sentBy: number | null) => database.query(`
+  const recordError = (estimateId: number, revision: number, message: string) => database.query(`UPDATE dbo.estimate_erp_links SET error=@error,updated_at=SYSUTCDATETIME()
+    WHERE estimate_id=@id AND revision=@revision;`, (r) => { r.input("error", sql.NVarChar(500), message.slice(0, 500)); r.input("id", sql.BigInt, estimateId); r.input("revision", sql.Int, revision); });
+  /* What the ERP said about one Cost Sheet, found by its reference. A send records the revision it sent: the ERP's own
+     revision field is not always the app's number (an R02 sent over R01's sheet read back as R01), so it is not stored. */
+  const recordSheet = (externalRef: string, sheet: CostSheet, sent: { revision: number; by: number } | null) => database.query(`
     UPDATE dbo.estimate_erp_links SET cost_sheet_no=COALESCE(@no,cost_sheet_no),erp_status=COALESCE(@status,erp_status),
       erp_revision=COALESCE(@revision,erp_revision),erp_total=COALESCE(@total,erp_total),erp_url=COALESCE(@url,erp_url),
       sent_at=CASE WHEN @sent_by IS NULL THEN sent_at ELSE SYSUTCDATETIME() END,sent_by=COALESCE(@sent_by,sent_by),
       synced_at=SYSUTCDATETIME(),error=CASE WHEN @sent_by IS NULL THEN error END,updated_at=SYSUTCDATETIME()
-    WHERE estimate_id=@id;`, (r) => {
+    WHERE external_ref=@ref;`, (r) => {
     r.input("no", sql.NVarChar(50), sheet.costSheetNo?.slice(0, 50) ?? null); r.input("status", sql.NVarChar(30), sheet.status?.slice(0, 30) ?? null);
-    r.input("revision", sql.Int, sheet.revision ?? revision); r.input("total", sql.Decimal(19, 4), sheet.total);
-    r.input("url", sql.NVarChar(500), sheet.url?.slice(0, 500) ?? null); r.input("sent_by", sql.BigInt, sentBy); r.input("id", sql.BigInt, estimateId);
+    r.input("revision", sql.Int, sent?.revision ?? null); r.input("total", sql.Decimal(19, 4), sheet.total);
+    r.input("url", sql.NVarChar(500), sheet.url?.slice(0, 500) ?? null); r.input("sent_by", sql.BigInt, sent?.by ?? null); r.input("ref", sql.NVarChar(100), externalRef);
   });
 
   return {
@@ -310,40 +328,52 @@ export function createEstimateErpSender(database: Database, erp: EstimateErpLink
       const header = (await database.query<{
         estimate_no: string; revision: number; status: string; project_name: string; locked_at: Date | string | null; customer_name: string;
         short_name: string | null; owner_email: string | null; project_no: string | null; revision_reason: string | null;
-        erp_revision: number | null; cost_sheet_no: string | null;
+        erp_revision: number | null; cost_sheet_no: string | null; previous_sheet_no: string | null; previous_revision: number | null;
       }>(`SELECT e.estimate_no,e.revision,e.status,e.project_name,e.locked_at,c.name customer_name,c.short_name,u.email owner_email,
           (SELECT TOP(1) p.project_no FROM dbo.projects p WHERE p.estimate_id=e.id AND p.deleted_at IS NULL) project_no,
           (SELECT TOP(1) JSON_VALUE(a.after_json,'$.reason') FROM dbo.audit_log a WHERE a.entity_type=N'Estimate' AND a.entity_id=e.id
             AND a.action IN(N'Revision created',N'Revision requested',N'Revision restored') AND TRY_CONVERT(int,JSON_VALUE(a.after_json,'$.revision'))=e.revision
             ORDER BY a.id DESC) revision_reason,
-          link.erp_revision,link.cost_sheet_no
+          link.erp_revision,link.cost_sheet_no,previous.cost_sheet_no previous_sheet_no,previous.revision previous_revision
         FROM dbo.estimates e INNER JOIN dbo.customers c ON c.id=e.customer_id INNER JOIN dbo.users u ON u.id=e.owner_id
-        LEFT JOIN dbo.estimate_erp_links link ON link.estimate_id=e.id
+        LEFT JOIN dbo.estimate_erp_links link ON link.estimate_id=e.id AND link.revision=e.revision
+        OUTER APPLY (SELECT TOP(1) p.cost_sheet_no,p.revision FROM dbo.estimate_erp_links p
+          WHERE p.estimate_id=e.id AND p.revision<e.revision AND p.cost_sheet_no IS NOT NULL ORDER BY p.revision DESC) previous
         WHERE e.id=@id AND e.deleted_at IS NULL;`, (r) => r.input("id", sql.BigInt, estimateId))).recordset[0];
       if (!header) return { sent: false, kind: "not_ready", message: "Estimate not found." };
       if (!["approved", "locked"].includes(header.status.toLowerCase())) {
         return { sent: false, kind: "not_ready", message: "Only an approved estimate is sent to the ERP." };
       }
-      // The ERP keeps this revision already; asking again would only answer "unchanged". A resend asks anyway, for a
+      // The ERP holds this revision's sheet already; asking again would only answer "unchanged". A resend asks anyway, for a
       // Cost Sheet someone deleted in the ERP so that it can be written again.
       if (!options.resend && header.erp_revision === header.revision && header.cost_sheet_no) return { sent: true, result: "unchanged", costSheetNo: header.cost_sheet_no };
-      if (!rows) return { sent: false, kind: "not_ready", message: "Open the estimate's ERP tab and press Send to the ERP." };
+      /* Each approved revision is its own Cost Sheet with its own reference (owner 2026-11-21, migration 119), so the ERP opens
+         a new sheet for R02 and keeps R01's. The link exists before any check, so a reason not to send is kept for the ERP tab. */
+      let externalRef = await database.transaction(async (transaction) => {
+        const issue = new sql.Request(transaction); issue.input("id", sql.BigInt, estimateId); issue.input("revision", sql.Int, header.revision);
+        issue.input("ref", sql.NVarChar(100), newEstimateErpRef());
+        return (await issue.query<{ external_ref: string }>(`
+          IF NOT EXISTS(SELECT 1 FROM dbo.estimate_erp_links WITH(UPDLOCK,HOLDLOCK) WHERE estimate_id=@id AND revision=@revision)
+            INSERT dbo.estimate_erp_links(estimate_id,revision,external_ref) VALUES(@id,@revision,@ref);
+          SELECT external_ref FROM dbo.estimate_erp_links WHERE estimate_id=@id AND revision=@revision;`)).recordset[0]!.external_ref;
+      });
+      if (!rows) {
+        const message = "The approval came without the ERP sheet's rows. Open the estimate's ERP tab and press Send to the ERP.";
+        await recordError(estimateId, header.revision, message);
+        return { sent: false, kind: "not_ready", message };
+      }
       const summary = await loadSummary(database, estimateId, actor, true);
       const blocker = !summary.reconciled ? "The ERP categories do not add up to the estimate total."
         : ESTIMATE_OVERHEAD_ENABLED && summary.overhead.state === "Missing" ? "The estimate has no approved overhead."
           : costEstimateBlocker(rows) ?? sheetRowsMismatch(rows, summary.categories);
-      if (blocker) { await recordError(estimateId, blocker); return { sent: false, kind: "not_ready", message: blocker }; }
-      let externalRef = await database.transaction(async (transaction) => {
-        const issue = new sql.Request(transaction); issue.input("id", sql.BigInt, estimateId); issue.input("ref", sql.NVarChar(100), newEstimateErpRef());
-        return (await issue.query<{ external_ref: string }>(`
-          IF NOT EXISTS(SELECT 1 FROM dbo.estimate_erp_links WITH(UPDLOCK,HOLDLOCK) WHERE estimate_id=@id)
-            INSERT dbo.estimate_erp_links(estimate_id,external_ref) VALUES(@id,@ref);
-          SELECT external_ref FROM dbo.estimate_erp_links WHERE estimate_id=@id;`)).recordset[0]!.external_ref;
-      });
+      if (blocker) { await recordError(estimateId, header.revision, blocker); return { sent: false, kind: "not_ready", message: blocker }; }
+      // The new sheet says which one it replaces, so people in the ERP can tell the revisions apart.
+      const replaces = header.previous_sheet_no ? `Supersedes ${header.previous_sheet_no} (R${String(header.previous_revision ?? 0).padStart(2, "0")})` : null;
       const argumentsFor = (ref: string) => costEstimateArguments({
         estimateId, externalRef: ref, revision: header.revision, estimateNo: header.estimate_no, projectNo: header.project_no,
         projectName: header.project_name, customer: header.customer_name, shortName: header.short_name,
-        revisionDescription: header.revision_reason, preparedByEmail: header.owner_email, approvedAt: header.locked_at, appBaseUrl: erp.appBaseUrl,
+        revisionDescription: [header.revision_reason, replaces].filter(Boolean).join(" · ") || null, preparedByEmail: header.owner_email,
+        approvedAt: header.locked_at, appBaseUrl: erp.appBaseUrl,
       }, rows, summary.overhead.amount);
       let args = argumentsFor(externalRef);
       let submitted = await erp.gateway.call<Record<string, unknown>>(actor.entraObjectId, "cost_estimate_submit", args);
@@ -353,21 +383,22 @@ export function createEstimateErpSender(database: Database, erp: EstimateErpLink
         const replaced = externalRef; externalRef = newEstimateErpRef();
         await database.transaction(async (transaction) => {
           const reissue = new sql.Request(transaction); reissue.input("id", sql.BigInt, estimateId); reissue.input("ref", sql.NVarChar(100), externalRef);
+          reissue.input("revision", sql.Int, header.revision);
           await reissue.query(`UPDATE dbo.estimate_erp_links SET external_ref=@ref,cost_sheet_no=NULL,erp_status=NULL,erp_revision=NULL,erp_total=NULL,
-            erp_url=NULL,updated_at=SYSUTCDATETIME() WHERE estimate_id=@id;`);
+            erp_url=NULL,updated_at=SYSUTCDATETIME() WHERE estimate_id=@id AND revision=@revision;`);
           await insertAudit(transaction, actor.id, "Estimate", estimateId, header.estimate_no, "ERP reference re-issued",
-            { externalRef: replaced, costSheetNo: header.cost_sheet_no }, { externalRef, reason: describeErpFailure(submitted as ErpFailure) });
+            { externalRef: replaced, costSheetNo: header.cost_sheet_no, revision: header.revision }, { externalRef, reason: describeErpFailure(submitted as ErpFailure) });
         });
         args = argumentsFor(externalRef);
         submitted = await erp.gateway.call<Record<string, unknown>>(actor.entraObjectId, "cost_estimate_submit", args);
       }
       if (!submitted.ok) {
         const message = describeErpFailure(submitted);
-        await recordError(estimateId, message);
+        await recordError(estimateId, header.revision, message);
         return { sent: false, kind: submitted.kind, message };
       }
       const sheet = readCostSheet(submitted.data);
-      await recordSheet(estimateId, sheet, header.revision, actor.id);
+      await recordSheet(externalRef, sheet, { revision: header.revision, by: actor.id });
       await database.transaction((transaction) => insertAudit(transaction, actor.id, "Estimate", estimateId, header.estimate_no, "Sent to ERP", null, {
         revision: header.revision, externalRef, result: sheet.result, costSheetNo: sheet.costSheetNo, erpStatus: sheet.status,
         total: args.total, lines: rows.length, response: JSON.stringify(submitted.data).slice(0, 2000),
@@ -375,16 +406,17 @@ export function createEstimateErpSender(database: Database, erp: EstimateErpLink
       return { sent: true, result: sheet.result, costSheetNo: sheet.costSheetNo, status: sheet.status };
     },
 
-    /** Reads the Cost Sheet back: CONFIRMED, LINKED once a sales quotation uses it, and the revision the ERP holds. */
+    /** Reads the newest Cost Sheet back: CONFIRMED, or LINKED once a sales quotation uses it. */
     async refresh(estimateId: number, actor: CurrentUser): Promise<EstimateErpOutcome> {
       if (!erp) return notConfigured;
-      const link = (await database.query<{ external_ref: string }>(`SELECT external_ref FROM dbo.estimate_erp_links WHERE estimate_id=@id;`,
+      const link = (await database.query<{ external_ref: string }>(`SELECT TOP(1) external_ref FROM dbo.estimate_erp_links
+        WHERE estimate_id=@id AND (cost_sheet_no IS NOT NULL OR sent_at IS NOT NULL) ORDER BY revision DESC;`,
         (r) => r.input("id", sql.BigInt, estimateId))).recordset[0];
       if (!link) return { sent: false, kind: "not_ready", message: "This estimate has not been sent to the ERP yet." };
       const read = await erp.gateway.call<Record<string, unknown>>(actor.entraObjectId, "cost_estimate_get", { external_ref: link.external_ref });
       if (!read.ok) return { sent: false, kind: read.kind, message: describeErpFailure(read) };
       const sheet = readCostSheet(read.data);
-      await recordSheet(estimateId, sheet, null, null);
+      await recordSheet(link.external_ref, sheet, null);
       return { sent: true, costSheetNo: sheet.costSheetNo, status: sheet.status };
     },
   };
