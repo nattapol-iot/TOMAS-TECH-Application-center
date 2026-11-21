@@ -17,8 +17,7 @@ function load(relative) {
   const code = ts.transpileModule(readFileSync(filename, "utf8"), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
   }).outputText;
-  const localRequire = (specifier) => specifier.startsWith(".")
-    ? load(path.resolve(path.dirname(filename), `${specifier}.ts`)) : require(specifier);
+  const localRequire = (specifier) => (specifier.startsWith(".") ? load(path.resolve(path.dirname(filename), `${specifier}.ts`)) : require(specifier));
   new Function("require", "module", "exports", code)(localRequire, loadedModule, loadedModule.exports);
   return loadedModule.exports;
 }
@@ -33,7 +32,19 @@ test("the portfolio loads the unpaged overview endpoint once per closed toggle",
   assert.match(client, /export interface ProjectOverviewItem extends ProjectSummary/);
   assert.match(client, /export const listProjectOverview = \(\{ includeClosed = false \}/);
   assert.match(client, /`\/api\/v1\/projects\/overview\$\{includeClosed \? "\?includeClosed=1" : ""\}`/);
-  for (const field of ["progressSource", "plannedProgress", "slipDays", "overdueCount", "blockedCount", "pendingRequests", "lastProgressAt", "canChangeStatus", "allowedStatuses", "nextMilestone", "scheduleError"]) {
+  for (const field of [
+    "progressSource",
+    "plannedProgress",
+    "slipDays",
+    "overdueCount",
+    "blockedCount",
+    "pendingRequests",
+    "lastProgressAt",
+    "canChangeStatus",
+    "allowedStatuses",
+    "nextMilestone",
+    "scheduleError",
+  ]) {
     assert.match(client, new RegExp(`\\b${field}[?]?:`), field);
   }
   assert.match(portfolio, /await listProjectOverview\(\{ includeClosed \}\)/);
@@ -49,8 +60,8 @@ test("sortable headers are buttons with aria-sort and the sort is remembered per
     assert.match(portfolio, new RegExp(`<PortfolioSortHeader column="${column}"`), column);
   }
   assert.match(portfolio, /portfolioSortStorageKey\(bootstrap\.user\.id\)/);
-  assert.match(portfolio, /try \{ return parsePortfolioSort\(window\.localStorage\.getItem\(sortStorageKey\)\); \} catch \{ return DEFAULT_PORTFOLIO_SORT; \}/);
-  assert.match(portfolio, /try \{ window\.localStorage\.setItem\(sortStorageKey, JSON\.stringify\(next\)\); \} catch/);
+  assert.match(portfolio, /try \{\s*return parsePortfolioSort\(window\.localStorage\.getItem\(sortStorageKey\)\);\s*\} catch \{\s*return DEFAULT_PORTFOLIO_SORT;\s*\}/);
+  assert.match(portfolio, /try \{\s*window\.localStorage\.setItem\(sortStorageKey, JSON\.stringify\(next\)\);\s*\} catch/);
 });
 
 test("rows open worst health first and page on the client with the 10-row default", () => {
@@ -59,7 +70,7 @@ test("rows open worst health first and page on the client with the 10-row defaul
   assert.match(lib, /DEFAULT_PORTFOLIO_SORT: PortfolioSort = \{ key: "health", direction: "asc" \}/);
   assert.match(portfolio, /sortPortfolio\(view\.rows, sort\)/);
   assert.match(portfolio, /const \[pageSize, setPageSize\] = useLinkedState\("rows", 10, numberLink\)/);
-  assert.match(portfolio, /<TablePageSize value=\{pageSize\}/);
+  assert.match(portfolio, /<TablePageSize\s+value=\{pageSize\}/);
   assert.match(portfolio, /sorted\.slice\(\(currentPage - 1\) \* pageSize, currentPage \* pageSize\)/);
 });
 
@@ -68,8 +79,8 @@ test("SegmentBar and FilterChips are shared components the portfolio uses", () =
   assert.match(ui, /export function FilterChips\(/);
   assert.doesNotMatch(ui, /import\s+["'][^"']+\.css["']/, "ui.tsx stays loadable without a bundler");
   assert.match(screens, /import "\.\.\/segment-filters\.css";/);
-  assert.match(portfolio, /<SegmentBar label="Portfolio\.healthBar" items=\{healthItems\} active=\{health\}/);
-  assert.match(portfolio, /<FilterChips label="Portfolio\.attention" items=\{chipItems\} active=\{chip\}/);
+  assert.match(portfolio, /<SegmentBar\s+label="Portfolio\.healthBar"\s+items=\{healthItems\}\s+active=\{health\}/);
+  assert.match(portfolio, /<FilterChips\s+label="Portfolio\.attention"\s+items=\{chipItems\}\s+active=\{chip\}/);
   const css = read("app/system/segment-filters.css");
   assert.doesNotMatch(css, /#[0-9a-fA-F]{3,6}\b/, "tokens only");
 });
@@ -92,11 +103,18 @@ test("SegmentBar and FilterChips press, clear and skip empty values accessibly",
   assert.ok(bar.includes(translate("ProjectHealth.Delayed", "TH")));
   assert.equal((bar.match(/<li>/g) ?? []).length, 3, "the legend lists every value, empty ones included");
 
-  const chips = render("EN", h(FilterChips, { items: [
-    { key: "overdue", label: "Portfolio.chipOverdue", value: 4, tone: "red" },
-    { key: "blocked", label: "Portfolio.chipBlocked", value: 0, tone: "red" },
-    { key: "waiting", label: "Portfolio.chipWaiting", value: 0, tone: "amber" },
-  ], active: "waiting", onPick() {} }));
+  const chips = render(
+    "EN",
+    h(FilterChips, {
+      items: [
+        { key: "overdue", label: "Portfolio.chipOverdue", value: 4, tone: "red" },
+        { key: "blocked", label: "Portfolio.chipBlocked", value: 0, tone: "red" },
+        { key: "waiting", label: "Portfolio.chipWaiting", value: 0, tone: "amber" },
+      ],
+      active: "waiting",
+      onPick() {},
+    }),
+  );
   assert.match(chips, /<button type="button" aria-pressed="false" class="filter-chip red"><span>Overdue tasks<\/span><strong>4<\/strong><\/button>/);
   assert.match(chips, /aria-pressed="false" disabled="" class="filter-chip red"><span>Blocked tasks/);
   assert.match(chips, /aria-pressed="true" class="filter-chip amber active"><span>Waiting for PM/, "the active chip stays enabled so it can be cleared");
@@ -110,25 +128,34 @@ test("the portfolio reports its sub-view, opens the schedule, changes stage and 
   assert.match(portfolio, /useActivitySubView\(timelineMode \? "projects-timeline" : "projects-portfolio"\)/);
   assert.match(screens, /import \{ useActivitySubView \} from "\.\.\/use-activity-presence";/);
   assert.match(portfolio, /openProjectSchedule\?: \(id: number, taskId\?: number\) => void/);
-  assert.match(portfolio, /openProjectSchedule \? <button type="button" className="portfolio-project-link" onClick=\{\(\) => openProjectSchedule\(item\.id\)\}><strong>\{item\.name\}<\/strong><\/button>/);
+  assert.match(
+    portfolio,
+    /openProjectSchedule \? \(\s*<button type="button" className="portfolio-project-link" onClick=\{\(\) => openProjectSchedule\(item\.id\)\}>\s*<strong>\{item\.name\}<\/strong>\s*<\/button>/,
+  );
   // The project number is its own sortable column, so sorting by number is one click.
   assert.match(portfolio, /<PortfolioSortHeader column="number" label="Portfolio\.colNumber"/);
-  assert.match(portfolio, /<td><strong className="mono">\{item\.number\}<\/strong><\/td>/);
+  assert.match(portfolio, /<td>\s*<strong className="mono">\{item\.number\}<\/strong>\s*<\/td>/);
   // The stage is a button listing every other stage; picking one saves. A native select would save on
   // every arrow key, so no stage select remains. Non-editors still see a badge.
-  assert.match(portfolio, /item\.canChangeStatus && item\.allowedStatuses\.length\s*\? <RowDisclosure label=\{`\$\{uiText\("Portfolio\.changeStage"\)\}/);
+  assert.match(portfolio, /item\.canChangeStatus && item\.allowedStatuses\.length\s*\? \(\s*<RowDisclosure\s+label=\{`\$\{uiText\("Portfolio\.changeStage"\)\}/);
   assert.match(portfolio, /actions=\{item\.allowedStatuses\.map\(\(value\) => \(\{ key: value, label: value, onSelect: \(\) => changeStage\(item, value\) \}\)\)\}/);
-  assert.match(portfolio, /: <Badge>\{item\.status\}<\/Badge>\}/);
+  assert.match(portfolio, /: \(\s*<Badge>\{item\.status\}<\/Badge>\s*\)\}/);
   assert.doesNotMatch(portfolio, /portfolio-stage"|onChange=\{\(event\) => changeStage\(/);
   assert.match(portfolio, /if \(next === "Closed"\) setClosingProject\(item\)/);
   // Closing is its own row action from any open stage, and the dialog says how much work is left.
-  assert.match(portfolio, /item\.canChangeStatus && item\.allowedStatuses\.includes\("Closed"\) \? \[\{ key: "close", label: "Portfolio\.closeTitle", icon: "checkCircle" as const, onSelect: \(\) => setClosingProject\(item\) \}\]/);
+  assert.match(
+    portfolio,
+    /item\.canChangeStatus && item\.allowedStatuses\.includes\("Closed"\)\s*\? \[\{ key: "close", label: "Portfolio\.closeTitle", icon: "checkCircle" as const, onSelect: \(\) => setClosingProject\(item\) \}\]/,
+  );
   assert.match(portfolio, /const unfinished = project\.taskCount - project\.doneCount;/);
-  assert.match(portfolio, /unfinished > 0 \? <div className="info-strip" role="note"><Icon name="alertTriangle" \/><span>\{t\("Portfolio\.closeUnfinished"\)\.replace\("\{open\}", String\(unfinished\)\)\.replace\("\{total\}", String\(project\.taskCount\)\)\}/);
+  assert.match(
+    portfolio,
+    /unfinished > 0 \? \(\s*<div className="info-strip" role="note">\s*<Icon name="alertTriangle" \/>\s*<span>\{t\("Portfolio\.closeUnfinished"\)\.replace\("\{open\}", String\(unfinished\)\)\.replace\("\{total\}", String\(project\.taskCount\)\)\}/,
+  );
   assert.match(portfolio, /updateProject\(item\.id, \{ rowVersion: item\.rowVersion, status: next/);
   assert.match(portfolio, /failure instanceof ApiClientError && failure\.status === 409/);
   // Edit, end user, members, documents and delete live in one overflow menu, the same disclosure.
-  assert.match(portfolio, /<RowDisclosure label=\{`\$\{uiText\("Portfolio\.more"\)\} \$\{item\.number\}`\} triggerClassName="row-action"/);
+  assert.match(portfolio, /<RowDisclosure\s+label=\{`\$\{uiText\("Portfolio\.more"\)\} \$\{item\.number\}`\}\s+triggerClassName="row-action"/);
   for (const action of ["edit", "end-user", "members", "documents", "delete"]) assert.match(portfolio, new RegExp(`key: "${action}"`), action);
   // Plain task language instead of infrastructure jargon.
   for (const jargon of [/Live SQL Server data/, /Loading from production API/, /NAS/, /folder metadata/]) assert.doesNotMatch(portfolio, jargon);
@@ -139,7 +166,7 @@ test("row menus are fixed-position disclosures the table cannot clip", () => {
   assert.ok(disclosure.length > 500, "RowDisclosure moved");
   // A disclosure, not an ARIA menu: no menu roles without the menu keyboard pattern.
   assert.doesNotMatch(portfolio, /role="menu"|role="menuitem"|aria-haspopup/);
-  assert.match(disclosure, /aria-expanded=\{open\} aria-controls=\{open \? panelId : undefined\}/);
+  assert.match(disclosure, /aria-expanded=\{open\}\s+aria-controls=\{open \? panelId : undefined\}/);
   assert.match(disclosure, /className="menu portfolio-menu" role="group" aria-label=\{label\}/);
   // Placed from the trigger's box with the menu's measured height, against the layout viewport (no scrollbar);
   // the row-index heuristic is gone.
@@ -152,7 +179,7 @@ test("row menus are fixed-position disclosures the table cannot clip", () => {
   // Scroll outside the menu or a resize closes it; Escape closes it and gives focus back to the trigger.
   assert.match(disclosure, /window\.addEventListener\("scroll", onScroll, true\)/);
   assert.match(disclosure, /window\.addEventListener\("resize", dismiss\)/);
-  assert.match(disclosure, /if \(event\.key === "Escape"\) \{ dismiss\(\); button\.current\?\.focus\(\); \}/);
+  assert.match(disclosure, /if \(event\.key === "Escape"\) \{\s*dismiss\(\);\s*button\.current\?\.focus\(\);\s*\}/);
   // Tabbing out of the group closes it.
   assert.match(disclosure, /onBlur=\{\(event\) => \{/);
   assert.match(disclosure, /if \(open && next instanceof Node && !event\.currentTarget\.contains\(next\)\) setOpen\(false\)/);
@@ -163,17 +190,20 @@ test("PM, team and status filters only apply values the controls can show", () =
   assert.match(portfolio, /const activeTeam = effectiveOption\(team, teams\)/);
   assert.match(portfolio, /const activeStatus = effectiveStatusFilter\(status, includeClosed\)/);
   assert.match(portfolio, /managerId: activeManagerId, team: activeTeam, mineUserId: mine \? bootstrap\.user\.id : null, status: activeStatus/);
-  assert.match(portfolio, /<select value=\{activeManagerId \?\? ""\}/);
-  assert.match(portfolio, /<select value=\{activeTeam \?\? ""\}/);
-  assert.match(portfolio, /<Select label="Status" value=\{activeStatus \?\? "All status"\}/);
+  assert.match(portfolio, /<select\s+value=\{activeManagerId \?\? ""\}/);
+  assert.match(portfolio, /<select\s+value=\{activeTeam \?\? ""\}/);
+  assert.match(portfolio, /<Select\s+label="Status"\s+value=\{activeStatus \?\? "All status"\}/);
   assert.match(portfolio, /if \(!event\.target\.checked && status === "Closed"\) setStatus\("All status"\)/, "unticking Show closed clears a Closed filter");
 });
 
 test("the project name opens the schedule only for users who can read it", () => {
   const shell = read("app/system/ProductionApp.tsx");
-  assert.match(shell, /<ProductionProjects \{\.\.\.common\} teamTestMode=\{IS_TEAM_TEST_MODE\} openProjectSchedule=\{bootstrap\.permissions\.includes\("schedule\.read"\) \? openProjectSchedule : undefined\} \/>/);
+  assert.match(
+    shell,
+    /<ProductionProjects \{\.\.\.common\} teamTestMode=\{IS_TEAM_TEST_MODE\} openProjectSchedule=\{bootstrap\.permissions\.includes\("schedule\.read"\) \? openProjectSchedule : undefined\} \/>/,
+  );
   // Without the prop the name is plain text.
-  assert.match(portfolio, /\{item\.name\}<\/strong><\/button> : <strong>\{item\.name\}<\/strong>\}/);
+  assert.match(portfolio, /\{item\.name\}<\/strong>\s*<\/button>\s*\) : \(\s*<strong>\{item\.name\}<\/strong>\s*\)\}/);
 });
 
 test("Overview has a List | Timeline toggle on the shared Gantt, remembered per user", () => {
@@ -182,9 +212,9 @@ test("Overview has a List | Timeline toggle on the shared Gantt, remembered per 
   assert.match(portfolio, /const \[mode, changeMode\] = useLinkedState<PortfolioMode>\("view", initialMode \?\? "list", PORTFOLIO_MODE_LINK\)/);
   assert.match(portfolio, /aria-pressed=\{mode === value\} onClick=\{\(\) => changeMode\(value\)\}/);
   // Timeline draws the same filtered, sorted rows as the list.
-  assert.match(portfolio, /<ProjectPortfolioGantt key=\{overview\?\.loadedAt \?\? 0\} rows=\{sorted\}/);
+  assert.match(portfolio, /<ProjectPortfolioGantt\s+key=\{overview\?\.loadedAt \?\? 0\}\s+rows=\{sorted\}/);
   // The timeline sorts with the same sort as the list (it has no column headers of its own).
-  assert.match(portfolio, /PORTFOLIO_SORT_KEYS\.map\(\(key\) => <option key=\{key\} value=\{key\}>/);
+  assert.match(portfolio, /PORTFOLIO_SORT_KEYS\.map\(\(key\) => \(\s*<option key=\{key\} value=\{key\}>/);
   const gantt = read("app/system/production/ProjectPortfolioGantt.tsx");
   assert.match(gantt, /from "\.\/GanttChart"/);
   // Tasks load only when a project is expanded, one schedule per expanded project.
@@ -199,10 +229,11 @@ test("Overview has a List | Timeline toggle on the shared Gantt, remembered per 
 });
 
 test("the row menu and stage come before the project name, so a small screen needs no sideways scroll to reach them", () => {
-  const head = portfolio.slice(portfolio.indexOf('<table className="portfolio-table">'), portfolio.indexOf("</tr></thead>", portfolio.indexOf('<table className="portfolio-table">')));
+  const head = portfolio.slice(portfolio.indexOf('<table className="portfolio-table">'), portfolio.indexOf("</thead>", portfolio.indexOf('<table className="portfolio-table">')));
   assert.ok(head.indexOf('className="portfolio-col-menu"') < head.indexOf("Portfolio.colStage"));
   assert.ok(head.indexOf("Portfolio.colStage") < head.indexOf('column="name"'));
-  const row = portfolio.slice(portfolio.indexOf("return <tr key={item.id}>"), portfolio.indexOf("</tr>;", portfolio.indexOf("return <tr key={item.id}>")));
+  const rowStart = portfolio.indexOf("<tr key={item.id}>");
+  const row = portfolio.slice(rowStart, portfolio.indexOf("</tr>", rowStart));
   assert.ok(row.indexOf('guide="project.rowMenu"') < row.indexOf('triggerClassName="portfolio-stage-trigger"'));
   assert.ok(row.indexOf('triggerClassName="portfolio-stage-trigger"') < row.indexOf("portfolio-project-link"));
 });

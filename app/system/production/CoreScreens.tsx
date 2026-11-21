@@ -62,17 +62,51 @@ import { listPendingDayRequests, listProjectOverview, type PendingDayRequest, ty
 import { ProjectPortfolioGantt } from "./ProjectPortfolioGantt";
 import { useActivitySubView } from "../use-activity-presence";
 import { choiceLink, flagLink, idLink, numberLink, optionalChoiceLink, optionalTextLink, textLink, useLinkedState } from "../screen-link";
-import { DEFAULT_PORTFOLIO_SORT, PORTFOLIO_CHIPS, PORTFOLIO_HEALTH_ORDER, PORTFOLIO_SORT_KEYS, effectiveOption, effectiveStatusFilter, formatSlip, nextPortfolioSort, parsePortfolioSort, portfolioSortStorageKey, portfolioView, rowMenuPlacement, sortPortfolio,
-  projectTeamOf, shownProjectTeam, type PortfolioChip, type PortfolioFilters, type PortfolioSort, type PortfolioSortKey } from "../../../lib/project-portfolio";
+import {
+  DEFAULT_PORTFOLIO_SORT,
+  PORTFOLIO_CHIPS,
+  PORTFOLIO_HEALTH_ORDER,
+  PORTFOLIO_SORT_KEYS,
+  effectiveOption,
+  effectiveStatusFilter,
+  formatSlip,
+  nextPortfolioSort,
+  parsePortfolioSort,
+  portfolioSortStorageKey,
+  portfolioView,
+  rowMenuPlacement,
+  sortPortfolio,
+  projectTeamOf,
+  shownProjectTeam,
+  type PortfolioChip,
+  type PortfolioFilters,
+  type PortfolioSort,
+  type PortfolioSortKey,
+} from "../../../lib/project-portfolio";
 import { allowedProjectTransitions, type ProjectStatus } from "../../../backend-node/src/project-lifecycle";
 import { EndUserCompanyField, EndUserEditModal, canEditEndUser } from "./EndUserCompanyField";
-import { ContactPicker, HealthBadge, MasterPlanSection, MemberOptions, NotBrokenDownNote, PROJECT_HEALTH_TONE, PaymentChecklist, TeamPlanSection, TeamSelect, planIssuesOf, planPayload, planSpanOf, projectTeamOptions,
-  type PlanHeadingDraft } from "./ProjectPlanFields";
+import {
+  ContactPicker,
+  HealthBadge,
+  MasterPlanSection,
+  MemberOptions,
+  NotBrokenDownNote,
+  PROJECT_HEALTH_TONE,
+  PaymentChecklist,
+  TeamPlanSection,
+  TeamSelect,
+  planIssuesOf,
+  planPayload,
+  planSpanOf,
+  projectTeamOptions,
+  type PlanHeadingDraft,
+} from "./ProjectPlanFields";
 import { ProductionCustomers, ProductionEngineeringRates } from "./AdminAnalyticsScreens";
 import { ErpMasterPanel } from "./ErpMasterPanel";
 import { PegasusScreen } from "./PegasusScreen";
 import { checkFields, failureDialog } from "./form-bubbles";
 import { clearDraft, confirmLeave, draftKeys, hasDraft, leaveCopy, useDraftField } from "./form-draft";
+import { PgSelect } from "./PegasusSelect";
 import { ErpProjectNumberField, isPlaceholderProjectNumber } from "./ErpProjectNumber";
 import { SearchSelect } from "./SearchSelect";
 import { canViewEngineeringRates } from "../../../backend-node/src/engineering-rate-access";
@@ -112,7 +146,7 @@ type CommonProps = {
   refreshBootstrap: () => Promise<void>;
 };
 
-const toError = (error: unknown) => error instanceof Error ? error.message : "The request could not be completed.";
+const toError = (error: unknown) => (error instanceof Error ? error.message : "The request could not be completed.");
 const formText = (data: FormData, name: string) => String(data.get(name) ?? "").trim();
 const optionalFormText = (data: FormData, name: string) => formText(data, name) || undefined;
 const formNumber = (data: FormData, name: string) => Number(formText(data, name));
@@ -167,15 +201,21 @@ function LoadError({ message, retry }: { message: string; retry: () => void }) {
   return (
     <div className="callout danger" role="alert">
       <Icon name="alertTriangle" />
-      <span><strong><LocalizedText text={"Could not load"} /></strong>{message}</span>
-      <button className="btn ghost" type="button" onClick={retry}><Icon name="refresh" /><LocalizedText text={"Try again"} /></button>
+      <span>
+        <strong>
+          <LocalizedText text={"Could not load"} />
+        </strong>
+        {message}
+      </span>
+      <button className="btn ghost" type="button" onClick={retry}>
+        <Icon name="refresh" />
+        <LocalizedText text={"Try again"} />
+      </button>
     </div>
   );
 }
 
-export type DashboardDestination =
-  | "my-work" | "inquiries" | "estimates" | "projects" | "signing"
-  | "approvals" | "purchase" | "pos" | "receiving";
+export type DashboardDestination = "my-work" | "inquiries" | "estimates" | "projects" | "signing" | "approvals" | "purchase" | "pos" | "receiving";
 
 type DashboardWorkItem = {
   projectId: number;
@@ -281,7 +321,11 @@ export function ProductionDashboard({
     setPartialError(false);
     const requests: Promise<void>[] = [];
     const capture = <T,>(promise: Promise<T>, apply: (value: T) => void) => {
-      requests.push(promise.then(apply).catch(() => { setPartialError(true); }));
+      requests.push(
+        promise.then(apply).catch(() => {
+          setPartialError(true);
+        }),
+      );
     };
     if (canReadSchedule) capture(apiRequest<DashboardWorkItem[]>("/api/v1/me/work"), setWorkItems);
     if (canReadSigning) capture(loadSignInbox(), setSignInbox);
@@ -298,20 +342,26 @@ export function ProductionDashboard({
   }, [canApproveProcurement, canReadInventory, canReadProcurement, canReadSchedule, canReadSigning]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => { void loadDashboard(); }, 0);
+    const timer = window.setTimeout(() => {
+      void loadDashboard();
+    }, 0);
     return () => window.clearTimeout(timer);
   }, [loadDashboard]);
 
   const [now] = useState(() => new Date());
   const todayKey = businessDate(now);
-  const currentEmployee = bootstrap.team.find((member) => member.id === bootstrap.user.id)
-    ?? bootstrap.team.find((member) => member.email.toLocaleLowerCase() === bootstrap.user.email.toLocaleLowerCase());
-  const employment = bootstrap.employment ?? (currentEmployee ? {
-    employeeId: currentEmployee.employeeId,
-    employeeNo: currentEmployee.employeeNo,
-    nickname: currentEmployee.nickname,
-    level: currentEmployee.level,
-  } : null);
+  const currentEmployee =
+    bootstrap.team.find((member) => member.id === bootstrap.user.id) ?? bootstrap.team.find((member) => member.email.toLocaleLowerCase() === bootstrap.user.email.toLocaleLowerCase());
+  const employment =
+    bootstrap.employment ??
+    (currentEmployee
+      ? {
+          employeeId: currentEmployee.employeeId,
+          employeeNo: currentEmployee.employeeNo,
+          nickname: currentEmployee.nickname,
+          level: currentEmployee.level,
+        }
+      : null);
   const startWorkDate = bootstrap.startWorkDate;
   const tenure = dashboardTenure(startWorkDate, todayKey);
   const startWorkDateLabel = startWorkDate
@@ -321,15 +371,13 @@ export function ProductionDashboard({
   const todayWork = openWork.filter((item) => {
     const start = dashboardDayDistance(item.planStart, todayKey);
     const finish = dashboardDayDistance(dashboardDueDate(item), todayKey);
-    return item.status === "In Progress" || item.status === "Blocked" || finish === 0
-      || (start !== null && start <= 0 && (finish === null || finish >= 0));
+    return item.status === "In Progress" || item.status === "Blocked" || finish === 0 || (start !== null && start <= 0 && (finish === null || finish >= 0));
   });
   const weekWork = openWork.filter((item) => {
     const distance = dashboardDayDistance(dashboardDueDate(item), todayKey);
     return distance !== null && distance >= 0 && distance <= 7;
   });
-  const doneWork = workItems.filter((item) => item.status === "Done")
-    .sort((a, b) => Date.parse(b.actualFinish ?? b.updatedAt) - Date.parse(a.actualFinish ?? a.updatedAt));
+  const doneWork = workItems.filter((item) => item.status === "Done").sort((a, b) => Date.parse(b.actualFinish ?? b.updatedAt) - Date.parse(a.actualFinish ?? a.updatedAt));
   const doneThisWeek = doneWork.filter((item) => {
     const distance = dashboardDayDistance(item.actualFinish ?? item.updatedAt, todayKey);
     return distance !== null && distance >= -7 && distance <= 0;
@@ -340,8 +388,7 @@ export function ProductionDashboard({
   });
   const displayedWork = (taskTab === "today" ? todayWork : taskTab === "week" ? weekWork : doneWork).slice(0, 6);
   const openPr = purchaseRequisitions.filter((item) => !["Converted to PO", "Rejected", "Cancelled"].includes(item.status));
-  const openPo = purchaseOrders.filter((item) => ["Ordered", "Partially Received"].includes(item.status)
-    && Number(item.orderedQuantity) > Number(item.receivedQuantity));
+  const openPo = purchaseOrders.filter((item) => ["Ordered", "Partially Received"].includes(item.status) && Number(item.orderedQuantity) > Number(item.receivedQuantity));
   const duePo = openPo.filter((item) => {
     const distance = dashboardDayDistance(item.expectedDate, todayKey);
     return distance !== null && distance <= 7;
@@ -366,7 +413,15 @@ export function ProductionDashboard({
     { label: "Estimate Cost", detail: "งานประเมินราคา", count: bootstrap.counts.estimates, icon: "file", tone: "violet", view: "estimates", visible: canReadEstimates },
     { label: "Project", detail: "โครงการที่ดำเนินการ", count: bootstrap.counts.activeProjects, icon: "folder", tone: "green", view: "projects", visible: canReadProjects },
     { label: "Sign", detail: "รอลายเซ็นของฉัน", count: signCount, icon: "edit", tone: signCount ? "amber" : "slate", view: "signing", visible: canReadSigning },
-    { label: "Approval", detail: canApproveEstimates && canApproveProcurement ? "Estimate และ PR" : canApproveEstimates ? "อนุมัติ Estimate" : "อนุมัติ PR", count: approvalCount, icon: "checkCircle", tone: approvalCount ? "amber" : "slate", view: approvalRequisitions.length || !canApproveEstimates ? "approvals" : "estimates", visible: canApproveEstimates || canApproveProcurement },
+    {
+      label: "Approval",
+      detail: canApproveEstimates && canApproveProcurement ? "Estimate และ PR" : canApproveEstimates ? "อนุมัติ Estimate" : "อนุมัติ PR",
+      count: approvalCount,
+      icon: "checkCircle",
+      tone: approvalCount ? "amber" : "slate",
+      view: approvalRequisitions.length || !canApproveEstimates ? "approvals" : "estimates",
+      visible: canApproveEstimates || canApproveProcurement,
+    },
     { label: "PR", detail: "ใบขอซื้อที่เปิดอยู่", count: openPr.length, icon: "package", tone: "blue", view: "purchase", visible: canReadProcurement },
     { label: "PO", detail: "คำสั่งซื้อที่ยังเปิด", count: openPo.length, icon: "truck", tone: duePo.length ? "amber" : "violet", view: "pos", visible: canReadProcurement },
     { label: "รับของ", detail: "เอกสารรอยืนยัน", count: draftReceipts.length, icon: "download", tone: draftReceipts.length ? "amber" : "green", view: "receiving", visible: canReadInventory },
@@ -379,17 +434,52 @@ export function ProductionDashboard({
         eyebrow="MY OPERATIONS DASHBOARD"
         title={`${t("สวัสดี")} ${bootstrap.user.name}`}
         subtitle={`${fullDate} · ${t("ดูงานที่ต้องทำและติดตามเอกสารทุกขั้นตอนจากที่เดียว")}`}
-        meta={<><Badge tone="blue">{bootstrap.user.department}</Badge><Badge tone="slate">{bootstrap.user.role}</Badge>{teamTestMode ? <Badge tone="amber"><LocalizedText text={"Team Test"} /></Badge> : <Badge tone="green"><LocalizedText text={"ข้อมูลล่าสุด"} /></Badge>}</>}
-        actions={<><button className="btn default" type="button" disabled={loading} onClick={() => { void Promise.all([loadDashboard(), refreshBootstrap()]); }}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button>{canReadSchedule ? <button className="btn primary" type="button" onClick={() => onNavigate("my-work")}><Icon name="user" /><LocalizedText text={"Open My Work"} /></button> : null}</>}
+        meta={
+          <>
+            <Badge tone="blue">{bootstrap.user.department}</Badge>
+            <Badge tone="slate">{bootstrap.user.role}</Badge>
+            {teamTestMode ? (
+              <Badge tone="amber">
+                <LocalizedText text={"Team Test"} />
+              </Badge>
+            ) : (
+              <Badge tone="green">
+                <LocalizedText text={"ข้อมูลล่าสุด"} />
+              </Badge>
+            )}
+          </>
+        }
+        actions={
+          <>
+            <button
+              className="btn default"
+              type="button"
+              disabled={loading}
+              onClick={() => {
+                void Promise.all([loadDashboard(), refreshBootstrap()]);
+              }}
+            >
+              <Icon name="refresh" />
+              <LocalizedText text={"Refresh"} />
+            </button>
+            {canReadSchedule ? (
+              <button className="btn primary" type="button" onClick={() => onNavigate("my-work")}>
+                <Icon name="user" />
+                <LocalizedText text={"Open My Work"} />
+              </button>
+            ) : null}
+          </>
+        }
       />
 
       <section className="dashboard-tenure" aria-label={t("ข้อมูลอายุงาน")}>
-        <span className="dashboard-tenure-symbol"><Icon name="user" /></span>
+        <span className="dashboard-tenure-symbol">
+          <Icon name="user" />
+        </span>
         <div className="dashboard-tenure-intro">
           <small>{t("เส้นทางของคุณกับ TOMAS TECH")}</small>
           <strong>{tenure ? `${t("ร่วมทีมมาแล้ว")} ${tenure.years} ${t("ปี")} ${tenure.months} ${t("เดือน")} ${tenure.days} ${t("วัน")}` : t("ยังไม่ระบุวันเริ่มงาน")}</strong>
-          {employment ? <span>{`${t("พนักงานเลขที่")} ${employment.employeeNo} · ${employment.level}`}</span>
-            : startWorkDate ? null : <span>{t("ไม่พบบัญชีผู้ใช้นี้ใน Employee Master")}</span>}
+          {employment ? <span>{`${t("พนักงานเลขที่")} ${employment.employeeNo} · ${employment.level}`}</span> : startWorkDate ? null : <span>{t("ไม่พบบัญชีผู้ใช้นี้ใน Employee Master")}</span>}
         </div>
         <div className="dashboard-tenure-stat">
           <small>{t("เริ่มงาน")}</small>
@@ -407,26 +497,66 @@ export function ProductionDashboard({
 
       <section className="dashboard-summary" aria-label={t("สรุปงานของฉัน")}>
         <button type="button" className="dashboard-summary-card primary" onClick={() => setTaskTab("today")}>
-          <span className="dashboard-summary-icon"><Icon name="calendar" /></span><span><small>{t("งานวันนี้")}</small><strong>{todayWork.length}</strong><em>{lateWork.length ? `${lateWork.length} ${t("งานเลยกำหนด")}` : t("อยู่ในแผน")}</em></span>
+          <span className="dashboard-summary-icon">
+            <Icon name="calendar" />
+          </span>
+          <span>
+            <small>{t("งานวันนี้")}</small>
+            <strong>{todayWork.length}</strong>
+            <em>{lateWork.length ? `${lateWork.length} ${t("งานเลยกำหนด")}` : t("อยู่ในแผน")}</em>
+          </span>
         </button>
         <button type="button" className="dashboard-summary-card" onClick={() => setTaskTab("week")}>
-          <span className="dashboard-summary-icon blue"><Icon name="clock" /></span><span><small>{t("ครบกำหนดใน 7 วัน")}</small><strong>{weekWork.length}</strong><em>{t("เตรียมงานล่วงหน้า")}</em></span>
+          <span className="dashboard-summary-icon blue">
+            <Icon name="clock" />
+          </span>
+          <span>
+            <small>{t("ครบกำหนดใน 7 วัน")}</small>
+            <strong>{weekWork.length}</strong>
+            <em>{t("เตรียมงานล่วงหน้า")}</em>
+          </span>
         </button>
         <button type="button" className="dashboard-summary-card" onClick={() => setTaskTab("done")}>
-          <span className="dashboard-summary-icon green"><Icon name="checkCircle" /></span><span><small>{t("เสร็จใน 7 วันที่ผ่านมา")}</small><strong>{doneThisWeek.length}</strong><em>{t("จาก Project Schedule")}</em></span>
+          <span className="dashboard-summary-icon green">
+            <Icon name="checkCircle" />
+          </span>
+          <span>
+            <small>{t("เสร็จใน 7 วันที่ผ่านมา")}</small>
+            <strong>{doneThisWeek.length}</strong>
+            <em>{t("จาก Project Schedule")}</em>
+          </span>
         </button>
         <div className={`dashboard-summary-card ${attentionCount ? "attention" : ""}`}>
-          <span className="dashboard-summary-icon amber"><Icon name="bell" /></span><span><small>{t("ต้องจัดการต่อ")}</small><strong>{attentionCount}</strong><em>{t("งาน เอกสาร และการอนุมัติ")}</em></span>
+          <span className="dashboard-summary-icon amber">
+            <Icon name="bell" />
+          </span>
+          <span>
+            <small>{t("ต้องจัดการต่อ")}</small>
+            <strong>{attentionCount}</strong>
+            <em>{t("งาน เอกสาร และการอนุมัติ")}</em>
+          </span>
         </div>
       </section>
 
-      {partialError ? <div className="dashboard-data-note" role="status"><Icon name="alertCircle" />{t("ข้อมูลบางโมดูลยังโหลดไม่สำเร็จ สามารถกดรีเฟรชได้โดยไม่กระทบข้อมูลส่วนอื่น")}</div> : null}
+      {partialError ? (
+        <div className="dashboard-data-note" role="status">
+          <Icon name="alertCircle" />
+          {t("ข้อมูลบางโมดูลยังโหลดไม่สำเร็จ สามารถกดรีเฟรชได้โดยไม่กระทบข้อมูลส่วนอื่น")}
+        </div>
+      ) : null}
 
       <section className="dashboard-main-grid">
         <Panel
           title="งานของฉัน"
           subtitle="เรียงจากงานที่ต้องสนใจก่อน"
-          actions={canReadSchedule ? <button className="link-btn" type="button" onClick={() => onNavigate("my-work")}><LocalizedText text={"ดูงานทั้งหมด"} /><Icon name="arrowRight" /></button> : undefined}
+          actions={
+            canReadSchedule ? (
+              <button className="link-btn" type="button" onClick={() => onNavigate("my-work")}>
+                <LocalizedText text={"ดูงานทั้งหมด"} />
+                <Icon name="arrowRight" />
+              </button>
+            ) : undefined
+          }
           flush
           className="dashboard-task-panel"
         >
@@ -440,49 +570,173 @@ export function ProductionDashboard({
             ]}
           />
           <div className="dashboard-task-list" role="tabpanel">
-            {loading && !workItems.length ? <div className="dashboard-loading"><span className="spinner" />{t("กำลังโหลดงานของคุณ…")}</div> : null}
+            {loading && !workItems.length ? (
+              <div className="dashboard-loading">
+                <span className="spinner" />
+                {t("กำลังโหลดงานของคุณ…")}
+              </div>
+            ) : null}
             {!loading && !canReadSchedule ? <EmptyState icon="lock" title="ไม่มีสิทธิ์ดู Project Schedule" message="ทางลัดโมดูลอื่นที่คุณใช้งานได้ยังแสดงอยู่ด้านล่าง" /> : null}
-            {!loading && canReadSchedule && !displayedWork.length ? <EmptyState icon="checkCircle" title={taskTab === "done" ? "ยังไม่มีงานที่ปิดแล้ว" : "ไม่มีงานในช่วงนี้"} message={taskTab === "done" ? "งานที่ทำเสร็จจะกลับมาแสดงที่นี่" : "คุณไม่มีงานที่ต้องทำในช่วงเวลานี้"} /> : null}
+            {!loading && canReadSchedule && !displayedWork.length ? (
+              <EmptyState icon="checkCircle" title={taskTab === "done" ? "ยังไม่มีงานที่ปิดแล้ว" : "ไม่มีงานในช่วงนี้"} message={taskTab === "done" ? "งานที่ทำเสร็จจะกลับมาแสดงที่นี่" : "คุณไม่มีงานที่ต้องทำในช่วงเวลานี้"} />
+            ) : null}
             {displayedWork.map((item) => {
               const distance = dashboardDayDistance(dashboardDueDate(item), todayKey);
-              const dateLabel = item.status === "Done"
-                ? `${t("เสร็จ")} ${formatDate(dashboardDateKey(item.actualFinish ?? item.updatedAt) ?? todayKey)}`
-                : distance !== null && distance < 0 ? `${t("เลยกำหนด")} ${Math.abs(distance)} ${t("วัน")}`
-                  : distance === 0 ? t("ครบกำหนดวันนี้")
-                    : distance !== null ? `${t("เหลือ")} ${distance} ${t("วัน")}` : t("ยังไม่ระบุวันส่ง");
-              return <button className="dashboard-task-row" type="button" key={item.taskId} onClick={() => onNavigate("my-work")}>
-                <span className={`dashboard-task-marker ${dashboardTaskTone(item)}`}><Icon name={item.status === "Done" ? "check" : item.status === "Blocked" ? "alertTriangle" : "calendar"} /></span>
-                <span className="dashboard-task-copy"><span><strong>{item.name}</strong><Badge tone={dashboardTaskTone(item)}>{item.status}</Badge></span><small>{item.projectNo} <LocalizedText text={"·"} /> {item.projectName}</small></span>
-                <span className="dashboard-task-progress"><strong>{Number(item.percentComplete)}%</strong><span className="progress"><b className={dashboardTaskTone(item)} style={{ width: `${Math.max(0, Math.min(100, Number(item.percentComplete)))}%` }} /></span></span>
-                <span className={distance !== null && distance < 0 ? "dashboard-task-due late" : "dashboard-task-due"}>{dateLabel}<Icon name="chevronRight" /></span>
-              </button>;
+              const dateLabel =
+                item.status === "Done"
+                  ? `${t("เสร็จ")} ${formatDate(dashboardDateKey(item.actualFinish ?? item.updatedAt) ?? todayKey)}`
+                  : distance !== null && distance < 0
+                    ? `${t("เลยกำหนด")} ${Math.abs(distance)} ${t("วัน")}`
+                    : distance === 0
+                      ? t("ครบกำหนดวันนี้")
+                      : distance !== null
+                        ? `${t("เหลือ")} ${distance} ${t("วัน")}`
+                        : t("ยังไม่ระบุวันส่ง");
+              return (
+                <button className="dashboard-task-row" type="button" key={item.taskId} onClick={() => onNavigate("my-work")}>
+                  <span className={`dashboard-task-marker ${dashboardTaskTone(item)}`}>
+                    <Icon name={item.status === "Done" ? "check" : item.status === "Blocked" ? "alertTriangle" : "calendar"} />
+                  </span>
+                  <span className="dashboard-task-copy">
+                    <span>
+                      <strong>{item.name}</strong>
+                      <Badge tone={dashboardTaskTone(item)}>{item.status}</Badge>
+                    </span>
+                    <small>
+                      {item.projectNo} <LocalizedText text={"·"} /> {item.projectName}
+                    </small>
+                  </span>
+                  <span className="dashboard-task-progress">
+                    <strong>{Number(item.percentComplete)}%</strong>
+                    <span className="progress">
+                      <b className={dashboardTaskTone(item)} style={{ width: `${Math.max(0, Math.min(100, Number(item.percentComplete)))}%` }} />
+                    </span>
+                  </span>
+                  <span className={distance !== null && distance < 0 ? "dashboard-task-due late" : "dashboard-task-due"}>
+                    {dateLabel}
+                    <Icon name="chevronRight" />
+                  </span>
+                </button>
+              );
             })}
           </div>
         </Panel>
 
         <Panel title="ต้องจัดการต่อ" subtitle="รายการที่กำลังรอคุณ" className="dashboard-attention-panel">
           <div className="dashboard-attention-list">
-            {lateWork.length ? <button type="button" onClick={() => onNavigate("my-work")}><span className="attention-icon red"><Icon name="alertTriangle" /></span><span><strong>{t("งานเลยกำหนด")}</strong><small>{t("อัปเดตสถานะหรือ Forecast")}</small></span><b>{lateWork.length}</b><Icon name="chevronRight" /></button> : null}
-            {signCount ? <button type="button" onClick={() => onNavigate("signing")}><span className="attention-icon amber"><Icon name="edit" /></span><span><strong>{t("เอกสารรอลายเซ็น")}</strong><small>{t("ตรวจและลงนาม")}</small></span><b>{signCount}</b><Icon name="chevronRight" /></button> : null}
-            {bootstrap.counts.approvals ? <button type="button" onClick={() => onNavigate("estimates")}><span className="attention-icon amber"><Icon name="checkCircle" /></span><span><strong>{t("Estimate รออนุมัติ")}</strong><small>{t("ตรวจต้นทุนและตัดสินใจ")}</small></span><b>{bootstrap.counts.approvals}</b><Icon name="chevronRight" /></button> : null}
-            {approvalRequisitions.length ? <button type="button" onClick={() => onNavigate("approvals")}><span className="attention-icon amber"><Icon name="checkCircle" /></span><span><strong>{t("PR รออนุมัติ")}</strong><small>{t("ตรวจวงเงินและความจำเป็น")}</small></span><b>{approvalRequisitions.length}</b><Icon name="chevronRight" /></button> : null}
-            {duePo.length ? <button type="button" onClick={() => onNavigate("pos")}><span className="attention-icon blue"><Icon name="truck" /></span><span><strong>{t("PO ถึงกำหนดรับ")}</strong><small>{t("ภายใน 7 วันหรือเลยกำหนด")}</small></span><b>{duePo.length}</b><Icon name="chevronRight" /></button> : null}
-            {draftReceipts.length ? <button type="button" onClick={() => onNavigate("receiving")}><span className="attention-icon violet"><Icon name="download" /></span><span><strong>{t("รับของรอยืนยัน")}</strong><small>{t("ตรวจจำนวนและ QC")}</small></span><b>{draftReceipts.length}</b><Icon name="chevronRight" /></button> : null}
-            {!loading && !attentionCount && !duePo.length ? <div className="dashboard-all-clear"><Icon name="checkCircle" /><span><strong>{t("เคลียร์ครบแล้ว")}</strong><small>{t("ยังไม่มีรายการที่ต้องเร่งดำเนินการ")}</small></span></div> : null}
-            {loading ? <div className="dashboard-loading"><span className="spinner" />{t("กำลังตรวจรายการ…")}</div> : null}
+            {lateWork.length ? (
+              <button type="button" onClick={() => onNavigate("my-work")}>
+                <span className="attention-icon red">
+                  <Icon name="alertTriangle" />
+                </span>
+                <span>
+                  <strong>{t("งานเลยกำหนด")}</strong>
+                  <small>{t("อัปเดตสถานะหรือ Forecast")}</small>
+                </span>
+                <b>{lateWork.length}</b>
+                <Icon name="chevronRight" />
+              </button>
+            ) : null}
+            {signCount ? (
+              <button type="button" onClick={() => onNavigate("signing")}>
+                <span className="attention-icon amber">
+                  <Icon name="edit" />
+                </span>
+                <span>
+                  <strong>{t("เอกสารรอลายเซ็น")}</strong>
+                  <small>{t("ตรวจและลงนาม")}</small>
+                </span>
+                <b>{signCount}</b>
+                <Icon name="chevronRight" />
+              </button>
+            ) : null}
+            {bootstrap.counts.approvals ? (
+              <button type="button" onClick={() => onNavigate("estimates")}>
+                <span className="attention-icon amber">
+                  <Icon name="checkCircle" />
+                </span>
+                <span>
+                  <strong>{t("Estimate รออนุมัติ")}</strong>
+                  <small>{t("ตรวจต้นทุนและตัดสินใจ")}</small>
+                </span>
+                <b>{bootstrap.counts.approvals}</b>
+                <Icon name="chevronRight" />
+              </button>
+            ) : null}
+            {approvalRequisitions.length ? (
+              <button type="button" onClick={() => onNavigate("approvals")}>
+                <span className="attention-icon amber">
+                  <Icon name="checkCircle" />
+                </span>
+                <span>
+                  <strong>{t("PR รออนุมัติ")}</strong>
+                  <small>{t("ตรวจวงเงินและความจำเป็น")}</small>
+                </span>
+                <b>{approvalRequisitions.length}</b>
+                <Icon name="chevronRight" />
+              </button>
+            ) : null}
+            {duePo.length ? (
+              <button type="button" onClick={() => onNavigate("pos")}>
+                <span className="attention-icon blue">
+                  <Icon name="truck" />
+                </span>
+                <span>
+                  <strong>{t("PO ถึงกำหนดรับ")}</strong>
+                  <small>{t("ภายใน 7 วันหรือเลยกำหนด")}</small>
+                </span>
+                <b>{duePo.length}</b>
+                <Icon name="chevronRight" />
+              </button>
+            ) : null}
+            {draftReceipts.length ? (
+              <button type="button" onClick={() => onNavigate("receiving")}>
+                <span className="attention-icon violet">
+                  <Icon name="download" />
+                </span>
+                <span>
+                  <strong>{t("รับของรอยืนยัน")}</strong>
+                  <small>{t("ตรวจจำนวนและ QC")}</small>
+                </span>
+                <b>{draftReceipts.length}</b>
+                <Icon name="chevronRight" />
+              </button>
+            ) : null}
+            {!loading && !attentionCount && !duePo.length ? (
+              <div className="dashboard-all-clear">
+                <Icon name="checkCircle" />
+                <span>
+                  <strong>{t("เคลียร์ครบแล้ว")}</strong>
+                  <small>{t("ยังไม่มีรายการที่ต้องเร่งดำเนินการ")}</small>
+                </span>
+              </div>
+            ) : null}
+            {loading ? (
+              <div className="dashboard-loading">
+                <span className="spinner" />
+                {t("กำลังตรวจรายการ…")}
+              </div>
+            ) : null}
           </div>
         </Panel>
       </section>
 
       <Panel title="ภาพรวมกระบวนการทำงาน" subtitle="กดที่แต่ละขั้นตอนเพื่อเปิดรายการที่เกี่ยวข้อง" className="dashboard-workflow-panel">
         <div className="dashboard-workflow">
-          {visibleWorkflow.map((item, index) => <button type="button" key={item.label} className={`dashboard-flow-card ${item.tone}`} onClick={() => onNavigate(item.view)}>
-            <span className="flow-index">{String(index + 1).padStart(2, "0")}</span>
-            <span className="flow-icon"><Icon name={item.icon} /></span>
-            <span className="flow-copy"><strong>{t(item.label)}</strong><small>{t(item.detail)}</small></span>
-            <span className="flow-count">{loading && ["Sign", "PR", "PO", "รับของ"].includes(item.label) ? "…" : item.count}</span>
-            <Icon name="chevronRight" className="flow-arrow" />
-          </button>)}
+          {visibleWorkflow.map((item, index) => (
+            <button type="button" key={item.label} className={`dashboard-flow-card ${item.tone}`} onClick={() => onNavigate(item.view)}>
+              <span className="flow-index">{String(index + 1).padStart(2, "0")}</span>
+              <span className="flow-icon">
+                <Icon name={item.icon} />
+              </span>
+              <span className="flow-copy">
+                <strong>{t(item.label)}</strong>
+                <small>{t(item.detail)}</small>
+              </span>
+              <span className="flow-count">{loading && ["Sign", "PR", "PO", "รับของ"].includes(item.label) ? "…" : item.count}</span>
+              <Icon name="chevronRight" className="flow-arrow" />
+            </button>
+          ))}
         </div>
       </Panel>
     </div>
@@ -490,19 +744,38 @@ export function ProductionDashboard({
 }
 
 const PORTFOLIO_CHIP_COPY: Record<PortfolioChip, { label: string; tone: Tone }> = {
-  overdue: { label: "Portfolio.chipOverdue", tone: "red" }, blocked: { label: "Portfolio.chipBlocked", tone: "red" },
-  waiting: { label: "Portfolio.chipWaiting", tone: "amber" }, stale: { label: "Portfolio.chipStale", tone: "slate" },
+  overdue: { label: "Portfolio.chipOverdue", tone: "red" },
+  blocked: { label: "Portfolio.chipBlocked", tone: "red" },
+  waiting: { label: "Portfolio.chipWaiting", tone: "amber" },
+  stale: { label: "Portfolio.chipStale", tone: "slate" },
   pastTarget: { label: "Portfolio.chipPastTarget", tone: "amber" },
 };
 const PROJECT_STAGE_FILTERS = ["All status", "Planning", "Design", "Development", "Installation", "Commissioning", "Handover", "On Hold", "Closed"];
 const formatDay = (value: string) => new Intl.DateTimeFormat(currentLocale(), { dateStyle: "medium" }).format(new Date(value));
 
-function PortfolioSortHeader({ column, label, sort, onSort, className }: { column: PortfolioSortKey; label: string; sort: PortfolioSort; onSort: (key: PortfolioSortKey) => void; className?: string }) {
+function PortfolioSortHeader({
+  column,
+  label,
+  sort,
+  onSort,
+  className,
+}: {
+  column: PortfolioSortKey;
+  label: string;
+  sort: PortfolioSort;
+  onSort: (key: PortfolioSortKey) => void;
+  className?: string;
+}) {
   const t = useUiText();
   const active = sort.key === column;
-  return <th className={className} aria-sort={active ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}>
-    <button type="button" className={`th-sort${active ? " active" : ""}`} onClick={() => onSort(column)}>{t(label)}<Icon name="chevronDown" className={active ? sort.direction : "idle"} /></button>
-  </th>;
+  return (
+    <th className={className} aria-sort={active ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}>
+      <button type="button" className={`th-sort${active ? " active" : ""}`} onClick={() => onSort(column)}>
+        {t(label)}
+        <Icon name="chevronDown" className={active ? sort.direction : "idle"} />
+      </button>
+    </th>
+  );
 }
 
 // Actual against where the plan says the project should be today; the tick is the plan.
@@ -512,12 +785,22 @@ function PortfolioProgress({ item }: { item: ProjectOverviewItem }) {
   const planned = item.plannedProgress === null || item.plannedProgress === undefined ? null : Math.round(item.plannedProgress);
   const tone: Tone = actual >= 100 ? "green" : planned !== null && actual < planned ? "amber" : "blue";
   const label = planned === null ? `${actual}%` : `${actual}% · ${t("Portfolio.plannedToday")} ${planned}%`;
-  return <div className="portfolio-progress" title={planned === null ? undefined : t("Portfolio.actualVsPlanned")}>
-    <span className="portfolio-progress-track"><span className="progress" role="img" aria-label={label}><b className={tone} style={{ width: `${Math.max(0, Math.min(100, actual))}%` }} /></span>
-      {planned !== null ? <i className="portfolio-progress-tick" aria-hidden="true" style={{ left: `${Math.max(0, Math.min(100, planned))}%` }} /> : null}</span>
-    <span className="portfolio-progress-text">{planned === null ? `${actual}%` : `${actual} / ${planned}`}</span>
-    {item.progressSource === "manual" ? <small className="portfolio-manual" title={t("Portfolio.manualHint")}>{t("Portfolio.manual")}</small> : null}
-  </div>;
+  return (
+    <div className="portfolio-progress" title={planned === null ? undefined : t("Portfolio.actualVsPlanned")}>
+      <span className="portfolio-progress-track">
+        <span className="progress" role="img" aria-label={label}>
+          <b className={tone} style={{ width: `${Math.max(0, Math.min(100, actual))}%` }} />
+        </span>
+        {planned !== null ? <i className="portfolio-progress-tick" aria-hidden="true" style={{ left: `${Math.max(0, Math.min(100, planned))}%` }} /> : null}
+      </span>
+      <span className="portfolio-progress-text">{planned === null ? `${actual}%` : `${actual} / ${planned}`}</span>
+      {item.progressSource === "manual" ? (
+        <small className="portfolio-manual" title={t("Portfolio.manualHint")}>
+          {t("Portfolio.manual")}
+        </small>
+      ) : null}
+    </div>
+  );
 }
 
 export type PortfolioAction = { key: string; label: string; icon?: IconName; danger?: boolean; guide?: string; onSelect: () => void };
@@ -526,7 +809,21 @@ export type PortfolioAction = { key: string; label: string; icon?: IconName; dan
 // anything. The group is position: fixed from the trigger's box, which keeps the table's scroll
 // area and the panel from clipping it; it flips above the trigger when the room below is short and
 // closes on scroll or resize instead of drifting away from its row.
-export function RowDisclosure({ label, trigger, triggerClassName, disabled = false, actions, guide }: { label: string; trigger: ReactNode; triggerClassName: string; disabled?: boolean; actions: PortfolioAction[]; guide?: string }) {
+export function RowDisclosure({
+  label,
+  trigger,
+  triggerClassName,
+  disabled = false,
+  actions,
+  guide,
+}: {
+  label: string;
+  trigger: ReactNode;
+  triggerClassName: string;
+  disabled?: boolean;
+  actions: PortfolioAction[];
+  guide?: string;
+}) {
   const t = useUiText();
   const [open, setOpen] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
@@ -535,12 +832,13 @@ export function RowDisclosure({ label, trigger, triggerClassName, disabled = fal
   const panelId = useId();
   // Measured before paint, written straight to the element: the menu's real height decides the side.
   useLayoutEffect(() => {
-    const anchor = button.current, menu = panel.current;
+    const anchor = button.current,
+      menu = panel.current;
     if (!open || !anchor || !menu) return;
     // The layout viewport, which a position:fixed box is measured against; innerWidth would include the page scrollbar.
     const viewport = document.documentElement;
     const place = rowMenuPlacement(anchor.getBoundingClientRect(), { width: viewport.clientWidth, height: viewport.clientHeight }, menu.offsetHeight);
-    const px = (value: number | null) => value === null ? "auto" : `${value}px`;
+    const px = (value: number | null) => (value === null ? "auto" : `${value}px`);
     menu.style.top = px(place.top);
     menu.style.bottom = px(place.bottom);
     menu.style.left = px(place.left);
@@ -550,10 +848,19 @@ export function RowDisclosure({ label, trigger, triggerClassName, disabled = fal
   useEffect(() => {
     if (!open) return;
     const dismiss = () => setOpen(false);
-    const onMouseDown = (event: MouseEvent) => { if (!wrap.current?.contains(event.target as Node)) dismiss(); };
-    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") { dismiss(); button.current?.focus(); } };
+    const onMouseDown = (event: MouseEvent) => {
+      if (!wrap.current?.contains(event.target as Node)) dismiss();
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        dismiss();
+        button.current?.focus();
+      }
+    };
     // Any scroll outside the menu moves the row under a fixed menu, so the menu goes.
-    const onScroll = (event: Event) => { if (!panel.current?.contains(event.target as Node)) dismiss(); };
+    const onScroll = (event: Event) => {
+      if (!panel.current?.contains(event.target as Node)) dismiss();
+    };
     document.addEventListener("mousedown", onMouseDown);
     document.addEventListener("keydown", onKeyDown);
     window.addEventListener("scroll", onScroll, true);
@@ -566,15 +873,53 @@ export function RowDisclosure({ label, trigger, triggerClassName, disabled = fal
     };
   }, [open]);
   if (!actions.length) return null;
-  return <div className="menu-wrap" ref={wrap} onBlur={(event) => {
-    // Tab moved focus past the group. A null target (focus left the window, or a browser that does
-    // not focus a clicked button) is left to the mousedown handler, so a click on an item still lands.
-    const next = event.relatedTarget;
-    if (open && next instanceof Node && !event.currentTarget.contains(next)) setOpen(false);
-  }}>
-    <button ref={button} type="button" className={triggerClassName} data-guide={guide} disabled={disabled} aria-expanded={open} aria-controls={open ? panelId : undefined} aria-label={label} title={label} onClick={() => setOpen((value) => !value)}>{trigger}</button>
-    {open ? <div ref={panel} id={panelId} className="menu portfolio-menu" role="group" aria-label={label}>{actions.map((action) => <button key={action.key} type="button" className={action.danger ? "danger" : undefined} data-guide={action.guide} onClick={() => { setOpen(false); button.current?.focus(); action.onSelect(); }}>{action.icon ? <Icon name={action.icon} /> : null}{t(action.label)}</button>)}</div> : null}
-  </div>;
+  return (
+    <div
+      className="menu-wrap"
+      ref={wrap}
+      onBlur={(event) => {
+        // Tab moved focus past the group. A null target (focus left the window, or a browser that does
+        // not focus a clicked button) is left to the mousedown handler, so a click on an item still lands.
+        const next = event.relatedTarget;
+        if (open && next instanceof Node && !event.currentTarget.contains(next)) setOpen(false);
+      }}
+    >
+      <button
+        ref={button}
+        type="button"
+        className={triggerClassName}
+        data-guide={guide}
+        disabled={disabled}
+        aria-expanded={open}
+        aria-controls={open ? panelId : undefined}
+        aria-label={label}
+        title={label}
+        onClick={() => setOpen((value) => !value)}
+      >
+        {trigger}
+      </button>
+      {open ? (
+        <div ref={panel} id={panelId} className="menu portfolio-menu" role="group" aria-label={label}>
+          {actions.map((action) => (
+            <button
+              key={action.key}
+              type="button"
+              className={action.danger ? "danger" : undefined}
+              data-guide={action.guide}
+              onClick={() => {
+                setOpen(false);
+                button.current?.focus();
+                action.onSelect();
+              }}
+            >
+              {action.icon ? <Icon name={action.icon} /> : null}
+              {t(action.label)}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 // Closing needs the date the customer took delivery; the API refuses a close without it. Unfinished
@@ -584,20 +929,51 @@ function CloseProjectModal({ project, busy, onClose, onConfirm }: { project: Pro
   const [date, setDate] = useState(() => project.actualDelivery ?? today());
   const tooEarly = Boolean(project.startDate && date && date < project.startDate);
   const unfinished = project.taskCount - project.doneCount;
-  return <Modal title="Portfolio.closeTitle" subtitle={`${project.number} · ${project.name}`} size="sm" onClose={onClose} footer={<>
-    <button className="btn ghost" type="button" onClick={onClose}><LocalizedText text={"Cancel"} /></button>
-    <button className="btn primary" type="button" disabled={busy || !date || tooEarly} onClick={() => onConfirm(date)}><Icon name="check" />{busy ? t("Saving…") : t("Portfolio.closeConfirm")}</button>
-  </>}>
-    <p>{t("Portfolio.closeHint")}</p>
-    {unfinished > 0 ? <div className="info-strip" role="note"><Icon name="alertTriangle" /><span>{t("Portfolio.closeUnfinished").replace("{open}", String(unfinished)).replace("{total}", String(project.taskCount))}</span></div> : null}
-    <label className="field"><span><LocalizedText text={"Actual delivery"} /></span><DateInput required min={project.startDate || undefined} value={date} onChange={(event) => setDate(event.target.value)} /></label>
-  </Modal>;
+  return (
+    <Modal
+      title="Portfolio.closeTitle"
+      subtitle={`${project.number} · ${project.name}`}
+      size="sm"
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn ghost" type="button" onClick={onClose}>
+            <LocalizedText text={"Cancel"} />
+          </button>
+          <button className="btn primary" type="button" disabled={busy || !date || tooEarly} onClick={() => onConfirm(date)}>
+            <Icon name="check" />
+            {busy ? t("Saving…") : t("Portfolio.closeConfirm")}
+          </button>
+        </>
+      }
+    >
+      <p>{t("Portfolio.closeHint")}</p>
+      {unfinished > 0 ? (
+        <div className="info-strip" role="note">
+          <Icon name="alertTriangle" />
+          <span>{t("Portfolio.closeUnfinished").replace("{open}", String(unfinished)).replace("{total}", String(project.taskCount))}</span>
+        </div>
+      ) : null}
+      <label className="field">
+        <span>
+          <LocalizedText text={"Actual delivery"} />
+        </span>
+        <DateInput required min={project.startDate || undefined} value={date} onChange={(event) => setDate(event.target.value)} />
+      </label>
+    </Modal>
+  );
 }
 
 type PortfolioMode = "list" | "timeline";
 const PORTFOLIO_SORT_LABEL: Record<PortfolioSortKey, string> = {
-  health: "Portfolio.colHealth", number: "Portfolio.colNumber", name: "Portfolio.colProject", pm: "Portfolio.colPm",
-  target: "Portfolio.colTarget", slip: "Portfolio.colSlip", progress: "Portfolio.colProgress", lastUpdate: "Portfolio.colLastUpdate",
+  health: "Portfolio.colHealth",
+  number: "Portfolio.colNumber",
+  name: "Portfolio.colProject",
+  pm: "Portfolio.colPm",
+  target: "Portfolio.colTarget",
+  slip: "Portfolio.colSlip",
+  progress: "Portfolio.colProgress",
+  lastUpdate: "Portfolio.colLastUpdate",
 };
 // The overview's filters are on its link and remembered for each person (screen-link.tsx); codecs are made once.
 const PORTFOLIO_MODE_LINK = choiceLink(["list", "timeline"] as const);
@@ -605,7 +981,14 @@ const PORTFOLIO_HEALTH_LINK = optionalChoiceLink(PORTFOLIO_HEALTH_ORDER);
 const PORTFOLIO_CHIP_LINK = optionalChoiceLink(PORTFOLIO_CHIPS);
 const PORTFOLIO_STATUS_LINK = choiceLink(PROJECT_STAGE_FILTERS);
 
-export function ProductionProjects({ bootstrap, notify, refreshBootstrap, teamTestMode, openProjectSchedule, initialMode }: CommonProps & {
+export function ProductionProjects({
+  bootstrap,
+  notify,
+  refreshBootstrap,
+  teamTestMode,
+  openProjectSchedule,
+  initialMode,
+}: CommonProps & {
   teamTestMode: boolean;
   openProjectSchedule?: (id: number, taskId?: number) => void;
   /** The old Project Timeline menu opens the portfolio straight in Timeline mode. */
@@ -628,7 +1011,13 @@ export function ProductionProjects({ bootstrap, notify, refreshBootstrap, teamTe
   const [health, setHealth] = useLinkedState<ProjectHealth | null>("health", null, PORTFOLIO_HEALTH_LINK);
   const [chip, setChip] = useLinkedState<PortfolioChip | null>("attention", null, PORTFOLIO_CHIP_LINK);
   const sortStorageKey = portfolioSortStorageKey(bootstrap.user.id);
-  const [sort, setSort] = useState<PortfolioSort>(() => { try { return parsePortfolioSort(window.localStorage.getItem(sortStorageKey)); } catch { return DEFAULT_PORTFOLIO_SORT; } });
+  const [sort, setSort] = useState<PortfolioSort>(() => {
+    try {
+      return parsePortfolioSort(window.localStorage.getItem(sortStorageKey));
+    } catch {
+      return DEFAULT_PORTFOLIO_SORT;
+    }
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [actionError, setActionError] = useState("");
@@ -645,12 +1034,23 @@ export function ProductionProjects({ bootstrap, notify, refreshBootstrap, teamTe
   const latestRequest = useRef(0);
   const load = useCallback(async () => {
     const request = ++latestRequest.current;
-    setLoading(true); setError("");
-    try { const data = await listProjectOverview({ includeClosed }); if (request === latestRequest.current) setOverview({ items: data.items, loadedAt: Date.now() }); }
-    catch (requestError) { if (request === latestRequest.current) setError(toError(requestError)); }
-    finally { if (request === latestRequest.current) setLoading(false); }
+    setLoading(true);
+    setError("");
+    try {
+      const data = await listProjectOverview({ includeClosed });
+      if (request === latestRequest.current) setOverview({ items: data.items, loadedAt: Date.now() });
+    } catch (requestError) {
+      if (request === latestRequest.current) setError(toError(requestError));
+    } finally {
+      if (request === latestRequest.current) setLoading(false);
+    }
   }, [includeClosed]);
-  useEffect(() => { const timer = window.setTimeout(() => { void load(); }, 0); return () => window.clearTimeout(timer); }, [load]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void load();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [load]);
   // Day requests waiting for this user's answer across projects; answered from the plan, opened on the task.
   const canAnswer = bootstrap.permissions.includes("schedule.plan") && bootstrap.permissions.includes("schedule.read");
   const [pendingRequests, setPendingRequests] = useState<PendingDayRequest[]>([]);
@@ -658,15 +1058,27 @@ export function ProductionProjects({ bootstrap, notify, refreshBootstrap, teamTe
     // Once per portfolio load (loadedAt is unset until the first one lands), not once before and once after.
     if (!canAnswer || !overview?.loadedAt) return;
     let cancelled = false;
-    void listPendingDayRequests().then((rows) => { if (!cancelled) setPendingRequests(rows); }).catch(() => { if (!cancelled) setPendingRequests([]); });
-    return () => { cancelled = true; };
+    void listPendingDayRequests()
+      .then((rows) => {
+        if (!cancelled) setPendingRequests(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setPendingRequests([]);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [canAnswer, overview?.loadedAt]);
   const canWrite = bootstrap.permissions.includes("project.write");
   // The API has the final say (work recorded, role); this only hides a button that could never work.
-  const canDelete = (project: ProjectSummary) => bootstrap.user.roles.some(role => role === "Management" || role === "Admin") || (canWrite && (project.managerId === bootstrap.user.id || bootstrap.user.roles.includes("Engineering Manager")));
+  const canDelete = (project: ProjectSummary) =>
+    bootstrap.user.roles.some((role) => role === "Management" || role === "Admin") || (canWrite && (project.managerId === bootstrap.user.id || bootstrap.user.roles.includes("Engineering Manager")));
   // The same people the API lets change a plan: this project's manager, an Engineering Manager or an Admin, while it is open.
-  const canPlan = (project: ProjectSummary) => canWrite && bootstrap.permissions.includes("schedule.plan") && project.status !== "Closed"
-    && (project.managerId === bootstrap.user.id || bootstrap.user.roles.some(role => role === "Engineering Manager" || role === "Admin"));
+  const canPlan = (project: ProjectSummary) =>
+    canWrite &&
+    bootstrap.permissions.includes("schedule.plan") &&
+    project.status !== "Closed" &&
+    (project.managerId === bootstrap.user.id || bootstrap.user.roles.some((role) => role === "Engineering Manager" || role === "Admin"));
   const items = useMemo(() => overview?.items ?? [], [overview]);
   const managers = useMemo(() => [...new Map(items.map((item) => [item.managerId, item.managerName] as const)).entries()].sort((a, b) => a[1].localeCompare(b[1])), [items]);
   const teams = useMemo(() => [...new Set(items.map((item) => shownProjectTeam(item.team)).filter(Boolean))].sort((a, b) => a.localeCompare(b)), [items]);
@@ -676,26 +1088,47 @@ export function ProductionProjects({ bootstrap, notify, refreshBootstrap, teamTe
   const activeManagerId = effectiveOption(managerId, managerIds);
   const activeTeam = effectiveOption(team, teams);
   const activeStatus = effectiveStatusFilter(status, includeClosed);
-  const filters = useMemo<PortfolioFilters>(() => ({ search, managerId: activeManagerId, team: activeTeam, mineUserId: mine ? bootstrap.user.id : null, status: activeStatus, health, chip }),
-    [search, activeManagerId, activeTeam, mine, bootstrap.user.id, activeStatus, health, chip]);
+  const filters = useMemo<PortfolioFilters>(
+    () => ({ search, managerId: activeManagerId, team: activeTeam, mineUserId: mine ? bootstrap.user.id : null, status: activeStatus, health, chip }),
+    [search, activeManagerId, activeTeam, mine, bootstrap.user.id, activeStatus, health, chip],
+  );
   const view = useMemo(() => portfolioView(items, filters, overview?.loadedAt ?? 0), [items, filters, overview?.loadedAt]);
   const sorted = useMemo(() => sortPortfolio(view.rows, sort), [view.rows, sort]);
   const pageCount = Math.max(1, Math.ceil(sorted.length / pageSize));
   const currentPage = Math.min(page, pageCount);
   const paged = sorted.slice((currentPage - 1) * pageSize, currentPage * pageSize);
   const filtered = filters.search !== "" || filters.managerId !== null || filters.team !== null || mine || filters.status !== null || health !== null || chip !== null;
-  const clearFilters = () => { setSearch(""); setManagerId(null); setTeam(null); setMine(false); setStatus("All status"); setHealth(null); setChip(null); setPage(1); };
+  const clearFilters = () => {
+    setSearch("");
+    setManagerId(null);
+    setTeam(null);
+    setMine(false);
+    setStatus("All status");
+    setHealth(null);
+    setChip(null);
+    setPage(1);
+  };
   const changeSort = (key: PortfolioSortKey) => {
     const next = nextPortfolioSort(sort, key);
-    setSort(next); setPage(1);
-    try { window.localStorage.setItem(sortStorageKey, JSON.stringify(next)); } catch { /* The sort is a convenience when storage is blocked. */ }
+    setSort(next);
+    setPage(1);
+    try {
+      window.localStorage.setItem(sortStorageKey, JSON.stringify(next));
+    } catch {
+      /* The sort is a convenience when storage is blocked. */
+    }
   };
-  const healthItems = PORTFOLIO_HEALTH_ORDER.filter((value) => (value !== "On Hold" && value !== "Completed") || view.healthCounts[value] > 0 || health === value)
-    .map((value) => ({ key: value, label: `ProjectHealth.${value}`, value: view.healthCounts[value], tone: PROJECT_HEALTH_TONE[value] }));
+  const healthItems = PORTFOLIO_HEALTH_ORDER.filter((value) => (value !== "On Hold" && value !== "Completed") || view.healthCounts[value] > 0 || health === value).map((value) => ({
+    key: value,
+    label: `ProjectHealth.${value}`,
+    value: view.healthCounts[value],
+    tone: PROJECT_HEALTH_TONE[value],
+  }));
   const chipItems = PORTFOLIO_CHIPS.map((key) => ({ key, ...PORTFOLIO_CHIP_COPY[key], value: view.chipCounts[key] }));
   // One step along the lifecycle, saved with the row's version so a stale row is refused, not overwritten.
   const saveStage = async (item: ProjectOverviewItem, next: string, actualDelivery?: string) => {
-    setStageBusy(item.id); setActionError("");
+    setStageBusy(item.id);
+    setActionError("");
     try {
       await updateProject(item.id, { rowVersion: item.rowVersion, status: next, ...(actualDelivery ? { actualDelivery } : {}) });
       setClosingProject(null);
@@ -707,106 +1140,462 @@ export function ProductionProjects({ bootstrap, notify, refreshBootstrap, teamTe
         notify(`${item.number} · ${failure.code === "concurrency_conflict" ? uiText("Portfolio.stageConflict") : uiText(failure.message)}`);
         await load();
       } else setActionError(`${item.number} · ${uiText(toError(failure))}`);
-    } finally { setStageBusy(null); }
+    } finally {
+      setStageBusy(null);
+    }
   };
   const changeStage = (item: ProjectOverviewItem, next: string) => {
     if (next === item.status) return;
-    if (next === "Closed") setClosingProject(item); else void saveStage(item, next);
+    if (next === "Closed") setClosingProject(item);
+    else void saveStage(item, next);
   };
   const rowActions = (item: ProjectOverviewItem): PortfolioAction[] => [
-    ...(canWrite ? [{ key: "edit", label: "Edit project", icon: "edit" as const, guide:"project.edit", onSelect: () => setEditingProject({ ...item, progress: item.typedProgress }) }] : []),
-    ...(canPlan(item) ? [{ key: "plan", label: "CRM.editMasterPlan", icon: "calendar" as const, guide:"project.editPlan", onSelect: () => setPlanningProject(item) }] : []),
-    ...(item.canChangeStatus && item.allowedStatuses.includes("Closed") ? [{ key: "close", label: "Portfolio.closeTitle", icon: "checkCircle" as const, onSelect: () => setClosingProject(item) }] : []),
+    ...(canWrite ? [{ key: "edit", label: "Edit project", icon: "edit" as const, guide: "project.edit", onSelect: () => setEditingProject({ ...item, progress: item.typedProgress }) }] : []),
+    ...(canPlan(item) ? [{ key: "plan", label: "CRM.editMasterPlan", icon: "calendar" as const, guide: "project.editPlan", onSelect: () => setPlanningProject(item) }] : []),
+    ...(item.canChangeStatus && item.allowedStatuses.includes("Closed")
+      ? [{ key: "close", label: "Portfolio.closeTitle", icon: "checkCircle" as const, onSelect: () => setClosingProject(item) }]
+      : []),
     ...(canWrite && canEditEndUser(item.status) ? [{ key: "end-user", label: "Portfolio.editEndUser", icon: "user" as const, onSelect: () => setEndUserProject(item) }] : []),
     { key: "members", label: "Portfolio.members", icon: "users", onSelect: () => setMembersProject(item) },
     { key: "documents", label: "Documents", icon: "paperclip", onSelect: () => setDocumentsProject(item) },
     ...(canDelete(item) ? [{ key: "delete", label: "CRM.deleteProject", icon: "trash" as const, danger: true, onSelect: () => setDeletingProject(item) }] : []),
   ];
-  return <>
-    <PageHeader eyebrow="APPROVED WORK" title={uiText("Projects")} subtitle="Portfolio.subtitle" actions={canWrite ? <button className="btn primary" type="button" data-guide="project.create" onClick={() => setCreateOpen(true)}><Icon name="plus" /><LocalizedText text={"Create project"} /></button> : undefined} />
-    <section className="portfolio-overview" aria-label={uiText("Portfolio.overview")}>
-      <SegmentBar label="Portfolio.healthBar" items={healthItems} active={health} onPick={(key) => { setHealth(key as ProjectHealth | null); setPage(1); }}
-        lead={<><strong>{view.barTotal}</strong><span>{uiText(includeClosed ? "Portfolio.inView" : "Portfolio.open")}</span></>} />
-      <FilterChips label="Portfolio.attention" items={chipItems} active={chip} onPick={(key) => { setChip(key as PortfolioChip | null); setPage(1); }} />
-    </section>
-    <Toolbar>
-      <SearchInput value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder="Portfolio.search" />
-      <label className="select-field"><span className="sr-only">{uiText("Portfolio.pm")}</span><select value={activeManagerId ?? ""} aria-label={uiText("Portfolio.pm")} onChange={(event) => { setManagerId(event.target.value ? Number(event.target.value) : null); setPage(1); }}><option value="">{uiText("Portfolio.allPms")}</option>{managers.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select><Icon name="chevronDown" /></label>
-      <label className="select-field"><span className="sr-only">{uiText("Portfolio.team")}</span><select value={activeTeam ?? ""} aria-label={uiText("Portfolio.team")} onChange={(event) => { setTeam(event.target.value || null); setPage(1); }}><option value="">{uiText("Portfolio.allTeams")}</option>{teams.map((value) => <option key={value} value={value}>{value}</option>)}</select><Icon name="chevronDown" /></label>
-      <Select label="Status" value={activeStatus ?? "All status"} onChange={(value) => { setStatus(value); setPage(1); if (value === "Closed") setIncludeClosed(true); }} options={PROJECT_STAGE_FILTERS} />
-      <label className="checkbox-row"><input type="checkbox" checked={mine} onChange={(event) => { setMine(event.target.checked); setPage(1); }} /><span>{uiText("Portfolio.mine")}</span></label>
-      <label className="checkbox-row"><input type="checkbox" checked={includeClosed} onChange={(event) => { setIncludeClosed(event.target.checked); if (!event.target.checked && status === "Closed") setStatus("All status"); setPage(1); }} /><span>{uiText("Portfolio.showClosed")}</span></label>
-      <div className="chip-select" role="group" aria-label={uiText("Portfolio.view")}>
-        {(["list", "timeline"] as const).map((value) => <button key={value} type="button" className={mode === value ? "chip on" : "chip"} aria-pressed={mode === value} onClick={() => changeMode(value)}><Icon name={value === "list" ? "table" : "chart"} />{uiText(value === "list" ? "Portfolio.viewList" : "Portfolio.viewTimeline")}</button>)}
-      </div>
-      <button className="btn ghost" type="button" disabled={loading} onClick={() => { void load(); }}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button>
-    </Toolbar>
-    {error ? <LoadError message={error} retry={() => { void load(); }} /> : null}
-    {actionError ? <div className="callout danger" role="alert"><Icon name="alertTriangle" /><span>{actionError}</span></div> : null}
-    {pendingRequests.length ? <details className="portfolio-waiting" open>
-      <summary><Icon name="clock" />{uiText("Portfolio.waitingForYou")} <strong>{pendingRequests.length}</strong></summary>
-      <ul>{pendingRequests.map((request) => <li key={request.id}>
-        <span className="mono">{request.projectNo}</span>
-        <span className="portfolio-waiting-task">{request.wbs ? `${request.wbs} ` : ""}{request.taskName}<small className="muted">{request.requestedBy} · {formatDay(request.occurredAt)}{request.comment ? ` · “${request.comment}”` : ""}</small></span>
-        <Badge tone="amber">+{request.requestDays} {uiText("days")}</Badge>
-        {openProjectSchedule ? <button className="btn sm primary" type="button" onClick={() => openProjectSchedule(request.projectId, request.taskId)}><Icon name="checkCircle" />{uiText("Portfolio.reviewRequest")}</button> : null}
-      </li>)}</ul>
-    </details> : null}
-    <Panel flush className="portfolio-panel">
-      {sorted.length && mode === "timeline" ? <>
-        {/* Keyed on the load, so a reload also refetches the tasks of expanded projects. */}
-        <ProjectPortfolioGantt key={overview?.loadedAt ?? 0} rows={sorted} today={today()} canReadSchedule={bootstrap.permissions.includes("schedule.read")} includeClosed={includeClosed} {...(openProjectSchedule ? { openProjectSchedule } : {})}
-          controls={/* The sort sits inside the timeline so it stays at hand in full screen. */
-          <div className="portfolio-gantt-sort">
-            <label className="select-field"><span className="sr-only">{uiText("Portfolio.sortBy")}</span><select value={sort.key} aria-label={uiText("Portfolio.sortBy")} onChange={(event) => changeSort(event.target.value as PortfolioSortKey)}>{PORTFOLIO_SORT_KEYS.map((key) => <option key={key} value={key}>{uiText(PORTFOLIO_SORT_LABEL[key])}</option>)}</select><Icon name="chevronDown" /></label>
-            <button type="button" className="btn ghost sm" onClick={() => changeSort(sort.key)} aria-label={uiText(sort.direction === "asc" ? "Portfolio.sortAscending" : "Portfolio.sortDescending")} title={uiText(sort.direction === "asc" ? "Portfolio.sortAscending" : "Portfolio.sortDescending")}><Icon name="chevronDown" className={sort.direction} />{uiText(sort.direction === "asc" ? "Portfolio.sortAscending" : "Portfolio.sortDescending")}</button>
-          </div>} />
-      </>
-        : sorted.length ? <div className="table-wrap"><TablePageSize value={pageSize} onChange={(value) => { setPageSize(value); setPage(1); }} /><table className="portfolio-table"><thead><tr>
-        <th className="portfolio-col-menu"><span className="sr-only">{uiText("Actions")}</span></th><th>{uiText("Portfolio.colStage")}</th>
-        <PortfolioSortHeader column="health" label="Portfolio.colHealth" sort={sort} onSort={changeSort} />
-        <PortfolioSortHeader column="number" label="Portfolio.colNumber" sort={sort} onSort={changeSort} />
-        <PortfolioSortHeader column="name" label="Portfolio.colProject" sort={sort} onSort={changeSort} className="portfolio-col-project" />
-        <PortfolioSortHeader column="pm" label="Portfolio.colPm" sort={sort} onSort={changeSort} className="portfolio-col-pm" />
-        <PortfolioSortHeader column="target" label="Portfolio.colTarget" sort={sort} onSort={changeSort} />
-        <PortfolioSortHeader column="slip" label="Portfolio.colSlip" sort={sort} onSort={changeSort} className="portfolio-col-slip" />
-        <PortfolioSortHeader column="progress" label="Portfolio.colProgress" sort={sort} onSort={changeSort} />
-        <PortfolioSortHeader column="lastUpdate" label="Portfolio.colLastUpdate" sort={sort} onSort={changeSort} />
-      </tr></thead><tbody>{paged.map((item) => {
-        const slip = formatSlip(item.status === "Closed" ? null : item.slipDays);
-        const customerLine = [item.customerName, item.endUserName].filter(Boolean).join(" / ");
-        return <tr key={item.id}>
-          <td className="portfolio-col-menu"><RowDisclosure label={`${uiText("Portfolio.more")} ${item.number}`} triggerClassName="row-action" guide="project.rowMenu" trigger={<Icon name="more" />} actions={rowActions(item)} /></td>
-          <td>{item.canChangeStatus && item.allowedStatuses.length
-            ? <RowDisclosure label={`${uiText("Portfolio.changeStage")} ${item.number} · ${uiText(item.status)}`} triggerClassName="portfolio-stage-trigger" disabled={stageBusy !== null}
-              trigger={<><span>{uiText(item.status)}</span><Icon name="chevronDown" /></>} actions={item.allowedStatuses.map((value) => ({ key: value, label: value, onSelect: () => changeStage(item, value) }))} />
-            : <Badge>{item.status}</Badge>}</td>
-          <td><HealthBadge health={item.health ?? "No plan"} status={item.status} />{item.status !== "Closed" && item.scheduleError ? <small className="portfolio-schedule-error" title={uiText("Portfolio.scheduleErrorHint")}>{uiText("Portfolio.scheduleError")}</small> : null}</td>
-          <td><strong className="mono">{item.number}</strong></td>
-          <td className="portfolio-col-project"><div className="portfolio-project">
-            {openProjectSchedule ? <button type="button" className="portfolio-project-link" onClick={() => openProjectSchedule(item.id)}><strong>{item.name}</strong></button> : <strong>{item.name}</strong>}
-            <small className="muted">{customerLine}{item.team ? ` · ${shownProjectTeam(item.team)}` : ""}</small>
-          </div></td>
-          <td className="portfolio-col-pm">{item.managerName}</td>
-          <td>{item.targetDelivery ? formatDate(item.targetDelivery) : "—"}</td>
-          <td className={`portfolio-col-slip portfolio-slip${item.status !== "Closed" && (item.slipDays ?? 0) > 0 ? " late" : ""}`}>{slip === null ? "–" : uiText("Portfolio.slipDays").replace("{n}", slip)}</td>
-          <td><PortfolioProgress item={item} /></td>
-          <td className="muted">{item.lastProgressAt ? formatDay(item.lastProgressAt) : "—"}</td>
-        </tr>;
-      })}</tbody></table><Pagination page={currentPage} pageCount={pageCount} from={(currentPage - 1) * pageSize + 1} to={Math.min(currentPage * pageSize, sorted.length)} total={sorted.length} onPage={setPage} /></div>
-        : loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Portfolio.loading"} /></div>
-        : items.length && filtered ? <EmptyState icon="filter" title="Portfolio.noMatch" message="Portfolio.noMatchHint" action={<button className="btn ghost sm" type="button" onClick={clearFilters}><Icon name="x" />{uiText("Portfolio.clearFilters")}</button>} />
-        : <EmptyState icon="folder" title="No project found" message="สร้าง Project จาก Estimate ที่อนุมัติแล้ว" />}
-    </Panel>
-    {closingProject ? <CloseProjectModal project={closingProject} busy={stageBusy !== null} onClose={() => setClosingProject(null)} onConfirm={(actualDelivery) => { void saveStage(closingProject, "Closed", actualDelivery); }} /> : null}
-    {createOpen ? <CreateProjectModal bootstrap={bootstrap} refreshBootstrap={refreshBootstrap} notify={notify} onClose={() => setCreateOpen(false)} onCreated={async (number, deliveryNote) => { setCreateOpen(false); notify(`${number} · ${uiText("Portfolio.created")}${deliveryNote}`); await Promise.all([load(), refreshBootstrap()]); }} /> : null}
-    {endUserProject ? <EndUserEditModal kind="projects" record={endUserProject} bootstrap={bootstrap} refreshBootstrap={refreshBootstrap} notify={notify} onClose={() => setEndUserProject(null)} onSaved={load} reloadRecord={async () => { const page = await listProjects({ search: endUserProject.number, pageSize: 100 }); const latest = page.items.find((item) => item.id === endUserProject.id); if (!latest) throw new Error("ไม่พบ Project หรือไม่มีสิทธิ์เข้าถึง / Project unavailable"); return latest; }} /> : null}
-    {documentsProject ? <ProjectDocumentsModal project={documentsProject} canWrite={canWrite} teamTestMode={teamTestMode} notify={notify} onClose={() => setDocumentsProject(null)} /> : null}
-    {membersProject ? <ProjectMembersModal project={membersProject} bootstrap={bootstrap} canWrite={canWrite} notify={notify} onClose={() => setMembersProject(null)} /> : null}
-    {deletingProject ? <DeleteProjectModal project={deletingProject} onClose={() => setDeletingProject(null)} onDeleted={async (number) => { setDeletingProject(null); notify(`${number} · ${uiText("CRM.projectDeleted")}`); await Promise.all([load(), refreshBootstrap()]); }} /> : null}
-    {planningProject ? <EditMasterPlanModal bootstrap={bootstrap} project={planningProject} onClose={() => setPlanningProject(null)} {...(openProjectSchedule ? { onOpenSchedule: () => { const id = planningProject.id; setPlanningProject(null); openProjectSchedule(id); } } : {})} onSaved={async (number) => { setPlanningProject(null); notify(`${number} · ${uiText("CRM.planSaved")}`); await load(); }} /> : null}
-    {editingProject ? <EditProjectModal bootstrap={bootstrap} project={editingProject} onClose={() => setEditingProject(null)} onSaved={async (number) => { setEditingProject(null); notify(`${number} updated`); await Promise.all([load(), refreshBootstrap()]); }} /> : null}
-  </>;
+  return (
+    <>
+      <PageHeader
+        eyebrow="APPROVED WORK"
+        title={uiText("Projects")}
+        subtitle="Portfolio.subtitle"
+        actions={
+          canWrite ? (
+            <button className="btn primary" type="button" data-guide="project.create" onClick={() => setCreateOpen(true)}>
+              <Icon name="plus" />
+              <LocalizedText text={"Create project"} />
+            </button>
+          ) : undefined
+        }
+      />
+      <section className="portfolio-overview" aria-label={uiText("Portfolio.overview")}>
+        <SegmentBar
+          label="Portfolio.healthBar"
+          items={healthItems}
+          active={health}
+          onPick={(key) => {
+            setHealth(key as ProjectHealth | null);
+            setPage(1);
+          }}
+          lead={
+            <>
+              <strong>{view.barTotal}</strong>
+              <span>{uiText(includeClosed ? "Portfolio.inView" : "Portfolio.open")}</span>
+            </>
+          }
+        />
+        <FilterChips
+          label="Portfolio.attention"
+          items={chipItems}
+          active={chip}
+          onPick={(key) => {
+            setChip(key as PortfolioChip | null);
+            setPage(1);
+          }}
+        />
+      </section>
+      <Toolbar>
+        <SearchInput
+          value={search}
+          onChange={(value) => {
+            setSearch(value);
+            setPage(1);
+          }}
+          placeholder="Portfolio.search"
+        />
+        <label className="select-field">
+          <span className="sr-only">{uiText("Portfolio.pm")}</span>
+          <select
+            value={activeManagerId ?? ""}
+            aria-label={uiText("Portfolio.pm")}
+            onChange={(event) => {
+              setManagerId(event.target.value ? Number(event.target.value) : null);
+              setPage(1);
+            }}
+          >
+            <option value="">{uiText("Portfolio.allPms")}</option>
+            {managers.map(([id, name]) => (
+              <option key={id} value={id}>
+                {name}
+              </option>
+            ))}
+          </select>
+          <Icon name="chevronDown" />
+        </label>
+        <label className="select-field">
+          <span className="sr-only">{uiText("Portfolio.team")}</span>
+          <select
+            value={activeTeam ?? ""}
+            aria-label={uiText("Portfolio.team")}
+            onChange={(event) => {
+              setTeam(event.target.value || null);
+              setPage(1);
+            }}
+          >
+            <option value="">{uiText("Portfolio.allTeams")}</option>
+            {teams.map((value) => (
+              <option key={value} value={value}>
+                {value}
+              </option>
+            ))}
+          </select>
+          <Icon name="chevronDown" />
+        </label>
+        <Select
+          label="Status"
+          value={activeStatus ?? "All status"}
+          onChange={(value) => {
+            setStatus(value);
+            setPage(1);
+            if (value === "Closed") setIncludeClosed(true);
+          }}
+          options={PROJECT_STAGE_FILTERS}
+        />
+        <label className="checkbox-row">
+          <input
+            type="checkbox"
+            checked={mine}
+            onChange={(event) => {
+              setMine(event.target.checked);
+              setPage(1);
+            }}
+          />
+          <span>{uiText("Portfolio.mine")}</span>
+        </label>
+        <label className="checkbox-row">
+          <input
+            type="checkbox"
+            checked={includeClosed}
+            onChange={(event) => {
+              setIncludeClosed(event.target.checked);
+              if (!event.target.checked && status === "Closed") setStatus("All status");
+              setPage(1);
+            }}
+          />
+          <span>{uiText("Portfolio.showClosed")}</span>
+        </label>
+        <div className="chip-select" role="group" aria-label={uiText("Portfolio.view")}>
+          {(["list", "timeline"] as const).map((value) => (
+            <button key={value} type="button" className={mode === value ? "chip on" : "chip"} aria-pressed={mode === value} onClick={() => changeMode(value)}>
+              <Icon name={value === "list" ? "table" : "chart"} />
+              {uiText(value === "list" ? "Portfolio.viewList" : "Portfolio.viewTimeline")}
+            </button>
+          ))}
+        </div>
+        <button
+          className="btn ghost"
+          type="button"
+          disabled={loading}
+          onClick={() => {
+            void load();
+          }}
+        >
+          <Icon name="refresh" />
+          <LocalizedText text={"Refresh"} />
+        </button>
+      </Toolbar>
+      {error ? (
+        <LoadError
+          message={error}
+          retry={() => {
+            void load();
+          }}
+        />
+      ) : null}
+      {actionError ? (
+        <div className="callout danger" role="alert">
+          <Icon name="alertTriangle" />
+          <span>{actionError}</span>
+        </div>
+      ) : null}
+      {pendingRequests.length ? (
+        <details className="portfolio-waiting" open>
+          <summary>
+            <Icon name="clock" />
+            {uiText("Portfolio.waitingForYou")} <strong>{pendingRequests.length}</strong>
+          </summary>
+          <ul>
+            {pendingRequests.map((request) => (
+              <li key={request.id}>
+                <span className="mono">{request.projectNo}</span>
+                <span className="portfolio-waiting-task">
+                  {request.wbs ? `${request.wbs} ` : ""}
+                  {request.taskName}
+                  <small className="muted">
+                    {request.requestedBy} · {formatDay(request.occurredAt)}
+                    {request.comment ? ` · “${request.comment}”` : ""}
+                  </small>
+                </span>
+                <Badge tone="amber">
+                  +{request.requestDays} {uiText("days")}
+                </Badge>
+                {openProjectSchedule ? (
+                  <button className="btn sm primary" type="button" onClick={() => openProjectSchedule(request.projectId, request.taskId)}>
+                    <Icon name="checkCircle" />
+                    {uiText("Portfolio.reviewRequest")}
+                  </button>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
+      <Panel flush className="portfolio-panel">
+        {sorted.length && mode === "timeline" ? (
+          <>
+            {/* Keyed on the load, so a reload also refetches the tasks of expanded projects. */}
+            <ProjectPortfolioGantt
+              key={overview?.loadedAt ?? 0}
+              rows={sorted}
+              today={today()}
+              canReadSchedule={bootstrap.permissions.includes("schedule.read")}
+              includeClosed={includeClosed}
+              {...(openProjectSchedule ? { openProjectSchedule } : {})}
+              controls={
+                /* The sort sits inside the timeline so it stays at hand in full screen. */
+                <div className="portfolio-gantt-sort">
+                  <label className="select-field">
+                    <span className="sr-only">{uiText("Portfolio.sortBy")}</span>
+                    <select value={sort.key} aria-label={uiText("Portfolio.sortBy")} onChange={(event) => changeSort(event.target.value as PortfolioSortKey)}>
+                      {PORTFOLIO_SORT_KEYS.map((key) => (
+                        <option key={key} value={key}>
+                          {uiText(PORTFOLIO_SORT_LABEL[key])}
+                        </option>
+                      ))}
+                    </select>
+                    <Icon name="chevronDown" />
+                  </label>
+                  <button
+                    type="button"
+                    className="btn ghost sm"
+                    onClick={() => changeSort(sort.key)}
+                    aria-label={uiText(sort.direction === "asc" ? "Portfolio.sortAscending" : "Portfolio.sortDescending")}
+                    title={uiText(sort.direction === "asc" ? "Portfolio.sortAscending" : "Portfolio.sortDescending")}
+                  >
+                    <Icon name="chevronDown" className={sort.direction} />
+                    {uiText(sort.direction === "asc" ? "Portfolio.sortAscending" : "Portfolio.sortDescending")}
+                  </button>
+                </div>
+              }
+            />
+          </>
+        ) : sorted.length ? (
+          <div className="table-wrap">
+            <TablePageSize
+              value={pageSize}
+              onChange={(value) => {
+                setPageSize(value);
+                setPage(1);
+              }}
+            />
+            <table className="portfolio-table">
+              <thead>
+                <tr>
+                  <th className="portfolio-col-menu">
+                    <span className="sr-only">{uiText("Actions")}</span>
+                  </th>
+                  <th>{uiText("Portfolio.colStage")}</th>
+                  <PortfolioSortHeader column="health" label="Portfolio.colHealth" sort={sort} onSort={changeSort} />
+                  <PortfolioSortHeader column="number" label="Portfolio.colNumber" sort={sort} onSort={changeSort} />
+                  <PortfolioSortHeader column="name" label="Portfolio.colProject" sort={sort} onSort={changeSort} className="portfolio-col-project" />
+                  <PortfolioSortHeader column="pm" label="Portfolio.colPm" sort={sort} onSort={changeSort} className="portfolio-col-pm" />
+                  <PortfolioSortHeader column="target" label="Portfolio.colTarget" sort={sort} onSort={changeSort} />
+                  <PortfolioSortHeader column="slip" label="Portfolio.colSlip" sort={sort} onSort={changeSort} className="portfolio-col-slip" />
+                  <PortfolioSortHeader column="progress" label="Portfolio.colProgress" sort={sort} onSort={changeSort} />
+                  <PortfolioSortHeader column="lastUpdate" label="Portfolio.colLastUpdate" sort={sort} onSort={changeSort} />
+                </tr>
+              </thead>
+              <tbody>
+                {paged.map((item) => {
+                  const slip = formatSlip(item.status === "Closed" ? null : item.slipDays);
+                  const customerLine = [item.customerName, item.endUserName].filter(Boolean).join(" / ");
+                  return (
+                    <tr key={item.id}>
+                      <td className="portfolio-col-menu">
+                        <RowDisclosure
+                          label={`${uiText("Portfolio.more")} ${item.number}`}
+                          triggerClassName="row-action"
+                          guide="project.rowMenu"
+                          trigger={<Icon name="more" />}
+                          actions={rowActions(item)}
+                        />
+                      </td>
+                      <td>
+                        {item.canChangeStatus && item.allowedStatuses.length ? (
+                          <RowDisclosure
+                            label={`${uiText("Portfolio.changeStage")} ${item.number} · ${uiText(item.status)}`}
+                            triggerClassName="portfolio-stage-trigger"
+                            disabled={stageBusy !== null}
+                            trigger={
+                              <>
+                                <span>{uiText(item.status)}</span>
+                                <Icon name="chevronDown" />
+                              </>
+                            }
+                            actions={item.allowedStatuses.map((value) => ({ key: value, label: value, onSelect: () => changeStage(item, value) }))}
+                          />
+                        ) : (
+                          <Badge>{item.status}</Badge>
+                        )}
+                      </td>
+                      <td>
+                        <HealthBadge health={item.health ?? "No plan"} status={item.status} />
+                        {item.status !== "Closed" && item.scheduleError ? (
+                          <small className="portfolio-schedule-error" title={uiText("Portfolio.scheduleErrorHint")}>
+                            {uiText("Portfolio.scheduleError")}
+                          </small>
+                        ) : null}
+                      </td>
+                      <td>
+                        <strong className="mono">{item.number}</strong>
+                      </td>
+                      <td className="portfolio-col-project">
+                        <div className="portfolio-project">
+                          {openProjectSchedule ? (
+                            <button type="button" className="portfolio-project-link" onClick={() => openProjectSchedule(item.id)}>
+                              <strong>{item.name}</strong>
+                            </button>
+                          ) : (
+                            <strong>{item.name}</strong>
+                          )}
+                          <small className="muted">
+                            {customerLine}
+                            {item.team ? ` · ${shownProjectTeam(item.team)}` : ""}
+                          </small>
+                        </div>
+                      </td>
+                      <td className="portfolio-col-pm">{item.managerName}</td>
+                      <td>{item.targetDelivery ? formatDate(item.targetDelivery) : "—"}</td>
+                      <td className={`portfolio-col-slip portfolio-slip${item.status !== "Closed" && (item.slipDays ?? 0) > 0 ? " late" : ""}`}>
+                        {slip === null ? "–" : uiText("Portfolio.slipDays").replace("{n}", slip)}
+                      </td>
+                      <td>
+                        <PortfolioProgress item={item} />
+                      </td>
+                      <td className="muted">{item.lastProgressAt ? formatDay(item.lastProgressAt) : "—"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <Pagination page={currentPage} pageCount={pageCount} from={(currentPage - 1) * pageSize + 1} to={Math.min(currentPage * pageSize, sorted.length)} total={sorted.length} onPage={setPage} />
+          </div>
+        ) : loading ? (
+          <div className="empty">
+            <span className="spinner" />
+            <LocalizedText text={"Portfolio.loading"} />
+          </div>
+        ) : items.length && filtered ? (
+          <EmptyState
+            icon="filter"
+            title="Portfolio.noMatch"
+            message="Portfolio.noMatchHint"
+            action={
+              <button className="btn ghost sm" type="button" onClick={clearFilters}>
+                <Icon name="x" />
+                {uiText("Portfolio.clearFilters")}
+              </button>
+            }
+          />
+        ) : (
+          <EmptyState icon="folder" title="No project found" message="สร้าง Project จาก Estimate ที่อนุมัติแล้ว" />
+        )}
+      </Panel>
+      {closingProject ? (
+        <CloseProjectModal
+          project={closingProject}
+          busy={stageBusy !== null}
+          onClose={() => setClosingProject(null)}
+          onConfirm={(actualDelivery) => {
+            void saveStage(closingProject, "Closed", actualDelivery);
+          }}
+        />
+      ) : null}
+      {createOpen ? (
+        <CreateProjectModal
+          bootstrap={bootstrap}
+          refreshBootstrap={refreshBootstrap}
+          notify={notify}
+          onClose={() => setCreateOpen(false)}
+          onCreated={async (number, deliveryNote) => {
+            setCreateOpen(false);
+            notify(`${number} · ${uiText("Portfolio.created")}${deliveryNote}`);
+            await Promise.all([load(), refreshBootstrap()]);
+          }}
+        />
+      ) : null}
+      {endUserProject ? (
+        <EndUserEditModal
+          kind="projects"
+          record={endUserProject}
+          bootstrap={bootstrap}
+          refreshBootstrap={refreshBootstrap}
+          notify={notify}
+          onClose={() => setEndUserProject(null)}
+          onSaved={load}
+          reloadRecord={async () => {
+            const page = await listProjects({ search: endUserProject.number, pageSize: 100 });
+            const latest = page.items.find((item) => item.id === endUserProject.id);
+            if (!latest) throw new Error("ไม่พบ Project หรือไม่มีสิทธิ์เข้าถึง / Project unavailable");
+            return latest;
+          }}
+        />
+      ) : null}
+      {documentsProject ? <ProjectDocumentsModal project={documentsProject} canWrite={canWrite} teamTestMode={teamTestMode} notify={notify} onClose={() => setDocumentsProject(null)} /> : null}
+      {membersProject ? <ProjectMembersModal project={membersProject} bootstrap={bootstrap} canWrite={canWrite} notify={notify} onClose={() => setMembersProject(null)} /> : null}
+      {deletingProject ? (
+        <DeleteProjectModal
+          project={deletingProject}
+          onClose={() => setDeletingProject(null)}
+          onDeleted={async (number) => {
+            setDeletingProject(null);
+            notify(`${number} · ${uiText("CRM.projectDeleted")}`);
+            await Promise.all([load(), refreshBootstrap()]);
+          }}
+        />
+      ) : null}
+      {planningProject ? (
+        <EditMasterPlanModal
+          bootstrap={bootstrap}
+          project={planningProject}
+          onClose={() => setPlanningProject(null)}
+          {...(openProjectSchedule
+            ? {
+                onOpenSchedule: () => {
+                  const id = planningProject.id;
+                  setPlanningProject(null);
+                  openProjectSchedule(id);
+                },
+              }
+            : {})}
+          onSaved={async (number) => {
+            setPlanningProject(null);
+            notify(`${number} · ${uiText("CRM.planSaved")}`);
+            await load();
+          }}
+        />
+      ) : null}
+      {editingProject ? (
+        <EditProjectModal
+          bootstrap={bootstrap}
+          project={editingProject}
+          onClose={() => setEditingProject(null)}
+          onSaved={async (number) => {
+            setEditingProject(null);
+            notify(`${number} updated`);
+            await Promise.all([load(), refreshBootstrap()]);
+          }}
+        />
+      ) : null}
+    </>
+  );
 }
 
 // Deleting is offered only after the API has confirmed nothing has been worked against the
@@ -818,27 +1607,106 @@ function DeleteProjectModal({ project, onClose, onDeleted }: { project: ProjectS
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [confirmation, setConfirmation] = useState("");
-  useEffect(() => { let cancelled = false; void checkProjectDeletion(project.id).then(value => { if (!cancelled) setCheck(value); }).catch(failure => { if (!cancelled) setError(toError(failure)); }); return () => { cancelled = true; }; }, [project.id]);
-  const submit = async () => { setBusy(true); setError(""); try { const deleted = await deleteProject(project.id, check?.canForceDelete ? { force: true, confirmProjectNo: confirmation } : undefined); await onDeleted(deleted.number); } catch (failure) { setError(toError(failure)); } finally { setBusy(false); } };
-  return <Modal title="CRM.deleteProject" subtitle={`${project.number} · ${project.name}`} size="sm" onClose={onClose} footer={<>
-    <button className="btn ghost" type="button" onClick={onClose}><LocalizedText text={"Cancel"} /></button>
-    <button className="btn danger" type="button" data-guide="project.deleteConfirm" disabled={busy || !(check?.canDelete || (check?.canForceDelete && confirmation === project.number))} onClick={() => { void submit(); }}><Icon name="trash" />{busy ? t("CRM.deletingProject") : t(check?.canForceDelete ? "CRM.deleteProjectAnyway" : "CRM.deleteProject")}</button>
-  </>}>
-    {error ? <div className="callout danger" role="alert"><Icon name="alertTriangle" /><span>{t(error)}</span></div> : null}
-    {!check && !error ? <p role="status">{t("CRM.loading")}</p> : null}
-    {check?.canDelete ? <p>{t("CRM.deleteProjectConfirm")}</p> : null}
-    {check && !check.canDelete ? <>
-      <p>{t(check.canForceDelete ? "CRM.deleteProjectWork" : "CRM.deleteProjectBlocked")}</p>
-      <ul className="project-delete-blockers">{check.blockers.map(blocker => <li key={blocker.source}><span>{t(`ProjectWork.${blocker.source}`)}</span><strong>{blocker.count}</strong></li>)}</ul>
-    </> : null}
-    {check?.canForceDelete ? <>
-      <p className="callout danger" data-guide="project.deleteWarning">{t("CRM.deleteProjectHideWarning")}</p>
-      <label className="field"><span>{t("CRM.deleteProjectTypeNumber")}</span><input data-guide="project.deleteNumber" value={confirmation} onChange={event => setConfirmation(event.target.value)} autoComplete="off" /></label>
-    </> : null}
-  </Modal>;
+  useEffect(() => {
+    let cancelled = false;
+    void checkProjectDeletion(project.id)
+      .then((value) => {
+        if (!cancelled) setCheck(value);
+      })
+      .catch((failure) => {
+        if (!cancelled) setError(toError(failure));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [project.id]);
+  const submit = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      const deleted = await deleteProject(project.id, check?.canForceDelete ? { force: true, confirmProjectNo: confirmation } : undefined);
+      await onDeleted(deleted.number);
+    } catch (failure) {
+      setError(toError(failure));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Modal
+      title="CRM.deleteProject"
+      subtitle={`${project.number} · ${project.name}`}
+      size="sm"
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn ghost" type="button" onClick={onClose}>
+            <LocalizedText text={"Cancel"} />
+          </button>
+          <button
+            className="btn danger"
+            type="button"
+            data-guide="project.deleteConfirm"
+            disabled={busy || !(check?.canDelete || (check?.canForceDelete && confirmation === project.number))}
+            onClick={() => {
+              void submit();
+            }}
+          >
+            <Icon name="trash" />
+            {busy ? t("CRM.deletingProject") : t(check?.canForceDelete ? "CRM.deleteProjectAnyway" : "CRM.deleteProject")}
+          </button>
+        </>
+      }
+    >
+      {error ? (
+        <div className="callout danger" role="alert">
+          <Icon name="alertTriangle" />
+          <span>{t(error)}</span>
+        </div>
+      ) : null}
+      {!check && !error ? <p role="status">{t("CRM.loading")}</p> : null}
+      {check?.canDelete ? <p>{t("CRM.deleteProjectConfirm")}</p> : null}
+      {check && !check.canDelete ? (
+        <>
+          <p>{t(check.canForceDelete ? "CRM.deleteProjectWork" : "CRM.deleteProjectBlocked")}</p>
+          <ul className="project-delete-blockers">
+            {check.blockers.map((blocker) => (
+              <li key={blocker.source}>
+                <span>{t(`ProjectWork.${blocker.source}`)}</span>
+                <strong>{blocker.count}</strong>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+      {check?.canForceDelete ? (
+        <>
+          <p className="callout danger" data-guide="project.deleteWarning">
+            {t("CRM.deleteProjectHideWarning")}
+          </p>
+          <label className="field">
+            <span>{t("CRM.deleteProjectTypeNumber")}</span>
+            <input data-guide="project.deleteNumber" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} autoComplete="off" />
+          </label>
+        </>
+      ) : null}
+    </Modal>
+  );
 }
 
-function ProjectMembersModal({ project, bootstrap, canWrite, notify, onClose }: { project: ProjectSummary; bootstrap: BootstrapData; canWrite: boolean; notify: (message: string) => void; onClose: () => void }) {
+function ProjectMembersModal({
+  project,
+  bootstrap,
+  canWrite,
+  notify,
+  onClose,
+}: {
+  project: ProjectSummary;
+  bootstrap: BootstrapData;
+  canWrite: boolean;
+  notify: (message: string) => void;
+  onClose: () => void;
+}) {
   const [members, setMembers] = useState<ProjectMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -860,7 +1728,12 @@ function ProjectMembersModal({ project, bootstrap, canWrite, notify, onClose }: 
     }
   }, [project.id]);
 
-  useEffect(() => { const timer = window.setTimeout(() => { void load(); }, 0); return () => window.clearTimeout(timer); }, [load]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void load();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [load]);
 
   const availableToAdd = bootstrap.team.filter((employee) => !members.some((member) => member.userId === employee.id));
 
@@ -895,55 +1768,231 @@ function ProjectMembersModal({ project, bootstrap, canWrite, notify, onClose }: 
     }
   };
 
-  return <Modal
-    title={`${project.number} · Team`}
-    subtitle={`${project.name} · ทุกคนในรายการนี้จะมองเห็นโปรเจกต์นี้ได้`}
-    size="lg"
-    onClose={onClose}
-    footer={<button className="btn ghost" type="button" onClick={onClose}><LocalizedText text={"Close"} /></button>}
-  >
-    {canWrite ? <div className="form-grid two">
-      <label className="field"><span><LocalizedText text={"Add member *"} /></span><select value={addUserId} disabled={adding} onChange={(event) => setAddUserId(Number(event.target.value))}><option value={0}><LocalizedText text={"Select a person"} /></option><MemberOptions people={availableToAdd} /></select></label>
-      <label className="field"><span><LocalizedText text={"Role on the project"} /></span><input maxLength={100} value={addRole} disabled={adding} placeholder="e.g. Support Engineer" onChange={(event) => setAddRole(event.target.value)} /></label>
-      <div className="span-2"><button className="btn primary" type="button" disabled={adding || !addUserId} onClick={() => { void add(); }}><Icon name="plus" />{adding ? <LocalizedText text={"Adding…"} /> : <LocalizedText text={"Add to project"} />}</button></div>
-    </div> : <div className="info-strip" role="status"><Icon name="shield" /><span><LocalizedText text={"บัญชีนี้ดูทีมงานได้ แต่ไม่มีสิทธิ์เพิ่ม/ลบสมาชิกโปรเจกต์"} /></span></div>}
+  return (
+    <Modal
+      title={`${project.number} · Team`}
+      subtitle={`${project.name} · ทุกคนในรายการนี้จะมองเห็นโปรเจกต์นี้ได้`}
+      size="lg"
+      onClose={onClose}
+      footer={
+        <button className="btn ghost" type="button" onClick={onClose}>
+          <LocalizedText text={"Close"} />
+        </button>
+      }
+    >
+      {canWrite ? (
+        <div className="form-grid two">
+          <label className="field">
+            <span>
+              <LocalizedText text={"Add member *"} />
+            </span>
+            <select value={addUserId} disabled={adding} onChange={(event) => setAddUserId(Number(event.target.value))}>
+              <option value={0}>
+                <LocalizedText text={"Select a person"} />
+              </option>
+              <MemberOptions people={availableToAdd} />
+            </select>
+          </label>
+          <label className="field">
+            <span>
+              <LocalizedText text={"Role on the project"} />
+            </span>
+            <input maxLength={100} value={addRole} disabled={adding} placeholder="e.g. Support Engineer" onChange={(event) => setAddRole(event.target.value)} />
+          </label>
+          <div className="span-2">
+            <button
+              className="btn primary"
+              type="button"
+              disabled={adding || !addUserId}
+              onClick={() => {
+                void add();
+              }}
+            >
+              <Icon name="plus" />
+              {adding ? <LocalizedText text={"Adding…"} /> : <LocalizedText text={"Add to project"} />}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="info-strip" role="status">
+          <Icon name="shield" />
+          <span>
+            <LocalizedText text={"บัญชีนี้ดูทีมงานได้ แต่ไม่มีสิทธิ์เพิ่ม/ลบสมาชิกโปรเจกต์"} />
+          </span>
+        </div>
+      )}
 
-    {actionError ? <div className="callout danger" role="alert"><Icon name="alertTriangle" /><span><strong><LocalizedText text={"ดำเนินการไม่สำเร็จ"} /></strong>{actionError}</span></div> : null}
-    {loadError ? <LoadError message={loadError} retry={() => { void load(); }} /> : null}
+      {actionError ? (
+        <div className="callout danger" role="alert">
+          <Icon name="alertTriangle" />
+          <span>
+            <strong>
+              <LocalizedText text={"ดำเนินการไม่สำเร็จ"} />
+            </strong>
+            {actionError}
+          </span>
+        </div>
+      ) : null}
+      {loadError ? (
+        <LoadError
+          message={loadError}
+          retry={() => {
+            void load();
+          }}
+        />
+      ) : null}
 
-    <Panel title={`${members.length} people`} subtitle={loading ? "Loading team…" : "Everyone who can see this project"} flush>
-      {members.length ? <div className="table-wrap"><table><thead><tr><th><LocalizedText text={"Name"} /></th><th><LocalizedText text={"Role on project"} /></th><th><LocalizedText text={"Department"} /></th><th><LocalizedText text={"System role"} /></th><th><span className="sr-only"><LocalizedText text={"Actions"} /></span></th></tr></thead><tbody>{members.map((member) => <tr key={member.userId}><td><strong>{member.name}</strong><small className="muted">{member.email}</small></td><td>{member.roleOnProject}{member.isManager ? <Badge tone="blue"><LocalizedText text={"Manager"} /></Badge> : null}{member.isLeadEngineer ? <Badge tone="blue"><LocalizedText text={"Lead Engineer"} /></Badge> : null}</td><td>{member.department}</td><td className="muted">{member.systemRole}</td><td>{canWrite && !member.isManager && !member.isLeadEngineer ? <button className="btn ghost sm" type="button" disabled={busyUserId !== null} aria-label={`Remove ${member.name}`} onClick={() => { void remove(member); }}><Icon name="trash" />{busyUserId === member.userId ? <LocalizedText text={"Removing…"} /> : <LocalizedText text={"Remove"} />}</button> : null}</td></tr>)}</tbody></table></div> : loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading…"} /></div> : !loadError ? <EmptyState icon="users" title="No team members yet" message="เพิ่มคนแรกที่ด้านบนเพื่อให้พวกเขามองเห็นโปรเจกต์นี้" /> : null}
-    </Panel>
-  </Modal>;
+      <Panel title={`${members.length} people`} subtitle={loading ? "Loading team…" : "Everyone who can see this project"} flush>
+        {members.length ? (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>
+                    <LocalizedText text={"Name"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Role on project"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Department"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"System role"} />
+                  </th>
+                  <th>
+                    <span className="sr-only">
+                      <LocalizedText text={"Actions"} />
+                    </span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {members.map((member) => (
+                  <tr key={member.userId}>
+                    <td>
+                      <strong>{member.name}</strong>
+                      <small className="muted">{member.email}</small>
+                    </td>
+                    <td>
+                      {member.roleOnProject}
+                      {member.isManager ? (
+                        <Badge tone="blue">
+                          <LocalizedText text={"Manager"} />
+                        </Badge>
+                      ) : null}
+                      {member.isLeadEngineer ? (
+                        <Badge tone="blue">
+                          <LocalizedText text={"Lead Engineer"} />
+                        </Badge>
+                      ) : null}
+                    </td>
+                    <td>{member.department}</td>
+                    <td className="muted">{member.systemRole}</td>
+                    <td>
+                      {canWrite && !member.isManager && !member.isLeadEngineer ? (
+                        <button
+                          className="btn ghost sm"
+                          type="button"
+                          disabled={busyUserId !== null}
+                          aria-label={`Remove ${member.name}`}
+                          onClick={() => {
+                            void remove(member);
+                          }}
+                        >
+                          <Icon name="trash" />
+                          {busyUserId === member.userId ? <LocalizedText text={"Removing…"} /> : <LocalizedText text={"Remove"} />}
+                        </button>
+                      ) : null}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : loading ? (
+          <div className="empty">
+            <span className="spinner" />
+            <LocalizedText text={"Loading…"} />
+          </div>
+        ) : !loadError ? (
+          <EmptyState icon="users" title="No team members yet" message="เพิ่มคนแรกที่ด้านบนเพื่อให้พวกเขามองเห็นโปรเจกต์นี้" />
+        ) : null}
+      </Panel>
+    </Modal>
+  );
 }
 
 // The part of GET /projects/:id/schedule the plan dialogs read: the headings at the top, the tasks under them
 // and the tasks' functions. Members' own tasks and rows below a function stay in Project Schedule.
-type PlanNode = { id: number; kind: string; name: string; planStart: string | null; planFinish: string | null; storedPlanStart: string | null; planDays: number;
-  planManDays: number; actualManDays: number; percentComplete: number; status: string; startMode: string; managedByResourcePlan?: boolean; pics: { id: number }[]; children: PlanNode[] };
+type PlanNode = {
+  id: number;
+  kind: string;
+  name: string;
+  planStart: string | null;
+  planFinish: string | null;
+  storedPlanStart: string | null;
+  planDays: number;
+  planManDays: number;
+  actualManDays: number;
+  percentComplete: number;
+  status: string;
+  startMode: string;
+  managedByResourcePlan?: boolean;
+  pics: { id: number }[];
+  children: PlanNode[];
+};
 type PlanSnapshot = { scheduleVersion: string | null; canPlan: boolean; tasks: PlanNode[] };
 const planRowStarted = (node: PlanNode) => node.status !== "Not Started" || node.percentComplete > 0 || node.actualManDays > 0;
 /** A row that must stay: it, or a row under it, has progress, or a member's own task sits under it. */
 const planRowLocked = (node: PlanNode): boolean => planRowStarted(node) || node.children.some((child) => child.kind === "detail" || planRowLocked(child));
 const datesDerived = (node: PlanNode) => node.children.length > 0 || node.startMode !== "manual";
-const shiftPlanDate = (iso: string, days: number) => { const date = new Date(`${iso}T00:00:00Z`); date.setUTCDate(date.getUTCDate() + days); return date.toISOString().slice(0, 10); };
+const shiftPlanDate = (iso: string, days: number) => {
+  const date = new Date(`${iso}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+};
 
 /** The plan as drafts. A heading's own dates are the customer's (its bar if it has none yet); a row that derives its dates shows what they resolve to. */
 function planDrafts(snapshot: PlanSnapshot): PlanHeadingDraft[] {
-  return snapshot.tasks.filter((node) => node.kind === "phase").map((heading) => ({
-    key: `task-${heading.id}`, id: heading.id, locked: planRowLocked(heading), name: heading.name,
-    start: heading.storedPlanStart ?? heading.planStart ?? "",
-    finish: heading.storedPlanStart ? shiftPlanDate(heading.storedPlanStart, Math.max(1, heading.planDays) - 1) : heading.planFinish ?? "",
-    tasks: heading.children.filter((task) => task.kind === "task").map((task) => ({
-      key: `task-${task.id}`, id: task.id, locked: planRowLocked(task), datesLocked: datesDerived(task), userId: task.pics[0]?.id ?? 0, name: task.name,
-      start: task.planStart ?? "", finish: task.planFinish ?? "", planManDays: task.planManDays ? String(task.planManDays) : "",
-      noFunctions: planRowStarted(task) || Boolean(task.managedByResourcePlan) || task.children.some((child) => child.kind === "detail"),
-      percent: task.percentComplete, actualManDays: task.actualManDays,
-      functions: task.children.filter((item) => item.kind === "task").map((item) => ({
-        key: `task-${item.id}`, id: item.id, locked: planRowLocked(item), datesLocked: datesDerived(item), name: item.name,
-        userId: item.pics[0]?.id ?? 0, start: item.planStart ?? "", finish: item.planFinish ?? "" })),
-    })),
-  }));
+  return snapshot.tasks
+    .filter((node) => node.kind === "phase")
+    .map((heading) => ({
+      key: `task-${heading.id}`,
+      id: heading.id,
+      locked: planRowLocked(heading),
+      name: heading.name,
+      start: heading.storedPlanStart ?? heading.planStart ?? "",
+      finish: heading.storedPlanStart ? shiftPlanDate(heading.storedPlanStart, Math.max(1, heading.planDays) - 1) : (heading.planFinish ?? ""),
+      tasks: heading.children
+        .filter((task) => task.kind === "task")
+        .map((task) => ({
+          key: `task-${task.id}`,
+          id: task.id,
+          locked: planRowLocked(task),
+          datesLocked: datesDerived(task),
+          userId: task.pics[0]?.id ?? 0,
+          name: task.name,
+          start: task.planStart ?? "",
+          finish: task.planFinish ?? "",
+          planManDays: task.planManDays ? String(task.planManDays) : "",
+          noFunctions: planRowStarted(task) || Boolean(task.managedByResourcePlan) || task.children.some((child) => child.kind === "detail"),
+          percent: task.percentComplete,
+          actualManDays: task.actualManDays,
+          functions: task.children
+            .filter((item) => item.kind === "task")
+            .map((item) => ({
+              key: `task-${item.id}`,
+              id: item.id,
+              locked: planRowLocked(item),
+              datesLocked: datesDerived(item),
+              name: item.name,
+              userId: item.pics[0]?.id ?? 0,
+              start: item.planStart ?? "",
+              finish: item.planFinish ?? "",
+            })),
+        })),
+    }));
 }
 
 /** The project's plan as editable drafts, and whether it differs from what was loaded. */
@@ -954,24 +2003,40 @@ function useProjectPlan(projectId: number) {
   const [headings, setHeadings] = useState<PlanHeadingDraft[]>([]);
   useEffect(() => {
     let cancelled = false;
-    void apiRequest<PlanSnapshot>(`/api/v1/projects/${projectId}/schedule`).then(snapshot => {
-      if (cancelled) return;
-      const drafts = planDrafts(snapshot);
-      setHeadings(drafts);
-      setPlan({ snapshot, initial: JSON.stringify(planPayload(drafts)) });
-    }).catch(failure => { if (!cancelled) setPlanError(toError(failure)); });
-    return () => { cancelled = true; };
+    void apiRequest<PlanSnapshot>(`/api/v1/projects/${projectId}/schedule`)
+      .then((snapshot) => {
+        if (cancelled) return;
+        const drafts = planDrafts(snapshot);
+        setHeadings(drafts);
+        setPlan({ snapshot, initial: JSON.stringify(planPayload(drafts)) });
+      })
+      .catch((failure) => {
+        if (!cancelled) setPlanError(toError(failure));
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [projectId]);
   const planChanged = plan !== null && plan.snapshot.canPlan && JSON.stringify(planPayload(headings)) !== plan.initial;
   const planIssues = planChanged ? planIssuesOf(t, headings) : [];
   // The plan goes only when it changed, so an untouched plan never collides with Project Schedule.
-  const planBody = () => planChanged ? { ...planPayload(headings), scheduleVersion: plan!.snapshot.scheduleVersion } : {};
+  const planBody = () => (planChanged ? { ...planPayload(headings), scheduleVersion: plan!.snapshot.scheduleVersion } : {});
   return { plan, planError, headings, setHeadings, planChanged, planIssues, planBody, span: planSpanOf(headings) };
 }
 
 function useScheduleTemplates() {
   const [templates, setTemplates] = useState<ScheduleTemplate[]>([]);
-  useEffect(() => { let cancelled = false; void listScheduleTemplates().then(items => { if (!cancelled) setTemplates(items); }).catch(() => undefined); return () => { cancelled = true; }; }, []);
+  useEffect(() => {
+    let cancelled = false;
+    void listScheduleTemplates()
+      .then((items) => {
+        if (!cancelled) setTemplates(items);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   return templates;
 }
 
@@ -980,7 +2045,13 @@ function useScheduleTemplates() {
  * headings and the Team Plan under them. When the plan's span moves, the project's start and
  * delivery can follow it.
  */
-function EditMasterPlanModal({ bootstrap, project, onClose, onSaved, onOpenSchedule }: {
+function EditMasterPlanModal({
+  bootstrap,
+  project,
+  onClose,
+  onSaved,
+  onOpenSchedule,
+}: {
   bootstrap: BootstrapData;
   project: ProjectSummary;
   onClose: () => void;
@@ -994,50 +2065,115 @@ function EditMasterPlanModal({ bootstrap, project, onClose, onSaved, onOpenSched
   const [followPlan, setFollowPlan] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const change = (update: (rows: PlanHeadingDraft[]) => PlanHeadingDraft[]) => { setError(""); setHeadings(update); };
-  const submit = async () => {
-    setBusy(true); setError("");
-    try {
-      const saved = await updateProject(project.id, { rowVersion: project.rowVersion, ...planBody(),
-        ...(followPlan && datesDiffer && span ? { startDate: span.start, targetDelivery: span.finish } : {}) });
-      await onSaved(saved.number);
-    } catch (requestError) { setError(toError(requestError)); } finally { setBusy(false); }
+  const change = (update: (rows: PlanHeadingDraft[]) => PlanHeadingDraft[]) => {
+    setError("");
+    setHeadings(update);
   };
-  return <Modal title={`${t("CRM.editMasterPlan")} · ${project.number}`} subtitle={project.name} size="xl" onClose={onClose} footer={<>
-    {error ? <span className="project-create-error" role="alert"><Icon name="alertTriangle" /><span>{t(error)}</span></span> : <span className="spacer" />}
-    <button className="btn ghost" type="button" onClick={onClose}><LocalizedText text={"Cancel"} /></button>
-    <button className="btn primary" type="button" data-guide="project.planSave" disabled={busy || !planChanged || planIssues.length > 0} onClick={() => { void submit(); }}>
-      <Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : t("CRM.savePlan")}
-    </button>
-  </>}><div className="project-create">
-    {planIssues.length ? <p role="status">{t("CRM.missingProjectFields")}: {planIssues.join(", ")}</p> : null}
-    {planError ? <p className="muted" role="status">{t("CRM.planUnavailable")}</p>
-      : !plan ? <p className="muted" role="status">{t("CRM.loading")}</p>
-      : plan.snapshot.canPlan ? <>
-        <MasterPlanSection rows={headings} onChange={change} templates={templates} />
-        <TeamPlanSection rows={headings} onChange={change} people={bootstrap.team} />
-        <NotBrokenDownNote headings={headings} />
-        {datesDiffer && span ? <label className="info-strip" data-guide="project.planDates"><input type="checkbox" checked={followPlan} disabled={busy} onChange={(event) => setFollowPlan(event.target.checked)} />
-          <span>{t("CRM.followPlanDates")}: {formatDate(span.start)} – {formatDate(span.finish)} ({t("CRM.currentDates")} {formatDate(project.startDate)} – {formatDate(project.targetDelivery)})</span></label> : null}
-        <p className="muted">{t("CRM.editPlanHint")}</p>
-        {onOpenSchedule ? <div><button className="btn ghost sm" type="button" onClick={onOpenSchedule}><Icon name="calendar" />{t("CRM.openProjectSchedule")}</button></div> : null}
-      </> : <p className="muted">{t("CRM.planReadOnly")}</p>}
-  </div></Modal>;
+  const submit = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      const saved = await updateProject(project.id, {
+        rowVersion: project.rowVersion,
+        ...planBody(),
+        ...(followPlan && datesDiffer && span ? { startDate: span.start, targetDelivery: span.finish } : {}),
+      });
+      await onSaved(saved.number);
+    } catch (requestError) {
+      setError(toError(requestError));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Modal
+      title={`${t("CRM.editMasterPlan")} · ${project.number}`}
+      subtitle={project.name}
+      size="xl"
+      onClose={onClose}
+      footer={
+        <>
+          {error ? (
+            <span className="project-create-error" role="alert">
+              <Icon name="alertTriangle" />
+              <span>{t(error)}</span>
+            </span>
+          ) : (
+            <span className="spacer" />
+          )}
+          <button className="btn ghost" type="button" onClick={onClose}>
+            <LocalizedText text={"Cancel"} />
+          </button>
+          <button
+            className="btn primary"
+            type="button"
+            data-guide="project.planSave"
+            disabled={busy || !planChanged || planIssues.length > 0}
+            onClick={() => {
+              void submit();
+            }}
+          >
+            <Icon name="check" />
+            {busy ? <LocalizedText text={"Saving…"} /> : t("CRM.savePlan")}
+          </button>
+        </>
+      }
+    >
+      <div className="project-create">
+        {planIssues.length ? (
+          <p role="status">
+            {t("CRM.missingProjectFields")}: {planIssues.join(", ")}
+          </p>
+        ) : null}
+        {planError ? (
+          <p className="muted" role="status">
+            {t("CRM.planUnavailable")}
+          </p>
+        ) : !plan ? (
+          <p className="muted" role="status">
+            {t("CRM.loading")}
+          </p>
+        ) : plan.snapshot.canPlan ? (
+          <>
+            <MasterPlanSection rows={headings} onChange={change} templates={templates} />
+            <TeamPlanSection rows={headings} onChange={change} people={bootstrap.team} />
+            <NotBrokenDownNote headings={headings} />
+            {datesDiffer && span ? (
+              <label className="info-strip" data-guide="project.planDates">
+                <input type="checkbox" checked={followPlan} disabled={busy} onChange={(event) => setFollowPlan(event.target.checked)} />
+                <span>
+                  {t("CRM.followPlanDates")}: {formatDate(span.start)} – {formatDate(span.finish)} ({t("CRM.currentDates")} {formatDate(project.startDate)} – {formatDate(project.targetDelivery)})
+                </span>
+              </label>
+            ) : null}
+            <p className="muted">{t("CRM.editPlanHint")}</p>
+            {onOpenSchedule ? (
+              <div>
+                <button className="btn ghost sm" type="button" onClick={onOpenSchedule}>
+                  <Icon name="calendar" />
+                  {t("CRM.openProjectSchedule")}
+                </button>
+              </div>
+            ) : null}
+          </>
+        ) : (
+          <p className="muted">{t("CRM.planReadOnly")}</p>
+        )}
+      </div>
+    </Modal>
+  );
 }
 
 // A project is edited in place rather than through a wizard: the lifecycle rules decide which
 // statuses the dropdown may offer, so the screen can never ask for a move the API would refuse.
-function EditProjectModal({ bootstrap, project, onClose, onSaved }: {
-  bootstrap: BootstrapData;
-  project: ProjectSummary;
-  onClose: () => void;
-  onSaved: (number: string) => Promise<void>;
-}) {
+function EditProjectModal({ bootstrap, project, onClose, onSaved }: { bootstrap: BootstrapData; project: ProjectSummary; onClose: () => void; onSaved: (number: string) => Promise<void> }) {
   const t = useUiText();
   // Additional roles count, as they do in the API. The person already on the project stays listed even
   // when no role qualifies them any more, so the dialog shows who is assigned instead of the first name.
-  const eligible = useCallback((roles: string[], keepId: number | null | undefined) => bootstrap.team.filter((member) =>
-    member.id === keepId || (member.roles ?? [member.role]).some((role) => roles.includes(role))), [bootstrap.team]);
+  const eligible = useCallback(
+    (roles: string[], keepId: number | null | undefined) => bootstrap.team.filter((member) => member.id === keepId || (member.roles ?? [member.role]).some((role) => roles.includes(role))),
+    [bootstrap.team],
+  );
   const managers = useMemo(() => eligible(["Project Manager", "Engineering Manager", "Admin"], project.managerId), [eligible, project.managerId]);
   const engineers = useMemo(() => eligible(["Engineer", "Engineering Manager", "Admin"], project.leadEngineerId), [eligible, project.leadEngineerId]);
   const elevated = (bootstrap.user.roles ?? [bootstrap.user.role]).some((role) => ["Admin", "Engineering Manager", "Project Manager"].includes(role));
@@ -1108,63 +2244,248 @@ function EditProjectModal({ bootstrap, project, onClose, onSaved }: {
     }
   };
 
-  return <Modal
-    title={`Edit ${project.number}`}
-    subtitle="เลื่อนสถานะ อัปเดตความคืบหน้า และแก้ข้อมูลโครงการ พร้อมบันทึก Audit trail"
-    size="xl"
-    onClose={onClose}
-    footer={<>
-      <button className="btn ghost" type="button" onClick={onClose}><LocalizedText text={"Cancel"} /></button>
-      <button className="btn primary" type="button" data-guide="project.editSave" disabled={busy || (!closing && (form.progress === "" || !Number.isInteger(form.progress) || form.progress < 0 || form.progress > 100)) || needsActualDelivery || !form.name.trim() || !form.site.trim() || !form.purchaseOrderNumber.trim() || planIssues.length > 0} onClick={() => { void submit(); }}>
-        <Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : <LocalizedText text={"Save project"} />}
-      </button>
-    </>}
-  ><div className="project-create">
-    {error ? <LoadError message={t(error)} retry={() => { void submit(); }} /> : null}
-    {needsActualDelivery ? <div className="info-strip" role="note"><Icon name="alertTriangle" /><span><LocalizedText text={"ระบุวันส่งมอบจริงก่อนปิดโครงการ / Record the actual delivery date before closing"} /></span></div> : null}
-    {closing ? <div className="info-strip" role="note"><Icon name="check" /><span><LocalizedText text={"ปิดโครงการแล้วความคืบหน้าจะถูกตั้งเป็น 100% / Closing sets progress to 100%"} /></span></div> : null}
-    {planIssues.length ? <p role="status">{t("CRM.missingProjectFields")}: {planIssues.join(", ")}</p> : null}
-    <div className="form-grid">
-      <label className="field span-2"><span><LocalizedText text={"Project name *"} /></span><input required maxLength={300} value={form.name} onChange={(event) => set("name", event.target.value)} /></label>
-      {numberable ? <ErpProjectNumberField span={2} guide="project.erpNumber" currentProjectId={project.id} disabled={busy} value={form.projectNumber} onChange={(projectNumber) => set("projectNumber", projectNumber)} /> : null}
-      <TeamSelect value={form.department} departments={departments} onChange={(department) => set("department", department)} />
-      <div className="field"><span>{t("CRM.planHealth")}</span><div className="project-health-cell">{project.health ? <HealthBadge health={project.health} status={project.status} /> : "—"}</div></div>
-      <label className="field"><span><LocalizedText text={"Status"} /></span><select value={form.status} onChange={(event) => set("status", event.target.value)}>{statusChoices.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
-      <label className="field"><span><LocalizedText text={"Portfolio.typedProgress"} /></span><input type="number" min={0} max={100} step={1} disabled={closing} value={closing ? 100 : form.progress} onChange={(event) => set("progress", event.target.value === "" ? "" : Number(event.target.value))} /></label>
-      <label className="field"><span><LocalizedText text={"Project manager"} /></span><select value={form.managerId} onChange={(event) => set("managerId", Number(event.target.value))}>{managers.some((member) => member.id === project.managerId) ? null : <option value={project.managerId}>{project.managerName}</option>}{managers.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>
-      <label className="field"><span><LocalizedText text={"Lead engineer"} /></span><select value={form.leadEngineerId} onChange={(event) => set("leadEngineerId", Number(event.target.value))}>{engineers.some((member) => member.id === project.leadEngineerId) ? null : <option value={project.leadEngineerId}>{project.leadEngineerName}</option>}{engineers.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>
-      <label className="field"><span><LocalizedText text={"Project type"} /></span><input maxLength={100} value={form.projectType} onChange={(event) => set("projectType", event.target.value)} /></label>
-      <label className="field"><span><LocalizedText text={"Customer PO number *"} /></span><input required maxLength={100} value={form.purchaseOrderNumber} onChange={(event) => set("purchaseOrderNumber", event.target.value)} /></label>
-      <label className="field"><span><LocalizedText text={"PO date"} /></span><DateInput value={form.purchaseOrderDate} onChange={(event) => set("purchaseOrderDate", event.target.value)} /></label>
-      <label className="field"><span><LocalizedText text={"Actual delivery"} /></span><DateInput min={form.startDate} value={form.actualDelivery} onChange={(event) => set("actualDelivery", event.target.value)} /></label>
-      <label className="field"><span><LocalizedText text={"Start date"} /></span><DateInput value={form.startDate} onChange={(event) => set("startDate", event.target.value)} /></label>
-      <label className="field"><span><LocalizedText text={"Target delivery"} /></span><DateInput min={form.startDate} value={form.targetDelivery} onChange={(event) => set("targetDelivery", event.target.value)} /></label>
-      <div className="field span-2"><span aria-hidden="true">&nbsp;</span>{span && (span.start !== form.startDate || span.finish !== form.targetDelivery)
-        ? <button className="btn ghost sm" type="button" onClick={() => setForm(state => ({ ...state, startDate: span.start, targetDelivery: span.finish }))}><Icon name="calendar" />{t("CRM.usePlanDates")}: {formatDate(span.start)} – {formatDate(span.finish)}</button> : null}</div>
-      <label className="field span-4"><span><LocalizedText text={"Site *"} /></span><input required maxLength={300} value={form.site} onChange={(event) => set("site", event.target.value)} /></label>
-    </div>
-    <ContactPicker customerId={project.customerId ?? 0} value={form.contactIds} onChange={(contactIds) => set("contactIds", contactIds)} />
-    {planError ? <p className="muted" role="status">{t("CRM.planUnavailable")}</p>
-      : !plan ? <p className="muted" role="status">{t("CRM.loading")}</p>
-      : plan.snapshot.canPlan ? <>
-        <MasterPlanSection rows={headings} onChange={setHeadings} templates={templates} />
-        <TeamPlanSection rows={headings} onChange={setHeadings} people={bootstrap.team} />
-        <NotBrokenDownNote headings={headings} />
-        <p className="muted">{t("CRM.editPlanHint")}</p>
-      </> : <p className="muted">{t("CRM.planReadOnly")}</p>}
-    <PaymentChecklist value={form.paymentsReceived} onChange={(paymentsReceived) => set("paymentsReceived", paymentsReceived)} />
-    <label className="field"><span><LocalizedText text={"Remark"} /></span><textarea rows={3} maxLength={20000} value={form.remark} onChange={(event) => set("remark", event.target.value)} /></label>
-  </div></Modal>;
+  return (
+    <Modal
+      title={`Edit ${project.number}`}
+      subtitle="เลื่อนสถานะ อัปเดตความคืบหน้า และแก้ข้อมูลโครงการ พร้อมบันทึก Audit trail"
+      size="xl"
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn ghost" type="button" onClick={onClose}>
+            <LocalizedText text={"Cancel"} />
+          </button>
+          <button
+            className="btn primary"
+            type="button"
+            data-guide="project.editSave"
+            disabled={
+              busy ||
+              (!closing && (form.progress === "" || !Number.isInteger(form.progress) || form.progress < 0 || form.progress > 100)) ||
+              needsActualDelivery ||
+              !form.name.trim() ||
+              !form.site.trim() ||
+              !form.purchaseOrderNumber.trim() ||
+              planIssues.length > 0
+            }
+            onClick={() => {
+              void submit();
+            }}
+          >
+            <Icon name="check" />
+            {busy ? <LocalizedText text={"Saving…"} /> : <LocalizedText text={"Save project"} />}
+          </button>
+        </>
+      }
+    >
+      <div className="project-create">
+        {error ? (
+          <LoadError
+            message={t(error)}
+            retry={() => {
+              void submit();
+            }}
+          />
+        ) : null}
+        {needsActualDelivery ? (
+          <div className="info-strip" role="note">
+            <Icon name="alertTriangle" />
+            <span>
+              <LocalizedText text={"ระบุวันส่งมอบจริงก่อนปิดโครงการ / Record the actual delivery date before closing"} />
+            </span>
+          </div>
+        ) : null}
+        {closing ? (
+          <div className="info-strip" role="note">
+            <Icon name="check" />
+            <span>
+              <LocalizedText text={"ปิดโครงการแล้วความคืบหน้าจะถูกตั้งเป็น 100% / Closing sets progress to 100%"} />
+            </span>
+          </div>
+        ) : null}
+        {planIssues.length ? (
+          <p role="status">
+            {t("CRM.missingProjectFields")}: {planIssues.join(", ")}
+          </p>
+        ) : null}
+        <div className="form-grid">
+          <label className="field span-2">
+            <span>
+              <LocalizedText text={"Project name *"} />
+            </span>
+            <input required maxLength={300} value={form.name} onChange={(event) => set("name", event.target.value)} />
+          </label>
+          {numberable ? (
+            <ErpProjectNumberField
+              span={2}
+              guide="project.erpNumber"
+              currentProjectId={project.id}
+              disabled={busy}
+              value={form.projectNumber}
+              onChange={(projectNumber) => set("projectNumber", projectNumber)}
+            />
+          ) : null}
+          <TeamSelect value={form.department} departments={departments} onChange={(department) => set("department", department)} />
+          <div className="field">
+            <span>{t("CRM.planHealth")}</span>
+            <div className="project-health-cell">{project.health ? <HealthBadge health={project.health} status={project.status} /> : "—"}</div>
+          </div>
+          <label className="field">
+            <span>
+              <LocalizedText text={"Status"} />
+            </span>
+            <select value={form.status} onChange={(event) => set("status", event.target.value)}>
+              {statusChoices.map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            <span>
+              <LocalizedText text={"Portfolio.typedProgress"} />
+            </span>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step={1}
+              disabled={closing}
+              value={closing ? 100 : form.progress}
+              onChange={(event) => set("progress", event.target.value === "" ? "" : Number(event.target.value))}
+            />
+          </label>
+          <label className="field">
+            <span>
+              <LocalizedText text={"Project manager"} />
+            </span>
+            <select value={form.managerId} onChange={(event) => set("managerId", Number(event.target.value))}>
+              {managers.some((member) => member.id === project.managerId) ? null : <option value={project.managerId}>{project.managerName}</option>}
+              {managers.map((member) => (
+                <option key={member.id} value={member.id}>
+                  {member.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            <span>
+              <LocalizedText text={"Lead engineer"} />
+            </span>
+            <select value={form.leadEngineerId} onChange={(event) => set("leadEngineerId", Number(event.target.value))}>
+              {engineers.some((member) => member.id === project.leadEngineerId) ? null : <option value={project.leadEngineerId}>{project.leadEngineerName}</option>}
+              {engineers.map((member) => (
+                <option key={member.id} value={member.id}>
+                  {member.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            <span>
+              <LocalizedText text={"Project type"} />
+            </span>
+            <input maxLength={100} value={form.projectType} onChange={(event) => set("projectType", event.target.value)} />
+          </label>
+          <label className="field">
+            <span>
+              <LocalizedText text={"Customer PO number *"} />
+            </span>
+            <input required maxLength={100} value={form.purchaseOrderNumber} onChange={(event) => set("purchaseOrderNumber", event.target.value)} />
+          </label>
+          <label className="field">
+            <span>
+              <LocalizedText text={"PO date"} />
+            </span>
+            <DateInput value={form.purchaseOrderDate} onChange={(event) => set("purchaseOrderDate", event.target.value)} />
+          </label>
+          <label className="field">
+            <span>
+              <LocalizedText text={"Actual delivery"} />
+            </span>
+            <DateInput min={form.startDate} value={form.actualDelivery} onChange={(event) => set("actualDelivery", event.target.value)} />
+          </label>
+          <label className="field">
+            <span>
+              <LocalizedText text={"Start date"} />
+            </span>
+            <DateInput value={form.startDate} onChange={(event) => set("startDate", event.target.value)} />
+          </label>
+          <label className="field">
+            <span>
+              <LocalizedText text={"Target delivery"} />
+            </span>
+            <DateInput min={form.startDate} value={form.targetDelivery} onChange={(event) => set("targetDelivery", event.target.value)} />
+          </label>
+          <div className="field span-2">
+            <span aria-hidden="true">&nbsp;</span>
+            {span && (span.start !== form.startDate || span.finish !== form.targetDelivery) ? (
+              <button className="btn ghost sm" type="button" onClick={() => setForm((state) => ({ ...state, startDate: span.start, targetDelivery: span.finish }))}>
+                <Icon name="calendar" />
+                {t("CRM.usePlanDates")}: {formatDate(span.start)} – {formatDate(span.finish)}
+              </button>
+            ) : null}
+          </div>
+          <label className="field span-4">
+            <span>
+              <LocalizedText text={"Site *"} />
+            </span>
+            <input required maxLength={300} value={form.site} onChange={(event) => set("site", event.target.value)} />
+          </label>
+        </div>
+        <ContactPicker customerId={project.customerId ?? 0} value={form.contactIds} onChange={(contactIds) => set("contactIds", contactIds)} />
+        {planError ? (
+          <p className="muted" role="status">
+            {t("CRM.planUnavailable")}
+          </p>
+        ) : !plan ? (
+          <p className="muted" role="status">
+            {t("CRM.loading")}
+          </p>
+        ) : plan.snapshot.canPlan ? (
+          <>
+            <MasterPlanSection rows={headings} onChange={setHeadings} templates={templates} />
+            <TeamPlanSection rows={headings} onChange={setHeadings} people={bootstrap.team} />
+            <NotBrokenDownNote headings={headings} />
+            <p className="muted">{t("CRM.editPlanHint")}</p>
+          </>
+        ) : (
+          <p className="muted">{t("CRM.planReadOnly")}</p>
+        )}
+        <PaymentChecklist value={form.paymentsReceived} onChange={(paymentsReceived) => set("paymentsReceived", paymentsReceived)} />
+        <label className="field">
+          <span>
+            <LocalizedText text={"Remark"} />
+          </span>
+          <textarea rows={3} maxLength={20000} value={form.remark} onChange={(event) => set("remark", event.target.value)} />
+        </label>
+      </div>
+    </Modal>
+  );
 }
-function ProjectDocumentsModal({ project, canWrite, teamTestMode, notify, onClose }: { project: ProjectSummary; canWrite: boolean; teamTestMode: boolean; notify: (message: string) => void; onClose: () => void }) {
+function ProjectDocumentsModal({
+  project,
+  canWrite,
+  teamTestMode,
+  notify,
+  onClose,
+}: {
+  project: ProjectSummary;
+  canWrite: boolean;
+  teamTestMode: boolean;
+  notify: (message: string) => void;
+  onClose: () => void;
+}) {
   const localizeCopy = useStaticCopy();
   const { lang } = useLanguage();
   const sourceRemarkLabel = lang === "TH" ? "แหล่งที่มา / หมายเหตุ" : lang === "JP" ? "引継ぎ元・備考" : "Source / remark";
-  const registerCopy = lang === "TH"
-    ? "รวมเอกสารที่ส่งต่ออัตโนมัติจาก Inquiry และ Site Visit พร้อมหมวดและเลขเอกสารต้นทาง"
-    : lang === "JP"
-      ? "Inquiry・Site Visitから自動引継ぎされた文書を、分類・元文書番号とともに表示します"
-      : "Includes documents automatically carried from the Inquiry and Site Visit, with their category and source number";
+  const registerCopy =
+    lang === "TH"
+      ? "รวมเอกสารที่ส่งต่ออัตโนมัติจาก Inquiry และ Site Visit พร้อมหมวดและเลขเอกสารต้นทาง"
+      : lang === "JP"
+        ? "Inquiry・Site Visitから自動引継ぎされた文書を、分類・元文書番号とともに表示します"
+        : "Includes documents automatically carried from the Inquiry and Site Visit, with their category and source number";
   const [documents, setDocuments] = useState<ProjectDocument[]>([]);
   const [folderCode, setFolderCode] = useState<string>(PROJECT_DOCUMENT_FOLDERS[0][0]);
   const [documentType, setDocumentType] = useState("");
@@ -1194,7 +2515,9 @@ function ProjectDocumentsModal({ project, canWrite, teamTestMode, notify, onClos
   }, [project.id]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => { void load(); }, 0);
+    const timer = window.setTimeout(() => {
+      void load();
+    }, 0);
     return () => window.clearTimeout(timer);
   }, [load]);
 
@@ -1234,7 +2557,11 @@ function ProjectDocumentsModal({ project, canWrite, teamTestMode, notify, onClos
     }
   };
 
-  const startWithdraw = (document: ProjectDocument) => { setWithdrawing(document); setWithdrawReason(""); setWithdrawError(""); };
+  const startWithdraw = (document: ProjectDocument) => {
+    setWithdrawing(document);
+    setWithdrawReason("");
+    setWithdrawError("");
+  };
   const withdraw = async () => {
     const target = withdrawing;
     if (!target || !withdrawReason.trim()) return;
@@ -1272,43 +2599,267 @@ function ProjectDocumentsModal({ project, canWrite, teamTestMode, notify, onClos
     }
   };
 
-  return <Modal
-    title={`${project.number} · Documents`}
-    subtitle={teamTestMode
-      ? `${project.name} · ไฟล์จัดเก็บชั่วคราวในเครื่องทดสอบและ metadata จัดเก็บใน SQL Server`
-      : `${project.name} · ไฟล์จัดเก็บบน NAS บริษัทและ metadata จัดเก็บใน SQL Server`}
-    size="xl"
-    onClose={onClose}
-    footer={<button className="btn ghost" type="button" onClick={onClose}><LocalizedText text={"Close"} /></button>}
-  >
-    {canWrite ? <form className="production-document-form" onSubmit={(event) => { void submit(event); }}>
-      <div className="form-grid two">
-        <label className="field"><span><LocalizedText text={"Project folder *"} /></span><select value={folderCode} disabled={uploading} onChange={(event) => setFolderCode(event.target.value)}>{PROJECT_DOCUMENT_FOLDERS.map(([code, name]) => <option key={code} value={code}>{code} <LocalizedText text={"·"} /> {name}</option>)}</select></label>
-        <label className="field"><span><LocalizedText text={"Document type *"} /></span><input required maxLength={100} value={documentType} disabled={uploading} placeholder={localizeCopy("เช่น Drawing, Manual, Report")} onChange={(event) => setDocumentType(event.target.value)} /></label>
-        <label className="field span-2"><span><LocalizedText text={"File * · Maximum 50 MiB"} /></span><input key={fileInputKey} required type="file" disabled={uploading} onChange={(event) => { const selected = event.target.files?.[0] ?? null; setFile(selected); setActionError(selected && selected.size > MAX_PROJECT_DOCUMENT_BYTES ? `ไฟล์ต้องมีขนาดไม่เกิน ${formatFileSize(MAX_PROJECT_DOCUMENT_BYTES)}` : ""); }} />{file ? <small>{file.name} <LocalizedText text={"·"} /> {formatFileSize(file.size)}</small> : null}</label>
-        <label className="field span-2"><span><LocalizedText text={"Remark"} /></span><textarea maxLength={2000} rows={2} value={remark} disabled={uploading} onChange={(event) => setRemark(event.target.value)} /></label>
-      </div>
-      <div className="production-document-submit"><small>{teamTestMode ? "API ตรวจนามสกุลและขนาดไฟล์ก่อนบันทึกลงพื้นที่ทดสอบชั่วคราว; ยังไม่เชื่อมต่อ NAS" : "API ตรวจนามสกุลและขนาดไฟล์ก่อนบันทึก; Production ต้องเปิดใช้การสแกนมัลแวร์ขององค์กรก่อนเปิดรับไฟล์จริง"}</small><button className="btn primary" type="submit" disabled={uploading || !file || !documentType.trim() || file.size === 0 || file.size > MAX_PROJECT_DOCUMENT_BYTES}><Icon name="paperclip" />{uploading ? "Uploading…" : "Upload document"}</button></div>
-    </form> : <div className="info-strip" role="status"><Icon name="shield" /><span><LocalizedText text={"บัญชีนี้อ่านและดาวน์โหลดเอกสารได้ แต่ไม่มีสิทธิ์อัปโหลดเอกสารโครงการ"} /></span></div>}
+  return (
+    <Modal
+      title={`${project.number} · Documents`}
+      subtitle={teamTestMode ? `${project.name} · ไฟล์จัดเก็บชั่วคราวในเครื่องทดสอบและ metadata จัดเก็บใน SQL Server` : `${project.name} · ไฟล์จัดเก็บบน NAS บริษัทและ metadata จัดเก็บใน SQL Server`}
+      size="xl"
+      onClose={onClose}
+      footer={
+        <button className="btn ghost" type="button" onClick={onClose}>
+          <LocalizedText text={"Close"} />
+        </button>
+      }
+    >
+      {canWrite ? (
+        <form
+          className="production-document-form"
+          onSubmit={(event) => {
+            void submit(event);
+          }}
+        >
+          <div className="form-grid two">
+            <label className="field">
+              <span>
+                <LocalizedText text={"Project folder *"} />
+              </span>
+              <select value={folderCode} disabled={uploading} onChange={(event) => setFolderCode(event.target.value)}>
+                {PROJECT_DOCUMENT_FOLDERS.map(([code, name]) => (
+                  <option key={code} value={code}>
+                    {code} <LocalizedText text={"·"} /> {name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span>
+                <LocalizedText text={"Document type *"} />
+              </span>
+              <input
+                required
+                maxLength={100}
+                value={documentType}
+                disabled={uploading}
+                placeholder={localizeCopy("เช่น Drawing, Manual, Report")}
+                onChange={(event) => setDocumentType(event.target.value)}
+              />
+            </label>
+            <label className="field span-2">
+              <span>
+                <LocalizedText text={"File * · Maximum 50 MiB"} />
+              </span>
+              <input
+                key={fileInputKey}
+                required
+                type="file"
+                disabled={uploading}
+                onChange={(event) => {
+                  const selected = event.target.files?.[0] ?? null;
+                  setFile(selected);
+                  setActionError(selected && selected.size > MAX_PROJECT_DOCUMENT_BYTES ? `ไฟล์ต้องมีขนาดไม่เกิน ${formatFileSize(MAX_PROJECT_DOCUMENT_BYTES)}` : "");
+                }}
+              />
+              {file ? (
+                <small>
+                  {file.name} <LocalizedText text={"·"} /> {formatFileSize(file.size)}
+                </small>
+              ) : null}
+            </label>
+            <label className="field span-2">
+              <span>
+                <LocalizedText text={"Remark"} />
+              </span>
+              <textarea maxLength={2000} rows={2} value={remark} disabled={uploading} onChange={(event) => setRemark(event.target.value)} />
+            </label>
+          </div>
+          <div className="production-document-submit">
+            <small>{teamTestMode ? "API ตรวจนามสกุลและขนาดไฟล์ก่อนบันทึกลงพื้นที่ทดสอบชั่วคราว; ยังไม่เชื่อมต่อ NAS" : "API ตรวจนามสกุลและขนาดไฟล์ก่อนบันทึก; Production ต้องเปิดใช้การสแกนมัลแวร์ขององค์กรก่อนเปิดรับไฟล์จริง"}</small>
+            <button className="btn primary" type="submit" disabled={uploading || !file || !documentType.trim() || file.size === 0 || file.size > MAX_PROJECT_DOCUMENT_BYTES}>
+              <Icon name="paperclip" />
+              {uploading ? "Uploading…" : "Upload document"}
+            </button>
+          </div>
+        </form>
+      ) : (
+        <div className="info-strip" role="status">
+          <Icon name="shield" />
+          <span>
+            <LocalizedText text={"บัญชีนี้อ่านและดาวน์โหลดเอกสารได้ แต่ไม่มีสิทธิ์อัปโหลดเอกสารโครงการ"} />
+          </span>
+        </div>
+      )}
 
-    {actionError ? <div className="callout danger" role="alert"><Icon name="alertTriangle" /><span><strong><LocalizedText text={"ดำเนินการไม่สำเร็จ"} /></strong>{actionError}</span></div> : null}
-    {loadError ? <LoadError message={loadError} retry={() => { void load(); }} /> : null}
+      {actionError ? (
+        <div className="callout danger" role="alert">
+          <Icon name="alertTriangle" />
+          <span>
+            <strong>
+              <LocalizedText text={"ดำเนินการไม่สำเร็จ"} />
+            </strong>
+            {actionError}
+          </span>
+        </div>
+      ) : null}
+      {loadError ? (
+        <LoadError
+          message={loadError}
+          retry={() => {
+            void load();
+          }}
+        />
+      ) : null}
 
-    <Panel title={`${documents.length} documents`} subtitle={loading ? "Loading document metadata…" : registerCopy} flush>
-      {documents.length ? <div className="table-wrap"><table><thead><tr><th><LocalizedText text={"File"} /></th><th><LocalizedText text={"Folder"} /></th><th><LocalizedText text={"Type"} /></th><th><LocalizedText text={"Size"} /></th><th>{sourceRemarkLabel}</th><th><LocalizedText text={"Uploaded by"} /></th><th><LocalizedText text={"Uploaded"} /></th><th><span className="sr-only"><LocalizedText text={"Actions"} /></span></th></tr></thead><tbody>{documents.map((document) => <tr key={document.id}><td><strong>{document.fileName}</strong><small className="document-content-type" title={document.sha256 ? `SHA-256 ${document.sha256}` : undefined}>{document.contentType}{document.sha256 ? ` · SHA-256 ${document.sha256.slice(0, 12)}…` : ""}</small></td><td><Badge>{document.folderCode}</Badge><small className="document-folder-name">{document.folderName}</small></td><td>{document.documentType}</td><td className="num">{formatFileSize(Number(document.sizeBytes))}</td><td>{document.remark || "—"}</td><td>{document.uploadedByName}</td><td className="muted">{formatDateTime(document.uploadedAt)}</td><td><button className="btn ghost sm" type="button" disabled={downloadingId !== null} aria-label={`Download ${document.fileName}`} onClick={() => { void download(document); }}><Icon name="download" />{downloadingId === document.id ? "Downloading…" : <LocalizedText text={"Download"} />}</button>{document.canWithdraw ? <button className="btn ghost sm" type="button" aria-label={`${localizeCopy("ProjectDocs.withdraw")} ${document.fileName}`} onClick={() => startWithdraw(document)}><Icon name="trash" /><LocalizedText text={"ProjectDocs.withdraw"} /></button> : null}</td></tr>)}</tbody></table></div> : loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading…"} /></div> : !loadError ? <EmptyState icon="file" title="No document uploaded" message={canWrite ? (teamTestMode ? "เลือกโฟลเดอร์ ประเภทเอกสาร และไฟล์ด้านบนเพื่ออัปโหลดไปยังพื้นที่ทดสอบชั่วคราว" : "เลือกโฟลเดอร์ ประเภทเอกสาร และไฟล์ด้านบนเพื่ออัปโหลดไปยัง NAS") : "ยังไม่มีเอกสารในโครงการนี้"} /> : null}
-    </Panel>
-    {withdrawing ? <Modal title="ProjectDocs.withdrawTitle" subtitle={withdrawing.fileName} size="sm" onClose={() => { if (!withdrawBusy) setWithdrawing(null); }}
-      footer={<><button className="btn ghost" type="button" disabled={withdrawBusy} onClick={() => setWithdrawing(null)}><LocalizedText text={"Cancel"} /></button><button className="btn danger" type="button" disabled={withdrawBusy || !withdrawReason.trim()} onClick={() => { void withdraw(); }}><Icon name="trash" /><LocalizedText text={withdrawBusy ? "Saving…" : "ProjectDocs.withdraw"} /></button></>}>
-      <p className="muted"><LocalizedText text={"ProjectDocs.withdrawHint"} /></p>
-      {withdrawError ? <div className="callout danger" role="alert"><Icon name="alertTriangle" /><span>{withdrawError}</span></div> : null}
-      <label className="field"><span><LocalizedText text={"ProjectDocs.withdrawReason"} /></span><textarea required maxLength={500} rows={3} value={withdrawReason} disabled={withdrawBusy} onChange={(event) => setWithdrawReason(event.target.value)} /></label>
-    </Modal> : null}
-  </Modal>;
+      <Panel title={`${documents.length} documents`} subtitle={loading ? "Loading document metadata…" : registerCopy} flush>
+        {documents.length ? (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>
+                    <LocalizedText text={"File"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Folder"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Type"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Size"} />
+                  </th>
+                  <th>{sourceRemarkLabel}</th>
+                  <th>
+                    <LocalizedText text={"Uploaded by"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Uploaded"} />
+                  </th>
+                  <th>
+                    <span className="sr-only">
+                      <LocalizedText text={"Actions"} />
+                    </span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {documents.map((document) => (
+                  <tr key={document.id}>
+                    <td>
+                      <strong>{document.fileName}</strong>
+                      <small className="document-content-type" title={document.sha256 ? `SHA-256 ${document.sha256}` : undefined}>
+                        {document.contentType}
+                        {document.sha256 ? ` · SHA-256 ${document.sha256.slice(0, 12)}…` : ""}
+                      </small>
+                    </td>
+                    <td>
+                      <Badge>{document.folderCode}</Badge>
+                      <small className="document-folder-name">{document.folderName}</small>
+                    </td>
+                    <td>{document.documentType}</td>
+                    <td className="num">{formatFileSize(Number(document.sizeBytes))}</td>
+                    <td>{document.remark || "—"}</td>
+                    <td>{document.uploadedByName}</td>
+                    <td className="muted">{formatDateTime(document.uploadedAt)}</td>
+                    <td>
+                      <button
+                        className="btn ghost sm"
+                        type="button"
+                        disabled={downloadingId !== null}
+                        aria-label={`Download ${document.fileName}`}
+                        onClick={() => {
+                          void download(document);
+                        }}
+                      >
+                        <Icon name="download" />
+                        {downloadingId === document.id ? "Downloading…" : <LocalizedText text={"Download"} />}
+                      </button>
+                      {document.canWithdraw ? (
+                        <button className="btn ghost sm" type="button" aria-label={`${localizeCopy("ProjectDocs.withdraw")} ${document.fileName}`} onClick={() => startWithdraw(document)}>
+                          <Icon name="trash" />
+                          <LocalizedText text={"ProjectDocs.withdraw"} />
+                        </button>
+                      ) : null}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : loading ? (
+          <div className="empty">
+            <span className="spinner" />
+            <LocalizedText text={"Loading…"} />
+          </div>
+        ) : !loadError ? (
+          <EmptyState
+            icon="file"
+            title="No document uploaded"
+            message={canWrite ? (teamTestMode ? "เลือกโฟลเดอร์ ประเภทเอกสาร และไฟล์ด้านบนเพื่ออัปโหลดไปยังพื้นที่ทดสอบชั่วคราว" : "เลือกโฟลเดอร์ ประเภทเอกสาร และไฟล์ด้านบนเพื่ออัปโหลดไปยัง NAS") : "ยังไม่มีเอกสารในโครงการนี้"}
+          />
+        ) : null}
+      </Panel>
+      {withdrawing ? (
+        <Modal
+          title="ProjectDocs.withdrawTitle"
+          subtitle={withdrawing.fileName}
+          size="sm"
+          onClose={() => {
+            if (!withdrawBusy) setWithdrawing(null);
+          }}
+          footer={
+            <>
+              <button className="btn ghost" type="button" disabled={withdrawBusy} onClick={() => setWithdrawing(null)}>
+                <LocalizedText text={"Cancel"} />
+              </button>
+              <button
+                className="btn danger"
+                type="button"
+                disabled={withdrawBusy || !withdrawReason.trim()}
+                onClick={() => {
+                  void withdraw();
+                }}
+              >
+                <Icon name="trash" />
+                <LocalizedText text={withdrawBusy ? "Saving…" : "ProjectDocs.withdraw"} />
+              </button>
+            </>
+          }
+        >
+          <p className="muted">
+            <LocalizedText text={"ProjectDocs.withdrawHint"} />
+          </p>
+          {withdrawError ? (
+            <div className="callout danger" role="alert">
+              <Icon name="alertTriangle" />
+              <span>{withdrawError}</span>
+            </div>
+          ) : null}
+          <label className="field">
+            <span>
+              <LocalizedText text={"ProjectDocs.withdrawReason"} />
+            </span>
+            <textarea required maxLength={500} rows={3} value={withdrawReason} disabled={withdrawBusy} onChange={(event) => setWithdrawReason(event.target.value)} />
+          </label>
+        </Modal>
+      ) : null}
+    </Modal>
+  );
 }
 
 // Only estimates whose CRM opportunity is WON; the order evidence arrives as the suggested PO.
-type ProjectEstimateOption = {id:number;number:string;projectName:string;customerId:number;ownerId:number;siteLocation:string;targetDelivery:string;opportunityNo:string;purchaseOrderNumber:string;purchaseOrderDate:string};
-type ProjectCreationOptions = { estimates: ProjectEstimateOption[]; people: {id:number;name:string;canManage:boolean;canLead:boolean}[]; canCreateWithoutEstimate?: boolean };
+type ProjectEstimateOption = {
+  id: number;
+  number: string;
+  projectName: string;
+  customerId: number;
+  ownerId: number;
+  siteLocation: string;
+  targetDelivery: string;
+  opportunityNo: string;
+  purchaseOrderNumber: string;
+  purchaseOrderDate: string;
+};
+type ProjectCreationOptions = { estimates: ProjectEstimateOption[]; people: { id: number; name: string; canManage: boolean; canLead: boolean }[]; canCreateWithoutEstimate?: boolean };
 // The same list the estimate screens offer, so a project without an estimate reads like one with.
 const PROJECT_TYPES = ["Automation", "IoT", "PLC", "Software", "Electrical", "Mechanical", "Robot", "AMR", "Auto Warehouse", "WMS", "WCS", "Traceability", "Vision", "Data Collection", "Other"];
 
@@ -1317,21 +2868,52 @@ const PROJECT_TYPES = ["Automation", "IoT", "PLC", "Software", "Electrical", "Me
  * Admins -- without one, naming its customer, name and type here. A failed save keeps everything typed:
  * its error sits beside the buttons, and the options load only fills fields nobody has filled yet.
  */
-export function CreateProjectModal({ bootstrap, refreshBootstrap, notify, onClose, onCreated, initialEstimateId }: { initialEstimateId?: number; bootstrap: BootstrapData; refreshBootstrap: () => Promise<void>; notify: (message: string) => void; onClose: () => void; onCreated: (number: string, deliveryNote: string) => Promise<void> }) {
-  const [options, setOptions] = useState<ProjectCreationOptions>({estimates:[],people:[]});
-  const managers = options.people.filter(member=>member.canManage);
-  const engineers = options.people.filter(member=>member.canLead);
-  const estimates = initialEstimateId ? options.estimates.filter(item=>item.id===initialEstimateId) : options.estimates;
+export function CreateProjectModal({
+  bootstrap,
+  refreshBootstrap,
+  notify,
+  onClose,
+  onCreated,
+  initialEstimateId,
+}: {
+  initialEstimateId?: number;
+  bootstrap: BootstrapData;
+  refreshBootstrap: () => Promise<void>;
+  notify: (message: string) => void;
+  onClose: () => void;
+  onCreated: (number: string, deliveryNote: string) => Promise<void>;
+}) {
+  const [options, setOptions] = useState<ProjectCreationOptions>({ estimates: [], people: [] });
+  const managers = options.people.filter((member) => member.canManage);
+  const engineers = options.people.filter((member) => member.canLead);
+  const estimates = initialEstimateId ? options.estimates.filter((item) => item.id === initialEstimateId) : options.estimates;
   const [loadingOptions, setLoadingOptions] = useState(true);
   const [optionsRevision, setOptionsRevision] = useState(0);
   const t = useUiText();
-  const [form, setForm] = useState<CreateProjectInput>({ projectNumber: "", estimateId: 0, purchaseOrderNumber: "", purchaseOrderDate: today(), managerId: 0, leadEngineerId: 0, startDate: today(), targetDelivery: futureDate(60), site: "", remark: "", department: "", paymentsReceived: [], contactIds: [], customerId: 0, projectName: "", projectType: "" });
+  const [form, setForm] = useState<CreateProjectInput>({
+    projectNumber: "",
+    estimateId: 0,
+    purchaseOrderNumber: "",
+    purchaseOrderDate: today(),
+    managerId: 0,
+    leadEngineerId: 0,
+    startDate: today(),
+    targetDelivery: futureDate(60),
+    site: "",
+    remark: "",
+    department: "",
+    paymentsReceived: [],
+    contactIds: [],
+    customerId: 0,
+    projectName: "",
+    projectType: "",
+  });
   const [withoutEstimate, setWithoutEstimate] = useState(false);
   const [headings, setHeadings] = useState<PlanHeadingDraft[]>([]);
   const templates = useScheduleTemplates();
   const departments = projectTeamOptions(form.department);
   // The team defaults to the lead engineer's team (from their department) until someone picks one.
-  const departmentOf = (userId: number) => projectTeamOf(bootstrap.team.find(member => member.id === userId)?.department);
+  const departmentOf = (userId: number) => projectTeamOf(bootstrap.team.find((member) => member.id === userId)?.department);
   const [inheritEndUser, setInheritEndUser] = useState(true);
   const [busy, setBusy] = useState(false);
   const [loadError, setLoadError] = useState("");
@@ -1340,103 +2922,427 @@ export function CreateProjectModal({ bootstrap, refreshBootstrap, notify, onClos
   // end user company), and must never clear an estimate, lead engineer or site someone already chose.
   const defaultsApplied = useRef(false);
   useEffect(() => {
-    let cancelled=false;
-    void apiRequest<ProjectCreationOptions>("/api/v1/projects/creation-options").then(data=>{
-      if(cancelled)return;
-      setOptions(data); setLoadError("");
-      if(defaultsApplied.current)return;
-      defaultsApplied.current=true;
-      const first=initialEstimateId ? data.estimates.find(item=>item.id===initialEstimateId) : undefined;
-      const lead=data.people.find(member=>member.canLead&&member.id===first?.ownerId)?.id??0;
-      setForm(current=>({...current,estimateId:current.estimateId||first?.id||0,
-        managerId:current.managerId||data.people.find(member=>member.canManage&&member.id===bootstrap.user.id)?.id||0,
-        leadEngineerId:current.leadEngineerId||lead,department:current.department||(lead?projectTeamOf(bootstrap.team.find(member=>member.id===lead)?.department):""),
-        site:current.site||first?.siteLocation||"",targetDelivery:first?.targetDelivery||current.targetDelivery,
-        purchaseOrderNumber:current.purchaseOrderNumber||first?.purchaseOrderNumber||"",purchaseOrderDate:first?.purchaseOrderDate||current.purchaseOrderDate}));
-      // Nothing approved to start from: someone allowed to go without an estimate starts there.
-      if(!initialEstimateId&&!data.estimates.length&&data.canCreateWithoutEstimate)setWithoutEstimate(true);
-    }).catch(error=>{if(!cancelled)setLoadError(toError(error));}).finally(()=>{if(!cancelled)setLoadingOptions(false);});
-    return()=>{cancelled=true;};
+    let cancelled = false;
+    void apiRequest<ProjectCreationOptions>("/api/v1/projects/creation-options")
+      .then((data) => {
+        if (cancelled) return;
+        setOptions(data);
+        setLoadError("");
+        if (defaultsApplied.current) return;
+        defaultsApplied.current = true;
+        const first = initialEstimateId ? data.estimates.find((item) => item.id === initialEstimateId) : undefined;
+        const lead = data.people.find((member) => member.canLead && member.id === first?.ownerId)?.id ?? 0;
+        setForm((current) => ({
+          ...current,
+          estimateId: current.estimateId || first?.id || 0,
+          managerId: current.managerId || data.people.find((member) => member.canManage && member.id === bootstrap.user.id)?.id || 0,
+          leadEngineerId: current.leadEngineerId || lead,
+          department: current.department || (lead ? projectTeamOf(bootstrap.team.find((member) => member.id === lead)?.department) : ""),
+          site: current.site || first?.siteLocation || "",
+          targetDelivery: first?.targetDelivery || current.targetDelivery,
+          purchaseOrderNumber: current.purchaseOrderNumber || first?.purchaseOrderNumber || "",
+          purchaseOrderDate: first?.purchaseOrderDate || current.purchaseOrderDate,
+        }));
+        // Nothing approved to start from: someone allowed to go without an estimate starts there.
+        if (!initialEstimateId && !data.estimates.length && data.canCreateWithoutEstimate) setWithoutEstimate(true);
+      })
+      .catch((error) => {
+        if (!cancelled) setLoadError(toError(error));
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingOptions(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [initialEstimateId, bootstrap.user.id, bootstrap.team, optionsRevision]);
   const standalone = withoutEstimate && !initialEstimateId;
-  const selectedEstimate = standalone ? undefined : estimates.find(item=>item.id===form.estimateId);
-  const customerId = standalone ? form.customerId ?? 0 : selectedEstimate?.customerId ?? 0;
-  const customer = bootstrap.customers.find(item=>item.id===customerId);
+  const selectedEstimate = standalone ? undefined : estimates.find((item) => item.id === form.estimateId);
+  const customerId = standalone ? (form.customerId ?? 0) : (selectedEstimate?.customerId ?? 0);
+  const customer = bootstrap.customers.find((item) => item.id === customerId);
   const canChooseSource = !initialEstimateId && Boolean(options.canCreateWithoutEstimate);
   // With dated rows the project runs from its first row to its last; otherwise its dates are typed.
   const span = planSpanOf(headings);
   const planned = span !== null;
   const planIssues = planIssuesOf(t, headings);
   const missingFields = [
-    ...(standalone ? [!form.customerId ? "Customer *" : "", !form.projectName?.trim() ? "Project name *" : "", !form.projectType ? "Project type *" : ""]
+    ...(standalone
+      ? [!form.customerId ? "Customer *" : "", !form.projectName?.trim() ? "Project name *" : "", !form.projectType ? "Project type *" : ""]
       : [!form.estimateId ? "Approved estimate *" : ""]),
-    !form.projectNumber.trim() ? "CRM.projectNoFromErp" : "", !form.purchaseOrderNumber.trim() ? "Customer PO number *" : "",
-    !form.purchaseOrderDate ? "PO date *" : "", !form.managerId ? "Project manager *" : "", !form.leadEngineerId ? "Lead engineer *" : "",
-    !planned && !form.startDate ? "Start date *" : "", !planned && !form.targetDelivery ? "Target delivery *" : "", !form.site.trim() ? "Site *" : "",
+    !form.projectNumber.trim() ? "CRM.projectNoFromErp" : "",
+    !form.purchaseOrderNumber.trim() ? "Customer PO number *" : "",
+    !form.purchaseOrderDate ? "PO date *" : "",
+    !form.managerId ? "Project manager *" : "",
+    !form.leadEngineerId ? "Lead engineer *" : "",
+    !planned && !form.startDate ? "Start date *" : "",
+    !planned && !form.targetDelivery ? "Target delivery *" : "",
+    !form.site.trim() ? "Site *" : "",
   ].filter(Boolean);
   const datesInvalid = !planned && (!form.startDate || !form.targetDelivery || form.targetDelivery < form.startDate);
-  const update = (patch: Partial<CreateProjectInput>) => { setSaveError(""); setForm(current => ({ ...current, ...patch })); };
-  const submit = async () => { setBusy(true); setSaveError(""); try {
-    const { customerId: chosenCustomer, projectName, projectType, estimateId, ...shared } = form;
-    const input: CreateProjectInput = { ...shared, projectNumber: form.projectNumber.trim(), startDate: span?.start ?? form.startDate, targetDelivery: span?.finish ?? form.targetDelivery,
-      department: form.department?.trim() || null, ...planPayload(headings),
-      ...(standalone ? { withoutEstimate: true, customerId: chosenCustomer, projectName: projectName?.trim(), projectType } : { estimateId }) };
-    if (standalone) input.endUserCustomerId = form.endUserCustomerId ?? null;
-    else if (inheritEndUser) delete input.endUserCustomerId; else input.endUserCustomerId = form.endUserCustomerId ?? null;
-    const created = await createProject(input); await onCreated(created.number, assignmentDeliveryNote(created.notification)); } catch (requestError) { setSaveError(toError(requestError)); } finally { setBusy(false); } };
-  return <Modal title="Create project" subtitle={standalone ? "CRM.projectGateWithoutEstimate" : "CRM.projectGate"} size="xl" onClose={onClose} footer={<>
-    {saveError ? <span className="project-create-error" role="alert"><Icon name="alertTriangle" /><span>{t(saveError)}</span></span> : <span className="spacer" />}
-    <button className="btn ghost" type="button" onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" data-guide="project.save" disabled={busy || loadingOptions || missingFields.length > 0 || planIssues.length > 0 || datesInvalid} onClick={() => { void submit(); }}><Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : <LocalizedText text={"Create project"} />}</button></>}><div className="project-create">
-    {loadError ? <LoadError message={t(loadError)} retry={() => { setLoadError("");setLoadingOptions(true);setOptionsRevision(value=>value+1); }} /> : null}
-    {canChooseSource ? <div className="seg-control" role="group" aria-label={t("CRM.projectSource")} data-guide="project.source">
-      <button type="button" className={standalone ? "" : "on"} aria-pressed={!standalone} disabled={busy} onClick={() => { setSaveError(""); setWithoutEstimate(false); }}>{t("CRM.projectFromEstimate")}</button>
-      <button type="button" className={standalone ? "on" : ""} aria-pressed={standalone} disabled={busy} onClick={() => { setSaveError(""); setWithoutEstimate(true); }}>{t("CRM.projectWithoutEstimate")}</button>
-    </div> : null}
-    {loadingOptions?<p role="status">{t("CRM.loading")}</p>:standalone?null:!estimates.length?<p className="alert warn">{t("CRM.noEligibleEstimate")}</p>:initialEstimateId&&!estimates.some(e=>e.id===initialEstimateId)?<p className="alert warn">{t("CRM.sourceUnavailable")}</p>:null}
-    {!loadingOptions&&(missingFields.length||planIssues.length)?<p role="status">{t("CRM.missingProjectFields")}: {[...missingFields.map(field=>t(field)), ...planIssues].join(", ")}</p>:null}
-    <div className="form-grid">
-      {standalone ? <>
-        {/* Typed search, not a long select: the customer list runs to hundreds of names. */}
-        <div className="field span-2" data-guide="project.from"><span><LocalizedText text={"Customer *"} /></span><SearchSelect value={form.customerId ? String(form.customerId) : ""} required disabled={busy}
-          options={bootstrap.customers.map((item) => ({ value: String(item.id), label: `${item.code} — ${item.name}`,
-            detail: [item.nameTh, item.nameEn, item.nameJa].filter((name) => name && name !== item.name).join(" / ") }))}
-          onChange={(value) => update({ customerId: Number(value) || 0, contactIds: [], endUserCustomerId: null })}
-          label={t("Customer *")} placeholder={t("CRM.searchCustomer")} noMatchText={t("CRM.noMatch")} clearLabel={t("CRM.clearChoice")}
-          showLabel={t("CRM.showOptions")} moreText={t("CRM.listCut")} /></div>
-        <label className="field span-2"><span><LocalizedText text={"Project name *"} /></span><input required maxLength={300} value={form.projectName ?? ""} onChange={(event) => update({ projectName: event.target.value })} /></label>
-        <label className="field"><span><LocalizedText text={"Project type *"} /></span><select disabled={busy} value={form.projectType ?? ""} onChange={(event) => update({ projectType: event.target.value })}><option value="">{t("CRM.selectProjectType")}</option>{PROJECT_TYPES.map((type) => <option key={type} value={type}>{t(type)}</option>)}</select></label>
-      </> : <>
-        <label className="field span-2" data-guide="project.from"><span><LocalizedText text={"Approved estimate *"} /></span><select disabled={busy || loadingOptions || Boolean(initialEstimateId)} value={form.estimateId} onChange={(event) => {const estimate=estimates.find(item=>item.id===Number(event.target.value));const lead=engineers.some(member=>member.id===estimate?.ownerId)?Number(estimate?.ownerId):0;update({ estimateId:Number(event.target.value),leadEngineerId:lead,department:form.department||departmentOf(lead),site:estimate?.siteLocation??"",targetDelivery:estimate?.targetDelivery||form.targetDelivery,purchaseOrderNumber:estimate?.purchaseOrderNumber??"",purchaseOrderDate:estimate?.purchaseOrderDate||today(),contactIds:[] });}}><option value={0}><LocalizedText text={"Select approved estimate"} /></option>{estimates.map((item) => <option key={item.id} value={item.id}>{item.opportunityNo} · {item.number} — {item.projectName}</option>)}</select></label>
-        <div className="field span-2"><span><LocalizedText text={"Customer"} /></span><div className="info-strip">{customer?.name||"—"}</div></div>
-      </>}
-      <ErpProjectNumberField guide="project.number" required disabled={busy} value={form.projectNumber} onChange={(projectNumber) => update({ projectNumber })}
-        onPick={(hit) => update({ projectNumber: hit.number, ...(standalone && !(form.projectName ?? "").trim() && hit.name ? { projectName: hit.name } : {}),
-          ...(standalone && !form.customerId && hit.customerId && bootstrap.customers.some((item) => item.id === hit.customerId) ? { customerId: hit.customerId, contactIds: [], endUserCustomerId: null } : {}) })} />
-      {standalone ? null : <div className="field span-2"><span>{t("CRM.projectName")}</span><div className="info-strip">{selectedEstimate?.projectName||"—"}</div></div>}
-      <TeamSelect value={form.department ?? ""} departments={departments} onChange={(department) => update({ department })} />
-      <label className="field" data-guide="project.people"><span><LocalizedText text={"Project manager *"} /></span><select value={form.managerId} onChange={(event) => update({ managerId: Number(event.target.value) })}><option value={0}>{t("CRM.selectProjectManager")}</option>{managers.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>
-      <label className="field"><span><LocalizedText text={"Lead engineer *"} /></span><select value={form.leadEngineerId} onChange={(event) => { const lead = Number(event.target.value); update({ leadEngineerId: lead, department: form.department || departmentOf(lead) }); }}><option value={0}>{t("CRM.selectLeadEngineer")}</option>{engineers.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>
-      <label className="field" data-guide="project.po"><span><LocalizedText text={"Customer PO number *"} /></span><input required maxLength={100} value={form.purchaseOrderNumber} onChange={(event) => update({ purchaseOrderNumber: event.target.value })} /></label>
-      <label className="field"><span><LocalizedText text={"PO date *"} /></span><DateInput value={form.purchaseOrderDate} onChange={(event) => update({ purchaseOrderDate: event.target.value })} /></label>
-      <label className="field span-4"><span><LocalizedText text={"Site *"} /></span><input required maxLength={300} value={form.site} onChange={(event) => update({ site: event.target.value })} /></label>
-      {standalone ? <EndUserCompanyField bootstrap={bootstrap} customerId={customerId} value={form.endUserCustomerId ?? null} disabled={busy || !customerId} onChange={(endUserCustomerId) => update({ endUserCustomerId })} refreshBootstrap={refreshBootstrap} notify={notify} /> : null}
-    </div>
-    <ContactPicker customerId={customerId} value={form.contactIds ?? []} onChange={(contactIds) => update({ contactIds })} />
-    <MasterPlanSection rows={headings} onChange={(change) => { setSaveError(""); setHeadings(change); }} templates={templates} />
-    <TeamPlanSection rows={headings} onChange={(change) => { setSaveError(""); setHeadings(change); }} people={bootstrap.team} />
-    <NotBrokenDownNote headings={headings} />
-    {planned ? <div className="info-strip" role="note"><Icon name="calendar" /><span>{t("CRM.projectSpanFromPlan")}{span ? `: ${formatDate(span.start)} – ${formatDate(span.finish)}` : ""}</span></div> : <div className="form-grid two">
-      <label className="field"><span><LocalizedText text={"Start date *"} /></span><DateInput required value={form.startDate} onChange={(event) => update({ startDate: event.target.value })} /></label>
-      <label className="field"><span><LocalizedText text={"Target delivery *"} /></span><DateInput required min={form.startDate} value={form.targetDelivery} onChange={(event) => update({ targetDelivery: event.target.value })} /></label>
-    </div>}
-    <PaymentChecklist value={form.paymentsReceived ?? []} onChange={(paymentsReceived) => update({ paymentsReceived })} />
-    <details><summary>{t("CRM.projectOptionalDetails")}</summary><div className="form-grid two">
-      {standalone ? null : <div className="span-2"><label style={{ display: "flex", alignItems: "center", gap: 8 }}><input type="checkbox" checked={inheritEndUser} disabled={busy} onChange={(event) => setInheritEndUser(event.target.checked)} /><LocalizedText text={"ใช้ End user จาก Inquiry ต้นทาง / Inherit from Inquiry"} /></label></div>}
-      {!standalone && !inheritEndUser ? <EndUserCompanyField bootstrap={bootstrap} customerId={customerId} value={form.endUserCustomerId ?? null} disabled={busy} onChange={(endUserCustomerId) => update({ endUserCustomerId })} refreshBootstrap={refreshBootstrap} notify={notify} /> : null}
-      <label className="field span-2"><span><LocalizedText text={"Remark"} /></span><textarea rows={3} maxLength={20000} value={form.remark||""} onChange={(event)=>update({remark:event.target.value})}/></label>
-    </div></details>
-    <p className="muted">{t("CRM.projectPlanLater")}</p>
-  </div></Modal>;
+  const update = (patch: Partial<CreateProjectInput>) => {
+    setSaveError("");
+    setForm((current) => ({ ...current, ...patch }));
+  };
+  const submit = async () => {
+    setBusy(true);
+    setSaveError("");
+    try {
+      const { customerId: chosenCustomer, projectName, projectType, estimateId, ...shared } = form;
+      const input: CreateProjectInput = {
+        ...shared,
+        projectNumber: form.projectNumber.trim(),
+        startDate: span?.start ?? form.startDate,
+        targetDelivery: span?.finish ?? form.targetDelivery,
+        department: form.department?.trim() || null,
+        ...planPayload(headings),
+        ...(standalone ? { withoutEstimate: true, customerId: chosenCustomer, projectName: projectName?.trim(), projectType } : { estimateId }),
+      };
+      if (standalone) input.endUserCustomerId = form.endUserCustomerId ?? null;
+      else if (inheritEndUser) delete input.endUserCustomerId;
+      else input.endUserCustomerId = form.endUserCustomerId ?? null;
+      const created = await createProject(input);
+      await onCreated(created.number, assignmentDeliveryNote(created.notification));
+    } catch (requestError) {
+      setSaveError(toError(requestError));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Modal
+      title="Create project"
+      subtitle={standalone ? "CRM.projectGateWithoutEstimate" : "CRM.projectGate"}
+      size="xl"
+      onClose={onClose}
+      footer={
+        <>
+          {saveError ? (
+            <span className="project-create-error" role="alert">
+              <Icon name="alertTriangle" />
+              <span>{t(saveError)}</span>
+            </span>
+          ) : (
+            <span className="spacer" />
+          )}
+          <button className="btn ghost" type="button" onClick={onClose}>
+            <LocalizedText text={"Cancel"} />
+          </button>
+          <button
+            className="btn primary"
+            type="button"
+            data-guide="project.save"
+            disabled={busy || loadingOptions || missingFields.length > 0 || planIssues.length > 0 || datesInvalid}
+            onClick={() => {
+              void submit();
+            }}
+          >
+            <Icon name="check" />
+            {busy ? <LocalizedText text={"Saving…"} /> : <LocalizedText text={"Create project"} />}
+          </button>
+        </>
+      }
+    >
+      <div className="project-create">
+        {loadError ? (
+          <LoadError
+            message={t(loadError)}
+            retry={() => {
+              setLoadError("");
+              setLoadingOptions(true);
+              setOptionsRevision((value) => value + 1);
+            }}
+          />
+        ) : null}
+        {canChooseSource ? (
+          <div className="seg-control" role="group" aria-label={t("CRM.projectSource")} data-guide="project.source">
+            <button
+              type="button"
+              className={standalone ? "" : "on"}
+              aria-pressed={!standalone}
+              disabled={busy}
+              onClick={() => {
+                setSaveError("");
+                setWithoutEstimate(false);
+              }}
+            >
+              {t("CRM.projectFromEstimate")}
+            </button>
+            <button
+              type="button"
+              className={standalone ? "on" : ""}
+              aria-pressed={standalone}
+              disabled={busy}
+              onClick={() => {
+                setSaveError("");
+                setWithoutEstimate(true);
+              }}
+            >
+              {t("CRM.projectWithoutEstimate")}
+            </button>
+          </div>
+        ) : null}
+        {loadingOptions ? (
+          <p role="status">{t("CRM.loading")}</p>
+        ) : standalone ? null : !estimates.length ? (
+          <p className="alert warn">{t("CRM.noEligibleEstimate")}</p>
+        ) : initialEstimateId && !estimates.some((e) => e.id === initialEstimateId) ? (
+          <p className="alert warn">{t("CRM.sourceUnavailable")}</p>
+        ) : null}
+        {!loadingOptions && (missingFields.length || planIssues.length) ? (
+          <p role="status">
+            {t("CRM.missingProjectFields")}: {[...missingFields.map((field) => t(field)), ...planIssues].join(", ")}
+          </p>
+        ) : null}
+        <div className="form-grid">
+          {standalone ? (
+            <>
+              {/* Typed search, not a long select: the customer list runs to hundreds of names. */}
+              <div className="field span-2" data-guide="project.from">
+                <span>
+                  <LocalizedText text={"Customer *"} />
+                </span>
+                <SearchSelect
+                  value={form.customerId ? String(form.customerId) : ""}
+                  required
+                  disabled={busy}
+                  options={bootstrap.customers.map((item) => ({
+                    value: String(item.id),
+                    label: `${item.code} — ${item.name}`,
+                    detail: [item.nameTh, item.nameEn, item.nameJa].filter((name) => name && name !== item.name).join(" / "),
+                  }))}
+                  onChange={(value) => update({ customerId: Number(value) || 0, contactIds: [], endUserCustomerId: null })}
+                  label={t("Customer *")}
+                  placeholder={t("CRM.searchCustomer")}
+                  noMatchText={t("CRM.noMatch")}
+                  clearLabel={t("CRM.clearChoice")}
+                  showLabel={t("CRM.showOptions")}
+                  moreText={t("CRM.listCut")}
+                />
+              </div>
+              <label className="field span-2">
+                <span>
+                  <LocalizedText text={"Project name *"} />
+                </span>
+                <input required maxLength={300} value={form.projectName ?? ""} onChange={(event) => update({ projectName: event.target.value })} />
+              </label>
+              <label className="field">
+                <span>
+                  <LocalizedText text={"Project type *"} />
+                </span>
+                <select disabled={busy} value={form.projectType ?? ""} onChange={(event) => update({ projectType: event.target.value })}>
+                  <option value="">{t("CRM.selectProjectType")}</option>
+                  {PROJECT_TYPES.map((type) => (
+                    <option key={type} value={type}>
+                      {t(type)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </>
+          ) : (
+            <>
+              <label className="field span-2" data-guide="project.from">
+                <span>
+                  <LocalizedText text={"Approved estimate *"} />
+                </span>
+                <select
+                  disabled={busy || loadingOptions || Boolean(initialEstimateId)}
+                  value={form.estimateId}
+                  onChange={(event) => {
+                    const estimate = estimates.find((item) => item.id === Number(event.target.value));
+                    const lead = engineers.some((member) => member.id === estimate?.ownerId) ? Number(estimate?.ownerId) : 0;
+                    update({
+                      estimateId: Number(event.target.value),
+                      leadEngineerId: lead,
+                      department: form.department || departmentOf(lead),
+                      site: estimate?.siteLocation ?? "",
+                      targetDelivery: estimate?.targetDelivery || form.targetDelivery,
+                      purchaseOrderNumber: estimate?.purchaseOrderNumber ?? "",
+                      purchaseOrderDate: estimate?.purchaseOrderDate || today(),
+                      contactIds: [],
+                    });
+                  }}
+                >
+                  <option value={0}>
+                    <LocalizedText text={"Select approved estimate"} />
+                  </option>
+                  {estimates.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.opportunityNo} · {item.number} — {item.projectName}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="field span-2">
+                <span>
+                  <LocalizedText text={"Customer"} />
+                </span>
+                <div className="info-strip">{customer?.name || "—"}</div>
+              </div>
+            </>
+          )}
+          <ErpProjectNumberField
+            guide="project.number"
+            required
+            disabled={busy}
+            value={form.projectNumber}
+            onChange={(projectNumber) => update({ projectNumber })}
+            onPick={(hit) =>
+              update({
+                projectNumber: hit.number,
+                ...(standalone && !(form.projectName ?? "").trim() && hit.name ? { projectName: hit.name } : {}),
+                ...(standalone && !form.customerId && hit.customerId && bootstrap.customers.some((item) => item.id === hit.customerId)
+                  ? { customerId: hit.customerId, contactIds: [], endUserCustomerId: null }
+                  : {}),
+              })
+            }
+          />
+          {standalone ? null : (
+            <div className="field span-2">
+              <span>{t("CRM.projectName")}</span>
+              <div className="info-strip">{selectedEstimate?.projectName || "—"}</div>
+            </div>
+          )}
+          <TeamSelect value={form.department ?? ""} departments={departments} onChange={(department) => update({ department })} />
+          <label className="field" data-guide="project.people">
+            <span>
+              <LocalizedText text={"Project manager *"} />
+            </span>
+            <select value={form.managerId} onChange={(event) => update({ managerId: Number(event.target.value) })}>
+              <option value={0}>{t("CRM.selectProjectManager")}</option>
+              {managers.map((member) => (
+                <option key={member.id} value={member.id}>
+                  {member.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            <span>
+              <LocalizedText text={"Lead engineer *"} />
+            </span>
+            <select
+              value={form.leadEngineerId}
+              onChange={(event) => {
+                const lead = Number(event.target.value);
+                update({ leadEngineerId: lead, department: form.department || departmentOf(lead) });
+              }}
+            >
+              <option value={0}>{t("CRM.selectLeadEngineer")}</option>
+              {engineers.map((member) => (
+                <option key={member.id} value={member.id}>
+                  {member.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field" data-guide="project.po">
+            <span>
+              <LocalizedText text={"Customer PO number *"} />
+            </span>
+            <input required maxLength={100} value={form.purchaseOrderNumber} onChange={(event) => update({ purchaseOrderNumber: event.target.value })} />
+          </label>
+          <label className="field">
+            <span>
+              <LocalizedText text={"PO date *"} />
+            </span>
+            <DateInput value={form.purchaseOrderDate} onChange={(event) => update({ purchaseOrderDate: event.target.value })} />
+          </label>
+          <label className="field span-4">
+            <span>
+              <LocalizedText text={"Site *"} />
+            </span>
+            <input required maxLength={300} value={form.site} onChange={(event) => update({ site: event.target.value })} />
+          </label>
+          {standalone ? (
+            <EndUserCompanyField
+              bootstrap={bootstrap}
+              customerId={customerId}
+              value={form.endUserCustomerId ?? null}
+              disabled={busy || !customerId}
+              onChange={(endUserCustomerId) => update({ endUserCustomerId })}
+              refreshBootstrap={refreshBootstrap}
+              notify={notify}
+            />
+          ) : null}
+        </div>
+        <ContactPicker customerId={customerId} value={form.contactIds ?? []} onChange={(contactIds) => update({ contactIds })} />
+        <MasterPlanSection
+          rows={headings}
+          onChange={(change) => {
+            setSaveError("");
+            setHeadings(change);
+          }}
+          templates={templates}
+        />
+        <TeamPlanSection
+          rows={headings}
+          onChange={(change) => {
+            setSaveError("");
+            setHeadings(change);
+          }}
+          people={bootstrap.team}
+        />
+        <NotBrokenDownNote headings={headings} />
+        {planned ? (
+          <div className="info-strip" role="note">
+            <Icon name="calendar" />
+            <span>
+              {t("CRM.projectSpanFromPlan")}
+              {span ? `: ${formatDate(span.start)} – ${formatDate(span.finish)}` : ""}
+            </span>
+          </div>
+        ) : (
+          <div className="form-grid two">
+            <label className="field">
+              <span>
+                <LocalizedText text={"Start date *"} />
+              </span>
+              <DateInput required value={form.startDate} onChange={(event) => update({ startDate: event.target.value })} />
+            </label>
+            <label className="field">
+              <span>
+                <LocalizedText text={"Target delivery *"} />
+              </span>
+              <DateInput required min={form.startDate} value={form.targetDelivery} onChange={(event) => update({ targetDelivery: event.target.value })} />
+            </label>
+          </div>
+        )}
+        <PaymentChecklist value={form.paymentsReceived ?? []} onChange={(paymentsReceived) => update({ paymentsReceived })} />
+        <details>
+          <summary>{t("CRM.projectOptionalDetails")}</summary>
+          <div className="form-grid two">
+            {standalone ? null : (
+              <div className="span-2">
+                <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <input type="checkbox" checked={inheritEndUser} disabled={busy} onChange={(event) => setInheritEndUser(event.target.checked)} />
+                  <LocalizedText text={"ใช้ End user จาก Inquiry ต้นทาง / Inherit from Inquiry"} />
+                </label>
+              </div>
+            )}
+            {!standalone && !inheritEndUser ? (
+              <EndUserCompanyField
+                bootstrap={bootstrap}
+                customerId={customerId}
+                value={form.endUserCustomerId ?? null}
+                disabled={busy}
+                onChange={(endUserCustomerId) => update({ endUserCustomerId })}
+                refreshBootstrap={refreshBootstrap}
+                notify={notify}
+              />
+            ) : null}
+            <label className="field span-2">
+              <span>
+                <LocalizedText text={"Remark"} />
+              </span>
+              <textarea rows={3} maxLength={20000} value={form.remark || ""} onChange={(event) => update({ remark: event.target.value })} />
+            </label>
+          </div>
+        </details>
+        <p className="muted">{t("CRM.projectPlanLater")}</p>
+      </div>
+    </Modal>
+  );
 }
 
 export function ProductionInventory({ bootstrap }: Pick<CommonProps, "bootstrap">) {
@@ -1446,16 +3352,158 @@ export function ProductionInventory({ bootstrap }: Pick<CommonProps, "bootstrap"
   const [reorderOnly, setReorderOnly] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const load = useCallback(async () => { setLoading(true); setError(""); try { setItems(await listInventory({ search, reorderOnly })); } catch (requestError) { setError(toError(requestError)); } finally { setLoading(false); } }, [search, reorderOnly]);
-  useEffect(() => { const timer = window.setTimeout(() => { void load(); }, 200); return () => window.clearTimeout(timer); }, [load]);
-  const totals = useMemo(() => ({ available: items.reduce((sum, item) => sum + Number(item.available), 0), value: items.reduce((sum, item) => sum + Number(item.usable) * Number(item.averageUnitCost), 0), reorder: items.filter((item) => Number(item.available) <= Number(item.reorderLevel)).length }), [items]);
-  return <>
-    <PageHeader eyebrow="MATERIAL CONTROL" title={uiText("Inventory")} subtitle={`สิทธิ์ปัจจุบัน: ${bootstrap.user.role} · ยอดคงเหลือคำนวณจาก immutable stock ledger`} />
-    <div className="kpi-grid three"><KpiCard label="Items" value={items.length} icon="package" tone="blue" /><KpiCard label="Available units" value={totals.available.toLocaleString(currentLocale())} icon="database" tone="green" /><KpiCard label="Reorder alerts" value={totals.reorder} note={formatMoney(totals.value)} icon="alertTriangle" tone={totals.reorder ? "amber" : "slate"} /></div>
-    <Toolbar><SearchInput link="q" value={search} onChange={setSearch} placeholder="Search item, part no., description or brand…" /><label className="checkbox-row"><input type="checkbox" checked={reorderOnly} onChange={(event) => setReorderOnly(event.target.checked)} /><span><LocalizedText text={"Reorder only"} /></span></label><button className="btn ghost" type="button" onClick={() => { void load(); }}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button></Toolbar>
-    {error ? <LoadError message={error} retry={() => { void load(); }} /> : null}
-    <Panel title={`${items.length} inventory items`} subtitle={loading ? "Loading from production API…" : "Live stock ledger balance"} flush>{items.length ? <div className="table-wrap"><table><thead><tr><th><LocalizedText text={"Item code"} /></th><th><LocalizedText text={"Part no."} /></th><th><LocalizedText text={"Description"} /></th><th><LocalizedText text={"Brand"} /></th><th><LocalizedText text={"Location"} /></th><th><LocalizedText text={"Usable"} /></th><th><LocalizedText text={"Quarantine"} /></th><th><LocalizedText text={"Reserved"} /></th><th><LocalizedText text={"Available"} /></th><th><LocalizedText text={"On order"} /></th><th><LocalizedText text={"Avg. cost"} /></th><th><LocalizedText text={"Reorder"} /></th></tr></thead><tbody>{items.map((item) => { const reorder = Number(item.available) <= Number(item.reorderLevel); return <tr key={item.itemId} className={reorder ? "row-wait" : undefined}><td><strong className="mono">{item.itemCode}</strong></td><td className="mono">{item.partNumber}</td><td>{item.description}</td><td>{item.brand}</td><td>{item.location}</td><td className="num">{Number(item.usable).toLocaleString(currentLocale())}</td><td className="num">{Number(item.quarantine).toLocaleString(currentLocale())}</td><td className="num">{Number(item.reserved).toLocaleString(currentLocale())}</td><td className="num"><strong>{Number(item.available).toLocaleString(currentLocale())}</strong> {item.unit}</td><td className="num">{Number(item.onOrder).toLocaleString(currentLocale())}</td><td className="num">{formatMoney(Number(item.averageUnitCost))}</td><td>{reorder ? <Badge tone="amber"><LocalizedText text={"Reorder"} /></Badge> : <Badge tone="green"><LocalizedText text={"OK"} /></Badge>}</td></tr>; })}</tbody></table></div> : loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading…"} /></div> : <EmptyState icon="database" title="No inventory item found" message="เพิ่ม Material master และรับสินค้าเข้าระบบก่อน" />}</Panel>
-  </>;
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      setItems(await listInventory({ search, reorderOnly }));
+    } catch (requestError) {
+      setError(toError(requestError));
+    } finally {
+      setLoading(false);
+    }
+  }, [search, reorderOnly]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void load();
+    }, 200);
+    return () => window.clearTimeout(timer);
+  }, [load]);
+  const totals = useMemo(
+    () => ({
+      available: items.reduce((sum, item) => sum + Number(item.available), 0),
+      value: items.reduce((sum, item) => sum + Number(item.usable) * Number(item.averageUnitCost), 0),
+      reorder: items.filter((item) => Number(item.available) <= Number(item.reorderLevel)).length,
+    }),
+    [items],
+  );
+  return (
+    <>
+      <PageHeader eyebrow="MATERIAL CONTROL" title={uiText("Inventory")} subtitle={`สิทธิ์ปัจจุบัน: ${bootstrap.user.role} · ยอดคงเหลือคำนวณจาก immutable stock ledger`} />
+      <div className="kpi-grid three">
+        <KpiCard label="Items" value={items.length} icon="package" tone="blue" />
+        <KpiCard label="Available units" value={totals.available.toLocaleString(currentLocale())} icon="database" tone="green" />
+        <KpiCard label="Reorder alerts" value={totals.reorder} note={formatMoney(totals.value)} icon="alertTriangle" tone={totals.reorder ? "amber" : "slate"} />
+      </div>
+      <Toolbar>
+        <SearchInput link="q" value={search} onChange={setSearch} placeholder="Search item, part no., description or brand…" />
+        <label className="checkbox-row">
+          <input type="checkbox" checked={reorderOnly} onChange={(event) => setReorderOnly(event.target.checked)} />
+          <span>
+            <LocalizedText text={"Reorder only"} />
+          </span>
+        </label>
+        <button
+          className="btn ghost"
+          type="button"
+          onClick={() => {
+            void load();
+          }}
+        >
+          <Icon name="refresh" />
+          <LocalizedText text={"Refresh"} />
+        </button>
+      </Toolbar>
+      {error ? (
+        <LoadError
+          message={error}
+          retry={() => {
+            void load();
+          }}
+        />
+      ) : null}
+      <Panel title={`${items.length} inventory items`} subtitle={loading ? "Loading from production API…" : "Live stock ledger balance"} flush>
+        {items.length ? (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>
+                    <LocalizedText text={"Item code"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Part no."} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Description"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Brand"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Location"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Usable"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Quarantine"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Reserved"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Available"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"On order"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Avg. cost"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Reorder"} />
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item) => {
+                  const reorder = Number(item.available) <= Number(item.reorderLevel);
+                  return (
+                    <tr key={item.itemId} className={reorder ? "row-wait" : undefined}>
+                      <td>
+                        <strong className="mono">{item.itemCode}</strong>
+                      </td>
+                      <td className="mono">{item.partNumber}</td>
+                      <td>{item.description}</td>
+                      <td>{item.brand}</td>
+                      <td>{item.location}</td>
+                      <td className="num">{Number(item.usable).toLocaleString(currentLocale())}</td>
+                      <td className="num">{Number(item.quarantine).toLocaleString(currentLocale())}</td>
+                      <td className="num">{Number(item.reserved).toLocaleString(currentLocale())}</td>
+                      <td className="num">
+                        <strong>{Number(item.available).toLocaleString(currentLocale())}</strong> {item.unit}
+                      </td>
+                      <td className="num">{Number(item.onOrder).toLocaleString(currentLocale())}</td>
+                      <td className="num">{formatMoney(Number(item.averageUnitCost))}</td>
+                      <td>
+                        {reorder ? (
+                          <Badge tone="amber">
+                            <LocalizedText text={"Reorder"} />
+                          </Badge>
+                        ) : (
+                          <Badge tone="green">
+                            <LocalizedText text={"OK"} />
+                          </Badge>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : loading ? (
+          <div className="empty">
+            <span className="spinner" />
+            <LocalizedText text={"Loading…"} />
+          </div>
+        ) : (
+          <EmptyState icon="database" title="No inventory item found" message="เพิ่ม Material master และรับสินค้าเข้าระบบก่อน" />
+        )}
+      </Panel>
+    </>
+  );
 }
 
 type MasterTab = "customers" | "suppliers" | "employees" | "inventory" | "rates" | "team";
@@ -1478,23 +3526,27 @@ export function ProductionMasterData({ bootstrap, notify, refreshBootstrap, onOp
   // The System menu's entries here (User Accounts & Permissions, Employees, Suppliers) wear the Pegasus ERP look (owner
   // 2026-11-21). Customers and the entries that left the menu keep the app's own look until the owner asks for them.
   const pegasus = tab === "team" || tab === "employees" || tab === "suppliers";
-  const screen = <>
-    <PageHeader
-      eyebrow="CONTROLLED MASTER RECORDS"
-      title={uiText(destination ? destination === "team" ? "User Accounts & Permissions" : tabs.find(item => item.id === destination)?.label ?? "Master Data" : "Master Data")}
-      subtitle="ค้นหาและจัดการข้อมูลกลางสำหรับลูกค้า ผู้ขาย บุคลากร สินค้า และอัตราค่าแรง"
-      meta={<Badge tone={canWrite ? "green" : "slate"}>{canWrite ? "Create access" : "Read only"}</Badge>}
-    />
-    {!destination ? <Tabs tabs={tabs} active={tab} onChange={setTab} /> : null}
-    <div className="master-data-content">
-      {tab === "customers" ? <ProductionCustomers embedded bootstrap={bootstrap} notify={notify} refreshBootstrap={refreshBootstrap} onOpenInquiries={onOpenInquiries} /> : null}
-      {tab === "suppliers" ? <SupplierMasterTab bootstrap={bootstrap} canWrite={canWrite} canCreate={canWrite || bootstrap.permissions.includes("estimate.write")} notify={notify} refreshBootstrap={refreshBootstrap} /> : null}
-      {tab === "employees" ? <EmployeeMasterTab canWrite={canWrite} notify={notify} /> : null}
-      {tab === "inventory" ? <InventoryItemMasterTab bootstrap={bootstrap} canWrite={canWrite} notify={notify} refreshBootstrap={refreshBootstrap} /> : null}
-      {tab === "rates" && canViewRates ? <ProductionEngineeringRates embedded bootstrap={bootstrap} notify={notify} refreshBootstrap={refreshBootstrap} /> : null}
-      {tab === "team" ? <TeamReferenceTab bootstrap={bootstrap} canManageRoles={bootstrap.permissions.includes("admin.manage_roles")} notify={notify} refreshBootstrap={refreshBootstrap} /> : null}
-    </div>
-  </>;
+  const screen = (
+    <>
+      <PageHeader
+        eyebrow="CONTROLLED MASTER RECORDS"
+        title={uiText(destination ? (destination === "team" ? "User Accounts & Permissions" : (tabs.find((item) => item.id === destination)?.label ?? "Master Data")) : "Master Data")}
+        subtitle="ค้นหาและจัดการข้อมูลกลางสำหรับลูกค้า ผู้ขาย บุคลากร สินค้า และอัตราค่าแรง"
+        meta={<Badge tone={canWrite ? "green" : "slate"}>{canWrite ? "Create access" : "Read only"}</Badge>}
+      />
+      {!destination ? <Tabs tabs={tabs} active={tab} onChange={setTab} /> : null}
+      <div className="master-data-content">
+        {tab === "customers" ? <ProductionCustomers embedded bootstrap={bootstrap} notify={notify} refreshBootstrap={refreshBootstrap} onOpenInquiries={onOpenInquiries} /> : null}
+        {tab === "suppliers" ? (
+          <SupplierMasterTab bootstrap={bootstrap} canWrite={canWrite} canCreate={canWrite || bootstrap.permissions.includes("estimate.write")} notify={notify} refreshBootstrap={refreshBootstrap} />
+        ) : null}
+        {tab === "employees" ? <EmployeeMasterTab canWrite={canWrite} notify={notify} /> : null}
+        {tab === "inventory" ? <InventoryItemMasterTab bootstrap={bootstrap} canWrite={canWrite} notify={notify} refreshBootstrap={refreshBootstrap} /> : null}
+        {tab === "rates" && canViewRates ? <ProductionEngineeringRates embedded bootstrap={bootstrap} notify={notify} refreshBootstrap={refreshBootstrap} /> : null}
+        {tab === "team" ? <TeamReferenceTab bootstrap={bootstrap} canManageRoles={bootstrap.permissions.includes("admin.manage_roles")} notify={notify} refreshBootstrap={refreshBootstrap} /> : null}
+      </div>
+    </>
+  );
   return pegasus ? <PegasusScreen>{screen}</PegasusScreen> : screen;
 }
 
@@ -1504,15 +3556,13 @@ function useMasterForm(refreshBootstrap: () => Promise<void>, notify: (message: 
   const [busy, setBusy] = useState(false);
   const [shownError, setError] = useState("");
   // Screens in the Pegasus look report a failure in the error dialog (form-bubbles.ts); the others keep their red box.
-  const fail = (message: string) => { if (failureTitle) void failureDialog(message, failureTitle); else setError(message); };
+  const fail = (message: string) => {
+    if (failureTitle) void failureDialog(message, failureTitle);
+    else setError(message);
+  };
   const error = failureTitle ? "" : shownError;
 
-  const submit = async (
-    form: HTMLFormElement,
-    action: () => Promise<unknown>,
-    successMessage: string,
-    afterReset?: () => void,
-  ) => {
+  const submit = async (form: HTMLFormElement, action: () => Promise<unknown>, successMessage: string, afterReset?: () => void) => {
     setBusy(true);
     setError("");
     try {
@@ -1537,7 +3587,17 @@ function useMasterForm(refreshBootstrap: () => Promise<void>, notify: (message: 
 
 function MasterFormError({ message }: { message: string }) {
   if (!message) return null;
-  return <div className="callout danger" role="alert"><Icon name="alertTriangle" /><span><strong><LocalizedText text={"โปรดตรวจสอบรายการนี้"} /></strong>{message}</span></div>;
+  return (
+    <div className="callout danger" role="alert">
+      <Icon name="alertTriangle" />
+      <span>
+        <strong>
+          <LocalizedText text={"โปรดตรวจสอบรายการนี้"} />
+        </strong>
+        {message}
+      </span>
+    </div>
+  );
 }
 
 function SupplierMasterTab({ bootstrap, canWrite, canCreate, notify, refreshBootstrap }: MasterTabProps & { canCreate: boolean }) {
@@ -1552,8 +3612,7 @@ function SupplierMasterTab({ bootstrap, canWrite, canCreate, notify, refreshBoot
     return bootstrap.suppliers.find((supplier) => ids.includes(supplier.id)) ?? null;
   });
   const [deletingId, setDeletingId] = useState<number | null>(null);
-  const suppliers = bootstrap.suppliers.filter((supplier) =>
-    [supplier.code, supplier.name, supplier.category].join(" ").toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
+  const suppliers = bootstrap.suppliers.filter((supplier) => [supplier.code, supplier.name, supplier.category].join(" ").toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
   const pageCount = Math.max(1, Math.ceil(suppliers.length / pageSize));
   const resolvedPage = Math.min(page, pageCount);
   const from = suppliers.length ? (resolvedPage - 1) * pageSize + 1 : 0;
@@ -1571,43 +3630,126 @@ function SupplierMasterTab({ bootstrap, canWrite, canCreate, notify, refreshBoot
       setDeletingId(null);
     }
   };
-  return <>
-    <Toolbar><SearchInput link="q" value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder="Search supplier code, name or category…" />
-      {canCreate ? <button className="btn primary" type="button" onClick={() => setCreateOpen(true)}><Icon name="plus" /><LocalizedText text={"Add supplier"} /></button> : null}
-    </Toolbar>
-    <ErpMasterPanel kind="suppliers" onChanged={refreshBootstrap} />
-    <Panel title={`${suppliers.length} ${uiText("suppliers")}`} subtitle="ข้อมูลผู้ขายชุดเดียวกันสำหรับ Cost item และ Preferred supplier" flush>
-      {suppliers.length ? <div className="table-wrap"><TablePageSize value={pageSize} onChange={(value) => { setPageSize(value); setPage(1); }} /><table>
-        <thead><tr>{canWrite ? <th className="pg-acts"><span className="sr-only">{uiText("Actions")}</span></th> : null}<th><LocalizedText text={"Code"} /></th><th><LocalizedText text={"Supplier name"} /></th><th><LocalizedText text={"Category"} /></th></tr></thead>
-        <tbody>{suppliers.slice(from - 1, to).map((supplier) => (
-          <tr key={supplier.id}>
-            {canWrite ? (
-              <td className="pg-acts">
-                <button className="pg-act" type="button" title={uiText("Edit")} aria-label={`${uiText("Edit")} ${supplier.code}`} onClick={() => setEditingSupplier(supplier)}><Icon name="edit" /></button>
-                {/* A supplier from Pegasus ERP is closed in the ERP, not deleted here (migration 099). */}
-                {supplier.erpCode ? null : <button className="pg-act danger" type="button" title={uiText("Delete")} aria-label={`${uiText("Delete")} ${supplier.code}`} disabled={deletingId === supplier.id}
-                  onClick={() => { void deleteSupplierRow(supplier); }}><Icon name="trash" /></button>}
-              </td>
-            ) : null}
-            <td>{canWrite
-              ? <button className="pg-doclink mono" type="button" onClick={() => setEditingSupplier(supplier)}>{supplier.code}</button>
-              : <strong className="mono">{supplier.code}</strong>}{supplier.erpCode ? <> <span title={supplier.erpCode}><Badge tone="green"><LocalizedText text={"ERP"} /></Badge></span></> : null}</td>
-            <td>{supplier.name}</td>
-            <td><Badge>{supplier.category}</Badge></td>
-          </tr>
-        ))}</tbody>
-      </table><Pagination page={resolvedPage} pageCount={pageCount} from={from} to={to} total={suppliers.length} onPage={setPage} /></div> : <EmptyState icon="truck" title="No supplier found" message="ลองเปลี่ยนคำค้นหา หรือกด Add supplier เพื่อเพิ่มผู้ขาย" />}
-    </Panel>
-    {createOpen ? <SupplierCreateForm onClose={() => setCreateOpen(false)} notify={(message) => { setCreateOpen(false); notify(message); }} refreshBootstrap={refreshBootstrap} /> : null}
-    {editingSupplier ? (
-      <SupplierEditModal
-        supplier={editingSupplier}
-        notify={notify}
-        refreshBootstrap={refreshBootstrap}
-        onClose={() => setEditingSupplier(null)}
-      />
-    ) : null}
-  </>;
+  return (
+    <>
+      <Toolbar>
+        <SearchInput
+          link="q"
+          value={search}
+          onChange={(value) => {
+            setSearch(value);
+            setPage(1);
+          }}
+          placeholder="Search supplier code, name or category…"
+        />
+        {canCreate ? (
+          <button className="btn primary" type="button" onClick={() => setCreateOpen(true)}>
+            <Icon name="plus" />
+            <LocalizedText text={"Add supplier"} />
+          </button>
+        ) : null}
+      </Toolbar>
+      <ErpMasterPanel kind="suppliers" onChanged={refreshBootstrap} />
+      <Panel title={`${suppliers.length} ${uiText("suppliers")}`} subtitle="ข้อมูลผู้ขายชุดเดียวกันสำหรับ Cost item และ Preferred supplier" flush>
+        {suppliers.length ? (
+          <div className="table-wrap">
+            <TablePageSize
+              value={pageSize}
+              onChange={(value) => {
+                setPageSize(value);
+                setPage(1);
+              }}
+            />
+            <table>
+              <thead>
+                <tr>
+                  {canWrite ? (
+                    <th className="pg-acts">
+                      <span className="sr-only">{uiText("Actions")}</span>
+                    </th>
+                  ) : null}
+                  <th>
+                    <LocalizedText text={"Code"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Supplier name"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Category"} />
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {suppliers.slice(from - 1, to).map((supplier) => (
+                  <tr key={supplier.id}>
+                    {canWrite ? (
+                      <td className="pg-acts">
+                        <button className="pg-act" type="button" title={uiText("Edit")} aria-label={`${uiText("Edit")} ${supplier.code}`} onClick={() => setEditingSupplier(supplier)}>
+                          <Icon name="edit" />
+                        </button>
+                        {/* A supplier from Pegasus ERP is closed in the ERP, not deleted here (migration 099). */}
+                        {supplier.erpCode ? null : (
+                          <button
+                            className="pg-act danger"
+                            type="button"
+                            title={uiText("Delete")}
+                            aria-label={`${uiText("Delete")} ${supplier.code}`}
+                            disabled={deletingId === supplier.id}
+                            onClick={() => {
+                              void deleteSupplierRow(supplier);
+                            }}
+                          >
+                            <Icon name="trash" />
+                          </button>
+                        )}
+                      </td>
+                    ) : null}
+                    <td>
+                      {canWrite ? (
+                        <button className="pg-doclink mono" type="button" onClick={() => setEditingSupplier(supplier)}>
+                          {supplier.code}
+                        </button>
+                      ) : (
+                        <strong className="mono">{supplier.code}</strong>
+                      )}
+                      {supplier.erpCode ? (
+                        <>
+                          {" "}
+                          <span title={supplier.erpCode}>
+                            <Badge tone="green">
+                              <LocalizedText text={"ERP"} />
+                            </Badge>
+                          </span>
+                        </>
+                      ) : null}
+                    </td>
+                    <td>{supplier.name}</td>
+                    <td>
+                      <Badge>{supplier.category}</Badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <Pagination page={resolvedPage} pageCount={pageCount} from={from} to={to} total={suppliers.length} onPage={setPage} />
+          </div>
+        ) : (
+          <EmptyState icon="truck" title="No supplier found" message="ลองเปลี่ยนคำค้นหา หรือกด Add supplier เพื่อเพิ่มผู้ขาย" />
+        )}
+      </Panel>
+      {createOpen ? (
+        <SupplierCreateForm
+          onClose={() => setCreateOpen(false)}
+          notify={(message) => {
+            setCreateOpen(false);
+            notify(message);
+          }}
+          refreshBootstrap={refreshBootstrap}
+        />
+      ) : null}
+      {editingSupplier ? <SupplierEditModal supplier={editingSupplier} notify={notify} refreshBootstrap={refreshBootstrap} onClose={() => setEditingSupplier(null)} /> : null}
+    </>
+  );
 }
 
 function SupplierEditModal({
@@ -1622,41 +3764,115 @@ function SupplierEditModal({
   onClose: () => void;
 }) {
   const uiText = useUiText();
-  const { busy, submit } = useMasterForm(refreshBootstrap, (msg) => { onClose(); notify(msg); }, uiText("Form.errorTitle"));
+  const { busy, submit } = useMasterForm(
+    refreshBootstrap,
+    (msg) => {
+      onClose();
+      notify(msg);
+    },
+    uiText("Form.errorTitle"),
+  );
   const draftKey = `supplier:edit:${supplier.id}`;
   const [values, setValues] = useDraftField(draftKey, "form", { category: supplier.category, name: supplier.name, contact: "", email: "", phone: "", brands: "" });
   const update = (key: keyof typeof values, value: string) => setValues((current) => ({ ...current, [key]: value }));
-  const close = async () => { if (await confirmLeave(draftKey, leaveCopy(uiText))) onClose(); };
+  const close = async () => {
+    if (await confirmLeave(draftKey, leaveCopy(uiText))) onClose();
+  };
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = event.currentTarget;
     if (!checkFields(form, uiText)) return;
-    const brands = values.brands.split(",").map((b) => b.trim()).filter(Boolean);
-    void submit(form, async () => {
-      await updateSupplier(supplier.id, {
-        name: values.name,
-        category: values.category,
-        contact: values.contact || undefined,
-        email: values.email || undefined,
-        phone: values.phone || undefined,
-        brands,
-      });
-    }, `Supplier ${supplier.code} updated`, () => clearDraft(draftKey));
+    const brands = values.brands
+      .split(",")
+      .map((b) => b.trim())
+      .filter(Boolean);
+    void submit(
+      form,
+      async () => {
+        await updateSupplier(supplier.id, {
+          name: values.name,
+          category: values.category,
+          contact: values.contact || undefined,
+          email: values.email || undefined,
+          phone: values.phone || undefined,
+          brands,
+        });
+      },
+      `Supplier ${supplier.code} updated`,
+      () => clearDraft(draftKey),
+    );
   };
   return (
-    <Modal title={`${uiText("Edit")} ${supplier.code}`} size="md" onClose={() => { void close(); }} footer={<>
-      <button className="btn ghost" type="button" onClick={() => { void close(); }}>{uiText("Cancel")}</button>
-      <button className="btn primary" type="submit" form="supplier-edit-form" disabled={busy}>{busy ? uiText("Saving…") : uiText("Save")}</button>
-    </>}>
+    <Modal
+      title={`${uiText("Edit")} ${supplier.code}`}
+      size="md"
+      onClose={() => {
+        void close();
+      }}
+      footer={
+        <>
+          <button
+            className="btn ghost"
+            type="button"
+            onClick={() => {
+              void close();
+            }}
+          >
+            {uiText("Cancel")}
+          </button>
+          <button className="btn primary" type="submit" form="supplier-edit-form" disabled={busy}>
+            {busy ? uiText("Saving…") : uiText("Save")}
+          </button>
+        </>
+      }
+    >
       <form id="supplier-edit-form" noValidate onSubmit={onSubmit}>
         <div className="form-grid two">
-          <label className="field"><span>{uiText("Code")}</span><input value={supplier.code} readOnly /></label>
-          <label className="field"><span><LocalizedText text={"Category *"} /></span><input name="category" value={values.category} onChange={(event) => update("category", event.target.value)} required maxLength={100} /></label>
-          <label className="field span-2"><span><LocalizedText text={"Supplier name *"} /></span><input name="name" value={values.name} onChange={(event) => update("name", event.target.value)} required maxLength={300} readOnly={Boolean(supplier.erpCode)} />{supplier.erpCode ? <small><LocalizedText text={"ErpMaster.supplierLockedHint"} /></small> : null}</label>
-          <label className="field"><span><LocalizedText text={"Contact person"} /></span><input name="contact" value={values.contact} onChange={(event) => update("contact", event.target.value)} maxLength={200} /></label>
-          <label className="field"><span><LocalizedText text={"Phone"} /></span><input name="phone" value={values.phone} onChange={(event) => update("phone", event.target.value)} maxLength={50} /></label>
-          <label className="field span-2"><span><LocalizedText text={"Email"} /></span><input name="email" type="email" value={values.email} onChange={(event) => update("email", event.target.value)} maxLength={200} /></label>
-          <label className="field span-2"><span><LocalizedText text={"Brands"} /></span><input name="brands" value={values.brands} onChange={(event) => update("brands", event.target.value)} maxLength={2000} placeholder="Siemens, Omron, SMC" /></label>
+          <label className="field">
+            <span>{uiText("Code")}</span>
+            <input value={supplier.code} readOnly />
+          </label>
+          <label className="field">
+            <span>
+              <LocalizedText text={"Category *"} />
+            </span>
+            <input name="category" value={values.category} onChange={(event) => update("category", event.target.value)} required maxLength={100} />
+          </label>
+          <label className="field span-2">
+            <span>
+              <LocalizedText text={"Supplier name *"} />
+            </span>
+            <input name="name" value={values.name} onChange={(event) => update("name", event.target.value)} required maxLength={300} readOnly={Boolean(supplier.erpCode)} />
+            {supplier.erpCode ? (
+              <small>
+                <LocalizedText text={"ErpMaster.supplierLockedHint"} />
+              </small>
+            ) : null}
+          </label>
+          <label className="field">
+            <span>
+              <LocalizedText text={"Contact person"} />
+            </span>
+            <input name="contact" value={values.contact} onChange={(event) => update("contact", event.target.value)} maxLength={200} />
+          </label>
+          <label className="field">
+            <span>
+              <LocalizedText text={"Phone"} />
+            </span>
+            <input name="phone" value={values.phone} onChange={(event) => update("phone", event.target.value)} maxLength={50} />
+          </label>
+          <label className="field span-2">
+            <span>
+              <LocalizedText text={"Email"} />
+            </span>
+            <input name="email" type="email" value={values.email} onChange={(event) => update("email", event.target.value)} maxLength={200} />
+          </label>
+          <label className="field span-2">
+            <span>
+              <LocalizedText text={"Brands"} />
+            </span>
+            <input name="brands" value={values.brands} onChange={(event) => update("brands", event.target.value)} maxLength={2000} placeholder="Siemens, Omron, SMC" />
+          </label>
         </div>
       </form>
     </Modal>
@@ -1670,9 +3886,10 @@ function SupplierCreateForm({ notify, refreshBootstrap, onClose }: Pick<CommonPr
   const { busy, submit } = useMasterForm(refreshBootstrap, notify, localizeCopy("Form.errorTitle"));
   // Controlled so a scanned card can fill the blanks the person has not typed yet, and kept in a draft (Pegasus 0.6).
   const [form, setForm] = useDraftField("supplier:new", "form", BLANK_SUPPLIER);
-  const close = async () => { if (await confirmLeave("supplier:new", leaveCopy(localizeCopy))) onClose(); };
-  const update = <K extends keyof typeof BLANK_SUPPLIER>(key: K, value: string) =>
-    setForm((current) => ({ ...current, [key]: value }));
+  const close = async () => {
+    if (await confirmLeave("supplier:new", leaveCopy(localizeCopy))) onClose();
+  };
+  const update = <K extends keyof typeof BLANK_SUPPLIER>(key: K, value: string) => setForm((current) => ({ ...current, [key]: value }));
 
   // A card never carries a supplier code or a category, so the code is suggested from
   // the company name and the category is left for the person to choose.
@@ -1685,11 +3902,12 @@ function SupplierCreateForm({ notify, refreshBootstrap, onClose }: Pick<CommonPr
       { key: "phone", value: result.phone, label: "โทรศัพท์" },
     ];
     const fillable = fields.filter((field) => field.value && !form[field.key].trim());
-    if (fillable.length) setForm((current) => {
-      const next = { ...current };
-      for (const field of fillable) if (!next[field.key].trim()) next[field.key] = field.value;
-      return next;
-    });
+    if (fillable.length)
+      setForm((current) => {
+        const next = { ...current };
+        for (const field of fillable) if (!next[field.key].trim()) next[field.key] = field.value;
+        return next;
+      });
     return fillable.map((field) => field.label);
   };
 
@@ -1697,7 +3915,10 @@ function SupplierCreateForm({ notify, refreshBootstrap, onClose }: Pick<CommonPr
     event.preventDefault();
     const element = event.currentTarget;
     if (!checkFields(element, localizeCopy)) return;
-    const brands = form.brands.split(",").map((brand) => brand.trim()).filter(Boolean);
+    const brands = form.brands
+      .split(",")
+      .map((brand) => brand.trim())
+      .filter(Boolean);
     const input: CreateSupplierInput = {
       code: form.code.trim(),
       name: form.name.trim(),
@@ -1707,47 +3928,189 @@ function SupplierCreateForm({ notify, refreshBootstrap, onClose }: Pick<CommonPr
       phone: form.phone.trim() || undefined,
       brands,
     };
-    void submit(element, async () => {
-      if (brands.length > 100) throw new Error("Brands ใส่ได้ไม่เกิน 100 รายการ");
-      if (brands.some((brand) => brand.length > 100)) throw new Error("Brand แต่ละรายการต้องยาวไม่เกิน 100 ตัวอักษร");
-      await createSupplier(input);
-    }, `Supplier ${input.code.toUpperCase()} created`, () => { setForm({ ...BLANK_SUPPLIER }); clearDraft("supplier:new"); });
+    void submit(
+      element,
+      async () => {
+        if (brands.length > 100) throw new Error("Brands ใส่ได้ไม่เกิน 100 รายการ");
+        if (brands.some((brand) => brand.length > 100)) throw new Error("Brand แต่ละรายการต้องยาวไม่เกิน 100 ตัวอักษร");
+        await createSupplier(input);
+      },
+      `Supplier ${input.code.toUpperCase()} created`,
+      () => {
+        setForm({ ...BLANK_SUPPLIER });
+        clearDraft("supplier:new");
+      },
+    );
   };
 
-  return <Modal title="Supplier.new" subtitle="ใช้ใน Cost item และ Preferred supplier" size="md" onClose={() => { void close(); }} footer={<>
-    <button className="btn ghost" type="button" disabled={busy} onClick={() => { void close(); }}>{localizeCopy("Cancel")}</button>
-    <button className="btn primary" type="submit" form="supplier-create-form" disabled={busy}>{localizeCopy(busy ? "Saving…" : "Save")}</button>
-  </>}>
-    <form id="supplier-create-form" noValidate onSubmit={onSubmit}>
-      <BusinessCardScanner disabled={busy} onApply={applyBusinessCard} />
-      <div className="form-grid two">
-        <label className="field"><span><LocalizedText text={"Supplier code *"} /></span><input name="code" required maxLength={30} pattern="[A-Za-z0-9][A-Za-z0-9._/-]*" autoCapitalize="characters" autoComplete="off" placeholder="SUP-001" value={form.code} onChange={(event) => update("code", event.target.value)} /></label>
-        <label className="field"><span><LocalizedText text={"Category *"} /></span><input name="category" required maxLength={100} placeholder={localizeCopy("Automation equipment")} value={form.category} onChange={(event) => update("category", event.target.value)} /></label>
-        <label className="field span-2"><span><LocalizedText text={"Supplier name *"} /></span><input name="name" required maxLength={300} autoComplete="organization" value={form.name} onChange={(event) => update("name", event.target.value)} /></label>
-        <label className="field"><span><LocalizedText text={"Contact person"} /></span><input name="contact" maxLength={200} autoComplete="name" value={form.contact} onChange={(event) => update("contact", event.target.value)} /></label>
-        <label className="field"><span><LocalizedText text={"Phone"} /></span><input name="phone" type="tel" maxLength={100} autoComplete="tel" value={form.phone} onChange={(event) => update("phone", event.target.value)} /></label>
-        <label className="field span-2"><span><LocalizedText text={"Email"} /></span><input name="email" type="email" maxLength={256} autoComplete="email" value={form.email} onChange={(event) => update("email", event.target.value)} /></label>
-        <label className="field span-2"><span><LocalizedText text={"Brands"} /></span><input name="brands" maxLength={10099} placeholder="Siemens, Omron, SMC" value={form.brands} onChange={(event) => update("brands", event.target.value)} /><small><LocalizedText text={"คั่นแต่ละ Brand ด้วย comma; สูงสุด 100 รายการ และรายการละ 100 ตัวอักษร"} /></small></label>
-      </div>
-    </form>
-  </Modal>;
+  return (
+    <Modal
+      title="Supplier.new"
+      subtitle="ใช้ใน Cost item และ Preferred supplier"
+      size="md"
+      onClose={() => {
+        void close();
+      }}
+      footer={
+        <>
+          <button
+            className="btn ghost"
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              void close();
+            }}
+          >
+            {localizeCopy("Cancel")}
+          </button>
+          <button className="btn primary" type="submit" form="supplier-create-form" disabled={busy}>
+            {localizeCopy(busy ? "Saving…" : "Save")}
+          </button>
+        </>
+      }
+    >
+      <form id="supplier-create-form" noValidate onSubmit={onSubmit}>
+        <BusinessCardScanner disabled={busy} onApply={applyBusinessCard} />
+        <div className="form-grid two">
+          <label className="field">
+            <span>
+              <LocalizedText text={"Supplier code *"} />
+            </span>
+            <input
+              name="code"
+              required
+              maxLength={30}
+              pattern="[A-Za-z0-9][A-Za-z0-9._/-]*"
+              autoCapitalize="characters"
+              autoComplete="off"
+              placeholder="SUP-001"
+              value={form.code}
+              onChange={(event) => update("code", event.target.value)}
+            />
+          </label>
+          <label className="field">
+            <span>
+              <LocalizedText text={"Category *"} />
+            </span>
+            <input name="category" required maxLength={100} placeholder={localizeCopy("Automation equipment")} value={form.category} onChange={(event) => update("category", event.target.value)} />
+          </label>
+          <label className="field span-2">
+            <span>
+              <LocalizedText text={"Supplier name *"} />
+            </span>
+            <input name="name" required maxLength={300} autoComplete="organization" value={form.name} onChange={(event) => update("name", event.target.value)} />
+          </label>
+          <label className="field">
+            <span>
+              <LocalizedText text={"Contact person"} />
+            </span>
+            <input name="contact" maxLength={200} autoComplete="name" value={form.contact} onChange={(event) => update("contact", event.target.value)} />
+          </label>
+          <label className="field">
+            <span>
+              <LocalizedText text={"Phone"} />
+            </span>
+            <input name="phone" type="tel" maxLength={100} autoComplete="tel" value={form.phone} onChange={(event) => update("phone", event.target.value)} />
+          </label>
+          <label className="field span-2">
+            <span>
+              <LocalizedText text={"Email"} />
+            </span>
+            <input name="email" type="email" maxLength={256} autoComplete="email" value={form.email} onChange={(event) => update("email", event.target.value)} />
+          </label>
+          <label className="field span-2">
+            <span>
+              <LocalizedText text={"Brands"} />
+            </span>
+            <input name="brands" maxLength={10099} placeholder="Siemens, Omron, SMC" value={form.brands} onChange={(event) => update("brands", event.target.value)} />
+            <small>
+              <LocalizedText text={"คั่นแต่ละ Brand ด้วย comma; สูงสุด 100 รายการ และรายการละ 100 ตัวอักษร"} />
+            </small>
+          </label>
+        </div>
+      </form>
+    </Modal>
+  );
 }
 
 function InventoryItemMasterTab({ bootstrap, canWrite, notify, refreshBootstrap }: MasterTabProps) {
   const [createOpen, setCreateOpen] = useState(false);
   const [revision, setRevision] = useState(0);
-  return <>
-    <Toolbar><span className="muted"><LocalizedText text={"ทะเบียนสินค้าใช้ร่วมกับ Inventory · การเพิ่มสินค้าไม่เพิ่มยอด Stock"} /></span>{canWrite ? <button className="btn primary" type="button" onClick={() => setCreateOpen(true)}><Icon name="plus" /><LocalizedText text={"Add inventory item"} /></button> : null}</Toolbar>
-    {bootstrap.permissions.includes("inventory.read") ? <InventoryMasterList key={revision} /> :
-    <Panel title="Inventory item rules" subtitle="ข้อมูลตั้งต้นสำหรับ Stock ledger">
-      <div className="settings-list">
-        <div><span className="setting-icon blue"><Icon name="package" /></span><span><strong><LocalizedText text={"Stable item code"} /></strong><small><LocalizedText text={"รหัส Item ต้องไม่ซ้ำ และรองรับตัวอักษร ตัวเลข . _ / -"} /></small></span></div>
-        <div><span className="setting-icon green"><Icon name="database" /></span><span><strong><LocalizedText text={"Opening balance is separate"} /></strong><small><LocalizedText text={"การสร้าง Master ไม่เพิ่มยอด Stock; ยอดคงเหลือมาจาก Stock ledger เท่านั้น"} /></small></span></div>
-        <div><span className="setting-icon amber"><Icon name="truck" /></span><span><strong>{bootstrap.suppliers.length} <LocalizedText text={"active suppliers"} /></strong><small><LocalizedText text={"Preferred supplier เป็นตัวเลือก ไม่บังคับสำหรับการสร้าง Item"} /></small></span></div>
-      </div>
-    </Panel>}
-    {createOpen ? <Modal title="Add inventory item" size="lg" onClose={() => setCreateOpen(false)}><InventoryItemCreateForm bootstrap={bootstrap} notify={(message) => { setCreateOpen(false); setRevision((value) => value + 1); notify(message); }} refreshBootstrap={refreshBootstrap} /></Modal> : null}
-  </>;
+  return (
+    <>
+      <Toolbar>
+        <span className="muted">
+          <LocalizedText text={"ทะเบียนสินค้าใช้ร่วมกับ Inventory · การเพิ่มสินค้าไม่เพิ่มยอด Stock"} />
+        </span>
+        {canWrite ? (
+          <button className="btn primary" type="button" onClick={() => setCreateOpen(true)}>
+            <Icon name="plus" />
+            <LocalizedText text={"Add inventory item"} />
+          </button>
+        ) : null}
+      </Toolbar>
+      {bootstrap.permissions.includes("inventory.read") ? (
+        <InventoryMasterList key={revision} />
+      ) : (
+        <Panel title="Inventory item rules" subtitle="ข้อมูลตั้งต้นสำหรับ Stock ledger">
+          <div className="settings-list">
+            <div>
+              <span className="setting-icon blue">
+                <Icon name="package" />
+              </span>
+              <span>
+                <strong>
+                  <LocalizedText text={"Stable item code"} />
+                </strong>
+                <small>
+                  <LocalizedText text={"รหัส Item ต้องไม่ซ้ำ และรองรับตัวอักษร ตัวเลข . _ / -"} />
+                </small>
+              </span>
+            </div>
+            <div>
+              <span className="setting-icon green">
+                <Icon name="database" />
+              </span>
+              <span>
+                <strong>
+                  <LocalizedText text={"Opening balance is separate"} />
+                </strong>
+                <small>
+                  <LocalizedText text={"การสร้าง Master ไม่เพิ่มยอด Stock; ยอดคงเหลือมาจาก Stock ledger เท่านั้น"} />
+                </small>
+              </span>
+            </div>
+            <div>
+              <span className="setting-icon amber">
+                <Icon name="truck" />
+              </span>
+              <span>
+                <strong>
+                  {bootstrap.suppliers.length} <LocalizedText text={"active suppliers"} />
+                </strong>
+                <small>
+                  <LocalizedText text={"Preferred supplier เป็นตัวเลือก ไม่บังคับสำหรับการสร้าง Item"} />
+                </small>
+              </span>
+            </div>
+          </div>
+        </Panel>
+      )}
+      {createOpen ? (
+        <Modal title="Add inventory item" size="lg" onClose={() => setCreateOpen(false)}>
+          <InventoryItemCreateForm
+            bootstrap={bootstrap}
+            notify={(message) => {
+              setCreateOpen(false);
+              setRevision((value) => value + 1);
+              notify(message);
+            }}
+            refreshBootstrap={refreshBootstrap}
+          />
+        </Modal>
+      ) : null}
+    </>
+  );
 }
 
 function InventoryMasterList() {
@@ -1760,23 +4123,111 @@ function InventoryMasterList() {
   const [retry, setRetry] = useState(0);
   useEffect(() => {
     let cancelled = false;
-    void listInventory({}).then((result) => { if (!cancelled) { setItems(result); setError(""); } })
-      .catch((reason) => { if (!cancelled) setError(toError(reason)); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
+    void listInventory({})
+      .then((result) => {
+        if (!cancelled) {
+          setItems(result);
+          setError("");
+        }
+      })
+      .catch((reason) => {
+        if (!cancelled) setError(toError(reason));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [retry]);
   const filtered = items.filter((item) => [item.itemCode, item.partNumber, item.description, item.brand, item.location].join(" ").toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   const resolvedPage = Math.min(page, pageCount);
   const from = filtered.length ? (resolvedPage - 1) * pageSize + 1 : 0;
   const to = Math.min(resolvedPage * pageSize, filtered.length);
-  return <>
-    <Toolbar><SearchInput link="q" value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder="Search item code, part number, description or brand…" /></Toolbar>
-    {error ? <LoadError message={error} retry={() => { setLoading(true); setRetry((value) => value + 1); }} /> : null}
-    <Panel title={`${filtered.length} inventory items`} subtitle="ข้อมูลสินค้าอ้างอิง · ดูยอดคงเหลือและการเคลื่อนไหวที่เมนู Inventory" flush>
-      {loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading…"} /></div> : filtered.length ? <div className="table-wrap"><TablePageSize value={pageSize} onChange={(value) => { setPageSize(value); setPage(1); }} /><table><thead><tr><th><LocalizedText text={"Item code"} /></th><th><LocalizedText text={"Part no."} /></th><th><LocalizedText text={"Description"} /></th><th><LocalizedText text={"Brand"} /></th><th><LocalizedText text={"Unit"} /></th><th><LocalizedText text={"Location"} /></th></tr></thead><tbody>{filtered.slice(from - 1, to).map((item) => <tr key={item.itemId}><td><strong className="mono">{item.itemCode}</strong></td><td>{item.partNumber || "—"}</td><td>{item.description}</td><td>{item.brand || "—"}</td><td>{item.unit}</td><td>{item.location || "—"}</td></tr>)}</tbody></table><Pagination page={resolvedPage} pageCount={pageCount} from={from} to={to} total={filtered.length} onPage={setPage} /></div> : !error ? <EmptyState icon="package" title="No inventory item found" message="ลองเปลี่ยนคำค้นหา หรือเพิ่มข้อมูลสินค้า" /> : null}
-    </Panel>
-  </>;
+  return (
+    <>
+      <Toolbar>
+        <SearchInput
+          link="q"
+          value={search}
+          onChange={(value) => {
+            setSearch(value);
+            setPage(1);
+          }}
+          placeholder="Search item code, part number, description or brand…"
+        />
+      </Toolbar>
+      {error ? (
+        <LoadError
+          message={error}
+          retry={() => {
+            setLoading(true);
+            setRetry((value) => value + 1);
+          }}
+        />
+      ) : null}
+      <Panel title={`${filtered.length} inventory items`} subtitle="ข้อมูลสินค้าอ้างอิง · ดูยอดคงเหลือและการเคลื่อนไหวที่เมนู Inventory" flush>
+        {loading ? (
+          <div className="empty">
+            <span className="spinner" />
+            <LocalizedText text={"Loading…"} />
+          </div>
+        ) : filtered.length ? (
+          <div className="table-wrap">
+            <TablePageSize
+              value={pageSize}
+              onChange={(value) => {
+                setPageSize(value);
+                setPage(1);
+              }}
+            />
+            <table>
+              <thead>
+                <tr>
+                  <th>
+                    <LocalizedText text={"Item code"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Part no."} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Description"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Brand"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Unit"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Location"} />
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.slice(from - 1, to).map((item) => (
+                  <tr key={item.itemId}>
+                    <td>
+                      <strong className="mono">{item.itemCode}</strong>
+                    </td>
+                    <td>{item.partNumber || "—"}</td>
+                    <td>{item.description}</td>
+                    <td>{item.brand || "—"}</td>
+                    <td>{item.unit}</td>
+                    <td>{item.location || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <Pagination page={resolvedPage} pageCount={pageCount} from={from} to={to} total={filtered.length} onPage={setPage} />
+          </div>
+        ) : !error ? (
+          <EmptyState icon="package" title="No inventory item found" message="ลองเปลี่ยนคำค้นหา หรือเพิ่มข้อมูลสินค้า" />
+        ) : null}
+      </Panel>
+    </>
+  );
 }
 
 function InventoryItemCreateForm({ bootstrap, notify, refreshBootstrap }: Pick<CommonProps, "bootstrap" | "notify" | "refreshBootstrap">) {
@@ -1801,28 +4252,96 @@ function InventoryItemCreateForm({ bootstrap, notify, refreshBootstrap }: Pick<C
     void submit(form, () => createInventoryItem(input), `Inventory item ${input.itemCode.toUpperCase()} created`);
   };
 
-  return <Panel title="Add inventory item" subtitle="สร้าง Material master โดยไม่สร้างยอด Stock เริ่มต้น">
-    <form onSubmit={onSubmit}>
-      <MasterFormError message={error} />
-      <div className="form-grid two">
-        <label className="field"><span><LocalizedText text={"Item code *"} /></span><input name="itemCode" required maxLength={100} pattern="[A-Za-z0-9][A-Za-z0-9._/-]*" autoCapitalize="characters" autoComplete="off" placeholder="MAT-001" /></label>
-        <label className="field"><span><LocalizedText text={"Part number"} /></span><input name="partNumber" maxLength={200} autoComplete="off" /></label>
-        <label className="field span-2"><span><LocalizedText text={"Description *"} /></span><textarea name="description" required maxLength={500} /></label>
-        <label className="field"><span><LocalizedText text={"Brand"} /></span><input name="brand" maxLength={100} /></label>
-        <label className="field"><span><LocalizedText text={"Unit *"} /></span><input name="unit" required maxLength={50} defaultValue="pcs" /></label>
-        <label className="field"><span><LocalizedText text={"Location"} /></span><input name="location" maxLength={100} /></label>
-        <label className="field"><span><LocalizedText text={"Preferred supplier"} /></span><select name="preferredSupplierId" defaultValue=""><option value=""><LocalizedText text={"No preferred supplier"} /></option>{bootstrap.suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.code} — {supplier.name}</option>)}</select></label>
-        <label className="field"><span><LocalizedText text={"Reorder level *"} /></span><input name="reorderLevel" type="number" required min="0" max="999999999999999.9999" step="0.0001" defaultValue="0" /></label>
-        <label className="field"><span><LocalizedText text={"Average unit cost (THB) *"} /></span><input name="averageUnitCost" type="number" required min="0" max="999999999999999.9999" step="0.0001" defaultValue="0" /></label>
-        <label className="field"><span><LocalizedText text={"Lead time (days) *"} /></span><input name="leadTimeDays" type="number" required min="0" max="2147483647" step="1" defaultValue="0" /></label>
-      </div>
-      <div className="row" style={{ justifyContent: "flex-end", marginTop: 14 }}><button className="btn primary" type="submit" disabled={busy}><Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : "Create inventory item"}</button></div>
-    </form>
-  </Panel>;
+  return (
+    <Panel title="Add inventory item" subtitle="สร้าง Material master โดยไม่สร้างยอด Stock เริ่มต้น">
+      <form onSubmit={onSubmit}>
+        <MasterFormError message={error} />
+        <div className="form-grid two">
+          <label className="field">
+            <span>
+              <LocalizedText text={"Item code *"} />
+            </span>
+            <input name="itemCode" required maxLength={100} pattern="[A-Za-z0-9][A-Za-z0-9._/-]*" autoCapitalize="characters" autoComplete="off" placeholder="MAT-001" />
+          </label>
+          <label className="field">
+            <span>
+              <LocalizedText text={"Part number"} />
+            </span>
+            <input name="partNumber" maxLength={200} autoComplete="off" />
+          </label>
+          <label className="field span-2">
+            <span>
+              <LocalizedText text={"Description *"} />
+            </span>
+            <textarea name="description" required maxLength={500} />
+          </label>
+          <label className="field">
+            <span>
+              <LocalizedText text={"Brand"} />
+            </span>
+            <input name="brand" maxLength={100} />
+          </label>
+          <label className="field">
+            <span>
+              <LocalizedText text={"Unit *"} />
+            </span>
+            <input name="unit" required maxLength={50} defaultValue="pcs" />
+          </label>
+          <label className="field">
+            <span>
+              <LocalizedText text={"Location"} />
+            </span>
+            <input name="location" maxLength={100} />
+          </label>
+          <label className="field">
+            <span>
+              <LocalizedText text={"Preferred supplier"} />
+            </span>
+            <select name="preferredSupplierId" defaultValue="">
+              <option value="">
+                <LocalizedText text={"No preferred supplier"} />
+              </option>
+              {bootstrap.suppliers.map((supplier) => (
+                <option key={supplier.id} value={supplier.id}>
+                  {supplier.code} — {supplier.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            <span>
+              <LocalizedText text={"Reorder level *"} />
+            </span>
+            <input name="reorderLevel" type="number" required min="0" max="999999999999999.9999" step="0.0001" defaultValue="0" />
+          </label>
+          <label className="field">
+            <span>
+              <LocalizedText text={"Average unit cost (THB) *"} />
+            </span>
+            <input name="averageUnitCost" type="number" required min="0" max="999999999999999.9999" step="0.0001" defaultValue="0" />
+          </label>
+          <label className="field">
+            <span>
+              <LocalizedText text={"Lead time (days) *"} />
+            </span>
+            <input name="leadTimeDays" type="number" required min="0" max="2147483647" step="1" defaultValue="0" />
+          </label>
+        </div>
+        <div className="row" style={{ justifyContent: "flex-end", marginTop: 14 }}>
+          <button className="btn primary" type="submit" disabled={busy}>
+            <Icon name="check" />
+            {busy ? <LocalizedText text={"Saving…"} /> : "Create inventory item"}
+          </button>
+        </div>
+      </form>
+    </Panel>
+  );
 }
 
 const SIGN_IN_STATUS_LABEL: Record<SignInRequest["status"], string> = {
-  new: "SignIn.statusNew", registered: "SignIn.statusRegistered", linkedElsewhere: "SignIn.statusLinkedElsewhere",
+  new: "SignIn.statusNew",
+  registered: "SignIn.statusRegistered",
+  linkedElsewhere: "SignIn.statusLinkedElsewhere",
 };
 /** The engineering departments, spelled exactly as team scoping compares them, and the engineer levels. */
 const EMPLOYEE_DEPARTMENTS = ["IoT Engineer Dept.", "Application Engineer Dept.", "Mechanical Engineer Dept.", "Electrical Engineer Dept.", "System Architect & System Engineer Dept."];
@@ -1830,31 +4349,67 @@ const EMPLOYEE_LEVELS = ["Junior Engineer", "Middle Engineer", "Senior Engineer"
 const OTHER_CHOICE = "__other__";
 
 /** A real dropdown: the standard values first, then any others already in use, and "Other" to type one that is new. */
-function ChoiceSelect({ value, standard, inUse, placeholder, onChange }: {
-  value: string; standard: string[]; inUse: string[]; placeholder: string; onChange: (value: string) => void;
-}) {
+function ChoiceSelect({ value, standard, inUse, placeholder, onChange }: { value: string; standard: string[]; inUse: string[]; placeholder: string; onChange: (value: string) => void }) {
   const { t } = useLanguage();
   const [typing, setTyping] = useState(false);
   const others = [...new Set([...inUse, value].filter((item) => item && !standard.includes(item)))].sort((a, b) => a.localeCompare(b));
-  if (typing) return <>
-    <input required maxLength={100} value={value} onChange={(event) => onChange(event.target.value)} />
-    <button type="button" className="btn ghost sm" onClick={() => setTyping(false)}>{t("Employee.backToList")}</button>
-  </>;
-  return <select required value={value} onChange={(event) => {
-    if (event.target.value === OTHER_CHOICE) { setTyping(true); onChange(""); } else onChange(event.target.value);
-  }}>
-    {!value ? <option value="">{t(placeholder)}</option> : null}
-    {standard.map((item) => <option key={item} value={item}>{item}</option>)}
-    {others.map((item) => <option key={item} value={item}>{item}</option>)}
-    <option value={OTHER_CHOICE}>{t("Employee.otherValue")}</option>
-  </select>;
+  if (typing)
+    return (
+      <>
+        <input required maxLength={100} value={value} onChange={(event) => onChange(event.target.value)} />
+        <button type="button" className="btn ghost sm" onClick={() => setTyping(false)}>
+          {t("Employee.backToList")}
+        </button>
+      </>
+    );
+  return (
+    <PgSelect
+      required
+      value={value}
+      onChange={(event) => {
+        if (event.target.value === OTHER_CHOICE) {
+          setTyping(true);
+          onChange("");
+        } else onChange(event.target.value);
+      }}
+    >
+      {!value ? (
+        <option value="" hidden>
+          {t(placeholder)}
+        </option>
+      ) : null}
+      {standard.map((item) => (
+        <option key={item} value={item}>
+          {item}
+        </option>
+      ))}
+      {others.map((item) => (
+        <option key={item} value={item}>
+          {item}
+        </option>
+      ))}
+      <option value={OTHER_CHOICE}>{t("Employee.otherValue")}</option>
+    </PgSelect>
+  );
 }
 
 // Department and job title start empty, so a new person is never filed under the IoT team by default.
 const EMPTY_EMPLOYEE: EmployeeInput = {
-  employeeNo: 0, nameEn: "", nameTh: "", department: "", jobTitle: "",
-  mobile: "", email: "", nickname: "", birthDate: "", uniformSize: "", shoeSize: "",
-  startWorkDate: businessDate(new Date()), endWorkDate: "", position: "Middle Engineer", isActive: true,
+  employeeNo: 0,
+  nameEn: "",
+  nameTh: "",
+  department: "",
+  jobTitle: "",
+  mobile: "",
+  email: "",
+  nickname: "",
+  birthDate: "",
+  uniformSize: "",
+  shoeSize: "",
+  startWorkDate: businessDate(new Date()),
+  endWorkDate: "",
+  position: "Middle Engineer",
+  isActive: true,
 };
 
 function employeeDuration(start: string, end: string | null, lang: "TH" | "EN" | "JP") {
@@ -1879,8 +4434,8 @@ function EmployeeMasterTab({ canWrite, notify }: { canWrite: boolean; notify: (m
   const [pageSize, setPageSize] = useState(50);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [reopenNew] = useState(() => canWrite ? draftKeys("employee:new:")[0] : undefined);
-  const [editing, setEditing] = useState<EmployeeRecord | "new" | null>(() => reopenNew ? "new" : null);
+  const [reopenNew] = useState(() => (canWrite ? draftKeys("employee:new:")[0] : undefined));
+  const [editing, setEditing] = useState<EmployeeRecord | "new" | null>(() => (reopenNew ? "new" : null));
   // Filled in from a sign-in request, so the employee is added with exactly the email that was tried.
   const [prefill, setPrefill] = useState<Partial<EmployeeInput> | null>(() => {
     const email = reopenNew?.slice("employee:new:".length);
@@ -1891,12 +4446,17 @@ function EmployeeMasterTab({ canWrite, notify }: { canWrite: boolean; notify: (m
   // Accounts the old first sign-in created (Admin, no department) that no employee record points at.
   const [unlinked, setUnlinked] = useState<UnlinkedAccount[]>([]);
   const load = useCallback(async () => {
-    setLoading(true); setError("");
+    setLoading(true);
+    setError("");
     try {
       const [list, requests, accounts] = await Promise.all([
-        listEmployees({ search, activeOnly }), canWrite ? listSignInRequests() : Promise.resolve([]), canWrite ? listUnlinkedAccounts() : Promise.resolve([]),
+        listEmployees({ search, activeOnly }),
+        canWrite ? listSignInRequests() : Promise.resolve([]),
+        canWrite ? listUnlinkedAccounts() : Promise.resolve([]),
       ]);
-      setEmployees(list); setSignInRequests(requests); setUnlinked(accounts);
+      setEmployees(list);
+      setSignInRequests(requests);
+      setUnlinked(accounts);
       // An employee left with unsaved changes opens again once the list is here (only on the first load).
       if (!reopenedEdit.current) {
         reopenedEdit.current = true;
@@ -1904,23 +4464,39 @@ function EmployeeMasterTab({ canWrite, notify }: { canWrite: boolean; notify: (m
         const match = list.find((employee) => ids.includes(employee.id));
         if (match) setEditing((current) => current ?? match);
       }
+    } catch (requestError) {
+      setError(toError(requestError));
+    } finally {
+      setLoading(false);
     }
-    catch (requestError) { setError(toError(requestError)); }
-    finally { setLoading(false); }
   }, [search, activeOnly, canWrite]);
   const dismiss = async (request: SignInRequest) => {
     if (!(await confirmDialog(t("SignIn.dismissConfirm").replace("{name}", request.name), { danger: true }))) return;
-    try { await dismissSignInRequest(request.subject); notify(t("SignIn.dismissed")); await load(); }
-    catch (requestError) { setError(toError(requestError)); }
+    try {
+      await dismissSignInRequest(request.subject);
+      notify(t("SignIn.dismissed"));
+      await load();
+    } catch (requestError) {
+      setError(toError(requestError));
+    }
   };
-  useEffect(() => { const timer = window.setTimeout(() => { void load(); }, 200); return () => window.clearTimeout(timer); }, [load]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void load();
+    }, 200);
+    return () => window.clearTimeout(timer);
+  }, [load]);
 
   const linkedAccounts = employees.filter((employee) => employee.accountActive !== null).length;
   const when = (value: string) => new Date(value).toLocaleString(lang === "TH" ? "th-TH" : lang === "JP" ? "ja-JP" : "en-GB");
   // An employee already has this email but does not point at the account: saving it links the account.
   const openEmployee = (account: UnlinkedAccount) => {
     const match = employees.find((employee) => employee.id === account.employeeId);
-    if (match) setEditing(match); else { setSearch(String(account.employeeNo)); setPage(1); }
+    if (match) setEditing(match);
+    else {
+      setSearch(String(account.employeeNo));
+      setPage(1);
+    }
   };
   const departments = new Set(employees.map((employee) => employee.department)).size;
   const pageCount = Math.max(1, Math.ceil(employees.length / pageSize));
@@ -1928,97 +4504,369 @@ function EmployeeMasterTab({ canWrite, notify }: { canWrite: boolean; notify: (m
   const from = employees.length ? (resolvedPage - 1) * pageSize + 1 : 0;
   const to = Math.min(resolvedPage * pageSize, employees.length);
   const visibleEmployees = employees.slice(from ? from - 1 : 0, to);
-  return <>
-    <Toolbar>
-      <SearchInput link="q" value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder={t("Search employee, nickname, email, department or position…")} />
-      <label className="checkbox-row"><input type="checkbox" checked={activeOnly} onChange={(event) => { setActiveOnly(event.target.checked); setPage(1); }} /><span>{t("Active employees only")}</span></label>
-      <button className="btn ghost" type="button" onClick={() => { void load(); }}><Icon name="refresh" />{t("Refresh")}</button>
-      {canWrite ? <button className="btn primary" type="button" onClick={() => { setPrefill(null); setEditing("new"); }}><Icon name="plus" />{t("New employee")}</button> : null}
-    </Toolbar>
-    <div className="kpi-grid three">
-      <KpiCard label={t("Employees")} value={employees.length} icon="users" tone="blue" />
-      <KpiCard label={t("Departments")} value={departments} icon="folder" tone="slate" />
-      <KpiCard label={t("Linked login accounts")} value={linkedAccounts} note={t("SignIn.linkedNote")} icon="shield" tone="green" />
-    </div>
-    {error ? <LoadError message={error} retry={() => { void load(); }} /> : null}
-    {canWrite && signInRequests.length ? <Panel title={`${t("SignIn.requestsTitle")} (${signInRequests.length})`} subtitle={t("SignIn.requestsSubtitle")} flush>
-      <div className="table-wrap"><table><thead><tr>
-        <th className="pg-acts"><span className="sr-only">{t("Actions")}</span></th><th>{t("Employee")}</th><th>{t("SignIn.signInEmail")}</th><th>{t("Status")}</th><th>{t("SignIn.lastAttempt")}</th>
-      </tr></thead><tbody>{signInRequests.map((request) => <tr key={request.subject}>
-        <td className="pg-acts">
-          {request.status === "new" ? <button className="pg-act" type="button" title={t("SignIn.addEmployee")} aria-label={`${t("SignIn.addEmployee")} ${request.name}`} onClick={() => { setPrefill({ nameEn: request.name, email: request.email }); setEditing("new"); }}><Icon name="plus" /></button> : null}
-          <button className="pg-act danger" type="button" title={t("SignIn.dismiss")} aria-label={`${t("SignIn.dismiss")} ${request.name}`} onClick={() => { void dismiss(request); }}><Icon name="x" /></button>
-        </td>
-        <td><div className="cell-primary"><strong>{request.name}</strong><span>{request.username}</span></div></td>
-        <td><strong className="mono">{request.email}</strong></td>
-        <td className="wrap"><Badge tone={request.status === "new" ? "amber" : request.status === "registered" ? "green" : "red"}>{t(SIGN_IN_STATUS_LABEL[request.status])}</Badge>
-          {request.status === "linkedElsewhere" ? <div className="muted">{t("SignIn.linkedElsewhereHint")}</div> : null}</td>
-        <td><div className="cell-primary"><strong>{new Date(request.lastAttemptAt).toLocaleString(lang === "TH" ? "th-TH" : lang === "JP" ? "ja-JP" : "en-GB")}</strong><span>{t("SignIn.attempts").replace("{n}", String(request.attempts))}</span></div></td>
-      </tr>)}</tbody></table></div>
-    </Panel> : null}
-    {canWrite && unlinked.length ? <Panel title={`${t("Employee.unlinkedTitle")} (${unlinked.length})`} subtitle={t("Employee.unlinkedSubtitle")} flush>
-      <div className="table-wrap"><table><thead><tr>
-        <th className="pg-acts"><span className="sr-only">{t("Actions")}</span></th><th>{t("Employee")}</th><th>{t("Role")}</th><th>{t("Department")}</th><th>{t("Employee.lastUsed")}</th>
-      </tr></thead><tbody>{unlinked.map((account) => <tr key={account.userId}>
-        <td className="pg-acts">{account.employeeId !== null
-          ? <button className="pg-act" type="button" title={t("Employee.openToLink").replace("{no}", String(account.employeeNo))} aria-label={t("Employee.openToLink").replace("{no}", String(account.employeeNo))} onClick={() => openEmployee(account)}><Icon name="edit" /></button>
-          : <button className="pg-act" type="button" title={t("SignIn.addEmployee")} aria-label={`${t("SignIn.addEmployee")} ${account.name}`} onClick={() => { setPrefill({ nameEn: account.name, email: account.email, department: account.department }); setEditing("new"); }}><Icon name="plus" /></button>}</td>
-        <td><div className="cell-primary"><strong>{account.name}</strong><span className="mono">{account.email}</span></div></td>
-        <td className="wrap"><Badge tone={account.role === "Admin" ? "red" : "slate"}>{account.role}</Badge>
-          {account.role === "Admin" ? <div className="muted">{t("Employee.unlinkedAdminHint")}</div> : null}</td>
-        <td>{account.department || t("Employee.noDepartment")}</td>
-        <td>{account.lastUsedAt ? when(account.lastUsedAt) : "—"}</td>
-      </tr>)}</tbody></table></div>
-    </Panel> : null}
-    <Panel title={`${employees.length} ${t("employees")}`} subtitle={t("Employee Master is stored in SQL Server; age and tenure are calculated from dates")} flush>
-      {employees.length ? <div className="table-wrap"><TablePageSize value={pageSize} onChange={(value) => { setPageSize(value); setPage(1); }} /><table><thead><tr>
-        {canWrite ? <th className="pg-acts"><span className="sr-only">{t("Actions")}</span></th> : null}<th>{t("Status")}</th><th>{t("Employee")}</th><th>{t("Email / mobile")}</th><th>{t("Department")}</th><th>{t("Level")}</th><th>{t("Job title")}</th><th>{t("Role")}</th><th>{t("Working time")}</th><th className="num">{t("Daily rate")}</th>
-      </tr></thead><tbody>{visibleEmployees.map((employee) => <tr key={employee.id}>
-        {canWrite ? <td className="pg-acts"><button className="pg-act" type="button" title={t("Edit")} aria-label={`${t("Edit")} ${employee.nameEn}`} onClick={() => setEditing(employee)}><Icon name="edit" /></button></td> : null}
-        <td><Badge tone={employee.isActive ? "green" : "slate"}>{t(employee.isActive ? "Active" : "Inactive")}</Badge></td>
-        <td><div className="cell-primary"><strong>{employee.nameEn}</strong><span>#{employee.employeeNo} <LocalizedText text={"·"} /> {employee.nickname || "—"}{employee.nameTh ? ` · ${employee.nameTh}` : ""}</span></div></td>
-        <td><div className="cell-primary"><strong>{employee.email}</strong><span>{employee.mobile || "—"}</span></div></td>
-        <td>{employee.department}</td><td><Badge>{employee.position}</Badge></td><td>{employee.jobTitle}</td>
-        <td>{employee.applicationRole ? <Badge tone={employee.accountActive ? "blue" : "red"}>{employee.applicationRole}</Badge> : <span className="muted">{t("Not provisioned")}</span>}</td>
-        <td>{employee.startWorkDate ? employeeDuration(employee.startWorkDate, employee.endWorkDate, lang) : "—"}</td>
-        <td className="num">{employee.dailyRate === null ? "—" : formatMoney(employee.dailyRate)}</td>
-      </tr>)}</tbody></table><Pagination page={resolvedPage} pageCount={pageCount} from={from} to={to} total={employees.length} onPage={setPage} /></div> : loading ? <div className="empty"><span className="spinner" />{t("Loading…")}</div> : !error ? <EmptyState icon="users" title={t("No employee found")} message={t("Add an employee or change the search filters")} /> : null}
-    </Panel>
-    {editing ? <EmployeeModal employee={editing === "new" ? null : editing} prefill={editing === "new" ? prefill : null} departments={employees.map((employee) => employee.department)} positions={employees.map((employee) => employee.position)} onClose={() => setEditing(null)} onSaved={async (message) => { setEditing(null); setPrefill(null); await load(); notify(message); }} /> : null}
-  </>;
+  return (
+    <>
+      <Toolbar>
+        <SearchInput
+          link="q"
+          value={search}
+          onChange={(value) => {
+            setSearch(value);
+            setPage(1);
+          }}
+          placeholder={t("Search employee, nickname, email, department or position…")}
+        />
+        <label className="checkbox-row">
+          <input
+            type="checkbox"
+            checked={activeOnly}
+            onChange={(event) => {
+              setActiveOnly(event.target.checked);
+              setPage(1);
+            }}
+          />
+          <span>{t("Active employees only")}</span>
+        </label>
+        <button
+          className="btn ghost"
+          type="button"
+          onClick={() => {
+            void load();
+          }}
+        >
+          <Icon name="refresh" />
+          {t("Refresh")}
+        </button>
+        {canWrite ? (
+          <button
+            className="btn primary"
+            type="button"
+            onClick={() => {
+              setPrefill(null);
+              setEditing("new");
+            }}
+          >
+            <Icon name="plus" />
+            {t("New employee")}
+          </button>
+        ) : null}
+      </Toolbar>
+      <div className="kpi-grid three">
+        <KpiCard label={t("Employees")} value={employees.length} icon="users" tone="blue" />
+        <KpiCard label={t("Departments")} value={departments} icon="folder" tone="slate" />
+        <KpiCard label={t("Linked login accounts")} value={linkedAccounts} note={t("SignIn.linkedNote")} icon="shield" tone="green" />
+      </div>
+      {error ? (
+        <LoadError
+          message={error}
+          retry={() => {
+            void load();
+          }}
+        />
+      ) : null}
+      {canWrite && signInRequests.length ? (
+        <Panel title={`${t("SignIn.requestsTitle")} (${signInRequests.length})`} subtitle={t("SignIn.requestsSubtitle")} flush>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th className="pg-acts">
+                    <span className="sr-only">{t("Actions")}</span>
+                  </th>
+                  <th>{t("Employee")}</th>
+                  <th>{t("SignIn.signInEmail")}</th>
+                  <th>{t("Status")}</th>
+                  <th>{t("SignIn.lastAttempt")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {signInRequests.map((request) => (
+                  <tr key={request.subject}>
+                    <td className="pg-acts">
+                      {request.status === "new" ? (
+                        <button
+                          className="pg-act"
+                          type="button"
+                          title={t("SignIn.addEmployee")}
+                          aria-label={`${t("SignIn.addEmployee")} ${request.name}`}
+                          onClick={() => {
+                            setPrefill({ nameEn: request.name, email: request.email });
+                            setEditing("new");
+                          }}
+                        >
+                          <Icon name="plus" />
+                        </button>
+                      ) : null}
+                      <button
+                        className="pg-act danger"
+                        type="button"
+                        title={t("SignIn.dismiss")}
+                        aria-label={`${t("SignIn.dismiss")} ${request.name}`}
+                        onClick={() => {
+                          void dismiss(request);
+                        }}
+                      >
+                        <Icon name="x" />
+                      </button>
+                    </td>
+                    <td>
+                      <div className="cell-primary">
+                        <strong>{request.name}</strong>
+                        <span>{request.username}</span>
+                      </div>
+                    </td>
+                    <td>
+                      <strong className="mono">{request.email}</strong>
+                    </td>
+                    <td className="wrap">
+                      <Badge tone={request.status === "new" ? "amber" : request.status === "registered" ? "green" : "red"}>{t(SIGN_IN_STATUS_LABEL[request.status])}</Badge>
+                      {request.status === "linkedElsewhere" ? <div className="muted">{t("SignIn.linkedElsewhereHint")}</div> : null}
+                    </td>
+                    <td>
+                      <div className="cell-primary">
+                        <strong>{new Date(request.lastAttemptAt).toLocaleString(lang === "TH" ? "th-TH" : lang === "JP" ? "ja-JP" : "en-GB")}</strong>
+                        <span>{t("SignIn.attempts").replace("{n}", String(request.attempts))}</span>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Panel>
+      ) : null}
+      {canWrite && unlinked.length ? (
+        <Panel title={`${t("Employee.unlinkedTitle")} (${unlinked.length})`} subtitle={t("Employee.unlinkedSubtitle")} flush>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th className="pg-acts">
+                    <span className="sr-only">{t("Actions")}</span>
+                  </th>
+                  <th>{t("Employee")}</th>
+                  <th>{t("Role")}</th>
+                  <th>{t("Department")}</th>
+                  <th>{t("Employee.lastUsed")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {unlinked.map((account) => (
+                  <tr key={account.userId}>
+                    <td className="pg-acts">
+                      {account.employeeId !== null ? (
+                        <button
+                          className="pg-act"
+                          type="button"
+                          title={t("Employee.openToLink").replace("{no}", String(account.employeeNo))}
+                          aria-label={t("Employee.openToLink").replace("{no}", String(account.employeeNo))}
+                          onClick={() => openEmployee(account)}
+                        >
+                          <Icon name="edit" />
+                        </button>
+                      ) : (
+                        <button
+                          className="pg-act"
+                          type="button"
+                          title={t("SignIn.addEmployee")}
+                          aria-label={`${t("SignIn.addEmployee")} ${account.name}`}
+                          onClick={() => {
+                            setPrefill({ nameEn: account.name, email: account.email, department: account.department });
+                            setEditing("new");
+                          }}
+                        >
+                          <Icon name="plus" />
+                        </button>
+                      )}
+                    </td>
+                    <td>
+                      <div className="cell-primary">
+                        <strong>{account.name}</strong>
+                        <span className="mono">{account.email}</span>
+                      </div>
+                    </td>
+                    <td className="wrap">
+                      <Badge tone={account.role === "Admin" ? "red" : "slate"}>{account.role}</Badge>
+                      {account.role === "Admin" ? <div className="muted">{t("Employee.unlinkedAdminHint")}</div> : null}
+                    </td>
+                    <td>{account.department || t("Employee.noDepartment")}</td>
+                    <td>{account.lastUsedAt ? when(account.lastUsedAt) : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Panel>
+      ) : null}
+      <Panel title={`${employees.length} ${t("employees")}`} subtitle={t("Employee Master is stored in SQL Server; age and tenure are calculated from dates")} flush>
+        {employees.length ? (
+          <div className="table-wrap">
+            <TablePageSize
+              value={pageSize}
+              onChange={(value) => {
+                setPageSize(value);
+                setPage(1);
+              }}
+            />
+            <table>
+              <thead>
+                <tr>
+                  {canWrite ? (
+                    <th className="pg-acts">
+                      <span className="sr-only">{t("Actions")}</span>
+                    </th>
+                  ) : null}
+                  <th>{t("Status")}</th>
+                  <th>{t("Employee")}</th>
+                  <th>{t("Email / mobile")}</th>
+                  <th>{t("Department")}</th>
+                  <th>{t("Level")}</th>
+                  <th>{t("Job title")}</th>
+                  <th>{t("Role")}</th>
+                  <th>{t("Working time")}</th>
+                  <th className="num">{t("Daily rate")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleEmployees.map((employee) => (
+                  <tr key={employee.id}>
+                    {canWrite ? (
+                      <td className="pg-acts">
+                        <button className="pg-act" type="button" title={t("Edit")} aria-label={`${t("Edit")} ${employee.nameEn}`} onClick={() => setEditing(employee)}>
+                          <Icon name="edit" />
+                        </button>
+                      </td>
+                    ) : null}
+                    <td>
+                      <Badge tone={employee.isActive ? "green" : "slate"}>{t(employee.isActive ? "Active" : "Inactive")}</Badge>
+                    </td>
+                    <td>
+                      <div className="cell-primary">
+                        <strong>{employee.nameEn}</strong>
+                        <span>
+                          #{employee.employeeNo} <LocalizedText text={"·"} /> {employee.nickname || "—"}
+                          {employee.nameTh ? ` · ${employee.nameTh}` : ""}
+                        </span>
+                      </div>
+                    </td>
+                    <td>
+                      <div className="cell-primary">
+                        <strong>{employee.email}</strong>
+                        <span>{employee.mobile || "—"}</span>
+                      </div>
+                    </td>
+                    <td>{employee.department}</td>
+                    <td>
+                      <Badge>{employee.position}</Badge>
+                    </td>
+                    <td>{employee.jobTitle}</td>
+                    <td>
+                      {employee.applicationRole ? <Badge tone={employee.accountActive ? "blue" : "red"}>{employee.applicationRole}</Badge> : <span className="muted">{t("Not provisioned")}</span>}
+                    </td>
+                    <td>{employee.startWorkDate ? employeeDuration(employee.startWorkDate, employee.endWorkDate, lang) : "—"}</td>
+                    <td className="num">{employee.dailyRate === null ? "—" : formatMoney(employee.dailyRate)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <Pagination page={resolvedPage} pageCount={pageCount} from={from} to={to} total={employees.length} onPage={setPage} />
+          </div>
+        ) : loading ? (
+          <div className="empty">
+            <span className="spinner" />
+            {t("Loading…")}
+          </div>
+        ) : !error ? (
+          <EmptyState icon="users" title={t("No employee found")} message={t("Add an employee or change the search filters")} />
+        ) : null}
+      </Panel>
+      {editing ? (
+        <EmployeeModal
+          employee={editing === "new" ? null : editing}
+          prefill={editing === "new" ? prefill : null}
+          departments={employees.map((employee) => employee.department)}
+          positions={employees.map((employee) => employee.position)}
+          onClose={() => setEditing(null)}
+          onSaved={async (message) => {
+            setEditing(null);
+            setPrefill(null);
+            await load();
+            notify(message);
+          }}
+        />
+      ) : null}
+    </>
+  );
 }
 
-function EmployeeModal({ employee, prefill = null, departments = [], positions = [], onClose, onSaved }: {
-  employee: EmployeeRecord | null; prefill?: Partial<EmployeeInput> | null;
+function EmployeeModal({
+  employee,
+  prefill = null,
+  departments = [],
+  positions = [],
+  onClose,
+  onSaved,
+}: {
+  employee: EmployeeRecord | null;
+  prefill?: Partial<EmployeeInput> | null;
   /** Departments and positions other employees already use, offered after the standard ones. */
-  departments?: string[]; positions?: string[];
-  onClose: () => void; onSaved: (message: string) => Promise<void>;
+  departments?: string[];
+  positions?: string[];
+  onClose: () => void;
+  onSaved: (message: string) => Promise<void>;
 }) {
   const { t } = useLanguage();
   const draftKey = employee ? `employee:edit:${employee.id}` : `employee:new:${prefill?.email ?? ""}`;
-  const [form, setForm] = useDraftField<EmployeeInput>(draftKey, "form", employee ? {
-    employeeNo: employee.employeeNo, nameEn: employee.nameEn, nameTh: employee.nameTh,
-    department: employee.department, jobTitle: employee.jobTitle, mobile: employee.mobile,
-    email: employee.email, nickname: employee.nickname, birthDate: employee.birthDate ?? "",
-    uniformSize: employee.uniformSize, shoeSize: employee.shoeSize, startWorkDate: employee.startWorkDate ?? "",
-    endWorkDate: employee.endWorkDate ?? "", position: employee.position, isActive: employee.isActive,
-  } : { ...EMPTY_EMPLOYEE, ...prefill });
-  const close = async () => { if (await confirmLeave(draftKey, leaveCopy(t))) onClose(); };
+  const [form, setForm] = useDraftField<EmployeeInput>(
+    draftKey,
+    "form",
+    employee
+      ? {
+          employeeNo: employee.employeeNo,
+          nameEn: employee.nameEn,
+          nameTh: employee.nameTh,
+          department: employee.department,
+          jobTitle: employee.jobTitle,
+          mobile: employee.mobile,
+          email: employee.email,
+          nickname: employee.nickname,
+          birthDate: employee.birthDate ?? "",
+          uniformSize: employee.uniformSize,
+          shoeSize: employee.shoeSize,
+          startWorkDate: employee.startWorkDate ?? "",
+          endWorkDate: employee.endWorkDate ?? "",
+          position: employee.position,
+          isActive: employee.isActive,
+        }
+      : { ...EMPTY_EMPLOYEE, ...prefill },
+  );
+  const close = async () => {
+    if (await confirmLeave(draftKey, leaveCopy(t))) onClose();
+  };
   const [busy, setBusy] = useState(false);
   const update = <K extends keyof EmployeeInput>(key: K, value: EmployeeInput[K]) => setForm((current) => ({ ...current, [key]: value }));
   const submit = async () => {
     setBusy(true);
     try {
-      const input: EmployeeInput = { ...form, nameTh: form.nameTh || undefined, mobile: form.mobile || undefined,
-        nickname: form.nickname || undefined, birthDate: form.birthDate || undefined,
-        uniformSize: form.uniformSize || undefined, shoeSize: form.shoeSize || undefined,
-        endWorkDate: form.endWorkDate || undefined };
+      const input: EmployeeInput = {
+        ...form,
+        nameTh: form.nameTh || undefined,
+        mobile: form.mobile || undefined,
+        nickname: form.nickname || undefined,
+        birthDate: form.birthDate || undefined,
+        uniformSize: form.uniformSize || undefined,
+        shoeSize: form.shoeSize || undefined,
+        endWorkDate: form.endWorkDate || undefined,
+      };
       if (employee) await updateEmployee(employee.id, { ...input, rowVersion: employee.rowVersion });
       else await createEmployee(input);
       clearDraft(draftKey);
       await onSaved(employee ? `${form.nameEn} updated` : `${form.nameEn} created`);
-    } catch (requestError) { void failureDialog(toError(requestError), t("Form.errorTitle")); }
-    finally { setBusy(false); }
+    } catch (requestError) {
+      void failureDialog(toError(requestError), t("Form.errorTitle"));
+    } finally {
+      setBusy(false);
+    }
   };
   const rules = [
     { invalid: !form.nameEn.trim(), at: '[name="nameEn"]', message: t("Form.required") },
@@ -2026,55 +4874,216 @@ function EmployeeModal({ employee, prefill = null, departments = [], positions =
     { invalid: !form.jobTitle.trim(), at: '[name="jobTitle"]', message: t("Form.required") },
     { invalid: Boolean(form.birthDate && form.startWorkDate && form.birthDate >= form.startWorkDate), at: '[data-bubble-anchor="birthday"]', message: t("Form.invalid") },
   ];
-  return <Modal title={employee ? "Edit employee" : "New employee"} subtitle="Employee profile is separate from application login access" size="lg" onClose={() => { void close(); }} footer={<>
-    <button className="btn ghost" type="button" onClick={() => { void close(); }}>{t("Cancel")}</button>
-    <button className="btn primary" type="submit" form="employee-master-form" disabled={busy}><Icon name="check" />{busy ? t("Saving…") : t("Save")}</button>
-  </>}>
-    <form id="employee-master-form" noValidate onSubmit={(event) => { event.preventDefault(); if (checkFields(event.currentTarget, t, rules)) void submit(); }}>
-      {employee?.masterLinked ? <div className="info-strip" role="note"><Icon name="database" />{t("Employee.masterLinked")}</div> : null}
-      <div className="form-grid two">
-        <label className="field"><span>{t("Employee No.")} *</span><input type="number" min="1" max="2147483647" required value={form.employeeNo || ""} onChange={(event) => update("employeeNo", Number(event.target.value))} /></label>
-        <label className="field"><span>{t("Nickname")}</span><input maxLength={100} value={form.nickname ?? ""} onChange={(event) => update("nickname", event.target.value)} /></label>
-        <label className="field"><span>{t("English name")} *</span><input name="nameEn" required maxLength={200} autoComplete="name" value={form.nameEn} onChange={(event) => update("nameEn", event.target.value)} /></label>
-        <label className="field"><span>{t("Thai name")}</span><input maxLength={200} value={form.nameTh ?? ""} onChange={(event) => update("nameTh", event.target.value)} /></label>
-        <label className="field"><span>{t("Email")} *</span><input name="email" required type="email" maxLength={256} autoComplete="email" value={form.email} onChange={(event) => update("email", event.target.value)} /></label>
-        <label className="field"><span>{t("Mobile")}</span><input type="tel" maxLength={50} autoComplete="tel" value={form.mobile ?? ""} onChange={(event) => update("mobile", event.target.value)} /></label>
-        <label className="field"><span>{t("Department")} *</span><ChoiceSelect value={form.department} standard={EMPLOYEE_DEPARTMENTS} inUse={departments} placeholder="Employee.chooseDepartment" onChange={(value) => update("department", value)} /></label>
-        <label className="field"><span>{t("Level / position")} *</span><ChoiceSelect value={form.position} standard={EMPLOYEE_LEVELS} inUse={positions} placeholder="Employee.chooseLevel" onChange={(value) => update("position", value)} /></label>
-        <label className="field span-2"><span>{t("Job title")} *</span><input name="jobTitle" required maxLength={500} value={form.jobTitle} onChange={(event) => update("jobTitle", event.target.value)} /></label>
-        <label className="field" data-bubble-anchor="birthday"><span>{t("Birthday")}</span><DateInput max={form.startWorkDate} value={form.birthDate ?? ""} onChange={(event) => update("birthDate", event.target.value)} /></label>
-        <label className="field"><span>{t("Start work")} *</span><DateInput required min={form.birthDate || undefined} value={form.startWorkDate} onChange={(event) => update("startWorkDate", event.target.value)} /></label>
-        <label className="field"><span>{t("End work")}</span><DateInput min={form.startWorkDate} value={form.endWorkDate ?? ""} onChange={(event) => update("endWorkDate", event.target.value)} /></label>
-        <label className="field"><span>{t("Uniform size")}</span><input maxLength={50} value={form.uniformSize ?? ""} onChange={(event) => update("uniformSize", event.target.value)} /></label>
-        <label className="field"><span>{t("Shoe size")}</span><input maxLength={50} value={form.shoeSize ?? ""} onChange={(event) => update("shoeSize", event.target.value)} /></label>
-        <label className="checkbox-row"><input type="checkbox" checked={form.isActive} onChange={(event) => update("isActive", event.target.checked)} /><span>{t("Active employee")}</span></label>
-      </div>
-      <div className="info-strip" role="note"><Icon name="shield" /><span>{t("SignIn.employeeAccessNote")}</span></div>
-    </form>
-  </Modal>;
+  return (
+    <Modal
+      title={employee ? "Edit employee" : "New employee"}
+      subtitle="Employee profile is separate from application login access"
+      size="lg"
+      onClose={() => {
+        void close();
+      }}
+      footer={
+        <>
+          <button
+            className="btn ghost"
+            type="button"
+            onClick={() => {
+              void close();
+            }}
+          >
+            {t("Cancel")}
+          </button>
+          <button className="btn primary" type="submit" form="employee-master-form" disabled={busy}>
+            <Icon name="check" />
+            {busy ? t("Saving…") : t("Save")}
+          </button>
+        </>
+      }
+    >
+      <form
+        id="employee-master-form"
+        noValidate
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (checkFields(event.currentTarget, t, rules)) void submit();
+        }}
+      >
+        {employee?.masterLinked ? (
+          <div className="info-strip" role="note">
+            <Icon name="database" />
+            {t("Employee.masterLinked")}
+          </div>
+        ) : null}
+        <div className="form-grid two">
+          <label className="field">
+            <span>{t("Employee No.")} *</span>
+            <input type="number" min="1" max="2147483647" required value={form.employeeNo || ""} onChange={(event) => update("employeeNo", Number(event.target.value))} />
+          </label>
+          <label className="field">
+            <span>{t("Nickname")}</span>
+            <input maxLength={100} value={form.nickname ?? ""} onChange={(event) => update("nickname", event.target.value)} />
+          </label>
+          <label className="field">
+            <span>{t("English name")} *</span>
+            <input name="nameEn" required maxLength={200} autoComplete="name" value={form.nameEn} onChange={(event) => update("nameEn", event.target.value)} />
+          </label>
+          <label className="field">
+            <span>{t("Thai name")}</span>
+            <input maxLength={200} value={form.nameTh ?? ""} onChange={(event) => update("nameTh", event.target.value)} />
+          </label>
+          <label className="field">
+            <span>{t("Email")} *</span>
+            <input name="email" required type="email" maxLength={256} autoComplete="email" value={form.email} onChange={(event) => update("email", event.target.value)} />
+          </label>
+          <label className="field">
+            <span>{t("Mobile")}</span>
+            <input type="tel" maxLength={50} autoComplete="tel" value={form.mobile ?? ""} onChange={(event) => update("mobile", event.target.value)} />
+          </label>
+          <label className="field">
+            <span>{t("Department")} *</span>
+            <ChoiceSelect value={form.department} standard={EMPLOYEE_DEPARTMENTS} inUse={departments} placeholder="Employee.chooseDepartment" onChange={(value) => update("department", value)} />
+          </label>
+          <label className="field">
+            <span>{t("Level / position")} *</span>
+            <ChoiceSelect value={form.position} standard={EMPLOYEE_LEVELS} inUse={positions} placeholder="Employee.chooseLevel" onChange={(value) => update("position", value)} />
+          </label>
+          <label className="field span-2">
+            <span>{t("Job title")} *</span>
+            <input name="jobTitle" required maxLength={500} value={form.jobTitle} onChange={(event) => update("jobTitle", event.target.value)} />
+          </label>
+          <label className="field" data-bubble-anchor="birthday">
+            <span>{t("Birthday")}</span>
+            <DateInput max={form.startWorkDate} value={form.birthDate ?? ""} onChange={(event) => update("birthDate", event.target.value)} />
+          </label>
+          <label className="field">
+            <span>{t("Start work")} *</span>
+            <DateInput required min={form.birthDate || undefined} value={form.startWorkDate} onChange={(event) => update("startWorkDate", event.target.value)} />
+          </label>
+          <label className="field">
+            <span>{t("End work")}</span>
+            <DateInput min={form.startWorkDate} value={form.endWorkDate ?? ""} onChange={(event) => update("endWorkDate", event.target.value)} />
+          </label>
+          <label className="field">
+            <span>{t("Uniform size")}</span>
+            <input maxLength={50} value={form.uniformSize ?? ""} onChange={(event) => update("uniformSize", event.target.value)} />
+          </label>
+          <label className="field">
+            <span>{t("Shoe size")}</span>
+            <input maxLength={50} value={form.shoeSize ?? ""} onChange={(event) => update("shoeSize", event.target.value)} />
+          </label>
+          <label className="checkbox-row">
+            <input type="checkbox" checked={form.isActive} onChange={(event) => update("isActive", event.target.checked)} />
+            <span>{t("Active employee")}</span>
+          </label>
+        </div>
+        <div className="info-strip" role="note">
+          <Icon name="shield" />
+          <span>{t("SignIn.employeeAccessNote")}</span>
+        </div>
+      </form>
+    </Modal>
+  );
 }
 
 type TeamMember = BootstrapData["team"][number];
 
 function TeamReferenceTab({ bootstrap, canManageRoles, notify, refreshBootstrap }: Pick<CommonProps, "bootstrap" | "notify" | "refreshBootstrap"> & { canManageRoles: boolean }) {
   const t = useUiText();
-  const [editing, setEditing] = useState<TeamMember | null>(() => canManageRoles ? bootstrap.team.find((member) => hasDraft(`role:${member.id}`)) ?? null : null);
-  return <>
-    <Panel title={`${bootstrap.team.length} ${t("active user accounts")}`} subtitle={t("System accounts and permission roles, separate from the employee register in Employees")} flush>
-      {bootstrap.team.length ? <div className="table-wrap"><table><thead><tr>{canManageRoles ? <th className="pg-acts"><span className="sr-only">{t("Actions")}</span></th> : null}<th><LocalizedText text={"Name"} /></th><th><LocalizedText text={"Email"} /></th><th><LocalizedText text={"Role"} /></th><th><LocalizedText text={"Department"} /></th><th><LocalizedText text={"Level"} /></th></tr></thead><tbody>{bootstrap.team.map((member) => <tr key={member.id}>{canManageRoles ? <td className="master-row-action"><button className="pg-act" type="button" title={t("Edit role")} aria-label={`${t("Edit role")} ${member.name}`} onClick={() => setEditing(member)}><Icon name="edit" /></button></td> : null}<td><div className="user-account-cell"><strong>{member.name}</strong>{member.id === bootstrap.user.id ? <small>{t("Current account")}</small> : null}</div></td><td>{member.email}</td><td><Badge tone={member.role === "Admin" ? "violet" : "blue"}>{member.role}</Badge></td><td>{member.department}</td><td>{member.level || "—"}</td></tr>)}</tbody></table></div> : <EmptyState icon="users" title="No active team member" message="Provision users before creating rate references" />}
-    </Panel>
-    {editing ? <UserRoleModal member={editing} isCurrentAccount={editing.id === bootstrap.user.id} onClose={() => setEditing(null)} onRolesChanged={async (message) => {
-      await refreshBootstrap();
-      notify(message);
-    }} onSaved={async (role) => {
-      await refreshBootstrap();
-      notify(t("Application role updated to {role}").replace("{role}", role));
-      setEditing(null);
-    }} /> : null}
-  </>;
+  const [editing, setEditing] = useState<TeamMember | null>(() => (canManageRoles ? (bootstrap.team.find((member) => hasDraft(`role:${member.id}`)) ?? null) : null));
+  return (
+    <>
+      <Panel title={`${bootstrap.team.length} ${t("active user accounts")}`} subtitle={t("System accounts and permission roles, separate from the employee register in Employees")} flush>
+        {bootstrap.team.length ? (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  {canManageRoles ? (
+                    <th className="pg-acts">
+                      <span className="sr-only">{t("Actions")}</span>
+                    </th>
+                  ) : null}
+                  <th>
+                    <LocalizedText text={"Name"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Email"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Role"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Department"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Level"} />
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {bootstrap.team.map((member) => (
+                  <tr key={member.id}>
+                    {canManageRoles ? (
+                      <td className="master-row-action">
+                        <button className="pg-act" type="button" title={t("Edit role")} aria-label={`${t("Edit role")} ${member.name}`} onClick={() => setEditing(member)}>
+                          <Icon name="edit" />
+                        </button>
+                      </td>
+                    ) : null}
+                    <td>
+                      <div className="user-account-cell">
+                        <strong>{member.name}</strong>
+                        {member.id === bootstrap.user.id ? <small>{t("Current account")}</small> : null}
+                      </div>
+                    </td>
+                    <td>{member.email}</td>
+                    <td>
+                      <Badge tone={member.role === "Admin" ? "violet" : "blue"}>{member.role}</Badge>
+                    </td>
+                    <td>{member.department}</td>
+                    <td>{member.level || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <EmptyState icon="users" title="No active team member" message="Provision users before creating rate references" />
+        )}
+      </Panel>
+      {editing ? (
+        <UserRoleModal
+          member={editing}
+          isCurrentAccount={editing.id === bootstrap.user.id}
+          onClose={() => setEditing(null)}
+          onRolesChanged={async (message) => {
+            await refreshBootstrap();
+            notify(message);
+          }}
+          onSaved={async (role) => {
+            await refreshBootstrap();
+            notify(t("Application role updated to {role}").replace("{role}", role));
+            setEditing(null);
+          }}
+        />
+      ) : null}
+    </>
+  );
 }
 
-function UserRoleModal({ member, isCurrentAccount, onClose, onSaved, onRolesChanged }: { member: TeamMember; isCurrentAccount: boolean; onClose: () => void; onSaved: (role: string) => Promise<void>; onRolesChanged: (message: string) => Promise<void> }) {
+function UserRoleModal({
+  member,
+  isCurrentAccount,
+  onClose,
+  onSaved,
+  onRolesChanged,
+}: {
+  member: TeamMember;
+  isCurrentAccount: boolean;
+  onClose: () => void;
+  onSaved: (role: string) => Promise<void>;
+  onRolesChanged: (message: string) => Promise<void>;
+}) {
   const t = useUiText();
   const [roles, setRoles] = useState<AccessRole[]>([]);
   const draftKey = `role:${member.id}`;
@@ -2085,11 +5094,15 @@ function UserRoleModal({ member, isCurrentAccount, onClose, onSaved, onRolesChan
   const [additional, setAdditional] = useState<UserAdditionalRole[]>([]);
   const [extraCode, setExtraCode] = useDraftField(draftKey, "extraCode", "");
   const [extraReason, setExtraReason] = useDraftField(draftKey, "extraReason", "");
-  const close = async () => { if (await confirmLeave(draftKey, leaveCopy(t))) onClose(); };
+  const close = async () => {
+    if (await confirmLeave(draftKey, leaveCopy(t))) onClose();
+  };
   const [extraBusy, setExtraBusy] = useState("");
   const grantFields = useRef<HTMLDivElement>(null);
   const failureTitle = t("Form.errorTitle");
-  const fail = (requestError: unknown) => { void failureDialog(toError(requestError), failureTitle); };
+  const fail = (requestError: unknown) => {
+    void failureDialog(toError(requestError), failureTitle);
+  };
 
   const loadAdditional = useCallback(async () => {
     const result = await listUserRoles(member.id);
@@ -2099,10 +5112,21 @@ function UserRoleModal({ member, isCurrentAccount, onClose, onSaved, onRolesChan
   useEffect(() => {
     let active = true;
     void Promise.all([listAccessRoles(), listUserRoles(member.id)])
-      .then(([roleList, assignment]) => { if (active) { setRoles(roleList.items); setAdditional(assignment.additional); } })
-      .catch((requestError) => { if (active) void failureDialog(toError(requestError), failureTitle); })
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
+      .then(([roleList, assignment]) => {
+        if (active) {
+          setRoles(roleList.items);
+          setAdditional(assignment.additional);
+        }
+      })
+      .catch((requestError) => {
+        if (active) void failureDialog(toError(requestError), failureTitle);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, [member.id, failureTitle]);
   const selectedRole = roles.find((role) => role.code === roleCode);
   const submit = async () => {
@@ -2112,8 +5136,11 @@ function UserRoleModal({ member, isCurrentAccount, onClose, onSaved, onRolesChan
       setSaved(true);
       clearDraft(draftKey);
       await onSaved(result.role);
-    } catch (requestError) { fail(requestError); }
-    finally { setBusy(false); }
+    } catch (requestError) {
+      fail(requestError);
+    } finally {
+      setBusy(false);
+    }
   };
 
   // An additional role carries its whole permission set, so every grant records why.
@@ -2127,11 +5154,15 @@ function UserRoleModal({ member, isCurrentAccount, onClose, onSaved, onRolesChan
     try {
       await grantUserRole(member.id, { roleCode: extraCode, reason: extraReason.trim() });
       const granted = extraCode;
-      setExtraCode(""); setExtraReason("");
+      setExtraCode("");
+      setExtraReason("");
       await loadAdditional();
       await onRolesChanged(`${member.name}: + ${granted}`);
-    } catch (requestError) { fail(requestError); }
-    finally { setExtraBusy(""); }
+    } catch (requestError) {
+      fail(requestError);
+    } finally {
+      setExtraBusy("");
+    }
   };
 
   const revokeExtra = async (code: string) => {
@@ -2140,43 +5171,132 @@ function UserRoleModal({ member, isCurrentAccount, onClose, onSaved, onRolesChan
       await revokeUserRole(member.id, code);
       await loadAdditional();
       await onRolesChanged(`${member.name}: − ${code}`);
-    } catch (requestError) { fail(requestError); }
-    finally { setExtraBusy(""); }
+    } catch (requestError) {
+      fail(requestError);
+    } finally {
+      setExtraBusy("");
+    }
   };
 
   const grantable = roles.filter((role) => role.code !== member.role && !additional.some((held) => held.code === role.code));
-  return <Modal title={t("Edit application role")} subtitle={t("Role changes update system permissions, not employee profile data")} size="md" onClose={() => { if (!busy) void close(); }} footer={<>
-    <button className="btn ghost" type="button" disabled={busy} onClick={() => { void close(); }}>{t("Cancel")}</button>
-    <button className="btn primary" type="button" disabled={loading || busy || saved || roleCode === member.role || !selectedRole} onClick={() => { void submit(); }}><Icon name="shield" />{busy ? t("Saving…") : t("Save role")}</button>
-  </>}>
-    <div className="role-account-summary">
-      <div className="user-account-cell"><strong>{member.name}</strong><small>{member.email}</small></div>
-      <Badge tone={member.role === "Admin" ? "violet" : "blue"}>{member.role}</Badge>
-    </div>
-    <Field label={t("New application role")}>
-      <select disabled={loading || busy || saved} value={roleCode} onChange={(event) => setRoleCode(event.target.value)}>
-        {loading ? <option value={member.role}>{t("Loading roles…")}</option> : roles.map((role) => <option key={role.id} value={role.code}>{role.name}{role.name !== role.code ? ` (${role.code})` : ""}</option>)}
-      </select>
-      {selectedRole ? <small className="role-option-description">{selectedRole.description || selectedRole.code}</small> : null}
-    </Field>
-    <Panel title={t("Additional roles")} subtitle={t("Each additional role grants that role's full permissions on top of the primary role")} flush>
-      {additional.length ? <ul className="role-grant-list">{additional.map((role) => <li key={role.code}>
-        <div><Badge tone={role.code === "Admin" ? "violet" : "blue"}>{role.code}</Badge><small className="muted">{role.reason}</small></div>
-        <button className="btn ghost sm" type="button" disabled={busy || saved || extraBusy !== ""} onClick={() => { void revokeExtra(role.code); }}><Icon name="trash" />{extraBusy === role.code ? t("Removing…") : t("Remove role")}</button>
-      </li>)}</ul> : <p className="muted">{t("This account holds its primary role only.")}</p>}
-      <div className="form-grid two" ref={grantFields}>
-        <Field label={t("Add another role")}>
-          <select name="extraRole" disabled={loading || busy || saved || extraBusy !== ""} value={extraCode} onChange={(event) => setExtraCode(event.target.value)}>
-            <option value="">{t("Select a role")}</option>
-            {grantable.map((role) => <option key={role.id} value={role.code}>{role.name}{role.name !== role.code ? ` (${role.code})` : ""}</option>)}
-          </select>
-        </Field>
-        <Field label={t("Reason")}>
-          <input name="extraReason" maxLength={1000} value={extraReason} disabled={loading || busy || saved || extraBusy !== ""} onChange={(event) => setExtraReason(event.target.value)} />
-        </Field>
+  return (
+    <Modal
+      title={t("Edit application role")}
+      subtitle={t("Role changes update system permissions, not employee profile data")}
+      size="md"
+      onClose={() => {
+        if (!busy) void close();
+      }}
+      footer={
+        <>
+          <button
+            className="btn ghost"
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              void close();
+            }}
+          >
+            {t("Cancel")}
+          </button>
+          <button
+            className="btn primary"
+            type="button"
+            disabled={loading || busy || saved || roleCode === member.role || !selectedRole}
+            onClick={() => {
+              void submit();
+            }}
+          >
+            <Icon name="shield" />
+            {busy ? t("Saving…") : t("Save role")}
+          </button>
+        </>
+      }
+    >
+      <div className="role-account-summary">
+        <div className="user-account-cell">
+          <strong>{member.name}</strong>
+          <small>{member.email}</small>
+        </div>
+        <Badge tone={member.role === "Admin" ? "violet" : "blue"}>{member.role}</Badge>
       </div>
-      <button className="btn default" type="button" disabled={loading || busy || saved || extraBusy !== ""} onClick={() => { void grantExtra(); }}><Icon name="plus" />{extraBusy && extraBusy === extraCode ? t("Saving…") : t("Grant role")}</button>
-    </Panel>
-    <div className="info-strip amber" role="note"><Icon name="alertTriangle" /><span>{isCurrentAccount ? t("Changing your own role refreshes your navigation and permissions immediately after saving.") : t("The employee will receive the new permissions on their next request.")}</span></div>
-  </Modal>;
+      <Field label={t("New application role")}>
+        <PgSelect disabled={loading || busy || saved} value={roleCode} onChange={(event) => setRoleCode(event.target.value)}>
+          {loading ? (
+            <option value={member.role}>{t("Loading roles…")}</option>
+          ) : (
+            roles.map((role) => (
+              <option key={role.id} value={role.code}>
+                {role.name}
+                {role.name !== role.code ? ` (${role.code})` : ""}
+              </option>
+            ))
+          )}
+        </PgSelect>
+        {selectedRole ? <small className="role-option-description">{selectedRole.description || selectedRole.code}</small> : null}
+      </Field>
+      <Panel title={t("Additional roles")} subtitle={t("Each additional role grants that role's full permissions on top of the primary role")} flush>
+        {additional.length ? (
+          <ul className="role-grant-list">
+            {additional.map((role) => (
+              <li key={role.code}>
+                <div>
+                  <Badge tone={role.code === "Admin" ? "violet" : "blue"}>{role.code}</Badge>
+                  <small className="muted">{role.reason}</small>
+                </div>
+                <button
+                  className="btn ghost sm"
+                  type="button"
+                  disabled={busy || saved || extraBusy !== ""}
+                  onClick={() => {
+                    void revokeExtra(role.code);
+                  }}
+                >
+                  <Icon name="trash" />
+                  {extraBusy === role.code ? t("Removing…") : t("Remove role")}
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="muted">{t("This account holds its primary role only.")}</p>
+        )}
+        <div className="form-grid two" ref={grantFields}>
+          <Field label={t("Add another role")}>
+            <PgSelect name="extraRole" disabled={loading || busy || saved || extraBusy !== ""} value={extraCode} onChange={(event) => setExtraCode(event.target.value)}>
+              <option value="">{t("Select a role")}</option>
+              {grantable.map((role) => (
+                <option key={role.id} value={role.code}>
+                  {role.name}
+                  {role.name !== role.code ? ` (${role.code})` : ""}
+                </option>
+              ))}
+            </PgSelect>
+          </Field>
+          <Field label={t("Reason")}>
+            <input name="extraReason" maxLength={1000} value={extraReason} disabled={loading || busy || saved || extraBusy !== ""} onChange={(event) => setExtraReason(event.target.value)} />
+          </Field>
+        </div>
+        <button
+          className="btn default"
+          type="button"
+          disabled={loading || busy || saved || extraBusy !== ""}
+          onClick={() => {
+            void grantExtra();
+          }}
+        >
+          <Icon name="plus" />
+          {extraBusy && extraBusy === extraCode ? t("Saving…") : t("Grant role")}
+        </button>
+      </Panel>
+      <div className="info-strip amber" role="note">
+        <Icon name="alertTriangle" />
+        <span>
+          {isCurrentAccount
+            ? t("Changing your own role refreshes your navigation and permissions immediately after saving.")
+            : t("The employee will receive the new permissions on their next request.")}
+        </span>
+      </div>
+    </Modal>
+  );
 }

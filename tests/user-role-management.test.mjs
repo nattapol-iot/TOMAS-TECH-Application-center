@@ -11,7 +11,7 @@ test("User accounts exposes role editing only through the dedicated permission",
     readFile(new URL("backend-node/src/routes/bootstrap.ts", root), "utf8"),
   ]);
   assert.match(screen, /permissions\.includes\("admin\.manage_roles"\)/);
-  assert.match(screen, /canManageRoles \? <td className="master-row-action">/);
+  assert.match(screen, /canManageRoles \? \(\s*<td className="master-row-action">/);
   assert.match(screen, /<UserRoleModal/);
   assert.match(screen, /listAccessRoles\(\)/);
   assert.match(screen, /updateUserRole\(member\.id, \{ roleCode, rowVersion: member\.rowVersion \}\)/);

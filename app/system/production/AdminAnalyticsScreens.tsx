@@ -5,34 +5,39 @@ import { useT as useStaticCopy } from "../i18n";
 import { currentLocale, useT as useUiText } from "../i18n";
 import { LocalizedText } from "../LocalizedText";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { apiRequest, checkAdminStorage, createSalesCustomerContact, listSalesCustomerContacts, loadNasSettings, removeSalesCustomerContact, saveNasSettings, testNasConnection, updateSalesCustomerContact, type BootstrapData, type NasConnectionTestResult, type NasSettingsInput, type NasSettingsResult, type PagedResult, type ProjectSummary, type SalesCustomerContact, type SalesCustomerContactPage, type StorageCheckResult } from "../api-client";
+import {
+  apiRequest,
+  checkAdminStorage,
+  createSalesCustomerContact,
+  listSalesCustomerContacts,
+  loadNasSettings,
+  removeSalesCustomerContact,
+  saveNasSettings,
+  testNasConnection,
+  updateSalesCustomerContact,
+  type BootstrapData,
+  type NasConnectionTestResult,
+  type NasSettingsInput,
+  type NasSettingsResult,
+  type PagedResult,
+  type ProjectSummary,
+  type SalesCustomerContact,
+  type SalesCustomerContactPage,
+  type StorageCheckResult,
+} from "../api-client";
 import { canManageEngineeringRates, canViewEngineeringRates } from "../../../backend-node/src/engineering-rate-access";
 import type { BusinessCardExtraction } from "../../../lib/business-card";
 import { BusinessCardScanner } from "./BusinessCardScanner";
 import { ErpMasterPanel } from "./ErpMasterPanel";
 import { listAllProjectsByNumber } from "../project-overview-client";
 import { canonicalLocalizedName, contactNameLines, localizedNameLines, localizedNamesFromCard, type ContactTitles, type LocalizedNames } from "./customer-localized-names";
-import {
-  Badge,
-  EmptyState,
-  Field,
-  Icon,
-  KpiCard,
-  Modal,
-  PageHeader,
-  Pagination,
-  Panel,
-  SearchInput,
-  Select,
-  TablePageSize,
-  Tabs,
-  Toolbar,
-} from "../ui";
+import { Badge, EmptyState, Field, Icon, KpiCard, Modal, PageHeader, Pagination, Panel, SearchInput, Select, TablePageSize, Tabs, Toolbar } from "../ui";
 import { DateInput } from "../DateInput";
 import { PegasusScreen } from "./PegasusScreen";
 import { IS_TMT_ID_MODE } from "../tmt-id.constants";
 import { checkFields, failureDialog } from "./form-bubbles";
 import { clearDraft, hasDraft, useDraftField } from "./form-draft";
+import { PgSelect } from "./PegasusSelect";
 
 export type AdminAnalyticsProps = {
   bootstrap: BootstrapData;
@@ -188,16 +193,13 @@ type ProjectCostReport = {
 const API_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
 const BUSINESS_TIME_ZONE = process.env.NEXT_PUBLIC_BUSINESS_TIME_ZONE ?? "Asia/Bangkok";
 const EMPTY_PAGE = <T,>(): PagedResult<T> => ({ items: [], page: 1, pageSize: 25, total: 0 });
-const toError = (error: unknown) => error instanceof Error ? error.message : "The request could not be completed.";
+const toError = (error: unknown) => (error instanceof Error ? error.message : "The request could not be completed.");
 const formatMoney = (value: number) => new Intl.NumberFormat(currentLocale(), { style: "currency", currency: "THB", maximumFractionDigits: 2 }).format(value);
 const formatNumber = (value: number) => new Intl.NumberFormat(currentLocale(), { maximumFractionDigits: 2 }).format(value);
-const formatPercent = (value: number | null) => value === null ? "—" : `${formatNumber(value)}%`;
-const formatDate = (value: string | null) => value
-  ? new Intl.DateTimeFormat(currentLocale(), { dateStyle: "medium" }).format(new Date(`${value.slice(0, 10)}T00:00:00`))
-  : "—";
-const formatDateTime = (value: string | null) => value
-  ? new Intl.DateTimeFormat(currentLocale(), { dateStyle: "short", timeStyle: "short", timeZone: BUSINESS_TIME_ZONE }).format(new Date(value))
-  : "—";
+const formatPercent = (value: number | null) => (value === null ? "—" : `${formatNumber(value)}%`);
+const formatDate = (value: string | null) => (value ? new Intl.DateTimeFormat(currentLocale(), { dateStyle: "medium" }).format(new Date(`${value.slice(0, 10)}T00:00:00`)) : "—");
+const formatDateTime = (value: string | null) =>
+  value ? new Intl.DateTimeFormat(currentLocale(), { dateStyle: "short", timeStyle: "short", timeZone: BUSINESS_TIME_ZONE }).format(new Date(value)) : "—";
 const businessDate = (date: Date) => {
   const parts = new Intl.DateTimeFormat("en-CA", { timeZone: BUSINESS_TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(date);
   const value = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? "";
@@ -218,8 +220,18 @@ function LoadError({ message, retry }: { message: string; retry?: () => void }) 
   return (
     <div className="callout danger" role="alert">
       <Icon name="alertTriangle" />
-      <span><strong><LocalizedText text={"Could not load"} /></strong>{message}</span>
-      {retry ? <button className="btn ghost" type="button" onClick={retry}><Icon name="refresh" /><LocalizedText text={"Try again"} /></button> : null}
+      <span>
+        <strong>
+          <LocalizedText text={"Could not load"} />
+        </strong>
+        {message}
+      </span>
+      {retry ? (
+        <button className="btn ghost" type="button" onClick={retry}>
+          <Icon name="refresh" />
+          <LocalizedText text={"Try again"} />
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -243,7 +255,11 @@ export function ProductionCustomers({ bootstrap, notify, refreshBootstrap, onOpe
   const customers = useMemo(() => {
     const needle = search.trim().toLocaleLowerCase();
     if (!needle) return bootstrap.customers;
-    return bootstrap.customers.filter((customer) => `${customer.code} ${customer.name} ${customer.nameTh} ${customer.nameEn} ${customer.nameJa} ${customer.industry} ${customer.contact} ${customer.contactNameTh} ${customer.contactNameEn} ${customer.contactNameJa} ${customer.contactTitleTh ?? ""} ${customer.contactTitleEn ?? ""} ${customer.contactTitleJa ?? ""} ${customer.position ?? ""} ${customer.department ?? ""} ${customer.email} ${customer.phone} ${customer.site}`.toLocaleLowerCase().includes(needle));
+    return bootstrap.customers.filter((customer) =>
+      `${customer.code} ${customer.name} ${customer.nameTh} ${customer.nameEn} ${customer.nameJa} ${customer.industry} ${customer.contact} ${customer.contactNameTh} ${customer.contactNameEn} ${customer.contactNameJa} ${customer.contactTitleTh ?? ""} ${customer.contactTitleEn ?? ""} ${customer.contactTitleJa ?? ""} ${customer.position ?? ""} ${customer.department ?? ""} ${customer.email} ${customer.phone} ${customer.site}`
+        .toLocaleLowerCase()
+        .includes(needle),
+    );
   }, [bootstrap.customers, search]);
   const pageCount = Math.max(1, Math.ceil(customers.length / pageSize));
   const resolvedPage = Math.min(page, pageCount);
@@ -256,74 +272,220 @@ export function ProductionCustomers({ bootstrap, notify, refreshBootstrap, onOpe
   if (!canRead) return <PermissionNotice permission="master.read" />;
   return (
     <>
-      {!embedded ? <PageHeader
-        eyebrow="MASTER DATA"
-        title={uiText("Customers")}
-        subtitle="Customer master shared by inquiry, estimate and reporting."
-        actions={canWrite ? <button className="btn primary" type="button" onClick={() => setCreateOpen(true)}><Icon name="plus" /><LocalizedText text={"Add customer"} /></button> : undefined}
-      /> : null}
+      {!embedded ? (
+        <PageHeader
+          eyebrow="MASTER DATA"
+          title={uiText("Customers")}
+          subtitle="Customer master shared by inquiry, estimate and reporting."
+          actions={
+            canWrite ? (
+              <button className="btn primary" type="button" onClick={() => setCreateOpen(true)}>
+                <Icon name="plus" />
+                <LocalizedText text={"Add customer"} />
+              </button>
+            ) : undefined
+          }
+        />
+      ) : null}
       <Toolbar>
-        {embedded && canWrite ? <button className="btn primary" type="button" onClick={() => setCreateOpen(true)}><Icon name="plus" /><LocalizedText text={"Add customer"} /></button> : null}
-        <SearchInput link="q" value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder="Search customer code, name or industry…" />
+        {embedded && canWrite ? (
+          <button className="btn primary" type="button" onClick={() => setCreateOpen(true)}>
+            <Icon name="plus" />
+            <LocalizedText text={"Add customer"} />
+          </button>
+        ) : null}
+        <SearchInput
+          link="q"
+          value={search}
+          onChange={(value) => {
+            setSearch(value);
+            setPage(1);
+          }}
+          placeholder="Search customer code, name or industry…"
+        />
       </Toolbar>
       <ErpMasterPanel kind="customers" onChanged={refreshBootstrap} />
       <Panel title={`${customers.length} customers`} flush>
-        {customers.length ? <div className="table-wrap"><TablePageSize value={pageSize} onChange={(value) => { setPageSize(value); setPage(1); }} /><table>
-          <thead><tr><th><LocalizedText text={"Code"} /></th><th><LocalizedText text={"Customer"} /></th><th><LocalizedText text={"Industry"} /></th><th><LocalizedText text={"Main contact"} /></th><th><LocalizedText text={"Email"} /></th><th><LocalizedText text={"Phone"} /></th><th><LocalizedText text={"Site"} /></th><th className="num"><LocalizedText text={"Inquiries"} /></th><th className="num"><LocalizedText text={"Open estimates"} /></th><th><span className="sr-only"><LocalizedText text={"Actions"} /></span></th></tr></thead>
-          <tbody>{visibleCustomers.map((customer) => <tr key={customer.id}>
-            <td><strong className="mono">{customer.code}</strong>{customer.erpCode ? <> <span title={customer.erpCode}><Badge tone="green">{uiText("ERP")}</Badge></span></> : null}</td>
-            <td><LocalizedNameStack names={customer} fallback={customer.name} /></td>
-            <td>{customer.industry || "—"}</td>
-            <td>{customer.contact ? <LocalizedNameStack names={{ nameTh: customer.contactNameTh, nameEn: customer.contactNameEn, nameJa: customer.contactNameJa }} titles={{ titleTh: customer.contactTitleTh, titleEn: customer.contactTitleEn, titleJa: customer.contactTitleJa }} fallback={customer.contact} /> : "—"}{customer.position || customer.department ? <div className="muted">{[customer.position, customer.department].filter(Boolean).join(" · ")}</div> : null}</td>
-            <td className="muted">{customer.email || "—"}</td>
-            <td className="mono">{customer.phone || "—"}</td>
-            <td>{customer.site || "—"}</td>
-            <td className="num">{customer.inquiries}</td>
-            <td className="num">{customer.openEstimates}</td>
-            <td><div className="row-actions">
-              {canWrite ? <button className="icon-btn" type="button" aria-label={`Edit ${customer.name}`} onClick={() => setEditingCustomer(customer)}><Icon name="edit" /></button> : null}
-              <button className="icon-btn" type="button" aria-label={`People at ${customer.name}`} onClick={() => setContactsCustomer(customer)}><Icon name="users" /></button>
-              {onOpenInquiries ? <button className="icon-btn" type="button" aria-label={`Open inquiries for ${customer.name}`} onClick={onOpenInquiries}><Icon name="chevronRight" /></button> : null}
-            </div></td>
-          </tr>)}</tbody>
-        </table><Pagination page={resolvedPage} pageCount={pageCount} from={from} to={to} total={customers.length} onPage={setPage} /></div> : <EmptyState icon="users" title="No customer found" message="ปรับคำค้นหา หรือเพิ่มลูกค้ารายแรกเมื่อมีสิทธิ์ master.write" />}
+        {customers.length ? (
+          <div className="table-wrap">
+            <TablePageSize
+              value={pageSize}
+              onChange={(value) => {
+                setPageSize(value);
+                setPage(1);
+              }}
+            />
+            <table>
+              <thead>
+                <tr>
+                  <th>
+                    <LocalizedText text={"Code"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Customer"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Industry"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Main contact"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Email"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Phone"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Site"} />
+                  </th>
+                  <th className="num">
+                    <LocalizedText text={"Inquiries"} />
+                  </th>
+                  <th className="num">
+                    <LocalizedText text={"Open estimates"} />
+                  </th>
+                  <th>
+                    <span className="sr-only">
+                      <LocalizedText text={"Actions"} />
+                    </span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleCustomers.map((customer) => (
+                  <tr key={customer.id}>
+                    <td>
+                      <strong className="mono">{customer.code}</strong>
+                      {customer.erpCode ? (
+                        <>
+                          {" "}
+                          <span title={customer.erpCode}>
+                            <Badge tone="green">{uiText("ERP")}</Badge>
+                          </span>
+                        </>
+                      ) : null}
+                    </td>
+                    <td>
+                      <LocalizedNameStack names={customer} fallback={customer.name} />
+                    </td>
+                    <td>{customer.industry || "—"}</td>
+                    <td>
+                      {customer.contact ? (
+                        <LocalizedNameStack
+                          names={{ nameTh: customer.contactNameTh, nameEn: customer.contactNameEn, nameJa: customer.contactNameJa }}
+                          titles={{ titleTh: customer.contactTitleTh, titleEn: customer.contactTitleEn, titleJa: customer.contactTitleJa }}
+                          fallback={customer.contact}
+                        />
+                      ) : (
+                        "—"
+                      )}
+                      {customer.position || customer.department ? <div className="muted">{[customer.position, customer.department].filter(Boolean).join(" · ")}</div> : null}
+                    </td>
+                    <td className="muted">{customer.email || "—"}</td>
+                    <td className="mono">{customer.phone || "—"}</td>
+                    <td>{customer.site || "—"}</td>
+                    <td className="num">{customer.inquiries}</td>
+                    <td className="num">{customer.openEstimates}</td>
+                    <td>
+                      <div className="row-actions">
+                        {canWrite ? (
+                          <button className="icon-btn" type="button" aria-label={`Edit ${customer.name}`} onClick={() => setEditingCustomer(customer)}>
+                            <Icon name="edit" />
+                          </button>
+                        ) : null}
+                        <button className="icon-btn" type="button" aria-label={`People at ${customer.name}`} onClick={() => setContactsCustomer(customer)}>
+                          <Icon name="users" />
+                        </button>
+                        {onOpenInquiries ? (
+                          <button className="icon-btn" type="button" aria-label={`Open inquiries for ${customer.name}`} onClick={onOpenInquiries}>
+                            <Icon name="chevronRight" />
+                          </button>
+                        ) : null}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <Pagination page={resolvedPage} pageCount={pageCount} from={from} to={to} total={customers.length} onPage={setPage} />
+          </div>
+        ) : (
+          <EmptyState icon="users" title="No customer found" message="ปรับคำค้นหา หรือเพิ่มลูกค้ารายแรกเมื่อมีสิทธิ์ master.write" />
+        )}
       </Panel>
-      {createOpen ? <CustomerModal customer={null} onClose={() => setCreateOpen(false)} onSaved={async (code) => {
-        setCreateOpen(false);
-        await refreshBootstrap?.();
-        notify(`${code} created`);
-      }} /> : null}
-      {editingCustomer ? <CustomerModal customer={editingCustomer} onClose={() => setEditingCustomer(null)} onSaved={async (code) => {
-        setEditingCustomer(null);
-        await refreshBootstrap?.();
-        notify(`${code} updated`);
-      }} /> : null}
-      {contactsCustomer ? <CustomerContactsModal
-        customer={contactsCustomer}
-        canWrite={canWrite}
-        notify={notify}
-        onClose={() => setContactsCustomer(null)}
-        onChanged={async () => { await refreshBootstrap?.(); }}
-      /> : null}
+      {createOpen ? (
+        <CustomerModal
+          customer={null}
+          onClose={() => setCreateOpen(false)}
+          onSaved={async (code) => {
+            setCreateOpen(false);
+            await refreshBootstrap?.();
+            notify(`${code} created`);
+          }}
+        />
+      ) : null}
+      {editingCustomer ? (
+        <CustomerModal
+          customer={editingCustomer}
+          onClose={() => setEditingCustomer(null)}
+          onSaved={async (code) => {
+            setEditingCustomer(null);
+            await refreshBootstrap?.();
+            notify(`${code} updated`);
+          }}
+        />
+      ) : null}
+      {contactsCustomer ? (
+        <CustomerContactsModal
+          customer={contactsCustomer}
+          canWrite={canWrite}
+          notify={notify}
+          onClose={() => setContactsCustomer(null)}
+          onChanged={async () => {
+            await refreshBootstrap?.();
+          }}
+        />
+      ) : null}
     </>
   );
 }
 
 type ContactFormState = {
-  nameTh: string; nameEn: string; nameJa: string;
-  titleTh: string; titleEn: string; titleJa: string;
-  department: string; position: string; email: string; phone: string;
+  nameTh: string;
+  nameEn: string;
+  nameJa: string;
+  titleTh: string;
+  titleEn: string;
+  titleJa: string;
+  department: string;
+  position: string;
+  email: string;
+  phone: string;
 };
 
 const EMPTY_CONTACT_FORM: ContactFormState = {
-  nameTh: "", nameEn: "", nameJa: "",
-  titleTh: "", titleEn: "", titleJa: "",
-  department: "", position: "", email: "", phone: "",
+  nameTh: "",
+  nameEn: "",
+  nameJa: "",
+  titleTh: "",
+  titleEn: "",
+  titleJa: "",
+  department: "",
+  position: "",
+  email: "",
+  phone: "",
 };
 
 // A company keeps as many people as it needs. They belong to a site, so the form offers the
 // site list and falls back to the MAIN site the API creates for a company that has none.
-function CustomerContactsModal({ customer, canWrite, notify, onClose, onChanged }: {
+function CustomerContactsModal({
+  customer,
+  canWrite,
+  notify,
+  onClose,
+  onChanged,
+}: {
   customer: BootstrapData["customers"][number];
   canWrite: boolean;
   notify: (message: string) => void;
@@ -351,24 +513,42 @@ function CustomerContactsModal({ customer, canWrite, notify, onClose, onChanged 
       setLoading(false);
     }
   }, [customer.id]);
-  useEffect(() => { const timer = window.setTimeout(() => { void load(); }, 0); return () => window.clearTimeout(timer); }, [load]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void load();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [load]);
 
   const closeForm = () => {
-    setCreating(false); setEditing(null); setMakePrimary(false);
-    setForm(EMPTY_CONTACT_FORM); setSiteId("");
+    setCreating(false);
+    setEditing(null);
+    setMakePrimary(false);
+    setForm(EMPTY_CONTACT_FORM);
+    setSiteId("");
   };
   const openCreate = () => {
-    setEditing(null); setCreating(true); setMakePrimary(false);
+    setEditing(null);
+    setCreating(true);
+    setMakePrimary(false);
     setForm(EMPTY_CONTACT_FORM);
     setSiteId(page?.sites[0] ? String(page.sites[0].id) : "");
   };
   const openEdit = (contact: SalesCustomerContact) => {
-    setCreating(false); setEditing(contact); setMakePrimary(contact.isPrimary);
+    setCreating(false);
+    setEditing(contact);
+    setMakePrimary(contact.isPrimary);
     setForm({
-      nameTh: contact.nameTh, nameEn: contact.nameEn, nameJa: contact.nameJa,
-      titleTh: contact.titleTh, titleEn: contact.titleEn, titleJa: contact.titleJa,
-      department: contact.department, position: contact.position,
-      email: contact.email, phone: contact.phone,
+      nameTh: contact.nameTh,
+      nameEn: contact.nameEn,
+      nameJa: contact.nameJa,
+      titleTh: contact.titleTh,
+      titleEn: contact.titleEn,
+      titleJa: contact.titleJa,
+      department: contact.department,
+      position: contact.position,
+      email: contact.email,
+      phone: contact.phone,
     });
     setSiteId(String(contact.siteId));
   };
@@ -388,27 +568,37 @@ function CustomerContactsModal({ customer, canWrite, notify, onClose, onChanged 
       { key: "phone", value: result.phone, label: "โทรศัพท์" },
     ];
     const fillable = fields.filter((field) => field.value && !form[field.key].trim());
-    if (fillable.length) setForm((current) => {
-      const next = { ...current };
-      for (const field of fillable) if (!next[field.key].trim()) next[field.key] = field.value;
-      return next;
-    });
+    if (fillable.length)
+      setForm((current) => {
+        const next = { ...current };
+        for (const field of fillable) if (!next[field.key].trim()) next[field.key] = field.value;
+        return next;
+      });
     return fillable.map((field) => field.label);
   };
   const resolvedName = canonicalLocalizedName({ nameTh: form.nameTh, nameEn: form.nameEn, nameJa: form.nameJa }, editing?.name);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!resolvedName) { setError("กรุณาระบุชื่อผู้ติดต่ออย่างน้อยหนึ่งภาษา"); return; }
+    if (!resolvedName) {
+      setError("กรุณาระบุชื่อผู้ติดต่ออย่างน้อยหนึ่งภาษา");
+      return;
+    }
     setBusy(true);
     setError("");
     try {
       const input = {
         name: resolvedName,
-        nameTh: form.nameTh.trim(), nameEn: form.nameEn.trim(), nameJa: form.nameJa.trim(),
-        titleTh: form.titleTh.trim(), titleEn: form.titleEn.trim(), titleJa: form.titleJa.trim(),
-        department: form.department.trim(), position: form.position.trim(),
-        email: form.email.trim(), phone: form.phone.trim(),
+        nameTh: form.nameTh.trim(),
+        nameEn: form.nameEn.trim(),
+        nameJa: form.nameJa.trim(),
+        titleTh: form.titleTh.trim(),
+        titleEn: form.titleEn.trim(),
+        titleJa: form.titleJa.trim(),
+        department: form.department.trim(),
+        position: form.position.trim(),
+        email: form.email.trim(),
+        phone: form.phone.trim(),
       };
       if (editing) {
         await updateSalesCustomerContact(customer.id, editing.id, { ...input, rowVersion: editing.rowVersion, isPrimary: makePrimary });
@@ -449,56 +639,179 @@ function CustomerContactsModal({ customer, canWrite, notify, onClose, onChanged 
   return (
     <Modal title={`People at ${customer.name}`} subtitle="ผู้ติดต่อทุกคนของบริษัทนี้ บันทึกแยกรายบุคคลพร้อม Audit trail" size="xl" onClose={onClose}>
       {error ? <LoadError message={error} /> : null}
-      {canWrite && !creating && !editing ? <Toolbar><button className="btn primary" type="button" onClick={openCreate}><Icon name="plus" /><LocalizedText text={"Add person"} /></button></Toolbar> : null}
-      {creating || editing ? <form onSubmit={(event) => { void submit(event); }}>
-        {creating ? <BusinessCardScanner disabled={busy} onApply={applyBusinessCard} /> : null}
-        <div className="form-grid two">
-          <Field label="ชื่อผู้ติดต่อ (ไทย)" hint="กรอกอย่างน้อย 1 ภาษา"><input name="nameTh" maxLength={200} value={form.nameTh} onChange={(event) => set("nameTh", event.target.value)} /></Field>
-          <Field label="Contact name (English)"><input name="nameEn" maxLength={200} value={form.nameEn} onChange={(event) => set("nameEn", event.target.value)} /></Field>
-          <Field label="担当者名 (日本語)"><input name="nameJa" maxLength={200} value={form.nameJa} onChange={(event) => set("nameJa", event.target.value)} /></Field>
-          <Field label="คำนำหน้า (ไทย)"><input name="titleTh" maxLength={50} value={form.titleTh} onChange={(event) => set("titleTh", event.target.value)} /></Field>
-          <Field label="Title (English)"><input name="titleEn" maxLength={50} value={form.titleEn} onChange={(event) => set("titleEn", event.target.value)} /></Field>
-          <Field label="敬称 (日本語)"><input name="titleJa" maxLength={50} value={form.titleJa} onChange={(event) => set("titleJa", event.target.value)} /></Field>
-          <Field label="Department"><input name="department" maxLength={200} value={form.department} onChange={(event) => set("department", event.target.value)} /></Field>
-          <Field label="Position"><input name="position" maxLength={200} value={form.position} onChange={(event) => set("position", event.target.value)} /></Field>
-          <Field label="Email"><input name="email" type="email" maxLength={256} value={form.email} onChange={(event) => set("email", event.target.value)} /></Field>
-          <Field label="Phone"><input name="phone" maxLength={100} value={form.phone} onChange={(event) => set("phone", event.target.value)} /></Field>
-          {!editing && multiSite ? <Field label="Site"><select name="siteId" value={siteId} onChange={(event) => setSiteId(event.target.value)}>{(page?.sites ?? []).map((site) => <option key={site.id} value={String(site.id)}>{site.name}</option>)}</select></Field> : null}
-          {editing ? <Field label="Main contact" hint="ผู้ติดต่อหลักของบริษัทมีได้คนเดียวต่อสถานที่"><label className="check"><input name="isPrimary" type="checkbox" checked={makePrimary} disabled={editing.isPrimary} onChange={(event) => setMakePrimary(event.target.checked)} /><span><LocalizedText text={"Set as main contact"} /></span></label></Field> : null}
+      {canWrite && !creating && !editing ? (
+        <Toolbar>
+          <button className="btn primary" type="button" onClick={openCreate}>
+            <Icon name="plus" />
+            <LocalizedText text={"Add person"} />
+          </button>
+        </Toolbar>
+      ) : null}
+      {creating || editing ? (
+        <form
+          onSubmit={(event) => {
+            void submit(event);
+          }}
+        >
+          {creating ? <BusinessCardScanner disabled={busy} onApply={applyBusinessCard} /> : null}
+          <div className="form-grid two">
+            <Field label="ชื่อผู้ติดต่อ (ไทย)" hint="กรอกอย่างน้อย 1 ภาษา">
+              <input name="nameTh" maxLength={200} value={form.nameTh} onChange={(event) => set("nameTh", event.target.value)} />
+            </Field>
+            <Field label="Contact name (English)">
+              <input name="nameEn" maxLength={200} value={form.nameEn} onChange={(event) => set("nameEn", event.target.value)} />
+            </Field>
+            <Field label="担当者名 (日本語)">
+              <input name="nameJa" maxLength={200} value={form.nameJa} onChange={(event) => set("nameJa", event.target.value)} />
+            </Field>
+            <Field label="คำนำหน้า (ไทย)">
+              <input name="titleTh" maxLength={50} value={form.titleTh} onChange={(event) => set("titleTh", event.target.value)} />
+            </Field>
+            <Field label="Title (English)">
+              <input name="titleEn" maxLength={50} value={form.titleEn} onChange={(event) => set("titleEn", event.target.value)} />
+            </Field>
+            <Field label="敬称 (日本語)">
+              <input name="titleJa" maxLength={50} value={form.titleJa} onChange={(event) => set("titleJa", event.target.value)} />
+            </Field>
+            <Field label="Department">
+              <input name="department" maxLength={200} value={form.department} onChange={(event) => set("department", event.target.value)} />
+            </Field>
+            <Field label="Position">
+              <input name="position" maxLength={200} value={form.position} onChange={(event) => set("position", event.target.value)} />
+            </Field>
+            <Field label="Email">
+              <input name="email" type="email" maxLength={256} value={form.email} onChange={(event) => set("email", event.target.value)} />
+            </Field>
+            <Field label="Phone">
+              <input name="phone" maxLength={100} value={form.phone} onChange={(event) => set("phone", event.target.value)} />
+            </Field>
+            {!editing && multiSite ? (
+              <Field label="Site">
+                <select name="siteId" value={siteId} onChange={(event) => setSiteId(event.target.value)}>
+                  {(page?.sites ?? []).map((site) => (
+                    <option key={site.id} value={String(site.id)}>
+                      {site.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            ) : null}
+            {editing ? (
+              <Field label="Main contact" hint="ผู้ติดต่อหลักของบริษัทมีได้คนเดียวต่อสถานที่">
+                <label className="check">
+                  <input name="isPrimary" type="checkbox" checked={makePrimary} disabled={editing.isPrimary} onChange={(event) => setMakePrimary(event.target.checked)} />
+                  <span>
+                    <LocalizedText text={"Set as main contact"} />
+                  </span>
+                </label>
+              </Field>
+            ) : null}
+          </div>
+          <div className="modal-actions">
+            <button className="btn default" type="button" disabled={busy} onClick={closeForm}>
+              <LocalizedText text={"Cancel"} />
+            </button>
+            <button className="btn primary" type="submit" disabled={busy || !resolvedName}>
+              <LocalizedText text={busy ? "Saving…" : "Save"} />
+            </button>
+          </div>
+        </form>
+      ) : null}
+      {loading ? (
+        <EmptyState icon="users" title="Loading…" message="กำลังโหลดรายชื่อผู้ติดต่อ" />
+      ) : contacts.length ? (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>
+                  <LocalizedText text={"Contact"} />
+                </th>
+                <th>
+                  <LocalizedText text={"Role"} />
+                </th>
+                <th>
+                  <LocalizedText text={"Email"} />
+                </th>
+                <th>
+                  <LocalizedText text={"Phone"} />
+                </th>
+                {multiSite ? (
+                  <th>
+                    <LocalizedText text={"Site"} />
+                  </th>
+                ) : null}
+                {canWrite ? (
+                  <th>
+                    <span className="sr-only">
+                      <LocalizedText text={"Actions"} />
+                    </span>
+                  </th>
+                ) : null}
+              </tr>
+            </thead>
+            <tbody>
+              {contacts.map((contact) => (
+                <tr key={contact.id}>
+                  <td>
+                    <LocalizedNameStack names={contact} titles={contact} fallback={contact.name} />
+                    {contact.isPrimary ? (
+                      <div>
+                        <Badge tone="blue">Main contact</Badge>
+                      </div>
+                    ) : null}
+                  </td>
+                  <td>{[contact.position, contact.department].filter(Boolean).join(" · ") || "—"}</td>
+                  <td className="muted">{contact.email || "—"}</td>
+                  <td className="mono">{contact.phone || "—"}</td>
+                  {multiSite ? <td>{contact.siteName}</td> : null}
+                  {canWrite ? (
+                    <td>
+                      <div className="row-actions">
+                        <button className="icon-btn" type="button" aria-label={`Edit ${contact.name}`} disabled={busy} onClick={() => openEdit(contact)}>
+                          <Icon name="edit" />
+                        </button>
+                        <button
+                          className="icon-btn"
+                          type="button"
+                          aria-label={`Remove ${contact.name}`}
+                          disabled={busy || contact.isPrimary}
+                          onClick={() => {
+                            void remove(contact);
+                          }}
+                        >
+                          <Icon name="trash" />
+                        </button>
+                      </div>
+                    </td>
+                  ) : null}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-        <div className="modal-actions">
-          <button className="btn default" type="button" disabled={busy} onClick={closeForm}><LocalizedText text={"Cancel"} /></button>
-          <button className="btn primary" type="submit" disabled={busy || !resolvedName}><LocalizedText text={busy ? "Saving…" : "Save"} /></button>
-        </div>
-      </form> : null}
-      {loading ? <EmptyState icon="users" title="Loading…" message="กำลังโหลดรายชื่อผู้ติดต่อ" /> : contacts.length ? <div className="table-wrap"><table>
-        <thead><tr><th><LocalizedText text={"Contact"} /></th><th><LocalizedText text={"Role"} /></th><th><LocalizedText text={"Email"} /></th><th><LocalizedText text={"Phone"} /></th>{multiSite ? <th><LocalizedText text={"Site"} /></th> : null}{canWrite ? <th><span className="sr-only"><LocalizedText text={"Actions"} /></span></th> : null}</tr></thead>
-        <tbody>{contacts.map((contact) => <tr key={contact.id}>
-          <td><LocalizedNameStack names={contact} titles={contact} fallback={contact.name} />{contact.isPrimary ? <div><Badge tone="blue">Main contact</Badge></div> : null}</td>
-          <td>{[contact.position, contact.department].filter(Boolean).join(" · ") || "—"}</td>
-          <td className="muted">{contact.email || "—"}</td>
-          <td className="mono">{contact.phone || "—"}</td>
-          {multiSite ? <td>{contact.siteName}</td> : null}
-          {canWrite ? <td><div className="row-actions">
-            <button className="icon-btn" type="button" aria-label={`Edit ${contact.name}`} disabled={busy} onClick={() => openEdit(contact)}><Icon name="edit" /></button>
-            <button className="icon-btn" type="button" aria-label={`Remove ${contact.name}`} disabled={busy || contact.isPrimary} onClick={() => { void remove(contact); }}><Icon name="trash" /></button>
-          </div></td> : null}
-        </tr>)}</tbody>
-      </table></div> : <EmptyState icon="users" title="No contact yet" message="เพิ่มผู้ติดต่อคนแรกของบริษัทนี้เมื่อมีสิทธิ์ master.write" />}
+      ) : (
+        <EmptyState icon="users" title="No contact yet" message="เพิ่มผู้ติดต่อคนแรกของบริษัทนี้เมื่อมีสิทธิ์ master.write" />
+      )}
     </Modal>
   );
 }
 function LocalizedNameStack({ names, fallback, titles }: { names: LocalizedNames; fallback: string; titles?: ContactTitles }) {
   const lines = titles ? contactNameLines({ ...names, ...titles }, fallback) : localizedNameLines(names);
   if (!lines.length) return <strong>{fallback}</strong>;
-  return <span className="localized-name-stack">{lines.map((line) => <span key={line.language}><small>{line.language}</small><strong>{line.value}</strong></span>)}</span>;
+  return (
+    <span className="localized-name-stack">
+      {lines.map((line) => (
+        <span key={line.language}>
+          <small>{line.language}</small>
+          <strong>{line.value}</strong>
+        </span>
+      ))}
+    </span>
+  );
 }
 
-export function CustomerModal({ customer, onClose, onSaved }: {
-  customer: BootstrapData["customers"][number] | null;
-  onClose: () => void;
-  onSaved: (code: string) => Promise<void>;
-}) {
+export function CustomerModal({ customer, onClose, onSaved }: { customer: BootstrapData["customers"][number] | null; onClose: () => void; onSaved: (code: string) => Promise<void> }) {
   const localizeCopy = useStaticCopy();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -542,15 +855,24 @@ export function CustomerModal({ customer, onClose, onSaved }: {
       { key: "site", value: result.address, label: "ที่อยู่" },
     ];
     const fillable = fields.filter((field) => field.value && !form[field.key].trim());
-    if (fillable.length) setForm((current) => Object.fromEntries(Object.entries(current).map(([key, value]) => {
-      const suggestion = fillable.find((field) => field.key === key)?.value;
-      return [key, suggestion && !String(value).trim() ? suggestion : value];
-    })) as typeof current);
+    if (fillable.length)
+      setForm(
+        (current) =>
+          Object.fromEntries(
+            Object.entries(current).map(([key, value]) => {
+              const suggestion = fillable.find((field) => field.key === key)?.value;
+              return [key, suggestion && !String(value).trim() ? suggestion : value];
+            }),
+          ) as typeof current,
+      );
     return fillable.map((field) => field.label);
   };
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!companyName) { setError("กรุณาระบุชื่อบริษัทอย่างน้อยหนึ่งภาษา"); return; }
+    if (!companyName) {
+      setError("กรุณาระบุชื่อบริษัทอย่างน้อยหนึ่งภาษา");
+      return;
+    }
     if (!contactName && (form.department.trim() || form.position.trim() || form.contactTitleTh.trim() || form.contactTitleEn.trim() || form.contactTitleJa.trim())) {
       setError("กรุณาระบุชื่อผู้ติดต่อ เพื่อบันทึกคำนำหน้า ตำแหน่ง และแผนกของบุคคลนี้");
       return;
@@ -562,10 +884,16 @@ export function CustomerModal({ customer, onClose, onSaved }: {
         ...(customer ? { rowVersion: customer.rowVersion } : {}),
         code: form.code.trim(),
         name: companyName,
-        nameTh: form.nameTh.trim(), nameEn: form.nameEn.trim(), nameJa: form.nameJa.trim(),
+        nameTh: form.nameTh.trim(),
+        nameEn: form.nameEn.trim(),
+        nameJa: form.nameJa.trim(),
         contact: contactName || undefined,
-        contactNameTh: form.contactNameTh.trim(), contactNameEn: form.contactNameEn.trim(), contactNameJa: form.contactNameJa.trim(),
-        contactTitleTh: form.contactTitleTh.trim(), contactTitleEn: form.contactTitleEn.trim(), contactTitleJa: form.contactTitleJa.trim(),
+        contactNameTh: form.contactNameTh.trim(),
+        contactNameEn: form.contactNameEn.trim(),
+        contactNameJa: form.contactNameJa.trim(),
+        contactTitleTh: form.contactTitleTh.trim(),
+        contactTitleEn: form.contactTitleEn.trim(),
+        contactTitleJa: form.contactTitleJa.trim(),
         department: form.department.trim(),
         position: form.position.trim(),
         email: form.email.trim() || undefined,
@@ -586,28 +914,111 @@ export function CustomerModal({ customer, onClose, onSaved }: {
   };
   return (
     <Modal title={customer ? "Edit customer" : "New customer"} subtitle={customer ? "แก้ไข Customer master พร้อมบันทึก Audit trail" : "บันทึกลง customer master ใน SQL Server"} size="lg" onClose={onClose}>
-      <form onSubmit={(event) => { void submit(event); }}>
+      <form
+        onSubmit={(event) => {
+          void submit(event);
+        }}
+      >
         {error ? <LoadError message={error} /> : null}
         {!customer ? <BusinessCardScanner disabled={busy} onApply={applyBusinessCard} /> : null}
         <div className="form-grid two">
-          <Field label="Customer code"><input name="code" required maxLength={30} pattern="[A-Za-z0-9][A-Za-z0-9._/-]*" value={form.code} onChange={(event) => set("code", event.target.value)} /></Field>
-          <Field label="ชื่อบริษัท (ไทย)" hint={fromErp ? "ErpMaster.lockedHint" : customer && !form.nameTh && !form.nameEn && !form.nameJa ? `ชื่อเดิม: ${customer.name}` : "กรอกอย่างน้อย 1 ภาษา"}><input name="nameTh" maxLength={300} readOnly={fromErp} value={form.nameTh} onChange={(event) => set("nameTh", event.target.value)} /></Field>
-          <Field label="Company name (English)"><input name="nameEn" maxLength={300} readOnly={fromErp} value={form.nameEn} onChange={(event) => set("nameEn", event.target.value)} /></Field>
-          <Field label="会社名 (日本語)"><input name="nameJa" maxLength={300} value={form.nameJa} onChange={(event) => set("nameJa", event.target.value)} /></Field>
-          <Field label="ชื่อผู้ติดต่อ (ไทย)"><input name="contactNameTh" maxLength={200} value={form.contactNameTh} onChange={(event) => set("contactNameTh", event.target.value)} /></Field>
-          <Field label="Contact name (English)" hint={customer?.contact && !form.contactNameTh && !form.contactNameEn && !form.contactNameJa ? `ชื่อเดิม: ${customer.contact}` : undefined}><input name="contactNameEn" maxLength={200} value={form.contactNameEn} onChange={(event) => set("contactNameEn", event.target.value)} /></Field>
-          <Field label="担当者名 (日本語)"><input name="contactNameJa" maxLength={200} value={form.contactNameJa} onChange={(event) => set("contactNameJa", event.target.value)} /></Field>
-          <Field label="คำนำหน้าผู้ติดต่อ (ไทย)" hint="เลือกหรือพิมพ์เองได้ เว้นว่างได้"><input name="contactTitleTh" aria-label={localizeCopy("คำนำหน้าผู้ติดต่อ ภาษาไทย")} maxLength={50} list="master-contact-titles-th" value={form.contactTitleTh} onChange={(event) => set("contactTitleTh", event.target.value)} /><datalist id="master-contact-titles-th">{["นาย", "นาง", "นางสาว", "ดร."].map((title) => <option key={title} value={title} />)}</datalist></Field>
-          <Field label="Contact title (English)"><input name="contactTitleEn" aria-label={localizeCopy("Contact title English")} maxLength={50} list="master-contact-titles-en" value={form.contactTitleEn} onChange={(event) => set("contactTitleEn", event.target.value)} /><datalist id="master-contact-titles-en">{["Mr.", "Ms.", "Mrs.", "Dr."].map((title) => <option key={title} value={title} />)}</datalist></Field>
-          <Field label="敬称 (日本語)" hint="แสดงหลังชื่อภาษาญี่ปุ่น"><input name="contactTitleJa" aria-label={localizeCopy("Contact title Japanese")} maxLength={50} list="master-contact-titles-ja" value={form.contactTitleJa} onChange={(event) => set("contactTitleJa", event.target.value)} /><datalist id="master-contact-titles-ja">{["様", "さん", "先生"].map((title) => <option key={title} value={title} />)}</datalist></Field>
-          <Field label="ตำแหน่ง / Position"><input name="position" maxLength={200} value={form.position} onChange={(event) => set("position", event.target.value)} /></Field>
-          <Field label="แผนก / Department"><input name="department" maxLength={200} value={form.department} onChange={(event) => set("department", event.target.value)} /></Field>
-          <Field label="Email"><input name="email" type="email" maxLength={256} value={form.email} onChange={(event) => set("email", event.target.value)} /></Field>
-          <Field label="Phone"><input name="phone" maxLength={100} value={form.phone} onChange={(event) => set("phone", event.target.value)} /></Field>
-          <Field label="Industry"><input name="industry" maxLength={200} value={form.industry} onChange={(event) => set("industry", event.target.value)} /></Field>
-          <Field label="Site" span={2}><input name="site" maxLength={300} readOnly={fromErp} value={form.site} onChange={(event) => set("site", event.target.value)} /></Field>
+          <Field label="Customer code">
+            <input name="code" required maxLength={30} pattern="[A-Za-z0-9][A-Za-z0-9._/-]*" value={form.code} onChange={(event) => set("code", event.target.value)} />
+          </Field>
+          <Field label="ชื่อบริษัท (ไทย)" hint={fromErp ? "ErpMaster.lockedHint" : customer && !form.nameTh && !form.nameEn && !form.nameJa ? `ชื่อเดิม: ${customer.name}` : "กรอกอย่างน้อย 1 ภาษา"}>
+            <input name="nameTh" maxLength={300} readOnly={fromErp} value={form.nameTh} onChange={(event) => set("nameTh", event.target.value)} />
+          </Field>
+          <Field label="Company name (English)">
+            <input name="nameEn" maxLength={300} readOnly={fromErp} value={form.nameEn} onChange={(event) => set("nameEn", event.target.value)} />
+          </Field>
+          <Field label="会社名 (日本語)">
+            <input name="nameJa" maxLength={300} value={form.nameJa} onChange={(event) => set("nameJa", event.target.value)} />
+          </Field>
+          <Field label="ชื่อผู้ติดต่อ (ไทย)">
+            <input name="contactNameTh" maxLength={200} value={form.contactNameTh} onChange={(event) => set("contactNameTh", event.target.value)} />
+          </Field>
+          <Field label="Contact name (English)" hint={customer?.contact && !form.contactNameTh && !form.contactNameEn && !form.contactNameJa ? `ชื่อเดิม: ${customer.contact}` : undefined}>
+            <input name="contactNameEn" maxLength={200} value={form.contactNameEn} onChange={(event) => set("contactNameEn", event.target.value)} />
+          </Field>
+          <Field label="担当者名 (日本語)">
+            <input name="contactNameJa" maxLength={200} value={form.contactNameJa} onChange={(event) => set("contactNameJa", event.target.value)} />
+          </Field>
+          <Field label="คำนำหน้าผู้ติดต่อ (ไทย)" hint="เลือกหรือพิมพ์เองได้ เว้นว่างได้">
+            <input
+              name="contactTitleTh"
+              aria-label={localizeCopy("คำนำหน้าผู้ติดต่อ ภาษาไทย")}
+              maxLength={50}
+              list="master-contact-titles-th"
+              value={form.contactTitleTh}
+              onChange={(event) => set("contactTitleTh", event.target.value)}
+            />
+            <datalist id="master-contact-titles-th">
+              {["นาย", "นาง", "นางสาว", "ดร."].map((title) => (
+                <option key={title} value={title} />
+              ))}
+            </datalist>
+          </Field>
+          <Field label="Contact title (English)">
+            <input
+              name="contactTitleEn"
+              aria-label={localizeCopy("Contact title English")}
+              maxLength={50}
+              list="master-contact-titles-en"
+              value={form.contactTitleEn}
+              onChange={(event) => set("contactTitleEn", event.target.value)}
+            />
+            <datalist id="master-contact-titles-en">
+              {["Mr.", "Ms.", "Mrs.", "Dr."].map((title) => (
+                <option key={title} value={title} />
+              ))}
+            </datalist>
+          </Field>
+          <Field label="敬称 (日本語)" hint="แสดงหลังชื่อภาษาญี่ปุ่น">
+            <input
+              name="contactTitleJa"
+              aria-label={localizeCopy("Contact title Japanese")}
+              maxLength={50}
+              list="master-contact-titles-ja"
+              value={form.contactTitleJa}
+              onChange={(event) => set("contactTitleJa", event.target.value)}
+            />
+            <datalist id="master-contact-titles-ja">
+              {["様", "さん", "先生"].map((title) => (
+                <option key={title} value={title} />
+              ))}
+            </datalist>
+          </Field>
+          <Field label="ตำแหน่ง / Position">
+            <input name="position" maxLength={200} value={form.position} onChange={(event) => set("position", event.target.value)} />
+          </Field>
+          <Field label="แผนก / Department">
+            <input name="department" maxLength={200} value={form.department} onChange={(event) => set("department", event.target.value)} />
+          </Field>
+          <Field label="Email">
+            <input name="email" type="email" maxLength={256} value={form.email} onChange={(event) => set("email", event.target.value)} />
+          </Field>
+          <Field label="Phone">
+            <input name="phone" maxLength={100} value={form.phone} onChange={(event) => set("phone", event.target.value)} />
+          </Field>
+          <Field label="Industry">
+            <input name="industry" maxLength={200} value={form.industry} onChange={(event) => set("industry", event.target.value)} />
+          </Field>
+          <Field label="Site" span={2}>
+            <input name="site" maxLength={300} readOnly={fromErp} value={form.site} onChange={(event) => set("site", event.target.value)} />
+          </Field>
         </div>
-        <div className="production-document-submit"><span /><div className="row-actions"><button className="btn ghost" type="button" onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="submit" disabled={busy || !companyName}><Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : customer ? "Save changes" : "Create customer"}</button></div></div>
+        <div className="production-document-submit">
+          <span />
+          <div className="row-actions">
+            <button className="btn ghost" type="button" onClick={onClose}>
+              <LocalizedText text={"Cancel"} />
+            </button>
+            <button className="btn primary" type="submit" disabled={busy || !companyName}>
+              <Icon name="check" />
+              {busy ? <LocalizedText text={"Saving…"} /> : customer ? "Save changes" : "Create customer"}
+            </button>
+          </div>
+        </div>
       </form>
     </Modal>
   );
@@ -615,7 +1026,10 @@ export function CustomerModal({ customer, onClose, onSaved }: {
 
 type ReportTab = "inventory" | "suppliers" | "pr-cycle" | "project-cost";
 
-export function ProductionReports({ bootstrap, onBack }: AdminAnalyticsProps & {
+export function ProductionReports({
+  bootstrap,
+  onBack,
+}: AdminAnalyticsProps & {
   /** Back to Operational Reports, where this page is also opened from. */
   onBack?: () => void;
 }) {
@@ -636,12 +1050,20 @@ export function ProductionReports({ bootstrap, onBack }: AdminAnalyticsProps & {
   const canInventory = bootstrap.permissions.includes("inventory.read");
   const canProcurement = bootstrap.permissions.includes("procurement.read");
   const canProject = bootstrap.permissions.includes("project.read");
-  const tabs = useMemo<{ id: ReportTab; label: string }[]>(() => [
-    ...(canInventory ? [{ id: "inventory" as const, label: "Inventory Value" }] : []),
-    ...(canProcurement ? [{ id: "suppliers" as const, label: "Supplier Performance" }, { id: "pr-cycle" as const, label: "PR Cycle Time" }] : []),
-    ...(canProject ? [{ id: "project-cost" as const, label: "Project Cost" }] : []),
-  ], [canInventory, canProcurement, canProject]);
-  const activeTab = tabs.some((item) => item.id === tab) ? tab : tabs[0]?.id ?? tab;
+  const tabs = useMemo<{ id: ReportTab; label: string }[]>(
+    () => [
+      ...(canInventory ? [{ id: "inventory" as const, label: "Inventory Value" }] : []),
+      ...(canProcurement
+        ? [
+            { id: "suppliers" as const, label: "Supplier Performance" },
+            { id: "pr-cycle" as const, label: "PR Cycle Time" },
+          ]
+        : []),
+      ...(canProject ? [{ id: "project-cost" as const, label: "Project Cost" }] : []),
+    ],
+    [canInventory, canProcurement, canProject],
+  );
+  const activeTab = tabs.some((item) => item.id === tab) ? tab : (tabs[0]?.id ?? tab);
 
   useEffect(() => {
     if (!canProject) return;
@@ -687,25 +1109,100 @@ export function ProductionReports({ bootstrap, onBack }: AdminAnalyticsProps & {
   }, [activeTab, canReport, from, projectId, to]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => { void load(); }, 0);
+    const timer = window.setTimeout(() => {
+      void load();
+    }, 0);
     return () => window.clearTimeout(timer);
   }, [load]);
 
-  if (!canReport) return <PegasusScreen><PermissionNotice permission="report.read" /></PegasusScreen>;
-  if (!tabs.length) return <PegasusScreen><PermissionNotice permission="inventory.read, procurement.read หรือ project.read" /></PegasusScreen>;
+  if (!canReport)
+    return (
+      <PegasusScreen>
+        <PermissionNotice permission="report.read" />
+      </PegasusScreen>
+    );
+  if (!tabs.length)
+    return (
+      <PegasusScreen>
+        <PermissionNotice permission="inventory.read, procurement.read หรือ project.read" />
+      </PegasusScreen>
+    );
   return (
     <PegasusScreen>
-      <PageHeader title={uiText("Summary Reports")} subtitle="รายงานคำนวณจาก SQL ledger และเอกสารจริงตามสิทธิ์ของผู้ใช้" meta={<Badge tone="green"><LocalizedText text={"Production API"} /></Badge>}
-        actions={onBack ? <button className="btn ghost" type="button" onClick={onBack}><Icon name="arrowLeft" />{uiText("Back to reports")}</button> : undefined} />
+      <PageHeader
+        title={uiText("Summary Reports")}
+        subtitle="รายงานคำนวณจาก SQL ledger และเอกสารจริงตามสิทธิ์ของผู้ใช้"
+        meta={
+          <Badge tone="green">
+            <LocalizedText text={"Production API"} />
+          </Badge>
+        }
+        actions={
+          onBack ? (
+            <button className="btn ghost" type="button" onClick={onBack}>
+              <Icon name="arrowLeft" />
+              {uiText("Back to reports")}
+            </button>
+          ) : undefined
+        }
+      />
       <Tabs<ReportTab> tabs={tabs} active={activeTab} onChange={setTab} />
       <Toolbar>
-        {activeTab !== "project-cost" ? <>
-          {activeTab !== "inventory" ? <label className="field"><span><LocalizedText text={"From"} /></span><DateInput value={from} max={to} onChange={(event) => setFrom(event.target.value)} /></label> : null}
-          <label className="field"><span><LocalizedText text={activeTab === "inventory" ? "As of" : "To"} /></span><DateInput value={to} min={activeTab === "inventory" ? undefined : from} max={today()} onChange={(event) => setTo(event.target.value)} /></label>
-        </> : <label className="select-field"><span className="sr-only"><LocalizedText text={"Project"} /></span><select value={projectId} onChange={(event) => setProjectId(Number(event.target.value))} aria-label={uiText("Project")}><option value={0}><LocalizedText text={"Select project"} /></option>{projects.map((project) => <option key={project.id} value={project.id}>{project.number} <LocalizedText text={"·"} /> {project.name}</option>)}</select><Icon name="chevronDown" /></label>}
-        <button className="btn ghost" type="button" onClick={() => { void load(); }} disabled={loading || (activeTab === "project-cost" && !projectId)}><Icon name="refresh" />{loading ? <LocalizedText text={"Loading…"} /> : <LocalizedText text={"Refresh"} />}</button>
+        {activeTab !== "project-cost" ? (
+          <>
+            {activeTab !== "inventory" ? (
+              <label className="field">
+                <span>
+                  <LocalizedText text={"From"} />
+                </span>
+                <DateInput value={from} max={to} onChange={(event) => setFrom(event.target.value)} />
+              </label>
+            ) : null}
+            <label className="field">
+              <span>
+                <LocalizedText text={activeTab === "inventory" ? "As of" : "To"} />
+              </span>
+              <DateInput value={to} min={activeTab === "inventory" ? undefined : from} max={today()} onChange={(event) => setTo(event.target.value)} />
+            </label>
+          </>
+        ) : (
+          <label className="select-field">
+            <span className="sr-only">
+              <LocalizedText text={"Project"} />
+            </span>
+            <PgSelect value={projectId} onChange={(event) => setProjectId(Number(event.target.value))} aria-label={uiText("Project")}>
+              <option value={0}>
+                <LocalizedText text={"Select project"} />
+              </option>
+              {projects.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.number} <LocalizedText text={"·"} /> {project.name}
+                </option>
+              ))}
+            </PgSelect>
+            <Icon name="chevronDown" />
+          </label>
+        )}
+        <button
+          className="btn ghost"
+          type="button"
+          onClick={() => {
+            void load();
+          }}
+          disabled={loading || (activeTab === "project-cost" && !projectId)}
+        >
+          <Icon name="refresh" />
+          {loading ? <LocalizedText text={"Loading…"} /> : <LocalizedText text={"Refresh"} />}
+        </button>
       </Toolbar>
-      {error ? <LoadError message={error} retry={() => { void load(); }} /> : null}
+      {error ? (
+        <LoadError
+          message={error}
+          retry={() => {
+            void load();
+          }}
+        />
+      ) : null}
       {activeTab === "inventory" ? <InventoryReportView report={inventory} loading={loading} /> : null}
       {activeTab === "suppliers" ? <SupplierReportView report={suppliers} loading={loading} /> : null}
       {activeTab === "pr-cycle" ? <PrCycleReportView report={prCycle} loading={loading} /> : null}
@@ -716,83 +1213,371 @@ export function ProductionReports({ bootstrap, onBack }: AdminAnalyticsProps & {
 
 function InventoryReportView({ report, loading }: { report: InventoryValueReport | null; loading: boolean }) {
   const uiText = useUiText();
-  if (!report) return <Panel>{loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading live report…"} /></div> : <EmptyState icon="chart" title={uiText("No report loaded")} message="เลือกวันที่แล้วกด Refresh" />}</Panel>;
-  return <>
-    <div className="kpi-grid four">
-      <KpiCard label="Inventory value" value={formatMoney(report.summary.totalValue)} note={uiText("Reports.asOf").replace("{date}", formatDate(report.asOf))} tone="blue" icon="database" />
-      <KpiCard label="Usable" value={formatMoney(report.summary.usableValue)} note={uiText("Reports.items").replace("{n}", String(report.summary.itemCount))} tone="green" icon="package" />
-      <KpiCard label="Quarantine" value={formatMoney(report.summary.quarantineValue)} note="Held inventory value" tone="amber" icon="alertTriangle" />
-      <KpiCard label="Slow moving" value={formatMoney(report.summary.slowMovingValue)} note={uiText("Reports.itemsDays").replace("{n}", String(report.summary.slowMovingItemCount)).replace("{days}", String(report.slowMovingDays))} tone="violet" icon="clock" />
-    </div>
-    <Panel title="Inventory valuation" subtitle={report.valuationMethod} flush>{report.items.length ? <div className="table-wrap"><table>
-      <thead><tr><th><LocalizedText text={"Item"} /></th><th><LocalizedText text={"Description"} /></th><th><LocalizedText text={"Location"} /></th><th className="num"><LocalizedText text={"Usable"} /></th><th className="num"><LocalizedText text={"Quarantine"} /></th><th className="num"><LocalizedText text={"Avg. cost"} /></th><th className="num"><LocalizedText text={"Total value"} /></th><th><LocalizedText text={"Last movement"} /></th><th><LocalizedText text={"Status"} /></th></tr></thead>
-      <tbody>{report.items.map((item) => <tr key={item.id}><td><strong className="mono">{item.itemCode}</strong><div className="muted">{item.partNumber}</div></td><td><strong>{item.description}</strong><div className="muted">{item.brand}</div></td><td>{item.location || "—"}</td><td className="num">{formatNumber(item.usable)} {item.unit}</td><td className="num">{formatNumber(item.quarantine)} {item.unit}</td><td className="num">{formatMoney(item.averageUnitCost)}</td><td className="num"><strong>{formatMoney(item.usableValue + item.quarantineValue)}</strong></td><td>{formatDateTime(item.lastMovementAt)}</td><td><Badge tone={item.isSlowMoving ? "amber" : "green"}>{item.isSlowMoving ? uiText("Reports.days").replace("{n}", String(item.inactiveDays)) : uiText("Reports.moving")}</Badge></td></tr>)}</tbody>
-    </table></div> : <EmptyState icon="package" title="No inventory value" message="ยังไม่มี stock transaction ถึงวันที่รายงาน" />}</Panel>
-  </>;
+  if (!report)
+    return (
+      <Panel>
+        {loading ? (
+          <div className="empty">
+            <span className="spinner" />
+            <LocalizedText text={"Loading live report…"} />
+          </div>
+        ) : (
+          <EmptyState icon="chart" title={uiText("No report loaded")} message="เลือกวันที่แล้วกด Refresh" />
+        )}
+      </Panel>
+    );
+  return (
+    <>
+      <div className="kpi-grid four">
+        <KpiCard label="Inventory value" value={formatMoney(report.summary.totalValue)} note={uiText("Reports.asOf").replace("{date}", formatDate(report.asOf))} tone="blue" icon="database" />
+        <KpiCard label="Usable" value={formatMoney(report.summary.usableValue)} note={uiText("Reports.items").replace("{n}", String(report.summary.itemCount))} tone="green" icon="package" />
+        <KpiCard label="Quarantine" value={formatMoney(report.summary.quarantineValue)} note="Held inventory value" tone="amber" icon="alertTriangle" />
+        <KpiCard
+          label="Slow moving"
+          value={formatMoney(report.summary.slowMovingValue)}
+          note={uiText("Reports.itemsDays").replace("{n}", String(report.summary.slowMovingItemCount)).replace("{days}", String(report.slowMovingDays))}
+          tone="violet"
+          icon="clock"
+        />
+      </div>
+      <Panel title="Inventory valuation" subtitle={report.valuationMethod} flush>
+        {report.items.length ? (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>
+                    <LocalizedText text={"Item"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Description"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Location"} />
+                  </th>
+                  <th className="num">
+                    <LocalizedText text={"Usable"} />
+                  </th>
+                  <th className="num">
+                    <LocalizedText text={"Quarantine"} />
+                  </th>
+                  <th className="num">
+                    <LocalizedText text={"Avg. cost"} />
+                  </th>
+                  <th className="num">
+                    <LocalizedText text={"Total value"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Last movement"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Status"} />
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {report.items.map((item) => (
+                  <tr key={item.id}>
+                    <td>
+                      <strong className="mono">{item.itemCode}</strong>
+                      <div className="muted">{item.partNumber}</div>
+                    </td>
+                    <td>
+                      <strong>{item.description}</strong>
+                      <div className="muted">{item.brand}</div>
+                    </td>
+                    <td>{item.location || "—"}</td>
+                    <td className="num">
+                      {formatNumber(item.usable)} {item.unit}
+                    </td>
+                    <td className="num">
+                      {formatNumber(item.quarantine)} {item.unit}
+                    </td>
+                    <td className="num">{formatMoney(item.averageUnitCost)}</td>
+                    <td className="num">
+                      <strong>{formatMoney(item.usableValue + item.quarantineValue)}</strong>
+                    </td>
+                    <td>{formatDateTime(item.lastMovementAt)}</td>
+                    <td>
+                      <Badge tone={item.isSlowMoving ? "amber" : "green"}>{item.isSlowMoving ? uiText("Reports.days").replace("{n}", String(item.inactiveDays)) : uiText("Reports.moving")}</Badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <EmptyState icon="package" title="No inventory value" message="ยังไม่มี stock transaction ถึงวันที่รายงาน" />
+        )}
+      </Panel>
+    </>
+  );
 }
 
 function SupplierReportView({ report, loading }: { report: SupplierPerformanceReport | null; loading: boolean }) {
   const uiText = useUiText();
-  if (!report) return <Panel>{loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading live report…"} /></div> : <EmptyState icon="truck" title={uiText("No report loaded")} message="เลือกช่วงเวลาแล้วกด Refresh" />}</Panel>;
-  return <Panel title="Supplier performance" subtitle={`${formatDate(report.from)} – ${formatDate(report.to)}`} flush>{report.suppliers.length ? <div className="table-wrap"><table>
-    <thead><tr><th><LocalizedText text={"Supplier"} /></th><th className="num"><LocalizedText text={"POs"} /></th><th className="num"><LocalizedText text={"Ordered"} /></th><th className="num"><LocalizedText text={"Received"} /></th><th className="num"><LocalizedText text={"Open"} /></th><th className="num"><LocalizedText text={"Fill rate"} /></th><th className="num"><LocalizedText text={"Accepted"} /></th><th className="num"><LocalizedText text={"Defect"} /></th><th className="num"><LocalizedText text={"On time"} /></th><th className="num"><LocalizedText text={"Lead days"} /></th></tr></thead>
-    <tbody>{report.suppliers.map((item) => <tr key={item.supplierId}><td><strong>{item.supplierName}</strong><div className="muted mono">{item.supplierCode}</div></td><td className="num">{item.purchaseOrderCount}</td><td className="num">{formatMoney(item.orderedValue)}</td><td className="num">{formatMoney(item.receivedValue)}</td><td className="num">{formatMoney(item.openValue)}</td><td className="num">{formatPercent(item.fillRatePercent)}</td><td className="num">{formatPercent(item.acceptedFillRatePercent)}</td><td className="num">{formatPercent(item.defectRatePercent)}</td><td className="num">{formatPercent(item.onTimeRatePercent)}</td><td className="num">{item.averageCompletionLeadDays === null ? "—" : formatNumber(item.averageCompletionLeadDays)}</td></tr>)}</tbody>
-  </table></div> : <EmptyState icon="truck" title="No supplier activity" message="ไม่พบ Purchase Order ในช่วงวันที่นี้" />}</Panel>;
+  if (!report)
+    return (
+      <Panel>
+        {loading ? (
+          <div className="empty">
+            <span className="spinner" />
+            <LocalizedText text={"Loading live report…"} />
+          </div>
+        ) : (
+          <EmptyState icon="truck" title={uiText("No report loaded")} message="เลือกช่วงเวลาแล้วกด Refresh" />
+        )}
+      </Panel>
+    );
+  return (
+    <Panel title="Supplier performance" subtitle={`${formatDate(report.from)} – ${formatDate(report.to)}`} flush>
+      {report.suppliers.length ? (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>
+                  <LocalizedText text={"Supplier"} />
+                </th>
+                <th className="num">
+                  <LocalizedText text={"POs"} />
+                </th>
+                <th className="num">
+                  <LocalizedText text={"Ordered"} />
+                </th>
+                <th className="num">
+                  <LocalizedText text={"Received"} />
+                </th>
+                <th className="num">
+                  <LocalizedText text={"Open"} />
+                </th>
+                <th className="num">
+                  <LocalizedText text={"Fill rate"} />
+                </th>
+                <th className="num">
+                  <LocalizedText text={"Accepted"} />
+                </th>
+                <th className="num">
+                  <LocalizedText text={"Defect"} />
+                </th>
+                <th className="num">
+                  <LocalizedText text={"On time"} />
+                </th>
+                <th className="num">
+                  <LocalizedText text={"Lead days"} />
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {report.suppliers.map((item) => (
+                <tr key={item.supplierId}>
+                  <td>
+                    <strong>{item.supplierName}</strong>
+                    <div className="muted mono">{item.supplierCode}</div>
+                  </td>
+                  <td className="num">{item.purchaseOrderCount}</td>
+                  <td className="num">{formatMoney(item.orderedValue)}</td>
+                  <td className="num">{formatMoney(item.receivedValue)}</td>
+                  <td className="num">{formatMoney(item.openValue)}</td>
+                  <td className="num">{formatPercent(item.fillRatePercent)}</td>
+                  <td className="num">{formatPercent(item.acceptedFillRatePercent)}</td>
+                  <td className="num">{formatPercent(item.defectRatePercent)}</td>
+                  <td className="num">{formatPercent(item.onTimeRatePercent)}</td>
+                  <td className="num">{item.averageCompletionLeadDays === null ? "—" : formatNumber(item.averageCompletionLeadDays)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <EmptyState icon="truck" title="No supplier activity" message="ไม่พบ Purchase Order ในช่วงวันที่นี้" />
+      )}
+    </Panel>
+  );
 }
 
 function PrCycleReportView({ report, loading }: { report: PrCycleTimeReport | null; loading: boolean }) {
   const uiText = useUiText();
-  if (!report) return <Panel>{loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading live report…"} /></div> : <EmptyState icon="clock" title={uiText("No report loaded")} message="เลือกช่วงเวลาแล้วกด Refresh" />}</Panel>;
-  const hours = (value: number | null) => value === null ? "—" : uiText("Reports.hours").replace("{n}", formatNumber(value));
-  return <>
-    <div className="kpi-grid four">
-      <KpiCard label="PR count" value={report.lifecycle.prCount} note={`${formatDate(report.from)} – ${formatDate(report.to)}`} tone="blue" icon="file" />
-      <KpiCard label="Create → Submit" value={hours(report.lifecycle.averageCreatedToSubmittedHours)} note="Average elapsed" tone="slate" icon="clock" />
-      <KpiCard label="Submit → Approve" value={hours(report.lifecycle.averageSubmittedToFinalApprovalHours)} note="Average elapsed" tone="violet" icon="checkCircle" />
-      <KpiCard label="Create → PO" value={hours(report.lifecycle.averageCreatedToFirstPurchaseOrderHours)} note="Average elapsed" tone="green" icon="truck" />
-    </div>
-    <Panel title="Approval stage duration" subtitle={report.durationBasis} flush>{report.stages.length ? <div className="table-wrap"><table><thead><tr><th><LocalizedText text={"Stage"} /></th><th className="num"><LocalizedText text={"Completed"} /></th><th className="num"><LocalizedText text={"Average"} /></th><th className="num"><LocalizedText text={"Minimum"} /></th><th className="num"><LocalizedText text={"Maximum"} /></th></tr></thead><tbody>{report.stages.map((stage) => <tr key={stage.stage}><td><strong>{stage.stage}</strong></td><td className="num">{stage.completedCount}</td><td className="num">{hours(stage.averageHours)}</td><td className="num">{hours(stage.minimumHours)}</td><td className="num">{hours(stage.maximumHours)}</td></tr>)}</tbody></table></div> : <EmptyState icon="clock" title="No completed stages" message="ยังไม่มีขั้นตอนอนุมัติที่เสร็จในช่วงวันที่นี้" />}</Panel>
-    {Object.keys(report.statusCounts).length ? <Panel title="PR status"><div className="kpi-grid four">{Object.entries(report.statusCounts).map(([status, count]) => <KpiCard key={status} label={status} value={count} icon="file" />)}</div></Panel> : null}
-  </>;
+  if (!report)
+    return (
+      <Panel>
+        {loading ? (
+          <div className="empty">
+            <span className="spinner" />
+            <LocalizedText text={"Loading live report…"} />
+          </div>
+        ) : (
+          <EmptyState icon="clock" title={uiText("No report loaded")} message="เลือกช่วงเวลาแล้วกด Refresh" />
+        )}
+      </Panel>
+    );
+  const hours = (value: number | null) => (value === null ? "—" : uiText("Reports.hours").replace("{n}", formatNumber(value)));
+  return (
+    <>
+      <div className="kpi-grid four">
+        <KpiCard label="PR count" value={report.lifecycle.prCount} note={`${formatDate(report.from)} – ${formatDate(report.to)}`} tone="blue" icon="file" />
+        <KpiCard label="Create → Submit" value={hours(report.lifecycle.averageCreatedToSubmittedHours)} note="Average elapsed" tone="slate" icon="clock" />
+        <KpiCard label="Submit → Approve" value={hours(report.lifecycle.averageSubmittedToFinalApprovalHours)} note="Average elapsed" tone="violet" icon="checkCircle" />
+        <KpiCard label="Create → PO" value={hours(report.lifecycle.averageCreatedToFirstPurchaseOrderHours)} note="Average elapsed" tone="green" icon="truck" />
+      </div>
+      <Panel title="Approval stage duration" subtitle={report.durationBasis} flush>
+        {report.stages.length ? (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>
+                    <LocalizedText text={"Stage"} />
+                  </th>
+                  <th className="num">
+                    <LocalizedText text={"Completed"} />
+                  </th>
+                  <th className="num">
+                    <LocalizedText text={"Average"} />
+                  </th>
+                  <th className="num">
+                    <LocalizedText text={"Minimum"} />
+                  </th>
+                  <th className="num">
+                    <LocalizedText text={"Maximum"} />
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {report.stages.map((stage) => (
+                  <tr key={stage.stage}>
+                    <td>
+                      <strong>{stage.stage}</strong>
+                    </td>
+                    <td className="num">{stage.completedCount}</td>
+                    <td className="num">{hours(stage.averageHours)}</td>
+                    <td className="num">{hours(stage.minimumHours)}</td>
+                    <td className="num">{hours(stage.maximumHours)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <EmptyState icon="clock" title="No completed stages" message="ยังไม่มีขั้นตอนอนุมัติที่เสร็จในช่วงวันที่นี้" />
+        )}
+      </Panel>
+      {Object.keys(report.statusCounts).length ? (
+        <Panel title="PR status">
+          <div className="kpi-grid four">
+            {Object.entries(report.statusCounts).map(([status, count]) => (
+              <KpiCard key={status} label={status} value={count} icon="file" />
+            ))}
+          </div>
+        </Panel>
+      ) : null}
+    </>
+  );
 }
 
 /** The report's figures in the order a reader adds them up; each has its name in the dictionary (admin-screens-copy.ts). */
 const PROJECT_BUDGET_ROWS: [keyof ProjectCostReport["budget"], string][] = [
-  ["approvedMaterial", "Reports.budgetMaterial"], ["approvedEngineering", "Reports.budgetEngineering"], ["approvedOutsource", "Reports.budgetOutsource"],
-  ["approvedTransportation", "Reports.budgetTransportation"], ["approvedAccommodation", "Reports.budgetAccommodation"], ["approvedOther", "Reports.budgetOther"],
-  ["contingency", "Reports.budgetContingency"], ["approvedEstimateTotal", "Reports.budgetTotal"],
+  ["approvedMaterial", "Reports.budgetMaterial"],
+  ["approvedEngineering", "Reports.budgetEngineering"],
+  ["approvedOutsource", "Reports.budgetOutsource"],
+  ["approvedTransportation", "Reports.budgetTransportation"],
+  ["approvedAccommodation", "Reports.budgetAccommodation"],
+  ["approvedOther", "Reports.budgetOther"],
+  ["contingency", "Reports.budgetContingency"],
+  ["approvedEstimateTotal", "Reports.budgetTotal"],
 ];
 const PROJECT_PROCUREMENT_ROWS: [keyof ProjectCostReport["procurement"], string][] = [
-  ["poCommitted", "Reports.poCommitted"], ["receivedAtPoPrice", "Reports.receivedAtPoPrice"], ["openPoCommitment", "Reports.openPoCommitment"],
-  ["openPr", "Reports.openPr"], ["reserved", "Reports.reserved"],
+  ["poCommitted", "Reports.poCommitted"],
+  ["receivedAtPoPrice", "Reports.receivedAtPoPrice"],
+  ["openPoCommitment", "Reports.openPoCommitment"],
+  ["openPr", "Reports.openPr"],
+  ["reserved", "Reports.reserved"],
 ];
 
 function ProjectCostReportView({ report, loading, projectSelected }: { report: ProjectCostReport | null; loading: boolean; projectSelected: boolean }) {
   const uiText = useUiText();
-  if (!projectSelected) return <Panel><EmptyState icon="folder" title="Select a project" message="เลือกโครงการเพื่อคำนวณต้นทุนจาก estimate, procurement และ stock ledger" /></Panel>;
-  if (!report) return <Panel>{loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading live report…"} /></div> : <EmptyState icon="chart" title={uiText("No report loaded")} message="กด Refresh เพื่อลองอีกครั้ง" />}</Panel>;
-  return <>
-    <div className="pg-report-head">
-      <h2>{report.project.number} · {report.project.name}</h2>
-      <Badge>{report.project.status}</Badge>
-      <span>{report.project.estimateNumber ? uiText("Reports.estimate").replace("{number}", report.project.estimateNumber) : uiText("Project without an estimate")}</span>
-    </div>
-    <div className="kpi-grid four">
-      <KpiCard label="Approved estimate" value={formatMoney(report.budget.approvedEstimateTotal)} note="Total approved budget" tone="blue" icon="file" />
-      <KpiCard label="Material actual" value={formatMoney(report.actual.materialConsumed)} note="Net MIR issue / return" tone="violet" icon="package" />
-      <KpiCard label="Forecast exposure" value={formatMoney(report.forecastExposure)} note="Actual + commitments" tone="amber" icon="trendingUp" />
-      <KpiCard label="Remaining material" value={formatMoney(report.remainingMaterialBudgetAfterForecast)} note="After forecast exposure" tone={report.remainingMaterialBudgetAfterForecast < 0 ? "red" : "green"} icon="chart" />
-    </div>
-    <div className="grid-2">
-      <Panel title="Approved budget" flush><div className="table-wrap"><table className="pg-figures"><tbody>
-        {PROJECT_BUDGET_ROWS.map(([key, label]) => <tr key={key} className={key === "approvedEstimateTotal" ? "pg-total" : undefined}><td>{uiText(label)}</td><td className="num">{formatMoney(report.budget[key])}</td></tr>)}
-      </tbody></table></div></Panel>
-      <Panel title="Procurement exposure" flush><div className="table-wrap"><table className="pg-figures"><tbody>
-        {PROJECT_PROCUREMENT_ROWS.map(([key, label]) => <tr key={key}><td>{uiText(label)}</td><td className="num">{formatMoney(report.procurement[key])}</td></tr>)}
-      </tbody></table></div></Panel>
-    </div>
-    <div className="callout info"><Icon name="database" /><span><strong><LocalizedText text={"Accounting scope"} /></strong><span>{report.accountingScope}</span><span>{report.forecastScope}</span></span></div>
-  </>;
+  if (!projectSelected)
+    return (
+      <Panel>
+        <EmptyState icon="folder" title="Select a project" message="เลือกโครงการเพื่อคำนวณต้นทุนจาก estimate, procurement และ stock ledger" />
+      </Panel>
+    );
+  if (!report)
+    return (
+      <Panel>
+        {loading ? (
+          <div className="empty">
+            <span className="spinner" />
+            <LocalizedText text={"Loading live report…"} />
+          </div>
+        ) : (
+          <EmptyState icon="chart" title={uiText("No report loaded")} message="กด Refresh เพื่อลองอีกครั้ง" />
+        )}
+      </Panel>
+    );
+  return (
+    <>
+      <div className="pg-report-head">
+        <h2>
+          {report.project.number} · {report.project.name}
+        </h2>
+        <Badge>{report.project.status}</Badge>
+        <span>{report.project.estimateNumber ? uiText("Reports.estimate").replace("{number}", report.project.estimateNumber) : uiText("Project without an estimate")}</span>
+      </div>
+      <div className="kpi-grid four">
+        <KpiCard label="Approved estimate" value={formatMoney(report.budget.approvedEstimateTotal)} note="Total approved budget" tone="blue" icon="file" />
+        <KpiCard label="Material actual" value={formatMoney(report.actual.materialConsumed)} note="Net MIR issue / return" tone="violet" icon="package" />
+        <KpiCard label="Forecast exposure" value={formatMoney(report.forecastExposure)} note="Actual + commitments" tone="amber" icon="trendingUp" />
+        <KpiCard
+          label="Remaining material"
+          value={formatMoney(report.remainingMaterialBudgetAfterForecast)}
+          note="After forecast exposure"
+          tone={report.remainingMaterialBudgetAfterForecast < 0 ? "red" : "green"}
+          icon="chart"
+        />
+      </div>
+      <div className="grid-2">
+        <Panel title="Approved budget" flush>
+          <div className="table-wrap">
+            <table className="pg-figures">
+              <tbody>
+                {PROJECT_BUDGET_ROWS.map(([key, label]) => (
+                  <tr key={key} className={key === "approvedEstimateTotal" ? "pg-total" : undefined}>
+                    <td>{uiText(label)}</td>
+                    <td className="num">{formatMoney(report.budget[key])}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Panel>
+        <Panel title="Procurement exposure" flush>
+          <div className="table-wrap">
+            <table className="pg-figures">
+              <tbody>
+                {PROJECT_PROCUREMENT_ROWS.map(([key, label]) => (
+                  <tr key={key}>
+                    <td>{uiText(label)}</td>
+                    <td className="num">{formatMoney(report.procurement[key])}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Panel>
+      </div>
+      <div className="callout info">
+        <Icon name="database" />
+        <span>
+          <strong>
+            <LocalizedText text={"Accounting scope"} />
+          </strong>
+          <span>{report.accountingScope}</span>
+          <span>{report.forecastScope}</span>
+        </span>
+      </div>
+    </>
+  );
 }
 
 export function ProductionEngineeringRates({ bootstrap, notify, refreshBootstrap, embedded = false }: AdminAnalyticsProps) {
@@ -819,19 +1604,181 @@ export function ProductionEngineeringRates({ bootstrap, notify, refreshBootstrap
       setLoading(false);
     }
   }, [activeOnly, canRead, page, pageSize, search]);
-  useEffect(() => { const timer = window.setTimeout(() => { void load(); }, 200); return () => window.clearTimeout(timer); }, [load]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void load();
+    }, 200);
+    return () => window.clearTimeout(timer);
+  }, [load]);
   if (!canRead) return <PermissionNotice permission="Management role" />;
   const pageCount = Math.max(1, Math.ceil(result.total / result.pageSize));
-  return <>
-    {!embedded ? <PageHeader eyebrow="COST MASTER" title={uiText("Engineering Rate")} subtitle="อัตราที่มีผลตามช่วงวันที่จาก SQL Server" actions={canWrite ? <button className="btn primary" type="button" onClick={() => setCreateOpen(true)}><Icon name="plus" /><LocalizedText text={"New Rate"} /></button> : undefined} /> : null}
-    <Toolbar>{embedded && canWrite ? <button className="btn primary" type="button" onClick={() => setCreateOpen(true)}><Icon name="plus" /><LocalizedText text={"New Rate"} /></button> : null}<SearchInput link="q" value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder="Search level, department or creator…" /><label className="checkbox-row"><input type="checkbox" checked={activeOnly} onChange={(event) => { setActiveOnly(event.target.checked); setPage(1); }} /><LocalizedText text={"Enabled records only"} /></label><button className="btn ghost" type="button" disabled={loading} onClick={() => { void load(); }}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button></Toolbar>
-    {error ? <LoadError message={error} retry={() => { void load(); }} /> : null}
-    <Panel title={`${result.total} rate records`} subtitle="Effective-dated engineering and installation rates" flush>{result.items.length ? <div className="table-wrap"><TablePageSize value={pageSize} onChange={(value) => { setPageSize(value); setPage(1); }} /><table>
-      <thead><tr><th><LocalizedText text={"Level"} /></th><th><LocalizedText text={"Department"} /></th><th><LocalizedText text={"Engineering / hour"} /></th><th><LocalizedText text={"Engineering / day"} /></th><th><LocalizedText text={"Installation / hour"} /></th><th><LocalizedText text={"Installation / day"} /></th><th><LocalizedText text={"Effective"} /></th><th><LocalizedText text={"Created by"} /></th><th><LocalizedText text={"Status"} /></th></tr></thead>
-      <tbody>{result.items.map((rate) => <tr key={rate.id}><td><strong>{rate.level}</strong></td><td>{rate.department}</td><td>{formatMoney(rate.engineeringHourly)}</td><td>{formatMoney(rate.engineeringDaily)}</td><td>{formatMoney(rate.installationHourly)}</td><td>{formatMoney(rate.installationDaily)}</td><td>{formatDate(rate.effectiveFrom)} – {formatDate(rate.effectiveTo)}</td><td><strong>{rate.createdByName}</strong><div className="muted">{formatDateTime(rate.createdAt)}</div></td><td><Badge tone={rate.isActive ? "green" : "slate"}>{rate.isActive ? "Active" : "Inactive"}</Badge></td></tr>)}</tbody>
-    </table><Pagination page={result.page} pageCount={pageCount} from={(result.page - 1) * result.pageSize + 1} to={Math.min(result.page * result.pageSize, result.total)} total={result.total} onPage={setPage} /></div> : loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading…"} /></div> : <EmptyState icon="chart" title="No engineering rates" message="เพิ่มอัตราแรกเมื่อมีสิทธิ์ master.write" />}</Panel>
-    {createOpen ? <CreateRateModal team={bootstrap.team} onClose={() => setCreateOpen(false)} onCreated={async (label) => { setCreateOpen(false); notify(`${label} created`); await load(); try { await refreshBootstrap?.(); } catch { setError("บันทึกอัตราแล้ว แต่โหลดข้อมูลล่าสุดไม่สำเร็จ กรุณารีเฟรชหน้า"); } }} /> : null}
-  </>;
+  return (
+    <>
+      {!embedded ? (
+        <PageHeader
+          eyebrow="COST MASTER"
+          title={uiText("Engineering Rate")}
+          subtitle="อัตราที่มีผลตามช่วงวันที่จาก SQL Server"
+          actions={
+            canWrite ? (
+              <button className="btn primary" type="button" onClick={() => setCreateOpen(true)}>
+                <Icon name="plus" />
+                <LocalizedText text={"New Rate"} />
+              </button>
+            ) : undefined
+          }
+        />
+      ) : null}
+      <Toolbar>
+        {embedded && canWrite ? (
+          <button className="btn primary" type="button" onClick={() => setCreateOpen(true)}>
+            <Icon name="plus" />
+            <LocalizedText text={"New Rate"} />
+          </button>
+        ) : null}
+        <SearchInput
+          link="q"
+          value={search}
+          onChange={(value) => {
+            setSearch(value);
+            setPage(1);
+          }}
+          placeholder="Search level, department or creator…"
+        />
+        <label className="checkbox-row">
+          <input
+            type="checkbox"
+            checked={activeOnly}
+            onChange={(event) => {
+              setActiveOnly(event.target.checked);
+              setPage(1);
+            }}
+          />
+          <LocalizedText text={"Enabled records only"} />
+        </label>
+        <button
+          className="btn ghost"
+          type="button"
+          disabled={loading}
+          onClick={() => {
+            void load();
+          }}
+        >
+          <Icon name="refresh" />
+          <LocalizedText text={"Refresh"} />
+        </button>
+      </Toolbar>
+      {error ? (
+        <LoadError
+          message={error}
+          retry={() => {
+            void load();
+          }}
+        />
+      ) : null}
+      <Panel title={`${result.total} rate records`} subtitle="Effective-dated engineering and installation rates" flush>
+        {result.items.length ? (
+          <div className="table-wrap">
+            <TablePageSize
+              value={pageSize}
+              onChange={(value) => {
+                setPageSize(value);
+                setPage(1);
+              }}
+            />
+            <table>
+              <thead>
+                <tr>
+                  <th>
+                    <LocalizedText text={"Level"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Department"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Engineering / hour"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Engineering / day"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Installation / hour"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Installation / day"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Effective"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Created by"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Status"} />
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {result.items.map((rate) => (
+                  <tr key={rate.id}>
+                    <td>
+                      <strong>{rate.level}</strong>
+                    </td>
+                    <td>{rate.department}</td>
+                    <td>{formatMoney(rate.engineeringHourly)}</td>
+                    <td>{formatMoney(rate.engineeringDaily)}</td>
+                    <td>{formatMoney(rate.installationHourly)}</td>
+                    <td>{formatMoney(rate.installationDaily)}</td>
+                    <td>
+                      {formatDate(rate.effectiveFrom)} – {formatDate(rate.effectiveTo)}
+                    </td>
+                    <td>
+                      <strong>{rate.createdByName}</strong>
+                      <div className="muted">{formatDateTime(rate.createdAt)}</div>
+                    </td>
+                    <td>
+                      <Badge tone={rate.isActive ? "green" : "slate"}>{rate.isActive ? "Active" : "Inactive"}</Badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <Pagination
+              page={result.page}
+              pageCount={pageCount}
+              from={(result.page - 1) * result.pageSize + 1}
+              to={Math.min(result.page * result.pageSize, result.total)}
+              total={result.total}
+              onPage={setPage}
+            />
+          </div>
+        ) : loading ? (
+          <div className="empty">
+            <span className="spinner" />
+            <LocalizedText text={"Loading…"} />
+          </div>
+        ) : (
+          <EmptyState icon="chart" title="No engineering rates" message="เพิ่มอัตราแรกเมื่อมีสิทธิ์ master.write" />
+        )}
+      </Panel>
+      {createOpen ? (
+        <CreateRateModal
+          team={bootstrap.team}
+          onClose={() => setCreateOpen(false)}
+          onCreated={async (label) => {
+            setCreateOpen(false);
+            notify(`${label} created`);
+            await load();
+            try {
+              await refreshBootstrap?.();
+            } catch {
+              setError("บันทึกอัตราแล้ว แต่โหลดข้อมูลล่าสุดไม่สำเร็จ กรุณารีเฟรชหน้า");
+            }
+          }}
+        />
+      ) : null}
+    </>
+  );
 }
 
 function CreateRateModal({ team, onClose, onCreated }: { team: BootstrapData["team"]; onClose: () => void; onCreated: (label: string) => Promise<void> }) {
@@ -847,10 +1794,14 @@ function CreateRateModal({ team, onClose, onCreated }: { team: BootstrapData["te
     setError("");
     try {
       const input = {
-        level: text("level"), department: text("department"),
-        engineeringHourly: Number(text("engineeringHourly")), engineeringDaily: Number(text("engineeringDaily")),
-        installationHourly: Number(text("installationHourly")), installationDaily: Number(text("installationDaily")),
-        effectiveFrom: text("effectiveFrom"), effectiveTo: optional("effectiveTo"),
+        level: text("level"),
+        department: text("department"),
+        engineeringHourly: Number(text("engineeringHourly")),
+        engineeringDaily: Number(text("engineeringDaily")),
+        installationHourly: Number(text("installationHourly")),
+        installationDaily: Number(text("installationDaily")),
+        effectiveFrom: text("effectiveFrom"),
+        effectiveTo: optional("effectiveTo"),
       };
       const created = await apiRequest<{ level: string; department: string }>("/api/v1/master/engineering-rates", { method: "POST", body: JSON.stringify(input) });
       await onCreated(`${created.department} · ${created.level}`);
@@ -860,17 +1811,65 @@ function CreateRateModal({ team, onClose, onCreated }: { team: BootstrapData["te
       setBusy(false);
     }
   };
-  return <Modal title="New engineering rate" subtitle="ช่วงวันที่และอัตราซ้ำซ้อนจะถูกตรวจใน transaction" size="lg" onClose={onClose}><form onSubmit={(event) => { void submit(event); }}>
-    {error ? <LoadError message={error} /> : null}
-    <div className="form-grid two">
-      <datalist id="master-rate-levels">{[...new Set(team.map((member) => member.level).filter(Boolean))].sort().map((level) => <option key={level} value={level} />)}</datalist>
-      <datalist id="master-rate-departments">{[...new Set(team.map((member) => member.department).filter(Boolean))].sort().map((department) => <option key={department} value={department} />)}</datalist>
-      <Field label="Level"><input name="level" required maxLength={100} list="master-rate-levels" /></Field><Field label="Department"><input name="department" required maxLength={100} list="master-rate-departments" /></Field>
-      <Field label="Engineering hourly"><input name="engineeringHourly" type="number" min={0} step="0.0001" required /></Field><Field label="Engineering daily"><input name="engineeringDaily" type="number" min={0} step="0.0001" required /></Field>
-      <Field label="Installation hourly"><input name="installationHourly" type="number" min={0} step="0.0001" required /></Field><Field label="Installation daily"><input name="installationDaily" type="number" min={0} step="0.0001" required /></Field>
-      <Field label="Effective from"><DateInput name="effectiveFrom" required max="9999-12-31" value={effectiveFrom} onChange={(event) => setEffectiveFrom(event.target.value)} /></Field><Field label="Effective to"><DateInput name="effectiveTo" min={effectiveFrom} max="9999-12-31" /></Field>
-    </div><div className="production-document-submit"><span /><div className="row-actions"><button className="btn ghost" type="button" onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="submit" disabled={busy}><Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : "Create rate"}</button></div></div>
-  </form></Modal>;
+  return (
+    <Modal title="New engineering rate" subtitle="ช่วงวันที่และอัตราซ้ำซ้อนจะถูกตรวจใน transaction" size="lg" onClose={onClose}>
+      <form
+        onSubmit={(event) => {
+          void submit(event);
+        }}
+      >
+        {error ? <LoadError message={error} /> : null}
+        <div className="form-grid two">
+          <datalist id="master-rate-levels">
+            {[...new Set(team.map((member) => member.level).filter(Boolean))].sort().map((level) => (
+              <option key={level} value={level} />
+            ))}
+          </datalist>
+          <datalist id="master-rate-departments">
+            {[...new Set(team.map((member) => member.department).filter(Boolean))].sort().map((department) => (
+              <option key={department} value={department} />
+            ))}
+          </datalist>
+          <Field label="Level">
+            <input name="level" required maxLength={100} list="master-rate-levels" />
+          </Field>
+          <Field label="Department">
+            <input name="department" required maxLength={100} list="master-rate-departments" />
+          </Field>
+          <Field label="Engineering hourly">
+            <input name="engineeringHourly" type="number" min={0} step="0.0001" required />
+          </Field>
+          <Field label="Engineering daily">
+            <input name="engineeringDaily" type="number" min={0} step="0.0001" required />
+          </Field>
+          <Field label="Installation hourly">
+            <input name="installationHourly" type="number" min={0} step="0.0001" required />
+          </Field>
+          <Field label="Installation daily">
+            <input name="installationDaily" type="number" min={0} step="0.0001" required />
+          </Field>
+          <Field label="Effective from">
+            <DateInput name="effectiveFrom" required max="9999-12-31" value={effectiveFrom} onChange={(event) => setEffectiveFrom(event.target.value)} />
+          </Field>
+          <Field label="Effective to">
+            <DateInput name="effectiveTo" min={effectiveFrom} max="9999-12-31" />
+          </Field>
+        </div>
+        <div className="production-document-submit">
+          <span />
+          <div className="row-actions">
+            <button className="btn ghost" type="button" onClick={onClose}>
+              <LocalizedText text={"Cancel"} />
+            </button>
+            <button className="btn primary" type="submit" disabled={busy}>
+              <Icon name="check" />
+              {busy ? <LocalizedText text={"Saving…"} /> : "Create rate"}
+            </button>
+          </div>
+        </div>
+      </form>
+    </Modal>
+  );
 }
 
 export function ProductionAuditLog({ bootstrap }: AdminAnalyticsProps) {
@@ -896,18 +1895,200 @@ export function ProductionAuditLog({ bootstrap }: AdminAnalyticsProps) {
       setLoading(false);
     }
   }, [canRead, entityType, page, search, source]);
-  useEffect(() => { const timer = window.setTimeout(() => { void load(); }, 200); return () => window.clearTimeout(timer); }, [load]);
-  if (!canRead) return <PegasusScreen><PermissionNotice permission="audit.read" /></PegasusScreen>;
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void load();
+    }, 200);
+    return () => window.clearTimeout(timer);
+  }, [load]);
+  if (!canRead)
+    return (
+      <PegasusScreen>
+        <PermissionNotice permission="audit.read" />
+      </PegasusScreen>
+    );
   const pageCount = Math.max(1, Math.ceil(result.total / result.pageSize));
-  return <PegasusScreen>
-    <PageHeader title={uiText("Audit Log")} subtitle="รวม Core audit และ Material audit แบบ read-only จากฐานข้อมูลจริง" meta={<Badge tone="green"><LocalizedText text={"Append only"} /></Badge>} />
-    <Toolbar><SearchInput link="q" value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder="Search document, action, actor or reason…" /><Select label="Source" value={source} options={["All sources", "Core", "Material"]} onChange={(value) => { setSource(value); setPage(1); }} /><label className="field"><span><LocalizedText text={"Entity"} /></span><input value={entityType} maxLength={50} placeholder={localizeCopy("e.g. Estimate")} onChange={(event) => { setEntityType(event.target.value); setPage(1); }} /></label><button className="btn ghost" type="button" disabled={loading} onClick={() => { void load(); }}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button></Toolbar>
-    {error ? <LoadError message={error} retry={() => { void load(); }} /> : null}
-    <Panel title={uiText("Audit.events").replace("{n}", String(result.total))} subtitle="This endpoint is read-only; both audit ledgers remain append-only" flush>{result.items.length ? <div className="table-wrap"><table>
-      <thead><tr><th><LocalizedText text={"Occurred"} /></th><th><LocalizedText text={"Source"} /></th><th><LocalizedText text={"Entity"} /></th><th><LocalizedText text={"Action"} /></th><th><LocalizedText text={"Actor"} /></th><th><LocalizedText text={"Project / Qty"} /></th><th><LocalizedText text={"Reason"} /></th><th><LocalizedText text={"Change"} /></th></tr></thead>
-      <tbody>{result.items.map((row) => <tr key={`${row.source}-${row.id}`}><td className="muted">{formatDateTime(row.occurredAt)}</td><td><Badge tone={row.source === "Material" ? "violet" : "blue"}>{row.source}</Badge></td><td><strong>{row.entityType}</strong><div className="muted mono">{row.entityNumber || `#${row.entityId}`}</div></td><td><Badge>{row.action}</Badge></td><td><strong>{row.actorName}</strong><div className="muted">{row.actorRole}</div></td><td>{row.projectId ? <div><LocalizedText text={"Project #"} />{row.projectId}</div> : "—"}{row.quantity !== null ? <div className="muted"><LocalizedText text={"Qty"} /> {formatNumber(row.quantity)}</div> : null}</td><td>{row.reason || "—"}</td><td>{row.beforeJson || row.afterJson ? <details><summary><LocalizedText text={"View JSON"} /></summary>{row.beforeJson ? <><strong><LocalizedText text={"Before"} /></strong><pre>{row.beforeJson}</pre></> : null}{row.afterJson ? <><strong><LocalizedText text={"After"} /></strong><pre>{row.afterJson}</pre></> : null}</details> : "—"}</td></tr>)}</tbody>
-    </table><Pagination page={result.page} pageCount={pageCount} from={(result.page - 1) * result.pageSize + 1} to={Math.min(result.page * result.pageSize, result.total)} total={result.total} onPage={setPage} /></div> : loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading…"} /></div> : <EmptyState icon="shield" title="No audit events" message="ไม่พบเหตุการณ์ตามตัวกรองนี้" />}</Panel>
-  </PegasusScreen>;
+  return (
+    <PegasusScreen>
+      <PageHeader
+        title={uiText("Audit Log")}
+        subtitle="รวม Core audit และ Material audit แบบ read-only จากฐานข้อมูลจริง"
+        meta={
+          <Badge tone="green">
+            <LocalizedText text={"Append only"} />
+          </Badge>
+        }
+      />
+      <Toolbar>
+        <SearchInput
+          link="q"
+          value={search}
+          onChange={(value) => {
+            setSearch(value);
+            setPage(1);
+          }}
+          placeholder="Search document, action, actor or reason…"
+        />
+        <Select
+          label="Source"
+          value={source}
+          options={["All sources", "Core", "Material"]}
+          onChange={(value) => {
+            setSource(value);
+            setPage(1);
+          }}
+        />
+        <label className="field">
+          <span>
+            <LocalizedText text={"Entity"} />
+          </span>
+          <input
+            value={entityType}
+            maxLength={50}
+            placeholder={localizeCopy("e.g. Estimate")}
+            onChange={(event) => {
+              setEntityType(event.target.value);
+              setPage(1);
+            }}
+          />
+        </label>
+        <button
+          className="btn ghost"
+          type="button"
+          disabled={loading}
+          onClick={() => {
+            void load();
+          }}
+        >
+          <Icon name="refresh" />
+          <LocalizedText text={"Refresh"} />
+        </button>
+      </Toolbar>
+      {error ? (
+        <LoadError
+          message={error}
+          retry={() => {
+            void load();
+          }}
+        />
+      ) : null}
+      <Panel title={uiText("Audit.events").replace("{n}", String(result.total))} subtitle="This endpoint is read-only; both audit ledgers remain append-only" flush>
+        {result.items.length ? (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>
+                    <LocalizedText text={"Occurred"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Source"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Entity"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Action"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Actor"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Project / Qty"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Reason"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Change"} />
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {result.items.map((row) => (
+                  <tr key={`${row.source}-${row.id}`}>
+                    <td className="muted">{formatDateTime(row.occurredAt)}</td>
+                    <td>
+                      <Badge tone={row.source === "Material" ? "violet" : "blue"}>{row.source}</Badge>
+                    </td>
+                    <td>
+                      <strong>{row.entityType}</strong>
+                      <div className="muted mono">{row.entityNumber || `#${row.entityId}`}</div>
+                    </td>
+                    <td>
+                      <Badge>{row.action}</Badge>
+                    </td>
+                    <td>
+                      <strong>{row.actorName}</strong>
+                      <div className="muted">{row.actorRole}</div>
+                    </td>
+                    <td>
+                      {row.projectId ? (
+                        <div>
+                          <LocalizedText text={"Project #"} />
+                          {row.projectId}
+                        </div>
+                      ) : (
+                        "—"
+                      )}
+                      {row.quantity !== null ? (
+                        <div className="muted">
+                          <LocalizedText text={"Qty"} /> {formatNumber(row.quantity)}
+                        </div>
+                      ) : null}
+                    </td>
+                    <td>{row.reason || "—"}</td>
+                    <td>
+                      {row.beforeJson || row.afterJson ? (
+                        <details>
+                          <summary>
+                            <LocalizedText text={"View JSON"} />
+                          </summary>
+                          {row.beforeJson ? (
+                            <>
+                              <strong>
+                                <LocalizedText text={"Before"} />
+                              </strong>
+                              <pre>{row.beforeJson}</pre>
+                            </>
+                          ) : null}
+                          {row.afterJson ? (
+                            <>
+                              <strong>
+                                <LocalizedText text={"After"} />
+                              </strong>
+                              <pre>{row.afterJson}</pre>
+                            </>
+                          ) : null}
+                        </details>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <Pagination
+              page={result.page}
+              pageCount={pageCount}
+              from={(result.page - 1) * result.pageSize + 1}
+              to={Math.min(result.page * result.pageSize, result.total)}
+              total={result.total}
+              onPage={setPage}
+            />
+          </div>
+        ) : loading ? (
+          <div className="empty">
+            <span className="spinner" />
+            <LocalizedText text={"Loading…"} />
+          </div>
+        ) : (
+          <EmptyState icon="shield" title="No audit events" message="ไม่พบเหตุการณ์ตามตัวกรองนี้" />
+        )}
+      </Panel>
+    </PegasusScreen>
+  );
 }
 
 const EMPTY_NAS_SETTINGS: NasSettingsInput = { server: "", share: "", destinationPath: "", username: "" };
@@ -924,40 +2105,56 @@ function StorageCheckPanel({ canWrite, notify }: { canWrite: boolean; notify: (m
   const [saving, setSaving] = useState(false);
   const nasFields = useRef<HTMLDivElement>(null);
   const failureTitle = uiText("Form.errorTitle");
-  const fail = (error: unknown) => { void failureDialog(String(error instanceof Error ? error.message : error), failureTitle); };
-  const uncPreview = form.server && form.share
-    ? `\\\\${form.server}\\${form.share}${form.destinationPath ? `\\${form.destinationPath.replaceAll("/", "\\")}` : ""}`
-    : "";
+  const fail = (error: unknown) => {
+    void failureDialog(String(error instanceof Error ? error.message : error), failureTitle);
+  };
+  const uncPreview = form.server && form.share ? `\\\\${form.server}\\${form.share}${form.destinationPath ? `\\${form.destinationPath.replaceAll("/", "\\")}` : ""}` : "";
 
   useEffect(() => {
-    void loadNasSettings().then((value) => {
-      setSettings(value);
-      if (value.draft) {
-        const loaded = { server: value.draft.server, share: value.draft.share, destinationPath: value.draft.destinationPath, username: value.draft.username };
-        setSaved(loaded);
-        if (!hasDraft("settings:nas")) setForm(loaded);
-      }
-    }).catch((error) => { void failureDialog(String(error instanceof Error ? error.message : error), failureTitle); });
+    void loadNasSettings()
+      .then((value) => {
+        setSettings(value);
+        if (value.draft) {
+          const loaded = { server: value.draft.server, share: value.draft.share, destinationPath: value.draft.destinationPath, username: value.draft.username };
+          setSaved(loaded);
+          if (!hasDraft("settings:nas")) setForm(loaded);
+        }
+      })
+      .catch((error) => {
+        void failureDialog(String(error instanceof Error ? error.message : error), failureTitle);
+      });
   }, [failureTitle, setForm]);
 
   const run = async () => {
-    setBusy(true); setResult(null);
-    try { setResult(await checkAdminStorage()); }
-    catch (e) { fail(e); }
-    finally { setBusy(false); }
+    setBusy(true);
+    setResult(null);
+    try {
+      setResult(await checkAdminStorage());
+    } catch (e) {
+      fail(e);
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const set = (key: keyof NasSettingsInput, value: string) => { setForm((current) => ({ ...current, [key]: value })); setConnection(null); };
+  const set = (key: keyof NasSettingsInput, value: string) => {
+    setForm((current) => ({ ...current, [key]: value }));
+    setConnection(null);
+  };
   const test = async () => {
     if (!checkFields(nasFields.current, uiText)) return;
-    setBusy(true); setConnection(null);
+    setBusy(true);
+    setConnection(null);
     try {
       const outcome = await testNasConnection(form);
       // A connection that fails is a failed action, so it opens the error dialog; a good one stays on the page with its path.
-      if (outcome.ok) setConnection(outcome); else fail(outcome.error ?? uiText("Settings.failed"));
+      if (outcome.ok) setConnection(outcome);
+      else fail(outcome.error ?? uiText("Settings.failed"));
+    } catch (e) {
+      fail(e);
+    } finally {
+      setBusy(false);
     }
-    catch (e) { fail(e); }
-    finally { setBusy(false); }
   };
   const save = async () => {
     if (!checkFields(nasFields.current, uiText)) return;
@@ -968,73 +2165,269 @@ function StorageCheckPanel({ canWrite, notify }: { canWrite: boolean; notify: (m
       setSaved(form);
       clearDraft("settings:nas");
       notify("Settings.saved");
-    } catch (e) { fail(e); }
-    finally { setSaving(false); }
+    } catch (e) {
+      fail(e);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
     <>
-    <Panel title="NAS connection & destination" subtitle="Settings.nasSubtitle">
-      <div className="form-grid two" ref={nasFields}>
-        <Field label="Settings.server"><input required value={form.server} placeholder="100.64.0.53" onChange={(event) => set("server", event.target.value)} /></Field>
-        <Field label="Share name"><input required value={form.share} placeholder="IoT Department" onChange={(event) => set("share", event.target.value)} /></Field>
-        <Field label="Destination path" span={2} hint="Settings.pathHint"><input required value={form.destinationPath} placeholder="IoT Team Center" onChange={(event) => set("destinationPath", event.target.value)} /></Field>
-        <Field label="NAS username"><input required value={form.username} autoComplete="username" onChange={(event) => set("username", event.target.value)} /></Field>
-        <Field label="Password"><input value={uiText("Settings.passwordValue")} disabled aria-label={uiText("Settings.passwordLabel")} /></Field>
-      </div>
-      {uncPreview ? <div className="info-strip" style={{ marginTop: 14 }}><Icon name="folder" /><span><strong>{uiText("Settings.target")}</strong><br /><small style={{ wordBreak: "break-all" }}>{uncPreview}</small></span></div> : null}
-      <div className="row-actions" style={{ justifyContent: "flex-end", marginTop: 14 }}>
-        <button className="btn ghost" type="button" disabled={busy || saving} onClick={() => { void test(); }}><Icon name="refresh" />{uiText(busy ? "Settings.testing" : "Settings.testServer")}</button>
-        <button className="btn primary" type="button" disabled={!canWrite || saving || busy} onClick={() => { void save(); }}><Icon name="check" />{uiText(saving ? "Saving…" : "Settings.saveSettings")}</button>
-      </div>
-      {connection?.ok ? <div className="callout info" style={{ marginTop: 12 }}><Icon name="checkCircle" /><span><span>{uiText("Settings.connected").replace("{ms}", String(connection.durationMs))}</span><small>{connection.uncPath}</small></span></div> : null}
-      {settings?.draft ? <div className="callout info" style={{ marginTop: 12 }}><Icon name="clock" /><span><strong>{uiText("Settings.draftSaved")}</strong><small>{uiText("Settings.draftBy").replace("{name}", settings.draft.updatedByName).replace("{when}", formatDateTime(settings.draft.updatedAt))}</small></span></div> : null}
-      <div className="info-strip" style={{ marginTop: 14 }}><Icon name="shield" /><span>{uiText("Settings.passwordNote")}</span></div>
-    </Panel>
-    <Panel
-      title="Active document storage"
-      subtitle="Settings.storageSubtitle"
-      actions={<button className="btn ghost sm" type="button" disabled={busy} onClick={() => { void run(); }}>{busy ? <><span className="spinner" /> {uiText("Settings.testing")}</> : <><Icon name="refresh" /> {uiText("Settings.runTest")}</>}</button>}
-    >
-      <div className="settings-list">
-        {result ? (<>
-          <div>
-            <span className={`setting-icon ${result.ok ? "green" : "red"}`}><Icon name={result.ok ? "database" : "alertTriangle"} /></span>
-            <span><strong>{uiText(result.mode === "Nas" ? "Settings.modeNas" : "Settings.modeLocal")}</strong><small style={{ wordBreak: "break-all" }}>{result.rootPath}</small>{result.error ? <small style={{ overflowWrap: "anywhere" }}>{result.error}</small> : null}</span>
-            <Badge tone={result.ok ? "green" : "red"}>{result.ok ? uiText("Settings.ok").replace("{ms}", String(result.durationMs)) : uiText("Settings.failed")}</Badge>
+      <Panel title="NAS connection & destination" subtitle="Settings.nasSubtitle">
+        <div className="form-grid two" ref={nasFields}>
+          <Field label="Settings.server">
+            <input required value={form.server} placeholder="100.64.0.53" onChange={(event) => set("server", event.target.value)} />
+          </Field>
+          <Field label="Share name">
+            <input required value={form.share} placeholder="IoT Department" onChange={(event) => set("share", event.target.value)} />
+          </Field>
+          <Field label="Destination path" span={2} hint="Settings.pathHint">
+            <input required value={form.destinationPath} placeholder="IoT Team Center" onChange={(event) => set("destinationPath", event.target.value)} />
+          </Field>
+          <Field label="NAS username">
+            <input required value={form.username} autoComplete="username" onChange={(event) => set("username", event.target.value)} />
+          </Field>
+          <Field label="Password">
+            <input value={uiText("Settings.passwordValue")} disabled aria-label={uiText("Settings.passwordLabel")} />
+          </Field>
+        </div>
+        {uncPreview ? (
+          <div className="info-strip" style={{ marginTop: 14 }}>
+            <Icon name="folder" />
+            <span>
+              <strong>{uiText("Settings.target")}</strong>
+              <br />
+              <small style={{ wordBreak: "break-all" }}>{uncPreview}</small>
+            </span>
           </div>
-        </>) : (
-          <div><span className="setting-icon slate"><Icon name="database" /></span><span><strong>{uiText("Settings.notTested")}</strong><small>{uiText("Settings.notTestedHint")}</small></span></div>
-        )}
-      </div>
-    </Panel>
+        ) : null}
+        <div className="row-actions" style={{ justifyContent: "flex-end", marginTop: 14 }}>
+          <button
+            className="btn ghost"
+            type="button"
+            disabled={busy || saving}
+            onClick={() => {
+              void test();
+            }}
+          >
+            <Icon name="refresh" />
+            {uiText(busy ? "Settings.testing" : "Settings.testServer")}
+          </button>
+          <button
+            className="btn primary"
+            type="button"
+            disabled={!canWrite || saving || busy}
+            onClick={() => {
+              void save();
+            }}
+          >
+            <Icon name="check" />
+            {uiText(saving ? "Saving…" : "Settings.saveSettings")}
+          </button>
+        </div>
+        {connection?.ok ? (
+          <div className="callout info" style={{ marginTop: 12 }}>
+            <Icon name="checkCircle" />
+            <span>
+              <span>{uiText("Settings.connected").replace("{ms}", String(connection.durationMs))}</span>
+              <small>{connection.uncPath}</small>
+            </span>
+          </div>
+        ) : null}
+        {settings?.draft ? (
+          <div className="callout info" style={{ marginTop: 12 }}>
+            <Icon name="clock" />
+            <span>
+              <strong>{uiText("Settings.draftSaved")}</strong>
+              <small>{uiText("Settings.draftBy").replace("{name}", settings.draft.updatedByName).replace("{when}", formatDateTime(settings.draft.updatedAt))}</small>
+            </span>
+          </div>
+        ) : null}
+        <div className="info-strip" style={{ marginTop: 14 }}>
+          <Icon name="shield" />
+          <span>{uiText("Settings.passwordNote")}</span>
+        </div>
+      </Panel>
+      <Panel
+        title="Active document storage"
+        subtitle="Settings.storageSubtitle"
+        actions={
+          <button
+            className="btn ghost sm"
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              void run();
+            }}
+          >
+            {busy ? (
+              <>
+                <span className="spinner" /> {uiText("Settings.testing")}
+              </>
+            ) : (
+              <>
+                <Icon name="refresh" /> {uiText("Settings.runTest")}
+              </>
+            )}
+          </button>
+        }
+      >
+        <div className="settings-list">
+          {result ? (
+            <>
+              <div>
+                <span className={`setting-icon ${result.ok ? "green" : "red"}`}>
+                  <Icon name={result.ok ? "database" : "alertTriangle"} />
+                </span>
+                <span>
+                  <strong>{uiText(result.mode === "Nas" ? "Settings.modeNas" : "Settings.modeLocal")}</strong>
+                  <small style={{ wordBreak: "break-all" }}>{result.rootPath}</small>
+                  {result.error ? <small style={{ overflowWrap: "anywhere" }}>{result.error}</small> : null}
+                </span>
+                <Badge tone={result.ok ? "green" : "red"}>{result.ok ? uiText("Settings.ok").replace("{ms}", String(result.durationMs)) : uiText("Settings.failed")}</Badge>
+              </div>
+            </>
+          ) : (
+            <div>
+              <span className="setting-icon slate">
+                <Icon name="database" />
+              </span>
+              <span>
+                <strong>{uiText("Settings.notTested")}</strong>
+                <small>{uiText("Settings.notTestedHint")}</small>
+              </span>
+            </div>
+          )}
+        </div>
+      </Panel>
     </>
   );
 }
 
 export function ProductionSettings({ bootstrap, notify, teamTestMode = false }: AdminAnalyticsProps) {
   const uiText = useUiText();
-  const endpoint = (() => { try { return new URL(API_BASE_URL).origin; } catch { return uiText("Settings.notConfigured"); } })();
+  const endpoint = (() => {
+    try {
+      return new URL(API_BASE_URL).origin;
+    } catch {
+      return uiText("Settings.notConfigured");
+    }
+  })();
   // The sign-in this build was made for: Team Test on the LAN, TMT ID on the shared host, Entra otherwise.
-  const auth = teamTestMode ? { text: "Settings.authTeamTest", badge: "Settings.badgeTeamTest", tone: "amber" as const }
-    : IS_TMT_ID_MODE ? { text: "Settings.authTmtId", badge: "Settings.badgeTmtId", tone: "green" as const }
-    : { text: "Settings.authEntra", badge: "Settings.badgeEntra", tone: "green" as const };
-  return <PegasusScreen>
-    <PageHeader title={uiText("System Settings")} subtitle="Settings.subtitle" meta={<Badge tone={teamTestMode ? "amber" : "green"}>{teamTestMode ? "Team Test" : "Production"}</Badge>} />
-    <div className="grid-2">
-      <Panel title="Signed-in identity" subtitle="Resolved by the API and SQL user registry"><div className="settings-list">
-        <div><span className="setting-icon blue"><Icon name="user" /></span><span><strong>{bootstrap.user.name}</strong><small>{bootstrap.user.email}</small></span><Badge>{bootstrap.user.role}</Badge></div>
-        <div><span className="setting-icon violet"><Icon name="users" /></span><span><strong>{bootstrap.user.department || "No department"}</strong><small><LocalizedText text={"Database user ID"} /> {bootstrap.user.id}</small></span><Badge tone={bootstrap.user.isActive ? "green" : "red"}>{bootstrap.user.isActive ? "Active" : "Settings.accountDisabled"}</Badge></div>
-      </div></Panel>
-      <Panel title="Live connections" subtitle="Verified by the successful bootstrap request"><div className="settings-list">
-        <div><span className="setting-icon green"><Icon name="database" /></span><span><strong><LocalizedText text={"SQL Server via API"} /></strong><small><LocalizedText text={"Bootstrap, master and permissions loaded successfully"} /></small></span><Badge tone="green"><LocalizedText text={"Connected"} /></Badge></div>
-        <div><span className="setting-icon blue"><Icon name="globe" /></span><span><strong><LocalizedText text={"API origin"} /></strong><small>{endpoint}</small></span><Badge tone="green"><LocalizedText text={"Configured"} /></Badge></div>
-        <div><span className="setting-icon amber"><Icon name="clock" /></span><span><strong><LocalizedText text={"Business timezone"} /></strong><small>{BUSINESS_TIME_ZONE}</small></span><Badge tone="blue">{"Active"}</Badge></div>
-        <div><span className="setting-icon violet"><Icon name="shield" /></span><span><strong><LocalizedText text={"Authentication"} /></strong><small>{uiText(auth.text)}</small></span><Badge tone={auth.tone}>{auth.badge}</Badge></div>
-      </div></Panel>
-    </div>
-    <StorageCheckPanel canWrite={bootstrap.permissions.includes("master.write")} notify={notify} />
-    <Panel title={uiText("Settings.permissions").replace("{n}", String(bootstrap.permissions.length))} subtitle="Settings.permissionsSubtitle"><div className="chip-select">{bootstrap.permissions.map((permission) => <Badge key={permission} tone="slate">{permission}</Badge>)}</div></Panel>
-    <div className="callout info"><Icon name="settings" /><span><strong><LocalizedText text={"Configuration ownership"} /></strong><span>{uiText("Settings.ownership")}</span></span></div>
-  </PegasusScreen>;
+  const auth = teamTestMode
+    ? { text: "Settings.authTeamTest", badge: "Settings.badgeTeamTest", tone: "amber" as const }
+    : IS_TMT_ID_MODE
+      ? { text: "Settings.authTmtId", badge: "Settings.badgeTmtId", tone: "green" as const }
+      : { text: "Settings.authEntra", badge: "Settings.badgeEntra", tone: "green" as const };
+  return (
+    <PegasusScreen>
+      <PageHeader title={uiText("System Settings")} subtitle="Settings.subtitle" meta={<Badge tone={teamTestMode ? "amber" : "green"}>{teamTestMode ? "Team Test" : "Production"}</Badge>} />
+      <div className="grid-2">
+        <Panel title="Signed-in identity" subtitle="Resolved by the API and SQL user registry">
+          <div className="settings-list">
+            <div>
+              <span className="setting-icon blue">
+                <Icon name="user" />
+              </span>
+              <span>
+                <strong>{bootstrap.user.name}</strong>
+                <small>{bootstrap.user.email}</small>
+              </span>
+              <Badge>{bootstrap.user.role}</Badge>
+            </div>
+            <div>
+              <span className="setting-icon violet">
+                <Icon name="users" />
+              </span>
+              <span>
+                <strong>{bootstrap.user.department || "No department"}</strong>
+                <small>
+                  <LocalizedText text={"Database user ID"} /> {bootstrap.user.id}
+                </small>
+              </span>
+              <Badge tone={bootstrap.user.isActive ? "green" : "red"}>{bootstrap.user.isActive ? "Active" : "Settings.accountDisabled"}</Badge>
+            </div>
+          </div>
+        </Panel>
+        <Panel title="Live connections" subtitle="Verified by the successful bootstrap request">
+          <div className="settings-list">
+            <div>
+              <span className="setting-icon green">
+                <Icon name="database" />
+              </span>
+              <span>
+                <strong>
+                  <LocalizedText text={"SQL Server via API"} />
+                </strong>
+                <small>
+                  <LocalizedText text={"Bootstrap, master and permissions loaded successfully"} />
+                </small>
+              </span>
+              <Badge tone="green">
+                <LocalizedText text={"Connected"} />
+              </Badge>
+            </div>
+            <div>
+              <span className="setting-icon blue">
+                <Icon name="globe" />
+              </span>
+              <span>
+                <strong>
+                  <LocalizedText text={"API origin"} />
+                </strong>
+                <small>{endpoint}</small>
+              </span>
+              <Badge tone="green">
+                <LocalizedText text={"Configured"} />
+              </Badge>
+            </div>
+            <div>
+              <span className="setting-icon amber">
+                <Icon name="clock" />
+              </span>
+              <span>
+                <strong>
+                  <LocalizedText text={"Business timezone"} />
+                </strong>
+                <small>{BUSINESS_TIME_ZONE}</small>
+              </span>
+              <Badge tone="blue">{"Active"}</Badge>
+            </div>
+            <div>
+              <span className="setting-icon violet">
+                <Icon name="shield" />
+              </span>
+              <span>
+                <strong>
+                  <LocalizedText text={"Authentication"} />
+                </strong>
+                <small>{uiText(auth.text)}</small>
+              </span>
+              <Badge tone={auth.tone}>{auth.badge}</Badge>
+            </div>
+          </div>
+        </Panel>
+      </div>
+      <StorageCheckPanel canWrite={bootstrap.permissions.includes("master.write")} notify={notify} />
+      <Panel title={uiText("Settings.permissions").replace("{n}", String(bootstrap.permissions.length))} subtitle="Settings.permissionsSubtitle">
+        <div className="chip-select">
+          {bootstrap.permissions.map((permission) => (
+            <Badge key={permission} tone="slate">
+              {permission}
+            </Badge>
+          ))}
+        </div>
+      </Panel>
+      <div className="callout info">
+        <Icon name="settings" />
+        <span>
+          <strong>
+            <LocalizedText text={"Configuration ownership"} />
+          </strong>
+          <span>{uiText("Settings.ownership")}</span>
+        </span>
+      </div>
+    </PegasusScreen>
+  );
 }

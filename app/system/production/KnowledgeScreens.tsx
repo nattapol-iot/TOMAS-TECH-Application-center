@@ -58,31 +58,12 @@ import {
 } from "../api-client";
 import { useT } from "../i18n";
 import { SolutionLibrary, useSolutionLibraryLabel } from "../SolutionLibrary";
-import {
-  Avatar,
-  Badge,
-  Drawer,
-  EmptyState,
-  Field,
-  Icon,
-  KpiCard,
-  Modal,
-  PageHeader,
-  Pagination,
-  Panel,
-  Pill,
-  Progress,
-  SearchInput,
-  Select,
-  TablePageSize,
-  Tabs,
-  Toolbar,
-  toneOf,
-} from "../ui";
+import { Avatar, Badge, Drawer, EmptyState, Field, Icon, KpiCard, Modal, PageHeader, Pagination, Panel, Pill, Progress, SearchInput, Select, TablePageSize, Tabs, Toolbar, toneOf } from "../ui";
 import { DateInput } from "../DateInput";
 import { PegasusScreen } from "./PegasusScreen";
 import { checkFields, failureDialog } from "./form-bubbles";
 import { clearDraft, confirmLeave, draftKeys, hasDraft, leaveCopy, useDraftField } from "./form-draft";
+import { PgSelect } from "./PegasusSelect";
 
 type KnowledgeProps = {
   bootstrap: BootstrapData;
@@ -91,27 +72,21 @@ type KnowledgeProps = {
 
 type HubTab = "solutions" | "register" | "presentations" | "articles" | "shared" | "acknowledgements" | "admin";
 
-const DOCUMENT_TYPE_FILTER = [
-  "All types", "Controlled Document", "Working Document", "Knowledge Article",
-  "Presentation", "Template", "Project Document", "Supplier Document", "External Reference",
-];
+const DOCUMENT_TYPE_FILTER = ["All types", "Controlled Document", "Working Document", "Knowledge Article", "Presentation", "Template", "Project Document", "Supplier Document", "External Reference"];
 
-const STATUS_FILTER = [
-  "All statuses", "Draft", "In Review", "Request Changes", "Pending Approval",
-  "Approved", "Published", "Review Due", "Expired", "Superseded", "Archived",
-];
+const STATUS_FILTER = ["All statuses", "Draft", "In Review", "Request Changes", "Pending Approval", "Approved", "Published", "Review Due", "Expired", "Superseded", "Archived"];
 
-const ARTICLE_TYPES = [
-  "All article types", "How-to", "Troubleshooting", "FAQ", "Technical Note", "Best Practice",
-  "Design Guideline", "Lessons Learned", "Root Cause Analysis", "Training Note",
-];
-
+const ARTICLE_TYPES = ["All article types", "How-to", "Troubleshooting", "FAQ", "Technical Note", "Best Practice", "Design Guideline", "Lessons Learned", "Root Cause Analysis", "Training Note"];
 
 const initialsOf = (name: string) =>
-  name.trim().split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase() ?? "").join("") || "?";
+  name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("") || "?";
 
-const errorText = (error: unknown) =>
-  error instanceof ApiClientError || error instanceof Error ? error.message : "Something went wrong.";
+const errorText = (error: unknown) => (error instanceof ApiClientError || error instanceof Error ? error.message : "Something went wrong.");
 
 export function ProductionKnowledgeHub({ bootstrap, notify }: KnowledgeProps) {
   const uiText = useUiText();
@@ -144,9 +119,7 @@ export function ProductionKnowledgeHub({ bootstrap, notify }: KnowledgeProps) {
   const [acknowledgements, setAcknowledgements] = useState<KnowledgeAcknowledgement[]>([]);
   const [dashboard, setDashboard] = useState<KnowledgeDashboard | null>(null);
 
-  const categoryOptions = useMemo(
-    () => ["All categories", ...categories.map((category) => category.nameEn)],
-    [categories]);
+  const categoryOptions = useMemo(() => ["All categories", ...categories.map((category) => category.nameEn)], [categories]);
 
   const load = useCallback(async () => {
     if (!canView) return;
@@ -156,8 +129,7 @@ export function ProductionKnowledgeHub({ bootstrap, notify }: KnowledgeProps) {
       const selectedCategory = categories.find((category) => category.nameEn === categoryName);
       const result = await listKnowledgeDocuments({
         search: search || undefined,
-        documentType: tab === "presentations" ? "Presentation"
-          : tab === "register" && documentType !== "All types" ? documentType : undefined,
+        documentType: tab === "presentations" ? "Presentation" : tab === "register" && documentType !== "All types" ? documentType : undefined,
         status: status === "All statuses" ? undefined : status,
         categoryId: selectedCategory?.id,
         confidentiality: confidentiality === "All confidentiality" ? undefined : confidentiality,
@@ -170,7 +142,9 @@ export function ProductionKnowledgeHub({ bootstrap, notify }: KnowledgeProps) {
       });
       setRows(result.items);
       setTotal(result.total);
-      void getKnowledgeDashboard().then(setDashboard).catch(() => undefined);
+      void getKnowledgeDashboard()
+        .then(setDashboard)
+        .catch(() => undefined);
     } catch (requestError) {
       setError(errorText(requestError));
     } finally {
@@ -186,11 +160,15 @@ export function ProductionKnowledgeHub({ bootstrap, notify }: KnowledgeProps) {
     void listMyKnowledgeAcknowledgements()
       .then((result) => setAcknowledgements(result.items))
       .catch(() => setAcknowledgements([]));
-    void getKnowledgeDashboard().then(setDashboard).catch(() => setDashboard(null));
+    void getKnowledgeDashboard()
+      .then(setDashboard)
+      .catch(() => setDashboard(null));
   }, [canView]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => { void load(); }, 0);
+    const timer = window.setTimeout(() => {
+      void load();
+    }, 0);
     return () => window.clearTimeout(timer);
   }, [load]);
 
@@ -198,11 +176,7 @@ export function ProductionKnowledgeHub({ bootstrap, notify }: KnowledgeProps) {
     return (
       <PegasusScreen>
         <PageHeader title={uiText("Knowledge Hub")} subtitle="Standards, SOP, templates and technical knowledge" />
-        <EmptyState
-          icon="lock"
-          title="No access to the knowledge library"
-          message="An administrator must grant the knowledge.view permission to your role."
-        />
+        <EmptyState icon="lock" title="No access to the knowledge library" message="An administrator must grant the knowledge.view permission to your role." />
       </PegasusScreen>
     );
   }
@@ -222,12 +196,21 @@ export function ProductionKnowledgeHub({ bootstrap, notify }: KnowledgeProps) {
         subtitle="Controlled standards, templates, presentations and technical knowledge in one register"
         actions={
           <>
-            <button className="btn ghost" type="button" disabled={loading} onClick={() => { void load(); }}>
-              <Icon name="refresh" />{t("Refresh")}
+            <button
+              className="btn ghost"
+              type="button"
+              disabled={loading}
+              onClick={() => {
+                void load();
+              }}
+            >
+              <Icon name="refresh" />
+              {t("Refresh")}
             </button>
             {canUpload ? (
               <button className="btn primary" type="button" data-guide="kh.new" onClick={() => setCreating(true)}>
-                <Icon name="plus" />{t("New Document")}
+                <Icon name="plus" />
+                {t("New Document")}
               </button>
             ) : null}
           </>
@@ -238,18 +221,15 @@ export function ProductionKnowledgeHub({ bootstrap, notify }: KnowledgeProps) {
         <KpiCard label="Knowledge documents" value={dashboard?.totalDocuments ?? total} note={t("permission-filtered library")} tone="blue" icon="book" />
         <KpiCard label="Published" value={published} note={t("current revision in force")} tone="green" icon="checkCircle" />
         <KpiCard label="In workflow" value={inWorkflow} note={t("review or approval pending")} tone="amber" icon="clock" />
-        <KpiCard
-          label="Needs attention"
-          value={needsReview}
-          note={t("review due or expired")}
-          tone={needsReview ? "red" : "green"}
-          icon="alertTriangle"
-        />
+        <KpiCard label="Needs attention" value={needsReview} note={t("review due or expired")} tone={needsReview ? "red" : "green"} icon="alertTriangle" />
       </div>
 
       <Tabs
         active={tab}
-        onChange={(value) => { setTab(value as HubTab); setPage(1); }}
+        onChange={(value) => {
+          setTab(value as HubTab);
+          setPage(1);
+        }}
         tabs={[
           { id: "solutions", label: solutionLabel },
           { id: "register", label: "Standards Register", count: total },
@@ -266,33 +246,99 @@ export function ProductionKnowledgeHub({ bootstrap, notify }: KnowledgeProps) {
         {tab === "register" ? (
           <>
             <Toolbar>
-              <SearchInput guide="kh.search" link="q"
+              <SearchInput
+                guide="kh.search"
+                link="q"
                 value={search}
-                onChange={(value) => { setSearch(value); setPage(1); }}
+                onChange={(value) => {
+                  setSearch(value);
+                  setPage(1);
+                }}
                 placeholder="Search document number, title, tag, owner or category…"
               />
-              <Select link="type" label="Document type" value={documentType}
-                onChange={(value) => { setDocumentType(value); setPage(1); }} options={DOCUMENT_TYPE_FILTER} />
-              <Select link="status" label="Status" value={status}
-                onChange={(value) => { setStatus(value); setPage(1); }} options={STATUS_FILTER} />
-              <Select link="category" label="Category" value={categoryName}
-                onChange={(value) => { setCategoryName(value); setPage(1); }} options={categoryOptions} />
-              <Select link="confidentiality" label="Confidentiality" value={confidentiality}
-                onChange={(value) => { setConfidentiality(value); setPage(1); }} options={["All confidentiality", "Company", "Department Only", "Project Team Only", "Management Only", "Confidential", "Restricted"]} />
-              <Select link="language" label="Language" value={language}
-                onChange={(value) => { setLanguage(value); setPage(1); }} options={["All languages", "EN", "TH", "JA"]} />
+              <Select
+                link="type"
+                label="Document type"
+                value={documentType}
+                onChange={(value) => {
+                  setDocumentType(value);
+                  setPage(1);
+                }}
+                options={DOCUMENT_TYPE_FILTER}
+              />
+              <Select
+                link="status"
+                label="Status"
+                value={status}
+                onChange={(value) => {
+                  setStatus(value);
+                  setPage(1);
+                }}
+                options={STATUS_FILTER}
+              />
+              <Select
+                link="category"
+                label="Category"
+                value={categoryName}
+                onChange={(value) => {
+                  setCategoryName(value);
+                  setPage(1);
+                }}
+                options={categoryOptions}
+              />
+              <Select
+                link="confidentiality"
+                label="Confidentiality"
+                value={confidentiality}
+                onChange={(value) => {
+                  setConfidentiality(value);
+                  setPage(1);
+                }}
+                options={["All confidentiality", "Company", "Department Only", "Project Team Only", "Management Only", "Confidential", "Restricted"]}
+              />
+              <Select
+                link="language"
+                label="Language"
+                value={language}
+                onChange={(value) => {
+                  setLanguage(value);
+                  setPage(1);
+                }}
+                options={["All languages", "EN", "TH", "JA"]}
+              />
               <label className="check-inline">
-                <input type="checkbox" checked={reviewDue}
-                  onChange={(event) => { setReviewDue(event.target.checked); setPage(1); }} />
+                <input
+                  type="checkbox"
+                  checked={reviewDue}
+                  onChange={(event) => {
+                    setReviewDue(event.target.checked);
+                    setPage(1);
+                  }}
+                />
                 <span>{t("Review due only")}</span>
               </label>
-              <TablePageSize value={pageSize} onChange={(value) => { setPageSize(value); setPage(1); }} />
+              <TablePageSize
+                value={pageSize}
+                onChange={(value) => {
+                  setPageSize(value);
+                  setPage(1);
+                }}
+              />
             </Toolbar>
 
             {error ? (
               <div className="callout error" role="alert">
-                <Icon name="alertTriangle" /><span>{error}</span>
-                <button className="btn ghost" type="button" onClick={() => { void load(); }}>{t("Retry")}</button>
+                <Icon name="alertTriangle" />
+                <span>{error}</span>
+                <button
+                  className="btn ghost"
+                  type="button"
+                  onClick={() => {
+                    void load();
+                  }}
+                >
+                  {t("Retry")}
+                </button>
               </div>
             ) : null}
 
@@ -302,11 +348,14 @@ export function ProductionKnowledgeHub({ bootstrap, notify }: KnowledgeProps) {
                   icon="book"
                   title="No documents yet"
                   message="Create a standard, SOP or template to start the register."
-                  action={canUpload ? (
-                    <button className="btn primary" type="button" onClick={() => setCreating(true)}>
-                      <Icon name="plus" />{t("New Document")}
-                    </button>
-                  ) : undefined}
+                  action={
+                    canUpload ? (
+                      <button className="btn primary" type="button" onClick={() => setCreating(true)}>
+                        <Icon name="plus" />
+                        {t("New Document")}
+                      </button>
+                    ) : undefined
+                  }
                 />
               ) : (
                 <div className="table-wrap">
@@ -328,12 +377,14 @@ export function ProductionKnowledgeHub({ bootstrap, notify }: KnowledgeProps) {
                     </thead>
                     <tbody>
                       {rows.map((row) => {
-                        const ackPercent = row.acknowledgementTotal === 0
-                          ? null
-                          : Math.round((row.acknowledgementDone / row.acknowledgementTotal) * 100);
+                        const ackPercent = row.acknowledgementTotal === 0 ? null : Math.round((row.acknowledgementDone / row.acknowledgementTotal) * 100);
                         return (
                           <tr key={row.id}>
-                            <td><button className="link-button mono" type="button" onClick={() => setOpenDocumentId(row.id)}>{row.documentNumber}</button></td>
+                            <td>
+                              <button className="link-button mono" type="button" onClick={() => setOpenDocumentId(row.id)}>
+                                {row.documentNumber}
+                              </button>
+                            </td>
                             <td>
                               <button className="link-button" type="button" onClick={() => setOpenDocumentId(row.id)}>
                                 {row.title}
@@ -341,16 +392,26 @@ export function ProductionKnowledgeHub({ bootstrap, notify }: KnowledgeProps) {
                             </td>
                             <td>{row.categoryName}</td>
                             <td>{row.department || "—"}</td>
-                            <td><Avatar initials={initialsOf(row.ownerName)} name={row.ownerName} /></td>
+                            <td>
+                              <Avatar initials={initialsOf(row.ownerName)} name={row.ownerName} />
+                            </td>
                             <td className="mono">{row.currentRevision ?? "—"}</td>
-                            <td><Badge tone={toneOf(row.status)}>{t(row.status)}</Badge></td>
+                            <td>
+                              <Badge tone={toneOf(row.status)}>{t(row.status)}</Badge>
+                            </td>
                             <td className="mono">{row.effectiveDate ?? "—"}</td>
                             <td className="mono">{row.nextReviewDate ?? "—"}</td>
                             <td style={{ minWidth: 120 }}>
-                              {ackPercent === null ? "—" : (
+                              {ackPercent === null ? (
+                                "—"
+                              ) : (
                                 <>
                                   <Progress value={ackPercent} tone={ackPercent === 100 ? "green" : "amber"} />
-                                  <small>{row.acknowledgementDone}<LocalizedText text={"of"} />{row.acknowledgementTotal}</small>
+                                  <small>
+                                    {row.acknowledgementDone}
+                                    <LocalizedText text={"of"} />
+                                    {row.acknowledgementTotal}
+                                  </small>
                                 </>
                               )}
                             </td>
@@ -362,20 +423,14 @@ export function ProductionKnowledgeHub({ bootstrap, notify }: KnowledgeProps) {
                   </table>
                 </div>
               )}
-              {total > 0 ? (
-                <Pagination page={page} pageCount={pageCount} from={from} to={to} total={total} onPage={setPage} />
-              ) : null}
+              {total > 0 ? <Pagination page={page} pageCount={pageCount} from={from} to={to} total={total} onPage={setPage} /> : null}
             </Panel>
           </>
         ) : null}
 
-        {tab === "presentations" ? (
-          <PresentationLibrary rows={rows} loading={loading} onOpen={setOpenDocumentId} />
-        ) : null}
+        {tab === "presentations" ? <PresentationLibrary rows={rows} loading={loading} onOpen={setOpenDocumentId} /> : null}
 
-        {tab === "articles" ? (
-          <ArticleLibrary categories={categories} bootstrap={bootstrap} canUpload={canUpload} notify={notify} />
-        ) : null}
+        {tab === "articles" ? <ArticleLibrary categories={categories} bootstrap={bootstrap} canUpload={canUpload} notify={notify} /> : null}
 
         {tab === "shared" ? <SharedWorkspace rows={rows} loading={loading} onOpen={setOpenDocumentId} /> : null}
 
@@ -393,9 +448,13 @@ export function ProductionKnowledgeHub({ bootstrap, notify }: KnowledgeProps) {
         ) : null}
 
         {tab === "admin" && canManageCategories ? (
-          <KnowledgeAdmin categories={categories} notify={notify} onChanged={() => {
-            void listKnowledgeCategories().then((result) => setCategories(result.items));
-          }} />
+          <KnowledgeAdmin
+            categories={categories}
+            notify={notify}
+            onChanged={() => {
+              void listKnowledgeCategories().then((result) => setCategories(result.items));
+            }}
+          />
         ) : null}
       </div>
 
@@ -423,7 +482,9 @@ export function ProductionKnowledgeHub({ bootstrap, notify }: KnowledgeProps) {
           canManagePermissions={canManagePermissions}
           notify={notify}
           onClose={() => setOpenDocumentId(null)}
-          onChanged={() => { void load(); }}
+          onChanged={() => {
+            void load();
+          }}
         />
       ) : null}
     </PegasusScreen>
@@ -434,33 +495,31 @@ export function ProductionKnowledgeHub({ bootstrap, notify }: KnowledgeProps) {
 // Presentation library — the same records, presented as cards rather than rows
 // because a slide deck is chosen by looking at it, not by reading a table.
 // ---------------------------------------------------------------------------
-function PresentationLibrary({
-  rows, loading, onOpen,
-}: { rows: KnowledgeDocumentRow[]; loading: boolean; onOpen: (id: number) => void }) {
+function PresentationLibrary({ rows, loading, onOpen }: { rows: KnowledgeDocumentRow[]; loading: boolean; onOpen: (id: number) => void }) {
   const t = useT();
   const decks = rows.filter((row) => row.documentType === "Presentation");
 
   if (decks.length === 0 && !loading) {
-    return (
-      <EmptyState
-        icon="play"
-        title="No presentations yet"
-        message="Upload a company, sales or technical presentation to build the library."
-      />
-    );
+    return <EmptyState icon="play" title="No presentations yet" message="Upload a company, sales or technical presentation to build the library." />;
   }
 
   return (
     <div className="card-grid">
       {decks.map((deck) => (
         <article className="doc-card" key={deck.id}>
-          <div className="doc-card-thumb" aria-hidden="true"><Icon name="play" /></div>
+          <div className="doc-card-thumb" aria-hidden="true">
+            <Icon name="play" />
+          </div>
           <div className="doc-card-body">
             <p className="doc-card-category">{deck.categoryName}</p>
             <h3>
-              <button className="link-button" type="button" onClick={() => onOpen(deck.id)}>{deck.title}</button>
+              <button className="link-button" type="button" onClick={() => onOpen(deck.id)}>
+                {deck.title}
+              </button>
             </h3>
-            <p className="doc-card-meta mono">{deck.documentNumber} <LocalizedText text={"·"} /> {deck.currentRevision ?? "—"}</p>
+            <p className="doc-card-meta mono">
+              {deck.documentNumber} <LocalizedText text={"·"} /> {deck.currentRevision ?? "—"}
+            </p>
             <div className="doc-card-foot">
               <Badge tone={toneOf(deck.status)}>{t(deck.status)}</Badge>
               <Pill>{deck.language}</Pill>
@@ -473,34 +532,66 @@ function PresentationLibrary({
   );
 }
 
-function SharedWorkspace({ rows, loading, onOpen }: {
-  rows: KnowledgeDocumentRow[]; loading: boolean; onOpen: (id: number) => void;
-}) {
+function SharedWorkspace({ rows, loading, onOpen }: { rows: KnowledgeDocumentRow[]; loading: boolean; onOpen: (id: number) => void }) {
   const t = useT();
   if (rows.length === 0 && !loading) return <EmptyState icon="users" title="No shared documents" message="Working, project and supplier documents shared with you will appear here." />;
-  return <Panel title={t("Team shared workspace")} subtitle={t("Working, project and supplier documents visible to you")} flush>
-    <div className="table-wrap"><table className="grid"><thead><tr><th>{t("Document No.")}</th><th>{t("Title")}</th><th>{t("Type")}</th><th>{t("Category")}</th><th>{t("Owner")}</th><th>{t("Rev")}</th><th>{t("Status")}</th><th>{t("Updated")}</th></tr></thead>
-      <tbody>{rows.map((row) => <tr key={row.id}><td><button className="link-button mono" type="button" onClick={() => onOpen(row.id)}>{row.documentNumber}</button></td><td><button className="link-button" type="button" onClick={() => onOpen(row.id)}>{row.title}</button></td><td>{row.documentType}</td><td>{row.categoryName}</td><td><Avatar initials={initialsOf(row.ownerName)} name={row.ownerName} /></td><td className="mono">{row.currentRevision}</td><td><Badge tone={toneOf(row.status)}>{row.status}</Badge></td><td className="mono">{row.updatedAt.slice(0, 10)}</td></tr>)}</tbody></table></div>
-  </Panel>;
+  return (
+    <Panel title={t("Team shared workspace")} subtitle={t("Working, project and supplier documents visible to you")} flush>
+      <div className="table-wrap">
+        <table className="grid">
+          <thead>
+            <tr>
+              <th>{t("Document No.")}</th>
+              <th>{t("Title")}</th>
+              <th>{t("Type")}</th>
+              <th>{t("Category")}</th>
+              <th>{t("Owner")}</th>
+              <th>{t("Rev")}</th>
+              <th>{t("Status")}</th>
+              <th>{t("Updated")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.id}>
+                <td>
+                  <button className="link-button mono" type="button" onClick={() => onOpen(row.id)}>
+                    {row.documentNumber}
+                  </button>
+                </td>
+                <td>
+                  <button className="link-button" type="button" onClick={() => onOpen(row.id)}>
+                    {row.title}
+                  </button>
+                </td>
+                <td>{row.documentType}</td>
+                <td>{row.categoryName}</td>
+                <td>
+                  <Avatar initials={initialsOf(row.ownerName)} name={row.ownerName} />
+                </td>
+                <td className="mono">{row.currentRevision}</td>
+                <td>
+                  <Badge tone={toneOf(row.status)}>{row.status}</Badge>
+                </td>
+                <td className="mono">{row.updatedAt.slice(0, 10)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Panel>
+  );
 }
 
 // ---------------------------------------------------------------------------
 // Read acknowledgement
 // ---------------------------------------------------------------------------
-function AcknowledgementList({
-  items, notify, onDone,
-}: { items: KnowledgeAcknowledgement[]; notify: (message: string) => void; onDone: () => void }) {
+function AcknowledgementList({ items, notify, onDone }: { items: KnowledgeAcknowledgement[]; notify: (message: string) => void; onDone: () => void }) {
   const t = useT();
   const [busy, setBusy] = useState(0);
 
   if (items.length === 0) {
-    return (
-      <EmptyState
-        icon="checkCircle"
-        title="Nothing waiting for you"
-        message="Standards assigned to you for reading will appear here until you confirm them."
-      />
-    );
+    return <EmptyState icon="checkCircle" title="Nothing waiting for you" message="Standards assigned to you for reading will appear here until you confirm them." />;
   }
 
   return (
@@ -546,7 +637,8 @@ function AcknowledgementList({
                       }
                     }}
                   >
-                    <Icon name="check" />{t("I have read this")}
+                    <Icon name="check" />
+                    {t("I have read this")}
                   </button>
                 </td>
               </tr>
@@ -561,14 +653,7 @@ function AcknowledgementList({
 // ---------------------------------------------------------------------------
 // Create
 // ---------------------------------------------------------------------------
-function ArticleLibrary({
-  categories, bootstrap, canUpload, notify,
-}: {
-  categories: KnowledgeCategory[];
-  bootstrap: BootstrapData;
-  canUpload: boolean;
-  notify: (message: string) => void;
-}) {
+function ArticleLibrary({ categories, bootstrap, canUpload, notify }: { categories: KnowledgeCategory[]; bootstrap: BootstrapData; canUpload: boolean; notify: (message: string) => void }) {
   const t = useT();
   const [items, setItems] = useState<KnowledgeArticleRow[]>([]);
   const [total, setTotal] = useState(0);
@@ -585,42 +670,147 @@ function ArticleLibrary({
       const result = await listKnowledgeArticles({
         search: search || undefined,
         articleType: articleType === "All article types" ? undefined : articleType,
-        page, pageSize,
+        page,
+        pageSize,
       });
-      setItems(result.items); setTotal(result.total);
-    } catch (error) { notify(errorText(error)); }
-    finally { setLoading(false); }
+      setItems(result.items);
+      setTotal(result.total);
+    } catch (error) {
+      notify(errorText(error));
+    } finally {
+      setLoading(false);
+    }
   }, [articleType, notify, page, pageSize, search]);
-  useEffect(() => { const timer = window.setTimeout(() => { void load(); }, 0); return () => window.clearTimeout(timer); }, [load]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void load();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [load]);
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
   return (
     <div className="stack">
       <Toolbar>
-        <SearchInput link="aq" value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder="Search how-to, troubleshooting, lessons learned…" />
-        <Select link="atype" label="Article type" value={articleType} options={ARTICLE_TYPES} onChange={(value) => { setArticleType(value); setPage(1); }} />
-        <TablePageSize value={pageSize} onChange={(value) => { setPageSize(value); setPage(1); }} />
-        {canUpload ? <button className="btn primary" type="button" onClick={() => setCreating(true)}><Icon name="plus" />{t("New article")}</button> : null}
+        <SearchInput
+          link="aq"
+          value={search}
+          onChange={(value) => {
+            setSearch(value);
+            setPage(1);
+          }}
+          placeholder="Search how-to, troubleshooting, lessons learned…"
+        />
+        <Select
+          link="atype"
+          label="Article type"
+          value={articleType}
+          options={ARTICLE_TYPES}
+          onChange={(value) => {
+            setArticleType(value);
+            setPage(1);
+          }}
+        />
+        <TablePageSize
+          value={pageSize}
+          onChange={(value) => {
+            setPageSize(value);
+            setPage(1);
+          }}
+        />
+        {canUpload ? (
+          <button className="btn primary" type="button" onClick={() => setCreating(true)}>
+            <Icon name="plus" />
+            {t("New article")}
+          </button>
+        ) : null}
       </Toolbar>
       <Panel title={t("Technical knowledge")} subtitle={t("How-to, troubleshooting, best practices and lessons learned")} flush>
-        {items.length === 0 && !loading ? <EmptyState icon="book" title="No knowledge article found" message="Create the first technical article for the team." /> : (
-          <div className="table-wrap"><table className="grid"><thead><tr><th>{t("Title")}</th><th>{t("Type")}</th><th>{t("Category")}</th><th>{t("Owner")}</th><th>{t("Status")}</th><th>{t("Helpful")}</th><th>{t("Views")}</th><th>{t("Updated")}</th></tr></thead>
-            <tbody>{items.map((article) => <tr key={article.id}><td><button className="link-button" type="button" onClick={() => setOpenId(article.id)}>{article.title}</button><div className="muted">{article.summary}</div></td>
-              <td>{article.articleType}</td><td>{article.categoryName}</td><td><Avatar initials={initialsOf(article.ownerName)} name={article.ownerName} /></td>
-              <td><Badge tone={toneOf(article.status)}>{article.status}</Badge></td><td>{article.helpfulCount}<LocalizedText text={"of"} />{article.helpfulCount + article.notHelpfulCount}</td>
-              <td>{article.viewCount}</td><td className="mono">{article.updatedAt.slice(0, 10)}</td></tr>)}</tbody></table></div>
+        {items.length === 0 && !loading ? (
+          <EmptyState icon="book" title="No knowledge article found" message="Create the first technical article for the team." />
+        ) : (
+          <div className="table-wrap">
+            <table className="grid">
+              <thead>
+                <tr>
+                  <th>{t("Title")}</th>
+                  <th>{t("Type")}</th>
+                  <th>{t("Category")}</th>
+                  <th>{t("Owner")}</th>
+                  <th>{t("Status")}</th>
+                  <th>{t("Helpful")}</th>
+                  <th>{t("Views")}</th>
+                  <th>{t("Updated")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((article) => (
+                  <tr key={article.id}>
+                    <td>
+                      <button className="link-button" type="button" onClick={() => setOpenId(article.id)}>
+                        {article.title}
+                      </button>
+                      <div className="muted">{article.summary}</div>
+                    </td>
+                    <td>{article.articleType}</td>
+                    <td>{article.categoryName}</td>
+                    <td>
+                      <Avatar initials={initialsOf(article.ownerName)} name={article.ownerName} />
+                    </td>
+                    <td>
+                      <Badge tone={toneOf(article.status)}>{article.status}</Badge>
+                    </td>
+                    <td>
+                      {article.helpfulCount}
+                      <LocalizedText text={"of"} />
+                      {article.helpfulCount + article.notHelpfulCount}
+                    </td>
+                    <td>{article.viewCount}</td>
+                    <td className="mono">{article.updatedAt.slice(0, 10)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
         {total > 0 ? <Pagination page={page} pageCount={pageCount} from={(page - 1) * pageSize + 1} to={Math.min(page * pageSize, total)} total={total} onPage={setPage} /> : null}
       </Panel>
-      {creating ? <ArticleEditorModal categories={categories} bootstrap={bootstrap} onClose={() => setCreating(false)} onSaved={(id) => {
-        setCreating(false); setOpenId(id); notify("Knowledge article created"); void load();
-      }} /> : null}
-      {openId !== null ? <ArticleDrawer articleId={openId} categories={categories} bootstrap={bootstrap} canEdit={bootstrap.permissions.includes("knowledge.edit")}
-        notify={notify} onClose={() => setOpenId(null)} onChanged={() => { void load(); }} /> : null}
+      {creating ? (
+        <ArticleEditorModal
+          categories={categories}
+          bootstrap={bootstrap}
+          onClose={() => setCreating(false)}
+          onSaved={(id) => {
+            setCreating(false);
+            setOpenId(id);
+            notify("Knowledge article created");
+            void load();
+          }}
+        />
+      ) : null}
+      {openId !== null ? (
+        <ArticleDrawer
+          articleId={openId}
+          categories={categories}
+          bootstrap={bootstrap}
+          canEdit={bootstrap.permissions.includes("knowledge.edit")}
+          notify={notify}
+          onClose={() => setOpenId(null)}
+          onChanged={() => {
+            void load();
+          }}
+        />
+      ) : null}
     </div>
   );
 }
 
-function ArticleEditorModal({ categories, bootstrap, article, onClose, onSaved }: {
+function ArticleEditorModal({
+  categories,
+  bootstrap,
+  article,
+  onClose,
+  onSaved,
+}: {
   categories: KnowledgeCategory[];
   bootstrap: BootstrapData;
   article?: KnowledgeArticleDetail;
@@ -629,7 +819,9 @@ function ArticleEditorModal({ categories, bootstrap, article, onClose, onSaved }
 }) {
   const t = useT();
   const draftKey = article ? `knowledge:article:${article.id}` : "knowledge:article:new";
-  const close = async () => { if (await confirmLeave(draftKey, leaveCopy(t))) onClose(); };
+  const close = async () => {
+    if (await confirmLeave(draftKey, leaveCopy(t))) onClose();
+  };
   const [title, setTitle] = useDraftField(draftKey, "title", article?.title ?? "");
   const [summary, setSummary] = useDraftField(draftKey, "summary", article?.summary ?? "");
   const [content, setContent] = useDraftField(draftKey, "content", article?.content ?? "");
@@ -643,101 +835,407 @@ function ArticleEditorModal({ categories, bootstrap, article, onClose, onSaved }
   const [busy, setBusy] = useState(false);
   const fields = useRef<HTMLDivElement>(null);
   const save = async () => {
-    if (!checkFields(fields.current, t, [
-      { invalid: !title.trim(), at: '[name="title"]', message: t("Form.required") },
-      { invalid: !content.trim(), at: '[name="content"]', message: t("Form.required") },
-      { invalid: !categoryId, at: '[name="categoryId"]', message: t("Form.choose") },
-    ])) return;
+    if (
+      !checkFields(fields.current, t, [
+        { invalid: !title.trim(), at: '[name="title"]', message: t("Form.required") },
+        { invalid: !content.trim(), at: '[name="content"]', message: t("Form.required") },
+        { invalid: !categoryId, at: '[name="categoryId"]', message: t("Form.choose") },
+      ])
+    )
+      return;
     setBusy(true);
-    const input = { title: title.trim(), summary: summary.trim(), content: content.trim(), articleType, categoryId,
-      ownerId: article?.ownerId ?? bootstrap.user.id, status, confidentiality, language, tags: tags.trim(), reviewDate: reviewDate || undefined };
+    const input = {
+      title: title.trim(),
+      summary: summary.trim(),
+      content: content.trim(),
+      articleType,
+      categoryId,
+      ownerId: article?.ownerId ?? bootstrap.user.id,
+      status,
+      confidentiality,
+      language,
+      tags: tags.trim(),
+      reviewDate: reviewDate || undefined,
+    };
     try {
-      if (article) { await updateKnowledgeArticle(article.id, input); clearDraft(draftKey); onSaved(article.id); }
-      else { const created = await createKnowledgeArticle(input); clearDraft(draftKey); onSaved(created.id); }
-    } catch (requestError) { void failureDialog(errorText(requestError), t("Form.errorTitle")); }
-    finally { setBusy(false); }
+      if (article) {
+        await updateKnowledgeArticle(article.id, input);
+        clearDraft(draftKey);
+        onSaved(article.id);
+      } else {
+        const created = await createKnowledgeArticle(input);
+        clearDraft(draftKey);
+        onSaved(created.id);
+      }
+    } catch (requestError) {
+      void failureDialog(errorText(requestError), t("Form.errorTitle"));
+    } finally {
+      setBusy(false);
+    }
   };
-  return <Modal title={article ? t("Edit knowledge article") : t("New knowledge article")} subtitle={t("Content is stored as safe plain text/Markdown; HTML is never injected")}
-    onClose={() => { void close(); }} footer={<><button className="btn ghost" type="button" onClick={() => { void close(); }}>{t("Cancel")}</button><button className="btn primary" type="button" disabled={busy} onClick={() => { void save(); }}>{busy ? t("Saving…") : t("Save article")}</button></>}>
-    <div className="form-grid" ref={fields}>
-      <Field label={t("Title")} span={2}><input name="title" value={title} maxLength={300} onChange={(event) => setTitle(event.target.value)} /></Field>
-      <Field label={t("Article type")}><select value={articleType} onChange={(event) => setArticleType(event.target.value)}>{ARTICLE_TYPES.slice(1).map((value) => <option key={value}>{value}</option>)}</select></Field>
-      <Field label={t("Category")}><select name="categoryId" value={categoryId} onChange={(event) => setCategoryId(Number(event.target.value))}>{categories.map((category) => <option key={category.id} value={category.id}>{category.nameEn}</option>)}</select></Field>
-      <Field label={t("Summary")} span={2}><textarea rows={2} value={summary} maxLength={1000} onChange={(event) => setSummary(event.target.value)} /></Field>
-      <Field label={t("Content")} span={2} hint={t("Headings, lists, links, tables and code blocks can be written in Markdown")}><textarea name="content" rows={14} value={content} onChange={(event) => setContent(event.target.value)} /></Field>
-      <Field label={t("Status")}><select value={status} onChange={(event) => setStatus(event.target.value)}>{["Draft", "In Review", "Published", "Archived"].map((value) => <option key={value}>{value}</option>)}</select></Field>
-      <Field label={t("Confidentiality")}><select value={confidentiality} onChange={(event) => setConfidentiality(event.target.value)}>{["Company", "Department Only", "Project Team Only", "Management Only", "Confidential", "Restricted"].map((value) => <option key={value}>{value}</option>)}</select></Field>
-      <Field label={t("Language")}><select value={language} onChange={(event) => setLanguage(event.target.value)}>{["EN", "TH", "JA"].map((value) => <option key={value}>{value}</option>)}</select></Field>
-      <Field label={t("Review date")}><DateInput value={reviewDate} onChange={(event) => setReviewDate(event.target.value)} /></Field>
-      <Field label={t("Tags")} span={2}><input value={tags} maxLength={500} onChange={(event) => setTags(event.target.value)} /></Field>
-    </div>
-  </Modal>;
+  return (
+    <Modal
+      title={article ? t("Edit knowledge article") : t("New knowledge article")}
+      subtitle={t("Content is stored as safe plain text/Markdown; HTML is never injected")}
+      onClose={() => {
+        void close();
+      }}
+      footer={
+        <>
+          <button
+            className="btn ghost"
+            type="button"
+            onClick={() => {
+              void close();
+            }}
+          >
+            {t("Cancel")}
+          </button>
+          <button
+            className="btn primary"
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              void save();
+            }}
+          >
+            {busy ? t("Saving…") : t("Save article")}
+          </button>
+        </>
+      }
+    >
+      <div className="form-grid" ref={fields}>
+        <Field label={t("Title")} span={2}>
+          <input name="title" value={title} maxLength={300} onChange={(event) => setTitle(event.target.value)} />
+        </Field>
+        <Field label={t("Article type")}>
+          <PgSelect value={articleType} onChange={(event) => setArticleType(event.target.value)}>
+            {ARTICLE_TYPES.slice(1).map((value) => (
+              <option key={value}>{value}</option>
+            ))}
+          </PgSelect>
+        </Field>
+        <Field label={t("Category")}>
+          <PgSelect name="categoryId" value={categoryId} onChange={(event) => setCategoryId(Number(event.target.value))}>
+            {categories.map((category) => (
+              <option key={category.id} value={category.id}>
+                {category.nameEn}
+              </option>
+            ))}
+          </PgSelect>
+        </Field>
+        <Field label={t("Summary")} span={2}>
+          <textarea rows={2} value={summary} maxLength={1000} onChange={(event) => setSummary(event.target.value)} />
+        </Field>
+        <Field label={t("Content")} span={2} hint={t("Headings, lists, links, tables and code blocks can be written in Markdown")}>
+          <textarea name="content" rows={14} value={content} onChange={(event) => setContent(event.target.value)} />
+        </Field>
+        <Field label={t("Status")}>
+          <PgSelect value={status} onChange={(event) => setStatus(event.target.value)}>
+            {["Draft", "In Review", "Published", "Archived"].map((value) => (
+              <option key={value}>{value}</option>
+            ))}
+          </PgSelect>
+        </Field>
+        <Field label={t("Confidentiality")}>
+          <PgSelect value={confidentiality} onChange={(event) => setConfidentiality(event.target.value)}>
+            {["Company", "Department Only", "Project Team Only", "Management Only", "Confidential", "Restricted"].map((value) => (
+              <option key={value}>{value}</option>
+            ))}
+          </PgSelect>
+        </Field>
+        <Field label={t("Language")}>
+          <PgSelect value={language} onChange={(event) => setLanguage(event.target.value)}>
+            {["EN", "TH", "JA"].map((value) => (
+              <option key={value}>{value}</option>
+            ))}
+          </PgSelect>
+        </Field>
+        <Field label={t("Review date")}>
+          <DateInput value={reviewDate} onChange={(event) => setReviewDate(event.target.value)} />
+        </Field>
+        <Field label={t("Tags")} span={2}>
+          <input value={tags} maxLength={500} onChange={(event) => setTags(event.target.value)} />
+        </Field>
+      </div>
+    </Modal>
+  );
 }
 
-function ArticleDrawer({ articleId, categories, bootstrap, canEdit, notify, onClose, onChanged }: {
-  articleId: number; categories: KnowledgeCategory[]; bootstrap: BootstrapData; canEdit: boolean;
-  notify: (message: string) => void; onClose: () => void; onChanged: () => void;
+function ArticleDrawer({
+  articleId,
+  categories,
+  bootstrap,
+  canEdit,
+  notify,
+  onClose,
+  onChanged,
+}: {
+  articleId: number;
+  categories: KnowledgeCategory[];
+  bootstrap: BootstrapData;
+  canEdit: boolean;
+  notify: (message: string) => void;
+  onClose: () => void;
+  onChanged: () => void;
 }) {
   const t = useT();
   const [article, setArticle] = useState<KnowledgeArticleDetail | null>(null);
   const [editing, setEditing] = useState(() => canEdit && hasDraft(`knowledge:article:${articleId}`));
-  const reload = useCallback(() => { void getKnowledgeArticle(articleId).then(setArticle).catch((error) => notify(errorText(error))); }, [articleId, notify]);
-  useEffect(() => { const timer = window.setTimeout(reload, 0); return () => window.clearTimeout(timer); }, [reload]);
-  if (!article) return <Drawer title={t("Loading…")} onClose={onClose}><span className="spinner" /></Drawer>;
-  return <>
-    <Drawer title={article.title} subtitle={`${article.articleType} · ${article.categoryName}`} onClose={onClose} width={760}
-      footer={<><button className="btn ghost" type="button" onClick={onClose}>{t("Close")}</button>{canEdit && (article.ownerId === bootstrap.user.id || bootstrap.permissions.includes("knowledge.manage_permissions")) ? <button className="btn primary" type="button" onClick={() => setEditing(true)}><Icon name="edit" />{t("Edit")}</button> : null}</>}>
-      <div className="drawer-meta"><Badge tone={toneOf(article.status)}>{article.status}</Badge><Pill>{article.language}</Pill><Pill>{article.confidentiality}</Pill><span>{article.ownerName}</span></div>
-      {article.summary ? <p className="lead">{article.summary}</p> : null}
-      <pre style={{ whiteSpace: "pre-wrap", fontFamily: "inherit", lineHeight: 1.65 }}>{article.content}</pre>
-      <div className="button-row">
-        <span>{t("Was this helpful?")}</span>
-        <button className="btn ghost sm" type="button" onClick={async () => { try { await sendKnowledgeArticleFeedback(article.id, true); notify("Thank you for the feedback"); reload(); } catch (error) { notify(errorText(error)); } }}>👍 {article.helpfulCount}</button>
-        <button className="btn ghost sm" type="button" onClick={async () => { try { await sendKnowledgeArticleFeedback(article.id, false); notify("Feedback recorded"); reload(); } catch (error) { notify(errorText(error)); } }}>👎 {article.notHelpfulCount}</button>
-      </div>
-    </Drawer>
-    {editing ? <ArticleEditorModal categories={categories} bootstrap={bootstrap} article={article} onClose={() => setEditing(false)} onSaved={() => { setEditing(false); notify("Article updated"); reload(); onChanged(); }} /> : null}
-  </>;
+  const reload = useCallback(() => {
+    void getKnowledgeArticle(articleId)
+      .then(setArticle)
+      .catch((error) => notify(errorText(error)));
+  }, [articleId, notify]);
+  useEffect(() => {
+    const timer = window.setTimeout(reload, 0);
+    return () => window.clearTimeout(timer);
+  }, [reload]);
+  if (!article)
+    return (
+      <Drawer title={t("Loading…")} onClose={onClose}>
+        <span className="spinner" />
+      </Drawer>
+    );
+  return (
+    <>
+      <Drawer
+        title={article.title}
+        subtitle={`${article.articleType} · ${article.categoryName}`}
+        onClose={onClose}
+        width={760}
+        footer={
+          <>
+            <button className="btn ghost" type="button" onClick={onClose}>
+              {t("Close")}
+            </button>
+            {canEdit && (article.ownerId === bootstrap.user.id || bootstrap.permissions.includes("knowledge.manage_permissions")) ? (
+              <button className="btn primary" type="button" onClick={() => setEditing(true)}>
+                <Icon name="edit" />
+                {t("Edit")}
+              </button>
+            ) : null}
+          </>
+        }
+      >
+        <div className="drawer-meta">
+          <Badge tone={toneOf(article.status)}>{article.status}</Badge>
+          <Pill>{article.language}</Pill>
+          <Pill>{article.confidentiality}</Pill>
+          <span>{article.ownerName}</span>
+        </div>
+        {article.summary ? <p className="lead">{article.summary}</p> : null}
+        <pre style={{ whiteSpace: "pre-wrap", fontFamily: "inherit", lineHeight: 1.65 }}>{article.content}</pre>
+        <div className="button-row">
+          <span>{t("Was this helpful?")}</span>
+          <button
+            className="btn ghost sm"
+            type="button"
+            onClick={async () => {
+              try {
+                await sendKnowledgeArticleFeedback(article.id, true);
+                notify("Thank you for the feedback");
+                reload();
+              } catch (error) {
+                notify(errorText(error));
+              }
+            }}
+          >
+            👍 {article.helpfulCount}
+          </button>
+          <button
+            className="btn ghost sm"
+            type="button"
+            onClick={async () => {
+              try {
+                await sendKnowledgeArticleFeedback(article.id, false);
+                notify("Feedback recorded");
+                reload();
+              } catch (error) {
+                notify(errorText(error));
+              }
+            }}
+          >
+            👎 {article.notHelpfulCount}
+          </button>
+        </div>
+      </Drawer>
+      {editing ? (
+        <ArticleEditorModal
+          categories={categories}
+          bootstrap={bootstrap}
+          article={article}
+          onClose={() => setEditing(false)}
+          onSaved={() => {
+            setEditing(false);
+            notify("Article updated");
+            reload();
+            onChanged();
+          }}
+        />
+      ) : null}
+    </>
+  );
 }
 
-function KnowledgeAdmin({ categories: activeCategories, notify, onChanged }: {
-  categories: KnowledgeCategory[]; notify: (message: string) => void; onChanged: () => void;
-}) {
+function KnowledgeAdmin({ categories: activeCategories, notify, onChanged }: { categories: KnowledgeCategory[]; notify: (message: string) => void; onChanged: () => void }) {
   const t = useT();
   const [categories, setCategories] = useState<KnowledgeCategory[]>(activeCategories);
   const [sequences, setSequences] = useState<KnowledgeNumberSequence[]>([]);
-  const [categoryEditor, setCategoryEditor] = useState<KnowledgeCategory | "new" | null>(() => hasDraft("knowledge:category:new") ? "new" : activeCategories.find((category) => hasDraft(`knowledge:category:${category.id}`)) ?? null);
-  const [sequenceEditor, setSequenceEditor] = useState<KnowledgeNumberSequence | "new" | null>(() => hasDraft("knowledge:sequence:new") ? "new" : null);
+  const [categoryEditor, setCategoryEditor] = useState<KnowledgeCategory | "new" | null>(() =>
+    hasDraft("knowledge:category:new") ? "new" : (activeCategories.find((category) => hasDraft(`knowledge:category:${category.id}`)) ?? null),
+  );
+  const [sequenceEditor, setSequenceEditor] = useState<KnowledgeNumberSequence | "new" | null>(() => (hasDraft("knowledge:sequence:new") ? "new" : null));
   const load = useCallback(async () => {
     try {
       const [categoryResult, sequenceResult] = await Promise.all([listKnowledgeCategories(true), listKnowledgeNumberSequences()]);
-      setCategories(categoryResult.items); setSequences(sequenceResult.items);
-    } catch (error) { notify(errorText(error)); }
+      setCategories(categoryResult.items);
+      setSequences(sequenceResult.items);
+    } catch (error) {
+      notify(errorText(error));
+    }
   }, [notify]);
-  useEffect(() => { const timer = window.setTimeout(() => { void load(); }, 0); return () => window.clearTimeout(timer); }, [load]);
-  return <div className="stack">
-    <Panel title={t("Category administration")} subtitle={t("Maintain hierarchy, display order, defaults and availability")} actions={<button className="btn primary" type="button" onClick={() => setCategoryEditor("new")}><Icon name="plus" />{t("New category")}</button>} flush>
-      <div className="table-wrap"><table className="grid"><thead><tr><th>{t("Order")}</th><th>{t("Code")}</th><th>{t("Category")}</th><th>{t("Parent")}</th><th>{t("Default type")}</th><th>{t("Documents")}</th><th>{t("Status")}</th><th /></tr></thead>
-        <tbody>{categories.map((category) => <tr key={category.id}><td>{category.sortOrder}</td><td className="mono">{category.code}</td><td>{category.nameEn}<div className="muted">{category.nameTh || category.nameJa}</div></td>
-          <td>{categories.find((item) => item.id === category.parentId)?.nameEn ?? "—"}</td><td>{category.defaultDocumentType ?? "—"}</td><td>{category.documentCount}</td>
-          <td><Badge tone={category.isActive ? "green" : "slate"}>{category.isActive ? t("Active") : t("Inactive")}</Badge></td><td><button className="btn ghost sm" type="button" onClick={() => setCategoryEditor(category)}><Icon name="edit" />{t("Edit")}</button></td></tr>)}</tbody></table></div>
-    </Panel>
-    <Panel title={t("Document number sequences")} subtitle={t("Concurrency-safe prefix and scope counters; existing counters can only move forward")} actions={<button className="btn primary" type="button" onClick={() => setSequenceEditor("new")}><Icon name="plus" />{t("New sequence")}</button>} flush>
-      <div className="table-wrap"><table className="grid"><thead><tr><th>{t("Prefix")}</th><th>{t("Scope")}</th><th>{t("Description")}</th><th>{t("Last number")}</th><th>{t("Padding")}</th><th>{t("Status")}</th><th /></tr></thead>
-        <tbody>{sequences.map((sequence) => <tr key={sequence.id}><td className="mono">{sequence.prefix}</td><td className="mono">{sequence.scopeCode}</td><td>{sequence.scopeName}</td><td className="mono">{sequence.lastNumber}</td><td>{sequence.padding}</td>
-          <td><Badge tone={sequence.isActive ? "green" : "slate"}>{sequence.isActive ? t("Active") : t("Inactive")}</Badge></td><td><button className="btn ghost sm" type="button" onClick={() => setSequenceEditor(sequence)}><Icon name="edit" />{t("Edit")}</button></td></tr>)}</tbody></table></div>
-    </Panel>
-    {categoryEditor ? <CategoryEditorModal category={categoryEditor === "new" ? undefined : categoryEditor} categories={categories} onClose={() => setCategoryEditor(null)} onSaved={() => { setCategoryEditor(null); notify("Category saved"); void load(); onChanged(); }} /> : null}
-    {sequenceEditor ? <SequenceEditorModal sequence={sequenceEditor === "new" ? undefined : sequenceEditor} onClose={() => setSequenceEditor(null)} onSaved={() => { setSequenceEditor(null); notify("Number sequence saved"); void load(); }} /> : null}
-  </div>;
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void load();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [load]);
+  return (
+    <div className="stack">
+      <Panel
+        title={t("Category administration")}
+        subtitle={t("Maintain hierarchy, display order, defaults and availability")}
+        actions={
+          <button className="btn primary" type="button" onClick={() => setCategoryEditor("new")}>
+            <Icon name="plus" />
+            {t("New category")}
+          </button>
+        }
+        flush
+      >
+        <div className="table-wrap">
+          <table className="grid">
+            <thead>
+              <tr>
+                <th>{t("Order")}</th>
+                <th>{t("Code")}</th>
+                <th>{t("Category")}</th>
+                <th>{t("Parent")}</th>
+                <th>{t("Default type")}</th>
+                <th>{t("Documents")}</th>
+                <th>{t("Status")}</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {categories.map((category) => (
+                <tr key={category.id}>
+                  <td>{category.sortOrder}</td>
+                  <td className="mono">{category.code}</td>
+                  <td>
+                    {category.nameEn}
+                    <div className="muted">{category.nameTh || category.nameJa}</div>
+                  </td>
+                  <td>{categories.find((item) => item.id === category.parentId)?.nameEn ?? "—"}</td>
+                  <td>{category.defaultDocumentType ?? "—"}</td>
+                  <td>{category.documentCount}</td>
+                  <td>
+                    <Badge tone={category.isActive ? "green" : "slate"}>{category.isActive ? t("Active") : t("Inactive")}</Badge>
+                  </td>
+                  <td>
+                    <button className="btn ghost sm" type="button" onClick={() => setCategoryEditor(category)}>
+                      <Icon name="edit" />
+                      {t("Edit")}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Panel>
+      <Panel
+        title={t("Document number sequences")}
+        subtitle={t("Concurrency-safe prefix and scope counters; existing counters can only move forward")}
+        actions={
+          <button className="btn primary" type="button" onClick={() => setSequenceEditor("new")}>
+            <Icon name="plus" />
+            {t("New sequence")}
+          </button>
+        }
+        flush
+      >
+        <div className="table-wrap">
+          <table className="grid">
+            <thead>
+              <tr>
+                <th>{t("Prefix")}</th>
+                <th>{t("Scope")}</th>
+                <th>{t("Description")}</th>
+                <th>{t("Last number")}</th>
+                <th>{t("Padding")}</th>
+                <th>{t("Status")}</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {sequences.map((sequence) => (
+                <tr key={sequence.id}>
+                  <td className="mono">{sequence.prefix}</td>
+                  <td className="mono">{sequence.scopeCode}</td>
+                  <td>{sequence.scopeName}</td>
+                  <td className="mono">{sequence.lastNumber}</td>
+                  <td>{sequence.padding}</td>
+                  <td>
+                    <Badge tone={sequence.isActive ? "green" : "slate"}>{sequence.isActive ? t("Active") : t("Inactive")}</Badge>
+                  </td>
+                  <td>
+                    <button className="btn ghost sm" type="button" onClick={() => setSequenceEditor(sequence)}>
+                      <Icon name="edit" />
+                      {t("Edit")}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Panel>
+      {categoryEditor ? (
+        <CategoryEditorModal
+          category={categoryEditor === "new" ? undefined : categoryEditor}
+          categories={categories}
+          onClose={() => setCategoryEditor(null)}
+          onSaved={() => {
+            setCategoryEditor(null);
+            notify("Category saved");
+            void load();
+            onChanged();
+          }}
+        />
+      ) : null}
+      {sequenceEditor ? (
+        <SequenceEditorModal
+          sequence={sequenceEditor === "new" ? undefined : sequenceEditor}
+          onClose={() => setSequenceEditor(null)}
+          onSaved={() => {
+            setSequenceEditor(null);
+            notify("Number sequence saved");
+            void load();
+          }}
+        />
+      ) : null}
+    </div>
+  );
 }
 
-function CategoryEditorModal({ category, categories, onClose, onSaved }: {
-  category?: KnowledgeCategory; categories: KnowledgeCategory[]; onClose: () => void; onSaved: () => void;
-}) {
+function CategoryEditorModal({ category, categories, onClose, onSaved }: { category?: KnowledgeCategory; categories: KnowledgeCategory[]; onClose: () => void; onSaved: () => void }) {
   const t = useT();
   const draftKey = category ? `knowledge:category:${category.id}` : "knowledge:category:new";
-  const close = async () => { if (await confirmLeave(draftKey, leaveCopy(t))) onClose(); };
+  const close = async () => {
+    if (await confirmLeave(draftKey, leaveCopy(t))) onClose();
+  };
   const [code, setCode] = useDraftField(draftKey, "code", category?.code ?? "");
   const [nameEn, setNameEn] = useDraftField(draftKey, "nameEn", category?.nameEn ?? "");
   const [nameTh, setNameTh] = useDraftField(draftKey, "nameTh", category?.nameTh ?? "");
@@ -751,34 +1249,114 @@ function CategoryEditorModal({ category, categories, onClose, onSaved }: {
   const save = async () => {
     if (!checkFields(fields.current, t)) return;
     try {
-      const input = { parentId: parentId || undefined, code: code.trim().toUpperCase(), nameEn: nameEn.trim(), nameTh: nameTh.trim(), nameJa: nameJa.trim(),
-        defaultDocumentType: documentType || undefined, defaultConfidentiality: confidentiality, sortOrder, isActive: active };
-      if (category) await updateKnowledgeCategory(category.id, input); else await createKnowledgeCategory(input);
+      const input = {
+        parentId: parentId || undefined,
+        code: code.trim().toUpperCase(),
+        nameEn: nameEn.trim(),
+        nameTh: nameTh.trim(),
+        nameJa: nameJa.trim(),
+        defaultDocumentType: documentType || undefined,
+        defaultConfidentiality: confidentiality,
+        sortOrder,
+        isActive: active,
+      };
+      if (category) await updateKnowledgeCategory(category.id, input);
+      else await createKnowledgeCategory(input);
       clearDraft(draftKey);
       onSaved();
-    } catch (requestError) { void failureDialog(errorText(requestError), t("Form.errorTitle")); }
+    } catch (requestError) {
+      void failureDialog(errorText(requestError), t("Form.errorTitle"));
+    }
   };
-  return <Modal title={category ? t("Edit category") : t("New category")} onClose={() => { void close(); }} footer={<><button className="btn ghost" type="button" onClick={() => { void close(); }}>{t("Cancel")}</button><button className="btn primary" type="button" onClick={() => { void save(); }}>{t("Save")}</button></>}>
-    <div className="form-grid" ref={fields}>
-      <Field label={t("Code")}><input value={code} maxLength={40} onChange={(event) => setCode(event.target.value)} /></Field>
-      <Field label={t("Display order")}><input type="number" value={sortOrder} onChange={(event) => setSortOrder(Number(event.target.value))} /></Field>
-      <Field label={t("English name")} span={2}><input value={nameEn} maxLength={200} onChange={(event) => setNameEn(event.target.value)} /></Field>
-      <Field label={t("Thai name")}><input value={nameTh} maxLength={200} onChange={(event) => setNameTh(event.target.value)} /></Field>
-      <Field label={t("Japanese name")}><input value={nameJa} maxLength={200} onChange={(event) => setNameJa(event.target.value)} /></Field>
-      <Field label={t("Parent category")}><select value={parentId} onChange={(event) => setParentId(Number(event.target.value))}><option value={0}>—</option>{categories.filter((item) => item.id !== category?.id).map((item) => <option key={item.id} value={item.id}>{item.nameEn}</option>)}</select></Field>
-      <Field label={t("Default document type")}><select value={documentType} onChange={(event) => setDocumentType(event.target.value)}><option value="">—</option>{DOCUMENT_TYPE_FILTER.slice(1).map((item) => <option key={item}>{item}</option>)}</select></Field>
-      <Field label={t("Default confidentiality")}><select value={confidentiality} onChange={(event) => setConfidentiality(event.target.value)}>{["Company", "Department Only", "Project Team Only", "Management Only", "Confidential", "Restricted"].map((item) => <option key={item}>{item}</option>)}</select></Field>
-      <Field label={t("Availability")}><label className="check-inline"><input type="checkbox" checked={active} onChange={(event) => setActive(event.target.checked)} /><span>{t("Active")}</span></label></Field>
-    </div>
-  </Modal>;
+  return (
+    <Modal
+      title={category ? t("Edit category") : t("New category")}
+      onClose={() => {
+        void close();
+      }}
+      footer={
+        <>
+          <button
+            className="btn ghost"
+            type="button"
+            onClick={() => {
+              void close();
+            }}
+          >
+            {t("Cancel")}
+          </button>
+          <button
+            className="btn primary"
+            type="button"
+            onClick={() => {
+              void save();
+            }}
+          >
+            {t("Save")}
+          </button>
+        </>
+      }
+    >
+      <div className="form-grid" ref={fields}>
+        <Field label={t("Code")}>
+          <input value={code} maxLength={40} onChange={(event) => setCode(event.target.value)} />
+        </Field>
+        <Field label={t("Display order")}>
+          <input type="number" value={sortOrder} onChange={(event) => setSortOrder(Number(event.target.value))} />
+        </Field>
+        <Field label={t("English name")} span={2}>
+          <input value={nameEn} maxLength={200} onChange={(event) => setNameEn(event.target.value)} />
+        </Field>
+        <Field label={t("Thai name")}>
+          <input value={nameTh} maxLength={200} onChange={(event) => setNameTh(event.target.value)} />
+        </Field>
+        <Field label={t("Japanese name")}>
+          <input value={nameJa} maxLength={200} onChange={(event) => setNameJa(event.target.value)} />
+        </Field>
+        <Field label={t("Parent category")}>
+          <PgSelect value={parentId} onChange={(event) => setParentId(Number(event.target.value))}>
+            <option value={0}>—</option>
+            {categories
+              .filter((item) => item.id !== category?.id)
+              .map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.nameEn}
+                </option>
+              ))}
+          </PgSelect>
+        </Field>
+        <Field label={t("Default document type")}>
+          <PgSelect value={documentType} onChange={(event) => setDocumentType(event.target.value)}>
+            <option value="">—</option>
+            {DOCUMENT_TYPE_FILTER.slice(1).map((item) => (
+              <option key={item}>{item}</option>
+            ))}
+          </PgSelect>
+        </Field>
+        <Field label={t("Default confidentiality")}>
+          <PgSelect value={confidentiality} onChange={(event) => setConfidentiality(event.target.value)}>
+            {["Company", "Department Only", "Project Team Only", "Management Only", "Confidential", "Restricted"].map((item) => (
+              <option key={item}>{item}</option>
+            ))}
+          </PgSelect>
+        </Field>
+        <Field label={t("Availability")}>
+          <label className="check-inline">
+            <input type="checkbox" checked={active} onChange={(event) => setActive(event.target.checked)} />
+            <span>{t("Active")}</span>
+          </label>
+        </Field>
+      </div>
+    </Modal>
+  );
 }
 
-function SequenceEditorModal({ sequence, onClose, onSaved }: {
-  sequence?: KnowledgeNumberSequence; onClose: () => void; onSaved: () => void;
-}) {
+function SequenceEditorModal({ sequence, onClose, onSaved }: { sequence?: KnowledgeNumberSequence; onClose: () => void; onSaved: () => void }) {
   const t = useT();
   const draftKey = sequence ? `knowledge:sequence:${sequence.id}` : "knowledge:sequence:new";
-  const close = async () => { if (await confirmLeave(draftKey, leaveCopy(t))) onClose(); };
+  const close = async () => {
+    if (await confirmLeave(draftKey, leaveCopy(t))) onClose();
+  };
   const [prefix, setPrefix] = useDraftField(draftKey, "prefix", sequence?.prefix ?? "STD");
   const [scopeCode, setScopeCode] = useDraftField(draftKey, "scopeCode", sequence?.scopeCode ?? "EE");
   const [scopeName, setScopeName] = useDraftField(draftKey, "scopeName", sequence?.scopeName ?? "");
@@ -790,26 +1368,76 @@ function SequenceEditorModal({ sequence, onClose, onSaved }: {
     if (!checkFields(fields.current, t)) return;
     try {
       const input = { prefix: prefix.trim().toUpperCase(), scopeCode: scopeCode.trim().toUpperCase(), scopeName: scopeName.trim(), lastNumber, padding, isActive: active };
-      if (sequence) await updateKnowledgeNumberSequence(sequence.id, input); else await createKnowledgeNumberSequence(input);
+      if (sequence) await updateKnowledgeNumberSequence(sequence.id, input);
+      else await createKnowledgeNumberSequence(input);
       clearDraft(draftKey);
       onSaved();
-    } catch (requestError) { void failureDialog(errorText(requestError), t("Form.errorTitle")); }
+    } catch (requestError) {
+      void failureDialog(errorText(requestError), t("Form.errorTitle"));
+    }
   };
-  return <Modal title={sequence ? t("Edit number sequence") : t("New number sequence")} subtitle={t("The last number cannot move backwards")} onClose={() => { void close(); }}
-    footer={<><button className="btn ghost" type="button" onClick={() => { void close(); }}>{t("Cancel")}</button><button className="btn primary" type="button" onClick={() => { void save(); }}>{t("Save")}</button></>}>
-    <div className="form-grid" ref={fields}>
-      <Field label={t("Prefix")}><input value={prefix} disabled={Boolean(sequence)} maxLength={10} onChange={(event) => setPrefix(event.target.value)} /></Field>
-      <Field label={t("Scope code")}><input value={scopeCode} disabled={Boolean(sequence)} maxLength={20} onChange={(event) => setScopeCode(event.target.value)} /></Field>
-      <Field label={t("Scope description")} span={2}><input value={scopeName} maxLength={200} onChange={(event) => setScopeName(event.target.value)} /></Field>
-      <Field label={t("Last number")}><input type="number" min={sequence?.lastNumber ?? 0} max={999999} value={lastNumber} onChange={(event) => setLastNumber(Number(event.target.value))} /></Field>
-      <Field label={t("Padding")}><input type="number" min={3} max={6} value={padding} onChange={(event) => setPadding(Number(event.target.value))} /></Field>
-      <Field label={t("Availability")}><label className="check-inline"><input type="checkbox" checked={active} onChange={(event) => setActive(event.target.checked)} /><span>{t("Active")}</span></label></Field>
-    </div>
-  </Modal>;
+  return (
+    <Modal
+      title={sequence ? t("Edit number sequence") : t("New number sequence")}
+      subtitle={t("The last number cannot move backwards")}
+      onClose={() => {
+        void close();
+      }}
+      footer={
+        <>
+          <button
+            className="btn ghost"
+            type="button"
+            onClick={() => {
+              void close();
+            }}
+          >
+            {t("Cancel")}
+          </button>
+          <button
+            className="btn primary"
+            type="button"
+            onClick={() => {
+              void save();
+            }}
+          >
+            {t("Save")}
+          </button>
+        </>
+      }
+    >
+      <div className="form-grid" ref={fields}>
+        <Field label={t("Prefix")}>
+          <input value={prefix} disabled={Boolean(sequence)} maxLength={10} onChange={(event) => setPrefix(event.target.value)} />
+        </Field>
+        <Field label={t("Scope code")}>
+          <input value={scopeCode} disabled={Boolean(sequence)} maxLength={20} onChange={(event) => setScopeCode(event.target.value)} />
+        </Field>
+        <Field label={t("Scope description")} span={2}>
+          <input value={scopeName} maxLength={200} onChange={(event) => setScopeName(event.target.value)} />
+        </Field>
+        <Field label={t("Last number")}>
+          <input type="number" min={sequence?.lastNumber ?? 0} max={999999} value={lastNumber} onChange={(event) => setLastNumber(Number(event.target.value))} />
+        </Field>
+        <Field label={t("Padding")}>
+          <input type="number" min={3} max={6} value={padding} onChange={(event) => setPadding(Number(event.target.value))} />
+        </Field>
+        <Field label={t("Availability")}>
+          <label className="check-inline">
+            <input type="checkbox" checked={active} onChange={(event) => setActive(event.target.checked)} />
+            <span>{t("Active")}</span>
+          </label>
+        </Field>
+      </div>
+    </Modal>
+  );
 }
 
 function CreateDocumentModal({
-  categories, bootstrap, onClose, onCreated,
+  categories,
+  bootstrap,
+  onClose,
+  onCreated,
 }: {
   categories: KnowledgeCategory[];
   bootstrap: BootstrapData;
@@ -818,7 +1446,9 @@ function CreateDocumentModal({
 }) {
   const t = useT();
   const draftKey = "knowledge:document:new";
-  const close = async () => { if (await confirmLeave(draftKey, leaveCopy(t))) onClose(); };
+  const close = async () => {
+    if (await confirmLeave(draftKey, leaveCopy(t))) onClose();
+  };
   const [title, setTitle] = useDraftField(draftKey, "title", "");
   const [documentType, setDocumentType] = useDraftField(draftKey, "documentType", "Controlled Document");
   const [categoryId, setCategoryId] = useDraftField(draftKey, "categoryId", categories[0]?.id ?? 0);
@@ -835,11 +1465,14 @@ function CreateDocumentModal({
   const requiresReviewDate = documentType === "Controlled Document";
 
   const submit = async () => {
-    if (!checkFields(fields.current, t, [
-      { invalid: !title.trim(), at: '[name="title"]', message: t("Form.required") },
-      { invalid: !categoryId, at: '[name="categoryId"]', message: t("Form.choose") },
-      { invalid: requiresReviewDate && !nextReviewDate, at: '[data-bubble-target="next-review"]', message: t("Date.required") },
-    ])) return;
+    if (
+      !checkFields(fields.current, t, [
+        { invalid: !title.trim(), at: '[name="title"]', message: t("Form.required") },
+        { invalid: !categoryId, at: '[name="categoryId"]', message: t("Form.choose") },
+        { invalid: requiresReviewDate && !nextReviewDate, at: '[data-bubble-target="next-review"]', message: t("Date.required") },
+      ])
+    )
+      return;
     setBusy(true);
     try {
       const created = await createKnowledgeDocument({
@@ -868,11 +1501,28 @@ function CreateDocumentModal({
     <Modal
       title={t("New document")}
       subtitle={t("The document number is issued by the server when you create it")}
-      onClose={() => { void close(); }}
+      onClose={() => {
+        void close();
+      }}
       footer={
         <>
-          <button className="btn ghost" type="button" onClick={() => { void close(); }}>{t("Cancel")}</button>
-          <button className="btn primary" type="button" disabled={busy} onClick={() => { void submit(); }}>
+          <button
+            className="btn ghost"
+            type="button"
+            onClick={() => {
+              void close();
+            }}
+          >
+            {t("Cancel")}
+          </button>
+          <button
+            className="btn primary"
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              void submit();
+            }}
+          >
             {busy ? t("Creating…") : t("Create document")}
           </button>
         </>
@@ -883,16 +1533,22 @@ function CreateDocumentModal({
           <input name="title" value={title} maxLength={300} onChange={(event) => setTitle(event.target.value)} />
         </Field>
         <Field label={t("Document type")}>
-          <select value={documentType} onChange={(event) => setDocumentType(event.target.value)}>
-            {DOCUMENT_TYPE_FILTER.slice(1).map((option) => <option key={option} value={option}>{t(option)}</option>)}
-          </select>
+          <PgSelect value={documentType} onChange={(event) => setDocumentType(event.target.value)}>
+            {DOCUMENT_TYPE_FILTER.slice(1).map((option) => (
+              <option key={option} value={option}>
+                {t(option)}
+              </option>
+            ))}
+          </PgSelect>
         </Field>
         <Field label={t("Category")}>
-          <select name="categoryId" value={categoryId} onChange={(event) => setCategoryId(Number(event.target.value))}>
+          <PgSelect name="categoryId" value={categoryId} onChange={(event) => setCategoryId(Number(event.target.value))}>
             {categories.map((category) => (
-              <option key={category.id} value={category.id}>{category.nameEn}</option>
+              <option key={category.id} value={category.id}>
+                {category.nameEn}
+              </option>
             ))}
-          </select>
+          </PgSelect>
         </Field>
         <Field label={t("Number prefix")} hint={t("STD, SOP, WI, TMP, PRS, KB, LL")}>
           <input value={prefix} maxLength={10} onChange={(event) => setPrefix(event.target.value.toUpperCase())} />
@@ -901,31 +1557,31 @@ function CreateDocumentModal({
           <input value={scope} maxLength={20} onChange={(event) => setScope(event.target.value.toUpperCase())} />
         </Field>
         <Field label={t("Confidentiality")}>
-          <select value={confidentiality} onChange={(event) => setConfidentiality(event.target.value)}>
-            {["Company", "Department Only", "Project Team Only", "Management Only", "Confidential", "Restricted"]
-              .map((option) => <option key={option} value={option}>{t(option)}</option>)}
-          </select>
+          <PgSelect value={confidentiality} onChange={(event) => setConfidentiality(event.target.value)}>
+            {["Company", "Department Only", "Project Team Only", "Management Only", "Confidential", "Restricted"].map((option) => (
+              <option key={option} value={option}>
+                {t(option)}
+              </option>
+            ))}
+          </PgSelect>
         </Field>
         <Field label={t("Language")}>
-          <select value={language} onChange={(event) => setLanguage(event.target.value)}>
-            {["EN", "TH", "JA"].map((option) => <option key={option} value={option}>{option}</option>)}
-          </select>
+          <PgSelect value={language} onChange={(event) => setLanguage(event.target.value)}>
+            {["EN", "TH", "JA"].map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </PgSelect>
         </Field>
-        <Field
-          label={t("Next review date")}
-          hint={requiresReviewDate ? t("Required for a controlled document") : t("Optional")}
-        >
+        <Field label={t("Next review date")} hint={requiresReviewDate ? t("Required for a controlled document") : t("Optional")}>
           <DateInput data-bubble-target="next-review" required={requiresReviewDate} value={nextReviewDate} onChange={(event) => setNextReviewDate(event.target.value)} />
         </Field>
         <Field label={t("Tags")} span={2} hint={t("Separate with semicolons")}>
           <input value={tags} maxLength={500} onChange={(event) => setTags(event.target.value)} />
         </Field>
         <Field label={t("File")} span={2} hint={t("Optional. PDF, Word, Excel, PowerPoint, text, CSV, PNG or JPG")}>
-          <input
-            type="file"
-            accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.png,.jpg,.jpeg"
-            onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-          />
+          <input type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.png,.jpg,.jpeg" onChange={(event) => setFile(event.target.files?.[0] ?? null)} />
         </Field>
       </div>
     </Modal>
@@ -936,7 +1592,15 @@ function CreateDocumentModal({
 // Detail drawer: revisions, workflow, related records and audit
 // ---------------------------------------------------------------------------
 function DocumentDrawer({
-  documentId, bootstrap, canPublish, canUpload, canArchive, canManagePermissions, notify, onClose, onChanged,
+  documentId,
+  bootstrap,
+  canPublish,
+  canUpload,
+  canArchive,
+  canManagePermissions,
+  notify,
+  onClose,
+  onChanged,
 }: {
   documentId: number;
   bootstrap: BootstrapData;
@@ -957,7 +1621,9 @@ function DocumentDrawer({
   const [busy, setBusy] = useState(false);
   const failureTitle = t("Form.errorTitle");
   const draftPrefix = `knowledge:doc:${documentId}:`;
-  const closeDrawer = async () => { if (await confirmLeave(draftKeys(draftPrefix), leaveCopy(t))) onClose(); };
+  const closeDrawer = async () => {
+    if (await confirmLeave(draftKeys(draftPrefix), leaveCopy(t))) onClose();
+  };
   // A document that could not be opened says so in the drawer (plain text) after the error dialog, instead of loading forever.
   const [loadFailed, setLoadFailed] = useState(false);
 
@@ -971,20 +1637,28 @@ function DocumentDrawer({
   }, [documentId, failureTitle]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => { void reload(); }, 0);
+    const timer = window.setTimeout(() => {
+      void reload();
+    }, 0);
     return () => window.clearTimeout(timer);
   }, [reload]);
   useEffect(() => {
     if (tab !== "audit") return;
-    void listKnowledgeAudit(documentId).then((result) => setAudit(result.items)).catch(() => setAudit([]));
+    void listKnowledgeAudit(documentId)
+      .then((result) => setAudit(result.items))
+      .catch(() => setAudit([]));
   }, [tab, documentId]);
   useEffect(() => {
     if (tab !== "comments") return;
-    void listKnowledgeComments(documentId).then((result) => setComments(result.items)).catch(() => setComments([]));
+    void listKnowledgeComments(documentId)
+      .then((result) => setComments(result.items))
+      .catch(() => setComments([]));
   }, [tab, documentId]);
   useEffect(() => {
     if (tab !== "access" || !canManagePermissions) return;
-    void listKnowledgePermissions(documentId).then((result) => setPermissions(result.items)).catch(() => setPermissions([]));
+    void listKnowledgePermissions(documentId)
+      .then((result) => setPermissions(result.items))
+      .catch(() => setPermissions([]));
   }, [tab, documentId, canManagePermissions]);
 
   const act = async (work: () => Promise<unknown>, message: string) => {
@@ -1012,75 +1686,124 @@ function DocumentDrawer({
   const document = detail.document;
   const latest = detail.versions[0];
   const publishedVersion = detail.versions.find((version) => version.status === "Published");
-  const myPendingStep = detail.approvals.find(
-    (step) => step.status === "Pending" && step.approverId === bootstrap.user.id);
-  const workingNext: Array<"Shared" | "Editing" | "Final"> = document.documentType !== "Working Document" ? []
-    : document.workflowStatus === "Draft" ? ["Shared"]
-      : document.workflowStatus === "Shared" ? ["Editing", "Final"]
-        : document.workflowStatus === "Editing" ? ["Shared", "Final"] : [];
+  const myPendingStep = detail.approvals.find((step) => step.status === "Pending" && step.approverId === bootstrap.user.id);
+  const workingNext: Array<"Shared" | "Editing" | "Final"> =
+    document.documentType !== "Working Document"
+      ? []
+      : document.workflowStatus === "Draft"
+        ? ["Shared"]
+        : document.workflowStatus === "Shared"
+          ? ["Editing", "Final"]
+          : document.workflowStatus === "Editing"
+            ? ["Shared", "Final"]
+            : [];
 
   return (
     <Drawer
       title={document.title}
       subtitle={`${document.documentNumber} · ${document.categoryName}`}
-      onClose={() => { void closeDrawer(); }}
+      onClose={() => {
+        void closeDrawer();
+      }}
       width={720}
       footer={
         <>
-          <button className="btn ghost" type="button" onClick={() => { void closeDrawer(); }}>{t("Close")}</button>
+          <button
+            className="btn ghost"
+            type="button"
+            onClick={() => {
+              void closeDrawer();
+            }}
+          >
+            {t("Close")}
+          </button>
           {latest?.fileName ? (
             <>
               {latest.mimeType && (latest.mimeType === "application/pdf" || latest.mimeType.startsWith("image/") || latest.mimeType.startsWith("text/")) ? (
-                <button className="btn ghost" type="button" disabled={busy} onClick={() => { void previewKnowledgeVersion(latest.id).catch((e) => notify(errorText(e))); }}><Icon name="eye" />{t("Preview")}</button>
+                <button
+                  className="btn ghost"
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    void previewKnowledgeVersion(latest.id).catch((e) => notify(errorText(e)));
+                  }}
+                >
+                  <Icon name="eye" />
+                  {t("Preview")}
+                </button>
               ) : null}
-              <button className="btn ghost" type="button" disabled={busy}
-                onClick={() => { void downloadKnowledgeVersion(latest.id).catch((e) => notify(errorText(e))); }}>
-                <Icon name="download" />{t("Download")}
+              <button
+                className="btn ghost"
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  void downloadKnowledgeVersion(latest.id).catch((e) => notify(errorText(e)));
+                }}
+              >
+                <Icon name="download" />
+                {t("Download")}
               </button>
             </>
           ) : null}
           {myPendingStep ? (
             <>
-              <button className="btn ghost" type="button" disabled={busy}
+              <button
+                className="btn ghost"
+                type="button"
+                disabled={busy}
                 onClick={async () => {
                   const comment = (await promptDialog(t("Why are changes needed?"))) ?? "";
                   if (!comment.trim()) return;
-                  void act(() => decideKnowledgeVersion(myPendingStep.versionId,
-                    { decision: "Request Changes", comment }), "Changes requested");
-                }}>
+                  void act(() => decideKnowledgeVersion(myPendingStep.versionId, { decision: "Request Changes", comment }), "Changes requested");
+                }}
+              >
                 {t("Request changes")}
               </button>
-              <button className="btn primary" type="button" disabled={busy}
-                onClick={() => void act(
-                  () => decideKnowledgeVersion(myPendingStep.versionId, { decision: "Approved" }),
-                  myPendingStep.stepType === "Approve" ? "Approved" : "Review complete")}>
+              <button
+                className="btn primary"
+                type="button"
+                disabled={busy}
+                onClick={() => void act(() => decideKnowledgeVersion(myPendingStep.versionId, { decision: "Approved" }), myPendingStep.stepType === "Approve" ? "Approved" : "Review complete")}
+              >
                 <Icon name="check" />
                 {myPendingStep.stepType === "Approve" ? t("Approve") : t("Complete review")}
               </button>
             </>
           ) : null}
           {canPublish && latest?.status === "Approved" ? (
-            <button className="btn primary" type="button" disabled={busy}
-              onClick={() => void act(() => publishKnowledgeVersion(latest.id, {}), "Published")}>
-              <Icon name="send" />{t("Publish")}
+            <button className="btn primary" type="button" disabled={busy} onClick={() => void act(() => publishKnowledgeVersion(latest.id, {}), "Published")}>
+              <Icon name="send" />
+              {t("Publish")}
             </button>
           ) : null}
-          {canUpload ? workingNext.map((status) => (
-            <button key={status} className={status === "Final" ? "btn primary" : "btn ghost"} type="button" disabled={busy}
-              onClick={() => void act(() => setKnowledgeWorkingStatus(documentId, status), `Working document moved to ${status}`)}>
-              <Icon name={status === "Final" ? "check" : status === "Editing" ? "edit" : "users"} />{t(status)}
-            </button>
-          )) : null}
+          {canUpload
+            ? workingNext.map((status) => (
+                <button
+                  key={status}
+                  className={status === "Final" ? "btn primary" : "btn ghost"}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void act(() => setKnowledgeWorkingStatus(documentId, status), `Working document moved to ${status}`)}
+                >
+                  <Icon name={status === "Final" ? "check" : status === "Editing" ? "edit" : "users"} />
+                  {t(status)}
+                </button>
+              ))
+            : null}
           {canArchive ? (
-            <button className="btn ghost" type="button" disabled={busy} onClick={async () => {
-              const reason = (await promptDialog(document.archivedAt ? t("Reason for restoring this document") : t("Reason for archiving this document"))) ?? "";
-              if (!reason.trim()) return;
-              void act(
-                () => document.archivedAt
-                  ? restoreKnowledgeDocument(documentId, reason.trim())
-                  : archiveKnowledgeDocument(documentId, reason.trim()),
-                document.archivedAt ? "Document restored" : "Document archived");
-            }}>
+            <button
+              className="btn ghost"
+              type="button"
+              disabled={busy}
+              onClick={async () => {
+                const reason = (await promptDialog(document.archivedAt ? t("Reason for restoring this document") : t("Reason for archiving this document"))) ?? "";
+                if (!reason.trim()) return;
+                void act(
+                  () => (document.archivedAt ? restoreKnowledgeDocument(documentId, reason.trim()) : archiveKnowledgeDocument(documentId, reason.trim())),
+                  document.archivedAt ? "Document restored" : "Document archived",
+                );
+              }}
+            >
               <Icon name={document.archivedAt ? "refresh" : "folder"} />
               {document.archivedAt ? t("Restore") : t("Archive")}
             </button>
@@ -1124,14 +1847,35 @@ function DocumentDrawer({
 
       {tab === "overview" ? (
         <div className="detail-grid">
-          <div><span>{t("Owner")}</span><strong>{document.ownerName}</strong></div>
-          <div><span>{t("Department")}</span><strong>{document.department || "—"}</strong></div>
-          <div><span>{t("Current revision")}</span><strong className="mono">{publishedVersion?.revision ?? latest?.revision ?? "—"}</strong></div>
-          <div><span>{t("Effective date")}</span><strong className="mono">{publishedVersion?.effectiveDate ?? "—"}</strong></div>
-          <div><span>{t("Next review")}</span><strong className="mono">{document.nextReviewDate ?? "—"}</strong></div>
-          <div><span>{t("Tags")}</span><strong>{document.tags || "—"}</strong></div>
+          <div>
+            <span>{t("Owner")}</span>
+            <strong>{document.ownerName}</strong>
+          </div>
+          <div>
+            <span>{t("Department")}</span>
+            <strong>{document.department || "—"}</strong>
+          </div>
+          <div>
+            <span>{t("Current revision")}</span>
+            <strong className="mono">{publishedVersion?.revision ?? latest?.revision ?? "—"}</strong>
+          </div>
+          <div>
+            <span>{t("Effective date")}</span>
+            <strong className="mono">{publishedVersion?.effectiveDate ?? "—"}</strong>
+          </div>
+          <div>
+            <span>{t("Next review")}</span>
+            <strong className="mono">{document.nextReviewDate ?? "—"}</strong>
+          </div>
+          <div>
+            <span>{t("Tags")}</span>
+            <strong>{document.tags || "—"}</strong>
+          </div>
           {document.description ? (
-            <div className="detail-full"><span>{t("Description")}</span><p>{document.description}</p></div>
+            <div className="detail-full">
+              <span>{t("Description")}</span>
+              <p>{document.description}</p>
+            </div>
           ) : null}
 
           {detail.approvals.length > 0 ? (
@@ -1140,9 +1884,7 @@ function DocumentDrawer({
               <ol className="timeline">
                 {detail.approvals.map((step) => (
                   <li key={step.id}>
-                    <Badge tone={step.status === "Approved" ? "green" : step.status === "Pending" ? "slate" : "amber"}>
-                      {t(step.status)}
-                    </Badge>
+                    <Badge tone={step.status === "Approved" ? "green" : step.status === "Pending" ? "slate" : "amber"}>{t(step.status)}</Badge>
                     <strong>{step.stepType === "Approve" ? t("Approver") : t("Reviewer")}</strong>
                     <span>{step.approverName}</span>
                     {step.comment ? <em>{step.comment}</em> : null}
@@ -1165,7 +1907,16 @@ function DocumentDrawer({
           ) : null}
           {canPublish && publishedVersion ? (
             <div className="detail-full">
-              <AcknowledgementAssignment draftKey={`${draftPrefix}ack`} versionId={publishedVersion.id} bootstrap={bootstrap} notify={notify} onChanged={() => { void reload(); onChanged(); }} />
+              <AcknowledgementAssignment
+                draftKey={`${draftPrefix}ack`}
+                versionId={publishedVersion.id}
+                bootstrap={bootstrap}
+                notify={notify}
+                onChanged={() => {
+                  void reload();
+                  onChanged();
+                }}
+              />
             </div>
           ) : null}
         </div>
@@ -1189,15 +1940,22 @@ function DocumentDrawer({
               {detail.versions.map((version) => (
                 <tr key={version.id}>
                   <td className="mono">{version.revision}</td>
-                  <td><Badge tone={toneOf(version.status)}>{t(version.status)}</Badge></td>
+                  <td>
+                    <Badge tone={toneOf(version.status)}>{t(version.status)}</Badge>
+                  </td>
                   <td>{t(version.changeType)}</td>
                   <td>{version.changeSummary}</td>
                   <td className="mono">{version.effectiveDate ?? "—"}</td>
                   <td>{version.createdByName}</td>
                   <td>
                     {version.fileName ? (
-                      <button className="btn ghost sm" type="button"
-                        onClick={() => { void downloadKnowledgeVersion(version.id).catch((e) => notify(errorText(e))); }}>
+                      <button
+                        className="btn ghost sm"
+                        type="button"
+                        onClick={() => {
+                          void downloadKnowledgeVersion(version.id).catch((e) => notify(errorText(e)));
+                        }}
+                      >
                         <Icon name="download" />
                       </button>
                     ) : null}
@@ -1218,8 +1976,17 @@ function DocumentDrawer({
       ) : null}
 
       {tab === "related" ? (
-        <DocumentRelations draftKey={`${draftPrefix}link`} documentId={documentId} relations={detail.relations} canEdit={canUpload}
-          notify={notify} onChanged={() => { void reload(); onChanged(); }} />
+        <DocumentRelations
+          draftKey={`${draftPrefix}link`}
+          documentId={documentId}
+          relations={detail.relations}
+          canEdit={canUpload}
+          notify={notify}
+          onChanged={() => {
+            void reload();
+            onChanged();
+          }}
+        />
       ) : null}
 
       {tab === "comments" ? (
@@ -1255,7 +2022,9 @@ function DocumentDrawer({
               <li key={event.id}>
                 <span className="mono">{event.occurredAt.slice(0, 16).replace("T", " ")}</span>
                 <strong>{t(event.action)}</strong>
-                <span>{event.actorName} <LocalizedText text={"·"} /> {event.actorRole}</span>
+                <span>
+                  {event.actorName} <LocalizedText text={"·"} /> {event.actorRole}
+                </span>
                 {event.revision ? <Pill>{event.revision}</Pill> : null}
                 {event.reason ? <em>{event.reason}</em> : null}
               </li>
@@ -1267,51 +2036,175 @@ function DocumentDrawer({
   );
 }
 
-function AcknowledgementAssignment({ draftKey, versionId, bootstrap, notify, onChanged }: {
-  draftKey: string; versionId: number; bootstrap: BootstrapData; notify: (message: string) => void; onChanged: () => void;
+function AcknowledgementAssignment({
+  draftKey,
+  versionId,
+  bootstrap,
+  notify,
+  onChanged,
+}: {
+  draftKey: string;
+  versionId: number;
+  bootstrap: BootstrapData;
+  notify: (message: string) => void;
+  onChanged: () => void;
 }) {
   const t = useT();
   const team = bootstrap.team ?? [];
   const [selected, setSelected] = useDraftField<number[]>(draftKey, "selected", []);
   const [dueAt, setDueAt] = useDraftField(draftKey, "dueAt", "");
   const fields = useRef<HTMLDivElement>(null);
-  return <Panel title={t("Read acknowledgement")} subtitle={t("Assignments are bound to this exact published revision")}>
-    <div className="form-grid" ref={fields}>
-      <Field label={t("Members")} span={2}><div className="check-grid">{team.map((member) => <label className="check-inline" key={member.id}><input type="checkbox" checked={selected.includes(member.id)} onChange={(event) => setSelected((current) => event.target.checked ? [...current, member.id] : current.filter((id) => id !== member.id))} /><span>{member.name}</span></label>)}</div></Field>
-      <Field label={t("Due date")}><DateInput value={dueAt} onChange={(event) => setDueAt(event.target.value)} /></Field>
-    </div>
-    <button className="btn primary" type="button" onClick={async () => {
-      if (!checkFields(fields.current, t, [{ invalid: selected.length === 0, at: ".check-grid", message: t("Form.chooseOne") }])) return;
-      try { const result = await assignKnowledgeAcknowledgement(versionId, { userIds: selected, dueAt: dueAt || undefined }); notify(`${result.assigned} acknowledgement assignment(s) added`); setSelected([]); clearDraft(draftKey); onChanged(); }
-      catch (error) { notify(errorText(error)); }
-    }}><Icon name="checkCircle" />{t("Assign acknowledgement")}</button>
-  </Panel>;
+  return (
+    <Panel title={t("Read acknowledgement")} subtitle={t("Assignments are bound to this exact published revision")}>
+      <div className="form-grid" ref={fields}>
+        <Field label={t("Members")} span={2}>
+          <div className="check-grid">
+            {team.map((member) => (
+              <label className="check-inline" key={member.id}>
+                <input
+                  type="checkbox"
+                  checked={selected.includes(member.id)}
+                  onChange={(event) => setSelected((current) => (event.target.checked ? [...current, member.id] : current.filter((id) => id !== member.id)))}
+                />
+                <span>{member.name}</span>
+              </label>
+            ))}
+          </div>
+        </Field>
+        <Field label={t("Due date")}>
+          <DateInput value={dueAt} onChange={(event) => setDueAt(event.target.value)} />
+        </Field>
+      </div>
+      <button
+        className="btn primary"
+        type="button"
+        onClick={async () => {
+          if (!checkFields(fields.current, t, [{ invalid: selected.length === 0, at: ".check-grid", message: t("Form.chooseOne") }])) return;
+          try {
+            const result = await assignKnowledgeAcknowledgement(versionId, { userIds: selected, dueAt: dueAt || undefined });
+            notify(`${result.assigned} acknowledgement assignment(s) added`);
+            setSelected([]);
+            clearDraft(draftKey);
+            onChanged();
+          } catch (error) {
+            notify(errorText(error));
+          }
+        }}
+      >
+        <Icon name="checkCircle" />
+        {t("Assign acknowledgement")}
+      </button>
+    </Panel>
+  );
 }
 
-function DocumentRelations({ draftKey, documentId, relations, canEdit, notify, onChanged }: {
-  draftKey: string; documentId: number; relations: KnowledgeDocumentDetail["relations"]; canEdit: boolean;
-  notify: (message: string) => void; onChanged: () => void;
+function DocumentRelations({
+  draftKey,
+  documentId,
+  relations,
+  canEdit,
+  notify,
+  onChanged,
+}: {
+  draftKey: string;
+  documentId: number;
+  relations: KnowledgeDocumentDetail["relations"];
+  canEdit: boolean;
+  notify: (message: string) => void;
+  onChanged: () => void;
 }) {
   const t = useT();
   const [entityType, setEntityType] = useDraftField(draftKey, "entityType", "Project");
   const [entityId, setEntityId] = useDraftField(draftKey, "entityId", "");
   const [relationType, setRelationType] = useDraftField(draftKey, "relationType", "Reference");
   const fields = useRef<HTMLDivElement>(null);
-  return <div className="stack">
-    {canEdit ? <Panel title={t("Link document")} subtitle={t("Link one document to many records without copying the file")}>
-      <div className="form-grid" ref={fields}>
-        <Field label={t("Record type")}><select value={entityType} onChange={(event) => setEntityType(event.target.value)}>{["Inquiry", "Project", "Estimate", "BOM", "PR", "PO", "GoodsReceipt", "MaterialIssue", "ItemMaster", "Supplier", "Customer"].map((value) => <option key={value}>{value}</option>)}</select></Field>
-        <Field label={t("Record ID")}><input name="entityId" type="number" min={1} value={entityId} onChange={(event) => setEntityId(event.target.value)} /></Field>
-        <Field label={t("Relation type")}><select value={relationType} onChange={(event) => setRelationType(event.target.value)}>{["Reference", "Attachment", "Deliverable", "Standard Applied", "Supersedes", "Related"].map((value) => <option key={value}>{value}</option>)}</select></Field>
-      </div>
-      <button className="btn primary" type="button" onClick={async () => { if (!checkFields(fields.current, t, [{ invalid: !Number(entityId), at: '[name="entityId"]', message: t("Form.required") }])) return; try { await linkKnowledgeDocument(documentId, { entityType, entityId: Number(entityId), relationType }); setEntityId(""); clearDraft(draftKey); notify("Document linked"); onChanged(); } catch (error) { notify(errorText(error)); } }}><Icon name="gitBranch" />{t("Link record")}</button>
-    </Panel> : null}
-    {relations.length === 0 ? <EmptyState icon="gitBranch" title="Not linked yet" message="Link this document to an inquiry, project, estimate, BOM, PR or PO to make it findable from that record." /> : <ul className="link-list">{relations.map((relation) => <li key={relation.id}><Pill>{relation.entityType}</Pill><span className="mono">#{relation.entityId}</span><span>{relation.relationType}</span><small>{relation.createdByName}</small>{canEdit ? <button className="btn ghost sm" type="button" onClick={async () => { try { await unlinkKnowledgeDocument(documentId, relation.id); notify("Document unlinked"); onChanged(); } catch (error) { notify(errorText(error)); } }}><Icon name="trash" /></button> : null}</li>)}</ul>}
-  </div>;
+  return (
+    <div className="stack">
+      {canEdit ? (
+        <Panel title={t("Link document")} subtitle={t("Link one document to many records without copying the file")}>
+          <div className="form-grid" ref={fields}>
+            <Field label={t("Record type")}>
+              <PgSelect value={entityType} onChange={(event) => setEntityType(event.target.value)}>
+                {["Inquiry", "Project", "Estimate", "BOM", "PR", "PO", "GoodsReceipt", "MaterialIssue", "ItemMaster", "Supplier", "Customer"].map((value) => (
+                  <option key={value}>{value}</option>
+                ))}
+              </PgSelect>
+            </Field>
+            <Field label={t("Record ID")}>
+              <input name="entityId" type="number" min={1} value={entityId} onChange={(event) => setEntityId(event.target.value)} />
+            </Field>
+            <Field label={t("Relation type")}>
+              <PgSelect value={relationType} onChange={(event) => setRelationType(event.target.value)}>
+                {["Reference", "Attachment", "Deliverable", "Standard Applied", "Supersedes", "Related"].map((value) => (
+                  <option key={value}>{value}</option>
+                ))}
+              </PgSelect>
+            </Field>
+          </div>
+          <button
+            className="btn primary"
+            type="button"
+            onClick={async () => {
+              if (!checkFields(fields.current, t, [{ invalid: !Number(entityId), at: '[name="entityId"]', message: t("Form.required") }])) return;
+              try {
+                await linkKnowledgeDocument(documentId, { entityType, entityId: Number(entityId), relationType });
+                setEntityId("");
+                clearDraft(draftKey);
+                notify("Document linked");
+                onChanged();
+              } catch (error) {
+                notify(errorText(error));
+              }
+            }}
+          >
+            <Icon name="gitBranch" />
+            {t("Link record")}
+          </button>
+        </Panel>
+      ) : null}
+      {relations.length === 0 ? (
+        <EmptyState icon="gitBranch" title="Not linked yet" message="Link this document to an inquiry, project, estimate, BOM, PR or PO to make it findable from that record." />
+      ) : (
+        <ul className="link-list">
+          {relations.map((relation) => (
+            <li key={relation.id}>
+              <Pill>{relation.entityType}</Pill>
+              <span className="mono">#{relation.entityId}</span>
+              <span>{relation.relationType}</span>
+              <small>{relation.createdByName}</small>
+              {canEdit ? (
+                <button
+                  className="btn ghost sm"
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await unlinkKnowledgeDocument(documentId, relation.id);
+                      notify("Document unlinked");
+                      onChanged();
+                    } catch (error) {
+                      notify(errorText(error));
+                    }
+                  }}
+                >
+                  <Icon name="trash" />
+                </button>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
 }
 
 function DocumentComments({
-  draftKey, documentId, versionId, comments, busy, onChanged, notify,
+  draftKey,
+  documentId,
+  versionId,
+  comments,
+  busy,
+  onChanged,
+  notify,
 }: {
   draftKey: string;
   documentId: number;
@@ -1329,22 +2222,42 @@ function DocumentComments({
     if (!checkFields(box.current, t, [{ invalid: !content.trim(), at: "textarea", message: t("Form.required") }])) return;
     try {
       await createKnowledgeComment(documentId, { content: content.trim(), versionId, parentCommentId: replyTo });
-      setContent(""); setReplyTo(undefined); notify("Comment added"); onChanged();
-    } catch (error) { notify(errorText(error)); }
+      setContent("");
+      setReplyTo(undefined);
+      notify("Comment added");
+      onChanged();
+    } catch (error) {
+      notify(errorText(error));
+    }
   };
   return (
     <div className="stack">
       <Panel title={replyTo ? t("Reply to comment") : t("Add comment")} subtitle={t("Comments stay linked to this document revision")}>
-        <div ref={box}><textarea rows={3} maxLength={4000} value={content} onChange={(event) => setContent(event.target.value)}
-          placeholder={t("Write a comment or review note…")} /></div>
+        <div ref={box}>
+          <textarea rows={3} maxLength={4000} value={content} onChange={(event) => setContent(event.target.value)} placeholder={t("Write a comment or review note…")} />
+        </div>
         <div className="button-row">
-          {replyTo ? <button className="btn ghost" type="button" onClick={() => setReplyTo(undefined)}>{t("Cancel reply")}</button> : null}
-          <button className="btn primary" type="button" disabled={busy} onClick={() => { void submit(); }}>
-            <Icon name="send" />{t("Post comment")}
+          {replyTo ? (
+            <button className="btn ghost" type="button" onClick={() => setReplyTo(undefined)}>
+              {t("Cancel reply")}
+            </button>
+          ) : null}
+          <button
+            className="btn primary"
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              void submit();
+            }}
+          >
+            <Icon name="send" />
+            {t("Post comment")}
           </button>
         </div>
       </Panel>
-      {comments.length === 0 ? <EmptyState icon="quote" title="No comments" message="Review discussions will appear here." /> : (
+      {comments.length === 0 ? (
+        <EmptyState icon="quote" title="No comments" message="Review discussions will appear here." />
+      ) : (
         <ol className="timeline">
           {comments.map((comment) => (
             <li key={comment.id} style={{ marginLeft: comment.parentCommentId ? 24 : 0 }}>
@@ -1354,11 +2267,23 @@ function DocumentComments({
               {comment.resolvedAt ? <Badge tone="green">{t("Resolved")}</Badge> : null}
               <p>{comment.content}</p>
               <div className="button-row">
-                <button className="btn ghost sm" type="button" onClick={() => setReplyTo(comment.id)}>{t("Reply")}</button>
-                <button className="btn ghost sm" type="button" onClick={async () => {
-                  try { await setKnowledgeCommentResolution(comment.id, !comment.resolvedAt); onChanged(); }
-                  catch (error) { notify(errorText(error)); }
-                }}>{comment.resolvedAt ? t("Reopen") : t("Resolve")}</button>
+                <button className="btn ghost sm" type="button" onClick={() => setReplyTo(comment.id)}>
+                  {t("Reply")}
+                </button>
+                <button
+                  className="btn ghost sm"
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await setKnowledgeCommentResolution(comment.id, !comment.resolvedAt);
+                      onChanged();
+                    } catch (error) {
+                      notify(errorText(error));
+                    }
+                  }}
+                >
+                  {comment.resolvedAt ? t("Reopen") : t("Resolve")}
+                </button>
               </div>
             </li>
           ))}
@@ -1369,7 +2294,13 @@ function DocumentComments({
 }
 
 function DocumentPermissions({
-  draftKey, documentId, permissions, bootstrap, busy, onChanged, notify,
+  draftKey,
+  documentId,
+  permissions,
+  bootstrap,
+  busy,
+  onChanged,
+  notify,
 }: {
   draftKey: string;
   documentId: number;
@@ -1390,40 +2321,115 @@ function DocumentPermissions({
       <Panel title={t("Permission summary")} subtitle={t("Server-side authorization is checked again on every read and download")}>
         <div className="form-grid">
           <Field label={t("Subject type")}>
-            <select value={subjectType} onChange={(event) => setSubjectType(event.target.value)}>
-              <option value="User">{t("User")}</option><option value="Department">{t("Department")}</option>
+            <PgSelect value={subjectType} onChange={(event) => setSubjectType(event.target.value)}>
+              <option value="User">{t("User")}</option>
+              <option value="Department">{t("Department")}</option>
               <option value="Project">{t("Project")}</option>
-            </select>
+            </PgSelect>
           </Field>
-          {subjectType === "User" ? <Field label={t("User")}><select value={subjectId} onChange={(event) => setSubjectId(Number(event.target.value))}>
-            {team.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}
-          </select></Field> : subjectType === "Department" ? <Field label={t("Department")}><input value={department} maxLength={200} onChange={(event) => setDepartment(event.target.value)} /></Field>
-            : <Field label={t("Project ID")}><input type="number" min={1} value={subjectId || ""} onChange={(event) => setSubjectId(Number(event.target.value))} /></Field>}
-          <Field label={t("Permission level")}><select value={level} onChange={(event) => setLevel(event.target.value)}>
-            {["View", "Download", "Comment", "Edit", "Review", "Approve", "Manage"].map((value) => <option key={value}>{value}</option>)}
-          </select></Field>
+          {subjectType === "User" ? (
+            <Field label={t("User")}>
+              <PgSelect value={subjectId} onChange={(event) => setSubjectId(Number(event.target.value))}>
+                {team.map((member) => (
+                  <option key={member.id} value={member.id}>
+                    {member.name}
+                  </option>
+                ))}
+              </PgSelect>
+            </Field>
+          ) : subjectType === "Department" ? (
+            <Field label={t("Department")}>
+              <input value={department} maxLength={200} onChange={(event) => setDepartment(event.target.value)} />
+            </Field>
+          ) : (
+            <Field label={t("Project ID")}>
+              <input type="number" min={1} value={subjectId || ""} onChange={(event) => setSubjectId(Number(event.target.value))} />
+            </Field>
+          )}
+          <Field label={t("Permission level")}>
+            <PgSelect value={level} onChange={(event) => setLevel(event.target.value)}>
+              {["View", "Download", "Comment", "Edit", "Review", "Approve", "Manage"].map((value) => (
+                <option key={value}>{value}</option>
+              ))}
+            </PgSelect>
+          </Field>
         </div>
-        <button className="btn primary" type="button" disabled={busy} onClick={async () => {
-          try {
-            await grantKnowledgePermission(documentId, {
-              subjectType, subjectId: subjectType === "Department" ? undefined : subjectId,
-              department: subjectType === "Department" ? department.trim() : undefined, permissionLevel: level,
-            }); clearDraft(draftKey); notify("Permission granted"); onChanged();
-          } catch (error) { notify(errorText(error)); }
-        }}><Icon name="plus" />{t("Grant access")}</button>
+        <button
+          className="btn primary"
+          type="button"
+          disabled={busy}
+          onClick={async () => {
+            try {
+              await grantKnowledgePermission(documentId, {
+                subjectType,
+                subjectId: subjectType === "Department" ? undefined : subjectId,
+                department: subjectType === "Department" ? department.trim() : undefined,
+                permissionLevel: level,
+              });
+              clearDraft(draftKey);
+              notify("Permission granted");
+              onChanged();
+            } catch (error) {
+              notify(errorText(error));
+            }
+          }}
+        >
+          <Icon name="plus" />
+          {t("Grant access")}
+        </button>
       </Panel>
-      <div className="table-wrap"><table className="grid"><thead><tr><th>{t("Subject")}</th><th>{t("Type")}</th><th>{t("Level")}</th><th>{t("Granted by")}</th><th /></tr></thead>
-        <tbody>{permissions.map((permission) => <tr key={permission.id}><td>{permission.subjectName || permission.department || `#${permission.subjectId}`}</td>
-          <td>{permission.subjectType}</td><td><Badge tone="blue">{permission.permissionLevel}</Badge></td><td>{permission.grantedByName}</td><td>
-            <button className="btn ghost sm" type="button" onClick={async () => { try { await revokeKnowledgePermission(documentId, permission.id); notify("Permission revoked"); onChanged(); } catch (error) { notify(errorText(error)); } }}>
-              <Icon name="trash" />
-            </button></td></tr>)}</tbody></table></div>
+      <div className="table-wrap">
+        <table className="grid">
+          <thead>
+            <tr>
+              <th>{t("Subject")}</th>
+              <th>{t("Type")}</th>
+              <th>{t("Level")}</th>
+              <th>{t("Granted by")}</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {permissions.map((permission) => (
+              <tr key={permission.id}>
+                <td>{permission.subjectName || permission.department || `#${permission.subjectId}`}</td>
+                <td>{permission.subjectType}</td>
+                <td>
+                  <Badge tone="blue">{permission.permissionLevel}</Badge>
+                </td>
+                <td>{permission.grantedByName}</td>
+                <td>
+                  <button
+                    className="btn ghost sm"
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await revokeKnowledgePermission(documentId, permission.id);
+                        notify("Permission revoked");
+                        onChanged();
+                      } catch (error) {
+                        notify(errorText(error));
+                      }
+                    }}
+                  >
+                    <Icon name="trash" />
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
 
 function SubmitForReviewForm({
-  draftKey, versionId, bootstrap, busy, onSubmit,
+  draftKey,
+  versionId,
+  bootstrap,
+  busy,
+  onSubmit,
 }: {
   draftKey: string;
   versionId: number;
@@ -1451,14 +2457,22 @@ function SubmitForReviewForm({
     <Panel title={t("Submit for review")} subtitle={t("The author cannot be the final approver")}>
       <div className="form-grid" ref={fields}>
         <Field label={t("Reviewer")}>
-          <select name="reviewerId" value={reviewerId} onChange={(event) => setReviewerId(Number(event.target.value))}>
-            {others.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}
-          </select>
+          <PgSelect name="reviewerId" value={reviewerId} onChange={(event) => setReviewerId(Number(event.target.value))}>
+            {others.map((member) => (
+              <option key={member.id} value={member.id}>
+                {member.name}
+              </option>
+            ))}
+          </PgSelect>
         </Field>
         <Field label={t("Approver")}>
-          <select name="approverId" value={approverId} onChange={(event) => setApproverId(Number(event.target.value))}>
-            {others.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}
-          </select>
+          <PgSelect name="approverId" value={approverId} onChange={(event) => setApproverId(Number(event.target.value))}>
+            {others.map((member) => (
+              <option key={member.id} value={member.id}>
+                {member.name}
+              </option>
+            ))}
+          </PgSelect>
         </Field>
       </div>
       <button
@@ -1466,15 +2480,19 @@ function SubmitForReviewForm({
         type="button"
         disabled={busy}
         onClick={() => {
-          if (!checkFields(fields.current, t, [
-            { invalid: !reviewerId, at: '[name="reviewerId"]', message: t("Form.choose") },
-            { invalid: !approverId, at: '[name="approverId"]', message: t("Form.choose") },
-          ])) return;
+          if (
+            !checkFields(fields.current, t, [
+              { invalid: !reviewerId, at: '[name="reviewerId"]', message: t("Form.choose") },
+              { invalid: !approverId, at: '[name="approverId"]', message: t("Form.choose") },
+            ])
+          )
+            return;
           clearDraft(draftKey);
           onSubmit({ reviewerIds: [reviewerId], approverId });
         }}
       >
-        <Icon name="send" />{t("Submit for review")}
+        <Icon name="send" />
+        {t("Submit for review")}
       </button>
       <input type="hidden" value={versionId} readOnly />
     </Panel>
@@ -1482,7 +2500,10 @@ function SubmitForReviewForm({
 }
 
 function UploadRevisionForm({
-  draftKey, documentId, busy, onUpload,
+  draftKey,
+  documentId,
+  busy,
+  onUpload,
 }: {
   draftKey: string;
   documentId: number;
@@ -1499,18 +2520,13 @@ function UploadRevisionForm({
     <Panel title={t("Upload a new revision")} subtitle={t("A published revision is never overwritten; this creates the next one")}>
       <div className="form-grid" ref={fields}>
         <Field label={t("Change type")}>
-          <select value={changeType} onChange={(event) => setChangeType(event.target.value as "Major" | "Minor")}>
+          <PgSelect value={changeType} onChange={(event) => setChangeType(event.target.value as "Major" | "Minor")}>
             <option value="Major">{t("Major")}</option>
             <option value="Minor">{t("Minor")}</option>
-          </select>
+          </PgSelect>
         </Field>
         <Field label={t("File")}>
-          <input
-            name="revisionFile"
-            type="file"
-            accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.png,.jpg,.jpeg"
-            onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-          />
+          <input name="revisionFile" type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.png,.jpg,.jpeg" onChange={(event) => setFile(event.target.files?.[0] ?? null)} />
         </Field>
         <Field label={t("Change summary")} span={2} hint={t("Required — it becomes part of the revision history")}>
           <input name="changeSummary" value={summary} maxLength={2000} onChange={(event) => setSummary(event.target.value)} />
@@ -1521,15 +2537,20 @@ function UploadRevisionForm({
         type="button"
         disabled={busy}
         onClick={() => {
-          if (!checkFields(fields.current, t, [
-            { invalid: !file, at: '[name="revisionFile"]', message: t("Form.choose") },
-            { invalid: !summary.trim(), at: '[name="changeSummary"]', message: t("Form.required") },
-          ]) || !file) return;
+          if (
+            !checkFields(fields.current, t, [
+              { invalid: !file, at: '[name="revisionFile"]', message: t("Form.choose") },
+              { invalid: !summary.trim(), at: '[name="changeSummary"]', message: t("Form.required") },
+            ]) ||
+            !file
+          )
+            return;
           clearDraft(draftKey);
           onUpload({ file, changeSummary: summary.trim(), changeType });
         }}
       >
-        <Icon name="upload" />{t("Upload revision")}
+        <Icon name="upload" />
+        {t("Upload revision")}
       </button>
       <input type="hidden" value={documentId} readOnly />
     </Panel>

@@ -22,16 +22,19 @@ test("Employee Master lists who is waiting to sign in and adds them with the ema
   assert.match(client, /`\/api\/v1\/master\/sign-in-requests\/\$\{encodeURIComponent\(subject\)\}`, \{ method: "DELETE" \}/);
   // Only people who may add employees load and see the requests.
   assert.match(screen, /canWrite \? listSignInRequests\(\) : Promise\.resolve\(\[\]\)/);
-  assert.match(screen, /\{canWrite && signInRequests\.length \? <Panel title=\{`\$\{t\("SignIn\.requestsTitle"\)\}/);
+  assert.match(screen, /\{canWrite && signInRequests\.length \? \(\s*<Panel title=\{`\$\{t\("SignIn\.requestsTitle"\)\}/);
   // Add as employee opens the usual form with the name and the exact email already filled in.
-  assert.match(screen, /setPrefill\(\{ nameEn: request\.name, email: request\.email \}\); setEditing\("new"\);/);
-  assert.match(screen, /\} : \{ \.\.\.EMPTY_EMPLOYEE, \.\.\.prefill \}\);/);
+  assert.match(screen, /setPrefill\(\{ nameEn: request\.name, email: request\.email \}\);\s*setEditing\("new"\);/);
+  assert.match(screen, /\}\s*: \{ \.\.\.EMPTY_EMPLOYEE, \.\.\.prefill \},?\s*\);/);
   // It is a quiet icon in the Actions column on the left (Pegasus look, 2026-11-21), named for the pointer and the screen reader.
-  assert.match(screen, /request\.status === "new" \? <button className="pg-act" type="button" title=\{t\("SignIn\.addEmployee"\)\} aria-label=/);
+  assert.match(screen, /request\.status === "new" \? \(\s*<button\s+className="pg-act"\s+type="button"\s+title=\{t\("SignIn\.addEmployee"\)\}\s+aria-label=/);
   // The form no longer says an employee record grants no access, and lists every engineering department.
   assert.match(screen, /t\("SignIn\.employeeAccessNote"\)/);
   assert.doesNotMatch(screen, /Employee records do not grant login access/);
-  assert.match(screen, /const EMPLOYEE_DEPARTMENTS = \["IoT Engineer Dept\.", "Application Engineer Dept\.", "Mechanical Engineer Dept\.", "Electrical Engineer Dept\.", "System Architect & System Engineer Dept\."\];/);
+  assert.match(
+    screen,
+    /const EMPLOYEE_DEPARTMENTS = \["IoT Engineer Dept\.", "Application Engineer Dept\.", "Mechanical Engineer Dept\.", "Electrical Engineer Dept\.", "System Architect & System Engineer Dept\."\];/,
+  );
   // Department and level are real dropdowns (a datalist hides every option but the one already typed), with "Other" to type a new one.
   assert.match(screen, /<ChoiceSelect value=\{form\.department\} standard=\{EMPLOYEE_DEPARTMENTS\} inUse=\{departments\}/);
   assert.match(screen, /<ChoiceSelect value=\{form\.position\} standard=\{EMPLOYEE_LEVELS\} inUse=\{positions\}/);
@@ -40,19 +43,17 @@ test("Employee Master lists who is waiting to sign in and adds them with the ema
   // Accounts the old first sign-in made (Admin, no department) are listed for the same people, and added with the same email.
   assert.match(client, /export const listUnlinkedAccounts = \(\) => apiRequest<UnlinkedAccount\[\]>\("\/api\/v1\/master\/unlinked-accounts"\);/);
   assert.match(screen, /canWrite \? listUnlinkedAccounts\(\) : Promise\.resolve\(\[\]\)/);
-  assert.match(screen, /\{canWrite && unlinked\.length \? <Panel title=\{`\$\{t\("Employee\.unlinkedTitle"\)\}/);
-  assert.match(screen, /setPrefill\(\{ nameEn: account\.name, email: account\.email, department: account\.department \}\); setEditing\("new"\);/);
+  assert.match(screen, /\{canWrite && unlinked\.length \? \(\s*<Panel title=\{`\$\{t\("Employee\.unlinkedTitle"\)\}/);
+  assert.match(screen, /setPrefill\(\{ nameEn: account\.name, email: account\.email, department: account\.department \}\);\s*setEditing\("new"\);/);
   // An employee that already has the email is opened instead, since saving it links the account.
-  assert.match(screen, /account\.employeeId !== null\s*\? <button className="pg-act" type="button" title=\{t\("Employee\.openToLink"\)[^>]*onClick=\{\(\) => openEmployee\(account\)\}>/);
+  assert.match(screen, /account\.employeeId !== null\s*\? \(\s*<button\s+className="pg-act"\s+type="button"\s+title=\{t\("Employee\.openToLink"\)[^>]*onClick=\{\(\) => openEmployee\(account\)\}\s*>/);
   assert.match(screen, /account\.role === "Admin" \? <div className="muted">\{t\("Employee\.unlinkedAdminHint"\)\}<\/div>/);
   // A new person is never filed under the IoT team by default.
-  assert.match(screen, /employeeNo: 0, nameEn: "", nameTh: "", department: "", jobTitle: "",/);
+  assert.match(screen, /employeeNo: 0,\s*nameEn: "",\s*nameTh: "",\s*department: "",\s*jobTitle: "",/);
 });
 
 test("every SignIn string has English, Thai and Japanese copy", async () => {
-  const [shell, screen, dictionary] = await Promise.all([
-    read("app/system/ProductionApp.tsx"), read("app/system/production/CoreScreens.tsx"), read("app/system/i18n.ts"),
-  ]);
+  const [shell, screen, dictionary] = await Promise.all([read("app/system/ProductionApp.tsx"), read("app/system/production/CoreScreens.tsx"), read("app/system/i18n.ts")]);
   const keys = [...new Set([shell, screen].flatMap((source) => [...source.matchAll(/"((?:SignIn|Employee)\.[A-Za-z]+)"/g)].map((match) => match[1])))];
   assert.ok(keys.length >= 15, `${keys.length} keys`);
   for (const key of keys) {
