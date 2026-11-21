@@ -98,9 +98,16 @@ The same two values also turn on `src/master-data/` (all dormant without them):
 - the signed-in person's own start date on the dashboard: master's `GET /api/v1/me` with their TMT ID token in
   `X-User-Token`. It needs the credentials vault (the token vault keeps each person's refresh token).
 
+- the project-number search (`GET /api/v1/erp/projects`): master's `GET /api/v1/projects?search=`, latest first,
+  cancelled ones left out, in place of the ERP's 30-row `purchasing_projects_list`;
+- the customer and supplier registers: master's `GET /api/v1/customers` / `suppliers?presence=all` answer the register
+  sync (`src/master-data/registers.ts`) in place of the ERP's `customers_list` / `suppliers_list`. Master keeps the
+  ERP's ids, so existing links hold; a record deleted in master is closed here.
+
 The key must be a user-bound key holding only `employee.self`, linked to a client with read grants on
-`company_holiday`, `exchange_rate` (and later `project`, `customer`, `supplier`). With master connected, start dates
-come from master alone, and only for the person signed in.
+`company_holiday`, `exchange_rate`, `project`, `customer` and `supplier`. With master connected, start dates come from
+master alone, and only for the person signed in. Without master the project search and the registers fall back to
+the ERP.
 
 ### Origin topology
 

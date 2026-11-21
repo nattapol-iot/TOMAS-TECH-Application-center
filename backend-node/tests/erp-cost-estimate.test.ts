@@ -7,7 +7,7 @@ import type { ErpGateway, ErpResult } from "../src/erp-purchasing.js";
 import type { CurrentUserService } from "../src/users.js";
 import { ApiError, registerErrorHandler } from "../src/errors.js";
 import { costEstimateArguments, costEstimateBlocker, parseErpSheetRows, readCostSheet, sheetRowsMismatch, type CostEstimateHeader, type CostEstimateLine } from "../src/erp-cost-estimate.js";
-import { registerEstimateErpRoutes } from "../src/routes/estimate-erp.js";
+import { createEstimateErpSender, registerEstimateErpRoutes } from "../src/routes/estimate-erp.js";
 
 /*
  * An approved estimate goes to the Pegasus ERP as a Cost Sheet (cost_estimate_submit). The ERP refuses a sheet whose category
@@ -115,11 +115,14 @@ const sheetRows = [
 
 function harness(t: { mock: { method: typeof import("node:test").mock.method } }, options: {
   status?: string; erpRevision?: number | null; answer?: ErpResult<Record<string, unknown>>; answers?: Array<ErpResult<Record<string, unknown>>>; actorId?: number;
+  previousSheet?: { no: string; revision: number };
 } = {}) {
-  const seen = { calls: [] as Array<{ subject: string; tool: string; args: Record<string, unknown> }>, recordedError: null as unknown, recordedSheet: null as Record<string, unknown> | null, audits: 0, issued: 0, reissued: 0 };
+  const seen = { calls: [] as Array<{ subject: string; tool: string; args: Record<string, unknown> }>, recordedError: null as unknown, recordedSheet: null as Record<string, unknown> | null,
+    errorRevision: null as unknown, audits: 0, issued: 0, issuedRevision: null as unknown, reissued: 0, reissuedRevision: null as unknown };
   t.mock.method(sql.Request.prototype, "query", async function (this: sql.Request, statement: string) {
-    if (statement.includes("INSERT dbo.estimate_erp_links")) { seen.issued += 1; return { recordset: [{ external_ref: "ENGAPP-EST-test" }] }; }
-    if (statement.includes("UPDATE dbo.estimate_erp_links SET external_ref")) { seen.reissued += 1; return { recordset: [] }; }
+    const parameter = (name: string) => (this as unknown as { parameters: Record<string, { value: unknown } | undefined> }).parameters[name]?.value;
+    if (statement.includes("INSERT dbo.estimate_erp_links")) { seen.issued += 1; seen.issuedRevision = parameter("revision"); return { recordset: [{ external_ref: "ENGAPP-EST-test" }] }; }
+    if (statement.includes("UPDATE dbo.estimate_erp_links SET external_ref")) { seen.reissued += 1; seen.reissuedRevision = parameter("revision"); return { recordset: [] }; }
     if (statement.includes("audit_log")) { seen.audits += 1; return { recordset: [] }; }
     if (statement.includes("activity_events")) return { recordset: [] };
     throw Error("Unexpected transaction query: " + statement);
@@ -133,7 +136,8 @@ function harness(t: { mock: { method: typeof import("node:test").mock.method } }
       if (statement.includes("INNER JOIN dbo.customers c")) {
         return { recordset: [{ estimate_no: "EST-2610-0023", revision: 2, status: options.status ?? "Approved", project_name: "AI Camera", locked_at: "2026-11-02T03:00:00Z",
           customer_name: "Unimicron", short_name: "UMTH", owner_email: "owner@tomastc.com", project_no: "PJ000000", revision_reason: null,
-          erp_revision: options.erpRevision ?? null, cost_sheet_no: options.erpRevision === undefined || options.erpRevision === null ? null : "CS-1" }] };
+          erp_revision: options.erpRevision ?? null, cost_sheet_no: options.erpRevision === undefined || options.erpRevision === null ? null : "CS-1",
+          previous_sheet_no: options.previousSheet?.no ?? null, previous_revision: options.previousSheet?.revision ?? null }] };
       }
       if (statement.includes("v_estimate_totals t ON t.estimate_id=e.id")) {
         const line = { mapping_row_version: null, copied_from_revision: null, manual_override: false, lead_time: null, remark: null };
@@ -147,9 +151,9 @@ function harness(t: { mock: { method: typeof import("node:test").mock.method } }
           [],
         ] };
       }
-      if (statement.includes("UPDATE dbo.estimate_erp_links SET error")) { seen.recordedError = inputs.error; return { recordset: [] }; }
+      if (statement.includes("UPDATE dbo.estimate_erp_links SET error")) { seen.recordedError = inputs.error; seen.errorRevision = inputs.revision; return { recordset: [] }; }
       if (statement.includes("UPDATE dbo.estimate_erp_links SET cost_sheet_no")) { seen.recordedSheet = inputs; return { recordset: [] }; }
-      if (statement.includes("SELECT external_ref FROM dbo.estimate_erp_links")) return { recordset: [{ external_ref: "ENGAPP-EST-test" }] };
+      if (statement.includes("external_ref FROM dbo.estimate_erp_links")) return { recordset: [{ external_ref: "ENGAPP-EST-test" }] };
       throw Error("Unexpected query: " + statement);
     },
   } as unknown as Database;
@@ -165,7 +169,7 @@ function harness(t: { mock: { method: typeof import("node:test").mock.method } }
   } as unknown as CurrentUserService;
   const app = Fastify(); registerErrorHandler(app);
   registerEstimateErpRoutes(app, database, users, { gateway, appBaseUrl: "https://iot-team-center.tomastc.com:8444" });
-  return { app, seen };
+  return { app, seen, database, gateway };
 }
 
 const send = (app: ReturnType<typeof Fastify>, payload: Record<string, unknown> = { lines: sheetRows }) =>
@@ -188,11 +192,47 @@ test("pressing send writes the ERP sheet's rows, not the cost lines behind them,
     assert.deepEqual(lines.map((line) => [line.category, line.amount, line.quantity, line.unit]), [["Hardware", 1000, 1, "Set"], ["Service", 500, 1, "Set"]]);
     assert.equal(lines[0]!.supplier, "Keyence");
     assert.equal(seen.issued, 1);
+    assert.equal(seen.issuedRevision, 2, "the reference belongs to this revision");
     assert.equal(seen.recordedSheet?.no, "CS-2611-0007");
+    assert.equal(seen.recordedSheet?.ref, "ENGAPP-EST-test");
     assert.equal(seen.recordedSheet?.revision, 2);
     assert.equal(seen.recordedSheet?.sent_by, 7);
     assert.equal(seen.audits, 1);
+    assert.equal(args.revision_description, undefined, "a first sheet replaces nothing");
   } finally { await app.close(); }
+});
+
+test("an approved later revision becomes a new Cost Sheet that names the one it supersedes (owner 2026-11-21)", async (t) => {
+  const { app, seen } = harness(t, { previousSheet: { no: "CS-2611-0001", revision: 1 } });
+  try {
+    const response = await send(app);
+    assert.equal(response.statusCode, 200, response.body);
+    assert.equal(seen.issued, 1);
+    assert.equal(seen.issuedRevision, 2);
+    assert.equal(seen.calls[0]!.args.revision, 2);
+    assert.equal(seen.calls[0]!.args.revision_description, "Supersedes CS-2611-0001 (R01)");
+  } finally { await app.close(); }
+});
+
+test("the strip shows the revision the app sent, whatever revision number the ERP answers", async (t) => {
+  // An R02 written over R01's sheet once read back as R01: the ERP's own revision field is not the app's number.
+  const { app, seen } = harness(t, { answer: { ok: true, data: { result: "created", cost_sheet: { cost_sheet_no: "CS-2611-0008", status: "CONFIRMED", revision_no: 0, total: 1500 } } } });
+  try {
+    const response = await send(app);
+    assert.equal(response.statusCode, 200, response.body);
+    assert.equal(seen.recordedSheet?.revision, 2);
+  } finally { await app.close(); }
+});
+
+test("an approval that came without the sheet's rows keeps the reason for the ERP tab", async (t) => {
+  const { seen, database, gateway } = harness(t);
+  const outcome = await createEstimateErpSender(database, { gateway, appBaseUrl: "https://iot-team-center.tomastc.com:8444" })
+    .send(41, { id: 7, entraObjectId: "kc-subject-7" } as never, null);
+  assert.equal(outcome.sent, false);
+  assert.equal(outcome.kind, "not_ready");
+  assert.match(String(seen.recordedError), /approval came without the ERP sheet's rows/);
+  assert.equal(seen.errorRevision, 2);
+  assert.equal(seen.calls.length, 0);
 });
 
 test("a send without the sheet's rows is refused", async (t) => {
@@ -267,6 +307,7 @@ test("a Cost Sheet deleted in the ERP is written again under a new reference", a
     assert.equal(response.json().costSheetNo, "CS-2611-0009");
     assert.equal(seen.calls.length, 2);
     assert.equal(seen.reissued, 1);
+    assert.equal(seen.reissuedRevision, 2, "only this revision's reference is replaced");
     const [first, second] = seen.calls.map((call) => String(call.args.external_ref));
     assert.equal(first, "ENGAPP-EST-test");
     assert.match(second!, /^ENGAPP-EST-[0-9a-f-]{36}$/);
@@ -303,5 +344,7 @@ test("checking the ERP reads the sheet by its reference and stores what it says"
     assert.deepEqual(seen.calls[0]!.args, { external_ref: "ENGAPP-EST-test" });
     assert.equal(seen.recordedSheet?.status, "LINKED");
     assert.equal(seen.recordedSheet?.sent_by, null);
+    assert.equal(seen.recordedSheet?.ref, "ENGAPP-EST-test");
+    assert.equal(seen.recordedSheet?.revision, null, "reading back never renumbers the sheet");
   } finally { await app.close(); }
 });

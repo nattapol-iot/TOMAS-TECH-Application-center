@@ -2,36 +2,36 @@
 
 [Module](../modules/estimate-erp.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `e04b600c`; generated, do not edit. [backend-node/src/routes/estimate-erp.ts](<../../../backend-node/src/routes/estimate-erp.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `929152cd`; generated, do not edit. [backend-node/src/routes/estimate-erp.ts](<../../../backend-node/src/routes/estimate-erp.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/estimates/:id/erp-summary` | 397–402 |
-| POST | `/api/v1/estimates/:id/erp-send` | 406–419 |
-| POST | `/api/v1/estimates/:id/erp-refresh` | 421–429 |
-| PUT | `/api/v1/estimates/:id/erp-mappings` | 431–510 |
-| POST | `/api/v1/estimates/:id/erp-groups` | 518–543 |
-| PUT | `/api/v1/estimates/:id/erp-groups/:groupId` | 545–573 |
-| DELETE | `/api/v1/estimates/:id/erp-groups/:groupId` | 575–598 |
-| POST | `/api/v1/estimates/:id/erp-export-events` | 600–643 |
+| GET | `/api/v1/estimates/:id/erp-summary` | 429–434 |
+| POST | `/api/v1/estimates/:id/erp-send` | 438–451 |
+| POST | `/api/v1/estimates/:id/erp-refresh` | 453–461 |
+| PUT | `/api/v1/estimates/:id/erp-mappings` | 463–542 |
+| POST | `/api/v1/estimates/:id/erp-groups` | 550–575 |
+| PUT | `/api/v1/estimates/:id/erp-groups/:groupId` | 577–605 |
+| DELETE | `/api/v1/estimates/:id/erp-groups/:groupId` | 607–630 |
+| POST | `/api/v1/estimates/:id/erp-export-events` | 632–675 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `erpLinkView` | [backend-node/src/routes/estimate-erp.ts](<../../../backend-node/src/routes/estimate-erp.ts>) | 123–130 |
-| `loadSummary` | [backend-node/src/routes/estimate-erp.ts](<../../../backend-node/src/routes/estimate-erp.ts>) | 132–150 |
-| `lockEstimateForErp` | [backend-node/src/routes/estimate-erp.ts](<../../../backend-node/src/routes/estimate-erp.ts>) | 153–167 |
-| `parseGroupMembers` | [backend-node/src/routes/estimate-erp.ts](<../../../backend-node/src/routes/estimate-erp.ts>) | 169–185 |
-| `parseGroupShape` | [backend-node/src/routes/estimate-erp.ts](<../../../backend-node/src/routes/estimate-erp.ts>) | 187–195 |
-| `assertGroupMembers` | [backend-node/src/routes/estimate-erp.ts](<../../../backend-node/src/routes/estimate-erp.ts>) | 198–218 |
-| `touchEstimateForErp` | [backend-node/src/routes/estimate-erp.ts](<../../../backend-node/src/routes/estimate-erp.ts>) | 220–225 |
-| `parseMappings` | [backend-node/src/routes/estimate-erp.ts](<../../../backend-node/src/routes/estimate-erp.ts>) | 234–258 |
-| `parseExportEvent` | [backend-node/src/routes/estimate-erp.ts](<../../../backend-node/src/routes/estimate-erp.ts>) | 260–277 |
-| `createEstimateErpSender` | [backend-node/src/routes/estimate-erp.ts](<../../../backend-node/src/routes/estimate-erp.ts>) | 290–391 |
-| `registerEstimateErpRoutes` | [backend-node/src/routes/estimate-erp.ts](<../../../backend-node/src/routes/estimate-erp.ts>) | 393–644 |
+| `erpLinkView` | [backend-node/src/routes/estimate-erp.ts](<../../../backend-node/src/routes/estimate-erp.ts>) | 136–143 |
+| `loadSummary` | [backend-node/src/routes/estimate-erp.ts](<../../../backend-node/src/routes/estimate-erp.ts>) | 145–166 |
+| `lockEstimateForErp` | [backend-node/src/routes/estimate-erp.ts](<../../../backend-node/src/routes/estimate-erp.ts>) | 169–183 |
+| `parseGroupMembers` | [backend-node/src/routes/estimate-erp.ts](<../../../backend-node/src/routes/estimate-erp.ts>) | 185–201 |
+| `parseGroupShape` | [backend-node/src/routes/estimate-erp.ts](<../../../backend-node/src/routes/estimate-erp.ts>) | 203–211 |
+| `assertGroupMembers` | [backend-node/src/routes/estimate-erp.ts](<../../../backend-node/src/routes/estimate-erp.ts>) | 214–234 |
+| `touchEstimateForErp` | [backend-node/src/routes/estimate-erp.ts](<../../../backend-node/src/routes/estimate-erp.ts>) | 236–241 |
+| `parseMappings` | [backend-node/src/routes/estimate-erp.ts](<../../../backend-node/src/routes/estimate-erp.ts>) | 250–274 |
+| `parseExportEvent` | [backend-node/src/routes/estimate-erp.ts](<../../../backend-node/src/routes/estimate-erp.ts>) | 276–293 |
+| `createEstimateErpSender` | [backend-node/src/routes/estimate-erp.ts](<../../../backend-node/src/routes/estimate-erp.ts>) | 306–423 |
+| `registerEstimateErpRoutes` | [backend-node/src/routes/estimate-erp.ts](<../../../backend-node/src/routes/estimate-erp.ts>) | 425–676 |
 
 ## Direct local dependencies
 

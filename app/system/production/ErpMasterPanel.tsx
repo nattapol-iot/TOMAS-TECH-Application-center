@@ -1,8 +1,8 @@
 /*
- * Customers and suppliers from Pegasus ERP (owner decision 2026-11-05, migration 099). Opening a customer or supplier
- * screen asks the server to read the ERP's register with the viewer's TMT ID sign-in; the server reads at most once per
- * 15 minutes for the whole app, adds what the app lacks and links what matches. An Admin confirms the records that match
- * more than one app record, or one only doubtfully. Server side: backend-node/src/erp-master-sync.ts.
+ * Customers and suppliers from tmt-master-data, or from Pegasus ERP where master is not connected (migration 099, owner
+ * decisions 2026-11-05 and 2026-11-21). Opening a customer or supplier screen asks the server to read the register; the
+ * server reads at most once per 15 minutes for the whole app, adds what the app lacks and links what matches. An Admin
+ * confirms the records that match more than one app record, or one only doubtfully. Server: backend-node/src/erp-master-sync.ts.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiRequest } from "../api-client";
@@ -12,7 +12,8 @@ import "./master-data.css";
 
 export type ErpMasterKind = "customers" | "suppliers";
 type Register = { kind: ErpMasterKind; finishedAt: string | null; running: boolean; continuing: boolean; error: string | null; linked: number; appOnly: number; review: number };
-type Overview = { enabled: boolean; canSettle: boolean; registers: Register[] };
+type RegisterSource = "master" | "erp";
+type Overview = { enabled: boolean; source: RegisterSource; canSettle: boolean; registers: Register[] };
 type Outcome = { state: "synced" | "partial" | "fresh" | "busy" | "failed" | "signed_out" | "off"; changed: boolean; message?: string };
 type ReviewItem = { key: string; code: string; nameTh: string; nameEn: string; taxId: string; address: string; candidateIds: number[] };
 type Candidate = { id: number; code: string; name: string; taxId: string; address: string; erpKey: string | null; erpCode?: string | null };
@@ -60,7 +61,7 @@ export function ErpMasterPanel({ kind, onChanged }: { kind: ErpMasterKind; onCha
     <div className={`info-strip erp-master-strip${failure ? " amber" : ""}`} role="status" data-guide="erp.status">
       <Icon name={failure ? "alertTriangle" : "database"} />
       <span className="erp-master-text">
-        <strong>{t("ErpMaster.from")}</strong>
+        <strong>{t(overview.source === "master" ? "ErpMaster.fromMaster" : "ErpMaster.from")}</strong>
         {" · "}{busy ? t("ErpMaster.syncing") : register.finishedAt ? t("ErpMaster.updated").replace("{time}", when(register.finishedAt)) : t("ErpMaster.never")}
         {" · "}{t("ErpMaster.linked").replace("{n}", count(register.linked))}
         {" · "}{t("ErpMaster.appOnly").replace("{n}", count(register.appOnly))}
@@ -73,11 +74,11 @@ export function ErpMasterPanel({ kind, onChanged }: { kind: ErpMasterKind; onCha
       {overview.canSettle ? <button className="btn ghost sm" type="button" disabled={busy} onClick={() => { void sync(true); }}>
         <Icon name="refresh" />{t("ErpMaster.syncNow")}</button> : null}
     </div>
-    {reviewing ? <ErpReviewModal kind={kind} onClose={() => setReviewing(false)} onSettled={async () => { await load(); await changed.current?.(); }} /> : null}
+    {reviewing ? <ErpReviewModal kind={kind} source={overview.source} onClose={() => setReviewing(false)} onSettled={async () => { await load(); await changed.current?.(); }} /> : null}
   </>;
 }
 
-function ErpReviewModal({ kind, onClose, onSettled }: { kind: ErpMasterKind; onClose: () => void; onSettled: () => Promise<void> }) {
+function ErpReviewModal({ kind, source, onClose, onSettled }: { kind: ErpMasterKind; source: RegisterSource; onClose: () => void; onSettled: () => Promise<void> }) {
   const t = useT();
   const [data, setData] = useState<{ items: ReviewItem[]; candidates: Candidate[] } | null>(null);
   const [error, setError] = useState("");
@@ -107,7 +108,7 @@ function ErpReviewModal({ kind, onClose, onSettled }: { kind: ErpMasterKind; onC
     {error ? <div className="callout danger" role="alert"><Icon name="alertTriangle" /><span>{error}</span></div> : null}
     {!data ? <div className="empty"><span className="spinner" /></div> : !data.items.length ? <p>{t("ErpMaster.nothingToReview")}</p> :
       <div className="table-wrap"><table>
-        <thead><tr><th>{t("ErpMaster.inErp")}</th><th>{t("ErpMaster.inApp")}</th><th><span className="sr-only">{t("Actions")}</span></th></tr></thead>
+        <thead><tr><th>{t(source === "master" ? "ErpMaster.inMaster" : "ErpMaster.inErp")}</th><th>{t("ErpMaster.inApp")}</th><th><span className="sr-only">{t("Actions")}</span></th></tr></thead>
         <tbody>{data.items.map((item) => {
           const options = item.candidateIds.map((id) => byId.get(id)).filter((candidate): candidate is Candidate => Boolean(candidate));
           const picked = chosen[item.key] ?? options.find((candidate) => !candidate.erpKey)?.id;

@@ -961,21 +961,24 @@ export type EstimateErpSummary = {
   /** Cost lines that are written as one row on the ERP sheet; the lines themselves are untouched. */
   groups: ErpGroup[];
   /** The Cost Sheet in the Pegasus ERP; `enabled` is false when this server has no ERP connection. */
-  erp?: { enabled: boolean; link: EstimateErpLink | null };
+  erp?: { enabled: boolean; link: EstimateErpLink | null; sheets?: EstimateErpSheetRef[] };
 };
+
+/** One approved revision's own Cost Sheet in the Pegasus ERP; the ERP keeps the earlier ones (owner 2026-11-21, migration 119). */
+export type EstimateErpSheetRef = { revision: number; costSheetNo: string | null; status: string | null; url: string | null; sentAt: string | null };
 
 export type EstimateErpLink = {
   ref: string;
   costSheetNo: string | null;
   /** CONFIRMED, or LINKED once a sales quotation in the ERP uses the sheet. */
   status: string | null;
-  /** The latest revision the ERP holds; a later approved revision is still to be sent. */
+  /** The estimate revision of the newest Cost Sheet the ERP accepted; a later approved revision is still to be sent, as a new sheet. */
   revision: number | null;
   total: number | null;
   url: string | null;
   sentAt: string | null;
   syncedAt: string | null;
-  /** Why the last send failed; cleared once one succeeds. */
+  /** Why the current revision's send failed; cleared once one succeeds. */
   error: string | null;
 };
 

@@ -178,6 +178,9 @@ GO
 :r database/migrations/114_request_numbers.sql
 :r database/migrations/115_pr_line_form_fields.sql
 :r database/migrations/116_pr_discipline_approvers.sql
+:r database/migrations/117_holiday_sync_grants.sql
+:r database/migrations/118_holidays_from_master.sql
+:r database/migrations/119_estimate_erp_sheet_per_revision.sql
 
 USE [$(DatabaseName)];
 GO

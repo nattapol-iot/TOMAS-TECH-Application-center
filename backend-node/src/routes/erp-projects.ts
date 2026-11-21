@@ -2,8 +2,9 @@ import type { FastifyInstance } from "fastify";
 import sql from "mssql";
 import type { Database } from "../db.js";
 import { describeErpFailure, type ErpGateway } from "../erp-purchasing.js";
-import { ERP_PROJECT_TOOL, erpProjectArguments, readErpProjects } from "../erp-projects.js";
+import { ERP_PROJECT_TOOL, erpProjectArguments, readErpProjects, type ErpProject } from "../erp-projects.js";
 import { firstQueryValue } from "../http.js";
+import type { MasterData } from "../master-data/services.js";
 import type { CurrentUserService } from "../users.js";
 
 export type ErpProjectHit = { number: string; name: string; customerName: string; customerId: number | null; projectId: number | null };
@@ -13,15 +14,32 @@ export type ErpProjectHit = { number: string; name: string; customerName: string
  * token. Each hit says which app customer it names, when exactly one carries that name, and whether a project here already
  * has the number. A failed search never blocks the form: the screen says why and the number can still be typed.
  */
-export function registerErpProjectRoutes(app: FastifyInstance, database: Database, users: CurrentUserService, erp: { gateway: ErpGateway } | null = null): void {
+export function registerErpProjectRoutes(app: FastifyInstance, database: Database, users: CurrentUserService, erp: { gateway: ErpGateway } | null = null,
+  masterData: MasterData | null = null): void {
+  type Search = { found: ErpProject[] } | { message: string; kind: string };
+  // Master data owns projects; the ERP's 30-row search is the fallback where master is not connected.
+  const fromMaster = async (master: MasterData, args: Record<string, unknown>): Promise<Search> => {
+    try {
+      return { found: await master.projects.search(typeof args.q === "string" ? args.q : "") };
+    } catch {
+      return { message: "Master data could not be searched right now; the number can still be typed.", kind: "unavailable" };
+    }
+  };
+  const fromErp = async (gateway: ErpGateway, subject: string, args: Record<string, unknown>): Promise<Search> => {
+    const result = await gateway.call<unknown>(subject, ERP_PROJECT_TOOL, args);
+    if (!result.ok) return { message: describeErpFailure(result), kind: result.kind };
+    const found = readErpProjects(result.data);
+    return found ? { found } : { message: `The ERP answered ${ERP_PROJECT_TOOL} without a projects list.`, kind: "error" };
+  };
+
   app.get("/api/v1/erp/projects", async (request) => {
     await users.demandPermission(request, "project.write");
     const actor = await users.required(request);
-    if (!erp) return { enabled: false, projects: [] as ErpProjectHit[] };
-    const result = await erp.gateway.call<unknown>(actor.entraObjectId, ERP_PROJECT_TOOL, erpProjectArguments(firstQueryValue((request.query as { q?: unknown }).q)));
-    if (!result.ok) return { enabled: true, projects: [] as ErpProjectHit[], message: describeErpFailure(result), kind: result.kind };
-    const found = readErpProjects(result.data);
-    if (!found) return { enabled: true, projects: [] as ErpProjectHit[], message: `The ERP answered ${ERP_PROJECT_TOOL} without a projects list.`, kind: "error" };
+    const args = erpProjectArguments(firstQueryValue((request.query as { q?: unknown }).q));
+    const answer = masterData ? await fromMaster(masterData, args) : erp ? await fromErp(erp.gateway, actor.entraObjectId, args) : null;
+    if (!answer) return { enabled: false, projects: [] as ErpProjectHit[] };
+    if (!("found" in answer)) return { enabled: true, projects: [] as ErpProjectHit[], ...answer };
+    const found = answer.found;
     if (!found.length) return { enabled: true, projects: [] as ErpProjectHit[] };
     // Typed OPENJSON columns take the database collation, so names compare without case like the rest of the app.
     const known = await database.query<{ id: number | string; value: string }>(`
