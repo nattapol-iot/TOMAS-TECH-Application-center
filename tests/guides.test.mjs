@@ -125,6 +125,8 @@ test("the catalog holds the guides the owner chose, in the order the work happen
       "asset-register",
       // Customers and suppliers from Pegasus ERP (2026-11-05).
       "erp-customers-suppliers",
+      // The header funnel of the Suppliers and Employees lists, filtered on the server (2026-11-21).
+      "list-column-filter",
       // Starring menu entries into the Favourites section (2026-11-10).
       "menu-favorites",
       "support-ticket",

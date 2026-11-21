@@ -181,7 +181,10 @@ test("lists follow the ERP: a record opens from its number, row actions are quie
   const master = core.slice(core.indexOf("function SupplierMasterTab"), core.indexOf("function UserRoleModal"));
   // Suppliers: the code opens the edit dialog; edit and delete are icons with a name for the pointer and the screen reader.
   assert.match(master, /<button className="pg-doclink mono" type="button" onClick=\{\(\) => setEditingSupplier\(supplier\)\}>\s*\{supplier\.code\}\s*<\/button>/);
-  assert.match(master, /\{canWrite \? \(\s*<th className="pg-acts">\s*<span className="sr-only">\{uiText\("Actions"\)\}<\/span>\s*<\/th>\s*\) : null\}\s*<th>\s*<LocalizedText text=\{"Code"\} \/>/);
+  assert.match(
+    master,
+    /\{canWrite \? \(\s*<th className="pg-acts">\s*<span className="sr-only">\{uiText\("Actions"\)\}<\/span>\s*<\/th>\s*\) : null\}\s*<th>\s*<span className="pg-th">\s*<LocalizedText text=\{"Code"\} \/>/,
+  );
   assert.match(master, /<button\s+className="pg-act danger"\s+type="button"\s+title=\{uiText\("Delete"\)\}\s+aria-label=/);
   assert.match(master, /supplier\.erpCode \? null : \(\s*<button\s+className="pg-act danger"/, "an ERP supplier is still not deleted here");
   assert.doesNotMatch(master, /style=\{\{ color: "#dc2626" \}\}/);
@@ -192,7 +195,7 @@ test("lists follow the ERP: a record opens from its number, row actions are quie
   );
   assert.doesNotMatch(master, /<span>(?:Code \(read-only\)|Name \*|Contact|Brands \(comma-separated\))<\/span>/);
   // Employees: Actions, then the status, then the rest (0.3).
-  assert.match(master, /\{canWrite \? \(\s*<th className="pg-acts">[\s\S]*?<\/th>\s*\) : null\}\s*<th>\{t\("Status"\)\}<\/th>\s*<th>\{t\("Employee"\)\}<\/th>/);
+  assert.match(master, /\{canWrite \? \(\s*<th className="pg-acts">[\s\S]*?<\/th>\s*\) : null\}\s*<th>\s*<span className="pg-th">\s*\{t\("Status"\)\}[\s\S]*?<\/th>\s*<th>\{t\("Employee"\)\}<\/th>/);
   // Every icon-only row action has a title and an aria-label (E.1).
   const actions = [...master.matchAll(/<button\s+className="pg-act[^>]*>/g)].map((match) => match[0]);
   assert.ok(actions.length >= 7, `row actions were found (${actions.length})`);
@@ -671,4 +674,73 @@ test("no browser select list is left on the ten screens", async () => {
   const reports = body(await read("app/system/production/AdminAnalyticsScreens.tsx"), "ProductionReports");
   assert.doesNotMatch(reports, /<select[\s>]/);
   assert.match(reports, /<PgSelect value=\{projectId\}/);
+});
+
+// Pegasus 0.3 and D.7: Suppliers and Employees are searched, filtered and paged on the server, with a funnel in the header.
+test("a column filter is sent as repeated parameters, and an empty one is left out", async () => {
+  const code = ts.transpileModule(await read("app/system/list-api.ts"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+  const calls = [];
+  const mod = { exports: {} };
+  new Function("require", "module", "exports", code)(() => ({ apiRequest: async (path) => calls.push(path) }), mod, mod.exports);
+  const { listQuery, listSuppliersPage, listEmployeesPage } = mod.exports;
+  assert.equal(listQuery({ search: "", category: [], page: 1 }), "?page=1");
+  assert.equal(listQuery({ category: ["Sensors", "Pneumatics"], page: 2, pageSize: 25 }), "?category=Sensors&category=Pneumatics&page=2&pageSize=25");
+  await listSuppliersPage({ search: "th", source: ["erp"], page: 1, pageSize: 50 });
+  await listEmployeesPage({ status: ["active"], department: [""], page: 1, pageSize: 50 });
+  assert.deepEqual(calls, ["/api/v1/master/suppliers?search=th&source=erp&page=1&pageSize=50", "/api/v1/master/employees?status=active&department=&page=1&pageSize=50"]);
+});
+
+test("the server pages, searches and filters both lists, and counts the values each funnel offers", async () => {
+  const master = await read("backend-node/src/routes/master.ts");
+  // Every filter value is a parameter read through OPENJSON; nothing from the query is put into the SQL text.
+  assert.match(master, /app\.get\("\/api\/v1\/master\/suppliers", async \(request\) => \{\s*await users\.demandPermission\(request, "master\.read"\);/);
+  assert.match(master, /supplier\.category IN \(SELECT value FROM OPENJSON\(@categories\) WITH \(value nvarchar\(100\) '\$'\)\)/);
+  assert.match(master, /const sources = filterChoices\(query\.source, "Source", \["erp", "local"\]\);/);
+  assert.match(master, /OFFSET @offset ROWS FETCH NEXT @page_size ROWS ONLY;/);
+  assert.match(master, /const pageSize = clampedInteger\(query\.pageSize, 50, 1, 100\);/);
+  // The employees route keeps its plain list for the pickers; a page parameter turns on paging, filters and facets.
+  assert.match(master, /const paged = query\.page !== undefined;/);
+  assert.match(master, /if \(!paged\) return items;/);
+  assert.match(master, /employee\.department IN \(SELECT value FROM OPENJSON\(@departments\) WITH \(value nvarchar\(200\) '\$'\)\)/);
+  assert.match(master, /facets: facetsOf\(facets, \["status", "department", "position", "account"\]\)/);
+  assert.match(master, /if \(values\.length > 100\) throw new ApiError\(400, "validation_failed"/);
+});
+
+test("the funnel follows D.7: faint until used, All first, rows that toggle, a search past eight values and Clear", async () => {
+  const filter = await read("app/system/production/ColumnFilter.tsx");
+  assert.match(filter, /className=\{`pg-col-filter\$\{active \? " active" : ""\}`\}/);
+  assert.match(filter, /const withSearch = options\.length > 8;/);
+  assert.match(filter, /const toggle = \(item: string\) => onChange\(value\.includes\(item\) \? value\.filter\(\(entry\) => entry !== item\) : \[\.\.\.value, item\]\);/);
+  assert.match(filter, /aria-pressed=\{!active\} onClick=\{\(\) => onChange\(\[\]\)\}/);
+  assert.match(filter, /t\("Form\.filterClear"\)/);
+  assert.match(filter, /button\.current\?\.closest\("dialog"\) \?\? document\.body/);
+  const css = await readCss("app/system/production/pegasus-screens.css");
+  assert.match(css, /\.pg-screen \.pg-col-filter \{[^}]*opacity: 0\.4;/);
+  assert.match(css, /\.pg-screen \.pg-col-filter\.active \{ color: var\(--pg-primary\); opacity: 1; \}/);
+  assert.match(css, /\.pg-select-panel \.pg-filter-list \{ max-height: 224px; overflow: auto; padding: 4px; \}/);
+  assert.match(css, /\.pg-select-panel \.pg-filter-option:not\(\.chosen\) > \.icon \{ opacity: 0; \}/);
+  for (const key of ["Form.filterColumn", "Form.filterSearch", "Form.filterAll", "Form.filterClear", "Form.filterBlank"])
+    for (const language of ["en", "th", "jp"]) assert.ok(FORM_COPY[key]?.[language], `${language} ${key}`);
+  for (const key of ["Supplier.source", "Supplier.sourceErp", "Supplier.sourceLocal"]) for (const language of ["en", "th", "jp"]) assert.ok(ADMIN_SCREENS_COPY[key]?.[language], `${language} ${key}`);
+});
+
+test("Suppliers and Employees read one page at a time, keep the table when a filter finds nothing, and edit with every field", async () => {
+  const core = await read("app/system/production/CoreScreens.tsx");
+  const suppliers = core.slice(core.indexOf("function SupplierMasterTab("), core.indexOf("function SupplierEditModal("));
+  assert.match(suppliers, /const next = await listSuppliersPage\(\{ search: search\.trim\(\), category, source, page, pageSize \}\);/);
+  // A delete that emptied the last page goes back to the page that is now last (no setState inside an effect).
+  assert.match(suppliers, /if \(!next\.items\.length && next\.total && page > 1\) setPage\(Math\.ceil\(next\.total \/ pageSize\)\);/);
+  assert.doesNotMatch(suppliers, /bootstrap\.suppliers\.filter/);
+  assert.match(suppliers, /<ColumnFilter column=\{uiText\("Category"\)\} options=\{categoryOptions\} value=\{category\} onChange=\{filterBy\(setCategory\)\} guide="list\.columnFilter" \/>/);
+  assert.match(suppliers, /\{rows\.length \|\| \(list && filtered\) \? \(/);
+  assert.match(suppliers, /<td className="pg-empty-row" colSpan=\{canWrite \? 4 : 3\}>/);
+  // The edit dialog starts from the row, so a save no longer blanks contact, email, phone and brands.
+  assert.match(core, /contact: supplier\.contact \?\? "",\s*email: supplier\.email \?\? "",\s*phone: supplier\.phone \?\? "",\s*brands: \(supplier\.brands \?\? \[\]\)\.join\(", "\),/);
+  const employees = core.slice(core.indexOf("function EmployeeMasterTab("), core.indexOf("function EmployeeModal("));
+  assert.match(employees, /listEmployeesPage\(\{ search: search\.trim\(\), status, department, position, page, pageSize \}\)/);
+  assert.match(employees, /const \[status, setStatus\] = useState<string\[\]>\(\["active"\]\);/);
+  assert.doesNotMatch(employees, /activeOnly|visibleEmployees/);
+  for (const column of ["Status", "Department", "Level"]) assert.match(employees, new RegExp(`<ColumnFilter\\s+column=\\{t\\("${column}"\\)\\}`), column);
+  // An employee with an edit draft opens again even when it is not on the first page.
+  assert.match(employees, /const match = ids\.length \? \(kept\(next\.items\) \?\? kept\(await listEmployees\(\)\)\) : undefined;/);
 });

@@ -107,6 +107,8 @@ import { PegasusScreen } from "./PegasusScreen";
 import { checkFields, failureDialog } from "./form-bubbles";
 import { clearDraft, confirmLeave, draftKeys, hasDraft, leaveCopy, useDraftField } from "./form-draft";
 import { PgSelect } from "./PegasusSelect";
+import { ColumnFilter } from "./ColumnFilter";
+import { listEmployeesPage, listSuppliersPage, type ListPage, type SupplierListItem } from "../list-api";
 import { ErpProjectNumberField, isPlaceholderProjectNumber } from "./ErpProjectNumber";
 import { SearchSelect } from "./SearchSelect";
 import { canViewEngineeringRates } from "../../../backend-node/src/engineering-rate-access";
@@ -3600,29 +3602,74 @@ function MasterFormError({ message }: { message: string }) {
   );
 }
 
+/** A supplier the edit dialog opens: a row of the server list carries contact, email, phone and brands; a bootstrap one does not. */
+type SupplierEditTarget = { id: number; code: string; name: string; category: string; erpCode?: string | null; contact?: string; email?: string; phone?: string; brands?: string[] };
+
 function SupplierMasterTab({ bootstrap, canWrite, canCreate, notify, refreshBootstrap }: MasterTabProps & { canCreate: boolean }) {
   const uiText = useUiText();
   const [search, setSearch] = useState("");
+  const [category, setCategory] = useState<string[]>([]);
+  const [source, setSource] = useState<string[]>([]);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
+  // Searched, filtered and paged on the server (Pegasus 0.3); the header funnels offer the values the server counts.
+  const [list, setList] = useState<ListPage<SupplierListItem, "category" | "source"> | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [createOpen, setCreateOpen] = useState(() => canCreate && hasDraft("supplier:new"));
-  const [editingSupplier, setEditingSupplier] = useState<{ id: number; code: string; name: string; category: string; erpCode?: string | null } | null>(() => {
+  const [editingSupplier, setEditingSupplier] = useState<SupplierEditTarget | null>(() => {
     if (!canWrite) return null;
     const ids = draftKeys("supplier:edit:").map((key) => Number(key.slice("supplier:edit:".length)));
     return bootstrap.suppliers.find((supplier) => ids.includes(supplier.id)) ?? null;
   });
   const [deletingId, setDeletingId] = useState<number | null>(null);
-  const suppliers = bootstrap.suppliers.filter((supplier) => [supplier.code, supplier.name, supplier.category].join(" ").toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()));
-  const pageCount = Math.max(1, Math.ceil(suppliers.length / pageSize));
-  const resolvedPage = Math.min(page, pageCount);
-  const from = suppliers.length ? (resolvedPage - 1) * pageSize + 1 : 0;
-  const to = Math.min(resolvedPage * pageSize, suppliers.length);
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const next = await listSuppliersPage({ search: search.trim(), category, source, page, pageSize });
+      setList(next);
+      // A delete that emptied the last page goes back to the page that is now last.
+      if (!next.items.length && next.total && page > 1) setPage(Math.ceil(next.total / pageSize));
+    } catch (requestError) {
+      setError(toError(requestError));
+    } finally {
+      setLoading(false);
+    }
+  }, [search, category, source, page, pageSize]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void load();
+    }, 200);
+    return () => window.clearTimeout(timer);
+  }, [load]);
+  // A save or a delete reads both the list and the short supplier list in bootstrap (the pickers elsewhere) again.
+  const refresh = async () => {
+    await refreshBootstrap();
+    await load();
+  };
+  const total = list?.total ?? 0;
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  const rows = list?.items ?? [];
+  const from = rows.length ? (page - 1) * pageSize + 1 : 0;
+  const to = rows.length ? from + rows.length - 1 : 0;
+  const filtered = Boolean(search.trim() || category.length || source.length);
+  const filterBy = (set: (next: string[]) => void) => (next: string[]) => {
+    set(next);
+    setPage(1);
+  };
+  const categoryOptions = (list?.facets.category ?? []).map((facet) => ({ value: facet.value, count: facet.count }));
+  const sourceOptions = (list?.facets.source ?? []).map((facet) => ({
+    value: facet.value,
+    label: uiText(facet.value === "erp" ? "Supplier.sourceErp" : "Supplier.sourceLocal"),
+    count: facet.count,
+  }));
   const deleteSupplierRow = async (supplier: { id: number; code: string; name: string }) => {
     if (!(await confirmDialog(`ลบ Supplier "${supplier.name}" (${supplier.code}) ใช่หรือไม่?`, { danger: true }))) return;
     setDeletingId(supplier.id);
     try {
       await deleteSupplier(supplier.id);
-      await refreshBootstrap();
+      await refresh();
       notify(`ลบ Supplier ${supplier.code} แล้ว`);
     } catch (e) {
       notify("ลบไม่สำเร็จ: " + toError(e));
@@ -3649,9 +3696,17 @@ function SupplierMasterTab({ bootstrap, canWrite, canCreate, notify, refreshBoot
           </button>
         ) : null}
       </Toolbar>
-      <ErpMasterPanel kind="suppliers" onChanged={refreshBootstrap} />
-      <Panel title={`${suppliers.length} ${uiText("suppliers")}`} subtitle="ข้อมูลผู้ขายชุดเดียวกันสำหรับ Cost item และ Preferred supplier" flush>
-        {suppliers.length ? (
+      <ErpMasterPanel kind="suppliers" onChanged={refresh} />
+      <Panel title={`${total} ${uiText("suppliers")}`} subtitle="ข้อมูลผู้ขายชุดเดียวกันสำหรับ Cost item และ Preferred supplier" flush>
+        {error ? (
+          <LoadError
+            message={error}
+            retry={() => {
+              void load();
+            }}
+          />
+        ) : null}
+        {rows.length || (list && filtered) ? (
           <div className="table-wrap">
             <TablePageSize
               value={pageSize}
@@ -3669,18 +3724,24 @@ function SupplierMasterTab({ bootstrap, canWrite, canCreate, notify, refreshBoot
                     </th>
                   ) : null}
                   <th>
-                    <LocalizedText text={"Code"} />
+                    <span className="pg-th">
+                      <LocalizedText text={"Code"} />
+                      <ColumnFilter column={uiText("Supplier.source")} options={sourceOptions} value={source} onChange={filterBy(setSource)} />
+                    </span>
                   </th>
                   <th>
                     <LocalizedText text={"Supplier name"} />
                   </th>
                   <th>
-                    <LocalizedText text={"Category"} />
+                    <span className="pg-th">
+                      <LocalizedText text={"Category"} />
+                      <ColumnFilter column={uiText("Category")} options={categoryOptions} value={category} onChange={filterBy(setCategory)} guide="list.columnFilter" />
+                    </span>
                   </th>
                 </tr>
               </thead>
               <tbody>
-                {suppliers.slice(from - 1, to).map((supplier) => (
+                {rows.map((supplier) => (
                   <tr key={supplier.id}>
                     {canWrite ? (
                       <td className="pg-acts">
@@ -3729,13 +3790,25 @@ function SupplierMasterTab({ bootstrap, canWrite, canCreate, notify, refreshBoot
                     </td>
                   </tr>
                 ))}
+                {!rows.length ? (
+                  <tr>
+                    <td className="pg-empty-row" colSpan={canWrite ? 4 : 3}>
+                      {uiText("Form.noResults")}
+                    </td>
+                  </tr>
+                ) : null}
               </tbody>
             </table>
-            <Pagination page={resolvedPage} pageCount={pageCount} from={from} to={to} total={suppliers.length} onPage={setPage} />
+            <Pagination page={Math.min(page, pageCount)} pageCount={pageCount} from={from} to={to} total={total} onPage={setPage} />
           </div>
-        ) : (
+        ) : loading ? (
+          <div className="empty">
+            <span className="spinner" />
+            <LocalizedText text={"Loading…"} />
+          </div>
+        ) : !error ? (
           <EmptyState icon="truck" title="No supplier found" message="ลองเปลี่ยนคำค้นหา หรือกด Add supplier เพื่อเพิ่มผู้ขาย" />
-        )}
+        ) : null}
       </Panel>
       {createOpen ? (
         <SupplierCreateForm
@@ -3744,10 +3817,10 @@ function SupplierMasterTab({ bootstrap, canWrite, canCreate, notify, refreshBoot
             setCreateOpen(false);
             notify(message);
           }}
-          refreshBootstrap={refreshBootstrap}
+          refreshBootstrap={refresh}
         />
       ) : null}
-      {editingSupplier ? <SupplierEditModal supplier={editingSupplier} notify={notify} refreshBootstrap={refreshBootstrap} onClose={() => setEditingSupplier(null)} /> : null}
+      {editingSupplier ? <SupplierEditModal supplier={editingSupplier} notify={notify} refreshBootstrap={refresh} onClose={() => setEditingSupplier(null)} /> : null}
     </>
   );
 }
@@ -3758,7 +3831,7 @@ function SupplierEditModal({
   refreshBootstrap,
   onClose,
 }: {
-  supplier: { id: number; code: string; name: string; category: string; erpCode?: string | null };
+  supplier: SupplierEditTarget;
   notify: (msg: string) => void;
   refreshBootstrap: () => Promise<void>;
   onClose: () => void;
@@ -3773,7 +3846,14 @@ function SupplierEditModal({
     uiText("Form.errorTitle"),
   );
   const draftKey = `supplier:edit:${supplier.id}`;
-  const [values, setValues] = useDraftField(draftKey, "form", { category: supplier.category, name: supplier.name, contact: "", email: "", phone: "", brands: "" });
+  const [values, setValues] = useDraftField(draftKey, "form", {
+    category: supplier.category,
+    name: supplier.name,
+    contact: supplier.contact ?? "",
+    email: supplier.email ?? "",
+    phone: supplier.phone ?? "",
+    brands: (supplier.brands ?? []).join(", "),
+  });
   const update = (key: keyof typeof values, value: string) => setValues((current) => ({ ...current, [key]: value }));
   const close = async () => {
     if (await confirmLeave(draftKey, leaveCopy(uiText))) onClose();
@@ -4427,9 +4507,13 @@ function employeeDuration(start: string, end: string | null, lang: "TH" | "EN" |
 
 function EmployeeMasterTab({ canWrite, notify }: { canWrite: boolean; notify: (message: string) => void }) {
   const { lang, t } = useLanguage();
-  const [employees, setEmployees] = useState<EmployeeRecord[]>([]);
+  // Searched, filtered and paged on the server (Pegasus 0.3). Status starts on Active, as the old "active only" box did.
+  const [list, setList] = useState<ListPage<EmployeeRecord, "status" | "department" | "position" | "account"> | null>(null);
+  const employees = list?.items ?? [];
   const [search, setSearch] = useState("");
-  const [activeOnly, setActiveOnly] = useState(true);
+  const [status, setStatus] = useState<string[]>(["active"]);
+  const [department, setDepartment] = useState<string[]>([]);
+  const [position, setPosition] = useState<string[]>([]);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
   const [loading, setLoading] = useState(true);
@@ -4449,19 +4533,23 @@ function EmployeeMasterTab({ canWrite, notify }: { canWrite: boolean; notify: (m
     setLoading(true);
     setError("");
     try {
-      const [list, requests, accounts] = await Promise.all([
-        listEmployees({ search, activeOnly }),
+      const [next, requests, accounts] = await Promise.all([
+        listEmployeesPage({ search: search.trim(), status, department, position, page, pageSize }),
         canWrite ? listSignInRequests() : Promise.resolve([]),
         canWrite ? listUnlinkedAccounts() : Promise.resolve([]),
       ]);
-      setEmployees(list);
+      setList(next);
+      // A save that emptied the last page goes back to the page that is now last.
+      if (!next.items.length && next.total && page > 1) setPage(Math.ceil(next.total / pageSize));
       setSignInRequests(requests);
       setUnlinked(accounts);
-      // An employee left with unsaved changes opens again once the list is here (only on the first load).
+      // An employee left with unsaved changes opens again once the list is here (only on the first load), also when it is
+      // not on this page.
       if (!reopenedEdit.current) {
         reopenedEdit.current = true;
         const ids = canWrite ? draftKeys("employee:edit:").map((key) => Number(key.slice("employee:edit:".length))) : [];
-        const match = list.find((employee) => ids.includes(employee.id));
+        const kept = (rows: EmployeeRecord[]) => rows.find((employee) => ids.includes(employee.id));
+        const match = ids.length ? (kept(next.items) ?? kept(await listEmployees())) : undefined;
         if (match) setEditing((current) => current ?? match);
       }
     } catch (requestError) {
@@ -4469,7 +4557,7 @@ function EmployeeMasterTab({ canWrite, notify }: { canWrite: boolean; notify: (m
     } finally {
       setLoading(false);
     }
-  }, [search, activeOnly, canWrite]);
+  }, [search, status, department, position, page, pageSize, canWrite]);
   const dismiss = async (request: SignInRequest) => {
     if (!(await confirmDialog(t("SignIn.dismissConfirm").replace("{name}", request.name), { danger: true }))) return;
     try {
@@ -4487,7 +4575,7 @@ function EmployeeMasterTab({ canWrite, notify }: { canWrite: boolean; notify: (m
     return () => window.clearTimeout(timer);
   }, [load]);
 
-  const linkedAccounts = employees.filter((employee) => employee.accountActive !== null).length;
+  const linkedAccounts = list?.facets.account.find((facet) => facet.value === "linked")?.count ?? 0;
   const when = (value: string) => new Date(value).toLocaleString(lang === "TH" ? "th-TH" : lang === "JP" ? "ja-JP" : "en-GB");
   // An employee already has this email but does not point at the account: saving it links the account.
   const openEmployee = (account: UnlinkedAccount) => {
@@ -4498,12 +4586,19 @@ function EmployeeMasterTab({ canWrite, notify }: { canWrite: boolean; notify: (m
       setPage(1);
     }
   };
-  const departments = new Set(employees.map((employee) => employee.department)).size;
-  const pageCount = Math.max(1, Math.ceil(employees.length / pageSize));
+  const total = list?.total ?? 0;
+  const departments = (list?.facets.department ?? []).filter((facet) => facet.value).length;
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
   const resolvedPage = Math.min(page, pageCount);
   const from = employees.length ? (resolvedPage - 1) * pageSize + 1 : 0;
-  const to = Math.min(resolvedPage * pageSize, employees.length);
-  const visibleEmployees = employees.slice(from ? from - 1 : 0, to);
+  const to = employees.length ? from + employees.length - 1 : 0;
+  const filtered = Boolean(search.trim() || status.length || department.length || position.length);
+  const filterBy = (set: (next: string[]) => void) => (next: string[]) => {
+    set(next);
+    setPage(1);
+  };
+  const facetOptions = (name: "status" | "department" | "position") =>
+    (list?.facets[name] ?? []).map((facet) => ({ value: facet.value, count: facet.count, ...(name === "status" ? { label: t(facet.value === "active" ? "Active" : "Inactive") } : {}) }));
   return (
     <>
       <Toolbar>
@@ -4516,17 +4611,6 @@ function EmployeeMasterTab({ canWrite, notify }: { canWrite: boolean; notify: (m
           }}
           placeholder={t("Search employee, nickname, email, department or position…")}
         />
-        <label className="checkbox-row">
-          <input
-            type="checkbox"
-            checked={activeOnly}
-            onChange={(event) => {
-              setActiveOnly(event.target.checked);
-              setPage(1);
-            }}
-          />
-          <span>{t("Active employees only")}</span>
-        </label>
         <button
           className="btn ghost"
           type="button"
@@ -4552,7 +4636,7 @@ function EmployeeMasterTab({ canWrite, notify }: { canWrite: boolean; notify: (m
         ) : null}
       </Toolbar>
       <div className="kpi-grid three">
-        <KpiCard label={t("Employees")} value={employees.length} icon="users" tone="blue" />
+        <KpiCard label={t("Employees")} value={total} icon="users" tone="blue" />
         <KpiCard label={t("Departments")} value={departments} icon="folder" tone="slate" />
         <KpiCard label={t("Linked login accounts")} value={linkedAccounts} note={t("SignIn.linkedNote")} icon="shield" tone="green" />
       </div>
@@ -4698,8 +4782,8 @@ function EmployeeMasterTab({ canWrite, notify }: { canWrite: boolean; notify: (m
           </div>
         </Panel>
       ) : null}
-      <Panel title={`${employees.length} ${t("employees")}`} subtitle={t("Employee Master is stored in SQL Server; age and tenure are calculated from dates")} flush>
-        {employees.length ? (
+      <Panel title={`${total} ${t("employees")}`} subtitle={t("Employee Master is stored in SQL Server; age and tenure are calculated from dates")} flush>
+        {employees.length || (list && filtered) ? (
           <div className="table-wrap">
             <TablePageSize
               value={pageSize}
@@ -4716,11 +4800,26 @@ function EmployeeMasterTab({ canWrite, notify }: { canWrite: boolean; notify: (m
                       <span className="sr-only">{t("Actions")}</span>
                     </th>
                   ) : null}
-                  <th>{t("Status")}</th>
+                  <th>
+                    <span className="pg-th">
+                      {t("Status")}
+                      <ColumnFilter column={t("Status")} options={facetOptions("status")} value={status} onChange={filterBy(setStatus)} />
+                    </span>
+                  </th>
                   <th>{t("Employee")}</th>
                   <th>{t("Email / mobile")}</th>
-                  <th>{t("Department")}</th>
-                  <th>{t("Level")}</th>
+                  <th>
+                    <span className="pg-th">
+                      {t("Department")}
+                      <ColumnFilter column={t("Department")} options={facetOptions("department")} value={department} onChange={filterBy(setDepartment)} guide="list.columnFilter" />
+                    </span>
+                  </th>
+                  <th>
+                    <span className="pg-th">
+                      {t("Level")}
+                      <ColumnFilter column={t("Level")} options={facetOptions("position")} value={position} onChange={filterBy(setPosition)} />
+                    </span>
+                  </th>
                   <th>{t("Job title")}</th>
                   <th>{t("Role")}</th>
                   <th>{t("Working time")}</th>
@@ -4728,7 +4827,7 @@ function EmployeeMasterTab({ canWrite, notify }: { canWrite: boolean; notify: (m
                 </tr>
               </thead>
               <tbody>
-                {visibleEmployees.map((employee) => (
+                {employees.map((employee) => (
                   <tr key={employee.id}>
                     {canWrite ? (
                       <td className="pg-acts">
@@ -4767,9 +4866,16 @@ function EmployeeMasterTab({ canWrite, notify }: { canWrite: boolean; notify: (m
                     <td className="num">{employee.dailyRate === null ? "—" : formatMoney(employee.dailyRate)}</td>
                   </tr>
                 ))}
+                {!employees.length ? (
+                  <tr>
+                    <td className="pg-empty-row" colSpan={canWrite ? 10 : 9}>
+                      {t("Form.noResults")}
+                    </td>
+                  </tr>
+                ) : null}
               </tbody>
             </table>
-            <Pagination page={resolvedPage} pageCount={pageCount} from={from} to={to} total={employees.length} onPage={setPage} />
+            <Pagination page={resolvedPage} pageCount={pageCount} from={from} to={to} total={total} onPage={setPage} />
           </div>
         ) : loading ? (
           <div className="empty">
@@ -4784,8 +4890,8 @@ function EmployeeMasterTab({ canWrite, notify }: { canWrite: boolean; notify: (m
         <EmployeeModal
           employee={editing === "new" ? null : editing}
           prefill={editing === "new" ? prefill : null}
-          departments={employees.map((employee) => employee.department)}
-          positions={employees.map((employee) => employee.position)}
+          departments={(list?.facets.department ?? []).map((facet) => facet.value)}
+          positions={(list?.facets.position ?? []).map((facet) => facet.value)}
           onClose={() => setEditing(null)}
           onSaved={async (message) => {
             setEditing(null);
