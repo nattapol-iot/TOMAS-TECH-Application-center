@@ -13,7 +13,9 @@
     "start": "bun --bun vinext start",
     "test": "bun run lint && bun run typecheck && bun test ./tests/",
     "typecheck": "bun --bun tsc --noEmit",
-    "lint": "oxlint"
+    "lint": "oxlint",
+    "fmt": "bun scripts/format-changed.mjs",
+    "fmt:check": "bun scripts/format-changed.mjs --check"
   },
   "dependencies": {
     "@azure/msal-browser": "5.20.0",
@@ -40,6 +42,7 @@
     "fast-xml-parser": "^5.11.1",
     "fastify": "^5.12.3",
     "mssql": "^12.7.0",
+    "oxfmt": "0.79.0",
     "oxlint": "1.94.0",
     "pdf-lib": "^1.17.1",
     "react-server-dom-webpack": "19.2.6",
