@@ -878,4 +878,9 @@ GO
 GRANT INSERT, DELETE ON OBJECT::dbo.holidays TO [iot_team_app_role];
 GRANT UPDATE (name) ON OBJECT::dbo.holidays TO [iot_team_app_role];
 GO
+
+-- database/migrations/121_daily_work_hours.sql
+GRANT SELECT, INSERT, UPDATE ON dbo.work_days TO [iot_team_app_role];
+GRANT SELECT, INSERT, DELETE ON dbo.work_hours TO [iot_team_app_role];
+GO
 -- END GENERATED MIGRATION GRANTS
