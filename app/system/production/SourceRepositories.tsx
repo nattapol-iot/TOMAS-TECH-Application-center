@@ -4,21 +4,43 @@ import { confirmDialog } from "../dialogs";
 import { optionalTextLink, textLink, useLinkedState } from "../screen-link";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import {
-  createSourceRepository, deleteRepositoryPath, deleteSourceRepository, downloadRepositoryArchive, downloadRepositoryFile,
-  fetchRepositoryFileBlob, getRepositoryBlob, getRepositoryTree, getSourceRepository, listProjects, listSourceRepositories,
-  updateSourceRepository, uploadRepositoryFile,
-  type ProjectSummary, type RepositoryBlob, type RepositoryHub, type RepositoryTree, type SourceRepository, type SourceRepositoryDetail,
+  createSourceRepository,
+  deleteRepositoryPath,
+  deleteSourceRepository,
+  downloadRepositoryArchive,
+  downloadRepositoryFile,
+  fetchRepositoryFileBlob,
+  getRepositoryBlob,
+  getRepositoryTree,
+  getSourceRepository,
+  listProjects,
+  listSourceRepositories,
+  updateSourceRepository,
+  uploadRepositoryFile,
+  type ProjectSummary,
+  type RepositoryBlob,
+  type RepositoryHub,
+  type RepositoryTree,
+  type SourceRepository,
+  type SourceRepositoryDetail,
 } from "../api-client";
 import { localeFor, useLanguage, useT } from "../i18n";
 import { LocalizedText } from "../LocalizedText";
 import { Badge, EmptyState, Field, Icon, Modal, Panel, SearchInput, Tabs, Toolbar } from "../ui";
 import { checkFields } from "./form-bubbles";
 import { clearDraft, confirmLeave, hasDraft, leaveCopy, useDraftField } from "./form-draft";
+import { PgSelect } from "./PegasusSelect";
 
 type Notify = (message: string) => void;
 
 const IMAGE_TYPES: Record<string, string> = {
-  png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", bmp: "image/bmp", svg: "image/svg+xml",
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  webp: "image/webp",
+  bmp: "image/bmp",
+  svg: "image/svg+xml",
 };
 
 function errorText(reason: unknown): string {
@@ -60,11 +82,18 @@ function readPreference(): { sort: RepositorySort; layout: RepositoryLayout } {
   }
 }
 function writePreference(value: { sort: RepositorySort; layout: RepositoryLayout }) {
-  try { window.localStorage.setItem(PREFERENCE_KEY, JSON.stringify(value)); } catch { /* storage unavailable: keep the default next time */ }
+  try {
+    window.localStorage.setItem(PREFERENCE_KEY, JSON.stringify(value));
+  } catch {
+    /* storage unavailable: keep the default next time */
+  }
 }
 
 function copyText(text: string, done: string, notify: Notify) {
-  void navigator.clipboard?.writeText(text).then(() => notify(done), () => notify(text));
+  void navigator.clipboard?.writeText(text).then(
+    () => notify(done),
+    () => notify(text),
+  );
 }
 
 /** Repository list, then one repository's tree, file view and history. */
@@ -85,9 +114,19 @@ export function SourceRepositories({ canManage, notify }: { canManage: boolean; 
   useEffect(() => {
     let active = true;
     listSourceRepositories()
-      .then((result) => { if (active) { setItems(result.items); setHub(result.hub ?? null); setError(null); } })
-      .catch((reason: unknown) => { if (active) setError(errorText(reason)); });
-    return () => { active = false; };
+      .then((result) => {
+        if (active) {
+          setItems(result.items);
+          setHub(result.hub ?? null);
+          setError(null);
+        }
+      })
+      .catch((reason: unknown) => {
+        if (active) setError(errorText(reason));
+      });
+    return () => {
+      active = false;
+    };
   }, [revision]);
 
   const projects = useMemo(() => {
@@ -96,8 +135,8 @@ export function SourceRepositories({ canManage, notify }: { canManage: boolean; 
     return [...seen.entries()].sort((a, b) => a[1].localeCompare(b[1]));
   }, [items]);
   const needle = query.trim().toLocaleLowerCase();
-  const visible = (items ?? []).filter((item) => (!project || String(item.project?.id ?? "") === project)
-    && (!needle || `${item.name} ${item.description} ${projectLabel(item.project)}`.toLocaleLowerCase().includes(needle)))
+  const visible = (items ?? [])
+    .filter((item) => (!project || String(item.project?.id ?? "") === project) && (!needle || `${item.name} ${item.description} ${projectLabel(item.project)}`.toLocaleLowerCase().includes(needle)))
     .sort(SORTS[view.sort]);
   // Groups follow the chosen sort: a project appears where its first repository would.
   const byProject = new Map<string, { key: string; project: SourceRepository["project"]; items: SourceRepository[] }>();
@@ -115,13 +154,24 @@ export function SourceRepositories({ canManage, notify }: { canManage: boolean; 
   };
 
   if (open) {
-    return <RepositoryView name={open} notify={notify} dateFormat={dateFormat}
-      onBack={() => { setOpen(null); setRevision((value) => value + 1); }} />;
+    return (
+      <RepositoryView
+        name={open}
+        notify={notify}
+        dateFormat={dateFormat}
+        onBack={() => {
+          setOpen(null);
+          setRevision((value) => value + 1);
+        }}
+      />
+    );
   }
 
   const rows = (list: SourceRepository[], showProject: boolean) => (
     <ul className="repo-list">
-      {list.map((item) => <RepositoryRow key={item.name} item={item} showProject={showProject} dateFormat={dateFormat} notify={notify} onOpen={() => setOpen(item.name)} />)}
+      {list.map((item) => (
+        <RepositoryRow key={item.name} item={item} showProject={showProject} dateFormat={dateFormat} notify={notify} onOpen={() => setOpen(item.name)} />
+      ))}
     </ul>
   );
 
@@ -131,18 +181,22 @@ export function SourceRepositories({ canManage, notify }: { canManage: boolean; 
         <SearchInput link="rq" value={query} onChange={setQuery} placeholder="Repos.search" />
         <label className="select-field">
           <span className="sr-only">{t("Repos.project")}</span>
-          <select value={project} onChange={(event) => setProject(event.target.value)}>
+          <PgSelect value={project} onChange={(event) => setProject(event.target.value)}>
             <option value="">{t("Repos.allProjects")}</option>
-            {projects.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
-          </select>
+            {projects.map(([id, label]) => (
+              <option key={id} value={id}>
+                {label}
+              </option>
+            ))}
+          </PgSelect>
         </label>
         <label className="select-field">
           <span className="sr-only">{t("Repos.sortLabel")}</span>
-          <select value={view.sort} onChange={(event) => changeView({ sort: event.target.value as RepositorySort })}>
+          <PgSelect value={view.sort} onChange={(event) => changeView({ sort: event.target.value as RepositorySort })}>
             <option value="updated">{t("Repos.sortUpdated")}</option>
             <option value="name">{t("Repos.sortName")}</option>
             <option value="size">{t("Repos.sortSize")}</option>
-          </select>
+          </PgSelect>
         </label>
         <div className="seg-control" role="group" aria-label={t("Repos.viewLabel")}>
           <button type="button" className={view.layout === "project" ? "on" : ""} aria-pressed={view.layout === "project"} onClick={() => changeView({ layout: "project" })}>
@@ -152,58 +206,102 @@ export function SourceRepositories({ canManage, notify }: { canManage: boolean; 
             <LocalizedText text={"Repos.viewList"} />
           </button>
         </div>
-        {items ? <span className="download-center-count">{visible.length} <LocalizedText text={"Repos.count"} /></span> : null}
+        {items ? (
+          <span className="download-center-count">
+            {visible.length} <LocalizedText text={"Repos.count"} />
+          </span>
+        ) : null}
         {hub ? (
-          <a className="btn default" href={hub.orgUrl} target="_blank" rel="noopener noreferrer"><Icon name="externalLink" /><LocalizedText text={"Repos.openHub"} /></a>
+          <a className="btn default" href={hub.orgUrl} target="_blank" rel="noopener noreferrer">
+            <Icon name="externalLink" />
+            <LocalizedText text={"Repos.openHub"} />
+          </a>
         ) : null}
         {canManage ? (
-          <button className="btn primary" type="button" onClick={() => setCreating(true)}><Icon name="plus" /><LocalizedText text={"Repos.new"} /></button>
+          <button className="btn primary" type="button" onClick={() => setCreating(true)}>
+            <Icon name="plus" />
+            <LocalizedText text={"Repos.new"} />
+          </button>
         ) : null}
       </Toolbar>
 
       {error ? (
-        <Panel><EmptyState icon="alertTriangle" title="Could not load" message={error}
-          action={<button className="btn default" type="button" onClick={() => setRevision((value) => value + 1)}><Icon name="refresh" /><LocalizedText text={"Try again"} /></button>} /></Panel>
+        <Panel>
+          <EmptyState
+            icon="alertTriangle"
+            title="Could not load"
+            message={error}
+            action={
+              <button className="btn default" type="button" onClick={() => setRevision((value) => value + 1)}>
+                <Icon name="refresh" />
+                <LocalizedText text={"Try again"} />
+              </button>
+            }
+          />
+        </Panel>
       ) : items === null ? (
-        <Panel><EmptyState icon="clock" title="Loading…" message="Repos.loading" /></Panel>
+        <Panel>
+          <EmptyState icon="clock" title="Loading…" message="Repos.loading" />
+        </Panel>
       ) : visible.length === 0 ? (
-        <Panel><EmptyState icon="gitBranch" title={items.length === 0 ? "Repos.emptyTitle" : "Downloads.noMatchTitle"}
-          message={items.length === 0 ? (canManage ? "Repos.emptyManage" : "Repos.emptyMessage") : "Downloads.noMatchMessage"} /></Panel>
+        <Panel>
+          <EmptyState
+            icon="gitBranch"
+            title={items.length === 0 ? "Repos.emptyTitle" : "Downloads.noMatchTitle"}
+            message={items.length === 0 ? (canManage ? "Repos.emptyManage" : "Repos.emptyMessage") : "Downloads.noMatchMessage"}
+          />
+        </Panel>
       ) : view.layout === "list" ? (
-        <section className="panel"><div className="panel-body flush">{rows(visible, true)}</div></section>
-      ) : groups.map((group) => (
-        <section className="panel" key={group.key || "none"}>
-          <div className="panel-head repo-group-head">
-            <h2>
-              <Icon name="folder" />
-              {group.project ? <>
-                {group.project.projectNo ? <span className="repo-group-no">{group.project.projectNo}</span> : null}
-                <span className="repo-group-name">{group.project.name || `#${group.project.id}`}</span>
-              </> : <LocalizedText text={"Repos.noProject"} />}
-            </h2>
-            <span className="download-center-count">{group.items.length} <LocalizedText text={"Repos.count"} /></span>
-          </div>
-          <div className="panel-body flush">{rows(group.items, false)}</div>
+        <section className="panel">
+          <div className="panel-body flush">{rows(visible, true)}</div>
         </section>
-      ))}
+      ) : (
+        groups.map((group) => (
+          <section className="panel" key={group.key || "none"}>
+            <div className="panel-head repo-group-head">
+              <h2>
+                <Icon name="folder" />
+                {group.project ? (
+                  <>
+                    {group.project.projectNo ? <span className="repo-group-no">{group.project.projectNo}</span> : null}
+                    <span className="repo-group-name">{group.project.name || `#${group.project.id}`}</span>
+                  </>
+                ) : (
+                  <LocalizedText text={"Repos.noProject"} />
+                )}
+              </h2>
+              <span className="download-center-count">
+                {group.items.length} <LocalizedText text={"Repos.count"} />
+              </span>
+            </div>
+            <div className="panel-body flush">{rows(group.items, false)}</div>
+          </section>
+        ))
+      )}
 
       {creating ? (
-        <CreateRepositoryModal onClose={() => setCreating(false)} notify={notify}
-          onCreated={(created) => { setCreating(false); setOpen(created.name); }} />
+        <CreateRepositoryModal
+          onClose={() => setCreating(false)}
+          notify={notify}
+          onCreated={(created) => {
+            setCreating(false);
+            setOpen(created.name);
+          }}
+        />
       ) : null}
     </>
   );
 }
 
-function RepositoryRow({ item, showProject, dateFormat, notify, onOpen }: {
-  item: SourceRepository; showProject: boolean; dateFormat: Intl.DateTimeFormat; notify: Notify; onOpen: () => void;
-}) {
+function RepositoryRow({ item, showProject, dateFormat, notify, onOpen }: { item: SourceRepository; showProject: boolean; dateFormat: Intl.DateTimeFormat; notify: Notify; onOpen: () => void }) {
   const t = useT();
   const [busy, setBusy] = useState(false);
   const empty = item.empty === true || item.fileCount === 0;
   const download = () => {
     setBusy(true);
-    downloadRepositoryArchive(item.name).catch((reason: unknown) => notify(errorText(reason))).finally(() => setBusy(false));
+    downloadRepositoryArchive(item.name)
+      .catch((reason: unknown) => notify(errorText(reason)))
+      .finally(() => setBusy(false));
   };
   return (
     <li className="repo-item">
@@ -215,19 +313,42 @@ function RepositoryRow({ item, showProject, dateFormat, notify, onOpen }: {
         </span>
         {item.description ? <span className="repo-item-description">{item.description}</span> : null}
         <span className="repo-item-meta">
-          {showProject && item.project ? <span className="repo-item-project" title={projectLabel(item.project)}><Icon name="folder" />{projectLabel(item.project)}</span> : null}
-          {item.defaultBranch ? <span><Icon name="gitBranch" />{item.defaultBranch}</span> : null}
-          {item.fileCount !== null ? <span>{item.fileCount} <LocalizedText text={"Repos.files"} /></span> : null}
+          {showProject && item.project ? (
+            <span className="repo-item-project" title={projectLabel(item.project)}>
+              <Icon name="folder" />
+              {projectLabel(item.project)}
+            </span>
+          ) : null}
+          {item.defaultBranch ? (
+            <span>
+              <Icon name="gitBranch" />
+              {item.defaultBranch}
+            </span>
+          ) : null}
+          {item.fileCount !== null ? (
+            <span>
+              {item.fileCount} <LocalizedText text={"Repos.files"} />
+            </span>
+          ) : null}
           {empty ? null : <span>{formatRepositorySize(item.sizeBytes)}</span>}
           {item.updatedAt ? (
-            <span><Icon name="clock" />{dateFormat.format(new Date(item.updatedAt))}{item.updatedBy.name ? ` · ${item.updatedBy.name}` : ""}</span>
+            <span>
+              <Icon name="clock" />
+              {dateFormat.format(new Date(item.updatedAt))}
+              {item.updatedBy.name ? ` · ${item.updatedBy.name}` : ""}
+            </span>
           ) : null}
         </span>
       </button>
       <div className="repo-item-actions">
         {item.cloneUrl ? (
-          <button className="icon-btn" type="button" aria-label={t("Repos.copyClone")} title={t("Repos.copyClone")}
-            onClick={() => copyText(`git clone ${item.cloneUrl}`, t("Repos.cloneCopied"), notify)}>
+          <button
+            className="icon-btn"
+            type="button"
+            aria-label={t("Repos.copyClone")}
+            title={t("Repos.copyClone")}
+            onClick={() => copyText(`git clone ${item.cloneUrl}`, t("Repos.cloneCopied"), notify)}
+          >
             <Icon name="copy" />
           </button>
         ) : null}
@@ -247,19 +368,30 @@ function ProjectPicker({ value, onChange }: { value: ProjectSummary | null; onCh
     let active = true;
     const timer = window.setTimeout(() => {
       listProjects({ page: 1, pageSize: 30, search: search.trim() || undefined })
-        .then((result) => { if (active) setOptions(result.items); })
-        .catch(() => { if (active) setOptions([]); });
+        .then((result) => {
+          if (active) setOptions(result.items);
+        })
+        .catch(() => {
+          if (active) setOptions([]);
+        });
     }, 250);
-    return () => { active = false; window.clearTimeout(timer); };
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
   }, [search]);
   const list = value && !options.some((item) => item.id === value.id) ? [value, ...options] : options;
   return (
     <div className="repo-project-picker">
       <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t("Repos.projectSearch")} />
-      <select value={value ? String(value.id) : ""} onChange={(event) => onChange(list.find((item) => String(item.id) === event.target.value) ?? null)}>
+      <PgSelect value={value ? String(value.id) : ""} onChange={(event) => onChange(list.find((item) => String(item.id) === event.target.value) ?? null)}>
         <option value="">{t("Repos.chooseProject")}</option>
-        {list.map((item) => <option key={item.id} value={item.id}>{item.number} · {item.name}</option>)}
-      </select>
+        {list.map((item) => (
+          <option key={item.id} value={item.id}>
+            {item.number} · {item.name}
+          </option>
+        ))}
+      </PgSelect>
     </div>
   );
 }
@@ -271,15 +403,20 @@ function CreateRepositoryModal({ onClose, onCreated, notify }: { onClose: () => 
   const [busy, setBusy] = useState(false);
   const t = useT();
   const fields = useRef<HTMLDivElement>(null);
-  const close = async () => { if (await confirmLeave("repo:new", leaveCopy(t))) onClose(); };
+  const close = async () => {
+    if (await confirmLeave("repo:new", leaveCopy(t))) onClose();
+  };
   const nameValid = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/.test(name) && !name.endsWith(".");
   const valid = nameValid && project !== null;
   const save = async () => {
-    if (!checkFields(fields.current, t, [
-      { invalid: !name, at: '[name="repoName"]', message: t("Form.required") },
-      { invalid: Boolean(name) && !nameValid, at: '[name="repoName"]', message: t("Form.pattern") },
-      { invalid: project === null, at: '[data-bubble-anchor="repo-project"]', message: t("Form.choose") },
-    ])) return;
+    if (
+      !checkFields(fields.current, t, [
+        { invalid: !name, at: '[name="repoName"]', message: t("Form.required") },
+        { invalid: Boolean(name) && !nameValid, at: '[name="repoName"]', message: t("Form.pattern") },
+        { invalid: project === null, at: '[data-bubble-anchor="repo-project"]', message: t("Form.choose") },
+      ])
+    )
+      return;
     if (!valid || !project) return;
     setBusy(true);
     try {
@@ -293,16 +430,39 @@ function CreateRepositoryModal({ onClose, onCreated, notify }: { onClose: () => 
     }
   };
   return (
-    <Modal title="Repos.new" subtitle="Repos.newHint" onClose={() => { void close(); }}
-      footer={<>
-        <button className="btn default" type="button" onClick={() => { void close(); }}><LocalizedText text={"Cancel"} /></button>
-        <button className="btn primary" type="button" disabled={busy} onClick={() => void save()}><Icon name="plus" /><LocalizedText text={"Repos.create"} /></button>
-      </>}>
+    <Modal
+      title="Repos.new"
+      subtitle="Repos.newHint"
+      onClose={() => {
+        void close();
+      }}
+      footer={
+        <>
+          <button
+            className="btn default"
+            type="button"
+            onClick={() => {
+              void close();
+            }}
+          >
+            <LocalizedText text={"Cancel"} />
+          </button>
+          <button className="btn primary" type="button" disabled={busy} onClick={() => void save()}>
+            <Icon name="plus" />
+            <LocalizedText text={"Repos.create"} />
+          </button>
+        </>
+      }
+    >
       <div className="form-grid two" ref={fields}>
         <Field label="Repos.name" hint="Repos.nameHint" span={2}>
           <input name="repoName" value={name} maxLength={100} onChange={(event) => setName(event.target.value.replace(/\s+/g, "-"))} placeholder="tmt-gateway-firmware" />
         </Field>
-        <Field label="Repos.project" span={2}><div data-bubble-anchor="repo-project"><ProjectPicker value={project} onChange={setProject} /></div></Field>
+        <Field label="Repos.project" span={2}>
+          <div data-bubble-anchor="repo-project">
+            <ProjectPicker value={project} onChange={setProject} />
+          </div>
+        </Field>
         <Field label="Repos.description" span={2}>
           <textarea rows={3} maxLength={1000} value={description} onChange={(event) => setDescription(event.target.value)} />
         </Field>
@@ -326,19 +486,38 @@ function RepositoryView({ name, notify, dateFormat, onBack }: { name: string; no
   useEffect(() => {
     let active = true;
     getSourceRepository(name)
-      .then((result) => { if (active) { setDetail(result); setError(null); } })
-      .catch((reason: unknown) => { if (active) setError(errorText(reason)); });
-    return () => { active = false; };
+      .then((result) => {
+        if (active) {
+          setDetail(result);
+          setError(null);
+        }
+      })
+      .catch((reason: unknown) => {
+        if (active) setError(errorText(reason));
+      });
+    return () => {
+      active = false;
+    };
   }, [name, revision]);
 
   const refresh = () => setRevision((value) => value + 1);
   const run = async (work: () => Promise<void>) => {
     setBusy(true);
-    try { await work(); } catch (reason) { notify(errorText(reason)); } finally { setBusy(false); }
+    try {
+      await work();
+    } catch (reason) {
+      notify(errorText(reason));
+    } finally {
+      setBusy(false);
+    }
   };
   const removeRepository = async () => {
     if (!detail || !(await confirmDialog(t("Repos.deleteConfirm").replace("{name}", detail.name), { danger: true }))) return;
-    void run(async () => { await deleteSourceRepository(detail.name); notify(t("Repos.deleted")); onBack(); });
+    void run(async () => {
+      await deleteSourceRepository(detail.name);
+      notify(t("Repos.deleted"));
+      onBack();
+    });
   };
   const removePath = async (target: string, isFolder: boolean) => {
     if (!(await confirmDialog(t(isFolder ? "Repos.deleteFolderConfirm" : "Repos.deleteFileConfirm").replace("{path}", target), { danger: true }))) return;
@@ -350,10 +529,28 @@ function RepositoryView({ name, notify, dateFormat, onBack }: { name: string; no
   };
 
   if (error) {
-    return <Panel><EmptyState icon="alertTriangle" title="Could not load" message={error}
-      action={<button className="btn default" type="button" onClick={onBack}><Icon name="arrowLeft" /><LocalizedText text={"Repos.back"} /></button>} /></Panel>;
+    return (
+      <Panel>
+        <EmptyState
+          icon="alertTriangle"
+          title="Could not load"
+          message={error}
+          action={
+            <button className="btn default" type="button" onClick={onBack}>
+              <Icon name="arrowLeft" />
+              <LocalizedText text={"Repos.back"} />
+            </button>
+          }
+        />
+      </Panel>
+    );
   }
-  if (!detail) return <Panel><EmptyState icon="clock" title="Loading…" message="Repos.loading" /></Panel>;
+  if (!detail)
+    return (
+      <Panel>
+        <EmptyState icon="clock" title="Loading…" message="Repos.loading" />
+      </Panel>
+    );
 
   const empty = detail.fileCount === 0 || detail.empty === true;
   const stamp = (at: string, by: string) => `${at ? dateFormat.format(new Date(at)) : "—"}${by ? ` · ${by}` : ""}`;
@@ -361,8 +558,18 @@ function RepositoryView({ name, notify, dateFormat, onBack }: { name: string; no
   return (
     <div className="stack repo-view">
       <nav className="repo-crumbs" aria-label={t("Repos.tab")}>
-        <button type="button" onClick={onBack}><Icon name="arrowLeft" /><LocalizedText text={"Repos.allRepositories"} /></button>
-        {detail.project ? <><span aria-hidden="true">/</span><span className="repo-crumbs-project" title={projectLabel(detail.project)}>{projectLabel(detail.project)}</span></> : null}
+        <button type="button" onClick={onBack}>
+          <Icon name="arrowLeft" />
+          <LocalizedText text={"Repos.allRepositories"} />
+        </button>
+        {detail.project ? (
+          <>
+            <span aria-hidden="true">/</span>
+            <span className="repo-crumbs-project" title={projectLabel(detail.project)}>
+              {projectLabel(detail.project)}
+            </span>
+          </>
+        ) : null}
         <span aria-hidden="true">/</span>
         <strong>{detail.name}</strong>
       </nav>
@@ -377,16 +584,29 @@ function RepositoryView({ name, notify, dateFormat, onBack }: { name: string; no
             {detail.description ? <p className="repo-head-description">{detail.description}</p> : null}
           </div>
           <div className="repo-actions">
-            {detail.canManage ? <>
-              <button className="btn default" type="button" disabled={busy} onClick={() => setUploading(true)}><Icon name="upload" /><LocalizedText text={"Repos.upload"} /></button>
-              <button className="icon-btn" type="button" disabled={busy} aria-label={t("Edit")} title={t("Edit")} onClick={() => setEditing(true)}><Icon name="edit" /></button>
-              <button className="icon-btn repo-danger" type="button" disabled={busy} aria-label={t("Repos.deleteRepository")} title={t("Repos.deleteRepository")} onClick={removeRepository}><Icon name="trash" /></button>
-            </> : null}
+            {detail.canManage ? (
+              <>
+                <button className="btn default" type="button" disabled={busy} onClick={() => setUploading(true)}>
+                  <Icon name="upload" />
+                  <LocalizedText text={"Repos.upload"} />
+                </button>
+                <button className="icon-btn" type="button" disabled={busy} aria-label={t("Edit")} title={t("Edit")} onClick={() => setEditing(true)}>
+                  <Icon name="edit" />
+                </button>
+                <button className="icon-btn repo-danger" type="button" disabled={busy} aria-label={t("Repos.deleteRepository")} title={t("Repos.deleteRepository")} onClick={removeRepository}>
+                  <Icon name="trash" />
+                </button>
+              </>
+            ) : null}
             {detail.webUrl ? (
-              <a className="btn default" href={detail.webUrl} target="_blank" rel="noopener noreferrer"><Icon name="externalLink" /><LocalizedText text={"Repos.openInHub"} /></a>
+              <a className="btn default" href={detail.webUrl} target="_blank" rel="noopener noreferrer">
+                <Icon name="externalLink" />
+                <LocalizedText text={"Repos.openInHub"} />
+              </a>
             ) : null}
             <button className="btn primary" type="button" disabled={busy || empty} onClick={() => void run(() => downloadRepositoryArchive(detail.name))}>
-              <Icon name="download" /><LocalizedText text={"Repos.downloadZip"} />
+              <Icon name="download" />
+              <LocalizedText text={"Repos.downloadZip"} />
             </button>
           </div>
         </div>
@@ -394,42 +614,116 @@ function RepositoryView({ name, notify, dateFormat, onBack }: { name: string; no
 
       <div className="repo-layout">
         <div className="stack repo-main">
-          <Tabs tabs={[{ id: "code", label: "Repos.code" }, { id: "history", label: "Repos.history", count: detail.history.length }]} active={tab} onChange={setTab} />
+          <Tabs
+            tabs={[
+              { id: "code", label: "Repos.code" },
+              { id: "history", label: "Repos.history", count: detail.history.length },
+            ]}
+            active={tab}
+            onChange={setTab}
+          />
 
-          {tab === "history" ? <HistoryPanel detail={detail} /> : file ? (
-            <BlobPanel key={file} repo={name} path={file} canManage={detail.canManage} busy={busy} notify={notify}
-              onNavigate={(next) => { setFile(null); setPath(next); }} onDelete={() => removePath(file, false)} />
+          {tab === "history" ? (
+            <HistoryPanel detail={detail} />
+          ) : file ? (
+            <BlobPanel
+              key={file}
+              repo={name}
+              path={file}
+              canManage={detail.canManage}
+              busy={busy}
+              notify={notify}
+              onNavigate={(next) => {
+                setFile(null);
+                setPath(next);
+              }}
+              onDelete={() => removePath(file, false)}
+            />
           ) : detail.empty === true && detail.cloneUrl ? (
             <QuickSetup url={detail.cloneUrl} branch={detail.defaultBranch || "main"} notify={notify} />
           ) : (
-            <TreePanel repo={name} path={path} revision={revision} canManage={detail.canManage} busy={busy} dateFormat={dateFormat} notify={notify}
+            <TreePanel
+              repo={name}
+              path={path}
+              revision={revision}
+              canManage={detail.canManage}
+              busy={busy}
+              dateFormat={dateFormat}
+              notify={notify}
               folderZip={!detail.cloneUrl}
-              onNavigate={setPath} onOpenFile={setFile} onDelete={removePath} />
+              onNavigate={setPath}
+              onOpenFile={setFile}
+              onDelete={removePath}
+            />
           )}
         </div>
 
         <aside className="stack repo-aside">
           {detail.cloneUrl ? (
             <section className="panel">
-              <div className="panel-head"><h2><Icon name="copy" /> <LocalizedText text={"Repos.clone"} /></h2></div>
+              <div className="panel-head">
+                <h2>
+                  <Icon name="copy" /> <LocalizedText text={"Repos.clone"} />
+                </h2>
+              </div>
               <div className="panel-body repo-aside-body">
                 <CommandBlock command={`git clone ${detail.cloneUrl}`} notify={notify} />
-                <p className="repo-hint"><LocalizedText text={"Repos.cloneHint"} /></p>
+                <p className="repo-hint">
+                  <LocalizedText text={"Repos.cloneHint"} />
+                </p>
               </div>
             </section>
           ) : null}
           <section className="panel">
-            <div className="panel-head"><h2><Icon name="book" /> <LocalizedText text={"Repos.about"} /></h2></div>
+            <div className="panel-head">
+              <h2>
+                <Icon name="book" /> <LocalizedText text={"Repos.about"} />
+              </h2>
+            </div>
             <div className="panel-body repo-aside-body">
               <dl className="repo-about">
-                <div><dt><LocalizedText text={"Repos.project"} /></dt><dd>{projectLabel(detail.project) || "—"}</dd></div>
-                {detail.defaultBranch ? <div><dt><LocalizedText text={"Repos.defaultBranch"} /></dt><dd><code>{detail.defaultBranch}</code></dd></div> : null}
                 <div>
-                  <dt><LocalizedText text={"Downloads.size"} /></dt>
-                  <dd>{formatRepositorySize(detail.sizeBytes)}{detail.fileCount !== null ? <> · {detail.fileCount} <LocalizedText text={"Repos.files"} /></> : null}</dd>
+                  <dt>
+                    <LocalizedText text={"Repos.project"} />
+                  </dt>
+                  <dd>{projectLabel(detail.project) || "—"}</dd>
                 </div>
-                <div><dt><LocalizedText text={"Downloads.updated"} /></dt><dd>{stamp(detail.updatedAt, detail.updatedBy.name)}</dd></div>
-                <div><dt><LocalizedText text={"Repos.created"} /></dt><dd>{stamp(detail.createdAt, detail.createdBy.name)}</dd></div>
+                {detail.defaultBranch ? (
+                  <div>
+                    <dt>
+                      <LocalizedText text={"Repos.defaultBranch"} />
+                    </dt>
+                    <dd>
+                      <code>{detail.defaultBranch}</code>
+                    </dd>
+                  </div>
+                ) : null}
+                <div>
+                  <dt>
+                    <LocalizedText text={"Downloads.size"} />
+                  </dt>
+                  <dd>
+                    {formatRepositorySize(detail.sizeBytes)}
+                    {detail.fileCount !== null ? (
+                      <>
+                        {" "}
+                        · {detail.fileCount} <LocalizedText text={"Repos.files"} />
+                      </>
+                    ) : null}
+                  </dd>
+                </div>
+                <div>
+                  <dt>
+                    <LocalizedText text={"Downloads.updated"} />
+                  </dt>
+                  <dd>{stamp(detail.updatedAt, detail.updatedBy.name)}</dd>
+                </div>
+                <div>
+                  <dt>
+                    <LocalizedText text={"Repos.created"} />
+                  </dt>
+                  <dd>{stamp(detail.createdAt, detail.createdBy.name)}</dd>
+                </div>
               </dl>
             </div>
           </section>
@@ -437,11 +731,30 @@ function RepositoryView({ name, notify, dateFormat, onBack }: { name: string; no
       </div>
 
       {uploading ? (
-        <UploadModal repo={name} path={path} maxBytes={detail.uploadMaxBytes ?? null} cloneUrl={detail.cloneUrl ?? null} notify={notify} onClose={() => setUploading(false)}
-          onDone={() => { setUploading(false); setFile(null); refresh(); }} />
+        <UploadModal
+          repo={name}
+          path={path}
+          maxBytes={detail.uploadMaxBytes ?? null}
+          cloneUrl={detail.cloneUrl ?? null}
+          notify={notify}
+          onClose={() => setUploading(false)}
+          onDone={() => {
+            setUploading(false);
+            setFile(null);
+            refresh();
+          }}
+        />
       ) : null}
       {editing ? (
-        <EditRepositoryModal detail={detail} notify={notify} onClose={() => setEditing(false)} onSaved={() => { setEditing(false); refresh(); }} />
+        <EditRepositoryModal
+          detail={detail}
+          notify={notify}
+          onClose={() => setEditing(false)}
+          onSaved={() => {
+            setEditing(false);
+            refresh();
+          }}
+        />
       ) : null}
     </div>
   );
@@ -451,22 +764,46 @@ function Breadcrumb({ repo, path, onNavigate }: { repo: string; path: string; on
   const segments = path.split("/").filter(Boolean);
   return (
     <nav className="breadcrumb repo-breadcrumb" aria-label="path">
-      <button type="button" onClick={() => onNavigate("")}>{repo}</button>
+      <button type="button" onClick={() => onNavigate("")}>
+        {repo}
+      </button>
       {segments.map((segment, index) => (
         <Fragment key={`${index}-${segment}`}>
           <span>/</span>
-          <button type="button" onClick={() => onNavigate(segments.slice(0, index + 1).join("/"))}>{segment}</button>
+          <button type="button" onClick={() => onNavigate(segments.slice(0, index + 1).join("/"))}>
+            {segment}
+          </button>
         </Fragment>
       ))}
     </nav>
   );
 }
 
-function TreePanel({ repo, path, revision, canManage, busy, dateFormat, notify, folderZip, onNavigate, onOpenFile, onDelete }: {
-  repo: string; path: string; revision: number; canManage: boolean; busy: boolean; dateFormat: Intl.DateTimeFormat; notify: Notify;
+function TreePanel({
+  repo,
+  path,
+  revision,
+  canManage,
+  busy,
+  dateFormat,
+  notify,
+  folderZip,
+  onNavigate,
+  onOpenFile,
+  onDelete,
+}: {
+  repo: string;
+  path: string;
+  revision: number;
+  canManage: boolean;
+  busy: boolean;
+  dateFormat: Intl.DateTimeFormat;
+  notify: Notify;
   /** Folder ZIPs come from NAS folders only; a TMTHub repository downloads whole. */
   folderZip: boolean;
-  onNavigate: (path: string) => void; onOpenFile: (path: string) => void; onDelete: (path: string, isFolder: boolean) => void;
+  onNavigate: (path: string) => void;
+  onOpenFile: (path: string) => void;
+  onDelete: (path: string, isFolder: boolean) => void;
 }) {
   const t = useT();
   const [tree, setTree] = useState<RepositoryTree | null>(null);
@@ -476,9 +813,22 @@ function TreePanel({ repo, path, revision, canManage, busy, dateFormat, notify, 
   useEffect(() => {
     let active = true;
     getRepositoryTree(repo, path)
-      .then((result) => { if (active) { setTree(result); setError(null); setLoadedKey(key); } })
-      .catch((reason: unknown) => { if (active) { setError(errorText(reason)); setLoadedKey(key); } });
-    return () => { active = false; };
+      .then((result) => {
+        if (active) {
+          setTree(result);
+          setError(null);
+          setLoadedKey(key);
+        }
+      })
+      .catch((reason: unknown) => {
+        if (active) {
+          setError(errorText(reason));
+          setLoadedKey(key);
+        }
+      });
+    return () => {
+      active = false;
+    };
   }, [repo, path, key]);
   const loading = loadedKey !== key;
   const parent = path.split("/").filter(Boolean).slice(0, -1).join("/");
@@ -500,12 +850,11 @@ function TreePanel({ repo, path, revision, canManage, busy, dateFormat, notify, 
                 {folders} <LocalizedText text={"Repos.folders"} /> · {files} <LocalizedText text={"Repos.files"} />
               </span>
             ) : null}
-            {tree && !loading && tree.entries.length > 8 ? (
-              <SearchInput value={find.path === path ? find.text : ""} onChange={(text) => setFind({ path, text })} placeholder="Repos.findFile" />
-            ) : null}
+            {tree && !loading && tree.entries.length > 8 ? <SearchInput value={find.path === path ? find.text : ""} onChange={(text) => setFind({ path, text })} placeholder="Repos.findFile" /> : null}
             {path && folderZip ? (
               <button className="btn default sm" type="button" disabled={busy} onClick={() => void downloadRepositoryArchive(repo, path).catch((reason: unknown) => notify(errorText(reason)))}>
-                <Icon name="download" /><LocalizedText text={"Repos.downloadFolder"} />
+                <Icon name="download" />
+                <LocalizedText text={"Repos.downloadFolder"} />
               </button>
             ) : null}
           </div>
@@ -520,33 +869,71 @@ function TreePanel({ repo, path, revision, canManage, busy, dateFormat, notify, 
           ) : (
             <div className="table-wrap">
               <table className="grid repo-tree">
-                <colgroup><col /><col style={{ width: 100 }} /><col style={{ width: 130 }} /><col style={{ width: canManage ? 112 : 64 }} /></colgroup>
+                <colgroup>
+                  <col />
+                  <col style={{ width: 100 }} />
+                  <col style={{ width: 130 }} />
+                  <col style={{ width: canManage ? 112 : 64 }} />
+                </colgroup>
                 <tbody>
                   {path ? (
                     <tr className="clickable" onClick={() => onNavigate(parent)}>
-                      <td colSpan={4}><span className="repo-entry"><Icon name="folder" /> ..</span></td>
+                      <td colSpan={4}>
+                        <span className="repo-entry">
+                          <Icon name="folder" /> ..
+                        </span>
+                      </td>
                     </tr>
                   ) : null}
                   {entries.map((entry) => (
                     <tr key={entry.path} className="clickable" onClick={() => (entry.type === "dir" ? onNavigate(entry.path) : onOpenFile(entry.path))}>
-                      <td><span className={`repo-entry ${entry.type}`} title={entry.name}><Icon name={entry.type === "dir" ? "folder" : "file"} /> {entry.name}</span></td>
+                      <td>
+                        <span className={`repo-entry ${entry.type}`} title={entry.name}>
+                          <Icon name={entry.type === "dir" ? "folder" : "file"} /> {entry.name}
+                        </span>
+                      </td>
                       <td className="num">{entry.type === "file" ? formatRepositorySize(entry.sizeBytes) : ""}</td>
                       <td>{dateFormat.format(new Date(entry.modifiedAt))}</td>
                       <td className="repo-row-actions">
                         {entry.type === "file" ? (
-                          <button className="icon-btn" type="button" aria-label={t("Downloads.download")} title={t("Downloads.download")}
-                            onClick={(event) => { event.stopPropagation(); void downloadRepositoryFile(repo, entry.path).catch((reason: unknown) => notify(errorText(reason))); }}>
+                          <button
+                            className="icon-btn"
+                            type="button"
+                            aria-label={t("Downloads.download")}
+                            title={t("Downloads.download")}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void downloadRepositoryFile(repo, entry.path).catch((reason: unknown) => notify(errorText(reason)));
+                            }}
+                          >
                             <Icon name="download" />
                           </button>
                         ) : folderZip ? (
-                          <button className="icon-btn" type="button" aria-label={t("Repos.downloadFolder")} title={t("Repos.downloadFolder")}
-                            onClick={(event) => { event.stopPropagation(); void downloadRepositoryArchive(repo, entry.path).catch((reason: unknown) => notify(errorText(reason))); }}>
+                          <button
+                            className="icon-btn"
+                            type="button"
+                            aria-label={t("Repos.downloadFolder")}
+                            title={t("Repos.downloadFolder")}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void downloadRepositoryArchive(repo, entry.path).catch((reason: unknown) => notify(errorText(reason)));
+                            }}
+                          >
                             <Icon name="download" />
                           </button>
                         ) : null}
                         {canManage ? (
-                          <button className="icon-btn" type="button" disabled={busy} aria-label={t("Repos.delete")} title={t("Repos.delete")}
-                            onClick={(event) => { event.stopPropagation(); onDelete(entry.path, entry.type === "dir"); }}>
+                          <button
+                            className="icon-btn"
+                            type="button"
+                            disabled={busy}
+                            aria-label={t("Repos.delete")}
+                            title={t("Repos.delete")}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              onDelete(entry.path, entry.type === "dir");
+                            }}
+                          >
                             <Icon name="trash" />
                           </button>
                         ) : null}
@@ -554,7 +941,11 @@ function TreePanel({ repo, path, revision, canManage, busy, dateFormat, notify, 
                     </tr>
                   ))}
                   {needle && entries.length === 0 ? (
-                    <tr><td colSpan={4} className="repo-no-match"><LocalizedText text={"Repos.noFileMatch"} /></td></tr>
+                    <tr>
+                      <td colSpan={4} className="repo-no-match">
+                        <LocalizedText text={"Repos.noFileMatch"} />
+                      </td>
+                    </tr>
                   ) : null}
                 </tbody>
               </table>
@@ -564,18 +955,34 @@ function TreePanel({ repo, path, revision, canManage, busy, dateFormat, notify, 
       </section>
       {tree?.readme && !loading ? (
         <section className="panel">
-          <div className="panel-head"><h2><Icon name="book" /> {tree.readme.name}</h2></div>
-          <div className="panel-body">
-            {/\.(md|markdown)$/i.test(tree.readme.name) ? <Markdown source={tree.readme.content} /> : <pre className="repo-readme-text">{tree.readme.content}</pre>}
+          <div className="panel-head">
+            <h2>
+              <Icon name="book" /> {tree.readme.name}
+            </h2>
           </div>
+          <div className="panel-body">{/\.(md|markdown)$/i.test(tree.readme.name) ? <Markdown source={tree.readme.content} /> : <pre className="repo-readme-text">{tree.readme.content}</pre>}</div>
         </section>
       ) : null}
     </>
   );
 }
 
-function BlobPanel({ repo, path, canManage, busy, notify, onNavigate, onDelete }: {
-  repo: string; path: string; canManage: boolean; busy: boolean; notify: Notify; onNavigate: (path: string) => void; onDelete: () => void;
+function BlobPanel({
+  repo,
+  path,
+  canManage,
+  busy,
+  notify,
+  onNavigate,
+  onDelete,
+}: {
+  repo: string;
+  path: string;
+  canManage: boolean;
+  busy: boolean;
+  notify: Notify;
+  onNavigate: (path: string) => void;
+  onDelete: () => void;
 }) {
   const t = useT();
   const [blob, setBlob] = useState<RepositoryBlob | null>(null);
@@ -587,14 +994,29 @@ function BlobPanel({ repo, path, canManage, busy, notify, onNavigate, onDelete }
     let active = true;
     let url: string | null = null;
     getRepositoryBlob(repo, path)
-      .then((result) => { if (active) { setBlob(result); setError(null); } })
-      .catch((reason: unknown) => { if (active) setError(errorText(reason)); });
+      .then((result) => {
+        if (active) {
+          setBlob(result);
+          setError(null);
+        }
+      })
+      .catch((reason: unknown) => {
+        if (active) setError(errorText(reason));
+      });
     if (imageType) {
       fetchRepositoryFileBlob(repo, path, imageType)
-        .then((data) => { if (active) { url = URL.createObjectURL(data); setImage(url); } })
+        .then((data) => {
+          if (active) {
+            url = URL.createObjectURL(data);
+            setImage(url);
+          }
+        })
         .catch(() => undefined);
     }
-    return () => { active = false; if (url) URL.revokeObjectURL(url); };
+    return () => {
+      active = false;
+      if (url) URL.revokeObjectURL(url);
+    };
   }, [repo, path, imageType]);
   const lines = useMemo(() => (blob?.content ?? "").replace(/\r\n/g, "\n").split("\n"), [blob]);
   const folder = path.split("/").slice(0, -1).join("/");
@@ -604,35 +1026,58 @@ function BlobPanel({ repo, path, canManage, busy, notify, onNavigate, onDelete }
       <div className="panel-head">
         <Breadcrumb repo={repo} path={path} onNavigate={onNavigate} />
         <div className="repo-actions">
-          {blob ? <span className="download-center-count">{blob.content !== null ? `${lines.length} ${t("Repos.lines")} · ` : ""}{formatRepositorySize(blob.sizeBytes)}</span> : null}
-          <button className="btn default sm" type="button" onClick={() => onNavigate(folder)}><Icon name="arrowLeft" /><LocalizedText text={"Repos.back"} /></button>
-          <button className="btn primary sm" type="button" onClick={() => void downloadRepositoryFile(repo, path).catch((reason: unknown) => notify(errorText(reason)))}>
-            <Icon name="download" /><LocalizedText text={"Downloads.download"} />
+          {blob ? (
+            <span className="download-center-count">
+              {blob.content !== null ? `${lines.length} ${t("Repos.lines")} · ` : ""}
+              {formatRepositorySize(blob.sizeBytes)}
+            </span>
+          ) : null}
+          <button className="btn default sm" type="button" onClick={() => onNavigate(folder)}>
+            <Icon name="arrowLeft" />
+            <LocalizedText text={"Repos.back"} />
           </button>
-          {canManage ? <button className="btn danger sm" type="button" disabled={busy} onClick={onDelete}><Icon name="trash" /><LocalizedText text={"Repos.delete"} /></button> : null}
+          <button className="btn primary sm" type="button" onClick={() => void downloadRepositoryFile(repo, path).catch((reason: unknown) => notify(errorText(reason)))}>
+            <Icon name="download" />
+            <LocalizedText text={"Downloads.download"} />
+          </button>
+          {canManage ? (
+            <button className="btn danger sm" type="button" disabled={busy} onClick={onDelete}>
+              <Icon name="trash" />
+              <LocalizedText text={"Repos.delete"} />
+            </button>
+          ) : null}
         </div>
       </div>
       <div className="panel-body flush">
-        {error ? <EmptyState icon="alertTriangle" title="Could not load" message={error} />
-          : !blob ? <EmptyState icon="clock" title="Loading…" message="Repos.loading" />
-          : imageType ? (image ? (
+        {error ? (
+          <EmptyState icon="alertTriangle" title="Could not load" message={error} />
+        ) : !blob ? (
+          <EmptyState icon="clock" title="Loading…" message="Repos.loading" />
+        ) : imageType ? (
+          image ? (
             <div className="repo-image">
               {/* eslint-disable-next-line @next/next/no-img-element -- local blob previews cannot use an image optimizer */}
               <img src={image} alt={blob.name} />
             </div>
-          ) : <EmptyState icon="clock" title="Loading…" message="Repos.loading" />)
-          : blob.content === null ? <EmptyState icon="file" title={blob.reason === "too_large" ? "Repos.tooLargeTitle" : "Repos.binaryTitle"} message="Repos.downloadInstead" />
-          : (
-            <div className="repo-code">
-              <table>
-                <tbody>
-                  {lines.map((line, index) => (
-                    <tr key={index}><td className="repo-line-no">{index + 1}</td><td className="repo-line">{line || " "}</td></tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          ) : (
+            <EmptyState icon="clock" title="Loading…" message="Repos.loading" />
+          )
+        ) : blob.content === null ? (
+          <EmptyState icon="file" title={blob.reason === "too_large" ? "Repos.tooLargeTitle" : "Repos.binaryTitle"} message="Repos.downloadInstead" />
+        ) : (
+          <div className="repo-code">
+            <table>
+              <tbody>
+                {lines.map((line, index) => (
+                  <tr key={index}>
+                    <td className="repo-line-no">{index + 1}</td>
+                    <td className="repo-line">{line || " "}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </section>
   );
@@ -644,8 +1089,7 @@ function CommandBlock({ command, notify }: { command: string; notify: Notify }) 
   return (
     <div className="repo-command">
       <pre>{command}</pre>
-      <button className="icon-btn" type="button" aria-label={t("Repos.copyCommand")} title={t("Repos.copyCommand")}
-        onClick={() => copyText(command, t("Repos.commandCopied"), notify)}>
+      <button className="icon-btn" type="button" aria-label={t("Repos.copyCommand")} title={t("Repos.copyCommand")} onClick={() => copyText(command, t("Repos.commandCopied"), notify)}>
         <Icon name="copy" />
       </button>
     </div>
@@ -658,14 +1102,22 @@ function QuickSetup({ url, branch, notify }: { url: string; branch: string; noti
     <section className="panel">
       <div className="panel-head">
         <div>
-          <h2><LocalizedText text={"Repos.emptyTreeTitle"} /></h2>
-          <p><LocalizedText text={"Repos.quickSetupHint"} /></p>
+          <h2>
+            <LocalizedText text={"Repos.emptyTreeTitle"} />
+          </h2>
+          <p>
+            <LocalizedText text={"Repos.quickSetupHint"} />
+          </p>
         </div>
       </div>
       <div className="panel-body repo-setup">
-        <h3><LocalizedText text={"Repos.pushExisting"} /></h3>
+        <h3>
+          <LocalizedText text={"Repos.pushExisting"} />
+        </h3>
         <CommandBlock command={`git remote add origin ${url}\ngit branch -M ${branch}\ngit push -u origin ${branch}`} notify={notify} />
-        <h3><LocalizedText text={"Repos.startNew"} /></h3>
+        <h3>
+          <LocalizedText text={"Repos.startNew"} />
+        </h3>
         <CommandBlock command={`git clone ${url}`} notify={notify} />
       </div>
     </section>
@@ -677,23 +1129,50 @@ function HistoryPanel({ detail }: { detail: SourceRepositoryDetail }) {
   const format = new Intl.DateTimeFormat(localeFor(lang), { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
   const actionKey = { create: "Repos.actionCreate", upload: "Repos.actionUpload", delete: "Repos.actionDelete", update: "Repos.actionUpdate", commit: "Repos.actionCommit" } as const;
   const tone = { create: "green", upload: "blue", delete: "red", update: "violet", commit: "blue" } as const;
-  if (detail.history.length === 0) return <Panel><EmptyState icon="clock" title="Repos.noHistory" message="Repos.noHistoryMessage" /></Panel>;
+  if (detail.history.length === 0)
+    return (
+      <Panel>
+        <EmptyState icon="clock" title="Repos.noHistory" message="Repos.noHistoryMessage" />
+      </Panel>
+    );
   return (
     <section className="panel">
       <div className="panel-body flush">
         <ul className="repo-history">
           {detail.history.map((entry, index) => (
             <li key={`${entry.at}-${index}`}>
-              <Badge tone={tone[entry.action]}><LocalizedText text={actionKey[entry.action]} /></Badge>
+              <Badge tone={tone[entry.action]}>
+                <LocalizedText text={actionKey[entry.action]} />
+              </Badge>
               <div>
                 <strong>{entry.message || entry.path || "—"}</strong>
                 <span>
                   {entry.by.name || "—"} · {entry.at ? format.format(new Date(entry.at)) : "—"}
-                  {entry.files ? <> · {entry.files} <LocalizedText text={"Repos.files"} /></> : null}
-                  {entry.path && entry.message ? <> · <code>{entry.path}</code></> : null}
-                  {entry.sha ? <> · {entry.url
-                    ? <a href={entry.url} target="_blank" rel="noopener noreferrer"><code>{entry.sha.slice(0, 8)}</code></a>
-                    : <code>{entry.sha.slice(0, 8)}</code>}</> : null}
+                  {entry.files ? (
+                    <>
+                      {" "}
+                      · {entry.files} <LocalizedText text={"Repos.files"} />
+                    </>
+                  ) : null}
+                  {entry.path && entry.message ? (
+                    <>
+                      {" "}
+                      · <code>{entry.path}</code>
+                    </>
+                  ) : null}
+                  {entry.sha ? (
+                    <>
+                      {" "}
+                      ·{" "}
+                      {entry.url ? (
+                        <a href={entry.url} target="_blank" rel="noopener noreferrer">
+                          <code>{entry.sha.slice(0, 8)}</code>
+                        </a>
+                      ) : (
+                        <code>{entry.sha.slice(0, 8)}</code>
+                      )}
+                    </>
+                  ) : null}
                 </span>
               </div>
             </li>
@@ -704,8 +1183,22 @@ function HistoryPanel({ detail }: { detail: SourceRepositoryDetail }) {
   );
 }
 
-function UploadModal({ repo, path, maxBytes, cloneUrl, notify, onClose, onDone }: {
-  repo: string; path: string; maxBytes: number | null; cloneUrl: string | null; notify: Notify; onClose: () => void; onDone: () => void;
+function UploadModal({
+  repo,
+  path,
+  maxBytes,
+  cloneUrl,
+  notify,
+  onClose,
+  onDone,
+}: {
+  repo: string;
+  path: string;
+  maxBytes: number | null;
+  cloneUrl: string | null;
+  notify: Notify;
+  onClose: () => void;
+  onDone: () => void;
 }) {
   const [files, setFiles] = useState<File[]>([]);
   // Checked before sending: a file over the ceiling would otherwise upload for minutes and then fail.
@@ -719,22 +1212,31 @@ function UploadModal({ repo, path, maxBytes, cloneUrl, notify, onClose, onDone }
   const [progress, setProgress] = useState<number | null>(null);
   const t = useT();
   const fields = useRef<HTMLDivElement>(null);
-  const close = async () => { if (await confirmLeave(draftKey, leaveCopy(t))) onClose(); };
+  const close = async () => {
+    if (await confirmLeave(draftKey, leaveCopy(t))) onClose();
+  };
   const hasZip = files.some((file) => /\.zip$/i.test(file.name));
   const canReplace = hasZip && extract && files.length === 1 && !target.trim();
 
   const start = async () => {
-    if (!checkFields(fields.current, t, [
-      { invalid: files.length === 0, at: '[name="repoFiles"]', message: t("Form.choose") },
-      { invalid: tooLarge.length > 0, at: '[name="repoFiles"]', message: t("Repos.tooLargeUpload") },
-    ])) return;
+    if (
+      !checkFields(fields.current, t, [
+        { invalid: files.length === 0, at: '[name="repoFiles"]', message: t("Form.choose") },
+        { invalid: tooLarge.length > 0, at: '[name="repoFiles"]', message: t("Repos.tooLargeUpload") },
+      ])
+    )
+      return;
     setProgress(0);
     let written = 0;
     let skipped = 0;
     try {
       for (const [index, file] of files.entries()) {
         const result = await uploadRepositoryFile(repo, file, {
-          path: target.trim().replace(/^\/+|\/+$/g, ""), message, extract: extract && /\.zip$/i.test(file.name), replace: canReplace && replace, stripRoot,
+          path: target.trim().replace(/^\/+|\/+$/g, ""),
+          message,
+          extract: extract && /\.zip$/i.test(file.name),
+          replace: canReplace && replace,
+          stripRoot,
         });
         written += result.written;
         skipped += result.skipped;
@@ -750,13 +1252,41 @@ function UploadModal({ repo, path, maxBytes, cloneUrl, notify, onClose, onDone }
   };
 
   return (
-    <Modal title="Repos.upload" subtitle="Repos.uploadHint" onClose={progress === null ? () => { void close(); } : () => undefined}
-      footer={<>
-        <button className="btn default" type="button" disabled={progress !== null} onClick={() => { void close(); }}><LocalizedText text={"Cancel"} /></button>
-        <button className="btn primary" type="button" disabled={progress !== null} onClick={() => void start()}>
-          <Icon name="upload" />{progress === null ? <LocalizedText text={"Repos.upload"} /> : <>{progress} / {files.length}</>}
-        </button>
-      </>}>
+    <Modal
+      title="Repos.upload"
+      subtitle="Repos.uploadHint"
+      onClose={
+        progress === null
+          ? () => {
+              void close();
+            }
+          : () => undefined
+      }
+      footer={
+        <>
+          <button
+            className="btn default"
+            type="button"
+            disabled={progress !== null}
+            onClick={() => {
+              void close();
+            }}
+          >
+            <LocalizedText text={"Cancel"} />
+          </button>
+          <button className="btn primary" type="button" disabled={progress !== null} onClick={() => void start()}>
+            <Icon name="upload" />
+            {progress === null ? (
+              <LocalizedText text={"Repos.upload"} />
+            ) : (
+              <>
+                {progress} / {files.length}
+              </>
+            )}
+          </button>
+        </>
+      }
+    >
       <div className="form-grid two" ref={fields}>
         <Field label="Repos.chooseFiles" span={2}>
           <input name="repoFiles" type="file" multiple onChange={(event) => setFiles([...(event.target.files ?? [])])} />
@@ -768,9 +1298,19 @@ function UploadModal({ repo, path, maxBytes, cloneUrl, notify, onClose, onDone }
         </Field>
         {tooLarge.length > 0 ? (
           <div className="span-2 repo-upload-too-large" role="alert">
-            <strong><LocalizedText text={"Repos.tooLargeUpload"} /></strong>
-            <ul>{tooLarge.map((file) => <li key={file.name}>{file.name} · {formatRepositorySize(file.size)}</li>)}</ul>
-            <span><LocalizedText text={"Repos.useGitPush"} /></span>
+            <strong>
+              <LocalizedText text={"Repos.tooLargeUpload"} />
+            </strong>
+            <ul>
+              {tooLarge.map((file) => (
+                <li key={file.name}>
+                  {file.name} · {formatRepositorySize(file.size)}
+                </li>
+              ))}
+            </ul>
+            <span>
+              <LocalizedText text={"Repos.useGitPush"} />
+            </span>
             {cloneUrl ? <code>{`git clone ${cloneUrl}`}</code> : null}
           </div>
         ) : null}
@@ -782,9 +1322,18 @@ function UploadModal({ repo, path, maxBytes, cloneUrl, notify, onClose, onDone }
         </Field>
         {hasZip ? (
           <div className="span-2 repo-options">
-            <label className="checkbox-row"><input type="checkbox" checked={extract} onChange={(event) => setExtract(event.target.checked)} /><LocalizedText text={"Repos.extract"} /></label>
-            <label className="checkbox-row"><input type="checkbox" checked={stripRoot} disabled={!extract} onChange={(event) => setStripRoot(event.target.checked)} /><LocalizedText text={"Repos.stripRoot"} /></label>
-            <label className="checkbox-row"><input type="checkbox" checked={canReplace && replace} disabled={!canReplace} onChange={(event) => setReplace(event.target.checked)} /><LocalizedText text={"Repos.replace"} /></label>
+            <label className="checkbox-row">
+              <input type="checkbox" checked={extract} onChange={(event) => setExtract(event.target.checked)} />
+              <LocalizedText text={"Repos.extract"} />
+            </label>
+            <label className="checkbox-row">
+              <input type="checkbox" checked={stripRoot} disabled={!extract} onChange={(event) => setStripRoot(event.target.checked)} />
+              <LocalizedText text={"Repos.stripRoot"} />
+            </label>
+            <label className="checkbox-row">
+              <input type="checkbox" checked={canReplace && replace} disabled={!canReplace} onChange={(event) => setReplace(event.target.checked)} />
+              <LocalizedText text={"Repos.replace"} />
+            </label>
           </div>
         ) : null}
       </div>
@@ -797,7 +1346,9 @@ function EditRepositoryModal({ detail, notify, onClose, onSaved }: { detail: Sou
   const draftKey = `repo:edit:${detail.name}`;
   const [description, setDescription] = useDraftField(draftKey, "description", detail.description);
   const [project, setProject] = useDraftField<ProjectSummary | null>(draftKey, "project", null);
-  const close = async () => { if (await confirmLeave(draftKey, leaveCopy(t))) onClose(); };
+  const close = async () => {
+    if (await confirmLeave(draftKey, leaveCopy(t))) onClose();
+  };
   const [busy, setBusy] = useState(false);
   const save = async () => {
     setBusy(true);
@@ -812,11 +1363,30 @@ function EditRepositoryModal({ detail, notify, onClose, onSaved }: { detail: Sou
     }
   };
   return (
-    <Modal title="Edit" subtitle={detail.name} onClose={() => { void close(); }}
-      footer={<>
-        <button className="btn default" type="button" onClick={() => { void close(); }}><LocalizedText text={"Cancel"} /></button>
-        <button className="btn primary" type="button" disabled={busy} onClick={() => void save()}><Icon name="check" /><LocalizedText text={"Save"} /></button>
-      </>}>
+    <Modal
+      title="Edit"
+      subtitle={detail.name}
+      onClose={() => {
+        void close();
+      }}
+      footer={
+        <>
+          <button
+            className="btn default"
+            type="button"
+            onClick={() => {
+              void close();
+            }}
+          >
+            <LocalizedText text={"Cancel"} />
+          </button>
+          <button className="btn primary" type="button" disabled={busy} onClick={() => void save()}>
+            <Icon name="check" />
+            <LocalizedText text={"Save"} />
+          </button>
+        </>
+      }
+    >
       <div className="form-grid two">
         <Field label="Repos.project" hint="Repos.keepProject" span={2}>
           <p className="repo-current-project">{projectLabel(detail.project) || "—"}</p>
@@ -835,18 +1405,31 @@ function Markdown({ source }: { source: string }) {
   const blocks: React.ReactNode[] = [];
   const lines = source.replace(/\r\n/g, "\n").split("\n");
   let index = 0;
-  const inline = (value: string, key: string) => value.split(/(`[^`]+`)/g).map((part, partIndex) => (
-    part.startsWith("`") && part.endsWith("`") && part.length > 1 ? <code key={`${key}-${partIndex}`}>{part.slice(1, -1)}</code>
-      : <Fragment key={`${key}-${partIndex}`}>{part.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")}</Fragment>
-  ));
+  const inline = (value: string, key: string) =>
+    value
+      .split(/(`[^`]+`)/g)
+      .map((part, partIndex) =>
+        part.startsWith("`") && part.endsWith("`") && part.length > 1 ? (
+          <code key={`${key}-${partIndex}`}>{part.slice(1, -1)}</code>
+        ) : (
+          <Fragment key={`${key}-${partIndex}`}>{part.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")}</Fragment>
+        ),
+      );
   while (index < lines.length) {
     const line = lines[index]!;
     if (/^```/.test(line)) {
       const code: string[] = [];
       index += 1;
-      while (index < lines.length && !/^```/.test(lines[index]!)) { code.push(lines[index]!); index += 1; }
+      while (index < lines.length && !/^```/.test(lines[index]!)) {
+        code.push(lines[index]!);
+        index += 1;
+      }
       index += 1;
-      blocks.push(<pre key={blocks.length} className="repo-md-code">{code.join("\n")}</pre>);
+      blocks.push(
+        <pre key={blocks.length} className="repo-md-code">
+          {code.join("\n")}
+        </pre>,
+      );
       continue;
     }
     const heading = /^(#{1,6})\s+(.*)$/.exec(line);
@@ -860,20 +1443,38 @@ function Markdown({ source }: { source: string }) {
     if (/^\s*([-*+]|\d+\.)\s+/.test(line)) {
       const ordered = /^\s*\d+\./.test(line);
       const items: string[] = [];
-      while (index < lines.length && /^\s*([-*+]|\d+\.)\s+/.test(lines[index]!)) { items.push(lines[index]!.replace(/^\s*([-*+]|\d+\.)\s+/, "")); index += 1; }
+      while (index < lines.length && /^\s*([-*+]|\d+\.)\s+/.test(lines[index]!)) {
+        items.push(lines[index]!.replace(/^\s*([-*+]|\d+\.)\s+/, ""));
+        index += 1;
+      }
       const List = ordered ? "ol" : "ul";
-      blocks.push(<List key={blocks.length}>{items.map((item, itemIndex) => <li key={itemIndex}>{inline(item, `l${index}-${itemIndex}`)}</li>)}</List>);
+      blocks.push(
+        <List key={blocks.length}>
+          {items.map((item, itemIndex) => (
+            <li key={itemIndex}>{inline(item, `l${index}-${itemIndex}`)}</li>
+          ))}
+        </List>,
+      );
       continue;
     }
     if (/^>\s?/.test(line)) {
       const quote: string[] = [];
-      while (index < lines.length && /^>\s?/.test(lines[index]!)) { quote.push(lines[index]!.replace(/^>\s?/, "")); index += 1; }
+      while (index < lines.length && /^>\s?/.test(lines[index]!)) {
+        quote.push(lines[index]!.replace(/^>\s?/, ""));
+        index += 1;
+      }
       blocks.push(<blockquote key={blocks.length}>{inline(quote.join(" "), `q${index}`)}</blockquote>);
       continue;
     }
-    if (!line.trim()) { index += 1; continue; }
+    if (!line.trim()) {
+      index += 1;
+      continue;
+    }
     const paragraph: string[] = [];
-    while (index < lines.length && lines[index]!.trim() && !/^(```|#{1,6}\s|>|\s*([-*+]|\d+\.)\s)/.test(lines[index]!)) { paragraph.push(lines[index]!); index += 1; }
+    while (index < lines.length && lines[index]!.trim() && !/^(```|#{1,6}\s|>|\s*([-*+]|\d+\.)\s)/.test(lines[index]!)) {
+      paragraph.push(lines[index]!);
+      index += 1;
+    }
     blocks.push(<p key={blocks.length}>{inline(paragraph.join(" "), `p${index}`)}</p>);
   }
   return <div className="repo-markdown">{blocks}</div>;

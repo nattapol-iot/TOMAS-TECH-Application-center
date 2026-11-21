@@ -25,8 +25,17 @@ test("production entry is API-backed and has no demo fallback", async () => {
 
 test("the in-memory demo prototype stays removed and production imports no sample stores", async () => {
   // The /demo prototype ran on a bundled sample dataset and was reachable without sign-in.
-  for (const removed of ["app/demo/page.tsx", "app/system/App.tsx", "app/system/data.ts", "app/system/calc.ts",
-    "app/system/matstore.ts", "app/system/store.ts", "app/system/session.ts", "app/system/routes.ts", "app/system/screens/"]) {
+  for (const removed of [
+    "app/demo/page.tsx",
+    "app/system/App.tsx",
+    "app/system/data.ts",
+    "app/system/calc.ts",
+    "app/system/matstore.ts",
+    "app/system/store.ts",
+    "app/system/session.ts",
+    "app/system/routes.ts",
+    "app/system/screens/",
+  ]) {
     await assert.rejects(access(new URL(removed, root)), `${removed} must not come back`);
   }
 
@@ -42,16 +51,8 @@ test("the in-memory demo prototype stays removed and production imports no sampl
   await collectProductionSources(productionDirectory);
   for (const path of productionSources) {
     const source = await readFile(path, "utf8");
-    assert.doesNotMatch(
-      source,
-      /(?:from\s+|import\s*\(\s*)["'][^"']*screens\//,
-      `${path.pathname} must not import the demo screens`,
-    );
-    assert.doesNotMatch(
-      source,
-      /(?:from\s+|import\s*\(\s*)["'][^"']*(?:data|calc|store|matstore|session)["']/,
-      `${path.pathname} must not import demo data or in-memory stores`,
-    );
+    assert.doesNotMatch(source, /(?:from\s+|import\s*\(\s*)["'][^"']*screens\//, `${path.pathname} must not import the demo screens`);
+    assert.doesNotMatch(source, /(?:from\s+|import\s*\(\s*)["'][^"']*(?:data|calc|store|matstore|session)["']/, `${path.pathname} must not import demo data or in-memory stores`);
   }
 });
 
@@ -59,28 +60,58 @@ test("production workspace exposes API-backed menus with Inquiry as the intake e
   const productionApp = await readFile(new URL("app/system/ProductionApp.tsx", root), "utf8");
   const navSource = productionApp.slice(productionApp.indexOf("const NAV"), productionApp.indexOf("const IS_AUTH_CONFIGURED"));
   const menuLabels = [
-    "Dashboard", "My Work", "RFQ intake & estimating", "Estimate Cost", "Projects", "Knowledge Hub", "Download Center", "Site Monitor", "Installed Base",
+    "Dashboard",
+    "My Work",
+    "RFQ intake & estimating",
+    "Estimate Cost",
+    "Projects",
+    "Knowledge Hub",
+    "Download Center",
+    "Site Monitor",
+    "Installed Base",
     // Every label is a dictionary key, never a literal in one language: the
     // intake and opportunity entries once carried raw Thai and showed Thai to
     // English and Japanese readers.
     // Pipeline is the board mode inside CRM Opportunities, not a menu entry of its own.
-    "CRM Dashboard", "CRM Customers", "CRM Contacts", "CRM Opportunities", "CRM Activities",
-    "Site Visit", "My Assignments",
+    "CRM Dashboard",
+    "CRM Customers",
+    "CRM Contacts",
+    "CRM Opportunities",
+    "CRM Activities",
+    "Site Visit",
+    "My Assignments",
     // Timeline is a mode in Projects; old timeline links are covered by the shell behavior tests.
-    "Price Library", "Supplier Quotation", "Waiting Supplier Price",
+    "Price Library",
+    "Supplier Quotation",
+    "Waiting Supplier Price",
     // Team overview replaced Resource Plan (2026-10-21) and sits under My Work; the weekly workload is a tab in it.
     "Team overview",
     // Lean procurement (2026-11-19): BOM is a tab of Purchase Requisition; orders, receiving and stock are done in Pegasus ERP.
-    "Purchase Requisition", "Approvals",
+    "Purchase Requisition",
+    "Approvals",
     // Document signing (DSN-TC-005). "My signature" is deliberately not here:
     // a specimen is a preference, reached from the user menu, because putting it
     // in the sidebar would imply the image is what authorises.
-    "Operational Reports", "Sign Inbox", "Signed Documents", "Company Stamps",
-    "Team Activity & Workload", "KPI & Growth", "Summary Reports",
-    "Customers", "Suppliers", "Employees", "Site Visit Reference Data", "Master Schedule",
-    "Module Templates", "Labor Packages", "Engineering rates",
-    "User Accounts & Permissions", "Audit Log", "System Settings",
-    "Employee Manual", "Report & Track Issues",
+    "Operational Reports",
+    "Sign Inbox",
+    "Signed Documents",
+    "Company Stamps",
+    "Team Activity & Workload",
+    "KPI & Growth",
+    "Summary Reports",
+    "Customers",
+    "Suppliers",
+    "Employees",
+    "Site Visit Reference Data",
+    "Master Schedule",
+    "Module Templates",
+    "Labor Packages",
+    "Engineering rates",
+    "User Accounts & Permissions",
+    "Audit Log",
+    "System Settings",
+    "Employee Manual",
+    "Report & Track Issues",
   ];
   for (const label of menuLabels) {
     assert.ok(navSource.includes(`label: "${label}"`) || navSource.includes(`"label":"${label}"`), label);
@@ -101,12 +132,33 @@ test("production My Work keeps the Demo workflow on live API contracts", async (
     readFile(new URL("lib/my-work.ts", root), "utf8"),
   ]);
   for (const label of [
-    "Needs update", "Late", "Blocked", "Due this week", "Awaiting the PM",
-    "New Assignments", "My Active Work", "My Updates", "Needs your update",
-    "Forecast", "Request more days", "Add Personal Task", "Open plan",
-    "Search project, WBS or task", "All projects", "Priority first", "Update details",
-    "No work groups match these filters", "Clear filters", "Last update", "quiet days", "estimated man-days",
-    "Filter by source", "Inquiry / Estimate", "Service", "Personal", "More actions",
+    "Needs update",
+    "Late",
+    "Blocked",
+    "Due this week",
+    "Awaiting the PM",
+    "New Assignments",
+    "My Active Work",
+    "My Updates",
+    "Needs your update",
+    "Forecast",
+    "Request more days",
+    "Add Personal Task",
+    "Open plan",
+    "Search project, WBS or task",
+    "All projects",
+    "Priority first",
+    "Update details",
+    "No work groups match these filters",
+    "Clear filters",
+    "Last update",
+    "quiet days",
+    "estimated man-days",
+    "Filter by source",
+    "Inquiry / Estimate",
+    "Service",
+    "Personal",
+    "More actions",
   ]) {
     assert.match(screen, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
@@ -190,7 +242,10 @@ test("schedule screens follow the API's progress and Resource Plan flags", async
   assert.match(schedule, /activeSchedule\.projectStatus !== "Closed" && !managed \? <button/);
   // Import Drawing follows the drawing rule (assigned PIC), not canProgress: the PM/Admin may post
   // progress on a row they are not PIC of, but the server refuses them a drawing there.
-  assert.match(schedule, /const canImportDrawing = canImportDrawingRow\(task, \{\s*scheduleAllowsProgress: activeSchedule\.canUpdateProgress,\s*hasSigningRequest: bootstrap\.permissions\.includes\("signing\.request"\),\s*userId: bootstrap\.user\.id,/);
+  assert.match(
+    schedule,
+    /const canImportDrawing = canImportDrawingRow\(task, \{\s*scheduleAllowsProgress: activeSchedule\.canUpdateProgress,\s*hasSigningRequest: bootstrap\.permissions\.includes\("signing\.request"\),\s*userId: bootstrap\.user\.id,/,
+  );
   // The drawer's actions wait while a save or reload runs, so they never act on a row being replaced.
   assert.match(schedule, /\{canImportDrawing \? <button className="btn sm default" type="button" disabled=\{saving\} onClick=\{onImportDrawing\}>/);
   assert.match(schedule, /saving=\{saving \|\| loadingSchedule\}/);
@@ -238,9 +293,7 @@ test("New Assignments source filtering is applied before SQL pagination", async 
 });
 
 test("My Work exposes schedule effort without changing the audited update path", async () => {
-  const [nodeRoute] = await Promise.all([
-    readFile(new URL("backend-node/src/routes/schedule.ts", root), "utf8"),
-  ]);
+  const [nodeRoute] = await Promise.all([readFile(new URL("backend-node/src/routes/schedule.ts", root), "utf8")]);
   assert.match(nodeRoute, /planManDays: task\.planManDays, actualManDays: task\.actualManDays/);
   assert.match(nodeRoute, /pendingAcknowledgmentTaskIds/);
   // My Work reads a project in one batch (schedule-service readProjectWork); the unacknowledged-task read is one of its statements.
@@ -252,17 +305,14 @@ test("My Work exposes schedule effort without changing the audited update path",
 
 test("production Projects table defaults to 10 rows and supports page-size selection", async () => {
   const screen = await readFile(new URL("app/system/production/CoreScreens.tsx", root), "utf8");
-  const projects = screen.slice(
-    screen.indexOf("export function ProductionProjects"),
-    screen.indexOf("function ProjectDocumentsModal"),
-  );
+  const projects = screen.slice(screen.indexOf("export function ProductionProjects"), screen.indexOf("function ProjectDocumentsModal"));
 
   assert.match(projects, /const \[pageSize, setPageSize\] = useLinkedState\("rows", 10, numberLink\)/);
   // The portfolio loads every project in scope once and pages in memory.
   assert.match(projects, /listProjectOverview\(\{ includeClosed \}\)/);
   assert.match(projects, /sorted\.slice\(\(currentPage - 1\) \* pageSize, currentPage \* pageSize\)/);
-  assert.match(projects, /<TablePageSize value=\{pageSize\}/);
-  assert.match(projects, /setPageSize\(value\); setPage\(1\)/);
+  assert.match(projects, /<TablePageSize\s+value=\{pageSize\}/);
+  assert.match(projects, /setPageSize\(value\);\s*setPage\(1\)/);
 });
 
 test("inquiry qualification persists probability and customer interest with audited concurrency", async () => {
@@ -310,10 +360,7 @@ test("legacy unauthenticated D1 routes, bindings and site-creator hosting are ab
 });
 
 test("production build validates identity and HTTPS configuration", async () => {
-  const [packageJson, validator] = await Promise.all([
-    readFile(new URL("package.json", root), "utf8"),
-    readFile(new URL("scripts/validate-production-env.mjs", root), "utf8"),
-  ]);
+  const [packageJson, validator] = await Promise.all([readFile(new URL("package.json", root), "utf8"), readFile(new URL("scripts/validate-production-env.mjs", root), "utf8")]);
   assert.match(packageJson, /validate-production-env\.mjs/);
   assert.match(validator, /NEXT_PUBLIC_ENTRA_TENANT_ID/);
   assert.match(validator, /NEXT_PUBLIC_ENTRA_CLIENT_ID/);
@@ -540,7 +587,18 @@ test("estimate revisions remain immutable and writes are record-scoped", async (
   for (const tab of ["Cost summary", "Cost Items", "Labor", "Other costs", "Assignment", "Validation", "Revision history", "Compare Revision", "Engineering Review"]) {
     assert.match(estimateScreen, new RegExp(tab.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
-  for (const action of ["New Work Package", "Add activity", "Supplier man-hour", "Add travel, hotel or per diem", "Continue to activity", "Search Price Library", "Import Excel", "Copy Previous Estimate", "Add item to this module", "Add module"]) {
+  for (const action of [
+    "New Work Package",
+    "Add activity",
+    "Supplier man-hour",
+    "Add travel, hotel or per diem",
+    "Continue to activity",
+    "Search Price Library",
+    "Import Excel",
+    "Copy Previous Estimate",
+    "Add item to this module",
+    "Add module",
+  ]) {
     assert.match(estimateScreen, new RegExp(action));
   }
   assert.match(estimateScreen, /loadPriceLibraryRecords/);
@@ -665,10 +723,7 @@ test("audited supplier purchase history is read-only to the application and reus
   assert.match(estimateScreen, /Purchase Price/);
   assert.match(pricingScreen, /loadAllSupplierPriceHistory/);
   assert.match(pricingScreen, /record\.sourceKind === "Estimate"/);
-  const priceLibrarySource = pricingScreen.slice(
-    pricingScreen.indexOf("export function ProductionPriceLibrary"),
-    pricingScreen.indexOf("const supplierQuotationCurrency"),
-  );
+  const priceLibrarySource = pricingScreen.slice(pricingScreen.indexOf("export function ProductionPriceLibrary"), pricingScreen.indexOf("const supplierQuotationCurrency"));
   assert.match(priceLibrarySource, /useState\(50\)/);
   assert.match(priceLibrarySource, /<TablePageSize value=\{pageSize\}/);
   assert.match(priceLibrarySource, /<Pagination page=\{currentPage\}/);
@@ -715,10 +770,7 @@ test("a quotation's price lines reach the Price Library or the screen says they 
   assert.ok(createStart > 0 && createEnd > createStart, "the create handler moved");
   const create = route.slice(createStart, createEnd);
   assert.match(create, /await writeQuotationLines\(transaction, Number\(row\.id\), lines, actor\.id\);/);
-  assert.ok(
-    create.indexOf("parseLineArray(payload)") < create.indexOf("writeStoredFile("),
-    "lines must be validated before the file is written, or a rejected payload leaves an orphan file",
-  );
+  assert.ok(create.indexOf("parseLineArray(payload)") < create.indexOf("writeStoredFile("), "lines must be validated before the file is written, or a rejected payload leaves an orphan file");
   assert.match(client, /body\.set\("lines", JSON\.stringify\(input\.lines\)\)/);
   assert.match(screen, /onCreated\(created\.quotationNumber, created\.lineCount\)/);
   // The old failure: the line write was fired separately and its error thrown away.
@@ -736,10 +788,7 @@ test("a quotation's price lines reach the Price Library or the screen says they 
   assert.match(screen, /if \(linesLoaded\) await saveQuotationLines\(record\.id, lines\);/);
 
   // The Price Library offers the add path itself rather than sending people elsewhere.
-  const priceLibrary = screen.slice(
-    screen.indexOf("export function ProductionPriceLibrary"),
-    screen.indexOf("const supplierQuotationCurrency"),
-  );
+  const priceLibrary = screen.slice(screen.indexOf("export function ProductionPriceLibrary"), screen.indexOf("const supplierQuotationCurrency"));
   assert.match(priceLibrary, /<SupplierQuotationUploadModal/);
   assert.match(priceLibrary, /text=\{"Add price"\}/);
 
@@ -839,10 +888,9 @@ test("the quotation route writes only columns supplier_quotations actually has",
   assert.ok(createStart > 0, "the supplier_quotations table declaration moved");
   const declaration = base.slice(createStart, base.indexOf("\n);", createStart));
   const columnType = "bigint|nvarchar|char|varchar|date|datetimeoffset|decimal|int|bit|rowversion";
-  const declared = new Set([
-    ...declaration.matchAll(new RegExp(`^\\s+(\\w+)\\s+(?:${columnType})\\b`, "gm")),
-    ...extension.matchAll(new RegExp(`\\bADD (\\w+) (?:${columnType})\\b`, "g")),
-  ].map((match) => match[1]));
+  const declared = new Set(
+    [...declaration.matchAll(new RegExp(`^\\s+(\\w+)\\s+(?:${columnType})\\b`, "gm")), ...extension.matchAll(new RegExp(`\\bADD (\\w+) (?:${columnType})\\b`, "g"))].map((match) => match[1]),
+  );
   assert.ok(declared.has("quotation_no") && declared.has("source_url"), "column extraction stopped working");
 
   const written = new Set();
@@ -938,7 +986,7 @@ test("customer master editing is audited, concurrent, and narrowly permissioned"
   ]);
   assert.match(screen, /title=\{customer \? "Edit customer" : "New customer"\}/);
   assert.match(screen, /method: customer \? "PUT" : "POST"/);
-  assert.match(screen, /<TablePageSize value=\{pageSize\}/);
+  assert.match(screen, /<TablePageSize\s+value=\{pageSize\}/);
   assert.match(ui, /export function TablePageSize/);
   assert.match(ui, /\[10, 25, 50, 100\]/);
   assert.match(grants, /GRANT INSERT, UPDATE ON OBJECT::dbo\.customers/);
@@ -963,20 +1011,13 @@ test("schedule day-request answers are atomic and narrowly permissioned", async 
   assert.match(verifier, /answer_schedule_day_request/);
   assert.match(deployment, /007_schedule_day_request_answers\.sql/);
   assert.ok(
-    migration.indexOf("FROM dbo.schedule_tasks WITH (UPDLOCK, HOLDLOCK)")
-      < migration.indexOf("FROM dbo.schedule_updates WITH (UPDLOCK, HOLDLOCK)"),
+    migration.indexOf("FROM dbo.schedule_tasks WITH (UPDLOCK, HOLDLOCK)") < migration.indexOf("FROM dbo.schedule_updates WITH (UPDLOCK, HOLDLOCK)"),
     "owner procedure must lock task before request",
   );
 });
 
 test("project documents use fail-closed NAS storage, scoped access, and append-only metadata", async () => {
-  const [
-    grants,
-    verifier,
-    probe,
-    deployment,
-    gitignore,
-  ] = await Promise.all([
+  const [grants, verifier, probe, deployment, gitignore] = await Promise.all([
     readFile(new URL("database/scripts/010_application_login.sql", root), "utf8"),
     readFile(new URL("database/scripts/080_verify_production_baseline.sql", root), "utf8"),
     readFile(new URL("scripts/Test-NasStorage.ps1", root), "utf8"),
@@ -1083,15 +1124,9 @@ test("document signing keeps files immutable, marks append-only, and the seal ac
 
   // A signature points at one exact byte sequence, so the file row cannot change
   // and the marks, the output and the chain cannot be rewritten.
-  for (const trigger of [
-    "trg_document_files_immutable",
-    "trg_signature_marks_append_only",
-    "trg_signed_documents_append_only",
-    "trg_sign_events_append_only",
-  ]) {
+  for (const trigger of ["trg_document_files_immutable", "trg_signature_marks_append_only", "trg_signed_documents_append_only", "trg_sign_events_append_only"]) {
     assert.ok(migration.includes(`CREATE OR ALTER TRIGGER dbo.${trigger}`), `${trigger} must exist`);
-    assert.match(migration.slice(migration.indexOf(trigger)).slice(0, 400), /INSTEAD OF UPDATE, DELETE/,
-      `${trigger} must refuse update and delete`);
+    assert.match(migration.slice(migration.indexOf(trigger)).slice(0, 400), /INSTEAD OF UPDATE, DELETE/, `${trigger} must refuse update and delete`);
   }
 
   // A frozen revision points at the stored bytes instead of copying them, so two
@@ -1152,8 +1187,7 @@ test("document signing keeps files immutable, marks append-only, and the seal ac
 
   // The application role can append to the ledgers but never rewrite them.
   for (const table of ["document_files", "signature_marks", "signed_documents", "sign_events"]) {
-    assert.ok(grants.includes(`GRANT INSERT ON OBJECT::dbo.${table} TO [iot_team_app_role];`),
-      `${table} must be append-only for the application role`);
+    assert.ok(grants.includes(`GRANT INSERT ON OBJECT::dbo.${table} TO [iot_team_app_role];`), `${table} must be append-only for the application role`);
     assert.ok(!grants.includes(`GRANT INSERT, UPDATE ON OBJECT::dbo.${table} TO`), `${table} must not receive UPDATE`);
     assert.ok(!grants.includes(`GRANT DELETE ON OBJECT::dbo.${table} TO`), `${table} must not receive DELETE`);
   }
@@ -1181,10 +1215,7 @@ test("document signing keeps files immutable, marks append-only, and the seal ac
   // Loading a project, its stored files, and the assigned Design task are
   // separate requests. A transient API restart must not turn an endpoint
   // failure into a fake form field or leave the user without a retry action.
-  const createModal = screens.slice(
-    screens.indexOf("export function CreateSignableDocumentModal"),
-    screens.indexOf("function FreezeRevisionModal"),
-  );
+  const createModal = screens.slice(screens.indexOf("export function CreateSignableDocumentModal"), screens.indexOf("function FreezeRevisionModal"));
   assert.match(createModal, /size="lg"/);
   assert.match(createModal, /className="form-grid two"/);
   for (const endpoint of ["projects", "attachments", "tasks"]) {
@@ -1208,8 +1239,7 @@ test("the verification code on a certificate resolves to a real, authenticated p
 
   // The printed link and QR have to land somewhere that exists. The code goes in
   // the query string because that is what the page reads.
-  assert.ok(routes.includes("verifyUrl: `${verifyBaseUrl}?code=${verifyCode}`"),
-    "the certificate link must carry the code in the query string the page reads");
+  assert.ok(routes.includes("verifyUrl: `${verifyBaseUrl}?code=${verifyCode}`"), "the certificate link must carry the code in the query string the page reads");
   assert.ok(page.includes('import("../system/VerifyEntry")'), "the verify route must load the entry component");
   assert.match(page, /ssr: false/);
   assert.match(entry, /searchParams|URLSearchParams/);
@@ -1236,8 +1266,7 @@ test("a signature specimen is every signed-in user own preference, by design", a
   assert.match(migration, /CREATE TABLE dbo\.signature_specimens/);
   assert.match(migration, /UNIQUE \(user_id, version\)/);
   const meRoutes = master.slice(master.indexOf("/api/v1/me/signature"), master.indexOf("/api/v1/master/company-stamps"));
-  assert.ok(!meRoutes.includes('demandPermission(request, "signing.'),
-    "the specimen routes must not gain a signing permission without changing DSN-TC-005 s8");
+  assert.ok(!meRoutes.includes('demandPermission(request, "signing.'), "the specimen routes must not gain a signing permission without changing DSN-TC-005 s8");
   assert.ok(meRoutes.includes("users.required(request)"));
 
   // Which is why "My signature" sits in the user menu beside Permissions rather
@@ -1249,14 +1278,11 @@ test("a signature specimen is every signed-in user own preference, by design", a
 
 test("Master Data Customers table defaults to 10 rows and supports page-size selection", async () => {
   const screen = await readFile(new URL("app/system/production/AdminAnalyticsScreens.tsx", root), "utf8");
-  const customers = screen.slice(
-    screen.indexOf("export function ProductionCustomers"),
-    screen.indexOf("function LocalizedNameStack"),
-  );
+  const customers = screen.slice(screen.indexOf("export function ProductionCustomers"), screen.indexOf("function LocalizedNameStack"));
 
   assert.match(customers, /const \[pageSize, setPageSize\] = useState\(10\)/);
-  assert.match(customers, /<TablePageSize value=\{pageSize\}/);
-  assert.match(customers, /setPageSize\(value\); setPage\(1\)/);
+  assert.match(customers, /<TablePageSize\s+value=\{pageSize\}/);
+  assert.match(customers, /setPageSize\(value\);\s*setPage\(1\)/);
 });
 
 test("project members can be managed after creation, not only assigned at creation time", async () => {

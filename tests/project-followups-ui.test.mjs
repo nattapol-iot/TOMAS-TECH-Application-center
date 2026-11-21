@@ -21,8 +21,7 @@ function load(relative) {
   const code = ts.transpileModule(readFileSync(filename, "utf8"), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
   }).outputText;
-  const localRequire = (specifier) => specifier.startsWith(".")
-    ? load(path.resolve(path.dirname(filename), `${specifier}.ts`)) : require(specifier);
+  const localRequire = (specifier) => (specifier.startsWith(".") ? load(path.resolve(path.dirname(filename), `${specifier}.ts`)) : require(specifier));
   new Function("require", "module", "exports", code)(localRequire, loadedModule, loadedModule.exports);
   return loadedModule.exports;
 }
@@ -46,7 +45,7 @@ test("the Timeline finds tasks across projects and shows only the matches with t
   // Nothing is dropped silently: hidden-by-filter projects, unopened projects and the API cap are all said.
   for (const key of ["Gantt.searchHidden", "Gantt.expandLimit", "Gantt.searchTruncated", "Gantt.clearSearch"]) assert.ok(gantt.includes(`"${key}"`), key);
   // The closed-projects switch reaches the search.
-  assert.match(core, /<ProjectPortfolioGantt key=\{overview\?\.loadedAt \?\? 0\} rows=\{sorted\} today=\{today\(\)\} canReadSchedule=\{[^}]+\} includeClosed=\{includeClosed\}/);
+  assert.match(core, /<ProjectPortfolioGantt\s+key=\{overview\?\.loadedAt \?\? 0\}\s+rows=\{sorted\}\s+today=\{today\(\)\}\s+canReadSchedule=\{[^}]+\}\s+includeClosed=\{includeClosed\}/);
   const css = read("app/system/production/project-portfolio.css");
   assert.match(css, /\.portfolio-gantt-search \{/);
   assert.match(css, /\.portfolio-waiting \{/);
@@ -61,7 +60,10 @@ test("day requests waiting for the signed-in PM or EM are listed above the portf
 
 test("new assignments can be acknowledged in place, one at a time or as a group", () => {
   const workspace = read("app/system/production/ResourceTaskWorkspace.tsx");
-  assert.match(workspace, /apiRequest\(`\/api\/v1\/resource-tasks\/\$\{task\.id\}\/acknowledge`,\{method:'POST',body:JSON\.stringify\(\{rowVersion:task\.rowVersion,scheduleVersion:task\.scheduleVersion\}\)\}\)/);
+  assert.match(
+    workspace,
+    /apiRequest\(`\/api\/v1\/resource-tasks\/\$\{task\.id\}\/acknowledge`,\{method:'POST',body:JSON\.stringify\(\{rowVersion:task\.rowVersion,scheduleVersion:task\.scheduleVersion\}\)\}\)/,
+  );
   assert.match(workspace, /className="new-assignment-child-actions"/);
   assert.match(workspace, /group\.items\.filter\(canAcknowledge\)\.length>1\?<div className="new-assignment-group-actions">/);
   const css = read("app/system/production/my-work.css");
@@ -82,7 +84,7 @@ test("a mistaken project document is withdrawn with a reason, never deleted", ()
   const api = read("app/system/api-client.ts");
   assert.match(api, /export const withdrawProjectDocument = \(projectId: number, documentId: number, input: \{ rowVersion: string; reason: string \}\) =>/);
   assert.match(api, /\{ method: "DELETE", body: JSON\.stringify\(input\) \}/);
-  assert.match(core, /\{document\.canWithdraw \? <button className="btn ghost sm" type="button"/);
+  assert.match(core, /\{document\.canWithdraw \? \(\s*<button className="btn ghost sm" type="button"/);
   assert.match(core, /await withdrawProjectDocument\(project\.id, target\.id, \{ rowVersion: target\.rowVersion, reason: withdrawReason\.trim\(\) \}\);/);
   assert.match(core, /disabled=\{withdrawBusy \|\| !withdrawReason\.trim\(\)\}/);
   assert.match(core, /<textarea required maxLength=\{500\}/, "the API caps the reason at 500");
@@ -104,7 +106,10 @@ test("pickers order projects newest number first, numerically", () => {
   const source = client.match(/export const newestProjectFirst = (\([^\n]+);/)[1];
   const compare = new Function(`return ${ts.transpile(source)}`)();
   const numbers = ["P-26-002", "P-26-010", "P-25-100", "P-26-001"].map((number) => ({ number }));
-  assert.deepEqual(numbers.sort(compare).map((item) => item.number), ["P-26-010", "P-26-002", "P-26-001", "P-25-100"]);
+  assert.deepEqual(
+    numbers.sort(compare).map((item) => item.number),
+    ["P-26-010", "P-26-002", "P-26-001", "P-25-100"],
+  );
 });
 
 test("Edit project lists PMs and leads by effective role and always shows who is assigned", () => {
@@ -129,8 +134,20 @@ test("CRM's pipeline bar and attention chips are the shared SegmentBar and Filte
   const { translate, LanguageContext } = load("app/system/i18n.ts");
   const { SegmentBar } = load("app/system/ui.tsx");
   const h = React.createElement;
-  const markup = renderToStaticMarkup(h(LanguageContext.Provider, { value: { lang: "EN", setLang() {}, t: (text) => translate(text, "EN") } },
-    h(SegmentBar, { items: [{ key: "NEW", label: "New", value: 2, tone: "slate", color: "var(--c8)" }, { key: "WON", label: "Won", value: 1, tone: "green" }], active: null, onPick() {} })));
+  const markup = renderToStaticMarkup(
+    h(
+      LanguageContext.Provider,
+      { value: { lang: "EN", setLang() {}, t: (text) => translate(text, "EN") } },
+      h(SegmentBar, {
+        items: [
+          { key: "NEW", label: "New", value: 2, tone: "slate", color: "var(--c8)" },
+          { key: "WON", label: "Won", value: 1, tone: "green" },
+        ],
+        active: null,
+        onPick() {},
+      }),
+    ),
+  );
   assert.match(markup, /style="flex-grow:2;background:var\(--c8\)"/);
   assert.match(markup, /class="segment-bar-dot slate" style="background:var\(--c8\)"/);
   assert.match(markup, /class="segment-bar-dot green"><\/i>/, "without a colour the tone draws it");
@@ -212,10 +229,13 @@ test("the portfolio Timeline goes full screen, with an overlay where the browser
   assert.match(read("app/globals.css"), /body\.fullscreen-overlay-open \{ overflow: hidden; \}/);
 
   // The whole block goes full screen, sort included, and the button says which way it goes.
-  assert.match(gantt, /<div ref=\{fullscreenRef\} className=\{`portfolio-gantt\$\{fullscreen\.active \? " is-fullscreen" : ""\}\$\{fullscreen\.overlay \? " is-overlay" : ""\}`\}>\r?\n\s+\{controls\}/);
+  assert.match(
+    gantt,
+    /<div ref=\{fullscreenRef\} className=\{`portfolio-gantt\$\{fullscreen\.active \? " is-fullscreen" : ""\}\$\{fullscreen\.overlay \? " is-overlay" : ""\}`\}>\r?\n\s+\{controls\}/,
+  );
   assert.match(gantt, /aria-pressed=\{fullscreen\.active\}/);
   assert.match(gantt, /<Icon name=\{fullscreen\.active \? "minimize" : "maximize"\} \/>\{t\(fullscreen\.active \? "Gantt\.exitFullScreen" : "Gantt\.fullScreen"\)\}/);
-  assert.match(core, /controls=\{\/\* The sort sits inside the timeline so it stays at hand in full screen\. \*\/\r?\n\s+<div className="portfolio-gantt-sort">/);
+  assert.match(core, /controls=\{\s*\/\* The sort sits inside the timeline so it stays at hand in full screen\. \*\/\r?\n\s+<div className="portfolio-gantt-sort">/);
   const ui = read("app/system/ui.tsx");
   assert.match(ui, /^\s+maximize: </m);
   assert.match(ui, /^\s+minimize: </m);
@@ -277,7 +297,10 @@ test("the Gantt dates stay above the rows, the fill follows the whole plan, and 
   assert.doesNotMatch(read("app/globals.css"), /^\.gantt/m);
   assert.match(read("app/system/production/GanttChart.tsx"), /<i style=\{\{ width: `\$\{doneWidth\}%` \}\} \/>/);
   // One health colour map for the badge, the health bar and the timeline's project bars.
-  assert.match(read("app/system/production/ProjectPlanFields.tsx"), /export const PROJECT_HEALTH_TONE[^=]*= \{\r?\n\s+"On Track": "blue", "At Risk": "amber", Delayed: "red", "No plan": "slate", "On Hold": "slate", Completed: "green",/);
+  assert.match(
+    read("app/system/production/ProjectPlanFields.tsx"),
+    /export const PROJECT_HEALTH_TONE[^=]*= \{\r?\n\s+"On Track": "blue", "At Risk": "amber", Delayed: "red", "No plan": "slate", "On Hold": "slate", Completed: "green",/,
+  );
   for (const file of ["app/system/production/CoreScreens.tsx", "app/system/production/ProjectPortfolioGantt.tsx"]) {
     const source = read(file);
     assert.match(source, /PROJECT_HEALTH_TONE\[/, file);
@@ -334,10 +357,25 @@ test("a project's Plan draws its delivery flag once, in the date header, with a 
 test("every new follow-up string has English, Thai and Japanese copy", () => {
   const { translate } = load("app/system/i18n.ts");
   const keys = [
-    "Gantt.taskSearch", "Gantt.findTasks", "Gantt.clearSearch", "Gantt.searchResult", "Gantt.searchHidden", "Gantt.searchTruncated",
-    "Portfolio.waitingForYou", "Portfolio.reviewRequest", "MyWork.noReportYet", "MyWork.inquiryWork", "MyWork.inquiryWorkHint",
-    "ResourceTasks.acknowledge", "ResourceTasks.acknowledgeAll", "ResourceTasks.acknowledged",
-    "ProjectDocs.withdraw", "ProjectDocs.withdrawTitle", "ProjectDocs.withdrawHint", "ProjectDocs.withdrawReason", "ProjectDocs.withdrawn",
+    "Gantt.taskSearch",
+    "Gantt.findTasks",
+    "Gantt.clearSearch",
+    "Gantt.searchResult",
+    "Gantt.searchHidden",
+    "Gantt.searchTruncated",
+    "Portfolio.waitingForYou",
+    "Portfolio.reviewRequest",
+    "MyWork.noReportYet",
+    "MyWork.inquiryWork",
+    "MyWork.inquiryWorkHint",
+    "ResourceTasks.acknowledge",
+    "ResourceTasks.acknowledgeAll",
+    "ResourceTasks.acknowledged",
+    "ProjectDocs.withdraw",
+    "ProjectDocs.withdrawTitle",
+    "ProjectDocs.withdrawHint",
+    "ProjectDocs.withdrawReason",
+    "ProjectDocs.withdrawn",
   ];
   for (const key of keys) {
     for (const lang of ["EN", "TH", "JP"]) assert.notEqual(translate(key, lang), key, `${key} has no ${lang}`);
@@ -351,11 +389,13 @@ test("every new follow-up string has English, Thai and Japanese copy", () => {
 
 test("a task history shows the change, drops the importer's text, and only a day request, its answer and a baseline keep a quoted reason", () => {
   const planning = read("app/system/production/PlanningPricingScreens.tsx");
-  const helpers = ["historyReason", "historyNoteFields", "historyValue", "historyShown"].map((name) => {
-    const line = planning.match(new RegExp(`^const ${name} = .*$`, "m"))?.[0];
-    assert.ok(line, name);
-    return line;
-  }).join("\n");
+  const helpers = ["historyReason", "historyNoteFields", "historyValue", "historyShown"]
+    .map((name) => {
+      const line = planning.match(new RegExp(`^const ${name} = .*$`, "m"))?.[0];
+      assert.ok(line, name);
+      return line;
+    })
+    .join("\n");
   const code = ts.transpileModule(`${helpers}\nreturn { historyReason, historyValue, historyShown };`, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
   const { historyReason, historyValue, historyShown } = new Function(code)();
   const imported = "Imported from Overall Project Plan row 1054; source WBS 3.3; source status Delay";

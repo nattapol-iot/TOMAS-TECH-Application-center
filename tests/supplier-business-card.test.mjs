@@ -48,7 +48,7 @@ test("the supplier form scans a card and only fills blank fields", async () => {
   // Typed values always win over scanned ones.
   assert.match(form, /fields\.filter\(\(field\) => field\.value && !form\[field\.key\]\.trim\(\)\)/);
   // The controlled form has to be cleared explicitly after a successful save, and so does its draft (Pegasus 0.6).
-  assert.match(form, /\(\) => \{ setForm\(\{ \.\.\.BLANK_SUPPLIER \}\); clearDraft\("supplier:new"\); \}\)/);
+  assert.match(form, /\(\) => \{\s*setForm\(\{ \.\.\.BLANK_SUPPLIER \}\);\s*clearDraft\("supplier:new"\);\s*\},?\s*\)/);
 });
 
 test("the scanner accepts a dragged card everywhere it is used", async () => {
@@ -66,10 +66,7 @@ test("the scanner accepts a dragged card everywhere it is used", async () => {
 });
 
 test("an engineer can register the supplier an estimate needs, but not edit the master record", async () => {
-  const [route, screens] = await Promise.all([
-    read("../backend-node/src/routes/master.ts"),
-    read("../app/system/production/CoreScreens.tsx"),
-  ]);
+  const [route, screens] = await Promise.all([read("../backend-node/src/routes/master.ts"), read("../app/system/production/CoreScreens.tsx")]);
   const createStart = route.indexOf('app.post("/api/v1/master/suppliers"');
   assert.ok(createStart > -1, "supplier create route not found");
   // Stop at the next route registration; several master routes sit between this one
@@ -87,5 +84,5 @@ test("an engineer can register the supplier an estimate needs, but not edit the 
 
   // The button follows the same rule the API enforces.
   assert.match(screens, /canCreate=\{canWrite \|\| bootstrap\.permissions\.includes\("estimate\.write"\)\}/);
-  assert.match(screens, /\{canCreate \? <button className="btn primary" type="button" onClick=\{\(\) => setCreateOpen\(true\)\}/);
+  assert.match(screens, /\{canCreate \? \(\s*<button className="btn primary" type="button" onClick=\{\(\) => setCreateOpen\(true\)\}/);
 });

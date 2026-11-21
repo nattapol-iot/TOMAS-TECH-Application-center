@@ -5,71 +5,116 @@ import ts from "typescript-api";
 
 // Drive the real form handlers with controlled React state and no network writes.
 function mountForm(file, exportName, props) {
-  const slots = [], requests = [];
-  let cursor = 0, tree;
+  const slots = [],
+    requests = [];
+  let cursor = 0,
+    tree;
   const hooks = {
     useState(initial) {
       const index = cursor++;
       if (!(index in slots)) slots[index] = initial;
-      return [slots[index], value => { slots[index] = typeof value === "function" ? value(slots[index]) : value; }];
+      return [
+        slots[index],
+        (value) => {
+          slots[index] = typeof value === "function" ? value(slots[index]) : value;
+        },
+      ];
     },
-    useRef: () => ({ current: null }), useEffect() {}, useMemo: callback => callback(),
+    useRef: () => ({ current: null }),
+    useEffect() {},
+    useMemo: (callback) => callback(),
   };
-  const jsx = (type, props) => type?.name === "DateInput" ? type(props) : ({ type, props });
+  const jsx = (type, props) => (type?.name === "DateInput" ? type(props) : { type, props });
   const dependencies = {
     "../dialogs": { confirmDialog: async () => globalThis.window?.confirm?.() ?? true, promptDialog: async () => globalThis.window?.prompt?.() ?? null, alertDialog: async () => {} },
     "../DateInput": { DateInput: (props) => ({ type: "input", props: { ...props, type: props.withTime ? "datetime-local" : "date" } }) },
-    react: hooks, "react-dom": { createPortal: value => value },
+    react: hooks,
+    "react-dom": { createPortal: (value) => value },
     "react/jsx-runtime": { jsx, jsxs: jsx, Fragment: "fragment" },
-    "../api-client": { async apiRequest(url, options) { requests.push({ url, body: JSON.parse(options.body) }); return { code: "TEST" }; } },
+    "../api-client": {
+      async apiRequest(url, options) {
+        requests.push({ url, body: JSON.parse(options.body) });
+        return { code: "TEST" };
+      },
+    },
     "./BusinessCardScanner": { BusinessCardScanner: "scanner" },
     "./ErpMasterPanel": { ErpMasterPanel: "erp-master-panel" },
     "./PegasusScreen": { PegasusScreen: "pegasus-screen" },
     "../tmt-id.constants": { IS_TMT_ID_MODE: false },
     "./form-bubbles": { checkFields: () => true, failureDialog: async () => {} },
-    "./form-draft": { useDraftField: (key, field, initial) => hooks.useState(initial), clearDraft() {}, hasDraft: () => false, draftKeys: () => [], confirmLeave: async () => true, leaveCopy: () => ({}) },
+    "./PegasusSelect": { PgSelect: "select" },
+    "./form-draft": {
+      useDraftField: (key, field, initial) => hooks.useState(initial),
+      clearDraft() {},
+      hasDraft: () => false,
+      draftKeys: () => [],
+      confirmLeave: async () => true,
+      leaveCopy: () => ({}),
+    },
     "./SearchSelect": { SearchSelect: "search-select" },
     "../project-overview-client": { listAllProjectsByNumber: async () => [] },
     "../ui": new Proxy({}, { get: (_, name) => name }),
-    "../i18n": { useT: () => value => value },
+    "../i18n": { useT: () => (value) => value },
     "../LocalizedText": { LocalizedText: "localized" },
     "../../../backend-node/src/engineering-rate-access": {
-      canManageEngineeringRates: role => ["Admin", "Engineering Manager"].includes(role),
-      canViewEngineeringRates: role => ["Admin", "Engineering Manager", "Managing Director"].includes(role),
+      canManageEngineeringRates: (role) => ["Admin", "Engineering Manager"].includes(role),
+      canViewEngineeringRates: (role) => ["Admin", "Engineering Manager", "Managing Director"].includes(role),
     },
     "./customer-localized-names": {
       canonicalLocalizedName: (names, fallback = "") => names.nameEn.trim() || names.nameTh.trim() || names.nameJa.trim() || fallback.trim(),
       localizedNamesFromCard(candidates, fallback) {
         const result = { nameTh: "", nameEn: "", nameJa: "" };
         for (const candidate of candidates ?? []) result[candidate.language === "th" ? "nameTh" : candidate.language === "ja" ? "nameJa" : "nameEn"] ||= candidate.value.trim();
-        if (!result.nameTh && !result.nameEn && !result.nameJa && fallback.trim()) result[/\p{Script=Thai}/u.test(fallback) ? "nameTh" : /[\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}]/u.test(fallback) ? "nameJa" : "nameEn"] = fallback.trim();
+        if (!result.nameTh && !result.nameEn && !result.nameJa && fallback.trim())
+          result[/\p{Script=Thai}/u.test(fallback) ? "nameTh" : /[\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}]/u.test(fallback) ? "nameJa" : "nameEn"] = fallback.trim();
         return result;
       },
-      localizedNameLines: names => Object.entries(names).filter(([, value]) => value).map(([language, value]) => ({ language, value })),
+      localizedNameLines: (names) =>
+        Object.entries(names)
+          .filter(([, value]) => value)
+          .map(([language, value]) => ({ language, value })),
     },
   };
   const code = ts.transpileModule(readFileSync(new URL(file, import.meta.url), "utf8"), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
   }).outputText;
   const mod = { exports: {} };
-  new Function("require", "module", "exports", `${code}\nexports.Subject = ${exportName};`)(name => {
-    assert.ok(dependencies[name], `Unexpected dependency ${name}`);
-    return dependencies[name];
-  }, mod, mod.exports);
-  const nodes = node => Array.isArray(node) ? node.flatMap(nodes) : node && typeof node === "object" ? [node, ...nodes(node.props?.children)] : [];
-  const render = () => { cursor = 0; tree = mod.exports.Subject(props); };
-  const input = name => nodes(tree).find(node => ["input", "textarea"].includes(node.type) && (node.props.name === name || node.props["aria-label"] === name));
+  new Function("require", "module", "exports", `${code}\nexports.Subject = ${exportName};`)(
+    (name) => {
+      assert.ok(dependencies[name], `Unexpected dependency ${name}`);
+      return dependencies[name];
+    },
+    mod,
+    mod.exports,
+  );
+  const nodes = (node) => (Array.isArray(node) ? node.flatMap(nodes) : node && typeof node === "object" ? [node, ...nodes(node.props?.children)] : []);
+  const render = () => {
+    cursor = 0;
+    tree = mod.exports.Subject(props);
+  };
+  const input = (name) => nodes(tree).find((node) => ["input", "textarea"].includes(node.type) && (node.props.name === name || node.props["aria-label"] === name));
   render();
   return {
-    requests, input,
-    change(name, value) { assert.ok(input(name), `Missing ${name}`); input(name).props.onChange({ target: { value } }); render(); },
+    requests,
+    input,
+    change(name, value) {
+      assert.ok(input(name), `Missing ${name}`);
+      input(name).props.onChange({ target: { value } });
+      render();
+    },
     scan(data) {
-      const scanner = nodes(tree).find(node => node.type === "scanner");
+      const scanner = nodes(tree).find((node) => node.type === "scanner");
       assert.ok(scanner);
       scanner.props.onApply({ companyName: "", contactName: "", email: "", phone: "", address: "", department: "", position: "", ...data });
       render();
     },
-    async submit() { nodes(tree).find(node => node.type === "form").props.onSubmit({ preventDefault() {}, stopPropagation() {} }); for (let i = 0; i < 8; i++) await Promise.resolve(); render(); },
+    async submit() {
+      nodes(tree)
+        .find((node) => node.type === "form")
+        .props.onSubmit({ preventDefault() {}, stopPropagation() {} });
+      for (let i = 0; i < 8; i++) await Promise.resolve();
+      render();
+    },
   };
 }
 const salesFile = "../app/system/production/InquiryCustomerFields.tsx";
@@ -115,7 +160,8 @@ test("master editing restores saved roles and explicitly clears removed values",
   const form = mountForm(masterFile, "CustomerModal", { ...masterProps, customer });
   assert.equal(form.input("department").props.value, "Sales");
   assert.equal(form.input("position").props.value, "Manager");
-  form.change("department", ""); form.change("position", "");
+  form.change("department", "");
+  form.change("position", "");
   await form.submit();
   assert.equal(form.requests[0].url, "/api/v1/master/customers/123");
   assert.equal(form.requests[0].body.department, "");

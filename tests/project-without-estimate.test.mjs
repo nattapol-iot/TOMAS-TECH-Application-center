@@ -31,12 +31,12 @@ test("Create project keeps what was typed when saving fails", async () => {
   const modal = screens.match(/export function CreateProjectModal\([\s\S]*?\n\}\n/)?.[0] ?? "";
   assert.ok(modal, "CreateProjectModal found");
   // The save error sits beside the buttons; "Could not load / Try again" is only for loading the options.
-  assert.match(modal, /catch \(requestError\) \{ setSaveError\(toError\(requestError\)\); \}/);
-  assert.match(modal, /\{saveError \? <span className="project-create-error" role="alert">/);
-  assert.match(modal, /\{loadError \? <LoadError message=\{t\(loadError\)\}/);
+  assert.match(modal, /catch \(requestError\) \{\s*setSaveError\(toError\(requestError\)\);\s*\}/);
+  assert.match(modal, /\{saveError \? \(\s*<span className="project-create-error" role="alert">/);
+  assert.match(modal, /\{loadError \? \(\s*<LoadError\s+message=\{t\(loadError\)\}/);
   // Reloading the options never clears a chosen estimate, lead engineer or site.
-  assert.match(modal, /if\(defaultsApplied\.current\)return;\n\s*defaultsApplied\.current=true;/);
-  assert.match(modal, /estimateId:current\.estimateId\|\|first\?\.id\|\|0/);
+  assert.match(modal, /if \(defaultsApplied\.current\) return;\n\s*defaultsApplied\.current = true;/);
+  assert.match(modal, /estimateId: current\.estimateId \|\| first\?\.id \|\| 0/);
 });
 
 test("Create project offers 'without an estimate' only to those allowed, with customer, name and type", async () => {
@@ -62,7 +62,11 @@ test("project mail links and bell notifications open the project's plan", async 
 });
 
 test("projects without an estimate still appear in the cost report and on the CRM customer", async () => {
-  const [reports, customers, analytics] = await Promise.all([source("backend-node/src/routes/reports.ts"), source("backend-node/src/routes/crm-customers.ts"), source("app/system/production/AdminAnalyticsScreens.tsx")]);
+  const [reports, customers, analytics] = await Promise.all([
+    source("backend-node/src/routes/reports.ts"),
+    source("backend-node/src/routes/crm-customers.ts"),
+    source("app/system/production/AdminAnalyticsScreens.tsx"),
+  ]);
   assert.match(reports, /FROM dbo\.projects p LEFT JOIN dbo\.estimates e ON e\.id=p\.estimate_id\n\s*LEFT JOIN dbo\.v_estimate_totals totals/);
   assert.match(customers, /FROM dbo\.projects p LEFT JOIN dbo\.inquiries i ON i\.id=p\.inquiry_id/);
   assert.match(analytics, /report\.project\.estimateNumber \? uiText\("Reports\.estimate"\)\.replace\("\{number\}", report\.project\.estimateNumber\) : uiText\("Project without an estimate"\)/);
@@ -78,15 +82,26 @@ test("a project belongs to one of three teams, and older department names read a
   assert.equal(projectTeamOf("System Architect & System Engineer Dept."), "");
   assert.equal(shownProjectTeam("Application Team"), "Application Team");
   assert.equal(shownProjectTeam(" Sales "), "Sales", "a team naming none of the three is kept as typed");
-  const rows = [{ team: "IoT Engineer Dept." }, { team: "IoT Team" }, { team: "Mechanical Team" }, { team: null }]
-    .map((row, index) => ({ ...row, id: index, number: `P${index}`, name: "", customerName: "", managerId: 1, leadEngineerId: 2, status: "Design" }));
-  assert.deepEqual(scopePortfolio(rows, { ...EMPTY_PORTFOLIO_FILTERS, team: "IoT Team" }).map((row) => row.id), [0, 1]);
+  const rows = [{ team: "IoT Engineer Dept." }, { team: "IoT Team" }, { team: "Mechanical Team" }, { team: null }].map((row, index) => ({
+    ...row,
+    id: index,
+    number: `P${index}`,
+    name: "",
+    customerName: "",
+    managerId: 1,
+    leadEngineerId: 2,
+    status: "Design",
+  }));
+  assert.deepEqual(
+    scopePortfolio(rows, { ...EMPTY_PORTFOLIO_FILTERS, team: "IoT Team" }).map((row) => row.id),
+    [0, 1],
+  );
 });
 
 test("the team select offers the three teams and the dialogs default to the lead engineer's team", async () => {
   const [fields, screens] = await Promise.all([source("app/system/production/ProjectPlanFields.tsx"), source("app/system/production/CoreScreens.tsx")]);
   assert.match(fields, /return \[\.\.\.PROJECT_TEAMS, \.\.\.\(kept && !\(PROJECT_TEAMS as readonly string\[\]\)\.includes\(kept\) \? \[kept\] : \[\]\)\];/);
   assert.equal(screens.match(/const departments = projectTeamOptions\(form\.department\);/g)?.length, 2, "Create and Edit project");
-  assert.match(screens, /const departmentOf = \(userId: number\) => projectTeamOf\(bootstrap\.team\.find\(member => member\.id === userId\)\?\.department\);/);
+  assert.match(screens, /const departmentOf = \(userId: number\) => projectTeamOf\(bootstrap\.team\.find\(\(member\) => member\.id === userId\)\?\.department\);/);
   assert.match(screens, /department: shownProjectTeam\(project\.team\),/);
 });
