@@ -44,11 +44,11 @@ function toProfile(payload: unknown): MasterDataProfile | null {
     envelope.data && typeof envelope.data === "object" ? envelope.data : envelope
   ) as Record<string, unknown>;
   return {
-    employeeNo: firstInteger(record, ["employeeNo", "employee_no", "employeeNumber"]),
-    name: firstText(record, ["nameEn", "name_en", "fullName", "full_name", "name"]),
-    department: firstText(record, ["department", "departmentName", "department_name"]),
-    role: firstText(record, ["role", "position", "positionName", "position_name"]),
-    email: firstText(record, ["email", "workEmail", "work_email"]),
+    employeeNo: firstInteger(record, ["employee_number", "employeeNo", "employee_no", "employeeNumber"]),
+    name: firstText(record, ["english_name", "nameEn", "name_en", "fullName", "full_name", "name"]),
+    department: firstText(record, ["team", "department", "departmentName", "department_name"]),
+    role: firstText(record, ["position", "role", "positionName", "position_name"]),
+    email: firstText(record, ["employee_lineworks_email", "microsoft_email", "email", "workEmail", "work_email"]),
   };
 }
 

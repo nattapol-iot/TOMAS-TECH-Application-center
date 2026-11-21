@@ -6,6 +6,7 @@ import { MASTER_KINDS, type MasterKind } from "../erp-master-data.js";
 import { createErpMasterSync } from "../erp-master-sync.js";
 import type { ErpGateway } from "../erp-purchasing.js";
 import { bodyObject, positiveLong, requiredText } from "../http.js";
+import type { MasterData } from "../master-data/services.js";
 import { hasRole } from "../user-roles.js";
 import type { CurrentUserService } from "../users.js";
 
@@ -23,8 +24,10 @@ const kindOf = (request: FastifyRequest): MasterKind => {
  * open; the round runs with the caller's TMT ID token and at most once per 15 minutes for the whole app. An Admin settles
  * the records that resemble more than one app record, or resemble one only doubtfully.
  */
-export function registerErpMasterDataRoutes(app: FastifyInstance, database: Database, users: CurrentUserService, erp: { gateway: ErpGateway } | null = null): void {
-  const master = createErpMasterSync(database, erp?.gateway ?? null);
+export function registerErpMasterDataRoutes(app: FastifyInstance, database: Database, users: CurrentUserService, erp: { gateway: ErpGateway } | null = null,
+  masterData: MasterData | null = null): void {
+  // Master data owns customers and suppliers now (same ids as the ERP's); the ERP registers remain the fallback.
+  const master = createErpMasterSync(database, masterData?.registers ?? erp?.gateway ?? null);
   const readable = async (request: FastifyRequest) => {
     const actor = await users.required(request);
     const held = new Set((await database.query<{ code: string }>(`SELECT code FROM dbo.user_effective_permissions WHERE user_id=@id;`,
@@ -45,7 +48,7 @@ export function registerErpMasterDataRoutes(app: FastifyInstance, database: Data
   app.get("/api/v1/erp/master-data", async (request) => {
     const { actor, kinds } = await readable(request);
     const registers = (await master.status()).filter((item) => kinds.includes(item.kind));
-    return { enabled: master.enabled, canSettle: hasRole(actor, "Admin"), registers };
+    return { enabled: master.enabled, source: masterData ? "master" : "erp", canSettle: hasRole(actor, "Admin"), registers };
   });
 
   app.post("/api/v1/erp/master-data/:kind/sync", async (request) => {

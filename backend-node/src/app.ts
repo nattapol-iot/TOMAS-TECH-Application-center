@@ -230,8 +230,8 @@ export async function buildApp(config: AppConfig): Promise<Application> {
   registerEstimateCostLookupRoutes(app, database, users);
   registerEstimateRoutes(app, config, database, users, erp, email);
   registerEstimateErpRoutes(app, database, users, erp);
-  registerErpMasterDataRoutes(app, database, users, erp);
-  registerErpProjectRoutes(app, database, users, erp);
+  registerErpMasterDataRoutes(app, database, users, erp, masterData);
+  registerErpProjectRoutes(app, database, users, erp, masterData);
   registerOverheadPolicyRoutes(app, config, database, users);
   registerEstimateWorkspaceReadRoute(app, config, database, users);
   registerRecordPresenceRoutes(app, database, users);

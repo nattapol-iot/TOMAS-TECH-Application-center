@@ -2,19 +2,19 @@
 
 [Module](../modules/projects.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `a7ecc466`; generated, do not edit. [backend-node/src/routes/erp-projects.ts](<../../../backend-node/src/routes/erp-projects.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `82bde3e6`; generated, do not edit. [backend-node/src/routes/erp-projects.ts](<../../../backend-node/src/routes/erp-projects.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/erp/projects` | 17–50 |
+| GET | `/api/v1/erp/projects` | 35–68 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `registerErpProjectRoutes` | [backend-node/src/routes/erp-projects.ts](<../../../backend-node/src/routes/erp-projects.ts>) | 16–51 |
+| `registerErpProjectRoutes` | [backend-node/src/routes/erp-projects.ts](<../../../backend-node/src/routes/erp-projects.ts>) | 17–69 |
 
 ## Direct local dependencies
 
@@ -22,6 +22,7 @@ Evidence: source snapshot `a7ecc466`; generated, do not edit. [backend-node/src/
 - [backend-node/src/erp-purchasing.ts](<../../../backend-node/src/erp-purchasing.ts>)
 - [backend-node/src/erp-projects.ts](<../../../backend-node/src/erp-projects.ts>)
 - [backend-node/src/http.ts](<../../../backend-node/src/http.ts>)
+- [backend-node/src/master-data/services.ts](<../../../backend-node/src/master-data/services.ts>)
 - [backend-node/src/users.ts](<../../../backend-node/src/users.ts>)
 
 ## SQL references (literal scan, not a complete schema or write-set)
