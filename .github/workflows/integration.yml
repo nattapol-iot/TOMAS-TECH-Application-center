@@ -38,6 +38,21 @@ jobs:
             --build-arg NEXT_PUBLIC_BUSINESS_TIME_ZONE=Asia/Bangkok \
             --build-arg SITE_ORIGIN=https://ci-check.example.com
 
+      - name: Smoke-test both images on Bun
+        # The images carry Bun only (no Node), so this proves the API modules load and the
+        # frontend serves a page with the runtime production uses.
+        run: |
+          docker run --rm iot-team-center-api:ci-check bun -e 'await import("./dist/src/startup-migrations.js"); console.log("api modules load")'
+          docker run -d --name fe-smoke -p 3300:3000 iot-team-center-frontend:ci-check
+          for attempt in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3300/ || true)
+            [ "$code" = 200 ] && break
+            sleep 1
+          done
+          docker logs fe-smoke | tail -20
+          docker rm -f fe-smoke
+          [ "$code" = 200 ] || { echo "frontend answered $code"; exit 1; }
+
   node-sql-integration:
     name: Node XLSX, overhead and handover SQL acceptance
     runs-on: ubuntu-24.04
@@ -59,12 +74,12 @@ jobs:
           - 1433:1433
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
+      - uses: oven-sh/setup-bun@v2
         with:
-          node-version: 24.x
+          bun-version: 1.4.5
       - name: Install Node API dependencies
         working-directory: backend-node
-        run: npm ci
+        run: bun install --frozen-lockfile
       - name: Install SQL Server command-line tools
         shell: bash
         run: |
@@ -87,4 +102,4 @@ jobs:
           exit 1
       - name: Run Node SQL acceptance without skips
         working-directory: backend-node
-        run: npm run test:sql-integration
+        run: bun run test:sql-integration

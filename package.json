@@ -3,20 +3,17 @@
   "version": "0.1.0",
   "private": true,
   "engines": {
-    "node": ">=22.13.0"
+    "bun": ">=1.4.5"
   },
   "scripts": {
-    "prepare:ocr": "node scripts/prepare-ocr-assets.mjs",
-    "predev": "npm run prepare:ocr",
-    "prebuild": "node scripts/guard-running-frontend-build.mjs && npm run prepare:ocr",
-    "prebuild:local": "node scripts/guard-running-frontend-build.mjs && npm run prepare:ocr",
-    "dev": "vinext dev",
-    "build": "node scripts/validate-production-env.mjs && vinext build",
-    "build:local": "vinext build",
-    "start": "vinext start",
-    "test": "npm run lint && npm run typecheck && node --test --test-isolation=none tests/*.test.mjs",
-    "typecheck": "tsc --noEmit",
-    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern .vercel"
+    "prepare:ocr": "bun scripts/prepare-ocr-assets.mjs",
+    "dev": "bun run prepare:ocr && bun --bun vinext dev",
+    "build": "bun scripts/guard-running-frontend-build.mjs && bun run prepare:ocr && bun scripts/validate-production-env.mjs && bun --bun vinext build",
+    "build:local": "bun scripts/guard-running-frontend-build.mjs && bun run prepare:ocr && bun --bun vinext build",
+    "start": "bun --bun vinext start",
+    "test": "bun run lint && bun run typecheck && bun test ./tests/",
+    "typecheck": "bun --bun tsc --noEmit",
+    "lint": "bun --bun eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern .vercel"
   },
   "dependencies": {
     "@azure/msal-browser": "5.20.0",

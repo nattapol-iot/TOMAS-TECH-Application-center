@@ -32,7 +32,7 @@ try {
  Invoke-CrmSql -SqlArguments @('-d',$databaseName,'-i','database/migrations/063_crm_sales_evidence.sql')
  $env:CRM_TEST_SERVER=$serverName
  $env:CRM_TEST_DATABASE=$databaseName
- & node --import ./backend-node/node_modules/tsx/dist/loader.mjs backend-node/tests/crm-sql-integration.ts
+ & bun backend-node/tests/crm-sql-integration.ts
  if($LASTEXITCODE -ne 0) { throw 'CRM API / SQL integration failed.' }
 }
 finally {

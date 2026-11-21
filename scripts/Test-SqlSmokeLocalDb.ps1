@@ -35,7 +35,7 @@ try {
   foreach($smoke in $smokes) {
     Push-Location -LiteralPath (Join-Path $repoRoot 'backend-node')
     try {
-      $text = & node --import tsx ("tests/sql/" + $smoke.Name)
+      $text = & bun ("tests/sql/" + $smoke.Name)
       if($LASTEXITCODE -ne 0) { throw "Could not generate $($smoke.Name)." }
     } finally { Pop-Location }
     $path = Join-Path ([IO.Path]::GetTempPath()) ('iot-smoke-' + $suffix + '-' + $smoke.BaseName + '.sql')

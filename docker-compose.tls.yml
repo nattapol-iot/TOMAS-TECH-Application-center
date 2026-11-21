@@ -33,7 +33,7 @@ services:
       SiteMonitor__AgentPublicUrl: ${SITE_MONITOR_AGENT_URL:-}
 
   frontend:
-    # The dev file bind-mounts the checkout and runs 'npm run dev', and a Vite dev server
+    # The dev file bind-mounts the checkout and runs 'bun run dev', and a Vite dev server
     # answers any path under the project root -- source, docs and /demo -- without sign-in.
     # Here the image is built from ./Dockerfile and serves only the compiled dist/.
     build:
@@ -57,7 +57,7 @@ services:
     # Like the api and caddy: back by itself when the colima VM restarts. Without it the site
     # answered 502 after the Mac mini's reboot on 2026-11-15 while everything else came back.
     restart: unless-stopped
-    # 'vinext start' serves prebuilt files; the 3g in the dev file was for 'npm ci' plus Vite.
+    # 'vinext start' serves prebuilt files; the 3g in the dev file was for 'bun install' plus Vite.
     mem_limit: 1g
 
   caddy:

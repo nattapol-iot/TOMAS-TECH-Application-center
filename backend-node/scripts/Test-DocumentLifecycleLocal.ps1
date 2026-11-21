@@ -45,7 +45,7 @@ try {
   $env:LIFECYCLE_TEST_CONNECTION=$builder.ConnectionString
   $env:LIFECYCLE_TEST_DATABASE=$databaseName
   Push-Location (Join-Path $repository 'backend-node')
-  try { node --import tsx tests/document-lifecycle-local-integration.mjs; if ($LASTEXITCODE -ne 0) { throw 'Local SQL integration failed.' } }
+  try { bun tests/document-lifecycle-local-integration.mjs; if ($LASTEXITCODE -ne 0) { throw 'Local SQL integration failed.' } }
   finally { Pop-Location }
 } finally {
   $env:LIFECYCLE_TEST_CONNECTION=$null; $env:LIFECYCLE_TEST_DATABASE=$null; $password=$null

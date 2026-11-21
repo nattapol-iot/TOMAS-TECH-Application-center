@@ -6,7 +6,7 @@ const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf
 
 test("a deploy backs the database up before the first pending migration (owner 2026-11-20)", () => {
   const deploy = read("scripts/macos/deploy.sh");
-  assert.ok(deploy.includes("compose run --rm --no-deps -e ConnectionStrings__Migrations -e Database__BackupBeforeMigrations=true api node"));
+  assert.ok(deploy.includes("compose run --rm --no-deps -e ConnectionStrings__Migrations -e Database__BackupBeforeMigrations=true api bun"));
   const runner = read("backend-node/src/migrate.ts");
   // After the pending list is known, before the loop that applies it; a failed backup throws, so nothing is applied.
   const pending = runner.indexOf("pending migration(s):"), backup = runner.indexOf("await backupBeforeMigrations("), apply = runner.indexOf("for (const file of pending) {");

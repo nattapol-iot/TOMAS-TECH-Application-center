@@ -34,6 +34,7 @@ import { fileURLToPath } from "node:url";
 import sql from "mssql";
 import type { AppConfig } from "./config.js";
 import { backupBeforeMigrations } from "./migration-backup.js";
+import { encryptedTransport } from "./sql-transport.js";
 import {
   validateAppliedMigrationIdentities,
   validateMigrationFiles,
@@ -51,8 +52,7 @@ function connectionConfig(config: AppConfig["database"]): sql.config {
   const parsed = sql.ConnectionPool.parseConnectionString(config.migrationConnectionString ?? config.connectionString);
   parsed.options = {
     ...parsed.options,
-    encrypt: true,
-    trustServerCertificate: config.trustServerCertificate,
+    ...encryptedTransport(parsed.server, config.trustServerCertificate),
     useUTC: true,
     appName: "IoTTeamCenter.NodeApi.Migrate",
   } as NonNullable<sql.config["options"]>;

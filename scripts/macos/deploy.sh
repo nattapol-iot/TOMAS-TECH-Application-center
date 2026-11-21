@@ -187,7 +187,7 @@ migrations_connection="${migrations_connection%\"}"; migrations_connection="${mi
 export ConnectionStrings__Migrations="$migrations_connection"
 # Database__BackupBeforeMigrations: when a migration is pending, the runner first writes a COPY_ONLY backup to the SQL Server's
 # default backup directory and stops, with nothing migrated, if it cannot (owner rule 2026-11-20). No pending migration, no backup.
-compose run --rm --no-deps -e ConnectionStrings__Migrations -e Database__BackupBeforeMigrations=true api node --input-type=module -e 'import { loadConfig } from "./dist/src/config.js"; import { runConfiguredMigrations } from "./dist/src/startup-migrations.js"; const config = loadConfig(); if (config.database.runMigrations === false) throw new Error("Deployment requires database migrations to be enabled"); await runConfiguredMigrations(config, console.log);'
+compose run --rm --no-deps -e ConnectionStrings__Migrations -e Database__BackupBeforeMigrations=true api bun -e 'const { loadConfig } = await import("./dist/src/config.js"); const { runConfiguredMigrations } = await import("./dist/src/startup-migrations.js"); const config = loadConfig(); if (config.database.runMigrations === false) throw new Error("Deployment requires database migrations to be enabled"); await runConfiguredMigrations(config, console.log);'
 unset ConnectionStrings__Migrations
 # A Caddyfile Caddy cannot load would leave every site down after the recreate below; check it
 # first, with the same image and environment, while the running containers still serve.
