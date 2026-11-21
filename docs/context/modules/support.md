@@ -4,7 +4,7 @@
 
 แจ้งปัญหา ticket การตอบรับ คู่มือ และบทสอนแบบคลิกตามบนหน้าจอจริงพร้อมความคืบหน้าของทีม
 
-Evidence: snapshot `4875a8f0`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
+Evidence: snapshot `d7fc61b5`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
 
 ## Read only the operation you change
 
@@ -17,17 +17,20 @@ Shared screens contain other modules: use the symbol and line range instead of r
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `useCopy` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 14–14 |
-| `SelectField` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 15–15 |
-| `PageButtons` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 16–16 |
-| `SupportDialog` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 17–21 |
-| `SupportCreateDialog` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 23–48 |
-| `SupportCenter` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 50–69 |
-| `isImage` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 72–72 |
-| `SupportImage` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 73–81 |
-| `SupportTicketView` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 82–110 |
-| `SupportActionForm` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 113–120 |
-| `SupportMembers` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 122–125 |
+| `useCopy` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 35–38 |
+| `kilobytes` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 39–39 |
+| `StatusBadge` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 41–44 |
+| `SelectField` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 46–51 |
+| `SupportDialog` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 54–72 |
+| `ErrorNote` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 74–76 |
+| `SupportCreateDialog` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 78–149 |
+| `SupportCenter` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 151–240 |
+| `isImage` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 243–243 |
+| `SupportImage` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 244–259 |
+| `MoreActions` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 264–284 |
+| `SupportTicketView` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 286–429 |
+| `SupportActionForm` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 432–470 |
+| `SupportMembers` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 472–502 |
 | `employeeManualLabel` | [app/system/production/EmployeeManualScreen.tsx](<../../../app/system/production/EmployeeManualScreen.tsx>) | 55–55 |
 | `EmployeeManualScreen` | [app/system/production/EmployeeManualScreen.tsx](<../../../app/system/production/EmployeeManualScreen.tsx>) | 57–101 |
 | `RUN_KEY` | [app/system/production/GuideLayer.tsx](<../../../app/system/production/GuideLayer.tsx>) | 92–92 |
@@ -67,6 +70,7 @@ Shared screens contain other modules: use the symbol and line range instead of r
 
 - [tests/employee-manual.test.mjs](<../../../tests/employee-manual.test.mjs>)
 - [tests/guides.test.mjs](<../../../tests/guides.test.mjs>)
+- [tests/support-pegasus.test.mjs](<../../../tests/support-pegasus.test.mjs>)
 - [backend-node/tests/support-rules.test.ts](<../../../backend-node/tests/support-rules.test.ts>)
 - [backend-node/tests/user-guides.test.ts](<../../../backend-node/tests/user-guides.test.ts>)
 

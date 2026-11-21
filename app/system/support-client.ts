@@ -6,7 +6,8 @@ export type SupportSummary={id:number;ticketNo:string;reporterId:number;reporter
 export type SupportRecognition={points:number;useful:boolean;detailed:boolean;actionable:boolean;message:string;evaluatorName:string;updatedAt:string;rowVersion:string};
 export type SupportTicket=SupportSummary & {description:string;context:Record<string,string>;duplicateOf:number|null;events:{id:number;kind:string;body:string;internal:boolean;details:Record<string,unknown>;createdAt:string;actorName:string}[];attachments:{id:number;name:string;contentType:string;sizeBytes:number;internal:boolean;createdAt:string;uploadedByName:string}[];recognition:SupportRecognition|null;permissions:{own:boolean;staff:boolean;internal:boolean;operate:boolean;assign:boolean;claim:boolean;award:boolean;adjust:boolean;comment:boolean}};
 export type ContributionPage={points:number;total:number;page:number;pageSize:number;items:{ticketId:number;ticketNo:string;points:number;message:string;updatedAt:string;evaluatorName:string}[]};
-export type SupportPage={items:SupportSummary[];page:number;pageSize:number;total:number};
+/** statusCounts: tickets per status over every row of the other filters (search, category, assignee), not only this page. */
+export type SupportPage={items:SupportSummary[];page:number;pageSize:number;total:number;statusCounts?:Record<string,number>};
 export const supportError=(error:unknown,lang:Lang)=>supportLabel(error instanceof ApiClientError?(error.status===409?'Conflict':error.status===404?'Unavailable':error.status===403?'Not allowed':[400,413,415,422].includes(error.status)?'Invalid input':'Failed'):'Failed',lang);
 export const supportRead=(id:number)=>apiRequest<SupportTicket>(`/api/v1/support/tickets/${id}`);
 export const supportMeta=()=>apiRequest<SupportMeta>('/api/v1/support/bootstrap');
