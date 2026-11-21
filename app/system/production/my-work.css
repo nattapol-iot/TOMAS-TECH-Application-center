@@ -5,45 +5,6 @@
   margin-bottom: 10px;
 }
 
-.my-work-source-filter {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-  margin: -2px 0 12px;
-  padding: 9px 10px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-md);
-  background: var(--n-25);
-}
-
-.my-work-source-filter button {
-  min-height: 30px;
-  padding: 0 11px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-pill);
-  background: var(--surface);
-  color: var(--ink-soft);
-  font-size: var(--fs-2xs);
-  font-weight: 650;
-  cursor: pointer;
-}
-
-.my-work-source-filter button:hover,
-.my-work-source-filter button.active {
-  border-color: var(--blue-line);
-  background: var(--blue-soft);
-  color: var(--blue-text);
-}
-
-.my-work-source-filter button:disabled {
-  border-color: transparent;
-  background: transparent;
-  color: var(--n-400);
-  cursor: not-allowed;
-  opacity: .62;
-}
-
 .estimate-work-groups,
 .new-assignment-list {
   display: grid;
@@ -564,4 +525,104 @@
 @media (max-width: 720px) {
   .plan-project-picker { min-width: 0; width: 100%; }
   .blocked-reason input { min-width: 0; width: 100%; }
+}
+
+/* ── My Work in the Pegasus look (owner 2026-11-21, /pegasus-design) ──────────────────────────────────────────
+   pegasus-skin.css styles the shared pieces under .pg-skin: page header, summary bar (C.2), tabs (D.6), toolbar,
+   panels, buttons, badges and dialogs. These rules fit the blocks only My Work has: one hairline border, 8px radius,
+   the urgency as a 3px left edge in the status colours (B.1: late red, blocked amber, waiting violet), 14px titles. */
+.my-work-pg .my-work-summary .pg-cell.red .pg-cell-value { color: var(--pg-red-fg); }
+.my-work-pg .my-work-summary .pg-cell.amber .pg-cell-value { color: var(--pg-amber-fg); }
+.my-work-pg .my-work-summary .pg-cell.violet .pg-cell-value { color: var(--pg-violet-fg); }
+.my-work-pg .my-work-summary .pg-cell[aria-pressed="true"] .pg-cell-value { color: var(--pg-primary); }
+@media (min-width: 640px) and (max-width: 1023px) {
+  .my-work-pg .my-work-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+/* Toolbar on the canvas: the filters, then the one search box at the right (0.3). */
+.my-work-pg .my-work-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.my-work-pg .my-work-toolbar .select-field { flex: 0 1 200px; min-width: 150px; }
+.my-work-pg .my-work-toolbar .my-work-project-filter { flex-basis: 280px; }
+.my-work-pg .my-work-toolbar .select-field select { width: 100%; max-width: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.my-work-pg .my-work-toolbar .search-field { margin-left: auto; }
+
+/* Work groups: the header is the toggle (chevron, reference, name), the figures one muted line under it. */
+.my-work-pg .work-group-list { gap: 8px; padding: 12px; }
+.my-work-pg .schedule-work-group,
+.my-work-pg .estimate-work-group {
+  border: 1px solid var(--pg-border);
+  border-left: 3px solid var(--pg-border);
+  border-radius: 8px;
+  background: var(--pg-background);
+  box-shadow: none;
+}
+.my-work-pg :is(.schedule-work-group, .estimate-work-group).urgency-0 { border-left-color: var(--pg-amber-fg); }
+.my-work-pg :is(.schedule-work-group, .estimate-work-group).urgency-1 { border-left-color: var(--pg-red-fg); }
+.my-work-pg :is(.schedule-work-group, .estimate-work-group).urgency-2 { border-left-color: var(--pg-slate-fg); }
+.my-work-pg :is(.schedule-work-group, .estimate-work-group).urgency-3 { border-left-color: var(--pg-primary); }
+.my-work-pg :is(.schedule-work-group, .estimate-work-group).urgency-4 { border-left-color: var(--pg-violet-fg); }
+.my-work-pg .schedule-work-group-head,
+.my-work-pg .estimate-work-group-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px 4px; border: 0; background: none; }
+.my-work-pg .schedule-work-group-toggle {
+  display: flex; align-items: flex-start; gap: 8px; flex: 1 1 auto; min-width: 0;
+  margin: -4px; padding: 4px; border: 0; border-radius: 6px; background: none;
+  color: inherit; font: inherit; text-align: left; cursor: pointer;
+  transition: background-color 150ms var(--pg-ease);
+}
+.my-work-pg .schedule-work-group-toggle:hover { background: var(--pg-row-hover); }
+.my-work-pg .schedule-work-group-toggle:focus-visible { outline: none; box-shadow: var(--pg-focus); }
+.my-work-pg .schedule-work-group-toggle > svg { flex: none; width: 16px; height: 16px; margin-top: 3px; color: var(--pg-muted-fg); }
+.my-work-pg .schedule-work-group-title { display: grid; gap: 2px; min-width: 0; }
+.my-work-pg .schedule-work-group-title .estimate-work-reference { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; color: var(--pg-muted-fg); font-size: 12px; }
+.my-work-pg .schedule-work-group-title .estimate-work-reference strong { color: var(--pg-foreground); font-weight: 600; }
+.my-work-pg .schedule-work-group-name { overflow: hidden; color: var(--pg-foreground); font-size: 14px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.my-work-pg .schedule-work-group-project { overflow: hidden; color: var(--pg-muted-fg); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.my-work-pg .schedule-work-group-actions,
+.my-work-pg .estimate-work-group-actions { display: flex; flex: none; align-items: center; gap: 8px; flex-wrap: nowrap; }
+.my-work-pg .work-group-focus { flex-basis: auto; max-width: 380px; color: var(--pg-muted-fg); font-size: 12px; text-align: right; }
+.my-work-pg .work-group-focus .pg-doclink { font-size: 12px; }
+.my-work-pg .work-group-metrics {
+  display: flex; flex-wrap: wrap; gap: 2px 14px;
+  padding: 0 12px 10px 36px; border: 0; background: none;
+  color: var(--pg-muted-fg); font-size: 12px; font-variant-numeric: tabular-nums;
+}
+.my-work-pg .work-group-metrics > span { display: inline; min-width: 0; padding: 0; background: none; color: inherit; font-size: inherit; }
+.my-work-pg .work-group-metrics .danger-text { color: var(--pg-red-fg); font-weight: 600; }
+.my-work-pg .work-group-metrics .warning-text { color: var(--pg-amber-fg); font-weight: 600; }
+.my-work-pg .schedule-work-group-items,
+.my-work-pg .estimate-work-sections { gap: 8px; padding: 10px 12px 12px; border-top: 1px solid var(--pg-divider); background: color-mix(in srgb, var(--pg-muted) 60%, var(--pg-background)); }
+
+/* A task inside a group: the same card language. */
+.my-work-pg .my-task-card { border: 1px solid var(--pg-border); border-left: 3px solid var(--pg-border); border-radius: 8px; background: var(--pg-background); box-shadow: none; }
+.my-work-pg .my-task-card.late { border-left-color: var(--pg-red-fg); }
+.my-work-pg .my-task-card.blocked { border-left-color: var(--pg-amber-fg); }
+.my-work-pg .my-task-card h3 { color: var(--pg-foreground); font-size: 14px; font-weight: 600; }
+.my-work-pg .my-task-meta { color: var(--pg-muted-fg); font-size: 12px; }
+
+/* My hours (WorkDaysPanel) in the same frame. */
+.my-work-pg .work-days { margin: 0; border-color: var(--pg-divider); border-radius: 8px; background: var(--pg-background); }
+.my-work-pg .work-days-title { color: var(--pg-foreground); font-size: 14px; font-weight: 600; }
+.my-work-pg .work-days-title svg { color: var(--pg-primary); }
+.my-work-pg .work-days-hint { color: var(--pg-muted-fg); }
+.my-work-pg .work-day { border-color: var(--pg-border); border-radius: 6px; }
+.my-work-pg .work-day:hover { border-color: color-mix(in srgb, var(--pg-primary) 40%, transparent); }
+.my-work-pg .work-day.confirmed { border-color: color-mix(in srgb, var(--pg-emerald-fg) 30%, transparent); background: var(--pg-success-bg); }
+.my-work-pg .work-day.confirmed .work-day-state { color: var(--pg-emerald-fg); }
+.my-work-pg .work-day.toConfirm { border-color: color-mix(in srgb, var(--pg-primary) 30%, transparent); background: var(--pg-primary-10); }
+.my-work-pg .work-day.toConfirm .work-day-state { color: var(--pg-primary); }
+.my-work-pg .work-day.empty { border-color: color-mix(in srgb, var(--pg-amber-fg) 30%, transparent); background: var(--pg-warning-bg); }
+.my-work-pg .work-day.empty .work-day-state { color: var(--pg-amber-fg); }
+.my-work-pg .work-day.off, .my-work-pg .work-day.future, .my-work-pg .work-day.closed { background: color-mix(in srgb, var(--pg-muted) 50%, var(--pg-background)); }
+.my-work-pg .work-day.today { box-shadow: inset 0 0 0 1px var(--pg-primary); }
+
+/* Phone width: the toolbar fields and the group header stack. */
+@media (max-width: 720px) {
+  .my-work-pg .my-work-toolbar .select-field,
+  .my-work-pg .my-work-toolbar .search-field { flex: 1 1 100%; min-width: 0; margin-left: 0; }
+  .my-work-pg .schedule-work-group-head,
+  .my-work-pg .estimate-work-group-head { flex-direction: column; align-items: stretch; gap: 6px; }
+  .my-work-pg .schedule-work-group-actions,
+  .my-work-pg .estimate-work-group-actions { justify-content: space-between; flex-wrap: wrap; padding-left: 24px; }
+  .my-work-pg .work-group-focus { max-width: none; text-align: left; }
+  .my-work-pg .work-group-metrics { padding-left: 36px; }
 }

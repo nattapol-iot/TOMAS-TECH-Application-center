@@ -4,7 +4,7 @@
 
 โปรแกรมและไฟล์ของแผนกจากโฟลเดอร์ download-center บน NAS และ Repository source code ของแต่ละโครงการ (tree โค้ด README ประวัติ zip) จำนวนครั้งที่ดาวน์โหลด และ Skill Hub ติดตั้ง skill ของ Claude Code / Codex
 
-Evidence: snapshot `08cd6028`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
+Evidence: snapshot `e57fb544`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
 
 ## Read only the operation you change
 
@@ -19,10 +19,10 @@ Shared screens contain other modules: use the symbol and line range instead of r
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `formatSize` | [app/system/production/DownloadCenterScreen.tsx](<../../../app/system/production/DownloadCenterScreen.tsx>) | 16–21 |
-| `matches` | [app/system/production/DownloadCenterScreen.tsx](<../../../app/system/production/DownloadCenterScreen.tsx>) | 23–27 |
-| `loadErrorText` | [app/system/production/DownloadCenterScreen.tsx](<../../../app/system/production/DownloadCenterScreen.tsx>) | 30–34 |
-| `DownloadCenterScreen` | [app/system/production/DownloadCenterScreen.tsx](<../../../app/system/production/DownloadCenterScreen.tsx>) | 41–167 |
+| `formatSize` | [app/system/production/DownloadCenterScreen.tsx](<../../../app/system/production/DownloadCenterScreen.tsx>) | 13–18 |
+| `matches` | [app/system/production/DownloadCenterScreen.tsx](<../../../app/system/production/DownloadCenterScreen.tsx>) | 20–24 |
+| `loadErrorText` | [app/system/production/DownloadCenterScreen.tsx](<../../../app/system/production/DownloadCenterScreen.tsx>) | 27–31 |
+| `DownloadCenterScreen` | [app/system/production/DownloadCenterScreen.tsx](<../../../app/system/production/DownloadCenterScreen.tsx>) | 38–161 |
 | `errorText` | [app/system/production/SourceRepositories.tsx](<../../../app/system/production/SourceRepositories.tsx>) | 22–24 |
 | `formatRepositorySize` | [app/system/production/SourceRepositories.tsx](<../../../app/system/production/SourceRepositories.tsx>) | 26–31 |
 | `projectLabel` | [app/system/production/SourceRepositories.tsx](<../../../app/system/production/SourceRepositories.tsx>) | 33–36 |
@@ -56,8 +56,6 @@ Shared screens contain other modules: use the symbol and line range instead of r
 - [app/system/ui.tsx](<../../../app/system/ui.tsx>)
 - [app/system/production/SourceRepositories.tsx](<../../../app/system/production/SourceRepositories.tsx>)
 - [app/system/production/SkillHub.tsx](<../../../app/system/production/SkillHub.tsx>)
-- [app/system/production/pegasus-skin.css](<../../../app/system/production/pegasus-skin.css>)
-- [app/system/production/pegasus-screens.css](<../../../app/system/production/pegasus-screens.css>)
 - [app/system/dialogs.ts](<../../../app/system/dialogs.ts>)
 - [app/system/screen-link.ts](<../../../app/system/screen-link.ts>)
 

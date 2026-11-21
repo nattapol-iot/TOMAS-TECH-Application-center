@@ -83,7 +83,7 @@ test("the day dialog: lines, what may be added, problems, the body sent and Back
 test("My Work shows the hours strip above its counts, and the panel talks to the three work-day routes", () => {
   const screens = read("app/system/production/PlanningPricingScreens.tsx");
   assert.match(screens, /import \{ WorkDaysPanel \} from "\.\/WorkDaysPanel";/);
-  assert.match(screens, /<WorkDaysPanel notify=\{notify\} \/>\n\s+<section className="my-work-kpis"/);
+  assert.match(screens, /<WorkDaysPanel notify=\{notify\} \/>\n\s+<div className="pg-summary my-work-summary"/);
   const panel = read("app/system/production/WorkDaysPanel.tsx");
   assert.match(panel, /`\/api\/v1\/me\/work-days\?from=\$\{monday\}&to=\$\{addDays\(monday, 6\)\}`/);
   assert.match(panel, /"\/api\/v1\/me\/work-days\/confirm", \{ method: "POST"/);
