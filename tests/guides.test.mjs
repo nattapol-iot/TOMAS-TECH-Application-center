@@ -97,6 +97,8 @@ test("the catalog holds the guides the owner chose, in the order the work happen
     // Starring menu entries into the Favourites section (2026-11-10).
     "menu-favorites",
     "support-ticket",
+    // Following your tickets on Report & Track Issues in the Pegasus look (2026-11-21).
+    "support-follow",
   ]);
   const copies = [];
   for (const guide of GUIDES) {
@@ -120,15 +122,15 @@ test("the catalog holds the guides the owner chose, in the order the work happen
 
 test("a guide is offered only to people who can do the task", () => {
   // Everyone can download files, star menu entries and report a problem.
-  assert.deepEqual(guidesFor([]).map((guide) => guide.id), ["downloads-skill", "menu-favorites", "support-ticket"]);
-  assert.deepEqual(guidesFor(["inquiry.read", "estimate.write"]).map((guide) => guide.id), ["estimate-create", "downloads-skill", "menu-favorites", "support-ticket"]);
+  assert.deepEqual(guidesFor([]).map((guide) => guide.id), ["downloads-skill", "menu-favorites", "support-ticket", "support-follow"]);
+  assert.deepEqual(guidesFor(["inquiry.read", "estimate.write"]).map((guide) => guide.id), ["estimate-create", "downloads-skill", "menu-favorites", "support-ticket", "support-follow"]);
   assert.ok(guidesFor(["inquiry.write", "inquiry.read", "intake.read", "intake.write"]).some((guide) => guide.id === "site-visit-request"));
   // Engineers hold inquiry.write since 094_engineer_inquiry_write.sql: they receive RFQs and attach files.
-  assert.deepEqual(guidesFor(["inquiry.write"]).map((guide) => guide.id), ["inquiry-create", "inquiry-attach", "downloads-skill", "menu-favorites", "support-ticket"]);
+  assert.deepEqual(guidesFor(["inquiry.write"]).map((guide) => guide.id), ["inquiry-create", "inquiry-attach", "downloads-skill", "menu-favorites", "support-ticket", "support-follow"]);
   // An engineer reads CRM and logs activities (053_crm.sql); sales also write deals and send them for estimating.
-  assert.deepEqual(guidesFor(["crm.read", "crm.activity.write"]).map((guide) => guide.id), ["crm-activity-followup", "downloads-skill", "menu-favorites", "support-ticket"]);
+  assert.deepEqual(guidesFor(["crm.read", "crm.activity.write"]).map((guide) => guide.id), ["crm-activity-followup", "downloads-skill", "menu-favorites", "support-ticket", "support-follow"]);
   assert.deepEqual(guidesFor(["crm.read", "crm.write", "crm.activity.write", "crm.convert"]).map((guide) => guide.id),
-    ["crm-deal-create", "crm-activity-followup", "crm-send-estimate", "crm-proposal-won", "downloads-skill", "menu-favorites", "support-ticket"]);
+    ["crm-deal-create", "crm-activity-followup", "crm-send-estimate", "crm-proposal-won", "downloads-skill", "menu-favorites", "support-ticket", "support-follow"]);
   // A planner sees the plan guide; a head who approves PRs sees the approval guide.
   assert.ok(guidesFor(["schedule.read", "schedule.plan"]).some((guide) => guide.id === "project-plan"));
   assert.ok(guidesFor(["procurement.approve"]).some((guide) => guide.id === "pr-approve"));

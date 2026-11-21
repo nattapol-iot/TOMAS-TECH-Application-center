@@ -2,7 +2,7 @@
 
 [Module](../modules/support.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `4875a8f0`; generated, do not edit. [backend-node/src/routes/support.ts](<../../../backend-node/src/routes/support.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `13567f33`; generated, do not edit. [backend-node/src/routes/support.ts](<../../../backend-node/src/routes/support.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
@@ -10,18 +10,18 @@ Evidence: source snapshot `4875a8f0`; generated, do not edit. [backend-node/src/
 |---|---|---|
 | GET | `/api/v1/support/bootstrap` | 17–22 |
 | POST | `/api/v1/support/members` | 23–41 |
-| GET | `/api/v1/support/tickets` | 42–51 |
-| GET | `/api/v1/me/support-contributions` | 52–58 |
-| POST | `/api/v1/support/tickets` | 59–75 |
-| GET | `/api/v1/support/tickets/:id` | 76–79 |
-| POST | `/api/v1/support/tickets/:id/attachments` | 135–159 |
-| GET | `/api/v1/support/tickets/:id/attachments/:attachmentId/content` | 160–164 |
+| GET | `/api/v1/support/tickets` | 42–56 |
+| GET | `/api/v1/me/support-contributions` | 57–63 |
+| POST | `/api/v1/support/tickets` | 64–80 |
+| GET | `/api/v1/support/tickets/:id` | 81–84 |
+| POST | `/api/v1/support/tickets/:id/attachments` | 140–164 |
+| GET | `/api/v1/support/tickets/:id/attachments/:attachmentId/content` | 165–169 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `registerSupportRoutes` | [backend-node/src/routes/support.ts](<../../../backend-node/src/routes/support.ts>) | 15–165 |
+| `registerSupportRoutes` | [backend-node/src/routes/support.ts](<../../../backend-node/src/routes/support.ts>) | 15–170 |
 
 ## Direct local dependencies
 

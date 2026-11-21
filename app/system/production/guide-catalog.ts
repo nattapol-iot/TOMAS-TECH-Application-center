@@ -2883,21 +2883,21 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
+        target: "support.subject", action: "next", view: "support",
+        title: { th: "หัวข้อ", en: "Subject", jp: "件名" },
+        body: {
+          th: "ช่องแรกของฟอร์ม: สั้นๆ ว่าเกิดอะไร เช่น 'กดบันทึก PR แล้วขึ้น error' อย่างน้อย 5 ตัวอักษร",
+          en: "The first field: a short line on what happened, e.g. 'Saving a PR shows an error'. At least 5 characters.",
+          jp: "最初の項目です。何が起きたかを短く書きます(例:「PR保存時にエラー」)。5文字以上です。",
+        },
+      },
+      {
         target: "support.kind", action: "next", view: "support",
         title: { th: "ประเภทและผลกระทบ", en: "Category and impact", jp: "カテゴリと影響" },
         body: {
           th: "เลือกว่าเป็นเรื่องของแอปหรือเรื่องอื่น และกระทบงานแค่ไหน ยังทำงานได้ ติดบางส่วน หรือทำงานไม่ได้",
           en: "Say whether it is about the app or something else, and how much it affects your work.",
           jp: "アプリに関することかその他か、業務への影響の大きさを選びます。",
-        },
-      },
-      {
-        target: "support.subject", action: "next", view: "support",
-        title: { th: "หัวข้อ", en: "Subject", jp: "件名" },
-        body: {
-          th: "สั้นๆ ว่าเกิดอะไร เช่น 'กดบันทึก PR แล้วขึ้น error' อย่างน้อย 5 ตัวอักษร",
-          en: "A short line on what happened, e.g. 'Saving a PR shows an error'. At least 5 characters.",
-          jp: "何が起きたかを短く書きます(例:「PR保存時にエラー」)。5文字以上です。",
         },
       },
       {
@@ -2913,9 +2913,9 @@ export const GUIDES: readonly Guide[] = [
         target: "support.attach", action: "next", view: "support",
         title: { th: "แนบรูปหน้าจอ", en: "Attach a screenshot", jp: "スクリーンショットを添付" },
         body: {
-          th: "แนบรูป (PNG, JPG) หรือ PDF ได้สูงสุด 5 ไฟล์ ไฟล์ละไม่เกิน 10 MB",
-          en: "Attach up to 5 images (PNG, JPG) or PDFs, 10 MB each at most.",
-          jp: "画像(PNG・JPG)またはPDFを最大5件、各10MBまで添付できます。",
+          th: "กดกรอบเส้นประเพื่อเลือกรูป (PNG, JPG) หรือ PDF เลือกเพิ่มได้หลายครั้งรวมสูงสุด 5 ไฟล์ ไฟล์ละไม่เกิน 10 MB กด X ที่ไฟล์เพื่อนำออก",
+          en: "Press the dashed box to choose images (PNG, JPG) or PDFs. You can add more in several goes, up to 5 files of 10 MB each; X takes a file out.",
+          jp: "点線の枠を押して画像(PNG・JPG)またはPDFを選びます。何回かに分けて追加でき、合計5件・各10MBまでです。×でファイルを外せます。",
         },
       },
       {
@@ -2925,6 +2925,72 @@ export const GUIDES: readonly Guide[] = [
           th: "กด 'ส่งเรื่อง' ทีมจะตอบกลับและคุณจะได้รับแจ้งเตือน ติดตามได้ที่ปุ่ม ? บนแถบด้านบน > 'แจ้งปัญหาและติดตาม' ถ้าแค่ฝึก ให้กด 'ปิด' แล้วกด 'จบบทสอน'",
           en: "Press Submit ticket. The team answers and you are notified; follow it under the ? button in the top bar > Report & Track Issues. Only practising? Press Close, then Finish.",
           jp: "「報告を送信」を押すとチームが回答し、通知が届きます。上部バーの「?」>「問題の報告と追跡」で確認できます。練習だけなら「閉じる」を押してから「完了」を押します。",
+        },
+      },
+    ],
+  },
+  {
+    id: "support-follow",
+    area: "tools",
+    title: { th: "ติดตามเรื่องที่แจ้ง", en: "Follow your tickets", jp: "報告の状況を確認" },
+    summary: {
+      th: "เปิด 'แจ้งปัญหาและติดตาม' ดูว่าเรื่องไหนยังเปิดอยู่หรือรอคุณตอบ กดช่องสถานะเพื่อกรอง แล้วเปิดเรื่องเพื่อตอบหรือยืนยันปิดเรื่อง",
+      en: "Open Report & Track Issues, see which tickets are open or wait for your answer, press a status cell to filter, and open a ticket to reply or confirm it is fixed.",
+      jp: "「問題の報告と追跡」を開き、未完了や回答待ちの報告を確認します。状態の欄を押して絞り込み、報告を開いて返信や完了の確認をします。",
+    },
+    minutes: 2,
+    permissions: [],
+    views: ["support"],
+    browse: true,
+    steps: [
+      {
+        target: "nav.help", action: "click", view: "support",
+        title: { th: "กดปุ่ม ?", en: "Press the ? button", jp: "「?」ボタンを押す" },
+        body: {
+          th: "ปุ่ม ? บนแถบด้านบนรวมเรื่องช่วยเหลือไว้ รวมถึงรายการเรื่องที่คุณแจ้ง",
+          en: "The ? button in the top bar holds the help, including the tickets you reported.",
+          jp: "上部バーの「?」ボタンにヘルプがまとまっており、自分の報告一覧もここにあります。",
+        },
+      },
+      {
+        target: "nav.support", action: "click", view: "support",
+        title: { th: "เปิด 'แจ้งปัญหาและติดตาม'", en: "Open Report & Track Issues", jp: "「問題の報告と追跡」を開く" },
+        body: {
+          th: "หน้านี้มีทุกเรื่องที่คุณแจ้ง พร้อมสถานะและคำตอบจากทีม",
+          en: "This screen has every ticket you reported, with its status and the team's answers.",
+          jp: "自分が報告したすべての報告と、その状態・チームの回答が表示されます。",
+        },
+      },
+      {
+        target: "support.tabs", action: "next", view: "support",
+        title: { th: "รายการของฉัน และคิวผู้ดูแล", en: "My tickets and the support queue", jp: "自分の報告と対応待ち一覧" },
+        body: {
+          th: "'รายการของฉัน' คือเรื่องที่คุณแจ้ง ผู้ดูแลจะเห็น 'คิวผู้ดูแล' เพิ่ม ส่วน 'คะแนนขอบคุณของฉัน' คือคะแนนที่ทีมมอบให้คุณ",
+          en: "My tickets are the ones you reported. Support members also see the Support queue; My contribution points lists the thanks the team gave you.",
+          jp: "「自分の報告」は自分が報告したものです。担当者には「対応待ち一覧」も表示されます。「自分の貢献ポイント」はチームから届いた感謝です。",
+        },
+      },
+      {
+        target: "support.summary", action: "next", view: "support",
+        title: { th: "แถบสถานะคือตัวกรอง", en: "The status bar is the filter", jp: "状態バーで絞り込む" },
+        body: {
+          th: "แต่ละช่องนับเรื่องในสถานะนั้นตามคำค้นและตัวกรองที่เลือก กดช่องเพื่อแสดงเฉพาะเรื่องเหล่านั้น 'รอข้อมูลจากผู้แจ้ง' คือทีมรอคำตอบจากคุณ",
+          en: "Each cell counts the tickets in that state for your search and filters; press one to show only those. Waiting for reporter means the team needs your answer.",
+          jp: "各欄は検索・絞り込みに合う報告をその状態ごとに数えます。押すとその報告だけを表示します。「報告者の回答待ち」はチームがあなたの回答を待っています。",
+        },
+      },
+      {
+        target: "support.list", action: "next", view: "support",
+        title: { th: "เปิดเรื่อง", en: "Open a ticket", jp: "報告を開く" },
+        body: {
+          th: "กดเลขเรื่องหรือแถวเพื่อเปิด ในเรื่องนั้นปุ่มสีน้ำเงินคือขั้นถัดไป เช่น 'ยืนยันปิดเรื่อง' หรือ 'รับเรื่องนี้' งานอื่นอยู่ใต้ 'การทำงานอื่น' ตอบทีมได้ที่ช่องตอบด้านล่างการสนทนา",
+          en: "Press the ticket no. or the row to open it. On the ticket the blue button is the next step, such as Confirm closure or Take this ticket; the rest is under More actions. Answer the team in the reply box under the conversation.",
+          jp: "報告番号または行を押して開きます。報告内の青いボタンが次の手順(「完了を確認」「担当として受け付ける」など)で、その他は「その他の操作」にあります。チームへの返信は会話の下の欄に入力します。",
+        },
+        missing: {
+          th: "ยังไม่มีเรื่องในรายการนี้ กดช่อง 'ทั้งหมด' ในแถบสถานะ หรือแจ้งปัญหาก่อน",
+          en: "There is no ticket in this list yet. Press All in the status bar, or report a problem first.",
+          jp: "この一覧にはまだ報告がありません。状態バーの「すべて」を押すか、先に問題を報告してください。",
         },
       },
     ],
