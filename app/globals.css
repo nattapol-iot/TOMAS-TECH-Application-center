@@ -3316,59 +3316,7 @@ tbody tr.row-late:hover td { background: #fadada; }
   padding: 1px 6px;
 }
 
-/* My Work — the urgent queue and the one-click controls */
-.my-work-guidance { margin-bottom: 12px; }
-
-.my-work-kpis {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 10px;
-  margin-bottom: 12px;
-}
-.my-work-stat {
-  position: relative;
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 2px 8px;
-  min-width: 0;
-  padding: 12px 13px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-lg);
-  background: var(--surface);
-  color: var(--ink);
-  text-align: left;
-  cursor: pointer;
-  transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
-}
-.my-work-stat::before {
-  content: "";
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 4px;
-  border-radius: var(--r-lg) 0 0 var(--r-lg);
-  background: var(--n-300);
-}
-.my-work-stat:hover { border-color: var(--n-300); box-shadow: var(--shadow-sm); transform: translateY(-1px); }
-.my-work-stat.active { border-color: var(--blue-line); box-shadow: 0 0 0 2px var(--blue-soft); }
-.my-work-stat > span { overflow: hidden; color: var(--muted); font-size: var(--fs-2xs); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
-.my-work-stat > strong { grid-row: 1 / span 2; grid-column: 2; align-self: center; font-size: var(--fs-xl); font-variant-numeric: tabular-nums; line-height: 1; }
-.my-work-stat > small { color: var(--n-400); font-size: var(--fs-3xs); }
-.my-work-stat.navy::before { background: var(--navy-800); }
-.my-work-stat.red::before { background: var(--red); }
-.my-work-stat.amber::before { background: var(--amber); }
-.my-work-stat.blue::before { background: var(--blue); }
-.my-work-stat.violet::before { background: var(--violet); }
-
-.my-work-toolbar {
-  display: grid;
-  grid-template-columns: minmax(260px, 1fr) minmax(220px, 0.7fr) minmax(150px, 0.35fr);
-  gap: 8px;
-  padding: 12px 14px 8px;
-  background: var(--n-25);
-}
-.my-work-toolbar .search-field,
-.my-work-toolbar .select-field { width: 100%; min-width: 0; background: var(--surface); }
-.my-work-toolbar .select-field select { width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* My Work — the urgent queue and the one-click controls (the page's Pegasus look is in production/my-work.css) */
 
 .my-work-filter-row {
   display: flex;
@@ -3522,15 +3470,7 @@ tbody tr.row-late:hover td { background: #fadada; }
 .pct-strip button:hover { background: var(--blue-soft); color: var(--blue-text); }
 .pct-strip button.on { background: var(--blue); color: #fff; }
 
-@media (max-width: 1100px) {
-  .my-work-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .my-work-toolbar { grid-template-columns: minmax(220px, 1fr) minmax(210px, 0.8fr); }
-}
-
 @media (max-width: 720px) {
-  .my-work-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .my-work-toolbar { grid-template-columns: minmax(0, 1fr); }
-  .my-work-sort { grid-column: auto; }
   .my-work-filter-row { padding-bottom: 10px; }
   .my-work-result-count { margin-left: 4px; }
   .my-task-card-main { grid-template-columns: minmax(0, 1fr); gap: 8px; }
@@ -3539,7 +3479,6 @@ tbody tr.row-late:hover td { background: #fadada; }
 }
 
 @media (max-width: 460px) {
-  .my-work-kpis { grid-template-columns: minmax(0, 1fr); }
   .my-task-actions .btn { flex: 1 1 auto; justify-content: center; }
 }
 

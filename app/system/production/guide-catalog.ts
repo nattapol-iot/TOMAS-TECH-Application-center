@@ -2915,6 +2915,15 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
+        target: "work.summary", action: "next", view: "my-work",
+        title: { th: "แถบสรุปคือตัวกรอง", en: "The summary bar is the filter", jp: "サマリーバーで絞り込む" },
+        body: {
+          th: "แต่ละช่องนับงานของคุณ: งานเปิดทั้งหมด เลยกำหนด ติดปัญหา ต้องอัปเดต ครบกำหนดสัปดาห์นี้ และรอ PM กดช่องไหนรายการด้านล่างจะเหลือเฉพาะงานนั้น ส่วนแหล่งงาน โครงการ การเรียง และช่องค้นหาอยู่ในแถวเดียวกันเหนือรายการ",
+          en: "Each cell counts your work: all open, late, blocked, needs update, due this week and awaiting the PM. Press one and the list below keeps only that work. Source, project, sort and search sit in one row above the list.",
+          jp: "各セルが作業数です：未完了すべて、遅延、ブロック、要更新、今週期限、PM待ち。押すと下の一覧がその作業だけになります。種類・案件・並べ替え・検索は一覧の上の1行にあります。",
+        },
+      },
+      {
         target: "work.group", action: "next", view: "my-work",
         title: { th: "กลุ่มงานของโครงการ", en: "A project's work", jp: "案件ごとの作業" },
         body: {

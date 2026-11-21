@@ -219,8 +219,11 @@ test("schedule screens follow the API's progress and Resource Plan flags", async
   assert.match(screen, /\{item\.managedByResourcePlan \? <ResourcePlanLock \/> : null\}/);
   assert.match(screen, /items\.filter\(offersPersonalTask\)/);
   assert.match(screen, /\{offersPersonalTask\(item\) \? <button/);
-  assert.equal((screen.match(/offersDayRequest\((?:item|focus)\) \? <button/g) ?? []).length, 3, "every Request more days button checks offersDayRequest");
-  assert.equal((screen.match(/!canRequestMoreDays\((?:item|focus)\)/g) ?? []).length, 3, "every Request more days button follows canRequestDays");
+  // The task row offers it twice (the clock beside the progress controls, More actions); the work group header no longer
+  // repeats it since the lean My Work (2026-11-21).
+  assert.equal((screen.match(/offersDayRequest\((?:item|focus)\) \? <button/g) ?? []).length, 2, "every Request more days button checks offersDayRequest");
+  assert.doesNotMatch(screen, /onRequest\(focus\)/);
+  assert.equal((screen.match(/!canRequestMoreDays\((?:item|focus)\)/g) ?? []).length, 2, "every Request more days button follows canRequestDays");
   // The old Resource Plan screen and its loaders live in ResourcePlanningScreen.tsx now.
   assert.doesNotMatch(screen, /function ProductionResourcePlan|function useSchedules|const leafTasks/);
 });

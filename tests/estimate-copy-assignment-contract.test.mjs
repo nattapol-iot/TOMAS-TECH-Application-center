@@ -123,7 +123,9 @@ test("the assignment queue groups sections by estimate revision with one navigat
   assert.match(panel, /sectionName\(record\.sectionCode\)/);
   assert.match(screens, /sortAssignmentQueue\(assignments\.filter\(isActionableAssignment\), todayIso\)/);
   assert.match(panel, /assignmentQueueSummary\(assignments, todayIso\)/);
-  assert.match(panel, /quietDays\(group\.updatedAt\)/);
+  // The group's figures are one line shared with the project groups (WorkGroupMeta, lean My Work 2026-11-21).
+  assert.match(panel, /<WorkGroupMeta count=\{group\.rows\.length\} countLabel="Sections"[^>]*updatedAt=\{group\.updatedAt\}/);
+  assert.match(panel, /quietDays\(updatedAt\)/);
   // Visibility never depends on the engineer changing the status first.
   assert.doesNotMatch(panel, /patchProgress|apiRequest\(/);
 });
