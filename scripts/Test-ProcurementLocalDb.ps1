@@ -158,7 +158,7 @@ try {
     Write-Output 'Checking the PR API on the upgraded database.'
     $env:PROCUREMENT_TEST_SERVER = $serverName
     $env:PROCUREMENT_TEST_DATABASE = $upgradeDatabase
-    & node --import ./backend-node/node_modules/tsx/dist/loader.mjs backend-node/tests/procurement-integration.ts
+    & bun backend-node/tests/procurement-integration.ts
     if ($LASTEXITCODE -ne 0) { throw 'Procurement API / SQL integration failed.' }
 
     $freshRunner = Get-Content -LiteralPath 'database/scripts/020_deploy_fresh_database.sql' -Raw

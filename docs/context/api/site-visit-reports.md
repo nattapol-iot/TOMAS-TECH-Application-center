@@ -2,7 +2,7 @@
 
 [Module](../modules/site-visit.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `e4b3da86`; generated, do not edit. [backend-node/src/routes/site-visit-reports.ts](<../../../backend-node/src/routes/site-visit-reports.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `3577fb4b`; generated, do not edit. [backend-node/src/routes/site-visit-reports.ts](<../../../backend-node/src/routes/site-visit-reports.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 

@@ -27,17 +27,17 @@ The owner's rule (2026-11-02): a new feature or function ships with its How-to g
 2. Mark every element a step points at: `data-guide="area.thing"` on the element, or the `guide` prop on `Field`, `Panel` or `SearchInput`. Tabs are reached as `[data-tab="id"]`.
 3. A redesign keeps the marks, or moves them to the new element. Do not delete a step because its button moved.
 4. A new menu screen needs a guide, or a one-line reason in `NO_GUIDE`.
-5. Run `node --test tests/guides.test.mjs`. It checks every target, every language, and every menu screen.
+5. Run `bun test ./tests/guides.test.mjs`. It checks every target, every language, and every menu screen.
 
 ## Focused verification
 
-Read current package.json scripts first. Root `npm test` currently runs lint, typecheck and root tests; it does **not** build. The command definition is the evidence for what actually runs.
+Read current package.json scripts first. Root `bun run test` currently runs lint, typecheck and root tests; it does **not** build. The command definition is the evidence for what actually runs.
 
 ```powershell
 # One root test; select the actual filename from the module card
-node --test tests/estimate-copy-assignment-contract.test.mjs
+bun test ./tests/estimate-copy-assignment-contract.test.mjs
 # One backend test, from backend-node/
-node --import tsx --test tests/estimate-copy-route.test.ts
+bun test tests/estimate-copy-route.test.ts
 ```
 
 Run heavier checks sequentially according to AGENTS.md. Root tests can invoke SQL integration; inspect flags and target safeguards before running them. Unit/static checks do not replace authenticated UAT. For document-only updates, validate links, routing coverage and generated reproducibility instead of rebuilding the application.

@@ -32,8 +32,8 @@ These project rules guide both agents; they do not override host/system policies
 - Do NOT spawn subagents, parallel agents, or workflows unless the user explicitly asks. Work as a single agent.
 - Do NOT create git worktrees unless the user explicitly asks. Work on the current checkout. (A worktree = a second `node_modules`, a second dev server, a second `tsc`.)
 - Never use watch mode (`tsc --watch`, `vite --watch`, `vitest --watch`, `nodemon`, …). Run once and let the process exit.
-- Heavy commands run one at a time, never in parallel: `npx tsc --noEmit`, `npm run build`, `npm test`, `npm run lint`.
-- Check `package.json` for current test scripts; `npm test` runs lint, typecheck and root tests, not the build. Run only checks relevant to the task.
+- Heavy commands run one at a time, never in parallel: `bun run typecheck`, `bun run build`, `bun run test`, `bun run lint`.
+- Check `package.json` for current test scripts; `bun run test` runs lint, typecheck and root tests, not the build. Run only checks relevant to the task.
 - Typecheck/build/test once at the END of a task, after all edits are done — not after every file change.
 - Stop temporary verification servers and background processes you started. Preserve services that were already running; if authorized work requires a temporary stop, restore the previous service configuration and verify it responds before finishing. Leave a server running when the user explicitly requested it.
 - If a dev server is needed to verify a change, reuse the one already running (see `.claude/launch.json`, port 3000) instead of starting another.
@@ -43,7 +43,7 @@ These project rules guide both agents; they do not override host/system policies
 <!-- PROJECT-CONTEXT:START -->
 ## Project Context — Engineering Center
 
-จุดเริ่มต้นเดียวสำหรับ AI · Source snapshot: `e4b3da86` · เอกสารอ้างโค้ด ไม่ใช่สถานะ live
+จุดเริ่มต้นเดียวสำหรับ AI · Source snapshot: `3577fb4b` · เอกสารอ้างโค้ด ไม่ใช่สถานะ live
 
 ## อ่านแบบประหยัด Context
 
