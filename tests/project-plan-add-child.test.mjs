@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import ts from "typescript";
+import ts from "typescript-api";
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const screen = read("app/system/production/PlanningPricingScreens.tsx");

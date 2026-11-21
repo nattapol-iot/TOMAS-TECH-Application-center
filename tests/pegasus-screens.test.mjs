@@ -4,7 +4,7 @@ import test from "node:test";
 import { ADMIN_SCREENS_COPY } from "../app/system/production/admin-screens-copy.ts";
 import { FORM_COPY } from "../app/system/production/form-copy.ts";
 import { createRequire } from "node:module";
-import ts from "typescript";
+import ts from "typescript-api";
 
 // The Team & Knowledge and System menus in the Pegasus ERP look (owner 2026-11-21): a screen wears "pg-skin pg-screen"
 // (PegasusScreen), pegasus-skin.css draws the shared parts and pegasus-screens.css the rest.

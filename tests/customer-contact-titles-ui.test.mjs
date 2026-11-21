@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import ts from "typescript";
+import ts from "typescript-api";
 
 // Drive the real form handlers with controlled React state and no network writes.
 function mountForm(file, exportName, props, initialState = []) {

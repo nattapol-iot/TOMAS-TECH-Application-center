@@ -4,7 +4,7 @@ import { createRequire } from "node:module";
 import test from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import ts from "typescript";
+import ts from "typescript-api";
 
 const require = createRequire(import.meta.url);
 const cache = new Map();

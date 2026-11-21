@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import ts from "typescript";
+import ts from "typescript-api";
 import { DASHBOARD_ROLES } from "../backend-node/src/executive-dashboard-model.ts";
 import * as rememberedView from "../lib/remembered-view.ts";
 import * as notificationRows from "../lib/notification-rows.ts";

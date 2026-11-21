@@ -109,10 +109,11 @@ git push tmthub --tags
 3. ถ้า path ของ share ไม่ใช่ `/volume1/IoT Department` ให้ใส่ `TMTHUB_NFS_PATH=/volumeX/IoT Department/IoT Team Center/TMTHub`
    ใน `.env` บน Mac mini (ดู path ได้ที่หน้า NFS Permissions ด้านล่าง "Mount path")
 
-**NFSv4.1 กับ v3:** deploy ลอง v4.1 ก่อนแล้วถอยไป v3 เอง ใช้ได้ทั้งคู่ (ใช้เวลา probe ไม่ถึง 1 วินาที)
+**NFSv4.1 กับ v3:** deploy ลอง v4.1 ก่อนแล้วถอยไป v3 เอง ใช้ได้ทั้งคู่ แบบที่ใช้ได้จะจำไว้ใน `~/iot-team-center/deploy-state/tmthub-nfs`
+และ deploy รอบต่อไปลองแบบนั้นก่อน (probe ครบทุกแบบใช้ราว 14 วินาที) ลบไฟล์นี้เมื่ออยากให้ probe ใหม่
 - ถ้า log ขึ้น `NFSv4.1 is not offered by the NAS; using NFSv3` แปลว่า NAS ตอบ v4 ว่า `no such file or directory`
   ทุก path รวมถึง `/` (ตรวจจาก VM เมื่อ 2026-10-27) คือ NFSv4 ยังปิดอยู่ที่ DSM
-  → **File Services → NFS → Maximum NFS protocol = NFSv4.1** แล้ว deploy ใหม่ probe จะเลือก v4.1 เอง
+  → **File Services → NFS → Maximum NFS protocol = NFSv4.1** แล้วลบ `~/iot-team-center/deploy-state/tmthub-nfs` บน Mac mini ก่อน deploy ใหม่ probe จะเลือก v4.1 เอง
 - หลังย้ายไป v4.1 ให้ทดสอบ push ที่มี delta ใหญ่ก่อน และอย่าเอา `pack.threads=1` ออกโดยไม่ได้ทดสอบ
 
 ### "The Git data underlying this repository cannot be read"

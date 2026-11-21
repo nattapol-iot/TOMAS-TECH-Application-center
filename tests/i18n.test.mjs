@@ -5,7 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import ts from "typescript";
+import ts from "typescript-api";
 
 const require = createRequire(import.meta.url);
 const modules = new Map();

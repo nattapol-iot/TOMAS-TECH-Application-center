@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { createRequire } from "node:module";
-import ts from "typescript";
+import ts from "typescript-api";
 
 const require = createRequire(import.meta.url);
 function loadPure(file) {

@@ -3,7 +3,7 @@ import test from "node:test";
 import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { createRequire } from "node:module";
-import ts from "typescript";
+import ts from "typescript-api";
 const require = createRequire(import.meta.url);
 const cache = new Map();
 function load(file) {
