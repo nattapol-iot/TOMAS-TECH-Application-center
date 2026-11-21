@@ -229,7 +229,6 @@ export function ProjectCostScreen({ bootstrap, openProjectSchedule }: Props) {
           </div>
         </>}
     </Panel>
-    {data && !access.laborMoney ? <p className="pc-note">{t("Cost.moneyHidden")}</p> : null}
     {detailId !== null ? <ProjectCostDialog projectId={detailId} canOpenPlan={Boolean(openProjectSchedule) && bootstrap.permissions.includes("schedule.read")}
       onOpenPlan={() => openProjectSchedule?.(detailId)} onClose={() => open(null)} /> : null}
   </div>;
