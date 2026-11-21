@@ -673,8 +673,22 @@ export function registerVisitMasterRoutes(
       query = request.query as Record<string, unknown>,
       unread = booleanQuery(query.unreadOnly, false),
       take = clampedInteger(query.limit, 50, 1, 200);
+    // A support notification is stored with generic text (support-service.ts), so a take, a reply and a
+    // resolve made in one go used to show as identical rows (team report 2026-11-21). The bell now reads
+    // what happened from the event the row points at (dedupe_key support:<event id>): ticket number,
+    // event kind, new status and who did it. The subject is ticket content, so it is given only to a
+    // reader who can still open the ticket (reporter, category member or support.manage).
     const result = await database.query<Record<string, unknown>>(
-      `SELECT TOP(@take) id,kind,title,detail,entity_type,entity_id,is_read,created_at,read_at FROM dbo.notifications WHERE user_id=@actor AND (@unread=0 OR is_read=0) ORDER BY created_at DESC,id DESC;`,
+      `DECLARE @supportManage bit=CASE WHEN EXISTS(SELECT 1 FROM dbo.users u JOIN dbo.role_permissions rp ON rp.role_id=u.role_id JOIN dbo.permissions p ON p.id=rp.permission_id WHERE u.id=@actor AND p.code=N'support.manage') THEN 1 ELSE 0 END;
+SELECT TOP(@take) n.id,n.kind,n.title,n.detail,n.entity_type,n.entity_id,n.is_read,n.created_at,n.read_at,
+ t.ticket_no support_ticket_no,
+ CASE WHEN t.reporter_id=@actor OR @supportManage=1 OR EXISTS(SELECT 1 FROM dbo.support_members m WHERE m.user_id=@actor AND m.category_code=t.category_code) THEN t.subject END support_subject,
+ e.kind support_event,CASE WHEN e.kind=N'StatusChanged' THEN JSON_VALUE(e.details_json,'$.to') END support_status,a.name support_actor
+FROM dbo.notifications n
+LEFT JOIN dbo.support_tickets t ON n.entity_type=N'SupportTicket' AND t.id=n.entity_id
+LEFT JOIN dbo.support_events e ON t.id IS NOT NULL AND n.dedupe_key LIKE N'support:%' AND e.id=TRY_CONVERT(bigint,SUBSTRING(n.dedupe_key,9,30)) AND e.ticket_id=t.id
+LEFT JOIN dbo.users a ON a.id=e.actor_id
+WHERE n.user_id=@actor AND (@unread=0 OR n.is_read=0) ORDER BY n.created_at DESC,n.id DESC;`,
       (q) => {
         q.input("take", sql.Int, take);
         q.input("actor", sql.BigInt, actor.id);
@@ -691,6 +705,16 @@ export function registerVisitMasterRoutes(
       isRead: Boolean(r.is_read),
       createdAt: r.created_at,
       readAt: r.read_at,
+      support:
+        r.support_ticket_no == null
+          ? null
+          : {
+              ticketNo: r.support_ticket_no,
+              subject: r.support_subject ?? null,
+              event: r.support_event ?? null,
+              status: r.support_status ?? null,
+              actorName: r.support_actor ?? null,
+            },
     }));
   });
   app.post("/api/v1/me/notifications/read", async (request) => {

@@ -2741,6 +2741,7 @@ export type ManagementVisitDashboard = {
 export type NotificationRecord = {
   id: number; kind: string; title: string; detail: string; entityType: string | null; entityId: number | null;
   isRead: boolean; createdAt: string; readAt: string | null;
+  support?: { ticketNo: string; subject: string | null; event: string | null; status: string | null; actorName: string | null } | null;
 };
 
 /* ------------------------------ Intake calls ----------------------------- */
