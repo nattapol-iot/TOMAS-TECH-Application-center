@@ -115,6 +115,7 @@ export function useLinkedState<T>(name: string | null, fallback: T, codec: LinkC
     if (text !== empty && state.params[name] !== text) state.params = { ...state.params, [name]: text };
     write(link, "replace");
     return () => {
+      // oxlint-disable-next-line react/exhaustive-deps -- the cleanup must compare with the link's state as it is now, not as it was.
       if (link.state.current !== state || state.params[name] === undefined) return;
       const params = { ...state.params };
       delete params[name];
@@ -176,6 +177,7 @@ export function useLinkedControl(name: string | null | undefined, value: string,
     }
     write(link, "replace");
     return () => {
+      // oxlint-disable-next-line react/exhaustive-deps -- the cleanup must compare with the link's state as it is now, not as it was.
       if (link.state.current !== state || state.params[name] === undefined) return;
       const rest = { ...state.params };
       delete rest[name];

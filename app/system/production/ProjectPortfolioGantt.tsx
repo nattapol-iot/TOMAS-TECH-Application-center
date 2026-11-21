@@ -34,7 +34,8 @@ export function ProjectPortfolioGantt({ rows, today, canReadSchedule, includeClo
   controls?: ReactNode;
 }) {
   const t = useT();
-  const fullscreen = useFullscreen<HTMLDivElement>();
+  // The ref apart from the state: React Compiler treats an object holding a ref as a ref and refuses its state reads.
+  const { ref: fullscreenRef, ...fullscreen } = useFullscreen<HTMLDivElement>();
   // The plan opens on another tab, so full screen ends first; otherwise it would keep covering the page.
   const openPlan = openProjectSchedule ? (id: number, taskId?: number) => { void fullscreen.exit(); openProjectSchedule(id, taskId); } : undefined;
   const [zoom, setZoom] = useState<GanttZoomChoice>("quarter");
@@ -140,7 +141,7 @@ export function ProjectPortfolioGantt({ rows, today, canReadSchedule, includeClo
   const shownTaskMatches = hits ? visibleRows.reduce((sum, item) => sum + (hits.get(item.id)?.size ?? 0), 0) : 0;
   const notOpened = hits ? Math.max(0, visibleRows.length - EXPAND_LIMIT) : 0;
 
-  return <div ref={fullscreen.ref} className={`portfolio-gantt${fullscreen.active ? " is-fullscreen" : ""}${fullscreen.overlay ? " is-overlay" : ""}`}>
+  return <div ref={fullscreenRef} className={`portfolio-gantt${fullscreen.active ? " is-fullscreen" : ""}${fullscreen.overlay ? " is-overlay" : ""}`}>
     {controls}
     <div className="portfolio-gantt-bar">
       <GanttToolbar zoom={zoom} onZoom={setZoom} onShift={(direction) => setAnchor((value) => shiftGanttAnchor(zoom === "fit" ? "quarter" : zoom, value, direction))} onToday={() => setAnchor(today)} />

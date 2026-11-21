@@ -1665,7 +1665,7 @@ function VisitCalendar({ bootstrap, onOpen }: Props & { onOpen: (id: number) => 
     const list: string[] = [];
     const start = new Date(`${range.from}T00:00:00`);
     const end = new Date(`${range.to}T00:00:00`);
-    for (let cursor = new Date(start); cursor <= end; cursor.setDate(cursor.getDate() + 1)) list.push(businessDate(cursor));
+    for (const cursor = new Date(start); cursor <= end; cursor.setDate(cursor.getDate() + 1)) list.push(businessDate(cursor));
     return list;
   }, [range.from, range.to]);
 
