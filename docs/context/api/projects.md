@@ -2,7 +2,7 @@
 
 [Module](../modules/projects.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `b1c8bd63`; generated, do not edit. [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `e04b600c`; generated, do not edit. [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
@@ -15,21 +15,21 @@ Evidence: source snapshot `b1c8bd63`; generated, do not edit. [backend-node/src/
 | GET | `/api/v1/projects/attention` | 192–210 |
 | GET | `/api/v1/projects/overview` | 214–264 |
 | GET | `/api/v1/projects/cost-overview` | 282–298 |
-| GET | `/api/v1/projects/:id/cost` | 302–351 |
-| POST | `/api/v1/projects` | 353–523 |
-| GET | `/api/v1/projects/:id/members` | 525–550 |
-| POST | `/api/v1/projects/:id/members` | 552–575 |
-| DELETE | `/api/v1/projects/:id/members/:userId` | 577–598 |
-| GET | `/api/v1/projects/:id/deletion` | 616–624 |
-| DELETE | `/api/v1/projects/:id` | 626–661 |
-| PUT | `/api/v1/projects/:id` | 663–799 |
+| GET | `/api/v1/projects/:id/cost` | 303–345 |
+| POST | `/api/v1/projects` | 347–517 |
+| GET | `/api/v1/projects/:id/members` | 519–544 |
+| POST | `/api/v1/projects/:id/members` | 546–569 |
+| DELETE | `/api/v1/projects/:id/members/:userId` | 571–592 |
+| GET | `/api/v1/projects/:id/deletion` | 610–618 |
+| DELETE | `/api/v1/projects/:id` | 620–655 |
+| PUT | `/api/v1/projects/:id` | 657–793 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
 | `shiftDate` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 47–52 |
-| `registerProjectRoutes` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 54–800 |
+| `registerProjectRoutes` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 54–794 |
 
 ## Direct local dependencies
 
@@ -63,7 +63,7 @@ Evidence: source snapshot `b1c8bd63`; generated, do not edit. [backend-node/src/
 
 ## SQL references (literal scan, not a complete schema or write-set)
 
-`dbo.cost_items`, `dbo.crm_opportunities`, `dbo.customer_site_contacts`, `dbo.customer_sites`, `dbo.customers`, `dbo.delete_unstarted_project`, `dbo.estimates`, `dbo.inquiries`, `dbo.manhour_lines`, `dbo.mat_pr_lines`, `dbo.mat_prs`, `dbo.project_contacts`, `dbo.project_folders`, `dbo.project_members`, `dbo.project_payment_milestones`, `dbo.project_purchase_units`, `dbo.projects`, `dbo.roles`, `dbo.schedule_updates`, `dbo.soft_delete_project`, `dbo.user_effective_permissions`, `dbo.user_effective_roles`, `dbo.users`, `dbo.v_estimate_cost_amounts`
+`dbo.cost_items`, `dbo.crm_opportunities`, `dbo.customer_site_contacts`, `dbo.customer_sites`, `dbo.customers`, `dbo.delete_unstarted_project`, `dbo.estimates`, `dbo.inquiries`, `dbo.mat_pr_lines`, `dbo.mat_prs`, `dbo.project_contacts`, `dbo.project_folders`, `dbo.project_members`, `dbo.project_payment_milestones`, `dbo.project_purchase_units`, `dbo.projects`, `dbo.roles`, `dbo.schedule_updates`, `dbo.soft_delete_project`, `dbo.user_effective_permissions`, `dbo.user_effective_roles`, `dbo.users`, `dbo.v_estimate_cost_amounts`
 
 ## Change boundary
 
