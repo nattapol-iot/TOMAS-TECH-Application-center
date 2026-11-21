@@ -17,7 +17,7 @@ import { registerEstimateRoutes } from "../src/routes/estimates.js";
 const version = Buffer.from("0000000000000001", "hex");
 
 function harness(t: { mock: { method: typeof import("node:test").mock.method } }, options: { erp: boolean; sendFails?: boolean; notSentYet?: boolean }) {
-  const seen = { approved: false, sendLookups: 0 };
+  const seen = { approved: false, sendLookups: 0, recordedError: null as unknown, errorRevision: null as unknown };
   t.mock.method(sql.Request.prototype, "query", async function (this: sql.Request, statement: string) {
     if (statement.includes("INNER JOIN dbo.inquiries i WITH (UPDLOCK,HOLDLOCK)")) {
       return { recordset: [{ estimate_no: "EST-1", status: "Engineering Review", progress: 90, revision: 2, owner_id: 7, inquiry_id: 3,
@@ -33,18 +33,24 @@ function harness(t: { mock: { method: typeof import("node:test").mock.method } }
     if (statement.includes("INNER JOIN dbo.v_estimate_totals t ON t.estimate_id=e.id WHERE e.id=@id")) return { recordset: [{ project_name: "Line 3", customer_name: "Customer", owner_name: "Owner", owner_email: "owner@tomastc.com", total: 1000 }] };
     if (statement.includes("action=N'Submitted'") || statement.includes("dbo.notifications")) return { recordset: [] };
     if (statement.includes("audit_log") || statement.includes("activity_events")) return { recordset: [] };
+    // The send keeps one link per estimate revision (migration 119) before it checks anything.
+    if (statement.includes("INSERT dbo.estimate_erp_links")) return { recordset: [{ external_ref: "ENGAPP-EST-test" }] };
     throw Error("Unexpected transaction query: " + statement);
   });
   const database = {
     async transaction(action: (transaction: object) => Promise<unknown>) { return action({}); },
-    async query(statement: string) {
+    async query(statement: string, bind?: (request: { input: (name: string, type: unknown, value: unknown) => void }) => void) {
+      if (statement.includes("UPDATE dbo.estimate_erp_links SET error")) {
+        const inputs: Record<string, unknown> = {}; bind?.({ input: (name, _type, value) => { inputs[name] = value; } });
+        seen.recordedError = inputs.error; seen.errorRevision = inputs.revision; return { recordset: [] };
+      }
       if (statement.includes("INNER JOIN dbo.customers c")) {
         seen.sendLookups += 1;
         if (options.sendFails) throw new Error("The database went away.");
         // The ERP already holds this revision, so the send answers without calling it.
         return { recordset: [{ estimate_no: "EST-1", revision: 2, status: "Approved", project_name: "Line 3", locked_at: "2026-11-02T03:00:00Z",
           customer_name: "Customer", short_name: "", owner_email: "owner@tomastc.com", project_no: null, revision_reason: null,
-          erp_revision: options.notSentYet ? null : 2, cost_sheet_no: options.notSentYet ? null : "CS-1" }] };
+          erp_revision: options.notSentYet ? null : 2, cost_sheet_no: options.notSentYet ? null : "CS-1", previous_sheet_no: null, previous_revision: null }] };
       }
       throw Error("Unexpected query: " + statement);
     },
@@ -96,14 +102,16 @@ test("without an ERP connection approval answers as before", async (t) => {
   } finally { await app.close(); }
 });
 
-test("approval without the sheet's rows leaves the send to the ERP tab", async (t) => {
-  const { app } = harness(t, { erp: true, notSentYet: true });
+test("approval without the sheet's rows leaves the send to the ERP tab, which says why", async (t) => {
+  const { app, seen } = harness(t, { erp: true, notSentYet: true });
   try {
     const response = await approve(app);
     assert.equal(response.statusCode, 200, response.body);
     assert.equal(response.json().status, "Approved");
     assert.equal(response.json().erp.sent, false);
     assert.match(response.json().erp.message, /ERP tab/);
+    assert.match(String(seen.recordedError), /approval came without the ERP sheet's rows/);
+    assert.equal(seen.errorRevision, 2);
   } finally { await app.close(); }
 });
 
