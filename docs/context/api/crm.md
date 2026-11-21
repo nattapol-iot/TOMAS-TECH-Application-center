@@ -2,7 +2,7 @@
 
 [Module](../modules/crm.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `ed9153db`; generated, do not edit. [backend-node/src/routes/crm.ts](<../../../backend-node/src/routes/crm.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `e57fb544`; generated, do not edit. [backend-node/src/routes/crm.ts](<../../../backend-node/src/routes/crm.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
