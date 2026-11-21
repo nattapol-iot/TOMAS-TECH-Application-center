@@ -8,7 +8,10 @@ const source = (path) => readFile(new URL(path, root), "utf8");
 test("every menu entry carries a star beside its link, and starred entries repeat under Favourites", async () => {
   const shell = await source("app/system/ProductionApp.tsx");
   // The star is a real button next to the <a>, never inside it: a click on it must not navigate.
-  assert.match(shell, /<\/a>\s*<button type="button" className="nav-star" aria-pressed=\{starred\} disabled=\{!starred && favoritesFull\} aria-label=\{starLabel\} title=\{starLabel\} onClick=\{\(\) => toggleFavorite\(item\.view\)\}><Icon name="star" \/><\/button>/);
+  assert.match(
+    shell,
+    /<\/a>\s*<button type="button" className="nav-star" aria-pressed=\{starred\} disabled=\{!starred && favoritesFull\} aria-label=\{starLabel\} title=\{starLabel\} onClick=\{\(\) => toggleFavorite\(item\.view\)\}><Icon name="star" \/><\/button>/,
+  );
   // Group entries keep nav.<view> for the guides; the copy under Favourites is nav.fav.<view>.
   assert.match(shell, /data-guide=\{favorite \? `nav\.fav\.\$\{item\.view\}` : `nav\.\$\{item\.view\}`\}/);
   assert.match(shell, /\{section\.items\.map\(\(item\) => navRow\(item\)\)\}/);
@@ -32,7 +35,7 @@ test("favourites are limited to 8, follow the menu's permission rule and are sav
   assert.match(shell, /await saveMenuFavorites\(nextFavorites\)/);
   assert.match(shell, /setToast\("Nav\.favSaveFailed"\)/);
   assert.match(client, /menuFavorites\?: string\[\];/);
-  assert.match(client, /export const saveMenuFavorites = \(views: readonly string\[\]\) => apiRequest<\{ views: string\[\] \}>\("\/api\/v1\/me\/menu-favorites", \{\s*method: "PUT",/);
+  assert.match(client, /export const saveMenuFavorites = \(views: readonly string\[\]\) =>\s*apiRequest<\{ views: string\[\] \}>\("\/api\/v1\/me\/menu-favorites", \{\s*method: "PUT",/);
   const favoriteCode = shell.slice(shell.indexOf("Menu favourites (owner request"), shell.indexOf("const clearPreferredSchedule"));
   assert.doesNotMatch(favoriteCode, /localStorage|sessionStorage/);
 });
@@ -71,7 +74,10 @@ test("the star hides until the entry is pointed at, stays lit when starred, and 
   assert.match(css, /\.nav-star\[aria-pressed="true"\], \.nav-item\.active \+ \.nav-star\[aria-pressed="true"\] \{ color: var\(--brand-gold\); \}/);
   assert.match(css, /\.nav-star\[aria-pressed="true"\] \.icon \{ fill: currentColor; \}/);
   assert.match(css, /\.nav-star:focus-visible \{ outline: 2px solid var\(--blue\);/);
-  assert.match(css, /\.sidebar-collapsed \.nav-star,\s*\.sidebar-collapsed \.nav-fav-group,\s*\.sidebar-collapsed \.nav-favorites-head,\s*\.sidebar-collapsed \.nav-favorites-empty,\s*\.sidebar-collapsed \.nav-favorites\.no-favorites \{ display: none; \}/);
+  assert.match(
+    css,
+    /\.sidebar-collapsed \.nav-star,\s*\.sidebar-collapsed \.nav-fav-group,\s*\.sidebar-collapsed \.nav-favorites-head,\s*\.sidebar-collapsed \.nav-favorites-empty,\s*\.sidebar-collapsed \.nav-favorites\.no-favorites \{ display: none; \}/,
+  );
   // No new colours: the favourites rules use tokens only.
   const block = css.slice(css.indexOf("/* Menu favourites:"), css.indexOf("/* Cost list & ERP"));
   assert.ok(block.length > 500);

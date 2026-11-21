@@ -75,6 +75,8 @@ export type AppConfig = {
   siteMonitor?: SiteMonitorConfig;
   /** The Pegasus ERP MCP endpoint approved requisitions are sent to (PEGASUS_MCP_URL; "off" disables). */
   pegasusMcpUrl?: string;
+  /** Copilot's OCR API that reads business cards and supplier quotations (COPILOT_OCR_URL; "off" disables). */
+  copilotOcrUrl?: string;
   /**
    * What an approved request becomes in the ERP (PEGASUS_REQUEST_LIST): "off" one ERP PR as before (the default), "excel" a
    * download for the project's Request List, "tool" lines sent to the Request List. See erp-request-list.ts.
@@ -125,7 +127,10 @@ function loadTmthubConfig(env: NodeJS.ProcessEnv): TmthubConfig | undefined {
   if (!token) return undefined;
   const apiUrl = (optional(env, "TMTHUB_API_URL") ?? "http://tmthub:3000").replace(/\/+$/, "");
   const publicUrl = required(env, "TMTHUB_PUBLIC_URL").replace(/\/+$/, "");
-  for (const [name, value] of [["TMTHUB_API_URL", apiUrl], ["TMTHUB_PUBLIC_URL", publicUrl]] as const) {
+  for (const [name, value] of [
+    ["TMTHUB_API_URL", apiUrl],
+    ["TMTHUB_PUBLIC_URL", publicUrl],
+  ] as const) {
     const url = new URL(value);
     if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error(`${name} must be an http(s) URL.`);
     if (url.username || url.password || url.search || url.hash) throw new Error(`${name} must be a plain origin or base URL.`);
@@ -147,8 +152,7 @@ function required(env: NodeJS.ProcessEnv, name: string): string {
 const TRUSTED_PROXY_ITEM = /^(loopback|linklocal|uniquelocal|[0-9a-f.:]+(\/\d{1,3})?)$/i;
 function trustProxySetting(value: string | undefined): false | number | string {
   if (value === undefined || /^(false|0|no|off)$/i.test(value)) return false;
-  if (/^(true|\*)$/i.test(value))
-    throw new Error("Http__TrustProxy must list proxy addresses or networks, not trust every hop.");
+  if (/^(true|\*)$/i.test(value)) throw new Error("Http__TrustProxy must list proxy addresses or networks, not trust every hop.");
   if (/^\d+$/.test(value)) return Number(value);
   if (!value.split(",").every((item) => TRUSTED_PROXY_ITEM.test(item.trim())))
     throw new Error("Http__TrustProxy must be a hop count or a comma-separated list of addresses, networks, loopback, linklocal or uniquelocal.");
@@ -172,15 +176,10 @@ function optionalBoolean(env: NodeJS.ProcessEnv, name: string, fallback: boolean
   throw new Error(`${name} must be true or false.`);
 }
 
-function positiveInteger(
-  env: NodeJS.ProcessEnv,
-  name: string,
-  fallback: number,
-): number {
+function positiveInteger(env: NodeJS.ProcessEnv, name: string, fallback: number): number {
   const raw = optional(env, name);
   const value = raw ? Number(raw) : fallback;
-  if (!Number.isSafeInteger(value) || value <= 0)
-    throw new Error(`${name} must be a positive integer.`);
+  if (!Number.isSafeInteger(value) || value <= 0) throw new Error(`${name} must be a positive integer.`);
   return value;
 }
 
@@ -199,13 +198,9 @@ export function normalizeBusinessTimeZone(value?: string): string {
   const configured = value?.trim() || "Asia/Bangkok";
   const normalized = WINDOWS_TO_IANA_TIME_ZONE[configured] ?? configured;
   try {
-    new Intl.DateTimeFormat("en-US", { timeZone: normalized }).format(
-      new Date(),
-    );
+    new Intl.DateTimeFormat("en-US", { timeZone: normalized }).format(new Date());
   } catch {
-    throw new Error(
-      `Business__TimeZoneId '${configured}' is not supported by this Node.js host.`,
-    );
+    throw new Error(`Business__TimeZoneId '${configured}' is not supported by this Node.js host.`);
   }
   return normalized;
 }
@@ -213,58 +208,29 @@ export function normalizeBusinessTimeZone(value?: string): string {
 export function isPrivateIpv4(host: string): boolean {
   if (isIP(host) !== 4) return false;
   const [first = 0, second = 0] = host.split(".").map(Number);
-  return (
-    first === 10 ||
-    (first === 172 && second >= 16 && second <= 31) ||
-    (first === 192 && second === 168)
-  );
+  return first === 10 || (first === 172 && second >= 16 && second <= 31) || (first === 192 && second === 168);
 }
 
 function validateOrigin(origin: string, allowPrivateLanHttp: boolean): void {
   const url = new URL(origin);
-  if (
-    url.origin !== origin ||
-    url.username ||
-    url.password ||
-    origin.includes("*")
-  )
-    throw new Error(`Untrusted CORS origin: ${origin}`);
+  if (url.origin !== origin || url.username || url.password || origin.includes("*")) throw new Error(`Untrusted CORS origin: ${origin}`);
   if (url.protocol === "https:") return;
-  if (
-    allowPrivateLanHttp &&
-    url.protocol === "http:" &&
-    isPrivateIpv4(url.hostname)
-  )
-    return;
-  if (
-    url.protocol === "http:" &&
-    (url.hostname === "localhost" || url.hostname === "127.0.0.1")
-  )
-    return;
+  if (allowPrivateLanHttp && url.protocol === "http:" && isPrivateIpv4(url.hostname)) return;
+  if (url.protocol === "http:" && (url.hostname === "localhost" || url.hostname === "127.0.0.1")) return;
   throw new Error(`CORS origin must use HTTPS: ${origin}`);
 }
 
 function validateGuid(name: string, value: string): void {
-  if (
-    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-      value,
-    )
-  ) {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) {
     throw new Error(`${name} must be a GUID.`);
   }
 }
 
-function loadTmtIdConfig(
-  env: NodeJS.ProcessEnv,
-  environment: AppConfig["environment"],
-  allowPrivateLanHttp: boolean,
-): TmtIdConfig {
+function loadTmtIdConfig(env: NodeJS.ProcessEnv, environment: AppConfig["environment"], allowPrivateLanHttp: boolean): TmtIdConfig {
   const issuer = required(env, "OIDC_ISSUER");
   const issuerUrl = new URL(issuer);
-  if (issuerUrl.protocol !== "https:")
-    throw new Error("OIDC_ISSUER must use HTTPS.");
-  if (issuerUrl.search || issuerUrl.hash)
-    throw new Error("OIDC_ISSUER must not contain a query or fragment.");
+  if (issuerUrl.protocol !== "https:") throw new Error("OIDC_ISSUER must use HTTPS.");
+  if (issuerUrl.search || issuerUrl.hash) throw new Error("OIDC_ISSUER must not contain a query or fragment.");
 
   const publicBaseUrl = required(env, "PUBLIC_BASE_URL");
   validateOrigin(publicBaseUrl, allowPrivateLanHttp);
@@ -276,41 +242,37 @@ function loadTmtIdConfig(
   validateOrigin(appBaseUrl, allowPrivateLanHttp);
 
   const sessionSecret = required(env, "SESSION_SECRET");
-  if (sessionSecret.length < 32 || sessionSecret.length > 512)
-    throw new Error("SESSION_SECRET must contain 32-512 characters.");
+  if (sessionSecret.length < 32 || sessionSecret.length > 512) throw new Error("SESSION_SECRET must contain 32-512 characters.");
 
-  const sessionCookieSecureRaw = optional(
-    env,
-    "SESSION_COOKIE_SECURE",
-  )?.toLowerCase();
-  if (
-    sessionCookieSecureRaw &&
-    sessionCookieSecureRaw !== "true" &&
-    sessionCookieSecureRaw !== "false"
-  ) {
+  const sessionCookieSecureRaw = optional(env, "SESSION_COOKIE_SECURE")?.toLowerCase();
+  if (sessionCookieSecureRaw && sessionCookieSecureRaw !== "true" && sessionCookieSecureRaw !== "false") {
     throw new Error("SESSION_COOKIE_SECURE must be true or false.");
   }
   const sessionCookieSecure = sessionCookieSecureRaw !== "false";
-  if (!sessionCookieSecure && environment !== "development")
-    throw new Error("SESSION_COOKIE_SECURE may be false only in development.");
+  if (!sessionCookieSecure && environment !== "development") throw new Error("SESSION_COOKIE_SECURE may be false only in development.");
 
   const masterDataUrl = optional(env, "MASTER_DATA_URL");
   const masterDataApiKey = optional(env, "MASTER_DATA_API_KEY");
-  if (Boolean(masterDataUrl) !== Boolean(masterDataApiKey))
-    throw new Error(
-      "MASTER_DATA_URL and MASTER_DATA_API_KEY are required together.",
-    );
+  if (Boolean(masterDataUrl) !== Boolean(masterDataApiKey)) throw new Error("MASTER_DATA_URL and MASTER_DATA_API_KEY are required together.");
   // Master data's own certificate cannot be renewed on the headscale tailnet, so the API reaches it through a TLS-skipping
   // proxy on its own host (the Mac mini's Caddy :8107, as orgrag does). That hop is plain HTTP to a private address.
   if (masterDataUrl) validateOrigin(masterDataUrl, allowPrivateLanHttp || isPrivateIpv4(new URL(masterDataUrl).hostname));
   // Still parsed so an old .env keeps starting; the API only warns that it is ignored.
   const defaultRoleCode = optional(env, "TMT_ID_DEFAULT_ROLE_CODE");
-  if (defaultRoleCode !== undefined && !/^[A-Za-z][A-Za-z0-9 _-]{0,49}$/.test(defaultRoleCode))
-    throw new Error("TMT_ID_DEFAULT_ROLE_CODE must be an existing dbo.roles code (1-50 characters).");
+  if (defaultRoleCode !== undefined && !/^[A-Za-z][A-Za-z0-9 _-]{0,49}$/.test(defaultRoleCode)) throw new Error("TMT_ID_DEFAULT_ROLE_CODE must be an existing dbo.roles code (1-50 characters).");
   // "none" turns company-domain sign-in off: everyone then waits for Employee Master again.
   const autoRegisterRaw = optional(env, "TMT_ID_AUTO_REGISTER_DOMAINS") ?? "tomastc.com";
-  const autoRegisterDomains = autoRegisterRaw.toLowerCase() === "none" ? [] : [...new Set(autoRegisterRaw
-    .split(",").map((domain) => domain.trim().toLowerCase()).filter(Boolean))];
+  const autoRegisterDomains =
+    autoRegisterRaw.toLowerCase() === "none"
+      ? []
+      : [
+          ...new Set(
+            autoRegisterRaw
+              .split(",")
+              .map((domain) => domain.trim().toLowerCase())
+              .filter(Boolean),
+          ),
+        ];
   for (const domain of autoRegisterDomains) {
     if (domain.length > 253 || !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/.test(domain))
       throw new Error("TMT_ID_AUTO_REGISTER_DOMAINS must be a comma-separated list of email domains, or none.");
@@ -332,47 +294,21 @@ function loadTmtIdConfig(
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
-  const environment = (
-    optional(env, "NODE_ENV") ?? "development"
-  ).toLowerCase();
-  if (
-    environment !== "development" &&
-    environment !== "staging" &&
-    environment !== "production"
-  ) {
+  const environment = (optional(env, "NODE_ENV") ?? "development").toLowerCase();
+  if (environment !== "development" && environment !== "staging" && environment !== "production") {
     throw new Error("NODE_ENV must be development, staging, or production.");
   }
 
-  const mode = (optional(env, "Authentication__Mode") ??
-    "Entra") as AuthenticationMode;
-  if (
-    mode !== "Development" &&
-    mode !== "TeamTest" &&
-    mode !== "Entra" &&
-    mode !== "TmtId"
-  ) {
+  const mode = (optional(env, "Authentication__Mode") ?? "Entra") as AuthenticationMode;
+  if (mode !== "Development" && mode !== "TeamTest" && mode !== "Entra" && mode !== "TmtId") {
     throw new Error("Authentication__Mode is invalid.");
   }
-  if (mode === "Development" && environment !== "development")
-    throw new Error(
-      "Development authentication is allowed only in development.",
-    );
-  if (mode === "TeamTest" && environment !== "staging")
-    throw new Error("TeamTest authentication is allowed only in staging.");
+  if (mode === "Development" && environment !== "development") throw new Error("Development authentication is allowed only in development.");
+  if (mode === "TeamTest" && environment !== "staging") throw new Error("TeamTest authentication is allowed only in staging.");
 
-  const teamTestSigningKey = optional(
-    env,
-    "Authentication__TeamTestSigningKey",
-  );
-  if (
-    mode === "TeamTest" &&
-    (!teamTestSigningKey ||
-      teamTestSigningKey.length < 32 ||
-      teamTestSigningKey.length > 256)
-  ) {
-    throw new Error(
-      "Authentication__TeamTestSigningKey must contain 32-256 characters.",
-    );
+  const teamTestSigningKey = optional(env, "Authentication__TeamTestSigningKey");
+  if (mode === "TeamTest" && (!teamTestSigningKey || teamTestSigningKey.length < 32 || teamTestSigningKey.length > 256)) {
+    throw new Error("Authentication__TeamTestSigningKey must contain 32-256 characters.");
   }
 
   const tenantId = optional(env, "Authentication__TenantId");
@@ -388,12 +324,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       if (!value) throw new Error(`${name} is required.`);
       validateGuid(name, value);
     }
-    if (clientId !== audience)
-      throw new Error(
-        "Authentication__Audience must equal Authentication__ClientId.",
-      );
-    if (!requiredScope || /\s/.test(requiredScope))
-      throw new Error("Authentication__RequiredScope must be one scope name.");
+    if (clientId !== audience) throw new Error("Authentication__Audience must equal Authentication__ClientId.");
+    if (!requiredScope || /\s/.test(requiredScope)) throw new Error("Authentication__RequiredScope must be one scope name.");
   }
 
   const siteMonitor = loadSiteMonitorConfig(env);
@@ -405,11 +337,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   if (siteMonitor && !allowedHosts.some((host) => host.toLowerCase() === siteMonitor.agentPublicHost)) {
     allowedHosts.push(siteMonitor.agentPublicHost);
   }
-  if (
-    environment !== "development" &&
-    (allowedHosts.length === 0 ||
-      allowedHosts.some((host) => host.includes("*")))
-  ) {
+  if (environment !== "development" && (allowedHosts.length === 0 || allowedHosts.some((host) => host.includes("*")))) {
     throw new Error("AllowedHosts must list exact hosts outside development.");
   }
 
@@ -419,47 +347,23 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
 
   const allowPrivateLanHttp = environment === "staging" && mode === "TeamTest";
   const corsOrigins = listByPrefix(env, "Cors__AllowedOrigins__");
-  if (environment !== "development" && corsOrigins.length === 0)
-    throw new Error(
-      "At least one CORS origin is required outside development.",
-    );
+  if (environment !== "development" && corsOrigins.length === 0) throw new Error("At least one CORS origin is required outside development.");
   corsOrigins.forEach((origin) => validateOrigin(origin, allowPrivateLanHttp));
 
-  const tmtId =
-    mode === "TmtId"
-      ? loadTmtIdConfig(env, environment, allowPrivateLanHttp)
-      : undefined;
+  const tmtId = mode === "TmtId" ? loadTmtIdConfig(env, environment, allowPrivateLanHttp) : undefined;
 
   const roleName = optional(env, "Database__ApplicationRoleName");
   const rolePassword = optional(env, "Database__ApplicationRolePassword");
-  if (Boolean(roleName) !== Boolean(rolePassword))
-    throw new Error(
-      "Both database application-role values are required together.",
-    );
-  if (
-    (roleName || rolePassword) &&
-    !(environment === "staging" && mode === "TeamTest")
-  ) {
-    throw new Error(
-      "Database application roles are allowed only in staging TeamTest mode.",
-    );
+  if (Boolean(roleName) !== Boolean(rolePassword)) throw new Error("Both database application-role values are required together.");
+  if ((roleName || rolePassword) && !(environment === "staging" && mode === "TeamTest")) {
+    throw new Error("Database application roles are allowed only in staging TeamTest mode.");
   }
-  if (roleName && !/^[A-Za-z][A-Za-z0-9_]{2,63}$/.test(roleName))
-    throw new Error("Database application role name is invalid.");
-  if (rolePassword && !/^[A-Za-z0-9_-]{32,256}$/.test(rolePassword))
-    throw new Error("Database application role password is invalid.");
+  if (roleName && !/^[A-Za-z][A-Za-z0-9_]{2,63}$/.test(roleName)) throw new Error("Database application role name is invalid.");
+  if (rolePassword && !/^[A-Za-z0-9_-]{32,256}$/.test(rolePassword)) throw new Error("Database application role password is invalid.");
 
-  const trustTeamTestCertificate = boolean(
-    env,
-    "Database__TrustServerCertificateForTeamTest",
-  );
-  if (
-    trustTeamTestCertificate &&
-    !(environment === "staging" && mode === "TeamTest")
-  ) {
-    throw new Error(
-      "Database__TrustServerCertificateForTeamTest is allowed only in staging TeamTest mode.",
-    );
+  const trustTeamTestCertificate = boolean(env, "Database__TrustServerCertificateForTeamTest");
+  if (trustTeamTestCertificate && !(environment === "staging" && mode === "TeamTest")) {
+    throw new Error("Database__TrustServerCertificateForTeamTest is allowed only in staging TeamTest mode.");
   }
 
   // Migrations create and alter objects, which the least-privilege application login cannot.
@@ -475,41 +379,24 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     throw new Error("Database__ReadOnly=true requires Database__RunMigrations=false.");
   }
 
-  const storageMode =
-    optional(env, "DocumentStorage__Mode") ??
-    (environment === "production" ? "Nas" : "Local");
-  if (storageMode !== "Local" && storageMode !== "Nas")
-    throw new Error("DocumentStorage__Mode must be Local or Nas.");
-  if (environment === "production" && storageMode !== "Nas")
-    throw new Error("DocumentStorage__Mode must be Nas in production.");
+  const storageMode = optional(env, "DocumentStorage__Mode") ?? (environment === "production" ? "Nas" : "Local");
+  if (storageMode !== "Local" && storageMode !== "Nas") throw new Error("DocumentStorage__Mode must be Local or Nas.");
+  if (environment === "production" && storageMode !== "Nas") throw new Error("DocumentStorage__Mode must be Nas in production.");
   const storagePath = required(env, "DocumentStorage__RootPath");
-  const maxFileSizeBytes = positiveInteger(
-    env,
-    "DocumentStorage__MaxFileSizeBytes",
-    52_428_800,
-  );
+  const maxFileSizeBytes = positiveInteger(env, "DocumentStorage__MaxFileSizeBytes", 52_428_800);
   if (maxFileSizeBytes < 1_048_576 || maxFileSizeBytes > 524_288_000) {
-    throw new Error(
-      "DocumentStorage__MaxFileSizeBytes must be between 1 MiB and 500 MiB.",
-    );
+    throw new Error("DocumentStorage__MaxFileSizeBytes must be between 1 MiB and 500 MiB.");
   }
   // Source code arrives as one zip, so it gets its own, larger ceiling than ordinary documents.
   // Uploads are inflated and committed in batches, but the zip itself is held in memory, and the
   // API container has 1 GiB: 500 MiB is the upper bound.
-  const repositoryUploadMaxBytes = positiveInteger(
-    env,
-    "DocumentStorage__RepositoryUploadMaxBytes",
-    Math.max(209_715_200, maxFileSizeBytes),
-  );
+  const repositoryUploadMaxBytes = positiveInteger(env, "DocumentStorage__RepositoryUploadMaxBytes", Math.max(209_715_200, maxFileSizeBytes));
   if (repositoryUploadMaxBytes < 1_048_576 || repositoryUploadMaxBytes > 524_288_000) {
-    throw new Error(
-      "DocumentStorage__RepositoryUploadMaxBytes must be between 1 MiB and 500 MiB.",
-    );
+    throw new Error("DocumentStorage__RepositoryUploadMaxBytes must be between 1 MiB and 500 MiB.");
   }
 
   const emailMode = optional(env, "Email__Mode") ?? "Disabled";
-  if (emailMode !== "Disabled" && emailMode !== "MicrosoftGraph")
-    throw new Error("Email__Mode must be Disabled or MicrosoftGraph.");
+  if (emailMode !== "Disabled" && emailMode !== "MicrosoftGraph") throw new Error("Email__Mode must be Disabled or MicrosoftGraph.");
   const emailTenantId = optional(env, "Email__TenantId");
   const emailClientId = optional(env, "Email__ClientId");
   const emailClientSecret = optional(env, "Email__ClientSecret");
@@ -524,16 +411,16 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       validateGuid(name, value);
     }
     if (!emailClientSecret) throw new Error("Email__ClientSecret is required when Microsoft Graph email is enabled.");
-    if (!emailSenderUser || !emailSenderUser.includes("@"))
-      throw new Error("Email__SenderUser must be the sender mailbox user principal name.");
-    if (!emailApplicationBaseUrl)
-      throw new Error("Email__ApplicationBaseUrl is required when Microsoft Graph email is enabled.");
+    if (!emailSenderUser || !emailSenderUser.includes("@")) throw new Error("Email__SenderUser must be the sender mailbox user principal name.");
+    if (!emailApplicationBaseUrl) throw new Error("Email__ApplicationBaseUrl is required when Microsoft Graph email is enabled.");
     validateOrigin(emailApplicationBaseUrl, allowPrivateLanHttp);
   }
   const tmthub = loadTmthubConfig(env);
   const credentialVault = parseVaultKeys(env.CREDENTIAL_VAULT_KEYS);
   const pegasusRaw = optional(env, "PEGASUS_MCP_URL") ?? "https://pegasus-erp.tomastc.com/mcp";
   if (pegasusRaw !== "off" && !/^https:\/\/[^\s/]+\/\S*$/.test(pegasusRaw)) throw new Error("PEGASUS_MCP_URL must be an https URL, or off.");
+  const copilotOcrRaw = optional(env, "COPILOT_OCR_URL") ?? "https://copilot.tomastc.com/api/v1/ocr";
+  if (copilotOcrRaw !== "off" && !/^https:\/\/[^\s/]+\/\S*$/.test(copilotOcrRaw)) throw new Error("COPILOT_OCR_URL must be an https URL, or off.");
   const requestListRaw = optional(env, "PEGASUS_REQUEST_LIST") ?? "off";
   if (requestListRaw !== "off" && requestListRaw !== "excel" && requestListRaw !== "tool") throw new Error("PEGASUS_REQUEST_LIST must be off, excel or tool.");
   return {
@@ -543,9 +430,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     allowedHosts,
     trustProxy,
     corsOrigins,
-    businessTimeZone: normalizeBusinessTimeZone(
-      optional(env, "Business__TimeZoneId"),
-    ),
+    businessTimeZone: normalizeBusinessTimeZone(optional(env, "Business__TimeZoneId")),
     auth: {
       mode,
       ...(teamTestSigningKey ? { teamTestSigningKey } : {}),
@@ -558,8 +443,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     database: {
       connectionString: required(env, "ConnectionStrings__IoTTeamCenter"),
       ...(migrationConnectionString ? { migrationConnectionString } : {}),
-      trustServerCertificate:
-        environment === "development" || trustTeamTestCertificate,
+      trustServerCertificate: environment === "development" || trustTeamTestCertificate,
       runMigrations,
       ...(backupBeforeMigrations ? { backupBeforeMigrations } : {}),
       readOnly,
@@ -585,6 +469,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     ...(credentialVault ? { credentialVault } : {}),
     ...(siteMonitor ? { siteMonitor } : {}),
     ...(pegasusRaw !== "off" ? { pegasusMcpUrl: pegasusRaw } : {}),
+    ...(copilotOcrRaw !== "off" ? { copilotOcrUrl: copilotOcrRaw.replace(/\/$/, "") } : {}),
     pegasusRequestList: requestListRaw,
   };
 }

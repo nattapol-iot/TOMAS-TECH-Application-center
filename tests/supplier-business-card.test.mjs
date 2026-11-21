@@ -58,7 +58,7 @@ test("the scanner accepts a dragged card everywhere it is used", async () => {
   assert.match(scanner, /onDrop=\{dropped\}/);
   // Only an image is scanned; anything else reports why instead of failing silently.
   assert.match(scanner, /dataTransfer\?\.files \?\? \[\]\)\].find\(\(item\) => item\.type\.startsWith\("image\/"\)\)/);
-  assert.match(scanner, /if \(!file\) \{ setError/);
+  assert.match(scanner, /if \(!file\) \{\s*setError/);
   // A drop while a scan is running must not start a second one.
   assert.match(scanner, /if \(disabled \|\| busy\) return;/);
   // Dragging over a child element must not flicker the highlight off.

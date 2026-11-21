@@ -5,6 +5,7 @@ import { acquireApiToken } from "./auth-client";
 import { getTeamTestSession, IS_TEAM_TEST_MODE } from "./team-test-client";
 import { IS_TMT_ID_MODE } from "./tmt-id.constants";
 import { isTrustedWebProtocol } from "./network-origin";
+import type { BusinessCardExtraction } from "../../lib/business-card";
 import type { ErpGroup } from "../../lib/erp-estimate-groups";
 import type { RecordViewer, SyncBeat } from "../../lib/record-live-sync";
 import type { EstimateDiscipline } from "../../lib/estimate-disciplines";
@@ -13,16 +14,8 @@ export const IS_API_CONFIGURED = (() => {
   try {
     const url = new URL(API_BASE_URL);
     const trustedProtocol = isTrustedWebProtocol(url, IS_TEAM_TEST_MODE);
-    const placeholderHost = url.hostname.endsWith(".invalid")
-      || url.hostname === "example.tomastc.com"
-      || url.hostname.endsWith(".example.tomastc.com");
-    return trustedProtocol
-      && !placeholderHost
-      && !url.username
-      && !url.password
-      && url.pathname === "/"
-      && !url.search
-      && !url.hash;
+    const placeholderHost = url.hostname.endsWith(".invalid") || url.hostname === "example.tomastc.com" || url.hostname.endsWith(".example.tomastc.com");
+    return trustedProtocol && !placeholderHost && !url.username && !url.password && url.pathname === "/" && !url.search && !url.hash;
   } catch {
     return false;
   }
@@ -135,7 +128,7 @@ export type PerformanceCycle = {
 
 export type PerformanceAssessment = {
   overallScore?: number | null;
-  activity?: {mode:string;weight:number;eligible:boolean;eligibleDays:number;automatic:number|null;total:number|null;rating:number|null;frozen:boolean};
+  activity?: { mode: string; weight: number; eligible: boolean; eligibleDays: number; automatic: number | null; total: number | null; rating: number | null; frozen: boolean };
   id: number;
   employeeId: number;
   userId: number;
@@ -988,16 +981,25 @@ export type EstimateErpOutcome = { sent: boolean; result?: string | null; costSh
 
 /** A row of the ERP summary sheet as the _ERP_ workbook writes it: what the ERP gets as one Cost Sheet line. */
 export type EstimateErpSheetRow = {
-  sourceType: string; description: string; internalCategory: string; erpCategory: string; amount: number;
-  supplier?: string; brand?: string; leadTime?: string; quoteRevision?: string; unitPrice?: number; quantity?: number; unit?: string;
+  sourceType: string;
+  description: string;
+  internalCategory: string;
+  erpCategory: string;
+  amount: number;
+  supplier?: string;
+  brand?: string;
+  leadTime?: string;
+  quoteRevision?: string;
+  unitPrice?: number;
+  quantity?: number;
+  unit?: string;
 };
 
 /** Sends the sheet's rows; `resend` writes the revision again, for a Cost Sheet deleted in the ERP. */
 export const sendEstimateToErp = (id: number, lines: EstimateErpSheetRow[], resend = false) =>
   apiRequest<EstimateErpOutcome>(`/api/v1/estimates/${id}/erp-send`, { method: "POST", body: JSON.stringify({ lines, resend }) });
 
-export const refreshEstimateErp = (id: number) =>
-  apiRequest<EstimateErpOutcome>(`/api/v1/estimates/${id}/erp-refresh`, { method: "POST", body: "{}" });
+export const refreshEstimateErp = (id: number) => apiRequest<EstimateErpOutcome>(`/api/v1/estimates/${id}/erp-refresh`, { method: "POST", body: "{}" });
 
 export type EstimateErpMappingInput = {
   sourceType: EstimateErpSourceType;
@@ -1128,7 +1130,11 @@ export type EstimateAssignmentMutationResult = {
 };
 
 export class ApiClientError extends Error {
-  constructor(public readonly status: number, public readonly code: string, message: string) {
+  constructor(
+    public readonly status: number,
+    public readonly code: string,
+    message: string,
+  ) {
     super(message);
   }
 }
@@ -1158,9 +1164,9 @@ async function authorizedFetch(path: string, init?: RequestInit, timeoutMs = 30_
     credentials: IS_TMT_ID_MODE ? "include" : "same-origin",
   });
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ code: "http_error", message: response.statusText })) as { code?: string; message?: string };
-    const code = response.status === 401 ? "session_expired" : error.code ?? "http_error";
-    const message = response.status === 401 ? "Your session is no longer valid. Please sign in again." : error.message ?? "The request failed.";
+    const error = (await response.json().catch(() => ({ code: "http_error", message: response.statusText }))) as { code?: string; message?: string };
+    const code = response.status === 401 ? "session_expired" : (error.code ?? "http_error");
+    const message = response.status === 401 ? "Your session is no longer valid. Please sign in again." : (error.message ?? "The request failed.");
     throw new ApiClientError(response.status, code, message);
   }
   return response;
@@ -1173,7 +1179,9 @@ export async function apiRequest<T>(path: string, init?: RequestInit, timeoutMs 
 }
 
 export async function uploadCrmDocument(file: File, customerId: number, opportunityId?: number, activityId?: number) {
-  const body = new FormData(); body.set("file", file); body.set("customerId", String(customerId));
+  const body = new FormData();
+  body.set("file", file);
+  body.set("customerId", String(customerId));
   if (opportunityId) body.set("opportunityId", String(opportunityId));
   if (activityId) body.set("activityId", String(activityId));
   return (await authorizedFetch("/api/v1/crm/documents", { method: "POST", body }, 120_000)).json();
@@ -1198,28 +1206,45 @@ export async function prepareReportEvidenceImage(file: File): Promise<File> {
   try {
     const image = new Image();
     image.decoding = "async";
-    await new Promise<void>((resolve, reject) => { image.onload = () => resolve(); image.onerror = () => reject(new Error("This image format cannot be opened. Choose a JPEG or PNG image.")); image.src = source; });
-    const maximum = 2400,scale = Math.min(1,maximum/Math.max(image.naturalWidth,image.naturalHeight));
-    const canvas = document.createElement("canvas");canvas.width=Math.max(1,Math.round(image.naturalWidth*scale));canvas.height=Math.max(1,Math.round(image.naturalHeight*scale));
-    const context=canvas.getContext("2d");if(!context)throw new Error("This browser cannot prepare the image.");context.drawImage(image,0,0,canvas.width,canvas.height);
-    const blob=await new Promise<Blob>((resolve,reject)=>canvas.toBlob(value=>value?resolve(value):reject(new Error("The image could not be prepared.")),"image/jpeg",0.86));
-    const stem=(file.name||"evidence").replace(/\.[^.]+$/,"").replace(/[^\p{L}\p{N}._ -]+/gu,"-").slice(0,120)||"evidence";
-    return new File([blob],`${stem}.jpg`,{type:"image/jpeg",lastModified:Date.now()});
-  } finally { URL.revokeObjectURL(source); }
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error("This image format cannot be opened. Choose a JPEG or PNG image."));
+      image.src = source;
+    });
+    const maximum = 2400,
+      scale = Math.min(1, maximum / Math.max(image.naturalWidth, image.naturalHeight));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+    canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("This browser cannot prepare the image.");
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((value) => (value ? resolve(value) : reject(new Error("The image could not be prepared."))), "image/jpeg", 0.86));
+    const stem =
+      (file.name || "evidence")
+        .replace(/\.[^.]+$/, "")
+        .replace(/[^\p{L}\p{N}._ -]+/gu, "-")
+        .slice(0, 120) || "evidence";
+    return new File([blob], `${stem}.jpg`, { type: "image/jpeg", lastModified: Date.now() });
+  } finally {
+    URL.revokeObjectURL(source);
+  }
 }
 
 export async function uploadReportEvidence(reportId: number, file: File): Promise<ReportEvidenceAttachment> {
-  const body=new FormData();body.set("file",await prepareReportEvidenceImage(file));
-  return (await authorizedFetch(`/api/v1/reports/workspace/${reportId}/evidence`,{method:"POST",body},120_000)).json() as Promise<ReportEvidenceAttachment>;
+  const body = new FormData();
+  body.set("file", await prepareReportEvidenceImage(file));
+  return (await authorizedFetch(`/api/v1/reports/workspace/${reportId}/evidence`, { method: "POST", body }, 120_000)).json() as Promise<ReportEvidenceAttachment>;
 }
 
 export async function downloadReportEvidence(reportId: number, attachmentId: number): Promise<Blob> {
-  return (await authorizedFetch(`/api/v1/reports/workspace/${reportId}/evidence/${attachmentId}/content`,{headers:{Accept:"image/*"}},120_000)).blob();
+  return (await authorizedFetch(`/api/v1/reports/workspace/${reportId}/evidence/${attachmentId}/content`, { headers: { Accept: "image/*" } }, 120_000)).blob();
 }
 
 /** A screenshot for a customer issue (Projects > Punchlist): downscaled to JPEG like report evidence. */
 export async function uploadIssueImage<T>(itemId: number, file: File): Promise<T> {
-  const body = new FormData(); body.set("file", await prepareReportEvidenceImage(file));
+  const body = new FormData();
+  body.set("file", await prepareReportEvidenceImage(file));
   return (await authorizedFetch(`/api/v1/issue-items/${itemId}/images`, { method: "POST", body }, 120_000)).json() as Promise<T>;
 }
 
@@ -1228,8 +1253,14 @@ export async function downloadIssueImage(itemId: number, imageId: number): Promi
 }
 
 export type ReportExportRecord = {
-  id: number; revision: number; format: "pdf" | "pptx"; fileName: string;
-  contentType: string; sizeBytes: number; sha256: string; createdAt: string;
+  id: number;
+  revision: number;
+  format: "pdf" | "pptx";
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+  sha256: string;
+  createdAt: string;
 };
 
 /** Archive a generated PDF/PPTX export to NAS-backed document storage so every export is retained. */
@@ -1244,14 +1275,14 @@ export const loadBootstrap = () => apiRequest<BootstrapData>("/api/v1/bootstrap"
 
 /** Master data's baht rate in force on a date; null rate when master has none for the currency. */
 export type MasterThbRate = { currency: string; rate: number; effectiveFrom: string };
-export const fetchMasterThbRate = (currency: string, date: string) =>
-  apiRequest<{ rate: MasterThbRate | null }>(`/api/v1/exchange-rates/thb?${new URLSearchParams({ currency, date })}`);
+export const fetchMasterThbRate = (currency: string, date: string) => apiRequest<{ rate: MasterThbRate | null }>(`/api/v1/exchange-rates/thb?${new URLSearchParams({ currency, date })}`);
 
 /** Replaces the person's starred menu entries (at most eight, in the order starred) and returns the saved list. */
-export const saveMenuFavorites = (views: readonly string[]) => apiRequest<{ views: string[] }>("/api/v1/me/menu-favorites", {
-  method: "PUT",
-  body: JSON.stringify({ views }),
-});
+export const saveMenuFavorites = (views: readonly string[]) =>
+  apiRequest<{ views: string[] }>("/api/v1/me/menu-favorites", {
+    method: "PUT",
+    body: JSON.stringify({ views }),
+  });
 
 export async function downloadSupportAttachment(ticketId: number, attachmentId: number) {
   return (await authorizedFetch(`/api/v1/support/tickets/${ticketId}/attachments/${attachmentId}/content`, { headers: { Accept: "application/octet-stream" } }, 120_000)).blob();
@@ -1259,7 +1290,9 @@ export async function downloadSupportAttachment(ticketId: number, attachmentId: 
 
 export async function uploadSupportAttachment(ticketId: number, file: File, requestKey: string, internal = false) {
   const body = new FormData();
-  body.append("file", file); body.append("requestKey", requestKey); body.append("internal", String(internal));
+  body.append("file", file);
+  body.append("requestKey", requestKey);
+  body.append("internal", String(internal));
   return (await authorizedFetch(`/api/v1/support/tickets/${ticketId}/attachments`, { method: "POST", body }, 120_000)).json() as Promise<{ id: number }>;
 }
 
@@ -1268,32 +1301,38 @@ export async function downloadHistoricalPrSource(id: number): Promise<Blob> {
   return response.blob();
 }
 
-export const loadPerformanceOverview = (cycleId?: number) =>
-  apiRequest<PerformanceOverview>(`/api/v1/performance/overview${cycleId ? `?cycleId=${cycleId}` : ""}`);
+export const loadPerformanceOverview = (cycleId?: number) => apiRequest<PerformanceOverview>(`/api/v1/performance/overview${cycleId ? `?cycleId=${cycleId}` : ""}`);
 
-export const loadPerformanceEvidence = (employeeId: number, cycleId: number) =>
-  apiRequest<PerformanceEvidence>(`/api/v1/performance/evidence/${employeeId}?cycleId=${cycleId}`);
+export const loadPerformanceEvidence = (employeeId: number, cycleId: number) => apiRequest<PerformanceEvidence>(`/api/v1/performance/evidence/${employeeId}?cycleId=${cycleId}`);
 
-export const updatePerformanceAssessment = (employeeId: number, input: {
-  cycleId: number;
-  scores: Array<{ areaCode: string; score: number; evidence?: string }>;
-  summary: string;
-  developmentGoal: string;
-  submit: boolean;
-  rowVersion?: string | null;
-}) => apiRequest<{ id: number; status: string; rowVersion: string }>(`/api/v1/performance/assessments/${employeeId}`, {
-  method: "PUT",
-  body: JSON.stringify(input),
-});
+export const updatePerformanceAssessment = (
+  employeeId: number,
+  input: {
+    cycleId: number;
+    scores: Array<{ areaCode: string; score: number; evidence?: string }>;
+    summary: string;
+    developmentGoal: string;
+    submit: boolean;
+    rowVersion?: string | null;
+  },
+) =>
+  apiRequest<{ id: number; status: string; rowVersion: string }>(`/api/v1/performance/assessments/${employeeId}`, {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
 
-export const completePerformanceAssessment = (employeeId: number, input: {
-  cycleId: number;
-  calibrationNote: string;
-  rowVersion: string;
-}) => apiRequest<{ id: number; status: "COMPLETED"; rowVersion: string }>(`/api/v1/performance/assessments/${employeeId}/complete`, {
-  method: "POST",
-  body: JSON.stringify(input),
-});
+export const completePerformanceAssessment = (
+  employeeId: number,
+  input: {
+    cycleId: number;
+    calibrationNote: string;
+    rowVersion: string;
+  },
+) =>
+  apiRequest<{ id: number; status: "COMPLETED"; rowVersion: string }>(`/api/v1/performance/assessments/${employeeId}/complete`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 
 const queryString = (values: Record<string, string | number | boolean | undefined>) => {
   const params = new URLSearchParams();
@@ -1325,12 +1364,10 @@ export const listInquiries = (values: {
   dueTo?: string;
   /** The Sales V2 list's summary bar: adds statusSummary, one row per status over every filter but the status. */
   summary?: boolean;
-}) =>
-  apiRequest<PagedResult<InquirySummary> & { statusSummary?: InquiryStatusCount[] }>(`/api/v1/inquiries/${queryString(values)}`);
+}) => apiRequest<PagedResult<InquirySummary> & { statusSummary?: InquiryStatusCount[] }>(`/api/v1/inquiries/${queryString(values)}`);
 
 export const createInquiry = (input: CreateInquiryInput) =>
-  apiRequest<{ id: number; number: string; rowVersion: string; notification: AssignmentNotificationResult }>(
-    "/api/v1/inquiries/", { method: "POST", body: JSON.stringify(input) });
+  apiRequest<{ id: number; number: string; rowVersion: string; notification: AssignmentNotificationResult }>("/api/v1/inquiries/", { method: "POST", body: JSON.stringify(input) });
 
 export const loadInquiry = (id: number) => apiRequest<InquiryDetail>(`/api/v1/inquiries/${id}`);
 
@@ -1385,7 +1422,11 @@ export async function downloadInquiryAttachment(id: number, attachmentId: number
   const quotedName = disposition.match(/filename="([^"]+)"/i)?.[1];
   let fileName = quotedName;
   if (encodedName) {
-    try { fileName = decodeURIComponent(encodedName); } catch { fileName = encodedName; }
+    try {
+      fileName = decodeURIComponent(encodedName);
+    } catch {
+      fileName = encodedName;
+    }
   }
   return { blob: await response.blob(), fileName };
 }
@@ -1405,8 +1446,7 @@ export const listEstimates = (values: {
   revision?: number;
   /** The V2 list's summary bar: adds statusSummary, one row per status over every filter but the status. */
   summary?: boolean;
-}) =>
-  apiRequest<PagedResult<EstimateSummary> & { statusSummary?: EstimateStatusCount[] }>(`/api/v1/estimates/${queryString(values)}`);
+}) => apiRequest<PagedResult<EstimateSummary> & { statusSummary?: EstimateStatusCount[] }>(`/api/v1/estimates/${queryString(values)}`);
 
 export type EstimateStatusCount = { status: string; count: number; total: number };
 
@@ -1479,21 +1519,41 @@ export async function downloadSupplierQuotation(id: number) {
   const encodedName = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
   const quotedName = disposition.match(/filename="([^"]+)"/i)?.[1];
   let fileName = quotedName;
-  if (encodedName) { try { fileName = decodeURIComponent(encodedName); } catch { fileName = encodedName; } }
+  if (encodedName) {
+    try {
+      fileName = decodeURIComponent(encodedName);
+    } catch {
+      fileName = encodedName;
+    }
+  }
   return { blob: await response.blob(), fileName };
 }
 
 export type QuotationLineItem = {
-  id?: number; lineNo: number; itemCode: string; description: string;
-  brand: string; model: string; qty: number; unit: string;
-  unitPrice: number; lineTotal?: number; currency: string; remark: string;
+  id?: number;
+  lineNo: number;
+  itemCode: string;
+  description: string;
+  brand: string;
+  model: string;
+  qty: number;
+  unit: string;
+  unitPrice: number;
+  lineTotal?: number;
+  currency: string;
+  remark: string;
 };
 
 export type QuotationLineForPriceLibrary = QuotationLineItem & {
-  quotationId: number; quotationNumber: string; supplierReference: string;
-  receivedDate: string; validUntil: string;
-  supplierId: number; supplierName: string;
-  sourceKind: "Document" | "WebReference"; sourceUrl: string;
+  quotationId: number;
+  quotationNumber: string;
+  supplierReference: string;
+  receivedDate: string;
+  validUntil: string;
+  supplierId: number;
+  supplierName: string;
+  sourceKind: "Document" | "WebReference";
+  sourceUrl: string;
 };
 
 /**
@@ -1512,18 +1572,14 @@ export const createReferencePrice = (input: {
   thbRate?: number | null;
   inquiryId?: number | null;
   lines?: QuotationLineItem[];
-}) => apiRequest<{ id: number; quotationNumber: string; rowVersion: string; lineCount: number }>(
-  "/api/v1/supplier-quotations/reference", { method: "POST", body: JSON.stringify(input) },
-);
+}) => apiRequest<{ id: number; quotationNumber: string; rowVersion: string; lineCount: number }>("/api/v1/supplier-quotations/reference", { method: "POST", body: JSON.stringify(input) });
 
 export const saveQuotationLines = (quotationId: number, lines: QuotationLineItem[]) =>
   apiRequest<void>(`/api/v1/supplier-quotations/${quotationId}/lines`, { method: "PUT", body: JSON.stringify({ lines }) });
 
-export const listQuotationLines = (quotationId: number) =>
-  apiRequest<QuotationLineItem[]>(`/api/v1/supplier-quotations/${quotationId}/lines`);
+export const listQuotationLines = (quotationId: number) => apiRequest<QuotationLineItem[]>(`/api/v1/supplier-quotations/${quotationId}/lines`);
 
-export const listAllQuotationLinesForPriceLibrary = () =>
-  apiRequest<QuotationLineForPriceLibrary[]>("/api/v1/supplier-quotation-lines");
+export const listAllQuotationLinesForPriceLibrary = () => apiRequest<QuotationLineForPriceLibrary[]>("/api/v1/supplier-quotation-lines");
 
 export const updateSupplierQuotation = (
   id: number,
@@ -1541,84 +1597,118 @@ export const updateSupplierQuotation = (
     sourceUrl?: string;
     rowVersion: string;
   },
-) => apiRequest<{ rowVersion: string }>(`/api/v1/supplier-quotations/${id}`, {
-  method: "PATCH",
-  body: JSON.stringify(patch),
-})
+) =>
+  apiRequest<{ rowVersion: string }>(`/api/v1/supplier-quotations/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  });
 
-export const deleteSupplierQuotation = (id: number) =>
-  apiRequest<void>(`/api/v1/supplier-quotations/${id}`, { method: "DELETE" })
+export const deleteSupplierQuotation = (id: number) => apiRequest<void>(`/api/v1/supplier-quotations/${id}`, { method: "DELETE" });
 
-export const updateSupplier = (
-  id: number,
-  input: { name: string; category: string; contact?: string; email?: string; phone?: string; brands?: string[] },
-) => apiRequest<{ id: number }>(`/api/v1/master/suppliers/${id}`, {
-  method: "PUT",
-  body: JSON.stringify(input),
-})
+export const updateSupplier = (id: number, input: { name: string; category: string; contact?: string; email?: string; phone?: string; brands?: string[] }) =>
+  apiRequest<{ id: number }>(`/api/v1/master/suppliers/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
 
-export const deleteSupplier = (id: number) =>
-  apiRequest<void>(`/api/v1/master/suppliers/${id}`, { method: "DELETE" })
+export const deleteSupplier = (id: number) => apiRequest<void>(`/api/v1/master/suppliers/${id}`, { method: "DELETE" });
 
 export const findOrCreateSupplier = (input: { name: string; taxId: string; category?: string }) =>
   apiRequest<{ id: number; name: string; created: boolean }>("/api/v1/master/suppliers/find-or-create", {
-    method: "POST", body: JSON.stringify(input),
+    method: "POST",
+    body: JSON.stringify(input),
   });
 
 // PDF quotation parsing — proxied through the Node backend to the Python pdf-parser service
 export type ParsedQuotationResult = {
-  supplierName: string; supplierTaxId: string; quotationNumber: string;
-  receivedDate: string; validUntil: string;
+  supplierName: string;
+  supplierTaxId: string;
+  quotationNumber: string;
+  receivedDate: string;
+  validUntil: string;
   currency: "THB" | "JPY" | "USD" | "EUR";
   totalAmount: number;
   lines: QuotationLineItem[];
-  rawText: string; requiresOcr: boolean;
+  rawText: string;
+  requiresOcr: boolean;
   confidence: Record<string, "high" | "low" | "none">;
 };
+
+// Copilot reads documents on one shared GPU queue; the API gives up at 280 s, so the browser waits a little longer than that.
+const COPILOT_SCAN_TIMEOUT_MS = 300_000;
 
 export async function parsePdfViaBackend(file: File): Promise<ParsedQuotationResult> {
   const form = new FormData();
   form.append("file", file, file.name);
-  // authorizedFetch injects auth headers and throws ApiClientError on non-2xx.
-  // FormData body lets the browser set the correct multipart/form-data boundary automatically.
-  const response = await authorizedFetch(
-    "/api/v1/supplier-quotations/parse-pdf",
-    { method: "POST", body: form },
-    120_000, // OCR on large scanned PDFs can take up to 2 minutes
-  );
+  const response = await authorizedFetch("/api/v1/supplier-quotations/parse-pdf", { method: "POST", body: form }, COPILOT_SCAN_TIMEOUT_MS);
   return response.json() as Promise<ParsedQuotationResult>;
+}
+
+export async function scanBusinessCardViaBackend(image: Blob, fileName: string): Promise<BusinessCardExtraction> {
+  const form = new FormData();
+  form.append("file", image, fileName);
+  const response = await authorizedFetch("/api/v1/business-cards/scan", { method: "POST", body: form }, COPILOT_SCAN_TIMEOUT_MS);
+  return response.json() as Promise<BusinessCardExtraction>;
 }
 
 export const createEstimate = (input: CreateEstimateInput) =>
   apiRequest<{ id: number; number: string; rowVersion: string; copied: Omit<EstimateCopyResult, "estimateRowVersion"> | null }>("/api/v1/estimates/", { method: "POST", body: JSON.stringify(input) });
 
-export const estimateWorkflow = (id: number, action: "submit" | "approve" | "request-revision" | "create-revision", rowVersion: string, comment = "",
-  erpLines: EstimateErpSheetRow[] | null = null) =>
+export const estimateWorkflow = (id: number, action: "submit" | "approve" | "request-revision" | "create-revision", rowVersion: string, comment = "", erpLines: EstimateErpSheetRow[] | null = null) =>
   /* Approving also sends the ERP sheet's rows to the Pegasus ERP when the server is connected; `erp` says how that went. */
   apiRequest<{ id: number; status: string; rowVersion: string; erp?: EstimateErpOutcome }>(`/api/v1/estimates/${id}/${action}`, {
     method: "POST",
     body: JSON.stringify({ comment, rowVersion, ...(erpLines ? { erpLines } : {}) }),
   });
 
-export const loadEstimateCostWorkspace = (id: number) =>
-  apiRequest<EstimateCostWorkspace>(`/api/v1/estimates/${id}/cost-workspace`);
+export const loadEstimateCostWorkspace = (id: number) => apiRequest<EstimateCostWorkspace>(`/api/v1/estimates/${id}/cost-workspace`);
 
 /** The lines of one revision in the history, as they counted then. Read-only. */
 export type EstimateRevisionDetail = {
-  estimateId: number; revision: number; code: string; reason: string; status: string; total: number; createdAt: string;
+  estimateId: number;
+  revision: number;
+  code: string;
+  reason: string;
+  status: string;
+  total: number;
+  createdAt: string;
   contingencyRate: number | null;
   /** Null for snapshots written before the breakdown was archived; `total` is always there. */
   totals: Record<"material" | "engineering" | "outsource" | "transportation" | "accommodation" | "other" | "subtotal" | "overhead" | "contingency" | "total", number | null> | null;
-  costItems: Array<{ id: number; categoryCode: string; category: string; module: string; itemCode: string; description: string; brand: string; model: string;
-    supplierName: string | null; quantity: number; unit: string; unitCost: number; lineTotal: number; amount: number }>;
-  manhourLines: Array<{ id: number; package: string; activity: string; discipline: string | null; provider: string; supplierName: string | null;
-    engineers: number; manDays: number; hoursPerDay: number; dailyRate: number; lineCost: number }>;
+  costItems: Array<{
+    id: number;
+    categoryCode: string;
+    category: string;
+    module: string;
+    itemCode: string;
+    description: string;
+    brand: string;
+    model: string;
+    supplierName: string | null;
+    quantity: number;
+    unit: string;
+    unitCost: number;
+    lineTotal: number;
+    amount: number;
+  }>;
+  manhourLines: Array<{
+    id: number;
+    package: string;
+    activity: string;
+    discipline: string | null;
+    provider: string;
+    supplierName: string | null;
+    engineers: number;
+    manDays: number;
+    hoursPerDay: number;
+    dailyRate: number;
+    lineCost: number;
+  }>;
   expenseLines: Array<{ id: number; package: string; expenseType: string; description: string; quantity: number; unit: string; unitCost: number; lineTotal: number }>;
   otherCostLines: Array<{ id: number; category: string; description: string; quantity: number; unit: string; unitCost: number; lineTotal: number }>;
 };
 
-export const loadEstimateRevision = (id: number, revision: number) =>
-  apiRequest<EstimateRevisionDetail>(`/api/v1/estimates/${id}/revisions/${revision}`);
+export const loadEstimateRevision = (id: number, revision: number) => apiRequest<EstimateRevisionDetail>(`/api/v1/estimates/${id}/revisions/${revision}`);
 
 /** Opens a new revision holding a copy of an earlier one; the revision in hand stays in the history. */
 export const restoreEstimateRevision = (id: number, fromRevision: number, rowVersion: string, comment = "") =>
@@ -1631,15 +1721,12 @@ export const restoreEstimateRevision = (id: number, fromRevision: number, rowVer
 export const syncEstimate = (id: number, since: string, editingKey: string | null) =>
   apiRequest<SyncBeat>(`/api/v1/estimates/${id}/sync`, { method: "POST", body: JSON.stringify({ since, editingKey }) });
 
-export const pingInquiryPresence = (id: number) =>
-  apiRequest<{ viewers: RecordViewer[] }>(`/api/v1/inquiries/${id}/presence`, { method: "POST", body: "{}" });
+export const pingInquiryPresence = (id: number) => apiRequest<{ viewers: RecordViewer[] }>(`/api/v1/inquiries/${id}/presence`, { method: "POST", body: "{}" });
 
 /** Best effort: a record left without saying so drops out once its last beat goes stale. */
-export const leaveRecord = (kind: "estimates" | "inquiries", id: number) =>
-  apiRequest<void>(`/api/v1/${kind}/${id}/presence`, { method: "DELETE" }).catch(() => undefined);
+export const leaveRecord = (kind: "estimates" | "inquiries", id: number) => apiRequest<void>(`/api/v1/${kind}/${id}/presence`, { method: "DELETE" }).catch(() => undefined);
 
-export const loadEstimateErpSummary = (id: number) =>
-  apiRequest<EstimateErpSummary>(`/api/v1/estimates/${id}/erp-summary`);
+export const loadEstimateErpSummary = (id: number) => apiRequest<EstimateErpSummary>(`/api/v1/estimates/${id}/erp-summary`);
 
 export const updateEstimateErpMappings = (id: number, estimateRowVersion: string, mappings: EstimateErpMappingInput[]) =>
   apiRequest<{ estimateRowVersion: string; erpSummary: EstimateErpSummary }>(`/api/v1/estimates/${id}/erp-mappings`, {
@@ -1647,7 +1734,11 @@ export const updateEstimateErpMappings = (id: number, estimateRowVersion: string
     body: JSON.stringify({ estimateRowVersion, mappings }),
   });
 
-export const createEstimateErpGroup = (id: number, estimateRowVersion: string, input: { title: string; quantity?: number; unit?: string; members: Array<{ sourceType: EstimateErpSourceType; sourceId: number }> }) =>
+export const createEstimateErpGroup = (
+  id: number,
+  estimateRowVersion: string,
+  input: { title: string; quantity?: number; unit?: string; members: Array<{ sourceType: EstimateErpSourceType; sourceId: number }> },
+) =>
   apiRequest<{ estimateRowVersion: string; erpSummary: EstimateErpSummary }>(`/api/v1/estimates/${id}/erp-groups`, {
     method: "POST",
     body: JSON.stringify({ estimateRowVersion, ...input }),
@@ -1781,8 +1872,7 @@ export type MyEstimateAssignment = {
 };
 
 /** Estimate sections assigned to the signed-in engineer, started or not. */
-export const listMyEstimateAssignments = (values: { includeClosed?: boolean } = {}) =>
-  apiRequest<MyEstimateAssignment[]>(`/api/v1/me/estimate-assignments${queryString(values)}`);
+export const listMyEstimateAssignments = (values: { includeClosed?: boolean } = {}) => apiRequest<MyEstimateAssignment[]>(`/api/v1/me/estimate-assignments${queryString(values)}`);
 
 export const updateEstimateContingency = (estimateId: number, contingencyRate: number, rowVersion: string) =>
   apiRequest<{ id: number; contingencyRate: number; rowVersion: string }>(`/api/v1/estimates/${estimateId}/contingency`, {
@@ -1790,8 +1880,7 @@ export const updateEstimateContingency = (estimateId: number, contingencyRate: n
     body: JSON.stringify({ contingencyRate, rowVersion }),
   });
 
-export const listProjects = (values: { page?: number; pageSize?: number; search?: string; status?: string }) =>
-  apiRequest<PagedResult<ProjectSummary>>(`/api/v1/projects/${queryString(values)}`);
+export const listProjects = (values: { page?: number; pageSize?: number; search?: string; status?: string }) => apiRequest<PagedResult<ProjectSummary>>(`/api/v1/projects/${queryString(values)}`);
 
 export const createProject = (input: CreateProjectInput) =>
   apiRequest<{ id: number; number: string; rowVersion: string; notification: AssignmentNotificationResult }>("/api/v1/projects/", { method: "POST", body: JSON.stringify(input) });
@@ -1807,8 +1896,7 @@ export type ScheduleTemplateRow = { name: string; startOffsetDays: number | null
 export type ScheduleTemplate = { id: number; name: string; updatedAt: string; updatedBy: string | null; rowVersion: string; rows: ScheduleTemplateRow[] };
 export type ScheduleTemplateInput = { name: string; rows: ScheduleTemplateRow[] };
 export const listScheduleTemplates = () => apiRequest<ScheduleTemplate[]>("/api/v1/schedule-templates");
-export const createScheduleTemplate = (input: ScheduleTemplateInput) =>
-  apiRequest<{ id: number; rowVersion: string }>("/api/v1/schedule-templates", { method: "POST", body: JSON.stringify(input) });
+export const createScheduleTemplate = (input: ScheduleTemplateInput) => apiRequest<{ id: number; rowVersion: string }>("/api/v1/schedule-templates", { method: "POST", body: JSON.stringify(input) });
 export const updateScheduleTemplate = (id: number, input: ScheduleTemplateInput & { rowVersion: string }) =>
   apiRequest<{ id: number; rowVersion: string }>(`/api/v1/schedule-templates/${id}`, { method: "PUT", body: JSON.stringify(input) });
 export const deleteScheduleTemplate = (id: number, rowVersion: string) =>
@@ -1839,17 +1927,16 @@ export type UpdateProjectInput = {
   scheduleVersion?: string | null;
 };
 
-export const listProjectContactOptions = (customerId: number) =>
-  apiRequest<ProjectContactOption[]>(`/api/v1/projects/contact-options?customerId=${customerId}`);
+export const listProjectContactOptions = (customerId: number) => apiRequest<ProjectContactOption[]>(`/api/v1/projects/contact-options?customerId=${customerId}`);
 
 // Omitted fields keep their saved value, so a screen can send only what it changed.
 export const updateProject = (projectId: number, input: UpdateProjectInput) =>
   apiRequest<ProjectSummary & { number: string }>(`/api/v1/projects/${projectId}`, {
-    method: "PUT", body: JSON.stringify(input),
+    method: "PUT",
+    body: JSON.stringify(input),
   });
 
-export const listProjectDocuments = (projectId: number) =>
-  apiRequest<ProjectDocument[]>(`/api/v1/projects/${projectId}/documents`);
+export const listProjectDocuments = (projectId: number) => apiRequest<ProjectDocument[]>(`/api/v1/projects/${projectId}/documents`);
 
 /** Takes a mistaken upload out of the project. The row and the stored file stay as evidence. */
 export const withdrawProjectDocument = (projectId: number, documentId: number, input: { rowVersion: string; reason: string }) =>
@@ -1867,8 +1954,7 @@ export type ProjectMember = {
   addedAt: string;
 };
 
-export const listProjectMembers = (projectId: number) =>
-  apiRequest<ProjectMember[]>(`/api/v1/projects/${projectId}/members`);
+export const listProjectMembers = (projectId: number) => apiRequest<ProjectMember[]>(`/api/v1/projects/${projectId}/members`);
 
 export const addProjectMember = (projectId: number, input: { userId: number; roleOnProject?: string }) =>
   apiRequest<{ userId: number; roleOnProject: string }>(`/api/v1/projects/${projectId}/members`, {
@@ -1876,8 +1962,7 @@ export const addProjectMember = (projectId: number, input: { userId: number; rol
     body: JSON.stringify(input),
   });
 
-export const removeProjectMember = (projectId: number, userId: number) =>
-  apiRequest<void>(`/api/v1/projects/${projectId}/members/${userId}`, { method: "DELETE" });
+export const removeProjectMember = (projectId: number, userId: number) => apiRequest<void>(`/api/v1/projects/${projectId}/members/${userId}`, { method: "DELETE" });
 
 export type DrawingTask = { id: number; name: string; leaderId: number | null; managerId: number | null; leaderName: string | null; managerName: string | null };
 export const listDrawingTasks = (projectId: number) => apiRequest<DrawingTask[]>(`/api/v1/projects/${projectId}/drawing-tasks`);
@@ -1900,41 +1985,51 @@ export async function downloadProjectDocument(projectId: number, documentId: num
   const quotedName = disposition.match(/filename="([^"]+)"/i)?.[1];
   let fileName = quotedName;
   if (encodedName) {
-    try { fileName = decodeURIComponent(encodedName); } catch { fileName = encodedName; }
+    try {
+      fileName = decodeURIComponent(encodedName);
+    } catch {
+      fileName = encodedName;
+    }
   }
   return { blob: await response.blob(), fileName };
 }
 
-export const createCustomer = (input: CreateCustomerInput) =>
-  apiRequest<CreatedMasterRecord>("/api/v1/master/customers", { method: "POST", body: JSON.stringify(input) });
+export const createCustomer = (input: CreateCustomerInput) => apiRequest<CreatedMasterRecord>("/api/v1/master/customers", { method: "POST", body: JSON.stringify(input) });
 
-export const createSupplier = (input: CreateSupplierInput) =>
-  apiRequest<CreatedMasterRecord>("/api/v1/master/suppliers", { method: "POST", body: JSON.stringify(input) });
+export const createSupplier = (input: CreateSupplierInput) => apiRequest<CreatedMasterRecord>("/api/v1/master/suppliers", { method: "POST", body: JSON.stringify(input) });
 
-export const createInventoryItem = (input: CreateInventoryItemInput) =>
-  apiRequest<CreatedMasterRecord>("/api/v1/master/inventory-items", { method: "POST", body: JSON.stringify(input) });
+export const createInventoryItem = (input: CreateInventoryItemInput) => apiRequest<CreatedMasterRecord>("/api/v1/master/inventory-items", { method: "POST", body: JSON.stringify(input) });
 
-export const listEmployees = (values: { search?: string; activeOnly?: boolean } = {}) =>
-  apiRequest<EmployeeRecord[]>(`/api/v1/master/employees${queryString(values)}`);
+export const listEmployees = (values: { search?: string; activeOnly?: boolean } = {}) => apiRequest<EmployeeRecord[]>(`/api/v1/master/employees${queryString(values)}`);
 
 /** Someone who signed in with TMT ID but has no account yet (GET /api/v1/master/sign-in-requests). */
 export type SignInRequest = {
-  subject: string; email: string; name: string; username: string; attempts: number;
-  firstAttemptAt: string; lastAttemptAt: string;
+  subject: string;
+  email: string;
+  name: string;
+  username: string;
+  attempts: number;
+  firstAttemptAt: string;
+  lastAttemptAt: string;
   /** new: add the employee; registered: they only need to sign in again; linkedElsewhere: the email's account uses another sign-in. */
   status: "new" | "registered" | "linkedElsewhere";
 };
 
 export const listSignInRequests = () => apiRequest<SignInRequest[]>("/api/v1/master/sign-in-requests");
-export const dismissSignInRequest = (subject: string) =>
-  apiRequest<void>(`/api/v1/master/sign-in-requests/${encodeURIComponent(subject)}`, { method: "DELETE" });
+export const dismissSignInRequest = (subject: string) => apiRequest<void>(`/api/v1/master/sign-in-requests/${encodeURIComponent(subject)}`, { method: "DELETE" });
 
 /** An account that signs in but has no Employee Master record, so no department (GET /api/v1/master/unlinked-accounts). */
 export type UnlinkedAccount = {
-  userId: number; email: string; name: string; role: string; department: string;
-  createdAt: string; lastUsedAt: string | null;
+  userId: number;
+  email: string;
+  name: string;
+  role: string;
+  department: string;
+  createdAt: string;
+  lastUsedAt: string | null;
   /** An active employee already has this email but does not point at the account; saving that employee links it. */
-  employeeId: number | null; employeeNo: number | null;
+  employeeId: number | null;
+  employeeNo: number | null;
 };
 
 export const listUnlinkedAccounts = () => apiRequest<UnlinkedAccount[]>("/api/v1/master/unlinked-accounts");
@@ -1951,11 +2046,9 @@ export const updateEmployee = (id: number, input: EmployeeInput & { rowVersion: 
     body: JSON.stringify(input),
   });
 
-export const listAccessRoles = () =>
-  apiRequest<{ items: AccessRole[] }>("/api/v1/admin/roles");
+export const listAccessRoles = () => apiRequest<{ items: AccessRole[] }>("/api/v1/admin/roles");
 
-export const listUserRoles = (id: number) =>
-  apiRequest<UserRoleAssignment>(`/api/v1/admin/users/${id}/roles`);
+export const listUserRoles = (id: number) => apiRequest<UserRoleAssignment>(`/api/v1/admin/users/${id}/roles`);
 
 export const grantUserRole = (id: number, input: { roleCode: string; reason: string }) =>
   apiRequest<{ userId: number; roleCode: string }>(`/api/v1/admin/users/${id}/roles`, {
@@ -1963,8 +2056,7 @@ export const grantUserRole = (id: number, input: { roleCode: string; reason: str
     body: JSON.stringify(input),
   });
 
-export const revokeUserRole = (id: number, roleCode: string) =>
-  apiRequest<void>(`/api/v1/admin/users/${id}/roles/${encodeURIComponent(roleCode)}`, { method: "DELETE" });
+export const revokeUserRole = (id: number, roleCode: string) => apiRequest<void>(`/api/v1/admin/users/${id}/roles/${encodeURIComponent(roleCode)}`, { method: "DELETE" });
 
 export const updateUserRole = (id: number, input: { roleCode: string; rowVersion: string }) =>
   apiRequest<{ id: number; role: string; rowVersion: string }>(`/api/v1/admin/users/${id}/role`, {
@@ -1972,8 +2064,7 @@ export const updateUserRole = (id: number, input: { roleCode: string; rowVersion
     body: JSON.stringify(input),
   });
 
-export const listInventory = (values: { search?: string; reorderOnly?: boolean }) =>
-  apiRequest<ItemBalance[]>(`/api/v1/inventory/items${queryString(values)}`);
+export const listInventory = (values: { search?: string; reorderOnly?: boolean }) => apiRequest<ItemBalance[]>(`/api/v1/inventory/items${queryString(values)}`);
 
 // ---------------------------------------------------------------------------
 // Knowledge & Document Hub
@@ -2161,16 +2252,22 @@ export type KnowledgeNumberSequence = {
 };
 
 export type KnowledgeDashboard = {
-  totalDocuments: number; published: number; inWorkflow: number; expired: number;
-  reviewDueWithin90Days: number; myDrafts: number; presentations: number;
-  assignedReviews: number; assignedApprovals: number; acknowledgementsRequired: number; articles: number;
+  totalDocuments: number;
+  published: number;
+  inWorkflow: number;
+  expired: number;
+  reviewDueWithin90Days: number;
+  myDrafts: number;
+  presentations: number;
+  assignedReviews: number;
+  assignedApprovals: number;
+  acknowledgementsRequired: number;
+  articles: number;
 };
 
-export const getKnowledgeDashboard = () =>
-  apiRequest<KnowledgeDashboard>("/api/v1/knowledge/dashboard");
+export const getKnowledgeDashboard = () => apiRequest<KnowledgeDashboard>("/api/v1/knowledge/dashboard");
 
-export const getSalesMaterialCatalog = () =>
-  apiRequest<SalesMaterialCatalogPayload>("/api/v1/knowledge/sales-materials");
+export const getSalesMaterialCatalog = () => apiRequest<SalesMaterialCatalogPayload>("/api/v1/knowledge/sales-materials");
 
 export const updateSalesMaterialCatalog = (catalog: SalesMaterialCatalogPayload) =>
   apiRequest<SalesMaterialCatalogPayload>("/api/v1/knowledge/sales-materials", {
@@ -2182,17 +2279,33 @@ export const listKnowledgeCategories = (includeInactive = false) =>
   apiRequest<{ items: KnowledgeCategory[] }>(`/api/v1/knowledge/categories${queryString({ includeInactive: includeInactive || undefined })}`);
 
 export const createKnowledgeCategory = (input: {
-  parentId?: number; code: string; nameEn: string; nameTh?: string; nameJa?: string;
-  defaultDocumentType?: string; defaultConfidentiality?: string; sortOrder: number; isActive: boolean;
+  parentId?: number;
+  code: string;
+  nameEn: string;
+  nameTh?: string;
+  nameJa?: string;
+  defaultDocumentType?: string;
+  defaultConfidentiality?: string;
+  sortOrder: number;
+  isActive: boolean;
 }) => apiRequest<{ id: number }>("/api/v1/knowledge/categories", { method: "POST", body: JSON.stringify(input) });
 
-export const updateKnowledgeCategory = (id: number, input: {
-  parentId?: number; code: string; nameEn: string; nameTh?: string; nameJa?: string;
-  defaultDocumentType?: string; defaultConfidentiality?: string; sortOrder: number; isActive: boolean;
-}) => apiRequest<{ id: number }>(`/api/v1/knowledge/categories/${id}`, { method: "PUT", body: JSON.stringify(input) });
+export const updateKnowledgeCategory = (
+  id: number,
+  input: {
+    parentId?: number;
+    code: string;
+    nameEn: string;
+    nameTh?: string;
+    nameJa?: string;
+    defaultDocumentType?: string;
+    defaultConfidentiality?: string;
+    sortOrder: number;
+    isActive: boolean;
+  },
+) => apiRequest<{ id: number }>(`/api/v1/knowledge/categories/${id}`, { method: "PUT", body: JSON.stringify(input) });
 
-export const listKnowledgeNumberSequences = () =>
-  apiRequest<{ items: KnowledgeNumberSequence[] }>("/api/v1/knowledge/number-sequences");
+export const listKnowledgeNumberSequences = () => apiRequest<{ items: KnowledgeNumberSequence[] }>("/api/v1/knowledge/number-sequences");
 
 export const createKnowledgeNumberSequence = (input: Omit<KnowledgeNumberSequence, "id" | "updatedAt">) =>
   apiRequest<{ id: number }>("/api/v1/knowledge/number-sequences", { method: "POST", body: JSON.stringify(input) });
@@ -2214,11 +2327,9 @@ export const listKnowledgeDocuments = (values: {
   workspace?: boolean;
   page?: number;
   pageSize?: number;
-}) =>
-  apiRequest<PagedResult<KnowledgeDocumentRow>>(`/api/v1/knowledge/documents${queryString(values)}`);
+}) => apiRequest<PagedResult<KnowledgeDocumentRow>>(`/api/v1/knowledge/documents${queryString(values)}`);
 
-export const getKnowledgeDocument = (id: number) =>
-  apiRequest<KnowledgeDocumentDetail>(`/api/v1/knowledge/documents/${id}`);
+export const getKnowledgeDocument = (id: number) => apiRequest<KnowledgeDocumentDetail>(`/api/v1/knowledge/documents/${id}`);
 
 export async function createKnowledgeDocument(input: {
   title: string;
@@ -2253,157 +2364,204 @@ export async function createKnowledgeDocument(input: {
   return response.json() as Promise<{ id: number; documentNumber: string; versionId: number }>;
 }
 
-export async function uploadKnowledgeVersion(documentId: number, input: {
-  file: File;
-  changeSummary: string;
-  changeType?: "Major" | "Minor";
-  baseVersionId?: number;
-}) {
+export async function uploadKnowledgeVersion(
+  documentId: number,
+  input: {
+    file: File;
+    changeSummary: string;
+    changeType?: "Major" | "Minor";
+    baseVersionId?: number;
+  },
+) {
   const body = new FormData();
   body.set("file", input.file);
   body.set("changeSummary", input.changeSummary);
   body.set("changeType", input.changeType ?? "Major");
   if (input.baseVersionId) body.set("baseVersionId", String(input.baseVersionId));
-  const response = await authorizedFetch(
-    `/api/v1/knowledge/documents/${documentId}/versions`, { method: "POST", body }, 120_000);
+  const response = await authorizedFetch(`/api/v1/knowledge/documents/${documentId}/versions`, { method: "POST", body }, 120_000);
   return response.json() as Promise<{ versionId: number; revision: string }>;
 }
 
-export const submitKnowledgeReview = (versionId: number, input: {
-  reviewerIds: number[];
-  approverId: number;
-  comment?: string;
-}) =>
+export const submitKnowledgeReview = (
+  versionId: number,
+  input: {
+    reviewerIds: number[];
+    approverId: number;
+    comment?: string;
+  },
+) =>
   apiRequest<{ versionId: number; status: string }>(`/api/v1/knowledge/versions/${versionId}/submit`, {
     method: "POST",
     body: JSON.stringify(input),
   });
 
-export const decideKnowledgeVersion = (versionId: number, input: {
-  decision: "Approved" | "Request Changes" | "Rejected";
-  comment?: string;
-}) =>
+export const decideKnowledgeVersion = (
+  versionId: number,
+  input: {
+    decision: "Approved" | "Request Changes" | "Rejected";
+    comment?: string;
+  },
+) =>
   apiRequest<{ versionId: number; status: string }>(`/api/v1/knowledge/versions/${versionId}/decide`, {
     method: "POST",
     body: JSON.stringify(input),
   });
 
-export const publishKnowledgeVersion = (versionId: number, input: {
-  effectiveDate?: string;
-  expiryDate?: string;
-  comment?: string;
-}) =>
-  apiRequest<{ versionId: number; status: string; supersededVersionId: number | null }>(
-    `/api/v1/knowledge/versions/${versionId}/publish`, {
-      method: "POST",
-      body: JSON.stringify(input),
-    });
+export const publishKnowledgeVersion = (
+  versionId: number,
+  input: {
+    effectiveDate?: string;
+    expiryDate?: string;
+    comment?: string;
+  },
+) =>
+  apiRequest<{ versionId: number; status: string; supersededVersionId: number | null }>(`/api/v1/knowledge/versions/${versionId}/publish`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 
-export const linkKnowledgeDocument = (documentId: number, input: {
-  entityType: string;
-  entityId: number;
-  relationType?: string;
-}) =>
+export const linkKnowledgeDocument = (
+  documentId: number,
+  input: {
+    entityType: string;
+    entityId: number;
+    relationType?: string;
+  },
+) =>
   apiRequest<{ id: number }>(`/api/v1/knowledge/documents/${documentId}/relations`, {
     method: "POST",
     body: JSON.stringify(input),
   });
 
-export const unlinkKnowledgeDocument = (documentId: number, relationId: number) =>
-  apiRequest<void>(`/api/v1/knowledge/documents/${documentId}/relations/${relationId}`, { method: "DELETE" });
+export const unlinkKnowledgeDocument = (documentId: number, relationId: number) => apiRequest<void>(`/api/v1/knowledge/documents/${documentId}/relations/${relationId}`, { method: "DELETE" });
 
 export const assignKnowledgeAcknowledgement = (versionId: number, input: { userIds: number[]; dueAt?: string }) =>
-  apiRequest<{ versionId: number; assigned: number }>(
-    `/api/v1/knowledge/versions/${versionId}/acknowledgements`, {
-      method: "POST",
-      body: JSON.stringify(input),
-    });
+  apiRequest<{ versionId: number; assigned: number }>(`/api/v1/knowledge/versions/${versionId}/acknowledgements`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 
 export const acknowledgeKnowledge = (acknowledgementId: number) =>
-  apiRequest<{ acknowledgementId: number; status: string }>(
-    `/api/v1/knowledge/acknowledgements/${acknowledgementId}/acknowledge`, { method: "POST" });
+  apiRequest<{ acknowledgementId: number; status: string }>(`/api/v1/knowledge/acknowledgements/${acknowledgementId}/acknowledge`, { method: "POST" });
 
-export const listMyKnowledgeAcknowledgements = () =>
-  apiRequest<{ items: KnowledgeAcknowledgement[] }>("/api/v1/knowledge/me/acknowledgements");
+export const listMyKnowledgeAcknowledgements = () => apiRequest<{ items: KnowledgeAcknowledgement[] }>("/api/v1/knowledge/me/acknowledgements");
 
-export const listKnowledgeAudit = (documentId: number) =>
-  apiRequest<{ items: KnowledgeAuditEvent[] }>(`/api/v1/knowledge/documents/${documentId}/audit`);
+export const listKnowledgeAudit = (documentId: number) => apiRequest<{ items: KnowledgeAuditEvent[] }>(`/api/v1/knowledge/documents/${documentId}/audit`);
 
 export const archiveKnowledgeDocument = (documentId: number, reason: string) =>
   apiRequest<{ id: number; status: string }>(`/api/v1/knowledge/documents/${documentId}/archive`, {
-    method: "POST", body: JSON.stringify({ reason }),
+    method: "POST",
+    body: JSON.stringify({ reason }),
   });
 
 export const setKnowledgeWorkingStatus = (documentId: number, status: "Shared" | "Editing" | "Final", reason?: string) =>
   apiRequest<{ id: number; versionId: number; status: string }>(`/api/v1/knowledge/documents/${documentId}/working-status`, {
-    method: "POST", body: JSON.stringify({ status, reason }),
+    method: "POST",
+    body: JSON.stringify({ status, reason }),
   });
 
 export const restoreKnowledgeDocument = (documentId: number, reason: string) =>
   apiRequest<{ id: number; status: string }>(`/api/v1/knowledge/documents/${documentId}/restore`, {
-    method: "POST", body: JSON.stringify({ reason }),
+    method: "POST",
+    body: JSON.stringify({ reason }),
   });
 
-export const listKnowledgeComments = (documentId: number) =>
-  apiRequest<{ items: KnowledgeComment[] }>(`/api/v1/knowledge/documents/${documentId}/comments`);
+export const listKnowledgeComments = (documentId: number) => apiRequest<{ items: KnowledgeComment[] }>(`/api/v1/knowledge/documents/${documentId}/comments`);
 
-export const createKnowledgeComment = (documentId: number, input: {
-  content: string; versionId?: number; parentCommentId?: number; mentionedUserIds?: number[];
-}) => apiRequest<{ id: number }>(`/api/v1/knowledge/documents/${documentId}/comments`, {
-  method: "POST", body: JSON.stringify(input),
-});
+export const createKnowledgeComment = (
+  documentId: number,
+  input: {
+    content: string;
+    versionId?: number;
+    parentCommentId?: number;
+    mentionedUserIds?: number[];
+  },
+) =>
+  apiRequest<{ id: number }>(`/api/v1/knowledge/documents/${documentId}/comments`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 
 export const setKnowledgeCommentResolution = (commentId: number, resolved: boolean) =>
   apiRequest<{ id: number; resolved: boolean }>(`/api/v1/knowledge/comments/${commentId}/resolution`, {
-    method: "POST", body: JSON.stringify({ resolved }),
+    method: "POST",
+    body: JSON.stringify({ resolved }),
   });
 
-export const listKnowledgePermissions = (documentId: number) =>
-  apiRequest<{ items: KnowledgePermission[] }>(`/api/v1/knowledge/documents/${documentId}/permissions`);
+export const listKnowledgePermissions = (documentId: number) => apiRequest<{ items: KnowledgePermission[] }>(`/api/v1/knowledge/documents/${documentId}/permissions`);
 
-export const grantKnowledgePermission = (documentId: number, input: {
-  subjectType: string; subjectId?: number; department?: string; permissionLevel: string;
-}) => apiRequest<{ id: number }>(`/api/v1/knowledge/documents/${documentId}/permissions`, {
-  method: "POST", body: JSON.stringify(input),
-});
+export const grantKnowledgePermission = (
+  documentId: number,
+  input: {
+    subjectType: string;
+    subjectId?: number;
+    department?: string;
+    permissionLevel: string;
+  },
+) =>
+  apiRequest<{ id: number }>(`/api/v1/knowledge/documents/${documentId}/permissions`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 
-export const revokeKnowledgePermission = (documentId: number, permissionId: number) =>
-  apiRequest<void>(`/api/v1/knowledge/documents/${documentId}/permissions/${permissionId}`, { method: "DELETE" });
+export const revokeKnowledgePermission = (documentId: number, permissionId: number) => apiRequest<void>(`/api/v1/knowledge/documents/${documentId}/permissions/${permissionId}`, { method: "DELETE" });
 
-export const listKnowledgeArticles = (values: {
-  search?: string; articleType?: string; status?: string; includeArchived?: boolean; page?: number; pageSize?: number;
-}) => apiRequest<PagedResult<KnowledgeArticleRow>>(`/api/v1/knowledge/articles${queryString(values)}`);
+export const listKnowledgeArticles = (values: { search?: string; articleType?: string; status?: string; includeArchived?: boolean; page?: number; pageSize?: number }) =>
+  apiRequest<PagedResult<KnowledgeArticleRow>>(`/api/v1/knowledge/articles${queryString(values)}`);
 
-export const getKnowledgeArticle = (id: number) =>
-  apiRequest<KnowledgeArticleDetail>(`/api/v1/knowledge/articles/${id}`);
+export const getKnowledgeArticle = (id: number) => apiRequest<KnowledgeArticleDetail>(`/api/v1/knowledge/articles/${id}`);
 
 export const createKnowledgeArticle = (input: {
-  title: string; summary?: string; content: string; articleType: string; categoryId: number;
-  ownerId?: number; status?: string; confidentiality?: string; language?: string; tags?: string; reviewDate?: string;
-}) => apiRequest<{ id: number; slug: string }>("/api/v1/knowledge/articles", {
-  method: "POST", body: JSON.stringify(input),
-});
+  title: string;
+  summary?: string;
+  content: string;
+  articleType: string;
+  categoryId: number;
+  ownerId?: number;
+  status?: string;
+  confidentiality?: string;
+  language?: string;
+  tags?: string;
+  reviewDate?: string;
+}) =>
+  apiRequest<{ id: number; slug: string }>("/api/v1/knowledge/articles", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 
-export const updateKnowledgeArticle = (id: number, input: {
-  title: string; summary?: string; content: string; articleType: string; categoryId: number;
-  ownerId?: number; status?: string; confidentiality?: string; language?: string; tags?: string; reviewDate?: string;
-}) => apiRequest<{ id: number }>(`/api/v1/knowledge/articles/${id}`, {
-  method: "PUT", body: JSON.stringify(input),
-});
+export const updateKnowledgeArticle = (
+  id: number,
+  input: {
+    title: string;
+    summary?: string;
+    content: string;
+    articleType: string;
+    categoryId: number;
+    ownerId?: number;
+    status?: string;
+    confidentiality?: string;
+    language?: string;
+    tags?: string;
+    reviewDate?: string;
+  },
+) =>
+  apiRequest<{ id: number }>(`/api/v1/knowledge/articles/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
 
 export const sendKnowledgeArticleFeedback = (id: number, helpful: boolean) =>
   apiRequest<{ id: number; helpful: boolean }>(`/api/v1/knowledge/articles/${id}/feedback`, {
-    method: "POST", body: JSON.stringify({ helpful }),
+    method: "POST",
+    body: JSON.stringify({ helpful }),
   });
 
 export async function downloadKnowledgeVersion(versionId: number) {
-  const response = await authorizedFetch(
-    `/api/v1/knowledge/versions/${versionId}/content`,
-    { headers: { Accept: "application/octet-stream" } }, 120_000);
+  const response = await authorizedFetch(`/api/v1/knowledge/versions/${versionId}/content`, { headers: { Accept: "application/octet-stream" } }, 120_000);
   const disposition = response.headers.get("Content-Disposition") ?? "";
   const encodedName = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
   const quotedName = disposition.match(/filename="([^"]+)"/i)?.[1];
-  const fileName = encodedName ? decodeURIComponent(encodedName) : quotedName ?? `document-${versionId}`;
+  const fileName = encodedName ? decodeURIComponent(encodedName) : (quotedName ?? `document-${versionId}`);
   const blob = await response.blob();
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
@@ -2416,9 +2574,7 @@ export async function downloadKnowledgeVersion(versionId: number) {
 }
 
 export async function previewKnowledgeVersion(versionId: number) {
-  const response = await authorizedFetch(
-    `/api/v1/knowledge/versions/${versionId}/content?preview=true`,
-    { headers: { Accept: "application/pdf,image/*,text/*" } }, 120_000);
+  const response = await authorizedFetch(`/api/v1/knowledge/versions/${versionId}/content?preview=true`, { headers: { Accept: "application/pdf,image/*,text/*" } }, 120_000);
   const blob = await response.blob();
   const url = URL.createObjectURL(blob);
   const preview = window.open(url, "_blank", "noopener,noreferrer");
@@ -2437,52 +2593,116 @@ export async function previewKnowledgeVersion(versionId: number) {
    site-visit-reports.ts and visit-master.ts).
    ========================================================================== */
 
-export type IntakeStatus =
-  | "Draft" | "Pending Technical Review" | "More Information Required" | "Ready to Schedule"
-  | "Scheduled" | "Completed" | "On Hold" | "Cancelled" | "Closed";
+export type IntakeStatus = "Draft" | "Pending Technical Review" | "More Information Required" | "Ready to Schedule" | "Scheduled" | "Completed" | "On Hold" | "Cancelled" | "Closed";
 
 export type VisitStatus =
-  | "Tentative" | "Pending Engineer Confirmation" | "Pending Customer Confirmation" | "Confirmed"
-  | "In Progress" | "Report Pending" | "Report Under Review" | "Completed" | "On Hold"
-  | "Reschedule Requested" | "Cancelled" | "Customer No-show" | "Closed";
+  | "Tentative"
+  | "Pending Engineer Confirmation"
+  | "Pending Customer Confirmation"
+  | "Confirmed"
+  | "In Progress"
+  | "Report Pending"
+  | "Report Under Review"
+  | "Completed"
+  | "On Hold"
+  | "Reschedule Requested"
+  | "Cancelled"
+  | "Customer No-show"
+  | "Closed";
 
 export type ReportSlaState = "not_applicable" | "on_track" | "due_soon" | "overdue" | "met" | "missed";
 
 export type VisitTypeRecord = {
-  id: number; code: string; nameEn: string; nameTh: string; nameJa: string; description: string;
-  defaultDurationMinutes: number; defaultEngineerCount: number; requiresManagerApproval: boolean;
-  sortOrder: number; isActive: boolean; checklistTemplateId: number | null; rowVersion: string;
+  id: number;
+  code: string;
+  nameEn: string;
+  nameTh: string;
+  nameJa: string;
+  description: string;
+  defaultDurationMinutes: number;
+  defaultEngineerCount: number;
+  requiresManagerApproval: boolean;
+  sortOrder: number;
+  isActive: boolean;
+  checklistTemplateId: number | null;
+  rowVersion: string;
 };
 
 export type VisitSkillRecord = {
-  id: number; code: string; nameEn: string; nameTh: string; nameJa: string; discipline: string;
-  sortOrder: number; isActive: boolean; engineerCount: number; rowVersion: string;
+  id: number;
+  code: string;
+  nameEn: string;
+  nameTh: string;
+  nameJa: string;
+  discipline: string;
+  sortOrder: number;
+  isActive: boolean;
+  engineerCount: number;
+  rowVersion: string;
 };
 
 export type ChecklistItemRecord = {
-  id: number; sortOrder: number; section: string; prompt: string; responseType: string;
-  unit: string; isRequired: boolean; guidance: string; isActive: boolean;
+  id: number;
+  sortOrder: number;
+  section: string;
+  prompt: string;
+  responseType: string;
+  unit: string;
+  isRequired: boolean;
+  guidance: string;
+  isActive: boolean;
 };
 
 export type ChecklistTemplateRecord = {
-  id: number; code: string; name: string; visitTypeId: number | null; visitTypeName: string | null;
-  description: string; version: number; isActive: boolean; rowVersion: string; items: ChecklistItemRecord[];
+  id: number;
+  code: string;
+  name: string;
+  visitTypeId: number | null;
+  visitTypeName: string | null;
+  description: string;
+  version: number;
+  isActive: boolean;
+  rowVersion: string;
+  items: ChecklistItemRecord[];
 };
 
 export type SlaPolicyRecord = {
-  id: number; code: string; name: string; visitTypeId: number | null; visitTypeName: string | null;
-  reviewResponseDays: number; scheduleLeadDays: number; reportDueDays: number; reportWarningHours: number;
-  isDefault: boolean; isActive: boolean; rowVersion: string;
+  id: number;
+  code: string;
+  name: string;
+  visitTypeId: number | null;
+  visitTypeName: string | null;
+  reviewResponseDays: number;
+  scheduleLeadDays: number;
+  reportDueDays: number;
+  reportWarningHours: number;
+  isDefault: boolean;
+  isActive: boolean;
+  rowVersion: string;
 };
 
 export type EngineerSkillRecord = {
-  id: number; userId: number; userName: string; department: string; skillId: number;
-  skillCode: string; skillName: string; proficiency: string; note: string; rowVersion: string;
+  id: number;
+  userId: number;
+  userName: string;
+  department: string;
+  skillId: number;
+  skillCode: string;
+  skillName: string;
+  proficiency: string;
+  note: string;
+  rowVersion: string;
 };
 
 export type EngineerAvailabilityRecord = {
-  id: number; userId: number; userName: string; kind: string; reason: string;
-  startsAt: string; endsAt: string; rowVersion: string;
+  id: number;
+  userId: number;
+  userName: string;
+  kind: string;
+  reason: string;
+  startsAt: string;
+  endsAt: string;
+  rowVersion: string;
 };
 
 export type VisitMasterData = {
@@ -2495,33 +2715,83 @@ export type VisitMasterData = {
 };
 
 export type SalesIntakeSummary = {
-  id: number; number: string; status: IntakeStatus; customerId: number; customerName: string;
-  siteName: string; subject: string; requestDate: string; salesOwnerId: number; salesOwnerName: string;
-  priority: string; requiredResponseDate: string | null; readinessScore: number;
-  blockerCount: number; warningCount: number; purposeCount: number; attachmentCount: number;
-  visitId: number | null; visitNumber: string | null; visitStatus: string | null;
-  scheduledStart: string | null; updatedAt: string; rowVersion: string; isArchived: boolean;
+  id: number;
+  number: string;
+  status: IntakeStatus;
+  customerId: number;
+  customerName: string;
+  siteName: string;
+  subject: string;
+  requestDate: string;
+  salesOwnerId: number;
+  salesOwnerName: string;
+  priority: string;
+  requiredResponseDate: string | null;
+  readinessScore: number;
+  blockerCount: number;
+  warningCount: number;
+  purposeCount: number;
+  attachmentCount: number;
+  visitId: number | null;
+  visitNumber: string | null;
+  visitStatus: string | null;
+  scheduledStart: string | null;
+  updatedAt: string;
+  rowVersion: string;
+  isArchived: boolean;
 };
 
 export type SalesIntakeRequirement = {
-  problemStatement: string; desiredCapability: string; expectedResult: string; expectedScope: string;
-  outOfScope: string; existingProcess: string; currentPainPoint: string; targetCycleTime: string;
-  productInformation: string; qualityRequirement: string; specialRequirement: string; budgetRange: string;
-  expectedTimeline: string; competitorInformation: string; additionalNotes: string;
+  problemStatement: string;
+  desiredCapability: string;
+  expectedResult: string;
+  expectedScope: string;
+  outOfScope: string;
+  existingProcess: string;
+  currentPainPoint: string;
+  targetCycleTime: string;
+  productInformation: string;
+  qualityRequirement: string;
+  specialRequirement: string;
+  budgetRange: string;
+  expectedTimeline: string;
+  competitorInformation: string;
+  additionalNotes: string;
 };
 
 export type SalesIntakeMachine = {
-  machineName: string; machineModel: string; machineSerialNo: string; manufacturer: string;
-  existingSystem: string; controllerBrand: string; availableDrawing: string; utilityInformation: string;
-  installationArea: string; spaceLimitation: string; workingEnvironment: string; safetyRequirement: string;
-  productionSchedule: string; shutdownWindow: string; ppeRequirement: string; siteAccessRequirement: string;
-  photographyRestricted: boolean; ndaRequired: boolean;
+  machineName: string;
+  machineModel: string;
+  machineSerialNo: string;
+  manufacturer: string;
+  existingSystem: string;
+  controllerBrand: string;
+  availableDrawing: string;
+  utilityInformation: string;
+  installationArea: string;
+  spaceLimitation: string;
+  workingEnvironment: string;
+  safetyRequirement: string;
+  productionSchedule: string;
+  shutdownWindow: string;
+  ppeRequirement: string;
+  siteAccessRequirement: string;
+  photographyRestricted: boolean;
+  ndaRequired: boolean;
 };
 
 export type SalesIntakeContact = {
-  siteId: number | null; siteContactId: number | null; customerBranch: string; siteName: string;
-  siteAddress: string; contactName: string; contactDepartment: string; contactPosition: string;
-  contactPhone: string; contactEmail: string; contactChannel: string;
+  siteId: number | null;
+  siteContactId: number | null;
+  customerBranch: string;
+  siteName: string;
+  siteAddress: string;
+  contactName: string;
+  contactDepartment: string;
+  contactPosition: string;
+  contactPhone: string;
+  contactEmail: string;
+  contactChannel: string;
 };
 
 export type IntakeWindowRecord = { id: number; startsAt: string; endsAt: string; preference: number; note: string };
@@ -2529,244 +2799,598 @@ export type IntakePurposeRecord = { visitTypeId: number; code: string; name: str
 export type IntakeSkillRecord = { skillId: number; code: string; name: string; source: string; isMandatory: boolean; note: string };
 
 export type IntakeAttachmentRecord = {
-  id: number; name: string; category: string; description: string; version: number; contentType: string;
-  sizeBytes: number; scanStatus: string; uploadedByName: string; uploadedAt: string; rowVersion: string;
+  id: number;
+  name: string;
+  category: string;
+  description: string;
+  version: number;
+  contentType: string;
+  sizeBytes: number;
+  scanStatus: string;
+  uploadedByName: string;
+  uploadedAt: string;
+  rowVersion: string;
 };
 
 export type IntakeReviewRecord = {
-  id: number; reviewerId: number; reviewerName: string; decision: string; comment: string; visitScope: string;
-  engineerCount: number; estimatedDurationMinutes: number; requiredEquipment: string; riskAssessment: string;
-  safetyConcern: string; requiresManagerApproval: boolean; managerApprovedByName: string | null;
-  managerApprovedAt: string | null; missingInformation: string; readinessScoreAtReview: number; createdAt: string;
+  id: number;
+  reviewerId: number;
+  reviewerName: string;
+  decision: string;
+  comment: string;
+  visitScope: string;
+  engineerCount: number;
+  estimatedDurationMinutes: number;
+  requiredEquipment: string;
+  riskAssessment: string;
+  safetyConcern: string;
+  requiresManagerApproval: boolean;
+  managerApprovedByName: string | null;
+  managerApprovedAt: string | null;
+  missingInformation: string;
+  readinessScoreAtReview: number;
+  createdAt: string;
 };
 
 export type StatusHistoryRecord = {
-  id: number; entityType: string; entityId: number; entityNumber: string; previousStatus: string | null;
-  newStatus: string; reason: string | null; changedByName: string; changedAt: string;
+  id: number;
+  entityType: string;
+  entityId: number;
+  entityNumber: string;
+  previousStatus: string | null;
+  newStatus: string;
+  reason: string | null;
+  changedByName: string;
+  changedAt: string;
 };
 
 export type ReadinessCheckResult = {
-  key: string; label: string; weight: number; severity: "blocker" | "warning"; hint: string; passed: boolean;
+  key: string;
+  label: string;
+  weight: number;
+  severity: "blocker" | "warning";
+  hint: string;
+  passed: boolean;
 };
 
 export type ReadinessResult = {
-  score: number; blockerCount: number; warningCount: number; canSubmit: boolean; checks: ReadinessCheckResult[];
+  score: number;
+  blockerCount: number;
+  warningCount: number;
+  canSubmit: boolean;
+  checks: ReadinessCheckResult[];
 };
 
 export type DuplicateReferenceRecord = { id: number; number: string; subject: string; requestDate: string; status: string };
 
 export type TraceabilityLinkRecord = {
-  id: number; sourceType: string; sourceId: number; targetType: string; targetId: number;
-  targetNumber: string; relation: string; note: string; createdByName: string; createdAt: string;
+  id: number;
+  sourceType: string;
+  sourceId: number;
+  targetType: string;
+  targetId: number;
+  targetNumber: string;
+  relation: string;
+  note: string;
+  createdByName: string;
+  createdAt: string;
 };
 
 export type SiteVisitSummary = {
-  id: number; number: string; intakeId: number; intakeNumber: string; status: VisitStatus;
-  customerId: number; customerName: string; siteName: string; subject: string;
-  visitTypeId: number; visitTypeName: string;
-  scheduledStart: string | null; scheduledEnd: string | null; timeZoneId: string;
-  requiredEngineerCount: number; assignedCount: number; acceptedCount: number;
-  leadEngineerName: string | null; engineerNames: string;
-  engineerConfirmed: boolean; customerConfirmed: boolean;
-  checkedInAt: string | null; checkedOutAt: string | null;
-  reportDueAt: string | null; reportStatus: string | null; reportSlaState: ReportSlaState;
-  skillMatchPercent: number; updatedAt: string; rowVersion: string; isArchived: boolean;
+  id: number;
+  number: string;
+  intakeId: number;
+  intakeNumber: string;
+  status: VisitStatus;
+  customerId: number;
+  customerName: string;
+  siteName: string;
+  subject: string;
+  visitTypeId: number;
+  visitTypeName: string;
+  scheduledStart: string | null;
+  scheduledEnd: string | null;
+  timeZoneId: string;
+  requiredEngineerCount: number;
+  assignedCount: number;
+  acceptedCount: number;
+  leadEngineerName: string | null;
+  engineerNames: string;
+  engineerConfirmed: boolean;
+  customerConfirmed: boolean;
+  checkedInAt: string | null;
+  checkedOutAt: string | null;
+  reportDueAt: string | null;
+  reportStatus: string | null;
+  reportSlaState: ReportSlaState;
+  skillMatchPercent: number;
+  updatedAt: string;
+  rowVersion: string;
+  isArchived: boolean;
 };
 
 export type SalesIntakeDetail = {
-  id: number; number: string; status: IntakeStatus; customerId: number; customerCode: string; customerName: string;
-  subject: string; customerReferenceNo: string; requestDate: string; salesOwnerId: number; salesOwnerName: string;
-  priority: string; requiredResponseDate: string | null; customerExpectedCompletion: string | null; source: string;
-  relatedInquiryId: number | null; relatedInquiryNumber: string | null;
-  relatedProjectId: number | null; relatedProjectNumber: string | null;
-  contact: SalesIntakeContact; requirement: SalesIntakeRequirement; machine: SalesIntakeMachine;
-  readinessScore: number; blockerCount: number; warningCount: number;
-  submittedAt: string | null; submittedByName: string | null; department: string;
-  createdByName: string; createdAt: string; updatedByName: string; updatedAt: string;
-  isArchived: boolean; rowVersion: string;
-  purposes: IntakePurposeRecord[]; skills: IntakeSkillRecord[]; windows: IntakeWindowRecord[];
-  attachments: IntakeAttachmentRecord[]; reviews: IntakeReviewRecord[]; visits: SiteVisitSummary[];
-  statusHistory: StatusHistoryRecord[]; links: TraceabilityLinkRecord[];
+  id: number;
+  number: string;
+  status: IntakeStatus;
+  customerId: number;
+  customerCode: string;
+  customerName: string;
+  subject: string;
+  customerReferenceNo: string;
+  requestDate: string;
+  salesOwnerId: number;
+  salesOwnerName: string;
+  priority: string;
+  requiredResponseDate: string | null;
+  customerExpectedCompletion: string | null;
+  source: string;
+  relatedInquiryId: number | null;
+  relatedInquiryNumber: string | null;
+  relatedProjectId: number | null;
+  relatedProjectNumber: string | null;
+  contact: SalesIntakeContact;
+  requirement: SalesIntakeRequirement;
+  machine: SalesIntakeMachine;
+  readinessScore: number;
+  blockerCount: number;
+  warningCount: number;
+  submittedAt: string | null;
+  submittedByName: string | null;
+  department: string;
+  createdByName: string;
+  createdAt: string;
+  updatedByName: string;
+  updatedAt: string;
+  isArchived: boolean;
+  rowVersion: string;
+  purposes: IntakePurposeRecord[];
+  skills: IntakeSkillRecord[];
+  windows: IntakeWindowRecord[];
+  attachments: IntakeAttachmentRecord[];
+  reviews: IntakeReviewRecord[];
+  visits: SiteVisitSummary[];
+  statusHistory: StatusHistoryRecord[];
+  links: TraceabilityLinkRecord[];
   duplicateReferences: DuplicateReferenceRecord[];
-  readiness: ReadinessResult; allowedTransitions: string[];
+  readiness: ReadinessResult;
+  allowedTransitions: string[];
 };
 
 export type SaveIntakeWindowInput = { startsAt: string; endsAt: string; preference: number; note?: string };
 
 export type SaveSalesIntakeInput = {
-  customerId: number; subject: string; customerReferenceNo?: string; requestDate?: string;
-  salesOwnerId: number; priority: string; requiredResponseDate?: string | null;
-  customerExpectedCompletion?: string | null; source: string;
-  relatedInquiryId?: number | null; relatedProjectId?: number | null;
-  contact: SalesIntakeContact; requirement: SalesIntakeRequirement; machine: SalesIntakeMachine;
-  visitTypeIds: number[]; skillIds: number[]; windows: SaveIntakeWindowInput[]; rowVersion?: string;
+  customerId: number;
+  subject: string;
+  customerReferenceNo?: string;
+  requestDate?: string;
+  salesOwnerId: number;
+  priority: string;
+  requiredResponseDate?: string | null;
+  customerExpectedCompletion?: string | null;
+  source: string;
+  relatedInquiryId?: number | null;
+  relatedProjectId?: number | null;
+  contact: SalesIntakeContact;
+  requirement: SalesIntakeRequirement;
+  machine: SalesIntakeMachine;
+  visitTypeIds: number[];
+  skillIds: number[];
+  windows: SaveIntakeWindowInput[];
+  rowVersion?: string;
 };
 
 export type VisitAssignmentRecord = {
-  id: number; engineerId: number; engineerName: string; department: string; assignmentRole: string;
-  status: string; skillMatchPercent: number; skills: string[]; missingSkills: string[];
-  conflictOverride: boolean; overrideReason: string | null; overrideByName: string | null; overrideAt: string | null;
-  respondedAt: string | null; responseNote: string | null; proposedStart: string | null; proposedEnd: string | null;
-  isActive: boolean; assignedByName: string; assignedAt: string; rowVersion: string;
+  id: number;
+  engineerId: number;
+  engineerName: string;
+  department: string;
+  assignmentRole: string;
+  status: string;
+  skillMatchPercent: number;
+  skills: string[];
+  missingSkills: string[];
+  conflictOverride: boolean;
+  overrideReason: string | null;
+  overrideByName: string | null;
+  overrideAt: string | null;
+  respondedAt: string | null;
+  responseNote: string | null;
+  proposedStart: string | null;
+  proposedEnd: string | null;
+  isActive: boolean;
+  assignedByName: string;
+  assignedAt: string;
+  rowVersion: string;
 };
 
 export type VisitConfirmationRecord = {
-  id: number; party: string; outcome: string; channel: string; confirmedByName: string;
-  confirmedAt: string; comment: string; evidenceAttachmentId: number | null;
-  recordedByName: string; recordedAt: string;
+  id: number;
+  party: string;
+  outcome: string;
+  channel: string;
+  confirmedByName: string;
+  confirmedAt: string;
+  comment: string;
+  evidenceAttachmentId: number | null;
+  recordedByName: string;
+  recordedAt: string;
 };
 
 export type VisitScheduleHistoryRecord = {
-  id: number; previousStart: string | null; previousEnd: string | null; newStart: string | null;
-  newEnd: string | null; reason: string; changedByName: string; changedAt: string;
+  id: number;
+  previousStart: string | null;
+  previousEnd: string | null;
+  newStart: string | null;
+  newEnd: string | null;
+  reason: string;
+  changedByName: string;
+  changedAt: string;
 };
 
 export type VisitChecklistResponseRecord = {
-  itemId: number; sortOrder: number; section: string; prompt: string; responseType: string; itemUnit: string;
-  isRequired: boolean; guidance: string; responseId: number | null; responseValue: string | null;
-  numericValue: number | null; unit: string; isNotApplicable: boolean; note: string | null;
-  answeredByName: string | null; answeredAt: string | null; rowVersion: string | null;
+  itemId: number;
+  sortOrder: number;
+  section: string;
+  prompt: string;
+  responseType: string;
+  itemUnit: string;
+  isRequired: boolean;
+  guidance: string;
+  responseId: number | null;
+  responseValue: string | null;
+  numericValue: number | null;
+  unit: string;
+  isNotApplicable: boolean;
+  note: string | null;
+  answeredByName: string | null;
+  answeredAt: string | null;
+  rowVersion: string | null;
 };
 
 export type VisitFindingRecord = {
-  id: number; kind: string; title: string; detail: string; measurementValue: number | null;
-  measurementUnit: string; severity: string; sortOrder: number; createdByName: string;
-  createdAt: string; rowVersion: string;
+  id: number;
+  kind: string;
+  title: string;
+  detail: string;
+  measurementValue: number | null;
+  measurementUnit: string;
+  severity: string;
+  sortOrder: number;
+  createdByName: string;
+  createdAt: string;
+  rowVersion: string;
 };
 
 export type VisitAttachmentRecord = {
-  id: number; findingId: number | null; name: string; category: string; description: string; version: number;
-  contentType: string; sizeBytes: number; scanStatus: string; uploadedByName: string; uploadedAt: string; rowVersion: string;
+  id: number;
+  findingId: number | null;
+  name: string;
+  category: string;
+  description: string;
+  version: number;
+  contentType: string;
+  sizeBytes: number;
+  scanStatus: string;
+  uploadedByName: string;
+  uploadedAt: string;
+  rowVersion: string;
 };
 
 export type VisitActionItemRecord = {
-  id: number; title: string; detail: string; ownerId: number | null; ownerName: string;
-  dueDate: string | null; status: string; completedAt: string | null; createdByName: string;
-  createdAt: string; rowVersion: string;
+  id: number;
+  title: string;
+  detail: string;
+  ownerId: number | null;
+  ownerName: string;
+  dueDate: string | null;
+  status: string;
+  completedAt: string | null;
+  createdByName: string;
+  createdAt: string;
+  rowVersion: string;
 };
 
 export type VisitReportRevisionRecord = {
-  id: number; revision: number; status: string; visitSummary: string; customerRequirement: string;
-  existingCondition: string; findingsSummary: string; measurementSummary: string; rootCause: string;
-  recommendedSolution: string; proposedScope: string; assumption: string; exclusion: string; risk: string;
-  safetyConcern: string; customerAdditionalRequest: string; engineerConclusion: string;
-  salesFollowUp: string; nextStep: string; changeSummary: string;
-  createdByName: string; createdAt: string; approvedByName: string | null; approvedAt: string | null; rowVersion: string;
+  id: number;
+  revision: number;
+  status: string;
+  visitSummary: string;
+  customerRequirement: string;
+  existingCondition: string;
+  findingsSummary: string;
+  measurementSummary: string;
+  rootCause: string;
+  recommendedSolution: string;
+  proposedScope: string;
+  assumption: string;
+  exclusion: string;
+  risk: string;
+  safetyConcern: string;
+  customerAdditionalRequest: string;
+  engineerConclusion: string;
+  salesFollowUp: string;
+  nextStep: string;
+  changeSummary: string;
+  createdByName: string;
+  createdAt: string;
+  approvedByName: string | null;
+  approvedAt: string | null;
+  rowVersion: string;
 };
 
 export type VisitReportRecord = {
-  id: number; number: string; visitId: number; visitNumber: string; status: string; currentRevision: number;
-  authorId: number; authorName: string; submittedAt: string | null; reviewedByName: string | null;
-  reviewedAt: string | null; reviewComment: string; customerAcknowledgedBy: string;
-  customerAcknowledgedAt: string | null; hasCustomerSignature: boolean; dueAt: string | null;
-  slaState: ReportSlaState; createdAt: string; updatedAt: string; rowVersion: string;
-  current: VisitReportRevisionRecord | null; revisions: VisitReportRevisionRecord[];
+  id: number;
+  number: string;
+  visitId: number;
+  visitNumber: string;
+  status: string;
+  currentRevision: number;
+  authorId: number;
+  authorName: string;
+  submittedAt: string | null;
+  reviewedByName: string | null;
+  reviewedAt: string | null;
+  reviewComment: string;
+  customerAcknowledgedBy: string;
+  customerAcknowledgedAt: string | null;
+  hasCustomerSignature: boolean;
+  dueAt: string | null;
+  slaState: ReportSlaState;
+  createdAt: string;
+  updatedAt: string;
+  rowVersion: string;
+  current: VisitReportRevisionRecord | null;
+  revisions: VisitReportRevisionRecord[];
 };
 
 export type SiteVisitDetail = {
-  id: number; number: string; status: VisitStatus; intakeId: number; intakeNumber: string; intakeSubject: string;
-  customerId: number; customerCode: string; customerName: string; siteName: string; siteAddress: string;
-  contactName: string; contactPhone: string; contactEmail: string;
-  visitTypeId: number; visitTypeName: string; checklistTemplateId: number | null; checklistTemplateName: string | null;
-  slaPolicyId: number | null; slaPolicyName: string | null; reportDueDays: number;
-  scheduledStart: string | null; scheduledEnd: string | null; timeZoneId: string;
-  travelMinutesBefore: number; travelMinutesAfter: number; meetingPoint: string; requiredEquipment: string;
-  internalNote: string; customerNote: string; requiredEngineerCount: number;
-  engineerConfirmedAt: string | null; customerConfirmedAt: string | null;
-  checkedInAt: string | null; checkedInByName: string | null;
-  checkInLatitude: number | null; checkInLongitude: number | null; locationConsentGiven: boolean;
-  checkedOutAt: string | null; checkedOutByName: string | null;
-  actualAttendees: string; customerAttendees: string; executionNote: string;
-  reportDueAt: string | null; reportSlaState: ReportSlaState;
-  closedAt: string | null; closedByName: string | null; closeReason: string;
-  department: string; createdByName: string; createdAt: string; updatedByName: string; updatedAt: string;
-  isArchived: boolean; rowVersion: string;
-  requiredSkills: string[]; teamSkillMatchPercent: number; missingSkills: string[];
-  assignments: VisitAssignmentRecord[]; confirmations: VisitConfirmationRecord[];
-  scheduleHistory: VisitScheduleHistoryRecord[]; checklist: VisitChecklistResponseRecord[];
-  findings: VisitFindingRecord[]; attachments: VisitAttachmentRecord[]; actionItems: VisitActionItemRecord[];
-  statusHistory: StatusHistoryRecord[]; links: TraceabilityLinkRecord[];
-  report: VisitReportRecord | null; allowedTransitions: string[]; canExecute: boolean;
+  id: number;
+  number: string;
+  status: VisitStatus;
+  intakeId: number;
+  intakeNumber: string;
+  intakeSubject: string;
+  customerId: number;
+  customerCode: string;
+  customerName: string;
+  siteName: string;
+  siteAddress: string;
+  contactName: string;
+  contactPhone: string;
+  contactEmail: string;
+  visitTypeId: number;
+  visitTypeName: string;
+  checklistTemplateId: number | null;
+  checklistTemplateName: string | null;
+  slaPolicyId: number | null;
+  slaPolicyName: string | null;
+  reportDueDays: number;
+  scheduledStart: string | null;
+  scheduledEnd: string | null;
+  timeZoneId: string;
+  travelMinutesBefore: number;
+  travelMinutesAfter: number;
+  meetingPoint: string;
+  requiredEquipment: string;
+  internalNote: string;
+  customerNote: string;
+  requiredEngineerCount: number;
+  engineerConfirmedAt: string | null;
+  customerConfirmedAt: string | null;
+  checkedInAt: string | null;
+  checkedInByName: string | null;
+  checkInLatitude: number | null;
+  checkInLongitude: number | null;
+  locationConsentGiven: boolean;
+  checkedOutAt: string | null;
+  checkedOutByName: string | null;
+  actualAttendees: string;
+  customerAttendees: string;
+  executionNote: string;
+  reportDueAt: string | null;
+  reportSlaState: ReportSlaState;
+  closedAt: string | null;
+  closedByName: string | null;
+  closeReason: string;
+  department: string;
+  createdByName: string;
+  createdAt: string;
+  updatedByName: string;
+  updatedAt: string;
+  isArchived: boolean;
+  rowVersion: string;
+  requiredSkills: string[];
+  teamSkillMatchPercent: number;
+  missingSkills: string[];
+  assignments: VisitAssignmentRecord[];
+  confirmations: VisitConfirmationRecord[];
+  scheduleHistory: VisitScheduleHistoryRecord[];
+  checklist: VisitChecklistResponseRecord[];
+  findings: VisitFindingRecord[];
+  attachments: VisitAttachmentRecord[];
+  actionItems: VisitActionItemRecord[];
+  statusHistory: StatusHistoryRecord[];
+  links: TraceabilityLinkRecord[];
+  report: VisitReportRecord | null;
+  allowedTransitions: string[];
+  canExecute: boolean;
 };
 
 export type EngineerCandidateRecord = {
-  id: number; name: string; email: string; department: string; role: string;
-  skills: string[]; skillMatchPercent: number; missingSkills: string[];
-  openAssignments: number; scheduledMinutesInWindow: number; conflictCount: number; conflictDetail: string;
-  travelMinutes: number; isActive: boolean; isAssigned: boolean;
+  id: number;
+  name: string;
+  email: string;
+  department: string;
+  role: string;
+  skills: string[];
+  skillMatchPercent: number;
+  missingSkills: string[];
+  openAssignments: number;
+  scheduledMinutesInWindow: number;
+  conflictCount: number;
+  conflictDetail: string;
+  travelMinutes: number;
+  isActive: boolean;
+  isAssigned: boolean;
 };
 
 export type CalendarEntryRecord = {
-  visitId: number; visitNumber: string; status: VisitStatus; customerName: string; siteName: string;
-  visitTypeName: string; startsAt: string; endsAt: string;
-  travelMinutesBefore: number; travelMinutesAfter: number; engineerIds: number[]; engineerNames: string;
+  visitId: number;
+  visitNumber: string;
+  status: VisitStatus;
+  customerName: string;
+  siteName: string;
+  visitTypeName: string;
+  startsAt: string;
+  endsAt: string;
+  travelMinutesBefore: number;
+  travelMinutesAfter: number;
+  engineerIds: number[];
+  engineerNames: string;
 };
 
 export type CalendarUnavailableRecord = {
-  id: number; userId: number; userName: string; kind: string; reason: string; startsAt: string; endsAt: string;
+  id: number;
+  userId: number;
+  userName: string;
+  kind: string;
+  reason: string;
+  startsAt: string;
+  endsAt: string;
 };
 
 export type CalendarResult = {
-  from: string; to: string; visits: CalendarEntryRecord[]; unavailable: CalendarUnavailableRecord[];
+  from: string;
+  to: string;
+  visits: CalendarEntryRecord[];
+  unavailable: CalendarUnavailableRecord[];
 };
 
 export type PreviousVisitRecord = {
-  id: number; number: string; visitTypeName: string; status: string;
-  scheduledStart: string | null; engineerNames: string; reportStatus: string | null;
+  id: number;
+  number: string;
+  visitTypeName: string;
+  status: string;
+  scheduledStart: string | null;
+  engineerNames: string;
+  reportStatus: string | null;
 };
 
 export type PreVisitBriefRecord = {
-  visit: SiteVisitDetail; requirement: SalesIntakeRequirement; machine: SalesIntakeMachine;
-  purposes: IntakePurposeRecord[]; intakeAttachments: IntakeAttachmentRecord[];
-  openQuestions: string[]; previousVisits: PreviousVisitRecord[]; emergencyContact: string;
+  visit: SiteVisitDetail;
+  requirement: SalesIntakeRequirement;
+  machine: SalesIntakeMachine;
+  purposes: IntakePurposeRecord[];
+  intakeAttachments: IntakeAttachmentRecord[];
+  openQuestions: string[];
+  previousVisits: PreviousVisitRecord[];
+  emergencyContact: string;
 };
 
 export type MyAssignmentRecord = {
-  visitId: number; visitNumber: string; visitStatus: VisitStatus; assignmentId: number; assignmentStatus: string;
-  assignmentRole: string; customerName: string; siteName: string; siteAddress: string; subject: string;
-  visitTypeName: string; scheduledStart: string | null; scheduledEnd: string | null;
-  contactName: string; contactPhone: string; checkedInAt: string | null; checkedOutAt: string | null;
-  reportDueAt: string | null; reportSlaState: ReportSlaState; reportStatus: string | null;
-  skillMatchPercent: number; rowVersion: string; assignmentRowVersion: string;
+  visitId: number;
+  visitNumber: string;
+  visitStatus: VisitStatus;
+  assignmentId: number;
+  assignmentStatus: string;
+  assignmentRole: string;
+  customerName: string;
+  siteName: string;
+  siteAddress: string;
+  subject: string;
+  visitTypeName: string;
+  scheduledStart: string | null;
+  scheduledEnd: string | null;
+  contactName: string;
+  contactPhone: string;
+  checkedInAt: string | null;
+  checkedOutAt: string | null;
+  reportDueAt: string | null;
+  reportSlaState: ReportSlaState;
+  reportStatus: string | null;
+  skillMatchPercent: number;
+  rowVersion: string;
+  assignmentRowVersion: string;
 };
 
 export type CountByLabel = { label: string; value: number };
 
 export type SalesVisitDashboard = {
-  intakesCreated: number; pendingTechnicalReview: number; moreInformationRequired: number;
-  waitingCustomerConfirmation: number; upcomingVisits: number; completedVisits: number;
-  waitingReport: number; convertedToInquiry: number; convertedToEstimate: number;
-  byStatus: CountByLabel[]; attention: SalesIntakeSummary[];
+  intakesCreated: number;
+  pendingTechnicalReview: number;
+  moreInformationRequired: number;
+  waitingCustomerConfirmation: number;
+  upcomingVisits: number;
+  completedVisits: number;
+  waitingReport: number;
+  convertedToInquiry: number;
+  convertedToEstimate: number;
+  byStatus: CountByLabel[];
+  attention: SalesIntakeSummary[];
 };
 
 export type EngineeringVisitDashboard = {
-  awaitingAssignment: number; awaitingConfirmation: number; visitsToday: number; visitsThisWeek: number;
-  scheduleConflicts: number; reportsOverdue: number;
-  workloadByEngineer: CountByLabel[]; skillDemand: CountByLabel[]; attention: SiteVisitSummary[];
+  awaitingAssignment: number;
+  awaitingConfirmation: number;
+  visitsToday: number;
+  visitsThisWeek: number;
+  scheduleConflicts: number;
+  reportsOverdue: number;
+  workloadByEngineer: CountByLabel[];
+  skillDemand: CountByLabel[];
+  attention: SiteVisitSummary[];
 };
 
 export type ManagementVisitDashboard = {
-  totalIntakes: number; totalVisits: number; averageLeadTimeDays: number; completionRatePercent: number;
-  reportSlaCompliancePercent: number; visitToEstimateConversionPercent: number;
-  visitToProjectConversionPercent: number; cancelledRatePercent: number;
-  rescheduledRatePercent: number; noShowRatePercent: number;
-  byCustomer: CountByLabel[]; bySalesOwner: CountByLabel[]; byEngineer: CountByLabel[];
-  byDepartment: CountByLabel[]; byVisitType: CountByLabel[];
+  totalIntakes: number;
+  totalVisits: number;
+  averageLeadTimeDays: number;
+  completionRatePercent: number;
+  reportSlaCompliancePercent: number;
+  visitToEstimateConversionPercent: number;
+  visitToProjectConversionPercent: number;
+  cancelledRatePercent: number;
+  rescheduledRatePercent: number;
+  noShowRatePercent: number;
+  byCustomer: CountByLabel[];
+  bySalesOwner: CountByLabel[];
+  byEngineer: CountByLabel[];
+  byDepartment: CountByLabel[];
+  byVisitType: CountByLabel[];
 };
 
 export type NotificationRecord = {
-  id: number; kind: string; title: string; detail: string; entityType: string | null; entityId: number | null;
-  isRead: boolean; createdAt: string; readAt: string | null;
+  id: number;
+  kind: string;
+  title: string;
+  detail: string;
+  entityType: string | null;
+  entityId: number | null;
+  isRead: boolean;
+  createdAt: string;
+  readAt: string | null;
   support?: { ticketNo: string; subject: string | null; event: string | null; status: string | null; actorName: string | null } | null;
 };
 
 /* ------------------------------ Intake calls ----------------------------- */
 
-export const listSalesIntakes = (values: {
-  page?: number; pageSize?: number; search?: string; status?: string; customerId?: number;
-  salesOwnerId?: number; priority?: string; requestFrom?: string; requestTo?: string;
-  mine?: boolean; includeArchived?: boolean; relatedInquiryId?: number;
-} = {}) => apiRequest<PagedResult<SalesIntakeSummary>>(`/api/v1/sales-intakes/${queryString(values)}`);
+export const listSalesIntakes = (
+  values: {
+    page?: number;
+    pageSize?: number;
+    search?: string;
+    status?: string;
+    customerId?: number;
+    salesOwnerId?: number;
+    priority?: string;
+    requestFrom?: string;
+    requestTo?: string;
+    mine?: boolean;
+    includeArchived?: boolean;
+    relatedInquiryId?: number;
+  } = {},
+) => apiRequest<PagedResult<SalesIntakeSummary>>(`/api/v1/sales-intakes/${queryString(values)}`);
 
 export const loadSalesIntake = (id: number) => apiRequest<SalesIntakeDetail>(`/api/v1/sales-intakes/${id}`);
 
@@ -2776,27 +3400,38 @@ export const loadSalesVisitDashboard = () => apiRequest<SalesVisitDashboard>("/a
 
 export const createSalesIntake = (input: SaveSalesIntakeInput) =>
   apiRequest<{ id: number; number: string; readiness: ReadinessResult }>("/api/v1/sales-intakes/", {
-    method: "POST", body: JSON.stringify(input),
+    method: "POST",
+    body: JSON.stringify(input),
   });
 
 export const saveSalesIntake = (id: number, input: SaveSalesIntakeInput) =>
   apiRequest<{ id: number; number: string; rowVersion: string; readiness: ReadinessResult }>(`/api/v1/sales-intakes/${id}`, {
-    method: "PUT", body: JSON.stringify(input),
+    method: "PUT",
+    body: JSON.stringify(input),
   });
 
 export const changeIntakeStatus = (id: number, input: { status: string; reason?: string; rowVersion: string }) =>
-  apiRequest<{ id: number; number: string; status: string; rowVersion: string; readiness: ReadinessResult }>(
-    `/api/v1/sales-intakes/${id}/status`, { method: "POST", body: JSON.stringify(input) });
+  apiRequest<{ id: number; number: string; status: string; rowVersion: string; readiness: ReadinessResult }>(`/api/v1/sales-intakes/${id}/status`, { method: "POST", body: JSON.stringify(input) });
 
 export type SubmitTechnicalReviewInput = {
-  decision: string; comment?: string; visitScope?: string; engineerCount: number;
-  estimatedDurationMinutes: number; requiredEquipment?: string; riskAssessment?: string;
-  safetyConcern?: string; requiresManagerApproval: boolean; skillIds?: number[]; rowVersion: string;
+  decision: string;
+  comment?: string;
+  visitScope?: string;
+  engineerCount: number;
+  estimatedDurationMinutes: number;
+  requiredEquipment?: string;
+  riskAssessment?: string;
+  safetyConcern?: string;
+  requiresManagerApproval: boolean;
+  skillIds?: number[];
+  rowVersion: string;
 };
 
 export const submitTechnicalReview = (id: number, input: SubmitTechnicalReviewInput) =>
-  apiRequest<{ id: number; number: string; reviewId: number; status: string; rowVersion: string; readiness: ReadinessResult }>(
-    `/api/v1/sales-intakes/${id}/review`, { method: "POST", body: JSON.stringify(input) });
+  apiRequest<{ id: number; number: string; reviewId: number; status: string; rowVersion: string; readiness: ReadinessResult }>(`/api/v1/sales-intakes/${id}/review`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 
 export async function uploadIntakeAttachment(id: number, input: { file: File; category: string; description?: string }) {
   const body = new FormData();
@@ -2808,124 +3443,214 @@ export async function uploadIntakeAttachment(id: number, input: { file: File; ca
 }
 
 export const deleteIntakeAttachment = (id: number, attachmentId: number) =>
-  apiRequest<{ id: number; attachmentId: number; readiness: ReadinessResult }>(
-    `/api/v1/sales-intakes/${id}/attachments/${attachmentId}`, { method: "DELETE" });
+  apiRequest<{ id: number; attachmentId: number; readiness: ReadinessResult }>(`/api/v1/sales-intakes/${id}/attachments/${attachmentId}`, { method: "DELETE" });
 
-export const downloadIntakeAttachment = (id: number, attachmentId: number) =>
-  downloadNamedFile(`/api/v1/sales-intakes/${id}/attachments/${attachmentId}/content`);
+export const downloadIntakeAttachment = (id: number, attachmentId: number) => downloadNamedFile(`/api/v1/sales-intakes/${id}/attachments/${attachmentId}/content`);
 
 /* ---------------------------- Site visit calls --------------------------- */
 
-export const listSiteVisits = (values: {
-  page?: number; pageSize?: number; search?: string; status?: string; customerId?: number;
-  engineerId?: number; visitTypeId?: number; from?: string; to?: string;
-  unassigned?: boolean; reportOverdue?: boolean; includeArchived?: boolean;
-} = {}) => apiRequest<PagedResult<SiteVisitSummary>>(`/api/v1/site-visits/${queryString(values)}`);
+export const listSiteVisits = (
+  values: {
+    page?: number;
+    pageSize?: number;
+    search?: string;
+    status?: string;
+    customerId?: number;
+    engineerId?: number;
+    visitTypeId?: number;
+    from?: string;
+    to?: string;
+    unassigned?: boolean;
+    reportOverdue?: boolean;
+    includeArchived?: boolean;
+  } = {},
+) => apiRequest<PagedResult<SiteVisitSummary>>(`/api/v1/site-visits/${queryString(values)}`);
 
 export const loadSiteVisit = (id: number) => apiRequest<SiteVisitDetail>(`/api/v1/site-visits/${id}`);
 
 export const loadPreVisitBrief = (id: number) => apiRequest<PreVisitBriefRecord>(`/api/v1/site-visits/${id}/brief`);
 
-export const loadEngineerCandidates = (id: number) =>
-  apiRequest<EngineerCandidateRecord[]>(`/api/v1/site-visits/${id}/candidates`);
+export const loadEngineerCandidates = (id: number) => apiRequest<EngineerCandidateRecord[]>(`/api/v1/site-visits/${id}/candidates`);
 
 export const loadVisitCalendar = (values: { from?: string; to?: string; engineerId?: number; department?: string } = {}) =>
   apiRequest<CalendarResult>(`/api/v1/site-visits/calendar${queryString(values)}`);
 
-export const loadMyAssignments = (values: { includeClosed?: boolean } = {}) =>
-  apiRequest<MyAssignmentRecord[]>(`/api/v1/site-visits/my-assignments${queryString(values)}`);
+export const loadMyAssignments = (values: { includeClosed?: boolean } = {}) => apiRequest<MyAssignmentRecord[]>(`/api/v1/site-visits/my-assignments${queryString(values)}`);
 
-export const loadEngineeringVisitDashboard = () =>
-  apiRequest<EngineeringVisitDashboard>("/api/v1/site-visits/dashboard/engineering");
+export const loadEngineeringVisitDashboard = () => apiRequest<EngineeringVisitDashboard>("/api/v1/site-visits/dashboard/engineering");
 
-export const loadManagementVisitDashboard = () =>
-  apiRequest<ManagementVisitDashboard>("/api/v1/site-visits/dashboard/management");
+export const loadManagementVisitDashboard = () => apiRequest<ManagementVisitDashboard>("/api/v1/site-visits/dashboard/management");
 
 export type CreateSiteVisitInput = {
-  intakeId: number; visitTypeId: number; checklistTemplateId?: number | null; proposedWindowId?: number | null;
-  scheduledStart?: string | null; scheduledEnd?: string | null; timeZoneId?: string;
-  travelMinutesBefore: number; travelMinutesAfter: number; meetingPoint?: string; requiredEquipment?: string;
-  internalNote?: string; customerNote?: string; requiredEngineerCount: number;
+  intakeId: number;
+  visitTypeId: number;
+  checklistTemplateId?: number | null;
+  proposedWindowId?: number | null;
+  scheduledStart?: string | null;
+  scheduledEnd?: string | null;
+  timeZoneId?: string;
+  travelMinutesBefore: number;
+  travelMinutesAfter: number;
+  meetingPoint?: string;
+  requiredEquipment?: string;
+  internalNote?: string;
+  customerNote?: string;
+  requiredEngineerCount: number;
 };
 
 export const createSiteVisit = (input: CreateSiteVisitInput) =>
   apiRequest<{ id: number; number: string; intakeId: number }>("/api/v1/site-visits/", {
-    method: "POST", body: JSON.stringify(input),
+    method: "POST",
+    body: JSON.stringify(input),
   });
 
 export const changeVisitStatus = (id: number, input: { status: string; reason?: string; rowVersion: string }) =>
   apiRequest<{ id: number; number: string; status: string; rowVersion: string }>(`/api/v1/site-visits/${id}/status`, {
-    method: "POST", body: JSON.stringify(input),
+    method: "POST",
+    body: JSON.stringify(input),
   });
 
 export type RescheduleVisitInput = {
-  scheduledStart: string; scheduledEnd: string; timeZoneId?: string;
-  travelMinutesBefore: number; travelMinutesAfter: number; meetingPoint?: string; reason: string; rowVersion: string;
+  scheduledStart: string;
+  scheduledEnd: string;
+  timeZoneId?: string;
+  travelMinutesBefore: number;
+  travelMinutesAfter: number;
+  meetingPoint?: string;
+  reason: string;
+  rowVersion: string;
 };
 
 export const rescheduleSiteVisit = (id: number, input: RescheduleVisitInput) =>
   apiRequest<{ id: number; number: string; rowVersion: string }>(`/api/v1/site-visits/${id}/schedule`, {
-    method: "PUT", body: JSON.stringify(input),
+    method: "PUT",
+    body: JSON.stringify(input),
   });
 
-export const assignVisitEngineer = (id: number, input: {
-  engineerId: number; assignmentRole: string; conflictOverride: boolean; overrideReason?: string; rowVersion: string;
-}) => apiRequest<{
-  id: number; assignmentId: number; matchPercent: number; missingSkills: string[];
-  conflicts: number; conflictDetail: string; rowVersion: string;
-}>(`/api/v1/site-visits/${id}/assignments`, { method: "POST", body: JSON.stringify(input) });
+export const assignVisitEngineer = (
+  id: number,
+  input: {
+    engineerId: number;
+    assignmentRole: string;
+    conflictOverride: boolean;
+    overrideReason?: string;
+    rowVersion: string;
+  },
+) =>
+  apiRequest<{
+    id: number;
+    assignmentId: number;
+    matchPercent: number;
+    missingSkills: string[];
+    conflicts: number;
+    conflictDetail: string;
+    rowVersion: string;
+  }>(`/api/v1/site-visits/${id}/assignments`, { method: "POST", body: JSON.stringify(input) });
 
-export const respondToAssignment = (id: number, assignmentId: number, input: {
-  response: string; note?: string; proposedStart?: string | null; proposedEnd?: string | null; rowVersion: string;
-}) => apiRequest<{ id: number; assignmentId: number; status: string; rowVersion: string }>(
-  `/api/v1/site-visits/${id}/assignments/${assignmentId}/response`, { method: "POST", body: JSON.stringify(input) });
+export const respondToAssignment = (
+  id: number,
+  assignmentId: number,
+  input: {
+    response: string;
+    note?: string;
+    proposedStart?: string | null;
+    proposedEnd?: string | null;
+    rowVersion: string;
+  },
+) =>
+  apiRequest<{ id: number; assignmentId: number; status: string; rowVersion: string }>(`/api/v1/site-visits/${id}/assignments/${assignmentId}/response`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 
-export const withdrawAssignment = (id: number, assignmentId: number) =>
-  apiRequest<{ id: number; assignmentId: number }>(`/api/v1/site-visits/${id}/assignments/${assignmentId}`, { method: "DELETE" });
+export const withdrawAssignment = (id: number, assignmentId: number) => apiRequest<{ id: number; assignmentId: number }>(`/api/v1/site-visits/${id}/assignments/${assignmentId}`, { method: "DELETE" });
 
-export const recordVisitConfirmation = (id: number, input: {
-  party: string; outcome: string; channel: string; confirmedByName?: string; confirmedAt?: string | null;
-  comment?: string; evidenceAttachmentId?: number | null; rowVersion: string;
-}) => apiRequest<{ id: number; confirmationId: number; rowVersion: string }>(
-  `/api/v1/site-visits/${id}/confirmations`, { method: "POST", body: JSON.stringify(input) });
+export const recordVisitConfirmation = (
+  id: number,
+  input: {
+    party: string;
+    outcome: string;
+    channel: string;
+    confirmedByName?: string;
+    confirmedAt?: string | null;
+    comment?: string;
+    evidenceAttachmentId?: number | null;
+    rowVersion: string;
+  },
+) => apiRequest<{ id: number; confirmationId: number; rowVersion: string }>(`/api/v1/site-visits/${id}/confirmations`, { method: "POST", body: JSON.stringify(input) });
 
-export const checkInSiteVisit = (id: number, input: {
-  actualAttendees?: string; customerAttendees?: string; locationConsentGiven: boolean;
-  latitude?: number | null; longitude?: number | null; rowVersion: string;
-}) => apiRequest<{ id: number; status: string; rowVersion: string }>(
-  `/api/v1/site-visits/${id}/check-in`, { method: "POST", body: JSON.stringify(input) });
+export const checkInSiteVisit = (
+  id: number,
+  input: {
+    actualAttendees?: string;
+    customerAttendees?: string;
+    locationConsentGiven: boolean;
+    latitude?: number | null;
+    longitude?: number | null;
+    rowVersion: string;
+  },
+) => apiRequest<{ id: number; status: string; rowVersion: string }>(`/api/v1/site-visits/${id}/check-in`, { method: "POST", body: JSON.stringify(input) });
 
 export const checkOutSiteVisit = (id: number, input: { executionNote?: string; rowVersion: string }) =>
-  apiRequest<{ id: number; status: string; reportDueAt: string; reportNumber: string; rowVersion: string }>(
-    `/api/v1/site-visits/${id}/check-out`, { method: "POST", body: JSON.stringify(input) });
+  apiRequest<{ id: number; status: string; reportDueAt: string; reportNumber: string; rowVersion: string }>(`/api/v1/site-visits/${id}/check-out`, { method: "POST", body: JSON.stringify(input) });
 
 export type SaveChecklistResponseInput = {
-  checklistItemId: number; responseValue?: string | null; numericValue?: number | null;
-  unit?: string; isNotApplicable: boolean; note?: string | null;
+  checklistItemId: number;
+  responseValue?: string | null;
+  numericValue?: number | null;
+  unit?: string;
+  isNotApplicable: boolean;
+  note?: string | null;
 };
 
 export const saveVisitChecklist = (id: number, answers: SaveChecklistResponseInput[]) =>
   apiRequest<{ id: number; saved: number }>(`/api/v1/site-visits/${id}/checklist`, {
-    method: "PUT", body: JSON.stringify(answers),
+    method: "PUT",
+    body: JSON.stringify(answers),
   });
 
-export const saveVisitFinding = (id: number, input: {
-  kind: string; title: string; detail?: string; measurementValue?: number | null;
-  measurementUnit?: string; severity: string; sortOrder: number;
-}) => apiRequest<{ id: number; findingId: number }>(`/api/v1/site-visits/${id}/findings`, {
-  method: "POST", body: JSON.stringify(input),
-});
+export const saveVisitFinding = (
+  id: number,
+  input: {
+    kind: string;
+    title: string;
+    detail?: string;
+    measurementValue?: number | null;
+    measurementUnit?: string;
+    severity: string;
+    sortOrder: number;
+  },
+) =>
+  apiRequest<{ id: number; findingId: number }>(`/api/v1/site-visits/${id}/findings`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 
-export const saveVisitActionItem = (id: number, input: {
-  title: string; detail?: string; ownerId?: number | null; ownerName?: string;
-  dueDate?: string | null; status: string;
-}) => apiRequest<{ id: number; actionItemId: number }>(`/api/v1/site-visits/${id}/action-items`, {
-  method: "POST", body: JSON.stringify(input),
-});
+export const saveVisitActionItem = (
+  id: number,
+  input: {
+    title: string;
+    detail?: string;
+    ownerId?: number | null;
+    ownerName?: string;
+    dueDate?: string | null;
+    status: string;
+  },
+) =>
+  apiRequest<{ id: number; actionItemId: number }>(`/api/v1/site-visits/${id}/action-items`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 
-export async function uploadVisitAttachment(id: number, input: {
-  file: File; category: string; description?: string; findingId?: number;
-}) {
+export async function uploadVisitAttachment(
+  id: number,
+  input: {
+    file: File;
+    category: string;
+    description?: string;
+    findingId?: number;
+  },
+) {
   const body = new FormData();
   body.set("file", input.file);
   body.set("category", input.category);
@@ -2935,48 +3660,77 @@ export async function uploadVisitAttachment(id: number, input: {
   return response.json() as Promise<VisitAttachmentRecord>;
 }
 
-export const downloadVisitAttachment = (id: number, attachmentId: number) =>
-  downloadNamedFile(`/api/v1/site-visits/${id}/attachments/${attachmentId}/content`);
+export const downloadVisitAttachment = (id: number, attachmentId: number) => downloadNamedFile(`/api/v1/site-visits/${id}/attachments/${attachmentId}/content`);
 
 export type SaveVisitReportInput = {
-  visitSummary?: string; customerRequirement?: string; existingCondition?: string; findingsSummary?: string;
-  measurementSummary?: string; rootCause?: string; recommendedSolution?: string; proposedScope?: string;
-  assumption?: string; exclusion?: string; risk?: string; safetyConcern?: string;
-  customerAdditionalRequest?: string; engineerConclusion?: string; salesFollowUp?: string;
-  nextStep?: string; changeSummary?: string; rowVersion: string;
+  visitSummary?: string;
+  customerRequirement?: string;
+  existingCondition?: string;
+  findingsSummary?: string;
+  measurementSummary?: string;
+  rootCause?: string;
+  recommendedSolution?: string;
+  proposedScope?: string;
+  assumption?: string;
+  exclusion?: string;
+  risk?: string;
+  safetyConcern?: string;
+  customerAdditionalRequest?: string;
+  engineerConclusion?: string;
+  salesFollowUp?: string;
+  nextStep?: string;
+  changeSummary?: string;
+  rowVersion: string;
 };
 
 export const saveVisitReport = (id: number, input: SaveVisitReportInput) =>
-  apiRequest<{ visitId: number; reportId: number; number: string; rowVersion: string }>(
-    `/api/v1/site-visits/${id}/report`, { method: "PUT", body: JSON.stringify(input) });
+  apiRequest<{ visitId: number; reportId: number; number: string; rowVersion: string }>(`/api/v1/site-visits/${id}/report`, { method: "PUT", body: JSON.stringify(input) });
 
 export const submitVisitReport = (id: number, rowVersion: string) =>
-  apiRequest<{ visitId: number; reportId: number; status: string; rowVersion: string }>(
-    `/api/v1/site-visits/${id}/report/submit`, { method: "POST", body: JSON.stringify({ status: "Submitted", rowVersion }) });
+  apiRequest<{ visitId: number; reportId: number; status: string; rowVersion: string }>(`/api/v1/site-visits/${id}/report/submit`, {
+    method: "POST",
+    body: JSON.stringify({ status: "Submitted", rowVersion }),
+  });
 
 export const reviewVisitReport = (id: number, input: { decision: string; comment?: string; rowVersion: string }) =>
-  apiRequest<{ visitId: number; reportId: number; status: string; rowVersion: string }>(
-    `/api/v1/site-visits/${id}/report/review`, { method: "POST", body: JSON.stringify(input) });
+  apiRequest<{ visitId: number; reportId: number; status: string; rowVersion: string }>(`/api/v1/site-visits/${id}/report/review`, { method: "POST", body: JSON.stringify(input) });
 
-export const acknowledgeVisitReport = (id: number, input: {
-  acknowledgedBy: string; acknowledgedAt?: string | null; signatureDataUrl?: string | null; rowVersion: string;
-}) => apiRequest<{ visitId: number; reportId: number; status: string; rowVersion: string }>(
-  `/api/v1/site-visits/${id}/report/acknowledge`, { method: "POST", body: JSON.stringify(input) });
+export const acknowledgeVisitReport = (
+  id: number,
+  input: {
+    acknowledgedBy: string;
+    acknowledgedAt?: string | null;
+    signatureDataUrl?: string | null;
+    rowVersion: string;
+  },
+) => apiRequest<{ visitId: number; reportId: number; status: string; rowVersion: string }>(`/api/v1/site-visits/${id}/report/acknowledge`, { method: "POST", body: JSON.stringify(input) });
 
 export const closeSiteVisit = (id: number, input: { reason: string; rowVersion: string }) =>
-  apiRequest<{ id: number; status: string; hasApprovedReport: boolean; rowVersion: string }>(
-    `/api/v1/site-visits/${id}/close`, { method: "POST", body: JSON.stringify(input) });
+  apiRequest<{ id: number; status: string; hasApprovedReport: boolean; rowVersion: string }>(`/api/v1/site-visits/${id}/close`, { method: "POST", body: JSON.stringify(input) });
 
-export const createInquiryFromVisit = (id: number, input: {
-  projectName: string; projectType: string; estimateOwnerId: number; dueDate: string;
-  priority: string; projectProbability: number; customerInterestGrade: string; remark?: string;
-}) => apiRequest<{ visitId: number; inquiryId: number; number: string }>(
-  `/api/v1/site-visits/${id}/inquiry`, { method: "POST", body: JSON.stringify(input) });
+export const createInquiryFromVisit = (
+  id: number,
+  input: {
+    projectName: string;
+    projectType: string;
+    estimateOwnerId: number;
+    dueDate: string;
+    priority: string;
+    projectProbability: number;
+    customerInterestGrade: string;
+    remark?: string;
+  },
+) => apiRequest<{ visitId: number; inquiryId: number; number: string }>(`/api/v1/site-visits/${id}/inquiry`, { method: "POST", body: JSON.stringify(input) });
 
 export const createEstimateFromVisit = (id: number) =>
   apiRequest<{
-    visitId: number; estimateId: number; number: string; inquiryId?: number;
-    status?: string; created: boolean; message?: string;
+    visitId: number;
+    estimateId: number;
+    number: string;
+    inquiryId?: number;
+    status?: string;
+    created: boolean;
+    message?: string;
   }>(`/api/v1/site-visits/${id}/estimate`, { method: "POST", body: JSON.stringify({}) });
 
 /* --------------------------- Master data calls --------------------------- */
@@ -2984,107 +3738,151 @@ export const createEstimateFromVisit = (id: number) =>
 export const loadVisitMasterData = () => apiRequest<VisitMasterData>("/api/v1/visit-master/");
 
 export const saveVisitType = (input: {
-  code: string; nameEn: string; nameTh?: string; nameJa?: string; description?: string;
-  defaultDurationMinutes: number; defaultEngineerCount: number; requiresManagerApproval: boolean;
-  sortOrder: number; isActive: boolean;
-}) => apiRequest<{ id: number; code: string }>("/api/v1/visit-master/visit-types", {
-  method: "POST", body: JSON.stringify(input),
-});
+  code: string;
+  nameEn: string;
+  nameTh?: string;
+  nameJa?: string;
+  description?: string;
+  defaultDurationMinutes: number;
+  defaultEngineerCount: number;
+  requiresManagerApproval: boolean;
+  sortOrder: number;
+  isActive: boolean;
+}) =>
+  apiRequest<{ id: number; code: string }>("/api/v1/visit-master/visit-types", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 
-export const saveVisitSkill = (input: {
-  code: string; nameEn: string; nameTh?: string; nameJa?: string; discipline?: string;
-  sortOrder: number; isActive: boolean;
-}) => apiRequest<{ id: number; code: string }>("/api/v1/visit-master/skills", {
-  method: "POST", body: JSON.stringify(input),
-});
+export const saveVisitSkill = (input: { code: string; nameEn: string; nameTh?: string; nameJa?: string; discipline?: string; sortOrder: number; isActive: boolean }) =>
+  apiRequest<{ id: number; code: string }>("/api/v1/visit-master/skills", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 
 export const saveChecklistTemplate = (input: {
-  code: string; name: string; visitTypeId?: number | null; description?: string; isActive: boolean;
+  code: string;
+  name: string;
+  visitTypeId?: number | null;
+  description?: string;
+  isActive: boolean;
   items: { sortOrder: number; section: string; prompt: string; responseType: string; unit?: string; isRequired: boolean; guidance?: string }[];
-}) => apiRequest<{ id: number; code: string; items: number }>("/api/v1/visit-master/checklist-templates", {
-  method: "POST", body: JSON.stringify(input),
-});
+}) =>
+  apiRequest<{ id: number; code: string; items: number }>("/api/v1/visit-master/checklist-templates", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 
 export const saveSlaPolicy = (input: {
-  code: string; name: string; visitTypeId?: number | null; reviewResponseDays: number;
-  scheduleLeadDays: number; reportDueDays: number; reportWarningHours: number; isDefault: boolean; isActive: boolean;
-}) => apiRequest<{ id: number; code: string }>("/api/v1/visit-master/sla-policies", {
-  method: "POST", body: JSON.stringify(input),
-});
+  code: string;
+  name: string;
+  visitTypeId?: number | null;
+  reviewResponseDays: number;
+  scheduleLeadDays: number;
+  reportDueDays: number;
+  reportWarningHours: number;
+  isDefault: boolean;
+  isActive: boolean;
+}) =>
+  apiRequest<{ id: number; code: string }>("/api/v1/visit-master/sla-policies", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 
 export const saveEngineerSkill = (input: { userId: number; skillId: number; proficiency: string; note?: string }) =>
   apiRequest<{ id: number }>("/api/v1/visit-master/engineer-skills", { method: "POST", body: JSON.stringify(input) });
 
-export const deleteEngineerSkill = (id: number) =>
-  apiRequest<{ id: number }>(`/api/v1/visit-master/engineer-skills/${id}`, { method: "DELETE" });
+export const deleteEngineerSkill = (id: number) => apiRequest<{ id: number }>(`/api/v1/visit-master/engineer-skills/${id}`, { method: "DELETE" });
 
-export const saveEngineerAvailability = (input: {
-  userId: number; kind: string; reason?: string; startsAt: string; endsAt: string;
-}) => apiRequest<{ id: number; conflictingVisits: string[] }>("/api/v1/visit-master/availability", {
-  method: "POST", body: JSON.stringify(input),
-});
+export const saveEngineerAvailability = (input: { userId: number; kind: string; reason?: string; startsAt: string; endsAt: string }) =>
+  apiRequest<{ id: number; conflictingVisits: string[] }>("/api/v1/visit-master/availability", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 
-export const deleteEngineerAvailability = (id: number) =>
-  apiRequest<{ id: number }>(`/api/v1/visit-master/availability/${id}`, { method: "DELETE" });
+export const deleteEngineerAvailability = (id: number) => apiRequest<{ id: number }>(`/api/v1/visit-master/availability/${id}`, { method: "DELETE" });
 
 /* ------------------------ Customer people (contacts) --------------------- */
 
 export type SalesCustomerContact = {
-  id: number; siteId: number; siteCode: string; siteName: string; name: string;
-  titleTh: string; titleEn: string; titleJa: string;
-  nameTh: string; nameEn: string; nameJa: string;
-  email: string; phone: string; department: string; position: string;
-  isPrimary: boolean; rowVersion: string;
+  id: number;
+  siteId: number;
+  siteCode: string;
+  siteName: string;
+  name: string;
+  titleTh: string;
+  titleEn: string;
+  titleJa: string;
+  nameTh: string;
+  nameEn: string;
+  nameJa: string;
+  email: string;
+  phone: string;
+  department: string;
+  position: string;
+  isPrimary: boolean;
+  rowVersion: string;
 };
 
 export type SalesCustomerContactPage = {
   sites: { id: number; code: string; name: string }[];
   contacts: SalesCustomerContact[];
   primaryContact: {
-    name: string; titleTh: string; titleEn: string; titleJa: string;
-    nameTh: string; nameEn: string; nameJa: string;
-    email: string; phone: string; department: string; position: string;
+    name: string;
+    titleTh: string;
+    titleEn: string;
+    titleJa: string;
+    nameTh: string;
+    nameEn: string;
+    nameJa: string;
+    email: string;
+    phone: string;
+    department: string;
+    position: string;
   } | null;
 };
 
 export type SalesCustomerContactInput = {
-  name?: string; nameTh?: string; nameEn?: string; nameJa?: string;
-  titleTh?: string; titleEn?: string; titleJa?: string;
-  email?: string; phone?: string; department?: string; position?: string;
+  name?: string;
+  nameTh?: string;
+  nameEn?: string;
+  nameJa?: string;
+  titleTh?: string;
+  titleEn?: string;
+  titleJa?: string;
+  email?: string;
+  phone?: string;
+  department?: string;
+  position?: string;
 };
 
 // The company page lists every person across every site; siteId is optional because the
 // API falls back to the MAIN site it creates for a company that has no site yet.
-export const listSalesCustomerContacts = (customerId: number) =>
-  apiRequest<SalesCustomerContactPage>(`/api/v1/sales/customers/${customerId}/contacts`);
+export const listSalesCustomerContacts = (customerId: number) => apiRequest<SalesCustomerContactPage>(`/api/v1/sales/customers/${customerId}/contacts`);
 
 export const createSalesCustomerContact = (customerId: number, input: SalesCustomerContactInput & { siteId?: number }) =>
   apiRequest<SalesCustomerContact>(`/api/v1/sales/customers/${customerId}/contacts`, {
-    method: "POST", body: JSON.stringify(input),
+    method: "POST",
+    body: JSON.stringify(input),
   });
 
-export const updateSalesCustomerContact = (
-  customerId: number,
-  contactId: number,
-  input: SalesCustomerContactInput & { rowVersion: string; isPrimary?: boolean },
-) => apiRequest<SalesCustomerContact>(`/api/v1/sales/customers/${customerId}/contacts/${contactId}`, {
-  method: "PUT", body: JSON.stringify(input),
-});
+export const updateSalesCustomerContact = (customerId: number, contactId: number, input: SalesCustomerContactInput & { rowVersion: string; isPrimary?: boolean }) =>
+  apiRequest<SalesCustomerContact>(`/api/v1/sales/customers/${customerId}/contacts/${contactId}`, {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
 
 export const removeSalesCustomerContact = (customerId: number, contactId: number, rowVersion: string) =>
-  apiRequest<{ id: number; removed: boolean }>(
-    `/api/v1/sales/customers/${customerId}/contacts/${contactId}${queryString({ rowVersion })}`,
-    { method: "DELETE" },
-  );
+  apiRequest<{ id: number; removed: boolean }>(`/api/v1/sales/customers/${customerId}/contacts/${contactId}${queryString({ rowVersion })}`, { method: "DELETE" });
 
 /* ---------------------------- Notification feed -------------------------- */
 
-export const listNotifications = (values: { unreadOnly?: boolean; limit?: number } = {}) =>
-  apiRequest<NotificationRecord[]>(`/api/v1/me/notifications/${queryString(values)}`);
+export const listNotifications = (values: { unreadOnly?: boolean; limit?: number } = {}) => apiRequest<NotificationRecord[]>(`/api/v1/me/notifications/${queryString(values)}`);
 
 export const markNotificationsRead = (input: { ids?: number[]; all?: boolean }) =>
   apiRequest<{ updated: number }>("/api/v1/me/notifications/read", {
-    method: "POST", body: JSON.stringify({ ids: input.ids ?? [], all: input.all ?? false }),
+    method: "POST",
+    body: JSON.stringify({ ids: input.ids ?? [], all: input.all ?? false }),
   });
 
 /* Download Center: department software and files published from the NAS share. */
@@ -3101,8 +3899,7 @@ export type DownloadCenterFile = {
 };
 export type DownloadCenterCategory = { folder: string; title: string; description: string; order: number; files: DownloadCenterFile[] };
 
-export const getDownloadCenter = () =>
-  apiRequest<{ categories: DownloadCenterCategory[] }>("/api/v1/download-center");
+export const getDownloadCenter = () => apiRequest<{ categories: DownloadCenterCategory[] }>("/api/v1/download-center");
 
 /**
  * Installers are tens of MB and may come over VPN. With TMT ID the session is a cookie, so the
@@ -3125,12 +3922,15 @@ export async function downloadCenterFile(category: string, file: string): Promis
 }
 
 export type SkillHubSkill = {
-  slug: string; title: string; description: string; category: string;
-  targets: ("claude" | "codex")[]; files: string[];
+  slug: string;
+  title: string;
+  description: string;
+  category: string;
+  targets: ("claude" | "codex")[];
+  files: string[];
 };
 export const getSkillHub = () => apiRequest<{ skills: SkillHubSkill[] }>("/api/v1/skill-hub");
-export const getSkillHubSkill = (slug: string) =>
-  apiRequest<{ slug: string; skillMd: string }>(`/api/v1/skill-hub/${encodeURIComponent(slug)}`);
+export const getSkillHubSkill = (slug: string) => apiRequest<{ slug: string; skillMd: string }>(`/api/v1/skill-hub/${encodeURIComponent(slug)}`);
 
 export async function downloadSkillInstaller(slug: string, target: "claude" | "codex"): Promise<void> {
   const path = `/api/v1/skill-hub/${encodeURIComponent(slug)}/install?${new URLSearchParams({ target })}`;
@@ -3177,32 +3977,38 @@ export type SourceRepository = {
 /** Set when the Download Center's repositories are TMTHub (git) repositories. */
 export type RepositoryHub = { url: string; org: string; orgUrl: string };
 export type RepositoryHistoryEntry = {
-  at: string; by: RepositoryActor; action: "create" | "upload" | "delete" | "update" | "commit"; message: string; path: string; files: number;
-  sha?: string; url?: string;
+  at: string;
+  by: RepositoryActor;
+  action: "create" | "upload" | "delete" | "update" | "commit";
+  message: string;
+  path: string;
+  files: number;
+  sha?: string;
+  url?: string;
 };
 export type SourceRepositoryDetail = SourceRepository & { history: RepositoryHistoryEntry[]; canManage: boolean; hub?: RepositoryHub | null; uploadMaxBytes?: number };
 export type RepositoryTreeEntry = { name: string; path: string; type: "dir" | "file"; sizeBytes: number; modifiedAt: string };
 export type RepositoryTree = { path: string; entries: RepositoryTreeEntry[]; readme: { name: string; path: string; content: string } | null };
 export type RepositoryBlob = {
-  path: string; name: string; sizeBytes: number; modifiedAt: string; content: string | null; reason: "binary" | "too_large" | null;
+  path: string;
+  name: string;
+  sizeBytes: number;
+  modifiedAt: string;
+  content: string | null;
+  reason: "binary" | "too_large" | null;
 };
 
 const repositoryBase = (name: string) => `/api/v1/download-center/repositories/${encodeURIComponent(name)}`;
 
-export const listSourceRepositories = () =>
-  apiRequest<{ items: SourceRepository[]; hub: RepositoryHub | null; uploadMaxBytes?: number }>("/api/v1/download-center/repositories");
+export const listSourceRepositories = () => apiRequest<{ items: SourceRepository[]; hub: RepositoryHub | null; uploadMaxBytes?: number }>("/api/v1/download-center/repositories");
 export const createSourceRepository = (input: { name: string; projectId: number; description: string }) =>
   apiRequest<SourceRepository>("/api/v1/download-center/repositories", { method: "POST", body: JSON.stringify(input) });
 export const updateSourceRepository = (name: string, input: { description?: string; projectId?: number }) =>
   apiRequest<SourceRepository>(repositoryBase(name), { method: "PATCH", body: JSON.stringify(input) });
-export const deleteSourceRepository = (name: string) =>
-  apiRequest<void>(repositoryBase(name), { method: "DELETE" });
-export const getSourceRepository = (name: string) =>
-  apiRequest<SourceRepositoryDetail>(repositoryBase(name));
-export const getRepositoryTree = (name: string, path: string) =>
-  apiRequest<RepositoryTree>(`${repositoryBase(name)}/tree?${new URLSearchParams({ path })}`);
-export const getRepositoryBlob = (name: string, path: string) =>
-  apiRequest<RepositoryBlob>(`${repositoryBase(name)}/blob?${new URLSearchParams({ path })}`);
+export const deleteSourceRepository = (name: string) => apiRequest<void>(repositoryBase(name), { method: "DELETE" });
+export const getSourceRepository = (name: string) => apiRequest<SourceRepositoryDetail>(repositoryBase(name));
+export const getRepositoryTree = (name: string, path: string) => apiRequest<RepositoryTree>(`${repositoryBase(name)}/tree?${new URLSearchParams({ path })}`);
+export const getRepositoryBlob = (name: string, path: string) => apiRequest<RepositoryBlob>(`${repositoryBase(name)}/blob?${new URLSearchParams({ path })}`);
 export const deleteRepositoryPath = (name: string, path: string, message: string) =>
   apiRequest<{ removed: number; fileCount: number | null; sizeBytes: number | null }>(`${repositoryBase(name)}/files?${new URLSearchParams({ path, message })}`, { method: "DELETE" });
 
@@ -3214,8 +4020,13 @@ export async function uploadRepositoryFile(name: string, file: File, options: { 
   body.set("replace", String(options.replace));
   body.set("stripRoot", String(options.stripRoot));
   body.set("file", file);
-  return (await authorizedFetch(`${repositoryBase(name)}/upload`, { method: "POST", body }, 15 * 60_000))
-    .json() as Promise<{ written: number; skipped: number; commits?: number; fileCount: number | null; sizeBytes: number | null }>;
+  return (await authorizedFetch(`${repositoryBase(name)}/upload`, { method: "POST", body }, 15 * 60_000)).json() as Promise<{
+    written: number;
+    skipped: number;
+    commits?: number;
+    fileCount: number | null;
+    sizeBytes: number | null;
+  }>;
 }
 
 /** Same delivery as downloadCenterFile: a cookie session lets the browser stream it to disk. */
@@ -3230,8 +4041,7 @@ async function downloadFromApi(path: string, file: string): Promise<void> {
   clickDownload(url, file);
   window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
-export const downloadRepositoryFile = (name: string, path: string) =>
-  downloadFromApi(`${repositoryBase(name)}/raw?${new URLSearchParams({ path })}`, path.split("/").at(-1) ?? "file");
+export const downloadRepositoryFile = (name: string, path: string) => downloadFromApi(`${repositoryBase(name)}/raw?${new URLSearchParams({ path })}`, path.split("/").at(-1) ?? "file");
 export const downloadRepositoryArchive = (name: string, path = "") =>
   downloadFromApi(`${repositoryBase(name)}/archive?${new URLSearchParams({ path })}`, `${[name, ...path.split("/").filter(Boolean)].join("-")}.zip`);
 /** Bytes for an inline image preview; the API always sends octet-stream, the page sets the type. */
@@ -3308,30 +4118,42 @@ export type AssetOptions = {
 };
 /** A customer's cabinet (control panel, MDB, rack) that equipment is mounted in. */
 export type AssetCabinet = {
-  id: number; customerId: number; customerSite: { id: number; name: string } | null; name: string; locationDetail: string; notes: string;
-  assetCount: number; rowVersion: string;
+  id: number;
+  customerId: number;
+  customerSite: { id: number; name: string } | null;
+  name: string;
+  locationDetail: string;
+  notes: string;
+  assetCount: number;
+  rowVersion: string;
 };
 export type AssetCabinetInput = { customerId: number; customerSiteId: number | null; name: string; locationDetail: string; notes: string };
 export type AssetQuery = {
-  page?: number; pageSize?: number; search?: string; customerId?: number; customerSiteId?: number; projectId?: number;
-  monitorSiteId?: number; monitorProgramId?: number; category?: string; status?: string; warranty?: string;
-  cabinetId?: number; sort?: "location" | "updated";
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  customerId?: number;
+  customerSiteId?: number;
+  projectId?: number;
+  monitorSiteId?: number;
+  monitorProgramId?: number;
+  category?: string;
+  status?: string;
+  warranty?: string;
+  cabinetId?: number;
+  sort?: "location" | "updated";
 };
 
 export const listAssets = (values: AssetQuery) =>
   apiRequest<PagedResult<InstalledAsset> & { facets: { status: Record<string, number>; category: Record<string, number> } }>(`/api/v1/assets${queryString(values)}`);
-export const getAssetOptions = (customerId?: number) =>
-  apiRequest<AssetOptions>(`/api/v1/assets/options${queryString({ customerId })}`);
+export const getAssetOptions = (customerId?: number) => apiRequest<AssetOptions>(`/api/v1/assets/options${queryString({ customerId })}`);
 export const getAsset = (id: number) => apiRequest<InstalledAssetDetail>(`/api/v1/assets/${id}`);
-export const createAsset = (input: AssetInput) =>
-  apiRequest<InstalledAsset>("/api/v1/assets", { method: "POST", body: JSON.stringify(input) });
-export const updateAsset = (id: number, input: AssetInput & { rowVersion: string }) =>
-  apiRequest<InstalledAsset>(`/api/v1/assets/${id}`, { method: "PUT", body: JSON.stringify(input) });
+export const createAsset = (input: AssetInput) => apiRequest<InstalledAsset>("/api/v1/assets", { method: "POST", body: JSON.stringify(input) });
+export const updateAsset = (id: number, input: AssetInput & { rowVersion: string }) => apiRequest<InstalledAsset>(`/api/v1/assets/${id}`, { method: "PUT", body: JSON.stringify(input) });
 export const addAssetEvent = (id: number, kind: "Note" | "Serviced", summary: string) =>
   apiRequest<{ ok: true }>(`/api/v1/assets/${id}/events`, { method: "POST", body: JSON.stringify({ kind, summary }) });
 export const deleteAsset = (id: number) => apiRequest<void>(`/api/v1/assets/${id}`, { method: "DELETE" });
-export const createAssetCabinet = (input: AssetCabinetInput) =>
-  apiRequest<AssetCabinet>("/api/v1/assets/cabinets", { method: "POST", body: JSON.stringify(input) });
+export const createAssetCabinet = (input: AssetCabinetInput) => apiRequest<AssetCabinet>("/api/v1/assets/cabinets", { method: "POST", body: JSON.stringify(input) });
 export const updateAssetCabinet = (id: number, input: AssetCabinetInput & { rowVersion: string }) =>
   apiRequest<AssetCabinet>(`/api/v1/assets/cabinets/${id}`, { method: "PUT", body: JSON.stringify(input) });
 export const deleteAssetCabinet = (id: number) => apiRequest<void>(`/api/v1/assets/cabinets/${id}`, { method: "DELETE" });
@@ -3358,23 +4180,28 @@ export type SiteCredential = {
   rowVersion: string;
 };
 export type SiteCredentialInput = {
-  customerId: number; customerSiteId: number | null; assetId: number | null; projectId: number | null;
-  kind: CredentialKind; label: string; username: string; host: string; notes: string;
+  customerId: number;
+  customerSiteId: number | null;
+  assetId: number | null;
+  projectId: number | null;
+  kind: CredentialKind;
+  label: string;
+  username: string;
+  host: string;
+  notes: string;
   /** Only when adding, or when the secret changes. */
   secret?: string;
 };
 export const listCredentials = (filter: { customerId?: number; customerSiteId?: number; assetId?: number; includeSiteWide?: boolean; search?: string }) =>
   apiRequest<{ items: SiteCredential[]; canManage: boolean; canReveal: boolean; vaultReady: boolean; kinds: CredentialKind[] }>(
-    `/api/v1/credentials${queryString({ ...filter, includeSiteWide: filter.includeSiteWide ? "true" : undefined })}`);
-export const createCredential = (input: SiteCredentialInput) =>
-  apiRequest<SiteCredential>("/api/v1/credentials", { method: "POST", body: JSON.stringify(input) });
+    `/api/v1/credentials${queryString({ ...filter, includeSiteWide: filter.includeSiteWide ? "true" : undefined })}`,
+  );
+export const createCredential = (input: SiteCredentialInput) => apiRequest<SiteCredential>("/api/v1/credentials", { method: "POST", body: JSON.stringify(input) });
 export const updateCredential = (id: number, input: SiteCredentialInput & { rowVersion: string }) =>
   apiRequest<SiteCredential>(`/api/v1/credentials/${id}`, { method: "PUT", body: JSON.stringify(input) });
-export const revealCredential = (id: number) =>
-  apiRequest<{ secret: string }>(`/api/v1/credentials/${id}/reveal`, { method: "POST", body: "{}" });
+export const revealCredential = (id: number) => apiRequest<{ secret: string }>(`/api/v1/credentials/${id}/reveal`, { method: "POST", body: "{}" });
 export const deleteCredential = (id: number) => apiRequest<void>(`/api/v1/credentials/${id}`, { method: "DELETE" });
-export const getCredentialAccess = (id: number) =>
-  apiRequest<{ items: Array<{ action: string; at: string; user: string; ip: string | null }> }>(`/api/v1/credentials/${id}/access`);
+export const getCredentialAccess = (id: number) => apiRequest<{ items: Array<{ action: string; at: string; user: string; ip: string | null }> }>(`/api/v1/credentials/${id}/access`);
 
 /* Site Monitor: TMT Control Panel agents on customer machines report programs, resources and logs. */
 export type MonitorContact = { priority: number; userId: number; name: string; email: string };
@@ -3483,10 +4310,8 @@ export type MonitorSiteInput = {
   rowVersion?: string;
 };
 
-export const getMonitorSites = () =>
-  apiRequest<{ sites: MonitorSite[]; heartbeatSeconds: number; agentServerUrl: string | null }>("/api/v1/monitor/sites");
-export const getMonitorSite = (siteId: number) =>
-  apiRequest<MonitorSiteDetail>(`/api/v1/monitor/sites/${siteId}`);
+export const getMonitorSites = () => apiRequest<{ sites: MonitorSite[]; heartbeatSeconds: number; agentServerUrl: string | null }>("/api/v1/monitor/sites");
+export const getMonitorSite = (siteId: number) => apiRequest<MonitorSiteDetail>(`/api/v1/monitor/sites/${siteId}`);
 export const getMonitorLogs = (siteId: number, filter: { level?: string; agentId?: number; q?: string; beforeId?: number; limit?: number }) => {
   const query = new URLSearchParams();
   if (filter.level) query.set("level", filter.level);
@@ -3498,12 +4323,10 @@ export const getMonitorLogs = (siteId: number, filter: { level?: string; agentId
 };
 export const sendMonitorCommand = (programId: number, verb: MonitorVerb) =>
   apiRequest<{ command: MonitorCommand }>(`/api/v1/monitor/programs/${programId}/commands`, { method: "POST", body: JSON.stringify({ verb }) });
-export const getMonitorCommand = (commandId: number) =>
-  apiRequest<{ command: MonitorCommand }>(`/api/v1/monitor/commands/${commandId}`);
+export const getMonitorCommand = (commandId: number) => apiRequest<{ command: MonitorCommand }>(`/api/v1/monitor/commands/${commandId}`);
 
 /* Release deployments: a TMTHub release installed on a monitored program, requested by one person and approved by another. */
-export type MonitorDeploymentStatus =
-  "PendingApproval" | "Approved" | "Delivered" | "Succeeded" | "Failed" | "RolledBack" | "Rejected" | "Cancelled" | "Expired";
+export type MonitorDeploymentStatus = "PendingApproval" | "Approved" | "Delivered" | "Succeeded" | "Failed" | "RolledBack" | "Rejected" | "Cancelled" | "Expired";
 export type MonitorDeployment = {
   id: number;
   program: { id: number; name: string };
@@ -3531,7 +4354,13 @@ export type MonitorDeployment = {
   isOwn: boolean;
 };
 export type MonitorRelease = {
-  id: number; tag: string; name: string; prerelease: boolean; publishedAt: string; url: string; notes: string;
+  id: number;
+  tag: string;
+  name: string;
+  prerelease: boolean;
+  publishedAt: string;
+  url: string;
+  notes: string;
   assets: Array<{ id: number; name: string; size: number; deployable: boolean }>;
 };
 
@@ -3545,20 +4374,15 @@ export const requestMonitorDeployment = (programId: number, input: { releaseId: 
   apiRequest<MonitorDeployment>(`/api/v1/monitor/programs/${programId}/deployments`, { method: "POST", body: JSON.stringify(input) }, 30 * 60_000);
 export const decideMonitorDeployment = (deploymentId: number, decision: "approve" | "reject" | "cancel", note = "") =>
   apiRequest<{ ok: true }>(`/api/v1/monitor/deployments/${deploymentId}/${decision}`, { method: "POST", body: JSON.stringify({ note }) });
-export const acknowledgeMonitorIncident = (incidentId: number) =>
-  apiRequest<{ ok: boolean }>(`/api/v1/monitor/incidents/${incidentId}/acknowledge`, { method: "POST", body: "{}" });
-export const createMonitorSite = (input: MonitorSiteInput) =>
-  apiRequest<{ id: number }>("/api/v1/monitor/sites", { method: "POST", body: JSON.stringify(input) });
-export const updateMonitorSite = (siteId: number, input: MonitorSiteInput) =>
-  apiRequest<{ ok: boolean }>(`/api/v1/monitor/sites/${siteId}`, { method: "PUT", body: JSON.stringify(input) });
+export const acknowledgeMonitorIncident = (incidentId: number) => apiRequest<{ ok: boolean }>(`/api/v1/monitor/incidents/${incidentId}/acknowledge`, { method: "POST", body: "{}" });
+export const createMonitorSite = (input: MonitorSiteInput) => apiRequest<{ id: number }>("/api/v1/monitor/sites", { method: "POST", body: JSON.stringify(input) });
+export const updateMonitorSite = (siteId: number, input: MonitorSiteInput) => apiRequest<{ ok: boolean }>(`/api/v1/monitor/sites/${siteId}`, { method: "PUT", body: JSON.stringify(input) });
 export const createMonitorAgent = (siteId: number, name: string) =>
   apiRequest<{ agent: { id: number; name: string; keyHint: string }; key: string }>(`/api/v1/monitor/sites/${siteId}/agents`, { method: "POST", body: JSON.stringify({ name }) });
-export const rotateMonitorAgentKey = (agentId: number) =>
-  apiRequest<{ key: string; keyHint: string }>(`/api/v1/monitor/agents/${agentId}/rotate-key`, { method: "POST", body: "{}" });
+export const rotateMonitorAgentKey = (agentId: number) => apiRequest<{ key: string; keyHint: string }>(`/api/v1/monitor/agents/${agentId}/rotate-key`, { method: "POST", body: "{}" });
 export const setMonitorAgentTmtdeskId = (agentId: number, tmtdeskId: string) =>
   apiRequest<{ tmtdeskId: string | null }>(`/api/v1/monitor/agents/${agentId}/tmtdesk`, { method: "PUT", body: JSON.stringify({ tmtdeskId }) });
-export const revokeMonitorAgent = (agentId: number) =>
-  apiRequest<{ ok: boolean }>(`/api/v1/monitor/agents/${agentId}/revoke`, { method: "POST", body: "{}" });
+export const revokeMonitorAgent = (agentId: number) => apiRequest<{ ok: boolean }>(`/api/v1/monitor/agents/${agentId}/revoke`, { method: "POST", body: "{}" });
 
 /**
  * Content-Disposition carries the real file name, which may be Thai. The
@@ -3572,7 +4396,11 @@ export async function downloadNamedFile(path: string) {
   const quotedName = disposition.match(/filename="([^"]+)"/i)?.[1];
   let fileName = quotedName;
   if (encodedName) {
-    try { fileName = decodeURIComponent(encodedName); } catch { fileName = encodedName; }
+    try {
+      fileName = decodeURIComponent(encodedName);
+    } catch {
+      fileName = encodedName;
+    }
   }
   return { blob: await response.blob(), fileName };
 }
@@ -3585,9 +4413,7 @@ export async function downloadNamedFile(path: string) {
 // identified by its SHA-256.
 // ---------------------------------------------------------------------------
 
-export type SignDocumentClass =
-  | "DRAWING" | "SPEC" | "MANUAL" | "MAT_APPROVE"
-  | "QUOTATION" | "PR_PO" | "UAT_ACCEPT" | "SERVICE_RPT";
+export type SignDocumentClass = "DRAWING" | "SPEC" | "MANUAL" | "MAT_APPROVE" | "QUOTATION" | "PR_PO" | "UAT_ACCEPT" | "SERVICE_RPT";
 
 export type SignableDocumentSummary = {
   scheduleTaskId: number | null;
@@ -3863,16 +4689,10 @@ export type SignVerification = {
 
 export const loadSignInbox = () => apiRequest<SignInbox>("/api/v1/signing/inbox");
 
-export const listSignableDocuments = (values: {
-  state?: string;
-  docClass?: string;
-  search?: string;
-  page?: number;
-  pageSize?: number;
-}) => apiRequest<PagedResult<SignableDocumentSummary>>(`/api/v1/signing/documents${queryString(values)}`);
+export const listSignableDocuments = (values: { state?: string; docClass?: string; search?: string; page?: number; pageSize?: number }) =>
+  apiRequest<PagedResult<SignableDocumentSummary>>(`/api/v1/signing/documents${queryString(values)}`);
 
-export const loadSignableDocument = (documentId: number) =>
-  apiRequest<SignableDocumentWorkspace>(`/api/v1/signing/documents/${documentId}`);
+export const loadSignableDocument = (documentId: number) => apiRequest<SignableDocumentWorkspace>(`/api/v1/signing/documents/${documentId}`);
 
 export const createSignableDocument = (input: {
   taskId?: number;
@@ -3885,19 +4705,23 @@ export const createSignableDocument = (input: {
   ownerId?: number;
   projectDocumentId: number;
   revisionLabel?: string;
-}) => apiRequest<{ id: number; documentNo: string; revisionLabel: string; fileId: number }>(
-  "/api/v1/signing/documents", { method: "POST", body: JSON.stringify(input) });
+}) => apiRequest<{ id: number; documentNo: string; revisionLabel: string; fileId: number }>("/api/v1/signing/documents", { method: "POST", body: JSON.stringify(input) });
 
-export const freezeDocumentRevision = (documentId: number, input: {
-  projectDocumentId: number;
-  revisionLabel: string;
-  rowVersion: string;
-}) => apiRequest<{ documentId: number; fileId: number; revisionLabel: string; supersededRequestId: number | null }>(
-  `/api/v1/signing/documents/${documentId}/revisions`, { method: "POST", body: JSON.stringify(input) });
+export const freezeDocumentRevision = (
+  documentId: number,
+  input: {
+    projectDocumentId: number;
+    revisionLabel: string;
+    rowVersion: string;
+  },
+) =>
+  apiRequest<{ documentId: number; fileId: number; revisionLabel: string; supersededRequestId: number | null }>(`/api/v1/signing/documents/${documentId}/revisions`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 
 export const openSignatureRequest = (documentId: number, input: { dueDate?: string; rowVersion: string; companyStampId?: number }) =>
-  apiRequest<{ requestId: number; steps: number; templateVersion: number }>(
-    `/api/v1/signing/documents/${documentId}/request`, { method: "POST", body: JSON.stringify(input) });
+  apiRequest<{ requestId: number; steps: number; templateVersion: number }>(`/api/v1/signing/documents/${documentId}/request`, { method: "POST", body: JSON.stringify(input) });
 
 /**
  * Forces a fresh interactive sign-in so the API can evidence that the signer
@@ -3911,59 +4735,48 @@ export async function prepareSigningSession(): Promise<"entra" | "team-test"> {
   return "entra";
 }
 
-export const signStep = (stepId: number, input: {
-  note?: string;
-  placement?: { pageNo: number; x: number; y: number; width: number; height: number };
-  rowVersion: string;
-}) => apiRequest<{ stepId: number; state: string; requestComplete: boolean }>(
-  `/api/v1/signing/steps/${stepId}/sign`, { method: "POST", body: JSON.stringify(input) });
+export const signStep = (
+  stepId: number,
+  input: {
+    note?: string;
+    placement?: { pageNo: number; x: number; y: number; width: number; height: number };
+    rowVersion: string;
+  },
+) => apiRequest<{ stepId: number; state: string; requestComplete: boolean }>(`/api/v1/signing/steps/${stepId}/sign`, { method: "POST", body: JSON.stringify(input) });
 
 export const returnStep = (stepId: number, reason: string, rowVersion: string) =>
-  apiRequest<{ stepId: number; state: string; documentState: string }>(
-    `/api/v1/signing/steps/${stepId}/return`, { method: "POST", body: JSON.stringify({ reason, rowVersion }) });
+  apiRequest<{ stepId: number; state: string; documentState: string }>(`/api/v1/signing/steps/${stepId}/return`, { method: "POST", body: JSON.stringify({ reason, rowVersion }) });
 
 export const rejectStep = (stepId: number, reason: string, rowVersion: string) =>
-  apiRequest<{ stepId: number; state: string; documentState: string }>(
-    `/api/v1/signing/steps/${stepId}/reject`, { method: "POST", body: JSON.stringify({ reason, rowVersion }) });
+  apiRequest<{ stepId: number; state: string; documentState: string }>(`/api/v1/signing/steps/${stepId}/reject`, { method: "POST", body: JSON.stringify({ reason, rowVersion }) });
 
 export const delegateStep = (stepId: number, toUserId: number, reason: string, rowVersion: string) =>
-  apiRequest<{ stepId: number; assigneeUserId: number }>(
-    `/api/v1/signing/steps/${stepId}/delegate`,
-    { method: "POST", body: JSON.stringify({ toUserId, reason, rowVersion }) });
+  apiRequest<{ stepId: number; assigneeUserId: number }>(`/api/v1/signing/steps/${stepId}/delegate`, { method: "POST", body: JSON.stringify({ toUserId, reason, rowVersion }) });
 
-export const attachPaperSignature = (stepId: number, input: {
-  scanProjectDocumentId: number;
-  note?: string;
-  rowVersion: string;
-}) => apiRequest<{ stepId: number; state: string; requestComplete: boolean }>(
-  `/api/v1/signing/steps/${stepId}/paper`, { method: "POST", body: JSON.stringify(input) });
+export const attachPaperSignature = (
+  stepId: number,
+  input: {
+    scanProjectDocumentId: number;
+    note?: string;
+    rowVersion: string;
+  },
+) => apiRequest<{ stepId: number; state: string; requestComplete: boolean }>(`/api/v1/signing/steps/${stepId}/paper`, { method: "POST", body: JSON.stringify(input) });
 
-export const verifySignedDocument = (code: string) =>
-  apiRequest<SignVerification>(`/api/v1/signing/verify/${encodeURIComponent(code)}`);
+export const verifySignedDocument = (code: string) => apiRequest<SignVerification>(`/api/v1/signing/verify/${encodeURIComponent(code)}`);
 
 export async function downloadSignedOutput(requestId: number) {
-  const response = await authorizedFetch(
-    `/api/v1/signing/requests/${requestId}/output`,
-    { headers: { Accept: "application/octet-stream" } },
-    120_000);
+  const response = await authorizedFetch(`/api/v1/signing/requests/${requestId}/output`, { headers: { Accept: "application/octet-stream" } }, 120_000);
   return { blob: await response.blob() };
 }
 
 export const loadMySignature = () => apiRequest<SignatureSpecimenView>("/api/v1/me/signature/");
 
-export const replaceMySignature = (input: {
-  source: "DRAWN" | "UPLOADED" | "TYPED";
-  imageBase64: string;
-  initialsBase64?: string;
-  initialsText?: string;
-}) => apiRequest<{ id: number; version: number; source: string }>(
-  "/api/v1/me/signature/", { method: "PUT", body: JSON.stringify(input) });
+export const replaceMySignature = (input: { source: "DRAWN" | "UPLOADED" | "TYPED"; imageBase64: string; initialsBase64?: string; initialsText?: string }) =>
+  apiRequest<{ id: number; version: number; source: string }>("/api/v1/me/signature/", { method: "PUT", body: JSON.stringify(input) });
 
 /** The caller's own specimen. There is deliberately no route for anyone else's. */
 export async function loadMySignatureImage(initials = false) {
-  const response = await authorizedFetch(
-    `/api/v1/me/signature/preview${initials ? "?initials=true" : ""}`,
-    { headers: { Accept: "image/png" } });
+  const response = await authorizedFetch(`/api/v1/me/signature/preview${initials ? "?initials=true" : ""}`, { headers: { Accept: "image/png" } });
   return URL.createObjectURL(await response.blob());
 }
 
@@ -3979,26 +4792,27 @@ export const createCompanyStamp = (input: {
   custodianRole: string;
   validFrom: string;
   validTo?: string;
-}) => apiRequest<{ id: number; code: string }>(
-  "/api/v1/master/company-stamps", { method: "POST", body: JSON.stringify(input) });
+}) => apiRequest<{ id: number; code: string }>("/api/v1/master/company-stamps", { method: "POST", body: JSON.stringify(input) });
 
-export const grantStampAuthority = (stampId: number, input: {
-  holderKind: "ROLE" | "USER";
-  holderId: number;
-  /** Role code for a ROLE grant; the API resolves it so the client never needs an id. */
-  holderRole?: string;
-  documentClass?: string;
-  validFrom: string;
-  validTo?: string;
-}) => apiRequest<{ id: number }>(`/api/v1/master/company-stamps/${stampId}/authorities`, {
-  method: "POST",
-  body: JSON.stringify(input),
-});
+export const grantStampAuthority = (
+  stampId: number,
+  input: {
+    holderKind: "ROLE" | "USER";
+    holderId: number;
+    /** Role code for a ROLE grant; the API resolves it so the client never needs an id. */
+    holderRole?: string;
+    documentClass?: string;
+    validFrom: string;
+    validTo?: string;
+  },
+) =>
+  apiRequest<{ id: number }>(`/api/v1/master/company-stamps/${stampId}/authorities`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 
 export const revokeStampAuthority = (stampId: number, authorityId: number, reason: string) =>
-  apiRequest<{ id: number; revoked: boolean }>(
-    `/api/v1/master/company-stamps/${stampId}/authorities/${authorityId}/revoke`,
-    { method: "POST", body: JSON.stringify({ reason }) });
+  apiRequest<{ id: number; revoked: boolean }>(`/api/v1/master/company-stamps/${stampId}/authorities/${authorityId}/revoke`, { method: "POST", body: JSON.stringify({ reason }) });
 
 /** Replaces a stamp's seal artwork (PNG, data URL or bare base64); needs signing.stamp.grant. */
 export const setCompanyStampImage = (stampId: number, imageBase64: string, rowVersion: string) =>
@@ -4085,11 +4899,9 @@ export type ModuleTemplateInput = {
 export const listModuleTemplates = (values: { page?: number; pageSize?: number; search?: string; categoryCode?: string; status?: string } = {}) =>
   apiRequest<PagedResult<ModuleTemplateSummary>>(`/api/v1/module-templates${queryString(values)}`);
 
-export const loadModuleTemplate = (id: number) =>
-  apiRequest<ModuleTemplateDetail>(`/api/v1/module-templates/${id}`);
+export const loadModuleTemplate = (id: number) => apiRequest<ModuleTemplateDetail>(`/api/v1/module-templates/${id}`);
 
-export const createModuleTemplate = (input: ModuleTemplateInput) =>
-  apiRequest<{ id: number; code: string }>("/api/v1/module-templates", { method: "POST", body: JSON.stringify(input) });
+export const createModuleTemplate = (input: ModuleTemplateInput) => apiRequest<{ id: number; code: string }>("/api/v1/module-templates", { method: "POST", body: JSON.stringify(input) });
 
 export const updateModuleTemplate = (id: number, input: ModuleTemplateInput & { rowVersion: string }) =>
   apiRequest<{ id: number; revision: number; rowVersion: string }>(`/api/v1/module-templates/${id}`, { method: "PUT", body: JSON.stringify(input) });
@@ -4097,39 +4909,37 @@ export const updateModuleTemplate = (id: number, input: ModuleTemplateInput & { 
 export const retireModuleTemplate = (id: number, rowVersion: string) =>
   apiRequest<{ id: number; status: string }>(`/api/v1/module-templates/${id}/retire`, { method: "POST", body: JSON.stringify({ rowVersion }) });
 
-export const createModuleTemplateFromEstimate = (input: {
-  estimateId: number;
-  categoryCode: string;
-  module: string;
-  code: string;
-  name: string;
-  projectType?: string;
-  description?: string;
-}) =>
+export const createModuleTemplateFromEstimate = (input: { estimateId: number; categoryCode: string; module: string; code: string; name: string; projectType?: string; description?: string }) =>
   apiRequest<{ id: number; code: string; lineCount: number }>("/api/v1/module-templates/from-estimate", { method: "POST", body: JSON.stringify(input) });
 
-export const applyModuleTemplate = (estimateId: number, input: {
-  templateId: number;
-  module: string;
-  modules: number;
-  ownerId: number;
-  keepReferencePrices: boolean;
-  estimateRowVersion: string;
-}) =>
+export const applyModuleTemplate = (
+  estimateId: number,
+  input: {
+    templateId: number;
+    module: string;
+    modules: number;
+    ownerId: number;
+    keepReferencePrices: boolean;
+    estimateRowVersion: string;
+  },
+) =>
   apiRequest<{ lines: number; module: string; reference: string; estimateRowVersion: string }>(`/api/v1/estimates/${estimateId}/apply-template`, {
     method: "POST",
     body: JSON.stringify(input),
   });
 
 /** Picked lines of a supplier quotation become cost lines; the server reads the prices and converts a foreign one to THB. */
-export const applySupplierQuotation = (estimateId: number, input: {
-  quotationId: number;
-  categoryCode: string;
-  module: string;
-  ownerId: number;
-  lines: { lineId: number; quantity: number }[];
-  estimateRowVersion: string;
-}) =>
+export const applySupplierQuotation = (
+  estimateId: number,
+  input: {
+    quotationId: number;
+    categoryCode: string;
+    module: string;
+    ownerId: number;
+    lines: { lineId: number; quantity: number }[];
+    estimateRowVersion: string;
+  },
+) =>
   apiRequest<{ lines: number; module: string; reference: string; estimateRowVersion: string }>(`/api/v1/estimates/${estimateId}/apply-quotation`, {
     method: "POST",
     body: JSON.stringify(input),
@@ -4171,17 +4981,19 @@ export type LaborRatePage = PagedResult<LaborRate> & {
   masterFieldsAvailable: boolean;
 };
 
-export const listLaborRates = (values: {
-  page?: number;
-  pageSize?: number;
-  search?: string;
-  costType?: "Engineering" | "Installation";
-  department?: string;
-  level?: string;
-  on?: string;
-  effectiveOnly?: boolean;
-  includeInactive?: boolean;
-} = {}) => apiRequest<LaborRatePage>(`/api/v1/labor-rates${queryString(values)}`);
+export const listLaborRates = (
+  values: {
+    page?: number;
+    pageSize?: number;
+    search?: string;
+    costType?: "Engineering" | "Installation";
+    department?: string;
+    level?: string;
+    on?: string;
+    effectiveOnly?: boolean;
+    includeInactive?: boolean;
+  } = {},
+) => apiRequest<LaborRatePage>(`/api/v1/labor-rates${queryString(values)}`);
 
 export type LaborPackageSummary = {
   id: number;
@@ -4255,20 +5067,20 @@ export type LaborPackageInput = {
   lines: LaborPackageLineInput[];
 };
 
-export const listLaborPackages = (values: {
-  page?: number;
-  pageSize?: number;
-  search?: string;
-  status?: string;
-  costType?: "Engineering" | "Installation";
-  department?: string;
-} = {}) => apiRequest<PagedResult<LaborPackageSummary>>(`/api/v1/labor-packages${queryString(values)}`);
+export const listLaborPackages = (
+  values: {
+    page?: number;
+    pageSize?: number;
+    search?: string;
+    status?: string;
+    costType?: "Engineering" | "Installation";
+    department?: string;
+  } = {},
+) => apiRequest<PagedResult<LaborPackageSummary>>(`/api/v1/labor-packages${queryString(values)}`);
 
-export const loadLaborPackage = (id: number) =>
-  apiRequest<LaborPackageDetail>(`/api/v1/labor-packages/${id}`);
+export const loadLaborPackage = (id: number) => apiRequest<LaborPackageDetail>(`/api/v1/labor-packages/${id}`);
 
-export const createLaborPackage = (input: LaborPackageInput) =>
-  apiRequest<{ id: number; code: string }>("/api/v1/labor-packages", { method: "POST", body: JSON.stringify(input) });
+export const createLaborPackage = (input: LaborPackageInput) => apiRequest<{ id: number; code: string }>("/api/v1/labor-packages", { method: "POST", body: JSON.stringify(input) });
 
 export type StandardLaborLibraryInstallResult = {
   createdLabor: string[];
@@ -4298,10 +5110,11 @@ export const createLaborPackageFromEstimate = (input: {
   department?: string;
   projectType?: string;
   description?: string;
-}) => apiRequest<{ id: number; code: string; lineCount: number }>("/api/v1/labor-packages/from-estimate", {
-  method: "POST",
-  body: JSON.stringify(input),
-});
+}) =>
+  apiRequest<{ id: number; code: string; lineCount: number }>("/api/v1/labor-packages/from-estimate", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 
 export type LaborPackageApplyOverride = {
   lineId: number;
@@ -4338,23 +5151,27 @@ export type LaborPackageAppliedLine = {
   erpCategory: string | null;
 };
 
-export const applyLaborPackage = (estimateId: number, input: {
-  packageId: number;
-  ownerId: number;
-  package?: string;
-  /** The labor-sheet section it is applied from; Installation lines stay Installation. */
-  discipline?: EstimateDiscipline;
-  lines?: LaborPackageApplyOverride[];
-  estimateRowVersion: string;
-}) => apiRequest<{
-  packageId: number;
-  reference: string;
-  workPackage: string;
-  lines: number;
-  skipped: number;
-  appliedLines: LaborPackageAppliedLine[];
-  estimateRowVersion: string;
-}>(`/api/v1/estimates/${estimateId}/apply-labor-package`, { method: "POST", body: JSON.stringify(input) });
+export const applyLaborPackage = (
+  estimateId: number,
+  input: {
+    packageId: number;
+    ownerId: number;
+    package?: string;
+    /** The labor-sheet section it is applied from; Installation lines stay Installation. */
+    discipline?: EstimateDiscipline;
+    lines?: LaborPackageApplyOverride[];
+    estimateRowVersion: string;
+  },
+) =>
+  apiRequest<{
+    packageId: number;
+    reference: string;
+    workPackage: string;
+    lines: number;
+    skipped: number;
+    appliedLines: LaborPackageAppliedLine[];
+    estimateRowVersion: string;
+  }>(`/api/v1/estimates/${estimateId}/apply-labor-package`, { method: "POST", body: JSON.stringify(input) });
 
 export type StorageCheckResult = {
   ok: boolean;
@@ -4377,10 +5194,8 @@ export type NasSettingsResult = {
 };
 export type NasConnectionTestResult = { ok: boolean; durationMs: number; uncPath?: string; error?: string };
 export const loadNasSettings = () => apiRequest<NasSettingsResult>("/api/v1/admin/nas-settings");
-export const saveNasSettings = (input: NasSettingsInput) =>
-  apiRequest<NasSettingsDraft>("/api/v1/admin/nas-settings", { method: "PUT", body: JSON.stringify(input) });
-export const testNasConnection = (input: NasSettingsInput) =>
-  apiRequest<NasConnectionTestResult>("/api/v1/admin/nas-settings/test", { method: "POST", body: JSON.stringify(input) });
+export const saveNasSettings = (input: NasSettingsInput) => apiRequest<NasSettingsDraft>("/api/v1/admin/nas-settings", { method: "PUT", body: JSON.stringify(input) });
+export const testNasConnection = (input: NasSettingsInput) => apiRequest<NasConnectionTestResult>("/api/v1/admin/nas-settings/test", { method: "POST", body: JSON.stringify(input) });
 
 export type EstimateModuleDetail = { moduleKey: string; title: string; remark: string | null; descriptionRows?: string[]; quantity?: number; unit?: string };
 export const loadEstimateModuleDetails = (id: number) => apiRequest<EstimateModuleDetail[]>(`/api/v1/estimates/${id}/module-details`);
@@ -4390,5 +5205,6 @@ export const updateEstimateModuleDetails = (id: number, estimateRowVersion: stri
 export type EstimateEffortInput = { engineers: number; manDays: number; hoursPerDay: number };
 export const updateEstimateManhourEffort = (id: number, lineId: number, estimateRowVersion: string, lineRowVersion: string, effort: EstimateEffortInput) =>
   apiRequest<{ rowVersion: string; estimateRowVersion: string }>(`/api/v1/estimates/${id}/manhour-lines/${lineId}/effort`, {
-    method: "PUT", body: JSON.stringify({ estimateRowVersion, lineRowVersion, ...effort }),
+    method: "PUT",
+    body: JSON.stringify({ estimateRowVersion, lineRowVersion, ...effort }),
   });

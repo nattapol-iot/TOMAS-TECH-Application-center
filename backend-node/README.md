@@ -121,6 +121,20 @@ The key must be a user-bound key holding only `employee.self`, linked to a clien
 master alone, and only for the person signed in. Without master the project search and the registers fall back to
 the ERP.
 
+#### Copilot OCR (`COPILOT_OCR_URL`)
+
+Business cards (`POST /api/v1/business-cards/scan`) and supplier quotation PDFs (`POST /api/v1/supplier-quotations/parse-pdf`)
+are read by copilot's OCR API (`src/copilot-ocr/`, default `https://copilot.tomastc.com/api/v1/ocr`; `off` disables it).
+- **Auth:** each call carries the signed-in person's own TMT ID access token from the token vault (copilot "user" mode).
+  - The scan is theirs: it also appears in their copilot Document Scanner.
+  - The Keycloak client `iot-team-center` carries an audience mapper for `copilot`.
+  - Copilot lists `iot-team-center` as a user-mode client in its `chat_api_clients` setting.
+- **Shapes:** a card is read as `kind=namecard`. A quotation is read as `kind=quotation` with our own `schema`
+  (`QUOTATION_SCHEMA`), so the answer already matches the quotation form.
+- **Waiting:** scans queue for one GPU. The API waits up to 280 s, then answers `504 copilot_busy`.
+- **Errors:** a person with no token in the vault gets `409 copilot_sign_in_required` (sign in again).
+- **Fallback:** without copilot, the quotation PDF still goes to the Python `pdf-parser`, and the card scanner reports that reading is not connected.
+
 ### Origin topology
 
 Single origin is the simpler deployment: proxy `/api/auth/*` and `/api/me` to
