@@ -83,7 +83,7 @@ export function ApplyLaborPackageModal({ workspace, currentUserId, busy, onClose
      apart from the actions that write to this estimate. */
   onManageLibrary?: () => void;
 }) {
-  const today = estimateBusinessDate(new Date());
+  const [today] = useState(() => estimateBusinessDate(new Date()));
   const [search, setSearch] = useState("");
   const [costType, setCostType] = useState<LaborCostType | "">("");
   const [page, setPage] = useState(1);

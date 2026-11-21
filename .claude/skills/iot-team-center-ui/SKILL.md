@@ -198,9 +198,9 @@ guide in the same PR.
 Run once, at the end, one at a time — this machine has 15 GB RAM:
 
 ```
-npx tsc --noEmit
-npx eslint <changed files>
-node --test --test-isolation=none tests/*.test.mjs
+bun run typecheck
+bun x oxlint <changed files>
+bun test ./tests/
 ```
 
 `tests/production-guardrails.test.mjs` pins UI strings, menu entries and class names. If a

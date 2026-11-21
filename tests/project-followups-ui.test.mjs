@@ -212,7 +212,7 @@ test("the portfolio Timeline goes full screen, with an overlay where the browser
   assert.match(read("app/globals.css"), /body\.fullscreen-overlay-open \{ overflow: hidden; \}/);
 
   // The whole block goes full screen, sort included, and the button says which way it goes.
-  assert.match(gantt, /<div ref=\{fullscreen\.ref\} className=\{`portfolio-gantt\$\{fullscreen\.active \? " is-fullscreen" : ""\}\$\{fullscreen\.overlay \? " is-overlay" : ""\}`\}>\r?\n\s+\{controls\}/);
+  assert.match(gantt, /<div ref=\{fullscreenRef\} className=\{`portfolio-gantt\$\{fullscreen\.active \? " is-fullscreen" : ""\}\$\{fullscreen\.overlay \? " is-overlay" : ""\}`\}>\r?\n\s+\{controls\}/);
   assert.match(gantt, /aria-pressed=\{fullscreen\.active\}/);
   assert.match(gantt, /<Icon name=\{fullscreen\.active \? "minimize" : "maximize"\} \/>\{t\(fullscreen\.active \? "Gantt\.exitFullScreen" : "Gantt\.fullScreen"\)\}/);
   assert.match(core, /controls=\{\/\* The sort sits inside the timeline so it stays at hand in full screen\. \*\/\r?\n\s+<div className="portfolio-gantt-sort">/);

@@ -2756,6 +2756,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
     const place = draftLevel(activeSchedule.tasks, rows, draft, step, pendingTaskIds);
     return place && (canPlan || (place.parentId !== null && taskById.get(place.parentId)?.canAddChild)) ? place : null;
   };
+  // oxlint-disable-next-line react/refs -- the rows only hand out handlers; any ref behind them is touched when one runs, never while rendering.
   const ganttRows: GanttRowSpec[] = visible.map((task) => {
     const summaryRow = task.kind === "phase" || task.children.length > 0, insert = plusFor(task), bin = binFor(task);
     const dropped = movePending?.taskId === task.id ? movePending : null;

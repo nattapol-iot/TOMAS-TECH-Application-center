@@ -300,7 +300,8 @@ export function ProductionDashboard({
     return () => window.clearTimeout(timer);
   }, [loadDashboard]);
 
-  const todayKey = businessDate(new Date());
+  const [now] = useState(() => new Date());
+  const todayKey = businessDate(now);
   const currentEmployee = bootstrap.team.find((member) => member.id === bootstrap.user.id)
     ?? bootstrap.team.find((member) => member.email.toLocaleLowerCase() === bootstrap.user.email.toLocaleLowerCase());
   const employment = bootstrap.employment ?? (currentEmployee ? {
@@ -348,7 +349,7 @@ export function ProductionDashboard({
   const approvalCount = bootstrap.counts.approvals + approvalRequisitions.length;
   const attentionCount = lateWork.length + signCount + approvalCount + draftReceipts.length;
   const locale = lang === "TH" ? "th-TH" : lang === "JP" ? "ja-JP" : "en-GB";
-  const fullDate = new Intl.DateTimeFormat(locale, { weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(new Date());
+  const fullDate = new Intl.DateTimeFormat(locale, { weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(now);
 
   const workflow: Array<{
     label: string;

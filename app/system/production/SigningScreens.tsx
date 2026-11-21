@@ -336,7 +336,8 @@ export function ProductionSignInbox({ bootstrap, notify }: SigningScreenProps) {
 }
 
 function SignTaskRow({ task, canSign, onOpen }: { task: SignTask; canSign: boolean; onOpen: () => void }) {
-  const overdue = Boolean(task.dueDate && new Date(`${task.dueDate.slice(0, 10)}T00:00:00`) < new Date(new Date().toDateString()));
+  const [startOfToday] = useState(() => new Date(new Date().toDateString()));
+  const overdue = Boolean(task.dueDate && new Date(`${task.dueDate.slice(0, 10)}T00:00:00`) < startOfToday);
   const stampBlocked = task.requiredMark === "SIGNATURE_STAMP" && !task.holdsStampAuthority;
   return (
     <tr>

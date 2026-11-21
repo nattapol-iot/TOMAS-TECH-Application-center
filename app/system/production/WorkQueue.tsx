@@ -235,7 +235,7 @@ export function EffortModal({ item, current, onClose, onSaved }: {
   onSaved: () => Promise<void>;
 }) {
   const { t } = useLanguage();
-  const fallbackDay = new Intl.DateTimeFormat("en-CA", { timeZone: process.env.NEXT_PUBLIC_BUSINESS_TIME_ZONE ?? "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  const [fallbackDay] = useState(() => new Intl.DateTimeFormat("en-CA", { timeZone: process.env.NEXT_PUBLIC_BUSINESS_TIME_ZONE ?? "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()));
   const [start, setStart] = useState(current?.start ?? item.start ?? fallbackDay);
   const [end, setEnd] = useState(current?.end ?? item.end ?? fallbackDay);
   const [amount, setAmount] = useState(current ? String(current.manDays) : "");
@@ -308,7 +308,7 @@ export function MyWorkQueue({ bootstrap, notify, openProjectSchedule, openEstima
     const timer = setTimeout(() => void load(), 0);
     return () => clearTimeout(timer);
   }, [load]);
-  const today = new Intl.DateTimeFormat("en-CA", { timeZone: process.env.NEXT_PUBLIC_BUSINESS_TIME_ZONE ?? "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  const [today] = useState(() => new Intl.DateTimeFormat("en-CA", { timeZone: process.env.NEXT_PUBLIC_BUSINESS_TIME_ZONE ?? "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()));
   const open = (item: Commitment) => (item.type === "Project" ? openProjectSchedule?.(item.entityId) : item.type === "Issue" ? openIssueBatch?.(item.entityId) : openEstimate?.(item.entityId));
   // My Work opens plans, estimates and issue batches; an inquiry opens from its own screen.
   const canOpen = (item: Commitment) => (item.type === "Project" ? Boolean(openProjectSchedule) : item.type === "Issue" ? Boolean(openIssueBatch) : item.type === "Estimate" && Boolean(openEstimate));
