@@ -4,7 +4,7 @@
 
 แจ้งปัญหา ticket การตอบรับ คู่มือ และบทสอนแบบคลิกตามบนหน้าจอจริงพร้อมความคืบหน้าของทีม
 
-Evidence: snapshot `4e791abf`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
+Evidence: snapshot `5cb810fc`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
 
 ## Read only the operation you change
 
@@ -17,20 +17,22 @@ Shared screens contain other modules: use the symbol and line range instead of r
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `useCopy` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 35–38 |
-| `kilobytes` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 39–39 |
-| `StatusBadge` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 41–44 |
-| `SelectField` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 46–51 |
-| `SupportDialog` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 54–72 |
-| `ErrorNote` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 74–76 |
-| `SupportCreateDialog` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 78–149 |
-| `SupportCenter` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 151–240 |
-| `isImage` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 243–243 |
-| `SupportImage` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 244–259 |
-| `MoreActions` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 264–284 |
-| `SupportTicketView` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 286–429 |
-| `SupportActionForm` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 432–470 |
-| `SupportMembers` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 472–502 |
+| `storedRows` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 22–24 |
+| `useCopy` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 39–42 |
+| `kilobytes` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 43–43 |
+| `StatusBadge` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 45–48 |
+| `SelectField` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 50–55 |
+| `SupportDialog` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 58–76 |
+| `Pager` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 79–84 |
+| `ErrorNote` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 86–88 |
+| `SupportCreateDialog` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 90–161 |
+| `SupportCenter` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 163–256 |
+| `isImage` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 259–259 |
+| `SupportImage` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 260–275 |
+| `MoreActions` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 280–300 |
+| `SupportTicketView` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 302–445 |
+| `SupportActionForm` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 448–486 |
+| `SupportMembers` | [app/system/production/SupportScreens.tsx](<../../../app/system/production/SupportScreens.tsx>) | 488–518 |
 | `employeeManualLabel` | [app/system/production/EmployeeManualScreen.tsx](<../../../app/system/production/EmployeeManualScreen.tsx>) | 55–55 |
 | `EmployeeManualScreen` | [app/system/production/EmployeeManualScreen.tsx](<../../../app/system/production/EmployeeManualScreen.tsx>) | 57–101 |
 | `RUN_KEY` | [app/system/production/GuideLayer.tsx](<../../../app/system/production/GuideLayer.tsx>) | 92–92 |

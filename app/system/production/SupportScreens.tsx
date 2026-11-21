@@ -10,14 +10,18 @@ import { confirmDialog } from "../dialogs";
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { apiRequest, downloadSupportAttachment, uploadSupportAttachment } from "../api-client";
 import { localeFor, useLanguage } from "../i18n";
-import { Icon, Pagination, SearchInput, Tabs, type IconName } from "../ui";
+import { Icon, Pagination, SearchInput, TablePageSize, Tabs, type IconName } from "../ui";
 import { supportLabel } from "../support-copy";
 import { supportError, supportMeta, supportRead, supportRequestKey, type ContributionPage, type SupportMeta, type SupportPage, type SupportTicket } from "../support-client";
 import "./support-center.css";
 
 const statuses = ["New", "Acknowledged", "InProgress", "WaitingForReporter", "Resolved", "Closed", "Cancelled"];
 const categories = ["Application", "Equipment", "Documents", "Coordination", "Other"];
-const PAGE_SIZE = 50;
+/** Rows per page: the shared TablePageSize choices, 10 like the other tables; the choice is kept on this device (0.3). */
+const ROW_CHOICES = [10, 25, 50, 100], ROWS_KEY = "tomas-tech-support:rows";
+const storedRows = () => {
+  try { const rows = Number(window.localStorage.getItem(ROWS_KEY)); return ROW_CHOICES.includes(rows) ? rows : 10; } catch { return 10; }
+};
 const MAX_FILES = 5, MAX_FILE_BYTES = 10 * 1024 * 1024;
 /** One colour, one meaning (DESIGN.md B.1): waiting for the team amber, team working blue, handed back pink, done green, cancelled grey. */
 const STATUS_TONE: Record<string, string> = { New: "warning", Acknowledged: "soft", InProgress: "soft", WaitingForReporter: "pink", Resolved: "success", Closed: "success", Cancelled: "neutral" };
@@ -69,6 +73,14 @@ function SupportDialog({ title, size = "lg", onClose, onSubmit, footer, children
   return <dialog ref={ref} tabIndex={-1} className={`support-center sp-dialog ${size}`} onCancel={(e) => { e.preventDefault(); onClose(); }} aria-label={title}>
     {onSubmit ? <form className="sp-dialog-frame" onSubmit={onSubmit}>{content}</form> : <div className="sp-dialog-frame">{content}</div>}
   </dialog>;
+}
+
+/** Under a table (D.7): which rows are showing and the page buttons, then how many rows a page shows. */
+function Pager({ total, page, size, onPage, onSize }: { total: number; page: number; size: number; onPage: (page: number) => void; onSize: (size: number) => void }) {
+  return <div className="sp-pager">
+    <Pagination page={page} pageCount={Math.max(1, Math.ceil(total / size))} from={(page - 1) * size + 1} to={Math.min(page * size, total)} total={total} onPage={onPage} />
+    <div data-guide="support.rows"><TablePageSize value={size} onChange={onSize} /></div>
+  </div>;
 }
 
 function ErrorNote({ message }: { message: string }) {
@@ -151,7 +163,12 @@ export function SupportCreateDialog({ context, onClose, onCreated, onOpen }: { c
 export function SupportCenter({ ticketId, onSelect, onCreate, notify, onDirtyChange, externalRevision = 0 }: { ticketId: number | null; onSelect: (id: number | null) => void; onCreate: () => void; notify: (message: string) => void; onDirtyChange: (dirty: boolean) => void; externalRevision?: number }) {
   const { s, lang, date } = useCopy();
   const [meta, setMeta] = useState<SupportMeta | null>(null), [mode, setMode] = useState<Mode>("mine"), [page, setPage] = useState(1), [search, setSearch] = useState(""), [group, setGroup] = useState(""), [category, setCategory] = useState(""), [filter, setFilter] = useState("");
-  const [list, setList] = useState<SupportPage>({ items: [], page: 1, pageSize: PAGE_SIZE, total: 0 }), [contributions, setContributions] = useState<ContributionPage | null>(null), [error, setError] = useState(""), [loading, setLoading] = useState(true), [revision, setRevision] = useState(0), [membersOpen, setMembersOpen] = useState(false);
+  const [pageSize, setPageSizeState] = useState(storedRows);
+  const setPageSize = (rows: number) => {
+    setPageSizeState(rows); setPage(1);
+    try { window.localStorage.setItem(ROWS_KEY, String(rows)); } catch { /* the choice is a convenience when storage is blocked */ }
+  };
+  const [list, setList] = useState<SupportPage>({ items: [], page: 1, pageSize, total: 0 }), [contributions, setContributions] = useState<ContributionPage | null>(null), [error, setError] = useState(""), [loading, setLoading] = useState(true), [revision, setRevision] = useState(0), [membersOpen, setMembersOpen] = useState(false);
   const requestId = useRef(0);
   const statusFilter = STATUS_GROUPS.find((g) => g.id === group)?.statuses.join(",") ?? "";
   useEffect(() => {
@@ -163,14 +180,14 @@ export function SupportCenter({ ticketId, onSelect, onCreate, notify, onDirtyCha
     const id = ++requestId.current;
     const timer = setTimeout(() => {
       setLoading(true); setError("");
-      const query = new URLSearchParams({ scope: mode, page: String(page), search, status: statusFilter, category, filter });
+      const query = new URLSearchParams({ scope: mode, page: String(page), pageSize: String(pageSize), search, status: statusFilter, category, filter });
       const load = mode === "contributions"
-        ? apiRequest<ContributionPage>(`/api/v1/me/support-contributions?page=${page}`).then((r) => { if (id === requestId.current) setContributions(r); })
+        ? apiRequest<ContributionPage>(`/api/v1/me/support-contributions?page=${page}&pageSize=${pageSize}`).then((r) => { if (id === requestId.current) setContributions(r); })
         : apiRequest<SupportPage>(`/api/v1/support/tickets?${query}`).then((r) => { if (id === requestId.current) setList(r); });
       void load.catch((e) => { if (id === requestId.current) setError(supportError(e, lang)); }).finally(() => { if (id === requestId.current) setLoading(false); });
     }, 200);
     return () => { clearTimeout(timer); requestId.current = id + 1; };
-  }, [mode, page, search, statusFilter, category, filter, revision, lang, ticketId, externalRevision]);
+  }, [mode, page, pageSize, search, statusFilter, category, filter, revision, lang, ticketId, externalRevision]);
   const refresh = () => setRevision((v) => v + 1);
   if (ticketId !== null) return <SupportTicketView key={ticketId} id={ticketId} meta={meta} onBack={() => onSelect(null)} notify={notify} onDirtyChange={onDirtyChange} />;
 
@@ -182,7 +199,6 @@ export function SupportCenter({ ticketId, onSelect, onCreate, notify, onDirtyCha
   const counts = list.statusCounts;
   const countOf = (statusesInGroup: readonly string[]) => counts ? (statusesInGroup.length ? statusesInGroup : statuses).reduce((n, status) => n + (counts[status] ?? 0), 0) : null;
   const filtered = Boolean(search || group || category || filter);
-  const pageCount = Math.max(1, Math.ceil(list.total / PAGE_SIZE));
   const queue = mode === "queue";
   return <section className="support-center sp-page">
     <header className="sp-head">
@@ -204,7 +220,7 @@ export function SupportCenter({ ticketId, onSelect, onCreate, notify, onDirtyCha
           <td className="wrap sp-pre">{item.message}</td><td>{item.evaluatorName}</td><td>{date(item.updatedAt)}</td>
         </tr>)}</tbody>
       </table></div> : <div className="sp-empty" role={loading ? "status" : undefined}>{s(loading ? "Loading" : "Empty")}</div>}
-      {contributions && contributions.total > PAGE_SIZE ? <Pagination page={page} pageCount={Math.ceil(contributions.total / PAGE_SIZE)} from={(page - 1) * PAGE_SIZE + 1} to={Math.min(page * PAGE_SIZE, contributions.total)} total={contributions.total} onPage={setPage} /> : null}
+      {contributions?.total ? <Pager total={contributions.total} page={page} size={pageSize} onPage={setPage} onSize={setPageSize} /> : null}
     </> : <>
       <div className="sp-summary" role="group" aria-label={s("Status")} data-guide="support.summary">
         {STATUS_GROUPS.map((g) => {
@@ -233,7 +249,7 @@ export function SupportCenter({ ticketId, onSelect, onCreate, notify, onDirtyCha
           <td>{date(item.updatedAt)}</td>
         </tr>)}</tbody>
       </table></div> : <div className="sp-empty" role={loading ? "status" : undefined}>{s(loading ? "Loading" : filtered ? "No match" : "Empty")}</div>}
-      {list.total ? <Pagination page={page} pageCount={pageCount} from={(page - 1) * PAGE_SIZE + 1} to={Math.min(page * PAGE_SIZE, list.total)} total={list.total} onPage={setPage} /> : null}
+      {list.total ? <Pager total={list.total} page={page} size={pageSize} onPage={setPage} onSize={setPageSize} /> : null}
     </>}
     {membersOpen && meta?.manage ? <SupportMembers meta={meta} onSaved={refresh} onClose={() => setMembersOpen(false)} /> : null}
   </section>;

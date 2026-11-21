@@ -55,10 +55,10 @@ export function registerSupportRoutes(app:FastifyInstance,config:AppConfig,db:Da
   return {items:(result.recordsets[0] as (TicketRow & {recognition_points:number|null})[]).map(r=>({...supportSummary(r),recognitionPoints:r.recognition_points})),page,pageSize,total:Number((result.recordsets[1] as {total:number}[])[0]?.total??0),statusCounts};
  });
  app.get('/api/v1/me/support-contributions',async request=>{
-  const actor=await actorFor(request),query=request.query as Record<string,unknown>,page=clampedInteger(query.page,1,1,100000),pageSize=50;
+  const actor=await actorFor(request),query=request.query as Record<string,unknown>,page=clampedInteger(query.page,1,1,100000),pageSize=clampedInteger(query.pageSize,50,1,100);
   const result=await db.query(`SELECT COALESCE(SUM(r.points),0) total FROM dbo.support_recognition r JOIN dbo.support_tickets t ON t.id=r.ticket_id WHERE t.reporter_id=@actor;
-   SELECT r.points,r.message,r.updated_at updatedAt,t.id ticketId,t.ticket_no ticketNo,u.name evaluatorName FROM dbo.support_recognition r JOIN dbo.support_tickets t ON t.id=r.ticket_id JOIN dbo.users u ON u.id=r.evaluator_id WHERE t.reporter_id=@actor ORDER BY r.updated_at DESC,t.id DESC OFFSET @offset ROWS FETCH NEXT 50 ROWS ONLY;
-   SELECT COUNT(*) count FROM dbo.support_recognition r JOIN dbo.support_tickets t ON t.id=r.ticket_id WHERE t.reporter_id=@actor;`,q=>q.input('actor',sql.BigInt,actor.id).input('offset',sql.Int,(page-1)*pageSize));
+   SELECT r.points,r.message,r.updated_at updatedAt,t.id ticketId,t.ticket_no ticketNo,u.name evaluatorName FROM dbo.support_recognition r JOIN dbo.support_tickets t ON t.id=r.ticket_id JOIN dbo.users u ON u.id=r.evaluator_id WHERE t.reporter_id=@actor ORDER BY r.updated_at DESC,t.id DESC OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY;
+   SELECT COUNT(*) count FROM dbo.support_recognition r JOIN dbo.support_tickets t ON t.id=r.ticket_id WHERE t.reporter_id=@actor;`,q=>q.input('actor',sql.BigInt,actor.id).input('offset',sql.Int,(page-1)*pageSize).input('limit',sql.Int,pageSize));
   return {points:Number((result.recordsets[0] as {total:number}[])[0]?.total??0),items:result.recordsets[1],total:Number((result.recordsets[2] as {count:number}[])[0]?.count??0),page,pageSize};
  });
  app.post('/api/v1/support/tickets',async(request,reply)=>{
