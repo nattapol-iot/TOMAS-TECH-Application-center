@@ -89,6 +89,18 @@ and is dormant -- it performs no network call at all -- unless both master-data
 values are set. Results are cached in-process for five minutes and are read
 only by `/api/me`, never by the per-request enforcement seam.
 
+The same two values also turn on `src/master-data/` (all dormant without them):
+
+- the company calendar: `GET /api/v1/company-calendar` is copied into `dbo.holidays` at most once an hour,
+  started by a signed-in bootstrap (NATIONAL, COMPANY and SPECIAL days, company-wide or branch `BKK`);
+- the baht rate offered on supplier quotations: `GET /api/v1/exchange-rates/thb` reads master's exchange rates;
+- the signed-in person's own start date on the dashboard: master's `GET /api/v1/me` with their TMT ID token in
+  `X-User-Token`. It needs the credentials vault (the token vault keeps each person's refresh token).
+
+The key must be a user-bound key holding only `employee.self`, linked to a client with read grants on
+`company_holiday`, `exchange_rate` (and later `project`, `customer`, `supplier`). With master connected, start dates
+come from master alone, and only for the person signed in.
+
 ### Origin topology
 
 Single origin is the simpler deployment: proxy `/api/auth/*` and `/api/me` to

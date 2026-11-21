@@ -5,7 +5,7 @@ import {createRequire} from 'node:module';
 import ts from 'typescript';
 const require=createRequire(import.meta.url);
 const today='2026-09-07';
-const member={id:7,name:'TEST member',department:'TEST team',role:'Engineer',canSignIn:true,startWorkDate:'2026-01-01'};
+const member={id:7,name:'TEST member',department:'TEST team',role:'Engineer',canSignIn:true};
 const meta={members:[member],selfId:7,canManage:false,canReview:false,canConfigure:false,startedAt:today+'T00:00:00Z',projects:[],cycles:[{id:1,code:'TEST cycle',name:'TEST cycle',periodStart:'2026-07-01',periodEnd:'2026-12-31',status:'OPEN',mode:'TRIAL',configured:false}]};
 const overview={day:today,updatedAt:today+'T01:00:00Z',items:[{...member,day:{day:today,status:'PENDING',expected:2,updated:0},entered:true,accessVisible:true,sessions:1,firstAt:today+'T01:00:00Z',lastAt:today+'T01:00:00Z',updatedTasks:0,projectOnly:false,score:{automatic:null,total:null,eligible:false,mode:'TRIAL'}}]};
 function harness(lang){let cursor=0;const states=[],effects=[];const react={...require('react'),useState(init){const i=cursor++;if(!(i in states))states[i]=typeof init==='function'?init():init;return [states[i],v=>{states[i]=typeof v==='function'?v(states[i]):v;}];},useRef(value){return react.useState(()=>({current:value}))[0];},useEffect:f=>effects.push(f),useCallback:f=>f};

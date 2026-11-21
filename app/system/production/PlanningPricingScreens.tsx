@@ -26,6 +26,7 @@ import { boardDays, dailyLoad, dateRuns, outlookLoad, overlapDays, withOutlook, 
 import { PicLoadPanel, useLoadNote, usePicLoads } from "./PlanPicLoad";
 import { choiceLink, optionalChoiceLink, placeId, useLinkedState, useScreenPlace } from "../screen-link";
 import { HealthBadge } from "./ProjectPlanFields";
+import { ThbRateField } from "./ThbRateField";
 import { PlanManHours, type PlanManHoursData } from "./PlanManHours";
 import { PlanPeopleGrid } from "./PlanPeopleGrid";
 import { RowDisclosure, type PortfolioAction } from "./CoreScreens";
@@ -3290,16 +3291,6 @@ const thbRateInvalid = (currency: SupplierQuotationRecord["currency"], value: st
 
 const thbRateOf = (currency: SupplierQuotationRecord["currency"], value: string) => currency === "THB" ? null : Number(value);
 
-function ThbRateField({ currency, value, onChange }: { currency: SupplierQuotationRecord["currency"]; value: string; onChange: (value: string) => void }) {
-  if (currency === "THB") return null;
-  const copy = (th: string, en: string, ja: string) => estimateUxCopy(currentLocale(), th, en, ja);
-  return <Field label={copy(`1 ${currency} = กี่บาท *`, `THB per 1 ${currency} *`, `1 ${currency} = THB *`)}
-    hint={copy("ใช้แปลงราคาเป็นบาทเมื่อนำรายการเข้า Estimate", "Converts the prices to baht when lines are added to an estimate", "見積へ明細を追加する際にバーツへ換算します")}>
-    <input type="number" min="0.000001" max="100000" step="0.0001" inputMode="decimal" value={value}
-      placeholder={currency === "JPY" ? "0.24" : "35.5"} onChange={(event) => onChange(event.target.value)} />
-  </Field>;
-}
-
 export type QuotationInquiry = { id: number; number: string; projectName: string; customerName: string };
 
 /*
@@ -3903,7 +3894,7 @@ export function SupplierQuotationUploadModal({ bootstrap, defaultInquiry, onClos
               <option value="THB">THB</option><option value="JPY">JPY</option><option value="USD">USD</option><option value="EUR">EUR</option>
             </select>
           </Field>
-          <ThbRateField currency={currency} value={thbRate} onChange={setThbRate} />
+          <ThbRateField currency={currency} date={receivedDate} value={thbRate} onChange={setThbRate} />
           <div style={confWrap("totalAmount")}>
             <Field label="Quotation amount *" hint={confHint("totalAmount") ?? (amountPinned ? undefined : "คิดจากผลรวมรายการให้อัตโนมัติ แก้เองได้")}>
               <input type="number" min="0.0001" step="0.01" value={amount} placeholder="0.00"
@@ -4081,7 +4072,7 @@ function EditQuotationModal({
         <Field label="Amount *">
           <input type="number" min="0.0001" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" />
         </Field>
-        <ThbRateField currency={currency} value={thbRate} onChange={setThbRate} />
+        <ThbRateField currency={currency} date={receivedDate} value={thbRate} onChange={setThbRate} />
         {/* A reference price is only checkable through its link, so the link is editable
             here; a document-backed row keeps its stored file and the server refuses one. */}
         {isReference ? (
@@ -4212,7 +4203,7 @@ function ReferencePriceModal({ bootstrap, onClose, onCreated }: {
           <option value="THB">THB</option><option value="JPY">JPY</option><option value="USD">USD</option><option value="EUR">EUR</option>
         </select>
       </Field>
-      <ThbRateField currency={currency} value={thbRate} onChange={setThbRate} />
+      <ThbRateField currency={currency} date={capturedDate} value={thbRate} onChange={setThbRate} />
       <Field label="Page or catalogue reference" hint="เช่น รหัสหน้า, ชื่อแคตตาล็อก (ไม่บังคับ)">
         <input maxLength={200} value={supplierReference} onChange={(event) => setSupplierReference(event.target.value)} placeholder="—" />
       </Field>

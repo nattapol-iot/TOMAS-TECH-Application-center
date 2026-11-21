@@ -23,14 +23,13 @@ export const visibleProject=(scope:ActivityScope,projectId:number|null)=>project
 export const ruleDto=(r:Row):ReportingRule=>({id:Number(r.id),userId:Number(r.user_id),projectId:r.project_id==null?null:Number(r.project_id),sourceType:String(r.source_type),sourceId:Number(r.source_id),title:String(r.title),startsOn:day(r.starts_on),endsOn:day(r.ends_on),stoppedOn:r.stopped_on?day(r.stopped_on):null,weekdayMask:Number(r.weekday_mask),cutoffMinute:Number(r.cutoff_minute),rowVersion:(r.row_version as Buffer).toString('base64')});
 export const eventDto=(r:Row):ActivityEvent=>({id:Number(r.id),actorId:Number(r.actor_id),projectId:r.project_id==null?null:Number(r.project_id),ruleId:r.rule_id==null?null:Number(r.rule_id),kind:String(r.kind),module:String(r.module),sourceType:r.source_type==null?null:String(r.source_type),sourceId:r.source_id==null?null:Number(r.source_id),summary:String(r.summary),occurredAt:iso(r.occurred_at),details:r.details_json?JSON.parse(String(r.details_json)):null});
 export async function activityRoster(db:Database,scope:ActivityScope){
- const result=await db.query<Row>(`SELECT u.id,u.name,u.department,r.code role,u.entra_object_id,
-  (SELECT MIN(e.start_work_date) FROM dbo.employees e WHERE e.user_id=u.id AND e.is_active=1 AND e.deleted_at IS NULL) start_work_date
+ const result=await db.query<Row>(`SELECT u.id,u.name,u.department,r.code role,u.entra_object_id
  FROM dbo.users u JOIN dbo.roles r ON r.id=u.role_id WHERE u.is_active=1 AND u.deleted_at IS NULL AND
  (@all=1 OR u.id=@actor OR (@department IS NOT NULL AND u.department=@department) OR EXISTS(
  SELECT 1 FROM dbo.projects p WHERE p.deleted_at IS NULL AND (p.manager_id=@actor OR p.lead_engineer_id=@actor) AND
  (u.id=p.manager_id OR u.id=p.lead_engineer_id OR EXISTS(SELECT 1 FROM dbo.project_members m WHERE m.project_id=p.id AND m.user_id=u.id)
  OR EXISTS(SELECT 1 FROM dbo.activity_rules ar WHERE ar.project_id=p.id AND ar.user_id=u.id)))) ORDER BY u.name`,q=>q.input('all',sql.Bit,scope.all).input('actor',sql.BigInt,scope.actorId).input('department',sql.NVarChar(100),scope.department));
- return result.recordset.map(r=>({id:Number(r.id),name:String(r.name),department:String(r.department),role:String(r.role),canSignIn:Boolean(r.entra_object_id),startWorkDate:r.start_work_date?day(r.start_work_date):null}));
+ return result.recordset.map(r=>({id:Number(r.id),name:String(r.name),department:String(r.department),role:String(r.role),canSignIn:Boolean(r.entra_object_id)}));
 }
 export async function memberEvidence(db:Database,userId:number,start:string,end:string,scope?:ActivityScope,tx?:Transaction){
  const result=await queryActivity<Row>(db,tx,`SELECT * FROM dbo.activity_rules WHERE user_id=@user AND ends_on>=@start;

@@ -24,7 +24,7 @@ import { contactTitleInput, localizedNameInput, primaryCustomerContactApply, syn
 type EmployeeRow = Record<string, unknown> & {
   id: number | string; employee_no: number; name_en: string; name_th: string; department: string;
   job_title: string; mobile: string; email: string; nickname: string; birth_date: Date | string | null;
-  uniform_size: string; shoe_size: string; start_work_date: Date | string; end_work_date: Date | string | null;
+  uniform_size: string; shoe_size: string; start_work_date: Date | string | null; end_work_date: Date | string | null;
   position: string; is_active: boolean; user_id: number | string | null; application_role: string | null;
   account_active: boolean | null; daily_rate: number | string | null; updated_at: Date | string; row_version: Buffer;
 };
@@ -181,7 +181,9 @@ export function registerMasterRoutes(app: FastifyInstance, database: Database, u
         CASE WHEN @include_private=1 THEN employee.birth_date ELSE NULL END AS birth_date,
         CASE WHEN @include_private=1 THEN employee.uniform_size ELSE N'' END AS uniform_size,
         CASE WHEN @include_private=1 THEN employee.shoe_size ELSE N'' END AS shoe_size,
-        employee.start_work_date,employee.end_work_date,employee.position,employee.is_active,app_user.id AS user_id,
+        CASE WHEN @include_private=1 THEN employee.start_work_date ELSE NULL END AS start_work_date,
+        CASE WHEN @include_private=1 THEN employee.end_work_date ELSE NULL END AS end_work_date,
+        employee.position,employee.is_active,app_user.id AS user_id,
         CASE WHEN app_user.id IS NULL THEN NULL ELSE CONCAT(role.code,
           (SELECT STRING_AGG(CONVERT(nvarchar(max),N' + '+business_role.code),N'')
            FROM dbo.user_business_roles business_grant JOIN dbo.roles business_role ON business_role.id=business_grant.role_id

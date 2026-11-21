@@ -70,7 +70,8 @@ export type BootstrapData = {
     employeeNo: number;
     nickname: string;
     level: string;
-    startWorkDate: string;
+    /** The signed-in person's own start date only; nobody else's is sent. */
+    startWorkDate: string | null;
   } | null;
   counts: { inquiries: number; estimates: number; activeProjects: number; approvals: number };
   customers: {
@@ -111,7 +112,6 @@ export type BootstrapData = {
     employeeId: number;
     employeeNo: number;
     nickname: string;
-    startWorkDate?: string;
     canSignIn: boolean;
     /** Primary and additional roles (dbo.user_effective_roles); older API builds omit it. */
     roles?: string[];
@@ -665,7 +665,8 @@ export type EmployeeRecord = {
   birthDate: string | null;
   uniformSize: string;
   shoeSize: string;
-  startWorkDate: string;
+  /** Start and end dates are private like the birth date: only master.write readers get them. */
+  startWorkDate: string | null;
   endWorkDate: string | null;
   position: string;
   isActive: boolean;
@@ -1235,6 +1236,11 @@ export async function uploadReportExport(reportId: number, format: "pdf" | "pptx
 }
 
 export const loadBootstrap = () => apiRequest<BootstrapData>("/api/v1/bootstrap");
+
+/** Master data's baht rate in force on a date; null rate when master has none for the currency. */
+export type MasterThbRate = { currency: string; rate: number; effectiveFrom: string };
+export const fetchMasterThbRate = (currency: string, date: string) =>
+  apiRequest<{ rate: MasterThbRate | null }>(`/api/v1/exchange-rates/thb?${new URLSearchParams({ currency, date })}`);
 
 /** Replaces the person's starred menu entries (at most eight, in the order starred) and returns the saved list. */
 export const saveMenuFavorites = (views: readonly string[]) => apiRequest<{ views: string[] }>("/api/v1/me/menu-favorites", {

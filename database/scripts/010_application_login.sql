@@ -873,4 +873,9 @@ GO
 -- database/migrations/116_pr_discipline_approvers.sql
 GRANT SELECT ON OBJECT::dbo.pr_discipline_approvers TO [iot_team_app_role];
 GO
+
+-- database/migrations/117_holiday_sync_grants.sql
+GRANT INSERT, DELETE ON OBJECT::dbo.holidays TO [iot_team_app_role];
+GRANT UPDATE (name) ON OBJECT::dbo.holidays TO [iot_team_app_role];
+GO
 -- END GENERATED MIGRATION GRANTS

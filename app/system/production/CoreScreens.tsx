@@ -307,7 +307,7 @@ export function ProductionDashboard({
     employeeNo: currentEmployee.employeeNo,
     nickname: currentEmployee.nickname,
     level: currentEmployee.level,
-    startWorkDate: currentEmployee.startWorkDate ?? "",
+    startWorkDate: null,
   } : null);
   const startWorkDate = employment?.startWorkDate;
   const tenure = dashboardTenure(startWorkDate, todayKey);
@@ -1947,7 +1947,7 @@ function EmployeeMasterTab({ canWrite, notify }: { canWrite: boolean; notify: (m
         <td><div className="cell-primary"><strong>{employee.email}</strong><span>{employee.mobile || "—"}</span></div></td>
         <td>{employee.department}</td><td><Badge>{employee.position}</Badge></td><td>{employee.jobTitle}</td>
         <td>{employee.applicationRole ? <Badge tone={employee.accountActive ? "blue" : "red"}>{employee.applicationRole}</Badge> : <span className="muted">{t("Not provisioned")}</span>}</td>
-        <td>{employeeDuration(employee.startWorkDate, employee.endWorkDate, lang)}</td>
+        <td>{employee.startWorkDate ? employeeDuration(employee.startWorkDate, employee.endWorkDate, lang) : "—"}</td>
         <td className="num">{employee.dailyRate === null ? "—" : formatMoney(employee.dailyRate)}</td>
         <td><Badge tone={employee.isActive ? "green" : "slate"}>{t(employee.isActive ? "Active" : "Inactive")}</Badge></td>
         <td>{canWrite ? <button className="icon-btn" type="button" aria-label={`${t("Edit")} ${employee.nameEn}`} onClick={() => setEditing(employee)}><Icon name="edit" /></button> : null}</td>
@@ -1968,7 +1968,7 @@ function EmployeeModal({ employee, prefill = null, departments = [], positions =
     employeeNo: employee.employeeNo, nameEn: employee.nameEn, nameTh: employee.nameTh,
     department: employee.department, jobTitle: employee.jobTitle, mobile: employee.mobile,
     email: employee.email, nickname: employee.nickname, birthDate: employee.birthDate ?? "",
-    uniformSize: employee.uniformSize, shoeSize: employee.shoeSize, startWorkDate: employee.startWorkDate,
+    uniformSize: employee.uniformSize, shoeSize: employee.shoeSize, startWorkDate: employee.startWorkDate ?? "",
     endWorkDate: employee.endWorkDate ?? "", position: employee.position, isActive: employee.isActive,
   } : { ...EMPTY_EMPLOYEE, ...prefill });
   const [busy, setBusy] = useState(false);

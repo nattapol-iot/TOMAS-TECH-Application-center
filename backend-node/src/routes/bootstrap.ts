@@ -3,6 +3,7 @@ import sql from "mssql";
 import type { Database } from "../db.js";
 import { ApiError } from "../errors.js";
 import { bodyObject, dateOnly } from "../http.js";
+import type { MasterData } from "../master-data/services.js";
 import type { CurrentUserService } from "../users.js";
 import { primaryCustomerContactApply } from "./sales-customers.js";
 
@@ -15,7 +16,7 @@ type CustomerRow = { id: number; code: string; name: string; name_th: string; na
 type SupplierRow = { id: number; code: string; name: string; category: string; erp_supplier_id: string | null };
 type TeamRow = {
   id: number; name: string; email: string; role: string; department: string; level: string;
-  employee_id: number; employee_no: number; nickname: string; start_work_date: Date | string; can_sign_in: boolean;
+  employee_id: number; employee_no: number; nickname: string; can_sign_in: boolean;
   effective_roles: string | null; row_version: Buffer;
 };
 type PermissionRow = { code: string };
@@ -57,7 +58,7 @@ export const MENU_FAVORITES_REPLACE = `
   SELECT @user, item.[value], CONVERT(int, item.[key]) FROM OPENJSON(@views) item;
   SELECT view_key FROM dbo.user_menu_favorites WHERE user_id=@user ORDER BY position;`;
 
-export function registerBootstrapRoutes(app: FastifyInstance, database: Database, users: CurrentUserService): void {
+export function registerBootstrapRoutes(app: FastifyInstance, database: Database, users: CurrentUserService, masterData: MasterData | null): void {
   app.get("/api/v1/me", async (request) => users.required(request));
 
   app.put("/api/v1/me/menu-favorites", async (request) => {
@@ -73,6 +74,9 @@ export function registerBootstrapRoutes(app: FastifyInstance, database: Database
 
   app.get("/api/v1/bootstrap", async (request) => {
     const user = await users.required(request);
+    masterData?.holidays.kick(user.id);
+    // Once master is connected it alone holds start dates, and it hands out only the signed-in person's own.
+    const ownStartDate = masterData?.ownRecord?.entryDate(user.entraObjectId);
     const result = await database.query<CountRow | CustomerRow | SupplierRow | TeamRow | PermissionRow | FavoriteRow>(`
       ;WITH granted AS (
         SELECT code FROM dbo.user_effective_permissions WHERE user_id = @user_id
@@ -111,7 +115,7 @@ export function registerBootstrapRoutes(app: FastifyInstance, database: Database
 
       SELECT app_user.id, employee.name_en AS name, employee.email, role.code AS role,
         employee.department, employee.position AS level, employee.id AS employee_id,
-        employee.employee_no, employee.nickname, employee.start_work_date,
+        employee.employee_no, employee.nickname,
         CONVERT(bit, CASE WHEN app_user.entra_object_id IS NULL THEN 0 ELSE 1 END) AS can_sign_in,
         (SELECT STRING_AGG(effective.code, N'|') FROM dbo.user_effective_roles effective WHERE effective.user_id = app_user.id) AS effective_roles,
         app_user.row_version
@@ -134,12 +138,13 @@ export function registerBootstrapRoutes(app: FastifyInstance, database: Database
     const permissions = result.recordsets[4] as unknown as PermissionRow[];
     const favorites = result.recordsets[5] as unknown as FavoriteRow[];
     const count = counts[0];
-    const employment = count?.employee_id == null || count.employee_start_work_date == null ? null : {
+    const startWorkDate = masterData ? (await ownStartDate) ?? null : dateOnly(count?.employee_start_work_date ?? null);
+    const employment = count?.employee_id == null ? null : {
       employeeId: Number(count.employee_id),
       employeeNo: Number(count.employee_no),
       nickname: count.employee_nickname ?? "",
       level: count.employee_level ?? "",
-      startWorkDate: dateOnly(count.employee_start_work_date),
+      startWorkDate,
     };
     return {
       user,
@@ -160,8 +165,7 @@ export function registerBootstrapRoutes(app: FastifyInstance, database: Database
       team: team.map((row) => ({
         id: Number(row.id), name: row.name, email: row.email, role: row.role,
         department: row.department, level: row.level, employeeId: Number(row.employee_id),
-        employeeNo: Number(row.employee_no), nickname: row.nickname,
-        startWorkDate: dateOnly(row.start_work_date), canSignIn: Boolean(row.can_sign_in),
+        employeeNo: Number(row.employee_no), nickname: row.nickname, canSignIn: Boolean(row.can_sign_in),
         roles: row.effective_roles ? row.effective_roles.split("|") : [row.role],
         rowVersion: row.row_version.toString("base64"),
       })),
