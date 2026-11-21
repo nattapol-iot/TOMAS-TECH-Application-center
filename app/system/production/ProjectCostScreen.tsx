@@ -1,0 +1,291 @@
+"use client";
+/* Projects > Cost (owner request 2026-11-21, for Leaders and above): one row per project with what its Estimate cost
+   gave and what the work has taken - Hardware and Outsource against the purchase requests, People against the
+   man-days on the plan. Read-only. The project number opens the breakdown in a dialog, so the list stays in place.
+   Pegasus look (pegasus-design DESIGN.md 0.2 dialogs over navigation, 0.3 lists, C.2 summary bar, C.4 meter,
+   D.5 badge, D.7 data table) through the app's own components under .pg-skin. The API side is
+   backend-node/src/project-cost.ts; the shapes and the sums are in project-cost-model.ts. */
+
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { apiRequest, type BootstrapData } from "../api-client";
+import { useT } from "../i18n";
+import { Badge, EmptyState, FilterChips, Icon, Modal, Pagination, Panel, SearchInput, TablePageSize, toneOf, type FilterItem, type Tone } from "../ui";
+import { flagLink, numberLink, optionalChoiceLink, placeId, textLink, useLinkedState, useScreenPlace } from "../screen-link";
+import {
+  BUDGET_STATES, DEFAULT_COST_SORT, budgetLeft, budgetShare, budgetState, costTotals, matchesCostSearch, nextCostSort, projectBudgetStates,
+  shortAmount, sortCostItems, stateCounts,
+  type BudgetState, type CostSort, type CostSortKey, type ProjectCostDetail, type ProjectCostItem, type ProjectCostOverview, type PurchaseCost,
+} from "../../../backend-node/src/project-cost-model";
+import "./pegasus-skin.css";
+import "./project-cost.css";
+
+type Props = { bootstrap: BootstrapData; openProjectSchedule?: (id: number) => void };
+
+const STATE_TONE: Record<BudgetState, Tone> = { over: "red", near: "amber", within: "green", none: "slate" };
+const STATE_LINK = optionalChoiceLink(BUDGET_STATES);
+/* Numbers read the same in every language: right-aligned, tabular, en-US grouping (DESIGN.md E.1). */
+const whole = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
+const exact = new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const days = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 });
+const DASH = "–";
+const money = (value: number | null) => (value === null ? DASH : whole.format(value));
+const manDays = (value: number | null) => (value === null ? DASH : days.format(value));
+const toError = (error: unknown) => (error instanceof Error ? error.message : "The request could not be completed.");
+
+/** A thin bar of the used share with an optional marker on the same scale (C.4); red once over, amber when near. */
+function Meter({ budget, used, marker, label, plain }: { budget: number | null; used: number | null; marker?: number | null | undefined; label: string; /** A share that is not a budget: always the primary colour. */ plain?: boolean }) {
+  const share = budgetShare(budget, used), state = plain ? "within" : budgetState(budget, used);
+  if (share === null) return <span className="pc-meter none" aria-hidden="true" />;
+  const mark = marker === undefined ? null : budgetShare(budget, marker);
+  return <span className={`pc-meter ${state}`} role="meter" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(share)} aria-label={label}>
+    <i style={{ width: `${share}%` }} />
+    {mark !== null ? <b style={{ left: `${mark}%` }} /> : null}
+  </span>;
+}
+
+/** "used / budget" over its bar, with what is left (or how far over) underneath: one group of a project in one cell. */
+function UseCell({ budget, used, marker, label, format, unit, notes = [] }: {
+  budget: number | null; used: number | null; marker?: number | null | undefined; label: string; format: (value: number | null) => string; unit?: string; notes?: ReactNode[];
+}) {
+  const t = useT();
+  const left = budgetLeft(budget, used), state = budgetState(budget, used), share = budget !== null && used !== null && budget > 0 ? Math.round((used / budget) * 100) : null;
+  if (budget === null && used === null) return <span className="pc-none">{DASH}</span>;
+  const parts: ReactNode[] = [
+    share !== null ? `${share}% ${t("Cost.ofBudget")}` : null,
+    left !== null && budget !== null && budget > 0 ? <span className={left < 0 ? "pc-over" : undefined}>{t(left < 0 ? "Cost.over" : "Cost.left")} {format(Math.abs(left))}</span> : null,
+    ...notes,
+  ].filter((part) => part !== null && part !== false && part !== undefined);
+  return <div className={`pc-use ${state}`}>
+    <div className="pc-use-figures"><strong>{format(used)}</strong><span>/ {budget === null ? t("Cost.noBudget") : format(budget)}{unit ? ` ${unit}` : ""}</span></div>
+    <Meter budget={budget} used={used} marker={marker} label={label} />
+    {parts.length ? <small>{parts.map((part, index) => <Fragment key={index}>{index ? " · " : null}{part}</Fragment>)}</small> : null}
+  </div>;
+}
+
+function SortHeader({ column, label, sort, onSort, className }: { column: CostSortKey; label: string; sort: CostSort; onSort: (key: CostSortKey) => void; className?: string }) {
+  const t = useT();
+  const active = sort.key === column;
+  return <th className={className} aria-sort={active ? (sort.descending ? "descending" : "ascending") : "none"}>
+    <button type="button" className={`th-sort${active ? " active" : ""}`} title={t("Cost.sortBy")} onClick={() => onSort(column)}>{t(label)}<Icon name="chevronDown" className={active ? (sort.descending ? "desc" : "asc") : "idle"} /></button>
+  </th>;
+}
+
+/** One cell of the totals bar (C.2): label with a hint on the right, the headline figure short with the exact value on hover. */
+function TotalCell({ label, hint, value, exactValue, sub, tone }: { label: string; hint?: string | undefined; value: string; exactValue?: string | undefined; sub?: ReactNode; tone?: BudgetState | undefined }) {
+  return <div className={`pc-total${tone ? ` ${tone}` : ""}`}>
+    <div className="pc-total-top"><dt>{label}</dt>{hint ? <dd className="pc-total-hint">{hint}</dd> : null}</div>
+    <dd className="pc-total-value" title={exactValue}>{value}</dd>
+    {sub ? <dd className="pc-total-sub">{sub}</dd> : null}
+  </div>;
+}
+
+const shortMoney = (value: number | null) => (value === null ? DASH : shortAmount(value));
+const sharePercent = (budget: number | null, used: number | null) => (budget !== null && used !== null && budget > 0 ? `${Math.round((used / budget) * 100)}%` : undefined);
+
+/** Totals of the rows on show: bought cost as requested / budget, people as planned / budget man-days, money only when the viewer has it. */
+function TotalsBar({ items, access, guide, single }: { items: ProjectCostItem[]; access: ProjectCostOverview["access"]; guide?: string; /** One project's own bar: no count of projects. */ single?: boolean }) {
+  const t = useT();
+  const totals = useMemo(() => costTotals(items), [items]);
+  const bought = (label: string, group: PurchaseCost) => <TotalCell label={t(label)} hint={sharePercent(group.budget, group.requested)} tone={budgetState(group.budget, group.requested)}
+    value={`${shortMoney(group.requested)} / ${shortMoney(group.budget)}`}
+    exactValue={`${t("Cost.requested")} ${group.requested === null ? DASH : exact.format(group.requested)} / ${t("Cost.budget")} ${group.budget === null ? DASH : exact.format(group.budget)}`}
+    sub={<>{t("Cost.ordered")} {money(group.ordered)}</>} />;
+  return <dl className="pc-totals" aria-label={t("Cost.totals")} data-guide={guide}>
+    {single ? null : <TotalCell label={t("Cost.projects")} value={whole.format(totals.projects)} />}
+    {bought("Cost.hardware", totals.hardware)}
+    {bought("Cost.outsource", totals.outsource)}
+    <TotalCell label={t("Cost.peopleMd")} hint={sharePercent(totals.labor.budgetManDays, totals.labor.plannedManDays)} tone={budgetState(totals.labor.budgetManDays, totals.labor.plannedManDays)}
+      value={`${manDays(totals.labor.plannedManDays)} / ${manDays(totals.labor.budgetManDays)}`}
+      sub={<span title={t("Cost.toDateHint")}>{t("Cost.toDate")} {manDays(totals.labor.toDateManDays)}</span>} />
+    {access.laborMoney ? <TotalCell label={t("Cost.peopleCost")} hint={sharePercent(totals.labor.budgetCost, totals.labor.plannedCost)} tone={budgetState(totals.labor.budgetCost, totals.labor.plannedCost)}
+      value={`${shortMoney(totals.labor.plannedCost)} / ${shortMoney(totals.labor.budgetCost)}`}
+      exactValue={`${t("Cost.planned")} ${totals.labor.plannedCost === null ? DASH : exact.format(totals.labor.plannedCost)} / ${t("Cost.budget")} ${totals.labor.budgetCost === null ? DASH : exact.format(totals.labor.budgetCost)}`}
+      sub={<span title={t("Cost.toDateHint")}>{t("Cost.toDate")} {money(totals.labor.toDateCost)}</span>} /> : null}
+  </dl>;
+}
+
+export function ProjectCostScreen({ bootstrap, openProjectSchedule }: Props) {
+  const t = useT();
+  const [data, setData] = useState<ProjectCostOverview | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  // The filters are on the screen's link under their own names, so the Overview tab's filters are not changed by these.
+  const [search, setSearch] = useLinkedState("costq", "", textLink, { remember: false });
+  const [state, setState] = useLinkedState<BudgetState | null>("coststate", null, STATE_LINK);
+  const [includeClosed, setIncludeClosed] = useLinkedState("costclosed", false, flagLink);
+  const [pageSize, setPageSize] = useLinkedState("costrows", 25, numberLink);
+  const [sort, setSort] = useState<CostSort>(DEFAULT_COST_SORT);
+  const [page, setPage] = useState(1);
+  const [opened, place] = useScreenPlace();
+  const [detailId, setDetailId] = useState<number | null>(() => (opened[0] === "cost" ? placeId(opened, 1) : null));
+  // Only the newest request may land: toggling "Show closed" twice must not show the older answer.
+  const latest = useRef(0);
+  const load = useCallback(async () => {
+    const request = ++latest.current;
+    setLoading(true); setError("");
+    try { const answer = await apiRequest<ProjectCostOverview>(`/api/v1/projects/cost-overview${includeClosed ? "?includeClosed=1" : ""}`); if (request === latest.current) setData(answer); }
+    catch (failure) { if (request === latest.current) setError(toError(failure)); }
+    finally { if (request === latest.current) setLoading(false); }
+  }, [includeClosed]);
+  useEffect(() => { const timer = window.setTimeout(() => { void load(); }, 0); return () => window.clearTimeout(timer); }, [load]);
+
+  const items = useMemo(() => data?.items ?? [], [data]);
+  const searched = useMemo(() => items.filter((item) => matchesCostSearch(item, search)), [items, search]);
+  const counts = useMemo(() => stateCounts(searched), [searched]);
+  const shown = useMemo(() => sortCostItems(state === null ? searched : searched.filter((item) => projectBudgetStates(item).worst === state), sort), [searched, state, sort]);
+  const pageCount = Math.max(1, Math.ceil(shown.length / pageSize)), currentPage = Math.min(page, pageCount);
+  const paged = shown.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const chips: FilterItem[] = BUDGET_STATES.map((key) => ({ key, label: `Cost.state.${key}`, value: counts[key], tone: STATE_TONE[key] }));
+  const filtered = search.trim() !== "" || state !== null;
+  const open = (id: number | null) => { setDetailId(id); place(id === null ? ["cost"] : ["cost", id]); };
+  const access = data?.access ?? { budget: false, purchases: false, laborMoney: false };
+  const changeSort = (key: CostSortKey) => { setSort(nextCostSort(sort, key)); setPage(1); };
+
+  return <div className="pg-skin pc">
+    <header className="page-header">
+      <div><h1>{t("Cost.title")}</h1><p className="page-sub">{t("Cost.subtitle")}</p></div>
+      <div className="page-actions">
+        <label className="checkbox-row"><input type="checkbox" checked={includeClosed} onChange={(event) => { setIncludeClosed(event.target.checked); setPage(1); }} /><span>{t("Cost.showClosed")}</span></label>
+        <button className="btn default" type="button" disabled={loading} onClick={() => { void load(); }}><Icon name="refresh" />{t("Refresh")}</button>
+      </div>
+    </header>
+    {error ? <div className="callout danger" role="alert"><Icon name="alertTriangle" /><span><strong>{t("Could not load")}</strong> {error}</span>
+      <button className="btn ghost sm" type="button" onClick={() => { void load(); }}><Icon name="refresh" />{t("Try again")}</button></div> : null}
+    {data ? <TotalsBar items={shown} access={access} guide="cost.totals" /> : loading ? <div className="pc-skeleton pc-skeleton-bar" aria-hidden="true" /> : null}
+    <div className="toolbar pc-toolbar">
+      <div data-guide="cost.filter"><FilterChips items={chips} active={state} onPick={(key) => { setState(key as BudgetState | null); setPage(1); }} label="Cost.stateFilter" /></div>
+      <span className="pc-spacer" />
+      <SearchInput value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder="Cost.search" guide="cost.search" />
+    </div>
+    <Panel flush guide="cost.table">
+      {!data ? loading ? <div className="pc-skeleton pc-skeleton-table" role="status" aria-label={t("Cost.loading")} /> : null
+        : !items.length ? <EmptyState icon="folder" title="Cost.empty" message="Cost.emptyHint" />
+        : <>
+          <div className="table-wrap"><table className="pc-table">
+            <thead><tr>
+              <SortHeader column="number" label="Cost.colProject" sort={sort} onSort={changeSort} />
+              <SortHeader column="state" label="Cost.colStatus" sort={sort} onSort={changeSort} />
+              <th>{t("Cost.colManager")}</th>
+              <SortHeader column="hardware" label="Cost.colHardware" sort={sort} onSort={changeSort} className="pc-col-use" />
+              <SortHeader column="outsource" label="Cost.colOutsource" sort={sort} onSort={changeSort} className="pc-col-use" />
+              <SortHeader column="labor" label="Cost.colPeople" sort={sort} onSort={changeSort} className="pc-col-use" />
+              {access.laborMoney ? <th className="num">{t("Cost.colPeopleCost")}</th> : null}
+            </tr></thead>
+            <tbody>
+              {paged.map((item) => { const states = projectBudgetStates(item);
+                return <tr key={item.id}>
+                  <td className="pc-project"><button type="button" className="pg-doclink" data-guide="cost.open" onClick={() => open(item.id)}>{item.number}</button>
+                    <small title={item.name}>{item.name}</small><small>{item.customerName}</small></td>
+                  <td><Badge tone={toneOf(item.status)}>{item.status}</Badge>
+                    {states.worst === "over" || states.worst === "near" ? <span className="pc-state"><Badge tone={STATE_TONE[states.worst]}>{`Cost.state.${states.worst}`}</Badge></span> : null}</td>
+                  <td>{item.managerName}</td>
+                  <td className="pc-col-use"><UseCell budget={item.hardware.budget} used={item.hardware.requested} label={t("Cost.hardware")} format={money}
+                    notes={[item.hardware.ordered ? <>{t("Cost.ordered")} {money(item.hardware.ordered)}</> : null]} /></td>
+                  <td className="pc-col-use"><UseCell budget={item.outsource.budget} used={item.outsource.requested} label={t("Cost.outsource")} format={money}
+                    notes={[item.outsource.ordered ? <>{t("Cost.ordered")} {money(item.outsource.ordered)}</> : null]} /></td>
+                  <td className="pc-col-use"><UseCell budget={item.labor.budgetManDays} used={item.labor.plannedManDays} marker={item.labor.toDateManDays} label={t("Cost.people")} format={manDays}
+                    notes={[item.labor.toDateManDays !== null ? <span title={t("Cost.toDateHint")}>{t("Cost.toDate")} {manDays(item.labor.toDateManDays)}</span> : null,
+                      item.labor.unplannedRows ? <span className="pc-warn" title={t("Cost.unplanned")}><Icon name="alertTriangle" />{whole.format(item.labor.unplannedRows)}</span> : null]} /></td>
+                  {access.laborMoney ? <td className="num">{money(item.labor.plannedCost)}{item.labor.budgetCost !== null ? <small>/ {money(item.labor.budgetCost)}</small> : null}
+                    {item.labor.toDateCost !== null ? <small title={t("Cost.toDateHint")}>{t("Cost.toDate")} {money(item.labor.toDateCost)}</small> : null}</td> : null}
+                </tr>; })}
+              {!paged.length ? <tr><td colSpan={access.laborMoney ? 7 : 6} className="pc-nomatch">{t("Cost.noMatch")}{filtered ? <> <button type="button" className="pg-doclink" onClick={() => { setSearch(""); setState(null); setPage(1); }}>{t("Cost.clearFilters")}</button></> : null}</td></tr> : null}
+            </tbody>
+          </table></div>
+          <div className="pc-foot">
+            <TablePageSize value={pageSize} onChange={(value) => { setPageSize(value); setPage(1); }} />
+            {shown.length > pageSize ? <Pagination page={currentPage} pageCount={pageCount} from={(currentPage - 1) * pageSize + 1} to={Math.min(currentPage * pageSize, shown.length)} total={shown.length} onPage={setPage} /> : null}
+          </div>
+        </>}
+    </Panel>
+    {data && !access.laborMoney ? <p className="pc-note">{t("Cost.moneyHidden")}</p> : null}
+    {detailId !== null ? <ProjectCostDialog projectId={detailId} canOpenPlan={Boolean(openProjectSchedule) && bootstrap.permissions.includes("schedule.read")}
+      onOpenPlan={() => openProjectSchedule?.(detailId)} onClose={() => open(null)} /> : null}
+  </div>;
+}
+
+/** One project's breakdown: bought cost by Module with its purchase requests, people by discipline and by the plan's top rows. */
+function ProjectCostDialog({ projectId, canOpenPlan, onOpenPlan, onClose }: { projectId: number; canOpenPlan: boolean; onOpenPlan: () => void; onClose: () => void }) {
+  const t = useT();
+  const [detail, setDetail] = useState<ProjectCostDetail | null>(null);
+  const [error, setError] = useState("");
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    let cancelled = false;
+    void apiRequest<ProjectCostDetail>(`/api/v1/projects/${projectId}/cost`).then((answer) => { if (!cancelled) { setDetail(answer); setError(""); } })
+      .catch((failure) => { if (!cancelled) setError(toError(failure)); });
+    return () => { cancelled = true; };
+  }, [projectId, attempt]);
+  const project = detail?.project, access = detail?.access;
+  const moduleTotal = (pick: (row: ProjectCostDetail["modules"][number]) => number | null) => { const values = (detail?.modules ?? []).map(pick).filter((value): value is number => value !== null);
+    return values.length ? values.reduce((sum, value) => sum + value, 0) : null; };
+  const span = (start: string | null, finish: string | null) => (start && finish ? `${start} – ${finish}` : DASH);
+  return <Modal title={project ? `${project.number} · ${project.name}` : "Cost.title"} subtitle={project ? project.customerName : "Cost.loading"} size="lg" onClose={onClose}
+    footer={<><button className="btn ghost" type="button" onClick={onClose}>{t("Close")}</button>
+      {canOpenPlan ? <button className="btn primary" type="button" data-guide="cost.openPlan" onClick={onOpenPlan}><Icon name="calendar" />{t("Cost.openPlan")}</button> : null}</>}>
+    {error ? <div className="callout danger" role="alert"><Icon name="alertTriangle" /><span><strong>{t("Could not load")}</strong> {error}</span>
+      <button className="btn ghost sm" type="button" onClick={() => { setError(""); setAttempt((value) => value + 1); }}><Icon name="refresh" />{t("Try again")}</button></div> : null}
+    {!detail || !project || !access ? error ? null : <div className="pc-skeleton pc-skeleton-table" role="status" aria-label={t("Cost.loading")} /> : <>
+      <TotalsDetail detail={detail} />
+      <section className="pc-section" data-guide="cost.hardware">
+        <h3>{t("Cost.detailHardware")}</h3><p>{t("Cost.detailHardwareHint")}</p>
+        {detail.modules.length ? <div className="table-wrap"><table>
+          <thead><tr><th>{t("Cost.colModule")}</th><th className="num">{t("Cost.budget")}</th><th className="num">{t("Cost.requested")}</th><th className="pc-col-bar" /><th className="num">{t("Cost.approved")}</th><th className="num">{t("Cost.ordered")}</th><th className="num">{t("Cost.left")}</th></tr></thead>
+          <tbody>{detail.modules.map((row) => { const left = budgetLeft(row.budget, row.requested);
+            return <tr key={row.module}><td>{row.module}</td><td className="num">{money(row.budget)}</td><td className="num">{money(row.requested)}</td>
+              <td className="pc-col-bar"><Meter budget={row.budget} used={row.requested} label={row.module} /></td>
+              <td className="num">{money(row.approved)}</td><td className="num">{money(row.ordered)}</td>
+              <td className={`num${left !== null && left < 0 ? " pc-over" : ""}`}>{money(left)}</td></tr>; })}
+            <tr className="pc-sum"><td>{t("Cost.total")}</td><td className="num">{money(moduleTotal((row) => row.budget))}</td><td className="num">{money(moduleTotal((row) => row.requested))}</td><td className="pc-col-bar" />
+              <td className="num">{money(moduleTotal((row) => row.approved))}</td><td className="num">{money(moduleTotal((row) => row.ordered))}</td>
+              <td className="num">{money(budgetLeft(moduleTotal((row) => row.budget), moduleTotal((row) => row.requested)))}</td></tr>
+          </tbody></table></div> : <p className="pc-empty">{t("Cost.noModules")}</p>}
+        {access.purchases ? <>
+          <h4>{t("Cost.detailRequests")}</h4>
+          {detail.requests.length ? <div className="table-wrap"><table>
+            <thead><tr><th>{t("Cost.colRequestNo")}</th><th>{t("Cost.colStatus")}</th><th>{t("Cost.colUnit")}</th><th>{t("Cost.colNeedBy")}</th><th className="num">{t("Cost.colLines")}</th><th className="num">{t("Cost.colAmount")}</th></tr></thead>
+            <tbody>{detail.requests.map((row) => <tr key={row.id}><td><strong>{row.number}</strong></td><td><Badge tone={toneOf(row.status)}>{row.status}</Badge></td><td>{row.unit ?? DASH}</td>
+              <td>{row.requiredDate ?? DASH}</td><td className="num">{whole.format(row.lines)}</td><td className="num">{money(row.amount)}</td></tr>)}</tbody></table></div>
+            : <p className="pc-empty">{t("Cost.noRequests")}</p>}
+        </> : null}
+      </section>
+      <section className="pc-section" data-guide="cost.people">
+        <h3>{t("Cost.detailPeople")}</h3><p>{t("Cost.detailPeopleHint")}{project.labor.source === "manual" ? ` ${t("Cost.manualBudget")}: ${manDays(project.labor.budgetManDays)} ${t("MD")}.` : ""}
+          {project.labor.dailyRate !== null ? ` ${t("Cost.dailyRate")}: ${money(project.labor.dailyRate)}.` : ""}</p>
+        {detail.disciplines.length ? <div className="table-wrap"><table>
+          <thead><tr><th>{t("Cost.colDiscipline")}</th><th className="num">{t("Cost.colManDays")}</th><th className="num">{t("Cost.colHours")}</th>{access.laborMoney ? <th className="num">{t("Cost.colCost")}</th> : null}</tr></thead>
+          <tbody>{detail.disciplines.map((row) => <tr key={row.discipline}><td>{t(`Cost.discipline.${row.discipline}`)}</td><td className="num">{manDays(row.manDays)}</td>
+            <td className="num">{whole.format(row.manDays * detail.hoursPerManDay)}</td>{access.laborMoney ? <td className="num">{money(row.cost)}</td> : null}</tr>)}
+            <tr className="pc-sum"><td>{t("Cost.total")}</td><td className="num">{manDays(project.labor.budgetManDays)}</td><td className="num">{project.labor.budgetManDays === null ? DASH : whole.format(project.labor.budgetManDays * detail.hoursPerManDay)}</td>
+              {access.laborMoney ? <td className="num">{money(project.labor.budgetCost)}</td> : null}</tr>
+          </tbody></table></div> : <p className="pc-empty">{t("Cost.noDisciplines")}</p>}
+        <h4>{t("Cost.detailPlan")}</h4><p>{t("Cost.detailPlanHint")} {t("Cost.toDateHint")}</p>
+        {detail.plan.length ? <div className="table-wrap"><table>
+          <thead><tr><th>{t("Cost.colPlanRow")}</th><th>{t("Cost.colPeriod")}</th><th className="num">{t("Cost.colProgress")}</th><th className="num">{t("Cost.colPlanned")}</th><th className="num">{t("Cost.colToDate")}</th><th className="pc-col-bar" />
+            <th className="num">{t("Cost.outsourcedMd")}</th>{access.laborMoney ? <th className="num">{t("Cost.colCost")}</th> : null}</tr></thead>
+          <tbody>{detail.plan.map((row) => <tr key={row.id}><td className="wrap">{row.name}</td><td>{span(row.planStart, row.planFinish)}</td><td className="num">{Math.round(row.percentComplete)}%</td>
+            <td className="num">{manDays(row.plannedManDays)}</td><td className="num">{manDays(row.toDateManDays)}</td>
+            <td className="pc-col-bar"><Meter budget={row.plannedManDays} used={row.toDateManDays} label={row.name} plain /></td>
+            <td className="num">{row.outsourcedManDays ? manDays(row.outsourcedManDays) : DASH}</td>{access.laborMoney ? <td className="num">{money(row.plannedCost)}</td> : null}</tr>)}
+            <tr className="pc-sum"><td>{t("Cost.total")}</td><td /><td /><td className="num">{manDays(project.labor.plannedManDays)}</td><td className="num">{manDays(project.labor.toDateManDays)}</td><td className="pc-col-bar" />
+              <td className="num">{project.labor.outsourcedManDays ? manDays(project.labor.outsourcedManDays) : DASH}</td>{access.laborMoney ? <td className="num">{money(project.labor.plannedCost)}</td> : null}</tr>
+          </tbody></table></div> : <p className="pc-empty">{t("Cost.noPlan")}</p>}
+      </section>
+    </>}
+  </Modal>;
+}
+
+/** The project's own totals on top of its dialog: the same cells as the list's bar, plus the estimate's whole cost. */
+function TotalsDetail({ detail }: { detail: ProjectCostDetail }) {
+  const t = useT();
+  const { project, access } = detail;
+  return <>
+    <TotalsBar items={[project]} access={access} single />
+    <p className="pc-detail-meta">
+      {project.estimateNo ? <span>{t("Cost.estimate")} <strong>{project.estimateNo}</strong></span> : <span>{t("Cost.noEstimate")}</span>}
+      {project.estimateTotal !== null ? <span title={t("Cost.estimateTotalHint")}>{t("Cost.estimateTotal")} <strong>{exact.format(project.estimateTotal)}</strong></span> : null}
+      {project.requests !== null ? <span><strong>{whole.format(project.requests)}</strong> {t("Cost.requestCount")}</span> : null}
+      {project.labor.unplannedRows ? <span className="pc-warn"><Icon name="alertTriangle" />{whole.format(project.labor.unplannedRows)} {t("Cost.unplanned")}</span> : null}
+    </p>
+  </>;
+}
