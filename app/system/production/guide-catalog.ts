@@ -1805,7 +1805,7 @@ const KNOWLEDGE_FIND: Guide = {
     {
       target: "kh.register", action: "next", view: "knowledge",
       title: { th: "เอกสารและ revision ปัจจุบัน", en: "Documents and their current revision", jp: "文書と最新リビジョン" },
-      body: { th: "หนึ่งแถวคือหนึ่งเอกสาร แสดง revision ที่ใช้อยู่ คลิกเพื่อเปิดอ่านหรือดาวน์โหลด", en: "One row per document with the revision in force; click one to read or download it.", jp: "1行が1文書で、有効なリビジョンが表示されます。クリックで閲覧・ダウンロードできます。" },
+      body: { th: "หนึ่งแถวคือหนึ่งเอกสาร แสดง revision ที่ใช้อยู่ คลิกเลขเอกสารหรือชื่อเพื่อเปิดอ่านหรือดาวน์โหลด", en: "One row per document with the revision in force; click its number or title to read or download it.", jp: "1行が1文書で、有効なリビジョンが表示されます。文書番号または件名をクリックすると閲覧・ダウンロードできます。" },
     },
     {
       target: "[data-tab=\"acknowledgements\"]", action: "click", view: "knowledge",
@@ -1851,7 +1851,7 @@ const DOWNLOADS: Guide = {
     {
       target: "dl.file", action: "next", view: "downloads",
       title: { th: "ดาวน์โหลด", en: "Download", jp: "ダウンロード" },
-      body: { th: "กดปุ่มดาวน์โหลดของไฟล์ ระบบนับจำนวนครั้งที่ดาวน์โหลดให้ทีมเห็นว่าไฟล์ไหนใช้บ่อย", en: "Press the file's download button; downloads are counted so the team sees what is used.", jp: "ファイルのダウンロードボタンを押します。回数が数えられ、よく使うファイルが分かります。" },
+      body: { th: "กดไอคอนดาวน์โหลดหน้าชื่อไฟล์ ระบบนับจำนวนครั้งที่ดาวน์โหลดให้ทีมเห็นว่าไฟล์ไหนใช้บ่อย", en: "Press the download icon in front of the file's name; downloads are counted so the team sees what is used.", jp: "ファイル名の左にあるダウンロードアイコンを押します。回数が数えられ、よく使うファイルが分かります。" },
       missing: { th: "ยังไม่มีไฟล์ในหมวดที่เปิดอยู่ กด 'ถัดไป'", en: "No file in the open category yet. Press Next.", jp: "開いているカテゴリにファイルがありません。「次へ」を押します。" },
     },
     {

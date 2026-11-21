@@ -7,6 +7,9 @@ import { LocalizedText } from "../LocalizedText";
 import { Badge, EmptyState, Icon, PageHeader, Panel, SearchInput, Tabs, Toolbar } from "../ui";
 import { SourceRepositories } from "./SourceRepositories";
 import { SkillHub } from "./SkillHub";
+// The Pegasus ERP look (owner 2026-11-21): pegasus-skin.css for the shared parts, pegasus-screens.css for the rest.
+import "./pegasus-skin.css";
+import "./pegasus-screens.css";
 
 type Notify = (message: string) => void;
 
@@ -76,7 +79,7 @@ export function DownloadCenterScreen({ canManage, canManageRepositories, notify 
   };
 
   return (
-    <div className="stack download-center">
+    <div className="pg-skin pg-screen stack download-center">
       <PageHeader title="Download Center" subtitle="Downloads.subtitle"
         actions={tab === "files" ? <button className="btn default" type="button" onClick={() => { setCategories(null); setRevision((value) => value + 1); }}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button> : undefined} />
 
@@ -114,15 +117,15 @@ export function DownloadCenterScreen({ canManage, canManageRepositories, notify 
           <div className="panel-body flush">
             <div className="table-wrap">
               <table className="grid download-center-table">
-                <colgroup><col /><col style={{ width: 100 }} /><col style={{ width: 90 }} /><col style={{ width: 120 }} /><col style={{ width: 100 }} /><col style={{ width: 140 }} /></colgroup>
+                <colgroup><col style={{ width: 56 }} /><col /><col style={{ width: 100 }} /><col style={{ width: 90 }} /><col style={{ width: 120 }} /><col style={{ width: 100 }} /></colgroup>
                 <thead>
                   <tr>
+                    <th className="pg-acts"><span className="sr-only">{t("Downloads.action")}</span></th>
                     <th><LocalizedText text={"Downloads.file"} /></th>
                     <th><LocalizedText text={"Downloads.version"} /></th>
                     <th className="num"><LocalizedText text={"Downloads.size"} /></th>
                     <th><LocalizedText text={"Downloads.updated"} /></th>
                     <th className="num"><LocalizedText text={"Downloads.count"} /></th>
-                    <th aria-label={t("Downloads.action")} />
                   </tr>
                 </thead>
                 <tbody>
@@ -130,6 +133,14 @@ export function DownloadCenterScreen({ canManage, canManageRepositories, notify 
                     const key = `${category.folder}/${file.name}`;
                     return (
                       <tr key={key}>
+                        {/* The row's one action, as a quiet icon in the Actions column on the left (Pegasus D.7). */}
+                        <td className="pg-acts">
+                          <button className="pg-act" type="button" data-guide="dl.file" disabled={downloading !== null}
+                            title={t(downloading === key ? "Downloads.downloading" : "Downloads.download")} aria-label={`${t("Downloads.download")} ${file.title}`}
+                            onClick={() => void download(category, file)}>
+                            <Icon name="download" />
+                          </button>
+                        </td>
                         <td className="wrap">
                           <div className="cell-primary">
                             <strong title={file.title}>{file.title}{file.recommended ? <> <Badge tone="blue"><LocalizedText text={"Downloads.recommended"} /></Badge></> : null}</strong>
@@ -141,11 +152,6 @@ export function DownloadCenterScreen({ canManage, canManageRepositories, notify 
                         <td className="num">{formatSize(file.sizeBytes)}</td>
                         <td>{dateFormat.format(new Date(file.modifiedAt))}</td>
                         <td className="num" title={t("Downloads.countTitle").replace("{n}", String(file.downloaderCount))}>{file.downloadCount}</td>
-                        <td>
-                          <button className="btn primary sm" type="button" data-guide="dl.file" disabled={downloading !== null} onClick={() => void download(category, file)}>
-                            <Icon name="download" /><LocalizedText text={downloading === key ? "Downloads.downloading" : "Downloads.download"} />
-                          </button>
-                        </td>
                       </tr>
                     );
                   })}

@@ -80,6 +80,7 @@ import {
   toneOf,
 } from "../ui";
 import { DateInput } from "../DateInput";
+import { PegasusScreen } from "./PegasusScreen";
 
 type KnowledgeProps = {
   bootstrap: BootstrapData;
@@ -193,14 +194,14 @@ export function ProductionKnowledgeHub({ bootstrap, notify }: KnowledgeProps) {
 
   if (!canView) {
     return (
-      <>
-        <PageHeader eyebrow="KNOWLEDGE" title={uiText("Knowledge Hub")} subtitle="Standards, SOP, templates and technical knowledge" />
+      <PegasusScreen>
+        <PageHeader title={uiText("Knowledge Hub")} subtitle="Standards, SOP, templates and technical knowledge" />
         <EmptyState
           icon="lock"
           title="No access to the knowledge library"
           message="An administrator must grant the knowledge.view permission to your role."
         />
-      </>
+      </PegasusScreen>
     );
   }
 
@@ -211,10 +212,10 @@ export function ProductionKnowledgeHub({ bootstrap, notify }: KnowledgeProps) {
   const from = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const to = Math.min(total, page * pageSize);
 
+  // The Pegasus ERP look (owner 2026-11-21): the document number opens its record, so the rows carry no Open button.
   return (
-    <>
+    <PegasusScreen>
       <PageHeader
-        eyebrow="KNOWLEDGE &amp; DOCUMENT HUB"
         title={uiText("Knowledge Hub")}
         subtitle="Controlled standards, templates, presentations and technical knowledge in one register"
         actions={
@@ -258,7 +259,7 @@ export function ProductionKnowledgeHub({ bootstrap, notify }: KnowledgeProps) {
         ]}
       />
 
-      <div style={{ marginTop: 14 }}>
+      <div className="pg-tab-body">
         {tab === "solutions" ? <SolutionLibrary canUpdate={canManageCategories} notify={notify} /> : null}
         {tab === "register" ? (
           <>
@@ -321,7 +322,6 @@ export function ProductionKnowledgeHub({ bootstrap, notify }: KnowledgeProps) {
                         <th>{t("Next Review")}</th>
                         <th>{t("Acknowledged")}</th>
                         <th>{t("Updated")}</th>
-                        <th aria-label={t("Actions")} />
                       </tr>
                     </thead>
                     <tbody>
@@ -331,7 +331,7 @@ export function ProductionKnowledgeHub({ bootstrap, notify }: KnowledgeProps) {
                           : Math.round((row.acknowledgementDone / row.acknowledgementTotal) * 100);
                         return (
                           <tr key={row.id}>
-                            <td className="mono">{row.documentNumber}</td>
+                            <td><button className="link-button mono" type="button" onClick={() => setOpenDocumentId(row.id)}>{row.documentNumber}</button></td>
                             <td>
                               <button className="link-button" type="button" onClick={() => setOpenDocumentId(row.id)}>
                                 {row.title}
@@ -353,11 +353,6 @@ export function ProductionKnowledgeHub({ bootstrap, notify }: KnowledgeProps) {
                               )}
                             </td>
                             <td className="mono">{row.updatedAt.slice(0, 10)}</td>
-                            <td>
-                              <button className="btn ghost sm" type="button" onClick={() => setOpenDocumentId(row.id)}>
-                                {t("Open")}
-                              </button>
-                            </td>
                           </tr>
                         );
                       })}
@@ -429,7 +424,7 @@ export function ProductionKnowledgeHub({ bootstrap, notify }: KnowledgeProps) {
           onChanged={() => { void load(); }}
         />
       ) : null}
-    </>
+    </PegasusScreen>
   );
 }
 
@@ -482,8 +477,8 @@ function SharedWorkspace({ rows, loading, onOpen }: {
   const t = useT();
   if (rows.length === 0 && !loading) return <EmptyState icon="users" title="No shared documents" message="Working, project and supplier documents shared with you will appear here." />;
   return <Panel title={t("Team shared workspace")} subtitle={t("Working, project and supplier documents visible to you")} flush>
-    <div className="table-wrap"><table className="grid"><thead><tr><th>{t("Document No.")}</th><th>{t("Title")}</th><th>{t("Type")}</th><th>{t("Category")}</th><th>{t("Owner")}</th><th>{t("Rev")}</th><th>{t("Status")}</th><th>{t("Updated")}</th><th /></tr></thead>
-      <tbody>{rows.map((row) => <tr key={row.id}><td className="mono">{row.documentNumber}</td><td><button className="link-button" type="button" onClick={() => onOpen(row.id)}>{row.title}</button></td><td>{row.documentType}</td><td>{row.categoryName}</td><td><Avatar initials={initialsOf(row.ownerName)} name={row.ownerName} /></td><td className="mono">{row.currentRevision}</td><td><Badge tone={toneOf(row.status)}>{row.status}</Badge></td><td className="mono">{row.updatedAt.slice(0, 10)}</td><td><button className="btn ghost sm" type="button" onClick={() => onOpen(row.id)}>{t("Open")}</button></td></tr>)}</tbody></table></div>
+    <div className="table-wrap"><table className="grid"><thead><tr><th>{t("Document No.")}</th><th>{t("Title")}</th><th>{t("Type")}</th><th>{t("Category")}</th><th>{t("Owner")}</th><th>{t("Rev")}</th><th>{t("Status")}</th><th>{t("Updated")}</th></tr></thead>
+      <tbody>{rows.map((row) => <tr key={row.id}><td><button className="link-button mono" type="button" onClick={() => onOpen(row.id)}>{row.documentNumber}</button></td><td><button className="link-button" type="button" onClick={() => onOpen(row.id)}>{row.title}</button></td><td>{row.documentType}</td><td>{row.categoryName}</td><td><Avatar initials={initialsOf(row.ownerName)} name={row.ownerName} /></td><td className="mono">{row.currentRevision}</td><td><Badge tone={toneOf(row.status)}>{row.status}</Badge></td><td className="mono">{row.updatedAt.slice(0, 10)}</td></tr>)}</tbody></table></div>
   </Panel>;
 }
 
@@ -606,11 +601,11 @@ function ArticleLibrary({
       </Toolbar>
       <Panel title={t("Technical knowledge")} subtitle={t("How-to, troubleshooting, best practices and lessons learned")} flush>
         {items.length === 0 && !loading ? <EmptyState icon="book" title="No knowledge article found" message="Create the first technical article for the team." /> : (
-          <div className="table-wrap"><table className="grid"><thead><tr><th>{t("Title")}</th><th>{t("Type")}</th><th>{t("Category")}</th><th>{t("Owner")}</th><th>{t("Status")}</th><th>{t("Helpful")}</th><th>{t("Views")}</th><th>{t("Updated")}</th><th /></tr></thead>
+          <div className="table-wrap"><table className="grid"><thead><tr><th>{t("Title")}</th><th>{t("Type")}</th><th>{t("Category")}</th><th>{t("Owner")}</th><th>{t("Status")}</th><th>{t("Helpful")}</th><th>{t("Views")}</th><th>{t("Updated")}</th></tr></thead>
             <tbody>{items.map((article) => <tr key={article.id}><td><button className="link-button" type="button" onClick={() => setOpenId(article.id)}>{article.title}</button><div className="muted">{article.summary}</div></td>
               <td>{article.articleType}</td><td>{article.categoryName}</td><td><Avatar initials={initialsOf(article.ownerName)} name={article.ownerName} /></td>
               <td><Badge tone={toneOf(article.status)}>{article.status}</Badge></td><td>{article.helpfulCount}<LocalizedText text={"of"} />{article.helpfulCount + article.notHelpfulCount}</td>
-              <td>{article.viewCount}</td><td className="mono">{article.updatedAt.slice(0, 10)}</td><td><button className="btn ghost sm" type="button" onClick={() => setOpenId(article.id)}>{t("Open")}</button></td></tr>)}</tbody></table></div>
+              <td>{article.viewCount}</td><td className="mono">{article.updatedAt.slice(0, 10)}</td></tr>)}</tbody></table></div>
         )}
         {total > 0 ? <Pagination page={page} pageCount={pageCount} from={(page - 1) * pageSize + 1} to={Math.min(page * pageSize, total)} total={total} onPage={setPage} /> : null}
       </Panel>
