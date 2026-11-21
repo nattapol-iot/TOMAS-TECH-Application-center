@@ -21,6 +21,9 @@ export type PlanManHoursData = {
   unplannedRows: number;
   hoursPerManDay: number;
   canSetBudget: boolean;
+  /** Man-days people confirmed for the project in My Work (migration 121), and how many people confirmed them. */
+  actualManDays?: number;
+  actualPeople?: number;
 };
 
 const figure = (value: number, digits = 2) => new Intl.NumberFormat(currentLocale(), { maximumFractionDigits: digits }).format(value);
@@ -40,6 +43,7 @@ export function PlanManHours({ projectId, data, onChanged }: { projectId: number
     </>}
     <span><small>{t("Plan.mhPlanned")}</small>{amount(data.plannedManDays)}</span>
     {data.outsourcedManDays ? <span className="plan-manhours-outsourced"><small>{t("Plan.mhOutsourced")}</small>{amount(data.outsourcedManDays)}</span> : null}
+    {data.actualManDays ? <span className="plan-manhours-actual" title={t("Plan.mhActualHint")}><small>{t("Plan.mhActual")}</small>{amount(data.actualManDays)} <em>{figure(data.actualPeople ?? 0, 0)} {t("Plan.mhActualPeople")}</em></span> : null}
     {left !== null ? <span className={over ? "over" : undefined}><small>{t(over ? "Plan.mhOver" : "Plan.mhLeft")}</small>{amount(Math.abs(left))}</span> : null}
     {data.unplannedRows > 0 ? <span className="plan-manhours-warn" title={t("Plan.mhUnplannedHint")}><Icon name="alertTriangle" />{figure(data.unplannedRows, 0)} {t("Plan.mhUnplanned")}</span> : null}
     {data.disciplines.length > 1 ? <span className="plan-manhours-split">{data.disciplines.map((row) => <span key={row.discipline}>{t(`Plan.mhDiscipline.${row.discipline}`)} <strong>{figure(row.manDays)}</strong></span>)}<em>{t("MD")}</em></span> : null}

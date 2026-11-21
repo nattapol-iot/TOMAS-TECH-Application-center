@@ -2,7 +2,7 @@
 
 [Module](../modules/planning.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `98d130e7`; generated, do not edit. [backend-node/src/routes/resource-planning.ts](<../../../backend-node/src/routes/resource-planning.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `0bb11f4f`; generated, do not edit. [backend-node/src/routes/resource-planning.ts](<../../../backend-node/src/routes/resource-planning.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 

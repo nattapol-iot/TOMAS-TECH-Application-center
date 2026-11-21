@@ -4,7 +4,7 @@
 
 เมนู ภาษา session bootstrap และโปรไฟล์
 
-Evidence: snapshot `98d130e7`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
+Evidence: snapshot `0bb11f4f`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
 
 ## Read only the operation you change
 
