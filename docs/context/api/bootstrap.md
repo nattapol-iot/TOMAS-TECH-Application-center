@@ -8,22 +8,23 @@ Evidence: source snapshot `4875a8f0`; generated, do not edit. [backend-node/src/
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/me` | 61–61 |
-| PUT | `/api/v1/me/menu-favorites` | 63–72 |
-| GET | `/api/v1/bootstrap` | 74–172 |
+| GET | `/api/v1/me` | 62–62 |
+| PUT | `/api/v1/me/menu-favorites` | 64–73 |
+| GET | `/api/v1/bootstrap` | 75–176 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `menuFavoritesInput` | [backend-node/src/routes/bootstrap.ts](<../../../backend-node/src/routes/bootstrap.ts>) | 43–51 |
-| `registerBootstrapRoutes` | [backend-node/src/routes/bootstrap.ts](<../../../backend-node/src/routes/bootstrap.ts>) | 60–173 |
+| `menuFavoritesInput` | [backend-node/src/routes/bootstrap.ts](<../../../backend-node/src/routes/bootstrap.ts>) | 44–52 |
+| `registerBootstrapRoutes` | [backend-node/src/routes/bootstrap.ts](<../../../backend-node/src/routes/bootstrap.ts>) | 61–177 |
 
 ## Direct local dependencies
 
 - [backend-node/src/db.ts](<../../../backend-node/src/db.ts>)
 - [backend-node/src/errors.ts](<../../../backend-node/src/errors.ts>)
 - [backend-node/src/http.ts](<../../../backend-node/src/http.ts>)
+- [backend-node/src/master-data/services.ts](<../../../backend-node/src/master-data/services.ts>)
 - [backend-node/src/users.ts](<../../../backend-node/src/users.ts>)
 - [backend-node/src/routes/sales-customers.ts](<../../../backend-node/src/routes/sales-customers.ts>)
 

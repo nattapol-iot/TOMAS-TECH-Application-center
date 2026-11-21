@@ -8,7 +8,7 @@ export function activityModuleLabel(module:string,t:(text:string)=>string){
  const sub=activitySubViews[module];
  return sub?`${t(activityModuleLabels[sub.parent]!)} · ${t(sub.label)}`:t(activityModuleLabels[module]??'Workspace');
 }
-export type ActivityMember={id:number;name:string;department:string;role:string;canSignIn:boolean;startWorkDate:string|null};
+export type ActivityMember={id:number;name:string;department:string;role:string;canSignIn:boolean};
 export type ActivityRule={id:number;userId:number;projectId:number|null;sourceType:string;sourceId:number;title:string;startsOn:string;endsOn:string;stoppedOn:string|null;weekdayMask:number;cutoffMinute:number;rowVersion:string};
 export type ActivityDay={day:string;status:string;expected:number;updated:number;credit:number|null;eventIds:number[]};
 export type ActivityEvent={id:number;actorId:number;projectId:number|null;ruleId:number|null;kind:string;module:string;sourceType:string|null;sourceId:number|null;summary:string;occurredAt:string;details:Record<string,unknown>|null};

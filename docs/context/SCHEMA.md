@@ -122,5 +122,6 @@ Evidence: repository migrations at `4875a8f0`. Highest file number is not proof 
 | [114_request_numbers.sql](<../../database/migrations/114_request_numbers.sql>) | Inspect migration SQL |
 | [115_pr_line_form_fields.sql](<../../database/migrations/115_pr_line_form_fields.sql>) | Inspect migration SQL |
 | [116_pr_discipline_approvers.sql](<../../database/migrations/116_pr_discipline_approvers.sql>) | `dbo.pr_discipline_approvers` |
+| [117_holiday_sync_grants.sql](<../../database/migrations/117_holiday_sync_grants.sql>) | Inspect migration SQL |
 
 Read [backend-node/src/migration-validation.ts](<../../backend-node/src/migration-validation.ts>), [backend-node/src/startup-migrations.ts](<../../backend-node/src/startup-migrations.ts>) and [backend-node/src/migrate.ts](<../../backend-node/src/migrate.ts>) before planning a migration. Applied migration identities and environment flags matter; never rewrite an already applied migration.

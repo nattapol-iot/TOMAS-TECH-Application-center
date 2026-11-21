@@ -8,17 +8,17 @@ Evidence: source snapshot `4875a8f0`; generated, do not edit. [backend-node/src/
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/master/employees` | 169–222 |
-| POST | `/api/v1/master/employees` | 224–243 |
-| PUT | `/api/v1/master/employees/:id` | 245–275 |
-| POST | `/api/v1/master/customers` | 277–294 |
-| PUT | `/api/v1/master/customers/:id` | 296–341 |
-| POST | `/api/v1/master/suppliers` | 343–374 |
-| POST | `/api/v1/master/inventory-items` | 376–423 |
-| POST | `/api/v1/master/engineering-rates` | 425–483 |
-| POST | `/api/v1/master/suppliers/find-or-create` | 487–536 |
-| PUT | `/api/v1/master/suppliers/:id` | 538–574 |
-| DELETE | `/api/v1/master/suppliers/:id` | 576–602 |
+| GET | `/api/v1/master/employees` | 169–224 |
+| POST | `/api/v1/master/employees` | 226–245 |
+| PUT | `/api/v1/master/employees/:id` | 247–277 |
+| POST | `/api/v1/master/customers` | 279–296 |
+| PUT | `/api/v1/master/customers/:id` | 298–343 |
+| POST | `/api/v1/master/suppliers` | 345–376 |
+| POST | `/api/v1/master/inventory-items` | 378–425 |
+| POST | `/api/v1/master/engineering-rates` | 427–485 |
+| POST | `/api/v1/master/suppliers/find-or-create` | 489–538 |
+| PUT | `/api/v1/master/suppliers/:id` | 540–576 |
+| DELETE | `/api/v1/master/suppliers/:id` | 578–604 |
 
 ## Named functions
 
@@ -35,7 +35,7 @@ Evidence: source snapshot `4875a8f0`; generated, do not edit. [backend-node/src/
 | `syncEmployeeDirectoryUser` | [backend-node/src/routes/master.ts](<../../../backend-node/src/routes/master.ts>) | 126–135 |
 | `customerInput` | [backend-node/src/routes/master.ts](<../../../backend-node/src/routes/master.ts>) | 137–158 |
 | `bindCustomer` | [backend-node/src/routes/master.ts](<../../../backend-node/src/routes/master.ts>) | 160–166 |
-| `registerMasterRoutes` | [backend-node/src/routes/master.ts](<../../../backend-node/src/routes/master.ts>) | 168–603 |
+| `registerMasterRoutes` | [backend-node/src/routes/master.ts](<../../../backend-node/src/routes/master.ts>) | 168–605 |
 
 ## Direct local dependencies
 

@@ -42,6 +42,7 @@ Shared screens contain other modules: use the symbol and line range instead of r
 - [backend-node/src/tmt-id/types.ts](<../../../backend-node/src/tmt-id/types.ts>)
 - [backend-node/src/tmt-id/token-vault.ts](<../../../backend-node/src/tmt-id/token-vault.ts>)
 - [backend-node/src/erp-purchasing.ts](<../../../backend-node/src/erp-purchasing.ts>)
+- [backend-node/src/master-data/services.ts](<../../../backend-node/src/master-data/services.ts>)
 - [backend-node/src/routes/sales-customers.ts](<../../../backend-node/src/routes/sales-customers.ts>)
 - [app/system/dialogs.ts](<../../../app/system/dialogs.ts>)
 - [app/system/production/ExecutiveDashboard.tsx](<../../../app/system/production/ExecutiveDashboard.tsx>)

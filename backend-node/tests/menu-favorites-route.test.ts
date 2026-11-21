@@ -22,7 +22,7 @@ async function put(t: import("node:test").TestContext, payload: unknown) {
   } as unknown as Database;
   const app = Fastify();
   registerErrorHandler(app);
-  registerBootstrapRoutes(app, database, users);
+  registerBootstrapRoutes(app, database, users, null);
   try {
     return { response: await app.inject({ method: "PUT", url: "/api/v1/me/menu-favorites", payload: payload as object }), captured, transactions };
   } finally {

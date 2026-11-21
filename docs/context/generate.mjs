@@ -1,4 +1,4 @@
-// Rebuild navigational evidence only. No application execution, network or database access.
+﻿// Rebuild navigational evidence only. No application execution, network or database access.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -23,7 +23,7 @@ const modules = [
  ['estimate-erp','ERP Summary / Excel','จัดหมวด ERP สรุปยอด export และ import workbook','estimate-erp estimate-excel-import overhead-policies','production/EstimateScreens.tsx','erp|estimate-excel|overhead|estimate-total'],
  ['labor','Labor Package / Rate Master','เซฟและใช้ชุดค่าแรง version rate และนำกลับมาใช้','labor-packages labor-rates','production/LaborPackageMaster.tsx production/LaborPackagePicker.tsx production/AdminAnalyticsScreens.tsx','labor|engineering-rate'],
  ['templates','Module Templates','สร้าง template โมดูลและนำเข้า estimate','module-templates','production/ModuleTemplateScreens.tsx production/ModuleTemplateEditor.tsx','template-selection|module-template'],
- ['pricing','Price Library / Supplier Quotation','ราคาย้อนหลัง ใบเสนอราคา PDF parser และติดตามราคาที่ขาด','pricing supplier-quotations','production/PlanningPricingScreens.tsx','quotation|historical-pr'],
+ ['pricing','Price Library / Supplier Quotation','ราคาย้อนหลัง ใบเสนอราคา PDF parser และติดตามราคาที่ขาด','pricing supplier-quotations exchange-rates','production/PlanningPricingScreens.tsx production/ThbRateField.tsx','quotation|historical-pr'],
  ['projects','Projects / Project Documents','ทะเบียนโครงการ end user เลขโครงการค้นจาก Pegasus ERP และรับส่งเอกสารจาก inquiry/site visit','projects project-documents erp-projects','production/CoreScreens.tsx production/ErpProjectNumber.tsx','project|end-user'],
  ['planning','Schedule / Resource / My Work','แผนงาน timeline กำลังคน lifecycle งานและคำขอปรับวัน','schedule resource-planning team-board resource-tasks issue-batches schedule-templates','production/PlanningPricingScreens.tsx production/ResourcePlanningScreen.tsx production/TeamBoard.tsx production/TeamBoardGantt.tsx production/ResourceTaskWorkspace.tsx production/IssueBatchScreen.tsx production/MyIssues.tsx production/GanttChart.tsx production/ProjectPortfolioGantt.tsx','resource|drawing|schedule|issue'],
  ['procurement','BOM / PR / PO / Approvals','ขอซื้อจาก BOM อนุมัติตามงบ Module ส่ง PR เข้า Pegasus ERP และประวัติ PR','boms purchase-requisitions purchase-units historical-pr','production/MaterialScreens.tsx','material|historical-pr'],

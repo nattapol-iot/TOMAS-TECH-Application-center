@@ -685,9 +685,9 @@ const SUPPLIER_QUOTATION: Guide = {
       target: "quote.lines", action: "next", view: "quotations",
       title: { th: "รายการและราคา", en: "Lines and prices", jp: "明細と価格" },
       body: {
-        th: "ตรวจรายการ จำนวน และราคาต่อหน่วย คลังราคาได้ราคาจากรายการเหล่านี้ ถ้าเป็นเงินเยน ดอลลาร์ หรือยูโร ใส่อัตราแลกเป็นบาทด้วย",
-        en: "Check each line, quantity and unit price; the Price Library takes its prices from these lines. For JPY, USD or EUR, enter the THB rate too.",
-        jp: "明細・数量・単価を確認します。価格ライブラリはこの明細から価格を取ります。円・ドル・ユーロの場合はバーツ換算レートも入力します。",
+        th: "ตรวจรายการ จำนวน และราคาต่อหน่วย คลังราคาได้ราคาจากรายการเหล่านี้ ถ้าเป็นเงินเยน ดอลลาร์ หรือยูโร ใส่อัตราแลกเป็นบาทด้วย กด 'ใช้อัตรากลาง' เพื่อใช้อัตราของบริษัท ณ วันที่ของใบ หรือพิมพ์เองก็ได้",
+        en: "Check each line, quantity and unit price; the Price Library takes its prices from these lines. For JPY, USD or EUR, enter the THB rate too: press Use the company rate for the rate in force on the quotation's date, or type your own.",
+        jp: "明細・数量・単価を確認します。価格ライブラリはこの明細から価格を取ります。円・ドル・ユーロの場合はバーツ換算レートも入力します。「会社レートを使う」で見積日の会社レートを入れるか、自分で入力します。",
       },
     },
     {
