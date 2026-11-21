@@ -2993,6 +2993,20 @@ export const GUIDES: readonly Guide[] = [
           jp: "この一覧にはまだ報告がありません。状態バーの「すべて」を押すか、先に問題を報告してください。",
         },
       },
+      {
+        target: "support.rows", action: "next", view: "support",
+        title: { th: "จำนวนแถวต่อหน้า", en: "Rows per page", jp: "1ページあたりの行数" },
+        body: {
+          th: "ใต้ตาราง เลือกแสดง 10, 25, 50 หรือ 100 แถวต่อหน้า ระบบจำค่าที่เลือกไว้ในเครื่องนี้ เรื่องที่เหลือดูได้ด้วยปุ่มเลขหน้า",
+          en: "Under the table, show 10, 25, 50 or 100 rows a page. The choice is kept on this device; the page buttons show the rest.",
+          jp: "表の下で1ページに10・25・50・100行から選べます。選んだ値はこの端末に保存され、残りはページボタンで表示します。",
+        },
+        missing: {
+          th: "ตัวเลือกนี้จะแสดงเมื่อรายการมีเรื่องอย่างน้อยหนึ่งเรื่อง",
+          en: "This appears once the list has at least one ticket.",
+          jp: "一覧に報告が1件以上あると表示されます。",
+        },
+      },
     ],
   },
 ];

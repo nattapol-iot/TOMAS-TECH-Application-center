@@ -58,6 +58,20 @@ test("the list's summary bar filters on status groups that the API accepts and c
   assert.match(client, /statusCounts\?:Record<string,number>/);
 });
 
+test("the person picks how many rows a page shows, and both list APIs take it", async () => {
+  const [screen, ui, routes] = await Promise.all([read("app/system/production/SupportScreens.tsx"), read("app/system/ui.tsx"), read("backend-node/src/routes/support.ts")]);
+  // The remembered choice must be one the shared picker offers, or the select would show a blank value.
+  const offered = /\{\[([\d, ]+)\]\.map\(\(size\) => <option key=\{size\}/.exec(ui)?.[1];
+  assert.match(screen, new RegExp(`const ROW_CHOICES = \\[${offered}\\]`));
+  assert.match(screen, /<div data-guide="support\.rows"><TablePageSize value=\{size\} onChange=\{onSize\} \/><\/div>/);
+  assert.match(screen, /setPageSizeState\(rows\); setPage\(1\);/);
+  assert.match(screen, /pageSize: String\(pageSize\)/);
+  assert.match(screen, /support-contributions\?page=\$\{page\}&pageSize=\$\{pageSize\}/);
+  // Both endpoints clamp the size to 1..100; the contributions query no longer fixes 50 rows.
+  assert.equal((routes.match(/pageSize=clampedInteger\(query\.pageSize,50,1,100\)/g) ?? []).length, 2);
+  assert.doesNotMatch(routes, /FETCH NEXT 50 ROWS ONLY/);
+});
+
 test("the ticket page keeps one primary action and puts the rest under More actions", async () => {
   const screen = await read("app/system/production/SupportScreens.tsx");
   assert.equal((screen.match(/data-guide="support\.primary"/g) ?? []).length, 1);

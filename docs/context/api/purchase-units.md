@@ -2,7 +2,7 @@
 
 [Module](../modules/procurement.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `4e791abf`; generated, do not edit. [backend-node/src/routes/purchase-units.ts](<../../../backend-node/src/routes/purchase-units.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `5cb810fc`; generated, do not edit. [backend-node/src/routes/purchase-units.ts](<../../../backend-node/src/routes/purchase-units.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 

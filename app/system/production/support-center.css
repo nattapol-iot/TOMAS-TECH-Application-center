@@ -198,6 +198,12 @@
 .support-center .pager-btn:hover:not(:disabled) { border-color: var(--pg-input); background: var(--pg-accent); color: var(--pg-accent-fg); }
 .support-center .pager-btn.page.active { border-color: var(--pg-primary); background: var(--pg-primary); color: var(--pg-primary-fg); }
 .support-center .pager-btn:focus-visible { outline: none; box-shadow: var(--pg-focus); }
+/* Rows per page beside the page buttons (D.7), over the app's shared TablePageSize. */
+.support-center .sp-pager { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; }
+.support-center .sp-pager > .pagination { flex: 1 1 auto; min-width: 0; }
+.support-center .table-page-size { gap: 8px; padding: 4px; border: 0; color: var(--pg-muted-fg); font-size: 14px; }
+.support-center .table-page-size select { height: 32px; padding: 0 28px 0 10px; border: 1px solid var(--pg-input); border-radius: 6px; background-color: var(--pg-background); color: var(--pg-foreground); font: inherit; font-size: 14px; font-variant-numeric: tabular-nums; box-shadow: 0 1px 2px rgb(0 0 0 / 0.05); cursor: pointer; }
+.support-center .table-page-size select:focus { outline: none; box-shadow: var(--pg-focus); }
 
 /* Errors: a tinted note with an icon, never bare red text. */
 .support-center .sp-error { display: flex; align-items: flex-start; gap: 8px; padding: 8px 12px; border: 1px solid color-mix(in srgb, var(--pg-destructive) 40%, transparent); border-radius: 8px; background: var(--pg-danger-bg); color: var(--pg-red-fg); }
