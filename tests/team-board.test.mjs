@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import ts from "typescript";
+import ts from "typescript-api";
 import { TEAM_BOARD_COPY } from "../app/system/production/team-board-copy.ts";
 
 const read = (file) => readFile(new URL(`../${file}`, import.meta.url), "utf8");

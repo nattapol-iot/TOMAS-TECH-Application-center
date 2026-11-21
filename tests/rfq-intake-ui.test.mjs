@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import ts from "typescript";
+import ts from "typescript-api";
 
 const source = readFileSync(new URL("../app/system/production/InquiryScreens.tsx", import.meta.url), "utf8");
 const ast = ts.createSourceFile("InquiryScreens.tsx", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);

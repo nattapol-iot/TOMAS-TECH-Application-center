@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {readFileSync} from 'node:fs';
 import {createRequire} from 'node:module';
-import ts from 'typescript';
+import ts from 'typescript-api';
 const require=createRequire(import.meta.url);
 const today='2026-09-07';
 const member={id:7,name:'TEST member',department:'TEST team',role:'Engineer',canSignIn:true};

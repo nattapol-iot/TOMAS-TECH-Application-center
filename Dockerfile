@@ -1,7 +1,9 @@
 FROM oven/bun:1.4.5-slim AS build
+ENV BUN_INSTALL_CACHE_DIR=/bun-cache
 WORKDIR /app
 COPY package.json bun.lock ./
-RUN bun install --frozen-lockfile
+# The cache mount keeps downloaded packages between builds: a lockfile change re-links them instead of fetching all again.
+RUN --mount=type=cache,target=/bun-cache bun install --frozen-lockfile
 COPY . .
 
 # NEXT_PUBLIC_* values are compiled into the client bundle at build time (not read again

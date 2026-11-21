@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import ts from "typescript";
+import ts from "typescript-api";
 import * as master from "../lib/labor-package-master.ts";
 import { LABOR_PACKAGE_COPY } from "../app/system/production/labor-package-copy.ts";
 

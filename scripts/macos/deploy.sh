@@ -18,6 +18,9 @@ TMTHUB_HOST_DEFAULT="tmthub.tomastc.com"
 TMTHUB_PORT_DEFAULT="8446"
 TMTHUB_ADMIN_EMAIL_DEFAULT="pattanasak.c@tomastc.com"
 TMTHUB_NAS_ADDR="${TMTHUB_NAS_ADDR:-100.64.0.53}"
+# What earlier deploys learned (the NFS mount that works, the TMTHub sign-in settings applied). Beside
+# DEPLOY_DIR, not in it: the sync into DEPLOY_DIR deletes anything the checkout does not have.
+STATE_DIR="${IOT_DEPLOY_STATE_DIR:-$(dirname "$DEPLOY_DIR")/deploy-state}"
 HEALTH_TIMEOUT_SECONDS=180
 
 log() { printf '==> %s\n' "$1"; }
@@ -255,19 +258,30 @@ deploy_site_monitor_tunnel() {
       return 0
     fi
   fi
+  # Through the tunnel, the agent API must answer 401 for a missing key, and any other API must be 404.
+  tunnel_serves_agent_only() {
+    for _ in $(seq 1 "$1"); do
+      ping_status="$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$agent_url/api/v1/monitor/agent/ping" || true)"
+      [[ "$ping_status" == "401" ]] && break
+      sleep 5
+    done
+    probe_status="$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$agent_url/api/v1/monitor/sites" || true)"
+    [[ "$ping_status" == "401" && "$probe_status" == "404" ]]
+  }
   log "Starting the Site Monitor tunnel connector"
   # --no-deps: the API was just recreated above; starting cloudflared must not restart it again.
-  if ! compose --profile tunnel up -d --no-deps --force-recreate cloudflared; then
+  # Without --force-recreate a connector whose config is unchanged keeps running (recreating it cost
+  # 16 s a deploy); it reaches the API by service name, so the new API container is found anyway.
+  if ! compose --profile tunnel up -d --no-deps cloudflared; then
     echo "::warning title=Site Monitor tunnel::cloudflared did not start; customer sites cannot report."
     return 0
   fi
-  # Through the tunnel, the agent API must answer 401 for a missing key, and any other API must be 404.
-  for _ in $(seq 1 12); do
-    ping_status="$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$agent_url/api/v1/monitor/agent/ping" || true)"
-    [[ "$ping_status" == "401" ]] && break
-    sleep 5
-  done
-  probe_status="$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$agent_url/api/v1/monitor/sites" || true)"
+  if ! tunnel_serves_agent_only 2; then
+    log "The tunnel does not answer as expected; recreating cloudflared"
+    compose --profile tunnel up -d --no-deps --force-recreate cloudflared \
+      || { echo "::warning title=Site Monitor tunnel::cloudflared did not start; customer sites cannot report."; return 0; }
+    tunnel_serves_agent_only 12 || true
+  fi
   if [[ "$ping_status" == "401" && "$probe_status" == "404" ]]; then
     log "Site Monitor tunnel is up: $agent_url serves the agent API only"
   else
@@ -351,6 +365,15 @@ deploy_tmthub() {
   }
   nfs_path="$(env_value TMTHUB_NFS_PATH)"
   nfs_options="$(env_value TMTHUB_NFS_OPTIONS)"
+  # The mount the last probe found is tried first: probing v4.1 paths the NAS does not offer cost
+  # 14 s a deploy. Delete the file to probe again (for example after switching NFSv4.1 on in DSM).
+  nfs_state="$STATE_DIR/tmthub-nfs"
+  if [[ -z "$nfs_path" || -z "$nfs_options" ]] && [[ -s "$nfs_state" ]]; then
+    remembered="$(cat "$nfs_state")"
+    if nfs_try "${remembered%%|*}" "${remembered#*|}"; then
+      nfs_path="${remembered%%|*}"; nfs_options="${remembered#*|}"
+    fi
+  fi
   if [[ -z "$nfs_path" || -z "$nfs_options" ]]; then
     nfs_share="${TMTHUB_NFS_SHARE:-/volume1/IoT Department}"
     nfs_sub="IoT Team Center/TMTHub"
@@ -375,6 +398,7 @@ deploy_tmthub() {
     # NFSv4 switched off (DSM: File Services > NFS > Maximum NFS protocol). v3 works the same here;
     # the probe picks v4.1 by itself once it is switched on.
     [[ "$nfs_options" == "$v4" ]] || log "NFSv4.1 is not offered by the NAS; using NFSv3 (enable NFSv4.1 in DSM to switch, docs/TMTHUB.md)"
+    mkdir -p "$STATE_DIR" && printf '%s|%s\n' "$nfs_path" "$nfs_options" > "$nfs_state"
   fi
   export TMTHUB_NFS_PATH="$nfs_path" TMTHUB_NFS_OPTIONS="$nfs_options"
   log "Starting TMTHub with its repositories on the NAS (NFS $nfs_path, ${nfs_options#rw,})"
@@ -401,7 +425,7 @@ deploy_tmthub() {
   # Sign-in through TMT ID with TMTHub's own Keycloak client (realm internal, client "tmthub",
   # redirect URI https://$TMTHUB_HOST:$TMTHUB_PORT/user/oauth2/TMT-ID/callback). The secret comes
   # from the GitHub Actions secret TMTHUB_OIDC_CLIENT_SECRET (deploy.yml) or from .env, and travels
-  # on stdin, never in a process argument. Updated on every deploy, so rotating it is one change.
+  # on stdin, never in a process argument. Applied again whenever it changes, so rotating it is one change.
   OIDC_ISSUER_VALUE="$(env_value OIDC_ISSUER)"; OIDC_ISSUER_VALUE="${OIDC_ISSUER_VALUE%/}"
   OIDC_CLIENT_ID_VALUE="${TMTHUB_OIDC_CLIENT_ID:-$(env_value TMTHUB_OIDC_CLIENT_ID)}"
   OIDC_CLIENT_ID_VALUE="${OIDC_CLIENT_ID_VALUE:-tmthub}"
@@ -416,9 +440,18 @@ deploy_tmthub() {
   # (company accounts) can sign in, and its tokens all carry iss = the realm URL, so the issuer is
   # used as the group claim. No removal: memberships an owner adds by hand stay.
   team_map="{\"$OIDC_ISSUER_VALUE\":{\"$TMTHUB_ORG\":[\"$members_team\"]}}"
-  log "Configuring TMTHub sign-in through TMT ID, client $OIDC_CLIENT_ID_VALUE ($auth_verb)"
-  printf '%s\n' "$oidc_secret" | tcompose exec -T -u git -e TEAM_MAP="$team_map" tmthub sh -c \
-    "IFS= read -r secret; forgejo admin auth $auth_verb --name TMT-ID --provider openidConnect --key '$OIDC_CLIENT_ID_VALUE' --secret \"\$secret\" --auto-discover-url '$OIDC_ISSUER_VALUE/.well-known/openid-configuration' --skip-local-2fa --group-claim-name iss --group-team-map \"\$TEAM_MAP\"" >/dev/null
+  # The settings live in TMTHub's database, so they are applied again only when they change. A hash
+  # stands in for them; the secret itself is never written to disk.
+  oauth_state="$STATE_DIR/tmthub-oauth"
+  oauth_fingerprint="$(printf '%s\n' "$OIDC_CLIENT_ID_VALUE" "$OIDC_ISSUER_VALUE" "$oidc_secret" "$team_map" | shasum -a 256 | cut -d' ' -f1)"
+  if [[ -n "$auth_id" && -s "$oauth_state" && "$(cat "$oauth_state")" == "$oauth_fingerprint" ]]; then
+    log "TMTHub sign-in through TMT ID is unchanged (client $OIDC_CLIENT_ID_VALUE)"
+  else
+    log "Configuring TMTHub sign-in through TMT ID, client $OIDC_CLIENT_ID_VALUE ($auth_verb)"
+    printf '%s\n' "$oidc_secret" | tcompose exec -T -u git -e TEAM_MAP="$team_map" tmthub sh -c \
+      "IFS= read -r secret; forgejo admin auth $auth_verb --name TMT-ID --provider openidConnect --key '$OIDC_CLIENT_ID_VALUE' --secret \"\$secret\" --auto-discover-url '$OIDC_ISSUER_VALUE/.well-known/openid-configuration' --skip-local-2fa --group-claim-name iss --group-team-map \"\$TEAM_MAP\"" >/dev/null
+    mkdir -p "$STATE_DIR" && printf '%s\n' "$oauth_fingerprint" > "$oauth_state"
+  fi
   unset oidc_secret
 
   # The administrator exists before first sign-in; TMT ID then links to it by email.

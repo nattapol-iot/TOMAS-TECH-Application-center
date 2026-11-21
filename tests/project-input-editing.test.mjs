@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import test from "node:test";
-import ts from "typescript";
+import ts from "typescript-api";
 import { progressForStatus } from "../backend-node/src/project-lifecycle.ts";
 
 const require = createRequire(import.meta.url);

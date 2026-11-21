@@ -1,10 +1,12 @@
 FROM oven/bun:1.4.5-slim AS build
+ENV BUN_INSTALL_CACHE_DIR=/bun-cache
 WORKDIR /app
 # Copy only backend-node sources (build context is the repo root; see docker-compose)
 COPY backend-node/package.json backend-node/bun.lock ./
-RUN bun install --frozen-lockfile
+RUN --mount=type=cache,target=/bun-cache bun install --frozen-lockfile
 COPY backend-node/ .
-RUN bun run build && rm -rf node_modules && bun install --frozen-lockfile --production
+RUN --mount=type=cache,target=/bun-cache bun run build && rm -rf node_modules \
+    && bun install --frozen-lockfile --production
 
 FROM oven/bun:1.4.5-slim
 WORKDIR /app

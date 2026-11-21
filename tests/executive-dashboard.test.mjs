@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {readFile} from 'node:fs/promises';
-import ts from 'typescript';
+import ts from 'typescript-api';
 const compile=source=>'data:text/javascript;base64,'+Buffer.from(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText).toString('base64');
 const modelUrl=compile(await readFile(new URL('../backend-node/src/executive-dashboard-model.ts',import.meta.url),'utf8'));
 const {overdueTask,projectHealth}=await import(modelUrl);

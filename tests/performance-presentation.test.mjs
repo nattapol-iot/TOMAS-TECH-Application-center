@@ -3,7 +3,7 @@ import test from 'node:test';
 import {readFileSync, existsSync} from 'node:fs';
 import {resolve,dirname} from 'node:path';
 import {createRequire} from 'node:module';
-import ts from 'typescript';
+import ts from 'typescript-api';
 const require=createRequire(import.meta.url);
 function loadPure(file){const mod={exports:{}};new Function('require','module','exports',ts.transpileModule(readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)(require,mod,mod.exports);return mod.exports;}
 const presentation=loadPure('app/system/production/performance-presentation.ts');
