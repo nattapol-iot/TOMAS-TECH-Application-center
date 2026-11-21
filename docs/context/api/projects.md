@@ -2,34 +2,34 @@
 
 [Module](../modules/projects.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `2bf09b7a`; generated, do not edit. [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `458c6a00`; generated, do not edit. [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/projects/creation-options` | 56–88 |
-| GET | `/api/v1/projects/handover/:inquiryId` | 90–113 |
-| GET | `/api/v1/projects/contact-options` | 115–125 |
-| GET | `/api/v1/projects` | 127–154 |
-| GET | `/api/v1/projects/attention` | 192–210 |
-| GET | `/api/v1/projects/overview` | 214–264 |
-| GET | `/api/v1/projects/cost-overview` | 282–298 |
-| GET | `/api/v1/projects/:id/cost` | 303–345 |
-| POST | `/api/v1/projects` | 347–517 |
-| GET | `/api/v1/projects/:id/members` | 519–544 |
-| POST | `/api/v1/projects/:id/members` | 546–569 |
-| DELETE | `/api/v1/projects/:id/members/:userId` | 571–592 |
-| GET | `/api/v1/projects/:id/deletion` | 610–618 |
-| DELETE | `/api/v1/projects/:id` | 620–655 |
-| PUT | `/api/v1/projects/:id` | 657–793 |
+| GET | `/api/v1/projects/creation-options` | 55–87 |
+| GET | `/api/v1/projects/handover/:inquiryId` | 89–112 |
+| GET | `/api/v1/projects/contact-options` | 114–124 |
+| GET | `/api/v1/projects` | 126–153 |
+| GET | `/api/v1/projects/attention` | 191–209 |
+| GET | `/api/v1/projects/overview` | 213–263 |
+| GET | `/api/v1/projects/cost-overview` | 277–293 |
+| GET | `/api/v1/projects/:id/cost` | 298–340 |
+| POST | `/api/v1/projects` | 342–512 |
+| GET | `/api/v1/projects/:id/members` | 514–539 |
+| POST | `/api/v1/projects/:id/members` | 541–564 |
+| DELETE | `/api/v1/projects/:id/members/:userId` | 566–587 |
+| GET | `/api/v1/projects/:id/deletion` | 605–613 |
+| DELETE | `/api/v1/projects/:id` | 615–650 |
+| PUT | `/api/v1/projects/:id` | 652–788 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `shiftDate` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 47–52 |
-| `registerProjectRoutes` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 54–794 |
+| `shiftDate` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 46–51 |
+| `registerProjectRoutes` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 53–789 |
 
 ## Direct local dependencies
 
@@ -47,7 +47,6 @@ Evidence: source snapshot `2bf09b7a`; generated, do not edit. [backend-node/src/
 - [backend-node/src/project-initial-plan.ts](<../../../backend-node/src/project-initial-plan.ts>)
 - [backend-node/src/project-health.ts](<../../../backend-node/src/project-health.ts>)
 - [backend-node/src/project-overview.ts](<../../../backend-node/src/project-overview.ts>)
-- [backend-node/src/engineering-rate-access.ts](<../../../backend-node/src/engineering-rate-access.ts>)
 - [backend-node/src/manhour-budget.ts](<../../../backend-node/src/manhour-budget.ts>)
 - [backend-node/src/project-cost.ts](<../../../backend-node/src/project-cost.ts>)
 - [backend-node/src/project-cost-model.ts](<../../../backend-node/src/project-cost-model.ts>)
