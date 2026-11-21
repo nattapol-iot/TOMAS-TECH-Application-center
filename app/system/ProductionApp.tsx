@@ -55,6 +55,7 @@ import { SupportCenter, SupportCreateDialog } from "./production/SupportScreens"
 import { EmployeeManualScreen, employeeManualLabel } from "./production/EmployeeManualScreen";
 import { supportLabel } from "./support-copy";
 import { EstimateLookScope } from "./production/EstimateLook";
+import { SalesLookScope } from "./production/SalesLook";
 // Screens off the landing path load on first visit; LazyScreens.tsx says which stay eager and why.
 import {
   LaborPackageMaster,
@@ -998,8 +999,8 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
             else { (await setView(destination)); window.scrollTo({ top: 0 }); }
           }} /> : personalDashboard : null}
           {view === "my-work" ? <><div className="my-work-related-links"><button className="btn default" type="button" onClick={async ()=>(await setView("activity"))}><Icon name="chart"/>{t("Team Activity")}</button>{bootstrap.permissions.includes("visit.read") ? <button className="btn default" type="button" onClick={async () => (await setView("my-assignments"))}><Icon name="truck" />{t("งานเข้าหน้างานของฉัน")}</button> : null}</div><ProductionMyWork {...moduleProps} openCrmOpportunity={openCrmOpportunity} newAssignmentCount={taskAcknowledgmentCount} onNewAssignmentChanged={() => setTaskInboxRevision(value => value + 1)} /></> : null}
-          {view.startsWith("crm-") && bootstrap.permissions.includes("crm.read") ? <CrmScreen refreshBootstrap={refreshBootstrap} notify={setToast} key={view} bootstrap={bootstrap} view={view as CrmView} onViewChange={setView} preferredOpportunityId={crmOpportunityId} openInquiry={openInquiry} openEstimate={openEstimate} openProject={openProjectSchedule} /> : null}
-          {view === "inquiries" ? <ProductionInquiries key={preferredInquiryId ?? (startInquiryCreate ? "create" : "list")} {...common} openProject={openProjectSchedule} openOpportunity={openCrmOpportunity} openEstimate={openEstimate} openVisit={openSiteVisit} startWithCreate={startInquiryCreate} preferredInquiryId={preferredInquiryId} onSelectInquiry={(id) => { setStartInquiryCreate(false); setPreferredInquiryId(id); }} /> : null}
+          {view.startsWith("crm-") && bootstrap.permissions.includes("crm.read") ? <SalesLookScope userId={bootstrap.user.id}><CrmScreen refreshBootstrap={refreshBootstrap} notify={setToast} key={view} bootstrap={bootstrap} view={view as CrmView} onViewChange={setView} preferredOpportunityId={crmOpportunityId} openInquiry={openInquiry} openEstimate={openEstimate} openProject={openProjectSchedule} /></SalesLookScope> : null}
+          {view === "inquiries" ? <SalesLookScope userId={bootstrap.user.id}><ProductionInquiries key={preferredInquiryId ?? (startInquiryCreate ? "create" : "list")} {...common} openProject={openProjectSchedule} openOpportunity={openCrmOpportunity} openEstimate={openEstimate} openVisit={openSiteVisit} startWithCreate={startInquiryCreate} preferredInquiryId={preferredInquiryId} onSelectInquiry={(id) => { setStartInquiryCreate(false); setPreferredInquiryId(id); }} /></SalesLookScope> : null}
           {view === "estimates" ? <EstimateLookScope userId={bootstrap.user.id}><ProductionEstimates key={preferredEstimateId ?? "estimate-list"} {...common} initialEstimateId={preferredEstimateId} onSelectEstimate={setPreferredEstimateId} /></EstimateLookScope> : null}
           {view === "projects" ? <>
             {/* Plan and Punchlist read the schedule; without schedule.read only the Overview is offered. */}
@@ -1014,9 +1015,9 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
           {view === "site-monitor" ? <SiteMonitorScreen bootstrap={bootstrap} notify={setToast} /> : null}
           {view === "installed-base" ? <InstalledBaseScreen canManage={bootstrap.permissions.includes("asset.manage")} canSeeCredentials={bootstrap.permissions.includes("credential.read")} notify={setToast} /> : null}
           {view === "sales-intake" ? <ProductionSalesIntake {...common} openVisit={openSiteVisit} openInquiry={openInquiry} startInquiry={startInquiry} /> : null}
-          {view === "site-visits" ? <ProductionSiteVisits key={preferredSiteVisitId ?? "site-visit-list"} {...common} initialVisitId={preferredSiteVisitId} openInquiry={openInquiry} startInquiry={startInquiry} /> : null}
-          {view === "my-assignments" ? <ProductionMyAssignments {...common} /> : null}
-          {view === "visit-master" ? <ProductionVisitMasterData {...common} /> : null}
+          {view === "site-visits" ? <SalesLookScope userId={bootstrap.user.id}><ProductionSiteVisits key={preferredSiteVisitId ?? "site-visit-list"} {...common} initialVisitId={preferredSiteVisitId} openInquiry={openInquiry} startInquiry={startInquiry} /></SalesLookScope> : null}
+          {view === "my-assignments" ? <SalesLookScope userId={bootstrap.user.id}><ProductionMyAssignments {...common} /></SalesLookScope> : null}
+          {view === "visit-master" ? <SalesLookScope userId={bootstrap.user.id}><ProductionVisitMasterData {...common} /></SalesLookScope> : null}
           {view === "price" ? <EstimateLookScope userId={bootstrap.user.id}><ProductionPriceLibrary {...moduleProps} /></EstimateLookScope> : null}
           {view === "quotations" ? <EstimateLookScope userId={bootstrap.user.id}><ProductionSupplierQuotations {...moduleProps} /></EstimateLookScope> : null}
           {view === "missing" ? <EstimateLookScope userId={bootstrap.user.id}><ProductionWaitingSupplierPrice {...moduleProps} /></EstimateLookScope> : null}
@@ -1041,7 +1042,8 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
           {view === "stamps" ? <ProductionCompanyStamps bootstrap={bootstrap} notify={setToast} /> : null}
           {view === "signature" ? <ProductionMySignature bootstrap={bootstrap} notify={setToast} /> : null}
           {view === "profile" ? <ProductionProfile bootstrap={bootstrap} language={language} onLanguageChange={setLanguage} onOpenMyWork={async () => (await setView("my-work"))} onOpenSignature={async () => (await setView("signature"))} /> : null}
-          {(["master", "customers", "suppliers", "employees", "material-master", "user-accounts"] as View[]).includes(view) ? <ProductionMasterData key={view} {...common} destination={view === "suppliers" ? "suppliers" : view === "employees" ? "employees" : view === "material-master" ? "inventory" : view === "user-accounts" ? "team" : "customers"} onOpenInquiries={bootstrap.permissions.includes("inquiry.read") ? async () => (await setView("inquiries")) : undefined} /> : null}
+          {view === "customers" ? <SalesLookScope userId={bootstrap.user.id}><ProductionMasterData key={view} {...common} destination="customers" onOpenInquiries={bootstrap.permissions.includes("inquiry.read") ? async () => (await setView("inquiries")) : undefined} /></SalesLookScope> : null}
+          {(["master", "suppliers", "employees", "material-master", "user-accounts"] as View[]).includes(view) ? <ProductionMasterData key={view} {...common} destination={view === "suppliers" ? "suppliers" : view === "employees" ? "employees" : view === "material-master" ? "inventory" : view === "user-accounts" ? "team" : "customers"} onOpenInquiries={bootstrap.permissions.includes("inquiry.read") ? async () => (await setView("inquiries")) : undefined} /> : null}
           {view === "reports" ? <ReportScreens {...common} onDirtyChange={onReportDirtyChange} onOpenAnalytics={async () => (await setView("summary-reports"))} /> : null}
           {view === "summary-reports" ? <ProductionReports {...moduleProps} onBack={async () => { await setView("reports"); }} /> : null}
           {view === "activity" && bootstrap.permissions.includes("activity.read") ? <TeamActivityScreen openSource={async (type,id,projectId)=>{if(projectId)openProjectSchedule(projectId);else if(type==="Inquiry")openInquiry(id);else (await setView("my-work"));}}/> : null}
