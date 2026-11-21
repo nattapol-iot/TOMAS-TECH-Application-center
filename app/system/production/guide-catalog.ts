@@ -531,9 +531,9 @@ const ESTIMATE_APPROVE: Guide = {
       target: "estimate.erp", action: "next", view: "estimates",
       title: { th: "Cost Sheet ใน ERP", en: "The Cost Sheet in the ERP", jp: "ERPのCost Sheet" },
       body: {
-        th: "แถบ Pegasus ERP แสดงเลข Cost Sheet ถ้าส่งไม่สำเร็จจะบอกเหตุผล และมีปุ่ม 'ส่งเข้า ERP' 'ส่งใหม่' ใช้หลังลบ Cost Sheet ใน ERP แล้วเท่านั้น",
-        en: "The Pegasus ERP strip shows the Cost Sheet number. When a send fails it says why and offers Send to the ERP; Send again is only for after the Cost Sheet was deleted in the ERP.",
-        jp: "Pegasus ERPの帯にCost Sheet番号が表示されます。送信に失敗すると理由と「ERPへ送信」が出ます。「再送信」はERPでCost Sheetを削除した後だけ使います。",
+        th: "แถบ Pegasus ERP แสดงเลข Cost Sheet และ revision ที่ส่งไป แต่ละ revision ที่อนุมัติเป็น Cost Sheet ใบใหม่ ใบของ revision ก่อนยังอยู่ใน ERP และแสดงต่อท้ายแถบนี้ ถ้าส่งไม่สำเร็จจะบอกเหตุผล และมีปุ่ม 'ส่งเข้า ERP' 'ส่งใหม่' ใช้หลังลบ Cost Sheet ใน ERP แล้วเท่านั้น",
+        en: "The Pegasus ERP strip shows the Cost Sheet number and the revision sent. Each approved revision becomes a new Cost Sheet; the earlier revisions' sheets stay in the ERP and are listed on this strip. When a send fails it says why and offers Send to the ERP; Send again is only for after the Cost Sheet was deleted in the ERP.",
+        jp: "Pegasus ERPの帯にCost Sheet番号と送信した改訂が表示されます。承認した改訂ごとに新しいCost Sheetになり、以前の改訂のシートはERPに残ってこの帯に並びます。送信に失敗すると理由と「ERPへ送信」が出ます。「再送信」はERPでCost Sheetを削除した後だけ使います。",
       },
     },
     {

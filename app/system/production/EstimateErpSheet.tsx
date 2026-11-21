@@ -623,12 +623,15 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify, onDirtyCha
   </section>;
 
   /* The Cost Sheet in the Pegasus ERP. Approval sends it with the approver's sign-in; this strip says where it stands and
-     offers the send again when that failed, or when a later revision has been approved. */
+     offers the send again when that failed, or when a later revision has been approved. Each approved revision is its own
+     Cost Sheet (owner 2026-11-21): R02 opens a new sheet and the ERP keeps R01's. */
   const erpLink = summary?.erp?.link ?? null;
   const approved = workspace.header.status === "Approved" || workspace.header.status === "Locked";
   const erpSentRevision = erpLink?.revision ?? null;
   const erpNeedsSend = approved && (erpSentRevision === null || erpSentRevision < workspace.header.revision);
   const erpProblem = erpError || (erpNeedsSend ? erpLink?.error ?? "" : "");
+  const earlierSheets = (summary?.erp?.sheets ?? []).filter((sheet) => sheet.revision !== erpSentRevision && sheet.costSheetNo);
+  const newSheet = erpSentRevision !== null && erpSentRevision < workspace.header.revision;
   const erpStatusLabel = (status: string | null) => status === "CONFIRMED" ? copy("อนุมัติแล้วใน ERP", "Confirmed in the ERP", "ERPで確定済み")
     : status === "LINKED" ? copy("ผูกกับใบเสนอราคาแล้ว", "Linked to a sales quotation", "見積書に紐付け済み") : status ?? "";
   const revisionLabel = (revision: number) => `R${String(revision).padStart(2, "0")}`;
@@ -659,11 +662,18 @@ export function EstimateErpSheetPanel({ workspace, onChanged, notify, onDirtyCha
       Cost Sheet <strong className="mono">{erpLink.costSheetNo ?? "—"}</strong> · {revisionLabel(erpSentRevision)}{erpLink.status ? ` · ${erpStatusLabel(erpLink.status)}` : ""}
       {erpLink.url ? <a className="link-btn" href={erpLink.url} target="_blank" rel="noopener noreferrer"><Icon name="externalLink" />{copy("เปิดใน ERP", "Open in the ERP", "ERPで開く")}</a> : null}
     </span> : null}
+    {earlierSheets.length ? <span className="est-ready-item" data-guide="estimate.erpEarlier">{copy("ใบของ revision ก่อน", "Earlier revisions", "以前の改訂")}:
+      {earlierSheets.map((sheet) => <span key={sheet.revision}> {sheet.url
+        ? <a className="link-btn" href={sheet.url} target="_blank" rel="noopener noreferrer"><span className="mono">{sheet.costSheetNo}</span> ({revisionLabel(sheet.revision)})</a>
+        : <><span className="mono">{sheet.costSheetNo}</span> ({revisionLabel(sheet.revision)})</>}</span>)}
+    </span> : null}
     {erpNeedsSend ? <span className={erpProblem ? "est-ready-item err" : "est-ready-item warn"}><span className="est-ready-icon"><Icon name={erpProblem ? "x" : "clock"} /></span>
-      {copy(`${revisionLabel(workspace.header.revision)} ยังไม่ได้ส่งเข้า ERP`, `${revisionLabel(workspace.header.revision)} is not in the ERP yet`, `${revisionLabel(workspace.header.revision)} はERP未送信`)}</span>
+      {newSheet
+        ? copy(`${revisionLabel(workspace.header.revision)} ยังไม่ได้ส่งเข้า ERP · จะเป็น Cost Sheet ใบใหม่`, `${revisionLabel(workspace.header.revision)} is not in the ERP yet · it becomes a new Cost Sheet`, `${revisionLabel(workspace.header.revision)} はERP未送信 · 新しいCost Sheetになります`)
+        : copy(`${revisionLabel(workspace.header.revision)} ยังไม่ได้ส่งเข้า ERP`, `${revisionLabel(workspace.header.revision)} is not in the ERP yet`, `${revisionLabel(workspace.header.revision)} はERP未送信`)}</span>
       : !approved ? <span className="est-ready-item"><span className="est-ready-icon"><Icon name="clock" /></span>
-        {erpSentRevision !== null && erpSentRevision < workspace.header.revision
-          ? copy(`ส่ง ${revisionLabel(workspace.header.revision)} เข้า ERP เมื่ออนุมัติ`, `${revisionLabel(workspace.header.revision)} goes to the ERP when it is approved`, `${revisionLabel(workspace.header.revision)} は承認時にERPへ送信`)
+        {newSheet
+          ? copy(`${revisionLabel(workspace.header.revision)} เข้า ERP เป็น Cost Sheet ใบใหม่เมื่ออนุมัติ`, `${revisionLabel(workspace.header.revision)} goes to the ERP as a new Cost Sheet when it is approved`, `${revisionLabel(workspace.header.revision)} は承認時に新しいCost SheetとしてERPへ送信`)
           : copy("ส่งเข้า ERP อัตโนมัติเมื่อ Estimate อนุมัติ", "Sent to the ERP when the estimate is approved", "見積承認時にERPへ自動送信")}</span> : null}
     {erpProblem ? <span className="est-ready-item err" title={erpProblem}>{erpProblem}</span> : null}
     <span className="spacer" />

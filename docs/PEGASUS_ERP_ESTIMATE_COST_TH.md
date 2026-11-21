@@ -2,7 +2,7 @@
 
 ถึง: ทีม Pegasus ERP · จาก: ทีม Engineering Center (IoT Team application) · วันที่ 2026-10-28
 อ้างอิง: `PURCHASE-REQUEST-MCP-TH.md` ข้อ 8.1 และ 8.4 ที่ระบุว่า "ส่ง cost estimate" ยังไม่มี tool และทีม ERP วางแผนทำไว้แล้ว
-สถานะ (2026-11-02): ทีม ERP ทำ `cost_estimate_submit` และ `cost_estimate_get` แล้ว ฝั่งเราเชื่อมแล้ว ดูคำตอบและสิ่งที่ทำแล้วท้ายเอกสาร
+สถานะ (2026-11-21): ทีม ERP ทำ `cost_estimate_submit` และ `cost_estimate_get` แล้ว ฝั่งเราเชื่อมแล้ว ตั้งแต่ 2026-11-21 **แต่ละ revision ที่อนุมัติเป็น Cost Sheet ใบใหม่** ดูหัวข้อ "เปลี่ยนเป็นหนึ่ง Cost Sheet ต่อ revision" ท้ายเอกสาร
 
 AI agent ของทีม ERP อ่านไฟล์นี้ได้ทั้งไฟล์ การเรียก MCP (endpoint, token, JSON-RPC, การ map error) ใช้แบบเดียวกับการส่ง PR ใน `PEGASUS_ERP_PR_INTEGRATION_TH.md`
 
@@ -23,7 +23,7 @@ AI agent ของทีม ERP อ่านไฟล์นี้ได้ทั
    - ผู้อนุมัติกำลังใช้งานอยู่ตอนกด token จึงยังใช้ได้ ไม่ติดปัญหา refresh token หมดอายุแบบการส่ง PR อัตโนมัติ
    - ส่งอีเมลของเจ้าของ Estimate ไปในฟิลด์ `prepared_by_email`
 4. ถ้าส่งไม่สำเร็จ Estimate ยังอนุมัติอยู่ แอปแสดง error และปุ่ม "ส่งเข้า ERP" ให้กดส่งใหม่ ไม่ retry อัตโนมัติ
-5. เมื่อแก้ Estimate จะออก revision ใหม่ (R01, R02, …) พออนุมัติ revision ใหม่ จะส่งอีกครั้งด้วย `external_ref` เดิมและเลข `revision` ใหม่
+5. เมื่อแก้ Estimate จะออก revision ใหม่ (R01, R02, …) พออนุมัติ revision ใหม่ จะส่งด้วย `external_ref` ใหม่ของ revision นั้น ERP จึงเปิด Cost Sheet ใบใหม่ และใบของ revision ก่อนยังอยู่ (เปลี่ยนเมื่อ 2026-11-21 เดิมใช้ `external_ref` เดิมและ ERP เขียนทับใบเดิม)
 
 ## ข้อมูลที่เสนอให้ส่ง
 
@@ -33,12 +33,12 @@ AI agent ของทีม ERP อ่านไฟล์นี้ได้ทั
 
 | ฟิลด์ | ค่า |
 |---|---|
-| `external_ref` | `ENGAPP-EST-<UUID v4>` ออกครั้งเดียวต่อ Estimate ใช้ค่าเดิมทุก revision และทุกครั้งที่ลองส่งซ้ำ |
+| `external_ref` | `ENGAPP-EST-<UUID v4>` หนึ่งค่าต่อ revision ที่อนุมัติ ใช้ค่าเดิมทุกครั้งที่ลองส่ง revision นั้นซ้ำ (ตั้งแต่ 2026-11-21 เดิมหนึ่งค่าต่อ Estimate) |
 | `revision` | เลข revision (R00 = 0) |
 | `estimate_no` | เช่น `EST-2610-0023` |
 | `project_no` | เลขโครงการ ถ้ายังเป็นตัวยึด `PJ000000` จะไม่ส่งฟิลด์นี้ |
 | `project_name`, `customer`, `short_name` | ชื่อโครงการ ลูกค้า ชื่อย่อ |
-| `revision_description` | เหตุผลของ revision |
+| `revision_description` | เหตุผลของ revision ถ้ามีใบของ revision ก่อน ต่อท้ายด้วย `Supersedes CS-… (R01)` |
 | `prepared_by_email` | อีเมลเจ้าของ Estimate |
 | `approved_at` | เวลาที่อนุมัติ (ISO 8601) |
 | `currency` | `THB` |
@@ -71,7 +71,7 @@ AI agent ของทีม ERP อ่านไฟล์นี้ได้ทั
 |---|---|---|
 | 1. Tool และ schema | `cost_estimate_submit` สำหรับส่ง `cost_estimate_get` สำหรับอ่านผล schema คงที่ ชื่อฟิลด์ตรงกับที่เสนอทุกตัว | ใช้ทั้งสอง tool |
 | 2. การผูก | บังคับ `external_ref`, `revision`, `estimate_no`, `currency`, `summary`, `total`, `lines` ส่วน `project_no` ไม่บังคับ ถ้ามีโครงการใน ERP จะผูกให้ ถ้ายังไม่มีก็รับไว้แล้วผูกทีหลังได้ `customer` ผูกเมื่อชื่อตรงกับลูกค้าใน ERP ทุกตัวอักษรโดยไม่สนตัวพิมพ์ | ไม่ส่ง `project_no` ถ้ายังเป็น `PJ000000` |
-| 3. Revision ใหม่ | ใช้ Cost Sheet ใบเดิม บรรทัดถูกแทนด้วยของ revision ใหม่ ERP เก็บเฉพาะ revision ล่าสุด revision เท่าเดิมได้ `unchanged` revision ต่ำกว่าได้ `errors.revision` ใบที่ LINKED แล้วยังรับ revision ใหม่ได้ ใบที่ถูกลบใน ERP ได้ `errors.external_ref` | `external_ref` เดียวต่อ Estimate ทุก revision ไม่ส่งซ้ำถ้า ERP มี revision นั้นแล้ว |
+| 3. Revision ใหม่ | ใช้ Cost Sheet ใบเดิม บรรทัดถูกแทนด้วยของ revision ใหม่ ERP เก็บเฉพาะ revision ล่าสุด revision เท่าเดิมได้ `unchanged` revision ต่ำกว่าได้ `errors.revision` ใบที่ LINKED แล้วยังรับ revision ใหม่ได้ ใบที่ถูกลบใน ERP ได้ `errors.external_ref` | ถึง 2026-11-20 ใช้ `external_ref` เดียวต่อ Estimate ตั้งแต่ 2026-11-21 ใช้ `external_ref` ใหม่ต่อ revision จึงได้ Cost Sheet ใบใหม่ทุก revision ไม่ส่งซ้ำถ้า ERP มี revision นั้นแล้ว |
 | 4. สิทธิ์ | ส่งต้องมีสิทธิ์แก้ Cost Sheet ใน ERP อ่านต้องมีสิทธิ์เปิดดู ถ้า `tools/list` ไม่มี `cost_estimate_submit` แปลว่าไม่มีสิทธิ์ | ถ้าผู้อนุมัติไม่มีสิทธิ์ ข้อความ error จะบอก และคนที่มีสิทธิ์กดส่งใหม่ได้ |
 | 5. ไฟล์แนบ | ไม่บังคับ `source_file = {name, content_base64}` รับ .xlsx/.xls ไม่เกิน 10 MB | ยังไม่แนบ ส่ง JSON อย่างเดียว |
 | 6. หมวด | ใช้ 7 หมวดเดียวกัน `summary[].amount` ต้องเท่ากับผลรวม `lines[].amount` ของหมวดนั้น `total` ต้องเท่ากับผลรวมบรรทัดบวก `overhead_amount` คลาดได้ไม่เกิน 0.01 | ปัดยอดแต่ละบรรทัดเป็นสตางค์ก่อน แล้วรวม summary และ total จากยอดที่ส่งจริง |
@@ -89,13 +89,31 @@ Error ของสอง tool นี้ไม่มีฟิลด์ `code` ถ
   - หน้าเว็บสร้างแถวด้วยโค้ดเดียวกับที่วาดหน้าสรุปและ export ไฟล์ แล้วส่งมากับคำขออนุมัติหรือปุ่มส่ง
   - server ตรวจทุกแถวและตรวจว่ายอดแต่ละหมวดตรงกับยอดที่ server คำนวณเองก่อนส่ง
   - ส่งครั้งแรกเมื่อ 2026-11-02 ได้ CS-202611-0001 ยอดตรงกัน แต่ส่งรายการต้นทุนย่อยทุกบรรทัด จึงแก้ให้ส่งเฉพาะแถวสรุป
-- **ส่งใหม่:** ERP เก็บ revision เดียวต่อ Cost Sheet และตอบ `unchanged` ถ้าส่ง revision เดิมซ้ำ ถ้าต้องการแทนที่รายการ ให้ลบ Cost Sheet ใน ERP ก่อน แล้วกด "ส่งใหม่" เมื่อ ERP ตอบ `errors.external_ref` กับใบที่เคยส่งแล้ว ระบบจะออก `external_ref` ใหม่และส่งเป็น Cost Sheet ใบใหม่
-- **ที่เก็บ:** `dbo.estimate_erp_links` (migration 093) เก็บ `external_ref` เลข Cost Sheet สถานะ revision ล่าสุดที่ ERP รับ ยอดรวม และ error ล่าสุด ตารางแยกจาก `dbo.estimates` เพื่อไม่ให้ row version ของ Estimate เปลี่ยน
+- **ส่งใหม่:** ERP ตอบ `unchanged` ถ้าส่ง revision เดิมซ้ำ ถ้าต้องการแทนที่รายการของ revision นั้น ให้ลบ Cost Sheet ใบนั้นใน ERP ก่อน แล้วกด "ส่งใหม่" เมื่อ ERP ตอบ `errors.external_ref` กับใบที่เคยส่งแล้ว ระบบจะออก `external_ref` ใหม่ให้ revision นั้นและส่งเป็น Cost Sheet ใบใหม่
+- **ที่เก็บ:** `dbo.estimate_erp_links` (migration 093, หนึ่งแถวต่อ Estimate และ revision ตั้งแต่ migration 119) เก็บ `external_ref` เลข Cost Sheet สถานะ revision ที่ส่ง ยอดรวม และ error ล่าสุด ตารางแยกจาก `dbo.estimates` เพื่อไม่ให้ row version ของ Estimate เปลี่ยน
 
 ## ยังต้องยืนยันกับทีม ERP
 
 1. **ชื่อฟิลด์ในคำตอบ:** ฝั่งเราอ่านเลข Cost Sheet, `status`, `revision`, `total` และ `url` ได้ทั้งจาก object ซ้อน (`cost_sheet`) และจากระดับบนสุด ช่วยยืนยันชื่อฟิลด์จริง โดยเฉพาะชื่อของเลข Cost Sheet และบอกด้วยว่ามีลิงก์ไปหน้า Cost Sheet ไหม
 2. **ทดสอบบน production:** ส่งครั้งแรกจะใช้ Estimate จริงที่อนุมัติแล้ว ถ้าทีม ERP อยากให้ส่งใบทดสอบก่อน แจ้งเลข Estimate หรือช่วงเวลาที่จะลบใบทดสอบให้
+
+## เปลี่ยนเป็นหนึ่ง Cost Sheet ต่อ revision (2026-11-21)
+
+- **สิ่งที่เจอ:** อนุมัติ R02 ของ Estimate ที่ส่ง R01 ไปแล้ว ERP เขียน R02 ทับรายการใน Cost Sheet ใบเดิมตามข้อ 3 ด้านบน
+  - แถบ ERP ในแอปยังแสดง R01 เพราะแอปเก็บเลข revision จากคำตอบของ ERP ซึ่งไม่ตรงกับเลข revision ของแอปเสมอไป
+- **เจ้าของงานตัดสิน:** แต่ละ revision ที่อนุมัติเป็น Cost Sheet ใบใหม่ และใบของ revision ก่อนต้องยังอยู่ใน ERP
+- **ฝั่ง Engineering Center ทำแล้ว (migration 119):**
+  - แต่ละ revision ได้ `external_ref` ของตัวเอง `cost_estimate_submit` จึงตอบ `created` กับ Cost Sheet ใบใหม่ `revision` ยังเป็นเลขของแอป เช่น ใบใหม่ของ R02 ส่ง `revision: 2`
+  - `revision_description` ของใบใหม่ต่อท้ายว่า `Supersedes CS-… (R01)` เพื่อให้คนใน ERP รู้ว่าแทนใบไหน
+  - แถบ ERP แสดงเลข revision ที่ส่งไปจริง และแสดงใบของ revision ก่อนต่อท้าย ไม่ใช้เลข revision จากคำตอบของ ERP แล้ว
+  - ปุ่ม "ตรวจสถานะใน ERP" อ่านใบล่าสุด
+  - ใบที่ส่งไปแล้วผูกกับ revision ที่ส่งจริงตามบันทึก "Sent to ERP"
+  - ใบที่ถูกเขียนทับไปแล้วก่อนเปลี่ยน ฝั่งเราไม่ส่งย้อนหลัง ใบนั้นถือ revision ล่าสุดที่ส่ง
+- **ขอให้ทีม ERP ยืนยัน:**
+  1. Cost Sheet หลายใบใช้ `estimate_no` เดียวกันได้ไหม ถ้าไม่ได้ ERP จะตอบ error ที่ `estimate_no` แอปจะแสดงข้อความนั้นบนแถบ ERP
+  2. ใบใหม่ที่ revision แรกเป็น 2 (ไม่ใช่ 0) รับได้ไหม
+  3. ถ้าอยากให้ใบเก่าขึ้นว่าถูกแทนแล้ว หรือผูกใบใหม่กับใบเก่า ขอชื่อฟิลด์ที่ ERP ต้องการ ตอนนี้แอปบอกไว้ใน `revision_description` เท่านั้น
+  4. ฟิลด์ `revision` ในคำตอบของ `cost_estimate_submit` / `cost_estimate_get` คือเลขที่แอปส่งไป หรือเลขนับของ ERP เอง
 
 ## ติดต่อ
 
