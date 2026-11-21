@@ -138,17 +138,18 @@ export function registerBootstrapRoutes(app: FastifyInstance, database: Database
     const permissions = result.recordsets[4] as unknown as PermissionRow[];
     const favorites = result.recordsets[5] as unknown as FavoriteRow[];
     const count = counts[0];
+    // Not tied to employment: master knows people who have no row in this app's dbo.employees.
     const startWorkDate = masterData ? (await ownStartDate) ?? null : dateOnly(count?.employee_start_work_date ?? null);
     const employment = count?.employee_id == null ? null : {
       employeeId: Number(count.employee_id),
       employeeNo: Number(count.employee_no),
       nickname: count.employee_nickname ?? "",
       level: count.employee_level ?? "",
-      startWorkDate,
     };
     return {
       user,
       employment,
+      startWorkDate,
       counts: {
         inquiries: Number(count?.inquiry_count ?? 0),
         estimates: Number(count?.estimate_count ?? 0),
