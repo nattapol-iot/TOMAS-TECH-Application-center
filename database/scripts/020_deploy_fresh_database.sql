@@ -181,6 +181,8 @@ GO
 :r database/migrations/117_holiday_sync_grants.sql
 :r database/migrations/118_holidays_from_master.sql
 :r database/migrations/119_estimate_erp_sheet_per_revision.sql
+:r database/migrations/120_employee_master_link.sql
+:r database/migrations/121_daily_work_hours.sql
 
 USE [$(DatabaseName)];
 GO

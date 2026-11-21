@@ -1,0 +1,66 @@
+/* My Work > My hours (WorkDaysPanel.tsx): the week strip and the day dialog. Tokens from app/globals.css only. */
+
+.work-days {
+  display: grid; gap: 8px;
+  margin-bottom: 12px; padding: 10px 12px;
+  border: 1px solid var(--line); border-radius: var(--r-md);
+  background: var(--surface);
+}
+.work-days-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.work-days-title { display: inline-flex; align-items: center; gap: 6px; color: var(--ink); font-size: var(--fs-md); font-weight: 600; }
+.work-days-title svg { width: 16px; height: 16px; color: var(--blue); }
+.work-days-nav { display: inline-flex; align-items: center; gap: 2px; color: var(--ink-soft); font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
+.work-days-nav .icon-btn:disabled { opacity: 0.35; cursor: default; }
+.work-days-hint { flex: 1 1 220px; color: var(--muted); font-size: var(--fs-xs); }
+.work-days-actions { display: inline-flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
+
+.work-days-strip { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.work-day {
+  display: grid; gap: 1px; min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--line); border-radius: var(--r-sm);
+  background: var(--surface);
+  text-align: left; font: inherit; cursor: pointer;
+}
+.work-day:hover { border-color: var(--blue-line); }
+.work-day:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+.work-day-name, .work-day-state { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: var(--fs-2xs); color: var(--muted); }
+.work-day-state { display: inline-flex; align-items: center; gap: 3px; }
+.work-day-state svg { flex: none; width: 11px; height: 11px; }
+.work-day strong { color: var(--ink); font-size: var(--fs-md); font-variant-numeric: tabular-nums; }
+.work-day strong small { color: var(--muted); font-size: var(--fs-2xs); font-weight: 400; }
+.work-day.confirmed { border-color: var(--green-line); background: var(--green-soft); }
+.work-day.confirmed .work-day-state { color: var(--green-text); }
+.work-day.toConfirm { border-color: var(--blue-line); background: var(--blue-soft); }
+.work-day.toConfirm .work-day-state { color: var(--blue-text); }
+.work-day.empty { border-color: var(--amber-line); background: var(--amber-soft); }
+.work-day.empty .work-day-state { color: var(--amber-text); }
+.work-day.off, .work-day.future, .work-day.closed { background: var(--n-25); }
+.work-day.off strong, .work-day.future strong, .work-day.closed strong { color: var(--muted); }
+.work-day.today { box-shadow: inset 0 0 0 1px var(--blue); }
+.work-day.loading { min-height: 56px; border-color: var(--line-soft); background: var(--n-50); cursor: default; }
+
+.work-days-note { margin: 0 0 8px; font-size: var(--fs-sm); }
+.work-day-lines { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.work-day-lines th, .work-day-lines td { padding: 6px 8px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+.work-day-lines th { color: var(--muted); font-size: var(--fs-xs); font-weight: 600; text-align: left; }
+.work-day-lines .num { text-align: right; font-variant-numeric: tabular-nums; }
+.work-day-lines input {
+  height: 28px; padding: 0 6px;
+  border: 1px solid var(--line); border-radius: var(--r-xs);
+  background: var(--surface); color: var(--ink); font: inherit;
+}
+.work-day-lines input[type="number"] { width: 84px; text-align: right; }
+.work-day-lines input[type="text"] { width: 100%; }
+.work-day-lines input.invalid { border-color: var(--red); }
+.work-day-kind { display: block; margin-bottom: 2px; color: var(--muted); font-size: var(--fs-2xs); }
+.work-day-title { color: var(--ink); white-space: normal; overflow-wrap: anywhere; }
+.work-day-title small { color: var(--muted); }
+.work-day-planned { display: block; margin-top: 2px; color: var(--muted); font-size: var(--fs-2xs); }
+.work-days-add { margin-top: 10px; }
+.work-days-total { margin-right: auto; color: var(--ink-soft); font-size: var(--fs-sm); }
+
+@media (max-width: 720px) {
+  .work-days-strip { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .work-days-hint { display: none; }
+}

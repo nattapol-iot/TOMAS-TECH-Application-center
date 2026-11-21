@@ -1108,6 +1108,65 @@ const PROJECT_DELETE: Guide = {
   ],
 };
 
+const MY_HOURS: Guide = {
+  id: "my-hours-confirm", area: "project", minutes: 2, permissions: ["schedule.read", "schedule.progress"], views: ["my-work"],
+  title: { th: "ยืนยันชั่วโมงทำงานรายวัน", en: "Confirm your daily hours", jp: "毎日の作業時間を確定" },
+  summary: {
+    th: "ระบบร่างชั่วโมงของแต่ละวันจากงานในแผน Team task Issue และนัดใน Outlook ถ้าเป็นไปตามแผนกดยืนยันครั้งเดียว ถ้าไม่ตรงเปิดวันนั้นแล้วแก้ชั่วโมง ลบหรือเพิ่มงาน ยืนยันย้อนหลังได้ 30 วัน",
+    en: "The app drafts each day's hours from your plan tasks, team tasks, issues and Outlook meetings. Confirm with one press when the day went as planned; otherwise open the day and change the hours, remove or add work. Days can be confirmed up to 30 days late.",
+    jp: "計画タスク・チームタスク・課題・Outlookの予定から毎日の作業時間を下書きします。計画どおりならワンクリックで確定し、違う日は日付を開いて時間を直したり作業を追加・削除したりします。30日前まで遡って確定できます。",
+  },
+  steps: [
+    menu("my-work",
+      { th: "เปิดงานของฉัน", en: "Open My Work", jp: "「マイワーク」を開く" },
+      { th: "แถบชั่วโมงทำงานอยู่บนสุดของหน้านี้ คลิกที่เมนูที่ไฮไลต์อยู่", en: "The hours strip is at the top of this page. Click the highlighted menu entry.", jp: "作業時間の帯はこの画面の一番上にあります。強調表示のメニューをクリックします。" }),
+    {
+      target: "hours.week", action: "next", view: "my-work",
+      title: { th: "ชั่วโมงทำงานของสัปดาห์", en: "Your week's hours", jp: "今週の作業時間" },
+      body: {
+        th: "แต่ละช่องคือหนึ่งวัน สีฟ้า 'รอยืนยัน' คือร่างจากแผน สีเขียวคือยืนยันแล้ว สีเหลือง 'ยังไม่ได้ลง' คือวันทำงานที่ไม่มีงานในแผน ต้องเพิ่มเอง ปุ่มลูกศรเลื่อนดูสัปดาห์ก่อนได้",
+        en: "Each box is a day. Blue To confirm is the draft from your plan, green is confirmed, amber Fill in is a working day with nothing planned that you fill in yourself. The arrows move to the previous week.",
+        jp: "各枠が1日です。青の「未確定」は計画からの下書き、緑は確定済み、黄色の「未入力」は計画のない稼働日で自分で入力します。矢印で前の週に移動できます。",
+      },
+    },
+    {
+      target: "hours.confirmToday", action: "next", view: "my-work",
+      title: { th: "วันที่เป็นไปตามแผน: กดครั้งเดียว", en: "A day that went as planned: one press", jp: "計画どおりの日：ワンクリック" },
+      body: {
+        th: "'ยืนยันวันนี้ตามแผน' บันทึกชั่วโมงตามร่างทันที ถ้ามีวันก่อนหน้าที่ยังค้าง ปุ่ม 'ยืนยันตามแผนที่ค้าง' จะยืนยันทุกวันนั้นพร้อมกัน วันที่ไม่มีงานในแผนจะไม่ถูกยืนยันให้",
+        en: "Confirm today as planned saves the drafted hours at once. When earlier days are still waiting, Confirm as planned confirms them all together; a day with nothing planned is left for you.",
+        jp: "「今日を計画どおり確定」で下書きの時間をすぐ保存します。前の日が残っていれば「未確定を計画どおり確定」でまとめて確定します。計画のない日は確定されません。",
+      },
+      missing: { th: "วันนี้ยืนยันแล้ว หรือวันนี้ไม่มีงานในแผน กด 'ถัดไป'", en: "Today is already confirmed or has nothing planned. Press Next.", jp: "今日は確定済みか、計画がありません。「次へ」を押します。" },
+    },
+    {
+      target: "hours.days", action: "click", clickOn: ".work-day", view: "my-work",
+      title: { th: "วันที่ไม่ตรงแผน: เปิดวันนั้น", en: "A day that went differently: open it", jp: "計画と違う日：その日を開く" },
+      body: { th: "คลิกช่องของวันที่ต้องการแก้", en: "Click the day you want to change.", jp: "直したい日の枠をクリックします。" },
+    },
+    {
+      target: "hours.add", action: "next", view: "my-work",
+      title: { th: "แก้ชั่วโมง ลบ หรือเพิ่มงาน", en: "Change hours, remove or add work", jp: "時間の修正・作業の削除と追加" },
+      body: {
+        th: "แก้ตัวเลขชั่วโมงเฉพาะงานที่ไม่ตรง (ทีละ 0.25 ชม.) กด × เพื่อลบงานที่ไม่ได้ทำ และเลือกงานจากช่อง 'เพิ่มงาน' ถ้าเป็นงานนอกแผน เลือก 'งานอื่นในโครงการ' หรือ 'งานอื่น' แล้วพิมพ์ว่าทำอะไร 'กลับไปตามแผน' ล้างที่แก้ไว้",
+        en: "Change the hours only where the day differed (in steps of 0.25 h), press × to remove work you did not do, and pick work from Add work. For work outside the plan choose Other work on a project or Other work and type what you did. Back to the plan undoes your changes.",
+        jp: "違う作業の時間だけ直し（0.25時間単位）、しなかった作業は×で削除し、「作業を追加」から作業を選びます。計画外の作業は「プロジェクトのその他作業」か「その他の作業」を選んで内容を入力します。「計画に戻す」で変更を取り消せます。",
+      },
+      missing: { th: "วันนี้แก้ไขไม่ได้ (ยังไม่ถึง หรือเกิน 30 วัน) กด 'ถัดไป'", en: "This day cannot be changed (still to come, or more than 30 days ago). Press Next.", jp: "この日は変更できません（未来の日か30日以上前）。「次へ」を押します。" },
+    },
+    {
+      target: "hours.save", action: "click", view: "my-work",
+      title: { th: "ยืนยันชั่วโมง", en: "Confirm the hours", jp: "時間を確定" },
+      body: {
+        th: "กด 'ยืนยันชั่วโมง' ชั่วโมงที่ยืนยันจะไปรวมเป็น 'ใช้จริง' ในแถบงบ Man-hour ของโครงการ แก้ซ้ำได้ภายใน 30 วัน ถ้าแค่ฝึก ให้กด 'ยกเลิก'",
+        en: "Press Confirm hours. Confirmed hours add up to Actual on the project's man-hour line, and the day can be changed again for 30 days. Only practising? Press Cancel.",
+        jp: "「時間を確定」を押します。確定した時間はプロジェクトの工数予算の「実績」に加算され、30日以内なら再度変更できます。練習だけなら「キャンセル」を押します。",
+      },
+      missing: { th: "วันนี้แก้ไขไม่ได้ กด 'จบบทสอน'", en: "This day cannot be changed. Press Finish.", jp: "この日は変更できません。「完了」を押します。" },
+    },
+  ],
+};
+
 const PROJECT_COST: Guide = {
   id: "project-cost", area: "project", minutes: 2, permissions: ["project.read", "schedule.read"], views: ["projects"], browse: true,
   title: { th: "ดูต้นทุนโครงการ (Hardware และคน)", en: "Check project cost (hardware and people)", jp: "プロジェクトコストを確認（ハードウェアと人員）" },
@@ -1207,9 +1266,9 @@ const PROJECT_PLAN: Guide = {
       target: "plan.manhours", action: "next", view: "projects",
       title: { th: "งบ Man-hour ของโปรเจกต์", en: "The project's man-hour budget", jp: "案件の工数予算" },
       body: {
-        th: "แถบนี้เทียบชั่วโมงที่ประเมินไว้ใน Estimate cost กับชั่วโมงที่วางในแผน และบอกว่าเหลือให้วางอีกเท่าไร สีแดงคือวางเกินงบ ตัวเลขสีเหลืองคือจำนวนงานที่ยังไม่ใส่ Man-day โปรเจกต์ที่ไม่มีค่าแรงประเมินไว้ ผู้จัดการกด 'ตั้งงบ' เพื่อกำหนดเองได้ และตอนแก้แถวงาน ใต้ช่อง Plan man-days จะบอกงบคงเหลือหลังแถวนั้น",
-        en: "This line compares the hours estimated in Estimate cost with the hours placed in the plan, and shows what is left to plan. Red means the plan is over the budget; the amber figure counts tasks that have no man-days yet. For a project with no estimated labor, a manager presses Set budget to type one. When you edit a row, the budget left after that row shows under Plan man-days.",
-        jp: "この行は見積原価の見積時間と計画に入れた時間を比べ、残りを表示します。赤は予算超過、黄色の数字は工数未入力のタスク数です。見積工数のない案件は、管理者が「予算を設定」で入力できます。行の編集時は、計画人日の下にその行の後の残り予算が表示されます。",
+        th: "แถบนี้เทียบชั่วโมงที่ประเมินไว้ใน Estimate cost กับชั่วโมงที่วางในแผน และบอกว่าเหลือให้วางอีกเท่าไร สีแดงคือวางเกินงบ ตัวเลขสีเหลืองคือจำนวนงานที่ยังไม่ใส่ Man-day เมื่อทีมกดยืนยันชั่วโมงใน My Work แล้ว จะมีช่อง 'ใช้จริง (ยืนยันแล้ว)' สีเขียวบอกชั่วโมงที่ใช้จริงและจำนวนคน โปรเจกต์ที่ไม่มีค่าแรงประเมินไว้ ผู้จัดการกด 'ตั้งงบ' เพื่อกำหนดเองได้ และตอนแก้แถวงาน ใต้ช่อง Plan man-days จะบอกงบคงเหลือหลังแถวนั้น",
+        en: "This line compares the hours estimated in Estimate cost with the hours placed in the plan, and shows what is left to plan. Red means the plan is over the budget; the amber figure counts tasks that have no man-days yet. Once people confirm their hours in My Work, a green Actual (confirmed) figure shows the hours really used and by how many people. For a project with no estimated labor, a manager presses Set budget to type one. When you edit a row, the budget left after that row shows under Plan man-days.",
+        jp: "この行は見積原価の見積時間と計画に入れた時間を比べ、残りを表示します。赤は予算超過、黄色の数字は工数未入力のタスク数です。メンバーがマイワークで作業時間を確定すると、緑の「実績（確定分）」に実際の時間と人数が表示されます。見積工数のない案件は、管理者が「予算を設定」で入力できます。行の編集時は、計画人日の下にその行の後の残り予算が表示されます。",
       },
       missing: { th: "ยังไม่ได้เลือกโปรเจกต์ กด 'ถัดไป'", en: "No project is chosen yet. Press Next.", jp: "案件がまだ選ばれていません。「次へ」を押します。" },
     },
@@ -2636,6 +2695,7 @@ export const GUIDES: readonly Guide[] = [
   PROJECT_CREATE,
   PROJECT_DELETE,
   PROJECT_COST,
+  MY_HOURS,
   PROJECT_PLAN,
   PROJECT_MASTER_PLAN,
   PROJECT_ERP_NUMBER,

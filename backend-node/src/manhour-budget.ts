@@ -12,6 +12,9 @@ import type { Transaction as TransactionType } from "mssql";
  * Planned: the man-days typed on the plan rows. Rows marked as outsourced manpower (the People
  * table, plan-people.ts) are somebody else's hours too: they are counted apart and stay out of
  * the comparison with the budget. Money is never part of this.
+ *
+ * Actual: the hours people confirmed for the project day by day (dbo.work_hours, migration 121, work-days.ts), as
+ * man-days, and how many people confirmed them. Days nobody has confirmed yet are not in it.
  */
 
 /** Hours shown per man-day. The plan and the estimate both count man-days; hours are a display. */
@@ -26,6 +29,7 @@ export type ManHourBudget = {
   source: BudgetSource; estimateNo: string | null; budgetManDays: number | null;
   disciplines: { discipline: string; manDays: number }[];
   plannedManDays: number; outsourcedManDays: number; unplannedRows: number; hoursPerManDay: number; canSetBudget: boolean;
+  actualManDays: number; actualPeople: number;
 };
 
 const round = (value: number): number => Math.round(value * 100) / 100;
@@ -84,7 +88,11 @@ export function parseBudgetManDays(value: unknown): number | null | undefined {
   return round(value);
 }
 
-export type StoredBudget = { estimateNo: string | null; estimateManDays: number; manualManDays: number | null; disciplines: { discipline: string; manDays: number }[] };
+export type StoredBudget = {
+  estimateNo: string | null; estimateManDays: number; manualManDays: number | null; disciplines: { discipline: string; manDays: number }[];
+  /** Hours confirmed for the project, and by how many people. */
+  actualHours?: number; actualPeople?: number;
+};
 
 export async function readStoredBudget(transaction: TransactionType, projectId: number): Promise<StoredBudget> {
   const request = new sql.Request(transaction); request.input("project", sql.BigInt, projectId);
@@ -96,6 +104,8 @@ export async function readStoredBudget(transaction: TransactionType, projectId: 
     INNER JOIN dbo.manhour_lines l ON l.estimate_id=e.id AND l.revision=e.revision AND l.deleted_at IS NULL AND l.provider=N'Internal'
     WHERE p.id=@project AND p.deleted_at IS NULL
     GROUP BY COALESCE(l.discipline,N'Other');`)).recordset;
+  const actual = (await request.query<Record<string, unknown>>(`SELECT SUM(h.hours) hours,COUNT(DISTINCT h.user_id) people
+    FROM dbo.work_hours h WHERE h.project_id=@project;`)).recordset[0];
   const order = ["Electrical", "Mechanical", "Software", "Installation", "Other"];
   const disciplines = lines.map((row) => ({ discipline: String(row.discipline), manDays: round(Number(row.man_days ?? 0)) }))
     .filter((row) => row.manDays > 0)
@@ -105,6 +115,7 @@ export async function readStoredBudget(transaction: TransactionType, projectId: 
     estimateManDays: round(disciplines.reduce((sum, row) => sum + row.manDays, 0)),
     manualManDays: project?.manhour_budget_days == null ? null : Number(project.manhour_budget_days),
     disciplines,
+    actualHours: Number(actual?.hours ?? 0), actualPeople: Number(actual?.people ?? 0),
   };
 }
 
@@ -116,5 +127,6 @@ export function manHourBudget(stored: StoredBudget, rows: readonly BudgetPlanRow
     disciplines: source === "estimate" ? stored.disciplines : [],
     plannedManDays: planned.manDays, outsourcedManDays: planned.outsourcedManDays, unplannedRows: planned.unplannedRows, hoursPerManDay: HOURS_PER_MAN_DAY,
     canSetBudget: canManage && source !== "estimate",
+    actualManDays: round((stored.actualHours ?? 0) / HOURS_PER_MAN_DAY), actualPeople: stored.actualPeople ?? 0,
   };
 }

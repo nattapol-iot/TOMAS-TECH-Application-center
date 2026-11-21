@@ -176,9 +176,10 @@ function proposedPlan(value: unknown, holidays: ReadonlySet<string>) {
 
 /**
  * Turns WORKLOAD_SQL's recordsets into open work items. A schedule that cannot be resolved is skipped and named in
- * warnings; orderRows are the saved work orders, for workOrders.
+ * warnings; orderRows are the saved work orders, for workOrders. keepFinished keeps finished work too: the daily hours
+ * draft (work-days.ts) still counts work done since on the past days it took.
  */
-export function workloadItems(sets: Row[][], holidays: ReadonlySet<string>): { items: WorkloadItem[]; warnings: string[]; orderRows: Row[] } {
+export function workloadItems(sets: Row[][], holidays: ReadonlySet<string>, options: { keepFinished?: boolean } = {}): { items: WorkloadItem[]; warnings: string[]; orderRows: Row[] } {
   const [inquiries = [], tasks = [], estimates = [], sections = [], projects = [], scheduleRows = [], pics = [], orderRows = [], teamTasks = [], issues = []] = sets;
   const items: WorkloadItem[] = [];
   const warnings: string[] = [];
@@ -282,7 +283,7 @@ export function workloadItems(sets: Row[][], holidays: ReadonlySet<string>): { i
       progress: 0, status: r.state === "Doing" ? "In Progress" : "Not Started", ...scope(r),
     });
   }
-  return { items: items.filter(isOpenWork), warnings, orderRows };
+  return { items: options.keepFinished ? items : items.filter(isOpenWork), warnings, orderRows };
 }
 
 export type WorkOrder = { userId: number; keys: string[] };

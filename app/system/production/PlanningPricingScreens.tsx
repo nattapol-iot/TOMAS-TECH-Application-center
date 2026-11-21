@@ -103,6 +103,7 @@ import {
 
 import { CrmMyWork } from "./CrmScreens";
 import { DateInput } from "../DateInput";
+import { WorkDaysPanel } from "./WorkDaysPanel";
 
 type ProductionPlanningProps = {
   openCrmOpportunity?: (id: number) => void;
@@ -1336,6 +1337,7 @@ export function ProductionMyWork({
       </>}
     />
     <div className="info-strip my-work-guidance"><Icon name="lock" /><LocalizedText text={"You update the tasks assigned to you. Dates and scope belong to the project manager — use Request more days when you need a change."} /></div>
+    <WorkDaysPanel notify={notify} />
     <section className="my-work-kpis" aria-label={localizeCopy("Task overview")}>
       <MyWorkStat label="Late" value={actionableOpen.filter(workIsLate).length + lateEstimateAssignments.length} tone="red" active={tab === "active" && taskFilter === "late"} onClick={() => { setTab("active"); setSourceFilter("all"); setTaskFilter("late"); }} />
       <MyWorkStat label="Blocked" value={actionableOpen.filter((item) => item.status === "Blocked").length} tone="amber" active={tab === "active" && taskFilter === "blocked"} onClick={() => { setTab("active"); setSourceFilter("all"); setTaskFilter("blocked"); }} />

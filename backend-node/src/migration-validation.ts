@@ -106,6 +106,8 @@ export const REQUIRED_MIGRATIONS: readonly MigrationIdentity[] = [
   { version: 118, fileName: "118_holidays_from_master.sql", name: "Holidays from master data" },
   { version: 119, fileName: "119_estimate_erp_sheet_per_revision.sql", name: "Estimate Cost Sheet per revision" },
   { version: 120, fileName: "120_employee_master_link.sql", name: "Employees linked to master data" },
+  { version: 121, fileName: "121_daily_work_hours.sql", name: "Daily work hours" },
+  { version: 122, fileName: "122_master_data_sync_account.sql", name: "Master data sync account" },
 ] as const;
 
 export const REQUIRED_SCHEMA_VERSION = REQUIRED_MIGRATIONS.at(-1)!.version;

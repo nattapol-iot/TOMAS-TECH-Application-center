@@ -1,8 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readMasterPage } from "../src/erp-master-data.js";
+import type { Database } from "../src/db.js";
+import { readMasterPage, type MasterKind } from "../src/erp-master-data.js";
+import type { ErpMasterSync } from "../src/erp-master-sync.js";
 import type { MasterDataClient } from "../src/master-data/client.js";
 import { createProjectSearch, projectHits } from "../src/master-data/project-search.js";
+import { REGISTER_SYNC_FIRST_RUN_MS } from "../src/master-data/constants.js";
+import { createRegisterSchedule } from "../src/master-data/register-sync.js";
 import { createMasterRegisterGateway, registerRowOf } from "../src/master-data/registers.js";
 
 const customer = (fields: Record<string, unknown>) => ({
@@ -67,4 +71,24 @@ test("project hits come from master's live projects, each number once, cancelled
   await search.search("");
   assert.equal(asked[0], "/api/v1/projects?limit=30&sort=updated_at&direction=desc&search=PJ26");
   assert.equal(asked[1], "/api/v1/projects?limit=30&sort=updated_at&direction=desc");
+});
+
+test("the hourly register round syncs both registers as the master data sync account", async (context) => {
+  context.mock.timers.enable({ apis: ["setTimeout", "setInterval"] });
+  const rounds: { kind: string; actor: unknown; force: boolean }[] = [];
+  const registers = {
+    sync: async (kind: MasterKind, actor: unknown, force: boolean) => { rounds.push({ kind, actor, force }); return { kind, state: "synced" as const, changed: false }; },
+  } as unknown as ErpMasterSync;
+  const database = { query: async () => ({ recordset: [{ id: "77" }] }) } as unknown as Database;
+  const schedule = createRegisterSchedule(registers, database, (error) => { throw error; });
+  schedule.start();
+  context.mock.timers.tick(REGISTER_SYNC_FIRST_RUN_MS);
+  context.mock.timers.reset();
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+  schedule.stop();
+  assert.deepEqual(rounds, [
+    { kind: "customers", actor: { id: 77, entraObjectId: "" }, force: false },
+    { kind: "suppliers", actor: { id: 77, entraObjectId: "" }, force: false },
+  ]);
 });

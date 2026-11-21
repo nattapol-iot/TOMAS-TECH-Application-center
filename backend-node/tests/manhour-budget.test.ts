@@ -59,8 +59,11 @@ test("manHourBudget: from the estimate with its disciplines; a manager may type 
   const fromEstimate: StoredBudget = { estimateNo: "EST-26-001", estimateManDays: 20, manualManDays: 99, disciplines: [{ discipline: "Electrical", manDays: 12 }, { discipline: "Software", manDays: 8 }] };
   assert.deepEqual(manHourBudget(fromEstimate, plan, true), {
     source: "estimate", estimateNo: "EST-26-001", budgetManDays: 20, disciplines: fromEstimate.disciplines,
-    plannedManDays: 8, outsourcedManDays: 0, unplannedRows: 1, hoursPerManDay: 8, canSetBudget: false,
+    plannedManDays: 8, outsourcedManDays: 0, unplannedRows: 1, hoursPerManDay: 8, canSetBudget: false, actualManDays: 0, actualPeople: 0,
   });
+  // Hours confirmed in My Work (migration 121) come through as man-days.
+  const confirmed = manHourBudget({ ...fromEstimate, actualHours: 30, actualPeople: 2 }, plan, true);
+  assert.equal(confirmed.actualManDays, 3.75); assert.equal(confirmed.actualPeople, 2);
   const typed: StoredBudget = { estimateNo: null, estimateManDays: 0, manualManDays: 15, disciplines: [] };
   const manual = manHourBudget(typed, plan, true);
   assert.equal(manual.source, "manual"); assert.equal(manual.budgetManDays, 15); assert.equal(manual.canSetBudget, true);
@@ -160,18 +163,19 @@ test("PUT manhour-budget: refused for an engineer, a bad figure, a closed projec
   }
 });
 
-test("GET schedule: carries the man-hour budget from the estimate, by discipline in the estimate's order", async (t) => {
+test("GET schedule: carries the man-hour budget from the estimate, by discipline in the estimate's order, and the confirmed hours", async (t) => {
   const app = harness(["Engineer"]);
   const base = budgetAnswers({ estimateManDays: 30 });
   installSqlMock(t, (statement) => statement.includes("FROM dbo.schedule_tasks WHERE project_id=@project AND deleted_at IS NULL ORDER BY")
-    ? { recordset: [] } : base(statement));
+    ? { recordset: [] }
+    : statement.includes("FROM dbo.work_hours h WHERE h.project_id=@project") ? { recordset: [{ hours: 36, people: 2 }] } : base(statement));
   try {
     const response = await app.inject({ method: "GET", url: `/api/v1/projects/${PROJECT_ID}/schedule` });
     assert.equal(response.statusCode, 200, response.body);
     assert.deepEqual(response.json().manHours, {
       source: "estimate", estimateNo: "EST-26-001", budgetManDays: 32,
       disciplines: [{ discipline: "Electrical", manDays: 2 }, { discipline: "Software", manDays: 30 }],
-      plannedManDays: 0, outsourcedManDays: 0, unplannedRows: 0, hoursPerManDay: 8, canSetBudget: false,
+      plannedManDays: 0, outsourcedManDays: 0, unplannedRows: 0, hoursPerManDay: 8, canSetBudget: false, actualManDays: 4.5, actualPeople: 2,
     });
   } finally { await app.close(); }
 });
