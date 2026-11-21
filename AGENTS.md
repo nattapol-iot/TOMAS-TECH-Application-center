@@ -34,6 +34,7 @@ These project rules guide both agents; they do not override host/system policies
 - Never use watch mode (`tsc --watch`, `vite --watch`, `vitest --watch`, `nodemon`, …). Run once and let the process exit.
 - Heavy commands run one at a time, never in parallel: `bun run typecheck`, `bun run build`, `bun run test`, `bun run lint`.
 - Check `package.json` for current test scripts; `bun run test` runs lint, typecheck and root tests, not the build. Run only checks relevant to the task.
+- Run `bun run fmt` before committing. It formats (oxfmt) only the files the branch changed, and CI checks the same files on every PR. Do not format files the task does not touch: the repository adopts the formatter file by file (owner decision 2026-11-21). A source-text test that breaks because its file got formatted is updated in the same change.
 - Typecheck/build/test once at the END of a task, after all edits are done — not after every file change.
 - Stop temporary verification servers and background processes you started. Preserve services that were already running; if authorized work requires a temporary stop, restore the previous service configuration and verify it responds before finishing. Leave a server running when the user explicitly requested it.
 - If a dev server is needed to verify a change, reuse the one already running (see `.claude/launch.json`, port 3000) instead of starting another.
@@ -43,7 +44,7 @@ These project rules guide both agents; they do not override host/system policies
 <!-- PROJECT-CONTEXT:START -->
 ## Project Context — Engineering Center
 
-จุดเริ่มต้นเดียวสำหรับ AI · Source snapshot: `1d4cde0b` · เอกสารอ้างโค้ด ไม่ใช่สถานะ live
+จุดเริ่มต้นเดียวสำหรับ AI · Source snapshot: `83dc9a9d` · เอกสารอ้างโค้ด ไม่ใช่สถานะ live
 
 ## อ่านแบบประหยัด Context
 

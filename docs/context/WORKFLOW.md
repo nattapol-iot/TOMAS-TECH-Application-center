@@ -31,7 +31,7 @@ The owner's rule (2026-11-02): a new feature or function ships with its How-to g
 
 ## Focused verification
 
-Read current package.json scripts first. Root `bun run test` currently runs lint, typecheck and root tests; it does **not** build. The command definition is the evidence for what actually runs.
+Read current package.json scripts first. Root `bun run test` currently runs lint, typecheck and root tests; it does **not** build. The command definition is the evidence for what actually runs. `bun run fmt` formats only the files the branch changed (oxfmt, `.oxfmtrc.json`); CI runs `bun run fmt:check` on the same files for every PR.
 
 ```powershell
 # One root test; select the actual filename from the module card

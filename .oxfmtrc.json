@@ -1,0 +1,5 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "printWidth": 200,
+  "ignorePatterns": ["public/ocr/**", "docs/**", "database/**", "bun.lock", "backend-node/bun.lock", "**/*.md"]
+}
