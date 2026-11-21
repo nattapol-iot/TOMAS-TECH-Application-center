@@ -29,6 +29,7 @@ import {
   Toolbar,
 } from "../ui";
 import { DateInput } from "../DateInput";
+import { PegasusScreen } from "./PegasusScreen";
 
 export type AdminAnalyticsProps = {
   bootstrap: BootstrapData;
@@ -611,7 +612,10 @@ export function CustomerModal({ customer, onClose, onSaved }: {
 
 type ReportTab = "inventory" | "suppliers" | "pr-cycle" | "project-cost";
 
-export function ProductionReports({ bootstrap }: AdminAnalyticsProps) {
+export function ProductionReports({ bootstrap, onBack }: AdminAnalyticsProps & {
+  /** Back to Operational Reports, where this page is also opened from. */
+  onBack?: () => void;
+}) {
   const uiText = useUiText();
   const [tab, setTab] = useState<ReportTab>("inventory");
   const [from, setFrom] = useState(yearAgo);
@@ -684,16 +688,17 @@ export function ProductionReports({ bootstrap }: AdminAnalyticsProps) {
     return () => window.clearTimeout(timer);
   }, [load]);
 
-  if (!canReport) return <PermissionNotice permission="report.read" />;
-  if (!tabs.length) return <PermissionNotice permission="inventory.read, procurement.read หรือ project.read" />;
+  if (!canReport) return <PegasusScreen><PermissionNotice permission="report.read" /></PegasusScreen>;
+  if (!tabs.length) return <PegasusScreen><PermissionNotice permission="inventory.read, procurement.read หรือ project.read" /></PegasusScreen>;
   return (
-    <>
-      <PageHeader eyebrow="LIVE ANALYTICS" title={uiText("Summary Reports")} subtitle="รายงานคำนวณจาก SQL ledger และเอกสารจริงตามสิทธิ์ของผู้ใช้" meta={<Badge tone="green"><LocalizedText text={"Production API"} /></Badge>} />
+    <PegasusScreen>
+      <PageHeader title={uiText("Summary Reports")} subtitle="รายงานคำนวณจาก SQL ledger และเอกสารจริงตามสิทธิ์ของผู้ใช้" meta={<Badge tone="green"><LocalizedText text={"Production API"} /></Badge>}
+        actions={onBack ? <button className="btn ghost" type="button" onClick={onBack}><Icon name="arrowLeft" />{uiText("Back to reports")}</button> : undefined} />
       <Tabs<ReportTab> tabs={tabs} active={activeTab} onChange={setTab} />
       <Toolbar>
         {activeTab !== "project-cost" ? <>
           {activeTab !== "inventory" ? <label className="field"><span><LocalizedText text={"From"} /></span><DateInput value={from} max={to} onChange={(event) => setFrom(event.target.value)} /></label> : null}
-          <label className="field"><span>{activeTab === "inventory" ? "As of" : "To"}</span><DateInput value={to} min={activeTab === "inventory" ? undefined : from} max={today()} onChange={(event) => setTo(event.target.value)} /></label>
+          <label className="field"><span><LocalizedText text={activeTab === "inventory" ? "As of" : "To"} /></span><DateInput value={to} min={activeTab === "inventory" ? undefined : from} max={today()} onChange={(event) => setTo(event.target.value)} /></label>
         </> : <label className="select-field"><span className="sr-only"><LocalizedText text={"Project"} /></span><select value={projectId} onChange={(event) => setProjectId(Number(event.target.value))} aria-label={uiText("Project")}><option value={0}><LocalizedText text={"Select project"} /></option>{projects.map((project) => <option key={project.id} value={project.id}>{project.number} <LocalizedText text={"·"} /> {project.name}</option>)}</select><Icon name="chevronDown" /></label>}
         <button className="btn ghost" type="button" onClick={() => { void load(); }} disabled={loading || (activeTab === "project-cost" && !projectId)}><Icon name="refresh" />{loading ? <LocalizedText text={"Loading…"} /> : <LocalizedText text={"Refresh"} />}</button>
       </Toolbar>
@@ -702,7 +707,7 @@ export function ProductionReports({ bootstrap }: AdminAnalyticsProps) {
       {activeTab === "suppliers" ? <SupplierReportView report={suppliers} loading={loading} /> : null}
       {activeTab === "pr-cycle" ? <PrCycleReportView report={prCycle} loading={loading} /> : null}
       {activeTab === "project-cost" ? <ProjectCostReportView report={projectCost} loading={loading} projectSelected={Boolean(projectId)} /> : null}
-    </>
+    </PegasusScreen>
   );
 }
 
@@ -717,8 +722,8 @@ function InventoryReportView({ report, loading }: { report: InventoryValueReport
       <KpiCard label="Slow moving" value={formatMoney(report.summary.slowMovingValue)} note={`${report.summary.slowMovingItemCount} items · ${report.slowMovingDays} days`} tone="violet" icon="clock" />
     </div>
     <Panel title="Inventory valuation" subtitle={report.valuationMethod} flush>{report.items.length ? <div className="table-wrap"><table>
-      <thead><tr><th><LocalizedText text={"Item"} /></th><th><LocalizedText text={"Description"} /></th><th><LocalizedText text={"Location"} /></th><th><LocalizedText text={"Usable"} /></th><th><LocalizedText text={"Quarantine"} /></th><th><LocalizedText text={"Avg. cost"} /></th><th><LocalizedText text={"Total value"} /></th><th><LocalizedText text={"Last movement"} /></th><th><LocalizedText text={"Status"} /></th></tr></thead>
-      <tbody>{report.items.map((item) => <tr key={item.id}><td><strong className="mono">{item.itemCode}</strong><div className="muted">{item.partNumber}</div></td><td><strong>{item.description}</strong><div className="muted">{item.brand}</div></td><td>{item.location || "—"}</td><td>{formatNumber(item.usable)} {item.unit}</td><td>{formatNumber(item.quarantine)} {item.unit}</td><td>{formatMoney(item.averageUnitCost)}</td><td><strong>{formatMoney(item.usableValue + item.quarantineValue)}</strong></td><td>{formatDateTime(item.lastMovementAt)}</td><td><Badge tone={item.isSlowMoving ? "amber" : "green"}>{item.isSlowMoving ? `${item.inactiveDays} days` : "Moving"}</Badge></td></tr>)}</tbody>
+      <thead><tr><th><LocalizedText text={"Item"} /></th><th><LocalizedText text={"Description"} /></th><th><LocalizedText text={"Location"} /></th><th className="num"><LocalizedText text={"Usable"} /></th><th className="num"><LocalizedText text={"Quarantine"} /></th><th className="num"><LocalizedText text={"Avg. cost"} /></th><th className="num"><LocalizedText text={"Total value"} /></th><th><LocalizedText text={"Last movement"} /></th><th><LocalizedText text={"Status"} /></th></tr></thead>
+      <tbody>{report.items.map((item) => <tr key={item.id}><td><strong className="mono">{item.itemCode}</strong><div className="muted">{item.partNumber}</div></td><td><strong>{item.description}</strong><div className="muted">{item.brand}</div></td><td>{item.location || "—"}</td><td className="num">{formatNumber(item.usable)} {item.unit}</td><td className="num">{formatNumber(item.quarantine)} {item.unit}</td><td className="num">{formatMoney(item.averageUnitCost)}</td><td className="num"><strong>{formatMoney(item.usableValue + item.quarantineValue)}</strong></td><td>{formatDateTime(item.lastMovementAt)}</td><td><Badge tone={item.isSlowMoving ? "amber" : "green"}>{item.isSlowMoving ? `${item.inactiveDays} days` : "Moving"}</Badge></td></tr>)}</tbody>
     </table></div> : <EmptyState icon="package" title="No inventory value" message="ยังไม่มี stock transaction ถึงวันที่รายงาน" />}</Panel>
   </>;
 }
@@ -727,8 +732,8 @@ function SupplierReportView({ report, loading }: { report: SupplierPerformanceRe
   const uiText = useUiText();
   if (!report) return <Panel>{loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading live report…"} /></div> : <EmptyState icon="truck" title={uiText("No report loaded")} message="เลือกช่วงเวลาแล้วกด Refresh" />}</Panel>;
   return <Panel title="Supplier performance" subtitle={`${formatDate(report.from)} – ${formatDate(report.to)}`} flush>{report.suppliers.length ? <div className="table-wrap"><table>
-    <thead><tr><th><LocalizedText text={"Supplier"} /></th><th><LocalizedText text={"POs"} /></th><th><LocalizedText text={"Ordered"} /></th><th><LocalizedText text={"Received"} /></th><th><LocalizedText text={"Open"} /></th><th><LocalizedText text={"Fill rate"} /></th><th><LocalizedText text={"Accepted"} /></th><th><LocalizedText text={"Defect"} /></th><th><LocalizedText text={"On time"} /></th><th><LocalizedText text={"Lead days"} /></th></tr></thead>
-    <tbody>{report.suppliers.map((item) => <tr key={item.supplierId}><td><strong>{item.supplierName}</strong><div className="muted mono">{item.supplierCode}</div></td><td>{item.purchaseOrderCount}</td><td>{formatMoney(item.orderedValue)}</td><td>{formatMoney(item.receivedValue)}</td><td>{formatMoney(item.openValue)}</td><td>{formatPercent(item.fillRatePercent)}</td><td>{formatPercent(item.acceptedFillRatePercent)}</td><td>{formatPercent(item.defectRatePercent)}</td><td>{formatPercent(item.onTimeRatePercent)}</td><td>{item.averageCompletionLeadDays === null ? "—" : formatNumber(item.averageCompletionLeadDays)}</td></tr>)}</tbody>
+    <thead><tr><th><LocalizedText text={"Supplier"} /></th><th className="num"><LocalizedText text={"POs"} /></th><th className="num"><LocalizedText text={"Ordered"} /></th><th className="num"><LocalizedText text={"Received"} /></th><th className="num"><LocalizedText text={"Open"} /></th><th className="num"><LocalizedText text={"Fill rate"} /></th><th className="num"><LocalizedText text={"Accepted"} /></th><th className="num"><LocalizedText text={"Defect"} /></th><th className="num"><LocalizedText text={"On time"} /></th><th className="num"><LocalizedText text={"Lead days"} /></th></tr></thead>
+    <tbody>{report.suppliers.map((item) => <tr key={item.supplierId}><td><strong>{item.supplierName}</strong><div className="muted mono">{item.supplierCode}</div></td><td className="num">{item.purchaseOrderCount}</td><td className="num">{formatMoney(item.orderedValue)}</td><td className="num">{formatMoney(item.receivedValue)}</td><td className="num">{formatMoney(item.openValue)}</td><td className="num">{formatPercent(item.fillRatePercent)}</td><td className="num">{formatPercent(item.acceptedFillRatePercent)}</td><td className="num">{formatPercent(item.defectRatePercent)}</td><td className="num">{formatPercent(item.onTimeRatePercent)}</td><td className="num">{item.averageCompletionLeadDays === null ? "—" : formatNumber(item.averageCompletionLeadDays)}</td></tr>)}</tbody>
   </table></div> : <EmptyState icon="truck" title="No supplier activity" message="ไม่พบ Purchase Order ในช่วงวันที่นี้" />}</Panel>;
 }
 
@@ -743,7 +748,7 @@ function PrCycleReportView({ report, loading }: { report: PrCycleTimeReport | nu
       <KpiCard label="Submit → Approve" value={hours(report.lifecycle.averageSubmittedToFinalApprovalHours)} note="Average elapsed" tone="violet" icon="checkCircle" />
       <KpiCard label="Create → PO" value={hours(report.lifecycle.averageCreatedToFirstPurchaseOrderHours)} note="Average elapsed" tone="green" icon="truck" />
     </div>
-    <Panel title="Approval stage duration" subtitle={report.durationBasis} flush>{report.stages.length ? <div className="table-wrap"><table><thead><tr><th><LocalizedText text={"Stage"} /></th><th><LocalizedText text={"Completed"} /></th><th><LocalizedText text={"Average"} /></th><th><LocalizedText text={"Minimum"} /></th><th><LocalizedText text={"Maximum"} /></th></tr></thead><tbody>{report.stages.map((stage) => <tr key={stage.stage}><td><strong>{stage.stage}</strong></td><td>{stage.completedCount}</td><td>{hours(stage.averageHours)}</td><td>{hours(stage.minimumHours)}</td><td>{hours(stage.maximumHours)}</td></tr>)}</tbody></table></div> : <EmptyState icon="clock" title="No completed stages" message="ยังไม่มีขั้นตอนอนุมัติที่เสร็จในช่วงวันที่นี้" />}</Panel>
+    <Panel title="Approval stage duration" subtitle={report.durationBasis} flush>{report.stages.length ? <div className="table-wrap"><table><thead><tr><th><LocalizedText text={"Stage"} /></th><th className="num"><LocalizedText text={"Completed"} /></th><th className="num"><LocalizedText text={"Average"} /></th><th className="num"><LocalizedText text={"Minimum"} /></th><th className="num"><LocalizedText text={"Maximum"} /></th></tr></thead><tbody>{report.stages.map((stage) => <tr key={stage.stage}><td><strong>{stage.stage}</strong></td><td className="num">{stage.completedCount}</td><td className="num">{hours(stage.averageHours)}</td><td className="num">{hours(stage.minimumHours)}</td><td className="num">{hours(stage.maximumHours)}</td></tr>)}</tbody></table></div> : <EmptyState icon="clock" title="No completed stages" message="ยังไม่มีขั้นตอนอนุมัติที่เสร็จในช่วงวันที่นี้" />}</Panel>
     {Object.keys(report.statusCounts).length ? <Panel title="PR status"><div className="kpi-grid four">{Object.entries(report.statusCounts).map(([status, count]) => <KpiCard key={status} label={status} value={count} icon="file" />)}</div></Panel> : null}
   </>;
 }
@@ -874,17 +879,17 @@ export function ProductionAuditLog({ bootstrap }: AdminAnalyticsProps) {
     }
   }, [canRead, entityType, page, search, source]);
   useEffect(() => { const timer = window.setTimeout(() => { void load(); }, 200); return () => window.clearTimeout(timer); }, [load]);
-  if (!canRead) return <PermissionNotice permission="audit.read" />;
+  if (!canRead) return <PegasusScreen><PermissionNotice permission="audit.read" /></PegasusScreen>;
   const pageCount = Math.max(1, Math.ceil(result.total / result.pageSize));
-  return <>
-    <PageHeader eyebrow="IMMUTABLE LEDGER" title={uiText("Audit Log")} subtitle="รวม Core audit และ Material audit แบบ read-only จากฐานข้อมูลจริง" meta={<Badge tone="green"><LocalizedText text={"Append only"} /></Badge>} />
+  return <PegasusScreen>
+    <PageHeader title={uiText("Audit Log")} subtitle="รวม Core audit และ Material audit แบบ read-only จากฐานข้อมูลจริง" meta={<Badge tone="green"><LocalizedText text={"Append only"} /></Badge>} />
     <Toolbar><SearchInput link="q" value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder="Search document, action, actor or reason…" /><Select label="Source" value={source} options={["All sources", "Core", "Material"]} onChange={(value) => { setSource(value); setPage(1); }} /><label className="field"><span><LocalizedText text={"Entity"} /></span><input value={entityType} maxLength={50} placeholder={localizeCopy("e.g. Estimate")} onChange={(event) => { setEntityType(event.target.value); setPage(1); }} /></label><button className="btn ghost" type="button" disabled={loading} onClick={() => { void load(); }}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button></Toolbar>
     {error ? <LoadError message={error} retry={() => { void load(); }} /> : null}
     <Panel title={`${result.total} audit events`} subtitle="This endpoint is read-only; both audit ledgers remain append-only" flush>{result.items.length ? <div className="table-wrap"><table>
       <thead><tr><th><LocalizedText text={"Occurred"} /></th><th><LocalizedText text={"Source"} /></th><th><LocalizedText text={"Entity"} /></th><th><LocalizedText text={"Action"} /></th><th><LocalizedText text={"Actor"} /></th><th><LocalizedText text={"Project / Qty"} /></th><th><LocalizedText text={"Reason"} /></th><th><LocalizedText text={"Change"} /></th></tr></thead>
       <tbody>{result.items.map((row) => <tr key={`${row.source}-${row.id}`}><td className="muted">{formatDateTime(row.occurredAt)}</td><td><Badge tone={row.source === "Material" ? "violet" : "blue"}>{row.source}</Badge></td><td><strong>{row.entityType}</strong><div className="muted mono">{row.entityNumber || `#${row.entityId}`}</div></td><td><Badge>{row.action}</Badge></td><td><strong>{row.actorName}</strong><div className="muted">{row.actorRole}</div></td><td>{row.projectId ? <div><LocalizedText text={"Project #"} />{row.projectId}</div> : "—"}{row.quantity !== null ? <div className="muted"><LocalizedText text={"Qty"} /> {formatNumber(row.quantity)}</div> : null}</td><td>{row.reason || "—"}</td><td>{row.beforeJson || row.afterJson ? <details><summary><LocalizedText text={"View JSON"} /></summary>{row.beforeJson ? <><strong><LocalizedText text={"Before"} /></strong><pre>{row.beforeJson}</pre></> : null}{row.afterJson ? <><strong><LocalizedText text={"After"} /></strong><pre>{row.afterJson}</pre></> : null}</details> : "—"}</td></tr>)}</tbody>
     </table><Pagination page={result.page} pageCount={pageCount} from={(result.page - 1) * result.pageSize + 1} to={Math.min(result.page * result.pageSize, result.total)} total={result.total} onPage={setPage} /></div> : loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading…"} /></div> : <EmptyState icon="shield" title="No audit events" message="ไม่พบเหตุการณ์ตามตัวกรองนี้" />}</Panel>
-  </>;
+  </PegasusScreen>;
 }
 
 const EMPTY_NAS_SETTINGS: NasSettingsInput = { server: "", share: "", destinationPath: "", username: "" };
@@ -977,8 +982,8 @@ function StorageCheckPanel({ canWrite, notify }: { canWrite: boolean; notify: (m
 export function ProductionSettings({ bootstrap, notify, teamTestMode = false }: AdminAnalyticsProps) {
   const uiText = useUiText();
   const endpoint = (() => { try { return new URL(API_BASE_URL).origin; } catch { return "Not configured"; } })();
-  return <>
-    <PageHeader eyebrow="RUNTIME STATUS" title={uiText("Settings")} subtitle="ตรวจสถานะระบบและกำหนดปลายทางจัดเก็บเอกสารของ NAS" meta={<Badge tone={teamTestMode ? "amber" : "green"}>{teamTestMode ? "Team Test" : "Production"}</Badge>} />
+  return <PegasusScreen>
+    <PageHeader title={uiText("System Settings")} subtitle="ตรวจสถานะระบบและกำหนดปลายทางจัดเก็บเอกสารของ NAS" meta={<Badge tone={teamTestMode ? "amber" : "green"}>{teamTestMode ? "Team Test" : "Production"}</Badge>} />
     <div className="grid-2">
       <Panel title="Signed-in identity" subtitle="Resolved by the API and SQL user registry"><div className="settings-list">
         <div><span className="setting-icon blue"><Icon name="user" /></span><span><strong>{bootstrap.user.name}</strong><small>{bootstrap.user.email}</small></span><Badge>{bootstrap.user.role}</Badge></div>
@@ -994,5 +999,5 @@ export function ProductionSettings({ bootstrap, notify, teamTestMode = false }: 
     <StorageCheckPanel canWrite={bootstrap.permissions.includes("master.write")} notify={notify} />
     <Panel title={`Permissions (${bootstrap.permissions.length})`} subtitle="สิทธิ์ RBAC ที่ API ส่งให้บัญชีปัจจุบัน"><div className="chip-select">{bootstrap.permissions.map((permission) => <Badge key={permission} tone="slate">{permission}</Badge>)}</div></Panel>
     <div className="callout info"><Icon name="settings" /><span><strong><LocalizedText text={"Configuration ownership"} /></strong><LocalizedText text={"ค่า connection string, Entra, CORS และ host ถูกจัดการที่ server environment เพื่อไม่ให้ browser แก้ไขความปลอดภัยของ Production ได้"} /></span></div>
-  </>;
+  </PegasusScreen>;
 }

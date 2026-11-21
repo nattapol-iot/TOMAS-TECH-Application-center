@@ -26,7 +26,8 @@ test("Employee Master lists who is waiting to sign in and adds them with the ema
   // Add as employee opens the usual form with the name and the exact email already filled in.
   assert.match(screen, /setPrefill\(\{ nameEn: request\.name, email: request\.email \}\); setEditing\("new"\);/);
   assert.match(screen, /\} : \{ \.\.\.EMPTY_EMPLOYEE, \.\.\.prefill \}\);/);
-  assert.match(screen, /request\.status === "new" \? <button className="btn primary sm"/);
+  // It is a quiet icon in the Actions column on the left (Pegasus look, 2026-11-21), named for the pointer and the screen reader.
+  assert.match(screen, /request\.status === "new" \? <button className="pg-act" type="button" title=\{t\("SignIn\.addEmployee"\)\} aria-label=/);
   // The form no longer says an employee record grants no access, and lists every engineering department.
   assert.match(screen, /t\("SignIn\.employeeAccessNote"\)/);
   assert.doesNotMatch(screen, /Employee records do not grant login access/);
@@ -42,7 +43,7 @@ test("Employee Master lists who is waiting to sign in and adds them with the ema
   assert.match(screen, /\{canWrite && unlinked\.length \? <Panel title=\{`\$\{t\("Employee\.unlinkedTitle"\)\}/);
   assert.match(screen, /setPrefill\(\{ nameEn: account\.name, email: account\.email, department: account\.department \}\); setEditing\("new"\);/);
   // An employee that already has the email is opened instead, since saving it links the account.
-  assert.match(screen, /account\.employeeId !== null\s*\? <button className="btn ghost sm" type="button" onClick=\{\(\) => openEmployee\(account\)\}>/);
+  assert.match(screen, /account\.employeeId !== null\s*\? <button className="pg-act" type="button" title=\{t\("Employee\.openToLink"\)[^>]*onClick=\{\(\) => openEmployee\(account\)\}>/);
   assert.match(screen, /account\.role === "Admin" \? <div className="muted">\{t\("Employee\.unlinkedAdminHint"\)\}<\/div>/);
   // A new person is never filed under the IoT team by default.
   assert.match(screen, /employeeNo: 0, nameEn: "", nameTh: "", department: "", jobTitle: "",/);

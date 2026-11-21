@@ -70,6 +70,7 @@ import { ContactPicker, HealthBadge, MasterPlanSection, MemberOptions, NotBroken
   type PlanHeadingDraft } from "./ProjectPlanFields";
 import { ProductionCustomers, ProductionEngineeringRates } from "./AdminAnalyticsScreens";
 import { ErpMasterPanel } from "./ErpMasterPanel";
+import { PegasusScreen } from "./PegasusScreen";
 import { ErpProjectNumberField, isPlaceholderProjectNumber } from "./ErpProjectNumber";
 import { SearchSelect } from "./SearchSelect";
 import { canViewEngineeringRates } from "../../../backend-node/src/engineering-rate-access";
@@ -1471,7 +1472,10 @@ export function ProductionMasterData({ bootstrap, notify, refreshBootstrap, onOp
     { id: "team", label: "User accounts", count: bootstrap.team.length },
   ];
 
-  return <>
+  // The System menu's entries here (User Accounts & Permissions, Employees, Suppliers) wear the Pegasus ERP look (owner
+  // 2026-11-21). Customers and the entries that left the menu keep the app's own look until the owner asks for them.
+  const pegasus = tab === "team" || tab === "employees" || tab === "suppliers";
+  const screen = <>
     <PageHeader
       eyebrow="CONTROLLED MASTER RECORDS"
       title={uiText(destination ? destination === "team" ? "User Accounts & Permissions" : tabs.find(item => item.id === destination)?.label ?? "Master Data" : "Master Data")}
@@ -1488,6 +1492,7 @@ export function ProductionMasterData({ bootstrap, notify, refreshBootstrap, onOp
       {tab === "team" ? <TeamReferenceTab bootstrap={bootstrap} canManageRoles={bootstrap.permissions.includes("admin.manage_roles")} notify={notify} refreshBootstrap={refreshBootstrap} /> : null}
     </div>
   </>;
+  return pegasus ? <PegasusScreen>{screen}</PegasusScreen> : screen;
 }
 
 type MasterTabProps = CommonProps & { canWrite: boolean };
@@ -1530,6 +1535,7 @@ function MasterFormError({ message }: { message: string }) {
 }
 
 function SupplierMasterTab({ bootstrap, canWrite, canCreate, notify, refreshBootstrap }: MasterTabProps & { canCreate: boolean }) {
+  const uiText = useUiText();
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
@@ -1560,26 +1566,24 @@ function SupplierMasterTab({ bootstrap, canWrite, canCreate, notify, refreshBoot
       {canCreate ? <button className="btn primary" type="button" onClick={() => setCreateOpen(true)}><Icon name="plus" /><LocalizedText text={"Add supplier"} /></button> : null}
     </Toolbar>
     <ErpMasterPanel kind="suppliers" onChanged={refreshBootstrap} />
-    <Panel title={suppliers.length + " suppliers"} subtitle="ข้อมูลผู้ขายชุดเดียวกันสำหรับ Cost item และ Preferred supplier" flush>
+    <Panel title={`${suppliers.length} ${uiText("suppliers")}`} subtitle="ข้อมูลผู้ขายชุดเดียวกันสำหรับ Cost item และ Preferred supplier" flush>
       {suppliers.length ? <div className="table-wrap"><TablePageSize value={pageSize} onChange={(value) => { setPageSize(value); setPage(1); }} /><table>
-        <thead><tr><th><LocalizedText text={"Code"} /></th><th><LocalizedText text={"Supplier name"} /></th><th><LocalizedText text={"Category"} /></th>{canWrite ? <th></th> : null}</tr></thead>
+        <thead><tr>{canWrite ? <th className="pg-acts"><span className="sr-only">{uiText("Actions")}</span></th> : null}<th><LocalizedText text={"Code"} /></th><th><LocalizedText text={"Supplier name"} /></th><th><LocalizedText text={"Category"} /></th></tr></thead>
         <tbody>{suppliers.slice(from - 1, to).map((supplier) => (
           <tr key={supplier.id}>
-            <td><strong className="mono">{supplier.code}</strong>{supplier.erpCode ? <> <span title={supplier.erpCode}><Badge tone="green"><LocalizedText text={"ERP"} /></Badge></span></> : null}</td>
-            <td><strong>{supplier.name}</strong></td>
-            <td><Badge>{supplier.category}</Badge></td>
             {canWrite ? (
-              <td>
-                <div style={{ display: "flex", gap: 4 }}>
-                  <button className="btn ghost sm" type="button" onClick={() => setEditingSupplier(supplier)}><Icon name="edit" />Edit</button>
-                  {/* A supplier from Pegasus ERP is closed in the ERP, not deleted here (migration 099). */}
-                  {supplier.erpCode ? null : <button className="btn ghost sm" type="button" disabled={deletingId === supplier.id}
-                    onClick={() => { void deleteSupplierRow(supplier); }} style={{ color: "#dc2626" }}>
-                    <Icon name="trash" />{deletingId === supplier.id ? "Deleting…" : "Delete"}
-                  </button>}
-                </div>
+              <td className="pg-acts">
+                <button className="pg-act" type="button" title={uiText("Edit")} aria-label={`${uiText("Edit")} ${supplier.code}`} onClick={() => setEditingSupplier(supplier)}><Icon name="edit" /></button>
+                {/* A supplier from Pegasus ERP is closed in the ERP, not deleted here (migration 099). */}
+                {supplier.erpCode ? null : <button className="pg-act danger" type="button" title={uiText("Delete")} aria-label={`${uiText("Delete")} ${supplier.code}`} disabled={deletingId === supplier.id}
+                  onClick={() => { void deleteSupplierRow(supplier); }}><Icon name="trash" /></button>}
               </td>
             ) : null}
+            <td>{canWrite
+              ? <button className="pg-doclink mono" type="button" onClick={() => setEditingSupplier(supplier)}>{supplier.code}</button>
+              : <strong className="mono">{supplier.code}</strong>}{supplier.erpCode ? <> <span title={supplier.erpCode}><Badge tone="green"><LocalizedText text={"ERP"} /></Badge></span></> : null}</td>
+            <td>{supplier.name}</td>
+            <td><Badge>{supplier.category}</Badge></td>
           </tr>
         ))}</tbody>
       </table><Pagination page={resolvedPage} pageCount={pageCount} from={from} to={to} total={suppliers.length} onPage={setPage} /></div> : <EmptyState icon="truck" title="No supplier found" message="ลองเปลี่ยนคำค้นหา หรือกด Add supplier เพื่อเพิ่มผู้ขาย" />}
@@ -1607,6 +1611,7 @@ function SupplierEditModal({
   refreshBootstrap: () => Promise<void>;
   onClose: () => void;
 }) {
+  const uiText = useUiText();
   const { busy, error, submit } = useMasterForm(refreshBootstrap, (msg) => { onClose(); notify(msg); });
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -1625,21 +1630,20 @@ function SupplierEditModal({
     }, `Supplier ${supplier.code} updated`);
   };
   return (
-    <Modal title={`Edit ${supplier.code}`} size="lg" onClose={onClose}>
+    <Modal title={`${uiText("Edit")} ${supplier.code}`} size="md" onClose={onClose} footer={<>
+      <button className="btn ghost" type="button" onClick={onClose}>{uiText("Cancel")}</button>
+      <button className="btn primary" type="submit" form="supplier-edit-form" disabled={busy}>{busy ? uiText("Saving…") : uiText("Save")}</button>
+    </>}>
       <MasterFormError message={error} />
-      <form onSubmit={onSubmit}>
+      <form id="supplier-edit-form" onSubmit={onSubmit}>
         <div className="form-grid two">
-          <label className="field"><span>Code (read-only)</span><input value={supplier.code} readOnly /></label>
-          <label className="field"><span>Name *</span><input name="name" defaultValue={supplier.name} required maxLength={300} readOnly={Boolean(supplier.erpCode)} />{supplier.erpCode ? <small><LocalizedText text={"ErpMaster.supplierLockedHint"} /></small> : null}</label>
-          <label className="field"><span>Category *</span><input name="category" defaultValue={supplier.category} required maxLength={100} /></label>
-          <label className="field"><span>Contact</span><input name="contact" maxLength={200} /></label>
-          <label className="field"><span>Email</span><input name="email" type="email" maxLength={200} /></label>
-          <label className="field"><span>Phone</span><input name="phone" maxLength={50} /></label>
-          <label className="field" style={{ gridColumn: "span 2" }}><span>Brands (comma-separated)</span><input name="brands" maxLength={2000} /></label>
-        </div>
-        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
-          <button className="btn default" type="button" onClick={onClose}>Cancel</button>
-          <button className="btn primary" type="submit" disabled={busy}>{busy ? "Saving…" : "Save changes"}</button>
+          <label className="field"><span>{uiText("Code")}</span><input value={supplier.code} readOnly /></label>
+          <label className="field"><span><LocalizedText text={"Category *"} /></span><input name="category" defaultValue={supplier.category} required maxLength={100} /></label>
+          <label className="field span-2"><span><LocalizedText text={"Supplier name *"} /></span><input name="name" defaultValue={supplier.name} required maxLength={300} readOnly={Boolean(supplier.erpCode)} />{supplier.erpCode ? <small><LocalizedText text={"ErpMaster.supplierLockedHint"} /></small> : null}</label>
+          <label className="field"><span><LocalizedText text={"Contact person"} /></span><input name="contact" maxLength={200} /></label>
+          <label className="field"><span><LocalizedText text={"Phone"} /></span><input name="phone" maxLength={50} /></label>
+          <label className="field span-2"><span><LocalizedText text={"Email"} /></span><input name="email" type="email" maxLength={200} /></label>
+          <label className="field span-2"><span><LocalizedText text={"Brands"} /></span><input name="brands" maxLength={2000} placeholder="Siemens, Omron, SMC" /></label>
         </div>
       </form>
     </Modal>
@@ -1911,46 +1915,45 @@ function EmployeeMasterTab({ canWrite, notify }: { canWrite: boolean; notify: (m
     {error ? <LoadError message={error} retry={() => { void load(); }} /> : null}
     {canWrite && signInRequests.length ? <Panel title={`${t("SignIn.requestsTitle")} (${signInRequests.length})`} subtitle={t("SignIn.requestsSubtitle")} flush>
       <div className="table-wrap"><table><thead><tr>
-        <th>{t("Employee")}</th><th>{t("SignIn.signInEmail")}</th><th>{t("Status")}</th><th>{t("SignIn.lastAttempt")}</th><th><span className="sr-only">{t("Actions")}</span></th>
+        <th className="pg-acts"><span className="sr-only">{t("Actions")}</span></th><th>{t("Employee")}</th><th>{t("SignIn.signInEmail")}</th><th>{t("Status")}</th><th>{t("SignIn.lastAttempt")}</th>
       </tr></thead><tbody>{signInRequests.map((request) => <tr key={request.subject}>
+        <td className="pg-acts">
+          {request.status === "new" ? <button className="pg-act" type="button" title={t("SignIn.addEmployee")} aria-label={`${t("SignIn.addEmployee")} ${request.name}`} onClick={() => { setPrefill({ nameEn: request.name, email: request.email }); setEditing("new"); }}><Icon name="plus" /></button> : null}
+          <button className="pg-act danger" type="button" title={t("SignIn.dismiss")} aria-label={`${t("SignIn.dismiss")} ${request.name}`} onClick={() => { void dismiss(request); }}><Icon name="x" /></button>
+        </td>
         <td><div className="cell-primary"><strong>{request.name}</strong><span>{request.username}</span></div></td>
         <td><strong className="mono">{request.email}</strong></td>
         <td className="wrap"><Badge tone={request.status === "new" ? "amber" : request.status === "registered" ? "green" : "red"}>{t(SIGN_IN_STATUS_LABEL[request.status])}</Badge>
           {request.status === "linkedElsewhere" ? <div className="muted">{t("SignIn.linkedElsewhereHint")}</div> : null}</td>
         <td><div className="cell-primary"><strong>{new Date(request.lastAttemptAt).toLocaleString(lang === "TH" ? "th-TH" : lang === "JP" ? "ja-JP" : "en-GB")}</strong><span>{t("SignIn.attempts").replace("{n}", String(request.attempts))}</span></div></td>
-        <td><div className="row-actions">
-          {request.status === "new" ? <button className="btn primary sm" type="button" onClick={() => { setPrefill({ nameEn: request.name, email: request.email }); setEditing("new"); }}><Icon name="plus" />{t("SignIn.addEmployee")}</button> : null}
-          <button className="btn ghost sm" type="button" onClick={() => { void dismiss(request); }}><Icon name="x" />{t("SignIn.dismiss")}</button>
-        </div></td>
       </tr>)}</tbody></table></div>
     </Panel> : null}
     {canWrite && unlinked.length ? <Panel title={`${t("Employee.unlinkedTitle")} (${unlinked.length})`} subtitle={t("Employee.unlinkedSubtitle")} flush>
       <div className="table-wrap"><table><thead><tr>
-        <th>{t("Employee")}</th><th>{t("Role")}</th><th>{t("Department")}</th><th>{t("Employee.lastUsed")}</th><th><span className="sr-only">{t("Actions")}</span></th>
+        <th className="pg-acts"><span className="sr-only">{t("Actions")}</span></th><th>{t("Employee")}</th><th>{t("Role")}</th><th>{t("Department")}</th><th>{t("Employee.lastUsed")}</th>
       </tr></thead><tbody>{unlinked.map((account) => <tr key={account.userId}>
+        <td className="pg-acts">{account.employeeId !== null
+          ? <button className="pg-act" type="button" title={t("Employee.openToLink").replace("{no}", String(account.employeeNo))} aria-label={t("Employee.openToLink").replace("{no}", String(account.employeeNo))} onClick={() => openEmployee(account)}><Icon name="edit" /></button>
+          : <button className="pg-act" type="button" title={t("SignIn.addEmployee")} aria-label={`${t("SignIn.addEmployee")} ${account.name}`} onClick={() => { setPrefill({ nameEn: account.name, email: account.email, department: account.department }); setEditing("new"); }}><Icon name="plus" /></button>}</td>
         <td><div className="cell-primary"><strong>{account.name}</strong><span className="mono">{account.email}</span></div></td>
         <td className="wrap"><Badge tone={account.role === "Admin" ? "red" : "slate"}>{account.role}</Badge>
           {account.role === "Admin" ? <div className="muted">{t("Employee.unlinkedAdminHint")}</div> : null}</td>
         <td>{account.department || t("Employee.noDepartment")}</td>
         <td>{account.lastUsedAt ? when(account.lastUsedAt) : "—"}</td>
-        <td><div className="row-actions">{account.employeeId !== null
-          ? <button className="btn ghost sm" type="button" onClick={() => openEmployee(account)}><Icon name="edit" />{t("Employee.openToLink").replace("{no}", String(account.employeeNo))}</button>
-          : <button className="btn primary sm" type="button" onClick={() => { setPrefill({ nameEn: account.name, email: account.email, department: account.department }); setEditing("new"); }}><Icon name="plus" />{t("SignIn.addEmployee")}</button>}
-        </div></td>
       </tr>)}</tbody></table></div>
     </Panel> : null}
     <Panel title={`${employees.length} ${t("employees")}`} subtitle={t("Employee Master is stored in SQL Server; age and tenure are calculated from dates")} flush>
       {employees.length ? <div className="table-wrap"><TablePageSize value={pageSize} onChange={(value) => { setPageSize(value); setPage(1); }} /><table><thead><tr>
-        <th>{t("Employee")}</th><th>{t("Email / mobile")}</th><th>{t("Department")}</th><th>{t("Level")}</th><th>{t("Job title")}</th><th>{t("Role")}</th><th>{t("Working time")}</th><th className="num">{t("Daily rate")}</th><th>{t("Status")}</th><th><span className="sr-only">{t("Actions")}</span></th>
+        {canWrite ? <th className="pg-acts"><span className="sr-only">{t("Actions")}</span></th> : null}<th>{t("Status")}</th><th>{t("Employee")}</th><th>{t("Email / mobile")}</th><th>{t("Department")}</th><th>{t("Level")}</th><th>{t("Job title")}</th><th>{t("Role")}</th><th>{t("Working time")}</th><th className="num">{t("Daily rate")}</th>
       </tr></thead><tbody>{visibleEmployees.map((employee) => <tr key={employee.id}>
+        {canWrite ? <td className="pg-acts"><button className="pg-act" type="button" title={t("Edit")} aria-label={`${t("Edit")} ${employee.nameEn}`} onClick={() => setEditing(employee)}><Icon name="edit" /></button></td> : null}
+        <td><Badge tone={employee.isActive ? "green" : "slate"}>{t(employee.isActive ? "Active" : "Inactive")}</Badge></td>
         <td><div className="cell-primary"><strong>{employee.nameEn}</strong><span>#{employee.employeeNo} <LocalizedText text={"·"} /> {employee.nickname || "—"}{employee.nameTh ? ` · ${employee.nameTh}` : ""}</span></div></td>
         <td><div className="cell-primary"><strong>{employee.email}</strong><span>{employee.mobile || "—"}</span></div></td>
         <td>{employee.department}</td><td><Badge>{employee.position}</Badge></td><td>{employee.jobTitle}</td>
         <td>{employee.applicationRole ? <Badge tone={employee.accountActive ? "blue" : "red"}>{employee.applicationRole}</Badge> : <span className="muted">{t("Not provisioned")}</span>}</td>
         <td>{employee.startWorkDate ? employeeDuration(employee.startWorkDate, employee.endWorkDate, lang) : "—"}</td>
         <td className="num">{employee.dailyRate === null ? "—" : formatMoney(employee.dailyRate)}</td>
-        <td><Badge tone={employee.isActive ? "green" : "slate"}>{t(employee.isActive ? "Active" : "Inactive")}</Badge></td>
-        <td>{canWrite ? <button className="icon-btn" type="button" aria-label={`${t("Edit")} ${employee.nameEn}`} onClick={() => setEditing(employee)}><Icon name="edit" /></button> : null}</td>
       </tr>)}</tbody></table><Pagination page={resolvedPage} pageCount={pageCount} from={from} to={to} total={employees.length} onPage={setPage} /></div> : loading ? <div className="empty"><span className="spinner" />{t("Loading…")}</div> : !error ? <EmptyState icon="users" title={t("No employee found")} message={t("Add an employee or change the search filters")} /> : null}
     </Panel>
     {editing ? <EmployeeModal employee={editing === "new" ? null : editing} prefill={editing === "new" ? prefill : null} departments={employees.map((employee) => employee.department)} positions={employees.map((employee) => employee.position)} onClose={() => setEditing(null)} onSaved={async (message) => { setEditing(null); setPrefill(null); await load(); notify(message); }} /> : null}
@@ -2027,7 +2030,7 @@ function TeamReferenceTab({ bootstrap, canManageRoles, notify, refreshBootstrap 
   const [editing, setEditing] = useState<TeamMember | null>(null);
   return <>
     <Panel title={`${bootstrap.team.length} ${t("active user accounts")}`} subtitle={t("System accounts and permission roles, separate from the employee register in Employees")} flush>
-      {bootstrap.team.length ? <div className="table-wrap"><table><thead><tr><th><LocalizedText text={"Name"} /></th><th><LocalizedText text={"Email"} /></th><th><LocalizedText text={"Role"} /></th><th><LocalizedText text={"Department"} /></th><th><LocalizedText text={"Level"} /></th>{canManageRoles ? <th><span className="sr-only">{t("Actions")}</span></th> : null}</tr></thead><tbody>{bootstrap.team.map((member) => <tr key={member.id}><td><div className="user-account-cell"><strong>{member.name}</strong>{member.id === bootstrap.user.id ? <small>{t("Current account")}</small> : null}</div></td><td>{member.email}</td><td><Badge tone={member.role === "Admin" ? "violet" : "blue"}>{member.role}</Badge></td><td>{member.department}</td><td>{member.level || "—"}</td>{canManageRoles ? <td className="master-row-action"><button className="btn ghost sm" type="button" aria-label={`${t("Edit role")} ${member.name}`} onClick={() => setEditing(member)}><Icon name="edit" />{t("Edit role")}</button></td> : null}</tr>)}</tbody></table></div> : <EmptyState icon="users" title="No active team member" message="Provision users before creating rate references" />}
+      {bootstrap.team.length ? <div className="table-wrap"><table><thead><tr>{canManageRoles ? <th className="pg-acts"><span className="sr-only">{t("Actions")}</span></th> : null}<th><LocalizedText text={"Name"} /></th><th><LocalizedText text={"Email"} /></th><th><LocalizedText text={"Role"} /></th><th><LocalizedText text={"Department"} /></th><th><LocalizedText text={"Level"} /></th></tr></thead><tbody>{bootstrap.team.map((member) => <tr key={member.id}>{canManageRoles ? <td className="master-row-action"><button className="pg-act" type="button" title={t("Edit role")} aria-label={`${t("Edit role")} ${member.name}`} onClick={() => setEditing(member)}><Icon name="edit" /></button></td> : null}<td><div className="user-account-cell"><strong>{member.name}</strong>{member.id === bootstrap.user.id ? <small>{t("Current account")}</small> : null}</div></td><td>{member.email}</td><td><Badge tone={member.role === "Admin" ? "violet" : "blue"}>{member.role}</Badge></td><td>{member.department}</td><td>{member.level || "—"}</td></tr>)}</tbody></table></div> : <EmptyState icon="users" title="No active team member" message="Provision users before creating rate references" />}
     </Panel>
     {editing ? <UserRoleModal member={editing} isCurrentAccount={editing.id === bootstrap.user.id} onClose={() => setEditing(null)} onRolesChanged={async (message) => {
       await refreshBootstrap();

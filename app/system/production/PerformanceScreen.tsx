@@ -17,6 +17,9 @@ import {
   type PerformanceCycle,
   type PerformanceEvidence,
 } from "../api-client";
+// The Pegasus ERP look (owner 2026-11-21): pegasus-skin.css for the shared parts, pegasus-screens.css for the performance-* ones.
+import "./pegasus-skin.css";
+import "./pegasus-screens.css";
 
 type TeamMember = {
   id: string | number;
@@ -229,7 +232,7 @@ export default function Performance({ currentUser, notify, openProjectSchedule, 
 
   if (loading || loadError) {
     return (
-      <div className="performance-page">
+      <div className="pg-skin pg-screen performance-page">
         <PageHeader eyebrow="PEOPLE & PERFORMANCE" title="KPI & Growth" subtitle="Fair, evidence-based reviews connected to the work each role delivers." />
         <section className="panel"><div className="panel-body performance-api-state">
           <span className={`performance-area-icon ${loadError ? "amber" : "blue"}`}><Icon name={loadError ? "alertTriangle" : "refresh"} /></span>
@@ -241,7 +244,7 @@ export default function Performance({ currentUser, notify, openProjectSchedule, 
   }
 
   return (
-    <div className="performance-page">
+    <div className="pg-skin pg-screen performance-page">
       <PageHeader
         eyebrow="PEOPLE & PERFORMANCE"
         title="KPI & Growth"

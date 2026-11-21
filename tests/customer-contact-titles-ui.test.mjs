@@ -24,6 +24,7 @@ function mountForm(file, exportName, props, initialState = []) {
     "../api-client": { async apiRequest(url, options) { requests.push({ url, body: JSON.parse(options.body) }); return { code: "TEST" }; } },
     "./BusinessCardScanner": { BusinessCardScanner: "scanner" },
     "./ErpMasterPanel": { ErpMasterPanel: "erp-master-panel" },
+    "./PegasusScreen": { PegasusScreen: "pegasus-screen" },
     "./SearchSelect": { SearchSelect: "search-select" },
     "../project-overview-client": { listAllProjectsByNumber: async () => [] },
     "../ui": new Proxy({}, { get: (_, name) => name }),
