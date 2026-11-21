@@ -3,6 +3,7 @@ import type { TmtIdConfig } from "../config.js";
 import type { ErpGateway } from "../erp-purchasing.js";
 import type { TokenSource } from "../tmt-id/token-vault.js";
 import { createMasterDataClient } from "./client.js";
+import { createEmployeeSync, type EmployeeSync } from "./employee-sync.js";
 import { createHolidaySync, type HolidaySync } from "./holiday-sync.js";
 import { createOwnRecordReader, type OwnRecordReader } from "./own-record.js";
 import { createProjectSearch, type ProjectSearch } from "./project-search.js";
@@ -17,6 +18,7 @@ export type MasterData = {
   projects: ProjectSearch;
   /** The customer and supplier registers, answering the register sync in place of the ERP. */
   registers: ErpGateway;
+  employees: EmployeeSync;
 };
 
 export function createMasterData(settings: TmtIdConfig, database: Database, tokens: TokenSource | null,
@@ -30,5 +32,6 @@ export function createMasterData(settings: TmtIdConfig, database: Database, toke
     ownRecord: tokens ? createOwnRecordReader(client, tokens, (error) => onError(error, "own record")) : null,
     projects: createProjectSearch(client),
     registers: createMasterRegisterGateway(client),
+    employees: createEmployeeSync(client, database, (error) => onError(error, "employee sync")),
   };
 }

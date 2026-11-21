@@ -5,7 +5,13 @@ export const MASTER_DATA_PATHS = {
   customers: "/api/v1/customers",
   suppliers: "/api/v1/suppliers",
   projects: "/api/v1/projects",
+  employees: "/api/v1/employees",
 } as const;
+
+export const EMPLOYEE_SYNC_INTERVAL_MS = 60 * 60_000;
+export const EMPLOYEE_SYNC_FIRST_RUN_MS = 30_000;
+// The company has well over this many people; a directory answer this short is treated as an outage.
+export const EMPLOYEE_DIRECTORY_MIN_PEOPLE = 20;
 
 export const PROJECT_SEARCH_LIMIT = 30;
 export const PROJECT_CLOSED_STATUS = "CANCELLED";
