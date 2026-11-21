@@ -10,6 +10,7 @@ import { baseHash, documentRoute, hashView, isPlainClick, parseScreenHash, RECOR
 import { ScreenLinkProvider, type ScreenLinkState } from "./screen-link";
 import { estimateBusinessDate } from "../../lib/estimate-ux";
 import { myWorkNeedsAttention as needsAttention } from "../../lib/my-work";
+import { noticeRows, supportRowText, type NoticeRow, type SupportNotice } from "../../lib/notification-rows";
 import { BrandLockup, BrandMark } from "./Brand";
 import { IS_ENTRA_CONFIGURED, restoreAccount, signInWithMicrosoft, signOutMicrosoft } from "./auth-client";
 import { ApiClientError, apiRequest, IS_API_CONFIGURED, loadBootstrap, saveMenuFavorites, type BootstrapData } from "./api-client";
@@ -114,6 +115,8 @@ type AppNotification = {
   entityId: number | null;
   isRead: boolean;
   createdAt: string;
+  /** Ticket number, event and actor of a support notification (null for every other kind). */
+  support?: SupportNotice | null;
 };
 /*
  * The left menu, in the order the work flows: sales, estimating, projects, procurement, team, system (lean menu
@@ -255,6 +258,9 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
   const [helpOpen, setHelpOpen] = useState(false);
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  // One row per support ticket (lib/notification-rows.ts); the badge counts the rows the bell shows.
+  const notificationRows = useMemo(() => noticeRows(notifications), [notifications]);
+  const unreadNotificationRows = notificationRows.filter((row) => !row.isRead).length;
   const [projectTab, setProjectTab] = useState<ProjectTab>(() => (typeof window === "undefined" ? "portfolio" : projectTabOf(window.location.hash)));
   const [inventoryTab, setInventoryTab] = useState<"balances" | "operations">("balances");
   const [preferredScheduleProjectId, setPreferredScheduleProjectId] = useState<number | null>(null);
@@ -648,11 +654,12 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
     }
   };
 
-  const openNotification = async (item: AppNotification) => {
+  const openNotification = async (row: NoticeRow<AppNotification>) => {
+    const { item } = row;
     setNotificationOpen(false);
-    if (!item.isRead) {
-      setNotifications((current) => current.map((entry) => entry.id === item.id ? { ...entry, isRead: true } : entry));
-      void apiRequest("/api/v1/me/notifications/read", { method: "POST", body: JSON.stringify({ ids: [item.id], all: false }) })
+    if (!row.isRead) {
+      setNotifications((current) => current.map((entry) => row.ids.includes(entry.id) ? { ...entry, isRead: true } : entry));
+      void apiRequest("/api/v1/me/notifications/read", { method: "POST", body: JSON.stringify({ ids: row.ids, all: false }) })
         .catch(() => { void refreshNotifications(); });
     }
     if (item.entityType === "GoodsReceipt") (await setView("receiving"));
@@ -956,15 +963,19 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
             <div className="menu-wrap">
               <button className="icon-btn" type="button" aria-label={t("Notifications")} aria-expanded={notificationOpen} onClick={() => { setNotificationOpen((value) => !value); setUserOpen(false); setHelpOpen(false); void refreshNotifications(); }}>
                 <Icon name="bell" />
-                {notifications.some((item) => !item.isRead) ? <b>{Math.min(99, notifications.filter((item) => !item.isRead).length)}</b> : null}
+                {unreadNotificationRows ? <b>{Math.min(99, unreadNotificationRows)}</b> : null}
               </button>
               {notificationOpen ? <div className="notification-menu" role="dialog" aria-label={t("Notifications")}>
-                <div className="notification-head"><span><strong>{t("Notifications")}</strong><small>{notifications.filter((item) => !item.isRead).length} {t("unread notifications")}</small></span><button type="button" disabled={!notifications.some((item) => !item.isRead)} onClick={() => { void markNotificationsRead(); }}>{t("Mark all as read")}</button></div>
+                <div className="notification-head"><span><strong>{t("Notifications")}</strong><small>{unreadNotificationRows} {t("unread notifications")}</small></span><button type="button" disabled={!unreadNotificationRows} onClick={() => { void markNotificationsRead(); }}>{t("Mark all as read")}</button></div>
                 <div className="notification-list">
-                  {notifications.length ? notifications.map((item) => <button key={item.id} type="button" className={item.isRead ? "notification-item" : "notification-item unread"} onClick={() => openNotification(item)}>
-                    <span className={`notification-icon ${item.kind === "MATERIAL_RECEIVED" ? "material" : ""}`}><Icon name={item.kind === "MATERIAL_RECEIVED" ? "package" : "bell"} /></span>
-                    <span><strong>{item.entityType === "SupportTicket" ? supportLabel(item.kind === "SUPPORT_RECOGNITION" ? "Support recognition" : "Support update", language) : item.title}</strong><small>{item.entityType === "SupportTicket" ? supportLabel("View ticket", language) : item.detail}</small><time>{new Intl.DateTimeFormat(language === "TH" ? "th-TH" : language === "JP" ? "ja-JP" : "en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(item.createdAt))}</time></span>
-                  </button>) : <div className="notification-empty"><Icon name="checkCircle" /><span>{t("No new notifications")}</span></div>}
+                  {notificationRows.length ? notificationRows.map((row) => {
+                    const { item } = row;
+                    const text = item.entityType === "SupportTicket" ? supportRowText(row, (key) => supportLabel(key, language)) : { title: item.title, detail: item.detail };
+                    return <button key={row.key} type="button" className={row.isRead ? "notification-item" : "notification-item unread"} onClick={() => openNotification(row)}>
+                      <span className={`notification-icon ${item.kind === "MATERIAL_RECEIVED" ? "material" : ""}`}><Icon name={item.kind === "MATERIAL_RECEIVED" ? "package" : "bell"} /></span>
+                      <span><strong>{text.title}</strong><small>{text.detail}</small><time>{new Intl.DateTimeFormat(language === "TH" ? "th-TH" : language === "JP" ? "ja-JP" : "en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(item.createdAt))}</time></span>
+                    </button>;
+                  }) : <div className="notification-empty"><Icon name="checkCircle" /><span>{t("No new notifications")}</span></div>}
                 </div>
               </div> : null}
             </div>

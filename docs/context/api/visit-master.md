@@ -2,7 +2,7 @@
 
 [Module](../modules/site-visit.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `60ea74be`; generated, do not edit. [backend-node/src/routes/visit-master.ts](<../../../backend-node/src/routes/visit-master.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `4875a8f0`; generated, do not edit. [backend-node/src/routes/visit-master.ts](<../../../backend-node/src/routes/visit-master.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
@@ -17,8 +17,8 @@ Evidence: source snapshot `60ea74be`; generated, do not edit. [backend-node/src/
 | DELETE | `/api/v1/visit-master/engineer-skills/:id` | 499–529 |
 | POST | `/api/v1/visit-master/availability` | 531–615 |
 | DELETE | `/api/v1/visit-master/availability/:id` | 616–669 |
-| GET | `/api/v1/me/notifications/` | 671–695 |
-| POST | `/api/v1/me/notifications/read` | 696–719 |
+| GET | `/api/v1/me/notifications/` | 671–719 |
+| POST | `/api/v1/me/notifications/read` | 720–743 |
 
 ## Named functions
 
@@ -28,7 +28,7 @@ Evidence: source snapshot `60ea74be`; generated, do not edit. [backend-node/src/
 | `code` | [backend-node/src/routes/visit-master.ts](<../../../backend-node/src/routes/visit-master.ts>) | 24–35 |
 | `bool` | [backend-node/src/routes/visit-master.ts](<../../../backend-node/src/routes/visit-master.ts>) | 36–47 |
 | `timestamp` | [backend-node/src/routes/visit-master.ts](<../../../backend-node/src/routes/visit-master.ts>) | 48–55 |
-| `registerVisitMasterRoutes` | [backend-node/src/routes/visit-master.ts](<../../../backend-node/src/routes/visit-master.ts>) | 57–720 |
+| `registerVisitMasterRoutes` | [backend-node/src/routes/visit-master.ts](<../../../backend-node/src/routes/visit-master.ts>) | 57–744 |
 
 ## Direct local dependencies
 
@@ -40,7 +40,7 @@ Evidence: source snapshot `60ea74be`; generated, do not edit. [backend-node/src/
 
 ## SQL references (literal scan, not a complete schema or write-set)
 
-`dbo.engineer_availability`, `dbo.engineer_skills`, `dbo.notifications`, `dbo.site_visit_assignments`, `dbo.site_visit_checklist_responses`, `dbo.site_visits`, `dbo.users`, `dbo.visit_checklist_items`, `dbo.visit_checklist_templates`, `dbo.visit_skills`, `dbo.visit_sla_policies`, `dbo.visit_types`
+`dbo.engineer_availability`, `dbo.engineer_skills`, `dbo.notifications`, `dbo.permissions`, `dbo.role_permissions`, `dbo.site_visit_assignments`, `dbo.site_visit_checklist_responses`, `dbo.site_visits`, `dbo.support_events`, `dbo.support_members`, `dbo.support_tickets`, `dbo.users`, `dbo.visit_checklist_items`, `dbo.visit_checklist_templates`, `dbo.visit_skills`, `dbo.visit_sla_policies`, `dbo.visit_types`
 
 ## Change boundary
 

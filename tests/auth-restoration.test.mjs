@@ -4,6 +4,7 @@ import test from "node:test";
 import ts from "typescript";
 import { DASHBOARD_ROLES } from "../backend-node/src/executive-dashboard-model.ts";
 import * as rememberedView from "../lib/remembered-view.ts";
+import * as notificationRows from "../lib/notification-rows.ts";
 
 const source = readFileSync(new URL("../app/system/ProductionApp.tsx", import.meta.url), "utf8");
 const compiled = ts.transpileModule(source, {
@@ -97,6 +98,7 @@ function createHarness({
   const modules = {
     "./dialogs": { confirmDialog: async () => globalThis.window.confirm?.() ?? true },
     "../../lib/remembered-view": rememberedView,
+    "../../lib/notification-rows": notificationRows,
     "../../backend-node/src/engineering-rate-access": { canViewEngineeringRates: role => DASHBOARD_ROLES.includes(role) },
     react,
     "react/jsx-runtime": jsxRuntime,
