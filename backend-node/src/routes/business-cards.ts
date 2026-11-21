@@ -22,9 +22,12 @@ export function registerBusinessCardRoutes(app: FastifyInstance, users: CurrentU
     if (!ocr) throw new ApiError(503, "copilot_off", "Business card reading is not connected on this server.");
     if (!BUSINESS_CARD_TYPES.includes(file.mimetype)) throw new ApiError(400, "validation_failed", "Send the card as a JPEG or PNG image.");
     try {
-      return businessCardFromScan(await ocr.scan(actor.entraObjectId, {
-        kind: "namecard", files: [{ name: file.filename || "business-card.jpg", type: file.mimetype, bytes }],
-      }));
+      return businessCardFromScan(
+        await ocr.scan(actor.entraObjectId, {
+          kind: "namecard",
+          files: [{ name: file.filename || "business-card.jpg", type: file.mimetype, bytes }],
+        }),
+      );
     } catch (error) {
       throw ocrApiError(error);
     }

@@ -135,21 +135,12 @@ export async function buildApp(config: AppConfig): Promise<Application> {
   const tmtId = createTmtIdRuntime(config, app.log);
   if (tmtId) await app.register(cookie);
   await app.register(cors, {
-    origin: (origin, callback) =>
-      callback(null, !origin || config.corsOrigins.includes(origin)),
+    origin: (origin, callback) => callback(null, !origin || config.corsOrigins.includes(origin)),
     // A split-origin deployment sends the session cookie cross-origin, which
     // the browser only does when the API also allows credentials.
     credentials: config.auth.mode === "TmtId",
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: [
-      "Authorization",
-      "Content-Type",
-      "X-Team-Test-Email",
-      "X-Team-Test-Code",
-      "X-Dev-User-Id",
-      "X-Dev-User-Email",
-      "If-Match",
-    ],
+    allowedHeaders: ["Authorization", "Content-Type", "X-Team-Test-Email", "X-Team-Test-Code", "X-Dev-User-Id", "X-Dev-User-Email", "If-Match"],
     maxAge: 3600,
   });
   // The per-person limit runs as a route preHandler, which Fastify places after the shared
@@ -167,21 +158,11 @@ export async function buildApp(config: AppConfig): Promise<Application> {
   });
 
   app.addHook("onRequest", async (request) => {
-    if (
-      config.database.readOnly === true &&
-      !["GET", "HEAD", "OPTIONS"].includes(request.method)
-    ) {
-      throw new ApiError(
-        403,
-        "local_read_only",
-        "This local API is connected in read-only mode. Database changes are disabled.",
-      );
+    if (config.database.readOnly === true && !["GET", "HEAD", "OPTIONS"].includes(request.method)) {
+      throw new ApiError(403, "local_read_only", "This local API is connected in read-only mode. Database changes are disabled.");
     }
     const host = request.hostname;
-    if (
-      config.environment !== "development" &&
-      !config.allowedHosts.includes(host)
-    ) {
+    if (config.environment !== "development" && !config.allowedHosts.includes(host)) {
       throw Object.assign(new Error("Host is not allowed."), {
         statusCode: 400,
       });
@@ -206,21 +187,22 @@ export async function buildApp(config: AppConfig): Promise<Application> {
   // A read-only API cannot link anyone; people already linked still sign in.
   // The Pegasus ERP takes a requisition only with its requester's own TMT ID token, master data answers /me only for the token's
   // own person, and copilot's OCR scans as the person, so sign-in keeps their refresh token when any of them is connected.
-  const tokenVault = tmtId && config.credentialVault && !config.database.readOnly && (config.pegasusMcpUrl || tmtId.settings.masterDataUrl || config.copilotOcrUrl)
-    ? new TmtIdTokenVault(database, config.credentialVault, tmtId.provider, (error) => app.log.warn({ err: error }, "TMT ID token refresh failed"))
-    : null;
-  const masterData = tmtId && !config.database.readOnly
-    ? createMasterData(tmtId.settings, database, tokenVault, (error, what) => app.log.warn({ err: error }, `Master data ${what} failed`))
-    : null;
+  const tokenVault =
+    tmtId && config.credentialVault && !config.database.readOnly && (config.pegasusMcpUrl || tmtId.settings.masterDataUrl || config.copilotOcrUrl)
+      ? new TmtIdTokenVault(database, config.credentialVault, tmtId.provider, (error) => app.log.warn({ err: error }, "TMT ID token refresh failed"))
+      : null;
+  const masterData = tmtId && !config.database.readOnly ? createMasterData(tmtId.settings, database, tokenVault, (error, what) => app.log.warn({ err: error }, `Master data ${what} failed`)) : null;
   if (masterData) {
     masterData.holidays.start();
     masterData.employees.start();
     masterData.registerSchedule.start();
-    app.addHook("onClose", async () => { masterData.holidays.stop(); masterData.employees.stop(); masterData.registerSchedule.stop(); });
+    app.addHook("onClose", async () => {
+      masterData.holidays.stop();
+      masterData.employees.stop();
+      masterData.registerSchedule.stop();
+    });
   }
-  const erp = tokenVault && tmtId && config.pegasusMcpUrl
-    ? { gateway: createErpGateway(new PegasusMcp(config.pegasusMcpUrl), tokenVault), appBaseUrl: tmtId.settings.appBaseUrl }
-    : null;
+  const erp = tokenVault && tmtId && config.pegasusMcpUrl ? { gateway: createErpGateway(new PegasusMcp(config.pegasusMcpUrl), tokenVault), appBaseUrl: tmtId.settings.appBaseUrl } : null;
   const copilotOcr = tokenVault && config.copilotOcrUrl ? createCopilotOcr(config.copilotOcrUrl, tokenVault) : null;
   if (tmtId) {
     registerTmtIdAuthRoutes(app, tmtId, config.database.readOnly ? null : createUserProvisioning(database, tmtId.settings.autoRegisterDomains), tokenVault);
@@ -232,15 +214,13 @@ export async function buildApp(config: AppConfig): Promise<Application> {
   registerExecutiveDashboardRoutes(app, database, users);
   registerBomRoutes(app, config, database, users);
   registerPricingRoutes(app, database, users);
-  app.addHook("preHandler", request => guardDocumentLifecycle(request, database, users));
+  app.addHook("preHandler", (request) => guardDocumentLifecycle(request, database, users));
   registerDocumentLifecycleRoutes(app, database, users, config);
   registerEstimateCostLookupRoutes(app, database, users);
   registerEstimateRoutes(app, config, database, users, erp, email);
   registerEstimateErpRoutes(app, database, users, erp);
   // Master data owns customers and suppliers now (same ids as the ERP's); the ERP registers remain the fallback.
-  registerErpMasterDataRoutes(app, database, users, masterData
-    ? { sync: masterData.registers, source: "master" }
-    : { sync: createErpMasterSync(database, erp?.gateway ?? null), source: "erp" });
+  registerErpMasterDataRoutes(app, database, users, masterData ? { sync: masterData.registers, source: "master" } : { sync: createErpMasterSync(database, erp?.gateway ?? null), source: "erp" });
   registerErpProjectRoutes(app, database, users, erp, masterData);
   registerOverheadPolicyRoutes(app, config, database, users);
   registerEstimateWorkspaceReadRoute(app, config, database, users);

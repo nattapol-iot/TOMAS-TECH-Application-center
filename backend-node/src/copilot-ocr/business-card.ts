@@ -3,7 +3,7 @@ import type { BusinessCardExtraction, BusinessCardName, OcrDocument, ScriptText 
 
 const clean = (value: unknown) => (typeof value === "string" ? value.normalize("NFC").replace(/\s+/g, " ").trim() : "");
 const list = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
-const scripts = (value: unknown): ScriptText => (value && typeof value === "object" ? value as ScriptText : null);
+const scripts = (value: unknown): ScriptText => (value && typeof value === "object" ? (value as ScriptText) : null);
 
 /** Each script the card prints, as printed: copilot fills a script only from that script on the card, never by translating. */
 function names(value: unknown): BusinessCardName[] {
@@ -20,7 +20,7 @@ function names(value: unknown): BusinessCardName[] {
 const first = (value: unknown) => names(value)[0]?.value ?? "";
 
 function phone(value: unknown): string {
-  const phones = list(value).map((item) => item && typeof item === "object" ? item as { kind?: unknown; number?: unknown } : {});
+  const phones = list(value).map((item) => (item && typeof item === "object" ? (item as { kind?: unknown; number?: unknown }) : {}));
   for (const kind of PHONE_PREFERENCE) {
     const match = phones.find((item) => item.kind === kind && clean(item.number));
     if (match) return clean(match.number);
@@ -31,8 +31,11 @@ function phone(value: unknown): string {
 /** Copilot's name card fields (document.data for kind namecard) in the shape the scanner fills the forms from. */
 export function businessCardFromScan(document: OcrDocument): BusinessCardExtraction {
   const data = document.data;
-  const address = list(data.addresses).map((item) => item && typeof item === "object" ? (item as { raw?: unknown }).raw : null).find((raw) => first(raw));
-  const companyNames = names(data.company), contactNames = names(data.name);
+  const address = list(data.addresses)
+    .map((item) => (item && typeof item === "object" ? (item as { raw?: unknown }).raw : null))
+    .find((raw) => first(raw));
+  const companyNames = names(data.company),
+    contactNames = names(data.name);
   return {
     companyName: companyNames[0]?.value ?? "",
     contactName: contactNames[0]?.value ?? "",

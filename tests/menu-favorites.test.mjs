@@ -32,7 +32,7 @@ test("favourites are limited to 8, follow the menu's permission rule and are sav
   assert.match(shell, /await saveMenuFavorites\(nextFavorites\)/);
   assert.match(shell, /setToast\("Nav\.favSaveFailed"\)/);
   assert.match(client, /menuFavorites\?: string\[\];/);
-  assert.match(client, /export const saveMenuFavorites = \(views: readonly string\[\]\) => apiRequest<\{ views: string\[\] \}>\("\/api\/v1\/me\/menu-favorites", \{\s*method: "PUT",/);
+  assert.match(client, /export const saveMenuFavorites = \(views: readonly string\[\]\) =>\s*apiRequest<\{ views: string\[\] \}>\("\/api\/v1\/me\/menu-favorites", \{\s*method: "PUT",/);
   const favoriteCode = shell.slice(shell.indexOf("Menu favourites (owner request"), shell.indexOf("const clearPreferredSchedule"));
   assert.doesNotMatch(favoriteCode, /localStorage|sessionStorage/);
 });

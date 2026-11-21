@@ -14,7 +14,9 @@ export const QUOTATION_SCHEMA: OcrSchema = {
     { name: "currency", description: "Currency code of the prices: THB, JPY, USD or EUR" },
     { name: "total_amount", type: "number", description: "The final total the supplier asks for, as printed on the quotation" },
     {
-      name: "lines", type: "table", description: "Every priced row of the item table; skip section headings that carry no price",
+      name: "lines",
+      type: "table",
+      description: "Every priced row of the item table; skip section headings that carry no price",
       columns: [
         { name: "item_code", description: "Part number or item code, when printed" },
         { name: "description", description: "What is quoted" },
@@ -37,7 +39,7 @@ const date = (value: unknown) => (typeof value === "string" && DATE.test(value) 
 
 function currencyOf(value: unknown): QuotationCurrency {
   const code = str(value).toUpperCase();
-  return (QUOTATION_CURRENCIES as readonly string[]).includes(code) ? code as QuotationCurrency : QUOTATION_DEFAULT_CURRENCY;
+  return (QUOTATION_CURRENCIES as readonly string[]).includes(code) ? (code as QuotationCurrency) : QUOTATION_DEFAULT_CURRENCY;
 }
 
 function addDays(isoDate: string, days: number): string {
@@ -55,17 +57,35 @@ export function quotationFromScan(document: OcrDocument): ParsedQuotation {
   const validUntil = date(fields.valid_until) || (receivedDate && validityDays > 0 ? addDays(receivedDate, validityDays) : "");
   const rows = Array.isArray(fields.lines) ? fields.lines : [];
   const lines: ParsedQuotationLine[] = rows
-    .map((row) => (row && typeof row === "object" ? row as Record<string, unknown> : {}))
+    .map((row) => (row && typeof row === "object" ? (row as Record<string, unknown>) : {}))
     .filter((row) => str(row.description) || str(row.item_code))
     .map((row, index) => ({
-      lineNo: index + 1, itemCode: str(row.item_code), description: str(row.description), brand: str(row.brand), model: str(row.model),
-      qty: num(row.qty), unit: str(row.unit), unitPrice: num(row.unit_price), lineTotal: num(row.line_total), currency, remark: str(row.remark),
+      lineNo: index + 1,
+      itemCode: str(row.item_code),
+      description: str(row.description),
+      brand: str(row.brand),
+      model: str(row.model),
+      qty: num(row.qty),
+      unit: str(row.unit),
+      unitPrice: num(row.unit_price),
+      lineTotal: num(row.line_total),
+      currency,
+      remark: str(row.remark),
     }));
-  const supplierName = str(fields.supplier_name), supplierTaxId = str(fields.supplier_tax_id).replace(/\D/g, ""), quotationNumber = str(fields.quotation_number);
+  const supplierName = str(fields.supplier_name),
+    supplierTaxId = str(fields.supplier_tax_id).replace(/\D/g, ""),
+    quotationNumber = str(fields.quotation_number);
   const totalAmount = num(fields.total_amount);
   const level = (present: boolean, strong: boolean) => (strong ? "high" : present ? "low" : "none");
   return {
-    supplierName, supplierTaxId, quotationNumber, receivedDate, validUntil, currency, totalAmount, lines,
+    supplierName,
+    supplierTaxId,
+    quotationNumber,
+    receivedDate,
+    validUntil,
+    currency,
+    totalAmount,
+    lines,
     rawText: "",
     requiresOcr: false,
     confidence: {

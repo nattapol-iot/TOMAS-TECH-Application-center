@@ -78,16 +78,29 @@ export function BusinessCardScanner({ disabled, onApply }: Props) {
 
   const applyResult = (parsed: BusinessCardExtraction) => {
     const changed = onApply(parsed);
-    setApplied(changed); setNeedsNameReview(false);
+    setApplied(changed);
+    setNeedsNameReview(false);
     setStatus(changed.length ? `เติมข้อมูลให้แล้ว ${changed.length} ช่อง กรุณาตรวจความถูกต้อง` : "อ่านข้อความได้ แต่ฟอร์มมีข้อมูลอยู่แล้ว จึงไม่ได้เขียนทับ");
   };
 
   // A preview change only releases its old URL; it must not cancel the scan that created the new preview.
-  useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
+  useEffect(
+    () => () => {
+      if (preview) URL.revokeObjectURL(preview);
+    },
+    [preview],
+  );
   // An answer arriving after unmount belongs to nobody.
-  useEffect(() => () => { runRef.current += 1; }, []);
+  useEffect(
+    () => () => {
+      runRef.current += 1;
+    },
+    [],
+  );
 
-  const clearPicker = (event: ChangeEvent<HTMLInputElement>) => { event.target.value = ""; };
+  const clearPicker = (event: ChangeEvent<HTMLInputElement>) => {
+    event.target.value = "";
+  };
   // Copilot finishes the scan anyway (it stays in the person's Document Scanner); this form just stops waiting for it.
   const cancel = () => {
     runRef.current += 1;
@@ -96,18 +109,36 @@ export function BusinessCardScanner({ disabled, onApply }: Props) {
   };
 
   const scan = async (file: File) => {
-    setError(""); setResult(null); setApplied([]); setNeedsNameReview(false);
-    if (!file.type.startsWith("image/")) { setError("กรุณาเลือกไฟล์รูปภาพนามบัตร"); return; }
-    if (file.size > MAX_IMAGE_BYTES) { setError("รูปมีขนาดเกิน 12 MB กรุณาลดขนาดรูปแล้วลองอีกครั้ง"); return; }
+    setError("");
+    setResult(null);
+    setApplied([]);
+    setNeedsNameReview(false);
+    if (!file.type.startsWith("image/")) {
+      setError("กรุณาเลือกไฟล์รูปภาพนามบัตร");
+      return;
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      setError("รูปมีขนาดเกิน 12 MB กรุณาลดขนาดรูปแล้วลองอีกครั้ง");
+      return;
+    }
     setPreview(URL.createObjectURL(file));
     setFileName(file.name || "รูปจากกล้อง");
-    setBusy(true); setStatus("กำลังเตรียมรูป…");
+    setBusy(true);
+    setStatus("กำลังเตรียมรูป…");
     const run = ++runRef.current;
     try {
       let image: Blob = file;
-      try { image = await prepareImage(file); } catch { /* The original is sent when the browser cannot redraw it. */ }
+      try {
+        image = await prepareImage(file);
+      } catch {
+        /* The original is sent when the browser cannot redraw it. */
+      }
       if (run !== runRef.current) return;
-      if (!SENDABLE_TYPES.includes(image.type)) { setError("เปิดรูปนี้ไม่ได้ กรุณาใช้รูป JPEG หรือ PNG"); setStatus(""); return; }
+      if (!SENDABLE_TYPES.includes(image.type)) {
+        setError("เปิดรูปนี้ไม่ได้ กรุณาใช้รูป JPEG หรือ PNG");
+        setStatus("");
+        return;
+      }
       setStatus("Copilot กำลังอ่านนามบัตร… ถ้ามีงานรอคิวอาจใช้เวลาสักครู่");
       const parsed = await scanBusinessCardViaBackend(image, image.type === "image/png" ? "business-card.png" : "business-card.jpg");
       if (run !== runRef.current) return;
@@ -116,14 +147,18 @@ export function BusinessCardScanner({ disabled, onApply }: Props) {
         setError("ยังแยกข้อมูลจากรูปนี้ไม่ได้ ลองถ่ายให้บัตรเต็มกรอบ ตรง และมีแสงสว่างขึ้น");
         setStatus("");
       } else {
-        setCompanyChoice(parsed.companyName); setContactChoice(parsed.contactName);
+        setCompanyChoice(parsed.companyName);
+        setContactChoice(parsed.contactName);
         if ((parsed.companyNames?.length ?? 0) > 1 || (parsed.contactNames?.length ?? 0) > 1) {
           setNeedsNameReview(true);
           setStatus("พบชื่อหลายภาษา เลือกชื่อที่ต้องการใช้ก่อนเติมข้อมูล");
         } else applyResult(parsed);
       }
     } catch (reason) {
-      if (run === runRef.current) { setError(failureMessage(reason)); setStatus(""); }
+      if (run === runRef.current) {
+        setError(failureMessage(reason));
+        setStatus("");
+      }
     } finally {
       if (run === runRef.current) setBusy(false);
     }
@@ -141,7 +176,10 @@ export function BusinessCardScanner({ disabled, onApply }: Props) {
     setDragging(false);
     if (disabled || busy) return;
     const file = [...(event.dataTransfer?.files ?? [])].find((item) => item.type.startsWith("image/"));
-    if (!file) { setError("ลากไฟล์รูปนามบัตรมาวาง (JPEG, PNG หรือ WebP)"); return; }
+    if (!file) {
+      setError("ลากไฟล์รูปนามบัตรมาวาง (JPEG, PNG หรือ WebP)");
+      return;
+    }
     void scan(file);
   };
 
@@ -158,37 +196,115 @@ export function BusinessCardScanner({ disabled, onApply }: Props) {
     setDragging(false);
   };
 
-  return <section
-    className={dragging ? "business-card-scanner is-dragging" : "business-card-scanner"}
-    aria-labelledby="business-card-title"
-    onDragOver={dragOver}
-    onDragLeave={dragLeave}
-    onDrop={dropped}
-  >
-    <div className="business-card-heading">
-      <div><strong id="business-card-title"><LocalizedText text={"สแกนนามบัตร"} /></strong><small>Copilot อ่านภาษาไทย อังกฤษ และญี่ปุ่น แล้วเติมช่องว่างให้ตรวจแก้ก่อนบันทึก · ลากรูปมาวางตรงนี้ได้</small></div>
-      <span className="business-card-private"><Icon name="upload" /><LocalizedText text={"ส่งรูปให้ Copilot"} /></span>
-    </div>
-    <div className="business-card-actions">
-      <button className="btn default" type="button" disabled={disabled || busy} onClick={() => importRef.current?.click()}><Icon name="upload" /><LocalizedText text={"เลือกรูปนามบัตร"} /></button>
-      <button className="btn primary" type="button" disabled={disabled || busy} onClick={() => cameraRef.current?.click()}><Icon name="eye" /><LocalizedText text={"ถ่ายรูปนามบัตร"} /></button>
-      {busy ? <button className="btn ghost" type="button" onClick={cancel}><LocalizedText text={"ยกเลิก"} /></button> : null}
-    </div>
-    <input ref={importRef} data-business-card-source="import" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" hidden onChange={selected} />
-    <input ref={cameraRef} data-business-card-source="camera" type="file" accept="image/*" capture="environment" hidden onChange={selected} />
-    {preview ? <div className="business-card-progress">
-      {/* eslint-disable-next-line @next/next/no-img-element -- local blob previews cannot use an image optimizer */}
-      <img src={preview} alt={`ตัวอย่างนามบัตร ${fileName}`} /><div>
-      {busy ? <><progress aria-label={localizeCopy("ความคืบหน้าการอ่านข้อความ")} /><p role="status" aria-live="polite">{status || "Copilot กำลังอ่านนามบัตร…"}</p></> : null}
-      {!busy && status ? <p className="business-card-success" role="status"><Icon name="checkCircle" />{status}</p> : null}
-      {result && needsNameReview ? <div className="business-card-names">
-        <p>ชื่อที่พิมพ์บนนามบัตร · เลือกใช้ได้โดยไม่แปลหรือสร้างชื่อภาษาอื่นเพิ่ม</p>
-        {(result.companyNames?.length ?? 0) > 1 ? <label className="field"><span><LocalizedText text={"ชื่อบริษัทที่จะใช้"} /></span><select aria-label={localizeCopy("ชื่อบริษัทที่จะใช้")} value={companyChoice} disabled={disabled || busy} onChange={event => setCompanyChoice(event.target.value)}>{result.companyNames!.map(name => <option key={`${name.language}:${name.value}`} value={name.value}>{({ th: "ไทย", en: "English", ja: "日本語" })[name.language]} — {name.value}</option>)}</select></label> : null}
-        {(result.contactNames?.length ?? 0) > 1 ? <label className="field"><span><LocalizedText text={"ชื่อผู้ติดต่อที่จะใช้"} /></span><select aria-label={localizeCopy("ชื่อผู้ติดต่อที่จะใช้")} value={contactChoice} disabled={disabled || busy} onChange={event => setContactChoice(event.target.value)}>{result.contactNames!.map(name => <option key={`${name.language}:${name.value}`} value={name.value}>{({ th: "ไทย", en: "English", ja: "日本語" })[name.language]} — {name.value}</option>)}</select></label> : null}
-        <button className="btn primary" type="button" disabled={disabled || busy} onClick={() => applyResult({ ...result, companyName: companyChoice, contactName: contactChoice })}><LocalizedText text={"เติมข้อมูลที่เลือกในช่องว่าง"} /></button>
-      </div> : null}
-      {result ? <p className="muted">{applied.length ? `เติม: ${applied.join(", ")}` : null}{result.documentUrl ? <> {applied.length ? "· " : ""}<a href={result.documentUrl} target="_blank" rel="noreferrer"><LocalizedText text={"เปิดใน Copilot"} /></a></> : null}</p> : null}
-    </div></div> : null}
-    {error ? <div className="callout danger business-card-error" role="alert"><Icon name="alertCircle" /><span>{error}</span></div> : null}
-  </section>;
+  return (
+    <section className={dragging ? "business-card-scanner is-dragging" : "business-card-scanner"} aria-labelledby="business-card-title" onDragOver={dragOver} onDragLeave={dragLeave} onDrop={dropped}>
+      <div className="business-card-heading">
+        <div>
+          <strong id="business-card-title">
+            <LocalizedText text={"สแกนนามบัตร"} />
+          </strong>
+          <small>Copilot อ่านภาษาไทย อังกฤษ และญี่ปุ่น แล้วเติมช่องว่างให้ตรวจแก้ก่อนบันทึก · ลากรูปมาวางตรงนี้ได้</small>
+        </div>
+        <span className="business-card-private">
+          <Icon name="upload" />
+          <LocalizedText text={"ส่งรูปให้ Copilot"} />
+        </span>
+      </div>
+      <div className="business-card-actions">
+        <button className="btn default" type="button" disabled={disabled || busy} onClick={() => importRef.current?.click()}>
+          <Icon name="upload" />
+          <LocalizedText text={"เลือกรูปนามบัตร"} />
+        </button>
+        <button className="btn primary" type="button" disabled={disabled || busy} onClick={() => cameraRef.current?.click()}>
+          <Icon name="eye" />
+          <LocalizedText text={"ถ่ายรูปนามบัตร"} />
+        </button>
+        {busy ? (
+          <button className="btn ghost" type="button" onClick={cancel}>
+            <LocalizedText text={"ยกเลิก"} />
+          </button>
+        ) : null}
+      </div>
+      <input ref={importRef} data-business-card-source="import" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" hidden onChange={selected} />
+      <input ref={cameraRef} data-business-card-source="camera" type="file" accept="image/*" capture="environment" hidden onChange={selected} />
+      {preview ? (
+        <div className="business-card-progress">
+          {/* eslint-disable-next-line @next/next/no-img-element -- local blob previews cannot use an image optimizer */}
+          <img src={preview} alt={`ตัวอย่างนามบัตร ${fileName}`} />
+          <div>
+            {busy ? (
+              <>
+                <progress aria-label={localizeCopy("ความคืบหน้าการอ่านข้อความ")} />
+                <p role="status" aria-live="polite">
+                  {status || "Copilot กำลังอ่านนามบัตร…"}
+                </p>
+              </>
+            ) : null}
+            {!busy && status ? (
+              <p className="business-card-success" role="status">
+                <Icon name="checkCircle" />
+                {status}
+              </p>
+            ) : null}
+            {result && needsNameReview ? (
+              <div className="business-card-names">
+                <p>ชื่อที่พิมพ์บนนามบัตร · เลือกใช้ได้โดยไม่แปลหรือสร้างชื่อภาษาอื่นเพิ่ม</p>
+                {(result.companyNames?.length ?? 0) > 1 ? (
+                  <label className="field">
+                    <span>
+                      <LocalizedText text={"ชื่อบริษัทที่จะใช้"} />
+                    </span>
+                    <select aria-label={localizeCopy("ชื่อบริษัทที่จะใช้")} value={companyChoice} disabled={disabled || busy} onChange={(event) => setCompanyChoice(event.target.value)}>
+                      {result.companyNames!.map((name) => (
+                        <option key={`${name.language}:${name.value}`} value={name.value}>
+                          {{ th: "ไทย", en: "English", ja: "日本語" }[name.language]} — {name.value}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
+                {(result.contactNames?.length ?? 0) > 1 ? (
+                  <label className="field">
+                    <span>
+                      <LocalizedText text={"ชื่อผู้ติดต่อที่จะใช้"} />
+                    </span>
+                    <select aria-label={localizeCopy("ชื่อผู้ติดต่อที่จะใช้")} value={contactChoice} disabled={disabled || busy} onChange={(event) => setContactChoice(event.target.value)}>
+                      {result.contactNames!.map((name) => (
+                        <option key={`${name.language}:${name.value}`} value={name.value}>
+                          {{ th: "ไทย", en: "English", ja: "日本語" }[name.language]} — {name.value}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
+                <button className="btn primary" type="button" disabled={disabled || busy} onClick={() => applyResult({ ...result, companyName: companyChoice, contactName: contactChoice })}>
+                  <LocalizedText text={"เติมข้อมูลที่เลือกในช่องว่าง"} />
+                </button>
+              </div>
+            ) : null}
+            {result ? (
+              <p className="muted">
+                {applied.length ? `เติม: ${applied.join(", ")}` : null}
+                {result.documentUrl ? (
+                  <>
+                    {" "}
+                    {applied.length ? "· " : ""}
+                    <a href={result.documentUrl} target="_blank" rel="noreferrer">
+                      <LocalizedText text={"เปิดใน Copilot"} />
+                    </a>
+                  </>
+                ) : null}
+              </p>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+      {error ? (
+        <div className="callout danger business-card-error" role="alert">
+          <Icon name="alertCircle" />
+          <span>{error}</span>
+        </div>
+      ) : null}
+    </section>
+  );
 }

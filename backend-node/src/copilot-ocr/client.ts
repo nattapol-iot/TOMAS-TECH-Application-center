@@ -1,9 +1,12 @@
 import type { TokenSource } from "../tmt-id/token-vault.js";
 import { SCAN_DEADLINE_MS, SCAN_SETTLED_STATES, SCAN_WAIT_SECONDS } from "./constants.js";
-import type { CopilotOcr, OcrDocument, OcrScanRequest } from "./types.js";
+import type { CopilotOcr, OcrDocument } from "./types.js";
 
 export class CopilotOcrError extends Error {
-  constructor(public readonly reason: "signed_out" | "rejected" | "unavailable" | "unreadable" | "timeout", message: string) {
+  constructor(
+    public readonly reason: "signed_out" | "rejected" | "unavailable" | "unreadable" | "timeout",
+    message: string,
+  ) {
     super(message);
     this.name = "CopilotOcrError";
   }
@@ -11,7 +14,7 @@ export class CopilotOcrError extends Error {
 
 type ScanReply = { job_id?: string; state?: string; error?: string | null; document?: Record<string, unknown> | null };
 
-const record = (value: unknown): Record<string, unknown> => (value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {});
+const record = (value: unknown): Record<string, unknown> => (value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {});
 const text = (value: unknown) => (typeof value === "string" ? value : null);
 
 function documentOf(raw: Record<string, unknown>): OcrDocument {
@@ -45,7 +48,7 @@ export function createCopilotOcr(baseUrl: string, tokens: TokenSource, fetchImpl
       throw new CopilotOcrError("rejected", `Copilot refused the document: ${await response.text().catch(() => "")}`.slice(0, 300));
     }
     if (!response.ok) throw new CopilotOcrError("unavailable", `Copilot answered ${response.status}.`);
-    return await response.json() as ScanReply;
+    return (await response.json()) as ScanReply;
   };
 
   return {
@@ -64,8 +67,7 @@ export function createCopilotOcr(baseUrl: string, tokens: TokenSource, fetchImpl
       while (!SCAN_SETTLED_STATES.includes(reply.state ?? "")) {
         if (!jobId) throw new CopilotOcrError("unavailable", "Copilot did not return a scan id.");
         if (now() >= deadline) throw new CopilotOcrError("timeout", "Copilot is still reading; try again in a few minutes.");
-        reply = await call(subject, (token) => fetchImpl(`${baseUrl}/scans/${encodeURIComponent(jobId)}?wait=${SCAN_WAIT_SECONDS}`,
-          { headers: { Authorization: `Bearer ${token}` } }));
+        reply = await call(subject, (token) => fetchImpl(`${baseUrl}/scans/${encodeURIComponent(jobId)}?wait=${SCAN_WAIT_SECONDS}`, { headers: { Authorization: `Bearer ${token}` } }));
       }
       if (reply.state !== "done" || !reply.document) throw new CopilotOcrError("unreadable", reply.error || "Copilot could not read the document.");
       return documentOf(reply.document);

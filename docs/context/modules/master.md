@@ -4,7 +4,7 @@
 
 ลูกค้า supplier (ดึงจาก Pegasus ERP) พนักงาน role audit และ settings
 
-Evidence: snapshot `00a285e2`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
+Evidence: snapshot `3874cdae`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
 
 ## Read only the operation you change
 
@@ -13,6 +13,7 @@ Evidence: snapshot `00a285e2`; source map, not a live availability claim. Test c
 - [admin API and function map](../api/admin.md) — registered in Node app
 - [sign-in-requests API and function map](../api/sign-in-requests.md) — registered in Node app
 - [erp-master-data API and function map](../api/erp-master-data.md) — registered in Node app
+- [business-cards API and function map](../api/business-cards.md) — registered in Node app
 
 ## UI function locator
 
@@ -114,6 +115,11 @@ Shared screens contain other modules: use the symbol and line range instead of r
 - [backend-node/src/routes/sales-customers.ts](<../../../backend-node/src/routes/sales-customers.ts>)
 - [backend-node/src/erp-master-data.ts](<../../../backend-node/src/erp-master-data.ts>)
 - [backend-node/src/erp-master-sync.ts](<../../../backend-node/src/erp-master-sync.ts>)
+- [backend-node/src/copilot-ocr/business-card.ts](<../../../backend-node/src/copilot-ocr/business-card.ts>)
+- [backend-node/src/copilot-ocr/constants.ts](<../../../backend-node/src/copilot-ocr/constants.ts>)
+- [backend-node/src/copilot-ocr/errors.ts](<../../../backend-node/src/copilot-ocr/errors.ts>)
+- [backend-node/src/copilot-ocr/types.ts](<../../../backend-node/src/copilot-ocr/types.ts>)
+- [backend-node/src/document-storage.ts](<../../../backend-node/src/document-storage.ts>)
 - [app/system/dialogs.ts](<../../../app/system/dialogs.ts>)
 - [app/system/i18n.ts](<../../../app/system/i18n.ts>)
 - [app/system/LocalizedText.tsx](<../../../app/system/LocalizedText.tsx>)
@@ -148,7 +154,6 @@ Shared screens contain other modules: use the symbol and line range instead of r
 ## Candidate regression tests
 
 - [tests/business-card-lifecycle.test.mjs](<../../../tests/business-card-lifecycle.test.mjs>)
-- [tests/business-card-multilingual.test.mjs](<../../../tests/business-card-multilingual.test.mjs>)
 - [tests/business-card-scanner.test.mjs](<../../../tests/business-card-scanner.test.mjs>)
 - [tests/customer-contact-role-ui.test.mjs](<../../../tests/customer-contact-role-ui.test.mjs>)
 - [tests/customer-contact-titles-ui.test.mjs](<../../../tests/customer-contact-titles-ui.test.mjs>)

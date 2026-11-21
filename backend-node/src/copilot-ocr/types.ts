@@ -43,16 +43,31 @@ export type BusinessCardExtraction = {
 export type QuotationCurrency = "THB" | "JPY" | "USD" | "EUR";
 
 export type ParsedQuotationLine = {
-  lineNo: number; itemCode: string; description: string; brand: string; model: string;
-  qty: number; unit: string; unitPrice: number; lineTotal: number; currency: QuotationCurrency; remark: string;
+  lineNo: number;
+  itemCode: string;
+  description: string;
+  brand: string;
+  model: string;
+  qty: number;
+  unit: string;
+  unitPrice: number;
+  lineTotal: number;
+  currency: QuotationCurrency;
+  remark: string;
 };
 
 /** What POST /supplier-quotations/parse-pdf answers; the same shape the Python pdf-parser returned. */
 export type ParsedQuotation = {
-  supplierName: string; supplierTaxId: string; quotationNumber: string;
-  receivedDate: string; validUntil: string; currency: QuotationCurrency; totalAmount: number;
+  supplierName: string;
+  supplierTaxId: string;
+  quotationNumber: string;
+  receivedDate: string;
+  validUntil: string;
+  currency: QuotationCurrency;
+  totalAmount: number;
   lines: ParsedQuotationLine[];
-  rawText: string; requiresOcr: boolean;
+  rawText: string;
+  requiresOcr: boolean;
   confidence: Record<string, "high" | "low" | "none">;
 };
 

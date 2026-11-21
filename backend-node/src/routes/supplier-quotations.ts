@@ -73,30 +73,36 @@ export function parseThbRate(value: unknown, currency: string): number | null {
 
 function quotation(row: Record<string, unknown> & { row_version: Buffer }) {
   return {
-    id: Number(row.id), quotationNumber: row.quotation_no, supplierReference: row.supplier_reference,
-    supplierId: Number(row.supplier_id), supplierName: row.supplier_name,
-    receivedDate: dateOnly(row.received_date as Date | string), validUntil: dateOnly(row.valid_until as Date | string),
-    inquiryId: row.inquiry_id === null ? null : Number(row.inquiry_id), inquiryNumber: row.inquiry_no,
-    projectName: row.project_name, currency: row.currency, amount: Number(row.amount), status: row.display_status,
+    id: Number(row.id),
+    quotationNumber: row.quotation_no,
+    supplierReference: row.supplier_reference,
+    supplierId: Number(row.supplier_id),
+    supplierName: row.supplier_name,
+    receivedDate: dateOnly(row.received_date as Date | string),
+    validUntil: dateOnly(row.valid_until as Date | string),
+    inquiryId: row.inquiry_id === null ? null : Number(row.inquiry_id),
+    inquiryNumber: row.inquiry_no,
+    projectName: row.project_name,
+    currency: row.currency,
+    amount: Number(row.amount),
+    status: row.display_status,
     thbRate: row.thb_rate === null || row.thb_rate === undefined ? null : Number(row.thb_rate),
     /* A web reference stores no file, so the file fields read as empty rather than
        as a document of zero bytes, and the URL it cites stands in their place. */
     sourceKind: row.source_kind === "WebReference" ? "WebReference" : "Document",
     sourceUrl: String(row.source_url ?? ""),
-    fileName: String(row.file_name ?? ""), contentType: String(row.content_type ?? ""), sizeBytes: Number(row.size_bytes ?? 0),
-    uploadedByName: row.uploaded_by_name, uploadedAt: row.uploaded_at, rowVersion: row.row_version.toString("base64"),
+    fileName: String(row.file_name ?? ""),
+    contentType: String(row.content_type ?? ""),
+    sizeBytes: Number(row.size_bytes ?? 0),
+    uploadedByName: row.uploaded_by_name,
+    uploadedAt: row.uploaded_at,
+    rowVersion: row.row_version.toString("base64"),
     /* Zero here means the document is stored but no price reached the Price Library. */
     lineCount: Number(row.line_count ?? 0),
   };
 }
 
-export function registerSupplierQuotationRoutes(
-  app: FastifyInstance,
-  config: AppConfig,
-  database: Database,
-  users: CurrentUserService,
-  ocr: CopilotOcr | null = null,
-): void {
+export function registerSupplierQuotationRoutes(app: FastifyInstance, config: AppConfig, database: Database, users: CurrentUserService, ocr: CopilotOcr | null = null): void {
   app.get("/api/v1/supplier-quotations", async (request) => {
     await users.demandPermission(request, "estimate.read");
     const query = request.query as Record<string, unknown>;
@@ -110,7 +116,8 @@ export function registerSupplierQuotationRoutes(
     if (status && !["Valid", "Expiring", "Expired", "Superseded"].includes(status)) {
       throw new ApiError(400, "validation_failed", "Quotation status is invalid.");
     }
-    const result = await database.query<(Record<string, unknown> & { row_version: Buffer; total_count: number | string })>(`
+    const result = await database.query<Record<string, unknown> & { row_version: Buffer; total_count: number | string }>(
+      `
       WITH quotation_rows AS (
         SELECT q.id,q.quotation_no,q.supplier_reference,q.supplier_id,s.name supplier_name,
                q.received_date,q.valid_until,q.inquiry_id,i.inquiry_no,i.project_name,q.currency,q.amount,q.thb_rate,
@@ -133,11 +140,17 @@ export function registerSupplierQuotationRoutes(
           OR COALESCE(project_name,N'') LIKE N'%'+@search+N'%' OR COALESCE(file_name,N'') LIKE N'%'+@search+N'%'
           OR source_url LIKE N'%'+@search+N'%')
       ORDER BY received_date DESC,id DESC OFFSET @offset ROWS FETCH NEXT @page_size ROWS ONLY;
-    `, (bind) => {
-      bind.input("today", sql.Date, todayIn(config.businessTimeZone)); bind.input("supplier", sql.BigInt, supplierId);
-      bind.input("inquiry", sql.BigInt, inquiryId); bind.input("status", sql.NVarChar(30), status); bind.input("search", sql.NVarChar(200), search);
-      bind.input("offset", sql.Int, (page - 1) * pageSize); bind.input("page_size", sql.Int, pageSize);
-    });
+    `,
+      (bind) => {
+        bind.input("today", sql.Date, todayIn(config.businessTimeZone));
+        bind.input("supplier", sql.BigInt, supplierId);
+        bind.input("inquiry", sql.BigInt, inquiryId);
+        bind.input("status", sql.NVarChar(30), status);
+        bind.input("search", sql.NVarChar(200), search);
+        bind.input("offset", sql.Int, (page - 1) * pageSize);
+        bind.input("page_size", sql.Int, pageSize);
+      },
+    );
     return { items: result.recordset.map(quotation), page, pageSize, total: Number(result.recordset[0]?.total_count ?? 0) };
   });
 
@@ -169,15 +182,25 @@ export function registerSupplierQuotationRoutes(
     let lines: LineInput[] = [];
     if (linesField) {
       let payload: unknown;
-      try { payload = JSON.parse(linesField); } catch { throw new ApiError(400, "validation_failed", "lines must be valid JSON."); }
+      try {
+        payload = JSON.parse(linesField);
+      } catch {
+        throw new ApiError(400, "validation_failed", "lines must be valid JSON.");
+      }
       lines = parseLineArray(payload);
     }
 
-    const references = await database.query<{ supplier_name: string }>(`
+    const references = await database.query<{ supplier_name: string }>(
+      `
       SELECT s.name supplier_name FROM dbo.suppliers s
       WHERE s.id=@supplier AND s.is_active=1 AND s.deleted_at IS NULL
         AND (@inquiry IS NULL OR EXISTS(SELECT 1 FROM dbo.inquiries i WHERE i.id=@inquiry AND i.deleted_at IS NULL));
-    `, (bind) => { bind.input("supplier", sql.BigInt, supplierId); bind.input("inquiry", sql.BigInt, inquiryId); });
+    `,
+      (bind) => {
+        bind.input("supplier", sql.BigInt, supplierId);
+        bind.input("inquiry", sql.BigInt, inquiryId);
+      },
+    );
     if (!references.recordset[0]) throw new ApiError(422, "invalid_reference", "Supplier or inquiry was not found.");
 
     const key = quotationStorageKey(references.recordset[0]!.supplier_name, extension, receivedDate);
@@ -185,28 +208,44 @@ export function registerSupplierQuotationRoutes(
     try {
       const created = await database.transaction(async (transaction) => {
         const validate = new sql.Request(transaction);
-        validate.input("supplier", sql.BigInt, supplierId); validate.input("inquiry", sql.BigInt, inquiryId);
-        const supplier = (await validate.query<{ supplier_name: string }>(`
+        validate.input("supplier", sql.BigInt, supplierId);
+        validate.input("inquiry", sql.BigInt, inquiryId);
+        const supplier = (
+          await validate.query<{ supplier_name: string }>(`
           SELECT s.name supplier_name FROM dbo.suppliers s WITH (UPDLOCK,HOLDLOCK)
           WHERE s.id=@supplier AND s.is_active=1 AND s.deleted_at IS NULL
             AND (@inquiry IS NULL OR EXISTS(SELECT 1 FROM dbo.inquiries i WHERE i.id=@inquiry AND i.deleted_at IS NULL));
-        `)).recordset[0];
+        `)
+        ).recordset[0];
         if (!supplier) throw new ApiError(422, "invalid_reference", "Supplier or inquiry was not found.");
         const number = await issueDocumentNumber(transaction, "SQ", receivedDate);
         const insert = new sql.Request(transaction);
-        insert.input("number", sql.NVarChar(30), number); insert.input("reference", sql.NVarChar(200), supplierReference);
-        insert.input("supplier", sql.BigInt, supplierId); insert.input("received", sql.Date, receivedDate); insert.input("valid", sql.Date, validUntil);
-        insert.input("inquiry", sql.BigInt, inquiryId); insert.input("currency", sql.Char(3), currency); insert.input("amount", sql.Decimal(19, 4), amount);
-        insert.input("thb_rate", sql.Decimal(19, 6), thbRate); insert.input("file", sql.NVarChar(500), fileName); insert.input("content_type", sql.NVarChar(200), contentType);
-        insert.input("size", sql.BigInt, write.sizeBytes); insert.input("key", sql.NVarChar(1000), key); insert.input("sha", sql.Char(64), write.sha256);
+        insert.input("number", sql.NVarChar(30), number);
+        insert.input("reference", sql.NVarChar(200), supplierReference);
+        insert.input("supplier", sql.BigInt, supplierId);
+        insert.input("received", sql.Date, receivedDate);
+        insert.input("valid", sql.Date, validUntil);
+        insert.input("inquiry", sql.BigInt, inquiryId);
+        insert.input("currency", sql.Char(3), currency);
+        insert.input("amount", sql.Decimal(19, 4), amount);
+        insert.input("thb_rate", sql.Decimal(19, 6), thbRate);
+        insert.input("file", sql.NVarChar(500), fileName);
+        insert.input("content_type", sql.NVarChar(200), contentType);
+        insert.input("size", sql.BigInt, write.sizeBytes);
+        insert.input("key", sql.NVarChar(1000), key);
+        insert.input("sha", sql.Char(64), write.sha256);
         insert.input("actor", sql.BigInt, actor.id);
-        const row = (await insert.query<{ id: number | string; row_version: Buffer }>(`
+        const row = (
+          await insert.query<{ id: number | string; row_version: Buffer }>(`
           INSERT INTO dbo.supplier_quotations(quotation_no,supplier_reference,supplier_id,received_date,valid_until,inquiry_id,currency,amount,thb_rate,file_name,content_type,size_bytes,storage_key,sha256,uploaded_by)
           OUTPUT inserted.id,inserted.row_version VALUES(@number,@reference,@supplier,@received,@valid,@inquiry,@currency,@amount,@thb_rate,@file,@content_type,@size,@key,@sha,@actor);
-        `)).recordset[0]!;
+        `)
+        ).recordset[0]!;
         await writeQuotationLines(transaction, Number(row.id), lines, actor.id);
         const audit = new sql.Request(transaction);
-        audit.input("actor", sql.BigInt, actor.id); audit.input("id", sql.BigInt, Number(row.id)); audit.input("number", sql.NVarChar(50), number);
+        audit.input("actor", sql.BigInt, actor.id);
+        audit.input("id", sql.BigInt, Number(row.id));
+        audit.input("number", sql.NVarChar(50), number);
         audit.input("after", sql.NVarChar(sql.MAX), JSON.stringify({ supplierId, supplierName: supplier.supplier_name, amount, currency, thbRate, fileName, lineCount: lines.length }));
         await audit.query(`INSERT INTO dbo.audit_log(actor_id,entity_type,entity_id,entity_no,action,after_json,reason)
           VALUES(@actor,N'SupplierQuotation',@id,@number,N'Uploaded',@after,N'Supplier quotation document uploaded');`);
@@ -245,35 +284,46 @@ export function registerSupplierQuotationRoutes(
       throw new ApiError(400, "validation_failed", "Amount must be greater than zero.");
     }
     const thbRate = parseThbRate(body.thbRate, currency);
-    const inquiryId = body.inquiryId === null || body.inquiryId === undefined
-      ? null : bodyId(body.inquiryId, "Inquiry id");
+    const inquiryId = body.inquiryId === null || body.inquiryId === undefined ? null : bodyId(body.inquiryId, "Inquiry id");
     const lines = parseLineArray(body.lines ?? []);
 
     const created = await database.transaction(async (transaction) => {
       const validate = new sql.Request(transaction);
-      validate.input("supplier", sql.BigInt, supplierId); validate.input("inquiry", sql.BigInt, inquiryId);
-      const supplier = (await validate.query<{ supplier_name: string }>(`
+      validate.input("supplier", sql.BigInt, supplierId);
+      validate.input("inquiry", sql.BigInt, inquiryId);
+      const supplier = (
+        await validate.query<{ supplier_name: string }>(`
         SELECT s.name supplier_name FROM dbo.suppliers s WITH (UPDLOCK,HOLDLOCK)
         WHERE s.id=@supplier AND s.is_active=1 AND s.deleted_at IS NULL
           AND (@inquiry IS NULL OR EXISTS(SELECT 1 FROM dbo.inquiries i WHERE i.id=@inquiry AND i.deleted_at IS NULL));
-      `)).recordset[0];
+      `)
+      ).recordset[0];
       if (!supplier) throw new ApiError(422, "invalid_reference", "Supplier or inquiry was not found.");
       const number = await issueDocumentNumber(transaction, "RP", receivedDate);
       const insert = new sql.Request(transaction);
-      insert.input("number", sql.NVarChar(30), number); insert.input("reference", sql.NVarChar(200), supplierReference);
-      insert.input("supplier", sql.BigInt, supplierId); insert.input("received", sql.Date, receivedDate);
-      insert.input("valid", sql.Date, validUntil); insert.input("inquiry", sql.BigInt, inquiryId);
-      insert.input("currency", sql.Char(3), currency); insert.input("amount", sql.Decimal(19, 4), amount);
+      insert.input("number", sql.NVarChar(30), number);
+      insert.input("reference", sql.NVarChar(200), supplierReference);
+      insert.input("supplier", sql.BigInt, supplierId);
+      insert.input("received", sql.Date, receivedDate);
+      insert.input("valid", sql.Date, validUntil);
+      insert.input("inquiry", sql.BigInt, inquiryId);
+      insert.input("currency", sql.Char(3), currency);
+      insert.input("amount", sql.Decimal(19, 4), amount);
       insert.input("thb_rate", sql.Decimal(19, 6), thbRate);
-      insert.input("url", sql.NVarChar(1000), sourceUrl); insert.input("actor", sql.BigInt, actor.id);
-      const row = (await insert.query<{ id: number | string; row_version: Buffer }>(`
+      insert.input("url", sql.NVarChar(1000), sourceUrl);
+      insert.input("actor", sql.BigInt, actor.id);
+      const row = (
+        await insert.query<{ id: number | string; row_version: Buffer }>(`
         INSERT INTO dbo.supplier_quotations(quotation_no,supplier_reference,supplier_id,received_date,valid_until,inquiry_id,currency,amount,thb_rate,source_kind,source_url,uploaded_by)
         OUTPUT inserted.id,inserted.row_version
         VALUES(@number,@reference,@supplier,@received,@valid,@inquiry,@currency,@amount,@thb_rate,N'WebReference',@url,@actor);
-      `)).recordset[0]!;
+      `)
+      ).recordset[0]!;
       await writeQuotationLines(transaction, Number(row.id), lines, actor.id);
       const audit = new sql.Request(transaction);
-      audit.input("actor", sql.BigInt, actor.id); audit.input("id", sql.BigInt, Number(row.id)); audit.input("number", sql.NVarChar(50), number);
+      audit.input("actor", sql.BigInt, actor.id);
+      audit.input("id", sql.BigInt, Number(row.id));
+      audit.input("number", sql.NVarChar(50), number);
       audit.input("after", sql.NVarChar(sql.MAX), JSON.stringify({ supplierId, supplierName: supplier.supplier_name, amount, currency, thbRate, sourceUrl, lineCount: lines.length }));
       await audit.query(`INSERT INTO dbo.audit_log(actor_id,entity_type,entity_id,entity_no,action,after_json,reason)
         VALUES(@actor,N'SupplierQuotation',@id,@number,N'Referenced',@after,N'Public price reference recorded without a stored document');`);
@@ -297,16 +347,27 @@ export function registerSupplierQuotationRoutes(
       throw new ApiError(404, "no_stored_document", `This price cites ${String(row.source_url)} and has no stored document.`);
     }
     return sendStoredFile(request, reply, config.documentStorage, {
-      storageKey: String(row.storage_key), fileName: String(row.file_name), contentType: String(row.content_type),
-      sizeBytes: Number(row.size_bytes), sha256: String(row.sha256),
+      storageKey: String(row.storage_key),
+      fileName: String(row.file_name),
+      contentType: String(row.content_type),
+      sizeBytes: Number(row.size_bytes),
+      sha256: String(row.sha256),
     });
   });
 
   // ── Quotation line items (extracted from PDF) ───────────────────────────
 
   type LineInput = {
-    lineNo: number; itemCode: string; description: string; brand: string;
-    model: string; qty: number; unit: string; unitPrice: number; currency: string; remark: string;
+    lineNo: number;
+    itemCode: string;
+    description: string;
+    brand: string;
+    model: string;
+    qty: number;
+    unit: string;
+    unitPrice: number;
+    currency: string;
+    remark: string;
   };
 
   function parseLines(body: Record<string, unknown>): LineInput[] {
@@ -331,11 +392,27 @@ export function registerSupplierQuotationRoutes(
       const currency = String(it.currency ?? "THB").toUpperCase();
       if (!validCurrencies.has(currency)) throw new ApiError(400, "validation_failed", `Line ${lineNo}: currency must be THB/JPY/USD/EUR.`);
       return {
-        lineNo, itemCode: String(it.itemCode ?? "").trim().slice(0, 200),
+        lineNo,
+        itemCode: String(it.itemCode ?? "")
+          .trim()
+          .slice(0, 200),
         description: description.slice(0, 500),
-        brand: String(it.brand ?? "").trim().slice(0, 100), model: String(it.model ?? "").trim().slice(0, 200),
-        qty, unit: String(it.unit ?? "EA").trim().slice(0, 50) || "EA", unitPrice, currency,
-        remark: String(it.remark ?? "").trim().slice(0, 1000),
+        brand: String(it.brand ?? "")
+          .trim()
+          .slice(0, 100),
+        model: String(it.model ?? "")
+          .trim()
+          .slice(0, 200),
+        qty,
+        unit:
+          String(it.unit ?? "EA")
+            .trim()
+            .slice(0, 50) || "EA",
+        unitPrice,
+        currency,
+        remark: String(it.remark ?? "")
+          .trim()
+          .slice(0, 1000),
       };
     });
   }
@@ -346,19 +423,22 @@ export function registerSupplierQuotationRoutes(
    * fail together: a quotation with no lines adds nothing to the Price Library, and
    * that used to be the silent outcome of a half-finished upload.
    */
-  async function writeQuotationLines(
-    transaction: sql.Transaction, quotationId: number, lines: LineInput[], actorId: number,
-  ): Promise<void> {
-    await new sql.Request(transaction).input("id", sql.BigInt, quotationId)
-      .query("DELETE FROM dbo.supplier_quotation_lines WHERE quotation_id=@id;");
+  async function writeQuotationLines(transaction: sql.Transaction, quotationId: number, lines: LineInput[], actorId: number): Promise<void> {
+    await new sql.Request(transaction).input("id", sql.BigInt, quotationId).query("DELETE FROM dbo.supplier_quotation_lines WHERE quotation_id=@id;");
     for (const line of lines) {
       const ins = new sql.Request(transaction);
-      ins.input("qid", sql.BigInt, quotationId); ins.input("no", sql.Int, line.lineNo);
-      ins.input("code", sql.NVarChar(200), line.itemCode); ins.input("desc", sql.NVarChar(500), line.description);
-      ins.input("brand", sql.NVarChar(100), line.brand); ins.input("model", sql.NVarChar(200), line.model);
-      ins.input("qty", sql.Decimal(19, 4), line.qty); ins.input("unit", sql.NVarChar(50), line.unit);
-      ins.input("price", sql.Decimal(19, 4), line.unitPrice); ins.input("cur", sql.Char(3), line.currency);
-      ins.input("remark", sql.NVarChar(sql.MAX), line.remark); ins.input("actor", sql.BigInt, actorId);
+      ins.input("qid", sql.BigInt, quotationId);
+      ins.input("no", sql.Int, line.lineNo);
+      ins.input("code", sql.NVarChar(200), line.itemCode);
+      ins.input("desc", sql.NVarChar(500), line.description);
+      ins.input("brand", sql.NVarChar(100), line.brand);
+      ins.input("model", sql.NVarChar(200), line.model);
+      ins.input("qty", sql.Decimal(19, 4), line.qty);
+      ins.input("unit", sql.NVarChar(50), line.unit);
+      ins.input("price", sql.Decimal(19, 4), line.unitPrice);
+      ins.input("cur", sql.Char(3), line.currency);
+      ins.input("remark", sql.NVarChar(sql.MAX), line.remark);
+      ins.input("actor", sql.BigInt, actorId);
       await ins.query(`INSERT INTO dbo.supplier_quotation_lines
         (quotation_id,line_no,item_code,description,brand,model,qty,unit,unit_price,currency,remark,created_by)
         VALUES(@qid,@no,@code,@desc,@brand,@model,@qty,@unit,@price,@cur,@remark,@actor);`);
@@ -367,10 +447,7 @@ export function registerSupplierQuotationRoutes(
 
   async function demandQuotationAccess(request: Parameters<typeof users.required>[0], id: number) {
     await users.demandPermission(request, "estimate.write");
-    const check = await database.query<{ id: number }>(
-      "SELECT id FROM dbo.supplier_quotations WHERE id=@id;",
-      (bind) => bind.input("id", sql.BigInt, id),
-    );
+    const check = await database.query<{ id: number }>("SELECT id FROM dbo.supplier_quotations WHERE id=@id;", (bind) => bind.input("id", sql.BigInt, id));
     if (!check.recordset[0]) throw new ApiError(404, "quotation_not_found", "Supplier quotation not found.");
   }
 
@@ -382,10 +459,7 @@ export function registerSupplierQuotationRoutes(
     const body = bodyObject(request.body);
     const lines = parseLines(body);
 
-    await database.transaction(
-      (transaction) => writeQuotationLines(transaction, id, lines, actor.id),
-      sql.ISOLATION_LEVEL.READ_COMMITTED,
-    );
+    await database.transaction((transaction) => writeQuotationLines(transaction, id, lines, actor.id), sql.ISOLATION_LEVEL.READ_COMMITTED);
 
     return reply.status(204).send();
   });
@@ -399,9 +473,18 @@ export function registerSupplierQuotationRoutes(
       (bind) => bind.input("id", sql.BigInt, id),
     );
     return rows.recordset.map((r) => ({
-      id: Number(r.id), lineNo: Number(r.line_no), itemCode: String(r.item_code), description: String(r.description),
-      brand: String(r.brand), model: String(r.model), qty: Number(r.qty), unit: String(r.unit),
-      unitPrice: Number(r.unit_price), lineTotal: Number(r.line_total), currency: String(r.currency), remark: String(r.remark ?? ""),
+      id: Number(r.id),
+      lineNo: Number(r.line_no),
+      itemCode: String(r.item_code),
+      description: String(r.description),
+      brand: String(r.brand),
+      model: String(r.model),
+      qty: Number(r.qty),
+      unit: String(r.unit),
+      unitPrice: Number(r.unit_price),
+      lineTotal: Number(r.line_total),
+      currency: String(r.currency),
+      remark: String(r.remark ?? ""),
     }));
   });
 
@@ -431,7 +514,9 @@ export function registerSupplierQuotationRoutes(
     if (ocr) {
       try {
         const document = await ocr.scan(actor.entraObjectId, {
-          kind: "quotation", schema: QUOTATION_SCHEMA, files: [{ name: file.filename || "quotation.pdf", type: "application/pdf", bytes: pdfBytes }],
+          kind: "quotation",
+          schema: QUOTATION_SCHEMA,
+          files: [{ name: file.filename || "quotation.pdf", type: "application/pdf", bytes: pdfBytes }],
         });
         if (!document.custom) throw new ApiError(422, "copilot_unreadable", document.customError || "Copilot read the PDF but could not fill the quotation fields.");
         return reply.status(200).send(quotationFromScan(document));
@@ -458,7 +543,7 @@ export function registerSupplierQuotationRoutes(
       throw new ApiError(502, "pdf_parser_error", "PDF parser failed. Enter details manually.");
     }
 
-    const result = await response.json() as Record<string, unknown>;
+    const result = (await response.json()) as Record<string, unknown>;
     return reply.status(200).send(result);
   });
 
@@ -485,11 +570,13 @@ export function registerSupplierQuotationRoutes(
     const updated = await database.transaction(async (transaction) => {
       const req = new sql.Request(transaction);
       req.input("id", sql.BigInt, id);
-      const current = (await req.query<Record<string, unknown> & { row_version: Buffer }>(`
+      const current = (
+        await req.query<Record<string, unknown> & { row_version: Buffer }>(`
         SELECT supplier_id, supplier_reference, received_date, valid_until, currency, amount, thb_rate, inquiry_id,
                source_kind, source_url, row_version
         FROM dbo.supplier_quotations WITH (UPDLOCK, HOLDLOCK) WHERE id=@id;
-      `)).recordset[0];
+      `)
+      ).recordset[0];
       if (!current) throw new ApiError(404, "quotation_not_found", "Supplier quotation not found.");
       if (rowVersion && !current.row_version.equals(rowVersion)) throw new ApiError(409, "conflict", "Quotation was modified by another user. Please refresh.");
 
@@ -501,8 +588,12 @@ export function registerSupplierQuotationRoutes(
       const newAmount = amountValue ?? Number(current.amount);
       const newInquiryId = inquiryId === undefined ? (current.inquiry_id === null ? null : Number(current.inquiry_id)) : (inquiryId ?? null);
       /* A rate belongs to one currency: a new currency without a new rate drops the old one. */
-      const newThbRate = body.thbRate !== undefined ? parseThbRate(body.thbRate, newCurrency)
-        : newCurrency === String(current.currency) && current.thb_rate !== null && current.thb_rate !== undefined ? Number(current.thb_rate) : null;
+      const newThbRate =
+        body.thbRate !== undefined
+          ? parseThbRate(body.thbRate, newCurrency)
+          : newCurrency === String(current.currency) && current.thb_rate !== null && current.thb_rate !== undefined
+            ? Number(current.thb_rate)
+            : null;
 
       if (newValid < newReceived) throw new ApiError(400, "validation_failed", "Valid until cannot be before received date.");
 
@@ -518,11 +609,13 @@ export function registerSupplierQuotationRoutes(
       const validate = new sql.Request(transaction);
       validate.input("supplier", sql.BigInt, newSupplierId);
       validate.input("inquiry", sql.BigInt, newInquiryId);
-      const ref = (await validate.query<{ supplier_name: string }>(`
+      const ref = (
+        await validate.query<{ supplier_name: string }>(`
         SELECT s.name supplier_name FROM dbo.suppliers s
         WHERE s.id=@supplier AND s.is_active=1 AND s.deleted_at IS NULL
           AND (@inquiry IS NULL OR EXISTS(SELECT 1 FROM dbo.inquiries i WHERE i.id=@inquiry AND i.deleted_at IS NULL));
-      `)).recordset[0];
+      `)
+      ).recordset[0];
       if (!ref) throw new ApiError(422, "invalid_reference", "Supplier or inquiry was not found.");
 
       const upd = new sql.Request(transaction);
@@ -538,16 +631,19 @@ export function registerSupplierQuotationRoutes(
       upd.input("source_url", sql.NVarChar(1000), newSourceUrl);
       /* Who changed it is recorded in audit_log below; supplier_quotations has never
          carried an updated_by column, and writing to one failed every save. */
-      const row = (await upd.query<{ row_version: Buffer }>(`
+      const row = (
+        await upd.query<{ row_version: Buffer }>(`
         UPDATE dbo.supplier_quotations SET
           supplier_id=@supplier, supplier_reference=@reference, received_date=@received,
           valid_until=@valid, currency=@currency, amount=@amount, thb_rate=@thb_rate, inquiry_id=@inquiry,
           source_url=@source_url
         OUTPUT inserted.row_version WHERE id=@id;
-      `)).recordset[0]!;
+      `)
+      ).recordset[0]!;
 
       const audit = new sql.Request(transaction);
-      audit.input("actor", sql.BigInt, actor.id); audit.input("id", sql.BigInt, id);
+      audit.input("actor", sql.BigInt, actor.id);
+      audit.input("id", sql.BigInt, id);
       audit.input("after", sql.NVarChar(sql.MAX), JSON.stringify({ supplierId: newSupplierId, supplierName: ref.supplier_name, amount: newAmount, currency: newCurrency, thbRate: newThbRate }));
       await audit.query(`INSERT INTO dbo.audit_log(actor_id,entity_type,entity_id,action,after_json,reason)
         VALUES(@actor,N'SupplierQuotation',@id,N'Updated',@after,N'Header fields updated');`);
@@ -563,10 +659,11 @@ export function registerSupplierQuotationRoutes(
     const actor = await users.required(request);
     const id = positiveLong((request.params as { id?: string }).id, "Supplier quotation id");
 
-    const row = (await database.query<{ storage_key: string | null; quotation_no: string }>(
-      "SELECT storage_key, quotation_no FROM dbo.supplier_quotations WHERE id=@id;",
-      (bind) => bind.input("id", sql.BigInt, id),
-    )).recordset[0];
+    const row = (
+      await database.query<{ storage_key: string | null; quotation_no: string }>("SELECT storage_key, quotation_no FROM dbo.supplier_quotations WHERE id=@id;", (bind) =>
+        bind.input("id", sql.BigInt, id),
+      )
+    ).recordset[0];
     if (!row) throw new ApiError(404, "quotation_not_found", "Supplier quotation not found.");
 
     await database.transaction(async (transaction) => {
@@ -575,7 +672,8 @@ export function registerSupplierQuotationRoutes(
       await del.query("DELETE FROM dbo.supplier_quotation_lines WHERE quotation_id=@id;");
       await del.query("DELETE FROM dbo.supplier_quotations WHERE id=@id;");
       const audit = new sql.Request(transaction);
-      audit.input("actor", sql.BigInt, actor.id); audit.input("id", sql.BigInt, id);
+      audit.input("actor", sql.BigInt, actor.id);
+      audit.input("id", sql.BigInt, id);
       audit.input("no", sql.NVarChar(50), row.quotation_no);
       await audit.query(`INSERT INTO dbo.audit_log(actor_id,entity_type,entity_id,entity_no,action,reason)
         VALUES(@actor,N'SupplierQuotation',@id,@no,N'Deleted',N'Supplier quotation deleted by user');`);
@@ -602,17 +700,25 @@ export function registerSupplierQuotationRoutes(
       ORDER BY q.received_date DESC, l.quotation_id DESC, l.line_no;
     `);
     return rows.recordset.map((r) => ({
-      id: Number(r.id), lineNo: Number(r.line_no),
-      itemCode: String(r.item_code), description: String(r.description),
-      brand: String(r.brand), model: String(r.model),
-      qty: Number(r.qty), unit: String(r.unit),
-      unitPrice: Number(r.unit_price), lineTotal: Number(r.line_total),
-      currency: String(r.currency), remark: String(r.remark ?? ""),
-      quotationId: Number(r.quotation_id), quotationNumber: String(r.quotation_no),
+      id: Number(r.id),
+      lineNo: Number(r.line_no),
+      itemCode: String(r.item_code),
+      description: String(r.description),
+      brand: String(r.brand),
+      model: String(r.model),
+      qty: Number(r.qty),
+      unit: String(r.unit),
+      unitPrice: Number(r.unit_price),
+      lineTotal: Number(r.line_total),
+      currency: String(r.currency),
+      remark: String(r.remark ?? ""),
+      quotationId: Number(r.quotation_id),
+      quotationNumber: String(r.quotation_no),
       supplierReference: String(r.supplier_reference ?? ""),
       receivedDate: dateOnly(r.received_date as Date | string),
       validUntil: dateOnly(r.valid_until as Date | string),
-      supplierId: Number(r.supplier_id), supplierName: String(r.supplier_name),
+      supplierId: Number(r.supplier_id),
+      supplierName: String(r.supplier_name),
       /* The Price Library labels these apart: a quotation is a price a supplier sent,
          a reference is a price someone read off a page. */
       sourceKind: r.source_kind === "WebReference" ? "WebReference" : "Document",
