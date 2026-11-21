@@ -1997,6 +1997,7 @@ function EmployeeModal({ employee, prefill = null, departments = [], positions =
   </>}>
     <form id="employee-master-form" onSubmit={(event) => { event.preventDefault(); void submit(); }}>
       <MasterFormError message={error} />
+      {employee?.masterLinked ? <div className="info-strip" role="note"><Icon name="database" />{t("Employee.masterLinked")}</div> : null}
       <div className="form-grid two">
         <label className="field"><span>{t("Employee No.")} *</span><input type="number" min="1" max="2147483647" required value={form.employeeNo || ""} onChange={(event) => update("employeeNo", Number(event.target.value))} /></label>
         <label className="field"><span>{t("Nickname")}</span><input maxLength={100} value={form.nickname ?? ""} onChange={(event) => update("nickname", event.target.value)} /></label>

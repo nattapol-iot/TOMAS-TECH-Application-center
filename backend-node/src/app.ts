@@ -210,7 +210,8 @@ export async function buildApp(config: AppConfig): Promise<Application> {
     : null;
   if (masterData) {
     masterData.holidays.start();
-    app.addHook("onClose", async () => masterData.holidays.stop());
+    masterData.employees.start();
+    app.addHook("onClose", async () => { masterData.holidays.stop(); masterData.employees.stop(); });
   }
   const erp = tokenVault && tmtId && config.pegasusMcpUrl
     ? { gateway: createErpGateway(new PegasusMcp(config.pegasusMcpUrl), tokenVault), appBaseUrl: tmtId.settings.appBaseUrl }

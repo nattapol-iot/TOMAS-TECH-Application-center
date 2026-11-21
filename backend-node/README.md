@@ -104,6 +104,12 @@ The same two values also turn on `src/master-data/` (all dormant without them):
   sync (`src/master-data/registers.ts`) in place of the ERP's `customers_list` / `suppliers_list`. Master keeps the
   ERP's ids, so existing links hold; a record deleted in master is closed here.
 
+- the employee directory (`src/master-data/employee-sync.ts`, 30 seconds after start, then hourly): names and nicknames
+  of `dbo.employees` follow master's active directory, and an employee who matched before (migration 120 keeps
+  master's `lineworks_user_id`) and is no longer listed is marked inactive. Rows match by email once; an email that
+  never matched is left alone. Department, position, sizes, dates and rates stay with this app, and `dbo.users`
+  accounts are not touched. A directory answer under 20 people changes nothing.
+
 The key must be a user-bound key holding only `employee.self`, linked to a client with read grants on
 `company_holiday`, `exchange_rate`, `project`, `customer` and `supplier`. With master connected, start dates come from
 master alone, and only for the person signed in. Without master the project search and the registers fall back to

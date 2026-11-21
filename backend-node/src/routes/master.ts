@@ -26,7 +26,7 @@ type EmployeeRow = Record<string, unknown> & {
   job_title: string; mobile: string; email: string; nickname: string; birth_date: Date | string | null;
   uniform_size: string; shoe_size: string; start_work_date: Date | string | null; end_work_date: Date | string | null;
   position: string; is_active: boolean; user_id: number | string | null; application_role: string | null;
-  account_active: boolean | null; daily_rate: number | string | null; updated_at: Date | string; row_version: Buffer;
+  account_active: boolean | null; daily_rate: number | string | null; updated_at: Date | string; row_version: Buffer; master_linked: boolean;
 };
 
 type EmployeeInput = {
@@ -190,7 +190,8 @@ export function registerMasterRoutes(app: FastifyInstance, database: Database, u
            WHERE business_grant.user_id=app_user.id AND business_grant.revoked_at IS NULL AND business_role.is_active=1)) END AS application_role,
         app_user.is_active AS account_active,
         rate.engineering_daily AS daily_rate,
-        employee.updated_at,employee.row_version
+        employee.updated_at,employee.row_version,
+        CONVERT(bit, CASE WHEN employee.master_lineworks_id IS NULL THEN 0 ELSE 1 END) AS master_linked
       FROM dbo.employees employee
       LEFT JOIN dbo.users app_user ON app_user.deleted_at IS NULL AND
         ((employee.user_id IS NOT NULL AND app_user.id=employee.user_id) OR (employee.user_id IS NULL AND app_user.email=employee.email))
@@ -219,7 +220,7 @@ export function registerMasterRoutes(app: FastifyInstance, database: Database, u
       position: row.position, isActive: Boolean(row.is_active), userId: row.user_id === null ? null : Number(row.user_id),
       applicationRole: row.application_role, accountActive: row.account_active === null ? null : Boolean(row.account_active),
       dailyRate: row.daily_rate === null ? null : Number(row.daily_rate), updatedAt: row.updated_at,
-      rowVersion: row.row_version.toString("base64"),
+      rowVersion: row.row_version.toString("base64"), masterLinked: Boolean(row.master_linked),
     }));
   });
 

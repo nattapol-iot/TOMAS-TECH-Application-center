@@ -665,6 +665,8 @@ export type EmployeeRecord = {
   birthDate: string | null;
   uniformSize: string;
   shoeSize: string;
+  /** Linked to tmt-master-data (migration 120): names and nickname follow master, and leaving master marks the row inactive. */
+  masterLinked: boolean;
   /** Start and end dates are private like the birth date: only master.write readers get them. */
   startWorkDate: string | null;
   endWorkDate: string | null;
