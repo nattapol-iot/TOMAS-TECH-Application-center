@@ -25,6 +25,7 @@ function mountForm(file, exportName, props) {
     "./BusinessCardScanner": { BusinessCardScanner: "scanner" },
     "./ErpMasterPanel": { ErpMasterPanel: "erp-master-panel" },
     "./PegasusScreen": { PegasusScreen: "pegasus-screen" },
+    "../tmt-id.constants": { IS_TMT_ID_MODE: false },
     "./SearchSelect": { SearchSelect: "search-select" },
     "../project-overview-client": { listAllProjectsByNumber: async () => [] },
     "../ui": new Proxy({}, { get: (_, name) => name }),

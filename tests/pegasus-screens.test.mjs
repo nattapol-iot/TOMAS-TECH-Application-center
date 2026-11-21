@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { ADMIN_SCREENS_COPY } from "../app/system/production/admin-screens-copy.ts";
 
 // The Team & Knowledge and System menus in the Pegasus ERP look (owner 2026-11-21): a screen wears "pg-skin pg-screen"
 // (PegasusScreen), pegasus-skin.css draws the shared parts and pegasus-screens.css the rest.
@@ -122,4 +123,59 @@ test("statuses keep one meaning per tone, and the labels added for these screens
     // The key is the English text; the entry adds Thai and Japanese.
     assert.match(i18n, new RegExp(`"${key}": \\{ th: "[^"]+", jp: "[^"]+" \\}`), `${key} has Thai and Japanese`);
   }
+});
+
+test("System Settings, Summary Reports, Audit Log and the supplier dialog ask only for keys that exist in three languages", async () => {
+  const [admin, core, i18n] = await Promise.all([read("app/system/production/AdminAnalyticsScreens.tsx"), read("app/system/production/CoreScreens.tsx"), read("app/system/i18n.ts")]);
+  assert.match(i18n, /import \{ ADMIN_SCREENS_COPY \} from "\.\/production\/admin-screens-copy";/);
+  assert.match(i18n, /\.\.\.ADMIN_SCREENS_COPY,/);
+  const asked = new Set([...`${admin}\n${core}`.matchAll(/"((?:Settings|Reports|Audit|Supplier)\.[A-Za-z]+)"/g)].map((match) => match[1]));
+  assert.ok(asked.size >= 45, `keys were found (${asked.size})`);
+  for (const key of asked) {
+    const entry = ADMIN_SCREENS_COPY[key];
+    assert.ok(entry, `${key} has an entry`);
+    for (const lang of ["en", "th", "jp"]) assert.ok(entry[lang]?.trim(), `${key} has ${lang}`);
+    // A value the screen fills in keeps its placeholders in every language.
+    for (const [placeholder] of entry.en.matchAll(/\{[a-z]+\}/g)) {
+      assert.ok(entry.th.includes(placeholder) && entry.jp.includes(placeholder), `${key} keeps ${placeholder}`);
+    }
+  }
+  // Settings no longer prints Thai-only words in English and Japanese sessions.
+  const settings = admin.slice(admin.indexOf("function StorageCheckPanel"));
+  assert.doesNotMatch(settings, /\p{Script=Thai}/u);
+  // The authentication row names the sign-in this build uses: TMT ID on the shared host, not always Entra.
+  assert.match(admin, /import \{ IS_TMT_ID_MODE \} from "\.\.\/tmt-id\.constants";/);
+  assert.match(settings, /: IS_TMT_ID_MODE \? \{ text: "Settings\.authTmtId", badge: "Settings\.badgeTmtId"/);
+});
+
+test("the project cost report names every figure instead of printing field names", async () => {
+  const admin = await read("app/system/production/AdminAnalyticsScreens.tsx");
+  assert.doesNotMatch(admin, /Object\.entries\(report\.(?:budget|procurement)\)/);
+  const typeBlock = (name) => new RegExp(`${name}: \\{([^}]+)\\}`).exec(admin.slice(admin.indexOf("type ProjectCostReport")))?.[1] ?? "";
+  const fields = (name) => [...typeBlock(name).matchAll(/(\w+): number/g)].map((match) => match[1]).sort();
+  const rows = (name) => [...(new RegExp(`const ${name}[^=]*= \\[([\\s\\S]*?)\\];`).exec(admin)?.[1] ?? "").matchAll(/\["(\w+)", "Reports\.\w+"\]/g)].map((match) => match[1]).sort();
+  assert.deepEqual(rows("PROJECT_BUDGET_ROWS"), fields("budget"));
+  assert.deepEqual(rows("PROJECT_PROCUREMENT_ROWS"), fields("procurement"));
+  // The project is a section heading under the page title, not a second page title.
+  assert.doesNotMatch(admin, /<PageHeader title=\{`\$\{report\.project\.number\}/);
+  assert.match(admin, /<div className="pg-report-head">\s*<h2>\{report\.project\.number\} · \{report\.project\.name\}<\/h2>/);
+});
+
+test("the Add supplier dialog is titled New supplier and saves from its footer", async () => {
+  const core = await read("app/system/production/CoreScreens.tsx");
+  const form = core.slice(core.indexOf("function SupplierCreateForm"), core.indexOf("function InventoryItemMasterTab"));
+  assert.match(form, /<Modal title="Supplier\.new" subtitle="ใช้ใน Cost item และ Preferred supplier" size="md" onClose=\{onClose\} footer=\{<>/);
+  assert.match(form, /<button className="btn primary" type="submit" form="supplier-create-form" disabled=\{busy\}>\{localizeCopy\(busy \? "Saving…" : "Save"\)\}<\/button>/);
+  assert.match(form, /<form id="supplier-create-form" onSubmit=\{onSubmit\}>/);
+  assert.doesNotMatch(form, /Create supplier|<Panel title="Add supplier"/);
+  // Name is the record's identity: full width, after the short code and the category.
+  assert.ok(form.indexOf('"Category *"') < form.indexOf('"Supplier name *"'));
+  assert.match(form, /<label className="field span-2"><span><LocalizedText text=\{"Supplier name \*"\} \/>/);
+});
+
+test("a read-only detail captions only each pair's label, so names and badges keep their own case", async () => {
+  const css = withoutComments(await read("app/system/production/pegasus-screens.css"));
+  assert.match(css, /\.pg-screen \.detail-grid span \{[^}]*text-transform: none;/);
+  assert.match(css, /\.pg-screen \.detail-grid > div > span:first-child \{ color: var\(--pg-muted-fg\); font-size: 12px; font-weight: 500; \}/);
+  assert.doesNotMatch(css, /callout > span > br/, "no rule hides line breaks: two text nodes would run together");
 });

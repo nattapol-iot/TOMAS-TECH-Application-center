@@ -117,7 +117,6 @@
 .pg-screen .callout.info { border-color: transparent; background: var(--pg-accent); color: var(--pg-foreground); }
 .pg-screen .callout.info > .icon { color: var(--pg-primary); }
 .pg-screen .callout strong { font-weight: 600; }
-.pg-screen .callout > span > br { display: none; }
 .pg-screen .callout small { color: var(--pg-muted-fg); font-size: 12px; }
 .pg-screen .callout > .btn { flex: none; }
 .pg-screen .info-strip > .icon { color: var(--pg-primary); }
@@ -154,7 +153,11 @@
 
 /* Label and value pairs in a read-only detail (0.9). */
 .pg-screen .detail-grid { gap: 12px 24px; }
-.pg-screen .detail-grid span { color: var(--pg-muted-fg); font-size: 12px; font-weight: 500; letter-spacing: 0.04em; }
+/* globals.css styles every span in a detail as an upper-case caption, which also caught names, badges and checkbox labels.
+   Here only a pair's label (the first span of each pair) is a caption, in normal case; everything inside reads as text. */
+.pg-screen .detail-grid span { color: var(--pg-foreground); font-size: 14px; font-weight: 400; letter-spacing: 0; text-transform: none; }
+.pg-screen .detail-grid > div > span:first-child { color: var(--pg-muted-fg); font-size: 12px; font-weight: 500; }
+.pg-skin.pg-screen .detail-grid .badge { font-size: 12px; font-weight: 500; }
 .pg-screen .detail-grid strong { color: var(--pg-foreground); font-size: 14px; font-weight: 500; }
 .pg-screen .timeline > li:not(.timeline-item) strong { font-weight: 500; }
 
@@ -373,6 +376,16 @@
 .pg-screen :is(.performance-area-evidence, .performance-comment) textarea { padding: 8px 12px; border-color: var(--pg-input); border-radius: 6px; background: var(--pg-background); color: var(--pg-foreground); font-size: 14px; box-shadow: var(--pgs-shadow-sm); }
 .pg-screen :is(.performance-area-evidence, .performance-comment) textarea:focus { border-color: var(--pg-input); outline: none; box-shadow: var(--pg-focus); }
 .pg-screen .performance-comment > small { font-size: 12px; }
+
+/* Summary Reports > Project cost: the project as a section heading (C.1.8), and figures as label-and-amount rows with the
+   total in bold under a rule. */
+.pg-screen .pg-report-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+.pg-screen .pg-report-head h2 { color: var(--pg-foreground); font-size: 16px; font-weight: 600; }
+.pg-screen .pg-report-head > span:last-child { flex-basis: 100%; color: var(--pg-muted-fg); font-size: 14px; }
+.pg-skin.pg-screen .pg-figures td { padding: 10px 16px; }
+.pg-skin.pg-screen .pg-figures tr:last-child td { border-bottom: 0; }
+.pg-skin.pg-screen .pg-figures tr.pg-total td { border-top: 1px solid var(--pg-divider); font-weight: 600; }
+.pg-skin.pg-screen .pg-figures tbody tr:hover td { background: none; }
 
 /* Knowledge Hub (KnowledgeScreens). */
 .pg-screen .card-grid { gap: 12px; }

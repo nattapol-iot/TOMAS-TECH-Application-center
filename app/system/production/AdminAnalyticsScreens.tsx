@@ -30,6 +30,7 @@ import {
 } from "../ui";
 import { DateInput } from "../DateInput";
 import { PegasusScreen } from "./PegasusScreen";
+import { IS_TMT_ID_MODE } from "../tmt-id.constants";
 
 export type AdminAnalyticsProps = {
   bootstrap: BootstrapData;
@@ -716,14 +717,14 @@ function InventoryReportView({ report, loading }: { report: InventoryValueReport
   if (!report) return <Panel>{loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading live report…"} /></div> : <EmptyState icon="chart" title={uiText("No report loaded")} message="เลือกวันที่แล้วกด Refresh" />}</Panel>;
   return <>
     <div className="kpi-grid four">
-      <KpiCard label="Inventory value" value={formatMoney(report.summary.totalValue)} note={`As of ${formatDate(report.asOf)}`} tone="blue" icon="database" />
-      <KpiCard label="Usable" value={formatMoney(report.summary.usableValue)} note={`${report.summary.itemCount} items`} tone="green" icon="package" />
+      <KpiCard label="Inventory value" value={formatMoney(report.summary.totalValue)} note={uiText("Reports.asOf").replace("{date}", formatDate(report.asOf))} tone="blue" icon="database" />
+      <KpiCard label="Usable" value={formatMoney(report.summary.usableValue)} note={uiText("Reports.items").replace("{n}", String(report.summary.itemCount))} tone="green" icon="package" />
       <KpiCard label="Quarantine" value={formatMoney(report.summary.quarantineValue)} note="Held inventory value" tone="amber" icon="alertTriangle" />
-      <KpiCard label="Slow moving" value={formatMoney(report.summary.slowMovingValue)} note={`${report.summary.slowMovingItemCount} items · ${report.slowMovingDays} days`} tone="violet" icon="clock" />
+      <KpiCard label="Slow moving" value={formatMoney(report.summary.slowMovingValue)} note={uiText("Reports.itemsDays").replace("{n}", String(report.summary.slowMovingItemCount)).replace("{days}", String(report.slowMovingDays))} tone="violet" icon="clock" />
     </div>
     <Panel title="Inventory valuation" subtitle={report.valuationMethod} flush>{report.items.length ? <div className="table-wrap"><table>
       <thead><tr><th><LocalizedText text={"Item"} /></th><th><LocalizedText text={"Description"} /></th><th><LocalizedText text={"Location"} /></th><th className="num"><LocalizedText text={"Usable"} /></th><th className="num"><LocalizedText text={"Quarantine"} /></th><th className="num"><LocalizedText text={"Avg. cost"} /></th><th className="num"><LocalizedText text={"Total value"} /></th><th><LocalizedText text={"Last movement"} /></th><th><LocalizedText text={"Status"} /></th></tr></thead>
-      <tbody>{report.items.map((item) => <tr key={item.id}><td><strong className="mono">{item.itemCode}</strong><div className="muted">{item.partNumber}</div></td><td><strong>{item.description}</strong><div className="muted">{item.brand}</div></td><td>{item.location || "—"}</td><td className="num">{formatNumber(item.usable)} {item.unit}</td><td className="num">{formatNumber(item.quarantine)} {item.unit}</td><td className="num">{formatMoney(item.averageUnitCost)}</td><td className="num"><strong>{formatMoney(item.usableValue + item.quarantineValue)}</strong></td><td>{formatDateTime(item.lastMovementAt)}</td><td><Badge tone={item.isSlowMoving ? "amber" : "green"}>{item.isSlowMoving ? `${item.inactiveDays} days` : "Moving"}</Badge></td></tr>)}</tbody>
+      <tbody>{report.items.map((item) => <tr key={item.id}><td><strong className="mono">{item.itemCode}</strong><div className="muted">{item.partNumber}</div></td><td><strong>{item.description}</strong><div className="muted">{item.brand}</div></td><td>{item.location || "—"}</td><td className="num">{formatNumber(item.usable)} {item.unit}</td><td className="num">{formatNumber(item.quarantine)} {item.unit}</td><td className="num">{formatMoney(item.averageUnitCost)}</td><td className="num"><strong>{formatMoney(item.usableValue + item.quarantineValue)}</strong></td><td>{formatDateTime(item.lastMovementAt)}</td><td><Badge tone={item.isSlowMoving ? "amber" : "green"}>{item.isSlowMoving ? uiText("Reports.days").replace("{n}", String(item.inactiveDays)) : uiText("Reports.moving")}</Badge></td></tr>)}</tbody>
     </table></div> : <EmptyState icon="package" title="No inventory value" message="ยังไม่มี stock transaction ถึงวันที่รายงาน" />}</Panel>
   </>;
 }
@@ -740,7 +741,7 @@ function SupplierReportView({ report, loading }: { report: SupplierPerformanceRe
 function PrCycleReportView({ report, loading }: { report: PrCycleTimeReport | null; loading: boolean }) {
   const uiText = useUiText();
   if (!report) return <Panel>{loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading live report…"} /></div> : <EmptyState icon="clock" title={uiText("No report loaded")} message="เลือกช่วงเวลาแล้วกด Refresh" />}</Panel>;
-  const hours = (value: number | null) => value === null ? "—" : `${formatNumber(value)} h`;
+  const hours = (value: number | null) => value === null ? "—" : uiText("Reports.hours").replace("{n}", formatNumber(value));
   return <>
     <div className="kpi-grid four">
       <KpiCard label="PR count" value={report.lifecycle.prCount} note={`${formatDate(report.from)} – ${formatDate(report.to)}`} tone="blue" icon="file" />
@@ -753,12 +754,27 @@ function PrCycleReportView({ report, loading }: { report: PrCycleTimeReport | nu
   </>;
 }
 
+/** The report's figures in the order a reader adds them up; each has its name in the dictionary (admin-screens-copy.ts). */
+const PROJECT_BUDGET_ROWS: [keyof ProjectCostReport["budget"], string][] = [
+  ["approvedMaterial", "Reports.budgetMaterial"], ["approvedEngineering", "Reports.budgetEngineering"], ["approvedOutsource", "Reports.budgetOutsource"],
+  ["approvedTransportation", "Reports.budgetTransportation"], ["approvedAccommodation", "Reports.budgetAccommodation"], ["approvedOther", "Reports.budgetOther"],
+  ["contingency", "Reports.budgetContingency"], ["approvedEstimateTotal", "Reports.budgetTotal"],
+];
+const PROJECT_PROCUREMENT_ROWS: [keyof ProjectCostReport["procurement"], string][] = [
+  ["poCommitted", "Reports.poCommitted"], ["receivedAtPoPrice", "Reports.receivedAtPoPrice"], ["openPoCommitment", "Reports.openPoCommitment"],
+  ["openPr", "Reports.openPr"], ["reserved", "Reports.reserved"],
+];
+
 function ProjectCostReportView({ report, loading, projectSelected }: { report: ProjectCostReport | null; loading: boolean; projectSelected: boolean }) {
   const uiText = useUiText();
   if (!projectSelected) return <Panel><EmptyState icon="folder" title="Select a project" message="เลือกโครงการเพื่อคำนวณต้นทุนจาก estimate, procurement และ stock ledger" /></Panel>;
   if (!report) return <Panel>{loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading live report…"} /></div> : <EmptyState icon="chart" title={uiText("No report loaded")} message="กด Refresh เพื่อลองอีกครั้ง" />}</Panel>;
   return <>
-    <PageHeader title={`${report.project.number} · ${report.project.name}`} subtitle={report.project.estimateNumber ? `Estimate ${report.project.estimateNumber}` : uiText("Project without an estimate")} meta={<Badge>{report.project.status}</Badge>} />
+    <div className="pg-report-head">
+      <h2>{report.project.number} · {report.project.name}</h2>
+      <Badge>{report.project.status}</Badge>
+      <span>{report.project.estimateNumber ? uiText("Reports.estimate").replace("{number}", report.project.estimateNumber) : uiText("Project without an estimate")}</span>
+    </div>
     <div className="kpi-grid four">
       <KpiCard label="Approved estimate" value={formatMoney(report.budget.approvedEstimateTotal)} note="Total approved budget" tone="blue" icon="file" />
       <KpiCard label="Material actual" value={formatMoney(report.actual.materialConsumed)} note="Net MIR issue / return" tone="violet" icon="package" />
@@ -766,14 +782,14 @@ function ProjectCostReportView({ report, loading, projectSelected }: { report: P
       <KpiCard label="Remaining material" value={formatMoney(report.remainingMaterialBudgetAfterForecast)} note="After forecast exposure" tone={report.remainingMaterialBudgetAfterForecast < 0 ? "red" : "green"} icon="chart" />
     </div>
     <div className="grid-2">
-      <Panel title="Approved budget"><div className="settings-list">
-        {Object.entries(report.budget).map(([label, value]) => <div key={label}><span className="setting-icon blue"><Icon name="file" /></span><span><strong>{label}</strong><small><LocalizedText text={"Approved estimate"} /></small></span><strong>{formatMoney(value)}</strong></div>)}
-      </div></Panel>
-      <Panel title="Procurement exposure"><div className="settings-list">
-        {Object.entries(report.procurement).map(([label, value]) => <div key={label}><span className="setting-icon amber"><Icon name="truck" /></span><span><strong>{label}</strong><small><LocalizedText text={"Procurement ledger"} /></small></span><strong>{formatMoney(value)}</strong></div>)}
-      </div></Panel>
+      <Panel title="Approved budget" flush><div className="table-wrap"><table className="pg-figures"><tbody>
+        {PROJECT_BUDGET_ROWS.map(([key, label]) => <tr key={key} className={key === "approvedEstimateTotal" ? "pg-total" : undefined}><td>{uiText(label)}</td><td className="num">{formatMoney(report.budget[key])}</td></tr>)}
+      </tbody></table></div></Panel>
+      <Panel title="Procurement exposure" flush><div className="table-wrap"><table className="pg-figures"><tbody>
+        {PROJECT_PROCUREMENT_ROWS.map(([key, label]) => <tr key={key}><td>{uiText(label)}</td><td className="num">{formatMoney(report.procurement[key])}</td></tr>)}
+      </tbody></table></div></Panel>
     </div>
-    <div className="callout info"><Icon name="database" /><span><strong><LocalizedText text={"Accounting scope"} /></strong>{report.accountingScope}<br />{report.forecastScope}</span></div>
+    <div className="callout info"><Icon name="database" /><span><strong><LocalizedText text={"Accounting scope"} /></strong><span>{report.accountingScope}</span><span>{report.forecastScope}</span></span></div>
   </>;
 }
 
@@ -885,7 +901,7 @@ export function ProductionAuditLog({ bootstrap }: AdminAnalyticsProps) {
     <PageHeader title={uiText("Audit Log")} subtitle="รวม Core audit และ Material audit แบบ read-only จากฐานข้อมูลจริง" meta={<Badge tone="green"><LocalizedText text={"Append only"} /></Badge>} />
     <Toolbar><SearchInput link="q" value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder="Search document, action, actor or reason…" /><Select label="Source" value={source} options={["All sources", "Core", "Material"]} onChange={(value) => { setSource(value); setPage(1); }} /><label className="field"><span><LocalizedText text={"Entity"} /></span><input value={entityType} maxLength={50} placeholder={localizeCopy("e.g. Estimate")} onChange={(event) => { setEntityType(event.target.value); setPage(1); }} /></label><button className="btn ghost" type="button" disabled={loading} onClick={() => { void load(); }}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button></Toolbar>
     {error ? <LoadError message={error} retry={() => { void load(); }} /> : null}
-    <Panel title={`${result.total} audit events`} subtitle="This endpoint is read-only; both audit ledgers remain append-only" flush>{result.items.length ? <div className="table-wrap"><table>
+    <Panel title={uiText("Audit.events").replace("{n}", String(result.total))} subtitle="This endpoint is read-only; both audit ledgers remain append-only" flush>{result.items.length ? <div className="table-wrap"><table>
       <thead><tr><th><LocalizedText text={"Occurred"} /></th><th><LocalizedText text={"Source"} /></th><th><LocalizedText text={"Entity"} /></th><th><LocalizedText text={"Action"} /></th><th><LocalizedText text={"Actor"} /></th><th><LocalizedText text={"Project / Qty"} /></th><th><LocalizedText text={"Reason"} /></th><th><LocalizedText text={"Change"} /></th></tr></thead>
       <tbody>{result.items.map((row) => <tr key={`${row.source}-${row.id}`}><td className="muted">{formatDateTime(row.occurredAt)}</td><td><Badge tone={row.source === "Material" ? "violet" : "blue"}>{row.source}</Badge></td><td><strong>{row.entityType}</strong><div className="muted mono">{row.entityNumber || `#${row.entityId}`}</div></td><td><Badge>{row.action}</Badge></td><td><strong>{row.actorName}</strong><div className="muted">{row.actorRole}</div></td><td>{row.projectId ? <div><LocalizedText text={"Project #"} />{row.projectId}</div> : "—"}{row.quantity !== null ? <div className="muted"><LocalizedText text={"Qty"} /> {formatNumber(row.quantity)}</div> : null}</td><td>{row.reason || "—"}</td><td>{row.beforeJson || row.afterJson ? <details><summary><LocalizedText text={"View JSON"} /></summary>{row.beforeJson ? <><strong><LocalizedText text={"Before"} /></strong><pre>{row.beforeJson}</pre></> : null}{row.afterJson ? <><strong><LocalizedText text={"After"} /></strong><pre>{row.afterJson}</pre></> : null}</details> : "—"}</td></tr>)}</tbody>
     </table><Pagination page={result.page} pageCount={pageCount} from={(result.page - 1) * result.pageSize + 1} to={Math.min(result.page * result.pageSize, result.total)} total={result.total} onPage={setPage} /></div> : loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading…"} /></div> : <EmptyState icon="shield" title="No audit events" message="ไม่พบเหตุการณ์ตามตัวกรองนี้" />}</Panel>
@@ -895,6 +911,7 @@ export function ProductionAuditLog({ bootstrap }: AdminAnalyticsProps) {
 const EMPTY_NAS_SETTINGS: NasSettingsInput = { server: "", share: "", destinationPath: "", username: "" };
 
 function StorageCheckPanel({ canWrite, notify }: { canWrite: boolean; notify: (message: string) => void }) {
+  const uiText = useUiText();
   const [result, setResult] = useState<StorageCheckResult | null>(null);
   const [settings, setSettings] = useState<NasSettingsResult | null>(null);
   const [form, setForm] = useState<NasSettingsInput>(EMPTY_NAS_SETTINGS);
@@ -932,45 +949,45 @@ function StorageCheckPanel({ canWrite, notify }: { canWrite: boolean; notify: (m
     try {
       const draft = await saveNasSettings(form);
       setSettings((current) => ({ active: current?.active ?? { mode: "Local", rootPath: "" }, draft }));
-      notify("บันทึกการตั้งค่า NAS แล้ว");
+      notify("Settings.saved");
     } catch (e) { setErr(String(e instanceof Error ? e.message : e)); }
     finally { setSaving(false); }
   };
 
   return (
     <>
-    <Panel title="NAS connection & destination" subtitle="กำหนดปลายทางไว้ที่จุดเดียว แล้วทดสอบ Server ก่อนนำไปใช้กับ Document Storage">
+    <Panel title="NAS connection & destination" subtitle="Settings.nasSubtitle">
       <div className="form-grid two">
-        <Field label="NAS Server / IP"><input value={form.server} placeholder="100.64.0.53" onChange={(event) => set("server", event.target.value)} /></Field>
+        <Field label="Settings.server"><input value={form.server} placeholder="100.64.0.53" onChange={(event) => set("server", event.target.value)} /></Field>
         <Field label="Share name"><input value={form.share} placeholder="IoT Department" onChange={(event) => set("share", event.target.value)} /></Field>
-        <Field label="Destination path" span={2} hint="โฟลเดอร์ใต้ Share เช่น IoT Team Center/Projects"><input value={form.destinationPath} placeholder="IoT Team Center" onChange={(event) => set("destinationPath", event.target.value)} /></Field>
+        <Field label="Destination path" span={2} hint="Settings.pathHint"><input value={form.destinationPath} placeholder="IoT Team Center" onChange={(event) => set("destinationPath", event.target.value)} /></Field>
         <Field label="NAS username"><input value={form.username} autoComplete="username" onChange={(event) => set("username", event.target.value)} /></Field>
-        <Field label="Password"><input value="จัดการที่ Server Secret" disabled aria-label="NAS password is managed on the server" /></Field>
+        <Field label="Password"><input value={uiText("Settings.passwordValue")} disabled aria-label={uiText("Settings.passwordLabel")} /></Field>
       </div>
-      {uncPreview ? <div className="info-strip" style={{ marginTop: 14 }}><Icon name="folder" /><span><strong>ปลายทางที่ต้องการใช้</strong><br /><small style={{ wordBreak: "break-all" }}>{uncPreview}</small></span></div> : null}
+      {uncPreview ? <div className="info-strip" style={{ marginTop: 14 }}><Icon name="folder" /><span><strong>{uiText("Settings.target")}</strong><br /><small style={{ wordBreak: "break-all" }}>{uncPreview}</small></span></div> : null}
       <div className="row-actions" style={{ justifyContent: "flex-end", marginTop: 14 }}>
-        <button className="btn ghost" type="button" disabled={busy || !form.server || !form.share || !form.destinationPath || !form.username} onClick={() => { void test(); }}><Icon name="refresh" />{busy ? "Testing…" : "Test server"}</button>
-        <button className="btn primary" type="button" disabled={!canWrite || saving || !form.server || !form.share || !form.destinationPath || !form.username} onClick={() => { void save(); }}><Icon name="check" />{saving ? "Saving…" : "Save settings"}</button>
+        <button className="btn ghost" type="button" disabled={busy || !form.server || !form.share || !form.destinationPath || !form.username} onClick={() => { void test(); }}><Icon name="refresh" />{uiText(busy ? "Settings.testing" : "Settings.testServer")}</button>
+        <button className="btn primary" type="button" disabled={!canWrite || saving || !form.server || !form.share || !form.destinationPath || !form.username} onClick={() => { void save(); }}><Icon name="check" />{uiText(saving ? "Saving…" : "Settings.saveSettings")}</button>
       </div>
-      {connection ? <div className={`callout ${connection.ok ? "info" : "error"}`} style={{ marginTop: 12 }}><Icon name={connection.ok ? "checkCircle" : "alertTriangle"} /><span>{connection.ok ? <>เชื่อมต่อ SMB Port 445 สำเร็จใน {connection.durationMs} ms<br /><small>{connection.uncPath}</small></> : connection.error}</span></div> : null}
-      {settings?.draft ? <div className="callout info" style={{ marginTop: 12 }}><Icon name="clock" /><span><strong>บันทึกเป็น Draft แล้ว</strong><br /><small>บันทึกล่าสุดโดย {settings.draft.updatedByName} · {formatDateTime(settings.draft.updatedAt)} ค่านี้จะเป็น Active หลังฝั่ง Server Apply/Deploy สำเร็จ</small></span></div> : null}
-      <div className="info-strip" style={{ marginTop: 14 }}><Icon name="shield" />Password ไม่ถูกส่งกลับ Browser และยังคงจัดการด้วย Server Secret</div>
+      {connection ? <div className={`callout ${connection.ok ? "info" : "error"}`} style={{ marginTop: 12 }}><Icon name={connection.ok ? "checkCircle" : "alertTriangle"} /><span>{connection.ok ? <><span>{uiText("Settings.connected").replace("{ms}", String(connection.durationMs))}</span><small>{connection.uncPath}</small></> : connection.error}</span></div> : null}
+      {settings?.draft ? <div className="callout info" style={{ marginTop: 12 }}><Icon name="clock" /><span><strong>{uiText("Settings.draftSaved")}</strong><small>{uiText("Settings.draftBy").replace("{name}", settings.draft.updatedByName).replace("{when}", formatDateTime(settings.draft.updatedAt))}</small></span></div> : null}
+      <div className="info-strip" style={{ marginTop: 14 }}><Icon name="shield" /><span>{uiText("Settings.passwordNote")}</span></div>
     </Panel>
     <Panel
       title="Active document storage"
-      subtitle="ทดสอบ write-read-delete ไฟล์จริงบน storage path ที่ backend ใช้งานอยู่"
-      actions={<button className="btn ghost sm" type="button" disabled={busy} onClick={() => { void run(); }}>{busy ? <><span className="spinner" /> Testing…</> : <><Icon name="refresh" /> Run storage test</>}</button>}
+      subtitle="Settings.storageSubtitle"
+      actions={<button className="btn ghost sm" type="button" disabled={busy} onClick={() => { void run(); }}>{busy ? <><span className="spinner" /> {uiText("Settings.testing")}</> : <><Icon name="refresh" /> {uiText("Settings.runTest")}</>}</button>}
     >
       <div className="settings-list">
         {result ? (<>
           <div>
             <span className={`setting-icon ${result.ok ? "green" : "red"}`}><Icon name={result.ok ? "database" : "alertTriangle"} /></span>
-            <span><strong>{result.mode === "Nas" ? "NAS (Network Share)" : "Local disk"}</strong><small style={{ wordBreak: "break-all" }}>{result.rootPath}</small></span>
-            <Badge tone={result.ok ? "green" : "red"}>{result.ok ? `OK · ${result.durationMs} ms` : "FAILED"}</Badge>
+            <span><strong>{uiText(result.mode === "Nas" ? "Settings.modeNas" : "Settings.modeLocal")}</strong><small style={{ wordBreak: "break-all" }}>{result.rootPath}</small></span>
+            <Badge tone={result.ok ? "green" : "red"}>{result.ok ? uiText("Settings.ok").replace("{ms}", String(result.durationMs)) : uiText("Settings.failed")}</Badge>
           </div>
           {result.error && <div className="callout error" style={{ marginTop: 8 }}><Icon name="alertTriangle" /><span>{result.error}</span></div>}
         </>) : (
-          <div><span className="setting-icon slate"><Icon name="database" /></span><span><strong>ยังไม่ได้ทดสอบ</strong><small>กด Run storage test เพื่อเขียน อ่าน และลบไฟล์ทดสอบบน storage ที่ใช้งานจริง</small></span></div>
+          <div><span className="setting-icon slate"><Icon name="database" /></span><span><strong>{uiText("Settings.notTested")}</strong><small>{uiText("Settings.notTestedHint")}</small></span></div>
         )}
         {err && <div className="callout error"><Icon name="alertTriangle" /><span>{err}</span></div>}
       </div>
@@ -981,23 +998,27 @@ function StorageCheckPanel({ canWrite, notify }: { canWrite: boolean; notify: (m
 
 export function ProductionSettings({ bootstrap, notify, teamTestMode = false }: AdminAnalyticsProps) {
   const uiText = useUiText();
-  const endpoint = (() => { try { return new URL(API_BASE_URL).origin; } catch { return "Not configured"; } })();
+  const endpoint = (() => { try { return new URL(API_BASE_URL).origin; } catch { return uiText("Settings.notConfigured"); } })();
+  // The sign-in this build was made for: Team Test on the LAN, TMT ID on the shared host, Entra otherwise.
+  const auth = teamTestMode ? { text: "Settings.authTeamTest", badge: "Settings.badgeTeamTest", tone: "amber" as const }
+    : IS_TMT_ID_MODE ? { text: "Settings.authTmtId", badge: "Settings.badgeTmtId", tone: "green" as const }
+    : { text: "Settings.authEntra", badge: "Settings.badgeEntra", tone: "green" as const };
   return <PegasusScreen>
-    <PageHeader title={uiText("System Settings")} subtitle="ตรวจสถานะระบบและกำหนดปลายทางจัดเก็บเอกสารของ NAS" meta={<Badge tone={teamTestMode ? "amber" : "green"}>{teamTestMode ? "Team Test" : "Production"}</Badge>} />
+    <PageHeader title={uiText("System Settings")} subtitle="Settings.subtitle" meta={<Badge tone={teamTestMode ? "amber" : "green"}>{teamTestMode ? "Team Test" : "Production"}</Badge>} />
     <div className="grid-2">
       <Panel title="Signed-in identity" subtitle="Resolved by the API and SQL user registry"><div className="settings-list">
         <div><span className="setting-icon blue"><Icon name="user" /></span><span><strong>{bootstrap.user.name}</strong><small>{bootstrap.user.email}</small></span><Badge>{bootstrap.user.role}</Badge></div>
-        <div><span className="setting-icon violet"><Icon name="users" /></span><span><strong>{bootstrap.user.department || "No department"}</strong><small><LocalizedText text={"Database user ID"} /> {bootstrap.user.id}</small></span><Badge tone={bootstrap.user.isActive ? "green" : "red"}>{bootstrap.user.isActive ? "Active" : "Disabled"}</Badge></div>
+        <div><span className="setting-icon violet"><Icon name="users" /></span><span><strong>{bootstrap.user.department || "No department"}</strong><small><LocalizedText text={"Database user ID"} /> {bootstrap.user.id}</small></span><Badge tone={bootstrap.user.isActive ? "green" : "red"}>{bootstrap.user.isActive ? "Active" : "Settings.accountDisabled"}</Badge></div>
       </div></Panel>
       <Panel title="Live connections" subtitle="Verified by the successful bootstrap request"><div className="settings-list">
         <div><span className="setting-icon green"><Icon name="database" /></span><span><strong><LocalizedText text={"SQL Server via API"} /></strong><small><LocalizedText text={"Bootstrap, master and permissions loaded successfully"} /></small></span><Badge tone="green"><LocalizedText text={"Connected"} /></Badge></div>
         <div><span className="setting-icon blue"><Icon name="globe" /></span><span><strong><LocalizedText text={"API origin"} /></strong><small>{endpoint}</small></span><Badge tone="green"><LocalizedText text={"Configured"} /></Badge></div>
         <div><span className="setting-icon amber"><Icon name="clock" /></span><span><strong><LocalizedText text={"Business timezone"} /></strong><small>{BUSINESS_TIME_ZONE}</small></span><Badge tone="blue">{"Active"}</Badge></div>
-        <div><span className="setting-icon violet"><Icon name="shield" /></span><span><strong><LocalizedText text={"Authentication"} /></strong><small>{teamTestMode ? "Temporary LAN Team Test session" : "Microsoft Entra ID access token"}</small></span><Badge tone={teamTestMode ? "amber" : "green"}>{teamTestMode ? "UAT only" : "Entra"}</Badge></div>
+        <div><span className="setting-icon violet"><Icon name="shield" /></span><span><strong><LocalizedText text={"Authentication"} /></strong><small>{uiText(auth.text)}</small></span><Badge tone={auth.tone}>{auth.badge}</Badge></div>
       </div></Panel>
     </div>
     <StorageCheckPanel canWrite={bootstrap.permissions.includes("master.write")} notify={notify} />
-    <Panel title={`Permissions (${bootstrap.permissions.length})`} subtitle="สิทธิ์ RBAC ที่ API ส่งให้บัญชีปัจจุบัน"><div className="chip-select">{bootstrap.permissions.map((permission) => <Badge key={permission} tone="slate">{permission}</Badge>)}</div></Panel>
-    <div className="callout info"><Icon name="settings" /><span><strong><LocalizedText text={"Configuration ownership"} /></strong><LocalizedText text={"ค่า connection string, Entra, CORS และ host ถูกจัดการที่ server environment เพื่อไม่ให้ browser แก้ไขความปลอดภัยของ Production ได้"} /></span></div>
+    <Panel title={uiText("Settings.permissions").replace("{n}", String(bootstrap.permissions.length))} subtitle="Settings.permissionsSubtitle"><div className="chip-select">{bootstrap.permissions.map((permission) => <Badge key={permission} tone="slate">{permission}</Badge>)}</div></Panel>
+    <div className="callout info"><Icon name="settings" /><span><strong><LocalizedText text={"Configuration ownership"} /></strong><span>{uiText("Settings.ownership")}</span></span></div>
   </PegasusScreen>;
 }

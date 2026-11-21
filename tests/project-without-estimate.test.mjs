@@ -65,7 +65,7 @@ test("projects without an estimate still appear in the cost report and on the CR
   const [reports, customers, analytics] = await Promise.all([source("backend-node/src/routes/reports.ts"), source("backend-node/src/routes/crm-customers.ts"), source("app/system/production/AdminAnalyticsScreens.tsx")]);
   assert.match(reports, /FROM dbo\.projects p LEFT JOIN dbo\.estimates e ON e\.id=p\.estimate_id\n\s*LEFT JOIN dbo\.v_estimate_totals totals/);
   assert.match(customers, /FROM dbo\.projects p LEFT JOIN dbo\.inquiries i ON i\.id=p\.inquiry_id/);
-  assert.match(analytics, /report\.project\.estimateNumber \? `Estimate \$\{report\.project\.estimateNumber\}` : uiText\("Project without an estimate"\)/);
+  assert.match(analytics, /report\.project\.estimateNumber \? uiText\("Reports\.estimate"\)\.replace\("\{number\}", report\.project\.estimateNumber\) : uiText\("Project without an estimate"\)/);
 });
 
 test("a project belongs to one of three teams, and older department names read as their team", async () => {
