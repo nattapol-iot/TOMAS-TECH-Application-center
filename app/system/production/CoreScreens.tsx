@@ -71,6 +71,7 @@ import { ContactPicker, HealthBadge, MasterPlanSection, MemberOptions, NotBroken
 import { ProductionCustomers, ProductionEngineeringRates } from "./AdminAnalyticsScreens";
 import { ErpMasterPanel } from "./ErpMasterPanel";
 import { PegasusScreen } from "./PegasusScreen";
+import { checkFields, failureDialog } from "./form-bubbles";
 import { ErpProjectNumberField, isPlaceholderProjectNumber } from "./ErpProjectNumber";
 import { SearchSelect } from "./SearchSelect";
 import { canViewEngineeringRates } from "../../../backend-node/src/engineering-rate-access";
@@ -1498,9 +1499,12 @@ export function ProductionMasterData({ bootstrap, notify, refreshBootstrap, onOp
 
 type MasterTabProps = CommonProps & { canWrite: boolean };
 
-function useMasterForm(refreshBootstrap: () => Promise<void>, notify: (message: string) => void) {
+function useMasterForm(refreshBootstrap: () => Promise<void>, notify: (message: string) => void, failureTitle?: string) {
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const [shownError, setError] = useState("");
+  // Screens in the Pegasus look report a failure in the error dialog (form-bubbles.ts); the others keep their red box.
+  const fail = (message: string) => { if (failureTitle) void failureDialog(message, failureTitle); else setError(message); };
+  const error = failureTitle ? "" : shownError;
 
   const submit = async (
     form: HTMLFormElement,
@@ -1518,10 +1522,10 @@ function useMasterForm(refreshBootstrap: () => Promise<void>, notify: (message: 
         await refreshBootstrap();
         notify(successMessage);
       } catch (refreshError) {
-        setError(`บันทึกสำเร็จแล้ว แต่โหลดข้อมูลล่าสุดไม่สำเร็จ: ${toError(refreshError)}`);
+        fail(`บันทึกสำเร็จแล้ว แต่โหลดข้อมูลล่าสุดไม่สำเร็จ: ${toError(refreshError)}`);
       }
     } catch (requestError) {
-      setError(toError(requestError));
+      fail(toError(requestError));
     } finally {
       setBusy(false);
     }
@@ -1613,10 +1617,11 @@ function SupplierEditModal({
   onClose: () => void;
 }) {
   const uiText = useUiText();
-  const { busy, error, submit } = useMasterForm(refreshBootstrap, (msg) => { onClose(); notify(msg); });
+  const { busy, submit } = useMasterForm(refreshBootstrap, (msg) => { onClose(); notify(msg); }, uiText("Form.errorTitle"));
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = event.currentTarget;
+    if (!checkFields(form, uiText)) return;
     const data = new FormData(form);
     const brands = (data.get("brands") as string ?? "").split(",").map((b) => b.trim()).filter(Boolean);
     void submit(form, async () => {
@@ -1635,8 +1640,7 @@ function SupplierEditModal({
       <button className="btn ghost" type="button" onClick={onClose}>{uiText("Cancel")}</button>
       <button className="btn primary" type="submit" form="supplier-edit-form" disabled={busy}>{busy ? uiText("Saving…") : uiText("Save")}</button>
     </>}>
-      <MasterFormError message={error} />
-      <form id="supplier-edit-form" onSubmit={onSubmit}>
+      <form id="supplier-edit-form" noValidate onSubmit={onSubmit}>
         <div className="form-grid two">
           <label className="field"><span>{uiText("Code")}</span><input value={supplier.code} readOnly /></label>
           <label className="field"><span><LocalizedText text={"Category *"} /></span><input name="category" defaultValue={supplier.category} required maxLength={100} /></label>
@@ -1655,7 +1659,7 @@ const BLANK_SUPPLIER = { code: "", name: "", category: "", contact: "", email: "
 
 function SupplierCreateForm({ notify, refreshBootstrap, onClose }: Pick<CommonProps, "notify" | "refreshBootstrap"> & { onClose: () => void }) {
   const localizeCopy = useStaticCopy();
-  const { busy, error, submit } = useMasterForm(refreshBootstrap, notify);
+  const { busy, submit } = useMasterForm(refreshBootstrap, notify, localizeCopy("Form.errorTitle"));
   // Controlled so a scanned card can fill the blanks the person has not typed yet.
   const [form, setForm] = useState({ ...BLANK_SUPPLIER });
   const update = <K extends keyof typeof BLANK_SUPPLIER>(key: K, value: string) =>
@@ -1683,6 +1687,7 @@ function SupplierCreateForm({ notify, refreshBootstrap, onClose }: Pick<CommonPr
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const element = event.currentTarget;
+    if (!checkFields(element, localizeCopy)) return;
     const brands = form.brands.split(",").map((brand) => brand.trim()).filter(Boolean);
     const input: CreateSupplierInput = {
       code: form.code.trim(),
@@ -1704,8 +1709,7 @@ function SupplierCreateForm({ notify, refreshBootstrap, onClose }: Pick<CommonPr
     <button className="btn ghost" type="button" disabled={busy} onClick={onClose}>{localizeCopy("Cancel")}</button>
     <button className="btn primary" type="submit" form="supplier-create-form" disabled={busy}>{localizeCopy(busy ? "Saving…" : "Save")}</button>
   </>}>
-    <form id="supplier-create-form" onSubmit={onSubmit}>
-      <MasterFormError message={error} />
+    <form id="supplier-create-form" noValidate onSubmit={onSubmit}>
       <BusinessCardScanner disabled={busy} onApply={applyBusinessCard} />
       <div className="form-grid two">
         <label className="field"><span><LocalizedText text={"Supplier code *"} /></span><input name="code" required maxLength={30} pattern="[A-Za-z0-9][A-Za-z0-9._/-]*" autoCapitalize="characters" autoComplete="off" placeholder="SUP-001" value={form.code} onChange={(event) => update("code", event.target.value)} /></label>
@@ -1978,10 +1982,9 @@ function EmployeeModal({ employee, prefill = null, departments = [], positions =
     endWorkDate: employee.endWorkDate ?? "", position: employee.position, isActive: employee.isActive,
   } : { ...EMPTY_EMPLOYEE, ...prefill });
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
   const update = <K extends keyof EmployeeInput>(key: K, value: EmployeeInput[K]) => setForm((current) => ({ ...current, [key]: value }));
   const submit = async () => {
-    setBusy(true); setError("");
+    setBusy(true);
     try {
       const input: EmployeeInput = { ...form, nameTh: form.nameTh || undefined, mobile: form.mobile || undefined,
         nickname: form.nickname || undefined, birthDate: form.birthDate || undefined,
@@ -1990,31 +1993,32 @@ function EmployeeModal({ employee, prefill = null, departments = [], positions =
       if (employee) await updateEmployee(employee.id, { ...input, rowVersion: employee.rowVersion });
       else await createEmployee(input);
       await onSaved(employee ? `${form.nameEn} updated` : `${form.nameEn} created`);
-    } catch (requestError) { setError(toError(requestError)); }
+    } catch (requestError) { void failureDialog(toError(requestError), t("Form.errorTitle")); }
     finally { setBusy(false); }
   };
-  const valid = form.employeeNo > 0 && !!form.nameEn.trim() && !!form.email.trim() && !!form.department.trim()
-    && !!form.jobTitle.trim() && !!form.startWorkDate && !!form.position.trim()
-    && (!form.birthDate || form.birthDate < form.startWorkDate)
-    && (!form.endWorkDate || form.endWorkDate >= form.startWorkDate);
+  const rules = [
+    { invalid: !form.nameEn.trim(), at: '[name="nameEn"]', message: t("Form.required") },
+    { invalid: !form.email.trim(), at: '[name="email"]', message: t("Form.required") },
+    { invalid: !form.jobTitle.trim(), at: '[name="jobTitle"]', message: t("Form.required") },
+    { invalid: Boolean(form.birthDate && form.startWorkDate && form.birthDate >= form.startWorkDate), at: '[data-bubble-anchor="birthday"]', message: t("Form.invalid") },
+  ];
   return <Modal title={employee ? "Edit employee" : "New employee"} subtitle="Employee profile is separate from application login access" size="lg" onClose={onClose} footer={<>
     <button className="btn ghost" type="button" onClick={onClose}>{t("Cancel")}</button>
-    <button className="btn primary" type="submit" form="employee-master-form" disabled={busy || !valid}><Icon name="check" />{busy ? t("Saving…") : t("Save")}</button>
+    <button className="btn primary" type="submit" form="employee-master-form" disabled={busy}><Icon name="check" />{busy ? t("Saving…") : t("Save")}</button>
   </>}>
-    <form id="employee-master-form" onSubmit={(event) => { event.preventDefault(); void submit(); }}>
-      <MasterFormError message={error} />
+    <form id="employee-master-form" noValidate onSubmit={(event) => { event.preventDefault(); if (checkFields(event.currentTarget, t, rules)) void submit(); }}>
       {employee?.masterLinked ? <div className="info-strip" role="note"><Icon name="database" />{t("Employee.masterLinked")}</div> : null}
       <div className="form-grid two">
         <label className="field"><span>{t("Employee No.")} *</span><input type="number" min="1" max="2147483647" required value={form.employeeNo || ""} onChange={(event) => update("employeeNo", Number(event.target.value))} /></label>
         <label className="field"><span>{t("Nickname")}</span><input maxLength={100} value={form.nickname ?? ""} onChange={(event) => update("nickname", event.target.value)} /></label>
-        <label className="field"><span>{t("English name")} *</span><input required maxLength={200} autoComplete="name" value={form.nameEn} onChange={(event) => update("nameEn", event.target.value)} /></label>
+        <label className="field"><span>{t("English name")} *</span><input name="nameEn" required maxLength={200} autoComplete="name" value={form.nameEn} onChange={(event) => update("nameEn", event.target.value)} /></label>
         <label className="field"><span>{t("Thai name")}</span><input maxLength={200} value={form.nameTh ?? ""} onChange={(event) => update("nameTh", event.target.value)} /></label>
-        <label className="field"><span>{t("Email")} *</span><input required type="email" maxLength={256} autoComplete="email" value={form.email} onChange={(event) => update("email", event.target.value)} /></label>
+        <label className="field"><span>{t("Email")} *</span><input name="email" required type="email" maxLength={256} autoComplete="email" value={form.email} onChange={(event) => update("email", event.target.value)} /></label>
         <label className="field"><span>{t("Mobile")}</span><input type="tel" maxLength={50} autoComplete="tel" value={form.mobile ?? ""} onChange={(event) => update("mobile", event.target.value)} /></label>
         <label className="field"><span>{t("Department")} *</span><ChoiceSelect value={form.department} standard={EMPLOYEE_DEPARTMENTS} inUse={departments} placeholder="Employee.chooseDepartment" onChange={(value) => update("department", value)} /></label>
         <label className="field"><span>{t("Level / position")} *</span><ChoiceSelect value={form.position} standard={EMPLOYEE_LEVELS} inUse={positions} placeholder="Employee.chooseLevel" onChange={(value) => update("position", value)} /></label>
-        <label className="field span-2"><span>{t("Job title")} *</span><input required maxLength={500} value={form.jobTitle} onChange={(event) => update("jobTitle", event.target.value)} /></label>
-        <label className="field"><span>{t("Birthday")}</span><DateInput max={form.startWorkDate} value={form.birthDate ?? ""} onChange={(event) => update("birthDate", event.target.value)} /></label>
+        <label className="field span-2"><span>{t("Job title")} *</span><input name="jobTitle" required maxLength={500} value={form.jobTitle} onChange={(event) => update("jobTitle", event.target.value)} /></label>
+        <label className="field" data-bubble-anchor="birthday"><span>{t("Birthday")}</span><DateInput max={form.startWorkDate} value={form.birthDate ?? ""} onChange={(event) => update("birthDate", event.target.value)} /></label>
         <label className="field"><span>{t("Start work")} *</span><DateInput required min={form.birthDate || undefined} value={form.startWorkDate} onChange={(event) => update("startWorkDate", event.target.value)} /></label>
         <label className="field"><span>{t("End work")}</span><DateInput min={form.startWorkDate} value={form.endWorkDate ?? ""} onChange={(event) => update("endWorkDate", event.target.value)} /></label>
         <label className="field"><span>{t("Uniform size")}</span><input maxLength={50} value={form.uniformSize ?? ""} onChange={(event) => update("uniformSize", event.target.value)} /></label>
@@ -2053,12 +2057,13 @@ function UserRoleModal({ member, isCurrentAccount, onClose, onSaved, onRolesChan
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [error, setError] = useState("");
   const [additional, setAdditional] = useState<UserAdditionalRole[]>([]);
   const [extraCode, setExtraCode] = useState("");
   const [extraReason, setExtraReason] = useState("");
-  const [extraError, setExtraError] = useState("");
   const [extraBusy, setExtraBusy] = useState("");
+  const grantFields = useRef<HTMLDivElement>(null);
+  const failureTitle = t("Form.errorTitle");
+  const fail = (requestError: unknown) => { void failureDialog(toError(requestError), failureTitle); };
 
   const loadAdditional = useCallback(async () => {
     const result = await listUserRoles(member.id);
@@ -2068,43 +2073,47 @@ function UserRoleModal({ member, isCurrentAccount, onClose, onSaved, onRolesChan
   useEffect(() => {
     let active = true;
     void Promise.all([listAccessRoles(), listUserRoles(member.id)])
-      .then(([roleList, assignment]) => { if (active) { setRoles(roleList.items); setAdditional(assignment.additional); setError(""); } })
-      .catch((requestError) => { if (active) setError(toError(requestError)); })
+      .then(([roleList, assignment]) => { if (active) { setRoles(roleList.items); setAdditional(assignment.additional); } })
+      .catch((requestError) => { if (active) void failureDialog(toError(requestError), failureTitle); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [member.id]);
+  }, [member.id, failureTitle]);
   const selectedRole = roles.find((role) => role.code === roleCode);
   const submit = async () => {
-    setBusy(true); setError("");
+    setBusy(true);
     try {
       const result = await updateUserRole(member.id, { roleCode, rowVersion: member.rowVersion });
       setSaved(true);
       await onSaved(result.role);
-    } catch (requestError) { setError(toError(requestError)); }
+    } catch (requestError) { fail(requestError); }
     finally { setBusy(false); }
   };
 
   // An additional role carries its whole permission set, so every grant records why.
   const grantExtra = async () => {
+    checkFields(grantFields.current, t, [
+      { invalid: !extraCode, at: '[name="extraRole"]', message: t("Form.choose") },
+      { invalid: !extraReason.trim(), at: '[name="extraReason"]', message: t("Form.required") },
+    ]);
     if (!extraCode || !extraReason.trim()) return;
-    setExtraBusy(extraCode); setExtraError("");
+    setExtraBusy(extraCode);
     try {
       await grantUserRole(member.id, { roleCode: extraCode, reason: extraReason.trim() });
       const granted = extraCode;
       setExtraCode(""); setExtraReason("");
       await loadAdditional();
       await onRolesChanged(`${member.name}: + ${granted}`);
-    } catch (requestError) { setExtraError(toError(requestError)); }
+    } catch (requestError) { fail(requestError); }
     finally { setExtraBusy(""); }
   };
 
   const revokeExtra = async (code: string) => {
-    setExtraBusy(code); setExtraError("");
+    setExtraBusy(code);
     try {
       await revokeUserRole(member.id, code);
       await loadAdditional();
       await onRolesChanged(`${member.name}: − ${code}`);
-    } catch (requestError) { setExtraError(toError(requestError)); }
+    } catch (requestError) { fail(requestError); }
     finally { setExtraBusy(""); }
   };
 
@@ -2128,21 +2137,19 @@ function UserRoleModal({ member, isCurrentAccount, onClose, onSaved, onRolesChan
         <div><Badge tone={role.code === "Admin" ? "violet" : "blue"}>{role.code}</Badge><small className="muted">{role.reason}</small></div>
         <button className="btn ghost sm" type="button" disabled={busy || saved || extraBusy !== ""} onClick={() => { void revokeExtra(role.code); }}><Icon name="trash" />{extraBusy === role.code ? t("Removing…") : t("Remove role")}</button>
       </li>)}</ul> : <p className="muted">{t("This account holds its primary role only.")}</p>}
-      <div className="form-grid two">
+      <div className="form-grid two" ref={grantFields}>
         <Field label={t("Add another role")}>
-          <select disabled={loading || busy || saved || extraBusy !== ""} value={extraCode} onChange={(event) => setExtraCode(event.target.value)}>
+          <select name="extraRole" disabled={loading || busy || saved || extraBusy !== ""} value={extraCode} onChange={(event) => setExtraCode(event.target.value)}>
             <option value="">{t("Select a role")}</option>
             {grantable.map((role) => <option key={role.id} value={role.code}>{role.name}{role.name !== role.code ? ` (${role.code})` : ""}</option>)}
           </select>
         </Field>
         <Field label={t("Reason")}>
-          <input maxLength={1000} value={extraReason} disabled={loading || busy || saved || extraBusy !== ""} onChange={(event) => setExtraReason(event.target.value)} />
+          <input name="extraReason" maxLength={1000} value={extraReason} disabled={loading || busy || saved || extraBusy !== ""} onChange={(event) => setExtraReason(event.target.value)} />
         </Field>
       </div>
-      <button className="btn default" type="button" disabled={loading || busy || saved || !extraCode || !extraReason.trim() || extraBusy !== ""} onClick={() => { void grantExtra(); }}><Icon name="plus" />{extraBusy && extraBusy === extraCode ? t("Saving…") : t("Grant role")}</button>
-      {extraError ? <div className="callout danger" role="alert"><Icon name="alertTriangle" /><span>{extraError}</span></div> : null}
+      <button className="btn default" type="button" disabled={loading || busy || saved || extraBusy !== ""} onClick={() => { void grantExtra(); }}><Icon name="plus" />{extraBusy && extraBusy === extraCode ? t("Saving…") : t("Grant role")}</button>
     </Panel>
     <div className="info-strip amber" role="note"><Icon name="alertTriangle" /><span>{isCurrentAccount ? t("Changing your own role refreshes your navigation and permissions immediately after saving.") : t("The employee will receive the new permissions on their next request.")}</span></div>
-    {error ? <div className="callout danger" role="alert"><Icon name="alertTriangle" /><span>{error}</span></div> : null}
   </Modal>;
 }
