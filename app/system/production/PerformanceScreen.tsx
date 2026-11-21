@@ -21,6 +21,7 @@ import {
 import "./pegasus-skin.css";
 import "./pegasus-screens.css";
 import { checkFields, failureDialog } from "./form-bubbles";
+import { clearDraft, confirmLeave, draftKeys, leaveCopy, useDraftField } from "./form-draft";
 
 type TeamMember = {
   id: string | number;
@@ -157,6 +158,7 @@ export default function Performance({ currentUser, notify, openProjectSchedule, 
   const editingAsManager = Boolean(editingId && managerView && editingId !== memberKey(currentMember));
   const evidenceEmployeeId = tab === "team" && managerView ? Number(memberKey(selected)) : Number(memberKey(currentMember));
 
+  const reopened = useRef(false);
   const applyOverview = useCallback((data: Awaited<ReturnType<typeof loadPerformanceOverview>>) => {
     setMembers(data.assessments.map(review => ({id: review.userId, employeeId: review.employeeId, name: review.name, department: review.department, role: review.role, level: review.level})));
     setSelectedId(current => data.assessments.some(review => String(review.employeeId) === current) ? current : String(data.assessments[0]?.employeeId ?? ""));
@@ -169,6 +171,14 @@ export default function Performance({ currentUser, notify, openProjectSchedule, 
     // no assessment of their own would otherwise land on an empty "mine".
     const ownAssessment = data.assessments.some(review => String(review.userId) === String(currentUser.id));
     setTab(current => !data.canManage ? "mine" : current === "mine" && !ownAssessment ? "team" : current);
+    if (!reopened.current) {
+      reopened.current = true;
+      const cycleId = data.selectedCycle.id;
+      const known = (id: string | undefined) => id && data.assessments.some((review) => String(review.employeeId) === id) ? id : undefined;
+      const assessment = known(draftKeys(`kpi:assessment:${cycleId}:`)[0]?.split(":")[3]);
+      const calibration = known(draftKeys(`kpi:calibration:${cycleId}:`)[0]?.split(":")[3]);
+      if (assessment) setEditingId(assessment); else if (calibration) setCompletingId(calibration);
+    }
   }, [currentUser.id]);
 
   const reload = useCallback(async (cycleId?: number) => {
@@ -379,6 +389,7 @@ export default function Performance({ currentUser, notify, openProjectSchedule, 
           member={members.find((member) => memberKey(member) === editingId) ?? currentMember}
           review={reviews.find((review) => review.employeeId === editingId) ?? mine}
           isManager={editingAsManager}
+          draftKey={selectedCycle ? `kpi:assessment:${selectedCycle.id}:${editingId}:${editingAsManager ? "manager" : "self"}` : undefined}
           workEvidence={workEvidence?.employeeId === Number(editingId) ? workEvidence : null}
           onClose={() => setEditingId(null)}
           onSave={async (scores, evidence, submit, summary, developmentGoal) => {
@@ -388,7 +399,7 @@ export default function Performance({ currentUser, notify, openProjectSchedule, 
           }}
         />
       ) : null}
-      {completingId && selectedCycle ? <CalibrationModal member={members.find((member) => memberKey(member) === completingId) ?? selected} onClose={() => setCompletingId(null)} onComplete={async (note) => { const review = reviews.find((entry) => entry.employeeId === completingId); if (!review?.rowVersion) throw new Error("Refresh the assessment before completing it."); await completePerformanceAssessment(Number(completingId), { cycleId: selectedCycle.id, calibrationNote: note, rowVersion: review.rowVersion }); await reload(selectedCycle.id); notify("KPI review completed and frozen"); setCompletingId(null); }} /> : null}
+      {completingId && selectedCycle ? <CalibrationModal draftKey={`kpi:calibration:${selectedCycle.id}:${completingId}`} member={members.find((member) => memberKey(member) === completingId) ?? selected} onClose={() => setCompletingId(null)} onComplete={async (note) => { const review = reviews.find((entry) => entry.employeeId === completingId); if (!review?.rowVersion) throw new Error("Refresh the assessment before completing it."); await completePerformanceAssessment(Number(completingId), { cycleId: selectedCycle.id, calibrationNote: note, rowVersion: review.rowVersion }); await reload(selectedCycle.id); notify("KPI review completed and frozen"); setCompletingId(null); }} /> : null}
     </div>
   );
 }
@@ -527,15 +538,18 @@ function Framework({ role, canManage }: { role: string; canManage: boolean }) {
   );
 }
 
-function AssessmentModal({ member, review, isManager, workEvidence, onClose, onSave }: { member: TeamMember; review: ReviewRecord; isManager: boolean; workEvidence: PerformanceEvidence | null; onClose: () => void; onSave: (scores: number[], evidence: string[], submit: boolean, summary: string, developmentGoal: string) => Promise<void> }) {
+function AssessmentModal({ member, review, isManager, workEvidence, onClose, onSave, draftKey }: { draftKey?: string; member: TeamMember; review: ReviewRecord; isManager: boolean; workEvidence: PerformanceEvidence | null; onClose: () => void; onSave: (scores: number[], evidence: string[], submit: boolean, summary: string, developmentGoal: string) => Promise<void> }) {
   const t = useT();
   const { lang } = useLanguage();
   const areas = areasForRole(member.role);
   const perspectiveScores = isManager ? review.managerScores : review.selfScores;
-  const [scores, setScores] = useState(perspectiveScores);
-  const [evidence, setEvidence] = useState(() => areas.map((_, index) => (isManager ? review.managerEvidence[index] : review.selfEvidence[index]) ?? ""));
-  const [summary, setSummary] = useState(isManager ? review.managerSummary : review.selfSummary);
-  const [developmentGoal, setDevelopmentGoal] = useState(review.developmentGoal);
+  // What is being written is kept in this browser until it is saved (Pegasus 0.6).
+  const key = draftKey ?? null;
+  const [scores, setScores] = useDraftField(key, "scores", perspectiveScores);
+  const [evidence, setEvidence] = useDraftField(key, "evidence", areas.map((_, index) => (isManager ? review.managerEvidence[index] : review.selfEvidence[index]) ?? ""));
+  const [summary, setSummary] = useDraftField(key, "summary", isManager ? review.managerSummary : review.selfSummary);
+  const [developmentGoal, setDevelopmentGoal] = useDraftField(key, "developmentGoal", review.developmentGoal);
+  const close = async () => { if (await confirmLeave(key, leaveCopy(t))) onClose(); };
   const [busy, setBusy] = useState(false);
   const editor = useRef<HTMLDivElement>(null);
   const weighted = scoreAverage(scores, areas);
@@ -548,11 +562,11 @@ function AssessmentModal({ member, review, isManager, workEvidence, onClose, onS
   const save = async (submit: boolean) => {
     if (submit && (!checkFields(editor.current, t, rules) || !valid)) return;
     setBusy(true);
-    try { await onSave(scores, evidence, submit, summary, developmentGoal); }
+    try { await onSave(scores, evidence, submit, summary, developmentGoal); clearDraft(key); }
     catch (caught) { void failureDialog(caught instanceof Error ? caught.message : t("The assessment could not be saved."), t("Form.errorTitle")); setBusy(false); }
   };
   return (
-    <Modal title={`${t(isManager ? "Manager assessment" : "Self review")} · ${member.name}`} subtitle="Rate demonstrated impact and add a specific example where it helps." size="xl" onClose={() => { if (!busy) onClose(); }} footer={<><button className="btn default" type="button" disabled={busy} onClick={() => { void save(false); }}><LocalizedText text={"Save draft"} /></button><button className="btn primary" type="button" disabled={busy} onClick={() => { void save(true); }}><Icon name="send" />{busy ? <LocalizedText text={"Saving…"} /> : t(isManager ? "Send to calibration" : "Submit self review")}</button></>}>
+    <Modal title={`${t(isManager ? "Manager assessment" : "Self review")} · ${member.name}`} subtitle="Rate demonstrated impact and add a specific example where it helps." size="xl" onClose={() => { if (!busy) void close(); }} footer={<><button className="btn default" type="button" disabled={busy} onClick={() => { void save(false); }}><LocalizedText text={"Save draft"} /></button><button className="btn primary" type="button" disabled={busy} onClick={() => { void save(true); }}><Icon name="send" />{busy ? <LocalizedText text={"Saving…"} /> : t(isManager ? "Send to calibration" : "Submit self review")}</button></>}>
       <div className="performance-modal-summary"><div className="performance-score-ring compact" style={{ ["--score" as string]: `${weighted * 20}%` }}><strong>{performanceScoreText(weighted)}</strong><span>/ 5.0</span></div><div><strong>{t(ratingLabel(weighted))}</strong><p><LocalizedText text={"Weighted score updates as you rate each area."} /></p></div></div>
       <div className="performance-score-editor" ref={editor}>
         {areas.map((area, index) => {
@@ -571,18 +585,19 @@ function AssessmentModal({ member, review, isManager, workEvidence, onClose, onS
   );
 }
 
-function CalibrationModal({ member, onClose, onComplete }: { member: TeamMember; onClose: () => void; onComplete: (note: string) => Promise<void> }) {
+function CalibrationModal({ member, onClose, onComplete, draftKey }: { draftKey?: string; member: TeamMember; onClose: () => void; onComplete: (note: string) => Promise<void> }) {
   const t = useT();
-  const [note, setNote] = useState("");
+  const [note, setNote] = useDraftField(draftKey ?? null, "note", "");
+  const close = async () => { if (await confirmLeave(draftKey, leaveCopy(t))) onClose(); };
   const [busy, setBusy] = useState(false);
   const decision = useRef<HTMLLabelElement>(null);
   const complete = async () => {
     if (!checkFields(decision.current, t, [{ invalid: !note.trim(), at: "textarea", message: t("Record the calibration decision before completing the review.") }])) return;
     setBusy(true);
-    try { await onComplete(note); }
+    try { await onComplete(note); clearDraft(draftKey); }
     catch (caught) { void failureDialog(caught instanceof Error ? caught.message : t("The review could not be completed."), t("Form.errorTitle")); setBusy(false); }
   };
-  return <Modal title={`${t("Complete calibration")} · ${member.name}`} subtitle="This freezes the final manager scores and written feedback." size="sm" onClose={onClose} footer={<><button className="btn default" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn success" type="button" disabled={busy} onClick={() => { void complete(); }}><Icon name="checkCircle" />{busy ? <LocalizedText text={"Completing…"} /> : <LocalizedText text={"Complete review"} />}</button></>}>
+  return <Modal title={`${t("Complete calibration")} · ${member.name}`} subtitle="This freezes the final manager scores and written feedback." size="sm" onClose={() => { void close(); }} footer={<><button className="btn default" type="button" disabled={busy} onClick={() => { void close(); }}><LocalizedText text={"Cancel"} /></button><button className="btn success" type="button" disabled={busy} onClick={() => { void complete(); }}><Icon name="checkCircle" />{busy ? <LocalizedText text={"Completing…"} /> : <LocalizedText text={"Complete review"} />}</button></>}>
     <div className="performance-rule"><Icon name="lock" /><p><strong><LocalizedText text={"Final review"} /></strong>  <LocalizedText text={"Completed assessments are immutable and remain available in the audit history."} /></p></div>
     <label className="performance-comment" ref={decision}><span><LocalizedText text={"Calibration decision"} /></span><textarea value={note} onChange={(event) => setNote(event.target.value)} rows={4} maxLength={1000} placeholder={t("Summarise the evidence considered and the agreed final outcome…")} /><small>{note.length}/1000</small></label>
   </Modal>;

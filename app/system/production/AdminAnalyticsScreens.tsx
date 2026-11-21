@@ -32,6 +32,7 @@ import { DateInput } from "../DateInput";
 import { PegasusScreen } from "./PegasusScreen";
 import { IS_TMT_ID_MODE } from "../tmt-id.constants";
 import { checkFields, failureDialog } from "./form-bubbles";
+import { clearDraft, hasDraft, useDraftField } from "./form-draft";
 
 export type AdminAnalyticsProps = {
   bootstrap: BootstrapData;
@@ -915,7 +916,9 @@ function StorageCheckPanel({ canWrite, notify }: { canWrite: boolean; notify: (m
   const uiText = useUiText();
   const [result, setResult] = useState<StorageCheckResult | null>(null);
   const [settings, setSettings] = useState<NasSettingsResult | null>(null);
-  const [form, setForm] = useState<NasSettingsInput>(EMPTY_NAS_SETTINGS);
+  // What the server holds is the starting point; typing on top of it is kept in this browser until it is saved (Pegasus 0.6).
+  const [saved, setSaved] = useState<NasSettingsInput>(EMPTY_NAS_SETTINGS);
+  const [form, setForm] = useDraftField<NasSettingsInput>("settings:nas", "form", saved);
   const [connection, setConnection] = useState<NasConnectionTestResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -929,9 +932,13 @@ function StorageCheckPanel({ canWrite, notify }: { canWrite: boolean; notify: (m
   useEffect(() => {
     void loadNasSettings().then((value) => {
       setSettings(value);
-      if (value.draft) setForm({ server: value.draft.server, share: value.draft.share, destinationPath: value.draft.destinationPath, username: value.draft.username });
+      if (value.draft) {
+        const loaded = { server: value.draft.server, share: value.draft.share, destinationPath: value.draft.destinationPath, username: value.draft.username };
+        setSaved(loaded);
+        if (!hasDraft("settings:nas")) setForm(loaded);
+      }
     }).catch((error) => { void failureDialog(String(error instanceof Error ? error.message : error), failureTitle); });
-  }, [failureTitle]);
+  }, [failureTitle, setForm]);
 
   const run = async () => {
     setBusy(true); setResult(null);
@@ -958,6 +965,8 @@ function StorageCheckPanel({ canWrite, notify }: { canWrite: boolean; notify: (m
     try {
       const draft = await saveNasSettings(form);
       setSettings((current) => ({ active: current?.active ?? { mode: "Local", rootPath: "" }, draft }));
+      setSaved(form);
+      clearDraft("settings:nas");
       notify("Settings.saved");
     } catch (e) { fail(e); }
     finally { setSaving(false); }

@@ -13,6 +13,7 @@ import { localeFor, useLanguage, useT } from "../i18n";
 import { LocalizedText } from "../LocalizedText";
 import { Badge, EmptyState, Field, Icon, Modal, Panel, SearchInput, Tabs, Toolbar } from "../ui";
 import { checkFields } from "./form-bubbles";
+import { clearDraft, confirmLeave, hasDraft, leaveCopy, useDraftField } from "./form-draft";
 
 type Notify = (message: string) => void;
 
@@ -75,7 +76,7 @@ export function SourceRepositories({ canManage, notify }: { canManage: boolean; 
   const [query, setQuery] = useState("");
   const [project, setProject] = useState("");
   const [view, setView] = useState(readPreference);
-  const [creating, setCreating] = useState(false);
+  const [creating, setCreating] = useState(() => canManage && hasDraft("repo:new"));
   const [open, setOpen] = useLinkedState("repo", null, optionalTextLink, { remember: false });
   const t = useT();
   const { lang } = useLanguage();
@@ -264,12 +265,13 @@ function ProjectPicker({ value, onChange }: { value: ProjectSummary | null; onCh
 }
 
 function CreateRepositoryModal({ onClose, onCreated, notify }: { onClose: () => void; onCreated: (repo: SourceRepository) => void; notify: Notify }) {
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [project, setProject] = useState<ProjectSummary | null>(null);
+  const [name, setName] = useDraftField("repo:new", "name", "");
+  const [description, setDescription] = useDraftField("repo:new", "description", "");
+  const [project, setProject] = useDraftField<ProjectSummary | null>("repo:new", "project", null);
   const [busy, setBusy] = useState(false);
   const t = useT();
   const fields = useRef<HTMLDivElement>(null);
+  const close = async () => { if (await confirmLeave("repo:new", leaveCopy(t))) onClose(); };
   const nameValid = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/.test(name) && !name.endsWith(".");
   const valid = nameValid && project !== null;
   const save = async () => {
@@ -281,7 +283,9 @@ function CreateRepositoryModal({ onClose, onCreated, notify }: { onClose: () => 
     if (!valid || !project) return;
     setBusy(true);
     try {
-      onCreated(await createSourceRepository({ name, projectId: project.id, description }));
+      const created = await createSourceRepository({ name, projectId: project.id, description });
+      clearDraft("repo:new");
+      onCreated(created);
     } catch (reason) {
       notify(errorText(reason));
     } finally {
@@ -289,9 +293,9 @@ function CreateRepositoryModal({ onClose, onCreated, notify }: { onClose: () => 
     }
   };
   return (
-    <Modal title="Repos.new" subtitle="Repos.newHint" onClose={onClose}
+    <Modal title="Repos.new" subtitle="Repos.newHint" onClose={() => { void close(); }}
       footer={<>
-        <button className="btn default" type="button" onClick={onClose}><LocalizedText text={"Cancel"} /></button>
+        <button className="btn default" type="button" onClick={() => { void close(); }}><LocalizedText text={"Cancel"} /></button>
         <button className="btn primary" type="button" disabled={busy} onClick={() => void save()}><Icon name="plus" /><LocalizedText text={"Repos.create"} /></button>
       </>}>
       <div className="form-grid two" ref={fields}>
@@ -315,8 +319,8 @@ function RepositoryView({ name, notify, dateFormat, onBack }: { name: string; no
   const [file, setFile] = useLinkedState("file", null, optionalTextLink, { remember: false });
   const [revision, setRevision] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [editing, setEditing] = useState(false);
+  const [uploading, setUploading] = useState(() => hasDraft(`repo:upload:${name}`));
+  const [editing, setEditing] = useState(() => hasDraft(`repo:edit:${name}`));
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -706,14 +710,16 @@ function UploadModal({ repo, path, maxBytes, cloneUrl, notify, onClose, onDone }
   const [files, setFiles] = useState<File[]>([]);
   // Checked before sending: a file over the ceiling would otherwise upload for minutes and then fail.
   const tooLarge = maxBytes ? files.filter((file) => file.size > maxBytes) : [];
-  const [target, setTarget] = useState(path);
-  const [message, setMessage] = useState("");
+  const draftKey = `repo:upload:${repo}`;
+  const [target, setTarget] = useDraftField(draftKey, "target", path);
+  const [message, setMessage] = useDraftField(draftKey, "message", "");
   const [extract, setExtract] = useState(true);
   const [replace, setReplace] = useState(false);
   const [stripRoot, setStripRoot] = useState(true);
   const [progress, setProgress] = useState<number | null>(null);
   const t = useT();
   const fields = useRef<HTMLDivElement>(null);
+  const close = async () => { if (await confirmLeave(draftKey, leaveCopy(t))) onClose(); };
   const hasZip = files.some((file) => /\.zip$/i.test(file.name));
   const canReplace = hasZip && extract && files.length === 1 && !target.trim();
 
@@ -735,6 +741,7 @@ function UploadModal({ repo, path, maxBytes, cloneUrl, notify, onClose, onDone }
         setProgress(index + 1);
       }
       notify(`${t("Repos.uploaded")} ${written}${skipped ? ` · ${t("Repos.skipped")} ${skipped}` : ""}`);
+      clearDraft(draftKey);
       onDone();
     } catch (reason) {
       notify(errorText(reason));
@@ -743,9 +750,9 @@ function UploadModal({ repo, path, maxBytes, cloneUrl, notify, onClose, onDone }
   };
 
   return (
-    <Modal title="Repos.upload" subtitle="Repos.uploadHint" onClose={progress === null ? onClose : () => undefined}
+    <Modal title="Repos.upload" subtitle="Repos.uploadHint" onClose={progress === null ? () => { void close(); } : () => undefined}
       footer={<>
-        <button className="btn default" type="button" disabled={progress !== null} onClick={onClose}><LocalizedText text={"Cancel"} /></button>
+        <button className="btn default" type="button" disabled={progress !== null} onClick={() => { void close(); }}><LocalizedText text={"Cancel"} /></button>
         <button className="btn primary" type="button" disabled={progress !== null} onClick={() => void start()}>
           <Icon name="upload" />{progress === null ? <LocalizedText text={"Repos.upload"} /> : <>{progress} / {files.length}</>}
         </button>
@@ -786,13 +793,17 @@ function UploadModal({ repo, path, maxBytes, cloneUrl, notify, onClose, onDone }
 }
 
 function EditRepositoryModal({ detail, notify, onClose, onSaved }: { detail: SourceRepositoryDetail; notify: Notify; onClose: () => void; onSaved: () => void }) {
-  const [description, setDescription] = useState(detail.description);
-  const [project, setProject] = useState<ProjectSummary | null>(null);
+  const t = useT();
+  const draftKey = `repo:edit:${detail.name}`;
+  const [description, setDescription] = useDraftField(draftKey, "description", detail.description);
+  const [project, setProject] = useDraftField<ProjectSummary | null>(draftKey, "project", null);
+  const close = async () => { if (await confirmLeave(draftKey, leaveCopy(t))) onClose(); };
   const [busy, setBusy] = useState(false);
   const save = async () => {
     setBusy(true);
     try {
       await updateSourceRepository(detail.name, { description, ...(project ? { projectId: project.id } : {}) });
+      clearDraft(draftKey);
       onSaved();
     } catch (reason) {
       notify(errorText(reason));
@@ -801,9 +812,9 @@ function EditRepositoryModal({ detail, notify, onClose, onSaved }: { detail: Sou
     }
   };
   return (
-    <Modal title="Edit" subtitle={detail.name} onClose={onClose}
+    <Modal title="Edit" subtitle={detail.name} onClose={() => { void close(); }}
       footer={<>
-        <button className="btn default" type="button" onClick={onClose}><LocalizedText text={"Cancel"} /></button>
+        <button className="btn default" type="button" onClick={() => { void close(); }}><LocalizedText text={"Cancel"} /></button>
         <button className="btn primary" type="button" disabled={busy} onClick={() => void save()}><Icon name="check" /><LocalizedText text={"Save"} /></button>
       </>}>
       <div className="form-grid two">

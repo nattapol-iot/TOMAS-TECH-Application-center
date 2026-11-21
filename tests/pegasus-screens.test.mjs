@@ -96,7 +96,7 @@ test("lists follow the ERP: a record opens from its number, row actions are quie
   assert.match(master, /supplier\.erpCode \? null : <button className="pg-act danger"/, "an ERP supplier is still not deleted here");
   assert.doesNotMatch(master, /style=\{\{ color: "#dc2626" \}\}/);
   // The edit dialog's buttons sit in its divided footer, the primary one last (D.8), and its labels go through the dictionary.
-  assert.match(master, /footer=\{<>\s*<button className="btn ghost" type="button" onClick=\{onClose\}>\{uiText\("Cancel"\)\}<\/button>\s*<button className="btn primary" type="submit" form="supplier-edit-form"/);
+  assert.match(master, /footer=\{<>\s*<button className="btn ghost" type="button" onClick=\{\(\) => \{ void close\(\); \}\}>\{uiText\("Cancel"\)\}<\/button>\s*<button className="btn primary" type="submit" form="supplier-edit-form"/);
   assert.doesNotMatch(master, /<span>(?:Code \(read-only\)|Name \*|Contact|Brands \(comma-separated\))<\/span>/);
   // Employees: Actions, then the status, then the rest (0.3).
   assert.match(master, /\{canWrite \? <th className="pg-acts">.*?<\/th> : null\}<th>\{t\("Status"\)\}<\/th><th>\{t\("Employee"\)\}<\/th>/);
@@ -168,7 +168,7 @@ test("the project cost report names every figure instead of printing field names
 test("the Add supplier dialog is titled New supplier and saves from its footer", async () => {
   const core = await read("app/system/production/CoreScreens.tsx");
   const form = core.slice(core.indexOf("function SupplierCreateForm"), core.indexOf("function InventoryItemMasterTab"));
-  assert.match(form, /<Modal title="Supplier\.new" subtitle="ใช้ใน Cost item และ Preferred supplier" size="md" onClose=\{onClose\} footer=\{<>/);
+  assert.match(form, /<Modal title="Supplier\.new" subtitle="ใช้ใน Cost item และ Preferred supplier" size="md" onClose=\{\(\) => \{ void close\(\); \}\} footer=\{<>/);
   assert.match(form, /<button className="btn primary" type="submit" form="supplier-create-form" disabled=\{busy\}>\{localizeCopy\(busy \? "Saving…" : "Save"\)\}<\/button>/);
   assert.match(form, /<form id="supplier-create-form" noValidate onSubmit=\{onSubmit\}>/);
   assert.doesNotMatch(form, /Create supplier|<Panel title="Add supplier"/);
@@ -258,7 +258,7 @@ test("the bubble helper decides by its rules without a DOM, and every message ex
   assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{\s*\.pg-screen \[data-invalid\]::after, \.pg-screen \[data-invalid\]::before, \.pg-screen \[data-shake\] \{ animation: none; \}/);
 
   const asked = new Set();
-  for (const file of [...SCREEN_FILES, "app/system/production/form-bubbles.ts"]) for (const match of (await read(file)).matchAll(/["'](Form\.[A-Za-z]+)["']/g)) asked.add(match[1]);
+  for (const file of [...SCREEN_FILES, "app/system/production/form-bubbles.ts", "app/system/production/form-draft.ts"]) for (const match of (await read(file)).matchAll(/["'](Form\.[A-Za-z]+)["']/g)) asked.add(match[1]);
   assert.ok(asked.size >= 8, `keys were found (${asked.size})`);
   for (const key of asked) {
     const entry = FORM_COPY[key];
@@ -277,4 +277,122 @@ test("the page header stays under the top bar while the page scrolls, only when 
   assert.match(globals, /\.page \{ padding: 20px 24px 32px; gap: 16px; \}/);
   assert.match(globals, /\.topbar \{\s*position: sticky;\s*top: 0;\s*z-index: 30;/);
   assert.match(css, /@media print \{ \.page > \.pg-skin\.pg-screen:first-child > :is\(\.page-header, \.activity-heading\):first-child \{ position: static; margin: 0; padding: 0; \} \}/);
+});
+
+// Pegasus 0.6 "never lose typed data": what is typed is kept in this browser until it is saved, a dialog with a draft opens
+// again after a reload, and leaving a changed form asks Keep editing or Discard changes.
+async function loadDrafts() {
+  const require = createRequire(import.meta.url);
+  const code = ts.transpileModule(await read("app/system/production/form-draft.ts"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+  const items = new Map(), asked = [];
+  const localStorage = { get length() { return items.size; }, key: (index) => [...items.keys()][index] ?? null, getItem: (key) => items.get(key) ?? null, setItem: (key, value) => items.set(key, String(value)), removeItem: (key) => items.delete(key) };
+  let answer = true;
+  // A tiny hook runner: state survives renders, effects run after each render.
+  let states = [], cursor = 0, effects = [];
+  const react = {
+    useState(init) { const index = cursor++; if (!(index in states)) states[index] = typeof init === "function" ? init() : init; return [states[index], (next) => { states[index] = typeof next === "function" ? next(states[index]) : next; }]; },
+    useEffect(effect) { effects.push(effect); },
+    useCallback: (fn) => fn,
+  };
+  const dialogs = { confirmDialog: async (text, options) => { asked.push({ text, ...options }); return answer; } };
+  const mod = { exports: {} };
+  new Function("require", "module", "exports", "window", code)((name) => name === "react" ? react : name === "../dialogs" ? dialogs : require(name), mod, mod.exports, { localStorage });
+  const render = (hook) => { cursor = 0; effects = []; const result = hook(); for (const effect of effects) effect(); return result; };
+  const remount = () => { states = []; };
+  return { drafts: mod.exports, items, asked, render, remount, answer: (value) => { answer = value; } };
+}
+
+test("a field is kept while it differs from where the form started, and comes back after a remount", async () => {
+  const { drafts, items, render, remount } = await loadDrafts();
+  const hook = () => drafts.useDraftField("employee:new:", "nameEn", "");
+  let [value, set] = render(hook);
+  assert.equal(value, "");
+  assert.equal(items.size, 0, "opening a form stores nothing");
+  set("Somchai");
+  [value] = render(hook);
+  assert.equal(value, "Somchai");
+  assert.deepEqual(JSON.parse(items.get("tomas-tech-draft:employee:new:")).values, { nameEn: "Somchai" });
+  assert.equal(drafts.hasDraft("employee:new:"), true);
+  assert.deepEqual(drafts.draftKeys("employee:new"), ["employee:new:"]);
+  // A reload: a fresh form starts from the draft.
+  remount();
+  [value, set] = render(hook);
+  assert.equal(value, "Somchai");
+  // Typing it back to the start removes the field, and with it the draft.
+  set("");
+  render(hook);
+  assert.equal(drafts.hasDraft("employee:new:"), false);
+  // A saved draft is cleared, and an old one is dropped.
+  set("x");
+  render(hook);
+  assert.equal(drafts.hasDraft("employee:new:"), true);
+  drafts.clearDraft("employee:new:");
+  assert.equal(drafts.hasDraft("employee:new:"), false);
+  items.set("tomas-tech-draft:old", JSON.stringify({ savedAt: Date.now() - 15 * 24 * 3600_000, values: { a: 1 } }));
+  assert.equal(drafts.readDraft("old"), null);
+  assert.equal(items.has("tomas-tech-draft:old"), false);
+  // A whole form kept as one object gets any field added since it was kept.
+  items.set("tomas-tech-draft:supplier:new", JSON.stringify({ savedAt: Date.now(), values: { form: { code: "S1" } } }));
+  remount();
+  assert.deepEqual(render(() => drafts.useDraftField("supplier:new", "form", { code: "", name: "" }))[0], { code: "S1", name: "" });
+  items.clear();
+  // Without a key the field is plain state and writes nothing.
+  remount();
+  const plainHook = () => drafts.useDraftField(null, "x", "");
+  const [, plain] = render(plainHook);
+  plain("typed");
+  assert.equal(render(plainHook)[0], "typed");
+  assert.equal(items.size, 0);
+});
+
+test("leaving a changed form asks Keep editing or Discard changes; an unchanged one closes without asking", async () => {
+  const { drafts, items, asked, answer } = await loadDrafts();
+  const copy = { title: "Unsaved changes", body: "Keep editing, or discard them?", keep: "Keep editing", discard: "Discard changes" };
+  assert.equal(await drafts.confirmLeave("supplier:new", copy), true);
+  assert.equal(asked.length, 0, "nothing to lose, nothing asked");
+  items.set("tomas-tech-draft:supplier:new", JSON.stringify({ savedAt: Date.now(), values: { form: { code: "S1" } } }));
+  answer(false);
+  assert.equal(await drafts.confirmLeave("supplier:new", copy), false);
+  assert.deepEqual(asked[0], { text: copy.body, title: copy.title, confirmText: "Discard changes", cancelText: "Keep editing", danger: true });
+  assert.equal(drafts.hasDraft("supplier:new"), true, "Keep editing keeps the draft");
+  answer(true);
+  assert.equal(await drafts.confirmLeave(["knowledge:doc:7:comment", null, "supplier:new"], copy), true);
+  assert.equal(drafts.hasDraft("supplier:new"), false, "Discard changes drops it");
+  assert.equal(asked.length, 2, "one question for a panel of forms");
+  assert.deepEqual(drafts.leaveCopy((key) => key), { title: "Form.unsavedTitle", body: "Form.unsavedBody", keep: "Form.keepEditing", discard: "Form.discard" });
+});
+
+test("the unsaved-changes words use exactly Keep editing and Discard changes in three languages", () => {
+  assert.equal(FORM_COPY["Form.keepEditing"].en, "Keep editing");
+  assert.equal(FORM_COPY["Form.discard"].en, "Discard changes");
+  for (const key of ["Form.unsavedTitle", "Form.unsavedBody", "Form.keepEditing", "Form.discard"])
+    for (const language of ["en", "th", "jp"]) assert.ok(FORM_COPY[key]?.[language], `${language} ${key}`);
+});
+
+test("every form on the ten screens keeps its draft, asks before closing with changes, and reopens after a reload", async () => {
+  const sources = Object.fromEntries(await Promise.all(SCREEN_FILES.map(async (file) => [file, await read(file)])));
+  for (const file of SCREEN_FILES) assert.match(sources[file], /from ["']\.\/form-draft["'];/, `${file} uses form-draft`);
+  const all = Object.values(sources).join("\n");
+  assert.ok((all.match(/useDraftField(<[^>(]+>)?\(/g) ?? []).length >= 60, "the fields are kept");
+  assert.ok((all.match(/confirmLeave\(/g) ?? []).length >= 15, "closing asks");
+  assert.ok((all.match(/clearDraft\(/g) ?? []).length >= 20, "a save clears");
+  const core = sources["app/system/production/CoreScreens.tsx"];
+  assert.ok(core.includes('const [createOpen, setCreateOpen] = useState(() => canCreate && hasDraft("supplier:new"));'));
+  assert.ok(core.includes('useDraftField("supplier:new", "form", BLANK_SUPPLIER)'));
+  assert.ok(core.includes('const draftKey = employee ? `employee:edit:${employee.id}` : `employee:new:${prefill?.email ?? ""}`;'));
+  assert.ok(core.includes("const [editing, setEditing] = useState<TeamMember | null>(() => canManageRoles ? bootstrap.team.find((member) => hasDraft(`role:${member.id}`)) ?? null : null);"));
+  // Supplier edit no longer reads uncontrolled inputs, so its fields can be kept.
+  assert.doesNotMatch(core, /defaultValue=\{supplier\./);
+  const kpi = sources["app/system/production/PerformanceScreen.tsx"];
+  assert.ok(kpi.includes('draftKey={selectedCycle ? `kpi:assessment:${selectedCycle.id}:${editingId}:${editingAsManager ? "manager" : "self"}` : undefined}'));
+  assert.ok(kpi.includes("try { await onSave(scores, evidence, submit, summary, developmentGoal); clearDraft(key); }"));
+  const knowledge = sources["app/system/production/KnowledgeScreens.tsx"];
+  assert.ok(knowledge.includes("const closeDrawer = async () => { if (await confirmLeave(draftKeys(draftPrefix), leaveCopy(t))) onClose(); };"));
+  assert.ok(knowledge.includes('const [creating, setCreating] = useState(() => canUpload && hasDraft("knowledge:document:new"));'));
+  const activity = sources["app/system/production/TeamActivityScreen.tsx"];
+  assert.ok(activity.includes("const discardDraft=async ()=>!form&&!reportRule||(await confirmLeave(openKey,leaveCopy(t)));"));
+  assert.ok(activity.includes("draftKey=`activity:${rule.userId}:report:${rule.id}`;"));
+  assert.doesNotMatch(activity, /confirmDialog/);
+  // The NAS form compares with what the server holds, so opening the page is not a change.
+  assert.ok(sources["app/system/production/AdminAnalyticsScreens.tsx"].includes('const [form, setForm] = useDraftField<NasSettingsInput>("settings:nas", "form", saved);'));
 });

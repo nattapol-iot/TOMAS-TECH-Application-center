@@ -27,6 +27,7 @@ function mountForm(file, exportName, props) {
     "./PegasusScreen": { PegasusScreen: "pegasus-screen" },
     "../tmt-id.constants": { IS_TMT_ID_MODE: false },
     "./form-bubbles": { checkFields: () => true, failureDialog: async () => {} },
+    "./form-draft": { useDraftField: (key, field, initial) => hooks.useState(initial), clearDraft() {}, hasDraft: () => false, draftKeys: () => [], confirmLeave: async () => true, leaveCopy: () => ({}) },
     "./SearchSelect": { SearchSelect: "search-select" },
     "../project-overview-client": { listAllProjectsByNumber: async () => [] },
     "../ui": new Proxy({}, { get: (_, name) => name }),
