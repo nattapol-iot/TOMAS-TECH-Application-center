@@ -1,11 +1,27 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { baseHash, documentRoute, hashView, isPlainClick, parseScreenHash, RECORD_LINK, restoredView, screenHash, screenPlace, viewFromHash, viewHash, viewStorageKey } from "../lib/remembered-view.ts";
+import {
+  baseHash,
+  documentRoute,
+  hashView,
+  isPlainClick,
+  parseScreenHash,
+  RECORD_LINK,
+  restoredView,
+  screenHash,
+  screenPlace,
+  viewFromHash,
+  viewHash,
+  viewStorageKey,
+} from "../lib/remembered-view.ts";
 
 const allowed = ["dashboard", "estimates", "labor-packages", "support", "documents", "activity", "profile"];
 test("canonical and emailed document links resolve to the same positive safe record ID", () => {
-  for (const [view, legacy] of [["estimates", "estimate"], ["inquiries", "inquiry"]]) {
+  for (const [view, legacy] of [
+    ["estimates", "estimate"],
+    ["inquiries", "inquiry"],
+  ]) {
     for (const hash of [`#/${view}/42`, `#${legacy}/42`]) {
       assert.deepEqual(documentRoute(hash), { view, id: 42 });
       assert.equal(hashView(hash), view);
@@ -46,7 +62,7 @@ test("a screen's address opens that screen in a new tab, even over the remembere
   assert.equal(restoredView("estimates", allowed, "#/settings", undefined, "dashboard"), "dashboard");
   assert.equal(restoredView("estimates", allowed, "#/estimates", "certificate", "dashboard"), "documents");
   // Old names are mapped the way the menu maps them (Master -> Customers -> CRM Customers).
-  const normalize = view => view === "customers" ? "crm-customers" : view;
+  const normalize = (view) => (view === "customers" ? "crm-customers" : view);
   assert.equal(restoredView(null, ["dashboard", "crm-customers"], "#/customers", undefined, "dashboard", normalize), "crm-customers");
   assert.equal(restoredView("customers", ["dashboard", "crm-customers"], "", undefined, "dashboard", normalize), "crm-customers");
 });
@@ -75,8 +91,8 @@ test("Ctrl, Cmd, Shift, Alt and middle clicks are left to the browser", () => {
 test("menu entries are links to their screen and the address bar follows the open screen", async () => {
   const app = await readFile(new URL("../app/system/ProductionApp.tsx", import.meta.url), "utf8");
   // A <button> cannot be opened in a new tab; the entry is a link whose plain click stays in the app.
-  assert.match(app, /<a href=\{viewHash\(item\.view\)\} data-guide=\{favorite \? `nav\.fav\.\$\{item\.view\}` : `nav\.\$\{item\.view\}`\}/);
-  assert.match(app, /onClick=\{(?:async )?\(event\) => \{ if \(!isPlainClick\(event\)\) return; event\.preventDefault\(\);/);
+  assert.match(app, /<a\s+href=\{viewHash\(item\.view\)\}\s+data-guide=\{favorite \? `nav\.fav\.\$\{item\.view\}` : `nav\.\$\{item\.view\}`\}/);
+  assert.match(app, /onClick=\{(?:async )?\(event\) => \{\s*if \(!isPlainClick\(event\)\) return;\s*event\.preventDefault\(\);/);
   assert.doesNotMatch(app, /return <button key=\{item\.view\}/);
   // Each screen change is a history entry; the first write and a rewrite of an older link replace.
   assert.match(app, /const replace = !addressed\.current \|\| \(hashView\(hash\) === view && \(!document \|\| document\.id === recordId\)\);/);
@@ -85,7 +101,7 @@ test("menu entries are links to their screen and the address bar follows the ope
   // Back/Forward go through setView, so permissions and the unsaved-changes prompt still apply.
   assert.match(app, /if \(!allowedViews\(bootstrap\)\.includes\(target\) \|\| !(?:\(await setView\(target\)\)|setView\(target\))\)/);
   assert.match(app, /if \(next !== view && !(?:\(await confirmReportNavigation\(\)\)|confirmReportNavigation\(\))\) return false;/);
-  assert.match(app, /restoredView\(saved, allowed, window\.location\.hash, initialVerifyCode, dailyLanding, requested => landingView\(requested as View, data\.permissions\)\)/);
+  assert.match(app, /restoredView\(saved, allowed, window\.location\.hash, initialVerifyCode, dailyLanding, \(?requested\)? => landingView\(requested as View, data\.permissions\)\)/);
 });
 
 test("a screen's own place and filters ride on its address and come back out unchanged", () => {

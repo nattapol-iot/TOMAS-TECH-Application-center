@@ -27,7 +27,11 @@ test("V2 shows one filled button: the step that moves the estimate forward now",
 });
 
 test("each summary cell counts what pressing it lists", () => {
-  const counts = [{ status: "Draft", count: 3, total: 300 }, { status: "Approved", count: 2, total: 500 }, { status: "Locked", count: 1, total: 100 }];
+  const counts = [
+    { status: "Draft", count: 3, total: 300 },
+    { status: "Approved", count: 2, total: 500 },
+    { status: "Locked", count: 1, total: 100 },
+  ];
   assert.deepEqual(estimateStatusCell(counts, "All status"), { count: 6, total: 900 });
   assert.deepEqual(estimateStatusCell(counts, "Draft"), { count: 3, total: 300 });
   // The list filters on the stored status, so Locked shows under All only.
@@ -39,11 +43,15 @@ test("each summary cell counts what pressing it lists", () => {
 /** Splits a selector list on the commas outside parentheses, so :is(a, b) stays whole. */
 function selectorsOf(list) {
   const parts = [];
-  let depth = 0, current = "";
+  let depth = 0,
+    current = "";
   for (const char of list) {
     if (char === "(") depth += 1;
     if (char === ")") depth -= 1;
-    if (char === "," && depth === 0) { parts.push(current.trim()); current = ""; } else current += char;
+    if (char === "," && depth === 0) {
+      parts.push(current.trim());
+      current = "";
+    } else current += char;
   }
   if (current.trim()) parts.push(current.trim());
   return parts;
@@ -66,7 +74,7 @@ test("the six Estimating screens carry the switch, and V1 renders as before", as
     source("backend-node/src/routes/estimates.ts"),
   ]);
   for (const view of ["estimates", "price", "quotations", "missing", "module-templates", "labor-packages"]) {
-    assert.match(app, new RegExp(`view === "${view}" \\? <EstimateLookScope userId=\\{bootstrap\\.user\\.id\\}>`), view);
+    assert.match(app, new RegExp(`view === "${view}" \\? \\(?\\s*<EstimateLookScope userId=\\{bootstrap\\.user\\.id\\}>`), view);
   }
   // One element in both looks, so switching keeps the open estimate, its tab and a typed draft mounted.
   assert.match(look, /<div className=\{look === "v2" \? "pge" : "est-look-v1"\} data-est-look=\{look\}>\{bar\}\{children\}<\/div>/);

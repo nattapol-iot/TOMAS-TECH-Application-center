@@ -61,7 +61,7 @@ test("every screen that assigns an inquiry says whether the mail went out", asyn
     assert.match(source, /assignmentDeliveryNote\(/, `${name} reports the delivery state`);
   }
   // The CRM convert dialog can only report it if the shell passes a toast down.
-  assert.match(shell, /<CrmScreen refreshBootstrap=\{refreshBootstrap\} notify=\{setToast\}/);
+  assert.match(shell, /<CrmScreen\s+refreshBootstrap=\{refreshBootstrap\}\s+notify=\{setToast\}/);
   assert.match(crm, /props\.notify\?\.\(/);
 });
 

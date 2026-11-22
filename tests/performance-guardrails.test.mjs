@@ -36,12 +36,8 @@ test("the active Node production API enforces role scope, workflow, optimistic c
 });
 
 test("production KPI UI is API-backed", async () => {
-  const [screen, client, productionApp] = await Promise.all([
-    source("app/system/production/PerformanceScreen.tsx"),
-    source("app/system/api-client.ts"),
-    source("app/system/ProductionApp.tsx"),
-  ]);
-  assert.match(productionApp, /<Performance currentUser=/);
+  const [screen, client, productionApp] = await Promise.all([source("app/system/production/PerformanceScreen.tsx"), source("app/system/api-client.ts"), source("app/system/ProductionApp.tsx")]);
+  assert.match(productionApp, /<Performance\s+currentUser=/);
   // The demo-era sample mode and its fake export button are gone; the screen only reads the API.
   assert.doesNotMatch(screen, /apiBacked|seedReviews|KPI summary exported/);
   // The landing tab follows the API's canManage (additional roles count), not the primary role alone:

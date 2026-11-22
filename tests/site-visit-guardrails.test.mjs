@@ -76,14 +76,10 @@ test("sales requirement, technical assessment and site findings are separate tab
   // visit workflow and report routes are the ones that could, so they are
   // checked by name against the sales-only column list.
   const salesOnlyColumns = ["problem_statement", "desired_capability", "expected_result", "expected_scope"];
-  const engineeringRoutes = await Promise.all([
-    read("backend-node/src/routes/site-visits-workflow.ts"),
-    read("backend-node/src/routes/site-visit-reports.ts"),
-  ]);
+  const engineeringRoutes = await Promise.all([read("backend-node/src/routes/site-visits-workflow.ts"), read("backend-node/src/routes/site-visit-reports.ts")]);
   for (const source of engineeringRoutes) {
     for (const column of salesOnlyColumns) {
-      assert.doesNotMatch(source, new RegExp(`UPDATE dbo\\.sales_intakes[^;]{0,400}${column}\\s*=`),
-        `a site visit route must not write dbo.sales_intakes.${column}`);
+      assert.doesNotMatch(source, new RegExp(`UPDATE dbo\\.sales_intakes[^;]{0,400}${column}\\s*=`), `a site visit route must not write dbo.sales_intakes.${column}`);
     }
   }
 });
@@ -100,9 +96,17 @@ test("permissions are declared once and enforced on every write path", async () 
   ]);
 
   const permissions = [
-    "intake.read", "intake.write", "intake.review", "visit.read", "visit.schedule",
-    "visit.override", "visit.execute", "visit.report", "visit.report_approve",
-    "visit.link", "visit.admin",
+    "intake.read",
+    "intake.write",
+    "intake.review",
+    "visit.read",
+    "visit.schedule",
+    "visit.override",
+    "visit.execute",
+    "visit.report",
+    "visit.report_approve",
+    "visit.link",
+    "visit.admin",
   ];
   for (const permission of permissions) {
     assert.match(migration, new RegExp(`\\(N'${permission.replace(".", "\\.")}',`), `${permission} is not seeded`);
@@ -119,7 +123,12 @@ test("permissions are declared once and enforced on every write path", async () 
   assert.match(migration, /p\.code = N'visit\.override'[\s\S]{0,200}N'Engineering Manager', N'Admin'/);
 
   // Every mutating route demands a permission before it touches anything.
-  for (const [name, source] of [["intake", intake], ["visit", visit], ["report", reports], ["master", master]]) {
+  for (const [name, source] of [
+    ["intake", intake],
+    ["visit", visit],
+    ["report", reports],
+    ["master", master],
+  ]) {
     const mutations = source.match(/app\.(?:post|put|patch|delete)\(/g) ?? [];
     assert.ok(mutations.length > 0, `${name} routes expose no mutations?`);
     const demands = source.match(/demandPermission\(|hasRolePermission\(|rolePermissions\(/g) ?? [];
@@ -181,10 +190,7 @@ test("the module is registered, audited and notified", async () => {
 });
 
 test("the status vocabulary is identical in the API and the schema", async () => {
-  const [core, migration] = await Promise.all([
-    read("backend-node/src/site-visit-common.ts"),
-    read("database/migrations/016_sales_intake_site_visit.sql"),
-  ]);
+  const [core, migration] = await Promise.all([read("backend-node/src/site-visit-common.ts"), read("database/migrations/016_sales_intake_site_visit.sql")]);
   /** The literal transition table exported by site-visit-common.ts. */
   const table = (name) => {
     const literal = new RegExp(`export const ${name}[^=]*=\\s*(\\{[^\\n]*\\});`).exec(core);
@@ -211,11 +217,7 @@ test("the status vocabulary is identical in the API and the schema", async () =>
 });
 
 test("the site visit screens are API-backed and permission-filtered", async () => {
-  const [screen, client, shell] = await Promise.all([
-    read("app/system/production/SiteVisitScreens.tsx"),
-    read("app/system/api-client.ts"),
-    read("app/system/ProductionApp.tsx"),
-  ]);
+  const [screen, client, shell] = await Promise.all([read("app/system/production/SiteVisitScreens.tsx"), read("app/system/api-client.ts"), read("app/system/ProductionApp.tsx")]);
 
   // The production screens must never reach for the demo dataset.
   assert.doesNotMatch(screen, /from ["'][^"']*(?:\/data|\/calc|\/store|\/matstore|\/session)["']/);
@@ -223,21 +225,43 @@ test("the site visit screens are API-backed and permission-filtered", async () =
 
   // Every screen the requirement asks for is present.
   for (const label of [
-    "คำขอเข้าหน้างาน / Visit preparation", "Technical Review Queue", "Sales Dashboard",
-    "Site Visit Requests", "Engineer Availability Calendar", "Engineering Dashboard",
-    "Pre-visit brief", "My Assignments", "Visit Master Data",
-    "Checklist Templates", "Engineer Skills", "Site visit report",
+    "คำขอเข้าหน้างาน / Visit preparation",
+    "Technical Review Queue",
+    "Sales Dashboard",
+    "Site Visit Requests",
+    "Engineer Availability Calendar",
+    "Engineering Dashboard",
+    "Pre-visit brief",
+    "My Assignments",
+    "Visit Master Data",
+    "Checklist Templates",
+    "Engineer Skills",
+    "Site visit report",
   ]) {
     assert.ok(screen.includes(label), `the production module is missing the '${label}' screen`);
   }
 
   // The typed client covers the workflow end to end.
   for (const call of [
-    "listSalesIntakes", "createSalesIntake", "changeIntakeStatus", "submitTechnicalReview",
-    "createSiteVisit", "assignVisitEngineer", "respondToAssignment", "recordVisitConfirmation",
-    "checkInSiteVisit", "checkOutSiteVisit", "saveVisitChecklist", "saveVisitReport",
-    "reviewVisitReport", "createInquiryFromVisit", "createEstimateFromVisit",
-    "loadVisitCalendar", "loadMyAssignments", "loadVisitMasterData", "listNotifications",
+    "listSalesIntakes",
+    "createSalesIntake",
+    "changeIntakeStatus",
+    "submitTechnicalReview",
+    "createSiteVisit",
+    "assignVisitEngineer",
+    "respondToAssignment",
+    "recordVisitConfirmation",
+    "checkInSiteVisit",
+    "checkOutSiteVisit",
+    "saveVisitChecklist",
+    "saveVisitReport",
+    "reviewVisitReport",
+    "createInquiryFromVisit",
+    "createEstimateFromVisit",
+    "loadVisitCalendar",
+    "loadMyAssignments",
+    "loadVisitMasterData",
+    "listNotifications",
   ]) {
     assert.match(client, new RegExp(`export const ${call}|export async function ${call}`), `api-client is missing ${call}`);
   }
@@ -247,7 +271,7 @@ test("the site visit screens are API-backed and permission-filtered", async () =
   assert.match(screen, /relatedInquiryId: inquiry\?\.id/);
   assert.match(shell, /view: "site-visits", label: "Site Visit", icon: "truck", permission: "visit\.read"/);
   assert.match(shell, /view: "my-assignments", label: "My Assignments", icon: "play", permission: "visit\.read"/);
-  assert.match(shell, /"view":"visit-master","label":"Site Visit Reference Data","icon":"layers","permission":"visit\.read"/);
+  assert.match(shell, /view: "visit-master", label: "Site Visit Reference Data", icon: "layers", permission: "visit\.read"/);
 });
 
 test("every CSS class the module renders is actually defined", async () => {

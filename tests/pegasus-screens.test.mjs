@@ -208,7 +208,7 @@ test("lists follow the ERP: a record opens from its number, row actions are quie
   assert.match(downloads, /<td className="pg-acts">\s*<button className="pg-act" type="button" data-guide="dl\.file"/);
   assert.doesNotMatch(downloads, /className="btn primary sm" type="button" data-guide="dl\.file"/);
   // Summary Reports: the way back sits in the page header, not above it.
-  assert.match(shell, /<ProductionReports \{\.\.\.moduleProps\} onBack=\{async \(\) => \{ await setView\("reports"\); \}\} \/>/);
+  assert.match(shell, /<ProductionReports\s+\{\.\.\.moduleProps\}\s+onBack=\{async \(\) => \{\s*await setView\("reports"\);\s*\}\}\s*\/>/);
   assert.match(
     admin,
     /actions=\{\s*onBack \? \(\s*<button className="btn ghost" type="button" onClick=\{onBack\}>\s*<Icon name="arrowLeft" \/>\s*\{uiText\("Back to reports"\)\}\s*<\/button>\s*\) : undefined\s*\}/,
@@ -408,7 +408,7 @@ test("the page header stays under the top bar while the page scrolls, only when 
   );
   // The negative margins match the page padding the template sets, and the top bar sits above it.
   const globals = await read("app/globals.css");
-  assert.match(globals, /\.page \{ padding: 20px 24px 32px; gap: 16px; \}/);
+  assert.match(globals, /\.page \{\s*padding: 20px 24px 32px;\s*gap: 16px;\s*\}/);
   assert.match(globals, /\.topbar \{\s*position: sticky;\s*top: 0;\s*z-index: 30;/);
   assert.match(css, /@media print \{ \.page > \.pg-skin\.pg-screen:first-child > :is\(\.page-header, \.activity-heading\):first-child \{ position: static; margin: 0; padding: 0; \} \}/);
 });

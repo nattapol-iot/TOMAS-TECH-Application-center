@@ -7,7 +7,21 @@ import { DASHBOARD_ROLES } from "../../backend-node/src/executive-dashboard-mode
 import { canViewEngineeringRates } from "../../backend-node/src/engineering-rate-access";
 import { canViewProjectCost } from "../../backend-node/src/project-cost-model";
 import { useActivityPresence } from "./use-activity-presence";
-import { baseHash, documentRoute, hashView, isPlainClick, parseScreenHash, RECORD_LINK, restoredView, screenHash, screenPlace, screenTail, viewFromHash, viewHash, viewStorageKey } from "../../lib/remembered-view";
+import {
+  baseHash,
+  documentRoute,
+  hashView,
+  isPlainClick,
+  parseScreenHash,
+  RECORD_LINK,
+  restoredView,
+  screenHash,
+  screenPlace,
+  screenTail,
+  viewFromHash,
+  viewHash,
+  viewStorageKey,
+} from "../../lib/remembered-view";
 import { ScreenLinkProvider, type ScreenLinkState } from "./screen-link";
 import { estimateBusinessDate } from "../../lib/estimate-ux";
 import { myWorkNeedsAttention as needsAttention } from "../../lib/my-work";
@@ -25,31 +39,10 @@ import type { TmtIdUser } from "./tmt-id.types";
 import { PRODUCT } from "./product";
 import { CopyLinkButton, Icon, Tabs, Toast, type IconName } from "./ui";
 import { LANGUAGES, LanguageContext, translate, applyDocumentLanguage, type Lang } from "./i18n";
-import {
-  ProductionDashboard,
-  ProductionInventory,
-  ProductionMasterData,
-  ProductionProjects,
-} from "./production/CoreScreens";
-import {
-  ProductionMyWork,
-  ProductionPriceLibrary,
-  ProductionProjectSchedule,
-  ProductionSupplierQuotations,
-  ProductionWaitingSupplierPrice,
-} from "./production/PlanningPricingScreens";
-import {
-  ProductionCompanyStamps,
-  ProductionMySignature,
-  ProductionSignedDocuments,
-  ProductionSignInbox,
-} from "./production/SigningScreens";
-import {
-  ProductionAuditLog,
-  ProductionEngineeringRates,
-  ProductionReports,
-  ProductionSettings,
-} from "./production/AdminAnalyticsScreens";
+import { ProductionDashboard, ProductionInventory, ProductionMasterData, ProductionProjects } from "./production/CoreScreens";
+import { ProductionMyWork, ProductionPriceLibrary, ProductionProjectSchedule, ProductionSupplierQuotations, ProductionWaitingSupplierPrice } from "./production/PlanningPricingScreens";
+import { ProductionCompanyStamps, ProductionMySignature, ProductionSignedDocuments, ProductionSignInbox } from "./production/SigningScreens";
+import { ProductionAuditLog, ProductionEngineeringRates, ProductionReports, ProductionSettings } from "./production/AdminAnalyticsScreens";
 import { ProductionProfile } from "./production/ProfileScreen";
 import { SupportCenter, SupportCreateDialog } from "./production/SupportScreens";
 import { EmployeeManualScreen, employeeManualLabel } from "./production/EmployeeManualScreen";
@@ -90,14 +83,57 @@ import {
 
 import { CrmScreen, type CrmView } from "./production/CrmScreens";
 
-type View = CrmView
-  | "dashboard" | "my-work" | "inquiries" | "estimates" | "projects" | "knowledge"
-  | "sales-intake" | "site-visits" | "my-assignments" | "visit-master"
-  | "price" | "quotations" | "missing" | "project-timeline" | "resources"
-  | "procurement" | "boms" | "purchase" | "pos" | "inventory" | "receiving" | "issues" | "approvals"
-  | "signing" | "documents" | "signature" | "stamps"
-  | "suppliers" | "employees" | "material-master" | "user-accounts" | "summary-reports"
-  | "activity" | "customers" | "reports" | "performance" | "master" | "module-templates" | "labor-packages" | "schedule-templates" | "rates" | "audit" | "settings" | "profile" | "manual" | "support" | "downloads" | "site-monitor" | "installed-base";
+type View =
+  | CrmView
+  | "dashboard"
+  | "my-work"
+  | "inquiries"
+  | "estimates"
+  | "projects"
+  | "knowledge"
+  | "sales-intake"
+  | "site-visits"
+  | "my-assignments"
+  | "visit-master"
+  | "price"
+  | "quotations"
+  | "missing"
+  | "project-timeline"
+  | "resources"
+  | "procurement"
+  | "boms"
+  | "purchase"
+  | "pos"
+  | "inventory"
+  | "receiving"
+  | "issues"
+  | "approvals"
+  | "signing"
+  | "documents"
+  | "signature"
+  | "stamps"
+  | "suppliers"
+  | "employees"
+  | "material-master"
+  | "user-accounts"
+  | "summary-reports"
+  | "activity"
+  | "customers"
+  | "reports"
+  | "performance"
+  | "master"
+  | "module-templates"
+  | "labor-packages"
+  | "schedule-templates"
+  | "rates"
+  | "audit"
+  | "settings"
+  | "profile"
+  | "manual"
+  | "support"
+  | "downloads"
+  | "site-monitor"
+  | "installed-base";
 
 /** unlessPermission hides an item from people who hold that permission, because they have a fuller screen for the same records. */
 type NavItem = { view: View; label: string; icon: IconName; permission?: string; permissions?: string[]; anyPermissions?: string[]; unlessPermission?: string; rateAccess?: boolean };
@@ -127,73 +163,95 @@ type AppNotification = {
  * A group name is a dictionary key (NavGroup.*). Folding screens into tabbed screens is phase 2.
  */
 const NAV: { group?: string; items: NavItem[] }[] = [
-  { items: [
-    { view: "dashboard", label: "Dashboard", icon: "grid" },
-    { view: "my-work", label: "My Work", icon: "user", anyPermissions: ["schedule.progress", "crm.read"] },
-    // Everyone's work on one page, with the weekly workload inside it (owner decision 2026-10-21).
-    { view: "resources", label: "Team overview", icon: "users", anyPermissions: ["team.board", "schedule.read"] },
-  ] },
-  { group: "NavGroup.sales", items: [
-    { view: "crm-dashboard", label: "CRM Dashboard", icon: "grid", permission: "crm.read" },
-    { view: "crm-customers", label: "CRM Customers", icon: "users", permission: "crm.read" },
-    { view: "crm-contacts", label: "CRM Contacts", icon: "user", permission: "crm.read" },
-    { view: "crm-opportunities", label: "CRM Opportunities", icon: "folder", permission: "crm.read" },
-    { view: "crm-activities", label: "CRM Activities", icon: "calendar", permission: "crm.read" },
-    { view: "inquiries", label: "RFQ intake & estimating", icon: "inbox", permission: "inquiry.read" },
-    { view: "site-visits", label: "Site Visit", icon: "truck", permission: "visit.read" },
-    { view: "my-assignments", label: "My Assignments", icon: "play", permission: "visit.read" },
-    {"view":"visit-master","label":"Site Visit Reference Data","icon":"layers","permission":"visit.read"},
-    {"view":"customers","label":"Customers","icon":"users","permission":"master.read","unlessPermission":"crm.read"},
-  ] },
-  { group: "NavGroup.estimating", items: [
-    { view: "estimates", label: "Estimate Cost", icon: "file", permission: "estimate.read" },
-    { view: "price", label: "Price Library", icon: "book", permission: "estimate.read" },
-    { view: "quotations", label: "Supplier Quotation", icon: "quote", permission: "estimate.read" },
-    { view: "missing", label: "Waiting Supplier Price", icon: "clock", permission: "estimate.read" },
-    {"view":"module-templates","label":"Module Templates","icon":"package","permission":"estimate.read"},
-    {"view":"labor-packages","label":"Labor Packages","icon":"layers","permission":"estimate.read"},
-    {"view":"rates","label":"Engineering rates","icon":"chart","permission":"master.read","rateAccess":true},
-  ] },
-  { group: "NavGroup.projects", items: [
-    { view: "projects", label: "Projects", icon: "folder", permission: "project.read" },
-    {"view":"reports","label":"Operational Reports","icon":"file","permission":"report.read"},
-    {"view":"signing","label":"Sign Inbox","icon":"edit","permission":"signing.read"},
-    {"view":"documents","label":"Signed Documents","icon":"shield","permission":"signing.read"},
-    {"view":"stamps","label":"Company Stamps","icon":"lock","permission":"signing.read"},
-    {"view":"schedule-templates","label":"Master Schedule","icon":"calendar"},
-    { view: "installed-base", label: "Installed Base", icon: "layers", permission: "asset.read" },
-    { view: "site-monitor", label: "Site Monitor", icon: "cpu", permission: "monitor.read" },
-  ] },
+  {
+    items: [
+      { view: "dashboard", label: "Dashboard", icon: "grid" },
+      { view: "my-work", label: "My Work", icon: "user", anyPermissions: ["schedule.progress", "crm.read"] },
+      // Everyone's work on one page, with the weekly workload inside it (owner decision 2026-10-21).
+      { view: "resources", label: "Team overview", icon: "users", anyPermissions: ["team.board", "schedule.read"] },
+    ],
+  },
+  {
+    group: "NavGroup.sales",
+    items: [
+      { view: "crm-dashboard", label: "CRM Dashboard", icon: "grid", permission: "crm.read" },
+      { view: "crm-customers", label: "CRM Customers", icon: "users", permission: "crm.read" },
+      { view: "crm-contacts", label: "CRM Contacts", icon: "user", permission: "crm.read" },
+      { view: "crm-opportunities", label: "CRM Opportunities", icon: "folder", permission: "crm.read" },
+      { view: "crm-activities", label: "CRM Activities", icon: "calendar", permission: "crm.read" },
+      { view: "inquiries", label: "RFQ intake & estimating", icon: "inbox", permission: "inquiry.read" },
+      { view: "site-visits", label: "Site Visit", icon: "truck", permission: "visit.read" },
+      { view: "my-assignments", label: "My Assignments", icon: "play", permission: "visit.read" },
+      { view: "visit-master", label: "Site Visit Reference Data", icon: "layers", permission: "visit.read" },
+      { view: "customers", label: "Customers", icon: "users", permission: "master.read", unlessPermission: "crm.read" },
+    ],
+  },
+  {
+    group: "NavGroup.estimating",
+    items: [
+      { view: "estimates", label: "Estimate Cost", icon: "file", permission: "estimate.read" },
+      { view: "price", label: "Price Library", icon: "book", permission: "estimate.read" },
+      { view: "quotations", label: "Supplier Quotation", icon: "quote", permission: "estimate.read" },
+      { view: "missing", label: "Waiting Supplier Price", icon: "clock", permission: "estimate.read" },
+      { view: "module-templates", label: "Module Templates", icon: "package", permission: "estimate.read" },
+      { view: "labor-packages", label: "Labor Packages", icon: "layers", permission: "estimate.read" },
+      { view: "rates", label: "Engineering rates", icon: "chart", permission: "master.read", rateAccess: true },
+    ],
+  },
+  {
+    group: "NavGroup.projects",
+    items: [
+      { view: "projects", label: "Projects", icon: "folder", permission: "project.read" },
+      { view: "reports", label: "Operational Reports", icon: "file", permission: "report.read" },
+      { view: "signing", label: "Sign Inbox", icon: "edit", permission: "signing.read" },
+      { view: "documents", label: "Signed Documents", icon: "shield", permission: "signing.read" },
+      { view: "stamps", label: "Company Stamps", icon: "lock", permission: "signing.read" },
+      { view: "schedule-templates", label: "Master Schedule", icon: "calendar" },
+      { view: "installed-base", label: "Installed Base", icon: "layers", permission: "asset.read" },
+      { view: "site-monitor", label: "Site Monitor", icon: "cpu", permission: "monitor.read" },
+    ],
+  },
   // Lean procurement (owner 2026-11-19): one entry for everyone, Approvals for approvers. BOM is a tab of the PR screen. The
   // dashboard, purchase orders, inventory, receiving, material issues and inventory items left the menu because that work is
   // done in Pegasus ERP; their screens and data are kept, and an entry put back here opens its screen again.
-  { group: "NavGroup.procurement", items: [
-    { view: "purchase", label: "Purchase Requisition", icon: "package", permission: "procurement.read" },
-    { view: "approvals", label: "Approvals", icon: "checkCircle", permission: "procurement.approve" },
-  ] },
-  { group: "NavGroup.team", items: [
-    {"view":"activity","label":"Team Activity & Workload","icon":"chart","permission":"activity.read"},
-    {"view":"performance","label":"KPI & Growth","icon":"trendingUp","permission":"performance.read"},
-    {"view":"summary-reports","label":"Summary Reports","icon":"chart","permission":"report.read"},
-    { view: "knowledge", label: "Knowledge Hub", icon: "book", permission: "knowledge.view" },
-    { view: "downloads", label: "Download Center", icon: "download" },
-  ] },
-  { group: "NavGroup.system", items: [
-    {"view":"user-accounts","label":"User Accounts & Permissions","icon":"users","permission":"master.read"},
-    {"view":"employees","label":"Employees","icon":"user","permission":"master.read"},
-    {"view":"suppliers","label":"Suppliers","icon":"truck","permission":"master.read"},
-    {"view":"audit","label":"Audit Log","icon":"shield","permission":"audit.read"},
-    {"view":"settings","label":"System Settings","icon":"settings","permission":"master.read"},
-  ] },
+  {
+    group: "NavGroup.procurement",
+    items: [
+      { view: "purchase", label: "Purchase Requisition", icon: "package", permission: "procurement.read" },
+      { view: "approvals", label: "Approvals", icon: "checkCircle", permission: "procurement.approve" },
+    ],
+  },
+  {
+    group: "NavGroup.team",
+    items: [
+      { view: "activity", label: "Team Activity & Workload", icon: "chart", permission: "activity.read" },
+      { view: "performance", label: "KPI & Growth", icon: "trendingUp", permission: "performance.read" },
+      { view: "summary-reports", label: "Summary Reports", icon: "chart", permission: "report.read" },
+      { view: "knowledge", label: "Knowledge Hub", icon: "book", permission: "knowledge.view" },
+      { view: "downloads", label: "Download Center", icon: "download" },
+    ],
+  },
+  {
+    group: "NavGroup.system",
+    items: [
+      { view: "user-accounts", label: "User Accounts & Permissions", icon: "users", permission: "master.read" },
+      { view: "employees", label: "Employees", icon: "user", permission: "master.read" },
+      { view: "suppliers", label: "Suppliers", icon: "truck", permission: "master.read" },
+      { view: "audit", label: "Audit Log", icon: "shield", permission: "audit.read" },
+      { view: "settings", label: "System Settings", icon: "settings", permission: "master.read" },
+    ],
+  },
 ];
 
 /** The one rule for which menu entries a person sees, and so which views a remembered session may restore. */
 function navItemAllowed(item: NavItem, permissions: readonly string[], role: string): boolean {
-  return (!item.permission || permissions.includes(item.permission))
-    && (!item.permissions || item.permissions.every((permission) => permissions.includes(permission)))
-    && (!item.anyPermissions || item.anyPermissions.some((permission) => permissions.includes(permission)))
-    && (!item.unlessPermission || !permissions.includes(item.unlessPermission))
-    && (!item.rateAccess || canViewEngineeringRates(role));
+  return (
+    (!item.permission || permissions.includes(item.permission)) &&
+    (!item.permissions || item.permissions.every((permission) => permissions.includes(permission))) &&
+    (!item.anyPermissions || item.anyPermissions.some((permission) => permissions.includes(permission))) &&
+    (!item.unlessPermission || !permissions.includes(item.unlessPermission)) &&
+    (!item.rateAccess || canViewEngineeringRates(role))
+  );
 }
 
 /** CRM users keep customers in CRM; the old Master destination still resolves. */
@@ -203,20 +261,20 @@ function landingView(next: View, permissions: readonly string[]): View {
   return target === "customers" && permissions.includes("crm.read") ? "crm-customers" : target;
 }
 /** Board and Timeline modes highlight the menu of their parent workspace. */
-const navView = (view: View): View => view === "crm-pipeline" ? "crm-opportunities" : view === "project-timeline" ? "projects" : view;
+const navView = (view: View): View => (view === "crm-pipeline" ? "crm-opportunities" : view === "project-timeline" ? "projects" : view);
 
 /** Help screens: open to everyone from the "?" menu in the top bar, not from the sidebar, and so not starrable. */
 const HELP_NAV: NavItem[] = [
-  {"view":"manual","label":"Employee Manual","icon":"book"},
-  {"view":"support","label":"Report & Track Issues","icon":"inbox"},
+  { view: "manual", label: "Employee Manual", icon: "book" },
+  { view: "support", label: "Report & Track Issues", icon: "inbox" },
 ];
 
 /** The views a refresh, a link or Back may open: the person's menu entries plus the screens reached from inside them. */
 function allowedViews(data: BootstrapData): View[] {
-  const allowed: View[] = NAV.flatMap(section => section.items)
-    .filter(item => navItemAllowed(item, data.permissions, data.user.role))
-    .map(item => item.view);
-  allowed.push("profile", "signature", ...HELP_NAV.map(item => item.view));
+  const allowed: View[] = NAV.flatMap((section) => section.items)
+    .filter((item) => navItemAllowed(item, data.permissions, data.user.role))
+    .map((item) => item.view);
+  allowed.push("profile", "signature", ...HELP_NAV.map((item) => item.view));
   if (data.permissions.includes("inquiry.read")) allowed.push("sales-intake");
   if (data.permissions.includes("crm.read")) allowed.push("crm-pipeline");
   // Older bookmarks still open Timeline mode, with the permissions its former menu required.
@@ -231,8 +289,12 @@ const WORKSPACE_LABEL = IS_LOCAL_READ_ONLY ? "LOCAL READ ONLY" : IS_TEAM_TEST_MO
 const LANGUAGE_STORAGE_KEY = "tomas-tech-language";
 // v3: the groups were renamed on 2026-11-12, so names stored under the older keys no longer exist and are not read.
 const NAV_GROUP_STORAGE_KEY = "tomas-tech-collapsed-nav-groups-v3";
-const NAV_GROUPS = NAV.flatMap(section => section.group ? [section.group] : []);
-/** Every group starts closed; the group of the open screen always shows open. */
+const NAV_GROUPS = NAV.flatMap((section) => (section.group ? [section.group] : []));
+/**
+ * Every group starts closed and opens or closes only when its heading is pressed. A closed group holding the open screen
+ * marks its heading instead of opening (owner 2026-11-22): groups that opened and closed by themselves on every menu click
+ * moved the whole menu under the pointer.
+ */
 const DEFAULT_COLLAPSED_GROUPS = NAV_GROUPS;
 type ProjectTab = "portfolio" | "schedule" | "punchlist" | "cost";
 /** The Projects tabs as their addresses name them: "#/projects" (overview), "#/projects/plan/<project>…", "#/projects/punchlist", "#/projects/cost/<project>". */
@@ -276,7 +338,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
   const [preferredInquiryId, setPreferredInquiryId] = useState<number | null>(null);
   const [preferredSiteVisitId, setPreferredSiteVisitId] = useState<number | null>(null);
   const [myWorkUrgentCount, setMyWorkUrgentCount] = useState(0);
-  const [crmOpportunityId, setCrmOpportunityId] = useState<number|null>(null);
+  const [crmOpportunityId, setCrmOpportunityId] = useState<number | null>(null);
   const [crmActionableCount, setCrmActionableCount] = useState(0);
   // Projects badge: open projects in scope that are Delayed or At Risk, by the portfolio's own health rule
   // (GET /api/v1/projects/attention). Read again on each screen change, so it follows a status change.
@@ -284,44 +346,84 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
   useEffect(() => {
     if (!bootstrap?.permissions.includes("project.read")) return;
     let cancelled = false;
-    void apiRequest<{ attention: number }>("/api/v1/projects/attention").then((result) => { if (!cancelled) setProjectAttentionCount(Number(result.attention) || 0); }).catch(() => { if (!cancelled) setProjectAttentionCount(0); });
-    return () => { cancelled = true; };
+    void apiRequest<{ attention: number }>("/api/v1/projects/attention")
+      .then((result) => {
+        if (!cancelled) setProjectAttentionCount(Number(result.attention) || 0);
+      })
+      .catch(() => {
+        if (!cancelled) setProjectAttentionCount(0);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [bootstrap, view]);
   // Approvals badge: what the Approvals screen lists for this user (GET /api/v1/procurement/approvals/attention), not estimates in review.
   const [procurementApprovalCount, setProcurementApprovalCount] = useState(0);
   useEffect(() => {
     if (!bootstrap?.permissions.some((code) => code === "procurement.approve" || code === "inventory.adjust")) return;
     let cancelled = false;
-    void apiRequest<{ waiting: number }>("/api/v1/procurement/approvals/attention").then((result) => { if (!cancelled) setProcurementApprovalCount(Number(result.waiting) || 0); }).catch(() => { if (!cancelled) setProcurementApprovalCount(0); });
-    return () => { cancelled = true; };
+    void apiRequest<{ waiting: number }>("/api/v1/procurement/approvals/attention")
+      .then((result) => {
+        if (!cancelled) setProcurementApprovalCount(Number(result.waiting) || 0);
+      })
+      .catch(() => {
+        if (!cancelled) setProcurementApprovalCount(0);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [bootstrap, view]);
   useEffect(() => {
-    if(!bootstrap?.permissions.includes("crm.read")) return;
-    let cancelled=false;
-    void apiRequest<{actionable:number}>("/api/v1/crm/dashboard").then(result=>{if(!cancelled)setCrmActionableCount(Number(result.actionable));}).catch(()=>{if(!cancelled)setCrmActionableCount(0);});
-    return()=>{cancelled=true;};
-  }, [bootstrap,view]);
-  const openCrmOpportunity = useCallback((id: number) => { setCrmOpportunityId(id); setViewState("crm-opportunities"); }, []);
+    if (!bootstrap?.permissions.includes("crm.read")) return;
+    let cancelled = false;
+    void apiRequest<{ actionable: number }>("/api/v1/crm/dashboard")
+      .then((result) => {
+        if (!cancelled) setCrmActionableCount(Number(result.actionable));
+      })
+      .catch(() => {
+        if (!cancelled) setCrmActionableCount(0);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [bootstrap, view]);
+  const openCrmOpportunity = useCallback((id: number) => {
+    setCrmOpportunityId(id);
+    setViewState("crm-opportunities");
+  }, []);
   useEffect(() => {
     // Cleared once followed, like the estimate and inquiry links, so the address effect can name the screen again.
-    const followCrm = () => { const match = window.location.hash.match(/^#crm\/(\d+)$/); if(!match || !bootstrap) return; window.history.replaceState(null, "", window.location.pathname + window.location.search); if(bootstrap.permissions.includes("crm.read")) openCrmOpportunity(Number(match[1])); };
-    followCrm(); window.addEventListener("hashchange",followCrm); return () => window.removeEventListener("hashchange",followCrm);
-  }, [bootstrap,openCrmOpportunity]);
+    const followCrm = () => {
+      const match = window.location.hash.match(/^#crm\/(\d+)$/);
+      if (!match || !bootstrap) return;
+      window.history.replaceState(null, "", window.location.pathname + window.location.search);
+      if (bootstrap.permissions.includes("crm.read")) openCrmOpportunity(Number(match[1]));
+    };
+    followCrm();
+    window.addEventListener("hashchange", followCrm);
+    return () => window.removeEventListener("hashchange", followCrm);
+  }, [bootstrap, openCrmOpportunity]);
   const [taskAcknowledgmentCount, setTaskAcknowledgmentCount] = useState(0);
   const [taskInboxRevision, setTaskInboxRevision] = useState(0);
   const [language, setLanguageState] = useState<Lang>("EN");
-  const setLanguage = useCallback((next: Lang) => { applyDocumentLanguage(next); setLanguageState(next); }, []);
+  const setLanguage = useCallback((next: Lang) => {
+    applyDocumentLanguage(next);
+    setLanguageState(next);
+  }, []);
   const reportDirty = useRef(false);
   const supportDirty = useRef(false);
-  const onSupportDirtyChange = useCallback((dirty: boolean) => { supportDirty.current = dirty; }, []);
+  const onSupportDirtyChange = useCallback((dirty: boolean) => {
+    supportDirty.current = dirty;
+  }, []);
   const [supportTicketId, setSupportTicketId] = useState<number | null>(null);
   const [supportCreate, setSupportCreate] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
   const [supportRevision, setSupportRevision] = useState(0);
-  const onReportDirtyChange = useCallback((dirty: boolean) => { reportDirty.current = dirty; }, []);
+  const onReportDirtyChange = useCallback((dirty: boolean) => {
+    reportDirty.current = dirty;
+  }, []);
   const [languageReady, setLanguageReady] = useState(false);
   const [collapsedNavGroups, setCollapsedNavGroups] = useState<string[]>(DEFAULT_COLLAPSED_GROUPS);
-  const [collapsedActiveGroup, setCollapsedActiveGroup] = useState<string | null>(null);
   const [navGroupsReady, setNavGroupsReady] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarReady, setSidebarReady] = useState(false);
@@ -330,19 +432,26 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
   const favoriteSaved = useRef<{ userId: number; views: string[] } | null>(null);
   const favoriteQueue = useRef<Promise<void>>(Promise.resolve());
   const favoriteTurn = useRef(0);
-  const canLoadMyWork = Boolean(bootstrap?.permissions.includes("schedule.read")
-    && bootstrap.permissions.includes("schedule.progress"));
-  const languageValue = useMemo(() => ({
-    lang: language,
-    setLang: setLanguage,
-    t: (text: string) => text === "Support Center" ? supportLabel(text, language) : translate(text, language),
-  }), [language, setLanguage]);
+  const canLoadMyWork = Boolean(bootstrap?.permissions.includes("schedule.read") && bootstrap.permissions.includes("schedule.progress"));
+  const languageValue = useMemo(
+    () => ({
+      lang: language,
+      setLang: setLanguage,
+      t: (text: string) => (text === "Support Center" ? supportLabel(text, language) : translate(text, language)),
+    }),
+    [language, setLanguage],
+  );
   const t = languageValue.t;
   useActivityPresence(bootstrap?.user.id, view, Boolean(bootstrap?.permissions.includes("activity.read")));
-  const confirmReportNavigation = useCallback(async () => (!reportDirty.current && !supportDirty.current) || (await confirmDialog(supportDirty.current ? supportLabel("Discard changes?", language) : t("Discard unsaved report changes?"), { danger: true })), [t, language]);
+  const confirmReportNavigation = useCallback(
+    async () =>
+      (!reportDirty.current && !supportDirty.current) ||
+      (await confirmDialog(supportDirty.current ? supportLabel("Discard changes?", language) : t("Discard unsaved report changes?"), { danger: true })),
+    [t, language],
+  );
   /** The address identifies the open document as well as its workspace. */
   const recordId = view === "estimates" ? preferredEstimateId : view === "inquiries" ? preferredInquiryId : null;
-  const address = view === "support" ? supportTicketId ? `#support/${supportTicketId}` : "#support" : viewHash(view, recordId);
+  const address = view === "support" ? (supportTicketId ? `#support/${supportTicketId}` : "#support") : viewHash(view, recordId);
   // What the open screen has put after its address (its tab, record and filters; screen-link.tsx), and a counter that
   // remounts the screen when Back, Forward or a pasted link changes that place under it.
   const screenLink = useRef<ScreenLinkState>({ view: "", path: [], params: {}, opened: {}, fromLink: false });
@@ -353,44 +462,61 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
     return screenLink.current;
   }, []);
   /** Puts a place on the open screen's address, e.g. the Projects tab; Back returns to the last one. */
-  const placeScreen = useCallback((path: (string | number)[]) => {
-    const state = linkStateFor(view, address);
-    state.path = path.map(String);
-    const next = address + screenTail(state.path, state.params);
-    if (baseHash(window.location.hash) === address && window.location.hash !== next) window.history.pushState(null, "", window.location.pathname + window.location.search + next);
-  }, [view, address, linkStateFor]);
-  const changeProjectTab = (tab: ProjectTab) => { setProjectTab(tab); placeScreen(tab === "portfolio" ? [] : [PROJECT_TAB_SEGMENT[tab]]); };
+  const placeScreen = useCallback(
+    (path: (string | number)[]) => {
+      const state = linkStateFor(view, address);
+      state.path = path.map(String);
+      const next = address + screenTail(state.path, state.params);
+      if (baseHash(window.location.hash) === address && window.location.hash !== next) window.history.pushState(null, "", window.location.pathname + window.location.search + next);
+    },
+    [view, address, linkStateFor],
+  );
+  const changeProjectTab = (tab: ProjectTab) => {
+    setProjectTab(tab);
+    placeScreen(tab === "portfolio" ? [] : [PROJECT_TAB_SEGMENT[tab]]);
+  };
   // Returns false when the person keeps unsaved changes. A #support/<id> fragment is left for the address
   // effect to replace with the next screen's, so Back reopens that ticket.
-  const setView = useCallback(async (next: View) => {
-    if (next !== view && !(await confirmReportNavigation())) return false;
-    if (next !== "activity" && window.location.hash === "#activity") window.history.replaceState(null, "", window.location.pathname + window.location.search);
-    if (window.matchMedia?.("(max-width: 980px)").matches) setSidebarCollapsed(true);
-    setCollapsedActiveGroup(null);
-    setCrmOpportunityId(null);
-    const target = landingView(next, bootstrap?.permissions ?? []);
-    if (target === "estimates") setPreferredEstimateId(null);
-    if (target === "inquiries") setPreferredInquiryId(null);
-    setViewState(target);
-    const activeGroup = NAV.find(section => section.items.some(item => item.view === navView(target)))?.group;
-    if (activeGroup) setCollapsedNavGroups(groups => groups.filter(group => group !== activeGroup));
-    return true;
-  }, [view, confirmReportNavigation, bootstrap]);
+  const setView = useCallback(
+    async (next: View) => {
+      if (next !== view && !(await confirmReportNavigation())) return false;
+      if (next !== "activity" && window.location.hash === "#activity") window.history.replaceState(null, "", window.location.pathname + window.location.search);
+      if (window.matchMedia?.("(max-width: 980px)").matches) setSidebarCollapsed(true);
+      setCrmOpportunityId(null);
+      const target = landingView(next, bootstrap?.permissions ?? []);
+      if (target === "estimates") setPreferredEstimateId(null);
+      if (target === "inquiries") setPreferredInquiryId(null);
+      // The menu groups stay as the person left them: opening a screen never opens or closes one (DEFAULT_COLLAPSED_GROUPS).
+      setViewState(target);
+      return true;
+    },
+    [view, confirmReportNavigation, bootstrap],
+  );
 
   useEffect(() => {
-    const follow = async () => { if (window.location.hash === "#activity" && bootstrap?.permissions.includes("activity.read")) (await setView("activity")); };
-    follow(); window.addEventListener("hashchange", follow); return () => window.removeEventListener("hashchange", follow);
+    const follow = async () => {
+      if (window.location.hash === "#activity" && bootstrap?.permissions.includes("activity.read")) await setView("activity");
+    };
+    follow();
+    window.addEventListener("hashchange", follow);
+    return () => window.removeEventListener("hashchange", follow);
   }, [bootstrap, setView]);
 
   const openSupport = async (id: number | null) => {
     if (!(await confirmReportNavigation())) return;
-    setSupportTicketId(id); setSupportCreate(false); setViewState("support");
+    setSupportTicketId(id);
+    setSupportCreate(false);
+    setViewState("support");
     window.history.replaceState(null, "", window.location.pathname + window.location.search + (id ? `#support/${id}` : "#support"));
   };
   useEffect(() => {
     const timer = window.setTimeout(() => {
       const match = window.location.hash.match(/^#support(?:\/(\d+))?$/);
-      if (match) { const id = Number(match[1]); setSupportTicketId(Number.isSafeInteger(id) && id > 0 ? id : null); setViewState("support"); }
+      if (match) {
+        const id = Number(match[1]);
+        setSupportTicketId(Number.isSafeInteger(id) && id > 0 ? id : null);
+        setViewState("support");
+      }
     }, 0);
     return () => window.clearTimeout(timer);
   }, []);
@@ -470,36 +596,52 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
   // The "?" menu closes on Escape and on a press anywhere outside it.
   useEffect(() => {
     if (!helpOpen) return;
-    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setHelpOpen(false); };
-    const onPress = (event: PointerEvent) => { if (!(event.target instanceof Element) || !event.target.closest('[data-menu="help"]')) setHelpOpen(false); };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setHelpOpen(false);
+    };
+    const onPress = (event: PointerEvent) => {
+      if (!(event.target instanceof Element) || !event.target.closest('[data-menu="help"]')) setHelpOpen(false);
+    };
     window.addEventListener("keydown", onKey);
     window.addEventListener("pointerdown", onPress);
-    return () => { window.removeEventListener("keydown", onKey); window.removeEventListener("pointerdown", onPress); };
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("pointerdown", onPress);
+    };
   }, [helpOpen]);
 
   const refreshBootstrap = async () => {
     setBootstrap(await loadBootstrap());
   };
 
-  const restoreWorkspace = useCallback((data: BootstrapData) => {
-    const allowed = allowedViews(data);
-    let saved: string | null = null;
-    try { saved = window.sessionStorage.getItem(viewStorageKey(data.user.id)); }
-    catch { /* Storage may be disabled; normal navigation still works. */ }
-    const dailyLanding: View = allowed.includes("my-work") ? "my-work" : "dashboard";
-    const target = restoredView(saved, allowed, window.location.hash, initialVerifyCode, dailyLanding, requested => landingView(requested as View, data.permissions));
-    const document = documentRoute(window.location.hash);
-    setPreferredEstimateId(target === "estimates" ? document?.id ?? null : null);
-    setPreferredInquiryId(target === "inquiries" ? document?.id ?? null : null);
-    if (target === "projects") setProjectTab(projectTabOf(window.location.hash));
-    setViewState(target);
-    setBootstrap(data);
-  }, [initialVerifyCode]);
+  const restoreWorkspace = useCallback(
+    (data: BootstrapData) => {
+      const allowed = allowedViews(data);
+      let saved: string | null = null;
+      try {
+        saved = window.sessionStorage.getItem(viewStorageKey(data.user.id));
+      } catch {
+        /* Storage may be disabled; normal navigation still works. */
+      }
+      const dailyLanding: View = allowed.includes("my-work") ? "my-work" : "dashboard";
+      const target = restoredView(saved, allowed, window.location.hash, initialVerifyCode, dailyLanding, (requested) => landingView(requested as View, data.permissions));
+      const document = documentRoute(window.location.hash);
+      setPreferredEstimateId(target === "estimates" ? (document?.id ?? null) : null);
+      setPreferredInquiryId(target === "inquiries" ? (document?.id ?? null) : null);
+      if (target === "projects") setProjectTab(projectTabOf(window.location.hash));
+      setViewState(target);
+      setBootstrap(data);
+    },
+    [initialVerifyCode],
+  );
 
   useEffect(() => {
     if (!bootstrap) return;
-    try { window.sessionStorage.setItem(viewStorageKey(bootstrap.user.id), view); }
-    catch { /* Remembering the page is optional when browser storage is blocked. */ }
+    try {
+      window.sessionStorage.setItem(viewStorageKey(bootstrap.user.id), view);
+    } catch {
+      /* Remembering the page is optional when browser storage is blocked. */
+    }
   }, [bootstrap, view]);
 
   // The address bar names the open screen: a refresh, a copied link or a menu entry opened in a new tab
@@ -602,20 +744,27 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
       }
     };
     void restore();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [restoreWorkspace]);
 
   useEffect(() => {
     let cancelled = false;
-    if (!bootstrap || !canLoadMyWork) return () => { cancelled = true; };
+    if (!bootstrap || !canLoadMyWork)
+      return () => {
+        cancelled = true;
+      };
     void apiRequest<MyWorkUrgencyItem[]>("/api/v1/me/work")
       .then((items) => {
         if (!cancelled) setMyWorkUrgentCount(items.filter(myWorkNeedsAttention).length);
       })
       .catch(() => {
         if (!cancelled) setMyWorkUrgentCount(0);
-    });
-    return () => { cancelled = true; };
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [bootstrap, canLoadMyWork]);
 
   useEffect(() => {
@@ -625,25 +774,41 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
       try {
         const result = await apiRequest<{ total: number }>("/api/v1/resource-tasks?mine=true&filter=Acknowledgment&pageSize=1");
         if (!cancelled) setTaskAcknowledgmentCount(result.total);
-      } catch { /* Keep the last known inbox count during a temporary outage. */ }
+      } catch {
+        /* Keep the last known inbox count during a temporary outage. */
+      }
     };
     void update();
-    const timer = setInterval(() => { void update(); }, 30000);
-    return () => { cancelled = true; clearInterval(timer); };
+    const timer = setInterval(() => {
+      void update();
+    }, 30000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
   }, [bootstrap, canLoadMyWork, taskInboxRevision]);
 
   const refreshNotifications = useCallback(async () => {
     if (!bootstrap) return;
     try {
       setNotifications(await apiRequest<AppNotification[]>("/api/v1/me/notifications/?limit=50"));
-    } catch { /* Notifications must never block the operational workspace. */ }
+    } catch {
+      /* Notifications must never block the operational workspace. */
+    }
   }, [bootstrap]);
 
   useEffect(() => {
     if (!bootstrap) return;
-    const initialTimer = window.setTimeout(() => { void refreshNotifications(); }, 0);
-    const timer = window.setInterval(() => { void refreshNotifications(); }, 30_000);
-    return () => { window.clearTimeout(initialTimer); window.clearInterval(timer); };
+    const initialTimer = window.setTimeout(() => {
+      void refreshNotifications();
+    }, 0);
+    const timer = window.setInterval(() => {
+      void refreshNotifications();
+    }, 30_000);
+    return () => {
+      window.clearTimeout(initialTimer);
+      window.clearInterval(timer);
+    };
   }, [bootstrap, refreshNotifications]);
 
   const markNotificationsRead = async () => {
@@ -661,24 +826,27 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
     const { item } = row;
     setNotificationOpen(false);
     if (!row.isRead) {
-      setNotifications((current) => current.map((entry) => row.ids.includes(entry.id) ? { ...entry, isRead: true } : entry));
-      void apiRequest("/api/v1/me/notifications/read", { method: "POST", body: JSON.stringify({ ids: row.ids, all: false }) })
-        .catch(() => { void refreshNotifications(); });
+      setNotifications((current) => current.map((entry) => (row.ids.includes(entry.id) ? { ...entry, isRead: true } : entry)));
+      void apiRequest("/api/v1/me/notifications/read", { method: "POST", body: JSON.stringify({ ids: row.ids, all: false }) }).catch(() => {
+        void refreshNotifications();
+      });
     }
-    if (item.entityType === "GoodsReceipt") (await setView("receiving"));
+    if (item.entityType === "GoodsReceipt") await setView("receiving");
     // An approved PR that could not go to the ERP by itself waits for its requester on the PR list.
-    if (item.entityType === "PurchaseRequisition") (await setView("purchase"));
+    if (item.entityType === "PurchaseRequisition") await setView("purchase");
     if (item.entityType === "SupportTicket" && item.entityId) openSupport(item.entityId);
     // A new project, or a task given to you on one, opens that project's plan.
     if (item.entityType === "Project" && item.entityId) openProjectSchedule(item.entityId);
     // A team task given to you opens the team board.
-    if (item.entityType === "TeamTask") (await setView("resources"));
+    if (item.entityType === "TeamTask") await setView("resources");
     // An estimate waiting for you to approve, or the decision on yours, opens that estimate.
     if (item.entityType === "Estimate" && item.entityId) openEstimate(item.entityId);
   };
 
   const signIn = async (teamTestEmail?: string, teamTestAccessCode?: string) => {
-    setBusy(true); setAuthError(""); setMyWorkUrgentCount(0);
+    setBusy(true);
+    setAuthError("");
+    setMyWorkUrgentCount(0);
     try {
       if (IS_TMT_ID_MODE) {
         // Navigates away to TMT ID; the callback lands back on the app origin
@@ -694,19 +862,23 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
         // session back up (and loads bootstrap data) once the redirect returns.
         await signInWithMicrosoft();
       }
-    }
-    catch (error) {
+    } catch (error) {
       if (IS_TEAM_TEST_MODE) clearTeamTestSession();
       setAuthError(error instanceof Error ? error.message : "Unable to sign in.");
+    } finally {
+      setBusy(false);
     }
-    finally { setBusy(false); }
   };
 
   const signOut = async () => {
     if (!(await confirmReportNavigation())) return;
-    try { if (bootstrap) window.sessionStorage.removeItem(viewStorageKey(bootstrap.user.id)); }
-    catch { /* Sign-out must also work when browser storage is blocked. */ }
-    setBusy(true); setAuthError("");
+    try {
+      if (bootstrap) window.sessionStorage.removeItem(viewStorageKey(bootstrap.user.id));
+    } catch {
+      /* Sign-out must also work when browser storage is blocked. */
+    }
+    setBusy(true);
+    setAuthError("");
     try {
       if (IS_TMT_ID_MODE) {
         // Clearing local state is not a sign-out while the provider still holds
@@ -718,18 +890,24 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
       if (IS_TEAM_TEST_MODE) clearTeamTestSession();
       else await signOutMicrosoft();
       reportDirty.current = false;
-      setBootstrap(null); setMyWorkUrgentCount(0); setViewState("my-work");
+      setBootstrap(null);
+      setMyWorkUrgentCount(0);
+      setViewState("my-work");
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : "Unable to sign out. Please try again.");
+    } finally {
+      setBusy(false);
     }
-    catch (error) { setAuthError(error instanceof Error ? error.message : "Unable to sign out. Please try again."); }
-    finally { setBusy(false); }
   };
 
-  const allowedNav = useMemo(() => NAV
-    .map((section) => ({
-      ...section,
-      items: section.items.filter((item) => navItemAllowed(item, bootstrap?.permissions ?? [], bootstrap?.user.role ?? "")),
-    }))
-    .filter((section) => section.items.length > 0), [bootstrap]);
+  const allowedNav = useMemo(
+    () =>
+      NAV.map((section) => ({
+        ...section,
+        items: section.items.filter((item) => navItemAllowed(item, bootstrap?.permissions ?? [], bootstrap?.user.role ?? "")),
+      })).filter((section) => section.items.length > 0),
+    [bootstrap],
+  );
 
   /*
    * Menu favourites (owner request 2026-11-10): the entries the person starred, shown first in the sidebar. The list is
@@ -737,7 +915,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
    * device. A click shows at once and is saved behind it; when the save fails the last saved list comes back with a
    * toast. An entry the person may no longer open is neither drawn nor counted, and leaves the list on the next save.
    */
-  const storedFavorites = bootstrap && favoriteEdit?.userId === bootstrap.user.id ? favoriteEdit.views : bootstrap?.menuFavorites ?? [];
+  const storedFavorites = bootstrap && favoriteEdit?.userId === bootstrap.user.id ? favoriteEdit.views : (bootstrap?.menuFavorites ?? []);
   const favoriteEntries = storedFavorites.flatMap((favorite) => {
     const favoriteSection = allowedNav.find((candidate) => candidate.items.some((item) => item.view === favorite));
     const favoriteItem = favoriteSection?.items.find((candidate) => candidate.view === favorite);
@@ -767,45 +945,63 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
     });
   };
 
-  const clearPreferredSchedule = useCallback(() => { setPreferredScheduleProjectId(null); setPreferredScheduleTaskId(null); }, []);
+  const clearPreferredSchedule = useCallback(() => {
+    setPreferredScheduleProjectId(null);
+    setPreferredScheduleTaskId(null);
+  }, []);
   // Opens a project's plan, optionally on one task (a bar clicked in the portfolio timeline).
-  const openProjectSchedule = useCallback(async (projectId: number, taskId?: number) => {
-    setPreferredScheduleProjectId(projectId);
-    setPreferredScheduleTaskId(taskId ?? null);
-    setScheduleLinkCount((count) => count + 1);
-    setProjectTab("schedule");
-    if (!(await setView("projects"))) return;
-    // The plan writes its own place once it opens; until then the address already names the project.
-    screenLink.current = { view: "projects", path: ["plan", String(projectId), ...(taskId ? ["task", String(taskId)] : [])], params: {}, opened: {}, fromLink: true };
-    if (view === "projects") window.history.pushState(null, "", window.location.pathname + window.location.search + screenHash("projects", screenLink.current.path));
-    window.scrollTo({ top: 0 });
-  }, [setView, view]);
+  const openProjectSchedule = useCallback(
+    async (projectId: number, taskId?: number) => {
+      setPreferredScheduleProjectId(projectId);
+      setPreferredScheduleTaskId(taskId ?? null);
+      setScheduleLinkCount((count) => count + 1);
+      setProjectTab("schedule");
+      if (!(await setView("projects"))) return;
+      // The plan writes its own place once it opens; until then the address already names the project.
+      screenLink.current = { view: "projects", path: ["plan", String(projectId), ...(taskId ? ["task", String(taskId)] : [])], params: {}, opened: {}, fromLink: true };
+      if (view === "projects") window.history.pushState(null, "", window.location.pathname + window.location.search + screenHash("projects", screenLink.current.path));
+      window.scrollTo({ top: 0 });
+    },
+    [setView, view],
+  );
   // Opens a customer issue batch on Projects > Punchlist.
-  const openIssueBatch = useCallback(async (batchId: number) => {
-    setPreferredIssueBatch((current) => ({ id: batchId, count: (current?.count ?? 0) + 1 }));
-    setProjectTab("punchlist");
-    if (!(await setView("projects"))) return;
-    screenLink.current = { view: "projects", path: ["punchlist", String(batchId)], params: {}, opened: {}, fromLink: true };
-    if (view === "projects") window.history.pushState(null, "", window.location.pathname + window.location.search + screenHash("projects", screenLink.current.path));
-    window.scrollTo({ top: 0 });
-  }, [setView, view]);
-  const openSiteVisit = useCallback(async (visitId: number) => {
-    setPreferredSiteVisitId(visitId);
-    (await setView("site-visits"));
-    window.scrollTo({ top: 0 });
-  }, [setView]);
-  const openEstimate = useCallback(async (estimateId: number) => {
-    if (!bootstrap?.permissions.includes("estimate.read") || !(await setView("estimates"))) return;
-    setPreferredEstimateId(estimateId);
-    window.scrollTo({ top: 0 });
-  }, [bootstrap, setView]);
+  const openIssueBatch = useCallback(
+    async (batchId: number) => {
+      setPreferredIssueBatch((current) => ({ id: batchId, count: (current?.count ?? 0) + 1 }));
+      setProjectTab("punchlist");
+      if (!(await setView("projects"))) return;
+      screenLink.current = { view: "projects", path: ["punchlist", String(batchId)], params: {}, opened: {}, fromLink: true };
+      if (view === "projects") window.history.pushState(null, "", window.location.pathname + window.location.search + screenHash("projects", screenLink.current.path));
+      window.scrollTo({ top: 0 });
+    },
+    [setView, view],
+  );
+  const openSiteVisit = useCallback(
+    async (visitId: number) => {
+      setPreferredSiteVisitId(visitId);
+      await setView("site-visits");
+      window.scrollTo({ top: 0 });
+    },
+    [setView],
+  );
+  const openEstimate = useCallback(
+    async (estimateId: number) => {
+      if (!bootstrap?.permissions.includes("estimate.read") || !(await setView("estimates"))) return;
+      setPreferredEstimateId(estimateId);
+      window.scrollTo({ top: 0 });
+    },
+    [bootstrap, setView],
+  );
   const [startInquiryCreate, setStartInquiryCreate] = useState(false);
-  const openInquiry = useCallback(async (id: number) => {
-    if (!bootstrap?.permissions.includes("inquiry.read") || !(await setView("inquiries"))) return;
-    setStartInquiryCreate(false);
-    setPreferredInquiryId(id);
-    window.scrollTo({top:0});
-  }, [bootstrap, setView, setStartInquiryCreate]);
+  const openInquiry = useCallback(
+    async (id: number) => {
+      if (!bootstrap?.permissions.includes("inquiry.read") || !(await setView("inquiries"))) return;
+      setStartInquiryCreate(false);
+      setPreferredInquiryId(id);
+      window.scrollTo({ top: 0 });
+    },
+    [bootstrap, setView, setStartInquiryCreate],
+  );
   /*
    * Project deep links carried by notification email still open the plan once.
    * Inquiry/Estimate links are persistent document addresses handled above.
@@ -827,15 +1023,19 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
     };
     const timer = window.setTimeout(follow, 0);
     window.addEventListener("hashchange", follow);
-    return () => { window.clearTimeout(timer); window.removeEventListener("hashchange", follow); };
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("hashchange", follow);
+    };
   }, [bootstrap, openProjectSchedule]);
 
-  const startInquiry = async () => { setStartInquiryCreate(true); setPreferredInquiryId(null); (await setView("inquiries")); };
+  const startInquiry = async () => {
+    setStartInquiryCreate(true);
+    setPreferredInquiryId(null);
+    await setView("inquiries");
+  };
   const toggleNavGroup = (group: string) => {
-    const active = NAV.find(section => section.group === group)?.items.some(item => item.view === navView(view));
-    const isCollapsed = collapsedNavGroups.includes(group) && (!active || collapsedActiveGroup === group);
-    setCollapsedActiveGroup(isCollapsed ? null : group);
-    setCollapsedNavGroups(current => isCollapsed ? current.filter(value => value !== group) : [...new Set([...current, group])]);
+    setCollapsedNavGroups((current) => (current.includes(group) ? current.filter((value) => value !== group) : [...current, group]));
   };
 
   // A missing bootstrap is not a signed-out session until restoration settles.
@@ -867,7 +1067,17 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
     );
   }
 
-  const personalDashboard = <ProductionDashboard bootstrap={bootstrap} refreshBootstrap={refreshBootstrap} teamTestMode={IS_TEAM_TEST_MODE} onNavigate={async (destination) => { (await setView(destination)); window.scrollTo({ top: 0 }); }} />;
+  const personalDashboard = (
+    <ProductionDashboard
+      bootstrap={bootstrap}
+      refreshBootstrap={refreshBootstrap}
+      teamTestMode={IS_TEAM_TEST_MODE}
+      onNavigate={async (destination) => {
+        await setView(destination);
+        window.scrollTo({ top: 0 });
+      }}
+    />
+  );
   const common = { bootstrap, notify: setToast, refreshBootstrap };
   const seesProjectCost = canViewProjectCost(bootstrap.user.roles ?? [bootstrap.user.role]);
   const moduleProps = {
@@ -890,195 +1100,654 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
   const navRow = (item: NavItem, favorite?: { group?: string }) => {
     const label = item.view === "manual" ? employeeManualLabel(language) : t(item.label);
     const isCurrent = navView(view) === item.view;
-    const menuBadge = item.view === "crm-opportunities" ? crmActionableCount : badgeFor(item.view, bootstrap, myWorkUrgentCount + taskAcknowledgmentCount, projectAttentionCount, procurementApprovalCount);
+    const menuBadge =
+      item.view === "crm-opportunities" ? crmActionableCount : badgeFor(item.view, bootstrap, myWorkUrgentCount + taskAcknowledgmentCount, projectAttentionCount, procurementApprovalCount);
     const starred = favoriteViews.includes(item.view);
     const starLabel = starred ? t("Nav.favRemove").replace("{menu}", label) : favoritesFull ? t("Nav.favFull") : t("Nav.favAdd").replace("{menu}", label);
     return (
       <div key={item.view} className={starred ? "nav-row starred" : "nav-row"} data-guide={!favorite && item.view === "dashboard" ? "nav.star" : undefined}>
-        <a href={viewHash(item.view)} data-guide={favorite ? `nav.fav.${item.view}` : `nav.${item.view}`} className={isCurrent ? "nav-item active" : "nav-item"} aria-current={isCurrent ? "page" : undefined} title={item.view === "crm-opportunities" ? `${label} · ${t("CRM.Actionable")}: ${crmActionableCount}` : label} aria-label={label} onClick={async (event) => { if (!isPlainClick(event)) return; event.preventDefault(); if (item.view === "inquiries") { setPreferredInquiryId(null); setStartInquiryCreate(false); } if (item.view === "estimates") setPreferredEstimateId(null); if (item.view === "site-visits") setPreferredSiteVisitId(null); (await setView(item.view)); window.scrollTo({ top: 0 }); }}><Icon name={item.icon} /><span>{label}</span>{favorite?.group ? <small className="nav-fav-group">{t(favorite.group)}</small> : null}{menuBadge ? <em>{menuBadge}</em> : null}</a>
-        <button type="button" className="nav-star" aria-pressed={starred} disabled={!starred && favoritesFull} aria-label={starLabel} title={starLabel} onClick={() => toggleFavorite(item.view)}><Icon name="star" /></button>
+        <a
+          href={viewHash(item.view)}
+          data-guide={favorite ? `nav.fav.${item.view}` : `nav.${item.view}`}
+          className={isCurrent ? "nav-item active" : "nav-item"}
+          aria-current={isCurrent ? "page" : undefined}
+          title={item.view === "crm-opportunities" ? `${label} · ${t("CRM.Actionable")}: ${crmActionableCount}` : label}
+          aria-label={label}
+          onClick={async (event) => {
+            if (!isPlainClick(event)) return;
+            event.preventDefault();
+            if (item.view === "inquiries") {
+              setPreferredInquiryId(null);
+              setStartInquiryCreate(false);
+            }
+            if (item.view === "estimates") setPreferredEstimateId(null);
+            if (item.view === "site-visits") setPreferredSiteVisitId(null);
+            await setView(item.view);
+            window.scrollTo({ top: 0 });
+          }}
+        >
+          <Icon name={item.icon} />
+          <span>{label}</span>
+          {favorite?.group ? <small className="nav-fav-group">{t(favorite.group)}</small> : null}
+          {menuBadge ? <em>{menuBadge}</em> : null}
+        </a>
+        <button type="button" className="nav-star" aria-pressed={starred} disabled={!starred && favoritesFull} aria-label={starLabel} title={starLabel} onClick={() => toggleFavorite(item.view)}>
+          <Icon name="star" />
+        </button>
       </div>
     );
   };
   return (
     <LanguageContext.Provider value={languageValue}>
-    <div className={sidebarCollapsed ? "app sidebar-collapsed" : "app"}>
-      {!sidebarCollapsed ? <button type="button" className="sidebar-mobile-backdrop" aria-label={t("Close navigation")} onClick={() => setSidebarCollapsed(true)} /> : null}
-      <aside className="sidebar">
-        <div className="brand"><BrandMark size={34} tone="dark" /><div><strong>{PRODUCT.company}</strong><span>{PRODUCT.name}</span></div></div>
-        <nav className="nav" aria-label={t("Main navigation")}>
-          <p className="nav-label">{t(WORKSPACE_LABEL)}</p>
-          <div className={favoriteEntries.length ? "nav-favorites" : "nav-favorites no-favorites"} role="group" aria-label={t("Nav.favorites")} data-guide="nav.favorites">
-            <p className="nav-favorites-head"><Icon name="star" /><span>{t("Nav.favorites")}</span><small>{favoriteEntries.length}/{MENU_FAVORITE_LIMIT}</small></p>
-            {favoriteEntries.length
-              ? favoriteEntries.map((entry) => navRow(entry.item, { group: entry.group }))
-              : <p className="nav-favorites-empty"><strong>{t("Nav.favEmptyTitle")}</strong>{t("Nav.favEmptyHint")}</p>}
+      <div className={sidebarCollapsed ? "app sidebar-collapsed" : "app"}>
+        {!sidebarCollapsed ? <button type="button" className="sidebar-mobile-backdrop" aria-label={t("Close navigation")} onClick={() => setSidebarCollapsed(true)} /> : null}
+        <aside className="sidebar">
+          <div className="brand">
+            <BrandMark size={34} tone="dark" />
+            <div>
+              <strong>{PRODUCT.company}</strong>
+              <span>{PRODUCT.name}</span>
+            </div>
           </div>
-          {allowedNav.map((section, sectionIndex) => {
-            const activeGroup = section.items.some(item => item.view === navView(view));
-            const collapsed = Boolean(section.group && collapsedNavGroups.includes(section.group) && (!activeGroup || collapsedActiveGroup === section.group));
-            return (
-              <div className={activeGroup ? "nav-group active-group" : "nav-group"} key={section.group ?? `primary-${sectionIndex}`}>
-                {section.group ? (
-                  <button className="nav-label nav-group-toggle" type="button" aria-expanded={!collapsed} aria-controls={`nav-group-${sectionIndex}`} title={t(section.group)} aria-label={t(section.group)} onClick={() => toggleNavGroup(section.group!)}>
-                    <span>{t(section.group)}</span><small>{section.items.length}</small><Icon name="chevronDown" />
-                  </button>
-                ) : null}
-                <div id={`nav-group-${sectionIndex}`} className={section.group ? "nav-group-items nav-subitems" : "nav-group-items"} hidden={collapsed}>
-                  {section.items.map((item) => navRow(item))}
+          <nav className="nav" aria-label={t("Main navigation")}>
+            <p className="nav-label">{t(WORKSPACE_LABEL)}</p>
+            <div className={favoriteEntries.length ? "nav-favorites" : "nav-favorites no-favorites"} role="group" aria-label={t("Nav.favorites")} data-guide="nav.favorites">
+              <p className="nav-favorites-head">
+                <Icon name="star" />
+                <span>{t("Nav.favorites")}</span>
+                <small>
+                  {favoriteEntries.length}/{MENU_FAVORITE_LIMIT}
+                </small>
+              </p>
+              {favoriteEntries.length ? (
+                favoriteEntries.map((entry) => navRow(entry.item, { group: entry.group }))
+              ) : (
+                <p className="nav-favorites-empty">
+                  <strong>{t("Nav.favEmptyTitle")}</strong>
+                  {t("Nav.favEmptyHint")}
+                </p>
+              )}
+            </div>
+            {allowedNav.map((section, sectionIndex) => {
+              const activeGroup = section.items.some((item) => item.view === navView(view));
+              const collapsed = Boolean(section.group && collapsedNavGroups.includes(section.group));
+              return (
+                <div className={activeGroup ? "nav-group active-group" : "nav-group"} key={section.group ?? `primary-${sectionIndex}`}>
+                  {section.group ? (
+                    <button
+                      className="nav-label nav-group-toggle"
+                      type="button"
+                      aria-expanded={!collapsed}
+                      aria-controls={`nav-group-${sectionIndex}`}
+                      title={t(section.group)}
+                      aria-label={t(section.group)}
+                      onClick={() => toggleNavGroup(section.group!)}
+                    >
+                      <span>{t(section.group)}</span>
+                      <small>{section.items.length}</small>
+                      <Icon name="chevronDown" />
+                    </button>
+                  ) : null}
+                  <div id={`nav-group-${sectionIndex}`} className={section.group ? "nav-group-items nav-subitems" : "nav-group-items"} hidden={collapsed}>
+                    {section.items.map((item) => navRow(item))}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </nav>
-        <div className="sidebar-user"><span className="avatar sm">{initials(bootstrap.user.name)}</span><div><strong>{bootstrap.user.name}</strong><span>{bootstrap.user.department} · {bootstrap.user.role}</span></div><button type="button" aria-label={t("Sign out")} onClick={() => { void signOut(); }}><Icon name="logout" /></button></div>
-      </aside>
-      <div className="main">
-        <header className="topbar">
-          <button
-            className="sidebar-toggle"
-            type="button"
-            aria-label={t(sidebarCollapsed ? "Expand navigation" : "Collapse navigation")}
-            aria-expanded={!sidebarCollapsed}
-            title={t(sidebarCollapsed ? "Expand navigation" : "Collapse navigation")}
-            onClick={() => setSidebarCollapsed((value) => !value)}
-          >
-            <Icon name={sidebarCollapsed ? "chevronRight" : "chevronLeft"} />
-          </button>
-          <div className="production-indicator"><span className="status-dot online" /><strong>{t(IS_TEAM_TEST_MODE ? "Team Test" : "Production")}</strong><small>{t("SQL Server API")}</small></div>
-          <div className="topbar-right">
-            <button className="btn default sm topbar-guide" type="button" aria-haspopup="dialog" title={t("Guide.openHint")} aria-label={t("Guide.open")} onClick={() => setGuideOpen(true)}><Icon name="play" /><span className="label">{t("Guide.open")}</span></button>
-            <CopyLinkButton notify={setToast} />
-            <button className="btn default sm" type="button" data-guide="topbar.report" onClick={() => setSupportCreate(true)}><Icon name="inbox" />{supportLabel("Report a problem", language)}</button>
-            <div className="lang-switch" role="group" aria-label={t("Language")}>
-              {LANGUAGES.map((code) => (
-                <button key={code} type="button" className={language === code ? "active" : ""} aria-pressed={language === code} onClick={() => setLanguage(code)}>{code}</button>
-              ))}
+              );
+            })}
+          </nav>
+          <div className="sidebar-user">
+            <span className="avatar sm">{initials(bootstrap.user.name)}</span>
+            <div>
+              <strong>{bootstrap.user.name}</strong>
+              <span>
+                {bootstrap.user.department} · {bootstrap.user.role}
+              </span>
             </div>
-            <div className="menu-wrap" data-menu="help">
-              <button className="icon-btn" type="button" data-guide="nav.help" aria-haspopup="menu" aria-expanded={helpOpen} aria-label={t("Nav.help")} title={t("Nav.help")} onClick={() => { setHelpOpen((value) => !value); setUserOpen(false); setNotificationOpen(false); }}><Icon name="help" /></button>
-              {helpOpen ? <div className="menu" role="menu" aria-label={t("Nav.help")}>
-                <button type="button" role="menuitem" data-guide="nav.manual" onClick={async () => { setHelpOpen(false); (await setView("manual")); }}><Icon name="book" />{employeeManualLabel(language)}</button>
-                <button type="button" role="menuitem" onClick={() => { setHelpOpen(false); setGuideOpen(true); }}><Icon name="play" />{t("Guide.open")}</button>
-                <button type="button" role="menuitem" data-guide="nav.support" onClick={() => { setHelpOpen(false); void openSupport(null); }}><Icon name="inbox" />{t("Report & Track Issues")}</button>
-                <button type="button" role="menuitem" onClick={async () => { setHelpOpen(false); (await setView("downloads")); }}><Icon name="download" />{t("Download Center")}</button>
-              </div> : null}
+            <button
+              type="button"
+              aria-label={t("Sign out")}
+              onClick={() => {
+                void signOut();
+              }}
+            >
+              <Icon name="logout" />
+            </button>
+          </div>
+        </aside>
+        <div className="main">
+          <header className="topbar">
+            <button
+              className="sidebar-toggle"
+              type="button"
+              aria-label={t(sidebarCollapsed ? "Expand navigation" : "Collapse navigation")}
+              aria-expanded={!sidebarCollapsed}
+              title={t(sidebarCollapsed ? "Expand navigation" : "Collapse navigation")}
+              onClick={() => setSidebarCollapsed((value) => !value)}
+            >
+              <Icon name={sidebarCollapsed ? "chevronRight" : "chevronLeft"} />
+            </button>
+            <div className="production-indicator">
+              <span className="status-dot online" />
+              <strong>{t(IS_TEAM_TEST_MODE ? "Team Test" : "Production")}</strong>
+              <small>{t("SQL Server API")}</small>
             </div>
-            <div className="menu-wrap">
-              <button className="icon-btn" type="button" aria-label={t("Notifications")} aria-expanded={notificationOpen} onClick={() => { setNotificationOpen((value) => !value); setUserOpen(false); setHelpOpen(false); void refreshNotifications(); }}>
-                <Icon name="bell" />
-                {unreadNotificationRows ? <b>{Math.min(99, unreadNotificationRows)}</b> : null}
+            <div className="topbar-right">
+              <button className="btn default sm topbar-guide" type="button" aria-haspopup="dialog" title={t("Guide.openHint")} aria-label={t("Guide.open")} onClick={() => setGuideOpen(true)}>
+                <Icon name="play" />
+                <span className="label">{t("Guide.open")}</span>
               </button>
-              {notificationOpen ? <div className="notification-menu" role="dialog" aria-label={t("Notifications")}>
-                <div className="notification-head"><span><strong>{t("Notifications")}</strong><small>{unreadNotificationRows} {t("unread notifications")}</small></span><button type="button" disabled={!unreadNotificationRows} onClick={() => { void markNotificationsRead(); }}>{t("Mark all as read")}</button></div>
-                <div className="notification-list">
-                  {notificationRows.length ? notificationRows.map((row) => {
-                    const { item } = row;
-                    const text = item.entityType === "SupportTicket" ? supportRowText(row, (key) => supportLabel(key, language)) : { title: item.title, detail: item.detail };
-                    return <button key={row.key} type="button" className={row.isRead ? "notification-item" : "notification-item unread"} onClick={() => openNotification(row)}>
-                      <span className={`notification-icon ${item.kind === "MATERIAL_RECEIVED" ? "material" : ""}`}><Icon name={item.kind === "MATERIAL_RECEIVED" ? "package" : "bell"} /></span>
-                      <span><strong>{text.title}</strong><small>{text.detail}</small><time>{new Intl.DateTimeFormat(language === "TH" ? "th-TH" : language === "JP" ? "ja-JP" : "en-GB", { dateStyle: "medium", timeStyle: "short" }).format(new Date(item.createdAt))}</time></span>
-                    </button>;
-                  }) : <div className="notification-empty"><Icon name="checkCircle" /><span>{t("No new notifications")}</span></div>}
-                </div>
-              </div> : null}
+              <CopyLinkButton notify={setToast} />
+              <button className="btn default sm" type="button" data-guide="topbar.report" onClick={() => setSupportCreate(true)}>
+                <Icon name="inbox" />
+                {supportLabel("Report a problem", language)}
+              </button>
+              <div className="lang-switch" role="group" aria-label={t("Language")}>
+                {LANGUAGES.map((code) => (
+                  <button key={code} type="button" className={language === code ? "active" : ""} aria-pressed={language === code} onClick={() => setLanguage(code)}>
+                    {code}
+                  </button>
+                ))}
+              </div>
+              <div className="menu-wrap" data-menu="help">
+                <button
+                  className="icon-btn"
+                  type="button"
+                  data-guide="nav.help"
+                  aria-haspopup="menu"
+                  aria-expanded={helpOpen}
+                  aria-label={t("Nav.help")}
+                  title={t("Nav.help")}
+                  onClick={() => {
+                    setHelpOpen((value) => !value);
+                    setUserOpen(false);
+                    setNotificationOpen(false);
+                  }}
+                >
+                  <Icon name="help" />
+                </button>
+                {helpOpen ? (
+                  <div className="menu" role="menu" aria-label={t("Nav.help")}>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      data-guide="nav.manual"
+                      onClick={async () => {
+                        setHelpOpen(false);
+                        await setView("manual");
+                      }}
+                    >
+                      <Icon name="book" />
+                      {employeeManualLabel(language)}
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setHelpOpen(false);
+                        setGuideOpen(true);
+                      }}
+                    >
+                      <Icon name="play" />
+                      {t("Guide.open")}
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      data-guide="nav.support"
+                      onClick={() => {
+                        setHelpOpen(false);
+                        void openSupport(null);
+                      }}
+                    >
+                      <Icon name="inbox" />
+                      {t("Report & Track Issues")}
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={async () => {
+                        setHelpOpen(false);
+                        await setView("downloads");
+                      }}
+                    >
+                      <Icon name="download" />
+                      {t("Download Center")}
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+              <div className="menu-wrap">
+                <button
+                  className="icon-btn"
+                  type="button"
+                  aria-label={t("Notifications")}
+                  aria-expanded={notificationOpen}
+                  onClick={() => {
+                    setNotificationOpen((value) => !value);
+                    setUserOpen(false);
+                    setHelpOpen(false);
+                    void refreshNotifications();
+                  }}
+                >
+                  <Icon name="bell" />
+                  {unreadNotificationRows ? <b>{Math.min(99, unreadNotificationRows)}</b> : null}
+                </button>
+                {notificationOpen ? (
+                  <div className="notification-menu" role="dialog" aria-label={t("Notifications")}>
+                    <div className="notification-head">
+                      <span>
+                        <strong>{t("Notifications")}</strong>
+                        <small>
+                          {unreadNotificationRows} {t("unread notifications")}
+                        </small>
+                      </span>
+                      <button
+                        type="button"
+                        disabled={!unreadNotificationRows}
+                        onClick={() => {
+                          void markNotificationsRead();
+                        }}
+                      >
+                        {t("Mark all as read")}
+                      </button>
+                    </div>
+                    <div className="notification-list">
+                      {notificationRows.length ? (
+                        notificationRows.map((row) => {
+                          const { item } = row;
+                          const text = item.entityType === "SupportTicket" ? supportRowText(row, (key) => supportLabel(key, language)) : { title: item.title, detail: item.detail };
+                          return (
+                            <button key={row.key} type="button" className={row.isRead ? "notification-item" : "notification-item unread"} onClick={() => openNotification(row)}>
+                              <span className={`notification-icon ${item.kind === "MATERIAL_RECEIVED" ? "material" : ""}`}>
+                                <Icon name={item.kind === "MATERIAL_RECEIVED" ? "package" : "bell"} />
+                              </span>
+                              <span>
+                                <strong>{text.title}</strong>
+                                <small>{text.detail}</small>
+                                <time>
+                                  {new Intl.DateTimeFormat(language === "TH" ? "th-TH" : language === "JP" ? "ja-JP" : "en-GB", { dateStyle: "medium", timeStyle: "short" }).format(
+                                    new Date(item.createdAt),
+                                  )}
+                                </time>
+                              </span>
+                            </button>
+                          );
+                        })
+                      ) : (
+                        <div className="notification-empty">
+                          <Icon name="checkCircle" />
+                          <span>{t("No new notifications")}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+              <div className="menu-wrap">
+                <button
+                  className="topbar-user"
+                  type="button"
+                  onClick={() => {
+                    setUserOpen((value) => !value);
+                    setNotificationOpen(false);
+                    setHelpOpen(false);
+                  }}
+                >
+                  <span className="avatar sm">{initials(bootstrap.user.name)}</span>
+                  <span>
+                    {bootstrap.user.name}
+                    <small>
+                      {bootstrap.user.role} · {bootstrap.user.department}
+                    </small>
+                  </span>
+                  <Icon name="chevronDown" />
+                </button>
+                {userOpen ? (
+                  <div className="menu" role="menu">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        setUserOpen(false);
+                        await setView("profile");
+                      }}
+                    >
+                      <Icon name="user" />
+                      {t("My Profile")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        setUserOpen(false);
+                        await setView("signature");
+                      }}
+                    >
+                      <Icon name="edit" />
+                      {t("My signature")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        setUserOpen(false);
+                        await setView("manual");
+                      }}
+                    >
+                      <Icon name="book" />
+                      {employeeManualLabel(language)}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => {
+                        setUserOpen(false);
+                        void signOut();
+                      }}
+                    >
+                      <Icon name="logout" />
+                      {t("Logout")}
+                    </button>
+                  </div>
+                ) : null}
+              </div>
             </div>
-            <div className="menu-wrap">
-              <button className="topbar-user" type="button" onClick={() => { setUserOpen((value) => !value); setNotificationOpen(false); setHelpOpen(false); }}><span className="avatar sm">{initials(bootstrap.user.name)}</span><span>{bootstrap.user.name}<small>{bootstrap.user.role} · {bootstrap.user.department}</small></span><Icon name="chevronDown" /></button>
-              {userOpen ? <div className="menu" role="menu"><button type="button" onClick={async () => { setUserOpen(false); (await setView("profile")); }}><Icon name="user" />{t("My Profile")}</button><button type="button" onClick={async () => { setUserOpen(false); (await setView("signature")); }}><Icon name="edit" />{t("My signature")}</button><button type="button" onClick={async () => { setUserOpen(false); (await setView("manual")); }}><Icon name="book" />{employeeManualLabel(language)}</button><button type="button" disabled={busy} onClick={() => { setUserOpen(false); void signOut(); }}><Icon name="logout" />{t("Logout")}</button></div> : null}
+          </header>
+          {IS_LOCAL_READ_ONLY ? (
+            <div className="local-read-only-banner" role="status">
+              <strong>Local read-only</strong>
+              <span>Remote Team Test database · schema {CONNECTED_SCHEMA_VERSION} · changes disabled</span>
             </div>
-          </div>
-        </header>
-        {IS_LOCAL_READ_ONLY ? <div className="local-read-only-banner" role="status"><strong>Local read-only</strong><span>Remote Team Test database · schema {CONNECTED_SCHEMA_VERSION} · changes disabled</span></div> : null}
-        <ScreenLinkProvider value={screenLinkValue}>
-        <main className="page" key={linkRevision}>
-          {view === "dashboard" ? DASHBOARD_ROLES.includes(bootstrap.user.role) ? <ExecutiveDashboard bootstrap={bootstrap} personal={personalDashboard} onOpen={async (destination, id) => {
-            if (id && destination === "inquiries") openInquiry(id);
-            else if (id && destination === "estimates") openEstimate(id);
-            else if (id && destination === "projects") openProjectSchedule(id);
-            else { (await setView(destination)); window.scrollTo({ top: 0 }); }
-          }} /> : personalDashboard : null}
-          {view === "my-work" ? <><div className="my-work-related-links"><button className="btn default" type="button" onClick={async ()=>(await setView("activity"))}><Icon name="chart"/>{t("Team Activity")}</button>{bootstrap.permissions.includes("visit.read") ? <button className="btn default" type="button" onClick={async () => (await setView("my-assignments"))}><Icon name="truck" />{t("งานเข้าหน้างานของฉัน")}</button> : null}</div><ProductionMyWork {...moduleProps} openCrmOpportunity={openCrmOpportunity} newAssignmentCount={taskAcknowledgmentCount} onNewAssignmentChanged={() => setTaskInboxRevision(value => value + 1)} /></> : null}
-          {view.startsWith("crm-") && bootstrap.permissions.includes("crm.read") ? <SalesLookScope userId={bootstrap.user.id}><CrmScreen refreshBootstrap={refreshBootstrap} notify={setToast} key={view} bootstrap={bootstrap} view={view as CrmView} onViewChange={setView} preferredOpportunityId={crmOpportunityId} openInquiry={openInquiry} openEstimate={openEstimate} openProject={openProjectSchedule} /></SalesLookScope> : null}
-          {view === "inquiries" ? <SalesLookScope userId={bootstrap.user.id}><ProductionInquiries key={preferredInquiryId ?? (startInquiryCreate ? "create" : "list")} {...common} openProject={openProjectSchedule} openOpportunity={openCrmOpportunity} openEstimate={openEstimate} openVisit={openSiteVisit} startWithCreate={startInquiryCreate} preferredInquiryId={preferredInquiryId} onSelectInquiry={(id) => { setStartInquiryCreate(false); setPreferredInquiryId(id); }} /></SalesLookScope> : null}
-          {view === "estimates" ? <EstimateLookScope userId={bootstrap.user.id}><ProductionEstimates key={preferredEstimateId ?? "estimate-list"} {...common} initialEstimateId={preferredEstimateId} onSelectEstimate={setPreferredEstimateId} /></EstimateLookScope> : null}
-          {view === "projects" ? <>
-            {/* Plan and Punchlist read the schedule; without schedule.read only the Overview is offered. */}
-            {/* Cost is for Leaders and above (project-cost-model.ts); the API refuses everyone else. */}
-            {bootstrap.permissions.includes("schedule.read") ? <Tabs tabs={[{ id: "portfolio" as ProjectTab, label: "Projects.tabOverview" }, { id: "schedule" as ProjectTab, label: "Projects.tabPlan" }, { id: "punchlist" as ProjectTab, label: "Projects.tabPunchlist" }, ...(seesProjectCost ? [{ id: "cost" as ProjectTab, label: "Projects.tabCost" }] : [])]} active={projectTab === "cost" && !seesProjectCost ? "portfolio" : projectTab} onChange={changeProjectTab} link={null} /> : null}
-            <div style={{ marginTop: 14 }}>
-              {projectTab === "cost" && seesProjectCost && bootstrap.permissions.includes("schedule.read") ? <ProjectCostScreen bootstrap={bootstrap} openProjectSchedule={openProjectSchedule} /> : projectTab === "portfolio" || projectTab === "cost" || !bootstrap.permissions.includes("schedule.read") ? <ProductionProjects {...common} teamTestMode={IS_TEAM_TEST_MODE} openProjectSchedule={bootstrap.permissions.includes("schedule.read") ? openProjectSchedule : undefined} /> : projectTab === "punchlist" ? <IssueBatchScreen key={`issues:${preferredIssueBatch?.count ?? 0}`} {...common} initialBatchId={preferredIssueBatch?.id ?? null} openProjectSchedule={openProjectSchedule} /> : <ProductionProjectSchedule key={`plan:${scheduleLinkCount}`} {...moduleProps} />}
-            </div>
-          </> : null}
-          {view === "knowledge" ? <ProductionKnowledgeHub bootstrap={bootstrap} notify={setToast} /> : null}
-          {view === "downloads" ? <DownloadCenterScreen canManage={bootstrap.permissions.includes("master.read")} canManageRepositories={bootstrap.permissions.includes("repository.write")} notify={setToast} /> : null}
-          {view === "site-monitor" ? <SiteMonitorScreen bootstrap={bootstrap} notify={setToast} /> : null}
-          {view === "installed-base" ? <InstalledBaseScreen canManage={bootstrap.permissions.includes("asset.manage")} canSeeCredentials={bootstrap.permissions.includes("credential.read")} notify={setToast} /> : null}
-          {view === "sales-intake" ? <ProductionSalesIntake {...common} openVisit={openSiteVisit} openInquiry={openInquiry} startInquiry={startInquiry} /> : null}
-          {view === "site-visits" ? <SalesLookScope userId={bootstrap.user.id}><ProductionSiteVisits key={preferredSiteVisitId ?? "site-visit-list"} {...common} initialVisitId={preferredSiteVisitId} openInquiry={openInquiry} startInquiry={startInquiry} /></SalesLookScope> : null}
-          {view === "my-assignments" ? <SalesLookScope userId={bootstrap.user.id}><ProductionMyAssignments {...common} /></SalesLookScope> : null}
-          {view === "visit-master" ? <SalesLookScope userId={bootstrap.user.id}><ProductionVisitMasterData {...common} /></SalesLookScope> : null}
-          {view === "price" ? <EstimateLookScope userId={bootstrap.user.id}><ProductionPriceLibrary {...moduleProps} /></EstimateLookScope> : null}
-          {view === "quotations" ? <EstimateLookScope userId={bootstrap.user.id}><ProductionSupplierQuotations {...moduleProps} /></EstimateLookScope> : null}
-          {view === "missing" ? <EstimateLookScope userId={bootstrap.user.id}><ProductionWaitingSupplierPrice {...moduleProps} /></EstimateLookScope> : null}
-          {/* Compatibility for old bookmarks; new navigation uses Projects > Timeline. */}
-          {view === "project-timeline" ? <ProductionProjects key="project-timeline" {...common} teamTestMode={IS_TEAM_TEST_MODE} initialMode="timeline" openProjectSchedule={openProjectSchedule} /> : null}
-          {view === "resources" ? <ProductionResourcePlan {...moduleProps} refreshBootstrap={refreshBootstrap} openInquiry={openInquiry} openEstimate={openEstimate} /> : null}
-          {view === "procurement" ? <ProductionProcurementDashboard {...moduleProps} /> : null}
-          {view === "boms" ? <ProductionBoms {...moduleProps} /> : null}
-          {view === "purchase" ? <ProductionPurchaseRequisitions {...moduleProps} /> : null}
-          {view === "pos" ? <ProductionPurchaseOrders {...moduleProps} /> : null}
-          {view === "inventory" ? <>
-            <Tabs tabs={[{ id: "balances", label: t("Stock Balances") }, { id: "operations", label: t("Adjustments & Quarantine") }]} active={inventoryTab} onChange={setInventoryTab} />
-            <div style={{ marginTop: 14 }}>
-              {inventoryTab === "balances" ? <ProductionInventory bootstrap={bootstrap} /> : <ProductionInventoryOperations {...moduleProps} />}
-            </div>
-          </> : null}
-          {view === "receiving" ? <ProductionGoodsReceiving {...moduleProps} /> : null}
-          {view === "issues" ? <ProductionMaterialIssues {...moduleProps} /> : null}
-          {view === "approvals" ? <ProductionApprovals {...moduleProps} /> : null}
-          {view === "signing" ? <ProductionSignInbox bootstrap={bootstrap} notify={setToast} /> : null}
-          {view === "documents" ? <ProductionSignedDocuments bootstrap={bootstrap} notify={setToast} initialVerifyCode={initialVerifyCode} /> : null}
-          {view === "stamps" ? <ProductionCompanyStamps bootstrap={bootstrap} notify={setToast} /> : null}
-          {view === "signature" ? <ProductionMySignature bootstrap={bootstrap} notify={setToast} /> : null}
-          {view === "profile" ? <ProductionProfile bootstrap={bootstrap} language={language} onLanguageChange={setLanguage} onOpenMyWork={async () => (await setView("my-work"))} onOpenSignature={async () => (await setView("signature"))} /> : null}
-          {view === "customers" ? <SalesLookScope userId={bootstrap.user.id}><ProductionMasterData key={view} {...common} destination="customers" onOpenInquiries={bootstrap.permissions.includes("inquiry.read") ? async () => (await setView("inquiries")) : undefined} /></SalesLookScope> : null}
-          {(["master", "suppliers", "employees", "material-master", "user-accounts"] as View[]).includes(view) ? <ProductionMasterData key={view} {...common} destination={view === "suppliers" ? "suppliers" : view === "employees" ? "employees" : view === "material-master" ? "inventory" : view === "user-accounts" ? "team" : "customers"} onOpenInquiries={bootstrap.permissions.includes("inquiry.read") ? async () => (await setView("inquiries")) : undefined} /> : null}
-          {view === "reports" ? <ReportScreens {...common} onDirtyChange={onReportDirtyChange} onOpenAnalytics={async () => (await setView("summary-reports"))} /> : null}
-          {view === "summary-reports" ? <ProductionReports {...moduleProps} onBack={async () => { await setView("reports"); }} /> : null}
-          {view === "activity" && bootstrap.permissions.includes("activity.read") ? <TeamActivityScreen openSource={async (type,id,projectId)=>{if(projectId)openProjectSchedule(projectId);else if(type==="Inquiry")openInquiry(id);else (await setView("my-work"));}}/> : null}
-          {view === "performance" ? <Performance currentUser={{ ...bootstrap.user, level: "" }} notify={setToast} openProjectSchedule={openProjectSchedule} openInquiry={openInquiry} openMyWork={async () => (await setView("my-work"))} /> : null}
-          {view === "module-templates" ? <EstimateLookScope userId={bootstrap.user.id}><ProductionModuleTemplates bootstrap={bootstrap} notify={setToast} /></EstimateLookScope> : null}
-          {view === "labor-packages" ? <EstimateLookScope userId={bootstrap.user.id}><LaborPackageMaster bootstrap={bootstrap} /></EstimateLookScope> : null}
-          {view === "schedule-templates" ? <ScheduleTemplateMaster bootstrap={bootstrap} notify={setToast} /> : null}
-          {view === "rates" ? <ProductionEngineeringRates {...common} /> : null}
-          {view === "audit" ? <ProductionAuditLog {...moduleProps} /> : null}
-          {view === "settings" ? <ProductionSettings {...moduleProps} teamTestMode={IS_TEAM_TEST_MODE} /> : null}
-          {view === "manual" ? <EmployeeManualScreen /> : null}
-          {view === "support" ? <SupportCenter externalRevision={supportRevision} ticketId={supportTicketId} onSelect={openSupport} onCreate={() => setSupportCreate(true)} notify={setToast} onDirtyChange={onSupportDirtyChange} /> : null}
-        </main>
-        </ScreenLinkProvider>
-        <footer className="app-footer">© 2026 {PRODUCT.company} · {PRODUCT.name} {PRODUCT.version} · {t(IS_TEAM_TEST_MODE ? "Team Test" : "Production")}</footer>
+          ) : null}
+          <ScreenLinkProvider value={screenLinkValue}>
+            <main className="page" key={linkRevision}>
+              {view === "dashboard" ? (
+                DASHBOARD_ROLES.includes(bootstrap.user.role) ? (
+                  <ExecutiveDashboard
+                    bootstrap={bootstrap}
+                    personal={personalDashboard}
+                    onOpen={async (destination, id) => {
+                      if (id && destination === "inquiries") openInquiry(id);
+                      else if (id && destination === "estimates") openEstimate(id);
+                      else if (id && destination === "projects") openProjectSchedule(id);
+                      else {
+                        await setView(destination);
+                        window.scrollTo({ top: 0 });
+                      }
+                    }}
+                  />
+                ) : (
+                  personalDashboard
+                )
+              ) : null}
+              {view === "my-work" ? (
+                <>
+                  <div className="my-work-related-links">
+                    <button className="btn default" type="button" onClick={async () => await setView("activity")}>
+                      <Icon name="chart" />
+                      {t("Team Activity")}
+                    </button>
+                    {bootstrap.permissions.includes("visit.read") ? (
+                      <button className="btn default" type="button" onClick={async () => await setView("my-assignments")}>
+                        <Icon name="truck" />
+                        {t("งานเข้าหน้างานของฉัน")}
+                      </button>
+                    ) : null}
+                  </div>
+                  <ProductionMyWork
+                    {...moduleProps}
+                    openCrmOpportunity={openCrmOpportunity}
+                    newAssignmentCount={taskAcknowledgmentCount}
+                    onNewAssignmentChanged={() => setTaskInboxRevision((value) => value + 1)}
+                  />
+                </>
+              ) : null}
+              {view.startsWith("crm-") && bootstrap.permissions.includes("crm.read") ? (
+                <SalesLookScope userId={bootstrap.user.id}>
+                  <CrmScreen
+                    refreshBootstrap={refreshBootstrap}
+                    notify={setToast}
+                    key={view}
+                    bootstrap={bootstrap}
+                    view={view as CrmView}
+                    onViewChange={setView}
+                    preferredOpportunityId={crmOpportunityId}
+                    openInquiry={openInquiry}
+                    openEstimate={openEstimate}
+                    openProject={openProjectSchedule}
+                  />
+                </SalesLookScope>
+              ) : null}
+              {view === "inquiries" ? (
+                <SalesLookScope userId={bootstrap.user.id}>
+                  <ProductionInquiries
+                    key={preferredInquiryId ?? (startInquiryCreate ? "create" : "list")}
+                    {...common}
+                    openProject={openProjectSchedule}
+                    openOpportunity={openCrmOpportunity}
+                    openEstimate={openEstimate}
+                    openVisit={openSiteVisit}
+                    startWithCreate={startInquiryCreate}
+                    preferredInquiryId={preferredInquiryId}
+                    onSelectInquiry={(id) => {
+                      setStartInquiryCreate(false);
+                      setPreferredInquiryId(id);
+                    }}
+                  />
+                </SalesLookScope>
+              ) : null}
+              {view === "estimates" ? (
+                <EstimateLookScope userId={bootstrap.user.id}>
+                  <ProductionEstimates key={preferredEstimateId ?? "estimate-list"} {...common} initialEstimateId={preferredEstimateId} onSelectEstimate={setPreferredEstimateId} />
+                </EstimateLookScope>
+              ) : null}
+              {view === "projects" ? (
+                <>
+                  {/* Plan and Punchlist read the schedule; without schedule.read only the Overview is offered. */}
+                  {/* Cost is for Leaders and above (project-cost-model.ts); the API refuses everyone else. */}
+                  {bootstrap.permissions.includes("schedule.read") ? (
+                    <Tabs
+                      tabs={[
+                        { id: "portfolio" as ProjectTab, label: "Projects.tabOverview" },
+                        { id: "schedule" as ProjectTab, label: "Projects.tabPlan" },
+                        { id: "punchlist" as ProjectTab, label: "Projects.tabPunchlist" },
+                        ...(seesProjectCost ? [{ id: "cost" as ProjectTab, label: "Projects.tabCost" }] : []),
+                      ]}
+                      active={projectTab === "cost" && !seesProjectCost ? "portfolio" : projectTab}
+                      onChange={changeProjectTab}
+                      link={null}
+                    />
+                  ) : null}
+                  <div style={{ marginTop: 14 }}>
+                    {projectTab === "cost" && seesProjectCost && bootstrap.permissions.includes("schedule.read") ? (
+                      <ProjectCostScreen bootstrap={bootstrap} openProjectSchedule={openProjectSchedule} />
+                    ) : projectTab === "portfolio" || projectTab === "cost" || !bootstrap.permissions.includes("schedule.read") ? (
+                      <ProductionProjects {...common} teamTestMode={IS_TEAM_TEST_MODE} openProjectSchedule={bootstrap.permissions.includes("schedule.read") ? openProjectSchedule : undefined} />
+                    ) : projectTab === "punchlist" ? (
+                      <IssueBatchScreen key={`issues:${preferredIssueBatch?.count ?? 0}`} {...common} initialBatchId={preferredIssueBatch?.id ?? null} openProjectSchedule={openProjectSchedule} />
+                    ) : (
+                      <ProductionProjectSchedule key={`plan:${scheduleLinkCount}`} {...moduleProps} />
+                    )}
+                  </div>
+                </>
+              ) : null}
+              {view === "knowledge" ? <ProductionKnowledgeHub bootstrap={bootstrap} notify={setToast} /> : null}
+              {view === "downloads" ? (
+                <DownloadCenterScreen canManage={bootstrap.permissions.includes("master.read")} canManageRepositories={bootstrap.permissions.includes("repository.write")} notify={setToast} />
+              ) : null}
+              {view === "site-monitor" ? <SiteMonitorScreen bootstrap={bootstrap} notify={setToast} /> : null}
+              {view === "installed-base" ? (
+                <InstalledBaseScreen canManage={bootstrap.permissions.includes("asset.manage")} canSeeCredentials={bootstrap.permissions.includes("credential.read")} notify={setToast} />
+              ) : null}
+              {view === "sales-intake" ? <ProductionSalesIntake {...common} openVisit={openSiteVisit} openInquiry={openInquiry} startInquiry={startInquiry} /> : null}
+              {view === "site-visits" ? (
+                <SalesLookScope userId={bootstrap.user.id}>
+                  <ProductionSiteVisits key={preferredSiteVisitId ?? "site-visit-list"} {...common} initialVisitId={preferredSiteVisitId} openInquiry={openInquiry} startInquiry={startInquiry} />
+                </SalesLookScope>
+              ) : null}
+              {view === "my-assignments" ? (
+                <SalesLookScope userId={bootstrap.user.id}>
+                  <ProductionMyAssignments {...common} />
+                </SalesLookScope>
+              ) : null}
+              {view === "visit-master" ? (
+                <SalesLookScope userId={bootstrap.user.id}>
+                  <ProductionVisitMasterData {...common} />
+                </SalesLookScope>
+              ) : null}
+              {view === "price" ? (
+                <EstimateLookScope userId={bootstrap.user.id}>
+                  <ProductionPriceLibrary {...moduleProps} />
+                </EstimateLookScope>
+              ) : null}
+              {view === "quotations" ? (
+                <EstimateLookScope userId={bootstrap.user.id}>
+                  <ProductionSupplierQuotations {...moduleProps} />
+                </EstimateLookScope>
+              ) : null}
+              {view === "missing" ? (
+                <EstimateLookScope userId={bootstrap.user.id}>
+                  <ProductionWaitingSupplierPrice {...moduleProps} />
+                </EstimateLookScope>
+              ) : null}
+              {/* Compatibility for old bookmarks; new navigation uses Projects > Timeline. */}
+              {view === "project-timeline" ? (
+                <ProductionProjects key="project-timeline" {...common} teamTestMode={IS_TEAM_TEST_MODE} initialMode="timeline" openProjectSchedule={openProjectSchedule} />
+              ) : null}
+              {view === "resources" ? <ProductionResourcePlan {...moduleProps} refreshBootstrap={refreshBootstrap} openInquiry={openInquiry} openEstimate={openEstimate} /> : null}
+              {view === "procurement" ? <ProductionProcurementDashboard {...moduleProps} /> : null}
+              {view === "boms" ? <ProductionBoms {...moduleProps} /> : null}
+              {view === "purchase" ? <ProductionPurchaseRequisitions {...moduleProps} /> : null}
+              {view === "pos" ? <ProductionPurchaseOrders {...moduleProps} /> : null}
+              {view === "inventory" ? (
+                <>
+                  <Tabs
+                    tabs={[
+                      { id: "balances", label: t("Stock Balances") },
+                      { id: "operations", label: t("Adjustments & Quarantine") },
+                    ]}
+                    active={inventoryTab}
+                    onChange={setInventoryTab}
+                  />
+                  <div style={{ marginTop: 14 }}>{inventoryTab === "balances" ? <ProductionInventory bootstrap={bootstrap} /> : <ProductionInventoryOperations {...moduleProps} />}</div>
+                </>
+              ) : null}
+              {view === "receiving" ? <ProductionGoodsReceiving {...moduleProps} /> : null}
+              {view === "issues" ? <ProductionMaterialIssues {...moduleProps} /> : null}
+              {view === "approvals" ? <ProductionApprovals {...moduleProps} /> : null}
+              {view === "signing" ? <ProductionSignInbox bootstrap={bootstrap} notify={setToast} /> : null}
+              {view === "documents" ? <ProductionSignedDocuments bootstrap={bootstrap} notify={setToast} initialVerifyCode={initialVerifyCode} /> : null}
+              {view === "stamps" ? <ProductionCompanyStamps bootstrap={bootstrap} notify={setToast} /> : null}
+              {view === "signature" ? <ProductionMySignature bootstrap={bootstrap} notify={setToast} /> : null}
+              {view === "profile" ? (
+                <ProductionProfile
+                  bootstrap={bootstrap}
+                  language={language}
+                  onLanguageChange={setLanguage}
+                  onOpenMyWork={async () => await setView("my-work")}
+                  onOpenSignature={async () => await setView("signature")}
+                />
+              ) : null}
+              {view === "customers" ? (
+                <SalesLookScope userId={bootstrap.user.id}>
+                  <ProductionMasterData
+                    key={view}
+                    {...common}
+                    destination="customers"
+                    onOpenInquiries={bootstrap.permissions.includes("inquiry.read") ? async () => await setView("inquiries") : undefined}
+                  />
+                </SalesLookScope>
+              ) : null}
+              {(["master", "suppliers", "employees", "material-master", "user-accounts"] as View[]).includes(view) ? (
+                <ProductionMasterData
+                  key={view}
+                  {...common}
+                  destination={view === "suppliers" ? "suppliers" : view === "employees" ? "employees" : view === "material-master" ? "inventory" : view === "user-accounts" ? "team" : "customers"}
+                  onOpenInquiries={bootstrap.permissions.includes("inquiry.read") ? async () => await setView("inquiries") : undefined}
+                />
+              ) : null}
+              {view === "reports" ? <ReportScreens {...common} onDirtyChange={onReportDirtyChange} onOpenAnalytics={async () => await setView("summary-reports")} /> : null}
+              {view === "summary-reports" ? (
+                <ProductionReports
+                  {...moduleProps}
+                  onBack={async () => {
+                    await setView("reports");
+                  }}
+                />
+              ) : null}
+              {view === "activity" && bootstrap.permissions.includes("activity.read") ? (
+                <TeamActivityScreen
+                  openSource={async (type, id, projectId) => {
+                    if (projectId) openProjectSchedule(projectId);
+                    else if (type === "Inquiry") openInquiry(id);
+                    else await setView("my-work");
+                  }}
+                />
+              ) : null}
+              {view === "performance" ? (
+                <Performance
+                  currentUser={{ ...bootstrap.user, level: "" }}
+                  notify={setToast}
+                  openProjectSchedule={openProjectSchedule}
+                  openInquiry={openInquiry}
+                  openMyWork={async () => await setView("my-work")}
+                />
+              ) : null}
+              {view === "module-templates" ? (
+                <EstimateLookScope userId={bootstrap.user.id}>
+                  <ProductionModuleTemplates bootstrap={bootstrap} notify={setToast} />
+                </EstimateLookScope>
+              ) : null}
+              {view === "labor-packages" ? (
+                <EstimateLookScope userId={bootstrap.user.id}>
+                  <LaborPackageMaster bootstrap={bootstrap} />
+                </EstimateLookScope>
+              ) : null}
+              {view === "schedule-templates" ? <ScheduleTemplateMaster bootstrap={bootstrap} notify={setToast} /> : null}
+              {view === "rates" ? <ProductionEngineeringRates {...common} /> : null}
+              {view === "audit" ? <ProductionAuditLog {...moduleProps} /> : null}
+              {view === "settings" ? <ProductionSettings {...moduleProps} teamTestMode={IS_TEAM_TEST_MODE} /> : null}
+              {view === "manual" ? <EmployeeManualScreen /> : null}
+              {view === "support" ? (
+                <SupportCenter
+                  externalRevision={supportRevision}
+                  ticketId={supportTicketId}
+                  onSelect={openSupport}
+                  onCreate={() => setSupportCreate(true)}
+                  notify={setToast}
+                  onDirtyChange={onSupportDirtyChange}
+                />
+              ) : null}
+            </main>
+          </ScreenLinkProvider>
+          <footer className="app-footer">
+            © 2026 {PRODUCT.company} · {PRODUCT.name} {PRODUCT.version} · {t(IS_TEAM_TEST_MODE ? "Team Test" : "Production")}
+          </footer>
+        </div>
+        {toast ? <Toast message={toast} onDone={() => setToast("")} /> : null}
+        <GuideLayer
+          view={view}
+          permissions={bootstrap.permissions}
+          userId={bootstrap.user.id}
+          open={guideOpen}
+          onOpen={() => setGuideOpen(true)}
+          onClose={() => setGuideOpen(false)}
+          goTo={async (next) => await setView(next as View)}
+        />
+        {supportCreate ? (
+          <SupportCreateDialog
+            context={{ module: view === "manual" ? employeeManualLabel(language) : (NAV.flatMap((group) => group.items).find((item) => item.view === navView(view))?.label ?? view) }}
+            onClose={() => setSupportCreate(false)}
+            onCreated={() => {
+              setSupportRevision((value) => value + 1);
+              void refreshNotifications();
+            }}
+            onOpen={openSupport}
+          />
+        ) : null}
       </div>
-      {toast ? <Toast message={toast} onDone={() => setToast("")} /> : null}
-      <GuideLayer view={view} permissions={bootstrap.permissions} userId={bootstrap.user.id} open={guideOpen} onOpen={() => setGuideOpen(true)} onClose={() => setGuideOpen(false)} goTo={async (next) => (await setView(next as View))} />
-      {supportCreate ? <SupportCreateDialog context={{ module: view === "manual" ? employeeManualLabel(language) : NAV.flatMap(group => group.items).find(item => item.view === navView(view))?.label ?? view }} onClose={() => setSupportCreate(false)} onCreated={() => { setSupportRevision(value => value + 1); void refreshNotifications(); }} onOpen={openSupport} /> : null}
-    </div>
     </LanguageContext.Provider>
   );
 }
 
-function ProductionLogin({
-  busy,
-  error,
-  mode,
-  entraConfigured,
-  apiConfigured,
-  language,
-  onLanguageChange,
-  onSignIn,
-  unregistered = null,
-}: ProductionLoginProps) {
+function ProductionLogin({ busy, error, mode, entraConfigured, apiConfigured, language, onLanguageChange, onSignIn, unregistered = null }: ProductionLoginProps) {
   const [teamTestEmail, setTeamTestEmail] = useState("");
   const [teamTestAccessCode, setTeamTestAccessCode] = useState("");
   const copy = PRODUCTION_LOGIN_COPY[mode];
@@ -1087,49 +1756,142 @@ function ProductionLogin({
   // the redirect live on the API, so only the API origin has to be trusted.
   const identityConfigured = mode === "entra" ? entraConfigured : true;
   const configured = identityConfigured && apiConfigured;
-  const missing = [
-    identityConfigured ? "" : "Microsoft Entra (Tenant ID, Client ID และ API scope)",
-    apiConfigured ? "" : "HTTPS API origin",
-  ].filter(Boolean).join(" และ ");
+  const missing = [identityConfigured ? "" : "Microsoft Entra (Tenant ID, Client ID และ API scope)", apiConfigured ? "" : "HTTPS API origin"].filter(Boolean).join(" และ ");
 
   const t = (text: string) => translate(text, language);
 
-  return <div className="login">
-    <aside className="login-aside">
-      <div className="login-brand"><BrandLockup tone="dark" height={44} /><span>{PRODUCT.name}</span></div>
-      <div><h2>{PRODUCT.name}</h2><p className="login-strap">{t("Central workspace for the engineering team")}</p><p>{t("One place for the engineering team's sales, estimates, projects, schedules, purchasing and stock, with controlled access and an audit trail.")}</p><ul className="login-points"><li><Icon name="check" />{t(copy.identityPoint)}</li><li><Icon name="check" />{t("SQL Server is the single source of record.")}</li><li><Icon name="check" />{t("Role-based access and safe concurrent editing.")}</li><li><Icon name="check" />{t("Unique document numbers with a traceable history.")}</li></ul></div>
-      <div className="login-stats"><div><strong>{copy.identityBadge}</strong><span>{t("Identity")}</span></div><div><strong>RBAC</strong><span>{t("Access")}</span></div><div><strong>SQL</strong><span>{t("System of record")}</span></div></div>
-    </aside>
-    <div className="login-form-wrap">
-      <form className="login-form" onSubmit={(event) => { event.preventDefault(); if (configured) void onSignIn(teamTestEmail, teamTestAccessCode); }}>
-        <div className="lang-switch" role="group" aria-label={t("Language")}>
-          {LANGUAGES.map((code) => <button key={code} type="button" className={language === code ? "active" : ""} aria-pressed={language === code} onClick={() => onLanguageChange(code)}>{code}</button>)}
+  return (
+    <div className="login">
+      <aside className="login-aside">
+        <div className="login-brand">
+          <BrandLockup tone="dark" height={44} />
+          <span>{PRODUCT.name}</span>
         </div>
-        <h1>{t(copy.heading)}</h1>
-        <p>{t(copy.intro)}</p>
-        {error ? <div className="callout error" role="alert"><Icon name="alertTriangle" /><span>{t(error)}</span></div> : null}
-        {unregistered ? <div className="callout" role="status"><Icon name="user" /><span>
-          <strong>{t("SignIn.signedInAs").replace("{name}", unregistered.name ?? unregistered.preferredUsername)}</strong>
-          <span>{t("SignIn.emailToRegister")} <strong className="mono">{unregistered.signInEmail ?? unregistered.email ?? unregistered.preferredUsername}</strong></span>
-          <span>{t("SignIn.waitingNote")}</span>
-        </span></div> : null}
-        {teamTestMode && apiConfigured ? <><label className="field"><span>{t("Registered email")}</span><input required type="email" maxLength={256} autoComplete="email" value={teamTestEmail} onChange={(event) => setTeamTestEmail(event.target.value)} /></label><label className="field"><span>{t("Personal test access code")}</span><input required type="password" maxLength={256} autoComplete="current-password" value={teamTestAccessCode} onChange={(event) => setTeamTestAccessCode(event.target.value)} /></label></> : null}
-        {configured
-          ? <button className="btn primary block" type="submit" disabled={busy}><Icon name="user" />{t(busy ? "Connecting…" : copy.submitLabel)}</button>
-          : <div className="callout warning" role="status"><Icon name="alertTriangle" /><span>{t(copy.lockedTitle)} {t("until these settings are configured:")} {missing}</span></div>}
-        {/* TMT ID keeps its own sign-in session, so signing in again would return the same
+        <div>
+          <h2>{PRODUCT.name}</h2>
+          <p className="login-strap">{t("Central workspace for the engineering team")}</p>
+          <p>{t("One place for the engineering team's sales, estimates, projects, schedules, purchasing and stock, with controlled access and an audit trail.")}</p>
+          <ul className="login-points">
+            <li>
+              <Icon name="check" />
+              {t(copy.identityPoint)}
+            </li>
+            <li>
+              <Icon name="check" />
+              {t("SQL Server is the single source of record.")}
+            </li>
+            <li>
+              <Icon name="check" />
+              {t("Role-based access and safe concurrent editing.")}
+            </li>
+            <li>
+              <Icon name="check" />
+              {t("Unique document numbers with a traceable history.")}
+            </li>
+          </ul>
+        </div>
+        <div className="login-stats">
+          <div>
+            <strong>{copy.identityBadge}</strong>
+            <span>{t("Identity")}</span>
+          </div>
+          <div>
+            <strong>RBAC</strong>
+            <span>{t("Access")}</span>
+          </div>
+          <div>
+            <strong>SQL</strong>
+            <span>{t("System of record")}</span>
+          </div>
+        </div>
+      </aside>
+      <div className="login-form-wrap">
+        <form
+          className="login-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (configured) void onSignIn(teamTestEmail, teamTestAccessCode);
+          }}
+        >
+          <div className="lang-switch" role="group" aria-label={t("Language")}>
+            {LANGUAGES.map((code) => (
+              <button key={code} type="button" className={language === code ? "active" : ""} aria-pressed={language === code} onClick={() => onLanguageChange(code)}>
+                {code}
+              </button>
+            ))}
+          </div>
+          <h1>{t(copy.heading)}</h1>
+          <p>{t(copy.intro)}</p>
+          {error ? (
+            <div className="callout error" role="alert">
+              <Icon name="alertTriangle" />
+              <span>{t(error)}</span>
+            </div>
+          ) : null}
+          {unregistered ? (
+            <div className="callout" role="status">
+              <Icon name="user" />
+              <span>
+                <strong>{t("SignIn.signedInAs").replace("{name}", unregistered.name ?? unregistered.preferredUsername)}</strong>
+                <span>
+                  {t("SignIn.emailToRegister")} <strong className="mono">{unregistered.signInEmail ?? unregistered.email ?? unregistered.preferredUsername}</strong>
+                </span>
+                <span>{t("SignIn.waitingNote")}</span>
+              </span>
+            </div>
+          ) : null}
+          {teamTestMode && apiConfigured ? (
+            <>
+              <label className="field">
+                <span>{t("Registered email")}</span>
+                <input required type="email" maxLength={256} autoComplete="email" value={teamTestEmail} onChange={(event) => setTeamTestEmail(event.target.value)} />
+              </label>
+              <label className="field">
+                <span>{t("Personal test access code")}</span>
+                <input required type="password" maxLength={256} autoComplete="current-password" value={teamTestAccessCode} onChange={(event) => setTeamTestAccessCode(event.target.value)} />
+              </label>
+            </>
+          ) : null}
+          {configured ? (
+            <button className="btn primary block" type="submit" disabled={busy}>
+              <Icon name="user" />
+              {t(busy ? "Connecting…" : copy.submitLabel)}
+            </button>
+          ) : (
+            <div className="callout warning" role="status">
+              <Icon name="alertTriangle" />
+              <span>
+                {t(copy.lockedTitle)} {t("until these settings are configured:")} {missing}
+              </span>
+            </div>
+          )}
+          {/* TMT ID keeps its own sign-in session, so signing in again would return the same
             unregistered account; ending that session is the only way to pick another one. */}
-        {mode === "tmt-id" && error && configured
-          ? <button className="btn default block" type="button" disabled={busy} onClick={() => redirectToTmtIdLogout()}><Icon name="logout" />{t("Use another account")}</button>
-          : null}
-        <div className="login-role-hint"><strong>{t(copy.accessTitle)}</strong>{t(copy.accessBody)}</div>
-      </form>
+          {mode === "tmt-id" && error && configured ? (
+            <button className="btn default block" type="button" disabled={busy} onClick={() => redirectToTmtIdLogout()}>
+              <Icon name="logout" />
+              {t("Use another account")}
+            </button>
+          ) : null}
+          <div className="login-role-hint">
+            <strong>{t(copy.accessTitle)}</strong>
+            {t(copy.accessBody)}
+          </div>
+        </form>
+      </div>
     </div>
-  </div>;
+  );
 }
 
 function initials(name: string) {
-  return name.trim().split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "U";
+  return (
+    name
+      .trim()
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase())
+      .join("") || "U"
+  );
 }
 
 /** The badge counts what My Work's "Needs update" counts (lib/my-work.ts), on the business day. */
