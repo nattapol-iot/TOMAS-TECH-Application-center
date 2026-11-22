@@ -108,6 +108,7 @@ export const REQUIRED_MIGRATIONS: readonly MigrationIdentity[] = [
   { version: 120, fileName: "120_employee_master_link.sql", name: "Employees linked to master data" },
   { version: 121, fileName: "121_daily_work_hours.sql", name: "Daily work hours" },
   { version: 122, fileName: "122_master_data_sync_account.sql", name: "Master data sync account" },
+  { version: 123, fileName: "123_plan_row_discipline.sql", name: "Plan row discipline" },
 ] as const;
 
 export const REQUIRED_SCHEMA_VERSION = REQUIRED_MIGRATIONS.at(-1)!.version;
@@ -143,10 +144,7 @@ export function validateMigrationFiles(files: readonly Readonly<{ fileName: stri
   for (const expected of REQUIRED_MIGRATIONS) {
     const sql = byName.get(expected.fileName);
     if (sql === undefined) throw new Error(`Required migration file is missing: ${expected.fileName}`);
-    const identity = new RegExp(
-      `schema_versions\\s*\\(\\s*version\\s*,\\s*name\\s*\\)[\\s\\S]*?VALUES\\s*\\(\\s*${expected.version}\\s*,\\s*N'${escapeRegExp(expected.name)}'\\s*\\)`,
-      "i",
-    );
+    const identity = new RegExp(`schema_versions\\s*\\(\\s*version\\s*,\\s*name\\s*\\)[\\s\\S]*?VALUES\\s*\\(\\s*${expected.version}\\s*,\\s*N'${escapeRegExp(expected.name)}'\\s*\\)`, "i");
     if (!identity.test(sql)) {
       throw new Error(`Migration ${expected.fileName} does not record the required schema identity '${expected.name}'.`);
     }
@@ -157,8 +155,7 @@ export function validateAppliedMigrationIdentities(applied: readonly AppliedMigr
   const byVersion = new Map(applied.map((migration) => [Number(migration.version), migration.name]));
   if (byVersion.get(37) === LEGACY_ROLE_MIGRATION) {
     throw new Error(
-      "Legacy migration identity detected: user role management was recorded as schema version 37. " +
-      "Automatic migration is blocked until an operator inspects and reconciles that database.",
+      "Legacy migration identity detected: user role management was recorded as schema version 37. " + "Automatic migration is blocked until an operator inspects and reconciles that database.",
     );
   }
   for (const expected of REQUIRED_MIGRATIONS) {

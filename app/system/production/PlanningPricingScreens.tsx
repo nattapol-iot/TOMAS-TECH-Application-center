@@ -9,6 +9,7 @@ import { CreateSignableDocumentModal } from "./SigningScreens";
 import { ResourceTaskWorkspace, type ResourceTask } from "./ResourceTaskWorkspace";
 import { SearchMultiPicker } from "./SearchMultiPicker";
 import { buildScheduleWorkbook, scheduleWorkbookName } from "../../../lib/schedule-workbook";
+import { PLAN_DISCIPLINES, disciplineLabel, draftPick, draftValue, isPlanDiscipline, type PlanDiscipline } from "../../../lib/plan-discipline";
 import { MyIssuesPanel } from "./MyIssues";
 import { loadProjectIssues, type ProjectIssue } from "./issue-batch-client";
 import type { IssueState } from "../../../lib/issue-batches";
@@ -260,6 +261,8 @@ export type ScheduleTask = {
   laborSource?: string;
   laborSupplier?: string;
   peopleByDay?: number[];
+  /** The discipline the row needs (migration 123): a row with it and no PIC waits for the head on Team overview > Allocation. */
+  discipline?: string | null;
   children: ScheduleTask[];
 };
 
@@ -3135,7 +3138,7 @@ function CustomerPeriodFields({ value, onChange }: { value: { start: string; fin
  * A row being typed in place on the plan (the + on a row, or Add main heading): the row it goes under (none: a main
  * heading), the sibling it goes before (none: last), and what has been typed so far.
  */
-type PlanDraft = { parentId: number | null; beforeId: number | null; name: string; memberId: number | null; start: string; finish: string; error: string };
+type PlanDraft = { parentId: number | null; beforeId: number | null; name: string; memberId: number | null; discipline?: PlanDiscipline | null; start: string; finish: string; error: string };
 
 /** The dates a new row starts with: its heading's customer dates or its task's dates; a new main heading has none. */
 function draftDates(parent: ScheduleTask | null, today: string): { start: string; finish: string } {
@@ -3258,14 +3261,24 @@ function PlanRowDraftEditor({
           className="plan-draft-member"
           data-guide="plan.quickMember"
           aria-label={t("Schedule.pics")}
-          value={draft.memberId ?? ""}
+          value={draftValue(draft)}
           disabled={busy}
-          onChange={(event) => onChange({ memberId: event.target.value ? Number(event.target.value) : null })}
+          onChange={(event) => onChange(draftPick(event.target.value))}
           onKeyDown={escape}
         >
           <option value="">{ownOnly ? t("Plan.creatorPicDefault") : kind === "task" ? `${t("CRM.selectMember")} *` : `${t("CRM.sameAsTask")}${inherited ? ` · ${inherited}` : ""}`}</option>
           {onPlan.length ? <optgroup label={t("Plan.peopleOnPlan")}>{onPlan.map(person)}</optgroup> : null}
           <optgroup label={t("Plan.everyoneElse")}>{others.map(person)}</optgroup>
+          {/* A row with no PIC and a discipline waits for the head on Team overview > Allocation (owner, 2026-11-22). */}
+          {!ownOnly && kind === "task" ? (
+            <optgroup label={t("Plan.waitingForPeople")}>
+              {PLAN_DISCIPLINES.map((discipline) => (
+                <option key={discipline} value={`d:${discipline}`}>
+                  {t(disciplineLabel(discipline))}
+                </option>
+              ))}
+            </optgroup>
+          ) : null}
         </select>
       )}
       <span className="plan-draft-dates">
@@ -3345,12 +3358,14 @@ function EditScheduleTaskModal({
   const budgetLeft = schedule.manHours && !task.children.length ? remainingForRow(schedule.manHours, Number(task.planManDays), planManDays) : null;
   const [picUserIds, setPicUserIds] = useState<number[]>(task.pics.map((pic) => pic.id));
   const [picExternal, setPicExternal] = useState(task.picExternal);
+  const [discipline, setDiscipline] = useState<PlanDiscipline | null>(isPlanDiscipline(task.discipline) ? task.discipline : null);
   const [customer, setCustomer] = useState(() => customerPeriod(task) ?? { start: "", finish: "" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [failedAction, setFailedAction] = useState<"save" | "delete">("save");
   const parentIsHeading = task.parentId !== null && flattenTasks(schedule.tasks).find((row) => row.id === task.parentId)?.kind === "phase";
-  const keepsMember = task.kind === "task" && parentIsHeading && task.pics.length > 0 && !picUserIds.length;
+  // A task under a heading keeps a member, unless it names the discipline it waits for (owner, 2026-11-22).
+  const keepsMember = task.kind === "task" && parentIsHeading && task.pics.length > 0 && !picUserIds.length && !discipline;
   const removing = flattenTasks([task]);
   const deleteReason =
     ownOnly && removing.some((row) => !row.canEditOwn)
@@ -3420,6 +3435,8 @@ function EditScheduleTaskModal({
           picUserIds: isPhase ? [] : picUserIds,
           picExternal: isPhase ? "" : picExternal.trim(),
           planManDays: isPhase ? 0 : planManDays,
+          // Members may not change it (the API compares only their own fields); a plan owner sends what is chosen.
+          ...(isPhase || ownOnly ? {} : { discipline }),
         }),
       });
       await onSaved();
@@ -3585,6 +3602,20 @@ function EditScheduleTaskModal({
               <p className="muted span-2" role="status">
                 {t("Plan.memberRequired")}
               </p>
+            ) : null}
+            {!ownOnly && task.kind === "task" ? (
+              <label className="field span-2" data-guide="plan.discipline">
+                <span>{t("Plan.discipline")}</span>
+                <select value={discipline ?? ""} onChange={(event) => setDiscipline(isPlanDiscipline(event.target.value) ? event.target.value : null)}>
+                  <option value="">{t("Plan.disciplineNone")}</option>
+                  {PLAN_DISCIPLINES.map((value) => (
+                    <option key={value} value={value}>
+                      {t(disciplineLabel(value))}
+                    </option>
+                  ))}
+                </select>
+                <small className="muted">{t("Plan.disciplineHint")}</small>
+              </label>
             ) : null}
             {!ownOnly ? (
               <label className="field span-2">
@@ -4367,7 +4398,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
       return;
     }
     // A task under a heading needs a member (owner, 2026-11-03); a row's dates come as a pair, a heading's may wait.
-    if (parent?.kind === "phase" && current.memberId === null) {
+    if (parent?.kind === "phase" && current.memberId === null && !current.discipline) {
       refuse(uiText("Plan.memberRequired"));
       return;
     }
@@ -4400,6 +4431,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
           picUserIds: memberIds,
           picExternal: "",
           planManDays: 0,
+          ...(parent && current.discipline ? { discipline: current.discipline } : {}),
         }),
       });
       notify(`${activeSchedule.projectNo} · ${name} ${uiText("Plan.quickAdded")}`);

@@ -69,14 +69,13 @@ function optionalPeriod(row: Record<string, unknown>, label: string): { start: s
 
 function manDays(value: unknown, label: string): number {
   if (value === undefined || value === null || value === "") return 0;
-  if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1_000_000
-    || (!value.toString().includes("e") && (value.toString().split(".")[1]?.length ?? 0) > 2)) {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1_000_000 || (!value.toString().includes("e") && (value.toString().split(".")[1]?.length ?? 0) > 2)) {
     throw new ApiError(400, "validation_failed", `${label} must be a number of man-days with at most 2 decimal places.`);
   }
   return value;
 }
 
-const rowId = (row: Record<string, unknown>, label: string) => row.id === undefined || row.id === null ? {} : { id: requiredInteger(row.id, `${label} id`, 1) };
+const rowId = (row: Record<string, unknown>, label: string) => (row.id === undefined || row.id === null ? {} : { id: requiredInteger(row.id, `${label} id`, 1) });
 
 /** The plan before 2026-11-03 sent its team rows, and rows outside its two phases, as lists of their own. */
 export function rejectOutdatedPlan(body: Record<string, unknown>): void {
@@ -100,8 +99,12 @@ export function parseInitialPlan(body: Record<string, unknown>): InitialPlan {
       });
       count += 1 + functions.length;
       return {
-        ...rowId(task, taskLabel), name: requiredText(task.name, 500, `${taskLabel} name`), userId: requiredInteger(task.userId, `${taskLabel} member`, 1),
-        ...period(task, taskLabel), planManDays: manDays(task.planManDays, `${taskLabel} plan`), functions,
+        ...rowId(task, taskLabel),
+        name: requiredText(task.name, 500, `${taskLabel} name`),
+        userId: requiredInteger(task.userId, `${taskLabel} member`, 1),
+        ...period(task, taskLabel),
+        planManDays: manDays(task.planManDays, `${taskLabel} plan`),
+        functions,
       };
     });
     count += 1;
@@ -113,65 +116,126 @@ export function parseInitialPlan(body: Record<string, unknown>): InitialPlan {
 
 /** First start and last finish over every dated row, or null when the plan has none. */
 export function planSpan(plan: InitialPlan): { start: string; finish: string } | null {
-  const dated = plan.headings.flatMap((heading): { start: string | null; finish: string | null }[] => [heading, ...heading.tasks.flatMap((task) => [task, ...task.functions])])
+  const dated = plan.headings
+    .flatMap((heading): { start: string | null; finish: string | null }[] => [heading, ...heading.tasks.flatMap((task) => [task, ...task.functions])])
     .filter((row): row is { start: string; finish: string } => row.start !== null && row.finish !== null);
   if (!dated.length) return null;
-  return { start: dated.map((row) => row.start).sort()[0]!, finish: dated.map((row) => row.finish).sort().at(-1)! };
+  return {
+    start: dated.map((row) => row.start).sort()[0]!,
+    finish: dated
+      .map((row) => row.finish)
+      .sort()
+      .at(-1)!,
+  };
 }
 
 /** Who does what, for the mail a new project sends: each task's member, and each function's. */
 export function planAssignments(plan: InitialPlan): { userId: number; task: string; start: string; finish: string }[] {
-  return plan.headings.flatMap((heading) => heading.tasks.flatMap((task) => [
-    { userId: task.userId, task: task.name, start: task.start, finish: task.finish },
-    ...task.functions.map((item) => ({ userId: item.userId ?? task.userId, task: `${task.name} · ${item.name}`, start: item.start ?? task.start, finish: item.finish ?? task.finish })),
-  ]));
+  return plan.headings.flatMap((heading) =>
+    heading.tasks.flatMap((task) => [
+      { userId: task.userId, task: task.name, start: task.start, finish: task.finish },
+      ...task.functions.map((item) => ({ userId: item.userId ?? task.userId, task: `${task.name} · ${item.name}`, start: item.start ?? task.start, finish: item.finish ?? task.finish })),
+    ]),
+  );
 }
 
 const planMembers = (plan: InitialPlan) => plan.headings.flatMap((heading) => heading.tasks.flatMap((task) => [task.userId, ...task.functions.map((item) => item.userId ?? task.userId)]));
 
-type NewRow = { parentId: number | null; sortOrder: number; kind: "phase" | "task"; name: string; visibility: "Customer" | "Internal"; planStart: string | null; planDays: number; planManDays: number };
+type NewRow = {
+  parentId: number | null;
+  sortOrder: number;
+  kind: "phase" | "task";
+  name: string;
+  visibility: "Customer" | "Internal";
+  planStart: string | null;
+  planDays: number;
+  planManDays: number;
+};
 
 async function insertRow(transaction: TransactionType, projectId: number, actorId: number, row: NewRow, note: string): Promise<number> {
   const insert = new sql.Request(transaction);
-  insert.input("project", sql.BigInt, projectId).input("parent", sql.BigInt, row.parentId).input("sort", sql.Int, row.sortOrder)
-    .input("kind", sql.NVarChar(20), row.kind).input("name", sql.NVarChar(500), row.name).input("visibility", sql.NVarChar(20), row.visibility)
-    .input("plan_start", sql.Date, row.planStart).input("plan_days", sql.Int, row.planDays)
-    .input("man_days", sql.Decimal(9, 2), row.planManDays).input("actor", sql.BigInt, actorId);
-  const created = (await insert.query<{ id: number | string }>(`DECLARE @changed TABLE(id bigint);
+  insert
+    .input("project", sql.BigInt, projectId)
+    .input("parent", sql.BigInt, row.parentId)
+    .input("sort", sql.Int, row.sortOrder)
+    .input("kind", sql.NVarChar(20), row.kind)
+    .input("name", sql.NVarChar(500), row.name)
+    .input("visibility", sql.NVarChar(20), row.visibility)
+    .input("plan_start", sql.Date, row.planStart)
+    .input("plan_days", sql.Int, row.planDays)
+    .input("man_days", sql.Decimal(9, 2), row.planManDays)
+    .input("actor", sql.BigInt, actorId);
+  const created = (
+    await insert.query<{ id: number | string }>(`DECLARE @changed TABLE(id bigint);
     INSERT INTO dbo.schedule_tasks(project_id,parent_id,sort_order,kind,name,is_milestone,origin,created_by,visibility,plan_start,plan_days,start_mode,predecessor_id,lag_days,pic_external,plan_man_days,updated_by)
     OUTPUT inserted.id INTO @changed VALUES(@project,@parent,@sort,@kind,@name,0,N'PM',@actor,@visibility,@plan_start,@plan_days,N'manual',NULL,0,N'',@man_days,@actor);
-    SELECT id FROM @changed;`)).recordset[0]!;
+    SELECT id FROM @changed;`)
+  ).recordset[0]!;
   const id = Number(created.id);
   await appendUpdate(transaction, projectId, id, actorId, "created", null, row.name, note);
   return id;
 }
 
-const CREATED = "Created with the project", ADDED = "Added in Edit project";
+const CREATED = "Created with the project",
+  ADDED = "Added in Edit project";
 
 /** A heading is shown to the customer: it is the Master Plan. */
 const insertHeading = (transaction: TransactionType, projectId: number, actorId: number, sortOrder: number, heading: PlanHeading, note: string) =>
-  insertRow(transaction, projectId, actorId, { parentId: null, sortOrder, kind: "phase", name: heading.name, visibility: "Customer",
-    planStart: heading.start, planDays: heading.start && heading.finish ? calendarDays(heading.start, heading.finish) : 1, planManDays: 0 }, note);
+  insertRow(
+    transaction,
+    projectId,
+    actorId,
+    {
+      parentId: null,
+      sortOrder,
+      kind: "phase",
+      name: heading.name,
+      visibility: "Customer",
+      planStart: heading.start,
+      planDays: heading.start && heading.finish ? calendarDays(heading.start, heading.finish) : 1,
+      planManDays: 0,
+    },
+    note,
+  );
 
-async function insertFunction(transaction: TransactionType, projectId: number, actorId: number, taskId: number, sortOrder: number, item: PlanFunction,
-  task: { userId: number; start: string; finish: string }, note: string): Promise<NewPics> {
-  const start = item.start ?? task.start, finish = item.finish ?? task.finish;
-  const id = await insertRow(transaction, projectId, actorId, { parentId: taskId, sortOrder, kind: "task", name: item.name, visibility: "Internal",
-    planStart: start, planDays: calendarDays(start, finish), planManDays: 0 }, note);
+async function insertFunction(
+  transaction: TransactionType,
+  projectId: number,
+  actorId: number,
+  taskId: number,
+  sortOrder: number,
+  item: PlanFunction,
+  task: { userId: number; start: string; finish: string },
+  note: string,
+): Promise<NewPics> {
+  const start = item.start ?? task.start,
+    finish = item.finish ?? task.finish;
+  const id = await insertRow(
+    transaction,
+    projectId,
+    actorId,
+    { parentId: taskId, sortOrder, kind: "task", name: item.name, visibility: "Internal", planStart: start, planDays: calendarDays(start, finish), planManDays: 0 },
+    note,
+  );
   return { taskId: id, userIds: await replacePics(transaction, id, [item.userId ?? task.userId]) };
 }
 
 /** A task with its functions; returns who was given which row. */
 async function insertTask(transaction: TransactionType, projectId: number, actorId: number, headingId: number, sortOrder: number, task: PlanTask, note: string): Promise<NewPics[]> {
-  const id = await insertRow(transaction, projectId, actorId, { parentId: headingId, sortOrder, kind: "task", name: task.name, visibility: "Internal",
-    planStart: task.start, planDays: calendarDays(task.start, task.finish), planManDays: task.planManDays }, note);
+  const id = await insertRow(
+    transaction,
+    projectId,
+    actorId,
+    { parentId: headingId, sortOrder, kind: "task", name: task.name, visibility: "Internal", planStart: task.start, planDays: calendarDays(task.start, task.finish), planManDays: task.planManDays },
+    note,
+  );
   const assigned: NewPics[] = [{ taskId: id, userIds: await replacePics(transaction, id, [task.userId]) }];
   for (const [index, item] of task.functions.entries()) assigned.push(await insertFunction(transaction, projectId, actorId, id, index + 1, item, task, note));
   return assigned;
 }
 
-/** A schedule PIC must be a project member, so everyone on the team plan joins the project. */
-async function ensureMembers(transaction: TransactionType, projectId: number, userIds: number[], actorId: number): Promise<void> {
+/** A schedule PIC must be a project member, so everyone on the team plan (or named on Allocation) joins the project. */
+export async function ensureMembers(transaction: TransactionType, projectId: number, userIds: number[], actorId: number): Promise<void> {
   for (const userId of new Set(userIds)) {
     const member = new sql.Request(transaction);
     member.input("project", sql.BigInt, projectId).input("user", sql.BigInt, userId).input("actor", sql.BigInt, actorId);
@@ -202,28 +266,53 @@ export async function insertInitialPlan(transaction: TransactionType, projectId:
  * rows of a project planned before headings (migration 098), and rows Resource Plan adds.
  */
 export async function unsortedHeadingId(transaction: TransactionType, projectId: number, actorId: number): Promise<number> {
-  const find = new sql.Request(transaction); find.input("project", sql.BigInt, projectId).input("name", sql.NVarChar(500), UNSORTED_HEADING);
-  const found = (await find.query<{ id: number | string }>(`SELECT TOP (1) id FROM dbo.schedule_tasks WITH (UPDLOCK,HOLDLOCK)
-    WHERE project_id=@project AND parent_id IS NULL AND kind=N'phase' AND name=@name AND deleted_at IS NULL ORDER BY id;`)).recordset[0];
+  const find = new sql.Request(transaction);
+  find.input("project", sql.BigInt, projectId).input("name", sql.NVarChar(500), UNSORTED_HEADING);
+  const found = (
+    await find.query<{ id: number | string }>(`SELECT TOP (1) id FROM dbo.schedule_tasks WITH (UPDLOCK,HOLDLOCK)
+    WHERE project_id=@project AND parent_id IS NULL AND kind=N'phase' AND name=@name AND deleted_at IS NULL ORDER BY id;`)
+  ).recordset[0];
   if (found) return Number(found.id);
-  const last = (await find.query<{ value: number }>(`SELECT COALESCE(MAX(sort_order),0)+1 value FROM dbo.schedule_tasks WITH (UPDLOCK,HOLDLOCK)
-    WHERE project_id=@project AND parent_id IS NULL AND deleted_at IS NULL;`)).recordset[0]!.value;
-  return insertRow(transaction, projectId, actorId, { parentId: null, sortOrder: Number(last), kind: "phase", name: UNSORTED_HEADING, visibility: "Internal",
-    planStart: null, planDays: 1, planManDays: 0 }, "Waits for the project manager to file its rows under a heading");
+  const last = (
+    await find.query<{ value: number }>(`SELECT COALESCE(MAX(sort_order),0)+1 value FROM dbo.schedule_tasks WITH (UPDLOCK,HOLDLOCK)
+    WHERE project_id=@project AND parent_id IS NULL AND deleted_at IS NULL;`)
+  ).recordset[0]!.value;
+  return insertRow(
+    transaction,
+    projectId,
+    actorId,
+    { parentId: null, sortOrder: Number(last), kind: "phase", name: UNSORTED_HEADING, visibility: "Internal", planStart: null, planDays: 1, planManDays: 0 },
+    "Waits for the project manager to file its rows under a heading",
+  );
 }
 
 export type ScheduleRow = {
-  id: number; parentId: number | null; kind: string; name: string; sortOrder: number; startMode: string;
-  planStart: string | null; planDays: number; planManDays: number; started: boolean; children: number;
-  pending: boolean; referenced: boolean; pic: number | null; picCount: number;
+  id: number;
+  parentId: number | null;
+  kind: string;
+  name: string;
+  sortOrder: number;
+  startMode: string;
+  planStart: string | null;
+  planDays: number;
+  planManDays: number;
+  started: boolean;
+  children: number;
+  pending: boolean;
+  referenced: boolean;
+  pic: number | null;
+  picCount: number;
   /** Members' own tasks under the row, and whether Resource Plan manages it. */
-  details: number; managed: boolean;
+  details: number;
+  managed: boolean;
 };
 
 export async function readScheduleRows(transaction: TransactionType, projectId: number, removing: number[] = []): Promise<ScheduleRow[]> {
-  const request = new sql.Request(transaction); request.input("project", sql.BigInt, projectId);
+  const request = new sql.Request(transaction);
+  request.input("project", sql.BigInt, projectId);
   request.input("removing", sql.NVarChar(sql.MAX), JSON.stringify(removing));
-  const rows = (await request.query<Record<string, unknown>>(`
+  const rows = (
+    await request.query<Record<string, unknown>>(`
     SELECT t.id,t.parent_id,t.kind,t.name,t.sort_order,t.start_mode,CONVERT(char(10),t.plan_start,23) plan_start,t.plan_days,t.plan_man_days,
       CASE WHEN t.status<>N'Not Started' OR t.percent_done>0 OR t.actual_start IS NOT NULL OR t.actual_end IS NOT NULL OR t.actual_man_days>0 THEN 1 ELSE 0 END started,
       (SELECT COUNT(*) FROM dbo.schedule_tasks c WHERE c.parent_id=t.id AND c.deleted_at IS NULL) children,
@@ -236,20 +325,34 @@ export async function readScheduleRows(transaction: TransactionType, projectId: 
         OR EXISTS(SELECT 1 FROM dbo.unified_reports ur WHERE ur.schedule_task_id=t.id) THEN 1 ELSE 0 END referenced,
       (SELECT MIN(p.user_id) FROM dbo.schedule_task_pics p WHERE p.task_id=t.id) pic,
       (SELECT COUNT(*) FROM dbo.schedule_task_pics p WHERE p.task_id=t.id) pic_count
-    FROM dbo.schedule_tasks t WITH(UPDLOCK,HOLDLOCK) WHERE t.project_id=@project AND t.deleted_at IS NULL;`)).recordset;
+    FROM dbo.schedule_tasks t WITH(UPDLOCK,HOLDLOCK) WHERE t.project_id=@project AND t.deleted_at IS NULL;`)
+  ).recordset;
   return rows.map((row) => ({
-    id: Number(row.id), parentId: row.parent_id === null ? null : Number(row.parent_id), kind: String(row.kind), name: String(row.name),
-    sortOrder: Number(row.sort_order), startMode: String(row.start_mode), planStart: row.plan_start === null ? null : String(row.plan_start),
-    planDays: Number(row.plan_days), planManDays: Number(row.plan_man_days), started: Boolean(row.started), children: Number(row.children),
-    pending: Boolean(row.pending), referenced: Boolean(row.referenced), pic: row.pic === null ? null : Number(row.pic), picCount: Number(row.pic_count),
-    details: Number(row.details), managed: Boolean(row.managed),
+    id: Number(row.id),
+    parentId: row.parent_id === null ? null : Number(row.parent_id),
+    kind: String(row.kind),
+    name: String(row.name),
+    sortOrder: Number(row.sort_order),
+    startMode: String(row.start_mode),
+    planStart: row.plan_start === null ? null : String(row.plan_start),
+    planDays: Number(row.plan_days),
+    planManDays: Number(row.plan_man_days),
+    started: Boolean(row.started),
+    children: Number(row.children),
+    pending: Boolean(row.pending),
+    referenced: Boolean(row.referenced),
+    pic: row.pic === null ? null : Number(row.pic),
+    picCount: Number(row.pic_count),
+    details: Number(row.details),
+    managed: Boolean(row.managed),
   }));
 }
 
 async function removeRow(transaction: TransactionType, projectId: number, row: ScheduleRow, actorId: number): Promise<void> {
   // The history row first: schedule_updates may only point at a task that is still active.
   await appendUpdate(transaction, projectId, row.id, actorId, "deleted", row.name, null, "Removed in Edit project");
-  const remove = new sql.Request(transaction); remove.input("id", sql.BigInt, row.id).input("actor", sql.BigInt, actorId);
+  const remove = new sql.Request(transaction);
+  remove.input("id", sql.BigInt, row.id).input("actor", sql.BigInt, actorId);
   await remove.query(`UPDATE dbo.schedule_tasks SET deleted_at=SYSUTCDATETIME(),updated_by=@actor,updated_at=SYSUTCDATETIME() WHERE id=@id AND deleted_at IS NULL;`);
 }
 
@@ -257,13 +360,26 @@ type RowChange = { name: string; planStart: string | null; planDays: number; pla
 
 async function updateRow(transaction: TransactionType, projectId: number, actorId: number, row: ScheduleRow, next: RowChange): Promise<void> {
   const update = new sql.Request(transaction);
-  update.input("id", sql.BigInt, row.id).input("name", sql.NVarChar(500), next.name).input("start", sql.Date, next.planStart)
-    .input("days", sql.Int, next.planDays).input("man_days", sql.Decimal(9, 2), next.planManDays).input("sort", sql.Int, next.sortOrder).input("actor", sql.BigInt, actorId);
+  update
+    .input("id", sql.BigInt, row.id)
+    .input("name", sql.NVarChar(500), next.name)
+    .input("start", sql.Date, next.planStart)
+    .input("days", sql.Int, next.planDays)
+    .input("man_days", sql.Decimal(9, 2), next.planManDays)
+    .input("sort", sql.Int, next.sortOrder)
+    .input("actor", sql.BigInt, actorId);
   await update.query(`UPDATE dbo.schedule_tasks SET name=@name,plan_start=@start,plan_days=@days,plan_man_days=@man_days,sort_order=@sort,
     updated_by=@actor,updated_at=SYSUTCDATETIME() WHERE id=@id AND deleted_at IS NULL;`);
-  await appendUpdate(transaction, projectId, row.id, actorId, "plan",
+  await appendUpdate(
+    transaction,
+    projectId,
+    row.id,
+    actorId,
+    "plan",
     JSON.stringify({ name: row.name, planStart: row.planStart, planDays: row.planDays, planManDays: row.planManDays }),
-    JSON.stringify({ name: next.name, planStart: next.planStart, planDays: next.planDays, planManDays: next.planManDays }), "Changed in Edit project");
+    JSON.stringify({ name: next.name, planStart: next.planStart, planDays: next.planDays, planManDays: next.planManDays }),
+    "Changed in Edit project",
+  );
 }
 
 /**
@@ -271,8 +387,11 @@ async function updateRow(transaction: TransactionType, projectId: number, actorI
  * predecessor, is shown with its resolved dates and the form sends those back: that is no change,
  * and its own stored dates stay. Any other dates for it are a change this form cannot make.
  */
-export function keptPlanRowDates(current: Pick<ScheduleRow, "planStart" | "planDays" | "children" | "startMode">, input: { start: string; finish: string },
-  shown: { planStart: string | null; planFinish: string | null } | undefined): { planStart: string | null; planDays: number; changed: boolean } {
+export function keptPlanRowDates(
+  current: Pick<ScheduleRow, "planStart" | "planDays" | "children" | "startMode">,
+  input: { start: string; finish: string },
+  shown: { planStart: string | null; planFinish: string | null } | undefined,
+): { planStart: string | null; planDays: number; changed: boolean } {
   if (current.children > 0 || current.startMode !== "manual") {
     return { planStart: current.planStart, planDays: current.planDays, changed: shown?.planStart !== input.start || shown?.planFinish !== input.finish };
   }
@@ -299,12 +418,15 @@ export function planRowsOf(rows: ScheduleRow[]): Set<number> {
  * nothing linked to it and no member's own task, or the save stops and names it.
  */
 export function plannedRemovals(rows: ScheduleRow[], listed: Set<number>): ScheduleRow[] {
-  const managed = planRowsOf(rows), byParent = new Map<number, ScheduleRow[]>();
+  const managed = planRowsOf(rows),
+    byParent = new Map<number, ScheduleRow[]>();
   for (const row of rows) if (row.parentId !== null) byParent.set(row.parentId, [...(byParent.get(row.parentId) ?? []), row]);
-  const removing: { row: ScheduleRow; depth: number }[] = [], seen = new Set<number>();
+  const removing: { row: ScheduleRow; depth: number }[] = [],
+    seen = new Set<number>();
   const take = (row: ScheduleRow, depth: number) => {
     if (seen.has(row.id)) return;
-    seen.add(row.id); removing.push({ row, depth });
+    seen.add(row.id);
+    removing.push({ row, depth });
     for (const child of byParent.get(row.id) ?? []) take(child, depth + 1);
   };
   for (const row of rows) if (managed.has(row.id) && !listed.has(row.id) && (row.parentId === null || listed.has(row.parentId))) take(row, 0);
@@ -331,8 +453,7 @@ export async function syncProjectPlan(transaction: TransactionType, projectId: n
   const pics = await readPics(transaction, projectId);
   const picsOf = (id: number) => (pics.get(id) ?? []).map((pic) => pic.id);
   // Only rows whose dates are derived need the resolved plan; a plan with no such row skips it.
-  const shown = rows.some((row) => row.children > 0 || row.startMode !== "manual")
-    ? resolveTasks(await readTasks(transaction, projectId), await readHolidays(transaction)).byId : null;
+  const shown = rows.some((row) => row.children > 0 || row.startMode !== "manual") ? resolveTasks(await readTasks(transaction, projectId), await readHolidays(transaction)).byId : null;
   const existing = (id: number | undefined, parentId: number | null, kind: string): ScheduleRow | undefined => {
     if (id === undefined) return undefined;
     const row = byId.get(id);
@@ -354,8 +475,9 @@ export async function syncProjectPlan(transaction: TransactionType, projectId: n
     if (userId !== null && !picsOf(row.id).includes(userId)) assigned.push({ taskId: row.id, userIds: await replacePics(transaction, row.id, [userId]) });
   };
 
-  const listed = new Set(plan.headings.flatMap((heading) => [heading.id, ...heading.tasks.flatMap((task) => [task.id, ...task.functions.map((item) => item.id)])])
-    .filter((id): id is number => id !== undefined));
+  const listed = new Set(
+    plan.headings.flatMap((heading) => [heading.id, ...heading.tasks.flatMap((task) => [task.id, ...task.functions.map((item) => item.id)])]).filter((id): id is number => id !== undefined),
+  );
   for (const row of plannedRemovals(rows, listed)) await removeRow(transaction, projectId, row, actorId);
 
   for (const [index, heading] of plan.headings.entries()) {
@@ -371,7 +493,10 @@ export async function syncProjectPlan(transaction: TransactionType, projectId: n
     } else headingId = await insertHeading(transaction, projectId, actorId, index + 1, heading, ADDED);
     for (const [taskIndex, task] of heading.tasks.entries()) {
       const row = existing(task.id, headingId, "task");
-      if (!row) { assigned.push(...await insertTask(transaction, projectId, actorId, headingId, taskIndex + 1, task, ADDED)); continue; }
+      if (!row) {
+        assigned.push(...(await insertTask(transaction, projectId, actorId, headingId, taskIndex + 1, task, ADDED)));
+        continue;
+      }
       await keep(row, task.name, task, task.planManDays, taskIndex + 1);
       await assign(row, task.userId);
       const hasFunctions = rows.some((child) => child.parentId === row.id && child.kind === "task");
@@ -383,7 +508,10 @@ export async function syncProjectPlan(transaction: TransactionType, projectId: n
       }
       for (const [itemIndex, item] of task.functions.entries()) {
         const functionRow = existing(item.id, row.id, "task");
-        if (!functionRow) { assigned.push(await insertFunction(transaction, projectId, actorId, row.id, itemIndex + 1, item, task, ADDED)); continue; }
+        if (!functionRow) {
+          assigned.push(await insertFunction(transaction, projectId, actorId, row.id, itemIndex + 1, item, task, ADDED));
+          continue;
+        }
         await keep(functionRow, item.name, item.start !== null && item.finish !== null ? { start: item.start, finish: item.finish } : null, functionRow.planManDays, itemIndex + 1);
         // No member named: the function keeps whoever it has, or takes its task's.
         await assign(functionRow, item.userId ?? (picsOf(functionRow.id).length ? null : task.userId));
@@ -424,7 +552,8 @@ export function parseProjectDetails(body: Record<string, unknown>): ProjectDetai
 /** Replaces each given set; a contact must be an active contact of the project's own customer. */
 export async function writeProjectDetails(transaction: TransactionType, projectId: number, details: ProjectDetails, actorId: number): Promise<void> {
   if (details.team !== undefined) {
-    const update = new sql.Request(transaction); update.input("id", sql.BigInt, projectId).input("team", sql.NVarChar(100), details.team);
+    const update = new sql.Request(transaction);
+    update.input("id", sql.BigInt, projectId).input("team", sql.NVarChar(100), details.team);
     await update.query(`UPDATE dbo.projects SET team=@team WHERE id=@id;`);
   }
   if (details.paymentsReceived !== undefined) {
@@ -439,9 +568,11 @@ export async function writeProjectDetails(transaction: TransactionType, projectI
   if (details.contactIds !== undefined) {
     const request = new sql.Request(transaction);
     request.input("id", sql.BigInt, projectId).input("actor", sql.BigInt, actorId).input("ids", sql.NVarChar(sql.MAX), details.contactIds.join(","));
-    const valid = (await request.query<{ count: number }>(`SELECT COUNT(*) count FROM dbo.customer_site_contacts sc
+    const valid = (
+      await request.query<{ count: number }>(`SELECT COUNT(*) count FROM dbo.customer_site_contacts sc
       JOIN dbo.customer_sites s ON s.id=sc.site_id JOIN dbo.projects p ON p.customer_id=s.customer_id AND p.id=@id
-      WHERE sc.id IN(SELECT TRY_CONVERT(bigint,value) FROM STRING_SPLIT(@ids,N',')) AND sc.is_active=1 AND sc.deleted_at IS NULL;`)).recordset[0]!;
+      WHERE sc.id IN(SELECT TRY_CONVERT(bigint,value) FROM STRING_SPLIT(@ids,N',')) AND sc.is_active=1 AND sc.deleted_at IS NULL;`)
+    ).recordset[0]!;
     if (Number(valid.count) !== details.contactIds.length) {
       throw new ApiError(422, "invalid_reference", "Every project contact must be an active contact of this customer.");
     }

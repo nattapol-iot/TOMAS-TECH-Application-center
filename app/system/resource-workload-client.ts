@@ -1,5 +1,5 @@
 import { apiRequest } from "./api-client";
-import type { Commitment } from "../../lib/resource-planning";
+import type { AwaySpan, Commitment, ConfirmedHours } from "../../lib/resource-planning";
 
 /** Saved effort for a whole inquiry or estimate (PUT /api/v1/resource-planning/:kind/:id). */
 export type WorkloadEffort = { entityType: string; entityId: number; start: string; end: string; manDays: number; rowVersion: string };
@@ -19,16 +19,25 @@ export type Workload = {
   warnings: string[];
   /** Each person's own order of work, as work keys, kept to the open work in items. */
   priorities: WorkOrder[];
+  /** Days away, taken off capacity on Team overview > Allocation; an older API omits them. */
+  away?: AwaySpan[];
+  /** Hours confirmed in My Work > My hours, per person and day; an older API omits them. */
+  actuals?: ConfirmedHours[];
 };
 export type WorkOrder = { userId: number; keys: string[] };
 
 /** The whole team's workload, or with `mine` only the caller's own work (My Work). */
-export const loadWorkload = (options: { mine?: boolean } = {}) =>
-  apiRequest<Workload>(`/api/v1/resource-planning/workload${options.mine ? "?mine=1" : ""}`);
+export const loadWorkload = (options: { mine?: boolean } = {}) => apiRequest<Workload>(`/api/v1/resource-planning/workload${options.mine ? "?mine=1" : ""}`);
+
+/**
+ * Names the people of a plan row from Team overview > Allocation (owner, 2026-11-22): only its PICs change, and anyone
+ * named joins the project. The project's manager, an Engineering Manager or an Admin.
+ */
+export const assignPlanRow = (taskId: number, userIds: number[]) =>
+  apiRequest<{ id: number; scheduleVersion: string; notification?: unknown }>(`/api/v1/schedule/tasks/${taskId}/assign`, { method: "POST", body: JSON.stringify({ userIds }) });
 
 /** Saves a person's order of work; the person themself or an Admin / Engineering Manager / Project Manager. */
-export const saveWorkOrder = (userId: number, keys: string[]) =>
-  apiRequest<WorkOrder>(`/api/v1/resource-planning/work-order/${userId}`, { method: "PUT", body: JSON.stringify({ keys }) });
+export const saveWorkOrder = (userId: number, keys: string[]) => apiRequest<WorkOrder>(`/api/v1/resource-planning/work-order/${userId}`, { method: "PUT", body: JSON.stringify({ keys }) });
 
 export type TeamTaskKind = "Appointment" | "Task" | "Away";
 /** A whole day, a morning (08:30–12:00), an afternoon (13:00–17:30), or its own time range. */
@@ -81,7 +90,9 @@ export type TeamTask = {
  * What a save sends; the server works out the man-days when they are left empty. `repeat` asks for a series: on a new
  * task, a task made to repeat, or (with applyTo "following") the days of a series from this one on.
  */
-export type TeamTaskInput = Omit<TeamTask, "id" | "customer" | "inquiryNo" | "projectNo" | "createdBy" | "createdByName" | "createdAt" | "rowVersion" | "manDays" | "seriesId"> & { manDays: number | null };
+export type TeamTaskInput = Omit<TeamTask, "id" | "customer" | "inquiryNo" | "projectNo" | "createdBy" | "createdByName" | "createdAt" | "rowVersion" | "manDays" | "seriesId"> & {
+  manDays: number | null;
+};
 /** What a save returns; a repeat also says its series and how many days it put the task on. */
 export type TeamTaskSaved = { id: number; rowVersion: string; manDays: number; calendar: CalendarDelivery; seriesId?: number; count?: number; replaced?: boolean };
 /** A site visit on the board, once per visit with every engineer on it; number and customer are empty without visit.read. */
@@ -116,12 +127,10 @@ export type TeamTaskChange = { action: string; actor: string; at: string; before
 
 /** What the person's Outlook got from a save (an invitation, an update or a cancellation); "none" when nothing was due. */
 export type CalendarDelivery = "none" | "sent" | "disabled" | "failed";
-export const loadTeamBoard = (from: string, to: string) =>
-  apiRequest<TeamBoardData>(`/api/v1/team-board?from=${from}&to=${to}`);
+export const loadTeamBoard = (from: string, to: string) => apiRequest<TeamBoardData>(`/api/v1/team-board?from=${from}&to=${to}`);
 /** Reads everyone's Outlook calendar now (or returns the read of a minute ago). */
 export const syncOutlookCalendars = () => apiRequest<OutlookSyncStatus>("/api/v1/team-board/outlook-sync", { method: "POST", body: "{}" });
-export const createTeamTask = (task: TeamTaskInput) =>
-  apiRequest<TeamTaskSaved>("/api/v1/team-tasks", { method: "POST", body: JSON.stringify(task) });
+export const createTeamTask = (task: TeamTaskInput) => apiRequest<TeamTaskSaved>("/api/v1/team-tasks", { method: "POST", body: JSON.stringify(task) });
 /** A day of a repeat changes on its own ("this"), or with every day after it ("following"). */
 export const updateTeamTask = (id: number, task: TeamTaskInput, rowVersion: string, applyTo: TeamTaskScope = "this") =>
   apiRequest<TeamTaskSaved>(`/api/v1/team-tasks/${id}`, { method: "PUT", body: JSON.stringify({ ...task, rowVersion, applyTo }) });
@@ -130,9 +139,22 @@ export const deleteTeamTask = (id: number, rowVersion: string, applyTo: TeamTask
 export const loadTeamTaskHistory = (id: number) => apiRequest<TeamTaskChange[]>(`/api/v1/team-tasks/${id}/history`);
 /** A saved task back into the shape a save sends. */
 export const teamTaskInput = (task: TeamTask): TeamTaskInput => ({
-  kind: task.kind, title: task.title, customerId: task.customerId, assigneeIds: [...task.assigneeIds], startDate: task.startDate, endDate: task.endDate,
-  slot: task.slot, startTime: task.startTime, endTime: task.endTime, manDays: task.manDays, status: task.status, inquiryId: task.inquiryId, projectId: task.projectId, note: task.note,
-  meetingMode: task.meetingMode ?? null, meetingPlace: task.meetingPlace ?? "",
+  kind: task.kind,
+  title: task.title,
+  customerId: task.customerId,
+  assigneeIds: [...task.assigneeIds],
+  startDate: task.startDate,
+  endDate: task.endDate,
+  slot: task.slot,
+  startTime: task.startTime,
+  endTime: task.endTime,
+  manDays: task.manDays,
+  status: task.status,
+  inquiryId: task.inquiryId,
+  projectId: task.projectId,
+  note: task.note,
+  meetingMode: task.meetingMode ?? null,
+  meetingPlace: task.meetingPlace ?? "",
   // A change to this day alone; a repeat is asked for only when making one.
   repeat: null,
 });

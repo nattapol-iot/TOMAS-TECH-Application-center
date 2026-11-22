@@ -2,13 +2,7 @@ import type { FastifyInstance } from "fastify";
 import sql from "mssql";
 import type { Database } from "../db.js";
 import type { CurrentUserService } from "../users.js";
-import {
-  bodyObject,
-  dateOnly,
-  parseDateOnly,
-  parseRowVersion,
-  positiveLong,
-} from "../http.js";
+import { bodyObject, dateOnly, parseDateOnly, parseRowVersion, positiveLong } from "../http.js";
 import { ApiError } from "../errors.js";
 import { insertAudit } from "../audit.js";
 import { isProjectElevated, isProjectManagerRole } from "../project-scope.js";
@@ -28,18 +22,8 @@ const map = (r: Row) => ({
   rowVersion: r.row_version.toString("base64"),
 });
 function decimal(value: unknown, max: number): number {
-  if (
-    typeof value !== "number" ||
-    !Number.isFinite(value) ||
-    value < 0 ||
-    value > max ||
-    Math.abs(value * 100 - Math.round(value * 100)) > 0.00001
-  )
-    throw new ApiError(
-      400,
-      "validation_failed",
-      "Enter a non-negative number with at most two decimals.",
-    );
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > max || Math.abs(value * 100 - Math.round(value * 100)) > 0.00001)
+    throw new ApiError(400, "validation_failed", "Enter a non-negative number with at most two decimals.");
   return value;
 }
 // Capacities, effort and holidays: shared by the planning read and the Workload read. Binds @actor.
@@ -54,11 +38,23 @@ const PLANNING_SQL = `
           WHERE a.id=e.entity_id AND i.deleted_at IS NULL)));
       SELECT holiday_date FROM dbo.holidays;`;
 const holidayDates = (rows: unknown) => (rows as { holiday_date: Date }[]).map((r) => dateOnly(r.holiday_date)!);
-export function registerResourcePlanningRoutes(
-  app: FastifyInstance,
-  db: Database,
-  users: CurrentUserService,
-) {
+// Team overview > Allocation (owner, 2026-11-22) takes days away off a person's capacity and sets the hours confirmed in
+// My Work > My hours (migration 121) beside the plan. Two recordsets after WORKLOAD_SQL, about seven months back and a
+// year ahead: days away from the team board (Away) and Site Visit availability, then confirmed hours per person and day.
+const ALLOCATION_SQL = `
+      DECLARE @allocation_today date = CONVERT(date,SWITCHOFFSET(SYSDATETIMEOFFSET(),'+07:00'));
+      SELECT a.user_id,t.start_date,t.end_date,t.time_slot slot FROM dbo.team_tasks t JOIN dbo.team_task_assignees a ON a.task_id=t.id
+      WHERE t.deleted_at IS NULL AND t.kind=N'Away' AND t.status<>N'Cancelled'
+        AND t.end_date>=DATEADD(day,-210,@allocation_today) AND t.start_date<=DATEADD(day,370,@allocation_today)
+      UNION ALL
+      SELECT v.user_id,CONVERT(date,SWITCHOFFSET(v.starts_at,'+07:00')),CONVERT(date,SWITCHOFFSET(DATEADD(second,-1,v.ends_at),'+07:00')),N'Day'
+      FROM dbo.engineer_availability v
+      WHERE v.deleted_at IS NULL AND v.kind IN(N'Leave',N'Training',N'Other Assignment',N'Unavailable')
+        AND v.ends_at>=DATEADD(day,-210,SYSDATETIMEOFFSET()) AND v.starts_at<=DATEADD(day,370,SYSDATETIMEOFFSET());
+      SELECT h.user_id,h.work_date,SUM(h.hours) hours FROM dbo.work_hours h
+      WHERE h.work_date>=DATEADD(day,-210,@allocation_today) GROUP BY h.user_id,h.work_date ORDER BY h.user_id,h.work_date;`;
+
+export function registerResourcePlanningRoutes(app: FastifyInstance, db: Database, users: CurrentUserService) {
   app.get("/api/v1/resource-planning", async (request) => {
     await users.demandPermission(request, "schedule.read");
     const actor = await users.required(request);
@@ -74,19 +70,25 @@ export function registerResourcePlanningRoutes(
     await users.demandPermission(request, "schedule.read");
     await users.demandPermission(request, "project.read");
     const actor = await users.required(request);
-    const result = await db.query<Row>(`SET NOCOUNT ON;${PLANNING_SQL}${WORKLOAD_SQL}`, (q) => q
-      .input("actor", sql.BigInt, actor.id)
-      .input("project_elevated", sql.Bit, isProjectElevated(actor))
-      // Admin, Engineering Managers and Project Managers see every inquiry task; others see the ones they are part of.
-      .input("task_elevated", sql.Bit, elevated(actor) || isProjectManagerRole(actor))
-      // Only the team board (routes/team-board.ts) reads work outside the caller's own scope.
-      .input("all_work", sql.Bit, false));
+    const result = await db.query<Row>(`SET NOCOUNT ON;${PLANNING_SQL}${WORKLOAD_SQL}${ALLOCATION_SQL}`, (q) =>
+      q
+        .input("actor", sql.BigInt, actor.id)
+        .input("project_elevated", sql.Bit, isProjectElevated(actor))
+        // Admin, Engineering Managers and Project Managers see every inquiry task; others see the ones they are part of.
+        .input("task_elevated", sql.Bit, elevated(actor) || isProjectManagerRole(actor))
+        // Only the team board (routes/team-board.ts) reads work outside the caller's own scope.
+        .input("all_work", sql.Bit, false),
+    );
     const sets = result.recordsets as unknown as Record<string, unknown>[][];
     const holidays = holidayDates(sets[2]);
-    const work = workloadItems(sets.slice(3), new Set(holidays));
+    // PLANNING_SQL is three recordsets and WORKLOAD_SQL ten; ALLOCATION_SQL's two follow them.
+    const work = workloadItems(sets.slice(3, 13), new Set(holidays));
+    const [awayRows = [], hourRows = []] = sets.slice(13);
     // My Work asks for the caller's own work only.
     const query = request.query as Record<string, unknown>;
-    const items = query.mine === "1" || query.mine === "true" ? work.items.filter((item) => item.ownerId === actor.id) : work.items;
+    const mine = query.mine === "1" || query.mine === "true";
+    const items = mine ? work.items.filter((item) => item.ownerId === actor.id) : work.items;
+    const ours = (row: Record<string, unknown>) => !mine || Number(row.user_id) === actor.id;
     return {
       capacities: (sets[0] as Row[]).map(map),
       efforts: (sets[1] as Row[]).map(map),
@@ -94,6 +96,10 @@ export function registerResourcePlanningRoutes(
       items,
       warnings: work.warnings,
       priorities: workOrders(work.orderRows, items),
+      away: awayRows
+        .filter(ours)
+        .map((row) => ({ userId: Number(row.user_id), start: dateOnly(row.start_date as Date | string), end: dateOnly(row.end_date as Date | string), slot: String(row.slot ?? "Day") })),
+      actuals: hourRows.filter(ours).map((row) => ({ userId: Number(row.user_id), date: dateOnly(row.work_date as Date | string), hours: Number(row.hours) })),
     };
   });
   // A person's own order of work, set by them or by a manager for them. Only the order is stored: plan dates never
@@ -102,16 +108,11 @@ export function registerResourcePlanningRoutes(
     await users.demandPermission(request, "schedule.read");
     const actor = await users.required(request);
     const userId = positiveLong((request.params as { userId?: string }).userId, "User id");
-    if (userId !== actor.id && !isProjectManagerRole(actor))
-      throw new ApiError(403, "work_order_forbidden", "Only the person or a manager can change this work order.");
+    if (userId !== actor.id && !isProjectManagerRole(actor)) throw new ApiError(403, "work_order_forbidden", "Only the person or a manager can change this work order.");
     const keys = bodyObject(request.body).keys;
-    if (!Array.isArray(keys) || keys.length > 500 || new Set(keys).size !== keys.length
-      || keys.some((key) => typeof key !== "string" || !WORK_KEY.test(key)))
+    if (!Array.isArray(keys) || keys.length > 500 || new Set(keys).size !== keys.length || keys.some((key) => typeof key !== "string" || !WORK_KEY.test(key)))
       throw new ApiError(400, "validation_failed", "Send the work keys in order, each once, at most 500.");
-    const person = (await db.query<{ id: number }>(
-      "SELECT id FROM dbo.users WHERE id=@user AND is_active=1 AND deleted_at IS NULL;",
-      (q) => q.input("user", sql.BigInt, userId),
-    )).recordset[0];
+    const person = (await db.query<{ id: number }>("SELECT id FROM dbo.users WHERE id=@user AND is_active=1 AND deleted_at IS NULL;", (q) => q.input("user", sql.BigInt, userId))).recordset[0];
     if (!person) throw new ApiError(404, "user_not_found", "That person is not an active user.");
     await db.transaction(async (transaction) => {
       const replace = new sql.Request(transaction);
@@ -133,34 +134,15 @@ export function registerResourcePlanningRoutes(
     const id = positiveLong(params.id, "Record id"),
       body = bodyObject(request.body);
     const capacity = params.kind === "capacity";
-    if (!capacity && !["Inquiry", "Estimate", "EstimateSection"].includes(params.kind))
-      throw new ApiError(400, "validation_failed", "Unknown planning record.");
-    if (!capacity && !section)
-      await users.demandPermission(
-        request,
-        params.kind === "Inquiry" ? "inquiry.write" : "estimate.write",
-      );
+    if (!capacity && !["Inquiry", "Estimate", "EstimateSection"].includes(params.kind)) throw new ApiError(400, "validation_failed", "Unknown planning record.");
+    if (!capacity && !section) await users.demandPermission(request, params.kind === "Inquiry" ? "inquiry.write" : "estimate.write");
     const planner = section && (await permissionFor(db, actor.id, "schedule.plan")) && (await permissionFor(db, actor.id, "estimate.write"));
-    const expected =
-      body.rowVersion == null ? null : parseRowVersion(body.rowVersion);
-    const amount = decimal(
-      capacity ? body.daysPerWeek : body.manDays,
-      capacity ? 5 : 100000,
-    );
+    const expected = body.rowVersion == null ? null : parseRowVersion(body.rowVersion);
+    const amount = decimal(capacity ? body.daysPerWeek : body.manDays, capacity ? 5 : 100000);
     const start = capacity ? null : parseDateOnly(body.start, "Start date"),
       end = capacity ? null : parseDateOnly(body.end, "End date");
-    if (
-      !capacity &&
-      (!start ||
-        !end ||
-        end < start ||
-        Date.parse(end) - Date.parse(start) > 3650 * 86400000)
-    )
-      throw new ApiError(
-        400,
-        "validation_failed",
-        "Valid start/end dates spanning at most ten years are required.",
-      );
+    if (!capacity && (!start || !end || end < start || Date.parse(end) - Date.parse(start) > 3650 * 86400000))
+      throw new ApiError(400, "validation_failed", "Valid start/end dates spanning at most ten years are required.");
     return db.transaction(async (tx) => {
       const q = new sql.Request(tx);
       q.input("id", sql.BigInt, id)
@@ -170,11 +152,7 @@ export function registerResourcePlanningRoutes(
         .input("end", sql.Date, end)
         .input("actor", sql.BigInt, actor.id);
       // Table names are selected only from constants, never from request input.
-      const source = capacity
-        ? "users"
-        : params.kind === "Inquiry"
-          ? "inquiries"
-          : "estimates";
+      const source = capacity ? "users" : params.kind === "Inquiry" ? "inquiries" : "estimates";
       const ref = (
         await q.query<{ id: number; owner_id?: number; support_id?: number | null }>(
           section
@@ -182,31 +160,15 @@ export function registerResourcePlanningRoutes(
             : `SELECT id FROM dbo.${source} WITH(UPDLOCK,HOLDLOCK) WHERE id=@id AND deleted_at IS NULL${capacity ? " AND is_active=1" : ""};`,
         )
       ).recordset[0];
-      if (!ref)
-        throw new ApiError(404, "not_found", "Source record is unavailable.");
+      if (!ref) throw new ApiError(404, "not_found", "Source record is unavailable.");
       if (section && !planner && Number(ref.owner_id) !== actor.id && Number(ref.support_id) !== actor.id)
         throw new ApiError(403, "section_effort_forbidden", "Only the section's engineers or a planner can plan its effort.");
-      if (params.kind === "Inquiry" && (await q.query('SELECT inquiry_id FROM dbo.resource_task_sources WHERE inquiry_id=@id')).recordset.length)
+      if (params.kind === "Inquiry" && (await q.query("SELECT inquiry_id FROM dbo.resource_task_sources WHERE inquiry_id=@id")).recordset.length)
         throw new ApiError(409, "inquiry_task_mode", "This inquiry uses approved task effort. Submit a task plan change in Resource Plan instead.");
       const table = capacity ? "resource_capacity" : "resource_effort";
-      const predicate = capacity
-        ? "user_id=@id"
-        : "entity_type=@kind AND entity_id=@id";
-      const current = (
-        await q.query<Row>(
-          `SELECT * FROM dbo.${table} WITH(UPDLOCK,HOLDLOCK) WHERE ${predicate};`,
-        )
-      ).recordset[0];
-      if (
-        current
-          ? !expected || !current.row_version.equals(expected)
-          : expected !== null
-      )
-        throw new ApiError(
-          409,
-          "concurrency_conflict",
-          "Planning data changed. Reload before saving.",
-        );
+      const predicate = capacity ? "user_id=@id" : "entity_type=@kind AND entity_id=@id";
+      const current = (await q.query<Row>(`SELECT * FROM dbo.${table} WITH(UPDLOCK,HOLDLOCK) WHERE ${predicate};`)).recordset[0];
+      if (current ? !expected || !current.row_version.equals(expected) : expected !== null) throw new ApiError(409, "concurrency_conflict", "Planning data changed. Reload before saving.");
       const statement = capacity
         ? current
           ? "UPDATE dbo.resource_capacity SET days_per_week=@amount,updated_by=@actor,updated_at=SYSUTCDATETIME() OUTPUT inserted.* WHERE user_id=@id"
@@ -215,16 +177,7 @@ export function registerResourcePlanningRoutes(
           ? "UPDATE dbo.resource_effort SET start_date=@start,end_date=@end,man_days=@amount,updated_by=@actor,updated_at=SYSUTCDATETIME() OUTPUT inserted.* WHERE entity_type=@kind AND entity_id=@id"
           : "INSERT dbo.resource_effort(entity_type,entity_id,start_date,end_date,man_days,updated_by) OUTPUT inserted.* VALUES(@kind,@id,@start,@end,@amount,@actor)";
       const saved = (await q.query<Row>(statement)).recordset[0]!;
-      await insertAudit(
-        tx,
-        actor.id,
-        "ResourcePlan",
-        id,
-        params.kind,
-        "Planning updated",
-        current ? map(current) : null,
-        map(saved),
-      );
+      await insertAudit(tx, actor.id, "ResourcePlan", id, params.kind, "Planning updated", current ? map(current) : null, map(saved));
       return map(saved);
     }, sql.ISOLATION_LEVEL.SERIALIZABLE);
   });

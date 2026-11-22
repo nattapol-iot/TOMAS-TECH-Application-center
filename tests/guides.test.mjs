@@ -104,6 +104,8 @@ test("the catalog holds the guides the owner chose, in the order the work happen
       "punchlist-issues",
       "punchlist-close-issue",
       "team-overview-task",
+      // One head names the people of every project, from the queue on Team overview > Allocation (2026-11-22).
+      "allocation-assign",
       "bom-release",
       // Approving an estimate sends it to Pegasus ERP as a Cost Sheet (2026-11-02).
       "estimate-approve",

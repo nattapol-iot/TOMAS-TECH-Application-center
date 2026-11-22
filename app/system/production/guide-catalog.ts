@@ -1819,9 +1819,9 @@ const PROJECT_PLAN: Guide = {
       view: "projects",
       title: { th: "ผู้รับผิดชอบ", en: "The member", jp: "担当者" },
       body: {
-        th: "งานใต้หัวข้อหลักต้องเลือกผู้รับผิดชอบ ฟังก์ชันใช้ผู้รับผิดชอบของงานถ้าไม่เลือกคนอื่น คนที่มีงานในแผนนี้แล้วอยู่ด้านบนของรายการ ผู้รับผิดชอบได้รับอีเมลและเห็นงานใน My Work",
-        en: "A task under a main heading needs a member; a function has its task's member unless you pick another. People already in this plan are at the top of the list. The member is emailed and sees the work in My Work.",
-        jp: "大見出しの下のタスクには担当者が必要です。機能は別の人を選ばなければタスクの担当者になります。この計画の担当者は一覧の上にあります。担当者にはメールが届き、マイワークに表示されます。",
+        th: "งานใต้หัวข้อหลักต้องเลือกผู้รับผิดชอบ หรือเลือก 'รอหัวหน้าจัดคน' พร้อมสายงาน (ไฟฟ้า เครื่องกล ซอฟต์แวร์ งานติดตั้ง) ท้ายรายการ แล้วหัวหน้าจะเลือกคนให้ที่ ภาพรวมงานทีม > จัดคน ฟังก์ชันใช้ผู้รับผิดชอบของงานถ้าไม่เลือกคนอื่น คนที่มีงานในแผนนี้แล้วอยู่ด้านบนของรายการ ผู้รับผิดชอบได้รับอีเมลและเห็นงานใน My Work",
+        en: "A task under a main heading needs a member, or pick Waiting for people with its discipline (Electrical, Mechanical, Software, Installation) at the end of the list and the head names the people on Team overview > Allocation. A function has its task's member unless you pick another. People already in this plan are at the top of the list. The member is emailed and sees the work in My Work.",
+        jp: "大見出しの下のタスクには担当者が必要です。または一覧の最後で職種（電気・機械・ソフトウェア・据付）付きの「担当者の割り当て待ち」を選ぶと、責任者がチーム概要 > 要員配置で担当者を決めます。機能は別の人を選ばなければタスクの担当者になります。この計画の担当者は一覧の上にあります。担当者にはメールが届き、マイワークに表示されます。",
       },
       missing: {
         th: "ช่องนี้ขึ้นเมื่อแถวใหม่เป็นงานหรือฟังก์ชัน กด › ให้แถวเข้าไปอยู่ใต้หัวข้อข้างบน หรือกด 'ถัดไป'",
@@ -1859,6 +1859,90 @@ const PROJECT_PLAN: Guide = {
         th: "กด + ที่แถว หรือ 'เพิ่มหัวข้อหลัก' เพื่อเปิดช่องพิมพ์ แล้วกด 'ถัดไป'",
         en: "Press + on a row, or Add main heading, to open the boxes, then press Next.",
         jp: "行の + か「大見出しを追加」で入力欄を開き、「次へ」を押します。",
+      },
+    },
+  ],
+};
+
+/*
+ * Allocation (owner, 2026-11-22): one head names the people of every project. A PM adds a plan row with its discipline and
+ * no member ("Waiting for people"); the row waits in the queue on Team overview > Allocation · weekly, where the head
+ * picks people by free time, leave already taken off.
+ */
+const ALLOCATION_ASSIGN: Guide = {
+  id: "allocation-assign",
+  area: "project",
+  title: { th: "จัดคนให้งานที่รอจัดคน", en: "Assign people to plan rows waiting for them", jp: "割り当て待ちの計画行に担当者を割り当て" },
+  summary: {
+    th: "PM เพิ่มงานในแผนพร้อมสายงานโดยยังไม่ใส่คน หัวหน้าเห็นงานทุกโครงการที่รอจัดคนในที่เดียว แล้วเลือกคนที่ว่างที่สุด (หักวันลาแล้ว)",
+    en: "A PM adds plan rows with a discipline and no member. The head sees every project's rows waiting for people in one place and picks the freest people, leave already taken off.",
+    jp: "PM は職種だけ指定して担当者を空けた計画行を追加します。責任者は全案件の割り当て待ちの行を一か所で見て、空きの多い人（不在日を差し引き済み）を選びます。",
+  },
+  minutes: 3,
+  permissions: ["schedule.read", "project.read", "schedule.plan"],
+  views: ["resources"],
+  steps: [
+    menu(
+      "resources",
+      { th: "เปิดเมนูภาพรวมงานทีม", en: "Open Team overview", jp: "「チームの仕事一覧」を開く" },
+      {
+        th: "การจัดคนอยู่ในแท็บ 'จัดคน · รายสัปดาห์' ของหน้านี้ คลิกที่เมนูที่ไฮไลต์อยู่",
+        en: "Allocation is the Allocation · weekly tab of this page. Click the highlighted menu entry.",
+        jp: "要員配置はこのページの「要員配置・週別」タブにあります。強調表示のメニューをクリックします。",
+      },
+    ),
+    {
+      target: '[data-tab="workload"]',
+      action: "click",
+      view: "resources",
+      title: { th: "กดแท็บ 'จัดคน · รายสัปดาห์'", en: "Press the Allocation · weekly tab", jp: "「要員配置・週別」タブを押す" },
+      body: {
+        th: "ตารางคน × สัปดาห์บอกว่าแต่ละคนมีงานกี่เปอร์เซ็นต์ของเวลาที่มี วันลาถูกหักออกจากเวลาแล้ว ใต้ตัวเลขมี 'จริง' คือชั่วโมงที่ยืนยันใน My Work และ 'ลา' คือจำนวนวันที่ลา",
+        en: "The people × weeks table shows each person's planned work as a share of the time they have, with days away already taken off. Under the figures, Actual is the hours confirmed in My Work and Away the days away.",
+        jp: "人×週の表は、各人の計画作業が持ち時間の何％かを示し、不在日は差し引き済みです。数字の下の「実績」はマイワークで確定した時間、「不在」は不在日数です。",
+      },
+    },
+    {
+      target: "alloc.queue",
+      action: "next",
+      view: "resources",
+      title: { th: "คิวงานรอจัดคน", en: "The queue of rows waiting for people", jp: "割り当て待ちの一覧" },
+      body: {
+        th: "งานทุกโครงการที่ PM เพิ่มไว้พร้อมสายงานแต่ยังไม่มีคน เรียงตามวันเริ่ม กดชิปสายงานเพื่อดูเฉพาะไฟฟ้า เครื่องกล ซอฟต์แวร์ หรืองานติดตั้ง กดเลขโครงการเพื่อเปิดแผน",
+        en: "Every project's rows a PM added with a discipline and no member, soonest start first. Press a discipline chip to see only Electrical, Mechanical, Software or Installation work, and the project number to open its plan.",
+        jp: "PM が職種だけ指定して担当者を空けた全案件の行で、開始日の早い順です。職種のチップで電気・機械・ソフトウェア・据付だけを表示し、案件番号で計画を開きます。",
+      },
+      missing: {
+        th: "แผงนี้ขึ้นเมื่อมีงานรอจัดคน PM เลือก 'รอหัวหน้าจัดคน' พร้อมสายงานตอนเพิ่มงานในแผน กด 'ถัดไป'",
+        en: "This shows when rows are waiting. A PM picks Waiting for people with a discipline when adding a plan row. Press Next.",
+        jp: "割り当て待ちの行があるときに表示されます。PM が計画行の追加時に職種付きの「担当者の割り当て待ち」を選びます。「次へ」を押します。",
+      },
+    },
+    {
+      target: "alloc.assign",
+      action: "click",
+      view: "resources",
+      title: { th: "กด 'จัดคน'", en: "Press Assign", jp: "「割り当て」を押す" },
+      body: {
+        th: "หน้าต่างจะแสดงคนที่สายงานตรงกันก่อน เรียงตามเวลาว่างในสัปดาห์ที่งานนี้ทำ ป้ายเขียวคือว่างพอ ส้มคือว่างไม่พอ แดงคือเกินอยู่แล้ว",
+        en: "The window lists people of the row's discipline first, freest first over the weeks the row runs. Green: enough free time; amber: not enough; red: already over.",
+        jp: "画面には同じ職種の人が先に、この行の週の空きが多い順に表示されます。緑は十分な空き、オレンジは不足、赤はすでに超過です。",
+      },
+      missing: {
+        th: "ปุ่มนี้มีสำหรับ PM ของโครงการ Engineering Manager และ Admin ถ้ายังไม่มีงานรอจัดคน กด 'ถัดไป'",
+        en: "The button is for the project's PM, Engineering Managers and Admins. If nothing is waiting, press Next.",
+        jp: "このボタンは案件の PM、Engineering Manager、Admin 用です。割り当て待ちがなければ「次へ」を押します。",
+      },
+    },
+    {
+      target: "alloc.assignSave",
+      action: "click",
+      view: "resources",
+      title: { th: "เลือกคนแล้วกด 'จัดคน'", en: "Pick the people and press Assign", jp: "担当者を選んで「割り当て」を押す" },
+      body: {
+        th: "ติ๊กได้หลายคน คนที่ยังไม่อยู่ในทีมโครงการจะถูกเพิ่มเข้าทีมให้ ผู้รับผิดชอบได้รับแจ้งและเห็นงานใน My Work งานจะหายจากคิวและไปอยู่ในแถวของคนนั้น ถ้าแค่ฝึก กด 'ยกเลิก' แล้วกด 'เสร็จ'",
+        en: "Tick one or more people; anyone not on the project's team joins it. They are notified and see the work in My Work, and the row leaves the queue for their line of the table. Only practising? Press Cancel, then Finish.",
+        jp: "複数人を選べます。案件のチームにいない人はチームに追加されます。担当者に通知され、マイワークに表示されます。行は一覧から消えてその人の行に入ります。練習だけなら「キャンセル」の後に「完了」を押します。",
       },
     },
   ],
@@ -3888,6 +3972,7 @@ export const GUIDES: readonly Guide[] = [
   PUNCHLIST_ISSUES,
   PUNCHLIST_CLOSE,
   TEAM_TASK,
+  ALLOCATION_ASSIGN,
   BOM_RELEASE,
   ESTIMATE_APPROVE,
   ESTIMATE_REVISION_BACK,

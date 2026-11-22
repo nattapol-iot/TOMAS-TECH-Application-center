@@ -20,7 +20,8 @@ test("a plan row that cannot be deleted keeps a dimmed bin that says why (SUP-20
   assert.match(gantt, /className=\{`gantt-remove\$\{row\.remove\.reason \? " blocked" : ""\}`\}/);
   assert.match(gantt, /title=\{row\.remove\.reason \?\? row\.remove\.label\}/);
   for (const key of ["Plan.deletePending", "Plan.deleteResourcePlan", "Plan.deleteFiltered"]) {
-    const line = i18n.split("\n").find((entry) => entry.includes(`"${key}"`));
+    // An entry may wrap over several lines; it runs from its key to the closing brace.
+    const line = i18n.slice(i18n.indexOf(`"${key}"`), i18n.indexOf("}", i18n.indexOf(`"${key}"`)) + 1);
     assert.ok(line && /en: "/.test(line) && /th: "/.test(line) && /jp: "/.test(line), `${key} in three languages`);
   }
 });

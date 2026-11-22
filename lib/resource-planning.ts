@@ -39,6 +39,10 @@ export type Commitment = {
    * The daily load reads these instead of spreading manDays evenly; manDays is their total.
    */
   byDay?: Record<string, number>;
+  /** A project plan row's schedule task id, so Team overview > Allocation can name its people. */
+  taskId?: number;
+  /** A project plan row's discipline (migration 123): set on a row waiting for the head to name its people. */
+  discipline?: string;
 };
 const DAY = 86400000;
 /** Working days a week for anyone without a saved capacity: Monday to Friday. backend-node/src/resource-workload.ts holds the same default. */
@@ -47,14 +51,11 @@ export const DEFAULT_WEEKLY_CAPACITY = 5;
 export const weeklyCapacity = (saved: number | null | undefined) => saved ?? DEFAULT_WEEKLY_CAPACITY;
 /** Work in these statuses, or at 100%, no longer takes anyone's time; the server filters with the same list. */
 export const FINISHED_WORK_STATUSES = ["Closed", "Cancelled", "Approved", "Locked", "Done", "Completed", "Reviewed", "Rejected"];
-export const isOpenWork = (item: Pick<Commitment, "progress" | "status">) =>
-  item.progress < 100 && !FINISHED_WORK_STATUSES.includes(item.status);
+export const isOpenWork = (item: Pick<Commitment, "progress" | "status">) => item.progress < 100 && !FINISHED_WORK_STATUSES.includes(item.status);
 /** The piece of work an item belongs to: a plan task and its functions are one. */
 export const workGroup = (item: Pick<Commitment, "group" | "workKey">) => item.group ?? item.workKey;
-export const dayNumber = (value: string) =>
-  Date.parse(value.slice(0, 10) + "T00:00:00Z") / DAY;
-export const dateFromDay = (value: number) =>
-  new Date(value * DAY).toISOString().slice(0, 10);
+export const dayNumber = (value: string) => Date.parse(value.slice(0, 10) + "T00:00:00Z") / DAY;
+export const dateFromDay = (value: number) => new Date(value * DAY).toISOString().slice(0, 10);
 export function planningWeeks(start: string, count: number) {
   const day = dayNumber(start),
     monday = day - ((new Date(day * DAY).getUTCDay() + 6) % 7);
@@ -63,21 +64,11 @@ export function planningWeeks(start: string, count: number) {
     end: dateFromDay(monday + i * 7 + 6),
   }));
 }
-export function workingDays(
-  start: string,
-  end: string,
-  holidays: readonly string[] = [],
-) {
+export function workingDays(start: string, end: string, holidays: readonly string[] = []) {
   const from = dayNumber(start),
     to = dayNumber(end),
     closed = new Set(holidays);
-  if (
-    !Number.isFinite(from) ||
-    !Number.isFinite(to) ||
-    to < from ||
-    to - from > 3650
-  )
-    return [];
+  if (!Number.isFinite(from) || !Number.isFinite(to) || to < from || to - from > 3650) return [];
   const result: string[] = [];
   for (let d = from; d <= to; d++) {
     const weekday = new Date(d * DAY).getUTCDay(),
@@ -92,7 +83,8 @@ export function workingDays(
  * Null for a bad date or a count outside 1–3650.
  */
 export function workingDayFinish(start: string, days: number, holidays: readonly string[] = []): string | null {
-  const from = dayNumber(start), closed = new Set(holidays);
+  const from = dayNumber(start),
+    closed = new Set(holidays);
   if (!Number.isFinite(from) || !Number.isInteger(days) || days < 1 || days > 3650) return null;
   let remaining = days;
   for (let d = from; d <= from + days * 3 + closed.size + 14; d++) {
@@ -107,7 +99,8 @@ export function workingDayFinish(start: string, days: number, holidays: readonly
  * Man-days by date.
  */
 export function impliedEffort(items: readonly Commitment[], holidays: readonly string[] = []): Map<string, number> {
-  const typed = new Set<string>(), implied = new Set<string>();
+  const typed = new Set<string>(),
+    implied = new Set<string>();
   for (const item of items) {
     if (!isOpenWork(item) || !item.start || !item.end) continue;
     const hasEffort = item.manDays !== null && item.manDays > 0;
@@ -122,43 +115,53 @@ export function impliedEffort(items: readonly Commitment[], holidays: readonly s
   }
   return byDate;
 }
+/**
+ * Days away (Team overview Away, Site Visit availability) for Team overview > Allocation, which takes them off a person's
+ * capacity (owner, 2026-11-22). A morning or an afternoon is half a day.
+ */
+export type AwaySpan = { userId: number; start: string | null; end: string | null; slot: string };
+/** The share of each working day a person is away, at most the whole day. */
+export function awayByDate(spans: readonly AwaySpan[], userId: number, holidays: readonly string[] = []): Map<string, number> {
+  const byDate = new Map<string, number>();
+  for (const span of spans) {
+    if (span.userId !== userId || !span.start || !span.end) continue;
+    const share = span.slot === "AM" || span.slot === "PM" ? 0.5 : 1;
+    for (const date of workingDays(span.start, span.end, holidays)) byDate.set(date, Math.min(1, (byDate.get(date) ?? 0) + share));
+  }
+  return byDate;
+}
+/** Hours confirmed in My Work > My hours (migration 121), per person and day; 8 hours make a man-day. */
+export type ConfirmedHours = { userId: number; date: string | null; hours: number };
+export const HOURS_PER_MAN_DAY = 8;
+export function confirmedManDays(rows: readonly ConfirmedHours[], userId: number, from: string, to: string): number {
+  let hours = 0;
+  for (const row of rows) if (row.userId === userId && row.date && row.date >= from && row.date <= to) hours += row.hours;
+  return Math.round((hours / HOURS_PER_MAN_DAY) * 100) / 100;
+}
 export function planningLoad(
   items: Commitment[],
   weeks: ReturnType<typeof planningWeeks>,
   capacity: number | null,
   today: string,
   holidays: readonly string[] = [],
+  /** The share of each working day the person is away (awayByDate): Allocation takes it off the capacity. */
+  away: ReadonlyMap<string, number> = new Map(),
 ) {
   const open = items.filter(isOpenWork);
   const implied = [...impliedEffort(open, holidays)];
   const entries = open.map((item) => ({
     item,
-    days:
-      item.start && item.end ? workingDays(item.start, item.end, holidays) : [],
+    days: item.start && item.end ? workingDays(item.start, item.end, holidays) : [],
   }));
   const weekly = weeks.map((week) => {
     let manDays = 0;
-    for (const { item, days } of entries)
-      if (days.length && item.manDays !== null)
-        manDays +=
-          (item.manDays *
-            days.filter((d) => d >= week.start && d <= week.end).length) /
-          days.length;
-    for (const [date, extra] of implied)
-      if (date >= week.start && date <= week.end) manDays += extra;
-    const available =
-      capacity === null
-        ? null
-        : (capacity * workingDays(week.start, week.end, holidays).length) / 5;
-    const utilisation =
-      available === null
-        ? null
-        : available === 0
-          ? manDays > 0
-            ? Infinity
-            : 0
-          : (manDays / available) * 100;
-    return { week, manDays, available, utilisation };
+    for (const { item, days } of entries) if (days.length && item.manDays !== null) manDays += (item.manDays * days.filter((d) => d >= week.start && d <= week.end).length) / days.length;
+    for (const [date, extra] of implied) if (date >= week.start && date <= week.end) manDays += extra;
+    const workDays = workingDays(week.start, week.end, holidays);
+    const awayDays = workDays.reduce((sum, date) => sum + (away.get(date) ?? 0), 0);
+    const available = capacity === null ? null : (capacity * (workDays.length - awayDays)) / 5;
+    const utilisation = available === null ? null : available === 0 ? (manDays > 0 ? Infinity : 0) : (manDays / available) * 100;
+    return { week, manDays, available, utilisation, awayDays };
   });
   const known = weekly.filter((w) => w.utilisation !== null);
   const committed = weekly.reduce((s, w) => s + w.manDays, 0),
@@ -167,31 +170,18 @@ export function planningLoad(
     weekly,
     committed,
     peak: known.length ? Math.max(...known.map((w) => w.utilisation!)) : null,
-    average:
-      capacity === null
-        ? null
-        : available
-          ? (committed / available) * 100
-          : committed
-            ? Infinity
-            : 0,
+    average: capacity === null ? null : available ? (committed / available) * 100 : committed ? Infinity : 0,
     open: open.length,
     overdue: open.filter((i) => i.end && i.end < today).length,
-    nextDue: open
-      .filter((i) => i.end)
-      .sort((a, b) => a.end!.localeCompare(b.end!))[0],
-    unknown: entries.filter((e) => e.item.manDays === null || !e.days.length)
-      .length,
+    nextDue: open.filter((i) => i.end).sort((a, b) => a.end!.localeCompare(b.end!))[0],
+    unknown: entries.filter((e) => e.item.manDays === null || !e.days.length).length,
   };
 }
-const byDueDate = (a: Commitment, b: Commitment) =>
-  (a.end ?? "9999-12-31").localeCompare(b.end ?? "9999-12-31") || a.reference.localeCompare(b.reference);
+const byDueDate = (a: Commitment, b: Commitment) => (a.end ?? "9999-12-31").localeCompare(b.end ?? "9999-12-31") || a.reference.localeCompare(b.reference);
 /** A person's open work in their order: what they ranked first, as ranked, then the rest soonest due first. */
 export function orderWork(items: Commitment[], order: readonly string[]) {
   const rank = new Map(order.map((key, index) => [key, index]));
-  return items
-    .filter(isOpenWork)
-    .sort((a, b) => (rank.get(a.workKey) ?? Infinity) - (rank.get(b.workKey) ?? Infinity) || byDueDate(a, b));
+  return items.filter(isOpenWork).sort((a, b) => (rank.get(a.workKey) ?? Infinity) - (rank.get(b.workKey) ?? Infinity) || byDueDate(a, b));
 }
 export type Projection = {
   /** The first and last working day the work is projected on; null when it cannot be projected. */
@@ -209,13 +199,7 @@ const EPSILON = 1e-6;
  * what is left of the day to the next. Remaining work is the effort not yet reported done. Work without effort, or a
  * person with no capacity, is not projected, and nothing past the horizon is guessed. Plan dates are not changed.
  */
-export function projectWork(
-  ordered: Commitment[],
-  capacity: number,
-  today: string,
-  holidays: readonly string[] = [],
-  horizonDays = 365,
-) {
+export function projectWork(ordered: Commitment[], capacity: number, today: string, holidays: readonly string[] = [], horizonDays = 365) {
   const result = new Map<string, Projection>();
   const remaining = new Map<string, number>();
   for (const item of ordered) {
@@ -243,10 +227,7 @@ export function projectWork(
     }
   }
   for (const [key, left] of remaining)
-    if (!result.has(key))
-      result.set(key, left > EPSILON
-        ? { start: started.get(key) ?? null, finish: null, lateDays: null, reason: "horizon" }
-        : { start: today, finish: today, lateDays: 0 });
+    if (!result.has(key)) result.set(key, left > EPSILON ? { start: started.get(key) ?? null, finish: null, lateDays: null, reason: "horizon" } : { start: today, finish: today, lateDays: 0 });
   return result;
 }
 /** Protect exported spreadsheet cells from formula injection. */

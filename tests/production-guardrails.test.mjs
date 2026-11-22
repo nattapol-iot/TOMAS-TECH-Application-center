@@ -294,7 +294,7 @@ test("New Assignments source filtering is applied before SQL pagination", async 
 
 test("My Work exposes schedule effort without changing the audited update path", async () => {
   const [nodeRoute] = await Promise.all([readFile(new URL("backend-node/src/routes/schedule.ts", root), "utf8")]);
-  assert.match(nodeRoute, /planManDays: task\.planManDays, actualManDays: task\.actualManDays/);
+  assert.match(nodeRoute, /planManDays: task\.planManDays,\s*actualManDays: task\.actualManDays/);
   assert.match(nodeRoute, /pendingAcknowledgmentTaskIds/);
   // My Work reads a project in one batch (schedule-service readProjectWork); the unacknowledged-task read is one of its statements.
   assert.match(await readFile(new URL("backend-node/src/schedule-service.ts", root), "utf8"), /assignee_id=@actor AND state=N'Approved' AND acknowledged_at IS NULL/);
@@ -797,7 +797,7 @@ test("a quotation's price lines reach the Price Library or the screen says they 
   // A JSON body carries real numbers; positiveLong only reads path and query strings.
   assert.doesNotMatch(route, /positiveLong\(body\./);
   for (const key of ["Price lines", "Add line", "Add the first price line", "Lines total", "No price line", "Currency", "Add price"]) {
-    assert.match(dictionary, new RegExp(`"${key}": \\{"th":`), `${key} has no dictionary entry`);
+    assert.match(dictionary, new RegExp(`"?${key}"?: \\{\\s*"?th"?:`), `${key} has no dictionary entry`);
   }
 });
 
@@ -865,7 +865,7 @@ test("an imported quotation is checked against what the company already paid", a
   assert.match(screen, /itemCode: line\.itemCode\.trim\(\) \|\| row\.match\.itemCode/);
   assert.match(styles, /\.catalogue-match \{/);
   for (const key of ["Previous price", "This quotation", "Source / Reference"]) {
-    assert.match(dictionary, new RegExp(`"${key}": \\{"th":`), `${key} has no dictionary entry`);
+    assert.match(dictionary, new RegExp(`"?${key}"?: \\{\\s*"?th"?:`), `${key} has no dictionary entry`);
   }
 });
 
@@ -942,7 +942,7 @@ test("a price with no document cites the page it came from, and the database kee
   assert.match(screen, /function ReferencePriceModal/);
   // The Price Library must never show a page someone read as a price a supplier sent.
   assert.match(screen, /"Web Reference" : "Supplier Quotation"/);
-  assert.match(dictionary, /"Web reference": \{"th":/);
+  assert.match(dictionary, /"Web reference": \{\s*"?th"?:/);
 });
 
 test("employee master backs assignment identities without granting login access", async () => {

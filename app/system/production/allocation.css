@@ -1,0 +1,118 @@
+/*
+ * Team overview > Allocation (owner, 2026-11-22): the queue of plan rows waiting for people, the dialog that names them,
+ * and the confirmed hours and days away written under each week of the people table. Tokens only.
+ */
+
+.alloc-queue-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.alloc-queue-filter .chip em {
+  margin-left: 6px;
+  font-style: normal;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.alloc-queue {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.alloc-queue > li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.alloc-queue > li:last-child {
+  border-bottom: 0;
+}
+.alloc-queue-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.alloc-queue-main > button {
+  align-self: flex-start;
+  text-align: left;
+  font-size: var(--fs-xs);
+}
+.alloc-queue-main strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.alloc-queue-main small {
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+
+/* Under each week of the people table: the hours confirmed, and the days away taken off the capacity. */
+.workload-actual,
+.workload-away {
+  display: block;
+  font-size: var(--fs-3xs);
+  line-height: 1.3;
+  white-space: nowrap;
+}
+.workload-actual {
+  color: var(--blue-text);
+}
+.workload-away {
+  color: var(--amber-text);
+}
+
+/* The assign dialog. */
+.alloc-assign-facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 4px;
+}
+.alloc-assign-hint {
+  margin: 0 0 8px;
+  font-size: var(--fs-xs);
+}
+.alloc-group {
+  margin: 12px 0 4px;
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+}
+.alloc-candidates {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.alloc-candidate {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 4px;
+  border-bottom: 1px solid var(--line-soft);
+  cursor: pointer;
+}
+.alloc-candidate-name {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+.alloc-candidate-name small {
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+
+@media (max-width: 720px) {
+  .alloc-queue > li {
+    flex-wrap: wrap;
+  }
+}
