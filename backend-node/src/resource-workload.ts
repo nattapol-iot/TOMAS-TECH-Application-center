@@ -11,8 +11,7 @@ import { resolveTasks, taskRow, type TaskRow } from "./schedule-service.js";
 export const DEFAULT_WEEKLY_CAPACITY = 5;
 /** Work in these statuses, or at 100%, no longer takes anyone's time. lib/resource-planning.ts filters with the same list. */
 export const FINISHED_WORK_STATUSES = ["Closed", "Cancelled", "Approved", "Locked", "Done", "Completed", "Reviewed", "Rejected"] as const;
-export const isOpenWork = (item: { progress: number; status: string }) =>
-  item.progress < 100 && !(FINISHED_WORK_STATUSES as readonly string[]).includes(item.status);
+export const isOpenWork = (item: { progress: number; status: string }) => item.progress < 100 && !(FINISHED_WORK_STATUSES as readonly string[]).includes(item.status);
 
 /** Where a piece of work's effort is planned on the Workload screen (PUT /resource-planning/:kind/:id). */
 export type EffortSource = { kind: "Inquiry" | "Estimate" | "EstimateSection"; id: number };
@@ -31,9 +30,17 @@ export type WorkloadItem = {
    */
   group?: string;
   /** Issue: a customer issue from a Punchlist batch (migration 107), whose entityId is its batch's id. */
-  type: "Inquiry" | "Estimate" | "Project" | "Task" | "Issue"; entityId: number; ownerId: number | null;
-  reference: string; title: string; customer: string; start: string | null; end: string | null;
-  manDays: number | null; progress: number; status: string;
+  type: "Inquiry" | "Estimate" | "Project" | "Task" | "Issue";
+  entityId: number;
+  ownerId: number | null;
+  reference: string;
+  title: string;
+  customer: string;
+  start: string | null;
+  end: string | null;
+  manDays: number | null;
+  progress: number;
+  status: string;
   /** Absent where the effort lives in the work's own plan (plan tasks, Resource Plan tasks, team tasks). */
   effort?: EffortSource;
   /** A Resource Plan task still awaiting approval: counted at its proposed dates and effort. */
@@ -46,6 +53,10 @@ export type WorkloadItem = {
   repeat?: boolean;
   /** A plan row with people typed per day: this person's man-days on each date (plan-people.ts peopleShares); manDays is their total. */
   byDay?: Record<string, number>;
+  /** A project plan row: its schedule task id, so Team overview > Allocation can name its people. */
+  taskId?: number;
+  /** A project plan row's discipline (migration 123), set by the PM on a row waiting for the head to name its people. */
+  discipline?: string;
 };
 
 const FINISHED_SQL = FINISHED_WORK_STATUSES.map((status) => `N'${status}'`).join(",");
@@ -183,17 +194,36 @@ export function workloadItems(sets: Row[][], holidays: ReadonlySet<string>, opti
   const [inquiries = [], tasks = [], estimates = [], sections = [], projects = [], scheduleRows = [], pics = [], orderRows = [], teamTasks = [], issues = []] = sets;
   const items: WorkloadItem[] = [];
   const warnings: string[] = [];
-  for (const r of inquiries) items.push({
-    key: `Inquiry-${id(r, "id")}`, workKey: `Inquiry-${id(r, "id")}`, type: "Inquiry", entityId: id(r, "id"), ownerId: optional(r, "owner_id"),
-    reference: text(r, "inquiry_no"), title: text(r, "project_name"), customer: text(r, "customer_name"),
-    start: day(r, "start_date"), end: day(r, "end_date"), manDays: optional(r, "man_days"), progress: Number(r.progress ?? 0), status: text(r, "status"),
-    effort: { kind: "Inquiry", id: id(r, "id") }, ...scope(r),
-  });
+  for (const r of inquiries)
+    items.push({
+      key: `Inquiry-${id(r, "id")}`,
+      workKey: `Inquiry-${id(r, "id")}`,
+      type: "Inquiry",
+      entityId: id(r, "id"),
+      ownerId: optional(r, "owner_id"),
+      reference: text(r, "inquiry_no"),
+      title: text(r, "project_name"),
+      customer: text(r, "customer_name"),
+      start: day(r, "start_date"),
+      end: day(r, "end_date"),
+      manDays: optional(r, "man_days"),
+      progress: Number(r.progress ?? 0),
+      status: text(r, "status"),
+      effort: { kind: "Inquiry", id: id(r, "id") },
+      ...scope(r),
+    });
   for (const r of tasks) {
     const work = {
-      key: `InquiryTask-${id(r, "id")}`, workKey: `InquiryTask-${id(r, "id")}`, type: "Inquiry" as const, entityId: id(r, "inquiry_id"),
-      reference: `${text(r, "inquiry_no")} · TASK-${id(r, "id")}`, title: text(r, "title"), customer: text(r, "customer_name"),
-      progress: Number(r.percent_done ?? 0), status: text(r, "execution_status"), ...scope(r),
+      key: `InquiryTask-${id(r, "id")}`,
+      workKey: `InquiryTask-${id(r, "id")}`,
+      type: "Inquiry" as const,
+      entityId: id(r, "inquiry_id"),
+      reference: `${text(r, "inquiry_no")} · TASK-${id(r, "id")}`,
+      title: text(r, "title"),
+      customer: text(r, "customer_name"),
+      progress: Number(r.percent_done ?? 0),
+      status: text(r, "execution_status"),
+      ...scope(r),
     };
     if (r.state !== "PendingApproval") {
       items.push({ ...work, ownerId: optional(r, "assignee_id"), start: day(r, "plan_start"), end: day(r, "plan_end"), manDays: optional(r, "man_days") });
@@ -202,20 +232,43 @@ export function workloadItems(sets: Row[][], holidays: ReadonlySet<string>, opti
     const plan = proposedPlan(r.pending_plan, holidays);
     if (plan) items.push({ ...work, ownerId: plan.assigneeId, start: plan.start, end: plan.end, manDays: plan.manDays, tentative: true });
   }
-  for (const r of estimates) items.push({
-    key: `Estimate-${id(r, "id")}-${text(r, "owner_id")}`, workKey: `Estimate-${id(r, "id")}`, type: "Estimate", entityId: id(r, "id"), ownerId: optional(r, "owner_id"),
-    reference: text(r, "estimate_no"), title: text(r, "project_name"), customer: text(r, "customer_name"),
-    start: day(r, "start_date"), end: day(r, "end_date"), manDays: optional(r, "man_days"), progress: Number(r.progress ?? 0), status: text(r, "status"),
-    effort: { kind: "Estimate", id: id(r, "id") }, ...scope(r),
-  });
-  for (const r of sections) {
-    const effort = optional(r, "man_days"), share = Math.max(1, Number(r.share_count ?? 1));
+  for (const r of estimates)
     items.push({
-      key: `EstimateSection-${id(r, "assignment_id")}-${text(r, "owner_id")}`, workKey: `EstimateSection-${id(r, "assignment_id")}`, type: "Estimate",
-      entityId: id(r, "id"), ownerId: optional(r, "owner_id"),
-      reference: `${text(r, "estimate_no")} · ${text(r, "section")}`, title: text(r, "project_name"), customer: text(r, "customer_name"),
-      start: day(r, "start_date"), end: day(r, "end_date"), manDays: effort === null ? null : effort / share, progress: Number(r.progress ?? 0), status: text(r, "status"),
-      effort: { kind: "EstimateSection", id: id(r, "assignment_id") }, ...scope(r),
+      key: `Estimate-${id(r, "id")}-${text(r, "owner_id")}`,
+      workKey: `Estimate-${id(r, "id")}`,
+      type: "Estimate",
+      entityId: id(r, "id"),
+      ownerId: optional(r, "owner_id"),
+      reference: text(r, "estimate_no"),
+      title: text(r, "project_name"),
+      customer: text(r, "customer_name"),
+      start: day(r, "start_date"),
+      end: day(r, "end_date"),
+      manDays: optional(r, "man_days"),
+      progress: Number(r.progress ?? 0),
+      status: text(r, "status"),
+      effort: { kind: "Estimate", id: id(r, "id") },
+      ...scope(r),
+    });
+  for (const r of sections) {
+    const effort = optional(r, "man_days"),
+      share = Math.max(1, Number(r.share_count ?? 1));
+    items.push({
+      key: `EstimateSection-${id(r, "assignment_id")}-${text(r, "owner_id")}`,
+      workKey: `EstimateSection-${id(r, "assignment_id")}`,
+      type: "Estimate",
+      entityId: id(r, "id"),
+      ownerId: optional(r, "owner_id"),
+      reference: `${text(r, "estimate_no")} · ${text(r, "section")}`,
+      title: text(r, "project_name"),
+      customer: text(r, "customer_name"),
+      start: day(r, "start_date"),
+      end: day(r, "end_date"),
+      manDays: effort === null ? null : effort / share,
+      progress: Number(r.progress ?? 0),
+      status: text(r, "status"),
+      effort: { kind: "EstimateSection", id: id(r, "assignment_id") },
+      ...scope(r),
     });
   }
   const projectById = new Map(projects.map((r) => [id(r, "id"), { number: text(r, "project_no"), customer: text(r, "customer_name"), scope: scope(r) }]));
@@ -230,12 +283,18 @@ export function workloadItems(sets: Row[][], holidays: ReadonlySet<string>, opti
     const project = projectById.get(projectId);
     if (!project) continue;
     let calculation: ReturnType<typeof resolveTasks>;
-    try { calculation = resolveTasks(rows, new Set(holidays)); } catch { warnings.push(project.number); continue; }
+    try {
+      calculation = resolveTasks(rows, new Set(holidays));
+    } catch {
+      warnings.push(project.number);
+      continue;
+    }
     const rowById = new Map(rows.map((row) => [row.id, row]));
     /** The task right under the heading that a row belongs to (itself, or the task its functions sit under). */
     const groupOf = (task: TaskRow) => {
       let top = task;
-      for (let parent = top.parentId === null ? undefined : rowById.get(top.parentId); parent && parent.kind !== "phase"; parent = top.parentId === null ? undefined : rowById.get(top.parentId)) top = parent;
+      for (let parent = top.parentId === null ? undefined : rowById.get(top.parentId); parent && parent.kind !== "phase"; parent = top.parentId === null ? undefined : rowById.get(top.parentId))
+        top = parent;
       return `Project-${top.id}`;
     };
     for (const task of rows) {
@@ -246,41 +305,76 @@ export function workloadItems(sets: Row[][], holidays: ReadonlySet<string>, opti
       const shares: Array<number | null> = owners.length ? owners : [null];
       // People typed per day (the People table) load each PIC with their share of each day. Outsourced manpower is the
       // supplier's: the row's man-days are not its PIC's, who keeps it as plan work with no man-days of their own.
-      const outsourced = task.laborSource === "Outsourced", people = task.peopleByDay ?? [];
+      const outsourced = task.laborSource === "Outsourced",
+        people = task.peopleByDay ?? [];
       const byDay = !outsourced && people.length && resolved.planStart ? peopleShares(resolved.planStart, people, shares.length) : null;
       const manDays = outsourced ? null : byDay ? Math.round(Object.values(byDay).reduce((sum, share) => sum + share, 0) * 100) / 100 : task.planManDays / shares.length;
-      for (const ownerId of shares) items.push({
-        key: `Project-${task.id}-${ownerId ?? "none"}`, workKey: `Project-${task.id}`, group: groupOf(task), type: "Project", entityId: projectId, ownerId,
-        reference: `${project.number} · ${resolved.wbs}`, title: task.name, customer: project.customer,
-        start: resolved.planStart, end: resolved.planFinish, manDays,
-        progress: resolved.percentComplete, status: resolved.status, ...(byDay ? { byDay } : {}), ...project.scope,
-      });
+      for (const ownerId of shares)
+        items.push({
+          key: `Project-${task.id}-${ownerId ?? "none"}`,
+          workKey: `Project-${task.id}`,
+          group: groupOf(task),
+          type: "Project",
+          entityId: projectId,
+          ownerId,
+          reference: `${project.number} · ${resolved.wbs}`,
+          title: task.name,
+          customer: project.customer,
+          start: resolved.planStart,
+          end: resolved.planFinish,
+          manDays,
+          progress: resolved.percentComplete,
+          status: resolved.status,
+          ...(byDay ? { byDay } : {}),
+          ...project.scope,
+          // The row's own id, and the discipline a row waiting for people asks for (migration 123): Allocation's queue.
+          taskId: task.id,
+          ...(task.discipline ? { discipline: task.discipline } : {}),
+        });
     }
   }
   // Team tasks are everyone's to see: they were added on the board for the team. One row per person, each with the
   // whole effort (a site visit for two takes both their days). A repeat is one piece of work, TeamSeries-<series id>,
   // whose entityId is its next day.
-  for (const r of teamTasks) items.push({
-    ...(optional(r, "series_id") === null
-      ? { key: `TeamTask-${id(r, "id")}-${text(r, "assignee_id") || "none"}`, workKey: `TeamTask-${id(r, "id")}` }
-      : { key: `TeamSeries-${id(r, "series_id")}-${text(r, "assignee_id") || "none"}`, workKey: `TeamSeries-${id(r, "series_id")}` }),
-    type: "Task", entityId: id(r, "id"), ownerId: optional(r, "assignee_id"),
-    reference: "", title: text(r, "title"), customer: text(r, "customer_name"),
-    start: day(r, "start_date"), end: day(r, "end_date"), manDays: Number(r.man_days ?? 0), progress: 0, status: "Planned",
-    taskKind: r.kind === "Appointment" ? "Appointment" : "Task",
-  });
+  for (const r of teamTasks)
+    items.push({
+      ...(optional(r, "series_id") === null
+        ? { key: `TeamTask-${id(r, "id")}-${text(r, "assignee_id") || "none"}`, workKey: `TeamTask-${id(r, "id")}` }
+        : { key: `TeamSeries-${id(r, "series_id")}-${text(r, "assignee_id") || "none"}`, workKey: `TeamSeries-${id(r, "series_id")}` }),
+      type: "Task",
+      entityId: id(r, "id"),
+      ownerId: optional(r, "assignee_id"),
+      reference: "",
+      title: text(r, "title"),
+      customer: text(r, "customer_name"),
+      start: day(r, "start_date"),
+      end: day(r, "end_date"),
+      manDays: Number(r.man_days ?? 0),
+      progress: 0,
+      status: "Planned",
+      taskKind: r.kind === "Appointment" ? "Appointment" : "Task",
+    });
   // A customer issue is its PIC's: plan hours as man-days (8 h = 1 MD); one with no hours yet loads nothing. Its
   // entityId is the batch, which the Punchlist opens.
   for (const r of issues) {
-    const hours = optional(r, "plan_hours"), what = text(r, "description").replace(/\s+/g, " ").trim();
+    const hours = optional(r, "plan_hours"),
+      what = text(r, "description").replace(/\s+/g, " ").trim();
     const start = day(r, "plan_start");
     items.push({
-      key: `Issue-${id(r, "id")}`, workKey: `Issue-${id(r, "id")}`, type: "Issue", entityId: id(r, "batch_id"), ownerId: optional(r, "assignee_id"),
+      key: `Issue-${id(r, "id")}`,
+      workKey: `Issue-${id(r, "id")}`,
+      type: "Issue",
+      entityId: id(r, "batch_id"),
+      ownerId: optional(r, "assignee_id"),
       reference: `${text(r, "batch_no")} #${id(r, "line_no")}`,
       title: [text(r, "function_name"), what.length > 120 ? `${what.slice(0, 119)}…` : what].filter(Boolean).join(" · "),
       customer: [text(r, "project_ref"), text(r, "customer_name")].filter(Boolean).join(" · "),
-      start, end: day(r, "plan_end") ?? start, manDays: hours === null ? null : Math.round((hours / 8) * 100) / 100,
-      progress: 0, status: r.state === "Doing" ? "In Progress" : "Not Started", ...scope(r),
+      start,
+      end: day(r, "plan_end") ?? start,
+      manDays: hours === null ? null : Math.round((hours / 8) * 100) / 100,
+      progress: 0,
+      status: r.state === "Doing" ? "In Progress" : "Not Started",
+      ...scope(r),
     });
   }
   return { items: options.keepFinished ? items : items.filter(isOpenWork), warnings, orderRows };
@@ -294,7 +388,8 @@ export function workOrders(rows: Row[], items: WorkloadItem[]): WorkOrder[] {
   for (const item of items) if (item.ownerId !== null) open.set(item.ownerId, (open.get(item.ownerId) ?? new Set()).add(item.workKey));
   const orders = new Map<number, string[]>();
   for (const r of rows) {
-    const userId = id(r, "user_id"), key = text(r, "work_key");
+    const userId = id(r, "user_id"),
+      key = text(r, "work_key");
     if (open.get(userId)?.has(key)) orders.set(userId, [...(orders.get(userId) ?? []), key]);
   }
   return [...orders].map(([userId, keys]) => ({ userId, keys }));

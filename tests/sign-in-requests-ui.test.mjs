@@ -57,7 +57,7 @@ test("every SignIn string has English, Thai and Japanese copy", async () => {
   const keys = [...new Set([shell, screen].flatMap((source) => [...source.matchAll(/"((?:SignIn|Employee)\.[A-Za-z]+)"/g)].map((match) => match[1])))];
   assert.ok(keys.length >= 15, `${keys.length} keys`);
   for (const key of keys) {
-    const pattern = String.raw`^\s*"` + key.replace(".", "\\.") + String.raw`": \{ en: "[^"]+", th: "[^"]+", jp: "[^"]+" \},$`;
+    const pattern = String.raw`^\s*"` + key.replace(".", "\\.") + String.raw`": \{\s*en: "[^"]+",\s*th: "[^"]+",\s*jp: "[^"]+",?\s*\},$`;
     assert.match(dictionary, new RegExp(pattern, "m"), `${key} needs en, th and jp`);
   }
 });

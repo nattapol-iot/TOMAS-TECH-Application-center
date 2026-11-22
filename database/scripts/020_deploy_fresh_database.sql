@@ -183,6 +183,8 @@ GO
 :r database/migrations/119_estimate_erp_sheet_per_revision.sql
 :r database/migrations/120_employee_master_link.sql
 :r database/migrations/121_daily_work_hours.sql
+:r database/migrations/122_master_data_sync_account.sql
+:r database/migrations/123_plan_row_discipline.sql
 
 USE [$(DatabaseName)];
 GO

@@ -13,23 +13,83 @@ export type ProjectRow = { id: number; projectNo: string; name: string; managerI
 /** active: the PIC can still answer for the row (an active account on the project's team); a PIC who left or was taken off the team does not hold it. */
 export type PicRow = { id: number; name: string; email: string; active: boolean };
 export type TaskRow = {
-  id: number; projectId: number; parentId: number | null; sortOrder: number; kind: string; name: string; isMilestone: boolean;
-  origin: string; createdBy: number; visibility: string; planStart: string | null; planDays: number; startMode: string;
-  predecessorId: number | null; lagDays: number; picExternal: string; planManDays: number; baselineStart: string | null;
-  baselineFinish: string | null; baselineDays: number; baselineRevision: number; actualStart: string | null;
-  actualFinish: string | null; forecastFinish: string | null; percentComplete: number; status: string;
-  blockedReason: string | null; remark: string | null; actualManDays: number; updatedBy: number; updatedAt: unknown; rowVersion: Buffer;
+  id: number;
+  projectId: number;
+  parentId: number | null;
+  sortOrder: number;
+  kind: string;
+  name: string;
+  isMilestone: boolean;
+  origin: string;
+  createdBy: number;
+  visibility: string;
+  planStart: string | null;
+  planDays: number;
+  startMode: string;
+  predecessorId: number | null;
+  lagDays: number;
+  picExternal: string;
+  planManDays: number;
+  baselineStart: string | null;
+  baselineFinish: string | null;
+  baselineDays: number;
+  baselineRevision: number;
+  actualStart: string | null;
+  actualFinish: string | null;
+  forecastFinish: string | null;
+  percentComplete: number;
+  status: string;
+  blockedReason: string | null;
+  remark: string | null;
+  actualManDays: number;
+  updatedBy: number;
+  updatedAt: unknown;
+  rowVersion: Buffer;
   /** The People table (plan-people.ts): our own staff or outsourced manpower, its supplier, and people per day from the plan start. */
-  laborSource?: string; laborSupplier?: string; peopleByDay?: number[];
+  laborSource?: string;
+  laborSupplier?: string;
+  peopleByDay?: number[];
+  /** The discipline the row needs (migration 123): set by the PM on a row waiting for the head to name its people. */
+  discipline?: PlanDiscipline | null;
 };
 export type PlanInput = {
-  scheduleVersion: string | null; rowVersion: Buffer | null; parentId: number | null; sortOrder: number; kind: string; name: string;
-  isMilestone: boolean; visibility: string; planStart: string | null; planDays: number; startMode: string;
-  predecessorId: number | null; lagDays: number; picUserIds: number[]; picExternal: string; planManDays: number;
+  scheduleVersion: string | null;
+  rowVersion: Buffer | null;
+  parentId: number | null;
+  sortOrder: number;
+  kind: string;
+  name: string;
+  isMilestone: boolean;
+  visibility: string;
+  planStart: string | null;
+  planDays: number;
+  startMode: string;
+  predecessorId: number | null;
+  lagDays: number;
+  picUserIds: number[];
+  picExternal: string;
+  planManDays: number;
+  /** Absent from an older client: the row keeps the discipline it has. */
+  discipline?: PlanDiscipline | null;
 };
+/** The disciplines a plan row can ask for (migration 123), the same four Projects > Cost splits people by. */
+export const PLAN_DISCIPLINES = ["Electrical", "Mechanical", "Software", "Installation"] as const;
+export type PlanDiscipline = (typeof PLAN_DISCIPLINES)[number];
+/** A discipline from a request body: null clears it, anything else must be one of the four. */
+export function planDiscipline(value: unknown): PlanDiscipline | null {
+  if (value === null || value === "") return null;
+  if (typeof value !== "string" || !(PLAN_DISCIPLINES as readonly string[]).includes(value)) throw new ApiError(400, "validation_failed", "Discipline is invalid.");
+  return value as PlanDiscipline;
+}
 export type ProgressInput = {
-  scheduleVersion: string | null; rowVersion: Buffer; percentComplete: number; actualStart: string | null;
-  actualFinish: string | null; forecastFinish: string | null; status: string; remark: string | null;
+  scheduleVersion: string | null;
+  rowVersion: Buffer;
+  percentComplete: number;
+  actualStart: string | null;
+  actualFinish: string | null;
+  forecastFinish: string | null;
+  status: string;
+  remark: string | null;
 };
 
 export function optionalId(value: unknown, label: string): number | null {
@@ -38,7 +98,8 @@ export function optionalId(value: unknown, label: string): number | null {
 }
 function decimal(value: unknown, label: string, min: number, max: number, scale: number): number {
   if (typeof value !== "number" || !Number.isFinite(value) || value < min || value > max) throw new ApiError(400, "validation_failed", `${label} is invalid.`);
-  if (!value.toString().toLowerCase().includes("e") && (value.toString().split(".")[1]?.length ?? 0) > scale) throw new ApiError(400, "validation_failed", `${label} cannot have more than ${scale} decimal places.`);
+  if (!value.toString().toLowerCase().includes("e") && (value.toString().split(".")[1]?.length ?? 0) > scale)
+    throw new ApiError(400, "validation_failed", `${label} cannot have more than ${scale} decimal places.`);
   return value;
 }
 function oneOf(value: string, label: string, values: string[]): string {
@@ -66,16 +127,33 @@ export function planInput(value: unknown, requireRowVersion: boolean): PlanInput
   if (kind !== "phase" && !planStart && startMode !== "linked") throw new ApiError(400, "validation_failed", "A manually scheduled task requires a plan start date.");
   if (isMilestone && planDays !== 1) throw new ApiError(400, "validation_failed", "A milestone must have a one-day duration.");
   // A main heading's own dates are the customer's (the Master Plan); its bar follows the rows under it.
-  if (kind === "phase" && (parentId || (!planStart && planDays !== 1) || startMode !== "manual" || predecessorId || lagDays !== 0 || picUserIds.length || picExternal || planManDays !== 0 || isMilestone)) {
+  if (
+    kind === "phase" &&
+    (parentId || (!planStart && planDays !== 1) || startMode !== "manual" || predecessorId || lagDays !== 0 || picUserIds.length || picExternal || planManDays !== 0 || isMilestone)
+  ) {
     throw new ApiError(400, "validation_failed", "A main heading is a top-level row with the customer's dates only: no dependencies, PICs, effort or milestone values.");
   }
   if (kind === "detail" && !parentId) throw new ApiError(400, "validation_failed", "A detail row must belong to a task.");
+  const discipline = body.discipline === undefined ? undefined : planDiscipline(body.discipline);
+  if (kind === "phase" && discipline) throw new ApiError(400, "validation_failed", "A main heading has no discipline; its rows carry it.");
   return {
     scheduleVersion: body.scheduleVersion === null || body.scheduleVersion === undefined ? null : requiredText(body.scheduleVersion, 64, "Schedule version"),
     rowVersion: requireRowVersion ? parseRowVersion(body.rowVersion) : null,
-    parentId, sortOrder: requiredInteger(body.sortOrder, "Sort order", -1_000_000, 1_000_000), kind,
-    name: requiredText(body.name, 500, "Task name"), isMilestone, visibility, planStart, planDays, startMode,
-    predecessorId, lagDays, picUserIds, picExternal, planManDays,
+    parentId,
+    sortOrder: requiredInteger(body.sortOrder, "Sort order", -1_000_000, 1_000_000),
+    kind,
+    name: requiredText(body.name, 500, "Task name"),
+    isMilestone,
+    visibility,
+    planStart,
+    planDays,
+    startMode,
+    predecessorId,
+    lagDays,
+    picUserIds,
+    picExternal,
+    planManDays,
+    ...(discipline === undefined ? {} : { discipline }),
   };
 }
 
@@ -93,62 +171,119 @@ export function progressInput(value: unknown): ProgressInput {
   if (forecastFinish && actualStart && forecastFinish < actualStart) throw new ApiError(400, "validation_failed", "Forecast finish cannot be before actual start.");
   if (status === "Done" && (percentComplete !== 100 || !actualStart || !actualFinish)) throw new ApiError(400, "validation_failed", "A completed task requires 100 percent and both actual dates.");
   if (status !== "Done" && percentComplete === 100) throw new ApiError(400, "validation_failed", "A task at 100 percent must have status Done.");
-  if (status === "Not Started" && (percentComplete !== 0 || actualStart || actualFinish)) throw new ApiError(400, "validation_failed", "A task that has not started cannot have progress or actual dates.");
-  return { scheduleVersion: body.scheduleVersion == null ? null : requiredText(body.scheduleVersion, 64, "Schedule version"), rowVersion: parseRowVersion(body.rowVersion), percentComplete, actualStart, actualFinish, forecastFinish, status, remark };
+  if (status === "Not Started" && (percentComplete !== 0 || actualStart || actualFinish))
+    throw new ApiError(400, "validation_failed", "A task that has not started cannot have progress or actual dates.");
+  return {
+    scheduleVersion: body.scheduleVersion == null ? null : requiredText(body.scheduleVersion, 64, "Schedule version"),
+    rowVersion: parseRowVersion(body.rowVersion),
+    percentComplete,
+    actualStart,
+    actualFinish,
+    forecastFinish,
+    status,
+    remark,
+  };
 }
 
 export function taskRow(row: Record<string, unknown> & { row_version: Buffer }): TaskRow {
   return {
-    id: Number(row.id), projectId: Number(row.project_id), parentId: row.parent_id === null ? null : Number(row.parent_id),
-    sortOrder: Number(row.sort_order), kind: String(row.kind), name: String(row.name), isMilestone: Boolean(row.is_milestone),
-    origin: String(row.origin), createdBy: Number(row.created_by), visibility: String(row.visibility),
-    planStart: dateOnly(row.plan_start as Date | string | null), planDays: Number(row.plan_days), startMode: String(row.start_mode),
-    predecessorId: row.predecessor_id === null ? null : Number(row.predecessor_id), lagDays: Number(row.lag_days),
-    picExternal: String(row.pic_external), planManDays: Number(row.plan_man_days), baselineStart: dateOnly(row.baseline_start as Date | string | null),
-    baselineFinish: dateOnly(row.baseline_end as Date | string | null), baselineDays: Number(row.baseline_days), baselineRevision: Number(row.baseline_rev),
-    actualStart: dateOnly(row.actual_start as Date | string | null), actualFinish: dateOnly(row.actual_end as Date | string | null),
-    forecastFinish: dateOnly(row.forecast_end as Date | string | null), percentComplete: Number(row.percent_done), status: String(row.status),
-    blockedReason: row.blocked_reason === null ? null : String(row.blocked_reason), remark: row.note === null ? null : String(row.note),
-    actualManDays: Number(row.actual_man_days), updatedBy: Number(row.updated_by), updatedAt: row.updated_at, rowVersion: row.row_version,
-    laborSource: row.labor_source == null ? "Own" : String(row.labor_source), laborSupplier: row.labor_supplier == null ? "" : String(row.labor_supplier),
+    id: Number(row.id),
+    projectId: Number(row.project_id),
+    parentId: row.parent_id === null ? null : Number(row.parent_id),
+    sortOrder: Number(row.sort_order),
+    kind: String(row.kind),
+    name: String(row.name),
+    isMilestone: Boolean(row.is_milestone),
+    origin: String(row.origin),
+    createdBy: Number(row.created_by),
+    visibility: String(row.visibility),
+    planStart: dateOnly(row.plan_start as Date | string | null),
+    planDays: Number(row.plan_days),
+    startMode: String(row.start_mode),
+    predecessorId: row.predecessor_id === null ? null : Number(row.predecessor_id),
+    lagDays: Number(row.lag_days),
+    picExternal: String(row.pic_external),
+    planManDays: Number(row.plan_man_days),
+    baselineStart: dateOnly(row.baseline_start as Date | string | null),
+    baselineFinish: dateOnly(row.baseline_end as Date | string | null),
+    baselineDays: Number(row.baseline_days),
+    baselineRevision: Number(row.baseline_rev),
+    actualStart: dateOnly(row.actual_start as Date | string | null),
+    actualFinish: dateOnly(row.actual_end as Date | string | null),
+    forecastFinish: dateOnly(row.forecast_end as Date | string | null),
+    percentComplete: Number(row.percent_done),
+    status: String(row.status),
+    blockedReason: row.blocked_reason === null ? null : String(row.blocked_reason),
+    remark: row.note === null ? null : String(row.note),
+    actualManDays: Number(row.actual_man_days),
+    updatedBy: Number(row.updated_by),
+    updatedAt: row.updated_at,
+    rowVersion: row.row_version,
+    laborSource: row.labor_source == null ? "Own" : String(row.labor_source),
+    laborSupplier: row.labor_supplier == null ? "" : String(row.labor_supplier),
     peopleByDay: fitPeople(storedPeople(row.people_by_day), Number(row.plan_days)),
+    discipline: row.discipline == null ? null : (String(row.discipline) as PlanDiscipline),
   };
 }
 
 const TASK_COLUMNS = `id,project_id,parent_id,sort_order,kind,name,is_milestone,origin,created_by,visibility,
  plan_start,plan_days,start_mode,predecessor_id,lag_days,pic_external,plan_man_days,baseline_start,baseline_end,
  baseline_days,baseline_rev,actual_start,actual_end,forecast_end,percent_done,status,blocked_reason,note,actual_man_days,
- updated_by,updated_at,row_version,labor_source,labor_supplier,people_by_day`;
+ updated_by,updated_at,row_version,labor_source,labor_supplier,people_by_day,discipline`;
 
 const TASKS_SQL = `SELECT ${TASK_COLUMNS} FROM dbo.schedule_tasks WHERE project_id=@project AND deleted_at IS NULL ORDER BY parent_id,sort_order,id;`;
 export async function readTasks(transaction: TransactionType, projectId: number): Promise<TaskRow[]> {
-  const request = new sql.Request(transaction); request.input("project", sql.BigInt, projectId);
+  const request = new sql.Request(transaction);
+  request.input("project", sql.BigInt, projectId);
   return (await request.query<Record<string, unknown> & { row_version: Buffer }>(TASKS_SQL)).recordset.map(taskRow);
 }
 export async function readTask(transaction: TransactionType, id: number): Promise<TaskRow> {
-  const request = new sql.Request(transaction); request.input("id", sql.BigInt, id);
-  const row = (await request.query<Record<string, unknown> & { row_version: Buffer }>(`SELECT ${TASK_COLUMNS} FROM dbo.schedule_tasks WITH (UPDLOCK,HOLDLOCK) WHERE id=@id AND deleted_at IS NULL;`)).recordset[0];
+  const request = new sql.Request(transaction);
+  request.input("id", sql.BigInt, id);
+  const row = (await request.query<Record<string, unknown> & { row_version: Buffer }>(`SELECT ${TASK_COLUMNS} FROM dbo.schedule_tasks WITH (UPDLOCK,HOLDLOCK) WHERE id=@id AND deleted_at IS NULL;`))
+    .recordset[0];
   if (!row) throw new ApiError(404, "schedule_task_not_found", "Schedule task not found.");
   return taskRow(row);
 }
 export async function readProject(transaction: TransactionType, projectId: number, lock = false): Promise<ProjectRow> {
-  const request = new sql.Request(transaction); request.input("project", sql.BigInt, projectId);
-  const row = (await request.query<Record<string, unknown>>(`SELECT id,project_no,name,manager_id,lead_engineer_id,status,target_delivery FROM dbo.projects${lock ? " WITH (UPDLOCK,HOLDLOCK)" : ""} WHERE id=@project AND deleted_at IS NULL;`)).recordset[0];
+  const request = new sql.Request(transaction);
+  request.input("project", sql.BigInt, projectId);
+  const row = (
+    await request.query<Record<string, unknown>>(
+      `SELECT id,project_no,name,manager_id,lead_engineer_id,status,target_delivery FROM dbo.projects${lock ? " WITH (UPDLOCK,HOLDLOCK)" : ""} WHERE id=@project AND deleted_at IS NULL;`,
+    )
+  ).recordset[0];
   if (!row) throw new ApiError(404, "project_not_found", "Project not found.");
-  return { id: Number(row.id), projectNo: String(row.project_no), name: String(row.name), managerId: Number(row.manager_id), leadEngineerId: row.lead_engineer_id == null ? null : Number(row.lead_engineer_id), status: String(row.status), targetDelivery: dateOnly((row.target_delivery ?? null) as Date | string | null) };
+  return {
+    id: Number(row.id),
+    projectNo: String(row.project_no),
+    name: String(row.name),
+    managerId: Number(row.manager_id),
+    leadEngineerId: row.lead_engineer_id == null ? null : Number(row.lead_engineer_id),
+    status: String(row.status),
+    targetDelivery: dateOnly((row.target_delivery ?? null) as Date | string | null),
+  };
 }
 export async function demandPlanOwner(transaction: TransactionType, projectId: number, actor: CurrentUser, allowLead = true): Promise<ProjectRow> {
   const project = await readProject(transaction, projectId, true);
   if (project.status === "Closed") throw new ApiError(409, "project_closed", "A closed project's schedule cannot be changed.");
-  if (project.managerId !== actor.id && !(allowLead && project.leadEngineerId === actor.id) && !hasRole(actor, "Engineering Manager", "Admin")) throw new ApiError(403, "schedule_plan_owner_required", "Only this project's plan owners can change its plan.");
+  if (project.managerId !== actor.id && !(allowLead && project.leadEngineerId === actor.id) && !hasRole(actor, "Engineering Manager", "Admin"))
+    throw new ApiError(403, "schedule_plan_owner_required", "Only this project's plan owners can change its plan.");
   return project;
 }
 /** A task is theirs when they created it or are a PIC of it or any task ancestor. Cycles fail closed. */
-export function isOwnPlanTask(taskId: number, actorId: number, tasks: ReadonlyMap<number, Pick<TaskRow, "id" | "parentId" | "kind" | "createdBy">>, pics: ReadonlyMap<number, readonly Pick<PicRow, "id">[]>): boolean {
-  const seen = new Set<number>(); let id: number | null = taskId;
+export function isOwnPlanTask(
+  taskId: number,
+  actorId: number,
+  tasks: ReadonlyMap<number, Pick<TaskRow, "id" | "parentId" | "kind" | "createdBy">>,
+  pics: ReadonlyMap<number, readonly Pick<PicRow, "id">[]>,
+): boolean {
+  const seen = new Set<number>();
+  let id: number | null = taskId;
   while (id !== null) {
     if (seen.has(id)) return false;
-    seen.add(id); const task = tasks.get(id);
+    seen.add(id);
+    const task = tasks.get(id);
     if (!task || task.kind !== "task") return false;
     if (task.createdBy === actorId || pics.get(id)?.some((pic) => pic.id === actorId)) return true;
     id = task.parentId;
@@ -157,22 +292,35 @@ export function isOwnPlanTask(taskId: number, actorId: number, tasks: ReadonlyMa
 }
 export async function demandRowPlanOwner(transaction: TransactionType, database: Database, projectId: number, actor: CurrentUser): Promise<ProjectRow> {
   const project = await readProject(transaction, projectId, true);
-  if (project.leadEngineerId !== actor.id && !await permissionFor(database, actor.id, "schedule.plan")) throw new ApiError(403, "permission_denied", "Schedule plan permission required.");
+  if (project.leadEngineerId !== actor.id && !(await permissionFor(database, actor.id, "schedule.plan"))) throw new ApiError(403, "permission_denied", "Schedule plan permission required.");
   return demandPlanOwner(transaction, projectId, actor);
 }
 /** Full plan rights, or the member's narrow create/edit/delete rights. Move stays with plan owners. */
-export async function demandMemberPlanRow(transaction: TransactionType, database: Database, projectId: number, actor: CurrentUser, task: TaskRow | null, input?: PlanInput): Promise<{ project: ProjectRow; canPlan: boolean }> {
+export async function demandMemberPlanRow(
+  transaction: TransactionType,
+  database: Database,
+  projectId: number,
+  actor: CurrentUser,
+  task: TaskRow | null,
+  input?: PlanInput,
+): Promise<{ project: ProjectRow; canPlan: boolean }> {
   const project = await readProject(transaction, projectId, true);
   if (project.status === "Closed") throw new ApiError(409, "project_closed", "A closed project's schedule cannot be changed.");
-  const canPlan = project.leadEngineerId === actor.id || (canAnswerDayRequests(project, actor) && await permissionFor(database, actor.id, "schedule.plan"));
+  const canPlan = project.leadEngineerId === actor.id || (canAnswerDayRequests(project, actor) && (await permissionFor(database, actor.id, "schedule.plan")));
   if (canPlan) return { project: await demandRowPlanOwner(transaction, database, projectId, actor), canPlan };
-  if (!await permissionFor(database, actor.id, "schedule.progress") || !await isProjectMember(transaction, projectId, actor.id)) throw new ApiError(403, "schedule_member_required", "Only a project member with schedule progress permission may change their own rows.");
+  if (!(await permissionFor(database, actor.id, "schedule.progress")) || !(await isProjectMember(transaction, projectId, actor.id)))
+    throw new ApiError(403, "schedule_member_required", "Only a project member with schedule progress permission may change their own rows.");
   if (task) {
     if (task.kind !== "task" || task.createdBy !== actor.id) throw new ApiError(403, "schedule_row_owner_required", "Only the creator may edit or delete this row.");
-    if (input && (["parentId", "sortOrder", "kind", "isMilestone", "visibility", "startMode", "predecessorId", "lagDays", "picExternal", "planManDays"] as const).some((key) => input[key] !== task[key])) throw new ApiError(403, "schedule_own_fields_only", "Members may change only the name, dates, days and project PICs of their own rows.");
+    if (
+      input &&
+      (["parentId", "sortOrder", "kind", "isMilestone", "visibility", "startMode", "predecessorId", "lagDays", "picExternal", "planManDays"] as const).some((key) => input[key] !== task[key])
+    )
+      throw new ApiError(403, "schedule_own_fields_only", "Members may change only the name, dates, days and project PICs of their own rows.");
   } else {
     const tasks = new Map((await readTasks(transaction, projectId)).map((row) => [row.id, row]));
-    if (!input || input.kind !== "task" || input.parentId === null || !isOwnPlanTask(input.parentId, actor.id, tasks, await readPics(transaction, projectId))) throw new ApiError(403, "schedule_own_parent_required", "Members may add tasks only beneath their own tasks.");
+    if (!input || input.kind !== "task" || input.parentId === null || !isOwnPlanTask(input.parentId, actor.id, tasks, await readPics(transaction, projectId)))
+      throw new ApiError(403, "schedule_own_parent_required", "Members may add tasks only beneath their own tasks.");
   }
   return { project, canPlan: false };
 }
@@ -180,55 +328,125 @@ export async function readHolidays(transaction: TransactionType): Promise<Set<st
   return new Set((await new sql.Request(transaction).query<{ holiday_date: Date | string }>(`SELECT holiday_date FROM dbo.holidays;`)).recordset.map((row) => dateOnly(row.holiday_date)!));
 }
 /** A PIC row (alias pic, user u) whose user is active and still on the team of task t's project: manager, lead engineer or listed member. */
-const ACTIVE_PIC_SQL = "u.is_active=1 AND u.deleted_at IS NULL AND EXISTS(SELECT 1 FROM dbo.projects pic_project WHERE pic_project.id=t.project_id AND (pic_project.manager_id=u.id OR pic_project.lead_engineer_id=u.id OR EXISTS(SELECT 1 FROM dbo.project_members pic_member WHERE pic_member.project_id=pic_project.id AND pic_member.user_id=u.id)))";
+const ACTIVE_PIC_SQL =
+  "u.is_active=1 AND u.deleted_at IS NULL AND EXISTS(SELECT 1 FROM dbo.projects pic_project WHERE pic_project.id=t.project_id AND (pic_project.manager_id=u.id OR pic_project.lead_engineer_id=u.id OR EXISTS(SELECT 1 FROM dbo.project_members pic_member WHERE pic_member.project_id=pic_project.id AND pic_member.user_id=u.id)))";
 /** No PIC who can still answer for the row: it is open to every project member (canPostProgress). */
 export const hasNoActivePic = (pics: PicRow[] | undefined): boolean => !(pics ?? []).some((pic) => pic.active);
 export async function readPics(transaction: TransactionType, projectId: number): Promise<Map<number, PicRow[]>> {
-  const request = new sql.Request(transaction); request.input("project", sql.BigInt, projectId);
+  const request = new sql.Request(transaction);
+  request.input("project", sql.BigInt, projectId);
   return picsByTask((await request.query<Record<string, unknown>>(PICS_SQL)).recordset);
 }
 const PICS_SQL = `SELECT pic.task_id,u.id,u.name,u.email,CAST(CASE WHEN ${ACTIVE_PIC_SQL} THEN 1 ELSE 0 END AS bit) active FROM dbo.schedule_task_pics pic INNER JOIN dbo.schedule_tasks t ON t.id=pic.task_id INNER JOIN dbo.users u ON u.id=pic.user_id WHERE t.project_id=@project AND t.deleted_at IS NULL ORDER BY pic.task_id,u.name,u.id;`;
 function picsByTask(rows: Record<string, unknown>[]): Map<number, PicRow[]> {
   const result = new Map<number, PicRow[]>();
-  for (const row of rows) { const id = Number(row.task_id); const list = result.get(id) ?? []; list.push({ id: Number(row.id), name: String(row.name), email: String(row.email), active: row.active !== false }); result.set(id, list); }
+  for (const row of rows) {
+    const id = Number(row.task_id);
+    const list = result.get(id) ?? [];
+    list.push({ id: Number(row.id), name: String(row.name), email: String(row.email), active: row.active !== false });
+    result.set(id, list);
+  }
   return result;
 }
 export async function currentScheduleVersion(transaction: TransactionType, projectId: number, lock = false): Promise<Buffer | null> {
-  const request = new sql.Request(transaction); request.input("project", sql.BigInt, projectId);
-  const row = (await request.query<{ row_version: Buffer }>(`SELECT TOP(1) row_version FROM dbo.schedule_tasks${lock ? " WITH (UPDLOCK,HOLDLOCK)" : ""} WHERE project_id=@project ORDER BY row_version DESC;`)).recordset[0];
+  const request = new sql.Request(transaction);
+  request.input("project", sql.BigInt, projectId);
+  const row = (
+    await request.query<{ row_version: Buffer }>(`SELECT TOP(1) row_version FROM dbo.schedule_tasks${lock ? " WITH (UPDLOCK,HOLDLOCK)" : ""} WHERE project_id=@project ORDER BY row_version DESC;`)
+  ).recordset[0];
   return row?.row_version ?? null;
 }
 export async function validateScheduleVersion(transaction: TransactionType, projectId: number, expected: string | null): Promise<void> {
   const current = await currentScheduleVersion(transaction, projectId, true);
-  if (!current) { if (!expected) return; throw concurrency(); }
+  if (!current) {
+    if (!expected) return;
+    throw concurrency();
+  }
   if (!expected || !current.equals(parseRowVersion(expected))) throw concurrency();
 }
 /** Replaces a row's PICs and returns who was not a PIC before, so the caller can tell them (project-notices.ts). */
 export async function replacePics(transaction: TransactionType, taskId: number, ids: number[]): Promise<number[]> {
-  const before = new sql.Request(transaction); before.input("task", sql.BigInt, taskId);
+  const before = new sql.Request(transaction);
+  before.input("task", sql.BigInt, taskId);
   const existing = new Set((await before.query<{ user_id: number | string }>(`SELECT user_id FROM dbo.schedule_task_pics WHERE task_id=@task;`)).recordset.map((row) => Number(row.user_id)));
-  const remove = new sql.Request(transaction); remove.input("task", sql.BigInt, taskId); await remove.query(`DELETE FROM dbo.schedule_task_pics WHERE task_id=@task;`);
-  for (const id of ids) { const insert = new sql.Request(transaction); insert.input("task", sql.BigInt, taskId); insert.input("user", sql.BigInt, id); await insert.query(`INSERT INTO dbo.schedule_task_pics(task_id,user_id) VALUES(@task,@user);`); }
+  const remove = new sql.Request(transaction);
+  remove.input("task", sql.BigInt, taskId);
+  await remove.query(`DELETE FROM dbo.schedule_task_pics WHERE task_id=@task;`);
+  for (const id of ids) {
+    const insert = new sql.Request(transaction);
+    insert.input("task", sql.BigInt, taskId);
+    insert.input("user", sql.BigInt, id);
+    await insert.query(`INSERT INTO dbo.schedule_task_pics(task_id,user_id) VALUES(@task,@user);`);
+  }
   return [...new Set(ids)].filter((id) => !existing.has(id));
 }
 export async function validatePics(transaction: TransactionType, project: ProjectRow, ids: number[]): Promise<void> {
-  for (const id of ids) { const request = new sql.Request(transaction); request.input("user", sql.BigInt, id); request.input("manager", sql.BigInt, project.managerId); request.input("project", sql.BigInt, project.id);
-    const row = (await request.query<{ allowed: boolean }>(`SELECT CAST(CASE WHEN EXISTS(SELECT 1 FROM dbo.users u WHERE u.id=@user AND u.is_active=1 AND u.deleted_at IS NULL AND (@user=@manager OR EXISTS(SELECT 1 FROM dbo.projects p WHERE p.id=@project AND p.lead_engineer_id=@user) OR EXISTS(SELECT 1 FROM dbo.project_members pm WHERE pm.project_id=@project AND pm.user_id=@user))) THEN 1 ELSE 0 END AS bit) allowed;`)).recordset[0];
-    if (!row?.allowed) throw new ApiError(422, "schedule_pic_invalid", "Every PIC must be an active member of the project."); }
+  for (const id of ids) {
+    const request = new sql.Request(transaction);
+    request.input("user", sql.BigInt, id);
+    request.input("manager", sql.BigInt, project.managerId);
+    request.input("project", sql.BigInt, project.id);
+    const row = (
+      await request.query<{ allowed: boolean }>(
+        `SELECT CAST(CASE WHEN EXISTS(SELECT 1 FROM dbo.users u WHERE u.id=@user AND u.is_active=1 AND u.deleted_at IS NULL AND (@user=@manager OR EXISTS(SELECT 1 FROM dbo.projects p WHERE p.id=@project AND p.lead_engineer_id=@user) OR EXISTS(SELECT 1 FROM dbo.project_members pm WHERE pm.project_id=@project AND pm.user_id=@user))) THEN 1 ELSE 0 END AS bit) allowed;`,
+      )
+    ).recordset[0];
+    if (!row?.allowed) throw new ApiError(422, "schedule_pic_invalid", "Every PIC must be an active member of the project.");
+  }
 }
-export async function appendUpdate(transaction: TransactionType, projectId: number, taskId: number | null, actorId: number, field: string, before: string | null, after: string | null, comment: string | null): Promise<void> {
-  const request = new sql.Request(transaction); request.input("project", sql.BigInt, projectId); request.input("task", sql.BigInt, taskId); request.input("actor", sql.BigInt, actorId); request.input("field", sql.NVarChar(50), field); request.input("before", sql.NVarChar(sql.MAX), before); request.input("after", sql.NVarChar(sql.MAX), after); request.input("comment", sql.NVarChar(sql.MAX), comment);
+export async function appendUpdate(
+  transaction: TransactionType,
+  projectId: number,
+  taskId: number | null,
+  actorId: number,
+  field: string,
+  before: string | null,
+  after: string | null,
+  comment: string | null,
+): Promise<void> {
+  const request = new sql.Request(transaction);
+  request.input("project", sql.BigInt, projectId);
+  request.input("task", sql.BigInt, taskId);
+  request.input("actor", sql.BigInt, actorId);
+  request.input("field", sql.NVarChar(50), field);
+  request.input("before", sql.NVarChar(sql.MAX), before);
+  request.input("after", sql.NVarChar(sql.MAX), after);
+  request.input("comment", sql.NVarChar(sql.MAX), comment);
   await request.query(`INSERT INTO dbo.schedule_updates(project_id,task_id,actor_id,field,from_value,to_value,comment) VALUES(@project,@task,@actor,@field,@before,@after,@comment);`);
 }
 export async function hasChildren(transaction: TransactionType, taskId: number): Promise<boolean> {
-  const request = new sql.Request(transaction); request.input("task", sql.BigInt, taskId); return Boolean((await request.query<{ value: boolean }>(`SELECT CAST(CASE WHEN EXISTS(SELECT 1 FROM dbo.schedule_tasks WITH (UPDLOCK,HOLDLOCK) WHERE parent_id=@task AND deleted_at IS NULL) THEN 1 ELSE 0 END AS bit) value;`)).recordset[0]?.value);
+  const request = new sql.Request(transaction);
+  request.input("task", sql.BigInt, taskId);
+  return Boolean(
+    (
+      await request.query<{ value: boolean }>(
+        `SELECT CAST(CASE WHEN EXISTS(SELECT 1 FROM dbo.schedule_tasks WITH (UPDLOCK,HOLDLOCK) WHERE parent_id=@task AND deleted_at IS NULL) THEN 1 ELSE 0 END AS bit) value;`,
+      )
+    ).recordset[0]?.value,
+  );
 }
 export async function hasPendingRequest(transaction: TransactionType, taskId: number): Promise<boolean> {
-  const request = new sql.Request(transaction); request.input("task", sql.BigInt, taskId); return Boolean((await request.query<{ value: boolean }>(`SELECT CAST(CASE WHEN EXISTS(SELECT 1 FROM dbo.schedule_updates WITH (UPDLOCK,HOLDLOCK) WHERE task_id=@task AND field=N'request' AND request_days>0 AND answer IS NULL) THEN 1 ELSE 0 END AS bit) value;`)).recordset[0]?.value);
+  const request = new sql.Request(transaction);
+  request.input("task", sql.BigInt, taskId);
+  return Boolean(
+    (
+      await request.query<{ value: boolean }>(
+        `SELECT CAST(CASE WHEN EXISTS(SELECT 1 FROM dbo.schedule_updates WITH (UPDLOCK,HOLDLOCK) WHERE task_id=@task AND field=N'request' AND request_days>0 AND answer IS NULL) THEN 1 ELSE 0 END AS bit) value;`,
+      )
+    ).recordset[0]?.value,
+  );
 }
 export async function demandAssignedLeaf(transaction: TransactionType, task: TaskRow, actorId: number): Promise<void> {
-  const request = new sql.Request(transaction); request.input("task", sql.BigInt, task.id); request.input("actor", sql.BigInt, actorId);
-  const allowed = Boolean((await request.query<{ allowed: boolean }>(`SELECT CAST(CASE WHEN EXISTS(SELECT 1 FROM dbo.schedule_task_pics WITH (UPDLOCK,HOLDLOCK) WHERE task_id=@task AND user_id=@actor) AND NOT EXISTS(SELECT 1 FROM dbo.schedule_tasks WITH (UPDLOCK,HOLDLOCK) WHERE parent_id=@task AND deleted_at IS NULL) THEN 1 ELSE 0 END AS bit) allowed;`)).recordset[0]?.allowed);
+  const request = new sql.Request(transaction);
+  request.input("task", sql.BigInt, task.id);
+  request.input("actor", sql.BigInt, actorId);
+  const allowed = Boolean(
+    (
+      await request.query<{ allowed: boolean }>(
+        `SELECT CAST(CASE WHEN EXISTS(SELECT 1 FROM dbo.schedule_task_pics WITH (UPDLOCK,HOLDLOCK) WHERE task_id=@task AND user_id=@actor) AND NOT EXISTS(SELECT 1 FROM dbo.schedule_tasks WITH (UPDLOCK,HOLDLOCK) WHERE parent_id=@task AND deleted_at IS NULL) THEN 1 ELSE 0 END AS bit) allowed;`,
+      )
+    ).recordset[0]?.allowed,
+  );
   if (!allowed || task.kind === "phase") throw new ApiError(403, "schedule_pic_required", "Only an assigned PIC can change a non-phase leaf task.");
 }
 export type ProgressRights = { isLeaf: boolean; isPic: boolean; isManager: boolean; isAdmin: boolean; managed: boolean; isMember: boolean; unassigned: boolean };
@@ -236,20 +454,40 @@ export type ProgressRights = { isLeaf: boolean; isPic: boolean; isManager: boole
  * Who may post progress on a row: a PIC, the project manager or an Admin, on a non-phase leaf; and on a row with no PIC
  * that no active team member holds (none, or only people who left or were taken off the team), any member of the project (owner decision 2026-10-26). A row Resource Plan manages stays with its PIC (its assignee).
  */
-export function canPostProgress(rights: ProgressRights): boolean { return rights.isLeaf && (rights.isPic || (!rights.managed && (rights.isManager || rights.isAdmin || (rights.isMember && rights.unassigned)))); }
+export function canPostProgress(rights: ProgressRights): boolean {
+  return rights.isLeaf && (rights.isPic || (!rights.managed && (rights.isManager || rights.isAdmin || (rights.isMember && rights.unassigned))));
+}
 /** True when @actor is the manager or lead engineer of @project or listed in its members: what My Work and demandProjectScope call assigned. */
-export const PROJECT_MEMBER_SQL = "EXISTS(SELECT 1 FROM dbo.projects member_project WHERE member_project.id=@project AND (member_project.manager_id=@actor OR member_project.lead_engineer_id=@actor OR EXISTS(SELECT 1 FROM dbo.project_members member WHERE member.project_id=member_project.id AND member.user_id=@actor)))";
+export const PROJECT_MEMBER_SQL =
+  "EXISTS(SELECT 1 FROM dbo.projects member_project WHERE member_project.id=@project AND (member_project.manager_id=@actor OR member_project.lead_engineer_id=@actor OR EXISTS(SELECT 1 FROM dbo.project_members member WHERE member.project_id=member_project.id AND member.user_id=@actor)))";
 export async function isProjectMember(transaction: TransactionType, projectId: number, actorId: number): Promise<boolean> {
-  const request = new sql.Request(transaction); request.input("project", sql.BigInt, projectId); request.input("actor", sql.BigInt, actorId);
+  const request = new sql.Request(transaction);
+  request.input("project", sql.BigInt, projectId);
+  request.input("actor", sql.BigInt, actorId);
   return Boolean((await request.query<{ value: boolean }>(`SELECT CAST(CASE WHEN ${PROJECT_MEMBER_SQL} THEN 1 ELSE 0 END AS bit) value;`)).recordset[0]?.value);
 }
 /** The progress route's check. Day requests, member details and drawing workflow keep demandAssignedLeaf (PIC only). */
 export async function demandProgressWriter(transaction: TransactionType, task: TaskRow, project: ProjectRow, actor: CurrentUser): Promise<void> {
-  const request = new sql.Request(transaction); request.input("task", sql.BigInt, task.id); request.input("actor", sql.BigInt, actor.id); request.input("project", sql.BigInt, project.id);
-  const row = (await request.query<{ is_pic: boolean; has_pics: boolean; has_children: boolean; managed: boolean; is_member: boolean }>(`SELECT CAST(CASE WHEN EXISTS(SELECT 1 FROM dbo.schedule_task_pics WITH (UPDLOCK,HOLDLOCK) WHERE task_id=@task AND user_id=@actor) THEN 1 ELSE 0 END AS bit) is_pic,CAST(CASE WHEN EXISTS(SELECT 1 FROM dbo.schedule_task_pics pic WITH (UPDLOCK,HOLDLOCK) INNER JOIN dbo.schedule_tasks t ON t.id=pic.task_id INNER JOIN dbo.users u ON u.id=pic.user_id WHERE pic.task_id=@task AND ${ACTIVE_PIC_SQL}) THEN 1 ELSE 0 END AS bit) has_pics,CAST(CASE WHEN EXISTS(SELECT 1 FROM dbo.schedule_tasks WITH (UPDLOCK,HOLDLOCK) WHERE parent_id=@task AND deleted_at IS NULL) THEN 1 ELSE 0 END AS bit) has_children,CAST(CASE WHEN EXISTS(SELECT 1 FROM dbo.resource_tasks WHERE schedule_task_id=@task) THEN 1 ELSE 0 END AS bit) managed,CAST(CASE WHEN ${PROJECT_MEMBER_SQL} THEN 1 ELSE 0 END AS bit) is_member;`)).recordset[0];
-  const rights = { isLeaf: task.kind !== "phase" && !row?.has_children, isPic: Boolean(row?.is_pic), isManager: project.managerId === actor.id, isAdmin: hasRole(actor, "Admin"), managed: Boolean(row?.managed),
-    isMember: Boolean(row?.is_member), unassigned: !row?.has_pics };
-  if (!canPostProgress(rights)) throw new ApiError(403, "schedule_pic_required", "Only an assigned PIC, the project manager, an Admin or, on a task with no PIC, a project member can update this task's progress.");
+  const request = new sql.Request(transaction);
+  request.input("task", sql.BigInt, task.id);
+  request.input("actor", sql.BigInt, actor.id);
+  request.input("project", sql.BigInt, project.id);
+  const row = (
+    await request.query<{ is_pic: boolean; has_pics: boolean; has_children: boolean; managed: boolean; is_member: boolean }>(
+      `SELECT CAST(CASE WHEN EXISTS(SELECT 1 FROM dbo.schedule_task_pics WITH (UPDLOCK,HOLDLOCK) WHERE task_id=@task AND user_id=@actor) THEN 1 ELSE 0 END AS bit) is_pic,CAST(CASE WHEN EXISTS(SELECT 1 FROM dbo.schedule_task_pics pic WITH (UPDLOCK,HOLDLOCK) INNER JOIN dbo.schedule_tasks t ON t.id=pic.task_id INNER JOIN dbo.users u ON u.id=pic.user_id WHERE pic.task_id=@task AND ${ACTIVE_PIC_SQL}) THEN 1 ELSE 0 END AS bit) has_pics,CAST(CASE WHEN EXISTS(SELECT 1 FROM dbo.schedule_tasks WITH (UPDLOCK,HOLDLOCK) WHERE parent_id=@task AND deleted_at IS NULL) THEN 1 ELSE 0 END AS bit) has_children,CAST(CASE WHEN EXISTS(SELECT 1 FROM dbo.resource_tasks WHERE schedule_task_id=@task) THEN 1 ELSE 0 END AS bit) managed,CAST(CASE WHEN ${PROJECT_MEMBER_SQL} THEN 1 ELSE 0 END AS bit) is_member;`,
+    )
+  ).recordset[0];
+  const rights = {
+    isLeaf: task.kind !== "phase" && !row?.has_children,
+    isPic: Boolean(row?.is_pic),
+    isManager: project.managerId === actor.id,
+    isAdmin: hasRole(actor, "Admin"),
+    managed: Boolean(row?.managed),
+    isMember: Boolean(row?.is_member),
+    unassigned: !row?.has_pics,
+  };
+  if (!canPostProgress(rights))
+    throw new ApiError(403, "schedule_pic_required", "Only an assigned PIC, the project manager, an Admin or, on a task with no PIC, a project member can update this task's progress.");
 }
 /**
  * Who may answer a day request: the project manager, or anyone holding Engineering Manager or Admin as any
@@ -261,7 +499,8 @@ export async function demandProgressWriter(transaction: TransactionType, task: T
  * and quiet days and the portfolio's last progress and "No update 7d+" all read this one list.
  */
 export const PROGRESS_REPORT_FIELDS_SQL = ["percent_complete", "status", "actual_start", "actual_finish", "forecast_finish", "blocked_reason", "remark", "progress"]
-  .map((field) => `N'${field}'`).join(",");
+  .map((field) => `N'${field}'`)
+  .join(",");
 
 export function canAnswerDayRequests(project: Pick<ProjectRow, "managerId">, actor: CurrentUser): boolean {
   return project.managerId === actor.id || hasRole(actor, "Engineering Manager", "Admin");
@@ -270,7 +509,8 @@ export function canAnswerDayRequests(project: Pick<ProjectRow, "managerId">, act
 export type ManagedTask = { state: string; acknowledged: boolean; assigneeId: number };
 /** Schedule rows a Resource Plan task manages: their plan and progress go through Resource Plan approval. */
 export async function readManagedTaskIds(transaction: TransactionType, projectId: number): Promise<Map<number, ManagedTask>> {
-  const request = new sql.Request(transaction); request.input("project", sql.BigInt, projectId);
+  const request = new sql.Request(transaction);
+  request.input("project", sql.BigInt, projectId);
   return managedByTask((await request.query<ManagedRow>(MANAGED_SQL)).recordset);
 }
 type ManagedRow = { schedule_task_id: number | string; state: string; acknowledged_at: unknown; assignee_id: number | string };
@@ -281,7 +521,10 @@ const managedByTask = (rows: ManagedRow[]): Map<number, ManagedTask> =>
 /** Between the statements of one batch; the route tests split a batch on it to answer each statement. */
 export const BATCH_SEPARATOR = "\n/* next */\n";
 export type ProjectWork = {
-  tasks: TaskRow[]; pics: Map<number, PicRow[]>; managed: Map<number, ManagedTask>; version: Buffer | null;
+  tasks: TaskRow[];
+  pics: Map<number, PicRow[]>;
+  managed: Map<number, ManagedTask>;
+  version: Buffer | null;
   /** Open requests for more days, newest first. */
   pendingRows: Record<string, unknown>[];
   /** Resource Plan tasks approved for this person and not yet acknowledged. */
@@ -303,13 +546,21 @@ const PROJECT_WORK_SQL = [
  * connection, so the seven reads per project, one after another, took seconds for someone on many projects.
  */
 export async function readProjectWork(transaction: TransactionType, projectId: number, actorId: number): Promise<ProjectWork> {
-  const request = new sql.Request(transaction); request.input("project", sql.BigInt, projectId); request.input("actor", sql.BigInt, actorId);
+  const request = new sql.Request(transaction);
+  request.input("project", sql.BigInt, projectId);
+  request.input("actor", sql.BigInt, actorId);
   // One record set per statement, in the batch's order. (No generic arrow function: a test parses this file as TSX.)
   const sets = (await request.query(PROJECT_WORK_SQL)).recordsets as unknown as unknown[][];
   const set = (index: number): unknown[] => sets[index] ?? [];
-  return { tasks: (set(0) as Array<Record<string, unknown> & { row_version: Buffer }>).map(taskRow), pics: picsByTask(set(1) as Record<string, unknown>[]),
-    pendingRows: set(2) as Record<string, unknown>[], acknowledgmentRows: set(3) as ProjectWork["acknowledgmentRows"], progressRows: set(4) as ProjectWork["progressRows"],
-    managed: managedByTask(set(5) as ManagedRow[]), version: (set(6) as Array<{ row_version: Buffer }>)[0]?.row_version ?? null };
+  return {
+    tasks: (set(0) as Array<Record<string, unknown> & { row_version: Buffer }>).map(taskRow),
+    pics: picsByTask(set(1) as Record<string, unknown>[]),
+    pendingRows: set(2) as Record<string, unknown>[],
+    acknowledgmentRows: set(3) as ProjectWork["acknowledgmentRows"],
+    progressRows: set(4) as ProjectWork["progressRows"],
+    managed: managedByTask(set(5) as ManagedRow[]),
+    version: (set(6) as Array<{ row_version: Buffer }>)[0]?.row_version ?? null,
+  };
 }
 /** The resource-tasks.ts preHandler's rule for progress on a managed row: an Approved task its assignee has acknowledged. */
 export function managedProgressReady(managed: ManagedTask, actorId: number): boolean {
@@ -324,14 +575,21 @@ export function datesWouldLoop(rows: ReadonlyMap<number, { parent: number | null
   const children = new Map<number, number[]>();
   for (const [id, row] of rows) if (row.parent !== null) children.set(row.parent, [...(children.get(row.parent) ?? []), id]);
   const waitsOn = (id: number): number[] => {
-    const own = children.get(id); if (own?.length) return own;
-    const row = rows.get(id); return row && row.startMode === "linked" && row.predecessor !== null && rows.has(row.predecessor) ? [row.predecessor] : [];
+    const own = children.get(id);
+    if (own?.length) return own;
+    const row = rows.get(id);
+    return row && row.startMode === "linked" && row.predecessor !== null && rows.has(row.predecessor) ? [row.predecessor] : [];
   };
-  const visiting = new Set<number>(), done = new Set<number>();
+  const visiting = new Set<number>(),
+    done = new Set<number>();
   const loops = (id: number): boolean => {
-    if (done.has(id)) return false; if (visiting.has(id)) return true;
-    visiting.add(id); if (waitsOn(id).some(loops)) return true;
-    visiting.delete(id); done.add(id); return false;
+    if (done.has(id)) return false;
+    if (visiting.has(id)) return true;
+    visiting.add(id);
+    if (waitsOn(id).some(loops)) return true;
+    visiting.delete(id);
+    done.add(id);
+    return false;
   };
   return [...rows.keys()].some(loops);
 }
@@ -343,11 +601,10 @@ export function datesWouldLoop(rows: ReadonlyMap<number, { parent: number | null
 export function placeInOrder(siblings: readonly { id: number; sortOrder: number }[], beforeId: number | null, movedId: number): { sortOrder: number; renumber: { id: number; sortOrder: number }[] } {
   const index = beforeId === null ? siblings.length : siblings.findIndex((row) => row.id === beforeId);
   if (index < 0) throw new ApiError(422, "schedule_move_target_invalid", "The row to place it before is not in that part of the plan.");
-  const previous = siblings[index - 1]?.sortOrder, next = siblings[index]?.sortOrder;
-  const between = previous === undefined && next === undefined ? 10
-    : previous === undefined ? next! - 10
-      : next === undefined ? previous + 10
-        : next - previous >= 2 ? Math.floor((previous + next) / 2) : null;
+  const previous = siblings[index - 1]?.sortOrder,
+    next = siblings[index]?.sortOrder;
+  const between =
+    previous === undefined && next === undefined ? 10 : previous === undefined ? next! - 10 : next === undefined ? previous + 10 : next - previous >= 2 ? Math.floor((previous + next) / 2) : null;
   if (between !== null && Math.abs(between) <= 1_000_000) return { sortOrder: between, renumber: [] };
   const order = [...siblings.slice(0, index), { id: movedId, sortOrder: Number.NaN }, ...siblings.slice(index)];
   const numbered = order.map((row, at) => ({ id: row.id, sortOrder: (at + 1) * 10 }));
@@ -364,73 +621,203 @@ export function scheduleParentAllowed(kind: string, parent: { kind: string } | n
 }
 export async function validateGraphAndHierarchy(transaction: TransactionType, projectId: number, taskId: number | null, input: PlanInput): Promise<void> {
   if (taskId && (input.parentId === taskId || input.predecessorId === taskId)) throw new ApiError(400, "schedule_self_reference", "A task cannot be its own parent or predecessor.");
-  const request = new sql.Request(transaction); request.input("project", sql.BigInt, projectId);
-  const rows = (await request.query<{ id: number | string; parent_id: number | string | null; predecessor_id: number | string | null; kind: string; start_mode?: string; name: string; status: string; percent_done: number; actual_start: unknown }>(`SELECT id,parent_id,predecessor_id,kind,start_mode,name,status,percent_done,actual_start FROM dbo.schedule_tasks WITH (UPDLOCK,HOLDLOCK) WHERE project_id=@project AND deleted_at IS NULL;`)).recordset;
-  const byId = new Map(rows.map((row) => [Number(row.id), { parent: row.parent_id === null ? null : Number(row.parent_id), predecessor: row.predecessor_id === null ? null : Number(row.predecessor_id), kind: row.kind, startMode: row.start_mode }]));
-  for (const reference of [input.parentId, input.predecessorId].filter((id): id is number => id !== null)) if (!byId.has(reference)) throw new ApiError(422, "schedule_reference_invalid", "Parent and predecessor tasks must be active rows in the same project.");
+  const request = new sql.Request(transaction);
+  request.input("project", sql.BigInt, projectId);
+  const rows = (
+    await request.query<{
+      id: number | string;
+      parent_id: number | string | null;
+      predecessor_id: number | string | null;
+      kind: string;
+      start_mode?: string;
+      name: string;
+      status: string;
+      percent_done: number;
+      actual_start: unknown;
+    }>(`SELECT id,parent_id,predecessor_id,kind,start_mode,name,status,percent_done,actual_start FROM dbo.schedule_tasks WITH (UPDLOCK,HOLDLOCK) WHERE project_id=@project AND deleted_at IS NULL;`)
+  ).recordset;
+  const byId = new Map(
+    rows.map((row) => [
+      Number(row.id),
+      { parent: row.parent_id === null ? null : Number(row.parent_id), predecessor: row.predecessor_id === null ? null : Number(row.predecessor_id), kind: row.kind, startMode: row.start_mode },
+    ]),
+  );
+  for (const reference of [input.parentId, input.predecessorId].filter((id): id is number => id !== null))
+    if (!byId.has(reference)) throw new ApiError(422, "schedule_reference_invalid", "Parent and predecessor tasks must be active rows in the same project.");
   if (input.kind === "phase" && input.parentId) throw new ApiError(400, "validation_failed", "A phase must be a top-level schedule row.");
   // The top of the plan is the Master Plan: main headings only (owner, 2026-11-03).
   if (input.kind === "task" && input.parentId === null) throw new ApiError(422, "schedule_parent_kind_invalid", "A task goes under a main heading.");
-  const key = taskId ?? -1; byId.set(key, { parent: input.parentId, predecessor: input.predecessorId, kind: input.kind, startMode: input.startMode });
-  const visiting = new Set<number>(), visited = new Set<number>();
-  const cycle = (id: number): boolean => { if (visited.has(id)) return false; if (visiting.has(id)) return true; visiting.add(id); const edge = byId.get(id); if (edge && ((edge.parent !== null && byId.has(edge.parent) && cycle(edge.parent)) || (edge.predecessor !== null && byId.has(edge.predecessor) && cycle(edge.predecessor)))) return true; visiting.delete(id); visited.add(id); return false; };
+  const key = taskId ?? -1;
+  byId.set(key, { parent: input.parentId, predecessor: input.predecessorId, kind: input.kind, startMode: input.startMode });
+  const visiting = new Set<number>(),
+    visited = new Set<number>();
+  const cycle = (id: number): boolean => {
+    if (visited.has(id)) return false;
+    if (visiting.has(id)) return true;
+    visiting.add(id);
+    const edge = byId.get(id);
+    if (edge && ((edge.parent !== null && byId.has(edge.parent) && cycle(edge.parent)) || (edge.predecessor !== null && byId.has(edge.predecessor) && cycle(edge.predecessor)))) return true;
+    visiting.delete(id);
+    visited.add(id);
+    return false;
+  };
   if ([...byId.keys()].some(cycle) || datesWouldLoop(byId)) throw new ApiError(409, "schedule_cycle", "The change would create a circular schedule relationship.");
   const children = new Map<number, string[]>();
-  for (const row of byId.values()) if (row.parent !== null) { const kinds = children.get(row.parent) ?? []; kinds.push(row.kind); children.set(row.parent, kinds); }
+  for (const row of byId.values())
+    if (row.parent !== null) {
+      const kinds = children.get(row.parent) ?? [];
+      kinds.push(row.kind);
+      children.set(row.parent, kinds);
+    }
   const depths = new Map<number, number>();
   const depthOf = (id: number): number => {
     if (depths.has(id)) return depths.get(id)!;
     const parent = byId.get(id)!.parent;
     const depth = parent === null ? 0 : depthOf(parent) + 1;
-    depths.set(id, depth); return depth;
+    depths.set(id, depth);
+    return depth;
   };
   for (const [id, row] of byId) {
     const parent = row.parent === null ? null : byId.get(row.parent)!;
-    const childKinds = row.parent === null ? [] : children.get(row.parent) ?? [];
+    const childKinds = row.parent === null ? [] : (children.get(row.parent) ?? []);
     const depth = depthOf(id);
-    if (row.kind !== "detail" && depth > MAX_PLAN_DEPTH) throw new ApiError(422, "schedule_parent_kind_invalid", "Plans go at most 6 levels deep (including the top-level row). Move this row and its task descendants to a shallower level.");
-    if (!scheduleParentAllowed(row.kind, parent, depth, childKinds)) throw new ApiError(422, id === key ? "schedule_parent_kind_invalid" : "schedule_child_kind_invalid", "Main headings must be top level. A task may hold sub tasks or member detail rows, but not both; details require a task without sub tasks.");
+    if (row.kind !== "detail" && depth > MAX_PLAN_DEPTH)
+      throw new ApiError(422, "schedule_parent_kind_invalid", "Plans go at most 6 levels deep (including the top-level row). Move this row and its task descendants to a shallower level.");
+    if (!scheduleParentAllowed(row.kind, parent, depth, childKinds))
+      throw new ApiError(
+        422,
+        id === key ? "schedule_parent_kind_invalid" : "schedule_child_kind_invalid",
+        "Main headings must be top level. A task may hold sub tasks or member detail rows, but not both; details require a task without sub tasks.",
+      );
   }
   const parent = rows.find((row) => Number(row.id) === input.parentId);
   if (input.kind === "task" && parent?.kind === "task" && !rows.some((row) => Number(row.parent_id) === input.parentId && row.kind === "task")) {
-    const linked = new sql.Request(transaction); linked.input("parent", sql.BigInt, input.parentId);
-    const managed = Boolean((await linked.query<{ value: boolean }>(`SELECT CAST(CASE WHEN EXISTS(SELECT 1 FROM dbo.resource_tasks WHERE schedule_task_id=@parent) THEN 1 ELSE 0 END AS bit) value;`)).recordset[0]?.value);
-    if (parent.status !== "Not Started" || Number(parent.percent_done) !== 0 || parent.actual_start || managed || await hasPendingRequest(transaction, Number(parent.id))) throw new ApiError(409, "schedule_row_in_use", `${parent.name} already has progress or linked work, so it cannot take sub tasks. Add the sub tasks under another task.`);
+    const linked = new sql.Request(transaction);
+    linked.input("parent", sql.BigInt, input.parentId);
+    const managed = Boolean(
+      (await linked.query<{ value: boolean }>(`SELECT CAST(CASE WHEN EXISTS(SELECT 1 FROM dbo.resource_tasks WHERE schedule_task_id=@parent) THEN 1 ELSE 0 END AS bit) value;`)).recordset[0]?.value,
+    );
+    if (parent.status !== "Not Started" || Number(parent.percent_done) !== 0 || parent.actual_start || managed || (await hasPendingRequest(transaction, Number(parent.id))))
+      throw new ApiError(409, "schedule_row_in_use", `${parent.name} already has progress or linked work, so it cannot take sub tasks. Add the sub tasks under another task.`);
   }
 }
 export function scheduleCalculation(tasks: TaskRow[]) {
-  return tasks.map((task): ScheduleCalculationTask => ({ id: task.id, parentId: task.parentId, sortOrder: task.sortOrder, planStart: task.planStart, planDays: task.planDays, startMode: task.startMode, predecessorId: task.predecessorId, lagDays: task.lagDays, actualStart: task.actualStart, actualFinish: task.actualFinish, forecastFinish: task.forecastFinish, percentComplete: task.percentComplete, status: task.status }));
+  return tasks.map((task): ScheduleCalculationTask => ({
+    id: task.id,
+    parentId: task.parentId,
+    sortOrder: task.sortOrder,
+    planStart: task.planStart,
+    planDays: task.planDays,
+    startMode: task.startMode,
+    predecessorId: task.predecessorId,
+    lagDays: task.lagDays,
+    actualStart: task.actualStart,
+    actualFinish: task.actualFinish,
+    forecastFinish: task.forecastFinish,
+    percentComplete: task.percentComplete,
+    status: task.status,
+  }));
 }
 /** What the reader may do on each row. projectCanProgress = the project is not Closed and the reader has schedule.progress. */
 export type TaskAccess = {
-  actorId: number; managed: Map<number, ManagedTask>; projectCanProgress: boolean; isManager: boolean; isAdmin: boolean;
+  actorId: number;
+  managed: Map<number, ManagedTask>;
+  projectCanProgress: boolean;
+  isManager: boolean;
+  isAdmin: boolean;
   /** The reader is the manager, lead engineer or a listed member (PROJECT_MEMBER_SQL): they may update rows that have no PIC. */
-  isMember: boolean; canPlan?: boolean;
+  isMember: boolean;
+  canPlan?: boolean;
   /** Master Plan frame leaves that the shared summary leaves out (project-health.ts countedLeaves); the screens' late and blocked rules skip them too. */
   frameIds?: Set<number>;
 };
 export function taskResponse(resolved: ResolvedScheduleTask, tasks: Map<number, TaskRow>, pics: Map<number, PicRow[]>, access?: TaskAccess): Record<string, unknown> {
   const task = tasks.get(resolved.source.id)!;
-  const managedTask = access?.managed.get(task.id), managed = managedTask !== undefined;
+  const managedTask = access?.managed.get(task.id),
+    managed = managedTask !== undefined;
   // A managed row also needs what the resource-tasks.ts preHandler demands, or the POST is refused with acknowledgment_required.
   const memberPlan = Boolean(access?.projectCanProgress && access.isMember);
-  const flags = access ? { canAddChild: Boolean(access.canPlan || (memberPlan && isOwnPlanTask(task.id, access.actorId, tasks, pics))),
-    canEditOwn: memberPlan && task.kind === "task" && task.createdBy === access.actorId, managedByResourcePlan: managed, countsTowardHealth: !access.frameIds?.has(task.id), canProgress: access.projectCanProgress && (!managedTask || managedProgressReady(managedTask, access.actorId)) && canPostProgress({ isLeaf: task.kind !== "phase" && !resolved.children.length,
-    isPic: (pics.get(task.id) ?? []).some((pic) => pic.id === access.actorId), isManager: access.isManager, isAdmin: access.isAdmin, managed,
-    isMember: access.isMember, unassigned: hasNoActivePic(pics.get(task.id)) }) } : {};
-  return { id: task.id, parentId: task.parentId, sortOrder: task.sortOrder, wbs: resolved.wbs, depth: resolved.depth, kind: task.kind, name: task.name,
-    isMilestone: task.isMilestone, origin: task.origin, visibility: task.visibility, planStart: resolved.planStart, planFinish: resolved.planFinish,
+  const flags = access
+    ? {
+        canAddChild: Boolean(access.canPlan || (memberPlan && isOwnPlanTask(task.id, access.actorId, tasks, pics))),
+        canEditOwn: memberPlan && task.kind === "task" && task.createdBy === access.actorId,
+        managedByResourcePlan: managed,
+        countsTowardHealth: !access.frameIds?.has(task.id),
+        canProgress:
+          access.projectCanProgress &&
+          (!managedTask || managedProgressReady(managedTask, access.actorId)) &&
+          canPostProgress({
+            isLeaf: task.kind !== "phase" && !resolved.children.length,
+            isPic: (pics.get(task.id) ?? []).some((pic) => pic.id === access.actorId),
+            isManager: access.isManager,
+            isAdmin: access.isAdmin,
+            managed,
+            isMember: access.isMember,
+            unassigned: hasNoActivePic(pics.get(task.id)),
+          }),
+      }
+    : {};
+  return {
+    id: task.id,
+    parentId: task.parentId,
+    sortOrder: task.sortOrder,
+    wbs: resolved.wbs,
+    depth: resolved.depth,
+    kind: task.kind,
+    name: task.name,
+    isMilestone: task.isMilestone,
+    origin: task.origin,
+    visibility: task.visibility,
+    planStart: resolved.planStart,
+    planFinish: resolved.planFinish,
     // The start as stored, for an edit to send back unchanged; planStart above is the resolved one.
     storedPlanStart: task.planStart,
-    planDays: task.planDays, workDays: resolved.workDays, startMode: task.startMode, predecessorId: task.predecessorId, lagDays: task.lagDays,
-    pics: pics.get(task.id) ?? [], picExternal: task.picExternal, planManDays: task.planManDays, baselineStart: task.baselineStart,
-    baselineFinish: task.baselineFinish, baselineDays: task.baselineDays, baselineRevision: task.baselineRevision, actualStart: resolved.actualStart,
-    actualFinish: resolved.actualFinish, forecastFinish: resolved.forecastFinish, percentComplete: resolved.percentComplete, status: resolved.status,
-    remark: task.remark, actualManDays: task.actualManDays, rowVersion: task.rowVersion.toString("base64"), updatedAt: task.updatedAt,
-    laborSource: task.laborSource ?? "Own", laborSupplier: task.laborSupplier ?? "", peopleByDay: task.peopleByDay ?? [],
-    updatedBy: task.updatedBy, ...flags, children: resolved.children.map((child) => taskResponse(child, tasks, pics, access)) };
+    planDays: task.planDays,
+    workDays: resolved.workDays,
+    startMode: task.startMode,
+    predecessorId: task.predecessorId,
+    lagDays: task.lagDays,
+    pics: pics.get(task.id) ?? [],
+    picExternal: task.picExternal,
+    planManDays: task.planManDays,
+    baselineStart: task.baselineStart,
+    baselineFinish: task.baselineFinish,
+    baselineDays: task.baselineDays,
+    baselineRevision: task.baselineRevision,
+    actualStart: resolved.actualStart,
+    actualFinish: resolved.actualFinish,
+    forecastFinish: resolved.forecastFinish,
+    percentComplete: resolved.percentComplete,
+    status: resolved.status,
+    remark: task.remark,
+    actualManDays: task.actualManDays,
+    rowVersion: task.rowVersion.toString("base64"),
+    updatedAt: task.updatedAt,
+    laborSource: task.laborSource ?? "Own",
+    laborSupplier: task.laborSupplier ?? "",
+    peopleByDay: task.peopleByDay ?? [],
+    discipline: task.discipline ?? null,
+    updatedBy: task.updatedBy,
+    ...flags,
+    children: resolved.children.map((child) => taskResponse(child, tasks, pics, access)),
+  };
 }
-export function resolveTasks(tasks: TaskRow[], holidays: Set<string>) { return resolveSchedule(scheduleCalculation(tasks), holidays); }
-export function concurrency(): ApiError { return new ApiError(409, "concurrency_conflict", "The schedule changed. Reload it and try again."); }
-export function calendarDays(start: string | null, finish: string | null): number { return !start || !finish || finish < start ? 0 : Math.round((Date.parse(`${finish}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86_400_000) + 1; }
-export async function permissionFor(database: Database, userId: number, permission: string): Promise<boolean> { const result = await database.query<{ allowed: boolean }>(`SELECT CAST(CASE WHEN EXISTS(SELECT 1 FROM dbo.user_effective_permissions WHERE user_id=@user_id AND code=@permission) THEN 1 ELSE 0 END AS bit) allowed;`, (request) => { request.input("user_id", sql.BigInt, userId); request.input("permission", sql.NVarChar(100), permission); }); return Boolean(result.recordset[0]?.allowed); }
+export function resolveTasks(tasks: TaskRow[], holidays: Set<string>) {
+  return resolveSchedule(scheduleCalculation(tasks), holidays);
+}
+export function concurrency(): ApiError {
+  return new ApiError(409, "concurrency_conflict", "The schedule changed. Reload it and try again.");
+}
+export function calendarDays(start: string | null, finish: string | null): number {
+  return !start || !finish || finish < start ? 0 : Math.round((Date.parse(`${finish}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86_400_000) + 1;
+}
+export async function permissionFor(database: Database, userId: number, permission: string): Promise<boolean> {
+  const result = await database.query<{ allowed: boolean }>(
+    `SELECT CAST(CASE WHEN EXISTS(SELECT 1 FROM dbo.user_effective_permissions WHERE user_id=@user_id AND code=@permission) THEN 1 ELSE 0 END AS bit) allowed;`,
+    (request) => {
+      request.input("user_id", sql.BigInt, userId);
+      request.input("permission", sql.NVarChar(100), permission);
+    },
+  );
+  return Boolean(result.recordset[0]?.allowed);
+}

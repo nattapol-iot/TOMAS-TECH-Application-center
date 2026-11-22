@@ -2,31 +2,20 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { choiceLink, flagLink, idLink, optionalChoiceLink, textLink, useLinkedState, useScreenPlace } from "../screen-link";
 import { apiRequest, type BootstrapData } from "../api-client";
-import {
-  Badge,
-  Drawer,
-  EmptyState,
-  Field,
-  FilterChips,
-  Icon,
-  Modal,
-  PageHeader,
-  Pagination,
-  Panel,
-  SearchInput,
-  Select,
-  Tabs,
-  type FilterItem,
-  type Tone,
-} from "../ui";
+import { Badge, Drawer, EmptyState, Field, FilterChips, Icon, Modal, PageHeader, Pagination, Panel, SearchInput, Select, Tabs, type FilterItem, type Tone } from "../ui";
 import { useLanguage } from "../i18n";
 import { useActivitySubView } from "../use-activity-presence";
 import { ResourceTaskWorkspace } from "./ResourceTaskWorkspace";
 import { EffortModal, WorkQueue } from "./WorkQueue";
 import { WorkloadGantt } from "./WorkloadGantt";
 import { TeamBoard } from "./TeamBoard";
-import { loadWorkload, saveWorkOrder, type Workload, type WorkloadCapacity } from "../resource-workload-client";
+import { assignPlanRow, loadWorkload, saveWorkOrder, type Workload, type WorkloadCapacity } from "../resource-workload-client";
+import { disciplineOfDepartment } from "../../../backend-node/src/project-cost-model";
+import { PLAN_DISCIPLINES, disciplineLabel, isPlanDiscipline } from "../../../lib/plan-discipline";
 import {
+  awayByDate,
+  confirmedManDays,
+  isOpenWork,
   orderWork,
   planningLoad,
   planningWeeks,
@@ -38,6 +27,7 @@ import {
   type Commitment,
 } from "../../../lib/resource-planning";
 import "./workload.css";
+import "./allocation.css";
 
 type Props = {
   bootstrap: BootstrapData;
@@ -77,13 +67,9 @@ const initials = (s: string) =>
     .slice(0, 2)
     .map((s) => s[0])
     .join("");
-const fmt = (n: number) =>
-  Number.isFinite(n)
-    ? n.toLocaleString(undefined, { maximumFractionDigits: 1 })
-    : "∞";
+const fmt = (n: number) => (Number.isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: 1 }) : "∞");
 const percent = (n: number | null) => (n === null ? "—" : fmt(n) + "%");
-const tone = (n: number | null): Tone =>
-  n === null ? "slate" : n > 100 ? "red" : n >= 85 ? "amber" : "green";
+const tone = (n: number | null): Tone => (n === null ? "slate" : n > 100 ? "red" : n >= 85 ? "amber" : "green");
 const today = () =>
   new Intl.DateTimeFormat("en-CA", {
     timeZone: process.env.NEXT_PUBLIC_BUSINESS_TIME_ZONE ?? "Asia/Bangkok",
@@ -109,31 +95,27 @@ function readStored<T extends string>(key: string, choices: readonly T[], fallba
   }
 }
 function store(key: string, value: string) {
-  try { window.localStorage.setItem(key, value); } catch { /* A remembered tab is a convenience when storage is blocked. */ }
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    /* A remembered tab is a convenience when storage is blocked. */
+  }
 }
-const byDueDate = (a: Commitment, b: Commitment) =>
-  (a.end ?? "9999-12-31").localeCompare(b.end ?? "9999-12-31") || a.reference.localeCompare(b.reference);
+const byDueDate = (a: Commitment, b: Commitment) => (a.end ?? "9999-12-31").localeCompare(b.end ?? "9999-12-31") || a.reference.localeCompare(b.reference);
 
-export function ProductionResourcePlan({
-  bootstrap,
-  notify,
-  openProjectSchedule,
-  openEstimate,
-  openInquiry,
-  openIssueBatch,
-}: Props) {
+export function ProductionResourcePlan({ bootstrap, notify, openProjectSchedule, openEstimate, openInquiry, openIssueBatch }: Props) {
   const { t } = useLanguage();
-  const canRead =
-    bootstrap.permissions.includes("schedule.read") &&
-    bootstrap.permissions.includes("project.read");
+  const canRead = bootstrap.permissions.includes("schedule.read") && bootstrap.permissions.includes("project.read");
   const canBoard = bootstrap.permissions.includes("team.board");
   const allowedTabs = [...(canBoard ? BOARD_TABS : []), ...(canRead ? PLAN_TABS : [])];
   // The tab is the link's place; without one, the tab last used here.
   const [opened, place] = useScreenPlace();
   const [storedTab, setTab] = useState<ResourceTab>(() => RESOURCE_TABS.find((tab) => tab === opened[0]) ?? readStored(tabStorageKey(bootstrap.user.id), RESOURCE_TABS, "board"));
   // A remembered tab the person may no longer open falls back to the first one they may.
-  const tab: ResourceTab = allowedTabs.includes(storedTab) ? storedTab : allowedTabs[0] ?? "board";
-  const [view, setView] = useLinkedState<WorkloadView>("display", "table", WORKLOAD_VIEW_LINK, { legacy: () => readStored<WorkloadView>(viewStorageKey(bootstrap.user.id), ["table", "gantt"], "table") });
+  const tab: ResourceTab = allowedTabs.includes(storedTab) ? storedTab : (allowedTabs[0] ?? "board");
+  const [view, setView] = useLinkedState<WorkloadView>("display", "table", WORKLOAD_VIEW_LINK, {
+    legacy: () => readStored<WorkloadView>(viewStorageKey(bootstrap.user.id), ["table", "gantt"], "table"),
+  });
   // Team Activity sees which Resource Plan tab is open (keys follow the tab ids).
   useActivitySubView(`resources-${tab}`);
   const [data, setData] = useState<Workload | null>(null);
@@ -152,7 +134,9 @@ export function ProductionResourcePlan({
   const [personId, setPersonId] = useLinkedState("wperson", null, idLink, { remember: false }),
     [unassignedOpen, setUnassignedOpen] = useState(false),
     [edit, setEdit] = useState<Commitment | null>(null),
-    [capacityUser, setCapacityUser] = useState<number | null>(null);
+    [capacityUser, setCapacityUser] = useState<number | null>(null),
+    [queueDiscipline, setQueueDiscipline] = useState<string>("all"),
+    [assigning, setAssigning] = useState<Commitment | null>(null);
   const canPlan = bootstrap.permissions.includes("schedule.plan");
   // Anyone orders their own work; Admin, Engineering Managers and Project Managers may order anyone's (the API agrees).
   const manages = (bootstrap.user.roles ?? [bootstrap.user.role]).some((role) => MANAGER_ROLES.includes(role));
@@ -182,7 +166,9 @@ export function ProductionResourcePlan({
   };
   const changeView = (next: WorkloadView) => setView(next);
   // The address names the tab on show, so the page's link opens on it.
-  useEffect(() => { place([tab], "replace"); }, [tab, place]);
+  useEffect(() => {
+    place([tab], "replace");
+  }, [tab, place]);
   const saveOrder = async (userId: number, keys: string[]) => {
     await saveWorkOrder(userId, keys);
     setData((current) => current && { ...current, priorities: [...current.priorities.filter((entry) => entry.userId !== userId), { userId, keys }] });
@@ -192,25 +178,29 @@ export function ProductionResourcePlan({
   const rows = useMemo(() => {
     if (!data) return [];
     const query = search.trim().toLocaleLowerCase();
-    return bootstrap.team
-      .filter((user) => department === ALL_DEPARTMENTS || user.department === department)
-      .map((user) => {
-        const items = data.items.filter((item) => item.ownerId === user.id);
-        const saved = data.capacities.find((c) => c.userId === user.id)?.daysPerWeek ?? null;
-        const capacity = weeklyCapacity(saved);
-        // Their work in their own order, and when each item would be done if worked in that order.
-        const order = data.priorities.find((entry) => entry.userId === user.id)?.keys ?? [];
-        const ordered = orderWork(items, order);
-        const projection = projectWork(ordered, capacity, todayIso, data.holidays);
-        const projectedLate = ordered.filter((item) => (projection.get(item.key)?.lateDays ?? 0) > 0).length;
-        return { user, items, saved, capacity, order, ordered, projection, projectedLate, ...planningLoad(items, weeks, capacity, todayIso, data.holidays) };
-      })
-      .filter((row) =>
-        !query ||
-        row.user.name.toLocaleLowerCase().includes(query) ||
-        row.items.some((item) => [item.reference, item.title, item.customer].join(" ").toLocaleLowerCase().includes(query)))
-      // The busiest people first, so the decisions sit at the top.
-      .sort((a, b) => (b.peak ?? -1) - (a.peak ?? -1) || b.open - a.open || a.user.name.localeCompare(b.user.name));
+    return (
+      bootstrap.team
+        .filter((user) => department === ALL_DEPARTMENTS || user.department === department)
+        .map((user) => {
+          const items = data.items.filter((item) => item.ownerId === user.id);
+          const saved = data.capacities.find((c) => c.userId === user.id)?.daysPerWeek ?? null;
+          const capacity = weeklyCapacity(saved);
+          // Their work in their own order, and when each item would be done if worked in that order.
+          const order = data.priorities.find((entry) => entry.userId === user.id)?.keys ?? [];
+          const ordered = orderWork(items, order);
+          const projection = projectWork(ordered, capacity, todayIso, data.holidays);
+          const projectedLate = ordered.filter((item) => (projection.get(item.key)?.lateDays ?? 0) > 0).length;
+          // Allocation (owner, 2026-11-22): days away come off the capacity, and the hours confirmed stand beside the plan.
+          const away = awayByDate(data.away ?? [], user.id, data.holidays);
+          const actual = weeks.map((week) => (week.start <= todayIso ? confirmedManDays(data.actuals ?? [], user.id, week.start, week.end) : null));
+          return { user, items, saved, capacity, order, ordered, projection, projectedLate, actual, ...planningLoad(items, weeks, capacity, todayIso, data.holidays, away) };
+        })
+        .filter(
+          (row) => !query || row.user.name.toLocaleLowerCase().includes(query) || row.items.some((item) => [item.reference, item.title, item.customer].join(" ").toLocaleLowerCase().includes(query)),
+        )
+        // The busiest people first, so the decisions sit at the top.
+        .sort((a, b) => (b.peak ?? -1) - (a.peak ?? -1) || b.open - a.open || a.user.name.localeCompare(b.user.name))
+    );
   }, [bootstrap.team, data, department, search, weeks, todayIso]);
   type Row = (typeof rows)[number];
   const matches: Record<Focus, (row: Row) => boolean> = {
@@ -232,7 +222,15 @@ export function ProductionResourcePlan({
     currentPage = Math.min(page, pageCount),
     visible = shown.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
   const unassigned = (data?.items ?? []).filter((item) => item.ownerId === null);
-  const person = personId === null ? null : rows.find((row) => row.user.id === personId) ?? null;
+  // Plan rows waiting for the head to name their people (owner, 2026-11-22); the rest stays in the drawer as before.
+  const waiting = unassigned.filter((item) => item.type === "Project" && item.taskId !== undefined && isOpenWork(item));
+  const otherUnassigned = unassigned.filter((item) => !waiting.includes(item));
+  const waitingShown = waiting
+    .filter((item) => queueDiscipline === "all" || (queueDiscipline === "none" ? !isPlanDiscipline(item.discipline) : item.discipline === queueDiscipline))
+    .sort((a, b) => (a.start ?? "9999").localeCompare(b.start ?? "9999") || a.reference.localeCompare(b.reference));
+  // The project's manager, an Engineering Manager or an Admin names people; the API checks the project.
+  const canAssign = canPlan && manages;
+  const person = personId === null ? null : (rows.find((row) => row.user.id === personId) ?? null);
   const currentWeek = weeks.find((week) => week.start <= todayIso && todayIso <= week.end)?.start;
   const departments = [...new Set(bootstrap.team.map((user) => user.department))].sort();
   // A team task opens on the board, not here.
@@ -244,8 +242,8 @@ export function ProductionResourcePlan({
         : item.type === "Issue"
           ? openIssueBatch?.(item.entityId)
           : item.type === "Estimate"
-          ? openEstimate?.(item.entityId)
-          : openInquiry?.(item.entityId);
+            ? openEstimate?.(item.entityId)
+            : openInquiry?.(item.entityId);
   // Whole-inquiry and estimate effort is planned here; tasks and plan rows carry their own effort.
   // Whole inquiries and estimates are planned by planners with write access; an estimate section also by its own
   // engineers (the API checks the section). Plan tasks and Resource Plan tasks carry their effort in their own plan.
@@ -257,28 +255,14 @@ export function ProductionResourcePlan({
     apply();
     setPage(1);
   };
-  const shiftWindow = (direction: -1 | 1) =>
-    filtered(() => setStart(dateFromDay(dayNumber(start || todayIso) + direction * Number(horizon) * 7)));
+  const shiftWindow = (direction: -1 | 1) => filtered(() => setStart(dateFromDay(dayNumber(start || todayIso) + direction * Number(horizon) * 7)));
   const saved = async () => {
     await load();
     notify(t("Saved"));
   };
   const exportPlan = () => {
     const rowsOut: unknown[][] = [
-      [
-        "Engineer",
-        "Department",
-        "Type",
-        "Reference",
-        "Description",
-        "Customer",
-        "Start",
-        "Finish",
-        "Man-days (person share)",
-        "Progress",
-        "Status",
-        ...weeks.map((w) => w.start + " MD"),
-      ],
+      ["Engineer", "Department", "Type", "Reference", "Description", "Customer", "Start", "Finish", "Man-days (person share)", "Progress", "Status", ...weeks.map((w) => w.start + " MD")],
     ];
     for (const row of rows)
       for (const item of row.items)
@@ -306,14 +290,7 @@ export function ProductionResourcePlan({
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
-  if (!allowedTabs.length)
-    return (
-      <EmptyState
-        icon="shield"
-        title={t("Permission denied")}
-        message="team.board"
-      />
-    );
+  if (!allowedTabs.length) return <EmptyState icon="shield" title={t("Permission denied")} message="team.board" />;
   const onBoard = tab === "board" || tab === "list";
   return (
     <div className="workload-page">
@@ -343,8 +320,18 @@ export function ProductionResourcePlan({
         onChange={changeTab}
         link={null}
         tabs={[
-          ...(canBoard ? [{ id: "board" as const, label: "TeamBoard.tabBoard" }, { id: "list" as const, label: "TeamBoard.tabList" }] : []),
-          ...(canRead ? [{ id: "workload" as const, label: "TeamBoard.tabWeekly" }, { id: "tasks" as const, label: "Workload.tabTasks" }] : []),
+          ...(canBoard
+            ? [
+                { id: "board" as const, label: "TeamBoard.tabBoard" },
+                { id: "list" as const, label: "TeamBoard.tabList" },
+              ]
+            : []),
+          ...(canRead
+            ? [
+                { id: "workload" as const, label: "TeamBoard.tabWeekly" },
+                { id: "tasks" as const, label: "Workload.tabTasks" },
+              ]
+            : []),
         ]}
       />
       {onBoard ? (
@@ -356,7 +343,9 @@ export function ProductionResourcePlan({
           {error ? (
             <div className="callout danger" role="alert">
               {error} {t("Displayed data may be stale. Refresh before planning.")}
-              <button className="btn ghost sm" type="button" onClick={() => void load()}>{t("Refresh")}</button>
+              <button className="btn ghost sm" type="button" onClick={() => void load()}>
+                {t("Refresh")}
+              </button>
             </div>
           ) : null}
           {data?.warnings.length ? (
@@ -365,17 +354,8 @@ export function ProductionResourcePlan({
             </div>
           ) : null}
           <div className="toolbar workload-toolbar">
-            <SearchInput
-              value={search}
-              onChange={(value) => filtered(() => setSearch(value))}
-              placeholder={t("Search engineer, inquiry, project or customer…")}
-            />
-            <Select
-              label="Department"
-              value={department}
-              onChange={(value) => filtered(() => setDepartment(value))}
-              options={[ALL_DEPARTMENTS, ...departments]}
-            />
+            <SearchInput value={search} onChange={(value) => filtered(() => setSearch(value))} placeholder={t("Search engineer, inquiry, project or customer…")} />
+            <Select label="Department" value={department} onChange={(value) => filtered(() => setDepartment(value))} options={[ALL_DEPARTMENTS, ...departments]} />
             <div className="chip-select" role="group" aria-label={t("Workload.view")}>
               <button type="button" className={view === "table" ? "chip on" : "chip"} aria-pressed={view === "table"} onClick={() => changeView("table")}>
                 <Icon name="table" />
@@ -386,30 +366,72 @@ export function ProductionResourcePlan({
                 {t("Workload.viewGantt")}
               </button>
             </div>
-            {view === "table" ? <div className="workload-window" role="group" aria-label={t("Planning window")}>
-              <button type="button" className="icon-btn" onClick={() => shiftWindow(-1)} title={t("Previous period")} aria-label={t("Previous period")}>
-                <Icon name="chevronLeft" />
-              </button>
-              <button type="button" className="btn default sm" onClick={() => filtered(() => setStart(dateFromDay(dayNumber(todayIso) - 14)))}>
-                {t("Today")}
-              </button>
-              <button type="button" className="icon-btn" onClick={() => shiftWindow(1)} title={t("Next period")} aria-label={t("Next period")}>
-                <Icon name="chevronRight" />
-              </button>
-              <Select label="Weeks" value={horizon} onChange={(value) => filtered(() => setHorizon(value))} options={["8", "12", "16", "24"]} />
-              <span className="muted">{t("weeks")}</span>
-            </div> : null}
+            {view === "table" ? (
+              <div className="workload-window" role="group" aria-label={t("Planning window")}>
+                <button type="button" className="icon-btn" onClick={() => shiftWindow(-1)} title={t("Previous period")} aria-label={t("Previous period")}>
+                  <Icon name="chevronLeft" />
+                </button>
+                <button type="button" className="btn default sm" onClick={() => filtered(() => setStart(dateFromDay(dayNumber(todayIso) - 14)))}>
+                  {t("Today")}
+                </button>
+                <button type="button" className="icon-btn" onClick={() => shiftWindow(1)} title={t("Next period")} aria-label={t("Next period")}>
+                  <Icon name="chevronRight" />
+                </button>
+                <Select label="Weeks" value={horizon} onChange={(value) => filtered(() => setHorizon(value))} options={["8", "12", "16", "24"]} />
+                <span className="muted">{t("weeks")}</span>
+              </div>
+            ) : null}
           </div>
           <FilterChips label="Workload.chips" items={chipItems} active={focus} onPick={(key) => filtered(() => setFocus(key as Focus | null))} />
+          {/* Allocation (owner, 2026-11-22): rows a PM added with a discipline and no PIC, for the head to name the people. */}
+          {waiting.length ? (
+            <Panel title="Alloc.queueTitle" subtitle="Alloc.queueSubtitle" guide="alloc.queue" flush>
+              <div className="alloc-queue-filter" role="group" aria-label={t("Plan.discipline")}>
+                {(["all", ...PLAN_DISCIPLINES, "none"] as const).map((key) => {
+                  const count = key === "all" ? waiting.length : waiting.filter((item) => (key === "none" ? !isPlanDiscipline(item.discipline) : item.discipline === key)).length;
+                  if (key !== "all" && !count) return null;
+                  return (
+                    <button key={key} type="button" className={queueDiscipline === key ? "chip on" : "chip"} aria-pressed={queueDiscipline === key} onClick={() => setQueueDiscipline(key)}>
+                      {t(key === "all" ? "Alloc.all" : key === "none" ? "Alloc.noDiscipline" : disciplineLabel(key))}
+                      <em>{count}</em>
+                    </button>
+                  );
+                })}
+              </div>
+              <ul className="alloc-queue">
+                {waitingShown.map((item) => (
+                  <li key={item.key}>
+                    <div className="alloc-queue-main">
+                      <button type="button" className="workload-item-link" onClick={() => open(item)}>
+                        {item.reference}
+                      </button>
+                      <strong>{item.title}</strong>
+                      <small>
+                        {item.customer ? `${item.customer} · ` : ""}
+                        {item.start ?? "—"} → {item.end ?? "—"} · {item.manDays === null ? t("Workload.missingEffort") : `${fmt(item.manDays)} MD`}
+                      </small>
+                    </div>
+                    <Badge tone={isPlanDiscipline(item.discipline) ? "blue" : "slate"}>{t(isPlanDiscipline(item.discipline) ? disciplineLabel(item.discipline) : "Alloc.noDiscipline")}</Badge>
+                    {canAssign ? (
+                      <button type="button" className="btn primary sm" data-guide="alloc.assign" onClick={() => setAssigning(item)}>
+                        <Icon name="users" />
+                        {t("Alloc.assign")}
+                      </button>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </Panel>
+          ) : null}
           <Panel
             title={view === "gantt" ? "Workload.ganttTitle" : "Workload.byWeek"}
             subtitle={view === "gantt" ? "Workload.ganttSubtitle" : "Planned man-days / available man-days · green under 85%, amber up to 100%, red above"}
             actions={
               <div className="workload-panel-actions">
-                {unassigned.length ? (
+                {otherUnassigned.length ? (
                   <button type="button" className="btn ghost sm" onClick={() => setUnassignedOpen(true)}>
                     <Icon name="alertCircle" />
-                    {t("Workload.unassigned").replace("{n}", String(unassigned.length))}
+                    {t("Workload.unassigned").replace("{n}", String(otherUnassigned.length))}
                   </button>
                 ) : null}
                 {focused.length > busy.length ? (
@@ -422,7 +444,14 @@ export function ProductionResourcePlan({
             flush
           >
             {!data ? (
-              <div className="empty">{loading ? <><span className="spinner" />{t("Loading from SQL Server…")}</> : null}</div>
+              <div className="empty">
+                {loading ? (
+                  <>
+                    <span className="spinner" />
+                    {t("Loading from SQL Server…")}
+                  </>
+                ) : null}
+              </div>
             ) : !rows.length ? (
               <EmptyState icon="users" title="Nobody matches the filter" message="Clear the department or search filter to see the team again." />
             ) : view === "gantt" ? (
@@ -457,28 +486,25 @@ export function ProductionResourcePlan({
                           </td>
                           <td className="num">
                             <strong>{row.open}</strong>
-                            {row.overdue ? <small className="workload-late">{row.overdue} {t("overdue")}</small> : null}
+                            {row.overdue ? (
+                              <small className="workload-late">
+                                {row.overdue} {t("overdue")}
+                              </small>
+                            ) : null}
                             {row.projectedLate ? <small className="workload-projected">{t("WorkQueue.lateCount").replace("{n}", String(row.projectedLate))}</small> : null}
                           </td>
-                          {row.weekly.map((w) => (
+                          {row.weekly.map((w, index) => (
                             <td key={w.week.start} className="num">
-                              <span
-                                className={"heat-cell " + (w.manDays > 0 ? tone(w.utilisation) : "slate")}
-                                title={`${fmt(w.manDays)} / ${w.available === null ? "—" : fmt(w.available)} MD`}
-                              >
+                              <span className={"heat-cell " + (w.manDays > 0 ? tone(w.utilisation) : "slate")} title={`${fmt(w.manDays)} / ${w.available === null ? "—" : fmt(w.available)} MD`}>
                                 {w.manDays > 0 ? percent(w.utilisation) : "—"}
                               </span>
                               {w.manDays > 0 ? <small className="workload-days">{fmt(w.manDays)} MD</small> : null}
+                              {(row.actual[index] ?? 0) > 0 ? <small className="workload-actual">{t("Alloc.actual").replace("{md}", fmt(row.actual[index] ?? 0))}</small> : null}
+                              {w.awayDays > 0 ? <small className="workload-away">{t("Alloc.away").replace("{days}", fmt(w.awayDays))}</small> : null}
                             </td>
                           ))}
                           <td>
-                            <button
-                              type="button"
-                              className="capacity-button"
-                              disabled={!canPlan}
-                              title={t("Weekly capacity")}
-                              onClick={() => setCapacityUser(row.user.id)}
-                            >
+                            <button type="button" className="capacity-button" disabled={!canPlan} title={t("Weekly capacity")} onClick={() => setCapacityUser(row.user.id)}>
                               {fmt(row.capacity)} MD
                               {row.saved === null ? <small>{t("Workload.defaultCapacity")}</small> : null}
                             </button>
@@ -514,12 +540,7 @@ export function ProductionResourcePlan({
       )}
       {person ? (
         <Drawer title={person.user.name} subtitle={person.user.department} onClose={() => setPersonId(null)} width={620}>
-          <p className="workload-drawer-summary">
-            {t("Workload.personSummary")
-              .replace("{open}", String(person.open))
-              .replace("{md}", fmt(person.committed))
-              .replace("{peak}", percent(person.peak))}
-          </p>
+          <p className="workload-drawer-summary">{t("Workload.personSummary").replace("{open}", String(person.open)).replace("{md}", fmt(person.committed)).replace("{peak}", percent(person.peak))}</p>
           <div className="workload-drawer-capacity">
             <span>
               {t("Weekly capacity")}: <strong>{fmt(person.capacity)} MD</strong>
@@ -554,7 +575,7 @@ export function ProductionResourcePlan({
       ) : null}
       {unassignedOpen ? (
         <Drawer title="Workload.unassignedTitle" subtitle="Workload.unassignedHint" onClose={() => setUnassignedOpen(false)} width={620}>
-          <WorkList items={unassigned} today={todayIso} canPlanEffort={() => false} onOpen={open} onEffort={setEdit} />
+          <WorkList items={otherUnassigned} today={todayIso} canPlanEffort={() => false} onOpen={open} onEffort={setEdit} />
         </Drawer>
       ) : null}
       {edit?.effort ? (
@@ -565,15 +586,21 @@ export function ProductionResourcePlan({
           onSaved={saved}
         />
       ) : null}
-      {capacityUser !== null && (
-        <CapacityModal
-          initialUser={capacityUser}
+      {assigning && data ? (
+        <AssignPlanRowModal
+          item={assigning}
           team={bootstrap.team}
-          capacities={data?.capacities ?? []}
-          onClose={() => setCapacityUser(null)}
-          onSaved={saved}
+          data={data}
+          today={todayIso}
+          onClose={() => setAssigning(null)}
+          onAssigned={async (names) => {
+            setAssigning(null);
+            notify(t("Alloc.assigned").replace("{n}", names));
+            await load();
+          }}
         />
-      )}
+      ) : null}
+      {capacityUser !== null && <CapacityModal initialUser={capacityUser} team={bootstrap.team} capacities={data?.capacities ?? []} onClose={() => setCapacityUser(null)} onSaved={saved} />}
     </div>
   );
 }
@@ -599,7 +626,9 @@ function WorkList({
       {[...items].sort(byDueDate).map((item) => (
         <li key={item.key}>
           <div className="workload-item-head">
-            <Badge tone={tones[item.type]}>{t(item.type === "Task" ? (item.taskKind === "Appointment" ? "TeamBoard.kindAppointment" : "TeamBoard.kindTask") : item.type === "Issue" ? "Issues.typeLabel" : item.type)}</Badge>
+            <Badge tone={tones[item.type]}>
+              {t(item.type === "Task" ? (item.taskKind === "Appointment" ? "TeamBoard.kindAppointment" : "TeamBoard.kindTask") : item.type === "Issue" ? "Issues.typeLabel" : item.type)}
+            </Badge>
             {item.type === "Task" ? null : (
               <button type="button" className="workload-item-link" onClick={() => onOpen(item)}>
                 {item.reference}
@@ -628,6 +657,130 @@ function WorkList({
   );
 }
 
+/**
+ * Names the people of a plan row waiting in the Allocation queue (owner, 2026-11-22). Everyone in the team is offered,
+ * the row's discipline first (department as Projects > Cost reads it; Installation takes anyone), then the freest:
+ * capacity less leave less planned work over the weeks the row runs. Anyone picked who is not on the project joins it.
+ */
+function AssignPlanRowModal({
+  item,
+  team,
+  data,
+  today,
+  onClose,
+  onAssigned,
+}: {
+  item: Commitment;
+  team: BootstrapData["team"];
+  data: Workload;
+  today: string;
+  onClose: () => void;
+  onAssigned: (names: string) => Promise<void>;
+}) {
+  const { t } = useLanguage();
+  const [picked, setPicked] = useState<number[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const wanted = isPlanDiscipline(item.discipline) ? item.discipline : null;
+  const candidates = useMemo(() => {
+    const start = item.start ?? today,
+      end = item.end ?? start;
+    const span = planningWeeks(start, Math.min(26, Math.max(1, Math.ceil((dayNumber(end) - dayNumber(start) + 1) / 7) + 1))).filter((week) => week.start <= end);
+    return team
+      .map((user) => {
+        const capacity = weeklyCapacity(data.capacities.find((entry) => entry.userId === user.id)?.daysPerWeek ?? null);
+        const load = planningLoad(
+          data.items.filter((work) => work.ownerId === user.id),
+          span,
+          capacity,
+          today,
+          data.holidays,
+          awayByDate(data.away ?? [], user.id, data.holidays),
+        );
+        const free = load.weekly.reduce((sum, week) => sum + (week.available ?? 0) - week.manDays, 0);
+        const matches = !wanted || wanted === "Installation" || disciplineOfDepartment(user.department) === wanted;
+        return { user, free, matches };
+      })
+      .sort((a, b) => Number(b.matches) - Number(a.matches) || b.free - a.free || a.user.name.localeCompare(b.user.name));
+  }, [team, data, item.start, item.end, today, wanted]);
+  const toggle = (id: number) => setPicked((current) => (current.includes(id) ? current.filter((value) => value !== id) : [...current, id]));
+  const submit = async () => {
+    if (!picked.length || item.taskId === undefined) return;
+    setBusy(true);
+    setError("");
+    try {
+      await assignPlanRow(item.taskId, picked);
+      await onAssigned(
+        team
+          .filter((user) => picked.includes(user.id))
+          .map((user) => user.name)
+          .join(", "),
+      );
+    } catch (failure) {
+      setError(errorText(failure));
+      setBusy(false);
+    }
+  };
+  const group = (matches: boolean) => candidates.filter((candidate) => candidate.matches === matches);
+  const row = ({ user, free }: (typeof candidates)[number]) => (
+    <li key={user.id}>
+      <label className="alloc-candidate">
+        <input type="checkbox" checked={picked.includes(user.id)} disabled={busy} onChange={() => toggle(user.id)} />
+        <span className="alloc-candidate-name">
+          <strong>{user.name}</strong>
+          <small>{user.department}</small>
+        </span>
+        <Badge tone={free < 0 ? "red" : item.manDays !== null && free < item.manDays ? "amber" : "green"}>{t(free < 0 ? "Alloc.over" : "Alloc.free").replace("{md}", fmt(Math.abs(free)))}</Badge>
+      </label>
+    </li>
+  );
+  return (
+    <Modal
+      title="Alloc.assignTitle"
+      subtitle={`${item.reference} · ${item.title}`}
+      size="md"
+      onClose={onClose}
+      footer={
+        <>
+          <span className="spacer" />
+          <button type="button" className="btn ghost" onClick={onClose} disabled={busy}>
+            {t("Cancel")}
+          </button>
+          <button type="button" className="btn primary" data-guide="alloc.assignSave" disabled={busy || !picked.length} onClick={() => void submit()}>
+            <Icon name="check" />
+            {busy ? t("Saving…") : `${t("Alloc.assign")}${picked.length ? ` (${picked.length})` : ""}`}
+          </button>
+        </>
+      }
+    >
+      {error ? (
+        <div className="callout danger" role="alert">
+          {t(error)}
+        </div>
+      ) : null}
+      <p className="alloc-assign-facts">
+        <Badge tone={wanted ? "blue" : "slate"}>{t(wanted ? disciplineLabel(wanted) : "Alloc.noDiscipline")}</Badge>
+        <span>
+          {item.start ?? "—"} → {item.end ?? "—"} · {item.manDays === null ? t("Workload.missingEffort") : `${fmt(item.manDays)} MD`}
+        </span>
+      </p>
+      <p className="muted alloc-assign-hint">
+        {t("Alloc.freeHead")} · {t("Alloc.joinsProject")}
+      </p>
+      {wanted && wanted !== "Installation" ? (
+        <>
+          <h4 className="alloc-group">{t("Alloc.matching")}</h4>
+          <ul className="alloc-candidates">{group(true).map(row)}</ul>
+          <h4 className="alloc-group">{t("Alloc.otherPeople")}</h4>
+          <ul className="alloc-candidates">{group(false).map(row)}</ul>
+        </>
+      ) : (
+        <ul className="alloc-candidates">{candidates.map(row)}</ul>
+      )}
+    </Modal>
+  );
+}
+
 function CapacityModal({
   initialUser,
   team,
@@ -643,9 +796,7 @@ function CapacityModal({
 }) {
   const { t } = useLanguage(),
     [user, setUser] = useState(initialUser),
-    [amount, setAmount] = useState(
-      String(weeklyCapacity(capacities.find((c) => c.userId === initialUser)?.daysPerWeek)),
-    ),
+    [amount, setAmount] = useState(String(weeklyCapacity(capacities.find((c) => c.userId === initialUser)?.daysPerWeek))),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
   return (
@@ -660,8 +811,7 @@ function CapacityModal({
               method: "PUT",
               body: JSON.stringify({
                 daysPerWeek: Number(amount),
-                rowVersion:
-                  capacities.find((c) => c.userId === user)?.rowVersion ?? null,
+                rowVersion: capacities.find((c) => c.userId === user)?.rowVersion ?? null,
               }),
             });
             await onSaved();
@@ -691,15 +841,7 @@ function CapacityModal({
           </select>
         </Field>
         <Field label={t("Working days per week (Monday–Friday)")}>
-          <input
-            required
-            type="number"
-            min="0"
-            max="5"
-            step="0.01"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-          />
+          <input required type="number" min="0" max="5" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
         </Field>
         {error && (
           <p role="alert" className="red-text">

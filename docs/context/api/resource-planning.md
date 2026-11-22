@@ -2,25 +2,25 @@
 
 [Module](../modules/planning.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `62ef25b2`; generated, do not edit. [backend-node/src/routes/resource-planning.ts](<../../../backend-node/src/routes/resource-planning.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `f3bcda04`; generated, do not edit. [backend-node/src/routes/resource-planning.ts](<../../../backend-node/src/routes/resource-planning.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/resource-planning` | 62–71 |
-| GET | `/api/v1/resource-planning/workload` | 73–98 |
-| PUT | `/api/v1/resource-planning/work-order/:userId` | 101–124 |
-| PUT | `/api/v1/resource-planning/:kind/:id` | 125–230 |
+| GET | `/api/v1/resource-planning` | 58–67 |
+| GET | `/api/v1/resource-planning/workload` | 69–104 |
+| PUT | `/api/v1/resource-planning/work-order/:userId` | 107–125 |
+| PUT | `/api/v1/resource-planning/:kind/:id` | 126–183 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `map` | [backend-node/src/routes/resource-planning.ts](<../../../backend-node/src/routes/resource-planning.ts>) | 20–29 |
-| `decimal` | [backend-node/src/routes/resource-planning.ts](<../../../backend-node/src/routes/resource-planning.ts>) | 30–44 |
-| `holidayDates` | [backend-node/src/routes/resource-planning.ts](<../../../backend-node/src/routes/resource-planning.ts>) | 56–56 |
-| `registerResourcePlanningRoutes` | [backend-node/src/routes/resource-planning.ts](<../../../backend-node/src/routes/resource-planning.ts>) | 57–231 |
+| `map` | [backend-node/src/routes/resource-planning.ts](<../../../backend-node/src/routes/resource-planning.ts>) | 14–23 |
+| `decimal` | [backend-node/src/routes/resource-planning.ts](<../../../backend-node/src/routes/resource-planning.ts>) | 24–28 |
+| `holidayDates` | [backend-node/src/routes/resource-planning.ts](<../../../backend-node/src/routes/resource-planning.ts>) | 40–40 |
+| `registerResourcePlanningRoutes` | [backend-node/src/routes/resource-planning.ts](<../../../backend-node/src/routes/resource-planning.ts>) | 57–184 |
 
 ## Direct local dependencies
 
@@ -36,7 +36,7 @@ Evidence: source snapshot `62ef25b2`; generated, do not edit. [backend-node/src/
 
 ## SQL references (literal scan, not a complete schema or write-set)
 
-`dbo.estimate_assignments`, `dbo.estimates`, `dbo.holidays`, `dbo.inquiries`, `dbo.resource_capacity`, `dbo.resource_effort`, `dbo.resource_task_sources`, `dbo.user_effective_permissions`, `dbo.users`, `dbo.work_priorities`
+`dbo.engineer_availability`, `dbo.estimate_assignments`, `dbo.estimates`, `dbo.holidays`, `dbo.inquiries`, `dbo.resource_capacity`, `dbo.resource_effort`, `dbo.resource_task_sources`, `dbo.team_task_assignees`, `dbo.team_tasks`, `dbo.user_effective_permissions`, `dbo.users`, `dbo.work_hours`, `dbo.work_priorities`
 
 ## Change boundary
 

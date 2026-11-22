@@ -114,11 +114,11 @@ test("Team overview opens on the team board; its weekly workload reads once and 
   assert.match(screen, /setData\(await loadWorkload\(\)\)/);
   assert.doesNotMatch(screen, /loadEstimateCostWorkspace|loadSchedules|listInquiries|listEstimates|resource-tasks\/commitments/);
   // The team board and its list first (team.board), then the weekly workload and Tasks (schedule access); the last tab is remembered per person.
-  assert.match(screen, /\{ id: "board" as const, label: "TeamBoard\.tabBoard" \}, \{ id: "list" as const, label: "TeamBoard\.tabList" \}/);
-  assert.match(screen, /\{ id: "workload" as const, label: "TeamBoard\.tabWeekly" \}, \{ id: "tasks" as const, label: "Workload\.tabTasks" \}/);
+  assert.match(screen, /\{ id: "board" as const, label: "TeamBoard\.tabBoard" \},\s*\{ id: "list" as const, label: "TeamBoard\.tabList" \}/);
+  assert.match(screen, /\{ id: "workload" as const, label: "TeamBoard\.tabWeekly" \},\s*\{ id: "tasks" as const, label: "Workload\.tabTasks" \}/);
   // A link names the tab; without one, the tab last used here.
   assert.match(screen, /RESOURCE_TABS\.find\(\(tab\) => tab === opened\[0\]\) \?\? readStored\(tabStorageKey\(bootstrap\.user\.id\), RESOURCE_TABS, "board"\)/);
-  assert.match(screen, /const tab: ResourceTab = allowedTabs\.includes\(storedTab\) \? storedTab : allowedTabs\[0\] \?\? "board";/);
+  assert.match(screen, /const tab: ResourceTab = allowedTabs\.includes\(storedTab\) \? storedTab : \(?allowedTabs\[0\] \?\? "board"\)?;/);
   assert.match(screen, /tomas-tech-resource-plan-tab:\$\{userId\}/);
   assert.doesNotMatch(screen, /id: "gantt"|id: "items"|KpiCard|BarChart/);
   // Chips filter the one table; a person opens a drawer with their open work and the effort and capacity edits.
@@ -139,7 +139,7 @@ test("every Workload and work order string has English, Thai and Japanese copy",
   const keys = [...new Set(sources.flatMap((source) => [...source.matchAll(/"((?:Workload|WorkQueue)\.[A-Za-z]+)"/g)].map((match) => match[1])))];
   assert.ok(keys.length >= 40, `${keys.length} keys`);
   for (const key of keys) {
-    const pattern = String.raw`^\s*"` + key.replace(".", "\\.") + String.raw`": \{ en: "[^"]+", th: "[^"]+", jp: "[^"]+" \},$`;
+    const pattern = String.raw`^\s*"` + key.replace(".", "\\.") + String.raw`": \{\s*en: "[^"]+",\s*th: "[^"]+",\s*jp: "[^"]+",?\s*\},$`;
     const entry = dictionary.match(new RegExp(pattern, "m"));
     assert.ok(entry, `${key} needs en, th and jp`);
   }

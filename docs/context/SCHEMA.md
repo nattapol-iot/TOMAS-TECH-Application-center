@@ -2,7 +2,7 @@
 
 [Context index](../../AGENTS.md)
 
-Evidence: repository migrations at `62ef25b2`. Highest file number is not proof of the live DB version. No credentials or connection strings are stored here.
+Evidence: repository migrations at `f3bcda04`. Highest file number is not proof of the live DB version. No credentials or connection strings are stored here.
 
 | Migration | Objects mentioned (literal CREATE TABLE / VIEW only) |
 |---|---|
@@ -128,5 +128,6 @@ Evidence: repository migrations at `62ef25b2`. Highest file number is not proof 
 | [120_employee_master_link.sql](<../../database/migrations/120_employee_master_link.sql>) | Inspect migration SQL |
 | [121_daily_work_hours.sql](<../../database/migrations/121_daily_work_hours.sql>) | `dbo.work_days`, `dbo.work_hours` |
 | [122_master_data_sync_account.sql](<../../database/migrations/122_master_data_sync_account.sql>) | Inspect migration SQL |
+| [123_plan_row_discipline.sql](<../../database/migrations/123_plan_row_discipline.sql>) | Inspect migration SQL |
 
 Read [backend-node/src/migration-validation.ts](<../../backend-node/src/migration-validation.ts>), [backend-node/src/startup-migrations.ts](<../../backend-node/src/startup-migrations.ts>) and [backend-node/src/migrate.ts](<../../backend-node/src/migrate.ts>) before planning a migration. Applied migration identities and environment flags matter; never rewrite an already applied migration.
