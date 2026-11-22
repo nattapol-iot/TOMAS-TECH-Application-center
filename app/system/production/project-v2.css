@@ -67,7 +67,11 @@
  * V2 layout: the switch shares the tabs' row, on the right, instead of a row of its own. The tab's content is a 12px column,
  * the rhythm the Pegasus skin gives its own children: the content sits one level down, so that rhythm does not reach it.
  */
-.project-v2 {
+/*
+ * Two classes, not one: the build may link pegasus-skin.css after this sheet (it did on 2026-11-22), and its
+ * ".pg-skin { display: flex }" would then win a tie and put the switch back on a row of its own.
+ */
+.pg-skin.project-v2 {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 12px 16px;
