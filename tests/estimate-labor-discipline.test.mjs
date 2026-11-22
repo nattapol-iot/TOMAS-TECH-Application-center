@@ -15,7 +15,12 @@ test("migration 070 adds a checked discipline to both ledgers and backfills only
   ]);
   for (const table of ["manhour_lines", "expense_lines"]) {
     assert.match(migration, new RegExp(`COL_LENGTH\\(N'dbo\\.${table}', N'discipline'\\) IS NULL\\s*ALTER TABLE dbo\\.${table} ADD discipline nvarchar\\(20\\) NULL;`));
-    assert.match(migration, new RegExp(`CK_${table}_discipline CHECK \\(\\s*discipline IS NULL\\s*OR \\(discipline=N''Installation'' AND cost_type=N''Installation''\\)\\s*OR \\(discipline IN \\(N''Electrical'',N''Mechanical'',N''Software''\\) AND cost_type=N''Engineering''\\)\\);`));
+    assert.match(
+      migration,
+      new RegExp(
+        `CK_${table}_discipline CHECK \\(\\s*discipline IS NULL\\s*OR \\(discipline=N''Installation'' AND cost_type=N''Installation''\\)\\s*OR \\(discipline IN \\(N''Electrical'',N''Mechanical'',N''Software''\\) AND cost_type=N''Engineering''\\)\\);`,
+      ),
+    );
   }
   // Earlier revisions are frozen by the current-revision triggers, so the backfill joins on the current one.
   assert.equal(migration.match(/INNER JOIN dbo\.estimates e ON e\.id=\w+\.estimate_id AND e\.revision=\w+\.revision/g)?.length, 2);
@@ -70,22 +75,29 @@ test("the labor and expense dialogs require a discipline and derive the cost typ
 });
 
 test("a new estimate can start from any previous estimate the person chooses", async () => {
-  const [screen, startFrom, inquiry, client] = await Promise.all([source("app/system/production/EstimateScreens.tsx"),
-    source("app/system/production/EstimateStartFrom.tsx"), source("app/system/production/InquiryScreens.tsx"), source("app/system/api-client.ts")]);
+  const [screen, startFrom, inquiry, client] = await Promise.all([
+    source("app/system/production/EstimateScreens.tsx"),
+    source("app/system/production/EstimateStartFrom.tsx"),
+    source("app/system/production/InquiryScreens.tsx"),
+    source("app/system/api-client.ts"),
+  ]);
   const modal = screen.match(/function CreateEstimateModal\([\s\S]*?\n\}\n/)?.[0] ?? "";
   // The person searches; nothing ranks or picks for them.
   assert.match(startFrom, /listEstimates\(\{ page: 1, pageSize: 24, search: sourceSearch\.trim\(\) \|\| undefined \}\)/);
   // An estimate with no cost has nothing to copy and is not offered; the list stays eight rows.
   assert.match(startFrom, /result\.items\.filter\(\(item\) => item\.id !== excludeId && Number\(item\.total\) > 0\)\.slice\(0, SOURCE_ROWS\)/);
   assert.match(startFrom, /const SOURCE_ROWS = 8;/);
-  assert.match(startFrom, /export function startFromInput\(source: EstimateSummary, ledgers: StartLedgers\): EstimateStartFrom \{\s*return \{ sourceEstimateId: source\.id, includeCostItems: ledgers\.costItems, includeManhour: ledgers\.manhour, includeExpenses: ledgers\.expenses, includeOtherCosts: ledgers\.otherCosts \};/);
+  assert.match(
+    startFrom,
+    /export function startFromInput\(source: EstimateSummary, ledgers: StartLedgers\): EstimateStartFrom \{\s*return \{ sourceEstimateId: source\.id, includeCostItems: ledgers\.costItems, includeManhour: ledgers\.manhour, includeExpenses: ledgers\.expenses, includeOtherCosts: ledgers\.otherCosts \};/,
+  );
   assert.match(modal, /<StartFromChoice idPrefix="estimate-start"/);
   assert.match(modal, /const copyFrom = startFrom === "copy" && source \? startFromInput\(source, ledgers\) : undefined;/);
   assert.match(modal, /const copyReady = startFrom === "blank" \|\| \(source !== null && anyStartLedger\(ledgers\)\);/);
   assert.match(client, /copyFrom\?: EstimateStartFrom;/);
   // The inquiry page, where most estimates are created, asks before it creates.
   assert.match(inquiry, /onClick=\{\(\) => setCreateEstimateOpen\(true\)\}/);
-  assert.match(inquiry, /<CreateEstimateFromInquiryDialog inquiry=\{\{ id: detail\.id, number: detail\.number, ownerId: detail\.estimateOwnerId, dueDate: detail\.dueDate \}\}/);
+  assert.match(inquiry, /<CreateEstimateFromInquiryDialog\s+inquiry=\{\{ id: detail\.id, number: detail\.number, ownerId: detail\.estimateOwnerId, dueDate: detail\.dueDate \}\}/);
   assert.doesNotMatch(inquiry, /createEstimate\(\{ inquiryId: detail\.id/, "the inquiry page no longer creates an empty estimate without asking");
   const dialog = startFrom.match(/export function CreateEstimateFromInquiryDialog\([\s\S]*?\n\}\n/)?.[0] ?? "";
   assert.match(dialog, /copyFrom: startFrom === "copy" && source \? startFromInput\(source, ledgers\) : undefined/);

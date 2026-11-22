@@ -9,17 +9,13 @@ const read = (path) => readFile(new URL(path, root), "utf8");
 // The engineer chosen in "Create inquiry" used to be told nothing at all: the inquiry
 // route had no notification of either kind, and app.ts did not even hand it the mailer.
 test("the engineer assigned an inquiry is told, in the app and by email", async () => {
-  const [route, app, email] = await Promise.all([
-    read("backend-node/src/routes/inquiries.ts"),
-    read("backend-node/src/app.ts"),
-    read("backend-node/src/email.ts"),
-  ]);
+  const [route, app, email] = await Promise.all([read("backend-node/src/routes/inquiries.ts"), read("backend-node/src/app.ts"), read("backend-node/src/email.ts")]);
   assert.match(app, /registerInquiryRoutes\(app, config, database, users, email\)/);
   assert.match(email, /async sendInquiryAssignment\(message: InquiryAssignmentEmail\)/);
-  assert.match(route, /notifyUsers\(transaction, \[notice\.ownerId\], "INQUIRY_ASSIGNED"/);
-  assert.match(route, /await queueAssignmentNotice\(transaction, \{/);
+  assert.match(route, /notifyUsers\(\s*transaction,\s*\[notice\.ownerId\],\s*"INQUIRY_ASSIGNED"/);
+  assert.match(route, /await queueAssignmentNotice\(\s*transaction,\s*\{/);
   // Both write paths -- the create and the later re-assignment -- go through the one builder.
-  assert.equal(route.split("await queueAssignmentNotice(transaction, {").length - 1, 2);
+  assert.equal(route.match(/await queueAssignmentNotice\(\s*transaction,\s*\{/g)?.length, 2);
   assert.equal(route.split("await deliverAssignmentEmail(email,").length - 1, 2);
 });
 
@@ -27,10 +23,10 @@ test("the engineer assigned an inquiry is told, in the app and by email", async 
 // written inside the transaction and the mail leaves only after it has committed.
 test("the bell is written inside the transaction and the mail is sent after it commits", async () => {
   const route = await read("backend-node/src/routes/inquiries.ts");
-  const bell = route.indexOf("await notifyUsers(transaction");
+  const bell = route.search(/await notifyUsers\(\s*transaction/);
   const returnedFromTransaction = route.indexOf("return { payload: { id, number, rowVersion:");
   const delivery = route.indexOf("const notification = await deliverAssignmentEmail(email, created.emailMessage);");
-  const reply = route.indexOf('return reply.status(201).header("Location"');
+  const reply = route.search(/return reply\s*\.status\(201\)\s*\.header\("Location"/);
   assert.ok(bell > 0 && returnedFromTransaction > bell, "the notification row is written before the transaction returns");
   assert.ok(delivery > returnedFromTransaction, "the mail is sent after the transaction callback has returned");
   assert.ok(reply > delivery, "the response reports the delivery state");
@@ -43,7 +39,7 @@ test("the bell is written inside the transaction and the mail is sent after it c
 test("assigning to yourself, or re-saving the same owner, notifies nobody", async () => {
   const route = await read("backend-node/src/routes/inquiries.ts");
   assert.match(route, /if \(notice\.ownerId === actorId\) return null;/);
-  assert.match(route, /Number\(current\.estimate_owner_id\) === estimateOwnerId \? null/);
+  assert.match(route, /Number\(current\.estimate_owner_id\) === estimateOwnerId\s*\? null/);
   // Handing an inquiry back to a previous owner is a new event, not a duplicate.
   assert.match(route, /inquiry:\$\{notice\.inquiryId\}:assigned:\$\{notice\.ownerId\}:\$\{notice\.version\}/);
 });
@@ -57,7 +53,11 @@ test("every screen that assigns an inquiry says whether the mail went out", asyn
     read("app/system/ProductionApp.tsx"),
   ]);
   assert.match(client, /export const assignmentDeliveryNote = \(notification: AssignmentNotificationResult\)/);
-  for (const [name, source] of [["CrmScreens", crm], ["CoreScreens", core], ["InquiryScreens", inquiry]]) {
+  for (const [name, source] of [
+    ["CrmScreens", crm],
+    ["CoreScreens", core],
+    ["InquiryScreens", inquiry],
+  ]) {
     assert.match(source, /assignmentDeliveryNote\(/, `${name} reports the delivery state`);
   }
   // The CRM convert dialog can only report it if the shell passes a toast down.
@@ -68,10 +68,7 @@ test("every screen that assigns an inquiry says whether the mail went out", asyn
 // A link is only useful if something answers it. The mail is written in the API and the
 // fragment is answered in the shell, so nothing but this test holds the two together.
 test("every fragment the notification mail links to is one the shell navigates", async () => {
-  const [email, shell] = await Promise.all([
-    read("backend-node/src/email.ts"),
-    read("app/system/ProductionApp.tsx"),
-  ]);
+  const [email, shell] = await Promise.all([read("backend-node/src/email.ts"), read("app/system/ProductionApp.tsx")]);
   const linked = [...email.matchAll(/href="\$\{escapeHtml\(appUrl\)\}#([a-z-]+)\//g)].map((match) => match[1]);
   assert.deepEqual([...new Set(linked)].sort(), ["estimate", "inquiry", "project", "support"]);
   for (const name of new Set(linked)) {
@@ -79,8 +76,7 @@ test("every fragment the notification mail links to is one the shell navigates",
       assert.deepEqual(documentRoute(`#${name}/42`), { view: name === "estimate" ? "estimates" : "inquiries", id: 42 });
       continue;
     }
-    assert.ok(new RegExp(String.raw`location\.hash\.match\(/\^#${name}(?:\\/|\()`).test(shell),
-      `the shell reads a #${name}/<id> deep link`);
+    assert.ok(new RegExp(String.raw`location\.hash\.match\(/\^#${name}(?:\\/|\()`).test(shell), `the shell reads a #${name}/<id> deep link`);
   }
   // Inquiry/Estimate email links now become persistent document URLs. The shell
   // behavior tests exercise restore, Back/Forward and returning to the list.

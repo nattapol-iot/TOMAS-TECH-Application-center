@@ -28,53 +28,138 @@ import { inquiryEstimateOwner } from "../crm-sales-evidence.js";
 import { crmAccess, bindAccess, scopedOpportunity, CRM_SCOPE, opportunityStageAfterInquiry, TERMINAL_INQUIRY_STATUSES } from "../crm.js";
 
 type InquiryRow = Record<string, unknown> & {
-  id: number | string; inquiry_no: string; inquiry_date: Date | string; customer_id: number | string;
-  customer_name: string; project_name: string; project_type: string; sales_owner: string | null;
-  estimate_owner_id: number | string; estimate_owner_name: string; due_date: Date | string; priority: string;
-  status: string; progress: number | string; revision: number; updated_at: Date | string;
-  row_version: Buffer; estimate_id: number | string | null; estimate_status: string | null; project_probability: number;
-  customer_interest_grade: string; total_count: number | string;
-  end_user_customer_id: number | string | null; end_user_name: string | null; end_user_code: string | null;
-  opportunity_id: number | string | null; opportunity_no: string | null;
+  id: number | string;
+  inquiry_no: string;
+  inquiry_date: Date | string;
+  customer_id: number | string;
+  customer_code: string;
+  customer_name: string;
+  project_name: string;
+  project_type: string;
+  sales_owner: string | null;
+  estimate_owner_id: number | string;
+  estimate_owner_name: string;
+  due_date: Date | string;
+  priority: string;
+  status: string;
+  progress: number | string;
+  revision: number;
+  updated_at: Date | string;
+  row_version: Buffer;
+  estimate_id: number | string | null;
+  estimate_status: string | null;
+  project_probability: number;
+  customer_interest_grade: string;
+  total_count: number | string;
+  end_user_customer_id: number | string | null;
+  end_user_name: string | null;
+  end_user_code: string | null;
+  opportunity_id: number | string | null;
+  opportunity_no: string | null;
 };
 
 type DetailSeedRow = Record<string, unknown> & {
-  id: number | string; inquiry_no: string; inquiry_date: Date | string; customer_id: number | string;
-  customer_code: string; customer_name: string; contact: string; project_name: string; project_type: string;
-  rfq_no: string | null; sales_owner: string | null; estimate_owner_id: number | string;
-  estimate_owner_name: string; due_date: Date | string; priority: string; project_probability: number;
-  customer_interest_grade: string; qualification_note: string | null; status: string; progress: number | string;
-  revision: number; requirement: string | null; background: string | null; scope_summary: string | null;
-  technical: string | null; target_delivery: Date | string | null; site_location: string | null;
-  standard: string | null; special: string | null; remark: string | null; created_at: Date | string;
-  updated_at: Date | string; row_version: Buffer; archived_at: Date | null; deleted_estimate_id: number | string | null;
-  end_user_customer_id: number | string | null; end_user_name: string | null; end_user_code: string | null;
+  id: number | string;
+  inquiry_no: string;
+  inquiry_date: Date | string;
+  customer_id: number | string;
+  customer_code: string;
+  customer_name: string;
+  contact: string;
+  project_name: string;
+  project_type: string;
+  rfq_no: string | null;
+  sales_owner: string | null;
+  estimate_owner_id: number | string;
+  estimate_owner_name: string;
+  due_date: Date | string;
+  priority: string;
+  project_probability: number;
+  customer_interest_grade: string;
+  qualification_note: string | null;
+  status: string;
+  progress: number | string;
+  revision: number;
+  requirement: string | null;
+  background: string | null;
+  scope_summary: string | null;
+  technical: string | null;
+  target_delivery: Date | string | null;
+  site_location: string | null;
+  standard: string | null;
+  special: string | null;
+  remark: string | null;
+  created_at: Date | string;
+  updated_at: Date | string;
+  row_version: Buffer;
+  archived_at: Date | null;
+  deleted_estimate_id: number | string | null;
+  end_user_customer_id: number | string | null;
+  end_user_name: string | null;
+  end_user_code: string | null;
 };
 
 type EstimateRow = Record<string, unknown> & {
-  id: number | string; estimate_no: string; revision: number; owner_id: number | string; owner_name: string;
-  created_date: Date | string; due_date: Date | string; status: string; progress: number | string;
-  material_total: number | string; engineering_total: number | string; outsource_total: number | string;
-  other_total: number | string; overhead_state: string | null; overhead_total: number | string | null;
-  total: number | string; row_version: Buffer;
+  id: number | string;
+  estimate_no: string;
+  revision: number;
+  owner_id: number | string;
+  owner_name: string;
+  created_date: Date | string;
+  due_date: Date | string;
+  status: string;
+  progress: number | string;
+  material_total: number | string;
+  engineering_total: number | string;
+  outsource_total: number | string;
+  other_total: number | string;
+  overhead_state: string | null;
+  overhead_total: number | string | null;
+  total: number | string;
+  row_version: Buffer;
 };
 
 type MeetingRow = Record<string, unknown> & {
-  id: number | string; meeting_date: Date | string; meeting_type: string; participants_json: string;
-  requirement: string | null; technical: string | null; decision: string | null; open_point: string | null;
-  action_item: string | null; owner_id: number | string | null; owner_name: string | null;
-  due_date: Date | string | null; attachment_id: number | string | null; attachment_name: string | null;
-  created_by_name: string; created_at: Date | string; row_version: Buffer;
+  id: number | string;
+  meeting_date: Date | string;
+  meeting_type: string;
+  participants_json: string;
+  requirement: string | null;
+  technical: string | null;
+  decision: string | null;
+  open_point: string | null;
+  action_item: string | null;
+  owner_id: number | string | null;
+  owner_name: string | null;
+  due_date: Date | string | null;
+  attachment_id: number | string | null;
+  attachment_name: string | null;
+  created_by_name: string;
+  created_at: Date | string;
+  row_version: Buffer;
 };
 
 type AttachmentRow = Record<string, unknown> & {
-  id: number | string; name: string; category: string; content_type: string; size_bytes: number | string;
-  uploaded_by_name: string; uploaded_at: Date | string; row_version: Buffer;
+  id: number | string;
+  name: string;
+  category: string;
+  content_type: string;
+  size_bytes: number | string;
+  uploaded_by_name: string;
+  uploaded_at: Date | string;
+  row_version: Buffer;
 };
 
 type ActivityRow = Record<string, unknown> & {
-  id: number | string; entity_type: string; entity_no: string; action: string; actor_name: string;
-  before_json: string | null; after_json: string | null; reason: string | null; occurred_at: Date | string;
+  id: number | string;
+  entity_type: string;
+  entity_no: string;
+  action: string;
+  actor_name: string;
+  before_json: string | null;
+  after_json: string | null;
+  reason: string | null;
+  occurred_at: Date | string;
 };
 
 function optionalInteger(value: unknown, label: string): number | null {
@@ -92,7 +177,10 @@ function nullableNumber(value: number | string | null): number | null {
 
 function todayIn(timeZone: string): string {
   const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone, year: "numeric", month: "2-digit", day: "2-digit",
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
   }).formatToParts(new Date());
   const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
   return `${values.year}-${values.month}-${values.day}`;
@@ -104,47 +192,61 @@ function addYears(date: string, years: number): string {
   return value.toISOString().slice(0, 10);
 }
 
-type AssignmentNotice = { inquiryId: number; inquiryNumber: string; projectName: string; customerName: string;
-  dueDate: string; priority: string; assignedBy: string; ownerId: number; ownerName: string; ownerEmail: string;
-  version: string };
+type AssignmentNotice = {
+  inquiryId: number;
+  inquiryNumber: string;
+  projectName: string;
+  customerName: string;
+  dueDate: string;
+  priority: string;
+  assignedBy: string;
+  ownerId: number;
+  ownerName: string;
+  ownerEmail: string;
+  version: string;
+};
 
 /*
  * The bell row is written inside the caller's transaction and the mail is sent after it
  * commits, so a Microsoft Graph outage can never roll back an inquiry. Assigning the
  * inquiry to yourself notifies nobody -- you already know.
  */
-async function queueAssignmentNotice(transaction: TransactionType, notice: AssignmentNotice, actorId: number,
-  detail: string): Promise<InquiryAssignmentEmail | null> {
+async function queueAssignmentNotice(transaction: TransactionType, notice: AssignmentNotice, actorId: number, detail: string): Promise<InquiryAssignmentEmail | null> {
   if (notice.ownerId === actorId) return null;
-  await notifyUsers(transaction, [notice.ownerId], "INQUIRY_ASSIGNED",
-    `Inquiry ${notice.inquiryNumber} · ${notice.projectName}`.slice(0, 300), detail,
-    "Inquiry", notice.inquiryId, `inquiry:${notice.inquiryId}:assigned:${notice.ownerId}:${notice.version}`);
+  await notifyUsers(
+    transaction,
+    [notice.ownerId],
+    "INQUIRY_ASSIGNED",
+    `Inquiry ${notice.inquiryNumber} · ${notice.projectName}`.slice(0, 300),
+    detail,
+    "Inquiry",
+    notice.inquiryId,
+    `inquiry:${notice.inquiryId}:assigned:${notice.ownerId}:${notice.version}`,
+  );
   if (!notice.ownerEmail) return null;
   return {
-    inquiryId: notice.inquiryId, inquiryNumber: notice.inquiryNumber, projectName: notice.projectName,
-    customerName: notice.customerName, dueDate: notice.dueDate, priority: notice.priority,
-    assignedBy: notice.assignedBy, recipients: [{ name: notice.ownerName, email: notice.ownerEmail }],
+    inquiryId: notice.inquiryId,
+    inquiryNumber: notice.inquiryNumber,
+    projectName: notice.projectName,
+    customerName: notice.customerName,
+    dueDate: notice.dueDate,
+    priority: notice.priority,
+    assignedBy: notice.assignedBy,
+    recipients: [{ name: notice.ownerName, email: notice.ownerEmail }],
   };
 }
 
-async function deliverAssignmentEmail(email: EmailService, message: InquiryAssignmentEmail | null):
-  Promise<EmailDeliveryResult | { status: "not_required"; recipients: string[] }> {
+async function deliverAssignmentEmail(email: EmailService, message: InquiryAssignmentEmail | null): Promise<EmailDeliveryResult | { status: "not_required"; recipients: string[] }> {
   return message ? email.sendInquiryAssignment(message) : { status: "not_required", recipients: [] };
 }
 
-export function registerInquiryRoutes(
-  app: FastifyInstance,
-  config: AppConfig,
-  database: Database,
-  users: CurrentUserService,
-  email: EmailService,
-): void {
+export function registerInquiryRoutes(app: FastifyInstance, config: AppConfig, database: Database, users: CurrentUserService, email: EmailService): void {
   registerEndUserUpdateRoute(app, database, users, "Inquiry");
   app.get("/api/v1/inquiries", async (request) => {
     await users.demandPermission(request, "inquiry.read");
     const actor = await users.required(request);
-    const permissions=await database.query<{code:string}>("SELECT code FROM dbo.user_effective_permissions WHERE user_id=@actor",q=>q.input("actor",sql.BigInt,actor.id));
-    const crmActor={id:actor.id,department:actor.department,permissions:permissions.recordset.map(r=>r.code)};
+    const permissions = await database.query<{ code: string }>("SELECT code FROM dbo.user_effective_permissions WHERE user_id=@actor", (q) => q.input("actor", sql.BigInt, actor.id));
+    const crmActor = { id: actor.id, department: actor.department, permissions: permissions.recordset.map((r) => r.code) };
     const query = request.query as Record<string, unknown>;
     const page = clampedInteger(query.page, 1, 1, Number.MAX_SAFE_INTEGER);
     const pageSize = clampedInteger(query.pageSize, 25, 1, 100);
@@ -158,9 +260,11 @@ export function registerInquiryRoutes(
     const interestGrade = rawGrade ? oneOf(rawGrade.toUpperCase(), "Customer interest grade", ["A", "B", "C", "D"]) : null;
     const probabilityFrom = optionalInteger(query.probabilityFrom, "Project probability from");
     const probabilityTo = optionalInteger(query.probabilityTo, "Project probability to");
-    if ((probabilityFrom !== null && (probabilityFrom < 0 || probabilityFrom > 100))
-      || (probabilityTo !== null && (probabilityTo < 0 || probabilityTo > 100))
-      || (probabilityFrom !== null && probabilityTo !== null && probabilityFrom > probabilityTo)) {
+    if (
+      (probabilityFrom !== null && (probabilityFrom < 0 || probabilityFrom > 100)) ||
+      (probabilityTo !== null && (probabilityTo < 0 || probabilityTo > 100)) ||
+      (probabilityFrom !== null && probabilityTo !== null && probabilityFrom > probabilityTo)
+    ) {
       throw new ApiError(400, "validation_failed", "Project probability filters must be between 0 and 100 and form a valid range.");
     }
     const inquiryFrom = parseDateOnly(firstQueryValue(query.inquiryFrom), "Inquiry from", true);
@@ -196,8 +300,9 @@ export function registerInquiryRoutes(
              OR i.project_name LIKE N'%' + @search + N'%' OR c.name LIKE N'%' + @search + N'%'
              OR eu.name LIKE N'%' + @search + N'%' OR eu.code LIKE N'%' + @search + N'%'
              OR i.rfq_no LIKE N'%' + @search + N'%')`;
-    const result = await database.query<InquiryRow>(`
-      SELECT i.id, i.inquiry_no, i.inquiry_date, i.customer_id, c.name AS customer_name,
+    const result = await database.query<InquiryRow>(
+      `
+      SELECT i.id, i.inquiry_no, i.inquiry_date, i.customer_id, c.code AS customer_code, c.name AS customer_name,
         i.end_user_customer_id,eu.name AS end_user_name,eu.code AS end_user_code,
         i.project_name, i.project_type, i.sales_owner, i.estimate_owner_id, u.name AS estimate_owner_name,
         i.due_date, i.priority, i.status, i.progress, i.revision, i.updated_at, i.row_version, i.estimate_id,
@@ -209,47 +314,81 @@ export function registerInquiryRoutes(
       ORDER BY i.updated_at DESC, i.id DESC
       OFFSET @offset ROWS FETCH NEXT @page_size ROWS ONLY;
       ${summary ? `SELECT i.status, COUNT_BIG(*) AS inquiry_count ${listFrom} GROUP BY i.status;` : ""}
-    `, (sqlRequest) => {
-      bindAccess(sqlRequest,crmActor).input("crmRead",sql.Bit,crmActor.permissions.includes("crm.read"));
-      sqlRequest.input("status", sql.NVarChar(50), status);
-      sqlRequest.input("search", sql.NVarChar(200), search);
-      sqlRequest.input("customer_id", sql.BigInt, customerId);
-      sqlRequest.input("project_type", sql.NVarChar(100), projectType);
-      sqlRequest.input("owner_id", sql.BigInt, ownerId);
-      sqlRequest.input("priority", sql.NVarChar(30), priority);
-      sqlRequest.input("interest_grade", sql.Char(1), interestGrade);
-      sqlRequest.input("probability_from", sql.TinyInt, probabilityFrom);
-      sqlRequest.input("probability_to", sql.TinyInt, probabilityTo);
-      sqlRequest.input("inquiry_from", sql.Date, inquiryFrom);
-      sqlRequest.input("inquiry_to", sql.Date, inquiryTo);
-      sqlRequest.input("due_from", sql.Date, dueFrom);
-      sqlRequest.input("due_to", sql.Date, dueTo);
-      sqlRequest.input("offset", sql.Int, (page - 1) * pageSize);
-      sqlRequest.input("page_size", sql.Int, pageSize);
-    });
+    `,
+      (sqlRequest) => {
+        bindAccess(sqlRequest, crmActor).input("crmRead", sql.Bit, crmActor.permissions.includes("crm.read"));
+        sqlRequest.input("status", sql.NVarChar(50), status);
+        sqlRequest.input("search", sql.NVarChar(200), search);
+        sqlRequest.input("customer_id", sql.BigInt, customerId);
+        sqlRequest.input("project_type", sql.NVarChar(100), projectType);
+        sqlRequest.input("owner_id", sql.BigInt, ownerId);
+        sqlRequest.input("priority", sql.NVarChar(30), priority);
+        sqlRequest.input("interest_grade", sql.Char(1), interestGrade);
+        sqlRequest.input("probability_from", sql.TinyInt, probabilityFrom);
+        sqlRequest.input("probability_to", sql.TinyInt, probabilityTo);
+        sqlRequest.input("inquiry_from", sql.Date, inquiryFrom);
+        sqlRequest.input("inquiry_to", sql.Date, inquiryTo);
+        sqlRequest.input("due_from", sql.Date, dueFrom);
+        sqlRequest.input("due_to", sql.Date, dueTo);
+        sqlRequest.input("offset", sql.Int, (page - 1) * pageSize);
+        sqlRequest.input("page_size", sql.Int, pageSize);
+      },
+    );
     return {
       items: result.recordset.map((row) => ({
-        id: Number(row.id), number: row.inquiry_no, inquiryDate: dateOnly(row.inquiry_date),
-        customerId: Number(row.customer_id), customerName: row.customer_name, projectName: row.project_name,
-        endUserCustomerId: nullableNumber(row.end_user_customer_id), endUserName: row.end_user_name, endUserCode: row.end_user_code,
-        projectType: row.project_type, salesOwner: row.sales_owner, estimateOwnerId: Number(row.estimate_owner_id),
-        estimateOwnerName: row.estimate_owner_name, dueDate: dateOnly(row.due_date), priority: row.priority,
-        projectProbability: row.project_probability, customerInterestGrade: row.customer_interest_grade.trim(),
-        status: row.status, progress: Number(row.progress), revision: row.revision, updatedAt: row.updated_at,
-        rowVersion: row.row_version.toString("base64"), estimateId: nullableNumber(row.estimate_id), estimateStatus: row.estimate_status,
-        opportunityId: row.opportunity_no ? nullableNumber(row.opportunity_id) : null, opportunityNo: row.opportunity_no,
-        hasOpportunity: row.opportunity_id != null, opportunityStage: row.opportunity_stage as string | null, proposalSentOn: row.proposal_sent_on ? dateOnly(row.proposal_sent_on as Date) : null, wonOn: row.won_on ? dateOnly(row.won_on as Date) : null, hasProject: Number(row.project_count)>0,
+        id: Number(row.id),
+        number: row.inquiry_no,
+        inquiryDate: dateOnly(row.inquiry_date),
+        // The code comes with the row: the app-wide customer list holds active customers only, so a closed or merged one showed "—".
+        customerId: Number(row.customer_id),
+        customerCode: row.customer_code,
+        customerName: row.customer_name,
+        projectName: row.project_name,
+        endUserCustomerId: nullableNumber(row.end_user_customer_id),
+        endUserName: row.end_user_name,
+        endUserCode: row.end_user_code,
+        projectType: row.project_type,
+        salesOwner: row.sales_owner,
+        estimateOwnerId: Number(row.estimate_owner_id),
+        estimateOwnerName: row.estimate_owner_name,
+        dueDate: dateOnly(row.due_date),
+        priority: row.priority,
+        projectProbability: row.project_probability,
+        customerInterestGrade: row.customer_interest_grade.trim(),
+        status: row.status,
+        progress: Number(row.progress),
+        revision: row.revision,
+        updatedAt: row.updated_at,
+        rowVersion: row.row_version.toString("base64"),
+        estimateId: nullableNumber(row.estimate_id),
+        estimateStatus: row.estimate_status,
+        opportunityId: row.opportunity_no ? nullableNumber(row.opportunity_id) : null,
+        opportunityNo: row.opportunity_no,
+        hasOpportunity: row.opportunity_id != null,
+        opportunityStage: row.opportunity_stage as string | null,
+        proposalSentOn: row.proposal_sent_on ? dateOnly(row.proposal_sent_on as Date) : null,
+        wonOn: row.won_on ? dateOnly(row.won_on as Date) : null,
+        hasProject: Number(row.project_count) > 0,
       })),
-      page, pageSize, total: Number(result.recordset[0]?.total_count ?? 0),
-      ...(summary ? { statusSummary: ((result.recordsets as unknown as Array<Array<{ status: string; inquiry_count: number | string }>>)[1] ?? [])
-        .map((row) => ({ status: row.status, count: Number(row.inquiry_count) })) } : {}),
+      page,
+      pageSize,
+      total: Number(result.recordset[0]?.total_count ?? 0),
+      ...(summary
+        ? {
+            statusSummary: ((result.recordsets as unknown as Array<Array<{ status: string; inquiry_count: number | string }>>)[1] ?? []).map((row) => ({
+              status: row.status,
+              count: Number(row.inquiry_count),
+            })),
+          }
+        : {}),
     };
   });
 
   app.get("/api/v1/inquiries/:id", async (request, reply) => {
     await users.demandPermission(request, "inquiry.read");
     const id = positiveLong((request.params as { id?: string }).id, "Inquiry id");
-    const result = await database.query<DetailSeedRow | EstimateRow | MeetingRow | AttachmentRow | ActivityRow>(`
+    const result = await database.query<DetailSeedRow | EstimateRow | MeetingRow | AttachmentRow | ActivityRow>(
+      `
       SELECT i.id, i.inquiry_no, i.inquiry_date, i.customer_id, c.code AS customer_code, c.name AS customer_name,
         i.end_user_customer_id,eu.name AS end_user_name,eu.code AS end_user_code,
         i.contact, i.project_name, i.project_type, i.rfq_no, i.sales_owner, i.estimate_owner_id,
@@ -292,82 +431,169 @@ export function registerInquiryRoutes(
       WHERE (a.entity_type=N'Inquiry' AND a.entity_id=@id) OR a.entity_no=@inquiry_no
         OR (@estimate_no IS NOT NULL AND a.entity_no=@estimate_no)
       ORDER BY a.occurred_at DESC, a.id DESC;
-    `, (sqlRequest) => sqlRequest.input("id", sql.BigInt, id));
+    `,
+      (sqlRequest) => sqlRequest.input("id", sql.BigInt, id),
+    );
     const seed = (result.recordsets[0] as unknown as DetailSeedRow[])[0];
     if (!seed) return reply.status(404).send();
     const estimateRow = (result.recordsets[1] as unknown as EstimateRow[])[0];
-    const estimate = estimateRow ? {
-      id: Number(estimateRow.id), number: estimateRow.estimate_no, revision: estimateRow.revision,
-      ownerId: Number(estimateRow.owner_id), ownerName: estimateRow.owner_name,
-      createdDate: dateOnly(estimateRow.created_date), dueDate: dateOnly(estimateRow.due_date),
-      status: estimateRow.status, progress: Number(estimateRow.progress), materialTotal: Number(estimateRow.material_total),
-      engineeringTotal: Number(estimateRow.engineering_total), outsourceTotal: Number(estimateRow.outsource_total),
-      otherTotal: Number(estimateRow.other_total), overheadState: estimateRow.overhead_state,
-      overheadTotal: estimateRow.overhead_total === null ? null : Number(estimateRow.overhead_total), total: Number(estimateRow.total),
-      rowVersion: estimateRow.row_version.toString("base64"),
-    } : null;
+    const estimate = estimateRow
+      ? {
+          id: Number(estimateRow.id),
+          number: estimateRow.estimate_no,
+          revision: estimateRow.revision,
+          ownerId: Number(estimateRow.owner_id),
+          ownerName: estimateRow.owner_name,
+          createdDate: dateOnly(estimateRow.created_date),
+          dueDate: dateOnly(estimateRow.due_date),
+          status: estimateRow.status,
+          progress: Number(estimateRow.progress),
+          materialTotal: Number(estimateRow.material_total),
+          engineeringTotal: Number(estimateRow.engineering_total),
+          outsourceTotal: Number(estimateRow.outsource_total),
+          otherTotal: Number(estimateRow.other_total),
+          overheadState: estimateRow.overhead_state,
+          overheadTotal: estimateRow.overhead_total === null ? null : Number(estimateRow.overhead_total),
+          total: Number(estimateRow.total),
+          rowVersion: estimateRow.row_version.toString("base64"),
+        }
+      : null;
     const meetings = (result.recordsets[2] as unknown as MeetingRow[]).map((row) => ({
-      id: Number(row.id), meetingDate: dateOnly(row.meeting_date), meetingType: row.meeting_type,
-      participants: JSON.parse(row.participants_json) as unknown, requirement: row.requirement ?? "",
-      technical: row.technical ?? "", decision: row.decision ?? "", openPoint: row.open_point ?? "",
-      actionItem: row.action_item ?? "", ownerId: nullableNumber(row.owner_id), ownerName: row.owner_name,
-      dueDate: dateOnly(row.due_date), attachmentId: nullableNumber(row.attachment_id), attachmentName: row.attachment_name,
-      createdByName: row.created_by_name, createdAt: row.created_at, rowVersion: row.row_version.toString("base64"),
+      id: Number(row.id),
+      meetingDate: dateOnly(row.meeting_date),
+      meetingType: row.meeting_type,
+      participants: JSON.parse(row.participants_json) as unknown,
+      requirement: row.requirement ?? "",
+      technical: row.technical ?? "",
+      decision: row.decision ?? "",
+      openPoint: row.open_point ?? "",
+      actionItem: row.action_item ?? "",
+      ownerId: nullableNumber(row.owner_id),
+      ownerName: row.owner_name,
+      dueDate: dateOnly(row.due_date),
+      attachmentId: nullableNumber(row.attachment_id),
+      attachmentName: row.attachment_name,
+      createdByName: row.created_by_name,
+      createdAt: row.created_at,
+      rowVersion: row.row_version.toString("base64"),
     }));
     const attachments = (result.recordsets[3] as unknown as AttachmentRow[]).map((row) => ({
-      id: Number(row.id), fileName: row.name, category: row.category, contentType: row.content_type,
-      sizeBytes: Number(row.size_bytes), uploadedByName: row.uploaded_by_name, uploadedAt: row.uploaded_at,
+      id: Number(row.id),
+      fileName: row.name,
+      category: row.category,
+      contentType: row.content_type,
+      sizeBytes: Number(row.size_bytes),
+      uploadedByName: row.uploaded_by_name,
+      uploadedAt: row.uploaded_at,
       rowVersion: row.row_version.toString("base64"),
     }));
     const activity = (result.recordsets[4] as unknown as ActivityRow[]).map((row) => ({
-      id: Number(row.id), entityType: row.entity_type, entityNumber: row.entity_no, action: row.action,
-      actorName: row.actor_name, beforeJson: row.before_json, afterJson: row.after_json,
-      reason: row.reason, occurredAt: row.occurred_at,
+      id: Number(row.id),
+      entityType: row.entity_type,
+      entityNumber: row.entity_no,
+      action: row.action,
+      actorName: row.actor_name,
+      beforeJson: row.before_json,
+      afterJson: row.after_json,
+      reason: row.reason,
+      occurredAt: row.occurred_at,
     }));
     return {
-      id: Number(seed.id), number: seed.inquiry_no, inquiryDate: dateOnly(seed.inquiry_date),
-      customerId: Number(seed.customer_id), customerCode: seed.customer_code, customerName: seed.customer_name,
-      endUserCustomerId: nullableNumber(seed.end_user_customer_id), endUserName: seed.end_user_name, endUserCode: seed.end_user_code,
-      contact: seed.contact, projectName: seed.project_name, projectType: seed.project_type, rfqNo: seed.rfq_no,
-      salesOwner: seed.sales_owner, estimateOwnerId: Number(seed.estimate_owner_id),
-      estimateOwnerName: seed.estimate_owner_name, dueDate: dateOnly(seed.due_date), priority: seed.priority,
-      projectProbability: seed.project_probability, customerInterestGrade: seed.customer_interest_grade.trim(),
-      archived: !!seed.archived_at, deletedEstimateId: nullableNumber(seed.deleted_estimate_id), qualificationNote: seed.qualification_note ?? "", status: seed.status, progress: Number(seed.progress),
-      revision: seed.revision, estimateId: estimate?.id ?? null, requirement: seed.requirement ?? "",
-      background: seed.background ?? "", scopeSummary: seed.scope_summary ?? "", technical: seed.technical ?? "",
-      targetDelivery: dateOnly(seed.target_delivery), siteLocation: seed.site_location ?? "", standard: seed.standard ?? "",
-      special: seed.special ?? "", remark: seed.remark ?? "", createdAt: seed.created_at, updatedAt: seed.updated_at,
-      rowVersion: seed.row_version.toString("base64"), estimate, meetings, attachments, activity,
+      id: Number(seed.id),
+      number: seed.inquiry_no,
+      inquiryDate: dateOnly(seed.inquiry_date),
+      customerId: Number(seed.customer_id),
+      customerCode: seed.customer_code,
+      customerName: seed.customer_name,
+      endUserCustomerId: nullableNumber(seed.end_user_customer_id),
+      endUserName: seed.end_user_name,
+      endUserCode: seed.end_user_code,
+      contact: seed.contact,
+      projectName: seed.project_name,
+      projectType: seed.project_type,
+      rfqNo: seed.rfq_no,
+      salesOwner: seed.sales_owner,
+      estimateOwnerId: Number(seed.estimate_owner_id),
+      estimateOwnerName: seed.estimate_owner_name,
+      dueDate: dateOnly(seed.due_date),
+      priority: seed.priority,
+      projectProbability: seed.project_probability,
+      customerInterestGrade: seed.customer_interest_grade.trim(),
+      archived: !!seed.archived_at,
+      deletedEstimateId: nullableNumber(seed.deleted_estimate_id),
+      qualificationNote: seed.qualification_note ?? "",
+      status: seed.status,
+      progress: Number(seed.progress),
+      revision: seed.revision,
+      estimateId: estimate?.id ?? null,
+      requirement: seed.requirement ?? "",
+      background: seed.background ?? "",
+      scopeSummary: seed.scope_summary ?? "",
+      technical: seed.technical ?? "",
+      targetDelivery: dateOnly(seed.target_delivery),
+      siteLocation: seed.site_location ?? "",
+      standard: seed.standard ?? "",
+      special: seed.special ?? "",
+      remark: seed.remark ?? "",
+      createdAt: seed.created_at,
+      updatedAt: seed.updated_at,
+      rowVersion: seed.row_version.toString("base64"),
+      estimate,
+      meetings,
+      attachments,
+      activity,
     };
   });
 
-  app.get("/api/v1/inquiry-duplicates",async request=>{
-    await users.demandPermission(request,"inquiry.read");
-    const query=request.query as Record<string,unknown>,customerId=requiredInteger(Number(firstQueryValue(query.customerId)),"Customer",1),projectName=requiredText(firstQueryValue(query.projectName),300,"Project name");
-    const result=await database.query<{id:number|string;reference_no:string;project_name:string;status:string;source:string}>(`SELECT TOP(5) i.id,i.inquiry_no reference_no,i.project_name,i.status,CASE WHEN i.opportunity_id IS NULL THEN N'Direct Inquiry' ELSE N'CRM' END source
+  app.get("/api/v1/inquiry-duplicates", async (request) => {
+    await users.demandPermission(request, "inquiry.read");
+    const query = request.query as Record<string, unknown>,
+      customerId = requiredInteger(Number(firstQueryValue(query.customerId)), "Customer", 1),
+      projectName = requiredText(firstQueryValue(query.projectName), 300, "Project name");
+    const result = await database.query<{ id: number | string; reference_no: string; project_name: string; status: string; source: string }>(
+      `SELECT TOP(5) i.id,i.inquiry_no reference_no,i.project_name,i.status,CASE WHEN i.opportunity_id IS NULL THEN N'Direct Inquiry' ELSE N'CRM' END source
       FROM dbo.inquiries i WHERE i.customer_id=@customer AND i.deleted_at IS NULL AND i.status NOT IN(N'Approved',N'Cancelled')
         AND (LOWER(LTRIM(RTRIM(i.project_name)))=LOWER(LTRIM(RTRIM(@name))) OR DIFFERENCE(i.project_name,@name)>=3)
-      ORDER BY CASE WHEN LOWER(LTRIM(RTRIM(i.project_name)))=LOWER(LTRIM(RTRIM(@name))) THEN 0 ELSE 1 END,i.updated_at DESC`,q=>q.input("customer",sql.BigInt,customerId).input("name",sql.NVarChar(300),projectName));
-    return result.recordset.map(row=>({id:Number(row.id),referenceNo:row.reference_no,projectName:row.project_name,status:row.status,source:row.source}));
+      ORDER BY CASE WHEN LOWER(LTRIM(RTRIM(i.project_name)))=LOWER(LTRIM(RTRIM(@name))) THEN 0 ELSE 1 END,i.updated_at DESC`,
+      (q) => q.input("customer", sql.BigInt, customerId).input("name", sql.NVarChar(300), projectName),
+    );
+    return result.recordset.map((row) => ({ id: Number(row.id), referenceNo: row.reference_no, projectName: row.project_name, status: row.status, source: row.source }));
   });
 
   app.post("/api/v1/inquiries", async (request, reply) => {
     const body = bodyObject(request.body);
-    const opportunityId = body.opportunityId == null ? null : requiredInteger(body.opportunityId,"Opportunity",1);
-    const crmActor = opportunityId ? await crmAccess(database,users,request,"crm.convert") : null;
+    const opportunityId = body.opportunityId == null ? null : requiredInteger(body.opportunityId, "Opportunity", 1);
+    const crmActor = opportunityId ? await crmAccess(database, users, request, "crm.convert") : null;
     if (!crmActor) await users.demandPermission(request, "inquiry.write");
     const actor = await users.required(request);
     if (opportunityId && crmActor) {
-      const source = await database.transaction(async tx => {
-        const opportunity = await scopedOpportunity(bindAccess(new sql.Request(tx),crmActor),opportunityId);
-        if (!(opportunity.row_version as Buffer).equals(parseRowVersion(body.opportunityRowVersion))) throw new ApiError(409,"concurrency_conflict","Opportunity changed. Refresh before creating an inquiry.");
-        const q=new sql.Request(tx);q.input("contact",sql.BigInt,opportunity.contact_id).input("sales",sql.BigInt,opportunity.sales_owner_id).input("site",sql.BigInt,opportunity.site_id);
-        const refs=(await q.query("SELECT (SELECT name FROM dbo.customer_site_contacts WHERE id=@contact) contact_name,(SELECT name FROM dbo.users WHERE id=@sales) sales_name,(SELECT address FROM dbo.customer_sites WHERE id=@site) site_address")).recordset[0]!;
-        return {...opportunity,...refs};
+      const source = await database.transaction(async (tx) => {
+        const opportunity = await scopedOpportunity(bindAccess(new sql.Request(tx), crmActor), opportunityId);
+        if (!(opportunity.row_version as Buffer).equals(parseRowVersion(body.opportunityRowVersion)))
+          throw new ApiError(409, "concurrency_conflict", "Opportunity changed. Refresh before creating an inquiry.");
+        const q = new sql.Request(tx);
+        q.input("contact", sql.BigInt, opportunity.contact_id).input("sales", sql.BigInt, opportunity.sales_owner_id).input("site", sql.BigInt, opportunity.site_id);
+        const refs = (
+          await q.query(
+            "SELECT (SELECT name FROM dbo.customer_site_contacts WHERE id=@contact) contact_name,(SELECT name FROM dbo.users WHERE id=@sales) sales_name,(SELECT address FROM dbo.customer_sites WHERE id=@site) site_address",
+          )
+        ).recordset[0]!;
+        return { ...opportunity, ...refs };
       });
-      Object.assign(body,{customerId:Number(source.customer_id),endUserCustomerId:source.end_user_customer_id==null?null:Number(source.end_user_customer_id),contact:source.contact_name??"",projectName:source.name,salesOwner:source.sales_name,requirement:source.need,scopeSummary:source.scope,siteLocation:source.site_address??"",priority:source.priority});
-      body.estimateOwnerId=inquiryEstimateOwner(body.estimateOwnerId,source.technical_owner_id);
-      body.projectProbability ??= Number(source.probability??50);body.customerInterestGrade ??="B";
+      Object.assign(body, {
+        customerId: Number(source.customer_id),
+        endUserCustomerId: source.end_user_customer_id == null ? null : Number(source.end_user_customer_id),
+        contact: source.contact_name ?? "",
+        projectName: source.name,
+        salesOwner: source.sales_name,
+        requirement: source.need,
+        scopeSummary: source.scope,
+        siteLocation: source.site_address ?? "",
+        priority: source.priority,
+      });
+      body.estimateOwnerId = inquiryEstimateOwner(body.estimateOwnerId, source.technical_owner_id);
+      body.projectProbability ??= Number(source.probability ?? 50);
+      body.customerInterestGrade ??= "B";
     }
     const customerId = requiredInteger(body.customerId, "Customer", 1);
     const endUserId = endUserCustomerId(body.endUserCustomerId) ?? null;
@@ -400,15 +626,18 @@ export function registerInquiryRoutes(
     }
 
     const created = await database.transaction(async (transaction) => {
-      const crmSource = opportunityId && crmActor ? await scopedOpportunity(bindAccess(new sql.Request(transaction),crmActor),opportunityId,true) : null;
-      if (crmSource && !(crmSource.row_version as Buffer).equals(parseRowVersion(body.opportunityRowVersion))) throw new ApiError(409,"concurrency_conflict","Opportunity changed. Refresh before creating an inquiry.");
+      const crmSource = opportunityId && crmActor ? await scopedOpportunity(bindAccess(new sql.Request(transaction), crmActor), opportunityId, true) : null;
+      if (crmSource && !(crmSource.row_version as Buffer).equals(parseRowVersion(body.opportunityRowVersion)))
+        throw new ApiError(409, "concurrency_conflict", "Opportunity changed. Refresh before creating an inquiry.");
       if (crmSource) {
-        if (["WON","LOST","ON_HOLD"].includes(String(crmSource.stage))) throw new ApiError(422,"crm_opportunity_closed","Reopen the opportunity before creating additional estimating work.");
+        if (["WON", "LOST", "ON_HOLD"].includes(String(crmSource.stage))) throw new ApiError(422, "crm_opportunity_closed", "Reopen the opportunity before creating additional estimating work.");
         const duplicate = new sql.Request(transaction);
-        duplicate.input("opportunity",sql.BigInt,opportunityId).input("approved",sql.NVarChar(50),TERMINAL_INQUIRY_STATUSES[0]).input("cancelled",sql.NVarChar(50),TERMINAL_INQUIRY_STATUSES[1]);
-        const existing = (await duplicate.query<{id:number|string;inquiry_no:string}>(`SELECT TOP(1) id,inquiry_no FROM dbo.inquiries WITH(UPDLOCK,HOLDLOCK)
-          WHERE opportunity_id=@opportunity AND deleted_at IS NULL AND status NOT IN(@approved,@cancelled) ORDER BY id DESC`)).recordset[0];
-        if (existing) throw new ApiError(409,"crm_inquiry_exists",`This opportunity already has an active inquiry: ${existing.inquiry_no}`);
+        duplicate.input("opportunity", sql.BigInt, opportunityId).input("approved", sql.NVarChar(50), TERMINAL_INQUIRY_STATUSES[0]).input("cancelled", sql.NVarChar(50), TERMINAL_INQUIRY_STATUSES[1]);
+        const existing = (
+          await duplicate.query<{ id: number | string; inquiry_no: string }>(`SELECT TOP(1) id,inquiry_no FROM dbo.inquiries WITH(UPDLOCK,HOLDLOCK)
+          WHERE opportunity_id=@opportunity AND deleted_at IS NULL AND status NOT IN(@approved,@cancelled) ORDER BY id DESC`)
+        ).recordset[0];
+        if (existing) throw new ApiError(409, "crm_inquiry_exists", `This opportunity already has an active inquiry: ${existing.inquiry_no}`);
       }
       const endUser = await validateEndUser(transaction, endUserId);
       const validate = new sql.Request(transaction);
@@ -430,19 +659,31 @@ export function registerInquiryRoutes(
       const issued = await issue.execute("dbo.issue_document_number");
       const number = String(issued.output.document_number);
       const insert = new sql.Request(transaction);
-      insert.input("number", sql.NVarChar(30), number); insert.input("today", sql.Date, today);
-      insert.input("customer_id", sql.BigInt, customerId); insert.input("contact", sql.NVarChar(200), contact);
+      insert.input("number", sql.NVarChar(30), number);
+      insert.input("today", sql.Date, today);
+      insert.input("customer_id", sql.BigInt, customerId);
+      insert.input("contact", sql.NVarChar(200), contact);
       insert.input("end_user_id", sql.BigInt, endUserId);
-      insert.input("project_name", sql.NVarChar(300), projectName); insert.input("project_type", sql.NVarChar(100), projectType);
-      insert.input("rfq_no", sql.NVarChar(100), rfqNo); insert.input("sales_owner", sql.NVarChar(200), salesOwner);
-      insert.input("estimate_owner_id", sql.BigInt, estimateOwnerId); insert.input("due_date", sql.Date, dueDate);
-      insert.input("priority", sql.NVarChar(30), priority); insert.input("project_probability", sql.TinyInt, projectProbability);
-      insert.input("interest_grade", sql.Char(1), customerInterestGrade); insert.input("qualification_note", sql.NVarChar(2000), qualificationNote);
-      insert.input("requirement", sql.NVarChar(sql.MAX), requirement); insert.input("background", sql.NVarChar(sql.MAX), background);
-      insert.input("scope_summary", sql.NVarChar(sql.MAX), scopeSummary); insert.input("technical", sql.NVarChar(sql.MAX), technical);
-      insert.input("target_delivery", sql.Date, targetDelivery); insert.input("site_location", sql.NVarChar(300), siteLocation);
-      insert.input("standard", sql.NVarChar(sql.MAX), standard); insert.input("special", sql.NVarChar(sql.MAX), special);
-      insert.input("remark", sql.NVarChar(sql.MAX), remark); insert.input("actor", sql.BigInt, actor.id);
+      insert.input("project_name", sql.NVarChar(300), projectName);
+      insert.input("project_type", sql.NVarChar(100), projectType);
+      insert.input("rfq_no", sql.NVarChar(100), rfqNo);
+      insert.input("sales_owner", sql.NVarChar(200), salesOwner);
+      insert.input("estimate_owner_id", sql.BigInt, estimateOwnerId);
+      insert.input("due_date", sql.Date, dueDate);
+      insert.input("priority", sql.NVarChar(30), priority);
+      insert.input("project_probability", sql.TinyInt, projectProbability);
+      insert.input("interest_grade", sql.Char(1), customerInterestGrade);
+      insert.input("qualification_note", sql.NVarChar(2000), qualificationNote);
+      insert.input("requirement", sql.NVarChar(sql.MAX), requirement);
+      insert.input("background", sql.NVarChar(sql.MAX), background);
+      insert.input("scope_summary", sql.NVarChar(sql.MAX), scopeSummary);
+      insert.input("technical", sql.NVarChar(sql.MAX), technical);
+      insert.input("target_delivery", sql.Date, targetDelivery);
+      insert.input("site_location", sql.NVarChar(300), siteLocation);
+      insert.input("standard", sql.NVarChar(sql.MAX), standard);
+      insert.input("special", sql.NVarChar(sql.MAX), special);
+      insert.input("remark", sql.NVarChar(sql.MAX), remark);
+      insert.input("actor", sql.BigInt, actor.id);
       const result = await insert.query<{ id: number | string; row_version: Buffer }>(`
         INSERT INTO dbo.inquiries (inquiry_no,inquiry_date,customer_id,end_user_customer_id,contact,project_name,project_type,rfq_no,
           sales_owner,estimate_owner_id,due_date,priority,status,progress,revision,project_probability,
@@ -456,33 +697,78 @@ export function registerInquiryRoutes(
       const row = result.recordset[0]!;
       const id = Number(row.id);
       if (crmSource) {
-        const link=new sql.Request(transaction);link.input("id",sql.BigInt,id).input("opportunity",sql.BigInt,opportunityId).input("site",sql.BigInt,crmSource.site_id).input("contact",sql.BigInt,crmSource.contact_id);
+        const link = new sql.Request(transaction);
+        link.input("id", sql.BigInt, id).input("opportunity", sql.BigInt, opportunityId).input("site", sql.BigInt, crmSource.site_id).input("contact", sql.BigInt, crmSource.contact_id);
         await link.query("UPDATE dbo.inquiries SET opportunity_id=@opportunity,customer_site_id=@site,customer_contact_id=@contact WHERE id=@id");
-        const nextStage=opportunityStageAfterInquiry(crmSource.stage);
-        if(nextStage!==String(crmSource.stage)){const advance=new sql.Request(transaction);advance.input("id",sql.BigInt,opportunityId).input("stage",sql.NVarChar(40),nextStage).input("actor",sql.BigInt,actor.id);await advance.query("UPDATE dbo.crm_opportunities SET stage=@stage,stage_changed_at=SYSUTCDATETIME(),updated_by=@actor,updated_at=SYSUTCDATETIME() WHERE id=@id");}
-        await insertAudit(transaction,actor.id,"CrmOpportunity",Number(opportunityId),String(crmSource.opportunity_no).slice(0,50),"ConvertedToInquiry",null,{inquiryId:id,inquiryNumber:number});
+        const nextStage = opportunityStageAfterInquiry(crmSource.stage);
+        if (nextStage !== String(crmSource.stage)) {
+          const advance = new sql.Request(transaction);
+          advance.input("id", sql.BigInt, opportunityId).input("stage", sql.NVarChar(40), nextStage).input("actor", sql.BigInt, actor.id);
+          await advance.query("UPDATE dbo.crm_opportunities SET stage=@stage,stage_changed_at=SYSUTCDATETIME(),updated_by=@actor,updated_at=SYSUTCDATETIME() WHERE id=@id");
+        }
+        await insertAudit(transaction, actor.id, "CrmOpportunity", Number(opportunityId), String(crmSource.opportunity_no).slice(0, 50), "ConvertedToInquiry", null, {
+          inquiryId: id,
+          inquiryNumber: number,
+        });
       }
       await insertAudit(transaction, actor.id, "Inquiry", id, number, "Created", null, {
-        customerId, ...endUser, contact, projectName, projectType, rfqNo, salesOwner, estimateOwnerId, dueDate, priority,
-        projectProbability, customerInterestGrade, qualificationNote, requirement, background, scopeSummary,
-        technical, targetDelivery, siteLocation, standard, special, remark,
+        customerId,
+        ...endUser,
+        contact,
+        projectName,
+        projectType,
+        rfqNo,
+        salesOwner,
+        estimateOwnerId,
+        dueDate,
+        priority,
+        projectProbability,
+        customerInterestGrade,
+        qualificationNote,
+        requirement,
+        background,
+        scopeSummary,
+        technical,
+        targetDelivery,
+        siteLocation,
+        standard,
+        special,
+        remark,
       });
       const assignee = new sql.Request(transaction);
-      assignee.input("owner_id", sql.BigInt, estimateOwnerId); assignee.input("customer_id", sql.BigInt, customerId);
-      const notice = (await assignee.query<{ owner_name: string; owner_email: string | null; customer_name: string }>(`
+      assignee.input("owner_id", sql.BigInt, estimateOwnerId);
+      assignee.input("customer_id", sql.BigInt, customerId);
+      const notice = (
+        await assignee.query<{ owner_name: string; owner_email: string | null; customer_name: string }>(`
         SELECT u.name AS owner_name,u.email AS owner_email,
           (SELECT c.name FROM dbo.customers c WHERE c.id=@customer_id) AS customer_name
         FROM dbo.users u WHERE u.id=@owner_id;
-      `)).recordset[0]!;
-      const emailMessage = await queueAssignmentNotice(transaction, {
-        inquiryId: id, inquiryNumber: number, projectName, customerName: notice.customer_name ?? "",
-        dueDate, priority, assignedBy: actor.name, ownerId: estimateOwnerId,
-        ownerName: notice.owner_name, ownerEmail: notice.owner_email ?? "", version: row.row_version.toString("hex"),
-      }, actor.id, `${notice.customer_name ?? ""} · ${projectName} — กำหนดส่ง ${dueDate} · ความเร่งด่วน ${priority} · มอบหมายโดย ${actor.name}`);
+      `)
+      ).recordset[0]!;
+      const emailMessage = await queueAssignmentNotice(
+        transaction,
+        {
+          inquiryId: id,
+          inquiryNumber: number,
+          projectName,
+          customerName: notice.customer_name ?? "",
+          dueDate,
+          priority,
+          assignedBy: actor.name,
+          ownerId: estimateOwnerId,
+          ownerName: notice.owner_name,
+          ownerEmail: notice.owner_email ?? "",
+          version: row.row_version.toString("hex"),
+        },
+        actor.id,
+        `${notice.customer_name ?? ""} · ${projectName} — กำหนดส่ง ${dueDate} · ความเร่งด่วน ${priority} · มอบหมายโดย ${actor.name}`,
+      );
       return { payload: { id, number, rowVersion: row.row_version.toString("base64") }, emailMessage };
     });
     const notification = await deliverAssignmentEmail(email, created.emailMessage);
-    return reply.status(201).header("Location", `/api/v1/inquiries/${created.payload.id}`)
+    return reply
+      .status(201)
+      .header("Location", `/api/v1/inquiries/${created.payload.id}`)
       .send({ ...created.payload, notification });
   });
 
@@ -496,44 +782,81 @@ export function registerInquiryRoutes(
     const response = await database.transaction(async (transaction) => {
       const currentRequest = new sql.Request(transaction);
       currentRequest.input("id", sql.BigInt, id);
-      const current = (await currentRequest.query<{ inquiry_no: string; estimate_owner_id: number | string; owner_name: string;
-        project_name: string; customer_name: string; due_date: Date | string; priority: string; row_version: Buffer }>(`
+      const current = (
+        await currentRequest.query<{
+          inquiry_no: string;
+          estimate_owner_id: number | string;
+          owner_name: string;
+          project_name: string;
+          customer_name: string;
+          due_date: Date | string;
+          priority: string;
+          row_version: Buffer;
+        }>(`
         SELECT i.inquiry_no,i.estimate_owner_id,u.name AS owner_name,i.project_name,c.name AS customer_name,i.due_date,i.priority,i.row_version
         FROM dbo.inquiries i WITH (UPDLOCK,HOLDLOCK)
         INNER JOIN dbo.users u ON u.id=i.estimate_owner_id
         INNER JOIN dbo.customers c ON c.id=i.customer_id
         WHERE i.id=@id AND i.deleted_at IS NULL AND i.archived_at IS NULL AND i.status<>N'Cancelled';
-      `)).recordset[0];
+      `)
+      ).recordset[0];
       if (!current) return null;
       if (!current.row_version.equals(rowVersion)) throw new ApiError(409, "concurrency_conflict", "This inquiry was updated by another user. Reload and try again.");
       const ownerRequest = new sql.Request(transaction);
       ownerRequest.input("owner_id", sql.BigInt, estimateOwnerId);
-      const nextOwner = (await ownerRequest.query<{ name: string; email: string | null }>(`
+      const nextOwner = (
+        await ownerRequest.query<{ name: string; email: string | null }>(`
         SELECT u.name,u.email FROM dbo.users u INNER JOIN dbo.roles r ON r.id=u.role_id
         WHERE u.id=@owner_id AND u.is_active=1 AND u.deleted_at IS NULL
           AND r.code IN (N'Engineer',N'Engineering Manager',N'Admin');
-      `)).recordset[0];
+      `)
+      ).recordset[0];
       if (!nextOwner) throw new ApiError(422, "invalid_reference", "The estimate owner must be an active engineer, engineering manager or administrator.");
       const update = new sql.Request(transaction);
-      update.input("owner_id", sql.BigInt, estimateOwnerId); update.input("actor", sql.BigInt, actor.id);
-      update.input("id", sql.BigInt, id); update.input("row_version", sql.VarBinary(8), rowVersion);
-      const updated = (await update.query<{ row_version: Buffer }>(`
+      update.input("owner_id", sql.BigInt, estimateOwnerId);
+      update.input("actor", sql.BigInt, actor.id);
+      update.input("id", sql.BigInt, id);
+      update.input("row_version", sql.VarBinary(8), rowVersion);
+      const updated = (
+        await update.query<{ row_version: Buffer }>(`
         UPDATE dbo.inquiries SET estimate_owner_id=@owner_id,updated_by=@actor,updated_at=SYSUTCDATETIME()
         OUTPUT inserted.row_version WHERE id=@id AND deleted_at IS NULL AND row_version=@row_version;
-      `)).recordset[0];
+      `)
+      ).recordset[0];
       if (!updated) throw new ApiError(409, "concurrency_conflict", "This inquiry was updated by another user. Reload and try again.");
-      await insertAudit(transaction, actor.id, "Inquiry", id, current.inquiry_no, "Estimate owner assigned",
+      await insertAudit(
+        transaction,
+        actor.id,
+        "Inquiry",
+        id,
+        current.inquiry_no,
+        "Estimate owner assigned",
         { estimateOwnerId: Number(current.estimate_owner_id), estimateOwnerName: current.owner_name },
-        { estimateOwnerId, estimateOwnerName: nextOwner.name });
+        { estimateOwnerId, estimateOwnerName: nextOwner.name },
+      );
       // Re-saving the same owner is not a new assignment, so it must not mail them again.
       const dueDate = dateOnly(current.due_date) ?? "";
-      const emailMessage = Number(current.estimate_owner_id) === estimateOwnerId ? null
-        : await queueAssignmentNotice(transaction, {
-            inquiryId: id, inquiryNumber: current.inquiry_no, projectName: current.project_name,
-            customerName: current.customer_name, dueDate, priority: current.priority, assignedBy: actor.name,
-            ownerId: estimateOwnerId, ownerName: nextOwner.name, ownerEmail: nextOwner.email ?? "",
-            version: updated.row_version.toString("hex"),
-          }, actor.id, `${current.customer_name} · ${current.project_name} — กำหนดส่ง ${dueDate} · ความเร่งด่วน ${current.priority} · มอบหมายโดย ${actor.name}`);
+      const emailMessage =
+        Number(current.estimate_owner_id) === estimateOwnerId
+          ? null
+          : await queueAssignmentNotice(
+              transaction,
+              {
+                inquiryId: id,
+                inquiryNumber: current.inquiry_no,
+                projectName: current.project_name,
+                customerName: current.customer_name,
+                dueDate,
+                priority: current.priority,
+                assignedBy: actor.name,
+                ownerId: estimateOwnerId,
+                ownerName: nextOwner.name,
+                ownerEmail: nextOwner.email ?? "",
+                version: updated.row_version.toString("hex"),
+              },
+              actor.id,
+              `${current.customer_name} · ${current.project_name} — กำหนดส่ง ${dueDate} · ความเร่งด่วน ${current.priority} · มอบหมายโดย ${actor.name}`,
+            );
       return { payload: { id, estimateOwnerId, estimateOwnerName: nextOwner.name, rowVersion: updated.row_version.toString("base64") }, emailMessage };
     }, sql.ISOLATION_LEVEL.READ_COMMITTED);
     if (!response) return reply.status(404).send();
@@ -553,25 +876,39 @@ export function registerInquiryRoutes(
     const response = await database.transaction(async (transaction) => {
       const currentRequest = new sql.Request(transaction);
       currentRequest.input("id", sql.BigInt, id);
-      const current = (await currentRequest.query<{ inquiry_no: string; project_probability: number; customer_interest_grade: string; qualification_note: string | null; row_version: Buffer }>(`
+      const current = (
+        await currentRequest.query<{ inquiry_no: string; project_probability: number; customer_interest_grade: string; qualification_note: string | null; row_version: Buffer }>(`
         SELECT inquiry_no,project_probability,customer_interest_grade,qualification_note,row_version
         FROM dbo.inquiries WITH (UPDLOCK,HOLDLOCK) WHERE id=@id AND deleted_at IS NULL AND archived_at IS NULL AND status<>N'Cancelled';
-      `)).recordset[0];
+      `)
+      ).recordset[0];
       if (!current) return null;
       if (!current.row_version.equals(rowVersion)) throw new ApiError(409, "concurrency_conflict", "This inquiry was updated by another user. Reload and try again.");
       const update = new sql.Request(transaction);
-      update.input("project_probability", sql.TinyInt, projectProbability); update.input("interest_grade", sql.Char(1), customerInterestGrade);
-      update.input("qualification_note", sql.NVarChar(2000), qualificationNote); update.input("actor", sql.BigInt, actor.id);
-      update.input("id", sql.BigInt, id); update.input("row_version", sql.VarBinary(8), rowVersion);
-      const updated = (await update.query<{ row_version: Buffer }>(`
+      update.input("project_probability", sql.TinyInt, projectProbability);
+      update.input("interest_grade", sql.Char(1), customerInterestGrade);
+      update.input("qualification_note", sql.NVarChar(2000), qualificationNote);
+      update.input("actor", sql.BigInt, actor.id);
+      update.input("id", sql.BigInt, id);
+      update.input("row_version", sql.VarBinary(8), rowVersion);
+      const updated = (
+        await update.query<{ row_version: Buffer }>(`
         UPDATE dbo.inquiries SET project_probability=@project_probability,customer_interest_grade=@interest_grade,
           qualification_note=@qualification_note,updated_by=@actor,updated_at=SYSUTCDATETIME()
         OUTPUT inserted.row_version WHERE id=@id AND deleted_at IS NULL AND row_version=@row_version;
-      `)).recordset[0];
+      `)
+      ).recordset[0];
       if (!updated) throw new ApiError(409, "concurrency_conflict", "This inquiry was updated by another user. Reload and try again.");
-      await insertAudit(transaction, actor.id, "Inquiry", id, current.inquiry_no, "Qualification updated",
+      await insertAudit(
+        transaction,
+        actor.id,
+        "Inquiry",
+        id,
+        current.inquiry_no,
+        "Qualification updated",
         { projectProbability: current.project_probability, customerInterestGrade: current.customer_interest_grade.trim(), qualificationNote: current.qualification_note },
-        { projectProbability, customerInterestGrade, qualificationNote });
+        { projectProbability, customerInterestGrade, qualificationNote },
+      );
       return { id, projectProbability, customerInterestGrade, qualificationNote, rowVersion: updated.row_version.toString("base64") };
     }, sql.ISOLATION_LEVEL.READ_COMMITTED);
     if (!response) return reply.status(404).send();
@@ -587,7 +924,7 @@ export function registerInquiryRoutes(
     const meetingType = requiredText(body.meetingType, 100, "Meeting type");
     const participantValues = body.participants === undefined || body.participants === null ? [] : body.participants;
     if (!Array.isArray(participantValues)) throw new ApiError(400, "validation_failed", "Meeting participants are invalid.");
-    const participants = [...new Set(participantValues.map((value) => typeof value === "string" ? value.trim() : "").filter(Boolean))];
+    const participants = [...new Set(participantValues.map((value) => (typeof value === "string" ? value.trim() : "")).filter(Boolean))];
     if (participants.length > 100 || participants.some((value) => value.length > 200)) throw new ApiError(400, "validation_failed", "Meeting participants are invalid.");
     const requirement = optionalBodyText(body.requirement, 20_000, "Customer requirement");
     const technical = optionalBodyText(body.technical, 20_000, "Technical discussion");
@@ -599,31 +936,43 @@ export function registerInquiryRoutes(
     const attachmentId = body.attachmentId === undefined || body.attachmentId === null ? null : requiredInteger(body.attachmentId, "Attachment", 1);
     const created = await database.transaction(async (transaction) => {
       const validate = new sql.Request(transaction);
-      validate.input("id", sql.BigInt, id); validate.input("owner_id", sql.BigInt, ownerId); validate.input("attachment_id", sql.BigInt, attachmentId);
-      const reference = (await validate.query<{ inquiry_no: string; owner_valid: number; attachment_valid: number }>(`
+      validate.input("id", sql.BigInt, id);
+      validate.input("owner_id", sql.BigInt, ownerId);
+      validate.input("attachment_id", sql.BigInt, attachmentId);
+      const reference = (
+        await validate.query<{ inquiry_no: string; owner_valid: number; attachment_valid: number }>(`
         SELECT i.inquiry_no,
           CASE WHEN @owner_id IS NULL OR EXISTS(SELECT 1 FROM dbo.users WHERE id=@owner_id AND is_active=1 AND deleted_at IS NULL) THEN 1 ELSE 0 END AS owner_valid,
           CASE WHEN @attachment_id IS NULL OR EXISTS(SELECT 1 FROM dbo.inquiry_attachments WHERE id=@attachment_id AND inquiry_id=@id AND deleted_at IS NULL) THEN 1 ELSE 0 END AS attachment_valid
         FROM dbo.inquiries i WITH(UPDLOCK,HOLDLOCK) WHERE i.id=@id AND i.deleted_at IS NULL AND i.archived_at IS NULL AND i.status<>N'Cancelled';
-      `)).recordset[0];
+      `)
+      ).recordset[0];
       if (!reference) return null;
       if (Number(reference.owner_valid) !== 1 || Number(reference.attachment_valid) !== 1) throw new ApiError(422, "invalid_reference", "Meeting owner or attachment is invalid.");
       const insert = new sql.Request(transaction);
-      insert.input("id", sql.BigInt, id); insert.input("meeting_date", sql.Date, meetingDate); insert.input("meeting_type", sql.NVarChar(100), meetingType);
-      insert.input("participants", sql.NVarChar(sql.MAX), JSON.stringify(participants)); insert.input("requirement", sql.NVarChar(sql.MAX), requirement);
-      insert.input("technical", sql.NVarChar(sql.MAX), technical); insert.input("decision", sql.NVarChar(sql.MAX), decision);
-      insert.input("open_point", sql.NVarChar(sql.MAX), openPoint); insert.input("action_item", sql.NVarChar(sql.MAX), actionItem);
-      insert.input("owner_id", sql.BigInt, ownerId); insert.input("due_date", sql.Date, dueDate); insert.input("attachment_id", sql.BigInt, attachmentId);
+      insert.input("id", sql.BigInt, id);
+      insert.input("meeting_date", sql.Date, meetingDate);
+      insert.input("meeting_type", sql.NVarChar(100), meetingType);
+      insert.input("participants", sql.NVarChar(sql.MAX), JSON.stringify(participants));
+      insert.input("requirement", sql.NVarChar(sql.MAX), requirement);
+      insert.input("technical", sql.NVarChar(sql.MAX), technical);
+      insert.input("decision", sql.NVarChar(sql.MAX), decision);
+      insert.input("open_point", sql.NVarChar(sql.MAX), openPoint);
+      insert.input("action_item", sql.NVarChar(sql.MAX), actionItem);
+      insert.input("owner_id", sql.BigInt, ownerId);
+      insert.input("due_date", sql.Date, dueDate);
+      insert.input("attachment_id", sql.BigInt, attachmentId);
       insert.input("actor", sql.BigInt, actor.id);
-      const row = (await insert.query<{ id: number | string; row_version: Buffer }>(`
+      const row = (
+        await insert.query<{ id: number | string; row_version: Buffer }>(`
         INSERT INTO dbo.inquiry_meetings (inquiry_id,meeting_date,meeting_type,participants_json,requirement,technical,
           decision,open_point,action_item,owner_id,due_date,attachment_id,created_by)
         OUTPUT inserted.id,inserted.row_version VALUES (@id,@meeting_date,@meeting_type,@participants,@requirement,@technical,
           @decision,@open_point,@action_item,@owner_id,@due_date,@attachment_id,@actor);
-      `)).recordset[0]!;
+      `)
+      ).recordset[0]!;
       const meetingId = Number(row.id);
-      await insertAudit(transaction, actor.id, "Inquiry", id, reference.inquiry_no, "Meeting recorded", null,
-        { meetingId, meetingDate, meetingType, participants, decision, ownerId, dueDate });
+      await insertAudit(transaction, actor.id, "Inquiry", id, reference.inquiry_no, "Meeting recorded", null, { meetingId, meetingDate, meetingType, participants, decision, ownerId, dueDate });
       return { id: meetingId, rowVersion: row.row_version.toString("base64") };
     }, sql.ISOLATION_LEVEL.READ_COMMITTED);
     if (!created) return reply.status(404).send();
