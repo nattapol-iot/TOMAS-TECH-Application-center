@@ -108,6 +108,8 @@ import { checkFields, failureDialog } from "./form-bubbles";
 import { clearDraft, confirmLeave, draftKeys, hasDraft, leaveCopy, useDraftField } from "./form-draft";
 import { PgSelect } from "./PegasusSelect";
 import { ColumnFilter } from "./ColumnFilter";
+import { useProjectCopy, useProjectLook } from "./ProjectLook";
+import { singleFilterValue } from "../../../lib/project-look";
 import { listEmployeesPage, listSuppliersPage, type ListPage, type SupplierListItem } from "../list-api";
 import { ErpProjectNumberField, isPlaceholderProjectNumber } from "./ErpProjectNumber";
 import { SearchSelect } from "./SearchSelect";
@@ -761,21 +763,34 @@ function PortfolioSortHeader({
   sort,
   onSort,
   className,
+  filter,
 }: {
   column: PortfolioSortKey;
   label: string;
   sort: PortfolioSort;
   onSort: (key: PortfolioSortKey) => void;
   className?: string;
+  /** The V2 list's header funnel (ColumnFilter), beside the sort button. */
+  filter?: ReactNode;
 }) {
   const t = useUiText();
   const active = sort.key === column;
+  const button = (
+    <button type="button" className={`th-sort${active ? " active" : ""}`} onClick={() => onSort(column)}>
+      {t(label)}
+      <Icon name="chevronDown" className={active ? sort.direction : "idle"} />
+    </button>
+  );
   return (
     <th className={className} aria-sort={active ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}>
-      <button type="button" className={`th-sort${active ? " active" : ""}`} onClick={() => onSort(column)}>
-        {t(label)}
-        <Icon name="chevronDown" className={active ? sort.direction : "idle"} />
-      </button>
+      {filter ? (
+        <span className="pg-th">
+          {button}
+          {filter}
+        </span>
+      ) : (
+        button
+      )}
     </th>
   );
 }
@@ -997,6 +1012,9 @@ export function ProductionProjects({
   initialMode?: PortfolioMode;
 }) {
   const uiText = useUiText();
+  // V2 (ProjectLook.tsx): the Pegasus list, and the plan edited on the Plan tab only (owner 2026-11-22).
+  const v2 = useProjectLook() === "v2";
+  const copy = useProjectCopy();
   const [mode, changeMode] = useLinkedState<PortfolioMode>("view", initialMode ?? "list", PORTFOLIO_MODE_LINK);
   const timelineMode = mode === "timeline";
   useActivitySubView(timelineMode ? "projects-timeline" : "projects-portfolio");
@@ -1153,7 +1171,14 @@ export function ProductionProjects({
   };
   const rowActions = (item: ProjectOverviewItem): PortfolioAction[] => [
     ...(canWrite ? [{ key: "edit", label: "Edit project", icon: "edit" as const, guide: "project.edit", onSelect: () => setEditingProject({ ...item, progress: item.typedProgress }) }] : []),
-    ...(canPlan(item) ? [{ key: "plan", label: "CRM.editMasterPlan", icon: "calendar" as const, guide: "project.editPlan", onSelect: () => setPlanningProject(item) }] : []),
+    // V2 edits the plan in one place: the row opens the Plan tab, where the table editor sits under More.
+    ...(v2
+      ? openProjectSchedule
+        ? [{ key: "open-plan", label: "CRM.openProjectSchedule", icon: "calendar" as const, guide: "project.openPlan", onSelect: () => openProjectSchedule(item.id) }]
+        : []
+      : canPlan(item)
+        ? [{ key: "plan", label: "CRM.editMasterPlan", icon: "calendar" as const, guide: "project.editPlan", onSelect: () => setPlanningProject(item) }]
+        : []),
     ...(item.canChangeStatus && item.allowedStatuses.includes("Closed")
       ? [{ key: "close", label: "Portfolio.closeTitle", icon: "checkCircle" as const, onSelect: () => setClosingProject(item) }]
       : []),
@@ -1162,147 +1187,303 @@ export function ProductionProjects({
     { key: "documents", label: "Documents", icon: "paperclip", onSelect: () => setDocumentsProject(item) },
     ...(canDelete(item) ? [{ key: "delete", label: "CRM.deleteProject", icon: "trash" as const, danger: true, onSelect: () => setDeletingProject(item) }] : []),
   ];
-  return (
+  const createButton = canWrite ? (
+    <button className="btn primary" type="button" data-guide="project.create" onClick={() => setCreateOpen(true)}>
+      <Icon name="plus" />
+      <LocalizedText text={"Create project"} />
+    </button>
+  ) : undefined;
+  const filterSelects = (
     <>
-      <PageHeader
-        eyebrow="APPROVED WORK"
-        title={uiText("Projects")}
-        subtitle="Portfolio.subtitle"
-        actions={
-          canWrite ? (
-            <button className="btn primary" type="button" data-guide="project.create" onClick={() => setCreateOpen(true)}>
-              <Icon name="plus" />
-              <LocalizedText text={"Create project"} />
-            </button>
-          ) : undefined
-        }
-      />
-      <section className="portfolio-overview" aria-label={uiText("Portfolio.overview")}>
-        <SegmentBar
-          label="Portfolio.healthBar"
-          items={healthItems}
-          active={health}
-          onPick={(key) => {
-            setHealth(key as ProjectHealth | null);
+      <label className="select-field">
+        <span className="sr-only">{uiText("Portfolio.pm")}</span>
+        <select
+          value={activeManagerId ?? ""}
+          aria-label={uiText("Portfolio.pm")}
+          onChange={(event) => {
+            setManagerId(event.target.value ? Number(event.target.value) : null);
             setPage(1);
-          }}
-          lead={
-            <>
-              <strong>{view.barTotal}</strong>
-              <span>{uiText(includeClosed ? "Portfolio.inView" : "Portfolio.open")}</span>
-            </>
-          }
-        />
-        <FilterChips
-          label="Portfolio.attention"
-          items={chipItems}
-          active={chip}
-          onPick={(key) => {
-            setChip(key as PortfolioChip | null);
-            setPage(1);
-          }}
-        />
-      </section>
-      <Toolbar>
-        <SearchInput
-          value={search}
-          onChange={(value) => {
-            setSearch(value);
-            setPage(1);
-          }}
-          placeholder="Portfolio.search"
-        />
-        <label className="select-field">
-          <span className="sr-only">{uiText("Portfolio.pm")}</span>
-          <select
-            value={activeManagerId ?? ""}
-            aria-label={uiText("Portfolio.pm")}
-            onChange={(event) => {
-              setManagerId(event.target.value ? Number(event.target.value) : null);
-              setPage(1);
-            }}
-          >
-            <option value="">{uiText("Portfolio.allPms")}</option>
-            {managers.map(([id, name]) => (
-              <option key={id} value={id}>
-                {name}
-              </option>
-            ))}
-          </select>
-          <Icon name="chevronDown" />
-        </label>
-        <label className="select-field">
-          <span className="sr-only">{uiText("Portfolio.team")}</span>
-          <select
-            value={activeTeam ?? ""}
-            aria-label={uiText("Portfolio.team")}
-            onChange={(event) => {
-              setTeam(event.target.value || null);
-              setPage(1);
-            }}
-          >
-            <option value="">{uiText("Portfolio.allTeams")}</option>
-            {teams.map((value) => (
-              <option key={value} value={value}>
-                {value}
-              </option>
-            ))}
-          </select>
-          <Icon name="chevronDown" />
-        </label>
-        <Select
-          label="Status"
-          value={activeStatus ?? "All status"}
-          onChange={(value) => {
-            setStatus(value);
-            setPage(1);
-            if (value === "Closed") setIncludeClosed(true);
-          }}
-          options={PROJECT_STAGE_FILTERS}
-        />
-        <label className="checkbox-row">
-          <input
-            type="checkbox"
-            checked={mine}
-            onChange={(event) => {
-              setMine(event.target.checked);
-              setPage(1);
-            }}
-          />
-          <span>{uiText("Portfolio.mine")}</span>
-        </label>
-        <label className="checkbox-row">
-          <input
-            type="checkbox"
-            checked={includeClosed}
-            onChange={(event) => {
-              setIncludeClosed(event.target.checked);
-              if (!event.target.checked && status === "Closed") setStatus("All status");
-              setPage(1);
-            }}
-          />
-          <span>{uiText("Portfolio.showClosed")}</span>
-        </label>
-        <div className="chip-select" role="group" aria-label={uiText("Portfolio.view")}>
-          {(["list", "timeline"] as const).map((value) => (
-            <button key={value} type="button" className={mode === value ? "chip on" : "chip"} aria-pressed={mode === value} onClick={() => changeMode(value)}>
-              <Icon name={value === "list" ? "table" : "chart"} />
-              {uiText(value === "list" ? "Portfolio.viewList" : "Portfolio.viewTimeline")}
-            </button>
-          ))}
-        </div>
-        <button
-          className="btn ghost"
-          type="button"
-          disabled={loading}
-          onClick={() => {
-            void load();
           }}
         >
-          <Icon name="refresh" />
-          <LocalizedText text={"Refresh"} />
-        </button>
-      </Toolbar>
+          <option value="">{uiText("Portfolio.allPms")}</option>
+          {managers.map(([id, name]) => (
+            <option key={id} value={id}>
+              {name}
+            </option>
+          ))}
+        </select>
+        <Icon name="chevronDown" />
+      </label>
+      <label className="select-field">
+        <span className="sr-only">{uiText("Portfolio.team")}</span>
+        <select
+          value={activeTeam ?? ""}
+          aria-label={uiText("Portfolio.team")}
+          onChange={(event) => {
+            setTeam(event.target.value || null);
+            setPage(1);
+          }}
+        >
+          <option value="">{uiText("Portfolio.allTeams")}</option>
+          {teams.map((value) => (
+            <option key={value} value={value}>
+              {value}
+            </option>
+          ))}
+        </select>
+        <Icon name="chevronDown" />
+      </label>
+      <Select
+        label="Status"
+        value={activeStatus ?? "All status"}
+        onChange={(value) => {
+          setStatus(value);
+          setPage(1);
+          if (value === "Closed") setIncludeClosed(true);
+        }}
+        options={PROJECT_STAGE_FILTERS}
+      />
+    </>
+  );
+  // V2 header funnels over the same single-value filters; the options count the projects loaded.
+  const countBy = (pick: (item: ProjectOverviewItem) => string) => items.reduce<Record<string, number>>((counts, item) => ({ ...counts, [pick(item)]: (counts[pick(item)] ?? 0) + 1 }), {});
+  const stageCounts = countBy((item) => item.status);
+  const managerCounts = countBy((item) => String(item.managerId));
+  const teamCounts = countBy((item) => shownProjectTeam(item.team));
+  const stageFilter = (
+    <ColumnFilter
+      column={uiText("Portfolio.colStage")}
+      options={PROJECT_STAGE_FILTERS.filter((value) => value !== "All status").map((value) => ({ value, label: uiText(value), count: stageCounts[value] ?? 0 }))}
+      value={activeStatus ? [activeStatus] : []}
+      onChange={(next) => {
+        const value = singleFilterValue(activeStatus, next);
+        setStatus(value ?? "All status");
+        if (value === "Closed") setIncludeClosed(true);
+        setPage(1);
+      }}
+      guide="project.stageFilter"
+    />
+  );
+  const managerFilter = (
+    <ColumnFilter
+      column={uiText("Portfolio.colPm")}
+      options={managers.map(([id, name]) => ({ value: String(id), label: name, count: managerCounts[String(id)] ?? 0 }))}
+      value={activeManagerId === null ? [] : [String(activeManagerId)]}
+      onChange={(next) => {
+        const value = singleFilterValue(activeManagerId === null ? null : String(activeManagerId), next);
+        setManagerId(value === null ? null : Number(value));
+        setPage(1);
+      }}
+      guide="project.pmFilter"
+    />
+  );
+  const teamFilter = (
+    <ColumnFilter
+      column={copy("ทีม", "Team", "チーム")}
+      options={teams.map((value) => ({ value, count: teamCounts[value] ?? 0 }))}
+      value={activeTeam ? [activeTeam] : []}
+      onChange={(next) => {
+        setTeam(singleFilterValue(activeTeam, next));
+        setPage(1);
+      }}
+    />
+  );
+  const toggleClosed = (next: boolean) => {
+    setIncludeClosed(next);
+    if (!next && status === "Closed") setStatus("All status");
+    setPage(1);
+  };
+  return (
+    <>
+      {v2 ? (
+        <>
+          {/* A Pegasus list title carries its count and no subtitle, so the actions keep to one row. */}
+          <PageHeader
+            eyebrow="APPROVED WORK"
+            title={`${uiText("Projects")} (${sorted.length})`}
+            actions={
+              <div className="project-v2-actions">
+                <SearchInput
+                  value={search}
+                  onChange={(value) => {
+                    setSearch(value);
+                    setPage(1);
+                  }}
+                  placeholder="Portfolio.search"
+                />
+                <div className="project-v2-seg" role="radiogroup" aria-label={uiText("Portfolio.mine")} data-guide="project.mine">
+                  {([false, true] as const).map((value) => (
+                    <button
+                      key={String(value)}
+                      type="button"
+                      role="radio"
+                      aria-checked={mine === value}
+                      onClick={() => {
+                        setMine(value);
+                        setPage(1);
+                      }}
+                    >
+                      {value ? copy("ของฉัน", "Mine", "自分の担当") : copy("ทั้งหมด", "All", "すべて")}
+                    </button>
+                  ))}
+                </div>
+                <div className="project-v2-seg" role="radiogroup" aria-label={uiText("Portfolio.view")}>
+                  {(["list", "timeline"] as const).map((value) => (
+                    <button key={value} type="button" role="radio" aria-checked={mode === value} onClick={() => changeMode(value)}>
+                      <Icon name={value === "list" ? "table" : "chart"} />
+                      {uiText(value === "list" ? "Portfolio.viewList" : "Portfolio.viewTimeline")}
+                    </button>
+                  ))}
+                </div>
+                <RowDisclosure
+                  label={uiText("Plan.more")}
+                  triggerClassName="btn default"
+                  guide="project.more"
+                  trigger={
+                    <>
+                      <Icon name="more" />
+                      {uiText("Plan.more")}
+                    </>
+                  }
+                  actions={[
+                    {
+                      key: "closed",
+                      label: includeClosed ? copy("ซ่อนโครงการที่ปิดแล้ว", "Hide closed projects", "完了したプロジェクトを隠す") : "Portfolio.showClosed",
+                      icon: includeClosed ? "check" : "eye",
+                      onSelect: () => toggleClosed(!includeClosed),
+                    },
+                    {
+                      key: "refresh",
+                      label: "Refresh",
+                      icon: "refresh",
+                      onSelect: () => {
+                        void load();
+                      },
+                    },
+                  ]}
+                />
+                {createButton}
+              </div>
+            }
+          />
+          {/* Pegasus summary bar: each health is a cell that filters the list; pressed again it clears. */}
+          <div className="pg-summary project-summary" role="group" aria-label={uiText("Portfolio.healthBar")} data-guide="project.summary">
+            <button
+              type="button"
+              className="pg-cell"
+              aria-pressed={health === null}
+              onClick={() => {
+                setHealth(null);
+                setPage(1);
+              }}
+            >
+              <span className="pg-cell-label">{uiText(includeClosed ? "Portfolio.inView" : "Portfolio.open")}</span>
+              <strong className="pg-cell-value">{view.barTotal}</strong>
+            </button>
+            {healthItems.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                className={`pg-cell tone-${item.tone}`}
+                aria-pressed={health === item.key}
+                onClick={() => {
+                  setHealth(health === item.key ? null : (item.key as ProjectHealth));
+                  setPage(1);
+                }}
+              >
+                <span className="pg-cell-label">{uiText(item.label)}</span>
+                <strong className="pg-cell-value">{item.value}</strong>
+              </button>
+            ))}
+          </div>
+          <FilterChips
+            label="Portfolio.attention"
+            items={chipItems}
+            active={chip}
+            onPick={(key) => {
+              setChip(key as PortfolioChip | null);
+              setPage(1);
+            }}
+          />
+          {/* The table carries these in its header funnels; the timeline has no header, so it keeps the three lists. */}
+          {mode === "timeline" ? <Toolbar>{filterSelects}</Toolbar> : null}
+        </>
+      ) : (
+        <>
+          <PageHeader eyebrow="APPROVED WORK" title={uiText("Projects")} subtitle="Portfolio.subtitle" actions={createButton} />
+          <section className="portfolio-overview" aria-label={uiText("Portfolio.overview")}>
+            <SegmentBar
+              label="Portfolio.healthBar"
+              items={healthItems}
+              active={health}
+              onPick={(key) => {
+                setHealth(key as ProjectHealth | null);
+                setPage(1);
+              }}
+              lead={
+                <>
+                  <strong>{view.barTotal}</strong>
+                  <span>{uiText(includeClosed ? "Portfolio.inView" : "Portfolio.open")}</span>
+                </>
+              }
+            />
+            <FilterChips
+              label="Portfolio.attention"
+              items={chipItems}
+              active={chip}
+              onPick={(key) => {
+                setChip(key as PortfolioChip | null);
+                setPage(1);
+              }}
+            />
+          </section>
+          <Toolbar>
+            <SearchInput
+              value={search}
+              onChange={(value) => {
+                setSearch(value);
+                setPage(1);
+              }}
+              placeholder="Portfolio.search"
+            />
+            {filterSelects}
+            <label className="checkbox-row">
+              <input
+                type="checkbox"
+                checked={mine}
+                onChange={(event) => {
+                  setMine(event.target.checked);
+                  setPage(1);
+                }}
+              />
+              <span>{uiText("Portfolio.mine")}</span>
+            </label>
+            <label className="checkbox-row">
+              <input type="checkbox" checked={includeClosed} onChange={(event) => toggleClosed(event.target.checked)} />
+              <span>{uiText("Portfolio.showClosed")}</span>
+            </label>
+            <div className="chip-select" role="group" aria-label={uiText("Portfolio.view")}>
+              {(["list", "timeline"] as const).map((value) => (
+                <button key={value} type="button" className={mode === value ? "chip on" : "chip"} aria-pressed={mode === value} onClick={() => changeMode(value)}>
+                  <Icon name={value === "list" ? "table" : "chart"} />
+                  {uiText(value === "list" ? "Portfolio.viewList" : "Portfolio.viewTimeline")}
+                </button>
+              ))}
+            </div>
+            <button
+              className="btn ghost"
+              type="button"
+              disabled={loading}
+              onClick={() => {
+                void load();
+              }}
+            >
+              <Icon name="refresh" />
+              <LocalizedText text={"Refresh"} />
+            </button>
+          </Toolbar>
+        </>
+      )}
       {error ? (
         <LoadError
           message={error}
@@ -1403,11 +1584,20 @@ export function ProductionProjects({
                   <th className="portfolio-col-menu">
                     <span className="sr-only">{uiText("Actions")}</span>
                   </th>
-                  <th>{uiText("Portfolio.colStage")}</th>
+                  <th>
+                    {v2 ? (
+                      <span className="pg-th">
+                        {uiText("Portfolio.colStage")}
+                        {stageFilter}
+                      </span>
+                    ) : (
+                      uiText("Portfolio.colStage")
+                    )}
+                  </th>
                   <PortfolioSortHeader column="health" label="Portfolio.colHealth" sort={sort} onSort={changeSort} />
                   <PortfolioSortHeader column="number" label="Portfolio.colNumber" sort={sort} onSort={changeSort} />
-                  <PortfolioSortHeader column="name" label="Portfolio.colProject" sort={sort} onSort={changeSort} className="portfolio-col-project" />
-                  <PortfolioSortHeader column="pm" label="Portfolio.colPm" sort={sort} onSort={changeSort} className="portfolio-col-pm" />
+                  <PortfolioSortHeader column="name" label="Portfolio.colProject" sort={sort} onSort={changeSort} className="portfolio-col-project" filter={v2 ? teamFilter : undefined} />
+                  <PortfolioSortHeader column="pm" label="Portfolio.colPm" sort={sort} onSort={changeSort} className="portfolio-col-pm" filter={v2 ? managerFilter : undefined} />
                   <PortfolioSortHeader column="target" label="Portfolio.colTarget" sort={sort} onSort={changeSort} />
                   <PortfolioSortHeader column="slip" label="Portfolio.colSlip" sort={sort} onSort={changeSort} className="portfolio-col-slip" />
                   <PortfolioSortHeader column="progress" label="Portfolio.colProgress" sort={sort} onSort={changeSort} />
@@ -1456,7 +1646,13 @@ export function ProductionProjects({
                         ) : null}
                       </td>
                       <td>
-                        <strong className="mono">{item.number}</strong>
+                        {v2 && openProjectSchedule ? (
+                          <button type="button" className="pg-doclink mono" onClick={() => openProjectSchedule(item.id)}>
+                            {item.number}
+                          </button>
+                        ) : (
+                          <strong className="mono">{item.number}</strong>
+                        )}
                       </td>
                       <td className="portfolio-col-project">
                         <div className="portfolio-project">
@@ -1588,6 +1784,20 @@ export function ProductionProjects({
         <EditProjectModal
           bootstrap={bootstrap}
           project={editingProject}
+          {...(v2
+            ? {
+                withPlan: false,
+                ...(openProjectSchedule
+                  ? {
+                      onOpenPlan: () => {
+                        const id = editingProject.id;
+                        setEditingProject(null);
+                        openProjectSchedule(id);
+                      },
+                    }
+                  : {}),
+              }
+            : {})}
           onClose={() => setEditingProject(null)}
           onSaved={async (number) => {
             setEditingProject(null);
@@ -2045,9 +2255,9 @@ function useScheduleTemplates() {
 /**
  * The plan of a project that already exists, without the rest of Edit project: its Master Plan
  * headings and the Team Plan under them. When the plan's span moves, the project's start and
- * delivery can follow it.
+ * delivery can follow it. V1 opens it from the project's row menu; V2 from the Plan tab's More menu.
  */
-function EditMasterPlanModal({
+export function EditMasterPlanModal({
   bootstrap,
   project,
   onClose,
@@ -2168,8 +2378,24 @@ function EditMasterPlanModal({
 
 // A project is edited in place rather than through a wizard: the lifecycle rules decide which
 // statuses the dropdown may offer, so the screen can never ask for a move the API would refuse.
-function EditProjectModal({ bootstrap, project, onClose, onSaved }: { bootstrap: BootstrapData; project: ProjectSummary; onClose: () => void; onSaved: (number: string) => Promise<void> }) {
+function EditProjectModal({
+  bootstrap,
+  project,
+  onClose,
+  onSaved,
+  withPlan = true,
+  onOpenPlan,
+}: {
+  bootstrap: BootstrapData;
+  project: ProjectSummary;
+  onClose: () => void;
+  onSaved: (number: string) => Promise<void>;
+  /** V2 (owner 2026-11-22) edits the plan on the Plan tab only: the dialog leaves the plan untouched and links there. */
+  withPlan?: boolean;
+  onOpenPlan?: () => void;
+}) {
   const t = useUiText();
+  const copy = useProjectCopy();
   // Additional roles count, as they do in the API. The person already on the project stays listed even
   // when no role qualifies them any more, so the dialog shows who is assigned instead of the first name.
   const eligible = useCallback(
@@ -2437,7 +2663,17 @@ function EditProjectModal({ bootstrap, project, onClose, onSaved }: { bootstrap:
           </label>
         </div>
         <ContactPicker customerId={project.customerId ?? 0} value={form.contactIds} onChange={(contactIds) => set("contactIds", contactIds)} />
-        {planError ? (
+        {!withPlan ? (
+          <p className="info-strip project-plan-elsewhere" data-guide="project.planElsewhere">
+            <Icon name="calendar" />
+            <span>{copy("แก้ Master Plan และ Team Plan ที่แท็บ Plan", "The Master Plan and the Team Plan are edited on the Plan tab.", "マスタープランとチームプランは「Plan」タブで編集します。")}</span>
+            {onOpenPlan ? (
+              <button className="btn ghost sm" type="button" onClick={onOpenPlan}>
+                {t("CRM.openProjectSchedule")}
+              </button>
+            ) : null}
+          </p>
+        ) : planError ? (
           <p className="muted" role="status">
             {t("CRM.planUnavailable")}
           </p>

@@ -11,7 +11,7 @@ const group = screen.slice(screen.indexOf("function ProductionScheduleWorkGroup"
 
 test("the page sits in the Pegasus scope, with the guidance as its subtitle instead of a strip", () => {
   assert.match(screen, /import "\.\/pegasus-skin\.css";\nimport "\.\/my-work\.css";/);
-  assert.match(page, /return <div className="pg-skin my-work-pg">/);
+  assert.match(page, /return \(?\s*<div className="pg-skin my-work-pg">/);
   assert.match(page, /subtitle=\{uiText\("You update the tasks assigned to you\./);
   assert.doesNotMatch(page, /my-work-guidance/);
 });
@@ -21,7 +21,7 @@ test("one summary bar replaces the five stat cards and the All open row; each ce
   assert.match(page, /<div className="pg-summary my-work-summary" role="group" aria-label=\{localizeCopy\("Task overview"\)\} data-guide="work\.summary">/);
   for (const id of ["open", "late", "blocked", "attention", "week", "waiting"]) assert.match(page, new RegExp(`\\{ id: "${id}", label: "`));
   assert.match(page, /aria-pressed=\{tab === "active" && taskFilter === cell\.id\}/);
-  assert.match(page, /onClick=\{\(\) => \{ setTab\("active"\); setSourceFilter\("all"\); setTaskFilter\(cell\.id\); \}\}/);
+  assert.match(page, /onClick=\{\(\) => \{\s*setTab\("active"\);\s*setSourceFilter\("all"\);\s*setTaskFilter\(cell\.id\);\s*\}\}/);
 });
 
 test("source, project, sort and the one search box share one toolbar row on the canvas", () => {
@@ -40,7 +40,7 @@ test("a work group's header is its toggle, the focus task opens its update, and 
   assert.match(group, /className="pg-doclink" type="button" disabled=\{saving\.has\(focus\.taskId\)\} title=\{uiText\("Update progress"\)\} onClick=\{\(\) => onEdit\(focus\)\}/);
   assert.doesNotMatch(group, /btn primary/);
   assert.doesNotMatch(group, /"Expand"|"Collapse"/);
-  assert.match(group, /<WorkGroupMeta /);
+  assert.match(group, /<WorkGroupMeta\s/);
   assert.match(screen, /function WorkGroupMeta\(/);
 });
 

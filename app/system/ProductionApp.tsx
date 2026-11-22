@@ -49,6 +49,7 @@ import { EmployeeManualScreen, employeeManualLabel } from "./production/Employee
 import { supportLabel } from "./support-copy";
 import { EstimateLookScope } from "./production/EstimateLook";
 import { SalesLookScope } from "./production/SalesLook";
+import { ProjectLookScope } from "./production/ProjectLook";
 // Screens off the landing path load on first visit; LazyScreens.tsx says which stay eager and why.
 import {
   LaborPackageMaster,
@@ -1539,7 +1540,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
                 </EstimateLookScope>
               ) : null}
               {view === "projects" ? (
-                <>
+                <ProjectLookScope userId={bootstrap.user.id}>
                   {/* Plan and Punchlist read the schedule; without schedule.read only the Overview is offered. */}
                   {/* Cost is for Leaders and above (project-cost-model.ts); the API refuses everyone else. */}
                   {bootstrap.permissions.includes("schedule.read") ? (
@@ -1566,7 +1567,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
                       <ProductionProjectSchedule key={`plan:${scheduleLinkCount}`} {...moduleProps} />
                     )}
                   </div>
-                </>
+                </ProjectLookScope>
               ) : null}
               {view === "knowledge" ? <ProductionKnowledgeHub bootstrap={bootstrap} notify={setToast} /> : null}
               {view === "downloads" ? (
@@ -1609,7 +1610,9 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
               ) : null}
               {/* Compatibility for old bookmarks; new navigation uses Projects > Timeline. */}
               {view === "project-timeline" ? (
-                <ProductionProjects key="project-timeline" {...common} teamTestMode={IS_TEAM_TEST_MODE} initialMode="timeline" openProjectSchedule={openProjectSchedule} />
+                <ProjectLookScope userId={bootstrap.user.id}>
+                  <ProductionProjects key="project-timeline" {...common} teamTestMode={IS_TEAM_TEST_MODE} initialMode="timeline" openProjectSchedule={openProjectSchedule} />
+                </ProjectLookScope>
               ) : null}
               {view === "resources" ? <ProductionResourcePlan {...moduleProps} refreshBootstrap={refreshBootstrap} openInquiry={openInquiry} openEstimate={openEstimate} /> : null}
               {view === "procurement" ? <ProductionProcurementDashboard {...moduleProps} /> : null}

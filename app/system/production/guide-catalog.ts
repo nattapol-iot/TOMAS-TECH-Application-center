@@ -3282,6 +3282,106 @@ const ESTIMATE_LOOK_V2: Guide = {
   ],
 };
 
+/*
+ * V1 / V2 look of the Projects screens (owner 2026-11-22): everyone starts on V1. V2 is the Pegasus ERP look, with the
+ * Overview as a Pegasus list and the plan edited on the Plan tab only.
+ */
+const PROJECT_LOOK_V2: Guide = {
+  id: "project-look-v2",
+  area: "project",
+  title: { th: "ใช้หน้าจอ Project แบบ V2 (Pegasus)", en: "Use the V2 (Pegasus) look of Projects", jp: "Projects の V2（Pegasus）表示を使う" },
+  summary: {
+    th: "สลับหน้าจอ Project เป็นแบบ V2 หน้าตาเดียวกับ Pegasus ERP หน้าภาพรวมกรองจากแถบสรุปและหัวคอลัมน์ และแก้แผนที่แท็บ Plan ที่เดียว ฟังก์ชันเหมือน V1 ทุกอย่าง กลับไป V1 ได้ทุกเมื่อ",
+    en: "Switch the Projects screens to V2, the Pegasus ERP look. The Overview filters from its summary bar and column headers, and the plan is edited on the Plan tab only. Every function is the same as in V1, and you can go back to V1 at any time.",
+    jp: "Projects 画面を Pegasus ERP と同じ V2 表示に切り替えます。概要はサマリーバーと列見出しで絞り込み、計画は「Plan」タブだけで編集します。機能は V1 と同じで、いつでも V1 に戻せます。",
+  },
+  minutes: 3,
+  permissions: ["project.read"],
+  views: ["projects"],
+  browse: true,
+  steps: [
+    menu(
+      "projects",
+      { th: "เปิดเมนูโปรเจกต์", en: "Open Projects", jp: "「Projects」を開く" },
+      {
+        th: "ปุ่มสลับ V1 / V2 อยู่มุมขวาบนของทุกแท็บ (ภาพรวม Plan Punchlist และ Cost) คลิกที่เมนูที่ไฮไลต์อยู่",
+        en: "Every Projects tab (Overview, Plan, Punchlist and Cost) has the V1 / V2 switch at the top right. Click the highlighted menu.",
+        jp: "Projects のすべてのタブ（概要、Plan、Punchlist、Cost）の右上に V1 / V2 の切り替えがあります。強調表示のメニューをクリックします。",
+      },
+    ),
+    {
+      target: "project.lookV2",
+      action: "click",
+      view: "projects",
+      title: { th: "กด V2", en: "Press V2", jp: "「V2」を押す" },
+      body: {
+        th: "หน้าจอเปลี่ยนเป็นแบบ Pegasus ทันที ระบบจำตัวเลือกไว้ในเครื่องนี้ แยกจากของ Estimating และงานขาย ครั้งหน้าที่เปิดหน้าโปรเจกต์จะเป็น V2",
+        en: "The screen changes to the Pegasus look at once. The choice is kept on this computer, apart from the Estimating and Sales ones, so Projects opens in V2 next time.",
+        jp: "画面がすぐに Pegasus 表示に変わります。選択は Estimating や営業とは別にこのコンピューターに保存され、次回も Projects は V2 で開きます。",
+      },
+    },
+    {
+      target: "project.summary",
+      action: "next",
+      view: "projects",
+      title: { th: "แถบสรุปสุขภาพโครงการ", en: "The health summary bar", jp: "健全性のサマリーバー" },
+      body: {
+        th: "ช่องแรกคือโครงการที่ยังเปิดอยู่ทั้งหมด ถัดไปคือ ล่าช้า เสี่ยง ยังไม่มีแผน และตามแผน กดช่องไหนรายการด้านล่างจะแสดงเฉพาะกลุ่มนั้น กดซ้ำเพื่อดูทั้งหมด ชิปใต้แถบคือเรื่องที่ต้องดูแล",
+        en: "The first cell is every open project, then Delayed, At Risk, No plan and On Track. Press a cell to list only those projects, and press it again to see them all. The chips under the bar are the things that need attention.",
+        jp: "最初のセルは進行中のすべての案件、続いて遅延・リスク・計画なし・順調です。セルを押すとその案件だけを一覧表示し、もう一度押すとすべて表示します。バーの下のチップは要対応の事項です。",
+      },
+      missing: {
+        th: "กด V2 ก่อน แถบนี้มีเฉพาะหน้าตาแบบ V2 และอยู่ในแท็บภาพรวม",
+        en: "Press V2 first; this bar is part of the V2 look, on the Overview tab.",
+        jp: "先に「V2」を押します。このバーは V2 表示の概要タブにだけあります。",
+      },
+    },
+    {
+      target: "project.pmFilter",
+      action: "next",
+      view: "projects",
+      title: { th: "กรองจากหัวคอลัมน์", en: "Filter from the column headers", jp: "列見出しで絞り込む" },
+      body: {
+        th: "กดรูปกรวยข้างหัวคอลัมน์ PM เพื่อเลือกผู้จัดการโครงการ หัวคอลัมน์สถานะและโครงการ (ทีม) ก็มีกรวยแบบเดียวกัน ค้นหา 'ทั้งหมด / ของฉัน' และ 'รายการ / ไทม์ไลน์' อยู่บนหัวหน้า ส่วนรีเฟรชและแสดงโครงการที่ปิดแล้วอยู่ในปุ่ม 'เพิ่มเติม'",
+        en: "Press the funnel beside the PM column to pick a project manager; the Stage and Project (team) columns have the same funnel. Search, All / Mine and List / Timeline sit in the page header; Refresh and Show closed projects are under More.",
+        jp: "PM 列の横の漏斗を押してプロジェクトマネージャーを選びます。ステージ列とプロジェクト（チーム）列にも同じ漏斗があります。検索・すべて／自分・一覧／タイムラインはページ見出しに、更新と完了案件の表示は「その他」にあります。",
+      },
+      missing: {
+        th: "กด 'รายการ' บนหัวหน้า กรวยอยู่บนหัวตาราง ในมุมมองไทม์ไลน์ตัวกรองจะเป็นรายการเลือกเหนือแผนภูมิ",
+        en: "Press List in the page header; the funnels are in the table header. In Timeline the filters are lists above the chart.",
+        jp: "ページ見出しの「一覧」を押します。漏斗は表の見出しにあります。タイムラインではチャートの上に選択リストがあります。",
+      },
+    },
+    {
+      target: "project.rowMenu",
+      action: "next",
+      view: "projects",
+      title: { th: "แก้แผนที่แท็บ Plan ที่เดียว", en: "The plan is edited on the Plan tab only", jp: "計画は「Plan」タブだけで編集します" },
+      body: {
+        th: "เมนู ⋯ ของแต่ละโครงการมี 'เปิด Project Schedule' แทน 'แก้ไข Master Plan' และฟอร์มแก้โครงการไม่มีส่วนแผนแล้ว ที่แท็บ Plan แก้แผนบน Gantt ได้เลย หรือกด 'เพิ่มเติม' > 'แก้ไข Master Plan' เพื่อแก้แบบตาราง ใช้แม่แบบแผน และให้วันโครงการตามแผน",
+        en: "Each project's ⋯ menu has Open Project Schedule in place of Edit Master Plan, and Edit project no longer holds the plan. On the Plan tab, edit the plan on the Gantt, or press More > Edit Master Plan for the table, the schedule templates and the project dates that follow the plan.",
+        jp: "各案件の ⋯ メニューには「マスタープランを編集」の代わりに「プロジェクトスケジュールを開く」があり、案件の編集画面には計画がありません。「Plan」タブではガントで計画を編集するか、「その他」>「マスタープランを編集」で表形式、テンプレート、計画に合わせた案件日付を編集します。",
+      },
+      missing: {
+        th: "ถ้ายังไม่มีโครงการในรายการ ให้กด 'ถัดไป'",
+        en: "If the list has no project yet, press Next.",
+        jp: "一覧に案件がない場合は「次へ」を押します。",
+      },
+    },
+    {
+      target: "project.look",
+      action: "next",
+      view: "projects",
+      title: { th: "กลับไปแบบเดิมได้ทุกเมื่อ", en: "Go back to V1 at any time", jp: "いつでも V1 に戻せます" },
+      body: {
+        th: "กด V1 เพื่อกลับไปหน้าตาเดิม งานที่เปิดอยู่ไม่หายและไม่ต้องบันทึกใหม่ เพราะ V1 กับ V2 ใช้ข้อมูลชุดเดียวกัน",
+        en: "Press V1 to return to the look you know. The work you have open stays as it is, because V1 and V2 use the same data.",
+        jp: "V1 を押すと従来の表示に戻ります。V1 と V2 は同じデータを使うので、開いている作業はそのまま残ります。",
+      },
+    },
+  ],
+};
+
 export const GUIDES: readonly Guide[] = [
   CRM_DEAL_CREATE,
   CRM_ACTIVITY,
@@ -3792,6 +3892,7 @@ export const GUIDES: readonly Guide[] = [
   ESTIMATE_APPROVE,
   ESTIMATE_REVISION_BACK,
   ESTIMATE_LOOK_V2,
+  PROJECT_LOOK_V2,
   {
     id: "purchase-request",
     area: "purchase",

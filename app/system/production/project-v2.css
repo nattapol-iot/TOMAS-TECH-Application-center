@@ -1,0 +1,196 @@
+/*
+ * Projects screens, V2: the Pegasus ERP look (owner 2026-11-22, tomastech-ui-design-system).
+ * ProjectLook.tsx wraps the Projects tabs (Overview, Plan, Punchlist, Cost) opened in V2 in "pg-skin pg-screen project-v2".
+ * pegasus-skin.css and pegasus-screens.css already draw the shared parts and set the app's tokens to Pegasus values: page
+ * header, buttons, panels, tables, badges, tabs, dialogs, summary bar, header funnels. So most of project-portfolio.css,
+ * gantt.css and globals.css takes the look without a rule here.
+ *
+ * This file holds only what the Projects screens add: the V1 / V2 switch, the leaner Overview header (search, segmented
+ * filters, More, Create), the health summary bar's tones, and the Plan and Gantt parts drawn with fixed colours.
+ *
+ * The switch's own rules (.project-look-*) apply in both looks. Every other rule sits under .project-v2, so nothing here
+ * reaches a screen opened in V1 or any other screen.
+ */
+
+/* ---------- The V1 / V2 switch (both looks) ---------- */
+.project-look-v1 {
+  display: contents;
+}
+.project-look-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.project-look-label {
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+.project-look-switch {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--n-100);
+}
+.project-look-switch button {
+  min-width: 36px;
+  height: 24px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--r-xs);
+  background: none;
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  cursor: pointer;
+}
+.project-look-switch button[aria-checked="true"] {
+  background: var(--surface);
+  color: var(--blue-text);
+  box-shadow: var(--shadow-xs);
+}
+.project-look-switch button:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 1px;
+}
+
+/* In V2 the switch is the ERP's muted segmented control (§5.7). */
+.project-v2 .project-look-switch {
+  padding: 3px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--pg-muted);
+}
+.project-v2 .project-look-label {
+  color: var(--pg-muted-fg);
+  font-size: 12px;
+}
+.project-v2 .project-look-switch button {
+  height: 26px;
+  border-radius: 4px;
+  color: var(--pg-muted-fg);
+  font-size: 13px;
+  font-weight: 500;
+}
+.project-v2 .project-look-switch button[aria-checked="true"] {
+  background: var(--pg-background);
+  color: var(--pg-foreground);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.08);
+}
+.project-v2 .project-look-switch button:focus-visible {
+  outline: none;
+  box-shadow: var(--pg-focus);
+}
+
+/* ---------- Overview: the list title row (§4 B) ---------- */
+/* The title keeps its width; the actions take the rest of the row and drop under it when they do not fit. */
+.project-v2 .page-header-text {
+  flex: 0 0 auto;
+}
+/* One row beside the title while it fits; the whole group drops under the title, then wraps, on a narrow screen. */
+.project-v2 .project-v2-actions {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.project-v2 .project-v2-actions .search-field {
+  flex: 0 1 240px;
+  min-width: 180px;
+}
+@media (max-width: 1280px) {
+  .project-v2 .project-v2-actions {
+    flex-wrap: wrap;
+  }
+}
+/* Segmented, muted (§5.7): All | Mine and List | Timeline. */
+.project-v2 .project-v2-seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 6px;
+  background: var(--pg-muted);
+}
+.project-v2 .project-v2-seg button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--pg-muted-fg);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.project-v2 .project-v2-seg button:hover {
+  color: var(--pg-foreground);
+}
+.project-v2 .project-v2-seg button[aria-checked="true"] {
+  background: var(--pg-background);
+  color: var(--pg-primary);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.08);
+}
+.project-v2 .project-v2-seg button:focus-visible {
+  outline: none;
+  box-shadow: var(--pg-focus);
+}
+.project-v2 .project-v2-seg .icon {
+  font-size: 15px;
+}
+
+/* The health summary bar: a cell's count takes its health's tone; pressed, it reads in primary like every summary cell. */
+.project-v2 .project-summary .tone-red .pg-cell-value {
+  color: var(--pg-red-fg);
+}
+.project-v2 .project-summary .tone-amber .pg-cell-value {
+  color: var(--pg-amber-fg);
+}
+.project-v2 .project-summary .tone-green .pg-cell-value {
+  color: var(--pg-emerald-fg);
+}
+.project-v2 .project-summary .tone-slate .pg-cell-value {
+  color: var(--pg-slate-fg);
+}
+.project-v2 .project-summary .pg-cell[aria-pressed="true"] .pg-cell-value {
+  color: var(--pg-primary);
+}
+
+/* The attention chips sit under the summary bar, tight to it. */
+.project-v2 .project-summary + .filter-chips {
+  margin-top: -4px;
+}
+
+/* The project number is the record's link (§2: document numbers always render as links). */
+.project-v2 .portfolio-table .pg-doclink {
+  white-space: nowrap;
+}
+
+/* Edit project, V2: the plan lives on the Plan tab; the dialog says where. */
+.project-v2 .project-plan-elsewhere {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+.project-v2 .project-plan-elsewhere .btn {
+  margin-left: auto;
+}
+
+@media (max-width: 720px) {
+  .project-v2 .project-v2-actions {
+    justify-content: stretch;
+  }
+  .project-v2 .project-v2-actions .search-field {
+    width: 100%;
+  }
+}

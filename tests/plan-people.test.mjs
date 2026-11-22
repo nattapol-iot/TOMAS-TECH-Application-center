@@ -1,7 +1,23 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { addDays, applyPeople, dayDiff, figureText, fillPeople, isWorkDay, mondayOf, overbookedDays, parsePastedBlock, peopleManDays, peopleOn, peopleShares, sameSpan, sharesTotal, usualPeople } from "../lib/plan-people.ts";
+import {
+  addDays,
+  applyPeople,
+  dayDiff,
+  figureText,
+  fillPeople,
+  isWorkDay,
+  mondayOf,
+  overbookedDays,
+  parsePastedBlock,
+  peopleManDays,
+  peopleOn,
+  peopleShares,
+  sameSpan,
+  sharesTotal,
+  usualPeople,
+} from "../lib/plan-people.ts";
 
 const root = new URL("../", import.meta.url);
 const source = async (path) => (await readFile(new URL(path, root), "utf8")).replace(/\r\n/g, "\n");
@@ -15,12 +31,18 @@ test("days: adding, counting, the week's Monday and what is a work day", () => {
   assert.equal(dayDiff("2026-12-07", "2026-12-11"), 4);
   assert.equal(mondayOf("2026-12-13"), "2026-12-07");
   assert.equal(mondayOf("2026-12-07"), "2026-12-07");
-  assert.deepEqual(["2026-12-09", "2026-12-10", "2026-12-12", "2026-12-13"].map((day) => isWorkDay(day, holidays)), [true, false, false, false]);
+  assert.deepEqual(
+    ["2026-12-09", "2026-12-10", "2026-12-12", "2026-12-13"].map((day) => isWorkDay(day, holidays)),
+    [true, false, false, false],
+  );
 });
 
 test("peopleOn: null outside the row's dates, 0 inside them with nobody set", () => {
   const span = { start: "2026-12-07", days: 5, people: [3, 0, 2] };
-  assert.deepEqual(["2026-12-06", "2026-12-07", "2026-12-08", "2026-12-09", "2026-12-11", "2026-12-12"].map((day) => peopleOn(span, day)), [null, 3, 0, 2, 0, null]);
+  assert.deepEqual(
+    ["2026-12-06", "2026-12-07", "2026-12-08", "2026-12-09", "2026-12-11", "2026-12-12"].map((day) => peopleOn(span, day)),
+    [null, 3, 0, 2, 0, null],
+  );
   assert.equal(peopleOn(null, "2026-12-07"), null);
   assert.equal(peopleManDays(span.people), 5);
 });
@@ -31,8 +53,7 @@ test("applyPeople: typing inside the dates keeps them; the rest of the row stays
 });
 
 test("applyPeople: a figure outside the dates stretches the row to that day", () => {
-  assert.deepEqual(applyPeople({ ...week, people: [2, 2, 2, 2, 2] }, edits({ "2026-12-05": 6, "2026-12-13": 1 })),
-    { start: "2026-12-05", days: 9, people: [6, 0, 2, 2, 2, 2, 2, 0, 1] });
+  assert.deepEqual(applyPeople({ ...week, people: [2, 2, 2, 2, 2] }, edits({ "2026-12-05": 6, "2026-12-13": 1 })), { start: "2026-12-05", days: 9, people: [6, 0, 2, 2, 2, 2, 2, 0, 1] });
 });
 
 test("applyPeople: clearing the first or last days takes them off the row, down to one day", () => {
@@ -48,7 +69,7 @@ test("applyPeople: a row with no dates takes them from the figures typed", () =>
 });
 
 test("fillPeople: People/day goes on every work day and on days that already have people", () => {
-  const span = { start: "2026-12-05", days: 7, people: [6] };    // Sat 5 to Fri 11; Sat has people already
+  const span = { start: "2026-12-05", days: 7, people: [6] }; // Sat 5 to Fri 11; Sat has people already
   assert.deepEqual(fillPeople(span, 3, holidays), { start: "2026-12-05", days: 7, people: [3, 0, 3, 3, 3, 0, 3] });
   assert.equal(usualPeople([3, 0, 3, 5]), 3);
   assert.equal(usualPeople([0, 0]), null);
@@ -56,7 +77,10 @@ test("fillPeople: People/day goes on every work day and on days that already hav
 });
 
 test("parsePastedBlock: rows and tabs from a spreadsheet; anything that is not a figure is skipped", () => {
-  assert.deepEqual(parsePastedBlock("3\t3\t\r\n6\tx\t10\r\n"), [[3, 3, null], [6, null, 10]]);
+  assert.deepEqual(parsePastedBlock("3\t3\t\r\n6\tx\t10\r\n"), [
+    [3, 3, null],
+    [6, null, 10],
+  ]);
   assert.deepEqual(parsePastedBlock("0.5\t0,5\t1.25"), [[0.5, 0.5, null]]);
 });
 
@@ -67,21 +91,30 @@ test("shares: one person on two tasks a day is 0.5 on each, kept to one decimal 
 });
 
 test("overbookedDays: the same PIC on several rows for more than one man-day on a day, and only then", () => {
-  const somchai = { id: 1, name: "Somchai" }, wanida = { id: 2, name: "Wanida" };
+  const somchai = { id: 1, name: "Somchai" },
+    wanida = { id: 2, name: "Wanida" };
   const found = overbookedDays([
-    { people: [somchai], cells: [1, 0.5, 3, null] },          // leads a crew of three on the third day: he is one of them
-    { people: [somchai, wanida], cells: [1, 0.5, 2, 1] },     // two PICs share the row's figure
-    { people: [], cells: [5, 5, 5, 5] },                      // no PIC, or an outsourced row: nobody to double-book
+    { people: [somchai], cells: [1, 0.5, 3, null] }, // leads a crew of three on the third day: he is one of them
+    { people: [somchai, wanida], cells: [1, 0.5, 2, 1] }, // two PICs share the row's figure
+    { people: [], cells: [5, 5, 5, 5] }, // no PIC, or an outsourced row: nobody to double-book
   ]);
   assert.deepEqual([...found.keys()].sort(), [0, 1]);
   assert.deepEqual([...found.get(0).keys()], [0, 2], "1 + 0.5 and 1 + 1 are over; 0.5 + 0.25 is not");
   assert.deepEqual(found.get(0).get(0), { name: "Somchai", total: 1.5, here: 1.5, other: 0, available: 1 });
   assert.deepEqual([...found.get(1).keys()], [0, 2]);
-  assert.equal(overbookedDays([{ people: [somchai], cells: [0.5] }, { people: [somchai], cells: [0.5] }]).size, 0, "half and half is one day");
+  assert.equal(
+    overbookedDays([
+      { people: [somchai], cells: [0.5] },
+      { people: [somchai], cells: [0.5] },
+    ]).size,
+    0,
+    "half and half is one day",
+  );
 });
 
 test("overbookedDays with the team board: work elsewhere and the person's own capacity decide", () => {
-  const somchai = { id: 1, name: "Somchai" }, rows = [{ people: [somchai], cells: [0.5, 0.5, 1, 0.5] }];
+  const somchai = { id: 1, name: "Somchai" },
+    rows = [{ people: [somchai], cells: [0.5, 0.5, 1, 0.5] }];
   const found = overbookedDays(rows, { other: (id, day) => [0.5, 0.6, 0, 0][day], available: (id, day) => (day === 3 ? 0.4 : 1) });
   assert.deepEqual([...found.get(0).keys()], [1, 3], "half here and half elsewhere fits; 0.5 + 0.6 does not; a half-time person cannot take 0.5");
   assert.deepEqual(found.get(0).get(1), { name: "Somchai", total: 1.1, here: 0.5, other: 0.6, available: 1 });
@@ -89,7 +122,7 @@ test("overbookedDays with the team board: work elsewhere and the person's own ca
 });
 
 test("peopleShares: each PIC's man-days by date, one a day at most", () => {
-  const shares = peopleShares("2026-12-05", [3, 0, 0.5], 2);                  // Sat 5 Dec: a crew of three, two PICs
+  const shares = peopleShares("2026-12-05", [3, 0, 0.5], 2); // Sat 5 Dec: a crew of three, two PICs
   assert.deepEqual(shares, { "2026-12-05": 1, "2026-12-07": 0.25 });
   assert.equal(sharesTotal(shares), 1.25);
 });
@@ -97,7 +130,7 @@ test("peopleShares: each PIC's man-days by date, one a day at most", () => {
 test("Plan screen: the People table is a view of Projects > Plan and locks man-days that come from it", async () => {
   const screen = await source("app/system/production/PlanningPricingScreens.tsx");
   assert.match(screen, /type PlanLevel = "team" \| "master" \| "member" \| "people";/);
-  assert.match(screen, /peopleView \? <PlanPeopleGrid projectId=\{activeSchedule\.projectId\}/);
+  assert.match(screen, /peopleView \? \(?\s*<PlanPeopleGrid\s+projectId=\{activeSchedule\.projectId\}/);
   assert.match(screen, /disabled=\{Boolean\(task\.peopleByDay\?\.length\)\}/, "Edit row does not take man-days for a row that has people per day");
   const grid = await source("app/system/production/PlanPeopleGrid.tsx");
   assert.match(grid, /data-guide="plan\.people"/);
