@@ -29,7 +29,8 @@ import { HealthBadge } from "./ProjectPlanFields";
 import { ThbRateField } from "./ThbRateField";
 import { PlanManHours, type PlanManHoursData } from "./PlanManHours";
 import { PlanPeopleGrid } from "./PlanPeopleGrid";
-import { RowDisclosure, type PortfolioAction } from "./CoreScreens";
+import { EditMasterPlanModal, RowDisclosure, type PortfolioAction } from "./CoreScreens";
+import { useProjectLook } from "./ProjectLook";
 import { SearchSelect } from "./SearchSelect";
 import { peopleShares, sharesTotal } from "../../../lib/plan-people";
 import { remainingForRow } from "../../../lib/manhour-budget";
@@ -95,11 +96,25 @@ import {
   Toolbar,
 } from "../ui";
 import { COST_ITEM_LOOKUP_MIN_CHARS } from "../../../lib/cost-item-lookup";
+import { assignmentNextAction, assignmentQueueSummary, assignmentUrgency, isActionableAssignment, sectionName, sortAssignmentQueue } from "../../../lib/estimate-assignment-queue";
 import {
-  assignmentNextAction, assignmentQueueSummary, assignmentUrgency, isActionableAssignment, sectionName, sortAssignmentQueue,
-} from "../../../lib/estimate-assignment-queue";
-import {
-  canAnswerDayRequests, canFinishWork, canImportDrawingRow, canProgressScheduleRow, canRequestMoreDays, isLateAgainstPlan, percentChangePatch, statusChangePatch, isStaleInProgress, myWorkNeedsAttention, needsForecastDate, needsZeroProgressFinishConfirmation, offersDayRequest, offersPersonalTask, parseMyWorkExpansion, sortMyWorkGroups, type MyWorkExpansion,
+  canAnswerDayRequests,
+  canFinishWork,
+  canImportDrawingRow,
+  canProgressScheduleRow,
+  canRequestMoreDays,
+  isLateAgainstPlan,
+  percentChangePatch,
+  statusChangePatch,
+  isStaleInProgress,
+  myWorkNeedsAttention,
+  needsForecastDate,
+  needsZeroProgressFinishConfirmation,
+  offersDayRequest,
+  offersPersonalTask,
+  parseMyWorkExpansion,
+  sortMyWorkGroups,
+  type MyWorkExpansion,
 } from "../../../lib/my-work";
 
 import { CrmMyWork } from "./CrmScreens";
@@ -374,23 +389,21 @@ type ProgressTarget = {
   rowVersion: string;
 };
 
-const toError = (error: unknown) => error instanceof Error ? error.message : "The request could not be completed.";
-const isConcurrencyConflict = (error: unknown) => error instanceof ApiClientError
-  && error.status === 409
-  && error.code === "concurrency_conflict";
-const money = (value: number) => new Intl.NumberFormat(currentLocale(), {
-  style: "currency",
-  currency: "THB",
-  maximumFractionDigits: 2,
-}).format(value);
+const toError = (error: unknown) => (error instanceof Error ? error.message : "The request could not be completed.");
+const isConcurrencyConflict = (error: unknown) => error instanceof ApiClientError && error.status === 409 && error.code === "concurrency_conflict";
+const money = (value: number) =>
+  new Intl.NumberFormat(currentLocale(), {
+    style: "currency",
+    currency: "THB",
+    maximumFractionDigits: 2,
+  }).format(value);
 const number = (value: number, maximumFractionDigits = 2) => new Intl.NumberFormat(currentLocale(), { maximumFractionDigits }).format(value);
-const date = (value: string | null) => value
-  ? new Intl.DateTimeFormat(currentLocale(), { dateStyle: "medium" }).format(new Date(`${value.slice(0, 10)}T00:00:00`))
-  : "—";
-const dateTime = (value: string) => new Intl.DateTimeFormat(currentLocale(), {
-  dateStyle: "short",
-  timeStyle: "short",
-}).format(new Date(value));
+const date = (value: string | null) => (value ? new Intl.DateTimeFormat(currentLocale(), { dateStyle: "medium" }).format(new Date(`${value.slice(0, 10)}T00:00:00`)) : "—");
+const dateTime = (value: string) =>
+  new Intl.DateTimeFormat(currentLocale(), {
+    dateStyle: "short",
+    timeStyle: "short",
+  }).format(new Date(value));
 // The business day in the configured zone, whatever zone the reader's device is set to.
 const isoToday = () => estimateBusinessDate(new Date(), process.env.NEXT_PUBLIC_BUSINESS_TIME_ZONE ?? "Asia/Bangkok");
 const ageInDays = (value: string | null) => {
@@ -401,27 +414,50 @@ const ageInDays = (value: string | null) => {
   return Math.max(0, Math.floor((today - parsed) / 86_400_000));
 };
 /* Only the host earns the column width; the full link lives on the href and title. */
-const hostOf = (url: string) => { try { return new URL(url).host; } catch { return url; } };
-const flattenTasks =(tasks: ScheduleTask[]): ScheduleTask[] => tasks.flatMap((task) => [task, ...flattenTasks(task.children)]);
+const hostOf = (url: string) => {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
+};
+const flattenTasks = (tasks: ScheduleTask[]): ScheduleTask[] => tasks.flatMap((task) => [task, ...flattenTasks(task.children)]);
 
 /* Rows a Resource Plan task owns: progress comes from its assignee and the dates from Resource Plan. */
 function ResourcePlanLock() {
-  return <Badge tone="slate"><Icon name="lock" /><LocalizedText text={"Resource Plan"} /></Badge>;
+  return (
+    <Badge tone="slate">
+      <Icon name="lock" />
+      <LocalizedText text={"Resource Plan"} />
+    </Badge>
+  );
 }
 
 function LoadError({ message, retry }: { message: string; retry: () => void }) {
-  return <div className="callout danger" role="alert">
-    <Icon name="alertTriangle" />
-    <span><strong><LocalizedText text={"Could not load"} /></strong><small>{message}</small></span>
-    <button className="btn ghost" type="button" onClick={retry}><Icon name="refresh" /><LocalizedText text={"Try again"} /></button>
-  </div>;
+  return (
+    <div className="callout danger" role="alert">
+      <Icon name="alertTriangle" />
+      <span>
+        <strong>
+          <LocalizedText text={"Could not load"} />
+        </strong>
+        <small>{message}</small>
+      </span>
+      <button className="btn ghost" type="button" onClick={retry}>
+        <Icon name="refresh" />
+        <LocalizedText text={"Try again"} />
+      </button>
+    </div>
+  );
 }
 
 function PermissionNotice({ permission, message }: { permission: string; message: string }) {
   const localizeCopy = useStaticCopy();
-  return <Panel title={localizeCopy("Access unavailable")} subtitle={`${localizeCopy("Required permission")}: ${permission}`}>
-    <EmptyState icon="lock" title={localizeCopy("This page is restricted by role")} message={message} />
-  </Panel>;
+  return (
+    <Panel title={localizeCopy("Access unavailable")} subtitle={`${localizeCopy("Required permission")}: ${permission}`}>
+      <EmptyState icon="lock" title={localizeCopy("This page is restricted by role")} message={message} />
+    </Panel>
+  );
 }
 
 async function loadAllEstimates() {
@@ -477,7 +513,8 @@ async function mapSettledLimited<T, R>(items: T[], limit: number, work: (item: T
 
 async function loadPriceRecords(): Promise<PriceLoadState> {
   const [estimates, historical, quotationLines] = await Promise.all([
-    loadAllEstimates(), loadAllSupplierPriceHistory(),
+    loadAllEstimates(),
+    loadAllSupplierPriceHistory(),
     listAllQuotationLinesForPriceLibrary().catch(() => [] as QuotationLineForPriceLibrary[]),
   ]);
   const settled = await mapSettledLimited(estimates, 5, async (estimate) => ({
@@ -488,90 +525,96 @@ async function loadPriceRecords(): Promise<PriceLoadState> {
   settled.forEach((result) => {
     if (!result.ok) return;
     const { estimate, workspace } = result.value;
-    workspace.costItems.forEach((item: EstimateCostItem) => records.push({
-      key: `${estimate.id}:${item.id}`,
-      sourceKind: "Estimate",
-      estimateId: estimate.id,
-      estimateNo: estimate.number,
-      estimateStatus: estimate.status,
-      projectName: estimate.projectName,
-      customerName: estimate.customerName,
+    workspace.costItems.forEach((item: EstimateCostItem) =>
+      records.push({
+        key: `${estimate.id}:${item.id}`,
+        sourceKind: "Estimate",
+        estimateId: estimate.id,
+        estimateNo: estimate.number,
+        estimateStatus: estimate.status,
+        projectName: estimate.projectName,
+        customerName: estimate.customerName,
+        itemId: item.id,
+        itemCode: item.itemCode,
+        description: item.description,
+        brand: item.brand,
+        model: item.model,
+        supplierId: item.supplierId,
+        supplierName: item.supplierName,
+        quantity: Number(item.quantity),
+        unit: item.unit,
+        unitCost: Number(item.unitCost),
+        lineTotal: Number(item.lineTotal),
+        priceSource: item.priceSource,
+        referenceNumber: item.referenceNumber,
+        priceDate: item.priceDate,
+        ownerName: item.ownerName,
+        lineStatus: item.status,
+        ageDays: ageInDays(item.priceDate),
+        sourceUrl: null,
+      }),
+    );
+  });
+  historical.forEach((item) =>
+    records.push({
+      key: `history:${item.id}`,
+      sourceKind: "Historical Purchase",
+      estimateId: 0,
+      estimateNo: item.purchaseOrderNumber || item.projectNumber,
+      estimateStatus: "Purchased",
+      projectName: `${item.projectNumber} · ${item.projectName}`,
+      customerName: item.customerName,
       itemId: item.id,
+      itemCode: item.itemCode,
+      description: item.description,
+      brand: item.brand,
+      model: "",
+      supplierId: item.supplierId,
+      supplierName: item.supplierName,
+      quantity: Number(item.quantity),
+      unit: item.unit,
+      unitCost: Number(item.actualUnitCost),
+      lineTotal: Number(item.actualLineCost),
+      priceSource: "Historical Purchase",
+      referenceNumber: item.quotationNumber || item.purchaseOrderNumber,
+      priceDate: item.quotationDate,
+      ownerName: "PR import",
+      lineStatus: item.purchaseOrderStatus || "Purchased",
+      ageDays: ageInDays(item.quotationDate),
+      sourceUrl: null,
+    }),
+  );
+  quotationLines.forEach((item) =>
+    records.push({
+      key: `sqline:${item.id}`,
+      /* Both kinds arrive through the same table; only the source tells them apart, and
+       the library must never present a page someone read as a price a supplier sent. */
+      sourceKind: item.sourceKind === "WebReference" ? "Web Reference" : "Supplier Quotation",
+      estimateId: 0,
+      estimateNo: item.quotationNumber,
+      estimateStatus: "Quoted",
+      projectName: item.supplierReference || item.quotationNumber,
+      customerName: "",
+      itemId: item.id ?? 0,
       itemCode: item.itemCode,
       description: item.description,
       brand: item.brand,
       model: item.model,
       supplierId: item.supplierId,
       supplierName: item.supplierName,
-      quantity: Number(item.quantity),
+      quantity: Number(item.qty),
       unit: item.unit,
-      unitCost: Number(item.unitCost),
-      lineTotal: Number(item.lineTotal),
-      priceSource: item.priceSource,
-      referenceNumber: item.referenceNumber,
-      priceDate: item.priceDate,
-      ownerName: item.ownerName,
-      lineStatus: item.status,
-      ageDays: ageInDays(item.priceDate),
-      sourceUrl: null,
-    }));
-  });
-  historical.forEach((item) => records.push({
-    key: `history:${item.id}`,
-    sourceKind: "Historical Purchase",
-    estimateId: 0,
-    estimateNo: item.purchaseOrderNumber || item.projectNumber,
-    estimateStatus: "Purchased",
-    projectName: `${item.projectNumber} · ${item.projectName}`,
-    customerName: item.customerName,
-    itemId: item.id,
-    itemCode: item.itemCode,
-    description: item.description,
-    brand: item.brand,
-    model: "",
-    supplierId: item.supplierId,
-    supplierName: item.supplierName,
-    quantity: Number(item.quantity),
-    unit: item.unit,
-    unitCost: Number(item.actualUnitCost),
-    lineTotal: Number(item.actualLineCost),
-    priceSource: "Historical Purchase",
-    referenceNumber: item.quotationNumber || item.purchaseOrderNumber,
-    priceDate: item.quotationDate,
-    ownerName: "PR import",
-    lineStatus: item.purchaseOrderStatus || "Purchased",
-    ageDays: ageInDays(item.quotationDate),
-    sourceUrl: null,
-  }));
-  quotationLines.forEach((item) => records.push({
-    key: `sqline:${item.id}`,
-    /* Both kinds arrive through the same table; only the source tells them apart, and
-       the library must never present a page someone read as a price a supplier sent. */
-    sourceKind: item.sourceKind === "WebReference" ? "Web Reference" : "Supplier Quotation",
-    estimateId: 0,
-    estimateNo: item.quotationNumber,
-    estimateStatus: "Quoted",
-    projectName: item.supplierReference || item.quotationNumber,
-    customerName: "",
-    itemId: item.id ?? 0,
-    itemCode: item.itemCode,
-    description: item.description,
-    brand: item.brand,
-    model: item.model,
-    supplierId: item.supplierId,
-    supplierName: item.supplierName,
-    quantity: Number(item.qty),
-    unit: item.unit,
-    unitCost: Number(item.unitPrice),
-    lineTotal: Number(item.lineTotal ?? item.qty * item.unitPrice),
-    priceSource: item.sourceKind === "WebReference" ? "Web Reference" : "Supplier Quotation",
-    referenceNumber: item.quotationNumber,
-    priceDate: item.receivedDate,
-    ownerName: item.supplierName,
-    lineStatus: item.sourceKind === "WebReference" ? "Referenced" : "Quoted",
-    ageDays: ageInDays(item.receivedDate),
-    sourceUrl: item.sourceUrl || null,
-  }));
+      unitCost: Number(item.unitPrice),
+      lineTotal: Number(item.lineTotal ?? item.qty * item.unitPrice),
+      priceSource: item.sourceKind === "WebReference" ? "Web Reference" : "Supplier Quotation",
+      referenceNumber: item.quotationNumber,
+      priceDate: item.receivedDate,
+      ownerName: item.supplierName,
+      lineStatus: item.sourceKind === "WebReference" ? "Referenced" : "Quoted",
+      ageDays: ageInDays(item.receivedDate),
+      sourceUrl: item.sourceUrl || null,
+    }),
+  );
   records.sort((a, b) => (b.priceDate ?? "").localeCompare(a.priceDate ?? "") || b.itemId - a.itemId);
   return {
     records,
@@ -584,11 +627,10 @@ async function loadPriceRecords(): Promise<PriceLoadState> {
 
 export async function loadSchedules(): Promise<ScheduleLoadState> {
   const projects = await loadAllProjects();
-  const settled = await mapSettledLimited(projects, 5, (project) =>
-    apiRequest<ProjectSchedule>(`/api/v1/projects/${project.id}/schedule`));
+  const settled = await mapSettledLimited(projects, 5, (project) => apiRequest<ProjectSchedule>(`/api/v1/projects/${project.id}/schedule`));
   return {
     projects,
-    schedules: settled.flatMap((item) => item.ok ? [item.value] : []),
+    schedules: settled.flatMap((item) => (item.ok ? [item.value] : [])),
     skippedSchedules: settled.filter((item) => !item.ok).length,
   };
 }
@@ -601,12 +643,18 @@ function usePrices(enabled: boolean) {
     if (!enabled) return;
     setLoading(true);
     setError("");
-    try { setState(await loadPriceRecords()); }
-    catch (requestError) { setError(toError(requestError)); }
-    finally { setLoading(false); }
+    try {
+      setState(await loadPriceRecords());
+    } catch (requestError) {
+      setError(toError(requestError));
+    } finally {
+      setLoading(false);
+    }
   }, [enabled]);
   useEffect(() => {
-    const timer = window.setTimeout(() => { void load(); }, 0);
+    const timer = window.setTimeout(() => {
+      void load();
+    }, 0);
     return () => window.clearTimeout(timer);
   }, [load]);
   return { ...state, loading, error, load };
@@ -626,12 +674,21 @@ function progressProblem(input: { initialStatus: string; percent: number; status
   return null;
 }
 
-function ProgressModal({ target, latestRowVersion, onClose, onSubmit, onConflict }: {
+function ProgressModal({
+  target,
+  latestRowVersion,
+  onClose,
+  onSubmit,
+  onConflict,
+}: {
   target: ProgressTarget;
   /** The row's version in the latest data; adopted only after this dialog's own save met a conflict. */
   latestRowVersion?: string | undefined;
   onClose: () => void;
-  onSubmit: (input: { percentComplete: number; status: string; actualStart: string | null; actualFinish: string | null; forecastFinish: string | null; remark: string }, rowVersion: string) => Promise<void>;
+  onSubmit: (
+    input: { percentComplete: number; status: string; actualStart: string | null; actualFinish: string | null; forecastFinish: string | null; remark: string },
+    rowVersion: string,
+  ) => Promise<void>;
   /** Reloads the latest task; the dialog stays open with the user's entry so they can check it and save again. */
   onConflict?: () => Promise<void>;
 }) {
@@ -651,13 +708,15 @@ function ProgressModal({ target, latestRowVersion, onClose, onSubmit, onConflict
     if (!canFinishWork(target.status) && next === "Done") return;
     setStatus(next);
     if (next === "Not Started") {
-      setPercent(0); setActualStart(""); setActualFinish("");
+      setPercent(0);
+      setActualStart("");
+      setActualFinish("");
     } else if (next === "Done") {
       setPercent(100);
       setActualStart((value) => value || isoToday());
       setActualFinish((value) => value || isoToday());
     } else if (next === "In Progress" || next === "Blocked") {
-      setPercent((value) => value === 100 ? 99 : next === "In Progress" && value === 0 ? 1 : value);
+      setPercent((value) => (value === 100 ? 99 : next === "In Progress" && value === 0 ? 1 : value));
       setActualStart((value) => value || isoToday());
       setActualFinish("");
     }
@@ -667,26 +726,38 @@ function ProgressModal({ target, latestRowVersion, onClose, onSubmit, onConflict
     setPercent(value);
     if (value === "") return;
     if (value === 100 && status !== "Blocked" && canFinishWork(target.status)) {
-      setStatus("Done"); setActualStart((current) => current || isoToday()); setActualFinish((current) => current || isoToday());
+      setStatus("Done");
+      setActualStart((current) => current || isoToday());
+      setActualFinish((current) => current || isoToday());
     } else if (value > 0 && value < 100 && (status === "Not Started" || status === "Done")) {
-      setStatus("In Progress"); setActualStart((current) => current || isoToday()); setActualFinish("");
+      setStatus("In Progress");
+      setActualStart((current) => current || isoToday());
+      setActualFinish("");
     }
   };
   const problem = progressProblem({ initialStatus: target.status, percent: percent === "" ? Number.NaN : percent, status, actualStart, actualFinish, forecastFinish, remark });
   const submit = async () => {
-    if (needsZeroProgressFinishConfirmation(Number(target.percentComplete), status)
-      && !(await confirmDialog(localizeCopy("This task is at 0%. Confirm that the work is complete and finish it today?")))) return;
-    setBusy(true); setError(""); setConflict(false);
+    if (
+      needsZeroProgressFinishConfirmation(Number(target.percentComplete), status) &&
+      !(await confirmDialog(localizeCopy("This task is at 0%. Confirm that the work is complete and finish it today?")))
+    )
+      return;
+    setBusy(true);
+    setError("");
+    setConflict(false);
     try {
-      await onSubmit({
-        percentComplete: Number(percent),
-        status,
-        actualStart: actualStart || null,
-        actualFinish: actualFinish || null,
-        forecastFinish: forecastFinish || null,
-        // An untouched note keeps what was stored, including a provenance line the form does not show.
-        remark: remarkEdited ? remark.trim() : (target.originalRemark ?? remark).trim(),
-      }, conflict ? latestRowVersion ?? target.rowVersion : target.rowVersion);
+      await onSubmit(
+        {
+          percentComplete: Number(percent),
+          status,
+          actualStart: actualStart || null,
+          actualFinish: actualFinish || null,
+          forecastFinish: forecastFinish || null,
+          // An untouched note keeps what was stored, including a provenance line the form does not show.
+          remark: remarkEdited ? remark.trim() : (target.originalRemark ?? remark).trim(),
+        },
+        conflict ? (latestRowVersion ?? target.rowVersion) : target.rowVersion,
+      );
       onClose();
     } catch (requestError) {
       if (isConcurrencyConflict(requestError) && onConflict) {
@@ -703,34 +774,113 @@ function ProgressModal({ target, latestRowVersion, onClose, onSubmit, onConflict
       setBusy(false);
     }
   };
-  return <Modal
-    title={`${uiText("Update")} ${target.wbs} · ${target.name}`}
-    subtitle={target.projectNo}
-    onClose={onClose}
-    footer={<>
-      {problem ? <span className="progress-problem" role="status"><Icon name="alertCircle" />{uiText(problem)}</span> : null}
-      <span className="spacer" />
-      <button className="btn ghost" type="button" onClick={onClose} disabled={busy}><LocalizedText text={"Cancel"} /></button>
-      <button className="btn primary" type="button" onClick={() => { void submit(); }} disabled={busy || problem !== null}>
-        <Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : <LocalizedText text={"Save progress"} />}
-      </button>
-    </>}
-  >
-    {conflict ? <div className="callout warning" role="alert"><Icon name="alertTriangle" /><span>{uiText("Progress.conflict")}</span></div> : null}
-    {error ? <LoadError message={error} retry={() => { void submit(); }} /> : null}
-    <div className="form-grid two">
-      <label className="field"><span><LocalizedText text={"Status *"} /></span><select value={status} onChange={(event) => changeStatus(event.target.value)}><option value={"Not Started"}><LocalizedText text={"Not Started"} /></option><option value={"In Progress"}><LocalizedText text={"In Progress"} /></option><option value={"Blocked"}><LocalizedText text={"Blocked"} /></option><option value={"Done"} disabled={target.status === "Blocked"}><LocalizedText text={"Done"} /></option></select></label>
-      <label className="field"><span><LocalizedText text={"Percent complete *"} /></span><input type="number" min="0" max="100" step="1" value={percent} onChange={(event) => changePercent(event.target.value === "" ? "" : Number(event.target.value))} /></label>
-      <label className="field"><span><LocalizedText text={"Actual start"} /></span><DateInput value={actualStart} onChange={(event) => setActualStart(event.target.value)} /></label>
-      <label className="field"><span><LocalizedText text={"Actual finish"} /></span><DateInput min={actualStart || undefined} value={actualFinish} onChange={(event) => setActualFinish(event.target.value)} /></label>
-      <label className="field"><span><LocalizedText text={"Forecast finish"} /></span><DateInput min={actualStart || undefined} value={forecastFinish} onChange={(event) => setForecastFinish(event.target.value)} /></label>
-      <label className="field span-2"><span>{status === "Blocked" ? <LocalizedText text={"Blocked reason *"} /> : <LocalizedText text={"Remark"} />}</span><textarea maxLength={20000} value={remark} onChange={(event) => { setRemark(event.target.value); setRemarkEdited(true); }} /></label>
-    </div>
-  </Modal>;
+  return (
+    <Modal
+      title={`${uiText("Update")} ${target.wbs} · ${target.name}`}
+      subtitle={target.projectNo}
+      onClose={onClose}
+      footer={
+        <>
+          {problem ? (
+            <span className="progress-problem" role="status">
+              <Icon name="alertCircle" />
+              {uiText(problem)}
+            </span>
+          ) : null}
+          <span className="spacer" />
+          <button className="btn ghost" type="button" onClick={onClose} disabled={busy}>
+            <LocalizedText text={"Cancel"} />
+          </button>
+          <button
+            className="btn primary"
+            type="button"
+            onClick={() => {
+              void submit();
+            }}
+            disabled={busy || problem !== null}
+          >
+            <Icon name="check" />
+            {busy ? <LocalizedText text={"Saving…"} /> : <LocalizedText text={"Save progress"} />}
+          </button>
+        </>
+      }
+    >
+      {conflict ? (
+        <div className="callout warning" role="alert">
+          <Icon name="alertTriangle" />
+          <span>{uiText("Progress.conflict")}</span>
+        </div>
+      ) : null}
+      {error ? (
+        <LoadError
+          message={error}
+          retry={() => {
+            void submit();
+          }}
+        />
+      ) : null}
+      <div className="form-grid two">
+        <label className="field">
+          <span>
+            <LocalizedText text={"Status *"} />
+          </span>
+          <select value={status} onChange={(event) => changeStatus(event.target.value)}>
+            <option value={"Not Started"}>
+              <LocalizedText text={"Not Started"} />
+            </option>
+            <option value={"In Progress"}>
+              <LocalizedText text={"In Progress"} />
+            </option>
+            <option value={"Blocked"}>
+              <LocalizedText text={"Blocked"} />
+            </option>
+            <option value={"Done"} disabled={target.status === "Blocked"}>
+              <LocalizedText text={"Done"} />
+            </option>
+          </select>
+        </label>
+        <label className="field">
+          <span>
+            <LocalizedText text={"Percent complete *"} />
+          </span>
+          <input type="number" min="0" max="100" step="1" value={percent} onChange={(event) => changePercent(event.target.value === "" ? "" : Number(event.target.value))} />
+        </label>
+        <label className="field">
+          <span>
+            <LocalizedText text={"Actual start"} />
+          </span>
+          <DateInput value={actualStart} onChange={(event) => setActualStart(event.target.value)} />
+        </label>
+        <label className="field">
+          <span>
+            <LocalizedText text={"Actual finish"} />
+          </span>
+          <DateInput min={actualStart || undefined} value={actualFinish} onChange={(event) => setActualFinish(event.target.value)} />
+        </label>
+        <label className="field">
+          <span>
+            <LocalizedText text={"Forecast finish"} />
+          </span>
+          <DateInput min={actualStart || undefined} value={forecastFinish} onChange={(event) => setForecastFinish(event.target.value)} />
+        </label>
+        <label className="field span-2">
+          <span>{status === "Blocked" ? <LocalizedText text={"Blocked reason *"} /> : <LocalizedText text={"Remark"} />}</span>
+          <textarea
+            maxLength={20000}
+            value={remark}
+            onChange={(event) => {
+              setRemark(event.target.value);
+              setRemarkEdited(true);
+            }}
+          />
+        </label>
+      </div>
+    </Modal>
+  );
 }
 
 // The due date that counts: the plan finish while the work is open (a forecast does not move it), the actual finish once done.
-const workEffectiveFinish = (item: MyWorkItem) => item.status === "Done" ? item.actualFinish ?? item.planFinish : item.planFinish;
+const workEffectiveFinish = (item: MyWorkItem) => (item.status === "Done" ? (item.actualFinish ?? item.planFinish) : item.planFinish);
 // The shared rules in lib/my-work.ts: late against the current plan, a forecast owed, quiet too long.
 const workIsLate = (item: MyWorkItem) => isLateAgainstPlan(item, isoToday());
 const workNeedsForecast = (item: MyWorkItem) => needsForecastDate(item, isoToday());
@@ -738,18 +888,23 @@ const workIsStale = (item: MyWorkItem) => isStaleInProgress({ status: item.statu
 /** The last progress report; an older API without it falls back to the row's update time. */
 const workLastReport = (item: MyWorkItem) => item.lastProgressAt ?? item.updatedAt;
 const workNeedsUpdate = (item: MyWorkItem) => myWorkNeedsAttention({ ...item, canUpdate: true, updatedAt: workLastReport(item) }, isoToday(), Date.now());
-const workUserNote = (value: string | null) => value?.trim().startsWith("Imported from Overall Project Plan") ? "" : value ?? "";
+const workUserNote = (value: string | null) => (value?.trim().startsWith("Imported from Overall Project Plan") ? "" : (value ?? ""));
 /** A progress save copies the task's note onto every field it changes, so in a history only a day request, its answer and a baseline carry words written for that event. */
-const historyReason = (entry: { field: string; comment: string | null }) => entry.comment && ["request", "request_answer", "baseline"].includes(entry.field) ? ` · “${entry.comment}”` : "";
+const historyReason = (entry: { field: string; comment: string | null }) => (entry.comment && ["request", "request_answer", "baseline"].includes(entry.field) ? ` · “${entry.comment}”` : "");
 /** The plan importer wrote its provenance into the note and the blocked reason; nobody typed it, so a history shows it as empty. */
 const historyNoteFields = ["remark", "blocked_reason"];
-const historyValue = (field: string, value: string | null) => historyNoteFields.includes(field) && /^\s*Imported (?:from Overall Project Plan|source status:)/.test(value ?? "") ? null : value;
+const historyValue = (field: string, value: string | null) => (historyNoteFields.includes(field) && /^\s*Imported (?:from Overall Project Plan|source status:)/.test(value ?? "") ? null : value);
 /** A note or blocked-reason row that only moved the importer's text says nothing. */
-const historyShown = (entry: { field: string; fromValue: string | null; toValue: string | null }) => !historyNoteFields.includes(entry.field) || historyValue(entry.field, entry.fromValue) !== historyValue(entry.field, entry.toValue);
-const daysFromToday = (value: string | null) => value
-  ? Math.round((Date.parse(`${value.slice(0, 10)}T00:00:00Z`) - Date.parse(`${isoToday()}T00:00:00Z`)) / 86_400_000)
-  : null;
-const myWorkInitials = (name: string) => name.trim().split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "U";
+const historyShown = (entry: { field: string; fromValue: string | null; toValue: string | null }) =>
+  !historyNoteFields.includes(entry.field) || historyValue(entry.field, entry.fromValue) !== historyValue(entry.field, entry.toValue);
+const daysFromToday = (value: string | null) => (value ? Math.round((Date.parse(`${value.slice(0, 10)}T00:00:00Z`) - Date.parse(`${isoToday()}T00:00:00Z`)) / 86_400_000) : null);
+const myWorkInitials = (name: string) =>
+  name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || "U";
 const quietDays = (updatedAt: string) => {
   const updated = Date.parse(updatedAt);
   return Number.isNaN(updated) ? 0 : Math.max(0, Math.floor((Date.now() - updated) / 86_400_000));
@@ -859,50 +1014,54 @@ const matchesWorkFilter = (item: MyWorkItem, filter: MyWorkFilter) => {
 function groupScheduleWork(items: MyWorkItem[]): ScheduleWorkGroup[] {
   const groups = new Map<string, MyWorkItem[]>();
   for (const item of items) {
-    const key = item.isOwnDetail
-      ? `personal:${item.projectId}:${workEffectiveFinish(item) ?? "no-date"}`
-      : `project:${item.projectId}:${item.phaseWbs ?? "other"}`;
+    const key = item.isOwnDetail ? `personal:${item.projectId}:${workEffectiveFinish(item) ?? "no-date"}` : `project:${item.projectId}:${item.phaseWbs ?? "other"}`;
     const current = groups.get(key);
     if (current) current.push(item);
     else groups.set(key, [item]);
   }
-  return [...groups.entries()].map(([key, rows]) => {
-    const first = rows[0]!;
-    const lateCount = rows.filter(workIsLate).length;
-    const blockedCount = rows.filter((item) => item.status === "Blocked").length;
-    const needsUpdateCount = rows.filter(workNeedsUpdate).length;
-    const dueThisWeekCount = rows.filter((item) => {
-      const days = daysFromToday(workEffectiveFinish(item));
-      return days !== null && days >= 0 && days <= 7;
-    }).length;
-    const waitingCount = rows.filter((item) => item.pendingRequest).length;
-    const nearestDue = rows.map(workEffectiveFinish).filter((value): value is string => Boolean(value)).sort()[0] ?? null;
-    const updatedAt = rows.reduce((latest, item) => Date.parse(workLastReport(item)) > Date.parse(latest) ? workLastReport(item) : latest, workLastReport(first));
-    const urgency = blockedCount ? 0 : lateCount ? 1 : needsUpdateCount ? 2 : dueThisWeekCount ? 3 : waitingCount ? 4 : 5;
-    return {
-      key,
-      source: (first.isOwnDetail ? "personal" : "project") as ScheduleWorkGroup["source"],
-      projectId: first.projectId,
-      projectNo: first.projectNo,
-      projectName: first.projectName,
-      phaseWbs: first.isOwnDetail ? null : first.phaseWbs,
-      phaseName: first.isOwnDetail ? "Personal tasks" : first.phaseName ?? "Other work",
-      managerName: first.managerName,
-      items: [...rows].sort((left, right) => left.wbs.localeCompare(right.wbs, undefined, { numeric: true })),
-      lateCount,
-      blockedCount,
-      needsUpdateCount,
-      dueThisWeekCount,
-      waitingCount,
-      progress: Math.round(rows.reduce((sum, item) => sum + Number(item.percentComplete), 0) / rows.length),
-      effort: rows.reduce((sum, item) => sum + Number(item.planManDays || 0), 0),
-      nearestDue,
-      updatedAt,
-      urgency,
-    };
-  }).sort((left, right) => left.urgency - right.urgency
-    || (left.nearestDue ?? "9999-12-31").localeCompare(right.nearestDue ?? "9999-12-31")
-    || Date.parse(left.updatedAt) - Date.parse(right.updatedAt));
+  return [...groups.entries()]
+    .map(([key, rows]) => {
+      const first = rows[0]!;
+      const lateCount = rows.filter(workIsLate).length;
+      const blockedCount = rows.filter((item) => item.status === "Blocked").length;
+      const needsUpdateCount = rows.filter(workNeedsUpdate).length;
+      const dueThisWeekCount = rows.filter((item) => {
+        const days = daysFromToday(workEffectiveFinish(item));
+        return days !== null && days >= 0 && days <= 7;
+      }).length;
+      const waitingCount = rows.filter((item) => item.pendingRequest).length;
+      const nearestDue =
+        rows
+          .map(workEffectiveFinish)
+          .filter((value): value is string => Boolean(value))
+          .sort()[0] ?? null;
+      const updatedAt = rows.reduce((latest, item) => (Date.parse(workLastReport(item)) > Date.parse(latest) ? workLastReport(item) : latest), workLastReport(first));
+      const urgency = blockedCount ? 0 : lateCount ? 1 : needsUpdateCount ? 2 : dueThisWeekCount ? 3 : waitingCount ? 4 : 5;
+      return {
+        key,
+        source: (first.isOwnDetail ? "personal" : "project") as ScheduleWorkGroup["source"],
+        projectId: first.projectId,
+        projectNo: first.projectNo,
+        projectName: first.projectName,
+        phaseWbs: first.isOwnDetail ? null : first.phaseWbs,
+        phaseName: first.isOwnDetail ? "Personal tasks" : (first.phaseName ?? "Other work"),
+        managerName: first.managerName,
+        items: [...rows].sort((left, right) => left.wbs.localeCompare(right.wbs, undefined, { numeric: true })),
+        lateCount,
+        blockedCount,
+        needsUpdateCount,
+        dueThisWeekCount,
+        waitingCount,
+        progress: Math.round(rows.reduce((sum, item) => sum + Number(item.percentComplete), 0) / rows.length),
+        effort: rows.reduce((sum, item) => sum + Number(item.planManDays || 0), 0),
+        nearestDue,
+        updatedAt,
+        urgency,
+      };
+    })
+    .sort(
+      (left, right) => left.urgency - right.urgency || (left.nearestDue ?? "9999-12-31").localeCompare(right.nearestDue ?? "9999-12-31") || Date.parse(left.updatedAt) - Date.parse(right.updatedAt),
+    );
 }
 
 function groupEstimateWork(assignments: MyEstimateAssignment[], todayIso: string): EstimateWorkGroup[] {
@@ -913,46 +1072,51 @@ function groupEstimateWork(assignments: MyEstimateAssignment[], todayIso: string
     if (rows) rows.push(record);
     else grouped.set(key, [record]);
   }
-  return [...grouped.entries()].map(([key, rows]) => {
-    const first = rows[0]!;
-    const lateCount = rows.filter((record) => assignmentUrgency(record, todayIso) === "overdue").length;
-    const blockedCount = rows.filter((record) => record.status === "Blocked").length;
-    const needsUpdateCount = rows.filter((record) => assignmentUrgency(record, todayIso) === "overdue"
-      || record.status === "Not Started" || quietDays(record.updatedAt) > 5).length;
-    const dueThisWeekCount = rows.filter((record) => assignmentUrgency(record, todayIso) === "due-soon").length;
-    const nearestDue = rows.map((record) => record.dueDate ?? record.estimateDueDate).filter((value): value is string => Boolean(value)).sort()[0] ?? null;
-    const updatedAt = rows.reduce((latest, record) => Date.parse(record.updatedAt) > Date.parse(latest) ? record.updatedAt : latest, first.updatedAt);
-    const urgency = blockedCount ? 0 : lateCount ? 1 : needsUpdateCount ? 2 : dueThisWeekCount ? 3 : 5;
-    return {
-      key,
-      estimateId: first.estimateId,
-      estimateNumber: first.estimateNumber,
-      revision: first.revision,
-      projectName: first.projectName,
-      customerName: first.customerName,
-      rows,
-      lateCount,
-      blockedCount,
-      needsUpdateCount,
-      dueThisWeekCount,
-      progress: Math.round(rows.reduce((sum, record) => sum + Number(record.progress), 0) / rows.length),
-      nearestDue,
-      updatedAt,
-      urgency,
-    };
-  }).sort((left, right) => left.urgency - right.urgency
-    || (left.nearestDue ?? "9999-12-31").localeCompare(right.nearestDue ?? "9999-12-31")
-    || Date.parse(left.updatedAt) - Date.parse(right.updatedAt));
+  return [...grouped.entries()]
+    .map(([key, rows]) => {
+      const first = rows[0]!;
+      const lateCount = rows.filter((record) => assignmentUrgency(record, todayIso) === "overdue").length;
+      const blockedCount = rows.filter((record) => record.status === "Blocked").length;
+      const needsUpdateCount = rows.filter((record) => assignmentUrgency(record, todayIso) === "overdue" || record.status === "Not Started" || quietDays(record.updatedAt) > 5).length;
+      const dueThisWeekCount = rows.filter((record) => assignmentUrgency(record, todayIso) === "due-soon").length;
+      const nearestDue =
+        rows
+          .map((record) => record.dueDate ?? record.estimateDueDate)
+          .filter((value): value is string => Boolean(value))
+          .sort()[0] ?? null;
+      const updatedAt = rows.reduce((latest, record) => (Date.parse(record.updatedAt) > Date.parse(latest) ? record.updatedAt : latest), first.updatedAt);
+      const urgency = blockedCount ? 0 : lateCount ? 1 : needsUpdateCount ? 2 : dueThisWeekCount ? 3 : 5;
+      return {
+        key,
+        estimateId: first.estimateId,
+        estimateNumber: first.estimateNumber,
+        revision: first.revision,
+        projectName: first.projectName,
+        customerName: first.customerName,
+        rows,
+        lateCount,
+        blockedCount,
+        needsUpdateCount,
+        dueThisWeekCount,
+        progress: Math.round(rows.reduce((sum, record) => sum + Number(record.progress), 0) / rows.length),
+        nearestDue,
+        updatedAt,
+        urgency,
+      };
+    })
+    .sort(
+      (left, right) => left.urgency - right.urgency || (left.nearestDue ?? "9999-12-31").localeCompare(right.nearestDue ?? "9999-12-31") || Date.parse(left.updatedAt) - Date.parse(right.updatedAt),
+    );
 }
 
-const estimateGroupMatchesFilter = (group: EstimateWorkGroup, filter: MyWorkFilter, todayIso: string) => group.rows.some((record) => {
-  if (filter === "late") return assignmentUrgency(record, todayIso) === "overdue";
-  if (filter === "week") return assignmentUrgency(record, todayIso) === "due-soon";
-  if (filter === "blocked" || filter === "waiting") return false;
-  if (filter === "attention") return assignmentUrgency(record, todayIso) === "overdue"
-    || record.status === "Not Started" || quietDays(record.updatedAt) > 5;
-  return true;
-});
+const estimateGroupMatchesFilter = (group: EstimateWorkGroup, filter: MyWorkFilter, todayIso: string) =>
+  group.rows.some((record) => {
+    if (filter === "late") return assignmentUrgency(record, todayIso) === "overdue";
+    if (filter === "week") return assignmentUrgency(record, todayIso) === "due-soon";
+    if (filter === "blocked" || filter === "waiting") return false;
+    if (filter === "attention") return assignmentUrgency(record, todayIso) === "overdue" || record.status === "Not Started" || quietDays(record.updatedAt) > 5;
+    return true;
+  });
 
 const ASSIGNMENT_TONE: Record<string, Parameters<typeof Badge>[0]["tone"]> = { overdue: "red", "due-soon": "amber", "on-track": "blue", none: "slate" };
 
@@ -965,7 +1129,17 @@ const ASSIGNMENT_TONE: Record<string, Parameters<typeof Badge>[0]["tone"]> = { o
  * which estimate to open. This panel lists the assignment itself — estimate,
  * discipline, status, due date — with the next step and a direct way in.
  */
-function MyEstimateAssignmentsPanel({ assignments, loading, error, todayIso, filter, isExpanded, onToggle, onOpenEstimate, onReload }: {
+function MyEstimateAssignmentsPanel({
+  assignments,
+  loading,
+  error,
+  todayIso,
+  filter,
+  isExpanded,
+  onToggle,
+  onOpenEstimate,
+  onReload,
+}: {
   assignments: MyEstimateAssignment[];
   loading: boolean;
   error: string;
@@ -979,88 +1153,256 @@ function MyEstimateAssignmentsPanel({ assignments, loading, error, todayIso, fil
   const localizeCopy = useStaticCopy();
   const summary = useMemo(() => assignmentQueueSummary(assignments, todayIso), [assignments, todayIso]);
   const groups = useMemo(() => groupEstimateWork(assignments, todayIso).filter((group) => estimateGroupMatchesFilter(group, filter, todayIso)), [assignments, filter, todayIso]);
-  return <Panel
-    title={localizeCopy("Estimate work")}
-    subtitle={localizeCopy("Grouped by Estimate and revision so each job has one clear place to continue.")}
-    flush
-    actions={<button className="btn ghost sm" type="button" disabled={loading} onClick={onReload}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button>}
-  >
-    <div className="my-work-filter-row" role="status">
-      <span className="my-work-result-count"><LocalizedText text={"Assigned to me"} /> <strong>{summary.actionable}</strong></span>
-      <span className="my-work-result-count"><LocalizedText text={"Not started"} /> <strong>{summary.notStarted}</strong></span>
-      <span className="my-work-result-count"><LocalizedText text={"Overdue"} /> <strong>{summary.overdue}</strong></span>
-      <span className="my-work-result-count"><LocalizedText text={"Due this week"} /> <strong>{summary.dueThisWeek}</strong></span>
-    </div>
-    {error ? <LoadError message={error} retry={onReload} /> : null}
-    {loading && !assignments.length ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading your estimate assignments…"} /></div> : null}
-    {!loading && !groups.length ? <EmptyState
-      icon="checkCircle"
-      title={localizeCopy("No estimate section is waiting for you")}
-      message={localizeCopy("A section appears here as soon as the estimate owner assigns it to you, before any work starts.")}
-    /> : null}
-    {groups.length ? <div className="estimate-work-groups">{groups.map((group) => <EstimateWorkGroupCard key={group.key} group={group} todayIso={todayIso} expanded={isExpanded(group.key, group.urgency <= 2)} onToggle={() => onToggle(group.key, isExpanded(group.key, group.urgency <= 2))} onOpenEstimate={onOpenEstimate} />)}</div> : null}
-  </Panel>;
+  return (
+    <Panel
+      title={localizeCopy("Estimate work")}
+      subtitle={localizeCopy("Grouped by Estimate and revision so each job has one clear place to continue.")}
+      flush
+      actions={
+        <button className="btn ghost sm" type="button" disabled={loading} onClick={onReload}>
+          <Icon name="refresh" />
+          <LocalizedText text={"Refresh"} />
+        </button>
+      }
+    >
+      <div className="my-work-filter-row" role="status">
+        <span className="my-work-result-count">
+          <LocalizedText text={"Assigned to me"} /> <strong>{summary.actionable}</strong>
+        </span>
+        <span className="my-work-result-count">
+          <LocalizedText text={"Not started"} /> <strong>{summary.notStarted}</strong>
+        </span>
+        <span className="my-work-result-count">
+          <LocalizedText text={"Overdue"} /> <strong>{summary.overdue}</strong>
+        </span>
+        <span className="my-work-result-count">
+          <LocalizedText text={"Due this week"} /> <strong>{summary.dueThisWeek}</strong>
+        </span>
+      </div>
+      {error ? <LoadError message={error} retry={onReload} /> : null}
+      {loading && !assignments.length ? (
+        <div className="empty">
+          <span className="spinner" />
+          <LocalizedText text={"Loading your estimate assignments…"} />
+        </div>
+      ) : null}
+      {!loading && !groups.length ? (
+        <EmptyState
+          icon="checkCircle"
+          title={localizeCopy("No estimate section is waiting for you")}
+          message={localizeCopy("A section appears here as soon as the estimate owner assigns it to you, before any work starts.")}
+        />
+      ) : null}
+      {groups.length ? (
+        <div className="estimate-work-groups">
+          {groups.map((group) => (
+            <EstimateWorkGroupCard
+              key={group.key}
+              group={group}
+              todayIso={todayIso}
+              expanded={isExpanded(group.key, group.urgency <= 2)}
+              onToggle={() => onToggle(group.key, isExpanded(group.key, group.urgency <= 2))}
+              onOpenEstimate={onOpenEstimate}
+            />
+          ))}
+        </div>
+      ) : null}
+    </Panel>
+  );
 }
 
 /** A work group's figures on one line; late, blocked and needs-update show only when there are some. */
-function WorkGroupMeta({ count, countLabel, late, blocked, needsUpdate, effort, progress, nearestDue, updatedAt, manager }: {
-  count: number; countLabel: string; late: number; blocked: number; needsUpdate: number; effort: number | null;
-  progress: number; nearestDue: string | null; updatedAt: string; manager: string | null;
+function WorkGroupMeta({
+  count,
+  countLabel,
+  late,
+  blocked,
+  needsUpdate,
+  effort,
+  progress,
+  nearestDue,
+  updatedAt,
+  manager,
+}: {
+  count: number;
+  countLabel: string;
+  late: number;
+  blocked: number;
+  needsUpdate: number;
+  effort: number | null;
+  progress: number;
+  nearestDue: string | null;
+  updatedAt: string;
+  manager: string | null;
 }) {
-  return <div className="work-group-metrics">
-    <span>{count} <LocalizedText text={countLabel} /></span>
-    {late ? <span className="danger-text">{late} <LocalizedText text={"Late"} /></span> : null}
-    {blocked ? <span className="warning-text">{blocked} <LocalizedText text={"Blocked"} /></span> : null}
-    {needsUpdate ? <span>{needsUpdate} <LocalizedText text={"Needs update"} /></span> : null}
-    {effort !== null ? <span><LocalizedText text={"Estimated effort"} /> {effort || "—"} MD</span> : null}
-    <span><LocalizedText text={"Progress"} /> {progress}%</span>
-    <span><LocalizedText text={"Nearest due"} /> {date(nearestDue)}</span>
-    <span><LocalizedText text={"Last update"} /> {date(updatedAt)} · {quietDays(updatedAt)} <LocalizedText text={"quiet days"} /></span>
-    {manager ? <span><LocalizedText text={"PM:"} /> {manager}</span> : null}
-  </div>;
+  return (
+    <div className="work-group-metrics">
+      <span>
+        {count} <LocalizedText text={countLabel} />
+      </span>
+      {late ? (
+        <span className="danger-text">
+          {late} <LocalizedText text={"Late"} />
+        </span>
+      ) : null}
+      {blocked ? (
+        <span className="warning-text">
+          {blocked} <LocalizedText text={"Blocked"} />
+        </span>
+      ) : null}
+      {needsUpdate ? (
+        <span>
+          {needsUpdate} <LocalizedText text={"Needs update"} />
+        </span>
+      ) : null}
+      {effort !== null ? (
+        <span>
+          <LocalizedText text={"Estimated effort"} /> {effort || "—"} MD
+        </span>
+      ) : null}
+      <span>
+        <LocalizedText text={"Progress"} /> {progress}%
+      </span>
+      <span>
+        <LocalizedText text={"Nearest due"} /> {date(nearestDue)}
+      </span>
+      <span>
+        <LocalizedText text={"Last update"} /> {date(updatedAt)} · {quietDays(updatedAt)} <LocalizedText text={"quiet days"} />
+      </span>
+      {manager ? (
+        <span>
+          <LocalizedText text={"PM:"} /> {manager}
+        </span>
+      ) : null}
+    </div>
+  );
 }
 
-function EstimateWorkGroupCard({ group, todayIso, expanded, onToggle, onOpenEstimate }: {
+function EstimateWorkGroupCard({
+  group,
+  todayIso,
+  expanded,
+  onToggle,
+  onOpenEstimate,
+}: {
   group: EstimateWorkGroup;
   todayIso: string;
   expanded: boolean;
   onToggle: () => void;
   onOpenEstimate?: ((estimateId: number) => void) | undefined;
 }) {
-  return <article className={`estimate-work-group urgency-${group.urgency}${expanded ? " expanded" : ""}`}>
-    <header className="estimate-work-group-head">
-      <button className="schedule-work-group-toggle" type="button" aria-expanded={expanded} aria-controls={`${group.key}-items`} onClick={onToggle}>
-        <Icon name={expanded ? "chevronDown" : "chevronRight"} />
-        <span className="schedule-work-group-title">
-          <span className="estimate-work-reference"><Badge tone="slate"><LocalizedText text={"Inquiry / Estimate"} /></Badge><strong className="mono">{group.estimateNumber}</strong><Badge tone="slate">R{String(group.revision).padStart(2, "0")}</Badge></span>
-          <strong className="schedule-work-group-name">{group.projectName}</strong>
-          <span className="schedule-work-group-project">{group.customerName}</span>
-        </span>
-      </button>
-      <div className="estimate-work-group-actions">
-        {onOpenEstimate ? <button className="btn ghost sm" type="button" onClick={() => onOpenEstimate(group.estimateId)}><Icon name="arrowRight" /><LocalizedText text={"Open Estimate"} /></button> : null}
-      </div>
-    </header>
-    <WorkGroupMeta count={group.rows.length} countLabel="Sections" late={group.lateCount} blocked={group.blockedCount} needsUpdate={group.needsUpdateCount}
-      effort={null} progress={group.progress} nearestDue={group.nearestDue} updatedAt={group.updatedAt} manager={null} />
-    {expanded ? <div className="estimate-work-sections" id={`${group.key}-items`}>{group.rows.map((record) => {
-      const urgency = assignmentUrgency(record, todayIso);
-      const next = assignmentNextAction(record);
-      return <section className="estimate-work-section" key={record.assignmentId}>
-        <div className="estimate-work-section-title"><strong>{record.sectionCode} · <LocalizedText text={sectionName(record.sectionCode)} /></strong><Badge tone={ASSIGNMENT_TONE[urgency]}><LocalizedText text={record.status} /></Badge></div>
-        <p><EstimateNextActionDetail record={record} code={next.code} /></p>
-        <div className="estimate-work-section-meta"><span>{record.role}</span><span><LocalizedText text={"Due Date"} /> {date(record.dueDate ?? record.estimateDueDate)}</span><span>{record.costLineCount} <LocalizedText text={"cost lines"} /></span><span>{Math.round(record.progress)}%</span></div>
-      </section>;
-    })}</div> : null}
-  </article>;
+  return (
+    <article className={`estimate-work-group urgency-${group.urgency}${expanded ? " expanded" : ""}`}>
+      <header className="estimate-work-group-head">
+        <button className="schedule-work-group-toggle" type="button" aria-expanded={expanded} aria-controls={`${group.key}-items`} onClick={onToggle}>
+          <Icon name={expanded ? "chevronDown" : "chevronRight"} />
+          <span className="schedule-work-group-title">
+            <span className="estimate-work-reference">
+              <Badge tone="slate">
+                <LocalizedText text={"Inquiry / Estimate"} />
+              </Badge>
+              <strong className="mono">{group.estimateNumber}</strong>
+              <Badge tone="slate">R{String(group.revision).padStart(2, "0")}</Badge>
+            </span>
+            <strong className="schedule-work-group-name">{group.projectName}</strong>
+            <span className="schedule-work-group-project">{group.customerName}</span>
+          </span>
+        </button>
+        <div className="estimate-work-group-actions">
+          {onOpenEstimate ? (
+            <button className="btn ghost sm" type="button" onClick={() => onOpenEstimate(group.estimateId)}>
+              <Icon name="arrowRight" />
+              <LocalizedText text={"Open Estimate"} />
+            </button>
+          ) : null}
+        </div>
+      </header>
+      <WorkGroupMeta
+        count={group.rows.length}
+        countLabel="Sections"
+        late={group.lateCount}
+        blocked={group.blockedCount}
+        needsUpdate={group.needsUpdateCount}
+        effort={null}
+        progress={group.progress}
+        nearestDue={group.nearestDue}
+        updatedAt={group.updatedAt}
+        manager={null}
+      />
+      {expanded ? (
+        <div className="estimate-work-sections" id={`${group.key}-items`}>
+          {group.rows.map((record) => {
+            const urgency = assignmentUrgency(record, todayIso);
+            const next = assignmentNextAction(record);
+            return (
+              <section className="estimate-work-section" key={record.assignmentId}>
+                <div className="estimate-work-section-title">
+                  <strong>
+                    {record.sectionCode} · <LocalizedText text={sectionName(record.sectionCode)} />
+                  </strong>
+                  <Badge tone={ASSIGNMENT_TONE[urgency]}>
+                    <LocalizedText text={record.status} />
+                  </Badge>
+                </div>
+                <p>
+                  <EstimateNextActionDetail record={record} code={next.code} />
+                </p>
+                <div className="estimate-work-section-meta">
+                  <span>{record.role}</span>
+                  <span>
+                    <LocalizedText text={"Due Date"} /> {date(record.dueDate ?? record.estimateDueDate)}
+                  </span>
+                  <span>
+                    {record.costLineCount} <LocalizedText text={"cost lines"} />
+                  </span>
+                  <span>{Math.round(record.progress)}%</span>
+                </div>
+              </section>
+            );
+          })}
+        </div>
+      ) : null}
+    </article>
+  );
 }
 
 function EstimateNextActionDetail({ record, code }: { record: MyEstimateAssignment; code: string }) {
-  const section = <><strong>{record.sectionCode} · <LocalizedText text={sectionName(record.sectionCode)} /></strong> </>;
-  if (code === "waiting-supplier") return <>{section}<LocalizedText text={"is waiting for a supplier price. Follow up on the quotation, then update this section."} /></>;
-  if (code === "waiting-information") return <>{section}<LocalizedText text={"is waiting for information from"} /> {record.estimateOwnerName}.</>;
-  if (code === "first-cost-line") return <>{section}<LocalizedText text={"has no cost line yet. Add the first line in Cost Items."} /></>;
-  if (code === "continue-costing") return <>{section}<LocalizedText text={"has"} /> {record.costLineCount} <LocalizedText text={"cost lines at"} /> {Math.round(record.progress)}%. <LocalizedText text={"Continue costing and update the section status."} /></>;
+  const section = (
+    <>
+      <strong>
+        {record.sectionCode} · <LocalizedText text={sectionName(record.sectionCode)} />
+      </strong>{" "}
+    </>
+  );
+  if (code === "waiting-supplier")
+    return (
+      <>
+        {section}
+        <LocalizedText text={"is waiting for a supplier price. Follow up on the quotation, then update this section."} />
+      </>
+    );
+  if (code === "waiting-information")
+    return (
+      <>
+        {section}
+        <LocalizedText text={"is waiting for information from"} /> {record.estimateOwnerName}.
+      </>
+    );
+  if (code === "first-cost-line")
+    return (
+      <>
+        {section}
+        <LocalizedText text={"has no cost line yet. Add the first line in Cost Items."} />
+      </>
+    );
+  if (code === "continue-costing")
+    return (
+      <>
+        {section}
+        <LocalizedText text={"has"} /> {record.costLineCount} <LocalizedText text={"cost lines at"} /> {Math.round(record.progress)}%.{" "}
+        <LocalizedText text={"Continue costing and update the section status."} />
+      </>
+    );
   return <LocalizedText text={assignmentNextAction(record).detail} />;
 }
 
@@ -1071,16 +1413,30 @@ function useMyEstimateAssignments(enabled: boolean) {
   const [error, setError] = useState("");
   const load = useCallback(async () => {
     if (!enabled) return;
-    setLoading(true); setError("");
-    try { setAssignments(await listMyEstimateAssignments({ includeClosed: true })); }
-    catch (requestError) { setError(toError(requestError)); }
-    finally { setLoading(false); }
+    setLoading(true);
+    setError("");
+    try {
+      setAssignments(await listMyEstimateAssignments({ includeClosed: true }));
+    } catch (requestError) {
+      setError(toError(requestError));
+    } finally {
+      setLoading(false);
+    }
   }, [enabled]);
   useEffect(() => {
-    const timer = window.setTimeout(() => { void load(); }, 0);
+    const timer = window.setTimeout(() => {
+      void load();
+    }, 0);
     return () => window.clearTimeout(timer);
   }, [load]);
-  return { assignments, loading, error, reload: () => { void load(); } };
+  return {
+    assignments,
+    loading,
+    error,
+    reload: () => {
+      void load();
+    },
+  };
 }
 
 export function ProductionMyWork({
@@ -1110,7 +1466,7 @@ export function ProductionMyWork({
   const [inquirySaving, setInquirySaving] = useState<number | null>(null);
   // The dialog saves against the row it opened on; the latest row is offered only after its own conflict.
   const [editingFor, setEditingFor] = useState<MyWorkItem | null>(null);
-  const editingLatest = editingFor ? items.find((item) => item.taskId === editingFor.taskId) ?? null : null;
+  const editingLatest = editingFor ? (items.find((item) => item.taskId === editingFor.taskId) ?? null) : null;
   const [personalTaskFor, setPersonalTaskFor] = useState<{ parentId: number | null } | null>(null);
   const [taskFilter, setTaskFilter] = useState<MyWorkFilter>("open");
   const [sourceFilter, setSourceFilter] = useState<MyWorkSource>("all");
@@ -1120,11 +1476,20 @@ export function ProductionMyWork({
   // The chosen sort is remembered per user, like the expanded groups.
   const sortStorageKey = `tomas-tech-my-work-sort:${bootstrap.user.id}`;
   const [taskSort, setTaskSortState] = useState<MyWorkSort>(() => {
-    try { const stored = window.localStorage.getItem(sortStorageKey); return stored === "due" || stored === "project" ? stored : "priority"; } catch { return "priority"; }
+    try {
+      const stored = window.localStorage.getItem(sortStorageKey);
+      return stored === "due" || stored === "project" ? stored : "priority";
+    } catch {
+      return "priority";
+    }
   });
   const setTaskSort = (next: MyWorkSort) => {
     setTaskSortState(next);
-    try { window.localStorage.setItem(sortStorageKey, next); } catch { /* The sort is a convenience when storage is blocked. */ }
+    try {
+      window.localStorage.setItem(sortStorageKey, next);
+    } catch {
+      /* The sort is a convenience when storage is blocked. */
+    }
   };
   const [taskSearch, setTaskSearch] = useState("");
   const [projectFilter, setProjectFilter] = useState("all");
@@ -1139,36 +1504,39 @@ export function ProductionMyWork({
         const stored = window.localStorage.getItem(expansionStorageKey);
         expansionOwner.current = expansionStorageKey;
         setExpandedGroups(parseMyWorkExpansion(stored));
-      } catch { setExpandedGroups({}); }
+      } catch {
+        setExpandedGroups({});
+      }
       setExpansionReady(true);
     }, 0);
     return () => window.clearTimeout(timer);
   }, [expansionStorageKey]);
   useEffect(() => {
     if (!expansionReady || expansionOwner.current !== expansionStorageKey) return;
-    try { window.localStorage.setItem(expansionStorageKey, JSON.stringify(expandedGroups)); }
-    catch { /* Expansion preferences are optional when storage is blocked. */ }
+    try {
+      window.localStorage.setItem(expansionStorageKey, JSON.stringify(expandedGroups));
+    } catch {
+      /* Expansion preferences are optional when storage is blocked. */
+    }
   }, [expandedGroups, expansionReady, expansionStorageKey]);
   const isGroupExpanded = useCallback((key: string, urgent: boolean) => expandedGroups[key] ?? urgent, [expandedGroups]);
   const toggleGroup = useCallback((key: string, current: boolean) => {
     setExpandedGroups((values) => ({ ...values, [key]: !current }));
   }, []);
-  const estimateAssignmentsPanel = bootstrap.permissions.includes("estimate.read")
-    && (sourceFilter === "all" || sourceFilter === "estimate")
-    && taskFilter !== "blocked"
-    && taskFilter !== "waiting"
-    ? <MyEstimateAssignmentsPanel
-      assignments={estimateQueue.assignments}
-      loading={estimateQueue.loading}
-      error={estimateQueue.error}
-      todayIso={todayIso}
-      filter={taskFilter}
-      isExpanded={isGroupExpanded}
-      onToggle={toggleGroup}
-      onOpenEstimate={openEstimate}
-      onReload={estimateQueue.reload}
-    />
-    : null;
+  const estimateAssignmentsPanel =
+    bootstrap.permissions.includes("estimate.read") && (sourceFilter === "all" || sourceFilter === "estimate") && taskFilter !== "blocked" && taskFilter !== "waiting" ? (
+      <MyEstimateAssignmentsPanel
+        assignments={estimateQueue.assignments}
+        loading={estimateQueue.loading}
+        error={estimateQueue.error}
+        todayIso={todayIso}
+        filter={taskFilter}
+        isExpanded={isGroupExpanded}
+        onToggle={toggleGroup}
+        onOpenEstimate={openEstimate}
+        onReload={estimateQueue.reload}
+      />
+    ) : null;
 
   // Only the newest reload may land: a quick save starts one in the background, and an older one
   // finishing later must not bring back the values (and row version) the save just replaced.
@@ -1176,7 +1544,8 @@ export function ProductionMyWork({
   const load = useCallback(async () => {
     if (!allowed) return;
     const request = ++loadSequence.current;
-    setLoading(true); setError("");
+    setLoading(true);
+    setError("");
     try {
       const [loadedItems, loadedUpdates, loadedInquiryWork] = await Promise.all([
         apiRequest<MyWorkItem[]>("/api/v1/me/work"),
@@ -1197,7 +1566,9 @@ export function ProductionMyWork({
   }, [allowed]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => { void load(); }, 0);
+    const timer = window.setTimeout(() => {
+      void load();
+    }, 0);
     return () => window.clearTimeout(timer);
   }, [load]);
 
@@ -1206,16 +1577,22 @@ export function ProductionMyWork({
   const open = useMemo(() => assignedItems.filter((item) => item.status !== "Done"), [assignedItems]);
   const actionableOpen = useMemo(() => open.filter((item) => item.canUpdate), [open]);
   const needsUpdate = useMemo(() => actionableOpen.filter(workNeedsUpdate), [actionableOpen]);
-  const dueThisWeek = useMemo(() => actionableOpen.filter((item) => {
-    const days = daysFromToday(workEffectiveFinish(item));
-    return days !== null && days >= 0 && days <= 7;
-  }), [actionableOpen]);
+  const dueThisWeek = useMemo(
+    () =>
+      actionableOpen.filter((item) => {
+        const days = daysFromToday(workEffectiveFinish(item));
+        return days !== null && days >= 0 && days <= 7;
+      }),
+    [actionableOpen],
+  );
   const waiting = useMemo(() => assignedItems.filter((item) => item.pendingRequest), [assignedItems]);
   const actionableEstimateAssignments = useMemo(() => estimateQueue.assignments.filter(isActionableAssignment), [estimateQueue.assignments]);
   const lateEstimateAssignments = useMemo(() => actionableEstimateAssignments.filter((record) => assignmentUrgency(record, todayIso) === "overdue"), [actionableEstimateAssignments, todayIso]);
   const dueEstimateAssignments = useMemo(() => actionableEstimateAssignments.filter((record) => assignmentUrgency(record, todayIso) === "due-soon"), [actionableEstimateAssignments, todayIso]);
-  const estimateAssignmentsNeedingUpdate = useMemo(() => actionableEstimateAssignments.filter((record) => assignmentUrgency(record, todayIso) === "overdue"
-    || record.status === "Not Started" || quietDays(record.updatedAt) > 5), [actionableEstimateAssignments, todayIso]);
+  const estimateAssignmentsNeedingUpdate = useMemo(
+    () => actionableEstimateAssignments.filter((record) => assignmentUrgency(record, todayIso) === "overdue" || record.status === "Not Started" || quietDays(record.updatedAt) > 5),
+    [actionableEstimateAssignments, todayIso],
+  );
   const projectOptions = useMemo(() => Array.from(new Map(items.map((item) => [String(item.projectId), `${item.projectNo} · ${item.projectName}`])).entries()), [items]);
   const personalTaskParents = useMemo(() => items.filter(offersPersonalTask), [items]);
   const visibleScheduleItems = useMemo(() => {
@@ -1226,34 +1603,32 @@ export function ProductionMyWork({
       if (sourceFilter === "project" && item.isOwnDetail) return false;
       if (sourceFilter === "personal" && !item.isOwnDetail) return false;
       if (projectFilter !== "all" && String(item.projectId) !== projectFilter) return false;
-      if (needle && ![item.projectNo, item.projectName, item.wbs, item.name, item.phaseName ?? "", item.status]
-        .some((value) => value.toLocaleLowerCase().includes(needle))) return false;
+      if (needle && ![item.projectNo, item.projectName, item.wbs, item.name, item.phaseName ?? "", item.status].some((value) => value.toLocaleLowerCase().includes(needle))) return false;
       return true;
     });
   }, [items, projectFilter, sourceFilter, taskSearch]);
   const scheduleGroups = useMemo(() => {
     const groups = groupScheduleWork(visibleScheduleItems.filter((item) => !item.unassigned)).filter((group) => group.items.some((item) => matchesWorkFilter(item, taskFilter)));
-    if (taskSort === "project") return [...groups].sort((left, right) => `${left.projectNo}:${left.phaseWbs ?? ""}`.localeCompare(`${right.projectNo}:${right.phaseWbs ?? ""}`, undefined, { numeric: true }));
+    if (taskSort === "project")
+      return [...groups].sort((left, right) => `${left.projectNo}:${left.phaseWbs ?? ""}`.localeCompare(`${right.projectNo}:${right.phaseWbs ?? ""}`, undefined, { numeric: true }));
     if (taskSort === "due") return [...groups].sort((left, right) => (left.nearestDue ?? "9999-12-31").localeCompare(right.nearestDue ?? "9999-12-31"));
     return groups;
   }, [taskFilter, taskSort, visibleScheduleItems]);
   // Shown under "All open" only, so the Late / Blocked / Needs update drill-downs stay the reader's own.
-  const unassignedGroups = useMemo(() => taskFilter !== "open" ? [] : groupScheduleWork(visibleScheduleItems.filter((item) => item.unassigned))
-    .map((group) => ({ ...group, key: `unassigned:${group.key}` })), [taskFilter, visibleScheduleItems]);
+  const unassignedGroups = useMemo(
+    () => (taskFilter !== "open" ? [] : groupScheduleWork(visibleScheduleItems.filter((item) => item.unassigned)).map((group) => ({ ...group, key: `unassigned:${group.key}` }))),
+    [taskFilter, visibleScheduleItems],
+  );
   const visibleEstimateGroups = useMemo(() => {
     if (sourceFilter !== "all" && sourceFilter !== "estimate") return [];
     if (projectFilter !== "all") return [];
     const needle = taskSearch.trim().toLocaleLowerCase();
     return groupEstimateWork(estimateQueue.assignments, todayIso)
       .filter((group) => estimateGroupMatchesFilter(group, taskFilter, todayIso))
-      .filter((group) => !needle || [group.estimateNumber, group.projectName, group.customerName]
-        .some((value) => value.toLocaleLowerCase().includes(needle)));
+      .filter((group) => !needle || [group.estimateNumber, group.projectName, group.customerName].some((value) => value.toLocaleLowerCase().includes(needle)));
   }, [estimateQueue.assignments, projectFilter, sourceFilter, taskFilter, taskSearch, todayIso]);
   const activeWorkGroups = useMemo(() => {
-    const groups = [
-      ...scheduleGroups.map((group) => ({ kind: "schedule" as const, group })),
-      ...visibleEstimateGroups.map((group) => ({ kind: "estimate" as const, group })),
-    ];
+    const groups = [...scheduleGroups.map((group) => ({ kind: "schedule" as const, group })), ...visibleEstimateGroups.map((group) => ({ kind: "estimate" as const, group }))];
     return sortMyWorkGroups(groups, taskSort, (entry) => {
       return entry.kind === "schedule" ? `${entry.group.projectNo}:${entry.group.phaseWbs ?? ""}` : entry.group.estimateNumber;
     });
@@ -1266,78 +1641,115 @@ export function ProductionMyWork({
     onMyWorkUrgentCountChange?.(needsUpdate.length);
   }, [needsUpdate.length, onMyWorkUrgentCountChange]);
 
-  const saveProgress = useCallback(async (item: MyWorkItem, input: MyWorkProgressInput, message: string) => {
-    setSaving((current) => new Set(current).add(item.taskId));
-    try {
-      const saved = await apiRequest<{ rowVersion: string }>(`/api/v1/schedule/tasks/${item.taskId}/updates`, {
-        method: "POST",
-        body: JSON.stringify({ scheduleVersion: item.scheduleVersion, rowVersion: item.rowVersion, ...input }),
-      });
-      // Show the saved values at once; the reload behind it brings the server's derived flags and times.
-      loadSequence.current += 1;
-      setItems((current) => current.map((entry) => entry.taskId === item.taskId ? { ...entry, ...input, rowVersion: saved.rowVersion } : entry));
-      notify(message);
-      void load();
-    } catch (requestError) {
-      if (isConcurrencyConflict(requestError)) {
-        notify(`${item.projectNo} · ${item.wbs} changed by another user; reloaded the latest data`);
-        await load();
-      } else {
-        setError(toError(requestError));
+  const saveProgress = useCallback(
+    async (item: MyWorkItem, input: MyWorkProgressInput, message: string) => {
+      setSaving((current) => new Set(current).add(item.taskId));
+      try {
+        const saved = await apiRequest<{ rowVersion: string }>(`/api/v1/schedule/tasks/${item.taskId}/updates`, {
+          method: "POST",
+          body: JSON.stringify({ scheduleVersion: item.scheduleVersion, rowVersion: item.rowVersion, ...input }),
+        });
+        // Show the saved values at once; the reload behind it brings the server's derived flags and times.
+        loadSequence.current += 1;
+        setItems((current) => current.map((entry) => (entry.taskId === item.taskId ? { ...entry, ...input, rowVersion: saved.rowVersion } : entry)));
+        notify(message);
+        void load();
+      } catch (requestError) {
+        if (isConcurrencyConflict(requestError)) {
+          notify(`${item.projectNo} · ${item.wbs} changed by another user; reloaded the latest data`);
+          await load();
+        } else {
+          setError(toError(requestError));
+        }
+      } finally {
+        setSaving((current) => {
+          const next = new Set(current);
+          next.delete(item.taskId);
+          return next;
+        });
       }
-    } finally {
-      setSaving((current) => {
-        const next = new Set(current);
-        next.delete(item.taskId);
-        return next;
-      });
-    }
-  }, [load, notify]);
+    },
+    [load, notify],
+  );
 
   // Resource-task progress (no schedule row): the same one-click control, saved against the task's row version.
   // The saved task replaces the card at once, so a second click sends the new row version; the error of a
   // refused save stays on screen because only a success or a conflict reloads.
-  const saveInquiryProgress = useCallback(async (task: ResourceTask, patch: Partial<MyWorkProgressInput>, message: string) => {
-    setInquirySaving(task.id);
-    try {
-      const saved = await apiRequest<ResourceTask>(`/api/v1/resource-tasks/${task.id}/progress`, { method: "POST", body: JSON.stringify({
-        rowVersion: task.rowVersion, percentComplete: Number(task.percentComplete), status: task.status,
-        actualStart: task.actualStart, actualFinish: task.actualFinish, forecastFinish: null, remark: null, ...patch,
-      }) });
-      loadSequence.current += 1;
-      setInquiryWork((current) => current.map((entry) => entry.id === task.id ? { ...entry, percentComplete: saved.percentComplete, status: saved.status,
-        actualStart: saved.actualStart, actualFinish: saved.actualFinish, rowVersion: saved.rowVersion, updatedAt: saved.updatedAt } : entry));
-      notify(message);
-      void load();
-    } catch (requestError) {
-      if (isConcurrencyConflict(requestError)) {
-        notify(`${task.reference} · ${uiText("Plan.changedReloaded")}`);
-        await load();
-      } else {
-        setError(toError(requestError));
+  const saveInquiryProgress = useCallback(
+    async (task: ResourceTask, patch: Partial<MyWorkProgressInput>, message: string) => {
+      setInquirySaving(task.id);
+      try {
+        const saved = await apiRequest<ResourceTask>(`/api/v1/resource-tasks/${task.id}/progress`, {
+          method: "POST",
+          body: JSON.stringify({
+            rowVersion: task.rowVersion,
+            percentComplete: Number(task.percentComplete),
+            status: task.status,
+            actualStart: task.actualStart,
+            actualFinish: task.actualFinish,
+            forecastFinish: null,
+            remark: null,
+            ...patch,
+          }),
+        });
+        loadSequence.current += 1;
+        setInquiryWork((current) =>
+          current.map((entry) =>
+            entry.id === task.id
+              ? {
+                  ...entry,
+                  percentComplete: saved.percentComplete,
+                  status: saved.status,
+                  actualStart: saved.actualStart,
+                  actualFinish: saved.actualFinish,
+                  rowVersion: saved.rowVersion,
+                  updatedAt: saved.updatedAt,
+                }
+              : entry,
+          ),
+        );
+        notify(message);
+        void load();
+      } catch (requestError) {
+        if (isConcurrencyConflict(requestError)) {
+          notify(`${task.reference} · ${uiText("Plan.changedReloaded")}`);
+          await load();
+        } else {
+          setError(toError(requestError));
+        }
+      } finally {
+        setInquirySaving(null);
       }
-    } finally {
-      setInquirySaving(null);
-    }
-  }, [load, notify, uiText]);
+    },
+    [load, notify, uiText],
+  );
 
-  const patchProgress = useCallback((item: MyWorkItem, patch: Partial<MyWorkProgressInput>, message: string) => {
-    const input: MyWorkProgressInput = {
-      percentComplete: Number(item.percentComplete),
-      status: item.status,
-      actualStart: item.actualStart,
-      actualFinish: item.actualFinish,
-      forecastFinish: item.forecastFinish,
-      remark: item.remark ?? "",
-      ...patch,
-    };
-    void saveProgress(item, input, message);
-  }, [saveProgress]);
+  const patchProgress = useCallback(
+    (item: MyWorkItem, patch: Partial<MyWorkProgressInput>, message: string) => {
+      const input: MyWorkProgressInput = {
+        percentComplete: Number(item.percentComplete),
+        status: item.status,
+        actualStart: item.actualStart,
+        actualFinish: item.actualFinish,
+        forecastFinish: item.forecastFinish,
+        remark: item.remark ?? "",
+        ...patch,
+      };
+      void saveProgress(item, input, message);
+    },
+    [saveProgress],
+  );
 
   if (!allowed) {
     if (bootstrap.permissions.includes("crm.read")) return <CrmMyWork openOpportunity={openCrmOpportunity} />;
     const missing = [!hasProgressPermission ? "schedule.progress" : "", !hasReadPermission ? "schedule.read" : ""].filter(Boolean).join(" + ");
-    return <><PageHeader eyebrow="PERSONAL WORKSPACE" title={uiText("My Work")} subtitle={uiText("Schedule work assigned to the signed-in user")} /><PermissionNotice permission={missing} message={uiText("Ask an administrator for Schedule read and progress permissions.")} />{estimateAssignmentsPanel}</>;
+    return (
+      <>
+        <PageHeader eyebrow="PERSONAL WORKSPACE" title={uiText("My Work")} subtitle={uiText("Schedule work assigned to the signed-in user")} />
+        <PermissionNotice permission={missing} message={uiText("Ask an administrator for Schedule read and progress permissions.")} />
+        {estimateAssignmentsPanel}
+      </>
+    );
   }
 
   // One summary bar (pegasus-design C.2): every cell counts and sets the filter it names.
@@ -1352,207 +1764,429 @@ export function ProductionMyWork({
   const sourceOptions = MY_WORK_SOURCE_OPTIONS.filter((option) => MY_WORK_SOURCE_AVAILABILITY[tab].includes(option.id));
   const activeList = tab === "active" && sourceFilter !== "crm";
 
-  return <div className="pg-skin my-work-pg">
-    <PageHeader
-      eyebrow="MY WORK"
-      title={uiText("My Work")}
-      subtitle={uiText("You update the tasks assigned to you. Dates and scope belong to the project manager — use Request more days when you need a change.")}
-      actions={<>
-        <button className="btn primary" type="button" disabled={loading || !personalTaskParents.length} title={localizeCopy(personalTaskParents.length ? "Add work inside an eligible assigned schedule task" : "No eligible assigned schedule task is available")} onClick={() => setPersonalTaskFor({ parentId: null })}><Icon name="plus" /><LocalizedText text={"Add Personal Task"} /></button>
-        <button className="btn ghost" type="button" disabled={loading || estimateQueue.loading} onClick={() => { void load(); estimateQueue.reload(); }}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button>
-      </>}
-    />
-    <WorkDaysPanel notify={notify} />
-    <div className="pg-summary my-work-summary" role="group" aria-label={localizeCopy("Task overview")} data-guide="work.summary">
-      {summaryCells.map((cell) => <button key={cell.id} type="button" className={`pg-cell${cell.tone && cell.value ? ` ${cell.tone}` : ""}`} aria-pressed={tab === "active" && taskFilter === cell.id}
-        onClick={() => { setTab("active"); setSourceFilter("all"); setTaskFilter(cell.id); }}>
-        <span className="pg-cell-label"><LocalizedText text={cell.label} /></span>
-        <span className="pg-cell-value">{cell.value}</span>
-      </button>)}
-    </div>
-    <Tabs<MyWorkTab> active={tab} onChange={(nextTab) => {
-      setTab(nextTab);
-      if (!MY_WORK_SOURCE_AVAILABILITY[nextTab].includes(sourceFilter)) setSourceFilter("all");
-    }} tabs={[
-      { id: "new", label: "New Assignments", count: newAssignmentCount },
-      { id: "active", label: "My Active Work", count: open.length + actionableEstimateAssignments.length },
-      { id: "queue", label: "WorkQueue.myTab" },
-      { id: "updates", label: "My Updates", count: updates.length },
-    ]} />
-    {sourceOptions.length > 1 ? <div className="toolbar my-work-toolbar">
-      <label className="select-field my-work-source">
-        <span className="sr-only"><LocalizedText text={"Filter by source"} /></span>
-        <select value={sourceFilter} aria-label={localizeCopy("Filter by source")} onChange={(event) => { const next = event.target.value as MyWorkSource; setSourceFilter(next); if (next === "estimate") setProjectFilter("all"); }}>
-          {sourceOptions.map((option) => <option key={option.id} value={option.id}>{localizeCopy(option.id === "all" ? "MyWork.allSources" : option.label)}</option>)}
-        </select>
-        <Icon name="chevronDown" />
-      </label>
-      {activeList && sourceFilter !== "estimate" ? <label className="select-field my-work-project-filter">
-        <span className="sr-only"><LocalizedText text={"Project"} /></span>
-        <select value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)} aria-label={localizeCopy("Project")}>
-          <option value="all">{localizeCopy("All projects")}</option>
-          {projectOptions.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
-        </select>
-        <Icon name="chevronDown" />
-      </label> : null}
-      {activeList ? <label className="select-field my-work-sort">
-        <span className="sr-only"><LocalizedText text={"Sort tasks"} /></span>
-        <select value={taskSort} onChange={(event) => setTaskSort(event.target.value as MyWorkSort)} aria-label={localizeCopy("Sort tasks")}>
-          <option value="priority">{localizeCopy("Priority first")}</option>
-          <option value="due">{localizeCopy("Due date")}</option>
-          <option value="project">{localizeCopy("Project & WBS")}</option>
-        </select>
-        <Icon name="chevronDown" />
-      </label> : null}
-      {activeList ? <SearchInput link="q" value={taskSearch} onChange={setTaskSearch} placeholder="Search project, WBS or task…" /> : null}
-    </div> : null}
-    {error ? <LoadError message={error} retry={() => { void load(); }} /> : null}
-
-    {tab === "new" ? <ResourceTaskWorkspace
-      bootstrap={bootstrap}
-      notify={notify}
-      mine
-      initialFilter="Acknowledgment"
-      variant="new-assignments"
-      sourceFilter={sourceFilter === "crm" ? "all" : sourceFilter}
-      isGroupExpanded={isGroupExpanded}
-      onToggleGroup={toggleGroup}
-      openProjectSchedule={openProjectSchedule}
-      onViewActive={() => setTab("active")}
-      onChanged={() => { void load(); onNewAssignmentChanged?.(); }}
-    /> : null}
-
-    {tab === "active" ? <>
-      {(sourceFilter === "all" || sourceFilter === "crm") && bootstrap.permissions.includes("crm.read") ? <CrmMyWork openOpportunity={openCrmOpportunity} /> : null}
-      {sourceFilter === "all" || sourceFilter === "project" ? <MyIssuesPanel notify={notify} openIssueBatch={openIssueBatch} /> : null}
-      {sourceFilter !== "crm" ? <>
-      <Panel
-        title={taskFilter === "attention" ? uiText("Needs your update") : `${activeWorkGroups.length} ${uiText("work groups")}`}
-        subtitle={taskFilter === "attention" ? uiText("Late, blocked or quiet for too long — clear these first") : undefined}
-        flush
-      >
-        {activeEstimateError ? <LoadError message={activeEstimateError} retry={estimateQueue.reload} /> : null}
-
-        <div className="my-work-task-list work-group-list">
-          {activeWorkGroups.map((entry) => entry.kind === "estimate"
-            ? <EstimateWorkGroupCard key={entry.group.key} group={entry.group} todayIso={todayIso} expanded={isGroupExpanded(entry.group.key, entry.group.urgency <= 2)} onToggle={() => toggleGroup(entry.group.key, isGroupExpanded(entry.group.key, entry.group.urgency <= 2))} onOpenEstimate={openEstimate} />
-            : <ProductionScheduleWorkGroup
-              key={entry.group.key}
-              group={entry.group}
-              expanded={isGroupExpanded(entry.group.key, entry.group.urgency <= 2)}
-              onToggle={() => toggleGroup(entry.group.key, isGroupExpanded(entry.group.key, entry.group.urgency <= 2))}
-              saving={saving}
-              notify={notify}
-              patchProgress={patchProgress}
-              openProjectSchedule={openProjectSchedule}
-              onEdit={setEditingFor}
-              onRequest={setRequestFor}
-              onAdd={(item) => setPersonalTaskFor({ parentId: item.taskId })}
-              onDelete={async (item) => {
-              if (!(await confirmDialog(`${localizeCopy("Delete your task")} “${item.name}”?`, { danger: true }))) return;
-              setSaving((current) => new Set(current).add(item.taskId));
-              try {
-                await apiRequest(`/api/v1/schedule/tasks/${item.taskId}/details`, {
-                  method: "DELETE",
-                  body: JSON.stringify({ scheduleVersion: item.scheduleVersion, rowVersion: item.rowVersion }),
-                });
-                notify(`${item.wbs} ${localizeCopy("deleted")}`);
-                await load();
-              } catch (requestError) {
-                setError(toError(requestError));
-              } finally {
-                setSaving((current) => { const next = new Set(current); next.delete(item.taskId); return next; });
-              }
+  return (
+    <div className="pg-skin my-work-pg">
+      <PageHeader
+        eyebrow="MY WORK"
+        title={uiText("My Work")}
+        subtitle={uiText("You update the tasks assigned to you. Dates and scope belong to the project manager — use Request more days when you need a change.")}
+        actions={
+          <>
+            <button
+              className="btn primary"
+              type="button"
+              disabled={loading || !personalTaskParents.length}
+              title={localizeCopy(personalTaskParents.length ? "Add work inside an eligible assigned schedule task" : "No eligible assigned schedule task is available")}
+              onClick={() => setPersonalTaskFor({ parentId: null })}
+            >
+              <Icon name="plus" />
+              <LocalizedText text={"Add Personal Task"} />
+            </button>
+            <button
+              className="btn ghost"
+              type="button"
+              disabled={loading || estimateQueue.loading}
+              onClick={() => {
+                void load();
+                estimateQueue.reload();
               }}
-            />)}
-          {!activeWorkGroups.length && !activeLoading && !activeEstimateError ? <EmptyState icon="search" title={uiText("No work groups match these filters")} message={uiText("Try another source, project, status or search term.")} action={<button className="btn default" type="button" onClick={() => { setTaskSearch(""); setProjectFilter("all"); setSourceFilter("all"); setTaskFilter("open"); }}><LocalizedText text={"Clear filters"} /></button>} /> : null}
-          {activeLoading && !activeWorkGroups.length ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading your work…"} /></div> : null}
-        </div>
-      </Panel>
-
-      {unassignedGroups.length ? <Panel title="MyWork.unassignedTitle" subtitle="MyWork.unassignedHint" flush><div className="my-work-task-list work-group-list">
-        {/* Nobody owns these rows, so there is no day request, personal task or delete here (the server sends those flags false). */}
-        {unassignedGroups.map((group) => <ProductionScheduleWorkGroup
-          key={group.key}
-          group={group}
-          expanded={isGroupExpanded(group.key, false)}
-          onToggle={() => toggleGroup(group.key, isGroupExpanded(group.key, false))}
-          saving={saving}
-          notify={notify}
-          patchProgress={patchProgress}
-          openProjectSchedule={openProjectSchedule}
-          onEdit={setEditingFor}
-          onRequest={setRequestFor}
-          onAdd={() => undefined}
-          onDelete={async () => undefined}
-        />)}
-      </div></Panel> : null}
-
-      {(sourceFilter === "all" || sourceFilter === "estimate") && inquiryWork.length ? <Panel title="MyWork.inquiryWork" subtitle="MyWork.inquiryWorkHint" flush><div className="my-work-task-list">
-        {inquiryWork.map((task) => <article key={task.id} className={`my-task-card${isLateAgainstPlan({ status: task.status, planFinish: task.end }, todayIso) ? " late" : ""}${task.status === "Blocked" ? " blocked" : ""}`}>
-          <div className="my-task-card-main">
-            <div className="my-task-identity">
-              <div className="my-task-kicker"><Badge tone="blue"><LocalizedText text={"Inquiry / Estimate"} /></Badge><span className="mono">{task.reference}</span></div>
-              <h3>{task.title}</h3>
-              <div className="my-task-meta"><span>{task.sourceTitle}</span><span><Icon name="calendar" />{date(task.start)} → {date(task.end)}</span>{task.manDays !== null ? <span><Icon name="users" />{task.manDays} <LocalizedText text={"estimated man-days"} /></span> : null}</div>
-            </div>
-            <div className="my-task-progress"><ProgressCell value={Number(task.percentComplete)} /></div>
-          </div>
-          <QuickProgressControls target={{ key: `rt:${task.id}`, wbs: task.reference, percentComplete: Number(task.percentComplete), status: task.status, actualStart: task.actualStart, actualFinish: task.actualFinish, forecastFinish: null, planFinish: task.end, remark: null, updatedAt: task.updatedAt }}
-            editable={inquirySaving === null} taskNotes={false} notify={notify} onPatch={(patch, message) => { void saveInquiryProgress(task, patch, message); }} />
-        </article>)}
-      </div></Panel> : null}
-      {(sourceFilter === "all" || sourceFilter === "project" || sourceFilter === "personal") && !assignedItems.length && !loading ? <Panel title={uiText("My tasks")} flush><EmptyState icon="checkCircle" title={uiText("Nothing assigned to you yet")} message={uiText("When the project manager assigns you a task it appears here.")} /></Panel> : null}
-      {loading && !items.length ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading your live schedule…"} /></div> : null}
-      </> : null}
-    </> : null}
-
-    {tab === "queue" ? <MyWorkQueue bootstrap={bootstrap} notify={notify} openProjectSchedule={openProjectSchedule} openEstimate={openEstimate} openIssueBatch={openIssueBatch} /> : null}
-    {tab === "updates" ? <Panel title={uiText("My Updates")} subtitle={uiText("What you reported, in order")} flush>
-      <div className="panel-body feed">
-        {visibleUpdates.slice(0, 40).map((entry) => <div className="feed-row" key={entry.id}>
-          <span className="avatar sm">{myWorkInitials(bootstrap.user.name)}</span>
-          <div>
-            <p><strong>{entry.projectNo}{entry.wbs ? ` · ${entry.wbs}` : ""} {entry.taskName ?? entry.projectName}</strong></p>
-            <p className="muted">
-              {entry.field === "request" || entry.requestDays > 0
-                ? <><LocalizedText text={"Requested"} /> {entry.requestDays} <LocalizedText text={"more days"} /> · <LocalizedText text={entry.answer ?? "waiting"} /></>
-                : <><LocalizedText text={myWorkAuditFieldLabel(entry.field)} />: {historyValue(entry.field, entry.fromValue) ?? "—"} → {historyValue(entry.field, entry.toValue) ?? "—"}</>}
-              {historyReason(entry)}
-              {entry.answerNote ? ` · PM: “${entry.answerNote}”` : ""}
-            </p>
-          </div>
-          <span className="muted mono" style={{ fontSize: 11 }}>{dateTime(entry.occurredAt)}</span>
-        </div>)}
-        {!visibleUpdates.length && !loading ? <p className="muted"><LocalizedText text={"No update yet."} /></p> : null}
+            >
+              <Icon name="refresh" />
+              <LocalizedText text={"Refresh"} />
+            </button>
+          </>
+        }
+      />
+      <WorkDaysPanel notify={notify} />
+      <div className="pg-summary my-work-summary" role="group" aria-label={localizeCopy("Task overview")} data-guide="work.summary">
+        {summaryCells.map((cell) => (
+          <button
+            key={cell.id}
+            type="button"
+            className={`pg-cell${cell.tone && cell.value ? ` ${cell.tone}` : ""}`}
+            aria-pressed={tab === "active" && taskFilter === cell.id}
+            onClick={() => {
+              setTab("active");
+              setSourceFilter("all");
+              setTaskFilter(cell.id);
+            }}
+          >
+            <span className="pg-cell-label">
+              <LocalizedText text={cell.label} />
+            </span>
+            <span className="pg-cell-value">{cell.value}</span>
+          </button>
+        ))}
       </div>
-    </Panel> : null}
+      <Tabs<MyWorkTab>
+        active={tab}
+        onChange={(nextTab) => {
+          setTab(nextTab);
+          if (!MY_WORK_SOURCE_AVAILABILITY[nextTab].includes(sourceFilter)) setSourceFilter("all");
+        }}
+        tabs={[
+          { id: "new", label: "New Assignments", count: newAssignmentCount },
+          { id: "active", label: "My Active Work", count: open.length + actionableEstimateAssignments.length },
+          { id: "queue", label: "WorkQueue.myTab" },
+          { id: "updates", label: "My Updates", count: updates.length },
+        ]}
+      />
+      {sourceOptions.length > 1 ? (
+        <div className="toolbar my-work-toolbar">
+          <label className="select-field my-work-source">
+            <span className="sr-only">
+              <LocalizedText text={"Filter by source"} />
+            </span>
+            <select
+              value={sourceFilter}
+              aria-label={localizeCopy("Filter by source")}
+              onChange={(event) => {
+                const next = event.target.value as MyWorkSource;
+                setSourceFilter(next);
+                if (next === "estimate") setProjectFilter("all");
+              }}
+            >
+              {sourceOptions.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {localizeCopy(option.id === "all" ? "MyWork.allSources" : option.label)}
+                </option>
+              ))}
+            </select>
+            <Icon name="chevronDown" />
+          </label>
+          {activeList && sourceFilter !== "estimate" ? (
+            <label className="select-field my-work-project-filter">
+              <span className="sr-only">
+                <LocalizedText text={"Project"} />
+              </span>
+              <select value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)} aria-label={localizeCopy("Project")}>
+                <option value="all">{localizeCopy("All projects")}</option>
+                {projectOptions.map(([id, label]) => (
+                  <option key={id} value={id}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+              <Icon name="chevronDown" />
+            </label>
+          ) : null}
+          {activeList ? (
+            <label className="select-field my-work-sort">
+              <span className="sr-only">
+                <LocalizedText text={"Sort tasks"} />
+              </span>
+              <select value={taskSort} onChange={(event) => setTaskSort(event.target.value as MyWorkSort)} aria-label={localizeCopy("Sort tasks")}>
+                <option value="priority">{localizeCopy("Priority first")}</option>
+                <option value="due">{localizeCopy("Due date")}</option>
+                <option value="project">{localizeCopy("Project & WBS")}</option>
+              </select>
+              <Icon name="chevronDown" />
+            </label>
+          ) : null}
+          {activeList ? <SearchInput link="q" value={taskSearch} onChange={setTaskSearch} placeholder="Search project, WBS or task…" /> : null}
+        </div>
+      ) : null}
+      {error ? (
+        <LoadError
+          message={error}
+          retry={() => {
+            void load();
+          }}
+        />
+      ) : null}
 
-    {requestFor ? <ProductionRequestDaysModal item={requestFor} onClose={() => setRequestFor(null)} onSubmitted={async () => {
-      setRequestFor(null);
-      notify(localizeCopy("Request sent to the project manager"));
-      await load();
-    }} /> : null}
-    {editingFor ? <ProgressModal
-      target={{ ...editingFor, remark: workUserNote(editingFor.remark), originalRemark: editingFor.remark }}
-      latestRowVersion={editingLatest?.rowVersion}
-      onClose={() => setEditingFor(null)}
-      onConflict={load}
-      onSubmit={async (input, rowVersion) => {
-        await apiRequest(`/api/v1/schedule/tasks/${editingFor.taskId}/updates`, {
-          method: "POST",
-          body: JSON.stringify({ scheduleVersion: editingFor.scheduleVersion, rowVersion, ...input }),
-        });
-        notify(`${editingFor.wbs} ${localizeCopy("progress updated")}`);
-        await load();
-      }}
-    /> : null}
-    {personalTaskFor ? <ProductionPersonalTaskModal items={personalTaskParents} initialParentId={personalTaskFor.parentId} onClose={() => setPersonalTaskFor(null)} onCreated={async () => {
-      setPersonalTaskFor(null);
-      notify(localizeCopy("Your personal task was added to the live schedule"));
-      await load();
-    }} /> : null}
-  </div>;
+      {tab === "new" ? (
+        <ResourceTaskWorkspace
+          bootstrap={bootstrap}
+          notify={notify}
+          mine
+          initialFilter="Acknowledgment"
+          variant="new-assignments"
+          sourceFilter={sourceFilter === "crm" ? "all" : sourceFilter}
+          isGroupExpanded={isGroupExpanded}
+          onToggleGroup={toggleGroup}
+          openProjectSchedule={openProjectSchedule}
+          onViewActive={() => setTab("active")}
+          onChanged={() => {
+            void load();
+            onNewAssignmentChanged?.();
+          }}
+        />
+      ) : null}
+
+      {tab === "active" ? (
+        <>
+          {(sourceFilter === "all" || sourceFilter === "crm") && bootstrap.permissions.includes("crm.read") ? <CrmMyWork openOpportunity={openCrmOpportunity} /> : null}
+          {sourceFilter === "all" || sourceFilter === "project" ? <MyIssuesPanel notify={notify} openIssueBatch={openIssueBatch} /> : null}
+          {sourceFilter !== "crm" ? (
+            <>
+              <Panel
+                title={taskFilter === "attention" ? uiText("Needs your update") : `${activeWorkGroups.length} ${uiText("work groups")}`}
+                subtitle={taskFilter === "attention" ? uiText("Late, blocked or quiet for too long — clear these first") : undefined}
+                flush
+              >
+                {activeEstimateError ? <LoadError message={activeEstimateError} retry={estimateQueue.reload} /> : null}
+
+                <div className="my-work-task-list work-group-list">
+                  {activeWorkGroups.map((entry) =>
+                    entry.kind === "estimate" ? (
+                      <EstimateWorkGroupCard
+                        key={entry.group.key}
+                        group={entry.group}
+                        todayIso={todayIso}
+                        expanded={isGroupExpanded(entry.group.key, entry.group.urgency <= 2)}
+                        onToggle={() => toggleGroup(entry.group.key, isGroupExpanded(entry.group.key, entry.group.urgency <= 2))}
+                        onOpenEstimate={openEstimate}
+                      />
+                    ) : (
+                      <ProductionScheduleWorkGroup
+                        key={entry.group.key}
+                        group={entry.group}
+                        expanded={isGroupExpanded(entry.group.key, entry.group.urgency <= 2)}
+                        onToggle={() => toggleGroup(entry.group.key, isGroupExpanded(entry.group.key, entry.group.urgency <= 2))}
+                        saving={saving}
+                        notify={notify}
+                        patchProgress={patchProgress}
+                        openProjectSchedule={openProjectSchedule}
+                        onEdit={setEditingFor}
+                        onRequest={setRequestFor}
+                        onAdd={(item) => setPersonalTaskFor({ parentId: item.taskId })}
+                        onDelete={async (item) => {
+                          if (!(await confirmDialog(`${localizeCopy("Delete your task")} “${item.name}”?`, { danger: true }))) return;
+                          setSaving((current) => new Set(current).add(item.taskId));
+                          try {
+                            await apiRequest(`/api/v1/schedule/tasks/${item.taskId}/details`, {
+                              method: "DELETE",
+                              body: JSON.stringify({ scheduleVersion: item.scheduleVersion, rowVersion: item.rowVersion }),
+                            });
+                            notify(`${item.wbs} ${localizeCopy("deleted")}`);
+                            await load();
+                          } catch (requestError) {
+                            setError(toError(requestError));
+                          } finally {
+                            setSaving((current) => {
+                              const next = new Set(current);
+                              next.delete(item.taskId);
+                              return next;
+                            });
+                          }
+                        }}
+                      />
+                    ),
+                  )}
+                  {!activeWorkGroups.length && !activeLoading && !activeEstimateError ? (
+                    <EmptyState
+                      icon="search"
+                      title={uiText("No work groups match these filters")}
+                      message={uiText("Try another source, project, status or search term.")}
+                      action={
+                        <button
+                          className="btn default"
+                          type="button"
+                          onClick={() => {
+                            setTaskSearch("");
+                            setProjectFilter("all");
+                            setSourceFilter("all");
+                            setTaskFilter("open");
+                          }}
+                        >
+                          <LocalizedText text={"Clear filters"} />
+                        </button>
+                      }
+                    />
+                  ) : null}
+                  {activeLoading && !activeWorkGroups.length ? (
+                    <div className="empty">
+                      <span className="spinner" />
+                      <LocalizedText text={"Loading your work…"} />
+                    </div>
+                  ) : null}
+                </div>
+              </Panel>
+
+              {unassignedGroups.length ? (
+                <Panel title="MyWork.unassignedTitle" subtitle="MyWork.unassignedHint" flush>
+                  <div className="my-work-task-list work-group-list">
+                    {/* Nobody owns these rows, so there is no day request, personal task or delete here (the server sends those flags false). */}
+                    {unassignedGroups.map((group) => (
+                      <ProductionScheduleWorkGroup
+                        key={group.key}
+                        group={group}
+                        expanded={isGroupExpanded(group.key, false)}
+                        onToggle={() => toggleGroup(group.key, isGroupExpanded(group.key, false))}
+                        saving={saving}
+                        notify={notify}
+                        patchProgress={patchProgress}
+                        openProjectSchedule={openProjectSchedule}
+                        onEdit={setEditingFor}
+                        onRequest={setRequestFor}
+                        onAdd={() => undefined}
+                        onDelete={async () => undefined}
+                      />
+                    ))}
+                  </div>
+                </Panel>
+              ) : null}
+
+              {(sourceFilter === "all" || sourceFilter === "estimate") && inquiryWork.length ? (
+                <Panel title="MyWork.inquiryWork" subtitle="MyWork.inquiryWorkHint" flush>
+                  <div className="my-work-task-list">
+                    {inquiryWork.map((task) => (
+                      <article
+                        key={task.id}
+                        className={`my-task-card${isLateAgainstPlan({ status: task.status, planFinish: task.end }, todayIso) ? " late" : ""}${task.status === "Blocked" ? " blocked" : ""}`}
+                      >
+                        <div className="my-task-card-main">
+                          <div className="my-task-identity">
+                            <div className="my-task-kicker">
+                              <Badge tone="blue">
+                                <LocalizedText text={"Inquiry / Estimate"} />
+                              </Badge>
+                              <span className="mono">{task.reference}</span>
+                            </div>
+                            <h3>{task.title}</h3>
+                            <div className="my-task-meta">
+                              <span>{task.sourceTitle}</span>
+                              <span>
+                                <Icon name="calendar" />
+                                {date(task.start)} → {date(task.end)}
+                              </span>
+                              {task.manDays !== null ? (
+                                <span>
+                                  <Icon name="users" />
+                                  {task.manDays} <LocalizedText text={"estimated man-days"} />
+                                </span>
+                              ) : null}
+                            </div>
+                          </div>
+                          <div className="my-task-progress">
+                            <ProgressCell value={Number(task.percentComplete)} />
+                          </div>
+                        </div>
+                        <QuickProgressControls
+                          target={{
+                            key: `rt:${task.id}`,
+                            wbs: task.reference,
+                            percentComplete: Number(task.percentComplete),
+                            status: task.status,
+                            actualStart: task.actualStart,
+                            actualFinish: task.actualFinish,
+                            forecastFinish: null,
+                            planFinish: task.end,
+                            remark: null,
+                            updatedAt: task.updatedAt,
+                          }}
+                          editable={inquirySaving === null}
+                          taskNotes={false}
+                          notify={notify}
+                          onPatch={(patch, message) => {
+                            void saveInquiryProgress(task, patch, message);
+                          }}
+                        />
+                      </article>
+                    ))}
+                  </div>
+                </Panel>
+              ) : null}
+              {(sourceFilter === "all" || sourceFilter === "project" || sourceFilter === "personal") && !assignedItems.length && !loading ? (
+                <Panel title={uiText("My tasks")} flush>
+                  <EmptyState icon="checkCircle" title={uiText("Nothing assigned to you yet")} message={uiText("When the project manager assigns you a task it appears here.")} />
+                </Panel>
+              ) : null}
+              {loading && !items.length ? (
+                <div className="empty">
+                  <span className="spinner" />
+                  <LocalizedText text={"Loading your live schedule…"} />
+                </div>
+              ) : null}
+            </>
+          ) : null}
+        </>
+      ) : null}
+
+      {tab === "queue" ? <MyWorkQueue bootstrap={bootstrap} notify={notify} openProjectSchedule={openProjectSchedule} openEstimate={openEstimate} openIssueBatch={openIssueBatch} /> : null}
+      {tab === "updates" ? (
+        <Panel title={uiText("My Updates")} subtitle={uiText("What you reported, in order")} flush>
+          <div className="panel-body feed">
+            {visibleUpdates.slice(0, 40).map((entry) => (
+              <div className="feed-row" key={entry.id}>
+                <span className="avatar sm">{myWorkInitials(bootstrap.user.name)}</span>
+                <div>
+                  <p>
+                    <strong>
+                      {entry.projectNo}
+                      {entry.wbs ? ` · ${entry.wbs}` : ""} {entry.taskName ?? entry.projectName}
+                    </strong>
+                  </p>
+                  <p className="muted">
+                    {entry.field === "request" || entry.requestDays > 0 ? (
+                      <>
+                        <LocalizedText text={"Requested"} /> {entry.requestDays} <LocalizedText text={"more days"} /> · <LocalizedText text={entry.answer ?? "waiting"} />
+                      </>
+                    ) : (
+                      <>
+                        <LocalizedText text={myWorkAuditFieldLabel(entry.field)} />: {historyValue(entry.field, entry.fromValue) ?? "—"} → {historyValue(entry.field, entry.toValue) ?? "—"}
+                      </>
+                    )}
+                    {historyReason(entry)}
+                    {entry.answerNote ? ` · PM: “${entry.answerNote}”` : ""}
+                  </p>
+                </div>
+                <span className="muted mono" style={{ fontSize: 11 }}>
+                  {dateTime(entry.occurredAt)}
+                </span>
+              </div>
+            ))}
+            {!visibleUpdates.length && !loading ? (
+              <p className="muted">
+                <LocalizedText text={"No update yet."} />
+              </p>
+            ) : null}
+          </div>
+        </Panel>
+      ) : null}
+
+      {requestFor ? (
+        <ProductionRequestDaysModal
+          item={requestFor}
+          onClose={() => setRequestFor(null)}
+          onSubmitted={async () => {
+            setRequestFor(null);
+            notify(localizeCopy("Request sent to the project manager"));
+            await load();
+          }}
+        />
+      ) : null}
+      {editingFor ? (
+        <ProgressModal
+          target={{ ...editingFor, remark: workUserNote(editingFor.remark), originalRemark: editingFor.remark }}
+          latestRowVersion={editingLatest?.rowVersion}
+          onClose={() => setEditingFor(null)}
+          onConflict={load}
+          onSubmit={async (input, rowVersion) => {
+            await apiRequest(`/api/v1/schedule/tasks/${editingFor.taskId}/updates`, {
+              method: "POST",
+              body: JSON.stringify({ scheduleVersion: editingFor.scheduleVersion, rowVersion, ...input }),
+            });
+            notify(`${editingFor.wbs} ${localizeCopy("progress updated")}`);
+            await load();
+          }}
+        />
+      ) : null}
+      {personalTaskFor ? (
+        <ProductionPersonalTaskModal
+          items={personalTaskParents}
+          initialParentId={personalTaskFor.parentId}
+          onClose={() => setPersonalTaskFor(null)}
+          onCreated={async () => {
+            setPersonalTaskFor(null);
+            notify(localizeCopy("Your personal task was added to the live schedule"));
+            await load();
+          }}
+        />
+      ) : null}
+    </div>
+  );
 }
 
 type QuickProgressTarget = {
@@ -1576,7 +2210,14 @@ type QuickProgressTarget = {
  * row): those inputs are left out, and a Blocked row changes status first, since the API asks for the
  * blocking reason again on every save and the row has none to send.
  */
-function QuickProgressControls({ target, editable, notify, onPatch, extra, taskNotes = true }: {
+function QuickProgressControls({
+  target,
+  editable,
+  notify,
+  onPatch,
+  extra,
+  taskNotes = true,
+}: {
   target: QuickProgressTarget;
   editable: boolean;
   notify: (message: string) => void;
@@ -1598,75 +2239,152 @@ function QuickProgressControls({ target, editable, notify, onPatch, extra, taskN
     setBlockedReason(null);
     if (patch) onPatch({ ...patch, remark: reason }, `${target.wbs} ${localizeCopy("status changed to")} ${localizeCopy("Blocked")}`);
   };
-  return <div className="quick-controls">
-    <div className="pct-strip" role="group" aria-label={uiText("Percent done")} data-guide="work.percent">
-      {[0, 25, 50, 75, 100].map((value) => <button key={value} type="button" aria-pressed={percent === value} disabled={!editable || (target.status === "Done" && value !== 100) || (target.status === "Blocked" && (value === 100 || !taskNotes))} className={percent === value ? "on" : undefined} onClick={async () => {
-        const patch = percentChangePatch(target, value, today);
-        if (!patch) return;
-        if (needsZeroProgressFinishConfirmation(percent, value === 100 ? "Done" : target.status)
-          && !(await confirmDialog(localizeCopy("This task is at 0%. Confirm that the work is complete and finish it today?")))) return;
-        onPatch(patch, `${target.wbs} ${localizeCopy("progress updated to")} ${value}%`);
-      }}>{value}</button>)}
+  return (
+    <div className="quick-controls">
+      <div className="pct-strip" role="group" aria-label={uiText("Percent done")} data-guide="work.percent">
+        {[0, 25, 50, 75, 100].map((value) => (
+          <button
+            key={value}
+            type="button"
+            aria-pressed={percent === value}
+            disabled={!editable || (target.status === "Done" && value !== 100) || (target.status === "Blocked" && (value === 100 || !taskNotes))}
+            className={percent === value ? "on" : undefined}
+            onClick={async () => {
+              const patch = percentChangePatch(target, value, today);
+              if (!patch) return;
+              if (
+                needsZeroProgressFinishConfirmation(percent, value === 100 ? "Done" : target.status) &&
+                !(await confirmDialog(localizeCopy("This task is at 0%. Confirm that the work is complete and finish it today?")))
+              )
+                return;
+              onPatch(patch, `${target.wbs} ${localizeCopy("progress updated to")} ${value}%`);
+            }}
+          >
+            {value}
+          </button>
+        ))}
+      </div>
+      <select
+        disabled={!editable}
+        value={target.status}
+        aria-label={uiText("Status")}
+        data-guide="work.status"
+        onChange={async (event) => {
+          const status = event.target.value;
+          if (status === "Done" && !canFinishWork(target.status)) return;
+          if (needsZeroProgressFinishConfirmation(percent, status) && !(await confirmDialog(localizeCopy("This task is at 0%. Confirm that the work is complete and finish it today?")))) return;
+          if (status === "Blocked" && !userNote.trim()) {
+            setBlockedReason("");
+            return;
+          }
+          const patch = statusChangePatch(target, status, today);
+          if (patch) onPatch(patch, `${target.wbs} ${localizeCopy("status changed to")} ${localizeCopy(status)}`);
+        }}
+      >
+        <option value={"Not Started"}>
+          <LocalizedText text={"Not Started"} />
+        </option>
+        <option value={"In Progress"}>
+          <LocalizedText text={"In Progress"} />
+        </option>
+        <option value={"Blocked"}>
+          <LocalizedText text={"Blocked"} />
+        </option>
+        <option value={"Done"} disabled={target.status === "Blocked"}>
+          <LocalizedText text={"Done"} />
+        </option>
+      </select>
+      {blockedReason !== null ? (
+        <span className="blocked-reason">
+          <input
+            maxLength={20000}
+            aria-label={localizeCopy("What is blocking it? (required)")}
+            placeholder={localizeCopy("What is blocking it? (required)")}
+            value={blockedReason}
+            onChange={(event) => setBlockedReason(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") saveBlocked();
+              // Escape cancels the reason only; preventDefault keeps the drawer underneath open.
+              if (event.key === "Escape") {
+                event.preventDefault();
+                setBlockedReason(null);
+              }
+            }}
+          />
+          <button className="btn sm primary" type="button" disabled={!blockedReason.trim()} onClick={saveBlocked}>
+            <Icon name="check" />
+            {uiText("MyWork.saveBlocked")}
+          </button>
+          <button className="btn sm ghost" type="button" onClick={() => setBlockedReason(null)}>
+            <LocalizedText text={"Cancel"} />
+          </button>
+        </span>
+      ) : null}
+      {taskNotes && (late || target.forecastFinish) ? (
+        <label className="forecast-inline">
+          <span>
+            <LocalizedText text={"Forecast"} />
+          </span>
+          <DateInput
+            key={`${target.key}:forecast:${target.forecastFinish ?? ""}`}
+            disabled={!editable}
+            defaultValue={target.forecastFinish ?? ""}
+            className={workNeedsForecastFor(target) ? "needs-input" : undefined}
+            min={target.actualStart ?? undefined}
+            onChange={(event) => {
+              // Only a whole date (or a cleared box) reaches here; a half-typed one keeps the stored forecast.
+              const value = event.target.value || null;
+              if (value === (target.forecastFinish ?? null)) return;
+              onPatch({ forecastFinish: value }, `${target.wbs} ${localizeCopy("forecast updated")}`);
+            }}
+          />
+        </label>
+      ) : null}
+      {taskNotes ? (
+        <input
+          key={`${target.key}:note:${userNote}`}
+          className="note-inline"
+          disabled={!editable}
+          placeholder={localizeCopy(target.status === "Blocked" ? "What is blocking it? (required)" : "Note…")}
+          defaultValue={userNote}
+          onBlur={(event) => {
+            const value = event.target.value.trim();
+            if (value === userNote) return;
+            if (target.status === "Blocked" && !value) {
+              notify(localizeCopy("Blocked tasks require a reason"));
+              return;
+            }
+            onPatch({ remark: value }, `${target.wbs} ${localizeCopy("note updated")}`);
+          }}
+        />
+      ) : null}
+      {extra}
     </div>
-    <select disabled={!editable} value={target.status} aria-label={uiText("Status")} data-guide="work.status" onChange={async (event) => {
-      const status = event.target.value;
-      if (status === "Done" && !canFinishWork(target.status)) return;
-      if (needsZeroProgressFinishConfirmation(percent, status)
-        && !(await confirmDialog(localizeCopy("This task is at 0%. Confirm that the work is complete and finish it today?")))) return;
-      if (status === "Blocked" && !userNote.trim()) { setBlockedReason(""); return; }
-      const patch = statusChangePatch(target, status, today);
-      if (patch) onPatch(patch, `${target.wbs} ${localizeCopy("status changed to")} ${localizeCopy(status)}`);
-    }}>
-      <option value={"Not Started"}><LocalizedText text={"Not Started"} /></option><option value={"In Progress"}><LocalizedText text={"In Progress"} /></option><option value={"Blocked"}><LocalizedText text={"Blocked"} /></option><option value={"Done"} disabled={target.status === "Blocked"}><LocalizedText text={"Done"} /></option>
-    </select>
-    {blockedReason !== null ? <span className="blocked-reason">
-      <input maxLength={20000} aria-label={localizeCopy("What is blocking it? (required)")} placeholder={localizeCopy("What is blocking it? (required)")} value={blockedReason} onChange={(event) => setBlockedReason(event.target.value)} onKeyDown={(event) => {
-        if (event.key === "Enter") saveBlocked();
-        // Escape cancels the reason only; preventDefault keeps the drawer underneath open.
-        if (event.key === "Escape") { event.preventDefault(); setBlockedReason(null); }
-      }} />
-      <button className="btn sm primary" type="button" disabled={!blockedReason.trim()} onClick={saveBlocked}><Icon name="check" />{uiText("MyWork.saveBlocked")}</button>
-      <button className="btn sm ghost" type="button" onClick={() => setBlockedReason(null)}><LocalizedText text={"Cancel"} /></button>
-    </span> : null}
-    {taskNotes && (late || target.forecastFinish) ? <label className="forecast-inline"><span><LocalizedText text={"Forecast"} /></span><DateInput
-      key={`${target.key}:forecast:${target.forecastFinish ?? ""}`}
-      disabled={!editable}
-      defaultValue={target.forecastFinish ?? ""}
-      className={workNeedsForecastFor(target) ? "needs-input" : undefined}
-      min={target.actualStart ?? undefined}
-      onChange={(event) => {
-        // Only a whole date (or a cleared box) reaches here; a half-typed one keeps the stored forecast.
-        const value = event.target.value || null;
-        if (value === (target.forecastFinish ?? null)) return;
-        onPatch({ forecastFinish: value }, `${target.wbs} ${localizeCopy("forecast updated")}`);
-      }}
-    /></label> : null}
-    {taskNotes ? <input
-      key={`${target.key}:note:${userNote}`}
-      className="note-inline"
-      disabled={!editable}
-      placeholder={localizeCopy(target.status === "Blocked" ? "What is blocking it? (required)" : "Note…")}
-      defaultValue={userNote}
-      onBlur={(event) => {
-        const value = event.target.value.trim();
-        if (value === userNote) return;
-        if (target.status === "Blocked" && !value) { notify(localizeCopy("Blocked tasks require a reason")); return; }
-        onPatch({ remark: value }, `${target.wbs} ${localizeCopy("note updated")}`);
-      }}
-    /> : null}
-    {extra}
-  </div>;
+  );
 }
 
 const workNeedsForecastFor = (target: QuickProgressTarget) => needsForecastDate(target, isoToday());
 
 const myWorkProgressTarget = (item: MyWorkItem): QuickProgressTarget => ({
-  key: String(item.taskId), wbs: item.wbs, percentComplete: Number(item.percentComplete), status: item.status,
-  actualStart: item.actualStart, actualFinish: item.actualFinish, forecastFinish: item.forecastFinish,
-  planFinish: item.planFinish, remark: item.remark, updatedAt: item.updatedAt,
+  key: String(item.taskId),
+  wbs: item.wbs,
+  percentComplete: Number(item.percentComplete),
+  status: item.status,
+  actualStart: item.actualStart,
+  actualFinish: item.actualFinish,
+  forecastFinish: item.forecastFinish,
+  planFinish: item.planFinish,
+  remark: item.remark,
+  updatedAt: item.updatedAt,
 });
 
-function ProductionWorkControls({ item, busy, notify, patchProgress, onRequest }: {
+function ProductionWorkControls({
+  item,
+  busy,
+  notify,
+  patchProgress,
+  onRequest,
+}: {
   item: MyWorkItem;
   busy: boolean;
   notify: (message: string) => void;
@@ -1675,11 +2393,43 @@ function ProductionWorkControls({ item, busy, notify, patchProgress, onRequest }
 }) {
   const localizeCopy = useStaticCopy();
   const editable = item.canUpdate && !busy;
-  return <QuickProgressControls target={myWorkProgressTarget(item)} editable={editable} notify={notify} onPatch={(patch, message) => patchProgress(item, patch, message)}
-    extra={offersDayRequest(item) ? <button className="row-action" type="button" disabled={!editable || !canRequestMoreDays(item)} title={localizeCopy(item.pendingRequest ? "A request is already waiting for the PM" : "Request more days")} aria-label={localizeCopy("Request more days")} onClick={onRequest}><Icon name="clock" /></button> : null} />;
+  return (
+    <QuickProgressControls
+      target={myWorkProgressTarget(item)}
+      editable={editable}
+      notify={notify}
+      onPatch={(patch, message) => patchProgress(item, patch, message)}
+      extra={
+        offersDayRequest(item) ? (
+          <button
+            className="row-action"
+            type="button"
+            disabled={!editable || !canRequestMoreDays(item)}
+            title={localizeCopy(item.pendingRequest ? "A request is already waiting for the PM" : "Request more days")}
+            aria-label={localizeCopy("Request more days")}
+            onClick={onRequest}
+          >
+            <Icon name="clock" />
+          </button>
+        ) : null
+      }
+    />
+  );
 }
 
-function ProductionScheduleWorkGroup({ group, expanded, onToggle, saving, notify, patchProgress, openProjectSchedule, onEdit, onRequest, onAdd, onDelete }: {
+function ProductionScheduleWorkGroup({
+  group,
+  expanded,
+  onToggle,
+  saving,
+  notify,
+  patchProgress,
+  openProjectSchedule,
+  onEdit,
+  onRequest,
+  onAdd,
+  onDelete,
+}: {
   group: ScheduleWorkGroup;
   expanded: boolean;
   onToggle: () => void;
@@ -1693,51 +2443,98 @@ function ProductionScheduleWorkGroup({ group, expanded, onToggle, saving, notify
   onDelete: (item: MyWorkItem) => Promise<void>;
 }) {
   const uiText = useUiText();
-  const focus = group.items.find((item) => item.status === "Blocked")
-    ?? group.items.find(workIsLate)
-    ?? group.items.find(workNeedsUpdate)
-    ?? group.items[0]!;
+  const focus = group.items.find((item) => item.status === "Blocked") ?? group.items.find(workIsLate) ?? group.items.find(workNeedsUpdate) ?? group.items[0]!;
   const urgent = group.urgency <= 2;
-  return <article className={`schedule-work-group urgency-${group.urgency}${expanded ? " expanded" : ""}`} data-guide="work.group">
-    <header className="schedule-work-group-head">
-      <button className="schedule-work-group-toggle" type="button" aria-expanded={expanded} aria-controls={`${group.key}-items`} onClick={onToggle}>
-        <Icon name={expanded ? "chevronDown" : "chevronRight"} />
-        <span className="schedule-work-group-title">
-          <span className="estimate-work-reference">
-            <Badge tone={group.source === "personal" ? "blue" : "slate"}><LocalizedText text={group.source === "personal" ? "Personal" : "Project"} /></Badge>
-            {group.items.every((item) => item.unassigned) ? <Badge tone="amber"><LocalizedText text={"No PIC"} /></Badge> : null}
-            <strong className="mono">{group.projectNo}</strong>
-            {group.phaseWbs ? <span className="mono">WBS {group.phaseWbs}</span> : null}
+  return (
+    <article className={`schedule-work-group urgency-${group.urgency}${expanded ? " expanded" : ""}`} data-guide="work.group">
+      <header className="schedule-work-group-head">
+        <button className="schedule-work-group-toggle" type="button" aria-expanded={expanded} aria-controls={`${group.key}-items`} onClick={onToggle}>
+          <Icon name={expanded ? "chevronDown" : "chevronRight"} />
+          <span className="schedule-work-group-title">
+            <span className="estimate-work-reference">
+              <Badge tone={group.source === "personal" ? "blue" : "slate"}>
+                <LocalizedText text={group.source === "personal" ? "Personal" : "Project"} />
+              </Badge>
+              {group.items.every((item) => item.unassigned) ? (
+                <Badge tone="amber">
+                  <LocalizedText text={"No PIC"} />
+                </Badge>
+              ) : null}
+              <strong className="mono">{group.projectNo}</strong>
+              {group.phaseWbs ? <span className="mono">WBS {group.phaseWbs}</span> : null}
+            </span>
+            <strong className="schedule-work-group-name">
+              <LocalizedText text={group.phaseName} />
+            </strong>
+            <span className="schedule-work-group-project">{group.projectName}</span>
           </span>
-          <strong className="schedule-work-group-name"><LocalizedText text={group.phaseName} /></strong>
-          <span className="schedule-work-group-project">{group.projectName}</span>
-        </span>
-      </button>
-      <div className="schedule-work-group-actions">
-        {urgent ? <span className="work-group-focus"><LocalizedText text={"Priority task"} />: {focus.canUpdate
-          ? <button className="pg-doclink" type="button" disabled={saving.has(focus.taskId)} title={uiText("Update progress")} onClick={() => onEdit(focus)}>WBS {focus.wbs} · {focus.name}</button>
-          : <strong>WBS {focus.wbs} · {focus.name}</strong>}</span> : null}
-        <button className="btn ghost sm" type="button" disabled={!openProjectSchedule} onClick={() => openProjectSchedule?.(group.projectId)}><Icon name="calendar" /><LocalizedText text={"Open Project"} /></button>
-      </div>
-    </header>
-    <WorkGroupMeta count={group.items.length} countLabel="Tasks" late={group.lateCount} blocked={group.blockedCount} needsUpdate={group.needsUpdateCount}
-      effort={group.effort} progress={group.progress} nearestDue={group.nearestDue} updatedAt={group.updatedAt} manager={group.source === "project" ? group.managerName : null} />
-    {expanded ? <div className="schedule-work-group-items" id={`${group.key}-items`}>{group.items.map((item) => <ProductionMyTaskRow
-      key={item.taskId}
-      item={item}
-      busy={saving.has(item.taskId)}
-      notify={notify}
-      patchProgress={patchProgress}
-      openProjectSchedule={openProjectSchedule}
-      onEdit={() => onEdit(item)}
-      onRequest={() => onRequest(item)}
-      onAdd={() => onAdd(item)}
-      onDelete={() => onDelete(item)}
-    />)}</div> : null}
-  </article>;
+        </button>
+        <div className="schedule-work-group-actions">
+          {urgent ? (
+            <span className="work-group-focus">
+              <LocalizedText text={"Priority task"} />:{" "}
+              {focus.canUpdate ? (
+                <button className="pg-doclink" type="button" disabled={saving.has(focus.taskId)} title={uiText("Update progress")} onClick={() => onEdit(focus)}>
+                  WBS {focus.wbs} · {focus.name}
+                </button>
+              ) : (
+                <strong>
+                  WBS {focus.wbs} · {focus.name}
+                </strong>
+              )}
+            </span>
+          ) : null}
+          <button className="btn ghost sm" type="button" disabled={!openProjectSchedule} onClick={() => openProjectSchedule?.(group.projectId)}>
+            <Icon name="calendar" />
+            <LocalizedText text={"Open Project"} />
+          </button>
+        </div>
+      </header>
+      <WorkGroupMeta
+        count={group.items.length}
+        countLabel="Tasks"
+        late={group.lateCount}
+        blocked={group.blockedCount}
+        needsUpdate={group.needsUpdateCount}
+        effort={group.effort}
+        progress={group.progress}
+        nearestDue={group.nearestDue}
+        updatedAt={group.updatedAt}
+        manager={group.source === "project" ? group.managerName : null}
+      />
+      {expanded ? (
+        <div className="schedule-work-group-items" id={`${group.key}-items`}>
+          {group.items.map((item) => (
+            <ProductionMyTaskRow
+              key={item.taskId}
+              item={item}
+              busy={saving.has(item.taskId)}
+              notify={notify}
+              patchProgress={patchProgress}
+              openProjectSchedule={openProjectSchedule}
+              onEdit={() => onEdit(item)}
+              onRequest={() => onRequest(item)}
+              onAdd={() => onAdd(item)}
+              onDelete={() => onDelete(item)}
+            />
+          ))}
+        </div>
+      ) : null}
+    </article>
+  );
 }
 
-function ProductionMyTaskRow({ item, busy, notify, patchProgress, openProjectSchedule, onEdit, onRequest, onAdd, onDelete }: {
+function ProductionMyTaskRow({
+  item,
+  busy,
+  notify,
+  patchProgress,
+  openProjectSchedule,
+  onEdit,
+  onRequest,
+  onAdd,
+  onDelete,
+}: {
   item: MyWorkItem;
   busy: boolean;
   notify: (message: string) => void;
@@ -1755,87 +2552,246 @@ function ProductionMyTaskRow({ item, busy, notify, patchProgress, openProjectSch
   const dueDays = daysFromToday(item.planFinish);
   const silentDays = quietDays(workLastReport(item));
   const attention = item.status === "Blocked" ? "Blocked" : late ? "Late" : workIsStale(item) ? "Update due" : null;
-  const timing = item.status === "Done" ? <LocalizedText text={"Completed"} />
-    : dueDays === null ? <LocalizedText text={"No due date"} />
-      : dueDays < 0 ? <>{Math.abs(dueDays)} <LocalizedText text={"days late"} /></>
-        : dueDays === 0 ? <LocalizedText text={"Due today"} />
-          : dueDays <= 7 ? <><LocalizedText text={"Due in"} /> {dueDays} <LocalizedText text={"days"} /></>
-            : <><LocalizedText text={"Due Date"} /> {date(item.planFinish)}</>;
-  return <article className={`my-task-card${late ? " late" : ""}${item.status === "Blocked" ? " blocked" : ""}`}>
-    <div className="my-task-card-main">
-      <div className="my-task-identity">
-        <div className="my-task-kicker">
-          {attention ? <Badge><LocalizedText text={attention} /></Badge> : <Badge><LocalizedText text={item.status} /></Badge>}
-          <span className="mono">WBS {item.wbs}</span>
-          {item.isOwnDetail ? <Pill tone="blue"><LocalizedText text={"own"} /></Pill> : null}
-          {item.isMilestone ? <Pill tone="violet"><LocalizedText text={"◆ Milestone"} /></Pill> : null}
-          {item.managedByResourcePlan ? <ResourcePlanLock /> : null}
+  const timing =
+    item.status === "Done" ? (
+      <LocalizedText text={"Completed"} />
+    ) : dueDays === null ? (
+      <LocalizedText text={"No due date"} />
+    ) : dueDays < 0 ? (
+      <>
+        {Math.abs(dueDays)} <LocalizedText text={"days late"} />
+      </>
+    ) : dueDays === 0 ? (
+      <LocalizedText text={"Due today"} />
+    ) : dueDays <= 7 ? (
+      <>
+        <LocalizedText text={"Due in"} /> {dueDays} <LocalizedText text={"days"} />
+      </>
+    ) : (
+      <>
+        <LocalizedText text={"Due Date"} /> {date(item.planFinish)}
+      </>
+    );
+  return (
+    <article className={`my-task-card${late ? " late" : ""}${item.status === "Blocked" ? " blocked" : ""}`}>
+      <div className="my-task-card-main">
+        <div className="my-task-identity">
+          <div className="my-task-kicker">
+            {attention ? (
+              <Badge>
+                <LocalizedText text={attention} />
+              </Badge>
+            ) : (
+              <Badge>
+                <LocalizedText text={item.status} />
+              </Badge>
+            )}
+            <span className="mono">WBS {item.wbs}</span>
+            {item.isOwnDetail ? (
+              <Pill tone="blue">
+                <LocalizedText text={"own"} />
+              </Pill>
+            ) : null}
+            {item.isMilestone ? (
+              <Pill tone="violet">
+                <LocalizedText text={"◆ Milestone"} />
+              </Pill>
+            ) : null}
+            {item.managedByResourcePlan ? <ResourcePlanLock /> : null}
+          </div>
+          <h3>{item.name}</h3>
+          <div className="my-task-meta">
+            <span>
+              <Icon name="calendar" />
+              {date(item.planStart)} → {date(item.planFinish)}
+            </span>
+            <span>
+              {item.workDays} <LocalizedText text={"work days"} />
+            </span>
+            {item.forecastFinish ? (
+              <span>
+                <LocalizedText text={"Forecast"} /> {date(item.forecastFinish)}
+              </span>
+            ) : null}
+            {item.planManDays > 0 ? (
+              <span>
+                <Icon name="users" />
+                {item.planManDays} <LocalizedText text={"estimated man-days"} />
+                {item.actualManDays > 0 ? (
+                  <>
+                    {" "}
+                    · {item.actualManDays} <LocalizedText text={"actual"} />
+                  </>
+                ) : null}
+              </span>
+            ) : null}
+            <span>
+              <Icon name="clock" />
+              {item.lastProgressAt === null ? (
+                <LocalizedText text={"MyWork.noReportYet"} />
+              ) : (
+                <>
+                  <LocalizedText text={"Last update"} /> {dateTime(workLastReport(item))} · {silentDays} <LocalizedText text={"quiet days"} />
+                </>
+              )}
+            </span>
+          </div>
         </div>
-        <h3>{item.name}</h3>
-        <div className="my-task-meta">
-          <span><Icon name="calendar" />{date(item.planStart)} → {date(item.planFinish)}</span>
-          <span>{item.workDays} <LocalizedText text={"work days"} /></span>
-          {item.forecastFinish ? <span><LocalizedText text={"Forecast"} /> {date(item.forecastFinish)}</span> : null}
-          {item.planManDays > 0 ? <span><Icon name="users" />{item.planManDays} <LocalizedText text={"estimated man-days"} />{item.actualManDays > 0 ? <> · {item.actualManDays} <LocalizedText text={"actual"} /></> : null}</span> : null}
-          <span><Icon name="clock" />{item.lastProgressAt === null ? <LocalizedText text={"MyWork.noReportYet"} /> : <><LocalizedText text={"Last update"} /> {dateTime(workLastReport(item))} · {silentDays} <LocalizedText text={"quiet days"} /></>}</span>
+        <div className="my-task-progress">
+          <ProgressCell value={Number(item.percentComplete)} />
+          <span className={late ? "late-text" : ""}>{timing}</span>
         </div>
       </div>
-      <div className="my-task-progress">
-        <ProgressCell value={Number(item.percentComplete)} />
-        <span className={late ? "late-text" : ""}>{timing}</span>
-      </div>
-    </div>
 
-    {item.pendingRequest ? <div className="my-task-request"><Icon name="clock" /><strong><LocalizedText text={"Awaiting the PM"} /></strong><span>{item.pendingRequest.requestDays} <LocalizedText text={"more days requested"} />{item.pendingRequest.comment ? ` · ${item.pendingRequest.comment}` : ""}</span></div> : null}
-    {needsForecast ? <div className="my-task-alert"><Icon name="alertTriangle" /><span><LocalizedText text={"This was due"} /> {date(item.planFinish)}<LocalizedText text={"MyWork.forecastBelow"} /></span></div> : null}
-
-    {item.canUpdate ? <ProductionWorkControls item={item} busy={busy} notify={notify} patchProgress={patchProgress} onRequest={onRequest} /> : null}
-
-    <div className="my-task-actions">
-      {item.canUpdate ? <button className="btn default sm" type="button" data-guide="work.details" disabled={busy} onClick={onEdit}><Icon name="edit" /><LocalizedText text={"Update details"} /></button> : null}
-      <button className="btn ghost sm" type="button" disabled={!openProjectSchedule} onClick={() => openProjectSchedule?.(item.projectId, item.taskId)}><Icon name="calendar" /><LocalizedText text={"Open plan"} /></button>
-      <span className="spacer" />
-      {offersDayRequest(item) || offersPersonalTask(item) || item.canDeleteDetail ? <details className="my-task-more-actions">
-        <summary><LocalizedText text={"More actions"} /><Icon name="chevronDown" /></summary>
-        <div>
-          {offersDayRequest(item) ? <button className="btn ghost sm" type="button" disabled={busy || !canRequestMoreDays(item)} onClick={onRequest}><Icon name="clock" /><LocalizedText text={"Request more days"} /></button> : null}
-          {offersPersonalTask(item) ? <button className="btn ghost sm" type="button" disabled={busy} title={localizeCopy("Add a private detail task")} onClick={onAdd}><Icon name="plus" /><LocalizedText text={"Add Personal Task"} /></button> : null}
-          {item.canDeleteDetail ? <button className="btn ghost sm danger-text" type="button" disabled={busy} title={localizeCopy("Delete my task")} onClick={() => { void onDelete(); }}><Icon name="trash" /><LocalizedText text={"Delete my task"} /></button> : null}
+      {item.pendingRequest ? (
+        <div className="my-task-request">
+          <Icon name="clock" />
+          <strong>
+            <LocalizedText text={"Awaiting the PM"} />
+          </strong>
+          <span>
+            {item.pendingRequest.requestDays} <LocalizedText text={"more days requested"} />
+            {item.pendingRequest.comment ? ` · ${item.pendingRequest.comment}` : ""}
+          </span>
         </div>
-      </details> : null}
-    </div>
-  </article>;
+      ) : null}
+      {needsForecast ? (
+        <div className="my-task-alert">
+          <Icon name="alertTriangle" />
+          <span>
+            <LocalizedText text={"This was due"} /> {date(item.planFinish)}
+            <LocalizedText text={"MyWork.forecastBelow"} />
+          </span>
+        </div>
+      ) : null}
+
+      {item.canUpdate ? <ProductionWorkControls item={item} busy={busy} notify={notify} patchProgress={patchProgress} onRequest={onRequest} /> : null}
+
+      <div className="my-task-actions">
+        {item.canUpdate ? (
+          <button className="btn default sm" type="button" data-guide="work.details" disabled={busy} onClick={onEdit}>
+            <Icon name="edit" />
+            <LocalizedText text={"Update details"} />
+          </button>
+        ) : null}
+        <button className="btn ghost sm" type="button" disabled={!openProjectSchedule} onClick={() => openProjectSchedule?.(item.projectId, item.taskId)}>
+          <Icon name="calendar" />
+          <LocalizedText text={"Open plan"} />
+        </button>
+        <span className="spacer" />
+        {offersDayRequest(item) || offersPersonalTask(item) || item.canDeleteDetail ? (
+          <details className="my-task-more-actions">
+            <summary>
+              <LocalizedText text={"More actions"} />
+              <Icon name="chevronDown" />
+            </summary>
+            <div>
+              {offersDayRequest(item) ? (
+                <button className="btn ghost sm" type="button" disabled={busy || !canRequestMoreDays(item)} onClick={onRequest}>
+                  <Icon name="clock" />
+                  <LocalizedText text={"Request more days"} />
+                </button>
+              ) : null}
+              {offersPersonalTask(item) ? (
+                <button className="btn ghost sm" type="button" disabled={busy} title={localizeCopy("Add a private detail task")} onClick={onAdd}>
+                  <Icon name="plus" />
+                  <LocalizedText text={"Add Personal Task"} />
+                </button>
+              ) : null}
+              {item.canDeleteDetail ? (
+                <button
+                  className="btn ghost sm danger-text"
+                  type="button"
+                  disabled={busy}
+                  title={localizeCopy("Delete my task")}
+                  onClick={() => {
+                    void onDelete();
+                  }}
+                >
+                  <Icon name="trash" />
+                  <LocalizedText text={"Delete my task"} />
+                </button>
+              ) : null}
+            </div>
+          </details>
+        ) : null}
+      </div>
+    </article>
+  );
 }
 
-function ProductionRequestDaysModal({ item, onClose, onSubmitted }: {
-  item: MyWorkItem;
-  onClose: () => void;
-  onSubmitted: () => Promise<void>;
-}) {
+function ProductionRequestDaysModal({ item, onClose, onSubmitted }: { item: MyWorkItem; onClose: () => void; onSubmitted: () => Promise<void> }) {
   const uiText = useUiText();
   const [days, setDays] = useState(2);
   const [comment, setComment] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const submit = async () => {
-    setBusy(true); setError("");
+    setBusy(true);
+    setError("");
     try {
       await apiRequest(`/api/v1/schedule/tasks/${item.taskId}/day-requests`, { method: "POST", body: JSON.stringify({ requestDays: days, comment: comment.trim() }) });
       await onSubmitted();
-    } catch (requestError) { setError(toError(requestError)); }
-    finally { setBusy(false); }
+    } catch (requestError) {
+      setError(toError(requestError));
+    } finally {
+      setBusy(false);
+    }
   };
-  return <Modal title={uiText("Request more days")} subtitle={`${item.wbs} ${item.name} · plan ${date(item.planStart)} → ${date(item.planFinish)}`} onClose={onClose} footer={<>
-    <span className="muted"><LocalizedText text={"The dates change only when the PM accepts."} /></span><span className="spacer" />
-    <button className="btn default" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button>
-    <button className="btn primary" type="button" disabled={busy || days < 1 || !comment.trim()} onClick={() => { void submit(); }}><Icon name="send" />{busy ? "Sending…" : <LocalizedText text={"Send request"} />}</button>
-  </>}>
-    {error ? <LoadError message={error} retry={() => { void submit(); }} /> : null}
-    <div className="form-grid"><Field label="Extra days needed"><input className="num" type="number" min="1" max="3650" value={days} onChange={(event) => setDays(Math.max(1, Number(event.target.value)))} /></Field><Field label="Why? (required — the PM decides with this)" span={3}><input maxLength={20000} value={comment} onChange={(event) => setComment(event.target.value)} placeholder={uiText("e.g. rack anchor rework — re-drilling takes 3 days")} /></Field></div>
-  </Modal>;
+  return (
+    <Modal
+      title={uiText("Request more days")}
+      subtitle={`${item.wbs} ${item.name} · plan ${date(item.planStart)} → ${date(item.planFinish)}`}
+      onClose={onClose}
+      footer={
+        <>
+          <span className="muted">
+            <LocalizedText text={"The dates change only when the PM accepts."} />
+          </span>
+          <span className="spacer" />
+          <button className="btn default" type="button" disabled={busy} onClick={onClose}>
+            <LocalizedText text={"Cancel"} />
+          </button>
+          <button
+            className="btn primary"
+            type="button"
+            disabled={busy || days < 1 || !comment.trim()}
+            onClick={() => {
+              void submit();
+            }}
+          >
+            <Icon name="send" />
+            {busy ? "Sending…" : <LocalizedText text={"Send request"} />}
+          </button>
+        </>
+      }
+    >
+      {error ? (
+        <LoadError
+          message={error}
+          retry={() => {
+            void submit();
+          }}
+        />
+      ) : null}
+      <div className="form-grid">
+        <Field label="Extra days needed">
+          <input className="num" type="number" min="1" max="3650" value={days} onChange={(event) => setDays(Math.max(1, Number(event.target.value)))} />
+        </Field>
+        <Field label="Why? (required — the PM decides with this)" span={3}>
+          <input maxLength={20000} value={comment} onChange={(event) => setComment(event.target.value)} placeholder={uiText("e.g. rack anchor rework — re-drilling takes 3 days")} />
+        </Field>
+      </div>
+    </Modal>
+  );
 }
 
-function ProductionPersonalTaskModal({ items, initialParentId = null, onClose, onCreated }: {
+function ProductionPersonalTaskModal({
+  items,
+  initialParentId = null,
+  onClose,
+  onCreated,
+}: {
   items: MyWorkItem[];
   /** The task a card opened the dialog from; the header button leaves it empty. */
   initialParentId?: number | null;
@@ -1849,41 +2805,90 @@ function ProductionPersonalTaskModal({ items, initialParentId = null, onClose, o
   const [error, setError] = useState("");
   // No fallback to another task: a parent that stopped qualifying must not silently become a different one.
   const item = items.find((candidate) => String(candidate.taskId) === parentId);
-  const planSpan = item?.planStart && item.planFinish
-    ? Math.round((Date.parse(`${item.planFinish.slice(0, 10)}T00:00:00Z`) - Date.parse(`${item.planStart.slice(0, 10)}T00:00:00Z`)) / 86_400_000) + 1
-    : 1;
+  const planSpan =
+    item?.planStart && item.planFinish ? Math.round((Date.parse(`${item.planFinish.slice(0, 10)}T00:00:00Z`) - Date.parse(`${item.planStart.slice(0, 10)}T00:00:00Z`)) / 86_400_000) + 1 : 1;
   const planDays = Number.isFinite(planSpan) ? Math.max(1, planSpan) : 1;
   const submit = async () => {
     if (!item) return;
-    setBusy(true); setError("");
+    setBusy(true);
+    setError("");
     try {
       await apiRequest(`/api/v1/schedule/tasks/${item.taskId}/details`, {
         method: "POST",
         body: JSON.stringify({ scheduleVersion: item.scheduleVersion, rowVersion: item.rowVersion, name: name.trim(), planDays }),
       });
       await onCreated();
-    } catch (requestError) { setError(toError(requestError)); }
-    finally { setBusy(false); }
+    } catch (requestError) {
+      setError(toError(requestError));
+    } finally {
+      setBusy(false);
+    }
   };
-  return <Modal
-    title={uiText("Add Personal Task")}
-    subtitle={uiText("Add a private detail beneath one of your assigned schedule tasks.")}
-    onClose={onClose}
-    footer={<>
-      <button className="btn default" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button>
-      <button className="btn primary" type="button" disabled={busy || !item || !name.trim()} onClick={() => { void submit(); }}><Icon name="plus" />{busy ? <LocalizedText text={"Adding…"} /> : <LocalizedText text={"Add task"} />}</button>
-    </>}
-  >
-    {error ? <LoadError message={error} retry={() => { void submit(); }} /> : null}
-    {!item ? <div className="callout warning" role="alert"><Icon name="alertTriangle" /><span>{uiText("MyWork.parentUnavailable")}</span></div> : null}
-    <div className="form-grid">
-      <Field label={uiText("Project task")} span={3}><select value={parentId} onChange={(event) => setParentId(event.target.value)}>{!item ? <option value={parentId}>—</option> : null}{items.map((candidate) => <option key={candidate.taskId} value={candidate.taskId}>{candidate.projectNo} · WBS {candidate.wbs} · {candidate.name}</option>)}</select></Field>
-      <Field label={uiText("Personal task")} span={3}><input maxLength={500} value={name} onChange={(event) => setName(event.target.value)} placeholder={uiText("What will you do?")} /></Field>
-      <Field label={uiText("Schedule window")}><input value={item ? `${date(item.planStart)} → ${date(item.planFinish)}` : "—"} readOnly /></Field>
-      <Field label={uiText("Days")}><input className="num" type="number" value={planDays} readOnly /></Field>
-    </div>
-    <div className="info-strip"><Icon name="alertCircle" /><LocalizedText text={"The personal task follows the selected project task dates and does not add workload effort."} /></div>
-  </Modal>;
+  return (
+    <Modal
+      title={uiText("Add Personal Task")}
+      subtitle={uiText("Add a private detail beneath one of your assigned schedule tasks.")}
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn default" type="button" disabled={busy} onClick={onClose}>
+            <LocalizedText text={"Cancel"} />
+          </button>
+          <button
+            className="btn primary"
+            type="button"
+            disabled={busy || !item || !name.trim()}
+            onClick={() => {
+              void submit();
+            }}
+          >
+            <Icon name="plus" />
+            {busy ? <LocalizedText text={"Adding…"} /> : <LocalizedText text={"Add task"} />}
+          </button>
+        </>
+      }
+    >
+      {error ? (
+        <LoadError
+          message={error}
+          retry={() => {
+            void submit();
+          }}
+        />
+      ) : null}
+      {!item ? (
+        <div className="callout warning" role="alert">
+          <Icon name="alertTriangle" />
+          <span>{uiText("MyWork.parentUnavailable")}</span>
+        </div>
+      ) : null}
+      <div className="form-grid">
+        <Field label={uiText("Project task")} span={3}>
+          <select value={parentId} onChange={(event) => setParentId(event.target.value)}>
+            {!item ? <option value={parentId}>—</option> : null}
+            {items.map((candidate) => (
+              <option key={candidate.taskId} value={candidate.taskId}>
+                {candidate.projectNo} · WBS {candidate.wbs} · {candidate.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label={uiText("Personal task")} span={3}>
+          <input maxLength={500} value={name} onChange={(event) => setName(event.target.value)} placeholder={uiText("What will you do?")} />
+        </Field>
+        <Field label={uiText("Schedule window")}>
+          <input value={item ? `${date(item.planStart)} → ${date(item.planFinish)}` : "—"} readOnly />
+        </Field>
+        <Field label={uiText("Days")}>
+          <input className="num" type="number" value={planDays} readOnly />
+        </Field>
+      </div>
+      <div className="info-strip">
+        <Icon name="alertCircle" />
+        <LocalizedText text={"The personal task follows the selected project task dates and does not add workload effort."} />
+      </div>
+    </Modal>
+  );
 }
 
 /** Everyone can be picked; a person not yet on the project joins it first, because a PIC must be a member. */
@@ -1898,34 +2903,62 @@ async function ensureScheduleMembers(projectId: number, managerId: number, userI
 /** Members may pick only people already on this project; planners can still add people. */
 function usePlanTeam(bootstrap: BootstrapData, schedule: ProjectSchedule | null) {
   const [members, setMembers] = useState<{ projectId: number; ids: number[] } | null>(null);
-  const projectId = schedule?.projectId, canPlan = schedule?.canPlan;
+  const projectId = schedule?.projectId,
+    canPlan = schedule?.canPlan;
   useEffect(() => {
     if (!projectId || canPlan) return;
     let cancelled = false;
-    void listProjectMembers(projectId).then(rows => { if (!cancelled) setMembers({ projectId, ids: rows.map(row => row.userId) }); }).catch(() => { if (!cancelled) setMembers({ projectId, ids: [] }); });
-    return () => { cancelled = true; };
+    void listProjectMembers(projectId)
+      .then((rows) => {
+        if (!cancelled) setMembers({ projectId, ids: rows.map((row) => row.userId) });
+      })
+      .catch(() => {
+        if (!cancelled) setMembers({ projectId, ids: [] });
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [projectId, canPlan]);
-  const ids = new Set([bootstrap.user.id, schedule?.managerId, schedule?.leadEngineerId, ...(members?.projectId === projectId ? members?.ids ?? [] : [])]);
-  return canPlan ? bootstrap : { ...bootstrap, team: bootstrap.team.filter(person => ids.has(person.id)) };
+  const ids = new Set([bootstrap.user.id, schedule?.managerId, schedule?.leadEngineerId, ...(members?.projectId === projectId ? (members?.ids ?? []) : [])]);
+  return canPlan ? bootstrap : { ...bootstrap, team: bootstrap.team.filter((person) => ids.has(person.id)) };
 }
 function PicPicker({ options, value, onChange }: { options: { id: number; label: string; detail?: string }[]; value: number[]; onChange: (value: number[]) => void }) {
   const t = useUiText();
-  return <div className="field span-2" data-guide="plan.pic"><span>{t("Schedule.pics")}</span>
-    <SearchMultiPicker options={options} value={value} onChange={onChange} label={t("Schedule.pics")} placeholder={t("Schedule.searchPeople")}
-      removeLabel={t("Schedule.removePic")} noMatchText={t("Schedule.noPersonMatch")} allChosenText={t("Schedule.everyoneChosen")} />
-    <small>{t("Schedule.picsHint")}</small></div>;
+  return (
+    <div className="field span-2" data-guide="plan.pic">
+      <span>{t("Schedule.pics")}</span>
+      <SearchMultiPicker
+        options={options}
+        value={value}
+        onChange={onChange}
+        label={t("Schedule.pics")}
+        placeholder={t("Schedule.searchPeople")}
+        removeLabel={t("Schedule.removePic")}
+        noMatchText={t("Schedule.noPersonMatch")}
+        allChosenText={t("Schedule.everyoneChosen")}
+      />
+      <small>{t("Schedule.picsHint")}</small>
+    </div>
+  );
 }
 
 /** How a row's start is set: on a date, or after another row finishes, a lag of calendar days later (negative overlaps). */
 type StartDraft = { mode: "manual" | "linked"; planStart: string; predecessorId: string; lagDays: number };
-const startDraftOf = (task: ScheduleTask | null): StartDraft => task
-  ? { mode: task.startMode === "linked" ? "linked" : "manual", planStart: task.planStart ?? task.storedPlanStart ?? isoToday(), predecessorId: task.predecessorId ? String(task.predecessorId) : "", lagDays: task.lagDays }
-  : { mode: "manual", planStart: isoToday(), predecessorId: "", lagDays: 0 };
+const startDraftOf = (task: ScheduleTask | null): StartDraft =>
+  task
+    ? {
+        mode: task.startMode === "linked" ? "linked" : "manual",
+        planStart: task.planStart ?? task.storedPlanStart ?? isoToday(),
+        predecessorId: task.predecessorId ? String(task.predecessorId) : "",
+        lagDays: task.lagDays,
+      }
+    : { mode: "manual", planStart: isoToday(), predecessorId: "", lagDays: 0 };
 const startReady = (start: StartDraft) => (start.mode === "linked" ? Boolean(start.predecessorId) : Boolean(start.planStart));
 /** The plan fields a start sends; a linked row keeps its stored date as the fallback while its predecessor has none. */
-const startBody = (start: StartDraft, stored: string | null) => start.mode === "linked"
-  ? { startMode: "linked", predecessorId: Number(start.predecessorId), lagDays: start.lagDays, planStart: stored }
-  : { startMode: "manual", predecessorId: null, lagDays: 0, planStart: start.planStart };
+const startBody = (start: StartDraft, stored: string | null) =>
+  start.mode === "linked"
+    ? { startMode: "linked", predecessorId: Number(start.predecessorId), lagDays: start.lagDays, planStart: stored }
+    : { startMode: "manual", predecessorId: null, lagDays: 0, planStart: start.planStart };
 
 /**
  * The rows a row may follow: not itself, not a detail row or a Resource Plan row (the API refuses those), and none
@@ -1934,45 +2967,88 @@ const startBody = (start: StartDraft, stored: string | null) => start.mode === "
 function predecessorChoices(schedule: ProjectSchedule, taskId: number | null, parentId: number | null): ScheduleTask[] {
   const rows = flattenTasks(schedule.tasks);
   const self = taskId ?? -1;
-  const graph = [...rows.filter((row) => row.id !== self), { id: self, parentId, predecessorId: null, startMode: "manual" }]
-    .map((row) => ({ id: row.id, parentId: row.id === self ? parentId : row.parentId, predecessorId: row.predecessorId, startMode: row.startMode }));
+  const graph = [...rows.filter((row) => row.id !== self), { id: self, parentId, predecessorId: null, startMode: "manual" }].map((row) => ({
+    id: row.id,
+    parentId: row.id === self ? parentId : row.parentId,
+    predecessorId: row.predecessorId,
+    startMode: row.startMode,
+  }));
   // The API also refuses a link that its parent and predecessor chains would lead back through.
   const edges = new Map(graph.map((row) => [row.id, [row.parentId, row.predecessorId].filter((id): id is number => id !== null)]));
   const reaches = (from: number, seen: Set<number>): boolean => from === self || (!seen.has(from) && Boolean(seen.add(from)) && (edges.get(from) ?? []).some((next) => reaches(next, seen)));
-  return rows.filter((row) => row.id !== self && row.kind !== "detail" && !row.managedByResourcePlan && !reaches(row.id, new Set())
-    && !planDatesLoop(graph.map((entry) => (entry.id === self ? { ...entry, predecessorId: row.id, startMode: "linked" } : entry))));
+  return rows.filter(
+    (row) =>
+      row.id !== self &&
+      row.kind !== "detail" &&
+      !row.managedByResourcePlan &&
+      !reaches(row.id, new Set()) &&
+      !planDatesLoop(graph.map((entry) => (entry.id === self ? { ...entry, predecessorId: row.id, startMode: "linked" } : entry))),
+  );
 }
 
 /** The start fields of the add and edit forms: a date, or a predecessor and lag with the start that gives. */
-function PlanStartFields({ schedule, taskId, parentId, value, onChange }: {
-  schedule: ProjectSchedule; taskId: number | null; parentId: number | null; value: StartDraft; onChange: (value: StartDraft) => void;
+function PlanStartFields({
+  schedule,
+  taskId,
+  parentId,
+  value,
+  onChange,
+}: {
+  schedule: ProjectSchedule;
+  taskId: number | null;
+  parentId: number | null;
+  value: StartDraft;
+  onChange: (value: StartDraft) => void;
 }) {
   const t = useUiText();
   const choices = useMemo(() => predecessorChoices(schedule, taskId, parentId), [schedule, taskId, parentId]);
   const holidays = useMemo(() => new Set(schedule.holidays ?? []), [schedule.holidays]);
   const predecessor = choices.find((row) => String(row.id) === value.predecessorId) ?? null;
   const starts = predecessor ? linkedStart(predecessor.planFinish, value.lagDays, holidays) : null;
-  return <>
-    <label className="field"><span>{t("Schedule.startMode")} *</span>
-      <select value={value.mode} onChange={(event) => onChange({ ...value, mode: event.target.value === "linked" ? "linked" : "manual" })}>
-        <option value="manual">{t("Schedule.startOnDate")}</option>
-        <option value="linked" disabled={!choices.length && value.mode !== "linked"}>{t("Schedule.startAfter")}</option>
-      </select>
-    </label>
-    {value.mode === "manual" ? <label className="field"><span><LocalizedText text={"Plan start *"} /></span><DateInput value={value.planStart} onChange={(event) => onChange({ ...value, planStart: event.target.value })} /></label> : <>
-      <label className="field"><span>{t("Schedule.predecessor")} *</span>
-        <select value={predecessor ? value.predecessorId : ""} onChange={(event) => onChange({ ...value, predecessorId: event.target.value })}>
-          <option value="">{t("Schedule.pickPredecessor")}</option>
-          {choices.map((row) => <option key={row.id} value={row.id}>{row.wbs} · {row.name}{row.planFinish ? ` (${t("Schedule.finishesOn").replace("{date}", date(row.planFinish))})` : ""}</option>)}
+  return (
+    <>
+      <label className="field">
+        <span>{t("Schedule.startMode")} *</span>
+        <select value={value.mode} onChange={(event) => onChange({ ...value, mode: event.target.value === "linked" ? "linked" : "manual" })}>
+          <option value="manual">{t("Schedule.startOnDate")}</option>
+          <option value="linked" disabled={!choices.length && value.mode !== "linked"}>
+            {t("Schedule.startAfter")}
+          </option>
         </select>
       </label>
-      <label className="field"><span>{t("Schedule.lagDays")}</span>
-        <input type="number" min={-365} max={3650} step={1} value={value.lagDays} onChange={(event) => onChange({ ...value, lagDays: Math.trunc(Number(event.target.value) || 0) })} />
-        <small>{t("Schedule.lagHint")}</small>
-      </label>
-      <p className="muted small plan-start-preview">{!predecessor ? t("Schedule.pickPredecessorHint") : starts ? t("Schedule.startsOn").replace("{date}", date(starts)) : t("Schedule.predecessorUndated")}</p>
-    </>}
-  </>;
+      {value.mode === "manual" ? (
+        <label className="field">
+          <span>
+            <LocalizedText text={"Plan start *"} />
+          </span>
+          <DateInput value={value.planStart} onChange={(event) => onChange({ ...value, planStart: event.target.value })} />
+        </label>
+      ) : (
+        <>
+          <label className="field">
+            <span>{t("Schedule.predecessor")} *</span>
+            <select value={predecessor ? value.predecessorId : ""} onChange={(event) => onChange({ ...value, predecessorId: event.target.value })}>
+              <option value="">{t("Schedule.pickPredecessor")}</option>
+              {choices.map((row) => (
+                <option key={row.id} value={row.id}>
+                  {row.wbs} · {row.name}
+                  {row.planFinish ? ` (${t("Schedule.finishesOn").replace("{date}", date(row.planFinish))})` : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            <span>{t("Schedule.lagDays")}</span>
+            <input type="number" min={-365} max={3650} step={1} value={value.lagDays} onChange={(event) => onChange({ ...value, lagDays: Math.trunc(Number(event.target.value) || 0) })} />
+            <small>{t("Schedule.lagHint")}</small>
+          </label>
+          <p className="muted small plan-start-preview">
+            {!predecessor ? t("Schedule.pickPredecessorHint") : starts ? t("Schedule.startsOn").replace("{date}", date(starts)) : t("Schedule.predecessorUndated")}
+          </p>
+        </>
+      )}
+    </>
+  );
 }
 
 /** The dates a form's row would take, to read its PICs' load over them. */
@@ -1982,48 +3058,77 @@ function PlanStartFields({ schedule, taskId, parentId, value, onChange }: {
  * nobody edits keep their dates.
  */
 function draftSpan(schedule: ProjectSchedule, start: StartDraft, workDays: number, milestone: boolean): { from: string | null; to: string | null } {
-  const predecessor = start.mode === "linked" ? flattenTasks(schedule.tasks).find((row) => String(row.id) === start.predecessorId) ?? null : null;
+  const predecessor = start.mode === "linked" ? (flattenTasks(schedule.tasks).find((row) => String(row.id) === start.predecessorId) ?? null) : null;
   const from = start.mode === "linked" ? linkedStart(predecessor?.planFinish ?? null, start.lagDays, new Set(schedule.holidays ?? [])) : start.planStart || null;
-  return { from, to: !from ? null : milestone ? from : workingDayFinish(from, Math.max(1, workDays), schedule.holidays ?? []) ?? ganttShift(from, Math.max(1, workDays) - 1) };
+  return { from, to: !from ? null : milestone ? from : (workingDayFinish(from, Math.max(1, workDays), schedule.holidays ?? []) ?? ganttShift(from, Math.max(1, workDays) - 1)) };
 }
 
 /** The PIC list with each person's load over the row's dates beside their department, and the chosen ones' load below it. */
-function PicFieldsWithLoad({ bootstrap, span, taskId, value, onChange, manDays }: {
-  bootstrap: BootstrapData; span: { from: string | null; to: string | null }; taskId: number | null; value: number[]; onChange: (value: number[]) => void; manDays: number;
+function PicFieldsWithLoad({
+  bootstrap,
+  span,
+  taskId,
+  value,
+  onChange,
+  manDays,
+}: {
+  bootstrap: BootstrapData;
+  span: { from: string | null; to: string | null };
+  taskId: number | null;
+  value: number[];
+  onChange: (value: number[]) => void;
+  manDays: number;
 }) {
   const picOptions = usePicOptions(bootstrap);
   const loads = usePicLoads(bootstrap, span.from, span.to, taskId);
   const note = useLoadNote();
-  const options = loads.state === "ready" ? picOptions.map((option) => {
-    const text = note(loads.byUser.get(option.id));
-    return text ? { ...option, detail: `${option.detail} · ${text}` } : option;
-  }) : picOptions;
-  return <>
-    <PicPicker options={options} value={value} onChange={onChange} />
-    <PicLoadPanel loads={loads} chosen={value} manDays={manDays} team={bootstrap.team} dateLabel={date}
-      onSwap={(from, to) => onChange(value.map((id) => (id === from ? to : id)))} />
-  </>;
+  const options =
+    loads.state === "ready"
+      ? picOptions.map((option) => {
+          const text = note(loads.byUser.get(option.id));
+          return text ? { ...option, detail: `${option.detail} · ${text}` } : option;
+        })
+      : picOptions;
+  return (
+    <>
+      <PicPicker options={options} value={value} onChange={onChange} />
+      <PicLoadPanel loads={loads} chosen={value} manDays={manDays} team={bootstrap.team} dateLabel={date} onSwap={(from, to) => onChange(value.map((id) => (id === from ? to : id)))} />
+    </>
+  );
 }
 
 const MAX_PLAN_DEPTH = 5;
-const canTakeSubTasks = (task: ScheduleTask, rows: ScheduleTask[]) => task.kind === "task" && task.depth < MAX_PLAN_DEPTH
-  && !rows.some((child) => child.parentId === task.id && child.kind === "detail")
-  && (task.children.length > 0 || (task.status === "Not Started" && Number(task.percentComplete) === 0 && !task.actualStart && !task.managedByResourcePlan));
+const canTakeSubTasks = (task: ScheduleTask, rows: ScheduleTask[]) =>
+  task.kind === "task" &&
+  task.depth < MAX_PLAN_DEPTH &&
+  !rows.some((child) => child.parentId === task.id && child.kind === "detail") &&
+  (task.children.length > 0 || (task.status === "Not Started" && Number(task.percentComplete) === 0 && !task.actualStart && !task.managedByResourcePlan));
 
 /** A main heading's own dates are the customer's (the Master Plan); its bar follows the rows under it. */
-const customerPeriod = (task: ScheduleTask) => task.kind === "phase" && task.parentId === null && task.storedPlanStart
-  ? { start: task.storedPlanStart, finish: ganttShift(task.storedPlanStart, Math.max(1, task.planDays) - 1) } : null;
+const customerPeriod = (task: ScheduleTask) =>
+  task.kind === "phase" && task.parentId === null && task.storedPlanStart ? { start: task.storedPlanStart, finish: ganttShift(task.storedPlanStart, Math.max(1, task.planDays) - 1) } : null;
 const periodDays = (start: string, finish: string) => Math.round((Date.parse(`${finish}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86_400_000) + 1;
 /** A heading's customer dates come as a pair or not at all. */
 const customerPeriodReady = (period: { start: string; finish: string }) => (!period.start && !period.finish) || Boolean(period.start && period.finish && period.finish >= period.start);
 
 function CustomerPeriodFields({ value, onChange }: { value: { start: string; finish: string }; onChange: (value: { start: string; finish: string }) => void }) {
   const t = useUiText();
-  return <>
-    <label className="field" data-guide="plan.customerDates"><span>{t("Plan.customerStart")}</span><DateInput value={value.start} onChange={(event) => onChange({ ...value, start: event.target.value })} /></label>
-    <label className="field"><span>{t("Plan.customerFinish")}</span><DateInput min={value.start || undefined} value={value.finish} onChange={(event) => onChange({ ...value, finish: event.target.value })} /></label>
-    <div className="info-strip span-2" role="note"><Icon name="calendar" /><span>{t("Plan.headingHint")}</span></div>
-  </>;
+  return (
+    <>
+      <label className="field" data-guide="plan.customerDates">
+        <span>{t("Plan.customerStart")}</span>
+        <DateInput value={value.start} onChange={(event) => onChange({ ...value, start: event.target.value })} />
+      </label>
+      <label className="field">
+        <span>{t("Plan.customerFinish")}</span>
+        <DateInput min={value.start || undefined} value={value.finish} onChange={(event) => onChange({ ...value, finish: event.target.value })} />
+      </label>
+      <div className="info-strip span-2" role="note">
+        <Icon name="calendar" />
+        <span>{t("Plan.headingHint")}</span>
+      </div>
+    </>
+  );
 }
 
 /**
@@ -2044,7 +3149,7 @@ function draftDates(parent: ScheduleTask | null, today: string): { start: string
  */
 function draftLevel(tasks: ScheduleTask[], rows: ScheduleTask[], draft: PlanDraft, step: -1 | 1, waiting: ReadonlySet<number | null>): Pick<PlanDraft, "parentId" | "beforeId"> | null {
   const byId = new Map(rows.map((row) => [row.id, row]));
-  const childrenOf = (id: number | null) => (id === null ? tasks : byId.get(id)?.children ?? []);
+  const childrenOf = (id: number | null) => (id === null ? tasks : (byId.get(id)?.children ?? []));
   if (step < 0) {
     const parent = draft.parentId === null ? null : byId.get(draft.parentId);
     if (!parent || (parent.parentId !== null && waiting.has(parent.parentId))) return null;
@@ -2061,46 +3166,143 @@ function draftLevel(tasks: ScheduleTask[], rows: ScheduleTask[], draft: PlanDraf
  * under a heading needs (a function has its task's unless another is picked), and its dates. Enter saves and opens the
  * next box just below; Esc closes. A main heading's dates are the customer's and may be left for later.
  */
-function PlanRowDraftEditor({ bootstrap, draft, parent, planPeople, ownOnly, busy, canOut, canIn, onChange, onLevel, onSave, onClose }: {
-  bootstrap: BootstrapData; draft: PlanDraft; parent: ScheduleTask | null; planPeople: Set<number>; ownOnly: boolean; busy: boolean; canOut: boolean; canIn: boolean;
-  onChange: (patch: Partial<PlanDraft>) => void; onLevel: (step: -1 | 1) => void; onSave: () => void; onClose: () => void;
+function PlanRowDraftEditor({
+  bootstrap,
+  draft,
+  parent,
+  planPeople,
+  ownOnly,
+  busy,
+  canOut,
+  canIn,
+  onChange,
+  onLevel,
+  onSave,
+  onClose,
+}: {
+  bootstrap: BootstrapData;
+  draft: PlanDraft;
+  parent: ScheduleTask | null;
+  planPeople: Set<number>;
+  ownOnly: boolean;
+  busy: boolean;
+  canOut: boolean;
+  canIn: boolean;
+  onChange: (patch: Partial<PlanDraft>) => void;
+  onLevel: (step: -1 | 1) => void;
+  onSave: () => void;
+  onClose: () => void;
 }) {
   const t = useUiText();
   const kind = !parent ? "heading" : parent.kind === "phase" ? "task" : "function";
   const nameInput = useRef<HTMLInputElement>(null);
   // Back to the name when the box opens, after each save and when its level changes.
-  useEffect(() => { if (!busy) nameInput.current?.focus(); }, [busy, draft.parentId, draft.beforeId]);
-  const escape = (event: { key: string; preventDefault: () => void }) => { if (event.key === "Escape") { event.preventDefault(); onClose(); } };
-  const onPlan = bootstrap.team.filter((member) => planPeople.has(member.id)), others = bootstrap.team.filter((member) => !planPeople.has(member.id));
-  const inherited = parent?.pics.filter((pic) => pic.active !== false).map((pic) => pic.name).join(", ") ?? "";
+  useEffect(() => {
+    if (!busy) nameInput.current?.focus();
+  }, [busy, draft.parentId, draft.beforeId]);
+  const escape = (event: { key: string; preventDefault: () => void }) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      onClose();
+    }
+  };
+  const onPlan = bootstrap.team.filter((member) => planPeople.has(member.id)),
+    others = bootstrap.team.filter((member) => !planPeople.has(member.id));
+  const inherited =
+    parent?.pics
+      .filter((pic) => pic.active !== false)
+      .map((pic) => pic.name)
+      .join(", ") ?? "";
   const nameLabel = kind === "heading" ? "Plan.headingName" : kind === "task" ? "CRM.taskName" : "CRM.functionName";
-  const person = (member: BootstrapData["team"][number]) => <option key={member.id} value={member.id}>{member.name}{member.department ? ` · ${member.department}` : ""}</option>;
-  return <form className="plan-draft" data-guide="plan.draft" aria-label={t(nameLabel)} onSubmit={(event) => { event.preventDefault(); onSave(); }}>
-    <span className="plan-draft-level" role="group" aria-label={t("Plan.draftLevel")} data-guide="plan.quickLevel">
-      <button type="button" className="icon-btn" disabled={busy || !canOut} aria-label={t("Plan.levelOut")} title={t("Plan.levelOut")} onClick={() => onLevel(-1)}><Icon name="chevronLeft" /></button>
-      <button type="button" className="icon-btn" disabled={busy || !canIn} aria-label={t("Plan.levelIn")} title={t("Plan.levelIn")} onClick={() => onLevel(1)}><Icon name="chevronRight" /></button>
-    </span>
-    <Badge tone={kind === "heading" ? "violet" : kind === "task" ? "blue" : "slate"}>{t(kind === "heading" ? "Plan.quickKindHeading" : kind === "task" ? "Plan.kindTask" : "Plan.kindFunction")}</Badge>
-    <input ref={nameInput} className="plan-draft-name" data-guide="plan.quickName" maxLength={500} placeholder={t(nameLabel)} aria-label={t(nameLabel)}
-      value={draft.name} readOnly={busy} onChange={(event) => onChange({ name: event.target.value })} onKeyDown={escape} />
-    {kind === "heading" ? null : <select className="plan-draft-member" data-guide="plan.quickMember" aria-label={t("Schedule.pics")} value={draft.memberId ?? ""} disabled={busy}
-      onChange={(event) => onChange({ memberId: event.target.value ? Number(event.target.value) : null })} onKeyDown={escape}>
-      <option value="">{ownOnly ? t("Plan.creatorPicDefault") : kind === "task" ? `${t("CRM.selectMember")} *` : `${t("CRM.sameAsTask")}${inherited ? ` · ${inherited}` : ""}`}</option>
-      {onPlan.length ? <optgroup label={t("Plan.peopleOnPlan")}>{onPlan.map(person)}</optgroup> : null}
-      <optgroup label={t("Plan.everyoneElse")}>{others.map(person)}</optgroup>
-    </select>}
-    <span className="plan-draft-dates">
-      <DateInput aria-label={t(kind === "heading" ? "Plan.customerStart" : "CRM.planStart")} title={t(kind === "heading" ? "Plan.customerStart" : "CRM.planStart")}
-        value={draft.start} readOnly={busy} onChange={(event) => onChange({ start: event.target.value, ...(draft.finish && event.target.value > draft.finish ? { finish: event.target.value } : {}) })} onKeyDown={escape} />
-      <span aria-hidden="true">–</span>
-      <DateInput aria-label={t(kind === "heading" ? "Plan.customerFinish" : "CRM.planFinish")} title={t(kind === "heading" ? "Plan.customerFinish" : "CRM.planFinish")}
-        min={draft.start || undefined} value={draft.finish} readOnly={busy} onChange={(event) => onChange({ finish: event.target.value })} onKeyDown={escape} />
-    </span>
-    <button type="submit" className="btn primary sm" data-guide="plan.save" disabled={busy || !draft.name.trim()}><Icon name="check" />{t(busy ? "Saving…" : "Save")}</button>
-    <button type="button" className="icon-btn" aria-label={t("Close")} title={t("Close")} onClick={onClose}><Icon name="x" /></button>
-    <small className="plan-draft-hint">{t(ownOnly ? "Plan.memberDraftHint" : "Plan.draftHint")}</small>
-    {draft.error ? <small className="plan-draft-error" role="alert">{draft.error}</small> : null}
-  </form>;
+  const person = (member: BootstrapData["team"][number]) => (
+    <option key={member.id} value={member.id}>
+      {member.name}
+      {member.department ? ` · ${member.department}` : ""}
+    </option>
+  );
+  return (
+    <form
+      className="plan-draft"
+      data-guide="plan.draft"
+      aria-label={t(nameLabel)}
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSave();
+      }}
+    >
+      <span className="plan-draft-level" role="group" aria-label={t("Plan.draftLevel")} data-guide="plan.quickLevel">
+        <button type="button" className="icon-btn" disabled={busy || !canOut} aria-label={t("Plan.levelOut")} title={t("Plan.levelOut")} onClick={() => onLevel(-1)}>
+          <Icon name="chevronLeft" />
+        </button>
+        <button type="button" className="icon-btn" disabled={busy || !canIn} aria-label={t("Plan.levelIn")} title={t("Plan.levelIn")} onClick={() => onLevel(1)}>
+          <Icon name="chevronRight" />
+        </button>
+      </span>
+      <Badge tone={kind === "heading" ? "violet" : kind === "task" ? "blue" : "slate"}>
+        {t(kind === "heading" ? "Plan.quickKindHeading" : kind === "task" ? "Plan.kindTask" : "Plan.kindFunction")}
+      </Badge>
+      <input
+        ref={nameInput}
+        className="plan-draft-name"
+        data-guide="plan.quickName"
+        maxLength={500}
+        placeholder={t(nameLabel)}
+        aria-label={t(nameLabel)}
+        value={draft.name}
+        readOnly={busy}
+        onChange={(event) => onChange({ name: event.target.value })}
+        onKeyDown={escape}
+      />
+      {kind === "heading" ? null : (
+        <select
+          className="plan-draft-member"
+          data-guide="plan.quickMember"
+          aria-label={t("Schedule.pics")}
+          value={draft.memberId ?? ""}
+          disabled={busy}
+          onChange={(event) => onChange({ memberId: event.target.value ? Number(event.target.value) : null })}
+          onKeyDown={escape}
+        >
+          <option value="">{ownOnly ? t("Plan.creatorPicDefault") : kind === "task" ? `${t("CRM.selectMember")} *` : `${t("CRM.sameAsTask")}${inherited ? ` · ${inherited}` : ""}`}</option>
+          {onPlan.length ? <optgroup label={t("Plan.peopleOnPlan")}>{onPlan.map(person)}</optgroup> : null}
+          <optgroup label={t("Plan.everyoneElse")}>{others.map(person)}</optgroup>
+        </select>
+      )}
+      <span className="plan-draft-dates">
+        <DateInput
+          aria-label={t(kind === "heading" ? "Plan.customerStart" : "CRM.planStart")}
+          title={t(kind === "heading" ? "Plan.customerStart" : "CRM.planStart")}
+          value={draft.start}
+          readOnly={busy}
+          onChange={(event) => onChange({ start: event.target.value, ...(draft.finish && event.target.value > draft.finish ? { finish: event.target.value } : {}) })}
+          onKeyDown={escape}
+        />
+        <span aria-hidden="true">–</span>
+        <DateInput
+          aria-label={t(kind === "heading" ? "Plan.customerFinish" : "CRM.planFinish")}
+          title={t(kind === "heading" ? "Plan.customerFinish" : "CRM.planFinish")}
+          min={draft.start || undefined}
+          value={draft.finish}
+          readOnly={busy}
+          onChange={(event) => onChange({ finish: event.target.value })}
+          onKeyDown={escape}
+        />
+      </span>
+      <button type="submit" className="btn primary sm" data-guide="plan.save" disabled={busy || !draft.name.trim()}>
+        <Icon name="check" />
+        {t(busy ? "Saving…" : "Save")}
+      </button>
+      <button type="button" className="icon-btn" aria-label={t("Close")} title={t("Close")} onClick={onClose}>
+        <Icon name="x" />
+      </button>
+      <small className="plan-draft-hint">{t(ownOnly ? "Plan.memberDraftHint" : "Plan.draftHint")}</small>
+      {draft.error ? (
+        <small className="plan-draft-error" role="alert">
+          {draft.error}
+        </small>
+      ) : null}
+    </form>
+  );
 }
 
 /*
@@ -2108,7 +3310,15 @@ function PlanRowDraftEditor({ bootstrap, draft, parent, planPeople, ownOnly, bus
  * duration, effort and who is responsible. Progress stays where it is. A row whose dates come
  * from its detail rows keeps them; they are shown but not editable here.
  */
-function EditScheduleTaskModal({ bootstrap, schedule, task, onClose, onSaved, onDeleted, onConflict }: {
+function EditScheduleTaskModal({
+  bootstrap,
+  schedule,
+  task,
+  onClose,
+  onSaved,
+  onDeleted,
+  onConflict,
+}: {
   bootstrap: BootstrapData;
   schedule: ProjectSchedule;
   task: ScheduleTask;
@@ -2142,22 +3352,37 @@ function EditScheduleTaskModal({ bootstrap, schedule, task, onClose, onSaved, on
   const parentIsHeading = task.parentId !== null && flattenTasks(schedule.tasks).find((row) => row.id === task.parentId)?.kind === "phase";
   const keepsMember = task.kind === "task" && parentIsHeading && task.pics.length > 0 && !picUserIds.length;
   const removing = flattenTasks([task]);
-  const deleteReason = ownOnly && removing.some(row => !row.canEditOwn) ? "Plan.deleteOthers" : removing.some((row) => row.status !== "Not Started" || Number(row.percentComplete) > 0 || row.actualStart || row.actualFinish || Number(row.actualManDays) > 0) ? "Plan.deleteProgress"
-      : removing.some((row) => row.kind === "detail") ? "Plan.deleteDetail" : "";
+  const deleteReason =
+    ownOnly && removing.some((row) => !row.canEditOwn)
+      ? "Plan.deleteOthers"
+      : removing.some((row) => row.status !== "Not Started" || Number(row.percentComplete) > 0 || row.actualStart || row.actualFinish || Number(row.actualManDays) > 0)
+        ? "Plan.deleteProgress"
+        : removing.some((row) => row.kind === "detail")
+          ? "Plan.deleteDetail"
+          : "";
   const remove = async () => {
     if (busy || deleteReason) return;
-    const confirmation = t("Plan.deleteConfirm").replace("{name}", task.name)
-      + (removing.length > 1 ? `\n${t("Plan.deleteChildren").replace("{count}", String(removing.length - 1))}` : "");
+    const confirmation = t("Plan.deleteConfirm").replace("{name}", task.name) + (removing.length > 1 ? `\n${t("Plan.deleteChildren").replace("{count}", String(removing.length - 1))}` : "");
     if (!(await confirmDialog(confirmation, { danger: true }))) return;
-    setBusy(true); setError(""); setFailedAction("delete");
+    setBusy(true);
+    setError("");
+    setFailedAction("delete");
     try {
       await apiRequest(`/api/v1/schedule/tasks/${task.id}`, { method: "DELETE", body: JSON.stringify({ scheduleVersion: schedule.scheduleVersion, rowVersion: task.rowVersion }) });
-      await onDeleted(); onClose();
+      await onDeleted();
+      onClose();
     } catch (requestError) {
       if (isConcurrencyConflict(requestError)) {
-        try { await onConflict(); onClose(); } catch (reloadError) { setError(toError(reloadError)); }
+        try {
+          await onConflict();
+          onClose();
+        } catch (reloadError) {
+          setError(toError(reloadError));
+        }
       } else setError(toError(requestError));
-    } finally { setBusy(false); }
+    } finally {
+      setBusy(false);
+    }
   };
   // Locked dates go back exactly as stored, so the API sees them unchanged.
   const lockedStart = { startMode: task.startMode, predecessorId: task.predecessorId, lagDays: task.lagDays, planStart: task.storedPlanStart ?? null };
@@ -2168,22 +3393,45 @@ function EditScheduleTaskModal({ bootstrap, schedule, task, onClose, onSaved, on
     return span.from && span.to ? Math.max(1, periodDays(span.from, span.to)) : planDays;
   };
   const submit = async () => {
-    setBusy(true); setError(""); setFailedAction("save");
+    setBusy(true);
+    setError("");
+    setFailedAction("save");
     try {
       if (!isPhase && !ownOnly) await ensureScheduleMembers(schedule.projectId, schedule.managerId, picUserIds);
-      await apiRequest(`/api/v1/schedule/tasks/${task.id}`, { method: "PUT", body: JSON.stringify({
-        scheduleVersion: schedule.scheduleVersion, rowVersion: task.rowVersion,
-        parentId: task.parentId, sortOrder: task.sortOrder, kind: task.kind, name: name.trim(),
-        isMilestone: isPhase ? false : milestone, visibility,
-        ...(isPhase ? { ...lockedStart, planStart: customer.start || null } : datesLocked ? lockedStart : ownOnly ? { ...lockedStart, planStart: task.startMode === "manual" ? start.planStart : task.storedPlanStart ?? null } : startBody(start, task.storedPlanStart ?? null)),
-        planDays: isPhase ? (customer.start && customer.finish ? periodDays(customer.start, customer.finish) : 1) : milestone && !datesLocked ? 1 : datesLocked ? task.planDays : calendarDays(),
-        picUserIds: isPhase ? [] : picUserIds, picExternal: isPhase ? "" : picExternal.trim(), planManDays: isPhase ? 0 : planManDays,
-      }) });
+      await apiRequest(`/api/v1/schedule/tasks/${task.id}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          scheduleVersion: schedule.scheduleVersion,
+          rowVersion: task.rowVersion,
+          parentId: task.parentId,
+          sortOrder: task.sortOrder,
+          kind: task.kind,
+          name: name.trim(),
+          isMilestone: isPhase ? false : milestone,
+          visibility,
+          ...(isPhase
+            ? { ...lockedStart, planStart: customer.start || null }
+            : datesLocked
+              ? lockedStart
+              : ownOnly
+                ? { ...lockedStart, planStart: task.startMode === "manual" ? start.planStart : (task.storedPlanStart ?? null) }
+                : startBody(start, task.storedPlanStart ?? null)),
+          planDays: isPhase ? (customer.start && customer.finish ? periodDays(customer.start, customer.finish) : 1) : milestone && !datesLocked ? 1 : datesLocked ? task.planDays : calendarDays(),
+          picUserIds: isPhase ? [] : picUserIds,
+          picExternal: isPhase ? "" : picExternal.trim(),
+          planManDays: isPhase ? 0 : planManDays,
+        }),
+      });
       await onSaved();
       onClose();
     } catch (requestError) {
       if (isConcurrencyConflict(requestError)) {
-        try { await onConflict(); onClose(); } catch (reloadError) { setError(toError(reloadError)); }
+        try {
+          await onConflict();
+          onClose();
+        } catch (reloadError) {
+          setError(toError(reloadError));
+        }
         return;
       }
       setError(toError(requestError));
@@ -2191,41 +3439,176 @@ function EditScheduleTaskModal({ bootstrap, schedule, task, onClose, onSaved, on
       setBusy(false);
     }
   };
-  return <Modal title="Schedule.editRow" subtitle={`${schedule.projectNo} · ${task.wbs} · ${task.name}`} size="lg" onClose={onClose} footer={<>
-    <span style={{ marginRight: "auto" }} title={deleteReason ? t(deleteReason) : undefined}><button className="btn danger ghost" type="button" data-guide="plan.delete" disabled={busy || Boolean(deleteReason)} title={deleteReason ? t(deleteReason) : undefined} onClick={() => { void remove(); }}>{t("Plan.deleteRow")}</button></span>
-    <button className="btn ghost" type="button" onClick={onClose} disabled={busy}><LocalizedText text={"Cancel"} /></button>
-    <button className="btn primary" type="button" disabled={busy || !name.trim() || (!datesLocked && (!startReady(start) || planDays < 1)) || planManDays < 0 || keepsMember || (isPhase && !customerPeriodReady(customer))} onClick={() => { void submit(); }}><Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : t("Schedule.saveRow")}</button>
-  </>}>
-    {error ? <LoadError message={t(error)} retry={() => { void (failedAction === "delete" ? remove() : submit()); }} /> : null}
-    <div className="form-grid two">
-      <label className="field span-2"><span><LocalizedText text={"Name *"} /></span><input maxLength={500} value={name} onChange={(event) => setName(event.target.value)} /></label>
-      {!ownOnly ? <label className="field"><span><LocalizedText text={"Visibility *"} /></span><select value={visibility} onChange={(event) => setVisibility(event.target.value)}><option value={"Internal"}><LocalizedText text={"Internal"} /></option><option value={"Customer"}><LocalizedText text={"Customer"} /></option></select></label> : null}
-      {isPhase ? <CustomerPeriodFields value={customer} onChange={setCustomer} /> : <>
-        {!ownOnly ? <label className="field"><span><LocalizedText text={"Plan man-days"} /></span><input type="number" min="0" max="1000000" step="0.25" value={planManDays} disabled={Boolean(task.peopleByDay?.length)} onChange={(event) => setPlanManDays(Number(event.target.value))} />{task.peopleByDay?.length ? <small>{t("Plan.mhFromPeople")}</small> : null}{budgetLeft !== null ? <small className={budgetLeft < 0 ? "plan-manhours-over" : undefined} data-guide="plan.manhoursRow">{t(budgetLeft < 0 ? "Plan.mhOver" : "Plan.mhRowLeft")} {number(Math.abs(budgetLeft))} {t("MD")}</small> : null}</label> : null}
-        {datesLocked ? <label className="field"><span><LocalizedText text={"Plan start *"} /></span><DateInput value={task.planStart ?? ""} disabled /></label>
-          : ownOnly ? <label className="field"><span><LocalizedText text={"Plan start *"} /></span><DateInput value={start.planStart} disabled={task.startMode !== "manual"} onChange={event => setStart(value => ({ ...value, planStart: event.target.value }))} /></label> : <PlanStartFields schedule={schedule} taskId={task.id} parentId={task.parentId} value={start} onChange={setStart} />}
-        <label className="field" data-guide="plan.workDays"><span><LocalizedText text={"Plan days *"} /></span><input type="number" min="1" max="3650" value={datesLocked ? storedWorkDays : milestone ? 1 : planDays} disabled={datesLocked || milestone} onChange={(event) => setPlanDays(Number(event.target.value))} /><small className="muted">{t("Plan.workDaysHint")}</small></label>
-        {datesLocked ? <p className="muted span-2">{t("Schedule.datesDerived")}</p> : !ownOnly ? <label className="checkbox-row span-2"><input type="checkbox" checked={milestone} onChange={(event) => setMilestone(event.target.checked)} /><LocalizedText text={"Milestone (1 day)"} /></label> : null}
-        <PicFieldsWithLoad bootstrap={planTeam} span={datesLocked ? { from: task.planStart, to: task.planFinish } : draftSpan(schedule, start, planDays, milestone)} taskId={task.id} value={picUserIds} onChange={setPicUserIds} manDays={planManDays} />
-        {keepsMember ? <p className="muted span-2" role="status">{t("Plan.memberRequired")}</p> : null}
-        {!ownOnly ? <label className="field span-2"><span><LocalizedText text={"External PIC"} /></span><input maxLength={300} value={picExternal} onChange={(event) => setPicExternal(event.target.value)} /></label> : null}
-      </>}
-    </div>
-  </Modal>;
+  return (
+    <Modal
+      title="Schedule.editRow"
+      subtitle={`${schedule.projectNo} · ${task.wbs} · ${task.name}`}
+      size="lg"
+      onClose={onClose}
+      footer={
+        <>
+          <span style={{ marginRight: "auto" }} title={deleteReason ? t(deleteReason) : undefined}>
+            <button
+              className="btn danger ghost"
+              type="button"
+              data-guide="plan.delete"
+              disabled={busy || Boolean(deleteReason)}
+              title={deleteReason ? t(deleteReason) : undefined}
+              onClick={() => {
+                void remove();
+              }}
+            >
+              {t("Plan.deleteRow")}
+            </button>
+          </span>
+          <button className="btn ghost" type="button" onClick={onClose} disabled={busy}>
+            <LocalizedText text={"Cancel"} />
+          </button>
+          <button
+            className="btn primary"
+            type="button"
+            disabled={busy || !name.trim() || (!datesLocked && (!startReady(start) || planDays < 1)) || planManDays < 0 || keepsMember || (isPhase && !customerPeriodReady(customer))}
+            onClick={() => {
+              void submit();
+            }}
+          >
+            <Icon name="check" />
+            {busy ? <LocalizedText text={"Saving…"} /> : t("Schedule.saveRow")}
+          </button>
+        </>
+      }
+    >
+      {error ? (
+        <LoadError
+          message={t(error)}
+          retry={() => {
+            void (failedAction === "delete" ? remove() : submit());
+          }}
+        />
+      ) : null}
+      <div className="form-grid two">
+        <label className="field span-2">
+          <span>
+            <LocalizedText text={"Name *"} />
+          </span>
+          <input maxLength={500} value={name} onChange={(event) => setName(event.target.value)} />
+        </label>
+        {!ownOnly ? (
+          <label className="field">
+            <span>
+              <LocalizedText text={"Visibility *"} />
+            </span>
+            <select value={visibility} onChange={(event) => setVisibility(event.target.value)}>
+              <option value={"Internal"}>
+                <LocalizedText text={"Internal"} />
+              </option>
+              <option value={"Customer"}>
+                <LocalizedText text={"Customer"} />
+              </option>
+            </select>
+          </label>
+        ) : null}
+        {isPhase ? (
+          <CustomerPeriodFields value={customer} onChange={setCustomer} />
+        ) : (
+          <>
+            {!ownOnly ? (
+              <label className="field">
+                <span>
+                  <LocalizedText text={"Plan man-days"} />
+                </span>
+                <input
+                  type="number"
+                  min="0"
+                  max="1000000"
+                  step="0.25"
+                  value={planManDays}
+                  disabled={Boolean(task.peopleByDay?.length)}
+                  onChange={(event) => setPlanManDays(Number(event.target.value))}
+                />
+                {task.peopleByDay?.length ? <small>{t("Plan.mhFromPeople")}</small> : null}
+                {budgetLeft !== null ? (
+                  <small className={budgetLeft < 0 ? "plan-manhours-over" : undefined} data-guide="plan.manhoursRow">
+                    {t(budgetLeft < 0 ? "Plan.mhOver" : "Plan.mhRowLeft")} {number(Math.abs(budgetLeft))} {t("MD")}
+                  </small>
+                ) : null}
+              </label>
+            ) : null}
+            {datesLocked ? (
+              <label className="field">
+                <span>
+                  <LocalizedText text={"Plan start *"} />
+                </span>
+                <DateInput value={task.planStart ?? ""} disabled />
+              </label>
+            ) : ownOnly ? (
+              <label className="field">
+                <span>
+                  <LocalizedText text={"Plan start *"} />
+                </span>
+                <DateInput value={start.planStart} disabled={task.startMode !== "manual"} onChange={(event) => setStart((value) => ({ ...value, planStart: event.target.value }))} />
+              </label>
+            ) : (
+              <PlanStartFields schedule={schedule} taskId={task.id} parentId={task.parentId} value={start} onChange={setStart} />
+            )}
+            <label className="field" data-guide="plan.workDays">
+              <span>
+                <LocalizedText text={"Plan days *"} />
+              </span>
+              <input
+                type="number"
+                min="1"
+                max="3650"
+                value={datesLocked ? storedWorkDays : milestone ? 1 : planDays}
+                disabled={datesLocked || milestone}
+                onChange={(event) => setPlanDays(Number(event.target.value))}
+              />
+              <small className="muted">{t("Plan.workDaysHint")}</small>
+            </label>
+            {datesLocked ? (
+              <p className="muted span-2">{t("Schedule.datesDerived")}</p>
+            ) : !ownOnly ? (
+              <label className="checkbox-row span-2">
+                <input type="checkbox" checked={milestone} onChange={(event) => setMilestone(event.target.checked)} />
+                <LocalizedText text={"Milestone (1 day)"} />
+              </label>
+            ) : null}
+            <PicFieldsWithLoad
+              bootstrap={planTeam}
+              span={datesLocked ? { from: task.planStart, to: task.planFinish } : draftSpan(schedule, start, planDays, milestone)}
+              taskId={task.id}
+              value={picUserIds}
+              onChange={setPicUserIds}
+              manDays={planManDays}
+            />
+            {keepsMember ? (
+              <p className="muted span-2" role="status">
+                {t("Plan.memberRequired")}
+              </p>
+            ) : null}
+            {!ownOnly ? (
+              <label className="field span-2">
+                <span>
+                  <LocalizedText text={"External PIC"} />
+                </span>
+                <input maxLength={300} value={picExternal} onChange={(event) => setPicExternal(event.target.value)} />
+              </label>
+            ) : null}
+          </>
+        )}
+      </div>
+    </Modal>
+  );
 }
 
-function BaselineModal({ schedule, onClose, onCreated, onConflict }: {
-  schedule: ProjectSchedule;
-  onClose: () => void;
-  onCreated: () => Promise<void>;
-  onConflict?: () => Promise<void>;
-}) {
+function BaselineModal({ schedule, onClose, onCreated, onConflict }: { schedule: ProjectSchedule; onClose: () => void; onCreated: () => Promise<void>; onConflict?: () => Promise<void> }) {
   const [label, setLabel] = useState(`Baseline ${schedule.baselines.length + 1}`);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const submit = async () => {
-    setBusy(true); setError("");
+    setBusy(true);
+    setError("");
     try {
       await apiRequest(`/api/v1/projects/${schedule.projectId}/schedule/baseline`, {
         method: "POST",
@@ -2244,22 +3627,67 @@ function BaselineModal({ schedule, onClose, onCreated, onConflict }: {
         return;
       }
       setError(toError(requestError));
+    } finally {
+      setBusy(false);
     }
-    finally { setBusy(false); }
   };
-  return <Modal title="Create schedule baseline" subtitle="Freeze วันที่แผนปัจจุบันเป็น revision ใหม่ใน SQL Server" onClose={onClose} footer={<>
-    <button className="btn ghost" type="button" onClick={onClose} disabled={busy}><LocalizedText text={"Cancel"} /></button>
-    <button className="btn primary" type="button" onClick={() => { void submit(); }} disabled={busy || !label.trim() || !reason.trim()}><Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : "Create baseline"}</button>
-  </>}>
-    {error ? <LoadError message={error} retry={() => { void submit(); }} /> : null}
-    <div className="form-grid two">
-      <label className="field span-2"><span><LocalizedText text={"Label *"} /></span><input maxLength={200} value={label} onChange={(event) => setLabel(event.target.value)} /></label>
-      <label className="field span-2"><span><LocalizedText text={"Reason *"} /></span><textarea maxLength={20000} value={reason} onChange={(event) => setReason(event.target.value)} /></label>
-    </div>
-  </Modal>;
+  return (
+    <Modal
+      title="Create schedule baseline"
+      subtitle="Freeze วันที่แผนปัจจุบันเป็น revision ใหม่ใน SQL Server"
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn ghost" type="button" onClick={onClose} disabled={busy}>
+            <LocalizedText text={"Cancel"} />
+          </button>
+          <button
+            className="btn primary"
+            type="button"
+            onClick={() => {
+              void submit();
+            }}
+            disabled={busy || !label.trim() || !reason.trim()}
+          >
+            <Icon name="check" />
+            {busy ? <LocalizedText text={"Saving…"} /> : "Create baseline"}
+          </button>
+        </>
+      }
+    >
+      {error ? (
+        <LoadError
+          message={error}
+          retry={() => {
+            void submit();
+          }}
+        />
+      ) : null}
+      <div className="form-grid two">
+        <label className="field span-2">
+          <span>
+            <LocalizedText text={"Label *"} />
+          </span>
+          <input maxLength={200} value={label} onChange={(event) => setLabel(event.target.value)} />
+        </label>
+        <label className="field span-2">
+          <span>
+            <LocalizedText text={"Reason *"} />
+          </span>
+          <textarea maxLength={20000} value={reason} onChange={(event) => setReason(event.target.value)} />
+        </label>
+      </div>
+    </Modal>
+  );
 }
 
-function ScheduleDayRequestAnswerModal({ request, schedule, task, onClose, onAnswered }: {
+function ScheduleDayRequestAnswerModal({
+  request,
+  schedule,
+  task,
+  onClose,
+  onAnswered,
+}: {
   request: ScheduleUpdate;
   schedule: ProjectSchedule;
   task: ScheduleTask | null;
@@ -2272,8 +3700,12 @@ function ScheduleDayRequestAnswerModal({ request, schedule, task, onClose, onAns
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const submit = async () => {
-    if (!task) { setError("The requested task is no longer available. Reload the schedule."); return; }
-    setBusy(true); setError("");
+    if (!task) {
+      setError("The requested task is no longer available. Reload the schedule.");
+      return;
+    }
+    setBusy(true);
+    setError("");
     try {
       await apiRequest(`/api/v1/schedule/day-requests/${request.id}/answer`, {
         method: "POST",
@@ -2293,19 +3725,62 @@ function ScheduleDayRequestAnswerModal({ request, schedule, task, onClose, onAns
     }
   };
   const taskLabel = task ? `${task.wbs} ${task.name}` : `Task ${request.taskId ?? "—"}`;
-  return <Modal
-    title="Review request for more days"
-    subtitle={`${schedule.projectNo} · ${taskLabel}`}
-    onClose={onClose}
-    footer={<><button className="btn default" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className={answer === "Accepted" ? "btn success" : "btn danger"} type="button" disabled={busy || !task || !note.trim()} onClick={() => { void submit(); }}><Icon name={answer === "Accepted" ? "check" : "x"} />{busy ? <LocalizedText text={"Saving…"} /> : answer}</button></>}
-  >
-    {error ? <LoadError message={error} retry={() => { void submit(); }} /> : null}
-    <div className="request-impact"><Icon name="clock" /><span>{request.requestDays} <LocalizedText text={"calendar day"} />{request.requestDays === 1 ? "" : "s"} <LocalizedText text={"requested. Accepting extends the task duration and recalculates the project schedule."} /></span></div>
-    <div className="form-grid two">
-      <Field label="Decision"><select value={answer} onChange={(event) => setAnswer(event.target.value as "Accepted" | "Rejected")}><option value={"Accepted"}><LocalizedText text={"Accepted"} /></option><option value={"Rejected"}><LocalizedText text={"Rejected"} /></option></select></Field>
-      <Field label="PM note (required)" span={2}><textarea maxLength={20000} rows={3} value={note} onChange={(event) => setNote(event.target.value)} placeholder={localizeCopy("Explain the decision for the team and audit trail")} /></Field>
-    </div>
-  </Modal>;
+  return (
+    <Modal
+      title="Review request for more days"
+      subtitle={`${schedule.projectNo} · ${taskLabel}`}
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn default" type="button" disabled={busy} onClick={onClose}>
+            <LocalizedText text={"Cancel"} />
+          </button>
+          <button
+            className={answer === "Accepted" ? "btn success" : "btn danger"}
+            type="button"
+            disabled={busy || !task || !note.trim()}
+            onClick={() => {
+              void submit();
+            }}
+          >
+            <Icon name={answer === "Accepted" ? "check" : "x"} />
+            {busy ? <LocalizedText text={"Saving…"} /> : answer}
+          </button>
+        </>
+      }
+    >
+      {error ? (
+        <LoadError
+          message={error}
+          retry={() => {
+            void submit();
+          }}
+        />
+      ) : null}
+      <div className="request-impact">
+        <Icon name="clock" />
+        <span>
+          {request.requestDays} <LocalizedText text={"calendar day"} />
+          {request.requestDays === 1 ? "" : "s"} <LocalizedText text={"requested. Accepting extends the task duration and recalculates the project schedule."} />
+        </span>
+      </div>
+      <div className="form-grid two">
+        <Field label="Decision">
+          <select value={answer} onChange={(event) => setAnswer(event.target.value as "Accepted" | "Rejected")}>
+            <option value={"Accepted"}>
+              <LocalizedText text={"Accepted"} />
+            </option>
+            <option value={"Rejected"}>
+              <LocalizedText text={"Rejected"} />
+            </option>
+          </select>
+        </Field>
+        <Field label="PM note (required)" span={2}>
+          <textarea maxLength={20000} rows={3} value={note} onChange={(event) => setNote(event.target.value)} placeholder={localizeCopy("Explain the decision for the team and audit trail")} />
+        </Field>
+      </div>
+    </Modal>
+  );
 }
 
 type PlanFilter = "late" | "blocked" | "mine" | "waiting";
@@ -2322,10 +3797,18 @@ const PLAN_ZOOM_LINK = choiceLink<GanttZoomChoice>(["fit", "month", "quarter", "
 /** The whole plan (Team Plan), only the headings on the customer's dates (Master Plan), or the plan by who does it. */
 const LEGEND_KEY = "tomas-tech-plan-legend";
 function readLegendOpen(): boolean {
-  try { return window.localStorage.getItem(LEGEND_KEY) === "1"; } catch { return false; }
+  try {
+    return window.localStorage.getItem(LEGEND_KEY) === "1";
+  } catch {
+    return false;
+  }
 }
 function saveLegendOpen(open: boolean) {
-  try { window.localStorage.setItem(LEGEND_KEY, open ? "1" : "0"); } catch { /* storage blocked: the choice lasts for this visit only */ }
+  try {
+    window.localStorage.setItem(LEGEND_KEY, open ? "1" : "0");
+  } catch {
+    /* storage blocked: the choice lasts for this visit only */
+  }
 }
 type PlanLevel = "team" | "master" | "member" | "people";
 const PLAN_LEVEL_LINK = choiceLink<PlanLevel>(["team", "master", "member", "people"]);
@@ -2336,37 +3819,52 @@ const PLAN_LEVEL_LABEL: Record<PlanLevel, string> = { team: "Plan.levelTeam", ma
  * under it, once per person on it, its man-days shared, with the task under its heading as its piece of work.
  */
 function planCommitments(schedule: ProjectSchedule): Commitment[] {
-  const rows = flattenTasks(schedule.tasks), byId = new Map(rows.map((row) => [row.id, row]));
+  const rows = flattenTasks(schedule.tasks),
+    byId = new Map(rows.map((row) => [row.id, row]));
   const groupOf = (row: ScheduleTask) => {
     let top = row;
     for (let parent = top.parentId === null ? undefined : byId.get(top.parentId); parent && parent.kind !== "phase"; parent = top.parentId === null ? undefined : byId.get(top.parentId)) top = parent;
     return `Project-${top.id}`;
   };
-  return rows.filter((row) => row.kind !== "phase" && !row.children.length).flatMap((row) => {
-    const owners = row.pics.filter((pic) => pic.active !== false).map((pic) => pic.id);
-    // As backend-node/src/resource-workload.ts builds them: people typed per day load each PIC with their share of each
-    // day, and outsourced manpower is the supplier's, so its row carries no man-days for its PIC.
-    const outsourced = row.laborSource === "Outsourced", people = row.peopleByDay ?? [];
-    const byDay = !outsourced && people.length && row.planStart ? peopleShares(row.planStart, people, owners.length || 1) : null;
-    return (owners.length ? owners : [null]).map((ownerId): Commitment => ({
-      key: `Project-${row.id}-${ownerId ?? "none"}`, workKey: `Project-${row.id}`, group: groupOf(row), type: "Project", entityId: schedule.projectId, ownerId,
-      reference: `${schedule.projectNo} · ${row.wbs}`, title: row.name, customer: "", start: row.planStart, end: row.planFinish,
-      manDays: outsourced ? null : byDay ? sharesTotal(byDay) : Number(row.planManDays) / (owners.length || 1), progress: Number(row.percentComplete), status: row.status,
-      ...(byDay ? { byDay } : {}),
-    }));
-  });
+  return rows
+    .filter((row) => row.kind !== "phase" && !row.children.length)
+    .flatMap((row) => {
+      const owners = row.pics.filter((pic) => pic.active !== false).map((pic) => pic.id);
+      // As backend-node/src/resource-workload.ts builds them: people typed per day load each PIC with their share of each
+      // day, and outsourced manpower is the supplier's, so its row carries no man-days for its PIC.
+      const outsourced = row.laborSource === "Outsourced",
+        people = row.peopleByDay ?? [];
+      const byDay = !outsourced && people.length && row.planStart ? peopleShares(row.planStart, people, owners.length || 1) : null;
+      return (owners.length ? owners : [null]).map((ownerId): Commitment => ({
+        key: `Project-${row.id}-${ownerId ?? "none"}`,
+        workKey: `Project-${row.id}`,
+        group: groupOf(row),
+        type: "Project",
+        entityId: schedule.projectId,
+        ownerId,
+        reference: `${schedule.projectNo} · ${row.wbs}`,
+        title: row.name,
+        customer: "",
+        start: row.planStart,
+        end: row.planFinish,
+        manDays: outsourced ? null : byDay ? sharesTotal(byDay) : Number(row.planManDays) / (owners.length || 1),
+        progress: Number(row.percentComplete),
+        status: row.status,
+        ...(byDay ? { byDay } : {}),
+      }));
+    });
 }
 /** The dates the by-member view reads everyone's other work for: the plan's own, at most the 400 days the board allows. */
 function memberWindowOf(schedule: ProjectSchedule, today: string) {
-  const from = schedule.summary.planStart ?? today, finish = schedule.summary.planFinish ?? from;
+  const from = schedule.summary.planStart ?? today,
+    finish = schedule.summary.planFinish ?? from;
   const to = finish < from ? from : finish > ganttShift(from, 399) ? ganttShift(from, 399) : finish;
   return { from, to };
 }
 /** Project numbers in natural order: PJ26009 before PJ26010. */
 const byProjectNumber = (a: { number: string }, b: { number: string }) => a.number.localeCompare(b.number, "en", { numeric: true, sensitivity: "base" });
 const isLeafTask = (task: ScheduleTask) => task.kind !== "phase" && task.children.length === 0;
-const taskOrDescendantMatches = (task: ScheduleTask, matches: (task: ScheduleTask) => boolean): boolean =>
-  matches(task) || task.children.some((child) => taskOrDescendantMatches(child, matches));
+const taskOrDescendantMatches = (task: ScheduleTask, matches: (task: ScheduleTask) => boolean): boolean => matches(task) || task.children.some((child) => taskOrDescendantMatches(child, matches));
 
 /** The rows the plan draws: collapsed branches hidden; under a quick filter, matching tasks with their parents. */
 function planRows(tasks: ScheduleTask[], collapsed: Set<number>, matches: ((task: ScheduleTask) => boolean) | null): ScheduleTask[] {
@@ -2388,9 +3886,26 @@ function planRows(tasks: ScheduleTask[], collapsed: Set<number>, matches: ((task
  * they have (red) marked under their bars. `board` is the team board's read of everyone's work; this project's own work
  * comes from the plan on screen, which may be newer. Rows nobody is on come last.
  */
-function memberGanttRows({ schedule, board, span, today, closed, selectedTaskId, t, onOpenTask, onToggle }: {
-  schedule: ProjectSchedule; board: TeamBoardData | null; span: { from: string; to: string }; today: string; closed: ReadonlySet<string>;
-  selectedTaskId: number | null; t: (key: string) => string; onOpenTask: (taskId: number) => void; onToggle: (key: string) => void;
+function memberGanttRows({
+  schedule,
+  board,
+  span,
+  today,
+  closed,
+  selectedTaskId,
+  t,
+  onOpenTask,
+  onToggle,
+}: {
+  schedule: ProjectSchedule;
+  board: TeamBoardData | null;
+  span: { from: string; to: string };
+  today: string;
+  closed: ReadonlySet<string>;
+  selectedTaskId: number | null;
+  t: (key: string) => string;
+  onOpenTask: (taskId: number) => void;
+  onToggle: (key: string) => void;
 }): GanttRowSpec[] {
   const out: GanttRowSpec[] = [];
   const rows = flattenTasks(schedule.tasks);
@@ -2399,79 +3914,169 @@ function memberGanttRows({ schedule, board, span, today, closed, selectedTaskId,
   // This project's work comes from the plan on screen, which may be newer than the board's read.
   const otherWork = (board?.items ?? []).filter((item) => !(item.type === "Project" && item.entityId === schedule.projectId));
   const meetings = outlookLoad(board?.outlook ?? []);
-  const spanDays = boardDays(span.from, Math.ceil((dayNumber(span.to) - dayNumber(span.from)) / 7) + 2, holidays, today)
-    .filter((day) => day.date >= span.from && day.date <= span.to);
+  const spanDays = boardDays(span.from, Math.ceil((dayNumber(span.to) - dayNumber(span.from)) / 7) + 2, holidays, today).filter((day) => day.date >= span.from && day.date <= span.to);
   const people = new Map<number, string>();
   for (const task of rows) if (task.kind !== "phase") for (const pic of task.pics) if (pic.active !== false && !people.has(pic.id)) people.set(pic.id, pic.name);
-  const overlapTitle = (day: Overlap) => `${date(day.date)} · ${day.work.map((item) => (item.hidden ? t("TeamBoard.hiddenWork") : [item.reference, item.title].filter(Boolean).join(" "))).join(" · ")}`;
+  const overlapTitle = (day: Overlap) =>
+    `${date(day.date)} · ${day.work.map((item) => (item.hidden ? t("TeamBoard.hiddenWork") : [item.reference, item.title].filter(Boolean).join(" "))).join(" · ")}`;
   const taskRows = (owned: ScheduleTask[], person: string) => {
     const depthOf = new Map<number, number>();
     return owned.map((task): GanttRowSpec => {
       const depth = task.parentId !== null && depthOf.has(task.parentId) ? depthOf.get(task.parentId)! + 1 : 1;
       depthOf.set(task.id, depth);
       return {
-        key: `member:${person}:task:${task.id}`, depth, kind: task.children.length ? "phase" : "task", label: <><span className="mono">{task.wbs}</span> {task.name}</>,
-        meta: [t(task.status), `${Math.round(Number(task.percentComplete))}%`].join(" · "), onOpen: () => onOpenTask(task.id),
-        start: task.planStart, finish: task.planFinish, progress: Number(task.percentComplete), tone: scheduleTone(task, today), selected: selectedTaskId === task.id,
+        key: `member:${person}:task:${task.id}`,
+        depth,
+        kind: task.children.length ? "phase" : "task",
+        label: (
+          <>
+            <span className="mono">{task.wbs}</span> {task.name}
+          </>
+        ),
+        meta: [t(task.status), `${Math.round(Number(task.percentComplete))}%`].join(" · "),
+        onOpen: () => onOpenTask(task.id),
+        start: task.planStart,
+        finish: task.planFinish,
+        progress: Number(task.percentComplete),
+        tone: scheduleTone(task, today),
+        selected: selectedTaskId === task.id,
         title: `${task.wbs} ${task.name} · ${task.planStart ?? "—"} → ${task.planFinish ?? "—"} · ${Math.round(Number(task.percentComplete))}%`,
       };
     });
   };
-  const otherLabel = (item: Commitment) => t(item.type === "Project" ? "Plan.memberOtherProject" : item.type === "Inquiry" ? "TeamBoard.listRfq"
-    : item.type === "Estimate" ? "TeamBoard.listEst" : item.taskKind === "Appointment" ? "TeamBoard.listAppointment" : "TeamBoard.kindTask");
+  const otherLabel = (item: Commitment) =>
+    t(
+      item.type === "Project"
+        ? "Plan.memberOtherProject"
+        : item.type === "Inquiry"
+          ? "TeamBoard.listRfq"
+          : item.type === "Estimate"
+            ? "TeamBoard.listEst"
+            : item.taskKind === "Appointment"
+              ? "TeamBoard.listAppointment"
+              : "TeamBoard.kindTask",
+    );
   for (const [personId, name] of [...people].sort((a, b) => a[1].localeCompare(b[1]))) {
     const key = String(personId);
     const owned = rows.filter((task) => task.kind !== "phase" && task.pics.some((pic) => pic.id === personId && pic.active !== false));
     const mine = planWork.filter((item) => item.ownerId === personId);
-    const others = otherWork.filter((item) => item.ownerId === personId && item.start && (item.end ?? item.start) >= span.from && item.start <= span.to)
+    const others = otherWork
+      .filter((item) => item.ownerId === personId && item.start && (item.end ?? item.start) >= span.from && item.start <= span.to)
       .sort((a, b) => (a.start ?? "").localeCompare(b.start ?? ""));
     const all = [...mine, ...others];
     const overlaps = overlapDays(all, span.from, span.to, holidays);
     const capacity = weeklyCapacity(board?.capacities.find((entry) => entry.userId === personId)?.daysPerWeek);
     const overDates = withOutlook(dailyLoad(all, spanDays, capacity, holidays), (day) => meetings.get(`${personId}|${day}`) ?? 0)
-      .filter((day) => day.available > 0 && (day.utilisation ?? 0) > 100).map((day) => day.date);
+      .filter((day) => day.available > 0 && (day.utilisation ?? 0) > 100)
+      .map((day) => day.date);
     // What they are on today, else what comes next.
     const open = owned.filter((task) => !task.children.length && task.status !== "Done" && Number(task.percentComplete) < 100 && task.planStart && task.planFinish);
     const now = open.filter((task) => task.planStart! <= today && task.planFinish! >= today);
     const next = open.filter((task) => task.planStart! > today).sort((a, b) => a.planStart!.localeCompare(b.planStart!))[0];
-    const doing = now.length ? `${t("Plan.memberNow")} ${now.slice(0, 2).map((task) => `${task.wbs} ${task.name}`).join(", ")}${now.length > 2 ? ` +${now.length - 2}` : ""}`
-      : next ? `${t("Plan.memberNext")} ${next.wbs} ${next.name} (${date(next.planStart)})` : t("Plan.memberIdle");
+    const doing = now.length
+      ? `${t("Plan.memberNow")} ${now
+          .slice(0, 2)
+          .map((task) => `${task.wbs} ${task.name}`)
+          .join(", ")}${now.length > 2 ? ` +${now.length - 2}` : ""}`
+      : next
+        ? `${t("Plan.memberNext")} ${next.wbs} ${next.name} (${date(next.planStart)})`
+        : t("Plan.memberIdle");
     const alerts: GanttAlert[] = [
-      ...dateRuns(overlaps.map((day) => day.date), holidays).map((run) => ({ key: `overlap-${run.start}`, ...run, tone: "amber" as const,
-        title: overlaps.filter((day) => day.date >= run.start && day.date <= run.finish).map(overlapTitle).join("\n") })),
-      ...dateRuns(overDates, holidays).map((run) => ({ key: `over-${run.start}`, ...run, tone: "red" as const,
-        title: `${t("Plan.memberOverTitle")} · ${date(run.start)}${run.finish !== run.start ? ` – ${date(run.finish)}` : ""}` })),
+      ...dateRuns(
+        overlaps.map((day) => day.date),
+        holidays,
+      ).map((run) => ({
+        key: `overlap-${run.start}`,
+        ...run,
+        tone: "amber" as const,
+        title: overlaps
+          .filter((day) => day.date >= run.start && day.date <= run.finish)
+          .map(overlapTitle)
+          .join("\n"),
+      })),
+      ...dateRuns(overDates, holidays).map((run) => ({
+        key: `over-${run.start}`,
+        ...run,
+        tone: "red" as const,
+        title: `${t("Plan.memberOverTitle")} · ${date(run.start)}${run.finish !== run.start ? ` – ${date(run.finish)}` : ""}`,
+      })),
     ];
     const expanded = !closed.has(key);
     out.push({
-      key: `member:${key}`, depth: 0, kind: "project", label: name, expandable: true, expanded, onToggle: () => onToggle(key),
-      meta: [doing, t("Plan.memberTasks").replace("{n}", String(open.length)),
+      key: `member:${key}`,
+      depth: 0,
+      kind: "project",
+      label: name,
+      expandable: true,
+      expanded,
+      onToggle: () => onToggle(key),
+      meta: [
+        doing,
+        t("Plan.memberTasks").replace("{n}", String(open.length)),
         ...(overlaps.length ? [t("Plan.memberOverlapDays").replace("{n}", String(overlaps.length))] : []),
-        ...(overDates.length ? [t("Plan.memberOverDays").replace("{n}", String(overDates.length))] : [])].join(" · "),
+        ...(overDates.length ? [t("Plan.memberOverDays").replace("{n}", String(overDates.length))] : []),
+      ].join(" · "),
       ...(overlaps.length || overDates.length ? { status: <Badge tone={overDates.length ? "red" : "amber"}>{t(overDates.length ? "Plan.memberOverBadge" : "Plan.memberOverlapBadge")}</Badge> } : {}),
-      start: null, finish: null, tone: "slate", title: `${name} · ${doing}`,
+      start: null,
+      finish: null,
+      tone: "slate",
+      title: `${name} · ${doing}`,
       segments: [
-        ...mine.map((item) => ({ key: item.key, start: item.start, finish: item.end, tone: scheduleTone({ status: item.status, planFinish: item.end, percentComplete: item.progress }, today), title: `${item.reference} ${item.title}` })),
-        ...others.map((item) => ({ key: item.key, start: item.start, finish: item.end, tone: "slate" as const, title: item.hidden ? t("TeamBoard.hiddenWork") : `${otherLabel(item)} · ${item.reference} ${item.title}` })),
+        ...mine.map((item) => ({
+          key: item.key,
+          start: item.start,
+          finish: item.end,
+          tone: scheduleTone({ status: item.status, planFinish: item.end, percentComplete: item.progress }, today),
+          title: `${item.reference} ${item.title}`,
+        })),
+        ...others.map((item) => ({
+          key: item.key,
+          start: item.start,
+          finish: item.end,
+          tone: "slate" as const,
+          title: item.hidden ? t("TeamBoard.hiddenWork") : `${otherLabel(item)} · ${item.reference} ${item.title}`,
+        })),
       ],
       ...(alerts.length ? { alerts } : {}),
     });
     if (!expanded) continue;
     out.push(...taskRows(owned, key));
-    for (const item of others) out.push({
-      key: `member:${key}:other:${item.key}`, depth: 1, kind: "task", tone: "slate", start: item.start, finish: item.end,
-      label: <><span className="plan-member-other">{otherLabel(item)}</span> {item.hidden ? t("TeamBoard.hiddenWork") : [item.reference, item.title].filter(Boolean).join(" ")}</>,
-      ...(item.customer ? { meta: item.customer } : {}),
-      title: `${item.hidden ? t("TeamBoard.hiddenWork") : `${item.reference} ${item.title}`} · ${item.start ?? "—"} → ${item.end ?? "—"}`,
-    });
+    for (const item of others)
+      out.push({
+        key: `member:${key}:other:${item.key}`,
+        depth: 1,
+        kind: "task",
+        tone: "slate",
+        start: item.start,
+        finish: item.end,
+        label: (
+          <>
+            <span className="plan-member-other">{otherLabel(item)}</span> {item.hidden ? t("TeamBoard.hiddenWork") : [item.reference, item.title].filter(Boolean).join(" ")}
+          </>
+        ),
+        ...(item.customer ? { meta: item.customer } : {}),
+        title: `${item.hidden ? t("TeamBoard.hiddenWork") : `${item.reference} ${item.title}`} · ${item.start ?? "—"} → ${item.end ?? "—"}`,
+      });
   }
   // Rows nobody is on yet, so they are not missed.
   const unassigned = rows.filter((task) => task.kind !== "phase" && !task.children.length && !task.pics.some((pic) => pic.active !== false));
   if (unassigned.length) {
     const expanded = !closed.has("none");
-    out.push({ key: "member:none", depth: 0, kind: "project", label: t("Plan.memberUnassigned"), meta: t("Plan.memberTasks").replace("{n}", String(unassigned.length)),
-      expandable: true, expanded, onToggle: () => onToggle("none"), start: null, finish: null, tone: "slate", title: t("Plan.memberUnassigned"),
-      segments: unassigned.map((task) => ({ key: `none:${task.id}`, start: task.planStart, finish: task.planFinish, tone: scheduleTone(task, today), title: `${task.wbs} ${task.name}` })) });
+    out.push({
+      key: "member:none",
+      depth: 0,
+      kind: "project",
+      label: t("Plan.memberUnassigned"),
+      meta: t("Plan.memberTasks").replace("{n}", String(unassigned.length)),
+      expandable: true,
+      expanded,
+      onToggle: () => onToggle("none"),
+      start: null,
+      finish: null,
+      tone: "slate",
+      title: t("Plan.memberUnassigned"),
+      segments: unassigned.map((task) => ({ key: `none:${task.id}`, start: task.planStart, finish: task.planFinish, tone: scheduleTone(task, today), title: `${task.wbs} ${task.name}` })),
+    });
     if (expanded) out.push(...taskRows(unassigned, "none"));
   }
   return out;
@@ -2488,6 +4093,9 @@ const PLAN_ISSUE_TONE: Record<IssueState, "amber" | "slate" | "blue" | "green" |
 export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectId, preferredTaskId, onPreferredConsumed, openIssueBatch }: ProductionPlanningProps) {
   const uiText = useUiText();
   useActivitySubView("projects-schedule");
+  // V2 edits the plan in one place (owner 2026-11-22): the table editor (Master Plan template, Team Plan, plan dates) opens here.
+  const v2 = useProjectLook() === "v2";
+  const [planTableOpen, setPlanTableOpen] = useState(false);
   const allowed = bootstrap.permissions.includes("schedule.read");
   const storageKey = planProjectStorageKey(bootstrap.user.id);
   const today = isoToday();
@@ -2513,7 +4121,11 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
   const { ref: fullscreenRef, active: fullscreenActive, toggle: toggleFullscreen } = useFullscreen<HTMLDivElement>({ overlayOnly: true });
   // The colour key is closed until asked for, and stays the way the reader left it.
   const [legendOpen, setLegendOpen] = useState(() => typeof window !== "undefined" && readLegendOpen());
-  const toggleLegend = () => setLegendOpen((open) => { saveLegendOpen(!open); return !open; });
+  const toggleLegend = () =>
+    setLegendOpen((open) => {
+      saveLegendOpen(!open);
+      return !open;
+    });
   const [drawerTaskId, setDrawerTaskId] = useState<number | null>(preferredTaskId ?? linkedTaskId);
   // The row being typed in place (PlanRowDraftEditor), and whether it is saving.
   const [draft, setDraft] = useState<PlanDraft | null>(null);
@@ -2523,7 +4135,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
   const [progressTask, setProgressTask] = useState<ScheduleTask | null>(null);
   const [editTask, setEditTask] = useState<ScheduleTask | null>(null);
   const [drawerError, setDrawerError] = useState("");
-  const [drawingTask, setDrawingTask] = useState<{projectId:number;taskId:number} | null>(null);
+  const [drawingTask, setDrawingTask] = useState<{ projectId: number; taskId: number } | null>(null);
   const [answerRequest, setAnswerRequest] = useState<ScheduleUpdate | null>(null);
   const [saving, setSaving] = useState(false);
   // A bar dropped on new dates: drawn there while it saves, then offered for undo until the next move.
@@ -2532,7 +4144,8 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
   const scheduleRequestId = useRef(0);
   const loadProjects = useCallback(async () => {
     if (!allowed) return;
-    setLoadingProjects(true); setError("");
+    setLoadingProjects(true);
+    setError("");
     try {
       const loaded = [...(await listProjectOverview({ includeClosed: true })).items].sort(byProjectNumber);
       setProjects(loaded);
@@ -2541,18 +4154,29 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
         if (current && loaded.some((project) => project.id === current)) return current;
         const linked = preferredProjectId ?? linkedProjectId;
         if (linked && loaded.some((project) => project.id === linked)) {
-          try { window.localStorage.setItem(storageKey, String(linked)); } catch { /* Remembering the project is a convenience. */ }
+          try {
+            window.localStorage.setItem(storageKey, String(linked));
+          } catch {
+            /* Remembering the project is a convenience. */
+          }
           return linked;
         }
         let remembered: number | null = null;
-        try { remembered = Number(window.localStorage.getItem(storageKey)) || null; } catch { remembered = null; }
+        try {
+          remembered = Number(window.localStorage.getItem(storageKey)) || null;
+        } catch {
+          remembered = null;
+        }
         if (remembered && loaded.some((project) => project.id === remembered)) return remembered;
         return loaded.find((project) => project.status !== "Closed")?.id ?? loaded[0]?.id ?? null;
       });
       // Used once: a later visit to the Plan opens the remembered project, not this link's drawer again.
       if (preferredProjectId || preferredTaskId) onPreferredConsumed?.();
-    } catch (requestError) { setError(toError(requestError)); }
-    finally { setLoadingProjects(false); }
+    } catch (requestError) {
+      setError(toError(requestError));
+    } finally {
+      setLoadingProjects(false);
+    }
   }, [allowed, preferredProjectId, preferredTaskId, linkedProjectId, onPreferredConsumed, storageKey]);
   // A reload keeps the current plan on screen; only switching projects clears it.
   // Customer issues of the project (Punchlist batches, owner 2026-11-18): drawn under the plan, apart from it. They
@@ -2561,25 +4185,32 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
   const [issuesOpen, setIssuesOpen] = useState(true);
   const loadSchedule = useCallback(async () => {
     const requestId = ++scheduleRequestId.current;
-    if (!selectedId) { setSchedule(null); setLoadingSchedule(false); return; }
-    setLoadingSchedule(true); setError("");
+    if (!selectedId) {
+      setSchedule(null);
+      setLoadingSchedule(false);
+      return;
+    }
+    setLoadingSchedule(true);
+    setError("");
     try {
       const loaded = await apiRequest<ProjectSchedule>(`/api/v1/projects/${selectedId}/schedule`);
       if (scheduleRequestId.current === requestId && loaded.projectId === selectedId) setSchedule(loaded);
-    }
-    catch (requestError) {
+    } catch (requestError) {
       if (scheduleRequestId.current === requestId) setError(toError(requestError));
-    }
-    finally {
+    } finally {
       if (scheduleRequestId.current === requestId) setLoadingSchedule(false);
     }
   }, [selectedId]);
   useEffect(() => {
-    const timer = window.setTimeout(() => { void loadProjects(); }, 0);
+    const timer = window.setTimeout(() => {
+      void loadProjects();
+    }, 0);
     return () => window.clearTimeout(timer);
   }, [loadProjects]);
   useEffect(() => {
-    const timer = window.setTimeout(() => { void loadSchedule(); }, 0);
+    const timer = window.setTimeout(() => {
+      void loadSchedule();
+    }, 0);
     return () => {
       window.clearTimeout(timer);
       scheduleRequestId.current += 1;
@@ -2589,9 +4220,15 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
     if (!selectedId || !allowed) return;
     let live = true;
     loadProjectIssues(selectedId)
-      .then((result) => { if (live) setPlanIssues({ projectId: selectedId, items: result.items }); })
-      .catch(() => { if (live) setPlanIssues({ projectId: selectedId, items: [] }); });
-    return () => { live = false; };
+      .then((result) => {
+        if (live) setPlanIssues({ projectId: selectedId, items: result.items });
+      })
+      .catch(() => {
+        if (live) setPlanIssues({ projectId: selectedId, items: [] });
+      });
+    return () => {
+      live = false;
+    };
   }, [selectedId, allowed, schedule]);
   // The address names the open project and task, so it is a link to them.
   useEffect(() => {
@@ -2607,21 +4244,50 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
     const [, from, to] = memberKey.split("|");
     let current = true;
     const timer = window.setTimeout(() => {
-      loadTeamBoard(from!, to!).then((data) => { if (current) setMemberWork({ key: memberKey, data, error: "" }); })
-        .catch((failure: unknown) => { if (current) setMemberWork({ key: memberKey, data: null, error: toError(failure) }); });
+      loadTeamBoard(from!, to!)
+        .then((data) => {
+          if (current) setMemberWork({ key: memberKey, data, error: "" });
+        })
+        .catch((failure: unknown) => {
+          if (current) setMemberWork({ key: memberKey, data: null, error: toError(failure) });
+        });
     }, 0);
-    return () => { current = false; window.clearTimeout(timer); };
+    return () => {
+      current = false;
+      window.clearTimeout(timer);
+    };
   }, [memberKey]);
   const selectProject = (nextId: number | null) => {
     scheduleRequestId.current += 1;
-    setSchedule(null); setDrawerTaskId(null); setFilter(null); setCollapsed(new Set()); setZoom("fit");
-    setDraft(null); setBaselineOpen(false); setProgressTask(null); setEditTask(null); setAnswerRequest(null); setDrawerError(""); setMovePending(null); setLastMove(null);
+    setSchedule(null);
+    setDrawerTaskId(null);
+    setFilter(null);
+    setCollapsed(new Set());
+    setZoom("fit");
+    setDraft(null);
+    setBaselineOpen(false);
+    setProgressTask(null);
+    setEditTask(null);
+    setAnswerRequest(null);
+    setDrawerError("");
+    setMovePending(null);
+    setLastMove(null);
     setLoadingSchedule(Boolean(nextId));
     setSelectedId(nextId);
-    try { if (nextId) window.localStorage.setItem(storageKey, String(nextId)); } catch { /* Remembering the project is a convenience. */ }
+    try {
+      if (nextId) window.localStorage.setItem(storageKey, String(nextId));
+    } catch {
+      /* Remembering the project is a convenience. */
+    }
   };
   const planTeam = usePlanTeam(bootstrap, schedule?.projectId === selectedId ? schedule : null);
-  if (!allowed) return <><PageHeader eyebrow="PROJECT CONTROL" title={uiText("Plan.title")} subtitle="Plan.subtitle" /><PermissionNotice permission="schedule.read" message="ผู้ดูแลระบบต้องเพิ่มสิทธิ์ Schedule Read ให้บทบาทนี้" /></>;
+  if (!allowed)
+    return (
+      <>
+        <PageHeader eyebrow="PROJECT CONTROL" title={uiText("Plan.title")} subtitle="Plan.subtitle" />
+        <PermissionNotice permission="schedule.read" message="ผู้ดูแลระบบต้องเพิ่มสิทธิ์ Schedule Read ให้บทบาทนี้" />
+      </>
+    );
   const activeSchedule = schedule?.projectId === selectedId ? schedule : null;
   const selectedProject = projects.find((project) => project.id === selectedId) ?? null;
   const rows = activeSchedule ? flattenTasks(activeSchedule.tasks) : [];
@@ -2638,25 +4304,43 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
     mine: (task) => isLeafTask(task) && task.pics.some((pic) => pic.id === bootstrap.user.id),
   };
   const filterItems = PLAN_FILTERS.map((item) => ({ ...item, value: rows.filter(filterRules[item.key]).length }));
-  const visible = !activeSchedule ? [] : masterView ? activeSchedule.tasks.filter((task) => task.kind === "phase")
-    : planRows(activeSchedule.tasks, collapsed, filter ? filterRules[filter] : null);
+  const visible = !activeSchedule ? [] : masterView ? activeSchedule.tasks.filter((task) => task.kind === "phase") : planRows(activeSchedule.tasks, collapsed, filter ? filterRules[filter] : null);
   const target = selectedProject?.targetDelivery ?? null;
-  const range = zoom === "fit"
-    ? ganttFitWindow([activeSchedule?.summary.planStart, activeSchedule?.summary.planFinish, target, ...rows.map((task) => task.forecastFinish)], today)
-    : ganttWindow(zoom, anchor);
-  const toggleRow = (taskId: number) => setCollapsed((current) => { const next = new Set(current); if (next.has(taskId)) next.delete(taskId); else next.add(taskId); return next; });
+  const range =
+    zoom === "fit" ? ganttFitWindow([activeSchedule?.summary.planStart, activeSchedule?.summary.planFinish, target, ...rows.map((task) => task.forecastFinish)], today) : ganttWindow(zoom, anchor);
+  const toggleRow = (taskId: number) =>
+    setCollapsed((current) => {
+      const next = new Set(current);
+      if (next.has(taskId)) next.delete(taskId);
+      else next.add(taskId);
+      return next;
+    });
   // The plan owner drags a leaf row's bar to new dates; the API refuses rows Resource Plan manages and rows waiting on a day request.
-  const canReschedule = (task: ScheduleTask) => canPlan && task.kind !== "phase" && task.children.length === 0 && !task.managedByResourcePlan
-    && !pendingTaskIds.has(task.id) && Boolean(task.planStart && task.planFinish) && !movePending && !saving;
+  const canReschedule = (task: ScheduleTask) =>
+    canPlan &&
+    task.kind !== "phase" &&
+    task.children.length === 0 &&
+    !task.managedByResourcePlan &&
+    !pendingTaskIds.has(task.id) &&
+    Boolean(task.planStart && task.planFinish) &&
+    !movePending &&
+    !saving;
   const visibleIds = new Set(visible.map((task) => task.id));
-  const links: GanttLink[] = visible.filter((task) => task.startMode === "linked" && task.predecessorId !== null && visibleIds.has(task.predecessorId))
+  const links: GanttLink[] = visible
+    .filter((task) => task.startMode === "linked" && task.predecessorId !== null && visibleIds.has(task.predecessorId))
     .map((task) => ({ from: `task:${task.predecessorId}`, to: `task:${task.id}` }));
   /** Opens the boxes for a new row under `parentId` (none: a main heading), before `beforeId` (none: last), with that row open. */
   const openDraft = (parentId: number | null, beforeId: number | null) => {
     if (!canPlan && (parentId === null || !taskById.get(parentId)?.canAddChild)) return;
-    if (parentId !== null) setCollapsed((current) => { if (!current.has(parentId)) return current; const next = new Set(current); next.delete(parentId); return next; });
+    if (parentId !== null)
+      setCollapsed((current) => {
+        if (!current.has(parentId)) return current;
+        const next = new Set(current);
+        next.delete(parentId);
+        return next;
+      });
     setFilter(null);
-    setDraft({ parentId, beforeId, name: "", memberId: canPlan ? null : bootstrap.user.id, ...draftDates(parentId === null ? null : taskById.get(parentId) ?? null, today), error: "" });
+    setDraft({ parentId, beforeId, name: "", memberId: canPlan ? null : bootstrap.user.id, ...draftDates(parentId === null ? null : (taskById.get(parentId) ?? null), today), error: "" });
   };
   /**
    * The + on a row, offered while nothing else is saving and no quick filter hides rows: on a heading it adds a task under
@@ -2675,31 +4359,62 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
   const saveDraft = async () => {
     const current = draft;
     if (!current || !activeSchedule || draftBusy || !current.name.trim()) return;
-    const name = current.name.trim(), parent = current.parentId === null ? null : taskById.get(current.parentId) ?? null;
+    const name = current.name.trim(),
+      parent = current.parentId === null ? null : (taskById.get(current.parentId) ?? null);
     const refuse = (message: string) => setDraft((value) => value && { ...value, error: message });
-    if (current.parentId !== null && !parent) { setDraft(null); return; }
+    if (current.parentId !== null && !parent) {
+      setDraft(null);
+      return;
+    }
     // A task under a heading needs a member (owner, 2026-11-03); a row's dates come as a pair, a heading's may wait.
-    if (parent?.kind === "phase" && current.memberId === null) { refuse(uiText("Plan.memberRequired")); return; }
+    if (parent?.kind === "phase" && current.memberId === null) {
+      refuse(uiText("Plan.memberRequired"));
+      return;
+    }
     const dated = Boolean(current.start && current.finish && current.finish >= current.start);
-    if (parent ? !dated : (current.start || current.finish) && !dated) { refuse(uiText("Plan.draftDates")); return; }
+    if (parent ? !dated : (current.start || current.finish) && !dated) {
+      refuse(uiText("Plan.draftDates"));
+      return;
+    }
     const memberIds = current.memberId === null ? [] : [current.memberId];
-    setDraftBusy(true); setError("");
+    setDraftBusy(true);
+    setError("");
     try {
       if (parent && canPlan) await ensureScheduleMembers(activeSchedule.projectId, activeSchedule.managerId, memberIds);
-      await apiRequest(`/api/v1/projects/${activeSchedule.projectId}/schedule/tasks`, { method: "POST", body: JSON.stringify({
-        scheduleVersion: activeSchedule.scheduleVersion, parentId: current.parentId, beforeId: current.beforeId, sortOrder: 0, kind: parent ? "task" : "phase", name,
-        isMilestone: false, visibility: parent ? "Internal" : "Customer", planStart: dated ? current.start : null, planDays: dated ? periodDays(current.start, current.finish) : 1,
-        startMode: "manual", predecessorId: null, lagDays: 0, picUserIds: memberIds, picExternal: "", planManDays: 0,
-      }) });
+      await apiRequest(`/api/v1/projects/${activeSchedule.projectId}/schedule/tasks`, {
+        method: "POST",
+        body: JSON.stringify({
+          scheduleVersion: activeSchedule.scheduleVersion,
+          parentId: current.parentId,
+          beforeId: current.beforeId,
+          sortOrder: 0,
+          kind: parent ? "task" : "phase",
+          name,
+          isMilestone: false,
+          visibility: parent ? "Internal" : "Customer",
+          planStart: dated ? current.start : null,
+          planDays: dated ? periodDays(current.start, current.finish) : 1,
+          startMode: "manual",
+          predecessorId: null,
+          lagDays: 0,
+          picUserIds: memberIds,
+          picExternal: "",
+          planManDays: 0,
+        }),
+      });
       notify(`${activeSchedule.projectNo} · ${name} ${uiText("Plan.quickAdded")}`);
       // The next box opens just below the new row, keeping the member and dates.
       setDraft((value) => value && { ...value, name: "", error: "" });
       await loadSchedule();
     } catch (failure) {
       // The typed row stays in the boxes; Enter tries again on the reloaded plan.
-      if (isConcurrencyConflict(failure)) { notify(`${activeSchedule.projectNo} · ${uiText("Plan.changedReloaded")}`); await loadSchedule(); }
-      else refuse(toError(failure));
-    } finally { setDraftBusy(false); }
+      if (isConcurrencyConflict(failure)) {
+        notify(`${activeSchedule.projectNo} · ${uiText("Plan.changedReloaded")}`);
+        await loadSchedule();
+      } else refuse(toError(failure));
+    } finally {
+      setDraftBusy(false);
+    }
   };
   /**
    * The bin on a row the plan owner may delete, with the rows under it: none has started, holds a member's own task or
@@ -2721,36 +4436,59 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
   const binFor = (task: ScheduleTask): GanttRowSpec["remove"] => {
     if (!changesPlan || movePending || saving || draftBusy) return undefined;
     const block = deleteBlock(task);
-    if (block) { const reason = uiText(block); return { label: uiText("Plan.deleteRow"), reason, onRemove: () => notify(`${task.wbs} ${task.name} · ${reason}`) }; }
+    if (block) {
+      const reason = uiText(block);
+      return { label: uiText("Plan.deleteRow"), reason, onRemove: () => notify(`${task.wbs} ${task.name} · ${reason}`) };
+    }
     const removing = flattenTasks([task]);
-    return { label: uiText("Plan.deleteRow"), onRemove: () => { void deleteRow(task, removing.map((row) => row.id)); } };
+    return {
+      label: uiText("Plan.deleteRow"),
+      onRemove: () => {
+        void deleteRow(
+          task,
+          removing.map((row) => row.id),
+        );
+      },
+    };
   };
   const deleteRow = async (task: ScheduleTask, removing: number[]) => {
     if (!activeSchedule) return;
-    const confirmation = uiText("Plan.deleteConfirm").replace("{name}", task.name)
-      + (removing.length > 1 ? `\n${uiText("Plan.deleteChildren").replace("{count}", String(removing.length - 1))}` : "");
+    const confirmation = uiText("Plan.deleteConfirm").replace("{name}", task.name) + (removing.length > 1 ? `\n${uiText("Plan.deleteChildren").replace("{count}", String(removing.length - 1))}` : "");
     if (!(await confirmDialog(confirmation, { danger: true }))) return;
-    setSaving(true); setError("");
+    setSaving(true);
+    setError("");
     try {
       await apiRequest(`/api/v1/schedule/tasks/${task.id}`, { method: "DELETE", body: JSON.stringify({ scheduleVersion: activeSchedule.scheduleVersion, rowVersion: task.rowVersion }) });
       notify(`${activeSchedule.projectNo} · ${task.name} ${uiText("Plan.rowDeleted")}`);
       // The drawer and the typing boxes do not stay on a row that is gone.
       if (drawerTaskId !== null && removing.includes(drawerTaskId)) setDrawerTaskId(null);
-      setDraft((current) => current && ((current.parentId !== null && removing.includes(current.parentId)) || (current.beforeId !== null && removing.includes(current.beforeId))) ? null : current);
+      setDraft((current) => (current && ((current.parentId !== null && removing.includes(current.parentId)) || (current.beforeId !== null && removing.includes(current.beforeId))) ? null : current));
     } catch (failure) {
       if (isConcurrencyConflict(failure)) notify(`${activeSchedule.projectNo} · ${task.wbs} ${uiText("Plan.changedReloaded")}`);
-      else { setError(toError(failure)); notify(`${activeSchedule.projectNo} · ${task.wbs} ${uiText("Plan.saveFailed")}`); }
-    } finally { await loadSchedule(); setSaving(false); }
+      else {
+        setError(toError(failure));
+        notify(`${activeSchedule.projectNo} · ${task.wbs} ${uiText("Plan.saveFailed")}`);
+      }
+    } finally {
+      await loadSchedule();
+      setSaving(false);
+    }
   };
   // The draft is drawn where its row will land: before the row it goes before, else after the rows under its parent.
-  const draftParent = draft?.parentId == null ? null : taskById.get(draft.parentId) ?? null;
-  const draftAt = !draft || (!canPlan && !draftParent?.canAddChild) || level === "member" || (draft.parentId !== null && !draftParent) ? -1 : draft.beforeId !== null ? visible.findIndex((task) => task.id === draft.beforeId)
-    : !draftParent ? visible.length : (() => {
-      const at = visible.indexOf(draftParent);
-      let end = at + 1;
-      while (at >= 0 && end < visible.length && visible[end]!.depth > draftParent.depth) end++;
-      return at < 0 ? -1 : end;
-    })();
+  const draftParent = draft?.parentId == null ? null : (taskById.get(draft.parentId) ?? null);
+  const draftAt =
+    !draft || (!canPlan && !draftParent?.canAddChild) || level === "member" || (draft.parentId !== null && !draftParent)
+      ? -1
+      : draft.beforeId !== null
+        ? visible.findIndex((task) => task.id === draft.beforeId)
+        : !draftParent
+          ? visible.length
+          : (() => {
+              const at = visible.indexOf(draftParent);
+              let end = at + 1;
+              while (at >= 0 && end < visible.length && visible[end]!.depth > draftParent.depth) end++;
+              return at < 0 ? -1 : end;
+            })();
   const levelOf = (step: -1 | 1) => {
     if (!draft || !activeSchedule) return null;
     const place = draftLevel(activeSchedule.tasks, rows, draft, step, pendingTaskIds);
@@ -2758,84 +4496,212 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
   };
   // oxlint-disable-next-line react/refs -- the rows only hand out handlers; any ref behind them is touched when one runs, never while rendering.
   const ganttRows: GanttRowSpec[] = visible.map((task) => {
-    const summaryRow = task.kind === "phase" || task.children.length > 0, insert = plusFor(task), bin = binFor(task);
+    const summaryRow = task.kind === "phase" || task.children.length > 0,
+      insert = plusFor(task),
+      bin = binFor(task);
     const dropped = movePending?.taskId === task.id ? movePending : null;
     const movable = canPlan && !filter && !movePending && !saving && !draftBusy;
     // A heading with nothing under it yet, or whose rows run past the customer's dates, says so.
     const committed = customerPeriod(task);
-    const headingMark = task.kind !== "phase" || task.parentId !== null ? null : !task.children.length ? <Badge tone="amber">{uiText("Plan.notBrokenDown")}</Badge>
-      : committed && task.planFinish && task.planFinish > committed.finish ? <Badge tone="red">{uiText("Plan.pastMasterPlan")}</Badge> : null;
+    const headingMark =
+      task.kind !== "phase" || task.parentId !== null ? null : !task.children.length ? (
+        <Badge tone="amber">{uiText("Plan.notBrokenDown")}</Badge>
+      ) : committed && task.planFinish && task.planFinish > committed.finish ? (
+        <Badge tone="red">{uiText("Plan.pastMasterPlan")}</Badge>
+      ) : null;
     const lock = task.managedByResourcePlan ? <ResourcePlanLock /> : pendingTaskIds.has(task.id) ? <Badge tone="amber">{uiText("Plan.waitingBadge")}</Badge> : headingMark;
-    if (masterView) return {
-      key: `task:${task.id}`, depth: 0, kind: "phase", label: <><span className="mono">{task.wbs}</span> {task.name}</>,
-      meta: [uiText(task.status), `${Math.round(Number(task.percentComplete))}%`].join(" · "), ...(lock ? { status: lock } : {}),
-      onOpen: () => setDrawerTaskId(task.id), start: committed?.start ?? task.planStart, finish: committed?.finish ?? task.planFinish,
-      progress: Number(task.percentComplete), tone: scheduleTone(task, today), baselineStart: task.baselineStart, baselineFinish: task.baselineFinish,
-      forecastFinish: task.planFinish, milestone: false, selected: drawerTaskId === task.id,
-      title: `${task.wbs} ${task.name} · ${committed?.start ?? task.planStart ?? "—"} → ${committed?.finish ?? task.planFinish ?? "—"} · ${Math.round(Number(task.percentComplete))}%`,
-    };
+    if (masterView)
+      return {
+        key: `task:${task.id}`,
+        depth: 0,
+        kind: "phase",
+        label: (
+          <>
+            <span className="mono">{task.wbs}</span> {task.name}
+          </>
+        ),
+        meta: [uiText(task.status), `${Math.round(Number(task.percentComplete))}%`].join(" · "),
+        ...(lock ? { status: lock } : {}),
+        onOpen: () => setDrawerTaskId(task.id),
+        start: committed?.start ?? task.planStart,
+        finish: committed?.finish ?? task.planFinish,
+        progress: Number(task.percentComplete),
+        tone: scheduleTone(task, today),
+        baselineStart: task.baselineStart,
+        baselineFinish: task.baselineFinish,
+        forecastFinish: task.planFinish,
+        milestone: false,
+        selected: drawerTaskId === task.id,
+        title: `${task.wbs} ${task.name} · ${committed?.start ?? task.planStart ?? "—"} → ${committed?.finish ?? task.planFinish ?? "—"} · ${Math.round(Number(task.percentComplete))}%`,
+      };
     return {
-      key: `task:${task.id}`, depth: task.depth, kind: summaryRow ? "phase" : "task",
-      label: <><span className="mono">{task.wbs}</span> {task.name}</>,
-      meta: [task.pics.map((pic) => pic.active === false ? `${pic.name} (${uiText("Plan.picLeft")})` : pic.name).join(", ") || task.picExternal, uiText(task.status), `${Math.round(Number(task.percentComplete))}%`].filter(Boolean).join(" · "),
+      key: `task:${task.id}`,
+      depth: task.depth,
+      kind: summaryRow ? "phase" : "task",
+      label: (
+        <>
+          <span className="mono">{task.wbs}</span> {task.name}
+        </>
+      ),
+      meta: [
+        task.pics.map((pic) => (pic.active === false ? `${pic.name} (${uiText("Plan.picLeft")})` : pic.name)).join(", ") || task.picExternal,
+        uiText(task.status),
+        `${Math.round(Number(task.percentComplete))}%`,
+      ]
+        .filter(Boolean)
+        .join(" · "),
       ...(lock ? { status: lock } : {}),
       ...(task.children.length && !filter ? { expandable: true, expanded: !collapsed.has(task.id), onToggle: () => toggleRow(task.id) } : {}),
       onOpen: () => setDrawerTaskId(task.id),
       ...(movable ? { movable: true } : {}),
       ...(insert ? { insert } : {}),
       ...(bin ? { remove: bin } : {}),
-      ...(canReschedule(task) ? { reschedule: { resize: !task.isMilestone, onChange: (start: string, finish: string) => { void moveTask(task, start, finish); } } } : {}),
-      start: dropped?.start ?? task.planStart, finish: dropped?.finish ?? task.planFinish, progress: Number(task.percentComplete), tone: scheduleTone(task, today),
-      baselineStart: task.baselineStart, baselineFinish: task.baselineFinish, forecastFinish: task.forecastFinish,
-      milestone: task.isMilestone, selected: drawerTaskId === task.id,
+      ...(canReschedule(task)
+        ? {
+            reschedule: {
+              resize: !task.isMilestone,
+              onChange: (start: string, finish: string) => {
+                void moveTask(task, start, finish);
+              },
+            },
+          }
+        : {}),
+      start: dropped?.start ?? task.planStart,
+      finish: dropped?.finish ?? task.planFinish,
+      progress: Number(task.percentComplete),
+      tone: scheduleTone(task, today),
+      baselineStart: task.baselineStart,
+      baselineFinish: task.baselineFinish,
+      forecastFinish: task.forecastFinish,
+      milestone: task.isMilestone,
+      selected: drawerTaskId === task.id,
       title: `${task.wbs} ${task.name} · ${task.planStart ?? "—"} → ${task.planFinish ?? "—"} · ${Math.round(Number(task.percentComplete))}%`,
     };
   });
   if (draft && draftAt >= 0 && activeSchedule) {
     ganttRows.splice(draftAt, 0, {
-      key: "draft", depth: draftParent ? draftParent.depth + 1 : 0, kind: draftParent ? "task" : "phase", label: null, start: null, finish: null, tone: "blue", title: "",
-      editor: <PlanRowDraftEditor bootstrap={planTeam} ownOnly={!canPlan} draft={draft} parent={draftParent} busy={draftBusy}
-        planPeople={new Set(rows.flatMap((task) => task.pics.map((pic) => pic.id)))} canOut={!masterView && levelOf(-1) !== null} canIn={!masterView && levelOf(1) !== null}
-        onChange={(patch) => setDraft((current) => current && { ...current, ...patch, error: "" })}
-        onLevel={(step) => {
-          const place = levelOf(step);
-          if (!place) return;
-          if (place.parentId !== null) setCollapsed((current) => { if (!current.has(place.parentId!)) return current; const next = new Set(current); next.delete(place.parentId!); return next; });
-          setDraft((current) => current && { ...current, ...place, ...draftDates(place.parentId === null ? null : taskById.get(place.parentId) ?? null, today), error: "" });
-        }}
-        onSave={() => { void saveDraft(); }} onClose={() => setDraft(null)} />,
+      key: "draft",
+      depth: draftParent ? draftParent.depth + 1 : 0,
+      kind: draftParent ? "task" : "phase",
+      label: null,
+      start: null,
+      finish: null,
+      tone: "blue",
+      title: "",
+      editor: (
+        <PlanRowDraftEditor
+          bootstrap={planTeam}
+          ownOnly={!canPlan}
+          draft={draft}
+          parent={draftParent}
+          busy={draftBusy}
+          planPeople={new Set(rows.flatMap((task) => task.pics.map((pic) => pic.id)))}
+          canOut={!masterView && levelOf(-1) !== null}
+          canIn={!masterView && levelOf(1) !== null}
+          onChange={(patch) => setDraft((current) => current && { ...current, ...patch, error: "" })}
+          onLevel={(step) => {
+            const place = levelOf(step);
+            if (!place) return;
+            if (place.parentId !== null)
+              setCollapsed((current) => {
+                if (!current.has(place.parentId!)) return current;
+                const next = new Set(current);
+                next.delete(place.parentId!);
+                return next;
+              });
+            setDraft((current) => current && { ...current, ...place, ...draftDates(place.parentId === null ? null : (taskById.get(place.parentId) ?? null), today), error: "" });
+          }}
+          onSave={() => {
+            void saveDraft();
+          }}
+          onClose={() => setDraft(null)}
+        />
+      ),
     });
   }
   // By member (owner request 2026-11-04): one row per person on the plan with their rows here, their other work faint,
   // and the days it overlaps (amber) or is more than they have (red) marked under their bars.
   const memberView = level === "member";
   const projectIssues = planIssues && planIssues.projectId === selectedId ? planIssues.items : [];
-  const issueStarts = projectIssues.map((issue) => issue.planStart).filter((day): day is string => Boolean(day)).sort();
-  const issueEnds = projectIssues.map((issue) => issue.planEnd ?? issue.planStart).filter((day): day is string => Boolean(day)).sort();
-  const issueRows: GanttRowSpec[] = masterView || filter || !projectIssues.length ? [] : [
-    {
-      key: "issues", depth: 0, kind: "phase", label: <>{uiText("Plan.issuesGroup")} <Badge tone="amber">{projectIssues.length}</Badge></>,
-      meta: uiText("Plan.issuesMeta"), expandable: true, expanded: issuesOpen, onToggle: () => setIssuesOpen((open) => !open),
-      start: issueStarts[0] ?? null, finish: issueEnds[issueEnds.length - 1] ?? null, tone: "amber", progress: null,
-      title: `${uiText("Plan.issuesGroup")} · ${projectIssues.length}`,
-    },
-    ...(issuesOpen ? projectIssues.map((issue): GanttRowSpec => {
-      const what = issue.functionName || (issue.description.length > 60 ? `${issue.description.slice(0, 59)}…` : issue.description);
-      return {
-        key: `issue:${issue.id}`, depth: 1, kind: "task", label: <><span className="mono">{issue.batchNo} #{issue.lineNo}</span> {what}</>,
-        meta: [issue.assigneeName, uiText(`Issues.state.${issue.state}`), issue.planHours === null ? "" : `${issue.planHours} h`].filter(Boolean).join(" · "),
-        ...(openIssueBatch ? { onOpen: () => openIssueBatch(issue.batchId) } : {}),
-        start: issue.planStart, finish: issue.planEnd ?? issue.planStart, progress: issue.state === "Done" ? 100 : null, tone: PLAN_ISSUE_TONE[issue.state],
-        ...(issue.planStart ? {} : { placeholder: uiText("Plan.issueUnplanned") }),
-        title: `${issue.batchNo} #${issue.lineNo} ${what} · ${issue.planStart ?? "—"} → ${issue.planEnd ?? issue.planStart ?? "—"}`,
-      };
-    }) : []),
-  ];
+  const issueStarts = projectIssues
+    .map((issue) => issue.planStart)
+    .filter((day): day is string => Boolean(day))
+    .sort();
+  const issueEnds = projectIssues
+    .map((issue) => issue.planEnd ?? issue.planStart)
+    .filter((day): day is string => Boolean(day))
+    .sort();
+  const issueRows: GanttRowSpec[] =
+    masterView || filter || !projectIssues.length
+      ? []
+      : [
+          {
+            key: "issues",
+            depth: 0,
+            kind: "phase",
+            label: (
+              <>
+                {uiText("Plan.issuesGroup")} <Badge tone="amber">{projectIssues.length}</Badge>
+              </>
+            ),
+            meta: uiText("Plan.issuesMeta"),
+            expandable: true,
+            expanded: issuesOpen,
+            onToggle: () => setIssuesOpen((open) => !open),
+            start: issueStarts[0] ?? null,
+            finish: issueEnds[issueEnds.length - 1] ?? null,
+            tone: "amber",
+            progress: null,
+            title: `${uiText("Plan.issuesGroup")} · ${projectIssues.length}`,
+          },
+          ...(issuesOpen
+            ? projectIssues.map((issue): GanttRowSpec => {
+                const what = issue.functionName || (issue.description.length > 60 ? `${issue.description.slice(0, 59)}…` : issue.description);
+                return {
+                  key: `issue:${issue.id}`,
+                  depth: 1,
+                  kind: "task",
+                  label: (
+                    <>
+                      <span className="mono">
+                        {issue.batchNo} #{issue.lineNo}
+                      </span>{" "}
+                      {what}
+                    </>
+                  ),
+                  meta: [issue.assigneeName, uiText(`Issues.state.${issue.state}`), issue.planHours === null ? "" : `${issue.planHours} h`].filter(Boolean).join(" · "),
+                  ...(openIssueBatch ? { onOpen: () => openIssueBatch(issue.batchId) } : {}),
+                  start: issue.planStart,
+                  finish: issue.planEnd ?? issue.planStart,
+                  progress: issue.state === "Done" ? 100 : null,
+                  tone: PLAN_ISSUE_TONE[issue.state],
+                  ...(issue.planStart ? {} : { placeholder: uiText("Plan.issueUnplanned") }),
+                  title: `${issue.batchNo} #${issue.lineNo} ${what} · ${issue.planStart ?? "—"} → ${issue.planEnd ?? issue.planStart ?? "—"}`,
+                };
+              })
+            : []),
+        ];
   const memberBoard = memberWork && memberWork.key === memberKey ? memberWork : null;
-  const memberRows = memberView && activeSchedule && memberSpan ? memberGanttRows({
-    schedule: activeSchedule, board: memberBoard?.data ?? null, span: memberSpan, today, closed: memberClosed, selectedTaskId: drawerTaskId, t: uiText, onOpenTask: setDrawerTaskId,
-    onToggle: (key) => setMemberClosed((current) => { const next = new Set(current); if (next.has(key)) next.delete(key); else next.add(key); return next; }),
-  }) : [];
+  const memberRows =
+    memberView && activeSchedule && memberSpan
+      ? memberGanttRows({
+          schedule: activeSchedule,
+          board: memberBoard?.data ?? null,
+          span: memberSpan,
+          today,
+          closed: memberClosed,
+          selectedTaskId: drawerTaskId,
+          t: uiText,
+          onOpenTask: setDrawerTaskId,
+          onToggle: (key) =>
+            setMemberClosed((current) => {
+              const next = new Set(current);
+              if (next.has(key)) next.delete(key);
+              else next.add(key);
+              return next;
+            }),
+        })
+      : [];
   const chartRows = memberView ? memberRows : [...ganttRows, ...issueRows];
   // Expand all / Collapse all fold what this view folds: the Team Plan's rows that have rows under them, or the members.
   // A quick filter shows every match open with its parents (planRows), so folding does nothing there.
@@ -2843,72 +4709,124 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
   const memberKeys = memberRows.filter((row) => row.expandable && row.depth === 0).map((row) => row.key.slice("member:".length));
   const anyFolded = memberView ? memberKeys.some((key) => memberClosed.has(key)) : parentIds.some((id) => collapsed.has(id));
   const foldFiltered = !memberView && filter !== null;
-  const expandAll = () => { if (memberView) setMemberClosed(new Set()); else setCollapsed(new Set()); };
-  const collapseAll = () => { if (memberView) setMemberClosed(new Set(memberKeys)); else setCollapsed(new Set(parentIds)); };
-  const drawerTask = drawerTaskId === null ? null : taskById.get(drawerTaskId) ?? null;
+  const expandAll = () => {
+    if (memberView) setMemberClosed(new Set());
+    else setCollapsed(new Set());
+  };
+  const collapseAll = () => {
+    if (memberView) setMemberClosed(new Set(memberKeys));
+    else setCollapsed(new Set(parentIds));
+  };
+  const drawerTask = drawerTaskId === null ? null : (taskById.get(drawerTaskId) ?? null);
   const saveTaskProgress = async (task: ScheduleTask, patch: Partial<MyWorkProgressInput>, message: string) => {
     if (!activeSchedule) return;
-    setSaving(true); setDrawerError("");
+    setSaving(true);
+    setDrawerError("");
     try {
-      await apiRequest(`/api/v1/schedule/tasks/${task.id}/updates`, { method: "POST", body: JSON.stringify({
-        scheduleVersion: activeSchedule.scheduleVersion, rowVersion: task.rowVersion,
-        percentComplete: Number(task.percentComplete), status: task.status, actualStart: task.actualStart, actualFinish: task.actualFinish,
-        forecastFinish: task.forecastFinish, remark: task.remark ?? "", ...patch,
-      }) });
+      await apiRequest(`/api/v1/schedule/tasks/${task.id}/updates`, {
+        method: "POST",
+        body: JSON.stringify({
+          scheduleVersion: activeSchedule.scheduleVersion,
+          rowVersion: task.rowVersion,
+          percentComplete: Number(task.percentComplete),
+          status: task.status,
+          actualStart: task.actualStart,
+          actualFinish: task.actualFinish,
+          forecastFinish: task.forecastFinish,
+          remark: task.remark ?? "",
+          ...patch,
+        }),
+      });
       notify(`${activeSchedule.projectNo} · ${message}`);
       await loadSchedule();
     } catch (failure) {
-      if (isConcurrencyConflict(failure)) { notify(`${activeSchedule.projectNo} · ${task.wbs} ${uiText("Plan.changedReloaded")}`); await loadSchedule(); }
-      else {
+      if (isConcurrencyConflict(failure)) {
+        notify(`${activeSchedule.projectNo} · ${task.wbs} ${uiText("Plan.changedReloaded")}`);
+        await loadSchedule();
+      } else {
         // Shown in the drawer, where the user is; the page-level error sits behind its backdrop.
         setDrawerError(toError(failure));
         notify(`${activeSchedule.projectNo} · ${task.wbs} ${uiText("Plan.saveFailed")}`);
         await loadSchedule();
       }
-    } finally { setSaving(false); }
+    } finally {
+      setSaving(false);
+    }
   };
   /** Saves a row's plan with new dates, everything else as it is; returns the row's new version. */
   const putDates = async (task: ScheduleTask, plan: { planStart: string | null; planDays: number; lagDays: number }) => {
-    const saved = await apiRequest<{ rowVersion: string }>(`/api/v1/schedule/tasks/${task.id}`, { method: "PUT", body: JSON.stringify({
-      scheduleVersion: activeSchedule?.scheduleVersion ?? null, rowVersion: task.rowVersion,
-      parentId: task.parentId, sortOrder: task.sortOrder, kind: task.kind, name: task.name, isMilestone: task.isMilestone, visibility: task.visibility,
-      planStart: plan.planStart, planDays: plan.planDays, startMode: task.startMode, predecessorId: task.predecessorId, lagDays: plan.lagDays,
-      picUserIds: task.pics.map((pic) => pic.id), picExternal: task.picExternal, planManDays: task.planManDays,
-    }) });
+    const saved = await apiRequest<{ rowVersion: string }>(`/api/v1/schedule/tasks/${task.id}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        scheduleVersion: activeSchedule?.scheduleVersion ?? null,
+        rowVersion: task.rowVersion,
+        parentId: task.parentId,
+        sortOrder: task.sortOrder,
+        kind: task.kind,
+        name: task.name,
+        isMilestone: task.isMilestone,
+        visibility: task.visibility,
+        planStart: plan.planStart,
+        planDays: plan.planDays,
+        startMode: task.startMode,
+        predecessorId: task.predecessorId,
+        lagDays: plan.lagDays,
+        picUserIds: task.pics.map((pic) => pic.id),
+        picExternal: task.picExternal,
+        planManDays: task.planManDays,
+      }),
+    });
     return saved.rowVersion;
   };
   const moveFailed = async (task: ScheduleTask, failure: unknown) => {
     if (isConcurrencyConflict(failure)) notify(`${activeSchedule?.projectNo ?? ""} · ${task.wbs} ${uiText("Plan.changedReloaded")}`);
-    else { setError(toError(failure)); notify(`${activeSchedule?.projectNo ?? ""} · ${task.wbs} ${uiText("Plan.saveFailed")}`); }
+    else {
+      setError(toError(failure));
+      notify(`${activeSchedule?.projectNo ?? ""} · ${task.wbs} ${uiText("Plan.saveFailed")}`);
+    }
   };
   const moveTask = async (task: ScheduleTask, start: string, finish: string) => {
     if (!activeSchedule) return;
-    const predecessorFinish = task.predecessorId === null ? null : taskById.get(task.predecessorId)?.planFinish ?? null;
+    const predecessorFinish = task.predecessorId === null ? null : (taskById.get(task.predecessorId)?.planFinish ?? null);
     const plan = draggedPlan(task, start, finish, predecessorFinish);
     const label = `${task.wbs} ${task.name}`;
-    setMovePending({ taskId: task.id, start, finish }); setSaving(true); setError("");
+    setMovePending({ taskId: task.id, start, finish });
+    setSaving(true);
+    setError("");
     try {
       const rowVersion = await putDates(task, plan);
       setLastMove({ taskId: task.id, label, rowVersion, before: { planStart: task.storedPlanStart ?? null, planDays: task.planDays, lagDays: task.lagDays } });
       notify(`${activeSchedule.projectNo} · ${label} ${uiText("Plan.movedTo")} ${date(start)} – ${date(finish)}`);
-    } catch (failure) { await moveFailed(task, failure); }
-    finally {
+    } catch (failure) {
+      await moveFailed(task, failure);
+    } finally {
       await loadSchedule();
-      setMovePending(null); setSaving(false);
+      setMovePending(null);
+      setSaving(false);
     }
   };
   const undoMove = async () => {
-    const move = lastMove, task = move ? taskById.get(move.taskId) : null;
+    const move = lastMove,
+      task = move ? taskById.get(move.taskId) : null;
     if (!move || !activeSchedule) return;
     // Someone changed the row after the move: putting the old dates back would overwrite their change.
-    if (!task || task.rowVersion !== move.rowVersion) { setLastMove(null); notify(`${move.label} ${uiText("Plan.undoStale")}`); return; }
-    setSaving(true); setError("");
+    if (!task || task.rowVersion !== move.rowVersion) {
+      setLastMove(null);
+      notify(`${move.label} ${uiText("Plan.undoStale")}`);
+      return;
+    }
+    setSaving(true);
+    setError("");
     try {
       await putDates(task, move.before);
       setLastMove(null);
       notify(`${activeSchedule.projectNo} · ${move.label} ${uiText("Plan.undone")}`);
-    } catch (failure) { await moveFailed(task, failure); }
-    finally { await loadSchedule(); setSaving(false); }
+    } catch (failure) {
+      await moveFailed(task, failure);
+    } finally {
+      await loadSchedule();
+      setSaving(false);
+    }
   };
   /**
    * Where a dropped row lands: under the row one level out above the gap, before the row below it when that one is at
@@ -2917,24 +4835,35 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
    * itself; a Resource Plan row or one waiting on a day request only up or down where it is) or when it would not move.
    */
   const placeFor = (drop: GanttRowDrop): { task: ScheduleTask; parentId: number | null; beforeId: number | null } | null => {
-    const rowOf = (key: string | null) => (key === null ? null : taskById.get(Number(key.replace("task:", ""))) ?? null);
-    const task = rowOf(drop.key), above = rowOf(drop.above), below = rowOf(drop.below);
+    const rowOf = (key: string | null) => (key === null ? null : (taskById.get(Number(key.replace("task:", ""))) ?? null));
+    const task = rowOf(drop.key),
+      above = rowOf(drop.above),
+      below = rowOf(drop.below);
     if (!activeSchedule || !task) return null;
     let parent = drop.depth > 0 ? above : null;
-    while (parent && parent.depth > drop.depth - 1) parent = parent.parentId === null ? null : taskById.get(parent.parentId) ?? null;
+    while (parent && parent.depth > drop.depth - 1) parent = parent.parentId === null ? null : (taskById.get(parent.parentId) ?? null);
     if (drop.depth > 0 && parent?.depth !== drop.depth - 1) return null;
     const parentId = parent?.id ?? null;
     const beforeId = below && below.depth === drop.depth && below.parentId === parentId ? below.id : null;
-    const childrenOf = (id: number | null) => (id === null ? activeSchedule.tasks : taskById.get(id)?.children ?? []);
-    const taskHeight = Math.max(0, ...flattenTasks(task.children).filter((row) => row.kind === "task").map((row) => row.depth - task.depth));
-    const fits = (into: ScheduleTask | null) => task.kind === "phase" ? into === null : task.kind === "task"
-      ? into !== null && (into.kind === "phase" || canTakeSubTasks(into, rows)) && into.depth + 1 + taskHeight <= MAX_PLAN_DEPTH
-      : into?.kind === "task" && !into.children.some((child) => child.kind === "task");
+    const childrenOf = (id: number | null) => (id === null ? activeSchedule.tasks : (taskById.get(id)?.children ?? []));
+    const taskHeight = Math.max(
+      0,
+      ...flattenTasks(task.children)
+        .filter((row) => row.kind === "task")
+        .map((row) => row.depth - task.depth),
+    );
+    const fits = (into: ScheduleTask | null) =>
+      task.kind === "phase"
+        ? into === null
+        : task.kind === "task"
+          ? into !== null && (into.kind === "phase" || canTakeSubTasks(into, rows)) && into.depth + 1 + taskHeight <= MAX_PLAN_DEPTH
+          : into?.kind === "task" && !into.children.some((child) => child.kind === "task");
     if (!fits(parent)) return null;
-    for (let up: ScheduleTask | null = parent; up; up = up.parentId === null ? null : taskById.get(up.parentId) ?? null) if (up.id === task.id) return null;
+    for (let up: ScheduleTask | null = parent; up; up = up.parentId === null ? null : (taskById.get(up.parentId) ?? null)) if (up.id === task.id) return null;
     if (parentId !== task.parentId && (task.managedByResourcePlan || pendingTaskIds.has(task.id) || (parentId !== null && pendingTaskIds.has(parentId)))) return null;
     if (parentId === task.parentId) {
-      const siblings = childrenOf(parentId), at = siblings.findIndex((row) => row.id === task.id);
+      const siblings = childrenOf(parentId),
+        at = siblings.findIndex((row) => row.id === task.id);
       if ((siblings[at + 1]?.id ?? null) === beforeId) return null;
     }
     return { task, parentId, beforeId };
@@ -2942,153 +4871,579 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
   const moveRow = async (drop: GanttRowDrop) => {
     const placed = placeFor(drop);
     if (!placed || !activeSchedule) return;
-    setSaving(true); setError("");
+    setSaving(true);
+    setError("");
     try {
-      await apiRequest(`/api/v1/schedule/tasks/${placed.task.id}/move`, { method: "POST", body: JSON.stringify({
-        scheduleVersion: activeSchedule.scheduleVersion, rowVersion: placed.task.rowVersion, parentId: placed.parentId, beforeId: placed.beforeId,
-      }) });
+      await apiRequest(`/api/v1/schedule/tasks/${placed.task.id}/move`, {
+        method: "POST",
+        body: JSON.stringify({
+          scheduleVersion: activeSchedule.scheduleVersion,
+          rowVersion: placed.task.rowVersion,
+          parentId: placed.parentId,
+          beforeId: placed.beforeId,
+        }),
+      });
       notify(`${activeSchedule.projectNo} · ${placed.task.wbs} ${placed.task.name} ${uiText("Plan.rowMoved")}`);
       // Dropped into a folded row: open it, so the row is seen where it landed.
-      if (placed.parentId !== null) setCollapsed((current) => { if (!current.has(placed.parentId!)) return current; const next = new Set(current); next.delete(placed.parentId!); return next; });
-    } catch (failure) { await moveFailed(placed.task, failure); }
-    finally { await loadSchedule(); setSaving(false); }
+      if (placed.parentId !== null)
+        setCollapsed((current) => {
+          if (!current.has(placed.parentId!)) return current;
+          const next = new Set(current);
+          next.delete(placed.parentId!);
+          return next;
+        });
+    } catch (failure) {
+      await moveFailed(placed.task, failure);
+    } finally {
+      await loadSchedule();
+      setSaving(false);
+    }
   };
   const exportPlan = () => {
     if (!activeSchedule) return;
     const exportedOn = isoToday();
-    downloadErpEstimateWorkbookBytes(buildScheduleWorkbook({
-      projectNo: activeSchedule.projectNo, projectName: activeSchedule.projectName, exportedOn,
-      planStart: activeSchedule.summary.planStart, planFinish: activeSchedule.summary.planFinish, percentComplete: Number(activeSchedule.summary.percentComplete),
-      labels: { title: uiText("Schedule.exportTitle"), project: uiText("Project"), exported: uiText("Schedule.exportedOn"), planPeriod: uiText("Plan period"), progress: uiText("Progress"),
-        columns: ["WBS", uiText("Task"), uiText("Schedule.kind"), uiText("Visibility"), uiText("Schedule.planStart"), uiText("Schedule.planFinish"), uiText("Work days"), uiText("PIC"),
-          uiText("Plan man-days"), uiText("Schedule.actualManDays"), uiText("Progress"), uiText("Status"), uiText("Schedule.actualStart"), uiText("Schedule.actualFinish"), uiText("Schedule.forecastFinish"), uiText("Remark")] },
-      rows: rows.map((task) => ({ wbs: task.wbs, depth: task.depth, kind: task.kind, name: task.name, visibility: task.visibility,
-        planStart: task.planStart, planFinish: task.planFinish, workDays: task.workDays,
-        pics: [...task.pics.map((pic) => pic.name), task.picExternal].filter(Boolean).join(", "),
-        planManDays: Number(task.planManDays), actualManDays: Number(task.actualManDays), percentComplete: Number(task.percentComplete), status: task.status,
-        actualStart: task.actualStart, actualFinish: task.actualFinish, forecastFinish: task.forecastFinish, remark: task.remark })),
-    }), scheduleWorkbookName(activeSchedule.projectNo, exportedOn));
+    downloadErpEstimateWorkbookBytes(
+      buildScheduleWorkbook({
+        projectNo: activeSchedule.projectNo,
+        projectName: activeSchedule.projectName,
+        exportedOn,
+        planStart: activeSchedule.summary.planStart,
+        planFinish: activeSchedule.summary.planFinish,
+        percentComplete: Number(activeSchedule.summary.percentComplete),
+        labels: {
+          title: uiText("Schedule.exportTitle"),
+          project: uiText("Project"),
+          exported: uiText("Schedule.exportedOn"),
+          planPeriod: uiText("Plan period"),
+          progress: uiText("Progress"),
+          columns: [
+            "WBS",
+            uiText("Task"),
+            uiText("Schedule.kind"),
+            uiText("Visibility"),
+            uiText("Schedule.planStart"),
+            uiText("Schedule.planFinish"),
+            uiText("Work days"),
+            uiText("PIC"),
+            uiText("Plan man-days"),
+            uiText("Schedule.actualManDays"),
+            uiText("Progress"),
+            uiText("Status"),
+            uiText("Schedule.actualStart"),
+            uiText("Schedule.actualFinish"),
+            uiText("Schedule.forecastFinish"),
+            uiText("Remark"),
+          ],
+        },
+        rows: rows.map((task) => ({
+          wbs: task.wbs,
+          depth: task.depth,
+          kind: task.kind,
+          name: task.name,
+          visibility: task.visibility,
+          planStart: task.planStart,
+          planFinish: task.planFinish,
+          workDays: task.workDays,
+          pics: [...task.pics.map((pic) => pic.name), task.picExternal].filter(Boolean).join(", "),
+          planManDays: Number(task.planManDays),
+          actualManDays: Number(task.actualManDays),
+          percentComplete: Number(task.percentComplete),
+          status: task.status,
+          actualStart: task.actualStart,
+          actualFinish: task.actualFinish,
+          forecastFinish: task.forecastFinish,
+          remark: task.remark,
+        })),
+      }),
+      scheduleWorkbookName(activeSchedule.projectNo, exportedOn),
+    );
   };
   // Used now and then, so behind one button: the Gantt keeps the room (owner, 2026-11-18).
   const moreActions: PortfolioAction[] = [
+    ...(v2 && canPlan && selectedProject ? [{ key: "plan-table", label: "CRM.editMasterPlan", icon: "calendar" as const, guide: "plan.editTable", onSelect: () => setPlanTableOpen(true) }] : []),
     ...(activeSchedule && rows.length ? [{ key: "export", label: "Schedule.exportExcel", icon: "download" as const, onSelect: exportPlan }] : []),
-    ...(activeSchedule?.canBaseline && rows.length ? [{ key: "baseline", label: activeSchedule.latestBaseline ? `${uiText("Create baseline")} · R${activeSchedule.latestBaseline.revision}` : "Create baseline", icon: "gitBranch" as const, onSelect: () => setBaselineOpen(true) }] : []),
-    ...(activeSchedule && (rows.length || draftAt >= 0) ? [{ key: "fullscreen", label: "Gantt.fullScreen", icon: "maximize" as const, onSelect: () => { void toggleFullscreen(); } }] : []),
-    { key: "refresh", label: "Refresh", icon: "refresh" as const, onSelect: () => { void Promise.all([loadProjects(), loadSchedule()]); } },
+    ...(activeSchedule?.canBaseline && rows.length
+      ? [
+          {
+            key: "baseline",
+            label: activeSchedule.latestBaseline ? `${uiText("Create baseline")} · R${activeSchedule.latestBaseline.revision}` : "Create baseline",
+            icon: "gitBranch" as const,
+            onSelect: () => setBaselineOpen(true),
+          },
+        ]
+      : []),
+    ...(activeSchedule && (rows.length || draftAt >= 0)
+      ? [
+          {
+            key: "fullscreen",
+            label: "Gantt.fullScreen",
+            icon: "maximize" as const,
+            onSelect: () => {
+              void toggleFullscreen();
+            },
+          },
+        ]
+      : []),
+    {
+      key: "refresh",
+      label: "Refresh",
+      icon: "refresh" as const,
+      onSelect: () => {
+        void Promise.all([loadProjects(), loadSchedule()]);
+      },
+    },
   ];
   const summary = activeSchedule?.summary;
   const planned = summary?.plannedProgress === null || summary?.plannedProgress === undefined ? null : Math.round(summary.plannedProgress);
   const slip = summary?.slipDays ?? selectedProject?.slipDays ?? null;
-  return <>
-    <Toolbar>
-      {/* One box to find and pick the project: typed search over number, name and customer. */}
-      <div className="plan-project-picker" data-guide="plan.project"><SearchSelect value={selectedId === null ? "" : String(selectedId)} label={uiText("Project")} placeholder={uiText("Plan.findProject")}
-        options={projects.map((project) => ({ value: String(project.id), label: `${project.number} · ${project.name}${project.status === "Closed" ? ` (${uiText("Closed")})` : ""}`, detail: project.customerName }))}
-        onChange={(value) => selectProject(value ? Number(value) : null)} noMatchText={uiText("CRM.noMatch")} clearLabel={uiText("CRM.clearChoice")} showLabel={uiText("CRM.showOptions")} moreText={uiText("CRM.listCut")} /></div>
-      {/* The plan in brief, beside the project it belongs to. Late and blocked counts are on the quick filters below. */}
-      {activeSchedule && summary ? <span className="plan-brief" aria-label={uiText("Plan.summary")}>
-        <HealthBadge health={summary.health ?? selectedProject?.health ?? "No plan"} />
-        <strong title={`${uiText("Progress")}${planned !== null ? ` · ${uiText("Portfolio.plannedToday")} ${planned}%` : ""}`}>{number(Number(summary.percentComplete), 0)}%</strong>
-        <span className="muted" title={uiText("Plan period")}>{summary.planStart ? `${date(summary.planStart)} – ${date(summary.planFinish)}` : uiText("Not planned")}</span>
-        <span>{uiText("Target delivery")} <strong>{target ? date(target) : "—"}</strong>{slip !== null ? <em className={slip > 0 ? "late" : undefined}>{uiText("Portfolio.slipDays").replace("{n}", slip > 0 ? `+${slip}` : String(slip))}</em> : null}</span>
-        {loadingSchedule ? <span className="plan-brief-loading" role="status"><span className="spinner" />{uiText("Plan.refreshing")}</span> : null}
-      </span> : null}
-      <span className="spacer" />
-      {canPlan && activeSchedule ? <button className="btn primary" type="button" data-guide="plan.add" disabled={draftBusy} onClick={() => openDraft(null, null)}><Icon name="plus" />{uiText("Plan.addHeading")}</button> : null}
-      <RowDisclosure label={uiText("Plan.more")} triggerClassName="btn default" guide="plan.more" trigger={<><Icon name="more" />{uiText("Plan.more")}</>} actions={moreActions} />
-    </Toolbar>
-    {error ? <LoadError message={error} retry={() => { void (selectedId ? loadSchedule() : loadProjects()); }} /> : null}
-    {activeSchedule && summary ? <>
-      {activeSchedule.manHours ? <PlanManHours projectId={activeSchedule.projectId} data={activeSchedule.manHours} onChanged={loadSchedule} /> : null}
-      <Panel flush>
-        {rows.length || draftAt >= 0 ? <div ref={fullscreenRef} className={`plan-gantt${fullscreenActive ? " is-fullscreen" : ""}`} data-guide="plan.gantt">
-          {fullscreenActive ? <div className="plan-gantt-title"><strong>{activeSchedule.projectNo} · {activeSchedule.projectName}</strong><HealthBadge health={summary.health ?? selectedProject?.health ?? "No plan"} /></div> : null}
-          <div className="plan-gantt-controls">
-            <div className="seg-control" role="group" aria-label={uiText("Plan.levelLabel")} data-guide="plan.level">
-              {(["team", "master", "member", "people"] as const).map((value) => <button key={value} type="button" className={level === value ? "on" : ""} aria-pressed={level === value} onClick={() => setLevel(value)}>{uiText(PLAN_LEVEL_LABEL[value])}</button>)}
-            </div>
-            {masterView || memberView || peopleView ? null : <FilterChips label="Plan.quickFilters" items={filterItems} active={filter} onPick={(key) => setFilter(key as PlanFilter | null)} />}
-            {peopleView ? null : <GanttToolbar zoom={zoom} allowFit compact onZoom={(next) => { setZoom(next); setAnchor(today); }} onShift={(direction) => { if (zoom !== "fit") setAnchor((value) => shiftGanttAnchor(zoom, value, direction)); }} onToday={() => { if (zoom === "fit") setZoom("quarter"); setAnchor(today); }} />}
-            <div className="gantt-nav" data-guide="plan.view">
-              {/* One button that flips: expand while anything is folded, otherwise collapse. */}
-              {masterView || peopleView ? null : <button type="button" className="btn ghost sm" disabled={foldFiltered} title={foldFiltered ? uiText("Plan.foldFiltered") : undefined} onClick={anyFolded ? expandAll : collapseAll}>
-                <Icon name={anyFolded ? "plus" : "minus"} />{uiText(anyFolded ? "Expand all" : "Gantt.collapseAll")}</button>}
-              {peopleView ? null : <button type="button" className="btn ghost sm" aria-expanded={legendOpen} onClick={toggleLegend}><Icon name="help" />{uiText("Plan.legendToggle")}</button>}
-              {/* Full screen opens from More; the way back stays here, where the Gantt covers the page. */}
-              {fullscreenActive ? <button type="button" className="btn ghost sm" title={uiText("Gantt.exitFullScreen")} onClick={() => { void toggleFullscreen(); }}><Icon name="minimize" />{uiText("Gantt.exitFullScreen")}</button> : null}
-            </div>
+  return (
+    <>
+      <Toolbar>
+        {/* One box to find and pick the project: typed search over number, name and customer. */}
+        <div className="plan-project-picker" data-guide="plan.project">
+          <SearchSelect
+            value={selectedId === null ? "" : String(selectedId)}
+            label={uiText("Project")}
+            placeholder={uiText("Plan.findProject")}
+            options={projects.map((project) => ({
+              value: String(project.id),
+              label: `${project.number} · ${project.name}${project.status === "Closed" ? ` (${uiText("Closed")})` : ""}`,
+              detail: project.customerName,
+            }))}
+            onChange={(value) => selectProject(value ? Number(value) : null)}
+            noMatchText={uiText("CRM.noMatch")}
+            clearLabel={uiText("CRM.clearChoice")}
+            showLabel={uiText("CRM.showOptions")}
+            moreText={uiText("CRM.listCut")}
+          />
+        </div>
+        {/* The plan in brief, beside the project it belongs to. Late and blocked counts are on the quick filters below. */}
+        {activeSchedule && summary ? (
+          <span className="plan-brief" aria-label={uiText("Plan.summary")}>
+            <HealthBadge health={summary.health ?? selectedProject?.health ?? "No plan"} />
+            <strong title={`${uiText("Progress")}${planned !== null ? ` · ${uiText("Portfolio.plannedToday")} ${planned}%` : ""}`}>{number(Number(summary.percentComplete), 0)}%</strong>
+            <span className="muted" title={uiText("Plan period")}>
+              {summary.planStart ? `${date(summary.planStart)} – ${date(summary.planFinish)}` : uiText("Not planned")}
+            </span>
+            <span>
+              {uiText("Target delivery")} <strong>{target ? date(target) : "—"}</strong>
+              {slip !== null ? <em className={slip > 0 ? "late" : undefined}>{uiText("Portfolio.slipDays").replace("{n}", slip > 0 ? `+${slip}` : String(slip))}</em> : null}
+            </span>
+            {loadingSchedule ? (
+              <span className="plan-brief-loading" role="status">
+                <span className="spinner" />
+                {uiText("Plan.refreshing")}
+              </span>
+            ) : null}
+          </span>
+        ) : null}
+        <span className="spacer" />
+        {canPlan && activeSchedule ? (
+          <button className="btn primary" type="button" data-guide="plan.add" disabled={draftBusy} onClick={() => openDraft(null, null)}>
+            <Icon name="plus" />
+            {uiText("Plan.addHeading")}
+          </button>
+        ) : null}
+        <RowDisclosure
+          label={uiText("Plan.more")}
+          triggerClassName="btn default"
+          guide="plan.more"
+          trigger={
+            <>
+              <Icon name="more" />
+              {uiText("Plan.more")}
+            </>
+          }
+          actions={moreActions}
+        />
+      </Toolbar>
+      {error ? (
+        <LoadError
+          message={error}
+          retry={() => {
+            void (selectedId ? loadSchedule() : loadProjects());
+          }}
+        />
+      ) : null}
+      {activeSchedule && summary ? (
+        <>
+          {activeSchedule.manHours ? <PlanManHours projectId={activeSchedule.projectId} data={activeSchedule.manHours} onChanged={loadSchedule} /> : null}
+          <Panel flush>
+            {rows.length || draftAt >= 0 ? (
+              <div ref={fullscreenRef} className={`plan-gantt${fullscreenActive ? " is-fullscreen" : ""}`} data-guide="plan.gantt">
+                {fullscreenActive ? (
+                  <div className="plan-gantt-title">
+                    <strong>
+                      {activeSchedule.projectNo} · {activeSchedule.projectName}
+                    </strong>
+                    <HealthBadge health={summary.health ?? selectedProject?.health ?? "No plan"} />
+                  </div>
+                ) : null}
+                <div className="plan-gantt-controls">
+                  <div className="seg-control" role="group" aria-label={uiText("Plan.levelLabel")} data-guide="plan.level">
+                    {(["team", "master", "member", "people"] as const).map((value) => (
+                      <button key={value} type="button" className={level === value ? "on" : ""} aria-pressed={level === value} onClick={() => setLevel(value)}>
+                        {uiText(PLAN_LEVEL_LABEL[value])}
+                      </button>
+                    ))}
+                  </div>
+                  {masterView || memberView || peopleView ? null : <FilterChips label="Plan.quickFilters" items={filterItems} active={filter} onPick={(key) => setFilter(key as PlanFilter | null)} />}
+                  {peopleView ? null : (
+                    <GanttToolbar
+                      zoom={zoom}
+                      allowFit
+                      compact
+                      onZoom={(next) => {
+                        setZoom(next);
+                        setAnchor(today);
+                      }}
+                      onShift={(direction) => {
+                        if (zoom !== "fit") setAnchor((value) => shiftGanttAnchor(zoom, value, direction));
+                      }}
+                      onToday={() => {
+                        if (zoom === "fit") setZoom("quarter");
+                        setAnchor(today);
+                      }}
+                    />
+                  )}
+                  <div className="gantt-nav" data-guide="plan.view">
+                    {/* One button that flips: expand while anything is folded, otherwise collapse. */}
+                    {masterView || peopleView ? null : (
+                      <button
+                        type="button"
+                        className="btn ghost sm"
+                        disabled={foldFiltered}
+                        title={foldFiltered ? uiText("Plan.foldFiltered") : undefined}
+                        onClick={anyFolded ? expandAll : collapseAll}
+                      >
+                        <Icon name={anyFolded ? "plus" : "minus"} />
+                        {uiText(anyFolded ? "Expand all" : "Gantt.collapseAll")}
+                      </button>
+                    )}
+                    {peopleView ? null : (
+                      <button type="button" className="btn ghost sm" aria-expanded={legendOpen} onClick={toggleLegend}>
+                        <Icon name="help" />
+                        {uiText("Plan.legendToggle")}
+                      </button>
+                    )}
+                    {/* Full screen opens from More; the way back stays here, where the Gantt covers the page. */}
+                    {fullscreenActive ? (
+                      <button
+                        type="button"
+                        className="btn ghost sm"
+                        title={uiText("Gantt.exitFullScreen")}
+                        onClick={() => {
+                          void toggleFullscreen();
+                        }}
+                      >
+                        <Icon name="minimize" />
+                        {uiText("Gantt.exitFullScreen")}
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+                {peopleView || !legendOpen ? null : (
+                  <GanttLegend baseline={Boolean(activeSchedule.latestBaseline)} target={Boolean(target)} links={!memberView && links.length > 0} draggable={canPlan && !memberView} />
+                )}
+                {memberView ? (
+                  <div className="info-strip plan-member-note" role="note" data-guide="plan.memberLegend">
+                    <i className="plan-member-key amber" aria-hidden="true" />
+                    <span>{uiText("Plan.memberLegendOverlap")}</span>
+                    <i className="plan-member-key red" aria-hidden="true" />
+                    <span>{uiText("Plan.memberLegendOver")}</span>
+                    <span className="muted">{memberBoard?.error ? uiText("Plan.memberBoardFailed") : !memberBoard ? uiText("Plan.memberBoardLoading") : uiText("Plan.memberLegendHint")}</span>
+                  </div>
+                ) : null}
+                {lastMove ? (
+                  <div className="info-strip plan-undo" role="status">
+                    <Icon name="calendar" />
+                    <span>
+                      {lastMove.label} {uiText("Plan.movedShort")}
+                    </span>
+                    <button
+                      className="btn ghost sm"
+                      type="button"
+                      disabled={saving || loadingSchedule}
+                      onClick={() => {
+                        void undoMove();
+                      }}
+                    >
+                      <Icon name="refresh" />
+                      {uiText("Plan.undo")}
+                    </button>
+                    <button className="icon-btn" type="button" aria-label={uiText("Close")} title={uiText("Close")} onClick={() => setLastMove(null)}>
+                      <Icon name="x" />
+                    </button>
+                  </div>
+                ) : null}
+                {peopleView ? (
+                  <PlanPeopleGrid
+                    projectId={activeSchedule.projectId}
+                    scheduleVersion={activeSchedule.scheduleVersion}
+                    tasks={activeSchedule.tasks}
+                    holidays={activeSchedule.holidays ?? []}
+                    canEdit={canPlan}
+                    lockedIds={pendingTaskIds}
+                    today={today}
+                    notify={notify}
+                    onReload={loadSchedule}
+                    onOpenTask={setDrawerTaskId}
+                  />
+                ) : chartRows.length ? (
+                  <GanttChart
+                    rows={chartRows}
+                    range={range}
+                    today={today}
+                    sideHeader={memberView ? "Plan.memberColumn" : "Gantt.taskColumn"}
+                    label="Gantt.planLabel"
+                    deliveryTarget={target}
+                    links={memberView ? [] : links}
+                    onMoveRow={(drop) => {
+                      void moveRow(drop);
+                    }}
+                    canMoveRow={(drop) => placeFor(drop) !== null}
+                  />
+                ) : (
+                  <EmptyState
+                    icon="filter"
+                    title="Plan.noMatch"
+                    message="Plan.noMatchHint"
+                    action={
+                      <button className="btn ghost sm" type="button" onClick={() => setFilter(null)}>
+                        <Icon name="x" />
+                        {uiText("Portfolio.clearFilters")}
+                      </button>
+                    }
+                  />
+                )}
+              </div>
+            ) : loadingSchedule ? (
+              <div className="empty">
+                <span className="spinner" />
+                <LocalizedText text={"Loading…"} />
+              </div>
+            ) : (
+              <EmptyState
+                icon="calendar"
+                title={uiText("This project has no schedule yet")}
+                message={canPlan ? "Plan.startWithHeading" : "Project Manager หรือ Engineering Manager เป็นผู้สร้างแผน"}
+                action={
+                  canPlan ? (
+                    <button className="btn primary sm" type="button" onClick={() => openDraft(null, null)}>
+                      <Icon name="plus" />
+                      {uiText("Plan.addHeading")}
+                    </button>
+                  ) : undefined
+                }
+              />
+            )}
+          </Panel>
+          {(() => {
+            const projectHistory = activeSchedule.recentUpdates.filter((update) => (update.taskId === null || !taskById.has(update.taskId)) && historyShown(update)).slice(0, 20);
+            return projectHistory.length ? (
+              <details className="plan-project-history">
+                <summary>
+                  {uiText("Plan.projectHistory")} ({projectHistory.length})
+                </summary>
+                <ul className="plan-history">
+                  {projectHistory.map((update) => (
+                    <li key={update.id}>
+                      <span className="plan-history-when">
+                        {dateTime(update.occurredAt)} · {update.actor.name}
+                      </span>
+                      <span>
+                        <strong>
+                          <LocalizedText text={myWorkAuditFieldLabel(update.field)} />
+                        </strong>
+                        {update.fromValue || update.toValue ? ` · ${historyValue(update.field, update.fromValue) ?? "—"} → ${historyValue(update.field, update.toValue) ?? "—"}` : ""}
+                        {historyReason(update)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            ) : null;
+          })()}
+          {canAnswerRequests && pendingDayRequests.length ? (
+            <Panel title="Requests waiting for the PM" subtitle="Accepting extends the task plan; rejecting leaves the dates unchanged" flush>
+              <div className="panel-body">
+                {pendingDayRequests.map((request) => {
+                  const requestedTask = request.taskId ? (taskById.get(request.taskId) ?? null) : null;
+                  return (
+                    <div className="request-row" key={`pending:${request.id}`}>
+                      <div className="request-head">
+                        <Badge tone="amber">
+                          +{request.requestDays} {"days"}
+                        </Badge>
+                        <strong>{requestedTask ? `${requestedTask.wbs} · ${requestedTask.name}` : `Task ${request.taskId ?? "—"}`}</strong>
+                        <span className="muted">
+                          <LocalizedText text={"requested by"} /> {request.actor.name} <LocalizedText text={"·"} /> {dateTime(request.occurredAt)}
+                        </span>
+                      </div>
+                      <p className="muted">{request.comment || "No reason provided"}</p>
+                      <button className="btn primary sm" type="button" disabled={!requestedTask} onClick={() => setAnswerRequest(request)}>
+                        <Icon name="checkCircle" />
+                        <LocalizedText text={"Review request"} />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </Panel>
+          ) : null}
+        </>
+      ) : loadingProjects || loadingSchedule ? (
+        <Panel>
+          <div className="empty">
+            <span className="spinner" />
+            <LocalizedText text={"Loading schedule…"} />
           </div>
-          {peopleView || !legendOpen ? null : <GanttLegend baseline={Boolean(activeSchedule.latestBaseline)} target={Boolean(target)} links={!memberView && links.length > 0} draggable={canPlan && !memberView} />}
-          {memberView ? <div className="info-strip plan-member-note" role="note" data-guide="plan.memberLegend">
-            <i className="plan-member-key amber" aria-hidden="true" /><span>{uiText("Plan.memberLegendOverlap")}</span>
-            <i className="plan-member-key red" aria-hidden="true" /><span>{uiText("Plan.memberLegendOver")}</span>
-            <span className="muted">{memberBoard?.error ? uiText("Plan.memberBoardFailed") : !memberBoard ? uiText("Plan.memberBoardLoading") : uiText("Plan.memberLegendHint")}</span>
-          </div> : null}
-          {lastMove ? <div className="info-strip plan-undo" role="status"><Icon name="calendar" /><span>{lastMove.label} {uiText("Plan.movedShort")}</span>
-            <button className="btn ghost sm" type="button" disabled={saving || loadingSchedule} onClick={() => { void undoMove(); }}><Icon name="refresh" />{uiText("Plan.undo")}</button>
-            <button className="icon-btn" type="button" aria-label={uiText("Close")} title={uiText("Close")} onClick={() => setLastMove(null)}><Icon name="x" /></button>
-          </div> : null}
-          {peopleView ? <PlanPeopleGrid projectId={activeSchedule.projectId} scheduleVersion={activeSchedule.scheduleVersion} tasks={activeSchedule.tasks} holidays={activeSchedule.holidays ?? []}
-            canEdit={canPlan} lockedIds={pendingTaskIds} today={today} notify={notify} onReload={loadSchedule} onOpenTask={setDrawerTaskId} />
-            : chartRows.length ? <GanttChart rows={chartRows} range={range} today={today} sideHeader={memberView ? "Plan.memberColumn" : "Gantt.taskColumn"} label="Gantt.planLabel" deliveryTarget={target} links={memberView ? [] : links}
-            onMoveRow={(drop) => { void moveRow(drop); }} canMoveRow={(drop) => placeFor(drop) !== null} />
-            : <EmptyState icon="filter" title="Plan.noMatch" message="Plan.noMatchHint" action={<button className="btn ghost sm" type="button" onClick={() => setFilter(null)}><Icon name="x" />{uiText("Portfolio.clearFilters")}</button>} />}
-        </div> : loadingSchedule ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading…"} /></div> : <EmptyState icon="calendar" title={uiText("This project has no schedule yet")} message={canPlan ? "Plan.startWithHeading" : "Project Manager หรือ Engineering Manager เป็นผู้สร้างแผน"}
-          action={canPlan ? <button className="btn primary sm" type="button" onClick={() => openDraft(null, null)}><Icon name="plus" />{uiText("Plan.addHeading")}</button> : undefined} />}
-      </Panel>
-      {(() => {
-        const projectHistory = activeSchedule.recentUpdates.filter((update) => (update.taskId === null || !taskById.has(update.taskId)) && historyShown(update)).slice(0, 20);
-        return projectHistory.length ? <details className="plan-project-history"><summary>{uiText("Plan.projectHistory")} ({projectHistory.length})</summary><ul className="plan-history">{projectHistory.map((update) => <li key={update.id}>
-          <span className="plan-history-when">{dateTime(update.occurredAt)} · {update.actor.name}</span>
-          <span><strong><LocalizedText text={myWorkAuditFieldLabel(update.field)} /></strong>{update.fromValue || update.toValue ? ` · ${historyValue(update.field, update.fromValue) ?? "—"} → ${historyValue(update.field, update.toValue) ?? "—"}` : ""}{historyReason(update)}</span>
-        </li>)}</ul></details> : null;
-      })()}
-      {canAnswerRequests && pendingDayRequests.length ? <Panel title="Requests waiting for the PM" subtitle="Accepting extends the task plan; rejecting leaves the dates unchanged" flush><div className="panel-body">
-        {pendingDayRequests.map((request) => {
-          const requestedTask = request.taskId ? taskById.get(request.taskId) ?? null : null;
-          return <div className="request-row" key={`pending:${request.id}`}><div className="request-head"><Badge tone="amber">+{request.requestDays} {"days"}</Badge><strong>{requestedTask ? `${requestedTask.wbs} · ${requestedTask.name}` : `Task ${request.taskId ?? "—"}`}</strong><span className="muted"><LocalizedText text={"requested by"} /> {request.actor.name} <LocalizedText text={"·"} /> {dateTime(request.occurredAt)}</span></div><p className="muted">{request.comment || "No reason provided"}</p><button className="btn primary sm" type="button" disabled={!requestedTask} onClick={() => setAnswerRequest(request)}><Icon name="checkCircle" /><LocalizedText text={"Review request"} /></button></div>;
-        })}
-      </div></Panel> : null}
-    </> : loadingProjects || loadingSchedule ? <Panel><div className="empty"><span className="spinner" /><LocalizedText text={"Loading schedule…"} /></div></Panel> : <Panel><EmptyState icon="folder" title="No accessible project" message="สร้าง Project หรือขอสิทธิ์เข้าถึงโครงการก่อนเปิด Schedule" /></Panel>}
-    {drawerTask && activeSchedule ? <PlanTaskDrawer
-      task={drawerTask}
-      schedule={activeSchedule}
-      bootstrap={bootstrap}
-      canPlan={canPlan}
-      canAnswerRequests={canAnswerRequests}
-      saving={saving || loadingSchedule}
-      error={drawerError}
-      notify={notify}
-      onClose={() => { setDrawerTaskId(null); setDrawerError(""); }}
-      onPatch={(patch, message) => { void saveTaskProgress(drawerTask, patch, message); }}
-      onDetails={() => setProgressTask(drawerTask)}
-      onEditPlan={() => setEditTask(drawerTask)}
-      onImportDrawing={() => setDrawingTask({ projectId: activeSchedule.projectId, taskId: drawerTask.id })}
-      onReview={setAnswerRequest}
-    /> : null}
-    {editTask && activeSchedule ? <EditScheduleTaskModal bootstrap={bootstrap} schedule={activeSchedule} task={editTask} onClose={() => setEditTask(null)}
-      onSaved={async () => { notify(`${activeSchedule.projectNo} · ${editTask.wbs} ${uiText("Schedule.rowSaved")}`); await loadSchedule(); }}
-      onDeleted={async () => { notify(`${activeSchedule.projectNo} · ${editTask.name} ${uiText("Plan.rowDeleted")}`); setDrawerTaskId(null); await loadSchedule(); }}
-      onConflict={async () => { notify(`${activeSchedule.projectNo} schedule changed by another user; reloaded latest data`); await loadSchedule(); }} /> : null}
-    {drawingTask ? <CreateSignableDocumentModal initialProjectId={drawingTask.projectId} initialTaskId={drawingTask.taskId} onClose={() => setDrawingTask(null)} onCreated={message => {setDrawingTask(null);notify(`${message} · Open Signed Documents to request approval`);}} /> : null}
-    {baselineOpen && activeSchedule ? <BaselineModal schedule={activeSchedule} onClose={() => setBaselineOpen(false)} onCreated={async () => { notify(`${activeSchedule.projectNo} baseline created`); await loadSchedule(); }} onConflict={async () => { notify(`${activeSchedule.projectNo} schedule changed by another user; reloaded latest data`); await loadSchedule(); }} /> : null}
-    {progressTask && activeSchedule ? <ProgressModal target={{ taskId: progressTask.id, projectNo: activeSchedule.projectNo, wbs: progressTask.wbs, name: progressTask.name, percentComplete: Number(progressTask.percentComplete), status: progressTask.status, actualStart: progressTask.actualStart, actualFinish: progressTask.actualFinish, forecastFinish: progressTask.forecastFinish, remark: workUserNote(progressTask.remark), originalRemark: progressTask.remark, rowVersion: progressTask.rowVersion }} latestRowVersion={taskById.get(progressTask.id)?.rowVersion} onClose={() => setProgressTask(null)} onSubmit={async (input, rowVersion) => {
-      await apiRequest(`/api/v1/schedule/tasks/${progressTask.id}/updates`, { method: "POST", body: JSON.stringify({ scheduleVersion: activeSchedule.scheduleVersion, rowVersion, ...input }) });
-      notify(`${activeSchedule.projectNo} · ${progressTask.wbs} progress updated`);
-      await loadSchedule();
-    }} onConflict={loadSchedule} /> : null}
-    {answerRequest && activeSchedule ? <ScheduleDayRequestAnswerModal
-      request={answerRequest}
-      schedule={activeSchedule}
-      task={answerRequest.taskId ? taskById.get(answerRequest.taskId) ?? null : null}
-      onClose={() => setAnswerRequest(null)}
-      onAnswered={async (answer) => { notify(`${activeSchedule.projectNo} day request ${answer.toLowerCase()}`); await loadSchedule(); }}
-    /> : null}
-  </>;
+        </Panel>
+      ) : (
+        <Panel>
+          <EmptyState icon="folder" title="No accessible project" message="สร้าง Project หรือขอสิทธิ์เข้าถึงโครงการก่อนเปิด Schedule" />
+        </Panel>
+      )}
+      {drawerTask && activeSchedule ? (
+        <PlanTaskDrawer
+          task={drawerTask}
+          schedule={activeSchedule}
+          bootstrap={bootstrap}
+          canPlan={canPlan}
+          canAnswerRequests={canAnswerRequests}
+          saving={saving || loadingSchedule}
+          error={drawerError}
+          notify={notify}
+          onClose={() => {
+            setDrawerTaskId(null);
+            setDrawerError("");
+          }}
+          onPatch={(patch, message) => {
+            void saveTaskProgress(drawerTask, patch, message);
+          }}
+          onDetails={() => setProgressTask(drawerTask)}
+          onEditPlan={() => setEditTask(drawerTask)}
+          onImportDrawing={() => setDrawingTask({ projectId: activeSchedule.projectId, taskId: drawerTask.id })}
+          onReview={setAnswerRequest}
+        />
+      ) : null}
+      {editTask && activeSchedule ? (
+        <EditScheduleTaskModal
+          bootstrap={bootstrap}
+          schedule={activeSchedule}
+          task={editTask}
+          onClose={() => setEditTask(null)}
+          onSaved={async () => {
+            notify(`${activeSchedule.projectNo} · ${editTask.wbs} ${uiText("Schedule.rowSaved")}`);
+            await loadSchedule();
+          }}
+          onDeleted={async () => {
+            notify(`${activeSchedule.projectNo} · ${editTask.name} ${uiText("Plan.rowDeleted")}`);
+            setDrawerTaskId(null);
+            await loadSchedule();
+          }}
+          onConflict={async () => {
+            notify(`${activeSchedule.projectNo} schedule changed by another user; reloaded latest data`);
+            await loadSchedule();
+          }}
+        />
+      ) : null}
+      {drawingTask ? (
+        <CreateSignableDocumentModal
+          initialProjectId={drawingTask.projectId}
+          initialTaskId={drawingTask.taskId}
+          onClose={() => setDrawingTask(null)}
+          onCreated={(message) => {
+            setDrawingTask(null);
+            notify(`${message} · Open Signed Documents to request approval`);
+          }}
+        />
+      ) : null}
+      {baselineOpen && activeSchedule ? (
+        <BaselineModal
+          schedule={activeSchedule}
+          onClose={() => setBaselineOpen(false)}
+          onCreated={async () => {
+            notify(`${activeSchedule.projectNo} baseline created`);
+            await loadSchedule();
+          }}
+          onConflict={async () => {
+            notify(`${activeSchedule.projectNo} schedule changed by another user; reloaded latest data`);
+            await loadSchedule();
+          }}
+        />
+      ) : null}
+      {progressTask && activeSchedule ? (
+        <ProgressModal
+          target={{
+            taskId: progressTask.id,
+            projectNo: activeSchedule.projectNo,
+            wbs: progressTask.wbs,
+            name: progressTask.name,
+            percentComplete: Number(progressTask.percentComplete),
+            status: progressTask.status,
+            actualStart: progressTask.actualStart,
+            actualFinish: progressTask.actualFinish,
+            forecastFinish: progressTask.forecastFinish,
+            remark: workUserNote(progressTask.remark),
+            originalRemark: progressTask.remark,
+            rowVersion: progressTask.rowVersion,
+          }}
+          latestRowVersion={taskById.get(progressTask.id)?.rowVersion}
+          onClose={() => setProgressTask(null)}
+          onSubmit={async (input, rowVersion) => {
+            await apiRequest(`/api/v1/schedule/tasks/${progressTask.id}/updates`, { method: "POST", body: JSON.stringify({ scheduleVersion: activeSchedule.scheduleVersion, rowVersion, ...input }) });
+            notify(`${activeSchedule.projectNo} · ${progressTask.wbs} progress updated`);
+            await loadSchedule();
+          }}
+          onConflict={loadSchedule}
+        />
+      ) : null}
+      {answerRequest && activeSchedule ? (
+        <ScheduleDayRequestAnswerModal
+          request={answerRequest}
+          schedule={activeSchedule}
+          task={answerRequest.taskId ? (taskById.get(answerRequest.taskId) ?? null) : null}
+          onClose={() => setAnswerRequest(null)}
+          onAnswered={async (answer) => {
+            notify(`${activeSchedule.projectNo} day request ${answer.toLowerCase()}`);
+            await loadSchedule();
+          }}
+        />
+      ) : null}
+      {planTableOpen && selectedProject ? (
+        <EditMasterPlanModal
+          bootstrap={bootstrap}
+          project={selectedProject}
+          onClose={() => setPlanTableOpen(false)}
+          onSaved={async (number) => {
+            setPlanTableOpen(false);
+            notify(`${number} · ${uiText("CRM.planSaved")}`);
+            await Promise.all([loadProjects(), loadSchedule()]);
+          }}
+        />
+      ) : null}
+    </>
+  );
 }
 
 /** One task of the plan: its dates, the quick progress control, the plan owner's edit, and its history. */
-function PlanTaskDrawer({ task, schedule: activeSchedule, bootstrap, canPlan, canAnswerRequests, saving, error, notify, onClose, onPatch, onDetails, onEditPlan, onImportDrawing, onReview }: {
+function PlanTaskDrawer({
+  task,
+  schedule: activeSchedule,
+  bootstrap,
+  canPlan,
+  canAnswerRequests,
+  saving,
+  error,
+  notify,
+  onClose,
+  onPatch,
+  onDetails,
+  onEditPlan,
+  onImportDrawing,
+  onReview,
+}: {
   task: ScheduleTask;
   schedule: ProjectSchedule;
   bootstrap: BootstrapData;
@@ -3118,56 +5473,210 @@ function PlanTaskDrawer({ task, schedule: activeSchedule, bootstrap, canPlan, ca
     userId: bootstrap.user.id,
   });
   const leaf = isLeafTask(task);
-  const predecessor = task.startMode === "linked" && task.predecessorId !== null ? flattenTasks(activeSchedule.tasks).find((row) => row.id === task.predecessorId) ?? null : null;
+  const predecessor = task.startMode === "linked" && task.predecessorId !== null ? (flattenTasks(activeSchedule.tasks).find((row) => row.id === task.predecessorId) ?? null) : null;
   const history = activeSchedule.recentUpdates.filter((update) => update.taskId === task.id && historyShown(update));
-  const pic = task.pics.map((person) => person.active === false ? `${person.name} (${uiText("Plan.picLeft")})` : person.name).join(", ") || task.picExternal || "—";
-  return <Drawer title={`${task.wbs} · ${task.name}`} subtitle={activeSchedule.projectNo} onClose={onClose} width={560}>
-    {error ? <div className="callout danger" role="alert"><Icon name="alertTriangle" /><span>{error}</span></div> : null}
-    {managed ? <div className="info-strip"><ResourcePlanLock /><span>{uiText("Plan.managedHint")}</span></div> : null}
-    <dl className="plan-facts">
-      <div><dt>{uiText("Plan")}</dt><dd>{date(task.planStart)} – {date(task.planFinish)} · {task.workDays} {uiText("work days")}</dd></div>
-      {predecessor ? <div><dt>{uiText("Schedule.predecessor")}</dt><dd>{predecessor.wbs} · {predecessor.name}{task.lagDays ? ` · ${task.lagDays > 0 ? "+" : ""}${task.lagDays} ${uiText("days")}` : ""}</dd></div> : null}
-      {task.baselineFinish ? <div><dt>{uiText("Baseline")}</dt><dd>{date(task.baselineStart)} – {date(task.baselineFinish)}</dd></div> : null}
-      {task.forecastFinish ? <div><dt>{uiText("Forecast")}</dt><dd>{date(task.forecastFinish)}</dd></div> : null}
-      {task.actualStart ? <div><dt>{uiText("Plan.actualDates")}</dt><dd>{date(task.actualStart)} → {task.actualFinish ? date(task.actualFinish) : "…"}</dd></div> : null}
-      <div><dt>{uiText("PIC")}</dt><dd>{pic}</dd></div>
-      {task.planManDays > 0 ? <div><dt>{uiText("Plan man-days")}</dt><dd>{number(Number(task.planManDays))} <LocalizedText text={"MD"} /></dd></div> : null}
-      <div><dt>{uiText("Status")}</dt><dd><Badge tone={scheduleTone(task, isoToday())}>{uiText(task.status)}</Badge> <ProgressCell value={Number(task.percentComplete)} /></dd></div>
-    </dl>
-    {leaf && canProgress ? <section className="plan-drawer-section"><h3>{uiText("Plan.updateProgress")}</h3>
-      <QuickProgressControls target={{ key: String(task.id), wbs: task.wbs, percentComplete: Number(task.percentComplete), status: task.status, actualStart: task.actualStart, actualFinish: task.actualFinish, forecastFinish: task.forecastFinish, planFinish: task.planFinish, remark: task.remark, updatedAt: String(task.updatedAt) }}
-        editable={!saving} notify={notify} onPatch={onPatch} />
-    </section> : null}
-    <div className="row-actions plan-drawer-actions">
-      {leaf && canProgress ? <button className="btn sm default" type="button" disabled={saving} onClick={onDetails}><Icon name="edit" /><LocalizedText text={"Update details"} /></button> : null}
-      {(canPlan || task.canEditOwn) && activeSchedule.projectStatus !== "Closed" && !managed ? <button className="btn sm ghost" type="button" disabled={saving} aria-label={`${uiText("Schedule.editRow")} ${task.wbs}`} onClick={onEditPlan}><Icon name="settings" />{uiText("Schedule.edit")}</button> : null}
-      {canImportDrawing ? <button className="btn sm default" type="button" disabled={saving} onClick={onImportDrawing}><Icon name="upload" /><LocalizedText text={"Import Drawing"} /></button> : null}
-      <CopyLinkButton notify={notify} />
-    </div>
-    <section className="plan-drawer-section"><h3>{uiText("Plan.history")}</h3>
-      {history.length ? <ul className="plan-history">{history.map((update) => {
-        const requestedTask = update.taskId === task.id ? task : null;
-        const pendingRequest = update.field === "request" && update.requestDays > 0 && !update.answer;
-        return <li key={update.id}>
-          <span className="plan-history-when">{dateTime(update.occurredAt)} · {update.actor.name}</span>
-          <span><strong><LocalizedText text={myWorkAuditFieldLabel(update.field)} /></strong>{update.requestDays > 0 ? ` · +${update.requestDays} ${uiText("days")}` : update.field === "plan" ? "" : ` · ${historyValue(update.field, update.fromValue) ?? "—"} → ${historyValue(update.field, update.toValue) ?? "—"}`}{historyReason(update)}</span>
-          {pendingRequest && requestedTask && canAnswerRequests ? <button className="btn sm primary" type="button" onClick={() => onReview(update)}><Icon name="checkCircle" /><LocalizedText text={"Review"} /></button>
-            : update.answer ? <span><Badge tone={update.answer === "Accepted" ? "green" : "red"}>{update.answer}</Badge> {update.answerBy?.name ?? "PM"}{update.answerNote ? ` · ${update.answerNote}` : ""}</span> : null}
-        </li>;
-      })}</ul> : <p className="muted">{uiText("Plan.noHistory")}</p>}
-    </section>
-  </Drawer>;
+  const pic = task.pics.map((person) => (person.active === false ? `${person.name} (${uiText("Plan.picLeft")})` : person.name)).join(", ") || task.picExternal || "—";
+  return (
+    <Drawer title={`${task.wbs} · ${task.name}`} subtitle={activeSchedule.projectNo} onClose={onClose} width={560}>
+      {error ? (
+        <div className="callout danger" role="alert">
+          <Icon name="alertTriangle" />
+          <span>{error}</span>
+        </div>
+      ) : null}
+      {managed ? (
+        <div className="info-strip">
+          <ResourcePlanLock />
+          <span>{uiText("Plan.managedHint")}</span>
+        </div>
+      ) : null}
+      <dl className="plan-facts">
+        <div>
+          <dt>{uiText("Plan")}</dt>
+          <dd>
+            {date(task.planStart)} – {date(task.planFinish)} · {task.workDays} {uiText("work days")}
+          </dd>
+        </div>
+        {predecessor ? (
+          <div>
+            <dt>{uiText("Schedule.predecessor")}</dt>
+            <dd>
+              {predecessor.wbs} · {predecessor.name}
+              {task.lagDays ? ` · ${task.lagDays > 0 ? "+" : ""}${task.lagDays} ${uiText("days")}` : ""}
+            </dd>
+          </div>
+        ) : null}
+        {task.baselineFinish ? (
+          <div>
+            <dt>{uiText("Baseline")}</dt>
+            <dd>
+              {date(task.baselineStart)} – {date(task.baselineFinish)}
+            </dd>
+          </div>
+        ) : null}
+        {task.forecastFinish ? (
+          <div>
+            <dt>{uiText("Forecast")}</dt>
+            <dd>{date(task.forecastFinish)}</dd>
+          </div>
+        ) : null}
+        {task.actualStart ? (
+          <div>
+            <dt>{uiText("Plan.actualDates")}</dt>
+            <dd>
+              {date(task.actualStart)} → {task.actualFinish ? date(task.actualFinish) : "…"}
+            </dd>
+          </div>
+        ) : null}
+        <div>
+          <dt>{uiText("PIC")}</dt>
+          <dd>{pic}</dd>
+        </div>
+        {task.planManDays > 0 ? (
+          <div>
+            <dt>{uiText("Plan man-days")}</dt>
+            <dd>
+              {number(Number(task.planManDays))} <LocalizedText text={"MD"} />
+            </dd>
+          </div>
+        ) : null}
+        <div>
+          <dt>{uiText("Status")}</dt>
+          <dd>
+            <Badge tone={scheduleTone(task, isoToday())}>{uiText(task.status)}</Badge> <ProgressCell value={Number(task.percentComplete)} />
+          </dd>
+        </div>
+      </dl>
+      {leaf && canProgress ? (
+        <section className="plan-drawer-section">
+          <h3>{uiText("Plan.updateProgress")}</h3>
+          <QuickProgressControls
+            target={{
+              key: String(task.id),
+              wbs: task.wbs,
+              percentComplete: Number(task.percentComplete),
+              status: task.status,
+              actualStart: task.actualStart,
+              actualFinish: task.actualFinish,
+              forecastFinish: task.forecastFinish,
+              planFinish: task.planFinish,
+              remark: task.remark,
+              updatedAt: String(task.updatedAt),
+            }}
+            editable={!saving}
+            notify={notify}
+            onPatch={onPatch}
+          />
+        </section>
+      ) : null}
+      <div className="row-actions plan-drawer-actions">
+        {leaf && canProgress ? (
+          <button className="btn sm default" type="button" disabled={saving} onClick={onDetails}>
+            <Icon name="edit" />
+            <LocalizedText text={"Update details"} />
+          </button>
+        ) : null}
+        {(canPlan || task.canEditOwn) && activeSchedule.projectStatus !== "Closed" && !managed ? (
+          <button className="btn sm ghost" type="button" disabled={saving} aria-label={`${uiText("Schedule.editRow")} ${task.wbs}`} onClick={onEditPlan}>
+            <Icon name="settings" />
+            {uiText("Schedule.edit")}
+          </button>
+        ) : null}
+        {canImportDrawing ? (
+          <button className="btn sm default" type="button" disabled={saving} onClick={onImportDrawing}>
+            <Icon name="upload" />
+            <LocalizedText text={"Import Drawing"} />
+          </button>
+        ) : null}
+        <CopyLinkButton notify={notify} />
+      </div>
+      <section className="plan-drawer-section">
+        <h3>{uiText("Plan.history")}</h3>
+        {history.length ? (
+          <ul className="plan-history">
+            {history.map((update) => {
+              const requestedTask = update.taskId === task.id ? task : null;
+              const pendingRequest = update.field === "request" && update.requestDays > 0 && !update.answer;
+              return (
+                <li key={update.id}>
+                  <span className="plan-history-when">
+                    {dateTime(update.occurredAt)} · {update.actor.name}
+                  </span>
+                  <span>
+                    <strong>
+                      <LocalizedText text={myWorkAuditFieldLabel(update.field)} />
+                    </strong>
+                    {update.requestDays > 0
+                      ? ` · +${update.requestDays} ${uiText("days")}`
+                      : update.field === "plan"
+                        ? ""
+                        : ` · ${historyValue(update.field, update.fromValue) ?? "—"} → ${historyValue(update.field, update.toValue) ?? "—"}`}
+                    {historyReason(update)}
+                  </span>
+                  {pendingRequest && requestedTask && canAnswerRequests ? (
+                    <button className="btn sm primary" type="button" onClick={() => onReview(update)}>
+                      <Icon name="checkCircle" />
+                      <LocalizedText text={"Review"} />
+                    </button>
+                  ) : update.answer ? (
+                    <span>
+                      <Badge tone={update.answer === "Accepted" ? "green" : "red"}>{update.answer}</Badge> {update.answerBy?.name ?? "PM"}
+                      {update.answerNote ? ` · ${update.answerNote}` : ""}
+                    </span>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <p className="muted">{uiText("Plan.noHistory")}</p>
+        )}
+      </section>
+    </Drawer>
+  );
 }
 
 function PriceAgeBadge({ record }: { record: PriceRecord }) {
-  if (record.ageDays === null) return <Badge tone="amber"><LocalizedText text={"No date"} /></Badge>;
-  if (record.ageDays <= 90) return <Badge tone="green">{record.ageDays} {"days"}</Badge>;
-  if (record.ageDays <= 180) return <Badge tone="amber">{record.ageDays} {"days"}</Badge>;
-  return <Badge tone="red">{record.ageDays} {"days"}</Badge>;
+  if (record.ageDays === null)
+    return (
+      <Badge tone="amber">
+        <LocalizedText text={"No date"} />
+      </Badge>
+    );
+  if (record.ageDays <= 90)
+    return (
+      <Badge tone="green">
+        {record.ageDays} {"days"}
+      </Badge>
+    );
+  if (record.ageDays <= 180)
+    return (
+      <Badge tone="amber">
+        {record.ageDays} {"days"}
+      </Badge>
+    );
+  return (
+    <Badge tone="red">
+      {record.ageDays} {"days"}
+    </Badge>
+  );
 }
 
 function PriceLoadWarning({ estimateCount, skippedWorkspaces }: Pick<PriceLoadState, "estimateCount" | "skippedWorkspaces">) {
-  return skippedWorkspaces ? <div className="callout warning"><Icon name="alertTriangle" /><span><strong><LocalizedText text={"Price view บางส่วนไม่ถูกโหลด"} /></strong><small><LocalizedText text={"ไม่สามารถอ่าน Cost workspace"} /> {skippedWorkspaces} <LocalizedText text={"From"} /> {estimateCount} <LocalizedText text={"estimates ได้ รายการที่แสดงยังคงเป็นข้อมูลจริงที่โหลดสำเร็จเท่านั้น"} /></small></span></div> : null;
+  return skippedWorkspaces ? (
+    <div className="callout warning">
+      <Icon name="alertTriangle" />
+      <span>
+        <strong>
+          <LocalizedText text={"Price view บางส่วนไม่ถูกโหลด"} />
+        </strong>
+        <small>
+          <LocalizedText text={"ไม่สามารถอ่าน Cost workspace"} /> {skippedWorkspaces} <LocalizedText text={"From"} /> {estimateCount}{" "}
+          <LocalizedText text={"estimates ได้ รายการที่แสดงยังคงเป็นข้อมูลจริงที่โหลดสำเร็จเท่านั้น"} />
+        </small>
+      </span>
+    </div>
+  ) : null;
 }
 
 export function ProductionPriceLibrary({ bootstrap, notify }: ProductionPlanningProps) {
@@ -3185,20 +5694,25 @@ export function ProductionPriceLibrary({ bootstrap, notify }: ProductionPlanning
   const [age, setAge] = useState("All ages");
   const [pageSize, setPageSize] = useState(50);
   const [page, setPage] = useState(1);
-  if (!allowed) return <><PageHeader eyebrow="COST KNOWLEDGE" title={uiText("Price Library")} subtitle="ราคาที่ใช้งานจริงจาก Estimate cost items" /><PermissionNotice permission="estimate.read" message="ผู้ดูแลระบบต้องเพิ่มสิทธิ์ Estimate Read ให้บทบาทนี้" /></>;
+  if (!allowed)
+    return (
+      <>
+        <PageHeader eyebrow="COST KNOWLEDGE" title={uiText("Price Library")} subtitle="ราคาที่ใช้งานจริงจาก Estimate cost items" />
+        <PermissionNotice permission="estimate.read" message="ผู้ดูแลระบบต้องเพิ่มสิทธิ์ Estimate Read ให้บทบาทนี้" />
+      </>
+    );
   const priced = records.filter((record) => record.unitCost > 0);
   const sources = ["All sources", ...Array.from(new Set(priced.map((record) => record.priceSource).filter(Boolean))).sort()];
   const suppliers = ["All suppliers", ...Array.from(new Set(priced.map((record) => record.supplierName).filter((value): value is string => Boolean(value)))).sort()];
   const rows = priced.filter((record) => {
-    const haystack = `${record.itemCode} ${record.description} ${record.brand} ${record.model} ${record.supplierName ?? ""} ${record.estimateNo} ${record.projectName} ${record.referenceNumber ?? ""}`.toLowerCase();
-    const ageMatches = age === "All ages"
-      || (age === "Fresh 0–90 days" && record.ageDays !== null && record.ageDays <= 90)
-      || (age === "Aging 91–180 days" && record.ageDays !== null && record.ageDays > 90 && record.ageDays <= 180)
-      || (age === "Stale / undated" && (record.ageDays === null || record.ageDays > 180));
-    return haystack.includes(search.toLowerCase())
-      && (source === "All sources" || record.priceSource === source)
-      && (supplier === "All suppliers" || record.supplierName === supplier)
-      && ageMatches;
+    const haystack =
+      `${record.itemCode} ${record.description} ${record.brand} ${record.model} ${record.supplierName ?? ""} ${record.estimateNo} ${record.projectName} ${record.referenceNumber ?? ""}`.toLowerCase();
+    const ageMatches =
+      age === "All ages" ||
+      (age === "Fresh 0–90 days" && record.ageDays !== null && record.ageDays <= 90) ||
+      (age === "Aging 91–180 days" && record.ageDays !== null && record.ageDays > 90 && record.ageDays <= 180) ||
+      (age === "Stale / undated" && (record.ageDays === null || record.ageDays > 180));
+    return haystack.includes(search.toLowerCase()) && (source === "All sources" || record.priceSource === source) && (supplier === "All suppliers" || record.supplierName === supplier) && ageMatches;
   });
   const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
   const currentPage = Math.min(page, pageCount);
@@ -3208,65 +5722,248 @@ export function ProductionPriceLibrary({ bootstrap, notify }: ProductionPlanning
   const fresh = priced.filter((record) => record.ageDays !== null && record.ageDays <= 90).length;
   const aging = priced.filter((record) => record.ageDays !== null && record.ageDays > 90 && record.ageDays <= 180).length;
   const stale = priced.filter((record) => record.ageDays === null || record.ageDays > 180).length;
-  return <>
-    <PageHeader eyebrow="COST KNOWLEDGE" title={uiText("Price Library")} subtitle="รวม Cost item ของ Estimate ปัจจุบันและราคาซื้อจริงที่ตรวจสอบจาก PR/ใบเสนอราคา; ไม่มี Mock price" actions={<>
-      <button className="btn ghost" type="button" disabled={loading} onClick={() => { void load(); }}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button>
-      {canAdd ? <button className="btn default" type="button" onClick={() => setShowAdd(true)}><Icon name="upload" /><LocalizedText text={"Upload quotation"} /></button> : null}
-      {canAdd ? <button className="btn primary" type="button" data-guide="price.add" onClick={() => setShowLink(true)}><Icon name="globe" /><LocalizedText text={"Add price"} /></button> : null}
-    </>} />
-    <div className="kpi-grid four"><KpiCard label="Price usages" value={priced.length} note={`${estimateCount} estimates · ${historicalCount} purchases · ${quotationLineCount} quotation lines`} tone="blue" icon="book" /><KpiCard label="Fresh 0–90 days" value={fresh} note="ตรวจ Price date" tone="green" icon="checkCircle" /><KpiCard label="Aging 91–180" value={aging} note="พิจารณายืนยันราคา" tone="amber" icon="clock" /><KpiCard label="Stale / undated" value={stale} note="ขอราคาใหม่ก่อนอนุมัติ" tone={stale ? "red" : "green"} icon="alertTriangle" /></div>
-    <Toolbar>
-      <SearchInput guide="price.search" link="q" value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder="Search item, brand, model, supplier, project or reference…" />
-      <Select link="source" label="Price source" value={source} onChange={(value) => { setSource(value); setPage(1); }} options={sources} />
-      <Select link="supplier" label="Supplier" value={supplier} onChange={(value) => { setSupplier(value); setPage(1); }} options={suppliers} />
-      <Select link="age" label="Price age" value={age} onChange={(value) => { setAge(value); setPage(1); }} options={["All ages", "Fresh 0–90 days", "Aging 91–180 days", "Stale / undated"]} />
-    </Toolbar>
-    <PriceLoadWarning estimateCount={estimateCount} skippedWorkspaces={skippedWorkspaces} />
-    {error ? <LoadError message={error} retry={() => { void load(); }} /> : null}
-    <Panel guide="price.list" title={rows.length + " live price records"} subtitle="แต่ละแถวสืบย้อนกลับไปยัง Estimate หรือ PR/PO ที่ซื้อจริงได้" flush>
-      <TablePageSize value={pageSize} onChange={(value) => { setPageSize(value); setPage(1); }} />
-      {pageRows.length ? <div className="table-wrap">
-        <table style={{ minWidth: 1580 }}>
-          <thead><tr><th><LocalizedText text={"Item"} /></th><th><LocalizedText text={"Brand / Model"} /></th><th><LocalizedText text={"Supplier"} /></th><th><LocalizedText text={"Qty / Unit"} /></th><th><LocalizedText text={"Unit price"} /></th><th><LocalizedText text={"Line total"} /></th><th><LocalizedText text={"Price date / Age"} /></th><th><LocalizedText text={"Source / Reference"} /></th><th><LocalizedText text={"Estimate / Project"} /></th><th><LocalizedText text={"Owner"} /></th><th><LocalizedText text={"Status"} /></th></tr></thead>
-          <tbody>{pageRows.map((record) => <tr key={record.key}>
-            <td><div className="cell-primary"><strong className="mono">{record.itemCode || "LINE-" + record.itemId}</strong><span>{record.description}</span></div></td>
-            <td><div className="cell-primary"><strong>{record.brand || "—"}</strong><span>{record.model || "—"}</span></div></td>
-            <td>{record.supplierName || "—"}</td>
-            <td className="num"><strong>{number(record.quantity)}</strong><small className="muted"> {record.unit}</small></td>
-            <td className="num"><strong>{money(record.unitCost)}</strong><small className="muted"> <LocalizedText text={"of"} /> {record.unit}</small></td>
-            <td className="num"><strong>{money(record.lineTotal)}</strong></td>
-            <td><div className="cell-primary"><strong>{date(record.priceDate)}</strong><span><PriceAgeBadge record={record} /></span></div></td>
-            <td><div className="cell-primary">
-              <strong>{record.priceSource || "Unspecified"}</strong>
-              {/* A referenced price is only as good as the page it came from, so the
+  return (
+    <>
+      <PageHeader
+        eyebrow="COST KNOWLEDGE"
+        title={uiText("Price Library")}
+        subtitle="รวม Cost item ของ Estimate ปัจจุบันและราคาซื้อจริงที่ตรวจสอบจาก PR/ใบเสนอราคา; ไม่มี Mock price"
+        actions={
+          <>
+            <button
+              className="btn ghost"
+              type="button"
+              disabled={loading}
+              onClick={() => {
+                void load();
+              }}
+            >
+              <Icon name="refresh" />
+              <LocalizedText text={"Refresh"} />
+            </button>
+            {canAdd ? (
+              <button className="btn default" type="button" onClick={() => setShowAdd(true)}>
+                <Icon name="upload" />
+                <LocalizedText text={"Upload quotation"} />
+              </button>
+            ) : null}
+            {canAdd ? (
+              <button className="btn primary" type="button" data-guide="price.add" onClick={() => setShowLink(true)}>
+                <Icon name="globe" />
+                <LocalizedText text={"Add price"} />
+              </button>
+            ) : null}
+          </>
+        }
+      />
+      <div className="kpi-grid four">
+        <KpiCard label="Price usages" value={priced.length} note={`${estimateCount} estimates · ${historicalCount} purchases · ${quotationLineCount} quotation lines`} tone="blue" icon="book" />
+        <KpiCard label="Fresh 0–90 days" value={fresh} note="ตรวจ Price date" tone="green" icon="checkCircle" />
+        <KpiCard label="Aging 91–180" value={aging} note="พิจารณายืนยันราคา" tone="amber" icon="clock" />
+        <KpiCard label="Stale / undated" value={stale} note="ขอราคาใหม่ก่อนอนุมัติ" tone={stale ? "red" : "green"} icon="alertTriangle" />
+      </div>
+      <Toolbar>
+        <SearchInput
+          guide="price.search"
+          link="q"
+          value={search}
+          onChange={(value) => {
+            setSearch(value);
+            setPage(1);
+          }}
+          placeholder="Search item, brand, model, supplier, project or reference…"
+        />
+        <Select
+          link="source"
+          label="Price source"
+          value={source}
+          onChange={(value) => {
+            setSource(value);
+            setPage(1);
+          }}
+          options={sources}
+        />
+        <Select
+          link="supplier"
+          label="Supplier"
+          value={supplier}
+          onChange={(value) => {
+            setSupplier(value);
+            setPage(1);
+          }}
+          options={suppliers}
+        />
+        <Select
+          link="age"
+          label="Price age"
+          value={age}
+          onChange={(value) => {
+            setAge(value);
+            setPage(1);
+          }}
+          options={["All ages", "Fresh 0–90 days", "Aging 91–180 days", "Stale / undated"]}
+        />
+      </Toolbar>
+      <PriceLoadWarning estimateCount={estimateCount} skippedWorkspaces={skippedWorkspaces} />
+      {error ? (
+        <LoadError
+          message={error}
+          retry={() => {
+            void load();
+          }}
+        />
+      ) : null}
+      <Panel guide="price.list" title={rows.length + " live price records"} subtitle="แต่ละแถวสืบย้อนกลับไปยัง Estimate หรือ PR/PO ที่ซื้อจริงได้" flush>
+        <TablePageSize
+          value={pageSize}
+          onChange={(value) => {
+            setPageSize(value);
+            setPage(1);
+          }}
+        />
+        {pageRows.length ? (
+          <div className="table-wrap">
+            <table style={{ minWidth: 1580 }}>
+              <thead>
+                <tr>
+                  <th>
+                    <LocalizedText text={"Item"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Brand / Model"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Supplier"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Qty / Unit"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Unit price"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Line total"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Price date / Age"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Source / Reference"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Estimate / Project"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Owner"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Status"} />
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {pageRows.map((record) => (
+                  <tr key={record.key}>
+                    <td>
+                      <div className="cell-primary">
+                        <strong className="mono">{record.itemCode || "LINE-" + record.itemId}</strong>
+                        <span>{record.description}</span>
+                      </div>
+                    </td>
+                    <td>
+                      <div className="cell-primary">
+                        <strong>{record.brand || "—"}</strong>
+                        <span>{record.model || "—"}</span>
+                      </div>
+                    </td>
+                    <td>{record.supplierName || "—"}</td>
+                    <td className="num">
+                      <strong>{number(record.quantity)}</strong>
+                      <small className="muted"> {record.unit}</small>
+                    </td>
+                    <td className="num">
+                      <strong>{money(record.unitCost)}</strong>
+                      <small className="muted">
+                        {" "}
+                        <LocalizedText text={"of"} /> {record.unit}
+                      </small>
+                    </td>
+                    <td className="num">
+                      <strong>{money(record.lineTotal)}</strong>
+                    </td>
+                    <td>
+                      <div className="cell-primary">
+                        <strong>{date(record.priceDate)}</strong>
+                        <span>
+                          <PriceAgeBadge record={record} />
+                        </span>
+                      </div>
+                    </td>
+                    <td>
+                      <div className="cell-primary">
+                        <strong>{record.priceSource || "Unspecified"}</strong>
+                        {/* A referenced price is only as good as the page it came from, so the
                   page is one click away rather than a number nobody can check. */}
-              {record.sourceUrl
-                ? <a className="mono" href={record.sourceUrl} target="_blank" rel="noopener noreferrer" title={record.sourceUrl}>
-                  {record.referenceNumber || "—"} <Icon name="externalLink" /> {hostOf(record.sourceUrl)}
-                </a>
-                : <span className="mono">{record.referenceNumber || "—"} <LocalizedText text={"·"} /> {record.sourceKind}</span>}
-            </div></td>
-            <td><div className="cell-primary"><strong className="mono">{record.estimateNo}</strong><span>{record.projectName}</span></div></td>
-            <td>{record.ownerName}</td>
-            <td><Badge>{record.lineStatus}</Badge></td>
-          </tr>)}</tbody>
-        </table>
-      </div> : loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading cost workspaces…"} /></div> : <EmptyState icon="book" title="No priced cost item found" message="ไม่พบข้อมูลตามตัวกรอง หรือยังไม่มี Unit cost ใน Estimate" />}
-      <Pagination page={currentPage} pageCount={pageCount} from={from} to={to} total={rows.length} onPage={setPage} />
-    </Panel>
-    {showAdd ? <SupplierQuotationUploadModal bootstrap={bootstrap} onClose={() => setShowAdd(false)} onCreated={async (quotationNumber, lineCount) => {
-      setShowAdd(false);
-      notify(lineCount
-        ? `${quotationNumber} · เพิ่ม ${lineCount} ราคาเข้าคลังแล้ว`
-        : `${quotationNumber} · บันทึกเอกสารแล้วแต่ยังไม่มีรายการราคา`);
-      await load();
-    }} /> : null}
-    {showLink ? <ReferencePriceModal bootstrap={bootstrap} onClose={() => setShowLink(false)} onCreated={async (quotationNumber, lineCount) => {
-      setShowLink(false);
-      notify(`${quotationNumber} · เพิ่ม ${lineCount} ราคาอ้างอิงเข้าคลังแล้ว`);
-      await load();
-    }} /> : null}
-  </>;
+                        {record.sourceUrl ? (
+                          <a className="mono" href={record.sourceUrl} target="_blank" rel="noopener noreferrer" title={record.sourceUrl}>
+                            {record.referenceNumber || "—"} <Icon name="externalLink" /> {hostOf(record.sourceUrl)}
+                          </a>
+                        ) : (
+                          <span className="mono">
+                            {record.referenceNumber || "—"} <LocalizedText text={"·"} /> {record.sourceKind}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td>
+                      <div className="cell-primary">
+                        <strong className="mono">{record.estimateNo}</strong>
+                        <span>{record.projectName}</span>
+                      </div>
+                    </td>
+                    <td>{record.ownerName}</td>
+                    <td>
+                      <Badge>{record.lineStatus}</Badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : loading ? (
+          <div className="empty">
+            <span className="spinner" />
+            <LocalizedText text={"Loading cost workspaces…"} />
+          </div>
+        ) : (
+          <EmptyState icon="book" title="No priced cost item found" message="ไม่พบข้อมูลตามตัวกรอง หรือยังไม่มี Unit cost ใน Estimate" />
+        )}
+        <Pagination page={currentPage} pageCount={pageCount} from={from} to={to} total={rows.length} onPage={setPage} />
+      </Panel>
+      {showAdd ? (
+        <SupplierQuotationUploadModal
+          bootstrap={bootstrap}
+          onClose={() => setShowAdd(false)}
+          onCreated={async (quotationNumber, lineCount) => {
+            setShowAdd(false);
+            notify(lineCount ? `${quotationNumber} · เพิ่ม ${lineCount} ราคาเข้าคลังแล้ว` : `${quotationNumber} · บันทึกเอกสารแล้วแต่ยังไม่มีรายการราคา`);
+            await load();
+          }}
+        />
+      ) : null}
+      {showLink ? (
+        <ReferencePriceModal
+          bootstrap={bootstrap}
+          onClose={() => setShowLink(false)}
+          onCreated={async (quotationNumber, lineCount) => {
+            setShowLink(false);
+            notify(`${quotationNumber} · เพิ่ม ${lineCount} ราคาอ้างอิงเข้าคลังแล้ว`);
+            await load();
+          }}
+        />
+      ) : null}
+    </>
+  );
 }
 
 const supplierQuotationCurrency = (value: number, currency: SupplierQuotationRecord["currency"]) =>
@@ -3287,12 +5984,19 @@ const quotationFileKind = (name: string) => {
 };
 
 const blankQuotationLine = (lineNo: number, currency: string): QuotationLineItem => ({
-  lineNo, itemCode: "", description: "", brand: "", model: "",
-  qty: 1, unit: "EA", unitPrice: 0, currency, remark: "",
+  lineNo,
+  itemCode: "",
+  description: "",
+  brand: "",
+  model: "",
+  qty: 1,
+  unit: "EA",
+  unitPrice: 0,
+  currency,
+  remark: "",
 });
 
-const quotationLinesTotal = (lines: QuotationLineItem[]) =>
-  lines.reduce((sum, line) => sum + (Number(line.qty) || 0) * (Number(line.unitPrice) || 0), 0);
+const quotationLinesTotal = (lines: QuotationLineItem[]) => lines.reduce((sum, line) => sum + (Number(line.qty) || 0) * (Number(line.unitPrice) || 0), 0);
 
 /* A cost line has no currency, so a JPY, USD or EUR quotation needs its baht rate before any of
    its lines can reach an estimate. It is asked for here, from whoever holds the document. */
@@ -3302,7 +6006,7 @@ const thbRateInvalid = (currency: SupplierQuotationRecord["currency"], value: st
   return !value.trim() || !Number.isFinite(rate) || rate <= 0 || rate > 100_000;
 };
 
-const thbRateOf = (currency: SupplierQuotationRecord["currency"], value: string) => currency === "THB" ? null : Number(value);
+const thbRateOf = (currency: SupplierQuotationRecord["currency"], value: string) => (currency === "THB" ? null : Number(value));
 
 export type QuotationInquiry = { id: number; number: string; projectName: string; customerName: string };
 
@@ -3358,7 +6062,10 @@ function useCatalogueMatches(lines: QuotationLineItem[]): Record<string, CostIte
         if (Object.keys(found).length) setMatches((previous) => ({ ...previous, ...found }));
       })();
     }, CATALOGUE_DEBOUNCE_MS);
-    return () => { active = false; window.clearTimeout(timer); };
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
   }, [signature]);
 
   return matches;
@@ -3382,7 +6089,12 @@ type CatalogueRow = {
  * cost last time, and what this quotation is asking for it. The rise is the reason to
  * look — finding it here is worth more than finding it after the estimate is approved.
  */
-function CatalogueComparison({ lines, matches, disabled, onChange }: {
+function CatalogueComparison({
+  lines,
+  matches,
+  disabled,
+  onChange,
+}: {
   lines: QuotationLineItem[];
   matches: Record<string, CostItemLookupRecord>;
   disabled: boolean;
@@ -3398,59 +6110,90 @@ function CatalogueComparison({ lines, matches, disabled, onChange }: {
   if (!rows.length) return null;
 
   const missing = (value: string, known: string) => !value.trim() && Boolean(known);
-  const fillable = rows.filter(({ line, match }) =>
-    missing(line.itemCode, match.itemCode) || missing(line.brand, match.brand) || missing(line.model, match.model));
+  const fillable = rows.filter(({ line, match }) => missing(line.itemCode, match.itemCode) || missing(line.brand, match.brand) || missing(line.model, match.model));
   /* Only the blanks are filled: whatever the supplier actually wrote stays as written. */
-  const fill = () => onChange(lines.map((line, index) => {
-    const row = rows.find((candidate) => candidate.index === index);
-    if (!row) return line;
-    return {
-      ...line,
-      itemCode: line.itemCode.trim() || row.match.itemCode,
-      brand: line.brand.trim() || row.match.brand,
-      model: line.model.trim() || row.match.model,
-    };
-  }));
+  const fill = () =>
+    onChange(
+      lines.map((line, index) => {
+        const row = rows.find((candidate) => candidate.index === index);
+        if (!row) return line;
+        return {
+          ...line,
+          itemCode: line.itemCode.trim() || row.match.itemCode,
+          brand: line.brand.trim() || row.match.brand,
+          model: line.model.trim() || row.match.model,
+        };
+      }),
+    );
 
-  return <div className="catalogue-match">
-    <div className="catalogue-match-head">
-      <div>
-        <strong>{`เคยซื้อแล้ว ${rows.length} จาก ${lines.length} รายการ`}</strong>
-        <span>เทียบกับราคาล่าสุดที่บริษัทเคยจ่าย</span>
+  return (
+    <div className="catalogue-match">
+      <div className="catalogue-match-head">
+        <div>
+          <strong>{`เคยซื้อแล้ว ${rows.length} จาก ${lines.length} รายการ`}</strong>
+          <span>เทียบกับราคาล่าสุดที่บริษัทเคยจ่าย</span>
+        </div>
+        {fillable.length && !disabled ? (
+          <button className="btn ghost sm" type="button" onClick={fill}>
+            <Icon name="check" />
+            {`เติมรหัส/ยี่ห้อ/รุ่นที่ว่าง ${fillable.length} รายการ`}
+          </button>
+        ) : null}
       </div>
-      {fillable.length && !disabled ? <button className="btn ghost sm" type="button" onClick={fill}>
-        <Icon name="check" />{`เติมรหัส/ยี่ห้อ/รุ่นที่ว่าง ${fillable.length} รายการ`}
-      </button> : null}
+      <div className="table-wrap">
+        <table style={{ minWidth: 760 }}>
+          <thead>
+            <tr>
+              <th>
+                <LocalizedText text={"Item"} />
+              </th>
+              <th>
+                <LocalizedText text={"Previous price"} />
+              </th>
+              <th>
+                <LocalizedText text={"This quotation"} />
+              </th>
+              <th>
+                <LocalizedText text={"Change"} />
+              </th>
+              <th>
+                <LocalizedText text={"Source / Reference"} />
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(({ line, match, change }) => (
+              <tr key={line.lineNo}>
+                <td>
+                  <div className="cell-primary">
+                    <strong className="mono">{match.itemCode || line.itemCode || "—"}</strong>
+                    <span>{line.description || match.description}</span>
+                  </div>
+                </td>
+                <td className="num">
+                  {money(match.unitCost)}
+                  <small className="muted"> / {match.unit}</small>
+                </td>
+                <td className="num">
+                  {money(line.unitPrice)}
+                  <small className="muted"> / {line.unit}</small>
+                </td>
+                <td className="num">{change === null ? "—" : <Badge tone={change > 1 ? "red" : change < -1 ? "green" : "slate"}>{`${change > 0 ? "+" : ""}${number(change, 1)}%`}</Badge>}</td>
+                <td>
+                  <div className="cell-primary">
+                    <strong>{match.priceSource}</strong>
+                    <span className="mono">
+                      {match.sourceNumber} <LocalizedText text={"·"} /> {date(match.priceDate)}
+                    </span>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
-    <div className="table-wrap">
-      <table style={{ minWidth: 760 }}>
-        <thead><tr>
-          <th><LocalizedText text={"Item"} /></th>
-          <th><LocalizedText text={"Previous price"} /></th>
-          <th><LocalizedText text={"This quotation"} /></th>
-          <th><LocalizedText text={"Change"} /></th>
-          <th><LocalizedText text={"Source / Reference"} /></th>
-        </tr></thead>
-        <tbody>{rows.map(({ line, match, change }) => <tr key={line.lineNo}>
-          <td><div className="cell-primary">
-            <strong className="mono">{match.itemCode || line.itemCode || "—"}</strong>
-            <span>{line.description || match.description}</span>
-          </div></td>
-          <td className="num">{money(match.unitCost)}<small className="muted"> / {match.unit}</small></td>
-          <td className="num">{money(line.unitPrice)}<small className="muted"> / {line.unit}</small></td>
-          <td className="num">{change === null
-            ? "—"
-            : <Badge tone={change > 1 ? "red" : change < -1 ? "green" : "slate"}>
-              {`${change > 0 ? "+" : ""}${number(change, 1)}%`}
-            </Badge>}</td>
-          <td><div className="cell-primary">
-            <strong>{match.priceSource}</strong>
-            <span className="mono">{match.sourceNumber} <LocalizedText text={"·"} /> {date(match.priceDate)}</span>
-          </div></td>
-        </tr>)}</tbody>
-      </table>
-    </div>
-  </div>;
+  );
 }
 
 /*
@@ -3459,7 +6202,14 @@ function CatalogueComparison({ lines, matches, disabled, onChange }: {
  * entry grid — one row per price, the arithmetic on the right, a running total under
  * it — instead of the footnote they used to be beneath the header form.
  */
-function QuotationLinesEditor({ lines, currency, minWidth = 920, disabled = false, emptyHint, onChange }: {
+function QuotationLinesEditor({
+  lines,
+  currency,
+  minWidth = 920,
+  disabled = false,
+  emptyHint,
+  onChange,
+}: {
   lines: QuotationLineItem[];
   currency: string;
   minWidth?: number;
@@ -3468,83 +6218,149 @@ function QuotationLinesEditor({ lines, currency, minWidth = 920, disabled = fals
   onChange: (lines: QuotationLineItem[]) => void;
 }) {
   const renumber = (next: QuotationLineItem[]) => next.map((line, index) => ({ ...line, lineNo: index + 1 }));
-  const update = (index: number, patch: Partial<QuotationLineItem>) =>
-    onChange(lines.map((line, position) => position === index ? { ...line, ...patch } : line));
+  const update = (index: number, patch: Partial<QuotationLineItem>) => onChange(lines.map((line, position) => (position === index ? { ...line, ...patch } : line)));
   const remove = (index: number) => onChange(renumber(lines.filter((_, position) => position !== index)));
   const add = () => onChange([...lines, blankQuotationLine(lines.length + 1, currency)]);
   /* A row with no name or no price is stored but reaches the library as nothing useful. */
   const incomplete = lines.filter((line) => !line.description.trim() || !(line.unitPrice > 0)).length;
   const matches = useCatalogueMatches(lines);
 
-  return <div className="quotation-lines" data-guide="quote.lines">
-    <div className="quotation-lines-head">
-      <div>
-        <strong><LocalizedText text={"Price lines"} /></strong>
-        <span>{lines.length
-          ? `${lines.length} รายการ · เข้าคลังราคาทันทีที่บันทึก`
-          : "ยังไม่มีรายการ — ใบนี้จะไม่เพิ่มราคาเข้าคลัง"}</span>
+  return (
+    <div className="quotation-lines" data-guide="quote.lines">
+      <div className="quotation-lines-head">
+        <div>
+          <strong>
+            <LocalizedText text={"Price lines"} />
+          </strong>
+          <span>{lines.length ? `${lines.length} รายการ · เข้าคลังราคาทันทีที่บันทึก` : "ยังไม่มีรายการ — ใบนี้จะไม่เพิ่มราคาเข้าคลัง"}</span>
+        </div>
+        {lines.length ? (
+          <button className="btn ghost sm" type="button" disabled={disabled} onClick={add}>
+            <Icon name="plus" />
+            <LocalizedText text={"Add line"} />
+          </button>
+        ) : null}
       </div>
-      {lines.length ? <button className="btn ghost sm" type="button" disabled={disabled} onClick={add}>
-        <Icon name="plus" /><LocalizedText text={"Add line"} />
-      </button> : null}
+      {lines.length ? (
+        <div className="quotation-lines-grid">
+          <div className="table-wrap">
+            <table className="sheet" style={{ minWidth }}>
+              <thead>
+                <tr>
+                  <th style={{ width: 34 }}>#</th>
+                  <th style={{ width: 124 }}>
+                    <LocalizedText text={"Item code"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Description"} />
+                  </th>
+                  <th style={{ width: 118 }}>
+                    <LocalizedText text={"Brand"} />
+                  </th>
+                  <th style={{ width: 66 }}>
+                    <LocalizedText text={"Qty"} />
+                  </th>
+                  <th style={{ width: 70 }}>
+                    <LocalizedText text={"Unit"} />
+                  </th>
+                  <th style={{ width: 112 }}>
+                    <LocalizedText text={"Unit price"} />
+                  </th>
+                  <th style={{ width: 112 }}>
+                    <LocalizedText text={"Line total"} />
+                  </th>
+                  <th style={{ width: 74 }}>
+                    <LocalizedText text={"Currency"} />
+                  </th>
+                  <th style={{ width: 36 }} />
+                </tr>
+              </thead>
+              <tbody>
+                {lines.map((line, index) => (
+                  <tr key={index}>
+                    <td className="computed" style={{ fontWeight: 400, color: "var(--muted)", textAlign: "center" }}>
+                      {line.lineNo}
+                    </td>
+                    <td>
+                      <input value={line.itemCode} disabled={disabled} maxLength={200} placeholder="—" onChange={(event) => update(index, { itemCode: event.target.value })} />
+                    </td>
+                    <td>
+                      <input value={line.description} disabled={disabled} maxLength={500} placeholder="ชื่อรายการ" onChange={(event) => update(index, { description: event.target.value })} />
+                    </td>
+                    <td>
+                      <input value={line.brand} disabled={disabled} maxLength={100} placeholder="—" onChange={(event) => update(index, { brand: event.target.value })} />
+                    </td>
+                    <td>
+                      <input className="num" type="number" min="0.0001" step="1" value={line.qty} disabled={disabled} onChange={(event) => update(index, { qty: Number(event.target.value) })} />
+                    </td>
+                    <td>
+                      <input value={line.unit} disabled={disabled} maxLength={50} onChange={(event) => update(index, { unit: event.target.value })} />
+                    </td>
+                    <td>
+                      <input
+                        className="num"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={line.unitPrice}
+                        disabled={disabled}
+                        onChange={(event) => update(index, { unitPrice: Number(event.target.value) })}
+                      />
+                    </td>
+                    <td className="computed">{number((Number(line.qty) || 0) * (Number(line.unitPrice) || 0), 2)}</td>
+                    <td>
+                      <select value={line.currency} disabled={disabled} onChange={(event) => update(index, { currency: event.target.value })}>
+                        <option value="THB">THB</option>
+                        <option value="JPY">JPY</option>
+                        <option value="USD">USD</option>
+                        <option value="EUR">EUR</option>
+                      </select>
+                    </td>
+                    <td>
+                      <button className="btn ghost sm" type="button" disabled={disabled} title="Remove line" style={{ padding: "2px 6px" }} onClick={() => remove(index)}>
+                        <Icon name="x" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="quotation-lines-foot">
+            {incomplete ? (
+              <span className="warn">
+                <Icon name="alertTriangle" /> {incomplete} รายการยังไม่มีชื่อหรือราคา
+              </span>
+            ) : (
+              <span />
+            )}
+            <span>
+              <LocalizedText text={"Lines total"} /> <strong>{number(quotationLinesTotal(lines), 2)}</strong> {currency}
+            </span>
+          </div>
+        </div>
+      ) : (
+        <button className="quotation-lines-empty" type="button" disabled={disabled} onClick={add}>
+          <Icon name="plus" />
+          <span>
+            <strong>
+              <LocalizedText text={"Add the first price line"} />
+            </strong>
+            <small>{emptyHint ?? "กรอกชื่อรายการกับราคาต่อหน่วย แล้วราคาจะเข้าคลังราคาทันทีที่บันทึก"}</small>
+          </span>
+        </button>
+      )}
+      <CatalogueComparison lines={lines} matches={matches} disabled={disabled} onChange={onChange} />
     </div>
-    {lines.length ? <div className="quotation-lines-grid">
-      <div className="table-wrap">
-        <table className="sheet" style={{ minWidth }}>
-          <thead><tr>
-            <th style={{ width: 34 }}>#</th>
-            <th style={{ width: 124 }}><LocalizedText text={"Item code"} /></th>
-            <th><LocalizedText text={"Description"} /></th>
-            <th style={{ width: 118 }}><LocalizedText text={"Brand"} /></th>
-            <th style={{ width: 66 }}><LocalizedText text={"Qty"} /></th>
-            <th style={{ width: 70 }}><LocalizedText text={"Unit"} /></th>
-            <th style={{ width: 112 }}><LocalizedText text={"Unit price"} /></th>
-            <th style={{ width: 112 }}><LocalizedText text={"Line total"} /></th>
-            <th style={{ width: 74 }}><LocalizedText text={"Currency"} /></th>
-            <th style={{ width: 36 }} />
-          </tr></thead>
-          <tbody>{lines.map((line, index) => <tr key={index}>
-            <td className="computed" style={{ fontWeight: 400, color: "var(--muted)", textAlign: "center" }}>{line.lineNo}</td>
-            <td><input value={line.itemCode} disabled={disabled} maxLength={200} placeholder="—"
-              onChange={(event) => update(index, { itemCode: event.target.value })} /></td>
-            <td><input value={line.description} disabled={disabled} maxLength={500} placeholder="ชื่อรายการ"
-              onChange={(event) => update(index, { description: event.target.value })} /></td>
-            <td><input value={line.brand} disabled={disabled} maxLength={100} placeholder="—"
-              onChange={(event) => update(index, { brand: event.target.value })} /></td>
-            <td><input className="num" type="number" min="0.0001" step="1" value={line.qty} disabled={disabled}
-              onChange={(event) => update(index, { qty: Number(event.target.value) })} /></td>
-            <td><input value={line.unit} disabled={disabled} maxLength={50}
-              onChange={(event) => update(index, { unit: event.target.value })} /></td>
-            <td><input className="num" type="number" min="0" step="0.01" value={line.unitPrice} disabled={disabled}
-              onChange={(event) => update(index, { unitPrice: Number(event.target.value) })} /></td>
-            <td className="computed">{number((Number(line.qty) || 0) * (Number(line.unitPrice) || 0), 2)}</td>
-            <td><select value={line.currency} disabled={disabled}
-              onChange={(event) => update(index, { currency: event.target.value })}>
-              <option value="THB">THB</option><option value="JPY">JPY</option><option value="USD">USD</option><option value="EUR">EUR</option>
-            </select></td>
-            <td><button className="btn ghost sm" type="button" disabled={disabled} title="Remove line"
-              style={{ padding: "2px 6px" }} onClick={() => remove(index)}><Icon name="x" /></button></td>
-          </tr>)}</tbody>
-        </table>
-      </div>
-      <div className="quotation-lines-foot">
-        {incomplete
-          ? <span className="warn"><Icon name="alertTriangle" /> {incomplete} รายการยังไม่มีชื่อหรือราคา</span>
-          : <span />}
-        <span><LocalizedText text={"Lines total"} /> <strong>{number(quotationLinesTotal(lines), 2)}</strong> {currency}</span>
-      </div>
-    </div> : <button className="quotation-lines-empty" type="button" disabled={disabled} onClick={add}>
-      <Icon name="plus" />
-      <span>
-        <strong><LocalizedText text={"Add the first price line"} /></strong>
-        <small>{emptyHint ?? "กรอกชื่อรายการกับราคาต่อหน่วย แล้วราคาจะเข้าคลังราคาทันทีที่บันทึก"}</small>
-      </span>
-    </button>}
-    <CatalogueComparison lines={lines} matches={matches} disabled={disabled} onChange={onChange} />
-  </div>;
+  );
 }
 
-export function SupplierQuotationUploadModal({ bootstrap, defaultInquiry, onClose, onCreated }: {
+export function SupplierQuotationUploadModal({
+  bootstrap,
+  defaultInquiry,
+  onClose,
+  onCreated,
+}: {
   bootstrap: BootstrapData;
   /** Estimate Cost files the quotation against its own RFQ, which may be older than the RFQs the list loads. */
   defaultInquiry?: QuotationInquiry;
@@ -3606,8 +6422,8 @@ export function SupplierQuotationUploadModal({ bootstrap, defaultInquiry, onClos
     if (!hasParsed) return {};
     const c = confidence[key];
     if (c === "high") return { borderLeft: "3px solid #22c55e", paddingLeft: 6, marginLeft: -6, borderRadius: 2 };
-    if (c === "low")  return { borderLeft: "3px solid #f59e0b", paddingLeft: 6, marginLeft: -6, borderRadius: 2 };
-    return               { borderLeft: "3px solid #ef4444",  paddingLeft: 6, marginLeft: -6, borderRadius: 2 };
+    if (c === "low") return { borderLeft: "3px solid #f59e0b", paddingLeft: 6, marginLeft: -6, borderRadius: 2 };
+    return { borderLeft: "3px solid #ef4444", paddingLeft: 6, marginLeft: -6, borderRadius: 2 };
   };
 
   // hint string shown under each field (Field label prop only accepts string)
@@ -3615,24 +6431,40 @@ export function SupplierQuotationUploadModal({ bootstrap, defaultInquiry, onClos
     if (!hasParsed) return undefined;
     const c = confidence[key];
     if (c === "high") return "✓ อ่านได้";
-    if (c === "low")  return "⚠ ควรตรวจสอบ";
+    if (c === "low") return "⚠ ควรตรวจสอบ";
     return "ไม่พบใน PDF — กรอกเอง";
   };
 
   useEffect(() => {
     let active = true;
-    void listInquiries({ page: 1, pageSize: 100 }).then((response) => {
-      if (active) setInquiries(response.items.map((item) => ({
-        id: item.id, number: item.number, projectName: item.projectName, customerName: item.customerName,
-      })));
-    }).catch((requestError) => { if (active) setError(toError(requestError)); });
-    return () => { active = false; };
+    void listInquiries({ page: 1, pageSize: 100 })
+      .then((response) => {
+        if (active)
+          setInquiries(
+            response.items.map((item) => ({
+              id: item.id,
+              number: item.number,
+              projectName: item.projectName,
+              customerName: item.customerName,
+            })),
+          );
+      })
+      .catch((requestError) => {
+        if (active) setError(toError(requestError));
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   // Accept File directly so we can call from onChange before state updates
   const parsePdf = async (targetFile: File) => {
     if (!targetFile.name.toLowerCase().endsWith(".pdf")) return;
-    setParsing(true); setParseWarning(""); setError(""); setConfidence({}); setNewSupplierName("");
+    setParsing(true);
+    setParseWarning("");
+    setError("");
+    setConfidence({});
+    setNewSupplierName("");
     // Reset header fields so stale values from a previous PDF don't persist
     setSupplierReference("");
     setReceivedDate(isoToday());
@@ -3652,16 +6484,17 @@ export function SupplierQuotationUploadModal({ bootstrap, defaultInquiry, onClos
       if (result.currency) setCurrency(result.currency);
       /* A total printed on the document outranks the line arithmetic: it can include
          freight, discount or tax that no single line carries. */
-      if (result.totalAmount > 0) { setAmount(String(result.totalAmount)); setAmountPinned(true); }
+      if (result.totalAmount > 0) {
+        setAmount(String(result.totalAmount));
+        setAmountPinned(true);
+      }
 
       // Auto-match supplier: try exact/substring match against master data first;
       // fall back to pre-filling the new-supplier text box so user can confirm.
       if (result.supplierName) {
         const normalizedParsed = result.supplierName.toLowerCase().trim();
         const matched = bootstrap.suppliers.find(
-          (s) => s.name.toLowerCase() === normalizedParsed
-            || s.name.toLowerCase().includes(normalizedParsed)
-            || normalizedParsed.includes(s.name.toLowerCase()),
+          (s) => s.name.toLowerCase() === normalizedParsed || s.name.toLowerCase().includes(normalizedParsed) || normalizedParsed.includes(s.name.toLowerCase()),
         );
         if (matched) {
           setSupplierId(String(matched.id));
@@ -3703,17 +6536,16 @@ export function SupplierQuotationUploadModal({ bootstrap, defaultInquiry, onClos
 
   const parsedAmount = Number(amount);
   const hasSupplier = !!supplierId || !!newSupplierName.trim();
-  const invalid = !hasSupplier || !receivedDate || !validUntil || validUntil < receivedDate
-    || !Number.isFinite(parsedAmount) || parsedAmount <= 0 || !file || thbRateInvalid(currency, thbRate);
+  const invalid = !hasSupplier || !receivedDate || !validUntil || validUntil < receivedDate || !Number.isFinite(parsedAmount) || parsedAmount <= 0 || !file || thbRateInvalid(currency, thbRate);
 
   // Warn when manual line items total doesn't match declared amount (>1% diff)
   const linesTotal = quotationLinesTotal(lines);
-  const linesTotalMismatch = lines.length > 0 && parsedAmount > 0
-    && Math.abs(linesTotal - parsedAmount) > parsedAmount * 0.01;
+  const linesTotalMismatch = lines.length > 0 && parsedAmount > 0 && Math.abs(linesTotal - parsedAmount) > parsedAmount * 0.01;
 
   const submit = async () => {
     if (invalid || !file) return;
-    setBusy(true); setError("");
+    setBusy(true);
+    setError("");
     try {
       // Resolve supplier:
       //   1. User selected from dropdown → use that ID directly
@@ -3733,10 +6565,16 @@ export function SupplierQuotationUploadModal({ bootstrap, defaultInquiry, onClos
       /* Lines travel with the document: the backend commits both or neither, so an
          upload can no longer succeed while the prices it carried vanish unreported. */
       const created = await createSupplierQuotation({
-        file, supplierId: resolvedSupplierId,
-        supplierReference: supplierReference.trim(), receivedDate, validUntil,
-        inquiryId: inquiryId ? Number(inquiryId) : undefined, currency, amount: parsedAmount,
-        thbRate: thbRateOf(currency, thbRate), lines,
+        file,
+        supplierId: resolvedSupplierId,
+        supplierReference: supplierReference.trim(),
+        receivedDate,
+        validUntil,
+        inquiryId: inquiryId ? Number(inquiryId) : undefined,
+        currency,
+        amount: parsedAmount,
+        thbRate: thbRateOf(currency, thbRate),
+        lines,
       });
       await onCreated(created.quotationNumber, created.lineCount, created.id);
     } catch (requestError) {
@@ -3751,226 +6589,336 @@ export function SupplierQuotationUploadModal({ bootstrap, defaultInquiry, onClos
   // Summary counts for the parse-result banner
   const confValues = Object.values(confidence);
   const highCount = confValues.filter((v) => v === "high").length;
-  const lowCount  = confValues.filter((v) => v === "low").length;
+  const lowCount = confValues.filter((v) => v === "low").length;
   const noneCount = confValues.filter((v) => v === "none").length;
 
-  return <Modal
-    title="Upload supplier quotation"
-    subtitle="เลือกไฟล์ PDF · ดู PDF ต้นฉบับด้านขวา · กรอก Supplier + Line items ด้านซ้าย"
-    size="xl"
-    onClose={onClose}
-    footer={<>
-      <button className="btn default" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button>
-      <button className="btn primary" type="button" data-guide="quote.save" disabled={busy || invalid} onClick={() => { void submit(); }}>
-        <Icon name="upload" /><LocalizedText text={busy ? "Uploading…" : "Upload quotation"} />
-      </button>
-    </>}
-  >
-    {error ? <div className="callout danger" role="alert"><Icon name="alertTriangle" /><span><strong><LocalizedText text={"Error"} /></strong> {error}</span></div> : null}
-    {parseWarning ? <div className="callout warning"><Icon name="alertTriangle" /><span>{parseWarning}</span></div> : null}
-
-    {/* Parse result summary banner */}
-    {hasParsed && !parseWarning && (
-      <div className="callout" style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 6, padding: "8px 12px", marginBottom: 12, display: "flex", alignItems: "center", gap: 10, fontSize: 13 }}>
-        <Icon name="check" />
-        <span>
-          <strong>อ่าน PDF แล้ว</strong> · Supplier / วันที่ / ยอดรวม / สกุลเงิน / รายการสินค้า ถูก fill อัตโนมัติ
-          {highCount > 0 && <> · <span style={{ color: "#15803d" }}>●</span> {highCount} field มั่นใจ</>}
-          {lowCount > 0  && <> · <span style={{ color: "#a16207" }}>●</span> {lowCount} field ควรตรวจสอบ</>}
-          {noneCount > 0 && <> · <span style={{ color: "#dc2626" }}>●</span> {noneCount} field ดูจาก PDF</>}
-        </span>
-        <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
-          {isPdf && (
-            <button className="btn ghost sm" type="button" disabled={parsing || busy}
-              onClick={() => { if (file) void parsePdf(file); }}
-              style={{ whiteSpace: "nowrap" }}>
-              {parsing ? <><span className="spinner" /> กำลังอ่าน…</> : <><Icon name="refresh" /> อ่านใหม่</>}
-            </button>
-          )}
+  return (
+    <Modal
+      title="Upload supplier quotation"
+      subtitle="เลือกไฟล์ PDF · ดู PDF ต้นฉบับด้านขวา · กรอก Supplier + Line items ด้านซ้าย"
+      size="xl"
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn default" type="button" disabled={busy} onClick={onClose}>
+            <LocalizedText text={"Cancel"} />
+          </button>
+          <button
+            className="btn primary"
+            type="button"
+            data-guide="quote.save"
+            disabled={busy || invalid}
+            onClick={() => {
+              void submit();
+            }}
+          >
+            <Icon name="upload" />
+            <LocalizedText text={busy ? "Uploading…" : "Upload quotation"} />
+          </button>
+        </>
+      }
+    >
+      {error ? (
+        <div className="callout danger" role="alert">
+          <Icon name="alertTriangle" />
+          <span>
+            <strong>
+              <LocalizedText text={"Error"} />
+            </strong>{" "}
+            {error}
+          </span>
         </div>
-      </div>
-    )}
-    {/* Uploading with no lines stores a document and no price — say so before it happens. */}
-    {file && !parsing && !lines.length ? (
-      <div className="callout warning" style={{ marginBottom: 12 }}>
-        <Icon name="alertTriangle" />
-        <span>
-          <strong>ยังไม่มีรายการราคา</strong>
-          อัปโหลดตอนนี้จะได้เฉพาะไฟล์เอกสาร คลังราคาจะไม่ได้ราคาจากใบนี้ — เพิ่มรายการด้านล่างก่อน
-        </span>
-      </div>
-    ) : null}
-    {linesTotalMismatch && (
-      <div className="callout warning" style={{ marginBottom: 12 }}>
-        <Icon name="alertTriangle" />
-        <span>ผลรวมรายการ ({number(linesTotal, 2)}) ไม่ตรงกับยอดใบเสนอราคา ({number(parsedAmount, 2)}) — ต่างกันได้ถ้ามีค่าขนส่ง ภาษี หรือส่วนลด</span>
-        <button className="btn ghost sm" type="button" style={{ whiteSpace: "nowrap", alignSelf: "center" }}
-          onClick={() => { setAmount(String(Number(linesTotal.toFixed(4)))); setAmountPinned(true); }}>
-          ใช้ยอดรวมรายการ
-        </button>
-      </div>
-    )}
-
-    {/* Main layout: form on left, PDF viewer on right when showPdf */}
-    <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "flex-start" }}>
-
-      {/* ── Left: form content ── */}
-      <div style={{ flex: "1 1 0", minWidth: 0 }}>
-
-        {/* File selector — auto-parses PDF on select */}
-        <div className="form-grid two" style={{ marginBottom: 16 }}>
-          <Field guide="quote.file" label="Quotation file *" hint="PDF → อ่านอัตโนมัติ · Excel, CSV, JPG, PNG · maximum 50 MB" span={2}>
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <input type="file" accept=".pdf,.xls,.xlsx,.csv,.jpg,.jpeg,.png"
-                onChange={(event) => {
-                  const f = event.target.files?.[0] ?? null;
-                  selectFile(f); setConfidence({}); setParseWarning(""); setNewSupplierName("");
-                  setLines([]); setAmount(""); setAmountPinned(false);
-                  if (f?.name.toLowerCase().endsWith(".pdf")) void parsePdf(f);
-                }} />
-              {isPdf && parsing && <span style={{ fontSize: 12, color: "var(--text-muted)", display: "flex", alignItems: "center", gap: 4 }}><span className="spinner" /> กำลังอ่าน PDF…</span>}
-              {isPdf && !parsing && !hasParsed && (
-                <button className="btn ghost sm" type="button" disabled={busy}
-                  onClick={() => { if (file) void parsePdf(file); }} style={{ whiteSpace: "nowrap" }}>
-                  <Icon name="eye" /> Parse PDF
-                </button>
-              )}
-              {/* Hiding the document used to be one-way: the only path back was picking the file again. */}
-              {pdfObjectUrl && !showPdf ? (
-                <button className="btn ghost sm" type="button" style={{ whiteSpace: "nowrap" }}
-                  onClick={() => setShowPdf(true)}>
-                  <Icon name="eye" /> แสดง PDF
-                </button>
-              ) : null}
-            </div>
-          </Field>
+      ) : null}
+      {parseWarning ? (
+        <div className="callout warning">
+          <Icon name="alertTriangle" />
+          <span>{parseWarning}</span>
         </div>
+      ) : null}
 
-        {/* Header form — fields tinted by confidence */}
-        <div className="form-grid two">
-          <Field label="System quotation no." hint="Generated automatically after upload">
-            <input value="SQ-YYMM-XXXX" readOnly />
-          </Field>
-          <div>
-            <Field guide="quote.supplier" label="Supplier *">
-              <select value={supplierId} onChange={(event) => {
-                setSupplierId(event.target.value);
-                setNewSupplierName("");
-              }}>
-                <option value="">— เลือก Supplier (หรือกรอกชื่อใหม่ด้านล่าง) —</option>
-                {bootstrap.suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.code} · {supplier.name}</option>)}
-              </select>
-              {!supplierId && (
-                <div style={{ marginTop: 6 }}>
-                  <input
-                    placeholder="ชื่อ Supplier ใหม่..."
-                    value={newSupplierName}
-                    onChange={(e) => setNewSupplierName(e.target.value)}
-                    maxLength={200}
-                    style={{ width: "100%" }}
-                  />
-                  <div style={{ fontSize: 12, color: newSupplierName.trim() ? "var(--accent)" : "var(--text-muted)", marginTop: 3 }}>
-                    {newSupplierName.trim()
-                      ? `จะสร้าง Supplier ใหม่ "${newSupplierName.trim()}" ใน Master Data เมื่อกด Upload`
-                      : "กรอกชื่อ Supplier ใหม่ หรือเลือกจากรายการด้านบน"}
-                  </div>
-                </div>
-              )}
-            </Field>
-          </div>
-          <div style={confWrap("quotationNumber")}>
-            <Field label="Supplier quotation / reference" hint={confHint("quotationNumber")}>
-              <input maxLength={200} value={supplierReference} onChange={(event) => setSupplierReference(event.target.value)} placeholder="e.g. QT-2609-001" />
-            </Field>
-          </div>
-          <Field guide="quote.inquiry" label="Related inquiry">
-            <select value={inquiryId} onChange={(event) => setInquiryId(event.target.value)}>
-              <option value="">Not linked</option>
-              {inquiryOptions.map((inquiry) => <option key={inquiry.id} value={inquiry.id}>{inquiry.number} · {inquiry.projectName} · {inquiry.customerName}</option>)}
-            </select>
-          </Field>
-          <div style={confWrap("receivedDate")}>
-            <Field label="Received date *" hint={confHint("receivedDate")}>
-              <DateInput value={receivedDate} onChange={(event) => {
-                setReceivedDate(event.target.value);
-                if (event.target.value && validUntil < event.target.value) setValidUntil(addIsoDays(event.target.value, 30));
-              }} />
-            </Field>
-          </div>
-          <div style={confWrap("validUntil")}>
-            <Field label="Valid until *" hint={confHint("validUntil")}>
-              <DateInput min={receivedDate || undefined} value={validUntil} onChange={(event) => setValidUntil(event.target.value)} />
-            </Field>
-          </div>
-          <Field label="Currency *">
-            <select value={currency} onChange={(event) => setCurrency(event.target.value as SupplierQuotationRecord["currency"])}>
-              <option value="THB">THB</option><option value="JPY">JPY</option><option value="USD">USD</option><option value="EUR">EUR</option>
-            </select>
-          </Field>
-          <ThbRateField currency={currency} date={receivedDate} value={thbRate} onChange={setThbRate} />
-          <div style={confWrap("totalAmount")}>
-            <Field label="Quotation amount *" hint={confHint("totalAmount") ?? (amountPinned ? undefined : "คิดจากผลรวมรายการให้อัตโนมัติ แก้เองได้")}>
-              <input type="number" min="0.0001" step="0.01" value={amount} placeholder="0.00"
-                onChange={(event) => { setAmount(event.target.value); setAmountPinned(true); }} />
-            </Field>
+      {/* Parse result summary banner */}
+      {hasParsed && !parseWarning && (
+        <div
+          className="callout"
+          style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 6, padding: "8px 12px", marginBottom: 12, display: "flex", alignItems: "center", gap: 10, fontSize: 13 }}
+        >
+          <Icon name="check" />
+          <span>
+            <strong>อ่าน PDF แล้ว</strong> · Supplier / วันที่ / ยอดรวม / สกุลเงิน / รายการสินค้า ถูก fill อัตโนมัติ
+            {highCount > 0 && (
+              <>
+                {" "}
+                · <span style={{ color: "#15803d" }}>●</span> {highCount} field มั่นใจ
+              </>
+            )}
+            {lowCount > 0 && (
+              <>
+                {" "}
+                · <span style={{ color: "#a16207" }}>●</span> {lowCount} field ควรตรวจสอบ
+              </>
+            )}
+            {noneCount > 0 && (
+              <>
+                {" "}
+                · <span style={{ color: "#dc2626" }}>●</span> {noneCount} field ดูจาก PDF
+              </>
+            )}
+          </span>
+          <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+            {isPdf && (
+              <button
+                className="btn ghost sm"
+                type="button"
+                disabled={parsing || busy}
+                onClick={() => {
+                  if (file) void parsePdf(file);
+                }}
+                style={{ whiteSpace: "nowrap" }}
+              >
+                {parsing ? (
+                  <>
+                    <span className="spinner" /> กำลังอ่าน…
+                  </>
+                ) : (
+                  <>
+                    <Icon name="refresh" /> อ่านใหม่
+                  </>
+                )}
+              </button>
+            )}
           </div>
         </div>
-
-        {/* Legend */}
-        {hasParsed && <div style={{ display: "flex", gap: 16, marginTop: 10, fontSize: 11, color: "var(--text-muted)" }}>
-          <span><span style={{ color: "#22c55e" }}>●</span> มั่นใจ</span>
-          <span><span style={{ color: "#f59e0b" }}>●</span> ควรตรวจสอบ</span>
-          <span><span style={{ color: "#ef4444" }}>●</span> ไม่พบ — กรอกเอง</span>
-        </div>}
-
-        {file ? <div className="file-row" style={{ marginTop: 12 }}><span className="file-icon"><Icon name="paperclip" /></span><div className="cell-primary"><strong>{file.name}</strong><span>{quotationFileKind(file.name)} · {number(file.size / 1024, 1)} KB</span></div></div> : null}
-      </div>
-
-      {/* ── Right: PDF viewer (sticky — stays in view while scrolling the form) ── */}
-      {showPdf && pdfObjectUrl && (
-        <div className="quotation-pdf-pane">
-          <div className="quotation-pdf-head">
-            <span>PDF ต้นฉบับ</span>
-            <button className="btn ghost sm" type="button" onClick={() => setShowPdf(false)} style={{ padding: "2px 8px" }}>
-              <Icon name="x" /> ซ่อน
-            </button>
-          </div>
-          <iframe src={pdfObjectUrl} title="PDF Preview" />
+      )}
+      {/* Uploading with no lines stores a document and no price — say so before it happens. */}
+      {file && !parsing && !lines.length ? (
+        <div className="callout warning" style={{ marginBottom: 12 }}>
+          <Icon name="alertTriangle" />
+          <span>
+            <strong>ยังไม่มีรายการราคา</strong>
+            อัปโหลดตอนนี้จะได้เฉพาะไฟล์เอกสาร คลังราคาจะไม่ได้ราคาจากใบนี้ — เพิ่มรายการด้านล่างก่อน
+          </span>
+        </div>
+      ) : null}
+      {linesTotalMismatch && (
+        <div className="callout warning" style={{ marginBottom: 12 }}>
+          <Icon name="alertTriangle" />
+          <span>
+            ผลรวมรายการ ({number(linesTotal, 2)}) ไม่ตรงกับยอดใบเสนอราคา ({number(parsedAmount, 2)}) — ต่างกันได้ถ้ามีค่าขนส่ง ภาษี หรือส่วนลด
+          </span>
+          <button
+            className="btn ghost sm"
+            type="button"
+            style={{ whiteSpace: "nowrap", alignSelf: "center" }}
+            onClick={() => {
+              setAmount(String(Number(linesTotal.toFixed(4))));
+              setAmountPinned(true);
+            }}
+          >
+            ใช้ยอดรวมรายการ
+          </button>
         </div>
       )}
 
-    </div>
+      {/* Main layout: form on left, PDF viewer on right when showPdf */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "flex-start" }}>
+        {/* ── Left: form content ── */}
+        <div style={{ flex: "1 1 0", minWidth: 0 }}>
+          {/* File selector — auto-parses PDF on select */}
+          <div className="form-grid two" style={{ marginBottom: 16 }}>
+            <Field guide="quote.file" label="Quotation file *" hint="PDF → อ่านอัตโนมัติ · Excel, CSV, JPG, PNG · maximum 50 MB" span={2}>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <input
+                  type="file"
+                  accept=".pdf,.xls,.xlsx,.csv,.jpg,.jpeg,.png"
+                  onChange={(event) => {
+                    const f = event.target.files?.[0] ?? null;
+                    selectFile(f);
+                    setConfidence({});
+                    setParseWarning("");
+                    setNewSupplierName("");
+                    setLines([]);
+                    setAmount("");
+                    setAmountPinned(false);
+                    if (f?.name.toLowerCase().endsWith(".pdf")) void parsePdf(f);
+                  }}
+                />
+                {isPdf && parsing && (
+                  <span style={{ fontSize: 12, color: "var(--text-muted)", display: "flex", alignItems: "center", gap: 4 }}>
+                    <span className="spinner" /> กำลังอ่าน PDF…
+                  </span>
+                )}
+                {isPdf && !parsing && !hasParsed && (
+                  <button
+                    className="btn ghost sm"
+                    type="button"
+                    disabled={busy}
+                    onClick={() => {
+                      if (file) void parsePdf(file);
+                    }}
+                    style={{ whiteSpace: "nowrap" }}
+                  >
+                    <Icon name="eye" /> Parse PDF
+                  </button>
+                )}
+                {/* Hiding the document used to be one-way: the only path back was picking the file again. */}
+                {pdfObjectUrl && !showPdf ? (
+                  <button className="btn ghost sm" type="button" style={{ whiteSpace: "nowrap" }} onClick={() => setShowPdf(true)}>
+                    <Icon name="eye" /> แสดง PDF
+                  </button>
+                ) : null}
+              </div>
+            </Field>
+          </div>
 
-    {/*
+          {/* Header form — fields tinted by confidence */}
+          <div className="form-grid two">
+            <Field label="System quotation no." hint="Generated automatically after upload">
+              <input value="SQ-YYMM-XXXX" readOnly />
+            </Field>
+            <div>
+              <Field guide="quote.supplier" label="Supplier *">
+                <select
+                  value={supplierId}
+                  onChange={(event) => {
+                    setSupplierId(event.target.value);
+                    setNewSupplierName("");
+                  }}
+                >
+                  <option value="">— เลือก Supplier (หรือกรอกชื่อใหม่ด้านล่าง) —</option>
+                  {bootstrap.suppliers.map((supplier) => (
+                    <option key={supplier.id} value={supplier.id}>
+                      {supplier.code} · {supplier.name}
+                    </option>
+                  ))}
+                </select>
+                {!supplierId && (
+                  <div style={{ marginTop: 6 }}>
+                    <input placeholder="ชื่อ Supplier ใหม่..." value={newSupplierName} onChange={(e) => setNewSupplierName(e.target.value)} maxLength={200} style={{ width: "100%" }} />
+                    <div style={{ fontSize: 12, color: newSupplierName.trim() ? "var(--accent)" : "var(--text-muted)", marginTop: 3 }}>
+                      {newSupplierName.trim() ? `จะสร้าง Supplier ใหม่ "${newSupplierName.trim()}" ใน Master Data เมื่อกด Upload` : "กรอกชื่อ Supplier ใหม่ หรือเลือกจากรายการด้านบน"}
+                    </div>
+                  </div>
+                )}
+              </Field>
+            </div>
+            <div style={confWrap("quotationNumber")}>
+              <Field label="Supplier quotation / reference" hint={confHint("quotationNumber")}>
+                <input maxLength={200} value={supplierReference} onChange={(event) => setSupplierReference(event.target.value)} placeholder="e.g. QT-2609-001" />
+              </Field>
+            </div>
+            <Field guide="quote.inquiry" label="Related inquiry">
+              <select value={inquiryId} onChange={(event) => setInquiryId(event.target.value)}>
+                <option value="">Not linked</option>
+                {inquiryOptions.map((inquiry) => (
+                  <option key={inquiry.id} value={inquiry.id}>
+                    {inquiry.number} · {inquiry.projectName} · {inquiry.customerName}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <div style={confWrap("receivedDate")}>
+              <Field label="Received date *" hint={confHint("receivedDate")}>
+                <DateInput
+                  value={receivedDate}
+                  onChange={(event) => {
+                    setReceivedDate(event.target.value);
+                    if (event.target.value && validUntil < event.target.value) setValidUntil(addIsoDays(event.target.value, 30));
+                  }}
+                />
+              </Field>
+            </div>
+            <div style={confWrap("validUntil")}>
+              <Field label="Valid until *" hint={confHint("validUntil")}>
+                <DateInput min={receivedDate || undefined} value={validUntil} onChange={(event) => setValidUntil(event.target.value)} />
+              </Field>
+            </div>
+            <Field label="Currency *">
+              <select value={currency} onChange={(event) => setCurrency(event.target.value as SupplierQuotationRecord["currency"])}>
+                <option value="THB">THB</option>
+                <option value="JPY">JPY</option>
+                <option value="USD">USD</option>
+                <option value="EUR">EUR</option>
+              </select>
+            </Field>
+            <ThbRateField currency={currency} date={receivedDate} value={thbRate} onChange={setThbRate} />
+            <div style={confWrap("totalAmount")}>
+              <Field label="Quotation amount *" hint={confHint("totalAmount") ?? (amountPinned ? undefined : "คิดจากผลรวมรายการให้อัตโนมัติ แก้เองได้")}>
+                <input
+                  type="number"
+                  min="0.0001"
+                  step="0.01"
+                  value={amount}
+                  placeholder="0.00"
+                  onChange={(event) => {
+                    setAmount(event.target.value);
+                    setAmountPinned(true);
+                  }}
+                />
+              </Field>
+            </div>
+          </div>
+
+          {/* Legend */}
+          {hasParsed && (
+            <div style={{ display: "flex", gap: 16, marginTop: 10, fontSize: 11, color: "var(--text-muted)" }}>
+              <span>
+                <span style={{ color: "#22c55e" }}>●</span> มั่นใจ
+              </span>
+              <span>
+                <span style={{ color: "#f59e0b" }}>●</span> ควรตรวจสอบ
+              </span>
+              <span>
+                <span style={{ color: "#ef4444" }}>●</span> ไม่พบ — กรอกเอง
+              </span>
+            </div>
+          )}
+
+          {file ? (
+            <div className="file-row" style={{ marginTop: 12 }}>
+              <span className="file-icon">
+                <Icon name="paperclip" />
+              </span>
+              <div className="cell-primary">
+                <strong>{file.name}</strong>
+                <span>
+                  {quotationFileKind(file.name)} · {number(file.size / 1024, 1)} KB
+                </span>
+              </div>
+            </div>
+          ) : null}
+        </div>
+
+        {/* ── Right: PDF viewer (sticky — stays in view while scrolling the form) ── */}
+        {showPdf && pdfObjectUrl && (
+          <div className="quotation-pdf-pane">
+            <div className="quotation-pdf-head">
+              <span>PDF ต้นฉบับ</span>
+              <button className="btn ghost sm" type="button" onClick={() => setShowPdf(false)} style={{ padding: "2px 8px" }}>
+                <Icon name="x" /> ซ่อน
+              </button>
+            </div>
+            <iframe src={pdfObjectUrl} title="PDF Preview" />
+          </div>
+        )}
+      </div>
+
+      {/*
       The price lines get the full width of the dialog rather than the half left over
       beside the PDF. Squeezed into that half, the description column — the one thing
       an engineer reads to know what the line is — collapsed to a single character.
     */}
-    <QuotationLinesEditor
-      lines={lines}
-      currency={currency}
-      disabled={busy}
-      emptyHint={parsing
-        ? "กำลังอ่าน PDF…"
-        : hasParsed
-          ? "ไม่พบรายการในไฟล์ — กรอกเองได้เลย ชื่อรายการกับราคาต่อหน่วยก็พอ"
-          : "กรอกชื่อรายการกับราคาต่อหน่วย หรือเลือกไฟล์ PDF ให้ระบบอ่านรายการให้"}
-      onChange={applyLines}
-    />
-  </Modal>;
+      <QuotationLinesEditor
+        lines={lines}
+        currency={currency}
+        disabled={busy}
+        emptyHint={parsing ? "กำลังอ่าน PDF…" : hasParsed ? "ไม่พบรายการในไฟล์ — กรอกเองได้เลย ชื่อรายการกับราคาต่อหน่วยก็พอ" : "กรอกชื่อรายการกับราคาต่อหน่วย หรือเลือกไฟล์ PDF ให้ระบบอ่านรายการให้"}
+        onChange={applyLines}
+      />
+    </Modal>
+  );
 }
 
-function EditQuotationModal({
-  record,
-  bootstrap,
-  onClose,
-  onSaved,
-}: {
-  record: SupplierQuotationRecord;
-  bootstrap: BootstrapData;
-  onClose: () => void;
-  onSaved: () => void;
-}) {
+function EditQuotationModal({ record, bootstrap, onClose, onSaved }: { record: SupplierQuotationRecord; bootstrap: BootstrapData; onClose: () => void; onSaved: () => void }) {
   const [supplierId, setSupplierId] = useState(String(record.supplierId));
   const [supplierReference, setSupplierReference] = useState(record.supplierReference);
   const [receivedDate, setReceivedDate] = useState(record.receivedDate);
@@ -3989,32 +6937,47 @@ function EditQuotationModal({
   const [error, setError] = useState("");
 
   useEffect(() => {
-    void listInquiries({ page: 1, pageSize: 100 }).then((r) =>
-      setInquiries(r.items.map((i) => ({ id: i.id, number: i.number, projectName: i.projectName, customerName: i.customerName })))
-    ).catch(() => undefined);
+    void listInquiries({ page: 1, pageSize: 100 })
+      .then((r) => setInquiries(r.items.map((i) => ({ id: i.id, number: i.number, projectName: i.projectName, customerName: i.customerName }))))
+      .catch(() => undefined);
   }, []);
 
   useEffect(() => {
     let active = true;
     void listQuotationLines(record.id)
-      .then((loaded) => { if (active) { setLines(loaded); setLinesLoaded(true); } })
-      .catch((loadError) => { if (active) setError("โหลดรายการราคาไม่สำเร็จ: " + toError(loadError)); });
-    return () => { active = false; };
+      .then((loaded) => {
+        if (active) {
+          setLines(loaded);
+          setLinesLoaded(true);
+        }
+      })
+      .catch((loadError) => {
+        if (active) setError("โหลดรายการราคาไม่สำเร็จ: " + toError(loadError));
+      });
+    return () => {
+      active = false;
+    };
   }, [record.id]);
 
   const isReference = record.sourceKind === "WebReference";
   const urlLooksOpenable = /^https?:\/\/[^\s<>"']+$/i.test(sourceUrl.trim());
   const parsedAmount = Number(amount);
-  const invalid = !supplierId || !receivedDate || !validUntil || validUntil < receivedDate
-    || !Number.isFinite(parsedAmount) || parsedAmount <= 0
-    || (isReference && !urlLooksOpenable) || thbRateInvalid(currency, thbRate);
+  const invalid =
+    !supplierId ||
+    !receivedDate ||
+    !validUntil ||
+    validUntil < receivedDate ||
+    !Number.isFinite(parsedAmount) ||
+    parsedAmount <= 0 ||
+    (isReference && !urlLooksOpenable) ||
+    thbRateInvalid(currency, thbRate);
   const linesTotal = quotationLinesTotal(lines);
-  const linesTotalMismatch = lines.length > 0 && parsedAmount > 0
-    && Math.abs(linesTotal - parsedAmount) > parsedAmount * 0.01;
+  const linesTotalMismatch = lines.length > 0 && parsedAmount > 0 && Math.abs(linesTotal - parsedAmount) > parsedAmount * 0.01;
 
   const submit = async () => {
     if (invalid) return;
-    setBusy(true); setError("");
+    setBusy(true);
+    setError("");
     try {
       await updateSupplierQuotation(record.id, {
         supplierId: Number(supplierId),
@@ -4043,20 +7006,38 @@ function EditQuotationModal({
       subtitle="แก้หัวใบเสนอราคาและรายการราคา — รายการที่บันทึกคือสิ่งที่เข้าคลังราคา"
       size="xl"
       onClose={onClose}
-      footer={<>
-        <button className="btn default" type="button" disabled={busy} onClick={onClose}>Cancel</button>
-        <button className="btn primary" type="button" disabled={busy || invalid} onClick={() => { void submit(); }}>
-          <Icon name="check" />{busy ? "Saving…" : "Save changes"}
-        </button>
-      </>}
+      footer={
+        <>
+          <button className="btn default" type="button" disabled={busy} onClick={onClose}>
+            Cancel
+          </button>
+          <button
+            className="btn primary"
+            type="button"
+            disabled={busy || invalid}
+            onClick={() => {
+              void submit();
+            }}
+          >
+            <Icon name="check" />
+            {busy ? "Saving…" : "Save changes"}
+          </button>
+        </>
+      }
     >
-      {error ? <div className="callout danger" role="alert"><Icon name="alertTriangle" /><span>{error}</span></div> : null}
+      {error ? (
+        <div className="callout danger" role="alert">
+          <Icon name="alertTriangle" />
+          <span>{error}</span>
+        </div>
+      ) : null}
       {linesTotalMismatch ? (
         <div className="callout warning">
           <Icon name="alertTriangle" />
-          <span>ผลรวมรายการ ({number(linesTotal, 2)}) ไม่ตรงกับยอดใบเสนอราคา ({number(parsedAmount, 2)}) — ต่างกันได้ถ้ามีค่าขนส่ง ภาษี หรือส่วนลด</span>
-          <button className="btn ghost sm" type="button" style={{ whiteSpace: "nowrap", alignSelf: "center" }}
-            onClick={() => setAmount(String(Number(linesTotal.toFixed(4))))}>
+          <span>
+            ผลรวมรายการ ({number(linesTotal, 2)}) ไม่ตรงกับยอดใบเสนอราคา ({number(parsedAmount, 2)}) — ต่างกันได้ถ้ามีค่าขนส่ง ภาษี หรือส่วนลด
+          </span>
+          <button className="btn ghost sm" type="button" style={{ whiteSpace: "nowrap", alignSelf: "center" }} onClick={() => setAmount(String(Number(linesTotal.toFixed(4))))}>
             ใช้ยอดรวมรายการ
           </button>
         </div>
@@ -4065,21 +7046,34 @@ function EditQuotationModal({
         <Field label="Supplier *">
           <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
             <option value="">— เลือก Supplier —</option>
-            {bootstrap.suppliers.map((s) => <option key={s.id} value={s.id}>{s.code} · {s.name}</option>)}
+            {bootstrap.suppliers.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.code} · {s.name}
+              </option>
+            ))}
           </select>
         </Field>
         <Field label="Supplier reference">
           <input maxLength={200} value={supplierReference} onChange={(e) => setSupplierReference(e.target.value)} placeholder="e.g. QT-2609-001" />
         </Field>
         <Field label="Received date *">
-          <DateInput value={receivedDate} onChange={(e) => { setReceivedDate(e.target.value); if (e.target.value && validUntil < e.target.value) setValidUntil(addIsoDays(e.target.value, 30)); }} />
+          <DateInput
+            value={receivedDate}
+            onChange={(e) => {
+              setReceivedDate(e.target.value);
+              if (e.target.value && validUntil < e.target.value) setValidUntil(addIsoDays(e.target.value, 30));
+            }}
+          />
         </Field>
         <Field label="Valid until *">
           <DateInput min={receivedDate || undefined} value={validUntil} onChange={(e) => setValidUntil(e.target.value)} />
         </Field>
         <Field label="Currency *">
           <select value={currency} onChange={(e) => setCurrency(e.target.value as SupplierQuotationRecord["currency"])}>
-            <option value="THB">THB</option><option value="JPY">JPY</option><option value="USD">USD</option><option value="EUR">EUR</option>
+            <option value="THB">THB</option>
+            <option value="JPY">JPY</option>
+            <option value="USD">USD</option>
+            <option value="EUR">EUR</option>
           </select>
         </Field>
         <Field label="Amount *">
@@ -4089,22 +7083,31 @@ function EditQuotationModal({
         {/* A reference price is only checkable through its link, so the link is editable
             here; a document-backed row keeps its stored file and the server refuses one. */}
         {isReference ? (
-          <Field label="Source link *" span={2}
-            hint={urlLooksOpenable ? "หน้าเว็บที่อ่านราคานี้มา" : "ต้องขึ้นต้นด้วย http:// หรือ https://"}>
-            <input value={sourceUrl} maxLength={1000} inputMode="url" placeholder="https://..."
-              onChange={(e) => setSourceUrl(e.target.value)} />
+          <Field label="Source link *" span={2} hint={urlLooksOpenable ? "หน้าเว็บที่อ่านราคานี้มา" : "ต้องขึ้นต้นด้วย http:// หรือ https://"}>
+            <input value={sourceUrl} maxLength={1000} inputMode="url" placeholder="https://..." onChange={(e) => setSourceUrl(e.target.value)} />
           </Field>
         ) : null}
         <Field label="Related inquiry" span={2}>
           <select value={inquiryId} onChange={(e) => setInquiryId(e.target.value)}>
             <option value="">Not linked</option>
-            {inquiries.map((i) => <option key={i.id} value={i.id}>{i.number} · {i.projectName} · {i.customerName}</option>)}
+            {inquiries.map((i) => (
+              <option key={i.id} value={i.id}>
+                {i.number} · {i.projectName} · {i.customerName}
+              </option>
+            ))}
           </select>
         </Field>
       </div>
-      {linesLoaded
-        ? <QuotationLinesEditor lines={lines} currency={currency} disabled={busy} onChange={setLines} />
-        : <div className="quotation-lines"><div className="empty"><span className="spinner" />กำลังโหลดรายการราคา…</div></div>}
+      {linesLoaded ? (
+        <QuotationLinesEditor lines={lines} currency={currency} disabled={busy} onChange={setLines} />
+      ) : (
+        <div className="quotation-lines">
+          <div className="empty">
+            <span className="spinner" />
+            กำลังโหลดรายการราคา…
+          </div>
+        </div>
+      )}
     </Modal>
   );
 }
@@ -4116,11 +7119,7 @@ function EditQuotationModal({
  * the number checkable months later, and the row is stored saying exactly that, so
  * it can never be read back as a price the supplier quoted.
  */
-function ReferencePriceModal({ bootstrap, onClose, onCreated }: {
-  bootstrap: BootstrapData;
-  onClose: () => void;
-  onCreated: (quotationNumber: string, lineCount: number) => Promise<void>;
-}) {
+function ReferencePriceModal({ bootstrap, onClose, onCreated }: { bootstrap: BootstrapData; onClose: () => void; onCreated: (quotationNumber: string, lineCount: number) => Promise<void> }) {
   const [supplierId, setSupplierId] = useState("");
   const [newSupplierName, setNewSupplierName] = useState("");
   const [sourceUrl, setSourceUrl] = useState("");
@@ -4140,12 +7139,12 @@ function ReferencePriceModal({ bootstrap, onClose, onCreated }: {
   const priced = lines.filter((line) => line.description.trim() && line.unitPrice > 0).length;
   /* The lines are the whole price here: a web page has no separate stated total. */
   const linesTotal = quotationLinesTotal(lines);
-  const invalid = !hasSupplier || !urlLooksOpenable || !capturedDate || !validUntil
-    || validUntil < capturedDate || !priced || linesTotal <= 0 || thbRateInvalid(currency, thbRate);
+  const invalid = !hasSupplier || !urlLooksOpenable || !capturedDate || !validUntil || validUntil < capturedDate || !priced || linesTotal <= 0 || thbRateInvalid(currency, thbRate);
 
   const submit = async () => {
     if (invalid) return;
-    setBusy(true); setError("");
+    setBusy(true);
+    setError("");
     try {
       let resolvedSupplierId = supplierId ? Number(supplierId) : 0;
       if (!resolvedSupplierId) {
@@ -4154,9 +7153,15 @@ function ReferencePriceModal({ bootstrap, onClose, onCreated }: {
         setSupplierId(String(found.id));
       }
       const created = await createReferencePrice({
-        supplierId: resolvedSupplierId, sourceUrl: trimmedUrl,
-        supplierReference: supplierReference.trim(), receivedDate: capturedDate, validUntil,
-        currency, amount: linesTotal, thbRate: thbRateOf(currency, thbRate), lines: lines.filter((line) => line.description.trim()),
+        supplierId: resolvedSupplierId,
+        sourceUrl: trimmedUrl,
+        supplierReference: supplierReference.trim(),
+        receivedDate: capturedDate,
+        validUntil,
+        currency,
+        amount: linesTotal,
+        thbRate: thbRateOf(currency, thbRate),
+        lines: lines.filter((line) => line.description.trim()),
       });
       await onCreated(created.quotationNumber, created.lineCount);
     } catch (requestError) {
@@ -4166,77 +7171,109 @@ function ReferencePriceModal({ bootstrap, onClose, onCreated }: {
     }
   };
 
-  return <Modal
-    title="Add price from a link"
-    subtitle="ราคาที่อ่านจากหน้าเว็บผู้ขาย — ไม่ต้องแนบไฟล์ แต่ต้องมีลิงก์และวันที่อ่าน"
-    size="xl"
-    onClose={onClose}
-    footer={<>
-      <button className="btn default" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button>
-      <button className="btn primary" type="button" disabled={busy || invalid} onClick={() => { void submit(); }}>
-        <Icon name="check" />{busy ? "กำลังบันทึก…" : `บันทึก ${priced} ราคาเข้าคลัง`}
-      </button>
-    </>}
-  >
-    {error ? <div className="callout danger" role="alert"><Icon name="alertTriangle" /><span>{error}</span></div> : null}
-    <div className="callout">
-      <Icon name="globe" />
-      <span>
-        <strong>ราคาอ้างอิง ไม่ใช่ราคายืนยันจากผู้ขาย</strong>
-        ในคลังราคาจะติดป้าย <em>Web reference</em> แยกจากใบเสนอราคาจริง และราคาหน้าเว็บเปลี่ยนได้ตลอด — วันที่อ่านคือสิ่งเดียวที่บอกว่าราคานี้เก่าแค่ไหน
-      </span>
-    </div>
+  return (
+    <Modal
+      title="Add price from a link"
+      subtitle="ราคาที่อ่านจากหน้าเว็บผู้ขาย — ไม่ต้องแนบไฟล์ แต่ต้องมีลิงก์และวันที่อ่าน"
+      size="xl"
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn default" type="button" disabled={busy} onClick={onClose}>
+            <LocalizedText text={"Cancel"} />
+          </button>
+          <button
+            className="btn primary"
+            type="button"
+            disabled={busy || invalid}
+            onClick={() => {
+              void submit();
+            }}
+          >
+            <Icon name="check" />
+            {busy ? "กำลังบันทึก…" : `บันทึก ${priced} ราคาเข้าคลัง`}
+          </button>
+        </>
+      }
+    >
+      {error ? (
+        <div className="callout danger" role="alert">
+          <Icon name="alertTriangle" />
+          <span>{error}</span>
+        </div>
+      ) : null}
+      <div className="callout">
+        <Icon name="globe" />
+        <span>
+          <strong>ราคาอ้างอิง ไม่ใช่ราคายืนยันจากผู้ขาย</strong>
+          ในคลังราคาจะติดป้าย <em>Web reference</em> แยกจากใบเสนอราคาจริง และราคาหน้าเว็บเปลี่ยนได้ตลอด — วันที่อ่านคือสิ่งเดียวที่บอกว่าราคานี้เก่าแค่ไหน
+        </span>
+      </div>
 
-    <div className="form-grid two">
-      <Field label="Supplier *">
-        <select value={supplierId} onChange={(event) => { setSupplierId(event.target.value); setNewSupplierName(""); }}>
-          <option value="">— เลือก Supplier (หรือกรอกชื่อใหม่ด้านล่าง) —</option>
-          {bootstrap.suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.code} · {supplier.name}</option>)}
-        </select>
-        {!supplierId ? <div style={{ marginTop: 6 }}>
-          <input placeholder="ชื่อ Supplier ใหม่..." value={newSupplierName} maxLength={200} style={{ width: "100%" }}
-            onChange={(event) => setNewSupplierName(event.target.value)} />
-        </div> : null}
-      </Field>
-      <Field label="Source link *" hint={trimmedUrl && !urlLooksOpenable ? "ต้องขึ้นต้นด้วย http:// หรือ https://" : "วาง URL ของหน้าที่เห็นราคา"}>
-        <input value={sourceUrl} maxLength={1000} placeholder="https://..." inputMode="url"
-          onChange={(event) => setSourceUrl(event.target.value)} />
-      </Field>
-      <Field label="Captured date *" hint="วันที่เปิดหน้านั้นและเห็นราคานี้">
-        <DateInput value={capturedDate} onChange={(event) => {
-          setCapturedDate(event.target.value);
-          if (event.target.value && validUntil < event.target.value) setValidUntil(addIsoDays(event.target.value, 30));
-        }} />
-      </Field>
-      <Field label="Treat as current until *" hint="พ้นวันนี้แล้วคลังราคาจะเตือนให้เช็กใหม่">
-        <DateInput min={capturedDate || undefined} value={validUntil} onChange={(event) => setValidUntil(event.target.value)} />
-      </Field>
-      <Field label="Currency *">
-        <select value={currency} onChange={(event) => setCurrency(event.target.value as SupplierQuotationRecord["currency"])}>
-          <option value="THB">THB</option><option value="JPY">JPY</option><option value="USD">USD</option><option value="EUR">EUR</option>
-        </select>
-      </Field>
-      <ThbRateField currency={currency} date={capturedDate} value={thbRate} onChange={setThbRate} />
-      <Field label="Page or catalogue reference" hint="เช่น รหัสหน้า, ชื่อแคตตาล็อก (ไม่บังคับ)">
-        <input maxLength={200} value={supplierReference} onChange={(event) => setSupplierReference(event.target.value)} placeholder="—" />
-      </Field>
-    </div>
+      <div className="form-grid two">
+        <Field label="Supplier *">
+          <select
+            value={supplierId}
+            onChange={(event) => {
+              setSupplierId(event.target.value);
+              setNewSupplierName("");
+            }}
+          >
+            <option value="">— เลือก Supplier (หรือกรอกชื่อใหม่ด้านล่าง) —</option>
+            {bootstrap.suppliers.map((supplier) => (
+              <option key={supplier.id} value={supplier.id}>
+                {supplier.code} · {supplier.name}
+              </option>
+            ))}
+          </select>
+          {!supplierId ? (
+            <div style={{ marginTop: 6 }}>
+              <input placeholder="ชื่อ Supplier ใหม่..." value={newSupplierName} maxLength={200} style={{ width: "100%" }} onChange={(event) => setNewSupplierName(event.target.value)} />
+            </div>
+          ) : null}
+        </Field>
+        <Field label="Source link *" hint={trimmedUrl && !urlLooksOpenable ? "ต้องขึ้นต้นด้วย http:// หรือ https://" : "วาง URL ของหน้าที่เห็นราคา"}>
+          <input value={sourceUrl} maxLength={1000} placeholder="https://..." inputMode="url" onChange={(event) => setSourceUrl(event.target.value)} />
+        </Field>
+        <Field label="Captured date *" hint="วันที่เปิดหน้านั้นและเห็นราคานี้">
+          <DateInput
+            value={capturedDate}
+            onChange={(event) => {
+              setCapturedDate(event.target.value);
+              if (event.target.value && validUntil < event.target.value) setValidUntil(addIsoDays(event.target.value, 30));
+            }}
+          />
+        </Field>
+        <Field label="Treat as current until *" hint="พ้นวันนี้แล้วคลังราคาจะเตือนให้เช็กใหม่">
+          <DateInput min={capturedDate || undefined} value={validUntil} onChange={(event) => setValidUntil(event.target.value)} />
+        </Field>
+        <Field label="Currency *">
+          <select value={currency} onChange={(event) => setCurrency(event.target.value as SupplierQuotationRecord["currency"])}>
+            <option value="THB">THB</option>
+            <option value="JPY">JPY</option>
+            <option value="USD">USD</option>
+            <option value="EUR">EUR</option>
+          </select>
+        </Field>
+        <ThbRateField currency={currency} date={capturedDate} value={thbRate} onChange={setThbRate} />
+        <Field label="Page or catalogue reference" hint="เช่น รหัสหน้า, ชื่อแคตตาล็อก (ไม่บังคับ)">
+          <input maxLength={200} value={supplierReference} onChange={(event) => setSupplierReference(event.target.value)} placeholder="—" />
+        </Field>
+      </div>
 
-    <QuotationLinesEditor
-      lines={lines}
-      currency={currency}
-      disabled={busy}
-      emptyHint="กรอกชื่อรายการกับราคาต่อหน่วยที่เห็นบนหน้าเว็บ"
-      onChange={setLines}
-    />
-  </Modal>;
+      <QuotationLinesEditor lines={lines} currency={currency} disabled={busy} emptyHint="กรอกชื่อรายการกับราคาต่อหน่วยที่เห็นบนหน้าเว็บ" onChange={setLines} />
+    </Modal>
+  );
 }
 
 export function ProductionSupplierQuotations({ bootstrap, notify }: ProductionPlanningProps) {
   const allowed = bootstrap.permissions.includes("estimate.read");
   const canUpload = bootstrap.permissions.includes("estimate.write");
   const [result, setResult] = useState<{ items: SupplierQuotationRecord[]; page: number; pageSize: number; total: number }>({
-    items: [], page: 1, pageSize: 50, total: 0,
+    items: [],
+    page: 1,
+    pageSize: 50,
+    total: 0,
   });
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
@@ -4258,13 +7295,15 @@ export function ProductionSupplierQuotations({ bootstrap, notify }: ProductionPl
     setLoading(true);
     setError("");
     try {
-      setResult(await listSupplierQuotations({
-        page,
-        pageSize,
-        search: search.trim() || undefined,
-        supplierId: supplierId ? Number(supplierId) : undefined,
-        status: status === "All statuses" ? undefined : status,
-      }));
+      setResult(
+        await listSupplierQuotations({
+          page,
+          pageSize,
+          search: search.trim() || undefined,
+          supplierId: supplierId ? Number(supplierId) : undefined,
+          status: status === "All statuses" ? undefined : status,
+        }),
+      );
     } catch (requestError) {
       setError(toError(requestError));
     } finally {
@@ -4273,11 +7312,19 @@ export function ProductionSupplierQuotations({ bootstrap, notify }: ProductionPl
   }, [allowed, page, pageSize, refreshKey, search, status, supplierId]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => { void load(); }, 250);
+    const timer = window.setTimeout(() => {
+      void load();
+    }, 250);
     return () => window.clearTimeout(timer);
   }, [load]);
 
-  if (!allowed) return <><PageHeader eyebrow="SUPPLIER SOURCING" title="Supplier Quotations" subtitle="ทะเบียนใบเสนอราคาผู้ขาย" /><PermissionNotice permission="estimate.read" message="ผู้ดูแลระบบต้องเพิ่มสิทธิ์ Estimate Read ให้บทบาทนี้" /></>;
+  if (!allowed)
+    return (
+      <>
+        <PageHeader eyebrow="SUPPLIER SOURCING" title="Supplier Quotations" subtitle="ทะเบียนใบเสนอราคาผู้ขาย" />
+        <PermissionNotice permission="estimate.read" message="ผู้ดูแลระบบต้องเพิ่มสิทธิ์ Estimate Read ให้บทบาทนี้" />
+      </>
+    );
 
   const pageCount = Math.max(1, Math.ceil(result.total / pageSize));
   const from = result.total ? (page - 1) * pageSize + 1 : 0;
@@ -4316,126 +7363,320 @@ export function ProductionSupplierQuotations({ bootstrap, notify }: ProductionPl
     }
   };
 
-  return <>
-    <PageHeader
-      eyebrow="SUPPLIER SOURCING"
-      title="Supplier Quotations"
-      subtitle="ใบเสนอราคาผู้ขายพร้อมไฟล์ต้นฉบับ และราคาอ้างอิงจากหน้าเว็บที่บันทึกลิงก์ไว้แทนไฟล์"
-      actions={<>
-        <button className="btn ghost" type="button" disabled={loading} onClick={() => setRefreshKey((value) => value + 1)}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button>
-        {canUpload ? <button className="btn default" type="button" onClick={() => setShowLink(true)}><Icon name="globe" /><LocalizedText text={"Add price"} /></button> : null}
-        {canUpload ? <button className="btn primary" type="button" data-guide="quote.upload" onClick={() => setShowUpload(true)}><Icon name="upload" /><LocalizedText text={"Upload quotation"} /></button> : null}
-      </>}
-    />
-    <div className="kpi-grid four">
-      <KpiCard label="All quotations" value={result.total} note="stored quotation documents" tone="blue" icon="quote" />
-      <KpiCard label="Valid on this page" value={countStatus("Valid")} note="more than 30 days remaining" tone="green" icon="checkCircle" />
-      <KpiCard label="Expiring on this page" value={countStatus("Expiring")} note="within 30 days" tone="amber" icon="clock" />
-      <KpiCard label="Expired on this page" value={countStatus("Expired")} note="validity ended" tone={countStatus("Expired") ? "red" : "green"} icon="alertTriangle" />
-    </div>
-    <Toolbar>
-      <SearchInput link="q" value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder="Search quotation no., supplier, inquiry, project or file…" />
-      <label className="select-field">
-        <span className="sr-only"><LocalizedText text={"Supplier"} /></span>
-        <select value={supplierId} onChange={(event) => { setSupplierId(event.target.value); setPage(1); }}>
-          <option value=""><LocalizedText text={"All suppliers"} /></option>
-          {bootstrap.suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.code} <LocalizedText text={"·"} /> {supplier.name}</option>)}
-        </select>
-        <Icon name="chevronDown" />
-      </label>
-      <Select link="status" label="Quotation status" value={status} options={["All statuses", "Valid", "Expiring", "Expired", "Superseded"]} onChange={(value) => { setStatus(value); setPage(1); }} />
-    </Toolbar>
-    {error ? <LoadError message={error} retry={() => { void load(); }} /> : null}
-    <Panel title={result.total + " supplier quotations"} subtitle="เอกสารทุกแถวจัดเก็บใน secure document storage และ metadata อยู่ใน SQL Server" flush>
-      <TablePageSize value={pageSize} onChange={(value) => { setPageSize(value); setPage(1); }} />
-      {result.items.length ? <div className="table-wrap">
-        <table style={{ minWidth: 1600 }}>
-          <thead><tr><th><LocalizedText text={"Quotation No."} /></th><th><LocalizedText text={"Supplier reference"} /></th><th><LocalizedText text={"Supplier"} /></th><th><LocalizedText text={"Received"} /></th><th><LocalizedText text={"Valid until"} /></th><th><LocalizedText text={"Inquiry / Project"} /></th><th><LocalizedText text={"Currency"} /></th><th><LocalizedText text={"Amount"} /></th><th><LocalizedText text={"Price lines"} /></th><th><LocalizedText text={"Uploaded by"} /></th><th><LocalizedText text={"Status"} /></th><th><LocalizedText text={"Attachment"} /></th><th><LocalizedText text={"Action"} /></th></tr></thead>
-          <tbody>{result.items.map((record) => <tr key={record.id}>
-            <td><strong className="mono">{record.quotationNumber}</strong></td>
-            <td className="mono">{record.supplierReference || "—"}</td>
-            <td><strong>{record.supplierName}</strong></td>
-            <td>{date(record.receivedDate)}</td>
-            <td>{date(record.validUntil)}</td>
-            <td><div className="cell-primary"><strong className="mono">{record.inquiryNumber || "Not linked"}</strong><span>{record.projectName || "—"}</span></div></td>
-            {/* Without a rate a foreign quotation's prices cannot reach an estimate, so say so here. */}
-            <td><Badge>{record.currency}</Badge>{record.currency === "THB" ? null : record.thbRate
-              ? <div className="muted">1 = {number(record.thbRate, 6)} THB</div>
-              : <div><Badge tone="amber">{estimateUxCopy(currentLocale(), "ยังไม่มีอัตราบาท", "No THB rate", "THBレート未設定")}</Badge></div>}</td>
-            <td className="num"><strong>{supplierQuotationCurrency(record.amount, record.currency)}</strong></td>
-            {/* Zero here is the failure this column exists to expose: a stored document
-                that put no price into the Price Library. */}
-            <td className="num">{record.lineCount > 0
-              ? <strong>{record.lineCount}</strong>
-              : <Badge tone="amber"><LocalizedText text={"No price line"} /></Badge>}</td>
-            <td><div className="cell-primary"><strong>{record.uploadedByName}</strong><span>{dateTime(record.uploadedAt)}</span></div></td>
-            <td><Badge>{record.status}</Badge></td>
-            {/* A reference has no file to describe; the page it cites stands in its place. */}
-            <td><div className="cell-primary">{record.sourceKind === "WebReference"
-              ? <>
-                <strong><LocalizedText text={"Web reference"} /></strong>
-                <a href={record.sourceUrl} target="_blank" rel="noopener noreferrer" title={record.sourceUrl}>
-                  <Icon name="externalLink" /> {hostOf(record.sourceUrl)}
-                </a>
-              </>
-              : <>
-                <strong>{quotationFileKind(record.fileName)}</strong>
-                <span title={record.fileName}>{record.fileName} <LocalizedText text={"·"} /> {number(record.sizeBytes / 1024, 1)} KB</span>
-              </>}</div></td>
-            <td>
-              <div style={{ display: "flex", gap: 4 }}>
-                {record.sourceKind === "Document" ? (
-                  <button className="btn ghost sm" type="button" disabled={downloadingId === record.id} onClick={() => { void download(record); }}>
-                    <Icon name="download" />{downloadingId === record.id ? "Downloading…" : <LocalizedText text={"Download"} />}
-                  </button>
-                ) : null}
-                {canUpload && (
-                  <button className="btn ghost sm" type="button" onClick={() => setEditingRecord(record)}>
-                    <Icon name="edit" />{record.lineCount
-                      ? <LocalizedText text={"Edit"} />
-                      : <LocalizedText text={"Add price"} />}
-                  </button>
-                )}
-                {canUpload && (
-                  <button className="btn ghost sm" type="button" disabled={deletingId === record.id} onClick={() => { void deleteQuotation(record); }}
-                    style={{ color: "#dc2626" }}>
-                    <Icon name="trash" />{deletingId === record.id ? "Deleting…" : "Delete"}
-                  </button>
-                )}
-              </div>
-            </td>
-          </tr>)}</tbody>
-        </table>
-      </div> : loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading supplier quotations…"} /></div> : <EmptyState icon="quote" title="No supplier quotation found" message="อัปโหลด PDF, Excel หรือรูปใบเสนอราคาผู้ขายเพื่อสร้างรายการแรก" action={canUpload ? <button className="btn primary" type="button" onClick={() => setShowUpload(true)}><Icon name="upload" /><LocalizedText text={"Upload quotation"} /></button> : undefined} />}
-      <Pagination page={page} pageCount={pageCount} from={from} to={to} total={result.total} onPage={setPage} />
-    </Panel>
-    {showUpload ? <SupplierQuotationUploadModal bootstrap={bootstrap} onClose={() => setShowUpload(false)} onCreated={async (quotationNumber, lineCount) => {
-      setShowUpload(false);
-      setPage(1);
-      setRefreshKey((value) => value + 1);
-      notify(lineCount
-        ? `${quotationNumber} อัปโหลดแล้ว · ${lineCount} ราคาเข้าคลังราคา`
-        : `${quotationNumber} อัปโหลดแล้ว · ยังไม่มีรายการราคา กด Add price เพื่อเพิ่ม`);
-    }} /> : null}
-    {showLink ? <ReferencePriceModal bootstrap={bootstrap} onClose={() => setShowLink(false)} onCreated={async (quotationNumber, lineCount) => {
-      setShowLink(false);
-      setPage(1);
-      setRefreshKey((value) => value + 1);
-      notify(`${quotationNumber} · เพิ่ม ${lineCount} ราคาอ้างอิงเข้าคลังแล้ว`);
-    }} /> : null}
-    {editingRecord ? (
-      <EditQuotationModal
-        record={editingRecord}
-        bootstrap={bootstrap}
-        onClose={() => setEditingRecord(null)}
-        onSaved={() => {
-          setEditingRecord(null);
-          setRefreshKey((v) => v + 1);
-          notify("Quotation updated");
-        }}
+  return (
+    <>
+      <PageHeader
+        eyebrow="SUPPLIER SOURCING"
+        title="Supplier Quotations"
+        subtitle="ใบเสนอราคาผู้ขายพร้อมไฟล์ต้นฉบับ และราคาอ้างอิงจากหน้าเว็บที่บันทึกลิงก์ไว้แทนไฟล์"
+        actions={
+          <>
+            <button className="btn ghost" type="button" disabled={loading} onClick={() => setRefreshKey((value) => value + 1)}>
+              <Icon name="refresh" />
+              <LocalizedText text={"Refresh"} />
+            </button>
+            {canUpload ? (
+              <button className="btn default" type="button" onClick={() => setShowLink(true)}>
+                <Icon name="globe" />
+                <LocalizedText text={"Add price"} />
+              </button>
+            ) : null}
+            {canUpload ? (
+              <button className="btn primary" type="button" data-guide="quote.upload" onClick={() => setShowUpload(true)}>
+                <Icon name="upload" />
+                <LocalizedText text={"Upload quotation"} />
+              </button>
+            ) : null}
+          </>
+        }
       />
-    ) : null}
-  </>;
+      <div className="kpi-grid four">
+        <KpiCard label="All quotations" value={result.total} note="stored quotation documents" tone="blue" icon="quote" />
+        <KpiCard label="Valid on this page" value={countStatus("Valid")} note="more than 30 days remaining" tone="green" icon="checkCircle" />
+        <KpiCard label="Expiring on this page" value={countStatus("Expiring")} note="within 30 days" tone="amber" icon="clock" />
+        <KpiCard label="Expired on this page" value={countStatus("Expired")} note="validity ended" tone={countStatus("Expired") ? "red" : "green"} icon="alertTriangle" />
+      </div>
+      <Toolbar>
+        <SearchInput
+          link="q"
+          value={search}
+          onChange={(value) => {
+            setSearch(value);
+            setPage(1);
+          }}
+          placeholder="Search quotation no., supplier, inquiry, project or file…"
+        />
+        <label className="select-field">
+          <span className="sr-only">
+            <LocalizedText text={"Supplier"} />
+          </span>
+          <select
+            value={supplierId}
+            onChange={(event) => {
+              setSupplierId(event.target.value);
+              setPage(1);
+            }}
+          >
+            <option value="">
+              <LocalizedText text={"All suppliers"} />
+            </option>
+            {bootstrap.suppliers.map((supplier) => (
+              <option key={supplier.id} value={supplier.id}>
+                {supplier.code} <LocalizedText text={"·"} /> {supplier.name}
+              </option>
+            ))}
+          </select>
+          <Icon name="chevronDown" />
+        </label>
+        <Select
+          link="status"
+          label="Quotation status"
+          value={status}
+          options={["All statuses", "Valid", "Expiring", "Expired", "Superseded"]}
+          onChange={(value) => {
+            setStatus(value);
+            setPage(1);
+          }}
+        />
+      </Toolbar>
+      {error ? (
+        <LoadError
+          message={error}
+          retry={() => {
+            void load();
+          }}
+        />
+      ) : null}
+      <Panel title={result.total + " supplier quotations"} subtitle="เอกสารทุกแถวจัดเก็บใน secure document storage และ metadata อยู่ใน SQL Server" flush>
+        <TablePageSize
+          value={pageSize}
+          onChange={(value) => {
+            setPageSize(value);
+            setPage(1);
+          }}
+        />
+        {result.items.length ? (
+          <div className="table-wrap">
+            <table style={{ minWidth: 1600 }}>
+              <thead>
+                <tr>
+                  <th>
+                    <LocalizedText text={"Quotation No."} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Supplier reference"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Supplier"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Received"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Valid until"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Inquiry / Project"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Currency"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Amount"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Price lines"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Uploaded by"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Status"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Attachment"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Action"} />
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {result.items.map((record) => (
+                  <tr key={record.id}>
+                    <td>
+                      <strong className="mono">{record.quotationNumber}</strong>
+                    </td>
+                    <td className="mono">{record.supplierReference || "—"}</td>
+                    <td>
+                      <strong>{record.supplierName}</strong>
+                    </td>
+                    <td>{date(record.receivedDate)}</td>
+                    <td>{date(record.validUntil)}</td>
+                    <td>
+                      <div className="cell-primary">
+                        <strong className="mono">{record.inquiryNumber || "Not linked"}</strong>
+                        <span>{record.projectName || "—"}</span>
+                      </div>
+                    </td>
+                    {/* Without a rate a foreign quotation's prices cannot reach an estimate, so say so here. */}
+                    <td>
+                      <Badge>{record.currency}</Badge>
+                      {record.currency === "THB" ? null : record.thbRate ? (
+                        <div className="muted">1 = {number(record.thbRate, 6)} THB</div>
+                      ) : (
+                        <div>
+                          <Badge tone="amber">{estimateUxCopy(currentLocale(), "ยังไม่มีอัตราบาท", "No THB rate", "THBレート未設定")}</Badge>
+                        </div>
+                      )}
+                    </td>
+                    <td className="num">
+                      <strong>{supplierQuotationCurrency(record.amount, record.currency)}</strong>
+                    </td>
+                    {/* Zero here is the failure this column exists to expose: a stored document
+                that put no price into the Price Library. */}
+                    <td className="num">
+                      {record.lineCount > 0 ? (
+                        <strong>{record.lineCount}</strong>
+                      ) : (
+                        <Badge tone="amber">
+                          <LocalizedText text={"No price line"} />
+                        </Badge>
+                      )}
+                    </td>
+                    <td>
+                      <div className="cell-primary">
+                        <strong>{record.uploadedByName}</strong>
+                        <span>{dateTime(record.uploadedAt)}</span>
+                      </div>
+                    </td>
+                    <td>
+                      <Badge>{record.status}</Badge>
+                    </td>
+                    {/* A reference has no file to describe; the page it cites stands in its place. */}
+                    <td>
+                      <div className="cell-primary">
+                        {record.sourceKind === "WebReference" ? (
+                          <>
+                            <strong>
+                              <LocalizedText text={"Web reference"} />
+                            </strong>
+                            <a href={record.sourceUrl} target="_blank" rel="noopener noreferrer" title={record.sourceUrl}>
+                              <Icon name="externalLink" /> {hostOf(record.sourceUrl)}
+                            </a>
+                          </>
+                        ) : (
+                          <>
+                            <strong>{quotationFileKind(record.fileName)}</strong>
+                            <span title={record.fileName}>
+                              {record.fileName} <LocalizedText text={"·"} /> {number(record.sizeBytes / 1024, 1)} KB
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    </td>
+                    <td>
+                      <div style={{ display: "flex", gap: 4 }}>
+                        {record.sourceKind === "Document" ? (
+                          <button
+                            className="btn ghost sm"
+                            type="button"
+                            disabled={downloadingId === record.id}
+                            onClick={() => {
+                              void download(record);
+                            }}
+                          >
+                            <Icon name="download" />
+                            {downloadingId === record.id ? "Downloading…" : <LocalizedText text={"Download"} />}
+                          </button>
+                        ) : null}
+                        {canUpload && (
+                          <button className="btn ghost sm" type="button" onClick={() => setEditingRecord(record)}>
+                            <Icon name="edit" />
+                            {record.lineCount ? <LocalizedText text={"Edit"} /> : <LocalizedText text={"Add price"} />}
+                          </button>
+                        )}
+                        {canUpload && (
+                          <button
+                            className="btn ghost sm"
+                            type="button"
+                            disabled={deletingId === record.id}
+                            onClick={() => {
+                              void deleteQuotation(record);
+                            }}
+                            style={{ color: "#dc2626" }}
+                          >
+                            <Icon name="trash" />
+                            {deletingId === record.id ? "Deleting…" : "Delete"}
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : loading ? (
+          <div className="empty">
+            <span className="spinner" />
+            <LocalizedText text={"Loading supplier quotations…"} />
+          </div>
+        ) : (
+          <EmptyState
+            icon="quote"
+            title="No supplier quotation found"
+            message="อัปโหลด PDF, Excel หรือรูปใบเสนอราคาผู้ขายเพื่อสร้างรายการแรก"
+            action={
+              canUpload ? (
+                <button className="btn primary" type="button" onClick={() => setShowUpload(true)}>
+                  <Icon name="upload" />
+                  <LocalizedText text={"Upload quotation"} />
+                </button>
+              ) : undefined
+            }
+          />
+        )}
+        <Pagination page={page} pageCount={pageCount} from={from} to={to} total={result.total} onPage={setPage} />
+      </Panel>
+      {showUpload ? (
+        <SupplierQuotationUploadModal
+          bootstrap={bootstrap}
+          onClose={() => setShowUpload(false)}
+          onCreated={async (quotationNumber, lineCount) => {
+            setShowUpload(false);
+            setPage(1);
+            setRefreshKey((value) => value + 1);
+            notify(lineCount ? `${quotationNumber} อัปโหลดแล้ว · ${lineCount} ราคาเข้าคลังราคา` : `${quotationNumber} อัปโหลดแล้ว · ยังไม่มีรายการราคา กด Add price เพื่อเพิ่ม`);
+          }}
+        />
+      ) : null}
+      {showLink ? (
+        <ReferencePriceModal
+          bootstrap={bootstrap}
+          onClose={() => setShowLink(false)}
+          onCreated={async (quotationNumber, lineCount) => {
+            setShowLink(false);
+            setPage(1);
+            setRefreshKey((value) => value + 1);
+            notify(`${quotationNumber} · เพิ่ม ${lineCount} ราคาอ้างอิงเข้าคลังแล้ว`);
+          }}
+        />
+      ) : null}
+      {editingRecord ? (
+        <EditQuotationModal
+          record={editingRecord}
+          bootstrap={bootstrap}
+          onClose={() => setEditingRecord(null)}
+          onSaved={() => {
+            setEditingRecord(null);
+            setRefreshKey((v) => v + 1);
+            notify("Quotation updated");
+          }}
+        />
+      ) : null}
+    </>
+  );
 }
 
 export function ProductionWaitingSupplierPrice({ bootstrap }: ProductionPlanningProps) {
@@ -4443,21 +7684,136 @@ export function ProductionWaitingSupplierPrice({ bootstrap }: ProductionPlanning
   const allowed = bootstrap.permissions.includes("estimate.read");
   const { records, estimateCount, skippedWorkspaces, loading, error, load } = usePrices(allowed);
   const [search, setSearch] = useState("");
-  if (!allowed) return <><PageHeader eyebrow="PRICE FOLLOW-UP" title={uiText("Waiting Supplier Price")} subtitle="รายการราคาผู้ขายที่ต้องติดตาม" /><PermissionNotice permission="estimate.read" message="ผู้ดูแลระบบต้องเพิ่มสิทธิ์ Estimate Read ให้บทบาทนี้" /></>;
+  if (!allowed)
+    return (
+      <>
+        <PageHeader eyebrow="PRICE FOLLOW-UP" title={uiText("Waiting Supplier Price")} subtitle="รายการราคาผู้ขายที่ต้องติดตาม" />
+        <PermissionNotice permission="estimate.read" message="ผู้ดูแลระบบต้องเพิ่มสิทธิ์ Estimate Read ให้บทบาทนี้" />
+      </>
+    );
   const waiting = records.filter((record) => record.sourceKind === "Estimate" && record.supplierId !== null && (record.unitCost <= 0 || record.ageDays === null || record.ageDays > 180));
-  const rows = waiting.filter((record) => `${record.supplierName ?? ""} ${record.itemCode} ${record.description} ${record.estimateNo} ${record.projectName}`.toLowerCase().includes(search.toLowerCase()));
+  const rows = waiting.filter((record) =>
+    `${record.supplierName ?? ""} ${record.itemCode} ${record.description} ${record.estimateNo} ${record.projectName}`.toLowerCase().includes(search.toLowerCase()),
+  );
   const missing = waiting.filter((record) => record.unitCost <= 0).length;
   const undated = waiting.filter((record) => record.unitCost > 0 && record.ageDays === null).length;
   const stale = waiting.filter((record) => record.unitCost > 0 && record.ageDays !== null && record.ageDays > 180).length;
-  const reason = (record: PriceRecord) => record.unitCost <= 0 ? "Missing / zero price" : record.ageDays === null ? "Missing price date" : `Stale ${record.ageDays} days`;
-  return <>
-    <PageHeader eyebrow="PRICE FOLLOW-UP" title={uiText("Waiting Supplier Price")} subtitle="Derivation: Cost item ต้องมี Supplier และราคาเป็นศูนย์/ไม่มี Price date/เก่ากว่า 180 วัน โดยคำนวณจากวันที่ปัจจุบัน" actions={<button className="btn ghost" type="button" disabled={loading} onClick={() => { void load(); }}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button>} />
-    <div className="kpi-grid four"><KpiCard label="Needs follow-up" value={waiting.length} note={`from ${estimateCount} estimates`} tone="amber" icon="clock" /><KpiCard label="Missing / zero" value={missing} note="no usable unit price" tone={missing ? "red" : "green"} icon="alertTriangle" /><KpiCard label="Missing date" value={undated} note="cannot validate price age" tone={undated ? "amber" : "green"} icon="calendar" /><KpiCard label="Older than 180" value={stale} note="request reconfirmation" tone={stale ? "red" : "green"} icon="refresh" /></div>
-    <Toolbar><SearchInput link="q" value={search} onChange={setSearch} placeholder="Search supplier, item, estimate or project…" /></Toolbar>
-    <PriceLoadWarning estimateCount={estimateCount} skippedWorkspaces={skippedWorkspaces} />
-    {error ? <LoadError message={error} retry={() => { void load(); }} /> : null}
-    <Panel title={`${rows.length} supplier price follow-ups`} subtitle="รายการนี้เป็นมุมมองคำนวณจากข้อมูลจริง ไม่ได้เปลี่ยนสถานะ Cost item อัตโนมัติ" flush>
-      {rows.length ? <div className="table-wrap"><table><thead><tr><th><LocalizedText text={"Reason"} /></th><th><LocalizedText text={"Supplier"} /></th><th><LocalizedText text={"Item"} /></th><th><LocalizedText text={"Current price"} /></th><th><LocalizedText text={"Price date"} /></th><th><LocalizedText text={"Estimate / Project"} /></th><th><LocalizedText text={"Estimate status"} /></th><th><LocalizedText text={"Owner"} /></th><th><LocalizedText text={"Line status"} /></th></tr></thead><tbody>{rows.map((record) => <tr key={record.key}><td><Badge tone="red">{reason(record)}</Badge></td><td>{record.supplierName}</td><td><div className="cell-primary"><strong className="mono">{record.itemCode || `LINE-${record.itemId}`}</strong><span>{record.description}</span></div></td><td className="num">{record.unitCost > 0 ? money(record.unitCost) : "—"}</td><td>{date(record.priceDate)}</td><td><div className="cell-primary"><strong className="mono">{record.estimateNo}</strong><span>{record.projectName}</span></div></td><td><Badge>{record.estimateStatus}</Badge></td><td>{record.ownerName}</td><td><Badge>{record.lineStatus}</Badge></td></tr>)}</tbody></table></div> : loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading cost workspaces…"} /></div> : <EmptyState icon="checkCircle" title="No supplier price needs follow-up" message="ไม่พบ Cost item ที่มี Supplier และเข้าเกณฑ์ราคาไม่พร้อมใช้งาน" />}
-    </Panel>
-  </>;
+  const reason = (record: PriceRecord) => (record.unitCost <= 0 ? "Missing / zero price" : record.ageDays === null ? "Missing price date" : `Stale ${record.ageDays} days`);
+  return (
+    <>
+      <PageHeader
+        eyebrow="PRICE FOLLOW-UP"
+        title={uiText("Waiting Supplier Price")}
+        subtitle="Derivation: Cost item ต้องมี Supplier และราคาเป็นศูนย์/ไม่มี Price date/เก่ากว่า 180 วัน โดยคำนวณจากวันที่ปัจจุบัน"
+        actions={
+          <button
+            className="btn ghost"
+            type="button"
+            disabled={loading}
+            onClick={() => {
+              void load();
+            }}
+          >
+            <Icon name="refresh" />
+            <LocalizedText text={"Refresh"} />
+          </button>
+        }
+      />
+      <div className="kpi-grid four">
+        <KpiCard label="Needs follow-up" value={waiting.length} note={`from ${estimateCount} estimates`} tone="amber" icon="clock" />
+        <KpiCard label="Missing / zero" value={missing} note="no usable unit price" tone={missing ? "red" : "green"} icon="alertTriangle" />
+        <KpiCard label="Missing date" value={undated} note="cannot validate price age" tone={undated ? "amber" : "green"} icon="calendar" />
+        <KpiCard label="Older than 180" value={stale} note="request reconfirmation" tone={stale ? "red" : "green"} icon="refresh" />
+      </div>
+      <Toolbar>
+        <SearchInput link="q" value={search} onChange={setSearch} placeholder="Search supplier, item, estimate or project…" />
+      </Toolbar>
+      <PriceLoadWarning estimateCount={estimateCount} skippedWorkspaces={skippedWorkspaces} />
+      {error ? (
+        <LoadError
+          message={error}
+          retry={() => {
+            void load();
+          }}
+        />
+      ) : null}
+      <Panel title={`${rows.length} supplier price follow-ups`} subtitle="รายการนี้เป็นมุมมองคำนวณจากข้อมูลจริง ไม่ได้เปลี่ยนสถานะ Cost item อัตโนมัติ" flush>
+        {rows.length ? (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>
+                    <LocalizedText text={"Reason"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Supplier"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Item"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Current price"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Price date"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Estimate / Project"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Estimate status"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Owner"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Line status"} />
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((record) => (
+                  <tr key={record.key}>
+                    <td>
+                      <Badge tone="red">{reason(record)}</Badge>
+                    </td>
+                    <td>{record.supplierName}</td>
+                    <td>
+                      <div className="cell-primary">
+                        <strong className="mono">{record.itemCode || `LINE-${record.itemId}`}</strong>
+                        <span>{record.description}</span>
+                      </div>
+                    </td>
+                    <td className="num">{record.unitCost > 0 ? money(record.unitCost) : "—"}</td>
+                    <td>{date(record.priceDate)}</td>
+                    <td>
+                      <div className="cell-primary">
+                        <strong className="mono">{record.estimateNo}</strong>
+                        <span>{record.projectName}</span>
+                      </div>
+                    </td>
+                    <td>
+                      <Badge>{record.estimateStatus}</Badge>
+                    </td>
+                    <td>{record.ownerName}</td>
+                    <td>
+                      <Badge>{record.lineStatus}</Badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : loading ? (
+          <div className="empty">
+            <span className="spinner" />
+            <LocalizedText text={"Loading cost workspaces…"} />
+          </div>
+        ) : (
+          <EmptyState icon="checkCircle" title="No supplier price needs follow-up" message="ไม่พบ Cost item ที่มี Supplier และเข้าเกณฑ์ราคาไม่พร้อมใช้งาน" />
+        )}
+      </Panel>
+    </>
+  );
 }

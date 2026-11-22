@@ -6,11 +6,7 @@ const root = new URL("../", import.meta.url);
 const source = (path) => readFile(new URL(path, root), "utf8");
 
 test("Copy Previous Estimate sends the whole selection to one server transaction", async () => {
-  const [screen, client, app] = await Promise.all([
-    source("app/system/production/EstimateScreens.tsx"),
-    source("app/system/api-client.ts"),
-    source("backend-node/src/app.ts"),
-  ]);
+  const [screen, client, app] = await Promise.all([source("app/system/production/EstimateScreens.tsx"), source("app/system/api-client.ts"), source("backend-node/src/app.ts")]);
   assert.match(client, /apiRequest<EstimateCopyResult>\(`\/api\/v1\/estimates\/\$\{estimateId\}\/copy-from`, \{ method: "POST"/);
   assert.match(app, /registerEstimateCopyRoutes\(app, config, database, users\);/);
   // The copy tool is the one that was already there, now a tab of the add-items dialog, calling the transactional endpoint.
@@ -77,10 +73,7 @@ test("a copy carries provenance and classification but never approval state or a
 });
 
 test("internal labour is re-rated from the live master, so a copy cannot import historical rates", async () => {
-  const [route, workspaceWrite] = await Promise.all([
-    source("backend-node/src/routes/estimate-copy.ts"),
-    source("backend-node/src/routes/estimate-workspace-write.ts"),
-  ]);
+  const [route, workspaceWrite] = await Promise.all([source("backend-node/src/routes/estimate-copy.ts"), source("backend-node/src/routes/estimate-workspace-write.ts")]);
   const rateQuery = /FROM dbo\.engineering_rates WHERE level=@level AND department=@department AND is_active=1 AND effective_from<=@today/;
   assert.match(workspaceWrite, rateQuery);
   assert.match(route, rateQuery);
@@ -124,7 +117,7 @@ test("the assignment queue groups sections by estimate revision with one navigat
   assert.match(screens, /sortAssignmentQueue\(assignments\.filter\(isActionableAssignment\), todayIso\)/);
   assert.match(panel, /assignmentQueueSummary\(assignments, todayIso\)/);
   // The group's figures are one line shared with the project groups (WorkGroupMeta, lean My Work 2026-11-21).
-  assert.match(panel, /<WorkGroupMeta count=\{group\.rows\.length\} countLabel="Sections"[^>]*updatedAt=\{group\.updatedAt\}/);
+  assert.match(panel, /<WorkGroupMeta\s+count=\{group\.rows\.length\}\s+countLabel="Sections"[^>]*updatedAt=\{group\.updatedAt\}/);
   assert.match(panel, /quietDays\(updatedAt\)/);
   // Visibility never depends on the engineer changing the status first.
   assert.doesNotMatch(panel, /patchProgress|apiRequest\(/);
@@ -144,10 +137,7 @@ test("the assignment read is scoped to the caller and respects finished and arch
 });
 
 test("the copy and assignment work adds no migration, so the labor lane keeps 044", async () => {
-  const [route, read] = await Promise.all([
-    source("backend-node/src/routes/estimate-copy.ts"),
-    source("backend-node/src/routes/estimate-assignments-read.ts"),
-  ]);
+  const [route, read] = await Promise.all([source("backend-node/src/routes/estimate-copy.ts"), source("backend-node/src/routes/estimate-assignments-read.ts")]);
   for (const file of [route, read]) {
     assert.doesNotMatch(file, /CREATE TABLE|ALTER TABLE|CREATE INDEX|DROP /);
   }

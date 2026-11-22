@@ -30,7 +30,10 @@ test("the bar fills with the planned share and stops at the budget", () => {
 
 test("Projects > Plan shows the man-hour budget line under the summary, and Edit row shows what is left", async () => {
   const [screen, line] = await Promise.all([source("app/system/production/PlanningPricingScreens.tsx"), source("app/system/production/PlanManHours.tsx")]);
-  assert.match(screen, /\{activeSchedule && summary \? <>\n\s*\{activeSchedule\.manHours \? <PlanManHours projectId=\{activeSchedule\.projectId\} data=\{activeSchedule\.manHours\} onChanged=\{loadSchedule\} \/> : null\}/);
+  assert.match(
+    screen,
+    /\{activeSchedule && summary \? \(?\s*<>\n\s*\{activeSchedule\.manHours \? <PlanManHours projectId=\{activeSchedule\.projectId\} data=\{activeSchedule\.manHours\} onChanged=\{loadSchedule\} \/> : null\}/,
+  );
   // An older API sends no manHours: the line is simply left out.
   assert.match(screen, /manHours\?: PlanManHoursData;/);
   assert.match(screen, /const budgetLeft = schedule\.manHours && !task\.children\.length \? remainingForRow\(schedule\.manHours, Number\(task\.planManDays\), planManDays\) : null;/);
@@ -47,7 +50,11 @@ test("Projects > Plan shows the man-hour budget line under the summary, and Edit
 });
 
 test("every Plan.mh* text the line asks for is in the dictionary in English, Thai and Japanese", async () => {
-  const [screen, line, copy] = await Promise.all([source("app/system/production/PlanningPricingScreens.tsx"), source("app/system/production/PlanManHours.tsx"), source("app/system/production/crm-copy.ts")]);
+  const [screen, line, copy] = await Promise.all([
+    source("app/system/production/PlanningPricingScreens.tsx"),
+    source("app/system/production/PlanManHours.tsx"),
+    source("app/system/production/crm-copy.ts"),
+  ]);
   const asked = new Set([...`${screen}\n${line}`.matchAll(/"(Plan\.mh[A-Za-z.]+)"/g)].map((match) => match[1]));
   for (const discipline of ["Electrical", "Mechanical", "Software", "Installation", "Other"]) asked.add(`Plan.mhDiscipline.${discipline}`);
   assert.ok(asked.size >= 20, `found ${asked.size} keys`);

@@ -13,7 +13,7 @@ test("a plan row that cannot be deleted keeps a dimmed bin that says why (SUP-20
   for (const key of ["Plan.deleteOthers", "Plan.deleteProgress", "Plan.deleteDetail", "Plan.deletePending", "Plan.deleteResourcePlan", "Plan.deleteFiltered"])
     assert.match(block, new RegExp(`"${key.replace(".", "\\.")}"`), key);
   // A blocked row explains instead of deleting; a reader who cannot change the plan sees no bin at all.
-  assert.match(block, /if \(block\) \{ const reason = uiText\(block\); return \{ label: uiText\("Plan\.deleteRow"\), reason, onRemove: \(\) => notify\(/);
+  assert.match(block, /if \(block\) \{\s*const reason = uiText\(block\);\s*return \{ label: uiText\("Plan\.deleteRow"\), reason, onRemove: \(\) => notify\(/);
   assert.match(block, /if \(!changesPlan \|\| movePending \|\| saving \|\| draftBusy\) return undefined;/);
   // The chart marks the blocked bin and shows the reason as its tooltip.
   assert.match(gantt, /remove\?: \{ label: string; onRemove: \(\) => void; reason\?: string \}/);

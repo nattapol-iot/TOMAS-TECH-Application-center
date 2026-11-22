@@ -76,7 +76,7 @@ test("My Work keeps acknowledged Inquiry work, remembers its sort and says when 
   assert.match(screens, /`\/api\/v1\/resource-tasks\/\$\{[a-z.]+\}\/progress`/);
   assert.match(screens, /"MyWork\.inquiryWork"/);
   assert.match(screens, /tomas-tech-my-work-sort:\$\{/);
-  assert.match(screens, /item\.lastProgressAt === null \? <LocalizedText text=\{"MyWork\.noReportYet"\} \/>/);
+  assert.match(screens, /item\.lastProgressAt === null \? \(?\s*<LocalizedText text=\{"MyWork\.noReportYet"\} \/>/);
   assert.match(screens, /const workLastReport = \(item: MyWorkItem\) => item\.lastProgressAt \?\? item\.updatedAt;/);
 });
 
@@ -158,9 +158,9 @@ test("review fixes: one quiet-days clock, Inquiry cards that only offer what the
   // The "Needs update" count, filter and badge read the same last report as the card's "Update due".
   assert.match(screens, /const workNeedsUpdate = \(item: MyWorkItem\) => myWorkNeedsAttention\(\{ \.\.\.item, canUpdate: true, updatedAt: workLastReport\(item\) \}/);
   // A resource task keeps no note or forecast, so its card offers neither, and a Blocked one changes status first.
-  assert.match(screens, /editable=\{inquirySaving === null\} taskNotes=\{false\}/);
-  assert.match(screens, /\{taskNotes && \(late \|\| target\.forecastFinish\) \? <label className="forecast-inline">/);
-  assert.match(screens, /\{taskNotes \? <input\r?\n\s+key=\{`\$\{target\.key\}:note:/);
+  assert.match(screens, /editable=\{inquirySaving === null\}\s+taskNotes=\{false\}/);
+  assert.match(screens, /\{taskNotes && \(late \|\| target\.forecastFinish\) \? \(?\s*<label className="forecast-inline">/);
+  assert.match(screens, /\{taskNotes \? \(?\s*<input\r?\n\s+key=\{`\$\{target\.key\}:note:/);
   assert.match(screens, /\(target\.status === "Blocked" && \(value === 100 \|\| !taskNotes\)\)/);
   // The saved task (and its new row version) replaces the card; only a success or a conflict reloads.
   const save = screens.slice(screens.indexOf("const saveInquiryProgress"), screens.indexOf("const patchProgress = useCallback"));
@@ -320,7 +320,7 @@ test("the Plan folds every row at once and goes full screen over the page, with 
   assert.match(plan, /<div ref=\{fullscreenRef\} className=\{`plan-gantt\$\{fullscreenActive \? " is-fullscreen" : ""\}`\} data-guide="plan\.gantt">/);
   assert.match(plan, /<div className="gantt-nav" data-guide="plan\.view">/);
   // Team Plan folds rows with rows under them; By member folds people; a quick filter shows matches open, so folding is off.
-  assert.match(plan, /const collapseAll = \(\) => \{ if \(memberView\) setMemberClosed\(new Set\(memberKeys\)\); else setCollapsed\(new Set\(parentIds\)\); \};/);
+  assert.match(plan, /const collapseAll = \(\) => \{\s*if \(memberView\) setMemberClosed\(new Set\(memberKeys\)\);\s*else setCollapsed\(new Set\(parentIds\)\);\s*\};/);
   assert.match(plan, /const foldFiltered = !memberView && filter !== null;/);
   const hook = read("app/system/use-fullscreen.ts");
   assert.match(hook, /if \(!overlayOnly && document\.fullscreenEnabled/);
@@ -349,7 +349,7 @@ test("a project's Plan draws its delivery flag once, in the date header, with a 
   assert.match(css, /\.gantt-scale-target::before \{ content: "";/);
   // The Plan hands the date to the chart, not to every row; the portfolio keeps one flag per project (each has its own date).
   const plan = read("app/system/production/PlanningPricingScreens.tsx");
-  assert.match(plan, /label="Gantt\.planLabel" deliveryTarget=\{target\}/);
+  assert.match(plan, /label="Gantt\.planLabel"\s+deliveryTarget=\{target\}/);
   assert.doesNotMatch(plan, /, target, selected: drawerTaskId === task\.id/);
   assert.match(read("app/system/production/ProjectPortfolioGantt.tsx"), /forecastFinish: item\.forecastFinish, target: item\.targetDelivery,/);
 });
@@ -391,7 +391,8 @@ test("a task history shows the change, drops the importer's text, and only a day
   const planning = read("app/system/production/PlanningPricingScreens.tsx");
   const helpers = ["historyReason", "historyNoteFields", "historyValue", "historyShown"]
     .map((name) => {
-      const line = planning.match(new RegExp(`^const ${name} = .*$`, "m"))?.[0];
+      // A definition may wrap onto a second line; it ends at the first line that ends with a semicolon.
+      const line = planning.match(new RegExp(`^const ${name} = [\\s\\S]*?;$`, "m"))?.[0];
       assert.ok(line, name);
       return line;
     })

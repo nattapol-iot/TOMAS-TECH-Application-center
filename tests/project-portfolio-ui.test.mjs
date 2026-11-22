@@ -134,7 +134,7 @@ test("the portfolio reports its sub-view, opens the schedule, changes stage and 
   );
   // The project number is its own sortable column, so sorting by number is one click.
   assert.match(portfolio, /<PortfolioSortHeader column="number" label="Portfolio\.colNumber"/);
-  assert.match(portfolio, /<td>\s*<strong className="mono">\{item\.number\}<\/strong>\s*<\/td>/);
+  assert.match(portfolio, /\) : \(\s*<strong className="mono">\{item\.number\}<\/strong>\s*\)\}\s*<\/td>/, "V1 shows the number as text");
   // The stage is a button listing every other stage; picking one saves. A native select would save on
   // every arrow key, so no stage select remains. Non-editors still see a badge.
   assert.match(portfolio, /item\.canChangeStatus && item\.allowedStatuses\.length\s*\? \(\s*<RowDisclosure\s+label=\{`\$\{uiText\("Portfolio\.changeStage"\)\}/);
@@ -193,7 +193,11 @@ test("PM, team and status filters only apply values the controls can show", () =
   assert.match(portfolio, /<select\s+value=\{activeManagerId \?\? ""\}/);
   assert.match(portfolio, /<select\s+value=\{activeTeam \?\? ""\}/);
   assert.match(portfolio, /<Select\s+label="Status"\s+value=\{activeStatus \?\? "All status"\}/);
-  assert.match(portfolio, /if \(!event\.target\.checked && status === "Closed"\) setStatus\("All status"\)/, "unticking Show closed clears a Closed filter");
+  assert.match(
+    portfolio,
+    /const toggleClosed = \(next: boolean\) => \{\s*setIncludeClosed\(next\);\s*if \(!next && status === "Closed"\) setStatus\("All status"\);/,
+    "unticking Show closed clears a Closed filter",
+  );
 });
 
 test("the project name opens the schedule only for users who can read it", () => {
@@ -224,7 +228,10 @@ test("Overview has a List | Timeline toggle on the shared Gantt, remembered per 
   assert.match(gantt, /onOpen: \(\) => openPlan\(item\.id, task\.id\)/);
   assert.match(gantt, /const openPlan = openProjectSchedule \? \(id: number, taskId\?: number\) => \{ void fullscreen\.exit\(\); openProjectSchedule\(id, taskId\); \}/);
   // The old Project Timeline menu opens the portfolio in Timeline mode; the old screen is gone.
-  assert.match(shell, /view === "project-timeline" \? \(?\s*<ProductionProjects key="project-timeline" \{\.\.\.common\} teamTestMode=\{IS_TEAM_TEST_MODE\} initialMode="timeline"/);
+  assert.match(
+    shell,
+    /view === "project-timeline" \? \(?\s*<ProjectLookScope userId=\{bootstrap\.user\.id\}>\s*<ProductionProjects key="project-timeline" \{\.\.\.common\} teamTestMode=\{IS_TEAM_TEST_MODE\} initialMode="timeline"/,
+  );
   assert.doesNotMatch(shell, /ProductionProjectTimeline/);
 });
 

@@ -188,7 +188,7 @@ test("production My Work keeps the Demo workflow on live API contracts", async (
   assert.match(screen, /confirmDialog\(localizeCopy\("This task is at 0%/);
   // One-click progress sits on the card face (no Quick update fold, no Start/Finish today, no forecast modal);
   // the forecast date is entered inline once a task is late.
-  assert.match(screen, /\{item\.canUpdate \? <ProductionWorkControls item=\{item\}/);
+  assert.match(screen, /\{item\.canUpdate \? \(?\s*<ProductionWorkControls item=\{item\}/);
   assert.doesNotMatch(screen, /function ProductionForecastModal|my-task-quick-update|"Start today"|"Finish today"/);
   assert.match(screen, /const patch = percentChangePatch\(target, value, today\);\s*if \(!patch\) return;/, "tapping the current percent sends nothing");
   // One personal-task dialog; a card opens it on its own task.
@@ -206,7 +206,7 @@ test("production My Work keeps the Demo workflow on live API contracts", async (
   assert.match(screen, /onViewActive=\{\(\) => setTab\("active"\)\}/);
   assert.match(screen, /taskFilter !== "blocked"/);
   assert.match(screen, /taskFilter !== "waiting"/);
-  assert.match(screen, /onChanged=\{\(\) => \{ void load\(\); onNewAssignmentChanged\?\.\(\); \}\}/);
+  assert.match(screen, /onChanged=\{\(\) => \{\s*void load\(\);\s*onNewAssignmentChanged\?\.\(\);\s*\}\}/);
   assert.match(screen, /planManDays/);
   assert.match(screen, /actualManDays/);
   assert.match(screen, /workUserNote/, "import provenance must not be presented as the employee note");
@@ -235,11 +235,11 @@ test("schedule screens follow the API's progress and Resource Plan flags", async
   assert.match(schedule, /const canProgress = canProgressScheduleRow\(task, \{/);
   const drawer = screen.slice(screen.indexOf("function PlanTaskDrawer"), screen.indexOf("function PriceAgeBadge"));
   assert.ok(drawer.length > 500, "PlanTaskDrawer moved");
-  assert.match(drawer, /\{leaf && canProgress \? <section/);
+  assert.match(drawer, /\{leaf && canProgress \? \(?\s*<section/);
   assert.doesNotMatch(drawer, /task\.pics\.some\(\(pic\) => pic\.id === bootstrap\.user\.id\)/, "the PIC-only rule must not bypass canProgress");
   // The server refuses plan edits and drawings on a managed row, so the screen does not offer them.
   assert.match(schedule, /const managed = Boolean\(task\.managedByResourcePlan\)/);
-  assert.match(schedule, /activeSchedule\.projectStatus !== "Closed" && !managed \? <button/);
+  assert.match(schedule, /activeSchedule\.projectStatus !== "Closed" && !managed \? \(?\s*<button/);
   // Import Drawing follows the drawing rule (assigned PIC), not canProgress: the PM/Admin may post
   // progress on a row they are not PIC of, but the server refuses them a drawing there.
   assert.match(
@@ -247,14 +247,14 @@ test("schedule screens follow the API's progress and Resource Plan flags", async
     /const canImportDrawing = canImportDrawingRow\(task, \{\s*scheduleAllowsProgress: activeSchedule\.canUpdateProgress,\s*hasSigningRequest: bootstrap\.permissions\.includes\("signing\.request"\),\s*userId: bootstrap\.user\.id,/,
   );
   // The drawer's actions wait while a save or reload runs, so they never act on a row being replaced.
-  assert.match(schedule, /\{canImportDrawing \? <button className="btn sm default" type="button" disabled=\{saving\} onClick=\{onImportDrawing\}>/);
+  assert.match(schedule, /\{canImportDrawing \? \(?\s*<button className="btn sm default" type="button" disabled=\{saving\} onClick=\{onImportDrawing\}>/);
   assert.match(schedule, /saving=\{saving \|\| loadingSchedule\}/);
   assert.match(schedule, /onImportDrawing=\{\(\) => setDrawingTask\(\{ projectId: activeSchedule\.projectId, taskId: drawerTask\.id \}\)\}/);
   // The plan is a Gantt on the shared component, and a reload keeps it on screen.
   // The plan by row, or by member (owner request 2026-11-04).
   // Customer issues are drawn under the plan rows, apart from them (Punchlist batches, 2026-11-18).
   assert.match(schedule, /const chartRows = memberView \? memberRows : \[\.\.\.ganttRows, \.\.\.issueRows\];/);
-  assert.match(schedule, /<GanttChart rows=\{chartRows\} range=\{range\}/);
+  assert.match(schedule, /<GanttChart\s+rows=\{chartRows\}\s+range=\{range\}/);
   assert.match(schedule, /onOpen: \(\) => setDrawerTaskId\(task\.id\)/);
   assert.doesNotMatch(schedule.slice(schedule.indexOf("const loadSchedule"), schedule.indexOf("useEffect(")), /setSchedule\(null\);\s*if \(!selectedId\)/, "a reload must not blank the plan");
   // The project picker lists projects by number.
@@ -263,20 +263,20 @@ test("schedule screens follow the API's progress and Resource Plan flags", async
   // Day-request answers follow the API's canAnswerRequests (canPlan on an older API), in both places.
   assert.match(screen, /canAnswerRequests\?: boolean;/);
   assert.match(schedule, /const canAnswerRequests = activeSchedule \? canAnswerDayRequests\(activeSchedule, bootstrap\.permissions\.includes\("schedule\.plan"\)\) : false;/);
-  assert.match(schedule, /\{canAnswerRequests && pendingDayRequests\.length \? <Panel/);
-  assert.match(schedule, /pendingRequest && requestedTask && canAnswerRequests \? <button/);
+  assert.match(schedule, /\{canAnswerRequests && pendingDayRequests\.length \? \(?\s*<Panel/);
+  assert.match(schedule, /pendingRequest && requestedTask && canAnswerRequests \? \(?\s*<button/);
   assert.doesNotMatch(schedule, /canPlan && pendingDayRequests|requestedTask && canPlan \?/);
   assert.match(schedule, /<ResourcePlanLock \/>/);
   // My Work: managed rows show the lock and offer neither a day request nor a personal task.
   assert.match(screen, /managedByResourcePlan\?: boolean;/);
   assert.match(screen, /canRequestDays\?: boolean;/);
   assert.match(screen, /canProgress\?: boolean;/);
-  assert.match(screen, /\{item\.managedByResourcePlan \? <ResourcePlanLock \/> : null\}/);
+  assert.match(screen, /\{item\.managedByResourcePlan \? \(?\s*<ResourcePlanLock \/> : null\}/);
   assert.match(screen, /items\.filter\(offersPersonalTask\)/);
-  assert.match(screen, /\{offersPersonalTask\(item\) \? <button/);
+  assert.match(screen, /\{offersPersonalTask\(item\) \? \(?\s*<button/);
   // The task row offers it twice (the clock beside the progress controls, More actions); the work group header no longer
   // repeats it since the lean My Work (2026-11-21).
-  assert.equal((screen.match(/offersDayRequest\((?:item|focus)\) \? <button/g) ?? []).length, 2, "every Request more days button checks offersDayRequest");
+  assert.equal((screen.match(/offersDayRequest\((?:item|focus)\) \? \(?\s*<button/g) ?? []).length, 2, "every Request more days button checks offersDayRequest");
   assert.doesNotMatch(screen, /onRequest\(focus\)/);
   assert.equal((screen.match(/!canRequestMoreDays\((?:item|focus)\)/g) ?? []).length, 2, "every Request more days button follows canRequestDays");
   // The old Resource Plan screen and its loaders live in ResourcePlanningScreen.tsx now.
@@ -725,7 +725,7 @@ test("audited supplier purchase history is read-only to the application and reus
   assert.match(pricingScreen, /record\.sourceKind === "Estimate"/);
   const priceLibrarySource = pricingScreen.slice(pricingScreen.indexOf("export function ProductionPriceLibrary"), pricingScreen.indexOf("const supplierQuotationCurrency"));
   assert.match(priceLibrarySource, /useState\(50\)/);
-  assert.match(priceLibrarySource, /<TablePageSize value=\{pageSize\}/);
+  assert.match(priceLibrarySource, /<TablePageSize\s+value=\{pageSize\}/);
   assert.match(priceLibrarySource, /<Pagination page=\{currentPage\}/);
   assert.match(priceLibrarySource, /table style=\{\{ minWidth: 1580 \}\}/);
   assert.match(grants, /GRANT SELECT ON OBJECT::dbo\.supplier_price_history/);
@@ -747,7 +747,7 @@ test("supplier quotations are uploaded to secure storage and listed in the stand
   assert.match(client, /createSupplierQuotation/);
   assert.match(client, /downloadSupplierQuotation/);
   assert.match(screen, /function SupplierQuotationUploadModal/);
-  assert.match(screen, /<TablePageSize value=\{pageSize\}/);
+  assert.match(screen, /<TablePageSize\s+value=\{pageSize\}/);
   assert.match(screen, /<Pagination page=\{page\}/);
   assert.match(screen, /useState\(50\)/);
   assert.match(grants, /GRANT SELECT ON OBJECT::dbo\.supplier_quotations/);
@@ -1467,7 +1467,7 @@ test("the ERP sheet tab classifies and writes, and never invents a selling figur
   // They are tabs now, visible on every estimate, rather than entries in a "More" menu.
   for (const id of ["assignment", "validation", "revision"]) assert.ok(screens.includes(`{ id: "${id}", label: copy(`), `the ${id} tab is missing from the workspace tabs`);
   // The reviewer's overview is the summary while an estimate is in review; "review" links land there.
-  assert.match(screens, /onSummary && inReview \? <EstimateReviewSummary/);
+  assert.match(screens, /onSummary && inReview \? \(?\s*<EstimateReviewSummary/);
   assert.match(screens, /const onSummary = tab === "summary" \|\| tab === "review";/);
   assert.match(sheet, /classify\(\[\.\.\.selected\], bulkCategory\)/);
   assert.match(sheet, /visibleRows\.map/);
@@ -1494,7 +1494,7 @@ test("the summary sheet shows what one Hardware set costs, on screen only", asyn
   const sheet = await readFile(new URL("app/system/production/EstimateErpSheet.tsx", root), "utf8");
   // Owner request 2026-10-27: the amount divided by the quantity, for Hardware rows only.
   assert.match(sheet, /<th className="num cb-money-col"><LocalizedText text=\{"Unit cost"\} \/><\/th>/);
-  assert.match(sheet, /heading\.category === "Hardware" && rowQuantity > 0 \? <>\{money\(row\.amount \/ rowQuantity\)\}/);
+  assert.match(sheet, /heading\.category === "Hardware" && rowQuantity > 0 \? \(?\s*<>\{money\(row\.amount \/ rowQuantity\)\}/);
   // Every spanning row and footer counts the new column.
   assert.doesNotMatch(sheet, /colSpan=\{4\}|colSpan=\{6\}/);
   // The ERP workbook is imported into another system; its layout does not change.
