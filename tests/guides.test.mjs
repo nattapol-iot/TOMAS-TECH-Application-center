@@ -195,9 +195,9 @@ test("a guide is offered only to people who can do the task", () => {
 test("the shell opens the guides from the top bar and loads the layer after first paint", () => {
   assert.match(
     shell,
-    /<button className="btn default sm topbar-guide" type="button" aria-haspopup="dialog"[^>]*onClick=\{\(\) => setGuideOpen\(true\)\}><Icon name="play" \/><span className="label">\{t\("Guide\.open"\)\}<\/span><\/button>/,
+    /<button className="btn default sm topbar-guide" type="button" aria-haspopup="dialog"[^>]*onClick=\{\(\) => setGuideOpen\(true\)\}>\s*<Icon name="play" \/>\s*<span className="label">\{t\("Guide\.open"\)\}<\/span>\s*<\/button>/,
   );
-  assert.match(shell, /<GuideLayer view=\{view\} permissions=\{bootstrap\.permissions\} userId=\{bootstrap\.user\.id\} open=\{guideOpen\}/);
+  assert.match(shell, /<GuideLayer\s+view=\{view\}\s+permissions=\{bootstrap\.permissions\}\s+userId=\{bootstrap\.user\.id\}\s+open=\{guideOpen\}/);
   assert.match(shell, /data-guide="topbar\.report" onClick=\{\(\) => setSupportCreate\(true\)\}/);
   const lazy = read("app/system/production/LazyScreens.tsx");
   // A loading component keeps vinext's error boundary: a missing guide chunk shows nothing instead of blanking the app.

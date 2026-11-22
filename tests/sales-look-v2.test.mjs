@@ -19,18 +19,18 @@ test("everyone starts on V1 and the choice is kept per person, apart from the Es
 
 test("every screen of the Sales menu group wears the switch", async () => {
   const shell = await read("app/system/ProductionApp.tsx");
-  const group = /\{ group: "NavGroup\.sales", items: \[([\s\S]*?)\] \},/.exec(shell)?.[1] ?? "";
+  const group = /\{\s*group: "NavGroup\.sales",\s*items: \[([\s\S]*?)\],?\s*\},/.exec(shell)?.[1] ?? "";
   const views = [...group.matchAll(/"?view"?:\s*"([^"]+)"/g)].map((match) => match[1]);
   assert.equal(views.length, 10, "the Sales group was read");
   for (const view of views) assert.ok(SALES_LOOK_VIEWS.includes(view), `${view} is a Sales look screen`);
   assert.ok(SALES_LOOK_VIEWS.includes("crm-pipeline"), "the board tab of CRM Opportunities too");
   // CRM screens share one wrapper; every other Sales view is wrapped where it renders.
-  assert.match(shell, /view\.startsWith\("crm-"\) && bootstrap\.permissions\.includes\("crm\.read"\) \? <SalesLookScope userId=\{bootstrap\.user\.id\}><CrmScreen /);
+  assert.match(shell, /view\.startsWith\("crm-"\) && bootstrap\.permissions\.includes\("crm\.read"\) \? \(?\s*<SalesLookScope userId=\{bootstrap\.user\.id\}>\s*<CrmScreen\s/);
   for (const view of ["inquiries", "site-visits", "my-assignments", "visit-master", "customers"]) {
-    assert.match(shell, new RegExp(`\\{view === "${view}" \\? <SalesLookScope userId=\\{bootstrap\\.user\\.id\\}>`), view);
+    assert.match(shell, new RegExp(`\\{view === "${view}" \\? \\(?\\s*<SalesLookScope userId=\\{bootstrap\\.user\\.id\\}>`), view);
   }
   // Customers in the System menu (master) keeps its own look.
-  assert.match(shell, /\(\["master", "suppliers", "employees", "material-master", "user-accounts"\] as View\[\]\)\.includes\(view\) \? <ProductionMasterData /);
+  assert.match(shell, /\(\["master", "suppliers", "employees", "material-master", "user-accounts"\] as View\[\]\)\.includes\(view\) \? \(?\s*<ProductionMasterData\s/);
 });
 
 test("V2 is the shared Pegasus skin plus sales-v2.css, and V1 renders the screen as before", async () => {

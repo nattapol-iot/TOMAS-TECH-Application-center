@@ -3,19 +3,37 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { unzipSync } from "fflate";
 import {
-  applyPaste, batchProgress, blankDraftRow, categoryFromText, draftErrors, draftPayload, draftRowIsBlank, hoursToManDays, ISSUE_STATE_TONE,
-  parseLooseDate, parseTsv, personFromText,
+  applyPaste,
+  batchProgress,
+  blankDraftRow,
+  categoryFromText,
+  draftErrors,
+  draftPayload,
+  draftRowIsBlank,
+  hoursToManDays,
+  ISSUE_STATE_TONE,
+  parseLooseDate,
+  parseTsv,
+  personFromText,
 } from "../lib/issue-batches.ts";
 import { buildIssueWorkbook, issueWorkbookName } from "../lib/issue-workbook.ts";
 
 const root = new URL("../", import.meta.url);
 const source = (path) => readFile(new URL(path, root), "utf8");
-const team = [{ id: 1, name: "Arunwit I." }, { id: 2, name: "Pimchanok S." }, { id: 3, name: "Nattapol P." }, { id: 4, name: "Natthida K." }];
+const team = [
+  { id: 1, name: "Arunwit I." },
+  { id: 2, name: "Pimchanok S." },
+  { id: 3, name: "Nattapol P." },
+  { id: 4, name: "Natthida K." },
+];
 let seq = 0;
 const key = () => `k${seq++}`;
 
 test("Excel's tab-separated copy is read with quoted cells that hold line breaks and quotes", () => {
-  assert.deepEqual(parseTsv("a\tb\r\nc\td\r\n"), [["a", "b"], ["c", "d"]]);
+  assert.deepEqual(parseTsv("a\tb\r\nc\td\r\n"), [
+    ["a", "b"],
+    ["c", "d"],
+  ]);
   assert.deepEqual(parseTsv('"two\nlines"\t"say ""hi"""\nx'), [["two\nlines", 'say "hi"'], ["x"]]);
   assert.deepEqual(parseTsv(""), []);
 });
@@ -47,8 +65,10 @@ test("rows pasted from Excel fill the line in focus and new lines below, column 
   const next = applyPaste(rows, { row: 1, field: "category" }, pasted, team, key);
   assert.equal(next.length, 3);
   assert.deepEqual(next[0], rows[0], "the line above is untouched");
-  assert.deepEqual([next[1].category, next[1].functionName, next[1].description, next[1].assigneeId, next[1].planStart, next[1].planEnd, next[1].planHours],
-    ["Requirement", "Packing list", "Add Net weight total", 2, "2026-11-20", "2026-11-21", "6"]);
+  assert.deepEqual(
+    [next[1].category, next[1].functionName, next[1].description, next[1].assigneeId, next[1].planStart, next[1].planEnd, next[1].planHours],
+    ["Requirement", "Packing list", "Add Net weight total", 2, "2026-11-20", "2026-11-21", "6"],
+  );
   // What cannot be read (an unknown person, "later", "abc") is left empty rather than guessed.
   assert.deepEqual([next[2].category, next[2].description, next[2].assigneeId, next[2].planStart, next[2].planHours], ["Problem", "Logs out every 5 minutes", null, "", ""]);
   // Starting further right shifts the columns: the first pasted cell lands in the description.
@@ -68,10 +88,16 @@ test("a blank line is left out; the first thing to fix on each line is named", (
   ];
   assert.equal(draftRowIsBlank(rows[1]), true);
   assert.equal(draftRowIsBlank(rows[1], 1), false, "a line with a picture is not blank");
-  assert.deepEqual(draftErrors(rows).map((error) => [error.row, error.field, error.message]), [
-    [2, "description", "Issues.errDescription"], [3, "planStart", "Issues.errStartFirst"], [4, "planEnd", "Issues.errEndBeforeStart"],
-    [5, "planHours", "Issues.errHours"], [6, "planHours", "Issues.errHours"],
-  ]);
+  assert.deepEqual(
+    draftErrors(rows).map((error) => [error.row, error.field, error.message]),
+    [
+      [2, "description", "Issues.errDescription"],
+      [3, "planStart", "Issues.errStartFirst"],
+      [4, "planEnd", "Issues.errEndBeforeStart"],
+      [5, "planHours", "Issues.errHours"],
+      [6, "planHours", "Issues.errHours"],
+    ],
+  );
   const { items, keys } = draftPayload(rows.slice(0, 2));
   assert.deepEqual(keys, [rows[0].key]);
   assert.deepEqual(items, [{ category: "Problem", functionName: "", description: "ok", assigneeId: null, planStart: "2026-11-20", planEnd: "2026-11-20", planHours: 4 }]);
@@ -88,9 +114,27 @@ test("hours, progress and colours follow the team's rules", () => {
 const decoder = new TextDecoder();
 test("the export is the team's Issues Table: three title lines, a two-row heading of 21 columns, one row per issue", () => {
   const bytes = buildIssueWorkbook({
-    projectNo: "PJ250029", projectName: "Packing List System", customer: "NTMV", updatedOn: "2026-11-18", picturesLabel: (n) => `${n} picture(s)`,
-    rows: [{ issuedOn: "2026-10-21", category: "Problem", functionName: "Slip to", pictures: 2, description: "Filter <Bill to> can't load", solution: "Fixed query & index",
-      inCharge: "Arunwit I.", planStart: "2026-10-30", planEnd: "2026-11-04", actualStart: "2026-10-30", actualEnd: "2026-11-04", status: "100%" }],
+    projectNo: "PJ250029",
+    projectName: "Packing List System",
+    customer: "NTMV",
+    updatedOn: "2026-11-18",
+    picturesLabel: (n) => `${n} picture(s)`,
+    rows: [
+      {
+        issuedOn: "2026-10-21",
+        category: "Problem",
+        functionName: "Slip to",
+        pictures: 2,
+        description: "Filter <Bill to> can't load",
+        solution: "Fixed query & index",
+        inCharge: "Arunwit I.",
+        planStart: "2026-10-30",
+        planEnd: "2026-11-04",
+        actualStart: "2026-10-30",
+        actualEnd: "2026-11-04",
+        status: "100%",
+      },
+    ],
   });
   const files = unzipSync(bytes);
   const sheet = decoder.decode(files["xl/worksheets/sheet1.xml"]);
@@ -114,7 +158,7 @@ test("the export is the team's Issues Table: three title lines, a two-row headin
 
 test("the Punchlist is the issue batch page alone, Pegasus-styled on this page only", async () => {
   const shell = await source("app/system/ProductionApp.tsx");
-  assert.match(shell, /projectTab === "punchlist" \? <IssueBatchScreen /);
+  assert.match(shell, /projectTab === "punchlist" \? \(?\s*<IssueBatchScreen /);
   assert.doesNotMatch(shell, /import \{ ResourceTaskWorkspace \}/);
   const screen = await source("app/system/production/IssueBatchScreen.tsx");
   // The old single-issue tab is gone (owner 2026-11-19); old is_issue tasks still list with the team's other tasks.
@@ -126,9 +170,16 @@ test("the Punchlist is the issue batch page alone, Pegasus-styled on this page o
   assert.match(screen, /createPortal\(<div className="pg pg-layer">/);
   const css = await source("app/system/production/issue-batch.css");
   // Every rule is under .pg and the tokens are --pg-*, so nothing reaches another screen.
-  const selectors = css.replace(/\/\*[\s\S]*?\*\//g, "").replace(/@keyframes[^{]+\{(?:[^{}]*\{[^}]*\})*[^}]*\}/g, "").match(/(^|\})\s*([^{}@]+)\{/g) ?? [];
+  const selectors =
+    css
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/@keyframes[^{]+\{(?:[^{}]*\{[^}]*\})*[^}]*\}/g, "")
+      .match(/(^|\})\s*([^{}@]+)\{/g) ?? [];
   for (const raw of selectors) {
-    const selector = raw.replace(/^\}?\s*/, "").replace(/\{$/, "").trim();
+    const selector = raw
+      .replace(/^\}?\s*/, "")
+      .replace(/\{$/, "")
+      .trim();
     for (const part of selector.split(",")) assert.match(part.trim(), /^\.pg\b/, `unscoped selector: ${part.trim()}`);
   }
   assert.doesNotMatch(css.replace(/--pg-[\w-]+/g, ""), /var\(--(?!pg-)/, "only --pg-* tokens");

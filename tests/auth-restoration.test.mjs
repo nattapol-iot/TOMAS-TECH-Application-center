@@ -63,27 +63,33 @@ function createHarness({
   };
 
   const react = {
-    useCallback: (callback, deps) => reactive ? memo(() => callback, deps) : callback,
+    useCallback: (callback, deps) => (reactive ? memo(() => callback, deps) : callback),
     useEffect(effect, deps) {
       if (reactive) {
         const index = hookCursor++;
         if (!hooks[index] || !sameDeps(hooks[index].deps, deps)) {
           const previous = hooks[index];
           hooks[index] = { deps, cleanup: previous?.cleanup };
-          mountEffects.push(() => { previous?.cleanup?.(); hooks[index].cleanup = effect(); });
+          mountEffects.push(() => {
+            previous?.cleanup?.();
+            hooks[index].cleanup = effect();
+          });
         }
         return;
       }
       if (!mounted) mountEffects.push(effect);
     },
-    useMemo: (factory, deps) => reactive ? memo(factory, deps) : factory(),
-    useRef: (value) => reactive ? memo(() => ({ current: value }), []) : ({ current: value }),
+    useMemo: (factory, deps) => (reactive ? memo(factory, deps) : factory()),
+    useRef: (value) => (reactive ? memo(() => ({ current: value }), []) : { current: value }),
     useState(initial) {
       const index = cursor++;
       if (!(index in states)) states[index] = typeof initial === "function" ? initial() : initial;
-      return [states[index], (next) => {
-        states[index] = typeof next === "function" ? next(states[index]) : next;
-      }];
+      return [
+        states[index],
+        (next) => {
+          states[index] = typeof next === "function" ? next(states[index]) : next;
+        },
+      ];
     },
   };
 
@@ -92,14 +98,17 @@ function createHarness({
     jsx: (type, props, key) => ({ type, props: props ?? {}, key }),
     jsxs: (type, props, key) => ({ type, props: props ?? {}, key }),
   };
-  const componentModule = new Proxy({}, {
-    get: (_target, property) => property === "default" ? "MockDefaultComponent" : String(property),
-  });
+  const componentModule = new Proxy(
+    {},
+    {
+      get: (_target, property) => (property === "default" ? "MockDefaultComponent" : String(property)),
+    },
+  );
   const modules = {
     "./dialogs": { confirmDialog: async () => globalThis.window.confirm?.() ?? true },
     "../../lib/remembered-view": rememberedView,
     "../../lib/notification-rows": notificationRows,
-    "../../backend-node/src/engineering-rate-access": { canViewEngineeringRates: role => DASHBOARD_ROLES.includes(role) },
+    "../../backend-node/src/engineering-rate-access": { canViewEngineeringRates: (role) => DASHBOARD_ROLES.includes(role) },
     "../../backend-node/src/project-cost-model": { canViewProjectCost: () => false },
     react,
     "react/jsx-runtime": jsxRuntime,
@@ -117,14 +126,16 @@ function createHarness({
     "./team-test-client": {
       IS_TEAM_TEST_MODE: mode === "team-test",
       clearTeamTestSession: () => {},
-      getTeamTestSession: () => mode === "team-test" ? { email: "team@example.com" } : null,
+      getTeamTestSession: () => (mode === "team-test" ? { email: "team@example.com" } : null),
       saveTeamTestSession: () => {},
     },
     "./tmt-id.constants": { IS_TMT_ID_MODE: mode === "tmt-id" },
     "./tmt-id-client": {
       currentAppPath: () => "/",
       loadTmtIdSession,
-      redirectToTmtIdLogin: () => { tmtLoginRedirects += 1; },
+      redirectToTmtIdLogin: () => {
+        tmtLoginRedirects += 1;
+      },
       redirectToTmtIdLogout: () => {},
     },
     "./sign-in-mode.constants": { SIGN_IN_MODE: mode },
@@ -161,13 +172,27 @@ function createHarness({
   const previousDocument = globalThis.document;
   const storage = new Map();
   globalThis.window = {
-    addEventListener: (name, callback) => { if (!listeners.has(name)) listeners.set(name, new Set()); listeners.get(name).add(callback); },
+    addEventListener: (name, callback) => {
+      if (!listeners.has(name)) listeners.set(name, new Set());
+      listeners.get(name).add(callback);
+    },
     clearInterval: () => {},
     clearTimeout: (id) => timers.delete(id),
     confirm: () => true,
     history: {
-      replaceState: (_state, _title, url) => { if (reactive) { window.location.hash = new URL(url, "https://app.test").hash; history[historyIndex] = window.location.hash; } },
-      pushState: (_state, _title, url) => { if (reactive) { window.location.hash = new URL(url, "https://app.test").hash; history.splice(++historyIndex); history.push(window.location.hash); } },
+      replaceState: (_state, _title, url) => {
+        if (reactive) {
+          window.location.hash = new URL(url, "https://app.test").hash;
+          history[historyIndex] = window.location.hash;
+        }
+      },
+      pushState: (_state, _title, url) => {
+        if (reactive) {
+          window.location.hash = new URL(url, "https://app.test").hash;
+          history.splice(++historyIndex);
+          history.push(window.location.hash);
+        }
+      },
     },
     localStorage: {
       getItem: (key) => storage.get(key) ?? null,
@@ -175,7 +200,10 @@ function createHarness({
       setItem: (key, value) => storage.set(key, String(value)),
     },
     sessionStorage: {
-      getItem: () => { if (storageBlocked) throw new Error("Storage blocked"); return savedView; },
+      getItem: () => {
+        if (storageBlocked) throw new Error("Storage blocked");
+        return savedView;
+      },
       setItem: () => {},
       removeItem: () => {},
     },
@@ -183,7 +211,11 @@ function createHarness({
     removeEventListener: (name, callback) => listeners.get(name)?.delete(callback),
     scrollTo: () => {},
     setInterval: () => 1,
-    setTimeout: (callback, delay) => { const id = Symbol(); if (reactive && delay === 0) timers.set(id, callback); return id; },
+    setTimeout: (callback, delay) => {
+      const id = Symbol();
+      if (reactive && delay === 0) timers.set(id, callback);
+      return id;
+    },
   };
   globalThis.document = { documentElement: { lang: "en" } };
 
@@ -197,8 +229,11 @@ function createHarness({
       for (let round = 0; round < 8; round++) {
         this.render();
         this.runMountEffects();
-        for (const [id, callback] of [...timers]) { timers.delete(id); callback(); }
-        await new Promise(resolve => setImmediate(resolve));
+        for (const [id, callback] of [...timers]) {
+          timers.delete(id);
+          callback();
+        }
+        await new Promise((resolve) => setImmediate(resolve));
       }
       return this.render();
     },
@@ -227,7 +262,7 @@ function createHarness({
 }
 
 function findNode(node, predicate) {
-  if (Array.isArray(node)) return node.map(child => findNode(child, predicate)).find(Boolean);
+  if (Array.isArray(node)) return node.map((child) => findNode(child, predicate)).find(Boolean);
   if (node == null || typeof node !== "object") return undefined;
   if (predicate(node)) return node;
   const children = Array.isArray(node.props?.children) ? node.props.children : [node.props?.children];
@@ -320,7 +355,12 @@ test("all sign-in modes wait for bootstrap before rendering the workspace", asyn
 test("missing or failed restored sessions show Login after restoration settles", async (t) => {
   for (const [name, restoreAccount] of [
     ["missing", async () => null],
-    ["failed", async () => { throw new Error("restore failed"); }],
+    [
+      "failed",
+      async () => {
+        throw new Error("restore failed");
+      },
+    ],
   ]) {
     await t.test(name, async () => {
       const harness = createHarness({ mode: "entra", restoreAccount });
@@ -364,7 +404,10 @@ test("unconfigured authentication renders Login immediately without attempting r
   const harness = createHarness({
     mode: "entra",
     configured: false,
-    restoreAccount: async () => { restoreCalls += 1; return null; },
+    restoreAccount: async () => {
+      restoreCalls += 1;
+      return null;
+    },
   });
   try {
     assert.ok(findNode(harness.render(), isLogin));
@@ -378,15 +421,21 @@ test("unconfigured authentication renders Login immediately without attempting r
 test("authenticated refresh restores Estimate Cost in every sign-in mode", async (t) => {
   for (const mode of ["tmt-id", "team-test", "entra"]) {
     await t.test(mode, async () => {
-      const harness = createHarness({ mode, savedView: "estimates",
-        restoreAccount: async () => ({}), loadTmtIdSession: async () => ({ status: "signed-in" }),
+      const harness = createHarness({
+        mode,
+        savedView: "estimates",
+        restoreAccount: async () => ({}),
+        loadTmtIdSession: async () => ({ status: "signed-in" }),
         loadBootstrap: async () => ({ ...bootstrap, permissions: ["estimate.read"] }),
       });
       try {
-        harness.render(); harness.runMountEffects();
-        await new Promise(resolve => setImmediate(resolve));
-        assert.ok(findNode(harness.render(), node => node.type === "ProductionEstimates"));
-      } finally { harness.cleanup(); }
+        harness.render();
+        harness.runMountEffects();
+        await new Promise((resolve) => setImmediate(resolve));
+        assert.ok(findNode(harness.render(), (node) => node.type === "ProductionEstimates"));
+      } finally {
+        harness.cleanup();
+      }
     });
   }
 });
@@ -396,32 +445,49 @@ test("refresh falls back safely for revoked permissions or blocked storage", asy
     await t.test(String(storageBlocked), async () => {
       const harness = createHarness({ mode: "team-test", savedView: "estimates", storageBlocked });
       try {
-        harness.render(); harness.runMountEffects();
-        await new Promise(resolve => setImmediate(resolve));
+        harness.render();
+        harness.runMountEffects();
+        await new Promise((resolve) => setImmediate(resolve));
         const tree = harness.render();
-        assert.ok(findNode(tree, node => node.type === "ProductionDashboard"));
-        assert.equal(findNode(tree, node => node.type === "ProductionEstimates"), undefined);
-      } finally { harness.cleanup(); }
+        assert.ok(findNode(tree, (node) => node.type === "ProductionDashboard"));
+        assert.equal(
+          findNode(tree, (node) => node.type === "ProductionEstimates"),
+          undefined,
+        );
+      } finally {
+        harness.cleanup();
+      }
     });
   }
 });
 
 function navLeaf(tree, label) {
-  return findNode(tree, node => node.type === "a" && findNode(node, child => child.type === "span" && child.props.children === label));
+  return findNode(tree, (node) => node.type === "a" && findNode(node, (child) => child.type === "span" && child.props.children === label));
 }
-const plainClick = () => ({ button: 0, ctrlKey: false, metaKey: false, shiftKey: false, altKey: false, defaultPrevented: false, prevented: false, preventDefault() { this.prevented = true; } });
+const plainClick = () => ({
+  button: 0,
+  ctrlKey: false,
+  metaKey: false,
+  shiftKey: false,
+  altKey: false,
+  defaultPrevented: false,
+  prevented: false,
+  preventDefault() {
+    this.prevented = true;
+  },
+});
 
 test("opening an estimate from an inquiry leaves a shareable document URL", async () => {
-  const harness = createHarness({ mode: "team-test", reactive: true, hash: "#/inquiries",
-    loadBootstrap: async () => ({ ...bootstrap, permissions: ["inquiry.read", "estimate.read"] }),
-  });
+  const harness = createHarness({ mode: "team-test", reactive: true, hash: "#/inquiries", loadBootstrap: async () => ({ ...bootstrap, permissions: ["inquiry.read", "estimate.read"] }) });
   try {
     const tree = await harness.flush();
-    findNode(tree, node => node.type === "ProductionInquiries").props.openEstimate(42);
+    findNode(tree, (node) => node.type === "ProductionInquiries").props.openEstimate(42);
     const opened = await harness.flush();
-    assert.equal(findNode(opened, node => node.type === "ProductionEstimates").props.initialEstimateId, 42);
+    assert.equal(findNode(opened, (node) => node.type === "ProductionEstimates").props.initialEstimateId, 42);
     assert.equal(window.location.hash, "#/estimates/42");
-  } finally { harness.cleanup(); }
+  } finally {
+    harness.cleanup();
+  }
 });
 
 test("shared Inquiry and Estimate links restore the exact record after sign-in", async (t) => {
@@ -432,15 +498,23 @@ test("shared Inquiry and Estimate links restore the exact record after sign-in",
     for (const mode of ["tmt-id", "team-test", "entra"]) {
       for (const hash of [`#/${view}/42`, `#${oldName}/42`]) {
         await t.test(`${mode} ${hash}`, async () => {
-          const harness = createHarness({ mode, reactive: true, hash, savedView: "dashboard", storageBlocked: true,
-            restoreAccount: async () => ({}), loadTmtIdSession: async () => ({ status: "signed-in" }),
+          const harness = createHarness({
+            mode,
+            reactive: true,
+            hash,
+            savedView: "dashboard",
+            storageBlocked: true,
+            restoreAccount: async () => ({}),
+            loadTmtIdSession: async () => ({ status: "signed-in" }),
             loadBootstrap: async () => ({ ...bootstrap, permissions: [permission] }),
           });
           try {
             const tree = await harness.flush();
-            assert.equal(findNode(tree, node => node.type === component).props[idProp], 42);
+            assert.equal(findNode(tree, (node) => node.type === component).props[idProp], 42);
             assert.equal(window.location.hash, `#/${view}/42`);
-          } finally { harness.cleanup(); }
+          } finally {
+            harness.cleanup();
+          }
         });
       }
     }
@@ -453,10 +527,8 @@ test("document selection, Back, Forward and returning to the list keep URL and s
     ["inquiries", "ProductionInquiries", "preferredInquiryId", "onSelectInquiry", "RFQ intake & estimating", "inquiry.read"],
   ]) {
     await t.test(view, async () => {
-      const harness = createHarness({ mode: "team-test", reactive: true, hash: `#/${view}`,
-        loadBootstrap: async () => ({ ...bootstrap, permissions: [permission] }),
-      });
-      const screen = tree => findNode(tree, node => node.type === component);
+      const harness = createHarness({ mode: "team-test", reactive: true, hash: `#/${view}`, loadBootstrap: async () => ({ ...bootstrap, permissions: [permission] }) });
+      const screen = (tree) => findNode(tree, (node) => node.type === component);
       try {
         let tree = await harness.flush();
         for (const id of [42, 43]) {
@@ -464,21 +536,30 @@ test("document selection, Back, Forward and returning to the list keep URL and s
           tree = await harness.flush();
           assert.equal(window.location.hash, `#/${view}/${id}`);
         }
-        harness.go(-1); tree = await harness.flush();
+        harness.go(-1);
+        tree = await harness.flush();
         assert.equal(screen(tree).props[idProp], 42);
-        harness.go(-1); tree = await harness.flush();
+        harness.go(-1);
+        tree = await harness.flush();
         assert.equal(screen(tree).props[idProp], null);
-        harness.go(1); tree = await harness.flush();
+        harness.go(1);
+        tree = await harness.flush();
         assert.equal(screen(tree).props[idProp], 42);
-        navLeaf(tree, label).props.onClick(plainClick()); tree = await harness.flush();
+        navLeaf(tree, label).props.onClick(plainClick());
+        tree = await harness.flush();
         assert.equal(window.location.hash, `#/${view}`);
         assert.equal(screen(tree).props[idProp], null);
-        screen(tree).props[selectProp](44); tree = await harness.flush();
-        screen(tree).props[selectProp](null); tree = await harness.flush();
+        screen(tree).props[selectProp](44);
+        tree = await harness.flush();
+        screen(tree).props[selectProp](null);
+        tree = await harness.flush();
         assert.equal(window.location.hash, `#/${view}`);
-        harness.navigate(`#/${view}/45`); tree = await harness.flush();
+        harness.navigate(`#/${view}/45`);
+        tree = await harness.flush();
         assert.equal(screen(tree).props[idProp], 45);
-      } finally { harness.cleanup(); }
+      } finally {
+        harness.cleanup();
+      }
     });
   }
 });
@@ -488,13 +569,18 @@ test("a shared document URL never bypasses module permissions", async () => {
     const harness = createHarness({ mode: "team-test", reactive: true, hash });
     try {
       const tree = await harness.flush();
-      assert.ok(findNode(tree, node => node.type === "ProductionDashboard"));
-      assert.equal(findNode(tree, node => ["ProductionInquiries", "ProductionEstimates"].includes(node.type)), undefined);
+      assert.ok(findNode(tree, (node) => node.type === "ProductionDashboard"));
+      assert.equal(
+        findNode(tree, (node) => ["ProductionInquiries", "ProductionEstimates"].includes(node.type)),
+        undefined,
+      );
       assert.equal(window.location.hash, "#/dashboard");
       harness.navigate(hash);
       await harness.flush();
       assert.equal(window.location.hash, "#/dashboard");
-    } finally { harness.cleanup(); }
+    } finally {
+      harness.cleanup();
+    }
   }
 });
 
@@ -502,121 +588,189 @@ test("legacy project timeline links and remembered views preserve schedule acces
   for (const permissions of [[], ["project.read"], ["schedule.read"], ["project.read", "schedule.read"]]) {
     for (const hash of ["", "#/project-timeline"]) {
       await t.test(`${permissions.join(",") || "none"} ${hash || "remembered"}`, async () => {
-        const harness = createHarness({ mode: "team-test", savedView: "project-timeline", hash,
-          loadBootstrap: async () => ({ ...bootstrap, permissions }),
-        });
+        const harness = createHarness({ mode: "team-test", savedView: "project-timeline", hash, loadBootstrap: async () => ({ ...bootstrap, permissions }) });
         try {
-          harness.render(); harness.runMountEffects();
-          await new Promise(resolve => setImmediate(resolve));
+          harness.render();
+          harness.runMountEffects();
+          await new Promise((resolve) => setImmediate(resolve));
           const tree = harness.render();
-          const timeline = findNode(tree, node => node.type === "ProductionProjects" && node.props.initialMode === "timeline");
+          const timeline = findNode(tree, (node) => node.type === "ProductionProjects" && node.props.initialMode === "timeline");
           assert.equal(navLeaf(tree, "Project Timeline"), undefined, "Timeline is a Projects mode, not a second menu");
           assert.equal(Boolean(timeline), permissions.length === 2);
           if (timeline) {
             assert.equal(navLeaf(tree, "Projects").props["aria-current"], "page");
             await timeline.props.openProjectSchedule(42, 8);
-            const plan = findNode(harness.render(), node => node.type === "ProductionProjectSchedule");
+            const plan = findNode(harness.render(), (node) => node.type === "ProductionProjectSchedule");
             assert.ok(plan, "a timeline task still opens its project plan");
             assert.equal(plan.props.preferredProjectId, 42);
             assert.equal(plan.props.preferredTaskId, 8);
           } else {
-            assert.ok(findNode(tree, node => node.type === "ProductionDashboard"));
+            assert.ok(findNode(tree, (node) => node.type === "ProductionDashboard"));
           }
-        } finally { harness.cleanup(); }
+        } finally {
+          harness.cleanup();
+        }
       });
     }
   }
 });
 
 test("master leaves restore directly and legacy master still opens customers", async (t) => {
-  for (const [savedView, destination] of [["master", "customers"], ["suppliers", "suppliers"], ["employees", "employees"], ["user-accounts", "team"]]) {
+  for (const [savedView, destination] of [
+    ["master", "customers"],
+    ["suppliers", "suppliers"],
+    ["employees", "employees"],
+    ["user-accounts", "team"],
+  ]) {
     await t.test(savedView, async () => {
-      const harness = createHarness({mode:"team-test",savedView,loadBootstrap:async()=>({...bootstrap,permissions:["master.read"]})});
+      const harness = createHarness({ mode: "team-test", savedView, loadBootstrap: async () => ({ ...bootstrap, permissions: ["master.read"] }) });
       try {
-        harness.render(); harness.runMountEffects(); await new Promise(resolve=>setImmediate(resolve));
-        const tree=harness.render();
-        assert.equal(findNode(tree,n=>n.type==="ProductionMasterData").props.destination,destination);
-      } finally {harness.cleanup();}
+        harness.render();
+        harness.runMountEffects();
+        await new Promise((resolve) => setImmediate(resolve));
+        const tree = harness.render();
+        assert.equal(findNode(tree, (n) => n.type === "ProductionMasterData").props.destination, destination);
+      } finally {
+        harness.cleanup();
+      }
     });
   }
 });
 
 test("non-admin estimators see libraries and help without rate or account access", async () => {
-  const harness=createHarness({mode:"team-test",loadBootstrap:async()=>({...bootstrap,permissions:["estimate.read"]})});
+  const harness = createHarness({ mode: "team-test", loadBootstrap: async () => ({ ...bootstrap, permissions: ["estimate.read"] }) });
   try {
-    harness.render();harness.runMountEffects();await new Promise(resolve=>setImmediate(resolve));const tree=harness.render();
-    for(const label of ["Module Templates","Labor Packages"]) assert.ok(navLeaf(tree,label),label);
+    harness.render();
+    harness.runMountEffects();
+    await new Promise((resolve) => setImmediate(resolve));
+    const tree = harness.render();
+    for (const label of ["Module Templates", "Labor Packages"]) assert.ok(navLeaf(tree, label), label);
     // The manual and the issue list left the sidebar for the "?" menu in the top bar (lean menu phase 1).
-    for(const label of ["Employee Manual","Report & Track Issues"]) assert.equal(navLeaf(tree,label),undefined,label);
-    const help=tree=>findNode(tree,n=>n.type==="button"&&n.props["data-guide"]==="nav.help");
-    assert.equal(help(tree).props["aria-expanded"],false);
-    assert.equal(findNode(tree,n=>n.props["data-guide"]==="nav.manual"),undefined);
+    for (const label of ["Employee Manual", "Report & Track Issues"]) assert.equal(navLeaf(tree, label), undefined, label);
+    const help = (tree) => findNode(tree, (n) => n.type === "button" && n.props["data-guide"] === "nav.help");
+    assert.equal(help(tree).props["aria-expanded"], false);
+    assert.equal(
+      findNode(tree, (n) => n.props["data-guide"] === "nav.manual"),
+      undefined,
+    );
     help(tree).props.onClick();
-    const opened=harness.render();
-    assert.equal(help(opened).props["aria-expanded"],true);
-    for(const mark of ["nav.manual","nav.support"]) assert.equal(findNode(opened,n=>n.props["data-guide"]===mark).props.role,"menuitem",mark);
-    for(const label of ["Engineering rates","User Accounts & Permissions","Customers"]) assert.equal(navLeaf(tree,label),undefined,label);
-  } finally {harness.cleanup();}
+    const opened = harness.render();
+    assert.equal(help(opened).props["aria-expanded"], true);
+    for (const mark of ["nav.manual", "nav.support"]) assert.equal(findNode(opened, (n) => n.props["data-guide"] === mark).props.role, "menuitem", mark);
+    for (const label of ["Engineering rates", "User Accounts & Permissions", "Customers"]) assert.equal(navLeaf(tree, label), undefined, label);
+  } finally {
+    harness.cleanup();
+  }
 });
 
 test("rate visibility still requires management role as well as master.read", async (t) => {
-  for(const role of ["User","Admin"]){await t.test(role,async()=>{
-    const harness=createHarness({mode:"team-test",savedView:"rates",loadBootstrap:async()=>({...bootstrap,user:{...bootstrap.user,role},permissions:["master.read"]})});
-    try {harness.render();harness.runMountEffects();await new Promise(resolve=>setImmediate(resolve));const tree=harness.render();assert.equal(Boolean(navLeaf(tree,"Engineering rates")),role==="Admin");assert.equal(Boolean(findNode(tree,n=>n.type==="ProductionEngineeringRates")),role==="Admin");}finally{harness.cleanup();}
-  });}
+  for (const role of ["User", "Admin"]) {
+    await t.test(role, async () => {
+      const harness = createHarness({ mode: "team-test", savedView: "rates", loadBootstrap: async () => ({ ...bootstrap, user: { ...bootstrap.user, role }, permissions: ["master.read"] }) });
+      try {
+        harness.render();
+        harness.runMountEffects();
+        await new Promise((resolve) => setImmediate(resolve));
+        const tree = harness.render();
+        assert.equal(Boolean(navLeaf(tree, "Engineering rates")), role === "Admin");
+        assert.equal(Boolean(findNode(tree, (n) => n.type === "ProductionEngineeringRates")), role === "Admin");
+      } finally {
+        harness.cleanup();
+      }
+    });
+  }
 });
 
-test("reports have distinct restored destinations and preserve the dirty exit guard", async(t)=>{
-  for(const savedView of ["reports","summary-reports"]){await t.test(savedView,async()=>{
-    const harness=createHarness({mode:"team-test",savedView,loadBootstrap:async()=>({...bootstrap,permissions:["report.read"]})});
-    try {harness.render();harness.runMountEffects();await new Promise(resolve=>setImmediate(resolve));const tree=harness.render();
-      const label=savedView==="reports"?"Operational Reports":"Summary Reports";
-      assert.equal(navLeaf(tree,label).props["aria-current"],"page");
-      assert.ok(findNode(tree,n=>n.type===(savedView==="reports"?"ReportScreens":"ProductionReports")));
-      if(savedView==="reports") {findNode(tree,n=>n.type==="ReportScreens").props.onDirtyChange(true);globalThis.window.confirm=()=>false;await navLeaf(tree,"Summary Reports").props.onClick(plainClick());assert.ok(findNode(harness.render(),n=>n.type==="ReportScreens"));}
-    }finally{harness.cleanup();}
-  });}
+test("reports have distinct restored destinations and preserve the dirty exit guard", async (t) => {
+  for (const savedView of ["reports", "summary-reports"]) {
+    await t.test(savedView, async () => {
+      const harness = createHarness({ mode: "team-test", savedView, loadBootstrap: async () => ({ ...bootstrap, permissions: ["report.read"] }) });
+      try {
+        harness.render();
+        harness.runMountEffects();
+        await new Promise((resolve) => setImmediate(resolve));
+        const tree = harness.render();
+        const label = savedView === "reports" ? "Operational Reports" : "Summary Reports";
+        assert.equal(navLeaf(tree, label).props["aria-current"], "page");
+        assert.ok(findNode(tree, (n) => n.type === (savedView === "reports" ? "ReportScreens" : "ProductionReports")));
+        if (savedView === "reports") {
+          findNode(tree, (n) => n.type === "ReportScreens").props.onDirtyChange(true);
+          globalThis.window.confirm = () => false;
+          await navLeaf(tree, "Summary Reports").props.onClick(plainClick());
+          assert.ok(findNode(harness.render(), (n) => n.type === "ReportScreens"));
+        }
+      } finally {
+        harness.cleanup();
+      }
+    });
+  }
 });
 
-test("active groups can collapse and reopen without changing destination",async()=>{
-  const harness=createHarness({mode:"team-test",savedView:"suppliers",loadBootstrap:async()=>({...bootstrap,permissions:["master.read"]})});
+// Owner 2026-11-22: a group opens or closes only from its heading, so the menu never moves under the pointer. A closed
+// group that holds the open screen stays closed and marks its heading (active-group); opening a screen leaves groups alone.
+test("groups open and close only from their heading, never by opening a screen", async () => {
+  const harness = createHarness({ mode: "team-test", savedView: "suppliers", loadBootstrap: async () => ({ ...bootstrap, permissions: ["master.read"] }) });
   try {
-    harness.render();harness.runMountEffects();await new Promise(resolve=>setImmediate(resolve));
-    const heading=tree=>findNode(tree,n=>n.type==="button"&&n.props.title==="NavGroup.system");
-    assert.equal(heading(harness.render()).props["aria-expanded"],true);
+    harness.render();
+    harness.runMountEffects();
+    await new Promise((resolve) => setImmediate(resolve));
+    const heading = (tree) => findNode(tree, (n) => n.type === "button" && n.props.title === "NavGroup.system");
+    const group = (tree) =>
+      findNode(tree, (n) => n.type === "div" && String(n.props.className).startsWith("nav-group ") && findNode(n, (c) => c.type === "button" && c.props.title === "NavGroup.system"));
+    assert.equal(heading(harness.render()).props["aria-expanded"], false, "the group of the open screen stays closed");
+    assert.equal(group(harness.render()).props.className, "nav-group active-group", "and its heading carries the mark");
     heading(harness.render()).props.onClick();
-    assert.equal(heading(harness.render()).props["aria-expanded"],false);
-    assert.equal(findNode(harness.render(),n=>n.type==="ProductionMasterData").props.destination,"suppliers");
+    assert.equal(heading(harness.render()).props["aria-expanded"], true);
+    assert.equal(findNode(harness.render(), (n) => n.type === "ProductionMasterData").props.destination, "suppliers");
+    await navLeaf(harness.render(), "Employees").props.onClick(plainClick());
+    assert.equal(findNode(harness.render(), (n) => n.type === "ProductionMasterData").props.destination, "employees");
+    assert.equal(heading(harness.render()).props["aria-expanded"], true, "opening a screen leaves an open group open");
     heading(harness.render()).props.onClick();
-    assert.equal(heading(harness.render()).props["aria-expanded"],true);
-  }finally{harness.cleanup();}
+    assert.equal(heading(harness.render()).props["aria-expanded"], false);
+    await navLeaf(harness.render(), "Suppliers").props.onClick(plainClick());
+    assert.equal(heading(harness.render()).props["aria-expanded"], false, "and a closed group closed");
+  } finally {
+    harness.cleanup();
+  }
 });
 
-test("mobile leaf navigation closes the drawer only after accepting navigation",async()=>{
-  const harness=createHarness({mode:"team-test",savedView:"reports",loadBootstrap:async()=>({...bootstrap,permissions:["report.read"]})});
+test("mobile leaf navigation closes the drawer only after accepting navigation", async () => {
+  const harness = createHarness({ mode: "team-test", savedView: "reports", loadBootstrap: async () => ({ ...bootstrap, permissions: ["report.read"] }) });
   try {
-    globalThis.window.matchMedia=()=>({matches:true});
-    harness.render();harness.runMountEffects();await new Promise(resolve=>setImmediate(resolve));
-    const tree=harness.render();await navLeaf(tree,"Summary Reports").props.onClick(plainClick());
-    assert.ok(findNode(harness.render(),n=>n.props.className==="app sidebar-collapsed"));
-    assert.ok(findNode(harness.render(),n=>n.type==="ProductionReports"));
-  }finally{harness.cleanup();}
+    globalThis.window.matchMedia = () => ({ matches: true });
+    harness.render();
+    harness.runMountEffects();
+    await new Promise((resolve) => setImmediate(resolve));
+    const tree = harness.render();
+    await navLeaf(tree, "Summary Reports").props.onClick(plainClick());
+    assert.ok(findNode(harness.render(), (n) => n.props.className === "app sidebar-collapsed"));
+    assert.ok(findNode(harness.render(), (n) => n.type === "ProductionReports"));
+  } finally {
+    harness.cleanup();
+  }
 });
 
-test("a menu entry is a link: Ctrl/Cmd+Click is left to the browser, a plain click stays in the app",async()=>{
-  const harness=createHarness({mode:"team-test",savedView:"reports",loadBootstrap:async()=>({...bootstrap,permissions:["report.read"]})});
+test("a menu entry is a link: Ctrl/Cmd+Click is left to the browser, a plain click stays in the app", async () => {
+  const harness = createHarness({ mode: "team-test", savedView: "reports", loadBootstrap: async () => ({ ...bootstrap, permissions: ["report.read"] }) });
   try {
-    harness.render();harness.runMountEffects();await new Promise(resolve=>setImmediate(resolve));
-    assert.equal(navLeaf(harness.render(),"Summary Reports").props.href,"#/summary-reports");
-    for(const modifier of ["ctrlKey","metaKey","shiftKey"]){
-      const event={...plainClick(),[modifier]:true};
-      await navLeaf(harness.render(),"Summary Reports").props.onClick(event);
-      assert.equal(event.prevented,false,modifier);
-      assert.ok(findNode(harness.render(),n=>n.type==="ReportScreens"),modifier);
+    harness.render();
+    harness.runMountEffects();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(navLeaf(harness.render(), "Summary Reports").props.href, "#/summary-reports");
+    for (const modifier of ["ctrlKey", "metaKey", "shiftKey"]) {
+      const event = { ...plainClick(), [modifier]: true };
+      await navLeaf(harness.render(), "Summary Reports").props.onClick(event);
+      assert.equal(event.prevented, false, modifier);
+      assert.ok(
+        findNode(harness.render(), (n) => n.type === "ReportScreens"),
+        modifier,
+      );
     }
-    const event=plainClick();
-    await navLeaf(harness.render(),"Summary Reports").props.onClick(event);
-    assert.equal(event.prevented,true);
-    assert.ok(findNode(harness.render(),n=>n.type==="ProductionReports"));
-  }finally{harness.cleanup();}
+    const event = plainClick();
+    await navLeaf(harness.render(), "Summary Reports").props.onClick(event);
+    assert.equal(event.prevented, true);
+    assert.ok(findNode(harness.render(), (n) => n.type === "ProductionReports"));
+  } finally {
+    harness.cleanup();
+  }
 });

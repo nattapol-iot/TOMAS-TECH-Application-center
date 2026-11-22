@@ -22,7 +22,7 @@ const viewsIn = (text) => [...text.matchAll(/\{ view: "([a-z-]+)"|\{"view":"([a-
 test("the sidebar holds the 40 entries in seven work-order groups; nothing is twice", async () => {
   const shell = await source("app/system/ProductionApp.tsx");
   const nav = shell.slice(shell.indexOf("const NAV:"), shell.indexOf("/** The one rule for which menu entries"));
-  const sections = nav.split(/\n {2}\{ (?=items: \[|group: ")/).slice(1);
+  const sections = nav.split(/\n {2}\{\s+(?=items: \[|group: ")/).slice(1);
   assert.equal(sections.length, GROUPS.length);
   for (const [index, [group, views]] of GROUPS.entries()) {
     assert.equal(/^group: "([^"]+)"/.exec(sections[index])?.[1] ?? null, group);
@@ -34,9 +34,9 @@ test("the sidebar holds the 40 entries in seven work-order groups; nothing is tw
   // The two help screens are entries of the "?" menu, and stay open to everyone.
   const help = shell.slice(shell.indexOf("const HELP_NAV"), shell.indexOf("function allowedViews"));
   assert.deepEqual(viewsIn(help), HELP);
-  assert.match(shell, /allowed\.push\("profile", "signature", \.\.\.HELP_NAV\.map\(item => item\.view\)\);/);
+  assert.match(shell, /allowed\.push\("profile", "signature", \.\.\.HELP_NAV\.map\(\(?item\)? => item\.view\)\);/);
   // Every one of the 42 is still a view the shell knows.
-  const viewType = shell.slice(shell.indexOf("type View = CrmView"), shell.indexOf("/** unlessPermission hides"));
+  const viewType = shell.slice(shell.indexOf("type View ="), shell.indexOf("/** unlessPermission hides"));
   for (const view of [...all, ...HELP]) assert.ok(view.startsWith("crm-") || viewType.includes(`"${view}"`), `unknown view ${view}`);
 });
 
@@ -49,22 +49,23 @@ test("moving an entry kept its permission rule", async () => {
     '{ view: "resources", label: "Team overview", icon: "users", anyPermissions: ["team.board", "schedule.read"] }',
     '{ view: "inquiries", label: "RFQ intake & estimating", icon: "inbox", permission: "inquiry.read" }',
     '{ view: "my-assignments", label: "My Assignments", icon: "play", permission: "visit.read" }',
-    '{"view":"visit-master","label":"Site Visit Reference Data","icon":"layers","permission":"visit.read"}',
-    '{"view":"customers","label":"Customers","icon":"users","permission":"master.read","unlessPermission":"crm.read"}',
+    '{ view: "visit-master", label: "Site Visit Reference Data", icon: "layers", permission: "visit.read" }',
+    '{ view: "customers", label: "Customers", icon: "users", permission: "master.read", unlessPermission: "crm.read" }',
     '{ view: "estimates", label: "Estimate Cost", icon: "file", permission: "estimate.read" }',
-    '{"view":"rates","label":"Engineering rates","icon":"chart","permission":"master.read","rateAccess":true}',
+    '{ view: "rates", label: "Engineering rates", icon: "chart", permission: "master.read", rateAccess: true }',
     '{ view: "projects", label: "Projects", icon: "folder", permission: "project.read" }',
-    '{"view":"schedule-templates","label":"Master Schedule","icon":"calendar"}',
+    '{ view: "schedule-templates", label: "Master Schedule", icon: "calendar" }',
     '{ view: "installed-base", label: "Installed Base", icon: "layers", permission: "asset.read" }',
     '{ view: "site-monitor", label: "Site Monitor", icon: "cpu", permission: "monitor.read" }',
     '{ view: "approvals", label: "Approvals", icon: "checkCircle", permission: "procurement.approve" }',
     '{ view: "knowledge", label: "Knowledge Hub", icon: "book", permission: "knowledge.view" }',
     '{ view: "downloads", label: "Download Center", icon: "download" }',
-    '{"view":"employees","label":"Employees","icon":"user","permission":"master.read"}',
-    '{"view":"suppliers","label":"Suppliers","icon":"truck","permission":"master.read"}',
-    '{"view":"manual","label":"Employee Manual","icon":"book"}',
-    '{"view":"support","label":"Report & Track Issues","icon":"inbox"}',
-  ]) assert.ok(nav.includes(entry), entry);
+    '{ view: "employees", label: "Employees", icon: "user", permission: "master.read" }',
+    '{ view: "suppliers", label: "Suppliers", icon: "truck", permission: "master.read" }',
+    '{ view: "manual", label: "Employee Manual", icon: "book" }',
+    '{ view: "support", label: "Report & Track Issues", icon: "inbox" }',
+  ])
+    assert.ok(nav.includes(entry), entry);
 });
 
 test("groups start closed, show their count, and the old stored names are not read", async () => {
@@ -73,33 +74,55 @@ test("groups start closed, show their count, and the old stored names are not re
   assert.match(shell, /const DEFAULT_COLLAPSED_GROUPS = NAV_GROUPS;/);
   assert.match(shell, /const saved = stored === null \? DEFAULT_COLLAPSED_GROUPS : JSON\.parse\(stored\);/);
   assert.match(shell, /saved\.filter\(\(group\): group is string => NAV_GROUPS\.includes\(group\)\)/);
-  // The group of the open screen shows open whatever is stored.
-  assert.match(shell, /collapsedNavGroups\.includes\(section\.group\) && \(!activeGroup \|\| collapsedActiveGroup === section\.group\)/);
-  assert.match(shell, /aria-expanded=\{!collapsed\} aria-controls=\{`nav-group-\$\{sectionIndex\}`\} title=\{t\(section\.group\)\}/);
-  assert.match(shell, /<span>\{t\(section\.group\)\}<\/span><small>\{section\.items\.length\}<\/small><Icon name="chevronDown" \/>/);
-  assert.match(css, /\.nav-group-toggle small \{ margin-left: auto;/);
-  assert.match(css, /\.sidebar-collapsed \.nav-group-toggle small \{ display: none; \}/);
+  // A group opens or closes only from its heading (owner 2026-11-22): a menu click never opens or closes one by itself,
+  // so the menu does not move under the pointer. A closed group holding the open screen marks its heading instead.
+  assert.match(shell, /const collapsed = Boolean\(section\.group && collapsedNavGroups\.includes\(section\.group\)\);/);
+  assert.doesNotMatch(shell, /collapsedActiveGroup/i);
+  // Only the stored choice and the heading change a group; opening a screen (setView) does not.
+  assert.equal(shell.match(/setCollapsedNavGroups\(/g)?.length, 2);
+  assert.match(css, /\.active-group > \.nav-group-toggle\[aria-expanded="false"\] \{\s*background: var\(--blue-soft\);\s*box-shadow: inset 3px 0 0 var\(--blue\);\s*\}/);
+  assert.match(shell, /aria-expanded=\{!collapsed\}\s+aria-controls=\{`nav-group-\$\{sectionIndex\}`\}\s+title=\{t\(section\.group\)\}/);
+  assert.match(shell, /<span>\{t\(section\.group\)\}<\/span>\s*<small>\{section\.items\.length\}<\/small>\s*<Icon name="chevronDown" \/>/);
+  assert.match(css, /\.nav-group-toggle small \{\s*margin-left: auto;/);
+  assert.match(css, /\.sidebar-collapsed \.nav-group-toggle small \{\s*display: none;\s*\}/);
   for (const [key, en, th] of [
-    ["NavGroup.sales", "SALES", "งานขาย"], ["NavGroup.estimating", "ESTIMATING", "ประมาณราคา"],
-    ["NavGroup.projects", "PROJECTS & DELIVERY", "โครงการและส่งมอบ"], ["NavGroup.procurement", "PROCUREMENT & STOCK", "จัดซื้อและคลัง"],
-    ["NavGroup.team", "TEAM & KNOWLEDGE", "ทีมและความรู้"], ["NavGroup.system", "SYSTEM", "ตั้งค่าระบบ"], ["Nav.help", "Help", "ช่วยเหลือ"],
-  ]) assert.match(i18n, new RegExp(`"${key.replace(".", "\\.")}": \\{ en: "${en}", th: "${th}", jp: "[^"]+" \\}`), key);
+    ["NavGroup.sales", "SALES", "งานขาย"],
+    ["NavGroup.estimating", "ESTIMATING", "ประมาณราคา"],
+    ["NavGroup.projects", "PROJECTS & DELIVERY", "โครงการและส่งมอบ"],
+    ["NavGroup.procurement", "PROCUREMENT & STOCK", "จัดซื้อและคลัง"],
+    ["NavGroup.team", "TEAM & KNOWLEDGE", "ทีมและความรู้"],
+    ["NavGroup.system", "SYSTEM", "ตั้งค่าระบบ"],
+    ["Nav.help", "Help", "ช่วยเหลือ"],
+  ])
+    assert.match(i18n, new RegExp(`"${key.replace(".", "\\.")}": \\{ en: "${en}", th: "${th}", jp: "[^"]+" \\}`), key);
 });
 
 test("the top bar ? menu opens the manual, the guides, the issue list and the download center", async () => {
   const [shell, ui] = await Promise.all([source("app/system/ProductionApp.tsx"), source("app/system/ui.tsx")]);
-  assert.match(shell, /<button className="icon-btn" type="button" data-guide="nav\.help" aria-haspopup="menu" aria-expanded=\{helpOpen\} aria-label=\{t\("Nav\.help"\)\} title=\{t\("Nav\.help"\)\}/);
-  assert.match(shell, /\{helpOpen \? <div className="menu" role="menu" aria-label=\{t\("Nav\.help"\)\}>/);
-  assert.match(shell, /role="menuitem" data-guide="nav\.manual" onClick=\{async \(\) => \{ setHelpOpen\(false\); \(await setView\("manual"\)\); \}\}><Icon name="book" \/>\{employeeManualLabel\(language\)\}/);
-  assert.match(shell, /role="menuitem" onClick=\{\(\) => \{ setHelpOpen\(false\); setGuideOpen\(true\); \}\}><Icon name="play" \/>\{t\("Guide\.open"\)\}/);
-  assert.match(shell, /role="menuitem" data-guide="nav\.support" onClick=\{\(\) => \{ setHelpOpen\(false\); void openSupport\(null\); \}\}><Icon name="inbox" \/>\{t\("Report & Track Issues"\)\}/);
-  assert.match(shell, /role="menuitem" onClick=\{async \(\) => \{ setHelpOpen\(false\); \(await setView\("downloads"\)\); \}\}><Icon name="download" \/>\{t\("Download Center"\)\}/);
+  assert.match(
+    shell,
+    /<button\s+className="icon-btn"\s+type="button"\s+data-guide="nav\.help"\s+aria-haspopup="menu"\s+aria-expanded=\{helpOpen\}\s+aria-label=\{t\("Nav\.help"\)\}\s+title=\{t\("Nav\.help"\)\}/,
+  );
+  assert.match(shell, /\{helpOpen \? \(?\s*<div className="menu" role="menu" aria-label=\{t\("Nav\.help"\)\}>/);
+  assert.match(
+    shell,
+    /role="menuitem"\s+data-guide="nav\.manual"\s+onClick=\{async \(\) => \{\s*setHelpOpen\(false\);\s*\(?await setView\("manual"\)\)?;\s*\}\}\s*>\s*<Icon name="book" \/>\s*\{employeeManualLabel\(language\)\}/,
+  );
+  assert.match(shell, /role="menuitem"\s+onClick=\{\(\) => \{\s*setHelpOpen\(false\);\s*setGuideOpen\(true\);\s*\}\}\s*>\s*<Icon name="play" \/>\s*\{t\("Guide\.open"\)\}/);
+  assert.match(
+    shell,
+    /role="menuitem"\s+data-guide="nav\.support"\s+onClick=\{\(\) => \{\s*setHelpOpen\(false\);\s*void openSupport\(null\);\s*\}\}\s*>\s*<Icon name="inbox" \/>\s*\{t\("Report & Track Issues"\)\}/,
+  );
+  assert.match(shell, /role="menuitem"\s+onClick=\{async \(\) => \{\s*setHelpOpen\(false\);\s*\(?await setView\("downloads"\)\)?;\s*\}\}\s*>\s*<Icon name="download" \/>\s*\{t\("Download Center"\)\}/);
   // It closes on Escape and on a press outside, and the three top-bar menus never stay open together.
   assert.match(shell, /if \(event\.key === "Escape"\) setHelpOpen\(false\);/);
   assert.match(shell, /!event\.target\.closest\('\[data-menu="help"\]'\)\) setHelpOpen\(false\);/);
-  assert.match(shell, /setUserOpen\(\(value\) => !value\); setNotificationOpen\(false\); setHelpOpen\(false\);/);
+  assert.match(shell, /setUserOpen\(\(value\) => !value\);\s*setNotificationOpen\(false\);\s*setHelpOpen\(false\);/);
   // The profile menu keeps its four entries.
-  assert.match(shell, /\{userOpen \? <div className="menu" role="menu">[\s\S]{0,200}t\("My Profile"\)[\s\S]{0,200}t\("My signature"\)[\s\S]{0,200}employeeManualLabel\(language\)[\s\S]{0,200}t\("Logout"\)/);
+  assert.match(
+    shell,
+    /\{userOpen \? \(?\s*<div className="menu" role="menu">[\s\S]{0,400}t\("My Profile"\)[\s\S]{0,400}t\("My signature"\)[\s\S]{0,400}employeeManualLabel\(language\)[\s\S]{0,400}t\("Logout"\)/,
+  );
   assert.match(ui, /help: <><circle cx="12" cy="12" r="10" \/>/);
 });
 

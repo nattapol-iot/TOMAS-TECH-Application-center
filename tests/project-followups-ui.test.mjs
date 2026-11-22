@@ -226,7 +226,7 @@ test("the portfolio Timeline goes full screen, with an overlay where the browser
   assert.match(hook, /if \(event\.key === "Escape" && !event\.defaultPrevented && !document\.querySelector\(ESCAPE_TAKEN\)\) setOverlay\(false\);/);
   assert.match(hook, /document\.body\.classList\.add\(OVERLAY_BODY_CLASS\)/);
   assert.match(hook, /document\.body\.classList\.remove\(OVERLAY_BODY_CLASS\)/);
-  assert.match(read("app/globals.css"), /body\.fullscreen-overlay-open \{ overflow: hidden; \}/);
+  assert.match(read("app/globals.css"), /body\.fullscreen-overlay-open \{\s*overflow: hidden;\s*\}/);
 
   // The whole block goes full screen, sort included, and the button says which way it goes.
   assert.match(

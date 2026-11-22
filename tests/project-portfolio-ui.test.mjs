@@ -224,7 +224,7 @@ test("Overview has a List | Timeline toggle on the shared Gantt, remembered per 
   assert.match(gantt, /onOpen: \(\) => openPlan\(item\.id, task\.id\)/);
   assert.match(gantt, /const openPlan = openProjectSchedule \? \(id: number, taskId\?: number\) => \{ void fullscreen\.exit\(\); openProjectSchedule\(id, taskId\); \}/);
   // The old Project Timeline menu opens the portfolio in Timeline mode; the old screen is gone.
-  assert.match(shell, /view === "project-timeline" \? <ProductionProjects key="project-timeline" \{\.\.\.common\} teamTestMode=\{IS_TEAM_TEST_MODE\} initialMode="timeline"/);
+  assert.match(shell, /view === "project-timeline" \? \(?\s*<ProductionProjects key="project-timeline" \{\.\.\.common\} teamTestMode=\{IS_TEAM_TEST_MODE\} initialMode="timeline"/);
   assert.doesNotMatch(shell, /ProductionProjectTimeline/);
 });
 
