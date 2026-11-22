@@ -45,6 +45,9 @@ test("the Projects tabs and the old timeline link wear the switch; V1 is display
   // V2: the switch shares the tabs' row instead of a row of its own.
   assert.match(css, /\.project-v2 > \.project-look-bar \{\s*grid-column: 2;\s*grid-row: 1;/);
   assert.match(css, /\.project-v2 > \.tabs \{\s*grid-column: 1;\s*grid-row: 1;\s*\}/);
+  // Two classes, so pegasus-skin.css linked after this sheet (as the build did) cannot turn the grid back into its flex column.
+  assert.match(css, /\.pg-skin\.project-v2 \{\s*display: grid;\s*grid-template-columns: minmax\(0, 1fr\) auto;/);
+  assert.doesNotMatch(css, /\n\.project-v2 \{/);
 });
 
 test("every rule of project-v2.css is the switch's own or sits under .project-v2", async () => {
@@ -53,7 +56,7 @@ test("every rule of project-v2.css is the switch's own or sits under .project-v2
   assert.ok(selectors.length > 20, "rules were read");
   for (const group of selectors)
     for (const selector of group.split(",").map((part) => part.trim()))
-      assert.ok(selector === ".project-v2" || selector.startsWith(".project-v2 ") || selector.startsWith(".project-look-"), `unscoped selector: ${selector}`);
+      assert.ok(selector === ".pg-skin.project-v2" || selector.startsWith(".project-v2 ") || selector.startsWith(".project-look-"), `unscoped selector: ${selector}`);
 });
 
 test("the V2 Overview is a Pegasus list: count in the title, health summary bar, More, and the filters in the column headers", async () => {

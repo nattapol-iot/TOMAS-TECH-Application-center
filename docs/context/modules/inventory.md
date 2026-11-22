@@ -4,7 +4,7 @@
 
 รับของ เบิกของ stock ledger และการควบคุมยอด
 
-Evidence: snapshot `fa01e209`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
+Evidence: snapshot `62ef25b2`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
 
 ## Read only the operation you change
 
