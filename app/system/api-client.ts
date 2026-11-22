@@ -296,6 +296,7 @@ export type InquirySummary = {
   number: string;
   inquiryDate: string;
   customerId: number;
+  customerCode?: string;
   customerName: string;
   endUserCustomerId?: number | null;
   endUserName?: string | null;

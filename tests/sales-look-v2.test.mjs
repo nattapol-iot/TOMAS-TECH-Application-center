@@ -52,9 +52,38 @@ test("sales-v2.css reaches only a screen opened in V2, and uses only tokens the 
       assert.match(selector, /^(?:\.sales-v2(?:$|[\s:.])|\.sales-look-(?:v1|bar|label|switch)\b)/, selector);
     }
   }
-  const shared = ["background", "foreground", "primary", "primary-fg", "muted", "muted-fg", "accent", "accent-fg", "destructive", "border", "input", "ring",
-    "emerald-fg", "red-fg", "amber-fg", "slate-fg", "violet-fg", "pink-fg", "success-bg", "danger-bg", "warning-bg", "neutral-bg", "violet-bg", "pink-bg",
-    "ease", "divider", "row-line", "primary-10", "row-hover", "focus"];
+  const shared = [
+    "background",
+    "foreground",
+    "primary",
+    "primary-fg",
+    "muted",
+    "muted-fg",
+    "accent",
+    "accent-fg",
+    "destructive",
+    "border",
+    "input",
+    "ring",
+    "emerald-fg",
+    "red-fg",
+    "amber-fg",
+    "slate-fg",
+    "violet-fg",
+    "pink-fg",
+    "success-bg",
+    "danger-bg",
+    "warning-bg",
+    "neutral-bg",
+    "violet-bg",
+    "pink-bg",
+    "ease",
+    "divider",
+    "row-line",
+    "primary-10",
+    "row-hover",
+    "focus",
+  ];
   for (const [, name] of css.matchAll(/var\(--pg-([a-z0-9-]+)/g)) assert.ok(shared.includes(name), `--pg-${name} is not one of the skin's tokens`);
   assert.equal((css.match(/#[0-9a-fA-F]{3,6}\b/g) ?? []).length, 0, "no fixed colours");
 });
@@ -73,7 +102,10 @@ test("the deal summary bar counts open deals, each open stage, then Won and Lost
 
 test("the RFQ summary bar counts what pressing a cell lists", () => {
   assert.deepEqual([...INQUIRY_STATUSES], ["New", "Estimating", "Waiting Supplier Price", "Estimate Completed", "Engineering Review", "Approved", "Cancelled"]);
-  const counts = [{ status: "New", count: 4 }, { status: "Approved", count: 2 }];
+  const counts = [
+    { status: "New", count: 4 },
+    { status: "Approved", count: 2 },
+  ];
   assert.equal(inquiryStatusCell(counts, "All status"), 6);
   assert.equal(inquiryStatusCell(counts, "New"), 4);
   assert.equal(inquiryStatusCell(counts, "Cancelled"), 0);
@@ -81,17 +113,24 @@ test("the RFQ summary bar counts what pressing a cell lists", () => {
 
 test("the V2 lists lay out the Pegasus way while V1 keeps its markup", async () => {
   const [crm, inquiry, route, client] = await Promise.all([
-    read("app/system/production/CrmScreens.tsx"), read("app/system/production/InquiryScreens.tsx"),
-    read("backend-node/src/routes/inquiries.ts"), read("app/system/api-client.ts"),
+    read("app/system/production/CrmScreens.tsx"),
+    read("app/system/production/InquiryScreens.tsx"),
+    read("backend-node/src/routes/inquiries.ts"),
+    read("app/system/api-client.ts"),
   ]);
   // Deals: summary bar instead of the overview panel on the lists, the dashboard keeps its panel; stage first, edit on the left.
   assert.match(crm, /const summary=v2&&mode!=="crm-dashboard";/);
   assert.match(crm, /data-guide="crm\.summary"/);
-  assert.match(crm, /\{v2\?<>\{onEdit\?<td className="pg-acts"><button type="button" className="pg-act"[^]*?\{stageCell\}\{dealCell\}\{customerCell\}<\/>:<>\{dealCell\}\{customerCell\}\{stageCell\}<\/>\}/);
+  assert.match(
+    crm,
+    /\{v2\?<>\{onEdit\?<td className="pg-acts"><button type="button" className="pg-act"[^]*?\{stageCell\}\{dealCell\}\{customerCell\}<\/>:<>\{dealCell\}\{customerCell\}\{stageCell\}<\/>\}/,
+  );
   // RFQ: the counts come with the page only when V2 asks, over every filter but the status.
   assert.match(inquiry, /summary: v2 \|\| undefined,/);
   assert.match(inquiry, /data-guide="inquiry\.summary"/);
-  assert.match(inquiry, /\{v2 \? null : <StatusLegend /);
+  assert.match(inquiry, /\{v2 \? null : \(?\s*<StatusLegend\s/);
+  // The customer code comes with the row; the app-wide list has active customers only (closed or merged ones showed "—").
+  assert.match(inquiry, /<strong>\{item\.customerCode \|\| customerItem\?\.code \|\| "—"\}<\/strong>/);
   assert.match(client, /apiRequest<PagedResult<InquirySummary> & \{ statusSummary\?: InquiryStatusCount\[\] \}>/);
   assert.match(route, /const summary = booleanQuery\(query\.summary\);/);
   assert.match(route, /\$\{listFrom\}\r?\n\s+AND \(@status IS NULL OR i\.status = @status\)/);
