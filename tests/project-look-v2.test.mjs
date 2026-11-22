@@ -37,6 +37,14 @@ test("the Projects tabs and the old timeline link wear the switch; V1 is display
   assert.match(scope, /data-guide="project\.look"/);
   assert.match(scope, /data-guide="project\.lookV2"/);
   assert.match(css, /\.project-look-v1 \{\s*display: contents;\s*\}/);
+  // The tab's body: 14px under the tabs in V1, as before. In V2 a 12px column, because the Pegasus skin spaces only its own
+  // children and the body sits one level down (owner 2026-11-22: "UI มันแปลกๆ", every block touched the next).
+  assert.match(shell, /<div className="project-look-body">/);
+  assert.match(css, /\.project-look-body \{\s*margin-top: 14px;/);
+  assert.match(css, /\.project-v2 > \.project-look-body \{\s*display: flex;\s*flex-direction: column;\s*gap: 12px;\s*margin-top: 0;\s*\}/);
+  // V2: the switch shares the tabs' row instead of a row of its own.
+  assert.match(css, /\.project-v2 > \.project-look-bar \{\s*grid-column: 2;\s*grid-row: 1;/);
+  assert.match(css, /\.project-v2 > \.tabs \{\s*grid-column: 1;\s*grid-row: 1;\s*\}/);
 });
 
 test("every rule of project-v2.css is the switch's own or sits under .project-v2", async () => {
@@ -44,7 +52,8 @@ test("every rule of project-v2.css is the switch's own or sits under .project-v2
   const selectors = [...css.matchAll(/([^{}]+)\{[^{}]*\}/g)].map((match) => match[1].trim()).filter((selector) => selector && !selector.startsWith("@"));
   assert.ok(selectors.length > 20, "rules were read");
   for (const group of selectors)
-    for (const selector of group.split(",").map((part) => part.trim())) assert.ok(selector.startsWith(".project-v2 ") || selector.startsWith(".project-look-"), `unscoped selector: ${selector}`);
+    for (const selector of group.split(",").map((part) => part.trim()))
+      assert.ok(selector === ".project-v2" || selector.startsWith(".project-v2 ") || selector.startsWith(".project-look-"), `unscoped selector: ${selector}`);
 });
 
 test("the V2 Overview is a Pegasus list: count in the title, health summary bar, More, and the filters in the column headers", async () => {

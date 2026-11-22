@@ -1556,7 +1556,8 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
                       link={null}
                     />
                   ) : null}
-                  <div style={{ marginTop: 14 }}>
+                  {/* project-v2.css: 14px under the tabs in V1; in V2 a 12px column, as the Pegasus skin spaces its own children. */}
+                  <div className="project-look-body">
                     {projectTab === "cost" && seesProjectCost && bootstrap.permissions.includes("schedule.read") ? (
                       <ProjectCostScreen bootstrap={bootstrap} openProjectSchedule={openProjectSchedule} />
                     ) : projectTab === "portfolio" || projectTab === "cost" || !bootstrap.permissions.includes("schedule.read") ? (

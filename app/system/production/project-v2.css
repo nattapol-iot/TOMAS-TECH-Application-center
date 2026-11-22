@@ -57,6 +57,42 @@
   outline-offset: 1px;
 }
 
+/* The tab's content sits 14px under the tabs (V1 kept the same space as an inline style). */
+.project-look-body {
+  margin-top: 14px;
+  min-width: 0;
+}
+
+/*
+ * V2 layout: the switch shares the tabs' row, on the right, instead of a row of its own. The tab's content is a 12px column,
+ * the rhythm the Pegasus skin gives its own children: the content sits one level down, so that rhythm does not reach it.
+ */
+.project-v2 {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px 16px;
+}
+.project-v2 > * {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+.project-v2 > .project-look-bar {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: center;
+  margin: 0;
+}
+.project-v2 > .tabs {
+  grid-column: 1;
+  grid-row: 1;
+}
+.project-v2 > .project-look-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 0;
+}
+
 /* In V2 the switch is the ERP's muted segmented control (§5.7). */
 .project-v2 .project-look-switch {
   padding: 3px;
@@ -173,6 +209,15 @@
 /* The project number is the record's link (§2: document numbers always render as links). */
 .project-v2 .portfolio-table .pg-doclink {
   white-space: nowrap;
+}
+
+/* Plan tab: the project box is as tall as the buttons beside it (h-9), and the row centres them. */
+.project-v2 .toolbar:has(> .plan-project-picker) {
+  align-items: center;
+}
+.project-v2 .plan-project-picker .search-select > input {
+  height: 36px;
+  padding-left: 10px;
 }
 
 /* Edit project, V2: the plan lives on the Plan tab; the dialog says where. */
