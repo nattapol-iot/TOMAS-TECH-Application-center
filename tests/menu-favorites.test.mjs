@@ -73,7 +73,7 @@ test("the star hides until the entry is pointed at, stays lit when starred, and 
   assert.match(css, /\.nav-row:hover \.nav-star,\s*\.nav-row:focus-within \.nav-star,\s*\.nav-star\[aria-pressed="true"\] \{\s*opacity: 1;\s*\}/);
   assert.match(css, /\.nav-star\[aria-pressed="true"\],\s*\.nav-item\.active \+ \.nav-star\[aria-pressed="true"\] \{\s*color: var\(--brand-gold\);\s*\}/);
   assert.match(css, /\.nav-star\[aria-pressed="true"\] \.icon \{\s*fill: currentColor;\s*\}/);
-  assert.match(css, /\.nav-star:focus-visible \{\s*outline: 2px solid var\(--blue\);/);
+  assert.match(css, /\.nav-star:focus-visible \{\s*outline: 2px solid var\(--nav-primary\);/);
   assert.match(
     css,
     /\.sidebar-collapsed \.nav-star,\s*\.sidebar-collapsed \.nav-fav-group,\s*\.sidebar-collapsed \.nav-favorites-head,\s*\.sidebar-collapsed \.nav-favorites-empty,\s*\.sidebar-collapsed \.nav-favorites\.no-favorites \{\s*display: none;\s*\}/,

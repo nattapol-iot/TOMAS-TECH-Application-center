@@ -6393,22 +6393,45 @@ button.dashboard-summary-card:hover {
   --r-sm: 4px;
   --r-md: 5px;
   --r-lg: 6px;
-  --sidebar-w: 250px;
+  --sidebar-w: 220px;
   --topbar-h: 64px;
+
+  /* Pegasus sidebar (tomastech-ui-design-system §1, §3) */
+  --nav-bg: #fff;
+  --nav-fg: #3f3f46; /* sidebar-foreground */
+  --nav-muted: #71717a; /* sidebar-foreground at 70 % */
+  --nav-accent: #e6f4ff; /* sidebar-accent */
+  --nav-accent-fg: #4d4d4d; /* sidebar-accent-foreground */
+  --nav-border: #ebebeb; /* sidebar-border at 70 % */
+  --nav-primary: #0071c2; /* primary */
+  --nav-logo: rgb(0 112 192);
+  --nav-count: #ebebeb; /* secondary */
+  --nav-count-fg: #171717;
+  --nav-hot: rgb(239 68 68 / 0.1); /* red-500 / 10 */
+  --nav-hot-fg: #dc2626; /* red-600 */
 }
 
 /* --- Sidebar ------------------------------------------------------------- */
 
+/*
+ * Pegasus ERP shell (tomastech-ui-design-system §3, owner request 2026-11-22):
+ * - white 220 px sidebar under the blue logo block;
+ * - 12 px entries 32 px high, entries inside a group 28 px with a grey guide line;
+ * - the open screen on a light-blue accent with a primary icon;
+ * - groups headed by muted labels;
+ * - red pills for counts that ask for action, grey pills for plain totals.
+ */
 .sidebar {
-  background: #fff;
-  border-right: 1px solid var(--tpl-line);
-  color: var(--tpl-ink);
+  background: var(--nav-bg);
+  border-right: 1px solid var(--nav-border);
+  color: var(--nav-fg);
 }
 
 .brand {
   gap: 12px;
-  padding: 14px 16px;
-  background: var(--tpl-blue);
+  min-height: var(--topbar-h);
+  padding: 0 16px;
+  background: var(--nav-logo);
   border-bottom: none;
 }
 .brand strong {
@@ -6418,85 +6441,126 @@ button.dashboard-summary-card:hover {
   letter-spacing: 0.02em;
 }
 .brand span {
-  color: rgb(255 255 255 / 0.78);
+  color: rgb(255 255 255 / 0.8);
   font-size: 11px;
 }
 
 .nav {
   padding: 8px 8px 20px;
-  scrollbar-color: var(--tpl-line) transparent;
+  scrollbar-color: var(--nav-border) transparent;
 }
 
 .nav-label {
-  padding: 14px 12px 6px;
-  color: #9aa4b2;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
+  padding: 12px 8px 4px;
+  color: var(--nav-muted);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.nav-group-toggle {
+  min-height: 32px;
+  margin-top: 4px;
+  padding: 0 8px;
+  border-radius: 6px;
+}
+.nav-group-toggle:hover {
+  background: var(--nav-accent);
+  color: var(--nav-fg);
+}
+.nav-group-toggle .icon {
+  font-size: 14px;
 }
 
 .nav-item {
-  gap: 12px;
-  padding: 9px 12px;
-  border-radius: var(--r-sm);
-  color: var(--tpl-ink);
-  font-size: 14px;
+  gap: 8px;
+  min-height: 32px;
+  padding: 8px;
+  border-radius: 6px;
+  color: var(--nav-fg);
+  font-size: 12px;
+  line-height: 16px;
+}
+.nav-subitems .nav-item {
+  min-height: 28px;
+  padding-block: 6px;
 }
 .nav-item .icon {
-  font-size: 17px;
-  color: #7b8794;
+  flex: none;
+  font-size: 16px;
+  color: var(--nav-muted);
 }
 .nav-item:hover {
-  background: #eef4fa;
-  color: var(--tpl-blue);
+  background: var(--nav-accent);
+  color: var(--nav-accent-fg);
 }
 .nav-item:hover .icon {
-  color: var(--tpl-blue);
+  color: var(--nav-fg);
 }
 
 .nav-item.active {
-  background: var(--tpl-blue);
-  color: #fff;
-  font-weight: 600;
+  background: var(--nav-accent);
+  color: var(--nav-accent-fg);
+  font-weight: 500;
   box-shadow: none;
 }
 .nav-item.active .icon {
-  color: #fff;
+  color: var(--nav-primary);
 }
+/* Count pills: red asks for action (hot), grey is a plain total. The icon-only and phone layouts keep their own corner badge. */
 .nav-item em {
-  background: #e9ecef;
-  color: #495057;
-  font-size: 11px;
+  border-radius: var(--r-pill);
+  background: var(--nav-count);
+  color: var(--nav-count-fg);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+@media (min-width: 981px) {
+  .app:not(.sidebar-collapsed) .nav-item em {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    height: 20px;
+    min-width: 20px;
+    padding: 0 6px;
+    font-size: 11px;
+    line-height: 1;
+  }
 }
 .nav-item.active em {
-  background: rgb(255 255 255 / 0.25);
-  color: #fff;
+  background: var(--nav-count);
+  color: var(--nav-count-fg);
 }
-.nav-item em.hot {
-  background: var(--tpl-red);
-  color: #fff;
+.nav-item em.hot,
+.nav-item.active em.hot {
+  background: var(--nav-hot);
+  color: var(--nav-hot-fg);
 }
 
 .sidebar-user {
-  background: #fff;
-  border-top: 1px solid var(--tpl-line);
+  min-height: 48px;
+  padding: 8px;
+  background: var(--nav-bg);
+  border-top: 1px solid var(--nav-border);
 }
 .sidebar-user .avatar {
-  background: #e9f2fb;
-  color: var(--tpl-blue);
+  border-radius: 6px;
+  background: var(--nav-accent);
+  color: var(--nav-primary);
 }
 .sidebar-user strong {
-  color: var(--tpl-ink);
+  color: var(--nav-fg);
 }
 .sidebar-user span {
-  color: #8a94a2;
+  color: var(--nav-muted);
 }
 .sidebar-user button {
-  color: #8a94a2;
+  color: var(--nav-muted);
 }
 .sidebar-user button:hover {
-  background: #eef4fa;
-  color: var(--tpl-blue);
+  background: var(--nav-accent);
+  color: var(--nav-fg);
 }
 
 /* --- Top bar ------------------------------------------------------------- */
@@ -9594,19 +9658,19 @@ tbody tr.link-row:hover td {
 .nav-subitems {
   margin-left: 10px;
   padding-left: 6px;
-  border-left: 1px solid var(--blue-line);
+  border-left: 1px solid var(--nav-border);
 }
 .active-group > .nav-group-toggle {
-  color: var(--blue);
+  color: var(--nav-primary);
 }
 /* A closed group never opens by itself (owner 2026-11-22); its heading shows that the open screen is inside. */
 .active-group > .nav-group-toggle[aria-expanded="false"] {
-  background: var(--blue-soft);
-  box-shadow: inset 3px 0 0 var(--blue);
+  background: var(--nav-accent);
+  box-shadow: inset 3px 0 0 var(--nav-primary);
 }
 .nav-group-toggle:focus-visible,
 .nav-item:focus-visible {
-  outline: 2px solid var(--blue);
+  outline: 2px solid var(--nav-primary);
   outline-offset: -2px;
 }
 .sidebar-collapsed .nav-subitems {
@@ -9663,7 +9727,7 @@ tbody tr.link-row:hover td {
   .app:not(.sidebar-collapsed) .sidebar .nav-subitems {
     margin-left: 10px;
     padding-left: 6px;
-    border-left: 1px solid var(--blue-line);
+    border-left: 1px solid var(--nav-border);
   }
 }
 
@@ -9725,11 +9789,11 @@ tbody tr.link-row:hover td {
   opacity: 1;
 }
 .nav-star:hover:not(:disabled) {
-  background: var(--tpl-line-soft);
-  color: var(--tpl-ink);
+  background: var(--nav-count);
+  color: var(--nav-fg);
 }
 .nav-star:focus-visible {
-  outline: 2px solid var(--blue);
+  outline: 2px solid var(--nav-primary);
   outline-offset: -2px;
 }
 .nav-star:disabled {
@@ -9740,11 +9804,11 @@ tbody tr.link-row:hover td {
   opacity: 0.4;
 }
 .nav-item.active + .nav-star {
-  color: var(--n-0);
+  color: var(--nav-muted);
 }
 .nav-item.active + .nav-star:hover:not(:disabled) {
-  background: rgb(255 255 255 / 0.18);
-  color: var(--n-0);
+  background: var(--nav-count);
+  color: var(--nav-fg);
 }
 .nav-star[aria-pressed="true"],
 .nav-item.active + .nav-star[aria-pressed="true"] {
@@ -9763,17 +9827,17 @@ tbody tr.link-row:hover td {
 .nav-favorites {
   margin-bottom: 6px;
   padding-bottom: 8px;
-  border-bottom: 1px solid var(--tpl-line-soft);
+  border-bottom: 1px solid var(--nav-border);
 }
 .nav-favorites-head {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 12px 6px;
-  color: var(--tpl-title);
-  font-size: var(--fs-2xs);
-  font-weight: 700;
-  letter-spacing: 0.06em;
+  padding: 8px 8px 4px;
+  color: var(--nav-muted);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
   text-transform: uppercase;
 }
 .nav-favorites-head .icon {
@@ -9822,7 +9886,7 @@ tbody tr.link-row:hover td {
   font-weight: 400;
 }
 .nav-item.active .nav-fav-group {
-  color: rgb(255 255 255 / 0.8);
+  color: var(--nav-muted);
 }
 .nav-item .nav-fav-group + em {
   margin-left: 6px;
