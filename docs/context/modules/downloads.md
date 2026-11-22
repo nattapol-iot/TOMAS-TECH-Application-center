@@ -4,7 +4,7 @@
 
 โปรแกรมและไฟล์ของแผนกจากโฟลเดอร์ download-center บน NAS และ Repository source code ของแต่ละโครงการ (tree โค้ด README ประวัติ zip) จำนวนครั้งที่ดาวน์โหลด และ Skill Hub ติดตั้ง skill ของ Claude Code / Codex
 
-Evidence: snapshot `ca8c1c73`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
+Evidence: snapshot `ebd12f09`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
 
 ## Read only the operation you change
 
