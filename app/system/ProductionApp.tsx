@@ -1129,7 +1129,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
           <Icon name={item.icon} />
           <span>{label}</span>
           {favorite?.group ? <small className="nav-fav-group">{t(favorite.group)}</small> : null}
-          {menuBadge ? <em>{menuBadge}</em> : null}
+          {menuBadge ? <em className={ACTION_COUNT_VIEWS.has(item.view) ? "hot" : undefined}>{menuBadge}</em> : null}
         </a>
         <button type="button" className="nav-star" aria-pressed={starred} disabled={!starred && favoritesFull} aria-label={starLabel} title={starLabel} onClick={() => toggleFavorite(item.view)}>
           <Icon name="star" />
@@ -1899,7 +1899,12 @@ function myWorkNeedsAttention(item: MyWorkUrgencyItem) {
   return needsAttention(item, estimateBusinessDate(new Date(), process.env.NEXT_PUBLIC_BUSINESS_TIME_ZONE ?? "Asia/Bangkok"), Date.now());
 }
 
-/** A number on a menu entry is something to act on: Projects counts the Delayed and At Risk ones, not every open project. */
+/**
+ * The number on a menu entry. My Work, Projects (the Delayed and At Risk ones), Approvals and CRM Opportunities count what
+ * waits on the person and show as red pills (Pegasus count pill, 2026-11-22); Inquiry and Estimate Cost count every open
+ * record and stay grey.
+ */
+const ACTION_COUNT_VIEWS: ReadonlySet<View> = new Set<View>(["my-work", "projects", "approvals", "crm-opportunities"]);
 function badgeFor(view: View, bootstrap: BootstrapData, myWorkUrgentCount = 0, projectAttentionCount = 0, procurementApprovalCount = 0) {
   if (view === "my-work") return myWorkUrgentCount;
   if (view === "inquiries") return bootstrap.counts.inquiries;

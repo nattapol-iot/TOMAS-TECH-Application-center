@@ -80,7 +80,7 @@ test("groups start closed, show their count, and the old stored names are not re
   assert.doesNotMatch(shell, /collapsedActiveGroup/i);
   // Only the stored choice and the heading change a group; opening a screen (setView) does not.
   assert.equal(shell.match(/setCollapsedNavGroups\(/g)?.length, 2);
-  assert.match(css, /\.active-group > \.nav-group-toggle\[aria-expanded="false"\] \{\s*background: var\(--blue-soft\);\s*box-shadow: inset 3px 0 0 var\(--blue\);\s*\}/);
+  assert.match(css, /\.active-group > \.nav-group-toggle\[aria-expanded="false"\] \{\s*background: var\(--nav-accent\);\s*box-shadow: inset 3px 0 0 var\(--nav-primary\);\s*\}/);
   assert.match(shell, /aria-expanded=\{!collapsed\}\s+aria-controls=\{`nav-group-\$\{sectionIndex\}`\}\s+title=\{t\(section\.group\)\}/);
   assert.match(shell, /<span>\{t\(section\.group\)\}<\/span>\s*<small>\{section\.items\.length\}<\/small>\s*<Icon name="chevronDown" \/>/);
   assert.match(css, /\.nav-group-toggle small \{\s*margin-left: auto;/);

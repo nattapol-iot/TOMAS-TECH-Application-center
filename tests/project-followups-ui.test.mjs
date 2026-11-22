@@ -208,7 +208,7 @@ test("the Projects menu badge counts open Delayed and At Risk projects, not ever
   assert.doesNotMatch(shell, /if \(view === "projects"\) return bootstrap\.counts\.activeProjects;/);
   // One read feeds both the condition and the number (and the entry's copy under Favourites).
   assert.equal((shell.match(/badgeFor\(item\.view, bootstrap, myWorkUrgentCount \+ taskAcknowledgmentCount, projectAttentionCount, procurementApprovalCount\)/g) ?? []).length, 1);
-  assert.match(shell, /\{menuBadge \? <em>\{menuBadge\}<\/em> : null\}/);
+  assert.match(shell, /\{menuBadge \? <em className=\{ACTION_COUNT_VIEWS\.has\(item\.view\) \? "hot" : undefined\}>\{menuBadge\}<\/em> : null\}/);
   // The endpoint the badge reads uses the portfolio's own health rule and scope.
   const routes = read("backend-node/src/routes/projects.ts");
   assert.match(routes, /app\.get\("\/api\/v1\/projects\/attention"/);
