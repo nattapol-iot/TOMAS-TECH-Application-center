@@ -46,10 +46,10 @@ test("Create project offers 'without an estimate' only to those allowed, with cu
   assert.match(modal, /\.\.\.\(standalone \? \{ withoutEstimate: true, customerId: chosenCustomer, projectName: projectName\?\.trim\(\), projectType \} : \{ estimateId \}\)/);
   for (const label of ["Customer \\*", "Project name \\*", "Project type \\*"]) assert.match(modal, new RegExp(`<LocalizedText text=\\{"${label}"\\} />`));
   assert.match(client, /withoutEstimate\?: boolean;/);
-  assert.match(routes, /canCreateWithoutEstimate: canCreateWithoutEstimate\(actor\) \};/);
+  assert.match(routes, /canCreateWithoutEstimate: canCreateWithoutEstimate\(actor\),?\s*\};/);
   // Files and the CRM order only follow a project that came from an inquiry.
-  assert.match(routes, /const documentsTransferred = source\.inquiryId === null \|\| input\.estimateId === null \? 0/);
-  assert.match(routes, /if \(source\.inquiryId !== null\) await confirmOpportunityOrder\(/);
+  assert.match(routes, /const documentsTransferred =\s*source\.inquiryId === null \|\| input\.estimateId === null\s*\? 0/);
+  assert.match(routes, /if \(source\.inquiryId !== null\)\s*await confirmOpportunityOrder\(/);
 });
 
 test("project mail links and bell notifications open the project's plan", async () => {

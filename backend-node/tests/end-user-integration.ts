@@ -28,10 +28,22 @@ try {
   run(`CREATE APPLICATION ROLE end_user_ci_role WITH PASSWORD='${password}';`);
   execFileSync("sqlcmd", [...args, "-d", name, "-i", "database/scripts/010_application_login.sql", "-v", `DatabaseName=${name}`, "AppLogin=end_user_ci_role"], { cwd: repo, stdio: "pipe" });
   const config: AppConfig = {
-    environment: "development", host: "127.0.0.1", port: 0, allowedHosts: ["localhost"],
-    corsOrigins: ["http://localhost:3000"], businessTimeZone: "Asia/Bangkok", auth: { mode: "Development" },
-    database: { connectionString: `Server=localhost;Database=${name};Integrated Security=true;TrustServerCertificate=true`, trustServerCertificate: true, applicationRoleName: "end_user_ci_role", applicationRolePassword: password },
-    documentStorage: { mode: "Local", rootPath: resolve(repo, "tmp", name), maxFileSizeBytes: 10000000 }, email: { mode: "Disabled" }, pdfParserUrl: "http://pdf-parser:8000",
+    environment: "development",
+    host: "127.0.0.1",
+    port: 0,
+    allowedHosts: ["localhost"],
+    corsOrigins: ["http://localhost:3000"],
+    businessTimeZone: "Asia/Bangkok",
+    auth: { mode: "Development" },
+    database: {
+      connectionString: `Server=localhost;Database=${name};Integrated Security=true;TrustServerCertificate=true`,
+      trustServerCertificate: true,
+      applicationRoleName: "end_user_ci_role",
+      applicationRolePassword: password,
+    },
+    documentStorage: { mode: "Local", rootPath: resolve(repo, "tmp", name), maxFileSizeBytes: 10000000 },
+    email: { mode: "Disabled" },
+    pdfParserUrl: "http://pdf-parser:8000",
   };
   application = await buildApp(config);
   const { app, database } = application;
@@ -41,7 +53,9 @@ try {
     checks++;
     return response.json();
   }
-  const actors = Object.fromEntries((await database.query<{ id: number; entra_object_id: string }>("SELECT id,entra_object_id FROM dbo.users")).recordset.map(row => [row.entra_object_id, Number(row.id)]));
+  const actors = Object.fromEntries(
+    (await database.query<{ id: number; entra_object_id: string }>("SELECT id,entra_object_id FROM dbo.users")).recordset.map((row) => [row.entra_object_id, Number(row.id)]),
+  );
   const direct = await api("sales", "/api/v1/sales/customers", { name: "TEST ONLY Contracting Partner", code: "EU-CONTRACT" }, 201);
   const endUser = await api("sales", "/api/v1/sales/customers", { name: "TEST ONLY Ultimate Factory", code: "EU-FACTORY" }, 201);
   const other = await api("sales", "/api/v1/sales/customers", { name: "TEST ONLY Second Factory", code: "EU-SECOND" }, 201);
@@ -49,14 +63,27 @@ try {
   run(`UPDATE dbo.customers SET is_active=0 WHERE id=${Number(inactive.id)}`);
   const today = new Date().toISOString().slice(0, 10);
   const dueDate = new Date(Date.now() + 86400000 * 14).toISOString().slice(0, 10);
-  const base = { customerId: direct.id, contact: "TEST ONLY Contact", projectName: "TEST ONLY End User", projectType: "IoT", salesOwner: "end-user-sales", estimateOwnerId: actors["end-user-engineer"], priority: "Normal", projectProbability: 25, customerInterestGrade: "C", dueDate };
+  const base = {
+    customerId: direct.id,
+    contact: "TEST ONLY Contact",
+    projectName: "TEST ONLY End User",
+    projectType: "IoT",
+    salesOwner: "end-user-sales",
+    estimateOwnerId: actors["end-user-engineer"],
+    priority: "Normal",
+    projectProbability: 25,
+    customerInterestGrade: "C",
+    dueDate,
+  };
   for (const bad of [0, "2", -1, 1.5]) await api("sales", "/api/v1/inquiries", { ...base, endUserCustomerId: bad }, 400);
   for (const bad of [inactive.id, 99999999]) await api("sales", "/api/v1/inquiries", { ...base, endUserCustomerId: bad }, 422);
   const legacy = await api("sales", "/api/v1/inquiries", base, 201);
   assert.equal((await api("sales", `/api/v1/inquiries/${legacy.id}`)).endUserCustomerId, null);
   let inquiry = await api("sales", "/api/v1/inquiries", { ...base, endUserCustomerId: endUser.id }, 201);
   let detail = await api("sales", `/api/v1/inquiries/${inquiry.id}`);
-  assert.equal(detail.customerId, direct.id); assert.equal(detail.endUserCustomerId, endUser.id); assert.equal(detail.endUserCode, "EU-FACTORY");
+  assert.equal(detail.customerId, direct.id);
+  assert.equal(detail.endUserCustomerId, endUser.id);
+  assert.equal(detail.endUserCode, "EU-FACTORY");
   assert.ok((await api("sales", "/api/v1/inquiries?search=EU-FACTORY")).items.some((row: { id: number }) => row.id === inquiry.id));
   assert.ok((await api("sales", "/api/v1/inquiries?search=Ultimate%20Factory")).items.some((row: { id: number }) => row.id === inquiry.id));
   await api("outsider", `/api/v1/inquiries/${inquiry.id}/end-user`, { endUserCustomerId: other.id, rowVersion: detail.rowVersion }, 403, "PUT");
@@ -64,11 +91,14 @@ try {
   const staleVersion = detail.rowVersion;
   detail = await api("sales", `/api/v1/inquiries/${inquiry.id}/end-user`, { endUserCustomerId: other.id, rowVersion: detail.rowVersion }, 200, "PUT");
   await api("sales", `/api/v1/inquiries/${inquiry.id}/end-user`, { endUserCustomerId: null, rowVersion: staleVersion }, 409, "PUT");
-  detail = await api("sales", `/api/v1/inquiries/${inquiry.id}/end-user`, { endUserCustomerId: null, rowVersion: detail.rowVersion }, 200, "PUT"); assert.equal(detail.endUserCustomerId, null);
-  detail = await api("sales", `/api/v1/inquiries/${inquiry.id}/end-user`, { endUserCustomerId: direct.id, rowVersion: detail.rowVersion }, 200, "PUT"); assert.equal(detail.endUserCustomerId, direct.id);
+  detail = await api("sales", `/api/v1/inquiries/${inquiry.id}/end-user`, { endUserCustomerId: null, rowVersion: detail.rowVersion }, 200, "PUT");
+  assert.equal(detail.endUserCustomerId, null);
+  detail = await api("sales", `/api/v1/inquiries/${inquiry.id}/end-user`, { endUserCustomerId: direct.id, rowVersion: detail.rowVersion }, 200, "PUT");
+  assert.equal(detail.endUserCustomerId, direct.id);
   detail = await api("sales", `/api/v1/inquiries/${inquiry.id}/end-user`, { endUserCustomerId: endUser.id, rowVersion: detail.rowVersion }, 200, "PUT");
   // Project creation needs the inquiry's CRM opportunity WON; mark the linked one, or link a new one.
-  const markOrderWon = (inquiry: string) => run(`DECLARE @inquiry bigint=(${inquiry}); DECLARE @owner bigint=(SELECT created_by FROM dbo.inquiries WHERE id=@inquiry);
+  const markOrderWon = (inquiry: string) =>
+    run(`DECLARE @inquiry bigint=(${inquiry}); DECLARE @owner bigint=(SELECT created_by FROM dbo.inquiries WHERE id=@inquiry);
     IF EXISTS(SELECT 1 FROM dbo.inquiries WHERE id=@inquiry AND opportunity_id IS NOT NULL)
       UPDATE o SET stage=N'WON',won_on=COALESCE(o.won_on,CONVERT(date,SYSUTCDATETIME())),won_reference=COALESCE(o.won_reference,N'TEST ONLY PO')
       FROM dbo.crm_opportunities o JOIN dbo.inquiries i ON i.opportunity_id=o.id WHERE i.id=@inquiry;
@@ -83,7 +113,15 @@ try {
       SELECT N'EU-EST-'+CONVERT(nvarchar(20),id),id,customer_id,project_name,project_type,estimate_owner_id,CONVERT(date,SYSUTCDATETIME()),due_date,N'Approved',created_by,updated_by FROM dbo.inquiries WHERE id=${inquiryId}`);
     return Number((await database.query<{ id: number }>(`SELECT id FROM dbo.estimates WHERE inquiry_id=${inquiryId}`)).recordset[0]!.id);
   }
-  const projectBase = { purchaseOrderNumber: "TEST ONLY PO", purchaseOrderDate: today, managerId: actors["end-user-admin"], leadEngineerId: actors["end-user-engineer"], startDate: today, targetDelivery: dueDate, site: "TEST ONLY Factory" };
+  const projectBase = {
+    purchaseOrderNumber: "TEST ONLY PO",
+    purchaseOrderDate: today,
+    managerId: actors["end-user-admin"],
+    leadEngineerId: actors["end-user-engineer"],
+    startDate: today,
+    targetDelivery: dueDate,
+    site: "TEST ONLY Factory",
+  };
   const projectFor = (estimateId: number) => ({ ...projectBase, estimateId, projectNumber: `PJ-EU-${estimateId}` });
   const estimateId = await approvedEstimate(Number(inquiry.id));
   await api("admin", "/api/v1/projects", { ...projectFor(estimateId), endUserCustomerId: "1" }, 400);
@@ -91,9 +129,11 @@ try {
   const inherited = await api("admin", "/api/v1/projects", projectFor(estimateId), 201);
   const listProject = async (id: number) => (await api("admin", "/api/v1/projects?pageSize=100")).items.find((row: { id: number }) => row.id === id);
   let project = await listProject(inherited.id);
-  assert.equal(project.customerId, direct.id); assert.equal(project.endUserCustomerId, endUser.id);
+  assert.equal(project.customerId, direct.id);
+  assert.equal(project.endUserCustomerId, endUser.id);
   for (const assignment of [`customer_id=${Number(other.id)}`, "name=N'Forbidden'", "status=N'Closed'"]) {
-    await assert.rejects(database.query(`UPDATE dbo.projects SET ${assignment} WHERE id=${Number(inherited.id)}`)); checks++;
+    await assert.rejects(database.query(`UPDATE dbo.projects SET ${assignment} WHERE id=${Number(inherited.id)}`));
+    checks++;
   }
   assert.ok((await api("admin", "/api/v1/projects?search=EU-FACTORY")).items.some((row: { id: number }) => row.id === inherited.id));
   detail = await api("sales", `/api/v1/inquiries/${inquiry.id}/end-user`, { endUserCustomerId: other.id, rowVersion: detail.rowVersion }, 200, "PUT");
@@ -103,7 +143,8 @@ try {
   const projectVersion = project.rowVersion;
   project = await api("admin", `/api/v1/projects/${project.id}/end-user`, { endUserCustomerId: other.id, rowVersion: project.rowVersion }, 200, "PUT");
   await api("admin", `/api/v1/projects/${project.id}/end-user`, { endUserCustomerId: null, rowVersion: projectVersion }, 409, "PUT");
-  project = await api("admin", `/api/v1/projects/${project.id}/end-user`, { endUserCustomerId: null, rowVersion: project.rowVersion }, 200, "PUT"); assert.equal(project.endUserCustomerId, null);
+  project = await api("admin", `/api/v1/projects/${project.id}/end-user`, { endUserCustomerId: null, rowVersion: project.rowVersion }, 200, "PUT");
+  assert.equal(project.endUserCustomerId, null);
   for (const explicit of [null, other.id]) {
     const source = await api("sales", "/api/v1/inquiries", { ...base, endUserCustomerId: endUser.id }, 201);
     const created = await api("admin", "/api/v1/projects", { ...projectFor(await approvedEstimate(Number(source.id))), endUserCustomerId: explicit }, 201);
@@ -111,16 +152,35 @@ try {
   }
   const legacyProject = await api("admin", "/api/v1/projects", projectFor(await approvedEstimate(Number(legacy.id))), 201);
   assert.equal((await listProject(legacyProject.id)).endUserCustomerId, null);
+  // An end user closed after the inquiry chose it (the customer register sync closes customers) still goes along;
+  // only one chosen at project creation must be active.
+  const closedLater = await api("sales", "/api/v1/sales/customers", { name: "TEST ONLY Closed Later", code: "EU-CLOSED" }, 201);
+  const closedSource = await api("sales", "/api/v1/inquiries", { ...base, endUserCustomerId: closedLater.id }, 201);
+  const closedEstimate = await approvedEstimate(Number(closedSource.id));
+  run(`UPDATE dbo.customers SET is_active=0 WHERE id=${Number(closedLater.id)}`);
+  await api("admin", "/api/v1/projects", { ...projectFor(closedEstimate), endUserCustomerId: closedLater.id }, 422);
+  const carried = await api("admin", "/api/v1/projects", projectFor(closedEstimate), 201);
+  assert.equal((await listProject(carried.id)).endUserCustomerId, closedLater.id);
   run(`UPDATE dbo.projects SET status=N'Closed' WHERE id=${Number(project.id)};UPDATE dbo.inquiries SET status=N'Cancelled' WHERE id=${Number(inquiry.id)}`);
-  project = await listProject(project.id); inquiry = await api("sales", `/api/v1/inquiries/${inquiry.id}`);
+  project = await listProject(project.id);
+  inquiry = await api("sales", `/api/v1/inquiries/${inquiry.id}`);
   await api("admin", `/api/v1/projects/${project.id}/end-user`, { endUserCustomerId: endUser.id, rowVersion: project.rowVersion }, 409, "PUT");
   await api("sales", `/api/v1/inquiries/${inquiry.id}/end-user`, { endUserCustomerId: endUser.id, rowVersion: inquiry.rowVersion }, 409, "PUT");
-  const audit = (await database.query<{ after_json: string }>(`SELECT after_json FROM dbo.audit_log WHERE entity_type=N'Project' AND entity_id=${Number(inherited.id)} AND action=N'Created from approved estimate'`)).recordset[0]!;
-  assert.equal(JSON.parse(audit.after_json).endUserCustomerId, endUser.id); assert.equal(JSON.parse(audit.after_json).endUserInheritedFromInquiry, true);
+  const audit = (
+    await database.query<{ after_json: string }>(`SELECT after_json FROM dbo.audit_log WHERE entity_type=N'Project' AND entity_id=${Number(inherited.id)} AND action=N'Created from approved estimate'`)
+  ).recordset[0]!;
+  assert.equal(JSON.parse(audit.after_json).endUserCustomerId, endUser.id);
+  assert.equal(JSON.parse(audit.after_json).endUserInheritedFromInquiry, true);
   const updates = (await database.query<{ before_json: string; after_json: string }>("SELECT before_json,after_json FROM dbo.audit_log WHERE action=N'End user updated'")).recordset;
-  assert.ok(updates.length >= 7); assert.ok(updates.every(row => Object.hasOwn(JSON.parse(row.before_json), "endUserCustomerId") && Object.hasOwn(JSON.parse(row.after_json), "endUserCustomerId")));
+  assert.ok(updates.length >= 7);
+  assert.ok(updates.every((row) => Object.hasOwn(JSON.parse(row.before_json), "endUserCustomerId") && Object.hasOwn(JSON.parse(row.after_json), "endUserCustomerId")));
   console.log(`End user SQL integration passed: ${checks} API checks; disposable database and restricted application role.`);
 } finally {
-  if (application) { await application.app.close(); await application.database.close(); }
-  execFileSync("sqlcmd", [...args, "-d", "master", "-Q", `IF DB_ID(N'${name}') IS NOT NULL BEGIN ALTER DATABASE [${name}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [${name}]; END;`], { stdio: "pipe" });
+  if (application) {
+    await application.app.close();
+    await application.database.close();
+  }
+  execFileSync("sqlcmd", [...args, "-d", "master", "-Q", `IF DB_ID(N'${name}') IS NOT NULL BEGIN ALTER DATABASE [${name}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [${name}]; END;`], {
+    stdio: "pipe",
+  });
 }

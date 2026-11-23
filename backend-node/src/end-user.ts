@@ -27,10 +27,26 @@ export async function validateEndUser(transaction: Transaction, id: number | nul
   if (id === null) return { endUserCustomerId: null, endUserName: null, endUserCode: null };
   const lookup = new sql.Request(transaction);
   lookup.input("end_user_id", sql.BigInt, id);
-  const row = (await lookup.query<{ name: string; code: string }>(`
+  const row = (
+    await lookup.query<{ name: string; code: string }>(`
     SELECT name,code FROM dbo.customers WITH (HOLDLOCK) WHERE id=@end_user_id AND is_active=1 AND deleted_at IS NULL;
-  `)).recordset[0];
+  `)
+  ).recordset[0];
   if (!row) throw new ApiError(422, "invalid_reference", "The selected end user must be an active customer.");
+  return { endUserCustomerId: id, endUserName: row.name, endUserCode: row.code };
+}
+
+/**
+ * The end user a project carries over from its inquiry. It was checked when the inquiry chose it, and the customer may
+ * have been closed since (the customer register sync closes customers), so only a newly chosen end user must be active.
+ * A closed one still goes along, the way the estimate's customer does; nobody creating the project can change it there.
+ */
+export async function inheritedEndUser(transaction: Transaction, id: number | null): Promise<{ endUserCustomerId: number | null; endUserName: string | null; endUserCode: string | null }> {
+  if (id === null) return { endUserCustomerId: null, endUserName: null, endUserCode: null };
+  const lookup = new sql.Request(transaction);
+  lookup.input("end_user_id", sql.BigInt, id);
+  const row = (await lookup.query<{ name: string; code: string }>(`SELECT name,code FROM dbo.customers WITH (HOLDLOCK) WHERE id=@end_user_id;`)).recordset[0];
+  if (!row) return { endUserCustomerId: null, endUserName: null, endUserCode: null };
   return { endUserCustomerId: id, endUserName: row.name, endUserCode: row.code };
 }
 
@@ -49,27 +65,43 @@ export function registerEndUserUpdateRoute(app: FastifyInstance, database: Datab
       if (project) await demandProjectScope(database, actor, id, transaction);
       const lookup = new sql.Request(transaction);
       lookup.input("id", sql.BigInt, id);
-      const current = (await lookup.query<{ number: string; status: string; end_user_customer_id: number | string | null; end_user_name: string | null; end_user_code: string | null; row_version: Buffer }>(`
+      const current = (
+        await lookup.query<{ number: string; status: string; end_user_customer_id: number | string | null; end_user_name: string | null; end_user_code: string | null; row_version: Buffer }>(`
         SELECT s.${numberColumn} AS number,s.status,s.end_user_customer_id,c.name AS end_user_name,c.code AS end_user_code,s.row_version
         FROM dbo.${table} s WITH (UPDLOCK,HOLDLOCK) LEFT JOIN dbo.customers c ON c.id=s.end_user_customer_id
         WHERE s.id=@id AND s.deleted_at IS NULL;
-      `)).recordset[0];
+      `)
+      ).recordset[0];
       if (!current) throw new ApiError(404, "not_found", `${entity} not found.`);
       if (!current.row_version.equals(rowVersion)) throw new ApiError(409, "concurrency_conflict", `This ${entity.toLowerCase()} was updated by another user. Reload and try again.`);
       demandEditableEndUser(current.status);
       const next = await validateEndUser(transaction, nextId);
       const update = new sql.Request(transaction);
-      update.input("id", sql.BigInt, id); update.input("actor", sql.BigInt, actor.id);
-      update.input("end_user_id", sql.BigInt, nextId); update.input("row_version", sql.VarBinary(8), rowVersion);
-      const updated = (await update.query<{ row_version: Buffer }>(`
+      update.input("id", sql.BigInt, id);
+      update.input("actor", sql.BigInt, actor.id);
+      update.input("end_user_id", sql.BigInt, nextId);
+      update.input("row_version", sql.VarBinary(8), rowVersion);
+      const updated = (
+        await update.query<{ row_version: Buffer }>(`
         UPDATE dbo.${table} SET end_user_customer_id=@end_user_id,updated_by=@actor,updated_at=SYSUTCDATETIME()
         OUTPUT inserted.row_version WHERE id=@id AND deleted_at IS NULL AND row_version=@row_version;
-      `)).recordset[0];
+      `)
+      ).recordset[0];
       if (!updated) throw new ApiError(409, "concurrency_conflict", "This record was updated by another user. Reload and try again.");
-      await insertAudit(transaction, actor.id, entity, id, current.number, "End user updated", {
-        endUserCustomerId: current.end_user_customer_id === null ? null : Number(current.end_user_customer_id),
-        endUserName: current.end_user_name, endUserCode: current.end_user_code,
-      }, next);
+      await insertAudit(
+        transaction,
+        actor.id,
+        entity,
+        id,
+        current.number,
+        "End user updated",
+        {
+          endUserCustomerId: current.end_user_customer_id === null ? null : Number(current.end_user_customer_id),
+          endUserName: current.end_user_name,
+          endUserCode: current.end_user_code,
+        },
+        next,
+      );
       return { id, ...next, rowVersion: updated.row_version.toString("base64") };
     }, sql.ISOLATION_LEVEL.READ_COMMITTED);
   });

@@ -14,7 +14,7 @@ test("Pipeline is the board mode of CRM Opportunities, not a second menu entry",
   assert.match(shell, /const navView = \(view: View\): View => \(?view === "crm-pipeline" \? "crm-opportunities" :/);
   assert.match(shell, /<CrmScreen\s[^>]*onViewChange=\{setView\}/);
   assert.match(crm, /<Tabs<CrmView> tabs=\{\[\{id:"crm-opportunities",label:"CRM\.listView"\},\{id:"crm-pipeline",label:"CRM\.boardView"\}\]\}/);
-  for (const key of ["CRM.listView", "CRM.boardView"]) assert.match(copy, new RegExp(`\\["${key.replace(".", "\\.")}","[^"]+","[^"]+","[^"]+"\\]`));
+  for (const key of ["CRM.listView", "CRM.boardView"]) assert.match(copy, new RegExp(`\\[\\s*"${key.replace(".", "\\.")}",\\s*"[^"]+",\\s*"[^"]+",\\s*"[^"]+",?\\s*\\]`));
 });
 
 test("CRM users keep customers in CRM; people without CRM keep the master list", async () => {

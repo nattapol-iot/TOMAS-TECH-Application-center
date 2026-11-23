@@ -59,7 +59,7 @@ test("every Plan.mh* text the line asks for is in the dictionary in English, Tha
   for (const discipline of ["Electrical", "Mechanical", "Software", "Installation", "Other"]) asked.add(`Plan.mhDiscipline.${discipline}`);
   assert.ok(asked.size >= 20, `found ${asked.size} keys`);
   for (const key of asked) {
-    const entry = copy.match(new RegExp(`\\["${key.replaceAll(".", "\\.")}", "([^"]+)", "([^"]+)", "([^"]+)"\\]`));
+    const entry = copy.match(new RegExp(`\\[\\s*"${key.replaceAll(".", "\\.")}",\\s*"([^"]+)",\\s*"([^"]+)",\\s*"([^"]+)",?\\s*\\]`));
     assert.ok(entry, `${key} is missing from crm-copy.ts`);
   }
 });
