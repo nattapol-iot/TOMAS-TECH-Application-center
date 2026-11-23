@@ -2,23 +2,23 @@
 
 [Module](../modules/planning.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `19c56afd`; generated, do not edit. [backend-node/src/routes/team-week.ts](<../../../backend-node/src/routes/team-week.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `7386f92d`; generated, do not edit. [backend-node/src/routes/team-week.ts](<../../../backend-node/src/routes/team-week.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/team-week` | 102–114 |
+| GET | `/api/v1/team-week` | 105–117 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `day` | [backend-node/src/routes/team-week.ts](<../../../backend-node/src/routes/team-week.ts>) | 45–45 |
-| `text` | [backend-node/src/routes/team-week.ts](<../../../backend-node/src/routes/team-week.ts>) | 46–46 |
-| `optionalId` | [backend-node/src/routes/team-week.ts](<../../../backend-node/src/routes/team-week.ts>) | 47–47 |
-| `teamWeekRead` | [backend-node/src/routes/team-week.ts](<../../../backend-node/src/routes/team-week.ts>) | 50–99 |
-| `registerTeamWeekRoutes` | [backend-node/src/routes/team-week.ts](<../../../backend-node/src/routes/team-week.ts>) | 101–115 |
+| `day` | [backend-node/src/routes/team-week.ts](<../../../backend-node/src/routes/team-week.ts>) | 48–48 |
+| `text` | [backend-node/src/routes/team-week.ts](<../../../backend-node/src/routes/team-week.ts>) | 49–49 |
+| `optionalId` | [backend-node/src/routes/team-week.ts](<../../../backend-node/src/routes/team-week.ts>) | 50–50 |
+| `teamWeekRead` | [backend-node/src/routes/team-week.ts](<../../../backend-node/src/routes/team-week.ts>) | 53–102 |
+| `registerTeamWeekRoutes` | [backend-node/src/routes/team-week.ts](<../../../backend-node/src/routes/team-week.ts>) | 104–118 |
 
 ## Direct local dependencies
 
