@@ -4,7 +4,7 @@
 
 ทะเบียนโครงการ end user เลขโครงการค้นจาก Pegasus ERP และรับส่งเอกสารจาก inquiry/site visit
 
-Evidence: snapshot `90342eec`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
+Evidence: snapshot `eeb69e03`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
 
 ## Read only the operation you change
 
@@ -150,6 +150,7 @@ Shared screens contain other modules: use the symbol and line range instead of r
 - [tests/team-board-closed-projects.test.mjs](<../../../tests/team-board-closed-projects.test.mjs>)
 - [backend-node/tests/end-user.test.ts](<../../../backend-node/tests/end-user.test.ts>)
 - [backend-node/tests/erp-projects.test.ts](<../../../backend-node/tests/erp-projects.test.ts>)
+- [backend-node/tests/project-cost-actual.test.ts](<../../../backend-node/tests/project-cost-actual.test.ts>)
 - [backend-node/tests/project-cost-route.test.ts](<../../../backend-node/tests/project-cost-route.test.ts>)
 - [backend-node/tests/project-cost.test.ts](<../../../backend-node/tests/project-cost.test.ts>)
 - [backend-node/tests/project-documents-withdraw.test.ts](<../../../backend-node/tests/project-documents-withdraw.test.ts>)
