@@ -97,7 +97,7 @@ const modules = new Set([
   "projects-timeline",
   "projects-schedule",
   "projects-punchlist",
-  "resources-board",
+  // resources-board (the daily grid) joined resources-week, Team planner, on 2026-11-23; its old rows keep their label.
   "resources-list",
   "resources-tasks",
   "resources-workload",

@@ -261,23 +261,34 @@ test("Team overview replaces Resource Plan in the menu and opens on the board fo
   assert.match(board, /import "\.\/team-board\.css";/);
 });
 
-test("the board follows the 2026-11-10 mockup: summary strip, sticky filters, pinned member and week, MD per day", async () => {
-  const [board, css] = await Promise.all([read("app/system/production/TeamBoard.tsx"), read("app/system/production/team-board.css")]);
-  // The over and overlap facts of the summary are the attention filters they count.
-  assert.match(board, /onClick=\{\s*\(\s*,?\s*\)\s*=>\s*pickAttention\(\s*attention\s*===\s*key\s*\?\s*null\s*:\s*key,?\s*\),?\s*\}>\s*\{\s*t\(\s*"TeamBoard\.sumSee",?\s*\),?\s*\}/);
-  assert.match(board, /\{counts\.over\}\s*<small>\s*\{t\("TeamBoard\.sumPeopleUnit"\)\} · \{summaryLink\("over"\)\}\s*<\/small>/);
-  assert.match(board, /\{counts\.overlap\}\s*<small>\s*\{t\("TeamBoard\.sumPeopleUnit"\)\} · \{summaryLink\("overlap"\)\}\s*<\/small>/);
+test("Team planner (2026-11-23): one summary bar of filters, sticky filters, pinned member and hours, one figure a day", async () => {
+  const [board, css, planner] = await Promise.all([read("app/system/production/TeamBoard.tsx"), read("app/system/production/team-board.css"), read("app/system/production/team-week.css")]);
+  // Seven figures, each the filter it counts; waiting for people counts the page's queue and the unassigned team tasks.
+  assert.match(board, /<div className="board-sum planner-sum" role="group" aria-label=\{t\("TeamBoard\.sumLabel"\)\} data-guide="teamweek\.chips">/);
+  assert.match(board, /const value = key === "unassigned" \? queueCount \+ unassignedTasks\.length : plannerCount\(key\);/);
+  assert.match(board, /aria-pressed=\{on\} onClick=\{\(\) => pickAttention\(on \? null : key\)\}/);
+  assert.deepEqual(
+    [...board.matchAll(/\{ key: "([a-z]+)", label: "Team(?:Week|Board)\.[A-Za-z]+", tone: "[a-z]+" \}/g)].map((match) => match[1]),
+    ["over", "overlap", "free", "pending", "leave", "late", "unassigned"],
+  );
+  // One, two or four weeks, one the first time; an old daily-grid link opens two.
+  assert.match(board, /useLinkedState<1 \| 2 \| 4>\("weeks", 1, WEEKS_LINK\)/);
+  assert.match(board, /if \(fromOldBoard && weeks === 1\) setWeeks\(2\);/);
   // The filter bar stays under the top bar; the teams are a segmented control with head counts, several at once.
   assert.match(css, /\.board-toolbar\.board-sticky \{\s*position: sticky; top: calc\(var\(--topbar-h\) \+ 8px\);/);
   assert.match(board, /<div className="seg-control board-team-seg" role="group" aria-label=\{t\("TeamBoard\.team"\)\}>/);
   assert.match(board, /aria-pressed=\{value\.includes\(name\)\} onClick=\{\(\) => toggle\(name\)\}/);
-  // The member and their week are pinned on the left, the week right after the member.
+  // The member and their hours over the days shown are pinned on the left, the hours right after the member.
   assert.match(css, /\.board-grid \.board-week \{\s*position: sticky; left: var\(--board-who-w\);/);
-  assert.match(board, /<td className="board-week">\{weekLoad\(person\.week\)\}<\/td>/);
-  // The day's MD opens the day's work and warns in red when over; an overlapping piece carries a labelled warning.
+  assert.match(board, /<td className="board-week">\{rangeLoad\(person\)\}<\/td>/);
+  // The day's figure opens the day in the side column and warns in red when over; an overlapping piece carries a labelled warning.
   assert.match(board, /className=\{\s*`board-md\$\{\s*over\s*\?\s*"\s*over"\s*:\s*"",?\s*\}`,?\s*\}\s*data-guide="team\.dayWork"/);
+  assert.match(board, /\{dayOpen && dayOpen\.userId !== null \? dayPanel\(\{ userId: dayOpen\.userId, date: dayOpen\.date \}\) : sideQueue\}/);
   assert.match(board, /<span className="board-chip-warn" role="img" aria-label=\{t\("TeamBoard\.overlapTime"\)\}>/);
   assert.match(css, /\.board-md\.over \{ color: var\(--red-text\); font-weight: 700; \}/);
+  // A past day not confirmed carries an amber line; the hours come from Team week for the days on show.
+  assert.match(planner, /\.board-cell\.pending \{\s*box-shadow: inset 0 -3px 0 var\(--amber\);/);
+  assert.match(board, /apiRequest<TeamWeekData>\(`\/api\/v1\/team-week\?from=\$\{gridFrom\}&to=\$\{gridTo\}`\)/);
   // Today is tinted down the whole column, below an over-capacity day's red.
   assert.ok(css.indexOf(".board-cell.today { background: var(--blue-soft); }") < css.indexOf(".board-cell.tone-over { background: var(--red-soft); }"));
 });
@@ -317,8 +328,8 @@ test("Outlook meetings count by their hours, lunch left out, a whole day at most
 
 test("only Admins, Leaders and managers add work on other people's rows; new work names its work and detail", async () => {
   const board = await read("app/system/production/TeamBoard.tsx");
-  // The + in a cell: on your own row, the unassigned row, or anyone's for someone who may assign others.
-  assert.match(board, /\{canAssignOthers \|\| userId === me \|\| userId === null \? \(/);
+  // The + in a cell: on your own row, or anyone's for someone who may assign others (team tasks nobody has taken sit beside the table).
+  assert.match(board, /\{canAssignOthers \|\| userId === me \? \(/);
   assert.match(board, /const assignable = useMemo\(\(\) => \(canAssignOthers \? null : \[me\]\), \[canAssignOthers, me\]\);/);
   assert.match(board, /\.filter\(\(user\) => assignable === null \|\| assignable\.includes\(user\.id\) \|\| Boolean\(original\?\.assigneeIds\.includes\(user\.id\)\)\)/);
   // Which work it is for, chosen every time, and a brief detail; a day away needs neither.

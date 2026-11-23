@@ -28,7 +28,7 @@ import {
 } from "../../../lib/resource-planning";
 import "./workload.css";
 import "./allocation.css";
-import { TeamWeek } from "./TeamWeekScreen";
+import "./team-week.css";
 
 type Props = {
   bootstrap: BootstrapData;
@@ -42,21 +42,21 @@ type Props = {
   refreshBootstrap?: () => Promise<void>;
 };
 // The team board and its list come first (owner decision 2026-10-21); the weekly workload and Tasks need schedule access.
-// Team week (owner decision 2026-11-23) opens first: everyone's week in hours, with the allocation queue beside it.
+// Team planner (owner decision 2026-11-23) opens first: the daily grid and Team week in one table, in hours, with the
+// allocation queue beside it. "board" was the daily grid's tab: its links open Team planner.
 type ResourceTab = "week" | "board" | "list" | "workload" | "tasks";
-const BOARD_TABS: readonly ResourceTab[] = ["week", "board", "list"];
+const BOARD_TABS: readonly ResourceTab[] = ["week", "list"];
 const PLAN_TABS: readonly ResourceTab[] = ["workload", "tasks"];
 type WorkloadView = "table" | "gantt";
 type Focus = "over" | "overdue" | "late" | "missing";
 // Team overview's link: "#/resources/<tab>?…" with the tab's filters (screen-link.tsx); codecs are made once.
 const RESOURCE_TABS: readonly ResourceTab[] = ["week", "board", "list", "workload", "tasks"];
 /**
- * Team overview shows two tabs, Team week and Allocation (owner decision 2026-11-23, "lean it again"); its other views
- * stay one click away under More views, nothing removed. needs: the right each view asks for.
+ * Team overview shows two tabs, Team planner and Allocation (owner decision 2026-11-23, "lean it again"); its other
+ * views stay one click away under More views. needs: the right each view asks for.
  */
 const MORE_VIEWS: readonly { id: ResourceTab; label: string; needs: "board" | "read" }[] = [
   { id: "list", label: "TeamBoard.tabList", needs: "board" },
-  { id: "board", label: "TeamBoard.tabBoard", needs: "board" },
   { id: "tasks", label: "Workload.tabTasks", needs: "read" },
 ];
 const WORKLOAD_VIEW_LINK = choiceLink<WorkloadView>(["table", "gantt"]);
@@ -122,8 +122,9 @@ export function ProductionResourcePlan({ bootstrap, notify, openProjectSchedule,
   // The tab is the link's place; without one, the tab last used here.
   const [opened, place] = useScreenPlace();
   const [storedTab, setTab] = useState<ResourceTab>(() => RESOURCE_TABS.find((tab) => tab === opened[0]) ?? readStored(tabStorageKey(bootstrap.user.id), RESOURCE_TABS, "week"));
-  // A remembered tab the person may no longer open falls back to the first one they may.
-  const tab: ResourceTab = allowedTabs.includes(storedTab) ? storedTab : (allowedTabs[0] ?? "week");
+  // The daily grid now lives in Team planner; a remembered tab the person may no longer open falls back to the first one they may.
+  const wanted: ResourceTab = storedTab === "board" ? "week" : storedTab;
+  const tab: ResourceTab = allowedTabs.includes(wanted) ? wanted : (allowedTabs[0] ?? "week");
   const [view, setView] = useLinkedState<WorkloadView>("display", "table", WORKLOAD_VIEW_LINK, {
     legacy: () => readStored<WorkloadView>(viewStorageKey(bootstrap.user.id), ["table", "gantt"], "table"),
   });
@@ -147,8 +148,7 @@ export function ProductionResourcePlan({ bootstrap, notify, openProjectSchedule,
     [edit, setEdit] = useState<Commitment | null>(null),
     [capacityUser, setCapacityUser] = useState<number | null>(null),
     [queueDiscipline, setQueueDiscipline] = useState<string>("all"),
-    [assigning, setAssigning] = useState<Commitment | null>(null),
-    [weekRevision, setWeekRevision] = useState(0);
+    [assigning, setAssigning] = useState<Commitment | null>(null);
   const canPlan = bootstrap.permissions.includes("schedule.plan");
   // Anyone orders their own work; Admin, Engineering Managers and Project Managers may order anyone's (the API agrees).
   const manages = (bootstrap.user.roles ?? [bootstrap.user.role]).some((role) => MANAGER_ROLES.includes(role));
@@ -165,7 +165,7 @@ export function ProductionResourcePlan({ bootstrap, notify, openProjectSchedule,
     }
   }, [canRead]);
   // The workload is read when its tab is first shown; a failed read waits for Refresh.
-  // The queue beside Team week reads the same workload.
+  // The queue beside Team planner reads the same workload.
   const wantsData = canRead && (tab === "workload" || tab === "week") && data === null && !error;
   useEffect(() => {
     if (!wantsData) return;
@@ -344,7 +344,7 @@ export function ProductionResourcePlan({ bootstrap, notify, openProjectSchedule,
     </Panel>
   ) : null;
   if (!allowedTabs.length) return <EmptyState icon="shield" title={t("Permission denied")} message="team.board" />;
-  const onBoard = tab === "board" || tab === "list";
+  const onBoard = tab === "list";
   const moreViews = MORE_VIEWS.filter((view) => (view.needs === "board" ? canBoard : canRead));
   const moreActive = moreViews.find((view) => view.id === tab);
   return (
@@ -403,23 +403,20 @@ export function ProductionResourcePlan({ bootstrap, notify, openProjectSchedule,
         ) : null}
       </div>
       {tab === "week" ? (
-        <>
-          <TeamWeek bootstrap={bootstrap} queue={canRead ? queuePanel : null} revision={weekRevision} />
-          {/* The add and Outlook buttons, and their dialogs, beside the title: the team board without its grid. */}
-          <TeamBoard
-            bootstrap={bootstrap}
-            notify={notify}
-            mode="actions"
-            onMode={changeTab}
-            today={todayIso}
-            openItem={open}
-            onChanged={() => {
-              setData(null);
-              setWeekRevision((current) => current + 1);
-            }}
-            actionsSlot={boardActions}
-          />
-        </>
+        // Team planner: the board's grid in hours, the allocation queue beside it; an old daily-grid link opens two weeks.
+        <TeamBoard
+          bootstrap={bootstrap}
+          notify={notify}
+          mode="board"
+          onMode={changeTab}
+          today={todayIso}
+          openItem={open}
+          onChanged={() => setData(null)}
+          actionsSlot={boardActions}
+          queue={canRead ? queuePanel : null}
+          queueCount={canRead ? waiting.length : 0}
+          fromOldBoard={opened[0] === "board"}
+        />
       ) : onBoard ? (
         <TeamBoard bootstrap={bootstrap} notify={notify} mode={tab} onMode={changeTab} today={todayIso} openItem={open} onChanged={() => setData(null)} actionsSlot={boardActions} />
       ) : tab === "tasks" ? (

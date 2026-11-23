@@ -43,7 +43,7 @@ export const activityModuleLabels: Record<string, string> = {
   "projects-timeline": "Projects · Timeline",
   "projects-schedule": "Projects · Schedule",
   "projects-punchlist": "Projects · Punchlist",
-  "resources-week": "Team overview · Team week",
+  "resources-week": "Team overview · Team planner",
   "resources-board": "Team overview · Team grid",
   "resources-list": "Team overview · Work list",
   "resources-tasks": "Resource Plan · Tasks",

@@ -7,13 +7,16 @@ import { bangkokToday } from "../issue-batches.js";
 import { isProjectElevated } from "../project-scope.js";
 import { teamWeek, type WeekAway, type WeekBlock, type WeekInput, type WeekMeeting, type WeekTask } from "../team-week.js";
 import type { CurrentUserService } from "../users.js";
-import { HOURS_PER_DAY, MAX_WINDOW_DAYS, dayNumber } from "../work-days.js";
+import { HOURS_PER_DAY, dayNumber } from "../work-days.js";
 
 /*
- * GET /api/v1/team-week?from&to   Team overview > Team week: everyone's days in hours, from My week blocks, Outlook
+ * GET /api/v1/team-week?from&to   Team overview > Team planner: everyone's days in hours, from My week blocks, Outlook
  *                                 meetings, team tasks and time away, with the hours each person confirmed.
  * Read with team.board, like the rest of Team overview. Rules: team-week.ts.
  */
+
+/** Team planner shows one, two or four weeks (owner decision 2026-11-23). */
+export const TEAM_WEEK_MAX_DAYS = 28;
 
 type Row = Record<string, unknown>;
 
@@ -105,7 +108,7 @@ export function registerTeamWeekRoutes(app: FastifyInstance, database: Database,
     const query = request.query as Record<string, unknown>;
     const from = parseDateOnly(query.from, "From")!,
       to = parseDateOnly(query.to, "To")!;
-    if (to < from || dayNumber(to) - dayNumber(from) + 1 > MAX_WINDOW_DAYS) throw new ApiError(400, "validation_failed", `Choose a window of at most ${MAX_WINDOW_DAYS} days.`);
+    if (to < from || dayNumber(to) - dayNumber(from) + 1 > TEAM_WEEK_MAX_DAYS) throw new ApiError(400, "validation_failed", `Choose a window of at most ${TEAM_WEEK_MAX_DAYS} days.`);
     const elevated = isProjectElevated(actor);
     const result = await database.query<Row>(TEAM_WEEK_SQL, (q) => q.input("actor", sql.BigInt, actor.id).input("elevated", sql.Bit, elevated).input("from", sql.Date, from).input("to", sql.Date, to));
     const { input, userIds } = teamWeekRead(result.recordsets as unknown as Row[][], from, to, elevated);
