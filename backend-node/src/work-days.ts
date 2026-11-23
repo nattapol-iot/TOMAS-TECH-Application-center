@@ -33,13 +33,37 @@ export const WORK_KEY = /^(?:Project|TeamTask|Issue|InquiryTask|Inquiry|Estimate
 export type WorkKind = "Project" | "TeamTask" | "Issue" | "Inquiry" | "Estimate" | "Outlook";
 /** A piece of work a day's hours can go to. */
 export type WorkChoice = { workKey: string; kind: WorkKind; projectId: number | null; projectNo: string | null; title: string; reference: string };
-export type DraftRow = WorkChoice & { hours: number };
+/**
+ * A drafted line: a piece of work, or (from a block booked for other work, migration 124) a note with no work key,
+ * counting towards a project or none.
+ */
+export type DraftRow = {
+  workKey: string | null;
+  kind: WorkKind | "ProjectOther" | "Other";
+  projectId: number | null;
+  projectNo: string | null;
+  title: string;
+  reference: string;
+  hours: number;
+};
+/** Time the person booked on their calendar (My week, migration 124); minutes after midnight. */
+export type BlockDay = { id: number; date: string; start: number; end: number; workKey: string | null; projectId: number | null; projectNo: string | null; title: string };
 
 export type TeamTaskDay = {
-  id: number; kind: "Appointment" | "Task" | "Away"; title: string; projectId: number | null; projectNo: string | null;
-  start: string; end: string; slot: string; startTime: string | null; endTime: string | null; manDays: number;
+  id: number;
+  kind: "Appointment" | "Task" | "Away";
+  title: string;
+  projectId: number | null;
+  projectNo: string | null;
+  start: string;
+  end: string;
+  slot: string;
+  startTime: string | null;
+  endTime: string | null;
+  manDays: number;
 };
-export type OutlookEventDay = { id: number; subject: string | null; allDay: boolean; start: string; end: string };
+/** eventId: the Outlook event's own id, by which the person may tie the meeting to a piece of work (migration 124). */
+export type OutlookEventDay = { id: number; eventId?: string; subject: string | null; allDay: boolean; start: string; end: string };
 /** Time away on each day of a span, in hours. */
 export type AwaySpan = { start: string; end: string; hours: number };
 export type DayDraft = { date: string; working: boolean; awayHours: number; rows: DraftRow[] };
@@ -48,7 +72,10 @@ const DAY = 86_400_000;
 export const dayNumber = (date: string) => Date.parse(`${date}T00:00:00Z`) / DAY;
 export const dateFromDay = (day: number) => new Date(day * DAY).toISOString().slice(0, 10);
 export const addDays = (date: string, days: number) => dateFromDay(dayNumber(date) + days);
-export const isWeekend = (date: string) => { const weekday = new Date(`${date}T00:00:00Z`).getUTCDay(); return weekday === 0 || weekday === 6; };
+export const isWeekend = (date: string) => {
+  const weekday = new Date(`${date}T00:00:00Z`).getUTCDay();
+  return weekday === 0 || weekday === 6;
+};
 export const isWorkingDay = (date: string, holidays: ReadonlySet<string>) => !isWeekend(date) && !holidays.has(date);
 const round2 = (value: number) => Math.round(value * 100) / 100;
 
@@ -74,10 +101,15 @@ export const isEditable = (date: string, today: string) => date >= editableFrom(
  * to the figures that lost most (largest remainder), so a day scaled to 8 hours still adds up to 8.
  */
 export function quarterHours(values: readonly number[], total: number): number[] {
-  const quarters = values.map((value) => Math.max(0, value) * 4), floors = quarters.map(Math.floor);
+  const quarters = values.map((value) => Math.max(0, value) * 4),
+    floors = quarters.map(Math.floor);
   let left = Math.round(total * 4) - floors.reduce((sum, value) => sum + value, 0);
   const order = quarters.map((value, index) => ({ index, remainder: value - floors[index]! })).sort((a, b) => b.remainder - a.remainder || a.index - b.index);
-  for (const { index } of order) { if (left <= 0) break; floors[index]! += 1; left -= 1; }
+  for (const { index } of order) {
+    if (left <= 0) break;
+    floors[index]! += 1;
+    left -= 1;
+  }
   return floors.map((value) => value / 4);
 }
 
@@ -90,7 +122,8 @@ const pieceOf = (item: Pick<WorkloadItem, "group" | "workKey">) => item.group ??
  */
 export function planShares(items: readonly WorkloadItem[], date: string, holidays: ReadonlySet<string>): { item: WorkloadItem; manDays: number }[] {
   const working = isWorkingDay(date, holidays);
-  const typed: { item: WorkloadItem; manDays: number }[] = [], implied: WorkloadItem[] = [];
+  const typed: { item: WorkloadItem; manDays: number }[] = [],
+    implied: WorkloadItem[] = [];
   for (const item of items) {
     if (!item.start || item.type === "Task") continue;
     const end = item.end ?? item.start;
@@ -124,7 +157,10 @@ export function teamTaskShare(task: TeamTaskDay, date: string, holidays: Readonl
 
 /** Hours of time away on a date: a whole day, a half day (AM / PM) or a time range. */
 export function awayHours(spans: readonly AwaySpan[], date: string): number {
-  return Math.min(HOURS_PER_DAY, spans.reduce((sum, span) => sum + (date >= span.start && date <= span.end ? span.hours : 0), 0));
+  return Math.min(
+    HOURS_PER_DAY,
+    spans.reduce((sum, span) => sum + (date >= span.start && date <= span.end ? span.hours : 0), 0),
+  );
 }
 
 /** Hours an away team task takes off each of its days. */
@@ -148,26 +184,68 @@ export function outlookHours(event: Pick<OutlookEventDay, "allDay" | "start" | "
   return Math.min(HOURS_PER_DAY, Math.max(0, until - from - lunch) / 60);
 }
 
-const kindOf = (item: WorkloadItem): WorkKind =>
-  item.type === "Project" ? "Project" : item.type === "Issue" ? "Issue" : item.type === "Estimate" ? "Estimate" : "Inquiry";
+/** The minutes a timed event covers on a date; null for an all-day event or a day it is not on. */
+export function outlookSpan(event: Pick<OutlookEventDay, "allDay" | "start" | "end">, date: string): { start: number; end: number } | null {
+  if (event.allDay) return null;
+  const first = event.start.slice(0, 10),
+    last = event.end.slice(0, 10);
+  if (date < first || date > last) return null;
+  const from = first === date ? minutesOfDay(event.start) : 0;
+  const until = last === date ? minutesOfDay(event.end) : 24 * 60;
+  return until > from ? { start: from, end: until } : null;
+}
+
+/** Minutes of [start, end) covered by any of the spans, each minute counted once. */
+export function coveredMinutes(start: number, end: number, spans: readonly { start: number; end: number }[]): number {
+  const cut = spans
+    .map((span) => ({ start: Math.max(start, span.start), end: Math.min(end, span.end) }))
+    .filter((span) => span.end > span.start)
+    .sort((a, b) => a.start - b.start);
+  let covered = 0,
+    reach = start;
+  for (const span of cut) {
+    const from = Math.max(reach, span.start);
+    if (span.end > from) {
+      covered += span.end - from;
+      reach = span.end;
+    }
+  }
+  return covered;
+}
+
+const kindOf = (item: WorkloadItem): WorkKind => (item.type === "Project" ? "Project" : item.type === "Issue" ? "Issue" : item.type === "Estimate" ? "Estimate" : "Inquiry");
 
 /** A workload item as a piece of work hours can go to. Issues take their batch's project from `issueProjects`. */
 export function choiceFromItem(item: WorkloadItem, issueProjects: ReadonlyMap<number, { projectId: number | null; projectNo: string | null }>): WorkChoice {
   const kind = kindOf(item);
   const issue = kind === "Issue" ? issueProjects.get(Number(item.workKey.slice("Issue-".length))) : undefined;
   return {
-    workKey: item.workKey, kind,
-    projectId: kind === "Project" ? item.entityId : issue?.projectId ?? null,
-    projectNo: kind === "Project" ? item.reference.split(" · ")[0] ?? null : issue?.projectNo ?? null,
-    title: item.title || item.reference, reference: item.reference,
+    workKey: item.workKey,
+    kind,
+    projectId: kind === "Project" ? item.entityId : (issue?.projectId ?? null),
+    projectNo: kind === "Project" ? (item.reference.split(" · ")[0] ?? null) : (issue?.projectNo ?? null),
+    title: item.title || item.reference,
+    reference: item.reference,
   };
 }
 
-export const choiceFromTeamTask = (task: TeamTaskDay): WorkChoice =>
-  ({ workKey: `TeamTask-${task.id}`, kind: "TeamTask", projectId: task.projectId, projectNo: task.projectNo, title: task.title, reference: task.projectNo ?? "" });
+export const choiceFromTeamTask = (task: TeamTaskDay): WorkChoice => ({
+  workKey: `TeamTask-${task.id}`,
+  kind: "TeamTask",
+  projectId: task.projectId,
+  projectNo: task.projectNo,
+  title: task.title,
+  reference: task.projectNo ?? "",
+});
 
-export const choiceFromOutlook = (event: OutlookEventDay): WorkChoice =>
-  ({ workKey: `Outlook-${event.id}`, kind: "Outlook", projectId: null, projectNo: null, title: event.subject?.trim() || "Outlook", reference: "" });
+export const choiceFromOutlook = (event: OutlookEventDay): WorkChoice => ({
+  workKey: `Outlook-${event.id}`,
+  kind: "Outlook",
+  projectId: null,
+  projectNo: null,
+  title: event.subject?.trim() || "Outlook",
+  reference: "",
+});
 
 export type DraftInput = {
   today: string;
@@ -183,41 +261,86 @@ export type DraftInput = {
   outlook: readonly OutlookEventDay[];
   away: readonly AwaySpan[];
   issueProjects: ReadonlyMap<number, { projectId: number | null; projectNo: string | null }>;
+  /** Time the person booked on My week (migration 124). A day with blocks is drafted from them, not from the plan. */
+  blocks?: readonly BlockDay[];
+  /** Outlook meetings the person tied to a piece of work: event id → work key. */
+  links?: ReadonlyMap<string, string>;
 };
+
+type Line = { choice: Omit<DraftRow, "hours">; hours: number };
+/** The line a booked block drafts: its piece of work, or its note when it is other work or its work is gone. */
+function blockChoice(block: BlockDay, choices: ReadonlyMap<string, WorkChoice>): Omit<DraftRow, "hours"> {
+  const choice = block.workKey ? choices.get(block.workKey) : undefined;
+  if (choice) return choice;
+  return { workKey: null, kind: block.projectId === null ? "Other" : "ProjectOther", projectId: block.projectId, projectNo: block.projectNo, title: block.title, reference: "" };
+}
+/** One line per piece of work (a note per project and text): two shares of it on a day add up. */
+function mergeLines(lines: readonly Line[]): Line[] {
+  const merged = new Map<string, Line>();
+  for (const line of lines) {
+    const key = line.choice.workKey ?? `note:${line.choice.projectId ?? ""}:${line.choice.title}`;
+    const seen = merged.get(key);
+    if (seen) seen.hours += line.hours;
+    else merged.set(key, { ...line });
+  }
+  return [...merged.values()];
+}
+/** Shares scaled down to fit `room` hours, kept to the quarter hour. */
+function fitted(lines: readonly Line[], room: number): Line[] {
+  const raw = lines.reduce((sum, line) => sum + line.hours, 0);
+  const total = Math.min(raw, Math.max(0, room));
+  const hours = quarterHours(
+    lines.map((line) => (raw > 0 ? line.hours * (total / raw) : 0)),
+    total,
+  );
+  return lines.map((line, index) => ({ ...line, hours: hours[index]! }));
+}
 
 /** The day the app offers the person to confirm. */
 export function draftDay(date: string, input: DraftInput): DayDraft {
   const working = isWorkingDay(date, input.holidays);
   const away = awayHours(input.away, date);
-  // Meetings first: they happened at a set time. Then the planned work shares what is left of the day.
-  const meetings = input.outlook.map((event) => ({ choice: choiceFromOutlook(event), hours: outlookHours(event, date) })).filter((row) => row.hours > 0);
-  const meetingRoom = Math.max(0, HOURS_PER_DAY - away);
-  const meetingRaw = meetings.reduce((sum, row) => sum + row.hours, 0);
-  const meetingTotal = Math.min(meetingRaw, meetingRoom);
-  const meetingHours = quarterHours(meetings.map((row) => meetingRaw > 0 ? row.hours * (meetingTotal / meetingRaw) : 0), meetingTotal);
+  const choices = new Map<string, WorkChoice>();
+  for (const item of [...input.items, ...input.finishedItems]) if (!choices.has(item.workKey)) choices.set(item.workKey, choiceFromItem(item, input.issueProjects));
+  for (const task of input.teamTasks) choices.set(`TeamTask-${task.id}`, choiceFromTeamTask(task));
+  // Meetings first: they happened at a set time. One the person tied to a piece of work counts there.
+  const meetingOf = (event: OutlookEventDay) => {
+    const linked = event.eventId ? input.links?.get(event.eventId) : undefined;
+    return (linked ? choices.get(linked) : undefined) ?? choiceFromOutlook(event);
+  };
+  const meetings = fitted(
+    input.outlook.map((event) => ({ choice: meetingOf(event), hours: outlookHours(event, date) })).filter((row) => row.hours > 0),
+    HOURS_PER_DAY - away,
+  );
+  const meetingTotal = meetings.reduce((sum, row) => sum + row.hours, 0);
+  const tasks = input.teamTasks.map((task) => ({ choice: choiceFromTeamTask(task), hours: teamTaskShare(task, date, input.holidays) * HOURS_PER_DAY })).filter((row) => row.hours > 0);
 
-  const work = [
-    ...planShares(date < input.today ? [...input.items, ...input.finishedItems] : input.items, date, input.holidays).map(({ item, manDays }) => ({ choice: choiceFromItem(item, input.issueProjects), hours: manDays * HOURS_PER_DAY })),
-    ...input.teamTasks.map((task) => ({ choice: choiceFromTeamTask(task), hours: teamTaskShare(task, date, input.holidays) * HOURS_PER_DAY })),
-  ].filter((row) => row.hours > 0);
-  // One piece of work is one line: two shares of it on a day add up.
-  const merged = new Map<string, { choice: WorkChoice; hours: number }>();
-  for (const row of work) { const seen = merged.get(row.choice.workKey); if (seen) seen.hours += row.hours; else merged.set(row.choice.workKey, { ...row }); }
-  const workRows = [...merged.values()];
-  const workRoom = Math.max(0, HOURS_PER_DAY - away - meetingTotal);
-  const workRaw = workRows.reduce((sum, row) => sum + row.hours, 0);
-  const workTotal = Math.min(workRaw, workRoom);
-  const workHours = quarterHours(workRows.map((row) => workRaw > 0 ? row.hours * (workTotal / workRaw) : 0), workTotal);
-
-  const rows: DraftRow[] = [
-    ...workRows.map((row, index) => ({ ...row.choice, hours: workHours[index]! })),
-    ...meetings.map((row, index) => ({ ...row.choice, hours: meetingHours[index]! })),
-  ].filter((row) => row.hours > 0);
+  const blocks = (input.blocks ?? []).filter((block) => block.date === date);
+  let work: Line[];
+  if (blocks.length) {
+    // The person said what the day holds: each block takes its own time, less the minutes a meeting took; team tasks
+    // share what is left of the day. The plan's even spread is not used on such a day.
+    const spans = input.outlook.map((event) => outlookSpan(event, date)).filter((span): span is { start: number; end: number } => span !== null);
+    const booked = blocks
+      .map((block) => ({ choice: blockChoice(block, choices), hours: (block.end - block.start - coveredMinutes(block.start, block.end, spans)) / 60 }))
+      .filter((row) => row.hours > 0);
+    const bookedTotal = booked.reduce((sum, row) => sum + row.hours, 0);
+    work = [...booked, ...fitted(mergeLines(tasks), HOURS_PER_DAY - away - meetingTotal - bookedTotal)];
+  } else {
+    const planned = planShares(date < input.today ? [...input.items, ...input.finishedItems] : input.items, date, input.holidays).map(({ item, manDays }) => ({
+      choice: choiceFromItem(item, input.issueProjects) as Omit<DraftRow, "hours">,
+      hours: manDays * HOURS_PER_DAY,
+    }));
+    work = fitted(mergeLines([...planned, ...tasks].filter((row) => row.hours > 0)), HOURS_PER_DAY - away - meetingTotal);
+  }
+  const rows: DraftRow[] = mergeLines([...work, ...meetings])
+    .map((row) => ({ ...row.choice, hours: row.hours }))
+    .filter((row) => row.hours > 0);
   return { date, working, awayHours: away, rows };
 }
 
-/** A day's draft hours by work key, for planned_hours. */
-export const draftHoursByKey = (draft: DayDraft) => new Map(draft.rows.map((row) => [row.workKey, row.hours]));
+/** A day's draft hours by work key, for planned_hours (typed notes have none). */
+export const draftHoursByKey = (draft: DayDraft) => new Map(draft.rows.flatMap((row) => (row.workKey === null ? [] : [[row.workKey, row.hours] as const])));
 
 // ── A day sent for confirmation ─────────────────────────────────────────────
 
@@ -267,7 +390,10 @@ export function parseDayRows(value: unknown): DayInputRow[] {
  * the server, never from the browser. Work typed by hand may count towards one of the person's projects.
  */
 export function resolveDayRows(
-  rows: readonly DayInputRow[], choices: ReadonlyMap<string, WorkChoice>, projects: ReadonlyMap<number, { projectNo: string }>, planned: ReadonlyMap<string, number>,
+  rows: readonly DayInputRow[],
+  choices: ReadonlyMap<string, WorkChoice>,
+  projects: ReadonlyMap<number, { projectNo: string }>,
+  planned: ReadonlyMap<string, number>,
 ): StoredRow[] {
   return rows.map((row) => {
     if (row.workKey !== null) {

@@ -18,7 +18,7 @@ test("the page sits in the Pegasus scope, with the guidance as its subtitle inst
 
 test("one summary bar replaces the five stat cards and the All open row; each cell is the filter it counts", () => {
   assert.doesNotMatch(screen, /MyWorkStat|my-work-kpis|my-work-filter-row" role="group"/);
-  assert.match(page, /<div className="pg-summary my-work-summary" role="group" aria-label=\{localizeCopy\("Task overview"\)\} data-guide="work\.summary">/);
+  assert.match(page, /<div className="pg-summary my-work-summary" role="group" aria-label=\{localizeCopy\("Task overview"\)\} data-guide="work\.summary" hidden=\{tab === "week"\}>/);
   for (const id of ["open", "late", "blocked", "attention", "week", "waiting"]) assert.match(page, new RegExp(`\\{ id: "${id}", label: "`));
   assert.match(page, /aria-pressed=\{tab === "active" && taskFilter === cell\.id\}/);
   assert.match(page, /onClick=\{\(\) => \{\s*setTab\("active"\);\s*setSourceFilter\("all"\);\s*setTaskFilter\(cell\.id\);\s*\}\}/);

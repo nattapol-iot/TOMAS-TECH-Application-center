@@ -120,7 +120,7 @@ import {
 
 import { CrmMyWork } from "./CrmScreens";
 import { DateInput } from "../DateInput";
-import { WorkDaysPanel } from "./WorkDaysPanel";
+import { MyWeek } from "./MyWeekScreen";
 
 type ProductionPlanningProps = {
   openCrmOpportunity?: (id: number) => void;
@@ -943,7 +943,7 @@ type MyWorkProgressInput = {
 
 type MyWorkFilter = "attention" | "open" | "late" | "blocked" | "week" | "waiting";
 type MyWorkSort = "priority" | "due" | "project";
-type MyWorkTab = "new" | "active" | "queue" | "updates";
+type MyWorkTab = "week" | "new" | "active" | "queue" | "updates";
 type MyWorkSource = "all" | "crm" | "estimate" | "project" | "service" | "personal";
 type ScheduleWorkGroup = {
   key: string;
@@ -995,6 +995,7 @@ const MY_WORK_SOURCE_OPTIONS: { id: MyWorkSource; label: string }[] = [
 ];
 
 const MY_WORK_SOURCE_AVAILABILITY: Record<MyWorkTab, MyWorkSource[]> = {
+  week: ["all"],
   new: ["all", "estimate", "project", "service"],
   active: ["all", "crm", "estimate", "project", "personal"],
   queue: ["all"],
@@ -1462,7 +1463,8 @@ export function ProductionMyWork({
   const [updates, setUpdates] = useState<MyWorkUpdate[]>([]);
   const [loading, setLoading] = useState(allowed);
   const [error, setError] = useState("");
-  const [tab, setTab] = useState<MyWorkTab>("active");
+  // My week opens first (owner decision 2026-11-23): the calendar is where the week is planned and its hours confirmed.
+  const [tab, setTab] = useState<MyWorkTab>("week");
   const [saving, setSaving] = useState<Set<number>>(() => new Set());
   const [requestFor, setRequestFor] = useState<MyWorkItem | null>(null);
   const [inquiryWork, setInquiryWork] = useState<ResourceTask[]>([]);
@@ -1800,8 +1802,7 @@ export function ProductionMyWork({
           </>
         }
       />
-      <WorkDaysPanel notify={notify} />
-      <div className="pg-summary my-work-summary" role="group" aria-label={localizeCopy("Task overview")} data-guide="work.summary">
+      <div className="pg-summary my-work-summary" role="group" aria-label={localizeCopy("Task overview")} data-guide="work.summary" hidden={tab === "week"}>
         {summaryCells.map((cell) => (
           <button
             key={cell.id}
@@ -1828,6 +1829,7 @@ export function ProductionMyWork({
           if (!MY_WORK_SOURCE_AVAILABILITY[nextTab].includes(sourceFilter)) setSourceFilter("all");
         }}
         tabs={[
+          { id: "week", label: "MyWeek.tab" },
           { id: "new", label: "New Assignments", count: newAssignmentCount },
           { id: "active", label: "My Active Work", count: open.length + actionableEstimateAssignments.length },
           { id: "queue", label: "WorkQueue.myTab" },
@@ -1898,6 +1900,7 @@ export function ProductionMyWork({
         />
       ) : null}
 
+      {tab === "week" ? <MyWeek notify={notify} /> : null}
       {tab === "new" ? (
         <ResourceTaskWorkspace
           bootstrap={bootstrap}
