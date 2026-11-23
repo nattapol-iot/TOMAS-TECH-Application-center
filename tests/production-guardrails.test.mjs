@@ -201,7 +201,8 @@ test("production My Work keeps the Demo workflow on live API contracts", async (
   assert.match(screen, /const activeLoading =/);
   assert.match(screen, /estimateQueue\.reload\(\)/);
   assert.match(screen, /taskFilter === "attention"/);
-  assert.match(screen, /useState<MyWorkTab>\("active"\)/);
+  // My week opens first since 2026-11-23: the calendar that replaces planning the week in Outlook.
+  assert.match(screen, /useState<MyWorkTab>\("week"\)/);
   assert.match(screen, /initialFilter="Acknowledgment"/);
   assert.match(screen, /onViewActive=\{\(\) => setTab\("active"\)\}/);
   assert.match(screen, /taskFilter !== "blocked"/);

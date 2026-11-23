@@ -185,6 +185,7 @@ GO
 :r database/migrations/121_daily_work_hours.sql
 :r database/migrations/122_master_data_sync_account.sql
 :r database/migrations/123_plan_row_discipline.sql
+:r database/migrations/124_my_week_calendar.sql
 
 USE [$(DatabaseName)];
 GO

@@ -1422,6 +1422,86 @@ const PROJECT_DELETE: Guide = {
   ],
 };
 
+const MY_WEEK_BOOK: Guide = {
+  id: "my-week-book",
+  area: "project",
+  minutes: 2,
+  permissions: ["schedule.read", "schedule.progress"],
+  views: ["my-work"],
+  title: { th: "วางแผนสัปดาห์และลงเวลาในปฏิทิน (แทน Outlook)", en: "Plan your week on the calendar (instead of Outlook)", jp: "カレンダーで週を計画する（Outlookの代わり）" },
+  summary: {
+    th: "ลงเวลาให้งานที่ได้รับบนปฏิทินในแอป ไม่ต้องพิมพ์ใน Outlook แล้ว แอปส่งเวลาที่ลงเข้าปฏิทิน Outlook ของคุณเอง และใช้ร่างชั่วโมงของแต่ละวัน นัดที่คนอื่นส่งมาใน Outlook จะขึ้นในปฏิทิน กดแล้วผูกกับงานได้",
+    en: "Book time for your work on the app's calendar instead of typing it into Outlook. The app writes the time into your Outlook calendar and drafts each day's hours from it. Meetings other people send you in Outlook show on the calendar; press one to tie it to a piece of work.",
+    jp: "Outlookに入力する代わりに、アプリのカレンダーで担当作業の時間を入れます。入れた時間は自動でOutlookの予定表に入り、毎日の作業時間の下書きになります。他の人から届いたOutlookの予定もカレンダーに表示され、押すと作業に紐づけられます。",
+  },
+  steps: [
+    menu(
+      "my-work",
+      { th: "เปิดงานของฉัน", en: "Open My Work", jp: "「マイワーク」を開く" },
+      { th: "สัปดาห์ของฉันอยู่ในหน้านี้ คลิกที่เมนูที่ไฮไลต์อยู่", en: "My week is on this page. Click the highlighted menu entry.", jp: "マイウィークはこの画面にあります。強調表示のメニューをクリックします。" },
+    ),
+    {
+      target: '[data-tab="week"]',
+      action: "click",
+      view: "my-work",
+      title: { th: "เปิดสัปดาห์ของฉัน", en: "Open My week", jp: "マイウィークを開く" },
+      body: { th: "กดแท็บ 'สัปดาห์ของฉัน'", en: "Press the My week tab.", jp: "「マイウィーク」タブを押します。" },
+    },
+    {
+      target: "myweek.backlog",
+      action: "next",
+      view: "my-work",
+      title: { th: "งานที่ได้รับ", en: "Work assigned to you", jp: "担当作業" },
+      body: {
+        th: "ด้านซ้ายคืองานที่คุณรับผิดชอบ แต่ละงานบอกชั่วโมงที่เหลือจากแผน (หักชั่วโมงที่ยืนยันแล้ว) และชั่วโมงที่ลงไว้ในสัปดาห์นี้ กด 'ลงเวลา' ที่งาน หรือคลิกช่องว่างในปฏิทินก็ได้",
+        en: "On the left is the work you are responsible for: the hours left in its plan (less the hours already confirmed) and the hours booked this week. Press Book time on a piece of work, or click a free time on the calendar.",
+        jp: "左側は担当作業です。計画の残り時間（確定済みの時間を除く）と今週入れた時間が表示されます。作業の「時間を入れる」を押すか、カレンダーの空き時間をクリックします。",
+      },
+      missing: { th: "ยังไม่มีงานที่ได้รับ กด 'ถัดไป'", en: "No work is assigned to you yet. Press Next.", jp: "担当作業がまだありません。「次へ」を押します。" },
+    },
+    {
+      target: "myweek.book",
+      action: "click",
+      view: "my-work",
+      title: { th: "ลงเวลา", en: "Book time", jp: "時間を入れる" },
+      body: { th: "กด 'ลงเวลา' ระบบหาช่วงว่างแรกของวันให้", en: "Press Book time. The app picks the day's first free hour.", jp: "「時間を入れる」を押します。その日の最初の空き時間が選ばれます。" },
+    },
+    {
+      target: "myweek.work",
+      action: "next",
+      view: "my-work",
+      title: { th: "เลือกงาน", en: "Choose the work", jp: "作業を選ぶ" },
+      body: {
+        th: "เลือกงานที่จะทำ ถ้าเป็นงานนอกแผน เลือก 'งานอื่นในโครงการ' หรือ 'งานอื่น' แล้วพิมพ์ว่าทำอะไร",
+        en: "Choose the work you will do. For work outside the plan choose Other work on a project or Other work and type what it is.",
+        jp: "行う作業を選びます。計画外の作業は「プロジェクトのその他作業」か「その他の作業」を選んで内容を入力します。",
+      },
+    },
+    {
+      target: "myweek.time",
+      action: "next",
+      view: "my-work",
+      title: { th: "วันและเวลา", en: "Day and time", jp: "日付と時間" },
+      body: {
+        th: "ตั้งวัน เวลาเริ่ม และเวลาจบ (ทีละ 15 นาที) ช่วงที่ชนกับช่องอื่นที่ลงไว้จะบันทึกไม่ได้ นัดใน Outlook ซ้อนกันได้ ระบบนับชั่วโมงของนัดแทน",
+        en: "Set the day, the start and the end (in 15 minutes). Time that overlaps another booked block cannot be saved; an Outlook meeting may overlap, and its hours are counted instead.",
+        jp: "日付・開始・終了を設定します（15分単位）。他の予定と重なる時間は保存できません。Outlookの予定とは重なってもよく、その予定の時間が計上されます。",
+      },
+    },
+    {
+      target: "myweek.save",
+      action: "click",
+      view: "my-work",
+      title: { th: "บันทึก แล้วเข้า Outlook เอง", en: "Save: it goes into Outlook by itself", jp: "保存するとOutlookに入ります" },
+      body: {
+        th: "กด 'บันทึก' เวลานี้จะเข้าปฏิทิน Outlook ของคุณทันที (แก้หรือลบที่แอป การแก้ใน Outlook จะถูกเขียนทับ) และใช้ร่างชั่วโมงของวันนั้น ถ้าแค่ฝึก ให้กด 'ยกเลิก'",
+        en: "Press Save. The time goes into your Outlook calendar at once (change or remove it in the app: changes made in Outlook are overwritten) and drafts that day's hours. Only practising? Press Cancel.",
+        jp: "「保存」を押すと、この時間がすぐOutlookの予定表に入り（変更・削除はアプリで。Outlookでの変更は上書きされます）、その日の作業時間の下書きになります。練習だけなら「キャンセル」を押します。",
+      },
+    },
+  ],
+};
+
 const MY_HOURS: Guide = {
   id: "my-hours-confirm",
   area: "project",
@@ -1430,50 +1510,61 @@ const MY_HOURS: Guide = {
   views: ["my-work"],
   title: { th: "ยืนยันชั่วโมงทำงานรายวัน", en: "Confirm your daily hours", jp: "毎日の作業時間を確定" },
   summary: {
-    th: "ระบบร่างชั่วโมงของแต่ละวันจากงานในแผน Team task Issue และนัดใน Outlook ถ้าเป็นไปตามแผนกดยืนยันครั้งเดียว ถ้าไม่ตรงเปิดวันนั้นแล้วแก้ชั่วโมง ลบหรือเพิ่มงาน ยืนยันย้อนหลังได้ 30 วัน",
-    en: "The app drafts each day's hours from your plan tasks, team tasks, issues and Outlook meetings. Confirm with one press when the day went as planned; otherwise open the day and change the hours, remove or add work. Days can be confirmed up to 30 days late.",
-    jp: "計画タスク・チームタスク・課題・Outlookの予定から毎日の作業時間を下書きします。計画どおりならワンクリックで確定し、違う日は日付を開いて時間を直したり作業を追加・削除したりします。30日前まで遡って確定できます。",
+    th: "ระบบร่างชั่วโมงของแต่ละวันจากเวลาที่คุณลงในสัปดาห์ของฉัน (ถ้าไม่ได้ลง ร่างจากงานในแผน) Team task Issue และนัดใน Outlook ถ้าเป็นไปตามนั้นกดยืนยันที่ท้ายวันครั้งเดียว ถ้าไม่ตรงเปิดวันนั้นแล้วแก้ชั่วโมง ลบหรือเพิ่มงาน ยืนยันย้อนหลังได้ 30 วัน",
+    en: "The app drafts each day's hours from the time you booked on My week (or, without it, from your plan tasks), team tasks, issues and Outlook meetings. Confirm with one press at the foot of the day when it went that way; otherwise open the day and change the hours, remove or add work. Days can be confirmed up to 30 days late.",
+    jp: "マイウィークで入れた時間（なければ計画タスク）、チームタスク、課題、Outlookの予定から毎日の作業時間を下書きします。そのとおりなら日の下でワンクリックで確定し、違う日はその日を開いて時間を直したり作業を追加・削除したりします。30日前まで遡って確定できます。",
   },
   steps: [
     menu(
       "my-work",
       { th: "เปิดงานของฉัน", en: "Open My Work", jp: "「マイワーク」を開く" },
       {
-        th: "แถบชั่วโมงทำงานอยู่บนสุดของหน้านี้ คลิกที่เมนูที่ไฮไลต์อยู่",
-        en: "The hours strip is at the top of this page. Click the highlighted menu entry.",
-        jp: "作業時間の帯はこの画面の一番上にあります。強調表示のメニューをクリックします。",
+        th: "การยืนยันชั่วโมงอยู่ท้ายแต่ละวันในสัปดาห์ของฉัน คลิกที่เมนูที่ไฮไลต์อยู่",
+        en: "Hours are confirmed at the foot of each day on My week. Click the highlighted menu entry.",
+        jp: "作業時間はマイウィークの各日の下で確定します。強調表示のメニューをクリックします。",
       },
     ),
     {
-      target: "hours.week",
-      action: "next",
-      view: "my-work",
-      title: { th: "ชั่วโมงทำงานของสัปดาห์", en: "Your week's hours", jp: "今週の作業時間" },
-      body: {
-        th: "แต่ละช่องคือหนึ่งวัน สีฟ้า 'รอยืนยัน' คือร่างจากแผน สีเขียวคือยืนยันแล้ว สีเหลือง 'ยังไม่ได้ลง' คือวันทำงานที่ไม่มีงานในแผน ต้องเพิ่มเอง ปุ่มลูกศรเลื่อนดูสัปดาห์ก่อนได้",
-        en: "Each box is a day. Blue To confirm is the draft from your plan, green is confirmed, amber Fill in is a working day with nothing planned that you fill in yourself. The arrows move to the previous week.",
-        jp: "各枠が1日です。青の「未確定」は計画からの下書き、緑は確定済み、黄色の「未入力」は計画のない稼働日で自分で入力します。矢印で前の週に移動できます。",
-      },
-    },
-    {
-      target: "hours.confirmToday",
-      action: "next",
-      view: "my-work",
-      title: { th: "วันที่เป็นไปตามแผน: กดครั้งเดียว", en: "A day that went as planned: one press", jp: "計画どおりの日：ワンクリック" },
-      body: {
-        th: "'ยืนยันวันนี้ตามแผน' บันทึกชั่วโมงตามร่างทันที ถ้ามีวันก่อนหน้าที่ยังค้าง ปุ่ม 'ยืนยันตามแผนที่ค้าง' จะยืนยันทุกวันนั้นพร้อมกัน วันที่ไม่มีงานในแผนจะไม่ถูกยืนยันให้",
-        en: "Confirm today as planned saves the drafted hours at once. When earlier days are still waiting, Confirm as planned confirms them all together; a day with nothing planned is left for you.",
-        jp: "「今日を計画どおり確定」で下書きの時間をすぐ保存します。前の日が残っていれば「未確定を計画どおり確定」でまとめて確定します。計画のない日は確定されません。",
-      },
-      missing: { th: "วันนี้ยืนยันแล้ว หรือวันนี้ไม่มีงานในแผน กด 'ถัดไป'", en: "Today is already confirmed or has nothing planned. Press Next.", jp: "今日は確定済みか、計画がありません。「次へ」を押します。" },
-    },
-    {
-      target: "hours.days",
+      target: '[data-tab="week"]',
       action: "click",
-      clickOn: ".work-day",
       view: "my-work",
-      title: { th: "วันที่ไม่ตรงแผน: เปิดวันนั้น", en: "A day that went differently: open it", jp: "計画と違う日：その日を開く" },
-      body: { th: "คลิกช่องของวันที่ต้องการแก้", en: "Click the day you want to change.", jp: "直したい日の枠をクリックします。" },
+      title: { th: "เปิดสัปดาห์ของฉัน", en: "Open My week", jp: "マイウィークを開く" },
+      body: { th: "กดแท็บ 'สัปดาห์ของฉัน'", en: "Press the My week tab.", jp: "「マイウィーク」タブを押します。" },
+    },
+    {
+      target: "myweek.week",
+      action: "next",
+      view: "my-work",
+      title: { th: "ชั่วโมงของสัปดาห์", en: "Your week's hours", jp: "今週の作業時間" },
+      body: {
+        th: "แถบนี้บอกชั่วโมงทำงานของสัปดาห์ ลงเวลาไปแล้วเท่าไร ลาเท่าไร ว่างเท่าไร และยืนยันแล้วเท่าไร ลูกศรด้านบนเลื่อนดูสัปดาห์ก่อนได้",
+        en: "This bar shows the week's working hours: how many are booked, away, free and confirmed. The arrows above move to the previous week.",
+        jp: "この帯は今週の勤務時間（予定済み・不在・空き・確定済み）を示します。上の矢印で前の週に移動できます。",
+      },
+    },
+    {
+      target: "myweek.confirm",
+      action: "next",
+      view: "my-work",
+      title: { th: "วันที่เป็นไปตามปฏิทิน: กดครั้งเดียว", en: "A day that went as booked: one press", jp: "予定どおりの日：ワンクリック" },
+      body: {
+        th: "ปุ่ม 'ยืนยัน' ท้ายวันบันทึกชั่วโมงตามร่างทันที วันที่ยังไม่ยืนยันมีปุ่มนี้ทุกวัน วันที่ไม่มีงานเลยต้องลงชั่วโมงเอง",
+        en: "Confirm at the foot of the day saves the drafted hours at once. Every day still waiting has this button; a day with nothing on it is filled in by you.",
+        jp: "日の下の「確定」で下書きの時間をすぐ保存します。未確定の日にはこのボタンがあります。何もない日は自分で入力します。",
+      },
+      missing: { th: "วันนี้ยืนยันแล้ว หรือวันนี้ไม่มีงาน กด 'ถัดไป'", en: "Today is already confirmed or has nothing on it. Press Next.", jp: "今日は確定済みか、作業がありません。「次へ」を押します。" },
+    },
+    {
+      target: "myweek.editHours",
+      action: "click",
+      view: "my-work",
+      title: { th: "วันที่ไม่ตรง: แก้ชั่วโมง", en: "A day that went differently: change the hours", jp: "違う日：時間を修正" },
+      body: { th: "กด 'แก้ชั่วโมง' ท้ายวันนั้น", en: "Press Change hours at the foot of that day.", jp: "その日の下の「時間を修正」を押します。" },
+      missing: {
+        th: "วันนี้ยังแก้ไม่ได้ (ยังไม่ถึงหรือปิดแล้ว) กด 'ถัดไป'",
+        en: "This day cannot be changed (still to come, or closed). Press Next.",
+        jp: "この日はまだ変更できません（未来の日か締め済み）。「次へ」を押します。",
+      },
     },
     {
       target: "hours.add",
@@ -3965,6 +4056,7 @@ export const GUIDES: readonly Guide[] = [
   PROJECT_CREATE,
   PROJECT_DELETE,
   PROJECT_COST,
+  MY_WEEK_BOOK,
   MY_HOURS,
   PROJECT_PLAN,
   PROJECT_MASTER_PLAN,

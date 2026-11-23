@@ -28,12 +28,27 @@ const BOARD_INVITE = /^team-(?:task|series)-\d+@iot-team-center$/i;
 const DAY = 86_400_000;
 
 export type GraphEvent = {
-  id: string; iCalUId?: string; subject?: string | null; sensitivity?: string; showAs?: string; isAllDay?: boolean; isCancelled?: boolean;
-  start?: { dateTime?: string }; end?: { dateTime?: string }; location?: { displayName?: string | null } | null;
+  id: string;
+  iCalUId?: string;
+  subject?: string | null;
+  sensitivity?: string;
+  showAs?: string;
+  isAllDay?: boolean;
+  isCancelled?: boolean;
+  start?: { dateTime?: string };
+  end?: { dateTime?: string };
+  location?: { displayName?: string | null } | null;
   organizer?: { emailAddress?: { address?: string | null } | null } | null;
 };
 export type OutlookRow = {
-  eventId: string; subject: string | null; location: string | null; isPrivate: boolean; isAllDay: boolean; showAs: string; start: string; end: string;
+  eventId: string;
+  subject: string | null;
+  location: string | null;
+  isPrivate: boolean;
+  isAllDay: boolean;
+  showAs: string;
+  start: string;
+  end: string;
 };
 
 /**
@@ -42,12 +57,15 @@ export type OutlookRow = {
  * subject or place. The board's invitations are known by their UID or by their organizer, the system mailbox (each
  * day of a recurring one has an iCalUId of its own).
  */
-export function outlookRows(events: readonly GraphEvent[], boardMailbox = ""): OutlookRow[] {
+export function outlookRows(events: readonly GraphEvent[], boardMailbox = "", own: ReadonlySet<string> = new Set()): OutlookRow[] {
   const rows: OutlookRow[] = [];
   const mailbox = boardMailbox.trim().toLowerCase();
   for (const event of events) {
-    const start = event.start?.dateTime?.slice(0, 19), end = event.end?.dateTime?.slice(0, 19);
+    const start = event.start?.dateTime?.slice(0, 19),
+      end = event.end?.dateTime?.slice(0, 19);
     if (!event.id || !start || !end || event.isCancelled) continue;
+    // Time the person booked on My week, which the app itself wrote into Outlook (outlook-write.ts).
+    if (own.has(event.id) || (event.iCalUId && own.has(event.iCalUId))) continue;
     const showAs = (event.showAs ?? "busy").toLowerCase();
     if (showAs === "free" || (event.iCalUId && BOARD_INVITE.test(event.iCalUId))) continue;
     if (mailbox && (event.organizer?.emailAddress?.address ?? "").trim().toLowerCase() === mailbox) continue;
@@ -56,7 +74,11 @@ export function outlookRows(events: readonly GraphEvent[], boardMailbox = ""): O
       eventId: event.id.slice(0, 400),
       subject: isPrivate ? null : (event.subject ?? "").trim().slice(0, 300) || null,
       location: isPrivate ? null : (event.location?.displayName ?? "").trim().slice(0, 300) || null,
-      isPrivate, isAllDay: Boolean(event.isAllDay), showAs: showAs.slice(0, 30), start, end: end < start ? start : end,
+      isPrivate,
+      isAllDay: Boolean(event.isAllDay),
+      showAs: showAs.slice(0, 30),
+      start,
+      end: end < start ? start : end,
     });
   }
   return rows;
@@ -82,8 +104,12 @@ async function readCalendar(graph: Graph, email: string, from: string, to: strin
 async function saveCalendar(db: Database, userId: number, from: string, to: string, rows: OutlookRow[] | null, error: string | null) {
   await db.transaction(async (transaction) => {
     const request = new sql.Request(transaction);
-    request.input("user", sql.BigInt, userId).input("from", sql.NVarChar(19), `${from}T00:00:00`).input("to", sql.NVarChar(19), `${to}T23:59:59`)
-      .input("rows", sql.NVarChar(sql.MAX), JSON.stringify(rows ?? [])).input("replace", sql.Bit, rows !== null)
+    request
+      .input("user", sql.BigInt, userId)
+      .input("from", sql.NVarChar(19), `${from}T00:00:00`)
+      .input("to", sql.NVarChar(19), `${to}T23:59:59`)
+      .input("rows", sql.NVarChar(sql.MAX), JSON.stringify(rows ?? []))
+      .input("replace", sql.Bit, rows !== null)
       .input("error", sql.NVarChar(500), error?.slice(0, 500) ?? null);
     await request.query(`
       IF @replace=1
@@ -117,22 +143,43 @@ export function syncOutlook(db: Database, graph: Graph, today = bangkokToday()):
       status = { state: "disabled", syncedAt: null, message: "Microsoft Graph is not configured.", people: 0, failed: 0 };
       return status;
     }
-    const from = shift(today, -WINDOW_BACK_DAYS), to = shift(today, WINDOW_AHEAD_DAYS);
-    const people = (await db.query<{ id: number | string; email: string }>(
-      `SELECT id,email FROM dbo.users WHERE is_active=1 AND deleted_at IS NULL AND email LIKE N'%_@_%';`)).recordset;
-    let done = 0, failed = 0, denied = 0, lastError = "";
+    const from = shift(today, -WINDOW_BACK_DAYS),
+      to = shift(today, WINDOW_AHEAD_DAYS);
+    const people = (await db.query<{ id: number | string; email: string }>(`SELECT id,email FROM dbo.users WHERE is_active=1 AND deleted_at IS NULL AND email LIKE N'%_@_%';`)).recordset;
+    // The entries the app wrote for My week blocks (migration 124), by person: they are not meetings to copy.
+    const own = new Map<number, Set<string>>();
+    const ownRows = (
+      await db
+        .query<{ user_id: number | string; outlook_event_id: string | null; outlook_ical_uid: string | null }>(
+          `SELECT user_id,outlook_event_id,outlook_ical_uid FROM dbo.work_blocks WHERE outlook_event_id IS NOT NULL;`,
+        )
+        .catch(() => ({ recordset: [] }))
+    ).recordset;
+    for (const row of ownRows) {
+      const ids = own.get(Number(row.user_id)) ?? new Set<string>();
+      for (const id of [row.outlook_event_id, row.outlook_ical_uid]) if (id) ids.add(id);
+      own.set(Number(row.user_id), ids);
+    }
+    let done = 0,
+      failed = 0,
+      denied = 0,
+      lastError = "";
     const queue = [...people];
     const worker = async () => {
       for (let person = queue.shift(); person; person = queue.shift()) {
         const userId = Number(person.id);
         try {
-          const rows = outlookRows(await readCalendar(graph, person.email.trim(), from, to), graph.graphSender ?? "");
+          const rows = outlookRows(await readCalendar(graph, person.email.trim(), from, to), graph.graphSender ?? "", own.get(userId));
           await saveCalendar(db, userId, from, to, rows, null);
           done++;
         } catch (error) {
           const read = error instanceof GraphReadError ? error : null;
           // No mailbox (a service account, another domain) is not a failure of the sync.
-          if (read && (read.status === 404 || read.code === "MailboxNotEnabledForRESTAPI" || read.code === "ResourceNotFound")) { done++; await saveCalendar(db, userId, from, to, null, "No Outlook mailbox").catch(() => undefined); continue; }
+          if (read && (read.status === 404 || read.code === "MailboxNotEnabledForRESTAPI" || read.code === "ResourceNotFound")) {
+            done++;
+            await saveCalendar(db, userId, from, to, null, "No Outlook mailbox").catch(() => undefined);
+            continue;
+          }
           if (read?.status === 403 || read?.status === 401) denied++;
           failed++;
           lastError = error instanceof Error ? error.message : String(error);
@@ -146,10 +193,15 @@ export function syncOutlook(db: Database, graph: Graph, today = bangkokToday()):
     const state: OutlookSyncState = !failed ? "ok" : denied && !done ? "denied" : done ? "partial" : "error";
     status = { state, syncedAt: new Date().toISOString(), message: lastError, people: done, failed };
     return status;
-  })().catch((error: unknown) => {
-    status = { state: "error", syncedAt: status.syncedAt, message: error instanceof Error ? error.message : String(error), people: 0, failed: 0 };
-    return status;
-  }).finally(() => { running = null; finishedAt = Date.now(); });
+  })()
+    .catch((error: unknown) => {
+      status = { state: "error", syncedAt: status.syncedAt, message: error instanceof Error ? error.message : String(error), people: 0, failed: 0 };
+      return status;
+    })
+    .finally(() => {
+      running = null;
+      finishedAt = Date.now();
+    });
   return running;
 }
 
@@ -162,13 +214,33 @@ export function refreshOutlookIfStale(db: Database, graph: Graph): void {
 
 /** The events on the board's days, for everyone: Bangkok local start and end. */
 export async function boardOutlookEvents(db: Database, from: string, to: string) {
-  const result = await db.query<{ id: number | string; user_id: number | string; subject: string | null; location: string | null; is_private: boolean; is_all_day: boolean; show_as: string; start_at: string; end_at: string }>(`
+  const result = await db.query<{
+    id: number | string;
+    user_id: number | string;
+    subject: string | null;
+    location: string | null;
+    is_private: boolean;
+    is_all_day: boolean;
+    show_as: string;
+    start_at: string;
+    end_at: string;
+  }>(
+    `
     SELECT id,user_id,subject,location,is_private,is_all_day,show_as,CONVERT(char(19),start_at,126) start_at,CONVERT(char(19),end_at,126) end_at
-    FROM dbo.outlook_events
-    WHERE start_at < DATEADD(day,1,CONVERT(datetime2(0),@to)) AND end_at > CONVERT(datetime2(0),@from);`,
-  (q) => q.input("from", sql.NVarChar(10), from).input("to", sql.NVarChar(10), to));
+    FROM dbo.outlook_events e
+    WHERE start_at < DATEADD(day,1,CONVERT(datetime2(0),@to)) AND end_at > CONVERT(datetime2(0),@from)
+      AND NOT EXISTS(SELECT 1 FROM dbo.work_blocks wb WHERE wb.user_id=e.user_id AND wb.outlook_event_id=e.event_id);`,
+    (q) => q.input("from", sql.NVarChar(10), from).input("to", sql.NVarChar(10), to),
+  );
   return result.recordset.map((row) => ({
-    id: Number(row.id), userId: Number(row.user_id), subject: row.is_private ? null : row.subject, location: row.is_private ? null : row.location,
-    private: Boolean(row.is_private), allDay: Boolean(row.is_all_day), showAs: row.show_as, start: row.start_at, end: row.end_at,
+    id: Number(row.id),
+    userId: Number(row.user_id),
+    subject: row.is_private ? null : row.subject,
+    location: row.is_private ? null : row.location,
+    private: Boolean(row.is_private),
+    allDay: Boolean(row.is_all_day),
+    showAs: row.show_as,
+    start: row.start_at,
+    end: row.end_at,
   }));
 }

@@ -883,4 +883,9 @@ GO
 GRANT SELECT, INSERT, UPDATE ON dbo.work_days TO [iot_team_app_role];
 GRANT SELECT, INSERT, DELETE ON dbo.work_hours TO [iot_team_app_role];
 GO
+
+-- database/migrations/124_my_week_calendar.sql
+GRANT SELECT, INSERT, UPDATE, DELETE ON dbo.work_blocks TO [iot_team_app_role];
+GRANT SELECT, INSERT, UPDATE, DELETE ON dbo.outlook_event_links TO [iot_team_app_role];
+GO
 -- END GENERATED MIGRATION GRANTS

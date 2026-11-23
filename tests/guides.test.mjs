@@ -94,6 +94,8 @@ test("the catalog holds the guides the owner chose, in the order the work happen
       "project-create",
       "project-delete",
       "project-cost",
+      // My week: time booked on the app's calendar goes into Outlook and drafts the day (2026-11-23).
+      "my-week-book",
       "my-hours-confirm",
       "project-plan",
       // Editing the Master Plan of a project that already exists (2026-11-03).
