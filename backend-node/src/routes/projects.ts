@@ -8,10 +8,21 @@ import { createStoredDirectory, deleteStoredFile, removeEmptyStoredDirectory } f
 import { transferProjectDocuments } from "../project-handover.js";
 import { ApiError } from "../errors.js";
 import { assertEstimateTotals } from "../estimate-total-guard.js";
-import { endUserCustomerId, registerEndUserUpdateRoute, validateEndUser } from "../end-user.js";
+import { endUserCustomerId, inheritedEndUser, registerEndUserUpdateRoute, validateEndUser } from "../end-user.js";
 import { bodyObject, clampedInteger, dateOnly, optionalBodyText, optionalText, parseDateOnly, parseRowVersion, positiveLong, requiredInteger, requiredText } from "../http.js";
 import { allowedProjectTransitions, checkProjectTransition, isProjectStatus, progressForStatus, type ProjectStatus } from "../project-lifecycle.js";
-import { insertInitialPlan, isPlaceholderProjectNumber, parseInitialPlan, parseProjectDetails, parseProjectNumber, planAssignments, planSpan, rejectOutdatedPlan, syncProjectPlan, writeProjectDetails } from "../project-initial-plan.js";
+import {
+  insertInitialPlan,
+  isPlaceholderProjectNumber,
+  parseInitialPlan,
+  parseProjectDetails,
+  parseProjectNumber,
+  planAssignments,
+  planSpan,
+  rejectOutdatedPlan,
+  syncProjectPlan,
+  writeProjectDetails,
+} from "../project-initial-plan.js";
 import type { ProjectHealth } from "../project-health.js";
 import { loadProjectScheduleSummaries } from "../project-overview.js";
 import { HOURS_PER_MAN_DAY } from "../manhour-budget.js";
@@ -28,19 +39,49 @@ import type { EmailService } from "../email.js";
 import { confirmOpportunityOrder } from "../crm.js";
 
 const STANDARD_FOLDERS = [
-  ["00", "To do list"], ["01", "Concept Design and Proposal"], ["02", "Drawing"],
-  ["03", "Estimate cost"], ["04", "Quote"], ["05", "PO"], ["06", "Specifications and Documentation"],
-  ["07", "Development"], ["08", "Schedule"], ["09", "Installation"], ["10", "Report"],
-  ["11", "Manual and Document"], ["12", "DATA & EXAMPLE"], ["13", "Pic and Video"], ["14", "Ref"],
+  ["00", "To do list"],
+  ["01", "Concept Design and Proposal"],
+  ["02", "Drawing"],
+  ["03", "Estimate cost"],
+  ["04", "Quote"],
+  ["05", "PO"],
+  ["06", "Specifications and Documentation"],
+  ["07", "Development"],
+  ["08", "Schedule"],
+  ["09", "Installation"],
+  ["10", "Report"],
+  ["11", "Manual and Document"],
+  ["12", "DATA & EXAMPLE"],
+  ["13", "Pic and Video"],
+  ["14", "Ref"],
 ] as const;
 
 type ProjectRow = Record<string, unknown> & {
-  id: number | string; project_no: string; name: string; customer_name: string; status: string;
-  project_type: string; manager_name: string; start_date: Date | string; target_delivery: Date | string;
-  progress: number | string; updated_at: Date | string; row_version: Buffer; total_count: number | string;
-  manager_id: number | string; lead_engineer_id: number | string; lead_engineer_name: string;
-  po_no: string; po_date: Date | string; actual_delivery: Date | string | null; site: string; remark: string | null;
-  customer_id: number | string; end_user_customer_id: number | string | null; end_user_name: string | null; end_user_code: string | null;
+  id: number | string;
+  project_no: string;
+  name: string;
+  customer_name: string;
+  status: string;
+  project_type: string;
+  manager_name: string;
+  start_date: Date | string;
+  target_delivery: Date | string;
+  progress: number | string;
+  updated_at: Date | string;
+  row_version: Buffer;
+  total_count: number | string;
+  manager_id: number | string;
+  lead_engineer_id: number | string;
+  lead_engineer_name: string;
+  po_no: string;
+  po_date: Date | string;
+  actual_delivery: Date | string | null;
+  site: string;
+  remark: string | null;
+  customer_id: number | string;
+  end_user_customer_id: number | string | null;
+  end_user_name: string | null;
+  end_user_code: string | null;
 };
 
 function shiftDate(value: string, unit: "day" | "year", amount: number): string {
@@ -60,12 +101,17 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
     const readsEstimates = await permissionFor(database, actor.id, "estimate.read");
     // Only work the customer has ordered: the linked CRM opportunity is WON, and its order
     // evidence is offered as the PO so it is not typed twice.
-    const result = await database.query<Record<string, unknown>>(`
+    const result = await database.query<Record<string, unknown>>(
+      `
       SELECT e.id,e.estimate_no number,e.project_name projectName,e.customer_id customerId,
+        -- Named here, not from the screen's customer list: that list holds active customers only, and the
+        -- customer may have been closed (by the register sync) after the estimate was approved.
+        c.name customerName,CASE WHEN c.is_active=1 AND c.deleted_at IS NULL THEN 0 ELSE 1 END customerClosed,
         e.owner_id ownerId,i.site_location siteLocation,i.target_delivery targetDelivery,
         o.opportunity_no opportunityNo,o.won_on wonOn,o.won_reference wonReference
       FROM dbo.estimates e JOIN dbo.inquiries i ON i.id=e.inquiry_id
       JOIN dbo.crm_opportunities o ON o.id=i.opportunity_id AND o.stage=N'WON'
+      LEFT JOIN dbo.customers c ON c.id=e.customer_id
       WHERE @reads_estimates=1 AND e.status IN(N'Approved',N'Locked') AND e.deleted_at IS NULL AND e.archived_at IS NULL
         AND i.deleted_at IS NULL AND i.archived_at IS NULL AND i.status<>N'Cancelled'
         AND NOT EXISTS(SELECT 1 FROM dbo.projects p WHERE p.inquiry_id=i.id OR p.estimate_id=e.id)
@@ -76,21 +122,34 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
       FROM dbo.users u JOIN dbo.user_effective_roles r ON r.user_id=u.id
       GROUP BY u.id,u.name HAVING MAX(CASE WHEN r.code IN(N'Project Manager',N'Engineering Manager',N'Admin',N'Engineer') THEN 1 ELSE 0 END)=1
       ORDER BY u.name;
-    `, (request) => request.input("reads_estimates", sql.Bit, readsEstimates));
+    `,
+      (request) => request.input("reads_estimates", sql.Bit, readsEstimates),
+    );
     const sets = result.recordsets as unknown as Record<string, unknown>[][];
-    return { estimates: (sets[0] ?? []).map(({ wonOn, wonReference, ...r }) => ({ ...r, id:Number(r.id), customerId:Number(r.customerId), ownerId:Number(r.ownerId), targetDelivery:dateOnly(r.targetDelivery as Date),
+    return {
+      estimates: (sets[0] ?? []).map(({ wonOn, wonReference, ...r }) => ({
+        ...r,
+        id: Number(r.id),
+        customerId: Number(r.customerId),
+        ownerId: Number(r.ownerId),
+        targetDelivery: dateOnly(r.targetDelivery as Date),
+        customerName: typeof r.customerName === "string" ? r.customerName : "",
+        customerClosed: Boolean(r.customerClosed),
         // The order reference is free text; it is only a PO number when it fits the PO field.
         purchaseOrderNumber: typeof wonReference === "string" && wonReference.trim().length <= 100 ? wonReference.trim() : "",
-        purchaseOrderDate: dateOnly(wonOn as Date | null) ?? "" })),
-      people: (sets[1] ?? []).map(r => ({ ...r, id:Number(r.id), canManage:Boolean(r.canManage), canLead:Boolean(r.canLead) })),
-      canCreateWithoutEstimate: canCreateWithoutEstimate(actor) };
+        purchaseOrderDate: dateOnly(wonOn as Date | null) ?? "",
+      })),
+      people: (sets[1] ?? []).map((r) => ({ ...r, id: Number(r.id), canManage: Boolean(r.canManage), canLead: Boolean(r.canLead) })),
+      canCreateWithoutEstimate: canCreateWithoutEstimate(actor),
+    };
   });
 
   app.get("/api/v1/projects/handover/:inquiryId", async (request) => {
     await users.demandPermission(request, "inquiry.read");
     const actor = await users.required(request);
-    const id = positiveLong((request.params as {inquiryId:string}).inquiryId,"Inquiry");
-    const result = await database.query<Record<string, unknown>>(`
+    const id = positiveLong((request.params as { inquiryId: string }).inquiryId, "Inquiry");
+    const result = await database.query<Record<string, unknown>>(
+      `
       SELECT i.status inquiryStatus,i.archived_at archivedAt,e.id estimateId,e.status estimateStatus,
         CASE WHEN EXISTS(SELECT 1 FROM dbo.crm_opportunities o WHERE o.id=i.opportunity_id AND o.stage=N'WON') THEN 1 ELSE 0 END won,
         e.deleted_at estimateDeletedAt,e.archived_at estimateArchivedAt,
@@ -101,26 +160,43 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
           OR EXISTS(SELECT 1 FROM dbo.project_members m WHERE m.project_id=p.id AND m.user_id=@actor)) THEN p.project_no END projectNo
       FROM dbo.inquiries i LEFT JOIN dbo.estimates e ON e.inquiry_id=i.id
       OUTER APPLY(SELECT TOP(1) * FROM dbo.projects WHERE inquiry_id=i.id ORDER BY id DESC) p
-      WHERE i.id=@id AND i.deleted_at IS NULL`, q => q.input("id",sql.BigInt,id).input("actor",sql.BigInt,actor.id)
-        .input("elevated",sql.Bit,isProjectElevated(actor)));
-    const row=result.recordset[0];
-    if(!row)throw new ApiError(404,"inquiry_not_found","Inquiry not found.");
-    const reason = row.hasProject ? "projectExists" : row.archivedAt || row.inquiryStatus === "Cancelled" ? "sourceUnavailable"
-      : !row.estimateId || row.estimateDeletedAt || row.estimateArchivedAt || !["Approved","Locked"].includes(String(row.estimateStatus)) ? "awaitCostApproval"
-      : !row.won ? "awaitWon" : "recordPo";
-    return { reason, estimateId:row.estimateId ? Number(row.estimateId) : null, projectId:row.projectId ? Number(row.projectId) : null, projectNo:row.projectNo ?? null };
+      WHERE i.id=@id AND i.deleted_at IS NULL`,
+      (q) => q.input("id", sql.BigInt, id).input("actor", sql.BigInt, actor.id).input("elevated", sql.Bit, isProjectElevated(actor)),
+    );
+    const row = result.recordset[0];
+    if (!row) throw new ApiError(404, "inquiry_not_found", "Inquiry not found.");
+    const reason = row.hasProject
+      ? "projectExists"
+      : row.archivedAt || row.inquiryStatus === "Cancelled"
+        ? "sourceUnavailable"
+        : !row.estimateId || row.estimateDeletedAt || row.estimateArchivedAt || !["Approved", "Locked"].includes(String(row.estimateStatus))
+          ? "awaitCostApproval"
+          : !row.won
+            ? "awaitWon"
+            : "recordPo";
+    return { reason, estimateId: row.estimateId ? Number(row.estimateId) : null, projectId: row.projectId ? Number(row.projectId) : null, projectNo: row.projectNo ?? null };
   });
   // The customer's own site contacts, for ticking who the project talks to.
   app.get("/api/v1/projects/contact-options", async (request) => {
     await users.demandPermission(request, "project.write");
     const customerId = positiveLong((request.query as { customerId?: string }).customerId, "Customer id");
-    const result = await database.query<Record<string, unknown>>(`
+    const result = await database.query<Record<string, unknown>>(
+      `
       SELECT sc.id,sc.name,sc.position,sc.department,sc.phone,sc.email,s.name site_name
       FROM dbo.customer_site_contacts sc JOIN dbo.customer_sites s ON s.id=sc.site_id
       WHERE s.customer_id=@customer AND sc.is_active=1 AND sc.deleted_at IS NULL AND s.deleted_at IS NULL
-      ORDER BY sc.is_primary DESC,sc.name,sc.id;`, (q) => q.input("customer", sql.BigInt, customerId));
-    return result.recordset.map((row) => ({ id: Number(row.id), name: String(row.name), position: String(row.position ?? ""),
-      department: String(row.department ?? ""), phone: String(row.phone ?? ""), email: String(row.email ?? ""), siteName: String(row.site_name ?? "") }));
+      ORDER BY sc.is_primary DESC,sc.name,sc.id;`,
+      (q) => q.input("customer", sql.BigInt, customerId),
+    );
+    return result.recordset.map((row) => ({
+      id: Number(row.id),
+      name: String(row.name),
+      position: String(row.position ?? ""),
+      department: String(row.department ?? ""),
+      phone: String(row.phone ?? ""),
+      email: String(row.email ?? ""),
+      siteName: String(row.site_name ?? ""),
+    }));
   });
 
   app.get("/api/v1/projects", async (request) => {
@@ -131,7 +207,8 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
     const pageSize = clampedInteger(query.pageSize, 25, 1, 100);
     const search = optionalText(query.search, 200, "Search");
     const status = optionalText(query.status, 50, "Status");
-    const result = await database.query<ProjectRow>(`
+    const result = await database.query<ProjectRow>(
+      `
       SELECT ${PROJECT_COLUMNS},
         COUNT_BIG(*) OVER() AS total_count
       ${PROJECT_SOURCE}
@@ -140,15 +217,22 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
           OR p.po_no LIKE N'%'+@search+N'%' OR c.name LIKE N'%'+@search+N'%'
           OR eu.name LIKE N'%'+@search+N'%' OR eu.code LIKE N'%'+@search+N'%')
       ORDER BY p.updated_at DESC,p.id DESC OFFSET @offset ROWS FETCH NEXT @page_size ROWS ONLY;
-    `, (sqlRequest) => {
-      sqlRequest.input("status", sql.NVarChar(50), status); sqlRequest.input("search", sql.NVarChar(200), search);
-      sqlRequest.input("actor", sql.BigInt, actor.id); sqlRequest.input("elevated", sql.Bit, seesAllProjects(actor));
-      sqlRequest.input("offset", sql.Int, (page - 1) * pageSize); sqlRequest.input("page_size", sql.Int, pageSize);
-    });
+    `,
+      (sqlRequest) => {
+        sqlRequest.input("status", sql.NVarChar(50), status);
+        sqlRequest.input("search", sql.NVarChar(200), search);
+        sqlRequest.input("actor", sql.BigInt, actor.id);
+        sqlRequest.input("elevated", sql.Bit, seesAllProjects(actor));
+        sqlRequest.input("offset", sql.Int, (page - 1) * pageSize);
+        sqlRequest.input("page_size", sql.Int, pageSize);
+      },
+    );
     const summaries = await loadProjectScheduleSummaries(database, result.recordset.map(projectInput), businessToday(config.businessTimeZone));
     return {
       items: result.recordset.map((row) => projectItem(row, summaries.get(Number(row.id))?.health ?? "No plan")),
-      page, pageSize, total: Number(result.recordset[0]?.total_count ?? 0),
+      page,
+      pageSize,
+      total: Number(result.recordset[0]?.total_count ?? 0),
     };
   });
 
@@ -168,21 +252,39 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
       INNER JOIN dbo.users le ON le.id=p.lead_engineer_id
       WHERE p.deleted_at IS NULL AND (@elevated=1 OR p.manager_id=@actor OR p.lead_engineer_id=@actor
         OR EXISTS(SELECT 1 FROM dbo.project_members m WHERE m.project_id=p.id AND m.user_id=@actor))`;
-  function projectInput(row: ProjectRow) { return { id: Number(row.id), status: String(row.status), targetDelivery: dateOnly(row.target_delivery) }; }
+  function projectInput(row: ProjectRow) {
+    return { id: Number(row.id), status: String(row.status), targetDelivery: dateOnly(row.target_delivery) };
+  }
   function projectItem(row: ProjectRow, health: ProjectHealth) {
     return {
-      id: Number(row.id), number: row.project_no, name: row.name, customerName: row.customer_name,
-      team: row.team ?? null, health,
+      id: Number(row.id),
+      number: row.project_no,
+      name: row.name,
+      customerName: row.customer_name,
+      team: row.team ?? null,
+      health,
       paymentsReceived: typeof row.payments_received === "string" && row.payments_received ? row.payments_received.split(",") : [],
       contactIds: typeof row.contact_ids === "string" && row.contact_ids ? row.contact_ids.split(",").map(Number) : [],
-      customerId: Number(row.customer_id), endUserCustomerId: row.end_user_customer_id === null ? null : Number(row.end_user_customer_id),
-      endUserName: row.end_user_name, endUserCode: row.end_user_code,
-      status: row.status, projectType: row.project_type, managerName: row.manager_name,
-      managerId: Number(row.manager_id), leadEngineerId: Number(row.lead_engineer_id), leadEngineerName: row.lead_engineer_name,
-      purchaseOrderNumber: row.po_no, purchaseOrderDate: dateOnly(row.po_date), actualDelivery: dateOnly(row.actual_delivery),
-      site: row.site, remark: row.remark ?? "",
-      startDate: dateOnly(row.start_date), targetDelivery: dateOnly(row.target_delivery), progress: Number(row.progress),
-      updatedAt: row.updated_at, rowVersion: row.row_version.toString("base64"),
+      customerId: Number(row.customer_id),
+      endUserCustomerId: row.end_user_customer_id === null ? null : Number(row.end_user_customer_id),
+      endUserName: row.end_user_name,
+      endUserCode: row.end_user_code,
+      status: row.status,
+      projectType: row.project_type,
+      managerName: row.manager_name,
+      managerId: Number(row.manager_id),
+      leadEngineerId: Number(row.lead_engineer_id),
+      leadEngineerName: row.lead_engineer_name,
+      purchaseOrderNumber: row.po_no,
+      purchaseOrderDate: dateOnly(row.po_date),
+      actualDelivery: dateOnly(row.actual_delivery),
+      site: row.site,
+      remark: row.remark ?? "",
+      startDate: dateOnly(row.start_date),
+      targetDelivery: dateOnly(row.target_delivery),
+      progress: Number(row.progress),
+      updatedAt: row.updated_at,
+      rowVersion: row.row_version.toString("base64"),
     };
   }
 
@@ -191,19 +293,27 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
   app.get("/api/v1/projects/attention", async (request) => {
     await users.demandPermission(request, "project.read");
     const actor = await users.required(request);
-    const result = await database.query<ProjectRow>(`
+    const result = await database.query<ProjectRow>(
+      `
       SELECT ${PROJECT_COLUMNS}
       ${PROJECT_SOURCE}
         AND p.status NOT IN (N'Closed',N'On Hold')
       ORDER BY p.id;
-    `, (sqlRequest) => { sqlRequest.input("actor", sql.BigInt, actor.id); sqlRequest.input("elevated", sql.Bit, seesAllProjects(actor)); });
+    `,
+      (sqlRequest) => {
+        sqlRequest.input("actor", sql.BigInt, actor.id);
+        sqlRequest.input("elevated", sql.Bit, seesAllProjects(actor));
+      },
+    );
     const rows = result.recordset;
     if (!rows.length) return { delayed: 0, atRisk: 0, attention: 0 };
     const summaries = await loadProjectScheduleSummaries(database, rows.map(projectInput), businessToday(config.businessTimeZone));
-    let delayed = 0, atRisk = 0;
+    let delayed = 0,
+      atRisk = 0;
     for (const row of rows) {
       const health = summaries.get(Number(row.id))?.health;
-      if (health === "Delayed") delayed += 1; else if (health === "At Risk") atRisk += 1;
+      if (health === "Delayed") delayed += 1;
+      else if (health === "At Risk") atRisk += 1;
     }
     return { delayed, atRisk, attention: delayed + atRisk };
   });
@@ -217,44 +327,66 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
     const includeClosed = query.includeClosed === "1" || query.includeClosed === "true";
     const elevated = seesAllProjects(actor);
     const manages = isProjectManagerRole(actor);
-    const result = await database.query<ProjectRow>(`
+    const result = await database.query<ProjectRow>(
+      `
       SELECT ${PROJECT_COLUMNS}
       ${PROJECT_SOURCE}
         AND (@include_closed=1 OR p.status<>N'Closed')
       ORDER BY p.project_no,p.id;
-    `, (sqlRequest) => {
-      sqlRequest.input("actor", sql.BigInt, actor.id); sqlRequest.input("elevated", sql.Bit, elevated);
-      sqlRequest.input("include_closed", sql.Bit, includeClosed);
-    });
+    `,
+      (sqlRequest) => {
+        sqlRequest.input("actor", sql.BigInt, actor.id);
+        sqlRequest.input("elevated", sql.Bit, elevated);
+        sqlRequest.input("include_closed", sql.Bit, includeClosed);
+      },
+    );
     const today = businessToday(config.businessTimeZone);
     const rows = result.recordset;
     if (!rows.length) return { today, items: [] };
     const summaries = await loadProjectScheduleSummaries(database, rows.map(projectInput), today);
     // Unanswered day requests and the latest progress entry per project, in one grouped read.
     // 'progress' is what Resource Plan writes when it updates a task it manages.
-    const activity = new Map((await database.query<{ project_id: number | string; pending_requests: number | string; last_progress_at: Date | null }>(`
+    const activity = new Map(
+      (
+        await database.query<{ project_id: number | string; pending_requests: number | string; last_progress_at: Date | null }>(
+          `
       SELECT u.project_id,
         SUM(CASE WHEN u.field=N'request' AND u.request_days>0 AND u.answer IS NULL THEN 1 ELSE 0 END) pending_requests,
         MAX(CASE WHEN u.field IN(${PROGRESS_REPORT_FIELDS_SQL}) THEN u.occurred_at END) last_progress_at
       FROM dbo.schedule_updates u WHERE u.project_id IN(SELECT TRY_CONVERT(bigint,value) FROM STRING_SPLIT(@ids,N','))
-      GROUP BY u.project_id;`, (sqlRequest) => sqlRequest.input("ids", sql.NVarChar(sql.MAX), rows.map((row) => Number(row.id)).join(",")),
-    )).recordset.map((row) => [Number(row.project_id), row] as const));
+      GROUP BY u.project_id;`,
+          (sqlRequest) => sqlRequest.input("ids", sql.NVarChar(sql.MAX), rows.map((row) => Number(row.id)).join(",")),
+        )
+      ).recordset.map((row) => [Number(row.project_id), row] as const),
+    );
     // The same people PUT /api/v1/projects/:id lets move a project along its lifecycle.
     const canWrite = await permissionFor(database, actor.id, "project.write");
     return {
       today,
       items: rows.map((row) => {
-        const id = Number(row.id), summary = summaries.get(id), counts = activity.get(id);
+        const id = Number(row.id),
+          summary = summaries.get(id),
+          counts = activity.get(id);
         const progress = summary?.progress ?? null;
         return {
           ...projectItem(row, summary?.health ?? "No plan"),
-          progress: progress ?? Number(row.progress), progressSource: progress === null ? "manual" : "schedule", typedProgress: Number(row.progress),
-          plannedProgress: summary?.plannedProgress ?? null, planStart: summary?.planStart ?? null, planFinish: summary?.planFinish ?? null,
-          forecastFinish: summary?.forecastFinish ?? null, slipDays: summary?.slipDays ?? null,
-          taskCount: summary?.taskCount ?? 0, doneCount: summary?.doneCount ?? 0, overdueCount: summary?.overdueCount ?? 0,
-          blockedCount: summary?.blockedCount ?? 0, slippedCount: summary?.slippedCount ?? 0, nextMilestone: summary?.nextMilestone ?? null,
+          progress: progress ?? Number(row.progress),
+          progressSource: progress === null ? "manual" : "schedule",
+          typedProgress: Number(row.progress),
+          plannedProgress: summary?.plannedProgress ?? null,
+          planStart: summary?.planStart ?? null,
+          planFinish: summary?.planFinish ?? null,
+          forecastFinish: summary?.forecastFinish ?? null,
+          slipDays: summary?.slipDays ?? null,
+          taskCount: summary?.taskCount ?? 0,
+          doneCount: summary?.doneCount ?? 0,
+          overdueCount: summary?.overdueCount ?? 0,
+          blockedCount: summary?.blockedCount ?? 0,
+          slippedCount: summary?.slippedCount ?? 0,
+          nextMilestone: summary?.nextMilestone ?? null,
           scheduleError: summary?.scheduleError ?? false,
-          pendingRequests: row.status === "Closed" ? 0 : Number(counts?.pending_requests ?? 0), lastProgressAt: counts?.last_progress_at ?? null,
+          pendingRequests: row.status === "Closed" ? 0 : Number(counts?.pending_requests ?? 0),
+          lastProgressAt: counts?.last_progress_at ?? null,
           canChangeStatus: canWrite && (manages || Number(row.manager_id) === actor.id || Number(row.lead_engineer_id) === actor.id),
           allowedStatuses: isProjectStatus(row.status) ? allowedProjectTransitions(row.status, manages) : [],
         };
@@ -270,25 +402,44 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
     if (!canViewProjectCost(rolesOf(actor))) throw new ApiError(403, "project_cost_forbidden", "The project cost overview is for Leaders and above.");
     return { actor, access: FULL_COST_ACCESS };
   }
-  const costRow = (row: ProjectRow) => ({ id: Number(row.id), number: row.project_no, name: row.name, customerName: row.customer_name,
-    managerId: Number(row.manager_id), managerName: row.manager_name, team: (row.team as string | null) ?? null, status: row.status });
+  const costRow = (row: ProjectRow) => ({
+    id: Number(row.id),
+    number: row.project_no,
+    name: row.name,
+    customerName: row.customer_name,
+    managerId: Number(row.manager_id),
+    managerName: row.manager_name,
+    team: (row.team as string | null) ?? null,
+    status: row.status,
+  });
 
   // Every project in scope with its cost figures, unpaged, for the screen to sort and filter in memory.
   app.get("/api/v1/projects/cost-overview", async (request) => {
     const { actor, access } = await costViewer(request);
     const query = request.query as Record<string, unknown>;
     const includeClosed = query.includeClosed === "1" || query.includeClosed === "true";
-    const rows = (await database.query<ProjectRow>(`
+    const rows = (
+      await database.query<ProjectRow>(
+        `
       SELECT ${PROJECT_COLUMNS}
       ${PROJECT_SOURCE}
         AND (@include_closed=1 OR p.status<>N'Closed')
       ORDER BY p.project_no,p.id;
-    `, (sqlRequest) => {
-      sqlRequest.input("actor", sql.BigInt, actor.id); sqlRequest.input("elevated", sql.Bit, seesAllProjects(actor));
-      sqlRequest.input("include_closed", sql.Bit, includeClosed);
-    })).recordset;
+    `,
+        (sqlRequest) => {
+          sqlRequest.input("actor", sql.BigInt, actor.id);
+          sqlRequest.input("elevated", sql.Bit, seesAllProjects(actor));
+          sqlRequest.input("include_closed", sql.Bit, includeClosed);
+        },
+      )
+    ).recordset;
     const today = businessToday(config.businessTimeZone);
-    const figures = await loadProjectCostFigures(database, rows.map((row) => Number(row.id)), today, access);
+    const figures = await loadProjectCostFigures(
+      database,
+      rows.map((row) => Number(row.id)),
+      today,
+      access,
+    );
     return { today, hoursPerManDay: HOURS_PER_MAN_DAY, access, items: rows.map((row) => ({ ...costRow(row), ...projectCost(Number(row.id), figures, access) })) };
   });
 
@@ -298,43 +449,89 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
   app.get("/api/v1/projects/:id/cost", async (request) => {
     const { actor, access } = await costViewer(request);
     const id = positiveLong((request.params as { id?: string }).id, "Project id");
-    const bind = (sqlRequest: InstanceType<typeof sql.Request>) => { sqlRequest.input("project", sql.BigInt, id); sqlRequest.input("none", sql.NVarChar(200), NO_MODULE); };
-    const row = (await database.query<ProjectRow>(`SELECT ${PROJECT_COLUMNS} ${PROJECT_SOURCE} AND p.id=@project;`, (sqlRequest) => {
-      sqlRequest.input("project", sql.BigInt, id); sqlRequest.input("actor", sql.BigInt, actor.id); sqlRequest.input("elevated", sql.Bit, seesAllProjects(actor));
-    })).recordset[0];
+    const bind = (sqlRequest: InstanceType<typeof sql.Request>) => {
+      sqlRequest.input("project", sql.BigInt, id);
+      sqlRequest.input("none", sql.NVarChar(200), NO_MODULE);
+    };
+    const row = (
+      await database.query<ProjectRow>(`SELECT ${PROJECT_COLUMNS} ${PROJECT_SOURCE} AND p.id=@project;`, (sqlRequest) => {
+        sqlRequest.input("project", sql.BigInt, id);
+        sqlRequest.input("actor", sql.BigInt, actor.id);
+        sqlRequest.input("elevated", sql.Bit, seesAllProjects(actor));
+      })
+    ).recordset[0];
     if (!row) throw new ApiError(404, "project_not_found", "Project not found.");
     const today = businessToday(config.businessTimeZone);
     const figures = await loadProjectCostFigures(database, [id], today, access);
     const amount = (value: unknown) => (value == null ? 0 : round2(Number(value)));
     // By the estimate's Module: what the estimate gave it (hardware and outsource) and what the requests charge to it.
-    const budgets = access.budget ? (await database.query<Record<string, unknown>>(`SELECT COALESCE(NULLIF(LTRIM(RTRIM(ci.module)),N''),@none) module,SUM(a.amount) budget
+    const budgets = access.budget
+      ? (
+          await database.query<Record<string, unknown>>(
+            `SELECT COALESCE(NULLIF(LTRIM(RTRIM(ci.module)),N''),@none) module,SUM(a.amount) budget
       FROM dbo.projects p INNER JOIN dbo.estimates e ON e.id=p.estimate_id
       INNER JOIN dbo.v_estimate_cost_amounts a ON a.estimate_id=e.id AND a.revision=e.revision AND a.category_code IN(${BOUGHT_CATEGORIES.map((code) => `N'${code}'`).join(",")})
       INNER JOIN dbo.cost_items ci ON ci.id=a.id
-      WHERE p.id=@project AND p.deleted_at IS NULL GROUP BY COALESCE(NULLIF(LTRIM(RTRIM(ci.module)),N''),@none);`, bind)).recordset : [];
-    const charged = access.purchases ? (await database.query<Record<string, unknown>>(`SELECT COALESCE(NULLIF(LTRIM(RTRIM(l.budget_module)),N''),@none) module,SUM(l.line_total) requested,
+      WHERE p.id=@project AND p.deleted_at IS NULL GROUP BY COALESCE(NULLIF(LTRIM(RTRIM(ci.module)),N''),@none);`,
+            bind,
+          )
+        ).recordset
+      : [];
+    const charged = access.purchases
+      ? (
+          await database.query<Record<string, unknown>>(
+            `SELECT COALESCE(NULLIF(LTRIM(RTRIM(l.budget_module)),N''),@none) module,SUM(l.line_total) requested,
         SUM(CASE WHEN pr.status IN(N'Approved',N'Converted to PO') THEN l.line_total ELSE 0 END) approved,
         SUM(CASE WHEN l.erp_line_status=N'ORDERED' OR (l.erp_line_status IS NULL AND pr.status=N'Converted to PO') THEN l.line_total ELSE 0 END) ordered
       FROM dbo.mat_prs pr INNER JOIN dbo.mat_pr_lines l ON l.pr_id=pr.id
       WHERE pr.project_id=@project AND pr.deleted_at IS NULL AND pr.status IN(${REQUESTING_PR_STATUSES})
-      GROUP BY COALESCE(NULLIF(LTRIM(RTRIM(l.budget_module)),N''),@none);`, bind)).recordset : [];
-    const requests = access.purchases ? (await database.query<Record<string, unknown>>(`SELECT pr.id,pr.pr_no,pr.status,pr.required_date,
+      GROUP BY COALESCE(NULLIF(LTRIM(RTRIM(l.budget_module)),N''),@none);`,
+            bind,
+          )
+        ).recordset
+      : [];
+    const requests = access.purchases
+      ? (
+          await database.query<Record<string, unknown>>(
+            `SELECT pr.id,pr.pr_no,pr.status,pr.required_date,
         CASE WHEN u.id IS NULL THEN NULL ELSE CONCAT(u.discipline,N' · ',LTRIM(CONCAT(u.drawing_no,N' ',u.unit_name))) END unit,
         COALESCE((SELECT SUM(l.line_total) FROM dbo.mat_pr_lines l WHERE l.pr_id=pr.id),0) amount,(SELECT COUNT(*) FROM dbo.mat_pr_lines l WHERE l.pr_id=pr.id) lines
       FROM dbo.mat_prs pr LEFT JOIN dbo.project_purchase_units u ON u.id=pr.unit_id
-      WHERE pr.project_id=@project AND pr.deleted_at IS NULL AND pr.status IN(${REQUESTING_PR_STATUSES}) ORDER BY pr.id DESC;`, bind)).recordset : [];
+      WHERE pr.project_id=@project AND pr.deleted_at IS NULL AND pr.status IN(${REQUESTING_PR_STATUSES}) ORDER BY pr.id DESC;`,
+            bind,
+          )
+        ).recordset
+      : [];
     // Modules by name; what belongs to no module comes last.
-    const moduleNames = [...new Set([...budgets, ...charged].map((item) => String(item.module)))]
-      .sort((left, right) => Number(left === NO_MODULE) - Number(right === NO_MODULE) || left.localeCompare(right, "en", { numeric: true }));
+    const moduleNames = [...new Set([...budgets, ...charged].map((item) => String(item.module)))].sort(
+      (left, right) => Number(left === NO_MODULE) - Number(right === NO_MODULE) || left.localeCompare(right, "en", { numeric: true }),
+    );
     const rate = access.laborMoney ? averageDailyRate(figures.estimates.get(id)) : null;
     return {
-      today, hoursPerManDay: HOURS_PER_MAN_DAY, access,
+      today,
+      hoursPerManDay: HOURS_PER_MAN_DAY,
+      access,
       project: { ...costRow(row), ...projectCost(id, figures, access) },
-      modules: moduleNames.map((module) => { const budget = budgets.find((item) => item.module === module), used = charged.find((item) => item.module === module);
-        return { module, budget: access.budget ? amount(budget?.budget) : null, requested: access.purchases ? amount(used?.requested) : null,
-          approved: access.purchases ? amount(used?.approved) : null, ordered: access.purchases ? amount(used?.ordered) : null }; }),
-      requests: requests.map((item) => ({ id: Number(item.id), number: String(item.pr_no), status: String(item.status), requiredDate: dateOnly(item.required_date as Date | string | null),
-        unit: item.unit == null ? null : String(item.unit), amount: amount(item.amount), lines: Number(item.lines) })),
+      modules: moduleNames.map((module) => {
+        const budget = budgets.find((item) => item.module === module),
+          used = charged.find((item) => item.module === module);
+        return {
+          module,
+          budget: access.budget ? amount(budget?.budget) : null,
+          requested: access.purchases ? amount(used?.requested) : null,
+          approved: access.purchases ? amount(used?.approved) : null,
+          ordered: access.purchases ? amount(used?.ordered) : null,
+        };
+      }),
+      requests: requests.map((item) => ({
+        id: Number(item.id),
+        number: String(item.pr_no),
+        status: String(item.status),
+        requiredDate: dateOnly(item.required_date as Date | string | null),
+        unit: item.unit == null ? null : String(item.unit),
+        amount: amount(item.amount),
+        lines: Number(item.lines),
+      })),
       plan: (figures.plans.get(id)?.rows ?? []).map((item) => ({ ...item, plannedCost: rate === null ? null : round2(item.plannedManDays * rate) })),
     };
   });
@@ -349,11 +546,14 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
     const details = parseProjectDetails(body);
     // Without an estimate the form names the customer, project name and type itself. Owner decision
     // 2026-10-14: for the Application team, who do not make an Estimate Cost, and for PMs and Admins.
-    const standalone = body.withoutEstimate === true ? {
-      customerId: requiredInteger(body.customerId, "Customer", 1),
-      projectName: requiredText(body.projectName, 300, "Project name"),
-      projectType: requiredText(body.projectType, 100, "Project type"),
-    } : null;
+    const standalone =
+      body.withoutEstimate === true
+        ? {
+            customerId: requiredInteger(body.customerId, "Customer", 1),
+            projectName: requiredText(body.projectName, 300, "Project name"),
+            projectType: requiredText(body.projectType, 100, "Project type"),
+          }
+        : null;
     if (!standalone) await users.demandPermission(request, "estimate.read");
     if (standalone && !canCreateWithoutEstimate(actor)) {
       throw new ApiError(403, "project_without_estimate_forbidden", "Only the Application team, a Project Manager or an Admin can create a project without an estimate.");
@@ -376,120 +576,178 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
       throw new ApiError(403, "schedule_plan_required", "Creating a project with a master plan or team plan requires schedule planning permission.");
     }
     const today = businessToday(config.businessTimeZone);
-    if (input.purchaseOrderDate < shiftDate(today, "year", -10) || input.purchaseOrderDate > shiftDate(today, "day", 30)
-      || input.startDate < shiftDate(today, "year", -1) || input.startDate > shiftDate(today, "year", 5)
-      || input.targetDelivery < input.startDate || input.targetDelivery > shiftDate(input.startDate, "year", 10)) {
+    if (
+      input.purchaseOrderDate < shiftDate(today, "year", -10) ||
+      input.purchaseOrderDate > shiftDate(today, "day", 30) ||
+      input.startDate < shiftDate(today, "year", -1) ||
+      input.startDate > shiftDate(today, "year", 5) ||
+      input.targetDelivery < input.startDate ||
+      input.targetDelivery > shiftDate(input.startDate, "year", 10)
+    ) {
       throw new ApiError(400, "validation_failed", "PO, start and target delivery dates are outside the allowed project range.");
     }
     const writtenKeys: string[] = [];
     let projectDirectory: string | undefined;
     let created: { id: number; number: string; rowVersion: string; folderMetadataCreated: number; documentsTransferred: number; notices: ProjectNotice[] };
     try {
-    created = await database.transaction(async (transaction) => {
-      const people = new sql.Request(transaction); people.input("manager_id", sql.BigInt, input.managerId); people.input("lead_id", sql.BigInt, input.leadEngineerId);
-      const roles = (await people.query<{ manager_role: string | null; lead_role: string | null }>(`
+      created = await database.transaction(async (transaction) => {
+        const people = new sql.Request(transaction);
+        people.input("manager_id", sql.BigInt, input.managerId);
+        people.input("lead_id", sql.BigInt, input.leadEngineerId);
+        const roles = (
+          await people.query<{ manager_role: string | null; lead_role: string | null }>(`
         SELECT (SELECT TOP(1) code FROM dbo.user_effective_roles
           WHERE user_id=@manager_id AND code IN(N'Project Manager',N'Engineering Manager',N'Admin')) AS manager_role,
           (SELECT TOP(1) code FROM dbo.user_effective_roles
           WHERE user_id=@lead_id AND code IN(N'Engineer',N'Engineering Manager',N'Admin')) AS lead_role;
-      `)).recordset[0];
-      if (!roles || !["Project Manager", "Engineering Manager", "Admin"].includes(roles.manager_role ?? "")
-        || !["Engineer", "Engineering Manager", "Admin"].includes(roles.lead_role ?? "")) {
-        throw new ApiError(422, "invalid_reference", "Manager and lead engineer must be active users with eligible roles.");
-      }
-      // Where the project comes from: an approved estimate on a WON order, or the form itself.
-      let source: { customerId: number; inquiryId: number | null; estimateNo: string | null; projectName: string; projectType: string; endUserId: number | null };
-      if (input.estimateId === null) {
-        const customer = new sql.Request(transaction); customer.input("id", sql.BigInt, standalone!.customerId);
-        if (!(await customer.query(`SELECT id FROM dbo.customers WITH (HOLDLOCK) WHERE id=@id AND is_active=1 AND deleted_at IS NULL;`)).recordset[0]) {
-          throw new ApiError(422, "invalid_reference", "The selected customer must be an active customer.");
+      `)
+        ).recordset[0];
+        if (!roles || !["Project Manager", "Engineering Manager", "Admin"].includes(roles.manager_role ?? "") || !["Engineer", "Engineering Manager", "Admin"].includes(roles.lead_role ?? "")) {
+          throw new ApiError(422, "invalid_reference", "Manager and lead engineer must be active users with eligible roles.");
         }
-        source = { ...standalone!, inquiryId: null, estimateNo: null, endUserId: requestedEndUserId ?? null };
-      } else {
-        const lookup = new sql.Request(transaction); lookup.input("id", sql.BigInt, input.estimateId);
-        const estimate = (await lookup.query<{ customer_id: number | string; inquiry_id: number | string; estimate_no: string; project_name: string; project_type: string }>(`
+        // Where the project comes from: an approved estimate on a WON order, or the form itself.
+        let source: { customerId: number; inquiryId: number | null; estimateNo: string | null; projectName: string; projectType: string; endUserId: number | null };
+        if (input.estimateId === null) {
+          const customer = new sql.Request(transaction);
+          customer.input("id", sql.BigInt, standalone!.customerId);
+          if (!(await customer.query(`SELECT id FROM dbo.customers WITH (HOLDLOCK) WHERE id=@id AND is_active=1 AND deleted_at IS NULL;`)).recordset[0]) {
+            throw new ApiError(422, "invalid_reference", "The selected customer must be an active customer.");
+          }
+          source = { ...standalone!, inquiryId: null, estimateNo: null, endUserId: requestedEndUserId ?? null };
+        } else {
+          const lookup = new sql.Request(transaction);
+          lookup.input("id", sql.BigInt, input.estimateId);
+          const estimate = (
+            await lookup.query<{ customer_id: number | string; inquiry_id: number | string; estimate_no: string; project_name: string; project_type: string }>(`
           SELECT customer_id,inquiry_id,estimate_no,project_name,project_type FROM dbo.estimates WITH (UPDLOCK,HOLDLOCK)
           WHERE id=@id AND status IN (N'Approved',N'Locked') AND deleted_at IS NULL AND archived_at IS NULL;
-        `)).recordset[0];
-        if (!estimate) throw new ApiError(422, "estimate_not_approved", "An approved estimate is required to create a project.");
-        const order = new sql.Request(transaction); order.input("inquiry", sql.BigInt, Number(estimate.inquiry_id));
-        if (!(await order.query(`SELECT o.id FROM dbo.inquiries i WITH(HOLDLOCK) JOIN dbo.crm_opportunities o WITH(HOLDLOCK) ON o.id=i.opportunity_id
-            WHERE i.id=@inquiry AND o.stage=N'WON';`)).recordset[0]) {
-          throw new ApiError(409, "opportunity_not_won", "Mark the customer order as WON on the linked CRM opportunity before creating a project.");
-        }
-        const duplicate = new sql.Request(transaction);
-        duplicate.input("estimate",sql.BigInt,input.estimateId).input("inquiry",sql.BigInt,Number(estimate.inquiry_id));
-        if((await duplicate.query(`SELECT id FROM dbo.projects WITH(UPDLOCK,HOLDLOCK) WHERE estimate_id=@estimate OR inquiry_id=@inquiry`)).recordset[0]) {
-          throw new ApiError(409,"project_already_exists","A project already exists for this inquiry. Open or restore the existing project.");
-        }
-        await assertEstimateTotals(transaction, input.estimateId);
-        const inquiryLookup = new sql.Request(transaction);
-        inquiryLookup.input("inquiry_id", sql.BigInt, Number(estimate.inquiry_id));
-        const inquiry = (await inquiryLookup.query<{ end_user_customer_id: number | string | null }>(`
+        `)
+          ).recordset[0];
+          if (!estimate) throw new ApiError(422, "estimate_not_approved", "An approved estimate is required to create a project.");
+          const order = new sql.Request(transaction);
+          order.input("inquiry", sql.BigInt, Number(estimate.inquiry_id));
+          if (
+            !(
+              await order.query(`SELECT o.id FROM dbo.inquiries i WITH(HOLDLOCK) JOIN dbo.crm_opportunities o WITH(HOLDLOCK) ON o.id=i.opportunity_id
+            WHERE i.id=@inquiry AND o.stage=N'WON';`)
+            ).recordset[0]
+          ) {
+            throw new ApiError(409, "opportunity_not_won", "Mark the customer order as WON on the linked CRM opportunity before creating a project.");
+          }
+          const duplicate = new sql.Request(transaction);
+          duplicate.input("estimate", sql.BigInt, input.estimateId).input("inquiry", sql.BigInt, Number(estimate.inquiry_id));
+          if ((await duplicate.query(`SELECT id FROM dbo.projects WITH(UPDLOCK,HOLDLOCK) WHERE estimate_id=@estimate OR inquiry_id=@inquiry`)).recordset[0]) {
+            throw new ApiError(409, "project_already_exists", "A project already exists for this inquiry. Open or restore the existing project.");
+          }
+          await assertEstimateTotals(transaction, input.estimateId);
+          const inquiryLookup = new sql.Request(transaction);
+          inquiryLookup.input("inquiry_id", sql.BigInt, Number(estimate.inquiry_id));
+          const inquiry = (
+            await inquiryLookup.query<{ end_user_customer_id: number | string | null }>(`
           SELECT end_user_customer_id FROM dbo.inquiries WITH (HOLDLOCK) WHERE id=@inquiry_id AND deleted_at IS NULL AND archived_at IS NULL AND status<>N'Cancelled';
-        `)).recordset[0];
-        if (!inquiry) throw new ApiError(422, "invalid_reference", "The source inquiry is no longer available.");
-        const inheritedEndUserId = inquiry.end_user_customer_id === null ? null : Number(inquiry.end_user_customer_id);
-        source = { customerId: Number(estimate.customer_id), inquiryId: Number(estimate.inquiry_id), estimateNo: estimate.estimate_no,
-          projectName: estimate.project_name, projectType: estimate.project_type,
-          endUserId: requestedEndUserId === undefined ? inheritedEndUserId : requestedEndUserId };
-      }
-      const endUser = await validateEndUser(transaction, source.endUserId);
-      // The number comes from the ERP. It stays reserved by a project in the trash, so the
-      // same ERP number is never issued to two records here. Only the all-zero placeholder
-      // (PJ000000), used before the ERP issues a number, may repeat.
-      const number = input.projectNumber;
-      const taken = new sql.Request(transaction); taken.input("number", sql.NVarChar(30), number);
-      if (!isPlaceholderProjectNumber(number) && (await taken.query(`SELECT id FROM dbo.projects WITH(UPDLOCK,HOLDLOCK) WHERE project_no=@number;`)).recordset[0]) {
-        throw new ApiError(409, "project_number_taken", "This project number is already used by another project, including any in the trash. Check the number from the ERP.");
-      }
-      const insert = new sql.Request(transaction);
-      insert.input("number", sql.NVarChar(30), number); insert.input("name", sql.NVarChar(300), source.projectName);
-      insert.input("customer_id", sql.BigInt, source.customerId); insert.input("project_type", sql.NVarChar(100), source.projectType);
-      insert.input("end_user_id", sql.BigInt, endUser.endUserCustomerId);
-      insert.input("manager_id", sql.BigInt, input.managerId); insert.input("lead_id", sql.BigInt, input.leadEngineerId);
-      insert.input("inquiry_id", sql.BigInt, source.inquiryId); insert.input("estimate_id", sql.BigInt, input.estimateId);
-      insert.input("po_no", sql.NVarChar(100), input.purchaseOrderNumber); insert.input("po_date", sql.Date, input.purchaseOrderDate);
-      insert.input("start_date", sql.Date, input.startDate); insert.input("target_delivery", sql.Date, input.targetDelivery);
-      insert.input("site", sql.NVarChar(300), input.site); insert.input("remark", sql.NVarChar(sql.MAX), input.remark);
-      insert.input("folder_path", sql.NVarChar(1000), `IoT Team - Documents / Project - ${input.startDate.slice(0, 4)} / [${number}] ${source.projectName}`);
-      insert.input("actor", sql.BigInt, actor.id);
-      const row = (await insert.query<{ id: number | string; row_version: Buffer }>(`
+        `)
+          ).recordset[0];
+          if (!inquiry) throw new ApiError(422, "invalid_reference", "The source inquiry is no longer available.");
+          const inheritedEndUserId = inquiry.end_user_customer_id === null ? null : Number(inquiry.end_user_customer_id);
+          source = {
+            customerId: Number(estimate.customer_id),
+            inquiryId: Number(estimate.inquiry_id),
+            estimateNo: estimate.estimate_no,
+            projectName: estimate.project_name,
+            projectType: estimate.project_type,
+            endUserId: requestedEndUserId === undefined ? inheritedEndUserId : requestedEndUserId,
+          };
+        }
+        // An end user carried over from the inquiry may have been closed since; one chosen here must be active.
+        const endUser = requestedEndUserId === undefined ? await inheritedEndUser(transaction, source.endUserId) : await validateEndUser(transaction, source.endUserId);
+        // The number comes from the ERP. It stays reserved by a project in the trash, so the
+        // same ERP number is never issued to two records here. Only the all-zero placeholder
+        // (PJ000000), used before the ERP issues a number, may repeat.
+        const number = input.projectNumber;
+        const taken = new sql.Request(transaction);
+        taken.input("number", sql.NVarChar(30), number);
+        if (!isPlaceholderProjectNumber(number) && (await taken.query(`SELECT id FROM dbo.projects WITH(UPDLOCK,HOLDLOCK) WHERE project_no=@number;`)).recordset[0]) {
+          throw new ApiError(409, "project_number_taken", "This project number is already used by another project, including any in the trash. Check the number from the ERP.");
+        }
+        const insert = new sql.Request(transaction);
+        insert.input("number", sql.NVarChar(30), number);
+        insert.input("name", sql.NVarChar(300), source.projectName);
+        insert.input("customer_id", sql.BigInt, source.customerId);
+        insert.input("project_type", sql.NVarChar(100), source.projectType);
+        insert.input("end_user_id", sql.BigInt, endUser.endUserCustomerId);
+        insert.input("manager_id", sql.BigInt, input.managerId);
+        insert.input("lead_id", sql.BigInt, input.leadEngineerId);
+        insert.input("inquiry_id", sql.BigInt, source.inquiryId);
+        insert.input("estimate_id", sql.BigInt, input.estimateId);
+        insert.input("po_no", sql.NVarChar(100), input.purchaseOrderNumber);
+        insert.input("po_date", sql.Date, input.purchaseOrderDate);
+        insert.input("start_date", sql.Date, input.startDate);
+        insert.input("target_delivery", sql.Date, input.targetDelivery);
+        insert.input("site", sql.NVarChar(300), input.site);
+        insert.input("remark", sql.NVarChar(sql.MAX), input.remark);
+        insert.input("folder_path", sql.NVarChar(1000), `IoT Team - Documents / Project - ${input.startDate.slice(0, 4)} / [${number}] ${source.projectName}`);
+        insert.input("actor", sql.BigInt, actor.id);
+        const row = (
+          await insert.query<{ id: number | string; row_version: Buffer }>(`
         INSERT INTO dbo.projects(project_no,name,customer_id,end_user_customer_id,project_type,status,manager_id,lead_engineer_id,
           inquiry_id,estimate_id,po_no,po_date,start_date,target_delivery,progress,site,remark,folder_path,created_by,updated_by)
         OUTPUT inserted.id,inserted.row_version VALUES (@number,@name,@customer_id,@end_user_id,@project_type,N'Planning',@manager_id,@lead_id,
           @inquiry_id,@estimate_id,@po_no,@po_date,@start_date,@target_delivery,0,@site,@remark,@folder_path,@actor,@actor);
-      `)).recordset[0]!;
-      const projectId = Number(row.id);
-      projectDirectory = `projects/${projectId}`;
-      const members = new sql.Request(transaction);
-      members.input("project_id", sql.BigInt, projectId); members.input("manager_id", sql.BigInt, input.managerId);
-      members.input("lead_id", sql.BigInt, input.leadEngineerId); members.input("actor", sql.BigInt, actor.id);
-      await members.query(`
+      `)
+        ).recordset[0]!;
+        const projectId = Number(row.id);
+        projectDirectory = `projects/${projectId}`;
+        const members = new sql.Request(transaction);
+        members.input("project_id", sql.BigInt, projectId);
+        members.input("manager_id", sql.BigInt, input.managerId);
+        members.input("lead_id", sql.BigInt, input.leadEngineerId);
+        members.input("actor", sql.BigInt, actor.id);
+        await members.query(`
         INSERT INTO dbo.project_members(project_id,user_id,role_on_project,created_by) VALUES (@project_id,@manager_id,N'Project Manager',@actor);
         IF @lead_id<>@manager_id INSERT INTO dbo.project_members(project_id,user_id,role_on_project,created_by) VALUES (@project_id,@lead_id,N'Lead Engineer',@actor);
       `);
-      await insertInitialPlan(transaction, projectId, plan, actor.id);
-      await writeProjectDetails(transaction, projectId, details, actor.id);
-      const folders = new sql.Request(transaction); folders.input("project_id", sql.BigInt, projectId); folders.input("actor", sql.BigInt, actor.id);
-      const values = STANDARD_FOLDERS.map(([code, name]) => `(@project_id,N'${code}',N'${name.replaceAll("'", "''")}',N'projects/${projectId}/${code}',@actor)`).join(",\n");
-      await folders.query(`INSERT INTO dbo.project_folders(project_id,folder_code,name,storage_key,created_by) VALUES ${values};`);
-      for (const [code] of STANDARD_FOLDERS) await createStoredDirectory(config.documentStorage, `${projectDirectory}/${code}`);
-      // Inquiry and estimate files follow the project; a project without an estimate has none to bring.
-      const documentsTransferred = source.inquiryId === null || input.estimateId === null ? 0
-        : await transferProjectDocuments(transaction, config.documentStorage, projectId, source.inquiryId, input.estimateId, actor.id, writtenKeys);
-      await insertAudit(transaction, actor.id, "Project", projectId, number, source.estimateNo ? "Created from approved estimate" : "Created without estimate", source.estimateNo,
-        { ...input, ...endUser, endUserInheritedFromInquiry: requestedEndUserId === undefined, documentsTransferred,
-          masterPlan: plan.headings, ...details });
-      if (source.inquiryId !== null) await confirmOpportunityOrder(transaction,source.inquiryId,actor.id,input.purchaseOrderDate>today?today:input.purchaseOrderDate,input.purchaseOrderNumber);
-      const customerName = (await new sql.Request(transaction).input("id", sql.BigInt, source.customerId)
-        .query<{ name: string }>(`SELECT name FROM dbo.customers WHERE id=@id;`)).recordset[0]?.name ?? "";
-      const notices = await queueProjectCreatedNotices(transaction, { id: actor.id, name: actor.name }, {
-        projectId, projectNumber: number, projectName: source.projectName, customerName, managerId: input.managerId, leadEngineerId: input.leadEngineerId,
-        startDate: input.startDate, targetDelivery: input.targetDelivery, team: planAssignments(plan),
+        await insertInitialPlan(transaction, projectId, plan, actor.id);
+        await writeProjectDetails(transaction, projectId, details, actor.id);
+        const folders = new sql.Request(transaction);
+        folders.input("project_id", sql.BigInt, projectId);
+        folders.input("actor", sql.BigInt, actor.id);
+        const values = STANDARD_FOLDERS.map(([code, name]) => `(@project_id,N'${code}',N'${name.replaceAll("'", "''")}',N'projects/${projectId}/${code}',@actor)`).join(",\n");
+        await folders.query(`INSERT INTO dbo.project_folders(project_id,folder_code,name,storage_key,created_by) VALUES ${values};`);
+        for (const [code] of STANDARD_FOLDERS) await createStoredDirectory(config.documentStorage, `${projectDirectory}/${code}`);
+        // Inquiry and estimate files follow the project; a project without an estimate has none to bring.
+        const documentsTransferred =
+          source.inquiryId === null || input.estimateId === null
+            ? 0
+            : await transferProjectDocuments(transaction, config.documentStorage, projectId, source.inquiryId, input.estimateId, actor.id, writtenKeys);
+        await insertAudit(transaction, actor.id, "Project", projectId, number, source.estimateNo ? "Created from approved estimate" : "Created without estimate", source.estimateNo, {
+          ...input,
+          ...endUser,
+          endUserInheritedFromInquiry: requestedEndUserId === undefined,
+          documentsTransferred,
+          masterPlan: plan.headings,
+          ...details,
+        });
+        if (source.inquiryId !== null)
+          await confirmOpportunityOrder(transaction, source.inquiryId, actor.id, input.purchaseOrderDate > today ? today : input.purchaseOrderDate, input.purchaseOrderNumber);
+        const customerName =
+          (await new sql.Request(transaction).input("id", sql.BigInt, source.customerId).query<{ name: string }>(`SELECT name FROM dbo.customers WHERE id=@id;`)).recordset[0]?.name ?? "";
+        const notices = await queueProjectCreatedNotices(
+          transaction,
+          { id: actor.id, name: actor.name },
+          {
+            projectId,
+            projectNumber: number,
+            projectName: source.projectName,
+            customerName,
+            managerId: input.managerId,
+            leadEngineerId: input.leadEngineerId,
+            startDate: input.startDate,
+            targetDelivery: input.targetDelivery,
+            team: planAssignments(plan),
+          },
+        );
+        return { id: projectId, number, rowVersion: row.row_version.toString("base64"), folderMetadataCreated: STANDARD_FOLDERS.length, documentsTransferred, notices };
       });
-      return { id: projectId, number, rowVersion: row.row_version.toString("base64"), folderMetadataCreated: STANDARD_FOLDERS.length, documentsTransferred, notices };
-    });
     } catch (error) {
       if (error instanceof DatabaseCommitOutcomeUnknownError) {
         request.log.fatal({ err: error.originalError, storageKeys: writtenKeys }, "Project handover commit outcome unknown; preserving files");
@@ -499,16 +757,20 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
             request.log.error({ err: cleanupError, storageKey: key }, "Could not remove rolled-back project handover file");
           });
         }
-        if (projectDirectory) await removeEmptyStoredDirectory(config.documentStorage, projectDirectory).catch((cleanupError: unknown) => {
-          request.log.error({ err: cleanupError, storageKey: projectDirectory }, "Could not remove empty rolled-back project folders");
-        });
+        if (projectDirectory)
+          await removeEmptyStoredDirectory(config.documentStorage, projectDirectory).catch((cleanupError: unknown) => {
+            request.log.error({ err: cleanupError, storageKey: projectDirectory }, "Could not remove empty rolled-back project folders");
+          });
       }
       throw error;
     }
     // Mail goes only after the project is committed; the bell rows were written with it.
     const { notices, ...project } = created;
     const notification = await deliverProjectNotices(email, notices);
-    return reply.status(201).header("Location", `/api/v1/projects/${created.id}`).send({ ...project, notification });
+    return reply
+      .status(201)
+      .header("Location", `/api/v1/projects/${created.id}`)
+      .send({ ...project, notification });
   });
 
   app.get("/api/v1/projects/:id/members", async (request) => {
@@ -517,9 +779,17 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
     const id = positiveLong((request.params as { id?: string }).id, "Project id");
     await demandProjectScope(database, actor, id);
     const result = await database.query<{
-      id: number | string; name: string; email: string; department: string; system_role: string;
-      role_on_project: string; created_at: Date | string; is_manager: number | boolean; is_lead_engineer: number | boolean;
-    }>(`
+      id: number | string;
+      name: string;
+      email: string;
+      department: string;
+      system_role: string;
+      role_on_project: string;
+      created_at: Date | string;
+      is_manager: number | boolean;
+      is_lead_engineer: number | boolean;
+    }>(
+      `
       SELECT u.id, u.name, u.email, u.department, r.code AS system_role, m.role_on_project, m.created_at,
              CASE WHEN u.id = p.manager_id THEN 1 ELSE 0 END AS is_manager,
              CASE WHEN u.id = p.lead_engineer_id THEN 1 ELSE 0 END AS is_lead_engineer
@@ -529,11 +799,18 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
       INNER JOIN dbo.projects p ON p.id = m.project_id
       WHERE m.project_id = @project_id
       ORDER BY CASE WHEN u.id = p.manager_id THEN 0 WHEN u.id = p.lead_engineer_id THEN 1 ELSE 2 END, u.name;
-    `, (sqlRequest) => sqlRequest.input("project_id", sql.BigInt, id));
+    `,
+      (sqlRequest) => sqlRequest.input("project_id", sql.BigInt, id),
+    );
     return result.recordset.map((row) => ({
-      userId: Number(row.id), name: row.name, email: row.email, department: row.department,
-      systemRole: row.system_role, roleOnProject: row.role_on_project,
-      isManager: Boolean(row.is_manager), isLeadEngineer: Boolean(row.is_lead_engineer),
+      userId: Number(row.id),
+      name: row.name,
+      email: row.email,
+      department: row.department,
+      systemRole: row.system_role,
+      roleOnProject: row.role_on_project,
+      isManager: Boolean(row.is_manager),
+      isLeadEngineer: Boolean(row.is_lead_engineer),
       addedAt: row.created_at,
     }));
   });
@@ -546,17 +823,19 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
     const userId = requiredInteger(body.userId, "User", 1);
     const roleOnProject = optionalBodyText(body.roleOnProject, 100, "Role on the project") ?? "Member";
     await demandProjectScope(database, actor, id);
-    const activeCheck = await database.query<{ ok: number }>(
-      `SELECT 1 AS ok FROM dbo.users WHERE id = @user_id AND is_active = 1 AND deleted_at IS NULL;`,
-      (sqlRequest) => sqlRequest.input("user_id", sql.BigInt, userId),
+    const activeCheck = await database.query<{ ok: number }>(`SELECT 1 AS ok FROM dbo.users WHERE id = @user_id AND is_active = 1 AND deleted_at IS NULL;`, (sqlRequest) =>
+      sqlRequest.input("user_id", sql.BigInt, userId),
     );
     if (!activeCheck.recordset[0]) throw new ApiError(422, "invalid_reference", "User must be an active account.");
     await database.transaction(async (transaction) => {
       const insert = new sql.Request(transaction);
-      insert.input("project_id", sql.BigInt, id); insert.input("user_id", sql.BigInt, userId);
-      insert.input("role", sql.NVarChar(100), roleOnProject); insert.input("actor", sql.BigInt, actor.id);
+      insert.input("project_id", sql.BigInt, id);
+      insert.input("user_id", sql.BigInt, userId);
+      insert.input("role", sql.NVarChar(100), roleOnProject);
+      insert.input("actor", sql.BigInt, actor.id);
       await insert.query(`INSERT INTO dbo.project_members(project_id,user_id,role_on_project,created_by) VALUES (@project_id,@user_id,@role,@actor);`);
-      const numberLookup = new sql.Request(transaction); numberLookup.input("project_id", sql.BigInt, id);
+      const numberLookup = new sql.Request(transaction);
+      numberLookup.input("project_id", sql.BigInt, id);
       const projectNo = (await numberLookup.query<{ project_no: string }>(`SELECT project_no FROM dbo.projects WHERE id = @project_id;`)).recordset[0]?.project_no ?? "";
       await insertAudit(transaction, actor.id, "Project", id, projectNo, "Added project member", null, { userId, roleOnProject });
     });
@@ -569,17 +848,19 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
     const id = positiveLong((request.params as { id?: string }).id, "Project id");
     const memberUserId = positiveLong((request.params as { userId?: string }).userId, "User id");
     await demandProjectScope(database, actor, id);
-    const coreCheck = await database.query<{ ok: number }>(
-      `SELECT 1 AS ok FROM dbo.projects WHERE id = @project_id AND (manager_id = @user_id OR lead_engineer_id = @user_id);`,
-      (sqlRequest) => { sqlRequest.input("project_id", sql.BigInt, id); sqlRequest.input("user_id", sql.BigInt, memberUserId); },
-    );
+    const coreCheck = await database.query<{ ok: number }>(`SELECT 1 AS ok FROM dbo.projects WHERE id = @project_id AND (manager_id = @user_id OR lead_engineer_id = @user_id);`, (sqlRequest) => {
+      sqlRequest.input("project_id", sql.BigInt, id);
+      sqlRequest.input("user_id", sql.BigInt, memberUserId);
+    });
     if (coreCheck.recordset[0]) throw new ApiError(422, "core_member", "The project manager and lead engineer cannot be removed here; reassign their role on the project instead.");
     await database.transaction(async (transaction) => {
       const del = new sql.Request(transaction);
-      del.input("project_id", sql.BigInt, id); del.input("user_id", sql.BigInt, memberUserId);
+      del.input("project_id", sql.BigInt, id);
+      del.input("user_id", sql.BigInt, memberUserId);
       const result = await del.query(`DELETE FROM dbo.project_members WHERE project_id = @project_id AND user_id = @user_id;`);
       if (result.rowsAffected[0] === 0) throw new ApiError(404, "not_a_member", "That user is not a member of this project.");
-      const numberLookup = new sql.Request(transaction); numberLookup.input("project_id", sql.BigInt, id);
+      const numberLookup = new sql.Request(transaction);
+      numberLookup.input("project_id", sql.BigInt, id);
       const projectNo = (await numberLookup.query<{ project_no: string }>(`SELECT project_no FROM dbo.projects WHERE id = @project_id;`)).recordset[0]?.project_no ?? "";
       await insertAudit(transaction, actor.id, "Project", id, projectNo, "Removed project member", { userId: memberUserId }, null);
     });
@@ -588,15 +869,19 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
 
   // Unstarted projects are removed; Management/Admin may hide projects with work after confirming the number.
   async function projectDeletion(transaction: sql.Transaction, id: number, actor: CurrentUser, execute: boolean) {
-    const lookup = new sql.Request(transaction); lookup.input("id", sql.BigInt, id);
-    const project = (await lookup.query<Record<string, unknown> & { project_no: string; manager_id: number | string }>(`
+    const lookup = new sql.Request(transaction);
+    lookup.input("id", sql.BigInt, id);
+    const project = (
+      await lookup.query<Record<string, unknown> & { project_no: string; manager_id: number | string }>(`
       SELECT project_no,name,customer_id,inquiry_id,estimate_id,status,manager_id,lead_engineer_id,po_no,po_date,start_date,target_delivery
-      FROM dbo.projects WITH(UPDLOCK,HOLDLOCK) WHERE id=@id AND deleted_at IS NULL;`)).recordset[0];
+      FROM dbo.projects WITH(UPDLOCK,HOLDLOCK) WHERE id=@id AND deleted_at IS NULL;`)
+    ).recordset[0];
     if (!project) throw new ApiError(404, "project_not_found", "Project not found.");
     if (Number(project.manager_id) !== actor.id && !hasRole(actor, "Engineering Manager", "Management", "Admin")) {
       throw new ApiError(403, "project_delete_forbidden", "Only this project's manager, an Engineering Manager, Management or an Admin can delete it.");
     }
-    const run = new sql.Request(transaction); run.input("id", sql.BigInt, id).input("actor", sql.BigInt, actor.id).input("execute", sql.Bit, execute);
+    const run = new sql.Request(transaction);
+    run.input("id", sql.BigInt, id).input("actor", sql.BigInt, actor.id).input("execute", sql.Bit, execute);
     const sets = (await run.execute("dbo.delete_unstarted_project")).recordsets as unknown as Record<string, unknown>[][];
     const blockers = (sets[0] ?? []).map((row) => ({ source: String(row.source), count: Number(row.row_count) }));
     return { project, blockers, storageKeys: (sets[1] ?? []).map((row) => String(row.storage_key)) };
@@ -624,7 +909,8 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
       const { project, blockers } = preview;
       if (body.force === true && body.confirmProjectNo !== project.project_no) throw new ApiError(400, "project_number_mismatch", "Type the project number exactly to confirm deletion.");
       if (blockers.length && forceRole && body.force === true) {
-        const hide = new sql.Request(transaction); hide.input("id", sql.BigInt, id).input("actor", sql.BigInt, actor.id);
+        const hide = new sql.Request(transaction);
+        hide.input("id", sql.BigInt, id).input("actor", sql.BigInt, actor.id);
         await hide.execute("dbo.soft_delete_project");
         await insertAudit(transaction, actor.id, "Project", id, project.project_no, "Deleted with recorded work (soft)", { project, blockers }, { deleted: true, soft: true });
         return { number: project.project_no, storageKeys: [] as string[], soft: true };
@@ -643,9 +929,10 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
         request.log.error({ err: error, storageKey: key, projectId: id }, "Could not remove a deleted project's file");
       });
     }
-    if (!deleted.soft) await removeEmptyStoredDirectory(config.documentStorage, `projects/${id}`).catch((error: unknown) => {
-      request.log.error({ err: error, projectId: id }, "Could not remove a deleted project's folders");
-    });
+    if (!deleted.soft)
+      await removeEmptyStoredDirectory(config.documentStorage, `projects/${id}`).catch((error: unknown) => {
+        request.log.error({ err: error, projectId: id }, "Could not remove a deleted project's folders");
+      });
     return { id, number: deleted.number, deleted: true };
   });
 
@@ -664,13 +951,15 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
     // The plan is sent whole, headings with their tasks and functions, or not at all.
     rejectOutdatedPlan(body);
     const plan = body.masterPlan === undefined ? null : parseInitialPlan(body);
-    const canPlan = plan !== null && await permissionFor(database, actor.id, "schedule.plan");
+    const canPlan = plan !== null && (await permissionFor(database, actor.id, "schedule.plan"));
     const saved = await database.transaction(async (transaction) => {
       const lookup = new sql.Request(transaction);
       lookup.input("id", sql.BigInt, id);
-      const before = (await lookup.query<Record<string, unknown>>(`SELECT id,project_no,name,project_type,status,progress,manager_id,lead_engineer_id,
+      const before = (
+        await lookup.query<Record<string, unknown>>(`SELECT id,project_no,name,project_type,status,progress,manager_id,lead_engineer_id,
         po_no,po_date,start_date,target_delivery,actual_delivery,site,remark FROM dbo.projects WITH(UPDLOCK,HOLDLOCK)
-        WHERE id=@id AND deleted_at IS NULL;`)).recordset[0];
+        WHERE id=@id AND deleted_at IS NULL;`)
+      ).recordset[0];
       if (!before) throw new ApiError(404, "project_not_found", "Project not found.");
       const currentStatus = String(before.status) as ProjectStatus;
 
@@ -679,20 +968,24 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
       let number = String(before.project_no);
       if (requestedNumber !== null && requestedNumber !== number) {
         if (!isPlaceholderProjectNumber(number)) throw new ApiError(409, "project_number_fixed", "This project already has its ERP number, which does not change here.");
-        const taken = new sql.Request(transaction); taken.input("number", sql.NVarChar(30), requestedNumber);
+        const taken = new sql.Request(transaction);
+        taken.input("number", sql.NVarChar(30), requestedNumber);
         if (!isPlaceholderProjectNumber(requestedNumber) && (await taken.query(`SELECT id FROM dbo.projects WITH(UPDLOCK,HOLDLOCK) WHERE project_no=@number;`)).recordset[0]) {
           throw new ApiError(409, "project_number_taken", "This project number is already used by another project, including any in the trash. Check the number from the ERP.");
         }
         number = requestedNumber;
       }
 
-      const statusValue = given("status", () => {
-        if (!isProjectStatus(body.status)) throw new ApiError(400, "validation_failed", "Project status is not one of the allowed values.");
-        return body.status;
-      }, currentStatus);
+      const statusValue = given(
+        "status",
+        () => {
+          if (!isProjectStatus(body.status)) throw new ApiError(400, "validation_failed", "Project status is not one of the allowed values.");
+          return body.status;
+        },
+        currentStatus,
+      );
       // Only the people answerable for the project move it along the lifecycle.
-      if (statusValue !== currentStatus && !manages
-        && Number(before.manager_id) !== actor.id && Number(before.lead_engineer_id) !== actor.id) {
+      if (statusValue !== currentStatus && !manages && Number(before.manager_id) !== actor.id && Number(before.lead_engineer_id) !== actor.id) {
         throw new ApiError(403, "project_status_forbidden", "Only the project manager, the lead engineer or a manager can change the project status.");
       }
 
@@ -708,11 +1001,15 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
         actualDelivery: given("actualDelivery", () => parseDateOnly(body.actualDelivery, "Actual delivery", true), dateOnly(before.actual_delivery as Date | null)),
         site: given("site", () => requiredText(body.site, 300, "Project site"), String(before.site)),
         remark: given("remark", () => optionalBodyText(body.remark, 20_000, "Remark"), (before.remark as string | null) ?? null),
-        progress: given("progress", () => {
-          const value = typeof body.progress === "number" ? body.progress : Number.NaN;
-          if (!Number.isFinite(value) || value < 0 || value > 100) throw new ApiError(400, "validation_failed", "Progress must be a number between 0 and 100.");
-          return Math.round(value * 100) / 100;
-        }, Number(before.progress)),
+        progress: given(
+          "progress",
+          () => {
+            const value = typeof body.progress === "number" ? body.progress : Number.NaN;
+            if (!Number.isFinite(value) || value < 0 || value > 100) throw new ApiError(400, "validation_failed", "Progress must be a number between 0 and 100.");
+            return Math.round(value * 100) / 100;
+          },
+          Number(before.progress),
+        ),
       };
 
       if (input.targetDelivery < input.startDate) {
@@ -727,32 +1024,48 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
       const progress = progressForStatus(statusValue, input.progress);
 
       const people = new sql.Request(transaction);
-      people.input("manager_id", sql.BigInt, input.managerId); people.input("lead_id", sql.BigInt, input.leadEngineerId);
-      const staff = (await people.query<{ found: number | string }>(`SELECT COUNT_BIG(*) found FROM dbo.users
-        WHERE id IN (@manager_id,@lead_id) AND is_active=1 AND deleted_at IS NULL;`)).recordset[0];
+      people.input("manager_id", sql.BigInt, input.managerId);
+      people.input("lead_id", sql.BigInt, input.leadEngineerId);
+      const staff = (
+        await people.query<{ found: number | string }>(`SELECT COUNT_BIG(*) found FROM dbo.users
+        WHERE id IN (@manager_id,@lead_id) AND is_active=1 AND deleted_at IS NULL;`)
+      ).recordset[0];
       const distinct = input.managerId === input.leadEngineerId ? 1 : 2;
       if (Number(staff?.found ?? 0) !== distinct) throw new ApiError(422, "invalid_reference", "The manager and the lead engineer must both be active users.");
 
       const update = new sql.Request(transaction);
-      update.input("id", sql.BigInt, id); update.input("row_version", sql.VarBinary(8), rowVersion); update.input("actor", sql.BigInt, actor.id);
-      update.input("name", sql.NVarChar(300), input.name); update.input("project_type", sql.NVarChar(100), input.projectType);
-      update.input("status", sql.NVarChar(50), statusValue); update.input("progress", sql.Decimal(5, 2), progress);
-      update.input("manager_id", sql.BigInt, input.managerId); update.input("lead_id", sql.BigInt, input.leadEngineerId);
-      update.input("po_no", sql.NVarChar(100), input.purchaseOrderNumber); update.input("po_date", sql.Date, input.purchaseOrderDate);
-      update.input("start_date", sql.Date, input.startDate); update.input("target_delivery", sql.Date, input.targetDelivery);
-      update.input("actual_delivery", sql.Date, input.actualDelivery); update.input("site", sql.NVarChar(300), input.site);
-      update.input("remark", sql.NVarChar(sql.MAX), input.remark); update.input("number", sql.NVarChar(30), number);
-      const updated = (await update.query<{ row_version: Buffer }>(`UPDATE dbo.projects SET project_no=@number,name=@name,project_type=@project_type,status=@status,progress=@progress,
+      update.input("id", sql.BigInt, id);
+      update.input("row_version", sql.VarBinary(8), rowVersion);
+      update.input("actor", sql.BigInt, actor.id);
+      update.input("name", sql.NVarChar(300), input.name);
+      update.input("project_type", sql.NVarChar(100), input.projectType);
+      update.input("status", sql.NVarChar(50), statusValue);
+      update.input("progress", sql.Decimal(5, 2), progress);
+      update.input("manager_id", sql.BigInt, input.managerId);
+      update.input("lead_id", sql.BigInt, input.leadEngineerId);
+      update.input("po_no", sql.NVarChar(100), input.purchaseOrderNumber);
+      update.input("po_date", sql.Date, input.purchaseOrderDate);
+      update.input("start_date", sql.Date, input.startDate);
+      update.input("target_delivery", sql.Date, input.targetDelivery);
+      update.input("actual_delivery", sql.Date, input.actualDelivery);
+      update.input("site", sql.NVarChar(300), input.site);
+      update.input("remark", sql.NVarChar(sql.MAX), input.remark);
+      update.input("number", sql.NVarChar(30), number);
+      const updated = (
+        await update.query<{ row_version: Buffer }>(`UPDATE dbo.projects SET project_no=@number,name=@name,project_type=@project_type,status=@status,progress=@progress,
         manager_id=@manager_id,lead_engineer_id=@lead_id,po_no=@po_no,po_date=@po_date,start_date=@start_date,target_delivery=@target_delivery,
         actual_delivery=@actual_delivery,site=@site,remark=@remark,updated_by=@actor,updated_at=SYSUTCDATETIME()
-        OUTPUT inserted.row_version WHERE id=@id AND deleted_at IS NULL AND row_version=@row_version;`)).recordset[0];
+        OUTPUT inserted.row_version WHERE id=@id AND deleted_at IS NULL AND row_version=@row_version;`)
+      ).recordset[0];
       if (!updated) throw new ApiError(409, "concurrency_conflict", "This project changed. Reload and try again.");
 
       // Project access is read from project_members, so a new manager or lead must appear there or
       // they would lose sight of the project they were just handed.
       const membership = new sql.Request(transaction);
-      membership.input("project_id", sql.BigInt, id); membership.input("actor", sql.BigInt, actor.id);
-      membership.input("manager_id", sql.BigInt, input.managerId); membership.input("lead_id", sql.BigInt, input.leadEngineerId);
+      membership.input("project_id", sql.BigInt, id);
+      membership.input("actor", sql.BigInt, actor.id);
+      membership.input("manager_id", sql.BigInt, input.managerId);
+      membership.input("lead_id", sql.BigInt, input.leadEngineerId);
       await membership.query(`IF NOT EXISTS(SELECT 1 FROM dbo.project_members WHERE project_id=@project_id AND user_id=@manager_id)
           INSERT INTO dbo.project_members(project_id,user_id,role_on_project,created_by) VALUES(@project_id,@manager_id,N'Project Manager',@actor);
         IF NOT EXISTS(SELECT 1 FROM dbo.project_members WHERE project_id=@project_id AND user_id=@lead_id)
@@ -775,12 +1088,24 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
       const latest = (await new sql.Request(transaction).input("id", sql.BigInt, id).query<{ row_version: Buffer }>(`SELECT row_version FROM dbo.projects WHERE id=@id;`)).recordset[0]!;
       const renumbered = number !== String(before.project_no);
       const after = { ...input, status: statusValue, progress, ...details, ...(plan ? { masterPlan: plan.headings } : {}), ...(renumbered ? { projectNumber: number } : {}) };
-      await insertAudit(transaction, actor.id, "Project", id, number, renumbered ? `Numbered ${number} from the ERP`
-        : transition.changed ? `Status ${currentStatus} to ${statusValue}` : "Updated", before, after);
+      await insertAudit(
+        transaction,
+        actor.id,
+        "Project",
+        id,
+        number,
+        renumbered ? `Numbered ${number} from the ERP` : transition.changed ? `Status ${currentStatus} to ${statusValue}` : "Updated",
+        before,
+        after,
+      );
       const notices = await queueTaskAssignmentNotices(transaction, { id: actor.id, name: actor.name }, assigned);
       return {
-        id, number, ...after, scheduleVersion,
-        rowVersion: latest.row_version.toString("base64"), notices,
+        id,
+        number,
+        ...after,
+        scheduleVersion,
+        rowVersion: latest.row_version.toString("base64"),
+        notices,
       };
     }, sql.ISOLATION_LEVEL.READ_COMMITTED);
     const { notices, ...project } = saved;

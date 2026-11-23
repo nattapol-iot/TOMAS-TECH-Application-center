@@ -3090,6 +3090,9 @@ type ProjectEstimateOption = {
   number: string;
   projectName: string;
   customerId: number;
+  // The estimate's customer by name, even when it has been closed since and so is missing from bootstrap.customers.
+  customerName?: string;
+  customerClosed?: boolean;
   ownerId: number;
   siteLocation: string;
   targetDelivery: string;
@@ -3415,7 +3418,10 @@ export function CreateProjectModal({
                 <span>
                   <LocalizedText text={"Customer"} />
                 </span>
-                <div className="info-strip">{customer?.name || "—"}</div>
+                <div className="info-strip">
+                  {customer?.name || selectedEstimate?.customerName || "—"}
+                  {!customer && selectedEstimate?.customerClosed ? <span className="muted"> · {t("CRM.customerClosed")}</span> : null}
+                </div>
               </div>
             </>
           )}

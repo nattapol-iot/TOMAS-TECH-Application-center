@@ -2,34 +2,34 @@
 
 [Module](../modules/projects.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `19c56afd`; generated, do not edit. [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `07b19920`; generated, do not edit. [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/projects/creation-options` | 55–87 |
-| GET | `/api/v1/projects/handover/:inquiryId` | 89–112 |
-| GET | `/api/v1/projects/contact-options` | 114–124 |
-| GET | `/api/v1/projects` | 126–153 |
-| GET | `/api/v1/projects/attention` | 191–209 |
-| GET | `/api/v1/projects/overview` | 213–263 |
-| GET | `/api/v1/projects/cost-overview` | 277–293 |
-| GET | `/api/v1/projects/:id/cost` | 298–340 |
-| POST | `/api/v1/projects` | 342–512 |
-| GET | `/api/v1/projects/:id/members` | 514–539 |
-| POST | `/api/v1/projects/:id/members` | 541–564 |
-| DELETE | `/api/v1/projects/:id/members/:userId` | 566–587 |
-| GET | `/api/v1/projects/:id/deletion` | 605–613 |
-| DELETE | `/api/v1/projects/:id` | 615–650 |
-| PUT | `/api/v1/projects/:id` | 652–788 |
+| GET | `/api/v1/projects/creation-options` | 96–145 |
+| GET | `/api/v1/projects/handover/:inquiryId` | 147–178 |
+| GET | `/api/v1/projects/contact-options` | 180–200 |
+| GET | `/api/v1/projects` | 202–237 |
+| GET | `/api/v1/projects/attention` | 293–319 |
+| GET | `/api/v1/projects/overview` | 323–395 |
+| GET | `/api/v1/projects/cost-overview` | 417–444 |
+| GET | `/api/v1/projects/:id/cost` | 449–537 |
+| POST | `/api/v1/projects` | 539–774 |
+| GET | `/api/v1/projects/:id/members` | 776–816 |
+| POST | `/api/v1/projects/:id/members` | 818–843 |
+| DELETE | `/api/v1/projects/:id/members/:userId` | 845–868 |
+| GET | `/api/v1/projects/:id/deletion` | 890–898 |
+| DELETE | `/api/v1/projects/:id` | 900–937 |
+| PUT | `/api/v1/projects/:id` | 939–1113 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `shiftDate` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 46–51 |
-| `registerProjectRoutes` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 53–789 |
+| `shiftDate` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 87–92 |
+| `registerProjectRoutes` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 94–1114 |
 
 ## Direct local dependencies
 
