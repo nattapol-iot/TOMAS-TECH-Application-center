@@ -274,10 +274,16 @@ test("Team planner (2026-11-23): one summary bar of filters, sticky filters, pin
   // One, two or four weeks, one the first time; an old daily-grid link opens two.
   assert.match(board, /useLinkedState<1 \| 2 \| 4>\("weeks", 1, WEEKS_LINK\)/);
   assert.match(board, /if \(fromOldBoard && weeks === 1\) setWeeks\(2\);/);
-  // The filter bar stays under the top bar; the teams are a segmented control with head counts, several at once.
+  // The filter bar stays under the top bar. Team planner keeps it to one row (owner, 2026-11-23): the teams, several at
+  // once with their head counts, and the kind of work are menus at the end of the row beside the search.
   assert.match(css, /\.board-toolbar\.board-sticky \{\s*position: sticky; top: calc\(var\(--topbar-h\) \+ 8px\);/);
-  assert.match(board, /<div className="seg-control board-team-seg" role="group" aria-label=\{t\("TeamBoard\.team"\)\}>/);
-  assert.match(board, /aria-pressed=\{value\.includes\(name\)\} onClick=\{\(\) => toggle\(name\)\}/);
+  assert.match(
+    board,
+    /<div className="planner-toolbar-end">[\s\S]*?<TeamFilter departments=\{departments\} counts=\{teamCounts\} value=\{teams\} onChange=\{pickTeams\} \/>\s*<KindPick value=\{category\} onChange=\{pickCategory\} \/>\s*\{searchBox\}/,
+  );
+  assert.match(board, /<input type="checkbox" checked=\{value\.includes\(name\)\} onChange=\{\(\) => toggle\(name\)\} \/>/);
+  assert.match(board, /<div className="seg-control board-seg" data-guide="team\.range">/);
+  assert.match(planner, /\.planner-toolbar-end \.search-field \{\s*flex: none;\s*width: 240px;/);
   // The member and their hours over the days shown are pinned on the left, the hours right after the member.
   assert.match(css, /\.board-grid \.board-week \{\s*position: sticky; left: var\(--board-who-w\);/);
   assert.match(board, /<td className="board-week">\{rangeLoad\(person\)\}<\/td>/);

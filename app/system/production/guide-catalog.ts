@@ -1996,9 +1996,9 @@ const TEAM_WEEK: Guide = {
       view: "resources",
       title: { th: "เลือกช่วงที่ดู", en: "Pick how much to see", jp: "表示する期間を選ぶ" },
       body: {
-        th: "กด 1, 2 หรือ 4 สัปดาห์ (2 สัปดาห์คือแบบตารางรายวันเดิม) ลูกศรเลื่อนไปช่วงก่อนหรือถัดไป ปุ่ม 'วันนี้' กลับมาสัปดาห์นี้ ระบบจำช่วงที่เลือกไว้ให้",
-        en: "Press 1, 2 or 4 weeks (2 weeks is the old daily grid). The arrows move to the period before or after, and Today comes back to this week. Your choice is remembered.",
-        jp: "1・2・4週を押します（2週は以前の日別表と同じ）。矢印で前後の期間へ、「今日」で今週に戻ります。選んだ期間は記憶されます。",
+        th: "กด 1, 2 หรือ 4 สัปดาห์ (2 สัปดาห์คือแบบตารางรายวันเดิม) ลูกศรเลื่อนไปช่วงก่อนหรือถัดไป ปุ่ม 'วันนี้' กลับมาสัปดาห์นี้ ระบบจำช่วงที่เลือกไว้ให้ ท้ายแถวเดียวกันมีเมนู 'ทีม' (เลือกได้หลายทีม) เมนู 'ประเภทงาน' และช่องค้นหา",
+        en: "Press 1, 2 or 4 weeks (2 weeks is the old daily grid). The arrows move to the period before or after, and Today comes back to this week. Your choice is remembered. At the end of the same row are the Team menu (several teams at once), the Work type menu and the search.",
+        jp: "1・2・4週を押します（2週は以前の日別表と同じ）。矢印で前後の期間へ、「今日」で今週に戻ります。選んだ期間は記憶されます。同じ行の右端に「チーム」メニュー（複数選択可）、「作業の種類」メニュー、検索があります。",
       },
       missing: {
         th: "ปุ่มนี้อยู่ในมุมมองตาราง ถ้าเปิด Gantt อยู่ ให้กด 'ตาราง' ก่อน หรือกด 'ถัดไป'",
