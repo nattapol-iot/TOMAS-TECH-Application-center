@@ -5470,6 +5470,13 @@ tbody tr.diff-change:hover td {
 .local-read-only-banner strong {
   color: #92400e;
 }
+.callout.tmt-id-relink {
+  align-items: center;
+  margin: 12px 20px 0;
+}
+.callout.tmt-id-relink > .btn {
+  flex: 0 0 auto;
+}
 
 .production-indicator {
   display: flex;

@@ -6,7 +6,7 @@ export function ocrApiError(error: unknown): unknown {
   if (!(error instanceof CopilotOcrError)) return error;
   switch (error.reason) {
     case "signed_out":
-      return new ApiError(409, "copilot_sign_in_required", "Sign out and sign in again with TMT ID, then scan once more.");
+      return new ApiError(409, "copilot_sign_in_required", "Sign in to TMT ID again, then scan once more. Signing out first is not needed.");
     case "rejected":
       return new ApiError(422, "copilot_rejected", error.message);
     case "unreadable":

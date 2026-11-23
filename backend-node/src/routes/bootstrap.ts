@@ -4,6 +4,7 @@ import type { Database } from "../db.js";
 import { ApiError } from "../errors.js";
 import { bodyObject, dateOnly } from "../http.js";
 import type { MasterData } from "../master-data/services.js";
+import type { TmtIdTokenVault } from "../tmt-id/token-vault.js";
 import type { CurrentUserService } from "../users.js";
 import { primaryCustomerContactApply } from "./sales-customers.js";
 
@@ -58,7 +59,8 @@ export const MENU_FAVORITES_REPLACE = `
   SELECT @user, item.[value], CONVERT(int, item.[key]) FROM OPENJSON(@views) item;
   SELECT view_key FROM dbo.user_menu_favorites WHERE user_id=@user ORDER BY position;`;
 
-export function registerBootstrapRoutes(app: FastifyInstance, database: Database, users: CurrentUserService, masterData: MasterData | null): void {
+export function registerBootstrapRoutes(app: FastifyInstance, database: Database, users: CurrentUserService, masterData: MasterData | null,
+  tokenVault: Pick<TmtIdTokenVault, "needsSignIn"> | null = null): void {
   app.get("/api/v1/me", async (request) => users.required(request));
 
   app.put("/api/v1/me/menu-favorites", async (request) => {
@@ -77,6 +79,9 @@ export function registerBootstrapRoutes(app: FastifyInstance, database: Database
     masterData?.holidays.refresh();
     // Once master is connected it alone holds start dates, and it hands out only the signed-in person's own.
     const ownStartDate = masterData?.ownRecord?.entryDate(user.entraObjectId);
+    // Asked up front so the person can sign in again before a scan or an ERP send fails on them. It shares the token the start
+    // date above already asks for, so it costs no extra call to TMT ID.
+    const needsTmtIdSignIn = tokenVault ? tokenVault.needsSignIn(user.entraObjectId).catch(() => false) : false;
     const result = await database.query<CountRow | CustomerRow | SupplierRow | TeamRow | PermissionRow | FavoriteRow>(`
       ;WITH granted AS (
         SELECT code FROM dbo.user_effective_permissions WHERE user_id = @user_id
@@ -173,6 +178,7 @@ export function registerBootstrapRoutes(app: FastifyInstance, database: Database
       permissions: permissions.map((row) => row.code),
       // A stored name that is no longer a menu entry (the help screens left the sidebar on 2026-11-12) is dropped here.
       menuFavorites: favorites.map((row) => row.view_key).filter((view) => MENU_VIEWS.includes(view)),
+      needsTmtIdSignIn: await needsTmtIdSignIn,
     };
   });
 }

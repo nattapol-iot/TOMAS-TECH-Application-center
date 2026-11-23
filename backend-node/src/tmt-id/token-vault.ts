@@ -57,6 +57,14 @@ export class TmtIdTokenVault implements TokenSource {
     return work;
   }
 
+  // A refresh that failed for a passing reason (the provider unreachable) keeps the row, so only a deleted or missing row means
+  // the person has to sign in again.
+  async needsSignIn(subject: string): Promise<boolean> {
+    if (await this.accessToken(subject)) return false;
+    const kept = await this.database.query(`SELECT 1 kept FROM dbo.user_oidc_tokens WHERE subject=@subject;`, (r) => r.input("subject", sql.NVarChar(100), subject));
+    return kept.recordset.length === 0;
+  }
+
   private async refresh(subject: string): Promise<string | null> {
     const row = (await this.database.query<{ refresh_cipher: Buffer; refresh_iv: Buffer; refresh_tag: Buffer; key_id: number; refresh_expires_at: Date | null }>(
       `SELECT refresh_cipher,refresh_iv,refresh_tag,key_id,refresh_expires_at FROM dbo.user_oidc_tokens WHERE subject=@subject;`,

@@ -113,6 +113,8 @@ export type BootstrapData = {
   permissions: string[];
   /** The menu entries the person starred, in the order starred (migration 104); an older API build omits it. */
   menuFavorites?: string[];
+  /** TMT ID can no longer hand this app a token for the person, so copilot scans and ERP sends fail until they sign in again. */
+  needsTmtIdSignIn?: boolean;
 };
 
 export type PerformanceCycle = {

@@ -47,7 +47,8 @@ function mountScanner(scanCard) {
     pendingEffects = [],
     applications = [],
     revoked = [],
-    sent = [];
+    sent = [],
+    signIns = [];
   let cursor = 0,
     dirty = false,
     mounted = true,
@@ -96,6 +97,7 @@ function mountScanner(scanCard) {
         return scanCard();
       },
     },
+    "../tmt-id-client": { currentAppPath: () => "/customers", redirectToTmtIdLogin: (next) => signIns.push(next) },
     "../ui": { Icon: "icon" },
     "../i18n": { useT: () => (text) => text },
     "../LocalizedText": { LocalizedText },
@@ -148,7 +150,9 @@ function mountScanner(scanCard) {
     applications,
     revoked,
     sent,
+    signIns,
     flush,
+    signInButton: () => nodes(nodes(tree).find((node) => node.props?.role === "alert")).find((node) => node.type === "button"),
     busy: () => nodes(tree).some((node) => node.type === "progress"),
     alert: () => text(nodes(tree).find((node) => node.props?.role === "alert")),
     link: () => nodes(tree).find((node) => node.type === "a")?.props.href,
@@ -245,10 +249,14 @@ test("copilot failures say what to do, and a photo copilot cannot take is never 
   await signedOut.flush();
   assert.match(signedOut.alert(), /TMT ID/);
   assert.equal(signedOut.busy(), false);
+  // Signing in again goes straight to TMT ID and back to this page; there is no sign-out step in between.
+  signedOut.signInButton().props.onClick();
+  assert.deepEqual(signedOut.signIns, ["/customers"]);
 
   const heic = mountScanner(async () => card("never@example.test"));
   heic.select("card.heic", "image/heic");
   await heic.flush();
   assert.equal(heic.sent.length, 0);
   assert.match(heic.alert(), /JPEG หรือ PNG/);
+  assert.equal(heic.signInButton(), undefined);
 });

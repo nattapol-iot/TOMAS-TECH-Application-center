@@ -1457,6 +1457,19 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
               <span>Remote Team Test database · schema {CONNECTED_SCHEMA_VERSION} · changes disabled</span>
             </div>
           ) : null}
+          {IS_TMT_ID_MODE && bootstrap.needsTmtIdSignIn ? (
+            <div className="callout warning tmt-id-relink" role="status">
+              <Icon name="alertTriangle" />
+              <span>
+                <strong>{t("TmtId.relinkTitle")}</strong>
+                {t("TmtId.relinkBody")}
+              </span>
+              <button className="btn sm" type="button" onClick={() => redirectToTmtIdLogin(currentAppPath())}>
+                <Icon name="user" />
+                {t("TmtId.relinkAction")}
+              </button>
+            </div>
+          ) : null}
           <ScreenLinkProvider value={screenLinkValue}>
             <main className="page" key={linkRevision}>
               {view === "dashboard" ? (
