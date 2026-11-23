@@ -1646,9 +1646,9 @@ const PROJECT_COST: Guide = {
       view: "projects",
       title: { th: "ค่าแรงแยกตามสายงาน", en: "Labor by discipline", jp: "分野別の労務費" },
       body: {
-        th: "แต่ละช่องคือค่าแรงทั้งหมด หรือของ Electrical, Mechanical, Software และ Installation แสดง 'Man-day ตามแผน / งบ' กับส่วนที่ถึงวันนี้ กดช่องของสายงานเพื่อให้คอลัมน์คนในตารางแสดงเฉพาะสายงานนั้น กดซ้ำเพื่อกลับไปดูทั้งหมด งบมาจาก Estimate cost ส่วน Man-day ในแผนนับตามแผนกของผู้รับผิดชอบแต่ละแถว บรรทัดต้นทุนคือค่าแรงเป็นบาท",
-        en: "Each cell is all labor, or Electrical, Mechanical, Software or Installation labor, as planned man-days / budget with the part due up to today. Press a discipline to make the table's People columns show it alone; press again for all labor. The budget is the Estimate cost's; plan man-days follow the department of each row's PIC. The Cost line is that labor in THB.",
-        jp: "各セルは労務費の合計、または電気・機械・ソフトウェア・据付の労務費で、「計画人日 / 予算」と本日までの分を表示します。分野を押すと表の人員列がその分野だけになり、もう一度押すと合計に戻ります。予算は見積原価、計画人日は各行の担当者の部署で振り分けます。「コスト」の行はその労務費（THB）です。",
+        th: "แต่ละช่องคือค่าแรงทั้งหมด หรือของ Electrical, Mechanical, Software และ Installation แสดง 'Man-day ตามแผน / งบ' กับส่วนที่ถึงวันนี้ กดช่องของสายงานเพื่อให้คอลัมน์คนในตารางแสดงเฉพาะสายงานนั้น กดซ้ำเพื่อกลับไปดูทั้งหมด งบมาจาก Estimate cost ส่วน Man-day ในแผนนับตามแผนกของผู้รับผิดชอบแต่ละแถว 'ใช้จริง' คือชั่วโมงที่ทีมยืนยันในงานของฉัน (8 ชม. = 1 MD) และ 'คาดจบ' คือใช้จริงบวกงานที่แผนยังเหลือ ถ้าคาดจบเกินงบช่องจะเป็นสีแดง บรรทัดต้นทุนคือค่าแรงเป็นบาท",
+        en: "Each cell is all labor, or Electrical, Mechanical, Software or Installation labor, as planned man-days / budget with the part due up to today. Press a discipline to make the table's People columns show it alone; press again for all labor. The budget is the Estimate cost's; plan man-days follow the department of each row's PIC. Actual is the hours the team confirmed in My Work (8 h a man-day), and Forecast is the actual plus what the plan still has to do; a forecast over budget turns the cell red. The Cost line is that labor in THB.",
+        jp: "各セルは労務費の合計、または電気・機械・ソフトウェア・据付の労務費で、「計画人日 / 予算」と本日までの分を表示します。分野を押すと表の人員列がその分野だけになり、もう一度押すと合計に戻ります。予算は見積原価、計画人日は各行の担当者の部署で振り分けます。「実績」はチームがマイワークで確定した時間（8時間＝1人日）、「見込み」は実績に計画の残りを足したもので、見込みが予算を超えるとセルが赤になります。「コスト」の行はその労務費（THB）です。",
       },
       missing: { th: "รอให้ข้อมูลโหลดเสร็จก่อน", en: "Wait for the figures to load.", jp: "データの読み込みを待ちます。" },
     },
@@ -1669,9 +1669,9 @@ const PROJECT_COST: Guide = {
       view: "projects",
       title: { th: "อ่านแถวของโครงการ", en: "Read a project's row", jp: "プロジェクトの行を読む" },
       body: {
-        th: "แต่ละกลุ่มแสดง 'ใช้ไป / งบ' พร้อมแถบ: น้ำเงินอยู่ในงบ เหลืองใกล้เต็ม แดงเกินงบ ขีดบนแถบของคนคือ Man-day ที่แผนวางไว้ถึงวันนี้ (ยังไม่มีการบันทึกชั่วโมงจริง) คอลัมน์คนแสดงสายงานที่เลือกไว้ในแถบค่าแรง กดหัวคอลัมน์เพื่อเรียง",
-        en: "Each group shows used / budget with a bar: blue within budget, amber near it, red over it. The mark on the People bar is the man-days the plan puts on or before today (actual hours are not recorded yet). The People columns show the discipline chosen in the labor bar. Press a column heading to sort.",
-        jp: "各グループは「使用 / 予算」とバーで表示されます。青は予算内、黄は間近、赤は超過です。人員のバー上の印は、計画上本日までの人日です（実績時間は未記録）。人員列は労務費バーで選んだ分野を表示します。列見出しを押すと並べ替えます。",
+        th: "แต่ละกลุ่มแสดง 'ใช้ไป / งบ' พร้อมแถบ: น้ำเงินอยู่ในงบ เหลืองใกล้เต็ม แดงเกินงบ ขีดบนแถบของคนคือ Man-day ที่แผนวางไว้ถึงวันนี้ ใต้แถบคือ 'ใช้จริง' (ชั่วโมงที่ยืนยันแล้ว) และ 'คาดจบ' คอลัมน์คนแสดงสายงานที่เลือกไว้ในแถบค่าแรง กดหัวคอลัมน์เพื่อเรียง",
+        en: "Each group shows used / budget with a bar: blue within budget, amber near it, red over it. The mark on the People bar is the man-days the plan puts on or before today; under the bar are Actual (confirmed hours) and Forecast. The People columns show the discipline chosen in the labor bar. Press a column heading to sort.",
+        jp: "各グループは「使用 / 予算」とバーで表示されます。青は予算内、黄は間近、赤は超過です。人員のバー上の印は、計画上本日までの人日です。バーの下に「実績」（確定時間）と「見込み」を表示します。人員列は労務費バーで選んだ分野を表示します。列見出しを押すと並べ替えます。",
       },
     },
     {
@@ -1960,6 +1960,106 @@ const PROJECT_PLAN: Guide = {
  * no member ("Waiting for people"); the row waits in the queue on Team overview > Allocation · weekly, where the head
  * picks people by free time, leave already taken off.
  */
+const TEAM_WEEK: Guide = {
+  id: "team-week",
+  area: "project",
+  browse: true,
+  title: { th: "แผนงานทีม: ใครว่าง ใครเกิน ใครยังไม่ยืนยันชั่วโมง", en: "Team planner: who is free, who is over, who has not confirmed", jp: "チームプランナー：空き・超過・未確定を確認" },
+  summary: {
+    th: "แผนงานทีมรวมตารางรายวันกับสัปดาห์ทีมไว้ในตารางเดียว แสดงชั่วโมงของทุกคนรายวัน 1, 2 หรือ 4 สัปดาห์ แต่ละช่องมีตัวเลขเดียว: ชั่วโมงที่ยืนยันแล้ว ถ้ายังไม่ยืนยันใช้ที่จองใน My week ถ้ายังไม่จองใช้ตามแผน แถบสรุปด้านบนกดกรองได้ และงานรอมอบหมายอยู่ด้านขวา",
+    en: "Team planner puts the daily grid and Team week in one table: everyone's hours a day over one, two or four weeks. Each cell has one figure: the hours confirmed, else booked on My week, else planned. The summary bar above filters, and work waiting for people sits on the right.",
+    jp: "チームプランナーは日別表とチーム週間を1つの表にまとめ、全員の1日ごとの時間を1・2・4週で表示します。各セルの数字は1つで、確定済みの時間、未確定ならマイウィークの予約、未予約なら計画です。上のまとめバーで絞り込め、割り当て待ちは右側にあります。",
+  },
+  minutes: 3,
+  permissions: ["team.board"],
+  views: ["resources"],
+  steps: [
+    menu(
+      "resources",
+      { th: "เปิดภาพรวมงานทีม", en: "Open Team overview", jp: "「チームの仕事一覧」を開く" },
+      {
+        th: "แผนงานทีมอยู่ในหน้านี้ คลิกที่เมนูที่ไฮไลต์อยู่",
+        en: "Team planner is on this page. Click the highlighted menu entry.",
+        jp: "チームプランナーはこの画面にあります。強調表示のメニューをクリックします。",
+      },
+    ),
+    {
+      target: '[data-tab="week"]',
+      action: "click",
+      view: "resources",
+      title: { th: "เปิดแผนงานทีม", en: "Open Team planner", jp: "チームプランナーを開く" },
+      body: { th: "กดแท็บ 'แผนงานทีม'", en: "Press the Team planner tab.", jp: "「チームプランナー」タブを押します。" },
+    },
+    {
+      target: "team.range",
+      action: "next",
+      view: "resources",
+      title: { th: "เลือกช่วงที่ดู", en: "Pick how much to see", jp: "表示する期間を選ぶ" },
+      body: {
+        th: "กด 1, 2 หรือ 4 สัปดาห์ (2 สัปดาห์คือแบบตารางรายวันเดิม) ลูกศรเลื่อนไปช่วงก่อนหรือถัดไป ปุ่ม 'วันนี้' กลับมาสัปดาห์นี้ ระบบจำช่วงที่เลือกไว้ให้ ท้ายแถวเดียวกันมีเมนู 'ทีม' (เลือกได้หลายทีม) เมนู 'ประเภทงาน' และช่องค้นหา",
+        en: "Press 1, 2 or 4 weeks (2 weeks is the old daily grid). The arrows move to the period before or after, and Today comes back to this week. Your choice is remembered. At the end of the same row are the Team menu (several teams at once), the Work type menu and the search.",
+        jp: "1・2・4週を押します（2週は以前の日別表と同じ）。矢印で前後の期間へ、「今日」で今週に戻ります。選んだ期間は記憶されます。同じ行の右端に「チーム」メニュー（複数選択可）、「作業の種類」メニュー、検索があります。",
+      },
+      missing: {
+        th: "ปุ่มนี้อยู่ในมุมมองตาราง ถ้าเปิด Gantt อยู่ ให้กด 'ตาราง' ก่อน หรือกด 'ถัดไป'",
+        en: "These buttons are on the table view. If the Gantt chart is open, press Table by day first, or press Next.",
+        jp: "このボタンは表の表示にあります。ガントチャートを表示中なら「表」を押すか、「次へ」を押します。",
+      },
+    },
+    {
+      target: "teamweek.table",
+      action: "next",
+      view: "resources",
+      title: { th: "ตัวเลขในช่อง", en: "The figure in a cell", jp: "セルの数字" },
+      body: {
+        th: "แถวละคน ช่องละวัน ตัวเลขคือชั่วโมงของวันนั้น เครื่องหมายถูกคือยืนยันแล้ว จุดทึบคือจองใน My week วงกลมโปร่งคือตามแผน (MD × 8) ช่องสีแดงคือเกินเวลาที่มี ขีดส้มใต้ช่องคือวันที่ผ่านมาแล้วแต่ยังไม่ยืนยัน มุมสีส้มคือมีงานซ้อน ข้างชื่อคือชั่วโมงรวมของช่วงที่ดู",
+        en: "One row per person, one column per day. The figure is the day's hours: a tick is confirmed, a dot is booked on My week, a ring is planned (MD × 8). A red cell is over the time the day offers, an amber line under a cell is a past day not confirmed yet, and an amber corner is overlapping work. Beside each name are the hours over the period shown.",
+        jp: "1行が1人、1列が1日です。数字はその日の時間で、チェックは確定済み、塗りの点はマイウィークの予約、白丸は計画（人日×8）です。赤いセルは持ち時間超過、セル下のオレンジの線は過ぎた日の未確定、オレンジの角は作業の重複です。名前の横は表示期間の合計時間です。",
+      },
+      missing: { th: "รอให้ข้อมูลโหลดเสร็จก่อน หรือกด 'ถัดไป'", en: "Wait for the table to load, or press Next.", jp: "読み込みを待つか、「次へ」を押します。" },
+    },
+    {
+      target: "teamweek.chips",
+      action: "next",
+      view: "resources",
+      title: { th: "กรองคนที่ต้องดู", en: "Filter the people to look at", jp: "確認したい人に絞る" },
+      body: {
+        th: "แถบสรุปนับคนในแต่ละเรื่อง: เกินกำลัง งานซ้อน ว่าง 8 ชม. ขึ้นไป ยังไม่ยืนยันชั่วโมง มีวันลา เลยกำหนด และงานรอมอบหมาย กดช่องไหนตารางเหลือเฉพาะคนกลุ่มนั้น กดซ้ำเพื่อดูทุกคน",
+        en: "The summary bar counts people for each: over capacity, overlapping work, 8 h or more free, hours not confirmed, time away, overdue, and work waiting for people. Press one to see only those people; press it again to see everyone.",
+        jp: "まとめバーは、負荷超過・作業の重複・8時間以上空き・時間未確定・休暇あり・期限超過・割り当て待ちの人数を表示します。押すとその人だけを表示し、もう一度押すと全員に戻ります。",
+      },
+    },
+    {
+      target: "team.dayWork",
+      action: "next",
+      view: "resources",
+      title: { th: "ดูงานของวัน", en: "See a day's work", jp: "その日の作業を見る" },
+      body: {
+        th: "กดตัวเลขในช่อง แผงด้านขวาจะแสดงชั่วโมงของวันนั้นและมาจากไหน ที่ลงใน My week งานทุกชิ้นที่กินเวลาวันนั้น นัดและวันลา กด + ในช่องว่างเพื่อเพิ่มงานให้คนนั้นวันนั้น",
+        en: "Press a figure: the panel on the right shows the day's hours and where they come from, what was booked on My week, every piece of work taking time that day, meetings and time away. Press + in an empty part of a cell to add work for that person and day.",
+        jp: "数字を押すと、右のパネルにその日の時間とその出どころ、マイウィークの予約、その日に時間を使う作業、予定と不在が表示されます。セルの空いた所の+でその人・その日に作業を追加できます。",
+      },
+      missing: { th: "ช่วงที่ดูยังไม่มีงาน กด 'ถัดไป'", en: "Nothing is planned in the period shown. Press Next.", jp: "表示期間に作業がありません。「次へ」を押します。" },
+    },
+    {
+      target: "alloc.queue",
+      action: "next",
+      view: "resources",
+      title: { th: "งานรอจัดคน", en: "Rows waiting for people", jp: "割り当て待ちの行" },
+      body: {
+        th: "ด้านขวาคืองานในแผนที่ PM ใส่สายงานไว้แต่ยังไม่มีคน หัวหน้ากด 'จัดคน' แล้วเลือกคนที่ว่างพอได้ทันที ใต้นั้นคืองานทีมที่ยังไม่มีคนรับ กดงานเพื่อเลือกคน",
+        en: "On the right are plan rows a PM gave a discipline but no person. The head presses Assign and picks someone free enough there and then. Under them are team tasks nobody has taken: open one to choose who does it.",
+        jp: "右側は、PMが職種だけ指定して担当者のいない計画行です。責任者は「割り当て」を押して空きのある人をその場で選びます。その下は担当者のいないチームタスクで、開いて担当者を選びます。",
+      },
+      missing: {
+        th: "ตอนนี้ไม่มีงานรอจัดคน หรือคุณไม่มีสิทธิ์ดูแผนงาน กด 'จบบทสอน'",
+        en: "Nothing is waiting for people, or you cannot read plans. Press Finish.",
+        jp: "割り当て待ちの行がないか、計画を見る権限がありません。「完了」を押します。",
+      },
+    },
+  ],
+};
+
 const ALLOCATION_ASSIGN: Guide = {
   id: "allocation-assign",
   area: "project",
@@ -1977,16 +2077,16 @@ const ALLOCATION_ASSIGN: Guide = {
       "resources",
       { th: "เปิดเมนูภาพรวมงานทีม", en: "Open Team overview", jp: "「チームの仕事一覧」を開く" },
       {
-        th: "การจัดคนอยู่ในแท็บ 'จัดคน · รายสัปดาห์' ของหน้านี้ คลิกที่เมนูที่ไฮไลต์อยู่",
-        en: "Allocation is the Allocation · weekly tab of this page. Click the highlighted menu entry.",
-        jp: "要員配置はこのページの「要員配置・週別」タブにあります。強調表示のメニューをクリックします。",
+        th: "การจัดคนอยู่ในแท็บ 'จัดคน 12 สัปดาห์' ของหน้านี้ (คิวรอจัดคนยังอยู่ข้างตารางของแท็บ 'แผนงานทีม' ด้วย) คลิกที่เมนูที่ไฮไลต์อยู่",
+        en: "Allocation is the Allocation · 12 weeks tab of this page (the queue also sits beside the Team planner table). Click the highlighted menu entry.",
+        jp: "要員配置はこのページの「要員配置・12週」タブにあります（割り当て待ちの一覧は「チームプランナー」の表の横にもあります）。強調表示のメニューをクリックします。",
       },
     ),
     {
       target: '[data-tab="workload"]',
       action: "click",
       view: "resources",
-      title: { th: "กดแท็บ 'จัดคน · รายสัปดาห์'", en: "Press the Allocation · weekly tab", jp: "「要員配置・週別」タブを押す" },
+      title: { th: "กดแท็บ 'จัดคน 12 สัปดาห์'", en: "Press the Allocation · 12 weeks tab", jp: "「要員配置・12週」タブを押す" },
       body: {
         th: "ตารางคน × สัปดาห์บอกว่าแต่ละคนมีงานกี่เปอร์เซ็นต์ของเวลาที่มี วันลาถูกหักออกจากเวลาแล้ว ใต้ตัวเลขมี 'จริง' คือชั่วโมงที่ยืนยันใน My Work และ 'ลา' คือจำนวนวันที่ลา",
         en: "The people × weeks table shows each person's planned work as a share of the time they have, with days away already taken off. Under the figures, Actual is the hours confirmed in My Work and Away the days away.",
@@ -2063,27 +2163,16 @@ const TEAM_TASK: Guide = {
       },
     ),
     {
-      target: "team.filters",
+      target: "teamweek.table",
       action: "next",
       view: "resources",
-      title: { th: "ดูว่าใครงานซ้อนหรือเกินกำลัง", en: "See who has overlapping work or too much", jp: "作業の重複や負荷超過を確認" },
+      title: { th: "ดูว่าใครว่างก่อนเพิ่มงาน", en: "See who is free before adding work", jp: "作業を追加する前に空きを確認" },
       body: {
-        th: "แถบตัวกรองนี้ค้างอยู่ด้านบนตอนเลื่อนหน้า ชิป 'งานซ้อน' แสดงเฉพาะคนที่มี 2 งานขึ้นไปในวันเดียวกัน ชิป 'งานล้นสัปดาห์นี้' แสดงคนที่งานเกินเวลา (กด 'ดูรายการ' ในแถบสรุปด้านบนได้เหมือนกัน) ในตาราง ช่องที่มีมุมสีส้มคือวันที่ซ้อน และไอคอนเตือนสีส้มบอกงานที่ซ้อนกัน ช่องสีแดงที่มีไอคอนเตือนคือวันที่เกินกำลัง ในมุมมอง Gantt เส้นสีส้มและสีแดงใต้แถวของแต่ละคนบอกช่วงวันเดียวกันนี้",
-        en: "This filter bar stays at the top while the page scrolls. The Overlapping work chip shows only people with two or more pieces of work on one day, and Over capacity this week those with more work than time (Show them in the summary above does the same). On the board, a cell with an amber corner is such a day and an amber warning icon marks each piece that overlaps; a red cell with a warning icon has more work than time. On the Gantt, amber and red lines under each person mark the same days.",
-        jp: "この絞り込みバーはページをスクロールしても上に残ります。「作業の重複」チップで同じ日に2件以上の作業がある人だけを、「今週の負荷超過」で作業が時間を超える人を表示します（上のまとめの「一覧を表示」も同じです）。表では、角がオレンジのセルが重複日で、オレンジの警告アイコンが重なっている作業を示します。警告アイコン付きの赤いセルは負荷超過の日です。ガントでは各人の行の下のオレンジと赤の線が同じ日を示します。",
+        th: "แผนงานทีมแสดงชั่วโมงของทุกคนรายวัน ช่องสีแดงคือวันที่เกินเวลาที่มี ข้างชื่อบอกชั่วโมงที่ยังว่างในช่วงที่ดู กด 1, 2 หรือ 4 สัปดาห์เพื่อดูไกลขึ้น",
+        en: "Team planner shows everyone's hours a day. A red cell is a day over the time it offers; beside each name are the hours still free in the period shown. Press 1, 2 or 4 weeks to see further.",
+        jp: "チームプランナーは全員の1日ごとの時間を表示します。赤いセルは持ち時間を超える日、名前の横は表示期間の空き時間です。1・2・4週を押すと先まで見られます。",
       },
-    },
-    {
-      target: "team.dayWork",
-      action: "next",
-      view: "resources",
-      title: { th: "ดูงานทั้งหมดของวันนั้น", en: "See all of someone's work on a day", jp: "その日の作業をすべて見る" },
-      body: {
-        th: "กดตัวเลข MD บนสุดของช่อง หรือมุมสีส้ม จะเปิดรายการงานทั้งหมดของคนนั้นในวันนั้น รวมงานโครงการ RFQ และ Estimate ที่กินเวลาวันนั้นแม้ยังไม่ถึงวันครบกำหนด บอก MD ต่อวันของแต่ละงาน และกรอบสีส้มบอกงานที่ซ้อนกัน กดงานเพื่อเปิด หรือกด 'เพิ่มงานวันนี้'",
-        en: "Click the MD figure at the top of a cell, or the amber corner, to list everything that person has on that day, including project, RFQ and estimate work that takes the day before it falls due, with each one's man-days a day. Amber boxes are the work that overlaps. Click a piece of work to open it, or Add work on this day.",
-        jp: "セル上部の人日の数字かオレンジの角をクリックすると、その人のその日の作業がすべて表示されます。期限前でもその日に時間を使う案件・RFQ・見積の作業を含み、各作業の1日あたりの人日も分かります。オレンジの枠が重なっている作業です。作業をクリックすると開き、「この日に作業を追加」もできます。",
-      },
-      missing: { th: "ช่องนี้กดได้เมื่อคนนั้นมีงานในวันนั้น กด 'ถัดไป'", en: "This shows when the person has work that day. Press Next.", jp: "その人にその日の作業があるときに表示されます。「次へ」を押します。" },
+      missing: { th: "รอให้ข้อมูลโหลดเสร็จก่อน กด 'ถัดไป'", en: "Wait for the table to load, or press Next.", jp: "読み込みを待つか、「次へ」を押します。" },
     },
     {
       target: "team.add",
@@ -2091,9 +2180,9 @@ const TEAM_TASK: Guide = {
       view: "resources",
       title: { th: "กด 'เพิ่มงาน / นัดหมาย'", en: "Press Add work or appointment", jp: "「作業・予定を追加」を押す" },
       body: {
-        th: "หรือกด + ในช่องของคนและวันที่บนตาราง ระบบใส่คนและวันนั้นให้",
-        en: "Or press + in a person's cell on a day; that person and date are filled in.",
-        jp: "表の担当者と日付のセルの+でも追加でき、その人と日付が入ります。",
+        th: "ปุ่มนี้อยู่มุมขวาบนของหน้า (กด + ในช่องของคนและวันบนแผนงานทีมได้ด้วย ระบบใส่คนและวันนั้นให้)",
+        en: "It is at the top right of the page. (You can also press + in a person's cell on a day in Team planner; that person and date are filled in.)",
+        jp: "ページ右上にあります（チームプランナーで担当者と日付のセルの+を押しても追加でき、その人と日付が入ります）。",
       },
     },
     {
@@ -4064,6 +4153,7 @@ export const GUIDES: readonly Guide[] = [
   PUNCHLIST_ISSUES,
   PUNCHLIST_CLOSE,
   TEAM_TASK,
+  TEAM_WEEK,
   ALLOCATION_ASSIGN,
   BOM_RELEASE,
   ESTIMATE_APPROVE,
@@ -4296,6 +4386,17 @@ export const GUIDES: readonly Guide[] = [
           jp: "全案件の担当作業がまとまっています。強調表示のメニューをクリックします。",
         },
       ),
+      {
+        target: '[data-tab="assigned"]',
+        action: "click",
+        view: "my-work",
+        title: { th: "งานที่ได้รับ", en: "Assigned to me", jp: "担当作業" },
+        body: {
+          th: "กดแท็บ 'งานที่ได้รับ' ข้างในมีงานที่กำลังทำ งานมอบหมายใหม่ และลำดับงานของคุณ",
+          en: "Press the Assigned to me tab. It holds your active work, new assignments and your work order.",
+          jp: "「担当作業」タブを押します。進行中の作業・新しい割り当て・作業順が入っています。",
+        },
+      },
       {
         target: '[data-tab="new"]',
         action: "click",

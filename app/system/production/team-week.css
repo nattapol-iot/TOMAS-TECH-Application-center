@@ -1,0 +1,537 @@
+/*
+ * Team overview (owner decision 2026-11-23): its tab row, and Team planner, the daily grid and Team week in one table
+ * in hours (TeamBoard.tsx, mode "board"). The grid's own rules are in team-board.css. Tokens only.
+ */
+
+/* Team overview's tab row: two tabs, and More views for the rest. */
+.team-tabs-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px 12px;
+}
+.team-tabs-row .tabs {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.team-more {
+  position: relative;
+  margin-bottom: 4px;
+}
+.team-more > summary {
+  list-style: none;
+  cursor: pointer;
+}
+.team-more > summary::-webkit-details-marker {
+  display: none;
+}
+.team-more.on > summary {
+  border-color: var(--blue-line);
+  background: var(--blue-soft);
+  color: var(--blue-text);
+}
+.team-more-menu {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 4px);
+  right: 0;
+  display: flex;
+  min-width: 220px;
+  flex-direction: column;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+}
+.team-more-menu button {
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink);
+  font-size: var(--fs-sm);
+  text-align: left;
+  cursor: pointer;
+}
+.team-more-menu button:hover,
+.team-more-menu button[aria-current="true"] {
+  background: var(--blue-soft);
+  color: var(--blue-text);
+}
+
+/* The page's More menu beside the title: copy the table, read it again. */
+.board-more-actions {
+  margin-bottom: 0;
+}
+.board-more-actions .team-more-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.board-more-actions .team-more-menu button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Team planner's toolbar, one row (owner, 2026-11-23): the period and how much of it, the view, then the teams, the kind
+   of work and the search at the end. */
+.board-toolbar .board-seg button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 12px;
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+.board-window .board-seg {
+  margin-left: 6px;
+}
+.planner-toolbar-end {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+/* A fixed width, so the end of the row does not break before the search. */
+.planner-toolbar-end .search-field {
+  flex: none;
+  width: 240px;
+  min-width: 0;
+  max-width: 100%;
+  margin-left: 0;
+}
+
+/* A menu on a button (the teams, the kind of work): the name of the filter, then what it is set to. */
+.board-pick {
+  position: relative;
+}
+.board-pick > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 280px;
+  list-style: none;
+  cursor: pointer;
+}
+.board-pick > summary::-webkit-details-marker {
+  display: none;
+}
+.board-pick-name {
+  color: var(--muted);
+  font-weight: 500;
+}
+.board-pick-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.board-pick.on > summary {
+  border-color: var(--blue-line);
+  background: var(--blue-soft);
+  color: var(--blue-text);
+}
+.board-pick.on .board-pick-name {
+  color: inherit;
+}
+.board-pick-menu {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 4px);
+  left: 0;
+  display: flex;
+  min-width: 260px;
+  max-height: 360px;
+  flex-direction: column;
+  padding: 4px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+}
+.planner-toolbar-end .board-pick-menu {
+  right: 0;
+  left: auto;
+}
+.board-pick-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--fs-sm);
+  text-align: left;
+  cursor: pointer;
+}
+.board-pick-option:hover,
+.board-pick-option:focus-within,
+.board-pick-option:focus-visible {
+  background: var(--blue-soft);
+  outline: none;
+}
+.board-pick-option > span:not(.cnt) {
+  flex: 1;
+  min-width: 0;
+}
+.board-pick-option i {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+}
+.board-pick-option .icon {
+  width: 14px;
+  height: 14px;
+  color: var(--blue-text);
+}
+.board-pick-option .cnt {
+  padding: 1px 6px;
+  border-radius: var(--r-pill);
+  background: var(--n-100);
+  color: var(--n-600);
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Once per person: the daily grid moved into Team planner. */
+.planner-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--blue-line);
+  border-radius: var(--r-md);
+  background: var(--blue-soft);
+  color: var(--blue-text);
+  font-size: var(--fs-sm);
+}
+.planner-notice > span {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+.planner-notice > .icon {
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
+
+/* The summary bar: seven figures, each the filter it counts. */
+.board-sum.planner-sum {
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+  gap: 8px;
+}
+.planner-sum-item {
+  align-items: flex-start;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 150ms ease;
+}
+.planner-sum-item:hover {
+  border-color: var(--blue-line);
+}
+.planner-sum-item:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 1px;
+}
+.planner-sum-item.on {
+  border-color: var(--blue);
+  background: var(--blue-soft);
+  box-shadow: inset 0 -2px 0 var(--blue);
+}
+.planner-sum .board-sum-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.planner-sum .board-sum-label i {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--n-400);
+}
+.planner-sum .board-sum-label i.red {
+  background: var(--red);
+}
+.planner-sum .board-sum-label i.amber {
+  background: var(--amber);
+}
+.planner-sum .board-sum-label i.green {
+  background: var(--green);
+}
+.planner-sum .board-sum-label i.violet {
+  background: var(--violet);
+}
+.planner-sum .board-sum-label i.blue {
+  background: var(--blue);
+}
+.planner-sum .board-sum-value.none {
+  color: var(--muted);
+}
+.planner-sum .board-sum-value.red {
+  color: var(--red-text);
+}
+.planner-sum .board-sum-value.amber {
+  color: var(--amber-text);
+}
+.planner-sum .board-sum-value.green {
+  color: var(--green-text);
+}
+.planner-sum .board-sum-value.violet {
+  color: var(--violet-text);
+}
+.planner-sum .board-sum-value.blue {
+  color: var(--blue-text);
+}
+
+/* The day's figure in hours and where it comes from: a tick confirmed, a dot booked on My week, a ring planned. */
+.board-src {
+  display: inline-block;
+  flex: none;
+  width: 7px;
+  height: 7px;
+  box-sizing: border-box;
+  border-radius: 50%;
+}
+.board-src.booked {
+  background: var(--blue);
+}
+.board-src.plan {
+  border: 1.5px solid var(--blue);
+  background: transparent;
+}
+.icon.board-src.confirmed {
+  width: 12px;
+  height: 12px;
+  border-radius: 0;
+  color: var(--green-text);
+}
+.board-grid .board-md {
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+}
+.board-grid.weeks-4 .board-md {
+  padding: 0 2px;
+}
+/* A past day whose hours are not confirmed yet: an amber line along the foot of the cell. */
+.board-cell.pending {
+  box-shadow: inset 0 -3px 0 var(--amber);
+}
+/* The day open in the side column. */
+.board-cell.picked {
+  box-shadow: inset 0 0 0 2px var(--blue);
+}
+.board-cell.pending.picked {
+  box-shadow:
+    inset 0 0 0 2px var(--blue),
+    inset 0 -4px 0 var(--amber);
+}
+.board-panel-legend i.pending {
+  border: 0;
+  border-bottom: 3px solid var(--amber);
+  border-radius: 0;
+  background: var(--blue-soft);
+}
+.board-week-pending {
+  display: block;
+  margin-top: 4px;
+  color: var(--amber-text);
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+}
+/* One week: the weekend narrower than the working days, which share the rest. */
+.board-grid.weeks-1 col.weekend {
+  width: 88px;
+}
+
+/* A team's band folds its rows away and back. */
+.board-group-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.board-group-toggle .icon {
+  width: 14px;
+  height: 14px;
+  transition: transform 150ms ease;
+}
+.board-group-toggle.open .icon {
+  transform: rotate(90deg);
+}
+
+/* The table and, beside it, the day opened from the grid or the work waiting for people. */
+.planner-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 10px;
+}
+.planner-main {
+  flex: 999 1 640px;
+  min-width: 0;
+}
+.planner-side {
+  position: sticky;
+  top: calc(var(--topbar-h) + var(--board-toolbar-h, 0px) + 16px);
+  display: flex;
+  flex: 1 1 290px;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  max-width: 380px;
+  max-height: calc(100vh - var(--topbar-h) - var(--board-toolbar-h, 120px) - 32px);
+  overflow: auto;
+  border-radius: var(--r-md);
+  scrollbar-width: thin;
+}
+.planner-side.on {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+.planner-side > .panel {
+  margin: 0;
+}
+/* The allocation queue in the side column: the row's words take the width, its discipline and Assign go under them. */
+.planner-side .alloc-queue > li {
+  flex-wrap: wrap;
+  gap: 6px 8px;
+}
+.planner-side .alloc-queue-main {
+  flex: 1 1 100%;
+}
+.planner-side .alloc-queue-main strong {
+  white-space: normal;
+}
+.planner-side-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px 14px 8px;
+}
+.planner-side-head > div {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.planner-side-head h2 {
+  margin: 0;
+  font-size: var(--fs-md);
+  font-weight: 650;
+}
+.planner-side-head p {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+.planner-side-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0 14px 12px;
+}
+.planner-side-foot {
+  display: flex;
+  justify-content: flex-end;
+  padding: 10px 14px;
+  border-top: 1px solid var(--line-soft);
+}
+.planner-side-empty {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px dashed var(--line);
+  border-radius: var(--r-md);
+  font-size: var(--fs-sm);
+}
+.planner-day-figure {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  padding: 10px 12px;
+  border-radius: var(--r-md);
+  background: var(--blue-soft);
+  color: var(--blue-text);
+}
+.planner-day-figure strong {
+  font-size: var(--fs-xl);
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.planner-day-figure.over {
+  background: var(--red-soft);
+  color: var(--red-text);
+}
+.planner-day-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+}
+.planner-day-note {
+  margin: 0;
+}
+/* Headings in the side column read as written ("My week" stays as named). */
+.planner-side .board-day-head {
+  margin: 8px 0 2px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.planner-day-booked {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--fs-sm);
+}
+.planner-day-booked li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Too narrow for the side column: it goes under the table, and a day opened from the grid comes in over the page. */
+@media (max-width: 1100px) {
+  .planner-side {
+    position: static;
+    max-width: 100%;
+    max-height: none;
+    overflow: visible;
+  }
+  .planner-side .planner-day {
+    position: fixed;
+    z-index: 60;
+    top: var(--topbar-h);
+    right: 0;
+    bottom: 0;
+    width: min(420px, 100vw);
+    overflow: auto;
+    border-radius: 0;
+    box-shadow: var(--shadow-lg);
+  }
+}

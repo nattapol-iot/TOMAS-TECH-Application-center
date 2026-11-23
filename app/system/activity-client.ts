@@ -1,27 +1,172 @@
-import { apiRequest } from './api-client';
-export const activityModuleLabels:Record<string,string>={dashboard:'Dashboard','my-work':'My Work',inquiries:'Inquiry',estimates:'Estimate Cost',projects:'Projects',knowledge:'Knowledge Hub','site-visits':'Site Visit','my-assignments':'My Assignments',price:'Price Library',quotations:'Supplier Quotation',missing:'Waiting Supplier Price','project-timeline':'Project Timeline',resources:'Team overview',procurement:'Procurement Dashboard',boms:'BOM',purchase:'Purchase Requisition',pos:'Purchase Orders',inventory:'Inventory',receiving:'Goods Receiving',issues:'Material Issues',approvals:'Approvals',signing:'Sign Inbox',documents:'Signed Documents',performance:'KPI & Growth',reports:'Reports',master:'Master Data',rates:'Engineering Rates',audit:'Audit Log',settings:'Settings',profile:'My Profile',manual:'Manual document',support:'Support Center',activity:'Team Activity','module-templates':'Module Templates',stamps:'Company Stamps','visit-master':'Visit Master Data',signature:'My signature','sales-intake':'Inquiry',labor:'Engineering Rates',
- 'projects-portfolio':'Projects · Portfolio','projects-timeline':'Projects · Timeline','projects-schedule':'Projects · Schedule','projects-punchlist':'Projects · Punchlist','resources-board':'Team overview · Team grid','resources-list':'Team overview · Work list','resources-tasks':'Resource Plan · Tasks','resources-gantt':'Resource Plan · Assignment timeline','resources-workload':'Resource Plan · Workload','resources-items':'Resource Plan · Work items'};
+import { apiRequest } from "./api-client";
+export const activityModuleLabels: Record<string, string> = {
+  dashboard: "Dashboard",
+  "my-work": "My Work",
+  inquiries: "Inquiry",
+  estimates: "Estimate Cost",
+  projects: "Projects",
+  knowledge: "Knowledge Hub",
+  "site-visits": "Site Visit",
+  "my-assignments": "My Assignments",
+  price: "Price Library",
+  quotations: "Supplier Quotation",
+  missing: "Waiting Supplier Price",
+  "project-timeline": "Project Timeline",
+  resources: "Team overview",
+  procurement: "Procurement Dashboard",
+  boms: "BOM",
+  purchase: "Purchase Requisition",
+  pos: "Purchase Orders",
+  inventory: "Inventory",
+  receiving: "Goods Receiving",
+  issues: "Material Issues",
+  approvals: "Approvals",
+  signing: "Sign Inbox",
+  documents: "Signed Documents",
+  performance: "KPI & Growth",
+  reports: "Reports",
+  master: "Master Data",
+  rates: "Engineering Rates",
+  audit: "Audit Log",
+  settings: "Settings",
+  profile: "My Profile",
+  manual: "Manual document",
+  support: "Support Center",
+  activity: "Team Activity",
+  "module-templates": "Module Templates",
+  stamps: "Company Stamps",
+  "visit-master": "Visit Master Data",
+  signature: "My signature",
+  "sales-intake": "Inquiry",
+  labor: "Engineering Rates",
+  "projects-portfolio": "Projects · Portfolio",
+  "projects-timeline": "Projects · Timeline",
+  "projects-schedule": "Projects · Schedule",
+  "projects-punchlist": "Projects · Punchlist",
+  "resources-week": "Team overview · Team planner",
+  "resources-board": "Team overview · Team grid",
+  "resources-list": "Team overview · Work list",
+  "resources-tasks": "Resource Plan · Tasks",
+  "resources-gantt": "Resource Plan · Assignment timeline",
+  "resources-workload": "Resource Plan · Workload",
+  "resources-items": "Resource Plan · Work items",
+};
 /** Sub-view keys (useActivitySubView) roll up to their parent module; the label is the dictionary key of the tab it names. */
-const activitySubViews:Record<string,{parent:string;label:string}>={'projects-portfolio':{parent:'projects',label:'Project Portfolio'},'projects-timeline':{parent:'projects',label:'Project Timeline'},'projects-schedule':{parent:'projects',label:'Project Schedule'},'projects-punchlist':{parent:'projects',label:'Punchlist · Customer issues'},'resources-board':{parent:'resources',label:'TeamBoard.tabBoard'},'resources-list':{parent:'resources',label:'TeamBoard.tabList'},'resources-tasks':{parent:'resources',label:'Tasks'},'resources-gantt':{parent:'resources',label:'Assignment timeline'},'resources-workload':{parent:'resources',label:'Workload'},'resources-items':{parent:'resources',label:'Work items'}};
+const activitySubViews: Record<string, { parent: string; label: string }> = {
+  "projects-portfolio": { parent: "projects", label: "Project Portfolio" },
+  "projects-timeline": { parent: "projects", label: "Project Timeline" },
+  "projects-schedule": { parent: "projects", label: "Project Schedule" },
+  "projects-punchlist": { parent: "projects", label: "Punchlist · Customer issues" },
+  "resources-week": { parent: "resources", label: "TeamWeek.tab" },
+  "resources-board": { parent: "resources", label: "TeamBoard.tabBoard" },
+  "resources-list": { parent: "resources", label: "TeamBoard.tabList" },
+  "resources-tasks": { parent: "resources", label: "Tasks" },
+  "resources-gantt": { parent: "resources", label: "Assignment timeline" },
+  "resources-workload": { parent: "resources", label: "Workload" },
+  "resources-items": { parent: "resources", label: "Work items" },
+};
 /** Translated page name; a sub-view reads "Projects · Project Schedule" with each part translated on its own. */
-export function activityModuleLabel(module:string,t:(text:string)=>string){
- const sub=activitySubViews[module];
- return sub?`${t(activityModuleLabels[sub.parent]!)} · ${t(sub.label)}`:t(activityModuleLabels[module]??'Workspace');
+export function activityModuleLabel(module: string, t: (text: string) => string) {
+  const sub = activitySubViews[module];
+  return sub ? `${t(activityModuleLabels[sub.parent]!)} · ${t(sub.label)}` : t(activityModuleLabels[module] ?? "Workspace");
 }
-export type ActivityMember={id:number;name:string;department:string;role:string;canSignIn:boolean};
-export type ActivityRule={id:number;userId:number;projectId:number|null;sourceType:string;sourceId:number;title:string;startsOn:string;endsOn:string;stoppedOn:string|null;weekdayMask:number;cutoffMinute:number;rowVersion:string};
-export type ActivityDay={day:string;status:string;expected:number;updated:number;credit:number|null;eventIds:number[]};
-export type ActivityEvent={id:number;actorId:number;projectId:number|null;ruleId:number|null;kind:string;module:string;sourceType:string|null;sourceId:number|null;summary:string;occurredAt:string;details:Record<string,unknown>|null};
-export type ActivityScore={cycleId:number;userId:number;mode:string;weight:number;formulaVersion:number;frozen:boolean;periodStart:string;periodEnd:string;startedAt:string;days:ActivityDay[];eligibleDays:number;expected:number;updated:number;timeliness:number|null;coverage:number|null;automatic:number|null;quality:number|null;total:number|null;rating:number|null;eligible:boolean;qualityReview:{clarity:number;nextStep:number;evidence:number;note:string;evidenceIds:number[];rowVersion:string}|null;clarifications:{id:number;note:string;createdAt:string}[]};
-export type ActivityMeta={members:ActivityMember[];selfId:number;canManage:boolean;canReview:boolean;canConfigure:boolean;startedAt:string;projects:{id:number;name:string}[];cycles:{id:number;code:string;name:string;periodStart:string;periodEnd:string;status:string;mode:string;configured:boolean}[]};
-export type ActivityOverview={day:string;updatedAt:string;items:(ActivityMember&{score:{automatic:number|null;total:number|null;eligible:boolean;mode:string}|null;day:ActivityDay;entered:boolean;accessVisible:boolean;sessions:number|null;firstAt:string|null;lastAt:string|null;updatedTasks:number;projectOnly:boolean})[]};
-export type ActivityDetail={member:ActivityMember;rules:ActivityRule[];events:ActivityEvent[];exceptions:{day:string;reason:string}[];days:ActivityDay[];startedAt:string;full:boolean;score:ActivityScore|null;sources:{sourceType:string;sourceId:number;projectId:number|null;title:string}[]};
-export const activityRead=<T>(path:string)=>apiRequest<T>(`/api/v1/activity/${path}`);
-export const activityWrite=<T=unknown>(path:string,body:object)=>apiRequest<T>(`/api/v1/activity/${path}`,{method:'POST',body:JSON.stringify(body)});
+export type ActivityMember = { id: number; name: string; department: string; role: string; canSignIn: boolean };
+export type ActivityRule = {
+  id: number;
+  userId: number;
+  projectId: number | null;
+  sourceType: string;
+  sourceId: number;
+  title: string;
+  startsOn: string;
+  endsOn: string;
+  stoppedOn: string | null;
+  weekdayMask: number;
+  cutoffMinute: number;
+  rowVersion: string;
+};
+export type ActivityDay = { day: string; status: string; expected: number; updated: number; credit: number | null; eventIds: number[] };
+export type ActivityEvent = {
+  id: number;
+  actorId: number;
+  projectId: number | null;
+  ruleId: number | null;
+  kind: string;
+  module: string;
+  sourceType: string | null;
+  sourceId: number | null;
+  summary: string;
+  occurredAt: string;
+  details: Record<string, unknown> | null;
+};
+export type ActivityScore = {
+  cycleId: number;
+  userId: number;
+  mode: string;
+  weight: number;
+  formulaVersion: number;
+  frozen: boolean;
+  periodStart: string;
+  periodEnd: string;
+  startedAt: string;
+  days: ActivityDay[];
+  eligibleDays: number;
+  expected: number;
+  updated: number;
+  timeliness: number | null;
+  coverage: number | null;
+  automatic: number | null;
+  quality: number | null;
+  total: number | null;
+  rating: number | null;
+  eligible: boolean;
+  qualityReview: { clarity: number; nextStep: number; evidence: number; note: string; evidenceIds: number[]; rowVersion: string } | null;
+  clarifications: { id: number; note: string; createdAt: string }[];
+};
+export type ActivityMeta = {
+  members: ActivityMember[];
+  selfId: number;
+  canManage: boolean;
+  canReview: boolean;
+  canConfigure: boolean;
+  startedAt: string;
+  projects: { id: number; name: string }[];
+  cycles: { id: number; code: string; name: string; periodStart: string; periodEnd: string; status: string; mode: string; configured: boolean }[];
+};
+export type ActivityOverview = {
+  day: string;
+  updatedAt: string;
+  items: (ActivityMember & {
+    score: { automatic: number | null; total: number | null; eligible: boolean; mode: string } | null;
+    day: ActivityDay;
+    entered: boolean;
+    accessVisible: boolean;
+    sessions: number | null;
+    firstAt: string | null;
+    lastAt: string | null;
+    updatedTasks: number;
+    projectOnly: boolean;
+  })[];
+};
+export type ActivityDetail = {
+  member: ActivityMember;
+  rules: ActivityRule[];
+  events: ActivityEvent[];
+  exceptions: { day: string; reason: string }[];
+  days: ActivityDay[];
+  startedAt: string;
+  full: boolean;
+  score: ActivityScore | null;
+  sources: { sourceType: string; sourceId: number; projectId: number | null; title: string }[];
+};
+export const activityRead = <T>(path: string) => apiRequest<T>(`/api/v1/activity/${path}`);
+export const activityWrite = <T = unknown>(path: string, body: object) => apiRequest<T>(`/api/v1/activity/${path}`, { method: "POST", body: JSON.stringify(body) });
 /** getRandomValues also works on the private-LAN HTTP origin. */
-export function activityRequestKey(){
- const bytes=crypto.getRandomValues(new Uint8Array(16));bytes[6]=(bytes[6]&15)|64;bytes[8]=(bytes[8]&63)|128;
- const hex=Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('');
- return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
+export function activityRequestKey() {
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 15) | 64;
+  bytes[8] = (bytes[8] & 63) | 128;
+  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
-export const bangkokDay=(date=new Date())=>new Date(date.getTime()+7*3600_000).toISOString().slice(0,10);
+export const bangkokDay = (date = new Date()) => new Date(date.getTime() + 7 * 3600_000).toISOString().slice(0, 10);

@@ -251,7 +251,10 @@
   font-variant-numeric: tabular-nums;
 }
 .myweek-dayhead strong {
+  overflow: hidden;
   font-size: var(--fs-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .myweek-dayhead.today {
   background: var(--blue-soft);
@@ -312,6 +315,10 @@
     var(--line-soft) calc(var(--myweek-row) * 4 - 1px),
     var(--line-soft) calc(var(--myweek-row) * 4)
   );
+}
+.myweek-dayhead.weekend,
+.myweek-day.weekend {
+  background-color: var(--n-50);
 }
 .myweek-day.today {
   background-color: color-mix(in srgb, var(--blue-soft) 40%, transparent);
@@ -517,4 +524,14 @@
   .myweek-editor .field.span-2 {
     grid-column: auto;
   }
+}
+
+/* My Work's "Assigned to me" tab holds active work, new assignments and the work order as a quieter second row. */
+.my-work-subtabs .tabs {
+  border-bottom: 0;
+}
+.my-work-subtabs .tab {
+  padding-top: 4px;
+  padding-bottom: 4px;
+  font-size: var(--fs-xs);
 }

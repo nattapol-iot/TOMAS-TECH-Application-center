@@ -18,7 +18,7 @@ test("employee manual is wired into the authenticated application", async () => 
   assert.match(screen, /embedded=1/);
   assert.match(screen, /download="Engineering-Center-Employee-Manual\.html"/);
   assert.match(screen, /TH:[\s\S]*EN:[\s\S]*JP:/);
-  assert.match(activity, /manual:'Manual document'/);
+  assert.match(activity, /manual:\s*["']Manual document["']/);
 });
 
 test("public handbook is self-contained", async () => {

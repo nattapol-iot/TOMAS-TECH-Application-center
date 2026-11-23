@@ -17,11 +17,13 @@ import {
   WORK_END,
   blockBody,
   dayBooked,
+  dayColumns,
   dayItems,
   dayOf,
   freeSlot,
   gridWindow,
   hoursLeft,
+  isWeekend,
   laneOf,
   minutesOf,
   overlapsBlocks,
@@ -86,7 +88,8 @@ export function MyWeek({ notify }: { notify: (message: string) => void }) {
   const data = result?.data && result.data.days[0]?.date === monday ? result.data : null;
   const error = result?.key === readKey ? result.error : "";
   const today = data?.today ?? bangkokToday();
-  const dates = useMemo(() => shownDates(monday, data), [monday, data]);
+  // Monday to Sunday (owner 2026-11-23); the weekend narrower and shaded.
+  const dates = useMemo(() => shownDates(monday), [monday]);
   const days = useMemo(() => dates.map((date) => ({ date, ...dayItems(date, data ?? EMPTY) })), [dates, data]);
   const span = gridWindow(days.flatMap((day) => day.timed));
   const rowOf = (minutes: number) => Math.round((Math.min(Math.max(minutes, span.start), span.end) - span.start) / STEP) + 1;
@@ -231,10 +234,10 @@ export function MyWeek({ notify }: { notify: (message: string) => void }) {
 
         <div className="myweek-calendar" data-guide="myweek.calendar" aria-busy={loading}>
           <div className="myweek-scroll">
-            <div className="myweek-grid" style={{ gridTemplateColumns: `52px repeat(${dates.length}, minmax(140px, 1fr))` }}>
+            <div className="myweek-grid" style={{ gridTemplateColumns: dayColumns(dates) }}>
               <span className="myweek-corner" />
               {dates.map((date) => (
-                <div key={date} className={`myweek-dayhead${date === today ? " today" : ""}`}>
+                <div key={date} className={`myweek-dayhead${date === today ? " today" : ""}${isWeekend(date) ? " weekend" : ""}`}>
                   <strong>{dayLabel(date)}</strong>
                   <span className="muted">
                     {number(data ? dayBooked(date, data) : 0)} {t("Plan.mhHours")}
@@ -269,7 +272,7 @@ export function MyWeek({ notify }: { notify: (message: string) => void }) {
                 return (
                   <div
                     key={day.date}
-                    className={`myweek-day${day.date === today ? " today" : ""}`}
+                    className={`myweek-day${day.date === today ? " today" : ""}${isWeekend(day.date) ? " weekend" : ""}`}
                     style={{ gridTemplateRows: `repeat(${rows}, var(--myweek-row))`, gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))` }}
                   >
                     {LUNCH_START >= span.start && LUNCH_END <= span.end ? (

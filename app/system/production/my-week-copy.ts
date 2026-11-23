@@ -2,6 +2,13 @@
 export const MY_WEEK_COPY: Record<string, { en: string; th: string; jp: string }> = Object.fromEntries(
   [
     ["MyWeek.tab", "My week", "สัปดาห์ของฉัน", "マイウィーク"],
+    [
+      "MyWeek.subtitle",
+      "Book your week here and confirm each day's hours at its foot. Time you book goes into your Outlook by itself.",
+      "ลงเวลางานของสัปดาห์ที่นี่ แล้วกดยืนยันชั่วโมงท้ายแต่ละวัน เวลาที่ลงจะเข้า Outlook ของคุณเอง",
+      "ここで週の時間を入れ、各日の下で作業時間を確定します。入れた時間は自動でOutlookに入ります。",
+    ],
+    ["MyWork.assignedTab", "Assigned to me", "งานที่ได้รับ", "担当作業"],
     ["MyWeek.book", "Book time", "ลงเวลา", "時間を入れる"],
     ["MyWeek.appointment", "Appointment or leave", "นัด / ลา", "予定・休暇"],
     ["MyWeek.thisWeek", "This week", "สัปดาห์นี้", "今週"],

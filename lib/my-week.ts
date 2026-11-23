@@ -167,21 +167,16 @@ export function freeSlot(timed: readonly CalendarItem[], length = 60, after = WO
   return best;
 }
 
-/** The days shown: Monday to Friday, and Saturday or Sunday when something is on them. */
-export function shownDates(monday: string, data: Pick<WeekData, "blocks" | "meetings" | "teamTasks" | "days"> | null): string[] {
-  const dates = Array.from({ length: 7 }, (_, index) => addDays(monday, index));
-  return dates.filter((date, index) => {
-    if (index < 5) return true;
-    if (!data) return false;
-    const day = data.days.find((entry) => entry.date === date);
-    return (
-      Boolean(day?.confirmed?.hours) ||
-      data.blocks.some((block) => block.date === date) ||
-      data.meetings.some((meeting) => dateOf(meeting.start) === date && !meeting.allDay) ||
-      data.teamTasks.some((task) => task.kind !== "Away" && date >= task.start && date <= task.end)
-    );
-  });
+/** The days shown: Monday to Sunday (owner 2026-11-23). */
+export function shownDates(monday: string): string[] {
+  return Array.from({ length: 7 }, (_, index) => addDays(monday, index));
 }
+
+/** Saturday or Sunday: a narrower, shaded column. */
+export const isWeekend = (date: string) => [0, 6].includes(new Date(`${date}T00:00:00Z`).getUTCDay());
+
+/** The calendar's columns: the times, then each day; a weekend day narrower than a working day. */
+export const dayColumns = (dates: readonly string[]) => ["52px", ...dates.map((date) => (isWeekend(date) ? "minmax(96px, 0.7fr)" : "minmax(124px, 1fr)"))].join(" ");
 
 /** Hours a timed item takes, lunch left out (as the hours draft counts meetings). */
 export const itemHours = (item: Pick<CalendarItem, "start" | "end" | "type">) =>

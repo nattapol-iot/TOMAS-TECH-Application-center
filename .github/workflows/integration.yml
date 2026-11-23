@@ -16,9 +16,32 @@ permissions:
   contents: read
 
 jobs:
+  # Same routing as ci.yml (see the comment there).
+  pick-runner:
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    outputs:
+      runs-on: ${{ steps.pick.outputs.runs-on }}
+    steps:
+      - id: pick
+        env:
+          GH_TOKEN: ${{ secrets.RUNNER_STATUS_TOKEN }}
+        run: |
+          online=$(gh api "repos/${{ github.repository }}/actions/runners" \
+            --jq '[.runners[] | select(.status == "online" and any(.labels[]; .name == "iot-ci"))] | length' \
+            2>/dev/null || echo 0)
+          echo "online iot-ci runners: ${online:-0}"
+          if [ "${online:-0}" -gt 0 ]; then
+            echo 'runs-on=["self-hosted","iot-ci"]' >> "$GITHUB_OUTPUT"
+          else
+            echo 'runs-on="ubuntu-24.04"' >> "$GITHUB_OUTPUT"
+          fi
+
   docker-build:
     name: Docker image build check
-    runs-on: ubuntu-24.04
+    needs: pick-runner
+    if: ${{ !cancelled() }}
+    runs-on: ${{ fromJSON(needs.pick-runner.outputs.runs-on || '["self-hosted","iot-ci"]') }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
@@ -43,6 +66,8 @@ jobs:
         # frontend serves a page with the runtime production uses.
         run: |
           docker run --rm iot-team-center-api:ci-check bun -e 'await import("./dist/src/startup-migrations.js"); console.log("api modules load")'
+          # The Mac runner keeps its Docker state between jobs, so clear a container a cancelled run left behind.
+          docker rm -f fe-smoke 2>/dev/null || true
           docker run -d --name fe-smoke -p 3300:3000 iot-team-center-frontend:ci-check
           for attempt in $(seq 1 30); do
             code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3300/ || true)
@@ -55,7 +80,9 @@ jobs:
 
   node-sql-integration:
     name: Node XLSX, overhead and handover SQL acceptance
-    runs-on: ubuntu-24.04
+    needs: pick-runner
+    if: ${{ !cancelled() }}
+    runs-on: ${{ fromJSON(needs.pick-runner.outputs.runs-on || '["self-hosted","iot-ci"]') }}
     timeout-minutes: 20
     env:
       IOT_RUN_SQL_INTEGRATION: "1"
@@ -66,6 +93,8 @@ jobs:
     services:
       sqlserver:
         image: mcr.microsoft.com/mssql/server:2022-latest
+        # SQL Server has no arm64 image; the Mac runner VM runs amd64 through Rosetta.
+        options: --platform linux/amd64
         env:
           ACCEPT_EULA: "Y"
           MSSQL_PID: Developer
@@ -83,12 +112,14 @@ jobs:
       - name: Install SQL Server command-line tools
         shell: bash
         run: |
+          echo "/opt/mssql-tools18/bin" >> "$GITHUB_PATH"
+          # The Mac runner keeps installed packages between jobs.
+          [ -x /opt/mssql-tools18/bin/sqlcmd ] && exit 0
           curl -sSL -o "$RUNNER_TEMP/packages-microsoft-prod.deb" \
             https://packages.microsoft.com/config/ubuntu/24.04/packages-microsoft-prod.deb
           sudo dpkg -i "$RUNNER_TEMP/packages-microsoft-prod.deb"
           sudo apt-get update
           sudo env ACCEPT_EULA=Y apt-get install -y mssql-tools18 unixodbc-dev
-          echo "/opt/mssql-tools18/bin" >> "$GITHUB_PATH"
       - name: Require isolated SQL Server availability
         shell: bash
         run: |

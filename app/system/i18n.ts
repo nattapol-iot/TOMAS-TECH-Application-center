@@ -29,6 +29,7 @@ import { ADMIN_SCREENS_COPY } from "./production/admin-screens-copy";
 import { FORM_COPY } from "./production/form-copy";
 import { WORK_DAYS_COPY } from "./production/work-days-copy";
 import { MY_WEEK_COPY } from "./production/my-week-copy";
+import { TEAM_WEEK_COPY } from "./production/team-week-copy";
 
 export type Lang = "TH" | "EN" | "JP";
 
@@ -2700,6 +2701,7 @@ export const DICTIONARY: Record<string, Entry> = {
   ...PROJECT_COST_COPY,
   ...WORK_DAYS_COPY,
   ...MY_WEEK_COPY,
+  ...TEAM_WEEK_COPY,
   ...ADMIN_SCREENS_COPY,
   ...FORM_COPY,
   /* Projects portfolio (ProductionProjects). Namespaced keys, added last, so no shared label changes. */
