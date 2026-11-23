@@ -124,14 +124,16 @@ function harness(t: TestContext, permitted: boolean) {
   return { app, reads };
 }
 
-test("GET team-week: team.board readers only, a window of at most 14 days, project numbers only where the reader may see them", async (t) => {
+test("GET team-week: team.board readers only, a window of at most four weeks, project numbers only where the reader may see them", async (t) => {
   const { app, reads } = harness(t, true);
   const response = await app.inject({ method: "GET", url: "/api/v1/team-week?from=2026-11-23&to=2026-11-27" });
   assert.equal(response.statusCode, 200, response.body);
   const body = response.json();
   assert.equal(body.rows.length, 2);
   assert.deepEqual([reads[0]!.actor, reads[0]!.elevated], [7, false]);
-  assert.equal((await app.inject({ method: "GET", url: "/api/v1/team-week?from=2026-11-23&to=2026-12-23" })).statusCode, 400);
+  // Team planner's four weeks (Monday 23 November to Sunday 20 December) fit; a day more does not.
+  assert.equal((await app.inject({ method: "GET", url: "/api/v1/team-week?from=2026-11-23&to=2026-12-20" })).statusCode, 200);
+  assert.equal((await app.inject({ method: "GET", url: "/api/v1/team-week?from=2026-11-23&to=2026-12-21" })).statusCode, 400);
   const denied = harness(t, false);
   assert.equal((await denied.app.inject({ method: "GET", url: "/api/v1/team-week?from=2026-11-23&to=2026-11-27" })).statusCode, 403);
 });

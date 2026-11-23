@@ -1,24 +1,21 @@
-/** Copy for Team overview > Team week (TeamWeekScreen.tsx); merged into DICTIONARY (i18n.ts). Namespaced keys only. */
+/** Copy for Team overview > Team planner (TeamBoard.tsx, lib/team-week.ts); merged into DICTIONARY (i18n.ts). Namespaced keys only. */
 export const TEAM_WEEK_COPY: Record<string, { en: string; th: string; jp: string }> = Object.fromEntries(
   [
-    ["TeamWeek.tab", "Team week", "สัปดาห์ทีม", "チーム週間"],
+    // Team planner (owner decision 2026-11-23): the daily grid and Team week in one tab; the key stays for links and activity.
+    ["TeamWeek.tab", "Team planner", "แผนงานทีม", "チームプランナー"],
     ["TeamOverview.moreViews", "More views", "มุมมองอื่น", "その他の表示"],
     [
       "TeamWeek.subtitle",
-      "Everyone's week in hours: time booked on My week, Outlook meetings, team tasks and time away. A day holds 8 hours.",
-      "สัปดาห์ของทุกคนเป็นชั่วโมง จากเวลาที่ลงในสัปดาห์ของฉัน นัดใน Outlook งานทีม และวันลา หนึ่งวันมี 8 ชั่วโมง",
-      "全員の週を時間で表示：マイウィークで入れた時間、Outlookの予定、チームタスク、休暇。1日は8時間です。",
+      "Everyone's days in hours over one, two or four weeks: the hours confirmed, else booked on My week, else planned. Time away comes off the day.",
+      "งานของทุกคนเป็นชั่วโมงรายวัน ดูได้ 1, 2 หรือ 4 สัปดาห์ ใช้ชั่วโมงที่ยืนยันแล้ว ถ้ายังไม่ยืนยันใช้ที่จองใน My week ถ้ายังไม่จองใช้ตามแผน วันลาหักออกจากเวลาที่มี",
+      "全員の日ごとの時間を1・2・4週で表示：確定済みの時間、未確定ならマイウィークの予約、未予約なら計画。不在はその日の持ち時間から差し引きます。",
     ],
-    ["TeamWeek.person", "Person · this week", "คน · สัปดาห์นี้", "担当者・今週"],
-    ["TeamWeek.chips", "Show", "แสดง", "表示"],
     ["TeamWeek.chipOver", "Over capacity", "เกินกำลัง", "負荷超過"],
     ["TeamWeek.chipFree", "8 h or more free", "ว่าง 8 ชม. ขึ้นไป", "8時間以上空き"],
     ["TeamWeek.chipPending", "Hours not confirmed", "ยังไม่ยืนยันชั่วโมง", "時間未確定"],
-    ["TeamWeek.chipLeave", "Away this week", "มีวันลา", "今週休暇あり"],
+    ["TeamWeek.chipLeave", "Time away", "มีวันลา", "休暇あり"],
     ["TeamWeek.unconfirmed", "Not confirmed", "ยังไม่ยืนยัน", "未確定"],
-    ["TeamWeek.confirmed", "Hours confirmed", "ยืนยันชั่วโมงแล้ว", "時間確定済み"],
-    ["TeamWeek.free", "Free", "ว่าง", "空き"],
-    ["TeamWeek.over", "Over", "เกิน", "超過"],
+    // What a day booked on My week holds, as the day panel lists it.
     ["TeamWeek.meetings", "Meetings", "ประชุม / นัด", "会議・予定"],
     ["TeamWeek.other", "Other work", "งานอื่น", "その他の作業"],
     ["TeamWeek.work", "Work", "งาน", "作業"],
@@ -27,10 +24,5 @@ export const TEAM_WEEK_COPY: Record<string, { en: string; th: string; jp: string
     ["TeamWeek.issue", "Customer issue", "Issue ลูกค้า", "顧客課題"],
     ["TeamWeek.teamTask", "Team task", "งานทีม", "チームタスク"],
     ["TeamWeek.away", "Away", "ลา", "不在"],
-    ["TeamWeek.more", "more", "รายการ", "件"],
-    ["TeamWeek.empty", "Nobody matches these filters.", "ไม่มีคนตรงกับตัวกรอง", "条件に合う人はいません。"],
-    ["TeamWeek.loadFailed", "Could not load the team's week", "โหลดสัปดาห์ของทีมไม่สำเร็จ", "チームの週を読み込めませんでした"],
-    ["TeamWeek.allDepartments", "All departments", "ทุกแผนก", "全部署"],
-    ["TeamWeek.search", "Search a person", "ค้นหาคน", "担当者を検索"],
   ].map(([key, en, th, jp]) => [key, { en: en!, th: th!, jp: jp! }]),
 );

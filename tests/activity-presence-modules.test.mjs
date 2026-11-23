@@ -90,14 +90,14 @@ test("every sub-view a screen reports is accepted, named after its parent view a
     used.filter(({ key }) => !accepted.has(key)),
     [],
   );
-  // The approved Projects and Team overview tabs; Team overview keys follow its real tab ids (week, board, list, workload, tasks).
+  // The approved Projects and Team overview tabs; Team overview keys follow its real tab ids (week, list, workload, tasks).
+  // The daily grid (resources-board) became part of Team planner (resources-week) on 2026-11-23.
   const subViews = [...accepted].filter((key) => !views.has(key) && /^(projects|resources)-/.test(key));
   assert.deepEqual(subViews.sort(), [
     "projects-portfolio",
     "projects-punchlist",
     "projects-schedule",
     "projects-timeline",
-    "resources-board",
     "resources-list",
     "resources-tasks",
     "resources-week",

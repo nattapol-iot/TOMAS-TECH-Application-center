@@ -2,7 +2,7 @@
 import { confirmDialog } from "../dialogs";
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { ApiClientError, listInquiries, listProjects, type BootstrapData } from "../api-client";
+import { ApiClientError, apiRequest, listInquiries, listProjects, type BootstrapData } from "../api-client";
 import { Drawer, EmptyState, Icon, Modal, SearchInput, type Tone } from "../ui";
 import { localeFor, useLanguage } from "../i18n";
 import { SearchSelect, type SearchSelectOption } from "./SearchSelect";
@@ -60,16 +60,21 @@ import {
 } from "../../../lib/team-board";
 import type { GanttAlert } from "./GanttChart";
 import { choiceLink, idLink, listLink, optionalChoiceLink, textLink, useLinkedState, type LinkCodec } from "../screen-link";
+import { CHIP_LABEL, plannerDay, plannerTotals, type PlannerDay, type TeamWeekData, type TeamWeekDay } from "../../../lib/team-week";
 import "./team-board.css";
+import "./team-week.css";
 import { DateInput } from "../DateInput";
 
 // The team board (owner decision 2026-10-21): everyone's work on one page, a day grid coloured by load, a list of all
 // work, and work added ahead with a subject and a date, adjusted later. See lib/team-board.ts for the arithmetic.
+// Team planner (owner decision 2026-11-23): the day grid and Team week in one table, in hours, for one, two or four
+// weeks; each cell shows one figure, the hours confirmed, else booked on My week, else planned (lib/team-week.ts).
 
-/** actions: only the add and Outlook buttons and their dialogs, for Team week (owner decision 2026-11-23: two tabs). */
-export type TeamBoardMode = "board" | "list" | "actions";
+/** board: Team planner, people by day; list: all the work as a list. */
+export type TeamBoardMode = "board" | "list";
 type Category = "rfq" | "est" | "prj" | "appointment" | "task" | "away";
-type Attention = "late" | "unassigned" | "over" | "overlap";
+/** The planner's summary bar; the list keeps the first four as its attention chips. */
+type Attention = "late" | "unassigned" | "over" | "overlap" | "free" | "pending" | "leave";
 type BoardEvent =
   | { kind: "rfq" | "est" | "prj"; key: string; item: Commitment; late: boolean }
   | { kind: "appointment" | "task" | "away"; key: string; task: TeamTask; late: boolean }
@@ -103,6 +108,9 @@ type Person = {
   /** The same over everything read (the Gantt scrolls past the grid), and the working days their load is over 100%. */
   overlaps: Overlap[];
   overDates: string[];
+  /** Team planner: each day on show in hours, and the person's total against what they can give. */
+  days: PlannerDay[];
+  hours: ReturnType<typeof plannerTotals>;
 };
 
 /** The teams a person last filtered the board by; a convenience, so blocked storage only forgets them. */
@@ -117,7 +125,24 @@ function readTeams(userId: number): string[] {
 }
 const LIST_PAGE = 100;
 // The board's link (screen-link.tsx): its window, teams, filters, layout and the task open in the drawer.
-const WEEKS_LINK: LinkCodec<2 | 4> = { parse: (text) => (text === "2" ? 2 : text === "4" ? 4 : null), format: String };
+const WEEKS_LINK: LinkCodec<1 | 2 | 4> = { parse: (text) => (text === "1" ? 1 : text === "2" ? 2 : text === "4" ? 4 : null), format: String };
+/** Width of a day column at each window, weekday and weekend, for the table's minimum width (team-board.css, team-week.css). */
+const DAY_WIDTH = { 1: [150, 88], 2: [112, 64], 4: [52, 40] } as const;
+/** The one-time notice that the daily grid moved into Team planner, dismissed per person. */
+const noticeKey = (userId: number) => `tomas-tech-team-planner-notice:${userId}`;
+const HOURS_PER_DAY = 8;
+const SOURCE_LABEL: Record<PlannerDay["source"], string> = { confirmed: "TeamBoard.srcConfirmed", booked: "TeamBoard.srcBooked", plan: "TeamBoard.srcPlan" };
+const SOURCE_NOTE: Record<PlannerDay["source"], string> = { confirmed: "TeamBoard.srcConfirmedNote", booked: "TeamBoard.srcBookedNote", plan: "TeamBoard.srcPlanNote" };
+/** Team planner's summary bar (owner decision 2026-11-23): each figure counts people, or work waiting, and filters by it. */
+const SUMMARY: readonly { key: Attention; label: string; tone: string }[] = [
+  { key: "over", label: "TeamWeek.chipOver", tone: "red" },
+  { key: "overlap", label: "TeamBoard.overlapTime", tone: "amber" },
+  { key: "free", label: "TeamWeek.chipFree", tone: "green" },
+  { key: "pending", label: "TeamWeek.chipPending", tone: "amber" },
+  { key: "leave", label: "TeamWeek.chipLeave", tone: "violet" },
+  { key: "late", label: "TeamBoard.late", tone: "red" },
+  { key: "unassigned", label: "TeamBoard.sumWaiting", tone: "blue" },
+];
 const LAYOUT_LINK = choiceLink(["grid", "gantt"] as const);
 const CATEGORIES: { key: Category; label: string; colour: string }[] = [
   { key: "rfq", label: "TeamBoard.typeRfq", colour: "var(--blue)" },
@@ -156,7 +181,9 @@ function readView(userId: number): "grid" | "gantt" {
 }
 
 const CATEGORY_LINK = optionalChoiceLink<Category>(["rfq", "est", "prj", "appointment", "task", "away"]);
-const ATTENTION_LINK = optionalChoiceLink<Attention>(["late", "unassigned", "over", "overlap"]);
+const ATTENTION_LINK = optionalChoiceLink<Attention>(["late", "unassigned", "over", "overlap", "free", "pending", "leave"]);
+/** The attention chips the list keeps; the rest belong to the planner's summary bar. */
+const LIST_ATTENTION: readonly Attention[] = ["late", "unassigned", "over", "overlap"];
 const LIST_TYPES: Record<Category, string> = {
   rfq: "TeamBoard.listRfq",
   est: "TeamBoard.listEst",
@@ -333,11 +360,14 @@ export function TeamBoard({
   openItem,
   onChanged,
   actionsSlot,
+  queue = null,
+  queueCount = 0,
+  fromOldBoard = false,
 }: {
   bootstrap: BootstrapData;
   notify: (message: string) => void;
   mode: TeamBoardMode;
-  onMode: (mode: Exclude<TeamBoardMode, "actions">) => void;
+  onMode: (mode: TeamBoardMode) => void;
   today: string;
   /** Opens an inquiry, estimate or project the reader may see. */
   openItem: (item: Commitment) => void;
@@ -348,11 +378,36 @@ export function TeamBoard({
    * the board shows its actions above itself; null while the header has not mounted yet.
    */
   actionsSlot?: HTMLElement | null;
+  /** Team planner's side column: the allocation queue (plan rows waiting for people), and how many rows wait in it. */
+  queue?: ReactNode;
+  queueCount?: number;
+  /** Opened from an old daily-grid link (#/resources/board): two weeks, as the grid showed. */
+  fromOldBoard?: boolean;
 }) {
   const { t, lang } = useLanguage();
   const uid = useId();
   const [start, setStart] = useLinkedState("from", mondayOf(today), textLink, { remember: false });
-  const [weeks, setWeeks] = useLinkedState("weeks", 2, WEEKS_LINK);
+  // One week first (owner decision 2026-11-23); two or four as the daily grid showed, remembered per person.
+  const [weeks, setWeeks] = useLinkedState<1 | 2 | 4>("weeks", 1, WEEKS_LINK);
+  const [notice, setNotice] = useState(() => {
+    try {
+      return mode === "board" && window.localStorage.getItem(noticeKey(bootstrap.user.id)) !== "1";
+    } catch {
+      return mode === "board";
+    }
+  });
+  const dismissNotice = () => {
+    setNotice(false);
+    try {
+      window.localStorage.setItem(noticeKey(bootstrap.user.id), "1");
+    } catch {
+      /* A notice seen again is all a blocked storage costs. */
+    }
+  };
+  useEffect(() => {
+    if (fromOldBoard && weeks === 1) setWeeks(2);
+    // oxlint-disable-next-line react/exhaustive-deps -- once, when an old daily-grid link opens the planner.
+  }, []);
   const [data, setData] = useState<TeamBoardData | null>(null);
   const [loading, setLoading] = useState(false),
     [error, setError] = useState("");
@@ -420,6 +475,38 @@ export function TeamBoard({
     return { from: first, to: dateFromDay(dayNumber(first) + 4) };
   }, [days, start, today]);
 
+  // Team planner: the days on show as Team week counts them (hours booked on My week and confirmed); the plan is the board's.
+  const gridFrom = days[0]?.date ?? start,
+    gridTo = days.at(-1)?.date ?? start;
+  const [booked, setBooked] = useState<{ key: string; data: TeamWeekData | null } | null>(null);
+  const bookedFor = useRef("");
+  const loadBooked = useCallback(async () => {
+    if (mode !== "board") return;
+    const key = `${gridFrom}|${gridTo}`;
+    bookedFor.current = key;
+    let value: TeamWeekData | null = null;
+    try {
+      value = await apiRequest<TeamWeekData>(`/api/v1/team-week?from=${gridFrom}&to=${gridTo}`);
+    } catch {
+      // The plan still shows; a notice says the booked and confirmed hours are missing.
+    }
+    if (bookedFor.current === key) setBooked({ key, data: value });
+  }, [mode, gridFrom, gridTo]);
+  useEffect(() => {
+    const timer = setTimeout(() => void loadBooked(), 0);
+    return () => clearTimeout(timer);
+  }, [loadBooked]);
+  const bookedNow = booked?.key === `${gridFrom}|${gridTo}` ? booked : null;
+  const weekDays = useMemo(() => {
+    const map = new Map<string, TeamWeekDay>();
+    for (const row of bookedNow?.data?.rows ?? []) for (const day of row.days) map.set(`${row.userId}|${day.date}`, day);
+    return map;
+  }, [bookedNow]);
+  const refresh = () => {
+    void load();
+    void loadBooked();
+  };
+
   const awayOf = useMemo(() => {
     const spans = new Map<number, { start: string | null; end: string | null }[]>();
     const add = (userId: number | null, from: string | null, to: string | null) => {
@@ -449,7 +536,19 @@ export function TeamBoard({
         const away = (date: string) => awayOf(user.id, date);
         const overlaps = overlapDays(items, range.from, range.to, data.holidays);
         const shown = new Set(days.map((day) => day.date));
+        const plannerDays = days.map((day, index) =>
+          plannerDay({
+            date: day.date,
+            today,
+            planManDays: load[index]?.manDays ?? 0,
+            availableManDays: load[index]?.available ?? 0,
+            awayAllDay: away(day.date),
+            week: weekDays.get(`${user.id}|${day.date}`) ?? null,
+          }),
+        );
         return {
+          days: plannerDays,
+          hours: plannerTotals(plannerDays),
           overlaps,
           overlapOn: new Map(overlaps.filter((day) => shown.has(day.date)).map((day) => [day.date, day])),
           overDates: withOutlook(dailyLoad(items, readDays, capacity, data.holidays), outlookOf)
@@ -466,7 +565,7 @@ export function TeamBoard({
         };
       })
       .sort((a, b) => a.user.department.localeCompare(b.user.department) || a.user.name.localeCompare(b.user.name));
-  }, [bootstrap.team, data, days, week, today, awayOf, range]);
+  }, [bootstrap.team, data, days, week, today, awayOf, range, weekDays]);
   const personById = useMemo(() => new Map(people.map((person) => [person.userId, person])), [people]);
 
   // What falls on each person's day, keyed "userId|date"; 0 is the unassigned row.
@@ -580,47 +679,58 @@ export function TeamBoard({
     setCategory(next);
     setListShown(LIST_PAGE);
   };
+  const sideRef = useRef<HTMLElement>(null);
   const pickAttention = (next: Attention | null) => {
     setAttention(next);
     setListShown(LIST_PAGE);
+    // Waiting for people: the planner's side column holds them.
+    if (next === "unassigned" && mode === "board") {
+      setDayOpen(null);
+      sideRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
   };
+  // The list keeps its four attention chips; the planner's other filters do nothing there.
+  const listAttention = attention !== null && LIST_ATTENTION.includes(attention) ? attention : null;
 
-  // The list: filtered rows, soonest due first, grouped by when they are due.
+  // The list: filtered rows, soonest due first, grouped by when they are due. The planner's Gantt filters people instead.
+  const rowAttention = mode === "list" ? listAttention : null;
   const listRows = scopedRows
     .filter(
       (row) =>
         (!category || row.category === category) &&
-        (attention !== "late" || row.late) &&
-        (attention !== "unassigned" || (row.task !== undefined && !row.ownerIds.length)) &&
-        (attention !== "over" || row.ownerIds.some((id) => overPeople.some((person) => person.userId === id))) &&
-        (attention !== "overlap" || row.ownerIds.some((id) => overlapPeople.some((person) => person.userId === id))),
+        (rowAttention !== "late" || row.late) &&
+        (rowAttention !== "unassigned" || (row.task !== undefined && !row.ownerIds.length)) &&
+        (rowAttention !== "over" || row.ownerIds.some((id) => overPeople.some((person) => person.userId === id))) &&
+        (rowAttention !== "overlap" || row.ownerIds.some((id) => overlapPeople.some((person) => person.userId === id))),
     )
     .sort((a, b) => (a.end ?? a.start ?? "9999").localeCompare(b.end ?? b.start ?? "9999") || a.key.localeCompare(b.key));
 
-  // The grid's people: the team filter, a search on name or team, and the attention chips.
+  // Team planner's filters over the days on show (owner decision 2026-11-23): one summary bar, each figure a filter.
+  const plannerMatch = (person: Person, key: Exclude<Attention, "unassigned">) => (key === "overlap" ? person.overlapOn.size > 0 : key === "late" ? person.late > 0 : person.hours.flags[key]);
+  const plannerCount = (key: Exclude<Attention, "unassigned">) => people.filter((person) => inDepartment(person.userId) && plannerMatch(person, key)).length;
+  // The grid's people: the team filter, a search on name or team, and the summary bar's filter; the busiest first in a team.
+  const byLoad = (a: Person, b: Person) => b.hours.total / Math.max(1, b.hours.capacity) - a.hours.total / Math.max(1, a.hours.capacity) || a.user.name.localeCompare(b.user.name);
   const gridPeople = people.filter(
     (person) =>
       inDepartment(person.userId) &&
       (personId === null || person.userId === personId) &&
       (!query || [person.user.name, person.user.nickname, person.user.department].join(" ").toLocaleLowerCase().includes(query)) &&
-      (attention !== "over" || (person.week.utilisation ?? 0) > 100) &&
-      (attention !== "overlap" || person.overlapOn.size > 0) &&
-      (attention !== "late" || person.late > 0),
+      (attention === null || attention === "unassigned" || plannerMatch(person, attention)),
   );
-  const showPeople = attention !== "unassigned";
-  const showUnassigned = (attention === null || attention === "unassigned") && personId === null && (unassignedTasks.length > 0 || attention === "unassigned");
-  // The summary strip (2026-11-10 mockup): the people on the grid and their week, following the filters and the window.
-  const shownPeople = showPeople ? gridPeople : [];
-  const teamSize = people.filter((person) => inDepartment(person.userId)).length;
-  const weekPlanned = shownPeople.reduce((sum, person) => sum + person.week.manDays, 0);
-  const weekAvailable = shownPeople.reduce((sum, person) => sum + person.week.available, 0);
-  // What a person's bar is measured against: one figure when everyone shown has the same week, otherwise their own.
-  const weekSizes = new Set(shownPeople.map((person) => person.week.available));
-  const weekSize = weekSizes.size === 1 ? [...weekSizes][0]! : null;
+  // The Gantt keeps a row for team tasks nobody has taken yet; the planner's grid lists them beside the table.
+  const showUnassigned = (attention === null || attention === "unassigned") && personId === null && unassignedTasks.length > 0;
+  // Teams folded on the grid (a convenience, not remembered).
+  const [folded, setFolded] = useState<string[]>([]);
+  // A day opened from the grid shows in the side column: bring it into sight when the column sits under the table.
+  useEffect(() => {
+    if (dayOpen) sideRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [dayOpen]);
 
   // Saved changes update the board in place: no full reload after each edit.
   const applyTask = (task: TeamTask | null, removedId?: number) => {
     onChanged?.();
+    // A team task counts in the hours booked: the planner reads them again.
+    void loadBooked();
     setData((current) => {
       if (!current) return current;
       const id = task?.id ?? removedId!;
@@ -664,7 +774,7 @@ export function TeamBoard({
     // A repeat is a task on each of its days: the board reads them.
     if (input.repeat) {
       onChanged?.();
-      await load();
+      await Promise.all([load(), loadBooked()]);
       notify(`${fill(t("TeamBoard.addedRepeat"), { n: saved.count ?? 0 })}${outlook(saved.calendar)}`);
       return;
     }
@@ -677,7 +787,7 @@ export function TeamBoard({
       // A task made to repeat, or the days of a repeat from this one on replaced: the board reads again.
       if (saved.replaced) {
         onChanged?.();
-        await load();
+        await Promise.all([load(), loadBooked()]);
         notify(`${saved.count ? fill(t("TeamBoard.addedRepeat"), { n: saved.count }) : t(message)}${outlook(saved.calendar)}`);
         return null;
       }
@@ -696,7 +806,7 @@ export function TeamBoard({
       // This day of a repeat and every one after it: the board reads again.
       if (scope === "following" && task.seriesId !== null) {
         onChanged?.();
-        await load();
+        await Promise.all([load(), loadBooked()]);
       } else applyTask(null, task.id);
       notify(`${t("TeamBoard.deleted")}${outlook(removed.calendar)}`);
     } catch (failure) {
@@ -824,19 +934,30 @@ export function TeamBoard({
       </span>
     );
   };
-  const cell = (userId: number | null, day: (typeof days)[number], load: DayLoad | null, away: boolean, name: string, overlap?: Overlap) => {
-    const all = (events.get(`${userId ?? 0}|${day.date}`) ?? []).filter((event) => userId !== null || event.kind === "appointment" || event.kind === "task");
+  /** Where a cell's figure comes from: a tick for confirmed hours, a dot for hours booked on My week, a ring for the plan. */
+  const sourceMark = (source: PlannerDay["source"]) => (source === "confirmed" ? <Icon name="check" className="board-src confirmed" /> : <i className={`board-src ${source}`} aria-hidden="true" />);
+  const cell = (person: Person, day: (typeof days)[number], index: number) => {
+    const userId = person.userId,
+      name = person.user.name;
+    const overlap = person.overlapOn.get(day.date);
+    const figure = person.days[index]!;
+    const all = events.get(`${userId}|${day.date}`) ?? [];
     const shown = category ? all.filter((event) => categoryOf(event) === category) : all;
-    // More planned than the day offers: the cell turns red and its MD figure carries a warning.
-    const over = Boolean(load && load.available > 0 && (load.utilisation ?? 0) > 100);
+    // Away all day is hatched; half a day only takes its hours off what the day offers.
+    const away = figure.away >= HOURS_PER_DAY || (figure.capacity === 0 && person.away(day.date));
+    // More than the day offers: the cell turns red and its figure carries a warning.
+    const over = figure.over;
     // Prefixed: a bare "empty" is the app-wide EmptyState box and would turn the cell into a flex column.
     const tone = `tone-${away ? "away" : day.holiday ? "holiday" : day.weekend ? "weekend" : over ? "over" : "blank"}`;
-    const md = load ? fill(t("TeamBoard.dayMd"), { n: fmt(load.manDays) }) : "";
+    const hours = fill(t("TeamBoard.dayHours"), { n: fmt(figure.hours) });
+    const showFigure = figure.hours > 0 || (figure.source === "confirmed" && !day.weekend && !day.holiday);
+    // The day open in the side column is outlined on the grid.
+    const picked = dayOpen?.userId === userId && dayOpen.date === day.date;
     return (
       <td
         key={day.date}
-        className={`board-cell ${tone}${day.today ? " today" : ""}${day.weekStart ? " week-start" : ""}${overlap ? " overlap" : ""}`}
-        title={[...(overlap ? [overlapText(overlap)] : []), ...shown.map((event) => eventLabel(event))].join("\n") || undefined}
+        className={`board-cell ${tone}${day.today ? " today" : ""}${day.weekStart ? " week-start" : ""}${overlap ? " overlap" : ""}${figure.pending ? " pending" : ""}${picked ? " picked" : ""}`}
+        title={[...(overlap ? [overlapText(overlap)] : []), ...(figure.pending ? [t("TeamWeek.unconfirmed")] : []), ...shown.map((event) => eventLabel(event))].join("\n") || undefined}
       >
         {overlap ? (
           <button
@@ -848,17 +969,20 @@ export function TeamBoard({
             title={`${overlapText(overlap)} · ${t("TeamBoard.dayWorkOpen")}`}
           />
         ) : null}
-        {load && !day.holiday && !day.weekend && load.manDays ? (
+        {showFigure ? (
           <button
             type="button"
             className={`board-md${over ? " over" : ""}`}
             data-guide="team.dayWork"
             onClick={() => setDayOpen({ userId, date: day.date })}
             title={t("TeamBoard.dayWorkOpen")}
-            aria-label={[md, pct(load.utilisation), over ? t("TeamBoard.legendOver") : "", t("TeamBoard.dayWorkOpen")].filter(Boolean).join(" · ")}
+            aria-label={[hours, t(SOURCE_LABEL[figure.source]), figure.pending ? t("TeamWeek.unconfirmed") : "", over ? t("TeamBoard.legendOver") : "", t("TeamBoard.dayWorkOpen")]
+              .filter(Boolean)
+              .join(" · ")}
           >
-            {md}
-            {over ? <Icon name="alertTriangle" /> : null}
+            {weeks === 4 ? fmt(figure.hours) : hours}
+            {sourceMark(figure.source)}
+            {over && weeks !== 4 ? <Icon name="alertTriangle" /> : null}
           </button>
         ) : null}
         {shown.slice(0, 2).map((event) => chipOf(event, overlap))}
@@ -868,7 +992,7 @@ export function TeamBoard({
           </button>
         ) : null}
         {/* Last, so the keyboard reaches the day's work first; it covers the empty part of the cell. */}
-        {canAssignOthers || userId === me || userId === null ? (
+        {canAssignOthers || userId === me ? (
           <button
             type="button"
             className="board-cell-add"
@@ -881,41 +1005,45 @@ export function TeamBoard({
       </td>
     );
   };
-  /** A person's week beside their name: planned against available MD, a flag when over or with room, and a bar. */
-  const weekLoad = (week: Person["week"]) => {
-    const use = week.utilisation;
-    const flag =
-      use !== null && use > 100 ? (
-        <span className="board-week-flag over">
-          <Icon name="alertTriangle" />
-          {fill(t("TeamBoard.loadOver"), { n: fmt(week.manDays - week.available) })}
-        </span>
-      ) : use !== null && use <= 60 ? (
-        <span className="board-week-flag free">{fill(t("TeamBoard.loadFree"), { n: fmt(week.available - week.manDays) })}</span>
-      ) : null;
-    // Green up to 60%, blue to 90%, amber to 100%, red over it; the figures above always say the same in words.
-    const tone = use === null ? "slate" : use > 100 ? "red" : use > 90 ? "amber" : use > 60 ? "blue" : "green";
+  /** A person's hours over the days on show, beside their name: against what they can give, a flag when over or with room, and a bar. */
+  const rangeLoad = (person: Person) => {
+    const { total, capacity, flags, pendingDays } = person.hours;
+    const use = capacity > 0 ? (total / capacity) * 100 : total > 0 ? Infinity : null;
+    const flag = flags.over ? (
+      <span className="board-week-flag over">
+        <Icon name="alertTriangle" />
+        {total > capacity ? fill(t("TeamBoard.hoursOver"), { n: fmt(total - capacity) }) : t("TeamBoard.dayOverShort")}
+      </span>
+    ) : flags.free ? (
+      <span className="board-week-flag free">{fill(t("TeamBoard.hoursFree"), { n: fmt(capacity - total) })}</span>
+    ) : null;
+    // Green up to 60%, blue to 90%, amber to 100%, red over it or with a day over; the figures above say the same in words.
+    const tone = use === null ? "slate" : flags.over ? "red" : use > 90 ? "amber" : use > 60 ? "blue" : "green";
     return (
       <>
         <span className="board-week-figures">
-          <b>{fill(t("TeamBoard.weekMd"), { planned: fmt(week.manDays), available: fmt(week.available) })}</b>
+          <b>{fill(t("TeamBoard.hoursOf"), { planned: fmt(total), available: fmt(capacity) })}</b>
           {flag}
         </span>
         <span className="progress board-week-bar" role="img" aria-label={pct(use)}>
           <b className={tone} style={{ width: `${use === null ? 0 : Math.min(100, Math.max(0, use))}%` }} />
         </span>
+        {pendingDays ? <small className="board-week-pending">{fill(t("TeamBoard.pendingDays"), { n: pendingDays })}</small> : null}
       </>
     );
   };
 
   /**
-   * A person's day (owner request 2026-11-06): every piece of work taking their time that day, including plan, RFQ and
-   * estimate work that only shows on the grid on the day it falls due, with what each takes that day, then their site
-   * visits, leave and Outlook meetings. Each opens its work, as a chip does.
+   * A person's day (owner request 2026-11-06), in the planner's side column (2026-11-23): the day's figure and where it
+   * comes from, what they booked on My week, then every piece of work taking their time that day, including plan, RFQ
+   * and estimate work that only shows on the grid on the day it falls due, then their site visits, leave and Outlook
+   * meetings. Each opens its work, as a chip does.
    */
-  const dayDrawer = (open: { userId: number | null; date: string }) => {
-    const person = open.userId === null ? null : (personById.get(open.userId) ?? null);
-    const load = person ? (person.load[days.findIndex((day) => day.date === open.date)] ?? null) : null;
+  const dayPanel = (open: { userId: number; date: string }) => {
+    const person = personById.get(open.userId) ?? null;
+    const index = days.findIndex((day) => day.date === open.date);
+    const figure = person && index >= 0 ? (person.days[index] ?? null) : null;
+    const bookedDay = weekDays.get(`${open.userId}|${open.date}`) ?? null;
     const pieces = dayWork(
       (data?.items ?? []).filter((item) => item.ownerId === open.userId),
       open.date,
@@ -924,126 +1052,177 @@ export function TeamBoard({
     // A day of a repeat (a daily meeting) loads the day but overlaps nothing, as on the grid.
     const overlapping = pieces.filter((piece) => !piece.rows.every((row) => row.item.repeat));
     const overlaps = (piece: (typeof pieces)[number]) => overlapping.length > 1 && overlapping.includes(piece);
-    const others = (events.get(`${open.userId ?? 0}|${open.date}`) ?? []).filter((event) => event.kind === "visit" || event.kind === "leave" || event.kind === "outlook" || event.kind === "away");
+    const others = (events.get(`${open.userId}|${open.date}`) ?? []).filter((event) => event.kind === "visit" || event.kind === "leave" || event.kind === "outlook" || event.kind === "away");
     const typeOf = (item: Commitment) => (item.type === "Task" ? (item.taskKind === "Appointment" ? "appointment" : "task") : itemCategory(item));
     const opener = (item: Commitment) => {
       if (item.type === "Task") {
         const task = data?.tasks.find((entry) => entry.id === item.entityId);
-        return task
-          ? () => {
-              setDayOpen(null);
-              setEditing(task);
-            }
-          : null;
+        return task ? () => setEditing(task) : null;
       }
-      return item.hidden
-        ? null
-        : () => {
-            setDayOpen(null);
-            openItem(item);
-          };
+      return item.hidden ? null : () => openItem(item);
     };
-    const name = person?.user.name ?? t("TeamBoard.unassignedRow");
-    const mayAdd = canAssignOthers || open.userId === me || open.userId === null;
+    const mayAdd = canAssignOthers || open.userId === me;
     return (
-      <Drawer
-        title={`${name} · ${longDate(open.date)}`}
-        onClose={() => setDayOpen(null)}
-        subtitle={load && load.available > 0 ? `${fmt(load.manDays)} / ${fmt(load.available)} MD · ${pct(load.utilisation)}` : undefined}
-        footer={
-          mayAdd ? (
-            <button
-              type="button"
-              className="btn primary"
-              onClick={() => {
-                setDayOpen(null);
-                setAdding({ assigneeId: open.userId, date: open.date });
-              }}
-            >
+      <section className="panel planner-day" aria-labelledby={`${uid}-day`}>
+        <div className="planner-side-head">
+          <div>
+            <h2 id={`${uid}-day`}>{person?.user.name ?? ""}</h2>
+            <p>{longDate(open.date)}</p>
+          </div>
+          <button type="button" className="icon-btn" aria-label={t("TeamBoard.dayClose")} title={t("TeamBoard.dayClose")} onClick={() => setDayOpen(null)}>
+            <Icon name="x" />
+          </button>
+        </div>
+        <div className="planner-side-body">
+          {figure ? (
+            <>
+              <div className={`planner-day-figure${figure.over ? " over" : ""}`}>
+                <strong>{fmt(figure.hours)}</strong>
+                <span>{fill(t("TeamBoard.ofHours"), { n: fmt(figure.capacity) })}</span>
+                <span className="planner-day-source">
+                  {sourceMark(figure.source)}
+                  {t(SOURCE_LABEL[figure.source])}
+                </span>
+              </div>
+              <p className="muted small planner-day-note">{t(SOURCE_NOTE[figure.source])}</p>
+              {figure.pending ? (
+                <div className="callout warning" role="status">
+                  {t("TeamBoard.dayPending")}
+                </div>
+              ) : null}
+            </>
+          ) : null}
+          {bookedDay && bookedDay.booked > 0 ? (
+            <>
+              <h3 className="board-day-head">{t("TeamBoard.dayBooked")}</h3>
+              <ul className="planner-day-booked">
+                {bookedDay.chips.map((chip) => (
+                  <li key={`${chip.kind}-${chip.label}`}>
+                    <span>{CHIP_LABEL[chip.label] ? t(CHIP_LABEL[chip.label]!) : chip.label}</span>
+                    <b>{fill(t("TeamBoard.dayHours"), { n: fmt(chip.hours) })}</b>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+          {overlapping.length > 1 ? (
+            <div className="callout warning board-day-warning" role="status">
+              {fill(t("TeamBoard.dayOverlap"), { n: overlapping.length })}
+            </div>
+          ) : null}
+          {pieces.length ? (
+            <>
+              <h3 className="board-day-head">{t("TeamBoard.dayWork")}</h3>
+              <ul className="board-day-list">
+                {pieces.map((piece) => (
+                  <li key={piece.piece} className={`board-day-piece${overlaps(piece) ? " overlap" : ""}`}>
+                    {piece.rows.map(({ item, perDay, fullDay }) => {
+                      const kind = typeOf(item),
+                        action = opener(item);
+                      const body = (
+                        <>
+                          <span className={`board-type ${kind}`}>{t(LIST_TYPES[kind])}</span>
+                          <strong>{item.hidden ? t("TeamBoard.hiddenWork") : [item.reference, item.title].filter(Boolean).join(" · ")}</strong>
+                          <small>
+                            {[
+                              item.customer,
+                              item.start === (item.end ?? item.start) ? shortDate(item.start) : `${shortDate(item.start)} – ${shortDate(item.end)}`,
+                              perDay !== null ? fill(t("TeamBoard.dayPerDay"), { n: fmt(perDay) }) : t(fullDay ? "TeamBoard.dayFullDay" : "TeamBoard.dayNoEffort"),
+                              item.end && item.end < today ? t("TeamBoard.late") : "",
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </small>
+                        </>
+                      );
+                      return action ? (
+                        <button key={item.key} type="button" className="board-day-item" onClick={action}>
+                          {body}
+                        </button>
+                      ) : (
+                        <div key={item.key} className="board-day-item">
+                          {body}
+                        </div>
+                      );
+                    })}
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+          {others.length ? (
+            <>
+              <h3 className="board-day-head">{t("TeamBoard.dayOther")}</h3>
+              <ul className="board-day-list">
+                {others.map((event) => (
+                  <li key={event.key} className="board-day-piece">
+                    {clickable(event) ? (
+                      <button type="button" className="board-day-item" onClick={() => openEvent(event)}>
+                        <strong>{eventLabel(event)}</strong>
+                        <small>{eventTitle(event)}</small>
+                      </button>
+                    ) : (
+                      <div className="board-day-item">
+                        <strong>{eventLabel(event)}</strong>
+                        <small>{eventTitle(event)}</small>
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+          {!pieces.length && !others.length && !(bookedDay && bookedDay.booked > 0) ? <EmptyState icon="calendar" title="TeamBoard.dayEmpty" message="TeamBoard.dayEmptyHint" /> : null}
+        </div>
+        {mayAdd ? (
+          <div className="planner-side-foot">
+            <button type="button" className="btn primary sm" onClick={() => setAdding({ assigneeId: open.userId, date: open.date })}>
               <Icon name="plus" />
               {t("TeamBoard.dayAdd")}
             </button>
-          ) : undefined
-        }
-      >
-        {overlapping.length > 1 ? (
-          <div className="callout warning board-day-warning" role="status">
-            {fill(t("TeamBoard.dayOverlap"), { n: overlapping.length })}
           </div>
         ) : null}
-        {pieces.length ? (
-          <>
-            <h3 className="board-day-head">{t("TeamBoard.dayWork")}</h3>
-            <ul className="board-day-list">
-              {pieces.map((piece) => (
-                <li key={piece.piece} className={`board-day-piece${overlaps(piece) ? " overlap" : ""}`}>
-                  {piece.rows.map(({ item, perDay, fullDay }) => {
-                    const kind = typeOf(item),
-                      action = opener(item);
-                    const body = (
-                      <>
-                        <span className={`board-type ${kind}`}>{t(LIST_TYPES[kind])}</span>
-                        <strong>{item.hidden ? t("TeamBoard.hiddenWork") : [item.reference, item.title].filter(Boolean).join(" · ")}</strong>
-                        <small>
-                          {[
-                            item.customer,
-                            item.start === (item.end ?? item.start) ? shortDate(item.start) : `${shortDate(item.start)} – ${shortDate(item.end)}`,
-                            perDay !== null ? fill(t("TeamBoard.dayPerDay"), { n: fmt(perDay) }) : t(fullDay ? "TeamBoard.dayFullDay" : "TeamBoard.dayNoEffort"),
-                            item.end && item.end < today ? t("TeamBoard.late") : "",
-                          ]
-                            .filter(Boolean)
-                            .join(" · ")}
-                        </small>
-                      </>
-                    );
-                    return action ? (
-                      <button key={item.key} type="button" className="board-day-item" onClick={action}>
-                        {body}
-                      </button>
-                    ) : (
-                      <div key={item.key} className="board-day-item">
-                        {body}
-                      </div>
-                    );
-                  })}
-                </li>
-              ))}
-            </ul>
-          </>
-        ) : null}
-        {others.length ? (
-          <>
-            <h3 className="board-day-head">{t("TeamBoard.dayOther")}</h3>
-            <ul className="board-day-list">
-              {others.map((event) => (
-                <li key={event.key} className="board-day-piece">
-                  {clickable(event) ? (
-                    <button
-                      type="button"
-                      className="board-day-item"
-                      onClick={() => {
-                        setDayOpen(null);
-                        openEvent(event);
-                      }}
-                    >
-                      <strong>{eventLabel(event)}</strong>
-                      <small>{eventTitle(event)}</small>
-                    </button>
-                  ) : (
-                    <div className="board-day-item">
-                      <strong>{eventLabel(event)}</strong>
-                      <small>{eventTitle(event)}</small>
-                    </div>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </>
-        ) : null}
-        {!pieces.length && !others.length ? <EmptyState icon="calendar" title="TeamBoard.dayEmpty" message="TeamBoard.dayEmptyHint" /> : null}
-      </Drawer>
+      </section>
     );
   };
+  // Beside the table when no day is open: the plan rows waiting for people (the page's queue) and team tasks nobody has taken.
+  const waitingTasks = [...unassignedTasks].sort((a, b) => a.startDate.localeCompare(b.startDate) || a.id - b.id);
+  const sideQueue = (
+    <>
+      {queue}
+      {waitingTasks.length ? (
+        <section className="panel planner-waiting" aria-labelledby={`${uid}-waiting`}>
+          <div className="planner-side-head">
+            <div>
+              <h2 id={`${uid}-waiting`}>{fill(t("TeamBoard.waitingTasks"), { n: waitingTasks.length })}</h2>
+              <p>{t("TeamBoard.unassignedHint")}</p>
+            </div>
+          </div>
+          <ul className="board-day-list planner-side-body">
+            {waitingTasks.map((task) => (
+              <li key={task.id} className="board-day-piece">
+                <button type="button" className="board-day-item" onClick={() => setEditing(task)}>
+                  <span className={`board-type ${task.kind === "Appointment" ? "appointment" : "task"}`}>{t(task.kind === "Appointment" ? "TeamBoard.listAppointment" : "TeamBoard.kindTask")}</span>
+                  <strong>{task.title}</strong>
+                  <small>
+                    {[
+                      task.customer,
+                      task.startDate === task.endDate ? shortDate(task.startDate) : `${shortDate(task.startDate)} – ${shortDate(task.endDate)}`,
+                      timeRange(task),
+                      task.endDate < today ? t("TeamBoard.late") : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </small>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+      {!queue && !waitingTasks.length ? <p className="muted planner-side-empty">{t("TeamBoard.waitingNone")}</p> : null}
+    </>
+  );
 
   // Under a person's bars: the days their work overlaps (amber) and the days it is more than they have (red).
   const personAlerts = (person: Person): GanttAlert[] => [
@@ -1084,19 +1263,17 @@ export function TeamBoard({
   });
   const ganttPeople: GanttPerson[] = [
     ...(showUnassigned ? [{ key: "none", name: t("TeamBoard.unassignedRow"), meta: t("TeamBoard.unassigned"), work: listRows.filter((row) => row.task && !row.ownerIds.length).map(ganttWork) }] : []),
-    ...(showPeople
-      ? gridPeople.map((person) => ({
-          key: String(person.userId),
-          name: person.user.name,
-          meta: [
-            person.user.department,
-            `${fmt(person.week.manDays)} / ${fmt(person.week.available)} MD`,
-            ...(person.overlaps.length ? [fill(t("TeamBoard.overlapDays"), { n: person.overlaps.length })] : []),
-          ].join(" · "),
-          work: listRows.filter((row) => row.ownerIds.includes(person.userId)).map(ganttWork),
-          alerts: personAlerts(person),
-        }))
-      : []),
+    ...gridPeople.map((person) => ({
+      key: String(person.userId),
+      name: person.user.name,
+      meta: [
+        person.user.department,
+        fill(t("TeamBoard.hoursOf"), { planned: fmt(person.hours.total), available: fmt(person.hours.capacity) }),
+        ...(person.overlaps.length ? [fill(t("TeamBoard.overlapDays"), { n: person.overlaps.length })] : []),
+      ].join(" · "),
+      work: listRows.filter((row) => row.ownerIds.includes(person.userId)).map(ganttWork),
+      alerts: personAlerts(person),
+    })),
   ];
 
   /** Copies what is on screen: the day grid as a grid, otherwise the filtered work as a list. Excel and chats take the text; Outlook and Teams the table. */
@@ -1110,9 +1287,11 @@ export function TeamBoard({
               person.user.name,
               person.user.department,
               ...days.map((day, index) => {
-                const load = person.load[index];
+                const figure = person.days[index];
                 const shown = (events.get(`${person.userId}|${day.date}`) ?? []).filter((event) => !category || categoryOf(event) === category);
-                return [day.holiday ? t("TeamBoard.holiday") : load && load.manDays ? pct(load.utilisation) : "", ...shown.map(eventLabel)].filter(Boolean).join(" · ");
+                return [day.holiday ? t("TeamBoard.holiday") : figure && figure.hours ? fill(t("TeamBoard.dayHours"), { n: fmt(figure.hours) }) : "", ...shown.map(eventLabel)]
+                  .filter(Boolean)
+                  .join(" · ");
               }),
             ]),
           ]
@@ -1179,7 +1358,7 @@ export function TeamBoard({
               ? fill(t("TeamBoard.outlookPartial"), { n: result.failed, when: "" })
               : `${t("TeamBoard.outlookError")} ${result.message}`,
       );
-      await load();
+      await Promise.all([load(), loadBooked()]);
     } catch (failure) {
       notify(errorText(failure));
     } finally {
@@ -1194,6 +1373,8 @@ export function TeamBoard({
 
   const groups = new Map<string, Person[]>();
   for (const person of gridPeople) groups.set(person.user.department || "—", [...(groups.get(person.user.department || "—") ?? []), person]);
+  for (const members of groups.values()) members.sort(byLoad);
+  const toggleFold = (group: string) => setFolded(folded.includes(group) ? folded.filter((name) => name !== group) : [...folded, group]);
   const personName = personId === null ? "" : (nameOf.get(personId) ?? "");
   const chip = (key: string, label: string, value: number, active: boolean, onPick: () => void, tone = "", colour?: string) => (
     <button key={key} type="button" className={`board-filter ${tone}${active ? " on" : ""}`} aria-pressed={active} onClick={onPick}>
@@ -1202,21 +1383,44 @@ export function TeamBoard({
     </button>
   );
 
-  // Copy, refresh, Outlook and Add: beside the page title when the page gives them a place.
+  // Outlook and Add beside the page title when the page gives them a place, copy and refresh under More (2026-11-23).
+  const closeMenu = (event: { currentTarget: HTMLElement }) => event.currentTarget.closest("details")?.removeAttribute("open");
   const actions = (
     <>
-      {mode !== "actions" ? (
-        <>
-          <button type="button" className="btn default" disabled={!data} onClick={() => void copyTable()} title={t("TeamBoard.copyTableHint")}>
+      <details className="team-more board-more-actions">
+        <summary className="btn default">
+          <Icon name="more" />
+          {t("TeamBoard.moreActions")}
+          <Icon name="chevronDown" />
+        </summary>
+        <div className="team-more-menu" role="menu">
+          <button
+            type="button"
+            role="menuitem"
+            disabled={!data}
+            onClick={(event) => {
+              closeMenu(event);
+              void copyTable();
+            }}
+            title={t("TeamBoard.copyTableHint")}
+          >
             <Icon name="copy" />
             {t("TeamBoard.copyTable")}
           </button>
-          <button type="button" className="btn default" disabled={loading} onClick={() => void load()}>
+          <button
+            type="button"
+            role="menuitem"
+            disabled={loading}
+            onClick={(event) => {
+              closeMenu(event);
+              refresh();
+            }}
+          >
             <Icon name="refresh" />
             {t("Refresh")}
           </button>
-        </>
-      ) : null}
+        </div>
+      </details>
       {data?.outlookSync && data.outlookSync.state !== "disabled" ? (
         <button type="button" className="btn default" disabled={syncing || data.outlookSync.state === "running"} onClick={() => void syncOutlook()} title={outlookStatusText}>
           <Icon name="calendar" />
@@ -1239,312 +1443,306 @@ export function TeamBoard({
       placeholder={mode === "board" ? "TeamBoard.searchPeople" : "TeamBoard.searchWork"}
     />
   );
-  // A fact in the summary strip that is also the attention filter it counts.
-  const summaryLink = (key: "over" | "overlap") => (
-    <button type="button" className="board-sum-link" aria-pressed={attention === key} onClick={() => pickAttention(attention === key ? null : key)}>
-      {t("TeamBoard.sumSee")}
-    </button>
-  );
 
   return (
     <div className="team-board" ref={boardRef}>
       {actionsSlot === undefined ? <div className="board-actions-row">{actions}</div> : actionsSlot ? createPortal(actions, actionsSlot) : null}
 
-      {mode !== "actions" ? (
-        <>
-          {data && mode === "board" && boardView === "grid" ? (
-            <div className="board-sum" role="group" aria-label={t("TeamBoard.sumLabel")}>
-              <div className="board-sum-item">
-                <span className="board-sum-label">{t("TeamBoard.sumShown")}</span>
-                <span className="board-sum-value">
-                  {shownPeople.length}
-                  <small>{fill(t("TeamBoard.sumShownOf"), { n: teamSize })}</small>
-                </span>
-              </div>
-              <div className="board-sum-item">
-                <span className="board-sum-label">{t("TeamBoard.sumLoad")}</span>
-                <span className="board-sum-value">
-                  {fmt(weekPlanned)}
-                  <small>{fill(t("TeamBoard.sumLoadOf"), { n: fmt(weekAvailable) })}</small>
-                </span>
-              </div>
-              <div className="board-sum-item">
-                <span className="board-sum-label">{t("TeamBoard.sumOver")}</span>
-                <span className={`board-sum-value${counts.over ? " over" : ""}`}>
-                  {counts.over ? <Icon name="alertTriangle" /> : null}
-                  {counts.over}
-                  <small>
-                    {t("TeamBoard.sumPeopleUnit")} · {summaryLink("over")}
-                  </small>
-                </span>
-              </div>
-              <div className="board-sum-item">
-                <span className="board-sum-label">{t("TeamBoard.overlapTime")}</span>
-                <span className={`board-sum-value${counts.overlap ? " overlap" : ""}`}>
-                  {counts.overlap ? <Icon name="alertTriangle" /> : null}
-                  {counts.overlap}
-                  <small>
-                    {t("TeamBoard.sumPeopleUnit")} · {summaryLink("overlap")}
-                  </small>
-                </span>
-              </div>
-            </div>
+      {/* Once per person: the daily grid moved here (owner decision 2026-11-23). */}
+      {mode === "board" && notice ? (
+        <div className="planner-notice" role="status">
+          <Icon name="alertCircle" />
+          <span>{t("TeamBoard.plannerNotice")}</span>
+          {weeks === 1 ? (
+            <button
+              type="button"
+              className="btn default sm"
+              onClick={() => {
+                setWeeks(2);
+                dismissNotice();
+              }}
+            >
+              {t("TeamBoard.plannerNoticeTwo")}
+            </button>
           ) : null}
+          <button type="button" className="btn ghost sm" onClick={dismissNotice}>
+            {t("TeamBoard.plannerNoticeOk")}
+          </button>
+        </div>
+      ) : null}
 
-          {/* Stays at the top of the page while the board scrolls (2026-11-10 mockup). */}
-          <div className="board-toolbar board-sticky" ref={toolbarRef}>
-            {mode === "board" && boardView === "grid" ? (
-              <div className="board-window" role="group" aria-label={t("TeamBoard.window")}>
-                <button type="button" className="icon-btn" aria-label={t("Previous period")} title={t("Previous period")} onClick={() => setStart(dateFromDay(dayNumber(start) - weeks * 7))}>
-                  <Icon name="chevronLeft" />
+      {/* Stays at the top of the page while the board scrolls (2026-11-10 mockup). */}
+      <div className="board-toolbar board-sticky" ref={toolbarRef}>
+        {mode === "board" && boardView === "grid" ? (
+          <div className="board-window" role="group" aria-label={t("TeamBoard.window")}>
+            <button type="button" className="icon-btn" aria-label={t("Previous period")} title={t("Previous period")} onClick={() => setStart(dateFromDay(dayNumber(start) - weeks * 7))}>
+              <Icon name="chevronLeft" />
+            </button>
+            <span className="board-range">
+              {shortDate(days[0]?.date ?? start)} – {yearDate(days.at(-1)?.date ?? start)}
+            </span>
+            <button type="button" className="icon-btn" aria-label={t("Next period")} title={t("Next period")} onClick={() => setStart(dateFromDay(dayNumber(start) + weeks * 7))}>
+              <Icon name="chevronRight" />
+            </button>
+            <button type="button" className="btn default sm" onClick={() => setStart(mondayOf(today))}>
+              {t("Today")}
+            </button>
+            <div className="chip-select" data-guide="team.range">
+              {([1, 2, 4] as const).map((count) => (
+                <button key={count} type="button" className={weeks === count ? "chip on" : "chip"} aria-pressed={weeks === count} onClick={() => setWeeks(count)}>
+                  {t(count === 1 ? "TeamBoard.oneWeek" : count === 2 ? "TeamBoard.twoWeeks" : "TeamBoard.fourWeeks")}
                 </button>
-                <span className="board-range">
-                  {shortDate(days[0]?.date ?? start)} – {yearDate(days.at(-1)?.date ?? start)}
-                </span>
-                <button type="button" className="icon-btn" aria-label={t("Next period")} title={t("Next period")} onClick={() => setStart(dateFromDay(dayNumber(start) + weeks * 7))}>
-                  <Icon name="chevronRight" />
-                </button>
-                <button type="button" className="btn default sm" onClick={() => setStart(mondayOf(today))}>
-                  {t("Today")}
-                </button>
-                <div className="chip-select">
-                  <button type="button" className={weeks === 2 ? "chip on" : "chip"} aria-pressed={weeks === 2} onClick={() => setWeeks(2)}>
-                    {t("TeamBoard.twoWeeks")}
-                  </button>
-                  <button type="button" className={weeks === 4 ? "chip on" : "chip"} aria-pressed={weeks === 4} onClick={() => setWeeks(4)}>
-                    {t("TeamBoard.fourWeeks")}
-                  </button>
-                </div>
-              </div>
-            ) : null}
-            {mode === "board" ? (
-              <div className="chip-select" role="group" aria-label={t("TeamBoard.view")}>
-                <button type="button" className={boardView === "grid" ? "chip on" : "chip"} aria-pressed={boardView === "grid"} onClick={() => pickView("grid")}>
-                  <Icon name="table" />
-                  {t("TeamBoard.viewGrid")}
-                </button>
-                <button type="button" className={boardView === "gantt" ? "chip on" : "chip"} aria-pressed={boardView === "gantt"} onClick={() => pickView("gantt")}>
-                  <Icon name="calendar" />
-                  {t("TeamBoard.viewGantt")}
-                </button>
-              </div>
-            ) : null}
-            {/* On the board the search ends the first row, so the teams and the chips share the rows below; the list has
-            the teams and the search on one row and the chips on their own. */}
-            {mode === "board" ? searchBox : null}
-            <TeamFilter departments={departments} counts={teamCounts} value={teams} onChange={pickTeams} />
-            {mode === "board" ? null : searchBox}
-            <div className={`board-filters${mode === "board" ? "" : " own-row"}`} role="group" aria-label={t("TeamBoard.chips")} data-guide="team.filters">
-              {chip("all", "TeamBoard.all", counts.all, category === null && attention === null, () => {
-                pickCategory(null);
-                pickAttention(null);
-              })}
-              {CATEGORIES.map(({ key, label, colour }) => chip(key, label, counts[key], category === key, () => pickCategory(category === key ? null : key), "", colour))}
-              <span className="board-sep" aria-hidden="true" />
-              {chip("late", "TeamBoard.late", counts.late, attention === "late", () => pickAttention(attention === "late" ? null : "late"), "red")}
-              {chip("unassigned", "TeamBoard.unassigned", counts.unassigned, attention === "unassigned", () => pickAttention(attention === "unassigned" ? null : "unassigned"), "amber")}
-              {chip("over", "TeamBoard.over", counts.over, attention === "over", () => pickAttention(attention === "over" ? null : "over"), "amber")}
-              {chip("overlap", "TeamBoard.overlap", counts.overlap, attention === "overlap", () => pickAttention(attention === "overlap" ? null : "overlap"), "amber")}
-              {personId !== null ? (
-                <button type="button" className="board-filter on" onClick={() => setPersonId(null)}>
-                  {fill(t("TeamBoard.personFilter"), { name: personName })} <Icon name="x" />
-                  <span className="sr-only">{t("TeamBoard.clearPerson")}</span>
-                </button>
-              ) : null}
+              ))}
             </div>
           </div>
+        ) : null}
+        {mode === "board" ? (
+          <div className="chip-select" role="group" aria-label={t("TeamBoard.view")}>
+            <button type="button" className={boardView === "grid" ? "chip on" : "chip"} aria-pressed={boardView === "grid"} onClick={() => pickView("grid")}>
+              <Icon name="table" />
+              {t("TeamBoard.viewGrid")}
+            </button>
+            <button type="button" className={boardView === "gantt" ? "chip on" : "chip"} aria-pressed={boardView === "gantt"} onClick={() => pickView("gantt")}>
+              <Icon name="calendar" />
+              {t("TeamBoard.viewGantt")}
+            </button>
+          </div>
+        ) : null}
+        {/* On the board the search ends the first row, so the teams and the chips share the rows below; the list has
+            the teams and the search on one row and the chips on their own. */}
+        {mode === "board" ? searchBox : null}
+        <TeamFilter departments={departments} counts={teamCounts} value={teams} onChange={pickTeams} />
+        {mode === "board" ? null : searchBox}
+        <div className={`board-filters${mode === "board" ? "" : " own-row"}`} role="group" aria-label={t("TeamBoard.chips")} data-guide="team.filters">
+          {chip("all", "TeamBoard.all", counts.all, category === null && (mode === "board" || listAttention === null), () => {
+            pickCategory(null);
+            if (mode === "list") pickAttention(null);
+          })}
+          {CATEGORIES.map(({ key, label, colour }) => chip(key, label, counts[key], category === key, () => pickCategory(category === key ? null : key), "", colour))}
+          {/* The planner's summary bar holds these for the grid; the list keeps them as chips. */}
+          {mode === "list" ? (
+            <>
+              <span className="board-sep" aria-hidden="true" />
+              {chip("late", "TeamBoard.late", counts.late, listAttention === "late", () => pickAttention(listAttention === "late" ? null : "late"), "red")}
+              {chip("unassigned", "TeamBoard.unassigned", counts.unassigned, listAttention === "unassigned", () => pickAttention(listAttention === "unassigned" ? null : "unassigned"), "amber")}
+              {chip("over", "TeamBoard.over", counts.over, listAttention === "over", () => pickAttention(listAttention === "over" ? null : "over"), "amber")}
+              {chip("overlap", "TeamBoard.overlap", counts.overlap, listAttention === "overlap", () => pickAttention(listAttention === "overlap" ? null : "overlap"), "amber")}
+            </>
+          ) : null}
+          {personId !== null ? (
+            <button type="button" className="board-filter on" onClick={() => setPersonId(null)}>
+              {fill(t("TeamBoard.personFilter"), { name: personName })} <Icon name="x" />
+              <span className="sr-only">{t("TeamBoard.clearPerson")}</span>
+            </button>
+          ) : null}
+        </div>
+      </div>
 
-          {error ? (
-            <div className="callout danger" role="alert">
-              {error}{" "}
-              <button type="button" className="btn ghost sm" onClick={() => void load()}>
-                {t("Refresh")}
+      {/* Team planner's summary bar (owner decision 2026-11-23): each figure is the filter it counts. */}
+      {data && mode === "board" ? (
+        <div className="board-sum planner-sum" role="group" aria-label={t("TeamBoard.sumLabel")} data-guide="teamweek.chips">
+          {SUMMARY.map(({ key, label, tone }) => {
+            const value = key === "unassigned" ? queueCount + unassignedTasks.length : plannerCount(key);
+            const on = attention === key;
+            return (
+              <button key={key} type="button" className={`board-sum-item planner-sum-item${on ? " on" : ""}`} aria-pressed={on} onClick={() => pickAttention(on ? null : key)}>
+                <span className="board-sum-label">
+                  <i className={tone} aria-hidden="true" />
+                  {t(label)}
+                </span>
+                <span className={`board-sum-value${value ? ` ${tone}` : " none"}`}>
+                  {value}
+                  <small>{t(key === "unassigned" ? "TeamBoard.sumWorkUnit" : "TeamBoard.sumPeopleUnit")}</small>
+                </span>
               </button>
-            </div>
-          ) : null}
-          {data?.warnings.length ? (
-            <div className="callout warning" role="status">
-              {t("Workload.schedulesSkipped")}: {data.warnings.join(", ")}
-            </div>
-          ) : null}
-          {data?.outlookSync && ["denied", "error", "partial"].includes(data.outlookSync.state) ? (
-            <div className="callout warning" role="status">
-              {outlookStatusText}
-            </div>
-          ) : null}
-
-          {!data ? (
-            <div className="panel">
-              <div className="empty">
-                {loading ? (
-                  <>
-                    <span className="spinner" />
-                    {t("Loading from SQL Server…")}
-                  </>
-                ) : null}
-              </div>
-            </div>
-          ) : mode === "board" && boardView === "gantt" ? (
-            <section className="panel board-panel">
-              <TeamBoardGantt people={ganttPeople} today={today} />
-            </section>
-          ) : mode === "board" ? (
-            <section className="panel board-panel" aria-labelledby={`${uid}-board`}>
-              <div className="panel-head board-panel-head">
-                <div>
-                  <h2 id={`${uid}-board`}>{t("TeamBoard.person")}</h2>
-                  <p>{weekSize !== null ? fill(t("TeamBoard.boardSub"), { n: fmt(weekSize) }) : t("TeamBoard.boardSubMixed")}</p>
-                </div>
-                <div className="panel-actions board-panel-legend">
-                  <span>
-                    <i className="over" aria-hidden="true" />
-                    {t("TeamBoard.legendDayOver")}
-                  </span>
-                  <span>
-                    <Icon name="alertTriangle" />
-                    {t("TeamBoard.overlapTime")}
-                  </span>
-                </div>
-              </div>
-              <div className="board-scroll">
-                <table className={`board-grid weeks-${weeks}`} style={{ minWidth: 350 + days.reduce((sum, day) => sum + (weeks === 2 ? (day.weekend ? 64 : 112) : day.weekend ? 40 : 52), 0) }}>
-                  <colgroup>
-                    <col className="board-who-col" />
-                    <col className="board-week-col" />
-                    {days.map((day) => (
-                      <col key={day.date} className={day.weekend ? "weekend" : undefined} />
-                    ))}
-                  </colgroup>
-                  <thead>
-                    <tr>
-                      <th scope="col" className="board-who">
-                        {t("TeamBoard.colMember")}
-                      </th>
-                      <th scope="col" className="board-week">
-                        {t("TeamBoard.colLoad")}
-                      </th>
-                      {days.map((day) => (
-                        <th
-                          key={day.date}
-                          scope="col"
-                          className={`board-day${day.today ? " today" : ""}${day.holiday ? " holiday" : ""}${day.weekend ? " weekend" : ""}${day.weekStart ? " week-start" : ""}`}
-                        >
-                          <b>
-                            {weekdayOf(day.date, weeks === 4 && day.weekend)}
-                            {day.today ? <em>{t("TeamBoard.today")}</em> : day.holiday ? <em>{t("TeamBoard.holiday")}</em> : null}
-                          </b>
-                          <span>{weeks === 4 && day.weekend ? dayOnly(day.date) : shortDate(day.date)}</span>
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {showUnassigned ? (
-                      <>
-                        <tr className="board-group">
-                          <th colSpan={2} scope="colgroup">
-                            {t("TeamBoard.unassigned")} · {unassignedTasks.length}
-                          </th>
-                          <td colSpan={days.length} />
-                        </tr>
-                        <tr className="board-unassigned">
-                          <th scope="row" className="board-who">
-                            <span className="board-person">
-                              <span className="board-avatar warn" aria-hidden="true">
-                                ?
-                              </span>
-                              <span>
-                                <strong>{t("TeamBoard.unassignedRow")}</strong>
-                                <small>{t("TeamBoard.unassignedHint")}</small>
-                              </span>
-                            </span>
-                          </th>
-                          <td className="board-week" />
-                          {days.map((day) => cell(null, day, null, false, t("TeamBoard.unassigned")))}
-                        </tr>
-                      </>
-                    ) : null}
-                    {showPeople
-                      ? [...groups].map(([group, members]) => (
-                          <GroupRows key={group} label={`${group} · ${members.length}`} span={days.length + 2} pinned>
-                            {members.map((person) => (
-                              <tr key={person.userId}>
-                                <th scope="row" className="board-who">
-                                  <button
-                                    type="button"
-                                    className="board-person"
-                                    onClick={() => {
-                                      setPersonId(person.userId);
-                                      onMode("list");
-                                    }}
-                                  >
-                                    <span className="board-avatar" aria-hidden="true">
-                                      {initials(person.user.name)}
-                                    </span>
-                                    <span>
-                                      <strong>{person.user.name}</strong>
-                                      <small className="board-person-meta">{[person.user.department, person.user.role].filter(Boolean).join(" · ")}</small>
-                                      {person.awayDays ? <small>{fill(t("TeamBoard.awayDays"), { n: person.awayDays })}</small> : null}
-                                      {person.overlapOn.size ? <small className="board-overlap-note">{fill(t("TeamBoard.overlapDays"), { n: person.overlapOn.size })}</small> : null}
-                                    </span>
-                                  </button>
-                                </th>
-                                <td className="board-week">{weekLoad(person.week)}</td>
-                                {days.map((day, index) => cell(person.userId, day, person.load[index] ?? null, person.away(day.date), person.user.name, person.overlapOn.get(day.date)))}
-                              </tr>
-                            ))}
-                          </GroupRows>
-                        ))
-                      : null}
-                    {showPeople && !gridPeople.length ? (
-                      <tr>
-                        <td colSpan={days.length + 2}>
-                          <EmptyState icon="users" title="Nobody matches the filter" message="Clear the department or search filter to see the team again." />
-                        </td>
-                      </tr>
-                    ) : null}
-                  </tbody>
-                </table>
-              </div>
-              <div className="board-legend">
-                <span>{fill(t("TeamBoard.shownPeople"), { n: shownPeople.length })}</span>
-                <span>
-                  <i className="overlap" />
-                  {t("TeamBoard.legendOverlap")}
-                </span>
-                <span>
-                  <i className="away" />
-                  {t("TeamBoard.legendAway")}
-                </span>
-                <span>
-                  <i className="outlook" />
-                  {t("TeamBoard.legendOutlook")}
-                </span>
-                <span className="muted">{t("TeamBoard.legendHint")}</span>
-              </div>
-            </section>
-          ) : (
-            <WorkList
-              rows={listRows}
-              shown={listShown}
-              onMore={() => setListShown((n) => n + LIST_PAGE)}
-              today={today}
-              bootstrap={bootstrap}
-              nameOf={nameOf}
-              shortDate={shortDate}
-              lateDays={lateDays}
-              canChange={canChange}
-              assignable={assignable}
-              onUpdate={update}
-              onEdit={setEditing}
-              onCopy={copyTask}
-              openItem={openItem}
-              onExpand={(draft) => setAdding({ assigneeId: null, date: draft.startDate || today, draft })}
-            />
-          )}
-          <p className="workload-method">{t("TeamBoard.method")}</p>
-        </>
+            );
+          })}
+        </div>
       ) : null}
+
+      {error ? (
+        <div className="callout danger" role="alert">
+          {error}{" "}
+          <button type="button" className="btn ghost sm" onClick={refresh}>
+            {t("Refresh")}
+          </button>
+        </div>
+      ) : null}
+      {mode === "board" && bookedNow && !bookedNow.data ? (
+        <div className="callout warning" role="status">
+          {t("TeamBoard.bookedFailed")}
+        </div>
+      ) : null}
+      {data?.warnings.length ? (
+        <div className="callout warning" role="status">
+          {t("Workload.schedulesSkipped")}: {data.warnings.join(", ")}
+        </div>
+      ) : null}
+      {data?.outlookSync && ["denied", "error", "partial"].includes(data.outlookSync.state) ? (
+        <div className="callout warning" role="status">
+          {outlookStatusText}
+        </div>
+      ) : null}
+
+      {!data ? (
+        <div className="panel">
+          <div className="empty">
+            {loading ? (
+              <>
+                <span className="spinner" />
+                {t("Loading from SQL Server…")}
+              </>
+            ) : null}
+          </div>
+        </div>
+      ) : mode === "board" ? (
+        <div className="planner-body">
+          <div className="planner-main">
+            {boardView === "gantt" ? (
+              <section className="panel board-panel">
+                <TeamBoardGantt people={ganttPeople} today={today} />
+              </section>
+            ) : (
+              <section className="panel board-panel" aria-labelledby={`${uid}-board`} data-guide="teamweek.table">
+                <div className="panel-head board-panel-head">
+                  <div>
+                    <h2 id={`${uid}-board`}>{t("TeamBoard.person")}</h2>
+                    <p>{t("TeamBoard.plannerSub")}</p>
+                  </div>
+                  <div className="panel-actions board-panel-legend">
+                    {(["confirmed", "booked", "plan"] as const).map((source) => (
+                      <span key={source}>
+                        {sourceMark(source)}
+                        {t(SOURCE_LABEL[source])}
+                      </span>
+                    ))}
+                    <span>
+                      <i className="pending" aria-hidden="true" />
+                      {t("TeamWeek.unconfirmed")}
+                    </span>
+                    <span>
+                      <i className="over" aria-hidden="true" />
+                      {t("TeamBoard.legendDayOver")}
+                    </span>
+                  </div>
+                </div>
+                <div className="board-scroll">
+                  <table className={`board-grid weeks-${weeks}`} style={{ minWidth: 350 + days.reduce((sum, day) => sum + DAY_WIDTH[weeks][day.weekend ? 1 : 0], 0) }}>
+                    <colgroup>
+                      <col className="board-who-col" />
+                      <col className="board-week-col" />
+                      {days.map((day) => (
+                        <col key={day.date} className={day.weekend ? "weekend" : undefined} />
+                      ))}
+                    </colgroup>
+                    <thead>
+                      <tr>
+                        <th scope="col" className="board-who">
+                          {t("TeamBoard.colMember")}
+                        </th>
+                        <th scope="col" className="board-week">
+                          {t("TeamBoard.colLoad")}
+                        </th>
+                        {days.map((day) => (
+                          <th
+                            key={day.date}
+                            scope="col"
+                            className={`board-day${day.today ? " today" : ""}${day.holiday ? " holiday" : ""}${day.weekend ? " weekend" : ""}${day.weekStart ? " week-start" : ""}`}
+                          >
+                            <b>
+                              {weekdayOf(day.date, weeks === 4 && day.weekend)}
+                              {day.today ? <em>{t("TeamBoard.today")}</em> : day.holiday ? <em>{t("TeamBoard.holiday")}</em> : null}
+                            </b>
+                            <span>{weeks === 4 && day.weekend ? dayOnly(day.date) : shortDate(day.date)}</span>
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[...groups].map(([group, members]) => (
+                        <GroupRows key={group} label={`${group} · ${members.length}`} span={days.length + 2} pinned open={!folded.includes(group)} onToggle={() => toggleFold(group)}>
+                          {members.map((person) => (
+                            <tr key={person.userId}>
+                              <th scope="row" className="board-who">
+                                <button
+                                  type="button"
+                                  className="board-person"
+                                  onClick={() => {
+                                    setPersonId(person.userId);
+                                    onMode("list");
+                                  }}
+                                >
+                                  <span className="board-avatar" aria-hidden="true">
+                                    {initials(person.user.name)}
+                                  </span>
+                                  <span>
+                                    <strong>{person.user.name}</strong>
+                                    <small className="board-person-meta">{[person.user.department, person.user.role].filter(Boolean).join(" · ")}</small>
+                                    {person.awayDays ? <small>{fill(t("TeamBoard.awayDays"), { n: person.awayDays })}</small> : null}
+                                    {person.overlapOn.size ? <small className="board-overlap-note">{fill(t("TeamBoard.overlapDays"), { n: person.overlapOn.size })}</small> : null}
+                                  </span>
+                                </button>
+                              </th>
+                              <td className="board-week">{rangeLoad(person)}</td>
+                              {days.map((day, index) => cell(person, day, index))}
+                            </tr>
+                          ))}
+                        </GroupRows>
+                      ))}
+                      {!gridPeople.length ? (
+                        <tr>
+                          <td colSpan={days.length + 2}>
+                            <EmptyState icon="users" title="Nobody matches the filter" message="Clear the department or search filter to see the team again." />
+                          </td>
+                        </tr>
+                      ) : null}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="board-legend">
+                  <span>{fill(t("TeamBoard.shownPeople"), { n: gridPeople.length })}</span>
+                  <span>
+                    <i className="overlap" />
+                    {t("TeamBoard.legendOverlap")}
+                  </span>
+                  <span>
+                    <i className="away" />
+                    {t("TeamBoard.legendAway")}
+                  </span>
+                  <span>
+                    <i className="outlook" />
+                    {t("TeamBoard.legendOutlook")}
+                  </span>
+                  <span className="muted">{t("TeamBoard.legendHint")}</span>
+                </div>
+              </section>
+            )}
+          </div>
+          {/* Beside the table: the day opened from the grid, otherwise the work waiting for people. */}
+          <aside className={`planner-side${attention === "unassigned" ? " on" : ""}`} ref={sideRef} aria-label={t("TeamBoard.sideLabel")}>
+            {dayOpen && dayOpen.userId !== null ? dayPanel({ userId: dayOpen.userId, date: dayOpen.date }) : sideQueue}
+          </aside>
+        </div>
+      ) : (
+        <WorkList
+          rows={listRows}
+          shown={listShown}
+          onMore={() => setListShown((n) => n + LIST_PAGE)}
+          today={today}
+          bootstrap={bootstrap}
+          nameOf={nameOf}
+          shortDate={shortDate}
+          lateDays={lateDays}
+          canChange={canChange}
+          assignable={assignable}
+          onUpdate={update}
+          onEdit={setEditing}
+          onCopy={copyTask}
+          openItem={openItem}
+          onExpand={(draft) => setAdding({ assigneeId: null, date: draft.startDate || today, draft })}
+        />
+      )}
+      <p className="workload-method">{t(mode === "board" ? "TeamBoard.plannerMethod" : "TeamBoard.method")}</p>
 
       {adding ? (
         <AddTaskModal
@@ -1565,7 +1763,6 @@ export function TeamBoard({
           }}
         />
       ) : null}
-      {dayOpen ? dayDrawer(dayOpen) : null}
       {editing ? (
         <TaskDrawer
           task={editing}
@@ -1618,14 +1815,24 @@ function TeamFilter({ departments, counts, value, onChange }: { departments: str
   );
 }
 
-/** A band naming the rows under it. `pinned` (the day grid): the name sits over the two pinned columns and stays in sight. */
-function GroupRows({ label, span, pinned = false, children }: { label: string; span: number; pinned?: boolean; children: ReactNode }) {
+/**
+ * A band naming the rows under it. `pinned` (the day grid): the name sits over the two pinned columns and stays in sight;
+ * with `onToggle` the name folds the team's rows away and back (Team planner, 2026-11-23).
+ */
+function GroupRows({ label, span, pinned = false, open = true, onToggle, children }: { label: string; span: number; pinned?: boolean; open?: boolean; onToggle?: () => void; children: ReactNode }) {
   return (
     <>
       {pinned ? (
         <tr className="board-group">
           <th colSpan={2} scope="colgroup">
-            {label}
+            {onToggle ? (
+              <button type="button" className={`board-group-toggle${open ? " open" : ""}`} aria-expanded={open} onClick={onToggle}>
+                <Icon name="chevronRight" />
+                {label}
+              </button>
+            ) : (
+              label
+            )}
           </th>
           <td colSpan={span - 2} />
         </tr>
@@ -1636,7 +1843,7 @@ function GroupRows({ label, span, pinned = false, children }: { label: string; s
           </th>
         </tr>
       )}
-      {children}
+      {open ? children : null}
     </>
   );
 }
