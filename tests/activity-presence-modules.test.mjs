@@ -9,9 +9,9 @@ const source = (path) => readFile(new URL(path, root), "utf8");
 /** The presence endpoint's module allowlist. */
 async function acceptedModules() {
   const route = await source("backend-node/src/routes/activity.ts");
-  const allowlist = /const modules=new Set\(\[([\s\S]*?)\]\);/.exec(route);
+  const allowlist = /const modules\s*=\s*new Set\(\[([\s\S]*?)\]\);/.exec(route);
   assert.ok(allowlist, "presence module allowlist not found");
-  return new Set([...allowlist[1].matchAll(/'([a-z-]+)'/g)].map((match) => match[1]));
+  return new Set([...allowlist[1].matchAll(/["']([a-z-]+)["']/g)].map((match) => match[1]));
 }
 
 /** Every .ts/.tsx file under app/, relative to the repo root. */
@@ -19,7 +19,7 @@ async function appFiles(dir = "app") {
   const files = [];
   for (const entry of await readdir(new URL(dir, root), { withFileTypes: true })) {
     const path = `${dir}/${entry.name}`;
-    if (entry.isDirectory()) files.push(...await appFiles(path));
+    if (entry.isDirectory()) files.push(...(await appFiles(path)));
     else if (/\.tsx?$/.test(entry.name)) files.push(path);
   }
   return files;
@@ -29,7 +29,8 @@ async function appFiles(dir = "app") {
 function subViewArguments(text) {
   const result = [];
   for (const match of text.matchAll(/(?<!function )useActivitySubView\(/g)) {
-    let depth = 1, at = match.index + match[0].length;
+    let depth = 1,
+      at = match.index + match[0].length;
     const start = at;
     for (; at < text.length && depth > 0; at++) depth += text[at] === "(" ? 1 : text[at] === ")" ? -1 : 0;
     result.push(text.slice(start, at - 1));
@@ -60,19 +61,18 @@ function unionMembers(text, alias) {
 }
 
 test("every navigable view is a module the presence endpoint accepts", async () => {
-  const [shell, crm, route] = await Promise.all([
-    source("app/system/ProductionApp.tsx"),
-    source("app/system/production/CrmScreens.tsx"),
-    source("backend-node/src/routes/activity.ts"),
-  ]);
+  const [shell, crm, route] = await Promise.all([source("app/system/ProductionApp.tsx"), source("app/system/production/CrmScreens.tsx"), source("backend-node/src/routes/activity.ts")]);
   // The shell reports its current view as the presence module on every navigation.
   assert.match(shell, /useActivityPresence\(bootstrap\?\.user\.id, view,/);
   const views = [...unionMembers(shell, "View"), ...unionMembers(crm, "CrmView")];
-  const allowlist = /const modules=new Set\(\[([\s\S]*?)\]\);/.exec(route);
+  const allowlist = /const modules\s*=\s*new Set\(\[([\s\S]*?)\]\);/.exec(route);
   assert.ok(allowlist, "presence module allowlist not found");
-  const accepted = new Set([...allowlist[1].matchAll(/'([a-z-]+)'/g)].map((match) => match[1]));
+  const accepted = new Set([...allowlist[1].matchAll(/["']([a-z-]+)["']/g)].map((match) => match[1]));
   // A view missing here answers 400 and the client drops the error, so that page never counts.
-  assert.deepEqual(views.filter((view) => !accepted.has(view)), []);
+  assert.deepEqual(
+    views.filter((view) => !accepted.has(view)),
+    [],
+  );
 });
 
 test("every sub-view a screen reports is accepted, named after its parent view and labelled", async () => {
@@ -84,19 +84,38 @@ test("every sub-view a screen reports is accepted, named after its parent view a
     for (const argument of subViewArguments(text)) used.push(...subViewKeys(argument, file, text).map((key) => ({ key, file })));
   }
   // A key missing from the allowlist answers 400, so that tab would silently never count.
-  assert.deepEqual(used.filter(({ key }) => !accepted.has(key)), []);
-  // The approved Projects and Team overview tabs; Team overview keys follow its real tab ids (board, list, workload, tasks).
+  assert.deepEqual(
+    used.filter(({ key }) => !accepted.has(key)),
+    [],
+  );
+  // The approved Projects and Team overview tabs; Team overview keys follow its real tab ids (week, board, list, workload, tasks).
   const subViews = [...accepted].filter((key) => !views.has(key) && /^(projects|resources)-/.test(key));
-  assert.deepEqual(subViews.sort(), ["projects-portfolio", "projects-punchlist", "projects-schedule", "projects-timeline", "resources-board", "resources-list", "resources-tasks", "resources-workload"]);
+  assert.deepEqual(subViews.sort(), [
+    "projects-portfolio",
+    "projects-punchlist",
+    "projects-schedule",
+    "projects-timeline",
+    "resources-board",
+    "resources-list",
+    "resources-tasks",
+    "resources-week",
+    "resources-workload",
+  ]);
   const resourceTabs = tabIds(await source("app/system/production/ResourcePlanningScreen.tsx"));
-  assert.deepEqual(subViews.filter((key) => key.startsWith("resources-")).map((key) => key.slice("resources-".length)).sort(), [...resourceTabs].sort());
+  assert.deepEqual(
+    subViews
+      .filter((key) => key.startsWith("resources-"))
+      .map((key) => key.slice("resources-".length))
+      .sort(),
+    [...resourceTabs].sort(),
+  );
   for (const key of subViews) {
     const parent = key.slice(0, key.indexOf("-"));
     // useActivityPresence reports a sub-view only while its parent view is open.
     assert.ok(views.has(parent), `${key}: parent view ${parent} is not a navigable view`);
     // Team Activity shows a readable label and rolls the key up to its parent.
-    assert.match(labels, new RegExp(`'${key}':'[^']+'`), `${key} has no activityModuleLabels entry`);
-    assert.match(labels, new RegExp(`'${key}':\\{parent:'${parent}',label:'[^']+'\\}`), `${key} does not roll up to ${parent}`);
+    assert.match(labels, new RegExp(`["']${key}["']:\\s*["'][^"']+["']`), `${key} has no activityModuleLabels entry`);
+    assert.match(labels, new RegExp(`["']${key}["']:\\s*\\{\\s*parent:\\s*["']${parent}["'],\\s*label:\\s*["'][^"']+["'],?\\s*\\}`), `${key} does not roll up to ${parent}`);
   }
 });
 
@@ -107,35 +126,92 @@ test("every sub-view a screen reports is accepted, named after its parent view a
  */
 async function presenceHarness() {
   const code = ts.transpileModule(await source("app/system/use-activity-presence.ts"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
-  const writes = [], queue = [], ref = { current: { at: 0, module: "", user: 0, page: "" } }, timers = new Map();
-  let notifications = 0, subscribed = false, snapshot, clock = 0, nextTimer = 1, presenceDeps, presenceCleanup;
+  const writes = [],
+    queue = [],
+    ref = { current: { at: 0, module: "", user: 0, page: "" } },
+    timers = new Map();
+  let notifications = 0,
+    subscribed = false,
+    snapshot,
+    clock = 0,
+    nextTimer = 1,
+    presenceDeps,
+    presenceCleanup;
   const react = {
     useRef: () => ref,
-    useEffect: (effect, deps) => { queue.push({ effect, deps }); },
+    useEffect: (effect, deps) => {
+      queue.push({ effect, deps });
+    },
     useSyncExternalStore(subscribe, getSnapshot) {
-      if (!subscribed) { subscribe(() => { notifications++; }); subscribed = true; }
+      if (!subscribed) {
+        subscribe(() => {
+          notifications++;
+        });
+        subscribed = true;
+      }
       snapshot = getSnapshot();
       return snapshot;
     },
   };
-  const setTimeout = (callback, ms) => { const id = nextTimer++; timers.set(id, { callback, at: clock + ms }); return id; };
-  const clearTimeout = (id) => { timers.delete(id); };
+  const setTimeout = (callback, ms) => {
+    const id = nextTimer++;
+    timers.set(id, { callback, at: clock + ms });
+    return id;
+  };
+  const clearTimeout = (id) => {
+    timers.delete(id);
+  };
   const listeners = new Map();
-  const target = { addEventListener(type, listener) { listeners.set(type, listener); }, removeEventListener(type, listener) { if (listeners.get(type) === listener) listeners.delete(type); } };
+  const target = {
+    addEventListener(type, listener) {
+      listeners.set(type, listener);
+    },
+    removeEventListener(type, listener) {
+      if (listeners.get(type) === listener) listeners.delete(type);
+    },
+  };
   const document = { ...target, visibilityState: "visible" };
   const exports = {};
-  new Function("require", "module", "exports", "document", "window", "setTimeout", "clearTimeout", code)((name) => {
-    if (name === "react") return react;
-    // A page open reads "presence:<module>"; a ping that must never log a page reads "ping:<module>".
-    if (name === "./activity-client") return { activityWrite: async (path, body) => { writes.push(`${body.page === true ? path : body.page === false ? "ping" : "unflagged"}:${body.module}`); } };
-    throw new Error(`Unexpected import ${name}`);
-  }, { exports }, exports, document, target, setTimeout, clearTimeout);
+  new Function("require", "module", "exports", "document", "window", "setTimeout", "clearTimeout", code)(
+    (name) => {
+      if (name === "react") return react;
+      // A page open reads "presence:<module>"; a ping that must never log a page reads "ping:<module>".
+      if (name === "./activity-client")
+        return {
+          activityWrite: async (path, body) => {
+            writes.push(`${body.page === true ? path : body.page === false ? "ping" : "unflagged"}:${body.module}`);
+          },
+        };
+      throw new Error(`Unexpected import ${name}`);
+    },
+    { exports },
+    exports,
+    document,
+    target,
+    setTimeout,
+    clearTimeout,
+  );
   /** Run queued effects child-first and return their cleanups in render order. */
-  const flush = () => queue.splice(0).map(({ effect }, index) => ({ index, effect })).reverse().map(({ index, effect }) => ({ index, cleanup: effect() })).sort((a, b) => a.index - b.index).map(({ cleanup }) => cleanup);
+  const flush = () =>
+    queue
+      .splice(0)
+      .map(({ effect }, index) => ({ index, effect }))
+      .reverse()
+      .map(({ index, effect }) => ({ index, cleanup: effect() }))
+      .sort((a, b) => a.index - b.index)
+      .map(({ cleanup }) => cleanup);
   return {
-    hooks: exports, writes, ref, document, notifications: () => notifications, renderedSnapshot: () => snapshot, pendingTimers: () => timers.size,
+    hooks: exports,
+    writes,
+    ref,
+    document,
+    notifications: () => notifications,
+    renderedSnapshot: () => snapshot,
+    pendingTimers: () => timers.size,
     /** Dispatch a window/document event to the presence listener. */
-    fire(type, event = { isTrusted: true }) { listeners.get(type)?.(event); },
+    fire(type, event = { isTrusted: true }) {
+      listeners.get(type)?.(event);
+    },
     /** Let in-flight writes finish, which releases the hook's one-request-at-a-time guard. */
     settle: () => new Promise((resolve) => setImmediate(resolve)),
     /** The shell renders, then (optionally) a screen with a sub-view; one commit. Returns the screen's unmount. */
@@ -145,12 +221,18 @@ async function presenceHarness() {
       if (key !== undefined) exports.useActivitySubView(key);
       // React skips an effect whose deps did not change; otherwise the old run cleans up before any new effect runs.
       const rerun = !presenceDeps || presence.deps.some((dep, index) => !Object.is(dep, presenceDeps[index]));
-      if (rerun) { presenceCleanup?.(); presenceDeps = presence.deps; }
+      if (rerun) {
+        presenceCleanup?.();
+        presenceDeps = presence.deps;
+      }
       const cleanups = flush();
       if (rerun) presenceCleanup = presence.effect();
       return cleanups[0];
     },
-    mount(key) { exports.useActivitySubView(key); return flush()[0]; },
+    mount(key) {
+      exports.useActivitySubView(key);
+      return flush()[0];
+    },
     /** Advance the fake clock, firing due timers in order. */
     advance(ms) {
       clock += ms;
@@ -235,7 +317,7 @@ test("only views whose screens report sub-views hold a page open, and only while
   const views = new Set(unionMembers(shell, "View"));
   const parentOf = (key) => key.slice(0, key.indexOf("-"));
   const allowlistParents = new Set([...accepted].filter((key) => !views.has(key) && views.has(parentOf(key))).map(parentOf));
-  const labelParents = new Set([...labels.matchAll(/\{parent:'([a-z-]+)'/g)].map((match) => match[1]));
+  const labelParents = new Set([...labels.matchAll(/\{\s*parent:\s*["']([a-z-]+)["']/g)].map((match) => match[1]));
   assert.deepEqual([...hooks.activitySubViewParents].sort(), [...allowlistParents].sort());
   assert.deepEqual([...hooks.activitySubViewParents].sort(), [...labelParents].sort());
 });

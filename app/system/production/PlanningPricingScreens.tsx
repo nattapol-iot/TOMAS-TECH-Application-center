@@ -944,6 +944,9 @@ type MyWorkProgressInput = {
 type MyWorkFilter = "attention" | "open" | "late" | "blocked" | "week" | "waiting";
 type MyWorkSort = "priority" | "due" | "project";
 type MyWorkTab = "week" | "new" | "active" | "queue" | "updates";
+/** My Work's three tabs (owner design 2026-11-23); new, active work and the work order sit under "Assigned to me". */
+type MyWorkTop = "week" | "assigned" | "updates";
+const ASSIGNED_TABS: readonly MyWorkTab[] = ["active", "new", "queue"];
 type MyWorkSource = "all" | "crm" | "estimate" | "project" | "service" | "personal";
 type ScheduleWorkGroup = {
   key: string;
@@ -1475,6 +1478,10 @@ export function ProductionMyWork({
   const [personalTaskFor, setPersonalTaskFor] = useState<{ parentId: number | null } | null>(null);
   const [taskFilter, setTaskFilter] = useState<MyWorkFilter>("open");
   const [sourceFilter, setSourceFilter] = useState<MyWorkSource>("all");
+  const pickTab = (nextTab: MyWorkTab) => {
+    setTab(nextTab);
+    if (!MY_WORK_SOURCE_AVAILABILITY[nextTab].includes(sourceFilter)) setSourceFilter("all");
+  };
   const [expandedGroups, setExpandedGroups] = useState<MyWorkExpansion>({});
   const [expansionReady, setExpansionReady] = useState(false);
   const expansionOwner = useRef("");
@@ -1822,20 +1829,28 @@ export function ProductionMyWork({
           </button>
         ))}
       </div>
-      <Tabs<MyWorkTab>
-        active={tab}
-        onChange={(nextTab) => {
-          setTab(nextTab);
-          if (!MY_WORK_SOURCE_AVAILABILITY[nextTab].includes(sourceFilter)) setSourceFilter("all");
-        }}
+      <Tabs<MyWorkTop>
+        active={ASSIGNED_TABS.includes(tab) ? "assigned" : (tab as MyWorkTop)}
+        onChange={(next) => pickTab(next === "assigned" ? "active" : next)}
         tabs={[
           { id: "week", label: "MyWeek.tab" },
-          { id: "new", label: "New Assignments", count: newAssignmentCount },
-          { id: "active", label: "My Active Work", count: open.length + actionableEstimateAssignments.length },
-          { id: "queue", label: "WorkQueue.myTab" },
+          { id: "assigned", label: "MyWork.assignedTab", count: newAssignmentCount + open.length + actionableEstimateAssignments.length },
           { id: "updates", label: "My Updates", count: updates.length },
         ]}
       />
+      {ASSIGNED_TABS.includes(tab) ? (
+        <div className="my-work-subtabs">
+          <Tabs<MyWorkTab>
+            active={tab}
+            onChange={pickTab}
+            tabs={[
+              { id: "active", label: "My Active Work", count: open.length + actionableEstimateAssignments.length },
+              { id: "new", label: "New Assignments", count: newAssignmentCount },
+              { id: "queue", label: "WorkQueue.myTab" },
+            ]}
+          />
+        </div>
+      ) : null}
       {sourceOptions.length > 1 ? (
         <div className="toolbar my-work-toolbar">
           <label className="select-field my-work-source">

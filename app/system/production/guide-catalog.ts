@@ -1960,6 +1960,73 @@ const PROJECT_PLAN: Guide = {
  * no member ("Waiting for people"); the row waits in the queue on Team overview > Allocation · weekly, where the head
  * picks people by free time, leave already taken off.
  */
+const TEAM_WEEK: Guide = {
+  id: "team-week",
+  area: "project",
+  browse: true,
+  title: { th: "ดูสัปดาห์ของทีม: ใครว่าง ใครเกิน ใครยังไม่ยืนยันชั่วโมง", en: "The team's week: who is free, who is over, who has not confirmed", jp: "チームの週：空き・超過・未確定を確認" },
+  summary: {
+    th: "สัปดาห์ทีมแสดงชั่วโมงของทุกคนจันทร์ถึงศุกร์ จากเวลาที่แต่ละคนลงในสัปดาห์ของฉัน นัดใน Outlook งานทีม และวันลา พร้อมสถานะยืนยันชั่วโมง และคิวงานรอจัดคนอยู่ข้างๆ",
+    en: "Team week shows everyone's hours from Monday to Friday, from the time each person booked on My week, their Outlook meetings, team tasks and time away, with whether the hours are confirmed and the queue of rows waiting for people beside it.",
+    jp: "チーム週間は、各自がマイウィークで入れた時間・Outlookの予定・チームタスク・休暇から、全員の月〜金の時間と確定状況を表示し、割り当て待ちの行の一覧を横に並べます。",
+  },
+  minutes: 2,
+  permissions: ["team.board"],
+  views: ["resources"],
+  steps: [
+    menu(
+      "resources",
+      { th: "เปิดภาพรวมงานทีม", en: "Open Team overview", jp: "「チームの仕事一覧」を開く" },
+      { th: "สัปดาห์ทีมอยู่ในหน้านี้ คลิกที่เมนูที่ไฮไลต์อยู่", en: "Team week is on this page. Click the highlighted menu entry.", jp: "チーム週間はこの画面にあります。強調表示のメニューをクリックします。" },
+    ),
+    {
+      target: '[data-tab="week"]',
+      action: "click",
+      view: "resources",
+      title: { th: "เปิดสัปดาห์ทีม", en: "Open Team week", jp: "チーム週間を開く" },
+      body: { th: "กดแท็บ 'สัปดาห์ทีม'", en: "Press the Team week tab.", jp: "「チーム週間」タブを押します。" },
+    },
+    {
+      target: "teamweek.table",
+      action: "next",
+      view: "resources",
+      title: { th: "ชั่วโมงของแต่ละคน", en: "Each person's hours", jp: "各自の時間" },
+      body: {
+        th: "แถวละคน ช่องละวัน ตัวเลขคือชั่วโมงงานของวันนั้น (สีแดงคือเกิน 8 ชั่วโมง) ใต้ตัวเลขคือโครงการที่ลงไว้และช่วงที่ว่าง เครื่องหมายถูกคือยืนยันชั่วโมงแล้ว 'ยังไม่ยืนยัน' คือวันที่ผ่านไปแล้วแต่ยังไม่ได้ยืนยัน",
+        en: "One row per person, one column per day. The figure is the day's hours of work (red: more than 8); under it the projects booked and the free time. A tick means the hours are confirmed; Not confirmed marks a past day still waiting.",
+        jp: "1行が1人、1列が1日です。数字はその日の作業時間（赤は8時間超）、その下に予定した案件と空き時間が出ます。チェックは時間確定済み、「未確定」は過ぎた日でまだ確定していない日です。",
+      },
+    },
+    {
+      target: "teamweek.chips",
+      action: "next",
+      view: "resources",
+      title: { th: "กรองคนที่ต้องดู", en: "Filter the people to look at", jp: "確認したい人に絞る" },
+      body: {
+        th: "กดเกินกำลัง ว่าง 8 ชม. ขึ้นไป ยังไม่ยืนยันชั่วโมง หรือมีวันลา เพื่อดูเฉพาะคนกลุ่มนั้น กดซ้ำเพื่อดูทุกคน",
+        en: "Press Over capacity, 8 h or more free, Hours not confirmed or Away this week to see only those people; press it again to see everyone.",
+        jp: "「負荷超過」「8時間以上空き」「時間未確定」「今週休暇あり」を押すとその人だけを表示し、もう一度押すと全員に戻ります。",
+      },
+    },
+    {
+      target: "alloc.queue",
+      action: "next",
+      view: "resources",
+      title: { th: "งานรอจัดคน", en: "Rows waiting for people", jp: "割り当て待ちの行" },
+      body: {
+        th: "ด้านขวาคืองานในแผนที่ PM ใส่สายงานไว้แต่ยังไม่มีคน หัวหน้ากด 'จัดคน' แล้วเลือกคนที่ว่างพอได้ทันที",
+        en: "On the right are plan rows a PM gave a discipline but no person. The head presses Assign and picks someone free enough there and then.",
+        jp: "右側は、PMが職種だけ指定して担当者のいない計画行です。責任者は「割り当て」を押して空きのある人をその場で選びます。",
+      },
+      missing: {
+        th: "ตอนนี้ไม่มีงานรอจัดคน หรือคุณไม่มีสิทธิ์ดูแผนงาน กด 'จบบทสอน'",
+        en: "Nothing is waiting for people, or you cannot read plans. Press Finish.",
+        jp: "割り当て待ちの行がないか、計画を見る権限がありません。「完了」を押します。",
+      },
+    },
+  ],
+};
+
 const ALLOCATION_ASSIGN: Guide = {
   id: "allocation-assign",
   area: "project",
@@ -4064,6 +4131,7 @@ export const GUIDES: readonly Guide[] = [
   PUNCHLIST_ISSUES,
   PUNCHLIST_CLOSE,
   TEAM_TASK,
+  TEAM_WEEK,
   ALLOCATION_ASSIGN,
   BOM_RELEASE,
   ESTIMATE_APPROVE,
@@ -4296,6 +4364,17 @@ export const GUIDES: readonly Guide[] = [
           jp: "全案件の担当作業がまとまっています。強調表示のメニューをクリックします。",
         },
       ),
+      {
+        target: '[data-tab="assigned"]',
+        action: "click",
+        view: "my-work",
+        title: { th: "งานที่ได้รับ", en: "Assigned to me", jp: "担当作業" },
+        body: {
+          th: "กดแท็บ 'งานที่ได้รับ' ข้างในมีงานที่กำลังทำ งานมอบหมายใหม่ และลำดับงานของคุณ",
+          en: "Press the Assigned to me tab. It holds your active work, new assignments and your work order.",
+          jp: "「担当作業」タブを押します。進行中の作業・新しい割り当て・作業順が入っています。",
+        },
+      },
       {
         target: '[data-tab="new"]',
         action: "click",

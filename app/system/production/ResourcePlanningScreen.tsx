@@ -28,6 +28,7 @@ import {
 } from "../../../lib/resource-planning";
 import "./workload.css";
 import "./allocation.css";
+import { TeamWeek } from "./TeamWeekScreen";
 
 type Props = {
   bootstrap: BootstrapData;
@@ -41,13 +42,14 @@ type Props = {
   refreshBootstrap?: () => Promise<void>;
 };
 // The team board and its list come first (owner decision 2026-10-21); the weekly workload and Tasks need schedule access.
-type ResourceTab = "board" | "list" | "workload" | "tasks";
-const BOARD_TABS: readonly ResourceTab[] = ["board", "list"];
+// Team week (owner decision 2026-11-23) opens first: everyone's week in hours, with the allocation queue beside it.
+type ResourceTab = "week" | "board" | "list" | "workload" | "tasks";
+const BOARD_TABS: readonly ResourceTab[] = ["week", "board", "list"];
 const PLAN_TABS: readonly ResourceTab[] = ["workload", "tasks"];
 type WorkloadView = "table" | "gantt";
 type Focus = "over" | "overdue" | "late" | "missing";
 // Team overview's link: "#/resources/<tab>?…" with the tab's filters (screen-link.tsx); codecs are made once.
-const RESOURCE_TABS: readonly ResourceTab[] = ["board", "list", "workload", "tasks"];
+const RESOURCE_TABS: readonly ResourceTab[] = ["week", "board", "list", "workload", "tasks"];
 const WORKLOAD_VIEW_LINK = choiceLink<WorkloadView>(["table", "gantt"]);
 const WORKLOAD_FOCUS_LINK = optionalChoiceLink<Focus>(["over", "overdue", "late", "missing"]);
 const WORKLOAD_WEEKS_LINK = choiceLink<string>(["8", "12", "16", "24"]);
@@ -110,9 +112,9 @@ export function ProductionResourcePlan({ bootstrap, notify, openProjectSchedule,
   const allowedTabs = [...(canBoard ? BOARD_TABS : []), ...(canRead ? PLAN_TABS : [])];
   // The tab is the link's place; without one, the tab last used here.
   const [opened, place] = useScreenPlace();
-  const [storedTab, setTab] = useState<ResourceTab>(() => RESOURCE_TABS.find((tab) => tab === opened[0]) ?? readStored(tabStorageKey(bootstrap.user.id), RESOURCE_TABS, "board"));
+  const [storedTab, setTab] = useState<ResourceTab>(() => RESOURCE_TABS.find((tab) => tab === opened[0]) ?? readStored(tabStorageKey(bootstrap.user.id), RESOURCE_TABS, "week"));
   // A remembered tab the person may no longer open falls back to the first one they may.
-  const tab: ResourceTab = allowedTabs.includes(storedTab) ? storedTab : (allowedTabs[0] ?? "board");
+  const tab: ResourceTab = allowedTabs.includes(storedTab) ? storedTab : (allowedTabs[0] ?? "week");
   const [view, setView] = useLinkedState<WorkloadView>("display", "table", WORKLOAD_VIEW_LINK, {
     legacy: () => readStored<WorkloadView>(viewStorageKey(bootstrap.user.id), ["table", "gantt"], "table"),
   });
@@ -153,7 +155,8 @@ export function ProductionResourcePlan({ bootstrap, notify, openProjectSchedule,
     }
   }, [canRead]);
   // The workload is read when its tab is first shown; a failed read waits for Refresh.
-  const wantsData = canRead && tab === "workload" && data === null && !error;
+  // The queue beside Team week reads the same workload.
+  const wantsData = canRead && (tab === "workload" || tab === "week") && data === null && !error;
   useEffect(() => {
     if (!wantsData) return;
     const timer = setTimeout(() => void load(), 0);
@@ -290,6 +293,46 @@ export function ProductionResourcePlan({ bootstrap, notify, openProjectSchedule,
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
+  // Allocation (owner, 2026-11-22): rows a PM added with a discipline and no PIC, for the head to name the people.
+  const queuePanel = waiting.length ? (
+    <Panel title="Alloc.queueTitle" subtitle="Alloc.queueSubtitle" guide="alloc.queue" flush>
+      <div className="alloc-queue-filter" role="group" aria-label={t("Plan.discipline")}>
+        {(["all", ...PLAN_DISCIPLINES, "none"] as const).map((key) => {
+          const count = key === "all" ? waiting.length : waiting.filter((item) => (key === "none" ? !isPlanDiscipline(item.discipline) : item.discipline === key)).length;
+          if (key !== "all" && !count) return null;
+          return (
+            <button key={key} type="button" className={queueDiscipline === key ? "chip on" : "chip"} aria-pressed={queueDiscipline === key} onClick={() => setQueueDiscipline(key)}>
+              {t(key === "all" ? "Alloc.all" : key === "none" ? "Alloc.noDiscipline" : disciplineLabel(key))}
+              <em>{count}</em>
+            </button>
+          );
+        })}
+      </div>
+      <ul className="alloc-queue">
+        {waitingShown.map((item) => (
+          <li key={item.key}>
+            <div className="alloc-queue-main">
+              <button type="button" className="workload-item-link" onClick={() => open(item)}>
+                {item.reference}
+              </button>
+              <strong>{item.title}</strong>
+              <small>
+                {item.customer ? `${item.customer} · ` : ""}
+                {item.start ?? "—"} → {item.end ?? "—"} · {item.manDays === null ? t("Workload.missingEffort") : `${fmt(item.manDays)} MD`}
+              </small>
+            </div>
+            <Badge tone={isPlanDiscipline(item.discipline) ? "blue" : "slate"}>{t(isPlanDiscipline(item.discipline) ? disciplineLabel(item.discipline) : "Alloc.noDiscipline")}</Badge>
+            {canAssign ? (
+              <button type="button" className="btn primary sm" data-guide="alloc.assign" onClick={() => setAssigning(item)}>
+                <Icon name="users" />
+                {t("Alloc.assign")}
+              </button>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    </Panel>
+  ) : null;
   if (!allowedTabs.length) return <EmptyState icon="shield" title={t("Permission denied")} message="team.board" />;
   const onBoard = tab === "board" || tab === "list";
   return (
@@ -297,7 +340,7 @@ export function ProductionResourcePlan({ bootstrap, notify, openProjectSchedule,
       <PageHeader
         eyebrow="ENGINEERING RESOURCE"
         title="Team overview"
-        subtitle={onBoard ? "TeamBoard.subtitle" : "Workload.subtitle"}
+        subtitle={tab === "week" ? "TeamWeek.subtitle" : onBoard ? "TeamBoard.subtitle" : "Workload.subtitle"}
         actions={
           tab === "workload" ? (
             <>
@@ -322,6 +365,7 @@ export function ProductionResourcePlan({ bootstrap, notify, openProjectSchedule,
         tabs={[
           ...(canBoard
             ? [
+                { id: "week" as const, label: "TeamWeek.tab" },
                 { id: "board" as const, label: "TeamBoard.tabBoard" },
                 { id: "list" as const, label: "TeamBoard.tabList" },
               ]
@@ -334,7 +378,9 @@ export function ProductionResourcePlan({ bootstrap, notify, openProjectSchedule,
             : []),
         ]}
       />
-      {onBoard ? (
+      {tab === "week" ? (
+        <TeamWeek bootstrap={bootstrap} queue={canRead ? queuePanel : null} />
+      ) : onBoard ? (
         <TeamBoard bootstrap={bootstrap} notify={notify} mode={tab} onMode={changeTab} today={todayIso} openItem={open} onChanged={() => setData(null)} actionsSlot={boardActions} />
       ) : tab === "tasks" ? (
         <ResourceTaskWorkspace bootstrap={bootstrap} notify={notify} linked onChanged={() => setData(null)} openProjectSchedule={openProjectSchedule} />
@@ -383,46 +429,7 @@ export function ProductionResourcePlan({ bootstrap, notify, openProjectSchedule,
             ) : null}
           </div>
           <FilterChips label="Workload.chips" items={chipItems} active={focus} onPick={(key) => filtered(() => setFocus(key as Focus | null))} />
-          {/* Allocation (owner, 2026-11-22): rows a PM added with a discipline and no PIC, for the head to name the people. */}
-          {waiting.length ? (
-            <Panel title="Alloc.queueTitle" subtitle="Alloc.queueSubtitle" guide="alloc.queue" flush>
-              <div className="alloc-queue-filter" role="group" aria-label={t("Plan.discipline")}>
-                {(["all", ...PLAN_DISCIPLINES, "none"] as const).map((key) => {
-                  const count = key === "all" ? waiting.length : waiting.filter((item) => (key === "none" ? !isPlanDiscipline(item.discipline) : item.discipline === key)).length;
-                  if (key !== "all" && !count) return null;
-                  return (
-                    <button key={key} type="button" className={queueDiscipline === key ? "chip on" : "chip"} aria-pressed={queueDiscipline === key} onClick={() => setQueueDiscipline(key)}>
-                      {t(key === "all" ? "Alloc.all" : key === "none" ? "Alloc.noDiscipline" : disciplineLabel(key))}
-                      <em>{count}</em>
-                    </button>
-                  );
-                })}
-              </div>
-              <ul className="alloc-queue">
-                {waitingShown.map((item) => (
-                  <li key={item.key}>
-                    <div className="alloc-queue-main">
-                      <button type="button" className="workload-item-link" onClick={() => open(item)}>
-                        {item.reference}
-                      </button>
-                      <strong>{item.title}</strong>
-                      <small>
-                        {item.customer ? `${item.customer} · ` : ""}
-                        {item.start ?? "—"} → {item.end ?? "—"} · {item.manDays === null ? t("Workload.missingEffort") : `${fmt(item.manDays)} MD`}
-                      </small>
-                    </div>
-                    <Badge tone={isPlanDiscipline(item.discipline) ? "blue" : "slate"}>{t(isPlanDiscipline(item.discipline) ? disciplineLabel(item.discipline) : "Alloc.noDiscipline")}</Badge>
-                    {canAssign ? (
-                      <button type="button" className="btn primary sm" data-guide="alloc.assign" onClick={() => setAssigning(item)}>
-                        <Icon name="users" />
-                        {t("Alloc.assign")}
-                      </button>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-            </Panel>
-          ) : null}
+          {queuePanel}
           <Panel
             title={view === "gantt" ? "Workload.ganttTitle" : "Workload.byWeek"}
             subtitle={view === "gantt" ? "Workload.ganttSubtitle" : "Planned man-days / available man-days · green under 85%, amber up to 100%, red above"}

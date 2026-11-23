@@ -1,0 +1,200 @@
+/*
+ * Team overview > Team week (TeamWeekScreen.tsx, owner decision 2026-11-23): everyone's week in hours, the
+ * allocation queue beside it. Tokens only.
+ */
+
+.teamweek {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.teamweek-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.teamweek-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+}
+.teamweek-department {
+  min-width: 180px;
+}
+.teamweek-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 10px;
+}
+.teamweek-table-wrap {
+  flex: 999 1 720px;
+  min-width: 0;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+.teamweek-table-wrap[aria-busy="true"] {
+  opacity: 0.7;
+}
+.teamweek-queue {
+  flex: 1 1 320px;
+  min-width: 0;
+  max-width: 100%;
+}
+.teamweek-table {
+  width: 100%;
+  min-width: 820px;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: var(--fs-xs);
+}
+.teamweek-table th,
+.teamweek-table td {
+  padding: 8px;
+  border-bottom: 1px solid var(--line-soft);
+  text-align: left;
+  vertical-align: top;
+}
+.teamweek-table td {
+  border-left: 1px solid var(--line-soft);
+}
+.teamweek-table thead th {
+  border-bottom-color: var(--line);
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+.teamweek-table thead th:first-child {
+  width: 210px;
+}
+.teamweek-table thead th.today,
+.teamweek-table td.today {
+  background: var(--blue-soft);
+}
+.teamweek-table thead th.today {
+  color: var(--blue-text);
+}
+.teamweek-table td.off {
+  background: var(--n-50);
+}
+.teamweek-table tbody th {
+  font-weight: 400;
+}
+.teamweek-name {
+  display: block;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+.teamweek-dept {
+  display: block;
+  margin-bottom: 4px;
+}
+.teamweek-bar {
+  display: block;
+  height: 5px;
+  overflow: hidden;
+  border-radius: var(--r-pill);
+  background: var(--n-100);
+}
+.teamweek-bar span {
+  display: block;
+  height: 100%;
+  background: var(--blue);
+}
+.teamweek-bar span.over {
+  background: var(--red);
+}
+.teamweek-bar span.light {
+  background: var(--n-400);
+}
+.teamweek-sum {
+  display: block;
+  margin-top: 3px;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+.teamweek-sum.over {
+  color: var(--red-text);
+  font-weight: 600;
+}
+.teamweek-day-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 4px;
+  font-variant-numeric: tabular-nums;
+}
+.teamweek-day-head strong {
+  font-size: var(--fs-sm);
+}
+.teamweek-day-head strong.over {
+  color: var(--red-text);
+}
+.teamweek-ok {
+  display: inline-flex;
+  margin-left: auto;
+  color: var(--green-text);
+}
+.teamweek-ok .icon {
+  width: 14px;
+  height: 14px;
+}
+.teamweek-pending {
+  margin-left: auto;
+  padding: 0 6px;
+  border-radius: var(--r-pill);
+  background: var(--amber-soft);
+  color: var(--amber-text);
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.teamweek-chip {
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+  margin-top: 2px;
+  padding: 1px 6px;
+  overflow: hidden;
+  border-radius: var(--r-xs);
+  background: var(--blue-soft);
+  color: var(--blue-text);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.teamweek-chip span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.teamweek-chip.other,
+.teamweek-chip.work {
+  background: var(--n-100);
+  color: var(--ink-soft);
+}
+.teamweek-chip.meeting,
+.teamweek-chip.task {
+  background: var(--violet-soft);
+  color: var(--violet-text);
+}
+.teamweek-chip.away {
+  background: var(--amber-soft);
+  color: var(--amber-text);
+}
+.teamweek-chip.free {
+  border: 1px dashed var(--n-400);
+  background: transparent;
+  color: var(--ink-soft);
+}
+.teamweek-more {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--fs-2xs);
+}
+.teamweek-empty {
+  margin: 0;
+  padding: 16px;
+}
