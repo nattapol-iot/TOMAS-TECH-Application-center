@@ -2,7 +2,7 @@
 
 [Module](../modules/support.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `ec25be16`; generated, do not edit. [backend-node/src/routes/support.ts](<../../../backend-node/src/routes/support.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `6fb49ebc`; generated, do not edit. [backend-node/src/routes/support.ts](<../../../backend-node/src/routes/support.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 

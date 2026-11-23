@@ -155,9 +155,17 @@ export type TeamTaskCalendarEmail = {
 type FetchLike = typeof fetch;
 
 function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/g, (character) => ({
-    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-  })[character]!);
+  return value.replace(
+    /[&<>"']/g,
+    (character) =>
+      ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;",
+      })[character]!,
+  );
 }
 
 function normalizedRecipients(recipients: EmailRecipient[]): EmailRecipient[] {
@@ -171,7 +179,13 @@ function normalizedRecipients(recipients: EmailRecipient[]): EmailRecipient[] {
 
 /** A Microsoft Graph read that did not succeed; status 403 is a permission the app has not been granted. */
 export class GraphReadError extends Error {
-  constructor(readonly status: number, readonly code: string, message: string) { super(message); }
+  constructor(
+    readonly status: number,
+    readonly code: string,
+    message: string,
+  ) {
+    super(message);
+  }
 }
 
 export class EmailService {
@@ -184,98 +198,134 @@ export class EmailService {
   ) {}
 
   async sendEstimateAssignment(message: EstimateAssignmentEmail): Promise<EmailDeliveryResult> {
-    return this.sendMail(message.recipients, `[Engineering Center] Assigned: ${message.estimateNumber} · ${message.section}`, (appUrl) =>
-      `<p>คุณได้รับมอบหมายงาน Estimate Cost / You have been assigned an Estimate Cost section.</p>`
-      + `<table><tr><td><strong>Estimate</strong></td><td>${escapeHtml(message.estimateNumber)}</td></tr>`
-      + `<tr><td><strong>Project</strong></td><td>${escapeHtml(message.projectName)}</td></tr>`
-      + `<tr><td><strong>Section</strong></td><td>${escapeHtml(message.section)}</td></tr>`
-      + `<tr><td><strong>Due date</strong></td><td>${escapeHtml(message.dueDate)}</td></tr>`
-      + `<tr><td><strong>Assigned by</strong></td><td>${escapeHtml(message.assignedBy)}</td></tr></table>`
-      + `<p><a href="${escapeHtml(appUrl)}#estimate/${message.estimateId}">เปิด Estimate Cost ${escapeHtml(message.estimateNumber)} / Open this estimate</a></p>`);
+    return this.sendMail(
+      message.recipients,
+      `[Engineering Center] Assigned: ${message.estimateNumber} · ${message.section}`,
+      (appUrl) =>
+        `<p>คุณได้รับมอบหมายงาน Estimate Cost / You have been assigned an Estimate Cost section.</p>` +
+        `<table><tr><td><strong>Estimate</strong></td><td>${escapeHtml(message.estimateNumber)}</td></tr>` +
+        `<tr><td><strong>Project</strong></td><td>${escapeHtml(message.projectName)}</td></tr>` +
+        `<tr><td><strong>Section</strong></td><td>${escapeHtml(message.section)}</td></tr>` +
+        `<tr><td><strong>Due date</strong></td><td>${escapeHtml(message.dueDate)}</td></tr>` +
+        `<tr><td><strong>Assigned by</strong></td><td>${escapeHtml(message.assignedBy)}</td></tr></table>` +
+        `<p><a href="${escapeHtml(appUrl)}#estimate/${message.estimateId}">เปิด Estimate Cost ${escapeHtml(message.estimateNumber)} / Open this estimate</a></p>`,
+    );
   }
 
   // The engineer picked in "Create inquiry" (from a CRM opportunity or directly) and on a
   // later reassignment. inquiries.ts writes the matching in-app notification inside the
   // transaction, so the bell still tells the engineer even when mail is off or Graph fails.
   async sendInquiryAssignment(message: InquiryAssignmentEmail): Promise<EmailDeliveryResult> {
-    return this.sendMail(message.recipients, `[Engineering Center] Inquiry ${message.inquiryNumber}: ${message.projectName}`, (appUrl) =>
-      `<p>คุณได้รับมอบหมาย Inquiry ใหม่ / A new inquiry has been assigned to you.</p>`
-      + `<table><tr><td><strong>Inquiry</strong></td><td>${escapeHtml(message.inquiryNumber)}</td></tr>`
-      + `<tr><td><strong>Customer</strong></td><td>${escapeHtml(message.customerName)}</td></tr>`
-      + `<tr><td><strong>Project</strong></td><td>${escapeHtml(message.projectName)}</td></tr>`
-      + `<tr><td><strong>Due date</strong></td><td>${escapeHtml(message.dueDate)}</td></tr>`
-      + `<tr><td><strong>Priority</strong></td><td>${escapeHtml(message.priority)}</td></tr>`
-      + `<tr><td><strong>Assigned by</strong></td><td>${escapeHtml(message.assignedBy)}</td></tr></table>`
-      + `<p><a href="${escapeHtml(appUrl)}#inquiry/${message.inquiryId}">เปิด Inquiry ${escapeHtml(message.inquiryNumber)} / Open this inquiry</a></p>`);
+    return this.sendMail(
+      message.recipients,
+      `[Engineering Center] Inquiry ${message.inquiryNumber}: ${message.projectName}`,
+      (appUrl) =>
+        `<p>คุณได้รับมอบหมาย Inquiry ใหม่ / A new inquiry has been assigned to you.</p>` +
+        `<table><tr><td><strong>Inquiry</strong></td><td>${escapeHtml(message.inquiryNumber)}</td></tr>` +
+        `<tr><td><strong>Customer</strong></td><td>${escapeHtml(message.customerName)}</td></tr>` +
+        `<tr><td><strong>Project</strong></td><td>${escapeHtml(message.projectName)}</td></tr>` +
+        `<tr><td><strong>Due date</strong></td><td>${escapeHtml(message.dueDate)}</td></tr>` +
+        `<tr><td><strong>Priority</strong></td><td>${escapeHtml(message.priority)}</td></tr>` +
+        `<tr><td><strong>Assigned by</strong></td><td>${escapeHtml(message.assignedBy)}</td></tr></table>` +
+        `<p><a href="${escapeHtml(appUrl)}#inquiry/${message.inquiryId}">เปิด Inquiry ${escapeHtml(message.inquiryNumber)} / Open this inquiry</a></p>`,
+    );
   }
 
   // Sent once per person after a project is created: its manager, lead engineer and everyone on the
   // team plan, never the person who created it. projects.ts writes the matching bell row in the
   // creation transaction, so the bell still tells them when mail is off or Graph fails.
   async sendProjectCreated(message: ProjectCreatedEmail): Promise<EmailDeliveryResult> {
-    const tasks = message.tasks.length === 0 ? "" :
-      `<p><strong>งานของคุณในแผน / Your rows in the plan</strong></p><table>${message.tasks.map((task) =>
-        `<tr><td>${escapeHtml(task.name)}</td><td>${escapeHtml(task.start)} – ${escapeHtml(task.finish)}</td></tr>`).join("")}</table>`;
-    return this.sendMail(message.recipients, `[Engineering Center] Project ${message.projectNumber}: ${message.projectName}`, (appUrl) =>
-      `<p>มี Project ใหม่ที่คุณอยู่ในทีม / A new project has been created with you on the team.</p>`
-      + `<table><tr><td><strong>Project</strong></td><td>${escapeHtml(message.projectNumber)} · ${escapeHtml(message.projectName)}</td></tr>`
-      + `<tr><td><strong>Customer</strong></td><td>${escapeHtml(message.customerName)}</td></tr>`
-      + `<tr><td><strong>Your role</strong></td><td>${escapeHtml(message.role)}</td></tr>`
-      + `<tr><td><strong>Project manager</strong></td><td>${escapeHtml(message.managerName)}</td></tr>`
-      + `<tr><td><strong>Lead engineer</strong></td><td>${escapeHtml(message.leadEngineerName)}</td></tr>`
-      + `<tr><td><strong>Start – target delivery</strong></td><td>${escapeHtml(message.startDate)} – ${escapeHtml(message.targetDelivery)}</td></tr>`
-      + `<tr><td><strong>Created by</strong></td><td>${escapeHtml(message.createdBy)}</td></tr></table>`
-      + tasks
-      + `<p><a href="${escapeHtml(appUrl)}#project/${message.projectId}">เปิดแผนงาน Project ${escapeHtml(message.projectNumber)} / Open the project plan</a></p>`);
+    const tasks =
+      message.tasks.length === 0
+        ? ""
+        : `<p><strong>งานของคุณในแผน / Your rows in the plan</strong></p><table>${message.tasks
+            .map((task) => `<tr><td>${escapeHtml(task.name)}</td><td>${escapeHtml(task.start)} – ${escapeHtml(task.finish)}</td></tr>`)
+            .join("")}</table>`;
+    return this.sendMail(
+      message.recipients,
+      `[Engineering Center] Project ${message.projectNumber}: ${message.projectName}`,
+      (appUrl) =>
+        `<p>มี Project ใหม่ที่คุณอยู่ในทีม / A new project has been created with you on the team.</p>` +
+        `<table><tr><td><strong>Project</strong></td><td>${escapeHtml(message.projectNumber)} · ${escapeHtml(message.projectName)}</td></tr>` +
+        `<tr><td><strong>Customer</strong></td><td>${escapeHtml(message.customerName)}</td></tr>` +
+        `<tr><td><strong>Your role</strong></td><td>${escapeHtml(message.role)}</td></tr>` +
+        `<tr><td><strong>Project manager</strong></td><td>${escapeHtml(message.managerName)}</td></tr>` +
+        `<tr><td><strong>Lead engineer</strong></td><td>${escapeHtml(message.leadEngineerName)}</td></tr>` +
+        `<tr><td><strong>Start – target delivery</strong></td><td>${escapeHtml(message.startDate)} – ${escapeHtml(message.targetDelivery)}</td></tr>` +
+        `<tr><td><strong>Created by</strong></td><td>${escapeHtml(message.createdBy)}</td></tr></table>` +
+        tasks +
+        `<p><a href="${escapeHtml(appUrl)}#project/${message.projectId}">เปิดแผนงาน Project ${escapeHtml(message.projectNumber)} / Open the project plan</a></p>`,
+    );
   }
 
   // A plan row given to someone other than the person assigning it. project-notices.ts writes the
   // bell row in the same transaction as the assignment and hands this message back to send after commit.
   async sendProjectTaskAssignment(message: ProjectTaskAssignmentEmail): Promise<EmailDeliveryResult> {
-    return this.sendMail(message.recipients, `[Engineering Center] Assigned: ${message.projectNumber} · ${message.taskName}`, (appUrl) =>
-      `<p>คุณได้รับมอบหมายงานใน Project / You have been assigned a project task.</p>`
-      + `<table><tr><td><strong>Project</strong></td><td>${escapeHtml(message.projectNumber)} · ${escapeHtml(message.projectName)}</td></tr>`
-      + `<tr><td><strong>Task</strong></td><td>${escapeHtml(message.taskName)}</td></tr>`
-      + `<tr><td><strong>Plan</strong></td><td>${escapeHtml(message.start)} – ${escapeHtml(message.finish)}</td></tr>`
-      + `<tr><td><strong>Assigned by</strong></td><td>${escapeHtml(message.assignedBy)}</td></tr></table>`
-      + `<p><a href="${escapeHtml(appUrl)}#project/${message.projectId}/task/${message.taskId}">เปิดงานนี้ใน Project ${escapeHtml(message.projectNumber)} / Open this task</a></p>`);
+    return this.sendMail(
+      message.recipients,
+      `[Engineering Center] Assigned: ${message.projectNumber} · ${message.taskName}`,
+      (appUrl) =>
+        `<p>คุณได้รับมอบหมายงานใน Project / You have been assigned a project task.</p>` +
+        `<table><tr><td><strong>Project</strong></td><td>${escapeHtml(message.projectNumber)} · ${escapeHtml(message.projectName)}</td></tr>` +
+        `<tr><td><strong>Task</strong></td><td>${escapeHtml(message.taskName)}</td></tr>` +
+        `<tr><td><strong>Plan</strong></td><td>${escapeHtml(message.start)} – ${escapeHtml(message.finish)}</td></tr>` +
+        `<tr><td><strong>Assigned by</strong></td><td>${escapeHtml(message.assignedBy)}</td></tr></table>` +
+        `<p><a href="${escapeHtml(appUrl)}#project/${message.projectId}/task/${message.taskId}">เปิดงานนี้ใน Project ${escapeHtml(message.projectNumber)} / Open this task</a></p>`,
+    );
   }
 
   // Of the approvers, only the final approver is emailed (owner 2026-11-03); purchase-requisitions.ts writes the bell rows, a department head's
   // included, in the same transaction and hands this message back to send after the commit.
   async sendPurchaseRequisitionApproval(message: PurchaseRequisitionApprovalEmail): Promise<EmailDeliveryResult> {
     const amount = message.amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    return this.sendMail(message.recipients, `[Engineering Center] PR ${message.prNumber} รออนุมัติ / waiting for approval`, (appUrl) =>
-      `<p>${message.stepApproverName
-        ? `PR นี้อยู่ที่ขั้นของ ${escapeHtml(message.stepApproverName)} คุณอนุมัติแทนได้เลย / It is at ${escapeHtml(message.stepApproverName)}'s step; you may decide it.`
-        : "PR นี้รอคุณอนุมัติขั้นสุดท้าย / It is waiting for your final approval."}</p>`
-      + `<table><tr><td><strong>PR</strong></td><td>${escapeHtml(message.prNumber)}</td></tr>`
-      + `<tr><td><strong>Project</strong></td><td>${escapeHtml(message.projectNumber)} · ${escapeHtml(message.projectName)}</td></tr>`
-      + `<tr><td><strong>Requester</strong></td><td>${escapeHtml(message.requesterName)}</td></tr>`
-      + `<tr><td><strong>Amount</strong></td><td>${escapeHtml(amount)} THB</td></tr>`
-      + `<tr><td><strong>Step</strong></td><td>${escapeHtml(message.step)}</td></tr></table>`
-      + `<p><a href="${escapeHtml(appUrl)}#/purchase">เปิดรายการใบขอซื้อ / Open Purchase Requisitions</a></p>`);
+    return this.sendMail(
+      message.recipients,
+      `[Engineering Center] PR ${message.prNumber} รออนุมัติ / waiting for approval`,
+      (appUrl) =>
+        `<p>${
+          message.stepApproverName
+            ? `PR นี้อยู่ที่ขั้นของ ${escapeHtml(message.stepApproverName)} คุณอนุมัติแทนได้เลย / It is at ${escapeHtml(message.stepApproverName)}'s step; you may decide it.`
+            : "PR นี้รอคุณอนุมัติขั้นสุดท้าย / It is waiting for your final approval."
+        }</p>` +
+        `<table><tr><td><strong>PR</strong></td><td>${escapeHtml(message.prNumber)}</td></tr>` +
+        `<tr><td><strong>Project</strong></td><td>${escapeHtml(message.projectNumber)} · ${escapeHtml(message.projectName)}</td></tr>` +
+        `<tr><td><strong>Requester</strong></td><td>${escapeHtml(message.requesterName)}</td></tr>` +
+        `<tr><td><strong>Amount</strong></td><td>${escapeHtml(amount)} THB</td></tr>` +
+        `<tr><td><strong>Step</strong></td><td>${escapeHtml(message.step)}</td></tr></table>` +
+        `<p><a href="${escapeHtml(appUrl)}#/purchase">เปิดรายการใบขอซื้อ / Open Purchase Requisitions</a></p>`,
+    );
   }
 
   // The requester hears of every decision on their PR (owner 2026-11-04), with the bell purchase-requisitions.ts writes; a fully
   // approved one is mailed once the ERP has answered, so the mail says whether the PR is in the ERP or must be sent again.
   async sendPurchaseRequisitionDecision(message: PurchaseRequisitionDecisionEmail): Promise<EmailDeliveryResult> {
-    const { erp } = message, rejected = message.decision === "Reject", waiting = !rejected && message.nextApproverName !== "";
+    const { erp } = message,
+      rejected = message.decision === "Reject",
+      waiting = !rejected && message.nextApproverName !== "";
     const subject = rejected ? "ไม่อนุมัติ / rejected" : waiting ? `ผ่าน ${message.step} / ${message.step} approved` : "อนุมัติแล้ว / approved";
-    const summary = rejected ? "PR ของคุณไม่ได้รับอนุมัติ / Your PR was rejected."
-      : waiting ? `ผ่าน ${escapeHtml(message.step)} แล้ว รอ ${escapeHtml(message.nextApproverName)} / Approved at ${escapeHtml(message.step)}; now waiting for ${escapeHtml(message.nextApproverName)}.`
-        : !erp ? "อนุมัติครบแล้ว / Fully approved."
-          : erp.sent ? `อนุมัติครบแล้ว และอยู่ใน Pegasus ERP แล้ว เลข ${escapeHtml(erp.prNo ?? "")} / Fully approved and in the ERP as ${escapeHtml(erp.prNo ?? "")}.`
+    const summary = rejected
+      ? "PR ของคุณไม่ได้รับอนุมัติ / Your PR was rejected."
+      : waiting
+        ? `ผ่าน ${escapeHtml(message.step)} แล้ว รอ ${escapeHtml(message.nextApproverName)} / Approved at ${escapeHtml(message.step)}; now waiting for ${escapeHtml(message.nextApproverName)}.`
+        : !erp
+          ? "อนุมัติครบแล้ว / Fully approved."
+          : erp.sent
+            ? `อนุมัติครบแล้ว และอยู่ใน Pegasus ERP แล้ว เลข ${escapeHtml(erp.prNo ?? "")} / Fully approved and in the ERP as ${escapeHtml(erp.prNo ?? "")}.`
             : "อนุมัติครบแล้ว แต่ยังไม่เข้า ERP เปิด PR แล้วกดส่งเข้า ERP / Fully approved but not in the ERP yet; open the PR and send it.";
-    return this.sendMail(message.recipients, `[Engineering Center] PR ${message.prNumber} ${subject}`, (appUrl) =>
-      `<p>${summary}</p>`
-      + `<table><tr><td><strong>PR</strong></td><td>${escapeHtml(message.prNumber)}</td></tr>`
-      + `<tr><td><strong>Project</strong></td><td>${escapeHtml(message.projectNumber)} · ${escapeHtml(message.projectName)}</td></tr>`
-      + `<tr><td><strong>Step</strong></td><td>${escapeHtml(message.step)}</td></tr>`
-      + `<tr><td><strong>Decided by</strong></td><td>${escapeHtml(message.decidedBy)}</td></tr>`
-      + (message.comment ? `<tr><td><strong>Comment</strong></td><td>${escapeHtml(message.comment)}</td></tr>` : "")
-      + (erp && !erp.sent && erp.message ? `<tr><td><strong>ERP</strong></td><td>${escapeHtml(erp.message)}</td></tr>` : "") + `</table>`
-      + `<p><a href="${escapeHtml(appUrl)}#/purchase">เปิดรายการใบขอซื้อ / Open Purchase Requisitions</a></p>`);
+    return this.sendMail(
+      message.recipients,
+      `[Engineering Center] PR ${message.prNumber} ${subject}`,
+      (appUrl) =>
+        `<p>${summary}</p>` +
+        `<table><tr><td><strong>PR</strong></td><td>${escapeHtml(message.prNumber)}</td></tr>` +
+        `<tr><td><strong>Project</strong></td><td>${escapeHtml(message.projectNumber)} · ${escapeHtml(message.projectName)}</td></tr>` +
+        `<tr><td><strong>Step</strong></td><td>${escapeHtml(message.step)}</td></tr>` +
+        `<tr><td><strong>Decided by</strong></td><td>${escapeHtml(message.decidedBy)}</td></tr>` +
+        (message.comment ? `<tr><td><strong>Comment</strong></td><td>${escapeHtml(message.comment)}</td></tr>` : "") +
+        (erp && !erp.sent && erp.message ? `<tr><td><strong>ERP</strong></td><td>${escapeHtml(erp.message)}</td></tr>` : "") +
+        `</table>` +
+        `<p><a href="${escapeHtml(appUrl)}#/purchase">เปิดรายการใบขอซื้อ / Open Purchase Requisitions</a></p>`,
+    );
   }
 
   // Every approver of an estimate is mailed when it is submitted (owner 2026-11-06); estimates.ts writes the matching bell
@@ -283,34 +333,49 @@ export class EmailService {
   async sendEstimateReview(message: EstimateReviewEmail): Promise<EmailDeliveryResult> {
     const revision = `R${String(message.revision).padStart(2, "0")}`;
     const total = message.total.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    return this.sendMail(message.recipients, `[Engineering Center] Estimate ${message.estimateNumber} ${revision} รออนุมัติ / waiting for approval`, (appUrl) =>
-      `<p>มี Estimate ส่งให้ตรวจ คุณหรือผู้อนุมัติคนอื่นอนุมัติหรือส่งกลับให้แก้ได้ / An estimate was sent for review; you or another approver may approve it or send it back.</p>`
-      + `<table><tr><td><strong>Estimate</strong></td><td>${escapeHtml(message.estimateNumber)} · ${revision}</td></tr>`
-      + `<tr><td><strong>Project</strong></td><td>${escapeHtml(message.projectName)}</td></tr>`
-      + `<tr><td><strong>Customer</strong></td><td>${escapeHtml(message.customerName)}</td></tr>`
-      + `<tr><td><strong>Estimate owner</strong></td><td>${escapeHtml(message.ownerName)}</td></tr>`
-      + `<tr><td><strong>Submitted by</strong></td><td>${escapeHtml(message.submittedBy)}</td></tr>`
-      + `<tr><td><strong>Total cost</strong></td><td>${escapeHtml(total)} THB</td></tr>`
-      + (message.comment ? `<tr><td><strong>Comment</strong></td><td>${escapeHtml(message.comment)}</td></tr>` : "") + `</table>`
-      + `<p><a href="${escapeHtml(appUrl)}#/estimates/${message.estimateId}">เปิด Estimate ${escapeHtml(message.estimateNumber)} / Open the estimate</a></p>`);
+    return this.sendMail(
+      message.recipients,
+      `[Engineering Center] Estimate ${message.estimateNumber} ${revision} รออนุมัติ / waiting for approval`,
+      (appUrl) =>
+        `<p>มี Estimate ส่งให้ตรวจ คุณหรือผู้อนุมัติคนอื่นอนุมัติหรือส่งกลับให้แก้ได้ / An estimate was sent for review; you or another approver may approve it or send it back.</p>` +
+        `<table><tr><td><strong>Estimate</strong></td><td>${escapeHtml(message.estimateNumber)} · ${revision}</td></tr>` +
+        `<tr><td><strong>Project</strong></td><td>${escapeHtml(message.projectName)}</td></tr>` +
+        `<tr><td><strong>Customer</strong></td><td>${escapeHtml(message.customerName)}</td></tr>` +
+        `<tr><td><strong>Estimate owner</strong></td><td>${escapeHtml(message.ownerName)}</td></tr>` +
+        `<tr><td><strong>Submitted by</strong></td><td>${escapeHtml(message.submittedBy)}</td></tr>` +
+        `<tr><td><strong>Total cost</strong></td><td>${escapeHtml(total)} THB</td></tr>` +
+        (message.comment ? `<tr><td><strong>Comment</strong></td><td>${escapeHtml(message.comment)}</td></tr>` : "") +
+        `</table>` +
+        `<p><a href="${escapeHtml(appUrl)}#/estimates/${message.estimateId}">เปิด Estimate ${escapeHtml(message.estimateNumber)} / Open the estimate</a></p>`,
+    );
   }
 
   // The owner (and whoever submitted it) hears of the decision on their estimate; an approved one is mailed after the
   // Pegasus ERP has answered, so the mail says whether its Cost Sheet is there.
   async sendEstimateDecision(message: EstimateDecisionEmail): Promise<EmailDeliveryResult> {
-    const revision = `R${String(message.revision).padStart(2, "0")}`, { erp } = message, approved = message.decision === "Approved";
-    const summary = !approved ? "Estimate ของคุณถูกส่งกลับให้แก้ไข / Your estimate was sent back for revision."
-      : !erp ? "Estimate ของคุณได้รับอนุมัติแล้ว / Your estimate was approved."
-        : erp.sent ? `อนุมัติแล้ว และอยู่ใน Pegasus ERP แล้ว${erp.costSheetNo ? ` (${escapeHtml(erp.costSheetNo)})` : ""} / Approved and in the ERP${erp.costSheetNo ? ` as ${escapeHtml(erp.costSheetNo)}` : ""}.`
+    const revision = `R${String(message.revision).padStart(2, "0")}`,
+      { erp } = message,
+      approved = message.decision === "Approved";
+    const summary = !approved
+      ? "Estimate ของคุณถูกส่งกลับให้แก้ไข / Your estimate was sent back for revision."
+      : !erp
+        ? "Estimate ของคุณได้รับอนุมัติแล้ว / Your estimate was approved."
+        : erp.sent
+          ? `อนุมัติแล้ว และอยู่ใน Pegasus ERP แล้ว${erp.costSheetNo ? ` (${escapeHtml(erp.costSheetNo)})` : ""} / Approved and in the ERP${erp.costSheetNo ? ` as ${escapeHtml(erp.costSheetNo)}` : ""}.`
           : "อนุมัติแล้ว แต่ยังไม่เข้า ERP เปิดแท็บสรุปแล้วกดส่งเข้า ERP / Approved but not in the ERP yet; open the summary tab and send it.";
-    return this.sendMail(message.recipients, `[Engineering Center] Estimate ${message.estimateNumber} ${revision} ${approved ? "อนุมัติแล้ว / approved" : "ส่งกลับให้แก้ไข / sent back"}`, (appUrl) =>
-      `<p>${summary}</p>`
-      + `<table><tr><td><strong>Estimate</strong></td><td>${escapeHtml(message.estimateNumber)} · ${revision}</td></tr>`
-      + `<tr><td><strong>Project</strong></td><td>${escapeHtml(message.projectName)}</td></tr>`
-      + `<tr><td><strong>Decided by</strong></td><td>${escapeHtml(message.decidedBy)}</td></tr>`
-      + (message.comment ? `<tr><td><strong>${approved ? "Comment" : "Reason"}</strong></td><td>${escapeHtml(message.comment)}</td></tr>` : "")
-      + (erp && !erp.sent && erp.message ? `<tr><td><strong>ERP</strong></td><td>${escapeHtml(erp.message)}</td></tr>` : "") + `</table>`
-      + `<p><a href="${escapeHtml(appUrl)}#/estimates/${message.estimateId}">เปิด Estimate ${escapeHtml(message.estimateNumber)} / Open the estimate</a></p>`);
+    return this.sendMail(
+      message.recipients,
+      `[Engineering Center] Estimate ${message.estimateNumber} ${revision} ${approved ? "อนุมัติแล้ว / approved" : "ส่งกลับให้แก้ไข / sent back"}`,
+      (appUrl) =>
+        `<p>${summary}</p>` +
+        `<table><tr><td><strong>Estimate</strong></td><td>${escapeHtml(message.estimateNumber)} · ${revision}</td></tr>` +
+        `<tr><td><strong>Project</strong></td><td>${escapeHtml(message.projectName)}</td></tr>` +
+        `<tr><td><strong>Decided by</strong></td><td>${escapeHtml(message.decidedBy)}</td></tr>` +
+        (message.comment ? `<tr><td><strong>${approved ? "Comment" : "Reason"}</strong></td><td>${escapeHtml(message.comment)}</td></tr>` : "") +
+        (erp && !erp.sent && erp.message ? `<tr><td><strong>ERP</strong></td><td>${escapeHtml(erp.message)}</td></tr>` : "") +
+        `</table>` +
+        `<p><a href="${escapeHtml(appUrl)}#/estimates/${message.estimateId}">เปิด Estimate ${escapeHtml(message.estimateNumber)} / Open the estimate</a></p>`,
+    );
   }
 
   /**
@@ -331,13 +396,22 @@ export class EmailService {
       const when = last === task.startDate ? task.startDate : `${task.startDate} – ${last}`;
       const cancelled = message.method === "CANCEL";
       const subject = `${cancelled ? "[Engineering Center] Cancelled: " : "[Engineering Center] "}${task.title}`;
-      const rows: [string, string][] = [["Date", `${when}${task.slot === "Time" && task.startTime ? ` ${task.startTime}–${task.endTime}` : ""}`],
-        ["Repeats", task.repeat ? repeatText(task.repeat.weekdays) : ""], ["Meeting", meetingLine(task)],
-        ["Customer", task.customer], ["Note", task.note], ["Sent by", message.sentBy]];
-      const html = `<p>${cancelled ? "ยกเลิกนัดนี้แล้ว / This has been cancelled." : "นัดจากหน้าภาพรวมงานทีม / From the Team overview."}</p>`
-        + `<p><strong>${escapeHtml(task.title)}</strong></p><table>`
-        + rows.filter(([, value]) => value).map(([label, value]) => `<tr><td><strong>${label}</strong></td><td>${escapeHtml(value)}</td></tr>`).join("")
-        + `</table><p><a href="${escapeHtml(link)}">เปิดภาพรวมงานทีม / Open the Team overview</a></p>`;
+      const rows: [string, string][] = [
+        ["Date", `${when}${task.slot === "Time" && task.startTime ? ` ${task.startTime}–${task.endTime}` : ""}`],
+        ["Repeats", task.repeat ? repeatText(task.repeat.weekdays) : ""],
+        ["Meeting", meetingLine(task)],
+        ["Customer", task.customer],
+        ["Note", task.note],
+        ["Sent by", message.sentBy],
+      ];
+      const html =
+        `<p>${cancelled ? "ยกเลิกนัดนี้แล้ว / This has been cancelled." : "นัดจากหน้าภาพรวมงานทีม / From the Team overview."}</p>` +
+        `<p><strong>${escapeHtml(task.title)}</strong></p><table>` +
+        rows
+          .filter(([, value]) => value)
+          .map(([label, value]) => `<tr><td><strong>${label}</strong></td><td>${escapeHtml(value)}</td></tr>`)
+          .join("") +
+        `</table><p><a href="${escapeHtml(link)}">เปิดภาพรวมงานทีม / Open the Team overview</a></p>`;
       const text = [task.title, ...rows.filter(([, value]) => value).map(([label, value]) => `${label}: ${value}`), link].join("\n");
       const ics = calendarEvent(task, { method: message.method, organizer: this.config.senderUser!, attendees: recipients, sequence: calendarSequence(), link });
       const mime = calendarMime({ from: this.config.senderUser!, to: recipients, subject, text, html, ics, method: message.method, boundary: `team-task-${task.id}-${Date.now()}` });
@@ -361,48 +435,60 @@ export class EmailService {
   // support.ts computes the same audience the in-app notification goes to and passes it
   // here, so email recipients are always the same set (never a second, drifting rule).
   async sendSupportTicketUpdate(message: SupportTicketEmail): Promise<EmailDeliveryResult> {
-    return this.sendMail(message.recipients, `[Engineering Center] Support ${message.ticketNumber}: ${message.summary}`, (appUrl) =>
-      `<p>${escapeHtml(message.summary)}</p>`
-      + `<table><tr><td><strong>Ticket</strong></td><td>${escapeHtml(message.ticketNumber)}</td></tr>`
-      + `<tr><td><strong>Subject</strong></td><td>${escapeHtml(message.subject)}</td></tr>`
-      + `<tr><td><strong>By</strong></td><td>${escapeHtml(message.actorName)}</td></tr></table>`
-      + `<p><a href="${escapeHtml(appUrl)}#support/${message.ticketId}">เปิด Support Center ${escapeHtml(message.ticketNumber)} / Open this ticket</a></p>`);
+    return this.sendMail(
+      message.recipients,
+      `[Engineering Center] Support ${message.ticketNumber}: ${message.summary}`,
+      (appUrl) =>
+        `<p>${escapeHtml(message.summary)}</p>` +
+        `<table><tr><td><strong>Ticket</strong></td><td>${escapeHtml(message.ticketNumber)}</td></tr>` +
+        `<tr><td><strong>Subject</strong></td><td>${escapeHtml(message.subject)}</td></tr>` +
+        `<tr><td><strong>By</strong></td><td>${escapeHtml(message.actorName)}</td></tr></table>` +
+        `<p><a href="${escapeHtml(appUrl)}#support/${message.ticketId}">เปิด Support Center ${escapeHtml(message.ticketNumber)} / Open this ticket</a></p>`,
+    );
   }
 
   // Sent by the Site Monitor sweeper (site-monitor.ts): escalation step 1 → 2 → 3 while an incident
   // stays open and unacknowledged, then once more to everyone already told when it is resolved.
   async sendSiteMonitorIncident(message: SiteMonitorEmail): Promise<EmailDeliveryResult> {
-    const what = message.kind === "ProgramStopped"
-      ? `${message.programName} stopped`
-      : `${message.agentName} is offline`;
-    const subject = message.state === "open"
-      ? `[Site Monitor] ${message.siteName}: ${what}`
-      : `[Site Monitor] Resolved · ${message.siteName}: ${what}`;
-    const heading = message.state === "open"
-      ? (message.kind === "ProgramStopped"
-        ? "โปรแกรมหยุดทำงานโดยไม่คาดคิด / A monitored program stopped unexpectedly."
-        : "เครื่องที่เฝ้าระวังหยุดส่งข้อมูล / A monitored machine stopped reporting.")
-      : "ปัญหาได้รับการแก้ไขแล้ว / The problem has been resolved.";
-    const row = (label: string, value: string) => value ? `<tr><td><strong>${label}</strong></td><td>${escapeHtml(value)}</td></tr>` : "";
-    const logs = message.recentLogs.length === 0 ? "" :
-      `<p><strong>Log ล่าสุด / Recent log</strong></p><table>${message.recentLogs.map((log) =>
-        `<tr><td>${escapeHtml(log.at)}</td><td>${escapeHtml(log.level)}</td><td>${escapeHtml(log.message)}</td></tr>`).join("")}</table>`;
-    return this.sendMail(message.recipients, subject, (appUrl) =>
-      `<p>${heading}</p>`
-      + `<table>${row("Site", message.siteName)}${row("Location", message.location)}`
-      + `${row("Program", message.kind === "ProgramStopped" ? message.programName : "")}`
-      + `${row("Agent", message.agentName)}${row("Machine", message.machineName)}`
-      + `${row("Since", message.openedAt)}${row("Resolved", message.state === "resolved" ? message.resolvedAt : "")}`
-      + `${message.state === "open" ? row("Escalation", `ผู้ดูแลลำดับที่ ${message.priority} / Responsible person #${message.priority}`) : ""}</table>`
-      + logs
-      + `<p><a href="${escapeHtml(appUrl)}#/site-monitor">เปิด Site Monitor / Open Site Monitor</a></p>`);
+    const what = message.kind === "ProgramStopped" ? `${message.programName} stopped` : `${message.agentName} is offline`;
+    const subject = message.state === "open" ? `[Site Monitor] ${message.siteName}: ${what}` : `[Site Monitor] Resolved · ${message.siteName}: ${what}`;
+    const heading =
+      message.state === "open"
+        ? message.kind === "ProgramStopped"
+          ? "โปรแกรมหยุดทำงานโดยไม่คาดคิด / A monitored program stopped unexpectedly."
+          : "เครื่องที่เฝ้าระวังหยุดส่งข้อมูล / A monitored machine stopped reporting."
+        : "ปัญหาได้รับการแก้ไขแล้ว / The problem has been resolved.";
+    const row = (label: string, value: string) => (value ? `<tr><td><strong>${label}</strong></td><td>${escapeHtml(value)}</td></tr>` : "");
+    const logs =
+      message.recentLogs.length === 0
+        ? ""
+        : `<p><strong>Log ล่าสุด / Recent log</strong></p><table>${message.recentLogs
+            .map((log) => `<tr><td>${escapeHtml(log.at)}</td><td>${escapeHtml(log.level)}</td><td>${escapeHtml(log.message)}</td></tr>`)
+            .join("")}</table>`;
+    return this.sendMail(
+      message.recipients,
+      subject,
+      (appUrl) =>
+        `<p>${heading}</p>` +
+        `<table>${row("Site", message.siteName)}${row("Location", message.location)}` +
+        `${row("Program", message.kind === "ProgramStopped" ? message.programName : "")}` +
+        `${row("Agent", message.agentName)}${row("Machine", message.machineName)}` +
+        `${row("Since", message.openedAt)}${row("Resolved", message.state === "resolved" ? message.resolvedAt : "")}` +
+        `${message.state === "open" ? row("Escalation", `ผู้ดูแลลำดับที่ ${message.priority} / Responsible person #${message.priority}`) : ""}</table>` +
+        logs +
+        `<p><a href="${escapeHtml(appUrl)}#/site-monitor">เปิด Site Monitor / Open Site Monitor</a></p>`,
+    );
   }
 
   /** Whether Microsoft Graph is set up at all (Email__Mode=MicrosoftGraph). */
-  get graphEnabled(): boolean { return this.config.mode !== "Disabled"; }
+  get graphEnabled(): boolean {
+    return this.config.mode !== "Disabled";
+  }
 
   /** The system mailbox: it sends, and organizes, the team board's Outlook invitations. */
-  get graphSender(): string { return this.config.senderUser ?? ""; }
+  get graphSender(): string {
+    return this.config.senderUser ?? "";
+  }
 
   /**
    * A Graph GET with the app's own token: the team board reads Outlook calendars with it (application permission
@@ -414,10 +500,32 @@ export class EmailService {
     const url = pathOrUrl.startsWith("https://") ? pathOrUrl : `https://graph.microsoft.com/v1.0${pathOrUrl}`;
     const response = await this.fetcher(url, { headers: { Authorization: `Bearer ${accessToken}`, ...headers }, signal: AbortSignal.timeout(20_000) });
     if (!response.ok) {
-      const body = await response.json().catch(() => null) as { error?: { code?: string; message?: string } } | null;
+      const body = (await response.json().catch(() => null)) as { error?: { code?: string; message?: string } } | null;
       throw new GraphReadError(response.status, body?.error?.code ?? "graph_error", body?.error?.message ?? `Microsoft Graph returned HTTP ${response.status}.`);
     }
-    return await response.json() as T;
+    return (await response.json()) as T;
+  }
+
+  /**
+   * A Graph write with the app's own token: My week writes the time people book into their own Outlook calendars
+   * (application permission Calendars.ReadWrite, migration 124). Returns the reply's JSON, or null when it has none.
+   */
+  async graphSend<T>(method: "POST" | "PATCH" | "DELETE", path: string, body?: unknown): Promise<T | null> {
+    if (!this.graphEnabled) throw new GraphReadError(0, "graph_disabled", "Microsoft Graph is not configured.");
+    const accessToken = await this.accessToken();
+    const response = await this.fetcher(`https://graph.microsoft.com/v1.0${path}`, {
+      method,
+      headers: { Authorization: `Bearer ${accessToken}`, ...(body === undefined ? {} : { "Content-Type": "application/json" }) },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!response.ok) {
+      const reply = (await response.json().catch(() => null)) as { error?: { code?: string; message?: string } } | null;
+      throw new GraphReadError(response.status, reply?.error?.code ?? "graph_error", reply?.error?.message ?? `Microsoft Graph returned HTTP ${response.status}.`);
+    }
+    if (response.status === 204) return null;
+    const text = await response.text();
+    return text ? (JSON.parse(text) as T) : null;
   }
 
   private async sendMail(rawRecipients: EmailRecipient[], subject: string, htmlBody: (appUrl: string) => string): Promise<EmailDeliveryResult> {
@@ -462,7 +570,7 @@ export class EmailService {
       signal: AbortSignal.timeout(10_000),
     });
     if (!response.ok) throw new Error(`Microsoft identity token endpoint returned HTTP ${response.status}.`);
-    const payload = await response.json() as { access_token?: string; expires_in?: number };
+    const payload = (await response.json()) as { access_token?: string; expires_in?: number };
     if (!payload.access_token) throw new Error("Microsoft identity token response did not contain an access token.");
     this.token = { value: payload.access_token, expiresAt: Date.now() + Math.max(payload.expires_in ?? 300, 60) * 1_000 };
     return this.token.value;

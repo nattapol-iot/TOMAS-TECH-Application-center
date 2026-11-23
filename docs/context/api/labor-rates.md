@@ -2,7 +2,7 @@
 
 [Module](../modules/labor.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `ec25be16`; generated, do not edit. [backend-node/src/routes/labor-rates.ts](<../../../backend-node/src/routes/labor-rates.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `6fb49ebc`; generated, do not edit. [backend-node/src/routes/labor-rates.ts](<../../../backend-node/src/routes/labor-rates.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 

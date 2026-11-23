@@ -8,10 +8,34 @@ import { bangkokToday } from "../issue-batches.js";
 import { WORKLOAD_SQL, isOpenWork, workloadItems } from "../resource-workload.js";
 import type { CurrentUserService } from "../users.js";
 import {
-  EDIT_DAYS_BACK, HOURS_PER_DAY, MAX_WINDOW_DAYS, addDays, awaySlotHours, choiceFromItem, choiceFromOutlook, choiceFromTeamTask, datesBetween,
-  dayNumber, draftDay, draftHoursByKey, editableFrom, isEditable, isWeekend, parseDayRows, resolveDayRows, totalHours,
-  type AwaySpan, type DraftInput, type OutlookEventDay, type StoredRow, type TeamTaskDay, type WorkChoice, type WorkKind,
+  EDIT_DAYS_BACK,
+  HOURS_PER_DAY,
+  MAX_WINDOW_DAYS,
+  addDays,
+  awaySlotHours,
+  choiceFromItem,
+  choiceFromOutlook,
+  choiceFromTeamTask,
+  datesBetween,
+  dayNumber,
+  draftDay,
+  draftHoursByKey,
+  editableFrom,
+  isEditable,
+  isWeekend,
+  parseDayRows,
+  resolveDayRows,
+  totalHours,
+  type AwaySpan,
+  type BlockDay,
+  type DraftInput,
+  type OutlookEventDay,
+  type StoredRow,
+  type TeamTaskDay,
+  type WorkChoice,
+  type WorkKind,
 } from "../work-days.js";
+import type { WorkloadItem } from "../resource-workload.js";
 
 /*
  * GET  /api/v1/me/work-days?from&to   the signed-in person's days: confirmed hours, or the draft to confirm
@@ -42,10 +66,11 @@ export const WORK_DAYS_SQL = `SET NOCOUNT ON;
       FROM dbo.engineer_availability e
       WHERE e.user_id=@actor AND e.deleted_at IS NULL
         AND CONVERT(date,SWITCHOFFSET(e.ends_at,'+07:00'))>=@from AND CONVERT(date,SWITCHOFFSET(e.starts_at,'+07:00'))<=@to;
-      SELECT id,subject,is_private,is_all_day,CONVERT(char(19),start_at,126) start_at,CONVERT(char(19),end_at,126) end_at
-      FROM dbo.outlook_events
-      WHERE user_id=@actor AND start_at<DATEADD(day,1,CONVERT(datetime2(0),@to)) AND end_at>CONVERT(datetime2(0),@from)
-      ORDER BY start_at,id;
+      SELECT e.id,e.event_id,e.subject,e.location,e.is_private,e.is_all_day,CONVERT(char(19),e.start_at,126) start_at,CONVERT(char(19),e.end_at,126) end_at
+      FROM dbo.outlook_events e
+      WHERE e.user_id=@actor AND e.start_at<DATEADD(day,1,CONVERT(datetime2(0),@to)) AND e.end_at>CONVERT(datetime2(0),@from)
+        AND NOT EXISTS(SELECT 1 FROM dbo.work_blocks wb WHERE wb.user_id=@actor AND wb.outlook_event_id=e.event_id)
+      ORDER BY e.start_at,e.id;
       SELECT i.id,b.project_id,p.project_no
       FROM dbo.issue_items i JOIN dbo.issue_batches b ON b.id=i.batch_id LEFT JOIN dbo.projects p ON p.id=b.project_id AND p.deleted_at IS NULL
       WHERE i.assignee_id=@actor;
@@ -57,17 +82,35 @@ export const WORK_DAYS_SQL = `SET NOCOUNT ON;
       SELECT h.work_date,h.work_key,h.project_id,p.project_no,h.title,h.hours,h.planned_hours
       FROM dbo.work_hours h LEFT JOIN dbo.projects p ON p.id=h.project_id
       WHERE h.user_id=@actor AND h.work_date BETWEEN @from AND @to
-      ORDER BY h.work_date,h.id;`;
+      ORDER BY h.work_date,h.id;
+      SELECT b.id,b.work_date,b.start_minute,b.end_minute,b.work_key,b.project_id,p.project_no,b.title,b.outlook_state,b.outlook_error
+      FROM dbo.work_blocks b LEFT JOIN dbo.projects p ON p.id=b.project_id
+      WHERE b.user_id=@actor AND b.deleted_at IS NULL AND b.work_date BETWEEN @from AND @to
+      ORDER BY b.work_date,b.start_minute,b.id;
+      SELECT event_id,work_key FROM dbo.outlook_event_links WHERE user_id=@actor;
+      SELECT work_key,SUM(hours) hours FROM dbo.work_hours WHERE user_id=@actor AND work_key IS NOT NULL GROUP BY work_key;`;
 
 export type RowKind = WorkKind | "ProjectOther" | "Other";
 export type DayRowDto = { workKey: string | null; kind: RowKind; projectId: number | null; projectNo: string | null; title: string; reference: string; hours: number; plannedHours: number | null };
 type StoredLine = StoredRow & { date: string; projectNo: string | null };
+/** A booked block as My week shows it: the draft's BlockDay plus where its Outlook entry stands. */
+export type BlockRow = BlockDay & { outlookState: string; outlookError: string | null };
+/** A meeting as My week shows it. */
+export type MeetingRow = OutlookEventDay & { eventId: string; location: string | null; private: boolean };
 export type WorkDaysRead = {
   draftInput: DraftInput;
   choices: Map<string, WorkChoice>;
   projects: Map<number, { projectNo: string; name: string }>;
   confirmed: Map<string, { at: string; times: number }>;
   stored: Map<string, StoredLine[]>;
+  /** My week (migration 124): the person's blocks, meetings and team tasks in the window, their open work and its confirmed hours. */
+  blocks: BlockRow[];
+  meetings: MeetingRow[];
+  tasks: TeamTaskDay[];
+  leave: { start: string; end: string }[];
+  links: Map<string, string>;
+  openItems: WorkloadItem[];
+  confirmedByKey: Map<string, number>;
 };
 
 const text = (row: Row, key: string) => String(row[key] ?? "");
@@ -76,75 +119,147 @@ const day = (row: Row, key: string) => dateOnly((row[key] ?? null) as Date | str
 const iso = (value: unknown) => (value instanceof Date ? value.toISOString() : String(value ?? ""));
 
 const KIND_BY_PREFIX: Record<string, WorkKind> = {
-  Project: "Project", TeamTask: "TeamTask", Issue: "Issue", InquiryTask: "Inquiry", Inquiry: "Inquiry", Estimate: "Estimate", EstimateSection: "Estimate", Outlook: "Outlook",
+  Project: "Project",
+  TeamTask: "TeamTask",
+  Issue: "Issue",
+  InquiryTask: "Inquiry",
+  Inquiry: "Inquiry",
+  Estimate: "Estimate",
+  EstimateSection: "Estimate",
+  Outlook: "Outlook",
 };
 export const kindOfKey = (workKey: string | null, projectId: number | null): RowKind =>
-  workKey === null ? (projectId === null ? "Other" : "ProjectOther") : KIND_BY_PREFIX[workKey.slice(0, workKey.lastIndexOf("-"))] ?? "Other";
+  workKey === null ? (projectId === null ? "Other" : "ProjectOther") : (KIND_BY_PREFIX[workKey.slice(0, workKey.lastIndexOf("-"))] ?? "Other");
 
 const KIND_ORDER: RowKind[] = ["Project", "TeamTask", "Issue", "Inquiry", "Estimate", "Outlook", "ProjectOther", "Other"];
 const byKind = (left: { kind: RowKind; projectNo: string | null; reference: string; title: string }, right: typeof left) =>
-  KIND_ORDER.indexOf(left.kind) - KIND_ORDER.indexOf(right.kind) || String(left.projectNo ?? "").localeCompare(String(right.projectNo ?? "")) ||
-  left.reference.localeCompare(right.reference, undefined, { numeric: true }) || left.title.localeCompare(right.title);
+  KIND_ORDER.indexOf(left.kind) - KIND_ORDER.indexOf(right.kind) ||
+  String(left.projectNo ?? "").localeCompare(String(right.projectNo ?? "")) ||
+  left.reference.localeCompare(right.reference, undefined, { numeric: true }) ||
+  left.title.localeCompare(right.title);
 
 /** The recordsets of WORK_DAYS_SQL, turned into the draft's input, the work hours can go to, and what is confirmed. */
 export function workDaysRead(sets: Row[][], actorId: number, from: string, today: string): WorkDaysRead {
   const holidays = new Set((sets[0] ?? []).map((row) => day(row, "holiday_date")));
   const work = workloadItems(sets.slice(1, 11), holidays, { keepFinished: true });
-  const [teamRows = [], awayRows = [], outlookRows = [], issueRows = [], projectRows = [], dayRows = [], lineRows = []] = sets.slice(11);
+  const [teamRows = [], awayRows = [], outlookRows = [], issueRows = [], projectRows = [], dayRows = [], lineRows = [], blockRows = [], linkRows = [], totalRows = []] = sets.slice(11);
   // The person's own work; team tasks are read on their own, with done ones and the project they belong to.
   const mine = work.items.filter((item) => item.ownerId === actorId && item.type !== "Task");
-  const items = mine.filter(isOpenWork), finishedItems = mine.filter((item) => !isOpenWork(item));
+  const items = mine.filter(isOpenWork),
+    finishedItems = mine.filter((item) => !isOpenWork(item));
   const tasks: TeamTaskDay[] = teamRows.map((row) => ({
-    id: Number(row.id), kind: row.kind === "Away" ? "Away" : row.kind === "Appointment" ? "Appointment" : "Task", title: text(row, "title"),
-    projectId: optionalId(row, "project_id"), projectNo: row.project_no == null ? null : text(row, "project_no"),
-    start: day(row, "start_date"), end: day(row, "end_date"), slot: text(row, "time_slot"),
-    startTime: row.start_time ? text(row, "start_time").trim() : null, endTime: row.end_time ? text(row, "end_time").trim() : null, manDays: Number(row.man_days ?? 0),
+    id: Number(row.id),
+    kind: row.kind === "Away" ? "Away" : row.kind === "Appointment" ? "Appointment" : "Task",
+    title: text(row, "title"),
+    projectId: optionalId(row, "project_id"),
+    projectNo: row.project_no == null ? null : text(row, "project_no"),
+    start: day(row, "start_date"),
+    end: day(row, "end_date"),
+    slot: text(row, "time_slot"),
+    startTime: row.start_time ? text(row, "start_time").trim() : null,
+    endTime: row.end_time ? text(row, "end_time").trim() : null,
+    manDays: Number(row.man_days ?? 0),
   }));
   const away: AwaySpan[] = [
     ...awayRows.map((row) => ({ start: day(row, "start_date"), end: day(row, "end_date"), hours: HOURS_PER_DAY })),
     ...tasks.filter((task) => task.kind === "Away").map((task) => ({ start: task.start, end: task.end, hours: awaySlotHours(task) })),
   ];
-  const outlook: OutlookEventDay[] = outlookRows.map((row) => ({
-    id: Number(row.id), subject: row.is_private ? null : (row.subject == null ? null : text(row, "subject")), allDay: Boolean(row.is_all_day),
-    start: text(row, "start_at"), end: text(row, "end_at"),
+  const meetings: MeetingRow[] = outlookRows.map((row) => ({
+    id: Number(row.id),
+    eventId: text(row, "event_id"),
+    subject: row.is_private ? null : row.subject == null ? null : text(row, "subject"),
+    allDay: Boolean(row.is_all_day),
+    start: text(row, "start_at"),
+    end: text(row, "end_at"),
+    location: row.is_private || row.location == null ? null : text(row, "location"),
+    private: Boolean(row.is_private),
   }));
+  const outlook: OutlookEventDay[] = meetings;
+  const blocks: BlockRow[] = blockRows.map((row) => ({
+    id: Number(row.id),
+    date: day(row, "work_date"),
+    start: Number(row.start_minute),
+    end: Number(row.end_minute),
+    workKey: row.work_key == null ? null : text(row, "work_key"),
+    projectId: optionalId(row, "project_id"),
+    projectNo: row.project_no == null ? null : text(row, "project_no"),
+    title: text(row, "title"),
+    outlookState: text(row, "outlook_state"),
+    outlookError: row.outlook_error == null ? null : text(row, "outlook_error"),
+  }));
+  const links = new Map(linkRows.map((row) => [text(row, "event_id"), text(row, "work_key")] as const));
+  const confirmedByKey = new Map(totalRows.map((row) => [text(row, "work_key"), Number(row.hours)] as const));
   const issueProjects = new Map(issueRows.map((row) => [Number(row.id), { projectId: optionalId(row, "project_id"), projectNo: row.project_no == null ? null : text(row, "project_no") }] as const));
   const projects = new Map(projectRows.map((row) => [Number(row.id), { projectNo: text(row, "project_no"), name: text(row, "name") }] as const));
   const confirmed = new Map(dayRows.map((row) => [day(row, "work_date"), { at: iso(row.confirmed_at), times: Number(row.times_confirmed ?? 1) }] as const));
   const stored = new Map<string, StoredLine[]>();
   for (const row of lineRows) {
     const date = day(row, "work_date");
-    stored.set(date, [...(stored.get(date) ?? []), {
-      date, workKey: row.work_key == null ? null : text(row, "work_key"), projectId: optionalId(row, "project_id"), projectNo: row.project_no == null ? null : text(row, "project_no"),
-      title: text(row, "title"), hours: Number(row.hours), plannedHours: row.planned_hours == null ? null : Number(row.planned_hours),
-    }]);
+    stored.set(date, [
+      ...(stored.get(date) ?? []),
+      {
+        date,
+        workKey: row.work_key == null ? null : text(row, "work_key"),
+        projectId: optionalId(row, "project_id"),
+        projectNo: row.project_no == null ? null : text(row, "project_no"),
+        title: text(row, "title"),
+        hours: Number(row.hours),
+        plannedHours: row.planned_hours == null ? null : Number(row.planned_hours),
+      },
+    ]);
   }
   // Work hours can go to: open work, work finished within the editable window, team tasks and meetings in the window.
   const oldest = addDays(from, -EDIT_DAYS_BACK);
   const choices = new Map<string, WorkChoice>();
-  const offer = (choice: WorkChoice) => { if (!choices.has(choice.workKey)) choices.set(choice.workKey, choice); };
+  const offer = (choice: WorkChoice) => {
+    if (!choices.has(choice.workKey)) choices.set(choice.workKey, choice);
+  };
   for (const item of items) offer(choiceFromItem(item, issueProjects));
   for (const item of finishedItems) if ((item.end ?? item.start ?? "") >= oldest) offer(choiceFromItem(item, issueProjects));
   for (const task of tasks) if (task.kind !== "Away") offer(choiceFromTeamTask(task));
   for (const event of outlook) offer(choiceFromOutlook(event));
-  return { draftInput: { today, holidays, items, finishedItems, teamTasks: tasks.filter((task) => task.kind !== "Away"), outlook, away, issueProjects }, choices, projects, confirmed, stored };
+  return {
+    draftInput: { today, holidays, items, finishedItems, teamTasks: tasks.filter((task) => task.kind !== "Away"), outlook, away, issueProjects, blocks, links },
+    choices,
+    projects,
+    confirmed,
+    stored,
+    blocks,
+    meetings,
+    tasks,
+    leave: awayRows.map((row) => ({ start: day(row, "start_date"), end: day(row, "end_date") })),
+    links,
+    openItems: items,
+    confirmedByKey,
+  };
 }
 
 export async function readWorkDays(database: Database, actorId: number, from: string, to: string, today: string): Promise<WorkDaysRead> {
-  const result = await database.query<Row>(WORK_DAYS_SQL, (q) => q
-    .input("actor", sql.BigInt, actorId)
-    // Only the person's own work is read, so nobody's elevated view widens the read.
-    .input("project_elevated", sql.Bit, false)
-    .input("task_elevated", sql.Bit, false)
-    .input("all_work", sql.Bit, false)
-    .input("from", sql.Date, from)
-    .input("to", sql.Date, to));
+  const result = await database.query<Row>(WORK_DAYS_SQL, (q) =>
+    q
+      .input("actor", sql.BigInt, actorId)
+      // Only the person's own work is read, so nobody's elevated view widens the read.
+      .input("project_elevated", sql.Bit, false)
+      .input("task_elevated", sql.Bit, false)
+      .input("all_work", sql.Bit, false)
+      .input("from", sql.Date, from)
+      .input("to", sql.Date, to),
+  );
   return workDaysRead(result.recordsets as unknown as Row[][], actorId, from, today);
 }
 
-const rowDto = (row: { workKey: string | null; projectId: number | null; projectNo: string | null; title: string; hours: number; plannedHours: number | null }, choices: ReadonlyMap<string, WorkChoice>): DayRowDto => ({
-  workKey: row.workKey, kind: kindOfKey(row.workKey, row.projectId), projectId: row.projectId, projectNo: row.projectNo, title: row.title,
-  reference: row.workKey ? choices.get(row.workKey)?.reference ?? "" : "", hours: row.hours, plannedHours: row.plannedHours,
+const rowDto = (
+  row: { workKey: string | null; projectId: number | null; projectNo: string | null; title: string; hours: number; plannedHours: number | null },
+  choices: ReadonlyMap<string, WorkChoice>,
+): DayRowDto => ({
+  workKey: row.workKey,
+  kind: kindOfKey(row.workKey, row.projectId),
+  projectId: row.projectId,
+  projectNo: row.projectNo,
+  title: row.title,
+  reference: row.workKey ? (choices.get(row.workKey)?.reference ?? "") : "",
+  hours: row.hours,
+  plannedHours: row.plannedHours,
 });
 
 export function workDaysResponse(read: WorkDaysRead, from: string, to: string, today: string) {
@@ -154,14 +269,24 @@ export function workDaysResponse(read: WorkDaysRead, from: string, to: string, t
     const confirmed = read.confirmed.get(date);
     const stored = (read.stored.get(date) ?? []).map((row) => rowDto(row, read.choices)).sort(byKind);
     return {
-      date, working: draft.working, holiday: read.draftInput.holidays.has(date), weekend: isWeekend(date), awayHours: draft.awayHours,
-      editable: isEditable(date, today), future: date > today,
+      date,
+      working: draft.working,
+      holiday: read.draftInput.holidays.has(date),
+      weekend: isWeekend(date),
+      awayHours: draft.awayHours,
+      editable: isEditable(date, today),
+      future: date > today,
       confirmed: confirmed ? { at: confirmed.at, times: confirmed.times, hours: totalHours(stored) } : null,
-      rows: confirmed ? stored : draftRows, draft: draftRows, draftHours: totalHours(draftRows),
+      rows: confirmed ? stored : draftRows,
+      draft: draftRows,
+      draftHours: totalHours(draftRows),
     };
   });
   return {
-    today, editableFrom: editableFrom(today), hoursPerDay: HOURS_PER_DAY, days,
+    today,
+    editableFrom: editableFrom(today),
+    hoursPerDay: HOURS_PER_DAY,
+    days,
     choices: [...read.choices.values()].map((choice) => ({ ...choice })).sort(byKind),
     projects: [...read.projects].map(([id, project]) => ({ id, ...project })),
   };
@@ -197,9 +322,9 @@ export function registerWorkDayRoutes(app: FastifyInstance, database: Database, 
   app.get("/api/v1/me/work-days", async (request) => {
     const actor = await users.required(request);
     const query = request.query as Record<string, unknown>;
-    const from = parseDateOnly(query.from, "From")!, to = parseDateOnly(query.to, "To")!;
-    if (to < from || dayNumber(to) - dayNumber(from) + 1 > MAX_WINDOW_DAYS)
-      throw new ApiError(400, "validation_failed", `Choose a window of at most ${MAX_WINDOW_DAYS} days.`);
+    const from = parseDateOnly(query.from, "From")!,
+      to = parseDateOnly(query.to, "To")!;
+    if (to < from || dayNumber(to) - dayNumber(from) + 1 > MAX_WINDOW_DAYS) throw new ApiError(400, "validation_failed", `Choose a window of at most ${MAX_WINDOW_DAYS} days.`);
     const today = bangkokToday();
     return workDaysResponse(await readWorkDays(database, actor.id, from, to, today), from, to, today);
   });
@@ -214,11 +339,19 @@ export function registerWorkDayRoutes(app: FastifyInstance, database: Database, 
     // Work already confirmed on this day stays a valid line, even if it has since left the person's plan.
     const choices = new Map(read.choices);
     for (const line of read.stored.get(date) ?? []) {
-      if (line.workKey && !choices.has(line.workKey)) choices.set(line.workKey, { workKey: line.workKey, kind: kindOfKey(line.workKey, line.projectId) as WorkKind, projectId: line.projectId, projectNo: line.projectNo, title: line.title, reference: "" });
+      if (line.workKey && !choices.has(line.workKey))
+        choices.set(line.workKey, {
+          workKey: line.workKey,
+          kind: kindOfKey(line.workKey, line.projectId) as WorkKind,
+          projectId: line.projectId,
+          projectNo: line.projectNo,
+          title: line.title,
+          reference: "",
+        });
     }
     const rows = resolveDayRows(input, choices, read.projects, draftHoursByKey(draftDay(date, read.draftInput)));
     const saved = await database.transaction((transaction) => saveDay(transaction, actor.id, date, rows));
-    const projectNo = (row: StoredRow) => (row.workKey ? choices.get(row.workKey)?.projectNo ?? null : row.projectId === null ? null : read.projects.get(row.projectId)?.projectNo ?? null);
+    const projectNo = (row: StoredRow) => (row.workKey ? (choices.get(row.workKey)?.projectNo ?? null) : row.projectId === null ? null : (read.projects.get(row.projectId)?.projectNo ?? null));
     const lines = rows.map((row) => rowDto({ ...row, projectNo: projectNo(row) }, choices)).sort(byKind);
     return { date, confirmed: { at: saved.at, times: saved.times, hours: totalHours(rows) }, rows: lines };
   });
@@ -230,18 +363,29 @@ export function registerWorkDayRoutes(app: FastifyInstance, database: Database, 
     const closed = dates.filter((date) => !isEditable(date, today));
     if (closed.length) throw new ApiError(409, "work_day_closed", `Days from ${editableFrom(today)} to today can be confirmed.`);
     const read = await readWorkDays(database, actor.id, dates[0]!, dates.at(-1)!, today);
-    const confirmed: string[] = [], skipped: { date: string; reason: "confirmed" | "empty" | "off" }[] = [];
+    const confirmed: string[] = [],
+      skipped: { date: string; reason: "confirmed" | "empty" | "off" }[] = [];
     const plans: { date: string; rows: StoredRow[] }[] = [];
     for (const date of dates) {
-      if (read.confirmed.has(date)) { skipped.push({ date, reason: "confirmed" }); continue; }
+      if (read.confirmed.has(date)) {
+        skipped.push({ date, reason: "confirmed" });
+        continue;
+      }
       const draft = draftDay(date, read.draftInput);
       // A day with nothing drafted needs the person to say what they did, unless they were away all of it.
-      if (!draft.rows.length && draft.awayHours < HOURS_PER_DAY) { skipped.push({ date, reason: draft.working ? "empty" : "off" }); continue; }
+      if (!draft.rows.length && draft.awayHours < HOURS_PER_DAY) {
+        skipped.push({ date, reason: draft.working ? "empty" : "off" });
+        continue;
+      }
       plans.push({ date, rows: draft.rows.map((row) => ({ workKey: row.workKey, projectId: row.projectId, title: row.title.slice(0, 300), hours: row.hours, plannedHours: row.hours })) });
     }
-    if (plans.length) await database.transaction(async (transaction) => {
-      for (const plan of plans) { await saveDay(transaction, actor.id, plan.date, plan.rows); confirmed.push(plan.date); }
-    });
+    if (plans.length)
+      await database.transaction(async (transaction) => {
+        for (const plan of plans) {
+          await saveDay(transaction, actor.id, plan.date, plan.rows);
+          confirmed.push(plan.date);
+        }
+      });
     return { confirmed, skipped };
   });
 }
