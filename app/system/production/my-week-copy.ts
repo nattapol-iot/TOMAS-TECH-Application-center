@@ -2,6 +2,7 @@
 export const MY_WEEK_COPY: Record<string, { en: string; th: string; jp: string }> = Object.fromEntries(
   [
     ["MyWeek.tab", "My week", "สัปดาห์ของฉัน", "マイウィーク"],
+    ["MyWork.assignedTab", "Assigned to me", "งานที่ได้รับ", "担当作業"],
     ["MyWeek.book", "Book time", "ลงเวลา", "時間を入れる"],
     ["MyWeek.appointment", "Appointment or leave", "นัด / ลา", "予定・休暇"],
     ["MyWeek.thisWeek", "This week", "สัปดาห์นี้", "今週"],

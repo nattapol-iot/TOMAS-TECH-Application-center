@@ -518,3 +518,13 @@
     grid-column: auto;
   }
 }
+
+/* My Work's "Assigned to me" tab holds active work, new assignments and the work order as a quieter second row. */
+.my-work-subtabs .tabs {
+  border-bottom: 0;
+}
+.my-work-subtabs .tab {
+  padding-top: 4px;
+  padding-bottom: 4px;
+  font-size: var(--fs-xs);
+}

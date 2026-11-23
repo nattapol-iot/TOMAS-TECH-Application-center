@@ -106,6 +106,8 @@ test("the catalog holds the guides the owner chose, in the order the work happen
       "punchlist-issues",
       "punchlist-close-issue",
       "team-overview-task",
+      // Team week: everyone's hours from My week, with the allocation queue beside it (2026-11-23).
+      "team-week",
       // One head names the people of every project, from the queue on Team overview > Allocation (2026-11-22).
       "allocation-assign",
       "bom-release",

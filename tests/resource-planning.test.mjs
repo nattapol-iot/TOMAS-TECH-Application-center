@@ -2,20 +2,16 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import ts from "typescript-api";
-const source = await readFile(
-  new URL("../lib/resource-planning.ts", import.meta.url),
-  "utf8",
-);
+const source = await readFile(new URL("../lib/resource-planning.ts", import.meta.url), "utf8");
 const compiled = ts.transpileModule(source, {
   compilerOptions: {
     module: ts.ModuleKind.ESNext,
     target: ts.ScriptTarget.ES2022,
   },
 }).outputText;
-const { planningWeeks, workingDays, planningLoad, resourceCsv, DEFAULT_WEEKLY_CAPACITY, weeklyCapacity, FINISHED_WORK_STATUSES, isOpenWork, orderWork, projectWork } =
-  await import(
-    "data:text/javascript;base64," + Buffer.from(compiled).toString("base64")
-  );
+const { planningWeeks, workingDays, planningLoad, resourceCsv, DEFAULT_WEEKLY_CAPACITY, weeklyCapacity, FINISHED_WORK_STATUSES, isOpenWork, orderWork, projectWork } = await import(
+  "data:text/javascript;base64," + Buffer.from(compiled).toString("base64")
+);
 const item = {
   key: "1",
   type: "Project",
@@ -50,39 +46,18 @@ test("effort is conserved and clipped to selected horizon", () => {
   assert.equal(planningLoad([item], w.slice(1), 5, "2026-09-09").committed, 5);
 });
 test("holidays reduce available capacity without discarding committed effort", () => {
-  const r = planningLoad([item], planningWeeks(item.start, 2), 5, item.start, [
-    "2026-09-07",
-  ]);
+  const r = planningLoad([item], planningWeeks(item.start, 2), 5, item.start, ["2026-09-07"]);
   assert.equal(r.weekly[0].available, 4);
   assert.ok(Math.abs(r.committed - 10) < 1e-9);
   assert.ok(r.peak > 100);
 });
 test("unknown effort and unset/zero capacity are not silently treated as free capacity", () => {
-  assert.equal(
-    planningLoad([item], planningWeeks(item.start, 2), null, item.start).peak,
-    null,
-  );
-  assert.equal(
-    planningLoad([item], planningWeeks(item.start, 2), 0, item.start).peak,
-    Infinity,
-  );
-  assert.equal(
-    planningLoad(
-      [{ ...item, manDays: null }],
-      planningWeeks(item.start, 2),
-      5,
-      item.start,
-    ).unknown,
-    1,
-  );
+  assert.equal(planningLoad([item], planningWeeks(item.start, 2), null, item.start).peak, null);
+  assert.equal(planningLoad([item], planningWeeks(item.start, 2), 0, item.start).peak, Infinity);
+  assert.equal(planningLoad([{ ...item, manDays: null }], planningWeeks(item.start, 2), 5, item.start).unknown, 1);
 });
 test("overdue excludes closed work and future due dates", () => {
-  const r = planningLoad(
-    [item, { ...item, key: "2", status: "Closed" }],
-    planningWeeks(item.start, 2),
-    5,
-    "2026-09-19",
-  );
+  const r = planningLoad([item, { ...item, key: "2", status: "Closed" }], planningWeeks(item.start, 2), 5, "2026-09-19");
   assert.equal(r.overdue, 1);
   assert.equal(r.open, 1);
 });
@@ -113,12 +88,12 @@ test("Team overview opens on the team board; its weekly workload reads once and 
   // One request instead of every inquiry, every estimate workspace and every project schedule.
   assert.match(screen, /setData\(await loadWorkload\(\)\)/);
   assert.doesNotMatch(screen, /loadEstimateCostWorkspace|loadSchedules|listInquiries|listEstimates|resource-tasks\/commitments/);
-  // The team board and its list first (team.board), then the weekly workload and Tasks (schedule access); the last tab is remembered per person.
-  assert.match(screen, /\{ id: "board" as const, label: "TeamBoard\.tabBoard" \},\s*\{ id: "list" as const, label: "TeamBoard\.tabList" \}/);
+  // Team week, the team board and its list first (team.board), then the weekly workload and Tasks (schedule access); the last tab is remembered per person.
+  assert.match(screen, /\{ id: "week" as const, label: "TeamWeek\.tab" \},\s*\{ id: "board" as const, label: "TeamBoard\.tabBoard" \},\s*\{ id: "list" as const, label: "TeamBoard\.tabList" \}/);
   assert.match(screen, /\{ id: "workload" as const, label: "TeamBoard\.tabWeekly" \},\s*\{ id: "tasks" as const, label: "Workload\.tabTasks" \}/);
-  // A link names the tab; without one, the tab last used here.
-  assert.match(screen, /RESOURCE_TABS\.find\(\(tab\) => tab === opened\[0\]\) \?\? readStored\(tabStorageKey\(bootstrap\.user\.id\), RESOURCE_TABS, "board"\)/);
-  assert.match(screen, /const tab: ResourceTab = allowedTabs\.includes\(storedTab\) \? storedTab : \(?allowedTabs\[0\] \?\? "board"\)?;/);
+  // A link names the tab; without one, the tab last used here, and Team week the first time (2026-11-23).
+  assert.match(screen, /RESOURCE_TABS\.find\(\(tab\) => tab === opened\[0\]\) \?\? readStored\(tabStorageKey\(bootstrap\.user\.id\), RESOURCE_TABS, "week"\)/);
+  assert.match(screen, /const tab: ResourceTab = allowedTabs\.includes\(storedTab\) \? storedTab : \(?allowedTabs\[0\] \?\? "week"\)?;/);
   assert.match(screen, /tomas-tech-resource-plan-tab:\$\{userId\}/);
   assert.doesNotMatch(screen, /id: "gantt"|id: "items"|KpiCard|BarChart/);
   // Chips filter the one table; a person opens a drawer with their open work and the effort and capacity edits.
@@ -147,13 +122,23 @@ test("every Workload and work order string has English, Thai and Japanese copy",
 const work = (key, change = {}) => ({ ...item, key, workKey: key, reference: key, start: "2026-10-05", end: "2026-10-09", manDays: 5, progress: 0, ...change });
 test("a person's order comes first, the rest by due date, and finished work drops out", () => {
   const items = [work("A", { end: "2026-10-20" }), work("B", { end: "2026-10-09" }), work("C", { end: "2026-10-12" }), work("D", { progress: 100 })];
-  assert.deepEqual(orderWork(items, ["C"]).map((entry) => entry.key), ["C", "B", "A"]);
-  assert.deepEqual(orderWork(items, []).map((entry) => entry.key), ["B", "C", "A"]);
+  assert.deepEqual(
+    orderWork(items, ["C"]).map((entry) => entry.key),
+    ["C", "B", "A"],
+  );
+  assert.deepEqual(
+    orderWork(items, []).map((entry) => entry.key),
+    ["B", "C", "A"],
+  );
   // A saved key for work that has gone changes nothing.
-  assert.deepEqual(orderWork(items, ["gone", "A"]).map((entry) => entry.key), ["A", "B", "C"]);
+  assert.deepEqual(
+    orderWork(items, ["gone", "A"]).map((entry) => entry.key),
+    ["A", "B", "C"],
+  );
 });
 test("working in a chosen order shows which overlapping work finishes late, and by how much", () => {
-  const a = work("A"), b = work("B");
+  const a = work("A"),
+    b = work("B");
   // Monday 5 October: both are due Friday and each needs the whole week.
   let projected = projectWork([a, b], 5, "2026-10-05");
   assert.deepEqual(projected.get("A"), { start: "2026-10-05", finish: "2026-10-09", lateDays: 0 });
@@ -183,10 +168,16 @@ test("work without effort, or a person without capacity, gets no guessed date", 
   assert.equal(projectWork([work("A", { manDays: 5000 })], 5, "2026-10-05").get("A").reason, "horizon");
 });
 test("the Workload shows a Gantt, a work order per person, and My Work has its own order tab", async () => {
-  const [screen, queue, gantt, myWork, lazy, client] = await Promise.all([
-    "../app/system/production/ResourcePlanningScreen.tsx", "../app/system/production/WorkQueue.tsx", "../app/system/production/WorkloadGantt.tsx",
-    "../app/system/production/PlanningPricingScreens.tsx", "../app/system/production/LazyScreens.tsx", "../app/system/resource-workload-client.ts",
-  ].map((file) => readFile(new URL(file, import.meta.url), "utf8")));
+  const [screen, queue, gantt, myWork, lazy, client] = await Promise.all(
+    [
+      "../app/system/production/ResourcePlanningScreen.tsx",
+      "../app/system/production/WorkQueue.tsx",
+      "../app/system/production/WorkloadGantt.tsx",
+      "../app/system/production/PlanningPricingScreens.tsx",
+      "../app/system/production/LazyScreens.tsx",
+      "../app/system/resource-workload-client.ts",
+    ].map((file) => readFile(new URL(file, import.meta.url), "utf8")),
+  );
   // Table or Gantt, remembered per person; the Gantt shows the same people, each in their own order.
   assert.match(screen, /tomas-tech-workload-view:\$\{userId\}/);
   assert.match(screen, /<WorkloadGantt people=\{shown\} today=\{todayIso\} onPerson=\{setPersonId\} onOpen=\{open\} \/>/);
@@ -207,9 +198,11 @@ test("the Workload shows a Gantt, a work order per person, and My Work has its o
   assert.match(queue, /loadWorkload\(\{ mine: true \}\)/);
 });
 test("estimate sections and tasks awaiting approval show up, and a section's engineer plans its effort", async () => {
-  const [screen, queue, gantt] = await Promise.all([
-    "../app/system/production/ResourcePlanningScreen.tsx", "../app/system/production/WorkQueue.tsx", "../app/system/production/WorkloadGantt.tsx",
-  ].map((file) => readFile(new URL(file, import.meta.url), "utf8")));
+  const [screen, queue, gantt] = await Promise.all(
+    ["../app/system/production/ResourcePlanningScreen.tsx", "../app/system/production/WorkQueue.tsx", "../app/system/production/WorkloadGantt.tsx"].map((file) =>
+      readFile(new URL(file, import.meta.url), "utf8"),
+    ),
+  );
   // Awaiting approval is marked wherever the work is listed.
   assert.match(queue, /\{item\.tentative \? <Badge tone="amber">\{t\("Workload\.awaitingApproval"\)\}<\/Badge> : null\}/);
   assert.match(screen, /\{item\.tentative \? <Badge tone="amber">\{t\("Workload\.awaitingApproval"\)\}<\/Badge> : null\}/);
@@ -225,16 +218,38 @@ test("estimate sections and tasks awaiting approval show up, and a section's eng
 });
 
 test("plan work with no man-days counts a full day a working day in the weekly load, once per task with its functions", () => {
-  const plan = (key, group, start, end, manDays) => ({ key, workKey: key, group, type: "Project", entityId: 1, ownerId: 7, reference: "", title: "", customer: "",
-    start, end, manDays, progress: 0, status: "Not Started" });
+  const plan = (key, group, start, end, manDays) => ({
+    key,
+    workKey: key,
+    group,
+    type: "Project",
+    entityId: 1,
+    ownerId: 7,
+    reference: "",
+    title: "",
+    customer: "",
+    start,
+    end,
+    manDays,
+    progress: 0,
+    status: "Not Started",
+  });
   const weeks = planningWeeks("2026-11-02", 2);
   // Two functions of task 21 with no man-days, the first week together and one into the second; task 30 has 3 MD in week two.
-  const load = planningLoad([
-    plan("Project-211", "Project-21", "2026-11-02", "2026-11-06", 0),
-    plan("Project-212", "Project-21", "2026-11-04", "2026-11-10", 0),
-    plan("Project-30", "Project-30", "2026-11-09", "2026-11-11", 3),
-  ], weeks, 5, "2026-11-02");
+  const load = planningLoad(
+    [
+      plan("Project-211", "Project-21", "2026-11-02", "2026-11-06", 0),
+      plan("Project-212", "Project-21", "2026-11-04", "2026-11-10", 0),
+      plan("Project-30", "Project-30", "2026-11-09", "2026-11-11", 3),
+    ],
+    weeks,
+    5,
+    "2026-11-02",
+  );
   // Week one: task 21 every day, once though both functions run; week two: Monday and Tuesday of task 21, and task 30.
-  assert.deepEqual(load.weekly.map((week) => week.manDays), [5, 5]);
+  assert.deepEqual(
+    load.weekly.map((week) => week.manDays),
+    [5, 5],
+  );
   assert.equal(load.committed, 10);
 });
