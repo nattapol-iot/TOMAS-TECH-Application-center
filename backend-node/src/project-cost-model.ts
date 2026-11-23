@@ -5,7 +5,9 @@
  * Two groups of cost, each as "what the Estimate cost gave" against "what the work has taken":
  *  - Bought: Hardware (estimate categories 01-05) and Outsource (07), against the purchase requests raised for the project.
  *  - People: the internal labor man-days of the estimate against the man-days on the plan, and what the plan says is
- *    used up to today. Nobody records actual hours yet, so "to date" is the plan's figure, not a time sheet.
+ *    used up to today. Since My week (owner decision 2026-11-23) people confirm the hours they really worked, so the
+ *    actual man-days are the confirmed hours (8 hours a man-day), and the forecast at completion is the actual plus
+ *    what the plan still has to do (planned less the plan's own to-date).
  * Every amount is an internal cost in THB. Selling prices and margins are not part of this app.
  */
 
@@ -37,8 +39,17 @@ export type LaborDiscipline = (typeof LABOR_DISCIPLINES)[number];
 
 /** Budget against plan, in man-days and (for a viewer who may see it) in money. */
 export type LaborFigures = {
-  budgetManDays: number | null; plannedManDays: number; toDateManDays: number | null;
-  budgetCost: number | null; plannedCost: number | null; toDateCost: number | null;
+  budgetManDays: number | null;
+  plannedManDays: number;
+  toDateManDays: number | null;
+  budgetCost: number | null;
+  plannedCost: number | null;
+  toDateCost: number | null;
+  /** Confirmed hours (My Work) as man-days, and the forecast at completion: actual plus the plan still to do. Null forecast when the plan's dates are unknown. */
+  actualManDays: number;
+  forecastManDays: number | null;
+  actualCost: number | null;
+  forecastCost: number | null;
 };
 export type LaborDisciplineCost = LaborFigures & { discipline: LaborDiscipline };
 
@@ -74,19 +85,43 @@ export type LaborCost = {
   budgetCost: number | null;
   plannedCost: number | null;
   toDateCost: number | null;
-  /** The same figures by discipline, in the order of LABOR_DISCIPLINES; only disciplines with a budget or planned man-days. */
+  /** Confirmed hours (My Work) as man-days, the forecast at completion (actual plus the plan still to do), and their money. */
+  actualManDays: number;
+  forecastManDays: number | null;
+  actualCost: number | null;
+  forecastCost: number | null;
+  /** The same figures by discipline, in the order of LABOR_DISCIPLINES; only disciplines with a budget, planned man-days or confirmed hours. */
   disciplines: LaborDisciplineCost[];
 };
 
 /** A project's labor figures in all (null) or for one discipline; a discipline the project has nothing in reads as no budget and nothing planned. */
 export function laborOf(labor: LaborCost, discipline: LaborDiscipline | null): LaborFigures {
   if (discipline === null) return labor;
-  return labor.disciplines.find((item) => item.discipline === discipline)
-    ?? { budgetManDays: null, plannedManDays: 0, toDateManDays: labor.toDateManDays === null ? null : 0, budgetCost: null, plannedCost: null, toDateCost: null };
+  return (
+    labor.disciplines.find((item) => item.discipline === discipline) ?? {
+      budgetManDays: null,
+      plannedManDays: 0,
+      toDateManDays: labor.toDateManDays === null ? null : 0,
+      budgetCost: null,
+      plannedCost: null,
+      toDateCost: null,
+      actualManDays: 0,
+      forecastManDays: labor.toDateManDays === null ? null : 0,
+      actualCost: null,
+      forecastCost: null,
+    }
+  );
 }
 
 export type ProjectCostItem = {
-  id: number; number: string; name: string; customerName: string; managerId: number; managerName: string; team: string | null; status: string;
+  id: number;
+  number: string;
+  name: string;
+  customerName: string;
+  managerId: number;
+  managerName: string;
+  team: string | null;
+  status: string;
   estimateNo: string | null;
   /** The estimate's whole cost, with what is neither bought nor own labor (travel, overhead, contingency). */
   estimateTotal: number | null;
@@ -102,11 +137,23 @@ export type ProjectCostOverview = { today: string; hoursPerManDay: number; acces
 export type CostModuleRow = { module: string; budget: number | null; requested: number | null; approved: number | null; ordered: number | null };
 export type CostRequestRow = { id: number; number: string; status: string; requiredDate: string | null; unit: string | null; amount: number | null; lines: number };
 /** A top row of the plan with the man-days under it. */
-export type CostPlanRow = { id: number; name: string; planStart: string | null; planFinish: string | null; percentComplete: number;
-  plannedManDays: number; outsourcedManDays: number; toDateManDays: number | null; plannedCost: number | null };
+export type CostPlanRow = {
+  id: number;
+  name: string;
+  planStart: string | null;
+  planFinish: string | null;
+  percentComplete: number;
+  plannedManDays: number;
+  outsourcedManDays: number;
+  toDateManDays: number | null;
+  plannedCost: number | null;
+};
 
 export type ProjectCostDetail = {
-  today: string; hoursPerManDay: number; access: CostAccess; project: ProjectCostItem;
+  today: string;
+  hoursPerManDay: number;
+  access: CostAccess;
+  project: ProjectCostItem;
   /** Bought cost by the estimate's Module, hardware and outsource together. */
   modules: CostModuleRow[];
   requests: CostRequestRow[];
@@ -145,15 +192,24 @@ export const budgetLeft = (budget: number | null, used: number | null): number |
 
 const WORST: BudgetState[] = ["over", "near", "within", "none"];
 
+/** People are over when the plan is, or when the forecast at completion is (owner 2026-11-23: warn before the budget runs out). */
+export function laborState(figures: Pick<LaborFigures, "budgetManDays" | "plannedManDays" | "forecastManDays">): BudgetState {
+  const planned = budgetState(figures.budgetManDays, figures.plannedManDays),
+    forecast = budgetState(figures.budgetManDays, figures.forecastManDays);
+  return WORST.find((state) => state === planned || state === forecast) ?? "none";
+}
+
 /**
  * The states a project is in, one per group, and the worst of them: the project's own state. With a discipline
  * chosen, the people group is that discipline's man-days.
  */
-export function projectBudgetStates(item: Pick<ProjectCostItem, "hardware" | "outsource" | "labor">, discipline: LaborDiscipline | null = null): { hardware: BudgetState; outsource: BudgetState; labor: BudgetState; worst: BudgetState } {
+export function projectBudgetStates(
+  item: Pick<ProjectCostItem, "hardware" | "outsource" | "labor">,
+  discipline: LaborDiscipline | null = null,
+): { hardware: BudgetState; outsource: BudgetState; labor: BudgetState; worst: BudgetState } {
   const hardware = budgetState(item.hardware.budget, item.hardware.requested);
   const outsource = budgetState(item.outsource.budget, item.outsource.requested);
-  const people = laborOf(item.labor, discipline);
-  const labor = budgetState(people.budgetManDays, people.plannedManDays);
+  const labor = laborState(laborOf(item.labor, discipline));
   return { hardware, outsource, labor, worst: WORST.find((state) => state === hardware || state === outsource || state === labor) ?? "none" };
 }
 
@@ -181,12 +237,16 @@ const total = (values: readonly (number | null)[]): number | null => {
   return seen.length ? round2(seen.reduce((sum, value) => sum + value, 0)) : null;
 };
 const purchaseTotal = (groups: readonly PurchaseCost[]): PurchaseCost => ({
-  budget: total(groups.map((group) => group.budget)), requested: total(groups.map((group) => group.requested)),
-  approved: total(groups.map((group) => group.approved)), ordered: total(groups.map((group) => group.ordered)),
+  budget: total(groups.map((group) => group.budget)),
+  requested: total(groups.map((group) => group.requested)),
+  approved: total(groups.map((group) => group.approved)),
+  ordered: total(groups.map((group) => group.ordered)),
 });
 
 export type CostTotals = {
-  projects: number; hardware: PurchaseCost; outsource: PurchaseCost;
+  projects: number;
+  hardware: PurchaseCost;
+  outsource: PurchaseCost;
   labor: LaborFigures & Pick<LaborCost, "outsourcedManDays">;
   /** People by discipline across the rows; only disciplines some row has. */
   disciplines: LaborDisciplineCost[];
@@ -196,14 +256,21 @@ const laborTotal = (figures: readonly LaborFigures[]): LaborFigures => ({
   budgetManDays: total(figures.map((item) => item.budgetManDays)),
   plannedManDays: round2(figures.reduce((sum, item) => sum + item.plannedManDays, 0)),
   toDateManDays: total(figures.map((item) => item.toDateManDays)),
-  budgetCost: total(figures.map((item) => item.budgetCost)), plannedCost: total(figures.map((item) => item.plannedCost)), toDateCost: total(figures.map((item) => item.toDateCost)),
+  budgetCost: total(figures.map((item) => item.budgetCost)),
+  plannedCost: total(figures.map((item) => item.plannedCost)),
+  toDateCost: total(figures.map((item) => item.toDateCost)),
+  actualManDays: round2(figures.reduce((sum, item) => sum + item.actualManDays, 0)),
+  forecastManDays: total(figures.map((item) => item.forecastManDays)),
+  actualCost: total(figures.map((item) => item.actualCost)),
+  forecastCost: total(figures.map((item) => item.forecastCost)),
 });
 
 /** The summary bar: every row on show added up, not only the page in view. */
 export function costTotals(items: readonly ProjectCostItem[]): CostTotals {
   return {
     projects: items.length,
-    hardware: purchaseTotal(items.map((item) => item.hardware)), outsource: purchaseTotal(items.map((item) => item.outsource)),
+    hardware: purchaseTotal(items.map((item) => item.hardware)),
+    outsource: purchaseTotal(items.map((item) => item.outsource)),
     labor: { ...laborTotal(items.map((item) => item.labor)), outsourcedManDays: round2(items.reduce((sum, item) => sum + item.labor.outsourcedManDays, 0)) },
     disciplines: LABOR_DISCIPLINES.flatMap((discipline) => {
       const found = items.flatMap((item) => item.labor.disciplines.filter((entry) => entry.discipline === discipline));
@@ -224,7 +291,8 @@ const ratio = (budget: number | null, used: number | null): number | null => (bu
 export function sortCostItems(items: readonly ProjectCostItem[], sort: CostSort, discipline: LaborDiscipline | null = null): ProjectCostItem[] {
   const direction = sort.descending ? -1 : 1;
   const byRatio = (pick: (item: ProjectCostItem) => number | null) => (left: ProjectCostItem, right: ProjectCostItem) => {
-    const a = pick(left), b = pick(right);
+    const a = pick(left),
+      b = pick(right);
     if (a === null || b === null) return a === b ? 0 : a === null ? 1 : -1;
     return (a - b) * direction;
   };
@@ -233,7 +301,10 @@ export function sortCostItems(items: readonly ProjectCostItem[], sort: CostSort,
     number: (left, right) => compareNumber(left.number, right.number) * direction,
     hardware: byRatio((item) => ratio(item.hardware.budget, item.hardware.requested)),
     outsource: byRatio((item) => ratio(item.outsource.budget, item.outsource.requested)),
-    labor: byRatio((item) => { const people = laborOf(item.labor, discipline); return ratio(people.budgetManDays, people.plannedManDays); }),
+    labor: byRatio((item) => {
+      const people = laborOf(item.labor, discipline);
+      return ratio(people.budgetManDays, people.plannedManDays);
+    }),
   };
   // Newest project number first among equals, the order the project pickers use.
   return [...items].sort((left, right) => order[sort.key](left, right) || compareNumber(right.number, left.number));
