@@ -1,7 +1,8 @@
 "use client";
 /* Projects > Cost (owner request 2026-11-21, for Leaders and above): one row per project with what its Estimate cost
-   gave and what the work has taken - Hardware and Outsource against the purchase requests, People against the
-   man-days on the plan, in all and by labor discipline (Electrical, Mechanical, Software, Installation). Read-only.
+   gave and what the work has taken - Hardware and Outsource against the purchase requests (THB), People against the
+   plan in hours of work (owner 2026-11-23: no money for people), in all and by labor discipline (Electrical,
+   Mechanical, Software, Installation). Read-only.
    The project number opens the breakdown in a dialog, so the list stays in place.
    Pegasus look (pegasus-design DESIGN.md 0.2 dialogs over navigation, 0.3 lists, C.2 summary bar, C.4 meter,
    D.5 badge, D.7 data table) through the app's own components under .pg-skin. The API side is
@@ -52,7 +53,9 @@ const exact = new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximum
 const days = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 });
 const DASH = "–";
 const money = (value: number | null) => (value === null ? DASH : whole.format(value));
-const manDays = (value: number | null) => (value === null ? DASH : days.format(value));
+/* People are counted in hours of work (owner 2026-11-23): the API's man-days read as hours, 8 hours a man-day. */
+const HOURS_PER_MAN_DAY = 8;
+const hours = (manDays: number | null) => (manDays === null ? DASH : days.format(manDays * HOURS_PER_MAN_DAY));
 const toError = (error: unknown) => (error instanceof Error ? error.message : "The request could not be completed.");
 
 /** A thin bar of the used share with an optional marker on the same scale (C.4); red once over, amber when near. */
@@ -227,8 +230,8 @@ function TotalsBar({ items, guide, single }: { items: ProjectCostItem[]; guide?:
 
 /**
  * People by labor discipline (owner 2026-11-21): one cell for all labor and one per discipline, each planned / budget
- * man-days with what the plan puts on or before today, and the same in money for a viewer who may see it. On the list
- * a cell is also the switch for the table's People columns; pressed again it returns to all labor.
+ * hours with what the plan puts on or before today. Money shows only if the route ever sends it again (laborMoney).
+ * On the list a cell is also the switch for the table's People columns; pressed again it returns to all labor.
  */
 function LaborBar({
   items,
@@ -261,13 +264,13 @@ function LaborBar({
               {percent ? <span className="pc-total-hint">{percent}</span> : null}
             </span>
             <span className="pc-total-value">
-              {manDays(figures.plannedManDays)} / {manDays(figures.budgetManDays)} <small>{t("MD")}</small>
+              {hours(figures.plannedManDays)} / {hours(figures.budgetManDays)} <small>{t("Cost.hoursUnit")}</small>
             </span>
             <span className="pc-total-sub" title={t("Cost.toDateHint")}>
-              {t("Cost.toDate")} {manDays(figures.toDateManDays)}
+              {t("Cost.toDate")} {hours(figures.toDateManDays)}
             </span>
             <span className="pc-total-sub pc-actual" title={`${t("Cost.actualHint")} ${t("Cost.forecastHint")}`}>
-              {t("Cost.actual")} {manDays(figures.actualManDays)} · {t("Cost.forecast")} {manDays(figures.forecastManDays)}
+              {t("Cost.actual")} {hours(figures.actualManDays)} · {t("Cost.forecast")} {hours(figures.forecastManDays)}
             </span>
             {access.laborMoney ? (
               <span
@@ -528,15 +531,15 @@ export function ProjectCostScreen({ bootstrap, openProjectSchedule }: Props) {
                             used={people.plannedManDays}
                             marker={people.toDateManDays}
                             label={t("Cost.people")}
-                            format={manDays}
+                            format={hours}
                             notes={[
                               people.toDateManDays !== null ? (
                                 <span title={t("Cost.toDateHint")}>
-                                  {t("Cost.toDate")} {manDays(people.toDateManDays)}
+                                  {t("Cost.toDate")} {hours(people.toDateManDays)}
                                 </span>
                               ) : null,
                               <span key="actual" className="pc-actual" title={`${t("Cost.actualHint")} ${t("Cost.forecastHint")}`}>
-                                {t("Cost.actual")} {manDays(people.actualManDays)} · {t("Cost.forecast")} {manDays(people.forecastManDays)}
+                                {t("Cost.actual")} {hours(people.actualManDays)} · {t("Cost.forecast")} {hours(people.forecastManDays)}
                               </span>,
                               discipline === null && item.labor.unplannedRows ? (
                                 <span className="pc-warn" title={t("Cost.unplanned")}>
@@ -806,7 +809,7 @@ function ProjectCostDialog({ projectId, canOpenPlan, onOpenPlan, onClose }: { pr
             <h3>{t("Cost.detailPeople")}</h3>
             <p>
               {t("Cost.disciplineRule")}
-              {project.labor.source === "manual" ? ` ${t("Cost.manualBudget")}: ${manDays(project.labor.budgetManDays)} ${t("MD")}.` : ""}
+              {project.labor.source === "manual" ? ` ${t("Cost.manualBudget")}: ${hours(project.labor.budgetManDays)} ${t("Cost.hoursUnit")}.` : ""}
               {project.labor.dailyRate !== null ? ` ${t("Cost.dailyRate")}: ${money(project.labor.dailyRate)}.` : ""}
             </p>
             {project.labor.disciplines.length ? (
@@ -846,17 +849,17 @@ function ProjectCostDialog({ projectId, canOpenPlan, onOpenPlan, onClose }: { pr
                       return (
                         <tr key={key} className={sum ? "pc-sum" : undefined}>
                           <td>{label}</td>
-                          <td className="num">{manDays(figures.budgetManDays)}</td>
-                          <td className="num">{manDays(figures.plannedManDays)}</td>
+                          <td className="num">{hours(figures.budgetManDays)}</td>
+                          <td className="num">{hours(figures.plannedManDays)}</td>
                           <td className="pc-col-bar">{sum ? null : <Meter budget={figures.budgetManDays} used={figures.plannedManDays} marker={figures.toDateManDays} label={label} />}</td>
-                          <td className="num">{manDays(figures.toDateManDays)}</td>
-                          <td className="num pc-actual">{manDays(figures.actualManDays)}</td>
+                          <td className="num">{hours(figures.toDateManDays)}</td>
+                          <td className="num pc-actual">{hours(figures.actualManDays)}</td>
                           <td
                             className={`num${laborState(figures) === "over" && figures.forecastManDays !== null && figures.budgetManDays !== null && figures.forecastManDays > figures.budgetManDays ? " pc-over" : ""}`}
                           >
-                            {manDays(figures.forecastManDays)}
+                            {hours(figures.forecastManDays)}
                           </td>
-                          <td className={`num${left !== null && left < 0 ? " pc-over" : ""}`}>{manDays(left)}</td>
+                          <td className={`num${left !== null && left < 0 ? " pc-over" : ""}`}>{hours(left)}</td>
                           {access.laborMoney ? (
                             <>
                               <td className="num">{money(figures.budgetCost)}</td>
@@ -900,12 +903,12 @@ function ProjectCostDialog({ projectId, canOpenPlan, onOpenPlan, onClose }: { pr
                         <td className="wrap">{row.name}</td>
                         <td>{span(row.planStart, row.planFinish)}</td>
                         <td className="num">{Math.round(row.percentComplete)}%</td>
-                        <td className="num">{manDays(row.plannedManDays)}</td>
-                        <td className="num">{manDays(row.toDateManDays)}</td>
+                        <td className="num">{hours(row.plannedManDays)}</td>
+                        <td className="num">{hours(row.toDateManDays)}</td>
                         <td className="pc-col-bar">
                           <Meter budget={row.plannedManDays} used={row.toDateManDays} label={row.name} plain />
                         </td>
-                        <td className="num">{row.outsourcedManDays ? manDays(row.outsourcedManDays) : DASH}</td>
+                        <td className="num">{row.outsourcedManDays ? hours(row.outsourcedManDays) : DASH}</td>
                         {access.laborMoney ? <td className="num">{money(row.plannedCost)}</td> : null}
                       </tr>
                     ))}
@@ -913,10 +916,10 @@ function ProjectCostDialog({ projectId, canOpenPlan, onOpenPlan, onClose }: { pr
                       <td>{t("Cost.total")}</td>
                       <td />
                       <td />
-                      <td className="num">{manDays(project.labor.plannedManDays)}</td>
-                      <td className="num">{manDays(project.labor.toDateManDays)}</td>
+                      <td className="num">{hours(project.labor.plannedManDays)}</td>
+                      <td className="num">{hours(project.labor.toDateManDays)}</td>
                       <td className="pc-col-bar" />
-                      <td className="num">{project.labor.outsourcedManDays ? manDays(project.labor.outsourcedManDays) : DASH}</td>
+                      <td className="num">{project.labor.outsourcedManDays ? hours(project.labor.outsourcedManDays) : DASH}</td>
                       {access.laborMoney ? <td className="num">{money(project.labor.plannedCost)}</td> : null}
                     </tr>
                   </tbody>

@@ -170,14 +170,14 @@ test("cost overview: refused below Leader before any figure is read", async () =
   }
 });
 
-test("cost overview: a Leader sees every figure, people cost in money included (owner 2026-11-21)", async () => {
+test("cost overview: a Leader sees every figure, people in man-days only, never in money (owner 2026-11-23)", async () => {
   const { database } = fakeDatabase();
   const app = server(database, ["Engineer", "Leader"]);
   try {
     const response = await app.inject({ method: "GET", url: "/api/v1/projects/cost-overview" });
     assert.equal(response.statusCode, 200, response.body);
     const body = response.json() as ProjectCostOverview;
-    assert.deepEqual(body.access, { budget: true, purchases: true, laborMoney: true });
+    assert.deepEqual(body.access, { budget: true, purchases: true, laborMoney: false });
     assert.equal(body.hoursPerManDay, 8);
     assert.equal(body.items.length, 1);
     const item = body.items[0]!;
@@ -194,40 +194,40 @@ test("cost overview: a Leader sees every figure, people cost in money included (
       outsourcedManDays: 0,
       toDateManDays: 0,
       unplannedRows: 0,
-      dailyRate: 4000,
-      budgetCost: 80000,
-      plannedCost: 0,
-      toDateCost: 0,
+      dailyRate: null,
+      budgetCost: null,
+      plannedCost: null,
+      toDateCost: null,
       actualManDays: 0,
       forecastManDays: 0,
-      actualCost: 0,
-      forecastCost: 0,
+      actualCost: null,
+      forecastCost: null,
       disciplines: [
         {
           discipline: "Electrical",
           budgetManDays: 12,
           plannedManDays: 0,
           toDateManDays: 0,
-          budgetCost: 48000,
-          plannedCost: 0,
-          toDateCost: 0,
+          budgetCost: null,
+          plannedCost: null,
+          toDateCost: null,
           actualManDays: 0,
           forecastManDays: 0,
-          actualCost: 0,
-          forecastCost: 0,
+          actualCost: null,
+          forecastCost: null,
         },
         {
           discipline: "Software",
           budgetManDays: 8,
           plannedManDays: 0,
           toDateManDays: 0,
-          budgetCost: 32000,
-          plannedCost: 0,
-          toDateCost: 0,
+          budgetCost: null,
+          plannedCost: null,
+          toDateCost: null,
           actualManDays: 0,
           forecastManDays: 0,
-          actualCost: 0,
-          forecastCost: 0,
+          actualCost: null,
+          forecastCost: null,
         },
       ],
     });
@@ -236,46 +236,46 @@ test("cost overview: a Leader sees every figure, people cost in money included (
   }
 });
 
-test("cost overview: plan man-days go to the disciplines of the row's PICs, in man-days and in money", async () => {
+test("cost overview: plan man-days go to the disciplines of the row's PICs, with no money", async () => {
   const { database } = fakeDatabase({ planned: true });
   const app = server(database, ["Project Manager"]);
   try {
     const response = await app.inject({ method: "GET", url: "/api/v1/projects/cost-overview?includeClosed=1" });
     assert.equal(response.statusCode, 200, response.body);
     const item = (response.json() as ProjectCostOverview).items[0]!;
-    // 6 man-days held by an electrical and an IoT engineer: 3 each, all due by today, at 4,000 a day.
+    // 6 man-days held by an electrical and an IoT engineer: 3 each, all due by today. No rate and no money is sent.
     assert.deepEqual(
       [item.labor.budgetManDays, item.labor.plannedManDays, item.labor.toDateManDays, item.labor.dailyRate, item.labor.budgetCost, item.labor.plannedCost, item.labor.toDateCost],
-      [20, 6, 6, 4000, 80000, 24000, 24000],
+      [20, 6, 6, null, null, null, null],
     );
     // Confirmed: 2 electrical man-days and 1 software, by each engineer's department; the plan has nothing left to do, so that is the forecast.
-    assert.deepEqual([item.labor.actualManDays, item.labor.forecastManDays, item.labor.actualCost, item.labor.forecastCost], [3, 3, 12000, 12000]);
+    assert.deepEqual([item.labor.actualManDays, item.labor.forecastManDays, item.labor.actualCost, item.labor.forecastCost], [3, 3, null, null]);
     assert.deepEqual(item.labor.disciplines, [
       {
         discipline: "Electrical",
         budgetManDays: 12,
         plannedManDays: 3,
         toDateManDays: 3,
-        budgetCost: 48000,
-        plannedCost: 12000,
-        toDateCost: 12000,
+        budgetCost: null,
+        plannedCost: null,
+        toDateCost: null,
         actualManDays: 2,
         forecastManDays: 2,
-        actualCost: 8000,
-        forecastCost: 8000,
+        actualCost: null,
+        forecastCost: null,
       },
       {
         discipline: "Software",
         budgetManDays: 8,
         plannedManDays: 3,
         toDateManDays: 3,
-        budgetCost: 32000,
-        plannedCost: 12000,
-        toDateCost: 12000,
+        budgetCost: null,
+        plannedCost: null,
+        toDateCost: null,
         actualManDays: 1,
         forecastManDays: 1,
-        actualCost: 4000,
-        forecastCost: 4000,
+        actualCost: null,
+        forecastCost: null,
       },
     ]);
   } finally {
@@ -291,7 +291,7 @@ test("project cost: one project's breakdown by module, request and plan row, wit
     assert.equal(response.statusCode, 200, response.body);
     const body = response.json() as ProjectCostDetail;
     assert.equal(body.project.number, "PJ260091");
-    assert.deepEqual(body.access, { budget: true, purchases: true, laborMoney: true });
+    assert.deepEqual(body.access, { budget: true, purchases: true, laborMoney: false });
     // Modules by name, and what belongs to no module last.
     assert.deepEqual(body.modules, [
       { module: "MZ01", budget: 70000, requested: 95000, approved: 60000, ordered: 30000 },
@@ -302,13 +302,13 @@ test("project cost: one project's breakdown by module, request and plan row, wit
     assert.deepEqual(
       body.project.labor.disciplines.map((row) => [row.discipline, row.budgetManDays, row.plannedManDays, row.budgetCost]),
       [
-        ["Electrical", 12, 3, 48000],
-        ["Software", 8, 3, 32000],
+        ["Electrical", 12, 3, null],
+        ["Software", 8, 3, null],
       ],
     );
     assert.deepEqual(
       body.plan.map((row) => [row.id, row.name, row.plannedManDays, row.toDateManDays, row.plannedCost]),
-      [[501, "Panel wiring", 6, 6, 24000]],
+      [[501, "Panel wiring", 6, 6, null]],
     );
   } finally {
     await app.close();
