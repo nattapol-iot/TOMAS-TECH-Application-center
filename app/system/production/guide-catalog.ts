@@ -1606,9 +1606,9 @@ const PROJECT_COST: Guide = {
   browse: true,
   title: { th: "ดูต้นทุนโครงการ (Hardware และคน)", en: "Check project cost (hardware and people)", jp: "プロジェクトコストを確認（ハードウェアと人員）" },
   summary: {
-    th: "สำหรับ Leader ขึ้นไป: ดูงบจาก Estimate cost เทียบกับใบขอซื้อ Hardware / Outsource และ Man-day ของคนตามแผน ของทุกโครงการในหน้าเดียว แล้วเปิดรายละเอียดรายโครงการ",
-    en: "For Leaders and above: see every project's Estimate cost against its hardware and outsource purchase requests and the planned man-days on one page, then open one project's breakdown.",
-    jp: "リーダー以上向け：全プロジェクトの見積原価と、ハードウェア・外注の購入依頼および計画人日を1ページで確認し、案件ごとの内訳を開きます。",
+    th: "สำหรับ Leader ขึ้นไป: ดูงบจาก Estimate cost เทียบกับใบขอซื้อ Hardware / Outsource และชั่วโมงงานของคนตามแผน ของทุกโครงการในหน้าเดียว แล้วเปิดรายละเอียดรายโครงการ",
+    en: "For Leaders and above: see every project's Estimate cost against its hardware and outsource purchase requests and the planned hours of work on one page, then open one project's breakdown.",
+    jp: "リーダー以上向け：全プロジェクトの見積原価と、ハードウェア・外注の購入依頼および計画工数（時間）を1ページで確認し、案件ごとの内訳を開きます。",
   },
   steps: [
     menu(
@@ -1644,11 +1644,11 @@ const PROJECT_COST: Guide = {
       target: "cost.labor",
       action: "next",
       view: "projects",
-      title: { th: "ค่าแรงแยกตามสายงาน", en: "Labor by discipline", jp: "分野別の労務費" },
+      title: { th: "ชั่วโมงงานแยกตามสายงาน", en: "Labor hours by discipline", jp: "分野別の工数（時間）" },
       body: {
-        th: "แต่ละช่องคือค่าแรงทั้งหมด หรือของ Electrical, Mechanical, Software และ Installation แสดง 'Man-day ตามแผน / งบ' กับส่วนที่ถึงวันนี้ กดช่องของสายงานเพื่อให้คอลัมน์คนในตารางแสดงเฉพาะสายงานนั้น กดซ้ำเพื่อกลับไปดูทั้งหมด งบมาจาก Estimate cost ส่วน Man-day ในแผนนับตามแผนกของผู้รับผิดชอบแต่ละแถว 'ใช้จริง' คือชั่วโมงที่ทีมยืนยันในงานของฉัน (8 ชม. = 1 MD) และ 'คาดจบ' คือใช้จริงบวกงานที่แผนยังเหลือ ถ้าคาดจบเกินงบช่องจะเป็นสีแดง บรรทัดต้นทุนคือค่าแรงเป็นบาท",
-        en: "Each cell is all labor, or Electrical, Mechanical, Software or Installation labor, as planned man-days / budget with the part due up to today. Press a discipline to make the table's People columns show it alone; press again for all labor. The budget is the Estimate cost's; plan man-days follow the department of each row's PIC. Actual is the hours the team confirmed in My Work (8 h a man-day), and Forecast is the actual plus what the plan still has to do; a forecast over budget turns the cell red. The Cost line is that labor in THB.",
-        jp: "各セルは労務費の合計、または電気・機械・ソフトウェア・据付の労務費で、「計画人日 / 予算」と本日までの分を表示します。分野を押すと表の人員列がその分野だけになり、もう一度押すと合計に戻ります。予算は見積原価、計画人日は各行の担当者の部署で振り分けます。「実績」はチームがマイワークで確定した時間（8時間＝1人日）、「見込み」は実績に計画の残りを足したもので、見込みが予算を超えるとセルが赤になります。「コスト」の行はその労務費（THB）です。",
+        th: "แต่ละช่องคือชั่วโมงงานทั้งหมด หรือของ Electrical, Mechanical, Software และ Installation แสดง 'ชั่วโมงตามแผน / งบ' กับส่วนที่ถึงวันนี้ กดช่องของสายงานเพื่อให้คอลัมน์คนในตารางแสดงเฉพาะสายงานนั้น กดซ้ำเพื่อกลับไปดูทั้งหมด งบคือชั่วโมงงานใน Estimate cost ส่วนชั่วโมงในแผนนับตามแผนกของผู้รับผิดชอบแต่ละแถว 'ใช้จริง' คือชั่วโมงที่ทีมยืนยันในงานของฉัน และ 'คาดจบ' คือใช้จริงบวกงานที่แผนยังเหลือ ถ้าคาดจบเกินงบช่องจะเป็นสีแดง ฝั่งคนนับเป็นชั่วโมง ไม่แสดงเป็นเงิน",
+        en: "Each cell is all labor, or Electrical, Mechanical, Software or Installation labor, as planned hours / budget with the part due up to today. Press a discipline to make the table's People columns show it alone; press again for all labor. The budget is the Estimate cost's labor hours; plan hours follow the department of each row's PIC. Actual is the hours the team confirmed in My Work, and Forecast is the actual plus what the plan still has to do; a forecast over budget turns the cell red. People are counted in hours, not money.",
+        jp: "各セルは工数の合計、または電気・機械・ソフトウェア・据付の工数で、「計画時間 / 予算」と本日までの分を表示します。分野を押すと表の人員列がその分野だけになり、もう一度押すと合計に戻ります。予算は見積原価の工数（時間）、計画時間は各行の担当者の部署で振り分けます。「実績」はチームがマイワークで確定した時間、「見込み」は実績に計画の残りを足したもので、見込みが予算を超えるとセルが赤になります。人員は金額ではなく時間で数えます。",
       },
       missing: { th: "รอให้ข้อมูลโหลดเสร็จก่อน", en: "Wait for the figures to load.", jp: "データの読み込みを待ちます。" },
     },
@@ -1669,9 +1669,9 @@ const PROJECT_COST: Guide = {
       view: "projects",
       title: { th: "อ่านแถวของโครงการ", en: "Read a project's row", jp: "プロジェクトの行を読む" },
       body: {
-        th: "แต่ละกลุ่มแสดง 'ใช้ไป / งบ' พร้อมแถบ: น้ำเงินอยู่ในงบ เหลืองใกล้เต็ม แดงเกินงบ ขีดบนแถบของคนคือ Man-day ที่แผนวางไว้ถึงวันนี้ ใต้แถบคือ 'ใช้จริง' (ชั่วโมงที่ยืนยันแล้ว) และ 'คาดจบ' คอลัมน์คนแสดงสายงานที่เลือกไว้ในแถบค่าแรง กดหัวคอลัมน์เพื่อเรียง",
-        en: "Each group shows used / budget with a bar: blue within budget, amber near it, red over it. The mark on the People bar is the man-days the plan puts on or before today; under the bar are Actual (confirmed hours) and Forecast. The People columns show the discipline chosen in the labor bar. Press a column heading to sort.",
-        jp: "各グループは「使用 / 予算」とバーで表示されます。青は予算内、黄は間近、赤は超過です。人員のバー上の印は、計画上本日までの人日です。バーの下に「実績」（確定時間）と「見込み」を表示します。人員列は労務費バーで選んだ分野を表示します。列見出しを押すと並べ替えます。",
+        th: "แต่ละกลุ่มแสดง 'ใช้ไป / งบ' พร้อมแถบ: น้ำเงินอยู่ในงบ เหลืองใกล้เต็ม แดงเกินงบ ขีดบนแถบของคนคือชั่วโมงที่แผนวางไว้ถึงวันนี้ ใต้แถบคือ 'ใช้จริง' (ชั่วโมงที่ยืนยันแล้ว) และ 'คาดจบ' คอลัมน์คนแสดงสายงานที่เลือกไว้ในแถบชั่วโมงงาน กดหัวคอลัมน์เพื่อเรียง",
+        en: "Each group shows used / budget with a bar: blue within budget, amber near it, red over it. The mark on the People bar is the hours the plan puts on or before today; under the bar are Actual (confirmed hours) and Forecast. The People columns show the discipline chosen in the labor hours bar. Press a column heading to sort.",
+        jp: "各グループは「使用 / 予算」とバーで表示されます。青は予算内、黄は間近、赤は超過です。人員のバー上の印は、計画上本日までの時間です。バーの下に「実績」（確定時間）と「見込み」を表示します。人員列は工数バーで選んだ分野を表示します。列見出しを押すと並べ替えます。",
       },
     },
     {
@@ -1702,11 +1702,11 @@ const PROJECT_COST: Guide = {
       target: "cost.people",
       action: "next",
       view: "projects",
-      title: { th: "ค่าแรงแยกตามสายงานและตามแผน", en: "Labor by discipline and by plan", jp: "分野別・計画別の労務費" },
+      title: { th: "ชั่วโมงงานแยกตามสายงานและตามแผน", en: "Labor hours by discipline and by plan", jp: "分野別・計画別の工数（時間）" },
       body: {
-        th: "ตารางบนเทียบงบกับแผนของแต่ละสายงาน: งบ Man-day ตามแผน ถึงวันนี้ และคงเหลือ (สีแดงเมื่อเกิน) ตารางล่างคือ Man-day ในแผนงานใต้หัวข้อหลักแต่ละแถว กด 'เปิดแผนงาน' เพื่อไปแก้แผน หรือกด 'ปิด' เพื่อกลับไปที่รายการ",
-        en: "The first table sets each discipline's budget against the plan: budget, planned man-days, to date and what is left (red when over). The second is the man-days on the plan under each top row. Press Open plan to change the plan, or Close to return to the list.",
-        jp: "上の表は分野ごとに予算と計画を比較します（予算、計画人日、本日まで、残り。超過は赤）。下の表は各トップ行配下の計画人日です。「計画を開く」で計画を修正、「閉じる」で一覧に戻ります。",
+        th: "ตารางบนเทียบงบกับแผนของแต่ละสายงานเป็นชั่วโมง: งบ ตามแผน ถึงวันนี้ ใช้จริง คาดจบ และคงเหลือ (สีแดงเมื่อเกิน) ตารางล่างคือชั่วโมงในแผนงานใต้หัวข้อหลักแต่ละแถว กด 'เปิดแผนงาน' เพื่อไปแก้แผน หรือกด 'ปิด' เพื่อกลับไปที่รายการ",
+        en: "The first table sets each discipline's budget against the plan in hours: budget, planned, to date, actual, forecast and what is left (red when over). The second is the planned hours under each top row. Press Open plan to change the plan, or Close to return to the list.",
+        jp: "上の表は分野ごとに予算と計画を時間で比較します（予算、計画、本日まで、実績、見込み、残り。超過は赤）。下の表は各トップ行配下の計画時間です。「計画を開く」で計画を修正、「閉じる」で一覧に戻ります。",
       },
       missing: { th: "รอให้รายละเอียดโหลดเสร็จก่อน", en: "Wait for the breakdown to load.", jp: "内訳の読み込みを待ちます。" },
     },

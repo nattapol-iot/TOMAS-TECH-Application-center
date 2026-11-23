@@ -8,13 +8,16 @@
  *    used up to today. Since My week (owner decision 2026-11-23) people confirm the hours they really worked, so the
  *    actual man-days are the confirmed hours (8 hours a man-day), and the forecast at completion is the actual plus
  *    what the plan still has to do (planned less the plan's own to-date).
- * Every amount is an internal cost in THB. Selling prices and margins are not part of this app.
+ * Bought amounts are an internal cost in THB. People are counted in hours of work against the Estimate cost's labor
+ * hours (owner decision 2026-11-23), never in money: the routes send no people cost and no daily rate (laborMoney is
+ * false), and the screen shows man-days as hours, 8 hours a man-day. Selling prices and margins are not part of this app.
  */
 
 /**
  * What the viewer may see. A figure the viewer may not see is null, never zero. Since the owner's decision of
  * 2026-11-21 everyone who may open the overview sees all of it (FULL_COST_ACCESS); the parts stay apart so a narrower
- * rule can come back in the route without touching the sums or the screen.
+ * rule can come back in the route without touching the sums or the screen. People cost in money is off for everyone
+ * since 2026-11-23: the owner reads people cost as hours of work only.
  */
 export type CostAccess = {
   /** Estimate cost figures. */
@@ -24,7 +27,7 @@ export type CostAccess = {
   /** People cost in money. */
   laborMoney: boolean;
 };
-export const FULL_COST_ACCESS: CostAccess = { budget: true, purchases: true, laborMoney: true };
+export const FULL_COST_ACCESS: CostAccess = { budget: true, purchases: true, laborMoney: false };
 
 /** One bought group. Requested is every live request; approved and ordered are parts of it. */
 export type PurchaseCost = { budget: number | null; requested: number | null; approved: number | null; ordered: number | null };
