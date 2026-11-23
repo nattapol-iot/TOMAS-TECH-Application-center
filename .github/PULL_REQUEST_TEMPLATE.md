@@ -18,7 +18,6 @@
 - [ ] No `console.log` left in production paths
 - [ ] No hardcoded credentials, secrets, or environment-specific values
 - [ ] Tested locally against Team Test / dev environment
-- [ ] `COORDINATION.md` updated if files were claimed or released
 - [ ] Migration added and documented if the database schema changed
 - [ ] How-to guide updated in `guide-catalog.ts` for any new or changed screen, button, field or flow, or the reason none is needed is stated here
 

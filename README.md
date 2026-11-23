@@ -24,7 +24,7 @@ React 19 + TypeScript + vinext/Vite frontend -> Node.js/TypeScript Fastify API i
 
 ## Working safely
 
-Read [documentation governance](docs/README.md), [DESIGN](DESIGN.md), and [COORDINATION](COORDINATION.md) before changing shared files. Historical IPs/PIDs/branch claims in coordination must be revalidated. FEATURES.md is the legacy/full-target domain specification, not a release checklist.
+Read [documentation governance](docs/README.md) and [DESIGN](docs/DESIGN.md) before changing shared files. The old coordination log and the legacy/full-target domain specification (FEATURES.md) are kept in [docs/archive](docs/archive) as history, not as a release checklist.
 
 Use an isolated checkout for builds and release validation. Do not build into a dist directory used by a running frontend. Keep feature changes together with their tests, migrations and documentation; preserve unrelated dirty work.
 

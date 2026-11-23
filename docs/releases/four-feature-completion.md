@@ -11,7 +11,7 @@ Validation: exact staged Report API87 SQL checks, Sales KPI29, PR36; reportUI8, 
 
 The crash/permission-mode transition exposed Windows packaged-app file virtualization: the runtime was present in the Codex package LocalCache, while ordinary PowerShell searched the logical LocalAppData path. Recovery linked the original path to the existing runtime and corrected ReleasePath. Database, documents and secrets were preserved; no reinstall or credential rotation occurred. Live SQL still has3 reports,1 historical PR import and migrations25–33.
 
-Open http://192.168.1.160:3000/ on the same private network. To resume outside Codex, double-click Start-IoT-Team-Center.cmd in this workspace. It runs the existing managed API/frontend launchers and verifies readiness. It does not install an automatic Windows startup task.
+Open http://192.168.1.160:3000/ on the same private network. To resume outside Codex, double-click scripts\Start-IoT-Team-Center.cmd in this workspace. It runs the existing managed API/frontend launchers and verifies readiness. It does not install an automatic Windows startup task.
 
 Follow-through fixes on 2026-09-06:
 

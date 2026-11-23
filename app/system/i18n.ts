@@ -983,7 +983,7 @@ export const DICTIONARY: Record<string, Entry> = {
   Proposed: { th: "เสนอมอบหมาย", jp: "割当提案" },
   // "Accepted" and "Sales Owner" already exist above (goods receipt, and the
   // inquiry screens). The dictionary is keyed by the English phrase, so this
-  // module reuses those entries rather than shadowing them — see COORDINATION.md.
+  // module reuses those entries rather than shadowing them.
   Declined: { th: "ปฏิเสธ", jp: "辞退" },
   "Information Requested": { th: "ขอข้อมูลเพิ่ม", jp: "情報要求" },
   "New Time Proposed": { th: "เสนอเวลาใหม่", jp: "別日程提案" },

@@ -13,14 +13,14 @@ Established by user request on 2026-09-05. Main manager coordinates work in task
 These are subagents of the manager task, not separate sidebar tasks. They run
 when assigned work; this setup does not create a background monitoring schedule.
 If agent handles are no longer available in a later session, recreate the roles
-with a concrete assignment and consult this document and COORDINATION.md.
+with a concrete assignment and consult this document and docs/archive/COORDINATION.md.
 
 ## Work protocol
 
 1. The user supplies the desired application change to Main manager.
-2. Main manager checks existing tasks and COORDINATION.md before assigning work.
+2. Main manager checks existing tasks and docs/archive/COORDINATION.md before assigning work.
 3. Assign an outcome, acceptance criteria and explicit file scope to each agent.
-   Claim files in COORDINATION.md before editing; one writer per shared file.
+   Claim files in docs/archive/COORDINATION.md before editing; one writer per shared file.
 4. Parallelize independent work. Sequence shared shell, API client, global CSS,
    route registration, dependencies and migration changes through one owner.
 5. Agents report changed files, verification results and unresolved dependencies.
