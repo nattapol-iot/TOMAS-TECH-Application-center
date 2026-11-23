@@ -15,11 +15,13 @@ import "./team-week.css";
 
 const number = (value: number) => new Intl.NumberFormat(currentLocale(), { maximumFractionDigits: 1 }).format(value);
 const dayLabel = (date: string) => new Intl.DateTimeFormat(currentLocale(), { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${date}T00:00:00Z`));
+/** Saturday or Sunday: a narrower, shaded column. */
+const isWeekend = (date: string) => [0, 6].includes(new Date(`${date}T00:00:00Z`).getUTCDay());
 const shortDate = (date: string) => new Intl.DateTimeFormat(currentLocale(), { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${date}T00:00:00Z`));
 const ALL = "all";
 const SHOWN_CHIPS = 3;
 
-export function TeamWeek({ bootstrap, queue }: { bootstrap: BootstrapData; queue?: ReactNode }) {
+export function TeamWeek({ bootstrap, queue, revision = 0 }: { bootstrap: BootstrapData; queue?: ReactNode; revision?: number }) {
   const t = useT();
   const [monday, setMonday] = useState(() => mondayOf(bangkokToday()));
   const [version, setVersion] = useState(0);
@@ -27,10 +29,11 @@ export function TeamWeek({ bootstrap, queue }: { bootstrap: BootstrapData; queue
   const [search, setSearch] = useState("");
   const [department, setDepartment] = useState(ALL);
   const [focus, setFocus] = useState<TeamWeekFocus | null>(null);
-  const readKey = `${monday}#${version}`;
+  // A team task added beside the title reads the week again.
+  const readKey = `${monday}#${version}#${revision}`;
   useEffect(() => {
     let live = true;
-    apiRequest<TeamWeekData>(`/api/v1/team-week?from=${monday}&to=${addDays(monday, 4)}`)
+    apiRequest<TeamWeekData>(`/api/v1/team-week?from=${monday}&to=${addDays(monday, 6)}`)
       .then((value) => {
         if (live) setResult({ key: readKey, data: value, error: "" });
       })
@@ -47,7 +50,8 @@ export function TeamWeek({ bootstrap, queue }: { bootstrap: BootstrapData; queue
   const error = result?.key === readKey ? result.error : "";
   const today = data?.today ?? bangkokToday();
   const hoursPerDay = data?.hoursPerDay ?? 8;
-  const dates = Array.from({ length: 5 }, (_, index) => addDays(monday, index));
+  // Monday to Sunday (owner 2026-11-23): site work falls on weekends too.
+  const dates = Array.from({ length: 7 }, (_, index) => addDays(monday, index));
   const departments = useMemo(() => [...new Set(bootstrap.team.map((user) => user.department).filter(Boolean))].sort(), [bootstrap.team]);
 
   const people = useMemo(() => {
@@ -77,7 +81,7 @@ export function TeamWeek({ bootstrap, queue }: { bootstrap: BootstrapData; queue
             <Icon name="chevronLeft" />
           </button>
           <strong>
-            {shortDate(monday)} – {shortDate(addDays(monday, 4))}
+            {shortDate(monday)} – {shortDate(addDays(monday, 6))}
           </strong>
           <button className="icon-btn" type="button" aria-label={t("Hours.nextWeek")} title={t("Hours.nextWeek")} onClick={() => setMonday(addDays(monday, 7))}>
             <Icon name="chevronRight" />
@@ -124,7 +128,7 @@ export function TeamWeek({ bootstrap, queue }: { bootstrap: BootstrapData; queue
               <tr>
                 <th scope="col">{t("TeamWeek.person")}</th>
                 {dates.map((date) => (
-                  <th key={date} scope="col" className={date === today ? "today" : undefined}>
+                  <th key={date} scope="col" className={[date === today ? "today" : "", isWeekend(date) ? "weekend" : ""].filter(Boolean).join(" ") || undefined}>
                     {dayLabel(date)}
                   </th>
                 ))}

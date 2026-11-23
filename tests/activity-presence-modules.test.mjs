@@ -39,6 +39,8 @@ function subViewArguments(text) {
 }
 
 /** Tab ids of a screen, from its `tabs={[{ id: "x", ... }]}` lists. */
+/** Team overview keeps two tabs and lists its other views under More views (MORE_VIEWS, 2026-11-23): they are tabs too. */
+const moreViewIds = (text) => [...(/const MORE_VIEWS[^=]*=\s*\[([\s\S]*?)\];/.exec(text)?.[1] ?? "").matchAll(/id:\s*["']([a-z-]+)["']/g)].map((id) => id[1]);
 const tabIds = (text) => [...text.matchAll(/tabs=\{\[([\s\S]*?)\]\}/g)].flatMap((list) => [...list[1].matchAll(/id:\s*["']([a-z-]+)["']/g)].map((id) => id[1]));
 
 /** Sub-view keys a call can report: string literals, and `prefix-${tab}` templates expanded over the file's tab ids. */
@@ -101,7 +103,8 @@ test("every sub-view a screen reports is accepted, named after its parent view a
     "resources-week",
     "resources-workload",
   ]);
-  const resourceTabs = tabIds(await source("app/system/production/ResourcePlanningScreen.tsx"));
+  const resourceScreen = await source("app/system/production/ResourcePlanningScreen.tsx");
+  const resourceTabs = [...tabIds(resourceScreen), ...moreViewIds(resourceScreen)];
   assert.deepEqual(
     subViews
       .filter((key) => key.startsWith("resources-"))

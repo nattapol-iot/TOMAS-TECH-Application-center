@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { blockBody, dayBooked, dayItems, freeSlot, gridWindow, hoursLeft, laneOf, overlapsBlocks, shownDates, timeChoices, weekSummary } from "../lib/my-week.ts";
+import { blockBody, dayBooked, dayColumns, dayItems, freeSlot, gridWindow, hoursLeft, isWeekend, laneOf, overlapsBlocks, shownDates, timeChoices, weekSummary } from "../lib/my-week.ts";
 import { MY_WEEK_COPY } from "../app/system/production/my-week-copy.ts";
 
 const root = new URL("../", import.meta.url);
@@ -136,8 +136,10 @@ test("the week in hours: capacity less time away, booked blocks and meetings, an
   // Wednesday: 1.5 h + 2 h of blocks and a 1 h meeting.
   assert.equal(dayBooked("2026-11-25", data), 4.5);
   assert.deepEqual(weekSummary(data, dates), { capacity: 40, booked: 4.5, away: 4, free: 31.5, confirmed: 8 });
-  assert.deepEqual(shownDates("2026-11-23", data), dates, "an empty weekend is not shown");
-  assert.equal(shownDates("2026-11-23", { ...data, blocks: [...data.blocks, block({ id: 9, date: "2026-11-28" })] }).length, 6);
+  // Monday to Sunday always (owner 2026-11-23); a weekend day is a narrower column.
+  assert.deepEqual(shownDates("2026-11-23"), [...dates, "2026-11-28", "2026-11-29"]);
+  assert.deepEqual([isWeekend("2026-11-27"), isWeekend("2026-11-28"), isWeekend("2026-11-29")], [false, true, true]);
+  assert.equal(dayColumns(["2026-11-27", "2026-11-28"]), "52px minmax(124px, 1fr) minmax(96px, 0.7fr)");
 });
 
 test("My Work opens on My week; the hours strip moved into the calendar; every word is in three languages", async () => {

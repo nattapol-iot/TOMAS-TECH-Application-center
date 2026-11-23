@@ -2,6 +2,7 @@
 export const TEAM_WEEK_COPY: Record<string, { en: string; th: string; jp: string }> = Object.fromEntries(
   [
     ["TeamWeek.tab", "Team week", "สัปดาห์ทีม", "チーム週間"],
+    ["TeamOverview.moreViews", "More views", "มุมมองอื่น", "その他の表示"],
     [
       "TeamWeek.subtitle",
       "Everyone's week in hours: time booked on My week, Outlook meetings, team tasks and time away. A day holds 8 hours.",

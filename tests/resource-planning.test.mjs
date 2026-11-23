@@ -89,8 +89,16 @@ test("Team overview opens on the team board; its weekly workload reads once and 
   assert.match(screen, /setData\(await loadWorkload\(\)\)/);
   assert.doesNotMatch(screen, /loadEstimateCostWorkspace|loadSchedules|listInquiries|listEstimates|resource-tasks\/commitments/);
   // Team week, the team board and its list first (team.board), then the weekly workload and Tasks (schedule access); the last tab is remembered per person.
-  assert.match(screen, /\{ id: "week" as const, label: "TeamWeek\.tab" \},\s*\{ id: "board" as const, label: "TeamBoard\.tabBoard" \},\s*\{ id: "list" as const, label: "TeamBoard\.tabList" \}/);
-  assert.match(screen, /\{ id: "workload" as const, label: "TeamBoard\.tabWeekly" \},\s*\{ id: "tasks" as const, label: "Workload\.tabTasks" \}/);
+  // Two tabs since 2026-11-23 (owner: lean it again): Team week and Allocation; the list, the daily grid and Tasks under More views.
+  assert.match(
+    screen,
+    /tabs=\{\[\.\.\.\(canBoard \? \[\{ id: "week" as const, label: "TeamWeek\.tab" \}\] : \[\]\), \.\.\.\(canRead \? \[\{ id: "workload" as const, label: "TeamBoard\.tabWeekly" \}\] : \[\]\)\]\}/,
+  );
+  assert.match(
+    screen,
+    /\{ id: "list", label: "TeamBoard\.tabList", needs: "board" \},\s*\{ id: "board", label: "TeamBoard\.tabBoard", needs: "board" \},\s*\{ id: "tasks", label: "Workload\.tabTasks", needs: "read" \},/,
+  );
+  assert.match(screen, /<details className=\{moreActive \? "team-more on" : "team-more"\} data-guide="team\.more">/);
   // A link names the tab; without one, the tab last used here, and Team week the first time (2026-11-23).
   assert.match(screen, /RESOURCE_TABS\.find\(\(tab\) => tab === opened\[0\]\) \?\? readStored\(tabStorageKey\(bootstrap\.user\.id\), RESOURCE_TABS, "week"\)/);
   assert.match(screen, /const tab: ResourceTab = allowedTabs\.includes\(storedTab\) \? storedTab : \(?allowedTabs\[0\] \?\? "week"\)?;/);

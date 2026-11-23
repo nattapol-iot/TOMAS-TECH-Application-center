@@ -5,34 +5,92 @@ import ts from "typescript-api";
 import { TEAM_BOARD_COPY } from "../app/system/production/team-board-copy.ts";
 
 const read = (file) => readFile(new URL(`../${file}`, import.meta.url), "utf8");
-const moduleUrl = (source) => "data:text/javascript;base64," + Buffer.from(
-  ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText).toString("base64");
+const moduleUrl = (source) =>
+  "data:text/javascript;base64," + Buffer.from(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText).toString("base64");
 // lib/team-board.ts imports lib/resource-planning.ts; both are compiled and the import pointed at the compiled copy.
 const planningUrl = moduleUrl(await read("lib/resource-planning.ts"));
-const { boardDays, dailyLoad, loadBand, weekTotals, spanLoad, freestOn, withExtra, defaultTaskManDays, dueGroup, covers, timeRange, tableTsv, tableHtml, outlookDates, outlookManDays, outlookLoad, withOutlook, overlapDays, repeatDays, monthAfter, isoWeekday, dateRuns, dayWork } =
-  await import(moduleUrl((await read("lib/team-board.ts")).replace(`from "./resource-planning"`, `from "${planningUrl}"`)));
+const {
+  boardDays,
+  dailyLoad,
+  loadBand,
+  weekTotals,
+  spanLoad,
+  freestOn,
+  withExtra,
+  defaultTaskManDays,
+  dueGroup,
+  covers,
+  timeRange,
+  tableTsv,
+  tableHtml,
+  outlookDates,
+  outlookManDays,
+  outlookLoad,
+  withOutlook,
+  overlapDays,
+  repeatDays,
+  monthAfter,
+  isoWeekday,
+  dateRuns,
+  dayWork,
+} = await import(moduleUrl((await read("lib/team-board.ts")).replace(`from "./resource-planning"`, `from "${planningUrl}"`)));
 
-const work = (change) => ({ key: "k", workKey: "k", type: "Project", entityId: 1, ownerId: 7, reference: "", title: "", customer: "",
-  start: "2026-10-19", end: "2026-10-23", manDays: 4, progress: 0, status: "In Progress", ...change });
+const work = (change) => ({
+  key: "k",
+  workKey: "k",
+  type: "Project",
+  entityId: 1,
+  ownerId: 7,
+  reference: "",
+  title: "",
+  customer: "",
+  start: "2026-10-19",
+  end: "2026-10-23",
+  manDays: 4,
+  progress: 0,
+  status: "In Progress",
+  ...change,
+});
 
 test("the board shows Monday to Sunday from the Monday of the week, with holidays, weekends and today marked", () => {
   const days = boardDays("2026-10-21", 2, ["2026-10-23"], "2026-10-21");
   assert.equal(days.length, 14);
   assert.deepEqual(days.map((day) => day.date).slice(0, 8), ["2026-10-19", "2026-10-20", "2026-10-21", "2026-10-22", "2026-10-23", "2026-10-24", "2026-10-25", "2026-10-26"]);
-  assert.deepEqual(days.filter((day) => day.weekend).map((day) => day.date), ["2026-10-24", "2026-10-25", "2026-10-31", "2026-11-01"]);
-  assert.deepEqual(days.filter((day) => day.holiday).map((day) => day.date), ["2026-10-23"]);
-  assert.deepEqual(days.filter((day) => day.today).map((day) => day.date), ["2026-10-21"]);
-  assert.deepEqual(days.filter((day) => day.weekStart).map((day) => day.date), ["2026-10-19", "2026-10-26"]);
+  assert.deepEqual(
+    days.filter((day) => day.weekend).map((day) => day.date),
+    ["2026-10-24", "2026-10-25", "2026-10-31", "2026-11-01"],
+  );
+  assert.deepEqual(
+    days.filter((day) => day.holiday).map((day) => day.date),
+    ["2026-10-23"],
+  );
+  assert.deepEqual(
+    days.filter((day) => day.today).map((day) => day.date),
+    ["2026-10-21"],
+  );
+  assert.deepEqual(
+    days.filter((day) => day.weekStart).map((day) => day.date),
+    ["2026-10-19", "2026-10-26"],
+  );
 });
 
 test("a day's load spreads each item over its working days, as the weekly workload does, and leave is not deducted", () => {
   const days = boardDays("2026-10-19", 1, ["2026-10-23"], "2026-10-21");
   // 4 MD over Monday to Thursday (Friday is a holiday): 1 MD a day; a 4-day week gives 0.8 MD a day.
   const load = dailyLoad([work({}), work({ key: "done", status: "Done" }), work({ key: "unknown", manDays: null })], days, 4, ["2026-10-23"]);
-  assert.deepEqual(load.map((day) => Number(day.manDays.toFixed(2))), [1, 1, 1, 1, 0, 0, 0]);
+  assert.deepEqual(
+    load.map((day) => Number(day.manDays.toFixed(2))),
+    [1, 1, 1, 1, 0, 0, 0],
+  );
   // Saturday and Sunday offer nothing, like the holiday, and nothing is spread onto them.
-  assert.deepEqual(load.map((day) => day.available), [0.8, 0.8, 0.8, 0.8, 0, 0, 0]);
-  assert.deepEqual(load.slice(5).map((day) => day.utilisation), [null, null]);
+  assert.deepEqual(
+    load.map((day) => day.available),
+    [0.8, 0.8, 0.8, 0.8, 0, 0, 0],
+  );
+  assert.deepEqual(
+    load.slice(5).map((day) => day.utilisation),
+    [null, null],
+  );
   assert.equal(Math.round(load[0].utilisation), 125);
   // A holiday with nothing planned has no load at all; work on a holiday is infinitely over; a full day on a working day is 100%.
   assert.equal(load[4].utilisation, null);
@@ -48,9 +106,19 @@ test("the freest people that day are offered first, never someone away or with n
   const days = boardDays("2026-10-19", 1, [], "2026-10-19");
   const person = (userId, manDays, away = false) => ({ userId, away: () => away, load: dailyLoad(manDays ? [work({ manDays })] : [], days, 5, []) });
   const people = [person(1, 5), person(2, 1), person(3, 0, true), person(4, 2), person(5, 0), person(6, 4.5)];
-  assert.deepEqual(freestOn(people, "2026-10-20", 3).map(({ person: p, utilisation }) => [p.userId, utilisation]), [[5, 0], [2, 20], [4, 40]]);
+  assert.deepEqual(
+    freestOn(people, "2026-10-20", 3).map(({ person: p, utilisation }) => [p.userId, utilisation]),
+    [
+      [5, 0],
+      [2, 20],
+      [4, 40],
+    ],
+  );
   // Someone from the chosen person's own team comes first while they have room (90% does not count as room).
-  assert.deepEqual(freestOn(people, "2026-10-20", 3, (p) => p.userId === 4 || p.userId === 6).map(({ person: p }) => p.userId), [4, 5, 2]);
+  assert.deepEqual(
+    freestOn(people, "2026-10-20", 3, (p) => p.userId === 4 || p.userId === 6).map(({ person: p }) => p.userId),
+    [4, 5, 2],
+  );
 });
 
 test("a new task's default effort and the list's due groups", () => {
@@ -59,35 +127,57 @@ test("a new task's default effort and the list's due groups", () => {
   assert.equal(defaultTaskManDays("2026-10-24", "2026-10-24", "Day"), 1);
   assert.equal(defaultTaskManDays("2026-10-24", "2026-10-22", "Day"), 0);
   // A one-day time range, as the server works it out: 2.5 hours is a quarter day; 11:00-14:00 leaves lunch out.
-  assert.deepEqual([defaultTaskManDays("2026-10-22", "2026-10-22", "Time", [], "09:00", "11:30"), defaultTaskManDays("2026-10-22", "2026-10-22", "Time", [], "11:00", "14:00"),
-    defaultTaskManDays("2026-10-22", "2026-10-22", "Time", [], "08:30", "17:30"), defaultTaskManDays("2026-10-22", "2026-10-22", "Time", [], "11:00", "10:00")], [0.25, 0.25, 1, 0]);
+  assert.deepEqual(
+    [
+      defaultTaskManDays("2026-10-22", "2026-10-22", "Time", [], "09:00", "11:30"),
+      defaultTaskManDays("2026-10-22", "2026-10-22", "Time", [], "11:00", "14:00"),
+      defaultTaskManDays("2026-10-22", "2026-10-22", "Time", [], "08:30", "17:30"),
+      defaultTaskManDays("2026-10-22", "2026-10-22", "Time", [], "11:00", "10:00"),
+    ],
+    [0.25, 0.25, 1, 0],
+  );
   assert.equal(timeRange({ slot: "Time", startTime: "09:00", endTime: "11:30" }), "09:00–11:30");
   assert.equal(timeRange({ slot: "AM", startTime: null, endTime: null }), "");
   // Wednesday 21 October.
-  assert.deepEqual(["2026-10-20", "2026-10-25", "2026-10-26", "2026-11-01", "2026-11-02", null].map((end) => dueGroup(end, "2026-10-21")),
-    ["late", "thisWeek", "nextWeek", "nextWeek", "later", "none"]);
+  assert.deepEqual(
+    ["2026-10-20", "2026-10-25", "2026-10-26", "2026-11-01", "2026-11-02", null].map((end) => dueGroup(end, "2026-10-21")),
+    ["late", "thisWeek", "nextWeek", "nextWeek", "later", "none"],
+  );
   assert.equal(covers("2026-10-20", "2026-10-22", "2026-10-21"), true);
   assert.equal(covers("2026-10-20", null, "2026-10-20"), true);
   assert.equal(covers(null, null, "2026-10-20"), false);
 });
 
 test("a copied table pastes as columns into Excel and as a table into Outlook, never as a formula", () => {
-  const rows = [["Kind", "Work"], ["Task", "Survey\tLine 2\nnote"], ["Task", "=HYPERLINK(\"x\")"], ["Task", "<b>&"]];
-  assert.equal(tableTsv(rows), "Kind\tWork\r\nTask\tSurvey Line 2 note\r\nTask\t'=HYPERLINK(\"x\")\r\nTask\t<b>&");
-  assert.equal(tableHtml(rows.slice(0, 1).concat([rows[3]])), '<table border="1" cellspacing="0" cellpadding="4"><tr><th>Kind</th><th>Work</th></tr><tr><td>Task</td><td>&lt;b&gt;&amp;</td></tr></table>');
+  const rows = [
+    ["Kind", "Work"],
+    ["Task", "Survey\tLine 2\nnote"],
+    ["Task", '=HYPERLINK("x")'],
+    ["Task", "<b>&"],
+  ];
+  assert.equal(tableTsv(rows), 'Kind\tWork\r\nTask\tSurvey Line 2 note\r\nTask\t\'=HYPERLINK("x")\r\nTask\t<b>&');
+  assert.equal(
+    tableHtml(rows.slice(0, 1).concat([rows[3]])),
+    '<table border="1" cellspacing="0" cellpadding="4"><tr><th>Kind</th><th>Work</th></tr><tr><td>Task</td><td>&lt;b&gt;&amp;</td></tr></table>',
+  );
 });
 
 test("Team overview replaces Resource Plan in the menu and opens on the board for everyone with team.board", async () => {
   const [shell, screen, board, client] = await Promise.all([
-    read("app/system/ProductionApp.tsx"), read("app/system/production/ResourcePlanningScreen.tsx"),
-    read("app/system/production/TeamBoard.tsx"), read("app/system/resource-workload-client.ts"),
+    read("app/system/ProductionApp.tsx"),
+    read("app/system/production/ResourcePlanningScreen.tsx"),
+    read("app/system/production/TeamBoard.tsx"),
+    read("app/system/resource-workload-client.ts"),
   ]);
   assert.match(shell, /\{ view: "resources", label: "Team overview", icon: "users", anyPermissions: \["team\.board", "schedule\.read"\] \}/);
   assert.doesNotMatch(shell, /label: "Resource Plan"|group: "PLANNING"/);
   // A team task given to someone opens the board from their notification.
   assert.match(shell, /if \(item\.entityType === "TeamTask"\) (?:\(await setView\("resources"\)\)|(?:await )?setView\("resources"\));/);
   assert.match(screen, /const canBoard = bootstrap\.permissions\.includes\("team\.board"\);/);
-  assert.match(screen, /<TeamBoard bootstrap=\{bootstrap\} notify=\{notify\} mode=\{tab\} onMode=\{changeTab\} today=\{todayIso\} openItem=\{open\} onChanged=\{\(\) => setData\(null\)\} actionsSlot=\{boardActions\} \/>/);
+  assert.match(
+    screen,
+    /<TeamBoard bootstrap=\{bootstrap\} notify=\{notify\} mode=\{tab\} onMode=\{changeTab\} today=\{todayIso\} openItem=\{open\} onChanged=\{\(\) => setData\(null\)\} actionsSlot=\{boardActions\} \/>/,
+  );
   // The board's actions sit beside the page title (2026-11-10 mockup), through a slot the page header keeps.
   assert.match(screen, /<div className="board-page-actions" ref=\{setBoardActions\} \/>/);
   assert.match(board, /actionsSlot === undefined \? <div className="board-actions-row">\{actions\}<\/div> : actionsSlot \? createPortal\(actions, actionsSlot\) : null/);
@@ -97,11 +187,14 @@ test("Team overview replaces Resource Plan in the menu and opens on the board fo
   // Clicking a day adds work for that person and day; chips open the task or the work; names list the person's work.
   assert.match(board, /onClick=\{\(\) => setAdding\(\{ assigneeId: userId, date: day\.date \}\)\}/);
   assert.match(board, /aria-label=\{fill\(t\("TeamBoard\.addFor"\), \{ name, date: longDate\(day\.date\) \}\)\}/);
-  assert.match(board, /onClick=\{\(\) => \{ setPersonId\(person\.userId\); onMode\("list"\); \}\}/);
+  assert.match(board, /onClick=\{\s*\(\s*,?\s*\)\s*=>\s*\{\s*setPersonId\(\s*person\.userId,?\s*\);\s*onMode\(\s*"list",?\s*\);\s*,?\s*\},?\s*\}/);
   // Copy (2026-10-22): a task starts a new one from all its fields; the table copies what is on screen.
-  assert.match(board, /const copyTask = \(task: TeamTask\) => \{ setEditing\(null\); setAdding\(\{ assigneeId: null, date: task\.startDate, copy: task \}\); \};/);
+  assert.match(
+    board,
+    /const\s*copyTask\s*=\s*\(\s*task:\s*TeamTask,?\s*\)\s*=>\s*\{\s*setEditing\(\s*null,?\s*\);\s*setAdding\(\s*\{\s*assigneeId:\s*null,\s*date:\s*task\.startDate,\s*copy:\s*task\s*,?\s*\},?\s*\);\s*,?\s*\};\s*/,
+  );
   // A copy happens once unless set to repeat (2026-11-09).
-  assert.match(board, /const start = copyFrom \? \{ \.\.\.draftOf\(copyFrom\), status: "Planned" as const, repeat: "" as const \} : initial \?\? draftOf\(null, preset\);/);
+  assert.match(board, /const start = copyFrom \? \{ \.\.\.draftOf\(copyFrom\), status: "Planned" as const, repeat: "" as const \} : \(?initial \?\? draftOf\(null, preset\)\)?;/);
   assert.match(board, /navigator\.clipboard\.write\(\[new ClipboardItem\(\{ "text\/plain": new Blob\(\[text\]/);
   assert.match(board, /else await navigator\.clipboard\.writeText\(text\);/);
   // A Gantt view of the same people and filtered work, remembered per person.
@@ -110,7 +203,10 @@ test("Team overview replaces Resource Plan in the menu and opens on the board fo
   const gantt = await read("app/system/production/TeamBoardGantt.tsx");
   assert.match(gantt, /<GanttChart rows=\{rows\} range=\{range\} today=\{today\} sideHeader="TeamBoard\.person" label="TeamBoard\.ganttLabel" \/>/);
   // A person's own row draws all their work on one line (2026-10-22), not one long bar from the first to the last.
-  assert.match(gantt, /start: null, finish: null, tone: "slate",\s+segments: person\.work\.map\(\(work\) => \(\{ key: work\.key, start: work\.start, finish: work\.end \?\? work\.start, tone: work\.tone/);
+  assert.match(
+    gantt,
+    /start: null, finish: null, tone: "slate",\s+segments: person\.work\.map\(\(work\) => \(\{ key: work\.key, start: work\.start, finish: work\.end \?\? work\.start, tone: work\.tone/,
+  );
   // Full screen fills the window; the chart scrolls inside it.
   const boardCss = await read("app/system/production/team-board.css");
   assert.match(boardCss, /\.board-gantt\.is-fullscreen \.gantt \{ flex: 1; min-height: 0; max-height: none; \}/);
@@ -122,7 +218,10 @@ test("Team overview replaces Resource Plan in the menu and opens on the board fo
   assert.match(board, /const inDepartment = \(userId: number\) => !teams\.length \|\| teams\.includes\(/);
   assert.match(board, /const teams = chosenTeams\.filter\(\(team\) => departments\.includes\(team\)\);/);
   // Now on the link and remembered by useLinkedState; a choice saved under the old key still counts.
-  assert.match(board, /useLinkedState\("teams", \[\], listLink, \{ legacy: \(\) => \{ const teams = readTeams\(bootstrap\.user\.id\); return teams\.length \? teams : null; \} \}\)/);
+  assert.match(
+    board,
+    /useLinkedState\(\s*"teams",\s*\[\s*,?\s*\],\s*listLink,\s*\{\s*legacy:\s*\(\s*,?\s*\)\s*=>\s*\{\s*const\s*teams\s*=\s*readTeams\(\s*bootstrap\.user\.id,?\s*\);\s*return\s*teams\.length\s*\?\s*teams\s*:\s*null;\s*,?\s*\}\s*,?\s*\},?\s*\)/,
+  );
   assert.doesNotMatch(board, /setDepartment\(/);
   // A time range (2026-10-22): a fourth choice beside the whole day, the morning and the afternoon, with from and until.
   assert.match(board, /\{ slot: "Time", label: "TeamBoard\.slotTime" \}/);
@@ -130,7 +229,10 @@ test("Team overview replaces Resource Plan in the menu and opens on the board fo
   assert.match(board, /startTime: draft\.kind !== "Away" && draft\.slot === "Time" \? draft\.startTime \|\| null : null,/);
   assert.match(board, /if \(!draft\.startTime \|\| !draft\.endTime\) return "TeamBoard\.timeNeeded";/);
   // Several people on a task (2026-10-22): picked with the shared multi-person picker, each with their load that day.
-  assert.match(board, /<SearchMultiPicker options=\{personOptions\} value=\{draft\.assigneeIds\} onChange=\{\(assigneeIds\) => set\(\{ \.\.\.draft, assigneeIds \}\)\}/);
+  assert.match(
+    board,
+    /<SearchMultiPicker\s*options=\{\s*personOptions,?\s*\}\s*value=\{\s*draft\.assigneeIds,?\s*\}\s*onChange=\{\s*\(\s*assigneeIds,?\s*\)\s*=>\s*set\(\s*\{\s*\.\.\.draft,\s*assigneeIds\s*,?\s*\},?\s*\),?\s*\}/,
+  );
   assert.match(board, /\{loads\.map\(\(\{ person, now, after, away, off \}\) => \(/);
   // Saturday and Sunday are on the grid (2026-10-24): shaded, with no load, and a day off rather than an overload in the form.
   assert.match(board, /day\.holiday \? "holiday" : day\.weekend \? "weekend" :/);
@@ -139,17 +241,20 @@ test("Team overview replaces Resource Plan in the menu and opens on the board fo
   assert.match(board, /manDays: Math\.max\(0, saved\.manDays - ownShare\(person\.userId\)\)/);
   assert.match(board, /<TaskFields draft=\{draft\} set=\{setDraft\} context=\{context\} disabled=\{!canChange \|\| busy\} original=\{task\} repeating=\{repeating\} \/>/);
   // The fullest person can be swapped for someone with more room, their own team first.
-  assert.match(board, /freestOn\(people\.filter\(\(entry\) => !draft\.assigneeIds\.includes\(entry\.userId\)/);
-  assert.match(board, /draft\.startDate, 3, \(entry\) => entry\.user\.department === worst\.person\.user\.department\)/);
+  assert.match(board, /freestOn\(\s*people\.filter\(\s*\(\s*entry,?\s*\)\s*=>\s*!draft\.assigneeIds\.includes\(\s*entry\.userId,?\s*\)/);
+  assert.match(board, /draft\.startDate,\s*3,\s*\(\s*entry,?\s*\)\s*=>\s*entry\.user\.department\s*===\s*worst\.person\.user\.department,?\s*\)/);
   assert.match(board, /onClick=\{\(\) => swap\(worst\.person\.userId, other\.userId\)\}/);
   // A task with several people counts for each of them, on each of their rows.
   assert.match(board, /\(task\.assigneeIds\.length \? task\.assigneeIds : \[null\]\)\.map\(\(ownerId\) => \(\{/);
   assert.match(board, /for \(const userId of task\.assigneeIds\.length \? task\.assigneeIds : \[null\]\)/);
   // Saves update the board in place; a conflict reloads it.
-  assert.match(board, /failure\.status === 409 \|\| failure\.status === 404\)\) \{ notify\(t\("TeamBoard\.conflict"\)\); await load\(\);/);
+  assert.match(board, /failure\.status\s*===\s*409\s*\|\|\s*failure\.status\s*===\s*404,?\s*\),?\s*\)\s*\{\s*notify\(\s*t\(\s*"TeamBoard\.conflict",?\s*\),?\s*\);\s*await\s*load\(\s*,?\s*\);\s*/);
   assert.doesNotMatch(board, /<datalist|KpiCard/);
   // Outlook (owner decision 2026-10-22): the form says the person gets it in Outlook; the toast says whether it got there.
-  assert.match(board, /\{draft\.kind !== "Away" && loads\.length \? <p className="muted small board-outlook"><Icon name="calendar" \/>\{t\(repeating && draft\.repeat \? "TeamBoard\.outlookRepeatHint" : "TeamBoard\.outlookHint"\)\}<\/p> : null\}/);
+  assert.match(
+    board,
+    /\{draft\.kind !== "Away" && loads\.length \? \(?\s*<p className="muted small board-outlook">\s*<Icon name="calendar" \/>\s*\{t\(repeating && draft\.repeat \? "TeamBoard\.outlookRepeatHint" : "TeamBoard\.outlookHint"\)\}\s*<\/p>\s*\)? : null\}/,
+  );
   assert.match(board, /notify\(`\$\{t\("TeamBoard\.added"\)\}\$\{outlook\(saved\.calendar\)\}`\)/);
   assert.match(client, /export type TeamTaskSaved = \{ id: number; rowVersion: string; manDays: number; calendar: CalendarDelivery;/);
   assert.match(client, /apiRequest<TeamTaskSaved>\("\/api\/v1\/team-tasks"/);
@@ -159,9 +264,9 @@ test("Team overview replaces Resource Plan in the menu and opens on the board fo
 test("the board follows the 2026-11-10 mockup: summary strip, sticky filters, pinned member and week, MD per day", async () => {
   const [board, css] = await Promise.all([read("app/system/production/TeamBoard.tsx"), read("app/system/production/team-board.css")]);
   // The over and overlap facts of the summary are the attention filters they count.
-  assert.match(board, /onClick=\{\(\) => pickAttention\(attention === key \? null : key\)\}>\{t\("TeamBoard\.sumSee"\)\}/);
-  assert.match(board, /\{counts\.over\}<small>\{t\("TeamBoard\.sumPeopleUnit"\)\} · \{summaryLink\("over"\)\}<\/small>/);
-  assert.match(board, /\{counts\.overlap\}<small>\{t\("TeamBoard\.sumPeopleUnit"\)\} · \{summaryLink\("overlap"\)\}<\/small>/);
+  assert.match(board, /onClick=\{\s*\(\s*,?\s*\)\s*=>\s*pickAttention\(\s*attention\s*===\s*key\s*\?\s*null\s*:\s*key,?\s*\),?\s*\}>\s*\{\s*t\(\s*"TeamBoard\.sumSee",?\s*\),?\s*\}/);
+  assert.match(board, /\{counts\.over\}\s*<small>\s*\{t\("TeamBoard\.sumPeopleUnit"\)\} · \{summaryLink\("over"\)\}\s*<\/small>/);
+  assert.match(board, /\{counts\.overlap\}\s*<small>\s*\{t\("TeamBoard\.sumPeopleUnit"\)\} · \{summaryLink\("overlap"\)\}\s*<\/small>/);
   // The filter bar stays under the top bar; the teams are a segmented control with head counts, several at once.
   assert.match(css, /\.board-toolbar\.board-sticky \{\s*position: sticky; top: calc\(var\(--topbar-h\) \+ 8px\);/);
   assert.match(board, /<div className="seg-control board-team-seg" role="group" aria-label=\{t\("TeamBoard\.team"\)\}>/);
@@ -170,7 +275,7 @@ test("the board follows the 2026-11-10 mockup: summary strip, sticky filters, pi
   assert.match(css, /\.board-grid \.board-week \{\s*position: sticky; left: var\(--board-who-w\);/);
   assert.match(board, /<td className="board-week">\{weekLoad\(person\.week\)\}<\/td>/);
   // The day's MD opens the day's work and warns in red when over; an overlapping piece carries a labelled warning.
-  assert.match(board, /className=\{`board-md\$\{over \? " over" : ""\}`\} data-guide="team\.dayWork"/);
+  assert.match(board, /className=\{\s*`board-md\$\{\s*over\s*\?\s*"\s*over"\s*:\s*"",?\s*\}`,?\s*\}\s*data-guide="team\.dayWork"/);
   assert.match(board, /<span className="board-chip-warn" role="img" aria-label=\{t\("TeamBoard\.overlapTime"\)\}>/);
   assert.match(css, /\.board-md\.over \{ color: var\(--red-text\); font-weight: 700; \}/);
   // Today is tinted down the whole column, below an over-capacity day's red.
@@ -178,8 +283,15 @@ test("the board follows the 2026-11-10 mockup: summary strip, sticky filters, pi
 });
 
 test("every team board string has English, Thai and Japanese, and no key is short enough to hijack the alias map", async () => {
-  const sources = await Promise.all(["app/system/production/TeamBoard.tsx", "app/system/production/ResourcePlanningScreen.tsx", "app/system/ProductionApp.tsx",
-    "app/system/production/WorkQueue.tsx", "app/system/activity-client.ts"].map(read));
+  const sources = await Promise.all(
+    [
+      "app/system/production/TeamBoard.tsx",
+      "app/system/production/ResourcePlanningScreen.tsx",
+      "app/system/ProductionApp.tsx",
+      "app/system/production/WorkQueue.tsx",
+      "app/system/activity-client.ts",
+    ].map(read),
+  );
   const used = new Set(sources.flatMap((text) => [...text.matchAll(/["'](TeamBoard\.[A-Za-z]+)["']/g)].map((match) => match[1])));
   used.add("Team overview");
   for (const key of used) for (const language of ["en", "th", "jp"]) assert.ok(TEAM_BOARD_COPY[key]?.[language]?.trim(), `${key}: ${language}`);
@@ -210,9 +322,15 @@ test("only Admins, Leaders and managers add work on other people's rows; new wor
   assert.match(board, /const assignable = useMemo\(\(\) => \(canAssignOthers \? null : \[me\]\), \[canAssignOthers, me\]\);/);
   assert.match(board, /\.filter\(\(user\) => assignable === null \|\| assignable\.includes\(user\.id\) \|\| Boolean\(original\?\.assigneeIds\.includes\(user\.id\)\)\)/);
   // Which work it is for, chosen every time, and a brief detail; a day away needs neither.
-  assert.match(board, /const draftMissing = \(draft: Draft\): string\[\] => draft\.kind === "Away" \? \[\] : \[/);
-  assert.match(board, /const draftReady = \(draft: Draft, repeating = true\) => Boolean\(draft\.title\.trim\(\) && draft\.startDate\) && !draftProblem\(draft, repeating\) && !draftMissing\(draft\)\.length/);
-  assert.match(board, /\["project", "TeamBoard\.workProject", work\.canProjects\], \["inquiry", "TeamBoard\.workInquiry", work\.canInquiries\], \["other", "TeamBoard\.workOther", true\]/);
+  assert.match(board, /const\s*draftMissing\s*=\s*\(\s*draft:\s*Draft,?\s*\):\s*string\[\s*,?\s*\]\s*=>\s*draft\.kind\s*===\s*"Away"\s*\?\s*\[\s*,?\s*\]\s*:\s*\[\s*/);
+  assert.match(
+    board,
+    /const\s*draftReady\s*=\s*\(\s*draft:\s*Draft,\s*repeating\s*=\s*true,?\s*\)\s*=>\s*Boolean\(\s*draft\.title\.trim\(\s*,?\s*\)\s*&&\s*draft\.startDate,?\s*\)\s*&&\s*!draftProblem\(\s*draft,\s*repeating,?\s*\)\s*&&\s*!draftMissing\(\s*draft,?\s*\)\.length/,
+  );
+  assert.match(
+    board,
+    /\[\s*"project",\s*"TeamBoard\.workProject",\s*work\.canProjects,?\s*\],\s*\[\s*"inquiry",\s*"TeamBoard\.workInquiry",\s*work\.canInquiries,?\s*\],\s*\[\s*"other",\s*"TeamBoard\.workOther",\s*true,?\s*\]/,
+  );
   // Outlook: on the cells, in the load, and a button to read the calendars now.
   assert.match(board, /add\(event\.userId, date, \{ kind: "outlook", key: `outlook-\$\{event\.id\}`, event, late: false \}\);/);
   assert.match(board, /const load = withOutlook\(dailyLoad\(items, days, capacity, data\.holidays\), \(date\) => outlookMd\.get/);
@@ -244,10 +362,16 @@ test("plan work with no man-days takes a full day per working day, once per task
     // An RFQ with no effort saved stays unknown, not a full day.
     work({ key: "rfq", workKey: "Inquiry-5", type: "Inquiry", start: "2026-11-02", end: "2026-11-06", manDays: null }),
   ];
-  assert.deepEqual(dailyLoad(items, days, 5, []).map((day) => day.manDays), [1, 1, 1, 2, 1, 0, 0]);
+  assert.deepEqual(
+    dailyLoad(items, days, 5, []).map((day) => day.manDays),
+    [1, 1, 1, 2, 1, 0, 0],
+  );
   // Once a function of the task has man-days, the task takes those on its days and no extra full day.
   const typed = [items[0], work({ ...items[1], manDays: 3 })];
-  assert.deepEqual(dailyLoad(typed, days, 5, []).map((day) => day.manDays), [1, 1, 1, 1, 0, 0, 0]);
+  assert.deepEqual(
+    dailyLoad(typed, days, 5, []).map((day) => day.manDays),
+    [1, 1, 1, 1, 0, 0, 0],
+  );
 });
 
 test("work overlaps on a working day when two pieces of work fall on it; a task's own functions never overlap", () => {
@@ -261,12 +385,25 @@ test("work overlaps on a working day when two pieces of work fall on it; a task'
   ];
   const overlaps = overlapDays(items, "2026-11-01", "2026-11-30", ["2026-11-06"]);
   // Thursday only: Friday is a holiday, the weekend is not a working day, and from Monday task 21 is over.
-  assert.deepEqual(overlaps.map((day) => day.date), ["2026-11-05"]);
-  assert.deepEqual(overlaps[0].work.map((item) => item.key), ["f1", "other"]);
-  assert.deepEqual(overlapDays(items, "2026-11-06", "2026-11-30", []).map((day) => day.date), ["2026-11-06"], "the window clips the work");
+  assert.deepEqual(
+    overlaps.map((day) => day.date),
+    ["2026-11-05"],
+  );
+  assert.deepEqual(
+    overlaps[0].work.map((item) => item.key),
+    ["f1", "other"],
+  );
+  assert.deepEqual(
+    overlapDays(items, "2026-11-06", "2026-11-30", []).map((day) => day.date),
+    ["2026-11-06"],
+    "the window clips the work",
+  );
   // Runs carry on over weekends and holidays between them, so a bar is drawn once.
-  assert.deepEqual(dateRuns(["2026-11-05", "2026-11-09", "2026-11-03", "2026-11-12"], ["2026-11-06"]),
-    [{ start: "2026-11-03", finish: "2026-11-03" }, { start: "2026-11-05", finish: "2026-11-09" }, { start: "2026-11-12", finish: "2026-11-12" }]);
+  assert.deepEqual(dateRuns(["2026-11-05", "2026-11-09", "2026-11-03", "2026-11-12"], ["2026-11-06"]), [
+    { start: "2026-11-03", finish: "2026-11-03" },
+    { start: "2026-11-05", finish: "2026-11-09" },
+    { start: "2026-11-12", finish: "2026-11-12" },
+  ]);
 });
 
 test("a day lists every piece of work spanning it, not only what falls due, with what each takes that day", () => {
@@ -279,21 +416,52 @@ test("a day lists every piece of work spanning it, not only what falls due, with
     work({ key: "done", workKey: "Project-99", start: "2026-11-02", end: "2026-11-06", status: "Done" }),
   ];
   const day = dayWork(items, "2026-11-05", []);
-  assert.deepEqual(day.map((piece) => [piece.piece, piece.rows.map((row) => row.item.key)]), [["Inquiry-5", ["rfq"]], ["Project-21", ["f1", "f2"]]]);
+  assert.deepEqual(
+    day.map((piece) => [piece.piece, piece.rows.map((row) => row.item.key)]),
+    [
+      ["Inquiry-5", ["rfq"]],
+      ["Project-21", ["f1", "f2"]],
+    ],
+  );
   assert.deepEqual(day[0].rows[0].perDay, 1);
-  assert.deepEqual(day[1].rows.map((row) => [row.perDay, row.fullDay]), [[null, true], [null, true]]);
+  assert.deepEqual(
+    day[1].rows.map((row) => [row.perDay, row.fullDay]),
+    [
+      [null, true],
+      [null, true],
+    ],
+  );
   // An estimate with no effort saved is listed on its day with nothing assumed.
-  assert.deepEqual(dayWork(items, "2026-11-06", []).map((piece) => piece.rows.map((row) => [row.item.key, row.perDay, row.fullDay])),
-    [[["f1", null, true], ["f2", null, true]], [["later", null, false]]]);
+  assert.deepEqual(
+    dayWork(items, "2026-11-06", []).map((piece) => piece.rows.map((row) => [row.item.key, row.perDay, row.fullDay])),
+    [
+      [
+        ["f1", null, true],
+        ["f2", null, true],
+      ],
+      [["later", null, false]],
+    ],
+  );
   // Saturday: work spanning the weekend takes none of it; an appointment put on the day still shows, with its whole effort.
   const saturday = [...items, work({ key: "sat", workKey: "TeamTask-4", type: "Task", start: "2026-11-07", end: "2026-11-07", manDays: 1 })];
-  assert.deepEqual(dayWork(saturday, "2026-11-07", []).map((piece) => piece.rows.map((row) => [row.item.key, row.perDay])), [[["sat", 1]]]);
+  assert.deepEqual(
+    dayWork(saturday, "2026-11-07", []).map((piece) => piece.rows.map((row) => [row.item.key, row.perDay])),
+    [[["sat", 1]]],
+  );
 });
 
 test("a repeat falls on its weekdays until its last day, company holidays left out, for a year at most", () => {
   // Tuesday 10 until Friday 20 November 2026, every working day; Monday 16 is a holiday.
-  assert.deepEqual(repeatDays("2026-11-10", [1, 2, 3, 4, 5], "2026-11-20", ["2026-11-16"]),
-    ["2026-11-10", "2026-11-11", "2026-11-12", "2026-11-13", "2026-11-17", "2026-11-18", "2026-11-19", "2026-11-20"]);
+  assert.deepEqual(repeatDays("2026-11-10", [1, 2, 3, 4, 5], "2026-11-20", ["2026-11-16"]), [
+    "2026-11-10",
+    "2026-11-11",
+    "2026-11-12",
+    "2026-11-13",
+    "2026-11-17",
+    "2026-11-18",
+    "2026-11-19",
+    "2026-11-20",
+  ]);
   // Mondays and Thursdays; Saturday and Sunday can be chosen too.
   assert.deepEqual(repeatDays("2026-11-11", [4, 1], "2026-11-23"), ["2026-11-12", "2026-11-16", "2026-11-19", "2026-11-23"]);
   assert.deepEqual(repeatDays("2026-11-14", [6, 7], "2026-11-15"), ["2026-11-14", "2026-11-15"]);
@@ -305,23 +473,49 @@ test("a repeat falls on its weekdays until its last day, company holidays left o
   // A month on, or the last day of a shorter month.
   assert.deepEqual([monthAfter("2026-11-10"), monthAfter("2026-01-31"), monthAfter("2026-12-15")], ["2026-12-10", "2026-02-28", "2027-01-15"]);
   // A day of a repeat (a daily meeting) loads the day like an Outlook meeting, but overlaps no other work.
-  const day = { key: "TeamTask-101-7", workKey: "TeamTask-101", type: "Task", entityId: 101, ownerId: 7, reference: "", title: "Daily update", customer: "",
-    start: "2026-11-11", end: "2026-11-11", manDays: 0.25, progress: 0, status: "Planned", taskKind: "Appointment", repeat: true };
+  const day = {
+    key: "TeamTask-101-7",
+    workKey: "TeamTask-101",
+    type: "Task",
+    entityId: 101,
+    ownerId: 7,
+    reference: "",
+    title: "Daily update",
+    customer: "",
+    start: "2026-11-11",
+    end: "2026-11-11",
+    manDays: 0.25,
+    progress: 0,
+    status: "Planned",
+    taskKind: "Appointment",
+    repeat: true,
+  };
   const plan = { ...day, key: "Project-5-7", workKey: "Project-5", type: "Project", entityId: 5, title: "Wiring", start: "2026-11-09", end: "2026-11-13", manDays: 5, repeat: undefined };
   assert.deepEqual(overlapDays([day, plan], "2026-11-09", "2026-11-13"), []);
-  assert.deepEqual(overlapDays([{ ...day, repeat: false }, plan], "2026-11-09", "2026-11-13").map((entry) => entry.date), ["2026-11-11"]);
+  assert.deepEqual(
+    overlapDays([{ ...day, repeat: false }, plan], "2026-11-09", "2026-11-13").map((entry) => entry.date),
+    ["2026-11-11"],
+  );
   assert.equal(dailyLoad([day, plan], [{ date: "2026-11-11", holiday: false }], 5, [])[0].manDays, 1.25);
 });
 
 test("team load: people typed per day load exactly those days, a weekend included, and overlap only where typed", () => {
   const item = (key, patch) => work({ key, workKey: key, start: "2026-12-04", end: "2026-12-08", manDays: 1.5, status: "Not Started", ...patch });
-  const typed = item("Project-1", { byDay: { "2026-12-04": 0.5, "2026-12-05": 1 } }), even = item("Project-2", { manDays: 3 });
-  const days = boardDays("2026-11-30", 2, [], "2026-12-01"), at = (load, date) => load.find((day) => day.date === date);
+  const typed = item("Project-1", { byDay: { "2026-12-04": 0.5, "2026-12-05": 1 } }),
+    even = item("Project-2", { manDays: 3 });
+  const days = boardDays("2026-11-30", 2, [], "2026-12-01"),
+    at = (load, date) => load.find((day) => day.date === date);
   const load = dailyLoad([typed, even], days, 5);
   assert.deepEqual([at(load, "2026-12-04").manDays, at(load, "2026-12-07").manDays], [1.5, 1], "0.5 typed + 3 MD over three work days; nothing typed on the 7th");
   assert.deepEqual([at(load, "2026-12-05").manDays, at(load, "2026-12-05").available], [1, 1], "a Saturday with people typed is a working day for them");
   assert.equal(at(load, "2026-12-06").available, 0, "the Sunday nobody typed stays closed");
-  assert.deepEqual(overlapDays([typed, even], "2026-12-01", "2026-12-12").map((day) => day.date), ["2026-12-04"]);
-  assert.deepEqual(dayWork([typed], "2026-12-05").map((piece) => piece.rows[0].perDay), [1]);
+  assert.deepEqual(
+    overlapDays([typed, even], "2026-12-01", "2026-12-12").map((day) => day.date),
+    ["2026-12-04"],
+  );
+  assert.deepEqual(
+    dayWork([typed], "2026-12-05").map((piece) => piece.rows[0].perDay),
+    [1],
+  );
   assert.equal(dayWork([typed], "2026-12-08").length, 0);
 });

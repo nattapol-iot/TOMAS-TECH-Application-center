@@ -130,6 +130,7 @@ test("Allocation · weekly: the queue, the assign dialog, days away and confirme
   assert.match(screen, /const matches = !wanted \|\| wanted === "Installation" \|\| disciplineOfDepartment\(user\.department\) === wanted;/);
   assert.match(screen, /\.sort\(\(a, b\) => Number\(b\.matches\) - Number\(a\.matches\) \|\| b\.free - a\.free/);
   assert.match(screen, /await assignPlanRow\(item\.taskId, picked\);/);
-  assert.match(copy, /\["TeamBoard\.tabWeekly", "Allocation · weekly", "จัดคน · รายสัปดาห์", "要員配置・週別"\]/);
+  // Renamed when Team overview went to two tabs (2026-11-23).
+  assert.match(copy, /\["TeamBoard\.tabWeekly", "Allocation · 12 weeks", "จัดคน 12 สัปดาห์", "要員配置・12週"\]/);
   assert.match(guides, /id: "allocation-assign"/);
 });

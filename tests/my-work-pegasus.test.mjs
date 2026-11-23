@@ -12,13 +12,14 @@ const group = screen.slice(screen.indexOf("function ProductionScheduleWorkGroup"
 test("the page sits in the Pegasus scope, with the guidance as its subtitle instead of a strip", () => {
   assert.match(screen, /import "\.\/pegasus-skin\.css";\nimport "\.\/my-work\.css";/);
   assert.match(page, /return \(?\s*<div className="pg-skin my-work-pg">/);
-  assert.match(page, /subtitle=\{uiText\("You update the tasks assigned to you\./);
+  assert.match(page, /: uiText\("You update the tasks assigned to you\./);
   assert.doesNotMatch(page, /my-work-guidance/);
 });
 
 test("one summary bar replaces the five stat cards and the All open row; each cell is the filter it counts", () => {
   assert.doesNotMatch(screen, /MyWorkStat|my-work-kpis|my-work-filter-row" role="group"/);
-  assert.match(page, /<div className="pg-summary my-work-summary" role="group" aria-label=\{localizeCopy\("Task overview"\)\} data-guide="work\.summary" hidden=\{tab === "week"\}>/);
+  // The counts show with the assigned work only (2026-11-23): a hidden attribute lost to the bar's own display rule.
+  assert.match(page, /\{ASSIGNED_TABS\.includes\(tab\) \? \(\s*<div className="pg-summary my-work-summary" role="group" aria-label=\{localizeCopy\("Task overview"\)\} data-guide="work\.summary">/);
   for (const id of ["open", "late", "blocked", "attention", "week", "waiting"]) assert.match(page, new RegExp(`\\{ id: "${id}", label: "`));
   assert.match(page, /aria-pressed=\{tab === "active" && taskFilter === cell\.id\}/);
   assert.match(page, /onClick=\{\(\) => \{\s*setTab\("active"\);\s*setSourceFilter\("all"\);\s*setTaskFilter\(cell\.id\);\s*\}\}/);
