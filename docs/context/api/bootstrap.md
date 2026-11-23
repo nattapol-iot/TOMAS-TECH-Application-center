@@ -2,22 +2,22 @@
 
 [Module](../modules/shell.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `b75d424c`; generated, do not edit. [backend-node/src/routes/bootstrap.ts](<../../../backend-node/src/routes/bootstrap.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `c868f0e0`; generated, do not edit. [backend-node/src/routes/bootstrap.ts](<../../../backend-node/src/routes/bootstrap.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/me` | 62–62 |
-| PUT | `/api/v1/me/menu-favorites` | 64–73 |
-| GET | `/api/v1/bootstrap` | 75–177 |
+| GET | `/api/v1/me` | 141–141 |
+| PUT | `/api/v1/me/menu-favorites` | 143–152 |
+| GET | `/api/v1/bootstrap` | 154–292 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `menuFavoritesInput` | [backend-node/src/routes/bootstrap.ts](<../../../backend-node/src/routes/bootstrap.ts>) | 44–52 |
-| `registerBootstrapRoutes` | [backend-node/src/routes/bootstrap.ts](<../../../backend-node/src/routes/bootstrap.ts>) | 61–178 |
+| `menuFavoritesInput` | [backend-node/src/routes/bootstrap.ts](<../../../backend-node/src/routes/bootstrap.ts>) | 117–125 |
+| `registerBootstrapRoutes` | [backend-node/src/routes/bootstrap.ts](<../../../backend-node/src/routes/bootstrap.ts>) | 134–293 |
 
 ## Direct local dependencies
 
@@ -25,6 +25,7 @@ Evidence: source snapshot `b75d424c`; generated, do not edit. [backend-node/src/
 - [backend-node/src/errors.ts](<../../../backend-node/src/errors.ts>)
 - [backend-node/src/http.ts](<../../../backend-node/src/http.ts>)
 - [backend-node/src/master-data/services.ts](<../../../backend-node/src/master-data/services.ts>)
+- [backend-node/src/tmt-id/token-vault.ts](<../../../backend-node/src/tmt-id/token-vault.ts>)
 - [backend-node/src/users.ts](<../../../backend-node/src/users.ts>)
 - [backend-node/src/routes/sales-customers.ts](<../../../backend-node/src/routes/sales-customers.ts>)
 

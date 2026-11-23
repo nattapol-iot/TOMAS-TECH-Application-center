@@ -5,6 +5,7 @@ import { LocalizedText } from "../LocalizedText";
 import { useEffect, useRef, useState, type ChangeEvent, type DragEvent } from "react";
 import { countBusinessCardFields, type BusinessCardExtraction } from "../../../lib/business-card";
 import { ApiClientError, scanBusinessCardViaBackend } from "../api-client";
+import { currentAppPath, redirectToTmtIdLogin } from "../tmt-id-client";
 import { Icon } from "../ui";
 
 const MAX_IMAGE_BYTES = 12 * 1024 * 1024;
@@ -52,7 +53,7 @@ async function prepareImage(file: File): Promise<Blob> {
 
 const failureMessage = (reason: unknown) => {
   if (!(reason instanceof ApiClientError)) return "ส่งรูปให้ Copilot ไม่สำเร็จ กรุณาลองอีกครั้ง";
-  if (reason.code === "copilot_sign_in_required") return "ต้องออกจากระบบแล้วเข้าสู่ระบบด้วย TMT ID ใหม่ก่อน จึงจะสแกนนามบัตรได้";
+  if (reason.code === "copilot_sign_in_required") return "การ login TMT ID หมดอายุ ต้อง login ใหม่ก่อนจึงจะสแกนนามบัตรได้ ข้อมูลที่ยังไม่บันทึกในหน้านี้จะหาย";
   if (reason.code === "copilot_busy") return "Copilot มีงานรอคิวอยู่มาก ยังอ่านไม่เสร็จ กรุณาลองอีกครั้งในอีกสักครู่ หรือกรอกข้อมูลเอง";
   if (reason.code === "copilot_unreadable" || reason.code === "copilot_rejected") return "Copilot อ่านนามบัตรนี้ไม่ได้ ลองถ่ายให้บัตรเต็มกรอบ ตรง และมีแสงสว่างขึ้น";
   if (reason.code === "copilot_off" || reason.code === "copilot_unavailable") return "ตอนนี้ติดต่อ Copilot ไม่ได้ กรุณากรอกข้อมูลเอง หรือลองใหม่ภายหลัง";
@@ -69,6 +70,7 @@ export function BusinessCardScanner({ disabled, onApply }: Props) {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
+  const [signInNeeded, setSignInNeeded] = useState(false);
   const [result, setResult] = useState<BusinessCardExtraction | null>(null);
   const [applied, setApplied] = useState<string[]>([]);
   const [needsNameReview, setNeedsNameReview] = useState(false);
@@ -110,6 +112,7 @@ export function BusinessCardScanner({ disabled, onApply }: Props) {
 
   const scan = async (file: File) => {
     setError("");
+    setSignInNeeded(false);
     setResult(null);
     setApplied([]);
     setNeedsNameReview(false);
@@ -157,6 +160,7 @@ export function BusinessCardScanner({ disabled, onApply }: Props) {
     } catch (reason) {
       if (run === runRef.current) {
         setError(failureMessage(reason));
+        setSignInNeeded(reason instanceof ApiClientError && reason.code === "copilot_sign_in_required");
         setStatus("");
       }
     } finally {
@@ -303,6 +307,12 @@ export function BusinessCardScanner({ disabled, onApply }: Props) {
         <div className="callout danger business-card-error" role="alert">
           <Icon name="alertCircle" />
           <span>{error}</span>
+          {signInNeeded ? (
+            <button className="btn sm" type="button" onClick={() => redirectToTmtIdLogin(currentAppPath())}>
+              <Icon name="user" />
+              login TMT ID อีกครั้ง
+            </button>
+          ) : null}
         </div>
       ) : null}
     </section>

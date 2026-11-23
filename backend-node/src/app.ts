@@ -211,7 +211,7 @@ export async function buildApp(config: AppConfig): Promise<Application> {
   }
   registerHealthRoutes(app, config, database);
   registerGoodsReceiptRoutes(app, config, database, users);
-  registerBootstrapRoutes(app, database, users, masterData);
+  registerBootstrapRoutes(app, database, users, masterData, tokenVault);
   registerExchangeRateRoutes(app, users, masterData);
   registerExecutiveDashboardRoutes(app, database, users);
   registerBomRoutes(app, config, database, users);

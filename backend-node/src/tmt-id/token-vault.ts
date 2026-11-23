@@ -9,7 +9,7 @@ export type IssuedTokens = { access_token?: string; refresh_token?: string; expi
 export type TokenSource = { accessToken: (subject: string) => Promise<string | null>; dropAccess: (subject: string) => void };
 
 const binding = (subject: string) => `tmt-id-refresh:${subject}`;
-const seconds = (value: unknown) => typeof value === "number" && Number.isFinite(value) && value > 0 ? value : undefined;
+const seconds = (value: unknown) => (typeof value === "number" && Number.isFinite(value) && value > 0 ? value : undefined);
 
 /**
  * Keeps each person's TMT ID refresh token so a call to another system (the Pegasus ERP) can carry that person's own
@@ -21,24 +21,38 @@ export class TmtIdTokenVault implements TokenSource {
   private readonly cache = new Map<string, { token: string; expiresAt: number }>();
   private readonly refreshing = new Map<string, Promise<string | null>>();
 
-  constructor(private readonly database: Database, private readonly vault: VaultKeys, private readonly provider: OidcProvider,
-    private readonly onError: (error: unknown) => void = () => {}, private readonly now: () => number = Date.now) {}
+  constructor(
+    private readonly database: Database,
+    private readonly vault: VaultKeys,
+    private readonly provider: OidcProvider,
+    private readonly onError: (error: unknown) => void = () => {},
+    private readonly now: () => number = Date.now,
+  ) {}
 
   async save(subject: string, tokens: IssuedTokens): Promise<void> {
     if (tokens.access_token && seconds(tokens.expires_in)) this.cache.set(subject, { token: tokens.access_token, expiresAt: this.now() + seconds(tokens.expires_in)! * 1000 });
     if (!tokens.refresh_token) return;
     const sealed = sealBound(this.vault, binding(subject), tokens.refresh_token);
     const expires = seconds(tokens.refresh_expires_in);
-    await this.database.query(`MERGE dbo.user_oidc_tokens AS target USING (SELECT @subject subject) AS source ON target.subject=source.subject
+    await this.database.query(
+      `MERGE dbo.user_oidc_tokens AS target USING (SELECT @subject subject) AS source ON target.subject=source.subject
       WHEN MATCHED THEN UPDATE SET refresh_cipher=@cipher,refresh_iv=@iv,refresh_tag=@tag,key_id=@key,refresh_expires_at=@expires,updated_at=SYSUTCDATETIME()
-      WHEN NOT MATCHED THEN INSERT(subject,refresh_cipher,refresh_iv,refresh_tag,key_id,refresh_expires_at) VALUES(@subject,@cipher,@iv,@tag,@key,@expires);`, (r) => {
-      r.input("subject", sql.NVarChar(100), subject); r.input("cipher", sql.VarBinary(sql.MAX), sealed.cipher); r.input("iv", sql.VarBinary(12), sealed.iv);
-      r.input("tag", sql.VarBinary(16), sealed.tag); r.input("key", sql.TinyInt, sealed.keyId);
-      r.input("expires", sql.DateTimeOffset, expires ? new Date(this.now() + expires * 1000) : null); });
+      WHEN NOT MATCHED THEN INSERT(subject,refresh_cipher,refresh_iv,refresh_tag,key_id,refresh_expires_at) VALUES(@subject,@cipher,@iv,@tag,@key,@expires);`,
+      (r) => {
+        r.input("subject", sql.NVarChar(100), subject);
+        r.input("cipher", sql.VarBinary(sql.MAX), sealed.cipher);
+        r.input("iv", sql.VarBinary(12), sealed.iv);
+        r.input("tag", sql.VarBinary(16), sealed.tag);
+        r.input("key", sql.TinyInt, sealed.keyId);
+        r.input("expires", sql.DateTimeOffset, expires ? new Date(this.now() + expires * 1000) : null);
+      },
+    );
   }
 
   /** Forget the cached access token only, so the next call refreshes it. */
-  dropAccess(subject: string): void { this.cache.delete(subject); }
+  dropAccess(subject: string): void {
+    this.cache.delete(subject);
+  }
 
   async forget(subject: string): Promise<void> {
     this.cache.delete(subject);
@@ -57,15 +71,34 @@ export class TmtIdTokenVault implements TokenSource {
     return work;
   }
 
+  // A refresh that failed for a passing reason (the provider unreachable) keeps the row, so only a deleted or missing row means
+  // the person has to sign in again.
+  async needsSignIn(subject: string): Promise<boolean> {
+    if (await this.accessToken(subject)) return false;
+    const kept = await this.database.query(`SELECT 1 kept FROM dbo.user_oidc_tokens WHERE subject=@subject;`, (r) => r.input("subject", sql.NVarChar(100), subject));
+    return kept.recordset.length === 0;
+  }
+
   private async refresh(subject: string): Promise<string | null> {
-    const row = (await this.database.query<{ refresh_cipher: Buffer; refresh_iv: Buffer; refresh_tag: Buffer; key_id: number; refresh_expires_at: Date | null }>(
-      `SELECT refresh_cipher,refresh_iv,refresh_tag,key_id,refresh_expires_at FROM dbo.user_oidc_tokens WHERE subject=@subject;`,
-      (r) => r.input("subject", sql.NVarChar(100), subject))).recordset[0];
+    const row = (
+      await this.database.query<{ refresh_cipher: Buffer; refresh_iv: Buffer; refresh_tag: Buffer; key_id: number; refresh_expires_at: Date | null }>(
+        `SELECT refresh_cipher,refresh_iv,refresh_tag,key_id,refresh_expires_at FROM dbo.user_oidc_tokens WHERE subject=@subject;`,
+        (r) => r.input("subject", sql.NVarChar(100), subject),
+      )
+    ).recordset[0];
     if (!row) return null;
-    if (row.refresh_expires_at && new Date(row.refresh_expires_at).getTime() <= this.now()) { await this.forget(subject); return null; }
+    if (row.refresh_expires_at && new Date(row.refresh_expires_at).getTime() <= this.now()) {
+      await this.forget(subject);
+      return null;
+    }
     let refreshToken: string;
-    try { refreshToken = openBound(this.vault, binding(subject), { cipher: row.refresh_cipher, iv: row.refresh_iv, tag: row.refresh_tag, keyId: Number(row.key_id) }); }
-    catch (error) { this.onError(error); await this.forget(subject); return null; }
+    try {
+      refreshToken = openBound(this.vault, binding(subject), { cipher: row.refresh_cipher, iv: row.refresh_iv, tag: row.refresh_tag, keyId: Number(row.key_id) });
+    } catch (error) {
+      this.onError(error);
+      await this.forget(subject);
+      return null;
+    }
     try {
       const tokens = await refreshTokenGrant(await this.provider.configuration(), refreshToken);
       await this.save(subject, { ...tokens, refresh_token: tokens.refresh_token ?? refreshToken, refresh_expires_in: (tokens as IssuedTokens).refresh_expires_in });
@@ -87,5 +120,7 @@ export function tokenHasAudience(accessToken: string | undefined, audience: stri
   try {
     const claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as { aud?: unknown };
     return Array.isArray(claims.aud) ? claims.aud.includes(audience) : claims.aud === audience;
-  } catch { return false; }
+  } catch {
+    return false;
+  }
 }
