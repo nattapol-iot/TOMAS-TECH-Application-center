@@ -15,12 +15,17 @@ function vaultWith(stored: boolean) {
     async query(statement: string) {
       statements.push(statement);
       if (!stored) return { recordset: [] };
-      if (statement.includes("SELECT refresh_cipher")) return { recordset: [{ refresh_cipher: sealed.cipher, refresh_iv: sealed.iv, refresh_tag: sealed.tag, key_id: sealed.keyId, refresh_expires_at: null }] };
+      if (statement.includes("SELECT refresh_cipher"))
+        return { recordset: [{ refresh_cipher: sealed.cipher, refresh_iv: sealed.iv, refresh_tag: sealed.tag, key_id: sealed.keyId, refresh_expires_at: null }] };
       if (statement.includes("SELECT 1 kept")) return { recordset: [{ kept: 1 }] };
       throw new Error(`Unexpected statement: ${statement}`);
     },
   } as unknown as Database;
-  const provider = { async configuration() { throw new Error("TMT ID is unreachable"); } } as unknown as OidcProvider;
+  const provider = {
+    async configuration() {
+      throw new Error("TMT ID is unreachable");
+    },
+  } as unknown as OidcProvider;
   return { vault: new TmtIdTokenVault(database, keys, provider), statements };
 }
 

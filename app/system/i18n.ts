@@ -2779,7 +2779,11 @@ export const DICTIONARY: Record<string, Entry> = {
   "Employee.lastUsed": { en: "Last used", th: "ใช้งานล่าสุด", jp: "最終利用" },
   "Employee.openToLink": { en: "Open employee #{no} and save to link", th: "เปิดพนักงาน #{no} แล้วกดบันทึกเพื่อผูกบัญชี", jp: "従業員 #{no} を開いて保存し紐付け" },
   "TmtId.relinkTitle": { en: "Your TMT ID sign-in has expired.", th: "การ login TMT ID ของคุณหมดอายุแล้ว", jp: "TMT ID のサインインが期限切れです。" },
-  "TmtId.relinkBody": { en: "Scanning with Copilot and sending purchase requisitions to the ERP stop working until you sign in again. You will come back to this page.", th: "สแกนด้วย Copilot และส่ง PR เข้า ERP จะใช้ไม่ได้จนกว่าจะ login ใหม่ login แล้วจะกลับมาที่หน้านี้", jp: "再サインインするまで Copilot でのスキャンと ERP への購買依頼の送信は使えません。サインイン後はこのページに戻ります。" },
+  "TmtId.relinkBody": {
+    en: "Scanning with Copilot and sending purchase requisitions to the ERP stop working until you sign in again. You will come back to this page.",
+    th: "สแกนด้วย Copilot และส่ง PR เข้า ERP จะใช้ไม่ได้จนกว่าจะ login ใหม่ login แล้วจะกลับมาที่หน้านี้",
+    jp: "再サインインするまで Copilot でのスキャンと ERP への購買依頼の送信は使えません。サインイン後はこのページに戻ります。",
+  },
   "TmtId.relinkAction": { en: "Sign in to TMT ID again", th: "login TMT ID อีกครั้ง", jp: "TMT ID に再サインイン" },
   "SignIn.signedInAs": { en: "You signed in to TMT ID as {name}.", th: "คุณ login TMT ID ในชื่อ {name}", jp: "TMT ID に {name} としてサインインしました。" },
   "SignIn.emailToRegister": { en: "Employee Master needs this email:", th: "อีเมลที่ต้องเพิ่มใน Employee Master:", jp: "Employee Master に登録が必要なメール:" },

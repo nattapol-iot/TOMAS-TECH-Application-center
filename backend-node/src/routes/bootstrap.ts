@@ -9,16 +9,55 @@ import type { CurrentUserService } from "../users.js";
 import { primaryCustomerContactApply } from "./sales-customers.js";
 
 type CountRow = {
-  inquiry_count: number; estimate_count: number; active_project_count: number; approval_count: number;
-  employee_id: number | null; employee_no: number | null; employee_nickname: string | null;
-  employee_level: string | null; employee_start_work_date: Date | string | null;
+  inquiry_count: number;
+  estimate_count: number;
+  active_project_count: number;
+  approval_count: number;
+  employee_id: number | null;
+  employee_no: number | null;
+  employee_nickname: string | null;
+  employee_level: string | null;
+  employee_start_work_date: Date | string | null;
 };
-type CustomerRow = { id: number; code: string; name: string; name_th: string; name_en: string; name_ja: string; industry: string; contact: string; contact_title_th: string; contact_title_en: string; contact_title_ja: string; contact_name_th: string; contact_name_en: string; contact_name_ja: string; email: string; phone: string; site: string; department: string; position: string; inquiry_count: number; open_estimate_count: number; erp_customer_code: string | null; row_version: Buffer };
+type CustomerRow = {
+  id: number;
+  code: string;
+  name: string;
+  name_th: string;
+  name_en: string;
+  name_ja: string;
+  industry: string;
+  contact: string;
+  contact_title_th: string;
+  contact_title_en: string;
+  contact_title_ja: string;
+  contact_name_th: string;
+  contact_name_en: string;
+  contact_name_ja: string;
+  email: string;
+  phone: string;
+  site: string;
+  department: string;
+  position: string;
+  inquiry_count: number;
+  open_estimate_count: number;
+  erp_customer_code: string | null;
+  row_version: Buffer;
+};
 type SupplierRow = { id: number; code: string; name: string; category: string; erp_supplier_id: string | null };
 type TeamRow = {
-  id: number; name: string; email: string; role: string; department: string; level: string;
-  employee_id: number; employee_no: number; nickname: string; can_sign_in: boolean;
-  effective_roles: string | null; row_version: Buffer;
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+  department: string;
+  level: string;
+  employee_id: number;
+  employee_no: number;
+  nickname: string;
+  can_sign_in: boolean;
+  effective_roles: string | null;
+  row_version: Buffer;
 };
 type PermissionRow = { code: string };
 type FavoriteRow = { view_key: string };
@@ -32,13 +71,46 @@ type FavoriteRow = { view_key: string };
  */
 export const MENU_FAVORITE_LIMIT = 8;
 export const MENU_VIEWS: readonly string[] = [
-  "dashboard", "my-work", "resources",
-  "crm-dashboard", "crm-customers", "crm-contacts", "crm-opportunities", "crm-activities", "inquiries", "site-visits", "my-assignments", "visit-master", "customers",
-  "estimates", "price", "quotations", "missing", "module-templates", "labor-packages", "rates",
-  "projects", "reports", "signing", "documents", "stamps", "schedule-templates", "installed-base", "site-monitor",
-  "purchase", "approvals",
-  "activity", "performance", "summary-reports", "knowledge", "downloads",
-  "user-accounts", "employees", "suppliers", "audit", "settings",
+  "dashboard",
+  "my-work",
+  "resources",
+  "crm-dashboard",
+  "crm-customers",
+  "crm-contacts",
+  "crm-opportunities",
+  "crm-activities",
+  "inquiries",
+  "site-visits",
+  "my-assignments",
+  "visit-master",
+  "customers",
+  "estimates",
+  "price",
+  "quotations",
+  "missing",
+  "module-templates",
+  "labor-packages",
+  "rates",
+  "projects",
+  "reports",
+  "signing",
+  "documents",
+  "stamps",
+  "schedule-templates",
+  "installed-base",
+  "site-monitor",
+  "purchase",
+  "approvals",
+  "activity",
+  "performance",
+  "summary-reports",
+  "knowledge",
+  "downloads",
+  "user-accounts",
+  "employees",
+  "suppliers",
+  "audit",
+  "settings",
 ];
 
 /** The list a person saves: at most eight menu views, each once, in the order they were starred. */
@@ -59,8 +131,13 @@ export const MENU_FAVORITES_REPLACE = `
   SELECT @user, item.[value], CONVERT(int, item.[key]) FROM OPENJSON(@views) item;
   SELECT view_key FROM dbo.user_menu_favorites WHERE user_id=@user ORDER BY position;`;
 
-export function registerBootstrapRoutes(app: FastifyInstance, database: Database, users: CurrentUserService, masterData: MasterData | null,
-  tokenVault: Pick<TmtIdTokenVault, "needsSignIn"> | null = null): void {
+export function registerBootstrapRoutes(
+  app: FastifyInstance,
+  database: Database,
+  users: CurrentUserService,
+  masterData: MasterData | null,
+  tokenVault: Pick<TmtIdTokenVault, "needsSignIn"> | null = null,
+): void {
   app.get("/api/v1/me", async (request) => users.required(request));
 
   app.put("/api/v1/me/menu-favorites", async (request) => {
@@ -82,7 +159,8 @@ export function registerBootstrapRoutes(app: FastifyInstance, database: Database
     // Asked up front so the person can sign in again before a scan or an ERP send fails on them. It shares the token the start
     // date above already asks for, so it costs no extra call to TMT ID.
     const needsTmtIdSignIn = tokenVault ? tokenVault.needsSignIn(user.entraObjectId).catch(() => false) : false;
-    const result = await database.query<CountRow | CustomerRow | SupplierRow | TeamRow | PermissionRow | FavoriteRow>(`
+    const result = await database.query<CountRow | CustomerRow | SupplierRow | TeamRow | PermissionRow | FavoriteRow>(
+      `
       ;WITH granted AS (
         SELECT code FROM dbo.user_effective_permissions WHERE user_id = @user_id
       )
@@ -134,7 +212,9 @@ export function registerBootstrapRoutes(app: FastifyInstance, database: Database
       SELECT code FROM dbo.user_effective_permissions WHERE user_id = @user_id ORDER BY code;
 
       SELECT view_key FROM dbo.user_menu_favorites WHERE user_id = @user_id ORDER BY position;
-    `, (sqlRequest) => sqlRequest.input("user_id", sql.BigInt, user.id));
+    `,
+      (sqlRequest) => sqlRequest.input("user_id", sql.BigInt, user.id),
+    );
 
     const counts = result.recordsets[0] as unknown as CountRow[];
     const customers = result.recordsets[1] as unknown as CustomerRow[];
@@ -144,13 +224,16 @@ export function registerBootstrapRoutes(app: FastifyInstance, database: Database
     const favorites = result.recordsets[5] as unknown as FavoriteRow[];
     const count = counts[0];
     // Not tied to employment: master knows people who have no row in this app's dbo.employees.
-    const startWorkDate = masterData ? (await ownStartDate) ?? null : dateOnly(count?.employee_start_work_date ?? null);
-    const employment = count?.employee_id == null ? null : {
-      employeeId: Number(count.employee_id),
-      employeeNo: Number(count.employee_no),
-      nickname: count.employee_nickname ?? "",
-      level: count.employee_level ?? "",
-    };
+    const startWorkDate = masterData ? ((await ownStartDate) ?? null) : dateOnly(count?.employee_start_work_date ?? null);
+    const employment =
+      count?.employee_id == null
+        ? null
+        : {
+            employeeId: Number(count.employee_id),
+            employeeNo: Number(count.employee_no),
+            nickname: count.employee_nickname ?? "",
+            level: count.employee_level ?? "",
+          };
     return {
       user,
       employment,
@@ -162,16 +245,42 @@ export function registerBootstrapRoutes(app: FastifyInstance, database: Database
         approvals: Number(count?.approval_count ?? 0),
       },
       customers: customers.map((row) => ({
-        id: Number(row.id), code: row.code, name: row.name, nameTh: row.name_th, nameEn: row.name_en, nameJa: row.name_ja, industry: row.industry, contact: row.contact,
-        contactTitleTh: row.contact_title_th, contactTitleEn: row.contact_title_en, contactTitleJa: row.contact_title_ja, contactNameTh: row.contact_name_th, contactNameEn: row.contact_name_en, contactNameJa: row.contact_name_ja,
-        email: row.email, phone: row.phone, site: row.site, department: row.department, position: row.position, inquiries: Number(row.inquiry_count),
-        openEstimates: Number(row.open_estimate_count), erpCode: row.erp_customer_code ?? null, rowVersion: row.row_version.toString("base64"),
+        id: Number(row.id),
+        code: row.code,
+        name: row.name,
+        nameTh: row.name_th,
+        nameEn: row.name_en,
+        nameJa: row.name_ja,
+        industry: row.industry,
+        contact: row.contact,
+        contactTitleTh: row.contact_title_th,
+        contactTitleEn: row.contact_title_en,
+        contactTitleJa: row.contact_title_ja,
+        contactNameTh: row.contact_name_th,
+        contactNameEn: row.contact_name_en,
+        contactNameJa: row.contact_name_ja,
+        email: row.email,
+        phone: row.phone,
+        site: row.site,
+        department: row.department,
+        position: row.position,
+        inquiries: Number(row.inquiry_count),
+        openEstimates: Number(row.open_estimate_count),
+        erpCode: row.erp_customer_code ?? null,
+        rowVersion: row.row_version.toString("base64"),
       })),
       suppliers: suppliers.map((row) => ({ id: Number(row.id), code: row.code, name: row.name, category: row.category, erpCode: row.erp_supplier_id ?? null })),
       team: team.map((row) => ({
-        id: Number(row.id), name: row.name, email: row.email, role: row.role,
-        department: row.department, level: row.level, employeeId: Number(row.employee_id),
-        employeeNo: Number(row.employee_no), nickname: row.nickname, canSignIn: Boolean(row.can_sign_in),
+        id: Number(row.id),
+        name: row.name,
+        email: row.email,
+        role: row.role,
+        department: row.department,
+        level: row.level,
+        employeeId: Number(row.employee_id),
+        employeeNo: Number(row.employee_no),
+        nickname: row.nickname,
+        canSignIn: Boolean(row.can_sign_in),
         roles: row.effective_roles ? row.effective_roles.split("|") : [row.role],
         rowVersion: row.row_version.toString("base64"),
       })),
