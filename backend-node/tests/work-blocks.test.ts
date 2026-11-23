@@ -400,7 +400,11 @@ test("POST work-blocks: books the person's own time for their work, and refuses 
   } finally {
     await app.close();
   }
+});
 
+// One harness per test: Bun does not undo a second mock of the same method in one test, so the fake SQL would leak
+// into every later test file.
+test("POST work-blocks refuses a block that overlaps another", async (t) => {
   const busy = harness(t, { sets: todaySets(), dayBlocks: [{ id: 4, start_minute: 540, end_minute: 660 }] });
   try {
     const overlap = await busy.app.inject({ method: "POST", url: "/api/v1/me/work-blocks", payload: { date: today, start: "08:30", end: "10:00", workKey: "Project-11" } });
@@ -425,7 +429,9 @@ test("PATCH and DELETE work-blocks: the person's own blocks only; a move is chec
   } finally {
     await app.close();
   }
+});
 
+test("PATCH work-blocks answers 404 for a block that is not the person's", async (t) => {
   const missing = harness(t, { current: null });
   try {
     const response = await missing.app.inject({ method: "PATCH", url: "/api/v1/me/work-blocks/8", payload: { start: "13:00" } });
@@ -457,7 +463,9 @@ test("GET week and PUT outlook-links: the person's own week; a meeting is tied o
   } finally {
     await app.close();
   }
+});
 
+test("PUT outlook-links answers 404 for a meeting that is gone", async (t) => {
   const gone = harness(t, { meeting: null });
   try {
     assert.equal((await gone.app.inject({ method: "PUT", url: "/api/v1/me/outlook-links", payload: { outlookId: 71, workKey: "Project-11" } })).statusCode, 404);
