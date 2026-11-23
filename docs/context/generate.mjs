@@ -95,4 +95,3 @@ const rules = read(index);
 const start = rules.indexOf(startMarker), end = rules.indexOf(endMarker);
 if (start < 0 || end < start || rules.indexOf(startMarker, start + 1) !== -1 || rules.indexOf(endMarker, end + 1) !== -1) throw Error('Missing or duplicate context markers in AGENTS.md');
 write(index, rules.slice(0, start) + startMarker + '\n' + indexContent + endMarker + rules.slice(end + endMarker.length));
-write('PROJECT_CONTEXT.md', '# Project Context\n\nย้ายกฎและสารบัญทั้งหมดไปที่ [AGENTS.md](AGENTS.md) แล้ว อ่านไฟล์นั้นเป็นจุดเริ่มต้นเดียว ไฟล์นี้คงไว้เพื่อรองรับลิงก์เดิม\n');

@@ -9,7 +9,7 @@
 1. [ผลตรวจ Application รอบล่าสุด](audits/production-readiness-2026-09-10.md)
 2. [แผนงานและผู้รับผิดชอบ](planning/PRODUCTION_BACKLOG.md)
 3. [ทะเบียนฟีเจอร์และหลักฐาน](planning/FEATURE_REGISTER.md)
-4. [ข้อกำหนดการออกแบบ](../DESIGN.md)
+4. [ข้อกำหนดการออกแบบ](DESIGN.md)
 5. [วิธีจัดการ release และป้องกันฟีเจอร์ถูกทับ](operations/RELEASE_CONTROL.md)
 
 ## หมวดเอกสาร
@@ -32,8 +32,8 @@
 - Release record ที่มี commit/hash/environment/schema: ยืนยันสิ่งที่ปล่อยใน environment นั้น
 - FEATURE_REGISTER: เชื่อม requirement → โค้ด → test → release; ช่องไม่มีหลักฐานให้ลง Unknown
 - DESIGN.md: ข้อกำหนด UX และรายการคำถาม; ห้ามใช้คำว่า Draft ตัดสินว่าโค้ดไม่มีฟีเจอร์
-- FEATURES.md, KNOWLEDGE_HUB.md, SITE_VISIT.md: ข้อกำหนดเดิม/เป้าหมายรายโดเมน ต้องเทียบ implementation
-- COORDINATION.md: ประวัติประสานงานแบบ append-only; IP, PID, branch และ claim เก่ามีอายุ ไม่ใช่สถานะ runtime ปัจจุบัน
+- archive/FEATURES.md, archive/KNOWLEDGE_HUB.md, archive/SITE_VISIT.md: ข้อกำหนดเดิม/เป้าหมายรายโดเมน ต้องเทียบ implementation
+- archive/COORDINATION.md: ประวัติประสานงานเดิม (ปิดแล้ว); IP, PID, branch และ claim เก่าไม่ใช่สถานะ runtime ปัจจุบัน
 
 เมื่อข้อมูลขัดกัน ให้เพิ่มประเด็นใน backlog พร้อมหลักฐานทั้งสองด้าน ห้ามลบ requirement หรือเลือกข้อความที่ใหม่ที่สุดโดยไม่ดู environment และ candidate
 

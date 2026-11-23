@@ -1,6 +1,6 @@
 # Inquiry and Estimate: Engineer usability audit
 
-Date: 2026-09-10. Status: Draft. Supporting contract: [DESIGN.md](../../DESIGN.md), especially Product goals, Information architecture, Design principles, Content voice and Interaction states. Preserve the existing nine Estimate tabs, summary breakdown, table and editing patterns; this is a targeted improvement brief, not a replacement layout.
+Date: 2026-09-10. Status: Draft. Supporting contract: [DESIGN.md](../DESIGN.md), especially Product goals, Information architecture, Design principles, Content voice and Interaction states. Preserve the existing nine Estimate tabs, summary breakdown, table and editing patterns; this is a targeted improvement brief, not a replacement layout.
 
 ## Evidence and limits
 
