@@ -74,6 +74,134 @@
   cursor: default;
 }
 
+/* Team planner's toolbar, one row (owner, 2026-11-23): the period and how much of it, the view, then the teams, the kind
+   of work and the search at the end. */
+.board-toolbar .board-seg button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 12px;
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+.board-window .board-seg {
+  margin-left: 6px;
+}
+.planner-toolbar-end {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+/* A fixed width, so the end of the row does not break before the search. */
+.planner-toolbar-end .search-field {
+  flex: none;
+  width: 240px;
+  min-width: 0;
+  max-width: 100%;
+  margin-left: 0;
+}
+
+/* A menu on a button (the teams, the kind of work): the name of the filter, then what it is set to. */
+.board-pick {
+  position: relative;
+}
+.board-pick > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 280px;
+  list-style: none;
+  cursor: pointer;
+}
+.board-pick > summary::-webkit-details-marker {
+  display: none;
+}
+.board-pick-name {
+  color: var(--muted);
+  font-weight: 500;
+}
+.board-pick-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.board-pick.on > summary {
+  border-color: var(--blue-line);
+  background: var(--blue-soft);
+  color: var(--blue-text);
+}
+.board-pick.on .board-pick-name {
+  color: inherit;
+}
+.board-pick-menu {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 4px);
+  left: 0;
+  display: flex;
+  min-width: 260px;
+  max-height: 360px;
+  flex-direction: column;
+  padding: 4px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+}
+.planner-toolbar-end .board-pick-menu {
+  right: 0;
+  left: auto;
+}
+.board-pick-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--fs-sm);
+  text-align: left;
+  cursor: pointer;
+}
+.board-pick-option:hover,
+.board-pick-option:focus-within,
+.board-pick-option:focus-visible {
+  background: var(--blue-soft);
+  outline: none;
+}
+.board-pick-option > span:not(.cnt) {
+  flex: 1;
+  min-width: 0;
+}
+.board-pick-option i {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+}
+.board-pick-option .icon {
+  width: 14px;
+  height: 14px;
+  color: var(--blue-text);
+}
+.board-pick-option .cnt {
+  padding: 1px 6px;
+  border-radius: var(--r-pill);
+  background: var(--n-100);
+  color: var(--n-600);
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
 /* Once per person: the daily grid moved into Team planner. */
 .planner-notice {
   display: flex;

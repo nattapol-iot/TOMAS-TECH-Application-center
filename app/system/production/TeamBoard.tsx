@@ -1,6 +1,6 @@
 "use client";
 import { confirmDialog } from "../dialogs";
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { ApiClientError, apiRequest, listInquiries, listProjects, type BootstrapData } from "../api-client";
 import { Drawer, EmptyState, Icon, Modal, SearchInput, type Tone } from "../ui";
@@ -1433,6 +1433,13 @@ export function TeamBoard({
       </button>
     </>
   );
+  // The one person the board shows, from a name on the grid or a link; it clears with its ×.
+  const personChip = (
+    <button type="button" className="board-filter on" onClick={() => setPersonId(null)}>
+      {fill(t("TeamBoard.personFilter"), { name: personName })} <Icon name="x" />
+      <span className="sr-only">{t("TeamBoard.clearPerson")}</span>
+    </button>
+  );
   const searchBox = (
     <SearchInput
       value={search}
@@ -1471,71 +1478,69 @@ export function TeamBoard({
         </div>
       ) : null}
 
-      {/* Stays at the top of the page while the board scrolls (2026-11-10 mockup). */}
-      <div className="board-toolbar board-sticky" ref={toolbarRef}>
-        {mode === "board" && boardView === "grid" ? (
-          <div className="board-window" role="group" aria-label={t("TeamBoard.window")}>
-            <button type="button" className="icon-btn" aria-label={t("Previous period")} title={t("Previous period")} onClick={() => setStart(dateFromDay(dayNumber(start) - weeks * 7))}>
-              <Icon name="chevronLeft" />
-            </button>
-            <span className="board-range">
-              {shortDate(days[0]?.date ?? start)} – {yearDate(days.at(-1)?.date ?? start)}
-            </span>
-            <button type="button" className="icon-btn" aria-label={t("Next period")} title={t("Next period")} onClick={() => setStart(dateFromDay(dayNumber(start) + weeks * 7))}>
-              <Icon name="chevronRight" />
-            </button>
-            <button type="button" className="btn default sm" onClick={() => setStart(mondayOf(today))}>
-              {t("Today")}
-            </button>
-            <div className="chip-select" data-guide="team.range">
-              {([1, 2, 4] as const).map((count) => (
-                <button key={count} type="button" className={weeks === count ? "chip on" : "chip"} aria-pressed={weeks === count} onClick={() => setWeeks(count)}>
-                  {t(count === 1 ? "TeamBoard.oneWeek" : count === 2 ? "TeamBoard.twoWeeks" : "TeamBoard.fourWeeks")}
-                </button>
-              ))}
-            </div>
-          </div>
-        ) : null}
+      {/* Stays at the top of the page while the board scrolls (2026-11-10 mockup). Team planner keeps it to one row (owner,
+          2026-11-23): the period and how much of it, the view, then the teams, the kind of work and the search. */}
+      <div className={`board-toolbar board-sticky${mode === "board" ? " planner-toolbar" : ""}`} ref={toolbarRef}>
         {mode === "board" ? (
-          <div className="chip-select" role="group" aria-label={t("TeamBoard.view")}>
-            <button type="button" className={boardView === "grid" ? "chip on" : "chip"} aria-pressed={boardView === "grid"} onClick={() => pickView("grid")}>
-              <Icon name="table" />
-              {t("TeamBoard.viewGrid")}
-            </button>
-            <button type="button" className={boardView === "gantt" ? "chip on" : "chip"} aria-pressed={boardView === "gantt"} onClick={() => pickView("gantt")}>
-              <Icon name="calendar" />
-              {t("TeamBoard.viewGantt")}
-            </button>
-          </div>
-        ) : null}
-        {/* On the board the search ends the first row, so the teams and the chips share the rows below; the list has
-            the teams and the search on one row and the chips on their own. */}
-        {mode === "board" ? searchBox : null}
-        <TeamFilter departments={departments} counts={teamCounts} value={teams} onChange={pickTeams} />
-        {mode === "board" ? null : searchBox}
-        <div className={`board-filters${mode === "board" ? "" : " own-row"}`} role="group" aria-label={t("TeamBoard.chips")} data-guide="team.filters">
-          {chip("all", "TeamBoard.all", counts.all, category === null && (mode === "board" || listAttention === null), () => {
-            pickCategory(null);
-            if (mode === "list") pickAttention(null);
-          })}
-          {CATEGORIES.map(({ key, label, colour }) => chip(key, label, counts[key], category === key, () => pickCategory(category === key ? null : key), "", colour))}
-          {/* The planner's summary bar holds these for the grid; the list keeps them as chips. */}
-          {mode === "list" ? (
-            <>
+          <>
+            {boardView === "grid" ? (
+              <div className="board-window" role="group" aria-label={t("TeamBoard.window")}>
+                <button type="button" className="icon-btn" aria-label={t("Previous period")} title={t("Previous period")} onClick={() => setStart(dateFromDay(dayNumber(start) - weeks * 7))}>
+                  <Icon name="chevronLeft" />
+                </button>
+                <span className="board-range">
+                  {shortDate(days[0]?.date ?? start)} – {yearDate(days.at(-1)?.date ?? start)}
+                </span>
+                <button type="button" className="icon-btn" aria-label={t("Next period")} title={t("Next period")} onClick={() => setStart(dateFromDay(dayNumber(start) + weeks * 7))}>
+                  <Icon name="chevronRight" />
+                </button>
+                <button type="button" className="btn default sm" onClick={() => setStart(mondayOf(today))}>
+                  {t("Today")}
+                </button>
+                <div className="seg-control board-seg" data-guide="team.range">
+                  {([1, 2, 4] as const).map((count) => (
+                    <button key={count} type="button" className={weeks === count ? "on" : undefined} aria-pressed={weeks === count} onClick={() => setWeeks(count)}>
+                      {t(count === 1 ? "TeamBoard.oneWeek" : count === 2 ? "TeamBoard.twoWeeks" : "TeamBoard.fourWeeks")}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            <div className="seg-control board-seg" role="group" aria-label={t("TeamBoard.view")}>
+              <button type="button" className={boardView === "grid" ? "on" : undefined} aria-pressed={boardView === "grid"} onClick={() => pickView("grid")}>
+                {t("TeamBoard.viewGrid")}
+              </button>
+              <button type="button" className={boardView === "gantt" ? "on" : undefined} aria-pressed={boardView === "gantt"} onClick={() => pickView("gantt")}>
+                {t("TeamBoard.viewGantt")}
+              </button>
+            </div>
+            <div className="planner-toolbar-end">
+              {personId !== null ? personChip : null}
+              <TeamFilter departments={departments} counts={teamCounts} value={teams} onChange={pickTeams} />
+              <KindPick value={category} onChange={pickCategory} />
+              {searchBox}
+            </div>
+          </>
+        ) : (
+          <>
+            {/* The list: the teams and the search on one row, the chips on their own. */}
+            <TeamFilter departments={departments} counts={teamCounts} value={teams} onChange={pickTeams} />
+            {searchBox}
+            <div className="board-filters own-row" role="group" aria-label={t("TeamBoard.chips")} data-guide="team.filters">
+              {chip("all", "TeamBoard.all", counts.all, category === null && listAttention === null, () => {
+                pickCategory(null);
+                pickAttention(null);
+              })}
+              {CATEGORIES.map(({ key, label, colour }) => chip(key, label, counts[key], category === key, () => pickCategory(category === key ? null : key), "", colour))}
               <span className="board-sep" aria-hidden="true" />
               {chip("late", "TeamBoard.late", counts.late, listAttention === "late", () => pickAttention(listAttention === "late" ? null : "late"), "red")}
               {chip("unassigned", "TeamBoard.unassigned", counts.unassigned, listAttention === "unassigned", () => pickAttention(listAttention === "unassigned" ? null : "unassigned"), "amber")}
               {chip("over", "TeamBoard.over", counts.over, listAttention === "over", () => pickAttention(listAttention === "over" ? null : "over"), "amber")}
               {chip("overlap", "TeamBoard.overlap", counts.overlap, listAttention === "overlap", () => pickAttention(listAttention === "overlap" ? null : "overlap"), "amber")}
-            </>
-          ) : null}
-          {personId !== null ? (
-            <button type="button" className="board-filter on" onClick={() => setPersonId(null)}>
-              {fill(t("TeamBoard.personFilter"), { name: personName })} <Icon name="x" />
-              <span className="sr-only">{t("TeamBoard.clearPerson")}</span>
-            </button>
-          ) : null}
-        </div>
+              {personId !== null ? personChip : null}
+            </div>
+          </>
+        )}
       </div>
 
       {/* Team planner's summary bar (owner decision 2026-11-23): each figure is the filter it counts. */}
@@ -1791,27 +1796,89 @@ export function TeamBoard({
   );
 }
 
+/** Closes a menu built on <details> when the pointer goes down outside it or Escape is pressed. */
+function useDismiss(menu: RefObject<HTMLDetailsElement | null>) {
+  useEffect(() => {
+    const close = (event: Event) => {
+      const element = menu.current;
+      if (!element?.open) return;
+      if (event instanceof KeyboardEvent ? event.key === "Escape" : !element.contains(event.target as Node)) element.open = false;
+    };
+    document.addEventListener("pointerdown", close);
+    document.addEventListener("keydown", close);
+    return () => {
+      document.removeEventListener("pointerdown", close);
+      document.removeEventListener("keydown", close);
+    };
+  }, [menu]);
+}
+
 /**
- * The teams as a segmented control with each one's head count (2026-11-10 mockup). Several can be pressed at once;
- * none pressed, or "All teams", is everyone.
+ * The teams with each one's head count, in a menu (owner, 2026-11-23: the team names are long and a row of them
+ * crowded the toolbar). Several can be ticked at once; none ticked, or "All teams", is everyone.
  */
 function TeamFilter({ departments, counts, value, onChange }: { departments: string[]; counts: Map<string, number>; value: string[]; onChange: (teams: string[]) => void }) {
   const { t } = useLanguage();
+  const menu = useRef<HTMLDetailsElement>(null);
+  useDismiss(menu);
   const everyone = [...counts.values()].reduce((sum, n) => sum + n, 0);
   const toggle = (team: string) => onChange(value.includes(team) ? value.filter((name) => name !== team) : departments.filter((name) => name === team || value.includes(name)));
+  const shown = !value.length ? t("TeamBoard.allTeams") : value.length === 1 ? value[0]! : fill(t("TeamBoard.teamsPicked"), { n: value.length });
   return (
-    <div className="seg-control board-team-seg" role="group" aria-label={t("TeamBoard.team")}>
-      <button type="button" className={value.length ? undefined : "on"} aria-pressed={!value.length} onClick={() => onChange([])}>
-        {t("TeamBoard.allTeams")}
-        <span className="cnt">{everyone}</span>
-      </button>
-      {departments.map((name) => (
-        <button key={name} type="button" className={value.includes(name) ? "on" : undefined} aria-pressed={value.includes(name)} onClick={() => toggle(name)}>
-          {name}
-          <span className="cnt">{counts.get(name) ?? 0}</span>
-        </button>
-      ))}
-    </div>
+    <details className={`board-pick${value.length ? " on" : ""}`} ref={menu}>
+      <summary className="btn default sm" title={value.join(", ") || undefined}>
+        <span className="board-pick-name">{t("TeamBoard.team")}</span>
+        <span className="board-pick-value">{shown}</span>
+        <Icon name="chevronDown" />
+      </summary>
+      <div className="board-pick-menu" role="group" aria-label={t("TeamBoard.team")}>
+        <label className="board-pick-option">
+          <input type="checkbox" checked={!value.length} onChange={() => onChange([])} />
+          <span>{t("TeamBoard.allTeams")}</span>
+          <span className="cnt">{everyone}</span>
+        </label>
+        {departments.map((name) => (
+          <label key={name} className="board-pick-option">
+            <input type="checkbox" checked={value.includes(name)} onChange={() => toggle(name)} />
+            <span>{name}</span>
+            <span className="cnt">{counts.get(name) ?? 0}</span>
+          </label>
+        ))}
+      </div>
+    </details>
+  );
+}
+
+/** Team planner: the kind of work its cells show, all or one, in a menu; the list keeps its chips with their counts. */
+function KindPick({ value, onChange }: { value: Category | null; onChange: (next: Category | null) => void }) {
+  const { t } = useLanguage();
+  const menu = useRef<HTMLDetailsElement>(null);
+  useDismiss(menu);
+  const pick = (next: Category | null) => {
+    onChange(next);
+    if (menu.current) menu.current.open = false;
+  };
+  const current = CATEGORIES.find((entry) => entry.key === value);
+  return (
+    <details className={`board-pick${value ? " on" : ""}`} ref={menu} data-guide="team.filters">
+      <summary className="btn default sm">
+        <span className="board-pick-name">{t("TeamBoard.kindPick")}</span>
+        <span className="board-pick-value">{t(current ? current.label : "TeamBoard.all")}</span>
+        <Icon name="chevronDown" />
+      </summary>
+      <div className="board-pick-menu" role="menu" aria-label={t("TeamBoard.kindPick")}>
+        {[null, ...CATEGORIES.map((entry) => entry.key)].map((key) => {
+          const entry = CATEGORIES.find((item) => item.key === key);
+          return (
+            <button key={key ?? "all"} type="button" role="menuitemradio" aria-checked={value === key} className="board-pick-option" onClick={() => pick(key)}>
+              <i style={{ background: entry?.colour ?? "transparent" }} aria-hidden="true" />
+              <span>{t(entry ? entry.label : "TeamBoard.all")}</span>
+              {value === key ? <Icon name="check" /> : null}
+            </button>
+          );
+        })}
+      </div>
+    </details>
   );
 }
 

@@ -173,6 +173,8 @@ export const TEAM_BOARD_COPY: Record<string, { en: string; th: string; jp: strin
       "予約・確定済みの時間を読み込めませんでした。表の数字は計画のみです。",
     ],
     ["TeamBoard.moreActions", "More", "เพิ่มเติม", "その他"],
+    ["TeamBoard.kindPick", "Work type", "ประเภทงาน", "作業の種類"],
+    ["TeamBoard.teamsPicked", "{n} teams", "{n} ทีม", "{n}チーム"],
     ["TeamBoard.sideLabel", "Waiting for people, or the day's work", "งานรอมอบหมาย หรืองานของวันที่เลือก", "割り当て待ち、または選んだ日の作業"],
     ["TeamBoard.waitingTasks", "Team tasks nobody has taken ({n})", "งานทีมที่ยังไม่มีคนรับ ({n})", "担当者のいないチームタスク（{n}）"],
     ["TeamBoard.waitingNone", "Nothing is waiting for people.", "ไม่มีงานรอมอบหมาย", "割り当て待ちはありません。"],
