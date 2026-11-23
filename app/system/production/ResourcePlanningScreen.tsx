@@ -50,6 +50,15 @@ type WorkloadView = "table" | "gantt";
 type Focus = "over" | "overdue" | "late" | "missing";
 // Team overview's link: "#/resources/<tab>?…" with the tab's filters (screen-link.tsx); codecs are made once.
 const RESOURCE_TABS: readonly ResourceTab[] = ["week", "board", "list", "workload", "tasks"];
+/**
+ * Team overview shows two tabs, Team week and Allocation (owner decision 2026-11-23, "lean it again"); its other views
+ * stay one click away under More views, nothing removed. needs: the right each view asks for.
+ */
+const MORE_VIEWS: readonly { id: ResourceTab; label: string; needs: "board" | "read" }[] = [
+  { id: "list", label: "TeamBoard.tabList", needs: "board" },
+  { id: "board", label: "TeamBoard.tabBoard", needs: "board" },
+  { id: "tasks", label: "Workload.tabTasks", needs: "read" },
+];
 const WORKLOAD_VIEW_LINK = choiceLink<WorkloadView>(["table", "gantt"]);
 const WORKLOAD_FOCUS_LINK = optionalChoiceLink<Focus>(["over", "overdue", "late", "missing"]);
 const WORKLOAD_WEEKS_LINK = choiceLink<string>(["8", "12", "16", "24"]);
@@ -138,7 +147,8 @@ export function ProductionResourcePlan({ bootstrap, notify, openProjectSchedule,
     [edit, setEdit] = useState<Commitment | null>(null),
     [capacityUser, setCapacityUser] = useState<number | null>(null),
     [queueDiscipline, setQueueDiscipline] = useState<string>("all"),
-    [assigning, setAssigning] = useState<Commitment | null>(null);
+    [assigning, setAssigning] = useState<Commitment | null>(null),
+    [weekRevision, setWeekRevision] = useState(0);
   const canPlan = bootstrap.permissions.includes("schedule.plan");
   // Anyone orders their own work; Admin, Engineering Managers and Project Managers may order anyone's (the API agrees).
   const manages = (bootstrap.user.roles ?? [bootstrap.user.role]).some((role) => MANAGER_ROLES.includes(role));
@@ -335,10 +345,11 @@ export function ProductionResourcePlan({ bootstrap, notify, openProjectSchedule,
   ) : null;
   if (!allowedTabs.length) return <EmptyState icon="shield" title={t("Permission denied")} message="team.board" />;
   const onBoard = tab === "board" || tab === "list";
+  const moreViews = MORE_VIEWS.filter((view) => (view.needs === "board" ? canBoard : canRead));
+  const moreActive = moreViews.find((view) => view.id === tab);
   return (
     <div className="workload-page">
       <PageHeader
-        eyebrow="ENGINEERING RESOURCE"
         title="Team overview"
         subtitle={tab === "week" ? "TeamWeek.subtitle" : onBoard ? "TeamBoard.subtitle" : "Workload.subtitle"}
         actions={
@@ -353,33 +364,62 @@ export function ProductionResourcePlan({ bootstrap, notify, openProjectSchedule,
                 {t("Refresh")}
               </button>
             </>
-          ) : onBoard ? (
+          ) : onBoard || tab === "week" ? (
             <div className="board-page-actions" ref={setBoardActions} />
           ) : null
         }
       />
-      <Tabs
-        active={tab}
-        onChange={changeTab}
-        link={null}
-        tabs={[
-          ...(canBoard
-            ? [
-                { id: "week" as const, label: "TeamWeek.tab" },
-                { id: "board" as const, label: "TeamBoard.tabBoard" },
-                { id: "list" as const, label: "TeamBoard.tabList" },
-              ]
-            : []),
-          ...(canRead
-            ? [
-                { id: "workload" as const, label: "TeamBoard.tabWeekly" },
-                { id: "tasks" as const, label: "Workload.tabTasks" },
-              ]
-            : []),
-        ]}
-      />
+      <div className="team-tabs-row">
+        <Tabs
+          active={tab}
+          onChange={changeTab}
+          link={null}
+          tabs={[...(canBoard ? [{ id: "week" as const, label: "TeamWeek.tab" }] : []), ...(canRead ? [{ id: "workload" as const, label: "TeamBoard.tabWeekly" }] : [])]}
+        />
+        {moreViews.length ? (
+          <details className={moreActive ? "team-more on" : "team-more"} data-guide="team.more">
+            <summary className="btn default sm">
+              <Icon name="more" />
+              {t(moreActive ? moreActive.label : "TeamOverview.moreViews")}
+              <Icon name="chevronDown" />
+            </summary>
+            <div className="team-more-menu" role="menu">
+              {moreViews.map((view) => (
+                <button
+                  key={view.id}
+                  type="button"
+                  role="menuitem"
+                  aria-current={view.id === tab ? "true" : undefined}
+                  onClick={(event) => {
+                    event.currentTarget.closest("details")?.removeAttribute("open");
+                    changeTab(view.id);
+                  }}
+                >
+                  {t(view.label)}
+                </button>
+              ))}
+            </div>
+          </details>
+        ) : null}
+      </div>
       {tab === "week" ? (
-        <TeamWeek bootstrap={bootstrap} queue={canRead ? queuePanel : null} />
+        <>
+          <TeamWeek bootstrap={bootstrap} queue={canRead ? queuePanel : null} revision={weekRevision} />
+          {/* The add and Outlook buttons, and their dialogs, beside the title: the team board without its grid. */}
+          <TeamBoard
+            bootstrap={bootstrap}
+            notify={notify}
+            mode="actions"
+            onMode={changeTab}
+            today={todayIso}
+            openItem={open}
+            onChanged={() => {
+              setData(null);
+              setWeekRevision((current) => current + 1);
+            }}
+            actionsSlot={boardActions}
+          />
+        </>
       ) : onBoard ? (
         <TeamBoard bootstrap={bootstrap} notify={notify} mode={tab} onMode={changeTab} today={todayIso} openItem={open} onChanged={() => setData(null)} actionsSlot={boardActions} />
       ) : tab === "tasks" ? (

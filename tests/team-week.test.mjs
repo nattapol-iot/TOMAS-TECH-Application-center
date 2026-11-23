@@ -40,12 +40,16 @@ test("Team overview opens on Team week, with the allocation queue beside it and 
   assert.match(screen, /type ResourceTab = "week" \| "board" \| "list" \| "workload" \| "tasks";/);
   assert.match(screen, /const BOARD_TABS: readonly ResourceTab\[\] = \["week", "board", "list"\];/);
   assert.match(screen, /RESOURCE_TABS, "week"\)/);
-  assert.match(screen, /\{ id: "week" as const, label: "TeamWeek\.tab" \},/);
-  assert.match(screen, /<TeamWeek bootstrap=\{bootstrap\} queue=\{canRead \? queuePanel : null\} \/>/);
+  assert.match(screen, /\{ id: "week" as const, label: "TeamWeek\.tab" \}/);
+  assert.match(screen, /<TeamWeek bootstrap=\{bootstrap\} queue=\{canRead \? queuePanel : null\} revision=\{weekRevision\} \/>/);
+  // Team week carries the add and Outlook buttons and their dialogs: the team board without its grid (2026-11-23).
+  assert.match(screen, /<TeamBoard\s+bootstrap=\{bootstrap\}\s+notify=\{notify\}\s+mode="actions"/);
+  assert.match(await source("app/system/production/TeamBoard.tsx"), /export type TeamBoardMode = "board" \| "list" \| "actions";/);
   assert.match(screen, /const wantsData = canRead && \(tab === "workload" \|\| tab === "week"\) && data === null && !error;/);
   assert.equal(screen.match(/\{queuePanel\}/g)?.length, 1, "Allocation · weekly keeps the same queue");
   const week = await source("app/system/production/TeamWeekScreen.tsx");
-  assert.match(week, /apiRequest<TeamWeekData>\(`\/api\/v1\/team-week\?from=\$\{monday\}&to=\$\{addDays\(monday, 4\)\}`\)/);
+  // Monday to Sunday (owner 2026-11-23).
+  assert.match(week, /apiRequest<TeamWeekData>\(`\/api\/v1\/team-week\?from=\$\{monday\}&to=\$\{addDays\(monday, 6\)\}`\)/);
   const used = new Set([...week.matchAll(/"(TeamWeek\.[A-Za-z]+)"/g)].map((match) => match[1]));
   assert.ok(used.size > 10);
   for (const key of used) {

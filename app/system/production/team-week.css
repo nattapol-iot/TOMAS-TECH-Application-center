@@ -31,7 +31,8 @@
   gap: 10px;
 }
 .teamweek-table-wrap {
-  flex: 999 1 720px;
+  /* Wide enough for Monday to Sunday: on a narrower page the queue moves under the table. */
+  flex: 999 1 960px;
   min-width: 0;
   overflow-x: auto;
   border: 1px solid var(--line);
@@ -48,7 +49,7 @@
 }
 .teamweek-table {
   width: 100%;
-  min-width: 820px;
+  min-width: 960px;
   border-collapse: collapse;
   table-layout: fixed;
   font-size: var(--fs-xs);
@@ -70,6 +71,9 @@
 }
 .teamweek-table thead th:first-child {
   width: 210px;
+}
+.teamweek-table thead th.weekend {
+  width: 8%;
 }
 .teamweek-table thead th.today,
 .teamweek-table td.today {
@@ -197,4 +201,61 @@
 .teamweek-empty {
   margin: 0;
   padding: 16px;
+}
+
+/* Team overview's tab row: two tabs, and More views for the rest (owner decision 2026-11-23). */
+.team-tabs-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px 12px;
+}
+.team-tabs-row .tabs {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.team-more {
+  position: relative;
+  margin-bottom: 4px;
+}
+.team-more > summary {
+  list-style: none;
+  cursor: pointer;
+}
+.team-more > summary::-webkit-details-marker {
+  display: none;
+}
+.team-more.on > summary {
+  border-color: var(--blue-line);
+  background: var(--blue-soft);
+  color: var(--blue-text);
+}
+.team-more-menu {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 4px);
+  right: 0;
+  display: flex;
+  min-width: 220px;
+  flex-direction: column;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+}
+.team-more-menu button {
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink);
+  font-size: var(--fs-sm);
+  text-align: left;
+  cursor: pointer;
+}
+.team-more-menu button:hover,
+.team-more-menu button[aria-current="true"] {
+  background: var(--blue-soft);
+  color: var(--blue-text);
 }

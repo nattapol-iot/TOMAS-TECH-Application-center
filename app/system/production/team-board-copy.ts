@@ -8,9 +8,9 @@ export const TEAM_BOARD_COPY: Record<string, { en: string; th: string; jp: strin
       "งานทุกอย่างของทุกคนในหน้าเดียว: RFQ · Estimate · โครงการ · นัดหมาย · งานที่เพิ่มเอง",
       "全員の仕事を1ページで：RFQ・見積・プロジェクト・予定・追加したタスク",
     ],
-    ["TeamBoard.tabBoard", "Team grid", "ตารางทีม", "チーム表"],
+    ["TeamBoard.tabBoard", "Daily grid", "ตารางรายวัน", "日別表"],
     ["TeamBoard.tabList", "Work list", "รายการงาน", "作業リスト"],
-    ["TeamBoard.tabWeekly", "Allocation · weekly", "จัดคน · รายสัปดาห์", "要員配置・週別"],
+    ["TeamBoard.tabWeekly", "Allocation · 12 weeks", "จัดคน 12 สัปดาห์", "要員配置・12週"],
     // Allocation (owner, 2026-11-22): one head names the people of every project's rows, from the queue of rows waiting for them.
     ["Alloc.queueTitle", "Waiting for people", "งานรอจัดคน", "割り当て待ち"],
     [

@@ -132,7 +132,7 @@ test("the day dialog: lines, what may be added, problems, the body sent and Back
 test("My Work confirms the hours on My week (2026-11-23), and the panel talks to the three work-day routes", () => {
   const screens = read("app/system/production/PlanningPricingScreens.tsx");
   assert.match(screens, /import \{ MyWeek \} from "\.\/MyWeekScreen";/);
-  assert.match(screens, /data-guide="work\.summary" hidden=\{tab === "week"\}>/);
+  assert.match(screens, /data-guide="work\.summary">/);
   const week = read("app/system/production/MyWeekScreen.tsx");
   assert.match(week, /import \{ WorkDayDialog \} from "\.\/WorkDaysPanel";/);
   assert.match(week, /`\/api\/v1\/me\/week\?from=\$\{monday\}&to=\$\{addDays\(monday, 6\)\}`/);

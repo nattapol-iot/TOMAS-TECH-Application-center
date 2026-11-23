@@ -139,6 +139,8 @@ type ProductionPlanningProps = {
   onNewAssignmentChanged?: () => void;
   /** Opens a customer issue batch on Projects > Punchlist. */
   openIssueBatch?: (batchId: number) => void;
+  /** My Work only: links to related screens, shown in its header. */
+  relatedLinks?: ReactNode;
 };
 
 type MyWorkItem = {
@@ -1456,6 +1458,7 @@ export function ProductionMyWork({
   onNewAssignmentChanged,
   openCrmOpportunity,
   openIssueBatch,
+  relatedLinks,
 }: ProductionPlanningProps) {
   const localizeCopy = useStaticCopy();
   const uiText = useUiText();
@@ -1778,57 +1781,44 @@ export function ProductionMyWork({
 
   return (
     <div className="pg-skin my-work-pg">
+      {/* One header row (owner 2026-11-23): title, a line on what the tab is for, related links, and the tab's own actions. */}
       <PageHeader
-        eyebrow="MY WORK"
         title={uiText("My Work")}
-        subtitle={uiText("You update the tasks assigned to you. Dates and scope belong to the project manager — use Request more days when you need a change.")}
+        subtitle={
+          tab === "week" ? uiText("MyWeek.subtitle") : uiText("You update the tasks assigned to you. Dates and scope belong to the project manager — use Request more days when you need a change.")
+        }
         actions={
           <>
-            <button
-              className="btn primary"
-              type="button"
-              disabled={loading || !personalTaskParents.length}
-              title={localizeCopy(personalTaskParents.length ? "Add work inside an eligible assigned schedule task" : "No eligible assigned schedule task is available")}
-              onClick={() => setPersonalTaskFor({ parentId: null })}
-            >
-              <Icon name="plus" />
-              <LocalizedText text={"Add Personal Task"} />
-            </button>
-            <button
-              className="btn ghost"
-              type="button"
-              disabled={loading || estimateQueue.loading}
-              onClick={() => {
-                void load();
-                estimateQueue.reload();
-              }}
-            >
-              <Icon name="refresh" />
-              <LocalizedText text={"Refresh"} />
-            </button>
+            {relatedLinks}
+            {ASSIGNED_TABS.includes(tab) ? (
+              <>
+                <button
+                  className="btn primary"
+                  type="button"
+                  disabled={loading || !personalTaskParents.length}
+                  title={localizeCopy(personalTaskParents.length ? "Add work inside an eligible assigned schedule task" : "No eligible assigned schedule task is available")}
+                  onClick={() => setPersonalTaskFor({ parentId: null })}
+                >
+                  <Icon name="plus" />
+                  <LocalizedText text={"Add Personal Task"} />
+                </button>
+                <button
+                  className="btn ghost"
+                  type="button"
+                  disabled={loading || estimateQueue.loading}
+                  onClick={() => {
+                    void load();
+                    estimateQueue.reload();
+                  }}
+                >
+                  <Icon name="refresh" />
+                  <LocalizedText text={"Refresh"} />
+                </button>
+              </>
+            ) : null}
           </>
         }
       />
-      <div className="pg-summary my-work-summary" role="group" aria-label={localizeCopy("Task overview")} data-guide="work.summary" hidden={tab === "week"}>
-        {summaryCells.map((cell) => (
-          <button
-            key={cell.id}
-            type="button"
-            className={`pg-cell${cell.tone && cell.value ? ` ${cell.tone}` : ""}`}
-            aria-pressed={tab === "active" && taskFilter === cell.id}
-            onClick={() => {
-              setTab("active");
-              setSourceFilter("all");
-              setTaskFilter(cell.id);
-            }}
-          >
-            <span className="pg-cell-label">
-              <LocalizedText text={cell.label} />
-            </span>
-            <span className="pg-cell-value">{cell.value}</span>
-          </button>
-        ))}
-      </div>
       <Tabs<MyWorkTop>
         active={ASSIGNED_TABS.includes(tab) ? "assigned" : (tab as MyWorkTop)}
         onChange={(next) => pickTab(next === "assigned" ? "active" : next)}
@@ -1849,6 +1839,29 @@ export function ProductionMyWork({
               { id: "queue", label: "WorkQueue.myTab" },
             ]}
           />
+        </div>
+      ) : null}
+      {/* The task counts filter the assigned work, so they show with it only (a hidden attribute lost to the bar's own display rule). */}
+      {ASSIGNED_TABS.includes(tab) ? (
+        <div className="pg-summary my-work-summary" role="group" aria-label={localizeCopy("Task overview")} data-guide="work.summary">
+          {summaryCells.map((cell) => (
+            <button
+              key={cell.id}
+              type="button"
+              className={`pg-cell${cell.tone && cell.value ? ` ${cell.tone}` : ""}`}
+              aria-pressed={tab === "active" && taskFilter === cell.id}
+              onClick={() => {
+                setTab("active");
+                setSourceFilter("all");
+                setTaskFilter(cell.id);
+              }}
+            >
+              <span className="pg-cell-label">
+                <LocalizedText text={cell.label} />
+              </span>
+              <span className="pg-cell-value">{cell.value}</span>
+            </button>
+          ))}
         </div>
       ) : null}
       {sourceOptions.length > 1 ? (

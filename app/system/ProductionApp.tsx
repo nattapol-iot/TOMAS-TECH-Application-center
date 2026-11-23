@@ -1479,26 +1479,27 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
                 )
               ) : null}
               {view === "my-work" ? (
-                <>
-                  <div className="my-work-related-links">
-                    <button className="btn default" type="button" onClick={async () => await setView("activity")}>
-                      <Icon name="chart" />
-                      {t("Team Activity")}
-                    </button>
-                    {bootstrap.permissions.includes("visit.read") ? (
-                      <button className="btn default" type="button" onClick={async () => await setView("my-assignments")}>
-                        <Icon name="truck" />
-                        {t("งานเข้าหน้างานของฉัน")}
+                // The links to Team Activity and site visit work sit in My Work's own header (2026-11-23), not a row above it.
+                <ProductionMyWork
+                  {...moduleProps}
+                  openCrmOpportunity={openCrmOpportunity}
+                  newAssignmentCount={taskAcknowledgmentCount}
+                  onNewAssignmentChanged={() => setTaskInboxRevision((value) => value + 1)}
+                  relatedLinks={
+                    <>
+                      <button className="btn ghost" type="button" onClick={async () => await setView("activity")}>
+                        <Icon name="chart" />
+                        {t("Team Activity")}
                       </button>
-                    ) : null}
-                  </div>
-                  <ProductionMyWork
-                    {...moduleProps}
-                    openCrmOpportunity={openCrmOpportunity}
-                    newAssignmentCount={taskAcknowledgmentCount}
-                    onNewAssignmentChanged={() => setTaskInboxRevision((value) => value + 1)}
-                  />
-                </>
+                      {bootstrap.permissions.includes("visit.read") ? (
+                        <button className="btn ghost" type="button" onClick={async () => await setView("my-assignments")}>
+                          <Icon name="truck" />
+                          {t("งานเข้าหน้างานของฉัน")}
+                        </button>
+                      ) : null}
+                    </>
+                  }
+                />
               ) : null}
               {view.startsWith("crm-") && bootstrap.permissions.includes("crm.read") ? (
                 <SalesLookScope userId={bootstrap.user.id}>
