@@ -1622,6 +1622,22 @@ const PROJECT_PAGE: Guide = {
       missing: { th: "เปิดหน้าของโปรเจกต์ก่อน หรือกด 'ถัดไป'", en: "Open a project's page first, or press Next.", jp: "先に案件のページを開くか、「次へ」を押します。" },
     },
     {
+      target: "projectCreate.aside",
+      action: "next",
+      view: "projects",
+      title: { th: "สร้างโปรเจกต์เป็นหน้าเต็ม", en: "Create project as a page", jp: "ページで案件を作成" },
+      body: {
+        th: "ใน V2 ปุ่ม 'สร้างโปรเจกต์' เปิดเป็นหน้าเต็ม 4 ส่วน: ที่มา ข้อมูลโปรเจกต์ แผนตั้งต้น และการชำระเงิน ด้านขวาบอกช่องที่ยังขาดและสิ่งที่ระบบทำหลังกดสร้าง สิ่งที่พิมพ์เก็บไว้ในเบราว์เซอร์จนกว่าจะสร้าง สร้างเสร็จระบบเปิดแท็บแผนงานของโปรเจกต์ใหม่ทันที",
+        en: "In V2, Create project opens as a page in four parts: where it comes from, project details, the starting plan and payments. The right-hand column lists what is still needed and what Create does. What you type is kept in the browser until the project exists, and the new project opens on its Plan.",
+        jp: "V2 では「案件を作成」がページで開き、由来・案件情報・初期計画・入金の4部構成です。右側に未入力の項目と作成時に行われる処理が表示されます。入力内容は作成までブラウザーに保存され、作成後は新しい案件の計画タブが開きます。",
+      },
+      missing: {
+        th: "กด 'สร้างโปรเจกต์' ใน V2 เพื่อเปิดหน้านี้ หรือกด 'ถัดไป'",
+        en: "Press Create project in V2 to open this page, or press Next.",
+        jp: "V2 で「案件を作成」を押すとこのページが開きます。または「次へ」を押します。",
+      },
+    },
+    {
       target: "projectDocs.folders",
       action: "next",
       view: "projects",
