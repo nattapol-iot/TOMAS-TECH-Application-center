@@ -38,14 +38,12 @@ jobs:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Deploy via macOS script
-        # scripts/macos/deploy.sh handles rsync, colima-iot Docker context,
-        # --force-recreate, Caddy reload, and health checks itself.
-        # It reads .env from ~/iot-team-center/src (preserved across deploys by
-        # rsync --exclude .env in the script). No sudo needed: the colima socket
-        # lives under the tomastc home directory.
-        # See docs/MACMINI_HANDOFF.md § "Bringing this repo up".
+        # scripts/macos/deploy.sh handles rsync, the colima-iot Docker context,
+        # --force-recreate, Caddy reload, and health checks itself. It reads .env from
+        # /Users/Shared/iot-team-center/src (preserved across deploys by rsync --exclude .env).
+        # The runner is the unprivileged user iotdeploy: it reaches only the iot VM's Docker API
+        # and that folder (docs: IOT-HOST-RUNNER-SECURITY.md in the operator notes).
         env:
-          DEV_NAS_USERNAME: ${{ secrets.NAS_USERNAME }}
           # TMTHub's own Keycloak client (docs/TMTHUB.md); empty until the secret is set.
           TMTHUB_OIDC_CLIENT_SECRET: ${{ secrets.TMTHUB_OIDC_CLIENT_SECRET }}
         run: scripts/macos/deploy.sh --source "$GITHUB_WORKSPACE"

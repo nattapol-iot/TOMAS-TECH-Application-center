@@ -31,6 +31,11 @@ services:
       # Site Monitor: the public origin customer machines report to through the Cloudflare Tunnel
       # (service cloudflared below). On that hostname the API serves /api/v1/monitor/agent/* only.
       SiteMonitor__AgentPublicUrl: ${SITE_MONITOR_AGENT_URL:-}
+    # Documents on the NAS over NFS, mounted by the iot VM's kernel like tmthub-nas. Not through the
+    # Mac's SMB mount: that needed the deploy runner to mount and repair it on the Mac, and the VM
+    # could keep a stale view of it after an SMB reconnect.
+    volumes: !override
+      - api-documents-nas:/app/App_Data/project-documents
 
   frontend:
     # The dev file bind-mounts the checkout and runs 'bun run dev', and a Vite dev server
@@ -230,3 +235,11 @@ volumes:
       # or NFSv4 pseudo-root, v4.1 or v3) and exports the pair that mounts.
       o: "addr=${TMTHUB_NAS_ADDR:-100.64.0.53},${TMTHUB_NFS_OPTIONS:-rw,nfsvers=4.1,hard,timeo=600,retrans=2,noresvport}"
       device: ":${TMTHUB_NFS_PATH:-/volume1/IoT Department/IoT Team Center/TMTHub}"
+  # The document root (projects, quotations, Download Center, TMTHub's folder) on the same NAS share
+  # and NFS rule as tmthub-nas. deploy.sh checks it mounts and writes before replacing the API.
+  api-documents-nas:
+    driver: local
+    driver_opts:
+      type: nfs
+      o: "addr=${TMTHUB_NAS_ADDR:-100.64.0.53},${IOT_DOCUMENTS_NFS_OPTIONS:-rw,nfsvers=3,nolock,hard,timeo=600,retrans=2,noresvport}"
+      device: ":${IOT_DOCUMENTS_NFS_PATH:-/volume1/IoT Department/IoT Team Center}"
