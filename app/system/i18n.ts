@@ -2745,6 +2745,7 @@ export const DICTIONARY: Record<string, Entry> = {
   "Portfolio.colLastUpdate": { en: "Last update", th: "อัปเดตล่าสุด", jp: "最終更新" },
   "Portfolio.colHours": { en: "Hours / budget", th: "ชม.จริง / งบ", jp: "実績時間 / 予算" },
   "ProjectPage.open": { en: "Open project page", th: "เปิดหน้าโปรเจกต์", jp: "案件ページを開く" },
+  "ProjectPage.open.short": { en: "Open", th: "เปิด", jp: "開く" },
   "ProjectPage.back": { en: "All projects", th: "โปรเจกต์ทั้งหมด", jp: "すべての案件" },
   "ProjectPage.missing": { en: "Project not found", th: "ไม่พบโปรเจกต์", jp: "案件が見つかりません" },
   "ProjectPage.missingHint": { en: "{no} is not a project you can see.", th: "{no} ไม่ใช่โปรเจกต์ที่คุณดูได้", jp: "{no} は表示できる案件ではありません。" },

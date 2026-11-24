@@ -26,12 +26,14 @@ import {
 import type { ProjectHealth } from "../project-health.js";
 import { loadProjectScheduleSummaries } from "../project-overview.js";
 import { HOURS_PER_MAN_DAY } from "../manhour-budget.js";
-import { BOUGHT_CATEGORIES, averageDailyRate, loadProjectCostFigures, projectCost } from "../project-cost.js";
+import { BOUGHT_CATEGORIES, averageDailyRate, loadEstimateFigures, loadPlanFigures, loadProjectCostFigures, projectCost } from "../project-cost.js";
 import { canViewProjectCost, FULL_COST_ACCESS, round2, type CostAccess } from "../project-cost-model.js";
 import { NO_MODULE, REQUESTING_PR_STATUSES } from "../procurement-rules.js";
 import { deliverProjectNotices, queueProjectCreatedNotices, queueTaskAssignmentNotices, type NewPics, type ProjectNotice } from "../project-notices.js";
 import { canCreateWithoutEstimate, demandProjectScope, isProjectElevated, isProjectManagerRole } from "../project-scope.js";
-import { currentScheduleVersion, PROGRESS_REPORT_FIELDS_SQL, permissionFor, validateScheduleVersion } from "../schedule-service.js";
+import { currentScheduleVersion, PROGRESS_REPORT_FIELDS_SQL, permissionFor, readHolidays, readTasks, resolveTasks, validateScheduleVersion } from "../schedule-service.js";
+import { scheduleLeaves } from "../project-health.js";
+import { disciplineHours, headingProgress } from "../project-page-overview.js";
 import { hasRole, rolesOf } from "../user-roles.js";
 import type { CurrentUser } from "../types.js";
 import type { CurrentUserService } from "../users.js";
@@ -90,6 +92,22 @@ function shiftDate(value: string, unit: "day" | "year", amount: number): string 
   else date.setUTCDate(date.getUTCDate() + amount);
   return date.toISOString().slice(0, 10);
 }
+
+/**
+ * The project page's Overview (task doc 5.3), one round trip: hours per plan row, purchase requests by status (counts,
+ * never money), the team and its hours this week, the latest documents and the latest changes to the plan.
+ */
+export const PAGE_OVERVIEW_SQL = `SELECT status,COUNT(*) requests FROM dbo.mat_prs WHERE project_id=@project AND deleted_at IS NULL GROUP BY status;
+  SELECT u.id,u.name,CASE WHEN u.id=p.manager_id THEN N'PM' WHEN u.id=p.lead_engineer_id THEN N'Lead' ELSE N'Member' END role,
+    COALESCE((SELECT SUM(h.hours) FROM dbo.work_hours h WHERE h.project_id=p.id AND h.user_id=u.id AND h.work_date BETWEEN @week AND DATEADD(day,6,@week)),0) week_hours
+    FROM dbo.projects p INNER JOIN dbo.users u ON u.id=p.manager_id OR u.id=p.lead_engineer_id
+      OR EXISTS(SELECT 1 FROM dbo.project_members m WHERE m.project_id=p.id AND m.user_id=u.id)
+    WHERE p.id=@project AND u.deleted_at IS NULL;
+  SELECT TOP(5) d.id,d.name,d.folder_code,d.document_type,d.uploaded_at,u.name uploaded_by FROM dbo.project_docs d
+    INNER JOIN dbo.users u ON u.id=d.uploaded_by WHERE d.project_id=@project AND d.deleted_at IS NULL ORDER BY d.uploaded_at DESC,d.id DESC;
+  SELECT TOP(8) s.id,s.field,s.comment,s.occurred_at,a.name actor,t.name task FROM dbo.schedule_updates s
+    INNER JOIN dbo.users a ON a.id=s.actor_id LEFT JOIN dbo.schedule_tasks t ON t.id=s.task_id
+    WHERE s.project_id=@project ORDER BY s.occurred_at DESC,s.id DESC;`;
 
 /** Per project: our own people's confirmed hours (dbo.work_hours) and the hours budget's sources (manhour-budget.ts). */
 export const PROJECT_HOURS_SQL = `SELECT p.id project_id,
@@ -472,6 +490,64 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
   // One project's cost: bought cost by Module, its purchase requests, and people by the plan's top rows. People by
   // discipline is part of the project's own figures (project.labor.disciplines), the same as in the list.
   // The project is read through the list's own scope rule, so a project outside it is "not found" here too.
+  async function readProjectStatus(transaction: InstanceType<typeof sql.Transaction>, id: number): Promise<string | null> {
+    const request = new sql.Request(transaction);
+    request.input("project", sql.BigInt, id);
+    const row = (await request.query<{ status: string }>(`SELECT status FROM dbo.projects WHERE id=@project AND deleted_at IS NULL;`)).recordset[0];
+    return row?.status ?? null;
+  }
+
+  // Task doc 5.3: the project page's Overview. project.read and the project's own scope, as the plan; no money in it.
+  app.get("/api/v1/projects/:id/page-overview", async (request) => {
+    await users.demandPermission(request, "project.read");
+    const actor = await users.required(request);
+    const id = positiveLong((request.params as { id?: string }).id, "Project id");
+    const today = businessToday(config.businessTimeZone);
+    const monday = new Date(Date.parse(`${today}T00:00:00Z`) - ((new Date(`${today}T00:00:00Z`).getUTCDay() + 6) % 7) * 86_400_000).toISOString().slice(0, 10);
+    return database.transaction(async (transaction) => {
+      await demandProjectScope(database, actor, id, transaction);
+      const tasks = await readTasks(transaction, id);
+      const holidays = await readHolidays(transaction);
+      let leaves: ReturnType<typeof scheduleLeaves> = [];
+      try {
+        leaves = tasks.length ? scheduleLeaves(tasks, resolveTasks(tasks, holidays)) : [];
+      } catch {
+        // A plan that cannot be resolved (a broken link) shows no heading figures rather than no page.
+      }
+      const status = (await readProjectStatus(transaction, id)) ?? "";
+      // The Cost tab's own figures, so both tabs split hours by discipline alike; only man-days are taken from them.
+      const estimate = (await loadEstimateFigures(transaction, [id])).get(id);
+      const plan = (await loadPlanFigures(transaction, [id], today)).get(id);
+      const read = new sql.Request(transaction);
+      read.input("project", sql.BigInt, id).input("week", sql.Date, monday);
+      const sets = ((await read.query(PAGE_OVERVIEW_SQL)).recordsets ?? []) as unknown as Record<string, unknown>[][];
+      return {
+        today,
+        weekStart: monday,
+        headings: headingProgress(tasks, leaves, today, status === "Closed"),
+        disciplines: disciplineHours(estimate?.disciplines ?? [], plan?.disciplines ?? [], HOURS_PER_MAN_DAY),
+        purchaseRequests: (sets[0] ?? []).map((row) => ({ status: String(row.status), count: Number(row.requests) })),
+        team: (sets[1] ?? []).map((row) => ({ id: Number(row.id), name: String(row.name), role: String(row.role), weekHours: Math.round(Number(row.week_hours ?? 0) * 10) / 10 })),
+        documents: (sets[2] ?? []).map((row) => ({
+          id: Number(row.id),
+          name: String(row.name),
+          folderCode: String(row.folder_code),
+          documentType: String(row.document_type),
+          uploadedAt: new Date(row.uploaded_at as Date | string).toISOString(),
+          uploadedBy: String(row.uploaded_by),
+        })),
+        activity: (sets[3] ?? []).map((row) => ({
+          id: Number(row.id),
+          field: String(row.field),
+          comment: row.comment == null ? null : String(row.comment).slice(0, 300),
+          at: new Date(row.occurred_at as Date | string).toISOString(),
+          actor: String(row.actor),
+          task: row.task == null ? null : String(row.task),
+        })),
+      };
+    });
+  });
+
   app.get("/api/v1/projects/:id/cost", async (request) => {
     const { actor, access } = await costViewer(request);
     const id = positiveLong((request.params as { id?: string }).id, "Project id");
