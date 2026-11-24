@@ -728,3 +728,106 @@
   border-width: 1px 0 0;
   border-radius: 0;
 }
+
+/* Mouse: drag a header edge to resize a column, drag a row by its WBS, right-click a row for its actions. */
+.plan-sheet .rsz {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  bottom: 0;
+  z-index: 1;
+  width: 7px;
+  cursor: col-resize;
+}
+.plan-sheet .rsz:hover {
+  background: color-mix(in srgb, var(--sh-primary) 35%, transparent);
+}
+.plan-sheet td.c.grab {
+  cursor: grab;
+}
+.plan-sheet .ps-scroll.dragging,
+.plan-sheet .ps-scroll.dragging * {
+  cursor: grabbing !important;
+  user-select: none;
+}
+.plan-sheet tr.drop-before > td {
+  box-shadow: inset 0 2px 0 var(--sh-primary);
+}
+.plan-sheet tr.drop-after > td {
+  box-shadow: inset 0 -2px 0 var(--sh-primary);
+}
+.plan-sheet tr.drop-into > td.c {
+  background-color: var(--sh-sel) !important;
+  box-shadow: inset 0 0 0 1px var(--sh-primary);
+}
+.plan-sheet .ps-menu {
+  position: fixed;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  min-width: 240px;
+  padding: 4px;
+  border: 1px solid var(--sh-border);
+  border-radius: 8px;
+  background: var(--sh-card);
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--sh-fg) 14%, transparent);
+  font-size: 12.5px;
+}
+.plan-sheet .ps-menu-head {
+  overflow: hidden;
+  padding: 6px 8px 4px;
+  color: var(--sh-muted);
+  font-size: 11.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.plan-sheet .ps-menu button {
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.plan-sheet .ps-menu button:hover:not(:disabled) {
+  background: var(--sh-primary-soft);
+}
+.plan-sheet .ps-menu button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.plan-sheet .ps-menu button.danger {
+  color: var(--sh-red);
+}
+
+/* Folded columns (PIC to Status): zero width, nothing drawn. */
+.plan-sheet .grid th.fold,
+.plan-sheet .grid td.fold {
+  padding: 0 !important;
+  border: 0 !important;
+  visibility: hidden;
+}
+.plan-sheet .colfold {
+  position: absolute;
+  right: 8px;
+  bottom: 6px;
+  width: 20px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid var(--sh-border);
+  border-radius: 4px;
+  background: var(--sh-card);
+  color: var(--sh-muted);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+.plan-sheet .colfold:hover {
+  background: var(--sh-primary-soft);
+  color: var(--sh-primary);
+}
+.plan-sheet .tools .btn[aria-pressed="true"] {
+  border-color: var(--sh-primary);
+  background: var(--sh-primary-soft);
+  color: var(--sh-primary);
+}

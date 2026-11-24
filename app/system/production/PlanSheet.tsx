@@ -98,8 +98,27 @@ const COLUMNS: { key: Column; label: string; lines?: [string, string]; sub?: str
 ];
 const LAST_COLUMN = COLUMNS.length - 1;
 const COLUMN_AT = Object.fromEntries(COLUMNS.map((column, index) => [column.key, index])) as Record<Column, number>;
-const LEFT = COLUMNS.reduce<number[]>((all, column, index) => [...all, index ? all[index - 1]! + COLUMNS[index - 1]!.width : GUT], []);
-const LEFT_WIDTH = LEFT[LAST_COLUMN]! + COLUMNS[LAST_COLUMN]!.width;
+const WIDTH_KEY = "tomas-tech-plan-sheet-widths";
+/** The columns from PIC to Status fold away together, leaving WBS and TASK beside a wider Gantt (owner 2026-11-24). */
+const FOLD_KEY = "tomas-tech-plan-sheet-folded";
+const readFolded = () => {
+  try {
+    return typeof window !== "undefined" && window.localStorage.getItem(FOLD_KEY) === "1";
+  } catch {
+    return false;
+  }
+};
+const readWidths = (): Record<string, number> => {
+  try {
+    const saved = typeof window === "undefined" ? null : window.localStorage.getItem(WIDTH_KEY);
+    const parsed = saved ? (JSON.parse(saved) as unknown) : null;
+    return parsed && typeof parsed === "object" ? (parsed as Record<string, number>) : {};
+  } catch {
+    return {};
+  }
+};
+type Drop = { id: number; where: "before" | "after" | "into" };
+type Menu = { id: number; x: number; y: number };
 const DISCIPLINES = ["Electrical", "Mechanical", "Software", "Installation"] as const;
 const DISCIPLINE_SHORT: Record<string, string> = { EE: "Electrical", ME: "Mechanical", SW: "Software", IN: "Installation" };
 const STATUSES = ["Not Started", "In Progress", "Blocked", "Done"] as const;
@@ -199,6 +218,8 @@ const GLYPH = {
   up: ["m18 15-6-6-6 6"],
   down: ["m6 9 6 6 6-6"],
   trash: ["M3 6h18", "M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6", "M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"],
+  fold: ["m11 17-5-5 5-5", "m18 17-5-5 5-5"],
+  unfold: ["m13 17 5-5-5-5", "m6 17 5-5-5-5"],
   calendar: ["M16 2v4M8 2v4M3 10h18", "M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"],
 };
 
@@ -254,6 +275,26 @@ export function PlanSheet({
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [steps, setSteps] = useState({ undo: 0, redo: 0 });
   const [frameWidth, setFrameWidth] = useState(0);
+  const [widths, setWidths] = useState<Record<string, number>>(readWidths);
+  const [drop, setDrop] = useState<Drop | null>(null);
+  const [menu, setMenu] = useState<Menu | null>(null);
+  const [folded, setFolded] = useState(readFolded);
+  const isFolded = (col: number) => folded && col > COLUMN_AT.name;
+  const lastColumn = folded ? COLUMN_AT.name : LAST_COLUMN;
+  const width = (col: number) => (isFolded(col) ? 0 : Math.max(36, widths[COLUMNS[col]!.key] ?? COLUMNS[col]!.width));
+  const toggleFold = () => {
+    const next = !folded;
+    setFolded(next);
+    try {
+      window.localStorage.setItem(FOLD_KEY, next ? "1" : "0");
+    } catch {
+      /* Remembering the fold is a convenience. */
+    }
+    const current = cursor.current.active;
+    if (next && current && current.col > COLUMN_AT.name) place({ id: current.id, col: COLUMN_AT.name }, null);
+  };
+  const LEFT = COLUMNS.map((_, col) => GUT + COLUMNS.slice(0, col).reduce((sum, _column, index) => sum + width(index), 0));
+  const LEFT_WIDTH = LEFT[LAST_COLUMN]! + width(LAST_COLUMN);
 
   const model = useMemo(() => {
     const all = sheetOrder(schedule.tasks);
@@ -315,7 +356,7 @@ export function PlanSheet({
     const visible: Row[] = [];
     let hideBelow: number | null = null;
     for (const row of rows) {
-      if (headingsOnly && row.task.depth > 1) continue;
+      if (headingsOnly && row.task.depth > 0) continue;
       if (hideBelow !== null) {
         if (row.task.depth > hideBelow) continue;
         hideBelow = null;
@@ -737,7 +778,7 @@ export function PlanSheet({
     const { active: from, anchor: corner } = cursor.current;
     const at = indexOf(from);
     const index = at < 0 ? 0 : Math.max(0, Math.min(lineCount - 1, at + down));
-    const next = { id: idAt(index), col: Math.max(0, Math.min(LAST_COLUMN, (from?.col ?? 1) + across)) };
+    const next = { id: idAt(index), col: Math.max(0, Math.min(lastColumn, (from?.col ?? 1) + across)) };
     place(next, extend ? (corner ?? from ?? next) : next);
   };
 
@@ -795,7 +836,7 @@ export function PlanSheet({
     const fields: Fields = { name, picExternal: "", planStart: current.start, planDays: 1, startMode: "manual", predecessorId: null, lagDays: 0, picUserIds: [], discipline: null };
     const parent = current.parentId === null ? null : model.byId.get(current.parentId);
     const id = enqueue({ type: "create", parentId: current.parentId, beforeId: current.beforeId, kind: current.kind, fields });
-    setSaving((list) => [...list, { seq: id, parentId: current.parentId, beforeId: current.beforeId, name, depth: (parent?.task.depth ?? 0) + 1, atEnd: false }]);
+    setSaving((list) => [...list, { seq: id, parentId: current.parentId, beforeId: current.beforeId, name, depth: parent ? parent.task.depth + 2 : 1, atEnd: false }]);
     if (keepOpen) {
       draftKey.current = ++seq.current;
       setDraft({ ...current, key: draftKey.current, text: "", start: current.start ? nextWorkDay(shiftDay(current.start, 1), holidays) : null });
@@ -823,6 +864,39 @@ export function PlanSheet({
     const uncles = grand ? grand.task.children : schedule.tasks,
       parentAt = uncles.findIndex((item) => item.id === parent.task.id);
     return { parentId: parent.task.parentId, beforeId: uncles[parentAt + 1]?.id ?? null, undo: back };
+  };
+  /** Where a dragged row lands on another: above it, below it, or under it as its last row; null when it cannot. */
+  const dropMove = (id: number, target: Drop): { parentId: number | null; beforeId: number | null } | null => {
+    const dragged = model.byId.get(id),
+      over = model.byId.get(target.id);
+    if (!dragged || !over || !canPlan) return null;
+    for (let up: Row | undefined = over; up; up = up.task.parentId === null ? undefined : model.byId.get(up.task.parentId)) if (up.task.id === id) return null;
+    let parentId: number | null, beforeId: number | null;
+    if (target.where === "into") {
+      parentId = over.task.id;
+      beforeId = null;
+    } else {
+      parentId = over.task.parentId;
+      const list = parentId === null ? schedule.tasks : (model.byId.get(parentId)?.task.children ?? []),
+        at = list.findIndex((item) => item.id === over.task.id);
+      beforeId = target.where === "before" ? over.task.id : (list[at + 1]?.id ?? null);
+      if (beforeId === id) beforeId = list[at + 2]?.id ?? null;
+    }
+    if (dragged.task.kind === "phase" ? parentId !== null : parentId === null) return null;
+    if (parentId !== dragged.task.parentId && (dragged.task.managedByResourcePlan || lockedIds.has(id) || (parentId !== null && lockedIds.has(parentId)))) return null;
+    const own = dragged.task.parentId === null ? schedule.tasks : (model.byId.get(dragged.task.parentId)?.task.children ?? []),
+      at = own.findIndex((item) => item.id === id);
+    if (parentId === dragged.task.parentId && (own[at + 1]?.id ?? null) === beforeId) return null;
+    return { parentId, beforeId };
+  };
+  const landRow = (id: number, target: Drop) => {
+    const move = dropMove(id, target),
+      dragged = model.byId.get(id);
+    if (!move || !dragged) return say(t("Sheet.cannotMove"), true);
+    const own = dragged.task.parentId === null ? schedule.tasks : (model.byId.get(dragged.task.parentId)?.task.children ?? []);
+    pushUndo({ kind: "move", taskId: id, parentId: dragged.task.parentId, beforeId: own[own.findIndex((item) => item.id === id) + 1]?.id ?? null });
+    enqueue({ type: "move", taskId: id, parentId: move.parentId, beforeId: move.beforeId });
+    if (move.parentId !== null && collapsed.has(move.parentId)) setCollapsed((current) => new Set([...current].filter((item) => item !== move.parentId)));
   };
   const moveRow = (how: "up" | "down" | "in" | "out") => {
     const move = moveFor(activeRow, how);
@@ -966,7 +1040,7 @@ export function PlanSheet({
       event.preventDefault();
       moveBy(arrow[0], arrow[1], event.shiftKey);
     } else if (event.key === "Tab") {
-      if ((event.shiftKey && col === 0) || (!event.shiftKey && col === LAST_COLUMN)) return;
+      if ((event.shiftKey && col === 0) || (!event.shiftKey && col >= lastColumn)) return;
       event.preventDefault();
       moveBy(0, event.shiftKey ? -1 : 1, false);
     } else if (event.key === "Enter") {
@@ -1022,7 +1096,7 @@ export function PlanSheet({
           const parentId = base.task.kind === "phase" ? base.task.id : base.task.parentId;
           const parent = parentId === null ? null : (model.byId.get(parentId) ?? null);
           const list = parent ? parent.task.children : schedule.tasks;
-          return { parentId, beforeId: base.task.kind === "phase" ? null : (list[list.findIndex((task) => task.id === base.task.id) + 1]?.id ?? null), depth: (parent?.task.depth ?? 0) + 1 };
+          return { parentId, beforeId: base.task.kind === "phase" ? null : (list[list.findIndex((task) => task.id === base.task.id) + 1]?.id ?? null), depth: parent ? parent.task.depth + 2 : 1 };
         })()
       : null;
     const after = base?.finish ?? [...model.rows].reverse().find((row) => row.finish)?.finish ?? null;
@@ -1171,7 +1245,17 @@ export function PlanSheet({
   // The mouse: press on a cell to select it, Shift-click to run a selection to it, double-click to type in it or, on a
   // bar, to open the task.
   const editHandler = useRef<(cell: Cell) => void>(() => undefined);
+  const dragHandler = useRef<{ aim: (id: number, over: number, at: number) => Drop | null; land: (id: number, target: Drop) => void }>({ aim: () => null, land: () => undefined });
   useLayoutEffect(() => {
+    dragHandler.current = {
+      aim: (id, over, at) => {
+        const row = model.byId.get(over);
+        const takes = row && (row.task.kind === "phase" || (row.task.kind === "task" && canAddSub(row.task)));
+        const where: Drop["where"] = at > 0.3 && at < 0.7 && takes ? "into" : at < 0.5 ? "before" : "after";
+        return dropMove(id, { id: over, where }) ? { id: over, where } : null;
+      },
+      land: landRow,
+    };
     editHandler.current = (cell: Cell) => {
       const row = model.byId.get(cell.id);
       if (row) startEdit(row, cell.col, null);
@@ -1187,12 +1271,76 @@ export function PlanSheet({
         line = cell?.closest<HTMLElement>("tr[data-id]");
       return cell && line ? { id: Number(line.dataset.id), col: Number(cell.dataset.c) } : null;
     };
+    const resize = (event: MouseEvent, handle: HTMLElement) => {
+      const col = Number(handle.dataset.col),
+        startX = event.clientX,
+        startWidth = handle.parentElement?.getBoundingClientRect().width ?? COLUMNS[col]!.width,
+        key = COLUMNS[col]!.key;
+      const move = (next: MouseEvent) => setWidths((current) => ({ ...current, [key]: Math.max(36, Math.round(startWidth + next.clientX - startX)) }));
+      const up = () => {
+        window.removeEventListener("mousemove", move);
+        window.removeEventListener("mouseup", up);
+        setWidths((current) => {
+          try {
+            window.localStorage.setItem(WIDTH_KEY, JSON.stringify(current));
+          } catch {
+            /* Remembering widths is a convenience. */
+          }
+          return current;
+        });
+      };
+      window.addEventListener("mousemove", move);
+      window.addEventListener("mouseup", up);
+    };
+    // A row's WBS cell is its handle: press and move to drag it; the line shows where it lands, the middle of a row
+    // puts it under that row.
+    const dragRow = (event: MouseEvent, id: number) => {
+      const startY = event.clientY;
+      let dragging = false,
+        target: Drop | null = null;
+      const move = (next: MouseEvent) => {
+        if (!dragging && Math.abs(next.clientY - startY) < 6) return;
+        dragging = true;
+        box.classList.add("dragging");
+        const bounds = box.getBoundingClientRect();
+        if (next.clientY < bounds.top + 70) box.scrollTop -= 12;
+        else if (next.clientY > bounds.bottom - 30) box.scrollTop += 12;
+        const line = document.elementFromPoint(next.clientX, next.clientY)?.closest<HTMLElement>("tr[data-id]");
+        const over = line && box.contains(line) ? Number(line.dataset.id) : 0;
+        target = over > 0 && over !== id ? dragHandler.current.aim(id, over, (next.clientY - line!.getBoundingClientRect().top) / line!.offsetHeight) : null;
+        setDrop(target);
+      };
+      const up = () => {
+        window.removeEventListener("mousemove", move);
+        window.removeEventListener("mouseup", up);
+        box.classList.remove("dragging");
+        setDrop(null);
+        if (dragging && target) dragHandler.current.land(id, target);
+      };
+      window.addEventListener("mousemove", move);
+      window.addEventListener("mouseup", up);
+    };
     const down = (event: MouseEvent) => {
+      const handle = event.button === 0 && event.target instanceof Element ? event.target.closest<HTMLElement>(".rsz") : null;
+      if (handle) {
+        event.preventDefault();
+        return resize(event, handle);
+      }
       const cell = event.button === 0 ? cellOf(event.target) : null;
       if (!cell) return;
       event.preventDefault();
       box.focus({ preventScroll: true });
       place(cell, event.shiftKey ? (cursor.current.anchor ?? cursor.current.active ?? cell) : cell);
+      if (cell.col === COLUMN_AT.wbs && cell.id > 0 && !event.shiftKey && live.current.canPlan) dragRow(event, cell.id);
+    };
+    const context = (event: MouseEvent) => {
+      const line = event.target instanceof Element ? event.target.closest<HTMLElement>("tr[data-id]") : null;
+      const id = line ? Number(line.dataset.id) : 0;
+      if (id <= 0) return;
+      event.preventDefault();
+      const cell = cellOf(event.target);
+      place({ id, col: cell?.col ?? cursor.current.active?.col ?? COLUMN_AT.name }, null);
+      setMenu({ id, x: event.clientX, y: event.clientY });
     };
     const double = (event: MouseEvent) => {
       const bar = event.target instanceof Element ? event.target.closest<HTMLElement>(".gb[data-id]") : null;
@@ -1202,11 +1350,29 @@ export function PlanSheet({
     };
     box.addEventListener("mousedown", down);
     box.addEventListener("dblclick", double);
+    box.addEventListener("contextmenu", context);
     return () => {
       box.removeEventListener("mousedown", down);
       box.removeEventListener("dblclick", double);
+      box.removeEventListener("contextmenu", context);
     };
   }, [place]);
+  useEffect(() => {
+    if (!menu) return;
+    const close = (event: Event) => {
+      if (event instanceof MouseEvent && event.target instanceof Element && event.target.closest(".ps-menu")) return;
+      if (event instanceof KeyboardEvent && event.key !== "Escape") return;
+      setMenu(null);
+    };
+    window.addEventListener("mousedown", close);
+    window.addEventListener("keydown", close);
+    window.addEventListener("scroll", close, true);
+    return () => {
+      window.removeEventListener("mousedown", close);
+      window.removeEventListener("keydown", close);
+      window.removeEventListener("scroll", close, true);
+    };
+  }, [menu]);
   // How wide the sheet is: with room for 360 px of Gantt, every column up to status stays frozen; else WBS and TASK.
   useEffect(() => {
     const box = frame.current;
@@ -1216,7 +1382,7 @@ export function PlanSheet({
     return () => observer.disconnect();
   }, []);
   const stickyCount = frameWidth - LEFT_WIDTH >= 360 ? COLUMNS.length : 2;
-  const stickyWidth = LEFT[stickyCount - 1]! + COLUMNS[stickyCount - 1]!.width;
+  const stickyWidth = LEFT[stickyCount - 1]! + width(stickyCount - 1);
   // Keeps the active cell in view, clear of the frozen columns and the header.
   useEffect(() => {
     const box = frame.current;
@@ -1290,7 +1456,11 @@ export function PlanSheet({
     while (end < rows.length && rows[end]!.task.depth > rows[at]!.task.depth) end++;
     return end;
   };
-  const sticky = (col: number) => (col < stickyCount ? { className: ` stk${col === stickyCount - 1 ? " stk-last" : ""}`, style: { left: LEFT[col] } } : { className: "", style: undefined });
+  const lastSticky = Math.min(stickyCount - 1, lastColumn);
+  const sticky = (col: number) =>
+    col < stickyCount
+      ? { className: ` stk${col === lastSticky ? " stk-last" : ""}${isFolded(col) ? " fold" : ""}`, style: { left: LEFT[col] } }
+      : { className: isFolded(col) ? " fold" : "", style: undefined };
   const extras = new Map<number, React.ReactNode[]>();
   const addExtra = (at: number, node: React.ReactNode) => {
     if (at >= 0) extras.set(at, [...(extras.get(at) ?? []), node]);
@@ -1322,7 +1492,7 @@ export function PlanSheet({
     );
   if (draft) {
     const parent = draft.parentId === null ? null : model.byId.get(draft.parentId),
-      depth = (parent?.task.depth ?? 0) + 1;
+      depth = parent ? parent.task.depth + 2 : 1;
     addExtra(
       placeAt(draft.parentId, draft.beforeId),
       <tr key={`draft-${draft.key}`} className={`lvl${Math.min(3, depth)} drafting`}>
@@ -1439,7 +1609,7 @@ export function PlanSheet({
       const folded = headingsOnly || collapsed.has(task.id),
         sub = placeFor(row, true);
       return (
-        <div className="nmw" style={{ paddingLeft: (task.depth - 1) * 16 }}>
+        <div className="nmw" style={{ paddingLeft: task.depth * 16 }}>
           {row.rollup && !headingsOnly ? (
             <button type="button" className="caret" tabIndex={-1} aria-expanded={!folded} aria-label={`${t(folded ? "Sheet.unfold" : "Sheet.fold")} ${task.wbs}`} onClick={() => toggle(task.id)}>
               <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -1450,7 +1620,7 @@ export function PlanSheet({
             <span className="sp" />
           )}
           <span className="nt">{row.fields.name}</span>
-          {sub && task.depth === 2 && !headingsOnly ? (
+          {sub && !headingsOnly ? (
             <button type="button" className="subadd" tabIndex={-1} title={t("Sheet.addSubTitle")} onClick={() => openDraft(sub)}>
               {t("Sheet.subAdd")}
             </button>
@@ -1555,7 +1725,7 @@ export function PlanSheet({
       plus = placeFor(row, false);
     const addTip = t(task.kind === "phase" || row.parent ? "Sheet.addUnder" : "Sheet.addBelow");
     rowsOut.push(
-      <tr key={task.id} data-id={task.id} className={`lvl${Math.min(3, task.depth)}${current ? " cur-row" : ""}`}>
+      <tr key={task.id} data-id={task.id} className={`lvl${Math.min(3, task.depth + 1)}${current ? " cur-row" : ""}${drop?.id === task.id ? ` drop-${drop.where}` : ""}`}>
         <td className="gut stk" style={{ left: 0 }}>
           {plus ? (
             <button type="button" className="add" tabIndex={-1} title={addTip} aria-label={`${addTip} ${task.wbs}`} onClick={() => openDraft(plus)}>
@@ -1578,7 +1748,8 @@ export function PlanSheet({
               key={column.key}
               data-c={col}
               aria-selected={Boolean(selected || on)}
-              className={`c${column.mono ? " ps-mono" : ""}${column.right ? " r" : ""}${calc ? " calc" : ""}${selected ? " insel" : ""}${on ? " act" : ""}${typing ? " editing" : ""}${frozen.className}`}
+              title={column.key === "wbs" && canPlan ? t("Sheet.dragHint") : undefined}
+              className={`c${column.mono ? " ps-mono" : ""}${column.key === "wbs" && canPlan ? " grab" : ""}${column.right ? " r" : ""}${calc ? " calc" : ""}${selected ? " insel" : ""}${on ? " act" : ""}${typing ? " editing" : ""}${frozen.className}`}
               style={frozen.style || fill ? { ...frozen.style, ...fill } : undefined}
             >
               {typing ? editor(row, col) : cellBody(row, column.key)}
@@ -1628,7 +1799,7 @@ export function PlanSheet({
   // The status bar: what is selected, the plan in one line, the save state and the keys.
   const chosen = area ? model.visible.slice(area.r0, Math.min(area.r1, model.visible.length - 1) + 1) : [];
   const chosenWork = chosen.filter((row) => !row.parent && row.workDays).reduce((sum, row) => sum + (row.workDays ?? 0), 0);
-  const headings = model.rows.filter((row) => row.task.depth === 1).length,
+  const headings = model.rows.filter((row) => row.task.depth === 0).length,
     leaves = model.rows.filter((row) => !row.parent).length;
   let planFirst: string | null = null,
     planLast: string | null = null;
@@ -1645,8 +1816,69 @@ export function PlanSheet({
   const tableWidth = LEFT_WIDTH + timeline.days * DW;
   const weeks = timeline.days / 7;
 
+  const menuRow = menu ? (model.byId.get(menu.id) ?? null) : null;
+  const runMenu = (key: string) => {
+    if (!menuRow) return;
+    if (key === "above" || key === "below" || key === "sub") openDraft(menuPlaces[key] ?? null);
+    else if (key === "in" || key === "out" || key === "up" || key === "down") moveRow(key);
+    else if (key === "open") onOpenTask(menuRow.task.id);
+    else if (key === "delete") removeFor(menuRow.task)?.onRemove();
+  };
+  const menuItems: { key: string; label: string; disabled?: boolean }[] = [];
+  const menuPlaces: Record<string, Omit<Draft, "key" | "start" | "text"> | null> = {};
+  if (menu && menuRow) {
+    const { task } = menuRow;
+    const parent = task.parentId === null ? null : model.byId.get(task.parentId);
+    const above =
+      task.kind === "detail" || (parent ? lockedIds.has(parent.task.id) || (!canPlan && !parent.task.canAddChild) : !canPlan)
+        ? null
+        : { parentId: task.parentId, beforeId: task.id, kind: (task.parentId === null ? "phase" : "task") as "phase" | "task" };
+    const below = placeFor(menuRow, false),
+      sub = placeFor(menuRow, true),
+      removal = removeFor(task);
+    menuPlaces.above = above;
+    menuPlaces.below = below;
+    menuPlaces.sub = sub;
+    menuItems.push(
+      { key: "above", label: t(task.kind === "phase" ? "Sheet.insertHeadingAbove" : "Sheet.insertAbove"), disabled: !above },
+      { key: "below", label: t(task.kind === "phase" || menuRow.rollup ? "Sheet.addUnder" : "Sheet.addBelow"), disabled: !below },
+      { key: "sub", label: t("Sheet.addSubTitle"), disabled: !sub },
+      { key: "in", label: t("Sheet.indentTitle"), disabled: typeof moveFor(menuRow, "in") === "string" },
+      { key: "out", label: t("Sheet.outdentTitle"), disabled: typeof moveFor(menuRow, "out") === "string" },
+      { key: "up", label: t("Sheet.moveUpTitle"), disabled: typeof moveFor(menuRow, "up") === "string" },
+      { key: "down", label: t("Sheet.moveDownTitle"), disabled: typeof moveFor(menuRow, "down") === "string" },
+      { key: "open", label: t("Sheet.openTask") },
+      { key: "delete", label: t("Plan.deleteRow"), disabled: !removal || busy },
+    );
+  }
+
   return (
     <section className="plan-sheet" data-guide="plan.sheet" aria-label={t("Sheet.label")}>
+      {menu && menuRow ? (
+        <div
+          className="ps-menu"
+          role="menu"
+          aria-label={t("Sheet.menuLabel")}
+          style={{ left: Math.min(menu.x, (typeof window === "undefined" ? 1200 : window.innerWidth) - 280), top: Math.min(menu.y, (typeof window === "undefined" ? 800 : window.innerHeight) - 330) }}
+        >
+          <div className="ps-menu-head">{`${menuRow.task.wbs} ${menuRow.fields.name}`}</div>
+          {menuItems.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              role="menuitem"
+              className={item.key === "delete" ? "danger" : undefined}
+              disabled={item.disabled}
+              onClick={() => {
+                setMenu(null);
+                runMenu(item.key);
+              }}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
       <div className="tools">
         <div className="grp">
           <button
@@ -1710,6 +1942,10 @@ export function PlanSheet({
           <Glyph d={GLYPH.calendar} />
           {t("Sheet.goToday")}
         </button>
+        <button type="button" className="btn" aria-pressed={folded} title={t("Sheet.foldTitle")} onClick={toggleFold}>
+          <Glyph d={folded ? GLYPH.unfold : GLYPH.fold} />
+          {t(folded ? "Sheet.showColumns" : "Sheet.foldColumns")}
+        </button>
         <span className="grow" />
       </div>
       <div className="legend" aria-label={t("Sheet.legendLabel")}>
@@ -1761,8 +1997,8 @@ export function PlanSheet({
         <table className="grid" style={{ width: tableWidth, ["--dw" as string]: `${DW}px` } as React.CSSProperties}>
           <colgroup>
             <col style={{ width: GUT }} />
-            {COLUMNS.map((column) => (
-              <col key={column.key} style={{ width: column.width }} />
+            {COLUMNS.map((column, col) => (
+              <col key={column.key} style={{ width: width(col) }} />
             ))}
             <col style={{ width: timeline.days * DW }} />
           </colgroup>
@@ -1784,7 +2020,20 @@ export function PlanSheet({
                     ) : (
                       t(column.label)
                     )}
+                    {column.key === "name" ? (
+                      <button
+                        type="button"
+                        className="colfold"
+                        aria-pressed={folded}
+                        title={t("Sheet.foldTitle")}
+                        aria-label={t(folded ? "Sheet.showColumns" : "Sheet.foldColumns")}
+                        onClick={toggleFold}
+                      >
+                        {folded ? "»" : "«"}
+                      </button>
+                    ) : null}
                     {column.sub ? <small>{column.sub.startsWith("Sheet.") ? t(column.sub) : column.sub}</small> : null}
+                    <span className="rsz" data-col={col} title={t("Sheet.resizeHint")} aria-hidden="true" />
                   </th>
                 );
               })}
