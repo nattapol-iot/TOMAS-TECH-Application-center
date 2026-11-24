@@ -29,6 +29,7 @@ import { PLAN_SHEET_COPY } from "./production/plan-sheet-copy";
 import { ADMIN_SCREENS_COPY } from "./production/admin-screens-copy";
 import { FORM_COPY } from "./production/form-copy";
 import { WORK_DAYS_COPY } from "./production/work-days-copy";
+import { VENDOR_WORK_COPY } from "./production/vendor-work-copy";
 import { MY_WEEK_COPY } from "./production/my-week-copy";
 import { TEAM_WEEK_COPY } from "./production/team-week-copy";
 import { DESIGN_SYSTEM_COPY } from "./production/design-system/design-system-copy";
@@ -2706,6 +2707,7 @@ export const DICTIONARY: Record<string, Entry> = {
   ...WORK_DAYS_COPY,
   ...MY_WEEK_COPY,
   ...TEAM_WEEK_COPY,
+  ...VENDOR_WORK_COPY,
   ...ADMIN_SCREENS_COPY,
   ...FORM_COPY,
   ...DESIGN_SYSTEM_COPY,

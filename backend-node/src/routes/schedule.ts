@@ -251,9 +251,11 @@ async function projectSchedule(transaction: TransactionType, database: Database,
   };
 }
 
-/** Hours confirmed in My Work on each plan row of a project (work keys "Project-<schedule task id>"). */
-export const ROW_HOURS_SQL = `SELECT TRY_CONVERT(bigint,SUBSTRING(work_key,9,30)) task_id,SUM(hours) hours FROM dbo.work_hours
-  WHERE project_id=@project AND work_key LIKE N'Project-%' GROUP BY work_key;`;
+/** Hours on each plan row of a project: confirmed in My Work (work keys "Project-<id>") and an outside supplier's (migration 127). */
+export const ROW_HOURS_SQL = `SELECT task_id,SUM(hours) hours FROM (
+    SELECT TRY_CONVERT(bigint,SUBSTRING(work_key,9,30)) task_id,hours FROM dbo.work_hours WHERE project_id=@project AND work_key LIKE N'Project-%'
+    UNION ALL SELECT v.task_id,v.hours FROM dbo.schedule_vendor_hours v INNER JOIN dbo.schedule_tasks t ON t.id=v.task_id WHERE t.project_id=@project AND t.labor_source=N'Outsourced'
+  ) h WHERE task_id IS NOT NULL GROUP BY task_id;`;
 async function readRowHours(transaction: TransactionType, projectId: number): Promise<Map<number, number>> {
   const request = new sql.Request(transaction);
   request.input("project", sql.BigInt, projectId);

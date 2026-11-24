@@ -1502,6 +1502,48 @@ const MY_WEEK_BOOK: Guide = {
   ],
 };
 
+// Task doc 3.6: an outside supplier's people per day on the outsourced rows a person looks after.
+const VENDOR_HOURS: Guide = {
+  id: "vendor-hours",
+  area: "project",
+  minutes: 1,
+  // Shows where to type; a practice run does not have to record a supplier's day.
+  browse: true,
+  permissions: ["schedule.read"],
+  views: ["my-work"],
+  title: { th: "ลงคนของผู้รับเหมารายวัน", en: "Record a supplier's people per day", jp: "外注先の人数を日ごとに記録" },
+  summary: {
+    th: "งานที่จ้างภายนอก ผู้ดูแลงานหรือ PM ลงจำนวนคนของผู้รับเหมาที่เข้าทำงานแต่ละวัน ชั่วโมงคิดเป็นคน × 8 และขึ้นเป็นชม.จริงของงานนั้นในตารางแผนงาน ไม่มีจำนวนเงิน",
+    en: "For outsourced work, the member who looks after the row or the project manager records how many of the supplier's people worked each day. Hours are people × 8 and show as the row's Actual h on the plan Sheet. No money here.",
+    jp: "外注作業では、担当者またはPMが外注先の人数を日ごとに入力します。時間は人数 × 8 で、計画表の「実績 h」に表示されます。金額は扱いません。",
+  },
+  steps: [
+    menu(
+      "my-work",
+      { th: "เปิดงานของฉัน", en: "Open My Work", jp: "「マイワーク」を開く" },
+      { th: "คลิกที่เมนูที่ไฮไลต์อยู่", en: "Click the highlighted menu entry.", jp: "強調表示のメニューをクリックします。" },
+    ),
+    {
+      target: '[data-tab="vendor"]',
+      action: "click",
+      view: "my-work",
+      title: { th: "เปิดงานจ้างภายนอก", en: "Open Outsourced work", jp: "「外注作業」を開く" },
+      body: { th: "กดแท็บ 'งานจ้างภายนอก'", en: "Press the Outsourced work tab.", jp: "「外注作業」タブを押します。" },
+    },
+    {
+      target: "work.vendor",
+      action: "next",
+      view: "my-work",
+      title: { th: "จำนวนคนรายวัน", en: "People per day", jp: "日ごとの人数" },
+      body: {
+        th: "แต่ละแถวคืองานที่จ้างภายนอกที่คุณดูแล พิมพ์จำนวนคนในช่องของวันนั้นแล้วกด Enter ระบบบันทึกทันที ลบตัวเลขเพื่อลบวันนั้น ลงย้อนหลังได้ 60 วัน ด้านขวาบอกชั่วโมงสัปดาห์นี้และชั่วโมงสะสมเทียบแผน",
+        en: "Each row is outsourced work you look after. Type the number of people in a day's box and press Enter; it saves at once. Clear the number to remove the day. Days up to 60 days back can be recorded. On the right: this week's hours and the hours to date against the plan.",
+        jp: "各行は担当する外注作業です。その日の欄に人数を入力して Enter を押すとすぐ保存されます。数字を消すとその日を削除します。60日前まで入力できます。右側に今週の時間と計画に対する累計を表示します。",
+      },
+    },
+  ],
+};
+
 const MY_HOURS: Guide = {
   id: "my-hours-confirm",
   area: "project",
@@ -4224,6 +4266,7 @@ export const GUIDES: readonly Guide[] = [
   PROJECT_COST,
   MY_WEEK_BOOK,
   MY_HOURS,
+  VENDOR_HOURS,
   PROJECT_PLAN,
   PROJECT_MASTER_PLAN,
   PROJECT_ERP_NUMBER,

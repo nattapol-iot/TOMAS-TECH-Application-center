@@ -122,6 +122,7 @@ import {
 import { CrmMyWork } from "./CrmScreens";
 import { DateInput } from "../DateInput";
 import { MyWeek } from "./MyWeekScreen";
+import { VendorWork } from "./VendorWork";
 
 type ProductionPlanningProps = {
   openCrmOpportunity?: (id: number) => void;
@@ -950,9 +951,9 @@ type MyWorkProgressInput = {
 
 type MyWorkFilter = "attention" | "open" | "late" | "blocked" | "week" | "waiting";
 type MyWorkSort = "priority" | "due" | "project";
-type MyWorkTab = "week" | "new" | "active" | "queue" | "updates";
+type MyWorkTab = "week" | "new" | "active" | "queue" | "updates" | "vendor";
 /** My Work's three tabs (owner design 2026-11-23); new, active work and the work order sit under "Assigned to me". */
-type MyWorkTop = "week" | "assigned" | "updates";
+type MyWorkTop = "week" | "assigned" | "updates" | "vendor";
 const ASSIGNED_TABS: readonly MyWorkTab[] = ["active", "new", "queue"];
 type MyWorkSource = "all" | "crm" | "estimate" | "project" | "service" | "personal";
 type ScheduleWorkGroup = {
@@ -1010,6 +1011,7 @@ const MY_WORK_SOURCE_AVAILABILITY: Record<MyWorkTab, MyWorkSource[]> = {
   active: ["all", "crm", "estimate", "project", "personal"],
   queue: ["all"],
   updates: ["all"],
+  vendor: ["all"],
 };
 
 const matchesWorkFilter = (item: MyWorkItem, filter: MyWorkFilter) => {
@@ -1831,6 +1833,8 @@ export function ProductionMyWork({
           { id: "week", label: "MyWeek.tab" },
           { id: "assigned", label: "MyWork.assignedTab", count: newAssignmentCount + open.length + actionableEstimateAssignments.length },
           { id: "updates", label: "My Updates", count: updates.length },
+          // Task doc 3.6: an outside supplier's people per day, for the rows this person looks after.
+          { id: "vendor", label: "Vendor.tab" },
         ]}
       />
       {ASSIGNED_TABS.includes(tab) ? (
@@ -1934,6 +1938,7 @@ export function ProductionMyWork({
       ) : null}
 
       {tab === "week" ? <MyWeek notify={notify} /> : null}
+      {tab === "vendor" ? <VendorWork notify={notify} /> : null}
       {tab === "new" ? (
         <ResourceTaskWorkspace
           bootstrap={bootstrap}
