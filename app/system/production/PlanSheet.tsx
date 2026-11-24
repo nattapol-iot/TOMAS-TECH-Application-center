@@ -21,7 +21,21 @@ import { readWorkbookSheets } from "../../../lib/import-spreadsheet";
 import { cellsToGrid, importChanges, readPlanTable, type ImportedPlan } from "../../../lib/plan-excel-import";
 import { linkedStart, nextWorkDay } from "../../../lib/gantt";
 import { percentChangePatch, statusChangePatch } from "../../../lib/my-work";
-import { linkText, mondayOn, parseDays, parseLink, parsePercent, parseSheetDate, sheetOrder, shiftDay, spanDays, type ExtraLink, type SheetLinkRow } from "../../../lib/plan-sheet";
+import {
+  hoursText,
+  linkText,
+  mondayOn,
+  parseDays,
+  parseHours,
+  parseLink,
+  parsePercent,
+  parseSheetDate,
+  sheetOrder,
+  shiftDay,
+  spanDays,
+  type ExtraLink,
+  type SheetLinkRow,
+} from "../../../lib/plan-sheet";
 import type { ProjectSchedule, ScheduleTask } from "./PlanningPricingScreens";
 import "./plan-sheet.css";
 
@@ -35,11 +49,13 @@ type Fields = {
   lagDays: number;
   /** The other rows it waits for (migration 126). */
   extraLinks: ExtraLink[];
+  /** Planned effort; the sheet shows and takes it in hours (8 a man-day). */
+  planManDays: number;
   picUserIds: number[];
   discipline: string | null;
 };
 type Patch = Partial<Fields>;
-type Column = "wbs" | "name" | "pic" | "start" | "end" | "days" | "done" | "work" | "after" | "member" | "status";
+type Column = "wbs" | "name" | "pic" | "start" | "end" | "days" | "done" | "work" | "after" | "member" | "status" | "hplan" | "hact" | "hleft";
 type Result = { patch?: Patch; percent?: number; status?: string; notice?: string } | { error: string; wbs?: string };
 type Row = {
   task: ScheduleTask;
@@ -57,6 +73,12 @@ type Row = {
   after: string;
   /** Leaf rows under it that run past their END (a heading's "late" chip). */
   lateKids: number;
+  /** Planned hours: its own, or what the rows under it plan when they plan any. */
+  planHours: number;
+  /** planHours is what the rows under it plan (then it is not typed on this row). */
+  planFromRows: boolean;
+  /** Hours confirmed in My Work, its rows' included. */
+  actualHours: number;
 };
 type Job = { seq: number; retried?: boolean } & (
   | { type: "plan"; taskId: number; patch: Patch }
@@ -90,6 +112,10 @@ const COLUMNS: { key: Column; label: string; lines?: [string, string]; sub?: str
   { key: "after", label: "Sheet.colAfter", sub: "WBS", width: 74, mono: true },
   { key: "member", label: "Sheet.colMember", sub: "Sheet.subTeam", width: 132, select: true },
   { key: "status", label: "Sheet.colStatus", sub: "Sheet.subInternal", width: 116, select: true },
+  // Task doc 3.1: people's work in hours only, planned against what My Work confirmed; never money.
+  { key: "hplan", label: "Sheet.colPlanHours", width: 62, mono: true, right: true },
+  { key: "hact", label: "Sheet.colActualHours", width: 62, mono: true, right: true },
+  { key: "hleft", label: "Sheet.colLeftHours", width: 62, mono: true, right: true },
 ];
 const LAST_COLUMN = COLUMNS.length - 1;
 const COLUMN_AT = Object.fromEntries(COLUMNS.map((column, index) => [column.key, index])) as Record<Column, number>;
@@ -181,6 +207,7 @@ const fieldsOf = (task: ScheduleTask): Fields => ({
   predecessorId: task.predecessorId,
   lagDays: task.lagDays,
   extraLinks: task.startMode === "linked" ? (task.extraLinks ?? []) : [],
+  planManDays: Number(task.planManDays) || 0,
   picUserIds: task.pics.map((pic) => pic.id),
   discipline: task.discipline ?? null,
 });
@@ -269,6 +296,7 @@ export function PlanSheet({
   const [saving, setSaving] = useState<readonly Saving[]>([]);
   const [collapsed, setCollapsed] = useState<ReadonlySet<number>>(() => new Set());
   const [headingsOnly, setHeadingsOnly] = useState(false);
+  const [disciplineFilter, setDisciplineFilter] = useState<string | null>(null);
   const [active, setActive] = useState<Cell | null>(null);
   const [anchor, setAnchor] = useState<Cell | null>(null);
   // The same two cells, kept as they change: two keys in one tick (a held arrow) each move from the one before.
@@ -370,9 +398,26 @@ export function PlanSheet({
         status: statuses.get(task.id) ?? (percents.get(task.id) === 100 ? "Done" : (percents.get(task.id) ?? 0) > 0 && task.status === "Not Started" ? "In Progress" : task.status),
         after: linkText(fields, linkRows, gap),
         lateKids: 0,
+        // One decimal: hours are stored as man-days to two decimals, so 1 h comes back as 1.04 before rounding.
+        planHours: Math.round(fields.planManDays * 8 * 10) / 10,
+        planFromRows: false,
+        actualHours: Number(task.actualHours ?? 0),
       };
     });
     const byId = new Map(rows.map((row) => [row.task.id, row] as const));
+    // Hours add up from the bottom: a row with rows under it plans what they plan (its own figure when they plan none),
+    // and its actual hours include theirs. Reading order puts a row before its rows, so the reverse walk is bottom-up.
+    const underPlan = new Map<number, number>();
+    for (const row of [...rows].reverse()) {
+      if (row.rollup && (underPlan.get(row.task.id) ?? 0) > 0) {
+        row.planHours = Math.round(underPlan.get(row.task.id)! * 10) / 10;
+        row.planFromRows = true;
+      }
+      const up = row.task.parentId === null ? undefined : byId.get(row.task.parentId);
+      if (!up) continue;
+      underPlan.set(up.task.id, (underPlan.get(up.task.id) ?? 0) + row.planHours);
+      up.actualHours += row.actualHours;
+    }
     for (const row of rows)
       if (isLate(row, today))
         for (let up = row.task.parentId === null ? undefined : byId.get(row.task.parentId); up; up = up.task.parentId === null ? undefined : byId.get(up.task.parentId)) up.lateKids += 1;
@@ -380,6 +425,8 @@ export function PlanSheet({
     let hideBelow: number | null = null;
     for (const row of rows) {
       if (headingsOnly && row.task.depth > 0) continue;
+      // The budget strip's discipline filter keeps headings and parent rows, so the rows shown keep their place.
+      if (disciplineFilter && !row.parent && (row.fields.discipline ?? "None") !== disciplineFilter) continue;
       if (hideBelow !== null) {
         if (row.task.depth > hideBelow) continue;
         hideBelow = null;
@@ -388,7 +435,7 @@ export function PlanSheet({
       if (row.parent && collapsed.has(row.task.id)) hideBelow = row.task.depth;
     }
     return { rows, byId, visible, linkRows };
-  }, [schedule, pending, collapsed, headingsOnly, holidays, today]);
+  }, [schedule, pending, collapsed, headingsOnly, holidays, today, disciplineFilter]);
 
   // The Gantt: 20 px days from the Monday of the plan's first day, at least 16 weeks, two weeks past the last END.
   const timeline = useMemo(() => {
@@ -404,6 +451,25 @@ export function PlanSheet({
     const x = (iso: string) => spanDays(from, iso) - 1;
     return { from, days, x, dates: Array.from({ length: days }, (_, index) => shiftDay(from, index)) };
   }, [model.rows, today]);
+  // Task doc 3.1: hours by discipline, planned and confirmed against the Estimate's labor hours; never money.
+  const budget = useMemo(() => {
+    const perDay = schedule.manHours?.hoursPerManDay ?? 8;
+    const byDiscipline = new Map<string, { budget: number; plan: number; actual: number }>();
+    const entry = (key: string) => byDiscipline.get(key) ?? byDiscipline.set(key, { budget: 0, plan: 0, actual: 0 }).get(key)!;
+    for (const line of schedule.manHours?.disciplines ?? []) entry(line.discipline).budget += line.manDays * perDay;
+    // As manhour-budget.ts counts effort: a row's own figure unless its rows carry one; outsourced people stay apart.
+    for (const row of model.rows) {
+      if (row.planFromRows || row.task.kind === "phase" || row.task.laborSource === "Outsourced" || (!row.planHours && !row.actualHours)) continue;
+      // A row with rows under it adds only its own hours here; its rows add theirs.
+      const ownActual = row.rollup ? Number(row.task.actualHours ?? 0) : row.actualHours;
+      const item = entry(row.fields.discipline ?? "None");
+      item.plan += row.planHours;
+      item.actual += ownActual;
+    }
+    const order = [...DISCIPLINES, "Other", "None"] as string[];
+    return [...byDiscipline.entries()].map(([discipline, value]) => ({ discipline, ...value })).sort((left, right) => order.indexOf(left.discipline) - order.indexOf(right.discipline));
+  }, [model.rows, schedule.manHours]);
+  const disciplineLabel = (key: string) => (key === "None" ? t("Sheet.budgetNone") : key === "Other" ? t("Plan.mhDiscipline.Other") : t(`Discipline.${key}`));
   const names = NAMES[lang] ?? NAMES.EN!;
   const dayDate = (iso: string | null) => (iso ? `${names.day[asDate(iso).getUTCDay()]} ${shortDate(iso)}` : "");
   const longDate = (iso: string) => `${Number(iso.slice(8, 10))} ${names.month[Number(iso.slice(5, 7)) - 1]} ${iso.slice(0, 4)}`;
@@ -480,7 +546,7 @@ export function PlanSheet({
           extraLinks: fields.startMode === "linked" ? fields.extraLinks : [],
           picUserIds: kind === "phase" ? [] : fields.picUserIds,
           picExternal: kind === "phase" ? "" : fields.picExternal,
-          planManDays: 0,
+          planManDays: kind === "phase" ? 0 : fields.planManDays,
           ...(kind === "phase" || !fields.discipline ? {} : { discipline: fields.discipline }),
         }),
       });
@@ -544,7 +610,7 @@ export function PlanSheet({
         extraLinks: fields.startMode === "linked" ? fields.extraLinks : [],
         picUserIds: fields.picUserIds,
         picExternal: fields.picExternal,
-        planManDays: Number(task.planManDays) || 0,
+        planManDays: fields.planManDays,
         ...(task.kind === "phase" ? {} : { discipline: fields.discipline }),
       }),
     });
@@ -624,7 +690,7 @@ export function PlanSheet({
   };
   const lockOf = (row: Row, column: Column): string => {
     const { task } = row;
-    if (column === "wbs" || column === "work") return "Sheet.calculated";
+    if (column === "wbs" || column === "work" || column === "hact" || column === "hleft") return "Sheet.calculated";
     if (column === "done" || column === "status") {
       if (task.kind === "phase" || row.parent) return "Sheet.headingNoProgress";
       return task.canProgress ? "" : "Sheet.progressRights";
@@ -639,6 +705,11 @@ export function PlanSheet({
     if (column === "member" && task.kind === "detail") return "Sheet.detailMember";
     if (column === "member" && task.pics.length > 1) return "Sheet.manyMembers";
     if (column === "days" && task.isMilestone) return "Sheet.milestoneDay";
+    if (column === "hplan") {
+      if (row.planFromRows || task.kind === "phase") return "Sheet.rollupHours";
+      if (task.isMilestone) return "Sheet.milestoneHours";
+      if (task.peopleByDay?.length) return "Sheet.peopleHours";
+    }
     return "";
   };
   /** A member typed or pasted: a person by id, name or email, else a discipline the row waits for. */
@@ -694,6 +765,13 @@ export function PlanSheet({
         const percent = text === "" ? 0 : parsePercent(text);
         return percent === null ? { error: "Sheet.badPercent" } : { percent };
       }
+      case "hplan": {
+        const hours = parseHours(text);
+        return hours === null ? { error: "Sheet.badHours" } : { patch: { planManDays: Math.round((hours / 8) * 100) / 100 } };
+      }
+      case "hact":
+      case "hleft":
+        return { error: "Sheet.calculated" };
       case "status": {
         const status = statusFor(text);
         return status ? { status } : { error: "Sheet.badStatus" };
@@ -786,6 +864,12 @@ export function PlanSheet({
           : "";
       case "status":
         return row.parent ? (row.lateKids ? t("Sheet.lateKids").replace("{count}", String(row.lateKids)) : "") : t(STATUS_LABEL[row.status] ?? row.status);
+      case "hplan":
+        return hoursText(row.planHours);
+      case "hact":
+        return hoursText(row.actualHours);
+      case "hleft":
+        return row.planHours ? String(Math.round((row.planHours - row.actualHours) * 10) / 10) : "";
     }
   };
 
@@ -864,7 +948,19 @@ export function PlanSheet({
       name = value.trim().slice(0, 500);
     if (!current || key !== draftKey.current) return;
     if (!name) return closeDraft();
-    const fields: Fields = { name, picExternal: "", planStart: current.start, planDays: 1, startMode: "manual", predecessorId: null, lagDays: 0, extraLinks: [], picUserIds: [], discipline: null };
+    const fields: Fields = {
+      name,
+      picExternal: "",
+      planStart: current.start,
+      planDays: 1,
+      startMode: "manual",
+      predecessorId: null,
+      lagDays: 0,
+      extraLinks: [],
+      planManDays: 0,
+      picUserIds: [],
+      discipline: null,
+    };
     const parent = current.parentId === null ? null : model.byId.get(current.parentId);
     const id = enqueue({ type: "create", parentId: current.parentId, beforeId: current.beforeId, kind: current.kind, fields });
     setSaving((list) => [...list, { seq: id, parentId: current.parentId, beforeId: current.beforeId, name, depth: parent ? parent.task.depth + 2 : 1, atEnd: false }]);
@@ -1155,6 +1251,7 @@ export function PlanSheet({
         predecessorId: null,
         lagDays: 0,
         extraLinks: [],
+        planManDays: 0,
         picUserIds: [],
         discipline: null,
       };
@@ -1195,6 +1292,9 @@ export function PlanSheet({
         status: "Not Started",
         after: "",
         lateKids: 0,
+        planHours: 0,
+        planFromRows: false,
+        actualHours: 0,
       };
       let fields = base0,
         percent: number | undefined;
@@ -2038,6 +2138,7 @@ export function PlanSheet({
         predecessorId: null,
         lagDays: 0,
         extraLinks: [],
+        planManDays: 0,
         picUserIds: [],
         discipline: null,
       };
@@ -2422,6 +2523,39 @@ export function PlanSheet({
           {t("Sheet.export")}
         </button>
       </div>
+      {budget.length ? (
+        <div className="ps-budget" data-guide="plan.sheetHours" role="group" aria-label={t("Sheet.budgetLabel")}>
+          <span className="ps-budget-lbl">{t("Sheet.budgetLabel")}</span>
+          <button type="button" className="ps-budget-all" aria-pressed={disciplineFilter === null} onClick={() => setDisciplineFilter(null)}>
+            {t("Sheet.budgetAll")}
+          </button>
+          {budget.map((item) => {
+            const over = item.budget > 0 && item.plan > item.budget;
+            return (
+              <button
+                key={item.discipline}
+                type="button"
+                className={`ps-budget-item${over ? " over" : ""}`}
+                aria-pressed={disciplineFilter === item.discipline}
+                title={over ? t("Sheet.budgetOver") : undefined}
+                onClick={() => setDisciplineFilter((current) => (current === item.discipline ? null : item.discipline))}
+              >
+                <b>{disciplineLabel(item.discipline)}</b>
+                <span className="ps-mono">
+                  {t("Sheet.budgetLine")
+                    .replace("{plan}", hoursText(item.plan) || "0")
+                    .replace("{budget}", item.budget ? hoursText(item.budget) : "–")
+                    .replace("{actual}", hoursText(item.actual) || "0")}
+                </span>
+                <i className="ps-budget-bar" aria-hidden="true">
+                  <i style={{ width: `${Math.min(100, item.budget ? (item.plan / item.budget) * 100 : item.plan ? 100 : 0)}%` }} />
+                  <i className="act" style={{ width: `${Math.min(100, item.budget ? (item.actual / item.budget) * 100 : 0)}%` }} />
+                </i>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
       <div className="legend" aria-label={t("Sheet.legendLabel")}>
         <span>
           <i className="sw task" />

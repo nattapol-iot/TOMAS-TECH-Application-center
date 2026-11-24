@@ -125,6 +125,25 @@ export function parseLink(text: string, self: SheetLinkRow, rows: readonly Sheet
   return { predecessorId: first.predecessorId, lagDays: first.lagDays, extraLinks };
 }
 
+/**
+ * A row's planned hours as typed (task doc 3.1): "16", "16h", "16 ชม." are hours; "2 MD", "2md", "2 วัน", "2 days"
+ * are man-days of 8 hours. Empty is 0. Null when it cannot be read or is out of range.
+ */
+export function parseHours(text: string): number | null {
+  // "2,5" is a decimal comma; "1,000" a thousands separator.
+  const raw = String(text).trim(),
+    value = /^\d+,\d{1,2}(?!\d)/.test(raw) ? raw.replace(",", ".") : raw.replace(/(\d),(?=\d{3})/g, "$1");
+  if (!value) return 0;
+  const match = value.match(/^(\d+(?:\.\d+)?)\s*(md|m\.d\.?|man-?days?|days?|d|วัน|h|hrs?|hours?|ชม\.?|ชั่วโมง)?$/i);
+  if (!match) return null;
+  const amount = Number(match[1]);
+  const hours = match[2] && /^(md|m\.d|man|day|d$|วัน)/i.test(match[2]) ? amount * 8 : amount;
+  return Number.isFinite(hours) && hours <= 8_000_000 ? Math.round(hours * 100) / 100 : null;
+}
+
+/** Hours as the sheet shows them: up to one decimal, nothing for 0. */
+export const hoursText = (hours: number) => (hours ? String(Math.round(hours * 10) / 10) : "");
+
 /** The rows of a plan tree in reading order, heading first, then what sits under it. */
 export function sheetOrder<T extends { children: T[] }>(tasks: readonly T[]): T[] {
   return tasks.flatMap((task) => [task, ...sheetOrder(task.children)]);

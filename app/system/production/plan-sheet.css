@@ -149,6 +149,63 @@
   height: 6px;
   background: var(--sh-head-bar);
 }
+/* Hours by discipline (task doc 3.1): each one filters the sheet to its rows. */
+.plan-sheet .ps-budget {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--sh-line);
+  font-size: 12px;
+}
+.plan-sheet .ps-budget-lbl {
+  color: var(--sh-muted);
+}
+.plan-sheet .ps-budget button {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  padding: 3px 8px;
+  border: 1px solid var(--sh-line);
+  border-radius: 4px;
+  background: var(--sh-card);
+  color: var(--sh-fg);
+  font: inherit;
+  cursor: pointer;
+}
+.plan-sheet .ps-budget button[aria-pressed="true"] {
+  border-color: var(--sh-primary);
+  box-shadow: inset 0 0 0 1px var(--sh-primary);
+}
+.plan-sheet .ps-budget-item.over b {
+  color: var(--sh-red);
+}
+.plan-sheet .ps-budget-bar {
+  position: relative;
+  width: 56px;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--sh-line);
+}
+.plan-sheet .ps-budget-bar i {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  background: var(--sh-primary);
+  opacity: 0.45;
+}
+.plan-sheet .ps-budget-bar i.act {
+  top: 2px;
+  bottom: 2px;
+  background: var(--sh-primary-dark);
+  opacity: 1;
+}
+.plan-sheet .ps-budget-item.over .ps-budget-bar i:not(.act) {
+  background: var(--sh-red);
+}
 .plan-sheet .sw.promised {
   border: 1.5px dashed var(--sh-head-bar);
   background: transparent;

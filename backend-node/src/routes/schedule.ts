@@ -201,6 +201,7 @@ async function projectSchedule(transaction: TransactionType, database: Database,
   const canPlan = project.status !== "Closed" && (project.leadEngineerId === actor.id || (canPlanPermission && canAnswerDayRequests(project, actor)));
   const isMember = await isProjectMember(transaction, projectId, actor.id);
   // Estimated against planned man-days (manhour-budget.ts); a manager types the budget when the Estimate has no labor.
+  const rowHours = await readRowHours(transaction, projectId);
   const manHours = manHourBudget(await readStoredBudget(transaction, projectId), tasks, isProjectManagerRole(actor) && project.status !== "Closed");
   return {
     projectId,
@@ -244,9 +245,20 @@ async function projectSchedule(transaction: TransactionType, database: Database,
         isMember,
         canPlan,
         frameIds: new Set(leaves.filter((leaf) => !counted.has(leaf.id) && !leaf.rollup).map((leaf) => leaf.id)),
+        actualHours: rowHours,
       }),
     ),
   };
+}
+
+/** Hours confirmed in My Work on each plan row of a project (work keys "Project-<schedule task id>"). */
+export const ROW_HOURS_SQL = `SELECT TRY_CONVERT(bigint,SUBSTRING(work_key,9,30)) task_id,SUM(hours) hours FROM dbo.work_hours
+  WHERE project_id=@project AND work_key LIKE N'Project-%' GROUP BY work_key;`;
+async function readRowHours(transaction: TransactionType, projectId: number): Promise<Map<number, number>> {
+  const request = new sql.Request(transaction);
+  request.input("project", sql.BigInt, projectId);
+  const rows = (await request.query<{ task_id: number | string | null; hours: number }>(ROW_HOURS_SQL)).recordset;
+  return new Map(rows.filter((row) => row.task_id !== null).map((row) => [Number(row.task_id), Math.round(Number(row.hours) * 100) / 100]));
 }
 
 /** timeZone: the business time zone (config.businessTimeZone); without it, the same Business__TimeZoneId setting loadConfig reads. */
