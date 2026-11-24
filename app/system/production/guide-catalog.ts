@@ -4576,6 +4576,18 @@ export const GUIDES: readonly Guide[] = [
         },
       },
       {
+        target: "work.newCard",
+        action: "next",
+        view: "my-work",
+        title: { th: "งานใหม่รอรับทราบ", en: "New work to acknowledge", jp: "了承待ちの新しい作業" },
+        body: {
+          th: "เมื่อหัวหน้ามอบงานใหม่ แถบนี้ขึ้นเหนือทุกแท็บ กด 'ดูและรับทราบ' เพื่อดูวันและชั่วโมงของแต่ละงานแล้วกด รับทราบ บนมือถือแท็บหลักอยู่ด้านล่าง และปุ่มยืนยันชั่วโมงของวันอยู่ติดล่างจอ",
+          en: "When your lead assigns new work, this bar shows above every tab. Press See and acknowledge to check each task's dates and hours, then press Acknowledge. On a phone the main tabs sit at the bottom and the day's Confirm button stays at the foot of the screen.",
+          jp: "リーダーが新しい作業を割り当てると、このバーがすべてのタブの上に表示されます。「確認して了承」を押して各作業の日付と時間を確認し、「了承」を押します。スマートフォンではメインタブが下にあり、その日の確定ボタンは画面下に固定されます。",
+        },
+        missing: { th: "ตอนนี้ไม่มีงานใหม่รอรับทราบ กด 'ถัดไป'", en: "No new work waits right now. Press Next.", jp: "今は了承待ちの作業がありません。「次へ」を押します。" },
+      },
+      {
         target: "work.summary",
         action: "next",
         view: "my-work",

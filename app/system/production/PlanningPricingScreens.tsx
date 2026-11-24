@@ -1843,6 +1843,20 @@ export function ProductionMyWork({
           { id: "vendor", label: "Vendor.tab" },
         ]}
       />
+      {/* Task doc 3.4: new work waiting to be acknowledged shows on every tab, one press from its cards. */}
+      {newAssignmentCount > 0 && tab !== "new" ? (
+        <div className="my-work-newcard" role="status" data-guide="work.newCard">
+          <Icon name="bell" />
+          <span>
+            <strong>{uiText("MyWork.newCardTitle").replace("{n}", String(newAssignmentCount))}</strong>
+            <small>{uiText("MyWork.newCardBody")}</small>
+          </span>
+          <button className="btn primary" type="button" onClick={() => pickTab("new")}>
+            {uiText("MyWork.newCardOpen")}
+            <Icon name="arrowRight" />
+          </button>
+        </div>
+      ) : null}
       {ASSIGNED_TABS.includes(tab) ? (
         <div className="my-work-subtabs">
           <Tabs<MyWorkTab>
