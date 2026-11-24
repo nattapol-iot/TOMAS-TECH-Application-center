@@ -201,6 +201,8 @@ export const PLAN_SHEET_COPY: Record<string, { en: string; th: string; jp: strin
     ["Sheet.linkHeading", "{wbs} is a main heading: follow a task under it", "{wbs} เป็นหัวข้อหลัก ให้ใส่งานในหัวข้อนั้นแทน", "{wbs} は大見出しです。その下のタスクを指定します"],
     ["Sheet.linkFamily", "{wbs} is this row's own heading or sub row", "{wbs} เป็นหัวข้อหรืองานย่อยของงานนี้ ต่อจากกันไม่ได้", "{wbs} はこの行の上位または配下の行です"],
     ["Sheet.linkLoop", "That would make the rows wait on each other in a circle", "ต่อกันเป็นวง งานนั้นรออยู่หลังงานนี้แล้ว", "行どうしが循環して待つことになります"],
+    ["Sheet.linkTwice", "{wbs} is named twice", "ใส่ {wbs} ซ้ำ", "{wbs} が二度入っています"],
+    ["Sheet.linkTooMany", "A row can wait for at most 11 rows", "ต่อจากได้ไม่เกิน 11 งาน", "前工程は 11 行までです"],
     ["Sheet.badDate", "Type a date such as 19/11/26, 19/11 or +1", "พิมพ์วันที่ เช่น 19/11/26, 19/11 หรือ +1", "19/11/26・19/11・+1 のように日付を入力します"],
     ["Sheet.badDays", "DAYS is a whole number from 1", "DAYS ต้องเป็นจำนวนเต็มตั้งแต่ 1", "DAYS は 1 以上の整数です"],
     ["Sheet.badPercent", "% DONE is from 0 to 100", "% DONE ต้องอยู่ระหว่าง 0–100", "% DONE は 0〜100 です"],

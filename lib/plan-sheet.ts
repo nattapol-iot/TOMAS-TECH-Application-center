@@ -71,42 +71,58 @@ export function parseDays(text: string): number | null {
   return Number.isInteger(value) && value >= 1 && value <= 3650 ? value : null;
 }
 
-export type SheetLinkRow = { id: number; parentId: number | null; wbs: string; kind: string; predecessorId: number | null; startMode: string };
-export type SheetLink = { predecessorId: number | null; lagDays: number };
+export type SheetLinkRow = { id: number; parentId: number | null; wbs: string; kind: string; predecessorId: number | null; startMode: string; extraIds?: readonly number[] };
+/** One more row a linked row waits for (migration 126), with its own gap in working days. */
+export type ExtraLink = { predecessorId: number; lagDays: number };
+export type SheetLink = { predecessorId: number | null; lagDays: number; extraLinks: ExtraLink[] };
 
-/** What the "after" cell shows: the WBS of the task the row waits for, and +N for a gap of N work days. */
-export function linkText(row: { startMode: string; predecessorId: number | null }, rows: readonly SheetLinkRow[], gap: number): string {
+const gapText = (gap: number) => (gap > 0 ? `+${gap}` : gap < 0 ? String(gap) : "");
+
+/** What the "after" cell shows: the WBS of each task the row waits for, and +N for a gap of N work days. */
+export function linkText(row: { startMode: string; predecessorId: number | null; extraLinks?: readonly ExtraLink[] }, rows: readonly SheetLinkRow[], gap: number): string {
   if (row.startMode !== "linked" || row.predecessorId === null) return "";
-  const before = rows.find((candidate) => candidate.id === row.predecessorId);
-  if (!before) return "";
-  return before.wbs + (gap > 0 ? `+${gap}` : gap < 0 ? String(gap) : "");
+  const wbsOf = (id: number) => rows.find((candidate) => candidate.id === id)?.wbs;
+  const first = wbsOf(row.predecessorId);
+  if (!first) return "";
+  return [first + gapText(gap), ...(row.extraLinks ?? []).flatMap((link) => (wbsOf(link.predecessorId) ? [wbsOf(link.predecessorId)! + gapText(link.lagDays)] : []))].join(", ");
 }
 
 /**
- * The "after" cell read back: a WBS, optionally +N or -N days, finish to start. Empty clears the link. Refused with a
+ * The "after" cell read back: one or more WBS separated by commas, each optionally +N or -N work days, finish to
+ * start; the row starts after the latest (owner 2026-11-24, migration 126). Empty clears the links. Refused with a
  * reason (an i18n key and the WBS it names) for a row that does not exist, the row itself, a heading, one of its own
- * headings or rows, and a link that would go round in a circle.
+ * headings or rows, the same row twice, more than 11 rows, and links that would go round in a circle.
  */
 export function parseLink(text: string, self: SheetLinkRow, rows: readonly SheetLinkRow[]): SheetLink | { error: string; wbs?: string } {
   const value = String(text).trim();
-  if (!value) return { predecessorId: null, lagDays: 0 };
-  const match = value.match(/^(\d+(?:\.\d+)*)\s*(?:([+-])\s*(\d{1,3}))?$/);
-  if (!match) return { error: "Sheet.linkUnreadable" };
-  const wbs = match[1]!;
-  const lagDays = match[2] ? Number(match[3]) * (match[2] === "-" ? -1 : 1) : 0;
-  const before = rows.find((row) => row.wbs === wbs);
-  if (!before) return { error: "Sheet.linkMissing", wbs };
-  if (before.id === self.id) return { error: "Sheet.linkSelf", wbs };
-  if (before.kind === "phase") return { error: "Sheet.linkHeading", wbs };
+  if (!value) return { predecessorId: null, lagDays: 0, extraLinks: [] };
+  const parts = value
+    .split(/[,;、]/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (parts.length > 11) return { error: "Sheet.linkTooMany" };
   const byId = new Map(rows.map((row) => [row.id, row]));
   const isAncestor = (ancestorId: number, of: SheetLinkRow) => {
     for (let at = of.parentId === null ? undefined : byId.get(of.parentId); at; at = at.parentId === null ? undefined : byId.get(at.parentId)) if (at.id === ancestorId) return true;
     return false;
   };
-  if (isAncestor(before.id, self) || isAncestor(self.id, before)) return { error: "Sheet.linkFamily", wbs };
-  const graph = rows.map((row) => (row.id === self.id ? { ...row, predecessorId: before.id, startMode: "linked" } : row));
-  if (planDatesLoop(graph)) return { error: "Sheet.linkLoop", wbs };
-  return { predecessorId: before.id, lagDays };
+  const links: ExtraLink[] = [];
+  for (const part of parts) {
+    const match = part.match(/^(\d+(?:\.\d+)*)\s*(?:([+-])\s*(\d{1,3}))?$/);
+    if (!match) return { error: "Sheet.linkUnreadable" };
+    const wbs = match[1]!;
+    const before = rows.find((row) => row.wbs === wbs);
+    if (!before) return { error: "Sheet.linkMissing", wbs };
+    if (before.id === self.id) return { error: "Sheet.linkSelf", wbs };
+    if (before.kind === "phase") return { error: "Sheet.linkHeading", wbs };
+    if (isAncestor(before.id, self) || isAncestor(self.id, before)) return { error: "Sheet.linkFamily", wbs };
+    if (links.some((link) => link.predecessorId === before.id)) return { error: "Sheet.linkTwice", wbs };
+    links.push({ predecessorId: before.id, lagDays: match[2] ? Number(match[3]) * (match[2] === "-" ? -1 : 1) : 0 });
+  }
+  const [first, ...extraLinks] = links as [ExtraLink, ...ExtraLink[]];
+  const graph = rows.map((row) => (row.id === self.id ? { ...row, predecessorId: first.predecessorId, startMode: "linked", extraIds: extraLinks.map((link) => link.predecessorId) } : row));
+  if (planDatesLoop(graph)) return { error: "Sheet.linkLoop", wbs: parts.join(", ") };
+  return { predecessorId: first.predecessorId, lagDays: first.lagDays, extraLinks };
 }
 
 /** The rows of a plan tree in reading order, heading first, then what sits under it. */

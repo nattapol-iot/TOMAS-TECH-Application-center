@@ -3193,6 +3193,11 @@ export const DICTIONARY: Record<string, Entry> = {
   "Plan.quickAdded": { en: "was added to the plan", th: "เพิ่มในแผนแล้ว", jp: "を計画に追加しました" },
   "Gantt.stretchHint": { en: "Drag to change the length", th: "ลากเพื่อปรับจำนวนวัน", jp: "ドラッグで期間を変更" },
   "Plan.movedTo": { en: "moved to", th: "เลื่อนเป็น", jp: "の日程を変更:" },
+  "Plan.manyPredecessors": {
+    en: "waits for several rows: change its start in the Sheet's After column",
+    th: "รอหลายงานอยู่ เปลี่ยนวันเริ่มที่ช่อง ต่อจาก ในมุมมองตาราง",
+    jp: "は複数の行を待っています。表の「前工程」列で開始を変更してください",
+  },
   "Plan.movedShort": { en: "was moved to new dates.", th: "ถูกเลื่อนวันแล้ว", jp: "の日程を変更しました。" },
   "Plan.undo": { en: "Undo the move", th: "เลิกทำ", jp: "元に戻す" },
   "Plan.undone": { en: "is back on its earlier dates", th: "กลับไปใช้วันเดิมแล้ว", jp: "を元の日程に戻しました" },

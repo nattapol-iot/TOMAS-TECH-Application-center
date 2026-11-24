@@ -12,11 +12,15 @@ export type ScheduleCalculationTask = {
   actualStart: string | null;
   /** lagDays counts working days (migration 125); false for a gap saved before it, which counts calendar days. */
   lagWorkDays?: boolean;
+  /** The other rows it waits for (migration 126), each with a gap in working days; it starts after the latest. */
+  extraLinks?: readonly ExtraLink[];
   actualFinish: string | null;
   forecastFinish: string | null;
   percentComplete: number;
   status: string;
 };
+
+export type ExtraLink = { predecessorId: number; lagDays: number };
 
 export type ResolvedScheduleTask = {
   source: ScheduleCalculationTask;
@@ -161,6 +165,15 @@ export function resolveSchedule(tasks: ScheduleCalculationTask[], holidays: Read
           planStart = calendar ? nextWorkDay(addDays(predecessorFinish, 1 + task.lagDays), holidays) : linkedWorkStart(predecessorFinish, task.lagDays, holidays);
           lagWorkDays = calendar ? workLagBetween(predecessorFinish, planStart, holidays) : task.lagDays;
         } else lagWorkDays = task.lagDays;
+        // A row waiting for several rows starts after the latest of them (owner 2026-11-24). A row named there that is
+        // no longer in the plan is passed over; deleting a row that others wait for is refused.
+        for (const link of task.extraLinks ?? []) {
+          const other = bySource.get(link.predecessorId);
+          const otherFinish = other ? resolveOne(other).planFinish : null;
+          if (!otherFinish) continue;
+          const start = linkedWorkStart(otherFinish, link.lagDays, holidays);
+          if (!planStart || start > planStart) planStart = start;
+        }
       }
       const planFinish = planStart ? addDays(planStart, Math.max(1, task.planDays) - 1) : null;
       const workDays = networkDays(planStart, planFinish, holidays);
