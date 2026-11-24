@@ -32,6 +32,7 @@ import { WORK_DAYS_COPY } from "./production/work-days-copy";
 import { MY_WEEK_COPY } from "./production/my-week-copy";
 import { TEAM_WEEK_COPY } from "./production/team-week-copy";
 import { DESIGN_SYSTEM_COPY } from "./production/design-system/design-system-copy";
+import { TOMAS_UI_COPY } from "./production/design-system/tomas-ui/tomas-ui-copy";
 
 export type Lang = "TH" | "EN" | "JP";
 
@@ -2708,6 +2709,7 @@ export const DICTIONARY: Record<string, Entry> = {
   ...ADMIN_SCREENS_COPY,
   ...FORM_COPY,
   ...DESIGN_SYSTEM_COPY,
+  ...TOMAS_UI_COPY,
   /* Projects portfolio (ProductionProjects). Namespaced keys, added last, so no shared label changes. */
   "Portfolio.subtitle": {
     en: "Every project you are part of, with its schedule health, progress against plan and stage.",
