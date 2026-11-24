@@ -799,3 +799,35 @@
 .plan-sheet .ps-menu button.danger {
   color: var(--sh-red);
 }
+
+/* Folded columns (PIC to Status): zero width, nothing drawn. */
+.plan-sheet .grid th.fold,
+.plan-sheet .grid td.fold {
+  padding: 0 !important;
+  border: 0 !important;
+  visibility: hidden;
+}
+.plan-sheet .colfold {
+  position: absolute;
+  right: 8px;
+  bottom: 6px;
+  width: 20px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid var(--sh-border);
+  border-radius: 4px;
+  background: var(--sh-card);
+  color: var(--sh-muted);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+.plan-sheet .colfold:hover {
+  background: var(--sh-primary-soft);
+  color: var(--sh-primary);
+}
+.plan-sheet .tools .btn[aria-pressed="true"] {
+  border-color: var(--sh-primary);
+  background: var(--sh-primary-soft);
+  color: var(--sh-primary);
+}

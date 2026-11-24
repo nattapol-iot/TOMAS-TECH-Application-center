@@ -99,6 +99,15 @@ const COLUMNS: { key: Column; label: string; lines?: [string, string]; sub?: str
 const LAST_COLUMN = COLUMNS.length - 1;
 const COLUMN_AT = Object.fromEntries(COLUMNS.map((column, index) => [column.key, index])) as Record<Column, number>;
 const WIDTH_KEY = "tomas-tech-plan-sheet-widths";
+/** The columns from PIC to Status fold away together, leaving WBS and TASK beside a wider Gantt (owner 2026-11-24). */
+const FOLD_KEY = "tomas-tech-plan-sheet-folded";
+const readFolded = () => {
+  try {
+    return typeof window !== "undefined" && window.localStorage.getItem(FOLD_KEY) === "1";
+  } catch {
+    return false;
+  }
+};
 const readWidths = (): Record<string, number> => {
   try {
     const saved = typeof window === "undefined" ? null : window.localStorage.getItem(WIDTH_KEY);
@@ -209,6 +218,8 @@ const GLYPH = {
   up: ["m18 15-6-6-6 6"],
   down: ["m6 9 6 6 6-6"],
   trash: ["M3 6h18", "M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6", "M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"],
+  fold: ["m11 17-5-5 5-5", "m18 17-5-5 5-5"],
+  unfold: ["m13 17 5-5-5-5", "m6 17 5-5-5-5"],
   calendar: ["M16 2v4M8 2v4M3 10h18", "M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"],
 };
 
@@ -267,7 +278,21 @@ export function PlanSheet({
   const [widths, setWidths] = useState<Record<string, number>>(readWidths);
   const [drop, setDrop] = useState<Drop | null>(null);
   const [menu, setMenu] = useState<Menu | null>(null);
-  const width = (col: number) => Math.max(36, widths[COLUMNS[col]!.key] ?? COLUMNS[col]!.width);
+  const [folded, setFolded] = useState(readFolded);
+  const isFolded = (col: number) => folded && col > COLUMN_AT.name;
+  const lastColumn = folded ? COLUMN_AT.name : LAST_COLUMN;
+  const width = (col: number) => (isFolded(col) ? 0 : Math.max(36, widths[COLUMNS[col]!.key] ?? COLUMNS[col]!.width));
+  const toggleFold = () => {
+    const next = !folded;
+    setFolded(next);
+    try {
+      window.localStorage.setItem(FOLD_KEY, next ? "1" : "0");
+    } catch {
+      /* Remembering the fold is a convenience. */
+    }
+    const current = cursor.current.active;
+    if (next && current && current.col > COLUMN_AT.name) place({ id: current.id, col: COLUMN_AT.name }, null);
+  };
   const LEFT = COLUMNS.map((_, col) => GUT + COLUMNS.slice(0, col).reduce((sum, _column, index) => sum + width(index), 0));
   const LEFT_WIDTH = LEFT[LAST_COLUMN]! + width(LAST_COLUMN);
 
@@ -753,7 +778,7 @@ export function PlanSheet({
     const { active: from, anchor: corner } = cursor.current;
     const at = indexOf(from);
     const index = at < 0 ? 0 : Math.max(0, Math.min(lineCount - 1, at + down));
-    const next = { id: idAt(index), col: Math.max(0, Math.min(LAST_COLUMN, (from?.col ?? 1) + across)) };
+    const next = { id: idAt(index), col: Math.max(0, Math.min(lastColumn, (from?.col ?? 1) + across)) };
     place(next, extend ? (corner ?? from ?? next) : next);
   };
 
@@ -1015,7 +1040,7 @@ export function PlanSheet({
       event.preventDefault();
       moveBy(arrow[0], arrow[1], event.shiftKey);
     } else if (event.key === "Tab") {
-      if ((event.shiftKey && col === 0) || (!event.shiftKey && col === LAST_COLUMN)) return;
+      if ((event.shiftKey && col === 0) || (!event.shiftKey && col >= lastColumn)) return;
       event.preventDefault();
       moveBy(0, event.shiftKey ? -1 : 1, false);
     } else if (event.key === "Enter") {
@@ -1431,7 +1456,11 @@ export function PlanSheet({
     while (end < rows.length && rows[end]!.task.depth > rows[at]!.task.depth) end++;
     return end;
   };
-  const sticky = (col: number) => (col < stickyCount ? { className: ` stk${col === stickyCount - 1 ? " stk-last" : ""}`, style: { left: LEFT[col] } } : { className: "", style: undefined });
+  const lastSticky = Math.min(stickyCount - 1, lastColumn);
+  const sticky = (col: number) =>
+    col < stickyCount
+      ? { className: ` stk${col === lastSticky ? " stk-last" : ""}${isFolded(col) ? " fold" : ""}`, style: { left: LEFT[col] } }
+      : { className: isFolded(col) ? " fold" : "", style: undefined };
   const extras = new Map<number, React.ReactNode[]>();
   const addExtra = (at: number, node: React.ReactNode) => {
     if (at >= 0) extras.set(at, [...(extras.get(at) ?? []), node]);
@@ -1913,6 +1942,10 @@ export function PlanSheet({
           <Glyph d={GLYPH.calendar} />
           {t("Sheet.goToday")}
         </button>
+        <button type="button" className="btn" aria-pressed={folded} title={t("Sheet.foldTitle")} onClick={toggleFold}>
+          <Glyph d={folded ? GLYPH.unfold : GLYPH.fold} />
+          {t(folded ? "Sheet.showColumns" : "Sheet.foldColumns")}
+        </button>
         <span className="grow" />
       </div>
       <div className="legend" aria-label={t("Sheet.legendLabel")}>
@@ -1987,6 +2020,18 @@ export function PlanSheet({
                     ) : (
                       t(column.label)
                     )}
+                    {column.key === "name" ? (
+                      <button
+                        type="button"
+                        className="colfold"
+                        aria-pressed={folded}
+                        title={t("Sheet.foldTitle")}
+                        aria-label={t(folded ? "Sheet.showColumns" : "Sheet.foldColumns")}
+                        onClick={toggleFold}
+                      >
+                        {folded ? "»" : "«"}
+                      </button>
+                    ) : null}
                     {column.sub ? <small>{column.sub.startsWith("Sheet.") ? t(column.sub) : column.sub}</small> : null}
                     <span className="rsz" data-col={col} title={t("Sheet.resizeHint")} aria-hidden="true" />
                   </th>
