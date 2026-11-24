@@ -140,7 +140,7 @@ test("My Work confirms the hours on My week (2026-11-23), and the panel talks to
   assert.match(panel, /`\/api\/v1\/me\/work-days\?from=\$\{monday\}&to=\$\{addDays\(monday, 6\)\}`/);
   assert.match(panel, /"\/api\/v1\/me\/work-days\/confirm", \{ method: "POST"/);
   assert.match(panel, /`\/api\/v1\/me\/work-days\/\$\{day\.date\}`, \{ method: "PUT"/);
-  assert.match(read("app/system/production/PlanManHours.tsx"), /data\.actualManDays \? <span className="plan-manhours-actual"/);
+  assert.match(read("app/system/production/PlanManHours.tsx"), /data\.actualManDays \? \(?\s*<span className="plan-manhours-actual"/);
 });
 
 test("every Hours copy key the panel asks for has Thai, English and Japanese, and the guide is listed", () => {

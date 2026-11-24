@@ -43,7 +43,7 @@ test("Projects > Plan shows the man-hour budget line under the summary, and Edit
   assert.match(await source("app/system/production/my-work.css"), /\.field small\.plan-manhours-over \{ color: var\(--red-text\);/);
   assert.match(line, /className="plan-manhours" data-guide="plan\.manhours"/);
   // Only a manager on a project with no estimated labor gets the button; the server decides (canSetBudget).
-  assert.match(line, /\{data\.canSetBudget \? <button className="btn default sm" type="button" data-guide="plan\.manhoursSet"/);
+  assert.match(line, /\{data\.canSetBudget \? \(?\s*<button className="btn default sm" type="button" data-guide="plan\.manhoursSet"/);
   assert.match(line, /apiRequest\(`\/api\/v1\/projects\/\$\{projectId\}\/manhour-budget`, \{ method: "PUT", body: JSON\.stringify\(\{ manDays: typed \}\) \}\)/);
   // Internal engineering effort only: no money on this line.
   assert.doesNotMatch(line, /THB|baht|฿|dailyRate|lineCost|price/i);
