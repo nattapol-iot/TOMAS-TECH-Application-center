@@ -110,6 +110,7 @@ test("production workspace exposes API-backed menus with Inquiry as the intake e
     "User Accounts & Permissions",
     "Audit Log",
     "System Settings",
+    "Design System",
     "Employee Manual",
     "Report & Track Issues",
   ];

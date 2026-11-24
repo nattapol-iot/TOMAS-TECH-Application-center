@@ -237,8 +237,8 @@ test("the portfolio Timeline goes full screen, with an overlay where the browser
   assert.match(gantt, /<Icon name=\{fullscreen\.active \? "minimize" : "maximize"\} \/>\{t\(fullscreen\.active \? "Gantt\.exitFullScreen" : "Gantt\.fullScreen"\)\}/);
   assert.match(core, /controls=\{\s*\/\* The sort sits inside the timeline so it stays at hand in full screen\. \*\/\r?\n\s+<div className="portfolio-gantt-sort">/);
   const ui = read("app/system/ui.tsx");
-  assert.match(ui, /^\s+maximize: </m);
-  assert.match(ui, /^\s+minimize: </m);
+  assert.match(ui, /^\s+maximize: \(?\s*</m);
+  assert.match(ui, /^\s+minimize: \(?\s*</m);
 
   // In full screen the chart takes the window height; the overlay stays under dialogs and toasts.
   const css = read("app/system/production/project-portfolio.css");

@@ -3296,6 +3296,7 @@ export const NO_GUIDE: Readonly<Record<string, string>> = {
   "crm-contacts": "Contacts are searched and added from the deal form (crm-deal-create).",
   missing: "Read-only list of estimate lines still waiting for a supplier price; prices arrive through supplier-quotation.",
   stamps: "Company stamp authority set up by admins.",
+  "design-system": "Developer reference of tokens and shared components; nothing to learn as a workflow.",
   activity: "Read-only team activity for heads.",
   performance: "KPI reviews are written by heads in a review cycle; add a guide when that flow next changes.",
   "summary-reports": "Read-only report analytics.",
