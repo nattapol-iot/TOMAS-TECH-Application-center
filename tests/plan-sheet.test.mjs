@@ -107,8 +107,10 @@ test("rows read heading first, then what sits under it", () => {
 test("the Sheet is the V2 plan's first view, with its guide marks and copy", async () => {
   const screen = await source("app/system/production/PlanningPricingScreens.tsx");
   assert.match(screen, /useLinkedState<PlanLevel>\("level", v2 \? "sheet" : "team", PLAN_LEVEL_LINK\)/);
-  assert.match(screen, /const level: PlanLevel = !v2 && storedLevel === "sheet" \? "team" : storedLevel;/, "V1 has no Sheet");
-  assert.match(screen, /v2 \? \(\["sheet", "team", "master", "member", "people"\] as const\) : \(\["team", "master", "member", "people"\] as const\)/);
+  assert.match(screen, /const level: PlanLevel = !v2 && storedLevel === "sheet" \? "team" : /, "V1 has no Sheet");
+  // Task doc 1.10: in V2 the Sheet replaces the Team and Master Plan Gantt (Headings only is the Master Plan); an old link opens the Sheet.
+  assert.match(screen, /v2 \? \(\["sheet", "member", "people"\] as const\) : \(\["team", "master", "member", "people"\] as const\)/);
+  assert.match(screen, /v2 && \(storedLevel === "team" \|\| storedLevel === "master"\) \? "sheet" : storedLevel/);
   const sheet = await source("app/system/production/PlanSheet.tsx");
   for (const mark of ["plan.sheet", "plan.sheetAdd", "plan.sheetAfter"]) assert.ok(sheet.includes(`data-guide="${mark}"`), mark);
   const keys = [...sheet.matchAll(/"(Sheet\.[A-Za-z]+)"/g)].map((match) => match[1]);

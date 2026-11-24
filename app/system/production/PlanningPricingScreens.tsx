@@ -31,7 +31,7 @@ import { ThbRateField } from "./ThbRateField";
 import { PlanManHours, type PlanManHoursData } from "./PlanManHours";
 import { PlanPeopleGrid } from "./PlanPeopleGrid";
 import { PlanSheet } from "./PlanSheet";
-import { EditMasterPlanModal, RowDisclosure, type PortfolioAction } from "./CoreScreens";
+import { RowDisclosure, type PortfolioAction } from "./CoreScreens";
 import { useProjectLook } from "./ProjectLook";
 import { SearchSelect } from "./SearchSelect";
 import { peopleShares, sharesTotal } from "../../../lib/plan-people";
@@ -4177,9 +4177,8 @@ const PLAN_ISSUE_TONE: Record<IssueState, "amber" | "slate" | "blue" | "green" |
 export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectId, preferredTaskId, onPreferredConsumed, openIssueBatch }: ProductionPlanningProps) {
   const uiText = useUiText();
   useActivitySubView("projects-schedule");
-  // V2 edits the plan in one place (owner 2026-11-22): the table editor (Master Plan template, Team Plan, plan dates) opens here.
+  // V2 edits the plan in one place, the Sheet (task doc 1.10): no table editor dialog, no Team / Master Plan Gantt.
   const v2 = useProjectLook() === "v2";
-  const [planTableOpen, setPlanTableOpen] = useState(false);
   const allowed = bootstrap.permissions.includes("schedule.read");
   const storageKey = planProjectStorageKey(bootstrap.user.id);
   const today = isoToday();
@@ -4198,7 +4197,8 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
   const [filter, setFilter] = useLinkedState<PlanFilter | null>("only", null, PLAN_FILTER_LINK);
   // V2 opens on the Sheet, the plan typed like the team's Excel Gantt (PlanSheet.tsx, owner 2026-11-24); V1 has no Sheet.
   const [storedLevel, setLevel] = useLinkedState<PlanLevel>("level", v2 ? "sheet" : "team", PLAN_LEVEL_LINK);
-  const level: PlanLevel = !v2 && storedLevel === "sheet" ? "team" : storedLevel;
+  // A V2 link to the old Team or Master Plan view opens the Sheet (its Headings only view is the Master Plan).
+  const level: PlanLevel = !v2 && storedLevel === "sheet" ? "team" : v2 && (storedLevel === "team" || storedLevel === "master") ? "sheet" : storedLevel;
   const sheetView = level === "sheet";
   const masterView = level === "master";
   // The People table: the same rows against the days, people per day typed like a spreadsheet (PlanPeopleGrid.tsx).
@@ -5054,7 +5054,6 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
   };
   // Used now and then, so behind one button: the Gantt keeps the room (owner, 2026-11-18).
   const moreActions: PortfolioAction[] = [
-    ...(v2 && canPlan && selectedProject ? [{ key: "plan-table", label: "CRM.editMasterPlan", icon: "calendar" as const, guide: "plan.editTable", onSelect: () => setPlanTableOpen(true) }] : []),
     ...(activeSchedule && rows.length ? [{ key: "export", label: "Schedule.exportExcel", icon: "download" as const, onSelect: exportPlan }] : []),
     ...(activeSchedule?.canBaseline && rows.length
       ? [
@@ -5132,7 +5131,8 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
           </span>
         ) : null}
         <span className="spacer" />
-        {canPlan && activeSchedule ? (
+        {/* V1 types a new heading into the Team / Master Plan Gantt; V2 adds rows on the Sheet itself (task doc 1.10). */}
+        {canPlan && activeSchedule && !v2 ? (
           <button className="btn primary" type="button" data-guide="plan.add" disabled={draftBusy} onClick={() => openDraft(null, null)}>
             <Icon name="plus" />
             {uiText("Plan.addHeading")}
@@ -5175,7 +5175,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
                 ) : null}
                 <div className="plan-gantt-controls">
                   <div className="seg-control" role="group" aria-label={uiText("Plan.levelLabel")} data-guide="plan.level">
-                    {(v2 ? (["sheet", "team", "master", "member", "people"] as const) : (["team", "master", "member", "people"] as const)).map((value) => (
+                    {(v2 ? (["sheet", "member", "people"] as const) : (["team", "master", "member", "people"] as const)).map((value) => (
                       <button key={value} type="button" className={level === value ? "on" : ""} aria-pressed={level === value} onClick={() => setLevel(value)}>
                         {uiText(PLAN_LEVEL_LABEL[value])}
                       </button>
@@ -5530,18 +5530,6 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
           onAnswered={async (answer) => {
             notify(`${activeSchedule.projectNo} day request ${answer.toLowerCase()}`);
             await loadSchedule();
-          }}
-        />
-      ) : null}
-      {planTableOpen && selectedProject ? (
-        <EditMasterPlanModal
-          bootstrap={bootstrap}
-          project={selectedProject}
-          onClose={() => setPlanTableOpen(false)}
-          onSaved={async (number) => {
-            setPlanTableOpen(false);
-            notify(`${number} · ${uiText("CRM.planSaved")}`);
-            await Promise.all([loadProjects(), loadSchedule()]);
           }}
         />
       ) : null}

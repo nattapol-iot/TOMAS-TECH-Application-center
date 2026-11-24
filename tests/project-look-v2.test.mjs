@@ -91,15 +91,10 @@ test("V2 edits the plan in one place: the row opens the Plan tab, Edit project l
   assert.match(core, /\{\.\.\.\(v2\s*\?\s*\{\s*withPlan: false,/);
   assert.match(core, /\{!withPlan \? \(\s*<p className="info-strip project-plan-elsewhere" data-guide="project\.planElsewhere">/);
   assert.match(core, /const planBody = \(\) => \(planChanged \? \{ \.\.\.planPayload\(headings\), scheduleVersion: plan!\.snapshot\.scheduleVersion \} : \{\}\);/);
-  // The table editor (templates, Team Plan, plan dates) moved, not lost: the Plan tab's More opens it in V2.
+  // Task doc 1.10: V2 edits the plan on the Sheet alone; the table editor dialog stays for V1's row menu only.
   assert.match(core, /export function EditMasterPlanModal\(/);
-  assert.match(plan, /import \{ EditMasterPlanModal, RowDisclosure, type PortfolioAction \} from "\.\/CoreScreens";/);
-  assert.match(
-    plan,
-    /\.\.\.\(v2 && canPlan && selectedProject\s*\?\s*\[\{ key: "plan-table", label: "CRM\.editMasterPlan", icon: "calendar" as const, guide: "plan\.editTable", onSelect: \(\) => setPlanTableOpen\(true\) \}\]/,
-  );
-  assert.match(plan, /\{planTableOpen && selectedProject \? \(\s*<EditMasterPlanModal/);
-  assert.match(plan, /await Promise\.all\(\[loadProjects\(\), loadSchedule\(\)\]\);/);
+  assert.match(plan, /import \{ RowDisclosure, type PortfolioAction \} from "\.\/CoreScreens";/);
+  assert.doesNotMatch(plan, /EditMasterPlanModal|plan-table|setPlanTableOpen/);
 });
 
 test("the guide walks through V2 and every step finds its element", async () => {

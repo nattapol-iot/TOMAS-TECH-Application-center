@@ -1174,7 +1174,7 @@ export function ProductionProjects({
   };
   const rowActions = (item: ProjectOverviewItem): PortfolioAction[] => [
     ...(canWrite ? [{ key: "edit", label: "Edit project", icon: "edit" as const, guide: "project.edit", onSelect: () => setEditingProject({ ...item, progress: item.typedProgress }) }] : []),
-    // V2 edits the plan in one place: the row opens the Plan tab, where the table editor sits under More.
+    // V2 edits the plan in one place: the row opens the Plan tab, on the Sheet (task doc 1.10).
     ...(v2
       ? openProjectSchedule
         ? [{ key: "open-plan", label: "CRM.openProjectSchedule", icon: "calendar" as const, guide: "project.openPlan", onSelect: () => openProjectSchedule(item.id) }]
