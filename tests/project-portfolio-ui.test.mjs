@@ -174,7 +174,7 @@ test("row menus are fixed-position disclosures the table cannot clip", () => {
   assert.doesNotMatch(disclosure, /window\.innerWidth|window\.innerHeight/);
   assert.doesNotMatch(portfolio, /paged\.length > 3|index >= paged\.length|portfolio-menu\$\{up/);
   const css = read("app/system/production/project-portfolio.css");
-  assert.match(css, /\.menu\.portfolio-menu \{ position: fixed; overflow-y: auto; \}/);
+  assert.match(css, /\.menu\.portfolio-menu \{\s*position: fixed;\s*overflow-y: auto;\s*\}/);
   assert.doesNotMatch(css, /\.portfolio-menu\.up/);
   // Scroll outside the menu or a resize closes it; Escape closes it and gives focus back to the trigger.
   assert.match(disclosure, /window\.addEventListener\("scroll", onScroll, true\)/);
@@ -247,7 +247,7 @@ test("the row menu and stage come before the project name, so a small screen nee
 
 test("the portfolio's PM and slip columns give way on a phone", () => {
   const css = read("app/system/production/project-portfolio.css");
-  assert.match(css, /@media \(max-width: 720px\) \{[\s\S]*\.portfolio-col-pm, \.portfolio-table \.portfolio-col-slip \{ display: none; \}/);
+  assert.match(css, /@media \(max-width: 720px\) \{[\s\S]*\.portfolio-col-pm,\s*\.portfolio-table \.portfolio-col-slip,\s*\.portfolio-table \.portfolio-col-hours \{\s*display: none;\s*\}/);
   assert.match(portfolio, /className="portfolio-col-pm"/);
   assert.match(portfolio, /className="portfolio-col-slip"/);
   assert.doesNotMatch(css, /#[0-9a-fA-F]{3,6}\b/, "tokens only");

@@ -29,6 +29,11 @@ export interface ProjectOverviewItem extends ProjectSummary {
   scheduleError: boolean;
   /** Day requests nobody has answered yet. */
   pendingRequests: number;
+  /** Task doc 5.1: rows the plan Sheet lists under To follow up, each once (0 on a closed project). An older API omits it. */
+  followUps?: number;
+  /** Our own people's confirmed hours, and the hours budget (Estimate internal labor, else typed); null budget: none. */
+  actualHours?: number;
+  budgetHours?: number | null;
   lastProgressAt: string | null;
   /** The same rule PUT /api/v1/projects/:id applies to a status change. */
   canChangeStatus: boolean;
@@ -41,20 +46,27 @@ export type ProjectOverview = { today: string; items: ProjectOverviewItem[] };
 export const projectOverviewPath = (includeClosed = false) => `/api/v1/projects/overview${includeClosed ? "?includeClosed=1" : ""}`;
 
 /** Every project in scope, unpaged: the portfolio sorts and filters in memory. Closed only on request. */
-export const listProjectOverview = ({ includeClosed = false }: { includeClosed?: boolean } = {}) =>
-  apiRequest<ProjectOverview>(projectOverviewPath(includeClosed));
+export const listProjectOverview = ({ includeClosed = false }: { includeClosed?: boolean } = {}) => apiRequest<ProjectOverview>(projectOverviewPath(includeClosed));
 
 /** Newest project number first: the order the project pickers list them in. */
 export const newestProjectFirst = (a: { number: string }, b: { number: string }) => b.number.localeCompare(a.number, "en", { numeric: true, sensitivity: "base" });
 
 /** Every project in scope, newest number first, for pickers that must not stop at the API page size of 100. */
-export const listAllProjectsByNumber = async (includeClosed = true) =>
-  [...(await listProjectOverview({ includeClosed })).items].sort(newestProjectFirst);
+export const listAllProjectsByNumber = async (includeClosed = true) => [...(await listProjectOverview({ includeClosed })).items].sort(newestProjectFirst);
 
 /** A day request waiting for the signed-in user's answer (GET /api/v1/schedule/day-requests/pending). */
 export type PendingDayRequest = {
-  id: number; projectId: number; projectNo: string; projectName: string; taskId: number; wbs: string | null; taskName: string;
-  requestDays: number; comment: string | null; requestedBy: string; occurredAt: string;
+  id: number;
+  projectId: number;
+  projectNo: string;
+  projectName: string;
+  taskId: number;
+  wbs: string | null;
+  taskName: string;
+  requestDays: number;
+  comment: string | null;
+  requestedBy: string;
+  occurredAt: string;
 };
 export const listPendingDayRequests = () => apiRequest<PendingDayRequest[]>("/api/v1/schedule/day-requests/pending");
 

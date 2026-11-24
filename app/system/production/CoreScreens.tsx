@@ -757,6 +757,9 @@ const PORTFOLIO_CHIP_COPY: Record<PortfolioChip, { label: string; tone: Tone }> 
 const PROJECT_STAGE_FILTERS = ["All status", "Planning", "Design", "Development", "Installation", "Commissioning", "Handover", "On Hold", "Closed"];
 const formatDay = (value: string) => new Intl.DateTimeFormat(currentLocale(), { dateStyle: "medium" }).format(new Date(value));
 
+/** Hours as the list shows them: whole numbers with separators, one decimal under ten. */
+const formatHours = (value: number) => (value < 10 && value % 1 ? value.toFixed(1) : Math.round(value).toLocaleString("en-US"));
+
 function PortfolioSortHeader({
   column,
   label,
@@ -1601,6 +1604,14 @@ export function ProductionProjects({
                   <PortfolioSortHeader column="target" label="Portfolio.colTarget" sort={sort} onSort={changeSort} />
                   <PortfolioSortHeader column="slip" label="Portfolio.colSlip" sort={sort} onSort={changeSort} className="portfolio-col-slip" />
                   <PortfolioSortHeader column="progress" label="Portfolio.colProgress" sort={sort} onSort={changeSort} />
+                  {v2 ? (
+                    <>
+                      <th className="portfolio-col-hours">{uiText("Portfolio.colHours")}</th>
+                      <th className="portfolio-col-follow" data-guide="project.followCol">
+                        {uiText("Portfolio.colFollow")}
+                      </th>
+                    </>
+                  ) : null}
                   <PortfolioSortHeader column="lastUpdate" label="Portfolio.colLastUpdate" sort={sort} onSort={changeSort} />
                 </tr>
               </thead>
@@ -1677,6 +1688,26 @@ export function ProductionProjects({
                       <td>
                         <PortfolioProgress item={item} />
                       </td>
+                      {v2 ? (
+                        <>
+                          {/* Task doc 5.1: confirmed hours against the hours budget, and how much waits on the plan's To follow up. */}
+                          <td
+                            className={`portfolio-col-hours mono${item.budgetHours && (item.actualHours ?? 0) > item.budgetHours ? " over" : ""}`}
+                            title={item.budgetHours && (item.actualHours ?? 0) > item.budgetHours ? uiText("Portfolio.hoursOver") : undefined}
+                          >
+                            {formatHours(item.actualHours ?? 0)} / {item.budgetHours ? formatHours(item.budgetHours) : "–"}
+                          </td>
+                          <td className="portfolio-col-follow">
+                            {item.followUps && openProjectSchedule ? (
+                              <button type="button" className="portfolio-follow" title={uiText("Portfolio.followOpen")} onClick={() => openProjectSchedule(item.id)}>
+                                {item.followUps}
+                              </button>
+                            ) : (
+                              <span className="muted">{item.followUps ? item.followUps : "–"}</span>
+                            )}
+                          </td>
+                        </>
+                      ) : null}
                       <td className="muted">{item.lastProgressAt ? formatDay(item.lastProgressAt) : "—"}</td>
                     </tr>
                   );

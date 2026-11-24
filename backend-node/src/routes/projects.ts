@@ -91,6 +91,14 @@ function shiftDate(value: string, unit: "day" | "year", amount: number): string 
   return date.toISOString().slice(0, 10);
 }
 
+/** Per project: our own people's confirmed hours (dbo.work_hours) and the hours budget's sources (manhour-budget.ts). */
+export const PROJECT_HOURS_SQL = `SELECT p.id project_id,
+    (SELECT SUM(h.hours) FROM dbo.work_hours h WHERE h.project_id=p.id) actual_hours,
+    (SELECT SUM(l.engineers*l.man_days) FROM dbo.estimates e INNER JOIN dbo.manhour_lines l ON l.estimate_id=e.id AND l.revision=e.revision
+      AND l.deleted_at IS NULL AND l.provider=N'Internal' WHERE e.id=p.estimate_id) estimate_days,
+    p.manhour_budget_days manual_days
+  FROM dbo.projects p WHERE p.id IN(SELECT TRY_CONVERT(bigint,value) FROM STRING_SPLIT(@ids,N','));`;
+
 export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, database: Database, users: CurrentUserService, email?: EmailService): void {
   registerEndUserUpdateRoute(app, database, users, "Project");
   app.get("/api/v1/projects/creation-options", async (request) => {
@@ -359,6 +367,15 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
         )
       ).recordset.map((row) => [Number(row.project_id), row] as const),
     );
+    // Task doc 5.1: our own people's confirmed hours against the hours budget, as Projects > Plan shows them
+    // (manhour-budget.ts): the Estimate's internal labor, else the budget a manager typed. Hours only, never money.
+    const hours = new Map(
+      (
+        await database.query<{ project_id: number | string; actual_hours: number | null; estimate_days: number | null; manual_days: number | null }>(PROJECT_HOURS_SQL, (sqlRequest) =>
+          sqlRequest.input("ids", sql.NVarChar(sql.MAX), rows.map((row) => Number(row.id)).join(",")),
+        )
+      ).recordset.map((row) => [Number(row.project_id), row] as const),
+    );
     // The same people PUT /api/v1/projects/:id lets move a project along its lifecycle.
     const canWrite = await permissionFor(database, actor.id, "project.write");
     return {
@@ -386,6 +403,8 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
           nextMilestone: summary?.nextMilestone ?? null,
           scheduleError: summary?.scheduleError ?? false,
           pendingRequests: row.status === "Closed" ? 0 : Number(counts?.pending_requests ?? 0),
+          followUps: summary?.followUps ?? 0,
+          ...projectHours(hours.get(id)),
           lastProgressAt: counts?.last_progress_at ?? null,
           canChangeStatus: canWrite && (manages || Number(row.manager_id) === actor.id || Number(row.lead_engineer_id) === actor.id),
           allowedStatuses: isProjectStatus(row.status) ? allowedProjectTransitions(row.status, manages) : [],
@@ -393,6 +412,13 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
       }),
     };
   });
+
+  /** A project's confirmed hours and its hours budget; null budget when it has none. */
+  function projectHours(row: { actual_hours: number | null; estimate_days: number | null; manual_days: number | null } | undefined) {
+    const estimate = Number(row?.estimate_days ?? 0);
+    const days = estimate > 0 ? estimate : row?.manual_days == null ? null : Number(row.manual_days);
+    return { actualHours: Math.round(Number(row?.actual_hours ?? 0) * 10) / 10, budgetHours: days === null ? null : Math.round(days * HOURS_PER_MAN_DAY * 10) / 10 };
+  }
 
   // The cost overview (project-cost-model.ts): a Leader and everyone above, and whoever sees it sees every figure on it,
   // people cost in money included (owner 2026-11-21: "Leader เห็นได้ทุกอย่าง"). The role is the one gate.

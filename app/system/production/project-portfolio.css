@@ -11,9 +11,14 @@
   background: var(--surface);
 }
 
-.portfolio-table th { vertical-align: bottom; }
+.portfolio-table th {
+  vertical-align: bottom;
+}
 /* The row menu and stage come first so a narrow screen reaches them without scrolling past the name. */
-.portfolio-table .portfolio-col-menu { width: 1%; padding-right: 0; }
+.portfolio-table .portfolio-col-menu {
+  width: 1%;
+  padding-right: 0;
+}
 .th-sort {
   display: inline-flex;
   align-items: center;
@@ -27,16 +32,43 @@
   letter-spacing: inherit;
   cursor: pointer;
 }
-.th-sort:hover, .th-sort.active { color: var(--ink); }
-.th-sort:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: var(--r-xs); }
-.th-sort .icon { font-size: 12px; color: var(--n-400); transition: transform 120ms ease; }
-.th-sort .icon.idle { opacity: 0; }
-.th-sort:hover .icon.idle { opacity: 0.6; }
-.th-sort .icon.asc { transform: rotate(180deg); color: var(--ink-soft); }
-.th-sort .icon.desc { color: var(--ink-soft); }
+.th-sort:hover,
+.th-sort.active {
+  color: var(--ink);
+}
+.th-sort:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+  border-radius: var(--r-xs);
+}
+.th-sort .icon {
+  font-size: 12px;
+  color: var(--n-400);
+  transition: transform 120ms ease;
+}
+.th-sort .icon.idle {
+  opacity: 0;
+}
+.th-sort:hover .icon.idle {
+  opacity: 0.6;
+}
+.th-sort .icon.asc {
+  transform: rotate(180deg);
+  color: var(--ink-soft);
+}
+.th-sort .icon.desc {
+  color: var(--ink-soft);
+}
 
-.portfolio-project { display: flex; flex-direction: column; gap: 2px; min-width: 220px; }
-.portfolio-project small { font-size: var(--fs-2xs); }
+.portfolio-project {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 220px;
+}
+.portfolio-project small {
+  font-size: var(--fs-2xs);
+}
 .portfolio-project-link {
   border: 0;
   background: none;
@@ -46,16 +78,69 @@
   text-align: left;
   cursor: pointer;
 }
-.portfolio-project-link:hover strong:last-child { color: var(--blue-text); text-decoration: underline; }
-.portfolio-project-link:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: var(--r-xs); }
+.portfolio-project-link:hover strong:last-child {
+  color: var(--blue-text);
+  text-decoration: underline;
+}
+.portfolio-project-link:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+  border-radius: var(--r-xs);
+}
 
-.portfolio-slip { font-variant-numeric: tabular-nums; color: var(--muted); }
-.portfolio-slip.late { color: var(--red-text); font-weight: 650; }
+.portfolio-slip {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+.portfolio-slip.late {
+  color: var(--red-text);
+  font-weight: 650;
+}
+/* Task doc 5.1: hours against the budget, and the count waiting on the plan's To follow up. */
+.portfolio-col-hours {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.portfolio-col-hours.over {
+  color: var(--red-text);
+  font-weight: 650;
+}
+.portfolio-col-follow {
+  text-align: center;
+}
+.portfolio-follow {
+  min-width: 28px;
+  padding: 1px 8px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--amber-soft);
+  color: var(--amber-text);
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+.portfolio-follow:hover {
+  text-decoration: underline;
+}
 
-.portfolio-schedule-error { display: block; margin-top: 2px; color: var(--amber-text); font-size: var(--fs-3xs); }
+.portfolio-schedule-error {
+  display: block;
+  margin-top: 2px;
+  color: var(--amber-text);
+  font-size: var(--fs-3xs);
+}
 
-.portfolio-progress { display: flex; align-items: center; gap: 7px; min-width: 150px; }
-.portfolio-progress-track { position: relative; flex: 1; min-width: 60px; }
+.portfolio-progress {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 150px;
+}
+.portfolio-progress-track {
+  position: relative;
+  flex: 1;
+  min-width: 60px;
+}
 .portfolio-progress-tick {
   position: absolute;
   top: -3px;
@@ -66,7 +151,12 @@
   background: var(--ink-soft);
   pointer-events: none;
 }
-.portfolio-progress-text { color: var(--ink-soft); font-size: var(--fs-2xs); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.portfolio-progress-text {
+  color: var(--ink-soft);
+  font-size: var(--fs-2xs);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
 .portfolio-manual {
   padding: 0 5px;
   border: 1px solid var(--line);
@@ -89,52 +179,185 @@
   font-size: var(--fs-sm);
   cursor: pointer;
 }
-.portfolio-stage-trigger:hover:not(:disabled) { border-color: var(--n-300); }
-.portfolio-stage-trigger:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
-.portfolio-stage-trigger:disabled { color: var(--muted); cursor: not-allowed; }
-.portfolio-stage-trigger .icon { font-size: 12px; color: var(--n-400); }
+.portfolio-stage-trigger:hover:not(:disabled) {
+  border-color: var(--n-300);
+}
+.portfolio-stage-trigger:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+.portfolio-stage-trigger:disabled {
+  color: var(--muted);
+  cursor: not-allowed;
+}
+.portfolio-stage-trigger .icon {
+  font-size: 12px;
+  color: var(--n-400);
+}
 
 /* Placed from the trigger's box by RowDisclosure (top or bottom, right, max-height) so the
    table's scroll area cannot clip it. */
-.menu.portfolio-menu { position: fixed; overflow-y: auto; }
-.portfolio-menu button.danger, .portfolio-menu button.danger .icon { color: var(--red-text); }
+.menu.portfolio-menu {
+  position: fixed;
+  overflow-y: auto;
+}
+.portfolio-menu button.danger,
+.portfolio-menu button.danger .icon {
+  color: var(--red-text);
+}
 
 @media (max-width: 720px) {
-  .portfolio-overview { padding: 10px 12px; }
-  .portfolio-waiting li { grid-template-columns: minmax(0, 1fr) max-content; }
-  .portfolio-waiting li .mono { grid-column: 1 / -1; }
-  .portfolio-gantt-search input { flex-basis: 100%; }
-  .portfolio-table .portfolio-col-pm, .portfolio-table .portfolio-col-slip { display: none; }
-  .portfolio-project { min-width: 160px; }
-  .portfolio-progress { min-width: 120px; }
+  .portfolio-overview {
+    padding: 10px 12px;
+  }
+  .portfolio-waiting li {
+    grid-template-columns: minmax(0, 1fr) max-content;
+  }
+  .portfolio-waiting li .mono {
+    grid-column: 1 / -1;
+  }
+  .portfolio-gantt-search input {
+    flex-basis: 100%;
+  }
+  .portfolio-table .portfolio-col-pm,
+  .portfolio-table .portfolio-col-slip,
+  .portfolio-table .portfolio-col-hours {
+    display: none;
+  }
+  .portfolio-project {
+    min-width: 160px;
+  }
+  .portfolio-progress {
+    min-width: 120px;
+  }
 }
 
 /* Overview > Timeline: the shared Gantt (gantt.css) under its zoom bar and legend. */
-.portfolio-gantt { display: flex; flex-direction: column; gap: 10px; padding-top: 12px; }
-.portfolio-gantt-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 0 14px; }
-.portfolio-gantt-sort { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 0 14px; }
-.portfolio-gantt-sort .icon.asc { transform: rotate(180deg); }
+.portfolio-gantt {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 12px;
+}
+.portfolio-gantt-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 0 14px;
+}
+.portfolio-gantt-sort {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+}
+.portfolio-gantt-sort .icon.asc {
+  transform: rotate(180deg);
+}
 
 /* Full screen, the browser's (:fullscreen) or the page's own overlay where the browser has none: the block
    fills the window and the chart scrolls inside it instead of stopping at 70vh. Above the top bar and
    menus, below dialogs (.overlay, 100) and toasts. */
-.portfolio-gantt.is-fullscreen { background: var(--surface); padding-bottom: 0; }
-.portfolio-gantt:fullscreen { width: 100%; height: 100%; overflow: hidden; }
-.portfolio-gantt.is-overlay { position: fixed; inset: 0; z-index: 90; overflow: hidden; }
-.portfolio-gantt.is-fullscreen .gantt { flex: 1; min-height: 0; max-height: none; }
+.portfolio-gantt.is-fullscreen {
+  background: var(--surface);
+  padding-bottom: 0;
+}
+.portfolio-gantt:fullscreen {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+.portfolio-gantt.is-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  overflow: hidden;
+}
+.portfolio-gantt.is-fullscreen .gantt {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+}
 
 /* Timeline task search: one row under the zoom bar; the result line wraps below the buttons. */
-.portfolio-gantt-search { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 0 14px; }
-.portfolio-gantt-search input { flex: 0 1 340px; min-width: 200px; height: 32px; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); color: var(--ink); font-size: var(--fs-sm); }
-.portfolio-gantt-search .muted, .portfolio-gantt-search .danger-text { font-size: var(--fs-xs); }
-.portfolio-gantt-search .danger-text { color: var(--red-text); }
+.portfolio-gantt-search {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+}
+.portfolio-gantt-search input {
+  flex: 0 1 340px;
+  min-width: 200px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: var(--fs-sm);
+}
+.portfolio-gantt-search .muted,
+.portfolio-gantt-search .danger-text {
+  font-size: var(--fs-xs);
+}
+.portfolio-gantt-search .danger-text {
+  color: var(--red-text);
+}
 
 /* Day requests waiting for this PM or EM, above the portfolio. */
-.portfolio-waiting { border: 1px solid var(--amber-line); border-radius: var(--r-md); background: var(--amber-soft); }
-.portfolio-waiting > summary { display: flex; align-items: center; gap: 8px; padding: 10px 14px; color: var(--amber-text); font-size: var(--fs-sm); font-weight: 650; cursor: pointer; }
-.portfolio-waiting > summary .icon { width: 15px; height: 15px; }
-.portfolio-waiting ul { display: grid; gap: 1px; margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--amber-line); background: var(--line-soft); }
-.portfolio-waiting li { display: grid; grid-template-columns: max-content minmax(0, 1fr) max-content max-content; align-items: center; gap: 12px; padding: 8px 14px; background: var(--surface); font-size: var(--fs-sm); }
-.portfolio-waiting li:last-child { border-radius: 0 0 var(--r-md) var(--r-md); }
-.portfolio-waiting-task { display: grid; gap: 2px; min-width: 0; }
-.portfolio-waiting-task small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-2xs); }
+.portfolio-waiting {
+  border: 1px solid var(--amber-line);
+  border-radius: var(--r-md);
+  background: var(--amber-soft);
+}
+.portfolio-waiting > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  color: var(--amber-text);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+  cursor: pointer;
+}
+.portfolio-waiting > summary .icon {
+  width: 15px;
+  height: 15px;
+}
+.portfolio-waiting ul {
+  display: grid;
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--amber-line);
+  background: var(--line-soft);
+}
+.portfolio-waiting li {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) max-content max-content;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  background: var(--surface);
+  font-size: var(--fs-sm);
+}
+.portfolio-waiting li:last-child {
+  border-radius: 0 0 var(--r-md) var(--r-md);
+}
+.portfolio-waiting-task {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.portfolio-waiting-task small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-2xs);
+}
