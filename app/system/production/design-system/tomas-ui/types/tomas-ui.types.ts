@@ -11,6 +11,7 @@ export type TomasUiDemoSpec = {
   title: string;
   exports: readonly string[];
   drawnInside?: Readonly<Record<string, string>>;
+  wide?: boolean;
 };
 
 export type TomasUiNotShown = { name: string; reason: string };
@@ -55,7 +56,5 @@ export type ClassTableProps = { rows: readonly (readonly [string, string])[] };
 export type ConfirmSample = "plain" | "destructive" | "processing";
 
 export type CalendarRange = { from: Date | undefined; to?: Date | undefined };
-
-export type TomasUiFieldProps = { label: string; htmlFor?: string; children: ReactNode };
 
 export type SidebarFrameProps = { children: ReactNode };

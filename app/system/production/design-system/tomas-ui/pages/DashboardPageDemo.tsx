@@ -11,9 +11,7 @@ export function DashboardPageDemo() {
     widget.kind === "stat" ? (
       <StatFigureView key={index} source={widget} format={widget.format} />
     ) : widget.kind === "chart" ? (
-      <div key={index} className="h-72">
-        <ChartView config={widget} visualId={`dashboard-${index}`} />
-      </div>
+      <ChartView key={index} config={widget} visualId={`dashboard-${index}`} />
     ) : (
       <EntityTable key={index} entity={WORK_ORDER} adapters={SAMPLE_ADAPTERS} columns={DASHBOARD_LIST_COLUMNS} limit={widget.limit} />
     ),

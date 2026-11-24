@@ -53,7 +53,7 @@ export const TOMAS_UI_DEMOS: readonly TomasUiDemoSpec[] = [
   { id: "resizable", section: "primitives", title: "TUI.demoResizable", exports: ["ResizablePanelGroup", "ResizablePanel", "ResizableHandle"] },
   { id: "calendar", section: "primitives", title: "TUI.demoCalendar", exports: ["Calendar", "CalendarDayButton"] },
 
-  { id: "field-control", section: "forms", title: "TUI.demoFieldControl", exports: ["FieldControl"] },
+  { id: "field-control", section: "forms", wide: true, title: "TUI.demoFieldControl", exports: ["FieldControl"] },
   {
     id: "pickers",
     section: "forms",
@@ -61,13 +61,13 @@ export const TOMAS_UI_DEMOS: readonly TomasUiDemoSpec[] = [
     exports: ["ComboboxControl", "MultiSelectControl", "OptionSelect", "IconPickerControl", "TimePickerControl", "DateRangePickerControl", "formatDateLabel"],
   },
   { id: "search-signature", section: "forms", title: "TUI.demoSearchSignature", exports: ["SearchInput", "SignaturePad"] },
-  { id: "form-fields", section: "forms", title: "TUI.demoFormFields", exports: ["FormFields", "FormRowsSection", "FormAside", "ValidatedForm"] },
+  { id: "form-fields", section: "forms", wide: true, title: "TUI.demoFormFields", exports: ["FormFields", "FormRowsSection", "FormAside", "ValidatedForm"] },
   { id: "form-dialog", section: "forms", title: "TUI.demoFormDialog", exports: ["FormDialog", "useFormScreen", "useFormRows"] },
 
-  { id: "data-table", section: "data", title: "TUI.demoDataTable", exports: ["DataTable", "SelectionBar", "Pagination"] },
+  { id: "data-table", section: "data", wide: true, title: "TUI.demoDataTable", exports: ["DataTable", "SelectionBar", "Pagination"] },
   { id: "field-cell", section: "data", title: "TUI.demoFieldCell", exports: ["FieldCell", "TONE_BADGE_CLASS", "TONE_FILL_CLASS", "columnScales"] },
-  { id: "entity-table", section: "data", title: "TUI.demoEntityTable", exports: ["EntityTable", "RestAdapter"] },
-  { id: "repeat-view", section: "data", title: "TUI.demoRepeatView", exports: ["RepeatView", "RepeatCell"] },
+  { id: "entity-table", section: "data", wide: true, title: "TUI.demoEntityTable", exports: ["EntityTable", "RestAdapter"] },
+  { id: "repeat-view", section: "data", wide: true, title: "TUI.demoRepeatView", exports: ["RepeatView", "RepeatCell"] },
   { id: "view-rows", section: "data", title: "TUI.demoViewRows", exports: ["useViewRows", "selectRows"] },
 
   { id: "record-sheet", section: "records", title: "TUI.demoRecordSheet", exports: ["RecordSheet", "useOpenRecord"] },
@@ -125,10 +125,10 @@ export const TOMAS_UI_DEMOS: readonly TomasUiDemoSpec[] = [
   },
   { id: "layout", section: "navigation", title: "TUI.demoLayout", exports: ["SplitPanes", "PageFrame", "PAGE_CARD_CLASS", "HeaderActionsMenu"] },
 
-  { id: "list-page", section: "pages", title: "TUI.demoListPage", exports: ["ListPage", "useListScreen", "useListActions"] },
-  { id: "dashboard-page", section: "pages", title: "TUI.demoDashboardPage", exports: ["DashboardPage"] },
+  { id: "list-page", section: "pages", wide: true, title: "TUI.demoListPage", exports: ["ListPage", "useListScreen", "useListActions"] },
+  { id: "dashboard-page", section: "pages", wide: true, title: "TUI.demoDashboardPage", exports: ["DashboardPage"] },
 
-  { id: "charts", section: "visuals", title: "TUI.demoCharts", exports: ["ChartView"] },
+  { id: "charts", section: "visuals", wide: true, title: "TUI.demoCharts", exports: ["ChartView"] },
   { id: "stats", section: "visuals", title: "TUI.demoStats", exports: ["StatFigureView"] },
   { id: "cross-filter", section: "visuals", title: "TUI.demoCrossFilter", exports: ["CrossFilterProvider", "CrossFilterContext", "useCrossFilter", "ScreenFilterBar"] },
   {

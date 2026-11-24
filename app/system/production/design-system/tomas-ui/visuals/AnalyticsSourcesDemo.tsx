@@ -31,7 +31,7 @@ export function AnalyticsSourcesDemo() {
             <div className="rounded-lg border p-3">
               <StatFigureView source={SERVER_COUNT} format="plain" />
             </div>
-            <div className="h-64 min-w-0 rounded-lg border p-3">
+            <div className="min-w-0 rounded-lg border p-3">
               <ChartView config={SERVER_CHART} visualId="server-status" />
             </div>
           </div>

@@ -15,7 +15,7 @@ export function CrossFilterDemo() {
           <div className="rounded-lg border p-3">
             <StatFigureView source={OPEN_ORDERS} format="plain" />
           </div>
-          <div className="h-64 min-w-0 rounded-lg border p-3">
+          <div className="min-w-0 rounded-lg border p-3">
             <ChartView config={BY_STATUS} visualId="cross-filter-status" />
           </div>
         </div>

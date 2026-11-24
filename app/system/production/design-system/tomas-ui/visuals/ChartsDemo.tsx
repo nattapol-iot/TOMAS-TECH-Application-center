@@ -9,13 +9,11 @@ export function ChartsDemo() {
     <TomasUiDemo id="charts">
       <div className="grid gap-4 md:grid-cols-2">
         {[...SAMPLE_CHARTS, EMPTY_CHART].map((config) => (
-          <figure key={config.title} className="flex h-80 min-w-0 flex-col gap-2 rounded-lg border p-3">
+          <figure key={config.title} className="flex min-w-0 flex-col gap-2 rounded-lg border p-3">
             <figcaption className="text-sm font-medium">
               {config.title} <code className="text-muted-foreground font-mono text-xs">{config.chart}</code>
             </figcaption>
-            <div className="min-h-0 flex-1">
-              <ChartView config={config} visualId={`chart-${config.chart}-${config.title}`} />
-            </div>
+            <ChartView config={config} visualId={`chart-${config.chart}-${config.title}`} />
           </figure>
         ))}
       </div>
