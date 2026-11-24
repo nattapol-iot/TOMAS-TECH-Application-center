@@ -994,12 +994,15 @@ export function ProductionProjects({
   teamTestMode,
   openProjectSchedule,
   openProjectPage,
+  openCreatePage,
   initialMode,
 }: CommonProps & {
   teamTestMode: boolean;
   openProjectSchedule?: (id: number, taskId?: number) => void;
   /** Task doc 5.2: a project's own page; V2 opens it from the number and the name. */
   openProjectPage?: (projectNo: string) => void;
+  /** Task doc 5.4: Create project as a page; V2 opens it instead of the dialog. */
+  openCreatePage?: () => void;
   /** The old Project Timeline menu opens the portfolio straight in Timeline mode. */
   initialMode?: PortfolioMode;
 }) {
@@ -1188,7 +1191,7 @@ export function ProductionProjects({
           ...(canDelete(item) ? [{ key: "delete", label: "CRM.deleteProject", icon: "trash" as const, danger: true, onSelect: () => setDeletingProject(item) }] : []),
         ];
   const createButton = canWrite ? (
-    <button className="btn primary" type="button" data-guide="project.create" onClick={() => setCreateOpen(true)}>
+    <button className="btn primary" type="button" data-guide="project.create" onClick={() => (v2 && openCreatePage ? openCreatePage() : setCreateOpen(true))}>
       <Icon name="plus" />
       <LocalizedText text={"Create project"} />
     </button>
@@ -3692,6 +3695,50 @@ type ProjectCreationOptions = { estimates: ProjectEstimateOption[]; people: { id
 // The same list the estimate screens offer, so a project without an estimate reads like one with.
 const PROJECT_TYPES = ["Automation", "IoT", "PLC", "Software", "Electrical", "Mechanical", "Robot", "AMR", "Auto Warehouse", "WMS", "WCS", "Traceability", "Vision", "Data Collection", "Other"];
 
+/**
+ * Task doc 5.4: Create project as a page. The form's four parts carry their numbers, the right-hand column says what is
+ * still missing and what the app does on Create, and what is typed is kept in this browser until the project exists.
+ */
+function CreateProjectPageShell({
+  title,
+  subtitle,
+  footer,
+  onClose,
+  aside,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  size?: string;
+  footer: ReactNode;
+  onClose: () => void;
+  aside: ReactNode;
+  children: ReactNode;
+}) {
+  const t = useUiText();
+  return (
+    <div className="project-create-page" data-guide="projectCreate.page">
+      <button type="button" className="btn ghost sm project-page-back" onClick={onClose}>
+        <Icon name="chevronLeft" />
+        {t("ProjectPage.back")}
+      </button>
+      <PageHeader title={title} {...(subtitle ? { subtitle } : {})} />
+      <div className="pcp-columns">
+        <div className="pcp-main">{children}</div>
+        <aside className="pcp-aside" data-guide="projectCreate.aside">
+          {aside}
+          <div className="pcp-actions">{footer}</div>
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+/** The dialog takes the same props as the page; the page alone has a right-hand column. */
+function CreateProjectModalShell({ aside: _aside, ...props }: Parameters<typeof Modal>[0] & { aside: ReactNode }) {
+  return <Modal {...props} />;
+}
+
 /*
  * A project starts from an approved estimate on a WON order, or -- for the Application team, PMs and
  * Admins -- without one, naming its customer, name and type here. A failed save keeps everything typed:
@@ -3704,13 +3751,17 @@ export function CreateProjectModal({
   onClose,
   onCreated,
   initialEstimateId,
+  page = false,
 }: {
+  /** Task doc 5.4: shown as a page (V2) instead of a dialog. */
+  page?: boolean;
   initialEstimateId?: number;
   bootstrap: BootstrapData;
   refreshBootstrap: () => Promise<void>;
   notify: (message: string) => void;
   onClose: () => void;
-  onCreated: (number: string, deliveryNote: string) => Promise<void>;
+  /** id: the new project, for the page to open it (task doc 5.4). */
+  onCreated: (number: string, deliveryNote: string, id?: number) => Promise<void>;
 }) {
   const [options, setOptions] = useState<ProjectCreationOptions>({ estimates: [], people: [] });
   const managers = options.people.filter((member) => member.canManage);
@@ -3719,7 +3770,9 @@ export function CreateProjectModal({
   const [loadingOptions, setLoadingOptions] = useState(true);
   const [optionsRevision, setOptionsRevision] = useState(0);
   const t = useUiText();
-  const [form, setForm] = useState<CreateProjectInput>({
+  // The page keeps what is typed in this browser (form-draft.ts); the dialog does not.
+  const draftKey = page ? `project-create:${bootstrap.user.id}` : null;
+  const [form, setForm] = useDraftField<CreateProjectInput>(draftKey, "form", {
     projectNumber: "",
     estimateId: 0,
     purchaseOrderNumber: "",
@@ -3737,8 +3790,8 @@ export function CreateProjectModal({
     projectName: "",
     projectType: "",
   });
-  const [withoutEstimate, setWithoutEstimate] = useState(false);
-  const [headings, setHeadings] = useState<PlanHeadingDraft[]>([]);
+  const [withoutEstimate, setWithoutEstimate] = useDraftField(draftKey, "withoutEstimate", false);
+  const [headings, setHeadings] = useDraftField<PlanHeadingDraft[]>(draftKey, "plan", []);
   const templates = useScheduleTemplates();
   const departments = projectTeamOptions(form.department);
   // The team defaults to the lead engineer's team (from their department) until someone picks one.
@@ -3757,6 +3810,14 @@ export function CreateProjectModal({
         if (cancelled) return;
         setOptions(data);
         setLoadError("");
+        // A kept draft may name an estimate or a person that no longer qualifies: clear those so the form asks again.
+        setForm((current) => ({
+          ...current,
+          estimateId: data.estimates.some((item) => item.id === current.estimateId) ? current.estimateId : 0,
+          managerId: data.people.some((member) => member.canManage && member.id === current.managerId) ? current.managerId : 0,
+          leadEngineerId: data.people.some((member) => member.canLead && member.id === current.leadEngineerId) ? current.leadEngineerId : 0,
+        }));
+        if (!data.canCreateWithoutEstimate) setWithoutEstimate(false);
         if (defaultsApplied.current) return;
         defaultsApplied.current = true;
         const first = initialEstimateId ? data.estimates.find((item) => item.id === initialEstimateId) : undefined;
@@ -3784,7 +3845,7 @@ export function CreateProjectModal({
     return () => {
       cancelled = true;
     };
-  }, [initialEstimateId, bootstrap.user.id, bootstrap.team, optionsRevision]);
+  }, [initialEstimateId, bootstrap.user.id, bootstrap.team, optionsRevision, setForm, setWithoutEstimate]);
   const standalone = withoutEstimate && !initialEstimateId;
   const selectedEstimate = standalone ? undefined : estimates.find((item) => item.id === form.estimateId);
   const customerId = standalone ? (form.customerId ?? 0) : (selectedEstimate?.customerId ?? 0);
@@ -3830,19 +3891,67 @@ export function CreateProjectModal({
       else if (inheritEndUser) delete input.endUserCustomerId;
       else input.endUserCustomerId = form.endUserCustomerId ?? null;
       const created = await createProject(input);
-      await onCreated(created.number, assignmentDeliveryNote(created.notification));
+      clearDraft(draftKey);
+      await onCreated(created.number, assignmentDeliveryNote(created.notification), created.id);
     } catch (requestError) {
       setSaveError(toError(requestError));
     } finally {
       setBusy(false);
     }
   };
+  const Shell = page ? CreateProjectPageShell : CreateProjectModalShell;
+  // Leaving the page with something typed asks to keep editing or discard it (Pegasus 0.6, form-draft.ts).
+  const close = () => {
+    if (!page) {
+      onClose();
+      return;
+    }
+    void confirmLeave(draftKey, leaveCopy(t)).then((leave) => {
+      if (leave) onClose();
+    });
+  };
+  const datesOutOfOrder = !planned && Boolean(form.startDate && form.targetDelivery && form.targetDelivery < form.startDate);
+  const step = (number: number, key: string) => (page ? <h3 className="pcp-step">{`${number} · ${t(key)}`}</h3> : null);
+  // The right-hand column of the page: what is still missing, and what Create does.
+  const aside = (
+    <>
+      <section className="pcp-box">
+        <h4>{t("ProjectCreate.missing")}</h4>
+        {loadingOptions ? (
+          <p className="muted">{t("CRM.loading")}</p>
+        ) : missingFields.length || planIssues.length || datesOutOfOrder ? (
+          <ul>
+            {[...missingFields.map((field) => t(field)), ...planIssues, ...(datesOutOfOrder ? [t("ProjectCreate.dateOrder")] : [])].map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        ) : (
+          <p className="pcp-ready">
+            <Icon name="check" />
+            {t("ProjectCreate.ready")}
+          </p>
+        )}
+      </section>
+      <section className="pcp-box">
+        <h4>{t("ProjectCreate.after")}</h4>
+        <ul>
+          <li>{t("ProjectCreate.afterFolders")}</li>
+          {standalone ? null : <li>{t("ProjectCreate.afterCarry")}</li>}
+          <li>{t("ProjectCreate.afterPlan")}</li>
+          <li>{t("ProjectCreate.afterMail")}</li>
+          <li>{t("ProjectCreate.afterOpen")}</li>
+        </ul>
+        <p className="muted">{t("ProjectCreate.draftKept")}</p>
+      </section>
+    </>
+  );
   return (
-    <Modal
+    <Shell
       title="Create project"
       subtitle={standalone ? "CRM.projectGateWithoutEstimate" : "CRM.projectGate"}
       size="xl"
-      onClose={onClose}
+      onClose={close}
+      aside={aside}
       footer={
         <>
           {saveError ? (
@@ -3853,7 +3962,7 @@ export function CreateProjectModal({
           ) : (
             <span className="spacer" />
           )}
-          <button className="btn ghost" type="button" onClick={onClose}>
+          <button className="btn ghost" type="button" onClick={close}>
             <LocalizedText text={"Cancel"} />
           </button>
           <button
@@ -3882,6 +3991,7 @@ export function CreateProjectModal({
             }}
           />
         ) : null}
+        {step(1, "ProjectCreate.stepSource")}
         {canChooseSource ? (
           <div className="seg-control" role="group" aria-label={t("CRM.projectSource")} data-guide="project.source">
             <button
@@ -3917,7 +4027,8 @@ export function CreateProjectModal({
         ) : initialEstimateId && !estimates.some((e) => e.id === initialEstimateId) ? (
           <p className="alert warn">{t("CRM.sourceUnavailable")}</p>
         ) : null}
-        {!loadingOptions && (missingFields.length || planIssues.length) ? (
+        {step(2, "ProjectCreate.stepInfo")}
+        {!page && !loadingOptions && (missingFields.length || planIssues.length) ? (
           <p role="status">
             {t("CRM.missingProjectFields")}: {[...missingFields.map((field) => t(field)), ...planIssues].join(", ")}
           </p>
@@ -4099,6 +4210,8 @@ export function CreateProjectModal({
           ) : null}
         </div>
         <ContactPicker customerId={customerId} value={form.contactIds ?? []} onChange={(contactIds) => update({ contactIds })} />
+        {step(3, "ProjectCreate.stepPlan")}
+        {page ? <p className="muted pcp-note">{t("ProjectCreate.planExcel")}</p> : null}
         <MasterPlanSection
           rows={headings}
           onChange={(change) => {
@@ -4140,6 +4253,7 @@ export function CreateProjectModal({
             </label>
           </div>
         )}
+        {step(4, "ProjectCreate.stepPayments")}
         <PaymentChecklist value={form.paymentsReceived ?? []} onChange={(paymentsReceived) => update({ paymentsReceived })} />
         <details>
           <summary>{t("CRM.projectOptionalDetails")}</summary>
@@ -4173,7 +4287,7 @@ export function CreateProjectModal({
         </details>
         <p className="muted">{t("CRM.projectPlanLater")}</p>
       </div>
-    </Modal>
+    </Shell>
   );
 }
 

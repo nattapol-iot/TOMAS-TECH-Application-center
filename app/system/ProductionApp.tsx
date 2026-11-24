@@ -39,7 +39,17 @@ import type { TmtIdUser } from "./tmt-id.types";
 import { PRODUCT } from "./product";
 import { CopyLinkButton, Icon, Tabs, Toast, type IconName } from "./ui";
 import { LANGUAGES, LanguageContext, translate, applyDocumentLanguage, type Lang } from "./i18n";
-import { PROJECT_PAGE_TABS, ProductionDashboard, ProductionInventory, ProductionMasterData, ProductionProjects, ProjectPage, type ProjectPageTab } from "./production/CoreScreens";
+import {
+  CreateProjectModal,
+  PROJECT_PAGE_TABS,
+  ProductionDashboard,
+  ProductionInventory,
+  ProductionMasterData,
+  ProductionProjects,
+  ProjectPage,
+  projectPageKey,
+  type ProjectPageTab,
+} from "./production/CoreScreens";
 import { ProductionMyWork, ProductionPriceLibrary, ProductionProjectSchedule, ProductionSupplierQuotations, ProductionWaitingSupplierPrice } from "./production/PlanningPricingScreens";
 import { ProductionCompanyStamps, ProductionMySignature, ProductionSignedDocuments, ProductionSignInbox } from "./production/SigningScreens";
 import { ProductionAuditLog, ProductionEngineeringRates, ProductionReports, ProductionSettings } from "./production/AdminAnalyticsScreens";
@@ -300,16 +310,17 @@ const NAV_GROUPS = NAV.flatMap((section) => (section.group ? [section.group] : [
  * moved the whole menu under the pointer.
  */
 const DEFAULT_COLLAPSED_GROUPS = NAV_GROUPS;
-type ProjectTab = "portfolio" | "schedule" | "punchlist" | "cost" | "page";
+type ProjectTab = "portfolio" | "schedule" | "punchlist" | "cost" | "page" | "create";
 /**
  * The Projects tabs as their addresses name them: "#/projects" (overview), "#/projects/plan/<project>…", "#/projects/punchlist",
  * "#/projects/cost/<project>"; any other first segment is a project number, its own page (task doc 5.2): "#/projects/<number>/<tab>".
  */
-const PROJECT_TAB_SEGMENT: Record<ProjectTab, string> = { portfolio: "", schedule: "plan", punchlist: "punchlist", cost: "cost", page: "" };
+const PROJECT_TAB_SEGMENT: Record<ProjectTab, string> = { portfolio: "", schedule: "plan", punchlist: "punchlist", cost: "cost", page: "", create: "new" };
 const projectTabOf = (hash: string): ProjectTab => {
   const address = parseScreenHash(hash);
   const segment = address?.view === "projects" ? address.path[0] : undefined;
-  return segment === "plan" ? "schedule" : segment === "punchlist" ? "punchlist" : segment === "cost" ? "cost" : segment ? "page" : "portfolio";
+  // "#/projects/new" is Create project as a page (task doc 5.4).
+  return segment === "plan" ? "schedule" : segment === "punchlist" ? "punchlist" : segment === "cost" ? "cost" : segment === "new" ? "create" : segment ? "page" : "portfolio";
 };
 type ProjectPagePlace = { no: string; tab: ProjectPageTab };
 /** The plan inside a project page names its project itself; nothing to clear afterwards. */
@@ -486,11 +497,12 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
   }, []);
   /** Puts a place on the open screen's address, e.g. the Projects tab; Back returns to the last one. */
   const placeScreen = useCallback(
-    (path: (string | number)[]) => {
+    (path: (string | number)[], how: "push" | "replace" = "push") => {
       const state = linkStateFor(view, address);
       state.path = path.map(String);
       const next = address + screenTail(state.path, state.params);
-      if (baseHash(window.location.hash) === address && window.location.hash !== next) window.history.pushState(null, "", window.location.pathname + window.location.search + next);
+      if (baseHash(window.location.hash) === address && window.location.hash !== next)
+        window.history[how === "push" ? "pushState" : "replaceState"](null, "", window.location.pathname + window.location.search + next);
     },
     [view, address, linkStateFor],
   );
@@ -998,11 +1010,11 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
   );
   // Opens a project's own page (task doc 5.2) on one of its tabs.
   const openProjectPage = useCallback(
-    async (projectNo: string, tab: ProjectPageTab = "overview") => {
+    async (projectNo: string, tab: ProjectPageTab = "overview", how: "push" | "replace" = "push") => {
       const next = { no: projectNo, tab };
       // On Projects already: the page is a new history entry, written before the address effect can rewrite the list's.
       if (view === "projects") {
-        placeScreen(projectPagePath(next));
+        placeScreen(projectPagePath(next), how);
         setProjectTab("page");
         setProjectPage(next);
         window.scrollTo({ top: 0 });
@@ -1132,6 +1144,8 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
   );
   const common = { bootstrap, notify: setToast, refreshBootstrap };
   const seesProjectCost = canViewProjectCost(bootstrap.user.roles ?? [bootstrap.user.role]);
+  // "#/projects/new" without project.write shows the list instead (task doc 5.4); the API refuses a create anyway.
+  const canCreateProject = bootstrap.permissions.includes("project.write");
   const moduleProps = {
     bootstrap,
     notify: setToast,
@@ -1634,7 +1648,24 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
                       }
                     />
                   ) : null}
-                  {projectTab !== "page" && bootstrap.permissions.includes("schedule.read") ? (
+                  {projectTab === "create" && canCreateProject ? (
+                    <CreateProjectModal
+                      page
+                      bootstrap={bootstrap}
+                      refreshBootstrap={refreshBootstrap}
+                      notify={setToast}
+                      onClose={() => changeProjectTab("portfolio")}
+                      onCreated={async (number, deliveryNote, id) => {
+                        setToast(`${number} · ${t("Portfolio.created")}${deliveryNote}`);
+                        await refreshBootstrap();
+                        // The new project opens on its plan, to add or bring in the rows (task doc 5.4).
+                        // In place of "#/projects/new", so Back does not reopen an empty form.
+                        if (id) await openProjectPage(projectPageKey({ id, number }), bootstrap.permissions.includes("schedule.read") ? "plan" : "overview", "replace");
+                        else changeProjectTab("portfolio");
+                      }}
+                    />
+                  ) : null}
+                  {projectTab !== "page" && !(projectTab === "create" && canCreateProject) && bootstrap.permissions.includes("schedule.read") ? (
                     <Tabs
                       tabs={[
                         { id: "portfolio" as ProjectTab, label: "Projects.tabOverview" },
@@ -1649,7 +1680,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
                   ) : null}
                   {/* project-v2.css: 14px under the tabs in V1; in V2 a 12px column, as the Pegasus skin spaces its own children. */}
                   <div className="project-look-body">
-                    {projectTab === "page" ? null : projectTab === "cost" && seesProjectCost && bootstrap.permissions.includes("schedule.read") ? (
+                    {projectTab === "page" || (projectTab === "create" && canCreateProject) ? null : projectTab === "cost" && seesProjectCost && bootstrap.permissions.includes("schedule.read") ? (
                       <ProjectCostScreen bootstrap={bootstrap} openProjectSchedule={openProjectSchedule} />
                     ) : projectTab === "portfolio" || projectTab === "cost" || !bootstrap.permissions.includes("schedule.read") ? (
                       <ProductionProjects
@@ -1657,6 +1688,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
                         teamTestMode={IS_TEAM_TEST_MODE}
                         openProjectSchedule={bootstrap.permissions.includes("schedule.read") ? openProjectSchedule : undefined}
                         openProjectPage={openProjectPage}
+                        openCreatePage={() => changeProjectTab("create")}
                       />
                     ) : projectTab === "punchlist" ? (
                       <IssueBatchScreen key={`issues:${preferredIssueBatch?.count ?? 0}`} {...common} initialBatchId={preferredIssueBatch?.id ?? null} openProjectSchedule={openProjectSchedule} />
