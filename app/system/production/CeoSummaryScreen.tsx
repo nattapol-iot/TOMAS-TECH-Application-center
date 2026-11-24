@@ -11,7 +11,9 @@ import { useT } from "../i18n";
 import { listProjectOverview, type ProjectOverviewItem } from "../project-overview-client";
 import { EmptyState, Icon, PageHeader } from "../ui";
 import { byBudgetRisk, factText, thingsToKnow } from "../../../lib/ceo-summary";
-import { projectBudgetStates, shortAmount, type ProjectCostItem, type ProjectCostOverview, type PurchaseCost } from "../../../backend-node/src/project-cost-model";
+import { buildCeoWorkbook, ceoWorkbookName } from "../../../lib/ceo-workbook";
+import { downloadErpEstimateWorkbookBytes } from "../../../lib/erp-estimate-workbook";
+import { projectBudgetStates, shortAmount, type ProjectCostDetail, type ProjectCostItem, type ProjectCostOverview, type PurchaseCost } from "../../../backend-node/src/project-cost-model";
 import { HealthBadge } from "./ProjectPlanFields";
 import "./ceo-summary.css";
 
@@ -68,6 +70,43 @@ export function CeoSummaryScreen({
   const shown = focus ? items.filter((item) => pageKey(item) === focus) : items;
   const elevated = (bootstrap.user.roles ?? [bootstrap.user.role]).some((role) => role === "Engineering Manager" || role === "Admin");
   const canWrite = bootstrap.permissions.includes("project.write");
+  // Task doc 6.4 (owner decision 6: made in the browser). PDF: the page as it is on screen, on A4 landscape, through the
+  // browser's own print to PDF (ceo-summary.css @media print). Excel: five sheets from the same figures (lib/ceo-workbook.ts).
+  const [exporting, setExporting] = useState(false);
+  const printPdf = () => {
+    document.documentElement.classList.add("print-ceo");
+    const done = () => {
+      document.documentElement.classList.remove("print-ceo");
+      window.removeEventListener("afterprint", done);
+    };
+    window.addEventListener("afterprint", done);
+    window.print();
+    // print() returns once the dialog closes in most browsers; where afterprint never comes, the class still goes.
+    window.setTimeout(done, 1000);
+  };
+  const downloadExcel = async () => {
+    if (!cost || exporting) return;
+    setExporting(true);
+    try {
+      const details = new Map<number, ProjectCostDetail>();
+      // Each project's own cost, four at a time; one that cannot be read is left out of the detail sheets, and said so.
+      for (let start = 0; start < shown.length; start += 4)
+        await Promise.all(
+          shown.slice(start, start + 4).map((item) =>
+            apiRequest<ProjectCostDetail>(`/api/v1/projects/${item.id}/cost`)
+              .then((detail) => details.set(item.id, detail))
+              .catch(() => undefined),
+          ),
+        );
+      downloadErpEstimateWorkbookBytes(buildCeoWorkbook({ shown, all: cost.items, details, schedule, hoursPerManDay: cost.hoursPerManDay, today: cost.today, t }), ceoWorkbookName(focus, cost.today));
+      const missing = shown.filter((item) => !details.has(item.id));
+      if (missing.length) notify(t("CEO.exportMissing").replace("{projects}", missing.map((item) => item.number).join(", ")));
+    } catch (failure) {
+      notify(failure instanceof Error ? failure.message : t("CEO.exportFailed"));
+    } finally {
+      setExporting(false);
+    }
+  };
   const setNote = useCallback(
     (id: number, note: ProjectCostItem["ceoNote"]) =>
       setCost((current) => (current ? { ...current, items: current.items.map((item) => (item.id === id ? { ...item, ceoNote: note } : item)) } : current)),
@@ -83,17 +122,27 @@ export function CeoSummaryScreen({
         title="CEO.title"
         subtitle="CEO.subtitle"
         actions={
-          <label className="ceo-focus">
-            <span className="muted">{t("CEO.show")}</span>
-            <select value={focus ?? ""} onChange={(event) => onFocus(event.target.value || null)} data-guide="ceo.focus">
-              <option value="">{t("CEO.allProjects")}</option>
-              {items.map((item) => (
-                <option key={item.id} value={pageKey(item)}>
-                  {item.number} · {item.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="ceo-actions">
+            <button type="button" className="btn default" data-guide="ceo.downloads" disabled={!cost || !shown.length} onClick={printPdf}>
+              <Icon name="download" />
+              {t("CEO.pdf")}
+            </button>
+            <button type="button" className="btn default" disabled={!cost || !shown.length || exporting} onClick={() => void downloadExcel()}>
+              <Icon name="download" />
+              {exporting ? t("CEO.exporting") : t("CEO.excel")}
+            </button>
+            <label className="ceo-focus">
+              <span className="muted">{t("CEO.show")}</span>
+              <select value={focus ?? ""} onChange={(event) => onFocus(event.target.value || null)} data-guide="ceo.focus">
+                <option value="">{t("CEO.allProjects")}</option>
+                {items.map((item) => (
+                  <option key={item.id} value={pageKey(item)}>
+                    {item.number} · {item.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
         }
       />
       {error ? (
