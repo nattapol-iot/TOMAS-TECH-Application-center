@@ -1830,6 +1830,18 @@ const PROJECT_PLAN: Guide = {
       missing: { th: "เปิด 'ตาราง' ใน V2 ก่อน หรือกด 'ถัดไป'", en: "Open the Sheet in V2 first, or press Next.", jp: "先に V2 の「表」を開くか、「次へ」を押します。" },
     },
     {
+      target: "plan.sheetExport",
+      action: "next",
+      view: "projects",
+      title: { th: "ส่งออก Excel แบบส่งลูกค้า", en: "Export Excel for the customer", jp: "顧客向け Excel を出力" },
+      body: {
+        th: "ปุ่มขวาบนสร้างไฟล์ Gantt หน้าตาเดียวกับที่ส่งลูกค้าอยู่: หัวไฟล์ชื่อโปรเจกต์ ลูกค้า เลข PJ และ PO คอลัมน์ WBS ถึง WORK DAYS และแท่ง Gantt เป็นสีในเซลล์รายวัน % DONE มาจากความคืบหน้าล่าสุดของทีม ไม่มีสถานะ เหตุผล หรือชั่วโมงภายใน เลือกภาษาวันที่ได้ ใส่คอลัมน์ผู้ทำหรือรวมงานย่อยได้ถ้าต้องการ ดูตัวอย่างก่อนกดดาวน์โหลด ระบบเก็บสำเนาไว้ในแฟ้ม 08 Schedule ของโปรเจกต์ให้ด้วย",
+        en: "The button at the top right makes the Gantt file in the layout the customer already gets: the project, customer, PJ number and PO on top, the columns WBS to WORK DAYS, and the Gantt as day-by-day cell colours. % DONE is the team's latest progress; no status, reasons or internal hours go out. Pick the date language, and add the member column or sub tasks if you want them. Check the preview, then download; a copy is kept in the project's folder 08 Schedule.",
+        jp: "右上のボタンで、顧客に送っているものと同じ体裁の Gantt ファイルを作ります。上部に案件名・顧客・PJ 番号・PO、WBS〜WORK DAYS の列、日ごとのセルの色でガントを表示します。% DONE はチームの最新の進捗で、状態・理由・社内の時間は出しません。日付の言語を選び、必要なら担当者列やサブタスクを加えます。プレビューを確認してダウンロードします。控えは案件のフォルダ 08 Schedule に保存されます。",
+      },
+      missing: { th: "เปิด 'ตาราง' ใน V2 ก่อน หรือกด 'ถัดไป'", en: "Open the Sheet in V2 first, or press Next.", jp: "先に V2 の「表」を開くか、「次へ」を押します。" },
+    },
+    {
       target: "plan.sheetAfter",
       action: "next",
       view: "projects",

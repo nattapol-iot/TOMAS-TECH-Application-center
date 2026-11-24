@@ -10,9 +10,19 @@
    keeps storing calendar days, so existing plans do not move. */
 
 import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ApiClientError, apiRequest } from "../api-client";
+import { ApiClientError, apiRequest, uploadProjectDocument } from "../api-client";
 import { confirmDialog } from "../dialogs";
 import { LanguageContext, useT } from "../i18n";
+import { Modal } from "../ui";
+import {
+  buildCustomerScheduleWorkbook,
+  customerScheduleDays,
+  customerScheduleFileName,
+  customerScheduleSheet,
+  type CustomerScheduleInput,
+  type CustomerScheduleRow,
+} from "../../../lib/customer-schedule-workbook";
+import { downloadErpEstimateWorkbookBytes } from "../../../lib/erp-estimate-workbook";
 import { linkedStart, nextWorkDay } from "../../../lib/gantt";
 import { percentChangePatch, statusChangePatch } from "../../../lib/my-work";
 import {
@@ -220,6 +230,7 @@ const GLYPH = {
   trash: ["M3 6h18", "M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6", "M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"],
   fold: ["m11 17-5-5 5-5", "m18 17-5-5 5-5"],
   unfold: ["m13 17 5-5-5-5", "m6 17 5-5-5-5"],
+  download: ["M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4", "m7 10 5 5 5-5", "M12 15V3"],
   calendar: ["M16 2v4M8 2v4M3 10h18", "M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"],
 };
 
@@ -234,6 +245,7 @@ export function PlanSheet({
   removeFor,
   ensureMembers,
   canAddSub,
+  project,
 }: {
   schedule: ProjectSchedule;
   /** The people a row may be given: everyone for a planner, the project's own people for a member (usePlanTeam). */
@@ -250,6 +262,8 @@ export function PlanSheet({
   /** A person named on a row joins the project first, because a PIC must be a member. */
   ensureMembers: (userIds: number[]) => Promise<void>;
   canAddSub: (task: ScheduleTask) => boolean;
+  /** The project's own facts for the customer file's title block. */
+  project?: { customerName: string; purchaseOrderNumber: string; leadEngineerName: string; startDate: string | null } | null;
 }) {
   const t = useT();
   const { lang } = useContext(LanguageContext);
@@ -275,6 +289,14 @@ export function PlanSheet({
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [steps, setSteps] = useState({ undo: 0, redo: 0 });
   const [frameWidth, setFrameWidth] = useState(0);
+  // The customer file (owner 2026-11-23): date language and the two internal options.
+  const [exporting, setExporting] = useState(false);
+  const [exportLang, setExportLang] = useState<"th" | "en">(() => (lang === "TH" ? "th" : "en"));
+  const [exportMember, setExportMember] = useState(false);
+  const [exportSub, setExportSub] = useState(false);
+  const [exportBusy, setExportBusy] = useState(false);
+  // A copy that did not reach folder 08: its reason, and the file to try again without a second download.
+  const [exportFailed, setExportFailed] = useState<{ reason: string; bytes: Uint8Array; name: string } | null>(null);
   const [widths, setWidths] = useState<Record<string, number>>(readWidths);
   const [drop, setDrop] = useState<Drop | null>(null);
   const [menu, setMenu] = useState<Menu | null>(null);
@@ -1816,6 +1838,61 @@ export function PlanSheet({
   const tableWidth = LEFT_WIDTH + timeline.days * DW;
   const weeks = timeline.days / 7;
 
+  /** The plan as the customer file has it: headings and tasks, sub tasks only when asked, never a member's own task. */
+  const exportInput = (): CustomerScheduleInput => ({
+    projectName: schedule.projectName,
+    customerName: project?.customerName ?? "",
+    projectNo: schedule.projectNo,
+    poNumber: project?.purchaseOrderNumber ?? "",
+    projectStart: project?.startDate || null,
+    lead: project?.leadEngineerName ?? "",
+    today,
+    lang: exportLang,
+    withMember: exportMember,
+    holidays: schedule.holidays ?? [],
+    rows: model.rows
+      .filter((row) => row.task.kind !== "detail" && (exportSub || row.task.depth <= 1))
+      .map((row): CustomerScheduleRow => ({
+        wbs: row.task.wbs,
+        level: row.task.depth + 1,
+        heading: row.task.kind === "phase",
+        name: row.fields.name,
+        party: row.fields.picExternal,
+        member: cellText(row, "member"),
+        start: row.start,
+        end: row.finish,
+        days: row.days,
+        percent: row.task.kind === "phase" ? null : Math.round(row.percent),
+        workDays: row.workDays,
+      })),
+  });
+  const downloadCustomerFile = async () => {
+    const bytes = buildCustomerScheduleWorkbook(exportInput()),
+      name = customerScheduleFileName(schedule.projectNo);
+    downloadErpEstimateWorkbookBytes(bytes, name);
+    await keepCopy(bytes, name);
+  };
+  /** A copy goes into the project's folder 08 Schedule, so the team can see what the customer was sent and when. */
+  const keepCopy = async (bytes: Uint8Array, name: string) => {
+    setExportFailed(null);
+    setExportBusy(true);
+    try {
+      const copy = new Uint8Array(bytes.byteLength);
+      copy.set(bytes);
+      await uploadProjectDocument(schedule.projectId, {
+        file: new File([copy.buffer], name, { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
+        folderCode: "08",
+        documentType: "Customer schedule",
+        remark: `Exported from the plan on ${today}`,
+      });
+      say(t("Sheet.exportKept"));
+      setExporting(false);
+    } catch (failure) {
+      setExportFailed({ reason: t(failure instanceof Error ? failure.message : "The request could not be completed."), bytes, name });
+    } finally {
+      setExportBusy(false);
+    }
+  };
   const menuRow = menu ? (model.byId.get(menu.id) ?? null) : null;
   const runMenu = (key: string) => {
     if (!menuRow) return;
@@ -1852,8 +1929,114 @@ export function PlanSheet({
     );
   }
 
+  const preview = exporting ? customerScheduleSheet(exportInput()) : null;
+  const previewDays = exporting ? customerScheduleDays(exportInput()) : [];
+  const shownDays = Math.min(previewDays.length, 70);
+  const previewLeft = 8 + (exportMember ? 1 : 0);
+  const previewText = (value: string | number | null | undefined, style: number) => {
+    if (value === null || value === undefined) return "";
+    if (typeof value === "number" && (style === 14 || style === 15)) {
+      const iso = shiftDay("1899-12-30", value);
+      return `${(exportLang === "th" ? NAMES.TH! : NAMES.EN!).day[asDate(iso).getUTCDay()]} ${shortDate(iso)}`;
+    }
+    if (typeof value === "number" && style === 18) return `${Math.round(value * 100)}%`;
+    return String(value);
+  };
+
   return (
     <section className="plan-sheet" data-guide="plan.sheet" aria-label={t("Sheet.label")}>
+      {exporting && preview ? (
+        <Modal
+          title="Sheet.export"
+          subtitle="Sheet.exportSubtitle"
+          size="xl"
+          onClose={() => {
+            setExporting(false);
+            setExportFailed(null);
+          }}
+          footer={
+            <>
+              <span className="ps-xl-note">{t("Sheet.exportNote").replace("{name}", customerScheduleFileName(schedule.projectNo))}</span>
+              <button type="button" className="btn ghost" onClick={() => setExporting(false)}>
+                {t("Close")}
+              </button>
+              <button type="button" className="btn primary" disabled={exportBusy} onClick={() => void downloadCustomerFile()}>
+                {exportBusy ? <span className="spinner" /> : null}
+                {t("Sheet.download")}
+              </button>
+            </>
+          }
+        >
+          {exportFailed ? (
+            <div className="ps-xl-error" role="alert">
+              <span>{t("Sheet.exportNotKept").replace("{reason}", exportFailed.reason)}</span>
+              <button type="button" className="btn ghost sm" disabled={exportBusy} onClick={() => void keepCopy(exportFailed.bytes, exportFailed.name)}>
+                {t("Sheet.retryCopy")}
+              </button>
+            </div>
+          ) : null}
+          {previewDays.length >= 104 * 7 ? <p className="ps-xl-cap">{t("Sheet.exportCapped")}</p> : null}
+          <div className="ps-xl-opts">
+            <label>
+              {t("Sheet.exportLang")}{" "}
+              <select value={exportLang} onChange={(event) => setExportLang(event.target.value === "en" ? "en" : "th")}>
+                <option value="th">{t("Sheet.exportLangTh")}</option>
+                <option value="en">{t("Sheet.exportLangEn")}</option>
+              </select>
+            </label>
+            <label className="chk">
+              <input type="checkbox" checked={exportMember} onChange={(event) => setExportMember(event.target.checked)} /> {t("Sheet.exportMember")}
+            </label>
+            <label className="chk">
+              <input type="checkbox" checked={exportSub} onChange={(event) => setExportSub(event.target.checked)} /> {t("Sheet.exportSubTasks")}
+            </label>
+          </div>
+          <div className="ps-xl-box">
+            <div className="ps-xl-head">
+              {preview.rows.slice(0, 3).map((line, index) => (
+                <div key={index} className={index ? "" : "xt"}>
+                  {String(line[0]?.value ?? "")}
+                </div>
+              ))}
+            </div>
+            <table className="ps-xl" style={{ width: 260 + previewLeft * 50 + shownDays * 11 }}>
+              <thead>
+                <tr>
+                  <th colSpan={previewLeft} />
+                  {Array.from({ length: shownDays / 7 }, (_, week) => (
+                    <th key={week} colSpan={7} className="wk">
+                      {`Week ${week + 1}`}
+                    </th>
+                  ))}
+                </tr>
+                <tr>
+                  {preview.rows[6]!.slice(0, previewLeft).map((cell, index) => (
+                    <th key={index} className="lbl">
+                      {String(cell.value ?? "")}
+                    </th>
+                  ))}
+                  {previewDays.slice(0, shownDays).map((day) => (
+                    <th key={day} className={`dn${day === today ? " td" : ""}`}>
+                      {Number(day.slice(8))}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {preview.rows.slice(8).map((line, index) => (
+                  <tr key={index}>
+                    {line.slice(0, previewLeft + shownDays).map((cell, col) => (
+                      <td key={col} className={`x${cell.style}${col >= previewLeft ? " g" : ""}`}>
+                        {col < previewLeft ? previewText(cell.value, cell.style) : null}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Modal>
+      ) : null}
       {menu && menuRow ? (
         <div
           className="ps-menu"
@@ -1947,6 +2130,10 @@ export function PlanSheet({
           {t(folded ? "Sheet.showColumns" : "Sheet.foldColumns")}
         </button>
         <span className="grow" />
+        <button type="button" className="btn primary" data-guide="plan.sheetExport" onClick={() => setExporting(true)}>
+          <Glyph d={GLYPH.download} />
+          {t("Sheet.export")}
+        </button>
       </div>
       <div className="legend" aria-label={t("Sheet.legendLabel")}>
         <span>
