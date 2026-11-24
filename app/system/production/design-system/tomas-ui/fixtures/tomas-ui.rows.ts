@@ -1,0 +1,76 @@
+import type { ActivityEvent, Row, RowValues } from "@tomas-tc/blueprint";
+
+export const TECHNICIAN_ROWS: Row[] = [
+  { id: "tech-1", name: "Narin Phonsri", team: "field", email: "narin@example.com" },
+  { id: "tech-2", name: "Ploy Kaewmanee", team: "field", email: "ploy@example.com" },
+  { id: "tech-3", name: "Kenji Arai", team: "lab", email: "kenji@example.com" },
+  { id: "tech-4", name: "Somchai Boonmee", team: "lab", email: "somchai@example.com" },
+];
+
+export const SITE_ROWS: Row[] = [
+  { id: "site-1", name: "Riverside Plant", region: "central" },
+  { id: "site-2", name: "Hillview Depot", region: "north" },
+  { id: "site-3", name: "Harbour Warehouse", region: "east" },
+  { id: "site-4", name: "Palm Bay Office", region: "south" },
+];
+
+export const DEVICE_ROWS: Row[] = [
+  { id: "dev-1", code: "GW-A01", name: "Gateway A-01", kind: "gateway", site: "site-1", status: "online", uptime: 0.999, installed: "2025-03-12" },
+  { id: "dev-2", code: "SN-B07", name: "Sensor hub B-07", kind: "sensor", site: "site-1", status: "online", uptime: 0.972, installed: "2025-06-01" },
+  { id: "dev-3", code: "PLC-C03", name: "PLC bridge C-03", kind: "plc", site: "site-2", status: "maintenance", uptime: 0.714, installed: "2024-11-20" },
+  { id: "dev-4", code: "CAM-D02", name: "Dock camera D-02", kind: "camera", site: "site-3", status: "offline", uptime: 0.412, installed: "2025-01-08" },
+  { id: "dev-5", code: "SN-E11", name: "Cold room sensor E-11", kind: "sensor", site: "site-3", status: "online", uptime: 0.958, installed: "2025-09-30" },
+  { id: "dev-6", code: "GW-F04", name: "Gateway F-04", kind: "gateway", site: "site-4", status: "online", uptime: 0.991, installed: "2026-02-14" },
+];
+
+export const WORK_ORDER_ROWS: Row[] = [
+  { id: "wo-1", code: "WO-0101", title: "Replace gateway power supply", device: "dev-1", assignee: "tech-1", priority: "high", status: "done", reported: "2026-06-04T08:15", due: "2026-06-10", progress: 100, cost: 4200, notes: "Swapped the 24 V supply and logged the old unit for return.", photo: "gateway-psu.jpg" },
+  { id: "wo-2", code: "WO-0102", title: "Calibrate humidity probes", device: "dev-2", assignee: "tech-3", priority: "normal", status: "done", reported: "2026-07-11T10:40", due: "2026-07-20", progress: 100, cost: 1500, notes: "All four probes within 2 percent after calibration.", photo: null },
+  { id: "wo-3", code: "WO-0103", title: "PLC firmware update", device: "dev-3", assignee: "tech-4", priority: "urgent", status: "in-progress", reported: "2026-08-02T14:05", due: "2026-11-28", progress: 60, cost: 8800, notes: "Firmware staged on the bridge; waiting for the production window to flash it.", photo: "plc-panel.jpg" },
+  { id: "wo-4", code: "WO-0104", title: "Dock camera offline", device: "dev-4", assignee: "tech-2", priority: "urgent", status: "open", reported: "2026-09-18T07:55", due: "2026-11-26", progress: 0, cost: 0, notes: "Camera stopped streaming after the storm; check the PoE switch first.", photo: null },
+  { id: "wo-5", code: "WO-0105", title: "Cold room alarm threshold", device: "dev-5", assignee: "tech-3", priority: "normal", status: "in-progress", reported: "2026-10-03T09:20", due: "2026-12-02", progress: 35, cost: 600, notes: "Raise the alarm threshold to minus 15 degrees as requested by the site.", photo: null },
+  { id: "wo-6", code: "WO-0106", title: "Quarterly gateway inspection", device: "dev-6", assignee: "tech-1", priority: "low", status: "open", reported: "2026-10-21T13:10", due: "2026-12-15", progress: 10, cost: 900, notes: "Routine inspection with a firmware and certificate check.", photo: null },
+  { id: "wo-7", code: "WO-0107", title: "Relocate sensor hub", device: "dev-2", assignee: "tech-2", priority: "normal", status: "cancelled", reported: "2026-11-02T11:00", due: "2026-11-12", progress: 0, cost: 0, notes: "Cancelled: the line move was postponed to next year.", photo: null },
+  { id: "wo-8", code: "WO-0108", title: "Network survey for new line", device: "dev-1", assignee: "tech-4", priority: "high", status: "open", reported: "2026-11-15T16:30", due: "2026-11-30", progress: 0, cost: 3200, notes: "Survey Wi-Fi coverage along the new packing line before installing sensors.", photo: null },
+];
+
+export const WORK_PART_ROWS: Row[] = [
+  { id: "part-1", "work-order": "wo-1", part: "24 V DIN power supply", qty: 1, "unit-cost": 3600 },
+  { id: "part-2", "work-order": "wo-1", part: "Terminal block set", qty: 2, "unit-cost": 300 },
+  { id: "part-3", "work-order": "wo-3", part: "Industrial SD card 32 GB", qty: 2, "unit-cost": 900 },
+  { id: "part-4", "work-order": "wo-5", part: "Probe cable 5 m", qty: 1, "unit-cost": 600 },
+];
+
+export const WORK_NOTE_ROWS: Row[] = [
+  { id: "note-1", "work-order": "wo-3", author: "tech-4", body: "Backup of the current PLC program saved to the project share.", posted: "2026-08-03T09:10" },
+  { id: "note-2", "work-order": "wo-3", author: "tech-1", body: "Site manager approved a two hour stop on Friday evening.", posted: "2026-11-20T17:45" },
+  { id: "note-3", "work-order": "wo-4", author: "tech-2", body: "PoE switch port 7 shows no link; bringing a spare switch tomorrow.", posted: "2026-11-21T10:05" },
+];
+
+export const WORK_ORDER_ACTIVITY: ActivityEvent[] = [
+  { id: "act-1", at: "2026-08-02T07:05:00Z", kind: "created", actor: "Narin Phonsri" },
+  { id: "act-2", at: "2026-08-03T02:30:00Z", kind: "moved", field: "status", from: "open", to: "in-progress", actor: "Somchai Boonmee" },
+  { id: "act-3", at: "2026-11-20T10:50:00Z", kind: "updated", fields: ["progress", "due"], actor: "Somchai Boonmee" },
+];
+
+export const INSPECTION_VALUES: RowValues = {
+  text: "Panel 3 checked",
+  longtext: "Cable glands tight, no water ingress, labels readable.",
+  number: 42,
+  boolean: true,
+  date: "2026-11-24",
+  time: "09:30",
+  datetime: "2026-11-24T09:30",
+  daterange: { start: "2026-11-24", end: "2026-11-28" },
+  timerange: { start: "08:00", end: "17:00" },
+  select: "pass",
+  multiselect: ["power", "network"],
+  file: "inspection-report.pdf",
+  reference: "dev-1",
+  color: "#2563eb",
+  phone: "+66 2 000 0000",
+  email: "inspector@example.com",
+  url: "https://example.com/inspection",
+  year: "2026",
+  icon: "cpu",
+};

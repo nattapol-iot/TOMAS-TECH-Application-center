@@ -2,11 +2,11 @@
 
 import { useState } from "react";
 import { PageHeader, Tabs } from "../../ui";
+import { TomasUiGallery } from "../LazyScreens";
 import { ComponentGallery } from "./ComponentGallery";
 import { DESIGN_SYSTEM_TABS } from "./config/design-system.constants";
 import "./design-system.css";
 import { TokenCatalog } from "./TokenCatalog";
-import { TomasUiGallery } from "./TomasUiGallery";
 import type { DesignSystemTab, NotifyProps } from "./types/design-system.types";
 
 export function DesignSystemScreen({ notify }: NotifyProps) {
