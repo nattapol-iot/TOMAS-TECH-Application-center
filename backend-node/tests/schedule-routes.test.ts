@@ -2100,3 +2100,44 @@ test("PUT: a heading's own dates change with rows under it; a task under a headi
     }
   });
 });
+
+// Task doc 3.7: an outsourced row is linked to the purchase request its supplier is bought on (migration 128).
+function requestLinkAnswers(laborSource: string, found: boolean) {
+  return (statement: string): Answer | undefined => {
+    if (statement.includes("FROM dbo.schedule_tasks WITH (UPDLOCK,HOLDLOCK) WHERE id=@id AND deleted_at IS NULL"))
+      return { recordset: [taskRaw({ id: 11, parent_id: 1, labor_source: laborSource, purchase_request_id: null })] };
+    if (statement.includes("FROM dbo.projects WITH (UPDLOCK,HOLDLOCK) WHERE id=@project")) return { recordset: [projectRaw()] };
+    if (statement.includes("SELECT TOP(1) row_version FROM dbo.schedule_tasks")) return { recordset: [{ row_version: SCHEDULE_VERSION }] };
+    if (statement.includes("SELECT id FROM dbo.mat_prs WHERE project_id=@project AND pr_no=@no AND deleted_at IS NULL")) return { recordset: found ? [{ id: 5 }] : [] };
+    return undefined;
+  };
+}
+
+test("PUT purchase-request: an outsourced row takes a request of its own project by number, or none", async (t) => {
+  for (const item of [
+    { name: "linked", source: "Outsourced", found: true, prNo: "PR-26-001", status: 200, request: 5 },
+    { name: "another project's request", source: "Outsourced", found: false, prNo: "PR-99", status: 422 },
+    { name: "a row we do ourselves", source: "Own", found: true, prNo: "PR-26-001", status: 409 },
+    { name: "unlinked", source: "Outsourced", found: false, prNo: null, status: 200, request: null },
+  ]) {
+    await t.test(item.name, async (sub) => {
+      const { app } = harness({ id: MANAGER_ID, role: "Project Manager" });
+      const statements = installSqlMock(sub, requestLinkAnswers(item.source, item.found));
+      try {
+        const response = await app.inject({ method: "PUT", url: "/api/v1/schedule/tasks/11/purchase-request", payload: { prNo: item.prNo } });
+        assert.equal(response.statusCode, item.status, response.body);
+        const update = statements.find((entry) => entry.statement.includes("SET purchase_request_id=@request"));
+        if (item.status === 200) assert.equal(update?.params.request ?? null, item.request);
+        else assert.equal(update, undefined, "nothing written");
+        if (item.prNo === null)
+          assert.equal(
+            statements.some((entry) => entry.statement.includes("FROM dbo.mat_prs")),
+            false,
+            "no lookup to unlink",
+          );
+      } finally {
+        await app.close();
+      }
+    });
+  }
+});

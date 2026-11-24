@@ -206,6 +206,15 @@
 .plan-sheet .ps-budget-item.over .ps-budget-bar i:not(.act) {
   background: var(--sh-red);
 }
+/* Task doc 3.7: an outsourced row's purchase request, or the lack of one. */
+.plan-sheet .tag.pr {
+  background: var(--sh-primary-soft);
+  color: var(--sh-primary-dark);
+}
+.plan-sheet .tag.nopr {
+  background: var(--red-soft);
+  color: var(--sh-red);
+}
 .plan-sheet .sw.promised {
   border: 1.5px dashed var(--sh-head-bar);
   background: transparent;

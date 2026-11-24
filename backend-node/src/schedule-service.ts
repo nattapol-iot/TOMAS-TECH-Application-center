@@ -26,6 +26,8 @@ export type TaskRow = {
   lagWorkDays?: boolean;
   /** The other rows a linked row waits for (migration 126). */
   extraLinks?: ExtraLink[];
+  /** The purchase request an outsourced row is bought on (migration 128). */
+  purchaseRequestId?: number | null;
   visibility: string;
   planStart: string | null;
   planDays: number;
@@ -243,6 +245,7 @@ export function taskRow(row: Record<string, unknown> & { row_version: Buffer }):
     lagDays: Number(row.lag_days),
     lagWorkDays: row.lag_work_days === undefined || row.lag_work_days === null ? true : Boolean(row.lag_work_days),
     extraLinks: storedLinks(row.extra_links),
+    purchaseRequestId: row.purchase_request_id == null ? null : Number(row.purchase_request_id),
     picExternal: String(row.pic_external),
     planManDays: Number(row.plan_man_days),
     baselineStart: dateOnly(row.baseline_start as Date | string | null),
@@ -268,7 +271,7 @@ export function taskRow(row: Record<string, unknown> & { row_version: Buffer }):
 }
 
 const TASK_COLUMNS = `id,project_id,parent_id,sort_order,kind,name,is_milestone,origin,created_by,visibility,
- plan_start,plan_days,start_mode,predecessor_id,lag_days,lag_work_days,extra_links,pic_external,plan_man_days,baseline_start,baseline_end,
+ plan_start,plan_days,start_mode,predecessor_id,lag_days,lag_work_days,extra_links,purchase_request_id,pic_external,plan_man_days,baseline_start,baseline_end,
  baseline_days,baseline_rev,actual_start,actual_end,forecast_end,percent_done,status,blocked_reason,note,actual_man_days,
  updated_by,updated_at,row_version,labor_source,labor_supplier,people_by_day,discipline`;
 
@@ -799,6 +802,8 @@ export type TaskAccess = {
   frameIds?: Set<number>;
   /** Hours people confirmed on each row in My Work (dbo.work_hours, work key "Project-<id>"). */
   actualHours?: Map<number, number>;
+  /** The project's purchase requests by id, for an outsourced row's link (migration 128). */
+  purchaseRequests?: Map<number, { prNo: string; status: string }>;
 };
 export function taskResponse(resolved: ResolvedScheduleTask, tasks: Map<number, TaskRow>, pics: Map<number, PicRow[]>, access?: TaskAccess): Record<string, unknown> {
   const task = tasks.get(resolved.source.id)!;
@@ -870,6 +875,8 @@ export function taskResponse(resolved: ResolvedScheduleTask, tasks: Map<number, 
     discipline: task.discipline ?? null,
     // Task doc 3.1: actual hours per row; the screen adds a row's own and its rows' hours.
     actualHours: access?.actualHours?.get(task.id) ?? 0,
+    // Task doc 3.7: the request an outsourced row is bought on; null when none is linked.
+    purchaseRequest: task.purchaseRequestId && access?.purchaseRequests?.has(task.purchaseRequestId) ? { id: task.purchaseRequestId, ...access.purchaseRequests.get(task.purchaseRequestId)! } : null,
     updatedBy: task.updatedBy,
     ...flags,
     children: resolved.children.map((child) => taskResponse(child, tasks, pics, access)),
