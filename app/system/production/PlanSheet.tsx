@@ -11,7 +11,7 @@
 
 import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ApiClientError, apiRequest, listProjectDocuments, uploadProjectDocument } from "../api-client";
-import { confirmDialog } from "../dialogs";
+import { confirmDialog, promptDialog } from "../dialogs";
 import { LanguageContext, useT } from "../i18n";
 import { Modal } from "../ui";
 import { CUSTOMER_SCHEDULE_TEMPLATE_URL, fillCustomerSchedule } from "../../../lib/customer-schedule-template";
@@ -84,6 +84,8 @@ type Job = { seq: number; retried?: boolean } & (
   | { type: "plan"; taskId: number; patch: Patch }
   | { type: "progress"; taskId: number; percent?: number; status?: string }
   | { type: "move"; taskId: number; parentId: number | null; beforeId: number | null }
+  /** Task doc 3.5: the row done by an outside supplier (or by us again), through the People table's save. */
+  | { type: "labor"; taskId: number; laborSource: "Own" | "Outsourced"; laborSupplier: string }
   | { type: "create"; parentId: number | null; parentSeq?: number; beforeId: number | null; kind: "phase" | "task"; fields: Fields; percent?: number }
 );
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
@@ -297,6 +299,8 @@ export function PlanSheet({
   const [collapsed, setCollapsed] = useState<ReadonlySet<number>>(() => new Set());
   const [headingsOnly, setHeadingsOnly] = useState(false);
   const [disciplineFilter, setDisciplineFilter] = useState<string | null>(null);
+  // Suppliers for the member cell (task doc 3.5): those on this plan, then the ERP's, read once when a member cell opens.
+  const [erpVendors, setErpVendors] = useState<string[] | null>(null);
   const [active, setActive] = useState<Cell | null>(null);
   const [anchor, setAnchor] = useState<Cell | null>(null);
   // The same two cells, kept as they change: two keys in one tick (a held arrow) each move from the one before.
@@ -470,6 +474,20 @@ export function PlanSheet({
     return [...byDiscipline.entries()].map(([discipline, value]) => ({ discipline, ...value })).sort((left, right) => order.indexOf(left.discipline) - order.indexOf(right.discipline));
   }, [model.rows, schedule.manHours]);
   const disciplineLabel = (key: string) => (key === "None" ? t("Sheet.budgetNone") : key === "Other" ? t("Plan.mhDiscipline.Other") : t(`Discipline.${key}`));
+  const vendorChoices = useMemo(() => {
+    const used = model.rows.flatMap((row) => (row.task.laborSource === "Outsourced" && row.task.laborSupplier ? [row.task.laborSupplier] : []));
+    return [...new Set([...used.sort((a, b) => a.localeCompare(b)), ...(erpVendors ?? [])])];
+  }, [model.rows, erpVendors]);
+  const memberEditing = editing !== null && COLUMNS[editing.col]?.key === "member";
+  const vendorsAsked = useRef(false),
+    vendorPrompt = useRef(false);
+  useEffect(() => {
+    if (!memberEditing || vendorsAsked.current || !canPlan) return;
+    vendorsAsked.current = true;
+    void apiRequest<{ items?: { name: string }[] }>("/api/v1/master/suppliers?source=erp&pageSize=100")
+      .then((page) => setErpVendors((page.items ?? []).map((item) => item.name).filter(Boolean)))
+      .catch(() => setErpVendors([]));
+  }, [memberEditing, canPlan]);
   const names = NAMES[lang] ?? NAMES.EN!;
   const dayDate = (iso: string | null) => (iso ? `${names.day[asDate(iso).getUTCDay()]} ${shortDate(iso)}` : "");
   const longDate = (iso: string) => `${Number(iso.slice(8, 10))} ${names.month[Number(iso.slice(5, 7)) - 1]} ${iso.slice(0, 4)}`;
@@ -560,6 +578,16 @@ export function PlanSheet({
     const task = flatById(plan).get(job.taskId);
     if (!task) return;
     const rowVersion = newest(task.rowVersion, versions.current.rows.get(task.id));
+    if (job.type === "labor") {
+      const saved = await apiRequest<{ scheduleVersion: string }>(`/api/v1/projects/${plan.projectId}/schedule/people`, {
+        method: "PUT",
+        body: JSON.stringify({ scheduleVersion, rows: [{ taskId: task.id, laborSource: job.laborSource, laborSupplier: job.laborSupplier }] }),
+      });
+      remember(task.id, saved);
+      // The row's own version moved without being handed back, so the plan is read again before it is saved.
+      stale.current = true;
+      return;
+    }
     if (job.type === "move") {
       const moved = await apiRequest<{ rowVersion: string; scheduleVersion: string }>(`/api/v1/schedule/tasks/${task.id}/move`, {
         method: "POST",
@@ -825,6 +853,25 @@ export function PlanSheet({
   const commit = async (row: Row, column: Column, text: string) => {
     const lock = lockOf(row, column);
     if (lock) return say(t(lock), true);
+    // An outside supplier does the row (task doc 3.5); our member stays on it as the one who looks after the work.
+    if (column === "member" && text.startsWith("v:")) {
+      if (!canPlan) return say(t("Sheet.readOnly"), true);
+      if (row.rollup || row.task.kind !== "task") return say(t("Sheet.vendorRow"), true);
+      let supplier = text.slice(2).trim().slice(0, 200);
+      if (supplier === "?") {
+        // One question at a time, even when "v:?" was pasted into many cells.
+        if (vendorPrompt.current) return;
+        vendorPrompt.current = true;
+        const typed = await promptDialog(t("Sheet.vendorAsk"), { title: t("Sheet.vendorGroup") }).finally(() => (vendorPrompt.current = false));
+        if (!typed?.trim()) return;
+        supplier = typed.trim().slice(0, 200);
+      }
+      const outsourced = row.task.laborSource === "Outsourced";
+      if (supplier ? outsourced && row.task.laborSupplier === supplier : !outsourced) return;
+      enqueue({ type: "labor", taskId: row.task.id, laborSource: supplier ? "Outsourced" : "Own", laborSupplier: supplier });
+      say(t(supplier ? "Sheet.vendorSet" : "Sheet.vendorCleared").replace("{name}", supplier));
+      return;
+    }
     const result = cellResult(row, column, text, row.fields);
     if ("error" in result) return say(t(result.error).replace("{wbs}", result.wbs ?? ""), true);
     if (result.status === "Blocked") {
@@ -857,11 +904,12 @@ export function PlanSheet({
         return row.workDays === null ? "" : String(row.workDays);
       case "after":
         return row.after;
-      case "member":
-        if (row.task.laborSource === "Outsourced" && row.task.laborSupplier) return row.task.laborSupplier;
-        return row.fields.picUserIds.length
-          ? row.fields.picUserIds.map((id) => row.task.pics.find((pic) => pic.id === id)?.name ?? team.find((person) => person.id === id)?.name ?? `#${id}`).join(", ")
-          : "";
+      case "member": {
+        const names = row.fields.picUserIds.map((id) => row.task.pics.find((pic) => pic.id === id)?.name ?? team.find((person) => person.id === id)?.name ?? `#${id}`).join(", ");
+        // Outsourced: the supplier, and our member who looks after it.
+        if (row.task.laborSource === "Outsourced" && row.task.laborSupplier) return names ? `${row.task.laborSupplier} · ${names}` : row.task.laborSupplier;
+        return row.fields.picUserIds.length ? names : "";
+      }
       case "status":
         return row.parent ? (row.lateKids ? t("Sheet.lateKids").replace("{count}", String(row.lateKids)) : "") : t(STATUS_LABEL[row.status] ?? row.status);
       case "hplan":
@@ -1721,6 +1769,17 @@ export function PlanSheet({
               ))}
             </optgroup>
           ) : null}
+          {row.task.kind === "task" && !row.rollup && canPlan ? (
+            <optgroup label={t("Sheet.vendorGroup")}>
+              {row.task.laborSource === "Outsourced" ? <option value="v:">{t("Sheet.vendorNone")}</option> : null}
+              {vendorChoices.map((name) => (
+                <option key={name} value={`v:${name}`}>
+                  {name}
+                </option>
+              ))}
+              <option value="v:?">{t("Sheet.vendorOther")}</option>
+            </optgroup>
+          ) : null}
         </select>
       );
     }
@@ -1775,13 +1834,17 @@ export function PlanSheet({
       );
     }
     if (column === "member") {
-      if (task.laborSource === "Outsourced" && task.laborSupplier)
+      if (task.laborSource === "Outsourced" && task.laborSupplier) {
+        // The supplier, and our member who looks after the work (task doc 3.5).
+        const looksAfter = cellText(row, "member").slice(task.laborSupplier.length);
         return (
           <>
             {task.laborSupplier}
             <span className="tag">{t("Sheet.outside")}</span>
+            {looksAfter}
           </>
         );
+      }
       const names = cellText(row, "member");
       if (names) return names;
       return task.kind === "task" && row.fields.discipline ? <span className="ph">{`${t("Sheet.waiting")} · ${t(`Discipline.${row.fields.discipline}`)}`}</span> : "";
