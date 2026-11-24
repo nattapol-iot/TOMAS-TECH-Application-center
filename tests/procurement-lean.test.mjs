@@ -28,7 +28,7 @@ test("an approved PR goes to the ERP, which picks suppliers and raises the PO; n
   assert.doesNotMatch(requisitions, /purchase-requisitions\/:id\/convert|INSERT INTO dbo\.mat_pos/);
   // Final approval sends it as the requester; the requester can send it again, and opening it reads the ERP's status.
   assert.match(requisitions, /decided\.status === "Approved" && goesOn\)[\s\S]*sendToErp\(id, decided\.requestedBy/);
-  assert.match(requisitions, /notifyUsers\(transaction, \[decided\.requestedBy\], "PR_ERP_SEND"/);
+  assert.match(requisitions, /notifyUsers\(\s*transaction,\s*\[decided\.requestedBy\],\s*"PR_ERP_SEND"/);
   assert.match(material, /\/api\/v1\/purchase-requisitions\/\$\{id\}\/erp-send`/);
   assert.match(material, /\/api\/v1\/purchase-requisitions\/\$\{id\}\/erp-sync`/);
   assert.match(editor, /\/api\/v1\/erp\/purchasing\/options/);
@@ -101,7 +101,7 @@ test("a PR goes to the requester's department head, then the final approver, who
 
 test("the requester hears of every decision on their PR, by bell and email (owner 2026-11-04)", () => {
   assert.match(requisitions, /const told = await noticeRequester\(transaction, id, actor, \{ stepId: current\.id, step: current\.name, decision, comment \}\);/);
-  assert.match(requisitions, /notifyUsers\(transaction, \[Number\(row\.requested_by\)\], "PR_DECISION"/);
+  assert.match(requisitions, /notifyUsers\(\s*transaction,\s*\[Number\(row\.requested_by\)\],\s*"PR_DECISION"/);
   // A fully approved PR is mailed with the ERP's answer; every other decision at once.
   assert.match(requisitions, /if \(decided\.status !== "Approved" \|\| !goesOn\) await tell\(decided\.told, null\);/);
   assert.match(requisitions, /void tell\(decided\.told, outcome\)/);
@@ -203,7 +203,10 @@ test("a row is added from inside the PR sheet's table: + on a row, and an add-ro
 test("a BOM has one budget figure: the list and the BOM itself both add up its lines (owner 2026-11-20)", () => {
   // The list once summed the BOM lines (outsource included) while the BOM showed the estimate's material total (no outsource,
   // any revision): THB 955,902.64 against 855,902.64 for one BOM.
-  assert.match(boms, /const BOM_BUDGET = `\(SELECT COALESCE\(SUM\(l\.qty_required\*l\.est_unit_cost\),0\) FROM dbo\.bom_lines l WHERE l\.bom_id=b\.id AND l\.deleted_at IS NULL AND \$\{MATERIAL_LINE\}\)`;/);
+  assert.match(
+    boms,
+    /const BOM_BUDGET = `\(SELECT COALESCE\(SUM\(l\.qty_required\*l\.est_unit_cost\),0\) FROM dbo\.bom_lines l WHERE l\.bom_id=b\.id AND l\.deleted_at IS NULL AND \$\{MATERIAL_LINE\}\)`;/,
+  );
   // The list, the opened BOM, and the release check against the review threshold.
   assert.equal(boms.split("${BOM_BUDGET} bom_budget").length - 1, 3);
   assert.ok(!boms.includes("v_estimate_totals") && !boms.includes("material_total") && !boms.includes("approvedMaterialBudget"));
@@ -256,11 +259,14 @@ test("BOM revisions count from zero and show as R<n>, like the estimate's (migra
 
 test("a BOM at or over the review threshold is released by a second person (migration 110, owner 2026-11-20)", () => {
   // The refusal is in the release itself, not only in what the screen offers.
-  assert.match(boms, /if \(reviewed && needsSecondReleaser\(Number\(reviewed\.bom_budget\), threshold\(reviewed\.review_threshold\), Number\(reviewed\.created_by\), actor\.id\)\)\s+throw new ApiError\(403, "bom_self_release_forbidden"/);
+  assert.match(
+    boms,
+    /if \(reviewed && needsSecondReleaser\(Number\(reviewed\.bom_budget\), threshold\(reviewed\.review_threshold\), Number\(reviewed\.created_by\), actor\.id\)\)\s+throw new ApiError\(403, "bom_self_release_forbidden"/,
+  );
   assert.ok(boms.includes('needsSecondReleaser: row.status === "Draft" && needsSecondReleaser(Number(row.bom_budget), threshold(row.review_threshold), Number(row.created_by), actor.id),'));
   // The budget it compares is the one figure the screens show.
   assert.ok(boms.includes("`SELECT ${BOM_BUDGET} bom_budget,b.created_by,${REVIEW_THRESHOLD} review_threshold FROM dbo.boms b WHERE b.id=@id;`"));
-  assert.ok(material.includes('item.needsSecondReleaser'));
+  assert.ok(material.includes("item.needsSecondReleaser"));
   assert.ok(material.includes('guide="bom.release" disabled onClick={() => undefined} />'));
   const migration = read("database/migrations/110_bom_review_threshold.sql");
   assert.match(migration, /THROW 51110, 'Migration 109 must be applied before migration 110\.', 1;/);
@@ -277,13 +283,17 @@ test("the ERP Request List: its tool names live in one file, and migration 111 k
   // A rename by the ERP team is a change in one file: no other source spells the tool names.
   for (const tool of ["project_request_list_add", "project_request_list_get", "project_request_list_cancel"]) {
     assert.ok(adapter.includes(`"${tool}"`), tool);
-    for (const other of ["backend-node/src/routes/purchase-requisitions.ts", "backend-node/src/erp-purchasing.ts", "backend-node/src/app.ts", "app/system/production/MaterialScreens.tsx"]) assert.ok(!read(other).includes(tool), `${tool} in ${other}`);
+    for (const other of ["backend-node/src/routes/purchase-requisitions.ts", "backend-node/src/erp-purchasing.ts", "backend-node/src/app.ts", "app/system/production/MaterialScreens.tsx"])
+      assert.ok(!read(other).includes(tool), `${tool} in ${other}`);
   }
   const migration = read("database/migrations/111_erp_request_list.sql");
   assert.match(migration, /THROW 51111, 'Migration 110 must be applied before migration 111\.', 1;/);
   assert.match(migration, /erp_line_status IN \(N''WAITING'', N''IN_PR'', N''ORDERED'', N''CANCELLED''\)/);
   // One line can be ordered on several ERP PRs and POs.
-  assert.match(migration, /CREATE TABLE dbo\.mat_pr_line_erp_orders \([^]*pr_line_id\s+bigint\s+NOT NULL CONSTRAINT FK_mat_pr_line_erp_orders_line FOREIGN KEY REFERENCES dbo\.mat_pr_lines\(id\) ON DELETE CASCADE/);
+  assert.match(
+    migration,
+    /CREATE TABLE dbo\.mat_pr_line_erp_orders \([^]*pr_line_id\s+bigint\s+NOT NULL CONSTRAINT FK_mat_pr_line_erp_orders_line FOREIGN KEY REFERENCES dbo\.mat_pr_lines\(id\) ON DELETE CASCADE/,
+  );
   // Requests the ERP already holds as one PR stay on purchase_request_get.
   assert.match(migration, /UPDATE dbo\.mat_prs SET erp_target = N''PR'' WHERE erp_target IS NULL AND erp_pr_no IS NOT NULL;/);
   assert.match(migration, /VALUES \(111, N'ERP request list line status'\);/);
@@ -298,11 +308,16 @@ test("an approved request goes to the ERP as the server is told: one PR, a sheet
   assert.ok(requisitions.includes('if (requestList === "excel") return prepareForUpload(prId);'));
   assert.ok(requisitions.includes('if (requestList === "tool") {'));
   // The Request List belongs to a project: a placeholder number is stopped before the ERP is asked.
-  assert.match(requisitions, /const blocked = requestListProblem\(erpHeader\);\s+if \(blocked\) \{ await recordError\(prId, blocked\); return \{ sent: false, kind: "validation", message: blocked \}; \}/);
+  assert.match(
+    requisitions,
+    /const blocked = requestListProblem\(erpHeader\);\s+if \(blocked\) \{\s*await recordError\(prId, blocked\);\s*return \{ sent: false, kind: "validation", message: blocked \};\s*\}/,
+  );
   // The line keys are kept before the call, and the tool is named only through the adapter.
-  assert.ok(requisitions.indexOf("await assignLineRefs(prId, prepared.ref);") > 0
-    && requisitions.indexOf("await assignLineRefs(prId, prepared.ref);") < requisitions.indexOf("const added = await erp.gateway.call<unknown>(subject, REQUEST_LIST_TOOLS.add,"));
-  assert.ok(requisitions.includes("erp.gateway.call<unknown>(subject, REQUEST_LIST_TOOLS.add,"));
+  assert.ok(
+    requisitions.indexOf("await assignLineRefs(prId, prepared.ref);") > 0 &&
+      requisitions.indexOf("await assignLineRefs(prId, prepared.ref);") < requisitions.search(/const added = await erp\.gateway\.call<unknown>\(\s*subject,\s*REQUEST_LIST_TOOLS\.add,/),
+  );
+  assert.match(requisitions, /erp\.gateway\.call<unknown>\(\s*subject,\s*REQUEST_LIST_TOOLS\.add,/);
   // One read per request per 15 minutes, whoever asks; inside that the last answer is shown.
   assert.ok(requisitions.includes("Date.now() - new Date(header.erp_synced_at).getTime() < ERP_LIST_SYNC_MINUTES * 60_000) return { synced: true, cached: true, erp: erpView(header) };"));
   // A recall after sending marks the request; it is never taken back while the ERP's list holds it.
@@ -312,13 +327,16 @@ test("an approved request goes to the ERP as the server is told: one PR, a sheet
   assert.ok(material.includes('{hasLineAnswers ? <td className="pg-line-erp"><LineErp erp={line.erp} /></td> : null}'));
   // A line the ERP has not answered for shows no status: a sheet waiting to be uploaded is not "waiting for Purchasing".
   assert.ok(material.includes('if (!erp?.status) return <span className="muted">—</span>;'));
-  assert.ok(material.includes('`RequestList_${pr.number}.xlsx`, REQUEST_LIST_SHEET.sheetName, true);'));
+  assert.ok(material.includes("`RequestList_${pr.number}.xlsx`, REQUEST_LIST_SHEET.sheetName, true);"));
   assert.ok(material.includes('data-guide="pr.request-list"') && material.includes('data-guide="pr.request-list-excel"'));
   // Sending by hand is not offered where the server gives a sheet, or once the list holds the request.
   assert.ok(material.includes('const canSend = Boolean(erp?.enabled && !erp.prNo && !inRequestList && listMode !== "excel")'));
   // The shared workbook writer keeps the cost workbook's styling unless told the sheet is plain data.
   assert.ok(read("lib/export-xlsx.ts").includes('export function exportXlsx(rows:CellValue[][],filename:string,sheetName="Summary cost",plain=false) {'));
   // The app role may write a line's ERP answer (migration 112); without it, taking a request back would be refused.
-  assert.match(read("database/migrations/112_request_list_line_grants.sql"), /GRANT UPDATE \(erp_line_ref, erp_item_id, erp_line_status, erp_line_status_label, erp_cancelled_reason, erp_line_url\) ON OBJECT::dbo\.mat_pr_lines TO \[iot_team_app_role\];/);
+  assert.match(
+    read("database/migrations/112_request_list_line_grants.sql"),
+    /GRANT UPDATE \(erp_line_ref, erp_item_id, erp_line_status, erp_line_status_label, erp_cancelled_reason, erp_line_url\) ON OBJECT::dbo\.mat_pr_lines TO \[iot_team_app_role\];/,
+  );
   assert.ok(read("backend-node/src/migration-validation.ts").includes('{ version: 112, fileName: "112_request_list_line_grants.sql", name: "Request list line grants" }'));
 });

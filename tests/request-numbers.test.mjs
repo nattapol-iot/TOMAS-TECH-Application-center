@@ -24,10 +24,11 @@ test("a request takes the app's own REQ number, for its project and Unit (migrat
 });
 
 test("a request over budget is submitted with its requester's reason, which the approvers read", () => {
-  assert.match(requisitions, /if \(over\.length && !reason\?\.trim\(\)\) throw new ApiError\(422, "justification_required"/);
+  assert.match(requisitions, /if \(over\.length && !reason\?\.trim\(\)\)\s*throw new ApiError\(422, "justification_required"/);
   // A reason given before is kept, so a corrected request goes again without asking twice.
-  assert.ok(requisitions.includes("const reason = over.length ? justification ?? h.over_budget_reason : null;"));
-  const editor = read("app/system/production/PurchaseRequestEditor.tsx"), material = read("app/system/production/MaterialScreens.tsx");
+  assert.ok(requisitions.includes("const reason = over.length ? (justification ?? h.over_budget_reason) : null;"));
+  const editor = read("app/system/production/PurchaseRequestEditor.tsx"),
+    material = read("app/system/production/MaterialScreens.tsx");
   assert.ok(editor.includes('const overBudget = Boolean(unitBudget?.over) || statuses.some((status) => status.level !== "ok" && status.thisRequest > 0);'));
   // The sheet asks for it and does not send without it; saving a draft needs none.
   assert.ok(editor.includes('data-guide="pr.submit" disabled={busy || !selected.length || issues.size > 0 || needsReason}'));

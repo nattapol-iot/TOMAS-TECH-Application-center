@@ -34,7 +34,7 @@ import { canCreateWithoutEstimate, demandProjectScope, isProjectElevated, isProj
 import { currentScheduleVersion, PROGRESS_REPORT_FIELDS_SQL, permissionFor, readHolidays, readTasks, resolveTasks, taskRow, validateScheduleVersion } from "../schedule-service.js";
 import { scheduleLeaves } from "../project-health.js";
 import { disciplineHours, headingProgress } from "../project-page-overview.js";
-import { hoursCurve } from "../project-cost-curve.js";
+import { hoursCurve, purchaseCurve } from "../project-cost-curve.js";
 import { hasRole, rolesOf } from "../user-roles.js";
 import type { CurrentUser } from "../types.js";
 import type { CurrentUserService } from "../users.js";
@@ -109,6 +109,25 @@ export const PAGE_OVERVIEW_SQL = `SELECT status,COUNT(*) requests FROM dbo.mat_p
   SELECT TOP(8) s.id,s.field,s.comment,s.occurred_at,a.name actor,t.name task FROM dbo.schedule_updates s
     INNER JOIN dbo.users a ON a.id=s.actor_id LEFT JOIN dbo.schedule_tasks t ON t.id=s.task_id
     WHERE s.project_id=@project ORDER BY s.occurred_at DESC,s.id DESC;`;
+
+/**
+ * The Cost tab's purchases (task doc 6.2): each live request line with the day it was requested, the day its order was
+ * first seen (migration 131; an older order falls back to the last word from the ERP, then the request's last change),
+ * its need-by date, the estimate category it was planned under and its amount; then the estimate's budget by category.
+ * The days are the company's (Bangkok, +07:00), not UTC, so a Monday-morning request lands in its own week.
+ */
+export const COST_PURCHASES_SQL = `-- cost purchases: request lines with their dates and category, then the budget by category.
+  SELECT CONVERT(char(10),SWITCHOFFSET(COALESCE(pr.submitted_at,pr.created_at),'+07:00'),23) requested_on,
+    CASE WHEN l.erp_line_status=N'ORDERED' OR (l.erp_line_status IS NULL AND pr.status=N'Converted to PO')
+      THEN CONVERT(char(10),SWITCHOFFSET(COALESCE(l.erp_ordered_at,pr.erp_po_seen_at,pr.erp_synced_at,pr.updated_at),'+07:00'),23) END ordered_on,
+    CONVERT(char(10),pr.required_date,23) needed_by,COALESCE(ci.category_code,N'') category,l.line_total amount
+  FROM dbo.mat_prs pr INNER JOIN dbo.mat_pr_lines l ON l.pr_id=pr.id
+  LEFT JOIN dbo.bom_lines bl ON bl.id=l.bom_line_id LEFT JOIN dbo.cost_items ci ON ci.id=bl.estimate_line_id
+  WHERE pr.project_id=@project AND pr.deleted_at IS NULL AND pr.status IN(${REQUESTING_PR_STATUSES});
+  SELECT a.category_code category,SUM(a.amount) budget
+  FROM dbo.projects p INNER JOIN dbo.estimates e ON e.id=p.estimate_id
+  INNER JOIN dbo.v_estimate_cost_amounts a ON a.estimate_id=e.id AND a.revision=e.revision AND a.category_code IN(${BOUGHT_CATEGORIES.map((code) => `N'${code}'`).join(",")})
+  WHERE p.id=@project AND p.deleted_at IS NULL GROUP BY a.category_code;`;
 
 /** The Cost tab (task doc 6.1): confirmed hours by day, and by person with the days they confirmed. */
 export const COST_PEOPLE_SQL = `-- cost curve: the plan rows, the holidays, hours by day, hours by person.
@@ -645,6 +664,30 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
         lines: Number(item.lines),
       })),
       plan: (figures.plans.get(id)?.rows ?? []).map((item) => ({ ...item, plannedCost: rate === null ? null : round2(item.plannedManDays * rate) })),
+      // Task doc 6.2: bought cost over time and by category, for a viewer who may see the requests (money).
+      ...(access.purchases
+        ? await (async () => {
+            const sets = ((
+              await database.query<Record<string, unknown>>(COST_PURCHASES_SQL, (sqlRequest) => {
+                sqlRequest.input("project", sql.BigInt, id);
+              })
+            ).recordsets ?? []) as unknown as Record<string, unknown>[][];
+            const budgets = access.budget ? new Map((sets[1] ?? []).map((item) => [String(item.category), Number(item.budget ?? 0)] as const)) : null;
+            return {
+              purchases: purchaseCurve(
+                (sets[0] ?? []).map((item) => ({
+                  requestedOn: String(item.requested_on ?? ""),
+                  orderedOn: item.ordered_on == null ? null : String(item.ordered_on),
+                  neededBy: item.needed_by == null ? null : String(item.needed_by),
+                  category: String(item.category ?? ""),
+                  amount: Number(item.amount ?? 0),
+                })),
+                budgets,
+                today,
+              ),
+            };
+          })()
+        : {}),
       // Task doc 6.1: the team's man-days week by week, and who worked the hours. Hours only; money stays above.
       ...(await (async () => {
         const sets = ((

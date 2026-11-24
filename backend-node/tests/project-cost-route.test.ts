@@ -91,6 +91,18 @@ function fakeDatabase(options: { inScope?: boolean; planned?: boolean } = {}) {
       statements.push(text);
       const rows = (...sets: unknown[][]) => ({ recordset: sets[0] ?? [], recordsets: sets });
       if (text.includes("p.project_no,p.name")) return rows(options.inScope === false ? [] : [projectRow]);
+      // Task doc 6.2: request lines with their dates and category, then the estimate's budget by category.
+      if (text.includes("-- cost purchases"))
+        return rows(
+          [
+            { requested_on: "2026-11-02", ordered_on: "2026-11-10", needed_by: "2026-12-01", category: "03", amount: 60000 },
+            { requested_on: "2026-11-04", ordered_on: null, needed_by: "2026-12-15", category: "", amount: 25000 },
+          ],
+          [
+            { category: "03", budget: 70000 },
+            { category: "07", budget: 20000 },
+          ],
+        );
       // Task doc 6.1: the plan rows, holidays, hours by day and by person for one project's Cost tab.
       if (text.includes("-- cost curve"))
         return options.planned
@@ -315,6 +327,14 @@ test("project cost: one project's breakdown by module, request and plan row, wit
     ]);
     assert.equal(body.curve?.at(-1)?.actualManDays, 3, "24 confirmed hours are 3 man-days");
     assert.equal(body.curve?.at(-1)?.plannedManDays, 2);
+    // Task doc 6.2: bought cost by category against its budget, a typed line apart, and the need-by window.
+    assert.deepEqual(body.purchases?.categories, [
+      { category: "03", budget: 70000, requested: 60000, ordered: 60000 },
+      { category: "07", budget: 20000, requested: 0, ordered: 0 },
+      // A line typed on the request has no bought budget, rather than one of 0.
+      { category: "", budget: null, requested: 25000, ordered: 0 },
+    ]);
+    assert.deepEqual(body.purchases?.window, { from: "2026-12-01", to: "2026-12-15" });
     // Modules by name, and what belongs to no module last.
     assert.deepEqual(body.modules, [
       { module: "MZ01", budget: 70000, requested: 95000, approved: 60000, ordered: 30000 },
