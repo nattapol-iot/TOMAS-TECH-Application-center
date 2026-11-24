@@ -25,6 +25,7 @@ import { SITE_MONITOR_COPY } from "./production/site-monitor-copy";
 import { INSTALLED_BASE_COPY } from "./production/installed-base-copy";
 import { TEAM_BOARD_COPY } from "./production/team-board-copy";
 import { PROJECT_COST_COPY } from "./production/project-cost-copy";
+import { PLAN_SHEET_COPY } from "./production/plan-sheet-copy";
 import { ADMIN_SCREENS_COPY } from "./production/admin-screens-copy";
 import { FORM_COPY } from "./production/form-copy";
 import { WORK_DAYS_COPY } from "./production/work-days-copy";
@@ -2701,6 +2702,7 @@ export const DICTIONARY: Record<string, Entry> = {
   ...INSTALLED_BASE_COPY,
   ...TEAM_BOARD_COPY,
   ...PROJECT_COST_COPY,
+  ...PLAN_SHEET_COPY,
   ...WORK_DAYS_COPY,
   ...MY_WEEK_COPY,
   ...TEAM_WEEK_COPY,
@@ -3104,11 +3106,6 @@ export const DICTIONARY: Record<string, Entry> = {
     en: "A main heading keeps the dates agreed with the customer. Its bar follows the tasks under it, and is marked when they run past these dates.",
     th: "หัวข้อหลักเก็บวันที่ตกลงกับลูกค้า · แถบของหัวข้อจะตามงานข้างใต้ และขึ้นเตือนเมื่องานเลยวันที่นี้",
     jp: "大見出しは顧客と合意した日程を持ちます。バーは配下のタスクに従い、この日程を超えると表示されます。",
-  },
-  "Plan.memberRequired": {
-    en: "A task under a main heading needs a member, or the discipline it waits for",
-    th: "งานใต้หัวข้อหลักต้องมีผู้รับผิดชอบ หรือเลือกสายงานไว้รอหัวหน้าจัดคน",
-    jp: "大見出しの下のタスクには担当者、または割り当て待ちの職種が必要です",
   },
   // A plan row's discipline (migration 123, owner 2026-11-22): the PM asks for people; the head names them on Allocation.
   "Plan.discipline": { en: "Discipline", th: "สายงาน", jp: "職種" },
