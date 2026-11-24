@@ -23,6 +23,8 @@ import {
   type CustomerScheduleRow,
 } from "../../../lib/customer-schedule-workbook";
 import { downloadErpEstimateWorkbookBytes } from "../../../lib/erp-estimate-workbook";
+import { readWorkbookSheets } from "../../../lib/import-spreadsheet";
+import { cellsToGrid, importChanges, readPlanTable, type ImportedPlan } from "../../../lib/plan-excel-import";
 import { linkedStart, nextWorkDay } from "../../../lib/gantt";
 import { percentChangePatch, statusChangePatch } from "../../../lib/my-work";
 import {
@@ -231,6 +233,7 @@ const GLYPH = {
   fold: ["m11 17-5-5 5-5", "m18 17-5-5 5-5"],
   unfold: ["m13 17 5-5-5-5", "m6 17 5-5-5-5"],
   download: ["M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4", "m7 10 5 5 5-5", "M12 15V3"],
+  upload: ["M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4", "m17 8-5-5-5 5", "M12 3v12"],
   calendar: ["M16 2v4M8 2v4M3 10h18", "M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"],
 };
 
@@ -295,6 +298,11 @@ export function PlanSheet({
   const [exportMember, setExportMember] = useState(false);
   const [exportSub, setExportSub] = useState(false);
   const [exportBusy, setExportBusy] = useState(false);
+  // Import from Excel (owner 2026-11-23): the file read in the browser, then applied by WBS.
+  const [importing, setImporting] = useState(false);
+  const [imported, setImported] = useState<{ file: string; sheet: string; plan: ImportedPlan } | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [importReading, setImportReading] = useState(false);
   // A copy that did not reach folder 08: its reason, and the file to try again without a second download.
   const [exportFailed, setExportFailed] = useState<{ reason: string; bytes: Uint8Array; name: string } | null>(null);
   const [widths, setWidths] = useState<Record<string, number>>(readWidths);
@@ -1893,6 +1901,107 @@ export function PlanSheet({
       setExportBusy(false);
     }
   };
+  // A file still being read when the dialog closes is dropped, not shown the next time it opens.
+  const importRun = useRef(0);
+  const closeImport = () => {
+    importRun.current += 1;
+    setImporting(false);
+    setImported(null);
+    setImportError(null);
+  };
+  const readImport = async (file: File) => {
+    const run = ++importRun.current;
+    setImportError(null);
+    setImportReading(true);
+    try {
+      for (const sheet of await readWorkbookSheets(file)) {
+        const plan = readPlanTable(cellsToGrid(sheet.cells), today);
+        if (plan?.rows.length) {
+          if (run === importRun.current) setImported({ file: file.name, sheet: sheet.name, plan });
+          return;
+        }
+      }
+      if (run === importRun.current) setImportError(t("Sheet.importNoTable"));
+    } catch (failure) {
+      if (run === importRun.current) setImportError(t("Sheet.importFailed").replace("{reason}", failure instanceof Error ? failure.message : String(failure)));
+    } finally {
+      if (run === importRun.current) setImportReading(false);
+    }
+  };
+  const planForImport = () =>
+    model.rows
+      .filter((row) => row.task.kind !== "detail")
+      .map((row) => ({ wbs: row.task.wbs, kind: row.task.kind, name: row.fields.name, party: row.fields.picExternal, start: row.start, end: row.finish, percent: row.percent, rollup: row.rollup }));
+  /** Rows the plan has (by WBS) take the file's name, PIC, dates and % DONE; the others are added under their WBS parent. */
+  const applyImport = async () => {
+    if (!imported || !canPlan) return;
+    const otherProject = imported.plan.projectNo && imported.plan.projectNo !== schedule.projectNo;
+    if (otherProject && !(await confirmDialog(t("Sheet.importOtherConfirm").replace("{file}", imported.plan.projectNo).replace("{plan}", schedule.projectNo)))) return;
+    const { changes } = importChanges(imported.plan.rows, planForImport());
+    const made = new Map<string, number>(),
+      skipped: string[] = [];
+    let added = 0,
+      updated = 0;
+    for (const { row, status } of changes) {
+      if (status === "same") continue;
+      const current = status === "add" ? undefined : model.rows.find((item) => item.task.wbs === row.wbs && item.task.kind !== "detail");
+      if (current) {
+        // A row waiting on a day request, or owned by the team overview, keeps its plan as it is.
+        const held = lockedIds.has(current.task.id) || Boolean(current.task.managedByResourcePlan);
+        const patch: Patch = {};
+        if (!held && !lockOf(current, "name")) patch.name = row.name;
+        if (!held && row.party && current.task.kind !== "phase" && !lockOf(current, "pic")) patch.picExternal = row.party;
+        const datesCount = !held && !row.parent && !current.rollup && current.task.kind !== "phase";
+        const moved = Boolean(row.start && row.end && (row.start !== current.start || row.end !== current.finish));
+        if (datesCount && moved && !lockOf(current, "start")) {
+          Object.assign(patch, { planStart: row.start, planDays: current.task.isMilestone ? 1 : spanDays(row.start!, row.end!) });
+          if (current.fields.startMode === "linked") Object.assign(patch, { startMode: "manual", predecessorId: null, lagDays: 0 });
+        }
+        const percent = datesCount && row.percent !== null && !lockOf(current, "done") ? row.percent : undefined;
+        if (apply(current, patch, percent, undefined)) updated += 1;
+        else skipped.push(row.wbs);
+        continue;
+      }
+      const parentWbs = row.wbs.split(".").slice(0, -1).join(".");
+      const parentSeq = parentWbs ? made.get(parentWbs) : undefined;
+      const existingParent = parentWbs && parentSeq === undefined ? model.rows.find((item) => item.task.wbs === parentWbs && item.task.kind !== "detail") : undefined;
+      // Under a row of the plan only where the row menu would add one: a heading, or a task that takes sub tasks.
+      const takes = existingParent ? !lockedIds.has(existingParent.task.id) && (existingParent.task.kind === "phase" || (existingParent.task.kind === "task" && canAddSub(existingParent.task))) : true;
+      if (parentWbs && ((!existingParent && parentSeq === undefined) || !takes)) {
+        skipped.push(row.wbs);
+        continue;
+      }
+      const kind = parentWbs ? "task" : "phase";
+      const fields: Fields = {
+        name: row.name,
+        picExternal: kind === "phase" ? "" : row.party,
+        planStart: row.start ?? (kind === "phase" ? null : today),
+        planDays: row.start && row.end ? spanDays(row.start, row.end) : 1,
+        startMode: "manual",
+        predecessorId: null,
+        lagDays: 0,
+        picUserIds: [],
+        discipline: null,
+      };
+      const seq = enqueue({
+        type: "create",
+        parentId: existingParent ? existingParent.task.id : null,
+        ...(parentSeq !== undefined ? { parentSeq } : {}),
+        beforeId: null,
+        kind,
+        fields,
+        ...(kind === "task" && !row.parent && row.percent ? { percent: row.percent } : {}),
+      });
+      made.set(row.wbs, seq);
+      setSaving((list) => [...list, { seq, parentId: null, beforeId: null, name: row.name, depth: row.level, atEnd: true }]);
+      added += 1;
+    }
+    say(
+      `${t("Sheet.importDone").replace("{updated}", String(updated)).replace("{added}", String(added))}${skipped.length ? ` · ${t("Sheet.importSkipped").replace("{wbs}", skipped.slice(0, 6).join(", "))}` : ""}`,
+      skipped.length > 0,
+    );
+    closeImport();
+  };
   const menuRow = menu ? (model.byId.get(menu.id) ?? null) : null;
   const runMenu = (key: string) => {
     if (!menuRow) return;
@@ -1929,6 +2038,8 @@ export function PlanSheet({
     );
   }
 
+  const importView = importing && imported ? importChanges(imported.plan.rows, planForImport()) : null;
+  const importCount = (status: string) => (importView ? importView.changes.filter((item) => item.status === status).length : 0);
   const preview = exporting ? customerScheduleSheet(exportInput()) : null;
   const previewDays = exporting ? customerScheduleDays(exportInput()) : [];
   const shownDays = Math.min(previewDays.length, 70);
@@ -1945,6 +2056,113 @@ export function PlanSheet({
 
   return (
     <section className="plan-sheet" data-guide="plan.sheet" aria-label={t("Sheet.label")}>
+      {importing ? (
+        <Modal
+          title="Sheet.import"
+          subtitle="Sheet.importSubtitle"
+          size="lg"
+          onClose={closeImport}
+          footer={
+            <>
+              {imported ? (
+                <button type="button" className="btn ghost" onClick={() => setImported(null)}>
+                  {t("Sheet.importAgain")}
+                </button>
+              ) : null}
+              <button type="button" className="btn ghost" onClick={closeImport}>
+                {t("Cancel")}
+              </button>
+              <button type="button" className="btn primary" disabled={!importView || importCount("add") + importCount("update") === 0} onClick={() => void applyImport()}>
+                {t("Sheet.importApply")}
+              </button>
+            </>
+          }
+        >
+          {importError ? (
+            <div className="ps-xl-error" role="alert">
+              <span>{importError}</span>
+            </div>
+          ) : null}
+          {!imported ? (
+            <label className="ps-im-drop">
+              <b>{importReading ? t("Sheet.importReading") : t("Sheet.importDrop")}</b>
+              <small>{t("Sheet.importDropHint")}</small>
+              <input
+                type="file"
+                accept=".xlsx,.xlsm"
+                hidden
+                onChange={(event) => {
+                  const file = event.currentTarget.files?.[0];
+                  event.currentTarget.value = "";
+                  if (file) void readImport(file);
+                }}
+              />
+            </label>
+          ) : (
+            <>
+              <div className="ps-im-sum">
+                <b>{imported.file}</b>
+                <span>{t("Sheet.importSheet").replace("{name}", imported.sheet)}</span>
+                <span>
+                  {t("Sheet.projectLine")
+                    .replace("{heads}", String(imported.plan.rows.filter((row) => row.level === 1).length))
+                    .replace("{tasks}", String(imported.plan.rows.filter((row) => !row.parent).length))}
+                </span>
+                {imported.plan.projectNo && imported.plan.projectNo !== schedule.projectNo ? (
+                  <span className="warn">{t("Sheet.importOtherProject").replace("{file}", imported.plan.projectNo).replace("{plan}", schedule.projectNo)}</span>
+                ) : null}
+              </div>
+              {imported.plan.warnings.length ? (
+                <ul className="ps-im-warn">
+                  {imported.plan.warnings.slice(0, 8).map((warning) => (
+                    <li key={`${warning.line}${warning.key}`}>{t(warning.key).replace("{line}", String(warning.line)).replace("{name}", warning.name)}</li>
+                  ))}
+                </ul>
+              ) : null}
+              <p className="ps-im-counts">
+                {t("Sheet.importCounts")
+                  .replace("{update}", String(importCount("update")))
+                  .replace("{add}", String(importCount("add")))
+                  .replace("{same}", String(importCount("same")))
+                  .replace("{kept}", String(importView?.kept ?? 0))}
+              </p>
+              <div className="ps-im-prev">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>WBS</th>
+                      <th>TASK</th>
+                      <th>PIC</th>
+                      <th>START</th>
+                      <th>END</th>
+                      <th>% DONE</th>
+                      <th>{t("Sheet.importResult")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {importView?.changes.map(({ row, status, was }) => (
+                      <tr key={`${row.wbs}-${row.line}`} className={row.level === 1 ? "l1" : undefined}>
+                        <td className="mono">{row.wbs}</td>
+                        <td style={{ paddingLeft: 8 + (row.level - 1) * 14 }}>
+                          {was ? <s className="was">{was}</s> : null}
+                          {row.name}
+                        </td>
+                        <td>{row.party}</td>
+                        <td className="mono">{dayDate(row.start)}</td>
+                        <td className="mono">{dayDate(row.end)}</td>
+                        <td className="mono">{row.parent || row.percent === null ? "" : `${row.percent}%`}</td>
+                        <td>
+                          <span className={`st ${status}`}>{t(status === "add" ? "Sheet.importAdd" : status === "update" ? "Sheet.importUpdate" : "Sheet.importSame")}</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </Modal>
+      ) : null}
       {exporting && preview ? (
         <Modal
           title="Sheet.export"
@@ -2130,6 +2348,10 @@ export function PlanSheet({
           {t(folded ? "Sheet.showColumns" : "Sheet.foldColumns")}
         </button>
         <span className="grow" />
+        <button type="button" className="btn" data-guide="plan.sheetImport" disabled={!canPlan} title={canPlan ? undefined : t("Sheet.importPlanOnly")} onClick={() => setImporting(true)}>
+          <Glyph d={GLYPH.upload} />
+          {t("Sheet.import")}
+        </button>
         <button type="button" className="btn primary" data-guide="plan.sheetExport" onClick={() => setExporting(true)}>
           <Glyph d={GLYPH.download} />
           {t("Sheet.export")}

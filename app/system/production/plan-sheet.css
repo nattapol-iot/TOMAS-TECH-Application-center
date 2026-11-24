@@ -980,3 +980,107 @@
 .ps-xl td {
   line-height: 16px;
 }
+
+/* Import from Excel: pick the file, then a summary, warnings and what each row will do. */
+.ps-im-drop {
+  display: grid;
+  gap: 4px;
+  place-items: center;
+  padding: 28px 16px;
+  border: 1.5px dashed var(--line);
+  border-radius: 8px;
+  background: var(--n-25);
+  color: var(--ink);
+  text-align: center;
+  cursor: pointer;
+}
+.ps-im-drop:hover {
+  border-color: var(--blue);
+  background: var(--blue-soft);
+}
+.ps-im-drop small {
+  color: var(--muted);
+}
+.ps-im-sum {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 12.5px;
+}
+.ps-im-sum span {
+  color: var(--muted);
+}
+.ps-im-sum .warn {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--amber-soft);
+  color: var(--amber-text);
+}
+.ps-im-warn {
+  margin: 0 0 8px;
+  padding: 6px 10px 6px 26px;
+  border-radius: 6px;
+  background: var(--amber-soft);
+  color: var(--amber-text);
+  font-size: 12px;
+}
+.ps-im-counts {
+  margin: 0 0 8px;
+  color: var(--ink-soft);
+  font-size: 12.5px;
+}
+.ps-im-prev {
+  max-height: 46vh;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.ps-im-prev table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.ps-im-prev th,
+.ps-im-prev td {
+  padding: 3px 8px;
+  border-bottom: 1px solid var(--line-soft);
+  text-align: left;
+  white-space: nowrap;
+}
+.ps-im-prev th {
+  position: sticky;
+  top: 0;
+  background: var(--n-50);
+  color: var(--ink-soft);
+}
+.ps-im-prev tr.l1 td {
+  background: var(--n-100);
+  font-weight: 600;
+}
+.ps-im-prev .mono {
+  font-family: var(--font-mono);
+}
+.ps-im-prev .st {
+  padding: 0 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.ps-im-prev .st.add {
+  background: var(--green-soft);
+  color: var(--green-text);
+}
+.ps-im-prev .st.update {
+  background: var(--blue-soft);
+  color: var(--blue-text);
+}
+.ps-im-prev .st.same {
+  background: var(--n-100);
+  color: var(--muted);
+}
+.ps-im-prev .was {
+  margin-right: 6px;
+  color: var(--red-text);
+}
