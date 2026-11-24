@@ -900,4 +900,8 @@ GO
 -- database/migrations/131_purchase_order_seen.sql
 GRANT UPDATE (erp_ordered_at) ON OBJECT::dbo.mat_pr_lines TO [iot_team_app_role];
 GO
+
+-- database/migrations/132_project_ceo_notes.sql
+GRANT SELECT, INSERT, UPDATE, DELETE ON dbo.project_ceo_notes TO [iot_team_app_role];
+GO
 -- END GENERATED MIGRATION GRANTS

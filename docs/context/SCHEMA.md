@@ -2,7 +2,7 @@
 
 [Context index](../../AGENTS.md)
 
-Evidence: repository migrations at `6fa18e02`. Highest file number is not proof of the live DB version. No credentials or connection strings are stored here.
+Evidence: repository migrations at `4814802e`. Highest file number is not proof of the live DB version. No credentials or connection strings are stored here.
 
 | Migration | Objects mentioned (literal CREATE TABLE / VIEW only) |
 |---|---|
@@ -137,5 +137,6 @@ Evidence: repository migrations at `6fa18e02`. Highest file number is not proof 
 | [129_template_plan.sql](<../../database/migrations/129_template_plan.sql>) | Inspect migration SQL |
 | [130_holiday_over_work.sql](<../../database/migrations/130_holiday_over_work.sql>) | `dbo.schedule_holiday_decisions` |
 | [131_purchase_order_seen.sql](<../../database/migrations/131_purchase_order_seen.sql>) | Inspect migration SQL |
+| [132_project_ceo_notes.sql](<../../database/migrations/132_project_ceo_notes.sql>) | `dbo.project_ceo_notes` |
 
 Read [backend-node/src/migration-validation.ts](<../../backend-node/src/migration-validation.ts>), [backend-node/src/startup-migrations.ts](<../../backend-node/src/startup-migrations.ts>) and [backend-node/src/migrate.ts](<../../backend-node/src/migrate.ts>) before planning a migration. Applied migration identities and environment flags matter; never rewrite an already applied migration.

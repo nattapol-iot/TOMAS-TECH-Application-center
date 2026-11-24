@@ -4,7 +4,7 @@
 
 จัดหมวด ERP สรุปยอด export และ import workbook
 
-Evidence: snapshot `6fa18e02`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
+Evidence: snapshot `4814802e`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
 
 ## Read only the operation you change
 

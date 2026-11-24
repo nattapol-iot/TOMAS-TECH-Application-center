@@ -91,6 +91,8 @@ function fakeDatabase(options: { inScope?: boolean; planned?: boolean } = {}) {
       statements.push(text);
       const rows = (...sets: unknown[][]) => ({ recordset: sets[0] ?? [], recordsets: sets });
       if (text.includes("p.project_no,p.name")) return rows(options.inScope === false ? [] : [projectRow]);
+      // Task doc 6.3: the project manager's note on the CEO summary.
+      if (text.includes("dbo.project_ceo_notes")) return rows([{ project_id: 7, note: "Waiting for the customer's layout sign-off.", updated_at: "2026-11-24T08:00:00Z", author: "Nattapol" }]);
       // Task doc 6.2: request lines with their dates and category, then the estimate's budget by category.
       if (text.includes("-- cost purchases"))
         return rows(
@@ -271,6 +273,8 @@ test("cost overview: plan man-days go to the disciplines of the row's PICs, with
     const response = await app.inject({ method: "GET", url: "/api/v1/projects/cost-overview?includeClosed=1" });
     assert.equal(response.statusCode, 200, response.body);
     const item = (response.json() as ProjectCostOverview).items[0]!;
+    // Task doc 6.3: the project manager's note rides along for the CEO summary.
+    assert.deepEqual(item.ceoNote, { text: "Waiting for the customer's layout sign-off.", by: "Nattapol", at: "2026-11-24T08:00:00.000Z" });
     // 6 man-days held by an electrical and an IoT engineer: 3 each, all due by today. No rate and no money is sent.
     assert.deepEqual(
       [item.labor.budgetManDays, item.labor.plannedManDays, item.labor.toDateManDays, item.labor.dailyRate, item.labor.budgetCost, item.labor.plannedCost, item.labor.toDateCost],
@@ -370,5 +374,49 @@ test("project cost: a project outside the viewer's scope is not found, and nothi
     );
   } finally {
     await app.close();
+  }
+});
+
+// Task doc 6.3: the project manager leaves or clears the CEO summary's note; nobody else on the project may.
+test("ceo note: the project's manager, an Engineering Manager or an Admin writes it; an empty note clears it", async (t) => {
+  for (const item of [
+    { name: "the manager", roles: ["Project Manager"], managerId: 99, note: "Waiting for sign-off.", status: 200, write: "MERGE" },
+    { name: "the manager clears it", roles: ["Project Manager"], managerId: 99, note: "  ", status: 200, write: "DELETE" },
+    { name: "an Engineering Manager", roles: ["Engineering Manager"], managerId: 5, note: "Covered.", status: 200, write: "MERGE" },
+    { name: "a Leader of another project's manager", roles: ["Leader"], managerId: 5, note: "Mine.", status: 403, write: null },
+    { name: "too long", roles: ["Project Manager"], managerId: 99, note: "x".repeat(2001), status: 400, write: null },
+  ]) {
+    await t.test(item.name, async () => {
+      const statements: { text: string; params: Record<string, unknown> }[] = [];
+      const database = {
+        async query(text: string, bind?: (request: { input: (name: string, ...rest: unknown[]) => unknown }) => void) {
+          const params: Record<string, unknown> = {};
+          const request = {
+            input(name: string, ...rest: unknown[]) {
+              params[name] = rest.length > 1 ? rest[1] : rest[0];
+              return request;
+            },
+          };
+          bind?.(request);
+          statements.push({ text, params });
+          if (text.includes("allowed")) return { recordset: [{ allowed: true }] };
+          if (text.includes("SELECT manager_id FROM dbo.projects")) return { recordset: [{ manager_id: item.managerId }] };
+          return { recordset: [], rowsAffected: [1] };
+        },
+      } as unknown as Database;
+      const app = server(database, item.roles);
+      try {
+        const response = await app.inject({ method: "PUT", url: "/api/v1/projects/7/ceo-note", payload: { note: item.note } });
+        assert.equal(response.statusCode, item.status, response.body);
+        const write = statements.find((entry) => entry.text.includes("project_ceo_notes"));
+        if (item.write === null) assert.equal(write, undefined, "nothing written");
+        else {
+          assert.ok(write?.text.includes(item.write), write?.text);
+          assert.equal(write?.params.actor, 99);
+        }
+      } finally {
+        await app.close();
+      }
+    });
   }
 });

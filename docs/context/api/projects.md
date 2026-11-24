@@ -2,35 +2,36 @@
 
 [Module](../modules/projects.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `6fa18e02`; generated, do not edit. [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `4814802e`; generated, do not edit. [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/projects/creation-options` | 151–200 |
-| GET | `/api/v1/projects/handover/:inquiryId` | 202–233 |
-| GET | `/api/v1/projects/contact-options` | 235–255 |
-| GET | `/api/v1/projects` | 257–292 |
-| GET | `/api/v1/projects/attention` | 348–374 |
-| GET | `/api/v1/projects/overview` | 378–461 |
-| GET | `/api/v1/projects/cost-overview` | 490–517 |
-| GET | `/api/v1/projects/:id/page-overview` | 530–578 |
-| GET | `/api/v1/projects/:id/cost` | 580–724 |
-| POST | `/api/v1/projects` | 726–961 |
-| GET | `/api/v1/projects/:id/members` | 963–1003 |
-| POST | `/api/v1/projects/:id/members` | 1005–1030 |
-| DELETE | `/api/v1/projects/:id/members/:userId` | 1032–1055 |
-| GET | `/api/v1/projects/:id/deletion` | 1077–1085 |
-| DELETE | `/api/v1/projects/:id` | 1087–1124 |
-| PUT | `/api/v1/projects/:id` | 1126–1300 |
+| GET | `/api/v1/projects/creation-options` | 155–204 |
+| GET | `/api/v1/projects/handover/:inquiryId` | 206–237 |
+| GET | `/api/v1/projects/contact-options` | 239–259 |
+| GET | `/api/v1/projects` | 261–296 |
+| GET | `/api/v1/projects/attention` | 352–378 |
+| GET | `/api/v1/projects/overview` | 382–465 |
+| GET | `/api/v1/projects/cost-overview` | 494–536 |
+| PUT | `/api/v1/projects/:id/ceo-note` | 540–570 |
+| GET | `/api/v1/projects/:id/page-overview` | 583–631 |
+| GET | `/api/v1/projects/:id/cost` | 633–777 |
+| POST | `/api/v1/projects` | 779–1014 |
+| GET | `/api/v1/projects/:id/members` | 1016–1056 |
+| POST | `/api/v1/projects/:id/members` | 1058–1083 |
+| DELETE | `/api/v1/projects/:id/members/:userId` | 1085–1108 |
+| GET | `/api/v1/projects/:id/deletion` | 1130–1138 |
+| DELETE | `/api/v1/projects/:id` | 1140–1177 |
+| PUT | `/api/v1/projects/:id` | 1179–1353 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
 | `shiftDate` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 90–95 |
-| `registerProjectRoutes` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 149–1301 |
+| `registerProjectRoutes` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 153–1354 |
 
 ## Direct local dependencies
 
@@ -66,7 +67,7 @@ Evidence: source snapshot `6fa18e02`; generated, do not edit. [backend-node/src/
 
 ## SQL references (literal scan, not a complete schema or write-set)
 
-`dbo.bom_lines`, `dbo.cost_items`, `dbo.crm_opportunities`, `dbo.customer_site_contacts`, `dbo.customer_sites`, `dbo.customers`, `dbo.delete_unstarted_project`, `dbo.estimates`, `dbo.holidays`, `dbo.inquiries`, `dbo.manhour_lines`, `dbo.mat_pr_lines`, `dbo.mat_prs`, `dbo.project_contacts`, `dbo.project_docs`, `dbo.project_folders`, `dbo.project_members`, `dbo.project_payment_milestones`, `dbo.project_purchase_units`, `dbo.projects`, `dbo.roles`, `dbo.schedule_tasks`, `dbo.schedule_updates`, `dbo.soft_delete_project`, `dbo.user_effective_permissions`, `dbo.user_effective_roles`, `dbo.users`, `dbo.v_estimate_cost_amounts`, `dbo.work_hours`
+`dbo.bom_lines`, `dbo.cost_items`, `dbo.crm_opportunities`, `dbo.customer_site_contacts`, `dbo.customer_sites`, `dbo.customers`, `dbo.delete_unstarted_project`, `dbo.estimates`, `dbo.holidays`, `dbo.inquiries`, `dbo.manhour_lines`, `dbo.mat_pr_lines`, `dbo.mat_prs`, `dbo.project_ceo_notes`, `dbo.project_contacts`, `dbo.project_docs`, `dbo.project_folders`, `dbo.project_members`, `dbo.project_payment_milestones`, `dbo.project_purchase_units`, `dbo.projects`, `dbo.roles`, `dbo.schedule_tasks`, `dbo.schedule_updates`, `dbo.soft_delete_project`, `dbo.user_effective_permissions`, `dbo.user_effective_roles`, `dbo.users`, `dbo.v_estimate_cost_amounts`, `dbo.work_hours`
 
 ## Change boundary
 

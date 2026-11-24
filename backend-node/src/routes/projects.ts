@@ -129,6 +129,10 @@ export const COST_PURCHASES_SQL = `-- cost purchases: request lines with their d
   INNER JOIN dbo.v_estimate_cost_amounts a ON a.estimate_id=e.id AND a.revision=e.revision AND a.category_code IN(${BOUGHT_CATEGORIES.map((code) => `N'${code}'`).join(",")})
   WHERE p.id=@project AND p.deleted_at IS NULL GROUP BY a.category_code;`;
 
+/** The CEO summary's notes (task doc 6.3, migration 132), for the projects listed. */
+export const CEO_NOTES_SQL = `SELECT n.project_id,n.note,n.updated_at,u.name author FROM dbo.project_ceo_notes n INNER JOIN dbo.users u ON u.id=n.updated_by
+  WHERE n.project_id IN(SELECT TRY_CONVERT(bigint,value) FROM STRING_SPLIT(@ids,N','));`;
+
 /** The Cost tab (task doc 6.1): confirmed hours by day, and by person with the days they confirmed. */
 export const COST_PEOPLE_SQL = `-- cost curve: the plan rows, the holidays, hours by day, hours by person.
   SELECT t.* FROM dbo.schedule_tasks t WHERE t.project_id=@project AND t.deleted_at IS NULL ORDER BY t.parent_id,t.sort_order,t.id;
@@ -513,7 +517,56 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
       today,
       access,
     );
-    return { today, hoursPerManDay: HOURS_PER_MAN_DAY, access, items: rows.map((row) => ({ ...costRow(row), ...projectCost(Number(row.id), figures, access) })) };
+    // Task doc 6.3: the project manager's note on the CEO summary (migration 132), with who left it and when.
+    const notes = new Map(
+      rows.length
+        ? (
+            await database.query<{ project_id: number | string; note: string; updated_at: Date | string; author: string }>(CEO_NOTES_SQL, (sqlRequest) => {
+              sqlRequest.input("ids", sql.NVarChar(sql.MAX), rows.map((row) => Number(row.id)).join(","));
+            })
+          ).recordset.map((note) => [Number(note.project_id), { text: note.note, by: note.author, at: new Date(note.updated_at).toISOString() }] as const)
+        : [],
+    );
+    return {
+      today,
+      hoursPerManDay: HOURS_PER_MAN_DAY,
+      access,
+      items: rows.map((row) => ({ ...costRow(row), ...projectCost(Number(row.id), figures, access), ceoNote: notes.get(Number(row.id)) ?? null })),
+    };
+  });
+
+  // Task doc 6.3: the project manager leaves or clears the note the CEO summary shows beside its own figures.
+  // The project's manager, an Engineering Manager or an Admin, with project.write, on a project in their scope.
+  app.put("/api/v1/projects/:id/ceo-note", async (request) => {
+    await users.demandPermission(request, "project.write");
+    const actor = await users.required(request);
+    const id = positiveLong((request.params as { id?: string }).id, "Project id");
+    const body = bodyObject(request.body);
+    const note = body.note === null || body.note === undefined ? "" : (optionalText(body.note, 2000, "Note") ?? "");
+    await demandProjectScope(database, actor, id);
+    const project = (
+      await database.query<{ manager_id: number | string }>(`SELECT manager_id FROM dbo.projects WHERE id=@project AND deleted_at IS NULL;`, (sqlRequest) => {
+        sqlRequest.input("project", sql.BigInt, id);
+      })
+    ).recordset[0];
+    if (!project) throw new ApiError(404, "project_not_found", "Project not found.");
+    // The note is read on the cost overview, so only someone who may read it writes it (Leaders and above).
+    if (!canViewProjectCost(rolesOf(actor))) throw new ApiError(403, "project_cost_forbidden", "The cost summary is for Leaders and above.");
+    if (Number(project.manager_id) !== actor.id && !hasRole(actor, "Engineering Manager") && !hasRole(actor, "Admin"))
+      throw new ApiError(403, "ceo_note_forbidden", "Only the project's manager, an Engineering Manager or an Admin writes this note.");
+    await database.query(
+      note.trim()
+        ? `MERGE dbo.project_ceo_notes WITH (HOLDLOCK) AS target USING (SELECT @project project_id) AS source ON target.project_id=source.project_id
+            WHEN MATCHED THEN UPDATE SET note=@note,updated_by=@actor,updated_at=SYSUTCDATETIME()
+            WHEN NOT MATCHED THEN INSERT(project_id,note,updated_by) VALUES(@project,@note,@actor);`
+        : `DELETE FROM dbo.project_ceo_notes WHERE project_id=@project;`,
+      (sqlRequest) => {
+        sqlRequest.input("project", sql.BigInt, id);
+        sqlRequest.input("note", sql.NVarChar(2000), note.trim());
+        sqlRequest.input("actor", sql.BigInt, actor.id);
+      },
+    );
+    return { projectId: id, note: note.trim() ? { text: note.trim(), by: actor.name, at: new Date().toISOString() } : null };
   });
 
   // One project's cost: bought cost by Module, its purchase requests, and people by the plan's top rows. People by

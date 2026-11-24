@@ -1638,6 +1638,22 @@ const PROJECT_PAGE: Guide = {
       },
     },
     {
+      target: "ceo.summary",
+      action: "next",
+      view: "projects",
+      title: { th: "สรุปต้นทุนสำหรับ CEO", en: "The CEO cost summary", jp: "CEO 向けコスト概要" },
+      body: {
+        th: "สำหรับ Leader ขึ้นไป เปิดจาก 'อื่นๆ' ในรายการโปรเจกต์ หรือปุ่ม 'สรุปสำหรับ CEO' ในแท็บต้นทุน หน้าเดียวแสดงทุกโปรเจกต์ที่เปิดอยู่ เรียงจากเสี่ยงงบมากที่สุด หรือเลือกโปรเจกต์เดียว แต่ละโปรเจกต์มี Hardware Outsource และคนเทียบงบ เรื่องที่ควรรู้ที่ระบบเขียนให้จากตัวเลข และหมายเหตุจาก PM (PM ของโปรเจกต์ EM หรือ Admin เขียนได้) กดชื่อเพื่อเปิดโปรเจกต์ ไม่มีการส่งอีเมล",
+        en: "For Leaders and above: open it from More on the project list, or the CEO summary button on a project's Cost tab. One page with every open project, most at risk on its budget first, or one project. Each shows hardware, outsource and people against budget, things to know written from the figures, and a note from the PM (the project's manager, an Engineering Manager or an Admin writes it). Press a name to open the project. Nothing is emailed.",
+        jp: "リーダー以上が対象です。案件一覧の「その他」、または案件のコストタブの「CEO 向け概要」から開きます。進行中の全案件を予算リスクの高い順に、または1案件だけを1ページで表示します。各案件にハードウェア・外注・人員の予算比、数値から自動で書かれる「知っておくべきこと」、PM からのメモ（案件の PM、EM、Admin が記入）があります。名前を押すと案件を開きます。メールは送りません。",
+      },
+      missing: {
+        th: "เปิดสรุปสำหรับ CEO ก่อน (Leader ขึ้นไป) หรือกด 'ถัดไป'",
+        en: "Open the CEO summary first (Leaders and above), or press Next.",
+        jp: "先に CEO 向け概要を開く（リーダー以上）か、「次へ」を押します。",
+      },
+    },
+    {
       target: "projectCreate.aside",
       action: "next",
       view: "projects",
