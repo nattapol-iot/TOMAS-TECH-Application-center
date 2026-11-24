@@ -14,14 +14,8 @@ import { ApiClientError, apiRequest, uploadProjectDocument } from "../api-client
 import { confirmDialog } from "../dialogs";
 import { LanguageContext, useT } from "../i18n";
 import { Modal } from "../ui";
-import {
-  buildCustomerScheduleWorkbook,
-  customerScheduleDays,
-  customerScheduleFileName,
-  customerScheduleSheet,
-  type CustomerScheduleInput,
-  type CustomerScheduleRow,
-} from "../../../lib/customer-schedule-workbook";
+import { CUSTOMER_SCHEDULE_TEMPLATE_URL, fillCustomerSchedule } from "../../../lib/customer-schedule-template";
+import { customerScheduleDays, customerScheduleFileName, customerScheduleSheet, type CustomerScheduleInput, type CustomerScheduleRow } from "../../../lib/customer-schedule-workbook";
 import { downloadErpEstimateWorkbookBytes } from "../../../lib/erp-estimate-workbook";
 import { readWorkbookSheets } from "../../../lib/import-spreadsheet";
 import { cellsToGrid, importChanges, readPlanTable, type ImportedPlan } from "../../../lib/plan-excel-import";
@@ -1846,6 +1840,20 @@ export function PlanSheet({
   const tableWidth = LEFT_WIDTH + timeline.days * DW;
   const weeks = timeline.days / 7;
 
+  const exportRow = (row: (typeof model.rows)[number]): CustomerScheduleRow => ({
+    wbs: row.task.wbs,
+    level: row.task.depth + 1,
+    heading: row.task.kind === "phase",
+    name: row.fields.name,
+    party: row.fields.picExternal,
+    member: cellText(row, "member"),
+    start: row.start,
+    end: row.finish,
+    days: row.days,
+    percent: row.task.kind === "phase" ? null : Math.round(row.percent),
+    workDays: row.workDays,
+    after: row.after,
+  });
   /** The plan as the customer file has it: headings and tasks, sub tasks only when asked, never a member's own task. */
   const exportInput = (): CustomerScheduleInput => ({
     projectName: schedule.projectName,
@@ -1856,28 +1864,29 @@ export function PlanSheet({
     lead: project?.leadEngineerName ?? "",
     today,
     lang: exportLang,
-    withMember: exportMember,
+    // The Plan sheet has no member column; members go on the sheet "Task list".
+    withMember: false,
     holidays: schedule.holidays ?? [],
-    rows: model.rows
-      .filter((row) => row.task.kind !== "detail" && (exportSub || row.task.depth <= 1))
-      .map((row): CustomerScheduleRow => ({
-        wbs: row.task.wbs,
-        level: row.task.depth + 1,
-        heading: row.task.kind === "phase",
-        name: row.fields.name,
-        party: row.fields.picExternal,
-        member: cellText(row, "member"),
-        start: row.start,
-        end: row.finish,
-        days: row.days,
-        percent: row.task.kind === "phase" ? null : Math.round(row.percent),
-        workDays: row.workDays,
-        after: row.after,
-      })),
+    rows: model.rows.filter((row) => row.task.kind !== "detail" && (exportSub || row.task.depth <= 1)).map(exportRow),
   });
+  /** The team's master Gantt workbook with this plan in it; "Task list" carries every row and its member when asked. */
   const downloadCustomerFile = async () => {
-    const bytes = buildCustomerScheduleWorkbook(exportInput()),
-      name = customerScheduleFileName(schedule.projectNo);
+    setExportFailed(null);
+    setExportBusy(true);
+    let bytes: Uint8Array;
+    try {
+      const response = await fetch(CUSTOMER_SCHEDULE_TEMPLATE_URL, { cache: "no-cache" });
+      if (!response.ok) throw new Error(t("Sheet.exportNoTemplate"));
+      bytes = fillCustomerSchedule(new Uint8Array(await response.arrayBuffer()), { ...exportInput(), taskList: exportMember ? model.rows.map(exportRow) : null });
+    } catch (failure) {
+      setExportBusy(false);
+      // What failed (a network error, a page instead of the file) means nothing to the reader; the console keeps it.
+      console.error("customer schedule export", failure);
+      say(t("Sheet.exportNoTemplate"), true);
+      return;
+    }
+    setExportBusy(false);
+    const name = customerScheduleFileName(schedule.projectNo);
     downloadErpEstimateWorkbookBytes(bytes, name);
     await keepCopy(bytes, name);
   };
@@ -2045,7 +2054,7 @@ export function PlanSheet({
   const previewDays = exporting ? customerScheduleDays(exportInput()) : [];
   const shownDays = Math.min(previewDays.length, 70);
   // The plan's columns and the narrow blank one; PREDECESSOR is hidden in the file, as in the team's own, and here too.
-  const previewLeft = 10 + (exportMember ? 1 : 0);
+  const previewLeft = 10;
   const previewHidden = preview ? preview.widths.findIndex((column) => column.hidden) : -1;
   const previewText = (value: string | number | null | undefined, style: number) => {
     if (value === null || value === undefined) return "";
@@ -2196,7 +2205,8 @@ export function PlanSheet({
               </button>
             </div>
           ) : null}
-          {previewDays.length >= 104 * 7 ? <p className="ps-xl-cap">{t("Sheet.exportCapped")}</p> : null}
+          {/* The master shows 43 weeks from Display Week. */}
+          {previewDays.length > 43 * 7 ? <p className="ps-xl-cap">{t("Sheet.exportCapped")}</p> : null}
           <div className="ps-xl-opts">
             <label>
               {t("Sheet.exportLang")}{" "}

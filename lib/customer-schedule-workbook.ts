@@ -1,12 +1,7 @@
-import { strToU8, zipSync } from "fflate";
-
 /*
- * The plan as the Gantt workbook the team sends customers (owner 2026-11-23, plan-grid mockup "ส่งออก Excel แบบส่งลูกค้า"):
- * "[ project ] Project Schedule", "[ customer ]", "PJ no [ PO ]" on top; WBS, TASK, PIC, START, END, DAYS, % DONE and
- * WORK DAYS; then one narrow column per day from the plan's first Monday, with Week / date / day-number / weekday
- * headers, and the plan drawn as filled cells. Headings sit on a gray band. Nothing internal goes out unless asked:
- * no status, hours, reasons or forecasts; the member column and sub tasks are options. Dates are real Excel dates and
- * figures are numbers, so the customer can keep working on the file. Built by hand like schedule-workbook.ts.
+ * The plan laid out the way the team's master Gantt workbook has it (owner 2026-11-24, PJ260210 "Gantt chart" R1), for
+ * the preview in Projects > Plan > "Export Excel for the customer". The file itself is the master workbook filled by
+ * lib/customer-schedule-template.ts; this keeps the shared row type, the day range and the file name.
  */
 
 export type CustomerScheduleRow = {
@@ -52,16 +47,8 @@ const NAMES = {
   th: { letter: ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"] },
   en: { letter: ["S", "M", "T", "W", "T", "F", "S"] },
 };
-/** Excel's own weekday names for START and END: Thai (LCID 041E) or English (0409), Gregorian years either way. */
-const DATE_FORMAT = { th: "[$-41E]ddd dd/mm/yy", en: "[$-409]ddd dd/mm/yy" };
-
 /** Days since 1899-12-30, the serial Excel reads as a date. */
 export const excelSerial = (iso: string) => dayNumber(iso) - dayNumber("1899-12-30");
-const xmlSafe = (value: string) =>
-  Array.from(value)
-    .filter((char) => char.charCodeAt(0) >= 0x20 || char === "\t" || char === "\n" || char === "\r")
-    .join("");
-const escapeXml = (value: string) => xmlSafe(value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" })[char]!);
 export function columnName(index: number): string {
   let name = "",
     rest = index;
@@ -73,7 +60,7 @@ export function columnName(index: number): string {
   return name;
 }
 
-/* Cell styles, in cellXfs order. */
+/* Cell kinds; the preview styles each as .x<number>. */
 const S = {
   title: 1,
   meta: 2,
@@ -105,90 +92,6 @@ const S = {
   copyright: 28,
   spacer: 29,
 } as const;
-/* The team's file (PJ260210 "Gantt chart" R1): blue 0070C0 bars, gray when done, a navy heading bar. */
-const COLORS = {
-  bar: "FF0070C0",
-  barDone: "FF808080",
-  band: "FFD9E1F2",
-  weekend: "FFF2F2F2",
-  head: "FFF2F2F2",
-  navy: "FF1F3864",
-  today: "FFFDE2E1",
-  todayStrong: "FFC00000",
-  holiday: "FFFCE4E8",
-  line: "FFBFBFBF",
-  soft: "FFE4E7EC",
-};
-
-function stylesXml(lang: "th" | "en"): string {
-  const fills = ["none", "gray125", COLORS.head, COLORS.band, COLORS.weekend, COLORS.bar, COLORS.barDone, COLORS.navy, COLORS.today, COLORS.todayStrong, COLORS.holiday]
-    .map((fill) =>
-      fill === "none" || fill === "gray125"
-        ? `<fill><patternFill patternType="${fill}"/></fill>`
-        : `<fill><patternFill patternType="solid"><fgColor rgb="${fill}"/><bgColor indexed="64"/></patternFill></fill>`,
-    )
-    .join("");
-  const FILL = { none: 0, head: 2, band: 3, weekend: 4, bar: 5, barDone: 6, navy: 7, today: 8, todayStrong: 9, holiday: 10 };
-  const side = (color: string) =>
-    `<left style="thin"><color rgb="${color}"/></left><right style="thin"><color rgb="${color}"/></right><top style="thin"><color rgb="${color}"/></top><bottom style="thin"><color rgb="${color}"/></bottom>`;
-  const borders =
-    `<border><left/><right/><top/><bottom/><diagonal/></border><border>${side(COLORS.line)}<diagonal/></border><border>${side(COLORS.soft)}<diagonal/></border>` +
-    `<border><left/><right/><top/><bottom style="medium"><color rgb="FF000000"/></bottom><diagonal/></border>`;
-  const fonts = [
-    `<font><sz val="11"/><name val="Calibri"/><family val="2"/></font>`,
-    `<font><b/><sz val="18"/><name val="Calibri"/><family val="2"/></font>`,
-    `<font><sz val="11"/><name val="Calibri"/><family val="2"/></font>`,
-    `<font><b/><sz val="11"/><name val="Calibri"/><family val="2"/></font>`,
-    `<font><sz val="9"/><name val="Calibri"/><family val="2"/></font>`,
-    `<font><b/><sz val="9"/><color rgb="FFFFFFFF"/><name val="Calibri"/><family val="2"/></font>`,
-    `<font><i/><sz val="9"/><color rgb="FF7F7F7F"/><name val="Calibri"/><family val="2"/></font>`,
-  ].join("");
-  const F = { normal: 0, title: 1, meta: 2, bold: 3, small: 4, smallWhite: 5, note: 6 };
-  const xf = (font: number, fill: number, border: number, numFmt = 0, alignment = "") =>
-    `<xf numFmtId="${numFmt}" fontId="${font}" fillId="${fill}" borderId="${border}" xfId="0"${numFmt ? ' applyNumberFormat="1"' : ""} applyFont="1" applyFill="1" applyBorder="1"${alignment ? ` applyAlignment="1"><alignment ${alignment}/></xf>` : "/>"}`;
-  const center = 'horizontal="center" vertical="center"',
-    middle = 'vertical="center"';
-  const list = [
-    `<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>`,
-    xf(F.title, FILL.none, 0, 0, middle),
-    xf(F.meta, FILL.none, 0, 0, 'horizontal="right" vertical="center"'),
-    xf(F.bold, FILL.none, 0, 0, 'horizontal="left" vertical="center"'),
-    xf(F.bold, FILL.none, 3, 0, `${center} wrapText="1"`),
-    xf(F.bold, FILL.head, 1, 0, 'horizontal="left" vertical="center"'),
-    xf(F.small, FILL.head, 1, 165, 'horizontal="left" vertical="center"'),
-    xf(F.small, FILL.none, 2, 166, center),
-    xf(F.smallWhite, FILL.todayStrong, 2, 166, center),
-    xf(F.small, FILL.none, 3, 0, center),
-    xf(F.normal, FILL.none, 1, 0, middle),
-    xf(F.bold, FILL.band, 1, 0, middle),
-    xf(F.normal, FILL.none, 1, 0, `${middle} indent="1"`),
-    xf(F.normal, FILL.none, 1, 0, `${middle} indent="2"`),
-    xf(F.normal, FILL.none, 1, 164, center),
-    xf(F.bold, FILL.band, 1, 164, center),
-    xf(F.normal, FILL.none, 1, 1, center),
-    xf(F.bold, FILL.band, 1, 1, center),
-    xf(F.normal, FILL.none, 1, 9, center),
-    xf(F.normal, FILL.none, 2),
-    xf(F.normal, FILL.weekend, 2),
-    xf(F.normal, FILL.bar, 2),
-    xf(F.normal, FILL.barDone, 2),
-    xf(F.normal, FILL.band, 2),
-    xf(F.normal, FILL.navy, 2),
-    xf(F.normal, FILL.today, 2),
-    xf(F.normal, FILL.holiday, 2),
-    xf(F.bold, FILL.none, 1, 165, center),
-    xf(F.note, FILL.none, 0, 0, 'horizontal="right" vertical="center"'),
-    xf(F.normal, FILL.none, 0),
-  ];
-  return (
-    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">` +
-    `<numFmts count="3"><numFmt numFmtId="164" formatCode="${escapeXml(DATE_FORMAT[lang])}"/><numFmt numFmtId="165" formatCode="d\\ mmm\\ yyyy"/><numFmt numFmtId="166" formatCode="d"/></numFmts>` +
-    `<fonts count="7">${fonts}</fonts><fills count="11">${fills}</fills><borders count="4">${borders}</borders>` +
-    `<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>` +
-    `<cellXfs count="${list.length}">${list.join("")}</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`
-  );
-}
-
 type Cell = { value?: string | number | null; style: number };
 
 /** The days the Gantt shows: from the Monday of the plan's first day to a week past its last, at least four weeks. */
@@ -342,48 +245,4 @@ export function customerScheduleSheet(input: CustomerScheduleInput): { rows: Cel
   };
 }
 
-function worksheetXml(sheet: ReturnType<typeof customerScheduleSheet>): string {
-  const content = sheet.rows
-    .map((row, rowIndex) => {
-      const cells = row
-        .map((cell, columnIndex) => {
-          const ref = `${columnName(columnIndex + 1)}${rowIndex + 1}`;
-          if (cell.value === undefined || cell.value === null || cell.value === "") return cell.style ? `<c r="${ref}" s="${cell.style}"/>` : "";
-          return typeof cell.value === "number"
-            ? `<c r="${ref}" s="${cell.style}"><v>${cell.value}</v></c>`
-            : `<c r="${ref}" s="${cell.style}" t="inlineStr"><is><t xml:space="preserve">${escapeXml(cell.value)}</t></is></c>`;
-        })
-        .join("");
-      const height = rowIndex === 0 ? ' ht="28" customHeight="1"' : rowIndex === 6 ? ' ht="34.8" customHeight="1"' : rowIndex >= 7 ? ' ht="18.6" customHeight="1"' : "";
-      return `<row r="${rowIndex + 1}"${height}>${cells}</row>`;
-    })
-    .join("");
-  const cols = sheet.widths.map((column, index) => `<col min="${index + 1}" max="${index + 1}" width="${column.width}"${column.hidden ? ' hidden="1"' : ""} customWidth="1"/>`).join("");
-  return (
-    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">` +
-    `<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>` +
-    `<sheetViews><sheetView workbookViewId="0" showGridLines="0" zoomScale="70" zoomScaleNormal="70"><pane ySplit="${sheet.frozen.rows}" topLeftCell="A${sheet.frozen.rows + 1}" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>` +
-    `<sheetFormatPr defaultRowHeight="15"/><cols>${cols}</cols><sheetData>${content}</sheetData>` +
-    `<mergeCells count="${sheet.merges.length}">${sheet.merges.map((ref) => `<mergeCell ref="${ref}"/>`).join("")}</mergeCells>` +
-    `<pageMargins left="0.3" right="0.3" top="0.4" bottom="0.4" header="0.2" footer="0.2"/><pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="0"/></worksheet>`
-  );
-}
-
-const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`;
-const rootRelationships = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`;
-const workbookXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Project Schedule" sheetId="1" r:id="rId1"/></sheets></workbook>`;
-const workbookRelationships = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`;
-
-export function buildCustomerScheduleWorkbook(input: CustomerScheduleInput): Uint8Array {
-  return zipSync({
-    "[Content_Types].xml": strToU8(contentTypes),
-    "_rels/.rels": strToU8(rootRelationships),
-    "xl/workbook.xml": strToU8(workbookXml),
-    "xl/_rels/workbook.xml.rels": strToU8(workbookRelationships),
-    "xl/styles.xml": strToU8(stylesXml(input.lang)),
-    "xl/worksheets/sheet1.xml": strToU8(worksheetXml(customerScheduleSheet(input))),
-  });
-}
-
-/** "PJ260210 Project Schedule.xlsx", the name the team's file already has; characters Windows refuses become "-". */
 export const customerScheduleFileName = (projectNo: string) => `${projectNo.replace(/[\\/:*?"<>|]+/g, "-").trim() || "Project"} Project Schedule.xlsx`;
