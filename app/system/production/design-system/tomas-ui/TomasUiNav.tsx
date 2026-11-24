@@ -2,9 +2,11 @@
 
 import { Badge, Button } from "@tomas-tc/ui";
 import { useT } from "../../../i18n";
+import { TOMAS_UI_LOOK_LABELS, TOMAS_UI_LOOKS } from "./config/tomas-ui.constants";
+import { TomasUiStates } from "./TomasUiStates";
 import type { TomasUiNavProps } from "./types/tomas-ui.types";
 
-export function TomasUiNav({ sections, shown, total }: TomasUiNavProps) {
+export function TomasUiNav({ sections, shown, total, look, onLookChange }: TomasUiNavProps) {
   const t = useT();
   const jump = (target: HTMLElement, id: string) => target.ownerDocument.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
   return (
@@ -17,7 +19,10 @@ export function TomasUiNav({ sections, shown, total }: TomasUiNavProps) {
       <Button type="button" size="xs" variant="ghost" onClick={(event) => jump(event.currentTarget, "tui-not-shown")}>
         {t("TUI.notShown")}
       </Button>
-      <Badge variant="outline" className="ml-auto">
+      <div className="ml-auto">
+        <TomasUiStates options={TOMAS_UI_LOOKS} label="TUI.look" labels={TOMAS_UI_LOOK_LABELS} value={look} onChange={onLookChange} />
+      </div>
+      <Badge variant="outline">
         {shown} / {total} {t("TUI.exportsShown")}
       </Badge>
     </nav>
