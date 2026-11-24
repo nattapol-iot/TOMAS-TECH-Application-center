@@ -301,6 +301,7 @@ export function PlanSheet({
   const [collapsed, setCollapsed] = useState<ReadonlySet<number>>(() => new Set());
   const [headingsOnly, setHeadingsOnly] = useState(false);
   const [disciplineFilter, setDisciplineFilter] = useState<string | null>(null);
+  const [followOpen, setFollowOpen] = useState(false);
   // Suppliers for the member cell (task doc 3.5): those on this plan, then the ERP's, read once when a member cell opens.
   const [erpVendors, setErpVendors] = useState<string[] | null>(null);
   const [active, setActive] = useState<Cell | null>(null);
@@ -505,6 +506,40 @@ export function PlanSheet({
       .then((page) => setErpVendors((page.items ?? []).map((item) => item.name).filter(Boolean)))
       .catch(() => setErpVendors([]));
   }, [memberEditing, canPlan]);
+  // Task doc 3.8: what needs following up on this plan, each one a link to its row.
+  const followUps = useMemo(() => {
+    const groups: { key: string; rows: Row[] }[] = [
+      { key: "late", rows: [] },
+      { key: "blocked", rows: [] },
+      { key: "due", rows: [] },
+      { key: "noMember", rows: [] },
+      { key: "noPr", rows: [] },
+    ];
+    const at = Object.fromEntries(groups.map((group) => [group.key, group.rows])) as Record<string, Row[]>;
+    for (const row of model.rows) {
+      if (row.parent || row.task.id < 0) continue;
+      if (isLate(row, today)) at.late!.push(row);
+      if (row.status === "Blocked") at.blocked!.push(row);
+      if (!isLate(row, today) && row.status === "Not Started" && row.start !== null && row.start <= today) at.due!.push(row);
+      if (row.task.kind === "task" && row.status !== "Done" && row.task.laborSource !== "Outsourced" && !row.fields.picUserIds.length) at.noMember!.push(row);
+      if (row.task.laborSource === "Outsourced" && !row.task.purchaseRequest && row.status !== "Done") at.noPr!.push(row);
+    }
+    return groups.filter((group) => group.rows.length);
+  }, [model.rows, today]);
+  const followCount = followUps.reduce((sum, group) => sum + group.rows.length, 0);
+  /** Opens the rows above a row, puts the cursor on it and scrolls it into view. */
+  const goToRow = (row: Row) => {
+    setFollowOpen(false);
+    setHeadingsOnly(false);
+    setDisciplineFilter(null);
+    setCollapsed((current) => {
+      const next = new Set(current);
+      for (let up = row.task.parentId; up !== null; up = model.byId.get(up)?.task.parentId ?? null) next.delete(up);
+      return next;
+    });
+    place({ id: row.task.id, col: COLUMN_AT.name }, null);
+    requestAnimationFrame(() => document.querySelector(`.plan-sheet tr[data-id="${row.task.id}"]`)?.scrollIntoView({ block: "center" }));
+  };
   const names = NAMES[lang] ?? NAMES.EN!;
   const dayDate = (iso: string | null) => (iso ? `${names.day[asDate(iso).getUTCDay()]} ${shortDate(iso)}` : "");
   const longDate = (iso: string) => `${Number(iso.slice(8, 10))} ${names.month[Number(iso.slice(5, 7)) - 1]} ${iso.slice(0, 4)}`;
@@ -2616,6 +2651,38 @@ export function PlanSheet({
           <Glyph d={GLYPH.calendar} />
           {t("Sheet.goToday")}
         </button>
+        <span className="ps-follow-wrap">
+          <button
+            type="button"
+            className={`btn${followCount ? " ps-follow-on" : ""}`}
+            data-guide="plan.sheetFollow"
+            aria-expanded={followOpen}
+            disabled={!followCount}
+            onClick={() => setFollowOpen((open) => !open)}
+          >
+            {t("Sheet.follow")} <b className="ps-mono">{followCount}</b>
+          </button>
+          {followOpen ? (
+            <div className="ps-follow" role="dialog" aria-label={t("Sheet.follow")}>
+              {followUps.map((group) => (
+                <section key={group.key}>
+                  <h4>
+                    {t(`Sheet.follow.${group.key}`)} <span className="ps-mono">{group.rows.length}</span>
+                  </h4>
+                  <ul>
+                    {group.rows.slice(0, 30).map((row) => (
+                      <li key={row.task.id}>
+                        <button type="button" onClick={() => goToRow(row)}>
+                          <span className="ps-mono">{row.task.wbs}</span> {row.fields.name}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ))}
+            </div>
+          ) : null}
+        </span>
         <button type="button" className="btn" aria-pressed={folded} title={t("Sheet.foldTitle")} onClick={toggleFold}>
           <Glyph d={folded ? GLYPH.unfold : GLYPH.fold} />
           {t(folded ? "Sheet.showColumns" : "Sheet.foldColumns")}
