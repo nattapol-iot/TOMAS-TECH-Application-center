@@ -186,6 +186,7 @@ GO
 :r database/migrations/122_master_data_sync_account.sql
 :r database/migrations/123_plan_row_discipline.sql
 :r database/migrations/124_my_week_calendar.sql
+:r database/migrations/125_plan_lag_work_days.sql
 
 USE [$(DatabaseName)];
 GO

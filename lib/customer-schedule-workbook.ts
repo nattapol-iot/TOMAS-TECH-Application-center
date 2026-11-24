@@ -245,4 +245,6 @@ export function customerScheduleSheet(input: CustomerScheduleInput): { rows: Cel
   };
 }
 
-export const customerScheduleFileName = (projectNo: string) => `${projectNo.replace(/[\\/:*?"<>|]+/g, "-").trim() || "Project"} Project Schedule.xlsx`;
+/** The file's name; `version` is the how-many-th file sent to the customer, kept in folder 08 (owner 2026-11-24). */
+export const customerScheduleFileName = (projectNo: string, version?: number | null) =>
+  `${projectNo.replace(/[\\/:*?"<>|]+/g, "-").trim() || "Project"} Project Schedule${version ? ` v${version}` : ""}.xlsx`;

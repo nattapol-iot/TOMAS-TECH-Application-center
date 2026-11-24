@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { calendarLagToWorking, linkText, mondayOn, parseDays, parseLink, parsePercent, parseSheetDate, sheetOrder, shiftDay, spanDays, workingLagToCalendar } from "../lib/plan-sheet.ts";
+import { linkedStart, workLagBetween } from "../lib/gantt.ts";
+import { linkText, mondayOn, parseDays, parseLink, parsePercent, parseSheetDate, sheetOrder, shiftDay, spanDays } from "../lib/plan-sheet.ts";
 
 const root = new URL("../", import.meta.url);
 const source = async (path) => (await readFile(new URL(path, root), "utf8")).replace(/\r\n/g, "\n");
@@ -48,17 +49,14 @@ test("percentages and day counts typed in a cell", () => {
   assert.equal(mondayOn("2026-11-29"), "2026-11-23");
 });
 
-test("a gap typed in work days is stored as the calendar days the API counts (owner 2026-11-24)", () => {
+test("a gap typed in work days is stored as work days, as the API counts it (owner 2026-11-24, migration 125)", () => {
   const none = new Set();
   // The predecessor ends on Friday 20 Nov 2026.
-  assert.equal(workingLagToCalendar("2026-11-20", 0, none), 0, "no gap stays 0: the next work day wherever the predecessor moves");
-  assert.equal(workingLagToCalendar("2026-11-20", 2, none), 4, "Mon and Tue skipped, the row starts on Wednesday 25");
-  assert.equal(workingLagToCalendar("2026-11-20", 2, new Set(["2026-11-24"])), 5, "a company holiday is not a work day either");
-  assert.equal(workingLagToCalendar("2026-11-20", -1, none), -1, "an overlap stays calendar days");
-  assert.equal(calendarLagToWorking("2026-11-20", 4, none), 2);
-  assert.equal(calendarLagToWorking("2026-11-20", 5, new Set(["2026-11-24"])), 2);
-  assert.equal(calendarLagToWorking("2026-11-20", 0, none), 0);
-  for (const lag of [1, 3, 7, 12]) assert.equal(calendarLagToWorking("2026-11-18", workingLagToCalendar("2026-11-18", lag, none), none), lag, `round trip of +${lag}`);
+  assert.equal(linkedStart("2026-11-20", 0, none), "2026-11-23", "no gap: the next work day wherever the predecessor moves");
+  assert.equal(linkedStart("2026-11-20", 2, none), "2026-11-25", "Mon and Tue skipped, the row starts on Wednesday 25");
+  assert.equal(linkedStart("2026-11-20", 2, new Set(["2026-11-24"])), "2026-11-26", "a company holiday is not a work day either");
+  assert.equal(linkedStart("2026-11-20", -1, none), "2026-11-20", "an overlap of one work day");
+  for (const lag of [-2, 0, 1, 3, 7, 12]) assert.equal(workLagBetween("2026-11-18", linkedStart("2026-11-18", lag, none), none), lag, `round trip of ${lag}`);
 });
 
 // 1 heading > 1.1 task, 1.2 task after 1.1 > 1.2.1 sub task, 1.3 task after 1.1.

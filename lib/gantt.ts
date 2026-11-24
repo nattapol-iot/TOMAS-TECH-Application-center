@@ -24,7 +24,9 @@ const addMonths = (iso: string, months: number) => {
 
 function weekWindow(firstMonday: number, weeks: number): GanttWindow {
   const columns = Array.from({ length: weeks }, (_, index): GanttColumn => ({
-    start: dateFromDay(firstMonday + index * 7), end: dateFromDay(firstMonday + index * 7 + 6), kind: "week",
+    start: dateFromDay(firstMonday + index * 7),
+    end: dateFromDay(firstMonday + index * 7 + 6),
+    kind: "week",
   }));
   return { start: columns[0]!.start, end: columns.at(-1)!.end, days: weeks * 7, columns };
 }
@@ -34,7 +36,8 @@ function monthWindow(firstMonth: string, months: number): GanttWindow {
     const start = addMonths(firstMonth, index);
     return { start, end: dateFromDay(dayNumber(addMonths(start, 1)) - 1), kind: "month" };
   });
-  const start = columns[0]!.start, end = columns.at(-1)!.end;
+  const start = columns[0]!.start,
+    end = columns.at(-1)!.end;
   return { start, end, days: dayNumber(end) - dayNumber(start) + 1, columns };
 }
 
@@ -68,7 +71,8 @@ export function ganttFitWindow(dates: readonly (string | null | undefined)[], fa
   const known = dates.filter((value): value is string => typeof value === "string" && Number.isFinite(dayNumber(value)));
   if (!known.length) return ganttWindow("quarter", fallbackAnchor);
   const days = known.map(dayNumber);
-  const first = Math.min(...days) - 7, last = Math.max(...days) + 7;
+  const first = Math.min(...days) - 7,
+    last = Math.max(...days) + 7;
   if (last - first <= 120) {
     const monday = mondayOf(first);
     return weekWindow(monday, Math.max(4, Math.ceil((last - monday + 1) / 7)));
@@ -84,10 +88,13 @@ export type GanttSpan = { left: number; width: number; clippedStart: boolean; cl
 /** Where a start–finish span sits in the window, as percentages; null when it is undated or outside. */
 export function ganttSpan(start: string | null | undefined, finish: string | null | undefined, window: GanttWindow): GanttSpan | null {
   if (!start || !finish) return null;
-  const windowStart = dayNumber(window.start), windowEnd = dayNumber(window.end) + 1;
-  const spanStart = dayNumber(start), spanEnd = dayNumber(finish) + 1;
+  const windowStart = dayNumber(window.start),
+    windowEnd = dayNumber(window.end) + 1;
+  const spanStart = dayNumber(start),
+    spanEnd = dayNumber(finish) + 1;
   if (!Number.isFinite(spanStart) || !Number.isFinite(spanEnd) || spanEnd <= spanStart) return null;
-  const from = Math.max(spanStart, windowStart), to = Math.min(spanEnd, windowEnd);
+  const from = Math.max(spanStart, windowStart),
+    to = Math.min(spanEnd, windowEnd);
   if (to <= from) return null;
   const size = windowEnd - windowStart;
   return { left: ((from - windowStart) / size) * 100, width: ((to - from) / size) * 100, clippedStart: spanStart < windowStart, clippedEnd: spanEnd > windowEnd };
@@ -100,19 +107,24 @@ export function ganttSpan(start: string | null | undefined, finish: string | nul
  */
 export function ganttDoneWidth(start: string | null | undefined, finish: string | null | undefined, progress: number, window: GanttWindow): number | null {
   if (!start || !finish || !Number.isFinite(progress)) return null;
-  const windowStart = dayNumber(window.start), windowEnd = dayNumber(window.end) + 1;
-  const spanStart = dayNumber(start), spanEnd = dayNumber(finish) + 1;
+  const windowStart = dayNumber(window.start),
+    windowEnd = dayNumber(window.end) + 1;
+  const spanStart = dayNumber(start),
+    spanEnd = dayNumber(finish) + 1;
   if (!Number.isFinite(spanStart) || !Number.isFinite(spanEnd) || spanEnd <= spanStart) return null;
-  const from = Math.max(spanStart, windowStart), to = Math.min(spanEnd, windowEnd);
+  const from = Math.max(spanStart, windowStart),
+    to = Math.min(spanEnd, windowEnd);
   if (to <= from) return null;
-  const doneEdge = spanStart + (spanEnd - spanStart) * Math.max(0, Math.min(100, progress)) / 100;
+  const doneEdge = spanStart + ((spanEnd - spanStart) * Math.max(0, Math.min(100, progress))) / 100;
   return Math.max(0, Math.min(1, (doneEdge - from) / (to - from))) * 100;
 }
 
 /** The left edge of one day in the window, as a percentage; null outside it. Used for today and targets. */
 export function ganttPoint(date: string | null | undefined, window: GanttWindow): number | null {
   if (!date) return null;
-  const windowStart = dayNumber(window.start), windowEnd = dayNumber(window.end) + 1, day = dayNumber(date);
+  const windowStart = dayNumber(window.start),
+    windowEnd = dayNumber(window.end) + 1,
+    day = dayNumber(date);
   if (!Number.isFinite(day) || day < windowStart || day >= windowEnd) return null;
   return ((day - windowStart) / (windowEnd - windowStart)) * 100;
 }
@@ -136,18 +148,41 @@ export const ganttShift = (date: string, days: number) => dateFromDay(dayNumber(
 export function nextWorkDay(date: string, holidays: ReadonlySet<string>): string {
   let day = dayNumber(date);
   for (let guard = 0; guard < 400; guard++, day++) {
-    const weekday = new Date(day * DAY).getUTCDay(), candidate = dateFromDay(day);
+    const weekday = new Date(day * DAY).getUTCDay(),
+      candidate = dateFromDay(day);
     if (weekday !== 0 && weekday !== 6 && !holidays.has(candidate)) return candidate;
   }
   return dateFromDay(day);
 }
 
+const isWorkDay = (date: string, holidays: ReadonlySet<string>) => nextWorkDay(date, holidays) === date;
+
+/** A working day moved by whole working days, forward or back (schedule-calculator.ts shiftWorkDays). */
+export function shiftWorkDays(date: string, count: number, holidays: ReadonlySet<string>): string {
+  let day = date;
+  for (let step = 0; step < Math.abs(count); step++) {
+    day = ganttShift(day, count > 0 ? 1 : -1);
+    while (!isWorkDay(day, holidays)) day = ganttShift(day, count > 0 ? 1 : -1);
+  }
+  return day;
+}
+
 /**
- * Where a row linked to a predecessor starts: the first working day after the predecessor's finish plus `lagDays`
- * calendar days, as backend-node/src/schedule-calculator.ts places it. Null while the predecessor has no dates.
+ * Where a row linked to a predecessor starts: the first working day after the predecessor's finish, then `lagDays`
+ * more working days (owner 2026-11-24; migration 125), as backend-node/src/schedule-calculator.ts places it. The
+ * API sends every gap in working days. Null while the predecessor has no dates.
  */
 export function linkedStart(predecessorFinish: string | null, lagDays: number, holidays: ReadonlySet<string>): string | null {
-  return predecessorFinish ? nextWorkDay(ganttShift(predecessorFinish, 1 + lagDays), holidays) : null;
+  return predecessorFinish ? shiftWorkDays(nextWorkDay(ganttShift(predecessorFinish, 1), holidays), lagDays, holidays) : null;
+}
+
+/** The gap in working days that puts a linked row on `start` (schedule-calculator.ts workLagBetween). */
+export function workLagBetween(predecessorFinish: string, start: string, holidays: ReadonlySet<string>): number {
+  const first = nextWorkDay(ganttShift(predecessorFinish, 1), holidays);
+  let count = 0;
+  if (start > first) for (let day = first; day < start; day = ganttShift(day, 1)) count += isWorkDay(day, holidays) ? 1 : 0;
+  else for (let day = start; day < first; day = ganttShift(day, 1)) count -= isWorkDay(day, holidays) ? 1 : 0;
+  return count;
 }
 
 /**
@@ -157,11 +192,14 @@ export function linkedStart(predecessorFinish: string | null, lagDays: number, h
  */
 export function draggedPlan(
   row: { startMode: string; isMilestone: boolean; storedPlanStart?: string | null; planStart: string | null; lagDays: number },
-  start: string, finish: string, predecessorFinish: string | null,
+  start: string,
+  finish: string,
+  predecessorFinish: string | null,
+  holidays: ReadonlySet<string> = new Set(),
 ): { planStart: string | null; planDays: number; lagDays: number } {
   const planDays = row.isMilestone ? 1 : Math.max(1, dayNumber(finish) - dayNumber(start) + 1);
   if (row.startMode !== "linked" || !predecessorFinish) return { planStart: start, planDays, lagDays: row.lagDays };
-  const lagDays = start === row.planStart ? row.lagDays : dayNumber(start) - dayNumber(predecessorFinish) - 1;
+  const lagDays = start === row.planStart ? row.lagDays : workLagBetween(predecessorFinish, nextWorkDay(start, holidays), holidays);
   return { planStart: row.storedPlanStart ?? null, planDays, lagDays };
 }
 
@@ -174,15 +212,18 @@ export function planDatesLoop(rows: readonly { id: number; parentId: number | nu
   const byId = new Map(rows.map((row) => [row.id, row]));
   const children = new Map<number, number[]>();
   for (const row of rows) if (row.parentId !== null) children.set(row.parentId, [...(children.get(row.parentId) ?? []), row.id]);
-  const visiting = new Set<number>(), done = new Set<number>();
+  const visiting = new Set<number>(),
+    done = new Set<number>();
   const loops = (id: number): boolean => {
     if (done.has(id)) return false;
     if (visiting.has(id)) return true;
     visiting.add(id);
-    const row = byId.get(id), own = children.get(id);
+    const row = byId.get(id),
+      own = children.get(id);
     const waitsOn = own?.length ? own : row && row.startMode === "linked" && row.predecessorId !== null && byId.has(row.predecessorId) ? [row.predecessorId] : [];
     if (waitsOn.some(loops)) return true;
-    visiting.delete(id); done.add(id);
+    visiting.delete(id);
+    done.add(id);
     return false;
   };
   return rows.some((row) => loops(row.id));
@@ -246,16 +287,17 @@ export function ganttDropChoices(rows: readonly { key: string; depth: number }[]
   if (!row) return [];
   const others = [...rows.slice(0, index), ...rows.slice(subtreeEnd(rows, index))];
   if (gap < 0 || gap > others.length) return [];
-  const above = others[gap - 1] ?? null, below = others[gap] ?? null;
+  const above = others[gap - 1] ?? null,
+    below = others[gap] ?? null;
   const depths: number[] = [];
   for (let depth = below ? below.depth : 0; depth <= (above ? above.depth + 1 : 0); depth++) depths.push(depth);
-  return depths.sort((a, b) => Math.abs(a - want) - Math.abs(b - want) || a - b)
-    .map((depth) => ({ key: row.key, above: above?.key ?? null, below: below?.key ?? null, depth }));
+  return depths.sort((a, b) => Math.abs(a - want) - Math.abs(b - want) || a - b).map((depth) => ({ key: row.key, above: above?.key ?? null, below: below?.key ?? null, depth }));
 }
 
 /** The row a drop puts the dragged row under, or null at the top level. */
 export function ganttDropParent(rows: readonly { key: string; depth: number }[], drop: GanttDrop): string | null {
-  const index = rows.findIndex((row) => row.key === drop.key), lifted = index < 0 ? index : subtreeEnd(rows, index);
+  const index = rows.findIndex((row) => row.key === drop.key),
+    lifted = index < 0 ? index : subtreeEnd(rows, index);
   for (let at = rows.findIndex((row) => row.key === drop.above); drop.depth > 0 && at >= 0; at--) {
     if (at >= index && at < lifted) continue;
     if (rows[at]!.depth === drop.depth - 1) return rows[at]!.key;
