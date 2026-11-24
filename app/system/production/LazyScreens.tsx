@@ -103,6 +103,8 @@ export const ProductionSiteVisits = dynamic(() => import("./SiteVisitScreens").t
 export const ProductionVisitMasterData = dynamic(() => import("./SiteVisitScreens").then((m) => m.ProductionVisitMasterData), screen);
 export const DownloadCenterScreen = dynamic(() => import("./DownloadCenterScreen").then((m) => m.DownloadCenterScreen), screen);
 export const DesignSystemScreen = dynamic(() => import("./design-system/DesignSystemScreen").then((m) => m.DesignSystemScreen), screen);
+// The Design System's @tomas-tc/ui tab: the package and its samples load when that tab is first opened.
+export const TomasUiGallery = dynamic(() => import("./design-system/tomas-ui/TomasUiGallery").then((m) => m.TomasUiGallery), screen);
 export const SiteMonitorScreen = dynamic(() => import("./SiteMonitorScreen").then((m) => m.SiteMonitorScreen), screen);
 export const InstalledBaseScreen = dynamic(() => import("./InstalledBaseScreen").then((m) => m.InstalledBaseScreen), screen);
 export const TeamActivityScreen = dynamic(() => import("./TeamActivityScreen").then((m) => m.TeamActivityScreen), screen);

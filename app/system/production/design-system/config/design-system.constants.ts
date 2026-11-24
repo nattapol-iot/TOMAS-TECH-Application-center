@@ -1,5 +1,5 @@
 import type { Tone } from "../../../ui";
-import type { DesignSystemTab, ModalSize, TokenKind, TomasBadgeVariant, TomasButtonSize, TomasButtonVariant, TomasDeviceRow, TomasDeviceStatus } from "../types/design-system.types";
+import type { DesignSystemTab, ModalSize, TokenKind } from "../types/design-system.types";
 
 export const TOKEN_KIND_ORDER: readonly TokenKind[] = ["color", "font", "type", "radius", "shadow", "size"];
 
@@ -51,31 +51,3 @@ export const BAR_SAMPLE = [
 export const LEGEND_SAMPLE = [{ label: "Draft" }, { label: "In Progress" }, { label: "Approved" }, { label: "Rejected" }];
 
 export const PAGE_SAMPLE = { pageCount: 8, pageSize: 25, total: 190 };
-
-export const TOMAS_UI_FRAME_DOC = "<!doctype html><html><head></head><body></body></html>";
-
-export const TOMAS_BUTTON_VARIANTS = ["default", "secondary", "outline", "ghost", "destructive", "link"] as const satisfies readonly TomasButtonVariant[];
-
-export const TOMAS_BUTTON_SIZES = ["xs", "sm", "default", "lg"] as const satisfies readonly TomasButtonSize[];
-
-export const TOMAS_BADGE_VARIANTS = ["default", "secondary", "destructive", "outline"] as const satisfies readonly TomasBadgeVariant[];
-
-export const TOMAS_PRIORITIES = [
-  { value: "low", label: "DS.tuiLow" },
-  { value: "high", label: "DS.tuiHigh" },
-];
-
-export const TOMAS_DEVICE_ROWS: readonly TomasDeviceRow[] = [
-  { name: "Gateway A-01", status: "online", uptime: "99.9%" },
-  { name: "Sensor hub B-07", status: "online", uptime: "97.2%" },
-  { name: "PLC bridge C-03", status: "offline", uptime: "71.4%" },
-];
-
-export const TOMAS_STATUS_BADGES: Record<TomasDeviceStatus, { label: string; variant: TomasBadgeVariant }> = {
-  online: { label: "DS.tuiOnline", variant: "default" },
-  offline: { label: "DS.tuiOffline", variant: "destructive" },
-};
-
-export const TOMAS_SKELETON_ROWS = [0, 1, 2] as const;
-
-export const TOMAS_MENU_ITEMS = ["DS.tuiEdit", "DS.tuiDuplicate", "DS.tuiDelete"];

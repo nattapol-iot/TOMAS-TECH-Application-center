@@ -3,10 +3,10 @@
 import { PortalContainerProvider, TooltipProvider } from "@tomas-tc/ui";
 import { useState } from "react";
 import { createPortal } from "react-dom";
-import { useT } from "../../i18n";
-import { TOMAS_UI_FRAME_DOC } from "./config/design-system.constants";
+import { useT } from "../../../i18n";
+import { TOMAS_UI_FRAME_DOC } from "./config/tomas-ui.constants";
 import TOMAS_UI_CSS from "./tomas-ui.css?inline";
-import type { TomasUiFrameProps } from "./types/design-system.types";
+import type { TomasUiFrameProps } from "./types/tomas-ui.types";
 
 // The package ships Tailwind preflight and :root tokens (--muted, --border, --canvas) that collide with
 // globals.css both ways, so it renders into its own document; its overlays portal there too.
