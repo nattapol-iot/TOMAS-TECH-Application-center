@@ -271,6 +271,8 @@ export type ScheduleTask = {
   discipline?: string | null;
   /** Hours people confirmed on the row in My Work (task doc 3.1); an older API omits it. */
   actualHours?: number;
+  /** The purchase request an outsourced row is bought on (task doc 3.7, migration 128). */
+  purchaseRequest?: { id: number; prNo: string; status: string } | null;
   children: ScheduleTask[];
 };
 

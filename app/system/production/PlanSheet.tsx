@@ -86,6 +86,8 @@ type Job = { seq: number; retried?: boolean } & (
   | { type: "move"; taskId: number; parentId: number | null; beforeId: number | null }
   /** Task doc 3.5: the row done by an outside supplier (or by us again), through the People table's save. */
   | { type: "labor"; taskId: number; laborSource: "Own" | "Outsourced"; laborSupplier: string }
+  /** Task doc 3.7: the purchase request an outsourced row is bought on, by number; null unlinks it. */
+  | { type: "pr"; taskId: number; prNo: string | null }
   | { type: "create"; parentId: number | null; parentSeq?: number; beforeId: number | null; kind: "phase" | "task"; fields: Fields; percent?: number }
 );
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
@@ -593,6 +595,15 @@ export function PlanSheet({
     const task = flatById(plan).get(job.taskId);
     if (!task) return;
     const rowVersion = newest(task.rowVersion, versions.current.rows.get(task.id));
+    if (job.type === "pr") {
+      const linked = await apiRequest<{ scheduleVersion: string | null }>(`/api/v1/schedule/tasks/${task.id}/purchase-request`, {
+        method: "PUT",
+        body: JSON.stringify({ prNo: job.prNo }),
+      });
+      remember(task.id, { scheduleVersion: linked.scheduleVersion });
+      stale.current = true;
+      return;
+    }
     if (job.type === "labor") {
       const saved = await apiRequest<{ scheduleVersion: string }>(`/api/v1/projects/${plan.projectId}/schedule/people`, {
         method: "PUT",
@@ -1856,6 +1867,13 @@ export function PlanSheet({
           <>
             {task.laborSupplier}
             <span className="tag">{t("Sheet.outside")}</span>
+            {task.purchaseRequest ? (
+              <span className="tag pr" title={t("Sheet.prTitle")}>{`${task.purchaseRequest.prNo} · ${t(task.purchaseRequest.status)}`}</span>
+            ) : (
+              <span className="tag nopr" title={t("Sheet.prMissingTitle")}>
+                {t("Sheet.prMissing")}
+              </span>
+            )}
             {looksAfter}
           </>
         );
@@ -2245,7 +2263,17 @@ export function PlanSheet({
     if (key === "above" || key === "below" || key === "sub") openDraft(menuPlaces[key] ?? null);
     else if (key === "in" || key === "out" || key === "up" || key === "down") moveRow(key);
     else if (key === "open") onOpenTask(menuRow.task.id);
+    else if (key === "pr") void linkRequest(menuRow);
     else if (key === "delete") removeFor(menuRow.task)?.onRemove();
+  };
+  /** Task doc 3.7: which purchase request the outsourced row's supplier is bought on; empty unlinks it. */
+  const linkRequest = async (row: Row) => {
+    const typed = await promptDialog(t("Sheet.prAsk"), { title: t("Sheet.prLink"), value: row.task.purchaseRequest?.prNo ?? "" });
+    if (typed === null) return;
+    const prNo = typed.trim() || null;
+    if ((row.task.purchaseRequest?.prNo ?? null) === prNo) return;
+    enqueue({ type: "pr", taskId: row.task.id, prNo });
+    say(prNo ? t("Sheet.prLinked").replace("{pr}", prNo) : t("Sheet.prUnlinked"));
   };
   const menuItems: { key: string; label: string; disabled?: boolean }[] = [];
   const menuPlaces: Record<string, Omit<Draft, "key" | "start" | "text"> | null> = {};
@@ -2273,6 +2301,7 @@ export function PlanSheet({
       { key: "open", label: t("Sheet.openTask") },
       { key: "delete", label: t("Plan.deleteRow"), disabled: !removal || busy },
     );
+    if (task.laborSource === "Outsourced" && canPlan) menuItems.splice(menuItems.length - 1, 0, { key: "pr", label: t("Sheet.prLink") });
   }
 
   const importView = importing && imported ? importChanges(imported.plan.rows, planForImport()) : null;

@@ -202,6 +202,7 @@ async function projectSchedule(transaction: TransactionType, database: Database,
   const isMember = await isProjectMember(transaction, projectId, actor.id);
   // Estimated against planned man-days (manhour-budget.ts); a manager types the budget when the Estimate has no labor.
   const rowHours = await readRowHours(transaction, projectId);
+  const requests = await readProjectRequests(transaction, projectId);
   const manHours = manHourBudget(await readStoredBudget(transaction, projectId), tasks, isProjectManagerRole(actor) && project.status !== "Closed");
   return {
     projectId,
@@ -246,6 +247,7 @@ async function projectSchedule(transaction: TransactionType, database: Database,
         canPlan,
         frameIds: new Set(leaves.filter((leaf) => !counted.has(leaf.id) && !leaf.rollup).map((leaf) => leaf.id)),
         actualHours: rowHours,
+        purchaseRequests: requests,
       }),
     ),
   };
@@ -256,6 +258,14 @@ export const ROW_HOURS_SQL = `SELECT task_id,SUM(hours) hours FROM (
     SELECT TRY_CONVERT(bigint,SUBSTRING(work_key,9,30)) task_id,hours FROM dbo.work_hours WHERE project_id=@project AND work_key LIKE N'Project-%'
     UNION ALL SELECT v.task_id,v.hours FROM dbo.schedule_vendor_hours v INNER JOIN dbo.schedule_tasks t ON t.id=v.task_id WHERE t.project_id=@project AND t.labor_source=N'Outsourced'
   ) h WHERE task_id IS NOT NULL GROUP BY task_id;`;
+/** The project's purchase requests, by id: what an outsourced plan row can be bought on (migration 128). */
+async function readProjectRequests(transaction: TransactionType, projectId: number): Promise<Map<number, { prNo: string; status: string }>> {
+  const request = new sql.Request(transaction);
+  request.input("project", sql.BigInt, projectId);
+  const rows = (await request.query<{ id: number | string; pr_no: string; status: string }>(`SELECT id,pr_no,status FROM dbo.mat_prs WHERE project_id=@project AND deleted_at IS NULL;`)).recordset;
+  return new Map(rows.map((row) => [Number(row.id), { prNo: row.pr_no, status: row.status }]));
+}
+
 async function readRowHours(transaction: TransactionType, projectId: number): Promise<Map<number, number>> {
   const request = new sql.Request(transaction);
   request.input("project", sql.BigInt, projectId);
@@ -435,6 +445,42 @@ export function registerScheduleRoutes(app: FastifyInstance, database: Database,
     });
     const { notices, ...result } = saved;
     return { ...result, notification: await deliverProjectNotices(email, notices) };
+  });
+
+  // Task doc 3.7: link an outsourced row to the purchase request its supplier is bought on, by the request's number.
+  app.put("/api/v1/schedule/tasks/:id/purchase-request", async (request) => {
+    const actor = await users.required(request);
+    const id = positiveLong((request.params as { id?: string }).id, "Schedule task id");
+    const body = bodyObject(request.body);
+    const prNo = body.prNo === null || body.prNo === undefined || body.prNo === "" ? null : requiredText(body.prNo, 30, "PR number");
+    return database.transaction(async (transaction) => {
+      const task = await readTask(transaction, id);
+      await demandRowPlanOwner(transaction, database, task.projectId, actor);
+      if (task.laborSource !== "Outsourced") throw new ApiError(409, "schedule_not_outsourced", "Only an outsourced row is linked to a purchase request.");
+      let requestId: number | null = null;
+      if (prNo) {
+        const find = new sql.Request(transaction);
+        find.input("project", sql.BigInt, task.projectId).input("no", sql.NVarChar(30), prNo.trim());
+        const found = (await find.query<{ id: number | string }>(`SELECT id FROM dbo.mat_prs WHERE project_id=@project AND pr_no=@no AND deleted_at IS NULL;`)).recordset[0];
+        if (!found) throw new ApiError(422, "purchase_request_not_in_project", `${prNo} is not a purchase request of this project.`);
+        requestId = Number(found.id);
+      }
+      const save = new sql.Request(transaction);
+      save.input("id", sql.BigInt, id).input("request", sql.BigInt, requestId).input("actor", sql.BigInt, actor.id);
+      await save.query(`UPDATE dbo.schedule_tasks SET purchase_request_id=@request,updated_by=@actor,updated_at=SYSUTCDATETIME() WHERE id=@id AND deleted_at IS NULL;`);
+      await appendUpdate(
+        transaction,
+        task.projectId,
+        id,
+        actor.id,
+        // A plan change in the row's history, so a link alone never counts as work that blocks deleting the project.
+        "plan",
+        JSON.stringify({ purchaseRequestId: task.purchaseRequestId ?? null }),
+        JSON.stringify({ purchaseRequestId: requestId }),
+        prNo,
+      );
+      return { id, purchaseRequestId: requestId, scheduleVersion: (await currentScheduleVersion(transaction, task.projectId))?.toString("base64") ?? null };
+    });
   });
 
   app.delete("/api/v1/schedule/tasks/:id", async (request) => {
