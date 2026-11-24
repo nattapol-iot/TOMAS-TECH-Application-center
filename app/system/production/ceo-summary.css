@@ -3,6 +3,12 @@
   display: grid;
   gap: 12px;
 }
+.ceo-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
 .ceo-focus {
   display: inline-flex;
   gap: 8px;
@@ -119,6 +125,47 @@
   gap: 6px;
   justify-content: flex-end;
   margin-top: 4px;
+}
+/* Task doc 6.4: the summary as it is on screen, on A4 landscape, nothing of the app around it. */
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 8mm;
+  }
+  html.print-ceo body * {
+    visibility: hidden;
+  }
+  html.print-ceo .ceo-summary,
+  html.print-ceo .ceo-summary * {
+    visibility: visible;
+  }
+  html.print-ceo .ceo-summary {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    font-size: 11px;
+  }
+  html.print-ceo .ceo-actions,
+  html.print-ceo .project-page-back,
+  html.print-ceo .ceo-note button {
+    display: none;
+  }
+  /* inspection-report.css hides every header in print; the summary's title and project lines are headers. */
+  html.print-ceo .ceo-summary .page-header,
+  html.print-ceo .ceo-item > header {
+    display: flex !important;
+  }
+  html.print-ceo .ceo-summary .page-header {
+    position: static;
+  }
+  html.print-ceo .ceo-item {
+    break-inside: avoid;
+    padding: 6px 8px;
+  }
+  html.print-ceo .ceo-list {
+    gap: 6px;
+  }
 }
 @media (max-width: 760px) {
   .ceo-body {
