@@ -48,6 +48,7 @@ import {
   type ProjectDocument,
   type ProjectMember,
   type ProjectSummary,
+  type PaymentMilestone,
   type ProjectDeletionCheck,
   type ScheduleTemplate,
   type SignInbox,
@@ -2048,7 +2049,7 @@ export function ProjectPage({
       </dl>
       <Tabs<ProjectPageTab> tabs={tabs.map((value) => ({ id: value, label: `ProjectPage.tab.${value}` }))} active={shownTab} onChange={onTab} link={null} />
       <div className="project-page-body">
-        {shownTab === "overview" ? <ProjectPageSummary item={item} onTab={onTab} /> : null}
+        {shownTab === "overview" ? <ProjectOverviewTab item={item} onTab={onTab} onMembers={() => setMembers(true)} onEdit={canWrite ? () => setEditing(true) : null} seesCost={seesCost} /> : null}
         {shownTab === "plan" ? renderPlan(item.id) : null}
         {shownTab === "cost" ? <ProjectCostPanel projectId={item.id} /> : null}
         {shownTab === "documents" ? <ProjectDocumentsPanel project={item} canWrite={canWrite} teamTestMode={teamTestMode} notify={notify} /> : null}
@@ -2106,7 +2107,285 @@ export function ProjectPage({
   );
 }
 
-/** The Overview tab's first cut (task doc 5.2): where the plan stands; task doc 5.3 fills in the rest of the page. */
+/** GET /api/v1/projects/:id/page-overview (task doc 5.3). */
+type PageOverview = {
+  today: string;
+  weekStart: string;
+  headings: { id: number; name: string; planStart: string | null; planFinish: string | null; progress: number | null; plannedProgress: number | null; late: boolean; rows: number }[];
+  disciplines: { discipline: string; budgetHours: number; planHours: number; actualHours: number }[];
+  purchaseRequests: { status: string; count: number }[];
+  team: { id: number; name: string; role: string; weekHours: number }[];
+  documents: { id: number; name: string; folderCode: string; documentType: string; uploadedAt: string; uploadedBy: string }[];
+  activity: { id: number; field: string; comment: string | null; at: string; actor: string; task: string | null }[];
+};
+const PAYMENT_STEPS: { code: PaymentMilestone; label: string }[] = [
+  { code: "AFTER_PO", label: "CRM.paymentAfterPo" },
+  { code: "AFTER_DESIGN", label: "CRM.paymentAfterDesign" },
+  { code: "AFTER_INSTALL", label: "CRM.paymentAfterInstall" },
+  { code: "GO_LIVE", label: "CRM.paymentGoLive" },
+];
+
+/**
+ * The Overview tab (task doc 5.3): where the project stands, each box a way to the place that handles it. Stage and
+ * health sit in the page's header; money is never shown here.
+ */
+function ProjectOverviewTab({
+  item,
+  onTab,
+  onMembers,
+  onEdit,
+  seesCost,
+}: {
+  item: ProjectOverviewItem;
+  onTab: (tab: ProjectPageTab) => void;
+  onMembers: () => void;
+  /** Payments are ticked in Edit project; null without project.write. */
+  onEdit: (() => void) | null;
+  /** The Cost tab lists the purchase requests with their amounts, for Leaders and above. */
+  seesCost: boolean;
+}) {
+  const uiText = useUiText();
+  const copy = useProjectCopy();
+  const [data, setData] = useState<PageOverview | null>(null);
+  const [error, setError] = useState("");
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    let cancelled = false;
+    void apiRequest<PageOverview>(`/api/v1/projects/${item.id}/page-overview`)
+      .then((answer) => {
+        if (!cancelled) {
+          setData(answer);
+          setError("");
+        }
+      })
+      .catch((failure) => {
+        if (!cancelled) setError(toError(failure));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [item.id, attempt]);
+  const dates: [string, string | null][] = [
+    [copy("เริ่มโปรเจกต์", "Project start", "開始日"), item.startDate],
+    [copy("PO ลูกค้า", "Customer PO", "顧客PO"), item.purchaseOrderDate],
+    [copy("แผนเสร็จ", "Plan finish", "計画完了"), item.planFinish],
+    [copy("คาดว่าเสร็จ", "Forecast finish", "完了見込み"), item.forecastFinish],
+    ["Portfolio.colTarget", item.targetDelivery],
+  ];
+  const paid = new Set(item.paymentsReceived ?? []);
+  // While the read failed, the boxes wait quietly under the error instead of spinning.
+  const waiting = error ? null : <span className="spinner" />;
+  const box = (key: string, title: string, to: (() => void) | null, children: ReactNode) => (
+    <section key={key} className={`po-box po-${key}`}>
+      <header>
+        <h3>{title}</h3>
+        {to ? (
+          <button type="button" className="btn ghost sm" onClick={to}>
+            {uiText("ProjectPage.open.short")}
+            <Icon name="arrowRight" />
+          </button>
+        ) : null}
+      </header>
+      {children}
+    </section>
+  );
+  return (
+    <div className="project-overview-tab">
+      <ProjectPageSummary item={item} onTab={onTab} />
+      {error ? <LoadError message={error} retry={() => setAttempt((value) => value + 1)} /> : null}
+      <div className="po-grid" data-guide="projectPage.boxes">
+        {box(
+          "dates",
+          copy("วันสำคัญ", "Key dates", "主要日程"),
+          () => onTab("plan"),
+          <dl className="po-dates">
+            {dates.map(([label, value]) => (
+              <div key={label}>
+                <dt>{uiText(label)}</dt>
+                <dd>{value ? formatDate(value) : "—"}</dd>
+              </div>
+            ))}
+            <div>
+              <dt>{uiText("ProjectPage.nextMilestone")}</dt>
+              <dd>{item.nextMilestone ? `${item.nextMilestone.name} · ${formatDate(item.nextMilestone.date)}` : "—"}</dd>
+            </div>
+          </dl>,
+        )}
+        {box(
+          "headings",
+          copy("ความคืบหน้าตามหัวข้อ", "Progress by heading", "見出し別の進捗"),
+          () => onTab("plan"),
+          data ? (
+            data.headings.length ? (
+              <ul className="po-bars">
+                {data.headings.map((heading) => (
+                  <li key={heading.id} className={heading.late ? "late" : undefined}>
+                    <span className="po-bar-label">
+                      {heading.name}
+                      <small className="muted">
+                        {heading.planStart ? `${formatDate(heading.planStart)} – ${formatDate(heading.planFinish ?? heading.planStart)}` : copy("ยังไม่แตกแผน", "Not broken down", "未展開")}
+                      </small>
+                    </span>
+                    {heading.progress === null ? (
+                      <span className="muted">–</span>
+                    ) : (
+                      <span className="po-bar" title={`${heading.progress}% / ${uiText("Portfolio.plannedToday")} ${heading.plannedProgress ?? 0}%`}>
+                        <i style={{ width: `${Math.min(100, heading.progress)}%` }} />
+                        {heading.plannedProgress !== null ? <b style={{ left: `${Math.min(100, heading.plannedProgress)}%` }} /> : null}
+                      </span>
+                    )}
+                    <span className="mono">{heading.progress === null ? "" : `${Math.round(heading.progress)}%`}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="muted">{uiText("Not planned")}</p>
+            )
+          ) : (
+            waiting
+          ),
+        )}
+        {box(
+          "hours",
+          copy("ชั่วโมงตามสาขา", "Hours by discipline", "分野別の時間"),
+          () => onTab("plan"),
+          data ? (
+            data.disciplines.length ? (
+              <table className="po-table">
+                <thead>
+                  <tr>
+                    <th />
+                    <th className="num">{copy("งบ", "Budget", "予算")}</th>
+                    <th className="num">{copy("แผน", "Plan", "計画")}</th>
+                    <th className="num">{copy("จริง", "Actual", "実績")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.disciplines.map((row) => (
+                    <tr key={row.discipline} className={row.budgetHours && row.actualHours > row.budgetHours ? "over" : undefined}>
+                      <td>{uiText(row.discipline)}</td>
+                      <td className="num mono">{row.budgetHours ? Math.round(row.budgetHours) : "–"}</td>
+                      <td className="num mono">{Math.round(row.planHours)}</td>
+                      <td className="num mono">{Math.round(row.actualHours)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <p className="muted">{copy("ยังไม่มีงบหรือชั่วโมง", "No budget or hours yet", "予算・時間はまだありません")}</p>
+            )
+          ) : (
+            waiting
+          ),
+        )}
+        {box(
+          "purchase",
+          copy("ใบขอซื้อ (PR)", "Purchase requests", "購買依頼"),
+          seesCost ? () => onTab("cost") : null,
+          data ? (
+            data.purchaseRequests.length ? (
+              <ul className="po-counts">
+                {data.purchaseRequests.map((row) => (
+                  <li key={row.status}>
+                    <span>{uiText(row.status)}</span>
+                    <strong className="mono">{row.count}</strong>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="muted">{copy("ยังไม่มีใบขอซื้อ", "No purchase request yet", "購買依頼はまだありません")}</p>
+            )
+          ) : (
+            waiting
+          ),
+        )}
+        {box(
+          "team",
+          copy("ทีมและชั่วโมงสัปดาห์นี้", "Team and hours this week", "チームと今週の時間"),
+          onMembers,
+          data ? (
+            <ul className="po-counts">
+              {data.team.map((person) => (
+                <li key={person.id}>
+                  <span>
+                    {person.name} {person.role !== "Member" ? <small className="muted">{person.role}</small> : null}
+                  </span>
+                  <strong className="mono">{person.weekHours ? `${person.weekHours} ${uiText("Plan.mhHours")}` : "–"}</strong>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            waiting
+          ),
+        )}
+        {box(
+          "documents",
+          copy("เอกสารล่าสุด", "Latest documents", "最新の文書"),
+          () => onTab("documents"),
+          data ? (
+            data.documents.length ? (
+              <ul className="po-list">
+                {data.documents.map((document) => (
+                  <li key={document.id}>
+                    <span>{document.name}</span>
+                    <small className="muted">
+                      {document.folderCode} · {document.documentType} · {document.uploadedBy} · {formatDay(document.uploadedAt)}
+                    </small>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="muted">{copy("ยังไม่มีเอกสาร", "No documents yet", "文書はまだありません")}</p>
+            )
+          ) : (
+            waiting
+          ),
+        )}
+        {box(
+          "payments",
+          uiText("CRM.customerPayments"),
+          onEdit,
+          <ul className="po-counts">
+            {PAYMENT_STEPS.map((step) => (
+              <li key={step.code} className={paid.has(step.code) ? "done" : undefined}>
+                <span>{uiText(step.label)}</span>
+                <strong>{paid.has(step.code) ? <Icon name="check" /> : "–"}</strong>
+              </li>
+            ))}
+          </ul>,
+        )}
+        {box(
+          "activity",
+          copy("ความเคลื่อนไหวล่าสุด", "Latest activity", "最近の動き"),
+          () => onTab("plan"),
+          data ? (
+            data.activity.length ? (
+              <ul className="po-list">
+                {data.activity.map((entry) => (
+                  <li key={entry.id}>
+                    <span>
+                      {entry.actor} · {entry.task ?? copy("ทั้งแผน", "the plan", "計画全体")}
+                    </span>
+                    <small className="muted">
+                      {entry.field}
+                      {entry.comment ? ` · ${entry.comment}` : ""} · {formatDay(entry.at)}
+                    </small>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="muted">{copy("ยังไม่มีความเคลื่อนไหว", "Nothing yet", "まだありません")}</p>
+            )
+          ) : (
+            waiting
+          ),
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** The Overview tab's figures row (task doc 5.2): where the plan stands, each a way to the Plan tab. */
 function ProjectPageSummary({ item, onTab }: { item: ProjectOverviewItem; onTab: (tab: ProjectPageTab) => void }) {
   const uiText = useUiText();
   const slip = formatSlip(item.status === "Closed" ? null : item.slipDays);

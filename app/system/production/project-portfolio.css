@@ -148,7 +148,7 @@
   cursor: pointer;
 }
 .project-page-cell:hover {
-  border-color: var(--primary);
+  border-color: var(--blue);
 }
 .project-page-cell strong {
   font-size: var(--fs-lg);
@@ -158,6 +158,126 @@
 }
 .project-page-cell.tone-amber strong {
   color: var(--amber-text);
+}
+/* Task doc 5.3: the Overview tab, boxes that each lead to the place that handles them. */
+.project-overview-tab {
+  display: grid;
+  gap: 12px;
+}
+.po-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 12px;
+}
+.po-box {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+.po-box > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.po-box h3 {
+  margin: 0;
+  font-size: var(--fs-sm);
+}
+.po-dates {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 12px;
+  margin: 0;
+}
+.po-dates dt {
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+.po-dates dd {
+  margin: 0;
+  font-weight: 600;
+}
+.po-bars,
+.po-counts,
+.po-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.po-bars li {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) 40px;
+  gap: 8px;
+  align-items: center;
+}
+.po-bars li.late .po-bar-label {
+  color: var(--red-text);
+}
+.po-bar-label {
+  display: grid;
+  min-width: 0;
+}
+.po-bar-label small {
+  font-size: var(--fs-xs);
+}
+.po-bar {
+  position: relative;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--n-100);
+}
+.po-bar i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 999px;
+  background: var(--blue);
+}
+.po-bars li.late .po-bar i {
+  background: var(--red);
+}
+.po-bar b {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  background: var(--navy-900);
+}
+.po-counts li,
+.po-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.po-list li {
+  flex-direction: column;
+  gap: 0;
+}
+.po-counts li.done strong {
+  color: var(--green-text);
+}
+.po-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-sm);
+}
+.po-table th,
+.po-table td {
+  padding: 3px 4px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+}
+.po-table .num {
+  text-align: right;
+}
+.po-table tr.over td {
+  color: var(--red-text);
 }
 /* Task doc 5.1: hours against the budget, and the count waiting on the plan's To follow up. */
 .portfolio-col-hours {
