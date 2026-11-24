@@ -53,7 +53,7 @@ const percentOf = (value: ImportCell, wholeNumbers: boolean): number | null => {
   return Number.isFinite(parsed) ? Math.max(0, Math.min(100, Math.round(parsed))) : null;
 };
 /** Lines under the table that are notes, not plan rows. */
-const NOTE = /^(remarks?|notes?|prepared|approved|checked|reviewed|signature|หมายเหตุ|ผู้จัดทำ|ผู้อนุมัติ|ผู้ตรวจ|ลงชื่อ)|:\s*$/i;
+const NOTE = /^(remarks?|notes?|prepared|approved|checked|reviewed|signature|หมายเหตุ|ผู้จัดทำ|ผู้อนุมัติ|ผู้ตรวจ|ลงชื่อ)|:\s*$|^[.\s]*\[\s*level\s*\d+\b[^\]]*\]\s*$/i;
 
 /** The plan table in a sheet's rows, or null when no row has both TASK and START. */
 export function readPlanTable(grid: readonly (readonly ImportCell[])[], today: string): ImportedPlan | null {

@@ -1872,6 +1872,7 @@ export function PlanSheet({
         days: row.days,
         percent: row.task.kind === "phase" ? null : Math.round(row.percent),
         workDays: row.workDays,
+        after: row.after,
       })),
   });
   const downloadCustomerFile = async () => {
@@ -2043,7 +2044,9 @@ export function PlanSheet({
   const preview = exporting ? customerScheduleSheet(exportInput()) : null;
   const previewDays = exporting ? customerScheduleDays(exportInput()) : [];
   const shownDays = Math.min(previewDays.length, 70);
-  const previewLeft = 8 + (exportMember ? 1 : 0);
+  // The plan's columns and the narrow blank one; PREDECESSOR is hidden in the file, as in the team's own, and here too.
+  const previewLeft = 10 + (exportMember ? 1 : 0);
+  const previewHidden = preview ? preview.widths.findIndex((column) => column.hidden) : -1;
   const previewText = (value: string | number | null | undefined, style: number) => {
     if (value === null || value === undefined) return "";
     if (typeof value === "number" && (style === 14 || style === 15)) {
@@ -2217,10 +2220,10 @@ export function PlanSheet({
                 </div>
               ))}
             </div>
-            <table className="ps-xl" style={{ width: 260 + previewLeft * 50 + shownDays * 11 }}>
+            <table className="ps-xl" style={{ width: 268 + (previewLeft - 2) * 50 + shownDays * 11 }}>
               <thead>
                 <tr>
-                  <th colSpan={previewLeft} />
+                  <th colSpan={previewLeft - 1} />
                   {Array.from({ length: shownDays / 7 }, (_, week) => (
                     <th key={week} colSpan={7} className="wk">
                       {`Week ${week + 1}`}
@@ -2228,11 +2231,13 @@ export function PlanSheet({
                   ))}
                 </tr>
                 <tr>
-                  {preview.rows[6]!.slice(0, previewLeft).map((cell, index) => (
-                    <th key={index} className="lbl">
-                      {String(cell.value ?? "")}
-                    </th>
-                  ))}
+                  {preview.rows[6]!.slice(0, previewLeft).map((cell, index) =>
+                    index === previewHidden ? null : (
+                      <th key={index} className={index === previewLeft - 1 ? "lbl sp" : "lbl"}>
+                        {String(cell.value ?? "")}
+                      </th>
+                    ),
+                  )}
                   {previewDays.slice(0, shownDays).map((day) => (
                     <th key={day} className={`dn${day === today ? " td" : ""}`}>
                       {Number(day.slice(8))}
@@ -2241,13 +2246,15 @@ export function PlanSheet({
                 </tr>
               </thead>
               <tbody>
-                {preview.rows.slice(8).map((line, index) => (
+                {preview.rows.slice(7).map((line, index) => (
                   <tr key={index}>
-                    {line.slice(0, previewLeft + shownDays).map((cell, col) => (
-                      <td key={col} className={`x${cell.style}${col >= previewLeft ? " g" : ""}`}>
-                        {col < previewLeft ? previewText(cell.value, cell.style) : null}
-                      </td>
-                    ))}
+                    {line.slice(0, previewLeft + shownDays).map((cell, col) =>
+                      col === previewHidden ? null : (
+                        <td key={col} className={`x${cell.style}${col >= previewLeft - 1 ? " g" : ""}`}>
+                          {col < previewLeft ? previewText(cell.value, cell.style) : null}
+                        </td>
+                      ),
+                    )}
                   </tr>
                 ))}
               </tbody>
