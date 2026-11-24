@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@azure/msal-browser": "5.20.0",
+    "@tomas-tc/ui": "2.8.3",
     "fflate": "^0.7.4",
     "pdfjs-dist": "6.3.289",
     "react": "19.2.6",

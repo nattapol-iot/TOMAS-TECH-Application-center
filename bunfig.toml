@@ -1,0 +1,4 @@
+# @tomas-tc/* comes from the company registry, reachable only on the tailnet. It has no uplink, so only
+# the scope points there; every other package still comes from the public npm registry.
+[install.scopes]
+"@tomas-tc" = "https://npm.tomastc.com/"

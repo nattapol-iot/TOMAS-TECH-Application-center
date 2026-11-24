@@ -60,6 +60,15 @@ jobs:
         with:
           bun-version: 1.4.5
 
+      # @tomas-tc/* installs from npm.tomastc.com, which only the tailnet reaches: GitHub-hosted runners
+      # (the fallback when iot-ci is offline) cannot install the frontend, so say so instead of timing out.
+      - name: Require the tailnet npm registry
+        run: |
+          curl -fsS -m 10 -o /dev/null https://npm.tomastc.com/-/ping || {
+            echo "::error::npm.tomastc.com (@tomas-tc/*) is reachable only from the tailnet. Re-run this job once the iot-ci runner is online."
+            exit 1
+          }
+
       - name: Install frontend dependencies
         run: bun install --frozen-lockfile
 
@@ -106,6 +115,13 @@ jobs:
 
       - name: Build Node backend Docker image
         run: docker build -f backend-node/Dockerfile -t iot-team-center-api:ci-check .
+
+      - name: Require the tailnet npm registry
+        run: |
+          curl -fsS -m 10 -o /dev/null https://npm.tomastc.com/-/ping || {
+            echo "::error::npm.tomastc.com (@tomas-tc/*) is reachable only from the tailnet. Re-run this job once the iot-ci runner is online."
+            exit 1
+          }
 
       - name: Build frontend Docker image
         # Placeholder build ARGs only -- proves the image builds and passes
