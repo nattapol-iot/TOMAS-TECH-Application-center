@@ -4,7 +4,7 @@ import type { Database } from "../src/db.js";
 import { workingCalendarHolidays } from "../src/master-data/calendar.js";
 import { createMasterDataClient, MasterDataError, type MasterDataClient } from "../src/master-data/client.js";
 import { thbRateOn } from "../src/master-data/exchange-rates.js";
-import { createHolidaySync } from "../src/master-data/holiday-sync.js";
+import { createHolidaySync, REPLACE_LISTED_YEARS } from "../src/master-data/holiday-sync.js";
 import { createOwnRecordReader, readEntryDate } from "../src/master-data/own-record.js";
 import type { TokenSource } from "../src/tmt-id/token-vault.js";
 
@@ -20,7 +20,9 @@ test("the working calendar keeps company-wide and Bangkok days off, one per date
     { holiday_date: "2026-06-02", holiday_name: "One division", holiday_type: "COMPANY", division_id: 2 },
     { holiday_date: "2026-06-03", holiday_name: "Bank", holiday_type: "BANK" },
     { holiday_date: "2026-06-06", holiday_name: "Weekly", holiday_type: "WEEKLY" },
-    { holiday_date: "not a date", holiday_name: "Broken", holiday_type: "NATIONAL" }, null, "text",
+    { holiday_date: "not a date", holiday_name: "Broken", holiday_type: "NATIONAL" },
+    null,
+    "text",
   ]);
   assert.deepEqual(holidays, [
     { date: "2026-04-13", name: "Songkran BKK" },
@@ -61,9 +63,10 @@ test("the client sends the key and the person's token and walks every page of a 
   const client = createMasterDataClient(settings, fake)!;
   assert.deepEqual(await client.listAll("/api/v1/company-calendar"), [1, 2, 3]);
   await client.get("/api/v1/me", "person-token");
-  assert.deepEqual(calls.map((call) => call.url), [
-    "https://master.test/api/v1/company-calendar?offset=0", "https://master.test/api/v1/company-calendar?offset=2", "https://master.test/api/v1/me",
-  ]);
+  assert.deepEqual(
+    calls.map((call) => call.url),
+    ["https://master.test/api/v1/company-calendar?offset=0", "https://master.test/api/v1/company-calendar?offset=2", "https://master.test/api/v1/me"],
+  );
   assert.equal(calls[0]!.headers["X-API-Key"], "key");
   assert.equal(calls[0]!.headers["X-User-Token"], undefined);
   assert.equal(calls[2]!.headers["X-User-Token"], "person-token");
@@ -71,7 +74,9 @@ test("the client sends the key and the person's token and walks every page of a 
 });
 
 test("the own-record reader retries once with a fresh token, caches, and falls back to the last answer", async () => {
-  let now = 0, issued = 0, failNext = false;
+  let now = 0,
+    issued = 0,
+    failNext = false;
   const tokens: TokenSource = { accessToken: async () => `token-${++issued}`, dropAccess: () => {} };
   const asked: (string | undefined)[] = [];
   const client: MasterDataClient = {
@@ -84,12 +89,18 @@ test("the own-record reader retries once with a fresh token, caches, and falls b
     listAll: async () => [],
   };
   const errors: unknown[] = [];
-  const reader = createOwnRecordReader(client, tokens, (error) => errors.push(error), () => now);
+  const reader = createOwnRecordReader(
+    client,
+    tokens,
+    (error) => errors.push(error),
+    () => now,
+  );
   assert.equal(await reader.entryDate("subject"), "2019-04-01");
   assert.deepEqual(asked, ["token-1", "token-2"]);
   assert.equal(await reader.entryDate("subject"), "2019-04-01");
   assert.equal(asked.length, 2);
-  now = 31 * 60_000; failNext = true;
+  now = 31 * 60_000;
+  failNext = true;
   assert.equal(await reader.entryDate("subject"), "2019-04-01");
   assert.equal(errors.length, 1);
   assert.equal(await reader.entryDate(""), null);
@@ -101,7 +112,12 @@ test("a request refreshes the holidays at most every five minutes and never writ
   const database = {
     async query(_text: string, bind: (request: { input: (name: string, _type: unknown, value: unknown) => unknown }) => void) {
       const inputs: Record<string, unknown> = {};
-      const request = { input: (name: string, _type: unknown, value: unknown) => { inputs[name] = value; return request; } };
+      const request = {
+        input: (name: string, _type: unknown, value: unknown) => {
+          inputs[name] = value;
+          return request;
+        },
+      };
       bind(request);
       writes.push(inputs);
       return { recordset: [], recordsets: [], rowsAffected: [], output: {} };
@@ -110,20 +126,46 @@ test("a request refreshes the holidays at most every five minutes and never writ
   let calendar: unknown[] = [];
   const client: MasterDataClient = { get: async () => ({}), listAll: async () => calendar };
   const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
-  const sync = createHolidaySync(client, database, (error) => { throw error; }, () => now);
+  const sync = createHolidaySync(
+    client,
+    database,
+    (error) => {
+      throw error;
+    },
+    () => now,
+  );
 
-  sync.refresh(); await settle();
+  sync.refresh();
+  await settle();
   assert.equal(writes.length, 0, "an empty calendar never writes");
 
   calendar = [{ holiday_date: "2026-04-13", holiday_name: "Songkran", holiday_type: "NATIONAL" }];
   now = 4 * 60_000;
-  sync.refresh(); await settle();
+  sync.refresh();
+  await settle();
   assert.equal(writes.length, 0, "a request within five minutes of the last sync does not sync again");
 
   now = 5 * 60_000;
-  sync.refresh(); await settle();
+  sync.refresh();
+  await settle();
   assert.equal(writes.length, 1);
   assert.equal(writes[0]!.holidays, JSON.stringify([{ date: "2026-04-13", name: "Songkran" }]));
   assert.equal(writes[0]!.years, "[2026]");
   assert.equal("actor" in writes[0]!, false, "rows from master carry no app author");
+});
+
+// Task doc 4.5 (migration 130): a holiday new to the app on open planned work tells the plan's manager and lead once.
+test("the holiday sync tells a project's manager and lead engineer about a new holiday on open work, once per day", () => {
+  const text = REPLACE_LISTED_YEARS.replace(/\s+/g, " ");
+  assert.match(text, /^ SET XACT_ABORT ON; BEGIN TRANSACTION;/, "the calendar and its bells go in together");
+  assert.match(text, /COMMIT TRANSACTION;$/);
+  assert.match(text, /OUTPUT \$action, inserted\.holiday_date, inserted\.name INTO @changes;/);
+  assert.match(text, /WHERE a\.action = N'INSERT' AND a\.holiday_date >= CONVERT\(date, SYSUTCDATETIME\(\)\)/, "only holidays just added and still to come");
+  assert.match(text, /t\.status <> N'Done'/, "done rows are left alone");
+  assert.match(text, /NOT EXISTS \(SELECT 1 FROM dbo\.schedule_tasks c WHERE c\.parent_id = t\.id AND c\.deleted_at IS NULL\)/, "rows without rows under them");
+  assert.match(text, /p\.status <> N'Closed'/, "closed projects are left alone");
+  assert.match(text, /VALUES \(h\.manager_id\), \(h\.lead_engineer_id\)/);
+  assert.match(text, /u\.is_active = 1 AND u\.deleted_at IS NULL/);
+  assert.match(text, /N'project-holiday:', h\.project_id, N':'/, "one bell per project and day");
+  assert.match(text, /WHERE NOT EXISTS \(SELECT 1 FROM dbo\.notifications n WITH \(UPDLOCK, HOLDLOCK\) WHERE n\.user_id = x\.user_id AND n\.dedupe_key = x\.dedupe_key\)/);
 });

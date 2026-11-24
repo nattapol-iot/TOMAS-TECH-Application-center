@@ -338,6 +338,10 @@ export type ProjectSchedule = {
   tasks: ScheduleTask[];
   /** Company holidays, to place a linked row's start as the API does; an older API omits them. */
   holidays?: string[];
+  /** Task doc 4.4-4.5 (migration 130): each holiday's name and when the app first saw it (null: before 130). */
+  holidayList?: { date: string; name: string; addedAt: string | null }[];
+  /** What the plan's managers decided about a new holiday on a row. */
+  holidayDecisions?: { taskId: number; date: string; decision: string }[];
 };
 
 type PriceRecord = {

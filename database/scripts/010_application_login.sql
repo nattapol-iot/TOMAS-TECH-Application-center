@@ -892,4 +892,8 @@ GO
 -- database/migrations/127_vendor_hours.sql
 GRANT SELECT, INSERT, UPDATE, DELETE ON dbo.schedule_vendor_hours TO [iot_team_app_role];
 GO
+
+-- database/migrations/130_holiday_over_work.sql
+GRANT SELECT, INSERT, UPDATE, DELETE ON dbo.schedule_holiday_decisions TO [iot_team_app_role];
+GO
 -- END GENERATED MIGRATION GRANTS
