@@ -242,8 +242,8 @@ test("the portfolio Timeline goes full screen, with an overlay where the browser
 
   // In full screen the chart takes the window height; the overlay stays under dialogs and toasts.
   const css = read("app/system/production/project-portfolio.css");
-  assert.match(css, /\.portfolio-gantt\.is-fullscreen \.gantt \{ flex: 1; min-height: 0; max-height: none; \}/);
-  assert.match(css, /\.portfolio-gantt\.is-overlay \{ position: fixed; inset: 0; z-index: 90;/);
+  assert.match(css, /\.portfolio-gantt\.is-fullscreen \.gantt \{\s*flex: 1;\s*min-height: 0;\s*max-height: none;\s*\}/);
+  assert.match(css, /\.portfolio-gantt\.is-overlay \{\s*position: fixed;\s*inset: 0;\s*z-index: 90;/);
   assert.match(read("app/globals.css"), /\.overlay \{\r?\n\s+position: fixed;\r?\n\s+inset: 0;\r?\n\s+z-index: 100;/);
   assert.doesNotMatch(css, /#[0-9a-fA-F]{3,6}\b/, "tokens only");
 

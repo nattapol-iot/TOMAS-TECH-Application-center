@@ -3756,6 +3756,22 @@ const PROJECT_LOOK_V2: Guide = {
       },
     },
     {
+      target: "project.followCol",
+      action: "next",
+      view: "projects",
+      title: { th: "ชั่วโมงและเรื่องที่ต้องตาม", en: "Hours and what to follow up", jp: "時間と要フォロー" },
+      body: {
+        th: "คอลัมน์ 'ชม.จริง / งบ' คือชั่วโมงที่ทีมยืนยันแล้วเทียบงบจาก Estimate (เป็นสีแดงเมื่อเกิน) คอลัมน์ 'ต้องตาม' คือจำนวนงานในแผนที่เลยกำหนด ติดปัญหา ถึงวันเริ่มแต่ยังไม่เริ่ม ยังไม่มีผู้ทำ หรือจ้างภายนอกแต่ยังไม่ขอซื้อ กดตัวเลขเพื่อเปิดแผนงาน",
+        en: "Hours / budget is the hours the team confirmed against the Estimate's budget (red when over). To follow up counts plan rows that are late, blocked, due but not started, have nobody on them, or are outsourced with no purchase request; press the number to open the plan.",
+        jp: "「実績時間 / 予算」はチームが確定した時間と見積の予算です（超過すると赤）。「要フォロー」は遅延・停滞・開始日を過ぎて未着手・担当者なし・購買依頼のない外注の行数です。数字を押すと計画を開きます。",
+      },
+      missing: {
+        th: "กด V2 ก่อน คอลัมน์นี้มีเฉพาะหน้าตาแบบ V2 ในมุมมองรายการ",
+        en: "Press V2 first; these columns are part of the V2 list.",
+        jp: "先に「V2」を押します。この列は V2 の一覧にだけあります。",
+      },
+    },
+    {
       target: "project.pmFilter",
       action: "next",
       view: "projects",

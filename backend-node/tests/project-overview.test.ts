@@ -4,7 +4,7 @@ import Fastify from "fastify";
 import type { AppConfig } from "../src/config.js";
 import type { Database } from "../src/db.js";
 import { ApiError, registerErrorHandler } from "../src/errors.js";
-import { loadProjectScheduleSummaries, summarizeProjects } from "../src/project-overview.js";
+import { followUpCount, loadProjectScheduleSummaries, summarizeProjects } from "../src/project-overview.js";
 import { registerProjectRoutes } from "../src/routes/projects.js";
 import { taskRow } from "../src/schedule-service.js";
 import type { CurrentUserService } from "../src/users.js";
@@ -14,11 +14,39 @@ const config = { businessTimeZone: "Asia/Bangkok", documentStorage: {} } as unkn
 
 /** A dbo.schedule_tasks row as SQL Server returns it. */
 const raw = (change: Record<string, unknown>) => ({
-  id: 1, project_id: 1, parent_id: null, sort_order: 1, kind: "task", name: "Task", is_milestone: false, origin: "Plan", created_by: 1,
-  visibility: "Internal", plan_start: "2026-10-05", plan_days: 5, start_mode: "manual", predecessor_id: null, lag_days: 0, pic_external: "",
-  plan_man_days: 0, baseline_start: null, baseline_end: null, baseline_days: 0, baseline_rev: 0, actual_start: null, actual_end: null,
-  forecast_end: null, percent_done: 0, status: "Not Started", blocked_reason: null, note: null, actual_man_days: 0, updated_by: 1,
-  updated_at: null, row_version: Buffer.alloc(8), ...change,
+  id: 1,
+  project_id: 1,
+  parent_id: null,
+  sort_order: 1,
+  kind: "task",
+  name: "Task",
+  is_milestone: false,
+  origin: "Plan",
+  created_by: 1,
+  visibility: "Internal",
+  plan_start: "2026-10-05",
+  plan_days: 5,
+  start_mode: "manual",
+  predecessor_id: null,
+  lag_days: 0,
+  pic_external: "",
+  plan_man_days: 0,
+  baseline_start: null,
+  baseline_end: null,
+  baseline_days: 0,
+  baseline_rev: 0,
+  actual_start: null,
+  actual_end: null,
+  forecast_end: null,
+  percent_done: 0,
+  status: "Not Started",
+  blocked_reason: null,
+  note: null,
+  actual_man_days: 0,
+  updated_by: 1,
+  updated_at: null,
+  row_version: Buffer.alloc(8),
+  ...change,
 });
 
 // Project 1: three headings with the customer's dates, the team's two work rows under one of them. Project 2: only a heading.
@@ -34,8 +62,10 @@ const rows = [
   raw({ id: 40, project_id: 4, name: "Orphan link", plan_start: null, start_mode: "linked", predecessor_id: 999 }),
 ];
 const projects = [
-  { id: 1, status: "Installation", targetDelivery: "2026-11-30" }, { id: 2, status: "Design", targetDelivery: "2026-12-31" },
-  { id: 3, status: "Design", targetDelivery: "2026-12-31" }, { id: 4, status: "Closed", targetDelivery: "2026-09-30" },
+  { id: 1, status: "Installation", targetDelivery: "2026-11-30" },
+  { id: 2, status: "Design", targetDelivery: "2026-12-31" },
+  { id: 3, status: "Design", targetDelivery: "2026-12-31" },
+  { id: 4, status: "Closed", targetDelivery: "2026-09-30" },
   { id: 5, status: "Planning", targetDelivery: null },
 ];
 
@@ -43,7 +73,7 @@ test("summaries group task rows by project and weigh progress by work days, leav
   const outcomes = summarizeProjects(projects, rows.map(taskRow), new Set(), TODAY);
   const first = outcomes.get(1)!;
   // Wiring: 5 work days at 40%; Commissioning: 12-21 Oct is 8 work days at 0%. The headings are not counted.
-  assert.equal(first.summary.progress, Math.round((40 * 5 / 13) * 100) / 100);
+  assert.equal(first.summary.progress, Math.round(((40 * 5) / 13) * 100) / 100);
   assert.equal(first.summary.taskCount, 2);
   assert.equal(first.summary.doneCount, 0);
   assert.equal(first.summary.scheduleError, false);
@@ -84,8 +114,14 @@ test("the loader reads every project's rows and the holidays in one round trip",
   const database = {
     async query(statement: string, bind: (request: unknown) => void) {
       const bound: Record<string, unknown> = {};
-      const request = { input(key: string, _type: unknown, value: unknown) { bound[key] = value; return request; } };
-      bind(request); calls.push({ statement, ids: bound.ids });
+      const request = {
+        input(key: string, _type: unknown, value: unknown) {
+          bound[key] = value;
+          return request;
+        },
+      };
+      bind(request);
+      calls.push({ statement, ids: bound.ids });
       // 13 October is a holiday, so Commissioning loses a work day.
       return { recordsets: [rows, [{ holiday_date: new Date("2026-10-13T00:00:00Z") }]] };
     },
@@ -96,7 +132,7 @@ test("the loader reads every project's rows and the holidays in one round trip",
   assert.match(calls[0]!.statement, /STRING_SPLIT\(@ids,N','\)/);
   assert.match(calls[0]!.statement, /t\.deleted_at IS NULL/);
   assert.match(calls[0]!.statement, /SELECT holiday_date FROM dbo\.holidays/);
-  assert.equal(summaries.get(1)!.progress, Math.round((40 * 5 / 12) * 100) / 100);
+  assert.equal(summaries.get(1)!.progress, Math.round(((40 * 5) / 12) * 100) / 100);
   assert.equal(summaries.get(3)!.scheduleError, true);
   assert.equal(summaries.size, 5);
 
@@ -109,11 +145,34 @@ test("the loader reads every project's rows and the holidays in one round trip",
 
 /** A project row as the list / overview SELECT returns it. */
 const projectRow = (change: Record<string, unknown>) => ({
-  id: 1, project_no: "P-26-001", name: "Line 3 IoT", customer_id: 7, customer_name: "ACME", status: "Installation", project_type: "IoT",
-  manager_name: "Somchai", end_user_customer_id: null, end_user_name: null, end_user_code: null, manager_id: 5, lead_engineer_id: 6,
-  lead_engineer_name: "Lek", po_no: "PO-1", po_date: "2026-09-01", actual_delivery: null, site: "Plant A", remark: null,
-  start_date: "2026-09-01", target_delivery: "2026-11-30", progress: 12, updated_at: "2026-10-01T00:00:00Z", row_version: Buffer.alloc(8),
-  team: "Team X", payments_received: "Deposit", contact_ids: "3,4", ...change,
+  id: 1,
+  project_no: "P-26-001",
+  name: "Line 3 IoT",
+  customer_id: 7,
+  customer_name: "ACME",
+  status: "Installation",
+  project_type: "IoT",
+  manager_name: "Somchai",
+  end_user_customer_id: null,
+  end_user_name: null,
+  end_user_code: null,
+  manager_id: 5,
+  lead_engineer_id: 6,
+  lead_engineer_name: "Lek",
+  po_no: "PO-1",
+  po_date: "2026-09-01",
+  actual_delivery: null,
+  site: "Plant A",
+  remark: null,
+  start_date: "2026-09-01",
+  target_delivery: "2026-11-30",
+  progress: 12,
+  updated_at: "2026-10-01T00:00:00Z",
+  row_version: Buffer.alloc(8),
+  team: "Team X",
+  payments_received: "Deposit",
+  contact_ids: "3,4",
+  ...change,
 });
 
 type Actor = { id: number; roles: string[] };
@@ -123,30 +182,52 @@ function overviewServer(actor: Actor, options: { canWrite?: boolean; denied?: bo
   const database = {
     async query(statement: string, bind?: (request: unknown) => void) {
       const bound: Record<string, unknown> = {};
-      const request = { input(key: string, _type: unknown, value: unknown) { bound[key] = value; return request; } };
-      bind?.(request); calls.push({ statement, bound });
+      const request = {
+        input(key: string, _type: unknown, value: unknown) {
+          bound[key] = value;
+          return request;
+        },
+      };
+      bind?.(request);
+      calls.push({ statement, bound });
       if (statement.includes("dbo.schedule_tasks t")) return { recordsets: [[...rows.filter((row) => row.project_id <= 2), ...(options.extraTasks ?? [])], []] };
       if (statement.includes("dbo.schedule_updates u")) {
         return { recordset: [{ project_id: 1, pending_requests: 2, last_progress_at: new Date("2026-10-03T08:00:00Z") }] };
       }
       if (statement.includes("user_effective_permissions")) return { recordset: [{ allowed: options.canWrite ?? true }] };
+      if (statement.includes("dbo.work_hours h"))
+        return {
+          recordset: [
+            { project_id: 1, actual_hours: 12.5, estimate_days: 4, manual_days: 9 },
+            { project_id: 2, actual_hours: null, estimate_days: 0, manual_days: 3 },
+          ],
+        };
       if (statement.includes("FROM dbo.projects p")) {
-        const all = [projectRow({}), projectRow({ id: 2, project_no: "P-26-002", status: "Design", manager_id: 9, lead_engineer_id: 9, progress: 33 }),
-          projectRow({ id: 5, project_no: "P-26-005", status: "Closed", manager_id: 9, lead_engineer_id: 9, progress: 100, target_delivery: "2026-09-30" })];
+        const all = [
+          projectRow({}),
+          projectRow({ id: 2, project_no: "P-26-002", status: "Design", manager_id: 9, lead_engineer_id: 9, progress: 33 }),
+          projectRow({ id: 5, project_no: "P-26-005", status: "Closed", manager_id: 9, lead_engineer_id: 9, progress: 100, target_delivery: "2026-09-30" }),
+        ];
         return { recordset: bound.include_closed ? all : all.filter((row) => row.status !== "Closed") };
       }
       throw new Error(`Unexpected query: ${statement}`);
     },
-    async transaction() { throw new Error("Unexpected transaction"); },
+    async transaction() {
+      throw new Error("Unexpected transaction");
+    },
   } as unknown as Database;
   const users = {
     async demandPermission(_request: unknown, permission: string) {
       permissionChecked = permission;
       if (options.denied) throw new ApiError(403, "permission_denied", "Denied");
     },
-    async required() { return actor; },
+    async required() {
+      return actor;
+    },
   } as unknown as CurrentUserService;
-  const server = Fastify(); registerErrorHandler(server); registerProjectRoutes(server, config, database, users);
+  const server = Fastify();
+  registerErrorHandler(server);
+  registerProjectRoutes(server, config, database, users);
   // A parametric sibling must not capture the static overview path.
   server.get("/api/v1/projects/:id", async () => ({ captured: true }));
   return { server, calls, permission: () => permissionChecked };
@@ -160,7 +241,9 @@ test("the overview needs project.read and refuses before any query", async () =>
     assert.equal(response.json().code, "permission_denied");
     assert.equal(permission(), "project.read");
     assert.equal(calls.length, 0);
-  } finally { await server.close(); }
+  } finally {
+    await server.close();
+  }
 });
 
 test("the overview binds the caller's scope and leaves closed projects out unless asked", async () => {
@@ -177,14 +260,22 @@ test("the overview binds the caller's scope and leaves closed projects out unles
     assert.match(list.statement, /EXISTS\(SELECT 1 FROM dbo\.project_members m WHERE m\.project_id=p\.id AND m\.user_id=@actor\)/);
     assert.match(list.statement, /@include_closed=1 OR p\.status<>N'Closed'/);
     assert.match(list.statement, /ORDER BY p\.project_no,p\.id/);
-    assert.deepEqual(open.json().items.map((item: { id: number }) => item.id), [1, 2]);
+    assert.deepEqual(
+      open.json().items.map((item: { id: number }) => item.id),
+      [1, 2],
+    );
     assert.match(open.json().today, /^\d{4}-\d{2}-\d{2}$/);
 
     calls.length = 0;
     const all = await server.inject({ method: "GET", url: "/api/v1/projects/overview?includeClosed=1" });
     assert.equal(calls.find((call) => call.statement.includes("FROM dbo.projects p"))!.bound.include_closed, true);
-    assert.deepEqual(all.json().items.map((item: { id: number }) => item.id), [1, 2, 5]);
-  } finally { await server.close(); }
+    assert.deepEqual(
+      all.json().items.map((item: { id: number }) => item.id),
+      [1, 2, 5],
+    );
+  } finally {
+    await server.close();
+  }
 });
 
 test("an elevated caller is bound as elevated", async () => {
@@ -192,7 +283,9 @@ test("an elevated caller is bound as elevated", async () => {
   try {
     assert.equal((await server.inject({ method: "GET", url: "/api/v1/projects/overview" })).statusCode, 200);
     assert.equal(calls.find((call) => call.statement.includes("FROM dbo.projects p"))!.bound.elevated, true);
-  } finally { await server.close(); }
+  } finally {
+    await server.close();
+  }
 });
 
 test("each overview item carries the list fields plus its schedule summary and stage rights", async (t) => {
@@ -203,16 +296,43 @@ test("each overview item carries the list fields plus its schedule summary and s
     const items = (await server.inject({ method: "GET", url: "/api/v1/projects/overview?includeClosed=1" })).json().items;
     const [first, second, closed] = items;
     // Same names and shape as GET /api/v1/projects, so the portfolio dialogs can reuse the row.
-    for (const field of ["id", "number", "name", "customerName", "team", "health", "paymentsReceived", "contactIds", "customerId",
-      "endUserCustomerId", "endUserName", "endUserCode", "status", "projectType", "managerName", "managerId", "leadEngineerId",
-      "leadEngineerName", "purchaseOrderNumber", "purchaseOrderDate", "actualDelivery", "site", "remark", "startDate", "targetDelivery",
-      "progress", "updatedAt", "rowVersion"]) assert.ok(field in first, `overview item is missing ${field}`);
+    for (const field of [
+      "id",
+      "number",
+      "name",
+      "customerName",
+      "team",
+      "health",
+      "paymentsReceived",
+      "contactIds",
+      "customerId",
+      "endUserCustomerId",
+      "endUserName",
+      "endUserCode",
+      "status",
+      "projectType",
+      "managerName",
+      "managerId",
+      "leadEngineerId",
+      "leadEngineerName",
+      "purchaseOrderNumber",
+      "purchaseOrderDate",
+      "actualDelivery",
+      "site",
+      "remark",
+      "startDate",
+      "targetDelivery",
+      "progress",
+      "updatedAt",
+      "rowVersion",
+    ])
+      assert.ok(field in first, `overview item is missing ${field}`);
     assert.deepEqual(first.contactIds, [3, 4]);
     assert.equal(first.targetDelivery, "2026-11-30");
 
     // Project 1 has a schedule: progress comes from it, not from the typed 12%.
     assert.equal(first.progressSource, "schedule");
-    assert.equal(first.progress, Math.round((40 * 5 / 13) * 100) / 100);
+    assert.equal(first.progress, Math.round(((40 * 5) / 13) * 100) / 100);
     assert.equal(first.taskCount, 2);
     assert.equal(first.planFinish, "2026-10-21");
     assert.equal(first.slipDays, -40);
@@ -222,6 +342,9 @@ test("each overview item carries the list fields plus its schedule summary and s
       assert.ok(field in first, `overview item is missing ${field}`);
     }
     assert.equal(first.pendingRequests, 2);
+    // Task doc 5.1: confirmed hours against the Estimate labor budget, else the typed one; none at all is null.
+    assert.deepEqual([first.actualHours, first.budgetHours, second.actualHours, second.budgetHours, closed.budgetHours], [12.5, 32, 0, 24, null]);
+    assert.equal(typeof first.followUps, "number");
     assert.equal(first.lastProgressAt, "2026-10-03T08:00:00.000Z");
     // The caller manages project 1, so it can move to any other stage, be put on hold or be closed.
     assert.equal(first.canChangeStatus, true);
@@ -246,7 +369,9 @@ test("each overview item carries the list fields plus its schedule summary and s
     assert.match(activity[0]!.statement, /u\.field=N'request' AND u\.request_days>0 AND u\.answer IS NULL/);
     assert.match(activity[0]!.statement, /GROUP BY u\.project_id/);
     assert.equal(calls.filter((call) => call.statement.includes("dbo.schedule_tasks t")).length, 1);
-  } finally { await server.close(); }
+  } finally {
+    await server.close();
+  }
 });
 
 test("a Closed project with unfinished schedule rows shows progress 100 and no plan %, matching the close dialog", async () => {
@@ -259,7 +384,9 @@ test("a Closed project with unfinished schedule rows shows progress 100 and no p
     assert.equal(closed.progress, 100);
     assert.equal(closed.plannedProgress, null);
     assert.equal(closed.health, "Completed");
-  } finally { await server.close(); }
+  } finally {
+    await server.close();
+  }
 });
 
 test("without project.write nobody gets the stage control, and an elevated writer may reopen", async () => {
@@ -267,20 +394,26 @@ test("without project.write nobody gets the stage control, and an elevated write
   try {
     const items = (await reader.server.inject({ method: "GET", url: "/api/v1/projects/overview" })).json().items;
     assert.equal(items[0].canChangeStatus, false);
-  } finally { await reader.server.close(); }
+  } finally {
+    await reader.server.close();
+  }
   const manager = overviewServer({ id: 77, roles: ["Engineering Manager"] });
   try {
     const items = (await manager.server.inject({ method: "GET", url: "/api/v1/projects/overview?includeClosed=1" })).json().items;
     assert.ok(items.every((item: { canChangeStatus: boolean }) => item.canChangeStatus));
     assert.deepEqual(items[2].allowedStatuses, ["Handover", "On Hold"]);
-  } finally { await manager.server.close(); }
+  } finally {
+    await manager.server.close();
+  }
   // Stores see every project but do not run them: a writer there neither moves others' stages nor reopens.
   const stores = overviewServer({ id: 77, roles: ["Warehouse"] });
   try {
     const items = (await stores.server.inject({ method: "GET", url: "/api/v1/projects/overview?includeClosed=1" })).json().items;
     assert.ok(items.every((item: { canChangeStatus: boolean }) => !item.canChangeStatus));
     assert.deepEqual(items[2].allowedStatuses, []);
-  } finally { await stores.server.close(); }
+  } finally {
+    await stores.server.close();
+  }
 });
 
 test("the paged project list takes its health from the same schedule summary", async () => {
@@ -298,7 +431,9 @@ test("the paged project list takes its health from the same schedule summary", a
     // The list keeps its typed progress and adds no overview fields.
     assert.equal(items[0].progress, 12);
     assert.equal("progressSource" in items[0], false);
-  } finally { await server.close(); }
+  } finally {
+    await server.close();
+  }
 });
 
 // ---- GET /api/v1/projects/attention (the Projects menu badge) ----
@@ -319,7 +454,9 @@ test("the menu badge counts open Delayed and At Risk projects by the overview's 
     assert.match(list.statement, /@elevated=1 OR p\.manager_id=@actor OR p\.lead_engineer_id=@actor/);
     assert.equal(list.bound.actor, 5);
     assert.equal(list.bound.elevated, false);
-  } finally { await server.close(); }
+  } finally {
+    await server.close();
+  }
 });
 
 test("the menu badge needs project.read", async () => {
@@ -328,5 +465,26 @@ test("the menu badge needs project.read", async () => {
     assert.equal((await server.inject({ method: "GET", url: "/api/v1/projects/attention" })).statusCode, 403);
     assert.equal(permission(), "project.read");
     assert.equal(calls.length, 0);
-  } finally { await server.close(); }
+  } finally {
+    await server.close();
+  }
+});
+
+test("the follow-up count names each row the plan Sheet lists once: late, blocked, due, nobody on it, outsourced with no request", () => {
+  const tasks = [
+    raw({ id: 1, name: "Late and nobody on it", plan_start: "2026-09-28", plan_days: 3 }),
+    raw({ id: 2, name: "Blocked", plan_start: "2026-10-20", plan_days: 3, status: "Blocked" }),
+    raw({ id: 3, name: "Due, not started", plan_start: "2026-10-05", plan_days: 10 }),
+    raw({ id: 4, name: "Outsourced, no request", plan_start: "2026-10-20", plan_days: 3, labor_source: "Outsourced" }),
+    raw({ id: 5, name: "Outsourced on a request", plan_start: "2026-10-20", plan_days: 3, labor_source: "Outsourced", purchase_request_id: 8 }),
+    raw({ id: 6, name: "Fine", plan_start: "2026-10-20", plan_days: 3 }),
+    raw({ id: 7, name: "Done late", plan_start: "2026-09-28", plan_days: 3, status: "Done", percent_done: 100 }),
+    // A dated heading with nothing under it yet: the Sheet never lists a heading.
+    raw({ id: 8, kind: "phase", name: "Not broken down yet", plan_start: "2026-09-28", plan_days: 3 }),
+  ].map((row) => taskRow(row as Parameters<typeof taskRow>[0]));
+  const { leaves } = summarizeProjects([{ id: 1, status: "Design", targetDelivery: null }], tasks, new Set(), TODAY, new Set([2, 3, 5, 6, 7])).get(1)!;
+  assert.equal(followUpCount(tasks, leaves, new Set([2, 3, 5, 6, 7]), TODAY), 4);
+  const withPeople = summarizeProjects([{ id: 1, status: "Design", targetDelivery: null }], tasks, new Set(), TODAY, new Set([1, 2, 3, 5, 6, 7])).get(1)!.summary;
+  assert.equal(withPeople.followUps, 4, "row 1 is late either way and counts once");
+  assert.equal(summarizeProjects([{ id: 1, status: "Closed", targetDelivery: null }], tasks, new Set(), TODAY, new Set()).get(1)!.summary.followUps, undefined);
 });
