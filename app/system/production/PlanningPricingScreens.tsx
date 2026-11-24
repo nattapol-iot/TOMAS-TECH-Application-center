@@ -235,6 +235,8 @@ export type ScheduleTask = {
   startMode: string;
   predecessorId: number | null;
   lagDays: number;
+  /** The other rows a linked row waits for (migration 126); it starts after the latest. */
+  extraLinks?: { predecessorId: number; lagDays: number }[];
   pics: SchedulePic[];
   picExternal: string;
   planManDays: number;
@@ -4847,6 +4849,11 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
   };
   const moveTask = async (task: ScheduleTask, start: string, finish: string) => {
     if (!activeSchedule) return;
+    // A row waiting for several rows (migration 126) starts after the latest; a drag here moves only the first gap.
+    if (task.startMode === "linked" && task.extraLinks?.length && start !== task.planStart) {
+      notify(`${activeSchedule.projectNo} · ${task.wbs} ${uiText("Plan.manyPredecessors")}`);
+      return;
+    }
     const predecessorFinish = task.predecessorId === null ? null : (taskById.get(task.predecessorId)?.planFinish ?? null);
     const plan = draggedPlan(task, start, finish, predecessorFinish, new Set(activeSchedule.holidays ?? []));
     const label = `${task.wbs} ${task.name}`;

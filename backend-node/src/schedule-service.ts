@@ -5,7 +5,7 @@ import { ApiError } from "./errors.js";
 import { hasRole } from "./user-roles.js";
 import { bodyObject, optionalBodyText, parseDateOnly, parseRowVersion, requiredInteger, requiredText } from "./http.js";
 import { dateOnly } from "./http.js";
-import { resolveSchedule, type ResolvedScheduleTask, type ScheduleCalculationTask } from "./schedule-calculator.js";
+import { resolveSchedule, type ExtraLink, type ResolvedScheduleTask, type ScheduleCalculationTask } from "./schedule-calculator.js";
 import type { CurrentUser } from "./types.js";
 
 import { fitPeople, storedPeople } from "./plan-people.js";
@@ -24,6 +24,8 @@ export type TaskRow = {
   createdBy: number;
   /** lagDays counts working days; false for a gap saved before migration 125 (calendar days). */
   lagWorkDays?: boolean;
+  /** The other rows a linked row waits for (migration 126). */
+  extraLinks?: ExtraLink[];
   visibility: string;
   planStart: string | null;
   planDays: number;
@@ -73,6 +75,8 @@ export type PlanInput = {
   planManDays: number;
   /** Absent from an older client: the row keeps the discipline it has. */
   discipline?: PlanDiscipline | null;
+  /** The other rows it waits for (migration 126). Absent: a linked row keeps the ones it has. */
+  extraLinks?: ExtraLink[];
 };
 /** The disciplines a plan row can ask for (migration 123), the same four Projects > Cost splits people by. */
 export const PLAN_DISCIPLINES = ["Electrical", "Mechanical", "Software", "Installation"] as const;
@@ -137,6 +141,9 @@ export function planInput(value: unknown, requireRowVersion: boolean): PlanInput
   }
   if (kind === "detail" && !parentId) throw new ApiError(400, "validation_failed", "A detail row must belong to a task.");
   const discipline = body.discipline === undefined ? undefined : planDiscipline(body.discipline);
+  // Left out, the row keeps the extra rows it waits for; a row that is not linked waits for none.
+  const extraLinks = body.extraLinks === undefined ? undefined : startMode === "linked" ? linksInput(body.extraLinks, predecessorId) : [];
+  if (kind === "phase" && extraLinks?.length) throw new ApiError(400, "validation_failed", "A main heading has no dependencies.");
   if (kind === "phase" && discipline) throw new ApiError(400, "validation_failed", "A main heading has no discipline; its rows carry it.");
   return {
     scheduleVersion: body.scheduleVersion === null || body.scheduleVersion === undefined ? null : requiredText(body.scheduleVersion, 64, "Schedule version"),
@@ -156,7 +163,37 @@ export function planInput(value: unknown, requireRowVersion: boolean): PlanInput
     picExternal,
     planManDays,
     ...(discipline === undefined ? {} : { discipline }),
+    ...(extraLinks === undefined ? {} : { extraLinks }),
   };
+}
+
+/** The extra_links JSON as stored (migration 126); anything unreadable counts as none. */
+export function storedLinks(value: unknown): ExtraLink[] {
+  if (typeof value !== "string" || !value) return [];
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return Array.isArray(parsed)
+      ? parsed
+          .map((item) => ({ predecessorId: Number((item as ExtraLink)?.predecessorId), lagDays: Math.trunc(Number((item as ExtraLink)?.lagDays) || 0) }))
+          .filter((item) => Number.isSafeInteger(item.predecessorId) && item.predecessorId > 0)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+/** The other rows a row waits for, as the API takes them: at most 10, no repeats, none the same as the first. */
+export function linksInput(value: unknown, predecessorId: number | null): ExtraLink[] {
+  if (!Array.isArray(value)) throw new ApiError(400, "validation_failed", "Extra links must be a list.");
+  if (value.length > 10) throw new ApiError(400, "validation_failed", "A row can wait for at most 11 rows.");
+  const links = value.map((item) => {
+    const link = bodyObject(item);
+    return { predecessorId: requiredInteger(link.predecessorId, "Predecessor task", 1), lagDays: requiredInteger(link.lagDays ?? 0, "Lag days", -365, 3650) };
+  });
+  const ids = links.map((link) => link.predecessorId);
+  if (new Set(ids).size !== ids.length || (predecessorId !== null && ids.includes(predecessorId))) throw new ApiError(400, "validation_failed", "Each row it waits for may be named once.");
+  if (links.length && predecessorId === null) throw new ApiError(400, "validation_failed", "A linked task requires a predecessor.");
+  return links;
 }
 
 export function progressInput(value: unknown): ProgressInput {
@@ -205,6 +242,7 @@ export function taskRow(row: Record<string, unknown> & { row_version: Buffer }):
     predecessorId: row.predecessor_id === null ? null : Number(row.predecessor_id),
     lagDays: Number(row.lag_days),
     lagWorkDays: row.lag_work_days === undefined || row.lag_work_days === null ? true : Boolean(row.lag_work_days),
+    extraLinks: storedLinks(row.extra_links),
     picExternal: String(row.pic_external),
     planManDays: Number(row.plan_man_days),
     baselineStart: dateOnly(row.baseline_start as Date | string | null),
@@ -230,7 +268,7 @@ export function taskRow(row: Record<string, unknown> & { row_version: Buffer }):
 }
 
 const TASK_COLUMNS = `id,project_id,parent_id,sort_order,kind,name,is_milestone,origin,created_by,visibility,
- plan_start,plan_days,start_mode,predecessor_id,lag_days,lag_work_days,pic_external,plan_man_days,baseline_start,baseline_end,
+ plan_start,plan_days,start_mode,predecessor_id,lag_days,lag_work_days,extra_links,pic_external,plan_man_days,baseline_start,baseline_end,
  baseline_days,baseline_rev,actual_start,actual_end,forecast_end,percent_done,status,blocked_reason,note,actual_man_days,
  updated_by,updated_at,row_version,labor_source,labor_supplier,people_by_day,discipline`;
 
@@ -321,10 +359,11 @@ export async function demandMemberPlanRow(
         ? (resolveTasks(await readTasks(transaction, projectId), await readHolidays(transaction)).byId.get(task.id)?.lagWorkDays ?? task.lagDays)
         : task.lagDays;
     if (
-      input &&
-      (["parentId", "sortOrder", "kind", "isMilestone", "visibility", "startMode", "predecessorId", "lagDays", "picExternal", "planManDays"] as const).some((key) =>
-        key === "lagDays" ? input.lagDays !== lagNow : input[key] !== task[key],
-      )
+      (input &&
+        (["parentId", "sortOrder", "kind", "isMilestone", "visibility", "startMode", "predecessorId", "lagDays", "picExternal", "planManDays"] as const).some((key) =>
+          key === "lagDays" ? input.lagDays !== lagNow : input[key] !== task[key],
+        )) ||
+      (input?.extraLinks !== undefined && JSON.stringify(input.extraLinks) !== JSON.stringify(task.startMode === "linked" ? (task.extraLinks ?? []) : []))
     )
       throw new ApiError(403, "schedule_own_fields_only", "Members may change only the name, dates, days and project PICs of their own rows.");
   } else {
@@ -581,14 +620,14 @@ export function managedProgressReady(managed: ManagedTask, actorId: number): boo
  * takes its dates from them, and a linked row without children from its predecessor. A task linked to its own phase,
  * or to a phase whose tasks wait on it, passes the parent and predecessor check but could never be drawn.
  */
-export function datesWouldLoop(rows: ReadonlyMap<number, { parent: number | null; predecessor: number | null; startMode?: string | undefined }>): boolean {
+export function datesWouldLoop(rows: ReadonlyMap<number, { parent: number | null; predecessor: number | null; startMode?: string | undefined; extras?: readonly number[] | undefined }>): boolean {
   const children = new Map<number, number[]>();
   for (const [id, row] of rows) if (row.parent !== null) children.set(row.parent, [...(children.get(row.parent) ?? []), id]);
   const waitsOn = (id: number): number[] => {
     const own = children.get(id);
     if (own?.length) return own;
     const row = rows.get(id);
-    return row && row.startMode === "linked" && row.predecessor !== null && rows.has(row.predecessor) ? [row.predecessor] : [];
+    return row && row.startMode === "linked" && row.predecessor !== null ? [row.predecessor, ...(row.extras ?? [])].filter((id) => rows.has(id)) : [];
   };
   const visiting = new Set<number>(),
     done = new Set<number>();
@@ -630,7 +669,8 @@ export function scheduleParentAllowed(kind: string, parent: { kind: string } | n
   return kind === "detail" && parent?.kind === "task" && !childKinds.includes("task");
 }
 export async function validateGraphAndHierarchy(transaction: TransactionType, projectId: number, taskId: number | null, input: PlanInput): Promise<void> {
-  if (taskId && (input.parentId === taskId || input.predecessorId === taskId)) throw new ApiError(400, "schedule_self_reference", "A task cannot be its own parent or predecessor.");
+  if (taskId && (input.parentId === taskId || input.predecessorId === taskId || input.extraLinks?.some((link) => link.predecessorId === taskId)))
+    throw new ApiError(400, "schedule_self_reference", "A task cannot be its own parent or predecessor.");
   const request = new sql.Request(transaction);
   request.input("project", sql.BigInt, projectId);
   const rows = (
@@ -644,21 +684,31 @@ export async function validateGraphAndHierarchy(transaction: TransactionType, pr
       status: string;
       percent_done: number;
       actual_start: unknown;
-    }>(`SELECT id,parent_id,predecessor_id,kind,start_mode,name,status,percent_done,actual_start FROM dbo.schedule_tasks WITH (UPDLOCK,HOLDLOCK) WHERE project_id=@project AND deleted_at IS NULL;`)
+      extra_links: string | null;
+    }>(
+      `SELECT id,parent_id,predecessor_id,kind,start_mode,name,status,percent_done,actual_start,extra_links FROM dbo.schedule_tasks WITH (UPDLOCK,HOLDLOCK) WHERE project_id=@project AND deleted_at IS NULL;`,
+    )
   ).recordset;
   const byId = new Map(
     rows.map((row) => [
       Number(row.id),
-      { parent: row.parent_id === null ? null : Number(row.parent_id), predecessor: row.predecessor_id === null ? null : Number(row.predecessor_id), kind: row.kind, startMode: row.start_mode },
+      {
+        parent: row.parent_id === null ? null : Number(row.parent_id),
+        predecessor: row.predecessor_id === null ? null : Number(row.predecessor_id),
+        kind: row.kind,
+        startMode: row.start_mode,
+        extras: storedLinks(row.extra_links).map((link) => link.predecessorId),
+      },
     ]),
   );
-  for (const reference of [input.parentId, input.predecessorId].filter((id): id is number => id !== null))
+  const extras = input.extraLinks?.map((link) => link.predecessorId) ?? (taskId ? (byId.get(taskId)?.extras ?? []) : []);
+  for (const reference of [input.parentId, input.predecessorId, ...(input.startMode === "linked" ? extras : [])].filter((id): id is number => id !== null))
     if (!byId.has(reference)) throw new ApiError(422, "schedule_reference_invalid", "Parent and predecessor tasks must be active rows in the same project.");
   if (input.kind === "phase" && input.parentId) throw new ApiError(400, "validation_failed", "A phase must be a top-level schedule row.");
   // The top of the plan is the Master Plan: main headings only (owner, 2026-11-03).
   if (input.kind === "task" && input.parentId === null) throw new ApiError(422, "schedule_parent_kind_invalid", "A task goes under a main heading.");
   const key = taskId ?? -1;
-  byId.set(key, { parent: input.parentId, predecessor: input.predecessorId, kind: input.kind, startMode: input.startMode });
+  byId.set(key, { parent: input.parentId, predecessor: input.predecessorId, kind: input.kind, startMode: input.startMode, extras: input.startMode === "linked" ? extras : [] });
   const visiting = new Set<number>(),
     visited = new Set<number>();
   const cycle = (id: number): boolean => {
@@ -666,7 +716,12 @@ export async function validateGraphAndHierarchy(transaction: TransactionType, pr
     if (visiting.has(id)) return true;
     visiting.add(id);
     const edge = byId.get(id);
-    if (edge && ((edge.parent !== null && byId.has(edge.parent) && cycle(edge.parent)) || (edge.predecessor !== null && byId.has(edge.predecessor) && cycle(edge.predecessor)))) return true;
+    if (
+      edge &&
+      ((edge.parent !== null && byId.has(edge.parent) && cycle(edge.parent)) ||
+        [edge.predecessor, ...(edge.startMode === "linked" ? (edge.extras ?? []) : [])].some((other) => other !== null && byId.has(other) && cycle(other)))
+    )
+      return true;
     visiting.delete(id);
     visited.add(id);
     return false;
@@ -722,6 +777,7 @@ export function scheduleCalculation(tasks: TaskRow[]) {
     predecessorId: task.predecessorId,
     lagDays: task.lagDays,
     lagWorkDays: task.lagWorkDays !== false,
+    extraLinks: task.startMode === "linked" ? (task.extraLinks ?? []) : [],
     actualStart: task.actualStart,
     actualFinish: task.actualFinish,
     forecastFinish: task.forecastFinish,
@@ -789,6 +845,7 @@ export function taskResponse(resolved: ResolvedScheduleTask, tasks: Map<number, 
     predecessorId: task.predecessorId,
     // Always working days (migration 125): a gap saved in calendar days is read back as the working days it spans.
     lagDays: resolved.lagWorkDays ?? task.lagDays,
+    extraLinks: task.startMode === "linked" ? (task.extraLinks ?? []) : [],
     pics: pics.get(task.id) ?? [],
     picExternal: task.picExternal,
     planManDays: task.planManDays,

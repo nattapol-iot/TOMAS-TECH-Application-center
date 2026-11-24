@@ -208,7 +208,7 @@ export function draggedPlan(
  * its dates from them, and a linked row without children from its predecessor. Used to leave such rows out of a
  * predecessor list, e.g. a task's own phase.
  */
-export function planDatesLoop(rows: readonly { id: number; parentId: number | null; predecessorId: number | null; startMode: string }[]): boolean {
+export function planDatesLoop(rows: readonly { id: number; parentId: number | null; predecessorId: number | null; startMode: string; extraIds?: readonly number[] }[]): boolean {
   const byId = new Map(rows.map((row) => [row.id, row]));
   const children = new Map<number, number[]>();
   for (const row of rows) if (row.parentId !== null) children.set(row.parentId, [...(children.get(row.parentId) ?? []), row.id]);
@@ -220,7 +220,7 @@ export function planDatesLoop(rows: readonly { id: number; parentId: number | nu
     visiting.add(id);
     const row = byId.get(id),
       own = children.get(id);
-    const waitsOn = own?.length ? own : row && row.startMode === "linked" && row.predecessorId !== null && byId.has(row.predecessorId) ? [row.predecessorId] : [];
+    const waitsOn = own?.length ? own : row && row.startMode === "linked" && row.predecessorId !== null ? [row.predecessorId, ...(row.extraIds ?? [])].filter((other) => byId.has(other)) : [];
     if (waitsOn.some(loops)) return true;
     visiting.delete(id);
     done.add(id);

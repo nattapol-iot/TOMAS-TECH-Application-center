@@ -72,10 +72,10 @@ test("the After cell: what it shows and what typing in it means", () => {
   assert.equal(linkText(rows[2], rows, 2), "1.1+2");
   assert.equal(linkText(rows[2], rows, 0), "1.1");
   assert.equal(linkText(rows[1], rows, 0), "", "a row typed by hand follows nothing");
-  assert.deepEqual(parseLink("", rows[2], rows), { predecessorId: null, lagDays: 0 });
-  assert.deepEqual(parseLink("1.1+2", rows[2], rows), { predecessorId: 2, lagDays: 2 });
-  assert.deepEqual(parseLink("1.1 + 2", rows[2], rows), { predecessorId: 2, lagDays: 2 });
-  assert.deepEqual(parseLink("1.1-1", rows[2], rows), { predecessorId: 2, lagDays: -1 });
+  assert.deepEqual(parseLink("", rows[2], rows), { predecessorId: null, lagDays: 0, extraLinks: [] });
+  assert.deepEqual(parseLink("1.1+2", rows[2], rows), { predecessorId: 2, lagDays: 2, extraLinks: [] });
+  assert.deepEqual(parseLink("1.1 + 2", rows[2], rows), { predecessorId: 2, lagDays: 2, extraLinks: [] });
+  assert.deepEqual(parseLink("1.1-1", rows[2], rows), { predecessorId: 2, lagDays: -1, extraLinks: [] });
   assert.deepEqual(parseLink("after 1.1", rows[2], rows), { error: "Sheet.linkUnreadable" });
   assert.deepEqual(parseLink("9.9", rows[2], rows), { error: "Sheet.linkMissing", wbs: "9.9" });
   assert.deepEqual(parseLink("1.2", rows[2], rows), { error: "Sheet.linkSelf", wbs: "1.2" });
@@ -84,7 +84,7 @@ test("the After cell: what it shows and what typing in it means", () => {
   assert.deepEqual(parseLink("1.2", rows[3], rows), { error: "Sheet.linkFamily", wbs: "1.2" });
   assert.deepEqual(parseLink("1.3", rows[1], rows), { error: "Sheet.linkLoop", wbs: "1.3" }, "1.3 already waits for 1.1");
   // 1.2 takes its dates from its sub task, so its own link does not count and 1.1 may follow it.
-  assert.deepEqual(parseLink("1.2", rows[1], rows), { predecessorId: 3, lagDays: 0 });
+  assert.deepEqual(parseLink("1.2", rows[1], rows), { predecessorId: 3, lagDays: 0, extraLinks: [] });
 });
 
 test("rows read heading first, then what sits under it", () => {
@@ -121,4 +121,33 @@ test("a task under a main heading may wait for its member (owner 2026-11-24)", a
   const routes = await source("backend-node/src/routes/schedule.ts");
   assert.match(routes, /if \(parent\.kind === "phase"\) return \[\];/);
   assert.ok(!routes.includes(`"schedule_member_required", "A task under a main heading`));
+});
+
+test("the After cell takes several rows: the row starts after the latest (migration 126)", () => {
+  // 1.3 waits for 1.1 and 1.2.1; 1.2 cannot be named while 1.2.1 sits under it, so 1.2.1 is used.
+  assert.deepEqual(parseLink("1.1, 1.2.1+3", rows[4], rows), { predecessorId: 2, lagDays: 0, extraLinks: [{ predecessorId: 4, lagDays: 3 }] });
+  assert.deepEqual(parseLink("1.1；1.2.1", rows[4], rows), { error: "Sheet.linkUnreadable" }, "only commas and semicolons split");
+  assert.deepEqual(parseLink("1.1; 1.2.1", rows[4], rows), { predecessorId: 2, lagDays: 0, extraLinks: [{ predecessorId: 4, lagDays: 0 }] });
+  assert.deepEqual(parseLink("1.1, 1.1+2", rows[4], rows), { error: "Sheet.linkTwice", wbs: "1.1" });
+  assert.deepEqual(parseLink("1.1, 9", rows[4], rows), { error: "Sheet.linkMissing", wbs: "9" });
+  assert.deepEqual(parseLink(Array.from({ length: 12 }, () => "1.1").join(","), rows[4], rows), { error: "Sheet.linkTooMany" });
+  // 1.1 waiting for 1.3 as a second row would loop: 1.3 already waits for 1.1.
+  const loop = parseLink("1.2.1, 1.3", rows[1], rows);
+  assert.equal(loop.error, "Sheet.linkLoop");
+  assert.equal(
+    linkText(
+      {
+        startMode: "linked",
+        predecessorId: 2,
+        extraLinks: [
+          { predecessorId: 4, lagDays: 3 },
+          { predecessorId: 99, lagDays: 0 },
+        ],
+      },
+      rows,
+      1,
+    ),
+    "1.1+1, 1.2.1+3",
+    "a row no longer in the plan is left out",
+  );
 });

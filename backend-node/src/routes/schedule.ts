@@ -84,6 +84,9 @@ function bindPlan(request: InstanceType<typeof sql.Request>, projectId: number, 
   request.input("man_days", sql.Decimal(9, 2), input.planManDays);
   request.input("discipline", sql.NVarChar(20), input.discipline ?? null);
   request.input("actor", sql.BigInt, actorId);
+  // The other rows it waits for (migration 126): replaced when sent, kept when left out, none once it is not linked.
+  request.input("extra_set", sql.Bit, input.extraLinks !== undefined);
+  request.input("extra", sql.NVarChar(2000), input.extraLinks?.length ? JSON.stringify(input.extraLinks) : null);
 }
 
 function planAudit(input: PlanInput): Record<string, unknown> {
@@ -298,8 +301,8 @@ export function registerScheduleRoutes(app: FastifyInstance, database: Database,
         await insert.query<{
           id: number | string;
           row_version: Buffer;
-        }>(`DECLARE @changed TABLE(id bigint,row_version binary(8)); INSERT INTO dbo.schedule_tasks(project_id,parent_id,sort_order,kind,name,is_milestone,origin,created_by,visibility,plan_start,plan_days,start_mode,predecessor_id,lag_days,pic_external,plan_man_days,discipline,updated_by)
-        OUTPUT inserted.id,inserted.row_version INTO @changed VALUES(@project,@parent,@sort,@kind,@name,@milestone,@origin,@actor,@visibility,@plan_start,@plan_days,@start_mode,@predecessor,@lag,@pic_external,@man_days,@discipline,@actor); SELECT id,row_version FROM @changed;`)
+        }>(`DECLARE @changed TABLE(id bigint,row_version binary(8)); INSERT INTO dbo.schedule_tasks(project_id,parent_id,sort_order,kind,name,is_milestone,origin,created_by,visibility,plan_start,plan_days,start_mode,predecessor_id,lag_days,extra_links,pic_external,plan_man_days,discipline,updated_by)
+        OUTPUT inserted.id,inserted.row_version INTO @changed VALUES(@project,@parent,@sort,@kind,@name,@milestone,@origin,@actor,@visibility,@plan_start,@plan_days,@start_mode,@predecessor,@lag,CASE WHEN @start_mode=N'linked' THEN @extra END,@pic_external,@man_days,@discipline,@actor); SELECT id,row_version FROM @changed;`)
       ).recordset[0]!;
       const id = Number(row.id);
       const added = await replacePics(transaction, id, picUserIds);
@@ -329,6 +332,9 @@ export function registerScheduleRoutes(app: FastifyInstance, database: Database,
       const pics = await readPics(transaction, existing.projectId);
       const oldPics = (pics.get(id) ?? []).map((pic) => pic.id);
       if (await hasPendingRequest(transaction, id)) throw new ApiError(409, "schedule_day_request_pending", "Answer the pending request for more days before changing this task's plan or assignment.");
+      // A screen that knows one predecessor leaves the others out: they stay, except one that is now the first.
+      if (input.extraLinks === undefined && input.startMode === "linked")
+        input.extraLinks = (existing.startMode === "linked" ? (existing.extraLinks ?? []) : []).filter((link) => link.predecessorId !== input.predecessorId);
       await validateGraphAndHierarchy(transaction, existing.projectId, id, input);
       if (input.parentId !== existing.parentId && input.parentId && (await hasPendingRequest(transaction, input.parentId)))
         throw new ApiError(409, "schedule_day_request_pending", "Answer the pending request for more days before changing this task's child rows.");
@@ -350,7 +356,8 @@ export function registerScheduleRoutes(app: FastifyInstance, database: Database,
           existing.startMode !== input.startMode ||
           existing.predecessorId !== input.predecessorId ||
           // A gap saved in calendar days comes back as working days (migration 125), so its number is not compared.
-          (existing.lagDays !== input.lagDays && existing.lagWorkDays !== false))
+          (existing.lagDays !== input.lagDays && existing.lagWorkDays !== false) ||
+          JSON.stringify(input.extraLinks ?? []) !== JSON.stringify(existing.startMode === "linked" ? (existing.extraLinks ?? []) : []))
       )
         throw new ApiError(400, "schedule_rollup_plan_derived", "A roll-up row's dates and dependency are calculated from its children and cannot be changed directly.");
       // People typed in the People table stay with the row: cut to its new length, and its man-days stay theirs (plan-people.ts).
@@ -363,7 +370,7 @@ export function registerScheduleRoutes(app: FastifyInstance, database: Database,
       update.input("people", sql.NVarChar(sql.MAX), peopleJson(people));
       const row = (
         await update.query<{ row_version: Buffer }>(
-          `DECLARE @changed TABLE(row_version binary(8)); UPDATE dbo.schedule_tasks SET parent_id=@parent,sort_order=@sort,kind=@kind,name=@name,is_milestone=@milestone,visibility=@visibility,plan_start=@plan_start,plan_days=@plan_days,start_mode=@start_mode,predecessor_id=@predecessor,lag_days=@lag,lag_work_days=1,pic_external=@pic_external,plan_man_days=@man_days,discipline=@discipline,people_by_day=@people,updated_by=@actor,updated_at=SYSUTCDATETIME() OUTPUT inserted.row_version INTO @changed WHERE id=@id AND project_id=@project AND deleted_at IS NULL AND row_version=@version; SELECT row_version FROM @changed;`,
+          `DECLARE @changed TABLE(row_version binary(8)); UPDATE dbo.schedule_tasks SET parent_id=@parent,sort_order=@sort,kind=@kind,name=@name,is_milestone=@milestone,visibility=@visibility,plan_start=@plan_start,plan_days=@plan_days,start_mode=@start_mode,predecessor_id=@predecessor,lag_days=@lag,lag_work_days=1,extra_links=CASE WHEN @start_mode<>N'linked' THEN NULL WHEN @extra_set=1 THEN @extra ELSE extra_links END,pic_external=@pic_external,plan_man_days=@man_days,discipline=@discipline,people_by_day=@people,updated_by=@actor,updated_at=SYSUTCDATETIME() OUTPUT inserted.row_version INTO @changed WHERE id=@id AND project_id=@project AND deleted_at IS NULL AND row_version=@version; SELECT row_version FROM @changed;`,
         )
       ).recordset[0];
       if (!row) throw concurrency();
@@ -499,7 +506,7 @@ export function registerScheduleRoutes(app: FastifyInstance, database: Database,
         update.input("people", sql.NVarChar(sql.MAX), peopleJson(change.people));
         update.input("actor", sql.BigInt, actor.id);
         const result = await update.query(
-          `UPDATE dbo.schedule_tasks SET plan_start=@plan_start,plan_days=@plan_days,start_mode=@start_mode,predecessor_id=@predecessor,lag_work_days=CASE WHEN lag_days=@lag THEN lag_work_days ELSE 1 END,lag_days=@lag,plan_man_days=@man_days,labor_source=@source,labor_supplier=@supplier,people_by_day=@people,updated_by=@actor,updated_at=SYSUTCDATETIME() WHERE id=@id AND project_id=@project AND deleted_at IS NULL AND row_version=@version;`,
+          `UPDATE dbo.schedule_tasks SET plan_start=@plan_start,plan_days=@plan_days,start_mode=@start_mode,predecessor_id=@predecessor,lag_work_days=CASE WHEN lag_days=@lag THEN lag_work_days ELSE 1 END,lag_days=@lag,extra_links=CASE WHEN @start_mode<>N'linked' THEN NULL ELSE extra_links END,plan_man_days=@man_days,labor_source=@source,labor_supplier=@supplier,people_by_day=@people,updated_by=@actor,updated_at=SYSUTCDATETIME() WHERE id=@id AND project_id=@project AND deleted_at IS NULL AND row_version=@version;`,
         );
         if (result.rowsAffected[0] !== 1) throw concurrency();
         const before = {
@@ -904,7 +911,7 @@ export function registerScheduleRoutes(app: FastifyInstance, database: Database,
       if (
         (
           await reference.query<{ value: boolean }>(
-            `SELECT CAST(CASE WHEN EXISTS(SELECT 1 FROM dbo.schedule_tasks WITH (UPDLOCK,HOLDLOCK) WHERE predecessor_id=@task AND deleted_at IS NULL) THEN 1 ELSE 0 END AS bit) value;`,
+            `SELECT CAST(CASE WHEN EXISTS(SELECT 1 FROM dbo.schedule_tasks WITH (UPDLOCK,HOLDLOCK) WHERE predecessor_id=@task AND deleted_at IS NULL) OR EXISTS(SELECT 1 FROM dbo.schedule_tasks d WITH (UPDLOCK,HOLDLOCK) CROSS APPLY OPENJSON(d.extra_links) WITH (predecessor_id bigint '$.predecessorId') l WHERE d.start_mode=N'linked' AND l.predecessor_id=@task AND d.deleted_at IS NULL) THEN 1 ELSE 0 END AS bit) value;`,
           )
         ).recordset[0]?.value
       )

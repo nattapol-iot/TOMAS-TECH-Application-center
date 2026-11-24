@@ -21,7 +21,7 @@ import { readWorkbookSheets } from "../../../lib/import-spreadsheet";
 import { cellsToGrid, importChanges, readPlanTable, type ImportedPlan } from "../../../lib/plan-excel-import";
 import { linkedStart, nextWorkDay } from "../../../lib/gantt";
 import { percentChangePatch, statusChangePatch } from "../../../lib/my-work";
-import { linkText, mondayOn, parseDays, parseLink, parsePercent, parseSheetDate, sheetOrder, shiftDay, spanDays, type SheetLinkRow } from "../../../lib/plan-sheet";
+import { linkText, mondayOn, parseDays, parseLink, parsePercent, parseSheetDate, sheetOrder, shiftDay, spanDays, type ExtraLink, type SheetLinkRow } from "../../../lib/plan-sheet";
 import type { ProjectSchedule, ScheduleTask } from "./PlanningPricingScreens";
 import "./plan-sheet.css";
 
@@ -33,6 +33,8 @@ type Fields = {
   startMode: string;
   predecessorId: number | null;
   lagDays: number;
+  /** The other rows it waits for (migration 126). */
+  extraLinks: ExtraLink[];
   picUserIds: number[];
   discipline: string | null;
 };
@@ -178,10 +180,20 @@ const fieldsOf = (task: ScheduleTask): Fields => ({
   startMode: task.startMode,
   predecessorId: task.predecessorId,
   lagDays: task.lagDays,
+  extraLinks: task.startMode === "linked" ? (task.extraLinks ?? []) : [],
   picUserIds: task.pics.map((pic) => pic.id),
   discipline: task.discipline ?? null,
 });
-const sameValue = (a: unknown, b: unknown) => (Array.isArray(a) && Array.isArray(b) ? a.length === b.length && a.every((value, index) => value === b[index]) : a === b);
+/** Where a linked row starts: after the latest of the rows it waits for, each with its own gap (migration 126). */
+function latestStart(fields: Fields, finishOf: (id: number) => string | null, holidays: ReadonlySet<string>): string | null {
+  let start = fields.predecessorId === null ? null : linkedStart(finishOf(fields.predecessorId), fields.lagDays, holidays);
+  for (const link of fields.extraLinks) {
+    const other = linkedStart(finishOf(link.predecessorId), link.lagDays, holidays);
+    if (other && (!start || other > start)) start = other;
+  }
+  return start;
+}
+const sameValue = (a: unknown, b: unknown) => (Array.isArray(a) && Array.isArray(b) ? JSON.stringify(a) === JSON.stringify(b) : a === b);
 /** The fields of `patch` that differ from `fields`; null when nothing changes. */
 function changed(fields: Fields, patch: Patch): Patch | null {
   const out: Patch = {};
@@ -327,6 +339,7 @@ export function PlanSheet({
         kind: task.kind,
         predecessorId: patch?.predecessorId !== undefined ? patch.predecessorId : task.predecessorId,
         startMode: patch?.startMode ?? task.startMode,
+        extraIds: (patch?.extraLinks ?? task.extraLinks ?? []).map((link) => link.predecessorId),
       };
     });
     const rows: Row[] = all.map((task) => {
@@ -337,8 +350,7 @@ export function PlanSheet({
         finish = task.planFinish,
         workDays: number | null = start && finish ? task.workDays : null;
       if (patch && !parent) {
-        const predecessorFinish = fields.predecessorId === null ? null : (byTask.get(fields.predecessorId)?.planFinish ?? null);
-        start = fields.startMode === "linked" ? (linkedStart(predecessorFinish, fields.lagDays, holidays) ?? task.planStart) : fields.planStart;
+        start = fields.startMode === "linked" ? (latestStart(fields, (id) => byTask.get(id)?.planFinish ?? null, holidays) ?? task.planStart) : fields.planStart;
         finish = start ? shiftDay(start, Math.max(1, fields.planDays) - 1) : null;
         workDays = start && finish ? countWorkDays(start, finish, holidays) : null;
       }
@@ -465,6 +477,7 @@ export function PlanSheet({
           startMode: fields.startMode,
           predecessorId: fields.predecessorId,
           lagDays: fields.lagDays,
+          extraLinks: fields.startMode === "linked" ? fields.extraLinks : [],
           picUserIds: kind === "phase" ? [] : fields.picUserIds,
           picExternal: kind === "phase" ? "" : fields.picExternal,
           planManDays: 0,
@@ -528,6 +541,7 @@ export function PlanSheet({
         startMode: fields.startMode,
         predecessorId: fields.predecessorId,
         lagDays: fields.lagDays,
+        extraLinks: fields.startMode === "linked" ? fields.extraLinks : [],
         picUserIds: fields.picUserIds,
         picExternal: fields.picExternal,
         planManDays: Number(task.planManDays) || 0,
@@ -600,8 +614,7 @@ export function PlanSheet({
   const startOf = (row: Row, fields: Fields): string | null => {
     if (row.rollup) return row.start;
     if (fields.startMode !== "linked") return fields.planStart;
-    const before = fields.predecessorId === null ? null : model.byId.get(fields.predecessorId);
-    return linkedStart(before?.finish ?? null, fields.lagDays, holidays) ?? row.start;
+    return latestStart(fields, (id) => model.byId.get(id)?.finish ?? null, holidays) ?? row.start;
   };
   /** The row just above in the sheet that has a finish: what +N in START counts from. */
   const finishAbove = (row: Row): string | null => {
@@ -668,7 +681,7 @@ export function PlanSheet({
         const patch: Patch = { planStart: date, ...(task.isMilestone || !start ? { planDays: 1 } : {}) };
         if (fields.startMode === "linked") {
           const before = model.linkRows.find((candidate) => candidate.id === fields.predecessorId);
-          return { patch: { ...patch, startMode: "manual", predecessorId: null, lagDays: 0 }, notice: t("Sheet.unlinked").replace("{wbs}", before?.wbs ?? "") };
+          return { patch: { ...patch, startMode: "manual", predecessorId: null, lagDays: 0, extraLinks: [] }, notice: t("Sheet.unlinked").replace("{wbs}", before?.wbs ?? "") };
         }
         return { patch };
       }
@@ -686,11 +699,19 @@ export function PlanSheet({
         return status ? { status } : { error: "Sheet.badStatus" };
       }
       case "after": {
-        const self: SheetLinkRow = { id: task.id, parentId: task.parentId, wbs: task.wbs, kind: task.kind, predecessorId: fields.predecessorId, startMode: fields.startMode };
+        const self: SheetLinkRow = {
+          id: task.id,
+          parentId: task.parentId,
+          wbs: task.wbs,
+          kind: task.kind,
+          predecessorId: fields.predecessorId,
+          startMode: fields.startMode,
+          extraIds: fields.extraLinks.map((link) => link.predecessorId),
+        };
         const link = parseLink(text, self, model.linkRows);
         if ("error" in link) return link;
-        if (link.predecessorId === null) return { patch: { startMode: "manual", predecessorId: null, lagDays: 0, planStart: startOf(row, fields) ?? today } };
-        return { patch: { startMode: "linked", predecessorId: link.predecessorId, lagDays: link.lagDays } };
+        if (link.predecessorId === null) return { patch: { startMode: "manual", predecessorId: null, lagDays: 0, extraLinks: [], planStart: startOf(row, fields) ?? today } };
+        return { patch: { startMode: "linked", predecessorId: link.predecessorId, lagDays: link.lagDays, extraLinks: link.extraLinks } };
       }
       case "member": {
         const patch = memberFor(text, task.pics);
@@ -843,7 +864,7 @@ export function PlanSheet({
       name = value.trim().slice(0, 500);
     if (!current || key !== draftKey.current) return;
     if (!name) return closeDraft();
-    const fields: Fields = { name, picExternal: "", planStart: current.start, planDays: 1, startMode: "manual", predecessorId: null, lagDays: 0, picUserIds: [], discipline: null };
+    const fields: Fields = { name, picExternal: "", planStart: current.start, planDays: 1, startMode: "manual", predecessorId: null, lagDays: 0, extraLinks: [], picUserIds: [], discipline: null };
     const parent = current.parentId === null ? null : model.byId.get(current.parentId);
     const id = enqueue({ type: "create", parentId: current.parentId, beforeId: current.beforeId, kind: current.kind, fields });
     setSaving((list) => [...list, { seq: id, parentId: current.parentId, beforeId: current.beforeId, name, depth: parent ? parent.task.depth + 2 : 1, atEnd: false }]);
@@ -1125,7 +1146,18 @@ export function PlanSheet({
       }
       const kind = level === 1 ? "phase" : "task";
       const parentRef = sibling && !wbs ? (sibling.parentId === null ? null : { id: sibling.parentId }) : level === 1 ? null : levels[level - 1]!;
-      const base0: Fields = { name, picExternal: "", planStart: kind === "phase" ? null : start, planDays: 1, startMode: "manual", predecessorId: null, lagDays: 0, picUserIds: [], discipline: null };
+      const base0: Fields = {
+        name,
+        picExternal: "",
+        planStart: kind === "phase" ? null : start,
+        planDays: 1,
+        startMode: "manual",
+        predecessorId: null,
+        lagDays: 0,
+        extraLinks: [],
+        picUserIds: [],
+        discipline: null,
+      };
       const task = {
         ...(base ?? model.rows[0])?.task,
         id: -1 - count,
@@ -1427,13 +1459,17 @@ export function PlanSheet({
     let paths = "";
     for (const row of model.visible) {
       if (row.fields.startMode !== "linked" || row.fields.predecessorId === null) continue;
-      const from = at.get(row.fields.predecessorId),
-        to = at.get(row.task.id);
-      if (!from || !to) continue;
-      const x1 = from.e + 1,
-        x2 = to.s - 1,
-        turn = Math.min(x1 + 8, x2 - 4);
-      paths += `<path class="ln" d="M${x1} ${from.y} H${turn} V${to.y} H${x2}" marker-end="url(#shArrow)"/>`;
+      const to = at.get(row.task.id);
+      if (!to) continue;
+      // One line from each row it waits for.
+      for (const id of [row.fields.predecessorId, ...row.fields.extraLinks.map((link) => link.predecessorId)]) {
+        const from = at.get(id);
+        if (!from) continue;
+        const x1 = from.e + 1,
+          x2 = to.s - 1,
+          turn = Math.min(x1 + 8, x2 - 4);
+        paths += `<path class="ln" d="M${x1} ${from.y} H${turn} V${to.y} H${x2}" marker-end="url(#shArrow)"/>`;
+      }
     }
     const table = box.querySelector<HTMLElement>("table.grid");
     svg.setAttribute("width", String(table?.offsetWidth ?? 0));
@@ -1961,7 +1997,7 @@ export function PlanSheet({
         const moved = Boolean(row.start && row.end && (row.start !== current.start || row.end !== current.finish));
         if (datesCount && moved && !lockOf(current, "start")) {
           Object.assign(patch, { planStart: row.start, planDays: current.task.isMilestone ? 1 : spanDays(row.start!, row.end!) });
-          if (current.fields.startMode === "linked") Object.assign(patch, { startMode: "manual", predecessorId: null, lagDays: 0 });
+          if (current.fields.startMode === "linked") Object.assign(patch, { startMode: "manual", predecessorId: null, lagDays: 0, extraLinks: [] });
         }
         const percent = datesCount && row.percent !== null && !lockOf(current, "done") ? row.percent : undefined;
         if (apply(current, patch, percent, undefined)) updated += 1;
@@ -1986,6 +2022,7 @@ export function PlanSheet({
         startMode: "manual",
         predecessorId: null,
         lagDays: 0,
+        extraLinks: [],
         picUserIds: [],
         discipline: null,
       };

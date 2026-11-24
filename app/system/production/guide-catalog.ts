@@ -1859,9 +1859,9 @@ const PROJECT_PLAN: Guide = {
       view: "projects",
       title: { th: "ต่อจาก: งานที่ต้องรอ", en: "After: the task a row waits for", jp: "前工程：先に終える作業" },
       body: {
-        th: "พิมพ์ WBS ของงานที่ต้องเสร็จก่อน เช่น 2.1 แถวนี้จะเริ่มวันทำงานถัดไปหลังงานนั้นจบ ใส่ +N เพื่อเว้น N วันทำงาน (ข้ามเสาร์ อาทิตย์ และวันหยุดบริษัท) เช่น 2.1+2 ลบช่องนี้เพื่อเลิกต่อ ถ้าพิมพ์ START เอง แถวนั้นจะเลิกต่อจากงานเดิม ต่อกันได้แบบ 'เสร็จแล้วค่อยเริ่ม' เท่านั้น และหัวข้อหลักไม่มีช่องนี้",
-        en: "Type the WBS of the task that must finish first, such as 2.1: the row starts on the next work day after it ends. Add +N for a gap of N work days (weekends and company holidays skipped), such as 2.1+2. Clear the cell to unlink it; typing START yourself also unlinks the row. Links are finish-to-start only, and a main heading has none.",
-        jp: "先に終える作業の WBS（例 2.1）を入力すると、その作業が終わった次の稼働日に始まります。+N で N 稼働日あけます（土日と会社休日を除く）。例 2.1+2。セルを消すと解除、START を直接入力しても解除されます。前工程は「終了後に開始」のみで、大見出しにはありません。",
+        th: "พิมพ์ WBS ของงานที่ต้องเสร็จก่อน เช่น 2.1 แถวนี้จะเริ่มวันทำงานถัดไปหลังงานนั้นจบ ใส่ +N เพื่อเว้น N วันทำงาน (ข้ามเสาร์ อาทิตย์ และวันหยุดบริษัท) เช่น 2.1+2 ถ้าต้องรอหลายงานให้คั่นด้วยจุลภาค เช่น 2.1, 3.4+1 แถวนี้จะเริ่มหลังงานที่จบช้าสุด ลบช่องนี้เพื่อเลิกต่อ ถ้าพิมพ์ START เอง แถวนั้นจะเลิกต่อจากงานเดิม ต่อกันได้แบบ 'เสร็จแล้วค่อยเริ่ม' เท่านั้น และหัวข้อหลักไม่มีช่องนี้",
+        en: "Type the WBS of the task that must finish first, such as 2.1: the row starts on the next work day after it ends. Add +N for a gap of N work days (weekends and company holidays skipped), such as 2.1+2. To wait for several tasks, separate them with commas, such as 2.1, 3.4+1: the row starts after the latest. Clear the cell to unlink it; typing START yourself also unlinks the row. Links are finish-to-start only, and a main heading has none.",
+        jp: "先に終える作業の WBS（例 2.1）を入力すると、その作業が終わった次の稼働日に始まります。+N で N 稼働日あけます（土日と会社休日を除く）。例 2.1+2。複数の作業を待つときはカンマで区切ります（例 2.1, 3.4+1）。いちばん遅く終わる作業の後に始まります。セルを消すと解除、START を直接入力しても解除されます。前工程は「終了後に開始」のみで、大見出しにはありません。",
       },
       missing: { th: "เปิด 'ตาราง' ใน V2 ก่อน หรือกด 'ถัดไป'", en: "Open the Sheet in V2 first, or press Next.", jp: "先に V2 の「表」を開くか、「次へ」を押します。" },
     },

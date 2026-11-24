@@ -320,6 +320,8 @@ export async function readScheduleRows(transaction: TransactionType, projectId: 
       CASE WHEN EXISTS(SELECT 1 FROM dbo.resource_tasks r WHERE r.schedule_task_id=t.id) THEN 1 ELSE 0 END managed,
       CASE WHEN EXISTS(SELECT 1 FROM dbo.schedule_updates u WHERE u.task_id=t.id AND u.field=N'request' AND u.request_days>0 AND u.answer IS NULL) THEN 1 ELSE 0 END pending,
       CASE WHEN EXISTS(SELECT 1 FROM dbo.schedule_tasks d WHERE d.predecessor_id=t.id AND d.deleted_at IS NULL AND d.id NOT IN (SELECT id FROM OPENJSON(@removing) WITH (id bigint '$')))
+        OR EXISTS(SELECT 1 FROM dbo.schedule_tasks d CROSS APPLY OPENJSON(d.extra_links) WITH (predecessor_id bigint '$.predecessorId') l
+          WHERE d.project_id=t.project_id AND d.start_mode=N'linked' AND l.predecessor_id=t.id AND d.deleted_at IS NULL AND d.id NOT IN (SELECT id FROM OPENJSON(@removing) WITH (id bigint '$')))
         OR EXISTS(SELECT 1 FROM dbo.resource_tasks r WHERE r.schedule_task_id=t.id)
         OR EXISTS(SELECT 1 FROM dbo.signable_documents sd WHERE sd.schedule_task_id=t.id)
         OR EXISTS(SELECT 1 FROM dbo.unified_reports ur WHERE ur.schedule_task_id=t.id) THEN 1 ELSE 0 END referenced,
