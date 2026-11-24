@@ -1830,6 +1830,18 @@ const PROJECT_PLAN: Guide = {
       missing: { th: "เปิด 'ตาราง' ใน V2 ก่อน หรือกด 'ถัดไป'", en: "Open the Sheet in V2 first, or press Next.", jp: "先に V2 の「表」を開くか、「次へ」を押します。" },
     },
     {
+      target: "plan.sheetImport",
+      action: "next",
+      view: "projects",
+      title: { th: "นำเข้าจาก Excel", en: "Import from Excel", jp: "Excel から取り込む" },
+      body: {
+        th: "เลือกไฟล์ Gantt ที่ทีมใช้อยู่ ระบบหาแถวหัวตารางที่มี TASK และ START เอง แล้วอ่าน WBS PIC START END DAYS และ % DONE ไฟล์อ่านในเบราว์เซอร์เท่านั้น ดูตัวอย่างก่อนว่าแถวไหนจะ 'แก้' 'เพิ่ม' หรือ 'เหมือนเดิม' โดยจับคู่ตามเลข WBS แถวในแอปที่ไม่มีในไฟล์คงไว้ และผู้ทำที่ใส่ไว้ไม่หาย กด 'นำเข้า' แล้วระบบบันทึกทีละแถวให้ (ย้อนการแก้แถวเดิมได้ด้วย Ctrl+Z) ใช้ได้เฉพาะเจ้าของแผน",
+        en: "Choose the Gantt file the team uses. The header row with TASK and START is found by itself, then WBS, PIC, START, END, DAYS and % DONE are read; the file stays in the browser. The preview shows which rows will change, be added or stay the same, matched by WBS. Rows in the plan that are not in the file stay, and members already named are kept. Press Import and each row is saved (changes to existing rows undo with Ctrl+Z). For the plan owner only.",
+        jp: "チームで使っている Gantt ファイルを選びます。TASK と START のある見出し行を自動で探し、WBS・PIC・START・END・DAYS・% DONE を読み込みます。ファイルはブラウザ内でのみ扱います。WBS で照合し、変更・追加・同じになる行をプレビューで確認できます。ファイルにない計画の行はそのまま、設定済みの担当者も残ります。「取り込む」で各行を保存します（既存行の変更は Ctrl+Z で戻せます）。計画の担当者のみ使えます。",
+      },
+      missing: { th: "เปิด 'ตาราง' ใน V2 ก่อน หรือกด 'ถัดไป'", en: "Open the Sheet in V2 first, or press Next.", jp: "先に V2 の「表」を開くか、「次へ」を押します。" },
+    },
+    {
       target: "plan.sheetExport",
       action: "next",
       view: "projects",
