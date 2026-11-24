@@ -143,6 +143,16 @@ export function MyWeek({ notify }: { notify: (message: string) => void }) {
     }
   };
 
+  // Task doc 3.4: on a phone the day columns are narrow, so the day to confirm (today first, else the latest before it)
+  // gets one wide button held at the foot of the screen.
+  const phoneConfirm = (() => {
+    if (!data) return null;
+    for (const date of dates.filter((item) => item <= today).reverse()) {
+      const day = dayOf(data, date);
+      if (day && dayState(day, data.hoursPerDay) === "toConfirm") return { date, hours: day.draftHours };
+    }
+    return null;
+  })();
   const outlook = data?.outlookWrite;
   return (
     <section className="myweek" aria-label={t("MyWeek.tab")}>
@@ -334,6 +344,14 @@ export function MyWeek({ notify }: { notify: (message: string) => void }) {
               ))}
             </div>
           </div>
+          {phoneConfirm ? (
+            <div className="myweek-phone-confirm">
+              <button className="btn primary" type="button" disabled={busy} onClick={() => void confirm(phoneConfirm.date)}>
+                <Icon name="check" />
+                {t("MyWeek.phoneConfirm").replace("{day}", dayLabel(phoneConfirm.date)).replace("{hours}", number(phoneConfirm.hours))}
+              </button>
+            </div>
+          ) : null}
           <div className="myweek-legend">
             <span className="block">{t("Hours.kindProject")}</span>
             <span className="meeting">{t("Hours.kindOutlook")}</span>
