@@ -190,6 +190,7 @@ GO
 :r database/migrations/126_plan_extra_predecessors.sql
 :r database/migrations/127_vendor_hours.sql
 :r database/migrations/128_outsource_pr_link.sql
+:r database/migrations/129_template_plan.sql
 
 USE [$(DatabaseName)];
 GO

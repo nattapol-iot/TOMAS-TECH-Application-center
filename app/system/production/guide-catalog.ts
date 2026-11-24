@@ -1908,6 +1908,18 @@ const PROJECT_PLAN: Guide = {
       missing: { th: "เปิด 'ตาราง' ใน V2 ก่อน หรือกด 'ถัดไป'", en: "Open the Sheet in V2 first, or press Next.", jp: "先に V2 の「表」を開くか、「次へ」を押します。" },
     },
     {
+      target: "plan.sheetTemplate",
+      action: "next",
+      view: "projects",
+      title: { th: "Master Schedule", en: "Master schedule", jp: "マスタースケジュール" },
+      body: {
+        th: "ปุ่มนี้ใส่ template ลงในแผน: เลือก template และวันเริ่ม ระบบคิดวันที่จากวันทำงาน ข้ามเสาร์ อาทิตย์ และวันหยุดบริษัท ยังไม่มีผู้ทำ หัวหน้าจัดคนทีหลัง หรือเก็บแผนนี้เป็น template ใหม่ (เก็บแถว ฝ่าย สาขา วันทำงาน และชั่วโมงตั้งต้น ไม่เก็บคนหรือวันที่) ทุกคนสร้างและแก้ template ได้",
+        en: "This button adds a template to the plan: pick one and a start date, and the dates come from its working days, skipping weekends and company holidays; people are assigned afterwards. Or keep this plan as a new template (rows, party, discipline, working days and starting hours; not people or dates). Anyone can make and change templates.",
+        jp: "このボタンでテンプレートを計画に追加します。テンプレートと開始日を選ぶと、稼働日から日付を計算します（土日と会社休日を除く）。担当者は後で割り当てます。この計画を新しいテンプレートとして保存することもできます（行・担当側・分野・稼働日・初期時間。担当者や日付は保存しません）。テンプレートは誰でも作成・変更できます。",
+      },
+      missing: { th: "เปิด 'ตาราง' ใน V2 ก่อน หรือกด 'ถัดไป'", en: "Open the Sheet in V2 first, or press Next.", jp: "先に V2 の「表」を開くか、「次へ」を押します。" },
+    },
+    {
       target: "plan.sheetFollow",
       action: "next",
       view: "projects",

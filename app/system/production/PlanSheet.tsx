@@ -10,7 +10,8 @@
    keeps storing calendar days, so existing plans do not move. */
 
 import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ApiClientError, apiRequest, listProjectDocuments, uploadProjectDocument } from "../api-client";
+import { ApiClientError, apiRequest, createScheduleTemplate, listProjectDocuments, listScheduleTemplates, uploadProjectDocument, type ScheduleTemplate } from "../api-client";
+import { planFromTemplate, templateFromPlan } from "../../../lib/plan-template";
 import { confirmDialog, promptDialog } from "../dialogs";
 import { LanguageContext, useT } from "../i18n";
 import { Modal } from "../ui";
@@ -302,6 +303,13 @@ export function PlanSheet({
   const [headingsOnly, setHeadingsOnly] = useState(false);
   const [disciplineFilter, setDisciplineFilter] = useState<string | null>(null);
   const [followOpen, setFollowOpen] = useState(false);
+  // Task doc 4.1-4.3: save this plan as a master schedule, or add one to it from a start date.
+  const [templateOpen, setTemplateOpen] = useState(false);
+  const [templates, setTemplates] = useState<ScheduleTemplate[] | null>(null);
+  const [templatePick, setTemplatePick] = useState("");
+  const [templateStart, setTemplateStart] = useState("");
+  const [templateName, setTemplateName] = useState("");
+  const [templateBusy, setTemplateBusy] = useState(false);
   // Suppliers for the member cell (task doc 3.5): those on this plan, then the ERP's, read once when a member cell opens.
   const [erpVendors, setErpVendors] = useState<string[] | null>(null);
   const [active, setActive] = useState<Cell | null>(null);
@@ -2238,6 +2246,77 @@ export function PlanSheet({
       .filter((row) => row.task.kind !== "detail")
       .map((row) => ({ wbs: row.task.wbs, kind: row.task.kind, name: row.fields.name, party: row.fields.picExternal, start: row.start, end: row.finish, percent: row.percent, rollup: row.rollup }));
   /** Rows the plan has (by WBS) take the file's name, PIC, dates and % DONE; the others are added under their WBS parent. */
+  const openTemplates = () => {
+    setTemplateOpen(true);
+    setTemplateName(`${schedule.projectName}`.slice(0, 200));
+    setTemplateStart(today);
+    listScheduleTemplates()
+      .then(setTemplates)
+      .catch(() => setTemplates([]));
+  };
+  const chosenTemplate = templates?.find((item) => String(item.id) === templatePick) ?? null;
+  const templateRows = chosenTemplate && /^\d{4}-\d{2}-\d{2}$/.test(templateStart) ? planFromTemplate(chosenTemplate, templateStart, holidays) : [];
+  /** Adds the template's rows at the end of the plan: headings with their rows under them, no people, dates from the start. */
+  const applyTemplate = () => {
+    if (!templateRows.length || !canPlan) return;
+    const parents: number[] = [];
+    for (const row of templateRows) {
+      const level = Math.max(1, Math.min(row.level, parents.length + 1));
+      parents.length = level - 1;
+      const kind = level === 1 ? "phase" : "task";
+      const fields: Fields = {
+        name: row.name.slice(0, 500),
+        picExternal: kind === "phase" ? "" : row.party,
+        planStart: row.start,
+        planDays: spanDays(row.start, row.end),
+        startMode: "manual",
+        predecessorId: null,
+        lagDays: 0,
+        extraLinks: [],
+        planManDays: kind === "phase" ? 0 : row.planManDays,
+        picUserIds: [],
+        discipline: kind === "phase" ? null : row.discipline,
+      };
+      const parentSeq = parents.at(-1);
+      const seq = enqueue({ type: "create", parentId: null, ...(parentSeq !== undefined ? { parentSeq } : {}), beforeId: null, kind, fields });
+      setSaving((list) => [...list, { seq, parentId: null, beforeId: null, name: row.name, depth: level, atEnd: true }]);
+      parents.push(seq);
+    }
+    say(
+      t("Sheet.tplApplied")
+        .replace("{count}", String(templateRows.length))
+        .replace("{name}", chosenTemplate?.name ?? ""),
+    );
+    setTemplateOpen(false);
+  };
+  /** Saves this plan as a new master schedule: rows at every level, working days and hours, no people or dates. */
+  const saveTemplate = async () => {
+    const name = templateName.trim();
+    if (!name) return;
+    const rows = model.rows
+      .filter((row) => row.task.kind !== "detail" && row.fields.name.trim())
+      .map((row) => ({
+        level: row.task.depth + 1,
+        name: row.fields.name,
+        party: row.task.kind === "phase" ? "" : row.fields.picExternal,
+        discipline: row.task.kind === "phase" ? null : row.fields.discipline,
+        start: row.start,
+        end: row.finish,
+        workDays: row.workDays,
+        planHours: row.planFromRows || row.task.kind === "phase" ? 0 : row.planHours,
+      }));
+    if (!rows.length) return;
+    setTemplateBusy(true);
+    try {
+      await createScheduleTemplate({ name, ...templateFromPlan(rows, holidays) });
+      say(t("Sheet.tplSaved").replace("{name}", name));
+      setTemplateOpen(false);
+    } catch (failure) {
+      say(failure instanceof ApiClientError ? failure.message : t("Sheet.tplFailed"), true);
+    } finally {
+      setTemplateBusy(false);
+    }
+  };
   const applyImport = async () => {
     if (!imported || !canPlan) return;
     const otherProject = imported.plan.projectNo && imported.plan.projectNo !== schedule.projectNo;
@@ -2376,6 +2455,68 @@ export function PlanSheet({
 
   return (
     <section className="plan-sheet" data-guide="plan.sheet" aria-label={t("Sheet.label")}>
+      {templateOpen ? (
+        <Modal
+          title="Sheet.tpl"
+          subtitle="Sheet.tplSubtitle"
+          size="lg"
+          onClose={() => setTemplateOpen(false)}
+          footer={
+            <button type="button" className="btn ghost" onClick={() => setTemplateOpen(false)}>
+              {t("Cancel")}
+            </button>
+          }
+        >
+          <div className="ps-tpl">
+            <section>
+              <h4>{t("Sheet.tplUse")}</h4>
+              <div className="ps-tpl-row">
+                <select value={templatePick} onChange={(event) => setTemplatePick(event.target.value)} aria-label={t("Sheet.tplPick")}>
+                  <option value="">{templates === null ? t("Loading") : t("Sheet.tplPick")}</option>
+                  {(templates ?? []).map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                      {item.plan?.length ? ` · ${item.plan.length}` : ` · ${item.rows.length}`}
+                    </option>
+                  ))}
+                </select>
+                <label>
+                  {t("Sheet.tplStart")} <input type="date" value={templateStart} onChange={(event) => setTemplateStart(event.target.value)} />
+                </label>
+                <button type="button" className="btn primary" disabled={!templateRows.length || !canPlan} title={canPlan ? undefined : t("Sheet.readOnly")} onClick={applyTemplate}>
+                  {t("Sheet.tplApply")}
+                </button>
+              </div>
+              {templateRows.length ? (
+                <p className="ps-tpl-note">
+                  {t("Sheet.tplPreview")
+                    .replace("{count}", String(templateRows.length))
+                    .replace("{start}", dayDate(templateRows.map((row) => row.start).sort()[0]!))
+                    .replace(
+                      "{end}",
+                      dayDate(
+                        templateRows
+                          .map((row) => row.end)
+                          .sort()
+                          .at(-1)!,
+                      ),
+                    )}
+                </p>
+              ) : null}
+            </section>
+            <section>
+              <h4>{t("Sheet.tplSave")}</h4>
+              <div className="ps-tpl-row">
+                <input value={templateName} maxLength={200} onChange={(event) => setTemplateName(event.target.value)} aria-label={t("Sheet.tplName")} placeholder={t("Sheet.tplName")} />
+                <button type="button" className="btn" disabled={!templateName.trim() || templateBusy || !model.rows.length} onClick={() => void saveTemplate()}>
+                  {t("Sheet.tplSaveButton")}
+                </button>
+              </div>
+              <p className="ps-tpl-note">{t("Sheet.tplSaveNote")}</p>
+            </section>
+          </div>
+        </Modal>
+      ) : null}
       {importing ? (
         <Modal
           title="Sheet.import"
@@ -2706,6 +2847,9 @@ export function PlanSheet({
           {t(folded ? "Sheet.showColumns" : "Sheet.foldColumns")}
         </button>
         <span className="grow" />
+        <button type="button" className="btn" data-guide="plan.sheetTemplate" onClick={openTemplates}>
+          {t("Sheet.tpl")}
+        </button>
         <button type="button" className="btn" data-guide="plan.sheetImport" disabled={!canPlan} title={canPlan ? undefined : t("Sheet.importPlanOnly")} onClick={() => setImporting(true)}>
           <Glyph d={GLYPH.upload} />
           {t("Sheet.import")}

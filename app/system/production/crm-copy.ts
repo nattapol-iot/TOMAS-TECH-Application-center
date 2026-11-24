@@ -602,6 +602,12 @@ export const CRM_COPY: Record<string, { en: string; th: string; jp: string }> = 
     ["MasterSchedule.name", "Schedule name", "ชื่อแผน", "計画名"],
     ["MasterSchedule.milestones", "Milestones", "ไมล์สโตน", "マイルストーン"],
     ["MasterSchedule.edit", "Edit", "แก้ไข", "編集"],
+    [
+      "MasterSchedule.fullPlan",
+      "Whole plan, {count} rows: add it from a project's plan Sheet (Master schedule)",
+      "มีแผนเต็ม {count} แถว ใส่ลงโปรเจกต์ได้จากตารางแผนงาน (ปุ่ม Master Schedule)",
+      "全体計画 {count} 行：プロジェクトの計画表（マスタースケジュール）から追加します",
+    ],
     ["MasterSchedule.delete", "Delete master schedule", "ลบ Master Schedule", "マスタースケジュールを削除"],
     [
       "MasterSchedule.deleteConfirm",

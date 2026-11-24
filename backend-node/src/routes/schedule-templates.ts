@@ -11,12 +11,59 @@ import type { CurrentUserService } from "../users.js";
  * Master schedules: named Master Plans reused when creating a project.
  * A row's start offset and duration count days from the project start. A row may carry
  * neither, in which case applying the template copies only its name and leaves the dates
- * to be typed. Every signed-in user may read them; changing them needs schedule.plan, the
- * permission that creating a project with a plan already requires (projects.ts), and a
- * change or delete must name the rowVersion it was based on.
+ * to be typed. Every signed-in user may read them, and since task doc 4.2 (owner 2026-11-23)
+ * also change them; the last one to change a template is kept. A change or delete must name
+ * the rowVersion it was based on.
+ *
+ * Task doc 4.1 (migration 129): a template may also keep a whole plan (plan_json): rows at every
+ * level with the party, the discipline, the working day it starts on, its working days and its
+ * starting hours. The flat rows stay for the screens that know only main headings.
  */
 
 export type TemplateRow = { name: string; startOffsetDays: number | null; durationDays: number | null };
+export type TemplatePlanRow = {
+  level: number;
+  name: string;
+  party: string;
+  discipline: string | null;
+  startWorkDay: number | null;
+  workDays: number | null;
+  planHours: number;
+};
+const MAX_PLAN_ROWS = 300;
+const DISCIPLINES = ["Electrical", "Mechanical", "Software", "Installation"];
+
+/** A whole plan as a template keeps it: level 1 first, a row at most one level under the row above. */
+export function parsePlan(value: unknown): TemplatePlanRow[] | null {
+  if (value === undefined || value === null) return null;
+  if (!Array.isArray(value)) throw new ApiError(400, "validation_failed", "A template plan must be a list of rows.");
+  if (value.length > MAX_PLAN_ROWS) throw new ApiError(400, "validation_failed", `A template plan cannot have more than ${MAX_PLAN_ROWS} rows.`);
+  let previous = 0;
+  return value.map((raw, index) => {
+    const label = `Plan row ${index + 1}`;
+    const row = bodyObject(raw);
+    const level = Number(row.level);
+    if (!Number.isInteger(level) || level < 1 || level > 5 || level > previous + 1) throw new ApiError(400, "validation_failed", `${label} has a level that does not follow the row above.`);
+    previous = level;
+    const startWorkDay = row.startWorkDay === null || row.startWorkDay === undefined ? null : Number(row.startWorkDay);
+    const workDays = row.workDays === null || row.workDays === undefined ? null : Number(row.workDays);
+    if (startWorkDay !== null && (!Number.isInteger(startWorkDay) || startWorkDay < 1 || startWorkDay > MAX_DAYS))
+      throw new ApiError(400, "validation_failed", `${label} start working day must be from 1 to ${MAX_DAYS}.`);
+    if (workDays !== null && (!Number.isInteger(workDays) || workDays < 1 || workDays > MAX_DAYS)) throw new ApiError(400, "validation_failed", `${label} working days must be from 1 to ${MAX_DAYS}.`);
+    const planHours = row.planHours === undefined || row.planHours === null ? 0 : Number(row.planHours);
+    if (!Number.isFinite(planHours) || planHours < 0 || planHours > 100_000) throw new ApiError(400, "validation_failed", `${label} hours must be from 0 to 100,000.`);
+    const discipline = typeof row.discipline === "string" && DISCIPLINES.includes(row.discipline) ? row.discipline : null;
+    return {
+      level,
+      name: requiredText(row.name, 500, `${label} name`),
+      party: typeof row.party === "string" ? row.party.trim().slice(0, 300) : "",
+      discipline,
+      startWorkDay,
+      workDays,
+      planHours: Math.round(planHours * 10) / 10,
+    };
+  });
+}
 const MAX_ROWS = 50;
 const MAX_DAYS = 3650;
 
@@ -28,7 +75,7 @@ function optionalDays(value: unknown, label: string, minimum: number): number | 
   return value as number;
 }
 
-export function parseTemplate(value: unknown): { name: string; rows: TemplateRow[] } {
+export function parseTemplate(value: unknown): { name: string; rows: TemplateRow[]; plan: TemplatePlanRow[] | null } {
   const body = bodyObject(value);
   const name = requiredText(body.name, 200, "Template name");
   if (!Array.isArray(body.rows) || body.rows.length === 0) throw new ApiError(400, "validation_failed", "A master schedule needs at least one row.");
@@ -44,16 +91,21 @@ export function parseTemplate(value: unknown): { name: string; rows: TemplateRow
     }
     return { name: requiredText(row.name, 500, `${label} name`), startOffsetDays, durationDays };
   });
-  return { name, rows };
+  return { name, rows, plan: parsePlan(body.plan) };
 }
 
 async function writeRows(transaction: TransactionType, templateId: number, rows: TemplateRow[]): Promise<void> {
-  const clear = new sql.Request(transaction); clear.input("template", sql.BigInt, templateId);
+  const clear = new sql.Request(transaction);
+  clear.input("template", sql.BigInt, templateId);
   await clear.query(`DELETE FROM dbo.schedule_template_rows WHERE template_id=@template;`);
   for (const [index, row] of rows.entries()) {
     const insert = new sql.Request(transaction);
-    insert.input("template", sql.BigInt, templateId).input("sort", sql.Int, index + 1).input("name", sql.NVarChar(500), row.name)
-      .input("offset", sql.Int, row.startOffsetDays).input("duration", sql.Int, row.durationDays);
+    insert
+      .input("template", sql.BigInt, templateId)
+      .input("sort", sql.Int, index + 1)
+      .input("name", sql.NVarChar(500), row.name)
+      .input("offset", sql.Int, row.startOffsetDays)
+      .input("duration", sql.Int, row.durationDays);
     await insert.query(`INSERT INTO dbo.schedule_template_rows(template_id,sort_order,name,start_offset_days,duration_days)
       VALUES(@template,@sort,@name,@offset,@duration);`);
   }
@@ -61,7 +113,8 @@ async function writeRows(transaction: TransactionType, templateId: number, rows:
 
 /** Locks a template and checks the caller saw its current version. */
 async function lockTemplate(transaction: TransactionType, id: number, rowVersion: Buffer): Promise<{ name: string }> {
-  const lookup = new sql.Request(transaction); lookup.input("id", sql.BigInt, id);
+  const lookup = new sql.Request(transaction);
+  lookup.input("id", sql.BigInt, id);
   const current = (await lookup.query<{ name: string; row_version: Buffer }>(`SELECT name,row_version FROM dbo.schedule_templates WITH(UPDLOCK,HOLDLOCK) WHERE id=@id;`)).recordset[0];
   if (!current) throw new ApiError(404, "schedule_template_not_found", "Master schedule not found.");
   if (!current.row_version.equals(rowVersion)) throw new ApiError(409, "concurrency_conflict", "Someone else changed this master schedule. Reload it and try again.");
@@ -69,7 +122,8 @@ async function lockTemplate(transaction: TransactionType, id: number, rowVersion
 }
 
 async function demandUniqueName(transaction: TransactionType, name: string, exceptId: number | null): Promise<void> {
-  const check = new sql.Request(transaction); check.input("name", sql.NVarChar(200), name).input("except", sql.BigInt, exceptId);
+  const check = new sql.Request(transaction);
+  check.input("name", sql.NVarChar(200), name).input("except", sql.BigInt, exceptId);
   const taken = (await check.query(`SELECT id FROM dbo.schedule_templates WITH(UPDLOCK,HOLDLOCK) WHERE name=@name AND (@except IS NULL OR id<>@except);`)).recordset[0];
   if (taken) throw new ApiError(409, "schedule_template_name_taken", "Another master schedule already has this name.");
 }
@@ -78,32 +132,42 @@ export function registerScheduleTemplateRoutes(app: FastifyInstance, database: D
   app.get("/api/v1/schedule-templates", async (request) => {
     await users.required(request);
     const result = await database.query<Record<string, unknown>>(`
-      SELECT t.id,t.name,t.updated_at,u.name updated_by_name,t.row_version FROM dbo.schedule_templates t
+      SELECT t.id,t.name,t.updated_at,u.name updated_by_name,t.row_version,t.plan_json FROM dbo.schedule_templates t
       LEFT JOIN dbo.users u ON u.id=t.updated_by ORDER BY t.name,t.id;
       SELECT template_id,name,start_offset_days,duration_days FROM dbo.schedule_template_rows ORDER BY template_id,sort_order;`);
     const [templates = [], rows = []] = result.recordsets as unknown as Record<string, unknown>[][];
     return templates.map((template) => ({
-      id: Number(template.id), name: String(template.name), updatedAt: template.updated_at,
+      id: Number(template.id),
+      name: String(template.name),
+      updatedAt: template.updated_at,
       updatedBy: template.updated_by_name === null ? null : String(template.updated_by_name),
       rowVersion: (template.row_version as Buffer).toString("base64"),
-      rows: rows.filter((row) => Number(row.template_id) === Number(template.id)).map((row) => ({
-        name: String(row.name),
-        startOffsetDays: row.start_offset_days === null ? null : Number(row.start_offset_days),
-        durationDays: row.duration_days === null ? null : Number(row.duration_days),
-      })),
+      plan: template.plan_json ? (JSON.parse(String(template.plan_json)) as TemplatePlanRow[]) : null,
+      rows: rows
+        .filter((row) => Number(row.template_id) === Number(template.id))
+        .map((row) => ({
+          name: String(row.name),
+          startOffsetDays: row.start_offset_days === null ? null : Number(row.start_offset_days),
+          durationDays: row.duration_days === null ? null : Number(row.duration_days),
+        })),
     }));
   });
 
   app.post("/api/v1/schedule-templates", async (request, reply) => {
-    await users.demandPermission(request, "schedule.plan");
     const actor = await users.required(request);
     const input = parseTemplate(request.body);
     const created = await database.transaction(async (transaction) => {
       await demandUniqueName(transaction, input.name, null);
-      const insert = new sql.Request(transaction); insert.input("name", sql.NVarChar(200), input.name).input("actor", sql.BigInt, actor.id);
-      const row = (await insert.query<{ id: number | string; row_version: Buffer }>(`DECLARE @created TABLE(id bigint,row_version binary(8));
-        INSERT INTO dbo.schedule_templates(name,created_by,updated_by) OUTPUT inserted.id,inserted.row_version INTO @created VALUES(@name,@actor,@actor);
-        SELECT id,row_version FROM @created;`)).recordset[0]!;
+      const insert = new sql.Request(transaction);
+      insert
+        .input("name", sql.NVarChar(200), input.name)
+        .input("actor", sql.BigInt, actor.id)
+        .input("plan", sql.NVarChar(sql.MAX), input.plan ? JSON.stringify(input.plan) : null);
+      const row = (
+        await insert.query<{ id: number | string; row_version: Buffer }>(`DECLARE @created TABLE(id bigint,row_version binary(8));
+        INSERT INTO dbo.schedule_templates(name,created_by,updated_by,plan_json) OUTPUT inserted.id,inserted.row_version INTO @created VALUES(@name,@actor,@actor,@plan);
+        SELECT id,row_version FROM @created;`)
+      ).recordset[0]!;
       const id = Number(row.id);
       await writeRows(transaction, id, input.rows);
       await insertAudit(transaction, actor.id, "Schedule Template", id, `ST-${id}`, "Created", null, input);
@@ -113,7 +177,6 @@ export function registerScheduleTemplateRoutes(app: FastifyInstance, database: D
   });
 
   app.put("/api/v1/schedule-templates/:id", async (request) => {
-    await users.demandPermission(request, "schedule.plan");
     const actor = await users.required(request);
     const id = positiveLong((request.params as { id?: string }).id, "Template id");
     const input = parseTemplate(request.body);
@@ -122,16 +185,25 @@ export function registerScheduleTemplateRoutes(app: FastifyInstance, database: D
       const current = await lockTemplate(transaction, id, rowVersion);
       await demandUniqueName(transaction, input.name, id);
       const update = new sql.Request(transaction);
-      update.input("id", sql.BigInt, id).input("name", sql.NVarChar(200), input.name).input("actor", sql.BigInt, actor.id);
-      const row = (await update.query<{ row_version: Buffer }>(`DECLARE @changed TABLE(row_version binary(8));
-        UPDATE dbo.schedule_templates SET name=@name,updated_by=@actor,updated_at=SYSUTCDATETIME() OUTPUT inserted.row_version INTO @changed WHERE id=@id;
-        SELECT row_version FROM @changed;`)).recordset[0]!;
+      update
+        .input("id", sql.BigInt, id)
+        .input("name", sql.NVarChar(200), input.name)
+        .input("actor", sql.BigInt, actor.id)
+        .input("plan", sql.NVarChar(sql.MAX), input.plan ? JSON.stringify(input.plan) : null)
+        .input("plan_sent", sql.Bit, Boolean(input.plan));
+      // A screen that knows only the main headings leaves the whole plan as it is.
+      const row = (
+        await update.query<{ row_version: Buffer }>(`DECLARE @changed TABLE(row_version binary(8));
+        UPDATE dbo.schedule_templates SET name=@name,plan_json=CASE WHEN @plan_sent=1 THEN @plan ELSE plan_json END,updated_by=@actor,updated_at=SYSUTCDATETIME() OUTPUT inserted.row_version INTO @changed WHERE id=@id;
+        SELECT row_version FROM @changed;`)
+      ).recordset[0]!;
       await writeRows(transaction, id, input.rows);
       await insertAudit(transaction, actor.id, "Schedule Template", id, `ST-${id}`, "Updated", { name: current.name }, input);
       return { id, rowVersion: row.row_version.toString("base64") };
     });
   });
 
+  // Deleting stays with schedule.plan: the owner opened changing templates to everyone (task doc 4.2), not deleting them.
   app.delete("/api/v1/schedule-templates/:id", async (request) => {
     await users.demandPermission(request, "schedule.plan");
     const actor = await users.required(request);
@@ -139,7 +211,8 @@ export function registerScheduleTemplateRoutes(app: FastifyInstance, database: D
     const rowVersion = parseRowVersion(bodyObject(request.body).rowVersion);
     return database.transaction(async (transaction) => {
       const removed = await lockTemplate(transaction, id, rowVersion);
-      const remove = new sql.Request(transaction); remove.input("id", sql.BigInt, id);
+      const remove = new sql.Request(transaction);
+      remove.input("id", sql.BigInt, id);
       await remove.query(`DELETE FROM dbo.schedule_templates WHERE id=@id;`);
       await insertAudit(transaction, actor.id, "Schedule Template", id, `ST-${id}`, "Deleted", { name: removed.name }, null);
       return { id, deleted: true };
