@@ -100,3 +100,12 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+.ds-tomas-frame {
+  display: block;
+  width: 100%;
+  height: max(560px, calc(100vh - 280px));
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
