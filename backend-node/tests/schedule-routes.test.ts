@@ -2141,3 +2141,41 @@ test("PUT purchase-request: an outsourced row takes a request of its own project
     });
   }
 });
+
+// Task doc 4.5 (migration 130): the plan's manager answers a new holiday on a row, moved out or kept.
+function holidayDecisionAnswers(isHoliday: boolean) {
+  return (statement: string): Answer | undefined => {
+    if (statement.includes("FROM dbo.schedule_tasks WITH (UPDLOCK,HOLDLOCK) WHERE id=@id AND deleted_at IS NULL")) return { recordset: [taskRaw({ id: 11, parent_id: 1 })] };
+    if (statement.includes("FROM dbo.projects WITH (UPDLOCK,HOLDLOCK) WHERE id=@project")) return { recordset: [projectRaw()] };
+    if (statement.includes("MERGE dbo.schedule_holiday_decisions")) return { recordset: [{ ok: isHoliday }] };
+    return undefined;
+  };
+}
+
+test("PUT holiday-decision: a company holiday on a row is answered Shifted or Kept; anything else is refused", async (t) => {
+  for (const item of [
+    { name: "moved out", payload: { date: "2027-01-04", decision: "Shifted" }, holiday: true, status: 200 },
+    { name: "kept", payload: { date: "2027-01-04", decision: "Kept" }, holiday: true, status: 200 },
+    { name: "not a company holiday", payload: { date: "2027-01-05", decision: "Kept" }, holiday: false, status: 422 },
+    { name: "an unknown answer", payload: { date: "2027-01-04", decision: "Later" }, holiday: true, status: 422, unread: true },
+    { name: "a date that is not a date", payload: { date: "04/01/2027", decision: "Kept" }, holiday: true, status: 422, unread: true },
+  ]) {
+    await t.test(item.name, async (sub) => {
+      const { app } = harness({ id: MANAGER_ID, role: "Project Manager" });
+      const statements = installSqlMock(sub, holidayDecisionAnswers(item.holiday));
+      try {
+        const response = await app.inject({ method: "PUT", url: "/api/v1/schedule/tasks/11/holiday-decision", payload: item.payload });
+        assert.equal(response.statusCode, item.status, response.body);
+        const merge = statements.find((entry) => entry.statement.includes("MERGE dbo.schedule_holiday_decisions"));
+        if (item.unread) assert.equal(merge, undefined, "nothing read or written");
+        else {
+          assert.equal(merge?.params.decision, item.payload.decision);
+          assert.equal(merge?.params.actor, MANAGER_ID);
+        }
+        if (item.status === 200) assert.deepEqual(response.json(), { taskId: 11, ...item.payload });
+      } finally {
+        await app.close();
+      }
+    });
+  }
+});

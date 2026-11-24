@@ -279,6 +279,79 @@
 .plan-sheet .ps-follow li button:hover {
   background: var(--sh-sel);
 }
+/* Task doc 4.4-4.5: a new holiday on a row, with its two answers; the legend's holiday opens the holidays dialog. */
+.plan-sheet .ps-follow li.ps-follow-hol {
+  display: grid;
+  gap: 2px;
+}
+.plan-sheet .ps-follow li.ps-follow-hol small {
+  display: block;
+  color: var(--sh-muted, var(--muted));
+}
+.plan-sheet .ps-follow-acts {
+  display: flex;
+  gap: 4px;
+  padding: 0 6px 4px;
+}
+.plan-sheet .ps-follow .ps-follow-acts button {
+  width: auto;
+  padding: 2px 8px;
+  border: 1px solid var(--sh-line, var(--line));
+  background: var(--sh-bg, #fff);
+}
+.plan-sheet .legend .ps-legend-hol {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline dotted;
+  cursor: pointer;
+}
+.ps-hol-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.ps-hol-table th,
+.ps-hol-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+.ps-hol-table th {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+.ps-hol-new {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--primary-soft, #e8f0fe);
+  color: var(--primary, #1a56db);
+  font-size: 11px;
+  font-weight: 600;
+}
+.ps-hol-table .ps-hol-new {
+  margin-left: 6px;
+}
+.ps-hol-row {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--primary, inherit);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.ps-hol-row:hover {
+  text-decoration: underline;
+}
 /* Task doc 3.7: an outsourced row's purchase request, or the lack of one. */
 .plan-sheet .tag.pr {
   background: var(--sh-primary-soft);

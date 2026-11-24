@@ -5,7 +5,7 @@ import { insertAudit } from "../audit.js";
 import type { Database } from "../db.js";
 import { ApiError, dayRequestAnswerError } from "../errors.js";
 import { hasRole } from "../user-roles.js";
-import { bodyObject, optionalBodyText, parseRowVersion, positiveLong, requiredInteger, requiredText } from "../http.js";
+import { bodyObject, dateOnly, optionalBodyText, parseRowVersion, positiveLong, requiredInteger, requiredText } from "../http.js";
 import { demandProjectScope, isMyWorkElevated, isProjectElevated, isProjectManagerRole } from "../project-scope.js";
 import { manHourBudget, MAXIMUM_BUDGET_MAN_DAYS, parseBudgetManDays, readStoredBudget } from "../manhour-budget.js";
 import { networkDays } from "../schedule-calculator.js";
@@ -236,6 +236,7 @@ async function projectSchedule(transaction: TransactionType, database: Database,
     recentUpdates: await readUpdates(transaction, projectId),
     // Company holidays, so the plan screen places a linked row's start the way schedule-calculator.ts does.
     holidays: [...holidays].sort(),
+    ...(await readHolidayList(transaction, projectId)),
     tasks: calculation.roots.map((item) =>
       taskResponse(item, new Map(tasks.map((task) => [task.id, task])), pics, {
         actorId: actor.id,
@@ -264,6 +265,27 @@ async function readProjectRequests(transaction: TransactionType, projectId: numb
   request.input("project", sql.BigInt, projectId);
   const rows = (await request.query<{ id: number | string; pr_no: string; status: string }>(`SELECT id,pr_no,status FROM dbo.mat_prs WHERE project_id=@project AND deleted_at IS NULL;`)).recordset;
   return new Map(rows.map((row) => [Number(row.id), { prNo: row.pr_no, status: row.status }]));
+}
+
+/**
+ * Company holidays with their names and when the app first saw each (null: before migration 130), and what the plan's
+ * managers decided about a new one on each row: the plan Sheet's holidays dialog and follow-up list (task doc 4.4-4.5).
+ */
+export const HOLIDAY_LIST_SQL = `SELECT holiday_date,name,added_at FROM dbo.holidays ORDER BY holiday_date;
+  SELECT d.task_id,d.holiday_date,d.decision FROM dbo.schedule_holiday_decisions d INNER JOIN dbo.schedule_tasks t ON t.id=d.task_id
+  WHERE t.project_id=@project AND t.deleted_at IS NULL;`;
+async function readHolidayList(transaction: TransactionType, projectId: number) {
+  const request = new sql.Request(transaction);
+  request.input("project", sql.BigInt, projectId);
+  const sets = ((await request.query(HOLIDAY_LIST_SQL)).recordsets ?? []) as unknown as Record<string, unknown>[][];
+  return {
+    holidayList: (sets[0] ?? []).map((row) => ({
+      date: dateOnly(row.holiday_date as Date | string)!,
+      name: String(row.name),
+      addedAt: row.added_at ? new Date(row.added_at as Date | string).toISOString() : null,
+    })),
+    holidayDecisions: (sets[1] ?? []).map((row) => ({ taskId: Number(row.task_id), date: dateOnly(row.holiday_date as Date | string)!, decision: String(row.decision) })),
+  };
 }
 
 async function readRowHours(transaction: TransactionType, projectId: number): Promise<Map<number, number>> {
@@ -480,6 +502,35 @@ export function registerScheduleRoutes(app: FastifyInstance, database: Database,
         prNo,
       );
       return { id, purchaseRequestId: requestId, scheduleVersion: (await currentScheduleVersion(transaction, task.projectId))?.toString("base64") ?? null };
+    });
+  });
+
+  // Task doc 4.5: a new company holiday on a row; the plan's manager moved its end out (the plan change is saved on its
+  // own) or kept it. Either way the follow-up list stops asking about that holiday on that row.
+  app.put("/api/v1/schedule/tasks/:id/holiday-decision", async (request) => {
+    const actor = await users.required(request);
+    const id = positiveLong((request.params as { id?: string }).id, "Schedule task id");
+    const body = bodyObject(request.body);
+    const date = requiredText(body.date, 10, "Holiday date");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new ApiError(422, "holiday_date_invalid", "Holiday date must be YYYY-MM-DD.");
+    const decision = body.decision === "Shifted" || body.decision === "Kept" ? body.decision : null;
+    if (!decision) throw new ApiError(422, "holiday_decision_invalid", "Decision must be Shifted or Kept.");
+    return database.transaction(async (transaction) => {
+      const task = await readTask(transaction, id);
+      await demandRowPlanOwner(transaction, database, task.projectId, actor);
+      const save = new sql.Request(transaction);
+      save.input("id", sql.BigInt, id).input("date", sql.Date, date).input("decision", sql.NVarChar(10), decision).input("actor", sql.BigInt, actor.id);
+      const saved = await save.query(`IF NOT EXISTS (SELECT 1 FROM dbo.holidays WHERE holiday_date=@date) SELECT CAST(0 AS bit) ok;
+        ELSE BEGIN
+          MERGE dbo.schedule_holiday_decisions WITH (HOLDLOCK) AS target USING (SELECT @id task_id,@date holiday_date) AS source
+            ON target.task_id=source.task_id AND target.holiday_date=source.holiday_date
+          WHEN MATCHED THEN UPDATE SET decision=@decision,decided_by=@actor,decided_at=SYSUTCDATETIME()
+          WHEN NOT MATCHED THEN INSERT(task_id,holiday_date,decision,decided_by) VALUES(@id,@date,@decision,@actor);
+          SELECT CAST(1 AS bit) ok;
+        END`);
+      if (!saved.recordset[0]?.ok) throw new ApiError(422, "holiday_not_found", `${date} is not a company holiday.`);
+      await insertAudit(transaction, actor.id, "Schedule Task", id, `T-${id}`, "Holiday decision", null, { holidayDate: date, decision });
+      return { taskId: id, date, decision };
     });
   });
 

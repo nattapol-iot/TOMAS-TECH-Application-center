@@ -13,7 +13,7 @@ import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, u
 import { ApiClientError, apiRequest, createScheduleTemplate, listProjectDocuments, listScheduleTemplates, uploadProjectDocument, type ScheduleTemplate } from "../api-client";
 import { planFromTemplate, templateFromPlan } from "../../../lib/plan-template";
 import { confirmDialog, promptDialog } from "../dialogs";
-import { LanguageContext, useT } from "../i18n";
+import { LanguageContext, useT, type Translator } from "../i18n";
 import { Modal } from "../ui";
 import { CUSTOMER_SCHEDULE_TEMPLATE_URL, fillCustomerSchedule } from "../../../lib/customer-schedule-template";
 import { customerScheduleDays, customerScheduleFileName, customerScheduleSheet, type CustomerScheduleInput, type CustomerScheduleRow } from "../../../lib/customer-schedule-workbook";
@@ -233,6 +233,9 @@ function changed(fields: Fields, patch: Patch): Patch | null {
   return Object.keys(out).length ? out : null;
 }
 const pick = (fields: Fields, keys: (keyof Fields)[]): Patch => Object.fromEntries(keys.map((key) => [key, fields[key]])) as Patch;
+type HolidayItem = NonNullable<ProjectSchedule["holidayList"]>[number];
+/** A holiday the app first saw within this many days is new: on planned work it waits in the follow-up list (task doc 4.5). */
+const NEW_HOLIDAY_DAYS = 30;
 const flatById = (schedule: ProjectSchedule) => new Map(sheetOrder(schedule.tasks).map((task) => [task.id, task] as const));
 const isLate = (row: { status: string; finish: string | null; parent: boolean }, today: string) => !row.parent && row.status !== "Done" && row.finish !== null && row.finish < today;
 
@@ -514,6 +517,28 @@ export function PlanSheet({
       .then((page) => setErpVendors((page.items ?? []).map((item) => item.name).filter(Boolean)))
       .catch(() => setErpVendors([]));
   }, [memberEditing, canPlan]);
+  // Task doc 4.4-4.5: the company holidays by name, and a new one on planned work until the plan's manager moves the
+  // row's end out or keeps it. Nothing moves on its own.
+  const [holidaysOpen, setHolidaysOpen] = useState(false);
+  const [decided, setDecided] = useState<ReadonlySet<string>>(() => new Set());
+  const holidayList = useMemo(() => schedule.holidayList ?? [], [schedule.holidayList]);
+  const holidayHits = useMemo(() => {
+    const answered = new Set([...(schedule.holidayDecisions ?? []).map((item) => `${item.taskId}:${item.date}`), ...decided]);
+    const since = shiftDay(today, -NEW_HOLIDAY_DAYS);
+    const hits: { row: Row; holiday: HolidayItem }[] = [];
+    for (const holiday of holidayList) {
+      if (!holiday.addedAt || holiday.addedAt.slice(0, 10) < since || holiday.date < today) continue;
+      for (const row of model.rows) {
+        if (row.parent || row.task.id < 0 || row.status === "Done" || !row.start || !row.finish) continue;
+        if (holiday.date < row.start || holiday.date > row.finish || answered.has(`${row.task.id}:${holiday.date}`)) continue;
+        hits.push({ row, holiday });
+      }
+    }
+    return hits;
+  }, [holidayList, schedule.holidayDecisions, decided, model.rows, today]);
+  /** Not-done rows without rows under them that a holiday falls on: the holidays dialog's last column. */
+  const rowsOnHoliday = (date: string) =>
+    model.rows.filter((row) => !row.parent && row.task.id > 0 && row.status !== "Done" && row.start !== null && row.finish !== null && row.start <= date && date <= row.finish);
   // Task doc 3.8: what needs following up on this plan, each one a link to its row.
   const followUps = useMemo(() => {
     const groups: { key: string; rows: Row[] }[] = [
@@ -522,6 +547,7 @@ export function PlanSheet({
       { key: "due", rows: [] },
       { key: "noMember", rows: [] },
       { key: "noPr", rows: [] },
+      { key: "newHoliday", rows: [] },
     ];
     const at = Object.fromEntries(groups.map((group) => [group.key, group.rows])) as Record<string, Row[]>;
     for (const row of model.rows) {
@@ -532,8 +558,9 @@ export function PlanSheet({
       if (row.task.kind === "task" && row.status !== "Done" && row.task.laborSource !== "Outsourced" && !row.fields.picUserIds.length) at.noMember!.push(row);
       if (row.task.laborSource === "Outsourced" && !row.task.purchaseRequest && row.status !== "Done") at.noPr!.push(row);
     }
+    for (const hit of holidayHits) if (!at.newHoliday!.includes(hit.row)) at.newHoliday!.push(hit.row);
     return groups.filter((group) => group.rows.length);
-  }, [model.rows, today]);
+  }, [model.rows, today, holidayHits]);
   // A row in two lists (late and blocked) counts once.
   const followCount = new Set(followUps.flatMap((group) => group.rows.map((row) => row.task.id))).size;
   /** Opens the rows above a row, puts the cursor on it and scrolls it into view. */
@@ -2246,6 +2273,9 @@ export function PlanSheet({
       .filter((row) => row.task.kind !== "detail")
       .map((row) => ({ wbs: row.task.wbs, kind: row.task.kind, name: row.fields.name, party: row.fields.picExternal, start: row.start, end: row.finish, percent: row.percent, rollup: row.rollup }));
   /** Rows the plan has (by WBS) take the file's name, PIC, dates and % DONE; the others are added under their WBS parent. */
+  // The holidays dialog shows the plan's months and the year ahead.
+  const holidayFrom = `${(schedule.summary.planStart && schedule.summary.planStart < today ? schedule.summary.planStart : today).slice(0, 7)}-01`;
+  const holidayTo = [schedule.summary.planFinish ?? today, shiftDay(today, 365)].sort().at(-1)!;
   const openTemplates = () => {
     setTemplateOpen(true);
     setTemplateName(`${schedule.projectName}`.slice(0, 200));
@@ -2397,6 +2427,25 @@ export function PlanSheet({
     else if (key === "pr") void linkRequest(menuRow);
     else if (key === "delete") removeFor(menuRow.task)?.onRemove();
   };
+  /** Task doc 4.5: moves the row's end one working day out (a plan change, undoable) or keeps it; either way it is answered. */
+  // The answer is saved first and the end moves only once it is: a refused answer leaves the row as it was, and a second
+  // press while the first is on its way does nothing.
+  const deciding = useRef(new Set<string>());
+  const decideHoliday = async (row: Row, holiday: HolidayItem, decision: "Shifted" | "Kept") => {
+    const key = `${row.task.id}:${holiday.date}`;
+    if (deciding.current.has(key)) return;
+    deciding.current.add(key);
+    try {
+      await apiRequest(`/api/v1/schedule/tasks/${row.task.id}/holiday-decision`, { method: "PUT", body: JSON.stringify({ date: holiday.date, decision }) });
+      if (decision === "Shifted" && row.start && row.finish) apply(row, { planDays: spanDays(row.start, nextWorkDay(shiftDay(row.finish, 1), holidays)) }, undefined, undefined);
+      setDecided((current) => new Set([...current, key]));
+      say(t(decision === "Shifted" ? "Sheet.holShifted" : "Sheet.holKept").replace("{name}", row.fields.name));
+    } catch (failure) {
+      say(failure instanceof ApiClientError ? failure.message : t("Sheet.holFailed"), true);
+    } finally {
+      deciding.current.delete(key);
+    }
+  };
   /** Task doc 3.7: which purchase request the outsourced row's supplier is bought on; empty unlinks it. */
   const linkRequest = async (row: Row) => {
     const typed = await promptDialog(t("Sheet.prAsk"), { title: t("Sheet.prLink"), value: row.task.purchaseRequest?.prNo ?? "" });
@@ -2455,6 +2504,31 @@ export function PlanSheet({
 
   return (
     <section className="plan-sheet" data-guide="plan.sheet" aria-label={t("Sheet.label")}>
+      {holidaysOpen ? (
+        <Modal
+          title="Sheet.holidaysTitle"
+          subtitle="Sheet.holidaysSubtitle"
+          size="lg"
+          onClose={() => setHolidaysOpen(false)}
+          footer={
+            <button type="button" className="btn ghost" onClick={() => setHolidaysOpen(false)}>
+              {t("Close")}
+            </button>
+          }
+        >
+          <HolidayTable
+            holidays={holidayList.filter((item) => item.date >= holidayFrom && item.date <= holidayTo)}
+            since={shiftDay(today, -NEW_HOLIDAY_DAYS)}
+            rowsOn={rowsOnHoliday}
+            dayDate={dayDate}
+            onRow={(row) => {
+              setHolidaysOpen(false);
+              goToRow(row);
+            }}
+            t={t}
+          />
+        </Modal>
+      ) : null}
       {templateOpen ? (
         <Modal
           title="Sheet.tpl"
@@ -2825,18 +2899,42 @@ export function PlanSheet({
               {followUps.map((group) => (
                 <section key={group.key}>
                   <h4>
-                    {t(`Sheet.follow.${group.key}`)} <span className="ps-mono">{group.rows.length}</span>
+                    {t(`Sheet.follow.${group.key}`)} <span className="ps-mono">{group.key === "newHoliday" ? holidayHits.length : group.rows.length}</span>
                   </h4>
-                  <ul>
-                    {group.rows.slice(0, 30).map((row) => (
-                      <li key={row.task.id}>
-                        <button type="button" onClick={() => goToRow(row)}>
-                          <span className="ps-mono">{row.task.wbs}</span> {row.fields.name}
-                        </button>
-                      </li>
-                    ))}
-                    {group.rows.length > 30 ? <li className="ps-follow-more">{t("Sheet.followMore").replace("{count}", String(group.rows.length - 30))}</li> : null}
-                  </ul>
+                  {group.key === "newHoliday" ? (
+                    <ul>
+                      {holidayHits.slice(0, 30).map(({ row, holiday }) => (
+                        <li key={`${row.task.id}:${holiday.date}`} className="ps-follow-hol">
+                          <button type="button" onClick={() => goToRow(row)}>
+                            <span className="ps-mono">{row.task.wbs}</span> {row.fields.name}
+                            <small>{`${holiday.name} · ${dayDate(holiday.date)}`}</small>
+                          </button>
+                          {canPlan ? (
+                            <span className="ps-follow-acts">
+                              <button type="button" title={t("Sheet.holShiftTitle")} onClick={() => void decideHoliday(row, holiday, "Shifted")}>
+                                {t("Sheet.holShift")}
+                              </button>
+                              <button type="button" title={t("Sheet.holKeepTitle")} onClick={() => void decideHoliday(row, holiday, "Kept")}>
+                                {t("Sheet.holKeep")}
+                              </button>
+                            </span>
+                          ) : null}
+                        </li>
+                      ))}
+                      {holidayHits.length > 30 ? <li className="ps-follow-more">{t("Sheet.followMore").replace("{count}", String(holidayHits.length - 30))}</li> : null}
+                    </ul>
+                  ) : (
+                    <ul>
+                      {group.rows.slice(0, 30).map((row) => (
+                        <li key={row.task.id}>
+                          <button type="button" onClick={() => goToRow(row)}>
+                            <span className="ps-mono">{row.task.wbs}</span> {row.fields.name}
+                          </button>
+                        </li>
+                      ))}
+                      {group.rows.length > 30 ? <li className="ps-follow-more">{t("Sheet.followMore").replace("{count}", String(group.rows.length - 30))}</li> : null}
+                    </ul>
+                  )}
                 </section>
               ))}
             </div>
@@ -2913,10 +3011,10 @@ export function PlanSheet({
           <i className="sw promised" />
           {t("Sheet.legendPromised")}
         </span>
-        <span>
+        <button type="button" className="ps-legend-hol" data-guide="plan.sheetHolidays" title={t("Sheet.holidaysOpen")} onClick={() => setHolidaysOpen(true)}>
           <i className="sw hol" />
           {t("Sheet.holiday")}
-        </span>
+        </button>
         <span>
           <i className="sw now" />
           {`${t("Sheet.today")} ${dayDate(today)}`}
@@ -3069,5 +3167,63 @@ export function PlanSheet({
         </span>
       </div>
     </section>
+  );
+}
+
+/** Task doc 4.4: the company holidays in the plan's months and the year ahead, each with the open work it falls on. */
+function HolidayTable({
+  holidays,
+  since,
+  rowsOn,
+  dayDate,
+  onRow,
+  t,
+}: {
+  holidays: readonly HolidayItem[];
+  since: string;
+  rowsOn: (date: string) => Row[];
+  dayDate: (iso: string | null) => string;
+  onRow: (row: Row) => void;
+  t: Translator;
+}) {
+  if (!holidays.length) return <p className="ps-tpl-note">{t("Sheet.holidaysNone")}</p>;
+  return (
+    <table className="ps-hol-table">
+      <thead>
+        <tr>
+          <th>{t("Sheet.holDate")}</th>
+          <th>{t("Sheet.holName")}</th>
+          <th>{t("Sheet.holWork")}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {holidays.map((holiday) => {
+          const rows = rowsOn(holiday.date);
+          return (
+            <tr key={holiday.date}>
+              <td className="ps-mono">{dayDate(holiday.date)}</td>
+              <td>
+                {holiday.name}
+                {holiday.addedAt && holiday.addedAt.slice(0, 10) >= since ? <span className="ps-hol-new">{t("Sheet.holNew")}</span> : null}
+              </td>
+              <td>
+                {rows.length ? (
+                  <>
+                    {rows.slice(0, 3).map((row) => (
+                      <button key={row.task.id} type="button" className="ps-hol-row" onClick={() => onRow(row)}>
+                        <span className="ps-mono">{row.task.wbs}</span> {row.fields.name}
+                      </button>
+                    ))}
+                    {rows.length > 3 ? <small className="muted">{t("Sheet.followMore").replace("{count}", String(rows.length - 3))}</small> : null}
+                  </>
+                ) : (
+                  <small className="muted">{t("Sheet.holNoRows")}</small>
+                )}
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
   );
 }
