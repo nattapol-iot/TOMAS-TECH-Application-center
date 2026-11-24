@@ -5253,6 +5253,16 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
                     removeFor={binFor}
                     ensureMembers={(userIds) => ensureScheduleMembers(activeSchedule.projectId, activeSchedule.managerId, userIds)}
                     canAddSub={(task) => canTakeSubTasks(task, rows)}
+                    project={
+                      selectedProject
+                        ? {
+                            customerName: selectedProject.endUserName || selectedProject.customerName,
+                            purchaseOrderNumber: selectedProject.purchaseOrderNumber,
+                            leadEngineerName: selectedProject.leadEngineerName,
+                            startDate: selectedProject.startDate || null,
+                          }
+                        : null
+                    }
                   />
                 ) : peopleView ? (
                   <PlanPeopleGrid
