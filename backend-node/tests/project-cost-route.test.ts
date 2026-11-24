@@ -91,6 +91,22 @@ function fakeDatabase(options: { inScope?: boolean; planned?: boolean } = {}) {
       statements.push(text);
       const rows = (...sets: unknown[][]) => ({ recordset: sets[0] ?? [], recordsets: sets });
       if (text.includes("p.project_no,p.name")) return rows(options.inScope === false ? [] : [projectRow]);
+      // Task doc 6.1: the plan rows, holidays, hours by day and by person for one project's Cost tab.
+      if (text.includes("-- cost curve"))
+        return options.planned
+          ? rows(
+              [{ ...taskRow, plan_man_days: 2 }],
+              [],
+              [
+                { work_date: "2026-11-02", hours: 8 },
+                { work_date: "2026-11-03", hours: 16 },
+              ],
+              [
+                { id: 4, name: "Electrical engineer", department: "Electrical Engineer Dept.", hours: 16, days: 2, last_day: "2026-11-03" },
+                { id: 5, name: "IoT engineer", department: "IoT Engineer Dept.", hours: 8, days: 1, last_day: "2026-11-02" },
+              ],
+            )
+          : rows([], [], [], []);
       // The estimate's totals, then its internal labor by discipline: electrical 12 man-days at 4,000, software 8 at 4,000.
       if (text.includes("dbo.v_estimate_totals"))
         return rows(
@@ -292,6 +308,13 @@ test("project cost: one project's breakdown by module, request and plan row, wit
     const body = response.json() as ProjectCostDetail;
     assert.equal(body.project.number, "PJ260091");
     assert.deepEqual(body.access, { budget: true, purchases: true, laborMoney: false });
+    // Task doc 6.1: who confirmed the hours, most first, by the discipline of their department, and the weekly curve.
+    assert.deepEqual(body.people, [
+      { id: 4, name: "Electrical engineer", discipline: "Electrical", hours: 16, days: 2, lastDay: "2026-11-03" },
+      { id: 5, name: "IoT engineer", discipline: "Software", hours: 8, days: 1, lastDay: "2026-11-02" },
+    ]);
+    assert.equal(body.curve?.at(-1)?.actualManDays, 3, "24 confirmed hours are 3 man-days");
+    assert.equal(body.curve?.at(-1)?.plannedManDays, 2);
     // Modules by name, and what belongs to no module last.
     assert.deepEqual(body.modules, [
       { module: "MZ01", budget: 70000, requested: 95000, approved: 60000, ordered: 30000 },

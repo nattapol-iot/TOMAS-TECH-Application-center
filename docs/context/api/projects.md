@@ -2,35 +2,35 @@
 
 [Module](../modules/projects.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `aeeccd77`; generated, do not edit. [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `d1166c4a`; generated, do not edit. [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/projects/creation-options` | 122–171 |
-| GET | `/api/v1/projects/handover/:inquiryId` | 173–204 |
-| GET | `/api/v1/projects/contact-options` | 206–226 |
-| GET | `/api/v1/projects` | 228–263 |
-| GET | `/api/v1/projects/attention` | 319–345 |
-| GET | `/api/v1/projects/overview` | 349–432 |
-| GET | `/api/v1/projects/cost-overview` | 461–488 |
-| GET | `/api/v1/projects/:id/page-overview` | 501–549 |
-| GET | `/api/v1/projects/:id/cost` | 551–639 |
-| POST | `/api/v1/projects` | 641–876 |
-| GET | `/api/v1/projects/:id/members` | 878–918 |
-| POST | `/api/v1/projects/:id/members` | 920–945 |
-| DELETE | `/api/v1/projects/:id/members/:userId` | 947–970 |
-| GET | `/api/v1/projects/:id/deletion` | 992–1000 |
-| DELETE | `/api/v1/projects/:id` | 1002–1039 |
-| PUT | `/api/v1/projects/:id` | 1041–1215 |
+| GET | `/api/v1/projects/creation-options` | 132–181 |
+| GET | `/api/v1/projects/handover/:inquiryId` | 183–214 |
+| GET | `/api/v1/projects/contact-options` | 216–236 |
+| GET | `/api/v1/projects` | 238–273 |
+| GET | `/api/v1/projects/attention` | 329–355 |
+| GET | `/api/v1/projects/overview` | 359–442 |
+| GET | `/api/v1/projects/cost-overview` | 471–498 |
+| GET | `/api/v1/projects/:id/page-overview` | 511–559 |
+| GET | `/api/v1/projects/:id/cost` | 561–681 |
+| POST | `/api/v1/projects` | 683–918 |
+| GET | `/api/v1/projects/:id/members` | 920–960 |
+| POST | `/api/v1/projects/:id/members` | 962–987 |
+| DELETE | `/api/v1/projects/:id/members/:userId` | 989–1012 |
+| GET | `/api/v1/projects/:id/deletion` | 1034–1042 |
+| DELETE | `/api/v1/projects/:id` | 1044–1081 |
+| PUT | `/api/v1/projects/:id` | 1083–1257 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `shiftDate` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 89–94 |
-| `registerProjectRoutes` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 120–1216 |
+| `shiftDate` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 90–95 |
+| `registerProjectRoutes` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 130–1258 |
 
 ## Direct local dependencies
 
@@ -57,6 +57,7 @@ Evidence: source snapshot `aeeccd77`; generated, do not edit. [backend-node/src/
 - [backend-node/src/schedule-service.ts](<../../../backend-node/src/schedule-service.ts>)
 - [backend-node/src/project-health.ts](<../../../backend-node/src/project-health.ts>)
 - [backend-node/src/project-page-overview.ts](<../../../backend-node/src/project-page-overview.ts>)
+- [backend-node/src/project-cost-curve.ts](<../../../backend-node/src/project-cost-curve.ts>)
 - [backend-node/src/user-roles.ts](<../../../backend-node/src/user-roles.ts>)
 - [backend-node/src/types.ts](<../../../backend-node/src/types.ts>)
 - [backend-node/src/users.ts](<../../../backend-node/src/users.ts>)
@@ -65,7 +66,7 @@ Evidence: source snapshot `aeeccd77`; generated, do not edit. [backend-node/src/
 
 ## SQL references (literal scan, not a complete schema or write-set)
 
-`dbo.cost_items`, `dbo.crm_opportunities`, `dbo.customer_site_contacts`, `dbo.customer_sites`, `dbo.customers`, `dbo.delete_unstarted_project`, `dbo.estimates`, `dbo.inquiries`, `dbo.manhour_lines`, `dbo.mat_pr_lines`, `dbo.mat_prs`, `dbo.project_contacts`, `dbo.project_docs`, `dbo.project_folders`, `dbo.project_members`, `dbo.project_payment_milestones`, `dbo.project_purchase_units`, `dbo.projects`, `dbo.roles`, `dbo.schedule_tasks`, `dbo.schedule_updates`, `dbo.soft_delete_project`, `dbo.user_effective_permissions`, `dbo.user_effective_roles`, `dbo.users`, `dbo.v_estimate_cost_amounts`, `dbo.work_hours`
+`dbo.cost_items`, `dbo.crm_opportunities`, `dbo.customer_site_contacts`, `dbo.customer_sites`, `dbo.customers`, `dbo.delete_unstarted_project`, `dbo.estimates`, `dbo.holidays`, `dbo.inquiries`, `dbo.manhour_lines`, `dbo.mat_pr_lines`, `dbo.mat_prs`, `dbo.project_contacts`, `dbo.project_docs`, `dbo.project_folders`, `dbo.project_members`, `dbo.project_payment_milestones`, `dbo.project_purchase_units`, `dbo.projects`, `dbo.roles`, `dbo.schedule_tasks`, `dbo.schedule_updates`, `dbo.soft_delete_project`, `dbo.user_effective_permissions`, `dbo.user_effective_roles`, `dbo.users`, `dbo.v_estimate_cost_amounts`, `dbo.work_hours`
 
 ## Change boundary
 

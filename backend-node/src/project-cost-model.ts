@@ -161,6 +161,10 @@ export type ProjectCostDetail = {
   modules: CostModuleRow[];
   requests: CostRequestRow[];
   plan: CostPlanRow[];
+  /** Task doc 6.1: own-staff man-days week by week, planned and confirmed, added up (project-cost-curve.ts). An older API omits it. */
+  curve?: { week: string; plannedManDays: number; actualManDays: number }[];
+  /** Who confirmed hours on the project, most first, with the discipline of their department. */
+  people?: { id: number; name: string; discipline: LaborDiscipline; hours: number; days: number; lastDay: string | null }[];
 };
 
 /**

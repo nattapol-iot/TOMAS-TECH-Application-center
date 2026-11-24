@@ -25,15 +25,16 @@ import {
 } from "../project-initial-plan.js";
 import type { ProjectHealth } from "../project-health.js";
 import { loadProjectScheduleSummaries } from "../project-overview.js";
-import { HOURS_PER_MAN_DAY } from "../manhour-budget.js";
-import { BOUGHT_CATEGORIES, averageDailyRate, loadEstimateFigures, loadPlanFigures, loadProjectCostFigures, projectCost } from "../project-cost.js";
-import { canViewProjectCost, FULL_COST_ACCESS, round2, type CostAccess } from "../project-cost-model.js";
+import { countedEffort, HOURS_PER_MAN_DAY } from "../manhour-budget.js";
+import { BOUGHT_CATEGORIES, averageDailyRate, loadEstimateFigures, loadPlanFigures, loadProjectCostFigures, projectCost, resolvedSpans } from "../project-cost.js";
+import { canViewProjectCost, disciplineOfDepartment, FULL_COST_ACCESS, round2, type CostAccess } from "../project-cost-model.js";
 import { NO_MODULE, REQUESTING_PR_STATUSES } from "../procurement-rules.js";
 import { deliverProjectNotices, queueProjectCreatedNotices, queueTaskAssignmentNotices, type NewPics, type ProjectNotice } from "../project-notices.js";
 import { canCreateWithoutEstimate, demandProjectScope, isProjectElevated, isProjectManagerRole } from "../project-scope.js";
-import { currentScheduleVersion, PROGRESS_REPORT_FIELDS_SQL, permissionFor, readHolidays, readTasks, resolveTasks, validateScheduleVersion } from "../schedule-service.js";
+import { currentScheduleVersion, PROGRESS_REPORT_FIELDS_SQL, permissionFor, readHolidays, readTasks, resolveTasks, taskRow, validateScheduleVersion } from "../schedule-service.js";
 import { scheduleLeaves } from "../project-health.js";
 import { disciplineHours, headingProgress } from "../project-page-overview.js";
+import { hoursCurve } from "../project-cost-curve.js";
 import { hasRole, rolesOf } from "../user-roles.js";
 import type { CurrentUser } from "../types.js";
 import type { CurrentUserService } from "../users.js";
@@ -108,6 +109,15 @@ export const PAGE_OVERVIEW_SQL = `SELECT status,COUNT(*) requests FROM dbo.mat_p
   SELECT TOP(8) s.id,s.field,s.comment,s.occurred_at,a.name actor,t.name task FROM dbo.schedule_updates s
     INNER JOIN dbo.users a ON a.id=s.actor_id LEFT JOIN dbo.schedule_tasks t ON t.id=s.task_id
     WHERE s.project_id=@project ORDER BY s.occurred_at DESC,s.id DESC;`;
+
+/** The Cost tab (task doc 6.1): confirmed hours by day, and by person with the days they confirmed. */
+export const COST_PEOPLE_SQL = `-- cost curve: the plan rows, the holidays, hours by day, hours by person.
+  SELECT t.* FROM dbo.schedule_tasks t WHERE t.project_id=@project AND t.deleted_at IS NULL ORDER BY t.parent_id,t.sort_order,t.id;
+  SELECT holiday_date FROM dbo.holidays;
+  SELECT work_date,SUM(hours) hours FROM dbo.work_hours WHERE project_id=@project GROUP BY work_date;
+  SELECT u.id,u.name,u.department,SUM(h.hours) hours,COUNT(DISTINCT h.work_date) days,MAX(h.work_date) last_day
+    FROM dbo.work_hours h INNER JOIN dbo.users u ON u.id=h.user_id WHERE h.project_id=@project
+    GROUP BY u.id,u.name,u.department ORDER BY SUM(h.hours) DESC;`;
 
 /** Per project: our own people's confirmed hours (dbo.work_hours) and the hours budget's sources (manhour-budget.ts). */
 export const PROJECT_HOURS_SQL = `SELECT p.id project_id,
@@ -635,6 +645,38 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
         lines: Number(item.lines),
       })),
       plan: (figures.plans.get(id)?.rows ?? []).map((item) => ({ ...item, plannedCost: rate === null ? null : round2(item.plannedManDays * rate) })),
+      // Task doc 6.1: the team's man-days week by week, and who worked the hours. Hours only; money stays above.
+      ...(await (async () => {
+        const sets = ((
+          await database.query<Record<string, unknown>>(COST_PEOPLE_SQL, (sqlRequest) => {
+            sqlRequest.input("project", sql.BigInt, id);
+          })
+        ).recordsets ?? []) as unknown as Record<string, unknown>[][];
+        const tasks = (sets[0] ?? []).map((item) => taskRow(item as Record<string, unknown> & { row_version: Buffer }));
+        const holidays = new Set((sets[1] ?? []).map((item) => dateOnly(item.holiday_date as Date | string)!));
+        const spans = tasks.length ? resolvedSpans(tasks, holidays) : null;
+        // The same rows and figures the labor's Planned adds up (manhour-budget.ts countedEffort), own staff only.
+        const rows = countedEffort(tasks)
+          .counted.filter((item) => !item.outsourced)
+          .map((item) => ({ planStart: spans?.get(item.id)?.planStart ?? null, planFinish: spans?.get(item.id)?.planFinish ?? null, plannedManDays: item.manDays }));
+        return {
+          curve: hoursCurve(
+            rows,
+            (sets[2] ?? []).map((item) => ({ date: dateOnly(item.work_date as Date | string) ?? "", hours: Number(item.hours ?? 0) })),
+            holidays,
+            HOURS_PER_MAN_DAY,
+            today,
+          ),
+          people: (sets[3] ?? []).map((item) => ({
+            id: Number(item.id),
+            name: String(item.name),
+            discipline: disciplineOfDepartment(item.department == null ? null : String(item.department)),
+            hours: round2(Number(item.hours ?? 0)),
+            days: Number(item.days ?? 0),
+            lastDay: dateOnly(item.last_day as Date | string),
+          })),
+        };
+      })()),
     };
   });
 
