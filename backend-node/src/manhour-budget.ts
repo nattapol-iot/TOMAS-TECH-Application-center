@@ -115,8 +115,8 @@ export type StoredBudget = {
 
 /** Outsource (07) cost lines priced by time count as labor hours; the unit names the team types. */
 export const OUTSOURCE_TIME_UNITS_SQL = `CASE
-    WHEN LOWER(LTRIM(RTRIM(c.unit))) IN (N'md',N'm.d.',N'man-day',N'man-days',N'manday',N'mandays',N'man day',N'man days',N'day',N'days',N'วัน',N'คน-วัน') THEN c.qty
-    WHEN LOWER(LTRIM(RTRIM(c.unit))) IN (N'h',N'hr',N'hrs',N'hour',N'hours',N'mh',N'man-hour',N'man-hours',N'ชม',N'ชม.',N'ชั่วโมง') THEN c.qty/8.0
+    WHEN LOWER(LTRIM(RTRIM(c.unit))) IN (N'md',N'm.d.',N'man-day',N'man-days',N'manday',N'mandays',N'man day',N'man days',N'md.',N'man-days.',N'day',N'days',N'วัน',N'คน-วัน',N'man-day.') THEN c.qty
+    WHEN LOWER(LTRIM(RTRIM(c.unit))) IN (N'h',N'hr',N'hr.',N'hrs',N'hrs.',N'hour',N'hours',N'mh',N'man-hr',N'man hour',N'man hours',N'man-hour',N'man-hours',N'ชม',N'ชม.',N'ชั่วโมง') THEN c.qty/${HOURS_PER_MAN_DAY}.0
     ELSE 0 END`;
 
 export async function readStoredBudget(transaction: TransactionType, projectId: number): Promise<StoredBudget> {
