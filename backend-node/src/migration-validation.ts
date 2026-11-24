@@ -114,6 +114,7 @@ export const REQUIRED_MIGRATIONS: readonly MigrationIdentity[] = [
   { version: 126, fileName: "126_plan_extra_predecessors.sql", name: "Plan extra predecessors" },
   { version: 127, fileName: "127_vendor_hours.sql", name: "Vendor hours" },
   { version: 128, fileName: "128_outsource_pr_link.sql", name: "Outsource PR link" },
+  { version: 129, fileName: "129_template_plan.sql", name: "Template plan" },
 ] as const;
 
 export const REQUIRED_SCHEMA_VERSION = REQUIRED_MIGRATIONS.at(-1)!.version;

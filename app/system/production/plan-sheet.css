@@ -206,6 +206,31 @@
 .plan-sheet .ps-budget-item.over .ps-budget-bar i:not(.act) {
   background: var(--sh-red);
 }
+/* Task doc 4.1-4.3: the Master schedule dialog. */
+.ps-tpl {
+  display: grid;
+  gap: 16px;
+}
+.ps-tpl h4 {
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+.ps-tpl-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.ps-tpl-row select,
+.ps-tpl-row input:not([type="date"]) {
+  min-width: 220px;
+  flex: 1;
+}
+.ps-tpl-note {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
 /* Task doc 3.8: the follow-up list, each item a way to its row. */
 .plan-sheet .ps-follow-wrap {
   position: relative;

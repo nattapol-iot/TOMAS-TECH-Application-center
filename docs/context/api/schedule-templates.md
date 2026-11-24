@@ -2,27 +2,28 @@
 
 [Module](../modules/planning.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `978b0311`; generated, do not edit. [backend-node/src/routes/schedule-templates.ts](<../../../backend-node/src/routes/schedule-templates.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `22dbecf9`; generated, do not edit. [backend-node/src/routes/schedule-templates.ts](<../../../backend-node/src/routes/schedule-templates.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/schedule-templates` | 78–95 |
-| POST | `/api/v1/schedule-templates` | 97–113 |
-| PUT | `/api/v1/schedule-templates/:id` | 115–133 |
-| DELETE | `/api/v1/schedule-templates/:id` | 135–147 |
+| GET | `/api/v1/schedule-templates` | 132–154 |
+| POST | `/api/v1/schedule-templates` | 156–177 |
+| PUT | `/api/v1/schedule-templates/:id` | 179–204 |
+| DELETE | `/api/v1/schedule-templates/:id` | 207–220 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `optionalDays` | [backend-node/src/routes/schedule-templates.ts](<../../../backend-node/src/routes/schedule-templates.ts>) | 23–29 |
-| `parseTemplate` | [backend-node/src/routes/schedule-templates.ts](<../../../backend-node/src/routes/schedule-templates.ts>) | 31–48 |
-| `writeRows` | [backend-node/src/routes/schedule-templates.ts](<../../../backend-node/src/routes/schedule-templates.ts>) | 50–60 |
-| `lockTemplate` | [backend-node/src/routes/schedule-templates.ts](<../../../backend-node/src/routes/schedule-templates.ts>) | 63–69 |
-| `demandUniqueName` | [backend-node/src/routes/schedule-templates.ts](<../../../backend-node/src/routes/schedule-templates.ts>) | 71–75 |
-| `registerScheduleTemplateRoutes` | [backend-node/src/routes/schedule-templates.ts](<../../../backend-node/src/routes/schedule-templates.ts>) | 77–148 |
+| `parsePlan` | [backend-node/src/routes/schedule-templates.ts](<../../../backend-node/src/routes/schedule-templates.ts>) | 37–66 |
+| `optionalDays` | [backend-node/src/routes/schedule-templates.ts](<../../../backend-node/src/routes/schedule-templates.ts>) | 70–76 |
+| `parseTemplate` | [backend-node/src/routes/schedule-templates.ts](<../../../backend-node/src/routes/schedule-templates.ts>) | 78–95 |
+| `writeRows` | [backend-node/src/routes/schedule-templates.ts](<../../../backend-node/src/routes/schedule-templates.ts>) | 97–112 |
+| `lockTemplate` | [backend-node/src/routes/schedule-templates.ts](<../../../backend-node/src/routes/schedule-templates.ts>) | 115–122 |
+| `demandUniqueName` | [backend-node/src/routes/schedule-templates.ts](<../../../backend-node/src/routes/schedule-templates.ts>) | 124–129 |
+| `registerScheduleTemplateRoutes` | [backend-node/src/routes/schedule-templates.ts](<../../../backend-node/src/routes/schedule-templates.ts>) | 131–221 |
 
 ## Direct local dependencies
 

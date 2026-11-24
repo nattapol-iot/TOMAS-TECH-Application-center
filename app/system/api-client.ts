@@ -1896,8 +1896,10 @@ export const deleteProject = (projectId: number, confirmation?: { force: true; c
 
 /** A reusable Master Plan. Days count from the project start; a row without them carries only its name. */
 export type ScheduleTemplateRow = { name: string; startOffsetDays: number | null; durationDays: number | null };
-export type ScheduleTemplate = { id: number; name: string; updatedAt: string; updatedBy: string | null; rowVersion: string; rows: ScheduleTemplateRow[] };
-export type ScheduleTemplateInput = { name: string; rows: ScheduleTemplateRow[] };
+/** A row of a template's whole plan (task doc 4.1, migration 129). */
+export type ScheduleTemplatePlanRow = { level: number; name: string; party: string; discipline: string | null; startWorkDay: number | null; workDays: number | null; planHours: number };
+export type ScheduleTemplate = { id: number; name: string; updatedAt: string; updatedBy: string | null; rowVersion: string; rows: ScheduleTemplateRow[]; plan?: ScheduleTemplatePlanRow[] | null };
+export type ScheduleTemplateInput = { name: string; rows: ScheduleTemplateRow[]; plan?: ScheduleTemplatePlanRow[] };
 export const listScheduleTemplates = () => apiRequest<ScheduleTemplate[]>("/api/v1/schedule-templates");
 export const createScheduleTemplate = (input: ScheduleTemplateInput) => apiRequest<{ id: number; rowVersion: string }>("/api/v1/schedule-templates", { method: "POST", body: JSON.stringify(input) });
 export const updateScheduleTemplate = (id: number, input: ScheduleTemplateInput & { rowVersion: string }) =>
