@@ -430,7 +430,12 @@ export function PlanSheet({
     for (const row of rows) {
       if (headingsOnly && row.task.depth > 0) continue;
       // The budget strip's discipline filter keeps headings and parent rows, so the rows shown keep their place.
-      if (disciplineFilter && !row.parent && (row.fields.discipline ?? "None") !== disciplineFilter) continue;
+      if (
+        disciplineFilter &&
+        !row.parent &&
+        (disciplineFilter === "Outsourced" ? row.task.laborSource !== "Outsourced" : row.task.laborSource === "Outsourced" || (row.fields.discipline ?? "None") !== disciplineFilter)
+      )
+        continue;
       if (hideBelow !== null) {
         if (row.task.depth > hideBelow) continue;
         hideBelow = null;
@@ -462,7 +467,16 @@ export function PlanSheet({
     const entry = (key: string) => byDiscipline.get(key) ?? byDiscipline.set(key, { budget: 0, plan: 0, actual: 0 }).get(key)!;
     for (const line of schedule.manHours?.disciplines ?? []) entry(line.discipline).budget += line.manDays * perDay;
     // As manhour-budget.ts counts effort: a row's own figure unless its rows carry one; outsourced people stay apart.
+    // Outsourced work (task doc 3.7): its own entry, against the Estimate's supplier labor; never the team's budget.
+    const outBudget = (schedule.manHours?.outsourceBudgetManDays ?? 0) * perDay;
+    if (outBudget) entry("Outsourced").budget += outBudget;
     for (const row of model.rows) {
+      if (row.task.laborSource === "Outsourced" && !row.planFromRows && row.task.kind !== "phase" && (row.planHours || row.actualHours)) {
+        const item = entry("Outsourced");
+        item.plan += row.planHours;
+        item.actual += row.rollup ? Number(row.task.actualHours ?? 0) : row.actualHours;
+        continue;
+      }
       if (row.planFromRows || row.task.kind === "phase" || row.task.laborSource === "Outsourced" || (!row.planHours && !row.actualHours)) continue;
       // A row with rows under it adds only its own hours here; its rows add theirs.
       const ownActual = row.rollup ? Number(row.task.actualHours ?? 0) : row.actualHours;
@@ -470,10 +484,11 @@ export function PlanSheet({
       item.plan += row.planHours;
       item.actual += ownActual;
     }
-    const order = [...DISCIPLINES, "Other", "None"] as string[];
+    const order = [...DISCIPLINES, "Other", "None", "Outsourced"] as string[];
     return [...byDiscipline.entries()].map(([discipline, value]) => ({ discipline, ...value })).sort((left, right) => order.indexOf(left.discipline) - order.indexOf(right.discipline));
   }, [model.rows, schedule.manHours]);
-  const disciplineLabel = (key: string) => (key === "None" ? t("Sheet.budgetNone") : key === "Other" ? t("Plan.mhDiscipline.Other") : t(`Discipline.${key}`));
+  const disciplineLabel = (key: string) =>
+    key === "None" ? t("Sheet.budgetNone") : key === "Other" ? t("Plan.mhDiscipline.Other") : key === "Outsourced" ? t("Sheet.vendorGroup") : t(`Discipline.${key}`);
   const vendorChoices = useMemo(() => {
     const used = model.rows.flatMap((row) => (row.task.laborSource === "Outsourced" && row.task.laborSupplier ? [row.task.laborSupplier] : []));
     return [...new Set([...used.sort((a, b) => a.localeCompare(b)), ...(erpVendors ?? [])])];

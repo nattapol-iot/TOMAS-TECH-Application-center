@@ -21,6 +21,8 @@ export type PlanManHoursData = {
   unplannedRows: number;
   hoursPerManDay: number;
   canSetBudget: boolean;
+  /** The Estimate's outsourced labor in man-days (task doc 3.7); an older API omits it. */
+  outsourceBudgetManDays?: number;
   /** Man-days people confirmed for the project in My Work (migration 121), and how many people confirmed them. */
   actualManDays?: number;
   actualPeople?: number;
@@ -32,27 +34,97 @@ export function PlanManHours({ projectId, data, onChanged }: { projectId: number
   const t = useT();
   const [editing, setEditing] = useState(false);
   const hours = (manDays: number) => figure(manDays * data.hoursPerManDay, 0);
-  const amount = (manDays: number) => <><strong>{hours(manDays)}</strong> {t("Plan.mhHours")} <em>({figure(manDays)} {t("MD")})</em></>;
-  const budget = data.budgetManDays, left = remainingManDays(data), over = left !== null && left < 0;
+  const amount = (manDays: number) => (
+    <>
+      <strong>{hours(manDays)}</strong> {t("Plan.mhHours")}{" "}
+      <em>
+        ({figure(manDays)} {t("MD")})
+      </em>
+    </>
+  );
+  const budget = data.budgetManDays,
+    left = remainingManDays(data),
+    over = left !== null && left < 0;
   const share = plannedShare(data);
-  return <section className="plan-manhours" data-guide="plan.manhours" aria-label={t("Plan.mhTitle")}>
-    <span className="plan-manhours-title"><Icon name="clock" />{t("Plan.mhTitle")}</span>
-    {budget === null ? <span className="plan-manhours-none">{t("Plan.mhNoBudget")}</span> : <>
-      <span className={`plan-manhours-bar${over ? " over" : ""}`} role="img" aria-label={`${t("Plan.mhPlanned")} ${Math.round(budget > 0 ? (data.plannedManDays / budget) * 100 : 0)}%`}><i style={{ width: `${share}%` }} /></span>
-      <span><small>{t("Plan.mhEstimated")}</small>{amount(budget)}</span>
-    </>}
-    <span><small>{t("Plan.mhPlanned")}</small>{amount(data.plannedManDays)}</span>
-    {data.outsourcedManDays ? <span className="plan-manhours-outsourced"><small>{t("Plan.mhOutsourced")}</small>{amount(data.outsourcedManDays)}</span> : null}
-    {data.actualManDays ? <span className="plan-manhours-actual" title={t("Plan.mhActualHint")}><small>{t("Plan.mhActual")}</small>{amount(data.actualManDays)} <em>{figure(data.actualPeople ?? 0, 0)} {t("Plan.mhActualPeople")}</em></span> : null}
-    {left !== null ? <span className={over ? "over" : undefined}><small>{t(over ? "Plan.mhOver" : "Plan.mhLeft")}</small>{amount(Math.abs(left))}</span> : null}
-    {data.unplannedRows > 0 ? <span className="plan-manhours-warn" title={t("Plan.mhUnplannedHint")}><Icon name="alertTriangle" />{figure(data.unplannedRows, 0)} {t("Plan.mhUnplanned")}</span> : null}
-    {data.disciplines.length > 1 ? <span className="plan-manhours-split">{data.disciplines.map((row) => <span key={row.discipline}>{t(`Plan.mhDiscipline.${row.discipline}`)} <strong>{figure(row.manDays)}</strong></span>)}<em>{t("MD")}</em></span> : null}
-    <span className="plan-manhours-source">
-      {data.source === "estimate" ? <em>{t("Plan.mhFromEstimate")}{data.estimateNo ? ` ${data.estimateNo}` : ""}</em> : data.source === "manual" ? <em>{t("Plan.mhManual")}</em> : null}
-      {data.canSetBudget ? <button className="btn default sm" type="button" data-guide="plan.manhoursSet" onClick={() => setEditing(true)}><Icon name="edit" />{t(budget === null ? "Plan.mhSet" : "Plan.mhChange")}</button> : null}
-    </span>
-    {editing ? <ManHourBudgetModal projectId={projectId} data={data} onClose={() => setEditing(false)} onSaved={onChanged} /> : null}
-  </section>;
+  return (
+    <section className="plan-manhours" data-guide="plan.manhours" aria-label={t("Plan.mhTitle")}>
+      <span className="plan-manhours-title">
+        <Icon name="clock" />
+        {t("Plan.mhTitle")}
+      </span>
+      {budget === null ? (
+        <span className="plan-manhours-none">{t("Plan.mhNoBudget")}</span>
+      ) : (
+        <>
+          <span className={`plan-manhours-bar${over ? " over" : ""}`} role="img" aria-label={`${t("Plan.mhPlanned")} ${Math.round(budget > 0 ? (data.plannedManDays / budget) * 100 : 0)}%`}>
+            <i style={{ width: `${share}%` }} />
+          </span>
+          <span>
+            <small>{t("Plan.mhEstimated")}</small>
+            {amount(budget)}
+          </span>
+        </>
+      )}
+      <span>
+        <small>{t("Plan.mhPlanned")}</small>
+        {amount(data.plannedManDays)}
+      </span>
+      {data.outsourcedManDays ? (
+        <span className="plan-manhours-outsourced">
+          <small>{t("Plan.mhOutsourced")}</small>
+          {amount(data.outsourcedManDays)}
+        </span>
+      ) : null}
+      {data.actualManDays ? (
+        <span className="plan-manhours-actual" title={t("Plan.mhActualHint")}>
+          <small>{t("Plan.mhActual")}</small>
+          {amount(data.actualManDays)}{" "}
+          <em>
+            {figure(data.actualPeople ?? 0, 0)} {t("Plan.mhActualPeople")}
+          </em>
+        </span>
+      ) : null}
+      {left !== null ? (
+        <span className={over ? "over" : undefined}>
+          <small>{t(over ? "Plan.mhOver" : "Plan.mhLeft")}</small>
+          {amount(Math.abs(left))}
+        </span>
+      ) : null}
+      {data.unplannedRows > 0 ? (
+        <span className="plan-manhours-warn" title={t("Plan.mhUnplannedHint")}>
+          <Icon name="alertTriangle" />
+          {figure(data.unplannedRows, 0)} {t("Plan.mhUnplanned")}
+        </span>
+      ) : null}
+      {data.disciplines.length > 1 ? (
+        <span className="plan-manhours-split">
+          {data.disciplines.map((row) => (
+            <span key={row.discipline}>
+              {t(`Plan.mhDiscipline.${row.discipline}`)} <strong>{figure(row.manDays)}</strong>
+            </span>
+          ))}
+          <em>{t("MD")}</em>
+        </span>
+      ) : null}
+      <span className="plan-manhours-source">
+        {data.source === "estimate" ? (
+          <em>
+            {t("Plan.mhFromEstimate")}
+            {data.estimateNo ? ` ${data.estimateNo}` : ""}
+          </em>
+        ) : data.source === "manual" ? (
+          <em>{t("Plan.mhManual")}</em>
+        ) : null}
+        {data.canSetBudget ? (
+          <button className="btn default sm" type="button" data-guide="plan.manhoursSet" onClick={() => setEditing(true)}>
+            <Icon name="edit" />
+            {t(budget === null ? "Plan.mhSet" : "Plan.mhChange")}
+          </button>
+        ) : null}
+      </span>
+      {editing ? <ManHourBudgetModal projectId={projectId} data={data} onClose={() => setEditing(false)} onSaved={onChanged} /> : null}
+    </section>
+  );
 }
 
 function ManHourBudgetModal({ projectId, data, onClose, onSaved }: { projectId: number; data: PlanManHoursData; onClose: () => void; onSaved: () => Promise<void> | void }) {
@@ -63,7 +135,8 @@ function ManHourBudgetModal({ projectId, data, onClose, onSaved }: { projectId: 
   const typed = value.trim() === "" ? null : Number(value);
   const valid = typed === null || (Number.isFinite(typed) && typed > 0 && typed <= 100000);
   const submit = async () => {
-    setBusy(true); setError("");
+    setBusy(true);
+    setError("");
     try {
       await apiRequest(`/api/v1/projects/${projectId}/manhour-budget`, { method: "PUT", body: JSON.stringify({ manDays: typed }) });
       await onSaved();
@@ -73,14 +146,41 @@ function ManHourBudgetModal({ projectId, data, onClose, onSaved }: { projectId: 
       setBusy(false);
     }
   };
-  return <Modal title="Plan.mhSetTitle" subtitle="Plan.mhSetHint" size="sm" onClose={onClose} footer={<>
-    <button className="btn ghost" type="button" disabled={busy} onClick={onClose}>{t("Cancel")}</button>
-    <button className="btn primary" type="button" data-guide="plan.manhoursSave" disabled={busy || !valid} onClick={() => { void submit(); }}>{t(busy ? "Saving…" : "Save")}</button>
-  </>}>
-    {error ? <div className="info-strip red" role="alert">{t(error)}</div> : null}
-    <label className="field"><span>{t("Plan.mhBudgetField")}</span>
-      <input type="number" min="0.25" max="100000" step="0.25" value={value} disabled={busy} onChange={(event) => setValue(event.target.value)} />
-    </label>
-    <p className="muted">{typed !== null && valid ? `${figure(typed * data.hoursPerManDay, 0)} ${t("Plan.mhHours")}` : t("Plan.mhClearHint")}</p>
-  </Modal>;
+  return (
+    <Modal
+      title="Plan.mhSetTitle"
+      subtitle="Plan.mhSetHint"
+      size="sm"
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn ghost" type="button" disabled={busy} onClick={onClose}>
+            {t("Cancel")}
+          </button>
+          <button
+            className="btn primary"
+            type="button"
+            data-guide="plan.manhoursSave"
+            disabled={busy || !valid}
+            onClick={() => {
+              void submit();
+            }}
+          >
+            {t(busy ? "Saving…" : "Save")}
+          </button>
+        </>
+      }
+    >
+      {error ? (
+        <div className="info-strip red" role="alert">
+          {t(error)}
+        </div>
+      ) : null}
+      <label className="field">
+        <span>{t("Plan.mhBudgetField")}</span>
+        <input type="number" min="0.25" max="100000" step="0.25" value={value} disabled={busy} onChange={(event) => setValue(event.target.value)} />
+      </label>
+      <p className="muted">{typed !== null && valid ? `${figure(typed * data.hoursPerManDay, 0)} ${t("Plan.mhHours")}` : t("Plan.mhClearHint")}</p>
+    </Modal>
+  );
 }
