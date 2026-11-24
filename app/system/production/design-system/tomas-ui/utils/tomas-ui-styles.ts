@@ -5,8 +5,8 @@ import TOMAS_UI_CSS from "../tomas-ui.css?inline";
 // instead and the inline CSS is pointed at them; the three packages never share a file name.
 const FONT_FILES = import.meta.glob<string>(
   [
-    "/node_modules/@fontsource-variable/noto-sans/files/*.woff2",
-    "/node_modules/@fontsource-variable/noto-sans-jp/files/*.woff2",
+    "/node_modules/@fontsource-variable/noto-sans/files/*-wght-normal.woff2",
+    "/node_modules/@fontsource-variable/noto-sans-jp/files/*-wght-normal.woff2",
     "/node_modules/@fontsource/sarabun/files/*-{400,500,600,700}-normal.woff2",
   ],
   { query: "?url", import: "default", eager: true, exhaustive: true },
