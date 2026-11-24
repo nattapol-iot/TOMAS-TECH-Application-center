@@ -4848,7 +4848,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
   const moveTask = async (task: ScheduleTask, start: string, finish: string) => {
     if (!activeSchedule) return;
     const predecessorFinish = task.predecessorId === null ? null : (taskById.get(task.predecessorId)?.planFinish ?? null);
-    const plan = draggedPlan(task, start, finish, predecessorFinish);
+    const plan = draggedPlan(task, start, finish, predecessorFinish, new Set(activeSchedule.holidays ?? []));
     const label = `${task.wbs} ${task.name}`;
     setMovePending({ taskId: task.id, start, finish });
     setSaving(true);
@@ -5590,7 +5590,7 @@ function PlanTaskDrawer({
             <dt>{uiText("Schedule.predecessor")}</dt>
             <dd>
               {predecessor.wbs} · {predecessor.name}
-              {task.lagDays ? ` · ${task.lagDays > 0 ? "+" : ""}${task.lagDays} ${uiText("days")}` : ""}
+              {task.lagDays ? ` · ${task.lagDays > 0 ? "+" : ""}${task.lagDays} ${uiText("Schedule.workDaysShort")}` : ""}
             </dd>
           </div>
         ) : null}

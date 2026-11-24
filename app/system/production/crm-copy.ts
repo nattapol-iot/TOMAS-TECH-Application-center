@@ -820,8 +820,14 @@ export const CRM_COPY: Record<string, { en: string; th: string; jp: string }> = 
     ["Schedule.predecessor", "Starts after row", "ต่อจากงาน", "先行タスク"],
     ["Schedule.pickPredecessor", "Choose the row it follows…", "เลือกงานก่อนหน้า…", "先行タスクを選択…"],
     ["Schedule.finishesOn", "finishes {date}", "เสร็จ {date}", "{date}終了"],
-    ["Schedule.lagDays", "Gap after it (days)", "เว้นระยะ (วัน)", "間隔（日）"],
-    ["Schedule.lagHint", "Calendar days after it finishes; negative to overlap.", "นับวันปฏิทินหลังงานก่อนหน้าเสร็จ · ใส่ค่าติดลบถ้าเริ่มก่อนงานก่อนหน้าเสร็จ", "完了後の暦日数。重ねる場合は負の値。"],
+    ["Schedule.lagDays", "Gap after it (working days)", "เว้นระยะ (วันทำงาน)", "間隔（稼働日）"],
+    ["Schedule.workDaysShort", "working days", "วันทำงาน", "稼働日"],
+    [
+      "Schedule.lagHint",
+      "Working days after it finishes (weekends and company holidays skipped); negative to overlap.",
+      "นับวันทำงานหลังงานก่อนหน้าเสร็จ (ข้ามเสาร์ อาทิตย์ และวันหยุดบริษัท) · ใส่ค่าติดลบถ้าเริ่มก่อนงานก่อนหน้าเสร็จ",
+      "完了後の稼働日数（土日と会社休日を除く）。重ねる場合は負の値。",
+    ],
     [
       "Schedule.pickPredecessorHint",
       "This row's dates follow the row it starts after: when that row moves, this one moves with it.",

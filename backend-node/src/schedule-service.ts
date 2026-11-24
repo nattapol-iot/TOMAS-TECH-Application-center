@@ -22,6 +22,8 @@ export type TaskRow = {
   isMilestone: boolean;
   origin: string;
   createdBy: number;
+  /** lagDays counts working days; false for a gap saved before migration 125 (calendar days). */
+  lagWorkDays?: boolean;
   visibility: string;
   planStart: string | null;
   planDays: number;
@@ -202,6 +204,7 @@ export function taskRow(row: Record<string, unknown> & { row_version: Buffer }):
     startMode: String(row.start_mode),
     predecessorId: row.predecessor_id === null ? null : Number(row.predecessor_id),
     lagDays: Number(row.lag_days),
+    lagWorkDays: row.lag_work_days === undefined || row.lag_work_days === null ? true : Boolean(row.lag_work_days),
     picExternal: String(row.pic_external),
     planManDays: Number(row.plan_man_days),
     baselineStart: dateOnly(row.baseline_start as Date | string | null),
@@ -227,7 +230,7 @@ export function taskRow(row: Record<string, unknown> & { row_version: Buffer }):
 }
 
 const TASK_COLUMNS = `id,project_id,parent_id,sort_order,kind,name,is_milestone,origin,created_by,visibility,
- plan_start,plan_days,start_mode,predecessor_id,lag_days,pic_external,plan_man_days,baseline_start,baseline_end,
+ plan_start,plan_days,start_mode,predecessor_id,lag_days,lag_work_days,pic_external,plan_man_days,baseline_start,baseline_end,
  baseline_days,baseline_rev,actual_start,actual_end,forecast_end,percent_done,status,blocked_reason,note,actual_man_days,
  updated_by,updated_at,row_version,labor_source,labor_supplier,people_by_day,discipline`;
 
@@ -312,9 +315,16 @@ export async function demandMemberPlanRow(
     throw new ApiError(403, "schedule_member_required", "Only a project member with schedule progress permission may change their own rows.");
   if (task) {
     if (task.kind !== "task" || task.createdBy !== actor.id) throw new ApiError(403, "schedule_row_owner_required", "Only the creator may edit or delete this row.");
+    // A gap saved in calendar days reaches the screen as working days (migration 125); it is compared in that unit.
+    const lagNow =
+      input && task.lagWorkDays === false && task.lagDays !== 0
+        ? (resolveTasks(await readTasks(transaction, projectId), await readHolidays(transaction)).byId.get(task.id)?.lagWorkDays ?? task.lagDays)
+        : task.lagDays;
     if (
       input &&
-      (["parentId", "sortOrder", "kind", "isMilestone", "visibility", "startMode", "predecessorId", "lagDays", "picExternal", "planManDays"] as const).some((key) => input[key] !== task[key])
+      (["parentId", "sortOrder", "kind", "isMilestone", "visibility", "startMode", "predecessorId", "lagDays", "picExternal", "planManDays"] as const).some((key) =>
+        key === "lagDays" ? input.lagDays !== lagNow : input[key] !== task[key],
+      )
     )
       throw new ApiError(403, "schedule_own_fields_only", "Members may change only the name, dates, days and project PICs of their own rows.");
   } else {
@@ -711,6 +721,7 @@ export function scheduleCalculation(tasks: TaskRow[]) {
     startMode: task.startMode,
     predecessorId: task.predecessorId,
     lagDays: task.lagDays,
+    lagWorkDays: task.lagWorkDays !== false,
     actualStart: task.actualStart,
     actualFinish: task.actualFinish,
     forecastFinish: task.forecastFinish,
@@ -776,7 +787,8 @@ export function taskResponse(resolved: ResolvedScheduleTask, tasks: Map<number, 
     workDays: resolved.workDays,
     startMode: task.startMode,
     predecessorId: task.predecessorId,
-    lagDays: task.lagDays,
+    // Always working days (migration 125): a gap saved in calendar days is read back as the working days it spans.
+    lagDays: resolved.lagWorkDays ?? task.lagDays,
     pics: pics.get(task.id) ?? [],
     picExternal: task.picExternal,
     planManDays: task.planManDays,

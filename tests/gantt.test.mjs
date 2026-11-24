@@ -1,6 +1,25 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { GANTT_ZOOMS, draggedPlan, ganttDoneWidth, ganttDragDays, ganttDropChoices, ganttDropParent, ganttFitWindow, ganttLanes, ganttLinkPath, ganttPoint, ganttShift, ganttSlip, ganttSpan, ganttWindow, linkedStart, nextWorkDay, planDatesLoop, shiftGanttAnchor } from "../lib/gantt.ts";
+import {
+  GANTT_ZOOMS,
+  draggedPlan,
+  ganttDoneWidth,
+  ganttDragDays,
+  ganttDropChoices,
+  ganttDropParent,
+  ganttFitWindow,
+  ganttLanes,
+  ganttLinkPath,
+  ganttPoint,
+  ganttShift,
+  ganttSlip,
+  ganttSpan,
+  ganttWindow,
+  linkedStart,
+  nextWorkDay,
+  planDatesLoop,
+  shiftGanttAnchor,
+} from "../lib/gantt.ts";
 
 const close = (actual, expected, message) => assert.ok(Math.abs(actual - expected) < 1e-9, `${message ?? ""} ${actual} ≠ ${expected}`);
 
@@ -27,13 +46,17 @@ test("zoom presets: week columns for month and quarter, month columns for half-y
 test("a span is placed in percent of the window and clipped at its edges", () => {
   const window = ganttWindow("month", "2026-10-06"); // 2026-09-28 .. 2026-11-08, 42 days
   const inside = ganttSpan("2026-09-28", "2026-10-04", window);
-  close(inside.left, 0); close(inside.width, (7 / 42) * 100);
-  assert.equal(inside.clippedStart, false); assert.equal(inside.clippedEnd, false);
+  close(inside.left, 0);
+  close(inside.width, (7 / 42) * 100);
+  assert.equal(inside.clippedStart, false);
+  assert.equal(inside.clippedEnd, false);
   const clipped = ganttSpan("2026-09-01", "2026-09-30", window);
-  close(clipped.left, 0); close(clipped.width, (3 / 42) * 100);
+  close(clipped.left, 0);
+  close(clipped.width, (3 / 42) * 100);
   assert.equal(clipped.clippedStart, true);
   const late = ganttSpan("2026-11-01", "2026-12-31", window);
-  assert.equal(late.clippedEnd, true); close(late.left + late.width, 100);
+  assert.equal(late.clippedEnd, true);
+  close(late.left + late.width, 100);
   assert.equal(ganttSpan("2026-12-01", "2026-12-05", window), null, "outside");
   assert.equal(ganttSpan(null, "2026-10-01", window), null, "undated");
   assert.equal(ganttSpan("2026-10-05", "2026-10-01", window), null, "reversed");
@@ -68,7 +91,8 @@ test("points mark one day, and nothing outside the window", () => {
 test("the slip tail runs from the day after the plan to a later forecast only", () => {
   const window = ganttWindow("month", "2026-10-06");
   const tail = ganttSlip("2026-10-09", "2026-10-14", window);
-  close(tail.left, (12 / 42) * 100); close(tail.width, (5 / 42) * 100);
+  close(tail.left, (12 / 42) * 100);
+  close(tail.width, (5 / 42) * 100);
   assert.equal(ganttSlip("2026-10-09", "2026-10-09", window), null);
   assert.equal(ganttSlip("2026-10-09", "2026-10-01", window), null, "an earlier forecast is not a slip");
   assert.equal(ganttSlip(null, "2026-10-14", window), null);
@@ -125,7 +149,7 @@ test("a linked row starts on the first working day after its predecessor and lag
   // Friday 30 Oct: the next day is Saturday, so Monday; Monday 2 Nov is a holiday, so Tuesday.
   assert.equal(nextWorkDay("2026-10-31", holidays), "2026-11-03");
   assert.equal(linkedStart("2026-10-30", 0, holidays), "2026-11-03");
-  assert.equal(linkedStart("2026-10-27", 2, holidays), "2026-10-30", "two calendar days of lag");
+  assert.equal(linkedStart("2026-10-27", 2, holidays), "2026-10-30", "two working days of lag: Wednesday 28, then Thursday and Friday");
   assert.equal(linkedStart("2026-10-30", -2, holidays), "2026-10-29", "a negative lag overlaps");
   assert.equal(linkedStart(null, 0, holidays), null);
 });
@@ -135,10 +159,11 @@ test("a dragged bar asks for calendar plan days; a linked row turns a move into 
   assert.deepEqual(draggedPlan(manual, "2026-11-04", "2026-11-10", null), { planStart: "2026-11-04", planDays: 7, lagDays: 0 });
   assert.deepEqual(draggedPlan({ ...manual, isMilestone: true }, "2026-11-04", "2026-11-04", null), { planStart: "2026-11-04", planDays: 1, lagDays: 0 });
   const linked = { startMode: "linked", isMilestone: false, storedPlanStart: null, planStart: "2026-11-02", lagDays: 0 };
-  // Predecessor finishes Friday 30 Oct; moved to Wednesday 4 Nov = four calendar days after Saturday.
-  assert.deepEqual(draggedPlan(linked, "2026-11-04", "2026-11-06", "2026-10-30"), { planStart: null, planDays: 3, lagDays: 4 });
+  // Predecessor finishes Friday 30 Oct; moved to Wednesday 4 Nov = two working days after Monday 2 (migration 125).
+  assert.deepEqual(draggedPlan(linked, "2026-11-04", "2026-11-06", "2026-10-30"), { planStart: null, planDays: 3, lagDays: 2 });
+  assert.deepEqual(draggedPlan(linked, "2026-11-04", "2026-11-06", "2026-10-30", new Set(["2026-11-03"])), { planStart: null, planDays: 3, lagDays: 1 }, "a holiday is not counted");
   assert.deepEqual(draggedPlan(linked, "2026-11-02", "2026-11-09", "2026-10-30"), { planStart: null, planDays: 8, lagDays: 0 }, "stretched only");
-  assert.equal(linkedStart("2026-10-30", 4, new Set()), "2026-11-04", "the API puts it back where it was dropped");
+  assert.equal(linkedStart("2026-10-30", 2, new Set()), "2026-11-04", "the API puts it back where it was dropped");
 });
 
 test("a predecessor that would make the dates go round in a circle is found", () => {
@@ -160,20 +185,46 @@ test("a link runs out of the predecessor's end into the successor's start, stepp
 
 test("a dragged row lands between two rows at the level its sideways drag asks for, within what the rows around the gap allow", () => {
   // H1 > T1 > F1, H1 > T2, H2 with nothing under it yet, H3 > T3.
-  const rows = [["H1", 0], ["T1", 1], ["F1", 2], ["T2", 1], ["H2", 0], ["H3", 0], ["T3", 1]].map(([key, depth]) => ({ key, depth }));
+  const rows = [
+    ["H1", 0],
+    ["T1", 1],
+    ["F1", 2],
+    ["T2", 1],
+    ["H2", 0],
+    ["H3", 0],
+    ["T3", 1],
+  ].map(([key, depth]) => ({ key, depth }));
   const at = (key) => rows.findIndex((row) => row.key === key);
   const landing = (choices) => choices.map((drop) => [drop.depth, ganttDropParent(rows, drop), drop.below]);
   // T2 held where it is: straight across it stays under H1; dragged one level right it goes under T1, after F1.
-  assert.deepEqual(landing(ganttDropChoices(rows, at("T2"), at("T2"), 1)), [[1, "H1", "H2"], [0, null, "H2"], [2, "T1", "H2"], [3, "F1", "H2"]]);
+  assert.deepEqual(landing(ganttDropChoices(rows, at("T2"), at("T2"), 1)), [
+    [1, "H1", "H2"],
+    [0, null, "H2"],
+    [2, "T1", "H2"],
+    [3, "F1", "H2"],
+  ]);
   assert.equal(ganttDropChoices(rows, at("T2"), at("T2"), 2)[0].depth, 2);
   // Dragged down just under H2, a heading with nothing under it yet: it goes into H2, or to the top if dragged left.
-  assert.deepEqual(landing(ganttDropChoices(rows, at("T2"), 4, 1)), [[1, "H2", "H3"], [0, null, "H3"]]);
+  assert.deepEqual(landing(ganttDropChoices(rows, at("T2"), 4, 1)), [
+    [1, "H2", "H3"],
+    [0, null, "H3"],
+  ]);
   // F1 dragged left where it is comes out to the level of T1, just before T2.
-  assert.deepEqual(landing(ganttDropChoices(rows, at("F1"), at("F1"), 1)), [[1, "H1", "T2"], [2, "T1", "T2"]]);
+  assert.deepEqual(landing(ganttDropChoices(rows, at("F1"), at("F1"), 1)), [
+    [1, "H1", "T2"],
+    [2, "T1", "T2"],
+  ]);
   // Between a row and its first child the only place is its first child.
   assert.deepEqual(landing(ganttDropChoices(rows, at("T3"), 1, 0)), [[1, "H1", "T1"]]);
   // A heading takes the rows under it along; past the last row it may go at any level down to one under T3.
-  assert.deepEqual(ganttDropChoices(rows, at("H1"), 3, 0).map((drop) => [drop.above, drop.below, drop.depth]), [["T3", null, 0], ["T3", null, 1], ["T3", null, 2]]);
+  assert.deepEqual(
+    ganttDropChoices(rows, at("H1"), 3, 0).map((drop) => [drop.above, drop.below, drop.depth]),
+    [
+      ["T3", null, 0],
+      ["T3", null, 1],
+      ["T3", null, 2],
+    ],
+  );
   assert.deepEqual(ganttDropChoices(rows, at("H1"), 4, 0), [], "past the end");
   assert.deepEqual(ganttDropChoices(rows, 99, 0, 0), [], "no such row");
 });

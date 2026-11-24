@@ -10,7 +10,7 @@
    keeps storing calendar days, so existing plans do not move. */
 
 import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ApiClientError, apiRequest, uploadProjectDocument } from "../api-client";
+import { ApiClientError, apiRequest, listProjectDocuments, uploadProjectDocument } from "../api-client";
 import { confirmDialog } from "../dialogs";
 import { LanguageContext, useT } from "../i18n";
 import { Modal } from "../ui";
@@ -21,20 +21,7 @@ import { readWorkbookSheets } from "../../../lib/import-spreadsheet";
 import { cellsToGrid, importChanges, readPlanTable, type ImportedPlan } from "../../../lib/plan-excel-import";
 import { linkedStart, nextWorkDay } from "../../../lib/gantt";
 import { percentChangePatch, statusChangePatch } from "../../../lib/my-work";
-import {
-  calendarLagToWorking,
-  linkText,
-  mondayOn,
-  parseDays,
-  parseLink,
-  parsePercent,
-  parseSheetDate,
-  sheetOrder,
-  shiftDay,
-  spanDays,
-  workingLagToCalendar,
-  type SheetLinkRow,
-} from "../../../lib/plan-sheet";
+import { linkText, mondayOn, parseDays, parseLink, parsePercent, parseSheetDate, sheetOrder, shiftDay, spanDays, type SheetLinkRow } from "../../../lib/plan-sheet";
 import type { ProjectSchedule, ScheduleTask } from "./PlanningPricingScreens";
 import "./plan-sheet.css";
 
@@ -355,9 +342,9 @@ export function PlanSheet({
         finish = start ? shiftDay(start, Math.max(1, fields.planDays) - 1) : null;
         workDays = start && finish ? countWorkDays(start, finish, holidays) : null;
       }
-      const predecessorFinish = fields.predecessorId === null ? null : (byTask.get(fields.predecessorId)?.planFinish ?? null),
-        heading = task.kind === "phase";
-      const gap = predecessorFinish ? calendarLagToWorking(predecessorFinish, fields.lagDays, holidays) : fields.lagDays;
+      const heading = task.kind === "phase";
+      // The API sends the gap in working days (migration 125).
+      const gap = fields.lagDays;
       return {
         task,
         fields,
@@ -703,8 +690,7 @@ export function PlanSheet({
         const link = parseLink(text, self, model.linkRows);
         if ("error" in link) return link;
         if (link.predecessorId === null) return { patch: { startMode: "manual", predecessorId: null, lagDays: 0, planStart: startOf(row, fields) ?? today } };
-        const before = model.byId.get(link.predecessorId)?.finish ?? null;
-        return { patch: { startMode: "linked", predecessorId: link.predecessorId, lagDays: before ? workingLagToCalendar(before, link.lagDays, holidays) : link.lagDays } };
+        return { patch: { startMode: "linked", predecessorId: link.predecessorId, lagDays: link.lagDays } };
       }
       case "member": {
         const patch = memberFor(text, task.pics);
@@ -1885,8 +1871,18 @@ export function PlanSheet({
       say(t("Sheet.exportNoTemplate"), true);
       return;
     }
+    // Each file sent is numbered: one more than the customer schedules already kept in folder 08 (owner 2026-11-24).
+    // When the folder cannot be read, the file goes out without a number rather than not at all.
+    // The highest number already used counts too, so a withdrawn copy's number is not sent again.
+    const kept = await listProjectDocuments(schedule.projectId).then(
+      (documents) => {
+        const copies = documents.filter((document) => document.folderCode === "08" && document.documentType === "Customer schedule");
+        return Math.max(copies.length, ...copies.map((document) => Number(document.fileName.match(/ v(\d+)\.xlsx$/i)?.[1] ?? 0)));
+      },
+      () => null,
+    );
     setExportBusy(false);
-    const name = customerScheduleFileName(schedule.projectNo);
+    const name = customerScheduleFileName(schedule.projectNo, kept === null ? null : kept + 1);
     downloadErpEstimateWorkbookBytes(bytes, name);
     await keepCopy(bytes, name);
   };

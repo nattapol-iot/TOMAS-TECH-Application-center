@@ -4,7 +4,7 @@
 
 ลูกค้า supplier (ดึงจาก Pegasus ERP) พนักงาน role audit และ settings
 
-Evidence: snapshot `b712e004`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
+Evidence: snapshot `fbce5309`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
 
 ## Read only the operation you change
 
@@ -162,6 +162,8 @@ Shared screens contain other modules: use the symbol and line range instead of r
 - [tests/customer-contact-role-ui.test.mjs](<../../../tests/customer-contact-role-ui.test.mjs>)
 - [tests/customer-contact-titles-ui.test.mjs](<../../../tests/customer-contact-titles-ui.test.mjs>)
 - [tests/customer-multilingual-names.test.mjs](<../../../tests/customer-multilingual-names.test.mjs>)
+- [tests/customer-schedule-template.test.mjs](<../../../tests/customer-schedule-template.test.mjs>)
+- [tests/customer-schedule-workbook.test.mjs](<../../../tests/customer-schedule-workbook.test.mjs>)
 - [tests/supplier-business-card.test.mjs](<../../../tests/supplier-business-card.test.mjs>)
 - [tests/user-role-management.test.mjs](<../../../tests/user-role-management.test.mjs>)
 - [backend-node/tests/admin-role-management.test.ts](<../../../backend-node/tests/admin-role-management.test.ts>)

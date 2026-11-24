@@ -74,37 +74,6 @@ export function parseDays(text: string): number | null {
 export type SheetLinkRow = { id: number; parentId: number | null; wbs: string; kind: string; predecessorId: number | null; startMode: string };
 export type SheetLink = { predecessorId: number | null; lagDays: number };
 
-const isWorkDay = (iso: string, holidays: ReadonlySet<string>) => {
-  const weekday = new Date(`${iso}T00:00:00Z`).getUTCDay();
-  return weekday !== 0 && weekday !== 6 && !holidays.has(iso);
-};
-
-/**
- * A gap typed in working days (owner 2026-11-24: +N skips weekends and company holidays) as the calendar days the plan
- * stores. The API starts a linked row on the first work day on or after predecessor finish + 1 + lag, so the row
- * starts on the (N+1)th work day after its predecessor finishes. No gap stays 0, which is the next work day wherever
- * the predecessor moves; a negative gap stays calendar days. A gap of N > 0 is worked out against the predecessor's
- * finish today, so it can be a day or two off after that finish moves across a weekend (phase 0.2: count it on the server).
- */
-export function workingLagToCalendar(predecessorFinish: string, workingLag: number, holidays: ReadonlySet<string>): number {
-  if (workingLag <= 0) return workingLag;
-  let day = predecessorFinish,
-    counted = 0;
-  while (counted < workingLag + 1) {
-    day = shiftDay(day, 1);
-    if (isWorkDay(day, holidays)) counted += 1;
-  }
-  return dayNumber(day) - dayNumber(predecessorFinish) - 1;
-}
-
-/** The stored calendar gap read back as work days between the predecessor's finish and the row's start. */
-export function calendarLagToWorking(predecessorFinish: string, calendarLag: number, holidays: ReadonlySet<string>): number {
-  if (calendarLag <= 0) return calendarLag;
-  let counted = 0;
-  for (let day = shiftDay(predecessorFinish, 1), stop = shiftDay(predecessorFinish, calendarLag); day <= stop; day = shiftDay(day, 1)) if (isWorkDay(day, holidays)) counted += 1;
-  return counted;
-}
-
 /** What the "after" cell shows: the WBS of the task the row waits for, and +N for a gap of N work days. */
 export function linkText(row: { startMode: string; predecessorId: number | null }, rows: readonly SheetLinkRow[], gap: number): string {
   if (row.startMode !== "linked" || row.predecessorId === null) return "";

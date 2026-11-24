@@ -349,7 +349,8 @@ export function registerScheduleRoutes(app: FastifyInstance, database: Database,
           existing.planDays !== input.planDays ||
           existing.startMode !== input.startMode ||
           existing.predecessorId !== input.predecessorId ||
-          existing.lagDays !== input.lagDays)
+          // A gap saved in calendar days comes back as working days (migration 125), so its number is not compared.
+          (existing.lagDays !== input.lagDays && existing.lagWorkDays !== false))
       )
         throw new ApiError(400, "schedule_rollup_plan_derived", "A roll-up row's dates and dependency are calculated from its children and cannot be changed directly.");
       // People typed in the People table stay with the row: cut to its new length, and its man-days stay theirs (plan-people.ts).
@@ -362,7 +363,7 @@ export function registerScheduleRoutes(app: FastifyInstance, database: Database,
       update.input("people", sql.NVarChar(sql.MAX), peopleJson(people));
       const row = (
         await update.query<{ row_version: Buffer }>(
-          `DECLARE @changed TABLE(row_version binary(8)); UPDATE dbo.schedule_tasks SET parent_id=@parent,sort_order=@sort,kind=@kind,name=@name,is_milestone=@milestone,visibility=@visibility,plan_start=@plan_start,plan_days=@plan_days,start_mode=@start_mode,predecessor_id=@predecessor,lag_days=@lag,pic_external=@pic_external,plan_man_days=@man_days,discipline=@discipline,people_by_day=@people,updated_by=@actor,updated_at=SYSUTCDATETIME() OUTPUT inserted.row_version INTO @changed WHERE id=@id AND project_id=@project AND deleted_at IS NULL AND row_version=@version; SELECT row_version FROM @changed;`,
+          `DECLARE @changed TABLE(row_version binary(8)); UPDATE dbo.schedule_tasks SET parent_id=@parent,sort_order=@sort,kind=@kind,name=@name,is_milestone=@milestone,visibility=@visibility,plan_start=@plan_start,plan_days=@plan_days,start_mode=@start_mode,predecessor_id=@predecessor,lag_days=@lag,lag_work_days=1,pic_external=@pic_external,plan_man_days=@man_days,discipline=@discipline,people_by_day=@people,updated_by=@actor,updated_at=SYSUTCDATETIME() OUTPUT inserted.row_version INTO @changed WHERE id=@id AND project_id=@project AND deleted_at IS NULL AND row_version=@version; SELECT row_version FROM @changed;`,
         )
       ).recordset[0];
       if (!row) throw concurrency();
@@ -498,7 +499,7 @@ export function registerScheduleRoutes(app: FastifyInstance, database: Database,
         update.input("people", sql.NVarChar(sql.MAX), peopleJson(change.people));
         update.input("actor", sql.BigInt, actor.id);
         const result = await update.query(
-          `UPDATE dbo.schedule_tasks SET plan_start=@plan_start,plan_days=@plan_days,start_mode=@start_mode,predecessor_id=@predecessor,lag_days=@lag,plan_man_days=@man_days,labor_source=@source,labor_supplier=@supplier,people_by_day=@people,updated_by=@actor,updated_at=SYSUTCDATETIME() WHERE id=@id AND project_id=@project AND deleted_at IS NULL AND row_version=@version;`,
+          `UPDATE dbo.schedule_tasks SET plan_start=@plan_start,plan_days=@plan_days,start_mode=@start_mode,predecessor_id=@predecessor,lag_work_days=CASE WHEN lag_days=@lag THEN lag_work_days ELSE 1 END,lag_days=@lag,plan_man_days=@man_days,labor_source=@source,labor_supplier=@supplier,people_by_day=@people,updated_by=@actor,updated_at=SYSUTCDATETIME() WHERE id=@id AND project_id=@project AND deleted_at IS NULL AND row_version=@version;`,
         );
         if (result.rowsAffected[0] !== 1) throw concurrency();
         const before = {

@@ -51,6 +51,7 @@ test("the customer file's title block, headers and file name follow the team's m
   assert.equal(sheet.widths[10].width, 2.44);
   assert.deepEqual(sheet.frozen, { columns: 0, rows: 7 });
   assert.equal(customerScheduleFileName("PJ260210"), "PJ260210 Project Schedule.xlsx");
+  assert.equal(customerScheduleFileName("PJ260210", 3), "PJ260210 Project Schedule v3.xlsx", "the third file kept in folder 08");
   assert.equal(customerScheduleFileName('PJ/26:02"10'), "PJ-26-02-10 Project Schedule.xlsx");
   const member = customerScheduleSheet({ ...input, withMember: true, lang: "en" });
   assert.deepEqual(
