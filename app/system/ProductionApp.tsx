@@ -1612,7 +1612,6 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
                     <ProjectPage
                       key={projectPage.no}
                       {...common}
-                      teamTestMode={IS_TEAM_TEST_MODE}
                       projectNo={projectPage.no}
                       tab={projectPage.tab}
                       onTab={changeProjectPageTab}

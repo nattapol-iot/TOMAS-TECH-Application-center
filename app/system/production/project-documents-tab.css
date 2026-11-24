@@ -1,0 +1,160 @@
+/* Task doc 5.5: a project's Documents tab, folders on the left and the files on the right. */
+.pdt {
+  display: grid;
+  grid-template-columns: minmax(200px, 260px) minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+.pdt-folders {
+  display: grid;
+  gap: 2px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+.pdt-folders button {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--fs-sm);
+  text-align: left;
+  cursor: pointer;
+}
+.pdt-folders button:hover {
+  background: var(--n-100);
+}
+.pdt-folders button[aria-pressed="true"] {
+  background: var(--blue-soft);
+  color: var(--blue-text);
+  font-weight: 600;
+}
+.pdt-folders button.is-empty {
+  color: var(--muted);
+}
+.pdt-main {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+.pdt-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.pdt-sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.pdt-sources button {
+  padding: 2px 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  font: inherit;
+  font-size: var(--fs-xs);
+  cursor: pointer;
+}
+.pdt-sources button[aria-pressed="true"] {
+  border-color: var(--blue);
+}
+.pdt-tag {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--n-100);
+  color: var(--ink-soft);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+.pdt-tag.inquiry {
+  background: var(--blue-soft);
+  color: var(--blue-text);
+}
+.pdt-tag.siteVisit {
+  background: var(--green-soft);
+  color: var(--green-text);
+}
+.pdt-tag.estimate {
+  background: var(--amber-soft);
+  color: var(--amber-text);
+}
+.pdt-tag.plan {
+  background: var(--violet-soft);
+  color: var(--violet-text);
+}
+.pdt-drop {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  border: 2px dashed var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--muted);
+}
+.pdt-drop.over {
+  border-color: var(--blue);
+  background: var(--blue-soft);
+  color: var(--blue-text);
+}
+.pdt-staged,
+.pdt-list {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+.pdt-staged table,
+table.pdt-list {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-sm);
+}
+.pdt-staged th,
+.pdt-staged td,
+.pdt-list th,
+.pdt-list td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+.pdt-staged td small,
+.pdt-list td small {
+  display: block;
+}
+.pdt-staged select,
+.pdt-staged input {
+  width: 100%;
+}
+.pdt-staged tr.done td {
+  color: var(--muted);
+}
+.pdt-error {
+  color: var(--red-text);
+}
+.pdt-state {
+  width: 40px;
+  text-align: center;
+}
+.pdt-staged-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 8px;
+}
+@media (max-width: 760px) {
+  .pdt {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

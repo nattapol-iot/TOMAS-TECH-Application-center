@@ -104,6 +104,7 @@ import {
 } from "./ProjectPlanFields";
 import { ProductionCustomers, ProductionEngineeringRates } from "./AdminAnalyticsScreens";
 import { ProjectCostPanel } from "./ProjectCostScreen";
+import { PROJECT_DOCUMENT_FOLDERS, ProjectDocumentsTab } from "./ProjectDocumentsTab";
 import { ErpMasterPanel } from "./ErpMasterPanel";
 import { PegasusScreen } from "./PegasusScreen";
 import { checkFields, failureDialog } from "./form-bubbles";
@@ -173,23 +174,6 @@ const businessDate = (date: Date) => {
 const futureDate = (days: number) => businessDate(new Date(Date.now() + days * 86_400_000));
 const today = () => businessDate(new Date());
 const MAX_PROJECT_DOCUMENT_BYTES = 50 * 1024 * 1024;
-const PROJECT_DOCUMENT_FOLDERS = [
-  ["00", "To do list"],
-  ["01", "Concept Design and Proposal"],
-  ["02", "Drawing"],
-  ["03", "Estimate cost"],
-  ["04", "Quote"],
-  ["05", "PO"],
-  ["06", "Specifications and Documentation"],
-  ["07", "Development"],
-  ["08", "Schedule"],
-  ["09", "Installation"],
-  ["10", "Report"],
-  ["11", "Manual and Document"],
-  ["12", "DATA & EXAMPLE"],
-  ["13", "Pic and Video"],
-  ["14", "Ref"],
-] as const;
 const formatFileSize = (bytes: number) => {
   if (!Number.isFinite(bytes) || bytes < 0) return "—";
   if (bytes < 1024) return `${bytes} B`;
@@ -1876,7 +1860,6 @@ export function ProjectPage({
   bootstrap,
   notify,
   refreshBootstrap,
-  teamTestMode,
   projectNo,
   tab,
   onTab,
@@ -1885,7 +1868,6 @@ export function ProjectPage({
   seesCost,
   seesPlan = true,
 }: CommonProps & {
-  teamTestMode: boolean;
   projectNo: string;
   tab: ProjectPageTab;
   onTab: (tab: ProjectPageTab) => void;
@@ -2052,7 +2034,7 @@ export function ProjectPage({
         {shownTab === "overview" ? <ProjectOverviewTab item={item} onTab={onTab} onMembers={() => setMembers(true)} onEdit={canWrite ? () => setEditing(true) : null} seesCost={seesCost} /> : null}
         {shownTab === "plan" ? renderPlan(item.id) : null}
         {shownTab === "cost" ? <ProjectCostPanel projectId={item.id} /> : null}
-        {shownTab === "documents" ? <ProjectDocumentsPanel project={item} canWrite={canWrite} teamTestMode={teamTestMode} notify={notify} /> : null}
+        {shownTab === "documents" ? <ProjectDocumentsTab project={item} canWrite={canWrite} notify={notify} /> : null}
       </div>
       {editing ? (
         <EditProjectModal
@@ -3308,30 +3290,19 @@ function EditProjectModal({
     </Modal>
   );
 }
-/** Task doc 5.2: the project page's Documents tab shows the same list and upload in the page instead of a dialog. */
-function InlineShell({ children }: { title: string; subtitle?: string; size?: string; onClose: () => void; footer?: ReactNode; children: ReactNode }) {
-  return <section className="project-docs-panel">{children}</section>;
-}
-export function ProjectDocumentsPanel(props: { project: ProjectSummary; canWrite: boolean; teamTestMode: boolean; notify: (message: string) => void }) {
-  return <ProjectDocumentsModal {...props} inline onClose={() => undefined} />;
-}
-
 function ProjectDocumentsModal({
   project,
   canWrite,
   teamTestMode,
   notify,
   onClose,
-  inline = false,
 }: {
   project: ProjectSummary;
   canWrite: boolean;
   teamTestMode: boolean;
   notify: (message: string) => void;
   onClose: () => void;
-  inline?: boolean;
 }) {
-  const Shell = inline ? InlineShell : Modal;
   const localizeCopy = useStaticCopy();
   const { lang } = useLanguage();
   const sourceRemarkLabel = lang === "TH" ? "แหล่งที่มา / หมายเหตุ" : lang === "JP" ? "引継ぎ元・備考" : "Source / remark";
@@ -3455,7 +3426,7 @@ function ProjectDocumentsModal({
   };
 
   return (
-    <Shell
+    <Modal
       title={`${project.number} · Documents`}
       subtitle={teamTestMode ? `${project.name} · ไฟล์จัดเก็บชั่วคราวในเครื่องทดสอบและ metadata จัดเก็บใน SQL Server` : `${project.name} · ไฟล์จัดเก็บบน NAS บริษัทและ metadata จัดเก็บใน SQL Server`}
       size="xl"
@@ -3697,7 +3668,7 @@ function ProjectDocumentsModal({
           </label>
         </Modal>
       ) : null}
-    </Shell>
+    </Modal>
   );
 }
 

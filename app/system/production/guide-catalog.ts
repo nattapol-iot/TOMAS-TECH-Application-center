@@ -1621,6 +1621,18 @@ const PROJECT_PAGE: Guide = {
       },
       missing: { th: "เปิดหน้าของโปรเจกต์ก่อน หรือกด 'ถัดไป'", en: "Open a project's page first, or press Next.", jp: "先に案件のページを開くか、「次へ」を押します。" },
     },
+    {
+      target: "projectDocs.folders",
+      action: "next",
+      view: "projects",
+      title: { th: "แท็บเอกสาร", en: "The Documents tab", jp: "文書タブ" },
+      body: {
+        th: "ด้านซ้ายคือแฟ้มมาตรฐาน 00–14 พร้อมจำนวนไฟล์ ด้านบนค้นหาและกรองตามที่มา (Inquiry, Site Visit, Estimate, ส่งออกจากแผน, อัปโหลดเอง) ลากไฟล์หลายไฟล์มาวางในกรอบนี้ แล้วเลือกแฟ้มและพิมพ์ชนิดของแต่ละไฟล์ก่อนกดอัปโหลด กดชื่อไฟล์เพื่อดาวน์โหลด",
+        en: "On the left, the standard folders 00-14 with their file counts; above, a search and a filter by where files came from (Inquiry, Site Visit, Estimate, plan export, uploaded). Drop many files in this box, give each its folder and type, then upload. Press a file's name to download it.",
+        jp: "左は標準フォルダー 00〜14 とファイル数、上は検索と由来（Inquiry・Site Visit・Estimate・計画から出力・アップロード）での絞り込みです。この枠に複数のファイルをドロップし、それぞれのフォルダーと種類を入れてからアップロードします。ファイル名を押すとダウンロードします。",
+      },
+      missing: { th: "เปิดแท็บเอกสารของโปรเจกต์ก่อน หรือกด 'ถัดไป'", en: "Open a project's Documents tab first, or press Next.", jp: "先に案件の文書タブを開くか、「次へ」を押します。" },
+    },
   ],
 };
 
