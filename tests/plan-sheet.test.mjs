@@ -151,3 +151,21 @@ test("the After cell takes several rows: the row starts after the latest (migrat
     "a row no longer in the plan is left out",
   );
 });
+
+test("planned hours are typed as hours or man-days (task doc 3.1)", async () => {
+  const { parseHours, hoursText } = await import("../lib/plan-sheet.ts");
+  assert.equal(parseHours("16"), 16);
+  assert.equal(parseHours("16h"), 16);
+  assert.equal(parseHours("16 ชม."), 16);
+  assert.equal(parseHours("2 MD"), 16);
+  assert.equal(parseHours("2md"), 16);
+  assert.equal(parseHours("1.5 วัน"), 12);
+  assert.equal(parseHours("3 days"), 24);
+  assert.equal(parseHours("2,5"), 2.5);
+  assert.equal(parseHours("1,000"), 1000, "a thousands separator");
+  assert.equal(parseHours(""), 0);
+  assert.equal(parseHours("two"), null);
+  assert.equal(parseHours("-4"), null);
+  assert.equal(hoursText(0), "");
+  assert.equal(hoursText(12.34), "12.3");
+});

@@ -797,6 +797,8 @@ export type TaskAccess = {
   canPlan?: boolean;
   /** Master Plan frame leaves that the shared summary leaves out (project-health.ts countedLeaves); the screens' late and blocked rules skip them too. */
   frameIds?: Set<number>;
+  /** Hours people confirmed on each row in My Work (dbo.work_hours, work key "Project-<id>"). */
+  actualHours?: Map<number, number>;
 };
 export function taskResponse(resolved: ResolvedScheduleTask, tasks: Map<number, TaskRow>, pics: Map<number, PicRow[]>, access?: TaskAccess): Record<string, unknown> {
   const task = tasks.get(resolved.source.id)!;
@@ -866,6 +868,8 @@ export function taskResponse(resolved: ResolvedScheduleTask, tasks: Map<number, 
     laborSupplier: task.laborSupplier ?? "",
     peopleByDay: task.peopleByDay ?? [],
     discipline: task.discipline ?? null,
+    // Task doc 3.1: actual hours per row; the screen adds a row's own and its rows' hours.
+    actualHours: access?.actualHours?.get(task.id) ?? 0,
     updatedBy: task.updatedBy,
     ...flags,
     children: resolved.children.map((child) => taskResponse(child, tasks, pics, access)),

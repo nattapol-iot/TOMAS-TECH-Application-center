@@ -268,6 +268,8 @@ export type ScheduleTask = {
   peopleByDay?: number[];
   /** The discipline the row needs (migration 123): a row with it and no PIC waits for the head on Team overview > Allocation. */
   discipline?: string | null;
+  /** Hours people confirmed on the row in My Work (task doc 3.1); an older API omits it. */
+  actualHours?: number;
   children: ScheduleTask[];
 };
 
