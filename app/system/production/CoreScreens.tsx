@@ -2161,7 +2161,7 @@ function ProjectOverviewTab({
   // While the read failed, the boxes wait quietly under the error instead of spinning.
   const waiting = error ? null : <span className="spinner" />;
   const box = (key: string, title: string, to: (() => void) | null, children: ReactNode) => (
-    <section key={key} className={`po-box po-${key}`}>
+    <section key={key} className={`po-box po-box-${key}`}>
       <header>
         <h3>{title}</h3>
         {to ? (

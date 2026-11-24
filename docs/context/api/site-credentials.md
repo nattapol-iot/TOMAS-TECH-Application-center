@@ -2,7 +2,7 @@
 
 [Module](../modules/installed-base.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `aeeccd77`; generated, do not edit. [backend-node/src/routes/site-credentials.ts](<../../../backend-node/src/routes/site-credentials.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `d1166c4a`; generated, do not edit. [backend-node/src/routes/site-credentials.ts](<../../../backend-node/src/routes/site-credentials.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
