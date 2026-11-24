@@ -69,7 +69,7 @@ test("migration 123 adds the discipline, checked to the four values, registered 
   assert.match(fresh, /:r database\/migrations\/122_master_data_sync_account\.sql\n:r database\/migrations\/123_plan_row_discipline\.sql/);
 });
 
-test("a task under a heading may wait with a discipline and no member; the head names people with the assign route", async () => {
+test("a task under a heading may wait with no member, with or without a discipline; the head names people with the assign route", async () => {
   const [routes, service, workload, planning, cost] = await Promise.all([
     source("backend-node/src/routes/schedule.ts"),
     source("backend-node/src/schedule-service.ts"),
@@ -79,8 +79,9 @@ test("a task under a heading may wait with a discipline and no member; the head 
   ]);
   assert.match(service, /export const PLAN_DISCIPLINES = \["Electrical", "Mechanical", "Software", "Installation"\] as const;/);
   assert.match(service, /if \(kind === "phase" && discipline\) throw new ApiError/);
-  assert.match(routes, /if \(parent\.kind === "phase" && input\.discipline\) return \[\];/);
-  assert.match(routes, /!input\.picUserIds\.length &&\s*!input\.discipline &&\s*oldPics\.length/);
+  // Member optional (owner, 2026-11-24, the plan Sheet): a task under a heading may lose or never have a member.
+  assert.match(routes, /if \(parent\.kind === "phase"\) return \[\];/);
+  assert.doesNotMatch(routes, /"schedule_member_required", "A task under a main heading/);
   assert.match(routes, /if \(input\.discipline === undefined\) input\.discipline = existing\.discipline \?\? null;/, "an older client keeps the row's discipline");
   // The assign route: plan owners only, people join the project, only the PICs change, the people are told.
   const assign = routes.slice(routes.indexOf('app.post("/api/v1/schedule/tasks/:id/assign"'), routes.indexOf('app.delete("/api/v1/schedule/tasks/:id"'));
@@ -108,10 +109,9 @@ test("the Plan asks for people by discipline: the draft row's select and the Edi
   const plan = await source("app/system/production/PlanningPricingScreens.tsx");
   assert.match(plan, /<optgroup label=\{t\("Plan\.waitingForPeople"\)\}>/);
   assert.match(plan, /onChange=\{\(event\) => onChange\(draftPick\(event\.target\.value\)\)\}/);
-  assert.match(plan, /if \(parent\?\.kind === "phase" && current\.memberId === null && !current\.discipline\) \{/);
+  assert.doesNotMatch(plan, /Plan\.memberRequired/, "a member is optional (owner, 2026-11-24)");
   assert.match(plan, /\.\.\.\(parent && current\.discipline \? \{ discipline: current\.discipline \} : \{\}\),/);
   assert.match(plan, /<label className="field span-2" data-guide="plan\.discipline">/);
-  assert.match(plan, /!picUserIds\.length && !discipline;/);
 });
 
 test("Allocation · weekly: the queue, the assign dialog, days away and confirmed hours in the table", async () => {

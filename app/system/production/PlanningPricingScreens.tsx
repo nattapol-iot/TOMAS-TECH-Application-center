@@ -30,6 +30,7 @@ import { HealthBadge } from "./ProjectPlanFields";
 import { ThbRateField } from "./ThbRateField";
 import { PlanManHours, type PlanManHoursData } from "./PlanManHours";
 import { PlanPeopleGrid } from "./PlanPeopleGrid";
+import { PlanSheet } from "./PlanSheet";
 import { EditMasterPlanModal, RowDisclosure, type PortfolioAction } from "./CoreScreens";
 import { useProjectLook } from "./ProjectLook";
 import { SearchSelect } from "./SearchSelect";
@@ -3394,9 +3395,6 @@ function EditScheduleTaskModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [failedAction, setFailedAction] = useState<"save" | "delete">("save");
-  const parentIsHeading = task.parentId !== null && flattenTasks(schedule.tasks).find((row) => row.id === task.parentId)?.kind === "phase";
-  // A task under a heading keeps a member, unless it names the discipline it waits for (owner, 2026-11-22).
-  const keepsMember = task.kind === "task" && parentIsHeading && task.pics.length > 0 && !picUserIds.length && !discipline;
   const removing = flattenTasks([task]);
   const deleteReason =
     ownOnly && removing.some((row) => !row.canEditOwn)
@@ -3515,7 +3513,7 @@ function EditScheduleTaskModal({
           <button
             className="btn primary"
             type="button"
-            disabled={busy || !name.trim() || (!datesLocked && (!startReady(start) || planDays < 1)) || planManDays < 0 || keepsMember || (isPhase && !customerPeriodReady(customer))}
+            disabled={busy || !name.trim() || (!datesLocked && (!startReady(start) || planDays < 1)) || planManDays < 0 || (isPhase && !customerPeriodReady(customer))}
             onClick={() => {
               void submit();
             }}
@@ -3629,11 +3627,6 @@ function EditScheduleTaskModal({
               onChange={setPicUserIds}
               manDays={planManDays}
             />
-            {keepsMember ? (
-              <p className="muted span-2" role="status">
-                {t("Plan.memberRequired")}
-              </p>
-            ) : null}
             {!ownOnly && task.kind === "task" ? (
               <label className="field span-2" data-guide="plan.discipline">
                 <span>{t("Plan.discipline")}</span>
@@ -3872,9 +3865,9 @@ function saveLegendOpen(open: boolean) {
     /* storage blocked: the choice lasts for this visit only */
   }
 }
-type PlanLevel = "team" | "master" | "member" | "people";
-const PLAN_LEVEL_LINK = choiceLink<PlanLevel>(["team", "master", "member", "people"]);
-const PLAN_LEVEL_LABEL: Record<PlanLevel, string> = { team: "Plan.levelTeam", master: "Plan.levelMaster", member: "Plan.levelMember", people: "People.view" };
+type PlanLevel = "sheet" | "team" | "master" | "member" | "people";
+const PLAN_LEVEL_LINK = choiceLink<PlanLevel>(["sheet", "team", "master", "member", "people"]);
+const PLAN_LEVEL_LABEL: Record<PlanLevel, string> = { sheet: "Sheet.view", team: "Plan.levelTeam", master: "Plan.levelMaster", member: "Plan.levelMember", people: "People.view" };
 
 /**
  * The plan's own work the way the team board counts it (backend-node/src/resource-workload.ts): each row with nothing
@@ -4174,7 +4167,10 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
   const [zoom, setZoom] = useLinkedState<GanttZoomChoice>("zoom", "fit", PLAN_ZOOM_LINK);
   const [anchor, setAnchor] = useState(today);
   const [filter, setFilter] = useLinkedState<PlanFilter | null>("only", null, PLAN_FILTER_LINK);
-  const [level, setLevel] = useLinkedState<PlanLevel>("level", "team", PLAN_LEVEL_LINK);
+  // V2 opens on the Sheet, the plan typed like the team's Excel Gantt (PlanSheet.tsx, owner 2026-11-24); V1 has no Sheet.
+  const [storedLevel, setLevel] = useLinkedState<PlanLevel>("level", v2 ? "sheet" : "team", PLAN_LEVEL_LINK);
+  const level: PlanLevel = !v2 && storedLevel === "sheet" ? "team" : storedLevel;
+  const sheetView = level === "sheet";
   const masterView = level === "master";
   // The People table: the same rows against the days, people per day typed like a spreadsheet (PlanPeopleGrid.tsx).
   const peopleView = level === "people";
@@ -4204,6 +4200,8 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
   const [movePending, setMovePending] = useState<{ taskId: number; start: string; finish: string } | null>(null);
   const [lastMove, setLastMove] = useState<{ taskId: number; label: string; rowVersion: string; before: { planStart: string | null; planDays: number; lagDays: number } } | null>(null);
   const scheduleRequestId = useRef(0);
+  // The plan as last read, handed to the Sheet so it saves its next edit on that read without waiting for a redraw.
+  const lastLoaded = useRef<ProjectSchedule | null>(null);
   const loadProjects = useCallback(async () => {
     if (!allowed) return;
     setLoadingProjects(true);
@@ -4256,7 +4254,10 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
     setError("");
     try {
       const loaded = await apiRequest<ProjectSchedule>(`/api/v1/projects/${selectedId}/schedule`);
-      if (scheduleRequestId.current === requestId && loaded.projectId === selectedId) setSchedule(loaded);
+      if (scheduleRequestId.current === requestId && loaded.projectId === selectedId) {
+        setSchedule(loaded);
+        lastLoaded.current = loaded;
+      }
     } catch (requestError) {
       if (scheduleRequestId.current === requestId) setError(toError(requestError));
     } finally {
@@ -4428,11 +4429,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
       setDraft(null);
       return;
     }
-    // A task under a heading needs a member (owner, 2026-11-03); a row's dates come as a pair, a heading's may wait.
-    if (parent?.kind === "phase" && current.memberId === null && !current.discipline) {
-      refuse(uiText("Plan.memberRequired"));
-      return;
-    }
+    // A row's dates come as a pair, a heading's may wait; a member is optional (owner, 2026-11-24).
     const dated = Boolean(current.start && current.finish && current.finish >= current.start);
     if (parent ? !dated : (current.start || current.finish) && !dated) {
       refuse(uiText("Plan.draftDates"));
@@ -5132,7 +5129,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
         <>
           {activeSchedule.manHours ? <PlanManHours projectId={activeSchedule.projectId} data={activeSchedule.manHours} onChanged={loadSchedule} /> : null}
           <Panel flush>
-            {rows.length || draftAt >= 0 ? (
+            {rows.length || draftAt >= 0 || sheetView ? (
               <div ref={fullscreenRef} className={`plan-gantt${fullscreenActive ? " is-fullscreen" : ""}`} data-guide="plan.gantt">
                 {fullscreenActive ? (
                   <div className="plan-gantt-title">
@@ -5144,14 +5141,16 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
                 ) : null}
                 <div className="plan-gantt-controls">
                   <div className="seg-control" role="group" aria-label={uiText("Plan.levelLabel")} data-guide="plan.level">
-                    {(["team", "master", "member", "people"] as const).map((value) => (
+                    {(v2 ? (["sheet", "team", "master", "member", "people"] as const) : (["team", "master", "member", "people"] as const)).map((value) => (
                       <button key={value} type="button" className={level === value ? "on" : ""} aria-pressed={level === value} onClick={() => setLevel(value)}>
                         {uiText(PLAN_LEVEL_LABEL[value])}
                       </button>
                     ))}
                   </div>
-                  {masterView || memberView || peopleView ? null : <FilterChips label="Plan.quickFilters" items={filterItems} active={filter} onPick={(key) => setFilter(key as PlanFilter | null)} />}
-                  {peopleView ? null : (
+                  {masterView || memberView || peopleView || sheetView ? null : (
+                    <FilterChips label="Plan.quickFilters" items={filterItems} active={filter} onPick={(key) => setFilter(key as PlanFilter | null)} />
+                  )}
+                  {peopleView || sheetView ? null : (
                     <GanttToolbar
                       zoom={zoom}
                       allowFit
@@ -5171,7 +5170,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
                   )}
                   <div className="gantt-nav" data-guide="plan.view">
                     {/* One button that flips: expand while anything is folded, otherwise collapse. */}
-                    {masterView || peopleView ? null : (
+                    {masterView || peopleView || sheetView ? null : (
                       <button
                         type="button"
                         className="btn ghost sm"
@@ -5183,7 +5182,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
                         {uiText(anyFolded ? "Expand all" : "Gantt.collapseAll")}
                       </button>
                     )}
-                    {peopleView ? null : (
+                    {peopleView || sheetView ? null : (
                       <button type="button" className="btn ghost sm" aria-expanded={legendOpen} onClick={toggleLegend}>
                         <Icon name="help" />
                         {uiText("Plan.legendToggle")}
@@ -5205,7 +5204,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
                     ) : null}
                   </div>
                 </div>
-                {peopleView || !legendOpen ? null : (
+                {peopleView || sheetView || !legendOpen ? null : (
                   <GanttLegend baseline={Boolean(activeSchedule.latestBaseline)} target={Boolean(target)} links={!memberView && links.length > 0} draggable={canPlan && !memberView} />
                 )}
                 {memberView ? (
@@ -5239,7 +5238,23 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
                     </button>
                   </div>
                 ) : null}
-                {peopleView ? (
+                {sheetView ? (
+                  <PlanSheet
+                    schedule={activeSchedule}
+                    team={planTeam.team}
+                    today={today}
+                    lockedIds={pendingTaskIds}
+                    notify={notify}
+                    onReload={async () => {
+                      await loadSchedule();
+                      return lastLoaded.current;
+                    }}
+                    onOpenTask={setDrawerTaskId}
+                    removeFor={binFor}
+                    ensureMembers={(userIds) => ensureScheduleMembers(activeSchedule.projectId, activeSchedule.managerId, userIds)}
+                    canAddSub={(task) => canTakeSubTasks(task, rows)}
+                  />
+                ) : peopleView ? (
                   <PlanPeopleGrid
                     projectId={activeSchedule.projectId}
                     scheduleVersion={activeSchedule.scheduleVersion}

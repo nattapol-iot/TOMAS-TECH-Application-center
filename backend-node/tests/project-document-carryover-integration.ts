@@ -19,9 +19,9 @@ let checks = 0;
 
 function multipart(fileName: string, bytes: Buffer, fields: Record<string, string>) {
   const boundary = `----handover-${randomUUID()}`;
-  const fieldParts = Object.entries(fields).map(([key, value]) =>
-    `--${boundary}\r\nContent-Disposition: form-data; name="${key}"\r\n\r\n${value}\r\n`,
-  ).join("");
+  const fieldParts = Object.entries(fields)
+    .map(([key, value]) => `--${boundary}\r\nContent-Disposition: form-data; name="${key}"\r\n\r\n${value}\r\n`)
+    .join("");
   const head = Buffer.from(`${fieldParts}--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${fileName}"\r\nContent-Type: text/plain\r\n\r\n`);
   return {
     payload: Buffer.concat([head, bytes, Buffer.from(`\r\n--${boundary}--\r\n`)]),
@@ -56,14 +56,26 @@ try {
   run(`CREATE APPLICATION ROLE handover_ci_role WITH PASSWORD='${password}';`);
   execFileSync("sqlcmd", [...sqlArgs, "-d", name, "-i", sqlTest.applicationLoginScript, "-v", `DatabaseName=${name}`, "AppLogin=handover_ci_role"], sqlTest.sqlcmdOptions);
   const config: AppConfig = {
-    environment: "development", host: "127.0.0.1", port: 0, allowedHosts: ["localhost"],
-    corsOrigins: ["http://localhost:3000"], businessTimeZone: "Asia/Bangkok", auth: { mode: "Development" },
+    environment: "development",
+    host: "127.0.0.1",
+    port: 0,
+    allowedHosts: ["localhost"],
+    corsOrigins: ["http://localhost:3000"],
+    businessTimeZone: "Asia/Bangkok",
+    auth: { mode: "Development" },
     database: { connectionString: sqlTest.connectionString, trustServerCertificate: true, applicationRoleName: "handover_ci_role", applicationRolePassword: password },
-    documentStorage: { mode: "Local", rootPath: storageRoot, maxFileSizeBytes: 10_000_000 }, email: { mode: "Disabled" }, pdfParserUrl: "http://pdf-parser:8000",
+    documentStorage: { mode: "Local", rootPath: storageRoot, maxFileSizeBytes: 10_000_000 },
+    email: { mode: "Disabled" },
+    pdfParserUrl: "http://pdf-parser:8000",
   };
   application = await buildApp(config);
   const { app, database } = application;
-  const actors = Object.fromEntries((await database.query<{ id: number; entra_object_id: string }>("SELECT id,entra_object_id FROM dbo.users WHERE entra_object_id LIKE N'handover-%'")).recordset.map((row) => [row.entra_object_id, Number(row.id)]));
+  const actors = Object.fromEntries(
+    (await database.query<{ id: number; entra_object_id: string }>("SELECT id,entra_object_id FROM dbo.users WHERE entra_object_id LIKE N'handover-%'")).recordset.map((row) => [
+      row.entra_object_id,
+      Number(row.id),
+    ]),
+  );
 
   async function api(actor: string, method: "GET" | "POST" | "PUT", url: string, body?: object, expected = 200) {
     const response = await app.inject({ method, url, headers: { "x-dev-user-id": `handover-${actor}` }, ...(body ? { payload: body } : {}) });
@@ -81,16 +93,32 @@ try {
   async function createInquiry(projectName: string) {
     const customer = await api("sales", "POST", "/api/v1/sales/customers", { name: `TEST ONLY ${projectName} customer` }, 201);
     const dueDate = new Date(Date.now() + 14 * 86_400_000).toISOString().slice(0, 10);
-    const inquiry = await api("sales", "POST", "/api/v1/inquiries", {
-      customerId: customer.id, contact: "TEST ONLY contact", projectName, projectType: "IoT",
-      salesOwner: "handover-sales", estimateOwnerId: actors["handover-engineer"], priority: "Normal",
-      projectProbability: 80, customerInterestGrade: "A", dueDate, requirement: "TEST ONLY customer requirement",
-      scopeSummary: "TEST ONLY requested scope", siteLocation: "TEST ONLY factory",
-    }, 201);
+    const inquiry = await api(
+      "sales",
+      "POST",
+      "/api/v1/inquiries",
+      {
+        customerId: customer.id,
+        contact: "TEST ONLY contact",
+        projectName,
+        projectType: "IoT",
+        salesOwner: "handover-sales",
+        estimateOwnerId: actors["handover-engineer"],
+        priority: "Normal",
+        projectProbability: 80,
+        customerInterestGrade: "A",
+        dueDate,
+        requirement: "TEST ONLY customer requirement",
+        scopeSummary: "TEST ONLY requested scope",
+        siteLocation: "TEST ONLY factory",
+      },
+      201,
+    );
     return { customer, inquiry, dueDate };
   }
   // Project creation needs the inquiry's CRM opportunity WON; mark the linked one, or link a new one.
-  const markOrderWon = (inquiry: string) => run(`DECLARE @inquiry bigint=(${inquiry}); DECLARE @owner bigint=(SELECT created_by FROM dbo.inquiries WHERE id=@inquiry);
+  const markOrderWon = (inquiry: string) =>
+    run(`DECLARE @inquiry bigint=(${inquiry}); DECLARE @owner bigint=(SELECT created_by FROM dbo.inquiries WHERE id=@inquiry);
     IF EXISTS(SELECT 1 FROM dbo.inquiries WHERE id=@inquiry AND opportunity_id IS NOT NULL)
       UPDATE o SET stage=N'WON',won_on=COALESCE(o.won_on,CONVERT(date,SYSUTCDATETIME())),won_reference=COALESCE(o.won_reference,N'TEST ONLY PO')
       FROM dbo.crm_opportunities o JOIN dbo.inquiries i ON i.opportunity_id=o.id WHERE i.id=@inquiry;
@@ -102,12 +130,30 @@ try {
   async function approveEstimate(inquiryId: number, dueDate: string) {
     markOrderWon(String(inquiryId));
     let estimate = await api("engineer", "POST", "/api/v1/estimates", { inquiryId, ownerId: actors["handover-engineer"], contingencyRate: 5, dueDate }, 201);
-    const manhour = await api("engineer", "POST", `/api/v1/estimates/${estimate.id}/manhour-lines`, {
-      estimateRowVersion: estimate.rowVersion, package: "TEST ONLY engineering", activity: "TEST ONLY design and implementation",
-      department: "Engineering", level: "Engineer", costType: "Engineering", provider: "Internal",
-      supplierId: null, quotationNumber: null, priceDate: null, engineers: 1, manDays: 1, hoursPerDay: 8,
-      dailyRate: 0, ownerId: actors["handover-engineer"], remark: "TEST ONLY complete flow",
-    }, 201);
+    const manhour = await api(
+      "engineer",
+      "POST",
+      `/api/v1/estimates/${estimate.id}/manhour-lines`,
+      {
+        estimateRowVersion: estimate.rowVersion,
+        package: "TEST ONLY engineering",
+        activity: "TEST ONLY design and implementation",
+        department: "Engineering",
+        level: "Engineer",
+        costType: "Engineering",
+        provider: "Internal",
+        supplierId: null,
+        quotationNumber: null,
+        priceDate: null,
+        engineers: 1,
+        manDays: 1,
+        hoursPerDay: 8,
+        dailyRate: 0,
+        ownerId: actors["handover-engineer"],
+        remark: "TEST ONLY complete flow",
+      },
+      201,
+    );
     estimate = { ...estimate, rowVersion: manhour.estimateRowVersion };
     // Approval requires every cost line, contingency included, to carry an ERP category; assign the unmapped ones as a reviewer would.
     const erpSummary = await api("engineer", "GET", `/api/v1/estimates/${estimate.id}/erp-summary`);
@@ -115,8 +161,12 @@ try {
     if (unmapped.length) {
       const mapped = await api("engineer", "PUT", `/api/v1/estimates/${estimate.id}/erp-mappings`, {
         estimateRowVersion: estimate.rowVersion,
-        mappings: unmapped.map((line: { sourceType: string; sourceId: number | null; mappingRowVersion: string | null }) =>
-          ({ sourceType: line.sourceType, sourceId: line.sourceId, erpCategory: "Service", mappingRowVersion: line.mappingRowVersion })),
+        mappings: unmapped.map((line: { sourceType: string; sourceId: number | null; mappingRowVersion: string | null }) => ({
+          sourceType: line.sourceType,
+          sourceId: line.sourceId,
+          erpCategory: "Service",
+          mappingRowVersion: line.mappingRowVersion,
+        })),
       });
       assert.equal(mapped.erpSummary.unmapped.lineCount, 0);
       estimate = { ...estimate, rowVersion: mapped.estimateRowVersion };
@@ -126,8 +176,17 @@ try {
     return estimate;
   }
   const today = new Date().toISOString().slice(0, 10);
-  const projectBody = (estimateId: number, dueDate: string) => ({ estimateId, projectNumber: `PJ-CARRY-${estimateId}`, purchaseOrderNumber: `TEST-PO-${estimateId}`, purchaseOrderDate: today,
-    managerId: actors["handover-manager"], leadEngineerId: actors["handover-engineer"], startDate: today, targetDelivery: dueDate, site: "TEST ONLY factory" });
+  const projectBody = (estimateId: number, dueDate: string) => ({
+    estimateId,
+    projectNumber: `PJ-CARRY-${estimateId}`,
+    purchaseOrderNumber: `TEST-PO-${estimateId}`,
+    purchaseOrderDate: today,
+    managerId: actors["handover-manager"],
+    leadEngineerId: actors["handover-engineer"],
+    startDate: today,
+    targetDelivery: dueDate,
+    site: "TEST ONLY factory",
+  });
 
   // Start with the real Inquiry APIs and upload the customer's original files.
   const main = await createInquiry("TEST ONLY complete handover");
@@ -143,41 +202,104 @@ try {
   const scheduledStart = new Date(Date.now() + 60 * 86_400_000);
   scheduledStart.setUTCHours(2, 0, 0, 0);
   const scheduledEnd = new Date(scheduledStart.getTime() + 4 * 3_600_000);
-  const intake = await api("sales", "POST", "/api/v1/sales-intakes/", {
-    customerId: main.customer.id, salesOwnerId: actors["handover-sales"], subject: "TEST ONLY linked intake",
-    priority: "Normal", source: "Email", requestDate: today, relatedInquiryId: main.inquiry.id,
-    contact: { contactChannel: "Email", siteName: "TEST ONLY factory", siteAddress: "TEST ONLY industrial estate",
-      contactName: "TEST ONLY contact", contactPhone: "0000000000", contactEmail: "handover@test.invalid" },
-    requirement: { problemStatement: "TEST ONLY inspect customer site before estimating", desiredCapability: "TEST ONLY verified design",
-      expectedResult: "TEST ONLY enough verified information for a complete estimate", expectedScope: "TEST ONLY survey scope" },
-    machine: { machineName: "TEST ONLY station", machineModel: "CI-1", existingSystem: "TEST ONLY manual station",
-      safetyRequirement: "TEST ONLY standard PPE", siteAccessRequirement: "TEST ONLY register at reception" },
-    visitTypeIds: [visitTypeId], skillIds: [skillId], windows: [{ startsAt: scheduledStart.toISOString(), endsAt: scheduledEnd.toISOString(), preference: 1 }],
-  }, 201);
+  const intake = await api(
+    "sales",
+    "POST",
+    "/api/v1/sales-intakes/",
+    {
+      customerId: main.customer.id,
+      salesOwnerId: actors["handover-sales"],
+      subject: "TEST ONLY linked intake",
+      priority: "Normal",
+      source: "Email",
+      requestDate: today,
+      relatedInquiryId: main.inquiry.id,
+      contact: {
+        contactChannel: "Email",
+        siteName: "TEST ONLY factory",
+        siteAddress: "TEST ONLY industrial estate",
+        contactName: "TEST ONLY contact",
+        contactPhone: "0000000000",
+        contactEmail: "handover@test.invalid",
+      },
+      requirement: {
+        problemStatement: "TEST ONLY inspect customer site before estimating",
+        desiredCapability: "TEST ONLY verified design",
+        expectedResult: "TEST ONLY enough verified information for a complete estimate",
+        expectedScope: "TEST ONLY survey scope",
+      },
+      machine: {
+        machineName: "TEST ONLY station",
+        machineModel: "CI-1",
+        existingSystem: "TEST ONLY manual station",
+        safetyRequirement: "TEST ONLY standard PPE",
+        siteAccessRequirement: "TEST ONLY register at reception",
+      },
+      visitTypeIds: [visitTypeId],
+      skillIds: [skillId],
+      windows: [{ startsAt: scheduledStart.toISOString(), endsAt: scheduledEnd.toISOString(), preference: 1 }],
+    },
+    201,
+  );
   const intakeId = Number(intake.id);
   const intakeBytes = Buffer.from("TEST ONLY linked RFQ from sales intake\n");
   await upload("sales", `/api/v1/sales-intakes/${intakeId}/attachments`, "customer-rfq.txt", intakeBytes, { category: "Customer RFQ", description: "TEST ONLY original RFQ" });
   const intakeDetail = await api("sales", "GET", `/api/v1/sales-intakes/${intakeId}`);
-  const intakeSubmitted = await api("sales", "POST", `/api/v1/sales-intakes/${intakeId}/status`, { status: "Pending Technical Review", reason: "TEST ONLY ready", rowVersion: intakeDetail.rowVersion });
-  const intakeReviewed = await api("manager", "POST", `/api/v1/sales-intakes/${intakeId}/review`, { decision: "Ready to Schedule", comment: "TEST ONLY sufficient information",
-    engineerCount: 1, estimatedDurationMinutes: 240, skillIds: [skillId], rowVersion: intakeSubmitted.rowVersion });
+  const intakeSubmitted = await api("sales", "POST", `/api/v1/sales-intakes/${intakeId}/status`, {
+    status: "Pending Technical Review",
+    reason: "TEST ONLY ready",
+    rowVersion: intakeDetail.rowVersion,
+  });
+  const intakeReviewed = await api("manager", "POST", `/api/v1/sales-intakes/${intakeId}/review`, {
+    decision: "Ready to Schedule",
+    comment: "TEST ONLY sufficient information",
+    engineerCount: 1,
+    estimatedDurationMinutes: 240,
+    skillIds: [skillId],
+    rowVersion: intakeSubmitted.rowVersion,
+  });
   assert.equal(intakeReviewed.status, "Ready to Schedule");
-  const visit = await api("manager", "POST", "/api/v1/site-visits/", { intakeId, visitTypeId,
-    scheduledStart: scheduledStart.toISOString(), scheduledEnd: scheduledEnd.toISOString(), requiredEngineerCount: 1 }, 201);
+  const visit = await api(
+    "manager",
+    "POST",
+    "/api/v1/site-visits/",
+    { intakeId, visitTypeId, scheduledStart: scheduledStart.toISOString(), scheduledEnd: scheduledEnd.toISOString(), requiredEngineerCount: 1 },
+    201,
+  );
   const visitId = Number(visit.id);
   let visitDetail = await api("manager", "GET", `/api/v1/site-visits/${visitId}`);
-  const assigned = await api("manager", "POST", `/api/v1/site-visits/${visitId}/assignments`, { engineerId: actors["handover-engineer"], assignmentRole: "Lead Engineer", rowVersion: visitDetail.rowVersion });
+  const assigned = await api("manager", "POST", `/api/v1/site-visits/${visitId}/assignments`, {
+    engineerId: actors["handover-engineer"],
+    assignmentRole: "Lead Engineer",
+    rowVersion: visitDetail.rowVersion,
+  });
   visitDetail = await api("engineer", "GET", `/api/v1/site-visits/${visitId}`);
   const assignment = visitDetail.assignments.find((row: { id: number }) => row.id === assigned.assignmentId);
-  await api("engineer", "POST", `/api/v1/site-visits/${visitId}/assignments/${assigned.assignmentId}/response`, { response: "Accepted", note: "TEST ONLY accepted", rowVersion: assignment.rowVersion });
+  await api("engineer", "POST", `/api/v1/site-visits/${visitId}/assignments/${assigned.assignmentId}/response`, {
+    response: "Accepted",
+    note: "TEST ONLY accepted",
+    rowVersion: assignment.rowVersion,
+  });
   visitDetail = await api("manager", "GET", `/api/v1/site-visits/${visitId}`);
   const pendingEngineer = await api("manager", "POST", `/api/v1/site-visits/${visitId}/status`, { status: "Pending Engineer Confirmation", reason: "", rowVersion: visitDetail.rowVersion });
   const pendingCustomer = await api("manager", "POST", `/api/v1/site-visits/${visitId}/status`, { status: "Pending Customer Confirmation", reason: "", rowVersion: pendingEngineer.rowVersion });
-  const confirmedByCustomer = await api("sales", "POST", `/api/v1/site-visits/${visitId}/confirmations`, { party: "Customer", outcome: "Confirmed", channel: "Email",
-    confirmedByName: "TEST ONLY customer", confirmedAt: new Date().toISOString(), rowVersion: pendingCustomer.rowVersion });
+  const confirmedByCustomer = await api("sales", "POST", `/api/v1/site-visits/${visitId}/confirmations`, {
+    party: "Customer",
+    outcome: "Confirmed",
+    channel: "Email",
+    confirmedByName: "TEST ONLY customer",
+    confirmedAt: new Date().toISOString(),
+    rowVersion: pendingCustomer.rowVersion,
+  });
   const confirmed = await api("manager", "POST", `/api/v1/site-visits/${visitId}/status`, { status: "Confirmed", reason: "", rowVersion: confirmedByCustomer.rowVersion });
-  const checkedIn = await api("engineer", "POST", `/api/v1/site-visits/${visitId}/check-in`, { actualAttendees: "TEST ONLY engineer", customerAttendees: "TEST ONLY customer",
-    locationConsentGiven: false, latitude: null, longitude: null, rowVersion: confirmed.rowVersion });
+  const checkedIn = await api("engineer", "POST", `/api/v1/site-visits/${visitId}/check-in`, {
+    actualAttendees: "TEST ONLY engineer",
+    customerAttendees: "TEST ONLY customer",
+    locationConsentGiven: false,
+    latitude: null,
+    longitude: null,
+    rowVersion: confirmed.rowVersion,
+  });
   assert.equal(checkedIn.status, "In Progress");
   const photoBytes = Buffer.from("TEST ONLY synthetic site photo bytes\n");
   await upload("engineer", `/api/v1/site-visits/${visitId}/attachments`, "site-photo.txt", photoBytes, { category: "Photo", description: "TEST ONLY site evidence" });
@@ -188,9 +310,12 @@ try {
   const reportVersion = visitDetail.report.rowVersion;
   const reportNumber = visitDetail.report.number;
   let report = await api("engineer", "PUT", `/api/v1/site-visits/${visitId}/report`, {
-    rowVersion: reportVersion, visitSummary: "TEST ONLY completed site visit and verified actual conditions.",
-    customerRequirement: "TEST ONLY automate the production station.", existingCondition: "TEST ONLY manual process.",
-    proposedScope: "TEST ONLY panel and controls.", engineerConclusion: "TEST ONLY solution is feasible and ready for estimating.",
+    rowVersion: reportVersion,
+    visitSummary: "TEST ONLY completed site visit and verified actual conditions.",
+    customerRequirement: "TEST ONLY automate the production station.",
+    existingCondition: "TEST ONLY manual process.",
+    proposedScope: "TEST ONLY panel and controls.",
+    engineerConclusion: "TEST ONLY solution is feasible and ready for estimating.",
   });
   report = await api("engineer", "POST", `/api/v1/site-visits/${visitId}/report/submit`, { rowVersion: report.rowVersion });
   report = await api("manager", "POST", `/api/v1/site-visits/${visitId}/report/review`, { rowVersion: report.rowVersion, decision: "Approved", comment: "TEST ONLY approved report" });
@@ -203,60 +328,150 @@ try {
   const estimate = await approveEstimate(Number(main.inquiry.id), main.dueDate);
   // Created with its plan, the way the Create project form sends it: the Master Plan headings, the team's tasks and their functions under them.
   const planDay = (offset: number) => new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
-  const sales = actors["handover-sales"]!, engineer = actors["handover-engineer"]!;
-  const created = await api("admin", "POST", "/api/v1/projects", { ...projectBody(estimate.id, main.dueDate), masterPlan: [
-    { name: "Kick-off meeting", start: planDay(3), finish: planDay(3) },
-    { name: "TEST ONLY Software development", start: planDay(4), finish: planDay(30), tasks: [
-      { name: "TEST ONLY Web App WMS", userId: sales, start: planDay(4), finish: planDay(20), planManDays: 12.5, functions: [
-        { name: "TEST ONLY Inbound" }, { name: "TEST ONLY Outbound", userId: engineer, start: planDay(10), finish: planDay(12) }] }] },
-    { name: "Go Live", start: planDay(40), finish: planDay(45) },
-  ] }, 201);
+  const sales = actors["handover-sales"]!,
+    engineer = actors["handover-engineer"]!;
+  const created = await api(
+    "admin",
+    "POST",
+    "/api/v1/projects",
+    {
+      ...projectBody(estimate.id, main.dueDate),
+      masterPlan: [
+        { name: "Kick-off meeting", start: planDay(3), finish: planDay(3) },
+        {
+          name: "TEST ONLY Software development",
+          start: planDay(4),
+          finish: planDay(30),
+          tasks: [
+            {
+              name: "TEST ONLY Web App WMS",
+              userId: sales,
+              start: planDay(4),
+              finish: planDay(20),
+              planManDays: 12.5,
+              functions: [{ name: "TEST ONLY Inbound" }, { name: "TEST ONLY Outbound", userId: engineer, start: planDay(10), finish: planDay(12) }],
+            },
+          ],
+        },
+        { name: "Go Live", start: planDay(40), finish: planDay(45) },
+      ],
+    },
+    201,
+  );
   assert.equal(created.number, `PJ-CARRY-${estimate.id}`);
   const header = (await database.query<{ start_date: Date; target_delivery: Date }>(`SELECT start_date,target_delivery FROM dbo.projects WHERE id=${Number(created.id)}`)).recordset[0]!;
   assert.deepEqual([header.start_date.toISOString().slice(0, 10), header.target_delivery.toISOString().slice(0, 10)], [planDay(3), planDay(45)]);
-  assert.equal((await database.query(`SELECT user_id FROM dbo.project_members WHERE project_id=${Number(created.id)} AND user_id IN(${sales},${engineer})`)).recordset.length, 2, "everyone on the team plan is on the project");
-  type PlanRow = { id: number; name: string; kind: string; visibility: string; planStart: string | null; planFinish: string | null; storedPlanStart: string | null;
-    planDays: number; planManDays: number; pics: Array<{ id: number }>; children: PlanRow[] };
+  assert.equal(
+    (await database.query(`SELECT user_id FROM dbo.project_members WHERE project_id=${Number(created.id)} AND user_id IN(${sales},${engineer})`)).recordset.length,
+    2,
+    "everyone on the team plan is on the project",
+  );
+  type PlanRow = {
+    id: number;
+    name: string;
+    kind: string;
+    visibility: string;
+    planStart: string | null;
+    planFinish: string | null;
+    storedPlanStart: string | null;
+    planDays: number;
+    planManDays: number;
+    pics: Array<{ id: number }>;
+    children: PlanRow[];
+  };
   const schedule = await api("manager", "GET", `/api/v1/projects/${created.id}/schedule`);
   const headings = schedule.tasks as PlanRow[];
   // Each heading shows the rows under it; its own dates stay the customer's.
-  assert.deepEqual(headings.map((row) => [row.name, row.kind, row.visibility, row.planStart, row.planFinish]),
-    [["Kick-off meeting", "phase", "Customer", planDay(3), planDay(3)], ["TEST ONLY Software development", "phase", "Customer", planDay(4), planDay(20)],
-      ["Go Live", "phase", "Customer", planDay(40), planDay(45)]]);
+  assert.deepEqual(
+    headings.map((row) => [row.name, row.kind, row.visibility, row.planStart, row.planFinish]),
+    [
+      ["Kick-off meeting", "phase", "Customer", planDay(3), planDay(3)],
+      ["TEST ONLY Software development", "phase", "Customer", planDay(4), planDay(20)],
+      ["Go Live", "phase", "Customer", planDay(40), planDay(45)],
+    ],
+  );
   assert.deepEqual([headings[1]!.storedPlanStart, headings[1]!.planDays], [planDay(4), 27]);
   const web = headings[1]!.children[0]!;
   assert.deepEqual([web.name, web.kind, web.visibility, web.planManDays, web.pics.map((pic) => pic.id)], ["TEST ONLY Web App WMS", "task", "Internal", 12.5, [sales]]);
   // A function without its own member or dates has its task's.
-  assert.deepEqual(web.children.map((row) => [row.name, row.planStart, row.planFinish, row.pics.map((pic) => pic.id)]),
-    [["TEST ONLY Inbound", planDay(4), planDay(20), [sales]], ["TEST ONLY Outbound", planDay(10), planDay(12), [engineer]]]);
+  assert.deepEqual(
+    web.children.map((row) => [row.name, row.planStart, row.planFinish, row.pics.map((pic) => pic.id)]),
+    [
+      ["TEST ONLY Inbound", planDay(4), planDay(20), [sales]],
+      ["TEST ONLY Outbound", planDay(10), planDay(12), [engineer]],
+    ],
+  );
   checks += 6;
   // Edit project sends the plan back as it shows it. Changing the dates of a task that takes them from its functions is refused;
   // renaming a heading, adding one, dropping a function and adding one without dates or member goes through.
-  const editPlan = (webStart: string) => ({ rowVersion: created.rowVersion, scheduleVersion: schedule.scheduleVersion, masterPlan: [
-    { id: headings[0]!.id, name: "Kick-off meeting with the customer", start: planDay(3), finish: planDay(3) },
-    { id: headings[1]!.id, name: headings[1]!.name, start: planDay(4), finish: planDay(30), tasks: [
-      { id: web.id, name: web.name, userId: sales, start: webStart, finish: planDay(20), planManDays: 12.5, functions: [
-        { id: web.children[0]!.id, name: "TEST ONLY Inbound", userId: sales, start: planDay(4), finish: planDay(20) }, { name: "TEST ONLY Picking" }] }] },
-    { name: "TEST ONLY FAT", start: planDay(32), finish: planDay(33) },
-    { id: headings[2]!.id, name: "Go Live", start: planDay(40), finish: planDay(45) },
-  ] });
+  const editPlan = (webStart: string) => ({
+    rowVersion: created.rowVersion,
+    scheduleVersion: schedule.scheduleVersion,
+    masterPlan: [
+      { id: headings[0]!.id, name: "Kick-off meeting with the customer", start: planDay(3), finish: planDay(3) },
+      {
+        id: headings[1]!.id,
+        name: headings[1]!.name,
+        start: planDay(4),
+        finish: planDay(30),
+        tasks: [
+          {
+            id: web.id,
+            name: web.name,
+            userId: sales,
+            start: webStart,
+            finish: planDay(20),
+            planManDays: 12.5,
+            functions: [{ id: web.children[0]!.id, name: "TEST ONLY Inbound", userId: sales, start: planDay(4), finish: planDay(20) }, { name: "TEST ONLY Picking" }],
+          },
+        ],
+      },
+      { name: "TEST ONLY FAT", start: planDay(32), finish: planDay(33) },
+      { id: headings[2]!.id, name: "Go Live", start: planDay(40), finish: planDay(45) },
+    ],
+  });
   assert.equal((await api("manager", "PUT", `/api/v1/projects/${created.id}`, editPlan(planDay(5)), 409)).code, "schedule_rollup_plan_derived");
   await api("manager", "PUT", `/api/v1/projects/${created.id}`, editPlan(planDay(4)));
   const editedPlan = await api("manager", "GET", `/api/v1/projects/${created.id}/schedule`);
   const edited = editedPlan.tasks as PlanRow[];
-  assert.deepEqual(edited.map((row) => row.name), ["Kick-off meeting with the customer", "TEST ONLY Software development", "TEST ONLY FAT", "Go Live"]);
-  assert.deepEqual(edited[1]!.children[0]!.children.map((row) => [row.name, row.planStart, row.planFinish, row.pics.map((pic) => pic.id)]),
-    [["TEST ONLY Inbound", planDay(4), planDay(20), [sales]], ["TEST ONLY Picking", planDay(4), planDay(20), [sales]]]);
+  assert.deepEqual(
+    edited.map((row) => row.name),
+    ["Kick-off meeting with the customer", "TEST ONLY Software development", "TEST ONLY FAT", "Go Live"],
+  );
+  assert.deepEqual(
+    edited[1]!.children[0]!.children.map((row) => [row.name, row.planStart, row.planFinish, row.pics.map((pic) => pic.id)]),
+    [
+      ["TEST ONLY Inbound", planDay(4), planDay(20), [sales]],
+      ["TEST ONLY Picking", planDay(4), planDay(20), [sales]],
+    ],
+  );
   assert.ok((await database.query(`SELECT 1 FROM dbo.schedule_tasks WHERE id=${Number(web.children[1]!.id)} AND deleted_at IS NOT NULL`)).recordset[0], "the dropped function is removed");
   checks += 3;
-  // The plan's + on a row: a task goes in place, before the sibling named in beforeId, and needs a member.
-  const insertBody = (picUserIds: number[]) => ({ scheduleVersion: editedPlan.scheduleVersion, parentId: edited[1]!.id, beforeId: edited[1]!.children[0]!.id,
-    sortOrder: 0, kind: "task", name: "TEST ONLY Design review", isMilestone: false, visibility: "Internal", planStart: planDay(9), planDays: 1, startMode: "manual",
-    predecessorId: null, lagDays: 0, picUserIds, picExternal: "", planManDays: 0 });
-  assert.equal((await api("manager", "POST", `/api/v1/projects/${created.id}/schedule/tasks`, insertBody([]), 400)).code, "schedule_member_required");
+  // The plan's + on a row: a task goes in place, before the sibling named in beforeId (a member is optional since 2026-11-24).
+  const insertBody = (picUserIds: number[]) => ({
+    scheduleVersion: editedPlan.scheduleVersion,
+    parentId: edited[1]!.id,
+    beforeId: edited[1]!.children[0]!.id,
+    sortOrder: 0,
+    kind: "task",
+    name: "TEST ONLY Design review",
+    isMilestone: false,
+    visibility: "Internal",
+    planStart: planDay(9),
+    planDays: 1,
+    startMode: "manual",
+    predecessorId: null,
+    lagDays: 0,
+    picUserIds,
+    picExternal: "",
+    planManDays: 0,
+  });
   await api("manager", "POST", `/api/v1/projects/${created.id}/schedule/tasks`, insertBody([engineer]), 201);
   const inserted = (await api("manager", "GET", `/api/v1/projects/${created.id}/schedule`)).tasks as PlanRow[];
-  assert.deepEqual(inserted[1]!.children.map((row) => row.name), ["TEST ONLY Design review", "TEST ONLY Web App WMS"]);
+  assert.deepEqual(
+    inserted[1]!.children.map((row) => row.name),
+    ["TEST ONLY Design review", "TEST ONLY Web App WMS"],
+  );
   checks += 2;
   // Migration 098 converts a plan built the old way: the Master Plan's rows become headings (one with progress keeps its place
   // under a heading of its name), a bare top-level row becomes a heading, and the Team plan and an assigned top-level row wait
@@ -280,15 +495,32 @@ try {
     INSERT dbo.schedule_task_pics(task_id,user_id) SELECT id,@s FROM @row;
     EXEC dbo.usp_schedule_convert_to_headings @project_id=@p;`);
   const converted = (await api("manager", "GET", `/api/v1/projects/${created.id}/schedule`)).tasks as PlanRow[];
-  assert.deepEqual(converted.map((row) => [row.name, row.kind]), [["Kick-off meeting with the customer", "phase"], ["TEST ONLY Software development", "phase"],
-    ["TEST ONLY FAT", "phase"], ["Go Live", "phase"], ["TEST ONLY Old FAT", "phase"], ["TEST ONLY Old design", "phase"], ["TEST ONLY Old main row", "phase"],
-    ["ยังไม่จัดหัวข้อ", "phase"]]);
+  assert.deepEqual(
+    converted.map((row) => [row.name, row.kind]),
+    [
+      ["Kick-off meeting with the customer", "phase"],
+      ["TEST ONLY Software development", "phase"],
+      ["TEST ONLY FAT", "phase"],
+      ["Go Live", "phase"],
+      ["TEST ONLY Old FAT", "phase"],
+      ["TEST ONLY Old design", "phase"],
+      ["TEST ONLY Old main row", "phase"],
+      ["ยังไม่จัดหัวข้อ", "phase"],
+    ],
+  );
   const byName = new Map(converted.map((row) => [row.name, row]));
-  assert.deepEqual([byName.get("TEST ONLY Old FAT")!.visibility, byName.get("TEST ONLY Old FAT")!.storedPlanStart, byName.get("TEST ONLY Old FAT")!.children.length],
-    ["Customer", planDay(50), 0]);
-  assert.deepEqual(byName.get("TEST ONLY Old design")!.children.map((row) => [row.name, row.kind, row.planStart]), [["TEST ONLY Old design", "task", planDay(5)]]);
-  assert.deepEqual(byName.get("ยังไม่จัดหัวข้อ")!.children.map((row) => [row.name, row.pics.map((pic) => pic.id)]),
-    [["TEST ONLY Old wiring", [sales]], ["TEST ONLY Old assigned row", [sales]]]);
+  assert.deepEqual([byName.get("TEST ONLY Old FAT")!.visibility, byName.get("TEST ONLY Old FAT")!.storedPlanStart, byName.get("TEST ONLY Old FAT")!.children.length], ["Customer", planDay(50), 0]);
+  assert.deepEqual(
+    byName.get("TEST ONLY Old design")!.children.map((row) => [row.name, row.kind, row.planStart]),
+    [["TEST ONLY Old design", "task", planDay(5)]],
+  );
+  assert.deepEqual(
+    byName.get("ยังไม่จัดหัวข้อ")!.children.map((row) => [row.name, row.pics.map((pic) => pic.id)]),
+    [
+      ["TEST ONLY Old wiring", [sales]],
+      ["TEST ONLY Old assigned row", [sales]],
+    ],
+  );
   assert.equal((await database.query(`SELECT 1 FROM dbo.schedule_tasks WHERE project_id=${Number(created.id)} AND name IN(N'Master Plan',N'Team plan') AND deleted_at IS NULL`)).recordset.length, 0);
   checks += 5;
   // The ERP number stays with its project: a second project cannot reuse it.
@@ -300,9 +532,10 @@ try {
   // a taken number is refused, and a real number stays.
   const placeholder = await api("admin", "POST", "/api/v1/projects", { ...projectBody(reuse.id, unrelated.dueDate), projectNumber: "PJ000000" }, 201);
   assert.equal(placeholder.number, "PJ000000");
-  const versionOf = async (id: number) => Buffer.from((await database.query<{ row_version: Buffer }>(`SELECT row_version FROM dbo.projects WHERE id=${id}`)).recordset[0]!.row_version).toString("base64");
-  const renumber = (projectNumber: string, expected = 200) => versionOf(Number(placeholder.id))
-    .then((rowVersion) => api("manager", "PUT", `/api/v1/projects/${placeholder.id}`, { rowVersion, projectNumber }, expected));
+  const versionOf = async (id: number) =>
+    Buffer.from((await database.query<{ row_version: Buffer }>(`SELECT row_version FROM dbo.projects WHERE id=${id}`)).recordset[0]!.row_version).toString("base64");
+  const renumber = (projectNumber: string, expected = 200) =>
+    versionOf(Number(placeholder.id)).then((rowVersion) => api("manager", "PUT", `/api/v1/projects/${placeholder.id}`, { rowVersion, projectNumber }, expected));
   assert.equal((await renumber(created.number, 409)).code, "project_number_taken");
   assert.equal((await renumber("pj-carry-erp")).number, "PJ-CARRY-ERP");
   assert.equal((await database.query<{ project_no: string }>(`SELECT project_no FROM dbo.projects WHERE id=${Number(placeholder.id)}`)).recordset[0]!.project_no, "PJ-CARRY-ERP");
@@ -312,7 +545,9 @@ try {
   checks += 5;
   assert.equal(created.folderMetadataCreated, 15);
   assert.equal(created.documentsTransferred, 7);
-  const folders = (await database.query<{ folder_code: string; storage_key: string }>(`SELECT folder_code,storage_key FROM dbo.project_folders WHERE project_id=${Number(created.id)} ORDER BY folder_code`)).recordset;
+  const folders = (
+    await database.query<{ folder_code: string; storage_key: string }>(`SELECT folder_code,storage_key FROM dbo.project_folders WHERE project_id=${Number(created.id)} ORDER BY folder_code`)
+  ).recordset;
   assert.equal(folders.length, 15);
   for (const folder of folders) {
     const code = folder.folder_code.trim();
@@ -324,14 +559,29 @@ try {
   assert.equal(listedDocs.length, 7);
   await api("outsider", "GET", `/api/v1/projects/${created.id}/documents`, undefined, 403);
 
-  const docs = (await database.query<{ folder_code: string; name: string; size_bytes: number; storage_key: string; provider_etag: string; remark: string }>(
-    `SELECT folder_code,name,size_bytes,storage_key,provider_etag,remark FROM dbo.project_docs WHERE project_id=${Number(created.id)} AND deleted_at IS NULL ORDER BY id`,
-  )).recordset;
+  const docs = (
+    await database.query<{ folder_code: string; name: string; size_bytes: number; storage_key: string; provider_etag: string; remark: string }>(
+      `SELECT folder_code,name,size_bytes,storage_key,provider_etag,remark FROM dbo.project_docs WHERE project_id=${Number(created.id)} AND deleted_at IS NULL ORDER BY id`,
+    )
+  ).recordset;
   assert.equal(docs.length, 7);
-  assert.deepEqual(Object.fromEntries(docs.filter((doc) => ["customer-layout.txt", "equipment-specification.txt", "customer-rfq.txt", "site-photo.txt"].includes(doc.name)).map((doc) => [doc.name, doc.folder_code.trim()])), {
-    "customer-layout.txt": "02", "equipment-specification.txt": "06", "customer-rfq.txt": "06", "site-photo.txt": "13",
-  });
-  const expectedBytes = new Map([["customer-layout.txt", drawingBytes], ["equipment-specification.txt", specificationBytes], ["customer-rfq.txt", intakeBytes], ["site-photo.txt", photoBytes]]);
+  assert.deepEqual(
+    Object.fromEntries(
+      docs.filter((doc) => ["customer-layout.txt", "equipment-specification.txt", "customer-rfq.txt", "site-photo.txt"].includes(doc.name)).map((doc) => [doc.name, doc.folder_code.trim()]),
+    ),
+    {
+      "customer-layout.txt": "02",
+      "equipment-specification.txt": "06",
+      "customer-rfq.txt": "06",
+      "site-photo.txt": "13",
+    },
+  );
+  const expectedBytes = new Map([
+    ["customer-layout.txt", drawingBytes],
+    ["equipment-specification.txt", specificationBytes],
+    ["customer-rfq.txt", intakeBytes],
+    ["site-photo.txt", photoBytes],
+  ]);
   for (const doc of docs) {
     const copied = readFileSync(resolve(storageRoot, doc.storage_key));
     assert.equal(copied.byteLength, Number(doc.size_bytes));
@@ -350,10 +600,12 @@ try {
   assert.ok(!docs.some((doc) => doc.name === "unrelated-secret.txt" || doc.remark.includes(unrelated.inquiry.number)));
   const drawingDoc = listedDocs.find((doc: { fileName: string }) => doc.fileName === "customer-layout.txt");
   const download = await app.inject({ method: "GET", url: `/api/v1/projects/${created.id}/documents/${drawingDoc.id}/content`, headers: { "x-dev-user-id": "handover-engineer" } });
-  assert.equal(download.statusCode, 200, download.body); checks++;
+  assert.equal(download.statusCode, 200, download.body);
+  checks++;
   assert.deepEqual(download.rawPayload, drawingBytes);
   const deniedDownload = await app.inject({ method: "GET", url: `/api/v1/projects/${created.id}/documents/${drawingDoc.id}/content`, headers: { "x-dev-user-id": "handover-outsider" } });
-  assert.equal(deniedDownload.statusCode, 403, deniedDownload.body); checks++;
+  assert.equal(deniedDownload.statusCode, 403, deniedDownload.body);
+  checks++;
 
   // A changed source is rejected atomically: no Project metadata or copied file survives.
   const corrupt = await createInquiry("TEST ONLY corrupt handover");
@@ -372,11 +624,27 @@ try {
 
   // Attachments that failed scanning block handover instead of disappearing silently.
   const blocked = await createInquiry("TEST ONLY blocked scan handover");
-  const blockedIntake = await api("sales", "POST", "/api/v1/sales-intakes/", {
-    customerId: blocked.customer.id, salesOwnerId: actors["handover-sales"], subject: "TEST ONLY blocked attachment",
-    priority: "Normal", source: "Email", requestDate: today, relatedInquiryId: blocked.inquiry.id,
-    contact: { contactChannel: "Email" }, requirement: {}, machine: {}, visitTypeIds: [], skillIds: [], windows: [],
-  }, 201);
+  const blockedIntake = await api(
+    "sales",
+    "POST",
+    "/api/v1/sales-intakes/",
+    {
+      customerId: blocked.customer.id,
+      salesOwnerId: actors["handover-sales"],
+      subject: "TEST ONLY blocked attachment",
+      priority: "Normal",
+      source: "Email",
+      requestDate: today,
+      relatedInquiryId: blocked.inquiry.id,
+      contact: { contactChannel: "Email" },
+      requirement: {},
+      machine: {},
+      visitTypeIds: [],
+      skillIds: [],
+      windows: [],
+    },
+    201,
+  );
   const blockedUpload = await upload("sales", `/api/v1/sales-intakes/${blockedIntake.id}/attachments`, "scan-failed.txt", Buffer.from("TEST ONLY scanner failure\n"), { category: "Other" });
   run(`UPDATE dbo.sales_intake_attachments SET scan_status=N'Failed' WHERE id=${Number(blockedUpload.id)};`);
   const blockedEstimate = await approveEstimate(Number(blocked.inquiry.id), blocked.dueDate);
@@ -387,10 +655,19 @@ try {
   assert.equal(Number((await database.query<{ total: number }>("SELECT COUNT(*) total FROM dbo.project_docs")).recordset[0]!.total), beforeDocCount);
   assert.deepEqual(filesBelow(resolve(storageRoot, "projects")).sort(), beforeBlockedFiles);
 
-  console.log(`Project document carryover SQL integration passed: ${checks} API checks; complete Inquiry/visit/report/estimate/Project flow, byte integrity, provenance, isolation and rollback cleanup.`);
+  console.log(
+    `Project document carryover SQL integration passed: ${checks} API checks; complete Inquiry/visit/report/estimate/Project flow, byte integrity, provenance, isolation and rollback cleanup.`,
+  );
 } finally {
-  if (application) { await application.app.close(); await application.database.close(); }
+  if (application) {
+    await application.app.close();
+    await application.database.close();
+  }
   assert.match(name, /^IoTTeamCenter_HandoverCI_[a-f0-9]{32}$/);
-  execFileSync("sqlcmd", [...sqlArgs, "-d", "master", "-Q", `IF DB_ID(N'${name}') IS NOT NULL BEGIN ALTER DATABASE [${name}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [${name}]; END;`], sqlTest.sqlcmdOptions);
+  execFileSync(
+    "sqlcmd",
+    [...sqlArgs, "-d", "master", "-Q", `IF DB_ID(N'${name}') IS NOT NULL BEGIN ALTER DATABASE [${name}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [${name}]; END;`],
+    sqlTest.sqlcmdOptions,
+  );
   rmSync(storageRoot, { recursive: true, force: true });
 }

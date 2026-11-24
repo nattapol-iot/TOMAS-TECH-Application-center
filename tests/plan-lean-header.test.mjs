@@ -14,7 +14,7 @@ test("the Plan opens on one row: a project box that searches, the plan in brief,
   assert.doesNotMatch(plan, /projectQuery|filteredProjects/, "the separate search box is gone");
   assert.match(plan, /<span className="plan-brief" aria-label=\{uiText\("Plan\.summary"\)\}>/);
   assert.doesNotMatch(plan, /className="plan-summary"/);
-  assert.match(plan, /<Panel flush>\n\s*\{rows\.length \|\| draftAt >= 0 \? \(?\s*<div ref=\{fullscreenRef\}/, "the panel no longer repeats the project's name");
+  assert.match(plan, /<Panel flush>\n\s*\{rows\.length \|\| draftAt >= 0 \|\| sheetView \? \(?\s*<div ref=\{fullscreenRef\}/, "the panel no longer repeats the project's name");
   assert.match(plan, /data-guide="plan\.add"/);
   assert.match(plan, /<RowDisclosure\s+label=\{uiText\("Plan\.more"\)\}\s+triggerClassName="btn default"\s+guide="plan\.more"/);
 });
@@ -39,7 +39,7 @@ test("the controls keep to one row: one range list, one fold button, and a colou
   assert.equal(count(plan, 'uiText("Gantt.collapseAll")'), 0, "the label flips inside one button");
   assert.match(plan, /uiText\(anyFolded \? "Expand all" : "Gantt\.collapseAll"\)/);
   assert.match(plan, /const \[legendOpen, setLegendOpen\] = useState\(\(\) => typeof window !== "undefined" && readLegendOpen\(\)\);/);
-  assert.match(plan, /\{peopleView \|\| !legendOpen \? null : \(?\s*<GanttLegend baseline=/);
+  assert.match(plan, /\{peopleView \|\| sheetView \|\| !legendOpen \? null : \(?\s*<GanttLegend baseline=/);
   assert.match(plan, /aria-expanded=\{legendOpen\} onClick=\{toggleLegend\}/);
   const gantt = await source("app/system/production/GanttChart.tsx");
   assert.match(gantt, /compact \? <label className="select-field gantt-zoom-select"><select value=\{zoom\} aria-label=\{t\("Gantt\.zoom"\)\}/);

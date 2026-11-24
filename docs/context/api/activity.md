@@ -2,23 +2,23 @@
 
 [Module](../modules/performance.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `036b22b7`; generated, do not edit. [backend-node/src/routes/activity.ts](<../../../backend-node/src/routes/activity.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `b712e004`; generated, do not edit. [backend-node/src/routes/activity.ts](<../../../backend-node/src/routes/activity.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| POST | `/api/v1/activity/presence` | 141–173 |
-| GET | `/api/v1/activity/meta` | 174–204 |
-| GET | `/api/v1/activity/overview` | 205–249 |
-| GET | `/api/v1/activity/members/:id` | 250–264 |
-| POST | `/api/v1/activity/rules` | 265–307 |
-| POST | `/api/v1/activity/rules/:id/stop` | 308–332 |
-| POST | `/api/v1/activity/reports` | 333–390 |
-| POST | `/api/v1/activity/exceptions` | 391–420 |
-| POST | `/api/v1/activity/quality` | 421–466 |
-| POST | `/api/v1/activity/clarifications` | 467–479 |
-| POST | `/api/v1/activity/cycle-policy` | 480–503 |
+| POST | `/api/v1/activity/presence` | 142–174 |
+| GET | `/api/v1/activity/meta` | 175–205 |
+| GET | `/api/v1/activity/overview` | 206–250 |
+| GET | `/api/v1/activity/members/:id` | 251–265 |
+| POST | `/api/v1/activity/rules` | 266–308 |
+| POST | `/api/v1/activity/rules/:id/stop` | 309–333 |
+| POST | `/api/v1/activity/reports` | 334–391 |
+| POST | `/api/v1/activity/exceptions` | 392–421 |
+| POST | `/api/v1/activity/quality` | 422–467 |
+| POST | `/api/v1/activity/clarifications` | 468–480 |
+| POST | `/api/v1/activity/cycle-policy` | 481–504 |
 
 ## Named functions
 
@@ -30,7 +30,7 @@ Evidence: source snapshot `036b22b7`; generated, do not edit. [backend-node/src/
 | `textDate` | [backend-node/src/routes/activity.ts](<../../../backend-node/src/routes/activity.ts>) | 28–28 |
 | `periodDays` | [backend-node/src/routes/activity.ts](<../../../backend-node/src/routes/activity.ts>) | 29–29 |
 | `uuid` | [backend-node/src/routes/activity.ts](<../../../backend-node/src/routes/activity.ts>) | 30–34 |
-| `registerActivityRoutes` | [backend-node/src/routes/activity.ts](<../../../backend-node/src/routes/activity.ts>) | 107–504 |
+| `registerActivityRoutes` | [backend-node/src/routes/activity.ts](<../../../backend-node/src/routes/activity.ts>) | 108–505 |
 
 ## Direct local dependencies
 

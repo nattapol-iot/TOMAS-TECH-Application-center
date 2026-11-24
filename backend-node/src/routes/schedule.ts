@@ -56,15 +56,14 @@ import { deliverProjectNotices, queueTaskAssignmentNotices } from "../project-no
 import { ensureMembers, readScheduleRows } from "../project-initial-plan.js";
 
 /**
- * A task under a main heading needs a member (owner, 2026-11-03), or a discipline: then it waits, with no PIC, for the head to
- * name its people on Team overview > Allocation (owner, 2026-11-22). A function under a task has its task's people unless
- * others are named.
+ * A task under a main heading may wait for its member (owner, 2026-11-24, the plan Sheet: "ผู้ทำไม่บังคับ"); with a
+ * discipline it waits for the head to name its people on Team overview > Allocation (owner, 2026-11-22). A function under
+ * a task has its task's people unless others are named.
  */
 async function membersFor(transaction: TransactionType, projectId: number, input: PlanInput): Promise<number[]> {
   if (input.kind !== "task" || input.parentId === null || input.picUserIds.length) return input.picUserIds;
   const parent = await readTask(transaction, input.parentId);
-  if (parent.kind === "phase" && input.discipline) return [];
-  if (parent.kind === "phase") throw new ApiError(400, "schedule_member_required", "A task under a main heading needs a member or the discipline it needs.");
+  if (parent.kind === "phase") return [];
   return ((await readPics(transaction, projectId)).get(parent.id) ?? []).filter((pic) => pic.active).map((pic) => pic.id);
 }
 
@@ -342,15 +341,6 @@ export function registerScheduleRoutes(app: FastifyInstance, database: Database,
         if ((await details.query<{ found: number }>(`SELECT COUNT_BIG(*) found FROM dbo.schedule_tasks WHERE parent_id=@id AND kind=N'detail' AND deleted_at IS NULL;`)).recordset[0]?.found)
           throw new ApiError(409, "schedule_detail_shared_task", "This task holds a member's personal task. Remove it before giving the task a second PIC.");
       }
-      if (
-        existing.kind === "task" &&
-        existing.parentId !== null &&
-        !input.picUserIds.length &&
-        !input.discipline &&
-        oldPics.length &&
-        (await readTask(transaction, existing.parentId)).kind === "phase"
-      )
-        throw new ApiError(400, "schedule_member_required", "A task under a main heading keeps at least one member, or the discipline it waits for.");
       // A heading's own dates are the customer's, so they change whatever rows sit under it.
       if (
         existing.kind !== "phase" &&

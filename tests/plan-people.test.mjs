@@ -129,7 +129,7 @@ test("peopleShares: each PIC's man-days by date, one a day at most", () => {
 
 test("Plan screen: the People table is a view of Projects > Plan and locks man-days that come from it", async () => {
   const screen = await source("app/system/production/PlanningPricingScreens.tsx");
-  assert.match(screen, /type PlanLevel = "team" \| "master" \| "member" \| "people";/);
+  assert.match(screen, /type PlanLevel = "sheet" \| "team" \| "master" \| "member" \| "people";/);
   assert.match(screen, /peopleView \? \(?\s*<PlanPeopleGrid\s+projectId=\{activeSchedule\.projectId\}/);
   assert.match(screen, /disabled=\{Boolean\(task\.peopleByDay\?\.length\)\}/, "Edit row does not take man-days for a row that has people per day");
   const grid = await source("app/system/production/PlanPeopleGrid.tsx");

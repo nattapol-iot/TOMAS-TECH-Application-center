@@ -1,0 +1,452 @@
+/* Projects > Plan, the Sheet view (PlanSheet.tsx, V2): the plan typed like an Excel Gantt. Cells on the left, frozen
+   gutter, WBS and TASK columns, a week-scaled bar chart on the right. App tokens only, so it follows both looks. */
+.plan-sheet {
+  --sheet-hol: var(--amber-soft);
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 8px 12px 10px;
+}
+.plan-sheet .sh-bar-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+}
+.plan-sheet .sh-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.plan-sheet .sh-state {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+.plan-sheet .sh-state em {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-style: normal;
+}
+.plan-sheet .sh-state .icon {
+  width: 14px;
+  height: 14px;
+}
+.plan-sheet .sh-note {
+  max-width: 560px;
+  color: var(--ink-soft);
+}
+.plan-sheet .sh-state.error .sh-note {
+  color: var(--red-text);
+}
+.plan-sheet .sh-note-x {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.plan-sheet .sh-note-x:hover {
+  background: var(--n-100);
+  color: var(--ink);
+}
+.plan-sheet .sh-keys {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-2xs);
+}
+
+.plan-sheet .sh-scroll {
+  overflow: auto;
+  min-height: 240px;
+  max-height: calc(100vh - 280px);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+.plan-sheet .sh-table {
+  width: max-content;
+  border-collapse: separate;
+  border-spacing: 0;
+  color: var(--ink);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+  outline: none;
+}
+.plan-sheet .sh-table:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--blue-line);
+}
+.plan-sheet .sh-table th,
+.plan-sheet .sh-table td {
+  box-sizing: border-box;
+  height: 28px;
+  padding: 0 6px;
+  overflow: hidden;
+  border-right: 1px solid var(--line-soft);
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--surface);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.plan-sheet .sh-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  height: 38px;
+  background: var(--n-50);
+  color: var(--ink-soft);
+  font-size: var(--fs-2xs);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1.15;
+  text-align: left;
+  vertical-align: middle;
+  white-space: normal;
+}
+.plan-sheet .sh-table thead th small {
+  display: block;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--fs-3xs);
+  font-weight: 400;
+  letter-spacing: 0;
+  text-overflow: ellipsis;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+/* Frozen on the left: gutter, WBS and TASK. */
+.plan-sheet .sh-table .sh-gut,
+.plan-sheet .sh-table .sh-wbs,
+.plan-sheet .sh-table .sh-name {
+  position: sticky;
+  z-index: 2;
+}
+.plan-sheet .sh-table thead .sh-gut,
+.plan-sheet .sh-table thead .sh-wbs,
+.plan-sheet .sh-table thead .sh-name {
+  z-index: 4;
+}
+.plan-sheet .sh-table .sh-gut {
+  left: 0;
+  width: 28px;
+  min-width: 28px;
+  max-width: 28px;
+  padding: 0 2px;
+  text-align: center;
+}
+.plan-sheet .sh-table .sh-wbs {
+  left: 28px;
+  width: 56px;
+  min-width: 56px;
+  max-width: 56px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  text-align: center;
+}
+.plan-sheet .sh-table .sh-name {
+  left: 84px;
+  width: 260px;
+  min-width: 260px;
+  max-width: 260px;
+  border-right: 2px solid var(--line);
+}
+.plan-sheet .sh-table .sh-pic {
+  width: 96px;
+  min-width: 96px;
+  max-width: 96px;
+}
+.plan-sheet .sh-table .sh-date {
+  width: 80px;
+  min-width: 80px;
+  max-width: 80px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  text-align: center;
+}
+.plan-sheet .sh-table .sh-num {
+  width: 68px;
+  min-width: 68px;
+  max-width: 68px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  text-align: right;
+}
+.plan-sheet .sh-table .sh-after {
+  width: 80px;
+  min-width: 80px;
+  max-width: 80px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+}
+.plan-sheet .sh-table .sh-member {
+  width: 136px;
+  min-width: 136px;
+  max-width: 136px;
+}
+.plan-sheet .sh-table .sh-disc {
+  width: 112px;
+  min-width: 112px;
+  max-width: 112px;
+}
+.plan-sheet .sh-table .sh-status {
+  width: 96px;
+  min-width: 96px;
+  max-width: 96px;
+  border-right: 2px solid var(--line);
+}
+.plan-sheet .sh-table thead .sh-date,
+.plan-sheet .sh-table thead .sh-num {
+  text-align: center;
+}
+
+/* Rows: headings shaded, the active cell outlined, a selection tinted, cells the plan works out greyed. */
+.plan-sheet .sh-row.k-phase td {
+  background: var(--n-50);
+  font-weight: 700;
+}
+.plan-sheet .sh-row.parent:not(.k-phase) .sh-name {
+  font-weight: 600;
+}
+.plan-sheet .sh-row.current .sh-gut,
+.plan-sheet .sh-row.current .sh-wbs {
+  background: var(--blue-soft);
+  color: var(--blue-text);
+}
+.plan-sheet .sh-table td.sh-c {
+  cursor: cell;
+}
+.plan-sheet .sh-table td.sh-c.ro {
+  color: var(--ink-soft);
+}
+.plan-sheet .sh-row td.sh-c.sel {
+  background: var(--blue-soft);
+}
+.plan-sheet .sh-row td.sh-c.on {
+  box-shadow: inset 0 0 0 2px var(--blue);
+}
+.plan-sheet .sh-row td.sh-c.typing {
+  padding: 0;
+  box-shadow: inset 0 0 0 2px var(--blue);
+}
+.plan-sheet .sh-table td.late {
+  color: var(--red-text);
+  font-weight: 600;
+}
+.plan-sheet .sh-table td.st-not-started {
+  color: var(--muted);
+}
+.plan-sheet .sh-table td.st-in-progress {
+  color: var(--blue-text);
+}
+.plan-sheet .sh-table td.st-blocked {
+  color: var(--red-text);
+  font-weight: 600;
+}
+.plan-sheet .sh-table td.st-done {
+  color: var(--green-text);
+}
+.plan-sheet .sh-input {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  min-height: 26px;
+  padding: 0 6px;
+  border: 0;
+  outline: none;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+.plan-sheet select.sh-input {
+  padding: 0 2px;
+}
+
+.plan-sheet .sh-label {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+.plan-sheet .sh-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.plan-sheet .sh-fold,
+.plan-sheet .sh-open,
+.plan-sheet .sh-plus {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.plan-sheet .sh-fold .icon,
+.plan-sheet .sh-open .icon,
+.plan-sheet .sh-plus .icon,
+.plan-sheet .sh-wbs .icon {
+  width: 14px;
+  height: 14px;
+}
+.plan-sheet .sh-fold:hover,
+.plan-sheet .sh-open:hover,
+.plan-sheet .sh-plus:hover {
+  background: var(--n-100);
+  color: var(--ink);
+}
+.plan-sheet .sh-fold-gap {
+  flex: none;
+  width: 20px;
+}
+.plan-sheet .sh-open {
+  margin-left: auto;
+  opacity: 0;
+}
+.plan-sheet .sh-plus {
+  opacity: 0;
+  color: var(--blue-text);
+}
+.plan-sheet .sh-row:hover .sh-open,
+.plan-sheet .sh-row.current .sh-open,
+.plan-sheet .sh-open:focus-visible,
+.plan-sheet .sh-row:hover .sh-plus,
+.plan-sheet .sh-row.current .sh-plus,
+.plan-sheet .sh-plus:focus-visible {
+  opacity: 1;
+}
+
+/* The row being typed, and rows still saving. */
+.plan-sheet .sh-draft td {
+  background: var(--blue-soft);
+}
+.plan-sheet .sh-draft .sh-input {
+  width: auto;
+  max-width: calc(100% - 4px);
+  min-width: 0;
+  height: 24px;
+  min-height: 24px;
+  border: 1px solid var(--blue-line);
+  border-radius: var(--r-sm);
+}
+.plan-sheet .sh-draft .sh-name .sh-input {
+  width: calc(100% - 4px);
+}
+.plan-sheet .sh-hint {
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+.plan-sheet .sh-ghost td {
+  background: var(--n-25);
+  color: var(--muted);
+}
+.plan-sheet .sh-wait .spinner {
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+/* The bars: whole weeks from a Monday, weekends and company holidays shaded, today a red line. */
+.plan-sheet .sh-table .sh-tl {
+  padding: 0;
+}
+.plan-sheet .sh-weeks {
+  display: flex;
+  height: 100%;
+  align-items: center;
+}
+.plan-sheet .sh-weeks span {
+  flex: none;
+  box-sizing: border-box;
+  overflow: hidden;
+  padding-left: 4px;
+  border-left: 1px solid var(--line-soft);
+  white-space: nowrap;
+}
+.plan-sheet .sh-track {
+  position: relative;
+  height: 27px;
+  background-image:
+    var(--sheet-stripes), repeating-linear-gradient(90deg, var(--line-soft) 0 1px, transparent 1px calc(var(--dw) * 7)),
+    repeating-linear-gradient(90deg, transparent 0 calc(var(--dw) * 5), var(--n-50) calc(var(--dw) * 5) calc(var(--dw) * 7));
+}
+.plan-sheet .sh-track::after {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--today-x);
+  width: 2px;
+  background: var(--red);
+  content: "";
+  opacity: 0.55;
+}
+.plan-sheet .sh-bar {
+  position: absolute;
+  top: 8px;
+  height: 12px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--blue);
+}
+.plan-sheet .sh-bar b {
+  display: block;
+  height: 100%;
+  background: var(--blue-text);
+}
+.plan-sheet .sh-bar.k-phase {
+  top: 10px;
+  height: 8px;
+  background: var(--ink-soft);
+}
+.plan-sheet .sh-bar.roll:not(.k-phase) {
+  top: 10px;
+  height: 8px;
+  background: var(--n-400);
+}
+.plan-sheet .sh-bar.done {
+  background: var(--green);
+}
+.plan-sheet .sh-bar.done b {
+  background: var(--green);
+}
+.plan-sheet .sh-bar.late {
+  background: var(--red);
+}
+.plan-sheet .sh-ms {
+  position: absolute;
+  top: 9px;
+  width: 10px;
+  height: 10px;
+  background: var(--amber);
+  transform: rotate(45deg);
+}
+
+@media (max-width: 720px) {
+  .plan-sheet {
+    padding: 6px 8px 8px;
+  }
+  .plan-sheet .sh-table .sh-name {
+    width: 150px;
+    min-width: 150px;
+    max-width: 150px;
+  }
+  .plan-sheet .sh-scroll {
+    max-height: calc(100vh - 220px);
+  }
+}
