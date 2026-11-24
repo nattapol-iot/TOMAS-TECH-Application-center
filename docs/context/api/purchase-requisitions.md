@@ -2,52 +2,52 @@
 
 [Module](../modules/procurement.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `d1166c4a`; generated, do not edit. [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `6fa18e02`; generated, do not edit. [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/purchase-requisitions` | 455–483 |
-| GET | `/api/v1/purchase-requisitions/approval-route` | 487–497 |
-| GET | `/api/v1/purchase-requisitions/:id` | 499–540 |
-| POST | `/api/v1/purchase-requisitions` | 542–561 |
-| PUT | `/api/v1/purchase-requisitions/:id` | 565–589 |
-| POST | `/api/v1/purchase-requisitions/:id/submit` | 591–609 |
-| POST | `/api/v1/purchase-requisitions/:id/decide` | 611–675 |
-| POST | `/api/v1/purchase-requisitions/:id/erp-send` | 678–687 |
-| POST | `/api/v1/purchase-requisitions/erp-sync` | 692–722 |
-| POST | `/api/v1/purchase-requisitions/:id/erp-sync` | 725–754 |
-| GET | `/api/v1/erp/purchasing/options` | 757–763 |
-| POST | `/api/v1/purchase-requisitions/:id/withdraw` | 800–819 |
-| POST | `/api/v1/purchase-requisitions/:id/cancel` | 823–836 |
-| POST | `/api/v1/purchase-requisitions/:id/request-list-uploaded` | 840–848 |
-| GET | `/api/v1/procurement/approvals/attention` | 851–861 |
+| GET | `/api/v1/purchase-requisitions` | 804–878 |
+| GET | `/api/v1/purchase-requisitions/approval-route` | 882–900 |
+| GET | `/api/v1/purchase-requisitions/:id` | 902–1032 |
+| POST | `/api/v1/purchase-requisitions` | 1034–1094 |
+| PUT | `/api/v1/purchase-requisitions/:id` | 1098–1164 |
+| POST | `/api/v1/purchase-requisitions/:id/submit` | 1166–1215 |
+| POST | `/api/v1/purchase-requisitions/:id/decide` | 1217–1357 |
+| POST | `/api/v1/purchase-requisitions/:id/erp-send` | 1360–1377 |
+| POST | `/api/v1/purchase-requisitions/erp-sync` | 1382–1440 |
+| POST | `/api/v1/purchase-requisitions/:id/erp-sync` | 1443–1479 |
+| GET | `/api/v1/erp/purchasing/options` | 1482–1490 |
+| POST | `/api/v1/purchase-requisitions/:id/withdraw` | 1534–1579 |
+| POST | `/api/v1/purchase-requisitions/:id/cancel` | 1583–1620 |
+| POST | `/api/v1/purchase-requisitions/:id/request-list-uploaded` | 1624–1637 |
+| GET | `/api/v1/procurement/approvals/attention` | 1640–1656 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `textOrNull` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 41–41 |
-| `erpView` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 42–45 |
-| `decimal` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 47–48 |
-| `readHeader` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 49–51 |
-| `optionalLink` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 54–61 |
-| `parseLineForm` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 64–70 |
-| `parseLines` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 73–96 |
-| `parseRequestFields` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 99–104 |
-| `issueRequestNumber` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 111–124 |
-| `assertUnitOfProject` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 127–132 |
-| `requestableBomLines` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 135–152 |
-| `assertActiveSuppliers` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 154–159 |
-| `insertLines` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 166–189 |
-| `approvalRoute` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 197–212 |
-| `buildApprovalRoute` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 214–225 |
-| `stepsOf` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 228–230 |
-| `demandPrScope` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 244–248 |
-| `noticeWaiting` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 255–274 |
-| `noticeRequester` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 280–294 |
-| `registerPurchaseRequisitionRoutes` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 296–863 |
+| `textOrNull` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 104–104 |
+| `erpView` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 105–120 |
+| `decimal` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 122–127 |
+| `readHeader` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 128–134 |
+| `optionalLink` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 137–148 |
+| `parseLineForm` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 151–162 |
+| `parseLines` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 165–197 |
+| `parseRequestFields` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 200–210 |
+| `issueRequestNumber` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 217–235 |
+| `assertUnitOfProject` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 238–245 |
+| `requestableBomLines` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 248–285 |
+| `assertActiveSuppliers` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 287–297 |
+| `insertLines` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 304–331 |
+| `approvalRoute` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 339–358 |
+| `buildApprovalRoute` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 360–385 |
+| `stepsOf` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 388–390 |
+| `demandPrScope` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 404–410 |
+| `noticeWaiting` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 417–455 |
+| `noticeRequester` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 461–503 |
+| `registerPurchaseRequisitionRoutes` | [backend-node/src/routes/purchase-requisitions.ts](<../../../backend-node/src/routes/purchase-requisitions.ts>) | 505–1657 |
 
 ## Direct local dependencies
 

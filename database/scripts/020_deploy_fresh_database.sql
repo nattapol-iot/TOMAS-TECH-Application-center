@@ -192,6 +192,7 @@ GO
 :r database/migrations/128_outsource_pr_link.sql
 :r database/migrations/129_template_plan.sql
 :r database/migrations/130_holiday_over_work.sql
+:r database/migrations/131_purchase_order_seen.sql
 
 USE [$(DatabaseName)];
 GO

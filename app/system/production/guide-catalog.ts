@@ -1627,8 +1627,8 @@ const PROJECT_PAGE: Guide = {
       view: "projects",
       title: { th: "แท็บต้นทุน", en: "The Cost tab", jp: "コストタブ" },
       body: {
-        th: "สำหรับ Leader ขึ้นไป แถวบนสลับมุมมอง ภาพรวม ตามงาน ตามคน และซื้อของ สี่ช่องด้านล่างคือ Hardware และ Outsource (ขอซื้อแล้วเทียบงบ) man-day ที่ใช้จริง และที่คาดตอนจบเทียบงบ กดช่องเพื่อไปมุมมองนั้น ภาพรวมมีกราฟ man-day สะสม (เส้นประคือแผน เส้นเขียวคือจริง เส้นแดงคืองบ จุดส้มคือคาดตอนจบ) คู่กับตารางตามสาขา",
-        en: "For Leaders and above. The top row switches between Overview, By task, By person and Bought. The four figures below are Hardware and Outsource (requested against budget), man-days used and the forecast at completion against budget; press one to open its view. The Overview draws man-days over time (dashed: plan, green: actual, red: budget, orange dot: forecast) beside the split by discipline.",
+        th: "สำหรับ Leader ขึ้นไป แถวบนสลับมุมมอง ภาพรวม ตามงาน ตามคน และซื้อของ สี่ช่องด้านล่างคือ Hardware และ Outsource (ขอซื้อแล้วเทียบงบ) man-day ที่ใช้จริง และที่คาดตอนจบเทียบงบ กดช่องเพื่อไปมุมมองนั้น ภาพรวมมีกราฟ man-day สะสม (เส้นประคือแผน เส้นเขียวคือจริง เส้นแดงคืองบ จุดส้มคือคาดตอนจบ) คู่กับตารางตามสาขา มุมมองซื้อของมีกราฟยอดขอซื้อและสั่งซื้อสะสม (สั่งซื้อนับจากวันที่ระบบเห็น PO) แถบช่วงวันที่ต้องการของ และแยกตามหมวด",
+        en: "For Leaders and above. The top row switches between Overview, By task, By person and Bought. The four figures below are Hardware and Outsource (requested against budget), man-days used and the forecast at completion against budget; press one to open its view. The Overview draws man-days over time (dashed: plan, green: actual, red: budget, orange dot: forecast) beside the split by discipline. Bought draws requested and ordered cost over time (ordered by the date the app first saw the PO), with the need-by dates as a band and the split by category.",
         jp: "リーダー以上が対象です。上段で「概要」「作業別」「人別」「購買」を切り替えます。その下の4つはハードウェアと外注（予算に対する依頼額）、実績人日、予算に対する完了時見込みで、押すとその表示に移ります。概要には人日の累計グラフ（点線：計画、緑：実績、赤：予算、橙の点：見込み）と分野別の表があります。",
       },
       missing: {

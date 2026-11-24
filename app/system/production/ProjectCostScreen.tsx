@@ -867,8 +867,136 @@ function ProjectCostPage(cost: ReturnType<typeof useProjectCostDetail>) {
           <p className="pc-empty">{t("Cost.noHours")}</p>
         )
       ) : null}
-      {view === "bought" ? <ProjectCostBody {...cost} /> : null}
+      {view === "bought" ? (
+        <>
+          {detail.purchases ? (
+            <PurchaseView purchases={detail.purchases} budget={access.budget ? (project.hardware.budget ?? 0) + (project.outsource.budget ?? 0) || null : null} today={detail.today} />
+          ) : null}
+          <ProjectCostBody {...cost} />
+        </>
+      ) : null}
     </div>
+  );
+}
+
+/** The estimate's bought categories (estimate-assignment-queue.ts names them the same way); "" is a line typed on the request. */
+const PURCHASE_CATEGORY: Record<string, string> = { "01": "Hardware", "02": "Software", "03": "Electrical", "04": "Mechanical", "05": "Robot", "07": "Outsource", "": "Cost.typedLine" };
+
+/**
+ * Task doc 6.2: what was bought, over time and by category. Requested and ordered added up week by week against the
+ * budget, the need-by window of the requests as a band, the budget's split by category and each category against it.
+ */
+function PurchaseView({ purchases, budget, today }: { purchases: NonNullable<ProjectCostDetail["purchases"]>; budget: number | null; today: string }) {
+  const t = useT();
+  const { curve, window: span, categories } = purchases;
+  const totalBudget = categories.reduce((sum, item) => sum + (item.budget ?? 0), 0);
+  return (
+    <div className="pc-page-overview">
+      <section className="pc-page-box" data-guide="cost.purchaseCurve">
+        <h3>{t("Cost.purchaseTitle")}</h3>
+        {curve.length ? <PurchaseChart curve={curve} budget={budget} span={span} today={today} /> : <p className="pc-empty">{t("Cost.noRequests")}</p>}
+      </section>
+      <section className="pc-page-box">
+        <h3>{t("Cost.byCategory")}</h3>
+        {totalBudget > 0 ? (
+          <div className="pc-split" role="img" aria-label={t("Cost.budgetSplit")}>
+            {categories
+              .filter((item) => (item.budget ?? 0) > 0)
+              .map((item) => (
+                <i
+                  key={item.category}
+                  className={`cat-${item.category || "typed"}`}
+                  style={{ width: `${((item.budget ?? 0) / totalBudget) * 100}%` }}
+                  title={`${t(PURCHASE_CATEGORY[item.category] ?? item.category)} ${shortAmount(item.budget ?? 0)}`}
+                />
+              ))}
+          </div>
+        ) : null}
+        <table className="pc-page-table">
+          <thead>
+            <tr>
+              <th />
+              <th className="num">{t("Cost.budget")}</th>
+              <th className="num">{t("Cost.requested")}</th>
+              <th className="num">{t("Cost.ordered")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {categories.map((item) => (
+              <tr key={item.category} className={item.budget !== null && item.requested > item.budget ? "over" : undefined}>
+                <td>
+                  <i className={`pc-split-key cat-${item.category || "typed"}`} aria-hidden="true" />
+                  {item.category ? `${item.category} · ` : ""}
+                  {t(PURCHASE_CATEGORY[item.category] ?? item.category)}
+                </td>
+                <td className="num mono">{item.budget === null ? DASH : shortAmount(item.budget)}</td>
+                <td className="num mono">{shortAmount(item.requested)}</td>
+                <td className="num mono">{shortAmount(item.ordered)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+    </div>
+  );
+}
+
+function PurchaseChart({
+  curve,
+  budget,
+  span,
+  today,
+}: {
+  curve: NonNullable<ProjectCostDetail["purchases"]>["curve"];
+  budget: number | null;
+  span: { from: string; to: string } | null;
+  today: string;
+}) {
+  const t = useT();
+  const width = 560,
+    height = 200,
+    left = 44,
+    bottom = 22;
+  // The band of need-by dates may lie past the last request: the drawing runs to whichever is later.
+  const firstWeek = curve[0]!.week,
+    lastWeek = [curve.at(-1)!.week, span?.to ?? "", today].sort().at(-1)!;
+  const dayOf = (iso: string) => Date.parse(`${iso}T00:00:00Z`) / 86_400_000;
+  const extent = Math.max(1, dayOf(lastWeek) - dayOf(firstWeek));
+  const x = (iso: string) => left + ((Math.min(Math.max(dayOf(iso), dayOf(firstWeek)), dayOf(lastWeek)) - dayOf(firstWeek)) / extent) * (width - left - 8);
+  const top = Math.max(1, budget ?? 0, ...curve.map((point) => Math.max(point.requested, point.ordered)));
+  const y = (value: number) => height - bottom - (value / top) * (height - bottom - 8);
+  const line = (pick: (point: (typeof curve)[number]) => number) => curve.map((point, index) => `${index ? "L" : "M"}${x(point.week).toFixed(1)},${y(pick(point)).toFixed(1)}`).join(" ");
+  return (
+    <figure className="pc-curve">
+      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={t("Cost.purchaseTitle")}>
+        {span ? <rect x={x(span.from)} y={8} width={Math.max(2, x(span.to) - x(span.from))} height={height - bottom - 8} className="window" /> : null}
+        {[0, 0.5, 1].map((share) => (
+          <g key={share}>
+            <line x1={left} x2={width - 8} y1={y(top * share)} y2={y(top * share)} className="grid" />
+            <text x={left - 4} y={y(top * share) + 4} textAnchor="end">
+              {shortAmount(top * share)}
+            </text>
+          </g>
+        ))}
+        {budget ? <line x1={left} x2={width - 8} y1={y(budget)} y2={y(budget)} className="budget" /> : null}
+        <path d={line((point) => point.requested)} className="planned" />
+        <path d={line((point) => point.ordered)} className="actual" />
+        {curve.length === 1 ? <circle cx={x(curve[0]!.week)} cy={y(curve[0]!.requested)} r={3} className="planned-dot" /> : null}
+        {curve.length === 1 ? <circle cx={x(curve[0]!.week)} cy={y(curve[0]!.ordered)} r={3} className="actual-dot" /> : null}
+        <text x={left} y={height - 4}>
+          {firstWeek}
+        </text>
+        <text x={width - 8} y={height - 4} textAnchor="end">
+          {lastWeek}
+        </text>
+      </svg>
+      <figcaption className="pc-curve-key">
+        <span className="planned">{t("Cost.requested")}</span>
+        <span className="actual">{t("Cost.ordered")}</span>
+        {budget ? <span className="budget">{t("Cost.budget")}</span> : null}
+        {span ? <span className="window">{t("Cost.needByWindow")}</span> : null}
+      </figcaption>
+    </figure>
   );
 }
 

@@ -163,6 +163,15 @@ export type ProjectCostDetail = {
   plan: CostPlanRow[];
   /** Task doc 6.1: own-staff man-days week by week, planned and confirmed, added up (project-cost-curve.ts). An older API omits it. */
   curve?: { week: string; plannedManDays: number; actualManDays: number }[];
+  /**
+   * Task doc 6.2, for a viewer who may see the requests: bought cost added up week by week (requested by the request's
+   * date, ordered by the order's date), the need-by window, and the split by the estimate's category ("" = typed line).
+   */
+  purchases?: {
+    curve: { week: string; requested: number; ordered: number }[];
+    window: { from: string; to: string } | null;
+    categories: { category: string; budget: number | null; requested: number; ordered: number }[];
+  };
   /** Who confirmed hours on the project, most first, with the discipline of their department. */
   people?: { id: number; name: string; discipline: LaborDiscipline; hours: number; days: number; lastDay: string | null }[];
 };

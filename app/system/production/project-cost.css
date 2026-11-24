@@ -492,6 +492,60 @@
 .pc-curve .forecast {
   fill: var(--amber);
 }
+/* Task doc 6.2: the need-by band behind the bought curve, and the budget split by category. */
+.pc-curve .window {
+  fill: var(--blue-soft);
+}
+.pc-curve-key .window::before {
+  height: 8px;
+  background: var(--blue-soft);
+}
+.pc-split {
+  display: flex;
+  height: 10px;
+  margin-bottom: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--n-100);
+}
+.pc-split i,
+.pc-split-key {
+  display: block;
+  height: 100%;
+  background: var(--n-400);
+}
+.pc-split-key {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 6px;
+  border-radius: 2px;
+  vertical-align: middle;
+}
+.pc-split .cat-01,
+.pc-split-key.cat-01 {
+  background: var(--blue);
+}
+.pc-split .cat-02,
+.pc-split-key.cat-02 {
+  background: var(--violet);
+}
+.pc-split .cat-03,
+.pc-split-key.cat-03 {
+  background: var(--amber);
+}
+.pc-split .cat-04,
+.pc-split-key.cat-04 {
+  background: var(--green-text);
+}
+.pc-split .cat-05,
+.pc-split-key.cat-05 {
+  background: var(--navy-900);
+}
+.pc-split .cat-07,
+.pc-split-key.cat-07 {
+  background: var(--red-text);
+}
 .pc-curve .planned-dot {
   fill: var(--blue);
 }
