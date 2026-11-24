@@ -26,10 +26,22 @@ export type BudgetPlanRow = { id: number; parentId: number | null; kind: string;
 export type PlannedEffort = { manDays: number; outsourcedManDays: number; unplannedRows: number };
 export type BudgetSource = "estimate" | "manual" | "none";
 export type ManHourBudget = {
-  source: BudgetSource; estimateNo: string | null; budgetManDays: number | null;
+  source: BudgetSource;
+  estimateNo: string | null;
+  budgetManDays: number | null;
   disciplines: { discipline: string; manDays: number }[];
-  plannedManDays: number; outsourcedManDays: number; unplannedRows: number; hoursPerManDay: number; canSetBudget: boolean;
-  actualManDays: number; actualPeople: number;
+  plannedManDays: number;
+  outsourcedManDays: number;
+  unplannedRows: number;
+  hoursPerManDay: number;
+  canSetBudget: boolean;
+  actualManDays: number;
+  actualPeople: number;
+  /**
+   * Task doc 3.7: the Estimate's outsourced labor, in man-days: supplier labor lines, and Outsource (07) cost lines
+   * priced by the man-day or the hour. 0 when the Estimate has none. Kept apart from the team's budget.
+   */
+  outsourceBudgetManDays: number;
 };
 
 const round = (value: number): number => Math.round(value * 100) / 100;
@@ -55,7 +67,8 @@ export type CountedEffort = { id: number; rootId: number; manDays: number; outso
  * each figure by its own row's dates without restating the rule.
  */
 export function countedEffort(rows: readonly BudgetPlanRow[]): { counted: CountedEffort[]; unplannedRows: number } {
-  const ids = new Set(rows.map((row) => row.id)), children = new Map<number | null, BudgetPlanRow[]>();
+  const ids = new Set(rows.map((row) => row.id)),
+    children = new Map<number | null, BudgetPlanRow[]>();
   for (const row of rows) {
     const parent = row.parentId !== null && ids.has(row.parentId) ? row.parentId : null;
     children.set(parent, [...(children.get(parent) ?? []), row]);
@@ -89,25 +102,54 @@ export function parseBudgetManDays(value: unknown): number | null | undefined {
 }
 
 export type StoredBudget = {
-  estimateNo: string | null; estimateManDays: number; manualManDays: number | null; disciplines: { discipline: string; manDays: number }[];
+  estimateNo: string | null;
+  estimateManDays: number;
+  manualManDays: number | null;
+  disciplines: { discipline: string; manDays: number }[];
   /** Hours confirmed for the project, and by how many people. */
-  actualHours?: number; actualPeople?: number;
+  actualHours?: number;
+  actualPeople?: number;
+  /** The Estimate's outsourced labor in man-days (task doc 3.7). */
+  outsourceManDays?: number;
 };
 
+/** Outsource (07) cost lines priced by time count as labor hours; the unit names the team types. */
+export const OUTSOURCE_TIME_UNITS_SQL = `CASE
+    WHEN LOWER(LTRIM(RTRIM(c.unit))) IN (N'md',N'm.d.',N'man-day',N'man-days',N'manday',N'mandays',N'man day',N'man days',N'md.',N'man-days.',N'day',N'days',N'วัน',N'คน-วัน',N'man-day.') THEN c.qty
+    WHEN LOWER(LTRIM(RTRIM(c.unit))) IN (N'h',N'hr',N'hr.',N'hrs',N'hrs.',N'hour',N'hours',N'mh',N'man-hr',N'man hour',N'man hours',N'man-hour',N'man-hours',N'ชม',N'ชม.',N'ชั่วโมง') THEN c.qty/${HOURS_PER_MAN_DAY}.0
+    ELSE 0 END`;
+
 export async function readStoredBudget(transaction: TransactionType, projectId: number): Promise<StoredBudget> {
-  const request = new sql.Request(transaction); request.input("project", sql.BigInt, projectId);
-  const project = (await request.query<Record<string, unknown>>(`SELECT p.manhour_budget_days,e.estimate_no
+  const request = new sql.Request(transaction);
+  request.input("project", sql.BigInt, projectId);
+  const project = (
+    await request.query<Record<string, unknown>>(`SELECT p.manhour_budget_days,e.estimate_no
     FROM dbo.projects p LEFT JOIN dbo.estimates e ON e.id=p.estimate_id
-    WHERE p.id=@project AND p.deleted_at IS NULL;`)).recordset[0];
-  const lines = (await request.query<Record<string, unknown>>(`SELECT COALESCE(l.discipline,N'Other') discipline,SUM(l.engineers*l.man_days) man_days
+    WHERE p.id=@project AND p.deleted_at IS NULL;`)
+  ).recordset[0];
+  const lines = (
+    await request.query<Record<string, unknown>>(`SELECT COALESCE(l.discipline,N'Other') discipline,SUM(l.engineers*l.man_days) man_days
     FROM dbo.projects p INNER JOIN dbo.estimates e ON e.id=p.estimate_id
     INNER JOIN dbo.manhour_lines l ON l.estimate_id=e.id AND l.revision=e.revision AND l.deleted_at IS NULL AND l.provider=N'Internal'
     WHERE p.id=@project AND p.deleted_at IS NULL
-    GROUP BY COALESCE(l.discipline,N'Other');`)).recordset;
-  const actual = (await request.query<Record<string, unknown>>(`SELECT SUM(h.hours) hours,COUNT(DISTINCT h.user_id) people
-    FROM dbo.work_hours h WHERE h.project_id=@project;`)).recordset[0];
+    GROUP BY COALESCE(l.discipline,N'Other');`)
+  ).recordset;
+  const actual = (
+    await request.query<Record<string, unknown>>(`SELECT SUM(h.hours) hours,COUNT(DISTINCT h.user_id) people
+    FROM dbo.work_hours h WHERE h.project_id=@project;`)
+  ).recordset[0];
+  const outsource = (
+    await request.query<Record<string, unknown>>(`SELECT
+      COALESCE((SELECT SUM(l.engineers*l.man_days) FROM dbo.manhour_lines l
+        WHERE l.estimate_id=e.id AND l.revision=e.revision AND l.deleted_at IS NULL AND l.provider=N'Supplier'),0)
+      + COALESCE((SELECT SUM(${OUTSOURCE_TIME_UNITS_SQL}) FROM dbo.cost_items c
+        WHERE c.estimate_id=e.id AND c.revision=e.revision AND c.deleted_at IS NULL AND c.category_code='07'),0) man_days
+    FROM dbo.projects p INNER JOIN dbo.estimates e ON e.id=p.estimate_id
+    WHERE p.id=@project AND p.deleted_at IS NULL;`)
+  ).recordset[0];
   const order = ["Electrical", "Mechanical", "Software", "Installation", "Other"];
-  const disciplines = lines.map((row) => ({ discipline: String(row.discipline), manDays: round(Number(row.man_days ?? 0)) }))
+  const disciplines = lines
+    .map((row) => ({ discipline: String(row.discipline), manDays: round(Number(row.man_days ?? 0)) }))
     .filter((row) => row.manDays > 0)
     .sort((left, right) => order.indexOf(left.discipline) - order.indexOf(right.discipline));
   return {
@@ -115,18 +157,27 @@ export async function readStoredBudget(transaction: TransactionType, projectId: 
     estimateManDays: round(disciplines.reduce((sum, row) => sum + row.manDays, 0)),
     manualManDays: project?.manhour_budget_days == null ? null : Number(project.manhour_budget_days),
     disciplines,
-    actualHours: Number(actual?.hours ?? 0), actualPeople: Number(actual?.people ?? 0),
+    actualHours: Number(actual?.hours ?? 0),
+    actualPeople: Number(actual?.people ?? 0),
+    outsourceManDays: round(Number(outsource?.man_days ?? 0)),
   };
 }
 
 export function manHourBudget(stored: StoredBudget, rows: readonly BudgetPlanRow[], canManage: boolean): ManHourBudget {
-  const source = budgetSource(stored.estimateManDays, stored.manualManDays), planned = plannedEffort(rows);
+  const source = budgetSource(stored.estimateManDays, stored.manualManDays),
+    planned = plannedEffort(rows);
   return {
-    source, estimateNo: stored.estimateNo,
+    source,
+    estimateNo: stored.estimateNo,
     budgetManDays: source === "estimate" ? stored.estimateManDays : source === "manual" ? stored.manualManDays : null,
     disciplines: source === "estimate" ? stored.disciplines : [],
-    plannedManDays: planned.manDays, outsourcedManDays: planned.outsourcedManDays, unplannedRows: planned.unplannedRows, hoursPerManDay: HOURS_PER_MAN_DAY,
+    plannedManDays: planned.manDays,
+    outsourcedManDays: planned.outsourcedManDays,
+    unplannedRows: planned.unplannedRows,
+    hoursPerManDay: HOURS_PER_MAN_DAY,
     canSetBudget: canManage && source !== "estimate",
-    actualManDays: round((stored.actualHours ?? 0) / HOURS_PER_MAN_DAY), actualPeople: stored.actualPeople ?? 0,
+    actualManDays: round((stored.actualHours ?? 0) / HOURS_PER_MAN_DAY),
+    actualPeople: stored.actualPeople ?? 0,
+    outsourceBudgetManDays: stored.outsourceManDays ?? 0,
   };
 }
