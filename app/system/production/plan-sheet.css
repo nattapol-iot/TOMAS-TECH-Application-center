@@ -206,6 +206,54 @@
 .plan-sheet .ps-budget-item.over .ps-budget-bar i:not(.act) {
   background: var(--sh-red);
 }
+/* Task doc 3.8: the follow-up list, each item a way to its row. */
+.plan-sheet .ps-follow-wrap {
+  position: relative;
+}
+.plan-sheet .btn.ps-follow-on b {
+  color: var(--sh-red);
+}
+.plan-sheet .ps-follow {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 4px);
+  left: 0;
+  display: grid;
+  gap: 8px;
+  width: min(360px, 90vw);
+  max-height: min(60vh, 320px);
+  padding: 10px;
+  overflow: auto;
+  border: 1px solid var(--sh-line);
+  border-radius: 6px;
+  background: var(--sh-card);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--sh-fg) 18%, transparent);
+}
+.plan-sheet .ps-follow h4 {
+  margin: 0 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.plan-sheet .ps-follow ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.plan-sheet .ps-follow li button {
+  width: 100%;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--sh-fg);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.plan-sheet .ps-follow li button:hover {
+  background: var(--sh-sel);
+}
 /* Task doc 3.7: an outsourced row's purchase request, or the lack of one. */
 .plan-sheet .tag.pr {
   background: var(--sh-primary-soft);

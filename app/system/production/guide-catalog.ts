@@ -1908,6 +1908,18 @@ const PROJECT_PLAN: Guide = {
       missing: { th: "เปิด 'ตาราง' ใน V2 ก่อน หรือกด 'ถัดไป'", en: "Open the Sheet in V2 first, or press Next.", jp: "先に V2 の「表」を開くか、「次へ」を押します。" },
     },
     {
+      target: "plan.sheetFollow",
+      action: "next",
+      view: "projects",
+      title: { th: "ต้องตาม", en: "To follow up", jp: "要フォロー" },
+      body: {
+        th: "ปุ่มนี้รวมงานที่ต้องตาม: เลยกำหนด ติดปัญหา ถึงวันเริ่มแต่ยังไม่เริ่ม ยังไม่มีผู้ทำ และงานจ้างภายนอกที่ยังไม่ขอซื้อ กดชื่องานเพื่อไปที่แถวนั้นในตาราง",
+        en: "This button gathers what needs following up: late, blocked, due to start but not started, no member yet, and outsourced work with no purchase request. Press a task to go to its row.",
+        jp: "このボタンに要フォローの作業をまとめます：遅延、停滞、開始日を過ぎて未着手、担当者なし、購買依頼のない外注作業。作業名を押すとその行に移動します。",
+      },
+      missing: { th: "เปิด 'ตาราง' ใน V2 ก่อน หรือกด 'ถัดไป'", en: "Open the Sheet in V2 first, or press Next.", jp: "先に V2 の「表」を開くか、「次へ」を押します。" },
+    },
+    {
       target: "plan.sheetHours",
       action: "next",
       view: "projects",
