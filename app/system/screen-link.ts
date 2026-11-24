@@ -24,6 +24,11 @@ export function ScreenLinkProvider({ value, children }: { value: ScreenLinkValue
   return createElement(ScreenLinkContext.Provider, { value }, children);
 }
 
+/** A screen shown inside another one's place (the Plan tab of a project page): its filters stay on the screen, off the address. */
+export function ScreenLinkIsolation({ children }: { children: ReactNode }) {
+  return createElement(ScreenLinkContext.Provider, { value: null }, children);
+}
+
 /** The screen's place and filters, read from the address the first time one of its hooks asks. */
 function current(link: ScreenLinkValue): ScreenLinkState {
   if (link.state.current.view !== link.view) link.state.current = screenPlace(window.location.hash, link.view, link.base);
@@ -46,14 +51,17 @@ function write(link: ScreenLinkValue, how: "push" | "replace") {
 export function useScreenPlace(): [string[], (path: readonly (string | number | null | undefined)[], how?: "push" | "replace") => void] {
   const link = useContext(ScreenLinkContext);
   const [opened] = useState<string[]>(() => (link ? current(link).path : []));
-  const place = useCallback((next: readonly (string | number | null | undefined)[], how: "push" | "replace" = "push") => {
-    if (!link) return;
-    const value = next.filter((part) => part !== null && part !== undefined && part !== "").map(String);
-    const state = current(link);
-    if (state.path.join("/") === value.join("/")) return;
-    state.path = value;
-    write(link, how);
-  }, [link]);
+  const place = useCallback(
+    (next: readonly (string | number | null | undefined)[], how: "push" | "replace" = "push") => {
+      if (!link) return;
+      const value = next.filter((part) => part !== null && part !== undefined && part !== "").map(String);
+      const state = current(link);
+      if (state.path.join("/") === value.join("/")) return;
+      state.path = value;
+      write(link, how);
+    },
+    [link],
+  );
   return [opened, place];
 }
 
@@ -71,7 +79,17 @@ export const numberLink: LinkCodec<number> = { parse: (text) => (text.trim() !==
 /** An id or nothing: "" in the address is no choice. */
 export const idLink: LinkCodec<number | null> = { parse: (text) => (/^[1-9]\d{0,15}$/.test(text) ? Number(text) : null), format: (value) => (value === null ? "" : String(value)) };
 export const listLink: LinkCodec<string[]> = {
-  parse: (text) => text.split(",").map((part) => { try { return decodeURIComponent(part); } catch { return part; } }).filter(Boolean),
+  parse: (text) =>
+    text
+      .split(",")
+      .map((part) => {
+        try {
+          return decodeURIComponent(part);
+        } catch {
+          return part;
+        }
+      })
+      .filter(Boolean),
   format: (value) => value.map(encodeURIComponent).join(","),
 };
 export function choiceLink<T extends string>(choices: readonly T[]): LinkCodec<T> {
@@ -98,11 +116,15 @@ export function useLinkedState<T>(name: string | null, fallback: T, codec: LinkC
     if (!link || name === null) return fallback;
     const state = current(link);
     const linked = state.opened[name];
-    if (state.fromLink) return linked === undefined ? fallback : codec.parse(linked) ?? fallback;
+    if (state.fromLink) return linked === undefined ? fallback : (codec.parse(linked) ?? fallback);
     let remembered: T | null = null;
     if (remember) {
-      try { const text = window.localStorage.getItem(rememberKey(link, name)); remembered = text === null ? options.legacy?.() ?? null : codec.parse(text); }
-      catch { /* Remembered filters are a convenience when storage is blocked. */ }
+      try {
+        const text = window.localStorage.getItem(rememberKey(link, name));
+        remembered = text === null ? (options.legacy?.() ?? null) : codec.parse(text);
+      } catch {
+        /* Remembered filters are a convenience when storage is blocked. */
+      }
     }
     return remembered ?? fallback;
   });
@@ -122,20 +144,28 @@ export function useLinkedState<T>(name: string | null, fallback: T, codec: LinkC
       state.params = params;
     };
   }, [link, name, value, codec, empty]);
-  const setValue = useCallback((next: T) => {
-    setValueState(next);
-    if (!link || name === null) return;
-    const state = current(link);
-    const text = codec.format(next);
-    const params = { ...state.params };
-    if (text === empty) delete params[name]; else params[name] = text;
-    state.params = params;
-    if (remember) {
-      try { if (text === empty) window.localStorage.removeItem(rememberKey(link, name)); else window.localStorage.setItem(rememberKey(link, name), text); }
-      catch { /* Remembered filters are a convenience when storage is blocked. */ }
-    }
-    write(link, "replace");
-  }, [link, name, codec, empty, remember]);
+  const setValue = useCallback(
+    (next: T) => {
+      setValueState(next);
+      if (!link || name === null) return;
+      const state = current(link);
+      const text = codec.format(next);
+      const params = { ...state.params };
+      if (text === empty) delete params[name];
+      else params[name] = text;
+      state.params = params;
+      if (remember) {
+        try {
+          if (text === empty) window.localStorage.removeItem(rememberKey(link, name));
+          else window.localStorage.setItem(rememberKey(link, name), text);
+        } catch {
+          /* Remembered filters are a convenience when storage is blocked. */
+        }
+      }
+      write(link, "replace");
+    },
+    [link, name, codec, empty, remember],
+  );
   return [value, setValue];
 }
 
@@ -145,17 +175,26 @@ export function useLinkedState<T>(name: string | null, fallback: T, codec: LinkC
  * the screen opens, a value from its link (or the remembered one) is handed to onChange once; `valid` drops one the
  * field cannot show. A value equal to `empty` is left out of the link.
  */
-export function useLinkedControl(name: string | null | undefined, value: string, onChange: (value: string) => void,
-  options: { remember?: boolean; empty?: string; valid?: (value: string) => boolean } = {}) {
+export function useLinkedControl(
+  name: string | null | undefined,
+  value: string,
+  onChange: (value: string) => void,
+  options: { remember?: boolean; empty?: string; valid?: (value: string) => boolean } = {},
+) {
   const context = useContext(ScreenLinkContext);
   const link = name ? context : null;
-  const remember = Boolean(options.remember), empty = options.empty ?? "";
+  const remember = Boolean(options.remember),
+    empty = options.empty ?? "";
   const [initial] = useState<string | null>(() => {
     if (!link || !name) return null;
     const state = current(link);
     if (state.fromLink) return state.opened[name] ?? null;
     if (!remember) return null;
-    try { return window.localStorage.getItem(rememberKey(link, name)); } catch { return null; }
+    try {
+      return window.localStorage.getItem(rememberKey(link, name));
+    } catch {
+      return null;
+    }
   });
   const handed = useRef(false);
   const valid = options.valid;
@@ -168,12 +207,17 @@ export function useLinkedControl(name: string | null | undefined, value: string,
     if (!link || !name) return;
     const state = current(link);
     const params = { ...state.params };
-    if (value === empty) delete params[name]; else params[name] = value;
+    if (value === empty) delete params[name];
+    else params[name] = value;
     state.params = params;
     // The first pass still shows the field's starting value while a linked or remembered one is being handed over.
     if (remember && (handed.current || initial === null)) {
-      try { if (value === empty) window.localStorage.removeItem(rememberKey(link, name)); else window.localStorage.setItem(rememberKey(link, name), value); }
-      catch { /* Remembered filters are a convenience when storage is blocked. */ }
+      try {
+        if (value === empty) window.localStorage.removeItem(rememberKey(link, name));
+        else window.localStorage.setItem(rememberKey(link, name), value);
+      } catch {
+        /* Remembered filters are a convenience when storage is blocked. */
+      }
     }
     write(link, "replace");
     return () => {

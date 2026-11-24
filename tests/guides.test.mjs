@@ -99,6 +99,8 @@ test("the catalog holds the guides the owner chose, in the order the work happen
       "my-hours-confirm",
       // An outside supplier's people per day on outsourced rows (task doc 3.6, 2026-11-25).
       "vendor-hours",
+      // A project's own page with its tabs (task doc 5.2, 2026-11-25).
+      "project-page",
       "project-plan",
       // Editing the Master Plan of a project that already exists (2026-11-03).
       "project-master-plan",

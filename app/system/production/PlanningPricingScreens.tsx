@@ -125,6 +125,8 @@ import { MyWeek } from "./MyWeekScreen";
 import { VendorWork } from "./VendorWork";
 
 type ProductionPlanningProps = {
+  /** The plan shown inside a project's own page (task doc 5.2): that project only, no project picker. */
+  lockedProject?: boolean;
   openCrmOpportunity?: (id: number) => void;
   bootstrap: BootstrapData;
   notify: (message: string) => void;
@@ -4174,7 +4176,7 @@ function memberGanttRows({
 /** Customer issues on the Plan Gantt, coloured like their badges on the Punchlist. */
 const PLAN_ISSUE_TONE: Record<IssueState, "amber" | "slate" | "blue" | "green" | "red"> = { Approval: "amber", Open: "slate", Doing: "blue", Done: "green", Cancelled: "slate", Rejected: "red" };
 
-export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectId, preferredTaskId, onPreferredConsumed, openIssueBatch }: ProductionPlanningProps) {
+export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectId, preferredTaskId, onPreferredConsumed, openIssueBatch, lockedProject = false }: ProductionPlanningProps) {
   const uiText = useUiText();
   useActivitySubView("projects-schedule");
   // V2 edits the plan in one place, the Sheet (task doc 1.10): no table editor dialog, no Team / Master Plan Gantt.
@@ -5093,7 +5095,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
     <>
       <Toolbar>
         {/* One box to find and pick the project: typed search over number, name and customer. */}
-        <div className="plan-project-picker" data-guide="plan.project">
+        <div className="plan-project-picker" data-guide="plan.project" style={lockedProject ? { display: "none" } : undefined}>
           <SearchSelect
             value={selectedId === null ? "" : String(selectedId)}
             label={uiText("Project")}

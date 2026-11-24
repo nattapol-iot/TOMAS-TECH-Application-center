@@ -96,6 +96,69 @@
   color: var(--red-text);
   font-weight: 650;
 }
+/* Task doc 5.2: a project's own page. */
+.project-page {
+  display: grid;
+  gap: 12px;
+}
+.project-page-back {
+  justify-self: start;
+}
+.project-page-meta {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.project-page-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.project-page-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px 16px;
+  margin: 0;
+}
+.project-page-facts dt {
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+.project-page-facts dd {
+  margin: 0;
+  font-weight: 600;
+}
+.project-page-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+}
+.project-page-cell {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.project-page-cell:hover {
+  border-color: var(--primary);
+}
+.project-page-cell strong {
+  font-size: var(--fs-lg);
+}
+.project-page-cell.tone-red strong {
+  color: var(--red-text);
+}
+.project-page-cell.tone-amber strong {
+  color: var(--amber-text);
+}
 /* Task doc 5.1: hours against the budget, and the count waiting on the plan's To follow up. */
 .portfolio-col-hours {
   white-space: nowrap;

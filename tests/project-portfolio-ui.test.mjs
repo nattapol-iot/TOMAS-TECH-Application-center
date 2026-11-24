@@ -204,7 +204,7 @@ test("the project name opens the schedule only for users who can read it", () =>
   const shell = read("app/system/ProductionApp.tsx");
   assert.match(
     shell,
-    /<ProductionProjects \{\.\.\.common\} teamTestMode=\{IS_TEAM_TEST_MODE\} openProjectSchedule=\{bootstrap\.permissions\.includes\("schedule\.read"\) \? openProjectSchedule : undefined\} \/>/,
+    /<ProductionProjects\s+\{\.\.\.common\}\s+teamTestMode=\{IS_TEAM_TEST_MODE\}\s+openProjectSchedule=\{bootstrap\.permissions\.includes\("schedule\.read"\) \? openProjectSchedule : undefined\}\s+openProjectPage=\{openProjectPage\}\s*\/>/,
   );
   // Without the prop the name is plain text.
   assert.match(portfolio, /\{item\.name\}<\/strong>\s*<\/button>\s*\) : \(\s*<strong>\{item\.name\}<\/strong>\s*\)\}/);
