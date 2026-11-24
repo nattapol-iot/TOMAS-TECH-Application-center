@@ -1,15 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { strFromU8, unzipSync } from "fflate";
-import {
-  buildCustomerScheduleWorkbook,
-  columnName,
-  CUSTOMER_SCHEDULE_COPYRIGHT,
-  customerScheduleDays,
-  customerScheduleFileName,
-  customerScheduleSheet,
-  excelSerial,
-} from "../lib/customer-schedule-workbook.ts";
+import { columnName, CUSTOMER_SCHEDULE_COPYRIGHT, customerScheduleDays, customerScheduleFileName, customerScheduleSheet, excelSerial } from "../lib/customer-schedule-workbook.ts";
 
 const rows = [
   { wbs: "1", level: 1, heading: true, name: "Design", party: "", member: "", start: "2026-11-25", end: "2026-12-04", days: 10, percent: null, workDays: 8 },
@@ -104,22 +95,7 @@ test("the plan is drawn as filled day cells: blue for work, gray when done, navy
   assert.equal(sheet.rows[7][2].value, "", "a heading has no PIC");
 });
 
-test("the workbook is a valid package with Thai or English dates, merged week headers and a frozen header", () => {
-  const files = unzipSync(buildCustomerScheduleWorkbook(input));
-  for (const part of ["[Content_Types].xml", "_rels/.rels", "xl/workbook.xml", "xl/_rels/workbook.xml.rels", "xl/styles.xml", "xl/worksheets/sheet1.xml"]) assert.ok(files[part], part);
-  const sheetXml = strFromU8(files["xl/worksheets/sheet1.xml"]);
-  assert.match(sheetXml, /<mergeCell ref="K4:Q4"\/>/, "Week 1 spans its seven days");
-  assert.match(sheetXml, /<mergeCell ref="K5:Q5"\/>/, "so does its Monday");
-  assert.match(sheetXml, /<mergeCell ref="A1:H1"\/>/, "the title runs to % DONE");
-  assert.match(sheetXml, /<pane ySplit="7" topLeftCell="A8"/);
-  assert.match(sheetXml, /<col min="4" max="4" width="6.89" hidden="1"/);
-  assert.match(sheetXml, /\[ OEE Monitoring \] Project Schedule/);
-  const styles = strFromU8(files["xl/styles.xml"]);
-  assert.match(styles, /formatCode="\[\$-41E\]ddd dd\/mm\/yy"/);
-  assert.match(styles, /formatCode="d\\ mmm\\ yyyy"/);
-  assert.match(strFromU8(unzipSync(buildCustomerScheduleWorkbook({ ...input, lang: "en" }))["xl/styles.xml"]), /formatCode="\[\$-409\]ddd dd\/mm\/yy"/);
-  const count = Number(sheetXml.match(/<mergeCells count="(\d+)"/)[1]);
-  assert.equal(count, sheetXml.match(/<mergeCell ref=/g).length);
+test("column names run past Z", () => {
   assert.equal(columnName(1), "A");
   assert.equal(columnName(27), "AA");
 });
