@@ -102,6 +102,7 @@ import {
   type PlanHeadingDraft,
 } from "./ProjectPlanFields";
 import { ProductionCustomers, ProductionEngineeringRates } from "./AdminAnalyticsScreens";
+import { ProjectCostPanel } from "./ProjectCostScreen";
 import { ErpMasterPanel } from "./ErpMasterPanel";
 import { PegasusScreen } from "./PegasusScreen";
 import { checkFields, failureDialog } from "./form-bubbles";
@@ -1007,10 +1008,13 @@ export function ProductionProjects({
   refreshBootstrap,
   teamTestMode,
   openProjectSchedule,
+  openProjectPage,
   initialMode,
 }: CommonProps & {
   teamTestMode: boolean;
   openProjectSchedule?: (id: number, taskId?: number) => void;
+  /** Task doc 5.2: a project's own page; V2 opens it from the number and the name. */
+  openProjectPage?: (projectNo: string) => void;
   /** The old Project Timeline menu opens the portfolio straight in Timeline mode. */
   initialMode?: PortfolioMode;
 }) {
@@ -1172,24 +1176,32 @@ export function ProductionProjects({
     if (next === "Closed") setClosingProject(item);
     else void saveStage(item, next);
   };
-  const rowActions = (item: ProjectOverviewItem): PortfolioAction[] => [
-    ...(canWrite ? [{ key: "edit", label: "Edit project", icon: "edit" as const, guide: "project.edit", onSelect: () => setEditingProject({ ...item, progress: item.typedProgress }) }] : []),
-    // V2 edits the plan in one place: the row opens the Plan tab, on the Sheet (task doc 1.10).
-    ...(v2
-      ? openProjectSchedule
-        ? [{ key: "open-plan", label: "CRM.openProjectSchedule", icon: "calendar" as const, guide: "project.openPlan", onSelect: () => openProjectSchedule(item.id) }]
-        : []
-      : canPlan(item)
-        ? [{ key: "plan", label: "CRM.editMasterPlan", icon: "calendar" as const, guide: "project.editPlan", onSelect: () => setPlanningProject(item) }]
-        : []),
-    ...(item.canChangeStatus && item.allowedStatuses.includes("Closed")
-      ? [{ key: "close", label: "Portfolio.closeTitle", icon: "checkCircle" as const, onSelect: () => setClosingProject(item) }]
-      : []),
-    ...(canWrite && canEditEndUser(item.status) ? [{ key: "end-user", label: "Portfolio.editEndUser", icon: "user" as const, onSelect: () => setEndUserProject(item) }] : []),
-    { key: "members", label: "Portfolio.members", icon: "users", onSelect: () => setMembersProject(item) },
-    { key: "documents", label: "Documents", icon: "paperclip", onSelect: () => setDocumentsProject(item) },
-    ...(canDelete(item) ? [{ key: "delete", label: "CRM.deleteProject", icon: "trash" as const, danger: true, onSelect: () => setDeletingProject(item) }] : []),
+  // Task doc 5.2: in V2 the project's page holds edit, members, stage, end user and delete; the row opens it or its plan.
+  const pageRowActions = (item: ProjectOverviewItem): PortfolioAction[] => [
+    ...(openProjectPage ? [{ key: "open-page", label: "ProjectPage.open", icon: "folder" as const, guide: "project.openPage", onSelect: () => openProjectPage(projectPageKey(item)) }] : []),
+    ...(openProjectSchedule ? [{ key: "open-plan", label: "CRM.openProjectSchedule", icon: "calendar" as const, guide: "project.openPlan", onSelect: () => openProjectSchedule(item.id) }] : []),
   ];
+  const rowActions = (item: ProjectOverviewItem): PortfolioAction[] =>
+    v2 && openProjectPage
+      ? pageRowActions(item)
+      : [
+          ...(canWrite ? [{ key: "edit", label: "Edit project", icon: "edit" as const, guide: "project.edit", onSelect: () => setEditingProject({ ...item, progress: item.typedProgress }) }] : []),
+          // V2 edits the plan in one place: the row opens the Plan tab, on the Sheet (task doc 1.10).
+          ...(v2
+            ? openProjectSchedule
+              ? [{ key: "open-plan", label: "CRM.openProjectSchedule", icon: "calendar" as const, guide: "project.openPlan", onSelect: () => openProjectSchedule(item.id) }]
+              : []
+            : canPlan(item)
+              ? [{ key: "plan", label: "CRM.editMasterPlan", icon: "calendar" as const, guide: "project.editPlan", onSelect: () => setPlanningProject(item) }]
+              : []),
+          ...(item.canChangeStatus && item.allowedStatuses.includes("Closed")
+            ? [{ key: "close", label: "Portfolio.closeTitle", icon: "checkCircle" as const, onSelect: () => setClosingProject(item) }]
+            : []),
+          ...(canWrite && canEditEndUser(item.status) ? [{ key: "end-user", label: "Portfolio.editEndUser", icon: "user" as const, onSelect: () => setEndUserProject(item) }] : []),
+          { key: "members", label: "Portfolio.members", icon: "users", onSelect: () => setMembersProject(item) },
+          { key: "documents", label: "Documents", icon: "paperclip", onSelect: () => setDocumentsProject(item) },
+          ...(canDelete(item) ? [{ key: "delete", label: "CRM.deleteProject", icon: "trash" as const, danger: true, onSelect: () => setDeletingProject(item) }] : []),
+        ];
   const createButton = canWrite ? (
     <button className="btn primary" type="button" data-guide="project.create" onClick={() => setCreateOpen(true)}>
       <Icon name="plus" />
@@ -1657,8 +1669,8 @@ export function ProductionProjects({
                         ) : null}
                       </td>
                       <td>
-                        {v2 && openProjectSchedule ? (
-                          <button type="button" className="pg-doclink mono" onClick={() => openProjectSchedule(item.id)}>
+                        {v2 && (openProjectPage || openProjectSchedule) ? (
+                          <button type="button" className="pg-doclink mono" onClick={() => (openProjectPage ? openProjectPage(projectPageKey(item)) : openProjectSchedule?.(item.id))}>
                             {item.number}
                           </button>
                         ) : (
@@ -1667,7 +1679,11 @@ export function ProductionProjects({
                       </td>
                       <td className="portfolio-col-project">
                         <div className="portfolio-project">
-                          {openProjectSchedule ? (
+                          {v2 && openProjectPage ? (
+                            <button type="button" className="portfolio-project-link" onClick={() => openProjectPage(projectPageKey(item))}>
+                              <strong>{item.name}</strong>
+                            </button>
+                          ) : openProjectSchedule ? (
                             <button type="button" className="portfolio-project-link" onClick={() => openProjectSchedule(item.id)}>
                               <strong>{item.name}</strong>
                             </button>
@@ -1838,6 +1854,286 @@ export function ProductionProjects({
         />
       ) : null}
     </>
+  );
+}
+
+/** Task doc 5.2: a project's own page, "#/projects/<number>/<tab>". */
+export type ProjectPageTab = "overview" | "plan" | "cost" | "documents";
+export const PROJECT_PAGE_TABS: readonly ProjectPageTab[] = ["overview", "plan", "cost", "documents"];
+/**
+ * The address of a project's page: its number, or its id while the number is the placeholder several projects share
+ * until the ERP gives theirs (PJ000000, project-initial-plan.ts).
+ */
+export const projectPageKey = (project: { id: number; number: string }) => (/^PJ0+$/i.test(project.number) ? String(project.id) : project.number);
+
+/**
+ * One project on its own page (task doc 5.2): a header with its name, stage and main facts, the actions that used to
+ * sit in the list's row menu (edit, members, stage, end user, delete), and the tabs Overview, Plan, Cost and Documents.
+ * The project is read from the overview, so it is the same row and the same rights as the list.
+ */
+export function ProjectPage({
+  bootstrap,
+  notify,
+  refreshBootstrap,
+  teamTestMode,
+  projectNo,
+  tab,
+  onTab,
+  onBack,
+  renderPlan,
+  seesCost,
+  seesPlan = true,
+}: CommonProps & {
+  teamTestMode: boolean;
+  projectNo: string;
+  tab: ProjectPageTab;
+  onTab: (tab: ProjectPageTab) => void;
+  onBack: () => void;
+  /** The plan screen for this project; the shell owns it. */
+  renderPlan: (projectId: number) => ReactNode;
+  /** Leaders and above (project-cost-model.ts); the API refuses everyone else. */
+  seesCost: boolean;
+  /** schedule.read: without it there is no Plan tab. */
+  seesPlan?: boolean;
+}) {
+  const uiText = useUiText();
+  const copy = useProjectCopy();
+  const [item, setItem] = useState<ProjectOverviewItem | null>(null);
+  const [state, setState] = useState<"loading" | "ready" | "missing" | "error">("loading");
+  const [error, setError] = useState("");
+  const [attempt, setAttempt] = useState(0);
+  const [editing, setEditing] = useState(false);
+  const [members, setMembers] = useState(false);
+  const [closing, setClosing] = useState(false);
+  const [endUser, setEndUser] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [stageBusy, setStageBusy] = useState(false);
+  const reload = () => setAttempt((value) => value + 1);
+  useEffect(() => {
+    let cancelled = false;
+    void listProjectOverview({ includeClosed: true })
+      .then((overview) => {
+        if (cancelled) return;
+        const found = overview.items.find((candidate) => projectPageKey(candidate) === projectNo) ?? null;
+        setItem(found);
+        setState(found ? "ready" : "missing");
+      })
+      .catch((failure) => {
+        if (cancelled) return;
+        setError(toError(failure));
+        setState("error");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectNo, attempt]);
+  const canWrite = bootstrap.permissions.includes("project.write");
+  const canDelete = (project: ProjectSummary) =>
+    bootstrap.user.roles.some((role) => role === "Management" || role === "Admin") || (canWrite && (project.managerId === bootstrap.user.id || bootstrap.user.roles.includes("Engineering Manager")));
+  const saveStage = async (project: ProjectOverviewItem, next: string, actualDelivery?: string) => {
+    setStageBusy(true);
+    try {
+      await updateProject(project.id, { rowVersion: project.rowVersion, status: next, ...(actualDelivery ? { actualDelivery } : {}) });
+      setClosing(false);
+      notify(`${project.number} · ${uiText(next)}`);
+      reload();
+    } catch (failure) {
+      setClosing(false);
+      notify(`${project.number} · ${failure instanceof ApiClientError && failure.code === "concurrency_conflict" ? uiText("Portfolio.stageConflict") : uiText(toError(failure))}`);
+      reload();
+    } finally {
+      setStageBusy(false);
+    }
+  };
+  const tabs = PROJECT_PAGE_TABS.filter((value) => (value !== "cost" || seesCost) && (value !== "plan" || seesPlan));
+  const shownTab = tabs.includes(tab) ? tab : "overview";
+  const back = (
+    <button type="button" className="btn ghost sm project-page-back" onClick={onBack}>
+      <Icon name="chevronLeft" />
+      {uiText("ProjectPage.back")}
+    </button>
+  );
+  if (state !== "ready" || !item)
+    return (
+      <div className="project-page">
+        {back}
+        {state === "loading" ? (
+          <div className="empty">
+            <span className="spinner" />
+            <LocalizedText text={"Portfolio.loading"} />
+          </div>
+        ) : state === "missing" ? (
+          <EmptyState icon="folder" title="ProjectPage.missing" message={uiText("ProjectPage.missingHint").replace("{no}", projectNo)} />
+        ) : (
+          <LoadError message={error} retry={reload} />
+        )}
+      </div>
+    );
+  const customerLine = [item.customerName, item.endUserName].filter(Boolean).join(" / ");
+  const facts: [string, ReactNode][] = [
+    ["Portfolio.colPm", item.managerName],
+    [copy("วิศวกรหลัก", "Lead engineer", "リードエンジニア"), item.leadEngineerName ?? "—"],
+    [copy("PO ลูกค้า", "Customer PO", "顧客PO"), item.purchaseOrderNumber || "—"],
+    ["Portfolio.colTarget", item.targetDelivery ? formatDate(item.targetDelivery) : "—"],
+  ];
+  const actions: PortfolioAction[] = [
+    ...(canWrite ? [{ key: "edit", label: "Edit project", icon: "edit" as const, guide: "project.edit", onSelect: () => setEditing(true) }] : []),
+    { key: "members", label: "Portfolio.members", icon: "users", onSelect: () => setMembers(true) },
+    ...(canWrite && canEditEndUser(item.status) ? [{ key: "end-user", label: "Portfolio.editEndUser", icon: "user" as const, onSelect: () => setEndUser(true) }] : []),
+    ...(canDelete(item) ? [{ key: "delete", label: "CRM.deleteProject", icon: "trash" as const, danger: true, onSelect: () => setDeleting(true) }] : []),
+  ];
+  return (
+    <div className="project-page" data-guide="projectPage.header">
+      {back}
+      <PageHeader
+        eyebrow="Projects"
+        title={`${item.number} · ${item.name}`}
+        meta={
+          <span className="project-page-meta">
+            <HealthBadge health={item.health ?? "No plan"} status={item.status} />
+            {customerLine ? <span className="muted">{customerLine}</span> : null}
+          </span>
+        }
+        actions={
+          <div className="project-page-actions">
+            {item.canChangeStatus && item.allowedStatuses.length ? (
+              <RowDisclosure
+                label={`${uiText("Portfolio.changeStage")} ${item.number} · ${uiText(item.status)}`}
+                triggerClassName="btn default"
+                guide="projectPage.stage"
+                disabled={stageBusy}
+                trigger={
+                  <>
+                    <span>{uiText(item.status)}</span>
+                    <Icon name="chevronDown" />
+                  </>
+                }
+                actions={item.allowedStatuses.map((value) => ({
+                  key: value,
+                  label: value,
+                  onSelect: () => (value === "Closed" ? setClosing(true) : void saveStage(item, value)),
+                }))}
+              />
+            ) : (
+              <Badge>{item.status}</Badge>
+            )}
+            {canWrite ? (
+              <button type="button" className="btn primary" data-guide="projectPage.edit" onClick={() => setEditing(true)}>
+                <Icon name="edit" />
+                {uiText("Edit project")}
+              </button>
+            ) : null}
+            <RowDisclosure
+              label={uiText("Plan.more")}
+              triggerClassName="btn default"
+              guide="projectPage.more"
+              trigger={
+                <>
+                  <Icon name="more" />
+                  {uiText("Plan.more")}
+                </>
+              }
+              actions={actions.filter((action) => action.key !== "edit")}
+            />
+          </div>
+        }
+      />
+      <dl className="project-page-facts">
+        {facts.map(([label, value]) => (
+          <div key={label}>
+            <dt>{uiText(label)}</dt>
+            <dd>{value}</dd>
+          </div>
+        ))}
+      </dl>
+      <Tabs<ProjectPageTab> tabs={tabs.map((value) => ({ id: value, label: `ProjectPage.tab.${value}` }))} active={shownTab} onChange={onTab} link={null} />
+      <div className="project-page-body">
+        {shownTab === "overview" ? <ProjectPageSummary item={item} onTab={onTab} /> : null}
+        {shownTab === "plan" ? renderPlan(item.id) : null}
+        {shownTab === "cost" ? <ProjectCostPanel projectId={item.id} /> : null}
+        {shownTab === "documents" ? <ProjectDocumentsPanel project={item} canWrite={canWrite} teamTestMode={teamTestMode} notify={notify} /> : null}
+      </div>
+      {editing ? (
+        <EditProjectModal
+          bootstrap={bootstrap}
+          project={{ ...item, progress: item.typedProgress }}
+          withPlan={false}
+          onOpenPlan={() => {
+            setEditing(false);
+            onTab("plan");
+          }}
+          onClose={() => setEditing(false)}
+          onSaved={async (number) => {
+            setEditing(false);
+            notify(`${number} updated`);
+            await refreshBootstrap();
+            reload();
+          }}
+        />
+      ) : null}
+      {members ? <ProjectMembersModal project={item} bootstrap={bootstrap} canWrite={canWrite} notify={notify} onClose={() => setMembers(false)} /> : null}
+      {closing ? <CloseProjectModal project={item} busy={stageBusy} onClose={() => setClosing(false)} onConfirm={(actualDelivery) => void saveStage(item, "Closed", actualDelivery)} /> : null}
+      {endUser ? (
+        <EndUserEditModal
+          kind="projects"
+          record={item}
+          bootstrap={bootstrap}
+          refreshBootstrap={refreshBootstrap}
+          notify={notify}
+          onClose={() => setEndUser(false)}
+          onSaved={async () => reload()}
+          reloadRecord={async () => {
+            const page = await listProjects({ search: item.number, pageSize: 100 });
+            const latest = page.items.find((candidate) => candidate.id === item.id);
+            if (!latest) throw new Error("ไม่พบ Project หรือไม่มีสิทธิ์เข้าถึง / Project unavailable");
+            return latest;
+          }}
+        />
+      ) : null}
+      {deleting ? (
+        <DeleteProjectModal
+          project={item}
+          onClose={() => setDeleting(false)}
+          onDeleted={async (number) => {
+            setDeleting(false);
+            notify(`${number} · ${uiText("CRM.projectDeleted")}`);
+            await refreshBootstrap();
+            onBack();
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+/** The Overview tab's first cut (task doc 5.2): where the plan stands; task doc 5.3 fills in the rest of the page. */
+function ProjectPageSummary({ item, onTab }: { item: ProjectOverviewItem; onTab: (tab: ProjectPageTab) => void }) {
+  const uiText = useUiText();
+  const slip = formatSlip(item.status === "Closed" ? null : item.slipDays);
+  const over = Boolean(item.budgetHours && (item.actualHours ?? 0) > item.budgetHours);
+  const cells: { key: string; label: string; value: ReactNode; tone?: string; to?: ProjectPageTab }[] = [
+    { key: "progress", label: "Portfolio.colProgress", value: <PortfolioProgress item={item} />, to: "plan" },
+    {
+      key: "slip",
+      label: "Portfolio.colSlip",
+      value: slip === null ? "–" : uiText("Portfolio.slipDays").replace("{n}", slip),
+      tone: (item.slipDays ?? 0) > 0 && item.status !== "Closed" ? "red" : undefined,
+      to: "plan",
+    },
+    { key: "follow", label: "Portfolio.colFollow", value: item.followUps ?? 0, tone: item.followUps ? "amber" : undefined, to: "plan" },
+    { key: "hours", label: "Portfolio.colHours", value: `${Math.round(item.actualHours ?? 0)} / ${item.budgetHours ? Math.round(item.budgetHours) : "–"}`, tone: over ? "red" : undefined, to: "plan" },
+    { key: "milestone", label: "ProjectPage.nextMilestone", value: item.nextMilestone ? `${item.nextMilestone.name} · ${formatDate(item.nextMilestone.date)}` : "–", to: "plan" },
+    { key: "requests", label: "ProjectPage.dayRequests", value: item.pendingRequests, tone: item.pendingRequests ? "amber" : undefined, to: "plan" },
+  ];
+  return (
+    <div className="project-page-summary" data-guide="projectPage.summary">
+      {cells.map((cell) => (
+        <button key={cell.key} type="button" className={`project-page-cell${cell.tone ? ` tone-${cell.tone}` : ""}`} onClick={() => cell.to && onTab(cell.to)}>
+          <span className="muted">{uiText(cell.label)}</span>
+          <strong>{cell.value}</strong>
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -2733,19 +3029,30 @@ function EditProjectModal({
     </Modal>
   );
 }
+/** Task doc 5.2: the project page's Documents tab shows the same list and upload in the page instead of a dialog. */
+function InlineShell({ children }: { title: string; subtitle?: string; size?: string; onClose: () => void; footer?: ReactNode; children: ReactNode }) {
+  return <section className="project-docs-panel">{children}</section>;
+}
+export function ProjectDocumentsPanel(props: { project: ProjectSummary; canWrite: boolean; teamTestMode: boolean; notify: (message: string) => void }) {
+  return <ProjectDocumentsModal {...props} inline onClose={() => undefined} />;
+}
+
 function ProjectDocumentsModal({
   project,
   canWrite,
   teamTestMode,
   notify,
   onClose,
+  inline = false,
 }: {
   project: ProjectSummary;
   canWrite: boolean;
   teamTestMode: boolean;
   notify: (message: string) => void;
   onClose: () => void;
+  inline?: boolean;
 }) {
+  const Shell = inline ? InlineShell : Modal;
   const localizeCopy = useStaticCopy();
   const { lang } = useLanguage();
   const sourceRemarkLabel = lang === "TH" ? "แหล่งที่มา / หมายเหตุ" : lang === "JP" ? "引継ぎ元・備考" : "Source / remark";
@@ -2869,7 +3176,7 @@ function ProjectDocumentsModal({
   };
 
   return (
-    <Modal
+    <Shell
       title={`${project.number} · Documents`}
       subtitle={teamTestMode ? `${project.name} · ไฟล์จัดเก็บชั่วคราวในเครื่องทดสอบและ metadata จัดเก็บใน SQL Server` : `${project.name} · ไฟล์จัดเก็บบน NAS บริษัทและ metadata จัดเก็บใน SQL Server`}
       size="xl"
@@ -3111,7 +3418,7 @@ function ProjectDocumentsModal({
           </label>
         </Modal>
       ) : null}
-    </Modal>
+    </Shell>
   );
 }
 

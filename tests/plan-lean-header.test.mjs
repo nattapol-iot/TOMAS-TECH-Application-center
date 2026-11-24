@@ -10,7 +10,10 @@ const count = (text, needle) => text.split(needle).length - 1;
 test("the Plan opens on one row: a project box that searches, the plan in brief, Add heading and More", async () => {
   const plan = await source("app/system/production/PlanningPricingScreens.tsx");
   assert.equal(count(plan, '<PageHeader eyebrow="PROJECT CONTROL"'), 1, "the page title stays only on the no-permission notice");
-  assert.match(plan, /<div className="plan-project-picker" data-guide="plan\.project">\s*<SearchSelect\s+value=\{selectedId === null \? "" : String\(selectedId\)\}/);
+  assert.match(
+    plan,
+    /<div className="plan-project-picker" data-guide="plan\.project" style=\{lockedProject \? \{ display: "none" \} : undefined\}>\s*<SearchSelect\s+value=\{selectedId === null \? "" : String\(selectedId\)\}/,
+  );
   assert.doesNotMatch(plan, /projectQuery|filteredProjects/, "the separate search box is gone");
   assert.match(plan, /<span className="plan-brief" aria-label=\{uiText\("Plan\.summary"\)\}>/);
   assert.doesNotMatch(plan, /className="plan-summary"/);

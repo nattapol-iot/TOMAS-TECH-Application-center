@@ -1544,6 +1544,74 @@ const VENDOR_HOURS: Guide = {
   ],
 };
 
+// Task doc 5.2: a project's own page, with its tabs and the actions the list's row menu held.
+const PROJECT_PAGE: Guide = {
+  id: "project-page",
+  area: "project",
+  minutes: 2,
+  // A tour of one project's page; nothing has to change.
+  browse: true,
+  permissions: ["project.read"],
+  views: ["projects"],
+  title: { th: "หน้าของโปรเจกต์", en: "A project's own page", jp: "案件のページ" },
+  summary: {
+    th: "ใน V2 กดเลขหรือชื่อโปรเจกต์ในรายการเพื่อเปิดหน้าของโปรเจกต์นั้น ด้านบนคือชื่อ ขั้นงาน และข้อมูลหลัก พร้อมปุ่มแก้ไข สมาชิก เปลี่ยนขั้น พัก ปิด และลบ ด้านล่างเป็นแท็บ ภาพรวม แผนงาน ต้นทุน และเอกสาร ลิงก์ของหน้านี้ส่งต่อให้เพื่อนเปิดแท็บเดียวกันได้",
+    en: "In V2, press a project's number or name in the list to open its own page. At the top: its name, stage and main facts, with Edit, Members, stage (hold, close), end user and Delete. Below: the tabs Overview, Plan, Cost and Documents. The page's link opens the same tab for a teammate.",
+    jp: "V2 では一覧の案件番号または名前を押すと案件のページが開きます。上部に名前・段階・主な情報と、編集・メンバー・段階の変更（保留・完了）・エンドユーザー・削除があります。下に「概要」「計画」「コスト」「文書」のタブがあります。このページのリンクで同じタブを共有できます。",
+  },
+  steps: [
+    menu("projects", { th: "เปิดโปรเจกต์", en: "Open Projects", jp: "「案件」を開く" }, { th: "คลิกที่เมนูที่ไฮไลต์อยู่", en: "Click the highlighted menu entry.", jp: "強調表示のメニューをクリックします。" }),
+    {
+      target: "project.rowMenu",
+      action: "next",
+      view: "projects",
+      title: { th: "เปิดหน้าของโปรเจกต์", en: "Open a project's page", jp: "案件のページを開く" },
+      body: {
+        th: "กดเลขหรือชื่อโปรเจกต์ หรือเมนู ⋯ ของแถวแล้วเลือก 'เปิดหน้าโปรเจกต์' เมนูของแถวมีเพียงเปิดหน้าและเปิดแผนงาน งานแก้ไขอื่นย้ายไปอยู่ในหน้าของโปรเจกต์",
+        en: "Press the project's number or name, or the row's ⋯ menu and Open project page. The row menu only opens the page or the plan; the other actions moved to the project's page.",
+        jp: "案件番号か名前を押すか、行の ⋯ メニューで「案件ページを開く」を選びます。行メニューはページと計画を開くだけで、他の操作は案件のページに移りました。",
+      },
+      missing: { th: "กด V2 ก่อน หน้านี้มีเฉพาะหน้าตาแบบ V2", en: "Press V2 first; the page is part of the V2 look.", jp: "先に「V2」を押します。このページは V2 表示だけです。" },
+    },
+    {
+      target: "projectPage.header",
+      action: "next",
+      view: "projects",
+      title: { th: "หัวของหน้า", en: "The page's header", jp: "ページの見出し" },
+      body: {
+        th: "ชื่อ เลขโปรเจกต์ สุขภาพของแผน ลูกค้า PM วิศวกรหลัก PO และวันส่งมอบ ปุ่มขั้นงานใช้เปลี่ยนขั้นตามกติกาเดิม รวมถึงพักงานและปิดโปรเจกต์",
+        en: "Name, number, the plan's health, customer, PM, lead engineer, PO and delivery date. The stage button moves the project along by the usual rules, including putting it on hold and closing it.",
+        jp: "名前・番号・計画の健全性・顧客・PM・リードエンジニア・PO・納期です。段階ボタンで従来のルールどおり段階を変更でき、保留や完了も行えます。",
+      },
+      missing: { th: "เปิดหน้าของโปรเจกต์ก่อน หรือกด 'ถัดไป'", en: "Open a project's page first, or press Next.", jp: "先に案件のページを開くか、「次へ」を押します。" },
+    },
+    {
+      target: "projectPage.more",
+      action: "next",
+      view: "projects",
+      title: { th: "แก้ไขและอื่นๆ", en: "Edit and More", jp: "編集とその他" },
+      body: {
+        th: "'แก้ไขโปรเจกต์' แก้ข้อมูลหลัก 'อื่นๆ' มีสมาชิก เปลี่ยน End user และลบโปรเจกต์ (ลบได้เมื่อยังไม่มีงานบันทึกไว้)",
+        en: "Edit project changes the main facts. More holds Members, the end user and Delete project (allowed while no work is recorded against it).",
+        jp: "「案件を編集」で主な情報を変更します。「その他」にはメンバー・エンドユーザー・案件の削除（作業記録がない間のみ）があります。",
+      },
+      missing: { th: "เปิดหน้าของโปรเจกต์ก่อน หรือกด 'ถัดไป'", en: "Open a project's page first, or press Next.", jp: "先に案件のページを開くか、「次へ」を押します。" },
+    },
+    {
+      target: "projectPage.summary",
+      action: "next",
+      view: "projects",
+      title: { th: "แท็บภาพรวม", en: "The Overview tab", jp: "概要タブ" },
+      body: {
+        th: "ความคืบหน้าเทียบแผน วันที่เลย เรื่องที่ต้องตาม ชั่วโมงจริงเทียบงบ จุดสำคัญถัดไป และคำขอปรับวันที่รอตอบ กดกล่องไหนจะไปที่แท็บแผนงาน",
+        en: "Progress against plan, days late, what to follow up, hours against budget, the next milestone and day requests waiting for an answer. Press a box to go to the Plan tab.",
+        jp: "計画に対する進捗・遅延日数・要フォロー・予算に対する実績時間・次のマイルストーン・回答待ちの日程変更依頼です。ボックスを押すと「計画」タブへ移ります。",
+      },
+      missing: { th: "เปิดหน้าของโปรเจกต์ก่อน หรือกด 'ถัดไป'", en: "Open a project's page first, or press Next.", jp: "先に案件のページを開くか、「次へ」を押します。" },
+    },
+  ],
+};
+
 const MY_HOURS: Guide = {
   id: "my-hours-confirm",
   area: "project",
@@ -4319,6 +4387,7 @@ export const GUIDES: readonly Guide[] = [
   MY_WEEK_BOOK,
   MY_HOURS,
   VENDOR_HOURS,
+  PROJECT_PAGE,
   PROJECT_PLAN,
   PROJECT_MASTER_PLAN,
   PROJECT_ERP_NUMBER,

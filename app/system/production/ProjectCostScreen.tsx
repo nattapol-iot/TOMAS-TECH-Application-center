@@ -634,9 +634,8 @@ export function ProjectCostScreen({ bootstrap, openProjectSchedule }: Props) {
   );
 }
 
-/** One project's breakdown: bought cost by Module with its purchase requests, labor by discipline (budget against plan) and by the plan's top rows. */
-function ProjectCostDialog({ projectId, canOpenPlan, onOpenPlan, onClose }: { projectId: number; canOpenPlan: boolean; onOpenPlan: () => void; onClose: () => void }) {
-  const t = useT();
+/** One project's cost detail: fetched once per project, and fetched again on Retry. */
+function useProjectCostDetail(projectId: number) {
   const [detail, setDetail] = useState<ProjectCostDetail | null>(null);
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
@@ -656,13 +655,14 @@ function ProjectCostDialog({ projectId, canOpenPlan, onOpenPlan, onClose }: { pr
       cancelled = true;
     };
   }, [projectId, attempt]);
-  const project = detail?.project,
-    access = detail?.access;
-  const moduleTotal = (pick: (row: ProjectCostDetail["modules"][number]) => number | null) => {
-    const values = (detail?.modules ?? []).map(pick).filter((value): value is number => value !== null);
-    return values.length ? values.reduce((sum, value) => sum + value, 0) : null;
-  };
-  const span = (start: string | null, finish: string | null) => (start && finish ? `${start} – ${finish}` : DASH);
+  return { detail, error, setError, retry: () => setAttempt((value) => value + 1) };
+}
+
+/** One project's breakdown: bought cost by Module with its purchase requests, labor by discipline (budget against plan) and by the plan's top rows. */
+function ProjectCostDialog({ projectId, canOpenPlan, onOpenPlan, onClose }: { projectId: number; canOpenPlan: boolean; onOpenPlan: () => void; onClose: () => void }) {
+  const t = useT();
+  const cost = useProjectCostDetail(projectId);
+  const project = cost.detail?.project;
   return (
     <Modal
       title={project ? `${project.number} · ${project.name}` : "Cost.title"}
@@ -683,6 +683,31 @@ function ProjectCostDialog({ projectId, canOpenPlan, onOpenPlan, onClose }: { pr
         </>
       }
     >
+      <ProjectCostBody {...cost} />
+    </Modal>
+  );
+}
+
+/** Task doc 5.2: the same breakdown on the project page's Cost tab. */
+export function ProjectCostPanel({ projectId }: { projectId: number }) {
+  return (
+    <div className="pc-panel">
+      <ProjectCostBody {...useProjectCostDetail(projectId)} />
+    </div>
+  );
+}
+
+function ProjectCostBody({ detail, error, setError, retry }: ReturnType<typeof useProjectCostDetail>) {
+  const t = useT();
+  const project = detail?.project,
+    access = detail?.access;
+  const moduleTotal = (pick: (row: ProjectCostDetail["modules"][number]) => number | null) => {
+    const values = (detail?.modules ?? []).map(pick).filter((value): value is number => value !== null);
+    return values.length ? values.reduce((sum, value) => sum + value, 0) : null;
+  };
+  const span = (start: string | null, finish: string | null) => (start && finish ? `${start} – ${finish}` : DASH);
+  return (
+    <>
       {error ? (
         <div className="callout danger" role="alert">
           <Icon name="alertTriangle" />
@@ -694,7 +719,7 @@ function ProjectCostDialog({ projectId, canOpenPlan, onOpenPlan, onClose }: { pr
             type="button"
             onClick={() => {
               setError("");
-              setAttempt((value) => value + 1);
+              retry();
             }}
           >
             <Icon name="refresh" />
@@ -931,7 +956,7 @@ function ProjectCostDialog({ projectId, canOpenPlan, onOpenPlan, onClose }: { pr
           </section>
         </>
       )}
-    </Modal>
+    </>
   );
 }
 

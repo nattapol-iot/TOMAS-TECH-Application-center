@@ -22,7 +22,7 @@ import {
   viewHash,
   viewStorageKey,
 } from "../../lib/remembered-view";
-import { ScreenLinkProvider, type ScreenLinkState } from "./screen-link";
+import { ScreenLinkIsolation, ScreenLinkProvider, type ScreenLinkState } from "./screen-link";
 import { estimateBusinessDate } from "../../lib/estimate-ux";
 import { myWorkNeedsAttention as needsAttention } from "../../lib/my-work";
 import { noticeRows, supportRowText, type NoticeRow, type SupportNotice } from "../../lib/notification-rows";
@@ -39,7 +39,7 @@ import type { TmtIdUser } from "./tmt-id.types";
 import { PRODUCT } from "./product";
 import { CopyLinkButton, Icon, Tabs, Toast, type IconName } from "./ui";
 import { LANGUAGES, LanguageContext, translate, applyDocumentLanguage, type Lang } from "./i18n";
-import { ProductionDashboard, ProductionInventory, ProductionMasterData, ProductionProjects } from "./production/CoreScreens";
+import { PROJECT_PAGE_TABS, ProductionDashboard, ProductionInventory, ProductionMasterData, ProductionProjects, ProjectPage, type ProjectPageTab } from "./production/CoreScreens";
 import { ProductionMyWork, ProductionPriceLibrary, ProductionProjectSchedule, ProductionSupplierQuotations, ProductionWaitingSupplierPrice } from "./production/PlanningPricingScreens";
 import { ProductionCompanyStamps, ProductionMySignature, ProductionSignedDocuments, ProductionSignInbox } from "./production/SigningScreens";
 import { ProductionAuditLog, ProductionEngineeringRates, ProductionReports, ProductionSettings } from "./production/AdminAnalyticsScreens";
@@ -300,14 +300,27 @@ const NAV_GROUPS = NAV.flatMap((section) => (section.group ? [section.group] : [
  * moved the whole menu under the pointer.
  */
 const DEFAULT_COLLAPSED_GROUPS = NAV_GROUPS;
-type ProjectTab = "portfolio" | "schedule" | "punchlist" | "cost";
-/** The Projects tabs as their addresses name them: "#/projects" (overview), "#/projects/plan/<project>…", "#/projects/punchlist", "#/projects/cost/<project>". */
-const PROJECT_TAB_SEGMENT: Record<ProjectTab, string> = { portfolio: "", schedule: "plan", punchlist: "punchlist", cost: "cost" };
+type ProjectTab = "portfolio" | "schedule" | "punchlist" | "cost" | "page";
+/**
+ * The Projects tabs as their addresses name them: "#/projects" (overview), "#/projects/plan/<project>…", "#/projects/punchlist",
+ * "#/projects/cost/<project>"; any other first segment is a project number, its own page (task doc 5.2): "#/projects/<number>/<tab>".
+ */
+const PROJECT_TAB_SEGMENT: Record<ProjectTab, string> = { portfolio: "", schedule: "plan", punchlist: "punchlist", cost: "cost", page: "" };
 const projectTabOf = (hash: string): ProjectTab => {
   const address = parseScreenHash(hash);
   const segment = address?.view === "projects" ? address.path[0] : undefined;
-  return segment === "plan" ? "schedule" : segment === "punchlist" ? "punchlist" : segment === "cost" ? "cost" : "portfolio";
+  return segment === "plan" ? "schedule" : segment === "punchlist" ? "punchlist" : segment === "cost" ? "cost" : segment ? "page" : "portfolio";
 };
+type ProjectPagePlace = { no: string; tab: ProjectPageTab };
+/** The plan inside a project page names its project itself; nothing to clear afterwards. */
+const KEEP_PREFERRED = () => undefined;
+const projectPageOf = (hash: string): ProjectPagePlace | null => {
+  const address = parseScreenHash(hash);
+  if (address?.view !== "projects" || projectTabOf(hash) !== "page") return null;
+  const tab = PROJECT_PAGE_TABS.find((value) => value === address.path[1]) ?? "overview";
+  return { no: address.path[0]!, tab };
+};
+const projectPagePath = (page: ProjectPagePlace) => (page.tab === "overview" ? [page.no] : [page.no, page.tab]);
 const SIDEBAR_STORAGE_KEY = "tomas-tech-sidebar-collapsed";
 /** The most menu entries a person may star; the API enforces the same number (backend-node/src/routes/bootstrap.ts). */
 const MENU_FAVORITE_LIMIT = 8;
@@ -331,6 +344,12 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
   const notificationRows = useMemo(() => noticeRows(notifications), [notifications]);
   const unreadNotificationRows = notificationRows.filter((row) => !row.isRead).length;
   const [projectTab, setProjectTab] = useState<ProjectTab>(() => (typeof window === "undefined" ? "portfolio" : projectTabOf(window.location.hash)));
+  const [projectPage, setProjectPage] = useState<ProjectPagePlace | null>(() => (typeof window === "undefined" ? null : projectPageOf(window.location.hash)));
+  /** Follows the address to the Projects tab, or the project page, it names. */
+  const followProjectHash = (hash: string) => {
+    setProjectTab(projectTabOf(hash));
+    setProjectPage(projectPageOf(hash));
+  };
   const [inventoryTab, setInventoryTab] = useState<"balances" | "operations">("balances");
   const [preferredScheduleProjectId, setPreferredScheduleProjectId] = useState<number | null>(null);
   const [preferredScheduleTaskId, setPreferredScheduleTaskId] = useState<number | null>(null);
@@ -477,7 +496,15 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
   );
   const changeProjectTab = (tab: ProjectTab) => {
     setProjectTab(tab);
+    setProjectPage(null);
     placeScreen(tab === "portfolio" ? [] : [PROJECT_TAB_SEGMENT[tab]]);
+  };
+  // Task doc 5.2: a project's own page, and its tabs as history entries.
+  const changeProjectPageTab = (tab: ProjectPageTab) => {
+    if (!projectPage) return;
+    const next = { ...projectPage, tab };
+    setProjectPage(next);
+    placeScreen(projectPagePath(next));
   };
   // Returns false when the person keeps unsaved changes. A #support/<id> fragment is left for the address
   // effect to replace with the next screen's, so Back reopens that ticket.
@@ -658,7 +685,8 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
     if (RECORD_LINK.test(hash)) return;
     // The screen's place (its tab, record and filters) follows the shell's part; a screen just opened may already have set it.
     const place = view === "support" ? null : linkStateFor(view, address);
-    if (place && view === "projects" && !place.path.length && projectTab !== "portfolio") place.path = [PROJECT_TAB_SEGMENT[projectTab]];
+    if (place && view === "projects" && !place.path.length && projectTab === "page" && projectPage) place.path = projectPagePath(projectPage);
+    else if (place && view === "projects" && !place.path.length && projectTab !== "portfolio") place.path = [PROJECT_TAB_SEGMENT[projectTab]];
     const target = address + (place ? screenTail(place.path, place.params) : "");
     if (baseHash(hash) !== address && hash !== address) {
       const document = documentRoute(hash);
@@ -666,7 +694,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
       window.history[replace ? "replaceState" : "pushState"](null, "", window.location.pathname + window.location.search + target);
     } else if (hash !== target) window.history.replaceState(null, "", window.location.pathname + window.location.search + target);
     addressed.current = true;
-  }, [bootstrap, view, address, recordId, projectTab, linkStateFor]);
+  }, [bootstrap, view, address, recordId, projectTab, projectPage, linkStateFor]);
 
   // Back, Forward and an edited address. A screen this person cannot open, or a change they decline
   // to discard, puts the open screen's address back.
@@ -681,7 +709,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
         const place = linkStateFor(view, address);
         if (window.location.hash !== address + screenTail(place.path, place.params)) {
           screenLink.current = screenPlace(window.location.hash, view, address);
-          if (view === "projects") setProjectTab(projectTabOf(window.location.hash));
+          if (view === "projects") followProjectHash(window.location.hash);
           setLinkRevision((value) => value + 1);
         }
         return;
@@ -692,7 +720,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
       }
       if (target === "estimates") setPreferredEstimateId(document?.id ?? null);
       if (target === "inquiries") setPreferredInquiryId(document?.id ?? null);
-      if (target === "projects") setProjectTab(projectTabOf(window.location.hash));
+      if (target === "projects") followProjectHash(window.location.hash);
     };
     window.addEventListener("hashchange", follow);
     return () => window.removeEventListener("hashchange", follow);
@@ -967,6 +995,26 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
       window.scrollTo({ top: 0 });
     },
     [setView, view],
+  );
+  // Opens a project's own page (task doc 5.2) on one of its tabs.
+  const openProjectPage = useCallback(
+    async (projectNo: string, tab: ProjectPageTab = "overview") => {
+      const next = { no: projectNo, tab };
+      // On Projects already: the page is a new history entry, written before the address effect can rewrite the list's.
+      if (view === "projects") {
+        placeScreen(projectPagePath(next));
+        setProjectTab("page");
+        setProjectPage(next);
+        window.scrollTo({ top: 0 });
+        return;
+      }
+      setProjectTab("page");
+      setProjectPage(next);
+      if (!(await setView("projects"))) return;
+      screenLink.current = { view: "projects", path: projectPagePath(next), params: {}, opened: {}, fromLink: true };
+      window.scrollTo({ top: 0 });
+    },
+    [setView, view, placeScreen],
   );
   // Opens a customer issue batch on Projects > Punchlist.
   const openIssueBatch = useCallback(
@@ -1560,7 +1608,34 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
                 <ProjectLookScope userId={bootstrap.user.id}>
                   {/* Plan and Punchlist read the schedule; without schedule.read only the Overview is offered. */}
                   {/* Cost is for Leaders and above (project-cost-model.ts); the API refuses everyone else. */}
-                  {bootstrap.permissions.includes("schedule.read") ? (
+                  {projectTab === "page" && projectPage ? (
+                    <ProjectPage
+                      key={projectPage.no}
+                      {...common}
+                      teamTestMode={IS_TEAM_TEST_MODE}
+                      projectNo={projectPage.no}
+                      tab={projectPage.tab}
+                      onTab={changeProjectPageTab}
+                      onBack={() => changeProjectTab("portfolio")}
+                      seesCost={seesProjectCost && bootstrap.permissions.includes("schedule.read")}
+                      seesPlan={bootstrap.permissions.includes("schedule.read")}
+                      renderPlan={(projectId) =>
+                        bootstrap.permissions.includes("schedule.read") ? (
+                          <ScreenLinkIsolation>
+                            <ProductionProjectSchedule
+                              key={`page-plan:${projectId}`}
+                              {...moduleProps}
+                              preferredProjectId={projectId}
+                              preferredTaskId={null}
+                              onPreferredConsumed={KEEP_PREFERRED}
+                              lockedProject
+                            />
+                          </ScreenLinkIsolation>
+                        ) : null
+                      }
+                    />
+                  ) : null}
+                  {projectTab !== "page" && bootstrap.permissions.includes("schedule.read") ? (
                     <Tabs
                       tabs={[
                         { id: "portfolio" as ProjectTab, label: "Projects.tabOverview" },
@@ -1575,10 +1650,15 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
                   ) : null}
                   {/* project-v2.css: 14px under the tabs in V1; in V2 a 12px column, as the Pegasus skin spaces its own children. */}
                   <div className="project-look-body">
-                    {projectTab === "cost" && seesProjectCost && bootstrap.permissions.includes("schedule.read") ? (
+                    {projectTab === "page" ? null : projectTab === "cost" && seesProjectCost && bootstrap.permissions.includes("schedule.read") ? (
                       <ProjectCostScreen bootstrap={bootstrap} openProjectSchedule={openProjectSchedule} />
                     ) : projectTab === "portfolio" || projectTab === "cost" || !bootstrap.permissions.includes("schedule.read") ? (
-                      <ProductionProjects {...common} teamTestMode={IS_TEAM_TEST_MODE} openProjectSchedule={bootstrap.permissions.includes("schedule.read") ? openProjectSchedule : undefined} />
+                      <ProductionProjects
+                        {...common}
+                        teamTestMode={IS_TEAM_TEST_MODE}
+                        openProjectSchedule={bootstrap.permissions.includes("schedule.read") ? openProjectSchedule : undefined}
+                        openProjectPage={openProjectPage}
+                      />
                     ) : projectTab === "punchlist" ? (
                       <IssueBatchScreen key={`issues:${preferredIssueBatch?.count ?? 0}`} {...common} initialBatchId={preferredIssueBatch?.id ?? null} openProjectSchedule={openProjectSchedule} />
                     ) : (
