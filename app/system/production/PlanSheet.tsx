@@ -526,7 +526,8 @@ export function PlanSheet({
     }
     return groups.filter((group) => group.rows.length);
   }, [model.rows, today]);
-  const followCount = followUps.reduce((sum, group) => sum + group.rows.length, 0);
+  // A row in two lists (late and blocked) counts once.
+  const followCount = new Set(followUps.flatMap((group) => group.rows.map((row) => row.task.id))).size;
   /** Opens the rows above a row, puts the cursor on it and scrolls it into view. */
   const goToRow = (row: Row) => {
     setFollowOpen(false);
@@ -538,7 +539,8 @@ export function PlanSheet({
       return next;
     });
     place({ id: row.task.id, col: COLUMN_AT.name }, null);
-    requestAnimationFrame(() => document.querySelector(`.plan-sheet tr[data-id="${row.task.id}"]`)?.scrollIntoView({ block: "center" }));
+    // Two frames: the rows above it open first, then it is on the page to scroll to.
+    requestAnimationFrame(() => requestAnimationFrame(() => document.querySelector(`.plan-sheet tr[data-id="${row.task.id}"]`)?.scrollIntoView({ block: "center" })));
   };
   const names = NAMES[lang] ?? NAMES.EN!;
   const dayDate = (iso: string | null) => (iso ? `${names.day[asDate(iso).getUTCDay()]} ${shortDate(iso)}` : "");
@@ -1608,6 +1610,21 @@ export function PlanSheet({
       box.removeEventListener("contextmenu", context);
     };
   }, [place]);
+  // The follow-up list closes on a click outside it or Escape, like the row menu.
+  useEffect(() => {
+    if (!followOpen) return;
+    const close = (event: Event) => {
+      if (event instanceof MouseEvent && event.target instanceof Element && event.target.closest(".ps-follow-wrap")) return;
+      if (event instanceof KeyboardEvent && event.key !== "Escape") return;
+      setFollowOpen(false);
+    };
+    window.addEventListener("mousedown", close);
+    window.addEventListener("keydown", close);
+    return () => {
+      window.removeEventListener("mousedown", close);
+      window.removeEventListener("keydown", close);
+    };
+  }, [followOpen]);
   useEffect(() => {
     if (!menu) return;
     const close = (event: Event) => {
@@ -2677,6 +2694,7 @@ export function PlanSheet({
                         </button>
                       </li>
                     ))}
+                    {group.rows.length > 30 ? <li className="ps-follow-more">{t("Sheet.followMore").replace("{count}", String(group.rows.length - 30))}</li> : null}
                   </ul>
                 </section>
               ))}

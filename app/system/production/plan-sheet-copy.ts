@@ -16,6 +16,7 @@ export const PLAN_SHEET_COPY: Record<string, { en: string; th: string; jp: strin
     ["Sheet.vendorGroup", "Outsourced to", "จ้างภายนอก", "外注先"],
     ["Sheet.follow", "To follow up", "ต้องตาม", "要フォロー"],
     ["Sheet.follow.late", "Late", "เลยกำหนด", "遅延"],
+    ["Sheet.followMore", "and {count} more", "และอีก {count} งาน", "ほか {count} 件"],
     ["Sheet.follow.blocked", "Blocked", "ติดปัญหา", "停滞"],
     ["Sheet.follow.due", "Due to start, not started", "ถึงวันเริ่มแต่ยังไม่เริ่ม", "開始日を過ぎて未着手"],
     ["Sheet.follow.noMember", "No member yet", "ยังไม่มีผู้ทำ", "担当者なし"],
