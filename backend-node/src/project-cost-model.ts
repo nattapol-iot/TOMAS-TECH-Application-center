@@ -117,6 +117,8 @@ export function laborOf(labor: LaborCost, discipline: LaborDiscipline | null): L
 }
 
 export type ProjectCostItem = {
+  /** Task doc 6.3: the project manager's note on the CEO summary; the cost overview carries it, a project's own cost does not. */
+  ceoNote?: { text: string; by: string; at: string } | null;
   id: number;
   number: string;
   name: string;

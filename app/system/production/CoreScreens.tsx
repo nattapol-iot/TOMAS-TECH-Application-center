@@ -995,6 +995,7 @@ export function ProductionProjects({
   openProjectSchedule,
   openProjectPage,
   openCreatePage,
+  openCeoSummary,
   initialMode,
 }: CommonProps & {
   teamTestMode: boolean;
@@ -1003,6 +1004,8 @@ export function ProductionProjects({
   openProjectPage?: (projectNo: string) => void;
   /** Task doc 5.4: Create project as a page; V2 opens it instead of the dialog. */
   openCreatePage?: () => void;
+  /** Task doc 6.3: the CEO cost summary, for Leaders and above. */
+  openCeoSummary?: () => void;
   /** The old Project Timeline menu opens the portfolio straight in Timeline mode. */
   initialMode?: PortfolioMode;
 }) {
@@ -1363,6 +1366,7 @@ export function ProductionProjects({
                         void load();
                       },
                     },
+                    ...(openCeoSummary ? [{ key: "ceo", label: "CEO.open", icon: "chart" as const, guide: "project.ceo", onSelect: openCeoSummary }] : []),
                   ]}
                 />
                 {createButton}
@@ -1870,6 +1874,7 @@ export function ProjectPage({
   renderPlan,
   seesCost,
   seesPlan = true,
+  onCeoSummary,
 }: CommonProps & {
   projectNo: string;
   tab: ProjectPageTab;
@@ -1879,6 +1884,8 @@ export function ProjectPage({
   renderPlan: (projectId: number) => ReactNode;
   /** Leaders and above (project-cost-model.ts); the API refuses everyone else. */
   seesCost: boolean;
+  /** Task doc 6.3: the CEO summary of this project, offered beside its Cost tab. */
+  onCeoSummary?: (key: string) => void;
   /** schedule.read: without it there is no Plan tab. */
   seesPlan?: boolean;
 }) {
@@ -2036,7 +2043,17 @@ export function ProjectPage({
       <div className="project-page-body">
         {shownTab === "overview" ? <ProjectOverviewTab item={item} onTab={onTab} onMembers={() => setMembers(true)} onEdit={canWrite ? () => setEditing(true) : null} seesCost={seesCost} /> : null}
         {shownTab === "plan" ? renderPlan(item.id) : null}
-        {shownTab === "cost" ? <ProjectCostPanel projectId={item.id} /> : null}
+        {shownTab === "cost" ? (
+          <>
+            {onCeoSummary ? (
+              <button type="button" className="btn default sm project-page-ceo" data-guide="projectPage.ceo" onClick={() => onCeoSummary(projectPageKey(item))}>
+                <Icon name="chart" />
+                {uiText("CEO.open")}
+              </button>
+            ) : null}
+            <ProjectCostPanel projectId={item.id} />
+          </>
+        ) : null}
         {shownTab === "documents" ? <ProjectDocumentsTab project={item} canWrite={canWrite} notify={notify} /> : null}
       </div>
       {editing ? (

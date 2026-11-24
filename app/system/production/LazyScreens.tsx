@@ -82,6 +82,7 @@ export const ProductionInquiries = dynamic(() => import("./InquiryScreens").then
 export const ProductionResourcePlan = dynamic(() => import("./ResourcePlanningScreen").then((m) => m.ProductionResourcePlan), screen);
 export const IssueBatchScreen = dynamic(() => import("./IssueBatchScreen").then((m) => m.IssueBatchScreen), screen);
 export const ProjectCostScreen = dynamic(() => import("./ProjectCostScreen").then((m) => m.ProjectCostScreen), screen);
+export const CeoSummaryScreen = dynamic(() => import("./CeoSummaryScreen").then((m) => m.CeoSummaryScreen), screen);
 export const ReportScreens = dynamic(() => import("./ReportScreens").then((m) => m.ReportScreens), screen);
 export const ProductionEstimates = dynamic(() => import("./EstimateScreens").then((m) => m.ProductionEstimates), screen);
 export const ProductionApprovals = dynamic(() => import("./MaterialScreens").then((m) => m.ProductionApprovals), screen);
