@@ -916,6 +916,15 @@
   max-width: 11px;
   padding: 0;
 }
+/* The narrow blank column between WORK DAYS and the days, as in the team's file. */
+.ps-xl th.sp,
+.ps-xl td.x29 {
+  width: 4px;
+  min-width: 4px;
+  max-width: 4px;
+  padding: 0;
+  background: var(--surface);
+}
 .ps-xl td.x11,
 .ps-xl td.x15,
 .ps-xl td.x17,

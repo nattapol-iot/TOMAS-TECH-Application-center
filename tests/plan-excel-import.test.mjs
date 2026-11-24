@@ -194,3 +194,21 @@ test("review fixes: blank % keeps the plan's, whole-number columns, duplicate WB
     "a row numbered by place never renames another",
   );
 });
+
+test("the colour key under the team's master plan is not read as plan rows", () => {
+  const grid = [
+    ["WBS", "TASK", "PIC", "PREDECESSOR", "START", "END", "DAYS", "% DONE"],
+    [1, "Design", "", "", 46351, 46360, 10, ""],
+    ["1.1", "Layout drawing", "Tomas", "", 46351, 46353, 3, 0.4],
+    [],
+    ["", "[ Level 1 Task or Phase ]"],
+    ["", ". [ Level 2 Task ]"],
+    ["", ". . . [ Level 4 Task ]"],
+    ["1.2", "[Level 2 PLC] program", "Tomas", "", 46354, 46355, 2, 0],
+  ];
+  const plan = readPlanTable(grid, "2026-11-24");
+  assert.deepEqual(
+    plan.rows.map((row) => row.name),
+    ["Design", "Layout drawing", "[Level 2 PLC] program"],
+  );
+});
