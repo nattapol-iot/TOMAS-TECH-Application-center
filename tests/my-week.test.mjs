@@ -144,7 +144,8 @@ test("the week in hours: capacity less time away, booked blocks and meetings, an
 
 test("My Work opens on My week; the hours strip moved into the calendar; every word is in three languages", async () => {
   const myWork = await source("app/system/production/PlanningPricingScreens.tsx");
-  assert.match(myWork, /type MyWorkTab = "week" \| "new" \| "active" \| "queue" \| "updates";/);
+  // Task doc 3.6 added Outsourced work (2026-11-25).
+  assert.match(myWork, /type MyWorkTab = "week" \| "new" \| "active" \| "queue" \| "updates" \| "vendor";/);
   assert.match(myWork, /useState<MyWorkTab>\("week"\)/);
   assert.match(myWork, /\{ id: "week", label: "MyWeek\.tab" \},\n\s*\{ id: "assigned", label: "MyWork\.assignedTab"/);
   assert.match(myWork, /\{tab === "week" \? <MyWeek notify=\{notify\} \/> : null\}/);

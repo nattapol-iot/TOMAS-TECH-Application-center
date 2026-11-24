@@ -1,0 +1,86 @@
+/* My Work > Outsourced work (VendorWork.tsx, task doc 3.6). Tokens only. */
+.vendor-work {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 4px 0;
+}
+.vendor-work .vendor-intro {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: 13px;
+}
+.vendor-work .vendor-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.vendor-work .vendor-range {
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+.vendor-work .vendor-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.vendor-work .vendor-grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.vendor-work .vendor-grid th,
+.vendor-work .vendor-grid td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line-soft);
+  text-align: left;
+  vertical-align: middle;
+}
+.vendor-work .vendor-grid thead th {
+  background: var(--n-50);
+  color: var(--ink-soft);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.vendor-work .vendor-grid .day {
+  width: 60px;
+  text-align: center;
+}
+.vendor-work .vendor-grid .today {
+  background: var(--blue-soft);
+}
+.vendor-work .vendor-grid .num {
+  font-family: var(--font-mono);
+  text-align: right;
+  white-space: nowrap;
+}
+.vendor-work .vendor-project {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.vendor-work .vendor-supplier {
+  color: var(--violet);
+}
+.vendor-work .vendor-people {
+  width: 48px;
+  min-height: 40px;
+  padding: 2px 4px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  text-align: center;
+}
+.vendor-work .vendor-people:disabled {
+  background: var(--n-50);
+  color: var(--muted);
+}
+.vendor-work .vendor-empty {
+  margin: 0;
+  color: var(--muted);
+}

@@ -50,6 +50,7 @@ import { registerInventoryRoutes } from "./routes/inventory.js";
 import { registerInquiryRoutes } from "./routes/inquiries.js";
 import { registerRecordPresenceRoutes } from "./routes/record-presence.js";
 import { registerUserGuideRoutes } from "./routes/user-guides.js";
+import { registerVendorHourRoutes } from "./routes/vendor-hours.js";
 import { registerWorkDayRoutes } from "./routes/work-days.js";
 import { registerWorkBlockRoutes } from "./routes/work-blocks.js";
 import { registerTeamWeekRoutes } from "./routes/team-week.js";
@@ -229,6 +230,7 @@ export async function buildApp(config: AppConfig): Promise<Application> {
   registerRecordPresenceRoutes(app, database, users);
   registerUserGuideRoutes(app, database, users);
   registerWorkDayRoutes(app, database, users);
+  registerVendorHourRoutes(app, database, users);
   registerWorkBlockRoutes(app, database, users, email);
   registerTeamWeekRoutes(app, database, users);
   registerEstimateCostWriteRoutes(app, database, users);

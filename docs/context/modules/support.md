@@ -4,7 +4,7 @@
 
 แจ้งปัญหา ticket การตอบรับ คู่มือ และบทสอนแบบคลิกตามบนหน้าจอจริงพร้อมความคืบหน้าของทีม
 
-Evidence: snapshot `e7d7f326`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
+Evidence: snapshot `b626b0e1`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
 
 ## Read only the operation you change
 

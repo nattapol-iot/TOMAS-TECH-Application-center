@@ -888,4 +888,8 @@ GO
 GRANT SELECT, INSERT, UPDATE, DELETE ON dbo.work_blocks TO [iot_team_app_role];
 GRANT SELECT, INSERT, UPDATE, DELETE ON dbo.outlook_event_links TO [iot_team_app_role];
 GO
+
+-- database/migrations/127_vendor_hours.sql
+GRANT SELECT, INSERT, UPDATE, DELETE ON dbo.schedule_vendor_hours TO [iot_team_app_role];
+GO
 -- END GENERATED MIGRATION GRANTS
