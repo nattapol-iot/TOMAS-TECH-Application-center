@@ -1717,6 +1717,21 @@ export function PlanSheet({
     }
     const now = timeline.x(today);
     if (now >= 0 && now < timeline.days) inner.push(<div key="today" className="today" style={{ left: now * DW, width: DW }} />);
+    // A main heading's own dates are the ones promised to the customer (Master Plan, 2026-11-03). Its bar now follows
+    // the rows under it (owner 2026-11-23), so the promised dates stay as a dashed frame to compare with.
+    const promised = row.rollup && task.kind === "phase" && task.parentId === null && task.storedPlanStart ? task.storedPlanStart : null;
+    if (promised) {
+      const promisedEnd = shiftDay(promised, Math.max(1, task.planDays) - 1);
+      if (promised !== row.start || promisedEnd !== row.finish)
+        inner.push(
+          <div
+            key="promised"
+            className="gb promised"
+            style={{ left: timeline.x(promised) * DW, width: spanDays(promised, promisedEnd) * DW - 2 }}
+            title={`${t("Sheet.legendPromised")} · ${dayDate(promised)} – ${dayDate(promisedEnd)}`}
+          />,
+        );
+    }
     if (row.start && row.finish) {
       const left = timeline.x(row.start) * DW,
         width = spanDays(row.start, row.finish) * DW - 2,
@@ -2423,6 +2438,10 @@ export function PlanSheet({
         <span>
           <i className="sw head" />
           {t("Sheet.legendHeading")}
+        </span>
+        <span>
+          <i className="sw promised" />
+          {t("Sheet.legendPromised")}
         </span>
         <span>
           <i className="sw hol" />
