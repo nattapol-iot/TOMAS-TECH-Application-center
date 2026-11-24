@@ -1,17 +1,20 @@
 "use client";
-/* Projects > Plan, the Sheet view (V2, owner 2026-11-23/24): the plan typed like the team's Excel Gantt. One row per
-   plan row and one cell per field. A cell saves itself when it is left: the whole row goes back to the API with the
-   one field changed (PUT /schedule/tasks/:id), % DONE goes as a progress update (POST /updates). Saves run one at a
-   time in the order they were typed, each on the newest row version, and the plan is read again when they stop.
-   What a typed date, link or percentage means is in lib/plan-sheet.ts. "After" (ต่อจาก) is finish-to-start only and
-   its +N counts work days (owner 2026-11-24); the plan keeps storing calendar days, so existing plans do not move. */
+/* Projects > Plan, the Sheet view (V2, owner 2026-11-23/24): the plan typed like the team's Excel Gantt, laid out as
+   the approved plan-grid mockup (artifact K9ySwjytLc7dvgVrjbEisu): a toolbar, a colour key, frozen columns WBS to
+   status, a Gantt in 20 px days with week / date / weekday headers, an add row at the bottom and a status bar.
+   A cell saves itself when it is left: the whole row goes back to the API with the one field changed
+   (PUT /schedule/tasks/:id); % DONE and status go as a progress update (POST /updates); rows move with
+   POST /schedule/tasks/:id/move. Saves run one at a time in the order they were typed, each on the newest row
+   version, and the plan is read again when they stop. What a typed date, link or percentage means is in
+   lib/plan-sheet.ts. "After" (ต่อจาก) is finish-to-start only and its +N counts work days (owner 2026-11-24); the plan
+   keeps storing calendar days, so existing plans do not move. */
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ApiClientError, apiRequest } from "../api-client";
-import { currentLocale, useT } from "../i18n";
-import { Icon } from "../ui";
+import { confirmDialog } from "../dialogs";
+import { LanguageContext, useT } from "../i18n";
 import { linkedStart, nextWorkDay } from "../../../lib/gantt";
-import { percentChangePatch } from "../../../lib/my-work";
+import { percentChangePatch, statusChangePatch } from "../../../lib/my-work";
 import {
   calendarLagToWorking,
   linkText,
@@ -41,52 +44,86 @@ type Fields = {
   discipline: string | null;
 };
 type Patch = Partial<Fields>;
-type Column = "name" | "pic" | "start" | "end" | "days" | "done" | "work" | "after" | "member" | "discipline" | "status";
-type Result = { patch?: Patch; percent?: number; notice?: string } | { error: string; wbs?: string };
+type Column = "wbs" | "name" | "pic" | "start" | "end" | "days" | "done" | "work" | "after" | "member" | "status";
+type Result = { patch?: Patch; percent?: number; status?: string; notice?: string } | { error: string; wbs?: string };
 type Row = {
   task: ScheduleTask;
   fields: Fields;
+  /** A main heading or a row with rows under it: no progress or status of its own. */
   parent: boolean;
+  /** Rows under it: its dates and link come from them. */
+  rollup: boolean;
   start: string | null;
   finish: string | null;
   days: number | null;
   workDays: number | null;
   percent: number;
+  status: string;
   after: string;
-  member: string;
+  /** Leaf rows under it that run past their END (a heading's "late" chip). */
+  lateKids: number;
 };
 type Job = { seq: number; retried?: boolean } & (
   | { type: "plan"; taskId: number; patch: Patch }
-  | { type: "progress"; taskId: number; percent: number }
-  | { type: "create"; parentId: number | null; beforeId: number | null; kind: "phase" | "task"; fields: Fields; percent?: number }
+  | { type: "progress"; taskId: number; percent?: number; status?: string }
+  | { type: "move"; taskId: number; parentId: number | null; beforeId: number | null }
+  | { type: "create"; parentId: number | null; parentSeq?: number; beforeId: number | null; kind: "phase" | "task"; fields: Fields; percent?: number }
 );
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
 type JobInput = DistributiveOmit<Job, "seq">;
-type Pending = { seq: number; taskId: number; patch?: Patch; percent?: number };
-type Ghost = { seq: number; parentId: number | null; beforeId: number | null; name: string };
-type Draft = { key: number; parentId: number | null; beforeId: number | null; kind: "phase" | "task"; start: string | null };
+type Pending = { seq: number; taskId: number; patch?: Patch; percent?: number; status?: string };
+type Saving = { seq: number; parentId: number | null; beforeId: number | null; name: string; depth: number; atEnd: boolean };
+type Draft = { key: number; parentId: number | null; beforeId: number | null; kind: "phase" | "task"; start: string | null; text: string };
 type Cell = { id: number; col: number };
 type Editing = Cell & { initial: string; typed: string | null };
 type Removal = { label: string; reason?: string; onRemove: () => void } | undefined;
+type UndoEntry = { kind: "plan"; taskId: number; patch: Patch } | { kind: "move"; taskId: number; parentId: number | null; beforeId: number | null };
 
-const COLUMNS: { key: Column; label: string; hint?: string; className: string; select?: boolean }[] = [
-  { key: "name", label: "Sheet.colTask", className: "sh-name" },
-  { key: "pic", label: "Sheet.colPic", hint: "Sheet.colPicHint", className: "sh-pic" },
-  { key: "start", label: "Sheet.colStart", className: "sh-date" },
-  { key: "end", label: "Sheet.colEnd", className: "sh-date" },
-  { key: "days", label: "Sheet.colDays", className: "sh-num" },
-  { key: "done", label: "Sheet.colDone", className: "sh-num" },
-  { key: "work", label: "Sheet.colWork", className: "sh-num" },
-  { key: "after", label: "Sheet.colAfter", hint: "Sheet.colAfterHint", className: "sh-after" },
-  { key: "member", label: "Sheet.colMember", hint: "Sheet.colMemberHint", className: "sh-member", select: true },
-  { key: "discipline", label: "Sheet.colDiscipline", className: "sh-disc", select: true },
-  { key: "status", label: "Sheet.colStatus", className: "sh-status" },
+/** The add row under the last row (mockup "ghost" row): type a name or paste from Excel there. */
+const FOOT = -1;
+const DW = 20,
+  GUT = 28;
+const COLUMNS: { key: Column; label: string; lines?: [string, string]; sub?: string; width: number; mono?: boolean; right?: boolean; select?: boolean }[] = [
+  { key: "wbs", label: "WBS", width: 54, mono: true },
+  { key: "name", label: "Sheet.colTask", width: 262 },
+  { key: "pic", label: "Sheet.colPic", sub: "Sheet.subParty", width: 78 },
+  { key: "start", label: "Sheet.colStart", width: 110, mono: true },
+  { key: "end", label: "Sheet.colEnd", width: 110, mono: true },
+  { key: "days", label: "Sheet.colDays", width: 46, mono: true, right: true },
+  { key: "done", label: "Sheet.colDone", lines: ["%", "DONE"], width: 54, mono: true, right: true },
+  { key: "work", label: "Sheet.colWork", lines: ["WORK", "DAYS"], width: 52, mono: true, right: true },
+  { key: "after", label: "Sheet.colAfter", sub: "WBS", width: 74, mono: true },
+  { key: "member", label: "Sheet.colMember", sub: "Sheet.subTeam", width: 132, select: true },
+  { key: "status", label: "Sheet.colStatus", sub: "Sheet.subInternal", width: 116, select: true },
 ];
 const LAST_COLUMN = COLUMNS.length - 1;
+const COLUMN_AT = Object.fromEntries(COLUMNS.map((column, index) => [column.key, index])) as Record<Column, number>;
+const LEFT = COLUMNS.reduce<number[]>((all, column, index) => [...all, index ? all[index - 1]! + COLUMNS[index - 1]!.width : GUT], []);
+const LEFT_WIDTH = LEFT[LAST_COLUMN]! + COLUMNS[LAST_COLUMN]!.width;
 const DISCIPLINES = ["Electrical", "Mechanical", "Software", "Installation"] as const;
 const DISCIPLINE_SHORT: Record<string, string> = { EE: "Electrical", ME: "Mechanical", SW: "Software", IN: "Installation" };
+const STATUSES = ["Not Started", "In Progress", "Blocked", "Done"] as const;
 const STATUS_LABEL: Record<string, string> = { "Not Started": "Sheet.stNotStarted", "In Progress": "Sheet.stInProgress", Blocked: "Sheet.stBlocked", Done: "Sheet.stDone" };
-const UNDO_LIMIT = 50;
+const STATUS_CHIP: Record<string, string> = { "Not Started": "s-ns", "In Progress": "s-ip", Blocked: "s-bl", Done: "s-dn" };
+const UNDO_LIMIT = 100;
+/* Weekday and month names as the mockup writes them (Sunday first): short for dates, one letter for the day row. */
+const NAMES: Record<string, { day: string[]; letter: string[]; month: string[] }> = {
+  TH: {
+    day: ["อา.", "จ.", "อ.", "พ.", "พฤ.", "ศ.", "ส."],
+    letter: ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"],
+    month: ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."],
+  },
+  EN: {
+    day: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+    letter: ["S", "M", "T", "W", "T", "F", "S"],
+    month: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+  },
+  JP: {
+    day: ["日", "月", "火", "水", "木", "金", "土"],
+    letter: ["日", "月", "火", "水", "木", "金", "土"],
+    month: ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"],
+  },
+};
 
 const isConflict = (error: unknown) => error instanceof ApiClientError && error.status === 409 && error.code === "concurrency_conflict";
 const failureText = (error: unknown) => (error instanceof Error ? error.message : "The request could not be completed.");
@@ -110,10 +147,10 @@ function newer(a: string | null | undefined, b: string | null | undefined): bool
   return false;
 }
 const newest = (a: string | null | undefined, b: string | null | undefined) => (newer(b, a) ? b : a) ?? b ?? null;
-/** A date as the cells show it, the way the team types it: 19/11/26. */
-const cellDate = (iso: string | null) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(2, 4)}` : "");
+const asDate = (iso: string) => new Date(`${iso}T00:00:00Z`);
+const shortDate = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(2, 4)}`;
 const isWorkDay = (iso: string, holidays: ReadonlySet<string>) => {
-  const weekday = new Date(`${iso}T00:00:00Z`).getUTCDay();
+  const weekday = asDate(iso).getUTCDay();
   return weekday !== 0 && weekday !== 6 && !holidays.has(iso);
 };
 function countWorkDays(start: string, finish: string, holidays: ReadonlySet<string>): number {
@@ -141,6 +178,29 @@ function changed(fields: Fields, patch: Patch): Patch | null {
 }
 const pick = (fields: Fields, keys: (keyof Fields)[]): Patch => Object.fromEntries(keys.map((key) => [key, fields[key]])) as Patch;
 const flatById = (schedule: ProjectSchedule) => new Map(sheetOrder(schedule.tasks).map((task) => [task.id, task] as const));
+const isLate = (row: { status: string; finish: string | null; parent: boolean }, today: string) => !row.parent && row.status !== "Done" && row.finish !== null && row.finish < today;
+
+/* The mockup's line icons, 16 px. */
+function Glyph({ d }: { d: string[] }) {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {d.map((path) => (
+        <path key={path} d={path} />
+      ))}
+    </svg>
+  );
+}
+const GLYPH = {
+  undo: ["M9 14 4 9l5-5", "M4 9h10.5a5.5 5.5 0 0 1 0 11H11"],
+  redo: ["m15 14 5-5-5-5", "M20 9H9.5a5.5 5.5 0 0 0 0 11H13"],
+  plus: ["M12 5v14M5 12h14"],
+  outdent: ["M21 12H11M21 6H11M21 18H11", "m7 8-4 4 4 4"],
+  indent: ["M21 12H11M21 6H11M21 18H11", "m3 8 4 4-4 4"],
+  up: ["m18 15-6-6-6 6"],
+  down: ["m6 9 6 6 6-6"],
+  trash: ["M3 6h18", "M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6", "M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"],
+  calendar: ["M16 2v4M8 2v4M3 10h18", "M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"],
+};
 
 export function PlanSheet({
   schedule,
@@ -171,11 +231,13 @@ export function PlanSheet({
   canAddSub: (task: ScheduleTask) => boolean;
 }) {
   const t = useT();
+  const { lang } = useContext(LanguageContext);
   const canPlan = schedule.canPlan;
   const holidays = useMemo(() => new Set(schedule.holidays ?? []), [schedule.holidays]);
   const [pending, setPending] = useState<readonly Pending[]>([]);
-  const [ghosts, setGhosts] = useState<readonly Ghost[]>([]);
+  const [saving, setSaving] = useState<readonly Saving[]>([]);
   const [collapsed, setCollapsed] = useState<ReadonlySet<number>>(() => new Set());
+  const [headingsOnly, setHeadingsOnly] = useState(false);
   const [active, setActive] = useState<Cell | null>(null);
   const [anchor, setAnchor] = useState<Cell | null>(null);
   // The same two cells, kept as they change: two keys in one tick (a held arrow) each move from the one before.
@@ -189,19 +251,21 @@ export function PlanSheet({
   const [draft, setDraft] = useState<Draft | null>(null);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<{ text: string; error: boolean } | null>(null);
-  const [savedOnce, setSavedOnce] = useState(false);
-  const [undoCount, setUndoCount] = useState(0);
+  const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [steps, setSteps] = useState({ undo: 0, redo: 0 });
+  const [frameWidth, setFrameWidth] = useState(0);
 
   const model = useMemo(() => {
     const all = sheetOrder(schedule.tasks);
     const byTask = new Map(all.map((task) => [task.id, task] as const));
     const patches = new Map<number, Patch>(),
-      percents = new Map<number, number>();
+      percents = new Map<number, number>(),
+      statuses = new Map<number, string>();
     for (const entry of pending) {
       if (entry.patch) patches.set(entry.taskId, { ...patches.get(entry.taskId), ...entry.patch });
       if (entry.percent !== undefined) percents.set(entry.taskId, entry.percent);
+      if (entry.status !== undefined) statuses.set(entry.taskId, entry.status);
     }
-    const teamName = new Map(team.map((person) => [person.id, person.name] as const));
     const linkRows: SheetLinkRow[] = all.map((task) => {
       const patch = patches.get(task.id);
       return {
@@ -226,26 +290,32 @@ export function PlanSheet({
         finish = start ? shiftDay(start, Math.max(1, fields.planDays) - 1) : null;
         workDays = start && finish ? countWorkDays(start, finish, holidays) : null;
       }
-      const predecessorFinish = fields.predecessorId === null ? null : (byTask.get(fields.predecessorId)?.planFinish ?? null);
+      const predecessorFinish = fields.predecessorId === null ? null : (byTask.get(fields.predecessorId)?.planFinish ?? null),
+        heading = task.kind === "phase";
       const gap = predecessorFinish ? calendarLagToWorking(predecessorFinish, fields.lagDays, holidays) : fields.lagDays;
-      const members = patch?.picUserIds ? patch.picUserIds.map((id) => teamName.get(id) ?? task.pics.find((pic) => pic.id === id)?.name ?? `#${id}`) : task.pics.map((pic) => pic.name);
       return {
         task,
         fields,
-        parent,
+        parent: parent || heading,
+        rollup: parent,
         start,
         finish,
         workDays,
         days: start && finish ? spanDays(start, finish) : null,
         percent: percents.get(task.id) ?? Number(task.percentComplete),
+        status: statuses.get(task.id) ?? (percents.get(task.id) === 100 ? "Done" : (percents.get(task.id) ?? 0) > 0 && task.status === "Not Started" ? "In Progress" : task.status),
         after: linkText(fields, linkRows, gap),
-        member: members.join(", "),
+        lateKids: 0,
       };
     });
     const byId = new Map(rows.map((row) => [row.task.id, row] as const));
+    for (const row of rows)
+      if (isLate(row, today))
+        for (let up = row.task.parentId === null ? undefined : byId.get(row.task.parentId); up; up = up.task.parentId === null ? undefined : byId.get(up.task.parentId)) up.lateKids += 1;
     const visible: Row[] = [];
     let hideBelow: number | null = null;
     for (const row of rows) {
+      if (headingsOnly && row.task.depth > 1) continue;
       if (hideBelow !== null) {
         if (row.task.depth > hideBelow) continue;
         hideBelow = null;
@@ -254,9 +324,9 @@ export function PlanSheet({
       if (row.parent && collapsed.has(row.task.id)) hideBelow = row.task.depth;
     }
     return { rows, byId, visible, linkRows };
-  }, [schedule, pending, collapsed, holidays, team]);
+  }, [schedule, pending, collapsed, headingsOnly, holidays, today]);
 
-  // The Gantt beside the cells: whole weeks from the plan's first Monday, narrower days for a longer plan.
+  // The Gantt: 20 px days from the Monday of the plan's first day, at least 16 weeks, two weeks past the last END.
   const timeline = useMemo(() => {
     let first: string | null = null,
       last: string | null = null;
@@ -264,25 +334,20 @@ export function PlanSheet({
       if (row.start && (!first || row.start < first)) first = row.start;
       if (row.finish && (!last || row.finish > last)) last = row.finish;
     }
-    const from = mondayOn(first ? shiftDay(first, -2) : today);
-    const until = last && last > today ? last : today;
-    const weeks = Math.min(80, Math.max(6, Math.ceil((spanDays(from, until) + 10) / 7)));
-    const width = weeks <= 12 ? 16 : weeks <= 26 ? 10 : weeks <= 52 ? 6 : 4;
+    const from = mondayOn(first ?? today);
+    const end = last && last > today ? last : today;
+    const days = Math.max(16 * 7, Math.ceil((spanDays(from, end) + 14) / 7) * 7);
     const x = (iso: string) => spanDays(from, iso) - 1;
-    const stripes = [...holidays]
-      .filter((day) => day >= from && x(day) < weeks * 7)
-      .map((day) => {
-        const left = x(day) * width;
-        return `linear-gradient(90deg, transparent ${left}px, var(--sheet-hol) ${left}px, var(--sheet-hol) ${left + width}px, transparent ${left + width}px)`;
-      });
-    return { from, weeks, width, x, todayX: x(today), stripes: stripes.join(", ") };
-  }, [model.rows, today, holidays]);
-  const weekLabel = useMemo(() => new Intl.DateTimeFormat(currentLocale(), { day: "numeric", month: "short", timeZone: "UTC" }), []);
+    return { from, days, x, dates: Array.from({ length: days }, (_, index) => shiftDay(from, index)) };
+  }, [model.rows, today]);
+  const names = NAMES[lang] ?? NAMES.EN!;
+  const dayDate = (iso: string | null) => (iso ? `${names.day[asDate(iso).getUTCDay()]} ${shortDate(iso)}` : "");
+  const longDate = (iso: string) => `${Number(iso.slice(8, 10))} ${names.month[Number(iso.slice(5, 7)) - 1]} ${iso.slice(0, 4)}`;
 
   // Everything the save queue and the native listeners read runs through this, so they always see the latest render.
-  const live = useRef({ schedule, model, t, notify, onReload, ensureMembers, today, holidays, canPlan });
+  const live = useRef({ schedule, model, t, notify, onReload, ensureMembers, today, holidays, canPlan, onOpenTask });
   useLayoutEffect(() => {
-    live.current = { schedule, model, t, notify, onReload, ensureMembers, today, holidays, canPlan };
+    live.current = { schedule, model, t, notify, onReload, ensureMembers, today, holidays, canPlan, onOpenTask };
   });
   // The newest plan this view has seen, from the props or its own reads, and the versions its own saves handed back.
   const latest = useRef(schedule);
@@ -291,20 +356,23 @@ export function PlanSheet({
   }, [schedule]);
   const versions = useRef({ schedule: null as string | null, rows: new Map<number, string>() });
   const saved = useRef(new Map<number, Patch>());
+  const created = useRef(new Map<number, number>());
   const queue = useRef<Job[]>([]);
   const running = useRef(false);
   const stale = useRef(false);
   const seq = useRef(0);
   const doneSeq = useRef(0);
-  const undo = useRef<{ taskId: number; patch: Patch }[]>([]);
+  const undoStack = useRef<UndoEntry[]>([]);
+  const redoStack = useRef<UndoEntry[]>([]);
   const draftKey = useRef(0);
-  const table = useRef<HTMLTableElement | null>(null);
+  const frame = useRef<HTMLDivElement | null>(null);
+  const links = useRef<SVGSVGElement | null>(null);
   const editRef = useRef<Editing | null>(null);
 
   const say = useCallback((text: string, error = false) => setNote({ text, error }), []);
   const dropPending = useCallback((test: (entry: { seq: number }) => boolean) => {
     setPending((current) => (current.some(test) ? current.filter((entry) => !test(entry)) : current));
-    setGhosts((current) => (current.some(test) ? current.filter((entry) => !test(entry)) : current));
+    setSaving((current) => (current.some(test) ? current.filter((entry) => !test(entry)) : current));
   }, []);
 
   /** Reads the plan again between saves; edits already saved leave the screen's overlay once the plan shows them. */
@@ -326,12 +394,14 @@ export function PlanSheet({
     };
     if (job.type === "create") {
       const { fields, kind } = job;
+      const parentId = job.parentSeq === undefined ? job.parentId : (created.current.get(job.parentSeq) ?? null);
+      if (job.parentSeq !== undefined && parentId === null) throw new Error("Sheet.parentFailed");
       if (kind === "task" && live.current.canPlan && fields.picUserIds.length) await live.current.ensureMembers(fields.picUserIds);
-      const created = await apiRequest<{ id: number; rowVersion: string; scheduleVersion: string }>(`/api/v1/projects/${plan.projectId}/schedule/tasks`, {
+      const made = await apiRequest<{ id: number; rowVersion: string; scheduleVersion: string }>(`/api/v1/projects/${plan.projectId}/schedule/tasks`, {
         method: "POST",
         body: JSON.stringify({
           scheduleVersion,
-          parentId: job.parentId,
+          parentId,
           beforeId: job.beforeId,
           sortOrder: 0,
           kind,
@@ -349,17 +419,27 @@ export function PlanSheet({
           ...(kind === "phase" || !fields.discipline ? {} : { discipline: fields.discipline }),
         }),
       });
-      remember(created.id, created);
+      created.current.set(job.seq, made.id);
+      remember(made.id, made);
       // Rows after it were renumbered, so their versions moved: the plan is read again before one of them is saved.
       if (job.beforeId !== null || job.percent) stale.current = true;
-      if (job.percent) queue.current.unshift({ seq: ++seq.current, type: "progress", taskId: created.id, percent: job.percent });
+      if (job.percent) queue.current.unshift({ seq: ++seq.current, type: "progress", taskId: made.id, percent: job.percent });
       return;
     }
     const task = flatById(plan).get(job.taskId);
     if (!task) return;
     const rowVersion = newest(task.rowVersion, versions.current.rows.get(task.id));
+    if (job.type === "move") {
+      const moved = await apiRequest<{ rowVersion: string; scheduleVersion: string }>(`/api/v1/schedule/tasks/${task.id}/move`, {
+        method: "POST",
+        body: JSON.stringify({ scheduleVersion, rowVersion, parentId: job.parentId, beforeId: job.beforeId }),
+      });
+      remember(task.id, moved);
+      stale.current = true;
+      return;
+    }
     if (job.type === "progress") {
-      const patch = percentChangePatch(task, job.percent, live.current.today);
+      const patch = job.status !== undefined ? statusChangePatch(task, job.status, live.current.today) : percentChangePatch(task, job.percent ?? 0, live.current.today);
       if (!patch) return;
       const result = await apiRequest<{ rowVersion: string; scheduleVersion: string }>(`/api/v1/schedule/tasks/${task.id}/updates`, {
         method: "POST",
@@ -411,7 +491,8 @@ export function PlanSheet({
     if (running.current) return;
     running.current = true;
     setBusy(true);
-    let wrote = false;
+    let wrote = false,
+      failed = false;
     try {
       while (queue.current.length) {
         const job = queue.current.shift()!;
@@ -429,6 +510,7 @@ export function PlanSheet({
             queue.current.unshift({ ...job, retried: true });
             continue;
           }
+          failed = true;
           dropPending((entry) => entry.seq === job.seq);
           if (isConflict(failure)) {
             tell(`${plan.projectNo} · ${label} ${translate("Plan.changedReloaded")}`);
@@ -447,7 +529,10 @@ export function PlanSheet({
       running.current = false;
       setBusy(false);
     }
-    setSavedOnce(true);
+    if (!failed) {
+      const now = new Date();
+      setSavedAt(`${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`);
+    }
   }, [refresh, run, dropPending, say]);
 
   const enqueue = useCallback(
@@ -461,7 +546,7 @@ export function PlanSheet({
   );
 
   const startOf = (row: Row, fields: Fields): string | null => {
-    if (row.parent) return row.start;
+    if (row.rollup) return row.start;
     if (fields.startMode !== "linked") return fields.planStart;
     const before = fields.predecessorId === null ? null : model.byId.get(fields.predecessorId);
     return linkedStart(before?.finish ?? null, fields.lagDays, holidays) ?? row.start;
@@ -474,8 +559,8 @@ export function PlanSheet({
   };
   const lockOf = (row: Row, column: Column): string => {
     const { task } = row;
-    if (column === "work" || column === "status") return "Sheet.calculated";
-    if (column === "done") {
+    if (column === "wbs" || column === "work") return "Sheet.calculated";
+    if (column === "done" || column === "status") {
       if (task.kind === "phase" || row.parent) return "Sheet.headingNoProgress";
       return task.canProgress ? "" : "Sheet.progressRights";
     }
@@ -484,28 +569,33 @@ export function PlanSheet({
       if (task.managedByResourcePlan) return "Sheet.resourceRow";
       if (lockedIds.has(task.id)) return "Sheet.lockedRow";
     }
-    if (task.kind === "phase" && (column === "pic" || column === "after" || column === "member" || column === "discipline")) return "Sheet.headingRow";
-    if (row.parent && (column === "start" || column === "end" || column === "days" || column === "after")) return "Sheet.rollupDates";
+    if (task.kind === "phase" && (column === "pic" || column === "after" || column === "member")) return "Sheet.headingRow";
+    if (row.rollup && (column === "start" || column === "end" || column === "days" || column === "after")) return "Sheet.rollupDates";
     if (column === "member" && task.kind === "detail") return "Sheet.detailMember";
     if (column === "member" && task.pics.length > 1) return "Sheet.manyMembers";
     if (column === "days" && task.isMilestone) return "Sheet.milestoneDay";
     return "";
   };
-  const memberFor = (text: string, own: readonly { id: number; name: string }[]): number | null | undefined => {
-    const value = text.trim().toLowerCase();
-    if (!value) return null;
-    const mine = own.find((pic) => String(pic.id) === value || pic.name.toLowerCase() === value);
-    if (mine) return mine.id;
-    const found =
-      team.find((person) => String(person.id) === value || person.name.toLowerCase() === value || (person.email ?? "").toLowerCase() === value) ??
-      team.find((person) => person.name.toLowerCase().startsWith(value));
-    return found ? found.id : undefined;
+  /** A member typed or pasted: a person by id, name or email, else a discipline the row waits for. */
+  const memberFor = (text: string, own: readonly { id: number; name: string }[]): Patch | undefined => {
+    const value = text.trim(),
+      lower = value.toLowerCase();
+    if (!value) return { picUserIds: [], discipline: null };
+    if (lower.startsWith("d:")) {
+      const code = DISCIPLINES.find((item) => item.toLowerCase() === lower.slice(2));
+      return code ? { picUserIds: [], discipline: code } : undefined;
+    }
+    const person =
+      own.find((pic) => String(pic.id) === lower || pic.name.toLowerCase() === lower) ??
+      team.find((item) => String(item.id) === lower || item.name.toLowerCase() === lower || (item.email ?? "").toLowerCase() === lower) ??
+      team.find((item) => item.name.toLowerCase().startsWith(lower));
+    if (person) return { picUserIds: [person.id] };
+    const code = DISCIPLINES.find((item) => item.toLowerCase() === lower || t(`Discipline.${item}`).toLowerCase() === lower) ?? DISCIPLINE_SHORT[value.toUpperCase()];
+    return code ? { picUserIds: [], discipline: code } : undefined;
   };
-  const disciplineFor = (text: string): string | null | undefined => {
-    const value = text.trim();
-    if (!value) return null;
-    const lower = value.toLowerCase();
-    return DISCIPLINES.find((code) => code.toLowerCase() === lower || t(`Discipline.${code}`).toLowerCase() === lower) ?? DISCIPLINE_SHORT[value.toUpperCase()];
+  const statusFor = (text: string): string | undefined => {
+    const lower = text.trim().toLowerCase();
+    return STATUSES.find((status) => status.toLowerCase() === lower || t(STATUS_LABEL[status]!).toLowerCase() === lower);
   };
   /** What one typed cell changes on its row; `fields` already holds the cells typed before it on the same row. */
   const cellResult = (row: Row, column: Column, raw: string, fields: Fields): Result => {
@@ -519,7 +609,7 @@ export function PlanSheet({
       case "start":
       case "end": {
         const start = startOf(row, fields);
-        const date = column === "start" ? parseSheetDate(text, today, finishAbove(row)) : parseSheetDate(text, start ?? today, start);
+        const date = column === "start" ? parseSheetDate(text.replace(/^\D+\s/, ""), today, finishAbove(row)) : parseSheetDate(text.replace(/^\D+\s/, ""), start ?? today, start);
         if (date === "") return task.kind === "phase" ? { patch: { planStart: null, planDays: 1 } } : { error: "Sheet.badDate" };
         if (date === null) return { error: "Sheet.badDate" };
         if (column === "end" && start && !task.isMilestone) return date < start ? { error: "Sheet.endBeforeStart" } : { patch: { planDays: spanDays(start, date) } };
@@ -539,6 +629,10 @@ export function PlanSheet({
         const percent = text === "" ? 0 : parsePercent(text);
         return percent === null ? { error: "Sheet.badPercent" } : { percent };
       }
+      case "status": {
+        const status = statusFor(text);
+        return status ? { status } : { error: "Sheet.badStatus" };
+      }
       case "after": {
         const self: SheetLinkRow = { id: task.id, parentId: task.parentId, wbs: task.wbs, kind: task.kind, predecessorId: fields.predecessorId, startMode: fields.startMode };
         const link = parseLink(text, self, model.linkRows);
@@ -548,25 +642,23 @@ export function PlanSheet({
         return { patch: { startMode: "linked", predecessorId: link.predecessorId, lagDays: before ? workingLagToCalendar(before, link.lagDays, holidays) : link.lagDays } };
       }
       case "member": {
-        const id = memberFor(text, task.pics);
-        return id === undefined ? { error: "Sheet.memberUnknown" } : { patch: { picUserIds: id === null ? [] : [id] } };
-      }
-      case "discipline": {
-        const code = disciplineFor(text);
-        return code === undefined ? { error: "Sheet.disciplineUnknown" } : { patch: { discipline: code } };
+        const patch = memberFor(text, task.pics);
+        return patch ? { patch } : { error: "Sheet.memberUnknown" };
       }
       default:
         return { error: "Sheet.calculated" };
     }
   };
+  const pushUndo = (entry: UndoEntry) => {
+    undoStack.current = [...undoStack.current.slice(1 - UNDO_LIMIT), entry];
+    redoStack.current = [];
+    setSteps({ undo: undoStack.current.length, redo: 0 });
+  };
   /** Queues what a row's typed cells change, shows it at once, and keeps the old values for Ctrl+Z. */
-  const apply = (row: Row, patch: Patch | undefined, percent: number | undefined, keepUndo = true) => {
+  const apply = (row: Row, patch: Patch | undefined, percent: number | undefined, status: string | undefined, keepUndo = true) => {
     const change = patch ? changed(row.fields, patch) : null;
     if (change) {
-      if (keepUndo) {
-        undo.current = [...undo.current.slice(1 - UNDO_LIMIT), { taskId: row.task.id, patch: pick(row.fields, Object.keys(change) as (keyof Fields)[]) }];
-        setUndoCount(undo.current.length);
-      }
+      if (keepUndo) pushUndo({ kind: "plan", taskId: row.task.id, patch: pick(row.fields, Object.keys(change) as (keyof Fields)[]) });
       const id = enqueue({ type: "plan", taskId: row.task.id, patch: change });
       setPending((current) => [...current, { seq: id, taskId: row.task.id, patch: change }]);
     }
@@ -574,47 +666,64 @@ export function PlanSheet({
       const id = enqueue({ type: "progress", taskId: row.task.id, percent });
       setPending((current) => [...current, { seq: id, taskId: row.task.id, percent }]);
     }
-    return Boolean(change) || (percent !== undefined && percent !== row.percent);
+    if (status !== undefined && status !== row.status) {
+      const id = enqueue({ type: "progress", taskId: row.task.id, status });
+      setPending((current) => [...current, { seq: id, taskId: row.task.id, status, ...(status === "Done" ? { percent: 100 } : status === "Not Started" ? { percent: 0 } : {}) }]);
+    }
+    return Boolean(change) || (percent !== undefined && percent !== row.percent) || (status !== undefined && status !== row.status);
   };
-  const commit = (row: Row, column: Column, text: string) => {
+  const commit = async (row: Row, column: Column, text: string) => {
     const lock = lockOf(row, column);
     if (lock) return say(t(lock), true);
     const result = cellResult(row, column, text, row.fields);
     if ("error" in result) return say(t(result.error).replace("{wbs}", result.wbs ?? ""), true);
-    if (apply(row, result.patch, result.percent)) setNote(result.notice ? { text: result.notice, error: false } : null);
+    if (result.status === "Blocked") {
+      // A blocked task needs its reason, which the task's own window asks for.
+      say(t("Sheet.blockedNeedsReason"));
+      onOpenTask(row.task.id);
+      return;
+    }
+    if (result.status === "Done" && row.percent === 0 && !(await confirmDialog(t("This task is at 0%. Confirm that the work is complete and finish it today?")))) return;
+    if (apply(row, result.patch, result.percent, result.status)) setNote(result.notice ? { text: result.notice, error: false } : null);
   };
 
   const cellText = (row: Row, column: Column): string => {
     switch (column) {
+      case "wbs":
+        return row.task.wbs;
       case "name":
         return row.fields.name;
       case "pic":
         return row.task.kind === "phase" ? "" : row.fields.picExternal;
       case "start":
-        return cellDate(row.start);
+        return dayDate(row.start);
       case "end":
-        return cellDate(row.finish);
+        return dayDate(row.finish);
       case "days":
         return row.days === null ? "" : String(row.days);
       case "done":
-        return row.task.kind === "phase" && !row.start ? "" : `${Math.round(row.percent)}%`;
+        return row.parent && !row.start ? "" : `${Math.round(row.percent)}%`;
       case "work":
         return row.workDays === null ? "" : String(row.workDays);
       case "after":
         return row.after;
       case "member":
-        return row.member;
-      case "discipline":
-        return row.fields.discipline ? t(`Discipline.${row.fields.discipline}`) : "";
+        if (row.task.laborSource === "Outsourced" && row.task.laborSupplier) return row.task.laborSupplier;
+        return row.fields.picUserIds.length
+          ? row.fields.picUserIds.map((id) => row.task.pics.find((pic) => pic.id === id)?.name ?? team.find((person) => person.id === id)?.name ?? `#${id}`).join(", ")
+          : "";
       case "status":
-        return row.task.kind === "phase" ? "" : t(STATUS_LABEL[row.task.status] ?? row.task.status);
+        return row.parent ? (row.lateKids ? t("Sheet.lateKids").replace("{count}", String(row.lateKids)) : "") : t(STATUS_LABEL[row.status] ?? row.status);
     }
   };
 
-  // Moving around: the active cell, and the corner a Shift-move or Shift-click runs the selection from.
-  const indexOf = (cell: Cell | null) => (cell ? model.visible.findIndex((row) => row.task.id === cell.id) : -1);
+  // Moving around: the active cell, and the corner a Shift-move or Shift-click runs the selection from. The add row at
+  // the bottom (FOOT) is the last line the keyboard reaches.
+  const lineCount = model.visible.length + 1;
+  const indexOf = (cell: Cell | null) => (!cell ? -1 : cell.id === FOOT ? model.visible.length : model.visible.findIndex((row) => row.task.id === cell.id));
+  const idAt = (index: number) => (index >= model.visible.length ? FOOT : model.visible[index]!.task.id);
   const activeIndex = indexOf(active);
-  const activeRow = activeIndex >= 0 ? model.visible[activeIndex]! : null;
+  const activeRow = activeIndex >= 0 && activeIndex < model.visible.length ? model.visible[activeIndex]! : null;
   const area = (() => {
     const from = indexOf(anchor),
       to = activeIndex;
@@ -623,261 +732,22 @@ export function PlanSheet({
       startColumn = from >= 0 && anchor ? anchor.col : active.col;
     return { r0: Math.min(start, to), r1: Math.max(start, to), c0: Math.min(startColumn, active.col), c1: Math.max(startColumn, active.col) };
   })();
-  const focusTable = () => table.current?.focus({ preventScroll: true });
+  const focusFrame = () => frame.current?.focus({ preventScroll: true });
   const moveBy = (down: number, across: number, extend: boolean) => {
-    const rows = model.visible,
-      { active: from, anchor: corner } = cursor.current;
-    if (!rows.length) return;
+    const { active: from, anchor: corner } = cursor.current;
     const at = indexOf(from);
-    const index = at < 0 ? 0 : Math.max(0, Math.min(rows.length - 1, at + down));
-    const next = { id: rows[index]!.task.id, col: Math.max(0, Math.min(LAST_COLUMN, (from?.col ?? 0) + across)) };
+    const index = at < 0 ? 0 : Math.max(0, Math.min(lineCount - 1, at + down));
+    const next = { id: idAt(index), col: Math.max(0, Math.min(LAST_COLUMN, (from?.col ?? 1) + across)) };
     place(next, extend ? (corner ?? from ?? next) : next);
   };
-  const startEdit = (row: Row, col: number, typed: string | null) => {
-    const column = COLUMNS[col]!.key,
-      lock = lockOf(row, column);
-    if (lock) return say(t(lock), column !== "work" && column !== "status");
-    const initial =
-      column === "member"
-        ? String(row.fields.picUserIds[0] ?? "")
-        : column === "discipline"
-          ? (row.fields.discipline ?? "")
-          : column === "done"
-            ? String(Math.round(row.percent))
-            : cellText(row, column);
-    const next = { id: row.task.id, col, initial, typed };
-    editRef.current = next;
-    setEditing(next);
-  };
-  /** Leaves the cell being typed: `value` null throws the typing away; then the selection moves as Enter or Tab asks. */
-  const finishEdit = (value: string | null, down: number, across: number) => {
-    const current = editRef.current;
-    if (!current) return;
-    editRef.current = null;
-    setEditing(null);
-    const row = model.byId.get(current.id),
-      column = COLUMNS[current.col]!;
-    if (row && value !== null && value !== current.initial) commit(row, column.key, value);
-    if (down || across) moveBy(down, across, false);
-    focusTable();
-  };
-  const focusEditor = useCallback((node: HTMLInputElement | HTMLSelectElement | null) => {
-    if (!node || node === document.activeElement) return;
-    node.focus({ preventScroll: true });
-    if (node instanceof HTMLInputElement) {
-      if (editRef.current?.typed !== null && editRef.current?.typed !== undefined) node.setSelectionRange(node.value.length, node.value.length);
-      else node.select();
-    }
-  }, []);
 
-  const undoLast = () => {
-    const last = undo.current.at(-1),
-      row = last ? model.byId.get(last.taskId) : undefined;
-    undo.current = undo.current.slice(0, -1);
-    setUndoCount(undo.current.length);
-    if (!last || !row) return say(t("Sheet.undoNothing"));
-    if (apply(row, last.patch, undefined, false)) say(`${row.task.wbs} · ${t("Sheet.undone")}`);
-    else undoLast();
-  };
-
-  const onKeyDown = (event: React.KeyboardEvent<HTMLTableElement>) => {
-    if (event.target !== event.currentTarget) return;
-    const arrows: Record<string, [number, number]> = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] };
-    const arrow = arrows[event.key],
-      control = event.ctrlKey || event.metaKey;
-    if (control && event.key.toLowerCase() === "z") {
-      event.preventDefault();
-      undoLast();
-      return;
-    }
-    if (arrow) {
-      event.preventDefault();
-      moveBy(arrow[0], arrow[1], event.shiftKey);
-    } else if (event.key === "Tab") {
-      if ((event.shiftKey && (active?.col ?? 0) === 0) || (!event.shiftKey && (active?.col ?? 0) === LAST_COLUMN)) return;
-      event.preventDefault();
-      moveBy(0, event.shiftKey ? -1 : 1, false);
-    } else if (event.key === "Enter") {
-      event.preventDefault();
-      moveBy(event.shiftKey ? -1 : 1, 0, false);
-    } else if (event.key === "F2" && activeRow && active) {
-      event.preventDefault();
-      startEdit(activeRow, active.col, null);
-    } else if (event.key === "Escape") {
-      if (active) place(active, active);
-    } else if ((event.key === "Delete" || event.key === "Backspace") && activeRow && active) {
-      event.preventDefault();
-      const column = COLUMNS[active.col]!.key,
-        lock = lockOf(activeRow, column);
-      if (lock) say(t(lock), column !== "work" && column !== "status");
-      else if (cellText(activeRow, column) !== "") commit(activeRow, column, "");
-    } else if (event.key.length === 1 && !control && !event.altKey && activeRow && active) {
-      event.preventDefault();
-      startEdit(activeRow, active.col, COLUMNS[active.col]!.select ? null : event.key);
-    }
-  };
-  const onCopy = (event: React.ClipboardEvent<HTMLTableElement>) => {
-    if (event.target !== event.currentTarget || !area) return;
-    event.preventDefault();
-    const lines: string[] = [];
-    for (let index = area.r0; index <= area.r1; index++) {
-      const row = model.visible[index]!;
-      lines.push(
-        COLUMNS.slice(area.c0, area.c1 + 1)
-          .map((column) => cellText(row, column.key).replace(/[\t\n]/g, " "))
-          .join("\t"),
-      );
-    }
-    event.clipboardData.setData("text/plain", lines.join("\n"));
-    say(t("Sheet.copied"));
-  };
-  /** A block copied from Excel: cells land from the active cell; lines past the last row become new rows. */
-  const onPaste = (event: React.ClipboardEvent<HTMLTableElement>) => {
-    if (event.target !== event.currentTarget || !activeRow || !active) return;
-    const text = event.clipboardData.getData("text/plain");
-    if (!text) return;
-    event.preventDefault();
-    const lines = text
-      .replace(/\r/g, "")
-      .replace(/\n+$/, "")
-      .split("\n")
-      .map((line) => line.split("\t"));
-    const problems: string[] = [];
-    let cells = 0,
-      lastRow = activeRow;
-    const typeLine = (row: Row, line: string[]) => {
-      let fields = row.fields,
-        patch: Patch | undefined,
-        percent: number | undefined;
-      line.forEach((value, across) => {
-        const column = COLUMNS[active.col + across]?.key;
-        if (!column || column === "work" || column === "status") return;
-        const lock = lockOf(row, column);
-        if (lock) {
-          if (value.trim() && value.trim() !== cellText(row, column)) problems.push(`${row.task.wbs || row.fields.name} ${t(COLUMNS[active.col + across]!.label)}: ${t(lock)}`);
-          return;
-        }
-        if (value.trim() === cellText(row, column)) return;
-        const result = cellResult(row, column, value, fields);
-        if ("error" in result) {
-          problems.push(`${row.task.wbs || row.fields.name} ${t(COLUMNS[active.col + across]!.label)}: ${t(result.error).replace("{wbs}", result.wbs ?? "")}`);
-          return;
-        }
-        if (result.percent !== undefined) percent = result.percent;
-        if (result.patch) {
-          patch = { ...patch, ...result.patch };
-          fields = { ...fields, ...result.patch };
-        }
-        cells += 1;
-      });
-      return { fields, patch, percent };
-    };
-    const extra: string[][] = [];
-    lines.forEach((line, down) => {
-      const row = model.visible[activeIndex + down];
-      if (!row) return extra.push(line);
-      lastRow = row;
-      const typed = typeLine(row, line);
-      apply(row, typed.patch, typed.percent);
-    });
-    if (extra.length) {
-      // New rows go under the last heading pasted into, or just after the last row pasted into, at its level.
-      const parentId = lastRow.task.kind === "phase" ? lastRow.task.id : lastRow.task.parentId;
-      const parent = parentId === null ? null : (model.byId.get(parentId) ?? null);
-      if (active.col !== 0) problems.push(t("Sheet.pasteNoName"));
-      else if (!canPlan && !parent?.task.canAddChild) problems.push(t("Sheet.readOnly"));
-      else {
-        const siblings = parent ? parent.task.children : schedule.tasks;
-        const beforeId = lastRow.task.kind === "phase" ? null : (siblings[siblings.findIndex((task) => task.id === lastRow.task.id) + 1]?.id ?? null);
-        const kind = parentId === null ? "phase" : "task";
-        let start = kind === "phase" ? null : lastRow.finish ? nextWorkDay(shiftDay(lastRow.finish, 1), holidays) : today;
-        extra.forEach((line, index) => {
-          const name = (line[0] ?? "").trim();
-          if (!name) return;
-          const base: Fields = { name, picExternal: "", planStart: start, planDays: 1, startMode: "manual", predecessorId: null, lagDays: 0, picUserIds: [], discipline: null };
-          const task = {
-            ...lastRow.task,
-            id: -1 - index,
-            parentId,
-            kind,
-            depth: (parent?.task.depth ?? 0) + 1,
-            wbs: "",
-            pics: [],
-            children: [],
-            isMilestone: false,
-            managedByResourcePlan: false,
-            canEditOwn: true,
-            canProgress: true,
-            storedPlanStart: start,
-            planStart: start,
-            planFinish: start,
-            planDays: 1,
-            startMode: "manual",
-            predecessorId: null,
-            lagDays: 0,
-            picExternal: "",
-            discipline: null,
-            name,
-          } as ScheduleTask;
-          const typed = typeLine({ task, fields: base, parent: false, start, finish: start, days: start ? 1 : null, workDays: null, percent: 0, after: "", member: "" }, line);
-          const fields = { ...base, ...typed.patch };
-          const id = enqueue({ type: "create", parentId, beforeId, kind, fields, ...(typed.percent ? { percent: typed.percent } : {}) });
-          setGhosts((current) => [...current, { seq: id, parentId, beforeId, name }]);
-          const finish = fields.planStart ? shiftDay(fields.planStart, fields.planDays - 1) : null;
-          if (finish) start = nextWorkDay(shiftDay(finish, 1), holidays);
-          cells += 1;
-        });
-      }
-    }
-    say(`${t("Sheet.pasted").replace("{count}", String(cells))}${problems.length ? ` · ${problems.slice(0, 4).join(" · ")}${problems.length > 4 ? " …" : ""}` : ""}`, problems.length > 0);
-  };
-
-  const editHandler = useRef<(cell: Cell) => void>(() => undefined);
-  useLayoutEffect(() => {
-    editHandler.current = (cell: Cell) => {
-      const row = model.byId.get(cell.id);
-      if (row) startEdit(row, cell.col, null);
-    };
-  });
-  // The mouse: press on a cell to select it, Shift-click to run a selection to it, double-click to type in it.
-  useEffect(() => {
-    const frame = table.current;
-    if (!frame) return;
-    const cellOf = (target: EventTarget | null): Cell | null => {
-      if (!(target instanceof Element) || target.closest("input,select,button,a")) return null;
-      const cell = target.closest<HTMLElement>("td[data-c]"),
-        line = cell?.closest<HTMLElement>("tr[data-id]");
-      return cell && line ? { id: Number(line.dataset.id), col: Number(cell.dataset.c) } : null;
-    };
-    const down = (event: MouseEvent) => {
-      const cell = event.button === 0 ? cellOf(event.target) : null;
-      if (!cell) return;
-      event.preventDefault();
-      frame.focus({ preventScroll: true });
-      place(cell, event.shiftKey ? (cursor.current.anchor ?? cursor.current.active ?? cell) : cell);
-    };
-    const double = (event: MouseEvent) => {
-      const cell = cellOf(event.target);
-      if (cell) editHandler.current(cell);
-    };
-    frame.addEventListener("mousedown", down);
-    frame.addEventListener("dblclick", double);
-    return () => {
-      frame.removeEventListener("mousedown", down);
-      frame.removeEventListener("dblclick", double);
-    };
-  }, [place]);
-  // Keeps the active cell in view as the keyboard moves it.
-  useEffect(() => {
-    if (!active) return;
-    table.current?.querySelector(`tr[data-id="${active.id}"] td[data-c="${active.col}"]`)?.scrollIntoView({ block: "nearest", inline: "nearest" });
-  }, [active]);
-
-  // Adding rows: the + on a row, or the buttons above. A heading takes a task at its end; a task, a row just below it.
-  const placeFor = (row: Row | null, sub: boolean): Omit<Draft, "key" | "start"> | null => {
+  // Adding rows: the + at the start of a row, Insert row, "+ sub task", and the add row at the bottom.
+  const lastHeading = () => [...schedule.tasks].reverse().find((task) => task.kind === "phase") ?? null;
+  const placeFor = (row: Row | null, sub: boolean): Omit<Draft, "key" | "start" | "text"> | null => {
     if (!row) {
-      const lastHeading = [...schedule.tasks].reverse().find((task) => task.kind === "phase");
-      return lastHeading ? { parentId: lastHeading.id, beforeId: null, kind: "task" } : canPlan ? { parentId: null, beforeId: null, kind: "phase" } : null;
+      const heading = lastHeading();
+      if (heading) return canPlan || heading.canAddChild ? { parentId: heading.id, beforeId: null, kind: "task" } : null;
+      return canPlan ? { parentId: null, beforeId: null, kind: "phase" } : null;
     }
     if (sub)
       return row.task.kind === "task" && canAddSub(row.task) && !lockedIds.has(row.task.id) && (canPlan || row.task.canAddChild) ? { parentId: row.task.id, beforeId: null, kind: "task" } : null;
@@ -889,7 +759,7 @@ export function PlanSheet({
     const siblings = parent ? parent.task.children : schedule.tasks;
     return { parentId: row.task.parentId, beforeId: siblings[siblings.findIndex((task) => task.id === row.task.id) + 1]?.id ?? null, kind: row.task.parentId === null ? "phase" : "task" };
   };
-  const draftStart = (place: Omit<Draft, "key" | "start">): string | null => {
+  const draftStart = (place: Omit<Draft, "key" | "start" | "text">): string | null => {
     if (place.kind === "phase") return null;
     const parent = place.parentId === null ? null : model.byId.get(place.parentId);
     const above = (() => {
@@ -905,34 +775,498 @@ export function PlanSheet({
     if (!above || above === parent) return parent?.start ?? today;
     return above.finish ? nextWorkDay(shiftDay(above.finish, 1), holidays) : today;
   };
-  const openDraft = (place: Omit<Draft, "key" | "start"> | null) => {
+  const openDraft = (place: Omit<Draft, "key" | "start" | "text"> | null, text = "") => {
     if (!place) return say(t("Sheet.subNotHere"), true);
     if (place.parentId !== null && collapsed.has(place.parentId)) setCollapsed((current) => new Set([...current].filter((id) => id !== place.parentId)));
+    if (headingsOnly && place.kind === "task") setHeadingsOnly(false);
     draftKey.current = ++seq.current;
-    setDraft({ ...place, key: draftKey.current, start: draftStart(place) });
+    setDraft({ ...place, key: draftKey.current, start: draftStart(place), text });
   };
   const closeDraft = () => {
     draftKey.current = 0;
     setDraft(null);
-    focusTable();
+    focusFrame();
   };
   const submitDraft = (key: number, value: string, keepOpen: boolean) => {
     const current = draft,
       name = value.trim().slice(0, 500);
     if (!current || key !== draftKey.current) return;
-    if (!name) {
-      draftKey.current = 0;
-      setDraft(null);
-      focusTable();
-      return;
-    }
+    if (!name) return closeDraft();
     const fields: Fields = { name, picExternal: "", planStart: current.start, planDays: 1, startMode: "manual", predecessorId: null, lagDays: 0, picUserIds: [], discipline: null };
+    const parent = current.parentId === null ? null : model.byId.get(current.parentId);
     const id = enqueue({ type: "create", parentId: current.parentId, beforeId: current.beforeId, kind: current.kind, fields });
-    setGhosts((list) => [...list, { seq: id, parentId: current.parentId, beforeId: current.beforeId, name }]);
+    setSaving((list) => [...list, { seq: id, parentId: current.parentId, beforeId: current.beforeId, name, depth: (parent?.task.depth ?? 0) + 1, atEnd: false }]);
     if (keepOpen) {
       draftKey.current = ++seq.current;
-      setDraft({ ...current, key: draftKey.current, start: current.start ? nextWorkDay(shiftDay(current.start, 1), holidays) : null });
+      setDraft({ ...current, key: draftKey.current, text: "", start: current.start ? nextWorkDay(shiftDay(current.start, 1), holidays) : null });
     } else closeDraft();
+  };
+
+  // Moving rows: up and down among their siblings, in under the row above, out beside their parent (plan owner only).
+  const moveFor = (row: Row | null, how: "up" | "down" | "in" | "out"): { parentId: number | null; beforeId: number | null; undo: { parentId: number | null; beforeId: number | null } } | string => {
+    if (!row) return "Sheet.cannotMove";
+    if (!canPlan) return "Sheet.planOnly";
+    const { task } = row,
+      parent = task.parentId === null ? null : (model.byId.get(task.parentId) ?? null);
+    const siblings = parent ? parent.task.children : schedule.tasks,
+      at = siblings.findIndex((item) => item.id === task.id);
+    const back = { parentId: task.parentId, beforeId: siblings[at + 1]?.id ?? null };
+    if (how === "up") return at > 0 ? { parentId: task.parentId, beforeId: siblings[at - 1]!.id, undo: back } : "Sheet.cannotMove";
+    if (how === "down") return at >= 0 && at < siblings.length - 1 ? { parentId: task.parentId, beforeId: siblings[at + 2]?.id ?? null, undo: back } : "Sheet.cannotMove";
+    if (task.kind !== "task" || task.managedByResourcePlan || lockedIds.has(task.id)) return how === "in" ? "Sheet.cannotIndent" : "Sheet.cannotOutdent";
+    if (how === "in") {
+      const above = siblings[at - 1];
+      return above && (above.kind === "phase" || (above.kind === "task" && canAddSub(above))) && !lockedIds.has(above.id) ? { parentId: above.id, beforeId: null, undo: back } : "Sheet.cannotIndent";
+    }
+    if (!parent || parent.task.kind === "phase" || parent.task.parentId === null) return "Sheet.cannotOutdent";
+    const grand = model.byId.get(parent.task.parentId);
+    const uncles = grand ? grand.task.children : schedule.tasks,
+      parentAt = uncles.findIndex((item) => item.id === parent.task.id);
+    return { parentId: parent.task.parentId, beforeId: uncles[parentAt + 1]?.id ?? null, undo: back };
+  };
+  const moveRow = (how: "up" | "down" | "in" | "out") => {
+    const move = moveFor(activeRow, how);
+    if (typeof move === "string") return say(t(move), true);
+    pushUndo({ kind: "move", taskId: activeRow!.task.id, ...move.undo });
+    enqueue({ type: "move", taskId: activeRow!.task.id, parentId: move.parentId, beforeId: move.beforeId });
+    if (move.parentId !== null && collapsed.has(move.parentId)) setCollapsed((current) => new Set([...current].filter((id) => id !== move.parentId)));
+  };
+
+  /** Ctrl+Z and Ctrl+Y: each step puts back what the step before changed, and keeps the way back for the other key. */
+  const step = (from: React.MutableRefObject<UndoEntry[]>, to: React.MutableRefObject<UndoEntry[]>, done: string) => {
+    const entry = from.current.at(-1);
+    from.current = from.current.slice(0, -1);
+    const row = entry ? model.byId.get(entry.taskId) : undefined;
+    if (!entry || !row) {
+      setSteps({ undo: undoStack.current.length, redo: redoStack.current.length });
+      return say(t("Sheet.undoNothing"));
+    }
+    if (entry.kind === "plan") {
+      to.current = [...to.current, { kind: "plan", taskId: row.task.id, patch: pick(row.fields, Object.keys(entry.patch) as (keyof Fields)[]) }];
+      apply(row, entry.patch, undefined, undefined, false);
+    } else {
+      const parent = row.task.parentId === null ? null : model.byId.get(row.task.parentId);
+      const siblings = parent ? parent.task.children : schedule.tasks;
+      to.current = [...to.current, { kind: "move", taskId: row.task.id, parentId: row.task.parentId, beforeId: siblings[siblings.findIndex((item) => item.id === row.task.id) + 1]?.id ?? null }];
+      enqueue({ type: "move", taskId: row.task.id, parentId: entry.parentId, beforeId: entry.beforeId });
+    }
+    setSteps({ undo: undoStack.current.length, redo: redoStack.current.length });
+    say(`${row.task.wbs} · ${t(done)}`);
+  };
+  const undoLast = () => step(undoStack, redoStack, "Sheet.undone");
+  const redoLast = () => step(redoStack, undoStack, "Sheet.redone");
+
+  const startEdit = (row: Row, col: number, typed: string | null) => {
+    const column = COLUMNS[col]!.key,
+      lock = lockOf(row, column);
+    if (lock) return say(t(lock), column !== "work" && column !== "wbs");
+    const initial =
+      column === "member"
+        ? row.fields.picUserIds.length === 1
+          ? String(row.fields.picUserIds[0])
+          : !row.fields.picUserIds.length && row.fields.discipline
+            ? `d:${row.fields.discipline}`
+            : ""
+        : column === "status"
+          ? row.status
+          : column === "done"
+            ? String(Math.round(row.percent))
+            : column === "start" || column === "end"
+              ? (column === "start" ? row.start : row.finish)
+                ? shortDate((column === "start" ? row.start : row.finish)!)
+                : ""
+              : cellText(row, column);
+    const next = { id: row.task.id, col, initial, typed };
+    editRef.current = next;
+    setEditing(next);
+  };
+  /** Leaves the cell being typed: `value` null throws the typing away; then the selection moves as Enter or Tab asks. */
+  const finishEdit = (value: string | null, down: number, across: number) => {
+    const current = editRef.current;
+    if (!current) return;
+    editRef.current = null;
+    setEditing(null);
+    const row = model.byId.get(current.id),
+      column = COLUMNS[current.col]!;
+    if (row && value !== null && value !== current.initial) void commit(row, column.key, value);
+    if (down || across) moveBy(down, across, false);
+    focusFrame();
+  };
+  const focusEditor = useCallback((node: HTMLInputElement | HTMLSelectElement | null) => {
+    if (!node || node === document.activeElement) return;
+    node.focus({ preventScroll: true });
+    if (node instanceof HTMLInputElement) {
+      if (node.dataset.typed) node.setSelectionRange(node.value.length, node.value.length);
+      else node.select();
+    }
+  }, []);
+
+  /** Ctrl+D: the cell above the selection fills the selected cells below it, as in Excel. */
+  const fillDown = () => {
+    if (!area || area.r0 < 1) return;
+    const above = model.visible[area.r0 - 1];
+    if (!above) return;
+    for (let index = area.r0; index <= Math.min(area.r1, model.visible.length - 1); index++) {
+      const row = model.visible[index]!;
+      let fields = row.fields,
+        patch: Patch | undefined,
+        percent: number | undefined,
+        status: string | undefined;
+      for (let col = area.c0; col <= area.c1; col++) {
+        const column = COLUMNS[col]!.key;
+        if (lockOf(row, column)) continue;
+        const value =
+          column === "start" || column === "end"
+            ? ((column === "start" ? above.start : above.finish) ?? "")
+            : column === "status"
+              ? above.status
+              : column === "member"
+                ? above.fields.picUserIds.length === 1
+                  ? String(above.fields.picUserIds[0])
+                  : above.fields.discipline
+                    ? `d:${above.fields.discipline}`
+                    : ""
+                : cellText(above, column);
+        const result = cellResult(row, column, value, fields);
+        if ("error" in result) continue;
+        if (result.patch) {
+          patch = { ...patch, ...result.patch };
+          fields = { ...fields, ...result.patch };
+        }
+        if (result.percent !== undefined) percent = result.percent;
+        if (result.status !== undefined && result.status !== "Blocked") status = result.status;
+      }
+      apply(row, patch, percent, status);
+    }
+  };
+
+  const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.target !== event.currentTarget) return;
+    const arrows: Record<string, [number, number]> = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] };
+    const arrow = arrows[event.key],
+      control = event.ctrlKey || event.metaKey,
+      col = active?.col ?? 1;
+    if (control && event.key.toLowerCase() === "z") {
+      event.preventDefault();
+      if (event.shiftKey) redoLast();
+      else undoLast();
+    } else if (control && event.key.toLowerCase() === "y") {
+      event.preventDefault();
+      redoLast();
+    } else if (control && event.key.toLowerCase() === "d") {
+      event.preventDefault();
+      fillDown();
+    } else if (control && event.key === "Enter") {
+      event.preventDefault();
+      openDraft(placeFor(activeRow, false));
+    } else if (arrow && event.altKey && event.shiftKey) {
+      event.preventDefault();
+      moveRow(event.key === "ArrowUp" ? "up" : event.key === "ArrowDown" ? "down" : event.key === "ArrowRight" ? "in" : "out");
+    } else if (arrow) {
+      event.preventDefault();
+      moveBy(arrow[0], arrow[1], event.shiftKey);
+    } else if (event.key === "Tab") {
+      if ((event.shiftKey && col === 0) || (!event.shiftKey && col === LAST_COLUMN)) return;
+      event.preventDefault();
+      moveBy(0, event.shiftKey ? -1 : 1, false);
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      moveBy(event.shiftKey ? -1 : 1, 0, false);
+    } else if (event.key === "Escape") {
+      if (active) place(active, active);
+    } else if (active?.id === FOOT) {
+      // The add row: a name typed in WBS or TASK starts a row at the end of the plan.
+      if (event.key.length === 1 && !control && !event.altKey && col <= COLUMN_AT.name) {
+        event.preventDefault();
+        openDraft(placeFor(null, false), event.key);
+      } else if (event.key === "F2") say(t("Sheet.newRowHint"));
+    } else if (event.key === "F2" && activeRow && active) {
+      event.preventDefault();
+      startEdit(activeRow, active.col, null);
+    } else if ((event.key === "Delete" || event.key === "Backspace") && activeRow && active) {
+      event.preventDefault();
+      const column = COLUMNS[active.col]!.key,
+        lock = lockOf(activeRow, column);
+      if (lock) say(t(lock), column !== "work" && column !== "wbs");
+      else if (cellText(activeRow, column) !== "") void commit(activeRow, column, "");
+    } else if (event.key.length === 1 && !control && !event.altKey && activeRow && active) {
+      event.preventDefault();
+      startEdit(activeRow, active.col, COLUMNS[active.col]!.select ? null : event.key);
+    }
+  };
+  const onCopy = (event: React.ClipboardEvent<HTMLDivElement>) => {
+    if (event.target !== event.currentTarget || !area) return;
+    event.preventDefault();
+    const lines: string[] = [];
+    for (let index = area.r0; index <= Math.min(area.r1, model.visible.length - 1); index++) {
+      const row = model.visible[index]!;
+      lines.push(
+        COLUMNS.slice(area.c0, area.c1 + 1)
+          .map((column) => (column.key === "start" || column.key === "end" ? ((column.key === "start" ? row.start : row.finish) ?? "") : cellText(row, column.key)).replace(/[\t\n]/g, " "))
+          .map((value) => (/^\d{4}-\d{2}-\d{2}$/.test(value) ? shortDate(value) : value))
+          .join("\t"),
+      );
+    }
+    event.clipboardData.setData("text/plain", lines.join("\n"));
+    say(t("Sheet.copied"));
+  };
+
+  /** Lines that become new rows. From the WBS column, the WBS sets the level (1 heading, 1.1 task, 1.1.1 sub task);
+   * from TASK, every line is a row beside `base`, or under the last heading when there is no base. */
+  const addLines = (lines: string[][], startCol: number, base: Row | null, problems: string[]) => {
+    const at = (line: string[], key: Column) => (COLUMN_AT[key] >= startCol ? (line[COLUMN_AT[key] - startCol] ?? "") : "");
+    const heading = lastHeading();
+    const levels: ({ id: number } | { seq: number } | null)[] = [null, heading ? { id: heading.id } : null, null, null];
+    const sibling = base
+      ? (() => {
+          const parentId = base.task.kind === "phase" ? base.task.id : base.task.parentId;
+          const parent = parentId === null ? null : (model.byId.get(parentId) ?? null);
+          const list = parent ? parent.task.children : schedule.tasks;
+          return { parentId, beforeId: base.task.kind === "phase" ? null : (list[list.findIndex((task) => task.id === base.task.id) + 1]?.id ?? null), depth: (parent?.task.depth ?? 0) + 1 };
+        })()
+      : null;
+    const after = base?.finish ?? [...model.rows].reverse().find((row) => row.finish)?.finish ?? null;
+    let start = after ? nextWorkDay(shiftDay(after, 1), holidays) : today,
+      count = 0;
+    for (const line of lines) {
+      const name = at(line, "name").trim();
+      if (!name) continue;
+      const wbs = startCol === COLUMN_AT.wbs ? at(line, "wbs").trim() : "";
+      let level = wbs && /^\d+(\.\d+)*$/.test(wbs) ? Math.min(3, wbs.split(".").length) : sibling ? sibling.depth : heading ? 2 : 1;
+      if (level === 3 && !levels[2]) level = 2;
+      if (level === 2 && !levels[1]) level = 1;
+      if (!canPlan && (level === 1 || !(levels[level - 1] && "id" in levels[level - 1]! && model.byId.get((levels[level - 1] as { id: number }).id)?.task.canAddChild))) {
+        problems.push(t("Sheet.readOnly"));
+        break;
+      }
+      const kind = level === 1 ? "phase" : "task";
+      const parentRef = sibling && !wbs ? (sibling.parentId === null ? null : { id: sibling.parentId }) : level === 1 ? null : levels[level - 1]!;
+      const base0: Fields = { name, picExternal: "", planStart: kind === "phase" ? null : start, planDays: 1, startMode: "manual", predecessorId: null, lagDays: 0, picUserIds: [], discipline: null };
+      const task = {
+        ...(base ?? model.rows[0])?.task,
+        id: -1 - count,
+        parentId: parentRef && "id" in parentRef ? parentRef.id : null,
+        kind,
+        depth: level,
+        wbs: "",
+        pics: [],
+        children: [],
+        isMilestone: false,
+        managedByResourcePlan: false,
+        canEditOwn: true,
+        canProgress: true,
+        storedPlanStart: base0.planStart,
+        planStart: base0.planStart,
+        planFinish: base0.planStart,
+        planDays: 1,
+        startMode: "manual",
+        predecessorId: null,
+        lagDays: 0,
+        picExternal: "",
+        discipline: null,
+        name,
+      } as ScheduleTask;
+      const row: Row = {
+        task,
+        fields: base0,
+        parent: kind === "phase",
+        rollup: false,
+        start: base0.planStart,
+        finish: base0.planStart,
+        days: base0.planStart ? 1 : null,
+        workDays: null,
+        percent: 0,
+        status: "Not Started",
+        after: "",
+        lateKids: 0,
+      };
+      let fields = base0,
+        percent: number | undefined;
+      for (const key of ["pic", "start", "end", "days", "done", "after", "member"] as Column[]) {
+        const value = at(line, key);
+        if (!value.trim() || lockOf(row, key)) continue;
+        const result = cellResult(row, key, value, fields);
+        if ("error" in result) {
+          problems.push(`${wbs || name} ${t(COLUMNS[COLUMN_AT[key]]!.label)}: ${t(result.error).replace("{wbs}", result.wbs ?? "")}`);
+          continue;
+        }
+        if (result.patch) fields = { ...fields, ...result.patch };
+        if (result.percent !== undefined && kind === "task") percent = result.percent;
+      }
+      const job = enqueue({
+        type: "create",
+        parentId: parentRef && "id" in parentRef ? parentRef.id : null,
+        ...(parentRef && "seq" in parentRef ? { parentSeq: parentRef.seq } : {}),
+        beforeId: sibling && !wbs ? sibling.beforeId : null,
+        kind,
+        fields,
+        ...(percent ? { percent } : {}),
+      });
+      setSaving((list) => [
+        ...list,
+        { seq: job, parentId: sibling && !wbs ? sibling.parentId : null, beforeId: sibling && !wbs ? sibling.beforeId : null, name, depth: level, atEnd: !(sibling && !wbs) },
+      ]);
+      levels[level] = { seq: job };
+      for (let deeper = level + 1; deeper < levels.length; deeper++) levels[deeper] = null;
+      const finish = fields.planStart ? shiftDay(fields.planStart, fields.planDays - 1) : null;
+      if (finish) start = nextWorkDay(shiftDay(finish, 1), holidays);
+      count += 1;
+    }
+    return count;
+  };
+  /** A block copied from Excel: cells land from the active cell; lines past the last row become new rows. */
+  const onPaste = (event: React.ClipboardEvent<HTMLDivElement>) => {
+    if (event.target !== event.currentTarget || !active) return;
+    const text = event.clipboardData.getData("text/plain");
+    if (!text) return;
+    event.preventDefault();
+    const lines = text
+      .replace(/\r/g, "")
+      .replace(/\n+$/, "")
+      .split("\n")
+      .map((line) => line.split("\t"));
+    const problems: string[] = [];
+    let cells = 0,
+      lastRow: Row | null = null;
+    const extra: string[][] = [];
+    lines.forEach((line, down) => {
+      const row = activeIndex + down < model.visible.length ? model.visible[activeIndex + down] : undefined;
+      if (!row) return extra.push(line);
+      lastRow = row;
+      let fields = row.fields,
+        patch: Patch | undefined,
+        percent: number | undefined,
+        status: string | undefined;
+      line.forEach((value, across) => {
+        const column = COLUMNS[active.col + across]?.key;
+        if (!column || column === "work" || column === "wbs") return;
+        if (value.trim() === cellText(row, column)) return;
+        const lock = lockOf(row, column);
+        if (lock) {
+          if (value.trim()) problems.push(`${row.task.wbs} ${t(COLUMNS[active.col + across]!.label)}: ${t(lock)}`);
+          return;
+        }
+        const result = cellResult(row, column, value, fields);
+        if ("error" in result) {
+          problems.push(`${row.task.wbs} ${t(COLUMNS[active.col + across]!.label)}: ${t(result.error).replace("{wbs}", result.wbs ?? "")}`);
+          return;
+        }
+        if (result.percent !== undefined) percent = result.percent;
+        if (result.status !== undefined && result.status !== "Blocked") status = result.status;
+        if (result.patch) {
+          patch = { ...patch, ...result.patch };
+          fields = { ...fields, ...result.patch };
+        }
+        cells += 1;
+      });
+      apply(row, patch, percent, status);
+    });
+    if (extra.length) {
+      if (active.col > COLUMN_AT.name) problems.push(t("Sheet.pasteNoName"));
+      else cells += addLines(extra, active.col, active.id === FOOT ? null : lastRow, problems);
+    }
+    say(`${t("Sheet.pasted").replace("{count}", String(cells))}${problems.length ? ` · ${problems.slice(0, 4).join(" · ")}${problems.length > 4 ? " …" : ""}` : ""}`, problems.length > 0);
+  };
+
+  // The mouse: press on a cell to select it, Shift-click to run a selection to it, double-click to type in it or, on a
+  // bar, to open the task.
+  const editHandler = useRef<(cell: Cell) => void>(() => undefined);
+  useLayoutEffect(() => {
+    editHandler.current = (cell: Cell) => {
+      const row = model.byId.get(cell.id);
+      if (row) startEdit(row, cell.col, null);
+      else if (cell.id === FOOT && cell.col <= COLUMN_AT.name) openDraft(placeFor(null, false));
+    };
+  });
+  useEffect(() => {
+    const box = frame.current;
+    if (!box) return;
+    const cellOf = (target: EventTarget | null): Cell | null => {
+      if (!(target instanceof Element) || target.closest("input,select,button,a")) return null;
+      const cell = target.closest<HTMLElement>("td[data-c]"),
+        line = cell?.closest<HTMLElement>("tr[data-id]");
+      return cell && line ? { id: Number(line.dataset.id), col: Number(cell.dataset.c) } : null;
+    };
+    const down = (event: MouseEvent) => {
+      const cell = event.button === 0 ? cellOf(event.target) : null;
+      if (!cell) return;
+      event.preventDefault();
+      box.focus({ preventScroll: true });
+      place(cell, event.shiftKey ? (cursor.current.anchor ?? cursor.current.active ?? cell) : cell);
+    };
+    const double = (event: MouseEvent) => {
+      const bar = event.target instanceof Element ? event.target.closest<HTMLElement>(".gb[data-id]") : null;
+      if (bar) return live.current.onOpenTask(Number(bar.dataset.id));
+      const cell = cellOf(event.target);
+      if (cell) editHandler.current(cell);
+    };
+    box.addEventListener("mousedown", down);
+    box.addEventListener("dblclick", double);
+    return () => {
+      box.removeEventListener("mousedown", down);
+      box.removeEventListener("dblclick", double);
+    };
+  }, [place]);
+  // How wide the sheet is: with room for 360 px of Gantt, every column up to status stays frozen; else WBS and TASK.
+  useEffect(() => {
+    const box = frame.current;
+    if (!box || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver((entries) => setFrameWidth(Math.round(entries[0]?.contentRect.width ?? 0)));
+    observer.observe(box);
+    return () => observer.disconnect();
+  }, []);
+  const stickyCount = frameWidth - LEFT_WIDTH >= 360 ? COLUMNS.length : 2;
+  const stickyWidth = LEFT[stickyCount - 1]! + COLUMNS[stickyCount - 1]!.width;
+  // Keeps the active cell in view, clear of the frozen columns and the header.
+  useEffect(() => {
+    const box = frame.current;
+    if (!active || !box) return;
+    const cell = box.querySelector<HTMLElement>(`tr[data-id="${active.id}"] td[data-c="${active.col}"]`);
+    if (!cell) return;
+    const top = (cell.parentElement as HTMLElement).offsetTop,
+      bottom = top + cell.offsetHeight,
+      head = 60;
+    if (top - head < box.scrollTop) box.scrollTop = Math.max(0, top - head);
+    else if (bottom > box.scrollTop + box.clientHeight) box.scrollTop = bottom - box.clientHeight;
+    if (active.col >= stickyCount) {
+      const left = cell.offsetLeft,
+        right = left + cell.offsetWidth;
+      if (left - stickyWidth < box.scrollLeft) box.scrollLeft = left - stickyWidth;
+      else if (right > box.scrollLeft + box.clientWidth) box.scrollLeft = right - box.clientWidth;
+    }
+  }, [active, stickyCount, stickyWidth]);
+  // Finish-to-start lines over the Gantt: from a predecessor's bar end to its follower's bar start.
+  useLayoutEffect(() => {
+    const box = frame.current,
+      svg = links.current;
+    if (!box || !svg) return;
+    const at = new Map<number, { s: number; e: number; y: number }>();
+    box.querySelectorAll<HTMLElement>(".gb[data-id]").forEach((bar) => {
+      const cell = bar.closest<HTMLElement>("td"),
+        line = cell?.parentElement;
+      if (!cell || !line) return;
+      const x = cell.offsetLeft + bar.offsetLeft;
+      at.set(Number(bar.dataset.id), { s: x, e: x + bar.offsetWidth, y: line.offsetTop + cell.offsetHeight / 2 });
+    });
+    let paths = "";
+    for (const row of model.visible) {
+      if (row.fields.startMode !== "linked" || row.fields.predecessorId === null) continue;
+      const from = at.get(row.fields.predecessorId),
+        to = at.get(row.task.id);
+      if (!from || !to) continue;
+      const x1 = from.e + 1,
+        x2 = to.s - 1,
+        turn = Math.min(x1 + 8, x2 - 4);
+      paths += `<path class="ln" d="M${x1} ${from.y} H${turn} V${to.y} H${x2}" marker-end="url(#shArrow)"/>`;
+    }
+    const table = box.querySelector<HTMLElement>("table.grid");
+    svg.setAttribute("width", String(table?.offsetWidth ?? 0));
+    svg.setAttribute("height", String(table?.offsetHeight ?? 0));
+    svg.innerHTML = `<defs><marker id="shArrow" viewBox="0 0 6 6" refX="5" refY="3" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L6 3 L0 6 z" class="ln-head"/></marker></defs>${paths}`;
+  });
+  const goToday = () => {
+    const box = frame.current;
+    if (box) box.scrollLeft = Math.max(0, LEFT_WIDTH + timeline.x(today) * DW - stickyWidth - 3 * DW);
   };
   const toggle = (id: number) =>
     setCollapsed((current) => {
@@ -956,74 +1290,80 @@ export function PlanSheet({
     while (end < rows.length && rows[end]!.task.depth > rows[at]!.task.depth) end++;
     return end;
   };
+  const sticky = (col: number) => (col < stickyCount ? { className: ` stk${col === stickyCount - 1 ? " stk-last" : ""}`, style: { left: LEFT[col] } } : { className: "", style: undefined });
   const extras = new Map<number, React.ReactNode[]>();
   const addExtra = (at: number, node: React.ReactNode) => {
     if (at >= 0) extras.set(at, [...(extras.get(at) ?? []), node]);
   };
-  for (const ghost of ghosts) {
-    const parent = ghost.parentId === null ? null : model.byId.get(ghost.parentId);
+  const blankCells = (skip: number) =>
+    COLUMNS.slice(skip).map((column, offset) => {
+      const col = skip + offset,
+        frozen = sticky(col);
+      return <td key={column.key} className={`c${frozen.className}`} style={frozen.style} />;
+    });
+  for (const row of saving)
     addExtra(
-      placeAt(ghost.parentId, ghost.beforeId),
-      <tr key={`ghost-${ghost.seq}`} className="sh-ghost">
-        <td className="sh-gut" />
-        <td className="sh-wbs" />
-        <td className="sh-c sh-name">
-          <span className="sh-label" style={{ paddingLeft: (parent?.task.depth ?? 0) * 14 }}>
-            {ghost.name}
-          </span>
+      row.atEnd ? model.visible.length : placeAt(row.parentId, row.beforeId),
+      <tr key={`saving-${row.seq}`} className={`lvl${Math.min(3, row.depth)} saving`}>
+        <td className="gut stk" style={{ left: 0 }} />
+        <td className={`c ps-mono${sticky(0).className}`} style={sticky(0).style} />
+        <td className={`c${sticky(1).className}`} style={sticky(1).style}>
+          <div className="nmw" style={{ paddingLeft: (row.depth - 1) * 16 }}>
+            <span className="sp" />
+            <span className="nt">{row.name}</span>
+            <span className="spinner" />
+          </div>
         </td>
-        <td className="sh-c sh-wait" colSpan={COLUMNS.length - 1}>
-          <span className="spinner" />
-          {t("Sheet.saving")}
+        {blankCells(2)}
+        <td className="tl">
+          <div className="tli" />
         </td>
-        <td className="sh-tl" />
       </tr>,
     );
-  }
   if (draft) {
-    const parent = draft.parentId === null ? null : model.byId.get(draft.parentId);
+    const parent = draft.parentId === null ? null : model.byId.get(draft.parentId),
+      depth = (parent?.task.depth ?? 0) + 1;
     addExtra(
       placeAt(draft.parentId, draft.beforeId),
-      <tr key={`draft-${draft.key}`} className="sh-draft">
-        <td className="sh-gut" />
-        <td className="sh-wbs">
-          <Icon name="plus" />
+      <tr key={`draft-${draft.key}`} className={`lvl${Math.min(3, depth)} drafting`}>
+        <td className="gut stk" style={{ left: 0 }} />
+        <td className={`c ps-mono${sticky(0).className}`} style={sticky(0).style} />
+        <td className={`c editing${sticky(1).className}`} style={sticky(1).style}>
+          <div className="nmw" style={{ paddingLeft: (depth - 1) * 16 }}>
+            <span className="sp" />
+            <input
+              key={draft.key}
+              ref={focusEditor}
+              className="ed"
+              maxLength={500}
+              defaultValue={draft.text}
+              data-typed={draft.text ? "1" : undefined}
+              placeholder={t(draft.kind === "phase" ? "Plan.addHeading" : "Sheet.newName")}
+              aria-label={t("Sheet.newName")}
+              onKeyDown={(event) => {
+                event.stopPropagation();
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  submitDraft(draft.key, event.currentTarget.value, true);
+                } else if (event.key === "Escape") {
+                  event.preventDefault();
+                  closeDraft();
+                }
+              }}
+              onBlur={(event) => submitDraft(draft.key, event.currentTarget.value, false)}
+            />
+          </div>
         </td>
-        <td className="sh-c sh-name">
-          <input
-            key={draft.key}
-            ref={focusEditor}
-            className="sh-input"
-            maxLength={500}
-            placeholder={t(draft.kind === "phase" ? "Plan.addHeading" : "Sheet.newName")}
-            aria-label={t("Sheet.newName")}
-            style={{ marginLeft: (parent?.task.depth ?? 0) * 14 }}
-            onKeyDown={(event) => {
-              event.stopPropagation();
-              if (event.key === "Enter") {
-                event.preventDefault();
-                submitDraft(draft.key, event.currentTarget.value, true);
-              } else if (event.key === "Escape") {
-                event.preventDefault();
-                closeDraft();
-              }
-            }}
-            onBlur={(event) => submitDraft(draft.key, event.currentTarget.value, false)}
-          />
-        </td>
-        <td className="sh-c sh-hint" colSpan={COLUMNS.length - 1}>
+        <td className="c hint" colSpan={COLUMNS.length - 2}>
           {t("Sheet.newHint")}
         </td>
-        <td className="sh-tl" />
+        <td className="tl">
+          <div className="tli" />
+        </td>
       </tr>,
     );
   }
 
-  const removal = activeRow && !busy ? removeFor(activeRow.task) : undefined;
-  const addTaskPlace = placeFor(activeRow, false),
-    addSubPlace = activeRow ? placeFor(activeRow, true) : null;
-  const trackWidth = timeline.weeks * 7 * timeline.width;
-  const tableStyle = { "--dw": `${timeline.width}px`, "--today-x": `${timeline.todayX * timeline.width}px`, "--sheet-stripes": timeline.stripes || "none" } as React.CSSProperties;
   const editor = (row: Row, col: number) => {
     const column = COLUMNS[col]!;
     const keys = (event: React.KeyboardEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -1043,40 +1383,37 @@ export function PlanSheet({
         finishEdit(value, event.key === "ArrowUp" ? -1 : 1, 0);
       }
     };
-    if (column.key === "member")
+    const label = `${row.task.wbs} ${column.lines ? column.lines.join(" ") : t(column.label)}`;
+    if (column.key === "member") {
+      const people = [...team, ...row.task.pics.filter((pic) => !team.some((person) => person.id === pic.id))].sort((a, b) => a.name.localeCompare(b.name));
       return (
-        <select
-          ref={focusEditor}
-          className="sh-input"
-          defaultValue={editing?.initial ?? ""}
-          aria-label={`${row.task.wbs} ${t(column.label)}`}
-          onKeyDown={keys}
-          onBlur={(event) => finishEdit(event.currentTarget.value, 0, 0)}
-        >
+        <select ref={focusEditor} className="ed" defaultValue={editing?.initial ?? ""} aria-label={label} onKeyDown={keys} onBlur={(event) => finishEdit(event.currentTarget.value, 0, 0)}>
           <option value="">{t("Sheet.noMember")}</option>
-          {[...team, ...row.task.pics.filter((pic) => !team.some((person) => person.id === pic.id))]
-            .sort((a, b) => a.name.localeCompare(b.name))
-            .map((person) => (
+          <optgroup label={t("Sheet.colMember")}>
+            {people.map((person) => (
               <option key={person.id} value={person.id}>
                 {person.name}
               </option>
             ))}
+          </optgroup>
+          {row.task.kind === "task" ? (
+            <optgroup label={t("Plan.waitingForPeople")}>
+              {DISCIPLINES.map((code) => (
+                <option key={code} value={`d:${code}`}>
+                  {t(`Discipline.${code}`)}
+                </option>
+              ))}
+            </optgroup>
+          ) : null}
         </select>
       );
-    if (column.key === "discipline")
+    }
+    if (column.key === "status")
       return (
-        <select
-          ref={focusEditor}
-          className="sh-input"
-          defaultValue={editing?.initial ?? ""}
-          aria-label={`${row.task.wbs} ${t(column.label)}`}
-          onKeyDown={keys}
-          onBlur={(event) => finishEdit(event.currentTarget.value, 0, 0)}
-        >
-          <option value="">{t("Sheet.noDiscipline")}</option>
-          {DISCIPLINES.map((code) => (
-            <option key={code} value={code}>
-              {t(`Discipline.${code}`)}
+        <select ref={focusEditor} className="ed" defaultValue={editing?.initial ?? ""} aria-label={label} onKeyDown={keys} onBlur={(event) => finishEdit(event.currentTarget.value, 0, 0)}>
+          {STATUSES.map((status) => (
+            <option key={status} value={status}>
+              {t(STATUS_LABEL[status]!)}
             </option>
           ))}
         </select>
@@ -1084,10 +1421,11 @@ export function PlanSheet({
     return (
       <input
         ref={focusEditor}
-        className="sh-input"
+        className="ed"
         defaultValue={editing?.typed ?? editing?.initial ?? ""}
+        data-typed={editing?.typed ? "1" : undefined}
         autoComplete="off"
-        aria-label={`${row.task.wbs} ${t(column.label)}`}
+        aria-label={label}
         inputMode={column.key === "days" || column.key === "done" ? "numeric" : undefined}
         onKeyDown={keys}
         onBlur={(event) => finishEdit(event.currentTarget.value, 0, 0)}
@@ -1095,184 +1433,444 @@ export function PlanSheet({
     );
   };
 
-  const body: React.ReactNode[] = [];
-  model.visible.forEach((row, index) => {
-    body.push(...(extras.get(index) ?? []));
+  const cellBody = (row: Row, column: Column) => {
+    const { task } = row;
+    if (column === "name") {
+      const folded = headingsOnly || collapsed.has(task.id),
+        sub = placeFor(row, true);
+      return (
+        <div className="nmw" style={{ paddingLeft: (task.depth - 1) * 16 }}>
+          {row.rollup && !headingsOnly ? (
+            <button type="button" className="caret" tabIndex={-1} aria-expanded={!folded} aria-label={`${t(folded ? "Sheet.unfold" : "Sheet.fold")} ${task.wbs}`} onClick={() => toggle(task.id)}>
+              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d={folded ? "m9 18 6-6-6-6" : "m6 9 6 6 6-6"} />
+              </svg>
+            </button>
+          ) : (
+            <span className="sp" />
+          )}
+          <span className="nt">{row.fields.name}</span>
+          {sub && task.depth === 2 && !headingsOnly ? (
+            <button type="button" className="subadd" tabIndex={-1} title={t("Sheet.addSubTitle")} onClick={() => openDraft(sub)}>
+              {t("Sheet.subAdd")}
+            </button>
+          ) : null}
+        </div>
+      );
+    }
+    if (column === "member") {
+      if (task.laborSource === "Outsourced" && task.laborSupplier)
+        return (
+          <>
+            {task.laborSupplier}
+            <span className="tag">{t("Sheet.outside")}</span>
+          </>
+        );
+      const names = cellText(row, "member");
+      if (names) return names;
+      return task.kind === "task" && row.fields.discipline ? <span className="ph">{`${t("Sheet.waiting")} · ${t(`Discipline.${row.fields.discipline}`)}`}</span> : "";
+    }
+    if (column === "status") {
+      if (row.parent) return row.lateKids ? <span className="ps-chip s-late">{cellText(row, "status")}</span> : "";
+      const late = isLate(row, today),
+        lateDays = late ? spanDays(row.finish!, today) - 1 : 0,
+        due = !late && row.status === "Not Started" && row.start !== null && row.start <= today;
+      return (
+        <>
+          <span className={`ps-chip ${STATUS_CHIP[row.status] ?? "s-ns"}`}>{cellText(row, "status")}</span>
+          {late ? (
+            <span className="flag late" title={t("Sheet.lateTitle").replace("{days}", String(lateDays))}>
+              +{lateDays}
+            </span>
+          ) : due ? (
+            <span className="flag due" title={t("Sheet.dueTitle")}>
+              !
+            </span>
+          ) : null}
+        </>
+      );
+    }
+    return cellText(row, column);
+  };
+  const barFor = (row: Row) => {
     const { task } = row,
-      on = active?.id === task.id,
-      inArea = area && index >= area.r0 && index <= area.r1;
-    const plus = placeFor(row, false),
-      late = task.kind !== "phase" && task.status !== "Done" && row.finish !== null && row.finish < today;
-    const barLeft = row.start ? timeline.x(row.start) * timeline.width : 0,
-      barWidth = row.start && row.finish ? spanDays(row.start, row.finish) * timeline.width : 0;
-    body.push(
-      <tr key={task.id} data-id={task.id} className={`sh-row k-${task.kind}${row.parent ? " parent" : ""}${on ? " current" : ""}`}>
-        <td className="sh-gut">
+      inner: React.ReactNode[] = [];
+    for (const day of holidays) {
+      const at = timeline.x(day);
+      if (at >= 0 && at < timeline.days) inner.push(<div key={`h${day}`} className="hol" style={{ left: at * DW, width: DW }} />);
+    }
+    const now = timeline.x(today);
+    if (now >= 0 && now < timeline.days) inner.push(<div key="today" className="today" style={{ left: now * DW, width: DW }} />);
+    if (row.start && row.finish) {
+      const left = timeline.x(row.start) * DW,
+        width = spanDays(row.start, row.finish) * DW - 2,
+        title = `${row.fields.name} · ${dayDate(row.start)} – ${dayDate(row.finish)}`;
+      if (row.parent) inner.push(<div key="bar" className="gb head" data-id={task.id} style={{ left, width }} title={title} />);
+      else if (task.isMilestone) inner.push(<div key="bar" className="gb ms" data-id={task.id} style={{ left: left + DW / 2 - 6 }} title={`${title} · ${t("Sheet.openHint")}`} />);
+      else {
+        const late = isLate(row, today),
+          outsourced = task.laborSource === "Outsourced";
+        inner.push(
+          <div
+            key="bar"
+            className={`gb${row.percent >= 100 ? " full" : ""}${row.status === "Blocked" ? " blk" : ""}${late ? " late" : ""}${outsourced ? " out" : ""}${activeRow?.task.id === task.id ? " cur" : ""}`}
+            data-id={task.id}
+            style={{ left, width }}
+            title={`${title} · ${row.days ?? 0} ${t("Sheet.colDays")} · ${Math.round(row.percent)}% · ${t("Sheet.openHint")}`}
+          >
+            <div className="dn" style={{ width: `${Math.min(100, row.percent)}%` }} />
+          </div>,
+        );
+        let tail = left + width;
+        if (late) {
+          const until = task.forecastFinish && task.forecastFinish > today ? task.forecastFinish : today,
+            extra = (spanDays(row.finish, until) - 1) * DW;
+          if (extra > 0) {
+            inner.push(<div key="ext" className="ext" style={{ left: left + width, width: extra }} />);
+            tail += extra;
+          }
+        }
+        const label = outsourced && task.laborSupplier ? task.laborSupplier : task.pics.map((pic) => pic.name).join(", ");
+        if (label)
+          inner.push(
+            <span key="label" className="gl" style={{ left: tail + 6 }}>
+              {label}
+            </span>,
+          );
+      }
+    } else if (!row.parent && task.kind !== "phase")
+      inner.push(
+        <span key="hint" className="gl hint" style={{ left: Math.max(0, now) * DW + 6 }}>
+          {t("Sheet.drawHint")}
+        </span>,
+      );
+    return <div className="tli">{inner}</div>;
+  };
+
+  const rowsOut: React.ReactNode[] = [];
+  model.visible.forEach((row, index) => {
+    rowsOut.push(...(extras.get(index) ?? []));
+    const { task } = row,
+      current = activeIndex === index,
+      plus = placeFor(row, false);
+    const addTip = t(task.kind === "phase" || row.parent ? "Sheet.addUnder" : "Sheet.addBelow");
+    rowsOut.push(
+      <tr key={task.id} data-id={task.id} className={`lvl${Math.min(3, task.depth)}${current ? " cur-row" : ""}`}>
+        <td className="gut stk" style={{ left: 0 }}>
           {plus ? (
-            <button
-              type="button"
-              className="sh-plus"
-              title={t(task.kind === "phase" ? "Sheet.addUnder" : "Sheet.addBelow")}
-              aria-label={`${t(task.kind === "phase" ? "Sheet.addUnder" : "Sheet.addBelow")} ${task.wbs}`}
-              onClick={() => openDraft(plus)}
-            >
-              <Icon name="plus" />
+            <button type="button" className="add" tabIndex={-1} title={addTip} aria-label={`${addTip} ${task.wbs}`} onClick={() => openDraft(plus)}>
+              +
             </button>
           ) : null}
         </td>
-        <td className="sh-wbs">{task.wbs}</td>
         {COLUMNS.map((column, col) => {
-          const selected = inArea && col >= area.c0 && col <= area.c1,
-            current = on && active?.col === col;
-          const locked = lockOf(row, column.key) !== "";
-          const typing = editing && editing.id === task.id && editing.col === col;
-          const text = cellText(row, column.key);
+          const selected = area && index >= area.r0 && index <= area.r1 && col >= area.c0 && col <= area.c1 && (area.r0 !== area.r1 || area.c0 !== area.c1),
+            on = current && active?.col === col,
+            typing = editing && editing.id === task.id && editing.col === col,
+            frozen = sticky(col);
+          const calc = column.key === "work" || (row.parent && ["done", "status"].includes(column.key)) || (row.rollup && ["start", "end", "days", "after"].includes(column.key));
+          const fill =
+            column.key === "done" && !row.parent && row.percent > 0
+              ? { backgroundImage: `linear-gradient(90deg, var(--sh-pct) ${Math.min(100, row.percent)}%, transparent ${Math.min(100, row.percent)}%)` }
+              : undefined;
           return (
             <td
               key={column.key}
               data-c={col}
-              aria-selected={Boolean(selected || current)}
-              className={`sh-c ${column.className}${current ? " on" : ""}${selected && !current ? " sel" : ""}${locked ? " ro" : ""}${typing ? " typing" : ""}${column.key === "status" ? ` st-${task.status.replace(/\s+/g, "-").toLowerCase()}` : ""}${column.key === "end" && late ? " late" : ""}`}
+              aria-selected={Boolean(selected || on)}
+              className={`c${column.mono ? " ps-mono" : ""}${column.right ? " r" : ""}${calc ? " calc" : ""}${selected ? " insel" : ""}${on ? " act" : ""}${typing ? " editing" : ""}${frozen.className}`}
+              style={frozen.style || fill ? { ...frozen.style, ...fill } : undefined}
             >
-              {typing ? (
-                editor(row, col)
-              ) : column.key === "name" ? (
-                <span className="sh-label" style={{ paddingLeft: Math.max(0, task.depth - 1) * 14 }}>
-                  {row.parent ? (
-                    <button
-                      type="button"
-                      className="sh-fold"
-                      aria-expanded={!collapsed.has(task.id)}
-                      aria-label={`${t(collapsed.has(task.id) ? "Sheet.unfold" : "Sheet.fold")} ${task.wbs}`}
-                      onClick={() => toggle(task.id)}
-                    >
-                      <Icon name={collapsed.has(task.id) ? "chevronRight" : "chevronDown"} />
-                    </button>
-                  ) : (
-                    <i className="sh-fold-gap" />
-                  )}
-                  <span className="sh-text">{text}</span>
-                  <button type="button" className="sh-open" title={t("Sheet.openTask")} aria-label={`${t("Sheet.openTask")} ${task.wbs}`} onClick={() => onOpenTask(task.id)}>
-                    <Icon name="externalLink" />
-                  </button>
-                </span>
-              ) : (
-                <span className="sh-text">{text}</span>
-              )}
+              {typing ? editor(row, col) : cellBody(row, column.key)}
             </td>
           );
         })}
-        <td className="sh-tl">
-          <div className="sh-track" style={{ width: trackWidth }}>
-            {row.start && row.finish ? (
-              task.isMilestone ? (
-                <i className="sh-ms" style={{ left: barLeft + timeline.width / 2 - 5 }} title={`${task.wbs} ${task.name}`} />
-              ) : (
-                <i
-                  className={`sh-bar k-${task.kind}${row.parent ? " roll" : ""}${task.status === "Done" ? " done" : late ? " late" : ""}`}
-                  style={{ left: barLeft, width: Math.max(2, barWidth) }}
-                  title={`${task.wbs} ${task.name} · ${cellDate(row.start)} – ${cellDate(row.finish)}`}
-                >
-                  {row.percent > 0 && task.kind !== "phase" ? <b style={{ width: `${Math.min(100, row.percent)}%` }} /> : null}
-                </i>
-              )
-            ) : null}
-          </div>
-        </td>
+        <td className="tl">{barFor(row)}</td>
       </tr>,
     );
   });
-  body.push(...(extras.get(model.visible.length) ?? []));
+  rowsOut.push(...(extras.get(model.visible.length) ?? []));
+  const footIndex = model.visible.length;
+  rowsOut.push(
+    <tr key="foot" data-id={FOOT} className={`foot${activeIndex === footIndex ? " cur-row" : ""}`}>
+      <td className="gut stk" style={{ left: 0 }}>
+        <button type="button" className="add" tabIndex={-1} title={t("Sheet.addEnd")} aria-label={t("Sheet.addEnd")} onClick={() => openDraft(placeFor(null, false))}>
+          +
+        </button>
+      </td>
+      {COLUMNS.map((column, col) => {
+        const frozen = sticky(col),
+          on = activeIndex === footIndex && active?.col === col;
+        return (
+          <td key={column.key} data-c={col} aria-selected={on} className={`c${on ? " act" : ""}${frozen.className}`} style={frozen.style}>
+            {column.key === "name" ? (
+              <>
+                <button type="button" className="lnk" tabIndex={-1} onClick={() => openDraft(placeFor(null, false))}>
+                  {t("Sheet.addTaskEnd")}
+                </button>
+                {canPlan ? (
+                  <button type="button" className="lnk" tabIndex={-1} onClick={() => openDraft({ parentId: null, beforeId: null, kind: "phase" })}>
+                    {t("Sheet.addHeadingEnd")}
+                  </button>
+                ) : null}
+                <span className="ph"> {t("Sheet.orPaste")}</span>
+              </>
+            ) : null}
+          </td>
+        );
+      })}
+      <td className="tl">
+        <div className="tli" />
+      </td>
+    </tr>,
+  );
 
-  const saving = busy || pending.length > 0 || ghosts.length > 0;
+  // The status bar: what is selected, the plan in one line, the save state and the keys.
+  const chosen = area ? model.visible.slice(area.r0, Math.min(area.r1, model.visible.length - 1) + 1) : [];
+  const chosenWork = chosen.filter((row) => !row.parent && row.workDays).reduce((sum, row) => sum + (row.workDays ?? 0), 0);
+  const headings = model.rows.filter((row) => row.task.depth === 1).length,
+    leaves = model.rows.filter((row) => !row.parent).length;
+  let planFirst: string | null = null,
+    planLast: string | null = null;
+  for (const row of model.rows) {
+    if (row.start && (!planFirst || row.start < planFirst)) planFirst = row.start;
+    if (row.finish && (!planLast || row.finish > planLast)) planLast = row.finish;
+  }
+  const removal = activeRow && !busy ? removeFor(activeRow.task) : undefined;
+  const pendingSave = busy || pending.length > 0 || saving.length > 0;
+  const moveTitle = (how: "up" | "down" | "in" | "out", key: string) => {
+    const move = moveFor(activeRow, how);
+    return { disabled: typeof move === "string", title: t(key) };
+  };
+  const tableWidth = LEFT_WIDTH + timeline.days * DW;
+  const weeks = timeline.days / 7;
+
   return (
-    <div className="plan-sheet" data-guide="plan.sheet">
-      <div className="sh-bar-top">
-        <div className="sh-actions" data-guide="plan.sheetAdd">
-          {canPlan ? (
-            <button type="button" className="btn ghost sm" onClick={() => openDraft({ parentId: null, beforeId: null, kind: "phase" })}>
-              <Icon name="plus" />
-              {t("Plan.addHeading")}
-            </button>
-          ) : null}
-          <button type="button" className="btn ghost sm" disabled={!addTaskPlace} onClick={() => openDraft(addTaskPlace)}>
-            <Icon name="plus" />
-            {t("Sheet.addTask")}
-          </button>
-          <button type="button" className="btn ghost sm" disabled={!addSubPlace} title={t("Sheet.addSubTitle")} onClick={() => openDraft(addSubPlace)}>
-            <Icon name="plus" />
-            {t("Sheet.addSub")}
-          </button>
-          <button type="button" className="btn ghost sm" disabled={!removal} title={removal?.reason ?? t("Sheet.deleteSelected")} onClick={() => removal?.onRemove()}>
-            <Icon name="trash" />
-            {t("Plan.deleteRow")}
+    <section className="plan-sheet" data-guide="plan.sheet" aria-label={t("Sheet.label")}>
+      <div className="tools">
+        <div className="grp">
+          <button
+            type="button"
+            className="btn ic"
+            disabled={!steps.undo}
+            title={t("Sheet.undoTitle")}
+            aria-label={t("Sheet.undo")}
+            onClick={() => {
+              undoLast();
+              focusFrame();
+            }}
+          >
+            <Glyph d={GLYPH.undo} />
           </button>
           <button
             type="button"
-            className="btn ghost sm"
-            disabled={!undoCount}
+            className="btn ic"
+            disabled={!steps.redo}
+            title={t("Sheet.redoTitle")}
+            aria-label={t("Sheet.redo")}
             onClick={() => {
-              undoLast();
-              focusTable();
+              redoLast();
+              focusFrame();
             }}
           >
-            <Icon name="refresh" />
-            {t("Sheet.undo")}
+            <Glyph d={GLYPH.redo} />
           </button>
         </div>
-        <span className={`sh-state${note?.error ? " error" : ""}`} role="status">
-          {note ? (
-            <>
-              <span className="sh-note">{note.text}</span>
-              <button type="button" className="sh-note-x" aria-label="×" onClick={() => setNote(null)}>
-                <Icon name="x" />
-              </button>
-            </>
-          ) : null}
-          {saving ? (
-            <>
-              <span className="spinner" />
-              {t("Sheet.saving")}
-            </>
-          ) : savedOnce ? (
-            <em>
-              <Icon name="check" />
-              {t("Sheet.saved")}
-            </em>
-          ) : (
-            <em>{t("Sheet.autoSave")}</em>
-          )}
-        </span>
+        <div className="grp" data-guide="plan.sheetAdd">
+          <button type="button" className="btn" disabled={!placeFor(activeRow, false)} title={t("Sheet.insertTitle")} onClick={() => openDraft(placeFor(activeRow, false))}>
+            <Glyph d={GLYPH.plus} />
+            {t("Sheet.insertRow")}
+          </button>
+          <button type="button" className="btn ic" aria-label={t("Sheet.outdent")} {...moveTitle("out", "Sheet.outdentTitle")} onClick={() => moveRow("out")}>
+            <Glyph d={GLYPH.outdent} />
+          </button>
+          <button type="button" className="btn ic" aria-label={t("Sheet.indent")} {...moveTitle("in", "Sheet.indentTitle")} onClick={() => moveRow("in")}>
+            <Glyph d={GLYPH.indent} />
+          </button>
+          <button type="button" className="btn ic" aria-label={t("Sheet.moveUp")} {...moveTitle("up", "Sheet.moveUpTitle")} onClick={() => moveRow("up")}>
+            <Glyph d={GLYPH.up} />
+          </button>
+          <button type="button" className="btn ic" aria-label={t("Sheet.moveDown")} {...moveTitle("down", "Sheet.moveDownTitle")} onClick={() => moveRow("down")}>
+            <Glyph d={GLYPH.down} />
+          </button>
+          <button type="button" className="btn" disabled={!removal} title={removal?.reason ?? t("Sheet.deleteSelected")} onClick={() => removal?.onRemove()}>
+            <Glyph d={GLYPH.trash} />
+            {t("Plan.deleteRow")}
+          </button>
+        </div>
+        <div className="seg" role="group" aria-label={t("Sheet.viewLabel")}>
+          <button type="button" className={headingsOnly ? "" : "on"} aria-pressed={!headingsOnly} onClick={() => setHeadingsOnly(false)}>
+            {t("Sheet.viewAll")}
+          </button>
+          <button type="button" className={headingsOnly ? "on" : ""} aria-pressed={headingsOnly} onClick={() => setHeadingsOnly(true)}>
+            {t("Sheet.viewHeadings")}
+          </button>
+        </div>
+        <button type="button" className="btn" onClick={goToday}>
+          <Glyph d={GLYPH.calendar} />
+          {t("Sheet.goToday")}
+        </button>
+        <span className="grow" />
       </div>
-      <div className="sh-scroll">
-        <table ref={table} className="sh-table" role="grid" tabIndex={0} aria-label={t("Sheet.label")} style={tableStyle} onKeyDown={onKeyDown} onCopy={onCopy} onPaste={onPaste}>
+      <div className="legend" aria-label={t("Sheet.legendLabel")}>
+        <span>
+          <i className="sw task" />
+          {t("Sheet.legendTask")}
+        </span>
+        <span>
+          <i className="sw part" />
+          {t("Sheet.legendDone")}
+        </span>
+        <span>
+          <i className="sw full" />
+          {t("Sheet.legendFull")}
+        </span>
+        <span>
+          <i className="sw head" />
+          {t("Sheet.legendHeading")}
+        </span>
+        <span>
+          <i className="sw hol" />
+          {t("Sheet.holiday")}
+        </span>
+        <span>
+          <i className="sw now" />
+          {`${t("Sheet.today")} ${dayDate(today)}`}
+        </span>
+        <span>
+          <i className="sw late" />
+          {t("Sheet.legendLate")}
+        </span>
+        <span>
+          <i className="sw blk" />
+          {t("Sheet.stBlocked")}
+        </span>
+        <span>
+          <i className="sw out" />
+          {t("Sheet.legendOut")}
+        </span>
+        <span>
+          <svg width="24" height="10" aria-hidden="true">
+            <path d="M1 2 H8 V8 H22" className="ln" />
+          </svg>
+          {t("Sheet.legendLink")}
+        </span>
+        <span>{t("Sheet.legendNote")}</span>
+      </div>
+      <div ref={frame} className="ps-scroll" role="grid" tabIndex={0} aria-label={t("Sheet.label")} onKeyDown={onKeyDown} onCopy={onCopy} onPaste={onPaste}>
+        <table className="grid" style={{ width: tableWidth, ["--dw" as string]: `${DW}px` } as React.CSSProperties}>
+          <colgroup>
+            <col style={{ width: GUT }} />
+            {COLUMNS.map((column) => (
+              <col key={column.key} style={{ width: column.width }} />
+            ))}
+            <col style={{ width: timeline.days * DW }} />
+          </colgroup>
           <thead>
-            <tr>
-              <th className="sh-gut" scope="col" aria-label="+" />
-              <th className="sh-wbs" scope="col">
-                WBS
-              </th>
-              {COLUMNS.map((column) => (
-                <th key={column.key} scope="col" className={`sh-c ${column.className}`} title={column.hint ? t(column.hint) : undefined}>
-                  {column.key === "after" ? <span data-guide="plan.sheetAfter">{t(column.label)}</span> : t(column.label)}
-                  {column.hint ? <small>{t(column.hint)}</small> : null}
-                </th>
-              ))}
-              <th className="sh-tl" scope="col">
-                <div className="sh-weeks" style={{ width: trackWidth }}>
-                  {Array.from({ length: timeline.weeks }, (_, week) => (
-                    <span key={week} style={{ width: 7 * timeline.width }}>
-                      {timeline.width >= 6 ? weekLabel.format(new Date(`${shiftDay(timeline.from, week * 7)}T00:00:00Z`)) : ""}
-                    </span>
+            <tr className="h1">
+              <th rowSpan={3} className="lh gut stk" style={{ left: 0 }} aria-label="+" />
+              {COLUMNS.map((column, col) => {
+                const frozen = sticky(col);
+                return (
+                  <th key={column.key} rowSpan={3} scope="col" className={`lh${column.right ? " r" : ""}${frozen.className}`} style={frozen.style}>
+                    {column.lines ? (
+                      <>
+                        {column.lines[0]}
+                        <br />
+                        {column.lines[1]}
+                      </>
+                    ) : column.key === "after" ? (
+                      <span data-guide="plan.sheetAfter">{t(column.label)}</span>
+                    ) : (
+                      t(column.label)
+                    )}
+                    {column.sub ? <small>{column.sub.startsWith("Sheet.") ? t(column.sub) : column.sub}</small> : null}
+                  </th>
+                );
+              })}
+              <th className="th-tl">
+                <div className="tlh">
+                  {Array.from({ length: weeks }, (_, week) => (
+                    <div key={week} className="wkc" style={{ width: 7 * DW }}>
+                      <b>{t("Sheet.week").replace("{n}", String(week + 1))}</b>
+                      <span>{longDate(shiftDay(timeline.from, week * 7))}</span>
+                    </div>
                   ))}
                 </div>
               </th>
             </tr>
+            {(["num", "dow"] as const).map((kind) => (
+              <tr key={kind} className={kind === "num" ? "h2" : "h3"}>
+                <th className="th-tl">
+                  <div className="tlh">
+                    {timeline.dates.map((day) => {
+                      const weekday = asDate(day).getUTCDay();
+                      return (
+                        <div
+                          key={day}
+                          className={`dc${weekday === 1 ? " mon" : ""}${weekday === 0 || weekday === 6 ? " we" : ""}${holidays.has(day) ? " hol" : ""}${day === today ? " td" : ""}`}
+                          title={holidays.has(day) ? t("Sheet.holiday") : undefined}
+                        >
+                          {kind === "num" ? Number(day.slice(8)) : names.letter[weekday]}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </th>
+              </tr>
+            ))}
           </thead>
-          <tbody>{body}</tbody>
+          <tbody>{rowsOut}</tbody>
         </table>
+        <svg ref={links} className="links" aria-hidden="true" />
       </div>
-      <p className="sh-keys">{t("Sheet.keys")}</p>
-    </div>
+      <div className="status">
+        <span>
+          {activeIndex === footIndex
+            ? t("Sheet.newRowHint")
+            : chosen.length
+              ? `${t("Sheet.selRows").replace("{count}", String(chosen.length))}${chosenWork ? ` · ${t("Sheet.selWork").replace("{days}", String(chosenWork))}` : ""}`
+              : t("Sheet.clickHint")}
+        </span>
+        <span>{`${t("Sheet.projectLine").replace("{heads}", String(headings)).replace("{tasks}", String(leaves))}${planFirst && planLast ? ` · ${dayDate(planFirst)} – ${dayDate(planLast)}` : ""}`}</span>
+        <span className={`save${note?.error ? " error" : ""}`} role="status">
+          {note ? (
+            note.text
+          ) : pendingSave ? (
+            <>
+              <span className="spinner" />
+              {t("Sheet.saving")}
+            </>
+          ) : savedAt ? (
+            t("Sheet.savedAt").replace("{time}", savedAt)
+          ) : (
+            t("Sheet.autoSave")
+          )}
+        </span>
+        <span className="keys">
+          <span>
+            <kbd>Enter</kbd> {t("Sheet.keyDown")}
+          </span>
+          <span>
+            <kbd>Tab</kbd> {t("Sheet.keyRight")}
+          </span>
+          <span>
+            <kbd>F2</kbd> {t("Sheet.keyEdit")}
+          </span>
+          <span>
+            <kbd>Ctrl</kbd>+<kbd>V</kbd> {t("Sheet.keyPaste")}
+          </span>
+          <span>
+            <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>→</kbd> {t("Sheet.keyIndent")}
+          </span>
+          <span>
+            <kbd>Ctrl</kbd>+<kbd>D</kbd> {t("Sheet.keyFill")}
+          </span>
+          <span>
+            <kbd>Ctrl</kbd>+<kbd>Z</kbd> {t("Sheet.undo")}
+          </span>
+        </span>
+      </div>
+    </section>
   );
 }
