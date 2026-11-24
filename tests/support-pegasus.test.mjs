@@ -61,7 +61,7 @@ test("the list's summary bar filters on status groups that the API accepts and c
 test("the person picks how many rows a page shows, and both list APIs take it", async () => {
   const [screen, ui, routes] = await Promise.all([read("app/system/production/SupportScreens.tsx"), read("app/system/ui.tsx"), read("backend-node/src/routes/support.ts")]);
   // The remembered choice must be one the shared picker offers, or the select would show a blank value.
-  const offered = /\{\[([\d, ]+)\]\.map\(\(size\) => <option key=\{size\}/.exec(ui)?.[1];
+  const offered = /\{\[([\d, ]+)\]\.map\(\(size\) => \(?\s*<option key=\{size\}/.exec(ui)?.[1];
   assert.match(screen, new RegExp(`const ROW_CHOICES = \\[${offered}\\]`));
   assert.match(screen, /<div data-guide="support\.rows"><TablePageSize value=\{size\} onChange=\{onSize\} \/><\/div>/);
   assert.match(screen, /setPageSizeState\(rows\); setPage\(1\);/);

@@ -64,6 +64,7 @@ import {
   DownloadCenterScreen,
   GuideLayer,
   SiteMonitorScreen,
+  DesignSystemScreen,
   InstalledBaseScreen,
   ProductionMaterialIssues,
   ProductionModuleTemplates,
@@ -134,7 +135,8 @@ type View =
   | "support"
   | "downloads"
   | "site-monitor"
-  | "installed-base";
+  | "installed-base"
+  | "design-system";
 
 /** unlessPermission hides an item from people who hold that permission, because they have a fuller screen for the same records. */
 type NavItem = { view: View; label: string; icon: IconName; permission?: string; permissions?: string[]; anyPermissions?: string[]; unlessPermission?: string; rateAccess?: boolean };
@@ -240,6 +242,7 @@ const NAV: { group?: string; items: NavItem[] }[] = [
       { view: "suppliers", label: "Suppliers", icon: "truck", permission: "master.read" },
       { view: "audit", label: "Audit Log", icon: "shield", permission: "audit.read" },
       { view: "settings", label: "System Settings", icon: "settings", permission: "master.read" },
+      { view: "design-system", label: "Design System", icon: "layers", permission: "master.read" },
     ],
   },
 ];
@@ -1589,6 +1592,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
                 <DownloadCenterScreen canManage={bootstrap.permissions.includes("master.read")} canManageRepositories={bootstrap.permissions.includes("repository.write")} notify={setToast} />
               ) : null}
               {view === "site-monitor" ? <SiteMonitorScreen bootstrap={bootstrap} notify={setToast} /> : null}
+              {view === "design-system" ? <DesignSystemScreen notify={setToast} /> : null}
               {view === "installed-base" ? (
                 <InstalledBaseScreen canManage={bootstrap.permissions.includes("asset.manage")} canSeeCredentials={bootstrap.permissions.includes("credential.read")} notify={setToast} />
               ) : null}

@@ -14,12 +14,12 @@ const GROUPS = [
   // Lean procurement (owner 2026-11-19): the PR list and Approvals; BOM is a tab of the PR screen, the rest is done in Pegasus ERP.
   ["NavGroup.procurement", ["purchase", "approvals"]],
   ["NavGroup.team", ["activity", "performance", "summary-reports", "knowledge", "downloads"]],
-  ["NavGroup.system", ["user-accounts", "employees", "suppliers", "audit", "settings"]],
+  ["NavGroup.system", ["user-accounts", "employees", "suppliers", "audit", "settings", "design-system"]],
 ];
 const HELP = ["manual", "support"];
 const viewsIn = (text) => [...text.matchAll(/\{ view: "([a-z-]+)"|\{"view":"([a-z-]+)"/g)].map((match) => match[1] ?? match[2]);
 
-test("the sidebar holds the 40 entries in seven work-order groups; nothing is twice", async () => {
+test("the sidebar holds the 41 entries in seven work-order groups; nothing is twice", async () => {
   const shell = await source("app/system/ProductionApp.tsx");
   const nav = shell.slice(shell.indexOf("const NAV:"), shell.indexOf("/** The one rule for which menu entries"));
   const sections = nav.split(/\n {2}\{\s+(?=items: \[|group: ")/).slice(1);
@@ -29,13 +29,13 @@ test("the sidebar holds the 40 entries in seven work-order groups; nothing is tw
     assert.deepEqual(viewsIn(sections[index]), views, group ?? "top");
   }
   const all = viewsIn(nav);
-  assert.equal(all.length, 40);
-  assert.equal(new Set(all).size, 40);
+  assert.equal(all.length, 41);
+  assert.equal(new Set(all).size, 41);
   // The two help screens are entries of the "?" menu, and stay open to everyone.
   const help = shell.slice(shell.indexOf("const HELP_NAV"), shell.indexOf("function allowedViews"));
   assert.deepEqual(viewsIn(help), HELP);
   assert.match(shell, /allowed\.push\("profile", "signature", \.\.\.HELP_NAV\.map\(\(?item\)? => item\.view\)\);/);
-  // Every one of the 42 is still a view the shell knows.
+  // Every one of the 43 is still a view the shell knows.
   const viewType = shell.slice(shell.indexOf("type View ="), shell.indexOf("/** unlessPermission hides"));
   for (const view of [...all, ...HELP]) assert.ok(view.startsWith("crm-") || viewType.includes(`"${view}"`), `unknown view ${view}`);
 });
@@ -123,7 +123,7 @@ test("the top bar ? menu opens the manual, the guides, the issue list and the do
     shell,
     /\{userOpen \? \(?\s*<div className="menu" role="menu">[\s\S]{0,400}t\("My Profile"\)[\s\S]{0,400}t\("My signature"\)[\s\S]{0,400}employeeManualLabel\(language\)[\s\S]{0,400}t\("Logout"\)/,
   );
-  assert.match(ui, /help: <><circle cx="12" cy="12" r="10" \/>/);
+  assert.match(ui, /help: \(\s*<>\s*<circle cx="12" cy="12" r="10" \/>/);
 });
 
 test("procurement is one menu entry for engineers: BOM and PR history are tabs of it, and an old BOM link lands there (owner 2026-11-19)", async () => {

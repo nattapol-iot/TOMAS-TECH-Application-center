@@ -1,0 +1,102 @@
+/* Design System screen (design-system/DesignSystemScreen.tsx). */
+.ds-screen,
+.ds-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.ds-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.ds-row + .ds-row {
+  margin-top: 12px;
+}
+
+.ds-tokens {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px;
+}
+
+.ds-tokens.font,
+.ds-tokens.type {
+  grid-template-columns: 1fr;
+}
+
+.ds-token {
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  text-align: left;
+  cursor: copy;
+}
+
+.ds-token:hover {
+  border-color: var(--blue-line);
+  background: var(--blue-soft);
+}
+
+.ds-token code {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--ink);
+}
+
+.ds-token small {
+  font-size: var(--fs-2xs);
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.ds-swatch {
+  height: 40px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+}
+
+.ds-specimen {
+  color: var(--ink);
+  line-height: 1.4;
+}
+
+.ds-shape {
+  width: 56px;
+  height: 40px;
+  margin: 6px 0;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.ds-progress {
+  width: 120px;
+}
+
+.ds-icons {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 6px;
+}
+
+.ds-icon {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-sm);
+  color: var(--ink-soft);
+}
+
+.ds-icon code {
+  font-size: var(--fs-2xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

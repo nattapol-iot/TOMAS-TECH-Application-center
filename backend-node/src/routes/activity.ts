@@ -39,6 +39,7 @@ const modules = new Set([
   "downloads",
   "site-monitor",
   "installed-base",
+  "design-system",
   "sales-intake",
   "labor",
   "signature",

@@ -111,6 +111,7 @@ export const MENU_VIEWS: readonly string[] = [
   "suppliers",
   "audit",
   "settings",
+  "design-system",
 ];
 
 /** The list a person saves: at most eight menu views, each once, in the order they were starred. */

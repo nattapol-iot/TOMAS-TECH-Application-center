@@ -31,8 +31,17 @@ function ScreenLoading({ error, retry }: DynamicOptionsLoadingProps) {
     return (
       <div role="alert">
         <Panel>
-          <EmptyState icon="alertTriangle" title="Unexpected error" message={error.message || "Unexpected error"}
-            action={<button className="btn default" type="button" onClick={() => retry?.()}><Icon name="refresh" /><LocalizedText text={"Try again"} /></button>} />
+          <EmptyState
+            icon="alertTriangle"
+            title="Unexpected error"
+            message={error.message || "Unexpected error"}
+            action={
+              <button className="btn default" type="button" onClick={() => retry?.()}>
+                <Icon name="refresh" />
+                <LocalizedText text={"Try again"} />
+              </button>
+            }
+          />
         </Panel>
       </div>
     );
@@ -43,13 +52,28 @@ function ScreenLoading({ error, retry }: DynamicOptionsLoadingProps) {
     return (
       <div role="alert">
         <Panel>
-          <EmptyState icon="alertTriangle" title="Could not load" message="This screen could not be opened. Refresh the page to load the latest version."
-            action={<button className="btn default" type="button" onClick={() => window.location.reload()}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button>} />
+          <EmptyState
+            icon="alertTriangle"
+            title="Could not load"
+            message="This screen could not be opened. Refresh the page to load the latest version."
+            action={
+              <button className="btn default" type="button" onClick={() => window.location.reload()}>
+                <Icon name="refresh" />
+                <LocalizedText text={"Refresh"} />
+              </button>
+            }
+          />
         </Panel>
       </div>
     );
   }
-  return <div role="status" aria-live="polite" aria-busy="true"><Panel><EmptyState icon="clock" title="Loading…" message="Opening this screen…" /></Panel></div>;
+  return (
+    <div role="status" aria-live="polite" aria-busy="true">
+      <Panel>
+        <EmptyState icon="clock" title="Loading…" message="Opening this screen…" />
+      </Panel>
+    </div>
+  );
 }
 
 const screen = { loading: ScreenLoading };
@@ -78,6 +102,7 @@ export const ProductionSalesIntake = dynamic(() => import("./SiteVisitScreens").
 export const ProductionSiteVisits = dynamic(() => import("./SiteVisitScreens").then((m) => m.ProductionSiteVisits), screen);
 export const ProductionVisitMasterData = dynamic(() => import("./SiteVisitScreens").then((m) => m.ProductionVisitMasterData), screen);
 export const DownloadCenterScreen = dynamic(() => import("./DownloadCenterScreen").then((m) => m.DownloadCenterScreen), screen);
+export const DesignSystemScreen = dynamic(() => import("./design-system/DesignSystemScreen").then((m) => m.DesignSystemScreen), screen);
 export const SiteMonitorScreen = dynamic(() => import("./SiteMonitorScreen").then((m) => m.SiteMonitorScreen), screen);
 export const InstalledBaseScreen = dynamic(() => import("./InstalledBaseScreen").then((m) => m.InstalledBaseScreen), screen);
 export const TeamActivityScreen = dynamic(() => import("./TeamActivityScreen").then((m) => m.TeamActivityScreen), screen);
