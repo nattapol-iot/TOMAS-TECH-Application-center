@@ -1871,9 +1871,9 @@ const PROJECT_PLAN: Guide = {
       view: "projects",
       title: { th: "ชั่วโมงงานตามสาขา", en: "Hours by discipline", jp: "分野別の作業時間" },
       body: {
-        th: "คอลัมน์ ชม.แผน รับชั่วโมง (16) หรือ man-day (2 MD) ชม.จริง คือชั่วโมงที่ทีมยืนยันใน My Work และคงเหลือคือแผนลบจริง แถบนี้รวมตามสาขาเทียบชั่วโมงแรงงานใน Estimate กดสาขาเพื่อดูเฉพาะงานของสาขานั้น ไม่มีจำนวนเงิน",
-        en: "The Plan h column takes hours (16) or man-days (2 MD); Actual h is what the team confirmed in My Work, and Left h is plan minus actual. This bar adds them up by discipline against the Estimate's labor hours; press a discipline to see only its rows. No money is shown.",
-        jp: "「計画 h」には時間（16）か人日（2 MD）を入力します。「実績 h」はチームがマイワークで確定した時間、「残り h」は計画から実績を引いた値です。この帯は分野ごとに見積の工数と比べます。分野を押すとその行だけ表示します。金額は表示しません。",
+        th: "คอลัมน์ ชม.แผน รับชั่วโมง (16) หรือ man-day (2 MD) ชม.จริง คือชั่วโมงที่ทีมยืนยันใน My Work และคงเหลือคือแผนลบจริง แถบนี้รวมตามสาขาเทียบชั่วโมงแรงงานใน Estimate กดสาขาเพื่อดูเฉพาะงานของสาขานั้น ไม่มีจำนวนเงิน งานที่จ้างภายนอก เลือกผู้รับเหมาในช่อง ผู้ทำ (กลุ่ม จ้างภายนอก) ผู้ทำของเรายังอยู่เป็นผู้ดูแล แท่งเป็นสีม่วง และไม่นับรวมกับงบชั่วโมงของทีม",
+        en: "The Plan h column takes hours (16) or man-days (2 MD); Actual h is what the team confirmed in My Work, and Left h is plan minus actual. This bar adds them up by discipline against the Estimate's labor hours; press a discipline to see only its rows. No money is shown. For outsourced work, pick the supplier in the Member cell (Outsourced to); our member stays on the row to look after it, the bar turns purple, and its hours stay out of the team budget.",
+        jp: "「計画 h」には時間（16）か人日（2 MD）を入力します。「実績 h」はチームがマイワークで確定した時間、「残り h」は計画から実績を引いた値です。この帯は分野ごとに見積の工数と比べます。分野を押すとその行だけ表示します。金額は表示しません。外注する作業は「担当」欄で外注先を選びます。社内の担当者は管理者として残り、バーは紫になり、時間はチームの予算に含めません。",
       },
       missing: { th: "เปิด 'ตาราง' ใน V2 ก่อน หรือกด 'ถัดไป'", en: "Open the Sheet in V2 first, or press Next.", jp: "先に V2 の「表」を開くか、「次へ」を押します。" },
     },
