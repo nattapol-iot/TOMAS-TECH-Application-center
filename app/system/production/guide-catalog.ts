@@ -1548,9 +1548,9 @@ const MY_HOURS: Guide = {
       view: "my-work",
       title: { th: "วันที่เป็นไปตามปฏิทิน: กดครั้งเดียว", en: "A day that went as booked: one press", jp: "予定どおりの日：ワンクリック" },
       body: {
-        th: "ปุ่ม 'ยืนยัน' ท้ายวันบันทึกชั่วโมงตามร่างทันที วันที่ยังไม่ยืนยันมีปุ่มนี้ทุกวัน วันที่ไม่มีงานเลยต้องลงชั่วโมงเอง",
-        en: "Confirm at the foot of the day saves the drafted hours at once. Every day still waiting has this button; a day with nothing on it is filled in by you.",
-        jp: "日の下の「確定」で下書きの時間をすぐ保存します。未確定の日にはこのボタンがあります。何もない日は自分で入力します。",
+        th: "ปุ่ม 'ยืนยัน' ท้ายวันบันทึกชั่วโมงตามร่างทันที วันที่ยังไม่ยืนยันมีปุ่มนี้ทุกวัน วันที่ไม่มีงานเลยต้องลงชั่วโมงเอง งานในแผนที่ยังไม่เริ่ม พอยืนยันชั่วโมงลงไปจะเปลี่ยนเป็นกำลังทำ และวันเริ่มจริงคือวันนั้น",
+        en: "Confirm at the foot of the day saves the drafted hours at once. Every day still waiting has this button; a day with nothing on it is filled in by you. A plan task not started yet turns In progress once hours on it are confirmed, with that day as its actual start.",
+        jp: "日の下の「確定」で下書きの時間をすぐ保存します。未確定の日にはこのボタンがあります。何もない日は自分で入力します。未着手の計画タスクは、時間を確定すると進行中になり、その日が実績開始日になります。",
       },
       missing: { th: "วันนี้ยืนยันแล้ว หรือวันนี้ไม่มีงาน กด 'ถัดไป'", en: "Today is already confirmed or has nothing on it. Press Next.", jp: "今日は確定済みか、作業がありません。「次へ」を押します。" },
     },

@@ -5,6 +5,7 @@ import type { Database } from "../db.js";
 import { ApiError } from "../errors.js";
 import { bodyObject, dateOnly, parseDateOnly } from "../http.js";
 import { bangkokToday } from "../issue-batches.js";
+import { appendUpdate } from "../schedule-service.js";
 import { WORKLOAD_SQL, isOpenWork, workloadItems } from "../resource-workload.js";
 import type { CurrentUserService } from "../users.js";
 import {
@@ -303,10 +304,54 @@ export const SAVE_DAY_SQL = `
         hours decimal(5,2) '$.hours',planned_hours decimal(5,2) '$.plannedHours') j;
       SELECT confirmed_at,times_confirmed FROM dbo.work_days WHERE user_id=@actor AND work_date=@date;`;
 
+/** The plan rows a day's confirmed hours were spent on: work keys "Project-<schedule task id>" with hours. */
+export function plannedRowsWorked(rows: readonly StoredRow[]): number[] {
+  return [
+    ...new Set(
+      rows
+        .filter((row) => row.hours > 0 && row.workKey?.startsWith("Project-"))
+        .map((row) => Number(row.workKey!.slice("Project-".length)))
+        .filter((id) => Number.isSafeInteger(id) && id > 0),
+    ),
+  ];
+}
+
+/*
+ * Owner 2026-11-23: hours confirmed on a plan row that has not started turn it In progress, with the actual start on
+ * that day. Only a leaf row (no rows under it) of an open project that is still Not Started at 0% with no actual
+ * start moves; the change goes into the row's history like a progress update.
+ */
+export const START_ON_HOURS_SQL = `
+      DECLARE @started TABLE(id bigint, project_id bigint);
+      UPDATE t SET status=N'In Progress',actual_start=@date,updated_by=@actor,updated_at=SYSUTCDATETIME()
+      OUTPUT inserted.id,inserted.project_id INTO @started
+      FROM dbo.schedule_tasks t INNER JOIN dbo.projects p ON p.id=t.project_id AND p.deleted_at IS NULL
+      WHERE t.id IN (SELECT value FROM OPENJSON(@ids) WITH (value bigint '$')) AND t.deleted_at IS NULL AND t.kind<>N'phase'
+        AND t.status=N'Not Started' AND t.percent_done=0 AND t.actual_start IS NULL AND p.status<>N'Closed'
+        AND NOT EXISTS(SELECT 1 FROM dbo.schedule_tasks c WHERE c.parent_id=t.id AND c.deleted_at IS NULL)
+        -- The person's own row, or one nobody holds yet; a Resource Plan row only once its assignee acknowledged it.
+        AND (EXISTS(SELECT 1 FROM dbo.schedule_task_pics pic WHERE pic.task_id=t.id AND pic.user_id=@actor) OR NOT EXISTS(SELECT 1 FROM dbo.schedule_task_pics pic WHERE pic.task_id=t.id))
+        AND NOT EXISTS(SELECT 1 FROM dbo.resource_tasks r WHERE r.schedule_task_id=t.id AND NOT (r.state=N'Approved' AND r.acknowledged_at IS NOT NULL AND r.assignee_id=@actor));
+      SELECT id,project_id FROM @started;`;
+
+async function startWorkedRows(transaction: TransactionType, actorId: number, date: string, rows: readonly StoredRow[]) {
+  const ids = plannedRowsWorked(rows);
+  if (!ids.length) return;
+  const request = new sql.Request(transaction);
+  request.input("actor", sql.BigInt, actorId).input("date", sql.Date, date).input("ids", sql.NVarChar(sql.MAX), JSON.stringify(ids));
+  const started = (await request.query<{ id: number | string; project_id: number | string }>(START_ON_HOURS_SQL)).recordset;
+  for (const row of started) {
+    const note = `Hours confirmed for ${date}`;
+    await appendUpdate(transaction, Number(row.project_id), Number(row.id), actorId, "status", "Not Started", "In Progress", note);
+    await appendUpdate(transaction, Number(row.project_id), Number(row.id), actorId, "actual_start", null, date, note);
+  }
+}
+
 async function saveDay(transaction: TransactionType, actorId: number, date: string, rows: readonly StoredRow[]) {
   const request = new sql.Request(transaction);
   request.input("actor", sql.BigInt, actorId).input("date", sql.Date, date).input("rows", sql.NVarChar(sql.MAX), JSON.stringify(rows));
   const saved = (await request.query<Row>(SAVE_DAY_SQL)).recordset[0];
+  await startWorkedRows(transaction, actorId, date, rows);
   return { at: iso(saved?.confirmed_at), times: Number(saved?.times_confirmed ?? 1) };
 }
 
