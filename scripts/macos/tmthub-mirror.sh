@@ -14,7 +14,7 @@
 # account token (TMTHUB_API_TOKEN in the deployment's .env, issued by deploy.sh).
 set -euo pipefail
 
-DEPLOY_DIR="${IOT_DEPLOY_DIR:-$HOME/iot-team-center/src}"
+DEPLOY_DIR="${IOT_DEPLOY_DIR:-/Users/Shared/iot-team-center/src}"
 DOCKER_CONTEXT="${IOT_DOCKER_CONTEXT:-colima-iot}"
 GITHUB_ORG="${TMTHUB_MIRROR_GITHUB_ORG:-Tomas-TC}"
 # GitHub repositories kept on TMTHub under another name or by hand (lowercase).

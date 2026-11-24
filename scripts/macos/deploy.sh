@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 # Deploys the shared-host stack (docker-compose.dev.yml + docker-compose.tls.yml: Node API,
-# production-built frontend, Caddy) on a colima host. Runs as the login user that owns the
-# colima profile (no sudo: the docker socket lives under that user's home), from the CI
-# runner or by hand:
+# production-built frontend, Caddy) into the iot colima VM, from the CI runner or by hand:
 #
 #   scripts/macos/deploy.sh --source /path/to/checkout
 #
-# The checkout is synced into DEPLOY_DIR because docker build contexts must live under the
-# home directory the VM mounts, and because the deploy copy carries the untracked .env.
+# It needs only the iot VM's Docker API (context colima-iot) and DEPLOY_DIR, so the runner can be
+# an unprivileged user (docs: IOT-HOST-RUNNER-SECURITY.md). The checkout is synced into
+# DEPLOY_DIR because bind-mounted config (deploy/caddy, deploy/tmthub) must live in the one folder
+# the VM mounts, and because the deploy copy carries the untracked .env.
 set -euo pipefail
 
 SOURCE=""
-DEPLOY_DIR="${IOT_DEPLOY_DIR:-$HOME/iot-team-center/src}"
+DEPLOY_DIR="${IOT_DEPLOY_DIR:-/Users/Shared/iot-team-center/src}"
 DOCKER_CONTEXT="${IOT_DOCKER_CONTEXT:-colima-iot}"
 PUBLIC_HOST_DEFAULT="iot-team-center.tomastc.com"
 TMTHUB_HOST_DEFAULT="tmthub.tomastc.com"
@@ -46,102 +46,53 @@ env_value() { grep -E "^$1=" "$DEPLOY_DIR/.env" | tail -n 1 | cut -d= -f2- | tr 
 [[ "$(env_value DEV_FRONTEND_AUTH_MODE)" == "tmt-id" ]] || die "DEV_FRONTEND_AUTH_MODE must be tmt-id in $DEPLOY_DIR/.env."
 docker context inspect "$DOCKER_CONTEXT" >/dev/null 2>&1 || die "Docker context '$DOCKER_CONTEXT' does not exist."
 # A context can exist while its VM is down; compose would then hang on the dead socket for minutes.
-if ! /usr/bin/perl -e 'alarm 15; exec @ARGV' docker --context "$DOCKER_CONTEXT" version >/dev/null 2>&1; then
-  if [[ "$DOCKER_CONTEXT" == "colima-iot" ]]; then
-    log "Docker daemon is unavailable; starting the isolated iot Colima profile"
-    # The VM stays alive only while Colima's limactl supervisor runs, and the Actions
-    # runner kills it at "Cleaning up orphan processes" -- the VM, with every container
-    # in it, then dies seconds after the deploy reports success. The runner identifies
-    # what to kill by the RUNNER_TRACKING_ID it puts in the environment of everything a
-    # step spawns, which children inherit; a new session alone does not escape it, so
-    # the variable has to be dropped before exec. Detaching as well keeps the supervisor
-    # off this job's terminal. Poll afterwards: the start no longer runs in foreground.
-    env -u RUNNER_TRACKING_ID \
-      /usr/bin/perl -MPOSIX -e 'exit 0 if fork; POSIX::setsid(); open STDIN, "<", "/dev/null"; open STDOUT, ">>", "/tmp/colima-iot-start.log"; open STDERR, ">&", \*STDOUT; exec @ARGV' \
-      colima start -p iot
-    log "Waiting for the iot Colima daemon (start log: /tmp/colima-iot-start.log)"
-    for _ in $(seq 1 60); do
-      /usr/bin/perl -e 'alarm 10; exec @ARGV' docker --context "$DOCKER_CONTEXT" version >/dev/null 2>&1 && break
-      sleep 5
-    done
-    /usr/bin/perl -e 'alarm 30; exec @ARGV' docker --context "$DOCKER_CONTEXT" version >/dev/null 2>&1 \
-      || die "Docker daemon behind '$DOCKER_CONTEXT' is still not answering after starting Colima profile iot; see /tmp/colima-iot-start.log."
-  else
-    die "Docker daemon behind '$DOCKER_CONTEXT' is not answering."
-  fi
-fi
-
-DOCUMENT_MODE="$(grep -E '^DEV_DOCUMENT_STORAGE_MODE=' "$DEPLOY_DIR/.env" | cut -d= -f2- || true)"
-if [[ "$DOCUMENT_MODE" == "Nas" ]]; then
-  log "Verifying the NAS mount on the Mac host"
-  DEV_NAS_USERNAME="${DEV_NAS_USERNAME:-$(grep -E '^DEV_NAS_USERNAME=' "$DEPLOY_DIR/.env" | cut -d= -f2- || true)}"
-  [[ -n "$DEV_NAS_USERNAME" ]] || die "NAS mode is enabled but DEV_NAS_USERNAME is missing."
-  DEV_NAS_USERNAME="$DEV_NAS_USERNAME" bash "$SOURCE/scripts/macos/mount-nas.sh"
-  if [[ "$DOCKER_CONTEXT" == "colima-iot" ]]; then
-    log "Checking NAS visibility inside the isolated iot VM"
-    # 'test -d' is not enough: after a host SMB reconnect the VM can keep an old view of the
-    # mount point (the directory exists, the NAS content does not), so the API silently reads
-    # and writes somewhere else. Write a probe through the Mac's SMB mount and read it in the VM.
-    NAS_DOCUMENT_DIR="$(grep -E '^DEV_DOCUMENT_STORAGE_PATH=' "$DEPLOY_DIR/.env" | cut -d= -f2- || true)"
-    NAS_DOCUMENT_DIR="${NAS_DOCUMENT_DIR:-/private/tmp/iot-team-center-nas/IoT Team Center}"
-    nas_probe=".iot-team-center-vm-probe"
-    nas_token="deploy-$(date +%s)-$$"
-    write_nas_probe() { mkdir -p "$NAS_DOCUMENT_DIR" 2>/dev/null && printf '%s' "$nas_token" > "$NAS_DOCUMENT_DIR/$nas_probe" 2>/dev/null; }
-    if ! write_nas_probe; then
-      # The Mac's own SMB mount is listed but no longer writable (a dead session after a NAS or
-      # network hiccup); mount-nas.sh skips a listed mount, so drop it and mount again.
-      log "The Mac's NAS mount is not writable; mounting it again"
-      /usr/bin/perl -e 'alarm 30; exec @ARGV' /sbin/umount -f /private/tmp/iot-team-center-nas || true
-      DEV_NAS_USERNAME="$DEV_NAS_USERNAME" bash "$SOURCE/scripts/macos/mount-nas.sh" || true
-    fi
-    if ! write_nas_probe; then
-      # Do not block the release on this: report what the runner sees so a person can fix the host.
-      log "Runner user: $(id -un); NAS mount: $(/sbin/mount | grep -F ' on /private/tmp/iot-team-center-nas ' || echo 'not mounted')"
-      ls -ldO /private/tmp/iot-team-center-nas "$NAS_DOCUMENT_DIR" 2>&1 | sed 's/^/    /' || true
-      echo "::warning title=NAS not writable::The runner cannot write to '$NAS_DOCUMENT_DIR' or remount the NAS; documents and Download Center may be unavailable. Fix the Mac mini NAS mount by hand (docs/MACMINI_HANDOFF.md)."
-    else
-    vm_sees_nas() {
-      [[ "$(/usr/bin/perl -e 'alarm 20; exec @ARGV' colima ssh -p iot -- cat "$NAS_DOCUMENT_DIR/$nas_probe" 2>/dev/null || true)" == "$nas_token" ]]
-    }
-    if ! vm_sees_nas; then
-      # Anything the API wrote while the VM had the old view is kept: copy it out of the VM
-      # before the restart and add it back to the NAS without overwriting a file there.
-      rescue_dir="$HOME/iot-team-center/nas-rescue-$(date +%Y%m%d-%H%M%S)"
-      mkdir -p "$rescue_dir"
-      vm_view_mb="$(/usr/bin/perl -e 'alarm 120; exec @ARGV' colima ssh -p iot -- du -sm "$NAS_DOCUMENT_DIR" 2>/dev/null | cut -f1 || true)"
-      if [[ ! "$vm_view_mb" =~ ^[0-9]+$ ]] || (( vm_view_mb > 4096 )); then
-        # Too large (or unreadable) to be writes from a short stale period: do not copy it.
-        echo "::warning title=NAS rescue::Skipped copying the iot VM's view of the document folder (${vm_view_mb:-unreadable} MB); check it by hand if uploads went missing"
-      elif /usr/bin/perl -e 'alarm 600; exec @ARGV' colima ssh -p iot -- \
-          tar -C "$NAS_DOCUMENT_DIR" --exclude "./$nas_probe" -cf - . > "$rescue_dir/vm-view.tar" 2>/dev/null; then
-        log "Saved the iot VM's view of the document folder to $rescue_dir ($(tar -tf "$rescue_dir/vm-view.tar" | grep -vc '/$' || true) files)"
-      else
-        echo "::warning title=NAS rescue::Could not copy the iot VM's view of the document folder before the restart; see $rescue_dir"
-      fi
-      # Only this application's VM may restart; preserve the operator's default context.
-      log "Refreshing stale NAS sharing in the isolated iot VM"
-      (
-        previous_context="$(docker context show)"
-        trap 'docker context use "$previous_context" >/dev/null' EXIT
-        /usr/bin/perl -e 'alarm 90; exec @ARGV' colima stop -p iot
-        /usr/bin/perl -e 'alarm 180; exec @ARGV' colima start -p iot
-      )
-      vm_sees_nas || die "NAS is mounted on the Mac but the iot VM still does not see its content."
-      if [[ -s "$rescue_dir/vm-view.tar" ]]; then
-        mkdir -p "$rescue_dir/files"
-        tar -C "$rescue_dir/files" -xf "$rescue_dir/vm-view.tar"
-        added="$(rsync -a --ignore-existing --out-format='%n' "$rescue_dir/files/" "$NAS_DOCUMENT_DIR/" | grep -vc '/$' || true)"
-        log "Added $added files the API wrote during the stale view back to the NAS (existing files untouched)"
-        [[ "$added" == "0" ]] || echo "::warning title=NAS rescue::$added files written during the stale NAS view were added back to the NAS; kept in $rescue_dir"
-      fi
-    fi
-    rm -f "$NAS_DOCUMENT_DIR/$nas_probe"
-    log "The iot VM sees the NAS content"
-    fi
-  fi
-fi
+# The runner cannot start the VM (it may not touch the Mac's colima profile); the colima-iot launch
+# agent on the Mac keeps it running.
+/usr/bin/perl -e 'alarm 15; exec @ARGV' docker --context "$DOCKER_CONTEXT" version >/dev/null 2>&1 \
+  || die "Docker daemon behind '$DOCKER_CONTEXT' is not answering. Start the VM on the Mac as tomastc: colima start -p iot"
 
 compose() { docker --context "$DOCKER_CONTEXT" compose -f docker-compose.dev.yml -f docker-compose.tls.yml "$@"; }
+# Runs a command in the iot VM itself (its kernel modules, its view of the network) through the
+# Docker API, so the runner needs no SSH key to the VM.
+vm() { /usr/bin/perl -e 'alarm 120; exec @ARGV' docker --context "$DOCKER_CONTEXT" run --rm --privileged --pid=host --network=host alpine:3.22 nsenter -t 1 -m -u -i -n -p -- "$@"; }
+
+# Mounts NFS path $1 with options $2 as a throwaway volume and writes a file through it.
+nfs_try() {
+  local probe_volume=iot-nfs-probe result=1 output
+  docker --context "$DOCKER_CONTEXT" volume rm -f "$probe_volume" >/dev/null 2>&1 || true
+  if output="$(docker --context "$DOCKER_CONTEXT" volume create --driver local --opt type=nfs \
+      --opt "o=addr=$TMTHUB_NAS_ADDR,$2" --opt "device=:$1" "$probe_volume" 2>&1 \
+    && docker --context "$DOCKER_CONTEXT" run --rm --entrypoint /bin/sh -v "$probe_volume:/probe" \
+      codeberg.org/forgejo/forgejo:15.0.9 -c 'id; ls -ldn /probe; touch /probe/.iot-nfs-probe && rm -f /probe/.iot-nfs-probe' 2>&1)"; then
+    result=0
+  fi
+  # One line per attempt in the job log, so a refusal says why (mount error, ownership, read-only).
+  # A refused mount is cut to the kernel's reason; anything else keeps the tail of the output.
+  if [[ $result != 0 ]]; then
+    output="$(printf '%s' "$output" | tr '\n' ' ' | /usr/bin/perl -ne 'print /failed to mount local volume:.*: ([^:]+?)\s+Run /s ? "not mounted ($1)" : substr($_, -400)')"
+  fi
+  log "NFS $1 (${2#rw,}): $([[ $result == 0 ]] && echo ok || printf '%s' "$output")"
+  docker --context "$DOCKER_CONTEXT" volume rm -f "$probe_volume" >/dev/null 2>&1 || true
+  return "$result"
+}
+
+# Documents live on the NAS over NFS (volume api-documents-nas in docker-compose.tls.yml). A mount
+# that fails stops the deploy here, while the running API still serves.
+DOCUMENT_MODE="$(env_value DEV_DOCUMENT_STORAGE_MODE)"
+export TMTHUB_NAS_ADDR
+if [[ "$DOCUMENT_MODE" == "Nas" ]]; then
+  IOT_DOCUMENTS_NFS_PATH="${IOT_DOCUMENTS_NFS_PATH:-$(env_value IOT_DOCUMENTS_NFS_PATH)}"
+  IOT_DOCUMENTS_NFS_PATH="${IOT_DOCUMENTS_NFS_PATH:-/volume1/IoT Department/IoT Team Center}"
+  IOT_DOCUMENTS_NFS_OPTIONS="${IOT_DOCUMENTS_NFS_OPTIONS:-$(env_value IOT_DOCUMENTS_NFS_OPTIONS)}"
+  IOT_DOCUMENTS_NFS_OPTIONS="${IOT_DOCUMENTS_NFS_OPTIONS:-rw,nfsvers=3,nolock,hard,timeo=600,retrans=2,noresvport}"
+  export IOT_DOCUMENTS_NFS_PATH IOT_DOCUMENTS_NFS_OPTIONS
+  vm modprobe nfs >/dev/null 2>&1 \
+    || vm sh -c 'DEBIAN_FRONTEND=noninteractive apt-get install -y -q "linux-modules-extra-$(uname -r)" >/dev/null && modprobe nfs' \
+    || die "The NFS client module is unavailable in the iot VM."
+  log "Checking the NAS document folder over NFS from the iot VM"
+  nfs_try "$IOT_DOCUMENTS_NFS_PATH" "$IOT_DOCUMENTS_NFS_OPTIONS" \
+    || die "The NAS document folder does not mount and write over NFS from the iot VM; nothing was replaced. Check the NAS NFS rule for this host (docs/TMTHUB.md)."
+fi
 
 log "Syncing $SOURCE -> $DEPLOY_DIR"
 rsync -a --delete \
@@ -324,45 +275,17 @@ deploy_tmthub() {
   fi
 
   # Storage: TMTHub keeps repositories, LFS and attachments on the NAS, mounted over NFS by the iot
-  # VM's kernel (volume tmthub-nas). NFS authorises this host by address, so no NAS password is
-  # involved. The folder is created through the existing SMB mount; the NAS needs an NFS rule for
-  # this host on the "IoT Department" share (docs/TMTHUB.md).
+  # VM's kernel (volume tmthub-nas), beside the documents. Its folder is created through the API's
+  # document volume, which is the same share.
   [[ "$DOCUMENT_MODE" == "Nas" ]] || die "TMTHub keeps its repositories on the NAS; DEV_DOCUMENT_STORAGE_MODE must be Nas."
-  mkdir -p "$(env_value DEV_DOCUMENT_STORAGE_PATH)/TMTHub"
-  if [[ "$DOCKER_CONTEXT" == "colima-iot" ]]; then
-    vm() { /usr/bin/perl -e 'alarm 120; exec @ARGV' colima ssh -p iot -- "$@"; }
-    vm timeout 10 bash -c "</dev/tcp/$TMTHUB_NAS_ADDR/2049" 2>/dev/null \
-      || { log "WARNING: TMTHub skipped: NFS on the NAS ($TMTHUB_NAS_ADDR:2049) is not reachable from the iot VM; enable it (docs/TMTHUB.md)."; echo "::warning title=TMTHub skipped::NFS on the NAS is not reachable from the iot VM; see docs/TMTHUB.md"; return 0; }
-    vm sudo modprobe nfs >/dev/null 2>&1 \
-      || vm sudo sh -c 'DEBIAN_FRONTEND=noninteractive apt-get install -y -q "linux-modules-extra-$(uname -r)" >/dev/null && modprobe nfs' \
-      || die "The NFS client module is unavailable in the iot VM."
-  fi
-  export TMTHUB_NAS_ADDR
+  compose exec -T api mkdir -p /app/App_Data/project-documents/TMTHub
 
   tcompose() { compose --profile tmthub "$@"; }
   tcompose rm -sf tmthub tmthub-backup >/dev/null 2>&1 || true
 
-  # Find the NFS path and protocol this NAS accepts by mounting a throwaway volume: Synology
-  # exports the full /volumeN path over v4, others (UGREEN) may use the v4 pseudo-root or v3.
+  # Find the NFS path and protocol this NAS accepts (nfs_try above): Synology exports the full
+  # /volumeN path over v4, others (UGREEN) may use the v4 pseudo-root or v3.
   # TMTHUB_NFS_PATH / TMTHUB_NFS_OPTIONS in .env pin a choice and skip the probe.
-  nfs_try() {
-    local probe_volume=tmthub-nfs-probe result=1 output
-    docker --context "$DOCKER_CONTEXT" volume rm -f "$probe_volume" >/dev/null 2>&1 || true
-    if output="$(docker --context "$DOCKER_CONTEXT" volume create --driver local --opt type=nfs \
-        --opt "o=addr=$TMTHUB_NAS_ADDR,$2" --opt "device=:$1" "$probe_volume" 2>&1 \
-      && docker --context "$DOCKER_CONTEXT" run --rm --entrypoint /bin/sh -v "$probe_volume:/probe" \
-        codeberg.org/forgejo/forgejo:15.0.9 -c 'id; ls -ldn /probe; touch /probe/.tmthub-probe && rm -f /probe/.tmthub-probe' 2>&1)"; then
-      result=0
-    fi
-    # One line per attempt in the job log, so a refusal says why (mount error, ownership, read-only).
-    # A refused mount is cut to the kernel's reason; anything else keeps the tail of the output.
-    if [[ $result != 0 ]]; then
-      output="$(printf '%s' "$output" | tr '\n' ' ' | /usr/bin/perl -ne 'print /failed to mount local volume:.*: ([^:]+?)\s+Run /s ? "not mounted ($1)" : substr($_, -400)')"
-    fi
-    log "NFS $1 (${2#rw,}): $([[ $result == 0 ]] && echo ok || printf '%s' "$output")"
-    docker --context "$DOCKER_CONTEXT" volume rm -f "$probe_volume" >/dev/null 2>&1 || true
-    return "$result"
-  }
   nfs_path="$(env_value TMTHUB_NFS_PATH)"
   nfs_options="$(env_value TMTHUB_NFS_OPTIONS)"
   # The mount the last probe found is tried first: probing v4.1 paths the NAS does not offer cost
