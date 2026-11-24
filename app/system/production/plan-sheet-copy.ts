@@ -59,6 +59,7 @@ export const PLAN_SHEET_COPY: Record<string, { en: string; th: string; jp: strin
     ["Sheet.legendDone", "Part done", "ส่วนที่เสร็จแล้ว", "完了した部分"],
     ["Sheet.legendFull", "100% done", "เสร็จ 100%", "100% 完了"],
     ["Sheet.legendHeading", "Main heading (from its rows)", "หัวข้อหลัก (คิดจากงานย่อย)", "大見出し（配下から計算）"],
+    ["Sheet.legendPromised", "Dates promised to the customer", "วันที่สัญญากับลูกค้า (เดิม)", "顧客に約束した日程"],
     ["Sheet.holiday", "Company holiday", "วันหยุดบริษัท", "会社休日"],
     ["Sheet.today", "Today", "วันนี้", "今日"],
     ["Sheet.legendLate", "Late (dashes = how far past)", "เลยกำหนด (เส้นประ = ช่วงที่เลย)", "遅延（破線 = 超過分）"],

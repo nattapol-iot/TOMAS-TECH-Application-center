@@ -149,6 +149,10 @@
   height: 6px;
   background: var(--sh-head-bar);
 }
+.plan-sheet .sw.promised {
+  border: 1.5px dashed var(--sh-head-bar);
+  background: transparent;
+}
 .plan-sheet .sw.hol {
   border: 1px solid var(--sh-holiday-fg);
   background: var(--sh-holiday);
@@ -633,6 +637,15 @@
   right: 0;
   border-width: 4px 0 0 4px;
   border-color: var(--sh-head-bar) transparent transparent transparent;
+}
+/* The customer's promised dates of a heading, kept to compare with the dates its rows now give it. */
+.plan-sheet .gb.promised {
+  top: 4px;
+  height: 16px;
+  border: 1.5px dashed var(--sh-head-bar);
+  background: transparent;
+  cursor: default;
+  pointer-events: none;
 }
 .plan-sheet .gb.ms {
   top: 6px;
