@@ -31,7 +31,7 @@ develop ────────────────────────
 1. `git checkout develop && git pull`
 2. `git checkout -b feature/YYYYMMDD-description`
 3. Work, commit, push.
-4. Open PR → `develop`. CI (`ci.yml` + `integration.yml`) must pass.
+4. Open PR → `develop`. CI (`ci.yml`) must pass.
 5. Merge to `develop` (squash or merge commit — team preference).
 6. When `develop` is ready to ship, open PR `develop → main`.
 7. 1 approving review + all checks pass → merge → deploy workflow fires.
@@ -83,6 +83,5 @@ Types: `feat` · `fix` · `hotfix` · `chore` · `docs` · `refactor` · `test`
 
 | Workflow | Triggers | Jobs |
 |----------|----------|------|
-| `ci.yml` | All PRs + pushes to `develop`, `feature/**`, `hotfix/**` | Lint/typecheck/test · Backend compile |
-| `integration.yml` | PRs to `main` or `develop` only | Docker build · SQL integration |
+| `ci.yml` | All PRs + pushes to `main`, `develop`, `feature/**`, `hotfix/**`, `release/**` | Lint/typecheck/test · Backend compile; Docker build · SQL integration on PRs to `main` or `develop` only |
 | `deploy.yml` | Push to `main` | Deploy (manual approval gate in GitHub Environment) |
