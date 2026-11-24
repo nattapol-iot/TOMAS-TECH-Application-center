@@ -39,7 +39,11 @@ test("a sample imports every export its demo claims to show", () => {
 test("every catalogued demo is rendered and every section has one", () => {
   const rendered = new Set(sources.flatMap((source) => [...source.matchAll(/<TomasUiDemo id="([^"]+)"/g)].map((match) => match[1])));
   assert.deepEqual([...rendered].sort(), TOMAS_UI_DEMOS.map((demo) => demo.id).sort());
-  for (const section of TOMAS_UI_SECTIONS) assert.ok(TOMAS_UI_DEMOS.some((demo) => demo.section === section.id), section.id);
+  for (const section of TOMAS_UI_SECTIONS)
+    assert.ok(
+      TOMAS_UI_DEMOS.some((demo) => demo.section === section.id),
+      section.id,
+    );
 });
 
 test("every TUI key the tab asks for reads in Thai, English and Japanese", () => {

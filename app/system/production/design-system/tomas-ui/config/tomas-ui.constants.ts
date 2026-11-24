@@ -22,12 +22,13 @@ export const TOMAS_BADGE_VARIANTS = ["default", "secondary", "outline", "ghost",
 
 export const TOMAS_AVATAR_SIZES = ["sm", "default", "lg"] as const;
 
-export const TOMAS_AVATAR_IMAGE = "data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' fill='%232563eb'/%3E%3Ccircle cx='20' cy='16' r='7' fill='%23dbeafe'/%3E%3Cpath d='M6 38c2-8 8-12 14-12s12 4 14 12' fill='%23dbeafe'/%3E%3C/svg%3E";
+export const TOMAS_AVATAR_IMAGE =
+  "data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' fill='%232563eb'/%3E%3Ccircle cx='20' cy='16' r='7' fill='%23dbeafe'/%3E%3Cpath d='M6 38c2-8 8-12 14-12s12 4 14 12' fill='%23dbeafe'/%3E%3C/svg%3E";
 
 export const TOMAS_LONG_NOTE =
   "Firmware 4.3 is staged on the PLC bridge. Flash it during the Friday stop, confirm the line counters resume, then export the new program and attach it to this work order before closing it.";
 
-export const TOMAS_PEOPLE =["NP", "PK", "KA", "SB"] as const;
+export const TOMAS_PEOPLE = ["NP", "PK", "KA", "SB"] as const;
 
 export const TOMAS_PRIORITIES = [
   { value: "low", label: "DS.tuiLow" },
@@ -59,11 +60,40 @@ export const TOMAS_MENU_ITEMS = ["DS.tuiEdit", "DS.tuiDuplicate", "DS.tuiDelete"
 export const TOMAS_LOG_LINES = Array.from({ length: 24 }, (_, index) => `08:${String(index * 2).padStart(2, "0")} gateway heartbeat ok`);
 
 export const TOMAS_COMMANDS = [
-  { group: "Devices", items: [{ label: "Open Gateway A-01", shortcut: "G A" }, { label: "Open Sensor hub B-07", shortcut: "G B" }] },
-  { group: "Work orders", items: [{ label: "New work order", shortcut: "N" }, { label: "Assign to me", shortcut: "A" }] },
+  {
+    group: "Devices",
+    items: [
+      { label: "Open Gateway A-01", shortcut: "G A" },
+      { label: "Open Sensor hub B-07", shortcut: "G B" },
+    ],
+  },
+  {
+    group: "Work orders",
+    items: [
+      { label: "New work order", shortcut: "N" },
+      { label: "Assign to me", shortcut: "A" },
+    ],
+  },
 ];
 
-export const TOMAS_ICON_NAMES = ["house", "cpu", "router", "wifi", "thermometer", "gauge", "wrench", "clipboard-list", "map-pin", "users", "bell", "settings", "power", "shield-check", "calendar", "not-an-icon"] as const;
+export const TOMAS_ICON_NAMES = [
+  "house",
+  "cpu",
+  "router",
+  "wifi",
+  "thermometer",
+  "gauge",
+  "wrench",
+  "clipboard-list",
+  "map-pin",
+  "users",
+  "bell",
+  "settings",
+  "power",
+  "shield-check",
+  "calendar",
+  "not-an-icon",
+] as const;
 
 export const TOMAS_STATES: readonly TomasUiState[] = ["loaded", "loading", "empty", "error"];
 
@@ -84,7 +114,7 @@ export const TOMAS_REFRESH_SECONDS = 30;
 
 export const TOMAS_TOAST_DELAY_MS = 1500;
 
-export const TOMAS_SHEET_SIDES =["right", "left", "top", "bottom"] as const;
+export const TOMAS_SHEET_SIDES = ["right", "left", "top", "bottom"] as const;
 
 export const TOMAS_SPLIT_RATIOS = ["1:2", "1:1", "2:1"] as const satisfies readonly SplitRatio[];
 

@@ -1,4 +1,3 @@
-
 export type TokenKind = "color" | "font" | "type" | "radius" | "shadow" | "size";
 
 export type DesignToken = { name: string; declared: string; resolved: string; kind: TokenKind };

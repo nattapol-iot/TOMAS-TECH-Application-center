@@ -50,12 +50,12 @@ export type RowTemplateProps = { text: string };
 
 export type TransitionButtonProps = { field: string; to: string };
 
-export type ClassTableProps ={ rows: readonly (readonly [string, string])[] };
+export type ClassTableProps = { rows: readonly (readonly [string, string])[] };
 
-export type ConfirmSample ="plain" | "destructive" | "processing";
+export type ConfirmSample = "plain" | "destructive" | "processing";
 
-export type CalendarRange ={ from: Date | undefined; to?: Date | undefined };
+export type CalendarRange = { from: Date | undefined; to?: Date | undefined };
 
-export type TomasUiFieldProps ={ label: string; htmlFor?: string; children: ReactNode };
+export type TomasUiFieldProps = { label: string; htmlFor?: string; children: ReactNode };
 
 export type SidebarFrameProps = { children: ReactNode };

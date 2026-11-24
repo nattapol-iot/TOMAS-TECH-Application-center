@@ -32,7 +32,16 @@ export function BlockStyleDemo() {
       <div className={cn(blockStyleClass(SAMPLE_BLOCK_STYLE), "text-sm")}>
         blockStyleClass(<code className="font-mono text-xs">{JSON.stringify(SAMPLE_BLOCK_STYLE)}</code>)
       </div>
-      <ClassTable rows={[["STICKY_CLASS", STICKY_CLASS] as const, ...Object.entries(PADDING_CLASS).map(([key, value]) => [`PADDING_CLASS.${key}`, value] as const), ...Object.entries(HEIGHT_CLASS).map(([key, value]) => [`HEIGHT_CLASS.${key}`, value] as const), ...Object.entries(SPAN_CLASS).slice(0, 4).map(([key, value]) => [`SPAN_CLASS.${key}`, value] as const)]} />
+      <ClassTable
+        rows={[
+          ["STICKY_CLASS", STICKY_CLASS] as const,
+          ...Object.entries(PADDING_CLASS).map(([key, value]) => [`PADDING_CLASS.${key}`, value] as const),
+          ...Object.entries(HEIGHT_CLASS).map(([key, value]) => [`HEIGHT_CLASS.${key}`, value] as const),
+          ...Object.entries(SPAN_CLASS)
+            .slice(0, 4)
+            .map(([key, value]) => [`SPAN_CLASS.${key}`, value] as const),
+        ]}
+      />
     </TomasUiDemo>
   );
 }

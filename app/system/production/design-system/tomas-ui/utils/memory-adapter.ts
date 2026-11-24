@@ -4,14 +4,18 @@ const blank = (value: RowValue | undefined) => value === null || value === undef
 
 const holdsPick = (value: RowValue | undefined, picks: string[]) => (Array.isArray(value) ? value : [value]).some((one) => !blank(one) && picks.includes(String(one)));
 
-const compare = (left: RowValue | undefined, right: RowValue | undefined) =>
-  typeof left === "number" && typeof right === "number" ? left - right : String(left).localeCompare(String(right));
+const compare = (left: RowValue | undefined, right: RowValue | undefined) => (typeof left === "number" && typeof right === "number" ? left - right : String(left).localeCompare(String(right)));
 
 export function answerList(rows: Row[], { query, where, searchFields }: ListRequest): ListResult {
   const needle = query.search.toLowerCase();
   const matched = applyFilters(rows, where).filter(
     (row) =>
-      (needle === "" || searchFields.some((key) => String(row[key] ?? "").toLowerCase().includes(needle))) &&
+      (needle === "" ||
+        searchFields.some((key) =>
+          String(row[key] ?? "")
+            .toLowerCase()
+            .includes(needle),
+        )) &&
       Object.entries(query.filters).every(([key, value]) => holdsPick(row[key], parsePicks(value))),
   );
   const sort = query.sort;

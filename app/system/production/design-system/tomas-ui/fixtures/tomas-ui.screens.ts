@@ -1,4 +1,21 @@
-import type { BlockStyle, ChartConfig, CreateButtonAction, DashboardScreen, Entity, Field, FilterBar, FormRowsSection, FormScreen, ListScreen, MediaHint, RepeatColumnHead, Row, RowValues, StatSource, WriteReachMap } from "@tomas-tc/blueprint";
+import type {
+  BlockStyle,
+  ChartConfig,
+  CreateButtonAction,
+  DashboardScreen,
+  Entity,
+  Field,
+  FilterBar,
+  FormRowsSection,
+  FormScreen,
+  ListScreen,
+  MediaHint,
+  RepeatColumnHead,
+  Row,
+  RowValues,
+  StatSource,
+  WriteReachMap,
+} from "@tomas-tc/blueprint";
 import type { AppNavGroup, CrossFilter, DataTableColumn, FieldCellProps, FieldOption, FormRows, NavCount, RecordTarget, RowScope, ScopeValues, ViewRowsOptions } from "@tomas-tc/ui";
 import { DEVICE, WORK_ORDER, WORK_PART } from "./tomas-ui.entities";
 import { DEVICE_ROWS, TECHNICIAN_ROWS, WORK_ORDER_ROWS, WORK_PART_ROWS } from "./tomas-ui.rows";
@@ -155,7 +172,14 @@ export const SAMPLE_CHARTS: readonly ChartConfig[] = [
     title: "Orders and cost per month",
     chart: "combo",
     format: "plain",
-    query: { entity: "work-order", groupBy: { field: "reported", bucket: "month" }, measures: [{ aggregate: "count", key: "orders" }, { aggregate: "sum", field: "cost", key: "cost" }] },
+    query: {
+      entity: "work-order",
+      groupBy: { field: "reported", bucket: "month" },
+      measures: [
+        { aggregate: "count", key: "orders" },
+        { aggregate: "sum", field: "cost", key: "cost" },
+      ],
+    },
     series: [
       { key: "orders", measure: "orders", label: "Orders", type: "bar", axis: "left" },
       { key: "cost", measure: "cost", label: "Cost", type: "line", axis: "right", format: { currency: "THB" }, tone: "warning" },
@@ -234,11 +258,11 @@ export const NEW_ORDER_VALUES: CreateButtonAction["values"] = { title: "Check {{
 
 export const PANE_DEVICE_IDS: readonly string[] = ["dev-3", "dev-4", "dev-404"];
 
-export const NEXT_DUE_ROWS:ViewRowsOptions = { filters: [{ field: "status", op: "in", value: ["open", "in-progress"] }], sort: { field: "due", direction: "asc" }, limit: 3 };
+export const NEXT_DUE_ROWS: ViewRowsOptions = { filters: [{ field: "status", op: "in", value: ["open", "in-progress"] }], sort: { field: "due", direction: "asc" }, limit: 3 };
 
 export const URGENT_ROWS: ViewRowsOptions = { filters: [{ field: "priority", op: "eq", value: "urgent" }] };
 
-export const REPEAT_HEADS:RepeatColumnHead[] = [{ field: "code" }, { field: "title", label: "Work order" }, { field: "status" }, { field: "assignee" }];
+export const REPEAT_HEADS: RepeatColumnHead[] = [{ field: "code" }, { field: "title", label: "Work order" }, { field: "status" }, { field: "assignee" }];
 
 export const SAMPLE_WRITE_REACH: WriteReachMap = {
   technician: ["technician"],
@@ -271,7 +295,7 @@ export const NAV_MENU = [
   },
 ];
 
-export const OPEN_ORDER_COUNT: NavCount ={ entity: WORK_ORDER, filters: [{ field: "status", op: "eq", value: "open" }] };
+export const OPEN_ORDER_COUNT: NavCount = { entity: WORK_ORDER, filters: [{ field: "status", op: "eq", value: "open" }] };
 
 export const NAV_GROUPS: AppNavGroup[] = [
   {
