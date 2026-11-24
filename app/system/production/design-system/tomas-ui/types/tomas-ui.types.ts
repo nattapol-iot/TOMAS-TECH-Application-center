@@ -1,3 +1,4 @@
+import type { BlueprintPlatform } from "@tomas-tc/blueprint";
 import type { Badge, Button } from "@tomas-tc/ui";
 import type { ComponentProps, ReactNode } from "react";
 
@@ -30,7 +31,7 @@ export type TomasDeviceStatus = "online" | "offline";
 
 export type TomasDeviceRow = { name: string; status: TomasDeviceStatus; uptime: string };
 
-export type TomasUiFrameProps = { children: ReactNode };
+export type TomasUiFrameProps = { look: BlueprintPlatform; children: ReactNode };
 
 export type TomasUiProvidersProps = { locale: string; children: ReactNode };
 
@@ -40,12 +41,19 @@ export type TomasUiDemoProps = { id: string; children: ReactNode };
 
 export type TomasUiStatesProps<State extends string> = {
   options: readonly State[];
+  label?: string;
   labels?: Readonly<Record<State, string>>;
   value: State;
   onChange: (state: State) => void;
 };
 
-export type TomasUiNavProps = { sections: readonly TomasUiSectionSpec[]; shown: number; total: number };
+export type TomasUiNavProps = {
+  sections: readonly TomasUiSectionSpec[];
+  shown: number;
+  total: number;
+  look: BlueprintPlatform;
+  onLookChange: (look: BlueprintPlatform) => void;
+};
 
 export type RowTemplateProps = { text: string };
 

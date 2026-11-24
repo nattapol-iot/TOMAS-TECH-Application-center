@@ -1,8 +1,14 @@
-import type { PageState, SplitRatio } from "@tomas-tc/blueprint";
+import type { BlueprintPlatform, PageState, SplitRatio } from "@tomas-tc/blueprint";
 import type { RowActionsLayout, RowsEditing } from "@tomas-tc/ui";
 import type { CalendarRange, TomasBadgeVariant, TomasButtonSize, TomasButtonVariant, TomasDeviceRow, TomasDeviceStatus, TomasUiState } from "../types/tomas-ui.types";
 
 export const TOMAS_UI_FRAME_DOC = "<!doctype html><html><head></head><body></body></html>";
+
+export const TOMAS_UI_LOOKS = ["pegasus", "custom"] as const satisfies readonly BlueprintPlatform[];
+
+export const TOMAS_UI_LOOK_LABELS: Record<BlueprintPlatform, string> = { pegasus: "TUI.lookPegasus", custom: "TUI.lookDefault" };
+
+export const TOMAS_UI_LOOK_KEY = "iot.design-system.tomas-ui.look";
 
 export const TOMAS_UI_LOCALES = { TH: "th", EN: "en", JP: "ja" } as const;
 
