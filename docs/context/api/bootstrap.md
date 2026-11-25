@@ -2,22 +2,22 @@
 
 [Module](../modules/shell.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `6c841029`; generated, do not edit. [backend-node/src/routes/bootstrap.ts](<../../../backend-node/src/routes/bootstrap.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `6cd83665`; generated, do not edit. [backend-node/src/routes/bootstrap.ts](<../../../backend-node/src/routes/bootstrap.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/me` | 144–144 |
-| PUT | `/api/v1/me/menu-favorites` | 146–155 |
-| GET | `/api/v1/bootstrap` | 157–295 |
+| GET | `/api/v1/me` | 142–142 |
+| PUT | `/api/v1/me/menu-favorites` | 144–153 |
+| GET | `/api/v1/bootstrap` | 155–293 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `menuFavoritesInput` | [backend-node/src/routes/bootstrap.ts](<../../../backend-node/src/routes/bootstrap.ts>) | 120–128 |
-| `registerBootstrapRoutes` | [backend-node/src/routes/bootstrap.ts](<../../../backend-node/src/routes/bootstrap.ts>) | 137–296 |
+| `menuFavoritesInput` | [backend-node/src/routes/bootstrap.ts](<../../../backend-node/src/routes/bootstrap.ts>) | 118–126 |
+| `registerBootstrapRoutes` | [backend-node/src/routes/bootstrap.ts](<../../../backend-node/src/routes/bootstrap.ts>) | 135–294 |
 
 ## Direct local dependencies
 

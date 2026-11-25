@@ -102,7 +102,7 @@ export const TEAM_BOARD_COPY: Record<string, { en: string; th: string; jp: strin
     ["TeamBoard.dayWork", "Work taking time this day", "งานที่กินเวลาวันนี้", "この日に時間を使う作業"],
     ["TeamBoard.dayOther", "Site visits, leave and meetings", "เข้าหน้างาน ลา และประชุม", "現地訪問・不在・会議"],
     ["TeamBoard.dayPerDay", "{n} MD a day", "{n} MD/วัน", "1日{n}人日"],
-    ["TeamBoard.dayFullDay", "no man-days · counted as a full day", "ไม่ได้ใส่ MD · นับเต็มวัน", "人日なし・1日として計算"],
+    ["TeamBoard.dayNoHours", "no hours yet · not counted", "ยังไม่ใส่ชั่วโมง · ไม่นับภาระ", "時間未入力・負荷に含めない"],
     ["TeamBoard.dayNoEffort", "no man-days yet", "ยังไม่ระบุ MD", "人日未入力"],
     ["TeamBoard.dayEmpty", "Nothing planned on this day", "วันนี้ไม่มีงาน", "この日の予定はありません"],
     ["TeamBoard.dayEmptyHint", "Add work for this person on this day below.", "เพิ่มงานให้คนนี้ในวันนี้ได้ที่ปุ่มด้านล่าง", "下のボタンでこの人のこの日の作業を追加できます。"],

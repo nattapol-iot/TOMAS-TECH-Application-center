@@ -225,7 +225,7 @@ test("estimate sections and tasks awaiting approval show up, and a section's eng
   assert.match(queue, /canPlanEffort=\{\(item\) => item\.effort\?\.kind === "EstimateSection"\}/);
 });
 
-test("plan work with no man-days counts a full day a working day in the weekly load, once per task with its functions", () => {
+test("plan work with no hours takes no time in the weekly load (owner 2026-11-25; it was a full day)", () => {
   const plan = (key, group, start, end, manDays) => ({
     key,
     workKey: key,
@@ -254,10 +254,10 @@ test("plan work with no man-days counts a full day a working day in the weekly l
     5,
     "2026-11-02",
   );
-  // Week one: task 21 every day, once though both functions run; week two: Monday and Tuesday of task 21, and task 30.
+  // Task 21 has no hours: it is listed To follow up, not counted. Week two holds task 30's 3 MD.
   assert.deepEqual(
     load.weekly.map((week) => week.manDays),
-    [5, 5],
+    [0, 3],
   );
-  assert.equal(load.committed, 10);
+  assert.equal(load.committed, 3);
 });

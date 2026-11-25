@@ -1116,7 +1116,7 @@ export function TeamBoard({
               <ul className="board-day-list">
                 {pieces.map((piece) => (
                   <li key={piece.piece} className={`board-day-piece${overlaps(piece) ? " overlap" : ""}`}>
-                    {piece.rows.map(({ item, perDay, fullDay }) => {
+                    {piece.rows.map(({ item, perDay, noHours }) => {
                       const kind = typeOf(item),
                         action = opener(item);
                       const body = (
@@ -1127,7 +1127,7 @@ export function TeamBoard({
                             {[
                               item.customer,
                               item.start === (item.end ?? item.start) ? shortDate(item.start) : `${shortDate(item.start)} – ${shortDate(item.end)}`,
-                              perDay !== null ? fill(t("TeamBoard.dayPerDay"), { n: fmt(perDay) }) : t(fullDay ? "TeamBoard.dayFullDay" : "TeamBoard.dayNoEffort"),
+                              perDay !== null ? fill(t("TeamBoard.dayPerDay"), { n: fmt(perDay) }) : t(noHours ? "TeamBoard.dayNoHours" : "TeamBoard.dayNoEffort"),
                               item.end && item.end < today ? t("TeamBoard.late") : "",
                             ]
                               .filter(Boolean)

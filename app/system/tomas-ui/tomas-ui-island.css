@@ -1,0 +1,79 @@
+/*
+ * @tomas-tc/ui on the app's own page (owner 2026-11-25: "ใช้ Componance UI @tomas-tc/ui เป็นหลัก").
+ *
+ * The package's stylesheet carries Tailwind's preflight and its tokens on :root, html and body; loaded as is it would
+ * restyle every screen. scripts/postcss-tomas-ui-scope.mjs rewrites this file after Tailwind built it: every rule moves
+ * under .tui, the root TomasUi.tsx renders, and every @layer is unwrapped so the app's unlayered rules cannot win over
+ * the package's utilities. Nothing here reaches a screen outside a .tui root.
+ *
+ * Built from the package's globals.css, without what belongs to a whole document: html's 80% font size (the Pegasus
+ * platform renders rem at 100%, as this app does), the body scroll-lock pins and the print page rules. Its fonts are the
+ * app's (Inter, Noto Sans Thai), already on the page, instead of the package's @fontsource files.
+ */
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "@tomas-tc/ui/tokens.css";
+
+/*
+ * Utilities are generated for the package and for the screens built on it (app/system/tomas-ui). The old screens are
+ * not scanned: their class names (grid, table, hidden …) would otherwise become Tailwind utilities. For the same reason an
+ * old component is never rendered inside a .tui root.
+ */
+@source "../../../node_modules/@tomas-tc/ui";
+@source "./";
+
+@custom-variant pegasus (&:where([data-platform='pegasus'], [data-platform='pegasus'] *));
+@custom-variant dark (&:is(.dark *));
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  /* body becomes the island root: it takes the text colour, and the page's canvas shows through. */
+  body {
+    @apply text-foreground;
+  }
+}
+
+/* The app's type, in place of the package's Noto Sans / Sarabun files. */
+[data-platform="pegasus"] {
+  --pegasus-font: "Inter", "Noto Sans Thai", -apple-system, BlinkMacSystemFont, "Segoe UI", "Leelawadee UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "Cascadia Mono", Consolas, monospace;
+}
+
+/* Every motion reads the token scale; collapsing the scale honours the OS setting. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-stagger: 0ms;
+    --duration-micro: 0ms;
+    --duration-quick: 0ms;
+    --duration-fast: 0ms;
+    --duration-medium: 0ms;
+    --duration-slow: 0ms;
+    --duration-very-slow: 0ms;
+  }
+}
+
+/* The ERP's scrollbars: a 4px muted line. */
+[data-platform="pegasus"] * {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in hsl, var(--muted-foreground) 45%, transparent) transparent;
+}
+
+/* An enter animation can start a frame after its element is first painted; a backwards fill keeps that frame clear. */
+[class*="animate-in"] {
+  --tw-animation-fill-mode: backwards;
+}
+
+/* A read that finishes within a frame or two shows no skeleton flash. */
+[data-slot="skeleton"] {
+  animation:
+    var(--animate-pulse),
+    skeleton-reveal 200ms 150ms backwards;
+}
+
+@keyframes skeleton-reveal {
+  from {
+    opacity: 0;
+  }
+}

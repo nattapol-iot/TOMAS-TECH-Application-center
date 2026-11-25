@@ -9,7 +9,7 @@
    lib/plan-sheet.ts. "After" (ต่อจาก) is finish-to-start only and its +N counts work days (owner 2026-11-24); the plan
    keeps storing calendar days, so existing plans do not move. */
 
-import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ApiClientError, apiRequest, createScheduleTemplate, listProjectDocuments, listScheduleTemplates, uploadProjectDocument, type ScheduleTemplate } from "../api-client";
 import { planFromTemplate, templateFromPlan } from "../../../lib/plan-template";
 import { confirmDialog, promptDialog } from "../dialogs";
@@ -22,6 +22,10 @@ import { readWorkbookSheets } from "../../../lib/import-spreadsheet";
 import { cellsToGrid, importChanges, readPlanTable, type ImportedPlan } from "../../../lib/plan-excel-import";
 import { linkedStart, nextWorkDay } from "../../../lib/gantt";
 import { percentChangePatch, statusChangePatch } from "../../../lib/my-work";
+import { HOURS_PER_DAY, headingRisk, planFit, taskFit, type PlanFit } from "../../../lib/capacity-plan";
+import { workingDays } from "../../../lib/resource-planning";
+import { boardWindow, usePlanCapacity } from "./plan-capacity";
+import type { AllocationFix } from "../tomas-ui/AllocationPanel";
 import {
   hoursText,
   linkText,
@@ -40,6 +44,9 @@ import {
 import type { ProjectSchedule, ScheduleTask } from "./PlanningPricingScreens";
 import "./plan-sheet.css";
 
+// The time of one row (owner decisions 2026-11-25): built on @tomas-tc/ui, loaded when first opened.
+const AllocationPanel = lazy(() => import("../tomas-ui/AllocationPanel").then((module) => ({ default: module.AllocationPanel })));
+
 type Fields = {
   name: string;
   picExternal: string;
@@ -56,7 +63,7 @@ type Fields = {
   discipline: string | null;
 };
 type Patch = Partial<Fields>;
-type Column = "wbs" | "name" | "pic" | "start" | "end" | "days" | "done" | "work" | "after" | "member" | "status" | "hplan" | "hact" | "hleft";
+type Column = "wbs" | "name" | "pic" | "start" | "end" | "days" | "done" | "work" | "after" | "member" | "status" | "hplan" | "hday" | "fit" | "hact" | "hleft";
 type Result = { patch?: Patch; percent?: number; status?: string; notice?: string } | { error: string; wbs?: string };
 type Row = {
   task: ScheduleTask;
@@ -119,6 +126,10 @@ const COLUMNS: { key: Column; label: string; lines?: [string, string]; sub?: str
   { key: "status", label: "Sheet.colStatus", sub: "Sheet.subInternal", width: 116, select: true },
   // Task doc 3.1: people's work in hours only, planned against what My Work confirmed; never money.
   { key: "hplan", label: "Sheet.colPlanHours", width: 62, mono: true, right: true },
+  // Owner decisions 2026-11-25: the hours are spread over the row's window, as hours a day and a share of the day, and the
+  // member's free time over every project says whether they fit (lib/capacity-plan.ts).
+  { key: "hday", label: "Sheet.colPerDay", sub: "Sheet.subPerDay", width: 92, mono: true, right: true },
+  { key: "fit", label: "Sheet.colFit", sub: "Sheet.subFit", width: 132 },
   { key: "hact", label: "Sheet.colActualHours", width: 62, mono: true, right: true },
   { key: "hleft", label: "Sheet.colLeftHours", width: 62, mono: true, right: true },
 ];
@@ -546,8 +557,80 @@ export function PlanSheet({
   const fileCurrent = sentFrom === null || (serverFile?.sentAt ?? null) !== sentFrom.file;
   const customerSentAt = fileCurrent ? (serverFile?.sentAt ?? null) : null;
   // Task doc 3.8: what needs following up on this plan, each one a link to its row.
+  // Part-time planning (owner decisions 2026-11-25): each row's hours a day and whether its member's free time, over
+  // every project and less time away, holds them. Team overview's board is read over the plan's dates (plan-capacity.ts).
+  const planSpan = useMemo(() => {
+    let first: string | null = null,
+      last: string | null = null;
+    for (const row of model.rows) {
+      if (row.start && (!first || row.start < first)) first = row.start;
+      if (row.finish && (!last || row.finish > last)) last = row.finish;
+    }
+    return boardWindow(first, last, today);
+  }, [model.rows, today]);
+  const capacity = usePlanCapacity(planSpan, schedule.scheduleVersion ?? "");
+  /** The rows the column judges: work rows still open, with dates (not headings, milestones or rows above others). */
+  const judged = (row: Row) => !row.parent && row.task.id > 0 && row.task.kind !== "phase" && !row.task.isMilestone && row.status !== "Done" && row.start !== null;
+  const fits = useMemo(() => {
+    const out = new Map<number, PlanFit>();
+    if (!capacity.board) return out;
+    for (const row of model.rows)
+      if (judged(row))
+        out.set(
+          row.task.id,
+          planFit(
+            {
+              id: row.task.id,
+              start: row.start,
+              end: row.finish,
+              picIds: row.fields.picUserIds,
+              planHours: row.planHours,
+              actualHours: row.actualHours,
+              outsourced: row.task.laborSource === "Outsourced",
+            },
+            capacity.board,
+            today,
+          ),
+        );
+    return out;
+    // oxlint-disable-next-line react/exhaustive-deps -- judged reads only the row
+  }, [capacity.board, model.rows, today]);
+  /** A main heading's end as promised to the customer (its own stored dates); any other heading's end, its rows'. */
+  const frameEnd = useCallback(
+    (row: Row) => (row.task.kind === "phase" && row.task.parentId === null && row.task.storedPlanStart ? shiftDay(row.task.storedPlanStart, Math.max(1, row.task.planDays) - 1) : row.finish),
+    [],
+  );
+  /** Each heading: whether a forecast under it passes its end, and how many rows under it have no hours. */
+  const headingFits = useMemo(() => {
+    const out = new Map<number, { atRisk: boolean; forecast: string | null; noHours: number }>();
+    if (!capacity.board) return out;
+    const under = new Map<number, PlanFit[]>();
+    for (const row of model.rows) {
+      const fit = fits.get(row.task.id);
+      if (!fit) continue;
+      for (let up = row.task.parentId; up !== null; up = model.byId.get(up)?.task.parentId ?? null) under.set(up, [...(under.get(up) ?? []), fit]);
+    }
+    for (const row of model.rows) {
+      if (!row.parent) continue;
+      const list = under.get(row.task.id) ?? [];
+      const timed = list.filter((fit) => fit.status === "fits" || fit.status === "short");
+      out.set(row.task.id, {
+        ...headingRisk(
+          frameEnd(row),
+          timed.map((fit) => fit.forecastFinish),
+        ),
+        noHours: list.filter((fit) => fit.status === "noHours").length,
+      });
+    }
+    return out;
+  }, [capacity.board, fits, model.rows, model.byId, frameEnd]);
+  const [allocFor, setAllocFor] = useState<number | null>(null);
+
   const followUps = useMemo(() => {
     const groups: { key: string; rows: Row[] }[] = [
+      { key: "short", rows: [] },
+      { key: "pastHeading", rows: [] },
+      { key: "noEffort", rows: [] },
       { key: "late", rows: [] },
       { key: "blocked", rows: [] },
       { key: "due", rows: [] },
@@ -572,6 +655,30 @@ export function PlanSheet({
       if (!isLate(row, today) && row.status === "Not Started" && row.start !== null && row.start <= today) at.due!.push(row);
       if (row.task.kind === "task" && row.status !== "Done" && row.task.laborSource !== "Outsourced" && !row.fields.picUserIds.length) at.noMember!.push(row);
       if (row.task.laborSource === "Outsourced" && !row.task.purchaseRequest && row.status !== "Done") at.noPr!.push(row);
+      // Owner decisions 2026-11-25: free time short for its hours; a row with a member and no hours is not counted.
+      const fit = fits.get(row.task.id);
+      if (fit?.status === "short" && row.start && row.finish) {
+        at.short!.push(row);
+        notes.set(
+          `short:${row.task.id}`,
+          fit.people
+            .filter((person) => person.shortHours > 0)
+            .map((person) =>
+              t("Sheet.followShort")
+                .replace("{name}", picNames.get(person.userId) ?? String(person.userId))
+                .replace("{need}", String(Math.round(person.remainingHours * 10) / 10))
+                .replace("{free}", String(Math.round(person.freeHours * 10) / 10))
+                .replace("{from}", shortDate(row.start!))
+                .replace("{to}", shortDate(row.finish!))
+                .replace("{short}", String(Math.round(person.shortHours * 10) / 10)),
+            )
+            .join(" · "),
+        );
+      }
+      if (judged(row) && row.task.laborSource !== "Outsourced" && row.fields.picUserIds.length && !(row.planHours > 0)) {
+        at.noEffort!.push(row);
+        notes.set(`noEffort:${row.task.id}`, t("Sheet.followNoEffort"));
+      }
       if (missing.size && row.task.laborSource !== "Outsourced" && row.start !== null && row.finish !== null) {
         const start = row.start,
           finish = row.finish;
@@ -592,6 +699,19 @@ export function PlanSheet({
       }
     }
     for (const hit of holidayHits) if (!at.newHoliday!.includes(hit.row)) at.newHoliday!.push(hit.row);
+    // A heading whose rows are forecast past the customer's dates.
+    for (const row of model.rows) {
+      const heading = headingFits.get(row.task.id);
+      const end = frameEnd(row);
+      if (!heading?.atRisk || row.task.kind !== "phase" || row.task.parentId !== null || !end) continue;
+      at.pastHeading!.push(row);
+      notes.set(
+        `pastHeading:${row.task.id}`,
+        t("Sheet.followPastHeading")
+          .replace("{forecast}", heading.forecast ? shortDate(heading.forecast) : "–")
+          .replace("{end}", shortDate(end)),
+      );
+    }
     // Rows changed since the customer file was last sent (the plan's change log), and the rows linked after a row whose
     // dates moved (a heading's dates move with the rows under it); each as the row the file shows (a heading and the
     // row under it). A deleted row counts against the row it was under; one whose parent went too, or a member's own
@@ -630,7 +750,8 @@ export function PlanSheet({
       at.customerFile!.sort((left, right) => model.rows.indexOf(left) - model.rows.indexOf(right));
     }
     return { groups: groups.filter((group) => group.rows.length || (group.key === "customerFile" && removed.length)), notes, removed };
-  }, [model.rows, model.byId, today, holidayHits, schedule.unconfirmedHours, fileCurrent, serverFile, t]);
+    // oxlint-disable-next-line react/exhaustive-deps -- judged reads only the row
+  }, [model.rows, model.byId, today, holidayHits, schedule.unconfirmedHours, fileCurrent, serverFile, t, fits, headingFits, frameEnd]);
   // A row in two lists (late and blocked) counts once; a removed row the customer file still shows counts too.
   const followCount = new Set(followUps.groups.flatMap((group) => group.rows.map((row) => row.task.id))).size + followUps.removed.length;
   /** The day a time was on in Bangkok, the business day (a file sent at 06:30 is not the day before). */
@@ -888,7 +1009,7 @@ export function PlanSheet({
   };
   const lockOf = (row: Row, column: Column): string => {
     const { task } = row;
-    if (column === "wbs" || column === "work" || column === "hact" || column === "hleft") return "Sheet.calculated";
+    if (column === "wbs" || column === "work" || column === "hact" || column === "hleft" || column === "hday" || column === "fit") return "Sheet.calculated";
     if (column === "done" || column === "status") {
       if (task.kind === "phase" || row.parent) return "Sheet.headingNoProgress";
       return task.canProgress ? "" : "Sheet.progressRights";
@@ -1054,6 +1175,24 @@ export function PlanSheet({
     if (apply(row, result.patch, result.percent, result.status)) setNote(result.notice ? { text: result.notice, error: false } : null);
   };
 
+  const oneDecimal = (value: number) => String(Math.round(value * 10) / 10);
+  /** The free-time cell's words: a row's verdict, or a heading's against its customer date. */
+  const fitText = (row: Row): string => {
+    if (row.parent) {
+      const heading = headingFits.get(row.task.id);
+      if (!heading) return "";
+      if (heading.atRisk) return t("Sheet.fitHeadingRisk").replace("{date}", heading.forecast ? shortDate(heading.forecast) : "–");
+      if (heading.noHours && heading.forecast === null) return t("Sheet.fitHeadingNoHours").replace("{count}", String(heading.noHours));
+      return heading.forecast ? t("Sheet.fitHeadingOk") : "";
+    }
+    const fit = fits.get(row.task.id);
+    if (!fit) return "";
+    if (fit.status === "short") return t("Sheet.fitShort").replace("{h}", String(Math.round(fit.shortHours * 10) / 10));
+    if (fit.status === "fits") return t("Sheet.fitFits");
+    if (fit.status === "noHours") return t("Sheet.fitNoHours");
+    if (fit.status === "outsourced") return t("Sheet.fitOutsourced");
+    return "";
+  };
   const cellText = (row: Row, column: Column): string => {
     switch (column) {
       case "wbs":
@@ -1084,6 +1223,13 @@ export function PlanSheet({
         return row.parent ? (row.lateKids ? t("Sheet.lateKids").replace("{count}", String(row.lateKids)) : "") : t(STATUS_LABEL[row.status] ?? row.status);
       case "hplan":
         return hoursText(row.planHours);
+      case "hday": {
+        const fit = fits.get(row.task.id);
+        if (fit?.status === "noHours") return t("Sheet.notCounted");
+        return fit && (fit.status === "fits" || fit.status === "short") ? `${oneDecimal(fit.perDayHours)} · ${fit.percentOfDay}%` : "";
+      }
+      case "fit":
+        return fitText(row);
       case "hact":
         return hoursText(row.actualHours);
       case "hleft":
@@ -1995,6 +2141,47 @@ export function PlanSheet({
 
   const cellBody = (row: Row, column: Column) => {
     const { task } = row;
+    if (column === "hday") {
+      const fit = fits.get(task.id);
+      if (fit?.status === "noHours") return <span className="ps-fit-muted">{t("Sheet.notCounted")}</span>;
+      if (!fit || (fit.status !== "fits" && fit.status !== "short")) return null;
+      return (
+        <span className="ps-perday">
+          <b>{oneDecimal(fit.perDayHours)}</b>
+          <span>· {fit.percentOfDay}%</span>
+          <i className={`ps-meter${fit.percentOfDay >= 70 ? " hi" : ""}`} aria-hidden="true">
+            <i style={{ width: `${Math.min(100, fit.percentOfDay)}%` }} />
+          </i>
+        </span>
+      );
+    }
+    if (column === "fit") {
+      const text = fitText(row);
+      if (!text) return null;
+      const fit = fits.get(task.id);
+      const heading = headingFits.get(task.id);
+      const tone = row.parent
+        ? heading?.atRisk
+          ? "short"
+          : heading && heading.noHours && !fits.size
+            ? "none"
+            : "ok"
+        : fit?.status === "short"
+          ? "short"
+          : fit?.status === "fits"
+            ? "ok"
+            : fit?.status === "outsourced"
+              ? "out"
+              : "none";
+      const chip = <span className={`ps-chip ps-fit-${tone}`}>{text}</span>;
+      return fit && (fit.status === "fits" || fit.status === "short") ? (
+        <button type="button" className="ps-fit-open" tabIndex={-1} title={t("Sheet.fitOpen")} data-guide="plan.sheetFit" onClick={() => setAllocFor(task.id)}>
+          {chip}
+        </button>
+      ) : (
+        chip
+      );
+    }
     if (column === "name") {
       const folded = headingsOnly || collapsed.has(task.id),
         sub = placeFor(row, true);
@@ -2116,6 +2303,14 @@ export function PlanSheet({
             tail += extra;
           }
         }
+        // Owner decisions 2026-11-25: where the member's free time takes the work past its end, hatched to the forecast.
+        const fit = fits.get(task.id);
+        if (fit?.status === "short" && fit.forecastFinish && row.finish && fit.forecastFinish > row.finish) {
+          const from = shiftDay(row.finish, 1);
+          const width = spanDays(from, fit.forecastFinish) * DW - 2;
+          inner.push(<div key="fc" className="gb fc" style={{ left: timeline.x(from) * DW, width }} title={`${t("Sheet.legendForecast")} · ${dayDate(fit.forecastFinish)}`} />);
+          tail = Math.max(tail, timeline.x(from) * DW + width);
+        }
         const label = outsourced && task.laborSupplier ? task.laborSupplier : task.pics.map((pic) => pic.name).join(", ");
         if (label)
           inner.push(
@@ -2154,7 +2349,12 @@ export function PlanSheet({
             on = current && active?.col === col,
             typing = editing && editing.id === task.id && editing.col === col,
             frozen = sticky(col);
-          const calc = column.key === "work" || (row.parent && ["done", "status"].includes(column.key)) || (row.rollup && ["start", "end", "days", "after"].includes(column.key));
+          const calc =
+            column.key === "work" ||
+            column.key === "hday" ||
+            column.key === "fit" ||
+            (row.parent && ["done", "status"].includes(column.key)) ||
+            (row.rollup && ["start", "end", "days", "after"].includes(column.key));
           const fill =
             column.key === "done" && !row.parent && row.percent > 0
               ? { backgroundImage: `linear-gradient(90deg, var(--sh-pct) ${Math.min(100, row.percent)}%, transparent ${Math.min(100, row.percent)}%)` }
@@ -2575,8 +2775,150 @@ export function PlanSheet({
     return String(value);
   };
 
+  // The open row's time: its heading, the people's names, the fixes and the weeks of its window.
+  const allocRow = allocFor === null ? null : (model.byId.get(allocFor) ?? null);
+  const allocFit = allocFor === null ? null : (fits.get(allocFor) ?? null);
+  let allocHeading: Row | null = null;
+  for (let up = allocRow?.task.parentId ?? null; up !== null; up = model.byId.get(up)?.task.parentId ?? null) allocHeading = model.byId.get(up) ?? allocHeading;
+  const personNames = new Map<number, string>([...team.map((person) => [person.id, person.name] as const), ...model.rows.flatMap((row) => row.task.pics.map((pic) => [pic.id, pic.name] as const))]);
+  const allocFixes: AllocationFix[] = [];
+  if (allocRow && allocFit?.status === "short" && capacity.board) {
+    const end = allocHeading ? frameEnd(allocHeading) : null;
+    const extend = allocFit.forecastFinish ? { kind: "extend" as const, date: allocFit.forecastFinish, insideFrame: !end || allocFit.forecastFinish <= end } : null;
+    if (extend?.insideFrame) allocFixes.push(extend);
+    // Someone not on the row with the most free time in its window.
+    const board = capacity.board;
+    const candidates = team
+      .filter((person) => !allocRow.fields.picUserIds.includes(person.id))
+      .map((person) => ({
+        person,
+        free: taskFit({
+          items: board.items,
+          isThisTask: () => false,
+          userId: person.id,
+          start: allocRow.start!,
+          end: allocRow.finish ?? allocRow.start!,
+          effortHours: 0,
+          doneHours: 0,
+          daysPerWeek: board.capacities.find((row) => row.userId === person.id)?.daysPerWeek ?? null,
+          away: new Map(),
+          holidays: board.holidays,
+          today,
+        }).freeHours,
+      }))
+      .filter((candidate) => candidate.free > 0)
+      .sort((a, b) => b.free - a.free);
+    const best = candidates[0];
+    if (best) allocFixes.push({ kind: "addPerson", userId: best.person.id, name: best.person.name, freeHours: best.free });
+    // The biggest other work of the member in the window, to move on its own plan.
+    const other = new Map<string, { reference: string; title: string; hours: number }>();
+    for (const person of allocFit.people)
+      for (const day of person.days)
+        for (const work of day.other) {
+          const current = other.get(work.key) ?? { reference: work.reference, title: work.title, hours: 0 };
+          current.hours += work.hours;
+          other.set(work.key, current);
+        }
+    const biggest = [...other.values()].sort((a, b) => b.hours - a.hours)[0];
+    if (biggest) {
+      const projectNo = /PJ\d{6}/.exec(biggest.reference)?.[0] ?? null;
+      allocFixes.push({
+        kind: "moveOther",
+        reference: biggest.reference,
+        title: biggest.title,
+        hours: Math.round(biggest.hours * 10) / 10,
+        href: projectNo && projectNo !== schedule.projectNo ? `#/projects/${projectNo}/plan` : null,
+      });
+    }
+    if (extend && !extend.insideFrame) allocFixes.push(extend);
+  }
+  /** The weeks of the open row's whole window with the hours an even spread gives each, the starting point to adjust. */
+  const allocWeeks = (() => {
+    if (!allocRow?.start) return [];
+    const days = workingDays(allocRow.start, allocRow.finish ?? allocRow.start, [...holidays]);
+    const weeks = new Map<string, { start: string; workDays: number; hours: number }>();
+    for (const date of days) {
+      const start = mondayOn(date);
+      const week = weeks.get(start) ?? { start, workDays: 0, hours: 0 };
+      week.workDays += 1;
+      week.hours = Math.round(((allocRow.planHours * week.workDays) / days.length) * 10) / 10;
+      weeks.set(start, week);
+    }
+    return [...weeks.values()];
+  })();
+  const applyFix = (fix: AllocationFix) => {
+    if (!allocRow) return;
+    if (fix.kind === "moveOther") {
+      if (fix.href) window.location.hash = fix.href;
+      return;
+    }
+    if (fix.kind === "extend") {
+      if (allocRow.start && apply(allocRow, { planDays: spanDays(allocRow.start, fix.date) }, undefined, undefined)) setAllocFor(null);
+      return;
+    }
+    void ensureMembers([fix.userId]).then(() => {
+      if (apply(allocRow, { picUserIds: [...allocRow.fields.picUserIds, fix.userId] }, undefined, undefined)) setAllocFor(null);
+    });
+  };
+  const [weeksSaving, setWeeksSaving] = useState(false);
+  /** Hours week by week as people a day on the row's days (the People table's figures, 8 hours a person-day). */
+  const saveWeeks = async (weeks: { start: string; hours: number }[]) => {
+    if (!allocRow?.start || pending.length || busy) return;
+    const start = allocRow.start,
+      finish = allocRow.finish ?? start;
+    const owners = Math.max(1, allocRow.fields.picUserIds.length);
+    const span = spanDays(start, finish);
+    const days = new Set(workingDays(start, finish, [...holidays]));
+    const people = Array.from({ length: span }, (_, offset) => {
+      const date = shiftDay(start, offset);
+      if (!days.has(date)) return 0;
+      const week = weeks.find((item) => item.start === mondayOn(date));
+      const inWeek = allocWeeks.find((item) => item.start === mondayOn(date))?.workDays ?? 1;
+      return week ? Math.round((week.hours / inWeek / HOURS_PER_DAY) * owners * 10) / 10 : 0;
+    });
+    setWeeksSaving(true);
+    try {
+      await apiRequest(`/api/v1/projects/${schedule.projectId}/schedule/people`, {
+        method: "PUT",
+        body: JSON.stringify({ scheduleVersion: schedule.scheduleVersion, rows: [{ taskId: allocRow.task.id, plan: { planStart: start, planDays: span, people } }] }),
+      });
+      await onReload();
+      notify(t("Alloc.weeklySaved").replace("{h}", String(Math.round(people.reduce((sum, figure) => sum + figure, 0) * HOURS_PER_DAY * 10) / 10)));
+    } catch (error) {
+      notify(error instanceof ApiClientError ? error.message : String(error));
+    } finally {
+      setWeeksSaving(false);
+    }
+  };
+
   return (
     <section className="plan-sheet" data-guide="plan.sheet" aria-label={t("Sheet.label")}>
+      {capacity.status === "unavailable" && planSpan ? <p className="ps-fit-note">{t("Sheet.fitUnavailable")}</p> : null}
+      {allocRow && allocFit ? (
+        <Suspense fallback={null}>
+          <AllocationPanel
+            open
+            onClose={() => setAllocFor(null)}
+            wbs={allocRow.task.wbs}
+            name={allocRow.fields.name}
+            projectNo={schedule.projectNo}
+            heading={allocHeading ? { name: allocHeading.fields.name, start: allocHeading.task.storedPlanStart ?? allocHeading.start, end: frameEnd(allocHeading) } : null}
+            start={allocRow.start!}
+            end={allocRow.finish ?? allocRow.start!}
+            planHours={allocRow.planHours}
+            actualHours={allocRow.actualHours}
+            fit={allocFit}
+            names={personNames}
+            fixes={allocFixes}
+            weeks={allocWeeks}
+            canPlan={canPlan && lockOf(allocRow, "end") === ""}
+            busy={busy || pending.length > 0 || weeksSaving}
+            formatDate={(iso) => dayDate(iso)}
+            onFix={applyFix}
+            onSaveWeeks={saveWeeks}
+          />
+        </Suspense>
+      ) : null}
       {holidaysOpen ? (
         <Modal
           title="Sheet.holidaysTitle"
@@ -3113,6 +3455,10 @@ export function PlanSheet({
         <span>
           <i className="sw promised" />
           {t("Sheet.legendPromised")}
+        </span>
+        <span>
+          <i className="sw fc" />
+          {t("Sheet.legendForecast")}
         </span>
         <button type="button" className="ps-legend-hol" data-guide="plan.sheetHolidays" title={t("Sheet.holidaysOpen")} onClick={() => setHolidaysOpen(true)}>
           <i className="sw hol" />

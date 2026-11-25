@@ -94,27 +94,10 @@ export function workingDayFinish(start: string, days: number, holidays: readonly
   return null;
 }
 /**
- * A plan row nobody gave man-days (owner decision 2026-11-04) takes a full day on each of its working days: once for
- * each piece of work (a task with its functions is one), and only on days that piece has no man-days of its own.
- * Man-days by date.
+ * A plan row nobody gave hours takes nobody's time (owner decision 2026-11-25, replacing the full day of 2026-11-04): people
+ * work on several projects at once, so a task's dates are its window, not a day's work. Such a row is listed To follow
+ * up until someone types its hours (lib/capacity-plan.ts).
  */
-export function impliedEffort(items: readonly Commitment[], holidays: readonly string[] = []): Map<string, number> {
-  const typed = new Set<string>(),
-    implied = new Set<string>();
-  for (const item of items) {
-    if (!isOpenWork(item) || !item.start || !item.end) continue;
-    const hasEffort = item.manDays !== null && item.manDays > 0;
-    if (!hasEffort && item.type !== "Project") continue;
-    for (const date of workingDays(item.start, item.end, holidays)) (hasEffort ? typed : implied).add(`${workGroup(item)}|${date}`);
-  }
-  const byDate = new Map<string, number>();
-  for (const key of implied) {
-    if (typed.has(key)) continue;
-    const date = key.slice(key.lastIndexOf("|") + 1);
-    byDate.set(date, (byDate.get(date) ?? 0) + 1);
-  }
-  return byDate;
-}
 /**
  * Days away (Team overview Away, Site Visit availability) for Team overview > Allocation, which takes them off a person's
  * capacity (owner, 2026-11-22). A morning or an afternoon is half a day.
@@ -148,7 +131,6 @@ export function planningLoad(
   away: ReadonlyMap<string, number> = new Map(),
 ) {
   const open = items.filter(isOpenWork);
-  const implied = [...impliedEffort(open, holidays)];
   const entries = open.map((item) => ({
     item,
     days: item.start && item.end ? workingDays(item.start, item.end, holidays) : [],
@@ -156,7 +138,6 @@ export function planningLoad(
   const weekly = weeks.map((week) => {
     let manDays = 0;
     for (const { item, days } of entries) if (days.length && item.manDays !== null) manDays += (item.manDays * days.filter((d) => d >= week.start && d <= week.end).length) / days.length;
-    for (const [date, extra] of implied) if (date >= week.start && date <= week.end) manDays += extra;
     const workDays = workingDays(week.start, week.end, holidays);
     const awayDays = workDays.reduce((sum, date) => sum + (away.get(date) ?? 0), 0);
     const available = capacity === null ? null : (capacity * (workDays.length - awayDays)) / 5;
