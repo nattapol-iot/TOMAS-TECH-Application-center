@@ -2,13 +2,13 @@
 
 [Module](../modules/dashboard.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `c0b7e1fa`; generated, do not edit. [backend-node/src/routes/executive-dashboard.ts](<../../../backend-node/src/routes/executive-dashboard.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `d574014e`; generated, do not edit. [backend-node/src/routes/executive-dashboard.ts](<../../../backend-node/src/routes/executive-dashboard.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/dashboard/management` | 20–162 |
+| GET | `/api/v1/dashboard/management` | 20–295 |
 
 ## Named functions
 
@@ -17,7 +17,7 @@ Evidence: source snapshot `c0b7e1fa`; generated, do not edit. [backend-node/src/
 | `n` | [backend-node/src/routes/executive-dashboard.ts](<../../../backend-node/src/routes/executive-dashboard.ts>) | 15–15 |
 | `s` | [backend-node/src/routes/executive-dashboard.ts](<../../../backend-node/src/routes/executive-dashboard.ts>) | 16–16 |
 | `d` | [backend-node/src/routes/executive-dashboard.ts](<../../../backend-node/src/routes/executive-dashboard.ts>) | 17–17 |
-| `registerExecutiveDashboardRoutes` | [backend-node/src/routes/executive-dashboard.ts](<../../../backend-node/src/routes/executive-dashboard.ts>) | 19–163 |
+| `registerExecutiveDashboardRoutes` | [backend-node/src/routes/executive-dashboard.ts](<../../../backend-node/src/routes/executive-dashboard.ts>) | 19–296 |
 
 ## Direct local dependencies
 
@@ -34,7 +34,7 @@ Evidence: source snapshot `c0b7e1fa`; generated, do not edit. [backend-node/src/
 
 ## SQL references (literal scan, not a complete schema or write-set)
 
-`dbo.customers`, `dbo.estimate_assignments`, `dbo.estimates`, `dbo.grn_lines`, `dbo.grns`, `dbo.holidays`, `dbo.inquiries`, `dbo.mat_po_lines`, `dbo.mat_pos`, `dbo.mat_pr_approval_steps`, `dbo.mat_pr_lines`, `dbo.mat_prs`, `dbo.project_members`, `dbo.projects`, `dbo.resource_capacity`, `dbo.resource_effort`, `dbo.resource_task_sources`, `dbo.resource_tasks`, `dbo.roles`, `dbo.schedule_task_pics`, `dbo.schedule_tasks`, `dbo.sign_requests`, `dbo.sign_steps`, `dbo.signable_documents`, `dbo.suppliers`, `dbo.user_effective_permissions`, `dbo.user_effective_roles`, `dbo.users`, `dbo.v_estimate_totals`
+`dbo.customers`, `dbo.estimate_assignments`, `dbo.estimates`, `dbo.grn_lines`, `dbo.grns`, `dbo.holidays`, `dbo.inquiries`, `dbo.mat_po_lines`, `dbo.mat_pos`, `dbo.mat_pr_approval_steps`, `dbo.mat_pr_lines`, `dbo.mat_prs`, `dbo.project_members`, `dbo.projects`, `dbo.resource_capacity`, `dbo.resource_effort`, `dbo.resource_task_sources`, `dbo.resource_tasks`, `dbo.schedule_task_pics`, `dbo.schedule_tasks`, `dbo.sign_requests`, `dbo.sign_steps`, `dbo.signable_documents`, `dbo.suppliers`, `dbo.user_effective_permissions`, `dbo.user_effective_roles`, `dbo.users`, `dbo.v_estimate_totals`
 
 ## Change boundary
 

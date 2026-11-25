@@ -2,28 +2,28 @@
 
 [Module](../modules/signing.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `c0b7e1fa`; generated, do not edit. [backend-node/src/routes/signature-master.ts](<../../../backend-node/src/routes/signature-master.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `d574014e`; generated, do not edit. [backend-node/src/routes/signature-master.ts](<../../../backend-node/src/routes/signature-master.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/me/signature` | 68–87 |
-| PUT | `/api/v1/me/signature` | 94–167 |
-| GET | `/api/v1/me/signature/preview` | 170–188 |
-| GET | `/api/v1/master/company-stamps` | 193–252 |
-| POST | `/api/v1/master/company-stamps` | 254–311 |
-| PUT | `/api/v1/master/company-stamps/:stampId/image` | 318–355 |
-| POST | `/api/v1/master/company-stamps/:stampId/authorities` | 362–439 |
-| POST | `/api/v1/master/company-stamps/:stampId/authorities/:authorityId/revoke` | 441–467 |
-| GET | `/api/v1/master/signature-flows` | 472–526 |
+| GET | `/api/v1/me/signature` | 55–79 |
+| PUT | `/api/v1/me/signature` | 86–161 |
+| GET | `/api/v1/me/signature/preview` | 164–182 |
+| GET | `/api/v1/master/company-stamps` | 187–250 |
+| POST | `/api/v1/master/company-stamps` | 252–310 |
+| PUT | `/api/v1/master/company-stamps/:stampId/image` | 317–350 |
+| POST | `/api/v1/master/company-stamps/:stampId/authorities` | 357–432 |
+| POST | `/api/v1/master/company-stamps/:stampId/authorities/:authorityId/revoke` | 434–459 |
+| GET | `/api/v1/master/signature-flows` | 464–522 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `decodePng` | [backend-node/src/routes/signature-master.ts](<../../../backend-node/src/routes/signature-master.ts>) | 34–57 |
-| `registerSignatureMasterRoutes` | [backend-node/src/routes/signature-master.ts](<../../../backend-node/src/routes/signature-master.ts>) | 59–527 |
+| `decodePng` | [backend-node/src/routes/signature-master.ts](<../../../backend-node/src/routes/signature-master.ts>) | 27–49 |
+| `registerSignatureMasterRoutes` | [backend-node/src/routes/signature-master.ts](<../../../backend-node/src/routes/signature-master.ts>) | 51–523 |
 
 ## Direct local dependencies
 
@@ -38,7 +38,7 @@ Evidence: source snapshot `c0b7e1fa`; generated, do not edit. [backend-node/src/
 
 ## SQL references (literal scan, not a complete schema or write-set)
 
-`dbo.company_stamps`, `dbo.notifications`, `dbo.roles`, `dbo.sign_flow_steps`, `dbo.sign_flow_templates`, `dbo.sign_requests`, `dbo.signature_marks`, `dbo.signature_specimens`, `dbo.stamp_authorities`, `dbo.users`
+`dbo.company_stamps`, `dbo.notifications`, `dbo.roles`, `dbo.sign_flow_steps`, `dbo.sign_flow_templates`, `dbo.sign_requests`, `dbo.signature_marks`, `dbo.signature_specimens`, `dbo.stamp_authorities`, `dbo.user_effective_roles`, `dbo.users`
 
 ## Change boundary
 

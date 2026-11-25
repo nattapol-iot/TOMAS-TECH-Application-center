@@ -2,7 +2,7 @@
 
 [Module](../modules/site-visit.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `c0b7e1fa`; generated, do not edit. [backend-node/src/routes/site-visits-read.ts](<../../../backend-node/src/routes/site-visits-read.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `d574014e`; generated, do not edit. [backend-node/src/routes/site-visits-read.ts](<../../../backend-node/src/routes/site-visits-read.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
@@ -38,7 +38,7 @@ Evidence: source snapshot `c0b7e1fa`; generated, do not edit. [backend-node/src/
 
 ## SQL references (literal scan, not a complete schema or write-set)
 
-`dbo.assert_engineer_available`, `dbo.customer_sites`, `dbo.customers`, `dbo.engineer_availability`, `dbo.engineer_skills`, `dbo.roles`, `dbo.sales_intake_skills`, `dbo.sales_intakes`, `dbo.site_visit_assignments`, `dbo.site_visit_links`, `dbo.site_visit_reports`, `dbo.site_visit_schedule_history`, `dbo.site_visits`, `dbo.users`, `dbo.visit_skills`, `dbo.visit_types`
+`dbo.assert_engineer_available`, `dbo.customer_sites`, `dbo.customers`, `dbo.engineer_availability`, `dbo.engineer_skills`, `dbo.roles`, `dbo.sales_intake_skills`, `dbo.sales_intakes`, `dbo.site_visit_assignments`, `dbo.site_visit_links`, `dbo.site_visit_reports`, `dbo.site_visit_schedule_history`, `dbo.site_visits`, `dbo.user_effective_roles`, `dbo.users`, `dbo.visit_skills`, `dbo.visit_types`
 
 ## Change boundary
 
