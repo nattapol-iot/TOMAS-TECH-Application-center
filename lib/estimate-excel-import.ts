@@ -42,9 +42,24 @@ const reference = (formula?: string) => formula?.replace(/^=/, "").match(/^'?([^
 const money = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 const validName = (s: string) => Boolean(s && s !== "-" && s !== "0");
 
+/**
+ * The Summary cost sheet to read. Some workbooks carry a short presentation Summary whose figures are formulas into the full
+ * one: "Summary cost" reads '001_Summary cost'!J15, and only '001_Summary cost' holds every cost line under its Sub Total
+ * (NTN-PT power meter workbook, 2026-11-25). The sheet to read is the Summary that takes no figure from another Summary;
+ * with one Summary, or none that qualifies, the first one is read as before.
+ */
+export function costSummarySheet<T extends { name: string; cells: Record<string, { formula?: string }> }>(sheets: readonly T[]): T | undefined {
+  const summaries = sheets.filter((s) => /summary[ _]*cost/i.test(s.name));
+  const escaped = (sheet: string) => sheet.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  // A formula names a sheet as 'Sheet name'!A1, or Sheet!A1 when the name has no space.
+  const names = (formula: string, sheet: string) => formula.includes(`'${sheet.replace(/'/g, "''")}'!`) || new RegExp(`(^|[^\\w.'])${escaped(sheet)}!`).test(formula);
+  const feedsFrom = (sheet: T, other: T) => Object.values(sheet.cells).some((cell) => Boolean(cell.formula) && names(cell.formula!, other.name));
+  return summaries.find((sheet) => !summaries.some((other) => other !== sheet && feedsFrom(sheet, other))) ?? summaries[0];
+}
+
 /** Summary defines scope; only expand detail totals actually referenced by active Summary rows. */
 export function parseEstimateWorkbook(sheets: WorkbookSheet[], filename: string): EstimateImportPreview | null {
-  const summary = sheets.find((s) => /summary[ _]*cost/i.test(s.name));
+  const summary = costSummarySheet(sheets);
   if (!summary) return null;
   const result: EstimateImportPreview = {
     format: "tomas",
