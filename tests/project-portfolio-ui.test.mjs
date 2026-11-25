@@ -26,6 +26,8 @@ const read = (file) => readFileSync(new URL(`../${file}`, import.meta.url), "utf
 const screens = read("app/system/production/CoreScreens.tsx");
 const portfolio = screens.slice(screens.indexOf("const PORTFOLIO_CHIP_COPY"), screens.indexOf("// Deleting is offered only after"));
 const ui = read("app/system/ui.tsx");
+// Since 2026-11-25 the list draws on @tomas-tc/ui; ProductionProjects keeps the data, the filters and the dialogs.
+const kit = read("app/system/tomas-ui/ProjectList.tsx");
 
 test("the portfolio loads the unpaged overview endpoint once per closed toggle", () => {
   const client = read("app/system/project-overview-client.ts");
@@ -54,11 +56,10 @@ test("the portfolio loads the unpaged overview endpoint once per closed toggle",
 });
 
 test("sortable headers are buttons with aria-sort and the sort is remembered per user", () => {
-  assert.match(portfolio, /aria-sort=\{active \? \(sort\.direction === "asc" \? "ascending" : "descending"\) : "none"\}/);
-  assert.match(portfolio, /<button type="button" className=\{`th-sort/);
-  for (const column of ["health", "number", "name", "pm", "target", "slip", "progress", "lastUpdate"]) {
-    assert.match(portfolio, new RegExp(`<PortfolioSortHeader column="${column}"`), column);
-  }
+  assert.match(kit, /aria-sort=\{sort\.key === key \? \(sort\.direction === "asc" \? "ascending" : "descending"\) : undefined\}/);
+  assert.match(kit, /<button type="button" onClick=\{\(\) => props\.onSort\(key\)\}/);
+  for (const column of ["health", "number", "name", "pm", "target", "slip", "progress", "lastUpdate"]) assert.match(kit, new RegExp(`sortHead\\("${column}"`), column);
+  assert.match(portfolio, /onSort=\{changeSort\}/);
   assert.match(portfolio, /portfolioSortStorageKey\(bootstrap\.user\.id\)/);
   assert.match(portfolio, /try \{\s*return parsePortfolioSort\(window\.localStorage\.getItem\(sortStorageKey\)\);\s*\} catch \{\s*return DEFAULT_PORTFOLIO_SORT;\s*\}/);
   assert.match(portfolio, /try \{\s*window\.localStorage\.setItem\(sortStorageKey, JSON\.stringify\(next\)\);\s*\} catch/);
@@ -70,17 +71,20 @@ test("rows open worst health first and page on the client with the 10-row defaul
   assert.match(lib, /DEFAULT_PORTFOLIO_SORT: PortfolioSort = \{ key: "health", direction: "asc" \}/);
   assert.match(portfolio, /sortPortfolio\(view\.rows, sort\)/);
   assert.match(portfolio, /const \[pageSize, setPageSize\] = useLinkedState\("rows", 10, numberLink\)/);
-  assert.match(portfolio, /<TablePageSize\s+value=\{pageSize\}/);
+  assert.match(portfolio, /perPage=\{pageSize\}/);
+  assert.match(kit, /<Pagination page=\{props\.page\} perPage=\{props\.perPage\} total=\{props\.total\} perPageOptions=\{\[10, 25, 50, 100\]\}/);
   assert.match(portfolio, /sorted\.slice\(\(currentPage - 1\) \* pageSize, currentPage \* pageSize\)/);
 });
 
-test("SegmentBar and FilterChips are shared components; the portfolio uses FilterChips", () => {
+test("SegmentBar and FilterChips are shared components; the portfolio draws its own on @tomas-tc/ui", () => {
   assert.match(ui, /export function SegmentBar\(/);
   assert.match(ui, /export function FilterChips\(/);
   assert.doesNotMatch(ui, /import\s+["'][^"']+\.css["']/, "ui.tsx stays loadable without a bundler");
   assert.match(screens, /import "\.\.\/segment-filters\.css";/);
-  // The portfolio's health bar is the Pegasus summary bar (project-scope.test.mjs); SegmentBar serves other screens.
-  assert.match(portfolio, /<FilterChips\s+label="Portfolio\.attention"\s+items=\{chipItems\}\s+active=\{chip\}/);
+  // The portfolio's health bar and attention chips are the kit's (ProjectListHead): a chip pressed again clears.
+  assert.match(kit, /onClick=\{\(\) => props\.chips\.onPick\(on \? null : chip\.key\)\}/);
+  assert.match(kit, /disabled=\{!chip\.value && !on\}/, "an empty chip is disabled unless it is the active one");
+  assert.match(portfolio, /chips=\{\{\s*label: uiText\("Portfolio\.attention"\)/);
   const css = read("app/system/segment-filters.css");
   assert.doesNotMatch(css, /#[0-9a-fA-F]{3,6}\b/, "tokens only");
 });
@@ -128,19 +132,14 @@ test("the portfolio reports its sub-view, opens the schedule, changes stage and 
   assert.match(portfolio, /useActivitySubView\(timelineMode \? "projects-timeline" : "projects-portfolio"\)/);
   assert.match(screens, /import \{ useActivitySubView \} from "\.\.\/use-activity-presence";/);
   assert.match(portfolio, /openProjectSchedule\?: \(id: number, taskId\?: number\) => void/);
+  // The number and the name open the project's page, or its plan where no page is offered.
+  assert.match(portfolio, /onOpen: openProjectPage \? \(\) => openProjectPage\(projectPageKey\(item\)\) : openProjectSchedule \? \(\) => openProjectSchedule\(item\.id\) : null,/);
+  // The stage is a menu of every other stage; picking one saves. Non-editors still see a badge.
   assert.match(
     portfolio,
-    /openProjectSchedule \? \(\s*<button type="button" className="portfolio-project-link" onClick=\{\(\) => openProjectSchedule\(item\.id\)\}>\s*<strong>\{item\.name\}<\/strong>\s*<\/button>/,
+    /options: item\.canChangeStatus && item\.allowedStatuses\.length \? item\.allowedStatuses\.map\(\(value\) => \(\{ value, label: uiText\(value\), onSelect: \(\) => changeStage\(item, value\) \}\)\) : null,/,
   );
-  // The project number is its own sortable column, so sorting by number is one click.
-  assert.match(portfolio, /<PortfolioSortHeader column="number" label="Portfolio\.colNumber"/);
-  assert.match(portfolio, /\) : \(\s*<strong className="mono">\{item\.number\}<\/strong>\s*\)\}\s*<\/td>/, "V1 shows the number as text");
-  // The stage is a button listing every other stage; picking one saves. A native select would save on
-  // every arrow key, so no stage select remains. Non-editors still see a badge.
-  assert.match(portfolio, /item\.canChangeStatus && item\.allowedStatuses\.length\s*\? \(\s*<RowDisclosure\s+label=\{`\$\{uiText\("Portfolio\.changeStage"\)\}/);
-  assert.match(portfolio, /actions=\{item\.allowedStatuses\.map\(\(value\) => \(\{ key: value, label: value, onSelect: \(\) => changeStage\(item, value\) \}\)\)\}/);
-  assert.match(portfolio, /: \(\s*<Badge>\{item\.status\}<\/Badge>\s*\)\}/);
-  assert.doesNotMatch(portfolio, /portfolio-stage"|onChange=\{\(event\) => changeStage\(/);
+  assert.match(kit, /\) : \(\s*<Badge variant="outline">\{row\.stage\.label\}<\/Badge>\s*\)\}/);
   assert.match(portfolio, /if \(next === "Closed"\) setClosingProject\(item\)/);
   // Closing is its own row action from any open stage, and the dialog says how much work is left.
   assert.match(
@@ -148,14 +147,11 @@ test("the portfolio reports its sub-view, opens the schedule, changes stage and 
     /item\.canChangeStatus && item\.allowedStatuses\.includes\("Closed"\)\s*\? \[\{ key: "close", label: "Portfolio\.closeTitle", icon: "checkCircle" as const, onSelect: \(\) => setClosingProject\(item\) \}\]/,
   );
   assert.match(portfolio, /const unfinished = project\.taskCount - project\.doneCount;/);
-  assert.match(
-    portfolio,
-    /unfinished > 0 \? \(\s*<div className="info-strip" role="note">\s*<Icon name="alertTriangle" \/>\s*<span>\{t\("Portfolio\.closeUnfinished"\)\.replace\("\{open\}", String\(unfinished\)\)\.replace\("\{total\}", String\(project\.taskCount\)\)\}/,
-  );
   assert.match(portfolio, /updateProject\(item\.id, \{ rowVersion: item\.rowVersion, status: next/);
   assert.match(portfolio, /failure instanceof ApiClientError && failure\.status === 409/);
-  // Edit, end user, members, documents and delete live in one overflow menu, the same disclosure.
-  assert.match(portfolio, /<RowDisclosure\s+label=\{`\$\{uiText\("Portfolio\.more"\)\} \$\{item\.number\}`\}\s+triggerClassName="row-action"/);
+  // The row's actions live in one menu, the kit's dropdown.
+  assert.match(portfolio, /label: `\$\{uiText\("Portfolio\.more"\)\} \$\{item\.number\}`,/);
+  assert.match(kit, /data-guide="project\.rowMenu"/);
   for (const action of ["edit", "end-user", "members", "documents", "delete"]) assert.match(portfolio, new RegExp(`key: "${action}"`), action);
   // Plain task language instead of infrastructure jargon.
   for (const jargon of [/Live SQL Server data/, /Loading from production API/, /NAS/, /folder metadata/]) assert.doesNotMatch(portfolio, jargon);
@@ -206,15 +202,16 @@ test("the project name opens the schedule only for users who can read it", () =>
     shell,
     /<ProductionProjects\s+\{\.\.\.common\}\s+teamTestMode=\{IS_TEAM_TEST_MODE\}\s+openProjectSchedule=\{bootstrap\.permissions\.includes\("schedule\.read"\) \? openProjectSchedule : undefined\}\s+openProjectPage=\{openProjectPage\}\s+openCreatePage=\{\(\) => changeProjectTab\("create"\)\}\s+\{\.\.\.\(seesProjectCost \? \{ openCeoSummary: \(\) => openCeoSummary\(\) \} : \{\}\)\}\s*\/>/,
   );
-  // Without the prop the name is plain text.
-  assert.match(portfolio, /\{item\.name\}<\/strong>\s*<\/button>\s*\) : \(\s*<strong>\{item\.name\}<\/strong>\s*\)\}/);
+  // Without a way to open it, the name is plain text.
+  assert.match(kit, /\) : \(\s*<strong className="truncate font-medium">\{row\.name\}<\/strong>\s*\)\}/);
 });
 
 test("Overview has a List | Timeline toggle on the shared Gantt, remembered per user", () => {
   const shell = read("app/system/ProductionApp.tsx");
   // The mode is on the link and remembered per person (screen-link.tsx useLinkedState).
   assert.match(portfolio, /const \[mode, changeMode\] = useLinkedState<PortfolioMode>\("view", initialMode \?\? "list", PORTFOLIO_MODE_LINK\)/);
-  assert.match(portfolio, /role="radio" aria-checked=\{mode === value\} onClick=\{\(\) => changeMode\(value\)\}/);
+  assert.match(portfolio, /value: mode,\s*onChange: changeMode,/);
+  assert.match(kit, /role="radio"\s+aria-checked=\{option\.value === value\}/);
   // Timeline draws the same filtered, sorted rows as the list.
   assert.match(portfolio, /<ProjectPortfolioGantt\s+key=\{overview\?\.loadedAt \?\? 0\}\s+rows=\{sorted\}/);
   // The timeline sorts with the same sort as the list (it has no column headers of its own).
@@ -233,21 +230,20 @@ test("Overview has a List | Timeline toggle on the shared Gantt, remembered per 
 });
 
 test("the row menu and stage come before the project name, so a small screen needs no sideways scroll to reach them", () => {
-  const head = portfolio.slice(portfolio.indexOf('<table className="portfolio-table">'), portfolio.indexOf("</thead>", portfolio.indexOf('<table className="portfolio-table">')));
-  assert.ok(head.indexOf('className="portfolio-col-menu"') < head.indexOf("Portfolio.colStage"));
-  assert.ok(head.indexOf("Portfolio.colStage") < head.indexOf('column="name"'));
-  const rowStart = portfolio.indexOf("<tr key={item.id}>");
-  const row = portfolio.slice(rowStart, portfolio.indexOf("</tr>", rowStart));
-  assert.ok(row.indexOf('guide="project.rowMenu"') < row.indexOf('triggerClassName="portfolio-stage-trigger"'));
-  assert.ok(row.indexOf('triggerClassName="portfolio-stage-trigger"') < row.indexOf("portfolio-project-link"));
+  const head = kit.slice(kit.indexOf("<TableHeader>"), kit.indexOf("</TableHeader>"));
+  assert.ok(head.indexOf("labels.actions") < head.indexOf("labels.stage"));
+  assert.ok(head.indexOf("labels.stage") < head.indexOf('sortHead("name"'));
+  const row = kit.slice(kit.indexOf("<TableRow key={row.id}>"), kit.indexOf("</TableRow>", kit.indexOf("<TableRow key={row.id}>")));
+  assert.ok(row.indexOf('data-guide="project.rowMenu"') < row.indexOf("row.stage.options"));
+  assert.ok(row.indexOf("row.stage.options") < row.indexOf("{row.name}"));
 });
 
-test("the portfolio's PM and slip columns give way on a phone", () => {
-  const css = read("app/system/production/project-portfolio.css");
-  assert.match(css, /@media \(max-width: 720px\) \{[\s\S]*\.portfolio-col-pm,\s*\.portfolio-table \.portfolio-col-slip,\s*\.portfolio-table \.portfolio-col-hours \{\s*display: none;\s*\}/);
-  assert.match(portfolio, /className="portfolio-col-pm"/);
-  assert.match(portfolio, /className="portfolio-col-slip"/);
-  assert.doesNotMatch(css, /#[0-9a-fA-F]{3,6}\b/, "tokens only");
+test("the portfolio's PM, slip and hours columns give way on a phone", () => {
+  assert.match(kit, /const PHONE_HIDDEN = "max-\[720px\]:hidden";/);
+  assert.match(kit, /sortHead\("pm", <Funnel filter=\{props\.filters\.pm\} \/>, PHONE_HIDDEN\)/);
+  assert.match(kit, /sortHead\("slip", undefined, PHONE_HIDDEN\)/);
+  assert.match(kit, /<TableHead className=\{PHONE_HIDDEN\}>\{labels\.hours\}<\/TableHead>/);
+  assert.match(kit, /<TableCell className=\{PHONE_HIDDEN\}>\{row\.pm\}<\/TableCell>/);
 });
 
 test("every portfolio string has Thai and Japanese copy", () => {

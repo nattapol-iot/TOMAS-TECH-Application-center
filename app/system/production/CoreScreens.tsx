@@ -5,6 +5,8 @@ import { useT as useStaticCopy } from "../i18n";
 import { currentLocale, useLanguage, useT as useUiText } from "../i18n";
 import { LocalizedText } from "../LocalizedText";
 import { lazy, Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import type { ColumnFilterSpec, ProjectListRow } from "../tomas-ui/ProjectList";
+import type { KitTone } from "../tomas-ui/tones";
 import {
   addProjectMember,
   createEmployee,
@@ -112,7 +114,6 @@ import { clearDraft, confirmLeave, draftKeys, hasDraft, leaveCopy, useDraftField
 import { PgSelect } from "./PegasusSelect";
 import { ColumnFilter } from "./ColumnFilter";
 import { useProjectCopy } from "./ProjectScope";
-import { singleFilterValue } from "../../../lib/portfolio-filter";
 import { listEmployeesPage, listSuppliersPage, type ListPage, type SupplierListItem } from "../list-api";
 import { ErpProjectNumberField, isPlaceholderProjectNumber } from "./ErpProjectNumber";
 import { SearchSelect } from "./SearchSelect";
@@ -127,7 +128,7 @@ import "./master-data.css";
 // eager screen module loads their styles on the first page.
 import "../segment-filters.css";
 import "./project-portfolio.css";
-import { Badge, EmptyState, FilterChips, Field, Icon, KpiCard, Modal, PageHeader, Pagination, Panel, SearchInput, Select, TablePageSize, Tabs, Toolbar, type IconName, type Tone } from "../ui";
+import { Badge, EmptyState, Field, Icon, KpiCard, Modal, PageHeader, Pagination, Panel, SearchInput, Select, TablePageSize, Tabs, Toolbar, type IconName, type Tone } from "../ui";
 import { DateInput } from "../DateInput";
 
 type CommonProps = {
@@ -730,44 +731,6 @@ const formatDay = (value: string) => new Intl.DateTimeFormat(currentLocale(), { 
 /** Hours as the list shows them: whole numbers with separators, one decimal under ten. */
 const formatHours = (value: number) => (value < 10 && value % 1 ? value.toFixed(1) : Math.round(value).toLocaleString("en-US"));
 
-function PortfolioSortHeader({
-  column,
-  label,
-  sort,
-  onSort,
-  className,
-  filter,
-}: {
-  column: PortfolioSortKey;
-  label: string;
-  sort: PortfolioSort;
-  onSort: (key: PortfolioSortKey) => void;
-  className?: string;
-  /** The V2 list's header funnel (ColumnFilter), beside the sort button. */
-  filter?: ReactNode;
-}) {
-  const t = useUiText();
-  const active = sort.key === column;
-  const button = (
-    <button type="button" className={`th-sort${active ? " active" : ""}`} onClick={() => onSort(column)}>
-      {t(label)}
-      <Icon name="chevronDown" className={active ? sort.direction : "idle"} />
-    </button>
-  );
-  return (
-    <th className={className} aria-sort={active ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}>
-      {filter ? (
-        <span className="pg-th">
-          {button}
-          {filter}
-        </span>
-      ) : (
-        button
-      )}
-    </th>
-  );
-}
-
 // Actual against where the plan says the project should be today; the tick is the plan.
 function PortfolioProgress({ item }: { item: ProjectOverviewItem }) {
   const t = useUiText();
@@ -971,6 +934,10 @@ const PORTFOLIO_HEALTH_LINK = optionalChoiceLink(PORTFOLIO_HEALTH_ORDER);
 const PORTFOLIO_CHIP_LINK = optionalChoiceLink(PORTFOLIO_CHIPS);
 const PORTFOLIO_STATUS_LINK = choiceLink(PROJECT_STAGE_FILTERS);
 
+// The list on @tomas-tc/ui (owner 2026-11-25), loaded with the screen so the kit stays out of the first load.
+const ProjectListHead = lazy(() => import("../tomas-ui/ProjectList").then((module) => ({ default: module.ProjectListHead })));
+const ProjectListTable = lazy(() => import("../tomas-ui/ProjectList").then((module) => ({ default: module.ProjectListTable })));
+
 export function ProductionProjects({
   bootstrap,
   notify,
@@ -1164,12 +1131,6 @@ export function ProductionProjects({
         ];
   // project.write, or the Application team, who create without an estimate and need no project.write (owner 2026-11-25).
   const canCreate = mayCreateProject(bootstrap.permissions, bootstrap.user.roles ?? [bootstrap.user.role], bootstrap.user.department);
-  const createButton = canCreate ? (
-    <button className="btn primary" type="button" data-guide="project.create" onClick={() => (openCreatePage ? openCreatePage() : setCreateOpen(true))}>
-      <Icon name="plus" />
-      <LocalizedText text={"Create project"} />
-    </button>
-  ) : undefined;
   const filterSelects = (
     <>
       <label className="select-field">
@@ -1227,44 +1188,89 @@ export function ProductionProjects({
   const stageCounts = countBy((item) => item.status);
   const managerCounts = countBy((item) => String(item.managerId));
   const teamCounts = countBy((item) => shownProjectTeam(item.team));
-  const stageFilter = (
-    <ColumnFilter
-      column={uiText("Portfolio.colStage")}
-      options={PROJECT_STAGE_FILTERS.filter((value) => value !== "All status").map((value) => ({ value, label: uiText(value), count: stageCounts[value] ?? 0 }))}
-      value={activeStatus ? [activeStatus] : []}
-      onChange={(next) => {
-        const value = singleFilterValue(activeStatus, next);
-        setStatus(value ?? "All status");
-        if (value === "Closed") setIncludeClosed(true);
-        setPage(1);
-      }}
-      guide="project.stageFilter"
-    />
-  );
-  const managerFilter = (
-    <ColumnFilter
-      column={uiText("Portfolio.colPm")}
-      options={managers.map(([id, name]) => ({ value: String(id), label: name, count: managerCounts[String(id)] ?? 0 }))}
-      value={activeManagerId === null ? [] : [String(activeManagerId)]}
-      onChange={(next) => {
-        const value = singleFilterValue(activeManagerId === null ? null : String(activeManagerId), next);
-        setManagerId(value === null ? null : Number(value));
-        setPage(1);
-      }}
-      guide="project.pmFilter"
-    />
-  );
-  const teamFilter = (
-    <ColumnFilter
-      column={copy("ทีม", "Team", "チーム")}
-      options={teams.map((value) => ({ value, count: teamCounts[value] ?? 0 }))}
-      value={activeTeam ? [activeTeam] : []}
-      onChange={(next) => {
-        setTeam(singleFilterValue(activeTeam, next));
-        setPage(1);
-      }}
-    />
-  );
+  const clearFilter = uiText("Portfolio.clearFilters");
+  const stageFilter: ColumnFilterSpec = {
+    label: uiText("Portfolio.colStage"),
+    clearLabel: clearFilter,
+    options: PROJECT_STAGE_FILTERS.filter((value) => value !== "All status").map((value) => ({ value, label: uiText(value), count: stageCounts[value] ?? 0 })),
+    value: activeStatus,
+    onChange: (value) => {
+      setStatus(value ?? "All status");
+      if (value === "Closed") setIncludeClosed(true);
+      setPage(1);
+    },
+    guide: "project.stageFilter",
+  };
+  const managerFilter: ColumnFilterSpec = {
+    label: uiText("Portfolio.colPm"),
+    clearLabel: clearFilter,
+    options: managers.map(([id, name]) => ({ value: String(id), label: name, count: managerCounts[String(id)] ?? 0 })),
+    value: activeManagerId === null ? null : String(activeManagerId),
+    onChange: (value) => {
+      setManagerId(value === null ? null : Number(value));
+      setPage(1);
+    },
+    guide: "project.pmFilter",
+  };
+  const teamFilter: ColumnFilterSpec = {
+    label: copy("ทีม", "Team", "チーム"),
+    clearLabel: clearFilter,
+    options: teams.map((value) => ({ value, label: value, count: teamCounts[value] ?? 0 })),
+    value: activeTeam,
+    onChange: (value) => {
+      setTeam(value);
+      setPage(1);
+    },
+  };
+  /** What each row on this page shows, in the reader's language (task doc 5.1). */
+  const listRows: ProjectListRow[] = paged.map((item) => {
+    const slip = formatSlip(item.status === "Closed" ? null : item.slipDays);
+    const customerLine = [item.customerName, item.endUserName].filter(Boolean).join(" / ");
+    const shown = item.status === "Closed" ? "Completed" : (item.health ?? "No plan");
+    const actual = Math.round(Number(item.progress) || 0);
+    const planned = item.plannedProgress === null || item.plannedProgress === undefined ? null : Math.round(item.plannedProgress);
+    const over = Boolean(item.budgetHours && (item.actualHours ?? 0) > item.budgetHours);
+    return {
+      id: item.id,
+      number: item.number,
+      name: item.name,
+      customerLine: `${customerLine}${item.team ? ` · ${shownProjectTeam(item.team)}` : ""}`,
+      onOpen: openProjectPage ? () => openProjectPage(projectPageKey(item)) : openProjectSchedule ? () => openProjectSchedule(item.id) : null,
+      menu: {
+        label: `${uiText("Portfolio.more")} ${item.number}`,
+        actions: rowActions(item).map((action) => ({
+          key: action.key,
+          label: uiText(action.label),
+          danger: Boolean(action.danger),
+          ...(action.guide ? { guide: action.guide } : {}),
+          onSelect: action.onSelect,
+        })),
+      },
+      stage: {
+        label: uiText(item.status),
+        menuLabel: `${uiText("Portfolio.changeStage")} ${item.number} · ${uiText(item.status)}`,
+        disabled: stageBusy !== null,
+        options: item.canChangeStatus && item.allowedStatuses.length ? item.allowedStatuses.map((value) => ({ value, label: uiText(value), onSelect: () => changeStage(item, value) })) : null,
+      },
+      health: { label: uiText(`ProjectHealth.${shown}`), tone: PROJECT_HEALTH_TONE[shown] },
+      scheduleError: item.status !== "Closed" && item.scheduleError ? { label: uiText("Portfolio.scheduleError"), hint: uiText("Portfolio.scheduleErrorHint") } : null,
+      pm: item.managerName,
+      target: item.targetDelivery ? formatDate(item.targetDelivery) : "—",
+      slip: { text: slip === null ? "–" : uiText("Portfolio.slipDays").replace("{n}", slip), late: item.status !== "Closed" && (item.slipDays ?? 0) > 0 },
+      progress: {
+        actual,
+        planned,
+        text: planned === null ? `${actual}%` : `${actual}% · ${uiText("Portfolio.plannedToday")} ${planned}%`,
+        title: planned === null ? undefined : uiText("Portfolio.actualVsPlanned"),
+        tone: actual >= 100 ? "green" : planned !== null && actual < planned ? "amber" : "blue",
+        manual: item.progressSource === "manual" ? { label: uiText("Portfolio.manual"), hint: uiText("Portfolio.manualHint") } : null,
+      },
+      // Task doc 5.1: confirmed hours against the hours budget, and how much waits on the plan's To follow up.
+      hours: { text: `${formatHours(item.actualHours ?? 0)} / ${item.budgetHours ? formatHours(item.budgetHours) : "–"}`, over, title: over ? uiText("Portfolio.hoursOver") : undefined },
+      follow: { count: item.followUps ?? 0, title: uiText("Portfolio.followOpen"), onOpen: openProjectSchedule ? () => openProjectSchedule(item.id) : null },
+      lastUpdate: item.lastProgressAt ? formatDay(item.lastProgressAt) : "—",
+    };
+  });
   const toggleClosed = (next: boolean) => {
     setIncludeClosed(next);
     if (!next && status === "Closed") setStatus("All status");
@@ -1272,125 +1278,76 @@ export function ProductionProjects({
   };
   return (
     <>
-      <>
-        {/* A Pegasus list title carries its count and no subtitle, so the actions keep to one row. */}
-        <PageHeader
-          eyebrow="APPROVED WORK"
+      <Suspense fallback={<PageHeader eyebrow="APPROVED WORK" title={`${uiText("Projects")} (${sorted.length})`} />}>
+        <ProjectListHead
           title={`${uiText("Projects")} (${sorted.length})`}
-          actions={
-            <div className="project-v2-actions">
-              <SearchInput
-                value={search}
-                onChange={(value) => {
-                  setSearch(value);
-                  setPage(1);
-                }}
-                placeholder="Portfolio.search"
-              />
-              <div className="project-v2-seg" role="radiogroup" aria-label={uiText("Portfolio.mine")} data-guide="project.mine">
-                {([false, true] as const).map((value) => (
-                  <button
-                    key={String(value)}
-                    type="button"
-                    role="radio"
-                    aria-checked={mine === value}
-                    onClick={() => {
-                      setMine(value);
-                      setPage(1);
-                    }}
-                  >
-                    {value ? copy("ของฉัน", "Mine", "自分の担当") : copy("ทั้งหมด", "All", "すべて")}
-                  </button>
-                ))}
-              </div>
-              <div className="project-v2-seg" role="radiogroup" aria-label={uiText("Portfolio.view")}>
-                {(["list", "timeline"] as const).map((value) => (
-                  <button key={value} type="button" role="radio" aria-checked={mode === value} onClick={() => changeMode(value)}>
-                    <Icon name={value === "list" ? "table" : "chart"} />
-                    {uiText(value === "list" ? "Portfolio.viewList" : "Portfolio.viewTimeline")}
-                  </button>
-                ))}
-              </div>
-              <RowDisclosure
-                label={uiText("Plan.more")}
-                triggerClassName="btn default"
-                guide="project.more"
-                trigger={
-                  <>
-                    <Icon name="more" />
-                    {uiText("Plan.more")}
-                  </>
-                }
-                actions={[
-                  {
-                    key: "closed",
-                    label: includeClosed ? copy("ซ่อนโครงการที่ปิดแล้ว", "Hide closed projects", "完了したプロジェクトを隠す") : "Portfolio.showClosed",
-                    icon: includeClosed ? "check" : "eye",
-                    onSelect: () => toggleClosed(!includeClosed),
-                  },
-                  {
-                    key: "refresh",
-                    label: "Refresh",
-                    icon: "refresh",
-                    onSelect: () => {
-                      void load();
-                    },
-                  },
-                ]}
-              />
-              {/* Task doc 5.1: the CEO summary is a button of its own on the list, for Leaders and above. */}
-              {openCeoSummary ? (
-                <button type="button" className="btn default" data-guide="project.ceo" onClick={openCeoSummary}>
-                  <Icon name="chart" />
-                  {uiText("CEO.open")}
-                </button>
-              ) : null}
-              {createButton}
-            </div>
-          }
-        />
-        {/* Pegasus summary bar: each health is a cell that filters the list; pressed again it clears. */}
-        <div className="pg-summary project-summary" role="group" aria-label={uiText("Portfolio.healthBar")} data-guide="project.summary">
-          <button
-            type="button"
-            className="pg-cell"
-            aria-pressed={health === null}
-            onClick={() => {
-              setHealth(null);
+          search={{
+            value: search,
+            placeholder: uiText("Portfolio.search"),
+            onChange: (value) => {
+              setSearch(value);
               setPage(1);
-            }}
-          >
-            <span className="pg-cell-label">{uiText(includeClosed ? "Portfolio.inView" : "Portfolio.open")}</span>
-            <strong className="pg-cell-value">{view.barTotal}</strong>
-          </button>
-          {healthItems.map((item) => (
-            <button
-              key={item.key}
-              type="button"
-              className={`pg-cell tone-${item.tone}`}
-              aria-pressed={health === item.key}
-              onClick={() => {
-                setHealth(health === item.key ? null : (item.key as ProjectHealth));
-                setPage(1);
-              }}
-            >
-              <span className="pg-cell-label">{uiText(item.label)}</span>
-              <strong className="pg-cell-value">{item.value}</strong>
-            </button>
-          ))}
-        </div>
-        <FilterChips
-          label="Portfolio.attention"
-          items={chipItems}
-          active={chip}
-          onPick={(key) => {
-            setChip(key as PortfolioChip | null);
-            setPage(1);
+            },
+          }}
+          mine={{
+            label: uiText("Portfolio.mine"),
+            options: [
+              { value: false, label: copy("ทั้งหมด", "All", "すべて") },
+              { value: true, label: copy("ของฉัน", "Mine", "自分の担当") },
+            ],
+            value: mine,
+            onChange: (value) => {
+              setMine(value);
+              setPage(1);
+            },
+          }}
+          mode={{
+            label: uiText("Portfolio.view"),
+            options: [
+              { value: "list", label: uiText("Portfolio.viewList") },
+              { value: "timeline", label: uiText("Portfolio.viewTimeline") },
+            ],
+            value: mode,
+            onChange: changeMode,
+          }}
+          more={{
+            label: uiText("Plan.more"),
+            actions: [
+              {
+                key: "closed",
+                label: includeClosed ? copy("ซ่อนโครงการที่ปิดแล้ว", "Hide closed projects", "完了したプロジェクトを隠す") : uiText("Portfolio.showClosed"),
+                onSelect: () => toggleClosed(!includeClosed),
+              },
+              { key: "refresh", label: uiText("Refresh"), onSelect: () => void load() },
+            ],
+          }}
+          // Task doc 5.1: the CEO summary is a button of its own on the list, for Leaders and above.
+          ceo={openCeoSummary ? { label: uiText("CEO.open"), onSelect: openCeoSummary } : null}
+          create={canCreate ? { label: uiText("Create project"), onSelect: () => (openCreatePage ? openCreatePage() : setCreateOpen(true)) } : null}
+          summary={{
+            label: uiText("Portfolio.healthBar"),
+            cells: [
+              { key: null, label: uiText(includeClosed ? "Portfolio.inView" : "Portfolio.open"), value: view.barTotal, tone: "slate", pressed: health === null },
+              ...healthItems.map((item) => ({ key: item.key, label: uiText(item.label), value: item.value, tone: item.tone, pressed: health === item.key })),
+            ],
+            onPick: (key) => {
+              setHealth(key === null || health === key ? null : (key as ProjectHealth));
+              setPage(1);
+            },
+          }}
+          chips={{
+            label: uiText("Portfolio.attention"),
+            items: chipItems.map((item) => ({ key: item.key, label: uiText(item.label), value: item.value, tone: item.tone as KitTone })),
+            active: chip,
+            onPick: (key) => {
+              setChip(key as PortfolioChip | null);
+              setPage(1);
+            },
           }}
         />
-        {/* The table carries these in its header funnels; the timeline has no header, so it keeps the three lists. */}
-        {mode === "timeline" ? <Toolbar>{filterSelects}</Toolbar> : null}
-      </>
+      </Suspense>
+      {/* The table carries these in its header funnels; the timeline has no header, so it keeps the three lists. */}
+      {mode === "timeline" ? <Toolbar>{filterSelects}</Toolbar> : null}
       {error ? (
         <LoadError
           message={error}
@@ -1437,202 +1394,107 @@ export function ProductionProjects({
           </ul>
         </details>
       ) : null}
-      <Panel flush className="portfolio-panel">
-        {sorted.length && mode === "timeline" ? (
-          <>
-            {/* Keyed on the load, so a reload also refetches the tasks of expanded projects. */}
-            <ProjectPortfolioGantt
-              key={overview?.loadedAt ?? 0}
-              rows={sorted}
-              today={today()}
-              canReadSchedule={bootstrap.permissions.includes("schedule.read")}
-              includeClosed={includeClosed}
-              {...(openProjectSchedule ? { openProjectSchedule } : {})}
-              controls={
-                /* The sort sits inside the timeline so it stays at hand in full screen. */
-                <div className="portfolio-gantt-sort">
-                  <label className="select-field">
-                    <span className="sr-only">{uiText("Portfolio.sortBy")}</span>
-                    <select value={sort.key} aria-label={uiText("Portfolio.sortBy")} onChange={(event) => changeSort(event.target.value as PortfolioSortKey)}>
-                      {PORTFOLIO_SORT_KEYS.map((key) => (
-                        <option key={key} value={key}>
-                          {uiText(PORTFOLIO_SORT_LABEL[key])}
-                        </option>
-                      ))}
-                    </select>
-                    <Icon name="chevronDown" />
-                  </label>
-                  <button
-                    type="button"
-                    className="btn ghost sm"
-                    onClick={() => changeSort(sort.key)}
-                    aria-label={uiText(sort.direction === "asc" ? "Portfolio.sortAscending" : "Portfolio.sortDescending")}
-                    title={uiText(sort.direction === "asc" ? "Portfolio.sortAscending" : "Portfolio.sortDescending")}
-                  >
-                    <Icon name="chevronDown" className={sort.direction} />
-                    {uiText(sort.direction === "asc" ? "Portfolio.sortAscending" : "Portfolio.sortDescending")}
-                  </button>
-                </div>
+      {sorted.length && mode === "list" ? (
+        <Suspense
+          fallback={
+            <div className="empty">
+              <span className="spinner" />
+            </div>
+          }
+        >
+          <ProjectListTable
+            labels={{
+              actions: uiText("Actions"),
+              stage: uiText("Portfolio.colStage"),
+              health: uiText(PORTFOLIO_SORT_LABEL.health),
+              number: uiText(PORTFOLIO_SORT_LABEL.number),
+              name: uiText(PORTFOLIO_SORT_LABEL.name),
+              pm: uiText(PORTFOLIO_SORT_LABEL.pm),
+              target: uiText(PORTFOLIO_SORT_LABEL.target),
+              slip: uiText(PORTFOLIO_SORT_LABEL.slip),
+              progress: uiText(PORTFOLIO_SORT_LABEL.progress),
+              hours: uiText("Portfolio.colHours"),
+              follow: uiText("Portfolio.colFollow"),
+              lastUpdate: uiText(PORTFOLIO_SORT_LABEL.lastUpdate),
+              ascending: uiText("Portfolio.sortAscending"),
+              descending: uiText("Portfolio.sortDescending"),
+            }}
+            sort={sort}
+            onSort={changeSort}
+            filters={{ stage: stageFilter, team: teamFilter, pm: managerFilter }}
+            rows={listRows}
+            page={currentPage}
+            perPage={pageSize}
+            total={sorted.length}
+            onPage={setPage}
+            onPerPage={(value) => {
+              setPageSize(value);
+              setPage(1);
+            }}
+          />
+        </Suspense>
+      ) : (
+        <Panel flush className="portfolio-panel">
+          {sorted.length && mode === "timeline" ? (
+            <>
+              {/* Keyed on the load, so a reload also refetches the tasks of expanded projects. */}
+              <ProjectPortfolioGantt
+                key={overview?.loadedAt ?? 0}
+                rows={sorted}
+                today={today()}
+                canReadSchedule={bootstrap.permissions.includes("schedule.read")}
+                includeClosed={includeClosed}
+                {...(openProjectSchedule ? { openProjectSchedule } : {})}
+                controls={
+                  /* The sort sits inside the timeline so it stays at hand in full screen. */
+                  <div className="portfolio-gantt-sort">
+                    <label className="select-field">
+                      <span className="sr-only">{uiText("Portfolio.sortBy")}</span>
+                      <select value={sort.key} aria-label={uiText("Portfolio.sortBy")} onChange={(event) => changeSort(event.target.value as PortfolioSortKey)}>
+                        {PORTFOLIO_SORT_KEYS.map((key) => (
+                          <option key={key} value={key}>
+                            {uiText(PORTFOLIO_SORT_LABEL[key])}
+                          </option>
+                        ))}
+                      </select>
+                      <Icon name="chevronDown" />
+                    </label>
+                    <button
+                      type="button"
+                      className="btn ghost sm"
+                      onClick={() => changeSort(sort.key)}
+                      aria-label={uiText(sort.direction === "asc" ? "Portfolio.sortAscending" : "Portfolio.sortDescending")}
+                      title={uiText(sort.direction === "asc" ? "Portfolio.sortAscending" : "Portfolio.sortDescending")}
+                    >
+                      <Icon name="chevronDown" className={sort.direction} />
+                      {uiText(sort.direction === "asc" ? "Portfolio.sortAscending" : "Portfolio.sortDescending")}
+                    </button>
+                  </div>
+                }
+              />
+            </>
+          ) : loading ? (
+            <div className="empty">
+              <span className="spinner" />
+              <LocalizedText text={"Portfolio.loading"} />
+            </div>
+          ) : items.length && filtered ? (
+            <EmptyState
+              icon="filter"
+              title="Portfolio.noMatch"
+              message="Portfolio.noMatchHint"
+              action={
+                <button className="btn ghost sm" type="button" onClick={clearFilters}>
+                  <Icon name="x" />
+                  {uiText("Portfolio.clearFilters")}
+                </button>
               }
             />
-          </>
-        ) : sorted.length ? (
-          <div className="table-wrap">
-            <TablePageSize
-              value={pageSize}
-              onChange={(value) => {
-                setPageSize(value);
-                setPage(1);
-              }}
-            />
-            <table className="portfolio-table">
-              <thead>
-                <tr>
-                  <th className="portfolio-col-menu">
-                    <span className="sr-only">{uiText("Actions")}</span>
-                  </th>
-                  <th>
-                    <span className="pg-th">
-                      {uiText("Portfolio.colStage")}
-                      {stageFilter}
-                    </span>
-                  </th>
-                  <PortfolioSortHeader column="health" label="Portfolio.colHealth" sort={sort} onSort={changeSort} />
-                  <PortfolioSortHeader column="number" label="Portfolio.colNumber" sort={sort} onSort={changeSort} />
-                  <PortfolioSortHeader column="name" label="Portfolio.colProject" sort={sort} onSort={changeSort} className="portfolio-col-project" filter={teamFilter} />
-                  <PortfolioSortHeader column="pm" label="Portfolio.colPm" sort={sort} onSort={changeSort} className="portfolio-col-pm" filter={managerFilter} />
-                  <PortfolioSortHeader column="target" label="Portfolio.colTarget" sort={sort} onSort={changeSort} />
-                  <PortfolioSortHeader column="slip" label="Portfolio.colSlip" sort={sort} onSort={changeSort} className="portfolio-col-slip" />
-                  <PortfolioSortHeader column="progress" label="Portfolio.colProgress" sort={sort} onSort={changeSort} />
-                  <th className="portfolio-col-hours">{uiText("Portfolio.colHours")}</th>
-                  <th className="portfolio-col-follow" data-guide="project.followCol">
-                    {uiText("Portfolio.colFollow")}
-                  </th>
-                  <PortfolioSortHeader column="lastUpdate" label="Portfolio.colLastUpdate" sort={sort} onSort={changeSort} />
-                </tr>
-              </thead>
-              <tbody>
-                {paged.map((item) => {
-                  const slip = formatSlip(item.status === "Closed" ? null : item.slipDays);
-                  const customerLine = [item.customerName, item.endUserName].filter(Boolean).join(" / ");
-                  return (
-                    <tr key={item.id}>
-                      <td className="portfolio-col-menu">
-                        <RowDisclosure
-                          label={`${uiText("Portfolio.more")} ${item.number}`}
-                          triggerClassName="row-action"
-                          guide="project.rowMenu"
-                          trigger={<Icon name="more" />}
-                          actions={rowActions(item)}
-                        />
-                      </td>
-                      <td>
-                        {item.canChangeStatus && item.allowedStatuses.length ? (
-                          <RowDisclosure
-                            label={`${uiText("Portfolio.changeStage")} ${item.number} · ${uiText(item.status)}`}
-                            triggerClassName="portfolio-stage-trigger"
-                            disabled={stageBusy !== null}
-                            trigger={
-                              <>
-                                <span>{uiText(item.status)}</span>
-                                <Icon name="chevronDown" />
-                              </>
-                            }
-                            actions={item.allowedStatuses.map((value) => ({ key: value, label: value, onSelect: () => changeStage(item, value) }))}
-                          />
-                        ) : (
-                          <Badge>{item.status}</Badge>
-                        )}
-                      </td>
-                      <td>
-                        <HealthBadge health={item.health ?? "No plan"} status={item.status} />
-                        {item.status !== "Closed" && item.scheduleError ? (
-                          <small className="portfolio-schedule-error" title={uiText("Portfolio.scheduleErrorHint")}>
-                            {uiText("Portfolio.scheduleError")}
-                          </small>
-                        ) : null}
-                      </td>
-                      <td>
-                        {openProjectPage || openProjectSchedule ? (
-                          <button type="button" className="pg-doclink mono" onClick={() => (openProjectPage ? openProjectPage(projectPageKey(item)) : openProjectSchedule?.(item.id))}>
-                            {item.number}
-                          </button>
-                        ) : (
-                          <strong className="mono">{item.number}</strong>
-                        )}
-                      </td>
-                      <td className="portfolio-col-project">
-                        <div className="portfolio-project" title={`${item.name}\n${customerLine}`}>
-                          {openProjectPage ? (
-                            <button type="button" className="portfolio-project-link" onClick={() => openProjectPage(projectPageKey(item))}>
-                              <strong>{item.name}</strong>
-                            </button>
-                          ) : openProjectSchedule ? (
-                            <button type="button" className="portfolio-project-link" onClick={() => openProjectSchedule(item.id)}>
-                              <strong>{item.name}</strong>
-                            </button>
-                          ) : (
-                            <strong>{item.name}</strong>
-                          )}
-                          <small className="muted">
-                            {customerLine}
-                            {item.team ? ` · ${shownProjectTeam(item.team)}` : ""}
-                          </small>
-                        </div>
-                      </td>
-                      <td className="portfolio-col-pm">{item.managerName}</td>
-                      <td>{item.targetDelivery ? formatDate(item.targetDelivery) : "—"}</td>
-                      <td className={`portfolio-col-slip portfolio-slip${item.status !== "Closed" && (item.slipDays ?? 0) > 0 ? " late" : ""}`}>
-                        {slip === null ? "–" : uiText("Portfolio.slipDays").replace("{n}", slip)}
-                      </td>
-                      <td>
-                        <PortfolioProgress item={item} />
-                      </td>
-                      {/* Task doc 5.1: confirmed hours against the hours budget, and how much waits on the plan's To follow up. */}
-                      <td
-                        className={`portfolio-col-hours mono${item.budgetHours && (item.actualHours ?? 0) > item.budgetHours ? " over" : ""}`}
-                        title={item.budgetHours && (item.actualHours ?? 0) > item.budgetHours ? uiText("Portfolio.hoursOver") : undefined}
-                      >
-                        {formatHours(item.actualHours ?? 0)} / {item.budgetHours ? formatHours(item.budgetHours) : "–"}
-                      </td>
-                      <td className="portfolio-col-follow">
-                        {item.followUps && openProjectSchedule ? (
-                          <button type="button" className="portfolio-follow" title={uiText("Portfolio.followOpen")} onClick={() => openProjectSchedule(item.id)}>
-                            {item.followUps}
-                          </button>
-                        ) : (
-                          <span className="muted">{item.followUps ? item.followUps : "–"}</span>
-                        )}
-                      </td>
-                      <td className="muted">{item.lastProgressAt ? formatDay(item.lastProgressAt) : "—"}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            <Pagination page={currentPage} pageCount={pageCount} from={(currentPage - 1) * pageSize + 1} to={Math.min(currentPage * pageSize, sorted.length)} total={sorted.length} onPage={setPage} />
-          </div>
-        ) : loading ? (
-          <div className="empty">
-            <span className="spinner" />
-            <LocalizedText text={"Portfolio.loading"} />
-          </div>
-        ) : items.length && filtered ? (
-          <EmptyState
-            icon="filter"
-            title="Portfolio.noMatch"
-            message="Portfolio.noMatchHint"
-            action={
-              <button className="btn ghost sm" type="button" onClick={clearFilters}>
-                <Icon name="x" />
-                {uiText("Portfolio.clearFilters")}
-              </button>
-            }
-          />
-        ) : (
-          <EmptyState icon="folder" title="No project found" message="สร้าง Project จาก Estimate ที่อนุมัติแล้ว" />
-        )}
-      </Panel>
+          ) : (
+            <EmptyState icon="folder" title="No project found" message="สร้าง Project จาก Estimate ที่อนุมัติแล้ว" />
+          )}
+        </Panel>
+      )}
       {closingProject ? (
         <CloseProjectModal
           project={closingProject}

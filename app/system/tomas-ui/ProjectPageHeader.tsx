@@ -7,6 +7,7 @@
  */
 import { Badge, Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, NamedIcon, Tabs, TabsList, TabsTrigger } from "@tomas-tc/ui";
 import type { ReactNode } from "react";
+import { TONE_BADGE, type KitTone } from "./tones";
 import { TomasUi } from "./TomasUi";
 
 export type ProjectHeaderAction = { key: string; label: string; danger?: boolean; onSelect: () => void };
@@ -15,7 +16,7 @@ export type ProjectPageHeaderProps<Tab extends string> = {
   backLabel: string;
   onBack: () => void;
   title: string;
-  health: { label: string; tone: "green" | "amber" | "red" | "slate" | "blue" };
+  health: { label: string; tone: KitTone };
   customer: string;
   stage: { label: string; menuLabel: string; busy: boolean; options: { value: string; label: string; onSelect: () => void }[] } | null;
   edit: { label: string; onSelect: () => void } | null;
@@ -24,15 +25,6 @@ export type ProjectPageHeaderProps<Tab extends string> = {
   tabs: { id: Tab; label: string }[];
   activeTab: Tab;
   onTab: (tab: Tab) => void;
-};
-
-/** The plan's health in the Pegasus badge colours. */
-const TONE_CLASS: Record<ProjectPageHeaderProps<string>["health"]["tone"], string> = {
-  red: "border-transparent bg-red-100 text-red-700",
-  amber: "border-transparent bg-amber-100 text-amber-800",
-  blue: "border-transparent bg-sky-100 text-sky-800",
-  green: "border-transparent bg-emerald-100 text-emerald-800",
-  slate: "border-transparent bg-muted text-muted-foreground",
 };
 
 export function ProjectPageHeader<Tab extends string>(props: ProjectPageHeaderProps<Tab>) {
@@ -49,7 +41,7 @@ export function ProjectPageHeader<Tab extends string>(props: ProjectPageHeaderPr
           <div className="grid min-w-0 gap-1">
             <h1 className="truncate text-xl font-semibold text-foreground">{props.title}</h1>
             <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-              <Badge variant="outline" className={TONE_CLASS[props.health.tone]}>
+              <Badge variant="outline" className={TONE_BADGE[props.health.tone]}>
                 {props.health.label}
               </Badge>
               {props.customer ? <span className="truncate">{props.customer}</span> : null}
