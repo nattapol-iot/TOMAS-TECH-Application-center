@@ -17,8 +17,9 @@ test("the centre of Command Center is a SCADA-style site overview, not a map (ow
   const screen = read("app/system/production/CommandCenterScreen.tsx");
   const css = read("app/system/production/command-center.css");
   assert.doesNotMatch(screen, /thailand-map|OpsMap|ops-graticule|ops-land/);
-  assert.match(screen, /<PlantHeader sites=\{sites\} severityOf=\{severityOf\} incidents=\{openIncidents\} filter=\{plantFilter\} onFilter=\{setPlantFilter\} \/>/);
-  assert.match(screen, /<SiteOverview sites=\{sites\} agents=\{agents\}/);
+  // Whitespace-tolerant: the formatter may put each prop on its own line.
+  assert.match(screen, /<PlantHeader\s+sites=\{sites\}\s+severityOf=\{severityOf\}\s+incidents=\{openIncidents\}\s+filter=\{plantFilter\}\s+onFilter=\{setPlantFilter\}\s*\/>/);
+  assert.match(screen, /<SiteOverview\s+sites=\{sites\}\s+agents=\{agents\}/);
   // Worst first, then by name.
   assert.match(screen, /SEVERITY_ORDER\[severityOf\.get\(a\.id\) \?\? "idle"\] - SEVERITY_ORDER\[severityOf\.get\(b\.id\) \?\? "idle"\]/);
   for (const key of ["Ops.plant", "Ops.plantLabel", "Ops.tile.cpu", "Ops.tile.alarms"]) assert.match(screen, new RegExp(`"${key.replaceAll(".", "\\.")}"`), key);
