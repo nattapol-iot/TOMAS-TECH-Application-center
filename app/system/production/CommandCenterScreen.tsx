@@ -22,7 +22,6 @@ import {
   agentProblems,
   createMonitorPoll,
   fleetKpis,
-  hasPosition,
   incidentSeverity,
   loadOf,
   percent,
@@ -34,12 +33,13 @@ import {
   type LoadMetric,
   type SiteSeverity,
 } from "./fleet-model";
-import { NEIGHBOURS, THAILAND, boundsFor, outlinePath, projection, type LonLat } from "./thailand-map";
 import "./command-center.css";
 
 /**
- * Command Center: the operations-room view of Site Monitor for a TV or wall screen. A map of Thailand with every
- * site glowing by state, live KPIs, the incident feed, the busiest machines with an hour of history, remote
+ * Command Center: the operations-room view of Site Monitor for a TV or wall screen, laid out like a SCADA overview
+ * (owner request 2026-11-25: an engineer's screen, not a map). The centre is a station overview: one faceplate per
+ * site with a status lamp, PCs online, programs running, peak CPU and open alarms, worst first, under an alarm
+ * summary bar. Around it: live KPIs, the incident feed, the busiest machines with an hour of history, remote
  * sessions, commands and script jobs. It polls the existing APIs; nothing here changes anything on a machine.
  *
  * Keys: F full screen (TV mode), S spotlight on/off, R refresh, ← → step through problem sites, 1 2 3 CPU / RAM /
@@ -321,7 +321,8 @@ export function CommandCenterScreen(_props: { notify: Notify }) {
             <TopMachines agents={agents} samples={center.samples} metric={metric} onMetric={setMetric} />
           </aside>
 
-          <section className="ops-map-panel" data-guide="ops.map">
+          <section className="ops-map-panel ops-plant" data-guide="ops.map" aria-label={t("Ops.plantLabel")}>
+            <PlantHeader sites={sites} severityOf={severityOf} alarms={openIncidents.length} />
             {stale ? (
               <p className="ops-stale-banner" role="status">
                 <Icon name="alertTriangle" />
@@ -340,13 +341,12 @@ export function CommandCenterScreen(_props: { notify: Notify }) {
                   <LocalizedText text={"Ops.openInMonitor"} />
                 </a>
               </div>
-            ) : null}
-            <OpsMap sites={sites} severityOf={severityOf} incidents={openIncidents} spotlight={spotlightSite?.id ?? null} selected={selected} onPick={setSelected} />
+            ) : (
+              <SiteOverview sites={sites} agents={agents} severityOf={severityOf} incidents={openIncidents} spotlight={spotlightSite?.id ?? null} selected={selected} now={now} onPick={setSelected} />
+            )}
             {spotlightSite ? (
               <SpotlightCard site={spotlightSite} severity={severityOf.get(spotlightSite.id)!} incidents={openIncidents} now={now} onOpen={() => setSelected(spotlightSite.id)} />
             ) : null}
-            <UnplacedRail sites={sites.filter((site) => !hasPosition(site))} severityOf={severityOf} onPick={setSelected} />
-            <Legend />
           </section>
 
           <aside className="ops-col ops-right">
@@ -518,104 +518,132 @@ function TopMachines({ agents, samples, metric, onMetric }: { agents: FleetAgent
   );
 }
 
-// ── map ────────────────────────────────────────────────────────────────────
+// ── site overview (SCADA-style faceplates) ─────────────────────────────────
 
-function OpsMap({
+/** The alarm summary across the top of the overview: how many sites stand in each state, and open alarms. */
+function PlantHeader({ sites, severityOf, alarms }: { sites: FleetSite[]; severityOf: Map<number, SiteSeverity>; alarms: number }) {
+  const t = useT();
+  const counts: Record<SiteSeverity, number> = { critical: 0, warning: 0, ok: 0, idle: 0 };
+  for (const site of sites) counts[severityOf.get(site.id) ?? "idle"] += 1;
+  return (
+    <div className="ops-plant-head">
+      <h2>
+        <LocalizedText text={"Ops.plant"} />
+      </h2>
+      <ul className="ops-legend">
+        {(["critical", "warning", "ok", "idle"] as const).map((severity) => (
+          <li key={severity} className={`${severity}${counts[severity] ? "" : " zero"}`}>
+            <i aria-hidden="true" />
+            {t(`Ops.severity.${severity}`)}
+            <strong className="ops-mono">{counts[severity]}</strong>
+          </li>
+        ))}
+        <li className={`alarms${alarms ? "" : " zero"}`}>
+          {t("Ops.tile.alarms")}
+          <strong className="ops-mono">{alarms}</strong>
+        </li>
+      </ul>
+    </div>
+  );
+}
+
+/** A filled share of a whole, the way an HMI bar graph shows a value against its range; empty when unknown. */
+function Meter({ value, total, tone }: { value: number | null; total: number; tone?: "warn" | "bad" | null }) {
+  const width = value === null || total <= 0 ? 0 : Math.max(0, Math.min(100, (value / total) * 100));
+  return (
+    <span className={`ops-meter${tone ? ` ${tone}` : ""}`} aria-hidden="true">
+      <span style={{ width: `${width}%` }} />
+    </span>
+  );
+}
+
+/**
+ * The station overview: a faceplate per site, worst first. Colour marks only what is abnormal (red alarm, amber
+ * warning); a healthy site stays grey with a small green lamp, the way a high-performance HMI keeps the eye on trouble.
+ */
+function SiteOverview({
   sites,
+  agents,
   severityOf,
   incidents,
   spotlight,
   selected,
+  now,
   onPick,
 }: {
   sites: FleetSite[];
+  agents: FleetAgent[];
   severityOf: Map<number, SiteSeverity>;
   incidents: CommandCenterIncident[];
   spotlight: number | null;
   selected: number | null;
+  now: number;
   onPick: (siteId: number) => void;
 }) {
   const t = useT();
-  const placed = sites.filter(hasPosition);
-  // A hundred-odd points: cheap enough to project on every render, so the map follows a site that gets a position.
-  const view = (() => {
-    const bounds = boundsFor(placed.map((site) => [site.longitude, site.latitude] as LonLat));
-    const map = projection(bounds);
-    const lines: { d: string; label: string; x: number; y: number }[] = [];
-    for (let lon = Math.ceil(bounds.west / 2) * 2; lon <= bounds.east; lon += 2) {
-      const [x1, y1] = map.project([lon, bounds.north]);
-      const [, y2] = map.project([lon, bounds.south]);
-      lines.push({ d: `M${x1.toFixed(1)} ${y1.toFixed(1)} V${y2.toFixed(1)}`, label: `${lon}°E`, x: x1 + 4, y: y2 - 8 });
-    }
-    for (let lat = Math.ceil(bounds.south / 2) * 2; lat <= bounds.north; lat += 2) {
-      const [x1, y1] = map.project([bounds.west, lat]);
-      const [x2] = map.project([bounds.east, lat]);
-      lines.push({ d: `M${x1.toFixed(1)} ${y1.toFixed(1)} H${x2.toFixed(1)}`, label: `${lat}°N`, x: x1 + 4, y: y1 - 4 });
-    }
-    return { map, lines, outline: outlinePath(THAILAND, map.project) };
-  })();
+  const ageText = useAgeText();
   const openBySite = new Map<number, number>();
   for (const incident of incidents) openBySite.set(incident.siteId, (openBySite.get(incident.siteId) ?? 0) + 1);
+  const ordered = [...sites].sort((a, b) => SEVERITY_ORDER[severityOf.get(a.id) ?? "idle"] - SEVERITY_ORDER[severityOf.get(b.id) ?? "idle"] || a.name.localeCompare(b.name, "th"));
   return (
-    <svg className="ops-map" viewBox={`0 0 ${view.map.width.toFixed(0)} ${view.map.height}`} role="group" aria-label={t("Ops.mapLabel")} preserveAspectRatio="xMidYMid meet">
-      <defs>
-        <radialGradient id="ops-land" cx="50%" cy="45%" r="65%">
-          <stop offset="0%" className="ops-land-core" />
-          <stop offset="100%" className="ops-land-edge" />
-        </radialGradient>
-      </defs>
-      <g className="ops-graticule">
-        {view.lines.map((line) => (
-          <g key={line.d}>
-            <path d={line.d} />
-            <text x={line.x} y={line.y}>
-              {line.label}
-            </text>
-          </g>
-        ))}
-      </g>
-      {NEIGHBOURS.map((item) => {
-        const [x, y] = view.map.project(item.at);
-        return (
-          <text key={item.key} className="ops-neighbour" x={x} y={y} textAnchor="middle">
-            {t(item.key)}
-          </text>
-        );
-      })}
-      <path className="ops-land" d={view.outline} fill="url(#ops-land)" />
-      {placed.map((site) => {
-        const [x, y] = view.map.project([site.longitude, site.latitude]);
+    <ol className="ops-tiles">
+      {ordered.map((site) => {
         const severity = severityOf.get(site.id) ?? "idle";
-        const open = Math.max(site.openIncidents, openBySite.get(site.id) ?? 0);
+        const alarms = Math.max(site.openIncidents, openBySite.get(site.id) ?? 0);
+        const loads = agents
+          .filter((agent) => agent.site.id === site.id)
+          .map((agent) => loadOf(agent, "cpu"))
+          .filter((value): value is number => value !== null);
+        const cpu = loads.length ? Math.round(Math.max(...loads)) : null;
         const focus = site.id === spotlight || site.id === selected;
+        const pcTone = site.agentCount > 0 && site.agentsOnline < site.agentCount ? (site.agentsOnline === 0 ? "bad" : "warn") : null;
         return (
-          <g
-            key={site.id}
-            className={`ops-site ${severity}${focus ? " focus" : ""}`}
-            transform={`translate(${x.toFixed(1)} ${y.toFixed(1)})`}
-            role="button"
-            tabIndex={0}
-            aria-label={`${site.name}: ${t(`Ops.severity.${severity}`)}`}
-            onClick={() => onPick(site.id)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                onPick(site.id);
-              }
-            }}
-          >
-            {open > 0 ? <circle className="ops-pulse" r="16" /> : null}
-            {open > 0 ? <circle className="ops-pulse late" r="16" /> : null}
-            <circle className="ops-halo" r={focus ? 34 : 24} />
-            <circle className="ops-dot" r={focus ? 14 : 11} />
-            <text className="ops-site-label" x="18" y="5">
-              {site.name}
-              {open > 0 ? ` · ${open}` : ""}
-            </text>
-          </g>
+          <li key={site.id}>
+            <button
+              type="button"
+              className={`ops-tile ${severity}${focus ? " focus" : ""}`}
+              aria-label={`${site.name}: ${t(`Ops.severity.${severity}`)}`}
+              aria-current={site.id === selected ? "true" : undefined}
+              onClick={() => onPick(site.id)}
+            >
+              <span className="ops-tile-head">
+                <i className="ops-lamp" aria-hidden="true" />
+                <strong>{site.name}</strong>
+                <span className="ops-tile-state">{t(`Ops.severity.${severity}`)}</span>
+              </span>
+              {site.location ? <span className="ops-tile-loc">{site.location}</span> : null}
+              <span className="ops-tile-values">
+                <span className="ops-tile-row">
+                  <span>{t("Ops.kpi.agents")}</span>
+                  <span className="ops-mono">
+                    {site.agentsOnline}/{site.agentCount}
+                  </span>
+                  <Meter value={site.agentsOnline} total={site.agentCount} tone={pcTone} />
+                </span>
+                <span className="ops-tile-row">
+                  <span>{t("Monitor.programsRunning")}</span>
+                  <span className="ops-mono">
+                    {site.programsRunning}/{site.programCount}
+                  </span>
+                  <Meter value={site.programsRunning} total={site.programCount} tone={site.programsRunning < site.programCount ? "warn" : null} />
+                </span>
+                <span className="ops-tile-row">
+                  <span>{t("Ops.tile.cpu")}</span>
+                  <span className="ops-mono">{cpu === null ? "—" : `${cpu}%`}</span>
+                  <Meter value={cpu} total={100} tone={cpu === null ? null : cpu >= 90 ? "bad" : cpu >= 75 ? "warn" : null} />
+                </span>
+              </span>
+              <span className="ops-tile-foot">
+                <span className={`ops-tile-alarms${alarms ? " on" : ""}`}>
+                  {t("Ops.tile.alarms")} <strong className="ops-mono">{alarms}</strong>
+                </span>
+                <span className="ops-mono">{site.lastSeenAt ? ageText(site.lastSeenAt, now) : "—"}</span>
+              </span>
+            </button>
+          </li>
         );
       })}
-    </svg>
+    </ol>
   );
 }
 
@@ -646,41 +674,6 @@ function SpotlightCard({ site, severity, incidents, now, onOpen }: { site: Fleet
         <Icon name="arrowRight" />
       </button>
     </div>
-  );
-}
-
-function UnplacedRail({ sites, severityOf, onPick }: { sites: FleetSite[]; severityOf: Map<number, SiteSeverity>; onPick: (siteId: number) => void }) {
-  if (sites.length === 0) return null;
-  return (
-    <div className="ops-rail">
-      <h3>
-        <LocalizedText text={"Ops.unplaced"} />
-      </h3>
-      <ul>
-        {sites.map((site) => (
-          <li key={site.id}>
-            <button type="button" className={`ops-rail-site ${severityOf.get(site.id) ?? "idle"}`} onClick={() => onPick(site.id)}>
-              <i aria-hidden="true" />
-              {site.name}
-            </button>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-function Legend() {
-  const t = useT();
-  return (
-    <ul className="ops-legend">
-      {(["critical", "warning", "ok", "idle"] as const).map((severity) => (
-        <li key={severity} className={severity}>
-          <i aria-hidden="true" />
-          {t(`Ops.severity.${severity}`)}
-        </li>
-      ))}
-    </ul>
   );
 }
 
