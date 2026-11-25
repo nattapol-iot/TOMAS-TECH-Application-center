@@ -5,6 +5,8 @@ import ts from "typescript-api";
 import { DASHBOARD_ROLES } from "../backend-node/src/executive-dashboard-model.ts";
 import * as rememberedView from "../lib/remembered-view.ts";
 import * as notificationRows from "../lib/notification-rows.ts";
+import * as approvers from "../app/system/approvers.ts";
+import * as projectCreateAccess from "../backend-node/src/project-create-access.ts";
 
 const source = readFileSync(new URL("../app/system/ProductionApp.tsx", import.meta.url), "utf8");
 const compiled = ts.transpileModule(source, {
@@ -110,6 +112,8 @@ function createHarness({
     "../../lib/notification-rows": notificationRows,
     "../../backend-node/src/engineering-rate-access": { canViewEngineeringRates: (role) => DASHBOARD_ROLES.includes(role) },
     "../../backend-node/src/project-cost-model": { canViewProjectCost: () => false },
+    "../../backend-node/src/project-create-access": projectCreateAccess,
+    "./approvers": approvers,
     react,
     "react/jsx-runtime": jsxRuntime,
     "./auth-client": {

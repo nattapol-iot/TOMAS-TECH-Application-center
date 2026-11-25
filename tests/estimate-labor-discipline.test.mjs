@@ -45,19 +45,19 @@ test("a discipline's rate list is its own department when the master has one, an
 
 test("the labor sheet is one section per discipline, each with its own travel, hotel and per diem", async () => {
   const sheet = await source("app/system/production/EstimateLaborSheet.tsx");
-  assert.match(sheet, /const sections: SectionKey\[\] = \[\.\.\.ESTIMATE_DISCIPLINES,/);
+  assert.match(sheet, /const sections: SectionKey\[\] = \[\s*\.\.\.ESTIMATE_DISCIPLINES,/);
   // Lines that no rule could place stay visible in their own section until someone chooses.
   assert.match(sheet, /workspace\.manhourLines\.some\(\(line\) => !line\.discipline\) \|\| workspace\.expenseLines\.some\(\(line\) => !line\.discipline\) \? \["unassigned" as const\] : \[\]/);
   assert.match(sheet, /onAddExpense\(\{ discipline, costType: costTypeOfDiscipline\(discipline\),/);
   // A quick row saves into its section: the discipline and the cost type it implies.
-  assert.match(sheet, /costType: costTypeOfDiscipline\(quickDraft\.section\), discipline: quickDraft\.section,/);
+  assert.match(sheet, /costType: costTypeOfDiscipline\(quickDraft\.section\),\s*discipline: quickDraft\.section,/);
   // Department and level come from the rate master, the source the server prices from.
   assert.match(sheet, /const options = disciplineRates\(rates, draft\.section\);/);
   assert.match(sheet, /apiRequest<PagedResult<EngineeringRateOption>>\("\/api\/v1\/estimates\/engineering-rate-options\?page=1&pageSize=100"\)/);
   // Amounts in the rate list stay behind master.read, as before.
   assert.match(sheet, /const canSeeRates = bootstrap\.permissions\.includes\("master\.read"\);/);
   assert.match(sheet, /\{canSeeRates \? ` · \$\{formatMoney\(/);
-  assert.match(sheet, /<ApplyLaborPackageModal [^>]*discipline=\{libraryFor\}/);
+  assert.match(sheet, /<ApplyLaborPackageModal\s[^>]*discipline=\{libraryFor\}/);
 });
 
 test("the labor and expense dialogs require a discipline and derive the cost type from it", async () => {

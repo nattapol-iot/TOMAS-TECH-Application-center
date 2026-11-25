@@ -57,7 +57,7 @@ test("moving an entry kept its permission rule", async () => {
     '{ view: "schedule-templates", label: "Master Schedule", icon: "calendar" }',
     '{ view: "installed-base", label: "Installed Base", icon: "layers", permission: "asset.read" }',
     '{ view: "monitor", label: "Site Monitor", icon: "cpu", permission: "monitor.read" }',
-    '{ view: "approvals", label: "Approvals", icon: "checkCircle", permission: "procurement.approve" }',
+    '{ view: "approvals", label: "Approvals", icon: "checkCircle", permission: "procurement.approve", orPurchaseApprover: true }',
     '{ view: "knowledge", label: "Knowledge Hub", icon: "book", permission: "knowledge.view" }',
     '{ view: "downloads", label: "Download Center", icon: "download" }',
     '{ view: "employees", label: "Employees", icon: "user", permission: "master.read" }',
@@ -136,12 +136,15 @@ test("procurement is one menu entry for engineers: BOM and PR history are tabs o
   assert.match(shell, /const target = next === "master" \? "customers" : next === "boms" \? "purchase" : next;/);
   // The screens themselves are kept, so an entry put back in the menu opens again.
   assert.match(shell, /\{view === "pos" \? <ProductionPurchaseOrders \{\.\.\.moduleProps\} \/> : null\}/);
-  assert.match(material, /\{ id: "requests", label: "Purchase Requisitions", count: endpoint\.data\.length \}, \{ id: "boms", label: "Bill of Materials" \}, \{ id: "history", label: "PR ย้อนหลัง" \}/);
-  assert.match(material, /tab === "boms" \? <ProductionBoms bootstrap=\{bootstrap\} notify=\{notify\} embedded onRequest=/);
+  assert.match(
+    material,
+    /\{ id: "requests", label: "Purchase Requisitions", count: endpoint\.data\.length \},\s*\{ id: "boms", label: "Bill of Materials" \},\s*\{ id: "history", label: "PR ย้อนหลัง" \}/,
+  );
+  assert.match(material, /tab === "boms" \? \(\s*<ProductionBoms\s+bootstrap=\{bootstrap\}\s+notify=\{notify\}\s+embedded\s+onRequest=/);
   // The BOM tab keeps its own link names, so the PR list's search and open record do not leak into it.
   assert.match(material, /useLinkedState\(embedded \? "bom" : "open", null, idLink/);
   assert.match(material, /<SearchInput link=\{embedded \? "bq" : "q"\}/);
   // Stock approvals moved to the ERP: their panels show only while something still waits.
-  assert.match(material, /\{waitingMirs\.length \? <Panel title="Material issue approvals"/);
-  assert.match(material, /\{canAdjust && waitingAdjustments\.length \? <Panel title="Stock adjustment approvals"/);
+  assert.match(material, /\{waitingMirs\.length \? \(\s*<Panel title="Material issue approvals"/);
+  assert.match(material, /\{canAdjust && waitingAdjustments\.length \? \(\s*<Panel title="Stock adjustment approvals"/);
 });

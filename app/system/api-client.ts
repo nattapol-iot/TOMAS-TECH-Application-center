@@ -67,6 +67,8 @@ export type BootstrapData = {
   /** The signed-in person's own start date only, from master data when it is connected; nobody else's is sent. */
   startWorkDate: string | null;
   counts: { inquiries: number; estimates: number; activeProjects: number; approvals: number };
+  /** Named approvers, who decide without the approve permission (see approvers.ts). An older API build omits it. */
+  approverOf?: { purchases: boolean; estimates: boolean };
   customers: {
     id: number;
     code: string;

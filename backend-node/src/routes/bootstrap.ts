@@ -13,6 +13,8 @@ type CountRow = {
   estimate_count: number;
   active_project_count: number;
   approval_count: number;
+  approves_purchases: boolean;
+  approves_estimates: boolean;
   employee_id: number | null;
   employee_no: number | null;
   employee_nickname: string | null;
@@ -173,7 +175,16 @@ export function registerBootstrapRoutes(
         CASE WHEN EXISTS (SELECT 1 FROM granted WHERE code = N'project.read')
              THEN (SELECT COUNT_BIG(*) FROM dbo.projects WHERE deleted_at IS NULL AND status <> N'Closed') ELSE CONVERT(bigint, 0) END AS active_project_count,
         CASE WHEN EXISTS (SELECT 1 FROM granted WHERE code = N'estimate.approve')
+               OR EXISTS (SELECT 1 FROM dbo.estimate_approvers WHERE user_id = @user_id)
              THEN (SELECT COUNT_BIG(*) FROM dbo.estimates WHERE deleted_at IS NULL AND status = N'Engineering Review') ELSE CONVERT(bigint, 0) END AS approval_count,
+        -- Approvers are named people, not a role: the PR route's final approver and heads (migrations 097, 116) and anyone a
+        -- PR step waits for, and the estimate approvers (migration 101). They decide without the approve permission.
+        CONVERT(bit, CASE WHEN EXISTS (SELECT 1 FROM dbo.pr_approval_settings WHERE final_approver_id = @user_id)
+               OR EXISTS (SELECT 1 FROM dbo.pr_department_approvers WHERE approver_id = @user_id)
+               OR EXISTS (SELECT 1 FROM dbo.pr_discipline_approvers WHERE approver_id = @user_id)
+               OR EXISTS (SELECT 1 FROM dbo.mat_pr_approval_steps WHERE approver_id = @user_id AND status = N'Current')
+             THEN 1 ELSE 0 END) AS approves_purchases,
+        CONVERT(bit, CASE WHEN EXISTS (SELECT 1 FROM dbo.estimate_approvers WHERE user_id = @user_id) THEN 1 ELSE 0 END) AS approves_estimates,
         employee.id AS employee_id,
         employee.employee_no,
         employee.nickname AS employee_nickname,
@@ -245,6 +256,7 @@ export function registerBootstrapRoutes(
         activeProjects: Number(count?.active_project_count ?? 0),
         approvals: Number(count?.approval_count ?? 0),
       },
+      approverOf: { purchases: Boolean(count?.approves_purchases), estimates: Boolean(count?.approves_estimates) },
       customers: customers.map((row) => ({
         id: Number(row.id),
         code: row.code,

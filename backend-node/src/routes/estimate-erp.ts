@@ -6,19 +6,20 @@ import { insertAudit } from "../audit.js";
 import type { Database } from "../db.js";
 import { ApiError } from "../errors.js";
 import { hasRole } from "../user-roles.js";
-import {
-  buildErpSummary,
-  parseErpCategory,
-  parseErpSourceType,
-  sourceNeedsId,
-  type ErpHeaderRow,
-  type ErpLineRow,
-  type ErpSourceType,
-} from "../estimate-erp.js";
+import { buildErpSummary, parseErpCategory, parseErpSourceType, sourceNeedsId, type ErpHeaderRow, type ErpLineRow, type ErpSourceType } from "../estimate-erp.js";
 import { bodyObject, parseRowVersion, positiveLong, requiredInteger, requiredText } from "../http.js";
 import { describeErpFailure, type ErpFailure } from "../erp-purchasing.js";
-import { costEstimateArguments, costEstimateBlocker, newEstimateErpRef, parseErpSheetRows, readCostSheet, sheetRowsMismatch, type CostEstimateLine,
-  type CostSheet, type EstimateErpLink } from "../erp-cost-estimate.js";
+import {
+  costEstimateArguments,
+  costEstimateBlocker,
+  newEstimateErpRef,
+  parseErpSheetRows,
+  readCostSheet,
+  sheetRowsMismatch,
+  type CostEstimateLine,
+  type CostSheet,
+  type EstimateErpLink,
+} from "../erp-cost-estimate.js";
 import { ESTIMATE_OVERHEAD_ENABLED } from "../feature-flags.js";
 import type { CurrentUser } from "../types.js";
 import type { CurrentUserService } from "../users.js";
@@ -69,7 +70,7 @@ const ERP_SUMMARY_SQL = `
     WHERE ci.estimate_id=@estimate_id AND ci.deleted_at IS NULL AND (ci.price_set_key IS NULL OR ci.is_price_set=1)
     UNION ALL
     SELECT N'ManhourLine',l.id,l.activity,CONCAT(l.cost_type,N' / ',l.provider),l.line_cost,
-      COALESCE(CASE WHEN e.status NOT IN(N'Approved',N'Locked') AND COALESCE(m.manual_override,0)=0 THEN ${laborCategorySql('l')} END,m.erp_category,CASE WHEN l.cost_type=N'Installation' THEN N'Installation' ELSE N'Unmapped' END),
+      COALESCE(CASE WHEN e.status NOT IN(N'Approved',N'Locked') AND COALESCE(m.manual_override,0)=0 THEN ${laborCategorySql("l")} END,m.erp_category,CASE WHEN l.cost_type=N'Installation' THEN N'Installation' ELSE N'Unmapped' END),
       m.row_version,m.copied_from_revision,CONVERT(bit,COALESCE(m.manual_override,0)),l.activity,l.level,COALESCE(s.name,l.provider),l.department,NULL,l.quotation_no,
       l.daily_rate,l.engineers*l.man_days,N'man-day',l.remark,2,l.sort_order,N'',l.package,l.id
     FROM dbo.manhour_lines l
@@ -123,9 +124,17 @@ type ErpGroupRow = { id: number | string; title: string; quantity: number | stri
 type ErpGroupMember = { sourceType: ErpSourceType; sourceId: number };
 
 type SummaryHeader = ErpHeaderRow & {
-  can_write: boolean; can_export: boolean; erp_ref?: string | null; erp_cost_sheet_no?: string | null; erp_status?: string | null;
-  erp_revision?: number | null; erp_total?: number | string | null; erp_url?: string | null; erp_sent_at?: Date | string | null;
-  erp_synced_at?: Date | string | null; erp_error?: string | null;
+  can_write: boolean;
+  can_export: boolean;
+  erp_ref?: string | null;
+  erp_cost_sheet_no?: string | null;
+  erp_status?: string | null;
+  erp_revision?: number | null;
+  erp_total?: number | string | null;
+  erp_url?: string | null;
+  erp_sent_at?: Date | string | null;
+  erp_synced_at?: Date | string | null;
+  erp_error?: string | null;
 };
 
 /**
@@ -134,12 +143,19 @@ type SummaryHeader = ErpHeaderRow & {
  * attempt.
  */
 function erpLinkView(header: SummaryHeader) {
-  return header.erp_ref ? {
-    ref: header.erp_ref, costSheetNo: header.erp_cost_sheet_no ?? null, status: header.erp_status ?? null,
-    revision: header.erp_revision === null || header.erp_revision === undefined ? null : Number(header.erp_revision),
-    total: header.erp_total === null || header.erp_total === undefined ? null : Number(header.erp_total), url: header.erp_url ?? null,
-    sentAt: header.erp_sent_at ?? null, syncedAt: header.erp_synced_at ?? null, error: header.erp_error ?? null,
-  } : null;
+  return header.erp_ref
+    ? {
+        ref: header.erp_ref,
+        costSheetNo: header.erp_cost_sheet_no ?? null,
+        status: header.erp_status ?? null,
+        revision: header.erp_revision === null || header.erp_revision === undefined ? null : Number(header.erp_revision),
+        total: header.erp_total === null || header.erp_total === undefined ? null : Number(header.erp_total),
+        url: header.erp_url ?? null,
+        sentAt: header.erp_sent_at ?? null,
+        syncedAt: header.erp_synced_at ?? null,
+        error: header.erp_error ?? null,
+      }
+    : null;
 }
 
 async function loadSummary(database: Database, estimateId: number, actor: CurrentUser, erpEnabled = false) {
@@ -155,13 +171,21 @@ async function loadSummary(database: Database, estimateId: number, actor: Curren
   const summary = buildErpSummary(header, recordsets[1] ?? [], canEdit);
   summary.capabilities.canExport = summary.capabilities.canExport && Boolean(header.can_export);
   const groups = (recordsets[2] ?? []).map((row) => ({
-    id: Number(row.id), title: row.title, quantity: Number(row.quantity), unit: row.unit,
+    id: Number(row.id),
+    title: row.title,
+    quantity: Number(row.quantity),
+    unit: row.unit,
     members: JSON.parse(row.members) as ErpGroupMember[],
     rowVersion: row.row_version.toString("base64"),
   }));
   // Each approved revision's own Cost Sheet, newest first: the ERP keeps the earlier ones (owner 2026-11-21).
-  const sheets = (recordsets[3] ?? []).map((row) => ({ revision: Number(row.revision), costSheetNo: row.cost_sheet_no ?? null, status: row.erp_status ?? null,
-    url: row.erp_url ?? null, sentAt: row.sent_at ?? null }));
+  const sheets = (recordsets[3] ?? []).map((row) => ({
+    revision: Number(row.revision),
+    costSheetNo: row.cost_sheet_no ?? null,
+    status: row.erp_status ?? null,
+    url: row.erp_url ?? null,
+    sentAt: row.sent_at ?? null,
+  }));
   return { ...summary, groups, erp: { enabled: erpEnabled, link: erpLinkView(header), sheets } };
 }
 
@@ -169,10 +193,12 @@ async function loadSummary(database: Database, estimateId: number, actor: Curren
 async function lockEstimateForErp(transaction: sql.Transaction, id: number, version: Buffer, actor: CurrentUser) {
   const lock = new sql.Request(transaction);
   lock.input("estimate_id", sql.BigInt, id);
-  const estimate = (await lock.query<{ estimate_no: string; revision: number; status: string; owner_id: number | string; row_version: Buffer }>(`
+  const estimate = (
+    await lock.query<{ estimate_no: string; revision: number; status: string; owner_id: number | string; row_version: Buffer }>(`
     SELECT estimate_no,revision,status,owner_id,row_version FROM dbo.estimates WITH(UPDLOCK,HOLDLOCK)
     WHERE id=@estimate_id AND deleted_at IS NULL;
-  `)).recordset[0];
+  `)
+  ).recordset[0];
   if (!estimate) throw new ApiError(404, "estimate_not_found", "Estimate not found.");
   if (!estimate.row_version.equals(version)) throw new ApiError(409, "concurrency_conflict", "This estimate changed. Reload and try again.");
   if (!EDITABLE.has(estimate.status)) throw new ApiError(409, "estimate_locked", `ERP mappings cannot be changed while the estimate is '${estimate.status}'.`);
@@ -213,22 +239,28 @@ function parseGroupShape(body: Record<string, unknown>) {
 /** Every member must still exist in this revision and belong to no other merged line. */
 async function assertGroupMembers(transaction: sql.Transaction, id: number, revision: number, members: ErpGroupMember[]) {
   const existing = new sql.Request(transaction);
-  existing.input("estimate_id", sql.BigInt, id); existing.input("revision", sql.Int, revision);
-  const rows = (await existing.query<{ id: number | string; members: string }>(`SELECT id,members FROM dbo.estimate_erp_groups WITH(UPDLOCK,HOLDLOCK)
-    WHERE estimate_id=@estimate_id AND revision=@revision;`)).recordset;
+  existing.input("estimate_id", sql.BigInt, id);
+  existing.input("revision", sql.Int, revision);
+  const rows = (
+    await existing.query<{ id: number | string; members: string }>(`SELECT id,members FROM dbo.estimate_erp_groups WITH(UPDLOCK,HOLDLOCK)
+    WHERE estimate_id=@estimate_id AND revision=@revision;`)
+  ).recordset;
   const taken = new Set(rows.flatMap((row) => (JSON.parse(row.members) as ErpGroupMember[]).map((member) => `${member.sourceType}:${member.sourceId}`)));
   for (const member of members) {
     if (taken.has(`${member.sourceType}:${member.sourceId}`)) {
       throw new ApiError(409, "erp_group_member_taken", "One of these lines is already part of another merged line.");
     }
     const source = new sql.Request(transaction);
-    source.input("estimate_id", sql.BigInt, id); source.input("revision", sql.Int, revision);
+    source.input("estimate_id", sql.BigInt, id);
+    source.input("revision", sql.Int, revision);
     source.input("source_id", sql.BigInt, member.sourceId);
-    const found = (await source.query<{ found: boolean }>(`
+    const found = (
+      await source.query<{ found: boolean }>(`
       SELECT CONVERT(bit,CASE WHEN EXISTS(SELECT 1 FROM ${SOURCE_TABLES[member.sourceType]} WITH(UPDLOCK,HOLDLOCK)
         WHERE id=@source_id AND estimate_id=@estimate_id AND revision=@revision AND deleted_at IS NULL)
         THEN 1 ELSE 0 END) found;
-    `)).recordset[0]?.found;
+    `)
+    ).recordset[0]?.found;
     if (!found) throw new ApiError(404, "estimate_erp_source_not_found", "A line of this merged line was not found in the current Estimate revision.");
   }
 }
@@ -266,9 +298,7 @@ function parseMappings(value: unknown): MappingInput[] {
       sourceType,
       sourceId,
       erpCategory: parseErpCategory(body.erpCategory),
-      mappingRowVersion: body.mappingRowVersion === null || body.mappingRowVersion === undefined
-        ? null
-        : parseRowVersion(body.mappingRowVersion),
+      mappingRowVersion: body.mappingRowVersion === null || body.mappingRowVersion === undefined ? null : parseRowVersion(body.mappingRowVersion),
     };
   });
 }
@@ -293,7 +323,11 @@ function parseExportEvent(value: unknown) {
 }
 
 export type EstimateErpOutcome = {
-  sent: boolean; result?: string | null; costSheetNo?: string | null; status?: string | null; message?: string;
+  sent: boolean;
+  result?: string | null;
+  costSheetNo?: string | null;
+  status?: string | null;
+  message?: string;
   kind?: ErpFailure["kind"] | "not_ready" | "not_configured";
 };
 
@@ -305,31 +339,60 @@ export type EstimateErpOutcome = {
  */
 export function createEstimateErpSender(database: Database, erp: EstimateErpLink | null) {
   const notConfigured: EstimateErpOutcome = { sent: false, kind: "not_configured", message: "The ERP connection is not configured on this server." };
-  const recordError = (estimateId: number, revision: number, message: string) => database.query(`UPDATE dbo.estimate_erp_links SET error=@error,updated_at=SYSUTCDATETIME()
-    WHERE estimate_id=@id AND revision=@revision;`, (r) => { r.input("error", sql.NVarChar(500), message.slice(0, 500)); r.input("id", sql.BigInt, estimateId); r.input("revision", sql.Int, revision); });
+  const recordError = (estimateId: number, revision: number, message: string) =>
+    database.query(
+      `UPDATE dbo.estimate_erp_links SET error=@error,updated_at=SYSUTCDATETIME()
+    WHERE estimate_id=@id AND revision=@revision;`,
+      (r) => {
+        r.input("error", sql.NVarChar(500), message.slice(0, 500));
+        r.input("id", sql.BigInt, estimateId);
+        r.input("revision", sql.Int, revision);
+      },
+    );
   /* What the ERP said about one Cost Sheet, found by its reference. A send records the revision it sent: the ERP's own
      revision field is not always the app's number (an R02 sent over R01's sheet read back as R01), so it is not stored. */
-  const recordSheet = (externalRef: string, sheet: CostSheet, sent: { revision: number; by: number } | null) => database.query(`
+  const recordSheet = (externalRef: string, sheet: CostSheet, sent: { revision: number; by: number } | null) =>
+    database.query(
+      `
     UPDATE dbo.estimate_erp_links SET cost_sheet_no=COALESCE(@no,cost_sheet_no),erp_status=COALESCE(@status,erp_status),
       erp_revision=COALESCE(@revision,erp_revision),erp_total=COALESCE(@total,erp_total),erp_url=COALESCE(@url,erp_url),
       sent_at=CASE WHEN @sent_by IS NULL THEN sent_at ELSE SYSUTCDATETIME() END,sent_by=COALESCE(@sent_by,sent_by),
       synced_at=SYSUTCDATETIME(),error=CASE WHEN @sent_by IS NULL THEN error END,updated_at=SYSUTCDATETIME()
-    WHERE external_ref=@ref;`, (r) => {
-    r.input("no", sql.NVarChar(50), sheet.costSheetNo?.slice(0, 50) ?? null); r.input("status", sql.NVarChar(30), sheet.status?.slice(0, 30) ?? null);
-    r.input("revision", sql.Int, sent?.revision ?? null); r.input("total", sql.Decimal(19, 4), sheet.total);
-    r.input("url", sql.NVarChar(500), sheet.url?.slice(0, 500) ?? null); r.input("sent_by", sql.BigInt, sent?.by ?? null); r.input("ref", sql.NVarChar(100), externalRef);
-  });
+    WHERE external_ref=@ref;`,
+      (r) => {
+        r.input("no", sql.NVarChar(50), sheet.costSheetNo?.slice(0, 50) ?? null);
+        r.input("status", sql.NVarChar(30), sheet.status?.slice(0, 30) ?? null);
+        r.input("revision", sql.Int, sent?.revision ?? null);
+        r.input("total", sql.Decimal(19, 4), sheet.total);
+        r.input("url", sql.NVarChar(500), sheet.url?.slice(0, 500) ?? null);
+        r.input("sent_by", sql.BigInt, sent?.by ?? null);
+        r.input("ref", sql.NVarChar(100), externalRef);
+      },
+    );
 
   return {
     enabled: Boolean(erp),
 
     async send(estimateId: number, actor: CurrentUser, rows: CostEstimateLine[] | null, options: { resend?: boolean } = {}): Promise<EstimateErpOutcome> {
       if (!erp) return notConfigured;
-      const header = (await database.query<{
-        estimate_no: string; revision: number; status: string; project_name: string; locked_at: Date | string | null; customer_name: string;
-        short_name: string | null; owner_email: string | null; project_no: string | null; revision_reason: string | null;
-        erp_revision: number | null; cost_sheet_no: string | null; previous_sheet_no: string | null; previous_revision: number | null;
-      }>(`SELECT e.estimate_no,e.revision,e.status,e.project_name,e.locked_at,c.name customer_name,c.short_name,u.email owner_email,
+      const header = (
+        await database.query<{
+          estimate_no: string;
+          revision: number;
+          status: string;
+          project_name: string;
+          locked_at: Date | string | null;
+          customer_name: string;
+          short_name: string | null;
+          owner_email: string | null;
+          project_no: string | null;
+          revision_reason: string | null;
+          erp_revision: number | null;
+          cost_sheet_no: string | null;
+          previous_sheet_no: string | null;
+          previous_revision: number | null;
+        }>(
+          `SELECT e.estimate_no,e.revision,e.status,e.project_name,e.locked_at,c.name customer_name,c.short_name,u.email owner_email,
           (SELECT TOP(1) p.project_no FROM dbo.projects p WHERE p.estimate_id=e.id AND p.deleted_at IS NULL) project_no,
           (SELECT TOP(1) JSON_VALUE(a.after_json,'$.reason') FROM dbo.audit_log a WHERE a.entity_type=N'Estimate' AND a.entity_id=e.id
             AND a.action IN(N'Revision created',N'Revision requested',N'Revision restored') AND TRY_CONVERT(int,JSON_VALUE(a.after_json,'$.revision'))=e.revision
@@ -339,7 +402,10 @@ export function createEstimateErpSender(database: Database, erp: EstimateErpLink
         LEFT JOIN dbo.estimate_erp_links link ON link.estimate_id=e.id AND link.revision=e.revision
         OUTER APPLY (SELECT TOP(1) p.cost_sheet_no,p.revision FROM dbo.estimate_erp_links p
           WHERE p.estimate_id=e.id AND p.revision<e.revision AND p.cost_sheet_no IS NOT NULL ORDER BY p.revision DESC) previous
-        WHERE e.id=@id AND e.deleted_at IS NULL;`, (r) => r.input("id", sql.BigInt, estimateId))).recordset[0];
+        WHERE e.id=@id AND e.deleted_at IS NULL;`,
+          (r) => r.input("id", sql.BigInt, estimateId),
+        )
+      ).recordset[0];
       if (!header) return { sent: false, kind: "not_ready", message: "Estimate not found." };
       if (!["approved", "locked"].includes(header.status.toLowerCase())) {
         return { sent: false, kind: "not_ready", message: "Only an approved estimate is sent to the ERP." };
@@ -350,12 +416,16 @@ export function createEstimateErpSender(database: Database, erp: EstimateErpLink
       /* Each approved revision is its own Cost Sheet with its own reference (owner 2026-11-21, migration 119), so the ERP opens
          a new sheet for R02 and keeps R01's. The link exists before any check, so a reason not to send is kept for the ERP tab. */
       let externalRef = await database.transaction(async (transaction) => {
-        const issue = new sql.Request(transaction); issue.input("id", sql.BigInt, estimateId); issue.input("revision", sql.Int, header.revision);
+        const issue = new sql.Request(transaction);
+        issue.input("id", sql.BigInt, estimateId);
+        issue.input("revision", sql.Int, header.revision);
         issue.input("ref", sql.NVarChar(100), newEstimateErpRef());
-        return (await issue.query<{ external_ref: string }>(`
+        return (
+          await issue.query<{ external_ref: string }>(`
           IF NOT EXISTS(SELECT 1 FROM dbo.estimate_erp_links WITH(UPDLOCK,HOLDLOCK) WHERE estimate_id=@id AND revision=@revision)
             INSERT dbo.estimate_erp_links(estimate_id,revision,external_ref) VALUES(@id,@revision,@ref);
-          SELECT external_ref FROM dbo.estimate_erp_links WHERE estimate_id=@id AND revision=@revision;`)).recordset[0]!.external_ref;
+          SELECT external_ref FROM dbo.estimate_erp_links WHERE estimate_id=@id AND revision=@revision;`)
+        ).recordset[0]!.external_ref;
       });
       if (!rows) {
         const message = "The approval came without the ERP sheet's rows. Open the estimate's ERP tab and press Send to the ERP.";
@@ -363,31 +433,60 @@ export function createEstimateErpSender(database: Database, erp: EstimateErpLink
         return { sent: false, kind: "not_ready", message };
       }
       const summary = await loadSummary(database, estimateId, actor, true);
-      const blocker = !summary.reconciled ? "The ERP categories do not add up to the estimate total."
-        : ESTIMATE_OVERHEAD_ENABLED && summary.overhead.state === "Missing" ? "The estimate has no approved overhead."
-          : costEstimateBlocker(rows) ?? sheetRowsMismatch(rows, summary.categories);
-      if (blocker) { await recordError(estimateId, header.revision, blocker); return { sent: false, kind: "not_ready", message: blocker }; }
+      const blocker = !summary.reconciled
+        ? "The ERP categories do not add up to the estimate total."
+        : ESTIMATE_OVERHEAD_ENABLED && summary.overhead.state === "Missing"
+          ? "The estimate has no approved overhead."
+          : (costEstimateBlocker(rows) ?? sheetRowsMismatch(rows, summary.categories));
+      if (blocker) {
+        await recordError(estimateId, header.revision, blocker);
+        return { sent: false, kind: "not_ready", message: blocker };
+      }
       // The new sheet says which one it replaces, so people in the ERP can tell the revisions apart.
       const replaces = header.previous_sheet_no ? `Supersedes ${header.previous_sheet_no} (R${String(header.previous_revision ?? 0).padStart(2, "0")})` : null;
-      const argumentsFor = (ref: string) => costEstimateArguments({
-        estimateId, externalRef: ref, revision: header.revision, estimateNo: header.estimate_no, projectNo: header.project_no,
-        projectName: header.project_name, customer: header.customer_name, shortName: header.short_name,
-        revisionDescription: [header.revision_reason, replaces].filter(Boolean).join(" · ") || null, preparedByEmail: header.owner_email,
-        approvedAt: header.locked_at, appBaseUrl: erp.appBaseUrl,
-      }, rows, summary.overhead.amount);
+      const argumentsFor = (ref: string) =>
+        costEstimateArguments(
+          {
+            estimateId,
+            externalRef: ref,
+            revision: header.revision,
+            estimateNo: header.estimate_no,
+            projectNo: header.project_no,
+            projectName: header.project_name,
+            customer: header.customer_name,
+            shortName: header.short_name,
+            revisionDescription: [header.revision_reason, replaces].filter(Boolean).join(" · ") || null,
+            preparedByEmail: header.owner_email,
+            approvedAt: header.locked_at,
+            appBaseUrl: erp.appBaseUrl,
+          },
+          rows,
+          summary.overhead.amount,
+        );
       let args = argumentsFor(externalRef);
       let submitted = await erp.gateway.call<Record<string, unknown>>(actor.entraObjectId, "cost_estimate_submit", args);
       /* The ERP refuses the reference of a Cost Sheet deleted there. Once a sheet has existed, that is the only reason for it,
          so the estimate takes a new reference and the sheet is written again as a new one. */
       if (!submitted.ok && submitted.kind === "validation" && submitted.errors?.external_ref && (header.erp_revision !== null || header.cost_sheet_no)) {
-        const replaced = externalRef; externalRef = newEstimateErpRef();
+        const replaced = externalRef;
+        externalRef = newEstimateErpRef();
         await database.transaction(async (transaction) => {
-          const reissue = new sql.Request(transaction); reissue.input("id", sql.BigInt, estimateId); reissue.input("ref", sql.NVarChar(100), externalRef);
+          const reissue = new sql.Request(transaction);
+          reissue.input("id", sql.BigInt, estimateId);
+          reissue.input("ref", sql.NVarChar(100), externalRef);
           reissue.input("revision", sql.Int, header.revision);
           await reissue.query(`UPDATE dbo.estimate_erp_links SET external_ref=@ref,cost_sheet_no=NULL,erp_status=NULL,erp_revision=NULL,erp_total=NULL,
             erp_url=NULL,updated_at=SYSUTCDATETIME() WHERE estimate_id=@id AND revision=@revision;`);
-          await insertAudit(transaction, actor.id, "Estimate", estimateId, header.estimate_no, "ERP reference re-issued",
-            { externalRef: replaced, costSheetNo: header.cost_sheet_no, revision: header.revision }, { externalRef, reason: describeErpFailure(submitted as ErpFailure) });
+          await insertAudit(
+            transaction,
+            actor.id,
+            "Estimate",
+            estimateId,
+            header.estimate_no,
+            "ERP reference re-issued",
+            { externalRef: replaced, costSheetNo: header.cost_sheet_no, revision: header.revision },
+            { externalRef, reason: describeErpFailure(submitted as ErpFailure) },
+          );
         });
         args = argumentsFor(externalRef);
         submitted = await erp.gateway.call<Record<string, unknown>>(actor.entraObjectId, "cost_estimate_submit", args);
@@ -399,19 +498,31 @@ export function createEstimateErpSender(database: Database, erp: EstimateErpLink
       }
       const sheet = readCostSheet(submitted.data);
       await recordSheet(externalRef, sheet, { revision: header.revision, by: actor.id });
-      await database.transaction((transaction) => insertAudit(transaction, actor.id, "Estimate", estimateId, header.estimate_no, "Sent to ERP", null, {
-        revision: header.revision, externalRef, result: sheet.result, costSheetNo: sheet.costSheetNo, erpStatus: sheet.status,
-        total: args.total, lines: rows.length, response: JSON.stringify(submitted.data).slice(0, 2000),
-      }));
+      await database.transaction((transaction) =>
+        insertAudit(transaction, actor.id, "Estimate", estimateId, header.estimate_no, "Sent to ERP", null, {
+          revision: header.revision,
+          externalRef,
+          result: sheet.result,
+          costSheetNo: sheet.costSheetNo,
+          erpStatus: sheet.status,
+          total: args.total,
+          lines: rows.length,
+          response: JSON.stringify(submitted.data).slice(0, 2000),
+        }),
+      );
       return { sent: true, result: sheet.result, costSheetNo: sheet.costSheetNo, status: sheet.status };
     },
 
     /** Reads the newest Cost Sheet back: CONFIRMED, or LINKED once a sales quotation uses it. */
     async refresh(estimateId: number, actor: CurrentUser): Promise<EstimateErpOutcome> {
       if (!erp) return notConfigured;
-      const link = (await database.query<{ external_ref: string }>(`SELECT TOP(1) external_ref FROM dbo.estimate_erp_links
+      const link = (
+        await database.query<{ external_ref: string }>(
+          `SELECT TOP(1) external_ref FROM dbo.estimate_erp_links
         WHERE estimate_id=@id AND (cost_sheet_no IS NOT NULL OR sent_at IS NOT NULL) ORDER BY revision DESC;`,
-        (r) => r.input("id", sql.BigInt, estimateId))).recordset[0];
+          (r) => r.input("id", sql.BigInt, estimateId),
+        )
+      ).recordset[0];
       if (!link) return { sent: false, kind: "not_ready", message: "This estimate has not been sent to the ERP yet." };
       const read = await erp.gateway.call<Record<string, unknown>>(actor.entraObjectId, "cost_estimate_get", { external_ref: link.external_ref });
       if (!read.ok) return { sent: false, kind: read.kind, message: describeErpFailure(read) };
@@ -440,10 +551,19 @@ export function registerEstimateErpRoutes(app: FastifyInstance, database: Databa
     const actor = await users.required(request);
     const id = positiveLong((request.params as { id?: string }).id, "Estimate id");
     if (!sender.enabled) throw new ApiError(503, "erp_not_configured", "The ERP connection is not configured on this server.");
-    const owner = (await database.query<{ owner_id: number | string }>(`SELECT owner_id FROM dbo.estimates WHERE id=@id AND deleted_at IS NULL;`,
-      (r) => r.input("id", sql.BigInt, id))).recordset[0];
+    // An approver is one of the listed people (migration 101), who decide without estimate.approve.
+    const owner = (
+      await database.query<{ owner_id: number | string; approver: boolean }>(
+        `SELECT e.owner_id,CONVERT(bit,CASE WHEN EXISTS(SELECT 1 FROM dbo.estimate_approvers a WHERE a.user_id=@actor) THEN 1 ELSE 0 END) approver
+      FROM dbo.estimates e WHERE e.id=@id AND e.deleted_at IS NULL;`,
+        (r) => {
+          r.input("id", sql.BigInt, id);
+          r.input("actor", sql.BigInt, actor.id);
+        },
+      )
+    ).recordset[0];
     if (!owner) throw new ApiError(404, "estimate_not_found", "Estimate not found.");
-    if (Number(owner.owner_id) !== actor.id && !hasRole(actor, "Engineering Manager", "Admin")) await users.demandPermission(request, "estimate.approve");
+    if (Number(owner.owner_id) !== actor.id && !owner.approver && !hasRole(actor, "Engineering Manager", "Admin")) await users.demandPermission(request, "estimate.approve");
     const body = bodyObject(request.body);
     const outcome = await sender.send(id, actor, parseErpSheetRows(body.lines), { resend: body.resend === true });
     if (!outcome.sent) throw new ApiError(outcome.kind === "not_ready" ? 409 : 422, "erp_send_failed", outcome.message ?? "The ERP refused the estimate.");
@@ -480,11 +600,14 @@ export function registerEstimateErpRoutes(app: FastifyInstance, database: Databa
         let manualOverride = false;
         if (mapping.sourceType === "ManhourLine") {
           const rule = new sql.Request(transaction);
-          rule.input("id", sql.BigInt, id); rule.input("revision", sql.Int, estimate.revision);
+          rule.input("id", sql.BigInt, id);
+          rule.input("revision", sql.Int, estimate.revision);
           rule.input("line", sql.BigInt, mapping.sourceId);
-          const automatic = (await rule.query<{ category: string | null }>(`SELECT ${laborCategorySql('l')} category
+          const automatic = (
+            await rule.query<{ category: string | null }>(`SELECT ${laborCategorySql("l")} category
             FROM dbo.manhour_lines l WITH(UPDLOCK,HOLDLOCK) WHERE l.id=@line AND l.estimate_id=@id
-              AND l.revision=@revision AND l.deleted_at IS NULL;`)).recordset[0]?.category;
+              AND l.revision=@revision AND l.deleted_at IS NULL;`)
+          ).recordset[0]?.category;
           manualOverride = Boolean(automatic) && automatic !== mapping.erpCategory;
           if (manualOverride) overrides.add(mapping);
         }
@@ -494,11 +617,13 @@ export function registerEstimateErpRoutes(app: FastifyInstance, database: Databa
           source.input("estimate_id", sql.BigInt, id);
           source.input("revision", sql.Int, estimate.revision);
           source.input("source_id", sql.BigInt, mapping.sourceId);
-          const exists = (await source.query<{ found: boolean }>(`
+          const exists = (
+            await source.query<{ found: boolean }>(`
             SELECT CONVERT(bit,CASE WHEN EXISTS(SELECT 1 FROM ${sourceTable} WITH(UPDLOCK,HOLDLOCK)
               WHERE id=@source_id AND estimate_id=@estimate_id AND revision=@revision AND deleted_at IS NULL)
               THEN 1 ELSE 0 END) found;
-          `)).recordset[0]?.found;
+          `)
+          ).recordset[0]?.found;
           if (!exists) throw new ApiError(404, "estimate_erp_source_not_found", "ERP mapping source was not found in the current Estimate revision.");
         }
         const mutation = new sql.Request(transaction);
@@ -511,13 +636,17 @@ export function registerEstimateErpRoutes(app: FastifyInstance, database: Databa
         mutation.input("mapping_version", sql.VarBinary(8), mapping.mappingRowVersion);
         mutation.input("manual_override", sql.Bit, manualOverride);
         // dbo.estimate_erp_mappings has an AFTER trigger, so OUTPUT must target a table variable (SQL error 334 otherwise).
-        const row = (await mutation.query<{ id: number | string }>(mapping.mappingRowVersion ? `
+        const row = (
+          await mutation.query<{ id: number | string }>(
+            mapping.mappingRowVersion
+              ? `
           DECLARE @changed TABLE(id bigint);
           UPDATE dbo.estimate_erp_mappings SET erp_category=@erp_category,manual_override=@manual_override,updated_by=@actor,updated_at=SYSUTCDATETIME()
           OUTPUT inserted.id INTO @changed(id) WHERE estimate_id=@estimate_id AND revision=@revision AND source_type=@source_type
             AND ((source_id=@source_id) OR (source_id IS NULL AND @source_id IS NULL)) AND row_version=@mapping_version;
           SELECT id FROM @changed;
-        ` : `
+        `
+              : `
           DECLARE @changed TABLE(id bigint);
           INSERT dbo.estimate_erp_mappings(estimate_id,revision,source_type,source_id,erp_category,manual_override,created_by,updated_by)
           OUTPUT inserted.id INTO @changed(id)
@@ -526,7 +655,9 @@ export function registerEstimateErpRoutes(app: FastifyInstance, database: Databa
             WHERE estimate_id=@estimate_id AND revision=@revision AND source_type=@source_type
               AND ((source_id=@source_id) OR (source_id IS NULL AND @source_id IS NULL)));
           SELECT id FROM @changed;
-        `)).recordset[0];
+        `,
+          )
+        ).recordset[0];
         if (!row) throw new ApiError(409, "concurrency_conflict", "An ERP mapping changed. Reload and try again.");
       }
 
@@ -559,15 +690,17 @@ export function registerEstimateErpRoutes(app: FastifyInstance, database: Databa
       const estimate = await lockEstimateForErp(transaction, id, estimateVersion, actor);
       await assertGroupMembers(transaction, id, estimate.revision, members);
       const insert = new sql.Request(transaction);
-      insert.input("estimate_id", sql.BigInt, id); insert.input("revision", sql.Int, estimate.revision);
-      insert.input("title", sql.NVarChar(200), title); insert.input("quantity", sql.Decimal(19, 4), quantity);
-      insert.input("unit", sql.NVarChar(30), unit); insert.input("members", sql.NVarChar(sql.MAX), JSON.stringify(members));
+      insert.input("estimate_id", sql.BigInt, id);
+      insert.input("revision", sql.Int, estimate.revision);
+      insert.input("title", sql.NVarChar(200), title);
+      insert.input("quantity", sql.Decimal(19, 4), quantity);
+      insert.input("unit", sql.NVarChar(30), unit);
+      insert.input("members", sql.NVarChar(sql.MAX), JSON.stringify(members));
       insert.input("actor", sql.BigInt, actor.id);
       await insert.query(`INSERT dbo.estimate_erp_groups(estimate_id,revision,title,quantity,unit,members,created_by,updated_by)
         VALUES(@estimate_id,@revision,@title,@quantity,@unit,@members,@actor,@actor);`);
       await touchEstimateForErp(transaction, id, actor.id);
-      await insertAudit(transaction, actor.id, "EstimateErpMapping", id, estimate.estimate_no, "ERP lines merged", null,
-        { revision: estimate.revision, title, quantity, unit, members });
+      await insertAudit(transaction, actor.id, "EstimateErpMapping", id, estimate.estimate_no, "ERP lines merged", null, { revision: estimate.revision, title, quantity, unit, members });
     });
     reply.code(201);
     const erpSummary = await loadSummary(database, id, actor, erpEnabled);
@@ -586,19 +719,24 @@ export function registerEstimateErpRoutes(app: FastifyInstance, database: Databa
     await database.transaction(async (transaction) => {
       const estimate = await lockEstimateForErp(transaction, id, estimateVersion, actor);
       const update = new sql.Request(transaction);
-      update.input("estimate_id", sql.BigInt, id); update.input("revision", sql.Int, estimate.revision);
-      update.input("group_id", sql.BigInt, groupId); update.input("group_version", sql.VarBinary(8), groupVersion);
-      update.input("title", sql.NVarChar(200), title); update.input("quantity", sql.Decimal(19, 4), quantity);
-      update.input("unit", sql.NVarChar(30), unit); update.input("actor", sql.BigInt, actor.id);
-      const changed = (await update.query<{ id: number | string }>(`DECLARE @changed TABLE(id bigint);
+      update.input("estimate_id", sql.BigInt, id);
+      update.input("revision", sql.Int, estimate.revision);
+      update.input("group_id", sql.BigInt, groupId);
+      update.input("group_version", sql.VarBinary(8), groupVersion);
+      update.input("title", sql.NVarChar(200), title);
+      update.input("quantity", sql.Decimal(19, 4), quantity);
+      update.input("unit", sql.NVarChar(30), unit);
+      update.input("actor", sql.BigInt, actor.id);
+      const changed = (
+        await update.query<{ id: number | string }>(`DECLARE @changed TABLE(id bigint);
         UPDATE dbo.estimate_erp_groups SET title=@title,quantity=@quantity,unit=@unit,updated_by=@actor,updated_at=SYSUTCDATETIME()
         OUTPUT inserted.id INTO @changed(id)
         WHERE id=@group_id AND estimate_id=@estimate_id AND revision=@revision AND row_version=@group_version;
-        SELECT id FROM @changed;`)).recordset[0];
+        SELECT id FROM @changed;`)
+      ).recordset[0];
       if (!changed) throw new ApiError(409, "concurrency_conflict", "This merged line changed. Reload and try again.");
       await touchEstimateForErp(transaction, id, actor.id);
-      await insertAudit(transaction, actor.id, "EstimateErpMapping", id, estimate.estimate_no, "Merged ERP line updated", null,
-        { revision: estimate.revision, groupId, title, quantity, unit });
+      await insertAudit(transaction, actor.id, "EstimateErpMapping", id, estimate.estimate_no, "Merged ERP line updated", null, { revision: estimate.revision, groupId, title, quantity, unit });
     });
     const erpSummary = await loadSummary(database, id, actor, erpEnabled);
     return { estimateRowVersion: erpSummary.estimateRowVersion, erpSummary };
@@ -614,16 +752,27 @@ export function registerEstimateErpRoutes(app: FastifyInstance, database: Databa
     await database.transaction(async (transaction) => {
       const estimate = await lockEstimateForErp(transaction, id, estimateVersion, actor);
       const remove = new sql.Request(transaction);
-      remove.input("estimate_id", sql.BigInt, id); remove.input("revision", sql.Int, estimate.revision);
+      remove.input("estimate_id", sql.BigInt, id);
+      remove.input("revision", sql.Int, estimate.revision);
       remove.input("group_id", sql.BigInt, groupId);
-      const removed = (await remove.query<{ title: string; members: string }>(`DECLARE @removed TABLE(title nvarchar(200),members nvarchar(max));
+      const removed = (
+        await remove.query<{ title: string; members: string }>(`DECLARE @removed TABLE(title nvarchar(200),members nvarchar(max));
         DELETE FROM dbo.estimate_erp_groups OUTPUT deleted.title,deleted.members INTO @removed(title,members)
         WHERE id=@group_id AND estimate_id=@estimate_id AND revision=@revision;
-        SELECT title,members FROM @removed;`)).recordset[0];
+        SELECT title,members FROM @removed;`)
+      ).recordset[0];
       if (!removed) throw new ApiError(404, "erp_group_not_found", "That merged line no longer exists.");
       await touchEstimateForErp(transaction, id, actor.id);
-      await insertAudit(transaction, actor.id, "EstimateErpMapping", id, estimate.estimate_no, "Merged ERP line split",
-        { revision: estimate.revision, groupId, title: removed.title, members: JSON.parse(removed.members) as ErpGroupMember[] }, null);
+      await insertAudit(
+        transaction,
+        actor.id,
+        "EstimateErpMapping",
+        id,
+        estimate.estimate_no,
+        "Merged ERP line split",
+        { revision: estimate.revision, groupId, title: removed.title, members: JSON.parse(removed.members) as ErpGroupMember[] },
+        null,
+      );
     });
     const erpSummary = await loadSummary(database, id, actor, erpEnabled);
     return { estimateRowVersion: erpSummary.estimateRowVersion, erpSummary };
@@ -644,17 +793,25 @@ export function registerEstimateErpRoutes(app: FastifyInstance, database: Databa
       const lock = new sql.Request(transaction);
       lock.input("estimate_id", sql.BigInt, id);
       lock.input("row_version", sql.VarBinary(8), event.estimateRowVersion);
-      const estimate = (await lock.query<{ estimate_no: string; revision: number }>(`
+      const estimate = (
+        await lock.query<{ estimate_no: string; revision: number }>(`
         SELECT estimate_no,revision FROM dbo.estimates WITH(UPDLOCK,HOLDLOCK)
         WHERE id=@estimate_id AND row_version=@row_version AND deleted_at IS NULL;
-      `)).recordset[0];
+      `)
+      ).recordset[0];
       if (!estimate || estimate.revision !== summary.revision) throw new ApiError(409, "concurrency_conflict", "This estimate changed. Reload and export again.");
-      const mappingDigest = createHash("sha256").update(JSON.stringify(summary.lines.map((line) => ({
-        sourceType: line.sourceType,
-        sourceId: line.sourceId,
-        erpCategory: line.erpCategory,
-        amount: line.amount,
-      })))).digest("hex");
+      const mappingDigest = createHash("sha256")
+        .update(
+          JSON.stringify(
+            summary.lines.map((line) => ({
+              sourceType: line.sourceType,
+              sourceId: line.sourceId,
+              erpCategory: line.erpCategory,
+              amount: line.amount,
+            })),
+          ),
+        )
+        .digest("hex");
       await insertAudit(transaction, actor.id, "EstimateErpExport", id, estimate.estimate_no, "ERP Summary exported", null, {
         revision: estimate.revision,
         estimateRowVersion: summary.estimateRowVersion,

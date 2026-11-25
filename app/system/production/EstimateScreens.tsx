@@ -263,7 +263,7 @@ const businessDate = (date = new Date()) => {
 };
 const futureDate = (days: number) => businessDate(new Date(Date.now() + days * 86_400_000));
 const normalizeEstimateDueDate = (value: string | undefined, earliest: string, latest: string) => (value && value >= earliest && value <= latest ? value : futureDate(7));
-const canOwnEstimate = (role: string) => ["Engineer", "Engineering Manager", "Admin"].includes(role);
+const canOwnEstimate = (role: string) => ["Engineer", "Leader", "Engineering Manager", "Admin"].includes(role);
 const canAssignEstimateOwner = (role: string) => ["Engineering Manager", "Admin"].includes(role);
 const assignmentResultMessage = (action: "created" | "updated", result: EstimateAssignmentMutationResult) => {
   const saved = `Assignment ${action}`;

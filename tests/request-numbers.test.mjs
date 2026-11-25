@@ -33,5 +33,6 @@ test("a request over budget is submitted with its requester's reason, which the 
   // The sheet asks for it and does not send without it; saving a draft needs none.
   assert.ok(editor.includes('data-guide="pr.submit" disabled={busy || !selected.length || issues.size > 0 || needsReason}'));
   assert.ok(editor.includes("justification: overBudget ? justification.trim() : undefined"));
-  assert.ok(material.includes('<strong><LocalizedText text={"เกินงบ · เหตุผลของผู้ขอ"} /></strong>{detail.purchaseRequisition.overBudgetReason}'));
+  // MaterialScreens.tsx is oxfmt-formatted: the markup is matched with its line breaks folded.
+  assert.ok(material.replace(/\s+/g, " ").includes('<strong> <LocalizedText text={"เกินงบ · เหตุผลของผู้ขอ"} /> </strong> {detail.purchaseRequisition.overBudgetReason}'));
 });

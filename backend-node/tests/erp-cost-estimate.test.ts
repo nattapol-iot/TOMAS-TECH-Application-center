@@ -16,26 +16,49 @@ import { createEstimateErpSender, registerEstimateErpRoutes } from "../src/route
  */
 
 const header: CostEstimateHeader = {
-  estimateId: 41, externalRef: "ENGAPP-EST-00000000-0000-4000-8000-000000000001", revision: 2, estimateNo: "EST-2610-0023",
-  projectNo: "PJ000000", projectName: "AI Camera", customer: "Unimicron (Thailand) Co., Ltd.", shortName: "UMTH",
-  revisionDescription: "Customer added a second line", preparedByEmail: "owner@tomastc.com", approvedAt: "2026-11-02T03:00:00.000Z",
+  estimateId: 41,
+  externalRef: "ENGAPP-EST-00000000-0000-4000-8000-000000000001",
+  revision: 2,
+  estimateNo: "EST-2610-0023",
+  projectNo: "PJ000000",
+  projectName: "AI Camera",
+  customer: "Unimicron (Thailand) Co., Ltd.",
+  shortName: "UMTH",
+  revisionDescription: "Customer added a second line",
+  preparedByEmail: "owner@tomastc.com",
+  approvedAt: "2026-11-02T03:00:00.000Z",
   appBaseUrl: "https://iot-team-center.tomastc.com:8444/",
 };
 const line = (overrides: Partial<CostEstimateLine>): CostEstimateLine => ({
-  sourceType: "CostItem", internalCategory: "01 Hardware", erpCategory: "Hardware", description: "PLC CPU", amount: 0, ...overrides,
+  sourceType: "CostItem",
+  internalCategory: "01 Hardware",
+  erpCategory: "Hardware",
+  description: "PLC CPU",
+  amount: 0,
+  ...overrides,
 });
 
 test("summary and total are built from the amounts actually sent, rounded to the satang", () => {
-  const args = costEstimateArguments(header, [
-    line({ amount: 1000.004, modelPartNumber: "KV-8000", brand: "Keyence", supplier: "Keyence Thailand", unitPrice: 500.002, quantity: 2, unit: "Pcs", module: "Control panel" }),
-    line({ amount: 0.335, description: "Cable" }),
-    line({ sourceType: "ManhourLine", internalCategory: "Engineering / Internal", erpCategory: "Service", description: "Programming", amount: 12000, unit: "man-day" }),
-    line({ sourceType: "Contingency", internalCategory: "Contingency", erpCategory: "Service", description: "Contingency", amount: 650.556 }),
-  ], 99.999);
+  const args = costEstimateArguments(
+    header,
+    [
+      line({ amount: 1000.004, modelPartNumber: "KV-8000", brand: "Keyence", supplier: "Keyence Thailand", unitPrice: 500.002, quantity: 2, unit: "Pcs", module: "Control panel" }),
+      line({ amount: 0.335, description: "Cable" }),
+      line({ sourceType: "ManhourLine", internalCategory: "Engineering / Internal", erpCategory: "Service", description: "Programming", amount: 12000, unit: "man-day" }),
+      line({ sourceType: "Contingency", internalCategory: "Contingency", erpCategory: "Service", description: "Contingency", amount: 650.556 }),
+    ],
+    99.999,
+  );
   const lines = args.lines as Array<Record<string, unknown>>;
-  assert.deepEqual(lines.map((entry) => entry.amount), [1000, 0.34, 12000, 650.56]);
+  assert.deepEqual(
+    lines.map((entry) => entry.amount),
+    [1000, 0.34, 12000, 650.56],
+  );
   const summary = args.summary as Array<{ category: string; amount: number }>;
-  assert.deepEqual(summary.map((entry) => entry.category), ["Hardware", "Software", "Service", "Installation", "License", "Maintenance", "Training"]);
+  assert.deepEqual(
+    summary.map((entry) => entry.category),
+    ["Hardware", "Software", "Service", "Installation", "License", "Maintenance", "Training"],
+  );
   assert.equal(summary.find((entry) => entry.category === "Hardware")!.amount, 1000.34);
   assert.equal(summary.find((entry) => entry.category === "Service")!.amount, 12650.56);
   assert.equal(args.overhead_amount, 100);
@@ -75,10 +98,11 @@ test("an estimate with unmapped, too many or no lines is not sent", () => {
 });
 
 test("the ERP's answer is read from a nested sheet or the top level", () => {
-  assert.deepEqual(readCostSheet({ result: "created", cost_sheet: { cost_sheet_no: "CS-2611-0007", status: "CONFIRMED", revision: 2, total: "13750.90", url: "https://pegasus-erp.tomastc.com/cost-sheets/7" } }),
-    { result: "created", costSheetNo: "CS-2611-0007", status: "CONFIRMED", revision: 2, total: 13750.9, url: "https://pegasus-erp.tomastc.com/cost-sheets/7" });
-  assert.deepEqual(readCostSheet({ no: "CS-1", status: "LINKED", revision: 3 }),
-    { result: null, costSheetNo: "CS-1", status: "LINKED", revision: 3, total: null, url: null });
+  assert.deepEqual(
+    readCostSheet({ result: "created", cost_sheet: { cost_sheet_no: "CS-2611-0007", status: "CONFIRMED", revision: 2, total: "13750.90", url: "https://pegasus-erp.tomastc.com/cost-sheets/7" } }),
+    { result: "created", costSheetNo: "CS-2611-0007", status: "CONFIRMED", revision: 2, total: 13750.9, url: "https://pegasus-erp.tomastc.com/cost-sheets/7" },
+  );
+  assert.deepEqual(readCostSheet({ no: "CS-1", status: "LINKED", revision: 3 }), { result: null, costSheetNo: "CS-1", status: "LINKED", revision: 3, total: null, url: null });
   assert.deepEqual(readCostSheet(null), { result: null, costSheetNo: null, status: null, revision: null, total: null, url: null });
 });
 
@@ -87,8 +111,18 @@ const version = Buffer.from("0000000000000001", "hex");
 test("the sheet's rows are checked before anything is sent", () => {
   const row = { sourceType: "CostItem", description: " PLC System ", internalCategory: "01 Hardware", erpCategory: "Hardware", amount: 1000, quantity: 1, unit: "Set", unitPrice: 1000 };
   assert.deepEqual(parseErpSheetRows([row])[0], {
-    sourceType: "CostItem", erpCategory: "Hardware", description: "PLC System", amount: 1000, internalCategory: "01 Hardware",
-    supplier: null, brand: null, leadTime: null, quoteRevision: null, unit: "Set", unitPrice: 1000, quantity: 1,
+    sourceType: "CostItem",
+    erpCategory: "Hardware",
+    description: "PLC System",
+    amount: 1000,
+    internalCategory: "01 Hardware",
+    supplier: null,
+    brand: null,
+    leadTime: null,
+    quoteRevision: null,
+    unit: "Set",
+    unitPrice: 1000,
+    quantity: 1,
   });
   assert.throws(() => parseErpSheetRows([]), /rows are required/);
   assert.throws(() => parseErpSheetRows([{ ...row, erpCategory: "Unmapped" }]), /row 1 has no ERP category/);
@@ -102,57 +136,188 @@ test("the rows must add up to the estimate's own summary, category by category",
     { sourceType: "CostItem", description: "PLC System", internalCategory: "01 Hardware", erpCategory: "Hardware", amount: 333.333 },
     { sourceType: "CostItem", description: "Vision", internalCategory: "01 Hardware", erpCategory: "Hardware", amount: 666.667 },
   ]);
-  assert.equal(sheetRowsMismatch(rows, [{ category: "Hardware", amount: 1000 }, { category: "Service", amount: 0 }]), null);
+  assert.equal(
+    sheetRowsMismatch(rows, [
+      { category: "Hardware", amount: 1000 },
+      { category: "Service", amount: 0 },
+    ]),
+    null,
+  );
   assert.match(sheetRowsMismatch(rows, [{ category: "Hardware", amount: 900 }])!, /Hardware rows add up to 1000.00, but the estimate's Hardware is 900.00/);
-  assert.match(sheetRowsMismatch(rows, [{ category: "Hardware", amount: 1000 }, { category: "Service", amount: 500 }])!, /Service rows add up to 0.00/);
+  assert.match(
+    sheetRowsMismatch(rows, [
+      { category: "Hardware", amount: 1000 },
+      { category: "Service", amount: 500 },
+    ])!,
+    /Service rows add up to 0.00/,
+  );
 });
 
 /* The summary holds three cost lines; the sheet writes them as two rows, and only the rows reach the ERP. */
 const sheetRows = [
   { sourceType: "CostItem", description: "PLC System KV-8000", internalCategory: "01 Hardware", erpCategory: "Hardware", amount: 1000, quantity: 1, unit: "Set", unitPrice: 1000, supplier: "Keyence" },
-  { sourceType: "ManhourLine", description: "Specification Design / Software Development", internalCategory: "Engineering", erpCategory: "Service", amount: 500, quantity: 1, unit: "Set", unitPrice: 500 },
+  {
+    sourceType: "ManhourLine",
+    description: "Specification Design / Software Development",
+    internalCategory: "Engineering",
+    erpCategory: "Service",
+    amount: 500,
+    quantity: 1,
+    unit: "Set",
+    unitPrice: 500,
+  },
 ];
 
-function harness(t: { mock: { method: typeof import("node:test").mock.method } }, options: {
-  status?: string; erpRevision?: number | null; answer?: ErpResult<Record<string, unknown>>; answers?: Array<ErpResult<Record<string, unknown>>>; actorId?: number;
-  previousSheet?: { no: string; revision: number };
-} = {}) {
-  const seen = { calls: [] as Array<{ subject: string; tool: string; args: Record<string, unknown> }>, recordedError: null as unknown, recordedSheet: null as Record<string, unknown> | null,
-    errorRevision: null as unknown, audits: 0, issued: 0, issuedRevision: null as unknown, reissued: 0, reissuedRevision: null as unknown };
+function harness(
+  t: { mock: { method: typeof import("node:test").mock.method } },
+  options: {
+    status?: string;
+    erpRevision?: number | null;
+    answer?: ErpResult<Record<string, unknown>>;
+    answers?: Array<ErpResult<Record<string, unknown>>>;
+    actorId?: number;
+    previousSheet?: { no: string; revision: number };
+    listedApprover?: boolean;
+  } = {},
+) {
+  const seen = {
+    calls: [] as Array<{ subject: string; tool: string; args: Record<string, unknown> }>,
+    recordedError: null as unknown,
+    recordedSheet: null as Record<string, unknown> | null,
+    errorRevision: null as unknown,
+    audits: 0,
+    issued: 0,
+    issuedRevision: null as unknown,
+    reissued: 0,
+    reissuedRevision: null as unknown,
+  };
   t.mock.method(sql.Request.prototype, "query", async function (this: sql.Request, statement: string) {
     const parameter = (name: string) => (this as unknown as { parameters: Record<string, { value: unknown } | undefined> }).parameters[name]?.value;
-    if (statement.includes("INSERT dbo.estimate_erp_links")) { seen.issued += 1; seen.issuedRevision = parameter("revision"); return { recordset: [{ external_ref: "ENGAPP-EST-test" }] }; }
-    if (statement.includes("UPDATE dbo.estimate_erp_links SET external_ref")) { seen.reissued += 1; seen.reissuedRevision = parameter("revision"); return { recordset: [] }; }
-    if (statement.includes("audit_log")) { seen.audits += 1; return { recordset: [] }; }
+    if (statement.includes("INSERT dbo.estimate_erp_links")) {
+      seen.issued += 1;
+      seen.issuedRevision = parameter("revision");
+      return { recordset: [{ external_ref: "ENGAPP-EST-test" }] };
+    }
+    if (statement.includes("UPDATE dbo.estimate_erp_links SET external_ref")) {
+      seen.reissued += 1;
+      seen.reissuedRevision = parameter("revision");
+      return { recordset: [] };
+    }
+    if (statement.includes("audit_log")) {
+      seen.audits += 1;
+      return { recordset: [] };
+    }
     if (statement.includes("activity_events")) return { recordset: [] };
     throw Error("Unexpected transaction query: " + statement);
   });
   const database = {
-    async transaction(action: (transaction: object) => Promise<unknown>) { return action({}); },
+    async transaction(action: (transaction: object) => Promise<unknown>) {
+      return action({});
+    },
     async query(statement: string, bind?: (request: { input: (name: string, type: unknown, value: unknown) => void }) => void) {
       const inputs: Record<string, unknown> = {};
-      bind?.({ input: (name, _type, value) => { inputs[name] = value; } });
-      if (statement.includes("SELECT owner_id FROM dbo.estimates")) return { recordset: [{ owner_id: 7 }] };
+      bind?.({
+        input: (name, _type, value) => {
+          inputs[name] = value;
+        },
+      });
+      if (statement.includes("SELECT e.owner_id") && statement.includes("dbo.estimate_approvers")) return { recordset: [{ owner_id: 7, approver: options.listedApprover === true }] };
       if (statement.includes("INNER JOIN dbo.customers c")) {
-        return { recordset: [{ estimate_no: "EST-2610-0023", revision: 2, status: options.status ?? "Approved", project_name: "AI Camera", locked_at: "2026-11-02T03:00:00Z",
-          customer_name: "Unimicron", short_name: "UMTH", owner_email: "owner@tomastc.com", project_no: "PJ000000", revision_reason: null,
-          erp_revision: options.erpRevision ?? null, cost_sheet_no: options.erpRevision === undefined || options.erpRevision === null ? null : "CS-1",
-          previous_sheet_no: options.previousSheet?.no ?? null, previous_revision: options.previousSheet?.revision ?? null }] };
+        return {
+          recordset: [
+            {
+              estimate_no: "EST-2610-0023",
+              revision: 2,
+              status: options.status ?? "Approved",
+              project_name: "AI Camera",
+              locked_at: "2026-11-02T03:00:00Z",
+              customer_name: "Unimicron",
+              short_name: "UMTH",
+              owner_email: "owner@tomastc.com",
+              project_no: "PJ000000",
+              revision_reason: null,
+              erp_revision: options.erpRevision ?? null,
+              cost_sheet_no: options.erpRevision === undefined || options.erpRevision === null ? null : "CS-1",
+              previous_sheet_no: options.previousSheet?.no ?? null,
+              previous_revision: options.previousSheet?.revision ?? null,
+            },
+          ],
+        };
       }
       if (statement.includes("v_estimate_totals t ON t.estimate_id=e.id")) {
         const line = { mapping_row_version: null, copied_from_revision: null, manual_override: false, lead_time: null, remark: null };
-        return { recordsets: [
-          [{ id: 41, revision: 2, status: "Approved", owner_id: 7, row_version: version, canonical_total: 1500, overhead_total: 0, overhead_state: "Zero", can_write: true, can_export: true }],
-          [
-            { ...line, source_type: "CostItem", source_id: 5, description: "PLC CPU", internal_category: "01 Hardware", amount: 600, erp_category: "Hardware", item: "KV-8000", model_part_number: "KV-8000", supplier: "Keyence", brand: "Keyence", quote_revision: "SQ-2611-0001", unit_price: 600, quantity: 1, unit: "Pcs", module: "PLC System KV-8000" },
-            { ...line, source_type: "CostItem", source_id: 6, description: "EtherNet unit", internal_category: "01 Hardware", amount: 400, erp_category: "Hardware", item: "KV-XLE02", model_part_number: "KV-XLE02", supplier: "Keyence", brand: "Keyence", quote_revision: null, unit_price: 400, quantity: 1, unit: "Pcs", module: "PLC System KV-8000" },
-            { ...line, source_type: "ManhourLine", source_id: 9, description: "Programming", internal_category: "Engineering / Internal", amount: 500, erp_category: "Service", item: "Programming", model_part_number: "Senior", supplier: "Internal", brand: null, quote_revision: null, unit_price: 500, quantity: 1, unit: "man-day", module: "Software" },
+        return {
+          recordsets: [
+            [{ id: 41, revision: 2, status: "Approved", owner_id: 7, row_version: version, canonical_total: 1500, overhead_total: 0, overhead_state: "Zero", can_write: true, can_export: true }],
+            [
+              {
+                ...line,
+                source_type: "CostItem",
+                source_id: 5,
+                description: "PLC CPU",
+                internal_category: "01 Hardware",
+                amount: 600,
+                erp_category: "Hardware",
+                item: "KV-8000",
+                model_part_number: "KV-8000",
+                supplier: "Keyence",
+                brand: "Keyence",
+                quote_revision: "SQ-2611-0001",
+                unit_price: 600,
+                quantity: 1,
+                unit: "Pcs",
+                module: "PLC System KV-8000",
+              },
+              {
+                ...line,
+                source_type: "CostItem",
+                source_id: 6,
+                description: "EtherNet unit",
+                internal_category: "01 Hardware",
+                amount: 400,
+                erp_category: "Hardware",
+                item: "KV-XLE02",
+                model_part_number: "KV-XLE02",
+                supplier: "Keyence",
+                brand: "Keyence",
+                quote_revision: null,
+                unit_price: 400,
+                quantity: 1,
+                unit: "Pcs",
+                module: "PLC System KV-8000",
+              },
+              {
+                ...line,
+                source_type: "ManhourLine",
+                source_id: 9,
+                description: "Programming",
+                internal_category: "Engineering / Internal",
+                amount: 500,
+                erp_category: "Service",
+                item: "Programming",
+                model_part_number: "Senior",
+                supplier: "Internal",
+                brand: null,
+                quote_revision: null,
+                unit_price: 500,
+                quantity: 1,
+                unit: "man-day",
+                module: "Software",
+              },
+            ],
+            [],
           ],
-          [],
-        ] };
+        };
       }
-      if (statement.includes("UPDATE dbo.estimate_erp_links SET error")) { seen.recordedError = inputs.error; seen.errorRevision = inputs.revision; return { recordset: [] }; }
-      if (statement.includes("UPDATE dbo.estimate_erp_links SET cost_sheet_no")) { seen.recordedSheet = inputs; return { recordset: [] }; }
+      if (statement.includes("UPDATE dbo.estimate_erp_links SET error")) {
+        seen.recordedError = inputs.error;
+        seen.errorRevision = inputs.revision;
+        return { recordset: [] };
+      }
+      if (statement.includes("UPDATE dbo.estimate_erp_links SET cost_sheet_no")) {
+        seen.recordedSheet = inputs;
+        return { recordset: [] };
+      }
       if (statement.includes("external_ref FROM dbo.estimate_erp_links")) return { recordset: [{ external_ref: "ENGAPP-EST-test" }] };
       throw Error("Unexpected query: " + statement);
     },
@@ -160,20 +325,25 @@ function harness(t: { mock: { method: typeof import("node:test").mock.method } }
   const gateway: ErpGateway = {
     async call<T>(subject: string, tool: string, args: Record<string, unknown>) {
       seen.calls.push({ subject, tool, args });
-      return (options.answers?.shift() ?? options.answer ?? { ok: true, data: { result: "created", cost_sheet: { cost_sheet_no: "CS-2611-0007", status: "CONFIRMED", revision: 2, total: 1500 } } }) as ErpResult<T>;
+      return (options.answers?.shift() ??
+        options.answer ?? { ok: true, data: { result: "created", cost_sheet: { cost_sheet_no: "CS-2611-0007", status: "CONFIRMED", revision: 2, total: 1500 } } }) as ErpResult<T>;
     },
   };
   const users = {
-    async demandPermission(_request: unknown, permission: string) { if (permission === "estimate.approve" && options.actorId === 8) throw new ApiError(403, "permission_denied", "Permission 'estimate.approve' is required."); },
-    async required() { return { id: options.actorId ?? 7, entraObjectId: "kc-subject-7", role: "Engineer", roles: ["Engineer"] }; },
+    async demandPermission(_request: unknown, permission: string) {
+      if (permission === "estimate.approve" && options.actorId === 8) throw new ApiError(403, "permission_denied", "Permission 'estimate.approve' is required.");
+    },
+    async required() {
+      return { id: options.actorId ?? 7, entraObjectId: "kc-subject-7", role: "Engineer", roles: ["Engineer"] };
+    },
   } as unknown as CurrentUserService;
-  const app = Fastify(); registerErrorHandler(app);
+  const app = Fastify();
+  registerErrorHandler(app);
   registerEstimateErpRoutes(app, database, users, { gateway, appBaseUrl: "https://iot-team-center.tomastc.com:8444" });
   return { app, seen, database, gateway };
 }
 
-const send = (app: ReturnType<typeof Fastify>, payload: Record<string, unknown> = { lines: sheetRows }) =>
-  app.inject({ method: "POST", url: "/api/v1/estimates/41/erp-send", payload });
+const send = (app: ReturnType<typeof Fastify>, payload: Record<string, unknown> = { lines: sheetRows }) => app.inject({ method: "POST", url: "/api/v1/estimates/41/erp-send", payload });
 
 test("pressing send writes the ERP sheet's rows, not the cost lines behind them, with the presser's token", async (t) => {
   const { app, seen } = harness(t);
@@ -188,8 +358,17 @@ test("pressing send writes the ERP sheet's rows, not the cost lines behind them,
     assert.equal(args.external_ref, "ENGAPP-EST-test");
     assert.equal(args.total, 1500);
     const lines = args.lines as Array<Record<string, unknown>>;
-    assert.deepEqual(lines.map((line) => line.description), ["PLC System KV-8000", "Specification Design / Software Development"]);
-    assert.deepEqual(lines.map((line) => [line.category, line.amount, line.quantity, line.unit]), [["Hardware", 1000, 1, "Set"], ["Service", 500, 1, "Set"]]);
+    assert.deepEqual(
+      lines.map((line) => line.description),
+      ["PLC System KV-8000", "Specification Design / Software Development"],
+    );
+    assert.deepEqual(
+      lines.map((line) => [line.category, line.amount, line.quantity, line.unit]),
+      [
+        ["Hardware", 1000, 1, "Set"],
+        ["Service", 500, 1, "Set"],
+      ],
+    );
     assert.equal(lines[0]!.supplier, "Keyence");
     assert.equal(seen.issued, 1);
     assert.equal(seen.issuedRevision, 2, "the reference belongs to this revision");
@@ -199,7 +378,9 @@ test("pressing send writes the ERP sheet's rows, not the cost lines behind them,
     assert.equal(seen.recordedSheet?.sent_by, 7);
     assert.equal(seen.audits, 1);
     assert.equal(args.revision_description, undefined, "a first sheet replaces nothing");
-  } finally { await app.close(); }
+  } finally {
+    await app.close();
+  }
 });
 
 test("an approved later revision becomes a new Cost Sheet that names the one it supersedes (owner 2026-11-21)", async (t) => {
@@ -211,7 +392,9 @@ test("an approved later revision becomes a new Cost Sheet that names the one it 
     assert.equal(seen.issuedRevision, 2);
     assert.equal(seen.calls[0]!.args.revision, 2);
     assert.equal(seen.calls[0]!.args.revision_description, "Supersedes CS-2611-0001 (R01)");
-  } finally { await app.close(); }
+  } finally {
+    await app.close();
+  }
 });
 
 test("the strip shows the revision the app sent, whatever revision number the ERP answers", async (t) => {
@@ -221,13 +404,14 @@ test("the strip shows the revision the app sent, whatever revision number the ER
     const response = await send(app);
     assert.equal(response.statusCode, 200, response.body);
     assert.equal(seen.recordedSheet?.revision, 2);
-  } finally { await app.close(); }
+  } finally {
+    await app.close();
+  }
 });
 
 test("an approval that came without the sheet's rows keeps the reason for the ERP tab", async (t) => {
   const { seen, database, gateway } = harness(t);
-  const outcome = await createEstimateErpSender(database, { gateway, appBaseUrl: "https://iot-team-center.tomastc.com:8444" })
-    .send(41, { id: 7, entraObjectId: "kc-subject-7" } as never, null);
+  const outcome = await createEstimateErpSender(database, { gateway, appBaseUrl: "https://iot-team-center.tomastc.com:8444" }).send(41, { id: 7, entraObjectId: "kc-subject-7" } as never, null);
   assert.equal(outcome.sent, false);
   assert.equal(outcome.kind, "not_ready");
   assert.match(String(seen.recordedError), /approval came without the ERP sheet's rows/);
@@ -241,7 +425,9 @@ test("a send without the sheet's rows is refused", async (t) => {
     const response = await send(app, {});
     assert.equal(response.statusCode, 400, response.body);
     assert.equal(seen.calls.length, 0);
-  } finally { await app.close(); }
+  } finally {
+    await app.close();
+  }
 });
 
 test("rows that do not add up to the estimate are not sent", async (t) => {
@@ -252,7 +438,9 @@ test("rows that do not add up to the estimate are not sent", async (t) => {
     assert.match(response.body, /Hardware rows add up to 900.00/);
     assert.match(String(seen.recordedError), /Hardware/);
     assert.equal(seen.calls.length, 0);
-  } finally { await app.close(); }
+  } finally {
+    await app.close();
+  }
 });
 
 test("a refused send is kept on the link and reported, and the estimate stays as it is", async (t) => {
@@ -263,7 +451,9 @@ test("a refused send is kept on the link and reported, and the estimate stays as
     assert.match(response.body, /total: The total does not match/);
     assert.match(String(seen.recordedError), /total: The total does not match/);
     assert.equal(seen.recordedSheet, null);
-  } finally { await app.close(); }
+  } finally {
+    await app.close();
+  }
 });
 
 test("an estimate that is not approved is not sent", async (t) => {
@@ -272,7 +462,9 @@ test("an estimate that is not approved is not sent", async (t) => {
     const response = await send(app);
     assert.equal(response.statusCode, 409, response.body);
     assert.equal(seen.calls.length, 0);
-  } finally { await app.close(); }
+  } finally {
+    await app.close();
+  }
 });
 
 test("a revision the ERP already holds is not sent again", async (t) => {
@@ -282,7 +474,9 @@ test("a revision the ERP already holds is not sent again", async (t) => {
     assert.equal(response.statusCode, 200, response.body);
     assert.equal(response.json().result, "unchanged");
     assert.equal(seen.calls.length, 0);
-  } finally { await app.close(); }
+  } finally {
+    await app.close();
+  }
 });
 
 test("sending again asks the ERP, which answers unchanged while it still holds the sheet", async (t) => {
@@ -293,14 +487,19 @@ test("sending again asks the ERP, which answers unchanged while it still holds t
     assert.equal(response.json().result, "unchanged");
     assert.equal(seen.calls.length, 1);
     assert.equal(seen.reissued, 0);
-  } finally { await app.close(); }
+  } finally {
+    await app.close();
+  }
 });
 
 test("a Cost Sheet deleted in the ERP is written again under a new reference", async (t) => {
-  const { app, seen } = harness(t, { erpRevision: 2, answers: [
-    { ok: false, kind: "validation", message: "The given data was invalid.", errors: { external_ref: ["The cost sheet was deleted."] } },
-    { ok: true, data: { result: "created", cost_sheet: { cost_sheet_no: "CS-2611-0009", status: "CONFIRMED", revision: 2 } } },
-  ] });
+  const { app, seen } = harness(t, {
+    erpRevision: 2,
+    answers: [
+      { ok: false, kind: "validation", message: "The given data was invalid.", errors: { external_ref: ["The cost sheet was deleted."] } },
+      { ok: true, data: { result: "created", cost_sheet: { cost_sheet_no: "CS-2611-0009", status: "CONFIRMED", revision: 2 } } },
+    ],
+  });
   try {
     const response = await send(app, { lines: sheetRows, resend: true });
     assert.equal(response.statusCode, 200, response.body);
@@ -313,7 +512,9 @@ test("a Cost Sheet deleted in the ERP is written again under a new reference", a
     assert.match(second!, /^ENGAPP-EST-[0-9a-f-]{36}$/);
     assert.notEqual(second, first);
     assert.equal(seen.recordedSheet?.no, "CS-2611-0009");
-  } finally { await app.close(); }
+  } finally {
+    await app.close();
+  }
 });
 
 test("a reference refused before any sheet existed is reported, not re-issued", async (t) => {
@@ -323,7 +524,9 @@ test("a reference refused before any sheet existed is reported, not re-issued", 
     assert.equal(response.statusCode, 422, response.body);
     assert.equal(seen.calls.length, 1);
     assert.equal(seen.reissued, 0);
-  } finally { await app.close(); }
+  } finally {
+    await app.close();
+  }
 });
 
 test("someone who is not the owner needs the approve permission to send", async (t) => {
@@ -332,7 +535,20 @@ test("someone who is not the owner needs the approve permission to send", async 
     const response = await send(app);
     assert.equal(response.statusCode, 403, response.body);
     assert.equal(seen.calls.length, 0);
-  } finally { await app.close(); }
+  } finally {
+    await app.close();
+  }
+});
+
+test("a listed estimate approver sends without the approve permission (migration 101)", async (t) => {
+  const { app, seen } = harness(t, { actorId: 8, listedApprover: true });
+  try {
+    const response = await send(app);
+    assert.equal(response.statusCode, 200, response.body);
+    assert.equal(seen.calls.length, 1);
+  } finally {
+    await app.close();
+  }
 });
 
 test("checking the ERP reads the sheet by its reference and stores what it says", async (t) => {
@@ -346,5 +562,7 @@ test("checking the ERP reads the sheet by its reference and stores what it says"
     assert.equal(seen.recordedSheet?.sent_by, null);
     assert.equal(seen.recordedSheet?.ref, "ENGAPP-EST-test");
     assert.equal(seen.recordedSheet?.revision, null, "reading back never renumbers the sheet");
-  } finally { await app.close(); }
+  } finally {
+    await app.close();
+  }
 });

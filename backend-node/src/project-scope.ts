@@ -2,6 +2,7 @@ import sql from "mssql";
 import type { Transaction as TransactionType } from "mssql";
 import type { Database } from "./db.js";
 import { ApiError } from "./errors.js";
+import { mayCreateWithoutEstimate } from "./project-create-access.js";
 import type { CurrentUser } from "./types.js";
 import { rolesOf } from "./user-roles.js";
 
@@ -18,31 +19,20 @@ export function isProjectManagerRole(user: CurrentUser): boolean {
   return rolesOf(user).some((role) => PROJECT_MANAGER_ROLES.has(role));
 }
 
-/**
- * Who may create a project without an estimate (owner decision 2026-10-14): the Application team,
- * who do not make an Estimate Cost, Project Managers and Admins. The team is read from the
- * department, whose names vary ("Application Engineer Dept.", group suffixes), so any department
- * naming Application counts. Creating still needs project.write.
- */
+/** Who may create a project without an estimate, project.write or not: see project-create-access.ts. */
 export function canCreateWithoutEstimate(user: CurrentUser): boolean {
-  return rolesOf(user).some((role) => role === "Project Manager" || role === "Admin") || /application/i.test(user.department ?? "");
+  return mayCreateWithoutEstimate(rolesOf(user), user.department);
 }
 
 export function isMyWorkElevated(user: CurrentUser): boolean {
   return rolesOf(user).some((role) => MY_WORK_ELEVATED_ROLES.has(role));
 }
 
-export async function demandProjectScope(
-  database: Database,
-  user: CurrentUser,
-  projectId: number,
-  transaction?: TransactionType,
-  myWork = false,
-): Promise<void> {
+export async function demandProjectScope(database: Database, user: CurrentUser, projectId: number, transaction?: TransactionType, myWork = false): Promise<void> {
   const bind = (request: InstanceType<typeof sql.Request>): void => {
-      request.input("project_id", sql.BigInt, projectId);
-      request.input("actor", sql.BigInt, user.id);
-      request.input("elevated", sql.Bit, myWork ? isMyWorkElevated(user) : isProjectElevated(user));
+    request.input("project_id", sql.BigInt, projectId);
+    request.input("actor", sql.BigInt, user.id);
+    request.input("elevated", sql.Bit, myWork ? isMyWorkElevated(user) : isProjectElevated(user));
   };
   const statement = `
         SELECT CASE WHEN @elevated=1 OR p.manager_id=@actor OR p.lead_engineer_id=@actor

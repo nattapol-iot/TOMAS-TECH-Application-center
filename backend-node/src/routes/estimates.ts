@@ -792,7 +792,7 @@ export function registerEstimateRoutes(
       ownerRequest.input("owner_id", sql.BigInt, ownerId);
       const validOwner = (
         await ownerRequest.query<{ allowed: boolean }>(`SELECT CASE WHEN EXISTS(SELECT 1 FROM dbo.users u INNER JOIN dbo.roles r ON r.id=u.role_id
-        WHERE u.id=@owner_id AND u.is_active=1 AND u.deleted_at IS NULL AND r.code IN(N'Engineer',N'Engineering Manager',N'Admin')) THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END allowed;`)
+        WHERE u.id=@owner_id AND u.is_active=1 AND u.deleted_at IS NULL AND r.code IN(N'Engineer',N'Leader',N'Engineering Manager',N'Admin')) THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END allowed;`)
       ).recordset[0]?.allowed;
       if (!validOwner) throw new ApiError(400, "validation_failed", "The selected estimate owner must be an active engineer, engineering manager or administrator.");
       const number = await issueDocumentNumber(transaction, "EST", today);

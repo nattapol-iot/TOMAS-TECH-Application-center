@@ -5,14 +5,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { Transaction as TransactionType } from "mssql";
 import type { AppConfig } from "../config.js";
 import { DatabaseCommitOutcomeUnknownError, type Database } from "../db.js";
-import {
-  deleteStoredFile,
-  DOCUMENT_DOWNLOAD_RATE_LIMIT,
-  sendStoredFile,
-  storageKey,
-  writeStoredBuffer,
-  resolveStoragePath,
-} from "../document-storage.js";
+import { deleteStoredFile, DOCUMENT_DOWNLOAD_RATE_LIMIT, sendStoredFile, storageKey, writeStoredBuffer, resolveStoragePath } from "../document-storage.js";
 import { ApiError } from "../errors.js";
 import { bodyObject, clampedInteger, firstQueryValue, optionalBodyText, parseRowVersion, positiveLong, requiredInteger } from "../http.js";
 import { insertAudit } from "../audit.js";
@@ -46,6 +39,7 @@ import {
 import type { CurrentUser } from "../types.js";
 import type { CurrentUserService } from "../users.js";
 import { businessToday } from "../business-date.js";
+import { rolesOf } from "../user-roles.js";
 
 const DOCUMENT_ENTITY = "SignableDocument";
 
@@ -106,11 +100,7 @@ function text(value: unknown): string | null {
  * points at nothing. `provider_etag` carried the hash before migration 018 gave
  * the table its own column, so both are read.
  */
-async function loadProjectDocument(
-  database: Database,
-  projectDocumentId: number,
-  transaction?: TransactionType,
-): Promise<ProjectDocumentSource> {
+async function loadProjectDocument(database: Database, projectDocumentId: number, transaction?: TransactionType): Promise<ProjectDocumentSource> {
   if (projectDocumentId <= 0) throw new ApiError(400, "project_document_required", "A stored document must be named.");
   // Inside a transaction the row stays locked until signing has recorded its use, so a withdrawal
   // (dbo.withdraw_project_document, migration 069) either finishes first and the document is gone, or
@@ -136,8 +126,7 @@ async function loadProjectDocument(
   if (!row) throw new ApiError(404, "project_document_not_found", "The stored document was not found.");
   const sha256 = text(row.sha256);
   if (!isSha256Hex(sha256)) {
-    throw new ApiError(409, "content_hash_missing",
-      "This stored document has no recorded SHA-256, so it cannot be frozen for signature. Re-upload it.");
+    throw new ApiError(409, "content_hash_missing", "This stored document has no recorded SHA-256, so it cannot be frozen for signature. Re-upload it.");
   }
   return {
     id: Number(row.id),
@@ -150,13 +139,7 @@ async function loadProjectDocument(
   };
 }
 
-async function freezeRevision(
-  transaction: TransactionType,
-  documentId: number,
-  revisionLabel: string,
-  source: ProjectDocumentSource,
-  actorId: number,
-): Promise<number> {
+async function freezeRevision(transaction: TransactionType, documentId: number, revisionLabel: string, source: ProjectDocumentSource, actorId: number): Promise<number> {
   const insert = new sql.Request(transaction);
   insert.input("document_id", sql.BigInt, documentId);
   insert.input("revision_label", sql.NVarChar(10), revisionLabel);
@@ -167,7 +150,8 @@ async function freezeRevision(
   insert.input("size_bytes", sql.BigInt, source.sizeBytes);
   insert.input("sha256", sql.Char(64), source.sha256);
   insert.input("actor", sql.BigInt, actorId);
-  const row = (await insert.query<{ id: number }>(`
+  const row = (
+    await insert.query<{ id: number }>(`
     DECLARE @created TABLE (id bigint NOT NULL);
     INSERT INTO dbo.document_files (
       document_id, revision_label, source, project_doc_id, storage_key,
@@ -177,28 +161,29 @@ async function freezeRevision(
       @document_id, @revision_label, N'UPLOADED', @project_doc_id, @storage_key,
       @file_name, @content_type, @size_bytes, @sha256, @actor);
     SELECT id FROM @created;
-  `)).recordset[0]!;
+  `)
+  ).recordset[0]!;
   return Number(row.id);
 }
 
 async function liveRequestId(transaction: TransactionType, documentId: number): Promise<number | null> {
   const request = new sql.Request(transaction);
   request.input("document_id", sql.BigInt, documentId);
-  const row = (await request.query<{ id: number }>(`
+  const row = (
+    await request.query<{ id: number }>(`
     SELECT TOP (1) id FROM dbo.sign_requests WITH (UPDLOCK, HOLDLOCK)
     WHERE document_id = @document_id AND state IN (N'PENDING_SIGN', N'PARTIALLY_SIGNED')
     ORDER BY id DESC;
-  `)).recordset[0];
+  `)
+  ).recordset[0];
   return row ? Number(row.id) : null;
 }
 
-async function loadActiveTemplate(
-  transaction: TransactionType,
-  documentClass: string,
-): Promise<{ id: number; version: number; ordered: boolean; steps: FlowTemplateStep[] }> {
+async function loadActiveTemplate(transaction: TransactionType, documentClass: string): Promise<{ id: number; version: number; ordered: boolean; steps: FlowTemplateStep[] }> {
   const request = new sql.Request(transaction);
   request.input("doc_class", sql.NVarChar(30), documentClass);
-  const rows = (await request.query<Record<string, unknown>>(`
+  const rows = (
+    await request.query<Record<string, unknown>>(`
     SELECT t.id, t.version, t.ordered,
            s.step_no, s.block_code, s.assignee_kind, s.assignee_role_id, s.assignee_user_id,
            s.required_mark, s.company_stamp_id, s.is_optional, s.parallel_group,
@@ -207,7 +192,8 @@ async function loadActiveTemplate(
     INNER JOIN dbo.sign_flow_steps s ON s.template_id = t.id
     WHERE t.doc_class = @doc_class AND t.status = N'ACTIVE'
     ORDER BY s.step_no;
-  `)).recordset;
+  `)
+  ).recordset;
   if (rows.length === 0) {
     throw new ApiError(409, "no_active_flow", `No active signature flow is configured for ${documentClass}.`);
   }
@@ -245,8 +231,9 @@ function appliesToAmount(step: FlowTemplateStep, amount: number | null): boolean
 async function activateSteps(transaction: TransactionType, requestId: number, ordered: boolean): Promise<void> {
   const request = new sql.Request(transaction);
   request.input("request_id", sql.BigInt, requestId);
-  await request.query(ordered
-    ? `UPDATE s SET s.state = N'PENDING'
+  await request.query(
+    ordered
+      ? `UPDATE s SET s.state = N'PENDING'
          FROM dbo.sign_steps s
         WHERE s.request_id = @request_id AND s.state = N'WAITING'
           AND NOT EXISTS (
@@ -256,7 +243,8 @@ async function activateSteps(transaction: TransactionType, requestId: number, or
                  AND earlier.state IN (N'WAITING', N'PENDING')
                  AND (s.parallel_group IS NULL OR earlier.parallel_group IS NULL
                       OR s.parallel_group <> earlier.parallel_group));`
-    : `UPDATE dbo.sign_steps SET state = N'PENDING' WHERE request_id = @request_id AND state = N'WAITING';`);
+      : `UPDATE dbo.sign_steps SET state = N'PENDING' WHERE request_id = @request_id AND state = N'WAITING';`,
+  );
   await request.query(`INSERT dbo.notifications(user_id,kind,title,detail,entity_type,entity_id)
     SELECT s.assignee_user_id,N'SIGNING_ASSIGNED',N'Document awaiting your signature',d.doc_no+N' - '+s.block_code,N'SignStep',s.id
     FROM dbo.sign_steps s JOIN dbo.sign_requests rq ON rq.id=s.request_id JOIN dbo.signable_documents d ON d.id=rq.document_id
@@ -267,17 +255,20 @@ async function activateSteps(transaction: TransactionType, requestId: number, or
 async function mandatoryStepsRemaining(transaction: TransactionType, requestId: number): Promise<number> {
   const request = new sql.Request(transaction);
   request.input("request_id", sql.BigInt, requestId);
-  const row = (await request.query<{ remaining: number }>(`
+  const row = (
+    await request.query<{ remaining: number }>(`
     SELECT COUNT_BIG(*) AS remaining FROM dbo.sign_steps
     WHERE request_id = @request_id AND is_optional = 0 AND state <> N'SIGNED';
-  `)).recordset[0]!;
+  `)
+  ).recordset[0]!;
   return Number(row.remaining);
 }
 
 async function loadStep(transaction: TransactionType, stepId: number): Promise<StepContext> {
   const request = new sql.Request(transaction);
   request.input("step_id", sql.BigInt, stepId);
-  const row = (await request.query<Record<string, unknown>>(`
+  const row = (
+    await request.query<Record<string, unknown>>(`
     SELECT s.id, s.request_id, rq.document_id, s.step_no, s.block_code, s.required_mark,
            s.company_stamp_id, s.assignee_user_id, role.code AS assignee_role, s.anchor_code,
            s.state, rq.state AS request_state, t.ordered, f.sha256, s.row_version
@@ -287,7 +278,8 @@ async function loadStep(transaction: TransactionType, stepId: number): Promise<S
     INNER JOIN dbo.document_files f ON f.id = rq.document_file_id
     LEFT JOIN dbo.roles role ON role.id = s.assignee_role_id
     WHERE s.id = @step_id;
-  `)).recordset[0];
+  `)
+  ).recordset[0];
   if (!row) throw new ApiError(404, "step_not_found", "The signature step was not found.");
   const requestState = String(row.request_state);
   if (requestState !== "PENDING_SIGN" && requestState !== "PARTIALLY_SIGNED") {
@@ -315,8 +307,8 @@ function demandStepIsMine(step: StepContext, actor: CurrentUser): void {
   if (step.stepState !== "PENDING") {
     throw new ApiError(409, "step_not_pending", `This step is ${step.stepState} and cannot be decided.`);
   }
-  const mine = step.assigneeUserId === actor.id
-    || (step.assigneeUserId === null && step.assigneeRoleCode === actor.role);
+  // A step addressed to a role is for everyone who holds it, an additional role included (migration 051).
+  const mine = step.assigneeUserId === actor.id || (step.assigneeUserId === null && step.assigneeRoleCode !== null && rolesOf(actor).includes(step.assigneeRoleCode));
   if (!mine) throw new ApiError(403, "step_not_assigned", "This signature step is not waiting for you.");
 }
 
@@ -343,8 +335,8 @@ async function insertMark(
   request.input("anchor_code", sql.NVarChar(50), input.anchorCode);
   request.input("text_value", sql.NVarChar(200), input.textValue ?? null);
   request.input("scan_id", sql.BigInt, input.scanProjectDocumentId ?? null);
-  request.input("page",sql.Int,input.placement?.page ?? null);
-  for(const key of ["x","y","width","height"] as const) request.input(key,sql.Decimal(9,6),input.placement?.[key] ?? null);
+  request.input("page", sql.Int, input.placement?.page ?? null);
+  for (const key of ["x", "y", "width", "height"] as const) request.input(key, sql.Decimal(9, 6), input.placement?.[key] ?? null);
   await request.query(`
     INSERT INTO dbo.signature_marks (
       sign_step_id, kind, specimen_id, company_stamp_id, stamp_authority_id,
@@ -353,14 +345,7 @@ async function insertMark(
   `);
 }
 
-async function closeStep(
-  transaction: TransactionType,
-  stepId: number,
-  state: string,
-  decision: string,
-  reason: string | null,
-  actorId: number,
-): Promise<void> {
+async function closeStep(transaction: TransactionType, stepId: number, state: string, decision: string, reason: string | null, actorId: number): Promise<void> {
   const request = new sql.Request(transaction);
   request.input("step_id", sql.BigInt, stepId);
   request.input("state", sql.NVarChar(20), state);
@@ -388,12 +373,7 @@ async function setRequestState(transaction: TransactionType, requestId: number, 
   await request.query("UPDATE dbo.sign_requests SET state = @state WHERE id = @request_id;");
 }
 
-async function closeRequest(
-  transaction: TransactionType,
-  requestId: number,
-  state: string,
-  reason: string | null,
-): Promise<void> {
+async function closeRequest(transaction: TransactionType, requestId: number, state: string, reason: string | null): Promise<void> {
   const request = new sql.Request(transaction);
   request.input("request_id", sql.BigInt, requestId);
   request.input("state", sql.NVarChar(30), state);
@@ -405,16 +385,19 @@ async function closeRequest(
 }
 
 async function frozenSource(transaction: TransactionType, config: AppConfig, fileId: number) {
-  const query=new sql.Request(transaction);query.input("file",sql.BigInt,fileId);
-  const file=(await query.query<{storage_key:string;content_type:string;sha256:string}>("SELECT storage_key,content_type,sha256 FROM dbo.document_files WHERE id=@file;")).recordset[0];
-  if(!file) throw new ApiError(404,"file_not_found","Frozen revision not found.");
-  const bytes=await readFile(resolveStoragePath(config.documentStorage,file.storage_key));
-  return {...file,bytes};
+  const query = new sql.Request(transaction);
+  query.input("file", sql.BigInt, fileId);
+  const file = (await query.query<{ storage_key: string; content_type: string; sha256: string }>("SELECT storage_key,content_type,sha256 FROM dbo.document_files WHERE id=@file;")).recordset[0];
+  if (!file) throw new ApiError(404, "file_not_found", "Frozen revision not found.");
+  const bytes = await readFile(resolveStoragePath(config.documentStorage, file.storage_key));
+  return { ...file, bytes };
 }
 
 async function placedArtwork(transaction: TransactionType, config: AppConfig, requestId: number): Promise<PdfMark[]> {
-  const query=new sql.Request(transaction);query.input("request",sql.BigInt,requestId);
-  const rows=(await query.query<{page_no:number|null;pos_x:number;pos_y:number;width:number;height:number;image_key:string;label:string}>(`
+  const query = new sql.Request(transaction);
+  query.input("request", sql.BigInt, requestId);
+  const rows = (
+    await query.query<{ page_no: number | null; pos_x: number; pos_y: number; width: number; height: number; image_key: string; label: string }>(`
     SELECT m.page_no,m.pos_x,m.pos_y,m.width,m.height,
       COALESCE(CASE WHEN m.kind=N'INITIAL' THEN sp.initials_image_key END,sp.image_key,stamp.image_key) image_key,
       CONCAT(s.block_code,N' / ',m.kind,N' / ',u.name,N' / ',CONVERT(nvarchar(30),s.decided_at,126)) label
@@ -423,23 +406,24 @@ async function placedArtwork(transaction: TransactionType, config: AppConfig, re
     LEFT JOIN dbo.signature_specimens sp ON sp.id=m.specimen_id
     LEFT JOIN dbo.company_stamps stamp ON stamp.id=m.company_stamp_id
     WHERE s.request_id=@request AND s.state=N'SIGNED' AND m.kind IN(N'SIGNATURE',N'INITIAL',N'STAMP') ORDER BY s.step_no,m.id;
-  `)).recordset;
-  return Promise.all(rows.map(async row=>({label:row.label,png:await readFile(resolveStoragePath(config.documentStorage,row.image_key)),placement:row.page_no===null?null:{page:Number(row.page_no),x:Number(row.pos_x),y:Number(row.pos_y),width:Number(row.width),height:Number(row.height)}})));
+  `)
+  ).recordset;
+  return Promise.all(
+    rows.map(async (row) => ({
+      label: row.label,
+      png: await readFile(resolveStoragePath(config.documentStorage, row.image_key)),
+      placement: row.page_no === null ? null : { page: Number(row.page_no), x: Number(row.pos_x), y: Number(row.pos_y), width: Number(row.width), height: Number(row.height) },
+    })),
+  );
 }
 
-async function produceOutput(
-  transaction: TransactionType,
-  database: Database,
-  config: AppConfig,
-  requestId: number,
-  document: SignableDocumentContext,
-  actor: CurrentUser,
-): Promise<string> {
+async function produceOutput(transaction: TransactionType, database: Database, config: AppConfig, requestId: number, document: SignableDocumentContext, actor: CurrentUser): Promise<string> {
   const chain = await verifyChain(database, requestId, transaction);
 
   const headerRequest = new sql.Request(transaction);
   headerRequest.input("request_id", sql.BigInt, requestId);
-  const header = (await headerRequest.query<Record<string, unknown>>(`
+  const header = (
+    await headerRequest.query<Record<string, unknown>>(`
     SELECT f.id AS file_id,f.content_type,f.revision_label, f.file_name, f.sha256, owner.name AS owner_name,
            CASE WHEN p.id IS NULL THEN NULL ELSE p.project_no + N' · ' + p.name END AS project_label
     FROM dbo.sign_requests rq
@@ -448,11 +432,13 @@ async function produceOutput(
     INNER JOIN dbo.users owner ON owner.id = d.owner_id
     LEFT JOIN dbo.projects p ON p.id = d.project_id
     WHERE rq.id = @request_id;
-  `)).recordset[0]!;
+  `)
+  ).recordset[0]!;
 
   const signatureRequest = new sql.Request(transaction);
   signatureRequest.input("request_id", sql.BigInt, requestId);
-  const signatures: CertificateSignature[] = (await signatureRequest.query<Record<string, unknown>>(`
+  const signatures: CertificateSignature[] = (
+    await signatureRequest.query<Record<string, unknown>>(`
     SELECT s.step_no, s.block_code, s.required_mark, u.name AS signer_name, r.code AS signer_role,
            delegated.name AS delegated_from, stamp.code AS stamp_code,
            (SELECT TOP (1) e.auth_evidence FROM dbo.sign_events e
@@ -465,7 +451,8 @@ async function produceOutput(
     LEFT JOIN dbo.company_stamps stamp ON stamp.id = s.company_stamp_id
     WHERE s.request_id = @request_id AND s.state = N'SIGNED'
     ORDER BY s.step_no;
-  `)).recordset.map((row) => ({
+  `)
+  ).recordset.map((row) => ({
     stepNo: Number(row.step_no),
     blockCode: String(row.block_code),
     requiredMark: String(row.required_mark),
@@ -480,8 +467,10 @@ async function produceOutput(
   const verifyCode = newVerifyCode();
   // Render only specimens referenced by completed marks, never a user's current specimen.
   // The resulting immutable certificate is authorized by document scope; raw specimen routes remain private.
-  const marksQuery = new sql.Request(transaction); marksQuery.input("request_id", sql.BigInt, requestId);
-  const artwork = (await marksQuery.query<{step_no:number;signature_key:string|null;stamp_key:string|null}>(`
+  const marksQuery = new sql.Request(transaction);
+  marksQuery.input("request_id", sql.BigInt, requestId);
+  const artwork = (
+    await marksQuery.query<{ step_no: number; signature_key: string | null; stamp_key: string | null }>(`
     SELECT s.step_no,
       COALESCE(CASE WHEN m.kind=N'INITIAL' THEN sp.initials_image_key END,sp.image_key) signature_key,
       stamp.image_key stamp_key
@@ -489,9 +478,10 @@ async function produceOutput(
     LEFT JOIN dbo.signature_specimens sp ON sp.id=m.specimen_id
     LEFT JOIN dbo.company_stamps stamp ON stamp.id=m.company_stamp_id
     WHERE s.request_id=@request_id AND s.state=N'SIGNED' AND m.kind IN (N'INITIAL',N'SIGNATURE',N'STAMP');
-  `)).recordset;
+  `)
+  ).recordset;
   for (const art of artwork) {
-    const signature = signatures.find(s => s.stepNo === Number(art.step_no));
+    const signature = signatures.find((s) => s.stepNo === Number(art.step_no));
     if (!signature) continue;
     if (art.signature_key) signature.signaturePngBase64 = (await readFile(resolveStoragePath(config.documentStorage, art.signature_key))).toString("base64");
     if (art.stamp_key) signature.stampPngBase64 = (await readFile(resolveStoragePath(config.documentStorage, art.stamp_key))).toString("base64");
@@ -519,14 +509,14 @@ async function produceOutput(
     signatures,
   });
 
-  const positioned=await placedArtwork(transaction,config,requestId);
-  const usePdf=positioned.some(mark=>mark.placement!==null);
-  if(usePdf) {
-    const source=await frozenSource(transaction,config,Number(header.file_id));
-    const pdf=await loadSigningPdf(source.bytes,source.content_type,source.sha256);
-    await paintMarks(pdf,positioned);
-    await appendPdfCertificate(pdf,positioned,{number:document.documentNo,revision:String(header.revision_label),verifyCode,hash:source.sha256,chain:chain.head});
-    bytes=Buffer.from(await pdf.save());
+  const positioned = await placedArtwork(transaction, config, requestId);
+  const usePdf = positioned.some((mark) => mark.placement !== null);
+  if (usePdf) {
+    const source = await frozenSource(transaction, config, Number(header.file_id));
+    const pdf = await loadSigningPdf(source.bytes, source.content_type, source.sha256);
+    await paintMarks(pdf, positioned);
+    await appendPdfCertificate(pdf, positioned, { number: document.documentNo, revision: String(header.revision_label), verifyCode, hash: source.sha256, chain: chain.head });
+    bytes = Buffer.from(await pdf.save());
   }
   const key = storageKey("signing/outputs", usePdf ? ".pdf" : ".html");
   const write = await writeStoredBuffer(config.documentStorage, key, bytes);
@@ -534,7 +524,7 @@ async function produceOutput(
   const insert = new sql.Request(transaction);
   insert.input("request_id", sql.BigInt, requestId);
   insert.input("storage_key", sql.NVarChar(1000), key);
-  insert.input("file_name", sql.NVarChar(500), `${document.documentNo}-${String(header.revision_label)}-${usePdf?"signed.pdf":"signature-certificate.html"}`);
+  insert.input("file_name", sql.NVarChar(500), `${document.documentNo}-${String(header.revision_label)}-${usePdf ? "signed.pdf" : "signature-certificate.html"}`);
   insert.input("content_type", sql.NVarChar(200), usePdf ? "application/pdf" : "text/html; charset=utf-8");
   insert.input("size_bytes", sql.BigInt, write.sizeBytes);
   insert.input("sha256", sql.Char(64), write.sha256);
@@ -548,12 +538,7 @@ async function produceOutput(
   return key;
 }
 
-export function registerSigningRoutes(
-  app: FastifyInstance,
-  config: AppConfig,
-  database: Database,
-  users: CurrentUserService,
-): void {
+export function registerSigningRoutes(app: FastifyInstance, config: AppConfig, database: Database, users: CurrentUserService): void {
   // -------------------------------------------------------------------------
   // Inbox — every signable class in one list. This reads sign_steps and nothing
   // else: it does not know what a drawing is, which is the proof the service is
@@ -563,7 +548,9 @@ export function registerSigningRoutes(
     await users.demandPermission(request, "signing.read");
     const actor = await users.required(request);
 
-    const waiting = (await database.query<Record<string, unknown>>(`
+    const waiting = (
+      await database.query<Record<string, unknown>>(
+        `
       SELECT s.id AS step_id, s.step_no, total.step_count, s.block_code, s.required_mark,
              stamp.code AS stamp_code, s.due_date, s.row_version,
              rq.id AS request_id, rq.created_at, rq.due_date AS request_due,
@@ -577,13 +564,13 @@ export function registerSigningRoutes(
                  WHERE a.company_stamp_id = s.company_stamp_id AND a.revoked_at IS NULL
                    AND a.valid_from <= @today AND (a.valid_to IS NULL OR a.valid_to >= @today)
                    AND (a.doc_class IS NULL OR a.doc_class = d.doc_class)
-                   AND (a.user_id = @actor OR ar.code = @role)
+                   AND (a.user_id = @actor OR ar.code IN (SELECT code FROM dbo.user_effective_roles WHERE user_id = @actor))
              ) THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END AS holds_authority,
              (SELECT MIN(a.valid_to) FROM dbo.stamp_authorities a
                LEFT JOIN dbo.roles ar ON ar.id = a.role_id
               WHERE a.company_stamp_id = s.company_stamp_id AND a.revoked_at IS NULL
                 AND (a.doc_class IS NULL OR a.doc_class = d.doc_class)
-                AND (a.user_id = @actor OR ar.code = @role)) AS authority_valid_to
+                AND (a.user_id = @actor OR ar.code IN (SELECT code FROM dbo.user_effective_roles WHERE user_id = @actor))) AS authority_valid_to
       FROM dbo.sign_steps s
       INNER JOIN dbo.sign_requests rq ON rq.id = s.request_id
       INNER JOIN dbo.signable_documents d ON d.id = rq.document_id
@@ -595,13 +582,15 @@ export function registerSigningRoutes(
       WHERE s.state = N'PENDING' AND rq.state IN (N'PENDING_SIGN', N'PARTIALLY_SIGNED')
         AND s.required_mark <> N'PAPER'
         AND (s.assignee_user_id = @actor
-             OR (s.assignee_user_id IS NULL AND s.assignee_role_id = (SELECT id FROM dbo.roles WHERE code = @role)))
+             OR (s.assignee_user_id IS NULL AND s.assignee_role_id IN (SELECT role_id FROM dbo.user_effective_roles WHERE user_id = @actor)))
       ORDER BY CASE WHEN s.due_date IS NULL THEN 1 ELSE 0 END, s.due_date, rq.created_at;
-    `, (bind) => {
-      bind.input("actor", sql.BigInt, actor.id);
-      bind.input("role", sql.NVarChar(50), actor.role);
-      bind.input("today", sql.Date, businessToday(config.businessTimeZone));
-    })).recordset.map((row) => ({
+    `,
+        (bind) => {
+          bind.input("actor", sql.BigInt, actor.id);
+          bind.input("today", sql.Date, businessToday(config.businessTimeZone));
+        },
+      )
+    ).recordset.map((row) => ({
       stepId: Number(row.step_id),
       stepNo: Number(row.step_no),
       totalSteps: Number(row.step_count),
@@ -638,10 +627,15 @@ export function registerSigningRoutes(
       pageSize: 100,
     });
 
-    const signedRecently = (await database.query<{ signed: number }>(`
+    const signedRecently = (
+      await database.query<{ signed: number }>(
+        `
       SELECT COUNT_BIG(*) AS signed FROM dbo.sign_steps
       WHERE decided_by = @actor AND state = N'SIGNED' AND decided_at >= DATEADD(day, -30, SYSUTCDATETIME());
-    `, (bind) => bind.input("actor", sql.BigInt, actor.id))).recordset[0]!;
+    `,
+        (bind) => bind.input("actor", sql.BigInt, actor.id),
+      )
+    ).recordset[0]!;
 
     return {
       waitingMe: waiting,
@@ -705,17 +699,18 @@ export function registerSigningRoutes(
       insert.input("owner", sql.BigInt, taskId !== null ? actor.id : body.ownerId ? Number(body.ownerId) : actor.id);
       insert.input("task", sql.BigInt, taskId);
       insert.input("actor", sql.BigInt, actor.id);
-      const row = (await insert.query<{ id: number }>(`
+      const row = (
+        await insert.query<{ id: number }>(`
         INSERT INTO dbo.signable_documents (
           doc_no, doc_class, title, project_id, estimate_id, document_locale, amount, owner_id, signing_state, created_by, schedule_task_id)
         OUTPUT inserted.id
         VALUES (@doc_no, @doc_class, @title, @project_id, @estimate_id, @locale, @amount, @owner, N'DRAFT', @actor, @task);
-      `)).recordset[0]!;
+      `)
+      ).recordset[0]!;
       const documentId = Number(row.id);
       const fileId = await freezeRevision(transaction, documentId, revisionLabel, source, actor.id);
       await setDocumentState(transaction, documentId, "DRAFT", fileId);
-      await insertAudit(transaction, actor.id, DOCUMENT_ENTITY, documentId, documentNo, "Created", null,
-        { documentClass, revisionLabel, sha256: source.sha256, projectId: source.projectId, taskId });
+      await insertAudit(transaction, actor.id, DOCUMENT_ENTITY, documentId, documentNo, "Created", null, { documentClass, revisionLabel, sha256: source.sha256, projectId: source.projectId, taskId });
       return { id: documentId, documentNo, revisionLabel, fileId };
     }, sql.ISOLATION_LEVEL.READ_COMMITTED);
 
@@ -732,7 +727,9 @@ export function registerSigningRoutes(
     const summary = (await listDocuments(database, actor, { extra: "AND d.id = @document_id", documentId, pageSize: 1 })).items[0];
     if (!summary) throw new ApiError(404, "document_not_found", "The signable document was not found.");
 
-    const revisions = (await database.query<Record<string, unknown>>(`
+    const revisions = (
+      await database.query<Record<string, unknown>>(
+        `
       SELECT f.id, f.revision_label, f.source, f.project_doc_id, pd.project_id, f.file_name, f.content_type,
              f.size_bytes, f.sha256, f.page_count, f.rendered_from_entity, f.rendered_from_id,
              f.frozen_at, u.name AS frozen_by_name, rq.id AS request_id, rq.state AS request_state
@@ -741,7 +738,10 @@ export function registerSigningRoutes(
       LEFT JOIN dbo.project_docs pd ON pd.id = f.project_doc_id
       OUTER APPLY (SELECT TOP (1) r.id, r.state FROM dbo.sign_requests r WHERE r.document_file_id = f.id ORDER BY r.id DESC) rq
       WHERE f.document_id = @document_id ORDER BY f.id DESC;
-    `, (bind) => bind.input("document_id", sql.BigInt, documentId))).recordset.map((row) => ({
+    `,
+        (bind) => bind.input("document_id", sql.BigInt, documentId),
+      )
+    ).recordset.map((row) => ({
       id: Number(row.id),
       revisionLabel: String(row.revision_label),
       source: String(row.source),
@@ -765,9 +765,7 @@ export function registerSigningRoutes(
     const latest = live ?? requests[0] ?? null;
     const latestId = latest ? Number(latest.id) : null;
     const events = latestId === null ? [] : await listEvents(database, latestId);
-    const chain = latestId === null
-      ? { verified: false, head: "", count: 0 }
-      : await verifyChain(database, latestId);
+    const chain = latestId === null ? { verified: false, head: "", count: 0 } : await verifyChain(database, latestId);
     const output = latestId === null ? null : await loadOutput(database, latestId);
 
     return {
@@ -834,8 +832,7 @@ export function registerSigningRoutes(
 
       const fileId = await freezeRevision(transaction, documentId, revisionLabel, source, actor.id);
       await setDocumentState(transaction, documentId, "DRAFT", fileId);
-      await insertAudit(transaction, actor.id, DOCUMENT_ENTITY, documentId, document.documentNo, "Revision frozen", null,
-        { revisionLabel, sha256: source.sha256, supersededRequestId: superseded });
+      await insertAudit(transaction, actor.id, DOCUMENT_ENTITY, documentId, document.documentNo, "Revision frozen", null, { revisionLabel, sha256: source.sha256, supersededRequestId: superseded });
       return { documentId, fileId, revisionLabel, supersededRequestId: superseded };
     }, sql.ISOLATION_LEVEL.READ_COMMITTED);
   });
@@ -874,9 +871,11 @@ export function registerSigningRoutes(
       if (drawingStampId) {
         const approver = { ...actor, id: drawingPeople!.APPROVED_BY };
         // Resolve using the actual manager's role, not the submitting member's role.
-        const roleQuery = new sql.Request(transaction); roleQuery.input("id", sql.BigInt, approver.id);
-        approver.role = (await roleQuery.query<{code: string}>(`SELECT r.code FROM dbo.users u JOIN dbo.roles r ON r.id=u.role_id WHERE u.id=@id;`)).recordset[0]!.code;
-        if (!await resolveStampAuthority(transaction, drawingStampId, "DRAWING", approver, businessToday(config.businessTimeZone))) throw new ApiError(409, "drawing_stamp_authority_missing", "The project Manager does not hold authority for this stamp.");
+        const roleQuery = new sql.Request(transaction);
+        roleQuery.input("id", sql.BigInt, approver.id);
+        approver.role = (await roleQuery.query<{ code: string }>(`SELECT r.code FROM dbo.users u JOIN dbo.roles r ON r.id=u.role_id WHERE u.id=@id;`)).recordset[0]!.code;
+        if (!(await resolveStampAuthority(transaction, drawingStampId, "DRAWING", approver, businessToday(config.businessTimeZone))))
+          throw new ApiError(409, "drawing_stamp_authority_missing", "The project Manager does not hold authority for this stamp.");
       }
       const steps = template.steps.filter((step) => appliesToAmount(step, document.amount)).sort((a, b) => a.stepNo - b.stepNo);
       if (steps.length === 0) throw new ApiError(409, "no_applicable_steps", "No step of the active flow applies to this document.");
@@ -888,35 +887,38 @@ export function registerSigningRoutes(
       insertRequest.input("template_version", sql.Int, template.version);
       insertRequest.input("actor", sql.BigInt, actor.id);
       insertRequest.input("due_date", sql.Date, body.dueDate ? String(body.dueDate).slice(0, 10) : null);
-      const requestId = Number((await insertRequest.query<{ id: number }>(`
+      const requestId = Number(
+        (
+          await insertRequest.query<{ id: number }>(`
         DECLARE @created TABLE (id bigint NOT NULL);
         INSERT INTO dbo.sign_requests (document_id, document_file_id, template_id, template_version, initiator_id, due_date, state)
         OUTPUT inserted.id INTO @created(id)
         VALUES (@document_id, @file_id, @template_id, @template_version, @actor, @due_date, N'PENDING_SIGN');
         SELECT id FROM @created;
-      `)).recordset[0]!.id);
+      `)
+        ).recordset[0]!.id,
+      );
 
       let stepNo = 0;
       for (const step of steps) {
         stepNo += 1;
-        const assigneeUserId = drawingPeople ? drawingPeople[step.blockCode as keyof typeof drawingPeople] ?? null : step.assigneeKind === "OWNER"
-          ? document.ownerId
-          : step.assigneeKind === "NAMED"
-            ? step.assigneeUserId
-            : step.assigneeKind === "PROJECT_MANAGER"
-              ? document.projectManagerId
-              : null;
+        const assigneeUserId = drawingPeople
+          ? (drawingPeople[step.blockCode as keyof typeof drawingPeople] ?? null)
+          : step.assigneeKind === "OWNER"
+            ? document.ownerId
+            : step.assigneeKind === "NAMED"
+              ? step.assigneeUserId
+              : step.assigneeKind === "PROJECT_MANAGER"
+                ? document.projectManagerId
+                : null;
         if (step.assigneeKind === "PROJECT_MANAGER" && assigneeUserId === null) {
-          throw new ApiError(409, "project_manager_unknown",
-            "This flow assigns a step to the project manager, but the document is not attached to a project.");
+          throw new ApiError(409, "project_manager_unknown", "This flow assigns a step to the project manager, but the document is not attached to a project.");
         }
         // A step assigned to a named person with no specimen would be
         // unsignable. Fail here with their name rather than parking the
         // document in a state nobody can move.
-        if (assigneeUserId !== null && step.requiredMark !== "PAPER"
-          && (await activeSpecimenId(database, assigneeUserId, transaction)) === null) {
-          throw new ApiError(409, "specimen_required", "A signer on this flow has not created their signature yet.",
-            { stepNo, blockCode: step.blockCode, userId: assigneeUserId });
+        if (assigneeUserId !== null && step.requiredMark !== "PAPER" && (await activeSpecimenId(database, assigneeUserId, transaction)) === null) {
+          throw new ApiError(409, "specimen_required", "A signer on this flow has not created their signature yet.", { stepNo, blockCode: step.blockCode, userId: assigneeUserId });
         }
 
         const insertStep = new sql.Request(transaction);
@@ -930,9 +932,7 @@ export function registerSigningRoutes(
         insertStep.input("is_optional", sql.Bit, step.isOptional);
         insertStep.input("parallel_group", sql.Int, step.parallelGroup);
         insertStep.input("anchor_code", sql.NVarChar(50), step.anchorCode);
-        insertStep.input("due_date", sql.Date, step.dueDays === null
-          ? null
-          : new Date(Date.now() + step.dueDays * 86_400_000).toISOString().slice(0, 10));
+        insertStep.input("due_date", sql.Date, step.dueDays === null ? null : new Date(Date.now() + step.dueDays * 86_400_000).toISOString().slice(0, 10));
         await insertStep.query(`
           INSERT INTO dbo.sign_steps (
             request_id, step_no, block_code, required_mark, company_stamp_id,
@@ -948,9 +948,11 @@ export function registerSigningRoutes(
 
       const fileRequest = new sql.Request(transaction);
       fileRequest.input("file_id", sql.BigInt, document.currentFileId);
-      const frozen = (await fileRequest.query<Record<string, unknown>>(`
+      const frozen = (
+        await fileRequest.query<Record<string, unknown>>(`
         SELECT revision_label, source, sha256, size_bytes FROM dbo.document_files WHERE id = @file_id;
-      `)).recordset[0]!;
+      `)
+      ).recordset[0]!;
       // Event 1 is the frozen file, so the chain starts from the bytes the first
       // signer will see rather than from the request record.
       await appendSignEvent(transaction, {
@@ -974,8 +976,7 @@ export function registerSigningRoutes(
           steps: String(stepNo),
         },
       });
-      await insertAudit(transaction, actor.id, DOCUMENT_ENTITY, documentId, document.documentNo, "Signature requested", null,
-        { requestId, templateVersion: template.version, steps: stepNo });
+      await insertAudit(transaction, actor.id, DOCUMENT_ENTITY, documentId, document.documentNo, "Signature requested", null, { requestId, templateVersion: template.version, steps: stepNo });
       return { requestId, steps: stepNo, templateVersion: template.version };
     }, sql.ISOLATION_LEVEL.READ_COMMITTED);
   });
@@ -983,44 +984,66 @@ export function registerSigningRoutes(
   // -------------------------------------------------------------------------
   // Step decisions
   // -------------------------------------------------------------------------
-  app.get("/api/v1/signing/documents/:documentId/preview", {config:{rateLimit:DOCUMENT_DOWNLOAD_RATE_LIMIT}}, async(request,reply)=>{
-    await users.demandPermission(request,"signing.read");const actor=await users.required(request);
-    const id=positiveLong((request.params as {documentId:string}).documentId,"Document id");
-    const query=request.query as {fileId?:string;stepId?:string};
-    const fileId=positiveLong(query.fileId,"Revision id");
-    const stepId=query.stepId?positiveLong(query.stepId,"Step id"):null;
-    const result=await database.transaction(async transaction=>{
-      const document=await loadSignableDocument(database,id,transaction);
-      await demandDocumentScope(database,document,actor,transaction);
-      const check=new sql.Request(transaction);check.input("file",sql.BigInt,fileId);check.input("document",sql.BigInt,id);
-      const file=(await check.query<{request_id:number|null}>(`SELECT (SELECT TOP(1) id FROM dbo.sign_requests WHERE document_file_id=f.id ORDER BY id DESC) request_id FROM dbo.document_files f WHERE f.id=@file AND f.document_id=@document;`)).recordset[0];
-      if(!file) throw new ApiError(404,"file_not_found","Revision not found in this document.");
-      const source=await frozenSource(transaction,config,fileId);
-      const pdf=await loadSigningPdf(source.bytes,source.content_type,source.sha256);
-      const marks=file.request_id?await placedArtwork(transaction,config,Number(file.request_id)):[];
-      await paintMarks(pdf,marks);
-      let specimen: {id:number;imageBase64:string}|null=null;let stampImageBase64:string|null=null;
-      if(stepId) {
-        await users.demandPermission(request,"signing.sign");
-        const step=await loadStep(transaction,stepId);demandStepIsMine(step,actor);
-        if(step.documentId!==id || step.fileSha256.toLowerCase()!==source.sha256.toLowerCase() || step.requestId!==Number(file.request_id)) throw new ApiError(409,"revision_changed","Reload the current signing revision.");
-        const specimenId=await activeSpecimenId(database,actor.id,transaction);
-        if(specimenId!==null) {
-          const imageQuery=new sql.Request(transaction);imageQuery.input("id",sql.BigInt,specimenId);imageQuery.input("initial",sql.Bit,step.requiredMark==="INITIAL");
-          const image=(await imageQuery.query<{image_key:string}>("SELECT COALESCE(CASE WHEN @initial=1 THEN initials_image_key END,image_key) image_key FROM dbo.signature_specimens WHERE id=@id;")).recordset[0]!;
-          specimen={id:specimenId,imageBase64:(await readFile(resolveStoragePath(config.documentStorage,image.image_key))).toString("base64")};
+  app.get("/api/v1/signing/documents/:documentId/preview", { config: { rateLimit: DOCUMENT_DOWNLOAD_RATE_LIMIT } }, async (request, reply) => {
+    await users.demandPermission(request, "signing.read");
+    const actor = await users.required(request);
+    const id = positiveLong((request.params as { documentId: string }).documentId, "Document id");
+    const query = request.query as { fileId?: string; stepId?: string };
+    const fileId = positiveLong(query.fileId, "Revision id");
+    const stepId = query.stepId ? positiveLong(query.stepId, "Step id") : null;
+    const result = await database.transaction(async (transaction) => {
+      const document = await loadSignableDocument(database, id, transaction);
+      await demandDocumentScope(database, document, actor, transaction);
+      const check = new sql.Request(transaction);
+      check.input("file", sql.BigInt, fileId);
+      check.input("document", sql.BigInt, id);
+      const file = (
+        await check.query<{ request_id: number | null }>(
+          `SELECT (SELECT TOP(1) id FROM dbo.sign_requests WHERE document_file_id=f.id ORDER BY id DESC) request_id FROM dbo.document_files f WHERE f.id=@file AND f.document_id=@document;`,
+        )
+      ).recordset[0];
+      if (!file) throw new ApiError(404, "file_not_found", "Revision not found in this document.");
+      const source = await frozenSource(transaction, config, fileId);
+      const pdf = await loadSigningPdf(source.bytes, source.content_type, source.sha256);
+      const marks = file.request_id ? await placedArtwork(transaction, config, Number(file.request_id)) : [];
+      await paintMarks(pdf, marks);
+      let specimen: { id: number; imageBase64: string } | null = null;
+      let stampImageBase64: string | null = null;
+      if (stepId) {
+        await users.demandPermission(request, "signing.sign");
+        const step = await loadStep(transaction, stepId);
+        demandStepIsMine(step, actor);
+        if (step.documentId !== id || step.fileSha256.toLowerCase() !== source.sha256.toLowerCase() || step.requestId !== Number(file.request_id))
+          throw new ApiError(409, "revision_changed", "Reload the current signing revision.");
+        const specimenId = await activeSpecimenId(database, actor.id, transaction);
+        if (specimenId !== null) {
+          const imageQuery = new sql.Request(transaction);
+          imageQuery.input("id", sql.BigInt, specimenId);
+          imageQuery.input("initial", sql.Bit, step.requiredMark === "INITIAL");
+          const image = (
+            await imageQuery.query<{ image_key: string }>("SELECT COALESCE(CASE WHEN @initial=1 THEN initials_image_key END,image_key) image_key FROM dbo.signature_specimens WHERE id=@id;")
+          ).recordset[0]!;
+          specimen = { id: specimenId, imageBase64: (await readFile(resolveStoragePath(config.documentStorage, image.image_key))).toString("base64") };
         }
-        if(step.companyStampId && step.requiredMark==="SIGNATURE_STAMP") {
-          const authority=await resolveStampAuthority(transaction,step.companyStampId,document.documentClass,actor,businessToday(config.businessTimeZone));
-          if(authority===null) throw new ApiError(403,"stamp_authority_missing","You cannot preview/apply this stamp without current authority.");
-          const stampQuery=new sql.Request(transaction);stampQuery.input("id",sql.BigInt,step.companyStampId);
-          const stamp=(await stampQuery.query<{image_key:string}>("SELECT image_key FROM dbo.company_stamps WHERE id=@id;")).recordset[0]!;
-          stampImageBase64=(await readFile(resolveStoragePath(config.documentStorage,stamp.image_key))).toString("base64");
+        if (step.companyStampId && step.requiredMark === "SIGNATURE_STAMP") {
+          const authority = await resolveStampAuthority(transaction, step.companyStampId, document.documentClass, actor, businessToday(config.businessTimeZone));
+          if (authority === null) throw new ApiError(403, "stamp_authority_missing", "You cannot preview/apply this stamp without current authority.");
+          const stampQuery = new sql.Request(transaction);
+          stampQuery.input("id", sql.BigInt, step.companyStampId);
+          const stamp = (await stampQuery.query<{ image_key: string }>("SELECT image_key FROM dbo.company_stamps WHERE id=@id;")).recordset[0]!;
+          stampImageBase64 = (await readFile(resolveStoragePath(config.documentStorage, stamp.image_key))).toString("base64");
         }
       }
-      return {pdfBase64:Buffer.from(await pdf.save()).toString("base64"),sourceSha256:source.sha256,pageCount:pdf.getPageCount(),specimen,stampImageBase64,legacyMarkCount:marks.filter(m=>!m.placement).length};
-    },sql.ISOLATION_LEVEL.READ_COMMITTED);
-    return reply.header("Cache-Control","no-store").send(result);
+      return {
+        pdfBase64: Buffer.from(await pdf.save()).toString("base64"),
+        sourceSha256: source.sha256,
+        pageCount: pdf.getPageCount(),
+        specimen,
+        stampImageBase64,
+        legacyMarkCount: marks.filter((m) => !m.placement).length,
+      };
+    }, sql.ISOLATION_LEVEL.READ_COMMITTED);
+    return reply.header("Cache-Control", "no-store").send(result);
   });
 
   app.post("/api/v1/signing/steps/:stepId/sign", async (request) => {
@@ -1033,8 +1056,8 @@ export function registerSigningRoutes(
     const body = bodyObject(request.body);
     const expected = parseRowVersion(body.rowVersion);
     const note = optionalBodyText(body.note, 4_000, "Note");
-    const placement=parsePlacement(body.placement);
-    const stampPlacement=parsePlacement(body.stampPlacement);
+    const placement = parsePlacement(body.placement);
+    const stampPlacement = parsePlacement(body.stampPlacement);
     const ip = clientIp(request);
     const userAgent = clientUserAgent(request);
 
@@ -1054,15 +1077,18 @@ export function registerSigningRoutes(
           throw new ApiError(409, "specimen_required", "Create your signature in Preferences before signing.");
         }
 
-        if(placement || stampPlacement) {
-          if(!placement || body.sourceSha256!==step.fileSha256 || Number(body.previewSpecimenId)!==specimenId) throw new ApiError(409,"preview_changed","Reload the preview: the frozen file or your signature has changed.");
-          const fileQuery=new sql.Request(transaction);fileQuery.input("request",sql.BigInt,step.requestId);
-          const fileId=Number((await fileQuery.query<{document_file_id:number}>("SELECT document_file_id FROM dbo.sign_requests WHERE id=@request;")).recordset[0]!.document_file_id);
-          const source=await frozenSource(transaction,config,fileId);
-          const pdf=await loadSigningPdf(source.bytes,source.content_type,source.sha256);
-          validatePage(pdf,placement);if(stampPlacement) validatePage(pdf,stampPlacement);
-          if(step.requiredMark==="SIGNATURE_STAMP" && !stampPlacement) throw new ApiError(400,"stamp_placement_required","Place the company stamp as well as your signature.");
-          if(step.requiredMark!=="SIGNATURE_STAMP" && stampPlacement) throw new ApiError(400,"unexpected_stamp","This step does not permit a company stamp.");
+        if (placement || stampPlacement) {
+          if (!placement || body.sourceSha256 !== step.fileSha256 || Number(body.previewSpecimenId) !== specimenId)
+            throw new ApiError(409, "preview_changed", "Reload the preview: the frozen file or your signature has changed.");
+          const fileQuery = new sql.Request(transaction);
+          fileQuery.input("request", sql.BigInt, step.requestId);
+          const fileId = Number((await fileQuery.query<{ document_file_id: number }>("SELECT document_file_id FROM dbo.sign_requests WHERE id=@request;")).recordset[0]!.document_file_id);
+          const source = await frozenSource(transaction, config, fileId);
+          const pdf = await loadSigningPdf(source.bytes, source.content_type, source.sha256);
+          validatePage(pdf, placement);
+          if (stampPlacement) validatePage(pdf, stampPlacement);
+          if (step.requiredMark === "SIGNATURE_STAMP" && !stampPlacement) throw new ApiError(400, "stamp_placement_required", "Place the company stamp as well as your signature.");
+          if (step.requiredMark !== "SIGNATURE_STAMP" && stampPlacement) throw new ApiError(400, "unexpected_stamp", "This step does not permit a company stamp.");
         }
 
         let stampAuthorityId: number | null = null;
@@ -1072,8 +1098,7 @@ export function registerSigningRoutes(
           }
           stampAuthorityId = await resolveStampAuthority(transaction, step.companyStampId, document.documentClass, actor, businessToday(config.businessTimeZone));
           if (stampAuthorityId === null) {
-            throw new ApiError(403, "stamp_authority_missing",
-              "You do not hold a live authority to apply this company stamp to this document class.");
+            throw new ApiError(403, "stamp_authority_missing", "You do not hold a live authority to apply this company stamp to this document class.");
           }
         }
 
@@ -1097,7 +1122,7 @@ export function registerSigningRoutes(
             companyStampId: step.companyStampId,
             stampAuthorityId,
             anchorCode: "stamp:MAIN",
-            placement:stampPlacement,
+            placement: stampPlacement,
           });
         }
 
@@ -1113,8 +1138,8 @@ export function registerSigningRoutes(
             required_mark: step.requiredMark,
             specimen_id: String(specimenId),
             file_sha256: step.fileSha256,
-            placement:placement?JSON.stringify(placement):null,
-            stamp_placement:stampPlacement?JSON.stringify(stampPlacement):null,
+            placement: placement ? JSON.stringify(placement) : null,
+            stamp_placement: stampPlacement ? JSON.stringify(stampPlacement) : null,
             note,
           },
           ip,
@@ -1156,16 +1181,21 @@ export function registerSigningRoutes(
           await setDocumentState(transaction, step.documentId, "PARTIALLY_SIGNED");
         }
 
-        await insertAudit(transaction, actor.id, DOCUMENT_ENTITY, step.documentId, document.documentNo, "Signed", null,
-          { stepId, blockCode: step.blockCode, requiredMark: step.requiredMark, stampAuthorityId, evidence: assurance.evidence, complete });
+        await insertAudit(transaction, actor.id, DOCUMENT_ENTITY, step.documentId, document.documentNo, "Signed", null, {
+          stepId,
+          blockCode: step.blockCode,
+          requiredMark: step.requiredMark,
+          stampAuthorityId,
+          evidence: assurance.evidence,
+          complete,
+        });
         return { stepId, state: "SIGNED", requestComplete: complete };
       }, sql.ISOLATION_LEVEL.READ_COMMITTED);
       return result;
     } catch (error) {
       if (writtenKey) {
         if (error instanceof DatabaseCommitOutcomeUnknownError) {
-          request.log.fatal({ err: error.originalError, storageKey: writtenKey },
-            "Signature certificate commit outcome unknown; preserving storage file");
+          request.log.fatal({ err: error.originalError, storageKey: writtenKey }, "Signature certificate commit outcome unknown; preserving storage file");
         } else {
           await deleteStoredFile(config.documentStorage, writtenKey);
         }
@@ -1180,11 +1210,9 @@ export function registerSigningRoutes(
    * then uploads a new revision or opens a fresh request on the same frozen file
    * — and signed steps stay as history against the file they were placed on.
    */
-  app.post("/api/v1/signing/steps/:stepId/return", (request) =>
-    decideStep(request, "signing.sign", "RETURNED", "VOIDED", "VOIDED", "DRAFT", "STEP_RETURNED", true));
+  app.post("/api/v1/signing/steps/:stepId/return", (request) => decideStep(request, "signing.sign", "RETURNED", "VOIDED", "VOIDED", "DRAFT", "STEP_RETURNED", true));
 
-  app.post("/api/v1/signing/steps/:stepId/reject", (request) =>
-    decideStep(request, "signing.reject", "REJECTED", "REJECTED", "REJECTED", "REJECTED", "STEP_REJECTED", false));
+  app.post("/api/v1/signing/steps/:stepId/reject", (request) => decideStep(request, "signing.reject", "REJECTED", "REJECTED", "REJECTED", "REJECTED", "STEP_REJECTED", false));
 
   async function decideStep(
     request: FastifyRequest,
@@ -1238,8 +1266,7 @@ export function registerSigningRoutes(
         ip,
         userAgent,
       });
-      await insertAudit(transaction, actor.id, DOCUMENT_ENTITY, step.documentId, document.documentNo, decision, null,
-        { stepId, blockCode: step.blockCode, reason });
+      await insertAudit(transaction, actor.id, DOCUMENT_ENTITY, step.documentId, document.documentNo, decision, null, { stepId, blockCode: step.blockCode, reason });
       return { stepId, state: stepState, documentState };
     }, sql.ISOLATION_LEVEL.READ_COMMITTED);
   }
@@ -1268,7 +1295,8 @@ export function registerSigningRoutes(
 
       const check = new sql.Request(transaction);
       check.input("user_id", sql.BigInt, toUserId);
-      const candidate = (await check.query<Record<string, unknown>>(`
+      const candidate = (
+        await check.query<Record<string, unknown>>(`
         SELECT u.name,
                CASE WHEN EXISTS (SELECT 1 FROM dbo.role_permissions rp
                     INNER JOIN dbo.permissions p ON p.id = rp.permission_id
@@ -1278,7 +1306,8 @@ export function registerSigningRoutes(
                     WHERE s.user_id = u.id AND s.active_to IS NULL)
                     THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END AS has_specimen
         FROM dbo.users u WHERE u.id = @user_id AND u.deleted_at IS NULL AND u.is_active = 1;
-      `)).recordset[0];
+      `)
+      ).recordset[0];
       if (!candidate) throw new ApiError(404, "delegate_not_found", "The delegate is not an active user.");
       if (!candidate.can_sign) throw new ApiError(409, "delegate_cannot_sign", `${String(candidate.name)} does not hold the signing permission.`);
       if (!candidate.has_specimen) throw new ApiError(409, "delegate_specimen_required", `${String(candidate.name)} has not created a signature yet.`);
@@ -1304,8 +1333,7 @@ export function registerSigningRoutes(
         ip: clientIp(request),
         userAgent: clientUserAgent(request),
       });
-      await insertAudit(transaction, actor.id, DOCUMENT_ENTITY, step.documentId, document.documentNo, "Delegated", null,
-        { stepId, blockCode: step.blockCode, toUserId, reason });
+      await insertAudit(transaction, actor.id, DOCUMENT_ENTITY, step.documentId, document.documentNo, "Delegated", null, { stepId, blockCode: step.blockCode, toUserId, reason });
       return { stepId, assigneeUserId: toUserId };
     }, sql.ISOLATION_LEVEL.READ_COMMITTED);
   });
@@ -1377,15 +1405,18 @@ export function registerSigningRoutes(
             ip,
           });
         }
-        await insertAudit(transaction, actor.id, DOCUMENT_ENTITY, step.documentId, document.documentNo,
-          "Paper signature attached", null, { stepId, blockCode: step.blockCode, scanDocumentId: scan.id, complete });
+        await insertAudit(transaction, actor.id, DOCUMENT_ENTITY, step.documentId, document.documentNo, "Paper signature attached", null, {
+          stepId,
+          blockCode: step.blockCode,
+          scanDocumentId: scan.id,
+          complete,
+        });
         return { stepId, state: "SIGNED", requestComplete: complete };
       }, sql.ISOLATION_LEVEL.READ_COMMITTED);
     } catch (error) {
       if (writtenKey) {
         if (error instanceof DatabaseCommitOutcomeUnknownError) {
-          request.log.fatal({ err: error.originalError, storageKey: writtenKey },
-            "Signature certificate commit outcome unknown; preserving storage file");
+          request.log.fatal({ err: error.originalError, storageKey: writtenKey }, "Signature certificate commit outcome unknown; preserving storage file");
         } else {
           await deleteStoredFile(config.documentStorage, writtenKey);
         }
@@ -1397,31 +1428,39 @@ export function registerSigningRoutes(
   // -------------------------------------------------------------------------
   // Output and verification
   // -------------------------------------------------------------------------
-  app.get(
-    "/api/v1/signing/requests/:requestId/output",
-    { config: { rateLimit: DOCUMENT_DOWNLOAD_RATE_LIMIT } },
-    async (request, reply) => {
-      await users.demandPermission(request, "signing.read");
-      const actor = await users.required(request);
-      const requestId = positiveLong((request.params as { requestId?: string }).requestId, "Request id");
-      const row = (await database.query<Record<string, unknown>>(`
+  app.get("/api/v1/signing/requests/:requestId/output", { config: { rateLimit: DOCUMENT_DOWNLOAD_RATE_LIMIT } }, async (request, reply) => {
+    await users.demandPermission(request, "signing.read");
+    const actor = await users.required(request);
+    const requestId = positiveLong((request.params as { requestId?: string }).requestId, "Request id");
+    const row = (
+      await database.query<Record<string, unknown>>(
+        `
         SELECT o.storage_key, o.file_name, o.content_type, o.size_bytes, o.sha256, rq.document_id
         FROM dbo.signed_documents o
         INNER JOIN dbo.sign_requests rq ON rq.id = o.request_id
         WHERE o.request_id = @request_id;
-      `, (bind) => bind.input("request_id", sql.BigInt, requestId))).recordset[0];
-      if (!row) throw new ApiError(404, "output_not_found", "This signature request has not produced a signed output.");
+      `,
+        (bind) => bind.input("request_id", sql.BigInt, requestId),
+      )
+    ).recordset[0];
+    if (!row) throw new ApiError(404, "output_not_found", "This signature request has not produced a signed output.");
 
-      const document = await loadSignableDocument(database, Number(row.document_id));
-      await demandDocumentScope(database, document, actor);
-      return sendStoredFile(request, reply, config.documentStorage, {
+    const document = await loadSignableDocument(database, Number(row.document_id));
+    await demandDocumentScope(database, document, actor);
+    return sendStoredFile(
+      request,
+      reply,
+      config.documentStorage,
+      {
         storageKey: String(row.storage_key),
         fileName: String(row.file_name),
         contentType: String(row.content_type),
         sizeBytes: Number(row.size_bytes),
         sha256: String(row.sha256),
-      }, { inline: true });
-    });
+      },
+      { inline: true },
+    );
+  });
 
   app.get("/api/v1/signing/verify/:code", async (request) => {
     // v1 is internal-only, matching the platform's identity assumption
@@ -1432,7 +1471,9 @@ export function registerSigningRoutes(
     if (!isVerifyCodeShape(code)) {
       throw new ApiError(400, "invalid_verify_code", "A verification code looks like TC-XXXX-XXXX-XXXX.");
     }
-    const row = (await database.query<Record<string, unknown>>(`
+    const row = (
+      await database.query<Record<string, unknown>>(
+        `
       SELECT rq.id AS request_id, d.doc_no, f.revision_label, d.doc_class, d.title, p.name AS project_name,
              f.sha256 AS source_sha, o.sha256 AS output_sha, rq.closed_at
       FROM dbo.signed_documents o
@@ -1441,12 +1482,17 @@ export function registerSigningRoutes(
       INNER JOIN dbo.document_files f ON f.id = rq.document_file_id
       LEFT JOIN dbo.projects p ON p.id = d.project_id
       WHERE o.verify_code = @code;
-    `, (bind) => bind.input("code", sql.NVarChar(24), code))).recordset[0];
+    `,
+        (bind) => bind.input("code", sql.NVarChar(24), code),
+      )
+    ).recordset[0];
     if (!row) throw new ApiError(404, "verify_code_not_found", "No signed document carries that verification code.");
 
     const requestId = Number(row.request_id);
     const chain = await verifyChain(database, requestId);
-    const blocks = (await database.query<Record<string, unknown>>(`
+    const blocks = (
+      await database.query<Record<string, unknown>>(
+        `
       SELECT s.block_code, u.name AS signer_name, r.code AS signer_role, s.required_mark,
              stamp.code AS stamp_code, s.decided_at,
              (SELECT TOP (1) e.auth_evidence FROM dbo.sign_events e
@@ -1456,7 +1502,10 @@ export function registerSigningRoutes(
       LEFT JOIN dbo.roles r ON r.id = u.role_id
       LEFT JOIN dbo.company_stamps stamp ON stamp.id = s.company_stamp_id
       WHERE s.request_id = @request_id AND s.state = N'SIGNED' ORDER BY s.step_no;
-    `, (bind) => bind.input("request_id", sql.BigInt, requestId))).recordset.map((block) => ({
+    `,
+        (bind) => bind.input("request_id", sql.BigInt, requestId),
+      )
+    ).recordset.map((block) => ({
       blockCode: String(block.block_code),
       signerName: text(block.signer_name) ?? "—",
       signerRole: text(block.signer_role),
@@ -1480,8 +1529,8 @@ export function registerSigningRoutes(
       chainHead: chain.head,
       chainVerified: chain.verified,
       blocks,
-      statement: "A statement of what Engineering Center recorded. Identity comes from the company Microsoft sign-in, "
-        + "not from a certification authority, and this is not a certificate issued by one.",
+      statement:
+        "A statement of what Engineering Center recorded. Identity comes from the company Microsoft sign-in, " + "not from a certification authority, and this is not a certificate issued by one.",
     };
   });
 }
@@ -1531,7 +1580,9 @@ async function listDocuments(
     request.input("page_size", sql.Int, pageSize);
   };
 
-  const rows = (await database.query<Record<string, unknown>>(`
+  const rows = (
+    await database.query<Record<string, unknown>>(
+      `
     SELECT d.id, d.doc_no, d.doc_class, d.title, d.project_id, p.project_no, p.name AS project_name,
            d.estimate_id, e.estimate_no, d.document_locale, d.amount,
            d.owner_id, owner.name AS owner_name, d.signing_state, d.schedule_task_id,
@@ -1552,7 +1603,10 @@ async function listDocuments(
     ${scope}
     ORDER BY d.updated_at DESC, d.id DESC
     OFFSET @offset ROWS FETCH NEXT @page_size ROWS ONLY;
-  `, bind)).recordset.map((row) => ({
+  `,
+      bind,
+    )
+  ).recordset.map((row) => ({
     id: Number(row.id),
     documentNo: String(row.doc_no),
     documentClass: String(row.doc_class),
@@ -1580,22 +1634,26 @@ async function listDocuments(
 
   let total = rows.length;
   if (options.withTotal) {
-    const counted = (await database.query<{ total: number }>(
-      `SELECT COUNT_BIG(*) AS total FROM dbo.signable_documents d ${scope};`, bind)).recordset[0]!;
+    const counted = (await database.query<{ total: number }>(`SELECT COUNT_BIG(*) AS total FROM dbo.signable_documents d ${scope};`, bind)).recordset[0]!;
     total = Number(counted.total);
   }
   return { items: rows, page, pageSize, total };
 }
 
 async function listRequests(database: Database, documentId: number): Promise<Record<string, unknown>[]> {
-  const requests = (await database.query<Record<string, unknown>>(`
+  const requests = (
+    await database.query<Record<string, unknown>>(
+      `
     SELECT rq.id, rq.document_file_id, f.revision_label, rq.template_id, rq.template_version,
            u.name AS initiator_name, rq.due_date, rq.state, rq.created_at, rq.closed_at, rq.close_reason, rq.row_version
     FROM dbo.sign_requests rq
     INNER JOIN dbo.document_files f ON f.id = rq.document_file_id
     INNER JOIN dbo.users u ON u.id = rq.initiator_id
     WHERE rq.document_id = @document_id ORDER BY rq.id DESC;
-  `, (bind) => bind.input("document_id", sql.BigInt, documentId))).recordset;
+  `,
+      (bind) => bind.input("document_id", sql.BigInt, documentId),
+    )
+  ).recordset;
 
   const details: Record<string, unknown>[] = [];
   for (const request of requests) {
@@ -1620,14 +1678,19 @@ async function listRequests(database: Database, documentId: number): Promise<Rec
 
 async function listSteps(database: Database, requestId: number): Promise<Record<string, unknown>[]> {
   const marks = new Map<number, Record<string, unknown>[]>();
-  for (const mark of (await database.query<Record<string, unknown>>(`
+  for (const mark of (
+    await database.query<Record<string, unknown>>(
+      `
     SELECT m.id, m.sign_step_id, m.kind, stamp.code AS stamp_code, m.stamp_authority_id, m.anchor_code,
            m.page_no, m.pos_x, m.pos_y, m.text_value, m.scan_project_doc_id, m.rendered_at
     FROM dbo.signature_marks m
     INNER JOIN dbo.sign_steps s ON s.id = m.sign_step_id
     LEFT JOIN dbo.company_stamps stamp ON stamp.id = m.company_stamp_id
     WHERE s.request_id = @request_id ORDER BY m.id;
-  `, (bind) => bind.input("request_id", sql.BigInt, requestId))).recordset) {
+  `,
+      (bind) => bind.input("request_id", sql.BigInt, requestId),
+    )
+  ).recordset) {
     const stepId = Number(mark.sign_step_id);
     const list = marks.get(stepId) ?? [];
     list.push({
@@ -1646,7 +1709,9 @@ async function listSteps(database: Database, requestId: number): Promise<Record<
     marks.set(stepId, list);
   }
 
-  return (await database.query<Record<string, unknown>>(`
+  return (
+    await database.query<Record<string, unknown>>(
+      `
     SELECT s.id, s.step_no, s.block_code, s.required_mark, stamp.code AS stamp_code,
            s.assignee_user_id, assignee.name AS assignee_name, role.code AS assignee_role,
            delegated.name AS delegated_from, s.is_optional, s.parallel_group, s.anchor_code, s.due_date,
@@ -1658,7 +1723,10 @@ async function listSteps(database: Database, requestId: number): Promise<Record<
     LEFT JOIN dbo.users delegated ON delegated.id = s.delegated_from_id
     LEFT JOIN dbo.users decided ON decided.id = s.decided_by
     WHERE s.request_id = @request_id ORDER BY s.step_no;
-  `, (bind) => bind.input("request_id", sql.BigInt, requestId))).recordset.map((row) => ({
+  `,
+      (bind) => bind.input("request_id", sql.BigInt, requestId),
+    )
+  ).recordset.map((row) => ({
     id: Number(row.id),
     stepNo: Number(row.step_no),
     blockCode: String(row.block_code),
@@ -1683,14 +1751,19 @@ async function listSteps(database: Database, requestId: number): Promise<Record<
 }
 
 async function listEvents(database: Database, requestId: number): Promise<Record<string, unknown>[]> {
-  return (await database.query<Record<string, unknown>>(`
+  return (
+    await database.query<Record<string, unknown>>(
+      `
     SELECT e.seq, e.action, u.name AS actor_name, s.step_no, e.detail, e.ip,
            e.auth_evidence, e.auth_at, e.payload_hash, e.prev_hash, e.hash, e.occurred_at
     FROM dbo.sign_events e
     LEFT JOIN dbo.users u ON u.id = e.actor_id
     LEFT JOIN dbo.sign_steps s ON s.id = e.sign_step_id
     WHERE e.request_id = @request_id ORDER BY e.seq;
-  `, (bind) => bind.input("request_id", sql.BigInt, requestId))).recordset.map((row) => ({
+  `,
+      (bind) => bind.input("request_id", sql.BigInt, requestId),
+    )
+  ).recordset.map((row) => ({
     seq: Number(row.seq),
     action: String(row.action),
     actorName: text(row.actor_name),
@@ -1707,10 +1780,15 @@ async function listEvents(database: Database, requestId: number): Promise<Record
 }
 
 async function loadOutput(database: Database, requestId: number): Promise<Record<string, unknown> | null> {
-  const row = (await database.query<Record<string, unknown>>(`
+  const row = (
+    await database.query<Record<string, unknown>>(
+      `
     SELECT o.id, o.file_name, o.content_type, o.size_bytes, o.sha256, o.verify_code, o.page_count, o.produced_at
     FROM dbo.signed_documents o WHERE o.request_id = @request_id;
-  `, (bind) => bind.input("request_id", sql.BigInt, requestId))).recordset[0];
+  `,
+      (bind) => bind.input("request_id", sql.BigInt, requestId),
+    )
+  ).recordset[0];
   if (!row) return null;
   return {
     id: Number(row.id),

@@ -2756,6 +2756,11 @@ export const DICTIONARY: Record<string, Entry> = {
     th: "เริ่มจาก Master Schedule พิมพ์หัวข้อหลัก หรือเว้นว่างไว้ก็ได้ ถ้าจะนำเข้าแผนจาก Excel ให้สร้างโปรเจกต์ก่อน ระบบจะเปิดแท็บแผนงานให้ทันที แล้วกด 'นำเข้าจาก Excel'",
     jp: "マスタースケジュールから始めるか、大見出しを入力するか、空のままにします。Excel から計画を取り込む場合は先に案件を作成してください。すぐに計画タブが開き、「Excel から取り込む」を使えます。",
   },
+  "ProjectCreate.planLater": {
+    en: "Type the start and delivery dates. The project's Project Manager adds the plan after it is created.",
+    th: "ใส่วันเริ่มและวันส่งมอบ แผนงานให้ Project Manager ของโปรเจกต์ใส่หลังสร้างเสร็จ",
+    jp: "開始日と納期を入力します。計画は作成後に案件のプロジェクトマネージャーが追加します。",
+  },
   "ProjectCreate.missing": { en: "Still needed", th: "ยังขาด", jp: "未入力" },
   "ProjectCreate.dateOrder": { en: "Target delivery comes before the start", th: "กำหนดส่งมอบอยู่ก่อนวันเริ่ม", jp: "納期が開始日より前です" },
   "ProjectCreate.ready": { en: "Everything needed is filled in", th: "ครบแล้ว กดสร้างได้", jp: "必要な項目はすべて入力済みです" },

@@ -6,6 +6,7 @@ import { ExecutiveDashboard } from "./production/ExecutiveDashboard";
 import { DASHBOARD_ROLES } from "../../backend-node/src/executive-dashboard-model";
 import { canViewEngineeringRates } from "../../backend-node/src/engineering-rate-access";
 import { canViewProjectCost } from "../../backend-node/src/project-cost-model";
+import { mayCreateProject, mayCreateWithoutEstimate } from "../../backend-node/src/project-create-access";
 import { useActivityPresence } from "./use-activity-presence";
 import {
   baseHash,
@@ -29,6 +30,7 @@ import { noticeRows, supportRowText, type NoticeRow, type SupportNotice } from "
 import { BrandLockup, BrandMark } from "./Brand";
 import { IS_ENTRA_CONFIGURED, restoreAccount, signInWithMicrosoft, signOutMicrosoft } from "./auth-client";
 import { ApiClientError, apiRequest, IS_API_CONFIGURED, loadBootstrap, saveMenuFavorites, type BootstrapData } from "./api-client";
+import { approvesPurchases } from "./approvers";
 import { clearTeamTestSession, getTeamTestSession, IS_TEAM_TEST_MODE, saveTeamTestSession } from "./team-test-client";
 import { IS_TMT_ID_MODE } from "./tmt-id.constants";
 import { currentAppPath, loadTmtIdSession, redirectToTmtIdLogin, redirectToTmtIdLogout } from "./tmt-id-client";
@@ -60,6 +62,7 @@ import { supportLabel } from "./support-copy";
 import { EstimateLookScope } from "./production/EstimateLook";
 import { SalesLookScope } from "./production/SalesLook";
 import { ProjectScope } from "./production/ProjectScope";
+import type { GuideDuty } from "./production/guide-catalog";
 // Screens off the landing path load on first visit; LazyScreens.tsx says which stay eager and why.
 import {
   LaborPackageMaster,
@@ -153,8 +156,24 @@ type View =
   | "installed-base"
   | "design-system";
 
-/** unlessPermission hides an item from people who hold that permission, because they have a fuller screen for the same records. */
-type NavItem = { view: View; label: string; icon: IconName; permission?: string; permissions?: string[]; anyPermissions?: string[]; unlessPermission?: string; rateAccess?: boolean };
+/**
+ * unlessPermission hides an item from people who hold that permission, because they have a fuller screen for the same records.
+ * orPurchaseApprover also shows it to someone named on the PR approval route, who decides without procurement.approve.
+ */
+type NavItem = {
+  view: View;
+  label: string;
+  icon: IconName;
+  permission?: string;
+  permissions?: string[];
+  anyPermissions?: string[];
+  unlessPermission?: string;
+  rateAccess?: boolean;
+  orPurchaseApprover?: boolean;
+};
+/** What the menu rule reads from the session: permissions, every held role, and the approver duties. */
+type NavAccess = Pick<BootstrapData, "permissions" | "approverOf"> & { user: Pick<BootstrapData["user"], "role" | "roles"> };
+const NO_NAV_ACCESS: NavAccess = { permissions: [], user: { role: "", roles: [] } };
 type MyWorkUrgencyItem = {
   status: string;
   canUpdate: boolean;
@@ -236,7 +255,7 @@ const NAV: { group?: string; items: NavItem[] }[] = [
     group: "NavGroup.procurement",
     items: [
       { view: "purchase", label: "Purchase Requisition", icon: "package", permission: "procurement.read" },
-      { view: "approvals", label: "Approvals", icon: "checkCircle", permission: "procurement.approve" },
+      { view: "approvals", label: "Approvals", icon: "checkCircle", permission: "procurement.approve", orPurchaseApprover: true },
     ],
   },
   {
@@ -263,13 +282,16 @@ const NAV: { group?: string; items: NavItem[] }[] = [
 ];
 
 /** The one rule for which menu entries a person sees, and so which views a remembered session may restore. */
-function navItemAllowed(item: NavItem, permissions: readonly string[], role: string): boolean {
+function navItemAllowed(item: NavItem, access: NavAccess): boolean {
+  const { permissions } = access;
+  // Every held role counts, an additional one included (migration 051), as in the API's own checks.
+  const roles = access.user.roles?.length ? access.user.roles : [access.user.role];
   return (
-    (!item.permission || permissions.includes(item.permission)) &&
+    (!item.permission || permissions.includes(item.permission) || (item.orPurchaseApprover === true && approvesPurchases(access))) &&
     (!item.permissions || item.permissions.every((permission) => permissions.includes(permission))) &&
     (!item.anyPermissions || item.anyPermissions.some((permission) => permissions.includes(permission))) &&
     (!item.unlessPermission || !permissions.includes(item.unlessPermission)) &&
-    (!item.rateAccess || canViewEngineeringRates(role))
+    (!item.rateAccess || roles.some(canViewEngineeringRates))
   );
 }
 
@@ -291,7 +313,7 @@ const HELP_NAV: NavItem[] = [
 /** The views a refresh, a link or Back may open: the person's menu entries plus the screens reached from inside them. */
 function allowedViews(data: BootstrapData): View[] {
   const allowed: View[] = NAV.flatMap((section) => section.items)
-    .filter((item) => navItemAllowed(item, data.permissions, data.user.role))
+    .filter((item) => navItemAllowed(item, data))
     .map((item) => item.view);
   allowed.push("profile", "signature", ...HELP_NAV.map((item) => item.view));
   if (data.permissions.includes("inquiry.read")) allowed.push("sales-intake");
@@ -421,7 +443,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
   // Approvals badge: what the Approvals screen lists for this user (GET /api/v1/procurement/approvals/attention), not estimates in review.
   const [procurementApprovalCount, setProcurementApprovalCount] = useState(0);
   useEffect(() => {
-    if (!bootstrap?.permissions.some((code) => code === "procurement.approve" || code === "inventory.adjust")) return;
+    if (!bootstrap || !(approvesPurchases(bootstrap) || bootstrap.permissions.includes("inventory.adjust"))) return;
     let cancelled = false;
     void apiRequest<{ waiting: number }>("/api/v1/procurement/approvals/attention")
       .then((result) => {
@@ -986,7 +1008,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
     () =>
       NAV.map((section) => ({
         ...section,
-        items: section.items.filter((item) => navItemAllowed(item, bootstrap?.permissions ?? [], bootstrap?.user.role ?? "")),
+        items: section.items.filter((item) => navItemAllowed(item, bootstrap ?? NO_NAV_ACCESS)),
       })).filter((section) => section.items.length > 0),
     [bootstrap],
   );
@@ -1182,8 +1204,16 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
   );
   const common = { bootstrap, notify: setToast, refreshBootstrap };
   const seesProjectCost = canViewProjectCost(bootstrap.user.roles ?? [bootstrap.user.role]);
-  // "#/projects/new" without project.write shows the list instead (task doc 5.4); the API refuses a create anyway.
-  const canCreateProject = bootstrap.permissions.includes("project.write");
+  // "#/projects/new" for someone who may not create shows the list instead (task doc 5.4); the API refuses a create anyway.
+  // The same rule as the Projects screen's Create project button and the API (project-create-access.ts).
+  const heldRoles = bootstrap.user.roles ?? [bootstrap.user.role];
+  const canCreateProject = mayCreateProject(bootstrap.permissions, heldRoles, bootstrap.user.department);
+  // Tasks done without their permission, so their guides are offered too (guide-catalog.ts GuideDuty).
+  const guideDuties: GuideDuty[] = [
+    ...(bootstrap.approverOf?.purchases ? (["purchase-approver"] as const) : []),
+    ...(bootstrap.approverOf?.estimates ? (["estimate-approver"] as const) : []),
+    ...(mayCreateWithoutEstimate(heldRoles, bootstrap.user.department) ? (["project-without-estimate"] as const) : []),
+  ];
   const moduleProps = {
     bootstrap,
     notify: setToast,
@@ -1914,6 +1944,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
         <GuideLayer
           view={view}
           permissions={bootstrap.permissions}
+          duties={guideDuties}
           userId={bootstrap.user.id}
           open={guideOpen}
           onOpen={() => setGuideOpen(true)}

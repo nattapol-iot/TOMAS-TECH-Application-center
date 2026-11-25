@@ -38,6 +38,13 @@ export type GuideStep = {
   missing?: GuideCopy;
 };
 
+/**
+ * A task some people do without its permission (2026-11-25): the named PR and estimate approvers (migrations 097, 101, 116)
+ * decide without the approve permission, and the Application team creates a project without an estimate without
+ * project.write.
+ */
+export type GuideDuty = "purchase-approver" | "estimate-approver" | "project-without-estimate";
+
 export type Guide = {
   id: string;
   area: GuideArea;
@@ -46,6 +53,8 @@ export type Guide = {
   minutes: number;
   /** Every permission the task needs; the guide is offered only to people who hold them all. */
   permissions: readonly string[];
+  /** Also offered to someone with this duty, who does the task without the permissions above. */
+  orDuty?: GuideDuty;
   /** Screens where the guide is listed first. */
   views: readonly string[];
   /** The screen that invites a newcomer to this guide the first time it is opened. */
@@ -557,6 +566,7 @@ const ESTIMATE_APPROVE: Guide = {
   },
   minutes: 3,
   permissions: ["estimate.read", "estimate.approve"],
+  orDuty: "estimate-approver",
   views: ["estimates"],
   steps: [
     menu(
@@ -1001,6 +1011,8 @@ const PROJECT_CREATE: Guide = {
   },
   minutes: 5,
   permissions: ["project.read", "project.write"],
+  // The Application team creates projects without an estimate and without project.write (owner 2026-11-25).
+  orDuty: "project-without-estimate",
   views: ["projects"],
   invite: "projects",
   steps: [
@@ -1036,9 +1048,9 @@ const PROJECT_CREATE: Guide = {
         jp: "通常は承認済み見積から作成します。サービス案件など見積がない場合は「見積なし」を選びます。",
       },
       missing: {
-        th: "บัญชีนี้สร้างจาก Estimate ที่อนุมัติแล้วเท่านั้น กด 'ถัดไป'",
-        en: "This account creates projects from approved estimates only. Press Next.",
-        jp: "このアカウントは承認済み見積からのみ作成できます。「次へ」を押します。",
+        th: "บัญชีนี้สร้างได้แบบเดียว: จาก Estimate ที่อนุมัติแล้ว หรือแบบไม่มี Estimate สำหรับทีม Application กด 'ถัดไป'",
+        en: "This account creates projects one way only: from an approved estimate, or without an estimate for the Application team. Press Next.",
+        jp: "このアカウントの作成方法は1つだけです（承認済み見積から、またはアプリケーションチームは見積なし）。「次へ」を押します。",
       },
     },
     {
@@ -1095,6 +1107,11 @@ const PROJECT_CREATE: Guide = {
         en: "Enter the plan's main headings with the dates agreed with the customer, such as 1 Kick-off and 2 Software development, or start from a Master Schedule. The customer sees only this part; the project's start and delivery come from dated rows, or you enter them if all rows are undated. Headings not broken down into tasks yet may leave both dates empty and be dated and broken down later.",
         jp: "計画の大見出しを顧客と合意した日程とともに入力します（例：1 Kick-off、2 Software development）。マスタースケジュールから始めることもできます。顧客にはこの部分だけが表示され、案件の開始日と納期は日程のある行から決まります。全行が日程未定の場合は案件の開始日と納期を入力します。まだタスクに分けていない見出しは両方の日付を空欄にし、後から日程を決めてタスクに分けられます。",
       },
+      missing: {
+        th: "บัญชีนี้ไม่ได้วางแผนตอนสร้าง ใส่วันเริ่มและวันส่งมอบ แล้ว Project Manager ของโปรเจกต์ใส่แผนหลังสร้าง กด 'ถัดไป'",
+        en: "This account does not plan while creating: type the start and delivery dates, and the project's Project Manager adds the plan afterwards. Press Next.",
+        jp: "このアカウントは作成時に計画を入力しません。開始日と納期を入力し、計画は作成後に案件のプロジェクトマネージャーが追加します。「次へ」を押します。",
+      },
     },
     {
       target: "project.team",
@@ -1105,6 +1122,11 @@ const PROJECT_CREATE: Guide = {
         th: "ใต้แต่ละหัวข้อหลัก กด 'เพิ่มงาน' แล้วใส่ชื่องาน ผู้รับผิดชอบ (ต้องมี) วันที่ และ man-days เช่น 2.1 Web App WMS จากนั้นกด + ที่แถวงานเพื่อเพิ่มฟังก์ชันที่ต้องทำ เช่น 2.1.1 Inbound ฟังก์ชันที่ไม่ใส่วันหรือผู้รับผิดชอบจะใช้ของงาน หัวข้อที่ยังไม่แตกงานขึ้นว่า 'ยังไม่แตกแผน' บันทึกได้และแตกทีหลังได้",
         en: "Under each heading press Add task and give it a name, a member (required), dates and man-days, such as 2.1 Web App WMS. Then press + on the task for the functions to build, such as 2.1.1 Inbound; a function without its own dates or member has its task's. A heading not broken down yet shows Not broken down; you can save and do it later.",
         jp: "各見出しで「タスクを追加」を押し、タスク名・担当者（必須）・日程・人日を入力します（例：2.1 Web App WMS）。タスク行の + で作る機能を追加します（例：2.1.1 Inbound）。日程や担当者のない機能はタスクのものを使います。まだ分けていない見出しには「未展開」と表示され、保存して後から分けられます。",
+      },
+      missing: {
+        th: "บัญชีนี้ไม่ได้วางแผนตอนสร้าง กด 'ถัดไป'",
+        en: "This account does not plan while creating. Press Next.",
+        jp: "このアカウントは作成時に計画を入力しません。「次へ」を押します。",
       },
     },
     {
@@ -1118,9 +1140,9 @@ const PROJECT_CREATE: Guide = {
         jp: "各大見出しに「タスクを追加」があります。新しいタスクは見出しの日程から始まります。",
       },
       missing: {
-        th: "เพิ่มหัวข้อหลักใน Master Plan ก่อน ปุ่มนี้จึงจะขึ้น กด 'ถัดไป'",
-        en: "Add a Master Plan heading first and the button appears. Press Next.",
-        jp: "先にマスタープランの見出しを追加するとボタンが表示されます。「次へ」を押します。",
+        th: "เพิ่มหัวข้อหลักใน Master Plan ก่อน ปุ่มนี้จึงจะขึ้น (บัญชีที่ไม่ได้วางแผนตอนสร้างจะไม่มีปุ่มนี้) กด 'ถัดไป'",
+        en: "Add a Master Plan heading first and the button appears (an account that does not plan while creating has none). Press Next.",
+        jp: "先にマスタープランの見出しを追加するとボタンが表示されます（作成時に計画を入力しないアカウントには表示されません）。「次へ」を押します。",
       },
     },
     {
@@ -2740,6 +2762,7 @@ const PR_APPROVE: Guide = {
   },
   minutes: 2,
   permissions: ["procurement.approve"],
+  orDuty: "purchase-approver",
   views: ["approvals", "purchase"],
   invite: "approvals",
   steps: [
@@ -5289,8 +5312,9 @@ export const GUIDES: readonly Guide[] = [
 
 export const guideText = (copy: GuideCopy, lang: "TH" | "EN" | "JP") => (lang === "TH" ? copy.th : lang === "JP" ? copy.jp : copy.en);
 
-/** The guides a person can do: every permission the task needs, in catalog order. */
-export const guidesFor = (permissions: readonly string[]) => GUIDES.filter((guide) => guide.permissions.every((code) => permissions.includes(code)));
+/** The guides a person can do: every permission the task needs, or the duty that stands in for them, in catalog order. */
+export const guidesFor = (permissions: readonly string[], duties: readonly GuideDuty[] = []) =>
+  GUIDES.filter((guide) => guide.permissions.every((code) => permissions.includes(code)) || (guide.orDuty !== undefined && duties.includes(guide.orDuty)));
 
 /** A data-guide name as a selector; a target that is already a selector (starts with "[") is used as it is. */
 export const guideSelector = (target: string) => (target.startsWith("[") ? target : `[data-guide="${target.replace(/["\\]/g, "\\$&")}"]`);
