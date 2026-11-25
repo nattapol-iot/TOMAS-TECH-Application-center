@@ -19,6 +19,7 @@ import {
   budgetState,
   canViewProjectCost,
   costTotals,
+  budgeted,
   DEFAULT_COST_SORT,
   disciplineOfDepartment,
   laborOf,
@@ -476,6 +477,9 @@ test("costTotals: adds what can be seen, keeps a hidden figure null, and adds ea
       forecastManDays: null,
       actualCost: null,
       forecastCost: null,
+      unbudgetedManDays: 0,
+      unbudgetedForecastManDays: 0,
+      budgetedForecastManDays: null,
     },
     {
       discipline: "Mechanical",
@@ -489,6 +493,9 @@ test("costTotals: adds what can be seen, keeps a hidden figure null, and adds ea
       forecastManDays: null,
       actualCost: null,
       forecastCost: null,
+      unbudgetedManDays: 0,
+      unbudgetedForecastManDays: 0,
+      budgetedForecastManDays: null,
     },
     {
       discipline: "Software",
@@ -502,8 +509,18 @@ test("costTotals: adds what can be seen, keeps a hidden figure null, and adds ea
       forecastManDays: null,
       actualCost: null,
       forecastCost: null,
+      unbudgetedManDays: 0,
+      unbudgetedForecastManDays: 0,
+      budgetedForecastManDays: null,
     },
   ]);
+  // A project with no budget: its plan is said apart, and the figure against budget leaves it out (budgeted).
+  const unbudgeted = item(3, "C", { labor: labor({ budgetManDays: null, plannedManDays: 30, forecastManDays: 32, disciplines: [] }) });
+  const mixed = costTotals([item(1, "A"), unbudgeted]);
+  assert.equal(mixed.labor.unbudgetedManDays, 30);
+  assert.equal(mixed.labor.unbudgetedForecastManDays, 32);
+  // The budgeted project has no forecast: none is made up from the unbudgeted one.
+  assert.deepEqual(budgeted(mixed.labor), { budgetManDays: mixed.labor.budgetManDays, plannedManDays: mixed.labor.plannedManDays - 30, forecastManDays: null });
   assert.equal(costTotals([]).hardware.budget, null);
   assert.deepEqual(costTotals([]).disciplines, []);
 });

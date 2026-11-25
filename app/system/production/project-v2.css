@@ -210,6 +210,32 @@
   margin-top: -4px;
 }
 
+/* The project cell keeps to its share of the row, its name and customer line cut short with the full text on hover, so
+   the slip, progress, hours and follow-up columns stay on screen instead of past the right edge. */
+.project-v2 .portfolio-table .portfolio-col-project {
+  width: 34%;
+  max-width: 0;
+}
+.project-v2 .portfolio-table .portfolio-project {
+  min-width: 200px;
+}
+@media (max-width: 720px) {
+  .project-v2 .portfolio-table .portfolio-project {
+    min-width: 160px;
+  }
+}
+.project-v2 .portfolio-table .portfolio-project strong,
+.project-v2 .portfolio-table .portfolio-project small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.project-v2 .portfolio-table .portfolio-project-link {
+  display: block;
+  max-width: 100%;
+}
+
 /* The project number is the record's link (§2: document numbers always render as links). */
 .project-v2 .portfolio-table .pg-doclink {
   white-space: nowrap;

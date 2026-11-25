@@ -71,7 +71,12 @@ test("the V2 Overview is a Pegasus list: count in the title, health summary bar,
   assert.match(screen, /guide="project\.more"/);
   assert.match(screen, /key: "closed",[\s\S]{0,200}"Portfolio\.showClosed"[\s\S]{0,120}onSelect: \(\) => toggleClosed\(!includeClosed\)/);
   assert.match(screen, /key: "refresh",\s*label: "Refresh"/);
-  assert.match(screen, /\/>\s*\{createButton\}\s*<\/div>/);
+  // Task doc 5.1: the CEO summary is a button of its own between More and Create, for Leaders and above.
+  assert.match(
+    screen,
+    /\{openCeoSummary \? \(\s*<button type="button" className="btn default" data-guide="project\.ceo" onClick=\{openCeoSummary\}>[\s\S]{0,160}\) : null\}\s*\{createButton\}\s*<\/div>/,
+  );
+  assert.doesNotMatch(screen, /key: "ceo", label: "CEO\.open"/, "no longer hidden under More");
   // The PM, team and stage filters are header funnels in the list, and lists above the chart in Timeline.
   for (const guide of ["project.stageFilter", "project.pmFilter"]) assert.match(screen, new RegExp(`guide="${guide.replace(".", "\\.")}"`), guide);
   assert.match(screen, /column="name"[^\n]*filter=\{v2 \? teamFilter : undefined\}/);

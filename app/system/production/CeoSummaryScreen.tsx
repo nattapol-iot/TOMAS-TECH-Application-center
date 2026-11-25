@@ -15,6 +15,7 @@ import { buildCeoWorkbook, ceoWorkbookName } from "../../../lib/ceo-workbook";
 import { downloadErpEstimateWorkbookBytes } from "../../../lib/erp-estimate-workbook";
 import { projectBudgetStates, shortAmount, type ProjectCostDetail, type ProjectCostItem, type ProjectCostOverview, type PurchaseCost } from "../../../backend-node/src/project-cost-model";
 import { HealthBadge } from "./ProjectPlanFields";
+import { PgSelect } from "./PegasusSelect";
 import "./ceo-summary.css";
 
 const DASH = "–";
@@ -133,14 +134,14 @@ export function CeoSummaryScreen({
             </button>
             <label className="ceo-focus">
               <span className="muted">{t("CEO.show")}</span>
-              <select value={focus ?? ""} onChange={(event) => onFocus(event.target.value || null)} data-guide="ceo.focus">
+              <PgSelect value={focus ?? ""} onChange={(event) => onFocus(event.target.value || null)} data-guide="ceo.focus" aria-label={t("CEO.show")}>
                 <option value="">{t("CEO.allProjects")}</option>
                 {items.map((item) => (
                   <option key={item.id} value={pageKey(item)}>
                     {item.number} · {item.name}
                   </option>
                 ))}
-              </select>
+              </PgSelect>
             </label>
           </div>
         }
@@ -194,10 +195,10 @@ function CeoProject({
   const facts = thingsToKnow(item, schedule ?? {});
   const worst = projectBudgetStates(item).worst;
   const bought = (figures: PurchaseCost) => (figures.requested === null ? DASH : `${shortAmount(figures.requested)}${figures.budget ? ` / ${shortAmount(figures.budget)}` : ""}`);
-  const people =
-    item.labor.budgetManDays === null
-      ? `${Math.round(item.labor.forecastManDays ?? item.labor.plannedManDays)} MD`
-      : `${Math.round(item.labor.forecastManDays ?? item.labor.plannedManDays)} / ${Math.round(item.labor.budgetManDays)} MD`;
+  // The plan or the forecast, whichever is more: the figure the things to know weigh (lib/ceo-summary.ts). The forecast
+  // alone reads 0 on a plan whose dates have passed with no hours confirmed, beside a line that says it is over budget.
+  const used = Math.round(Math.max(item.labor.plannedManDays, item.labor.forecastManDays ?? 0));
+  const people = item.labor.budgetManDays === null ? `${used} MD` : `${used} / ${Math.round(item.labor.budgetManDays)} MD`;
   const save = async () => {
     setBusy(true);
     try {

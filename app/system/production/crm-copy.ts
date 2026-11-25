@@ -703,7 +703,19 @@ export const CRM_COPY: Record<string, { en: string; th: string; jp: string }> = 
     ["CRM.removeContact", "Remove contact", "เอาผู้ติดต่อออก", "担当者を外す"],
     ["CRM.noContactMatch", "No contact matches. Try another word.", "ไม่พบผู้ติดต่อที่ตรงกัน · ลองคำอื่น", "該当する担当者がいません。別の語で検索してください。"],
     ["CRM.allContactsChosen", "Every contact of this customer is already chosen.", "เลือกผู้ติดต่อของลูกค้ารายนี้ครบแล้ว", "この顧客の担当者はすべて選択済みです。"],
-    ["CRM.projectContactsPickCustomer", "Select the approved estimate first, then tick the contacts.", "เลือก Estimate ก่อน แล้วค่อยติ๊กผู้ติดต่อ", "先に見積を選択してから担当者を選んでください。"],
+    // The end-user field's hint (EndUserCompanyField.tsx), written half in Thai and half in English.
+    [
+      "บริษัทที่ใช้งานจริง อาจต่างจากบริษัทที่เรารับงานด้วย · Optional; leave blank when unknown",
+      "The company that uses the system, which can differ from the one we work for · Optional; leave blank when unknown",
+      "บริษัทที่ใช้งานจริง อาจต่างจากบริษัทที่เรารับงานด้วย · ไม่บังคับ เว้นว่างได้ถ้ายังไม่ทราบ",
+      "実際に使う会社で、受注先と異なる場合があります・任意、不明なら空欄のままにします",
+    ],
+    [
+      "CRM.projectContactsPickCustomer",
+      "Choose the customer (or the approved estimate) first, then tick the contacts.",
+      "เลือกลูกค้า (หรือ Estimate) ก่อน แล้วค่อยติ๊กผู้ติดต่อ",
+      "先に顧客（または承認済み見積）を選んでから担当者を選んでください。",
+    ],
     [
       "CRM.projectContactsNone",
       "This customer has no contacts yet. Add them on the customer record.",

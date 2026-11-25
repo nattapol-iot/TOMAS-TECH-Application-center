@@ -21,6 +21,7 @@ import {
   budgetShare,
   budgetState,
   costTotals,
+  budgeted,
   laborOf,
   laborState,
   matchesCostSearch,
@@ -34,6 +35,7 @@ import {
   type CostSortKey,
   type LaborDiscipline,
   type LaborFigures,
+  type Unbudgeted,
   type ProjectCostDetail,
   type ProjectCostItem,
   type ProjectCostOverview,
@@ -248,15 +250,18 @@ function LaborBar({
 }) {
   const t = useT();
   const totals = useMemo(() => costTotals(items), [items]);
-  const cells: { key: LaborDiscipline | null; label: string; figures: LaborFigures }[] = [
+  const cells: { key: LaborDiscipline | null; label: string; figures: LaborFigures & Unbudgeted }[] = [
     { key: null, label: t("Cost.allLabor"), figures: totals.labor },
     ...totals.disciplines.map((entry) => ({ key: entry.discipline, label: t(`Cost.discipline.${entry.discipline}`), figures: entry })),
   ];
   return (
     <div className="pc-labor" role="group" aria-label={t("Cost.laborBy")} data-guide={guide}>
       {cells.map(({ key, label, figures }) => {
-        const state = laborState(figures),
-          percent = sharePercent(figures.budgetManDays, figures.plannedManDays);
+        // Against budget only where there is one; the plan of projects with no budget is said on its own line.
+        // With no budget anywhere (one project without one, say) the plan is shown whole, as before.
+        const inBudget = figures.budgetManDays === null ? figures : budgeted(figures);
+        const state = laborState(inBudget),
+          percent = sharePercent(inBudget.budgetManDays, inBudget.plannedManDays);
         const body = (
           <>
             <span className="pc-total-top">
@@ -264,8 +269,13 @@ function LaborBar({
               {percent ? <span className="pc-total-hint">{percent}</span> : null}
             </span>
             <span className="pc-total-value">
-              {hours(figures.plannedManDays)} / {hours(figures.budgetManDays)} <small>{t("Cost.hoursUnit")}</small>
+              {hours(inBudget.plannedManDays)} / {hours(figures.budgetManDays)} <small>{t("Cost.hoursUnit")}</small>
             </span>
+            {figures.budgetManDays !== null && figures.unbudgetedManDays > 0 ? (
+              <span className="pc-total-sub" title={t("Cost.unbudgetedHint")}>
+                {t("Cost.unbudgeted")} {hours(figures.unbudgetedManDays)}
+              </span>
+            ) : null}
             <span className="pc-total-sub" title={t("Cost.toDateHint")}>
               {t("Cost.toDate")} {hours(figures.toDateManDays)}
             </span>
