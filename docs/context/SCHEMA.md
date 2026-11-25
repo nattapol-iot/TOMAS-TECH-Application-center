@@ -2,7 +2,7 @@
 
 [Context index](../../AGENTS.md)
 
-Evidence: repository migrations at `6a54b857`. Highest file number is not proof of the live DB version. No credentials or connection strings are stored here.
+Evidence: repository migrations at `6faeb5d3`. Highest file number is not proof of the live DB version. No credentials or connection strings are stored here.
 
 | Migration | Objects mentioned (literal CREATE TABLE / VIEW only) |
 |---|---|
@@ -138,5 +138,7 @@ Evidence: repository migrations at `6a54b857`. Highest file number is not proof 
 | [130_holiday_over_work.sql](<../../database/migrations/130_holiday_over_work.sql>) | `dbo.schedule_holiday_decisions` |
 | [131_purchase_order_seen.sql](<../../database/migrations/131_purchase_order_seen.sql>) | Inspect migration SQL |
 | [132_project_ceo_notes.sql](<../../database/migrations/132_project_ceo_notes.sql>) | `dbo.project_ceo_notes` |
+| [133_monitor_fleet_command_center.sql](<../../database/migrations/133_monitor_fleet_command_center.sql>) | `dbo.monitor_agent_samples`, `dbo.monitor_script_jobs`, `dbo.monitor_script_targets`, `dbo.monitor_site_alert_channels` |
+| [134_estimate_historical_import.sql](<../../database/migrations/134_estimate_historical_import.sql>) | Inspect migration SQL |
 
 Read [backend-node/src/migration-validation.ts](<../../backend-node/src/migration-validation.ts>), [backend-node/src/startup-migrations.ts](<../../backend-node/src/startup-migrations.ts>) and [backend-node/src/migrate.ts](<../../backend-node/src/migrate.ts>) before planning a migration. Applied migration identities and environment flags matter; never rewrite an already applied migration.

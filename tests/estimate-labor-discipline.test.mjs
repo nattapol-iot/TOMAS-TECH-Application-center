@@ -65,8 +65,8 @@ test("the labor and expense dialogs require a discipline and derive the cost typ
   const manhour = screen.match(/function ManhourEditor\([\s\S]*?\n\}\n/)?.[0] ?? "";
   const expense = screen.match(/function ExpenseEditor\([\s\S]*?\n\}\n/)?.[0] ?? "";
   for (const editor of [manhour, expense]) {
-    assert.match(editor, /<Field label="Discipline \*"><DisciplineSelect value=\{form\.discipline\}/);
-    assert.match(editor, /const valid = Boolean\(form\.discipline && /);
+    assert.match(editor, /<Field label="Discipline \*">\s*<DisciplineSelect value=\{form\.discipline\}/);
+    assert.match(editor, /const valid = Boolean\(\s*form\.discipline &&/);
     assert.match(editor, /costType: costTypeOfDiscipline\(discipline\)/);
     assert.doesNotMatch(editor, /<Field label="Cost type \*">/);
   }
@@ -108,7 +108,7 @@ test("an empty estimate offers the same start, however it was created", async ()
   // open the workspace, so the offer lives there for any estimate with no line yet.
   const screen = await source("app/system/production/EstimateScreens.tsx");
   assert.match(screen, /const lineCount = workspace\.costItems\.length \+ workspace\.manhourLines\.length \+ workspace\.expenseLines\.length \+ workspace\.otherCostLines\.length;/);
-  assert.match(screen, /\{lineCount === 0 && capabilities\.canEditAllSections && !startDismissed \? <EstimateStartPanel workspace=\{workspace\} busy=\{busy\} onCopy=\{copyFromEstimate\}/);
+  assert.match(screen, /\{lineCount === 0 && capabilities\.canEditAllSections && !startDismissed \? \(\s*<EstimateStartPanel workspace=\{workspace\} busy=\{busy\} onCopy=\{copyFromEstimate\}/);
   const panel = screen.match(/function EstimateStartPanel\([\s\S]*?\n\}\n/)?.[0] ?? "";
   assert.match(panel, /sections: COST_CATEGORIES\.map\(\(\[code\]\) => code\)/, "every section, so labor (06) and travel come across too");
   assert.match(panel, /<EstimateSourcePicker excludeId=\{workspace\.header\.id\}/);

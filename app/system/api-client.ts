@@ -442,6 +442,8 @@ export type EstimateSummary = {
   contingencyTotal: number;
   total: number;
   updatedAt: string;
+  /** The old Excel file's name when the estimate was imported afterwards (historical import); null otherwise. */
+  historicalSource?: string | null;
   rowVersion: string;
 };
 
@@ -1447,11 +1449,25 @@ export const listEstimates = (values: {
   confidentiality?: string;
   language?: string;
   revision?: number;
+  /** Only the estimates imported afterwards from an old Excel Estimate Cost. */
+  historical?: boolean;
   /** The V2 list's summary bar: adds statusSummary, one row per status over every filter but the status. */
   summary?: boolean;
 }) => apiRequest<PagedResult<EstimateSummary> & { statusSummary?: EstimateStatusCount[] }>(`/api/v1/estimates/${queryString(values)}`);
 
 export type EstimateStatusCount = { status: string; count: number; total: number };
+
+/** A project without an estimate that the signed-in person may import an old Excel Estimate Cost for. */
+export type HistoricalImportProject = { id: number; projectNo: string; name: string; projectType: string; status: string; startDate: string; customerName: string; hasInquiry: boolean };
+export type HistoricalImportResult = { id: number; number: string; inquiryNumber: string; inquiryCreated: boolean; projectId: number; projectNo: string; alreadyImported: boolean };
+export const listHistoricalImportProjects = () => apiRequest<HistoricalImportProject[]>("/api/v1/estimates/historical-import/projects");
+/** One old workbook becomes a Draft estimate linked to the project; the original file goes along and is checked on the server. */
+export const importHistoricalEstimate = (payload: Record<string, unknown>, file: File) => {
+  const body = new FormData();
+  body.append("payload", JSON.stringify(payload));
+  body.append("file", file);
+  return apiRequest<HistoricalImportResult>("/api/v1/estimates/historical-import", { method: "POST", body }, 180_000);
+};
 
 export type CostItemLookupField = "itemCode" | "description" | "brand" | "supplier";
 export type CostItemLookupRecord = {
@@ -4507,12 +4523,9 @@ export type MonitorScriptTarget = {
   completedAt: string | null;
 };
 export type MonitorScriptJobInput = { title: string; shell: MonitorScriptShell; script: string; timeoutSeconds: number; note: string; agentIds: number[] };
-export const listMonitorScriptJobs = () =>
-  apiRequest<{ items: MonitorScriptJob[]; canRequest: boolean; canApprove: boolean }>("/api/v1/monitor/script-jobs");
-export const getMonitorScriptJob = (jobId: number) =>
-  apiRequest<{ job: MonitorScriptJob; script: string; targets: MonitorScriptTarget[] }>(`/api/v1/monitor/script-jobs/${jobId}`);
-export const requestMonitorScriptJob = (input: MonitorScriptJobInput) =>
-  apiRequest<MonitorScriptJob>("/api/v1/monitor/script-jobs", { method: "POST", body: JSON.stringify(input) });
+export const listMonitorScriptJobs = () => apiRequest<{ items: MonitorScriptJob[]; canRequest: boolean; canApprove: boolean }>("/api/v1/monitor/script-jobs");
+export const getMonitorScriptJob = (jobId: number) => apiRequest<{ job: MonitorScriptJob; script: string; targets: MonitorScriptTarget[] }>(`/api/v1/monitor/script-jobs/${jobId}`);
+export const requestMonitorScriptJob = (input: MonitorScriptJobInput) => apiRequest<MonitorScriptJob>("/api/v1/monitor/script-jobs", { method: "POST", body: JSON.stringify(input) });
 export const decideMonitorScriptJob = (jobId: number, decision: "approve" | "reject" | "cancel", note = "") =>
   apiRequest<{ ok: true; queued?: number }>(`/api/v1/monitor/script-jobs/${jobId}/${decision}`, { method: "POST", body: JSON.stringify({ note }) });
 
@@ -4529,8 +4542,7 @@ export type MonitorAlertChannel = {
   updatedAt: string | null;
   updatedBy: string | null;
 };
-export const getMonitorAlertChannels = (siteId: number) =>
-  apiRequest<{ vaultConfigured: boolean; channels: MonitorAlertChannel[] }>(`/api/v1/monitor/sites/${siteId}/alert-channels`);
+export const getMonitorAlertChannels = (siteId: number) => apiRequest<{ vaultConfigured: boolean; channels: MonitorAlertChannel[] }>(`/api/v1/monitor/sites/${siteId}/alert-channels`);
 export const saveMonitorAlertChannel = (siteId: number, channel: MonitorAlertChannelName, input: { enabled: boolean; target?: string; secret?: string; remove?: boolean }) =>
   apiRequest<{ ok: true }>(`/api/v1/monitor/sites/${siteId}/alert-channels/${channel}`, { method: "PUT", body: JSON.stringify(input) });
 export const testMonitorAlertChannel = (siteId: number, channel: MonitorAlertChannelName) =>

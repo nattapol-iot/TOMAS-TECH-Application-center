@@ -9,6 +9,7 @@ import { EstimatePriceSetEditor } from "./EstimatePriceSetEditor";
 import { EstimateModuleEditor } from "./EstimateModuleEditor";
 import { useT as useStaticCopy } from "../i18n";
 import { EstimateExcelImport, EstimateImportHistory } from "./EstimateExcelImport";
+import { HistoricalEstimateImportModal } from "./EstimateHistoricalImport";
 import { EstimateQuotationSource, type QuotationApplyInput } from "./EstimateQuotationSource";
 import { EstimateOverheadPanel } from "./EstimateOverheadPanel";
 import { ESTIMATE_OVERHEAD_ENABLED } from "../../../lib/feature-flags";
@@ -95,22 +96,7 @@ import {
   type PagedResult,
   type SupplierPriceHistoryRecord,
 } from "../api-client";
-import {
-  Badge,
-  EmptyState,
-  Field,
-  Icon,
-  Modal,
-  PageHeader,
-  Pagination,
-  Panel,
-  Progress,
-  ProgressCell,
-  SearchInput,
-  TablePageSize,
-  Tabs,
-  type Tone,
-} from "../ui";
+import { Badge, EmptyState, Field, Icon, Modal, PageHeader, Pagination, Panel, Progress, ProgressCell, SearchInput, TablePageSize, Tabs, type Tone } from "../ui";
 import { exportXlsx } from "../../../lib/export-xlsx";
 import { erpEstimateWorkbookFilename } from "../../../lib/erp-estimate-workbook";
 import { readSpreadsheet, type SpreadsheetRow } from "../../../lib/import-spreadsheet";
@@ -147,7 +133,7 @@ const PROJECT_TYPES = ["Automation", "IoT", "PLC", "Software", "Electrical", "Me
 const STALE_TEMPLATE_PRICE_DAYS = 180;
 /* Module scope on purpose: the age of a reference price is read once, when the
    engineer picks the template, not recomputed on every render. */
-const priceAgeInDays = (date: string | null) => date ? Math.floor((Date.now() - new Date(date).getTime()) / 86_400_000) : null;
+const priceAgeInDays = (date: string | null) => (date ? Math.floor((Date.now() - new Date(date).getTime()) / 86_400_000) : null);
 const SECTION_STATUSES = ["Not Started", "In Progress", "Waiting Information", "Waiting Supplier", "Completed", "Reviewed"];
 const EXPENSE_TYPES = ["Travel", "Accommodation", "Per Diem", "Transportation", "Equipment Rental", "Other"];
 const EXPENSE_SECTION_BY_TYPE: Record<string, "08" | "09" | "10"> = { Travel: "08", Transportation: "08", Accommodation: "09", "Per Diem": "09", "Equipment Rental": "10", Other: "10" };
@@ -178,33 +164,43 @@ async function loadAllSupplierPriceHistoryRecords() {
 async function mapLimited<T, R>(items: T[], limit: number, work: (item: T) => Promise<R>) {
   const results: (R | null)[] = new Array(items.length).fill(null);
   let next = 0;
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (next < items.length) {
-      const index = next++;
-      try { results[index] = await work(items[index]); }
-      catch { results[index] = null; }
-    }
-  }));
+  await Promise.all(
+    Array.from({ length: Math.min(limit, items.length) }, async () => {
+      while (next < items.length) {
+        const index = next++;
+        try {
+          results[index] = await work(items[index]);
+        } catch {
+          results[index] = null;
+        }
+      }
+    }),
+  );
   return results;
 }
 
 async function loadPriceLibraryRecords(currentEstimateId: number) {
-  const [estimates, historyResult] = await Promise.all([
-    loadAllEstimateSummaries(),
-    loadAllSupplierPriceHistoryRecords(),
-  ]);
-  const loaded = await mapLimited(estimates.filter((estimate) => estimate.id !== currentEstimateId), 5, async (estimate) => ({ estimate, workspace: await loadEstimateCostWorkspace(estimate.id) }));
-  const estimateRecords: PriceLibraryRecord[] = loaded.flatMap((entry) => entry ? entry.workspace.costItems.map((item) => ({
-    key: `estimate:${entry.estimate.id}:${item.id}`,
-    sourceNumber: entry.estimate.number,
-    sourceEstimateId: entry.estimate.id,
-    sourceRevision: entry.workspace.header.revision,
-    sourceStatus: entry.workspace.header.status,
-    projectName: entry.estimate.projectName,
-    customerName: entry.estimate.customerName,
-    sourceKind: "Estimate" as const,
-    item,
-  })) : []);
+  const [estimates, historyResult] = await Promise.all([loadAllEstimateSummaries(), loadAllSupplierPriceHistoryRecords()]);
+  const loaded = await mapLimited(
+    estimates.filter((estimate) => estimate.id !== currentEstimateId),
+    5,
+    async (estimate) => ({ estimate, workspace: await loadEstimateCostWorkspace(estimate.id) }),
+  );
+  const estimateRecords: PriceLibraryRecord[] = loaded.flatMap((entry) =>
+    entry
+      ? entry.workspace.costItems.map((item) => ({
+          key: `estimate:${entry.estimate.id}:${item.id}`,
+          sourceNumber: entry.estimate.number,
+          sourceEstimateId: entry.estimate.id,
+          sourceRevision: entry.workspace.header.revision,
+          sourceStatus: entry.workspace.header.status,
+          projectName: entry.estimate.projectName,
+          customerName: entry.estimate.customerName,
+          sourceKind: "Estimate" as const,
+          item,
+        }))
+      : [],
+  );
   const historicalRecords: PriceLibraryRecord[] = historyResult.map((history) => ({
     key: `history:${history.id}`,
     sourceNumber: history.quotationNumber || history.purchaseOrderNumber || history.projectNumber,
@@ -241,16 +237,15 @@ async function loadPriceLibraryRecords(currentEstimateId: number) {
       rowVersion: "",
     },
   }));
-  return [...estimateRecords, ...historicalRecords]
-    .sort((left, right) => (right.item.priceDate ?? "").localeCompare(left.item.priceDate ?? "") || right.item.id - left.item.id);
+  return [...estimateRecords, ...historicalRecords].sort((left, right) => (right.item.priceDate ?? "").localeCompare(left.item.priceDate ?? "") || right.item.id - left.item.id);
 }
 
-const toError = (error: unknown) => error instanceof Error ? error.message : "The request could not be completed.";
+const toError = (error: unknown) => (error instanceof Error ? error.message : "The request could not be completed.");
 const isCriticalValidationIssue = (issue: EstimateCostWorkspace["validationIssues"][number]) => issue.severity.trim().toLowerCase() === "error";
 const numberOf = (value: number | string | null | undefined) => Number(value ?? 0);
 const formatMoney = (value: number | string | null | undefined) => new Intl.NumberFormat(currentLocale(), { style: "currency", currency: "THB", maximumFractionDigits: 2 }).format(numberOf(value));
 const formatNumber = (value: number | string | null | undefined, maximumFractionDigits = 2) => numberOf(value).toLocaleString(currentLocale(), { maximumFractionDigits });
-const dateValue = (value: string | null | undefined) => value ? value.slice(0, 10) : "";
+const dateValue = (value: string | null | undefined) => (value ? value.slice(0, 10) : "");
 const formatDate = (value: string | null | undefined) => {
   if (!value) return "—";
   const parsed = new Date(value.length === 10 ? `${value}T00:00:00` : value);
@@ -267,7 +262,7 @@ const businessDate = (date = new Date()) => {
   return `${part("year")}-${part("month")}-${part("day")}`;
 };
 const futureDate = (days: number) => businessDate(new Date(Date.now() + days * 86_400_000));
-const normalizeEstimateDueDate = (value: string | undefined, earliest: string, latest: string) => value && value >= earliest && value <= latest ? value : futureDate(7);
+const normalizeEstimateDueDate = (value: string | undefined, earliest: string, latest: string) => (value && value >= earliest && value <= latest ? value : futureDate(7));
 const canOwnEstimate = (role: string) => ["Engineer", "Engineering Manager", "Admin"].includes(role);
 const canAssignEstimateOwner = (role: string) => ["Engineering Manager", "Admin"].includes(role);
 const assignmentResultMessage = (action: "created" | "updated", result: EstimateAssignmentMutationResult) => {
@@ -310,15 +305,15 @@ function dueDistance(due: string, today: string) {
    only when it is the newest snapshot before it: Create Revision and Withdraw leave no such row. */
 function latestSendBack(workspace: EstimateCostWorkspace) {
   if (workspace.header.status !== "Revision Required") return null;
-  const previous = workspace.revisionHistory
-    .filter((entry) => entry.revision < workspace.header.revision)
-    .sort((left, right) => right.revision - left.revision)[0];
+  const previous = workspace.revisionHistory.filter((entry) => entry.revision < workspace.header.revision).sort((left, right) => right.revision - left.revision)[0];
   return previous?.status === "Revision Required" ? previous : null;
 }
 const copyResultMessage = (result: EstimateCopyResult) => {
   const copied = [
-    [result.costItems, "cost item"], [result.manhourLines, "man-hour line"],
-    [result.expenseLines, "expense line"], [result.otherCostLines, "other-cost line"],
+    [result.costItems, "cost item"],
+    [result.manhourLines, "man-hour line"],
+    [result.expenseLines, "expense line"],
+    [result.otherCostLines, "other-cost line"],
   ] as const;
   const parts = copied.filter(([count]) => count > 0).map(([count, label]) => `${count} ${label}(s)`);
   const notes = [
@@ -330,11 +325,37 @@ const copyResultMessage = (result: EstimateCopyResult) => {
 };
 
 function LoadError({ message, retry }: { message: string; retry: () => void }) {
-  return <div className="callout danger" role="alert"><Icon name="alertTriangle" /><span><strong><LocalizedText text={"ดำเนินการไม่สำเร็จ"} /></strong>{message}</span><button className="btn ghost" type="button" onClick={retry}><Icon name="refresh" /><LocalizedText text={"Try again"} /></button></div>;
+  return (
+    <div className="callout danger" role="alert">
+      <Icon name="alertTriangle" />
+      <span>
+        <strong>
+          <LocalizedText text={"ดำเนินการไม่สำเร็จ"} />
+        </strong>
+        {message}
+      </span>
+      <button className="btn ghost" type="button" onClick={retry}>
+        <Icon name="refresh" />
+        <LocalizedText text={"Try again"} />
+      </button>
+    </div>
+  );
 }
 
 function FilterSelect({ label, value, options, onChange }: { label: string; value: string; options: { value: string; label: string }[]; onChange: (value: string) => void }) {
-  return <label className="select-field"><span className="sr-only">{label}</span><select value={value} aria-label={label} onChange={(event) => onChange(event.target.value)}>{options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select><Icon name="chevronDown" /></label>;
+  return (
+    <label className="select-field">
+      <span className="sr-only">{label}</span>
+      <select value={value} aria-label={label} onChange={(event) => onChange(event.target.value)}>
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+      <Icon name="chevronDown" />
+    </label>
+  );
 }
 
 async function listAllNewInquiries() {
@@ -349,10 +370,22 @@ async function listAllNewInquiries() {
   return [...new Map(items.map((item) => [item.id, item])).values()];
 }
 
-export function ProductionEstimates({ bootstrap, notify, refreshBootstrap, initialEstimateId = null, onSelectEstimate }: Props & { initialEstimateId?: number | null; onSelectEstimate?: (id: number | null) => void }) {
+export function ProductionEstimates({
+  bootstrap,
+  notify,
+  refreshBootstrap,
+  initialEstimateId = null,
+  onSelectEstimate,
+}: Props & { initialEstimateId?: number | null; onSelectEstimate?: (id: number | null) => void }) {
   const uiText = useUiText();
   const [result, setResult] = useState<PagedResult<EstimateSummary>>(EMPTY_PAGE);
-  const { ready: navigationReady, estimateId: selectedEstimateId, selectEstimate: setSelectedEstimateId, tab, selectTab: setTab } = useEstimateNavigation(bootstrap.user.id, initialEstimateId, onSelectEstimate);
+  const {
+    ready: navigationReady,
+    estimateId: selectedEstimateId,
+    selectEstimate: setSelectedEstimateId,
+    tab,
+    selectTab: setTab,
+  } = useEstimateNavigation(bootstrap.user.id, initialEstimateId, onSelectEstimate);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
   const [search, setSearch] = useState("");
@@ -363,10 +396,12 @@ export function ProductionEstimates({ bootstrap, notify, refreshBootstrap, initi
   const [ownerId, setOwnerId] = useState("All owners");
   const [department, setDepartment] = useState("All departments");
   const [revision, setRevision] = useState("All revisions");
+  const [historicalOnly, setHistoricalOnly] = useState(false);
   const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
+  const [historicalOpen, setHistoricalOpen] = useState(false);
   const v2 = useEstimateLook() === "v2";
   const [statusSummary, setStatusSummary] = useState<EstimateStatusCount[] | null>(null);
 
@@ -385,6 +420,7 @@ export function ProductionEstimates({ bootstrap, notify, refreshBootstrap, initi
         ownerId: ownerId === "All owners" ? undefined : Number(ownerId),
         department: department === "All departments" ? undefined : department,
         revision: revision === "All revisions" ? undefined : Number(revision),
+        historical: historicalOnly || undefined,
         summary: v2 || undefined,
       });
       setResult(next);
@@ -394,26 +430,38 @@ export function ProductionEstimates({ bootstrap, notify, refreshBootstrap, initi
     } finally {
       setLoading(false);
     }
-  }, [customerId, department, mine, ownerId, page, pageSize, projectType, revision, search, status, v2]);
+  }, [customerId, department, historicalOnly, mine, ownerId, page, pageSize, projectType, revision, search, status, v2]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => { void load(); }, 200);
+    const timer = window.setTimeout(() => {
+      void load();
+    }, 200);
     return () => window.clearTimeout(timer);
   }, [load]);
 
-  if (!navigationReady) return <div className="info-strip"><LocalizedText text="Loading…" /></div>;
+  if (!navigationReady)
+    return (
+      <div className="info-strip">
+        <LocalizedText text="Loading…" />
+      </div>
+    );
   if (selectedEstimateId !== null) {
-    return <ProductionEstimateWorkspace
-      key={selectedEstimateId}
-      estimateId={selectedEstimateId}
-      tab={tab}
-      setTab={setTab}
-      bootstrap={bootstrap}
-      notify={notify}
-      refreshBootstrap={refreshBootstrap}
-      onBack={() => { setSelectedEstimateId(null); void load(); }}
-      onListChanged={load}
-    />;
+    return (
+      <ProductionEstimateWorkspace
+        key={selectedEstimateId}
+        estimateId={selectedEstimateId}
+        tab={tab}
+        setTab={setTab}
+        bootstrap={bootstrap}
+        notify={notify}
+        refreshBootstrap={refreshBootstrap}
+        onBack={() => {
+          setSelectedEstimateId(null);
+          void load();
+        }}
+        onListChanged={load}
+      />
+    );
   }
 
   const canCreate = bootstrap.permissions.includes("estimate.write");
@@ -423,14 +471,31 @@ export function ProductionEstimates({ bootstrap, notify, refreshBootstrap, initi
   const owners = bootstrap.team.filter((member) => canOwnEstimate(member.role));
   const todayIso = businessDate();
   const copy = estimateCopy;
-  const clearFilters = () => { setCustomerId("All customers"); setProjectType("All project types"); setOwnerId("All owners"); setDepartment("All departments"); setRevision("All revisions"); resetPage(); };
+  const clearFilters = () => {
+    setCustomerId("All customers");
+    setProjectType("All project types");
+    setOwnerId("All owners");
+    setDepartment("All departments");
+    setRevision("All revisions");
+    setHistoricalOnly(false);
+    resetPage();
+  };
   /* Secondary filters live in one popover; what is set shows as a chip that removes itself. */
   const chips = [
-    customerId !== "All customers" ? { key: "customer", label: `${copy("ลูกค้า", "Customer", "顧客")}: ${bootstrap.customers.find((customer) => String(customer.id) === customerId)?.name ?? customerId}`, clear: () => setCustomerId("All customers") } : null,
+    customerId !== "All customers"
+      ? {
+          key: "customer",
+          label: `${copy("ลูกค้า", "Customer", "顧客")}: ${bootstrap.customers.find((customer) => String(customer.id) === customerId)?.name ?? customerId}`,
+          clear: () => setCustomerId("All customers"),
+        }
+      : null,
     projectType !== "All project types" ? { key: "type", label: `${copy("ประเภทงาน", "Project type", "案件種別")}: ${projectType}`, clear: () => setProjectType("All project types") } : null,
-    ownerId !== "All owners" ? { key: "owner", label: `${copy("ผู้ประเมิน", "Estimator", "見積担当")}: ${owners.find((owner) => String(owner.id) === ownerId)?.name ?? ownerId}`, clear: () => setOwnerId("All owners") } : null,
+    ownerId !== "All owners"
+      ? { key: "owner", label: `${copy("ผู้ประเมิน", "Estimator", "見積担当")}: ${owners.find((owner) => String(owner.id) === ownerId)?.name ?? ownerId}`, clear: () => setOwnerId("All owners") }
+      : null,
     department !== "All departments" ? { key: "department", label: `${copy("แผนก", "Department", "部署")}: ${department}`, clear: () => setDepartment("All departments") } : null,
     revision !== "All revisions" ? { key: "revision", label: `Revision: ${revisionCode(Number(revision))}`, clear: () => setRevision("All revisions") } : null,
+    historicalOnly ? { key: "historical", label: copy("เฉพาะ Estimate ย้อนหลัง", "Imported old estimates only", "取り込んだ過去の見積のみ"), clear: () => setHistoricalOnly(false) } : null,
   ].filter((chip): chip is { key: string; label: string; clear: () => void } => chip !== null);
   const costKey = [
     { label: copy("วัสดุ", "Material", "材料"), color: "var(--c1)" },
@@ -439,102 +504,463 @@ export function ProductionEstimates({ bootstrap, notify, refreshBootstrap, initi
     { label: copy("อื่นๆ", "Other", "その他"), color: "var(--c4)" },
   ];
 
-  return <div className="est-list">
-    <PageHeader
-      title={uiText("Estimate Cost")}
-      subtitle={copy("ต้นทุนวิศวกรรมภายใน · กรอก ตรวจทาน และอนุมัติทีละ Revision", "Internal engineering cost · fill in, review and approve one revision at a time", "社内技術原価 · リビジョンごとに入力・レビュー・承認")}
-      actions={<><DocumentHistoryButton kind="estimates" notify={notify} onOpen={setSelectedEstimateId} onChanged={async () => { await load(); await refreshBootstrap(); }} />{canCreate ? <button className="btn primary" type="button" onClick={() => setCreateOpen(true)}><Icon name="plus" /><LocalizedText text={"New estimate from inquiry"} /></button> : null}</>}
-    />
-    <div className="est-toolbar">
-      {canOwnEstimate(bootstrap.user.role) ? <div className="seg-control" role="group" aria-label={copy("ขอบเขต", "Scope", "範囲")}>
-        <button type="button" className={mine ? "on" : ""} aria-pressed={mine} onClick={() => { setMine(true); setOwnerId("All owners"); resetPage(); }}><LocalizedText text={"My estimates"} /></button>
-        <button type="button" className={mine ? "" : "on"} aria-pressed={!mine} onClick={() => { setMine(false); resetPage(); }}><LocalizedText text={"All estimates"} /></button>
-      </div> : null}
-      <SearchInput link="q" value={search} onChange={(value) => { setSearch(value); resetPage(); }} placeholder="Search estimate, inquiry, project or customer…" />
-      <div className="est-filter">
-        <button className={advancedFiltersOpen || chips.length ? "btn default active" : "btn default"} type="button" aria-expanded={advancedFiltersOpen} onClick={() => setAdvancedFiltersOpen((current) => !current)}><Icon name="filter" />{copy("ตัวกรอง", "Filters", "フィルター")}{chips.length ? <span className="est-count">{chips.length}</span> : null}</button>
-        {advancedFiltersOpen ? <div className="est-filter-pop" role="group" aria-label={copy("ตัวกรองเพิ่มเติม", "More filters", "詳細フィルター")}>
-          <div className="est-filter-grid">
-            <div className="est-filter-field"><span>{copy("ลูกค้า", "Customer", "顧客")}</span><FilterSelect label="Customer" value={customerId} onChange={(value) => { setCustomerId(value); resetPage(); }} options={[{ value: "All customers", label: "All customers" }, ...bootstrap.customers.map((customer) => ({ value: String(customer.id), label: `${customer.code} — ${customer.name}` }))]} /></div>
-            <div className="est-filter-field"><span>{copy("ประเภทงาน", "Project type", "案件種別")}</span><FilterSelect label="Project type" value={projectType} onChange={(value) => { setProjectType(value); resetPage(); }} options={["All project types", ...PROJECT_TYPES].map((value) => ({ value, label: value }))} /></div>
-            <div className="est-filter-field"><span>{copy("ผู้ประเมิน", "Estimator", "見積担当")}</span><FilterSelect label="Owner" value={ownerId} onChange={(value) => { setMine(false); setOwnerId(value); resetPage(); }} options={[{ value: "All owners", label: "All owners" }, ...owners.map((owner) => ({ value: String(owner.id), label: owner.name }))]} /></div>
-            <div className="est-filter-field"><span>{copy("แผนก", "Department", "部署")}</span><FilterSelect label="Department" value={department} onChange={(value) => { setDepartment(value); resetPage(); }} options={["All departments", ...departments].map((value) => ({ value, label: value }))} /></div>
-            <div className="est-filter-field"><span>Revision</span><FilterSelect label="Revision" value={revision} onChange={(value) => { setRevision(value); resetPage(); }} options={[{ value: "All revisions", label: "All revisions" }, ...Array.from({ length: 11 }, (_, index) => ({ value: String(index), label: revisionCode(index) }))]} /></div>
+  return (
+    <div className="est-list">
+      <PageHeader
+        title={uiText("Estimate Cost")}
+        subtitle={copy(
+          "ต้นทุนวิศวกรรมภายใน · กรอก ตรวจทาน และอนุมัติทีละ Revision",
+          "Internal engineering cost · fill in, review and approve one revision at a time",
+          "社内技術原価 · リビジョンごとに入力・レビュー・承認",
+        )}
+        actions={
+          <>
+            <DocumentHistoryButton
+              kind="estimates"
+              notify={notify}
+              onOpen={setSelectedEstimateId}
+              onChanged={async () => {
+                await load();
+                await refreshBootstrap();
+              }}
+            />
+            {canCreate && canOwnEstimate(bootstrap.user.role) ? (
+              <button className="btn default" type="button" data-guide="estimate.historical-import" onClick={() => setHistoricalOpen(true)}>
+                <Icon name="upload" />
+                <LocalizedText text={"Import old estimate"} />
+              </button>
+            ) : null}
+            {canCreate ? (
+              <button className="btn primary" type="button" onClick={() => setCreateOpen(true)}>
+                <Icon name="plus" />
+                <LocalizedText text={"New estimate from inquiry"} />
+              </button>
+            ) : null}
+          </>
+        }
+      />
+      <div className="est-toolbar">
+        {canOwnEstimate(bootstrap.user.role) ? (
+          <div className="seg-control" role="group" aria-label={copy("ขอบเขต", "Scope", "範囲")}>
+            <button
+              type="button"
+              className={mine ? "on" : ""}
+              aria-pressed={mine}
+              onClick={() => {
+                setMine(true);
+                setOwnerId("All owners");
+                resetPage();
+              }}
+            >
+              <LocalizedText text={"My estimates"} />
+            </button>
+            <button
+              type="button"
+              className={mine ? "" : "on"}
+              aria-pressed={!mine}
+              onClick={() => {
+                setMine(false);
+                resetPage();
+              }}
+            >
+              <LocalizedText text={"All estimates"} />
+            </button>
           </div>
-          <div className="est-filter-actions">
-            <button className="btn ghost sm" type="button" onClick={clearFilters}>{copy("ล้างทั้งหมด", "Clear all", "すべてクリア")}</button>
-            <button className="btn primary sm" type="button" onClick={() => setAdvancedFiltersOpen(false)}>{copy("เสร็จ", "Done", "完了")}</button>
-          </div>
-        </div> : null}
+        ) : null}
+        <SearchInput
+          link="q"
+          value={search}
+          onChange={(value) => {
+            setSearch(value);
+            resetPage();
+          }}
+          placeholder="Search estimate, inquiry, project or customer…"
+        />
+        <div className="est-filter">
+          <button
+            className={advancedFiltersOpen || chips.length ? "btn default active" : "btn default"}
+            type="button"
+            aria-expanded={advancedFiltersOpen}
+            onClick={() => setAdvancedFiltersOpen((current) => !current)}
+          >
+            <Icon name="filter" />
+            {copy("ตัวกรอง", "Filters", "フィルター")}
+            {chips.length ? <span className="est-count">{chips.length}</span> : null}
+          </button>
+          {advancedFiltersOpen ? (
+            <div className="est-filter-pop" role="group" aria-label={copy("ตัวกรองเพิ่มเติม", "More filters", "詳細フィルター")}>
+              <div className="est-filter-grid">
+                <div className="est-filter-field">
+                  <span>{copy("ลูกค้า", "Customer", "顧客")}</span>
+                  <FilterSelect
+                    label="Customer"
+                    value={customerId}
+                    onChange={(value) => {
+                      setCustomerId(value);
+                      resetPage();
+                    }}
+                    options={[
+                      { value: "All customers", label: "All customers" },
+                      ...bootstrap.customers.map((customer) => ({ value: String(customer.id), label: `${customer.code} — ${customer.name}` })),
+                    ]}
+                  />
+                </div>
+                <div className="est-filter-field">
+                  <span>{copy("ประเภทงาน", "Project type", "案件種別")}</span>
+                  <FilterSelect
+                    label="Project type"
+                    value={projectType}
+                    onChange={(value) => {
+                      setProjectType(value);
+                      resetPage();
+                    }}
+                    options={["All project types", ...PROJECT_TYPES].map((value) => ({ value, label: value }))}
+                  />
+                </div>
+                <div className="est-filter-field">
+                  <span>{copy("ผู้ประเมิน", "Estimator", "見積担当")}</span>
+                  <FilterSelect
+                    label="Owner"
+                    value={ownerId}
+                    onChange={(value) => {
+                      setMine(false);
+                      setOwnerId(value);
+                      resetPage();
+                    }}
+                    options={[{ value: "All owners", label: "All owners" }, ...owners.map((owner) => ({ value: String(owner.id), label: owner.name }))]}
+                  />
+                </div>
+                <div className="est-filter-field">
+                  <span>{copy("แผนก", "Department", "部署")}</span>
+                  <FilterSelect
+                    label="Department"
+                    value={department}
+                    onChange={(value) => {
+                      setDepartment(value);
+                      resetPage();
+                    }}
+                    options={["All departments", ...departments].map((value) => ({ value, label: value }))}
+                  />
+                </div>
+                <div className="est-filter-field">
+                  <span>Revision</span>
+                  <FilterSelect
+                    label="Revision"
+                    value={revision}
+                    onChange={(value) => {
+                      setRevision(value);
+                      resetPage();
+                    }}
+                    options={[{ value: "All revisions", label: "All revisions" }, ...Array.from({ length: 11 }, (_, index) => ({ value: String(index), label: revisionCode(index) }))]}
+                  />
+                </div>
+                <label className="est-filter-field est-filter-check" data-guide="estimate.historical-filter">
+                  <span>{copy("ที่มา", "Source", "出所")}</span>
+                  <span>
+                    <input
+                      type="checkbox"
+                      checked={historicalOnly}
+                      onChange={(event) => {
+                        setHistoricalOnly(event.target.checked);
+                        resetPage();
+                      }}
+                    />{" "}
+                    {copy("เฉพาะ Estimate ย้อนหลัง (นำเข้าจาก Excel เดิม)", "Only old estimates imported from Excel", "旧Excelから取り込んだ見積のみ")}
+                  </span>
+                </label>
+              </div>
+              <div className="est-filter-actions">
+                <button className="btn ghost sm" type="button" onClick={clearFilters}>
+                  {copy("ล้างทั้งหมด", "Clear all", "すべてクリア")}
+                </button>
+                <button className="btn primary sm" type="button" onClick={() => setAdvancedFiltersOpen(false)}>
+                  {copy("เสร็จ", "Done", "完了")}
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </div>
+        <button
+          className="btn ghost est-icon-btn"
+          type="button"
+          disabled={loading}
+          aria-label={uiText("Refresh")}
+          title={uiText("Refresh")}
+          onClick={() => {
+            void load();
+          }}
+        >
+          <Icon name="refresh" />
+        </button>
       </div>
-      <button className="btn ghost est-icon-btn" type="button" disabled={loading} aria-label={uiText("Refresh")} title={uiText("Refresh")} onClick={() => { void load(); }}><Icon name="refresh" /></button>
+      {chips.length ? (
+        <div className="est-chips">
+          {chips.map((chip) => (
+            <span className="est-chip" key={chip.key}>
+              {chip.label}
+              <button
+                type="button"
+                aria-label={copy("ลบตัวกรองนี้", "Remove this filter", "このフィルターを解除")}
+                onClick={() => {
+                  chip.clear();
+                  resetPage();
+                }}
+              >
+                <Icon name="x" />
+              </button>
+            </span>
+          ))}
+          <button className="btn ghost sm" type="button" onClick={clearFilters}>
+            {copy("ล้างทั้งหมด", "Clear all", "すべてクリア")}
+          </button>
+        </div>
+      ) : null}
+      {error ? (
+        <LoadError
+          message={error}
+          retry={() => {
+            void load();
+          }}
+        />
+      ) : null}
+      {/* V2: the status tabs become a summary bar whose cells are the same filters, with each status's count and cost. */}
+      {v2 ? (
+        <EstimateStatusSummary
+          tabs={ESTIMATE_STATUS_TABS}
+          counts={statusSummary}
+          status={status}
+          onStatus={(value) => {
+            setStatus(value);
+            resetPage();
+          }}
+          formatMoney={formatMoney}
+        />
+      ) : null}
+      <section className="panel est-list-panel" data-guide="estimate.list">
+        {v2 ? null : (
+          <div className="tabs est-status-tabs" role="tablist" aria-label={copy("สถานะ", "Status", "ステータス")}>
+            {ESTIMATE_STATUS_TABS.map(([value, th, en, ja]) => (
+              <button
+                key={value}
+                type="button"
+                role="tab"
+                aria-selected={status === value}
+                className={status === value ? "tab active" : "tab"}
+                onClick={() => {
+                  setStatus(value);
+                  resetPage();
+                }}
+              >
+                {copy(th, en, ja)}
+              </button>
+            ))}
+          </div>
+        )}
+        {result.items.length ? (
+          <div className="table-wrap">
+            <table className="est-list-table">
+              <thead>
+                <tr>
+                  {/* V2 (DESIGN.md 0.3): status first; the estimate number is the link that opens it, so no open arrow at the end. */}
+                  {v2 ? <th className="est-status-col">{copy("สถานะ", "Status", "ステータス")}</th> : null}
+                  <th>Estimate</th>
+                  <th>{copy("งาน / ลูกค้า", "Project / customer", "案件 / 顧客")}</th>
+                  <th>{copy("ผู้ประเมิน", "Estimator", "見積担当")}</th>
+                  <th>{copy("กำหนดส่ง", "Due", "期限")}</th>
+                  <th className="num">
+                    <span className="est-cost-key">
+                      {costKey.map((key) => (
+                        <span key={key.label}>
+                          <i style={{ background: key.color }} />
+                          {key.label}
+                        </span>
+                      ))}
+                    </span>
+                    {copy("ต้นทุนรวม", "Total cost", "原価合計")}
+                  </th>
+                  {v2 ? null : <th>{copy("สถานะ", "Status", "ステータス")}</th>}
+                  <th>{copy("อัปเดต", "Updated", "更新")}</th>
+                  {v2 ? null : <th aria-label={uiText("Action")} />}
+                </tr>
+              </thead>
+              <tbody>
+                {result.items.map((item) => {
+                  const closed = isClosedEstimateStatus(item.status);
+                  const late = item.dueDate < todayIso && !closed;
+                  const view = estimateStatusView(item.status);
+                  const parts = [
+                    numberOf(item.materialTotal),
+                    numberOf(item.engineeringTotal),
+                    numberOf(item.outsourceTotal),
+                    numberOf(item.transportationTotal) + numberOf(item.accommodationTotal) + numberOf(item.otherTotal) + numberOf(item.contingencyTotal),
+                  ];
+                  const base = parts.reduce((sum, value) => sum + Math.max(0, value), 0);
+                  const breakdown = costKey.map((key, index) => `${key.label} ${formatMoney(parts[index])}`).join(" · ");
+                  const statusCell = (
+                    <td>
+                      <Badge tone={view.tone}>
+                        <span>{view.label}</span>
+                      </Badge>
+                      <span className="est-progress" aria-hidden="true">
+                        <i style={{ width: `${Math.min(100, Math.max(0, numberOf(item.progress)))}%` }} />
+                      </span>
+                    </td>
+                  );
+                  return (
+                    <tr key={item.id} className={`clickable${late ? " row-late" : ""}`} onClick={() => setSelectedEstimateId(item.id)}>
+                      {v2 ? statusCell : null}
+                      <td>
+                        <a
+                          className="mono est-no"
+                          href={viewHash("estimates", item.id)}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            if (!isPlainClick(event)) return;
+                            event.preventDefault();
+                            setSelectedEstimateId(item.id);
+                          }}
+                        >
+                          {item.number}
+                        </a>
+                        <span className="pill">{revisionCode(item.revision)}</span>
+                        {item.historicalSource ? (
+                          <span className="pill est-historical" title={`${copy("นำเข้าย้อนหลังจาก", "Imported afterwards from", "取り込み元")} ${item.historicalSource}`}>
+                            {copy("ย้อนหลัง", "Old", "過去")}
+                          </span>
+                        ) : null}
+                        <div className="est-sub mono">{item.inquiryNumber}</div>
+                      </td>
+                      <td className="wrap est-project">
+                        <strong>{item.projectName}</strong>
+                        <div className="est-sub">
+                          {item.customerName} · {item.projectType}
+                        </div>
+                      </td>
+                      <td>{item.ownerName}</td>
+                      <td>
+                        {formatDate(item.dueDate)}
+                        {closed ? null : <div className={late ? "est-sub red-text" : "est-sub"}>{dueDistance(item.dueDate, todayIso)}</div>}
+                      </td>
+                      <td className="num">
+                        {base > 0 ? (
+                          <>
+                            <strong>{formatMoney(item.total)}</strong>
+                            <span className="est-stack" title={breakdown}>
+                              {parts.map((value, index) => (value > 0 ? <i key={costKey[index].label} style={{ width: `${(value / base) * 100}%`, background: costKey[index].color }} /> : null))}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="est-sub">{copy("ยังไม่มีต้นทุน", "No cost yet", "原価なし")}</span>
+                        )}
+                      </td>
+                      {v2 ? null : statusCell}
+                      <td className="est-sub">{formatDateTime(item.updatedAt)}</td>
+                      {v2 ? null : (
+                        <td>
+                          <button
+                            className="row-action"
+                            type="button"
+                            aria-label={`Open ${item.number}`}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setSelectedEstimateId(item.id);
+                            }}
+                          >
+                            <Icon name="chevronRight" />
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : loading ? (
+          <div className="empty">
+            <span className="spinner" />
+            <LocalizedText text={"Loading…"} />
+          </div>
+        ) : (
+          <EmptyState icon="file" title="No estimate matches the filters" message="ปรับตัวกรองหรือสร้าง Estimate จาก Inquiry ที่ยังไม่มี Estimate" />
+        )}
+        {result.total ? (
+          <div className="est-list-foot">
+            <TablePageSize
+              value={pageSize}
+              onChange={(value) => {
+                setPageSize(value);
+                resetPage();
+              }}
+            />
+            <Pagination
+              page={result.page}
+              pageCount={pageCount}
+              from={(result.page - 1) * result.pageSize + 1}
+              to={Math.min(result.page * result.pageSize, result.total)}
+              total={result.total}
+              onPage={setPage}
+            />
+          </div>
+        ) : null}
+      </section>
+      {createOpen ? (
+        <CreateEstimateModal
+          bootstrap={bootstrap}
+          onClose={() => setCreateOpen(false)}
+          onCreated={async (created) => {
+            setCreateOpen(false);
+            notify(startFromCreatedMessage(created.number, created.copied));
+            await Promise.all([load(), refreshBootstrap()]);
+            setSelectedEstimateId(created.id);
+          }}
+        />
+      ) : null}
+      {historicalOpen ? (
+        <HistoricalEstimateImportModal
+          bootstrap={bootstrap}
+          owners={canAssignEstimateOwner(bootstrap.user.role) ? owners : owners.filter((owner) => owner.id === bootstrap.user.id)}
+          onClose={() => setHistoricalOpen(false)}
+          onImported={async (imported) => {
+            setHistoricalOpen(false);
+            notify(
+              imported.alreadyImported
+                ? copy(
+                    `ไฟล์นี้นำเข้าเป็น ${imported.number} ของ ${imported.projectNo} ไว้แล้ว`,
+                    `This file was already imported as ${imported.number} for ${imported.projectNo}.`,
+                    `このファイルは ${imported.projectNo} の ${imported.number} として取り込み済みです。`,
+                  )
+                : copy(
+                    `สร้าง ${imported.number} (ร่าง R00) และผูกกับ ${imported.projectNo} แล้ว`,
+                    `${imported.number} (Draft R00) is created and linked to ${imported.projectNo}.`,
+                    `${imported.number}(下書きR00)を作成し、${imported.projectNo} に紐付けました。`,
+                  ),
+            );
+            await Promise.all([load(), refreshBootstrap()]);
+            setSelectedEstimateId(imported.id);
+          }}
+        />
+      ) : null}
     </div>
-    {chips.length ? <div className="est-chips">
-      {chips.map((chip) => <span className="est-chip" key={chip.key}>{chip.label}<button type="button" aria-label={copy("ลบตัวกรองนี้", "Remove this filter", "このフィルターを解除")} onClick={() => { chip.clear(); resetPage(); }}><Icon name="x" /></button></span>)}
-      <button className="btn ghost sm" type="button" onClick={clearFilters}>{copy("ล้างทั้งหมด", "Clear all", "すべてクリア")}</button>
-    </div> : null}
-    {error ? <LoadError message={error} retry={() => { void load(); }} /> : null}
-    {/* V2: the status tabs become a summary bar whose cells are the same filters, with each status's count and cost. */}
-    {v2 ? <EstimateStatusSummary tabs={ESTIMATE_STATUS_TABS} counts={statusSummary} status={status} onStatus={(value) => { setStatus(value); resetPage(); }} formatMoney={formatMoney} /> : null}
-    <section className="panel est-list-panel" data-guide="estimate.list">
-      {v2 ? null : <div className="tabs est-status-tabs" role="tablist" aria-label={copy("สถานะ", "Status", "ステータス")}>
-        {ESTIMATE_STATUS_TABS.map(([value, th, en, ja]) => <button key={value} type="button" role="tab" aria-selected={status === value} className={status === value ? "tab active" : "tab"} onClick={() => { setStatus(value); resetPage(); }}>{copy(th, en, ja)}</button>)}
-      </div>}
-      {result.items.length ? <div className="table-wrap"><table className="est-list-table">
-        <thead><tr>
-          {/* V2 (DESIGN.md 0.3): status first; the estimate number is the link that opens it, so no open arrow at the end. */}
-          {v2 ? <th className="est-status-col">{copy("สถานะ", "Status", "ステータス")}</th> : null}
-          <th>Estimate</th>
-          <th>{copy("งาน / ลูกค้า", "Project / customer", "案件 / 顧客")}</th>
-          <th>{copy("ผู้ประเมิน", "Estimator", "見積担当")}</th>
-          <th>{copy("กำหนดส่ง", "Due", "期限")}</th>
-          <th className="num"><span className="est-cost-key">{costKey.map((key) => <span key={key.label}><i style={{ background: key.color }} />{key.label}</span>)}</span>{copy("ต้นทุนรวม", "Total cost", "原価合計")}</th>
-          {v2 ? null : <th>{copy("สถานะ", "Status", "ステータス")}</th>}
-          <th>{copy("อัปเดต", "Updated", "更新")}</th>
-          {v2 ? null : <th aria-label={uiText("Action")} />}
-        </tr></thead>
-        <tbody>{result.items.map((item) => {
-          const closed = isClosedEstimateStatus(item.status);
-          const late = item.dueDate < todayIso && !closed;
-          const view = estimateStatusView(item.status);
-          const parts = [numberOf(item.materialTotal), numberOf(item.engineeringTotal), numberOf(item.outsourceTotal), numberOf(item.transportationTotal) + numberOf(item.accommodationTotal) + numberOf(item.otherTotal) + numberOf(item.contingencyTotal)];
-          const base = parts.reduce((sum, value) => sum + Math.max(0, value), 0);
-          const breakdown = costKey.map((key, index) => `${key.label} ${formatMoney(parts[index])}`).join(" · ");
-          const statusCell = <td><Badge tone={view.tone}><span>{view.label}</span></Badge><span className="est-progress" aria-hidden="true"><i style={{ width: `${Math.min(100, Math.max(0, numberOf(item.progress)))}%` }} /></span></td>;
-          return <tr key={item.id} className={`clickable${late ? " row-late" : ""}`} onClick={() => setSelectedEstimateId(item.id)}>
-            {v2 ? statusCell : null}
-            <td><a className="mono est-no" href={viewHash("estimates", item.id)} onClick={(event) => { event.stopPropagation(); if (!isPlainClick(event)) return; event.preventDefault(); setSelectedEstimateId(item.id); }}>{item.number}</a><span className="pill">{revisionCode(item.revision)}</span><div className="est-sub mono">{item.inquiryNumber}</div></td>
-            <td className="wrap est-project"><strong>{item.projectName}</strong><div className="est-sub">{item.customerName} · {item.projectType}</div></td>
-            <td>{item.ownerName}</td>
-            <td>{formatDate(item.dueDate)}{closed ? null : <div className={late ? "est-sub red-text" : "est-sub"}>{dueDistance(item.dueDate, todayIso)}</div>}</td>
-            <td className="num">{base > 0 ? <><strong>{formatMoney(item.total)}</strong><span className="est-stack" title={breakdown}>{parts.map((value, index) => value > 0 ? <i key={costKey[index].label} style={{ width: `${(value / base) * 100}%`, background: costKey[index].color }} /> : null)}</span></> : <span className="est-sub">{copy("ยังไม่มีต้นทุน", "No cost yet", "原価なし")}</span>}</td>
-            {v2 ? null : statusCell}
-            <td className="est-sub">{formatDateTime(item.updatedAt)}</td>
-            {v2 ? null : <td><button className="row-action" type="button" aria-label={`Open ${item.number}`} onClick={(event) => { event.stopPropagation(); setSelectedEstimateId(item.id); }}><Icon name="chevronRight" /></button></td>}
-          </tr>;
-        })}</tbody>
-      </table></div>
-        : loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading…"} /></div>
-          : <EmptyState icon="file" title="No estimate matches the filters" message="ปรับตัวกรองหรือสร้าง Estimate จาก Inquiry ที่ยังไม่มี Estimate" />}
-      {result.total ? <div className="est-list-foot">
-        <TablePageSize value={pageSize} onChange={(value) => { setPageSize(value); resetPage(); }} />
-        <Pagination page={result.page} pageCount={pageCount} from={(result.page - 1) * result.pageSize + 1} to={Math.min(result.page * result.pageSize, result.total)} total={result.total} onPage={setPage} />
-      </div> : null}
-    </section>
-    {createOpen ? <CreateEstimateModal bootstrap={bootstrap} onClose={() => setCreateOpen(false)} onCreated={async (created) => {
-      setCreateOpen(false);
-      notify(startFromCreatedMessage(created.number, created.copied));
-      await Promise.all([load(), refreshBootstrap()]);
-      setSelectedEstimateId(created.id);
-    }} /> : null}
-  </div>;
+  );
 }
 
 /* An estimate with no line yet — however it was created — shows where to start. Copying a similar
    previous estimate stays one click away; the creation dialogs already offered it once. */
-function EstimateStartPanel({ workspace, busy, canAssign, onOpenTab, onCopy, onDismiss }: {
-  workspace: EstimateCostWorkspace; busy: boolean; canAssign: boolean; onOpenTab: (tab: WorkspaceTab) => void;
-  onCopy: (input: Omit<EstimateCopyInput, "estimateRowVersion" | "ownerId">) => Promise<boolean>; onDismiss: () => void;
+function EstimateStartPanel({
+  workspace,
+  busy,
+  canAssign,
+  onOpenTab,
+  onCopy,
+  onDismiss,
+}: {
+  workspace: EstimateCostWorkspace;
+  busy: boolean;
+  canAssign: boolean;
+  onOpenTab: (tab: WorkspaceTab) => void;
+  onCopy: (input: Omit<EstimateCopyInput, "estimateRowVersion" | "ownerId">) => Promise<boolean>;
+  onDismiss: () => void;
 }) {
   const copy = estimateCopy;
   const [copyOpen, setCopyOpen] = useState(false);
@@ -542,50 +968,151 @@ function EstimateStartPanel({ workspace, busy, canAssign, onOpenTab, onCopy, onD
   const [ledgers, setLedgers] = useState<StartLedgers>(ALL_START_LEDGERS);
   const anyLedger = anyStartLedger(ledgers);
   const steps = [
-    ...(canAssign ? [{ key: "assign", title: copy("แบ่งงานให้ทีม (ถ้าทำหลายคน)", "Split the work (when several people estimate)", "チームで分担（複数人の場合）"), text: copy("มอบหมายส่วนงาน Electrical / Mechanical / Software ระบบส่งอีเมลและงานขึ้นใน My Work", "Assign the Electrical / Mechanical / Software sections; assignees get an email and see the work in My Work.", "電気・機械・ソフトの各セクションを割り当てると、担当者にメールが届き My Work に表示されます。"), actions: <button className="btn default sm" type="button" onClick={() => onOpenTab("assignment")}><Icon name="users" />{copy("มอบหมายส่วนงาน", "Assign sections", "セクションを割当")}</button> }] : []),
-    { key: "cost", title: copy("ใส่วัสดุและอุปกรณ์", "Add equipment and material", "機器・材料を追加"), text: copy("เพิ่มทีละโมดูล นำเข้า Excel ฟอร์มบริษัท ใช้ Template หรือคัดลอกจาก Estimate เดิมที่คล้ายกัน", "Add module by module, import the company Excel form, apply a template or copy a similar earlier estimate.", "モジュール単位で追加、会社様式のExcel取込、テンプレート適用、または類似の過去見積をコピーします。"), actions: <><button className="btn primary sm" type="button" onClick={() => onOpenTab("cost")}><Icon name="plus" />{copy("ไปที่วัสดุและอุปกรณ์", "Open equipment and material", "機器・材料へ")}</button><button className="btn default sm" type="button" aria-expanded={copyOpen} onClick={() => setCopyOpen((current) => !current)}><Icon name="copy" />{copy("คัดลอกจาก Estimate เดิม", "Copy an earlier estimate", "過去見積からコピー")}</button></> },
-    { key: "labor", title: copy("ใส่ค่าแรงตามสาขา", "Add labor by discipline", "分野別に工数を追加"), text: copy("Electrical · Mechanical · Software · Installation พร้อมค่าเดินทางของแต่ละสาขา", "Electrical · Mechanical · Software · Installation, each with its own travel.", "電気・機械・ソフト・据付、それぞれの旅費とともに。"), actions: <button className="btn default sm" type="button" onClick={() => onOpenTab("manhour")}>{copy("ไปที่ค่าแรง", "Open labor", "労務費へ")}<Icon name="arrowRight" /></button> },
+    ...(canAssign
+      ? [
+          {
+            key: "assign",
+            title: copy("แบ่งงานให้ทีม (ถ้าทำหลายคน)", "Split the work (when several people estimate)", "チームで分担（複数人の場合）"),
+            text: copy(
+              "มอบหมายส่วนงาน Electrical / Mechanical / Software ระบบส่งอีเมลและงานขึ้นใน My Work",
+              "Assign the Electrical / Mechanical / Software sections; assignees get an email and see the work in My Work.",
+              "電気・機械・ソフトの各セクションを割り当てると、担当者にメールが届き My Work に表示されます。",
+            ),
+            actions: (
+              <button className="btn default sm" type="button" onClick={() => onOpenTab("assignment")}>
+                <Icon name="users" />
+                {copy("มอบหมายส่วนงาน", "Assign sections", "セクションを割当")}
+              </button>
+            ),
+          },
+        ]
+      : []),
+    {
+      key: "cost",
+      title: copy("ใส่วัสดุและอุปกรณ์", "Add equipment and material", "機器・材料を追加"),
+      text: copy(
+        "เพิ่มทีละโมดูล นำเข้า Excel ฟอร์มบริษัท ใช้ Template หรือคัดลอกจาก Estimate เดิมที่คล้ายกัน",
+        "Add module by module, import the company Excel form, apply a template or copy a similar earlier estimate.",
+        "モジュール単位で追加、会社様式のExcel取込、テンプレート適用、または類似の過去見積をコピーします。",
+      ),
+      actions: (
+        <>
+          <button className="btn primary sm" type="button" onClick={() => onOpenTab("cost")}>
+            <Icon name="plus" />
+            {copy("ไปที่วัสดุและอุปกรณ์", "Open equipment and material", "機器・材料へ")}
+          </button>
+          <button className="btn default sm" type="button" aria-expanded={copyOpen} onClick={() => setCopyOpen((current) => !current)}>
+            <Icon name="copy" />
+            {copy("คัดลอกจาก Estimate เดิม", "Copy an earlier estimate", "過去見積からコピー")}
+          </button>
+        </>
+      ),
+    },
+    {
+      key: "labor",
+      title: copy("ใส่ค่าแรงตามสาขา", "Add labor by discipline", "分野別に工数を追加"),
+      text: copy(
+        "Electrical · Mechanical · Software · Installation พร้อมค่าเดินทางของแต่ละสาขา",
+        "Electrical · Mechanical · Software · Installation, each with its own travel.",
+        "電気・機械・ソフト・据付、それぞれの旅費とともに。",
+      ),
+      actions: (
+        <button className="btn default sm" type="button" onClick={() => onOpenTab("manhour")}>
+          {copy("ไปที่ค่าแรง", "Open labor", "労務費へ")}
+          <Icon name="arrowRight" />
+        </button>
+      ),
+    },
   ];
-  return <Panel className="estimate-start-panel est-start"
-    title={copy("เริ่มกรอก Estimate", "Start this estimate", "見積を始める")}
-    subtitle={copy("Estimate นี้ยังไม่มีรายการ ทำตามลำดับนี้ หรือเริ่มขั้นไหนก่อนก็ได้", "This estimate has no line yet. Follow these steps, in any order.", "この見積にはまだ明細がありません。順番は自由です。")}
-    actions={<button className="btn ghost sm" type="button" onClick={onDismiss}>{copy("ซ่อน", "Hide", "閉じる")}</button>}>
-    <ol className="est-start-steps">
-      {steps.map((step, index) => <li key={step.key}>
-        <span className="est-dot">{index + 1}</span>
-        <div className="est-start-text"><strong>{step.title}</strong><p>{step.text}</p></div>
-        <div className="est-start-actions">{step.actions}</div>
-      </li>)}
-    </ol>
-    {copyOpen ? <div className="est-start-copy">
-      <EstimateSourcePicker excludeId={workspace.header.id} source={source} onSource={setSource} ledgers={ledgers} onLedgers={setLedgers} />
-      {/* The two ways forward sit together, so not copying reads as a choice rather than a stray link. */}
-      <div className="row" style={{ marginTop: 12 }}>
-        <button className="btn primary" type="button" disabled={busy || !source || !anyLedger} onClick={() => { if (source) void onCopy({ sourceEstimateId: source.id, sections: COST_CATEGORIES.map(([code]) => code), includeCostItems: ledgers.costItems, includeManhour: ledgers.manhour, includeExpenses: ledgers.expenses, includeOtherCosts: ledgers.otherCosts, includeErpCategories: true }); }}>
-          <Icon name="copy" />{source ? copy(`คัดลอกจาก ${source.number}`, `Copy from ${source.number}`, `${source.number} からコピー`) : copy("เลือก Estimate ด้านบนก่อน", "Choose an estimate above", "上で見積を選択")}
+  return (
+    <Panel
+      className="estimate-start-panel est-start"
+      title={copy("เริ่มกรอก Estimate", "Start this estimate", "見積を始める")}
+      subtitle={copy("Estimate นี้ยังไม่มีรายการ ทำตามลำดับนี้ หรือเริ่มขั้นไหนก่อนก็ได้", "This estimate has no line yet. Follow these steps, in any order.", "この見積にはまだ明細がありません。順番は自由です。")}
+      actions={
+        <button className="btn ghost sm" type="button" onClick={onDismiss}>
+          {copy("ซ่อน", "Hide", "閉じる")}
         </button>
-        <span className="muted">{copy("หรือ", "or", "または")}</span>
-        <button className="btn default" type="button" disabled={busy} onClick={() => setCopyOpen(false)}>
-          <Icon name="edit" />{copy("ไม่คัดลอก — เริ่มกรอกเอง", "Don't copy — fill it in myself", "コピーせずに自分で入力")}
-        </button>
-      </div>
-    </div> : null}
-  </Panel>;
+      }
+    >
+      <ol className="est-start-steps">
+        {steps.map((step, index) => (
+          <li key={step.key}>
+            <span className="est-dot">{index + 1}</span>
+            <div className="est-start-text">
+              <strong>{step.title}</strong>
+              <p>{step.text}</p>
+            </div>
+            <div className="est-start-actions">{step.actions}</div>
+          </li>
+        ))}
+      </ol>
+      {copyOpen ? (
+        <div className="est-start-copy">
+          <EstimateSourcePicker excludeId={workspace.header.id} source={source} onSource={setSource} ledgers={ledgers} onLedgers={setLedgers} />
+          {/* The two ways forward sit together, so not copying reads as a choice rather than a stray link. */}
+          <div className="row" style={{ marginTop: 12 }}>
+            <button
+              className="btn primary"
+              type="button"
+              disabled={busy || !source || !anyLedger}
+              onClick={() => {
+                if (source)
+                  void onCopy({
+                    sourceEstimateId: source.id,
+                    sections: COST_CATEGORIES.map(([code]) => code),
+                    includeCostItems: ledgers.costItems,
+                    includeManhour: ledgers.manhour,
+                    includeExpenses: ledgers.expenses,
+                    includeOtherCosts: ledgers.otherCosts,
+                    includeErpCategories: true,
+                  });
+              }}
+            >
+              <Icon name="copy" />
+              {source ? copy(`คัดลอกจาก ${source.number}`, `Copy from ${source.number}`, `${source.number} からコピー`) : copy("เลือก Estimate ด้านบนก่อน", "Choose an estimate above", "上で見積を選択")}
+            </button>
+            <span className="muted">{copy("หรือ", "or", "または")}</span>
+            <button className="btn default" type="button" disabled={busy} onClick={() => setCopyOpen(false)}>
+              <Icon name="edit" />
+              {copy("ไม่คัดลอก — เริ่มกรอกเอง", "Don't copy — fill it in myself", "コピーせずに自分で入力")}
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </Panel>
+  );
 }
 
 /* A new estimate no longer has to start empty. "Start from a previous estimate" lets the
    estimator find any estimate by number, project or customer and carry its equipment,
    labor, travel and other costs into R00; the server creates and fills it in one
    transaction (copyEstimateLines), re-resolving internal labor at today's rates. */
-function CreateEstimateModal({ bootstrap, onClose, onCreated }: { bootstrap: BootstrapData; onClose: () => void; onCreated: (created: { id: number; number: string; copied: Omit<EstimateCopyResult, "estimateRowVersion"> | null }) => Promise<void> }) {
+function CreateEstimateModal({
+  bootstrap,
+  onClose,
+  onCreated,
+}: {
+  bootstrap: BootstrapData;
+  onClose: () => void;
+  onCreated: (created: { id: number; number: string; copied: Omit<EstimateCopyResult, "estimateRowVersion"> | null }) => Promise<void>;
+}) {
   const uiText = useUiText();
   const copy = (th: string, en: string, ja: string) => estimateUxCopy(currentLocale(), th, en, ja);
   const allOwners = useMemo(() => bootstrap.team.filter((member) => canOwnEstimate(member.role)), [bootstrap.team]);
-  const owners = useMemo(() => canAssignEstimateOwner(bootstrap.user.role) ? allOwners : allOwners.filter((member) => member.id === bootstrap.user.id), [allOwners, bootstrap.user.id, bootstrap.user.role]);
+  const owners = useMemo(
+    () => (canAssignEstimateOwner(bootstrap.user.role) ? allOwners : allOwners.filter((member) => member.id === bootstrap.user.id)),
+    [allOwners, bootstrap.user.id, bootstrap.user.role],
+  );
   const earliestDueDate = businessDate();
   const latestDueDate = futureDate(365 * 5);
   const [inquiries, setInquiries] = useState<InquirySummary[]>([]);
-  const [form, setForm] = useState<CreateEstimateInput>({ inquiryId: 0, ownerId: owners.find((owner) => owner.id === bootstrap.user.id)?.id ?? owners[0]?.id ?? 0, dueDate: normalizeEstimateDueDate(undefined, earliestDueDate, latestDueDate), contingencyRate: 5 });
+  const [form, setForm] = useState<CreateEstimateInput>({
+    inquiryId: 0,
+    ownerId: owners.find((owner) => owner.id === bootstrap.user.id)?.id ?? owners[0]?.id ?? 0,
+    dueDate: normalizeEstimateDueDate(undefined, earliestDueDate, latestDueDate),
+    contingencyRate: 5,
+  });
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -593,7 +1120,8 @@ function CreateEstimateModal({ bootstrap, onClose, onCreated }: { bootstrap: Boo
   const [source, setSource] = useState<EstimateSummary | null>(null);
   const [ledgers, setLedgers] = useState<StartLedgers>(ALL_START_LEDGERS);
   const load = useCallback(async () => {
-    setLoading(true); setError("");
+    setLoading(true);
+    setError("");
     try {
       const inquiries = await listAllNewInquiries();
       const available = inquiries.filter((item) => item.estimateId === null && item.status === "New" && (canAssignEstimateOwner(bootstrap.user.role) || item.estimateOwnerId === bootstrap.user.id));
@@ -608,39 +1136,152 @@ function CreateEstimateModal({ bootstrap, onClose, onCreated }: { bootstrap: Boo
           dueDate: normalizeEstimateDueDate(first?.dueDate, earliestDueDate, latestDueDate),
         };
       });
-    } catch (requestError) { setError(toError(requestError)); }
-    finally { setLoading(false); }
+    } catch (requestError) {
+      setError(toError(requestError));
+    } finally {
+      setLoading(false);
+    }
   }, [bootstrap.user.id, bootstrap.user.role, earliestDueDate, latestDueDate, owners, setInquiries]);
   useEffect(() => {
-    const timer = window.setTimeout(() => { void load(); }, 0);
+    const timer = window.setTimeout(() => {
+      void load();
+    }, 0);
     return () => window.clearTimeout(timer);
   }, [load]);
   const copyReady = startFrom === "blank" || (source !== null && anyStartLedger(ledgers));
   const submit = async () => {
-    setBusy(true); setError("");
+    setBusy(true);
+    setError("");
     try {
       const copyFrom = startFrom === "copy" && source ? startFromInput(source, ledgers) : undefined;
       await onCreated(await createEstimate({ ...form, copyFrom }));
+    } catch (requestError) {
+      setError(toError(requestError));
+    } finally {
+      setBusy(false);
     }
-    catch (requestError) { setError(toError(requestError)); }
-    finally { setBusy(false); }
   };
-  return <Modal title={uiText("New estimate from inquiry")} subtitle="SQL Server ออกเลข Estimate และสร้าง R00 ภายใน transaction เดียว" size="lg" onClose={onClose} footer={<><button className="btn ghost" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || loading || !form.inquiryId || !form.ownerId || !form.dueDate || !copyReady} onClick={() => { void submit(); }}><Icon name="check" />{busy ? <LocalizedText text={"Creating…"} /> : startFrom === "copy" ? copy("สร้าง R00 จาก Estimate ที่เลือก", "Create R00 from the chosen estimate", "選択した見積からR00を作成") : copy("สร้าง R00", "Create R00", "R00を作成")}</button></>}>
-    {error ? <LoadError message={error} retry={() => { void load(); }} /> : null}
-    {loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading inquiries…"} /></div> : inquiries.length ? <div className="form-grid two">
-      <Field label="Registered inquiry *" span={2}><select value={form.inquiryId} onChange={(event) => { const inquiry = inquiries.find((item) => item.id === Number(event.target.value)); const requestedOwner = owners.find((owner) => owner.id === inquiry?.estimateOwnerId)?.id ?? owners.find((owner) => owner.id === bootstrap.user.id)?.id; setForm((current) => ({ ...current, inquiryId: Number(event.target.value), ownerId: requestedOwner ?? current.ownerId, dueDate: normalizeEstimateDueDate(inquiry?.dueDate, earliestDueDate, latestDueDate) })); }}>{inquiries.map((item) => <option key={item.id} value={item.id}>{item.number} — {item.projectName} · {item.customerName}</option>)}</select></Field>
-      <div className="span-2 info-strip" role="status"><Icon name="check" /><span><LocalizedText text={"The estimator and due date come from the inquiry · contingency starts at 5%"} /></span></div>
-      <details className="span-2"><summary><LocalizedText text={"ปรับผู้ประเมิน กำหนดส่ง หรือ Contingency"} /></summary><div className="form-grid two" style={{marginTop:12}}>
-        <Field label="Estimate owner *"><select value={form.ownerId} onChange={(event) => setForm((current) => ({ ...current, ownerId: Number(event.target.value) }))}>{owners.map((owner) => <option key={owner.id} value={owner.id}>{owner.name} · {owner.department}</option>)}</select></Field>
-        <Field label="Due date *" hint="Today through five years"><DateInput min={earliestDueDate} max={latestDueDate} value={form.dueDate} onChange={(event) => setForm((current) => ({ ...current, dueDate: event.target.value }))} /></Field>
-        <Field label="Contingency %"><input type="number" min="0" max="100" step="0.01" value={form.contingencyRate} onChange={(event) => setForm((current) => ({ ...current, contingencyRate: Number(event.target.value) }))} /></Field>
-      </div></details>
-      <StartFromChoice idPrefix="estimate-start" startFrom={startFrom} onStartFrom={setStartFrom} source={source} onSource={setSource} ledgers={ledgers} onLedgers={setLedgers} />
-    </div> : <EmptyState icon="inbox" title="No inquiry available" message="ทุก Inquiry มี Estimate แล้ว หรือบัญชีนี้ไม่มี Inquiry ที่อ่านได้" />}
-  </Modal>;
+  return (
+    <Modal
+      title={uiText("New estimate from inquiry")}
+      subtitle="SQL Server ออกเลข Estimate และสร้าง R00 ภายใน transaction เดียว"
+      size="lg"
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn ghost" type="button" disabled={busy} onClick={onClose}>
+            <LocalizedText text={"Cancel"} />
+          </button>
+          <button
+            className="btn primary"
+            type="button"
+            disabled={busy || loading || !form.inquiryId || !form.ownerId || !form.dueDate || !copyReady}
+            onClick={() => {
+              void submit();
+            }}
+          >
+            <Icon name="check" />
+            {busy ? (
+              <LocalizedText text={"Creating…"} />
+            ) : startFrom === "copy" ? (
+              copy("สร้าง R00 จาก Estimate ที่เลือก", "Create R00 from the chosen estimate", "選択した見積からR00を作成")
+            ) : (
+              copy("สร้าง R00", "Create R00", "R00を作成")
+            )}
+          </button>
+        </>
+      }
+    >
+      {error ? (
+        <LoadError
+          message={error}
+          retry={() => {
+            void load();
+          }}
+        />
+      ) : null}
+      {loading ? (
+        <div className="empty">
+          <span className="spinner" />
+          <LocalizedText text={"Loading inquiries…"} />
+        </div>
+      ) : inquiries.length ? (
+        <div className="form-grid two">
+          <Field label="Registered inquiry *" span={2}>
+            <select
+              value={form.inquiryId}
+              onChange={(event) => {
+                const inquiry = inquiries.find((item) => item.id === Number(event.target.value));
+                const requestedOwner = owners.find((owner) => owner.id === inquiry?.estimateOwnerId)?.id ?? owners.find((owner) => owner.id === bootstrap.user.id)?.id;
+                setForm((current) => ({
+                  ...current,
+                  inquiryId: Number(event.target.value),
+                  ownerId: requestedOwner ?? current.ownerId,
+                  dueDate: normalizeEstimateDueDate(inquiry?.dueDate, earliestDueDate, latestDueDate),
+                }));
+              }}
+            >
+              {inquiries.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.number} — {item.projectName} · {item.customerName}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <div className="span-2 info-strip" role="status">
+            <Icon name="check" />
+            <span>
+              <LocalizedText text={"The estimator and due date come from the inquiry · contingency starts at 5%"} />
+            </span>
+          </div>
+          <details className="span-2">
+            <summary>
+              <LocalizedText text={"ปรับผู้ประเมิน กำหนดส่ง หรือ Contingency"} />
+            </summary>
+            <div className="form-grid two" style={{ marginTop: 12 }}>
+              <Field label="Estimate owner *">
+                <select value={form.ownerId} onChange={(event) => setForm((current) => ({ ...current, ownerId: Number(event.target.value) }))}>
+                  {owners.map((owner) => (
+                    <option key={owner.id} value={owner.id}>
+                      {owner.name} · {owner.department}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Due date *" hint="Today through five years">
+                <DateInput min={earliestDueDate} max={latestDueDate} value={form.dueDate} onChange={(event) => setForm((current) => ({ ...current, dueDate: event.target.value }))} />
+              </Field>
+              <Field label="Contingency %">
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  value={form.contingencyRate}
+                  onChange={(event) => setForm((current) => ({ ...current, contingencyRate: Number(event.target.value) }))}
+                />
+              </Field>
+            </div>
+          </details>
+          <StartFromChoice idPrefix="estimate-start" startFrom={startFrom} onStartFrom={setStartFrom} source={source} onSource={setSource} ledgers={ledgers} onLedgers={setLedgers} />
+        </div>
+      ) : (
+        <EmptyState icon="inbox" title="No inquiry available" message="ทุก Inquiry มี Estimate แล้ว หรือบัญชีนี้ไม่มี Inquiry ที่อ่านได้" />
+      )}
+    </Modal>
+  );
 }
 
-function ProductionEstimateWorkspace({ estimateId, tab, setTab, bootstrap, notify, refreshBootstrap, onBack, onListChanged }: Props & { estimateId: number; tab: WorkspaceTab; setTab: (tab: WorkspaceTab) => void; onBack: () => void; onListChanged: () => Promise<void> }) {
+function ProductionEstimateWorkspace({
+  estimateId,
+  tab,
+  setTab,
+  bootstrap,
+  notify,
+  refreshBootstrap,
+  onBack,
+  onListChanged,
+}: Props & { estimateId: number; tab: WorkspaceTab; setTab: (tab: WorkspaceTab) => void; onBack: () => void; onListChanged: () => Promise<void> }) {
   const v2 = useEstimateLook() === "v2";
   const uiText = useUiText();
   const [workspace, setWorkspace] = useState<EstimateCostWorkspace | null>(null);
@@ -653,7 +1294,9 @@ function ProductionEstimateWorkspace({ estimateId, tab, setTab, bootstrap, notif
   const onErpExportChange = useCallback((run: (() => void) | null) => setErpExport(run ? { run } : null), []);
   /* Approval sends the ERP sheet's rows to the Pegasus ERP; the sheet below (mounted even when hidden) hands them over. */
   const erpSheetRows = useRef<(() => EstimateErpSheetRow[]) | null>(null);
-  const onErpSheetRowsChange = useCallback((rows: (() => EstimateErpSheetRow[]) | null) => { erpSheetRows.current = rows; }, []);
+  const onErpSheetRowsChange = useCallback((rows: (() => EstimateErpSheetRow[]) | null) => {
+    erpSheetRows.current = rows;
+  }, []);
   const [costFocus, setCostFocus] = useState<string | null>(null);
   const clearCostFocus = useCallback(() => setCostFocus(null), []);
   const [loading, setLoading] = useState(true);
@@ -694,22 +1337,37 @@ function ProductionEstimateWorkspace({ estimateId, tab, setTab, bootstrap, notif
   }, []);
 
   const load = useCallback(async () => {
-    setLoading(true); setError("");
-    try { adopt(await loadEstimateCostWorkspace(estimateId)); }
-    catch (requestError) { setError(toError(requestError)); }
-    finally { setLoading(false); }
+    setLoading(true);
+    setError("");
+    try {
+      adopt(await loadEstimateCostWorkspace(estimateId));
+    } catch (requestError) {
+      setError(toError(requestError));
+    } finally {
+      setLoading(false);
+    }
   }, [estimateId, adopt]);
   useEffect(() => {
-    const timer = window.setTimeout(() => { void load(); }, 0);
+    const timer = window.setTimeout(() => {
+      void load();
+    }, 0);
     return () => window.clearTimeout(timer);
   }, [load]);
 
   // What this person has open, so a colleague sees it before opening the same line.
-  const editingKey = costEditor ? `cost:${costEditor === "new" ? "new" : costEditor.id}`
-    : manhourEditor ? `manhour:${manhourEditor === "new" ? "new" : manhourEditor.id}`
-    : expenseEditor ? `expense:${expenseEditor === "new" ? "new" : expenseEditor.id}`
-    : otherEditor ? `other:${otherEditor === "new" ? "new" : otherEditor.id}`
-    : assignmentEditor ? `assignment:${assignmentEditor.id}` : assignmentCreateOpen ? "assignment:new" : null;
+  const editingKey = costEditor
+    ? `cost:${costEditor === "new" ? "new" : costEditor.id}`
+    : manhourEditor
+      ? `manhour:${manhourEditor === "new" ? "new" : manhourEditor.id}`
+      : expenseEditor
+        ? `expense:${expenseEditor === "new" ? "new" : expenseEditor.id}`
+        : otherEditor
+          ? `other:${otherEditor === "new" ? "new" : otherEditor.id}`
+          : assignmentEditor
+            ? `assignment:${assignmentEditor.id}`
+            : assignmentCreateOpen
+              ? "assignment:new"
+              : null;
   const editingContext = () => ({
     // A dialog -- including one a child opened -- and unsaved ERP classification both
     // hold work a reload would throw away.
@@ -722,31 +1380,49 @@ function ProductionEstimateWorkspace({ estimateId, tab, setTab, bootstrap, notif
     const state = liveRef.current;
     if (!state) return;
     const decision = reloadDecision(state, editingContext());
-    if (decision !== "reload") { setWaitingOn(decision === "wait" ? state.changedBy : null); return; }
+    if (decision !== "reload") {
+      setWaitingOn(decision === "wait" ? state.changedBy : null);
+      return;
+    }
     if (reloading.current) return;
     reloading.current = true;
     try {
       const fresh = await loadEstimateCostWorkspace(estimateId);
       // Someone may have started typing while it loaded; what they type wins.
-      if (reloadDecision(liveRef.current ?? state, editingContext()) !== "reload") { setWaitingOn(state.changedBy); return; }
+      if (reloadDecision(liveRef.current ?? state, editingContext()) !== "reload") {
+        setWaitingOn(state.changedBy);
+        return;
+      }
       adopt(fresh);
-      notify(state.changedBy.length
-        ? `${liveCopy("อัปเดตตามการแก้ไขของ", "Updated with changes by", "変更を反映しました：")} ${state.changedBy.join(", ")}`
-        : liveCopy("Estimate นี้มีการแก้ไข", "This estimate was changed", "この見積は変更されました"));
-    } catch { /* the next beat asks again */ }
-    finally { reloading.current = false; }
+      notify(
+        state.changedBy.length
+          ? `${liveCopy("อัปเดตตามการแก้ไขของ", "Updated with changes by", "変更を反映しました：")} ${state.changedBy.join(", ")}`
+          : liveCopy("Estimate นี้มีการแก้ไข", "This estimate was changed", "この見積は変更されました"),
+      );
+    } catch {
+      /* the next beat asks again */
+    } finally {
+      reloading.current = false;
+    }
   };
-  useHeartbeat(workspace !== null, 10_000, async () => {
-    if (!workspace) return;
-    const beat = await syncEstimate(estimateId, liveRef.current?.cursor ?? workspace.header.syncCursor, editingKey);
-    liveRef.current = afterBeat(liveRef.current ?? afterLoad(workspace.header.syncCursor), beat);
-    setViewers(beat.viewers);
-    // Said once per person per line, before the collision rather than at the 409.
-    const clash = collisions(beat.viewers, editingKey).filter((viewer) => !warnedAbout.current.has(`${editingKey}:${viewer.userId}`));
-    for (const viewer of clash) warnedAbout.current.add(`${editingKey}:${viewer.userId}`);
-    if (clash.length) notify(`${liveCopy("กำลังแก้บรรทัดนี้อยู่เช่นกัน:", "Also editing this line:", "この行をほかに編集中：")} ${clash.map((viewer) => viewer.name).join(", ")}`);
-    await settle();
-  }, () => { void leaveRecord("estimates", estimateId); });
+  useHeartbeat(
+    workspace !== null,
+    10_000,
+    async () => {
+      if (!workspace) return;
+      const beat = await syncEstimate(estimateId, liveRef.current?.cursor ?? workspace.header.syncCursor, editingKey);
+      liveRef.current = afterBeat(liveRef.current ?? afterLoad(workspace.header.syncCursor), beat);
+      setViewers(beat.viewers);
+      // Said once per person per line, before the collision rather than at the 409.
+      const clash = collisions(beat.viewers, editingKey).filter((viewer) => !warnedAbout.current.has(`${editingKey}:${viewer.userId}`));
+      for (const viewer of clash) warnedAbout.current.add(`${editingKey}:${viewer.userId}`);
+      if (clash.length) notify(`${liveCopy("กำลังแก้บรรทัดนี้อยู่เช่นกัน:", "Also editing this line:", "この行をほかに編集中：")} ${clash.map((viewer) => viewer.name).join(", ")}`);
+      await settle();
+    },
+    () => {
+      void leaveRecord("estimates", estimateId);
+    },
+  );
   // While a change waits on something unsaved, look again often -- locally, no request.
   useHeartbeat(waitingOn !== null, 1_500, settle);
 
@@ -756,8 +1432,11 @@ function ProductionEstimateWorkspace({ estimateId, tab, setTab, bootstrap, notif
     try {
       await apiRequest(`/api/v1/estimates/${estimateId}/line-order`, { method: "PUT", body: JSON.stringify({ sourceType, orderedIds, move, estimateRowVersion: workspace.header.rowVersion }) });
       await afterMutation(move ? "ย้ายรายการและบันทึกลำดับแล้ว / Item moved" : "บันทึกลำดับแล้ว / Order saved");
-    } catch (error) { await mutationError(error); }
-    finally { setBusy(false); }
+    } catch (error) {
+      await mutationError(error);
+    } finally {
+      setBusy(false);
+    }
   };
   const afterMutation = async (message: string) => {
     notify(message);
@@ -785,44 +1464,95 @@ function ProductionEstimateWorkspace({ estimateId, tab, setTab, bootstrap, notif
     if (!workspace || busy) return;
     setBusy(true);
     try {
-      await apiRequest(`/api/v1/estimates/${estimateId}/cost-modules/copy`, { method: "POST", body: JSON.stringify({ categoryCode: group.categoryCode, module: group.module, targetModule, estimateRowVersion: workspace.header.rowVersion }) });
+      await apiRequest(`/api/v1/estimates/${estimateId}/cost-modules/copy`, {
+        method: "POST",
+        body: JSON.stringify({ categoryCode: group.categoryCode, module: group.module, targetModule, estimateRowVersion: workspace.header.rowVersion }),
+      });
       await afterMutation(estimateUxCopy(currentLocale(), "คัดลอกโมดูลแล้ว", "Module copied", "モジュールを複製しました"));
-    } finally { setBusy(false); }
+    } finally {
+      setBusy(false);
+    }
   };
   const removeModule = async (group: CostModuleGroup) => {
-    if (!workspace || busy || !(await confirmDialog(`ลบ Main Module "${group.module}" และรายการต้นทุนทั้งหมด ${group.lines.length} รายการ? การลบนี้มีบันทึกประวัติ
-Remove this module and all ${group.lines.length} cost items?`, { danger: true }))) return;
-    setBusy(true); setError("");
+    if (
+      !workspace ||
+      busy ||
+      !(await confirmDialog(
+        `ลบ Main Module "${group.module}" และรายการต้นทุนทั้งหมด ${group.lines.length} รายการ? การลบนี้มีบันทึกประวัติ
+Remove this module and all ${group.lines.length} cost items?`,
+        { danger: true },
+      ))
+    )
+      return;
+    setBusy(true);
+    setError("");
     try {
-      await apiRequest(`/api/v1/estimates/${estimateId}/cost-modules/remove`, { method: "POST", body: JSON.stringify({ categoryCode: group.categoryCode, module: group.module, estimateRowVersion: workspace.header.rowVersion }) });
+      await apiRequest(`/api/v1/estimates/${estimateId}/cost-modules/remove`, {
+        method: "POST",
+        body: JSON.stringify({ categoryCode: group.categoryCode, module: group.module, estimateRowVersion: workspace.header.rowVersion }),
+      });
       await afterMutation("ลบ Main Module แล้ว / Main module removed");
-    } catch (error) { await mutationError(error); }
-    finally { setBusy(false); }
+    } catch (error) {
+      await mutationError(error);
+    } finally {
+      setBusy(false);
+    }
   };
   const copyFromEstimate = async (input: Omit<EstimateCopyInput, "estimateRowVersion" | "ownerId">) => {
     if (!workspace) return false;
-    setBusy(true); setError("");
+    setBusy(true);
+    setError("");
     try {
       const result = await copyEstimateContent(estimateId, { ...input, estimateRowVersion: workspace.header.rowVersion, ownerId: workspace.header.ownerId });
       await afterMutation(copyResultMessage(result));
       return true;
-    } catch (requestError) { await mutationError(requestError); return false; }
-    finally { setBusy(false); }
+    } catch (requestError) {
+      await mutationError(requestError);
+      return false;
+    } finally {
+      setBusy(false);
+    }
   };
   const removeLine = async (kind: "cost" | "manhour" | "expense" | "other", id: number, rowVersion: string) => {
     if (!workspace || !(await confirmDialog("Remove this line from the current revision? This action is audited.", { danger: true }))) return;
-    setBusy(true); setError("");
+    setBusy(true);
+    setError("");
     try {
       if (kind === "cost") await removeCostItem(estimateId, id, workspace.header.rowVersion, rowVersion, "Removed from estimate workspace");
       if (kind === "manhour") await removeEstimateManhour(estimateId, id, workspace.header.rowVersion, rowVersion, "Removed from estimate workspace");
       if (kind === "expense") await removeEstimateExpense(estimateId, id, workspace.header.rowVersion, rowVersion, "Removed from estimate workspace");
       if (kind === "other") await removeEstimateOtherCost(estimateId, id, workspace.header.rowVersion, rowVersion, "Removed from estimate workspace");
       await afterMutation("Line removed");
-    } catch (requestError) { await mutationError(requestError); }
-    finally { setBusy(false); }
+    } catch (requestError) {
+      await mutationError(requestError);
+    } finally {
+      setBusy(false);
+    }
   };
 
-  if (!workspace) return <><button className="back-link" type="button" onClick={onBack}><Icon name="arrowLeft" /><LocalizedText text={"Estimate Cost"} /></button>{error ? <LoadError message={error} retry={() => { void load(); }} /> : null}{loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading estimate workspace…"} /></div> : null}</>;
+  if (!workspace)
+    return (
+      <>
+        <button className="back-link" type="button" onClick={onBack}>
+          <Icon name="arrowLeft" />
+          <LocalizedText text={"Estimate Cost"} />
+        </button>
+        {error ? (
+          <LoadError
+            message={error}
+            retry={() => {
+              void load();
+            }}
+          />
+        ) : null}
+        {loading ? (
+          <div className="empty">
+            <span className="spinner" />
+            <LocalizedText text={"Loading estimate workspace…"} />
+          </div>
+        ) : null}
+      </>
+    );
 
   const header = workspace.header;
   const totals = header.totals;
@@ -831,7 +1561,10 @@ Remove this module and all ${group.lines.length} cost items?`, { danger: true })
     const target = parseEditingKey(key);
     if (!target) return null;
     if (target.id === "new") return liveCopy("บรรทัดใหม่", "a new line", "新しい行");
-    if (target.kind === "cost") { const line = workspace.costItems.find((item) => item.id === target.id); return line ? line.itemCode || line.description : null; }
+    if (target.kind === "cost") {
+      const line = workspace.costItems.find((item) => item.id === target.id);
+      return line ? line.itemCode || line.description : null;
+    }
     if (target.kind === "manhour") return workspace.manhourLines.find((line) => line.id === target.id)?.activity ?? null;
     if (target.kind === "expense") return workspace.expenseLines.find((line) => line.id === target.id)?.description ?? null;
     if (target.kind === "other") return workspace.otherCostLines.find((line) => line.id === target.id)?.description ?? null;
@@ -854,29 +1587,170 @@ Remove this module and all ${group.lines.length} cost items?`, { danger: true })
       ["Owner", header.ownerName, "Created", header.createdDate, "Due", header.dueDate],
       [],
       ["COST ITEMS"],
-      ["Category code", "Category", "Subcategory", "Module", "Item code", "Description", "Brand", "Model", "Specification", "Supplier", "Qty", "Unit", "Unit cost", "Line total", "Price source", "Reference", "Reference project", "Price date", "Owner", "Status", "Remark", "Updated"],
-      ...workspace.costItems.map((line) => [line.categoryCode, line.category, line.subcategory, line.module, line.itemCode, line.description, line.brand, line.model, line.specification, line.supplierName, numberOf(line.quantity), line.unit, numberOf(line.unitCost), numberOf(line.lineTotal), line.priceSource, line.referenceNumber, line.referenceProject, line.priceDate, line.ownerName, line.status, line.remark, line.updatedAt]),
-      [], ["ENGINEERING MAN-HOUR"],
-      ["Discipline", "Package", "Activity", "Department", "Level", "Cost type", "Provider", "Supplier", "Quotation", "Quotation date", "Engineers", "Man-days", "Hours/day", "Daily rate", "Man-hours", "Line cost", "Owner", "Remark", "Updated"],
-      ...workspace.manhourLines.map((line) => [line.discipline, line.package, line.activity, line.department, line.level, line.costType, line.provider, line.supplierName, line.quotationNumber, line.priceDate, numberOf(line.engineers), numberOf(line.manDays), numberOf(line.hoursPerDay), numberOf(line.dailyRate), numberOf(line.manHours), numberOf(line.lineCost), line.ownerName, line.remark, line.updatedAt]),
-      [], ["PROJECT EXPENSE"],
+      [
+        "Category code",
+        "Category",
+        "Subcategory",
+        "Module",
+        "Item code",
+        "Description",
+        "Brand",
+        "Model",
+        "Specification",
+        "Supplier",
+        "Qty",
+        "Unit",
+        "Unit cost",
+        "Line total",
+        "Price source",
+        "Reference",
+        "Reference project",
+        "Price date",
+        "Owner",
+        "Status",
+        "Remark",
+        "Updated",
+      ],
+      ...workspace.costItems.map((line) => [
+        line.categoryCode,
+        line.category,
+        line.subcategory,
+        line.module,
+        line.itemCode,
+        line.description,
+        line.brand,
+        line.model,
+        line.specification,
+        line.supplierName,
+        numberOf(line.quantity),
+        line.unit,
+        numberOf(line.unitCost),
+        numberOf(line.lineTotal),
+        line.priceSource,
+        line.referenceNumber,
+        line.referenceProject,
+        line.priceDate,
+        line.ownerName,
+        line.status,
+        line.remark,
+        line.updatedAt,
+      ]),
+      [],
+      ["ENGINEERING MAN-HOUR"],
+      [
+        "Discipline",
+        "Package",
+        "Activity",
+        "Department",
+        "Level",
+        "Cost type",
+        "Provider",
+        "Supplier",
+        "Quotation",
+        "Quotation date",
+        "Engineers",
+        "Man-days",
+        "Hours/day",
+        "Daily rate",
+        "Man-hours",
+        "Line cost",
+        "Owner",
+        "Remark",
+        "Updated",
+      ],
+      ...workspace.manhourLines.map((line) => [
+        line.discipline,
+        line.package,
+        line.activity,
+        line.department,
+        line.level,
+        line.costType,
+        line.provider,
+        line.supplierName,
+        line.quotationNumber,
+        line.priceDate,
+        numberOf(line.engineers),
+        numberOf(line.manDays),
+        numberOf(line.hoursPerDay),
+        numberOf(line.dailyRate),
+        numberOf(line.manHours),
+        numberOf(line.lineCost),
+        line.ownerName,
+        line.remark,
+        line.updatedAt,
+      ]),
+      [],
+      ["PROJECT EXPENSE"],
       ["Discipline", "Package", "Type", "Description", "Cost type", "Supplier", "Reference", "Qty", "Unit", "Unit cost", "Line total", "Owner", "Remark", "Updated"],
-      ...workspace.expenseLines.map((line) => [line.discipline, line.package, line.expenseType, line.description, line.costType, line.supplierName, line.referenceNumber, numberOf(line.quantity), line.unit, numberOf(line.unitCost), numberOf(line.lineTotal), line.ownerName, line.remark, line.updatedAt]),
-      [], ["OTHER PROJECT COST"],
+      ...workspace.expenseLines.map((line) => [
+        line.discipline,
+        line.package,
+        line.expenseType,
+        line.description,
+        line.costType,
+        line.supplierName,
+        line.referenceNumber,
+        numberOf(line.quantity),
+        line.unit,
+        numberOf(line.unitCost),
+        numberOf(line.lineTotal),
+        line.ownerName,
+        line.remark,
+        line.updatedAt,
+      ]),
+      [],
+      ["OTHER PROJECT COST"],
       ["Category", "Description", "Qty", "Unit", "Unit cost", "Line total", "Remark"],
       ...workspace.otherCostLines.map((line) => [line.category, line.description, numberOf(line.quantity), line.unit, numberOf(line.unitCost), numberOf(line.lineTotal), line.remark]),
-      [], ["ASSIGNMENTS"],
+      [],
+      ["ASSIGNMENTS"],
       ["Section", "Owner", "Support", "Due date", "Status", "Progress %", "Comment"],
-      ...workspace.assignments.map((assignment) => [assignment.section, assignment.ownerName, assignment.supportName, assignment.dueDate, assignment.status, numberOf(assignment.progress), assignment.comment]),
-      [], ["REVISION HISTORY"],
+      ...workspace.assignments.map((assignment) => [
+        assignment.section,
+        assignment.ownerName,
+        assignment.supportName,
+        assignment.dueDate,
+        assignment.status,
+        numberOf(assignment.progress),
+        assignment.comment,
+      ]),
+      [],
+      ["REVISION HISTORY"],
       ["Revision", "Reason", "Description", "Created by", "Created", "Reviewed by", "Reviewed", "Status", "Total"],
-      ...workspace.revisionHistory.map((revision) => [revision.code, revision.reason, revision.description, revision.createdByName, revision.createdAt, revision.reviewedByName, revision.reviewedAt, revision.status, numberOf(revision.total)]),
-      [], ["VALIDATION"],
+      ...workspace.revisionHistory.map((revision) => [
+        revision.code,
+        revision.reason,
+        revision.description,
+        revision.createdByName,
+        revision.createdAt,
+        revision.reviewedByName,
+        revision.reviewedAt,
+        revision.status,
+        numberOf(revision.total),
+      ]),
+      [],
+      ["VALIDATION"],
       ["Severity", "Code", "Message", "Entity type", "Entity ID"],
       ...workspace.validationIssues.map((issue) => [issue.severity, issue.code, issue.message, issue.entityType, issue.entityId]),
-      [], ["TOTALS"],
-      ...(ESTIMATE_OVERHEAD_ENABLED ? [["Overhead state", header.overhead?.state ?? "Missing"], ["Overhead policy version", header.overhead?.policyVersion ?? null], ["Overhead hourly rate", header.overhead?.hourlyRate ?? null], ["Overhead eligible hours", header.overhead?.eligibleDirectHours ?? null], ["Overhead", totals.overhead ?? null]] : []),
-      ["Material", numberOf(totals.material)], ["Engineering", numberOf(totals.engineering)], ["Outsource", numberOf(totals.outsource)], ["Transportation", numberOf(totals.transportation)], ["Accommodation", numberOf(totals.accommodation)], ["Other", numberOf(totals.other)], [`Contingency ${formatNumber(header.contingencyRate)}%`, numberOf(totals.contingency)], ["TOTAL ESTIMATED COST", numberOf(totals.total)],
+      [],
+      ["TOTALS"],
+      ...(ESTIMATE_OVERHEAD_ENABLED
+        ? [
+            ["Overhead state", header.overhead?.state ?? "Missing"],
+            ["Overhead policy version", header.overhead?.policyVersion ?? null],
+            ["Overhead hourly rate", header.overhead?.hourlyRate ?? null],
+            ["Overhead eligible hours", header.overhead?.eligibleDirectHours ?? null],
+            ["Overhead", totals.overhead ?? null],
+          ]
+        : []),
+      ["Material", numberOf(totals.material)],
+      ["Engineering", numberOf(totals.engineering)],
+      ["Outsource", numberOf(totals.outsource)],
+      ["Transportation", numberOf(totals.transportation)],
+      ["Accommodation", numberOf(totals.accommodation)],
+      ["Other", numberOf(totals.other)],
+      [`Contingency ${formatNumber(header.contingencyRate)}%`, numberOf(totals.contingency)],
+      ["TOTAL ESTIMATED COST", numberOf(totals.total)],
     ];
     exportXlsx(rows, `${header.number}_${revisionCode(header.revision)}_${header.status.replaceAll(" ", "-")}_EstimateCost.xlsx`);
     notify("Estimate exported from live workspace");
@@ -889,30 +1763,82 @@ Remove this module and all ${group.lines.length} cost items?`, { danger: true })
   const inReview = header.status === "Engineering Review";
   /* Draft is where costs are filled in; a send-back reopens that same step on the next revision. */
   const rail = [
-    { key: "fill", label: header.status === "Revision Required" ? copy(`แก้ไขตามที่ส่งกลับ · ${revisionCode(header.revision)}`, `Revise as returned · ${revisionCode(header.revision)}`, `差し戻し対応 · ${revisionCode(header.revision)}`) : copy("กรอกต้นทุน (ร่าง)", "Fill in costs (draft)", "原価入力（下書き）"), state: approved || inReview ? "done" : header.status === "Cancelled" ? "off" : "now" },
+    {
+      key: "fill",
+      label:
+        header.status === "Revision Required"
+          ? copy(`แก้ไขตามที่ส่งกลับ · ${revisionCode(header.revision)}`, `Revise as returned · ${revisionCode(header.revision)}`, `差し戻し対応 · ${revisionCode(header.revision)}`)
+          : copy("กรอกต้นทุน (ร่าง)", "Fill in costs (draft)", "原価入力（下書き）"),
+      state: approved || inReview ? "done" : header.status === "Cancelled" ? "off" : "now",
+    },
     { key: "review", label: copy("ตรวจทาน", "Review", "レビュー"), state: approved ? "done" : inReview ? "now" : "later" },
     { key: "approve", label: copy("อนุมัติ", "Approved", "承認"), state: approved ? "done" : "later" },
   ];
   /* Who the estimate waits for (owner 2026-11-06): one of the listed approvers decides, never on their own estimate, and
      every one of them is told by the bell and by email when it is submitted. */
   const review = workspace.review;
-  const deciders = (review?.approvers ?? []).filter((approver) => !approver.isOwner).map((approver) => approver.name).join(" · ") || "—";
+  const deciders =
+    (review?.approvers ?? [])
+      .filter((approver) => !approver.isOwner)
+      .map((approver) => approver.name)
+      .join(" · ") || "—";
   const approvedBy = review?.decision === "Approved" ? review.decidedBy : header.lockedByName;
   const approvedAt = review?.decision === "Approved" ? review.decidedAt : header.lockedAt;
-  const reviewLine = !review || header.status === "Cancelled" ? null
-    : inReview ? <><Icon name="clock" /><span>{review.submittedBy ? copy(`ส่งตรวจโดย ${review.submittedBy}`, `Sent for review by ${review.submittedBy}`, `${review.submittedBy} がレビュー依頼`) : copy("ส่งตรวจแล้ว", "Sent for review", "レビュー依頼済み")}{review.submittedAt ? ` · ${formatDateTime(review.submittedAt)}` : ""}</span>
-      <span>{copy("รออนุมัติจากคนใดคนหนึ่ง:", "Waiting for one of:", "承認待ち（いずれか1名）:")} <strong>{deciders}</strong></span></>
-      : approved ? <><Icon name="checkCircle" /><span>{copy("อนุมัติโดย", "Approved by", "承認者")} <strong>{approvedBy ?? "—"}</strong>{approvedAt ? ` · ${formatDateTime(approvedAt)}` : ""}</span></>
-        : <><Icon name="users" /><span>{copy("กดส่งตรวจแล้ว ระบบจะแจ้งผู้อนุมัติ:", "Submitting tells the approvers:", "提出すると承認者に通知:")} <strong>{deciders}</strong></span></>;
+  const reviewLine =
+    !review || header.status === "Cancelled" ? null : inReview ? (
+      <>
+        <Icon name="clock" />
+        <span>
+          {review.submittedBy
+            ? copy(`ส่งตรวจโดย ${review.submittedBy}`, `Sent for review by ${review.submittedBy}`, `${review.submittedBy} がレビュー依頼`)
+            : copy("ส่งตรวจแล้ว", "Sent for review", "レビュー依頼済み")}
+          {review.submittedAt ? ` · ${formatDateTime(review.submittedAt)}` : ""}
+        </span>
+        <span>
+          {copy("รออนุมัติจากคนใดคนหนึ่ง:", "Waiting for one of:", "承認待ち（いずれか1名）:")} <strong>{deciders}</strong>
+        </span>
+      </>
+    ) : approved ? (
+      <>
+        <Icon name="checkCircle" />
+        <span>
+          {copy("อนุมัติโดย", "Approved by", "承認者")} <strong>{approvedBy ?? "—"}</strong>
+          {approvedAt ? ` · ${formatDateTime(approvedAt)}` : ""}
+        </span>
+      </>
+    ) : (
+      <>
+        <Icon name="users" />
+        <span>
+          {copy("กดส่งตรวจแล้ว ระบบจะแจ้งผู้อนุมัติ:", "Submitting tells the approvers:", "提出すると承認者に通知:")} <strong>{deciders}</strong>
+        </span>
+      </>
+    );
   const manDays = workspace.manhourLines.reduce((sum, line) => sum + numberOf(line.manDays) * numberOf(line.engineers), 0);
   /* The cost bar is the breakdown; each part opens the tab its lines live on. */
   const segments: { key: string; label: string; value: number; note: string; color: string; tab: WorkspaceTab }[] = [
-    { key: "material", label: copy("วัสดุและอุปกรณ์", "Material", "材料・機器"), value: numberOf(totals.material), note: copy(`${workspace.costItems.length} รายการ`, `${workspace.costItems.length} item(s)`, `${workspace.costItems.length}件`), color: "var(--c1)", tab: "cost" },
+    {
+      key: "material",
+      label: copy("วัสดุและอุปกรณ์", "Material", "材料・機器"),
+      value: numberOf(totals.material),
+      note: copy(`${workspace.costItems.length} รายการ`, `${workspace.costItems.length} item(s)`, `${workspace.costItems.length}件`),
+      color: "var(--c1)",
+      tab: "cost",
+    },
     { key: "engineering", label: copy("ค่าแรงวิศวกรรม", "Engineering", "技術工数"), value: numberOf(totals.engineering), note: `${formatNumber(manDays)} Man-day`, color: "var(--c2)", tab: "manhour" },
     { key: "outsource", label: "Outsource", value: numberOf(totals.outsource), note: "", color: "var(--c5)", tab: "other" },
-    { key: "travel", label: copy("เดินทาง · ที่พัก", "Travel · hotel", "交通・宿泊"), value: numberOf(totals.transportation) + numberOf(totals.accommodation), note: copy("ตามสาขา", "per discipline", "分野別"), color: "var(--c7)", tab: "manhour" },
+    {
+      key: "travel",
+      label: copy("เดินทาง · ที่พัก", "Travel · hotel", "交通・宿泊"),
+      value: numberOf(totals.transportation) + numberOf(totals.accommodation),
+      note: copy("ตามสาขา", "per discipline", "分野別"),
+      color: "var(--c7)",
+      tab: "manhour",
+    },
     { key: "other", label: copy("อื่นๆ", "Other", "その他"), value: numberOf(totals.other), note: "", color: "var(--c4)", tab: "other" },
-    ...(ESTIMATE_OVERHEAD_ENABLED && numberOf(totals.overhead) > 0 ? [{ key: "overhead", label: "Overhead", value: numberOf(totals.overhead), note: "", color: "var(--c6)", tab: "summary" as WorkspaceTab }] : []),
+    ...(ESTIMATE_OVERHEAD_ENABLED && numberOf(totals.overhead) > 0
+      ? [{ key: "overhead", label: "Overhead", value: numberOf(totals.overhead), note: "", color: "var(--c6)", tab: "summary" as WorkspaceTab }]
+      : []),
     { key: "contingency", label: `Contingency ${formatNumber(header.contingencyRate)}%`, value: numberOf(totals.contingency), note: "", color: "var(--c8)", tab: "other" },
   ];
   const onSummary = tab === "summary" || tab === "review";
@@ -920,300 +1846,989 @@ Remove this module and all ${group.lines.length} cost items?`, { danger: true })
   const previousEntry = header.revision > 0 ? workspace.revisionHistory.find((entry) => entry.revision === header.revision - 1) : undefined;
   const previousTotal = previousEntry ? numberOf(previousEntry.total) : null;
   const revisionDelta = previousTotal === null ? 0 : numberOf(totals.total) - previousTotal;
-  const submitBlocker = criticalCount > 0
-    ? copy(`แก้ ${criticalCount} ข้อผิดพลาดก่อนส่งตรวจ`, `Resolve ${criticalCount} error(s) before submitting`, `提出前に${criticalCount}件のエラーを修正`)
-    : classificationDirty ? copy("บันทึกการจัดหมวดก่อนส่งตรวจ", "Save the category changes before submitting", "提出前に分類を保存") : undefined;
+  const submitBlocker =
+    criticalCount > 0
+      ? copy(`แก้ ${criticalCount} ข้อผิดพลาดก่อนส่งตรวจ`, `Resolve ${criticalCount} error(s) before submitting`, `提出前に${criticalCount}件のエラーを修正`)
+      : classificationDirty
+        ? copy("บันทึกการจัดหมวดก่อนส่งตรวจ", "Save the category changes before submitting", "提出前に分類を保存")
+        : undefined;
 
   /* V2 (DESIGN.md 0.4): one filled button for the step that moves the estimate forward, the others under More actions. */
   const v2Actions: Record<EstimateHeaderAction, HeaderAction | null> = {
-    approve: capabilities.canApprove ? { key: "approve", label: uiText("Approve"), icon: "check", guide: "estimate.approve", disabled: busy || criticalCount > 0 || classificationDirty, onClick: () => setWorkflowAction("approve") } : null,
-    submit: capabilities.canSubmit ? { key: "submit", label: uiText("Submit Review"), icon: "send", guide: "estimate.submit", disabled: busy || criticalCount > 0 || classificationDirty, title: submitBlocker, onClick: () => setWorkflowAction("submit") } : null,
-    "export-erp": approved ? { key: "export-erp", label: copy("Export ไป ERP", "Export to ERP", "ERPへ出力"), icon: "download", disabled: busy || !erpExport, title: erpExport ? undefined : copy("ดูสิ่งที่ยังขาดได้ในแท็บสรุป", "The summary tab shows what is still missing", "不足点はサマリーで確認できます"), onClick: () => erpExport?.run() } : null,
-    "create-revision": capabilities.canCreateRevision ? { key: "create-revision", label: uiText("Create Revision"), icon: "gitBranch", disabled: busy, onClick: () => setWorkflowAction("create-revision") } : null,
-    "request-revision": capabilities.canRequestRevision ? { key: "request-revision", label: uiText("Request Revision"), icon: "arrowLeft", disabled: busy, onClick: () => setWorkflowAction("request-revision") } : null,
+    approve: capabilities.canApprove
+      ? { key: "approve", label: uiText("Approve"), icon: "check", guide: "estimate.approve", disabled: busy || criticalCount > 0 || classificationDirty, onClick: () => setWorkflowAction("approve") }
+      : null,
+    submit: capabilities.canSubmit
+      ? {
+          key: "submit",
+          label: uiText("Submit Review"),
+          icon: "send",
+          guide: "estimate.submit",
+          disabled: busy || criticalCount > 0 || classificationDirty,
+          title: submitBlocker,
+          onClick: () => setWorkflowAction("submit"),
+        }
+      : null,
+    "export-erp": approved
+      ? {
+          key: "export-erp",
+          label: copy("Export ไป ERP", "Export to ERP", "ERPへ出力"),
+          icon: "download",
+          disabled: busy || !erpExport,
+          title: erpExport ? undefined : copy("ดูสิ่งที่ยังขาดได้ในแท็บสรุป", "The summary tab shows what is still missing", "不足点はサマリーで確認できます"),
+          onClick: () => erpExport?.run(),
+        }
+      : null,
+    "create-revision": capabilities.canCreateRevision
+      ? { key: "create-revision", label: uiText("Create Revision"), icon: "gitBranch", disabled: busy, onClick: () => setWorkflowAction("create-revision") }
+      : null,
+    "request-revision": capabilities.canRequestRevision
+      ? { key: "request-revision", label: uiText("Request Revision"), icon: "arrowLeft", disabled: busy, onClick: () => setWorkflowAction("request-revision") }
+      : null,
   };
-  const v2PrimaryKey = estimatePrimaryAction({ approve: Boolean(v2Actions.approve), submit: Boolean(v2Actions.submit), exportErp: Boolean(v2Actions["export-erp"]), createRevision: Boolean(v2Actions["create-revision"]), requestRevision: Boolean(v2Actions["request-revision"]) });
+  const v2PrimaryKey = estimatePrimaryAction({
+    approve: Boolean(v2Actions.approve),
+    submit: Boolean(v2Actions.submit),
+    exportErp: Boolean(v2Actions["export-erp"]),
+    createRevision: Boolean(v2Actions["create-revision"]),
+    requestRevision: Boolean(v2Actions["request-revision"]),
+  });
   const v2Primary = v2PrimaryKey ? v2Actions[v2PrimaryKey] : null;
   const v2More: HeaderAction[] = [
-    ...(["submit", "approve", "request-revision", "create-revision", "export-erp"] as const).map((key) => v2Actions[key]).filter((action): action is HeaderAction => action !== null && action.key !== v2PrimaryKey),
-    { key: "export-excel", label: uiText("Export Excel"), icon: "download", disabled: header.status !== "Approved", title: header.status !== "Approved" ? uiText("Approve the estimate before export") : undefined, onClick: exportWorkspace },
-    { key: "refresh", label: uiText("Refresh"), icon: "refresh", disabled: loading || busy, onClick: () => { void load(); } },
+    ...(["submit", "approve", "request-revision", "create-revision", "export-erp"] as const)
+      .map((key) => v2Actions[key])
+      .filter((action): action is HeaderAction => action !== null && action.key !== v2PrimaryKey),
+    {
+      key: "export-excel",
+      label: uiText("Export Excel"),
+      icon: "download",
+      disabled: header.status !== "Approved",
+      title: header.status !== "Approved" ? uiText("Approve the estimate before export") : undefined,
+      onClick: exportWorkspace,
+    },
+    {
+      key: "refresh",
+      label: uiText("Refresh"),
+      icon: "refresh",
+      disabled: loading || busy,
+      onClick: () => {
+        void load();
+      },
+    },
   ];
-  const railList = <ol className="est-rail" aria-label={copy("ขั้นตอน", "Workflow", "ワークフロー")}>
-            {rail.map((step, index) => <li key={step.key} className={`est-step ${step.state}`} aria-current={step.state === "now" ? "step" : undefined}><span className="est-dot">{step.state === "done" ? <Icon name="check" /> : index + 1}</span>{step.label}</li>)}
-          </ol>;
-  const checksChip = validationCount
-            ? <button className={`est-issue ${criticalCount ? "red" : "amber"}`} type="button" onClick={() => setTab("validation")}><Icon name="alertTriangle" />{[criticalCount ? copy(`${criticalCount} ต้องแก้ก่อนส่ง`, `${criticalCount} to fix before submitting`, `提出前に${criticalCount}件修正`) : "", warningCount ? copy(`${warningCount} คำเตือน`, `${warningCount} warning(s)`, `警告${warningCount}件`) : ""].filter(Boolean).join(" · ")}</button>
-            : <span className="est-issue green"><Icon name="checkCircle" />{copy("ผ่านการตรวจของระบบ", "System checks passed", "システムチェック合格")}</span>;
-  const reviewNote = reviewLine ? <p className={`est-review${inReview ? " waiting" : ""}`} data-guide="estimate.review">{reviewLine}</p> : null;
-  return <DraftHoldProvider value={holds}><div ref={workspaceRoot} className="estimate-live-root est-workspace">
-    <div className="breadcrumb"><button type="button" onClick={onBack}><LocalizedText text={"Estimate Cost"} /></button><Icon name="chevronRight" /><span>{header.number}</span></div>
-    {v2 ? <EstimateHeaderV2
-      title={header.projectName}
-      badges={<><Badge tone={statusView.tone}><span>{statusView.label}</span></Badge><span className="pill mono">{revisionCode(header.revision)}</span></>}
-      meta={<>
-        <span className="mono"><strong>{header.number}</strong></span>
-        <span>{header.customerCode} — {header.customerName}</span>
-        <span className="mono">Inquiry {header.inquiryNumber}</span>
-        <span><LocalizedText text="Estimate owner" />: <strong>{header.ownerName}</strong></span>
-        <span><LocalizedText text="Due" />: <strong className={currentLate ? "red-text" : undefined}>{formatDate(header.dueDate)}</strong>{isClosedEstimateStatus(header.status) ? null : <em className={currentLate ? "red-text" : undefined}> · {dueDistance(header.dueDate, businessDate())}</em>}</span>
-      </>}
-      viewers={<RecordViewers viewers={viewers} describe={describeLine} />}
-      primary={v2Primary}
-      more={v2More}
-      moreMeta={<><LocalizedText text="Created" />: {formatDate(header.createdDate)}</>}
-      destructive={<DocumentLifecycleButton kind="estimates" id={header.id} notify={notify} onChanged={async () => { onBack(); await refreshBootstrap(); }} />}
-    /> : <>
-      <header className="est-head">
-        <div className="est-head-text">
-          <div className="est-title"><h1>{header.projectName}</h1><Badge tone={statusView.tone}><span>{statusView.label}</span></Badge></div>
-          <div className="est-meta">
-            <span className="mono"><strong>{header.number} · {revisionCode(header.revision)}</strong></span>
-            <span>{header.customerCode} — {header.customerName}</span>
-            <span className="mono">Inquiry {header.inquiryNumber}</span>
-            <span><LocalizedText text="Estimate owner" />: <strong>{header.ownerName}</strong></span>
-            <span><LocalizedText text="Due" />: <strong className={currentLate ? "red-text" : undefined}>{formatDate(header.dueDate)}</strong>{isClosedEstimateStatus(header.status) ? null : <em className={currentLate ? "red-text" : undefined}> · {dueDistance(header.dueDate, businessDate())}</em>}</span>
+  const railList = (
+    <ol className="est-rail" aria-label={copy("ขั้นตอน", "Workflow", "ワークフロー")}>
+      {rail.map((step, index) => (
+        <li key={step.key} className={`est-step ${step.state}`} aria-current={step.state === "now" ? "step" : undefined}>
+          <span className="est-dot">{step.state === "done" ? <Icon name="check" /> : index + 1}</span>
+          {step.label}
+        </li>
+      ))}
+    </ol>
+  );
+  const checksChip = validationCount ? (
+    <button className={`est-issue ${criticalCount ? "red" : "amber"}`} type="button" onClick={() => setTab("validation")}>
+      <Icon name="alertTriangle" />
+      {[
+        criticalCount ? copy(`${criticalCount} ต้องแก้ก่อนส่ง`, `${criticalCount} to fix before submitting`, `提出前に${criticalCount}件修正`) : "",
+        warningCount ? copy(`${warningCount} คำเตือน`, `${warningCount} warning(s)`, `警告${warningCount}件`) : "",
+      ]
+        .filter(Boolean)
+        .join(" · ")}
+    </button>
+  ) : (
+    <span className="est-issue green">
+      <Icon name="checkCircle" />
+      {copy("ผ่านการตรวจของระบบ", "System checks passed", "システムチェック合格")}
+    </span>
+  );
+  const reviewNote = reviewLine ? (
+    <p className={`est-review${inReview ? " waiting" : ""}`} data-guide="estimate.review">
+      {reviewLine}
+    </p>
+  ) : null;
+  return (
+    <DraftHoldProvider value={holds}>
+      <div ref={workspaceRoot} className="estimate-live-root est-workspace">
+        <div className="breadcrumb">
+          <button type="button" onClick={onBack}>
+            <LocalizedText text={"Estimate Cost"} />
+          </button>
+          <Icon name="chevronRight" />
+          <span>{header.number}</span>
+        </div>
+        {v2 ? (
+          <EstimateHeaderV2
+            title={header.projectName}
+            badges={
+              <>
+                <Badge tone={statusView.tone}>
+                  <span>{statusView.label}</span>
+                </Badge>
+                <span className="pill mono">{revisionCode(header.revision)}</span>
+              </>
+            }
+            meta={
+              <>
+                <span className="mono">
+                  <strong>{header.number}</strong>
+                </span>
+                <span>
+                  {header.customerCode} — {header.customerName}
+                </span>
+                <span className="mono">Inquiry {header.inquiryNumber}</span>
+                <span>
+                  <LocalizedText text="Estimate owner" />: <strong>{header.ownerName}</strong>
+                </span>
+                <span>
+                  <LocalizedText text="Due" />: <strong className={currentLate ? "red-text" : undefined}>{formatDate(header.dueDate)}</strong>
+                  {isClosedEstimateStatus(header.status) ? null : <em className={currentLate ? "red-text" : undefined}> · {dueDistance(header.dueDate, businessDate())}</em>}
+                </span>
+              </>
+            }
+            viewers={<RecordViewers viewers={viewers} describe={describeLine} />}
+            primary={v2Primary}
+            more={v2More}
+            moreMeta={
+              <>
+                <LocalizedText text="Created" />: {formatDate(header.createdDate)}
+              </>
+            }
+            destructive={
+              <DocumentLifecycleButton
+                kind="estimates"
+                id={header.id}
+                notify={notify}
+                onChanged={async () => {
+                  onBack();
+                  await refreshBootstrap();
+                }}
+              />
+            }
+          />
+        ) : (
+          <>
+            <header className="est-head">
+              <div className="est-head-text">
+                <div className="est-title">
+                  <h1>{header.projectName}</h1>
+                  <Badge tone={statusView.tone}>
+                    <span>{statusView.label}</span>
+                  </Badge>
+                </div>
+                <div className="est-meta">
+                  <span className="mono">
+                    <strong>
+                      {header.number} · {revisionCode(header.revision)}
+                    </strong>
+                  </span>
+                  <span>
+                    {header.customerCode} — {header.customerName}
+                  </span>
+                  <span className="mono">Inquiry {header.inquiryNumber}</span>
+                  <span>
+                    <LocalizedText text="Estimate owner" />: <strong>{header.ownerName}</strong>
+                  </span>
+                  <span>
+                    <LocalizedText text="Due" />: <strong className={currentLate ? "red-text" : undefined}>{formatDate(header.dueDate)}</strong>
+                    {isClosedEstimateStatus(header.status) ? null : <em className={currentLate ? "red-text" : undefined}> · {dueDistance(header.dueDate, businessDate())}</em>}
+                  </span>
+                </div>
+              </div>
+              <div className="est-head-actions">
+                <RecordViewers viewers={viewers} describe={describeLine} />
+                <details className="estimate-more est-menu">
+                  <summary className="btn default est-icon-btn" aria-label={copy("ตัวเลือกเพิ่มเติม", "More options", "その他の操作")} title={copy("ตัวเลือกเพิ่มเติม", "More options", "その他の操作")}>
+                    <Icon name="more" />
+                  </summary>
+                  <div className="estimate-more-content">
+                    <div className="estimate-document-meta">
+                      <span>
+                        <LocalizedText text="Created" />: {formatDate(header.createdDate)}
+                      </span>
+                    </div>
+                    <button
+                      className="btn default"
+                      type="button"
+                      disabled={header.status !== "Approved"}
+                      title={header.status !== "Approved" ? "Approve the estimate before export" : undefined}
+                      onClick={exportWorkspace}
+                    >
+                      <Icon name="download" />
+                      <LocalizedText text={"Export Excel"} />
+                    </button>
+                    <button
+                      className="btn default"
+                      type="button"
+                      disabled={loading || busy}
+                      onClick={() => {
+                        void load();
+                      }}
+                    >
+                      <Icon name="refresh" />
+                      <LocalizedText text={"Refresh"} />
+                    </button>
+                    <DocumentLifecycleButton
+                      kind="estimates"
+                      id={header.id}
+                      notify={notify}
+                      onChanged={async () => {
+                        onBack();
+                        await refreshBootstrap();
+                      }}
+                    />
+                  </div>
+                </details>
+                {capabilities.canSubmit ? (
+                  <button
+                    className="btn primary"
+                    type="button"
+                    data-guide="estimate.submit"
+                    disabled={busy || criticalCount > 0 || classificationDirty}
+                    title={submitBlocker}
+                    onClick={() => setWorkflowAction("submit")}
+                  >
+                    <Icon name="send" />
+                    <LocalizedText text={"Submit Review"} />
+                  </button>
+                ) : null}
+                {capabilities.canRequestRevision ? (
+                  <button className="btn warn" type="button" disabled={busy} onClick={() => setWorkflowAction("request-revision")}>
+                    <Icon name="refresh" />
+                    <LocalizedText text={"Request Revision"} />
+                  </button>
+                ) : null}
+                {capabilities.canCreateRevision ? (
+                  <button className="btn default" type="button" disabled={busy} onClick={() => setWorkflowAction("create-revision")}>
+                    <Icon name="gitBranch" />
+                    <LocalizedText text={"Create Revision"} />
+                  </button>
+                ) : null}
+                {approved ? (
+                  <button
+                    className="btn primary"
+                    type="button"
+                    disabled={busy || !erpExport}
+                    title={erpExport ? undefined : copy("ดูสิ่งที่ยังขาดได้ในแท็บสรุป", "The summary tab shows what is still missing", "不足点はサマリーで確認できます")}
+                    onClick={() => erpExport?.run()}
+                  >
+                    <Icon name="download" />
+                    {copy("Export ไป ERP", "Export to ERP", "ERPへ出力")}
+                  </button>
+                ) : null}
+                {capabilities.canApprove ? (
+                  <button className="btn success" type="button" data-guide="estimate.approve" disabled={busy || criticalCount > 0 || classificationDirty} onClick={() => setWorkflowAction("approve")}>
+                    <Icon name="checkCircle" />
+                    <LocalizedText text={"Approve"} />
+                  </button>
+                ) : null}
+              </div>
+            </header>
+          </>
+        )}
+        {header.archived ? (
+          <div className="info-strip">
+            <Icon name="lock" />
+            <LocalizedText text="Archived document — read only" />
           </div>
-        </div>
-        <div className="est-head-actions">
-          <RecordViewers viewers={viewers} describe={describeLine} />
-          <details className="estimate-more est-menu"><summary className="btn default est-icon-btn" aria-label={copy("ตัวเลือกเพิ่มเติม", "More options", "その他の操作")} title={copy("ตัวเลือกเพิ่มเติม", "More options", "その他の操作")}><Icon name="more" /></summary><div className="estimate-more-content">
-            <div className="estimate-document-meta"><span><LocalizedText text="Created" />: {formatDate(header.createdDate)}</span></div>
-            <button className="btn default" type="button" disabled={header.status !== "Approved"} title={header.status !== "Approved" ? "Approve the estimate before export" : undefined} onClick={exportWorkspace}><Icon name="download" /><LocalizedText text={"Export Excel"} /></button>
-            <button className="btn default" type="button" disabled={loading || busy} onClick={() => { void load(); }}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button>
-            <DocumentLifecycleButton kind="estimates" id={header.id} notify={notify} onChanged={async () => { onBack(); await refreshBootstrap(); }} />
-          </div></details>
-          {capabilities.canSubmit ? <button className="btn primary" type="button" data-guide="estimate.submit" disabled={busy || criticalCount > 0 || classificationDirty} title={submitBlocker} onClick={() => setWorkflowAction("submit")}><Icon name="send" /><LocalizedText text={"Submit Review"} /></button> : null}
-          {capabilities.canRequestRevision ? <button className="btn warn" type="button" disabled={busy} onClick={() => setWorkflowAction("request-revision")}><Icon name="refresh" /><LocalizedText text={"Request Revision"} /></button> : null}
-          {capabilities.canCreateRevision ? <button className="btn default" type="button" disabled={busy} onClick={() => setWorkflowAction("create-revision")}><Icon name="gitBranch" /><LocalizedText text={"Create Revision"} /></button> : null}
-          {approved ? <button className="btn primary" type="button" disabled={busy || !erpExport} title={erpExport ? undefined : copy("ดูสิ่งที่ยังขาดได้ในแท็บสรุป", "The summary tab shows what is still missing", "不足点はサマリーで確認できます")} onClick={() => erpExport?.run()}><Icon name="download" />{copy("Export ไป ERP", "Export to ERP", "ERPへ出力")}</button> : null}
-          {capabilities.canApprove ? <button className="btn success" type="button" data-guide="estimate.approve" disabled={busy || criticalCount > 0 || classificationDirty} onClick={() => setWorkflowAction("approve")}><Icon name="checkCircle" /><LocalizedText text={"Approve"} /></button> : null}
-        </div>
-      </header>
-    </>}
-    {header.archived ? <div className="info-strip"><Icon name="lock" /><LocalizedText text="Archived document — read only" /></div> : null}
-    {waitingOn ? <div className="info-strip amber" role="status"><Icon name="refresh" /><span><strong>{waitingOn.length
-      ? `${liveCopy("แก้ไขโดย", "Changed by", "変更者：")} ${waitingOn.join(", ")}`
-      : liveCopy("Estimate นี้มีการแก้ไข", "This estimate was changed", "この見積は変更されました")}</strong>{" · "}
-      {liveCopy("จะอัปเดตให้ทันทีที่คุณบันทึกหรือปิดสิ่งที่กำลังแก้", "It updates as soon as you save or close what you are editing.", "編集中の内容を保存するか閉じるとすぐに更新されます。")}</span></div> : null}
-    {sentBack ? <div className="info-strip amber est-sentback" role="status"><Icon name="alertTriangle" /><span><strong>{[sentBack.reviewedByName, sentBack.reviewedAt ? formatDate(sentBack.reviewedAt) : ""].filter(Boolean).join(" · ") || copy("ผู้ตรวจ", "Reviewer", "レビュー担当")}</strong>{" · "}{copy("ส่งกลับให้แก้:", "returned it:", "差し戻し理由:")} “{sentBack.reason.trim() || copy("ไม่ได้ระบุเหตุผล", "No reason was given", "理由の記載なし")}”</span><span className="spacer" /><button className="link-btn" type="button" onClick={() => setTab("revision")}>{copy("ดูประวัติ Revision", "Open revision history", "改訂履歴を開く")}<Icon name="arrowRight" /></button></div> : null}
-    {classificationDirty ? <div className="info-strip amber"><Icon name="alertTriangle" /><span>{copy("มีการจัดหมวดที่ยังไม่บันทึก กรุณาบันทึกก่อนส่งตรวจ", "Save category changes before submitting for review.", "提出前に分類の変更を保存してください。")}</span><button className="link-btn" type="button" onClick={() => setTab("summary")}>{copy("กลับไปบันทึก", "Return to save", "保存へ戻る")}</button></div> : null}
-    {error ? <LoadError message={error} retry={() => { void load(); }} /> : null}
-    {v2 ? <>
-      <section className="pge-flow" aria-label={copy("ขั้นตอน", "Workflow", "ワークフロー")}>{railList}{checksChip}{reviewNote}</section>
-      <PegasusSummaryBar label={copy("ภาพรวมต้นทุน", "Cost overview", "原価概要")} cells={[
-        ...segments.map((segment) => ({ key: segment.key, label: segment.label, color: segment.color, value: formatMoney(segment.value), onClick: () => setTab(segment.tab),
-          hint: segmentBase > 0 && segment.value > 0 ? `${Math.round((segment.value / segmentBase) * 100)}%` : undefined, note: segment.note || undefined })),
-        { key: "total", total: true, label: copy("ต้นทุนรวม", "Total cost", "原価合計"), value: formatMoney(totals.total), hint: revisionCode(header.revision),
-          note: previousTotal === null ? copy("ต้นทุนภายใน", "Internal cost", "社内原価") : revisionDelta === 0
-            ? copy(`เท่ากับ ${revisionCode(header.revision - 1)}`, `Same as ${revisionCode(header.revision - 1)}`, `${revisionCode(header.revision - 1)} と同額`)
-            : `${revisionDelta > 0 ? "+" : "−"}${formatMoney(Math.abs(revisionDelta))} ${copy("จาก", "vs", "前版比")} ${revisionCode(header.revision - 1)}` },
-      ]} />
-    </> : <>
-      <section className="panel est-overview" aria-label={copy("ภาพรวมต้นทุน", "Cost overview", "原価概要")}>
-        <div className="est-overview-main">
-          <div className="est-overview-top">
-            {railList}
-            {checksChip}
+        ) : null}
+        {waitingOn ? (
+          <div className="info-strip amber" role="status">
+            <Icon name="refresh" />
+            <span>
+              <strong>
+                {waitingOn.length
+                  ? `${liveCopy("แก้ไขโดย", "Changed by", "変更者：")} ${waitingOn.join(", ")}`
+                  : liveCopy("Estimate นี้มีการแก้ไข", "This estimate was changed", "この見積は変更されました")}
+              </strong>
+              {" · "}
+              {liveCopy("จะอัปเดตให้ทันทีที่คุณบันทึกหรือปิดสิ่งที่กำลังแก้", "It updates as soon as you save or close what you are editing.", "編集中の内容を保存するか閉じるとすぐに更新されます。")}
+            </span>
           </div>
-          {reviewNote}
-          {segmentBase > 0
-            ? <div className="est-costbar" role="img" aria-label={segments.filter((segment) => segment.value > 0).map((segment) => `${segment.label} ${formatMoney(segment.value)}`).join(" · ")}>{segments.map((segment) => segment.value > 0 ? <i key={segment.key} style={{ width: `${(segment.value / segmentBase) * 100}%`, background: segment.color }} /> : null)}</div>
-            : <div className="est-costbar empty"><span>{copy("ยังไม่มีต้นทุน", "No cost yet", "原価なし")}</span></div>}
-          <div className="est-legend">
-            {segments.map((segment) => <button key={segment.key} type="button" className="est-legend-item" onClick={() => setTab(segment.tab)}>
-              <span><i style={{ background: segment.color }} />{segment.label}</span>
-              <strong>{formatMoney(segment.value)}</strong>
-              {segment.note ? <em>{segment.note}</em> : null}
-            </button>)}
+        ) : null}
+        {sentBack ? (
+          <div className="info-strip amber est-sentback" role="status">
+            <Icon name="alertTriangle" />
+            <span>
+              <strong>{[sentBack.reviewedByName, sentBack.reviewedAt ? formatDate(sentBack.reviewedAt) : ""].filter(Boolean).join(" · ") || copy("ผู้ตรวจ", "Reviewer", "レビュー担当")}</strong>
+              {" · "}
+              {copy("ส่งกลับให้แก้:", "returned it:", "差し戻し理由:")} “{sentBack.reason.trim() || copy("ไม่ได้ระบุเหตุผล", "No reason was given", "理由の記載なし")}”
+            </span>
+            <span className="spacer" />
+            <button className="link-btn" type="button" onClick={() => setTab("revision")}>
+              {copy("ดูประวัติ Revision", "Open revision history", "改訂履歴を開く")}
+              <Icon name="arrowRight" />
+            </button>
           </div>
+        ) : null}
+        {classificationDirty ? (
+          <div className="info-strip amber">
+            <Icon name="alertTriangle" />
+            <span>{copy("มีการจัดหมวดที่ยังไม่บันทึก กรุณาบันทึกก่อนส่งตรวจ", "Save category changes before submitting for review.", "提出前に分類の変更を保存してください。")}</span>
+            <button className="link-btn" type="button" onClick={() => setTab("summary")}>
+              {copy("กลับไปบันทึก", "Return to save", "保存へ戻る")}
+            </button>
+          </div>
+        ) : null}
+        {error ? (
+          <LoadError
+            message={error}
+            retry={() => {
+              void load();
+            }}
+          />
+        ) : null}
+        {v2 ? (
+          <>
+            <section className="pge-flow" aria-label={copy("ขั้นตอน", "Workflow", "ワークフロー")}>
+              {railList}
+              {checksChip}
+              {reviewNote}
+            </section>
+            <PegasusSummaryBar
+              label={copy("ภาพรวมต้นทุน", "Cost overview", "原価概要")}
+              cells={[
+                ...segments.map((segment) => ({
+                  key: segment.key,
+                  label: segment.label,
+                  color: segment.color,
+                  value: formatMoney(segment.value),
+                  onClick: () => setTab(segment.tab),
+                  hint: segmentBase > 0 && segment.value > 0 ? `${Math.round((segment.value / segmentBase) * 100)}%` : undefined,
+                  note: segment.note || undefined,
+                })),
+                {
+                  key: "total",
+                  total: true,
+                  label: copy("ต้นทุนรวม", "Total cost", "原価合計"),
+                  value: formatMoney(totals.total),
+                  hint: revisionCode(header.revision),
+                  note:
+                    previousTotal === null
+                      ? copy("ต้นทุนภายใน", "Internal cost", "社内原価")
+                      : revisionDelta === 0
+                        ? copy(`เท่ากับ ${revisionCode(header.revision - 1)}`, `Same as ${revisionCode(header.revision - 1)}`, `${revisionCode(header.revision - 1)} と同額`)
+                        : `${revisionDelta > 0 ? "+" : "−"}${formatMoney(Math.abs(revisionDelta))} ${copy("จาก", "vs", "前版比")} ${revisionCode(header.revision - 1)}`,
+                },
+              ]}
+            />
+          </>
+        ) : (
+          <>
+            <section className="panel est-overview" aria-label={copy("ภาพรวมต้นทุน", "Cost overview", "原価概要")}>
+              <div className="est-overview-main">
+                <div className="est-overview-top">
+                  {railList}
+                  {checksChip}
+                </div>
+                {reviewNote}
+                {segmentBase > 0 ? (
+                  <div
+                    className="est-costbar"
+                    role="img"
+                    aria-label={segments
+                      .filter((segment) => segment.value > 0)
+                      .map((segment) => `${segment.label} ${formatMoney(segment.value)}`)
+                      .join(" · ")}
+                  >
+                    {segments.map((segment) => (segment.value > 0 ? <i key={segment.key} style={{ width: `${(segment.value / segmentBase) * 100}%`, background: segment.color }} /> : null))}
+                  </div>
+                ) : (
+                  <div className="est-costbar empty">
+                    <span>{copy("ยังไม่มีต้นทุน", "No cost yet", "原価なし")}</span>
+                  </div>
+                )}
+                <div className="est-legend">
+                  {segments.map((segment) => (
+                    <button key={segment.key} type="button" className="est-legend-item" onClick={() => setTab(segment.tab)}>
+                      <span>
+                        <i style={{ background: segment.color }} />
+                        {segment.label}
+                      </span>
+                      <strong>{formatMoney(segment.value)}</strong>
+                      {segment.note ? <em>{segment.note}</em> : null}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="est-total">
+                <span>{copy("ต้นทุนรวมโดยประมาณ", "Total estimated cost", "見積原価合計")}</span>
+                <strong>{formatMoney(totals.total)}</strong>
+                {previousTotal !== null ? (
+                  <span className={revisionDelta > 0 ? "est-delta up" : revisionDelta < 0 ? "est-delta down" : "est-delta"}>
+                    {revisionDelta === 0
+                      ? copy(`เท่ากับ ${revisionCode(header.revision - 1)}`, `Same as ${revisionCode(header.revision - 1)}`, `${revisionCode(header.revision - 1)} と同額`)
+                      : `${revisionDelta > 0 ? "+" : "−"}${formatMoney(Math.abs(revisionDelta))} ${copy("จาก", "vs", "前版比")} ${revisionCode(header.revision - 1)}`}
+                  </span>
+                ) : null}
+                <span>
+                  {copy("ต้นทุนภายใน", "Internal cost", "社内原価")} · {revisionCode(header.revision)}
+                </span>
+              </div>
+            </section>
+          </>
+        )}
+        {approved ? (
+          <section className="panel est-handoff" aria-label={copy("ส่งต่อ", "Hand-off", "引き継ぎ")}>
+            <div className="est-handoff-title">
+              <strong>{copy("ส่งต่อ", "Hand-off", "引き継ぎ")}</strong>
+              <span className="muted">
+                {copy(
+                  `ใช้ต้นทุน ${revisionCode(header.revision)} ต่อ · Revision นี้ล็อกแล้ว แก้ไขผ่านการสร้าง Revision ใหม่`,
+                  `Carry the ${revisionCode(header.revision)} cost forward · this revision is locked; changes go through a new revision`,
+                  `${revisionCode(header.revision)} の原価を引き継ぎ · この改訂はロック済み`,
+                )}
+              </span>
+            </div>
+            <div className="est-handoff-card">
+              <div className="est-handoff-head">
+                <Icon name="file" />
+                <strong>{copy("ไฟล์ ERP", "ERP file", "ERPファイル")}</strong>
+                {erpUnclassified === 0 ? (
+                  <Badge tone="green">
+                    <span>{copy("จัดหมวดครบ", "Classified", "分類済み")}</span>
+                  </Badge>
+                ) : erpUnclassified ? (
+                  <Badge tone="amber">
+                    <span>{copy(`ยังไม่จัดหมวด ${erpUnclassified}`, `${erpUnclassified} unclassified`, `未分類 ${erpUnclassified}`)}</span>
+                  </Badge>
+                ) : null}
+                <span className="spacer" />
+                {erpExport ? (
+                  <button className="link-btn" type="button" onClick={() => erpExport.run()}>
+                    Export
+                  </button>
+                ) : null}
+              </div>
+              <span className="mono">{erpEstimateWorkbookFilename(header.number, header.projectName, header.revision)}</span>
+            </div>
+            <div className="est-handoff-card">
+              <div className="est-handoff-head">
+                <Icon name="users" />
+                <strong>{copy("ฝ่ายขาย", "Sales", "営業")}</strong>
+              </div>
+              <span>{copy(`ทำใบเสนอราคาต่อจาก RFQ ${header.inquiryNumber}`, `Prepares the quotation from RFQ ${header.inquiryNumber}`, `RFQ ${header.inquiryNumber} から見積書を作成`)}</span>
+            </div>
+            <div className="est-handoff-card">
+              <div className="est-handoff-head">
+                <Icon name="folder" />
+                <strong>Project</strong>
+              </div>
+              <span>{copy("สร้างจาก RFQ ได้เมื่อลูกค้ายืนยันสั่งซื้อ", "Created from the RFQ once the customer orders", "受注確定後にRFQから作成")}</span>
+            </div>
+          </section>
+        ) : null}
+        {lineCount === 0 && capabilities.canEditAllSections && !startDismissed ? (
+          <EstimateStartPanel workspace={workspace} busy={busy} onCopy={copyFromEstimate} canAssign={capabilities.canManageAssignments} onOpenTab={setTab} onDismiss={() => setStartDismissed(true)} />
+        ) : null}
+        <Tabs
+          active={onSummary ? "summary" : tab}
+          onChange={setTab}
+          tabs={[
+            { id: "summary", label: copy("สรุป", "Cost summary", "原価サマリー"), raw: true },
+            { id: "cost", label: copy("วัสดุและอุปกรณ์", "Cost Items", "原価明細"), count: workspace.costItems.length, raw: true },
+            { id: "manhour", label: copy("ค่าแรง", "Labor", "労務費"), count: workspace.manhourLines.length, raw: true },
+            { id: "other", label: copy("ค่าใช้จ่ายอื่น", "Other costs", "その他費用"), count: workspace.otherCostLines.length, raw: true },
+            { id: "validation", label: copy("ตรวจสอบ", "Validation", "検証"), count: validationCount, raw: true },
+            { id: "assignment", label: copy("ผู้รับผิดชอบ", "Assignment", "担当"), count: workspace.assignments.length, raw: true },
+            { id: "revision", label: copy("Revision", "Revision history", "改訂履歴"), raw: true },
+          ]}
+        />
+
+        {onSummary && inReview ? (
+          <EstimateReviewSummary
+            workspace={workspace}
+            erpUnclassified={erpUnclassified}
+            sheetOpen={sheetOpen}
+            onOpenTab={setTab}
+            onOpenSheet={() => {
+              setSheetOpen(true);
+              window.setTimeout(() => sheetRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 0);
+            }}
+          />
+        ) : null}
+        {onSummary && header.status === "Revision Required" ? <EstimateNextSteps workspace={workspace} busy={busy} onOpen={setTab} onSubmit={() => setWorkflowAction("submit")} /> : null}
+        <div ref={sheetRef} hidden={!onSummary || (inReview && !sheetOpen)}>
+          <EstimateErpSheetPanel
+            workspace={workspace}
+            notify={notify}
+            onChanged={afterMutation}
+            onDirtyChange={setClassificationDirty}
+            onOpenTab={setTab}
+            onUnclassifiedChange={setErpUnclassified}
+            onExportChange={onErpExportChange}
+            onSheetRowsChange={onErpSheetRowsChange}
+            hideReadiness={inReview}
+          />
         </div>
-        <div className="est-total">
-          <span>{copy("ต้นทุนรวมโดยประมาณ", "Total estimated cost", "見積原価合計")}</span>
-          <strong>{formatMoney(totals.total)}</strong>
-          {previousTotal !== null ? <span className={revisionDelta > 0 ? "est-delta up" : revisionDelta < 0 ? "est-delta down" : "est-delta"}>{revisionDelta === 0
-            ? copy(`เท่ากับ ${revisionCode(header.revision - 1)}`, `Same as ${revisionCode(header.revision - 1)}`, `${revisionCode(header.revision - 1)} と同額`)
-            : `${revisionDelta > 0 ? "+" : "−"}${formatMoney(Math.abs(revisionDelta))} ${copy("จาก", "vs", "前版比")} ${revisionCode(header.revision - 1)}`}</span> : null}
-          <span>{copy("ต้นทุนภายใน", "Internal cost", "社内原価")} · {revisionCode(header.revision)}</span>
-        </div>
-      </section>
-    </>}
-    {approved ? <section className="panel est-handoff" aria-label={copy("ส่งต่อ", "Hand-off", "引き継ぎ")}>
-      <div className="est-handoff-title"><strong>{copy("ส่งต่อ", "Hand-off", "引き継ぎ")}</strong><span className="muted">{copy(`ใช้ต้นทุน ${revisionCode(header.revision)} ต่อ · Revision นี้ล็อกแล้ว แก้ไขผ่านการสร้าง Revision ใหม่`, `Carry the ${revisionCode(header.revision)} cost forward · this revision is locked; changes go through a new revision`, `${revisionCode(header.revision)} の原価を引き継ぎ · この改訂はロック済み`)}</span></div>
-      <div className="est-handoff-card"><div className="est-handoff-head"><Icon name="file" /><strong>{copy("ไฟล์ ERP", "ERP file", "ERPファイル")}</strong>{erpUnclassified === 0 ? <Badge tone="green"><span>{copy("จัดหมวดครบ", "Classified", "分類済み")}</span></Badge> : erpUnclassified ? <Badge tone="amber"><span>{copy(`ยังไม่จัดหมวด ${erpUnclassified}`, `${erpUnclassified} unclassified`, `未分類 ${erpUnclassified}`)}</span></Badge> : null}<span className="spacer" />{erpExport ? <button className="link-btn" type="button" onClick={() => erpExport.run()}>Export</button> : null}</div>
-        <span className="mono">{erpEstimateWorkbookFilename(header.number, header.projectName, header.revision)}</span></div>
-      <div className="est-handoff-card"><div className="est-handoff-head"><Icon name="users" /><strong>{copy("ฝ่ายขาย", "Sales", "営業")}</strong></div><span>{copy(`ทำใบเสนอราคาต่อจาก RFQ ${header.inquiryNumber}`, `Prepares the quotation from RFQ ${header.inquiryNumber}`, `RFQ ${header.inquiryNumber} から見積書を作成`)}</span></div>
-      <div className="est-handoff-card"><div className="est-handoff-head"><Icon name="folder" /><strong>Project</strong></div><span>{copy("สร้างจาก RFQ ได้เมื่อลูกค้ายืนยันสั่งซื้อ", "Created from the RFQ once the customer orders", "受注確定後にRFQから作成")}</span></div>
-    </section> : null}
-    {lineCount === 0 && capabilities.canEditAllSections && !startDismissed ? <EstimateStartPanel workspace={workspace} busy={busy} onCopy={copyFromEstimate} canAssign={capabilities.canManageAssignments} onOpenTab={setTab} onDismiss={() => setStartDismissed(true)} /> : null}
-    <Tabs active={onSummary ? "summary" : tab} onChange={setTab} tabs={[
-      { id: "summary", label: copy("สรุป", "Cost summary", "原価サマリー"), raw: true },
-      { id: "cost", label: copy("วัสดุและอุปกรณ์", "Cost Items", "原価明細"), count: workspace.costItems.length, raw: true },
-      { id: "manhour", label: copy("ค่าแรง", "Labor", "労務費"), count: workspace.manhourLines.length, raw: true },
-      { id: "other", label: copy("ค่าใช้จ่ายอื่น", "Other costs", "その他費用"), count: workspace.otherCostLines.length, raw: true },
-      { id: "validation", label: copy("ตรวจสอบ", "Validation", "検証"), count: validationCount, raw: true },
-      { id: "assignment", label: copy("ผู้รับผิดชอบ", "Assignment", "担当"), count: workspace.assignments.length, raw: true },
-      { id: "revision", label: copy("Revision", "Revision history", "改訂履歴"), raw: true },
-    ]} />
+        {onSummary ? (
+          <>
+            {ESTIMATE_OVERHEAD_ENABLED ? (
+              <EstimateOverheadPanel
+                workspace={workspace}
+                bootstrap={bootstrap}
+                onSaved={async () => {
+                  await afterMutation("Overhead updated");
+                }}
+              />
+            ) : null}
+            <details className="estimate-secondary">
+              <summary>{estimateUxCopy(currentLocale(), "ความพร้อมและข้อมูล Revision", "Readiness and revision information", "準備状況と改訂情報")}</summary>
+              <EstimateSummaryTab workspace={workspace} />
+            </details>
+          </>
+        ) : null}
+        {tab === "cost" ? (
+          <EstimateCostItemsTab
+            onCopyModule={copyModule}
+            onRemoveModule={removeModule}
+            onReorder={reorder}
+            onExcelImported={async () => {
+              await afterMutation("นำเข้า Excel ทั้งชุดสำเร็จ");
+            }}
+            bootstrap={bootstrap}
+            workspace={workspace}
+            busy={busy}
+            focusModuleKey={costFocus}
+            onFocusHandled={clearCostFocus}
+            onAdd={(seed = {}) => {
+              setCostSeed(seed);
+              setCostEditor("new");
+            }}
+            onBulkAddCost={async (seeds, message) => {
+              if (!seeds.length) return false;
+              setBusy(true);
+              setError("");
+              let rowVersion = workspace.header.rowVersion;
+              let saved = 0;
+              try {
+                for (const seed of seeds) {
+                  const result = await createCostItem(estimateId, { ...seed, estimateRowVersion: rowVersion } as CostItemInput);
+                  rowVersion = result.estimateRowVersion;
+                  saved += 1;
+                }
+                await afterMutation(`${message} · ${saved} line(s) written to SQL Server`);
+                return true;
+              } catch (requestError) {
+                notify(`${saved} line(s) saved before the operation stopped`);
+                await mutationError(requestError);
+                return false;
+              } finally {
+                setBusy(false);
+              }
+            }}
+            onApplyTemplate={async (input) => {
+              if (!workspace) return false;
+              setBusy(true);
+              setError("");
+              try {
+                const result = await applyModuleTemplate(estimateId, { ...input, estimateRowVersion: workspace.header.rowVersion });
+                await afterMutation(`${result.lines} line(s) added to "${result.module}" from ${result.reference}`);
+                return true;
+              } catch (requestError) {
+                await mutationError(requestError);
+                return false;
+              } finally {
+                setBusy(false);
+              }
+            }}
+            onApplyQuotation={async (input) => {
+              if (!workspace) return false;
+              setBusy(true);
+              setError("");
+              try {
+                const result = await applySupplierQuotation(estimateId, { ...input, estimateRowVersion: workspace.header.rowVersion });
+                await afterMutation(
+                  estimateCopy(`เพิ่ม ${result.lines} รายการจาก ${result.reference}`, `${result.lines} line(s) added from ${result.reference}`, `${result.reference} から ${result.lines} 件追加`),
+                );
+                return true;
+              } catch (requestError) {
+                await mutationError(requestError);
+                return false;
+              } finally {
+                setBusy(false);
+              }
+            }}
+            onSaveTemplate={async (input) => {
+              setBusy(true);
+              setError("");
+              try {
+                const result = await createModuleTemplateFromEstimate({ estimateId, ...input });
+                notify(`${result.code} saved to the master library · ${result.lineCount} line(s)`);
+                return true;
+              } catch (requestError) {
+                await mutationError(requestError);
+                return false;
+              } finally {
+                setBusy(false);
+              }
+            }}
+            onQuickAddCost={async (input) => {
+              setBusy(true);
+              setError("");
+              try {
+                await createCostItem(estimateId, input);
+                await afterMutation("Cost item created · press Enter to continue adding rows");
+                return true;
+              } catch (requestError) {
+                await mutationError(requestError);
+                return false;
+              } finally {
+                setBusy(false);
+              }
+            }}
+            onCopyFrom={copyFromEstimate}
+            onEdit={(line) => {
+              setCostSeed({});
+              setCostEditor(line);
+            }}
+            onRemove={(line) => {
+              void removeLine("cost", line.id, line.rowVersion);
+            }}
+          />
+        ) : null}
+        {tab === "manhour" ? (
+          <EstimateLaborTab
+            bootstrap={bootstrap}
+            workspace={workspace}
+            busy={busy}
+            onNewPackage={setPackageEditorFor}
+            onAddManhour={(seed) => {
+              setManhourSeed(seed);
+              setManhourEditor("new");
+            }}
+            onQuickAddManhour={async (input) => {
+              setBusy(true);
+              setError("");
+              try {
+                await createEstimateManhour(estimateId, input);
+                await afterMutation("Activity created · press Enter to continue adding rows");
+                return true;
+              } catch (requestError) {
+                await mutationError(requestError);
+                return false;
+              } finally {
+                setBusy(false);
+              }
+            }}
+            onSaveEffort={async (line, effort, lineRowVersion) => {
+              setBusy(true);
+              setError("");
+              try {
+                await updateEstimateManhourEffort(estimateId, line.id, workspace.header.rowVersion, lineRowVersion, effort);
+                await afterMutation("Effort updated");
+                return true;
+              } catch (requestError) {
+                await mutationError(requestError);
+                return false;
+              } finally {
+                setBusy(false);
+              }
+            }}
+            onLaborLibraryChanged={async (message) => {
+              await afterMutation(message);
+            }}
+            onEditManhour={(line) => {
+              setManhourSeed({});
+              setManhourEditor(line);
+            }}
+            onRemoveManhour={(line) => {
+              void removeLine("manhour", line.id, line.rowVersion);
+            }}
+            onAddExpense={(seed) => {
+              setExpenseSeed(seed);
+              setExpenseEditor("new");
+            }}
+            onEditExpense={(line) => {
+              setExpenseSeed({});
+              setExpenseEditor(line);
+            }}
+            onRemoveExpense={(line) => {
+              void removeLine("expense", line.id, line.rowVersion);
+            }}
+          />
+        ) : null}
+        {tab === "other" ? (
+          <EstimateOtherCostTab
+            key={header.rowVersion}
+            workspace={workspace}
+            busy={busy}
+            onAddOther={() => setOtherEditor("new")}
+            onEditOther={setOtherEditor}
+            onRemoveOther={(line) => {
+              void removeLine("other", line.id, line.rowVersion);
+            }}
+            onUpdateContingency={async (rate) => {
+              setBusy(true);
+              setError("");
+              try {
+                await updateEstimateContingency(estimateId, rate, header.rowVersion);
+                await afterMutation("Contingency updated");
+              } catch (requestError) {
+                await mutationError(requestError);
+              } finally {
+                setBusy(false);
+              }
+            }}
+          />
+        ) : null}
+        {tab === "assignment" ? <EstimateAssignmentTab workspace={workspace} onAssign={() => setAssignmentCreateOpen(true)} onEdit={setAssignmentEditor} /> : null}
+        {tab === "validation" ? (
+          <EstimateValidationTab
+            workspace={workspace}
+            onFix={(issue) => {
+              setTab(estimateIssueTab(issue));
+              const cost = workspace.costItems.find((line) => issue.entityType === "CostItem" && line.id === issue.entityId);
+              const manhour = workspace.manhourLines.find((line) => issue.entityType === "ManhourLine" && line.id === issue.entityId);
+              const expense = workspace.expenseLines.find((line) => issue.entityType === "ExpenseLine" && line.id === issue.entityId);
+              const other = workspace.otherCostLines.find((line) => issue.entityType === "OtherCostLine" && line.id === issue.entityId);
+              if (cost?.canEdit) {
+                setCostSeed({});
+                setCostEditor(cost);
+              }
+              if (manhour?.canEdit) {
+                setManhourSeed({});
+                setManhourEditor(manhour);
+              }
+              if (expense?.canEdit) {
+                setExpenseSeed({});
+                setExpenseEditor(expense);
+              }
+              if (other && capabilities.canEditOtherCosts) setOtherEditor(other);
+            }}
+          />
+        ) : null}
+        {tab === "revision" ? (
+          <div className="stack">
+            <EstimateImportHistory key={header.rowVersion} estimateId={header.id} />
+            <EstimateRevisionTab
+              revisions={workspace.revisionHistory}
+              sources={workspace.revisionSources ?? []}
+              currentRevision={header.revision}
+              currentTotal={numberOf(totals.total)}
+              estimateId={header.id}
+              estimateNumber={header.number}
+              rowVersion={header.rowVersion}
+              canRestore={capabilities.canRestoreRevision === true}
+              onRestored={afterMutation}
+            />
+            <div>
+              <EstimateCompareTab revisions={workspace.revisionHistory} currentRevision={header.revision} currentTotal={numberOf(totals.total)} />
+            </div>
+          </div>
+        ) : null}
 
-    {onSummary && inReview ? <EstimateReviewSummary workspace={workspace} erpUnclassified={erpUnclassified} sheetOpen={sheetOpen} onOpenTab={setTab} onOpenSheet={() => { setSheetOpen(true); window.setTimeout(() => sheetRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 0); }} /> : null}
-    {onSummary && header.status === "Revision Required" ? <EstimateNextSteps workspace={workspace} busy={busy} onOpen={setTab} onSubmit={() => setWorkflowAction("submit")} /> : null}
-    <div ref={sheetRef} hidden={!onSummary || (inReview && !sheetOpen)}><EstimateErpSheetPanel workspace={workspace} notify={notify} onChanged={afterMutation} onDirtyChange={setClassificationDirty} onOpenTab={setTab} onUnclassifiedChange={setErpUnclassified} onExportChange={onErpExportChange} onSheetRowsChange={onErpSheetRowsChange} hideReadiness={inReview} />
-    </div>
-    {onSummary ? <>
-      {ESTIMATE_OVERHEAD_ENABLED ? <EstimateOverheadPanel workspace={workspace} bootstrap={bootstrap} onSaved={async () => { await afterMutation("Overhead updated"); }} /> : null}
-      <details className="estimate-secondary"><summary>{estimateUxCopy(currentLocale(), "ความพร้อมและข้อมูล Revision", "Readiness and revision information", "準備状況と改訂情報")}</summary>
-<EstimateSummaryTab workspace={workspace} /></details></> : null}
-    {tab === "cost" ? <EstimateCostItemsTab onCopyModule={copyModule} onRemoveModule={removeModule} onReorder={reorder} onExcelImported={async () => { await afterMutation("นำเข้า Excel ทั้งชุดสำเร็จ"); }} bootstrap={bootstrap} workspace={workspace} busy={busy} focusModuleKey={costFocus} onFocusHandled={clearCostFocus} onAdd={(seed = {}) => { setCostSeed(seed); setCostEditor("new"); }} onBulkAddCost={async (seeds, message) => {
-      if (!seeds.length) return false;
-      setBusy(true); setError("");
-      let rowVersion = workspace.header.rowVersion;
-      let saved = 0;
-      try {
-        for (const seed of seeds) {
-          const result = await createCostItem(estimateId, { ...seed, estimateRowVersion: rowVersion } as CostItemInput);
-          rowVersion = result.estimateRowVersion;
-          saved += 1;
-        }
-        await afterMutation(`${message} · ${saved} line(s) written to SQL Server`);
-        return true;
-      } catch (requestError) {
-        notify(`${saved} line(s) saved before the operation stopped`);
-        await mutationError(requestError);
-        return false;
-      } finally { setBusy(false); }
-    }} onApplyTemplate={async (input) => {
-      if (!workspace) return false;
-      setBusy(true); setError("");
-      try {
-        const result = await applyModuleTemplate(estimateId, { ...input, estimateRowVersion: workspace.header.rowVersion });
-        await afterMutation(`${result.lines} line(s) added to "${result.module}" from ${result.reference}`);
-        return true;
-      } catch (requestError) { await mutationError(requestError); return false; }
-      finally { setBusy(false); }
-    }} onApplyQuotation={async (input) => {
-      if (!workspace) return false;
-      setBusy(true); setError("");
-      try {
-        const result = await applySupplierQuotation(estimateId, { ...input, estimateRowVersion: workspace.header.rowVersion });
-        await afterMutation(estimateCopy(`เพิ่ม ${result.lines} รายการจาก ${result.reference}`, `${result.lines} line(s) added from ${result.reference}`, `${result.reference} から ${result.lines} 件追加`));
-        return true;
-      } catch (requestError) { await mutationError(requestError); return false; }
-      finally { setBusy(false); }
-    }} onSaveTemplate={async (input) => {
-      setBusy(true); setError("");
-      try {
-        const result = await createModuleTemplateFromEstimate({ estimateId, ...input });
-        notify(`${result.code} saved to the master library · ${result.lineCount} line(s)`);
-        return true;
-      } catch (requestError) { await mutationError(requestError); return false; }
-      finally { setBusy(false); }
-    }} onQuickAddCost={async (input) => {
-      setBusy(true); setError("");
-      try { await createCostItem(estimateId, input); await afterMutation("Cost item created · press Enter to continue adding rows"); return true; }
-      catch (requestError) { await mutationError(requestError); return false; }
-      finally { setBusy(false); }
-    }} onCopyFrom={copyFromEstimate} onEdit={(line) => { setCostSeed({}); setCostEditor(line); }} onRemove={(line) => { void removeLine("cost", line.id, line.rowVersion); }} /> : null}
-    {tab === "manhour" ? <EstimateLaborTab
-      bootstrap={bootstrap}
-      workspace={workspace}
-      busy={busy}
-      onNewPackage={setPackageEditorFor}
-      onAddManhour={(seed) => { setManhourSeed(seed); setManhourEditor("new"); }}
-      onQuickAddManhour={async (input) => {
-        setBusy(true); setError("");
-        try { await createEstimateManhour(estimateId, input); await afterMutation("Activity created · press Enter to continue adding rows"); return true; }
-        catch (requestError) { await mutationError(requestError); return false; }
-        finally { setBusy(false); }
-      }}
-      onSaveEffort={async (line, effort, lineRowVersion) => {
-        setBusy(true); setError("");
-        try { await updateEstimateManhourEffort(estimateId, line.id, workspace.header.rowVersion, lineRowVersion, effort); await afterMutation("Effort updated"); return true; }
-        catch (requestError) { await mutationError(requestError); return false; }
-        finally { setBusy(false); }
-      }}
-      onLaborLibraryChanged={async (message) => { await afterMutation(message); }}
-      onEditManhour={(line) => { setManhourSeed({}); setManhourEditor(line); }}
-      onRemoveManhour={(line) => { void removeLine("manhour", line.id, line.rowVersion); }}
-      onAddExpense={(seed) => { setExpenseSeed(seed); setExpenseEditor("new"); }}
-      onEditExpense={(line) => { setExpenseSeed({}); setExpenseEditor(line); }}
-      onRemoveExpense={(line) => { void removeLine("expense", line.id, line.rowVersion); }}
-    /> : null}
-    {tab === "other" ? <EstimateOtherCostTab key={header.rowVersion} workspace={workspace} busy={busy} onAddOther={() => setOtherEditor("new")} onEditOther={setOtherEditor} onRemoveOther={(line) => { void removeLine("other", line.id, line.rowVersion); }} onUpdateContingency={async (rate) => {
-      setBusy(true); setError("");
-      try { await updateEstimateContingency(estimateId, rate, header.rowVersion); await afterMutation("Contingency updated"); }
-      catch (requestError) { await mutationError(requestError); }
-      finally { setBusy(false); }
-    }} /> : null}
-    {tab === "assignment" ? <EstimateAssignmentTab workspace={workspace} onAssign={() => setAssignmentCreateOpen(true)} onEdit={setAssignmentEditor} /> : null}
-    {tab === "validation" ? <EstimateValidationTab workspace={workspace} onFix={(issue) => {
-      setTab(estimateIssueTab(issue));
-      const cost = workspace.costItems.find((line) => issue.entityType === "CostItem" && line.id === issue.entityId);
-      const manhour = workspace.manhourLines.find((line) => issue.entityType === "ManhourLine" && line.id === issue.entityId);
-      const expense = workspace.expenseLines.find((line) => issue.entityType === "ExpenseLine" && line.id === issue.entityId);
-      const other = workspace.otherCostLines.find((line) => issue.entityType === "OtherCostLine" && line.id === issue.entityId);
-      if (cost?.canEdit) { setCostSeed({}); setCostEditor(cost); }
-      if (manhour?.canEdit) { setManhourSeed({}); setManhourEditor(manhour); }
-      if (expense?.canEdit) { setExpenseSeed({}); setExpenseEditor(expense); }
-      if (other && capabilities.canEditOtherCosts) setOtherEditor(other);
-    }} /> : null}
-    {tab === "revision" ? <div className="stack"><EstimateImportHistory key={header.rowVersion} estimateId={header.id} /><EstimateRevisionTab revisions={workspace.revisionHistory} sources={workspace.revisionSources ?? []} currentRevision={header.revision} currentTotal={numberOf(totals.total)}
-      estimateId={header.id} estimateNumber={header.number} rowVersion={header.rowVersion} canRestore={capabilities.canRestoreRevision === true} onRestored={afterMutation} /><div><EstimateCompareTab revisions={workspace.revisionHistory} currentRevision={header.revision} currentTotal={numberOf(totals.total)} /></div></div> : null}
-
-
-    {costEditor ? <CostItemEditor bootstrap={bootstrap} workspace={workspace} line={costEditor === "new" ? null : costEditor} seed={costSeed} busy={busy} onClose={() => { setCostEditor(null); setCostSeed({}); }} onSave={async (input, lineId) => {
-      setBusy(true); setError("");
-      try { if (lineId) await updateCostItem(estimateId, lineId, input); else await createCostItem(estimateId, input); setCostEditor(null); setCostSeed({}); await afterMutation(lineId ? "Cost item updated" : "Cost item created"); }
-      catch (requestError) { await mutationError(requestError); }
-      finally { setBusy(false); }
-    }} /> : null}
-    {packageEditorFor ? <WorkPackageEditor discipline={packageEditorFor} busy={busy} onClose={() => setPackageEditorFor(null)} onContinue={(seed) => {
-      setPackageEditorFor(null);
-      setManhourSeed(seed);
-      setManhourEditor("new");
-    }} /> : null}
-    {manhourEditor ? <ManhourEditor bootstrap={bootstrap} workspace={workspace} line={manhourEditor === "new" ? null : manhourEditor} seed={manhourSeed} busy={busy} onClose={() => { setManhourEditor(null); setManhourSeed({}); }} onSave={async (input, lineId) => {
-      setBusy(true); setError("");
-      try { if (lineId) await updateEstimateManhour(estimateId, lineId, input); else await createEstimateManhour(estimateId, input); setManhourEditor(null); setManhourSeed({}); await afterMutation(lineId ? "Man-hour updated" : "Man-hour created"); }
-      catch (requestError) { await mutationError(requestError); }
-      finally { setBusy(false); }
-    }} /> : null}
-    {expenseEditor ? <ExpenseEditor bootstrap={bootstrap} workspace={workspace} line={expenseEditor === "new" ? null : expenseEditor} seed={expenseSeed} busy={busy} onClose={() => { setExpenseEditor(null); setExpenseSeed({}); }} onSave={async (input, lineId) => {
-      setBusy(true); setError("");
-      try { if (lineId) await updateEstimateExpense(estimateId, lineId, input); else await createEstimateExpense(estimateId, input); setExpenseEditor(null); setExpenseSeed({}); await afterMutation(lineId ? "Expense updated" : "Expense created"); }
-      catch (requestError) { await mutationError(requestError); }
-      finally { setBusy(false); }
-    }} /> : null}
-    {otherEditor ? <OtherCostEditor workspace={workspace} line={otherEditor === "new" ? null : otherEditor} busy={busy} onClose={() => setOtherEditor(null)} onSave={async (input, lineId) => {
-      setBusy(true); setError("");
-      try { if (lineId) await updateEstimateOtherCost(estimateId, lineId, input); else await createEstimateOtherCost(estimateId, input); setOtherEditor(null); await afterMutation(lineId ? "Other cost updated" : "Other cost created"); }
-      catch (requestError) { await mutationError(requestError); }
-      finally { setBusy(false); }
-    }} /> : null}
-    {assignmentCreateOpen ? <CreateAssignmentModal bootstrap={bootstrap} workspace={workspace} busy={busy} onClose={() => setAssignmentCreateOpen(false)} onSave={async (input) => {
-      setBusy(true); setError("");
-      try { const result = await createEstimateAssignment(estimateId, input); setAssignmentCreateOpen(false); await afterMutation(assignmentResultMessage("created", result)); }
-      catch (requestError) { await mutationError(requestError); }
-      finally { setBusy(false); }
-    }} /> : null}
-    {assignmentEditor ? <AssignmentEditor bootstrap={bootstrap} workspace={workspace} assignment={assignmentEditor} busy={busy} onClose={() => setAssignmentEditor(null)} onSave={async (input) => {
-      setBusy(true); setError("");
-      try { const result = await updateEstimateAssignment(estimateId, assignmentEditor.id, input); setAssignmentEditor(null); await afterMutation(assignmentResultMessage("updated", result)); }
-      catch (requestError) { await mutationError(requestError); }
-      finally { setBusy(false); }
-    }} /> : null}
-    {workflowAction ? <WorkflowModal action={workflowAction} workspace={workspace} busy={busy} onShowValidation={() => { setWorkflowAction(null); setTab("validation"); }} onClose={() => setWorkflowAction(null)} onConfirm={async (comment) => {
-      setBusy(true); setError("");
-      try { const result = await estimateWorkflow(estimateId, workflowAction, header.rowVersion, comment, workflowAction === "approve" ? erpSheetRows.current?.() ?? null : null); const label = workflowAction === "approve" ? "approved and locked" : workflowAction === "submit" ? "submitted for engineering review" : workflowAction === "create-revision" ? "opened a new revision" : "returned for revision";
-        /* Approval sends the estimate to the Pegasus ERP; a failed send is said here and kept on the ERP tab with a button to send again. */
-        const erp = !result.erp ? "" : result.erp.sent
-          ? estimateCopy(` · ส่งเข้า ERP แล้ว${result.erp.costSheetNo ? ` (${result.erp.costSheetNo})` : ""}`, ` · sent to the ERP${result.erp.costSheetNo ? ` (${result.erp.costSheetNo})` : ""}`, ` · ERPへ送信済み${result.erp.costSheetNo ? `（${result.erp.costSheetNo}）` : ""}`)
-          : estimateCopy(` · ส่งเข้า ERP ไม่สำเร็จ: ${result.erp.message ?? ""} — ส่งใหม่ได้ที่แท็บ ERP`, ` · not sent to the ERP: ${result.erp.message ?? ""} — send it again from the ERP tab`, ` · ERP送信失敗: ${result.erp.message ?? ""} — ERPタブから再送できます`);
-        setWorkflowAction(null); await afterMutation(`${header.number} ${label}${erp}`); }
-      catch (requestError) { await mutationError(requestError); }
-      finally { setBusy(false); }
-    }} /> : null}
-  </div></DraftHoldProvider>;
+        {costEditor ? (
+          <CostItemEditor
+            bootstrap={bootstrap}
+            workspace={workspace}
+            line={costEditor === "new" ? null : costEditor}
+            seed={costSeed}
+            busy={busy}
+            onClose={() => {
+              setCostEditor(null);
+              setCostSeed({});
+            }}
+            onSave={async (input, lineId) => {
+              setBusy(true);
+              setError("");
+              try {
+                if (lineId) await updateCostItem(estimateId, lineId, input);
+                else await createCostItem(estimateId, input);
+                setCostEditor(null);
+                setCostSeed({});
+                await afterMutation(lineId ? "Cost item updated" : "Cost item created");
+              } catch (requestError) {
+                await mutationError(requestError);
+              } finally {
+                setBusy(false);
+              }
+            }}
+          />
+        ) : null}
+        {packageEditorFor ? (
+          <WorkPackageEditor
+            discipline={packageEditorFor}
+            busy={busy}
+            onClose={() => setPackageEditorFor(null)}
+            onContinue={(seed) => {
+              setPackageEditorFor(null);
+              setManhourSeed(seed);
+              setManhourEditor("new");
+            }}
+          />
+        ) : null}
+        {manhourEditor ? (
+          <ManhourEditor
+            bootstrap={bootstrap}
+            workspace={workspace}
+            line={manhourEditor === "new" ? null : manhourEditor}
+            seed={manhourSeed}
+            busy={busy}
+            onClose={() => {
+              setManhourEditor(null);
+              setManhourSeed({});
+            }}
+            onSave={async (input, lineId) => {
+              setBusy(true);
+              setError("");
+              try {
+                if (lineId) await updateEstimateManhour(estimateId, lineId, input);
+                else await createEstimateManhour(estimateId, input);
+                setManhourEditor(null);
+                setManhourSeed({});
+                await afterMutation(lineId ? "Man-hour updated" : "Man-hour created");
+              } catch (requestError) {
+                await mutationError(requestError);
+              } finally {
+                setBusy(false);
+              }
+            }}
+          />
+        ) : null}
+        {expenseEditor ? (
+          <ExpenseEditor
+            bootstrap={bootstrap}
+            workspace={workspace}
+            line={expenseEditor === "new" ? null : expenseEditor}
+            seed={expenseSeed}
+            busy={busy}
+            onClose={() => {
+              setExpenseEditor(null);
+              setExpenseSeed({});
+            }}
+            onSave={async (input, lineId) => {
+              setBusy(true);
+              setError("");
+              try {
+                if (lineId) await updateEstimateExpense(estimateId, lineId, input);
+                else await createEstimateExpense(estimateId, input);
+                setExpenseEditor(null);
+                setExpenseSeed({});
+                await afterMutation(lineId ? "Expense updated" : "Expense created");
+              } catch (requestError) {
+                await mutationError(requestError);
+              } finally {
+                setBusy(false);
+              }
+            }}
+          />
+        ) : null}
+        {otherEditor ? (
+          <OtherCostEditor
+            workspace={workspace}
+            line={otherEditor === "new" ? null : otherEditor}
+            busy={busy}
+            onClose={() => setOtherEditor(null)}
+            onSave={async (input, lineId) => {
+              setBusy(true);
+              setError("");
+              try {
+                if (lineId) await updateEstimateOtherCost(estimateId, lineId, input);
+                else await createEstimateOtherCost(estimateId, input);
+                setOtherEditor(null);
+                await afterMutation(lineId ? "Other cost updated" : "Other cost created");
+              } catch (requestError) {
+                await mutationError(requestError);
+              } finally {
+                setBusy(false);
+              }
+            }}
+          />
+        ) : null}
+        {assignmentCreateOpen ? (
+          <CreateAssignmentModal
+            bootstrap={bootstrap}
+            workspace={workspace}
+            busy={busy}
+            onClose={() => setAssignmentCreateOpen(false)}
+            onSave={async (input) => {
+              setBusy(true);
+              setError("");
+              try {
+                const result = await createEstimateAssignment(estimateId, input);
+                setAssignmentCreateOpen(false);
+                await afterMutation(assignmentResultMessage("created", result));
+              } catch (requestError) {
+                await mutationError(requestError);
+              } finally {
+                setBusy(false);
+              }
+            }}
+          />
+        ) : null}
+        {assignmentEditor ? (
+          <AssignmentEditor
+            bootstrap={bootstrap}
+            workspace={workspace}
+            assignment={assignmentEditor}
+            busy={busy}
+            onClose={() => setAssignmentEditor(null)}
+            onSave={async (input) => {
+              setBusy(true);
+              setError("");
+              try {
+                const result = await updateEstimateAssignment(estimateId, assignmentEditor.id, input);
+                setAssignmentEditor(null);
+                await afterMutation(assignmentResultMessage("updated", result));
+              } catch (requestError) {
+                await mutationError(requestError);
+              } finally {
+                setBusy(false);
+              }
+            }}
+          />
+        ) : null}
+        {workflowAction ? (
+          <WorkflowModal
+            action={workflowAction}
+            workspace={workspace}
+            busy={busy}
+            onShowValidation={() => {
+              setWorkflowAction(null);
+              setTab("validation");
+            }}
+            onClose={() => setWorkflowAction(null)}
+            onConfirm={async (comment) => {
+              setBusy(true);
+              setError("");
+              try {
+                const result = await estimateWorkflow(estimateId, workflowAction, header.rowVersion, comment, workflowAction === "approve" ? (erpSheetRows.current?.() ?? null) : null);
+                const label =
+                  workflowAction === "approve"
+                    ? "approved and locked"
+                    : workflowAction === "submit"
+                      ? "submitted for engineering review"
+                      : workflowAction === "create-revision"
+                        ? "opened a new revision"
+                        : "returned for revision";
+                /* Approval sends the estimate to the Pegasus ERP; a failed send is said here and kept on the ERP tab with a button to send again. */
+                const erp = !result.erp
+                  ? ""
+                  : result.erp.sent
+                    ? estimateCopy(
+                        ` · ส่งเข้า ERP แล้ว${result.erp.costSheetNo ? ` (${result.erp.costSheetNo})` : ""}`,
+                        ` · sent to the ERP${result.erp.costSheetNo ? ` (${result.erp.costSheetNo})` : ""}`,
+                        ` · ERPへ送信済み${result.erp.costSheetNo ? `（${result.erp.costSheetNo}）` : ""}`,
+                      )
+                    : estimateCopy(
+                        ` · ส่งเข้า ERP ไม่สำเร็จ: ${result.erp.message ?? ""} — ส่งใหม่ได้ที่แท็บ ERP`,
+                        ` · not sent to the ERP: ${result.erp.message ?? ""} — send it again from the ERP tab`,
+                        ` · ERP送信失敗: ${result.erp.message ?? ""} — ERPタブから再送できます`,
+                      );
+                setWorkflowAction(null);
+                await afterMutation(`${header.number} ${label}${erp}`);
+              } catch (requestError) {
+                await mutationError(requestError);
+              } finally {
+                setBusy(false);
+              }
+            }}
+          />
+        ) : null}
+      </div>
+    </DraftHoldProvider>
+  );
 }
 
 /* Cost items are grouped the way an engineer thinks about the machine: one band per
@@ -1235,7 +2850,7 @@ const moduleKeyOf = (categoryCode: string, module: string) => `${categoryCode}::
 /* The band a line sits under: its module, else its price set, else the line alone. */
 const costGroupKeyOf = (line: EstimateCostItem) => {
   const moduleName = line.module.trim();
-  return moduleName ? moduleKeyOf(line.categoryCode, moduleName) : (line.priceSetKey ? `set:${line.priceSetKey}` : `standalone:${line.id}`);
+  return moduleName ? moduleKeyOf(line.categoryCode, moduleName) : line.priceSetKey ? `set:${line.priceSetKey}` : `standalone:${line.id}`;
 };
 /* A set component is priced by its set header, so only the header can be waiting for a price. */
 const lineNeedsPrice = (line: EstimateCostItem) => numberOf(line.unitCost) <= 0 && (!line.priceSetKey || Boolean(line.isPriceSet));
@@ -1257,9 +2872,16 @@ function costModuleGroups(lines: EstimateCostItem[]): CostModuleGroup[] {
     else if (lineNeedsSupplier(line)) group.needSupplier += 1;
   }
   for (const group of groups.values()) {
-    const ordered: EstimateCostItem[] = []; const seen = new Set<string>();
-    for (const line of group.lines) { if (!line.priceSetKey) ordered.push(line); else if (!seen.has(line.priceSetKey)) { seen.add(line.priceSetKey); ordered.push(...group.lines.filter(item => item.priceSetKey === line.priceSetKey).sort((a,b) => Number(Boolean(b.isPriceSet))-Number(Boolean(a.isPriceSet)))); } }
-    group.lines=ordered;
+    const ordered: EstimateCostItem[] = [];
+    const seen = new Set<string>();
+    for (const line of group.lines) {
+      if (!line.priceSetKey) ordered.push(line);
+      else if (!seen.has(line.priceSetKey)) {
+        seen.add(line.priceSetKey);
+        ordered.push(...group.lines.filter((item) => item.priceSetKey === line.priceSetKey).sort((a, b) => Number(Boolean(b.isPriceSet)) - Number(Boolean(a.isPriceSet))));
+      }
+    }
+    group.lines = ordered;
   }
   return [...groups.values()].sort((left, right) => left.categoryCode.localeCompare(right.categoryCode));
 }
@@ -1270,27 +2892,75 @@ function EstimateNextSteps({ workspace, busy, onOpen, onSubmit }: { workspace: E
   const { capabilities } = workspace;
   const criticalCount = workspace.validationIssues.filter(isCriticalValidationIssue).length;
   const warningCount = workspace.validationIssues.length - criticalCount;
-  const action = estimateNextAction({ criticalCount, warningCount, costItemCount: workspace.costItems.length, manhourLineCount: workspace.manhourLines.length, canEditCostItems: capabilities.canEditCostItems, canEditManhour: capabilities.canEditManhour, status: workspace.header.status, canSubmit: capabilities.canSubmit, canApprove: capabilities.canApprove });
+  const action = estimateNextAction({
+    criticalCount,
+    warningCount,
+    costItemCount: workspace.costItems.length,
+    manhourLineCount: workspace.manhourLines.length,
+    canEditCostItems: capabilities.canEditCostItems,
+    canEditManhour: capabilities.canEditManhour,
+    status: workspace.header.status,
+    canSubmit: capabilities.canSubmit,
+    canApprove: capabilities.canApprove,
+  });
   const content = {
-    "address-revision": [copy("แก้ตามที่ผู้ตรวจส่งกลับ", "Address what the reviewer sent back", "差し戻し内容に対応"), copy("เปิด Revision Control เพื่ออ่านเหตุผลฉบับเต็ม", "Open Revision Control for the full note", "改訂管理で差し戻し理由を確認")],
-    "resolve-blockers": [copy(`แก้ ${criticalCount} รายการที่ปิดกั้นการส่งตรวจ`, `Resolve ${criticalCount} submission blocker(s)`, `送信を妨げる${criticalCount}件を修正`), copy("เปิด Validation เพื่อไปยังรายการที่ต้องแก้", "Open Validation and go directly to the affected lines.", "Validationから対象明細を開きます。")],
-    "add-cost": [copy("เพิ่มรายการต้นทุนรายการแรก", "Add the first cost item", "最初の原価明細を追加"), copy("เริ่มจากอุปกรณ์ ซอฟต์แวร์ หรือใช้ Template", "Start with equipment, software or a template.", "機器、ソフトウェア、テンプレートから開始します。")],
-    "add-effort": [copy("เพิ่มค่าแรงวิศวกรรม", "Add engineering effort", "技術工数を追加"), copy("ระบุงาน จำนวนคน และวันทำงานก่อนตรวจความพร้อม", "Add the activity, staffing and work days before validation.", "作業、人数、日数を入力してから確認します。")],
-    "submit-review": [copy("ส่ง Estimate ให้ Engineering Review", "Submit for Engineering Review", "技術レビューへ送信"), warningCount
-      ? copy(`มีคำเตือน ${warningCount} รายการที่ยังไม่ได้ตรวจ ซึ่งไม่ปิดกั้นการส่ง`, `${warningCount} advisory warning(s) are still open. They do not block submission.`, `未確認の注意事項が${warningCount}件あります。送信は妨げられません。`)
-      : copy("ไม่มีข้อผิดพลาดที่ปิดกั้น สามารถตรวจสรุปแล้วส่งได้", "No blocking errors remain. Review the totals and submit.", "重大エラーはありません。合計を確認して送信できます。")],
-    approve: [copy("ตรวจและอนุมัติ Estimate", "Review and approve the Estimate", "見積を確認して承認"), copy("ตรวจยอดต้นทุนและคำเตือนก่อนอนุมัติ", "Review totals and advisory warnings before approval.", "承認前に合計と注意事項を確認します。")],
-    "review-warnings": [copy(`ตรวจคำเตือน ${warningCount} รายการ`, `Review ${warningCount} advisory warning(s)`, `${warningCount}件の注意事項を確認`), copy("คำเตือนไม่ปิดกั้น workflow แต่ควรตรวจความถูกต้อง", "Warnings do not block workflow, but should be checked.", "注意事項は処理を妨げませんが、確認してください。")],
-    "review-summary": [copy("ตรวจสรุป Estimate", "Review the Estimate summary", "見積サマリーを確認"), copy("ข้อมูลปัจจุบันไม่มีงานที่ระบบระบุว่าต้องแก้", "There is no system-identified action for the current state.", "現在、システムが要求する修正はありません。")],
+    "address-revision": [
+      copy("แก้ตามที่ผู้ตรวจส่งกลับ", "Address what the reviewer sent back", "差し戻し内容に対応"),
+      copy("เปิด Revision Control เพื่ออ่านเหตุผลฉบับเต็ม", "Open Revision Control for the full note", "改訂管理で差し戻し理由を確認"),
+    ],
+    "resolve-blockers": [
+      copy(`แก้ ${criticalCount} รายการที่ปิดกั้นการส่งตรวจ`, `Resolve ${criticalCount} submission blocker(s)`, `送信を妨げる${criticalCount}件を修正`),
+      copy("เปิด Validation เพื่อไปยังรายการที่ต้องแก้", "Open Validation and go directly to the affected lines.", "Validationから対象明細を開きます。"),
+    ],
+    "add-cost": [
+      copy("เพิ่มรายการต้นทุนรายการแรก", "Add the first cost item", "最初の原価明細を追加"),
+      copy("เริ่มจากอุปกรณ์ ซอฟต์แวร์ หรือใช้ Template", "Start with equipment, software or a template.", "機器、ソフトウェア、テンプレートから開始します。"),
+    ],
+    "add-effort": [
+      copy("เพิ่มค่าแรงวิศวกรรม", "Add engineering effort", "技術工数を追加"),
+      copy("ระบุงาน จำนวนคน และวันทำงานก่อนตรวจความพร้อม", "Add the activity, staffing and work days before validation.", "作業、人数、日数を入力してから確認します。"),
+    ],
+    "submit-review": [
+      copy("ส่ง Estimate ให้ Engineering Review", "Submit for Engineering Review", "技術レビューへ送信"),
+      warningCount
+        ? copy(
+            `มีคำเตือน ${warningCount} รายการที่ยังไม่ได้ตรวจ ซึ่งไม่ปิดกั้นการส่ง`,
+            `${warningCount} advisory warning(s) are still open. They do not block submission.`,
+            `未確認の注意事項が${warningCount}件あります。送信は妨げられません。`,
+          )
+        : copy("ไม่มีข้อผิดพลาดที่ปิดกั้น สามารถตรวจสรุปแล้วส่งได้", "No blocking errors remain. Review the totals and submit.", "重大エラーはありません。合計を確認して送信できます。"),
+    ],
+    approve: [
+      copy("ตรวจและอนุมัติ Estimate", "Review and approve the Estimate", "見積を確認して承認"),
+      copy("ตรวจยอดต้นทุนและคำเตือนก่อนอนุมัติ", "Review totals and advisory warnings before approval.", "承認前に合計と注意事項を確認します。"),
+    ],
+    "review-warnings": [
+      copy(`ตรวจคำเตือน ${warningCount} รายการ`, `Review ${warningCount} advisory warning(s)`, `${warningCount}件の注意事項を確認`),
+      copy("คำเตือนไม่ปิดกั้น workflow แต่ควรตรวจความถูกต้อง", "Warnings do not block workflow, but should be checked.", "注意事項は処理を妨げませんが、確認してください。"),
+    ],
+    "review-summary": [
+      copy("ตรวจสรุป Estimate", "Review the Estimate summary", "見積サマリーを確認"),
+      copy("ข้อมูลปัจจุบันไม่มีงานที่ระบบระบุว่าต้องแก้", "There is no system-identified action for the current state.", "現在、システムが要求する修正はありません。"),
+    ],
   } as const;
   const [title, subtitle] = content[action.kind];
   /* The reviewer's reason sits in the strip at the top of the workspace (latestSendBack), so this
      panel only names the next step. */
-  return <Panel title={copy("สิ่งที่ต้องทำต่อ", "Next action", "次の作業")} subtitle={subtitle}>
-    {action.kind === "submit-review"
-      ? <button className="btn primary" type="button" disabled={busy} onClick={onSubmit}><Icon name="send" />{title}</button>
-      : <button className="btn primary" type="button" onClick={() => onOpen(action.tab)}><Icon name="arrowRight" />{title}</button>}
-  </Panel>;
+  return (
+    <Panel title={copy("สิ่งที่ต้องทำต่อ", "Next action", "次の作業")} subtitle={subtitle}>
+      {action.kind === "submit-review" ? (
+        <button className="btn primary" type="button" disabled={busy} onClick={onSubmit}>
+          <Icon name="send" />
+          {title}
+        </button>
+      ) : (
+        <button className="btn primary" type="button" onClick={() => onOpen(action.tab)}>
+          <Icon name="arrowRight" />
+          {title}
+        </button>
+      )}
+    </Panel>
+  );
 }
 
 function EstimateSummaryTab({ workspace }: { workspace: EstimateCostWorkspace }) {
@@ -1303,26 +2973,132 @@ function EstimateSummaryTab({ workspace }: { workspace: EstimateCostWorkspace })
   const modules = costModuleGroups(costItems);
   const openLines = modules.reduce((sum, group) => sum + group.needPrice + group.needSupplier, 0);
   const manDays = manhourLines.reduce((sum, line) => sum + numberOf(line.manDays) * numberOf(line.engineers), 0);
-  return <>
-    <section className="grid-2">
-      <Panel title={uiText("Readiness")} subtitle="ยอดเงินอยู่ในแถบด้านบนแล้ว หน้านี้ตอบว่าพร้อมส่งหรือยัง"><ul className="check-list">
-        <li className={`check-item ${costItems.length ? "pass" : "warning"}`}><Icon name={costItems.length ? "checkCircle" : "alertTriangle"} /><div><strong>{costItems.length} <LocalizedText text={"cost item ·"} /> {modules.length} <LocalizedText text={"module"} /></strong><p>{!costItems.length ? "ยังไม่มีรายการอุปกรณ์" : openLines ? `${openLines} item ยังไม่มีราคาหรือผู้ขาย` : "ทุก item มีราคาและผู้ขายแล้ว"}</p></div></li>
-        <li className={`check-item ${manhourLines.length ? "pass" : "warning"}`}><Icon name={manhourLines.length ? "checkCircle" : "alertTriangle"} /><div><strong>{formatNumber(manDays)} <LocalizedText text={"man-days"} /></strong><p>{manhourLines.length} <LocalizedText text={"man-hour line ·"} /> {expenseLines.length + otherCostLines.length} <LocalizedText text={"project cost line"} /></p></div></li>
-        <li className={`check-item ${validationTone}`}><Icon name={validationIcon} /><div><strong>{workspace.validationIssues.length ? `${criticalCount} error · ${warningCount} warning` : "Server validation passed"}</strong><p>{criticalCount ? "Critical error ปิดกั้นการ submit และ approve" : warningCount ? "Warning เป็นคำเตือน ไม่ปิดกั้น workflow" : "ตรวจกับ revision ปัจจุบันแล้ว"}</p></div></li>
-      </ul></Panel>
-      <Panel title="Revision information"><dl className="def-list one"><div><dt><LocalizedText text={"Revision"} /></dt><dd><strong>{revisionCode(header.revision)}</strong></dd></div><div><dt><LocalizedText text={"Status"} /></dt><dd><Badge>{header.status}</Badge></dd></div><div><dt><LocalizedText text={"Last updated"} /></dt><dd>{formatDateTime(header.updatedAt)}</dd></div><div><dt><LocalizedText text={"Lock"} /></dt><dd>{header.lockedAt ? `${formatDateTime(header.lockedAt)} · ${header.lockedByName ?? "—"}` : "Not locked"}</dd></div></dl></Panel>
-    </section>
-  </>;
+  return (
+    <>
+      <section className="grid-2">
+        <Panel title={uiText("Readiness")} subtitle="ยอดเงินอยู่ในแถบด้านบนแล้ว หน้านี้ตอบว่าพร้อมส่งหรือยัง">
+          <ul className="check-list">
+            <li className={`check-item ${costItems.length ? "pass" : "warning"}`}>
+              <Icon name={costItems.length ? "checkCircle" : "alertTriangle"} />
+              <div>
+                <strong>
+                  {costItems.length} <LocalizedText text={"cost item ·"} /> {modules.length} <LocalizedText text={"module"} />
+                </strong>
+                <p>{!costItems.length ? "ยังไม่มีรายการอุปกรณ์" : openLines ? `${openLines} item ยังไม่มีราคาหรือผู้ขาย` : "ทุก item มีราคาและผู้ขายแล้ว"}</p>
+              </div>
+            </li>
+            <li className={`check-item ${manhourLines.length ? "pass" : "warning"}`}>
+              <Icon name={manhourLines.length ? "checkCircle" : "alertTriangle"} />
+              <div>
+                <strong>
+                  {formatNumber(manDays)} <LocalizedText text={"man-days"} />
+                </strong>
+                <p>
+                  {manhourLines.length} <LocalizedText text={"man-hour line ·"} /> {expenseLines.length + otherCostLines.length} <LocalizedText text={"project cost line"} />
+                </p>
+              </div>
+            </li>
+            <li className={`check-item ${validationTone}`}>
+              <Icon name={validationIcon} />
+              <div>
+                <strong>{workspace.validationIssues.length ? `${criticalCount} error · ${warningCount} warning` : "Server validation passed"}</strong>
+                <p>{criticalCount ? "Critical error ปิดกั้นการ submit และ approve" : warningCount ? "Warning เป็นคำเตือน ไม่ปิดกั้น workflow" : "ตรวจกับ revision ปัจจุบันแล้ว"}</p>
+              </div>
+            </li>
+          </ul>
+        </Panel>
+        <Panel title="Revision information">
+          <dl className="def-list one">
+            <div>
+              <dt>
+                <LocalizedText text={"Revision"} />
+              </dt>
+              <dd>
+                <strong>{revisionCode(header.revision)}</strong>
+              </dd>
+            </div>
+            <div>
+              <dt>
+                <LocalizedText text={"Status"} />
+              </dt>
+              <dd>
+                <Badge>{header.status}</Badge>
+              </dd>
+            </div>
+            <div>
+              <dt>
+                <LocalizedText text={"Last updated"} />
+              </dt>
+              <dd>{formatDateTime(header.updatedAt)}</dd>
+            </div>
+            <div>
+              <dt>
+                <LocalizedText text={"Lock"} />
+              </dt>
+              <dd>{header.lockedAt ? `${formatDateTime(header.lockedAt)} · ${header.lockedByName ?? "—"}` : "Not locked"}</dd>
+            </div>
+          </dl>
+        </Panel>
+      </section>
+    </>
+  );
 }
 
-function EstimateCostItemsTab({ onCopyModule, onRemoveModule, onReorder, onExcelImported, bootstrap, workspace, busy, focusModuleKey, onFocusHandled, onAdd, onBulkAddCost, onQuickAddCost, onCopyFrom, onApplyTemplate, onApplyQuotation, onSaveTemplate, onEdit, onRemove }: { onCopyModule: (group: CostModuleGroup, name: string) => Promise<void>; onRemoveModule: (group: CostModuleGroup) => Promise<void>; onReorder: ReorderEstimate; onExcelImported: () => Promise<void>; bootstrap: BootstrapData; workspace: EstimateCostWorkspace; busy: boolean; focusModuleKey: string | null; onFocusHandled: () => void; onAdd: (seed?: CostItemSeed) => void; onBulkAddCost: (seeds: CostItemSeed[], message: string) => Promise<boolean>; onQuickAddCost: (input: CostItemInput) => Promise<boolean>; onCopyFrom: (input: Omit<EstimateCopyInput, "estimateRowVersion" | "ownerId">) => Promise<boolean>; onApplyTemplate: (input: { templateId: number; module: string; modules: number; ownerId: number; keepReferencePrices: boolean }) => Promise<boolean>; onApplyQuotation: (input: QuotationApplyInput) => Promise<boolean>; onSaveTemplate: (input: { categoryCode: string; module: string; code: string; name: string; projectType: string; description: string }) => Promise<boolean>; onEdit: (line: EstimateCostItem) => void; onRemove: (line: EstimateCostItem) => void }) {
-  const [setSelection,setSetSelection]=useState<number[]>([]);
-  const [setEditor,setSetEditor]=useState<{members:EstimateCostItem[];header?:EstimateCostItem}|null>(null);
-  const [setError,setSetError]=useState("");
-  const [setBusy,setSetBusy]=useState(false);
-  const detachSetItem=async(line:EstimateCostItem)=>{
-    if(!(await confirmDialog("นำรายการออกจากเซ็ต? ราคาต่อชิ้นจะเป็นรอราคา และต้องตรวจราคาใหม่ หากเป็นชิ้นสุดท้าย เซ็ตจะถูกลบด้วย", { danger: true })))return;
-    setSetBusy(true);setSetError("");try{await apiRequest(`/api/v1/estimates/${workspace.header.id}/price-set-detach`,{method:"POST",body:JSON.stringify({lineId:line.id,estimateRowVersion:workspace.header.rowVersion})});await onExcelImported();}catch(error){setSetError(toError(error));}finally{setSetBusy(false);}
+function EstimateCostItemsTab({
+  onCopyModule,
+  onRemoveModule,
+  onReorder,
+  onExcelImported,
+  bootstrap,
+  workspace,
+  busy,
+  focusModuleKey,
+  onFocusHandled,
+  onAdd,
+  onBulkAddCost,
+  onQuickAddCost,
+  onCopyFrom,
+  onApplyTemplate,
+  onApplyQuotation,
+  onSaveTemplate,
+  onEdit,
+  onRemove,
+}: {
+  onCopyModule: (group: CostModuleGroup, name: string) => Promise<void>;
+  onRemoveModule: (group: CostModuleGroup) => Promise<void>;
+  onReorder: ReorderEstimate;
+  onExcelImported: () => Promise<void>;
+  bootstrap: BootstrapData;
+  workspace: EstimateCostWorkspace;
+  busy: boolean;
+  focusModuleKey: string | null;
+  onFocusHandled: () => void;
+  onAdd: (seed?: CostItemSeed) => void;
+  onBulkAddCost: (seeds: CostItemSeed[], message: string) => Promise<boolean>;
+  onQuickAddCost: (input: CostItemInput) => Promise<boolean>;
+  onCopyFrom: (input: Omit<EstimateCopyInput, "estimateRowVersion" | "ownerId">) => Promise<boolean>;
+  onApplyTemplate: (input: { templateId: number; module: string; modules: number; ownerId: number; keepReferencePrices: boolean }) => Promise<boolean>;
+  onApplyQuotation: (input: QuotationApplyInput) => Promise<boolean>;
+  onSaveTemplate: (input: { categoryCode: string; module: string; code: string; name: string; projectType: string; description: string }) => Promise<boolean>;
+  onEdit: (line: EstimateCostItem) => void;
+  onRemove: (line: EstimateCostItem) => void;
+}) {
+  const [setSelection, setSetSelection] = useState<number[]>([]);
+  const [setEditor, setSetEditor] = useState<{ members: EstimateCostItem[]; header?: EstimateCostItem } | null>(null);
+  const [setError, setSetError] = useState("");
+  const [setBusy, setSetBusy] = useState(false);
+  const detachSetItem = async (line: EstimateCostItem) => {
+    if (!(await confirmDialog("นำรายการออกจากเซ็ต? ราคาต่อชิ้นจะเป็นรอราคา และต้องตรวจราคาใหม่ หากเป็นชิ้นสุดท้าย เซ็ตจะถูกลบด้วย", { danger: true }))) return;
+    setSetBusy(true);
+    setSetError("");
+    try {
+      await apiRequest(`/api/v1/estimates/${workspace.header.id}/price-set-detach`, { method: "POST", body: JSON.stringify({ lineId: line.id, estimateRowVersion: workspace.header.rowVersion }) });
+      await onExcelImported();
+    } catch (error) {
+      setSetError(toError(error));
+    } finally {
+      setSetBusy(false);
+    }
   };
   const [moduleEditor, setModuleEditor] = useState<{ key: string; title: string } | null>(null);
   /* One module's actions open at a time, inline, so the scrolling sheet never clips a popover. */
@@ -1349,7 +3125,9 @@ function EstimateCostItemsTab({ onCopyModule, onRemoveModule, onReorder, onExcel
   const bandRefs = useRef<Record<string, HTMLTableRowElement | null>>({});
   const quickDraftOpen = Boolean(quickDraft);
   const quickDraftVersion = quickDraft?.version;
-  useEffect(() => { if (quickDraftOpen) quickItemCodeRef.current?.focus(); }, [quickDraftOpen, quickDraftVersion]);
+  useEffect(() => {
+    if (quickDraftOpen) quickItemCodeRef.current?.focus();
+  }, [quickDraftOpen, quickDraftVersion]);
 
   /* Which modules the engineer left folded is a per-estimate preference, not data.
      A browser with site data blocked simply starts with everything open. */
@@ -1391,56 +3169,79 @@ function EstimateCostItemsTab({ onCopyModule, onRemoveModule, onReorder, onExcel
   }, [workspace.costItems, activeCategory, activeAttention]);
   const [draggedCostId, setDraggedCostId] = useState<number | null>(null);
   const [dropMarker, setDropMarker] = useState("");
-  const clearDrag = () => { setDraggedCostId(null); setDropMarker(""); };
+  const clearDrag = () => {
+    setDraggedCostId(null);
+    setDropMarker("");
+  };
   const allowDrop = (event: React.DragEvent, marker: string) => {
     if (!canAdd || busy || quickSaving || draggedCostId === null) return;
-    event.preventDefault(); event.dataTransfer.dropEffect = "move"; setDropMarker(marker);
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    setDropMarker(marker);
   };
   const dropCost = (event: React.DragEvent, targetId: number, after: boolean) => {
     event.preventDefault();
     const lineId = draggedCostId;
     clearDrag();
     if (!canAdd || busy || quickSaving || lineId === null || lineId === targetId) return;
-    const source = workspace.costItems.find(line => line.id === lineId);
-    const target = workspace.costItems.find(line => line.id === targetId);
+    const source = workspace.costItems.find((line) => line.id === lineId);
+    const target = workspace.costItems.find((line) => line.id === targetId);
     if (!source?.canEdit || !target) return;
-    const ids = workspace.costItems.map(line => line.id);
+    const ids = workspace.costItems.map((line) => line.id);
     const ordered = insertCostLine(ids, lineId, targetId, after);
     const crossModule = source.categoryCode !== target.categoryCode || source.module !== target.module;
     if (!crossModule && ordered.every((id, index) => id === ids[index])) return;
     void onReorder("CostItem", ordered, { lineId, targetLineId: targetId });
   };
   const moveCostModule = (group: CostModuleGroup, direction: -1 | 1) => {
-    const siblings = workspace.costItems.filter(line => line.categoryCode === group.categoryCode);
+    const siblings = workspace.costItems.filter((line) => line.categoryCode === group.categoryCode);
     const moved = moveModule(siblings, costGroupKeyOf, group.key, direction);
     let offset = 0;
-    const ordered = workspace.costItems.map(line => line.categoryCode === group.categoryCode ? moved[offset++] : line);
-    void onReorder("CostItem", ordered.map(line => line.id));
+    const ordered = workspace.costItems.map((line) => (line.categoryCode === group.categoryCode ? moved[offset++] : line));
+    void onReorder(
+      "CostItem",
+      ordered.map((line) => line.id),
+    );
   };
   /* Dragging a module by its grip moves the whole block within its discipline. A module dropped on a band lands
      before or after it by the pointer's half; dropped on a module's items, it lands after that module. */
   const [draggedModule, setDraggedModule] = useState<{ key: string; categoryCode: string } | null>(null);
-  const clearModuleDrag = () => { setDraggedModule(null); setDropMarker(""); };
+  const clearModuleDrag = () => {
+    setDraggedModule(null);
+    setDropMarker("");
+  };
   const allowModuleDrop = (event: React.DragEvent, target: { key: string; categoryCode: string }, after: boolean) => {
     if (!canAdd || busy || quickSaving || !draggedModule || draggedModule.categoryCode !== target.categoryCode || draggedModule.key === target.key) return;
-    event.preventDefault(); event.dataTransfer.dropEffect = "move"; setDropMarker(`mod:${target.key}:${after ? "after" : "before"}`);
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    setDropMarker(`mod:${target.key}:${after ? "after" : "before"}`);
   };
   const dropModule = (event: React.DragEvent, target: { key: string; categoryCode: string }, after: boolean) => {
     event.preventDefault();
     const dragged = draggedModule;
     clearModuleDrag();
     if (!canAdd || busy || quickSaving || !dragged || dragged.categoryCode !== target.categoryCode || dragged.key === target.key) return;
-    const siblings = workspace.costItems.filter(line => line.categoryCode === target.categoryCode);
+    const siblings = workspace.costItems.filter((line) => line.categoryCode === target.categoryCode);
     const moved = placeModule(siblings, costGroupKeyOf, dragged.key, target.key, after);
     if (moved.every((line, index) => line.id === siblings[index]!.id)) return;
     let offset = 0;
-    void onReorder("CostItem", workspace.costItems.map(line => line.categoryCode === target.categoryCode ? moved[offset++]!.id : line.id));
+    void onReorder(
+      "CostItem",
+      workspace.costItems.map((line) => (line.categoryCode === target.categoryCode ? moved[offset++]!.id : line.id)),
+    );
   };
-  const pointerAfter = (event: React.DragEvent) => { const bounds = event.currentTarget.getBoundingClientRect(); return event.clientY >= bounds.top + bounds.height / 2; };
+  const pointerAfter = (event: React.DragEvent) => {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    return event.clientY >= bounds.top + bounds.height / 2;
+  };
   const moveCostLine = (group: CostModuleGroup, index: number, direction: -1 | 1) => {
     const moved = moveSibling(group.lines, index, direction);
-    const ids = new Set(group.lines.map(line => line.id)); let offset = 0;
-    void onReorder("CostItem", workspace.costItems.map(line => ids.has(line.id) ? moved[offset++].id : line.id));
+    const ids = new Set(group.lines.map((line) => line.id));
+    let offset = 0;
+    void onReorder(
+      "CostItem",
+      workspace.costItems.map((line) => (ids.has(line.id) ? moved[offset++].id : line.id)),
+    );
   };
   const visibleLines = groups.flatMap((group) => group.lines);
   const lineSeverity = useMemo(() => {
@@ -1453,11 +3254,32 @@ function EstimateCostItemsTab({ onCopyModule, onRemoveModule, onReorder, onExcel
     return severity;
   }, [workspace.validationIssues]);
   /* The toolbar opens the source used last; a module footer opens the price library aimed at that module. */
-  const openAddItems = (target: AddItemsTarget | null) => { setAddTarget(target); setAddSwitched(false); setTool(target ? "price" : addSource); };
-  const closeTool = () => { setTool(null); setAddTarget(null); };
-  const sourceTabs = (active: AddItemsSource) => function renderSourceTabs(locked: boolean) { return <AddItemsSources active={active} switched={addSwitched} locked={locked} onSwitch={(next) => { setAddSource(next); setAddSwitched(true); setTool(next); }} />; };
+  const openAddItems = (target: AddItemsTarget | null) => {
+    setAddTarget(target);
+    setAddSwitched(false);
+    setTool(target ? "price" : addSource);
+  };
+  const closeTool = () => {
+    setTool(null);
+    setAddTarget(null);
+  };
+  const sourceTabs = (active: AddItemsSource) =>
+    function renderSourceTabs(locked: boolean) {
+      return (
+        <AddItemsSources
+          active={active}
+          switched={addSwitched}
+          locked={locked}
+          onSwitch={(next) => {
+            setAddSource(next);
+            setAddSwitched(true);
+            setTool(next);
+          }}
+        />
+      );
+    };
   const isCollapsed = (key: string) => collapsed.includes(key);
-  const toggleModule = (key: string) => setCollapsed((current) => current.includes(key) ? current.filter((item) => item !== key) : [...current, key]);
+  const toggleModule = (key: string) => setCollapsed((current) => (current.includes(key) ? current.filter((item) => item !== key) : [...current, key]));
   const pendingKey = pendingModule ? moduleKeyOf(pendingModule.categoryCode, pendingModule.module) : null;
   const showPending = Boolean(pendingModule && pendingKey && !groups.some((group) => group.key === pendingKey) && (category === "all" || category === pendingModule?.categoryCode));
 
@@ -1466,7 +3288,11 @@ function EstimateCostItemsTab({ onCopyModule, onRemoveModule, onReorder, onExcel
     if (!focusModuleKey) return;
     const timer = window.setTimeout(() => {
       setCategory("all");
-      if (focusModuleKey.startsWith("price-set:")) { const key=focusModuleKey.slice(10);const header=workspace.costItems.find(line=>line.priceSetKey===key&&line.isPriceSet);if(header)setSetEditor({header,members:workspace.costItems.filter(line=>line.priceSetKey===key&&!line.isPriceSet)}); }
+      if (focusModuleKey.startsWith("price-set:")) {
+        const key = focusModuleKey.slice(10);
+        const header = workspace.costItems.find((line) => line.priceSetKey === key && line.isPriceSet);
+        if (header) setSetEditor({ header, members: workspace.costItems.filter((line) => line.priceSetKey === key && !line.isPriceSet) });
+      }
       setCollapsed((current) => current.filter((key) => key !== focusModuleKey));
       bandRefs.current[focusModuleKey]?.scrollIntoView({ block: "center" });
       onFocusHandled();
@@ -1475,14 +3301,50 @@ function EstimateCostItemsTab({ onCopyModule, onRemoveModule, onReorder, onExcel
   }, [focusModuleKey, onFocusHandled, workspace.costItems]);
 
   const startQuickRow = (group: { key: string; categoryCode: string; category: string; module: string }) => {
-    const prior = workspace.costItems.find((line) => line.categoryCode === group.categoryCode && line.module === group.module) ?? workspace.costItems.find((line) => line.categoryCode === group.categoryCode);
+    const prior =
+      workspace.costItems.find((line) => line.categoryCode === group.categoryCode && line.module === group.module) ?? workspace.costItems.find((line) => line.categoryCode === group.categoryCode);
     setCollapsed((current) => current.filter((key) => key !== group.key));
-    setQuickDraft({ version: (quickDraft?.version ?? 0) + 1, groupKey: group.key, categoryCode: group.categoryCode, category: group.category, subcategory: prior?.subcategory ?? "", module: group.module, itemCode: "", description: "", brand: "", model: "", specification: "", supplierId: prior?.supplierId ?? undefined, quantity: 1, unit: prior?.unit ?? "Pcs", unitCost: 0, priceSource: prior?.priceSource ?? "Manual Estimate", referenceNumber: "", referenceProject: workspace.header.number, priceDate: businessDate(), remark: "", ownerId: defaultOwnerId });
+    setQuickDraft({
+      version: (quickDraft?.version ?? 0) + 1,
+      groupKey: group.key,
+      categoryCode: group.categoryCode,
+      category: group.category,
+      subcategory: prior?.subcategory ?? "",
+      module: group.module,
+      itemCode: "",
+      description: "",
+      brand: "",
+      model: "",
+      specification: "",
+      supplierId: prior?.supplierId ?? undefined,
+      quantity: 1,
+      unit: prior?.unit ?? "Pcs",
+      unitCost: 0,
+      priceSource: prior?.priceSource ?? "Manual Estimate",
+      referenceNumber: "",
+      referenceProject: workspace.header.number,
+      priceDate: businessDate(),
+      remark: "",
+      ownerId: defaultOwnerId,
+    });
   };
-  const updateQuick = <K extends keyof QuickCostDraft>(key: K, value: QuickCostDraft[K]) => setQuickDraft((current) => current ? { ...current, [key]: value } : current);
+  const updateQuick = <K extends keyof QuickCostDraft>(key: K, value: QuickCostDraft[K]) => setQuickDraft((current) => (current ? { ...current, [key]: value } : current));
   /* A pick from the type-ahead lands the whole reference line; the date only moves when the reference carries one. */
-  const applyQuickLookup = (patch: CostItemLookupPatch) => setQuickDraft((current) => current ? { ...current, ...patch, module: current.module, priceDate: patch.priceDate ?? current.priceDate } : current);
-  const quickValid = Boolean(quickDraft && quickDraft.categoryCode.length === 2 && quickDraft.itemCode.trim() && quickDraft.description.trim() && Number.isInteger(quickDraft.quantity) && quickDraft.quantity > 0 && quickDraft.unit.trim() && quickDraft.unitCost >= 0 && quickDraft.quantity * quickDraft.unitCost <= MAX_LEDGER_LINE_TOTAL && quickDraft.priceSource && quickDraft.ownerId > 0);
+  const applyQuickLookup = (patch: CostItemLookupPatch) =>
+    setQuickDraft((current) => (current ? { ...current, ...patch, module: current.module, priceDate: patch.priceDate ?? current.priceDate } : current));
+  const quickValid = Boolean(
+    quickDraft &&
+    quickDraft.categoryCode.length === 2 &&
+    quickDraft.itemCode.trim() &&
+    quickDraft.description.trim() &&
+    Number.isInteger(quickDraft.quantity) &&
+    quickDraft.quantity > 0 &&
+    quickDraft.unit.trim() &&
+    quickDraft.unitCost >= 0 &&
+    quickDraft.quantity * quickDraft.unitCost <= MAX_LEDGER_LINE_TOTAL &&
+    quickDraft.priceSource &&
+    quickDraft.ownerId > 0,
+  );
   const saveQuickRow = async (continueAdding: boolean) => {
     if (!quickDraft || !quickValid || busy || quickSaving) return;
     setQuickSaving(true);
@@ -1495,26 +3357,204 @@ function EstimateCostItemsTab({ onCopyModule, onRemoveModule, onReorder, onExcel
 
   const colCount = dense ? 10 : 16;
   const sheetWidth = dense ? 1260 : 2130;
-  const draftRow = (groupKey: string) => quickDraft?.groupKey === groupKey ? <tr className="item-row inline-draft-row cost-draft-row" key={`quick-${groupKey}-${quickDraft.version}`} title={localizeCopy("Enter: save and create the next row · Esc: cancel")} onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); setQuickDraft(null); } if (event.key === "Enter" && !event.nativeEvent.isComposing) { event.preventDefault(); void saveQuickRow(true); } }}>
-    <td><span className="cell-text quick-new"><LocalizedText text={"New"} />{!quickDraft.module ? <small style={{ display: "block" }}><LocalizedText text={"standalone"} /></small> : null}</span></td>
-    <td><CostItemLookupInput field="itemCode" inputRef={(node) => { quickItemCodeRef.current = node; }} required aria-label={uiText("Item code")} maxLength={100} placeholder={localizeCopy("Part No. *")} value={quickDraft.itemCode} onChange={(text) => updateQuick("itemCode", text)} onPick={applyQuickLookup} suppliers={bootstrap.suppliers} /></td>
-    <td><div className="inline-stack"><CostItemLookupInput field="description" required aria-label={uiText("Description")} maxLength={500} placeholder={localizeCopy("Description *")} value={quickDraft.description} onChange={(text) => updateQuick("description", text)} onPick={applyQuickLookup} suppliers={bootstrap.suppliers} /><input aria-label={uiText("Specification")} maxLength={20000} placeholder={uiText("Specification")} value={quickDraft.specification ?? ""} onChange={(event) => updateQuick("specification", event.target.value)} /></div></td>
-    <td><div className="inline-stack"><CostItemLookupInput field="brand" aria-label={uiText("Brand")} maxLength={100} placeholder={uiText("Brand")} value={quickDraft.brand ?? ""} onChange={(text) => updateQuick("brand", text)} onPick={applyQuickLookup} suppliers={bootstrap.suppliers} /><input aria-label={uiText("Model")} maxLength={200} placeholder={uiText("Model")} value={quickDraft.model ?? ""} onChange={(event) => updateQuick("model", event.target.value)} /></div></td>
-    <td><SupplierLookupInput suppliers={bootstrap.suppliers} aria-label={uiText("Supplier")} placeholder={uiText("Supplier")} value={quickDraft.supplierId} onChange={(supplierId) => updateQuick("supplierId", supplierId)} /></td>
-    <td><input className="num" aria-label={uiText("Quantity")} type="number" min="1" max="1000000000" step="1" value={quickDraft.quantity} onChange={(event) => updateQuick("quantity", Number(event.target.value))} /></td>
-    <td><select aria-label={uiText("Unit")} value={quickDraft.unit} onChange={(event) => updateQuick("unit", event.target.value)}>{UNITS.map((unit) => <option key={unit}>{unit}</option>)}</select></td>
-    <td><input className="num" aria-label={uiText("Unit cost")} type="number" min="0" max="1000000000" step="0.0001" value={quickDraft.unitCost} onChange={(event) => updateQuick("unitCost", Number(event.target.value))} /></td>
-    <td className="quick-computed"><strong>{formatMoney(quickDraft.quantity * quickDraft.unitCost)}</strong></td>
-    {dense ? null : <>
-      <td><select aria-label={localizeCopy("Price source")} value={quickDraft.priceSource} onChange={(event) => updateQuick("priceSource", event.target.value)}>{PRICE_SOURCES.map((source) => <option key={source}>{source}</option>)}</select></td>
-      <td><div className="inline-stack"><input aria-label={localizeCopy("Reference number")} maxLength={200} placeholder={localizeCopy("Reference No.")} value={quickDraft.referenceNumber ?? ""} onChange={(event) => updateQuick("referenceNumber", event.target.value)} /><input aria-label={localizeCopy("Reference project")} maxLength={200} placeholder={localizeCopy("Reference project")} value={quickDraft.referenceProject ?? ""} onChange={(event) => updateQuick("referenceProject", event.target.value)} /></div></td>
-      <td><DateInput aria-label={uiText("Price date")} value={quickDraft.priceDate ?? ""} onChange={(event) => updateQuick("priceDate", event.target.value || undefined)} /></td>
-      <td><select aria-label={localizeCopy("Cost owner")} value={quickDraft.ownerId} onChange={(event) => updateQuick("ownerId", Number(event.target.value))}>{owners.map((owner) => <option key={owner.id} value={owner.id}>{owner.name}</option>)}</select></td>
-      <td><input aria-label={localizeCopy("Cost remark")} maxLength={20000} placeholder={uiText("Remark")} value={quickDraft.remark ?? ""} onChange={(event) => updateQuick("remark", event.target.value)} /></td>
-      <td><span className="cell-text"><Badge>{"Draft"}</Badge></span></td>
-    </>}
-    <td><div className="row-actions"><button className="row-action save" type="button" disabled={!quickValid || busy || quickSaving} onClick={() => { void saveQuickRow(false); }} aria-label={localizeCopy("Save cost item")}><Icon name="check" /></button><button className="row-action" type="button" disabled={busy || quickSaving} onClick={() => setQuickDraft(null)} aria-label={localizeCopy("Cancel new cost item")}><Icon name="x" /></button></div></td>
-  </tr> : null;
+  const draftRow = (groupKey: string) =>
+    quickDraft?.groupKey === groupKey ? (
+      <tr
+        className="item-row inline-draft-row cost-draft-row"
+        key={`quick-${groupKey}-${quickDraft.version}`}
+        title={localizeCopy("Enter: save and create the next row · Esc: cancel")}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            event.preventDefault();
+            setQuickDraft(null);
+          }
+          if (event.key === "Enter" && !event.nativeEvent.isComposing) {
+            event.preventDefault();
+            void saveQuickRow(true);
+          }
+        }}
+      >
+        <td>
+          <span className="cell-text quick-new">
+            <LocalizedText text={"New"} />
+            {!quickDraft.module ? (
+              <small style={{ display: "block" }}>
+                <LocalizedText text={"standalone"} />
+              </small>
+            ) : null}
+          </span>
+        </td>
+        <td>
+          <CostItemLookupInput
+            field="itemCode"
+            inputRef={(node) => {
+              quickItemCodeRef.current = node;
+            }}
+            required
+            aria-label={uiText("Item code")}
+            maxLength={100}
+            placeholder={localizeCopy("Part No. *")}
+            value={quickDraft.itemCode}
+            onChange={(text) => updateQuick("itemCode", text)}
+            onPick={applyQuickLookup}
+            suppliers={bootstrap.suppliers}
+          />
+        </td>
+        <td>
+          <div className="inline-stack">
+            <CostItemLookupInput
+              field="description"
+              required
+              aria-label={uiText("Description")}
+              maxLength={500}
+              placeholder={localizeCopy("Description *")}
+              value={quickDraft.description}
+              onChange={(text) => updateQuick("description", text)}
+              onPick={applyQuickLookup}
+              suppliers={bootstrap.suppliers}
+            />
+            <input
+              aria-label={uiText("Specification")}
+              maxLength={20000}
+              placeholder={uiText("Specification")}
+              value={quickDraft.specification ?? ""}
+              onChange={(event) => updateQuick("specification", event.target.value)}
+            />
+          </div>
+        </td>
+        <td>
+          <div className="inline-stack">
+            <CostItemLookupInput
+              field="brand"
+              aria-label={uiText("Brand")}
+              maxLength={100}
+              placeholder={uiText("Brand")}
+              value={quickDraft.brand ?? ""}
+              onChange={(text) => updateQuick("brand", text)}
+              onPick={applyQuickLookup}
+              suppliers={bootstrap.suppliers}
+            />
+            <input aria-label={uiText("Model")} maxLength={200} placeholder={uiText("Model")} value={quickDraft.model ?? ""} onChange={(event) => updateQuick("model", event.target.value)} />
+          </div>
+        </td>
+        <td>
+          <SupplierLookupInput
+            suppliers={bootstrap.suppliers}
+            aria-label={uiText("Supplier")}
+            placeholder={uiText("Supplier")}
+            value={quickDraft.supplierId}
+            onChange={(supplierId) => updateQuick("supplierId", supplierId)}
+          />
+        </td>
+        <td>
+          <input
+            className="num"
+            aria-label={uiText("Quantity")}
+            type="number"
+            min="1"
+            max="1000000000"
+            step="1"
+            value={quickDraft.quantity}
+            onChange={(event) => updateQuick("quantity", Number(event.target.value))}
+          />
+        </td>
+        <td>
+          <select aria-label={uiText("Unit")} value={quickDraft.unit} onChange={(event) => updateQuick("unit", event.target.value)}>
+            {UNITS.map((unit) => (
+              <option key={unit}>{unit}</option>
+            ))}
+          </select>
+        </td>
+        <td>
+          <input
+            className="num"
+            aria-label={uiText("Unit cost")}
+            type="number"
+            min="0"
+            max="1000000000"
+            step="0.0001"
+            value={quickDraft.unitCost}
+            onChange={(event) => updateQuick("unitCost", Number(event.target.value))}
+          />
+        </td>
+        <td className="quick-computed">
+          <strong>{formatMoney(quickDraft.quantity * quickDraft.unitCost)}</strong>
+        </td>
+        {dense ? null : (
+          <>
+            <td>
+              <select aria-label={localizeCopy("Price source")} value={quickDraft.priceSource} onChange={(event) => updateQuick("priceSource", event.target.value)}>
+                {PRICE_SOURCES.map((source) => (
+                  <option key={source}>{source}</option>
+                ))}
+              </select>
+            </td>
+            <td>
+              <div className="inline-stack">
+                <input
+                  aria-label={localizeCopy("Reference number")}
+                  maxLength={200}
+                  placeholder={localizeCopy("Reference No.")}
+                  value={quickDraft.referenceNumber ?? ""}
+                  onChange={(event) => updateQuick("referenceNumber", event.target.value)}
+                />
+                <input
+                  aria-label={localizeCopy("Reference project")}
+                  maxLength={200}
+                  placeholder={localizeCopy("Reference project")}
+                  value={quickDraft.referenceProject ?? ""}
+                  onChange={(event) => updateQuick("referenceProject", event.target.value)}
+                />
+              </div>
+            </td>
+            <td>
+              <DateInput aria-label={uiText("Price date")} value={quickDraft.priceDate ?? ""} onChange={(event) => updateQuick("priceDate", event.target.value || undefined)} />
+            </td>
+            <td>
+              <select aria-label={localizeCopy("Cost owner")} value={quickDraft.ownerId} onChange={(event) => updateQuick("ownerId", Number(event.target.value))}>
+                {owners.map((owner) => (
+                  <option key={owner.id} value={owner.id}>
+                    {owner.name}
+                  </option>
+                ))}
+              </select>
+            </td>
+            <td>
+              <input
+                aria-label={localizeCopy("Cost remark")}
+                maxLength={20000}
+                placeholder={uiText("Remark")}
+                value={quickDraft.remark ?? ""}
+                onChange={(event) => updateQuick("remark", event.target.value)}
+              />
+            </td>
+            <td>
+              <span className="cell-text">
+                <Badge>{"Draft"}</Badge>
+              </span>
+            </td>
+          </>
+        )}
+        <td>
+          <div className="row-actions">
+            <button
+              className="row-action save"
+              type="button"
+              disabled={!quickValid || busy || quickSaving}
+              onClick={() => {
+                void saveQuickRow(false);
+              }}
+              aria-label={localizeCopy("Save cost item")}
+            >
+              <Icon name="check" />
+            </button>
+            <button className="row-action" type="button" disabled={busy || quickSaving} onClick={() => setQuickDraft(null)} aria-label={localizeCopy("Cancel new cost item")}>
+              <Icon name="x" />
+            </button>
+          </div>
+        </td>
+      </tr>
+    ) : null;
 
   const moduleBand = (group: { key: string; categoryCode: string; category: string; module: string }, ordinal: number, lineCount: number, groupTotal: number) => {
     /* Red: lines whose validation error blocks submit. Amber: lines still waiting for a price or a supplier,
@@ -1523,160 +3563,859 @@ function EstimateCostItemsTab({ onCopyModule, onRemoveModule, onReorder, onExcel
     const errors = bandLines.filter((line) => lineSeverity.get(line.id) === "error").length;
     const warnings = bandLines.filter((line) => lineSeverity.get(line.id) !== "error" && (lineSeverity.has(line.id) || lineNeedsPrice(line) || lineNeedsSupplier(line))).length;
     const moduleMarker = dropMarker === `mod:${group.key}:before` ? " cost-drop-before" : dropMarker === `mod:${group.key}:after` && isCollapsed(group.key) ? " cost-drop-after" : "";
-    return <tr className={"module-row" + (dropMarker === group.key ? " cost-drop-module" : "") + moduleMarker} onDragOver={event => { if (draggedModule) allowModuleDrop(event, group, pointerAfter(event)); else if (lineCount) allowDrop(event, group.key); }} onDrop={event => { if (draggedModule) { dropModule(event, group, pointerAfter(event)); return; } const target = groups.find(entry => entry.key === group.key)?.lines.at(-1); if (target) dropCost(event, target.id, true); }} key={`band-${group.key}`} ref={(node) => { bandRefs.current[group.key] = node; }}>
-
-    <td colSpan={colCount}><div className="row band">
-      {canAdd && lineCount ? <button type="button" className="icon-btn cost-drag-handle" draggable={!busy && !quickSaving} disabled={busy || quickSaving} aria-label={"Drag module " + group.module} title={estimateCopy("ลากเพื่อย้ายโมดูล", "Drag to move the module", "ドラッグしてモジュールを移動")} onDragStart={event => { setDraggedModule({ key: group.key, categoryCode: group.categoryCode }); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", group.key); }} onDragEnd={clearModuleDrag}>⠿</button> : null}
-      <button type="button" className="module-toggle" aria-label={(isCollapsed(group.key) ? "Expand " : "Collapse ") + group.module} aria-expanded={!isCollapsed(group.key)} onClick={() => toggleModule(group.key)}>
-        <Icon name={isCollapsed(group.key) ? "chevronRight" : "chevronDown"} />
-      </button>
-      {canAdd && lineCount ? <button type="button" className="module-name-edit" disabled={busy || quickSaving} title={localizeCopy("แก้ชื่อ Main Module / Rename Main Module")} onClick={() => setModuleEditor({ key: "category:" + group.categoryCode + ":" + group.module, title: group.module })}><strong>{ordinal} · {group.module}</strong><Icon name="edit" /></button> : <strong>{ordinal} · {group.module}</strong>}
-      <span className="pill">{group.categoryCode}</span>
-      <span className="muted">{group.category} · {estimateCopy(`${lineCount} รายการ`, `${lineCount} item(s)`, `${lineCount}件`)}</span>
-      {errors ? <Badge tone="red">{estimateCopy(`${errors} ต้องแก้`, `${errors} to fix`, `要修正 ${errors}`)}</Badge> : null}
-      {warnings ? <Badge tone="amber">{estimateCopy(`${warnings} คำเตือน`, `${warnings} warning(s)`, `警告 ${warnings}`)}</Badge> : null}
-      {lineCount ? <strong className="est-band-total">{formatMoney(groupTotal)}</strong> : null}
-      {canAdd && lineCount ? (bandActions === group.key
-      ? <span className="row-actions cost-order-actions est-band-actions"><button className="icon-btn" type="button" disabled={busy || quickSaving} title={localizeCopy("เก็บโมดูลนี้เข้าคลัง Master Template")} aria-label={"Save as template " + group.module} onClick={() => { setBandActions(null); setSaveTarget(groups.find((entry) => entry.key === group.key) ?? null); }}><Icon name="package" /></button>{([-1, 1] as const).map(direction => {
-        const siblings = groups.filter(entry => entry.categoryCode === group.categoryCode);
-        const index = siblings.findIndex(entry => entry.key === group.key);
-        return <button key={direction} className="icon-btn" type="button" aria-label={(direction === -1 ? "Move up " : "Move down ") + group.module} title={localizeCopy(direction === -1 ? "ขยับขึ้น / Move up" : "ขยับลง / Move down")} disabled={busy || quickSaving || index + direction < 0 || index + direction >= siblings.length} onClick={() => moveCostModule(siblings[index], direction)}>{direction === -1 ? "▲" : "▼"}</button>;
-      })}<button className="icon-btn" type="button" disabled={busy || quickSaving} title={estimateUxCopy(currentLocale(), "คัดลอกโมดูล", "Copy module", "モジュールを複製")} aria-label={"Copy Module " + group.module} onClick={() => setCopyTarget(groups.find(entry => entry.key === group.key) ?? null)}><Icon name="copy" /></button><button className="icon-btn" type="button" disabled={busy || quickSaving} title={localizeCopy("แก้ไข Main Module / Edit Main Module")} aria-label={"Edit Main Module " + group.module} onClick={() => setModuleEditor({ key: "category:" + group.categoryCode + ":" + group.module, title: group.module })}><Icon name="edit" /></button><button className="icon-btn danger" type="button" disabled={busy || quickSaving} title={localizeCopy("ลบ Main Module / Delete Main Module")} aria-label={"Delete Main Module " + group.module} onClick={() => { const target = groups.find(entry => entry.key === group.key); if (target) void onRemoveModule(target); }}><Icon name="trash" /></button><button className="icon-btn" type="button" aria-label={estimateCopy("ปิดตัวเลือกโมดูล", "Close module actions", "モジュール操作を閉じる")} onClick={() => setBandActions(null)}><Icon name="x" /></button></span>
-      : <button className="icon-btn" type="button" disabled={busy || quickSaving} aria-expanded={false} title={estimateCopy("ตัวเลือกโมดูล: ย้าย คัดลอก แก้ไข บันทึกเป็น Template ลบ", "Module actions: move, copy, edit, save as template, delete", "モジュール操作：移動・複製・編集・テンプレート保存・削除")} aria-label={estimateCopy("ตัวเลือกโมดูล", "Module actions", "モジュール操作") + " " + group.module} onClick={() => setBandActions(group.key)}><Icon name="more" /></button>) : null}
-    </div></td>
-  </tr>;
+    return (
+      <tr
+        className={"module-row" + (dropMarker === group.key ? " cost-drop-module" : "") + moduleMarker}
+        onDragOver={(event) => {
+          if (draggedModule) allowModuleDrop(event, group, pointerAfter(event));
+          else if (lineCount) allowDrop(event, group.key);
+        }}
+        onDrop={(event) => {
+          if (draggedModule) {
+            dropModule(event, group, pointerAfter(event));
+            return;
+          }
+          const target = groups.find((entry) => entry.key === group.key)?.lines.at(-1);
+          if (target) dropCost(event, target.id, true);
+        }}
+        key={`band-${group.key}`}
+        ref={(node) => {
+          bandRefs.current[group.key] = node;
+        }}
+      >
+        <td colSpan={colCount}>
+          <div className="row band">
+            {canAdd && lineCount ? (
+              <button
+                type="button"
+                className="icon-btn cost-drag-handle"
+                draggable={!busy && !quickSaving}
+                disabled={busy || quickSaving}
+                aria-label={"Drag module " + group.module}
+                title={estimateCopy("ลากเพื่อย้ายโมดูล", "Drag to move the module", "ドラッグしてモジュールを移動")}
+                onDragStart={(event) => {
+                  setDraggedModule({ key: group.key, categoryCode: group.categoryCode });
+                  event.dataTransfer.effectAllowed = "move";
+                  event.dataTransfer.setData("text/plain", group.key);
+                }}
+                onDragEnd={clearModuleDrag}
+              >
+                ⠿
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="module-toggle"
+              aria-label={(isCollapsed(group.key) ? "Expand " : "Collapse ") + group.module}
+              aria-expanded={!isCollapsed(group.key)}
+              onClick={() => toggleModule(group.key)}
+            >
+              <Icon name={isCollapsed(group.key) ? "chevronRight" : "chevronDown"} />
+            </button>
+            {canAdd && lineCount ? (
+              <button
+                type="button"
+                className="module-name-edit"
+                disabled={busy || quickSaving}
+                title={localizeCopy("แก้ชื่อ Main Module / Rename Main Module")}
+                onClick={() => setModuleEditor({ key: "category:" + group.categoryCode + ":" + group.module, title: group.module })}
+              >
+                <strong>
+                  {ordinal} · {group.module}
+                </strong>
+                <Icon name="edit" />
+              </button>
+            ) : (
+              <strong>
+                {ordinal} · {group.module}
+              </strong>
+            )}
+            <span className="pill">{group.categoryCode}</span>
+            <span className="muted">
+              {group.category} · {estimateCopy(`${lineCount} รายการ`, `${lineCount} item(s)`, `${lineCount}件`)}
+            </span>
+            {errors ? <Badge tone="red">{estimateCopy(`${errors} ต้องแก้`, `${errors} to fix`, `要修正 ${errors}`)}</Badge> : null}
+            {warnings ? <Badge tone="amber">{estimateCopy(`${warnings} คำเตือน`, `${warnings} warning(s)`, `警告 ${warnings}`)}</Badge> : null}
+            {lineCount ? <strong className="est-band-total">{formatMoney(groupTotal)}</strong> : null}
+            {canAdd && lineCount ? (
+              bandActions === group.key ? (
+                <span className="row-actions cost-order-actions est-band-actions">
+                  <button
+                    className="icon-btn"
+                    type="button"
+                    disabled={busy || quickSaving}
+                    title={localizeCopy("เก็บโมดูลนี้เข้าคลัง Master Template")}
+                    aria-label={"Save as template " + group.module}
+                    onClick={() => {
+                      setBandActions(null);
+                      setSaveTarget(groups.find((entry) => entry.key === group.key) ?? null);
+                    }}
+                  >
+                    <Icon name="package" />
+                  </button>
+                  {([-1, 1] as const).map((direction) => {
+                    const siblings = groups.filter((entry) => entry.categoryCode === group.categoryCode);
+                    const index = siblings.findIndex((entry) => entry.key === group.key);
+                    return (
+                      <button
+                        key={direction}
+                        className="icon-btn"
+                        type="button"
+                        aria-label={(direction === -1 ? "Move up " : "Move down ") + group.module}
+                        title={localizeCopy(direction === -1 ? "ขยับขึ้น / Move up" : "ขยับลง / Move down")}
+                        disabled={busy || quickSaving || index + direction < 0 || index + direction >= siblings.length}
+                        onClick={() => moveCostModule(siblings[index], direction)}
+                      >
+                        {direction === -1 ? "▲" : "▼"}
+                      </button>
+                    );
+                  })}
+                  <button
+                    className="icon-btn"
+                    type="button"
+                    disabled={busy || quickSaving}
+                    title={estimateUxCopy(currentLocale(), "คัดลอกโมดูล", "Copy module", "モジュールを複製")}
+                    aria-label={"Copy Module " + group.module}
+                    onClick={() => setCopyTarget(groups.find((entry) => entry.key === group.key) ?? null)}
+                  >
+                    <Icon name="copy" />
+                  </button>
+                  <button
+                    className="icon-btn"
+                    type="button"
+                    disabled={busy || quickSaving}
+                    title={localizeCopy("แก้ไข Main Module / Edit Main Module")}
+                    aria-label={"Edit Main Module " + group.module}
+                    onClick={() => setModuleEditor({ key: "category:" + group.categoryCode + ":" + group.module, title: group.module })}
+                  >
+                    <Icon name="edit" />
+                  </button>
+                  <button
+                    className="icon-btn danger"
+                    type="button"
+                    disabled={busy || quickSaving}
+                    title={localizeCopy("ลบ Main Module / Delete Main Module")}
+                    aria-label={"Delete Main Module " + group.module}
+                    onClick={() => {
+                      const target = groups.find((entry) => entry.key === group.key);
+                      if (target) void onRemoveModule(target);
+                    }}
+                  >
+                    <Icon name="trash" />
+                  </button>
+                  <button className="icon-btn" type="button" aria-label={estimateCopy("ปิดตัวเลือกโมดูล", "Close module actions", "モジュール操作を閉じる")} onClick={() => setBandActions(null)}>
+                    <Icon name="x" />
+                  </button>
+                </span>
+              ) : (
+                <button
+                  className="icon-btn"
+                  type="button"
+                  disabled={busy || quickSaving}
+                  aria-expanded={false}
+                  title={estimateCopy(
+                    "ตัวเลือกโมดูล: ย้าย คัดลอก แก้ไข บันทึกเป็น Template ลบ",
+                    "Module actions: move, copy, edit, save as template, delete",
+                    "モジュール操作：移動・複製・編集・テンプレート保存・削除",
+                  )}
+                  aria-label={estimateCopy("ตัวเลือกโมดูล", "Module actions", "モジュール操作") + " " + group.module}
+                  onClick={() => setBandActions(group.key)}
+                >
+                  <Icon name="more" />
+                </button>
+              )
+            ) : null}
+          </div>
+        </td>
+      </tr>
+    );
   };
 
-  return <>
-  {moduleEditor ? <EstimateModuleEditor workspace={workspace} moduleKey={moduleEditor.key} initialTitle={moduleEditor.title} onClose={() => setModuleEditor(null)} onSaved={onExcelImported} /> : null}
-  {setError ? <div role="alert" className="info-strip red">{setError}</div> : null}
-  {setEditor ? <EstimatePriceSetEditor workspace={workspace} bootstrap={bootstrap} members={setEditor.members} header={setEditor.header} onClose={()=>setSetEditor(null)} onSaved={async()=>{setSetSelection([]);await onExcelImported();}}/> : null}
-  <Panel className="estimate-cost-panel" flush>
-    <div className="est-sheet-bar">
-      {presentCategories.length ? <div className="est-dchips" role="group" aria-label={localizeCopy("Cost category")}>
-        <button type="button" className={activeCategory === "all" ? "est-dchip on" : "est-dchip"} aria-pressed={activeCategory === "all"} onClick={() => { setCategory("all"); setQuickDraft(null); }}>{estimateCopy("ทั้งหมด", "All", "すべて")}<span className="est-dchip-n">{workspace.costItems.length}</span></button>
-        {presentCategories.map(([code, name]) => { const count = workspace.costItems.filter((line) => line.categoryCode === code).length; return <button key={code} type="button" className={activeCategory === code ? "est-dchip on" : "est-dchip"} aria-pressed={activeCategory === code} onClick={() => { setCategory(code); setQuickDraft(null); }}><span className="est-dchip-code mono">{code}</span>{name}<span className="est-dchip-n">{count}</span></button>; })}
-      </div> : null}
-      <span className="spacer" />
-      <div className="est-seg" role="group" aria-label={estimateCopy("คอลัมน์ที่แสดง", "Columns shown", "表示する列")}>
-        <button type="button" className={dense ? "on" : undefined} aria-pressed={dense} title={estimateCopy("แสดงคอลัมน์หลัก", "Main columns only", "主要な列のみ")} onClick={() => setDense(true)}>{estimateCopy("ย่อ", "Compact", "簡易")}</button>
-        <button type="button" className={dense ? undefined : "on"} aria-pressed={!dense} title={estimateCopy("เพิ่มแหล่งราคา อ้างอิง วันที่ราคา ผู้รับผิดชอบ หมายเหตุ และสถานะ", "Adds price source, reference, price date, owner, remark and status", "価格元・参照・価格日・担当・備考・状態を追加")} onClick={() => setDense(false)}>{estimateCopy("เต็ม", "Full", "全列")}</button>
-      </div>
-      <button type="button" className="btn ghost sm icon-btn" disabled={!groups.length} aria-label={localizeCopy("หุบทุกโมดูล")} title={localizeCopy("หุบทุกโมดูล")} onClick={() => setCollapsed(groups.filter(group => group.module).map((group) => group.key))}><Icon name="minimize" /></button>
-      <button type="button" className="btn ghost sm icon-btn" disabled={!collapsed.length} aria-label={localizeCopy("กางทุกโมดูล")} title={localizeCopy("กางทุกโมดูล")} onClick={() => setCollapsed([])}><Icon name="maximize" /></button>
-      {canAdd ? <>
-    {setSelection.length ? <button type="button" className="btn default sm" disabled={busy || setBusy} onClick={() => setSetEditor({ members: workspace.costItems.filter(line => setSelection.includes(line.id) && !line.priceSetKey) })}>{estimateUxCopy(currentLocale(), "รวมเป็นเซ็ต", "Set price", "セット化")} ({setSelection.length})</button> : null}
-    <button className="btn default sm" type="button" disabled={busy} onClick={() => onAdd({ module: "", categoryCode: category === "all" ? "01" : category })}><Icon name="plus" />{estimateUxCopy(currentLocale(), "เพิ่มรายการ", "Add item", "明細を追加")}</button>
-    <button className="btn default sm" type="button" disabled={busy} onClick={() => openAddItems(null)}><Icon name="upload" />{estimateUxCopy(currentLocale(), "นำเข้า / คัดลอก", "Import / copy", "インポート / コピー")}</button>
-    <button className="btn primary sm" type="button" data-guide="estimate.addModule" disabled={busy} onClick={() => setTool("module")}><Icon name="layers" />{estimateUxCopy(currentLocale(), "เพิ่มโมดูล", "Add module", "モジュールを追加")}</button>
-      </> : null}
-    </div>
-    {groups.length || showPending ? <div className="table-wrap cost-sheet-wrap"><table className="cost-inline-sheet cost-sheet" style={{ minWidth: sheetWidth }}>
-      <thead><tr>
-        <th style={{ width: 48 }}>#</th>
-        <th style={{ width: 140 }}>{estimateCopy("รหัส", "Code", "コード")}</th>
-        <th style={{ width: 280 }}>{estimateCopy("รายการ / Spec", "Item / Spec", "明細 / 仕様")}</th>
-        <th style={{ width: 140 }}>Brand / Model</th>
-        <th style={{ width: 150 }}><LocalizedText text={"Supplier"} /></th>
-        <th className="num" style={{ width: 84 }}><LocalizedText text={"Qty"} /></th>
-        <th style={{ width: 104 }}><LocalizedText text={"Unit"} /></th>
-        <th className="num" style={{ width: 112 }}>{estimateCopy("ต้นทุน/หน่วย", "Unit cost", "単価")}</th>
-        <th className="num" style={{ width: 120 }}><LocalizedText text={"Total"} /></th>
-        {dense ? null : <>
-          <th style={{ width: 150 }}><LocalizedText text={"Price source"} /></th>
-          <th style={{ width: 170 }}><LocalizedText text={"Reference"} /></th>
-          <th style={{ width: 110 }}><LocalizedText text={"Price date"} /></th>
-          <th style={{ width: 150 }}><LocalizedText text={"Owner"} /></th>
-          <th style={{ width: 180 }}><LocalizedText text={"Remark"} /></th>
-          <th style={{ width: 110 }}><LocalizedText text={"Status"} /></th>
-        </>}
-        <th style={{ width: 84 }} aria-label={uiText("Action")} />
-      </tr></thead>
-      <tbody>
-        {groups.flatMap((group, groupIndex) => {
-          if (group.module && isCollapsed(group.key)) return [moduleBand(group, groupIndex + 1, group.lines.length, group.total)];
-          return [
-            group.module ? moduleBand(group, groupIndex + 1, group.lines.length, group.total) : null,
-            ...group.lines.map((line, index) => <tr key={line.id} className={"item-row" + (line.isPriceSet ? " price-set-header" : line.priceSetKey ? " price-set-component" : "") + (dropMarker === line.id + ":before" ? " cost-drop-before" : dropMarker === line.id + ":after" || (dropMarker === `mod:${group.key}:after` && index === group.lines.length - 1) ? " cost-drop-after" : "")} onDragOver={event => { if (draggedModule) { allowModuleDrop(event, group, true); return; } const bounds = event.currentTarget.getBoundingClientRect(); allowDrop(event, line.id + (event.clientY < bounds.top + bounds.height / 2 ? ":before" : ":after")); }} onDrop={event => { if (draggedModule) { dropModule(event, group, true); return; } const bounds = event.currentTarget.getBoundingClientRect(); dropCost(event, line.id, event.clientY >= bounds.top + bounds.height / 2); }}>
-              <td><span className="cell-text muted mono">{group.module ? `${groupIndex + 1}-${index + 1}` : String(groupIndex + 1)}</span></td>
-              <td><span className="cell-text">{canAdd && line.canEdit && !line.priceSetKey ? <input type="checkbox" aria-label={"Select for price set " + line.itemCode} checked={setSelection.includes(line.id)} onChange={event=>setSetSelection(current=>event.target.checked?[...current,line.id]:current.filter(id=>id!==line.id))}/> : null}<strong className="mono">{line.isPriceSet ? "SET" : line.itemCode}</strong></span></td>
-              <td><div className="cell-primary"><strong>{line.isPriceSet ? "▣ " : line.priceSetKey ? "↳ " : ""}{line.description}</strong>{line.priceSetKey && !line.isPriceSet ? <span>{line.quantityPerSet} {line.unit} / Set · รวมในราคาเซ็ต</span> : null}{!group.module ? <span>รายการเดี่ยว / Standalone · {line.category}</span> : null}{line.specification ? <span>{line.specification}</span> : null}</div></td>
-              <td><div className="cell-primary"><strong>{line.brand || "—"}</strong>{line.model ? <span>{line.model}</span> : null}</div></td>
-              <td><span className="cell-text">{line.supplierName ?? <span className="soft-warn"><LocalizedText text={"ยังไม่เลือกผู้ขาย"} /></span>}</span></td>
-              {line.canEdit ? <EstimateModuleQuantityCells key={line.id+":"+line.rowVersion} name={line.itemCode} quantity={line.quantity} unit={line.unit} units={workspace.costItems.map(item=>item.unit)} showCostRatio={!line.priceSetKey||Boolean(line.isPriceSet)} disabled={busy||setBusy} onSave={async (quantity,unit)=>{setSetBusy(true);try{await apiRequest(`/api/v1/estimates/${workspace.header.id}/cost-items/${line.id}/quantity`,{method:"PUT",body:JSON.stringify({estimateRowVersion:workspace.header.rowVersion,lineRowVersion:line.rowVersion,quantity,unit})});await onExcelImported();}finally{setSetBusy(false);}}}/> : <><td className="num">{formatNumber(line.quantity, 0)}</td><td><span className="cell-text">{line.unit}</span></td></>}
-              <td className="num">{line.priceSetKey && !line.isPriceSet ? <span className="muted"><LocalizedText text={"Included in the set price"} /></span> : numberOf(line.unitCost) > 0 ? formatMoney(line.unitCost) : <span className="soft-warn"><LocalizedText text={"รอราคา"} /></span>}</td>
-              <td className="num"><strong>{line.priceSetKey && !line.isPriceSet ? "—" : formatMoney(line.lineTotal)}</strong></td>
-              {dense ? null : <>
-                <td><span className="cell-text">{line.priceSource}</span></td>
-                <td><div className="cell-primary"><strong>{line.referenceNumber || "—"}</strong>{line.referenceProject ? <span>{line.referenceProject}</span> : null}</div></td>
-                <td><span className="cell-text">{formatDate(line.priceDate)}</span></td>
-                <td><span className="cell-text">{line.ownerName}</span></td>
-                <td><span className="cell-text">{line.remark || "—"}</span></td>
-                <td><span className="cell-text"><Badge>{line.status}</Badge></span></td>
-              </>}
-              <td><div className="row-actions cost-order-actions">{line.canEdit && line.isPriceSet ? <button type="button" className="btn ghost sm" disabled={busy||setBusy} onClick={()=>setSetEditor({header:line,members:workspace.costItems.filter(item=>item.priceSetKey===line.priceSetKey&&!item.isPriceSet)})}>{estimateCopy("แก้ไขเซ็ต", "Edit set", "セット編集")}</button> : line.canEdit && line.priceSetKey ? <button type="button" className="icon-btn" disabled={busy||setBusy} title="นำออกจากเซ็ต / Remove from set" onClick={()=>void detachSetItem(line)}>↗</button> : null}{canAdd && line.canEdit && !line.priceSetKey ? <button type="button" className="icon-btn cost-drag-handle" draggable={!busy && !quickSaving} disabled={busy || quickSaving} aria-label={"Drag " + line.itemCode + " to reorder or move to another module"} title="ลากเพื่อย้ายรายการ / Drag to move item" onDragStart={event => { setDraggedCostId(line.id); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", String(line.id)); }} onDragEnd={clearDrag}>⠿</button> : null}{!line.priceSetKey && (canAdd || line.canEdit) ? (rowActions === line.id ? <>{canAdd ? ([-1, 1] as const).map(direction => <button key={direction} className="icon-btn" type="button" aria-label={(direction === -1 ? "Move up " : "Move down ") + line.itemCode} disabled={busy || quickSaving || (group.module ? index + direction < 0 || index + direction >= group.lines.length : groups.filter(entry => entry.categoryCode === group.categoryCode).findIndex(entry => entry.key === group.key) + direction < 0 || groups.filter(entry => entry.categoryCode === group.categoryCode).findIndex(entry => entry.key === group.key) + direction >= groups.filter(entry => entry.categoryCode === group.categoryCode).length)} onClick={() => group.module ? moveCostLine(group, index, direction) : moveCostModule(group, direction)}>{direction === -1 ? "▲" : "▼"}</button>) : null}{line.canEdit ? <><button className="icon-btn" type="button" disabled={busy} aria-label={`Edit ${line.itemCode}`} onClick={() => onEdit(line)}><Icon name="edit" /></button><button className="icon-btn danger" type="button" disabled={busy} aria-label={`Remove ${line.itemCode}`} onClick={() => onRemove(line)}><Icon name="trash" /></button></> : null}<button className="icon-btn" type="button" aria-label={estimateCopy("ปิดตัวเลือกรายการ", "Close line actions", "明細操作を閉じる")} onClick={() => setRowActions(null)}><Icon name="x" /></button></> : <button className="icon-btn" type="button" disabled={busy || quickSaving} title={estimateCopy("ตัวเลือก: ย้ายขึ้น-ลง แก้ไข ลบ", "Actions: move up or down, edit, delete", "操作：上下移動・編集・削除")} aria-label={estimateCopy("ตัวเลือกรายการ", "Line actions", "明細操作") + " " + line.itemCode} onClick={() => setRowActions(line.id)}><Icon name="more" /></button>) : null}{canAdd && !line.canEdit && !line.priceSetKey ? <Icon name="lock" /> : null}</div></td>
-            </tr>),
-            group.module ? draftRow(group.key) : null,
-            group.module ? <tr className="cost-module-subtotal" key={`add-${group.key}`}><td colSpan={8}><div className="cost-module-footer">{canAdd ? <><button type="button" className="add-row-btn" disabled={busy || quickSaving} onClick={() => startQuickRow(group)}><span><Icon name="plus" />{estimateUxCopy(currentLocale(), "เพิ่มรายการในโมดูลนี้", "Add item to this module", "このモジュールに明細を追加")}</span></button><button type="button" className="link-btn est-add-from" disabled={busy || quickSaving} onClick={() => openAddItems({ categoryCode: group.categoryCode, category: group.category, module: group.module })}><Icon name="search" />{estimateCopy("เพิ่มจากคลังราคา / นำเข้า", "Add from the price library / import", "価格ライブラリ・取込から追加")}</button></> : null}{quickDraft?.groupKey === group.key ? <span className="est-sheet-hint">{estimateCopy("Enter บันทึกแล้วเพิ่มแถวต่อ · Esc ยกเลิก · ลาก ⠿ ย้ายรายการ ข้ามโมดูลได้ · ⋯ ย้าย แก้ไข ลบ", "Enter saves and adds another row · Esc cancels · drag ⠿ to move an item, also across modules · ⋯ move, edit, delete", "Enterで保存して次の行へ · Escで取消 · ⠿で移動（モジュール間も可） · ⋯ 移動・編集・削除")}</span> : null}<span className="est-subtotal-label">{estimateUxCopy(currentLocale(), "รวมโมดูล", "Module subtotal", "モジュール小計")}</span></div></td><td className="num"><strong>{formatMoney(group.total)}</strong></td>{!dense ? <td colSpan={6} /> : null}<td /></tr> : null,
-            draftRow(`standalone-after:${group.key}`),
-          ];
-        })}
-        {showPending && pendingModule && pendingKey ? [
-          moduleBand({ key: pendingKey, ...pendingModule }, groups.length + 1, 0, 0),
-          draftRow(pendingKey),
-          quickDraft?.groupKey === pendingKey ? null : <tr className="module-empty" key={`empty-${pendingKey}`}><td colSpan={colCount}><LocalizedText text={"ยังไม่มี item ในโมดูลนี้ — เพิ่ม item แรกเพื่อบันทึกโมดูลลง revision"} /></td></tr>,
-          <tr className="add-row" key={`add-${pendingKey}`}><td colSpan={colCount}><button type="button" className="add-row-btn" disabled={!canAdd || busy} onClick={() => startQuickRow({ key: pendingKey, ...pendingModule })}><span><Icon name="plus" /><LocalizedText text={"Add item to"} /> {pendingModule.module}</span></button></td></tr>,
-        ] : null}
-      </tbody>
-    </table></div> : <EmptyState icon="package" title={uiText("No cost item")} message={canAdd ? "เพิ่มรายการเดี่ยวได้ทันที หรือสร้าง Main Module เพื่อจัดกลุ่มรายการ" : "ไม่มีรายการที่บัญชีนี้อ่านได้"} action={canAdd ? <button className="btn primary" type="button" onClick={() => onAdd({ module: "", categoryCode: category === "all" ? "01" : category })}><Icon name="plus" /><LocalizedText text={"Add a standalone item"} /></button> : undefined} />}
-    <div className="sticky-foot"><div className="foot-item"><span><LocalizedText text={"Modules"} /></span><strong>{groups.filter(group => group.module).length}</strong></div><div className="foot-item"><span><LocalizedText text={"Shown lines"} /></span><strong>{visibleLines.length}</strong></div><div className="foot-item"><span><LocalizedText text={"Shown subtotal"} /></span><strong>{formatMoney(visibleLines.reduce((sum, line) => sum + numberOf(line.lineTotal), 0))}</strong></div>{attentionCounts.price || attentionCounts.supplier ? <div className="est-attention" role="group" aria-label={estimateCopy("รายการที่ยังไม่ครบ", "Lines still incomplete", "未完了の明細")}>{(["price", "supplier"] as const).map((kind) => attentionCounts[kind] ? <button key={kind} type="button" className={activeAttention === kind ? "est-attention-chip active" : "est-attention-chip"} aria-pressed={activeAttention === kind} title={activeAttention === kind ? estimateCopy("แสดงทุกรายการ", "Show every line", "すべての明細を表示") : estimateCopy("แสดงเฉพาะรายการนี้", "Show only these lines", "該当明細のみ表示")} onClick={() => { setAttention(activeAttention === kind ? "" : kind); setQuickDraft(null); }}><Icon name="alertTriangle" />{kind === "price" ? estimateCopy("รอราคา", "Waiting for price", "価格待ち") : estimateCopy("ยังไม่เลือกผู้ขาย", "No supplier", "仕入先未選択")}<strong>{attentionCounts[kind]}</strong>{activeAttention === kind ? <Icon name="x" /> : null}</button> : null)}</div> : null}<div className="foot-total"><span><LocalizedText text={"Total estimated cost"} /></span><strong>{formatMoney(workspace.header.totals.total)}</strong></div></div>
-  </Panel>
-  {tool === "price" ? <PriceLibraryPicker workspace={workspace} busy={busy} target={addTarget} sources={sourceTabs("price")} onClose={closeTool} onUse={async (records) => {
-    /* From a module footer every picked price lands in that module; from the toolbar each keeps its source's module. */
-    const seeds = records.map((record) => costSeedFromLine(record.item, workspace.header.ownerId, record.sourceKind === "Historical Purchase" ? "Purchase Price" : "Price Library", record.sourceNumber, record.projectName));
-    const saved = await onBulkAddCost(addTarget ? seeds.map((seed) => ({ ...seed, ...addTarget })) : seeds, "Price selected from live Price Library");
-    if (saved) closeTool();
-  }} /> : null}
-  {tool === "import" ? <EstimateExcelImport workspace={workspace} bootstrap={bootstrap} sources={sourceTabs("import")} onClose={closeTool} onImported={onExcelImported} onLegacy={() => setTool("import-flat")} /> : null}
-  {tool === "import-flat" ? <ImportCostItemsModal bootstrap={bootstrap} workspace={workspace} busy={busy} onClose={() => setTool(null)} onImport={async (seeds) => { const saved = await onBulkAddCost(seeds, "Excel import completed"); if (saved) setTool(null); }} /> : null}
-  {tool === "copy" ? <CopyPreviousEstimateModal workspace={workspace} busy={busy} sources={sourceTabs("copy")} onClose={closeTool} onCopy={async (input) => {
-    const saved = await onCopyFrom(input);
-    if (saved) setTool(null);
-  }} /> : null}
-  {tool === "template" ? <ApplyModuleTemplateModal workspace={workspace} currentUserId={bootstrap.user.id} busy={busy} sources={sourceTabs("template")} onClose={closeTool} onApply={async (input) => {
-    const applied = await onApplyTemplate(input);
-    if (applied) setTool(null);
-    return applied;
-  }} /> : null}
-  {tool === "quotation" ? <EstimateQuotationSource workspace={workspace} bootstrap={bootstrap} busy={busy} target={addTarget} sources={sourceTabs("quotation")} onClose={closeTool} onApply={async (input) => {
-    const applied = await onApplyQuotation(input);
-    if (applied) setTool(null);
-    return applied;
-  }} /> : null}
-  {copyTarget ? <CopyCostModuleModal group={copyTarget} groups={groups} busy={busy} onClose={() => setCopyTarget(null)} onCopy={onCopyModule} /> : null}
-  {saveTarget ? <SaveModuleTemplateModal group={saveTarget} busy={busy} onClose={() => setSaveTarget(null)} onSave={async (input) => {
-    const saved = await onSaveTemplate(input);
-    if (saved) setSaveTarget(null);
-    return saved;
-  }} /> : null}
-  {tool === "module" ? <MainModuleEditor workspace={workspace} busy={busy} onClose={() => setTool(null)} onContinue={(seed) => {
-    setTool(null);
-    const pending = { categoryCode: seed.categoryCode ?? "01", category: seed.category ?? "Hardware", module: (seed.module ?? "").trim() };
-    if (!pending.module) return;
-    setCategory("all");
-    setPendingModule(pending);
-    startQuickRow({ key: moduleKeyOf(pending.categoryCode, pending.module), ...pending });
-  }} /> : null}
-  </>;
+  return (
+    <>
+      {moduleEditor ? (
+        <EstimateModuleEditor workspace={workspace} moduleKey={moduleEditor.key} initialTitle={moduleEditor.title} onClose={() => setModuleEditor(null)} onSaved={onExcelImported} />
+      ) : null}
+      {setError ? (
+        <div role="alert" className="info-strip red">
+          {setError}
+        </div>
+      ) : null}
+      {setEditor ? (
+        <EstimatePriceSetEditor
+          workspace={workspace}
+          bootstrap={bootstrap}
+          members={setEditor.members}
+          header={setEditor.header}
+          onClose={() => setSetEditor(null)}
+          onSaved={async () => {
+            setSetSelection([]);
+            await onExcelImported();
+          }}
+        />
+      ) : null}
+      <Panel className="estimate-cost-panel" flush>
+        <div className="est-sheet-bar">
+          {presentCategories.length ? (
+            <div className="est-dchips" role="group" aria-label={localizeCopy("Cost category")}>
+              <button
+                type="button"
+                className={activeCategory === "all" ? "est-dchip on" : "est-dchip"}
+                aria-pressed={activeCategory === "all"}
+                onClick={() => {
+                  setCategory("all");
+                  setQuickDraft(null);
+                }}
+              >
+                {estimateCopy("ทั้งหมด", "All", "すべて")}
+                <span className="est-dchip-n">{workspace.costItems.length}</span>
+              </button>
+              {presentCategories.map(([code, name]) => {
+                const count = workspace.costItems.filter((line) => line.categoryCode === code).length;
+                return (
+                  <button
+                    key={code}
+                    type="button"
+                    className={activeCategory === code ? "est-dchip on" : "est-dchip"}
+                    aria-pressed={activeCategory === code}
+                    onClick={() => {
+                      setCategory(code);
+                      setQuickDraft(null);
+                    }}
+                  >
+                    <span className="est-dchip-code mono">{code}</span>
+                    {name}
+                    <span className="est-dchip-n">{count}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+          <span className="spacer" />
+          <div className="est-seg" role="group" aria-label={estimateCopy("คอลัมน์ที่แสดง", "Columns shown", "表示する列")}>
+            <button type="button" className={dense ? "on" : undefined} aria-pressed={dense} title={estimateCopy("แสดงคอลัมน์หลัก", "Main columns only", "主要な列のみ")} onClick={() => setDense(true)}>
+              {estimateCopy("ย่อ", "Compact", "簡易")}
+            </button>
+            <button
+              type="button"
+              className={dense ? undefined : "on"}
+              aria-pressed={!dense}
+              title={estimateCopy(
+                "เพิ่มแหล่งราคา อ้างอิง วันที่ราคา ผู้รับผิดชอบ หมายเหตุ และสถานะ",
+                "Adds price source, reference, price date, owner, remark and status",
+                "価格元・参照・価格日・担当・備考・状態を追加",
+              )}
+              onClick={() => setDense(false)}
+            >
+              {estimateCopy("เต็ม", "Full", "全列")}
+            </button>
+          </div>
+          <button
+            type="button"
+            className="btn ghost sm icon-btn"
+            disabled={!groups.length}
+            aria-label={localizeCopy("หุบทุกโมดูล")}
+            title={localizeCopy("หุบทุกโมดูล")}
+            onClick={() => setCollapsed(groups.filter((group) => group.module).map((group) => group.key))}
+          >
+            <Icon name="minimize" />
+          </button>
+          <button
+            type="button"
+            className="btn ghost sm icon-btn"
+            disabled={!collapsed.length}
+            aria-label={localizeCopy("กางทุกโมดูล")}
+            title={localizeCopy("กางทุกโมดูล")}
+            onClick={() => setCollapsed([])}
+          >
+            <Icon name="maximize" />
+          </button>
+          {canAdd ? (
+            <>
+              {setSelection.length ? (
+                <button
+                  type="button"
+                  className="btn default sm"
+                  disabled={busy || setBusy}
+                  onClick={() => setSetEditor({ members: workspace.costItems.filter((line) => setSelection.includes(line.id) && !line.priceSetKey) })}
+                >
+                  {estimateUxCopy(currentLocale(), "รวมเป็นเซ็ต", "Set price", "セット化")} ({setSelection.length})
+                </button>
+              ) : null}
+              <button className="btn default sm" type="button" disabled={busy} onClick={() => onAdd({ module: "", categoryCode: category === "all" ? "01" : category })}>
+                <Icon name="plus" />
+                {estimateUxCopy(currentLocale(), "เพิ่มรายการ", "Add item", "明細を追加")}
+              </button>
+              <button className="btn default sm" type="button" disabled={busy} onClick={() => openAddItems(null)}>
+                <Icon name="upload" />
+                {estimateUxCopy(currentLocale(), "นำเข้า / คัดลอก", "Import / copy", "インポート / コピー")}
+              </button>
+              <button className="btn primary sm" type="button" data-guide="estimate.addModule" disabled={busy} onClick={() => setTool("module")}>
+                <Icon name="layers" />
+                {estimateUxCopy(currentLocale(), "เพิ่มโมดูล", "Add module", "モジュールを追加")}
+              </button>
+            </>
+          ) : null}
+        </div>
+        {groups.length || showPending ? (
+          <div className="table-wrap cost-sheet-wrap">
+            <table className="cost-inline-sheet cost-sheet" style={{ minWidth: sheetWidth }}>
+              <thead>
+                <tr>
+                  <th style={{ width: 48 }}>#</th>
+                  <th style={{ width: 140 }}>{estimateCopy("รหัส", "Code", "コード")}</th>
+                  <th style={{ width: 280 }}>{estimateCopy("รายการ / Spec", "Item / Spec", "明細 / 仕様")}</th>
+                  <th style={{ width: 140 }}>Brand / Model</th>
+                  <th style={{ width: 150 }}>
+                    <LocalizedText text={"Supplier"} />
+                  </th>
+                  <th className="num" style={{ width: 84 }}>
+                    <LocalizedText text={"Qty"} />
+                  </th>
+                  <th style={{ width: 104 }}>
+                    <LocalizedText text={"Unit"} />
+                  </th>
+                  <th className="num" style={{ width: 112 }}>
+                    {estimateCopy("ต้นทุน/หน่วย", "Unit cost", "単価")}
+                  </th>
+                  <th className="num" style={{ width: 120 }}>
+                    <LocalizedText text={"Total"} />
+                  </th>
+                  {dense ? null : (
+                    <>
+                      <th style={{ width: 150 }}>
+                        <LocalizedText text={"Price source"} />
+                      </th>
+                      <th style={{ width: 170 }}>
+                        <LocalizedText text={"Reference"} />
+                      </th>
+                      <th style={{ width: 110 }}>
+                        <LocalizedText text={"Price date"} />
+                      </th>
+                      <th style={{ width: 150 }}>
+                        <LocalizedText text={"Owner"} />
+                      </th>
+                      <th style={{ width: 180 }}>
+                        <LocalizedText text={"Remark"} />
+                      </th>
+                      <th style={{ width: 110 }}>
+                        <LocalizedText text={"Status"} />
+                      </th>
+                    </>
+                  )}
+                  <th style={{ width: 84 }} aria-label={uiText("Action")} />
+                </tr>
+              </thead>
+              <tbody>
+                {groups.flatMap((group, groupIndex) => {
+                  if (group.module && isCollapsed(group.key)) return [moduleBand(group, groupIndex + 1, group.lines.length, group.total)];
+                  return [
+                    group.module ? moduleBand(group, groupIndex + 1, group.lines.length, group.total) : null,
+                    ...group.lines.map((line, index) => (
+                      <tr
+                        key={line.id}
+                        className={
+                          "item-row" +
+                          (line.isPriceSet ? " price-set-header" : line.priceSetKey ? " price-set-component" : "") +
+                          (dropMarker === line.id + ":before"
+                            ? " cost-drop-before"
+                            : dropMarker === line.id + ":after" || (dropMarker === `mod:${group.key}:after` && index === group.lines.length - 1)
+                              ? " cost-drop-after"
+                              : "")
+                        }
+                        onDragOver={(event) => {
+                          if (draggedModule) {
+                            allowModuleDrop(event, group, true);
+                            return;
+                          }
+                          const bounds = event.currentTarget.getBoundingClientRect();
+                          allowDrop(event, line.id + (event.clientY < bounds.top + bounds.height / 2 ? ":before" : ":after"));
+                        }}
+                        onDrop={(event) => {
+                          if (draggedModule) {
+                            dropModule(event, group, true);
+                            return;
+                          }
+                          const bounds = event.currentTarget.getBoundingClientRect();
+                          dropCost(event, line.id, event.clientY >= bounds.top + bounds.height / 2);
+                        }}
+                      >
+                        <td>
+                          <span className="cell-text muted mono">{group.module ? `${groupIndex + 1}-${index + 1}` : String(groupIndex + 1)}</span>
+                        </td>
+                        <td>
+                          <span className="cell-text">
+                            {canAdd && line.canEdit && !line.priceSetKey ? (
+                              <input
+                                type="checkbox"
+                                aria-label={"Select for price set " + line.itemCode}
+                                checked={setSelection.includes(line.id)}
+                                onChange={(event) => setSetSelection((current) => (event.target.checked ? [...current, line.id] : current.filter((id) => id !== line.id)))}
+                              />
+                            ) : null}
+                            <strong className="mono">{line.isPriceSet ? "SET" : line.itemCode}</strong>
+                          </span>
+                        </td>
+                        <td>
+                          <div className="cell-primary">
+                            <strong>
+                              {line.isPriceSet ? "▣ " : line.priceSetKey ? "↳ " : ""}
+                              {line.description}
+                            </strong>
+                            {line.priceSetKey && !line.isPriceSet ? (
+                              <span>
+                                {line.quantityPerSet} {line.unit} / Set · รวมในราคาเซ็ต
+                              </span>
+                            ) : null}
+                            {!group.module ? <span>รายการเดี่ยว / Standalone · {line.category}</span> : null}
+                            {line.specification ? <span>{line.specification}</span> : null}
+                          </div>
+                        </td>
+                        <td>
+                          <div className="cell-primary">
+                            <strong>{line.brand || "—"}</strong>
+                            {line.model ? <span>{line.model}</span> : null}
+                          </div>
+                        </td>
+                        <td>
+                          <span className="cell-text">
+                            {line.supplierName ?? (
+                              <span className="soft-warn">
+                                <LocalizedText text={"ยังไม่เลือกผู้ขาย"} />
+                              </span>
+                            )}
+                          </span>
+                        </td>
+                        {line.canEdit ? (
+                          <EstimateModuleQuantityCells
+                            key={line.id + ":" + line.rowVersion}
+                            name={line.itemCode}
+                            quantity={line.quantity}
+                            unit={line.unit}
+                            units={workspace.costItems.map((item) => item.unit)}
+                            showCostRatio={!line.priceSetKey || Boolean(line.isPriceSet)}
+                            disabled={busy || setBusy}
+                            onSave={async (quantity, unit) => {
+                              setSetBusy(true);
+                              try {
+                                await apiRequest(`/api/v1/estimates/${workspace.header.id}/cost-items/${line.id}/quantity`, {
+                                  method: "PUT",
+                                  body: JSON.stringify({ estimateRowVersion: workspace.header.rowVersion, lineRowVersion: line.rowVersion, quantity, unit }),
+                                });
+                                await onExcelImported();
+                              } finally {
+                                setSetBusy(false);
+                              }
+                            }}
+                          />
+                        ) : (
+                          <>
+                            <td className="num">{formatNumber(line.quantity, 0)}</td>
+                            <td>
+                              <span className="cell-text">{line.unit}</span>
+                            </td>
+                          </>
+                        )}
+                        <td className="num">
+                          {line.priceSetKey && !line.isPriceSet ? (
+                            <span className="muted">
+                              <LocalizedText text={"Included in the set price"} />
+                            </span>
+                          ) : numberOf(line.unitCost) > 0 ? (
+                            formatMoney(line.unitCost)
+                          ) : (
+                            <span className="soft-warn">
+                              <LocalizedText text={"รอราคา"} />
+                            </span>
+                          )}
+                        </td>
+                        <td className="num">
+                          <strong>{line.priceSetKey && !line.isPriceSet ? "—" : formatMoney(line.lineTotal)}</strong>
+                        </td>
+                        {dense ? null : (
+                          <>
+                            <td>
+                              <span className="cell-text">{line.priceSource}</span>
+                            </td>
+                            <td>
+                              <div className="cell-primary">
+                                <strong>{line.referenceNumber || "—"}</strong>
+                                {line.referenceProject ? <span>{line.referenceProject}</span> : null}
+                              </div>
+                            </td>
+                            <td>
+                              <span className="cell-text">{formatDate(line.priceDate)}</span>
+                            </td>
+                            <td>
+                              <span className="cell-text">{line.ownerName}</span>
+                            </td>
+                            <td>
+                              <span className="cell-text">{line.remark || "—"}</span>
+                            </td>
+                            <td>
+                              <span className="cell-text">
+                                <Badge>{line.status}</Badge>
+                              </span>
+                            </td>
+                          </>
+                        )}
+                        <td>
+                          <div className="row-actions cost-order-actions">
+                            {line.canEdit && line.isPriceSet ? (
+                              <button
+                                type="button"
+                                className="btn ghost sm"
+                                disabled={busy || setBusy}
+                                onClick={() => setSetEditor({ header: line, members: workspace.costItems.filter((item) => item.priceSetKey === line.priceSetKey && !item.isPriceSet) })}
+                              >
+                                {estimateCopy("แก้ไขเซ็ต", "Edit set", "セット編集")}
+                              </button>
+                            ) : line.canEdit && line.priceSetKey ? (
+                              <button type="button" className="icon-btn" disabled={busy || setBusy} title="นำออกจากเซ็ต / Remove from set" onClick={() => void detachSetItem(line)}>
+                                ↗
+                              </button>
+                            ) : null}
+                            {canAdd && line.canEdit && !line.priceSetKey ? (
+                              <button
+                                type="button"
+                                className="icon-btn cost-drag-handle"
+                                draggable={!busy && !quickSaving}
+                                disabled={busy || quickSaving}
+                                aria-label={"Drag " + line.itemCode + " to reorder or move to another module"}
+                                title="ลากเพื่อย้ายรายการ / Drag to move item"
+                                onDragStart={(event) => {
+                                  setDraggedCostId(line.id);
+                                  event.dataTransfer.effectAllowed = "move";
+                                  event.dataTransfer.setData("text/plain", String(line.id));
+                                }}
+                                onDragEnd={clearDrag}
+                              >
+                                ⠿
+                              </button>
+                            ) : null}
+                            {!line.priceSetKey && (canAdd || line.canEdit) ? (
+                              rowActions === line.id ? (
+                                <>
+                                  {canAdd
+                                    ? ([-1, 1] as const).map((direction) => (
+                                        <button
+                                          key={direction}
+                                          className="icon-btn"
+                                          type="button"
+                                          aria-label={(direction === -1 ? "Move up " : "Move down ") + line.itemCode}
+                                          disabled={
+                                            busy ||
+                                            quickSaving ||
+                                            (group.module
+                                              ? index + direction < 0 || index + direction >= group.lines.length
+                                              : groups.filter((entry) => entry.categoryCode === group.categoryCode).findIndex((entry) => entry.key === group.key) + direction < 0 ||
+                                                groups.filter((entry) => entry.categoryCode === group.categoryCode).findIndex((entry) => entry.key === group.key) + direction >=
+                                                  groups.filter((entry) => entry.categoryCode === group.categoryCode).length)
+                                          }
+                                          onClick={() => (group.module ? moveCostLine(group, index, direction) : moveCostModule(group, direction))}
+                                        >
+                                          {direction === -1 ? "▲" : "▼"}
+                                        </button>
+                                      ))
+                                    : null}
+                                  {line.canEdit ? (
+                                    <>
+                                      <button className="icon-btn" type="button" disabled={busy} aria-label={`Edit ${line.itemCode}`} onClick={() => onEdit(line)}>
+                                        <Icon name="edit" />
+                                      </button>
+                                      <button className="icon-btn danger" type="button" disabled={busy} aria-label={`Remove ${line.itemCode}`} onClick={() => onRemove(line)}>
+                                        <Icon name="trash" />
+                                      </button>
+                                    </>
+                                  ) : null}
+                                  <button className="icon-btn" type="button" aria-label={estimateCopy("ปิดตัวเลือกรายการ", "Close line actions", "明細操作を閉じる")} onClick={() => setRowActions(null)}>
+                                    <Icon name="x" />
+                                  </button>
+                                </>
+                              ) : (
+                                <button
+                                  className="icon-btn"
+                                  type="button"
+                                  disabled={busy || quickSaving}
+                                  title={estimateCopy("ตัวเลือก: ย้ายขึ้น-ลง แก้ไข ลบ", "Actions: move up or down, edit, delete", "操作：上下移動・編集・削除")}
+                                  aria-label={estimateCopy("ตัวเลือกรายการ", "Line actions", "明細操作") + " " + line.itemCode}
+                                  onClick={() => setRowActions(line.id)}
+                                >
+                                  <Icon name="more" />
+                                </button>
+                              )
+                            ) : null}
+                            {canAdd && !line.canEdit && !line.priceSetKey ? <Icon name="lock" /> : null}
+                          </div>
+                        </td>
+                      </tr>
+                    )),
+                    group.module ? draftRow(group.key) : null,
+                    group.module ? (
+                      <tr className="cost-module-subtotal" key={`add-${group.key}`}>
+                        <td colSpan={8}>
+                          <div className="cost-module-footer">
+                            {canAdd ? (
+                              <>
+                                <button type="button" className="add-row-btn" disabled={busy || quickSaving} onClick={() => startQuickRow(group)}>
+                                  <span>
+                                    <Icon name="plus" />
+                                    {estimateUxCopy(currentLocale(), "เพิ่มรายการในโมดูลนี้", "Add item to this module", "このモジュールに明細を追加")}
+                                  </span>
+                                </button>
+                                <button
+                                  type="button"
+                                  className="link-btn est-add-from"
+                                  disabled={busy || quickSaving}
+                                  onClick={() => openAddItems({ categoryCode: group.categoryCode, category: group.category, module: group.module })}
+                                >
+                                  <Icon name="search" />
+                                  {estimateCopy("เพิ่มจากคลังราคา / นำเข้า", "Add from the price library / import", "価格ライブラリ・取込から追加")}
+                                </button>
+                              </>
+                            ) : null}
+                            {quickDraft?.groupKey === group.key ? (
+                              <span className="est-sheet-hint">
+                                {estimateCopy(
+                                  "Enter บันทึกแล้วเพิ่มแถวต่อ · Esc ยกเลิก · ลาก ⠿ ย้ายรายการ ข้ามโมดูลได้ · ⋯ ย้าย แก้ไข ลบ",
+                                  "Enter saves and adds another row · Esc cancels · drag ⠿ to move an item, also across modules · ⋯ move, edit, delete",
+                                  "Enterで保存して次の行へ · Escで取消 · ⠿で移動（モジュール間も可） · ⋯ 移動・編集・削除",
+                                )}
+                              </span>
+                            ) : null}
+                            <span className="est-subtotal-label">{estimateUxCopy(currentLocale(), "รวมโมดูล", "Module subtotal", "モジュール小計")}</span>
+                          </div>
+                        </td>
+                        <td className="num">
+                          <strong>{formatMoney(group.total)}</strong>
+                        </td>
+                        {!dense ? <td colSpan={6} /> : null}
+                        <td />
+                      </tr>
+                    ) : null,
+                    draftRow(`standalone-after:${group.key}`),
+                  ];
+                })}
+                {showPending && pendingModule && pendingKey
+                  ? [
+                      moduleBand({ key: pendingKey, ...pendingModule }, groups.length + 1, 0, 0),
+                      draftRow(pendingKey),
+                      quickDraft?.groupKey === pendingKey ? null : (
+                        <tr className="module-empty" key={`empty-${pendingKey}`}>
+                          <td colSpan={colCount}>
+                            <LocalizedText text={"ยังไม่มี item ในโมดูลนี้ — เพิ่ม item แรกเพื่อบันทึกโมดูลลง revision"} />
+                          </td>
+                        </tr>
+                      ),
+                      <tr className="add-row" key={`add-${pendingKey}`}>
+                        <td colSpan={colCount}>
+                          <button type="button" className="add-row-btn" disabled={!canAdd || busy} onClick={() => startQuickRow({ key: pendingKey, ...pendingModule })}>
+                            <span>
+                              <Icon name="plus" />
+                              <LocalizedText text={"Add item to"} /> {pendingModule.module}
+                            </span>
+                          </button>
+                        </td>
+                      </tr>,
+                    ]
+                  : null}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <EmptyState
+            icon="package"
+            title={uiText("No cost item")}
+            message={canAdd ? "เพิ่มรายการเดี่ยวได้ทันที หรือสร้าง Main Module เพื่อจัดกลุ่มรายการ" : "ไม่มีรายการที่บัญชีนี้อ่านได้"}
+            action={
+              canAdd ? (
+                <button className="btn primary" type="button" onClick={() => onAdd({ module: "", categoryCode: category === "all" ? "01" : category })}>
+                  <Icon name="plus" />
+                  <LocalizedText text={"Add a standalone item"} />
+                </button>
+              ) : undefined
+            }
+          />
+        )}
+        <div className="sticky-foot">
+          <div className="foot-item">
+            <span>
+              <LocalizedText text={"Modules"} />
+            </span>
+            <strong>{groups.filter((group) => group.module).length}</strong>
+          </div>
+          <div className="foot-item">
+            <span>
+              <LocalizedText text={"Shown lines"} />
+            </span>
+            <strong>{visibleLines.length}</strong>
+          </div>
+          <div className="foot-item">
+            <span>
+              <LocalizedText text={"Shown subtotal"} />
+            </span>
+            <strong>{formatMoney(visibleLines.reduce((sum, line) => sum + numberOf(line.lineTotal), 0))}</strong>
+          </div>
+          {attentionCounts.price || attentionCounts.supplier ? (
+            <div className="est-attention" role="group" aria-label={estimateCopy("รายการที่ยังไม่ครบ", "Lines still incomplete", "未完了の明細")}>
+              {(["price", "supplier"] as const).map((kind) =>
+                attentionCounts[kind] ? (
+                  <button
+                    key={kind}
+                    type="button"
+                    className={activeAttention === kind ? "est-attention-chip active" : "est-attention-chip"}
+                    aria-pressed={activeAttention === kind}
+                    title={
+                      activeAttention === kind ? estimateCopy("แสดงทุกรายการ", "Show every line", "すべての明細を表示") : estimateCopy("แสดงเฉพาะรายการนี้", "Show only these lines", "該当明細のみ表示")
+                    }
+                    onClick={() => {
+                      setAttention(activeAttention === kind ? "" : kind);
+                      setQuickDraft(null);
+                    }}
+                  >
+                    <Icon name="alertTriangle" />
+                    {kind === "price" ? estimateCopy("รอราคา", "Waiting for price", "価格待ち") : estimateCopy("ยังไม่เลือกผู้ขาย", "No supplier", "仕入先未選択")}
+                    <strong>{attentionCounts[kind]}</strong>
+                    {activeAttention === kind ? <Icon name="x" /> : null}
+                  </button>
+                ) : null,
+              )}
+            </div>
+          ) : null}
+          <div className="foot-total">
+            <span>
+              <LocalizedText text={"Total estimated cost"} />
+            </span>
+            <strong>{formatMoney(workspace.header.totals.total)}</strong>
+          </div>
+        </div>
+      </Panel>
+      {tool === "price" ? (
+        <PriceLibraryPicker
+          workspace={workspace}
+          busy={busy}
+          target={addTarget}
+          sources={sourceTabs("price")}
+          onClose={closeTool}
+          onUse={async (records) => {
+            /* From a module footer every picked price lands in that module; from the toolbar each keeps its source's module. */
+            const seeds = records.map((record) =>
+              costSeedFromLine(record.item, workspace.header.ownerId, record.sourceKind === "Historical Purchase" ? "Purchase Price" : "Price Library", record.sourceNumber, record.projectName),
+            );
+            const saved = await onBulkAddCost(addTarget ? seeds.map((seed) => ({ ...seed, ...addTarget })) : seeds, "Price selected from live Price Library");
+            if (saved) closeTool();
+          }}
+        />
+      ) : null}
+      {tool === "import" ? (
+        <EstimateExcelImport workspace={workspace} bootstrap={bootstrap} sources={sourceTabs("import")} onClose={closeTool} onImported={onExcelImported} onLegacy={() => setTool("import-flat")} />
+      ) : null}
+      {tool === "import-flat" ? (
+        <ImportCostItemsModal
+          bootstrap={bootstrap}
+          workspace={workspace}
+          busy={busy}
+          onClose={() => setTool(null)}
+          onImport={async (seeds) => {
+            const saved = await onBulkAddCost(seeds, "Excel import completed");
+            if (saved) setTool(null);
+          }}
+        />
+      ) : null}
+      {tool === "copy" ? (
+        <CopyPreviousEstimateModal
+          workspace={workspace}
+          busy={busy}
+          sources={sourceTabs("copy")}
+          onClose={closeTool}
+          onCopy={async (input) => {
+            const saved = await onCopyFrom(input);
+            if (saved) setTool(null);
+          }}
+        />
+      ) : null}
+      {tool === "template" ? (
+        <ApplyModuleTemplateModal
+          workspace={workspace}
+          currentUserId={bootstrap.user.id}
+          busy={busy}
+          sources={sourceTabs("template")}
+          onClose={closeTool}
+          onApply={async (input) => {
+            const applied = await onApplyTemplate(input);
+            if (applied) setTool(null);
+            return applied;
+          }}
+        />
+      ) : null}
+      {tool === "quotation" ? (
+        <EstimateQuotationSource
+          workspace={workspace}
+          bootstrap={bootstrap}
+          busy={busy}
+          target={addTarget}
+          sources={sourceTabs("quotation")}
+          onClose={closeTool}
+          onApply={async (input) => {
+            const applied = await onApplyQuotation(input);
+            if (applied) setTool(null);
+            return applied;
+          }}
+        />
+      ) : null}
+      {copyTarget ? <CopyCostModuleModal group={copyTarget} groups={groups} busy={busy} onClose={() => setCopyTarget(null)} onCopy={onCopyModule} /> : null}
+      {saveTarget ? (
+        <SaveModuleTemplateModal
+          group={saveTarget}
+          busy={busy}
+          onClose={() => setSaveTarget(null)}
+          onSave={async (input) => {
+            const saved = await onSaveTemplate(input);
+            if (saved) setSaveTarget(null);
+            return saved;
+          }}
+        />
+      ) : null}
+      {tool === "module" ? (
+        <MainModuleEditor
+          workspace={workspace}
+          busy={busy}
+          onClose={() => setTool(null)}
+          onContinue={(seed) => {
+            setTool(null);
+            const pending = { categoryCode: seed.categoryCode ?? "01", category: seed.category ?? "Hardware", module: (seed.module ?? "").trim() };
+            if (!pending.module) return;
+            setCategory("all");
+            setPendingModule(pending);
+            startQuickRow({ key: moduleKeyOf(pending.categoryCode, pending.module), ...pending });
+          }}
+        />
+      ) : null}
+    </>
+  );
 }
 
 function costSeedFromLine(line: EstimateCostItem, ownerId: number, priceSource: string, referenceNumber: string, referenceProject: string): CostItemSeed {
   return {
-    categoryCode: line.categoryCode, category: line.category, subcategory: line.subcategory, module: line.module,
-    itemCode: line.itemCode, description: line.description, brand: line.brand, model: line.model,
-    specification: line.specification ?? "", supplierId: line.supplierId ?? undefined, quantity: numberOf(line.quantity),
-    unit: line.unit, unitCost: numberOf(line.unitCost), priceSource, referenceNumber, referenceProject,
-    priceDate: dateValue(line.priceDate) || businessDate(), remark: line.remark ?? "", ownerId,
+    categoryCode: line.categoryCode,
+    category: line.category,
+    subcategory: line.subcategory,
+    module: line.module,
+    itemCode: line.itemCode,
+    description: line.description,
+    brand: line.brand,
+    model: line.model,
+    specification: line.specification ?? "",
+    supplierId: line.supplierId ?? undefined,
+    quantity: numberOf(line.quantity),
+    unit: line.unit,
+    unitCost: numberOf(line.unitCost),
+    priceSource,
+    referenceNumber,
+    referenceProject,
+    priceDate: dateValue(line.priceDate) || businessDate(),
+    remark: line.remark ?? "",
+    ownerId,
   };
 }
 
@@ -1694,12 +4433,42 @@ const ADD_ITEM_SOURCES = [
 ] as const;
 
 function AddItemsSources({ active, switched, locked, onSwitch }: { active: AddItemsSource; switched: boolean; locked: boolean; onSwitch: (source: AddItemsSource) => void }) {
-  return <div className={switched ? "est-source-tabs switched" : "est-source-tabs"} role="group" aria-label={estimateCopy("แหล่งที่มาของรายการ", "Where the items come from", "明細の取得元")}>
-    {ADD_ITEM_SOURCES.map(([id, icon, th, en, ja]) => <button key={id} type="button" className={active === id ? "est-source active" : "est-source"} aria-pressed={active === id} disabled={locked && active !== id} onClick={() => { if (active !== id) onSwitch(id); }}><Icon name={icon} />{estimateCopy(th, en, ja)}</button>)}
-  </div>;
+  return (
+    <div className={switched ? "est-source-tabs switched" : "est-source-tabs"} role="group" aria-label={estimateCopy("แหล่งที่มาของรายการ", "Where the items come from", "明細の取得元")}>
+      {ADD_ITEM_SOURCES.map(([id, icon, th, en, ja]) => (
+        <button
+          key={id}
+          type="button"
+          className={active === id ? "est-source active" : "est-source"}
+          aria-pressed={active === id}
+          disabled={locked && active !== id}
+          onClick={() => {
+            if (active !== id) onSwitch(id);
+          }}
+        >
+          <Icon name={icon} />
+          {estimateCopy(th, en, ja)}
+        </button>
+      ))}
+    </div>
+  );
 }
 
-function PriceLibraryPicker({ workspace, busy, target, sources, onClose, onUse }: { workspace: EstimateCostWorkspace; busy: boolean; target: AddItemsTarget | null; sources?: (locked: boolean) => React.ReactNode; onClose: () => void; onUse: (records: PriceLibraryRecord[]) => Promise<void> }) {
+function PriceLibraryPicker({
+  workspace,
+  busy,
+  target,
+  sources,
+  onClose,
+  onUse,
+}: {
+  workspace: EstimateCostWorkspace;
+  busy: boolean;
+  target: AddItemsTarget | null;
+  sources?: (locked: boolean) => React.ReactNode;
+  onClose: () => void;
+  onUse: (records: PriceLibraryRecord[]) => Promise<void>;
+}) {
   const uiText = useUiText();
   const [picked, setPicked] = useState<string[]>([]);
   const [source, setSource] = useState<PriceLibraryRecord | null>(null);
@@ -1710,22 +4479,200 @@ function PriceLibraryPicker({ workspace, busy, target, sources, onClose, onUse }
   const [error, setError] = useState("");
   useEffect(() => {
     let active = true;
-    void loadPriceLibraryRecords(workspace.header.id).then((items) => { if (active) setRecords(items); }).catch((requestError) => { if (active) setError(toError(requestError)); }).finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
+    void loadPriceLibraryRecords(workspace.header.id)
+      .then((items) => {
+        if (active) setRecords(items);
+      })
+      .catch((requestError) => {
+        if (active) setError(toError(requestError));
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, [workspace.header.id]);
   const needle = search.trim().toLocaleLowerCase();
-  const matches = records.filter(({ item, sourceNumber, projectName, customerName }) => !needle || [item.itemCode, item.description, item.brand, item.model, item.supplierName, sourceNumber, projectName, customerName].some((value) => value?.toLocaleLowerCase().includes(needle))).sort((a, b) => (b.item.priceDate ?? "").localeCompare(a.item.priceDate ?? ""));
+  const matches = records
+    .filter(
+      ({ item, sourceNumber, projectName, customerName }) =>
+        !needle || [item.itemCode, item.description, item.brand, item.model, item.supplierName, sourceNumber, projectName, customerName].some((value) => value?.toLocaleLowerCase().includes(needle)),
+    )
+    .sort((a, b) => (b.item.priceDate ?? "").localeCompare(a.item.priceDate ?? ""));
   const visible = matches.slice(0, visibleLimit);
-  return <Modal title={uiText("Search Price Library")} subtitle="ค้นจาก Estimate เดิมและประวัติราคาซื้อจริงที่ตรวจสอบจาก PR/ใบเสนอราคา" size="wide" onClose={onClose} footer={<><span className="muted">{records.length} <LocalizedText text={"live price record(s)"} /></span><span className="spacer" /><button className="btn default" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || !picked.length} onClick={() => { void onUse(records.filter((record) => picked.includes(record.key))); }}><Icon name="plus" />{estimateCopy(`เพิ่ม ${picked.length} รายการ`, `Add ${picked.length} item(s)`, `${picked.length}件を追加`)}</button></>}>
-    {sources?.(busy)}
-    <div className="info-strip est-add-target"><Icon name="layers" /><span>{target ? <>{estimateCopy("เพิ่มเข้าโมดูล", "Adding to module", "追加先モジュール")}: <strong>{target.module}</strong> · {target.categoryCode} {target.category}</> : estimateCopy("รายการจะเข้าโมดูลตามชื่อในแหล่งราคา · เปิดจากท้ายโมดูลเพื่อเพิ่มเข้าโมดูลนั้นโดยตรง", "Items keep the module name of their price source · open this from a module footer to add straight into that module", "明細は価格元のモジュール名で追加されます · モジュール下部から開くとそのモジュールへ直接追加します")}</span></div>
-    <SearchInput value={search} onChange={(value) => { setSearch(value); setVisibleLimit(100); }} placeholder="Search item code, description, brand, supplier or estimate…" />
-    <p className="muted">{estimateUxCopy(currentLocale(), "ราคาอ้างอิงเรียงจากวันที่ล่าสุด ตรวจหน่วย จำนวน และเงื่อนไขก่อนใช้ ราคานี้ไม่ได้ยืนยันว่าผู้ขายยังเสนออยู่", "Newest reference dates first. Check units, quantities and terms; these are not confirmed current offers.", "参照日の新しい順です。単位・数量・条件を確認してください。現在有効な見積価格とは限りません。")}</p>
-    {source ? <div className="panel" style={{ padding: 12, marginTop: 12 }}><strong>{source.sourceNumber} {source.sourceRevision !== undefined ? revisionCode(source.sourceRevision) : ""} · {source.sourceStatus ?? source.sourceKind}</strong><p>{source.item.description} · {source.item.quantity} {source.item.unit} × {formatMoney(source.item.unitCost)} · {formatDate(source.item.priceDate)}</p><p>{source.item.referenceNumber || "—"} · {source.item.remark || "—"}</p>{source.sourceEstimateId ? <EstimateImportHistory estimateId={source.sourceEstimateId} /> : null}<button className="btn ghost sm" type="button" onClick={() => setSource(null)}><LocalizedText text="Close" /></button></div> : null}
-    {matches.length > visibleLimit ? <button type="button" className="btn default sm" onClick={() => setVisibleLimit((value) => value + 100)}>{estimateUxCopy(currentLocale(), "แสดงเพิ่ม", "Show more", "さらに表示")} ({visible.length}/{matches.length})</button> : null}
-    {error ? <div className="callout danger"><Icon name="alertTriangle" /><span>{error}</span></div> : null}
-    {loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading live Price Library…"} /></div> : visible.length ? <div className="table-wrap tall" style={{ marginTop: 12 }}><table><thead><tr><th className="est-pick-col" aria-label={estimateCopy("เลือก", "Select", "選択")} /><th><LocalizedText text={"Item"} /></th><th><LocalizedText text={"Description"} /></th><th><LocalizedText text={"Brand / Model"} /></th><th><LocalizedText text={"Supplier"} /></th><th><LocalizedText text={"Source"} /></th><th><LocalizedText text={"Price date"} /></th><th className="num"><LocalizedText text={"Unit cost"} /></th></tr></thead><tbody>{visible.map((record) => <tr key={record.key} className={picked.includes(record.key) ? "est-picked" : undefined}><td><input type="checkbox" aria-label={estimateCopy("เลือก", "Select", "選択") + " " + record.item.itemCode} disabled={busy} checked={picked.includes(record.key)} onChange={(event) => { const checked = event.target.checked; setPicked((current) => checked ? [...current, record.key] : current.filter((key) => key !== record.key)); }} /></td><td><strong className="mono">{record.item.itemCode}</strong></td><td>{record.item.description}</td><td>{[record.item.brand, record.item.model].filter(Boolean).join(" · ") || "—"}</td><td>{record.item.supplierName ?? "—"}</td><td><div className="cell-primary"><button type="button" className="link-btn" onClick={() => setSource(record)}>{record.sourceNumber} {record.sourceRevision !== undefined ? revisionCode(record.sourceRevision) : ""}</button><span>{record.projectName} <LocalizedText text={"·"} /> {record.sourceKind}</span></div></td><td>{formatDate(record.item.priceDate)}</td><td className="num"><strong>{formatMoney(record.item.unitCost)}</strong><div className="muted">/ {record.item.unit} · Qty {record.item.quantity}</div></td></tr>)}</tbody></table></div> : <EmptyState icon="search" title="No matching price" message="ลองค้นด้วย Part No., Description, Brand, Supplier หรือเลขที่เอกสาร" />}
-  </Modal>;
+  return (
+    <Modal
+      title={uiText("Search Price Library")}
+      subtitle="ค้นจาก Estimate เดิมและประวัติราคาซื้อจริงที่ตรวจสอบจาก PR/ใบเสนอราคา"
+      size="wide"
+      onClose={onClose}
+      footer={
+        <>
+          <span className="muted">
+            {records.length} <LocalizedText text={"live price record(s)"} />
+          </span>
+          <span className="spacer" />
+          <button className="btn default" type="button" disabled={busy} onClick={onClose}>
+            <LocalizedText text={"Cancel"} />
+          </button>
+          <button
+            className="btn primary"
+            type="button"
+            disabled={busy || !picked.length}
+            onClick={() => {
+              void onUse(records.filter((record) => picked.includes(record.key)));
+            }}
+          >
+            <Icon name="plus" />
+            {estimateCopy(`เพิ่ม ${picked.length} รายการ`, `Add ${picked.length} item(s)`, `${picked.length}件を追加`)}
+          </button>
+        </>
+      }
+    >
+      {sources?.(busy)}
+      <div className="info-strip est-add-target">
+        <Icon name="layers" />
+        <span>
+          {target ? (
+            <>
+              {estimateCopy("เพิ่มเข้าโมดูล", "Adding to module", "追加先モジュール")}: <strong>{target.module}</strong> · {target.categoryCode} {target.category}
+            </>
+          ) : (
+            estimateCopy(
+              "รายการจะเข้าโมดูลตามชื่อในแหล่งราคา · เปิดจากท้ายโมดูลเพื่อเพิ่มเข้าโมดูลนั้นโดยตรง",
+              "Items keep the module name of their price source · open this from a module footer to add straight into that module",
+              "明細は価格元のモジュール名で追加されます · モジュール下部から開くとそのモジュールへ直接追加します",
+            )
+          )}
+        </span>
+      </div>
+      <SearchInput
+        value={search}
+        onChange={(value) => {
+          setSearch(value);
+          setVisibleLimit(100);
+        }}
+        placeholder="Search item code, description, brand, supplier or estimate…"
+      />
+      <p className="muted">
+        {estimateUxCopy(
+          currentLocale(),
+          "ราคาอ้างอิงเรียงจากวันที่ล่าสุด ตรวจหน่วย จำนวน และเงื่อนไขก่อนใช้ ราคานี้ไม่ได้ยืนยันว่าผู้ขายยังเสนออยู่",
+          "Newest reference dates first. Check units, quantities and terms; these are not confirmed current offers.",
+          "参照日の新しい順です。単位・数量・条件を確認してください。現在有効な見積価格とは限りません。",
+        )}
+      </p>
+      {source ? (
+        <div className="panel" style={{ padding: 12, marginTop: 12 }}>
+          <strong>
+            {source.sourceNumber} {source.sourceRevision !== undefined ? revisionCode(source.sourceRevision) : ""} · {source.sourceStatus ?? source.sourceKind}
+          </strong>
+          <p>
+            {source.item.description} · {source.item.quantity} {source.item.unit} × {formatMoney(source.item.unitCost)} · {formatDate(source.item.priceDate)}
+          </p>
+          <p>
+            {source.item.referenceNumber || "—"} · {source.item.remark || "—"}
+          </p>
+          {source.sourceEstimateId ? <EstimateImportHistory estimateId={source.sourceEstimateId} /> : null}
+          <button className="btn ghost sm" type="button" onClick={() => setSource(null)}>
+            <LocalizedText text="Close" />
+          </button>
+        </div>
+      ) : null}
+      {matches.length > visibleLimit ? (
+        <button type="button" className="btn default sm" onClick={() => setVisibleLimit((value) => value + 100)}>
+          {estimateUxCopy(currentLocale(), "แสดงเพิ่ม", "Show more", "さらに表示")} ({visible.length}/{matches.length})
+        </button>
+      ) : null}
+      {error ? (
+        <div className="callout danger">
+          <Icon name="alertTriangle" />
+          <span>{error}</span>
+        </div>
+      ) : null}
+      {loading ? (
+        <div className="empty">
+          <span className="spinner" />
+          <LocalizedText text={"Loading live Price Library…"} />
+        </div>
+      ) : visible.length ? (
+        <div className="table-wrap tall" style={{ marginTop: 12 }}>
+          <table>
+            <thead>
+              <tr>
+                <th className="est-pick-col" aria-label={estimateCopy("เลือก", "Select", "選択")} />
+                <th>
+                  <LocalizedText text={"Item"} />
+                </th>
+                <th>
+                  <LocalizedText text={"Description"} />
+                </th>
+                <th>
+                  <LocalizedText text={"Brand / Model"} />
+                </th>
+                <th>
+                  <LocalizedText text={"Supplier"} />
+                </th>
+                <th>
+                  <LocalizedText text={"Source"} />
+                </th>
+                <th>
+                  <LocalizedText text={"Price date"} />
+                </th>
+                <th className="num">
+                  <LocalizedText text={"Unit cost"} />
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {visible.map((record) => (
+                <tr key={record.key} className={picked.includes(record.key) ? "est-picked" : undefined}>
+                  <td>
+                    <input
+                      type="checkbox"
+                      aria-label={estimateCopy("เลือก", "Select", "選択") + " " + record.item.itemCode}
+                      disabled={busy}
+                      checked={picked.includes(record.key)}
+                      onChange={(event) => {
+                        const checked = event.target.checked;
+                        setPicked((current) => (checked ? [...current, record.key] : current.filter((key) => key !== record.key)));
+                      }}
+                    />
+                  </td>
+                  <td>
+                    <strong className="mono">{record.item.itemCode}</strong>
+                  </td>
+                  <td>{record.item.description}</td>
+                  <td>{[record.item.brand, record.item.model].filter(Boolean).join(" · ") || "—"}</td>
+                  <td>{record.item.supplierName ?? "—"}</td>
+                  <td>
+                    <div className="cell-primary">
+                      <button type="button" className="link-btn" onClick={() => setSource(record)}>
+                        {record.sourceNumber} {record.sourceRevision !== undefined ? revisionCode(record.sourceRevision) : ""}
+                      </button>
+                      <span>
+                        {record.projectName} <LocalizedText text={"·"} /> {record.sourceKind}
+                      </span>
+                    </div>
+                  </td>
+                  <td>{formatDate(record.item.priceDate)}</td>
+                  <td className="num">
+                    <strong>{formatMoney(record.item.unitCost)}</strong>
+                    <div className="muted">
+                      / {record.item.unit} · Qty {record.item.quantity}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <EmptyState icon="search" title="No matching price" message="ลองค้นด้วย Part No., Description, Brand, Supplier หรือเลขที่เอกสาร" />
+      )}
+    </Modal>
+  );
 }
 
 /* Copy Previous Estimate hands the whole selection to one server transaction.
@@ -1733,7 +4680,19 @@ function PriceLibraryPicker({ workspace, busy, target, sources, onClose, onUse }
    a deactivated supplier stopped halfway and left a partial copy behind, and it
    only ever carried cost items. The server now copies the cost, man-hour,
    expense and other-cost ledgers with their ERP classifications, or nothing. */
-function CopyPreviousEstimateModal({ workspace, busy, sources, onClose, onCopy }: { workspace: EstimateCostWorkspace; busy: boolean; sources?: (locked: boolean) => React.ReactNode; onClose: () => void; onCopy: (input: Omit<EstimateCopyInput, "estimateRowVersion" | "ownerId">) => Promise<void> }) {
+function CopyPreviousEstimateModal({
+  workspace,
+  busy,
+  sources,
+  onClose,
+  onCopy,
+}: {
+  workspace: EstimateCostWorkspace;
+  busy: boolean;
+  sources?: (locked: boolean) => React.ReactNode;
+  onClose: () => void;
+  onCopy: (input: Omit<EstimateCopyInput, "estimateRowVersion" | "ownerId">) => Promise<void>;
+}) {
   const [estimates, setEstimates] = useState<EstimateSummary[]>([]);
   const [sourceId, setSourceId] = useState(0);
   const [sourceWorkspace, setSourceWorkspace] = useState<EstimateCostWorkspace | null>(null);
@@ -1746,21 +4705,46 @@ function CopyPreviousEstimateModal({ workspace, busy, sources, onClose, onCopy }
   const [error, setError] = useState("");
   useEffect(() => {
     let active = true;
-    void loadAllEstimateSummaries().then((items) => {
-      if (!active) return;
-      const choices = items.filter((item) => item.id !== workspace.header.id);
-      setEstimates(choices);
-      setSourceId(choices[0]?.id ?? 0);
-    }).catch((requestError) => { if (active) setError(toError(requestError)); }).finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
+    void loadAllEstimateSummaries()
+      .then((items) => {
+        if (!active) return;
+        const choices = items.filter((item) => item.id !== workspace.header.id);
+        setEstimates(choices);
+        setSourceId(choices[0]?.id ?? 0);
+      })
+      .catch((requestError) => {
+        if (active) setError(toError(requestError));
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, [workspace.header.id]);
   /* Every discipline starts ticked: labor (06), outsource (07) and travel (08-10) often have no material line, and
      ticking only the disciplines with material lines silently left them out of a whole-estimate copy. */
   useEffect(() => {
     if (!sourceId) return;
     let active = true;
-    void loadEstimateCostWorkspace(sourceId).then((loaded) => { if (active) { setSourceWorkspace(loaded); setSelected(COST_CATEGORIES.map(([code]) => code)); setExcluded([]); setOpenSections([]); } }).catch((requestError) => { if (active) setError(toError(requestError)); }).finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
+    void loadEstimateCostWorkspace(sourceId)
+      .then((loaded) => {
+        if (active) {
+          setSourceWorkspace(loaded);
+          setSelected(COST_CATEGORIES.map(([code]) => code));
+          setExcluded([]);
+          setOpenSections([]);
+        }
+      })
+      .catch((requestError) => {
+        if (active) setError(toError(requestError));
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, [sourceId]);
   const source = estimates.find((item) => item.id === sourceId);
   const allowedSection = (code: string) => workspace.capabilities.canEditAllSections || workspace.capabilities.editableSections.includes(code);
@@ -1791,45 +4775,180 @@ function CopyPreviousEstimateModal({ workspace, busy, sources, onClose, onCopy }
   };
   const toggleModule = (code: string, module: string, on: boolean) => {
     const key = moduleKeyOf(code, module);
-    setExcluded((current) => on ? current.filter((item) => item !== key) : [...current, key]);
+    setExcluded((current) => (on ? current.filter((item) => item !== key) : [...current, key]));
     if (on && !selected.includes(code)) setSelected((current) => [...current, code]);
   };
   const setAllModules = (code: string, on: boolean) => {
     const keys = sectionModules(code).map(([name]) => moduleKeyOf(code, name));
-    setExcluded((current) => on ? current.filter((item) => !keys.includes(item)) : [...new Set([...current, ...keys])]);
+    setExcluded((current) => (on ? current.filter((item) => !keys.includes(item)) : [...new Set([...current, ...keys])]));
   };
-  return <Modal title="Copy Previous Estimate" subtitle="คัดลอกทั้งชุด ต้นทุน แรงงาน ค่าใช้จ่ายและการจัดประเภท ERP จาก Estimate จริงเข้ามาใน revision นี้ในทรานแซกชันเดียว" size="wide" onClose={onClose} footer={<><button className="btn default" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || loading || !source || !totalLines} onClick={() => { if (source) void onCopy({ sourceEstimateId: source.id, sections: selected.filter(allowedSection), includeManhour: ledgers.manhour, includeExpenses: ledgers.expenses, includeOtherCosts: ledgers.otherCosts, includeErpCategories: ledgers.erpCategories, modules: moduleSelection() }); }}><Icon name="copy" /><LocalizedText text={"Copy"} /> {totalLines} <LocalizedText text={"line(s)"} /></button></>}>
-    {sources?.(busy)}
-    <div className="est-source-narrow">
-    <Field label="Source estimate *"><select value={sourceId} disabled={loading && !estimates.length} onChange={(event) => { setLoading(true); setError(""); setSourceId(Number(event.target.value)); }}>{estimates.map((estimate) => <option key={estimate.id} value={estimate.id}>{estimate.number} <LocalizedText text={"·"} /> {estimate.projectName} <LocalizedText text={"·"} /> {estimate.customerName}</option>)}</select></Field>
-    {error ? <div className="callout danger"><Icon name="alertTriangle" /><span>{error}</span></div> : null}
-    <div className="info-strip"><Icon name="shield" /><span><LocalizedText text={"ต้นฉบับไม่ถูกแก้ไข สถานะอนุมัติ ประวัติการอนุมัติและผู้รับผิดชอบ section เดิมไม่ถูกคัดลอก อัตราค่าแรงภายในคำนวณใหม่ตามอัตราที่มีผลวันนี้"} /></span></div>
-    {loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading source estimate…"} /></div> : sourceWorkspace ? <>
-      <div className="settings-list" style={{ marginTop: 12 }}>{COST_CATEGORIES.map(([code, name]) => {
-        const count = sectionCounts(code);
-        if (!count) return null;
-        const allowed = allowedSection(code);
-        const modules = sectionModules(code);
-        const chosen = modules.filter(([module]) => moduleIncluded(code, module)).length;
-        const open = openSections.includes(code);
-        return <div key={code} className="copy-section">
-          <div className="check-row"><input id={`copy-category-${code}`} type="checkbox" disabled={!allowed} checked={allowed && selected.includes(code)} onChange={(event) => setSelected((current) => event.target.checked ? [...current, code] : current.filter((item) => item !== code))} /><label htmlFor={`copy-category-${code}`}><strong>{code} — {name}</strong> <small>{count} <LocalizedText text={"line(s)"} />{allowed ? "" : " · no permission for this section"}</small></label>
-            {allowed && modules.length > 1 ? <button type="button" className="btn ghost sm copy-module-toggle" aria-expanded={open} onClick={() => setOpenSections((current) => open ? current.filter((item) => item !== code) : [...current, code])}><Icon name={open ? "chevronDown" : "chevronRight"} />{estimateCopy(`เลือกโมดูล ${chosen}/${modules.length}`, `Modules ${chosen}/${modules.length}`, `モジュール ${chosen}/${modules.length}`)}</button> : null}
+  return (
+    <Modal
+      title="Copy Previous Estimate"
+      subtitle="คัดลอกทั้งชุด ต้นทุน แรงงาน ค่าใช้จ่ายและการจัดประเภท ERP จาก Estimate จริงเข้ามาใน revision นี้ในทรานแซกชันเดียว"
+      size="wide"
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn default" type="button" disabled={busy} onClick={onClose}>
+            <LocalizedText text={"Cancel"} />
+          </button>
+          <button
+            className="btn primary"
+            type="button"
+            disabled={busy || loading || !source || !totalLines}
+            onClick={() => {
+              if (source)
+                void onCopy({
+                  sourceEstimateId: source.id,
+                  sections: selected.filter(allowedSection),
+                  includeManhour: ledgers.manhour,
+                  includeExpenses: ledgers.expenses,
+                  includeOtherCosts: ledgers.otherCosts,
+                  includeErpCategories: ledgers.erpCategories,
+                  modules: moduleSelection(),
+                });
+            }}
+          >
+            <Icon name="copy" />
+            <LocalizedText text={"Copy"} /> {totalLines} <LocalizedText text={"line(s)"} />
+          </button>
+        </>
+      }
+    >
+      {sources?.(busy)}
+      <div className="est-source-narrow">
+        <Field label="Source estimate *">
+          <select
+            value={sourceId}
+            disabled={loading && !estimates.length}
+            onChange={(event) => {
+              setLoading(true);
+              setError("");
+              setSourceId(Number(event.target.value));
+            }}
+          >
+            {estimates.map((estimate) => (
+              <option key={estimate.id} value={estimate.id}>
+                {estimate.number} <LocalizedText text={"·"} /> {estimate.projectName} <LocalizedText text={"·"} /> {estimate.customerName}
+              </option>
+            ))}
+          </select>
+        </Field>
+        {error ? (
+          <div className="callout danger">
+            <Icon name="alertTriangle" />
+            <span>{error}</span>
           </div>
-          {allowed && open && modules.length > 1 ? <div className="copy-module-list">
-            <div className="copy-module-all"><button type="button" className="link-btn" onClick={() => setAllModules(code, true)}>{estimateCopy("เลือกทั้งหมด", "Select all", "すべて選択")}</button><button type="button" className="link-btn" onClick={() => setAllModules(code, false)}>{estimateCopy("ไม่เลือกเลย", "Select none", "選択解除")}</button></div>
-            {modules.map(([module, lines], index) => <label key={module || "-"} className="copy-module-option"><input type="checkbox" checked={selected.includes(code) && moduleIncluded(code, module)} onChange={(event) => toggleModule(code, module, event.target.checked)} /><span>{index + 1} · {module || estimateCopy("(ไม่มีโมดูล)", "(no module)", "（モジュールなし）")}</span><small>{lines} <LocalizedText text={"line(s)"} /></small></label>)}
-          </div> : null}
-        </div>;
-      })}</div>
-      <div className="settings-list" style={{ marginTop: 12 }}>
-        {([["manhour", "Engineering man-hour", sourceWorkspace.manhourLines.length], ["expenses", "Expenses", sourceWorkspace.expenseLines.length], ["otherCosts", "Other project cost", sourceWorkspace.otherCostLines.length], ["erpCategories", "ERP classifications", 0]] as const).map(([key, label, count]) => (
-          <div key={key} className="check-row"><input id={`copy-ledger-${key}`} type="checkbox" checked={ledgers[key]} onChange={(event) => setLedgers((current) => ({ ...current, [key]: event.target.checked }))} /><label htmlFor={`copy-ledger-${key}`}><strong><LocalizedText text={label} /></strong>{count ? <small>{count} <LocalizedText text={"line(s)"} /></small> : null}</label></div>
-        ))}
+        ) : null}
+        <div className="info-strip">
+          <Icon name="shield" />
+          <span>
+            <LocalizedText text={"ต้นฉบับไม่ถูกแก้ไข สถานะอนุมัติ ประวัติการอนุมัติและผู้รับผิดชอบ section เดิมไม่ถูกคัดลอก อัตราค่าแรงภายในคำนวณใหม่ตามอัตราที่มีผลวันนี้"} />
+          </span>
+        </div>
+        {loading ? (
+          <div className="empty">
+            <span className="spinner" />
+            <LocalizedText text={"Loading source estimate…"} />
+          </div>
+        ) : sourceWorkspace ? (
+          <>
+            <div className="settings-list" style={{ marginTop: 12 }}>
+              {COST_CATEGORIES.map(([code, name]) => {
+                const count = sectionCounts(code);
+                if (!count) return null;
+                const allowed = allowedSection(code);
+                const modules = sectionModules(code);
+                const chosen = modules.filter(([module]) => moduleIncluded(code, module)).length;
+                const open = openSections.includes(code);
+                return (
+                  <div key={code} className="copy-section">
+                    <div className="check-row">
+                      <input
+                        id={`copy-category-${code}`}
+                        type="checkbox"
+                        disabled={!allowed}
+                        checked={allowed && selected.includes(code)}
+                        onChange={(event) => setSelected((current) => (event.target.checked ? [...current, code] : current.filter((item) => item !== code)))}
+                      />
+                      <label htmlFor={`copy-category-${code}`}>
+                        <strong>
+                          {code} — {name}
+                        </strong>{" "}
+                        <small>
+                          {count} <LocalizedText text={"line(s)"} />
+                          {allowed ? "" : " · no permission for this section"}
+                        </small>
+                      </label>
+                      {allowed && modules.length > 1 ? (
+                        <button
+                          type="button"
+                          className="btn ghost sm copy-module-toggle"
+                          aria-expanded={open}
+                          onClick={() => setOpenSections((current) => (open ? current.filter((item) => item !== code) : [...current, code]))}
+                        >
+                          <Icon name={open ? "chevronDown" : "chevronRight"} />
+                          {estimateCopy(`เลือกโมดูล ${chosen}/${modules.length}`, `Modules ${chosen}/${modules.length}`, `モジュール ${chosen}/${modules.length}`)}
+                        </button>
+                      ) : null}
+                    </div>
+                    {allowed && open && modules.length > 1 ? (
+                      <div className="copy-module-list">
+                        <div className="copy-module-all">
+                          <button type="button" className="link-btn" onClick={() => setAllModules(code, true)}>
+                            {estimateCopy("เลือกทั้งหมด", "Select all", "すべて選択")}
+                          </button>
+                          <button type="button" className="link-btn" onClick={() => setAllModules(code, false)}>
+                            {estimateCopy("ไม่เลือกเลย", "Select none", "選択解除")}
+                          </button>
+                        </div>
+                        {modules.map(([module, lines], index) => (
+                          <label key={module || "-"} className="copy-module-option">
+                            <input type="checkbox" checked={selected.includes(code) && moduleIncluded(code, module)} onChange={(event) => toggleModule(code, module, event.target.checked)} />
+                            <span>
+                              {index + 1} · {module || estimateCopy("(ไม่มีโมดูล)", "(no module)", "（モジュールなし）")}
+                            </span>
+                            <small>
+                              {lines} <LocalizedText text={"line(s)"} />
+                            </small>
+                          </label>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+            <div className="settings-list" style={{ marginTop: 12 }}>
+              {(
+                [
+                  ["manhour", "Engineering man-hour", sourceWorkspace.manhourLines.length],
+                  ["expenses", "Expenses", sourceWorkspace.expenseLines.length],
+                  ["otherCosts", "Other project cost", sourceWorkspace.otherCostLines.length],
+                  ["erpCategories", "ERP classifications", 0],
+                ] as const
+              ).map(([key, label, count]) => (
+                <div key={key} className="check-row">
+                  <input id={`copy-ledger-${key}`} type="checkbox" checked={ledgers[key]} onChange={(event) => setLedgers((current) => ({ ...current, [key]: event.target.checked }))} />
+                  <label htmlFor={`copy-ledger-${key}`}>
+                    <strong>
+                      <LocalizedText text={label} />
+                    </strong>
+                    {count ? (
+                      <small>
+                        {count} <LocalizedText text={"line(s)"} />
+                      </small>
+                    ) : null}
+                  </label>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : null}
       </div>
-    </> : null}
-    </div>
-  </Modal>;
+    </Modal>
+  );
 }
 
 const OTHER_COST_SECTION_BY_CATEGORY: Record<string, string> = { Outsource: "07", Transportation: "08", Accommodation: "09", "Other Cost": "10" };
@@ -1850,46 +4969,214 @@ const excelDate = (value: string | number) => {
   return Number.isNaN(parsed.getTime()) ? businessDate() : parsed.toISOString().slice(0, 10);
 };
 
-function ImportCostItemsModal({ bootstrap, workspace, busy, onClose, onImport }: { bootstrap: BootstrapData; workspace: EstimateCostWorkspace; busy: boolean; onClose: () => void; onImport: (seeds: CostItemSeed[]) => Promise<void> }) {
+function ImportCostItemsModal({
+  bootstrap,
+  workspace,
+  busy,
+  onClose,
+  onImport,
+}: {
+  bootstrap: BootstrapData;
+  workspace: EstimateCostWorkspace;
+  busy: boolean;
+  onClose: () => void;
+  onImport: (seeds: CostItemSeed[]) => Promise<void>;
+}) {
   const uiText = useUiText();
   const [fileName, setFileName] = useState("");
   const [rows, setRows] = useState<SpreadsheetRow[]>([]);
   const [error, setError] = useState("");
   const [reading, setReading] = useState(false);
   const allowedCodes = COST_CATEGORIES.filter(([code]) => workspace.capabilities.canEditAllSections || workspace.capabilities.editableSections.includes(code)).map(([code]) => code);
-  const seeds = rows.map((row, index): CostItemSeed | null => {
-    const rawCategory = spreadsheetText(row, ["categorycode", "category", "discipline", "หมวด", "หมวดหมู่"]);
-    const matchedCategory = COST_CATEGORIES.find(([code, name]) => code === rawCategory.padStart(2, "0") || normalizedHeader(name) === normalizedHeader(rawCategory)) ?? COST_CATEGORIES[0];
-    if (!allowedCodes.includes(matchedCategory[0])) return null;
-    const supplierName = spreadsheetText(row, ["supplier", "suppliername", "vendor", "ผู้ขาย"]);
-    const supplier = bootstrap.suppliers.find((item) => [item.name, item.code].some((value) => normalizedHeader(value) === normalizedHeader(supplierName)));
-    const description = spreadsheetText(row, ["description", "itemdescription", "name", "รายละเอียด", "รายการ"]);
-    if (!description) return null;
-    const itemCode = spreadsheetText(row, ["itemcode", "partno", "partnumber", "modelno", "รหัส", "รหัสสินค้า"]) || `IMPORT-${String(index + 1).padStart(4, "0")}`;
-    const quantity = spreadsheetNumber(row, ["qty", "quantity", "จำนวน"], 1);
-    const unitCost = spreadsheetNumber(row, ["unitcost", "price", "unitprice", "ราคา", "ราคาต่อหน่วย"], 0);
-    if (quantity <= 0 || unitCost < 0 || quantity * unitCost > MAX_LEDGER_LINE_TOTAL) return null;
-    const priceDateValue = spreadsheetValue(row, ["pricedate", "date", "วันที่ราคา"]);
-    return { categoryCode: matchedCategory[0], category: matchedCategory[1], subcategory: spreadsheetText(row, ["subcategory", "subcategoryname", "หมวดย่อย"]), module: spreadsheetText(row, ["module", "mainmodule", "workpackage", "โมดูล"]) || matchedCategory[1], itemCode, description, brand: spreadsheetText(row, ["brand", "ยี่ห้อ"]), model: spreadsheetText(row, ["model", "รุ่น"]), specification: spreadsheetText(row, ["specification", "spec", "ขนาด", "สเปค"]), supplierId: supplier?.id, quantity, unit: spreadsheetText(row, ["unit", "uom", "หน่วย"]) || "Pcs", unitCost, priceSource: spreadsheetText(row, ["pricesource", "source", "แหล่งราคา"]) || "Supplier Quotation", referenceNumber: spreadsheetText(row, ["referencenumber", "reference", "quotationno", "quoteno", "เลขที่ใบเสนอราคา"]), referenceProject: workspace.header.number, priceDate: priceDateValue === "" ? businessDate() : excelDate(priceDateValue), remark: spreadsheetText(row, ["remark", "note", "หมายเหตุ"]), ownerId: workspace.header.ownerId };
-  }).filter((seed): seed is CostItemSeed => Boolean(seed));
+  const seeds = rows
+    .map((row, index): CostItemSeed | null => {
+      const rawCategory = spreadsheetText(row, ["categorycode", "category", "discipline", "หมวด", "หมวดหมู่"]);
+      const matchedCategory = COST_CATEGORIES.find(([code, name]) => code === rawCategory.padStart(2, "0") || normalizedHeader(name) === normalizedHeader(rawCategory)) ?? COST_CATEGORIES[0];
+      if (!allowedCodes.includes(matchedCategory[0])) return null;
+      const supplierName = spreadsheetText(row, ["supplier", "suppliername", "vendor", "ผู้ขาย"]);
+      const supplier = bootstrap.suppliers.find((item) => [item.name, item.code].some((value) => normalizedHeader(value) === normalizedHeader(supplierName)));
+      const description = spreadsheetText(row, ["description", "itemdescription", "name", "รายละเอียด", "รายการ"]);
+      if (!description) return null;
+      const itemCode = spreadsheetText(row, ["itemcode", "partno", "partnumber", "modelno", "รหัส", "รหัสสินค้า"]) || `IMPORT-${String(index + 1).padStart(4, "0")}`;
+      const quantity = spreadsheetNumber(row, ["qty", "quantity", "จำนวน"], 1);
+      const unitCost = spreadsheetNumber(row, ["unitcost", "price", "unitprice", "ราคา", "ราคาต่อหน่วย"], 0);
+      if (quantity <= 0 || unitCost < 0 || quantity * unitCost > MAX_LEDGER_LINE_TOTAL) return null;
+      const priceDateValue = spreadsheetValue(row, ["pricedate", "date", "วันที่ราคา"]);
+      return {
+        categoryCode: matchedCategory[0],
+        category: matchedCategory[1],
+        subcategory: spreadsheetText(row, ["subcategory", "subcategoryname", "หมวดย่อย"]),
+        module: spreadsheetText(row, ["module", "mainmodule", "workpackage", "โมดูล"]) || matchedCategory[1],
+        itemCode,
+        description,
+        brand: spreadsheetText(row, ["brand", "ยี่ห้อ"]),
+        model: spreadsheetText(row, ["model", "รุ่น"]),
+        specification: spreadsheetText(row, ["specification", "spec", "ขนาด", "สเปค"]),
+        supplierId: supplier?.id,
+        quantity,
+        unit: spreadsheetText(row, ["unit", "uom", "หน่วย"]) || "Pcs",
+        unitCost,
+        priceSource: spreadsheetText(row, ["pricesource", "source", "แหล่งราคา"]) || "Supplier Quotation",
+        referenceNumber: spreadsheetText(row, ["referencenumber", "reference", "quotationno", "quoteno", "เลขที่ใบเสนอราคา"]),
+        referenceProject: workspace.header.number,
+        priceDate: priceDateValue === "" ? businessDate() : excelDate(priceDateValue),
+        remark: spreadsheetText(row, ["remark", "note", "หมายเหตุ"]),
+        ownerId: workspace.header.ownerId,
+      };
+    })
+    .filter((seed): seed is CostItemSeed => Boolean(seed));
   const choose = async (file: File | null) => {
     if (!file) return;
-    setReading(true); setError(""); setRows([]); setFileName(file.name);
-    try { const imported = await readSpreadsheet(file); if (!imported.length) throw new Error("ไม่พบแถวข้อมูลใต้ Header ในชีตแรก"); setRows(imported); }
-    catch (requestError) { setError(toError(requestError)); }
-    finally { setReading(false); }
+    setReading(true);
+    setError("");
+    setRows([]);
+    setFileName(file.name);
+    try {
+      const imported = await readSpreadsheet(file);
+      if (!imported.length) throw new Error("ไม่พบแถวข้อมูลใต้ Header ในชีตแรก");
+      setRows(imported);
+    } catch (requestError) {
+      setError(toError(requestError));
+    } finally {
+      setReading(false);
+    }
   };
-  return <Modal title={uiText("Import Excel")} subtitle="รองรับ .xlsx, .csv และ .tsv · อ่านชีตแรก · ตรวจ Preview ก่อนเขียนลง SQL Server" size="xl" onClose={onClose} footer={<><span className="muted">{seeds.length} <LocalizedText text={"valid of"} /> {rows.length} <LocalizedText text={"row(s)"} /></span><span className="spacer" /><button className="btn default" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || reading || !seeds.length} onClick={() => { void onImport(seeds); }}><Icon name="upload" /><LocalizedText text={"Import"} /> {seeds.length} <LocalizedText text={"row(s)"} /></button></>}>
-    <Field label="Excel file *" hint="Header ที่รองรับ เช่น Category, Module, Item Code, Description, Brand, Model, Supplier, Qty, Unit, Unit Cost"><input type="file" accept=".xlsx,.csv,.tsv" disabled={busy || reading} onChange={(event) => { void choose(event.target.files?.[0] ?? null); }} /></Field>
-    {fileName ? <div className="info-strip"><Icon name="file" /><span><strong>{fileName}</strong> <LocalizedText text={"·"} /> {reading ? "Reading…" : `${rows.length} source row(s)`}</span></div> : null}
-    {error ? <div className="callout danger"><Icon name="alertTriangle" /><span>{error}</span></div> : null}
-    {rows.length ? <div className="table-wrap tall" style={{ marginTop: 12 }}><table><thead><tr><th><LocalizedText text={"Category"} /></th><th><LocalizedText text={"Module"} /></th><th><LocalizedText text={"Item code"} /></th><th><LocalizedText text={"Description"} /></th><th><LocalizedText text={"Brand / Model"} /></th><th><LocalizedText text={"Supplier"} /></th><th className="num"><LocalizedText text={"Qty"} /></th><th><LocalizedText text={"Unit"} /></th><th className="num"><LocalizedText text={"Unit cost"} /></th><th className="num"><LocalizedText text={"Total"} /></th></tr></thead><tbody>{seeds.slice(0, 100).map((seed, index) => <tr key={`${seed.itemCode}-${index}`}><td><span className="pill">{seed.categoryCode}</span> {seed.category}</td><td>{seed.module}</td><td><strong className="mono">{seed.itemCode}</strong></td><td>{seed.description}</td><td>{[seed.brand, seed.model].filter(Boolean).join(" · ") || "—"}</td><td>{bootstrap.suppliers.find((supplier) => supplier.id === seed.supplierId)?.name ?? "—"}</td><td className="num">{formatNumber(seed.quantity)}</td><td>{seed.unit}</td><td className="num">{formatMoney(seed.unitCost)}</td><td className="num"><strong>{formatMoney(numberOf(seed.quantity) * numberOf(seed.unitCost))}</strong></td></tr>)}</tbody></table></div> : null}
-  </Modal>;
+  return (
+    <Modal
+      title={uiText("Import Excel")}
+      subtitle="รองรับ .xlsx, .csv และ .tsv · อ่านชีตแรก · ตรวจ Preview ก่อนเขียนลง SQL Server"
+      size="xl"
+      onClose={onClose}
+      footer={
+        <>
+          <span className="muted">
+            {seeds.length} <LocalizedText text={"valid of"} /> {rows.length} <LocalizedText text={"row(s)"} />
+          </span>
+          <span className="spacer" />
+          <button className="btn default" type="button" disabled={busy} onClick={onClose}>
+            <LocalizedText text={"Cancel"} />
+          </button>
+          <button
+            className="btn primary"
+            type="button"
+            disabled={busy || reading || !seeds.length}
+            onClick={() => {
+              void onImport(seeds);
+            }}
+          >
+            <Icon name="upload" />
+            <LocalizedText text={"Import"} /> {seeds.length} <LocalizedText text={"row(s)"} />
+          </button>
+        </>
+      }
+    >
+      <Field label="Excel file *" hint="Header ที่รองรับ เช่น Category, Module, Item Code, Description, Brand, Model, Supplier, Qty, Unit, Unit Cost">
+        <input
+          type="file"
+          accept=".xlsx,.csv,.tsv"
+          disabled={busy || reading}
+          onChange={(event) => {
+            void choose(event.target.files?.[0] ?? null);
+          }}
+        />
+      </Field>
+      {fileName ? (
+        <div className="info-strip">
+          <Icon name="file" />
+          <span>
+            <strong>{fileName}</strong> <LocalizedText text={"·"} /> {reading ? "Reading…" : `${rows.length} source row(s)`}
+          </span>
+        </div>
+      ) : null}
+      {error ? (
+        <div className="callout danger">
+          <Icon name="alertTriangle" />
+          <span>{error}</span>
+        </div>
+      ) : null}
+      {rows.length ? (
+        <div className="table-wrap tall" style={{ marginTop: 12 }}>
+          <table>
+            <thead>
+              <tr>
+                <th>
+                  <LocalizedText text={"Category"} />
+                </th>
+                <th>
+                  <LocalizedText text={"Module"} />
+                </th>
+                <th>
+                  <LocalizedText text={"Item code"} />
+                </th>
+                <th>
+                  <LocalizedText text={"Description"} />
+                </th>
+                <th>
+                  <LocalizedText text={"Brand / Model"} />
+                </th>
+                <th>
+                  <LocalizedText text={"Supplier"} />
+                </th>
+                <th className="num">
+                  <LocalizedText text={"Qty"} />
+                </th>
+                <th>
+                  <LocalizedText text={"Unit"} />
+                </th>
+                <th className="num">
+                  <LocalizedText text={"Unit cost"} />
+                </th>
+                <th className="num">
+                  <LocalizedText text={"Total"} />
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {seeds.slice(0, 100).map((seed, index) => (
+                <tr key={`${seed.itemCode}-${index}`}>
+                  <td>
+                    <span className="pill">{seed.categoryCode}</span> {seed.category}
+                  </td>
+                  <td>{seed.module}</td>
+                  <td>
+                    <strong className="mono">{seed.itemCode}</strong>
+                  </td>
+                  <td>{seed.description}</td>
+                  <td>{[seed.brand, seed.model].filter(Boolean).join(" · ") || "—"}</td>
+                  <td>{bootstrap.suppliers.find((supplier) => supplier.id === seed.supplierId)?.name ?? "—"}</td>
+                  <td className="num">{formatNumber(seed.quantity)}</td>
+                  <td>{seed.unit}</td>
+                  <td className="num">{formatMoney(seed.unitCost)}</td>
+                  <td className="num">
+                    <strong>{formatMoney(numberOf(seed.quantity) * numberOf(seed.unitCost))}</strong>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+    </Modal>
+  );
 }
 
 /* Pull a whole module out of the library. The engineer says how many of it the project
    needs; the multiplication is the point of the feature. */
-function ApplyModuleTemplateModal({ workspace, currentUserId, busy, sources, onClose, onApply }: { workspace: EstimateCostWorkspace; currentUserId: number; busy: boolean; sources?: (locked: boolean) => React.ReactNode; onClose: () => void; onApply: (input: { templateId: number; module: string; modules: number; ownerId: number; keepReferencePrices: boolean }) => Promise<boolean> }) {
+function ApplyModuleTemplateModal({
+  workspace,
+  currentUserId,
+  busy,
+  sources,
+  onClose,
+  onApply,
+}: {
+  workspace: EstimateCostWorkspace;
+  currentUserId: number;
+  busy: boolean;
+  sources?: (locked: boolean) => React.ReactNode;
+  onClose: () => void;
+  onApply: (input: { templateId: number; module: string; modules: number; ownerId: number; keepReferencePrices: boolean }) => Promise<boolean>;
+}) {
   const [templates, setTemplates] = useState<ModuleTemplateSummary[]>([]);
   const [templatePage, setTemplatePage] = useState(1);
   const [templateTotal, setTemplateTotal] = useState(0);
@@ -1908,11 +5195,24 @@ function ApplyModuleTemplateModal({ workspace, currentUserId, busy, sources, onC
     const timer = window.setTimeout(() => {
       setLoading(true);
       void listModuleTemplates({ status: "Active", search: search || undefined, categoryCode: discipline || undefined, page: templatePage, pageSize: 50 })
-        .then((result) => { if (active) { setTemplates(result.items); setTemplateTotal(result.total); setError(""); } })
-        .catch((requestError) => { if (active) setError(toError(requestError)); })
-        .finally(() => { if (active) setLoading(false); });
+        .then((result) => {
+          if (active) {
+            setTemplates(result.items);
+            setTemplateTotal(result.total);
+            setError("");
+          }
+        })
+        .catch((requestError) => {
+          if (active) setError(toError(requestError));
+        })
+        .finally(() => {
+          if (active) setLoading(false);
+        });
     }, 200);
-    return () => { active = false; window.clearTimeout(timer); };
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
   }, [search, discipline, templatePage]);
   const choose = async (template: ModuleTemplateSummary) => {
     setError("");
@@ -1923,125 +5223,453 @@ function ApplyModuleTemplateModal({ workspace, currentUserId, busy, sources, onC
       setModules(1);
       setKeepPrices(true);
       setStaleDays(priceAgeInDays(detail.oldestPriceDate));
-    } catch (requestError) { setError(toError(requestError)); }
+    } catch (requestError) {
+      setError(toError(requestError));
+    }
   };
   const stale = staleDays !== null && staleDays > STALE_TEMPLATE_PRICE_DAYS;
-  const projected = selected ? selected.lines.map((line) => ({ line, quantity: line.quantityPerModule * modules, total: line.quantityPerModule * modules * (keepPrices ? line.referenceUnitCost : 0) })) : [];
+  const projected = selected
+    ? selected.lines.map((line) => ({ line, quantity: line.quantityPerModule * modules, total: line.quantityPerModule * modules * (keepPrices ? line.referenceUnitCost : 0) }))
+    : [];
   const projectedTotal = projected.reduce((sum, entry) => sum + entry.total, 0);
   /* A template can carry lines from several disciplines, so the section check has
      to read every line rather than the template's primary discipline. */
-  const blocker = selected ? moduleTemplateApplyBlocker({
-    status: selected.status,
-    lineSections: selected.lines.map((line) => line.categoryCode),
-    canEditCostItems: workspace.capabilities.canEditCostItems,
-    capabilities: workspace.capabilities,
-  }) : null;
+  const blocker = selected
+    ? moduleTemplateApplyBlocker({
+        status: selected.status,
+        lineSections: selected.lines.map((line) => line.categoryCode),
+        canEditCostItems: workspace.capabilities.canEditCostItems,
+        capabilities: workspace.capabilities,
+      })
+    : null;
   const valid = Boolean(selected && moduleName.trim() && modules >= 1) && !blocker;
-  return <Modal title="Apply Master Template" subtitle="เลือกโมดูลจากคลัง ใส่จำนวนชุด แล้วดูผลก่อนลงจริง" size="wide" onClose={onClose} footer={<>
-    <button className="btn ghost" type="button" disabled={busy || saving} onClick={onClose}><LocalizedText text={"Cancel"} /></button>
-    <button className="btn primary" type="button" disabled={!valid || busy || saving} onClick={async () => {
-      if (!selected) return;
-      setSaving(true);
-      await onApply({ templateId: selected.id, module: moduleName.trim(), modules, ownerId: estimateApplyOwnerId(workspace.capabilities, workspace.header.ownerId, currentUserId), keepReferencePrices: keepPrices });
-      setSaving(false);
-    }}><Icon name="plus" />{saving ? "Applying…" : selected ? `Apply ${projected.length} line(s)` : "Apply"}</button>
-  </>}>
-    {sources?.(busy || saving)}
-    {error ? <div className="info-strip red"><Icon name="alertCircle" /><span>{error}</span></div> : null}
-    <div className="row" style={{ gap: 8 }}>
-      <SearchInput value={search} onChange={(value) => { setSearch(value); setTemplatePage(1); }} placeholder="ค้นหา code, ชื่อ, item, brand" />
-      <FilterSelect label="Discipline" value={discipline} onChange={(value) => { setDiscipline(value); setTemplatePage(1); }} options={[{ value: "", label: "ทุก discipline" }, ...COST_CATEGORIES.map(([code, name]) => ({ value: code, label: `${code} ${name}` }))]} />
-    </div>
-    {loading ? <div className="empty"><span className="spinner" /><LocalizedText text={"Loading templates…"} /></div> : templates.length ? <div className="table-wrap estimate-template-picker-list"><table><thead><tr><th><LocalizedText text={"Template"} /></th><th style={{ width: 140 }}><LocalizedText text={"Discipline"} /></th><th className="num" style={{ width: 70 }}><LocalizedText text={"Lines"} /></th><th className="num" style={{ width: 140 }}><LocalizedText text={"Reference"} /></th><th style={{ width: 80 }} /></tr></thead><tbody>{templates.map((template) => <tr key={template.id} className={selected?.id === template.id ? "selected" : undefined}>
-      <td><div className="cell-primary"><strong>{template.code} <LocalizedText text={"·"} /> {template.name}</strong><span>{template.description || `ใช้ไปแล้ว ${template.usageCount} ใบเสนอราคา`}</span></div></td>
-      <td><span className="pill">{template.categoryCode}</span> {template.category}</td>
-      <td className="num">{template.lineCount}</td>
-      <td className="num">{formatMoney(template.referenceTotal)}</td>
-      <td><button className="btn default sm" type="button" disabled={busy} onClick={() => { void choose(template); }}>{selected?.id === template.id ? "Selected" : "Select"}</button></td>
-    </tr>)}</tbody></table></div> : <EmptyState icon="package" title="No template" message="ไม่พบชุดที่พร้อมใช้งาน — สร้างได้ที่หน้า Module Templates หรือปุ่ม Save as template บนแถบโมดูล" />}
-    <Pagination page={templatePage} pageCount={Math.max(1, Math.ceil(templateTotal / 50))} from={templateTotal ? (templatePage - 1) * 50 + 1 : 0} to={Math.min(templatePage * 50, templateTotal)} total={templateTotal} onPage={setTemplatePage} />
-    {selected ? <>
-      {blocker ? <div className="info-strip red"><Icon name="alertCircle" /><span>{blocker}</span></div> : null}
-      <div className="info-strip"><Icon name="user" /><span>{selected.name} <LocalizedText text={"· Revision"} /> {selected.revision} <LocalizedText text={"· สร้างโดย"} /> {selected.createdByName} <LocalizedText text={"· แก้ไขล่าสุดโดย"} /> {selected.updatedByName} <LocalizedText text={"เมื่อ"} /> {new Intl.DateTimeFormat(currentLocale(), { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Bangkok" }).format(new Date(selected.updatedAt))}</span></div>
-      <div className="form-grid three" style={{ marginTop: 12 }}>
-        <Field label="ชื่อโมดูลในใบนี้ *"><input required maxLength={200} value={moduleName} onChange={(event) => setModuleName(event.target.value)} /></Field>
-        <Field label="จำนวนชุด *"><input className="num" type="number" min="1" max="500" step="1" value={modules} onChange={(event) => setModules(Math.max(1, Math.floor(Number(event.target.value) || 1)))} /></Field>
-        <Field label="ราคา"><label className="check-inline"><input type="checkbox" checked={keepPrices} onChange={(event) => setKeepPrices(event.target.checked)} /><LocalizedText text={"ใช้ราคาอ้างอิงจาก template"} /></label></Field>
+  return (
+    <Modal
+      title="Apply Master Template"
+      subtitle="เลือกโมดูลจากคลัง ใส่จำนวนชุด แล้วดูผลก่อนลงจริง"
+      size="wide"
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn ghost" type="button" disabled={busy || saving} onClick={onClose}>
+            <LocalizedText text={"Cancel"} />
+          </button>
+          <button
+            className="btn primary"
+            type="button"
+            disabled={!valid || busy || saving}
+            onClick={async () => {
+              if (!selected) return;
+              setSaving(true);
+              await onApply({
+                templateId: selected.id,
+                module: moduleName.trim(),
+                modules,
+                ownerId: estimateApplyOwnerId(workspace.capabilities, workspace.header.ownerId, currentUserId),
+                keepReferencePrices: keepPrices,
+              });
+              setSaving(false);
+            }}
+          >
+            <Icon name="plus" />
+            {saving ? "Applying…" : selected ? `Apply ${projected.length} line(s)` : "Apply"}
+          </button>
+        </>
+      }
+    >
+      {sources?.(busy || saving)}
+      {error ? (
+        <div className="info-strip red">
+          <Icon name="alertCircle" />
+          <span>{error}</span>
+        </div>
+      ) : null}
+      <div className="row" style={{ gap: 8 }}>
+        <SearchInput
+          value={search}
+          onChange={(value) => {
+            setSearch(value);
+            setTemplatePage(1);
+          }}
+          placeholder="ค้นหา code, ชื่อ, item, brand"
+        />
+        <FilterSelect
+          label="Discipline"
+          value={discipline}
+          onChange={(value) => {
+            setDiscipline(value);
+            setTemplatePage(1);
+          }}
+          options={[{ value: "", label: "ทุก discipline" }, ...COST_CATEGORIES.map(([code, name]) => ({ value: code, label: `${code} ${name}` }))]}
+        />
       </div>
-      {stale ? <div className="info-strip amber"><Icon name="alertTriangle" /><span><LocalizedText text={"ราคาอ้างอิงเก่าสุดในชุดนี้อายุ"} /> {staleDays} <LocalizedText text={"วัน — ควรทบทวนราคาหลังลงรายการ"} /></span></div> : null}
-      {!keepPrices ? <div className="info-strip"><Icon name="alertCircle" /><span><LocalizedText text={"จะลงรายการด้วยราคา 0 ทุกบรรทัด แล้วค่อยใส่ราคาเองหรือดึงจาก Price Library"} /></span></div> : null}
-      <div className="table-wrap" style={{ maxHeight: 240, marginTop: 10 }}><table><thead><tr><th style={{ width: 130 }}><LocalizedText text={"Item code"} /></th><th><LocalizedText text={"Description"} /></th><th style={{ width: 130 }}><LocalizedText text={"Discipline"} /></th><th className="num" style={{ width: 90 }}><LocalizedText text={"Qty"} /></th><th style={{ width: 80 }}><LocalizedText text={"Unit"} /></th><th className="num" style={{ width: 130 }}><LocalizedText text={"Total"} /></th></tr></thead><tbody>{projected.map((entry) => <tr key={entry.line.id}>
-        <td><strong className="mono">{entry.line.itemCode}</strong></td>
-        <td><div className="cell-primary"><strong>{entry.line.description}</strong>{entry.line.brand || entry.line.model ? <span>{[entry.line.brand, entry.line.model].filter(Boolean).join(" · ")}</span> : null}</div></td>
-        <td><span className="pill">{entry.line.categoryCode}</span> {entry.line.category}</td>
-        <td className="num">{formatNumber(entry.quantity, 4)}</td>
-        <td>{entry.line.unit}</td>
-        <td className="num"><strong>{formatMoney(entry.total)}</strong></td>
-      </tr>)}</tbody></table></div>
-      <div className="sticky-foot" style={{ marginTop: 0 }}><div className="foot-item"><span><LocalizedText text={"Lines"} /></span><strong>{projected.length}</strong></div><div className="foot-item"><span><LocalizedText text={"Modules"} /></span><strong>{modules}</strong></div><div className="foot-total"><span><LocalizedText text={"Added to estimate"} /></span><strong>{formatMoney(projectedTotal)}</strong></div></div>
-    </> : null}
-  </Modal>;
+      {loading ? (
+        <div className="empty">
+          <span className="spinner" />
+          <LocalizedText text={"Loading templates…"} />
+        </div>
+      ) : templates.length ? (
+        <div className="table-wrap estimate-template-picker-list">
+          <table>
+            <thead>
+              <tr>
+                <th>
+                  <LocalizedText text={"Template"} />
+                </th>
+                <th style={{ width: 140 }}>
+                  <LocalizedText text={"Discipline"} />
+                </th>
+                <th className="num" style={{ width: 70 }}>
+                  <LocalizedText text={"Lines"} />
+                </th>
+                <th className="num" style={{ width: 140 }}>
+                  <LocalizedText text={"Reference"} />
+                </th>
+                <th style={{ width: 80 }} />
+              </tr>
+            </thead>
+            <tbody>
+              {templates.map((template) => (
+                <tr key={template.id} className={selected?.id === template.id ? "selected" : undefined}>
+                  <td>
+                    <div className="cell-primary">
+                      <strong>
+                        {template.code} <LocalizedText text={"·"} /> {template.name}
+                      </strong>
+                      <span>{template.description || `ใช้ไปแล้ว ${template.usageCount} ใบเสนอราคา`}</span>
+                    </div>
+                  </td>
+                  <td>
+                    <span className="pill">{template.categoryCode}</span> {template.category}
+                  </td>
+                  <td className="num">{template.lineCount}</td>
+                  <td className="num">{formatMoney(template.referenceTotal)}</td>
+                  <td>
+                    <button
+                      className="btn default sm"
+                      type="button"
+                      disabled={busy}
+                      onClick={() => {
+                        void choose(template);
+                      }}
+                    >
+                      {selected?.id === template.id ? "Selected" : "Select"}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <EmptyState icon="package" title="No template" message="ไม่พบชุดที่พร้อมใช้งาน — สร้างได้ที่หน้า Module Templates หรือปุ่ม Save as template บนแถบโมดูล" />
+      )}
+      <Pagination
+        page={templatePage}
+        pageCount={Math.max(1, Math.ceil(templateTotal / 50))}
+        from={templateTotal ? (templatePage - 1) * 50 + 1 : 0}
+        to={Math.min(templatePage * 50, templateTotal)}
+        total={templateTotal}
+        onPage={setTemplatePage}
+      />
+      {selected ? (
+        <>
+          {blocker ? (
+            <div className="info-strip red">
+              <Icon name="alertCircle" />
+              <span>{blocker}</span>
+            </div>
+          ) : null}
+          <div className="info-strip">
+            <Icon name="user" />
+            <span>
+              {selected.name} <LocalizedText text={"· Revision"} /> {selected.revision} <LocalizedText text={"· สร้างโดย"} /> {selected.createdByName} <LocalizedText text={"· แก้ไขล่าสุดโดย"} />{" "}
+              {selected.updatedByName} <LocalizedText text={"เมื่อ"} />{" "}
+              {new Intl.DateTimeFormat(currentLocale(), { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Bangkok" }).format(new Date(selected.updatedAt))}
+            </span>
+          </div>
+          <div className="form-grid three" style={{ marginTop: 12 }}>
+            <Field label="ชื่อโมดูลในใบนี้ *">
+              <input required maxLength={200} value={moduleName} onChange={(event) => setModuleName(event.target.value)} />
+            </Field>
+            <Field label="จำนวนชุด *">
+              <input className="num" type="number" min="1" max="500" step="1" value={modules} onChange={(event) => setModules(Math.max(1, Math.floor(Number(event.target.value) || 1)))} />
+            </Field>
+            <Field label="ราคา">
+              <label className="check-inline">
+                <input type="checkbox" checked={keepPrices} onChange={(event) => setKeepPrices(event.target.checked)} />
+                <LocalizedText text={"ใช้ราคาอ้างอิงจาก template"} />
+              </label>
+            </Field>
+          </div>
+          {stale ? (
+            <div className="info-strip amber">
+              <Icon name="alertTriangle" />
+              <span>
+                <LocalizedText text={"ราคาอ้างอิงเก่าสุดในชุดนี้อายุ"} /> {staleDays} <LocalizedText text={"วัน — ควรทบทวนราคาหลังลงรายการ"} />
+              </span>
+            </div>
+          ) : null}
+          {!keepPrices ? (
+            <div className="info-strip">
+              <Icon name="alertCircle" />
+              <span>
+                <LocalizedText text={"จะลงรายการด้วยราคา 0 ทุกบรรทัด แล้วค่อยใส่ราคาเองหรือดึงจาก Price Library"} />
+              </span>
+            </div>
+          ) : null}
+          <div className="table-wrap" style={{ maxHeight: 240, marginTop: 10 }}>
+            <table>
+              <thead>
+                <tr>
+                  <th style={{ width: 130 }}>
+                    <LocalizedText text={"Item code"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Description"} />
+                  </th>
+                  <th style={{ width: 130 }}>
+                    <LocalizedText text={"Discipline"} />
+                  </th>
+                  <th className="num" style={{ width: 90 }}>
+                    <LocalizedText text={"Qty"} />
+                  </th>
+                  <th style={{ width: 80 }}>
+                    <LocalizedText text={"Unit"} />
+                  </th>
+                  <th className="num" style={{ width: 130 }}>
+                    <LocalizedText text={"Total"} />
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {projected.map((entry) => (
+                  <tr key={entry.line.id}>
+                    <td>
+                      <strong className="mono">{entry.line.itemCode}</strong>
+                    </td>
+                    <td>
+                      <div className="cell-primary">
+                        <strong>{entry.line.description}</strong>
+                        {entry.line.brand || entry.line.model ? <span>{[entry.line.brand, entry.line.model].filter(Boolean).join(" · ")}</span> : null}
+                      </div>
+                    </td>
+                    <td>
+                      <span className="pill">{entry.line.categoryCode}</span> {entry.line.category}
+                    </td>
+                    <td className="num">{formatNumber(entry.quantity, 4)}</td>
+                    <td>{entry.line.unit}</td>
+                    <td className="num">
+                      <strong>{formatMoney(entry.total)}</strong>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="sticky-foot" style={{ marginTop: 0 }}>
+            <div className="foot-item">
+              <span>
+                <LocalizedText text={"Lines"} />
+              </span>
+              <strong>{projected.length}</strong>
+            </div>
+            <div className="foot-item">
+              <span>
+                <LocalizedText text={"Modules"} />
+              </span>
+              <strong>{modules}</strong>
+            </div>
+            <div className="foot-total">
+              <span>
+                <LocalizedText text={"Added to estimate"} />
+              </span>
+              <strong>{formatMoney(projectedTotal)}</strong>
+            </div>
+          </div>
+        </>
+      ) : null}
+    </Modal>
+  );
 }
 
 /* The other half: a module that turned out well becomes a library entry without
    anyone retyping it. */
-function SaveModuleTemplateModal({ group, busy, onClose, onSave }: { group: CostModuleGroup; busy: boolean; onClose: () => void; onSave: (input: { categoryCode: string; module: string; code: string; name: string; projectType: string; description: string }) => Promise<boolean> }) {
+function SaveModuleTemplateModal({
+  group,
+  busy,
+  onClose,
+  onSave,
+}: {
+  group: CostModuleGroup;
+  busy: boolean;
+  onClose: () => void;
+  onSave: (input: { categoryCode: string; module: string; code: string; name: string; projectType: string; description: string }) => Promise<boolean>;
+}) {
   const localizeCopy = useStaticCopy();
-  const suggested = group.module.trim().toUpperCase().replace(/[^A-Z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 32);
+  const suggested = group.module
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 32);
   const [code, setCode] = useState(suggested || "MODULE");
   const [name, setName] = useState(group.module);
   const [projectType, setProjectType] = useState("");
   const [description, setDescription] = useState("");
   const [saving, setSaving] = useState(false);
   const valid = Boolean(code.trim() && name.trim());
-  return <Modal title="Save as Master Template" subtitle={`${group.lines.length} รายการในโมดูล "${group.module}" จะถูกเก็บเป็นชุดตั้งต้น`} size="sm" onClose={onClose} footer={<>
-    <button className="btn ghost" type="button" disabled={busy || saving} onClick={onClose}><LocalizedText text={"Cancel"} /></button>
-    <button className="btn primary" type="button" disabled={!valid || busy || saving} onClick={async () => {
-      setSaving(true);
-      await onSave({ categoryCode: group.categoryCode, module: group.module, code: code.trim().toUpperCase(), name: name.trim(), projectType, description });
-      setSaving(false);
-    }}><Icon name="package" />{saving ? <LocalizedText text={"Saving…"} /> : "Save to library"}</button>
-  </>}>
-    <div className="form-grid two">
-      <Field label="Template code *"><input required maxLength={40} value={code} onChange={(event) => setCode(event.target.value)} placeholder="เช่น CTU-A-800" /></Field>
-      <Field label="Template name *"><input required maxLength={200} value={name} onChange={(event) => setName(event.target.value)} /></Field>
-      <Field label="Project type"><select value={projectType} onChange={(event) => setProjectType(event.target.value)}><option value=""><LocalizedText text={"ไม่ระบุ"} /></option>{PROJECT_TYPES.map((type) => <option key={type}>{type}</option>)}</select></Field>
-      <Field label="Discipline"><input value={`${group.categoryCode} ${group.category}`} readOnly /></Field>
-    </div>
-    <Field label="Description"><textarea rows={3} maxLength={1000} value={description} onChange={(event) => setDescription(event.target.value)} placeholder={localizeCopy("ชุดนี้ใช้กับงานแบบไหน มีอะไรที่ต้องรู้ก่อนดึงไปใช้")} /></Field>
-    <div className="info-strip" style={{ marginTop: 10 }}><Icon name="alertCircle" /><span><LocalizedText text={"ราคาที่เก็บไปเป็น"} /><b><LocalizedText text={"ราคาอ้างอิง"} /></b><LocalizedText text={"พร้อมวันที่ ไม่ใช่ราคาปัจจุบัน ตอนดึงไปใช้จะเตือนถ้าเก่าเกิน"} /> {STALE_TEMPLATE_PRICE_DAYS} <LocalizedText text={"days"} /></span></div>
-  </Modal>;
+  return (
+    <Modal
+      title="Save as Master Template"
+      subtitle={`${group.lines.length} รายการในโมดูล "${group.module}" จะถูกเก็บเป็นชุดตั้งต้น`}
+      size="sm"
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn ghost" type="button" disabled={busy || saving} onClick={onClose}>
+            <LocalizedText text={"Cancel"} />
+          </button>
+          <button
+            className="btn primary"
+            type="button"
+            disabled={!valid || busy || saving}
+            onClick={async () => {
+              setSaving(true);
+              await onSave({ categoryCode: group.categoryCode, module: group.module, code: code.trim().toUpperCase(), name: name.trim(), projectType, description });
+              setSaving(false);
+            }}
+          >
+            <Icon name="package" />
+            {saving ? <LocalizedText text={"Saving…"} /> : "Save to library"}
+          </button>
+        </>
+      }
+    >
+      <div className="form-grid two">
+        <Field label="Template code *">
+          <input required maxLength={40} value={code} onChange={(event) => setCode(event.target.value)} placeholder="เช่น CTU-A-800" />
+        </Field>
+        <Field label="Template name *">
+          <input required maxLength={200} value={name} onChange={(event) => setName(event.target.value)} />
+        </Field>
+        <Field label="Project type">
+          <select value={projectType} onChange={(event) => setProjectType(event.target.value)}>
+            <option value="">
+              <LocalizedText text={"ไม่ระบุ"} />
+            </option>
+            {PROJECT_TYPES.map((type) => (
+              <option key={type}>{type}</option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Discipline">
+          <input value={`${group.categoryCode} ${group.category}`} readOnly />
+        </Field>
+      </div>
+      <Field label="Description">
+        <textarea rows={3} maxLength={1000} value={description} onChange={(event) => setDescription(event.target.value)} placeholder={localizeCopy("ชุดนี้ใช้กับงานแบบไหน มีอะไรที่ต้องรู้ก่อนดึงไปใช้")} />
+      </Field>
+      <div className="info-strip" style={{ marginTop: 10 }}>
+        <Icon name="alertCircle" />
+        <span>
+          <LocalizedText text={"ราคาที่เก็บไปเป็น"} />
+          <b>
+            <LocalizedText text={"ราคาอ้างอิง"} />
+          </b>
+          <LocalizedText text={"พร้อมวันที่ ไม่ใช่ราคาปัจจุบัน ตอนดึงไปใช้จะเตือนถ้าเก่าเกิน"} /> {STALE_TEMPLATE_PRICE_DAYS} <LocalizedText text={"days"} />
+        </span>
+      </div>
+    </Modal>
+  );
 }
 
-function CopyCostModuleModal({ group, groups, busy, onCopy, onClose }: {
-  group: CostModuleGroup; groups: CostModuleGroup[]; busy: boolean;
-  onCopy: (group: CostModuleGroup, name: string) => Promise<void>; onClose: () => void;
+function CopyCostModuleModal({
+  group,
+  groups,
+  busy,
+  onCopy,
+  onClose,
+}: {
+  group: CostModuleGroup;
+  groups: CostModuleGroup[];
+  busy: boolean;
+  onCopy: (group: CostModuleGroup, name: string) => Promise<void>;
+  onClose: () => void;
 }) {
   const copy = (th: string, en: string, jp: string) => estimateUxCopy(currentLocale(), th, en, jp);
   const [name, setName] = useState(() => {
     let index = 1;
     const base = group.module.slice(0, 185);
-    while (groups.some(entry => entry.categoryCode === group.categoryCode && entry.module.toLowerCase() === `${base} (Copy ${index})`.toLowerCase())) index++;
+    while (groups.some((entry) => entry.categoryCode === group.categoryCode && entry.module.toLowerCase() === `${base} (Copy ${index})`.toLowerCase())) index++;
     return `${base} (Copy ${index})`;
   });
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const pending = busy || saving;
-  const duplicate = groups.some(entry => entry.categoryCode === group.categoryCode && entry.module.trim().toLowerCase() === name.trim().toLowerCase());
+  const duplicate = groups.some((entry) => entry.categoryCode === group.categoryCode && entry.module.trim().toLowerCase() === name.trim().toLowerCase());
   const submit = async () => {
     if (pending || !name.trim() || duplicate) return;
-    setSaving(true); setError("");
-    try { await onCopy(group, name.trim()); onClose(); }
-    catch (error) { setError(toError(error)); }
-    finally { setSaving(false); }
+    setSaving(true);
+    setError("");
+    try {
+      await onCopy(group, name.trim());
+      onClose();
+    } catch (error) {
+      setError(toError(error));
+    } finally {
+      setSaving(false);
+    }
   };
-  return <Modal title={copy("คัดลอกโมดูล", "Copy module", "モジュールを複製")} subtitle={group.module} onClose={() => { if (!pending) onClose(); }}>
-    <p>{copy(`คัดลอก ${group.lines.length} รายการ พร้อมจำนวน ราคา และชุดราคา ภายใน Estimate นี้`, `Copy ${group.lines.length} items with quantities, prices and price sets into this estimate.`, `${group.lines.length}件の数量・価格・セットをこの見積内に複製します。`)}</p>
-    <label className="field"><span>{copy("ชื่อโมดูลใหม่", "New module name", "新しいモジュール名")}</span><input value={name} maxLength={200} disabled={pending} onChange={event => setName(event.target.value)} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); void submit(); } }} /></label>
-    {duplicate ? <div className="info-strip amber">{copy("ชื่อนี้มีอยู่แล้ว กรุณาใช้ชื่อใหม่", "This name already exists. Choose a new name.", "この名前は既に存在します。別の名前を入力してください。")}</div> : null}
-    {error ? <div role="alert" className="info-strip red">{error}</div> : null}
-    <div className="modal-actions"><button className="btn default" disabled={pending} onClick={onClose}><LocalizedText text="Cancel" /></button><button className="btn primary" disabled={pending || !name.trim() || duplicate} onClick={() => void submit()}><Icon name="copy" />{copy(pending ? "กำลังคัดลอก…" : "คัดลอกโมดูล", pending ? "Copying…" : "Copy module", pending ? "複製中…" : "モジュールを複製")}</button></div>
-  </Modal>;
+  return (
+    <Modal
+      title={copy("คัดลอกโมดูล", "Copy module", "モジュールを複製")}
+      subtitle={group.module}
+      onClose={() => {
+        if (!pending) onClose();
+      }}
+    >
+      <p>
+        {copy(
+          `คัดลอก ${group.lines.length} รายการ พร้อมจำนวน ราคา และชุดราคา ภายใน Estimate นี้`,
+          `Copy ${group.lines.length} items with quantities, prices and price sets into this estimate.`,
+          `${group.lines.length}件の数量・価格・セットをこの見積内に複製します。`,
+        )}
+      </p>
+      <label className="field">
+        <span>{copy("ชื่อโมดูลใหม่", "New module name", "新しいモジュール名")}</span>
+        <input
+          value={name}
+          maxLength={200}
+          disabled={pending}
+          onChange={(event) => setName(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              void submit();
+            }
+          }}
+        />
+      </label>
+      {duplicate ? (
+        <div className="info-strip amber">{copy("ชื่อนี้มีอยู่แล้ว กรุณาใช้ชื่อใหม่", "This name already exists. Choose a new name.", "この名前は既に存在します。別の名前を入力してください。")}</div>
+      ) : null}
+      {error ? (
+        <div role="alert" className="info-strip red">
+          {error}
+        </div>
+      ) : null}
+      <div className="modal-actions">
+        <button className="btn default" disabled={pending} onClick={onClose}>
+          <LocalizedText text="Cancel" />
+        </button>
+        <button className="btn primary" disabled={pending || !name.trim() || duplicate} onClick={() => void submit()}>
+          <Icon name="copy" />
+          {copy(pending ? "กำลังคัดลอก…" : "คัดลอกโมดูล", pending ? "Copying…" : "Copy module", pending ? "複製中…" : "モジュールを複製")}
+        </button>
+      </div>
+    </Modal>
+  );
 }
 
 function MainModuleEditor({ workspace, busy, onClose, onContinue }: { workspace: EstimateCostWorkspace; busy: boolean; onClose: () => void; onContinue: (seed: CostItemSeed) => void }) {
@@ -2053,15 +5681,75 @@ function MainModuleEditor({ workspace, busy, onClose, onContinue }: { workspace:
   const selected = COST_CATEGORIES.find(([code]) => code === categoryCode) ?? COST_CATEGORIES[0];
   /* jsx-a11y forbids autoFocus; the name is still the one field that must be
      typed, so the dialog puts the caret there on open. */
-  useEffect(() => { nameRef.current?.focus(); }, []);
-  const submit = () => { if (!busy && name.trim()) onContinue({ categoryCode: selected[0], category: selected[1], module: name.trim(), priceSource: "Manual Estimate" }); };
-  return <Modal title="New Main Module" subtitle="Name the module, then add its first item to save it into this revision" size="md" onClose={onClose} footer={<><button className="btn default" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || !name.trim()} onClick={submit}><Icon name="arrowRight" /><LocalizedText text={"Continue to first item"} /></button></>}>
-    <div className="form-grid two"><Field label="Discipline *"><select value={categoryCode} onChange={(event) => setCategoryCode(event.target.value)}>{allowedCategories.map(([code, label]) => <option key={code} value={code}>{code} — {label}</option>)}</select></Field><Field label="Main module name *"><input required ref={nameRef} maxLength={200} value={name} onChange={(event) => setName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing) { event.preventDefault(); submit(); } }} placeholder={localizeCopy("เช่น Control Panel หรือ PLC System")} /></Field></div>
-    <div className="info-strip" style={{ marginTop: 12 }}><Icon name="layers" /><span><LocalizedText text={"Main Module จะถูกบันทึกจริงเมื่อ Item แรกถูกสร้าง เพื่อไม่ให้เกิดโมดูลว่างในฐานข้อมูล"} /></span></div>
-  </Modal>;
+  useEffect(() => {
+    nameRef.current?.focus();
+  }, []);
+  const submit = () => {
+    if (!busy && name.trim()) onContinue({ categoryCode: selected[0], category: selected[1], module: name.trim(), priceSource: "Manual Estimate" });
+  };
+  return (
+    <Modal
+      title="New Main Module"
+      subtitle="Name the module, then add its first item to save it into this revision"
+      size="md"
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn default" type="button" disabled={busy} onClick={onClose}>
+            <LocalizedText text={"Cancel"} />
+          </button>
+          <button className="btn primary" type="button" disabled={busy || !name.trim()} onClick={submit}>
+            <Icon name="arrowRight" />
+            <LocalizedText text={"Continue to first item"} />
+          </button>
+        </>
+      }
+    >
+      <div className="form-grid two">
+        <Field label="Discipline *">
+          <select value={categoryCode} onChange={(event) => setCategoryCode(event.target.value)}>
+            {allowedCategories.map(([code, label]) => (
+              <option key={code} value={code}>
+                {code} — {label}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Main module name *">
+          <input
+            required
+            ref={nameRef}
+            maxLength={200}
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.nativeEvent.isComposing) {
+                event.preventDefault();
+                submit();
+              }
+            }}
+            placeholder={localizeCopy("เช่น Control Panel หรือ PLC System")}
+          />
+        </Field>
+      </div>
+      <div className="info-strip" style={{ marginTop: 12 }}>
+        <Icon name="layers" />
+        <span>
+          <LocalizedText text={"Main Module จะถูกบันทึกจริงเมื่อ Item แรกถูกสร้าง เพื่อไม่ให้เกิดโมดูลว่างในฐานข้อมูล"} />
+        </span>
+      </div>
+    </Modal>
+  );
 }
 
-function EstimateOtherCostTab({ workspace, busy, onAddOther, onEditOther, onRemoveOther, onUpdateContingency }: {
+function EstimateOtherCostTab({
+  workspace,
+  busy,
+  onAddOther,
+  onEditOther,
+  onRemoveOther,
+  onUpdateContingency,
+}: {
   workspace: EstimateCostWorkspace;
   busy: boolean;
   onAddOther: () => void;
@@ -2079,11 +5767,15 @@ function EstimateOtherCostTab({ workspace, busy, onAddOther, onEditOther, onRemo
   // The server takes 0–100 in steps of 0.25.
   const validRate = rateText.trim() !== "" && Number.isFinite(rate) && rate >= 0 && rate <= 100 && Math.abs(rate * 4 - Math.round(rate * 4)) < 1e-9;
   const base = numberOf(totals.subtotal);
-  const previewContingency = validRate ? Math.round(base * rate / 100) : numberOf(totals.contingency);
-  const categoryView = (category: EstimateOtherCostLine["category"]): { label: string; tone: Tone } => category === "Outsource" ? { label: "Outsource", tone: "violet" }
-    : category === "Transportation" ? { label: copy("เดินทาง", "Transportation", "交通"), tone: "blue" }
-      : category === "Accommodation" ? { label: copy("ที่พัก", "Accommodation", "宿泊"), tone: "blue" }
-        : { label: copy("อื่นๆ", "Other", "その他"), tone: "slate" };
+  const previewContingency = validRate ? Math.round((base * rate) / 100) : numberOf(totals.contingency);
+  const categoryView = (category: EstimateOtherCostLine["category"]): { label: string; tone: Tone } =>
+    category === "Outsource"
+      ? { label: "Outsource", tone: "violet" }
+      : category === "Transportation"
+        ? { label: copy("เดินทาง", "Transportation", "交通"), tone: "blue" }
+        : category === "Accommodation"
+          ? { label: copy("ที่พัก", "Accommodation", "宿泊"), tone: "blue" }
+          : { label: copy("อื่นๆ", "Other", "その他"), tone: "slate" };
   const baseRows: Array<[string, number, string]> = [
     [copy("วัสดุและอุปกรณ์", "Material", "材料・機器"), numberOf(totals.material), "var(--c1)"],
     [copy("ค่าแรง", "Labor", "労務費"), numberOf(totals.engineering), "var(--c2)"],
@@ -2092,58 +5784,335 @@ function EstimateOtherCostTab({ workspace, busy, onAddOther, onEditOther, onRemo
     [copy("อื่นๆ", "Other", "その他"), numberOf(totals.other), "var(--c4)"],
   ];
   if (numberOf(totals.overhead) > 0) baseRows.push(["Overhead", numberOf(totals.overhead), "var(--c6)"]);
-  return <section className="grid-main est-other">
-    <div className="stack">
-      <Panel title={copy("Outsource และค่าใช้จ่ายอื่น", "Outsource and other costs", "外注・その他費用")} subtitle={copy("แก้ได้เฉพาะเจ้าของ Estimate, Engineering Manager และ Admin", "Editable by the estimate owner, Engineering Managers and Admins", "見積担当者・技術マネージャー・管理者のみ編集可")} actions={canEdit ? <button className="btn primary sm" type="button" onClick={onAddOther}><Icon name="plus" />{copy("เพิ่มรายการ", "Add other cost", "項目を追加")}</button> : undefined} flush>
-        {workspace.otherCostLines.length ? <div className="table-wrap"><table className="est-other-table"><thead><tr>
-          <th>{copy("หมวด", "Category", "区分")}</th><th>{copy("รายการ", "Item", "項目")}</th><th className="num">{copy("จำนวน", "Qty", "数量")}</th><th>{copy("หน่วย", "Unit", "単位")}</th>
-          <th className="num">{copy("ราคา/หน่วย", "Unit cost", "単価")}</th><th className="num">{copy("รวม", "Total", "合計")}</th><th>{copy("หมายเหตุ", "Remark", "備考")}</th><th className="num">{copy("จัดการ", "Actions", "操作")}</th>
-        </tr></thead><tbody>{workspace.otherCostLines.map((line) => {
-          const view = categoryView(line.category);
-          const waiting = numberOf(line.unitCost) <= 0;
-          return <tr key={line.id}>
-            <td><Badge tone={view.tone}><span>{view.label}</span></Badge></td>
-            <td className="wrap"><strong>{line.description}</strong></td>
-            <td className="num">{formatNumber(line.quantity, 4)}</td>
-            <td>{line.unit}</td>
-            <td className="num">{waiting ? <span className="est-wait"><span className="est-wait-pill">{copy("รอราคา", "Waiting for price", "価格待ち")}</span>{formatMoney(0)}</span> : formatMoney(line.unitCost)}</td>
-            <td className={waiting ? "num soft-warn" : "num"}><strong>{formatMoney(line.lineTotal)}</strong></td>
-            <td>{line.remark || "—"}</td>
-            <td className="num">{!line.canEdit ? (canEdit ? <Icon name="lock" /> : null) : rowActions === line.id
-              ? <span className="row-actions est-other-actions"><button className="icon-btn" type="button" disabled={busy} onClick={() => { setRowActions(null); onEditOther(line); }} aria-label={`Edit ${line.description}`}><Icon name="edit" /></button><button className="icon-btn danger" type="button" disabled={busy} onClick={() => { setRowActions(null); onRemoveOther(line); }} aria-label={`Remove ${line.description}`}><Icon name="trash" /></button><button className="icon-btn" type="button" aria-label={copy("ปิดตัวเลือก", "Close actions", "操作を閉じる")} onClick={() => setRowActions(null)}><Icon name="x" /></button></span>
-              : <button className="icon-btn" type="button" disabled={busy} title={copy("แก้ไข · ลบ", "Edit · delete", "編集・削除")} aria-label={`${copy("ตัวเลือก", "Actions", "操作")} ${line.description}`} onClick={() => setRowActions(line.id)}><Icon name="more" /></button>}</td>
-          </tr>;
-        })}</tbody></table></div> : <EmptyState icon="package" title="No other project cost" message="ยังไม่มี outsource, transportation, accommodation หรือ other cost" action={canEdit ? <button className="btn primary" type="button" onClick={onAddOther}><Icon name="plus" /><LocalizedText text={"Add other cost"} /></button> : undefined} />}
-      </Panel>
-    </div>
-    <div className="stack">
-      <Panel title="Contingency">
-        <span className="est-cont-label">{copy("อัตรา Contingency", "Contingency rate", "予備費率")}</span>
-        <div className="est-cont-row">
-          <span className="est-cont-input"><input type="number" min="0" max="100" step="0.25" aria-label={copy("อัตรา Contingency (%)", "Contingency rate (%)", "予備費率 (%)")} aria-invalid={!validRate} value={rateText} disabled={!canUpdate || busy} onChange={(event) => setRateText(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && canUpdate && validRate && rate !== numberOf(workspace.header.contingencyRate)) void onUpdateContingency(rate); }} /><span>%</span></span>
-          {canUpdate ? <button className="btn primary sm" type="button" disabled={busy || !validRate || rate === numberOf(workspace.header.contingencyRate)} onClick={() => { void onUpdateContingency(rate); }}>{copy("บันทึก", "Save", "保存")}</button> : null}
-        </div>
-        <small className={validRate ? "muted" : "soft-warn"}>{canUpdate ? copy("0–100% · ทีละ 0.25", "0–100% · steps of 0.25", "0〜100% · 0.25刻み") : copy("บัญชีนี้ไม่มีสิทธิ์แก้ Contingency", "This account cannot change the contingency", "このアカウントは予備費を変更できません")}</small>
-        <div className="est-cont-calc">
-          <div>{copy("คิดจากฐานต้นทุน", "On the cost base", "原価ベース")} <strong>{formatMoney(base)}</strong> × {validRate ? formatNumber(rate) : "—"}% = <strong>{formatMoney(previewContingency)}</strong></div>
-          <div className="muted">{copy("ต้นทุนรวมหลัง Contingency", "Total after contingency", "予備費込み合計")} {formatMoney(base + previewContingency)}</div>
-        </div>
-      </Panel>
-      <Panel title={copy("ฐานต้นทุน", "Cost base", "原価ベース")} actions={<span className="muted est-readonly">{copy("อ่านอย่างเดียว", "Read-only", "閲覧のみ")}</span>} flush>
-        <ul className="est-base-list">
-          {baseRows.map(([label, value, color]) => <li key={label}><span className="est-base-dot" style={{ background: color }} />{label}<strong>{formatMoney(value)}</strong></li>)}
-          <li className="total">{copy("รวมก่อน Contingency", "Before contingency", "予備費前合計")}<strong>{formatMoney(base)}</strong></li>
-        </ul>
-      </Panel>
-    </div>
-  </section>;
+  return (
+    <section className="grid-main est-other">
+      <div className="stack">
+        <Panel
+          title={copy("Outsource และค่าใช้จ่ายอื่น", "Outsource and other costs", "外注・その他費用")}
+          subtitle={copy(
+            "แก้ได้เฉพาะเจ้าของ Estimate, Engineering Manager และ Admin",
+            "Editable by the estimate owner, Engineering Managers and Admins",
+            "見積担当者・技術マネージャー・管理者のみ編集可",
+          )}
+          actions={
+            canEdit ? (
+              <button className="btn primary sm" type="button" onClick={onAddOther}>
+                <Icon name="plus" />
+                {copy("เพิ่มรายการ", "Add other cost", "項目を追加")}
+              </button>
+            ) : undefined
+          }
+          flush
+        >
+          {workspace.otherCostLines.length ? (
+            <div className="table-wrap">
+              <table className="est-other-table">
+                <thead>
+                  <tr>
+                    <th>{copy("หมวด", "Category", "区分")}</th>
+                    <th>{copy("รายการ", "Item", "項目")}</th>
+                    <th className="num">{copy("จำนวน", "Qty", "数量")}</th>
+                    <th>{copy("หน่วย", "Unit", "単位")}</th>
+                    <th className="num">{copy("ราคา/หน่วย", "Unit cost", "単価")}</th>
+                    <th className="num">{copy("รวม", "Total", "合計")}</th>
+                    <th>{copy("หมายเหตุ", "Remark", "備考")}</th>
+                    <th className="num">{copy("จัดการ", "Actions", "操作")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {workspace.otherCostLines.map((line) => {
+                    const view = categoryView(line.category);
+                    const waiting = numberOf(line.unitCost) <= 0;
+                    return (
+                      <tr key={line.id}>
+                        <td>
+                          <Badge tone={view.tone}>
+                            <span>{view.label}</span>
+                          </Badge>
+                        </td>
+                        <td className="wrap">
+                          <strong>{line.description}</strong>
+                        </td>
+                        <td className="num">{formatNumber(line.quantity, 4)}</td>
+                        <td>{line.unit}</td>
+                        <td className="num">
+                          {waiting ? (
+                            <span className="est-wait">
+                              <span className="est-wait-pill">{copy("รอราคา", "Waiting for price", "価格待ち")}</span>
+                              {formatMoney(0)}
+                            </span>
+                          ) : (
+                            formatMoney(line.unitCost)
+                          )}
+                        </td>
+                        <td className={waiting ? "num soft-warn" : "num"}>
+                          <strong>{formatMoney(line.lineTotal)}</strong>
+                        </td>
+                        <td>{line.remark || "—"}</td>
+                        <td className="num">
+                          {!line.canEdit ? (
+                            canEdit ? (
+                              <Icon name="lock" />
+                            ) : null
+                          ) : rowActions === line.id ? (
+                            <span className="row-actions est-other-actions">
+                              <button
+                                className="icon-btn"
+                                type="button"
+                                disabled={busy}
+                                onClick={() => {
+                                  setRowActions(null);
+                                  onEditOther(line);
+                                }}
+                                aria-label={`Edit ${line.description}`}
+                              >
+                                <Icon name="edit" />
+                              </button>
+                              <button
+                                className="icon-btn danger"
+                                type="button"
+                                disabled={busy}
+                                onClick={() => {
+                                  setRowActions(null);
+                                  onRemoveOther(line);
+                                }}
+                                aria-label={`Remove ${line.description}`}
+                              >
+                                <Icon name="trash" />
+                              </button>
+                              <button className="icon-btn" type="button" aria-label={copy("ปิดตัวเลือก", "Close actions", "操作を閉じる")} onClick={() => setRowActions(null)}>
+                                <Icon name="x" />
+                              </button>
+                            </span>
+                          ) : (
+                            <button
+                              className="icon-btn"
+                              type="button"
+                              disabled={busy}
+                              title={copy("แก้ไข · ลบ", "Edit · delete", "編集・削除")}
+                              aria-label={`${copy("ตัวเลือก", "Actions", "操作")} ${line.description}`}
+                              onClick={() => setRowActions(line.id)}
+                            >
+                              <Icon name="more" />
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <EmptyState
+              icon="package"
+              title="No other project cost"
+              message="ยังไม่มี outsource, transportation, accommodation หรือ other cost"
+              action={
+                canEdit ? (
+                  <button className="btn primary" type="button" onClick={onAddOther}>
+                    <Icon name="plus" />
+                    <LocalizedText text={"Add other cost"} />
+                  </button>
+                ) : undefined
+              }
+            />
+          )}
+        </Panel>
+      </div>
+      <div className="stack">
+        <Panel title="Contingency">
+          <span className="est-cont-label">{copy("อัตรา Contingency", "Contingency rate", "予備費率")}</span>
+          <div className="est-cont-row">
+            <span className="est-cont-input">
+              <input
+                type="number"
+                min="0"
+                max="100"
+                step="0.25"
+                aria-label={copy("อัตรา Contingency (%)", "Contingency rate (%)", "予備費率 (%)")}
+                aria-invalid={!validRate}
+                value={rateText}
+                disabled={!canUpdate || busy}
+                onChange={(event) => setRateText(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && canUpdate && validRate && rate !== numberOf(workspace.header.contingencyRate)) void onUpdateContingency(rate);
+                }}
+              />
+              <span>%</span>
+            </span>
+            {canUpdate ? (
+              <button
+                className="btn primary sm"
+                type="button"
+                disabled={busy || !validRate || rate === numberOf(workspace.header.contingencyRate)}
+                onClick={() => {
+                  void onUpdateContingency(rate);
+                }}
+              >
+                {copy("บันทึก", "Save", "保存")}
+              </button>
+            ) : null}
+          </div>
+          <small className={validRate ? "muted" : "soft-warn"}>
+            {canUpdate
+              ? copy("0–100% · ทีละ 0.25", "0–100% · steps of 0.25", "0〜100% · 0.25刻み")
+              : copy("บัญชีนี้ไม่มีสิทธิ์แก้ Contingency", "This account cannot change the contingency", "このアカウントは予備費を変更できません")}
+          </small>
+          <div className="est-cont-calc">
+            <div>
+              {copy("คิดจากฐานต้นทุน", "On the cost base", "原価ベース")} <strong>{formatMoney(base)}</strong> × {validRate ? formatNumber(rate) : "—"}% ={" "}
+              <strong>{formatMoney(previewContingency)}</strong>
+            </div>
+            <div className="muted">
+              {copy("ต้นทุนรวมหลัง Contingency", "Total after contingency", "予備費込み合計")} {formatMoney(base + previewContingency)}
+            </div>
+          </div>
+        </Panel>
+        <Panel title={copy("ฐานต้นทุน", "Cost base", "原価ベース")} actions={<span className="muted est-readonly">{copy("อ่านอย่างเดียว", "Read-only", "閲覧のみ")}</span>} flush>
+          <ul className="est-base-list">
+            {baseRows.map(([label, value, color]) => (
+              <li key={label}>
+                <span className="est-base-dot" style={{ background: color }} />
+                {label}
+                <strong>{formatMoney(value)}</strong>
+              </li>
+            ))}
+            <li className="total">
+              {copy("รวมก่อน Contingency", "Before contingency", "予備費前合計")}
+              <strong>{formatMoney(base)}</strong>
+            </li>
+          </ul>
+        </Panel>
+      </div>
+    </section>
+  );
 }
 
 function EstimateAssignmentTab({ workspace, onAssign, onEdit }: { workspace: EstimateCostWorkspace; onAssign: () => void; onEdit: (assignment: EstimateAssignment) => void }) {
   const overall = workspace.assignments.length ? workspace.assignments.reduce((sum, assignment) => sum + numberOf(assignment.progress), 0) / workspace.assignments.length : 0;
-  return <section className="grid-main"><Panel title="Estimate sections" subtitle="ผู้รับผิดชอบ วันครบกำหนด สถานะ และ progress จากฐานข้อมูล" flush actions={workspace.capabilities.canManageAssignments && ESTIMATE_ASSIGNMENT_SECTIONS.some(([code]) => !workspace.assignments.some((assignment) => assignment.section.trim().slice(0, 2) === code)) ? <button className="btn primary sm" type="button" onClick={onAssign}><Icon name="plus" /><LocalizedText text={"Assign section"} /></button> : undefined}>
-    {workspace.assignments.length ? <div className="table-wrap"><table><thead><tr><th><LocalizedText text={"Section"} /></th><th><LocalizedText text={"Responsible Engineer"} /></th><th><LocalizedText text={"Support Engineer"} /></th><th><LocalizedText text={"Due Date"} /></th><th><LocalizedText text={"Status"} /></th><th><LocalizedText text={"Progress"} /></th><th><LocalizedText text={"Comment"} /></th><th /></tr></thead><tbody>{workspace.assignments.map((assignment) => <tr key={assignment.id}><td><strong>{assignment.section}</strong></td><td>{assignment.ownerName}</td><td>{assignment.supportName ?? "—"}</td><td>{formatDate(assignment.dueDate)}</td><td><Badge>{assignment.status}</Badge></td><td style={{ minWidth: 120 }}><ProgressCell value={numberOf(assignment.progress)} /></td><td>{assignment.comment || "—"}</td><td>{assignment.canEdit ? <button className="icon-btn" type="button" onClick={() => onEdit(assignment)} aria-label={`Edit assignment ${assignment.section}`}><Icon name="edit" /></button> : <Icon name="lock" />}</td></tr>)}</tbody></table></div> : <EmptyState icon="users" title="No section assignment" message={workspace.capabilities.canManageAssignments ? "กด Assign section เพื่อมอบหมายงานก่อนเริ่มกรอกต้นทุน" : "ยังไม่มีผู้รับผิดชอบ section ใน Estimate นี้"} />}
-  </Panel><div className="stack"><Panel title="Estimate completion"><div className="row" style={{ justifyContent: "space-between", marginBottom: 8 }}><span className="muted"><LocalizedText text={"Overall assignment progress"} /></span><strong style={{ fontSize: "var(--fs-xl)" }}>{Math.round(overall)}%</strong></div><Progress value={overall} /><ul className="check-list" style={{ marginTop: 12 }}>{workspace.assignments.map((assignment) => <li key={assignment.id} className={`check-item ${numberOf(assignment.progress) === 100 ? "pass" : ""}`}><Icon name={numberOf(assignment.progress) === 100 ? "checkCircle" : assignment.status.includes("Waiting") ? "clock" : "alertCircle"} /><div><strong>{assignment.section} — {formatNumber(assignment.progress)}%</strong><p>{assignment.ownerName} <LocalizedText text={"·"} /> {assignment.status}</p></div></li>)}</ul></Panel><Panel title="Permission"><div className="info-strip"><Icon name="shield" /><span>{workspace.capabilities.canManageAssignments ? "บัญชีนี้สามารถมอบหมายผู้รับผิดชอบ เปลี่ยน schedule และอัปเดต progress ได้" : workspace.assignments.some((assignment) => assignment.canEdit) ? "คุณอัปเดตสถานะ progress และ comment ของ section ที่รับผิดชอบได้ โดยเปลี่ยนผู้รับผิดชอบหรือ due date ไม่ได้" : "อ่านอย่างเดียว — Estimate owner, Engineering Manager หรือ Admin เป็นผู้จัด assignment"}</span></div></Panel></div></section>;
+  return (
+    <section className="grid-main">
+      <Panel
+        title="Estimate sections"
+        subtitle="ผู้รับผิดชอบ วันครบกำหนด สถานะ และ progress จากฐานข้อมูล"
+        flush
+        actions={
+          workspace.capabilities.canManageAssignments && ESTIMATE_ASSIGNMENT_SECTIONS.some(([code]) => !workspace.assignments.some((assignment) => assignment.section.trim().slice(0, 2) === code)) ? (
+            <button className="btn primary sm" type="button" onClick={onAssign}>
+              <Icon name="plus" />
+              <LocalizedText text={"Assign section"} />
+            </button>
+          ) : undefined
+        }
+      >
+        {workspace.assignments.length ? (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>
+                    <LocalizedText text={"Section"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Responsible Engineer"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Support Engineer"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Due Date"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Status"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Progress"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Comment"} />
+                  </th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {workspace.assignments.map((assignment) => (
+                  <tr key={assignment.id}>
+                    <td>
+                      <strong>{assignment.section}</strong>
+                    </td>
+                    <td>{assignment.ownerName}</td>
+                    <td>{assignment.supportName ?? "—"}</td>
+                    <td>{formatDate(assignment.dueDate)}</td>
+                    <td>
+                      <Badge>{assignment.status}</Badge>
+                    </td>
+                    <td style={{ minWidth: 120 }}>
+                      <ProgressCell value={numberOf(assignment.progress)} />
+                    </td>
+                    <td>{assignment.comment || "—"}</td>
+                    <td>
+                      {assignment.canEdit ? (
+                        <button className="icon-btn" type="button" onClick={() => onEdit(assignment)} aria-label={`Edit assignment ${assignment.section}`}>
+                          <Icon name="edit" />
+                        </button>
+                      ) : (
+                        <Icon name="lock" />
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <EmptyState
+            icon="users"
+            title="No section assignment"
+            message={workspace.capabilities.canManageAssignments ? "กด Assign section เพื่อมอบหมายงานก่อนเริ่มกรอกต้นทุน" : "ยังไม่มีผู้รับผิดชอบ section ใน Estimate นี้"}
+          />
+        )}
+      </Panel>
+      <div className="stack">
+        <Panel title="Estimate completion">
+          <div className="row" style={{ justifyContent: "space-between", marginBottom: 8 }}>
+            <span className="muted">
+              <LocalizedText text={"Overall assignment progress"} />
+            </span>
+            <strong style={{ fontSize: "var(--fs-xl)" }}>{Math.round(overall)}%</strong>
+          </div>
+          <Progress value={overall} />
+          <ul className="check-list" style={{ marginTop: 12 }}>
+            {workspace.assignments.map((assignment) => (
+              <li key={assignment.id} className={`check-item ${numberOf(assignment.progress) === 100 ? "pass" : ""}`}>
+                <Icon name={numberOf(assignment.progress) === 100 ? "checkCircle" : assignment.status.includes("Waiting") ? "clock" : "alertCircle"} />
+                <div>
+                  <strong>
+                    {assignment.section} — {formatNumber(assignment.progress)}%
+                  </strong>
+                  <p>
+                    {assignment.ownerName} <LocalizedText text={"·"} /> {assignment.status}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </Panel>
+        <Panel title="Permission">
+          <div className="info-strip">
+            <Icon name="shield" />
+            <span>
+              {workspace.capabilities.canManageAssignments
+                ? "บัญชีนี้สามารถมอบหมายผู้รับผิดชอบ เปลี่ยน schedule และอัปเดต progress ได้"
+                : workspace.assignments.some((assignment) => assignment.canEdit)
+                  ? "คุณอัปเดตสถานะ progress และ comment ของ section ที่รับผิดชอบได้ โดยเปลี่ยนผู้รับผิดชอบหรือ due date ไม่ได้"
+                  : "อ่านอย่างเดียว — Estimate owner, Engineering Manager หรือ Admin เป็นผู้จัด assignment"}
+            </span>
+          </div>
+        </Panel>
+      </div>
+    </section>
+  );
 }
 
 function EstimateValidationTab({ workspace, onFix }: { workspace: EstimateCostWorkspace; onFix: (issue: EstimateCostWorkspace["validationIssues"][number]) => void }) {
@@ -2152,15 +6121,136 @@ function EstimateValidationTab({ workspace, onFix }: { workspace: EstimateCostWo
   const orderedIssues = [...criticalIssues, ...warningIssues];
   const resultTone = criticalIssues.length ? "red" : warningIssues.length ? "amber" : "green";
   const resultIcon = criticalIssues.length || warningIssues.length ? "alertTriangle" : "checkCircle";
-  return <section className="grid-main"><Panel title="Estimate Validation" subtitle="ตรวจโดย API/SQL Server ก่อน Submit และ Approve">
-    {orderedIssues.length ? <ul className="check-list">{orderedIssues.map((issue) => { const critical = isCriticalValidationIssue(issue); return <li className={`check-item ${critical ? "error" : "warning"}`} key={`${issue.code}-${issue.entityType}-${issue.entityId}`}><Icon name={critical ? "alertCircle" : "alertTriangle"} /><div style={{ flex: 1 }}><strong>{estimateIssueMessage(issue, currentLocale())}</strong><details><summary>{estimateUxCopy(currentLocale(), "รายละเอียดการตรวจ", "Validation details", "検証の詳細")}</summary><p>{issue.message} · {issue.code} · {issue.entityType} #{issue.entityId}</p></details></div>{estimateIssueTab(issue) !== "validation" ? <button className="btn ghost sm" type="button" onClick={() => onFix(issue)}>{estimateUxCopy(currentLocale(), "เปิดจุดที่ต้องตรวจ", "Open affected section", "該当箇所を開く")}<Icon name="arrowRight" /></button> : null}</li>; })}</ul> : <div className="empty"><span className="empty-icon"><Icon name="checkCircle" /></span><strong><LocalizedText text={"Server validation passed"} /></strong><p><LocalizedText text={"Revision ปัจจุบันไม่มี critical issue หรือ advisory warning"} /></p></div>}
-  </Panel><div className="stack"><Panel title="Result"><div className={`info-strip ${resultTone}`}><Icon name={resultIcon} /><span>{criticalIssues.length ? `${criticalIssues.length} error(s) block submission and approval${warningIssues.length ? ` · ${warningIssues.length} warning(s) are advisory` : ""}` : warningIssues.length ? `${warningIssues.length} advisory warning(s) do not block submission or approval` : "No validation error or warning"}</span></div></Panel><Panel title="Rules enforced"><ul className="check-list"><li className="check-item"><Icon name="cpu" /><div><strong><LocalizedText text={"Positive quantity"} /></strong><p><LocalizedText text={"Every persisted line must have quantity greater than zero."} /></p></div></li><li className="check-item"><Icon name="cpu" /><div><strong><LocalizedText text={"Unit cost and owner"} /></strong><p><LocalizedText text={"Required references are checked at the API boundary."} /></p></div></li><li className="check-item"><Icon name="cpu" /><div><strong><LocalizedText text={"Supplier man-hour"} /></strong><p><LocalizedText text={"Supplier and quotation are mandatory."} /></p></div></li><li className="check-item"><Icon name="cpu" /><div><strong><LocalizedText text={"Non-empty revision"} /></strong><p><LocalizedText text={"At least one cost or effort line is required."} /></p></div></li></ul></Panel></div></section>;
+  return (
+    <section className="grid-main">
+      <Panel title="Estimate Validation" subtitle="ตรวจโดย API/SQL Server ก่อน Submit และ Approve">
+        {orderedIssues.length ? (
+          <ul className="check-list">
+            {orderedIssues.map((issue) => {
+              const critical = isCriticalValidationIssue(issue);
+              return (
+                <li className={`check-item ${critical ? "error" : "warning"}`} key={`${issue.code}-${issue.entityType}-${issue.entityId}`}>
+                  <Icon name={critical ? "alertCircle" : "alertTriangle"} />
+                  <div style={{ flex: 1 }}>
+                    <strong>{estimateIssueMessage(issue, currentLocale())}</strong>
+                    <details>
+                      <summary>{estimateUxCopy(currentLocale(), "รายละเอียดการตรวจ", "Validation details", "検証の詳細")}</summary>
+                      <p>
+                        {issue.message} · {issue.code} · {issue.entityType} #{issue.entityId}
+                      </p>
+                    </details>
+                  </div>
+                  {estimateIssueTab(issue) !== "validation" ? (
+                    <button className="btn ghost sm" type="button" onClick={() => onFix(issue)}>
+                      {estimateUxCopy(currentLocale(), "เปิดจุดที่ต้องตรวจ", "Open affected section", "該当箇所を開く")}
+                      <Icon name="arrowRight" />
+                    </button>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <div className="empty">
+            <span className="empty-icon">
+              <Icon name="checkCircle" />
+            </span>
+            <strong>
+              <LocalizedText text={"Server validation passed"} />
+            </strong>
+            <p>
+              <LocalizedText text={"Revision ปัจจุบันไม่มี critical issue หรือ advisory warning"} />
+            </p>
+          </div>
+        )}
+      </Panel>
+      <div className="stack">
+        <Panel title="Result">
+          <div className={`info-strip ${resultTone}`}>
+            <Icon name={resultIcon} />
+            <span>
+              {criticalIssues.length
+                ? `${criticalIssues.length} error(s) block submission and approval${warningIssues.length ? ` · ${warningIssues.length} warning(s) are advisory` : ""}`
+                : warningIssues.length
+                  ? `${warningIssues.length} advisory warning(s) do not block submission or approval`
+                  : "No validation error or warning"}
+            </span>
+          </div>
+        </Panel>
+        <Panel title="Rules enforced">
+          <ul className="check-list">
+            <li className="check-item">
+              <Icon name="cpu" />
+              <div>
+                <strong>
+                  <LocalizedText text={"Positive quantity"} />
+                </strong>
+                <p>
+                  <LocalizedText text={"Every persisted line must have quantity greater than zero."} />
+                </p>
+              </div>
+            </li>
+            <li className="check-item">
+              <Icon name="cpu" />
+              <div>
+                <strong>
+                  <LocalizedText text={"Unit cost and owner"} />
+                </strong>
+                <p>
+                  <LocalizedText text={"Required references are checked at the API boundary."} />
+                </p>
+              </div>
+            </li>
+            <li className="check-item">
+              <Icon name="cpu" />
+              <div>
+                <strong>
+                  <LocalizedText text={"Supplier man-hour"} />
+                </strong>
+                <p>
+                  <LocalizedText text={"Supplier and quotation are mandatory."} />
+                </p>
+              </div>
+            </li>
+            <li className="check-item">
+              <Icon name="cpu" />
+              <div>
+                <strong>
+                  <LocalizedText text={"Non-empty revision"} />
+                </strong>
+                <p>
+                  <LocalizedText text={"At least one cost or effort line is required."} />
+                </p>
+              </div>
+            </li>
+          </ul>
+        </Panel>
+      </div>
+    </section>
+  );
 }
 
 function revisionWithCurrent(revisions: EstimateRevision[], currentRevision: number, currentTotal: number) {
   const existing = revisions.find((revision) => revision.revision === currentRevision);
-  if (existing) return revisions.map((revision) => revision.revision === currentRevision ? { ...revision, total: currentTotal } : revision).sort((left, right) => left.revision - right.revision);
-  return [...revisions, { id: -1, revision: currentRevision, code: revisionCode(currentRevision), reason: "Current revision", description: "Current live revision", createdById: 0, createdByName: "—", createdAt: "", reviewedById: null, reviewedByName: null, reviewedAt: null, status: "Active", total: currentTotal }].sort((left, right) => left.revision - right.revision);
+  if (existing) return revisions.map((revision) => (revision.revision === currentRevision ? { ...revision, total: currentTotal } : revision)).sort((left, right) => left.revision - right.revision);
+  return [
+    ...revisions,
+    {
+      id: -1,
+      revision: currentRevision,
+      code: revisionCode(currentRevision),
+      reason: "Current revision",
+      description: "Current live revision",
+      createdById: 0,
+      createdByName: "—",
+      createdAt: "",
+      reviewedById: null,
+      reviewedByName: null,
+      reviewedAt: null,
+      status: "Active",
+      total: currentTotal,
+    },
+  ].sort((left, right) => left.revision - right.revision);
 }
 
 /* `description` is the FOR JSON PATH snapshot archived with each revision, not prose. It stays one
@@ -2171,12 +6261,18 @@ function RevisionDescription({ text }: { text: string }) {
   if (text.length <= 160 && !text.includes("\n") && !text.trim().startsWith("{") && !text.trim().startsWith("[")) return <span className="revision-description-text">{text}</span>;
   let formatted = text;
   if (open) {
-    try { formatted = JSON.stringify(JSON.parse(text), null, 2); } catch { /* Plain descriptions retain their original text. */ }
+    try {
+      formatted = JSON.stringify(JSON.parse(text), null, 2);
+    } catch {
+      /* Plain descriptions retain their original text. */
+    }
   }
-  return <details className="est-snapshot" open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
-    <summary>{estimateCopy("ดูข้อมูลที่บันทึกไว้", "Show the stored snapshot", "保存データを表示")}</summary>
-    {open ? <pre className="revision-description-text expanded">{formatted}</pre> : null}
-  </details>;
+  return (
+    <details className="est-snapshot" open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
+      <summary>{estimateCopy("ดูข้อมูลที่บันทึกไว้", "Show the stored snapshot", "保存データを表示")}</summary>
+      {open ? <pre className="revision-description-text expanded">{formatted}</pre> : null}
+    </details>
+  );
 }
 
 function revisionStatusView(revision: EstimateRevision, currentRevision: number): { label: string; tone: Tone } {
@@ -2195,38 +6291,153 @@ const wentBackReason = (reason: string) => {
   const note = match[2] ? ` · ${match[2]}` : "";
   return estimateCopy(`กลับไปใช้ ${match[1]}${note}`, `Went back to ${match[1]}${note}`, `${match[1]} に戻した${note}`);
 };
-const revisionReasonText = (reason: string) => reason === "Approved" ? estimateCopy("อนุมัติ", "Approved", "承認")
-  : reason === "Current revision" ? estimateCopy("Revision ที่กำลังทำ", "Current revision", "作業中の改訂")
-    : reason === "Review withdrawn" ? estimateCopy("ถอนการส่งตรวจ", "Review withdrawn", "提出取り下げ") : wentBackReason(reason) ?? reason;
+const revisionReasonText = (reason: string) =>
+  reason === "Approved"
+    ? estimateCopy("อนุมัติ", "Approved", "承認")
+    : reason === "Current revision"
+      ? estimateCopy("Revision ที่กำลังทำ", "Current revision", "作業中の改訂")
+      : reason === "Review withdrawn"
+        ? estimateCopy("ถอนการส่งตรวจ", "Review withdrawn", "提出取り下げ")
+        : (wentBackReason(reason) ?? reason);
 
-function EstimateRevisionTab({ revisions, sources, currentRevision, currentTotal, estimateId, estimateNumber, rowVersion, canRestore, onRestored }: {
-  revisions: EstimateRevision[]; sources: Array<{ revision: number; fromRevision: number; note?: string | null }>; currentRevision: number; currentTotal: number;
-  estimateId: number; estimateNumber: string; rowVersion: string; canRestore: boolean; onRestored: (message: string) => Promise<void>;
+function EstimateRevisionTab({
+  revisions,
+  sources,
+  currentRevision,
+  currentTotal,
+  estimateId,
+  estimateNumber,
+  rowVersion,
+  canRestore,
+  onRestored,
+}: {
+  revisions: EstimateRevision[];
+  sources: Array<{ revision: number; fromRevision: number; note?: string | null }>;
+  currentRevision: number;
+  currentTotal: number;
+  estimateId: number;
+  estimateNumber: string;
+  rowVersion: string;
+  canRestore: boolean;
+  onRestored: (message: string) => Promise<void>;
 }) {
   const rows = revisionWithCurrent(revisions, currentRevision, currentTotal);
   const copy = estimateCopy;
   const [opened, setOpened] = useState<EstimateRevision | null>(null);
   const copiedFrom = new Map(sources.map((source) => [source.revision, source]));
-  return <Panel guide="estimate.revisions" title={copy("ประวัติ Revision", "Revision Control", "改訂管理")} subtitle={copy("ทุก Revision ถูกเก็บถาวร แก้ไม่ได้ · กด 'ดูรายการ' เพื่อเปิดดู Revision เก่า หรือกลับไปใช้ Revision นั้นทำต่อ", "Revision history is an immutable record. Press View lines to open an earlier revision, or to continue from it.", "改訂履歴は変更不可の記録です。「明細を見る」で以前の改訂を開き、そこから続けることもできます。")} flush>{rows.length ? <div className="table-wrap"><table className="estimate-revision-table">
-    <thead><tr><th><LocalizedText text={"Revision"} /></th><th><LocalizedText text={"Reason"} /></th><th><LocalizedText text={"Status"} /></th><th><LocalizedText text={"Created by"} /></th><th><LocalizedText text={"Reviewed by"} /></th><th className="num"><LocalizedText text={"Total"} /></th><th><LocalizedText text={"Description"} /></th><th aria-label={copy("ดูรายการ", "View lines", "明細を見る")} /></tr></thead>
-    <tbody>{rows.map((revision) => {
-      const view = revisionStatusView(revision, currentRevision);
-      const from = copiedFrom.get(revision.revision);
-      return <tr key={revision.id}>
-        <td><span className="pill blue">{revision.code || revisionCode(revision.revision)}</span>{from ? <div className="est-sub">{copy(`คัดลอกจาก ${revisionCode(from.fromRevision)}`, `Copied from ${revisionCode(from.fromRevision)}`, `${revisionCode(from.fromRevision)} からコピー`)}{from.note ? ` · ${from.note}` : ""}</div> : null}</td>
-        <td className="wrap"><strong>{revisionReasonText(revision.reason)}</strong></td>
-        <td><Badge tone={view.tone}><span>{view.label}</span></Badge></td>
-        <td>{revision.createdByName}<div className="est-sub">{formatDateTime(revision.createdAt)}</div></td>
-        <td>{revision.reviewedByName ?? "—"}{revision.reviewedAt ? <div className="est-sub">{formatDateTime(revision.reviewedAt)}</div> : null}</td>
-        <td className="num"><strong>{formatMoney(revision.total)}</strong></td>
-        <td className="wrap"><RevisionDescription text={revision.description} /></td>
-        {/* The current revision is the workspace itself; only the ones in the history open here. */}
-        <td>{revision.id !== -1 && revision.revision !== currentRevision ? <button className="btn ghost sm" type="button" data-guide="estimate.revisionOpen" onClick={() => setOpened(revision)}><Icon name="eye" />{copy("ดูรายการ", "View lines", "明細を見る")}</button> : null}</td>
-      </tr>;
-    })}</tbody>
-  </table></div> : <EmptyState icon="gitBranch" title="No revision history" message="ยังไม่มี revision record ที่ API ส่งกลับ" />}
-    {opened ? <EstimateRevisionView key={opened.revision} estimateId={estimateId} estimateNumber={estimateNumber} revision={opened} currentRevision={currentRevision} rowVersion={rowVersion}
-      canRestore={canRestore} onClose={() => setOpened(null)} onRestored={async (message) => { setOpened(null); await onRestored(message); }} /> : null}</Panel>;
+  return (
+    <Panel
+      guide="estimate.revisions"
+      title={copy("ประวัติ Revision", "Revision Control", "改訂管理")}
+      subtitle={copy(
+        "ทุก Revision ถูกเก็บถาวร แก้ไม่ได้ · กด 'ดูรายการ' เพื่อเปิดดู Revision เก่า หรือกลับไปใช้ Revision นั้นทำต่อ",
+        "Revision history is an immutable record. Press View lines to open an earlier revision, or to continue from it.",
+        "改訂履歴は変更不可の記録です。「明細を見る」で以前の改訂を開き、そこから続けることもできます。",
+      )}
+      flush
+    >
+      {rows.length ? (
+        <div className="table-wrap">
+          <table className="estimate-revision-table">
+            <thead>
+              <tr>
+                <th>
+                  <LocalizedText text={"Revision"} />
+                </th>
+                <th>
+                  <LocalizedText text={"Reason"} />
+                </th>
+                <th>
+                  <LocalizedText text={"Status"} />
+                </th>
+                <th>
+                  <LocalizedText text={"Created by"} />
+                </th>
+                <th>
+                  <LocalizedText text={"Reviewed by"} />
+                </th>
+                <th className="num">
+                  <LocalizedText text={"Total"} />
+                </th>
+                <th>
+                  <LocalizedText text={"Description"} />
+                </th>
+                <th aria-label={copy("ดูรายการ", "View lines", "明細を見る")} />
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((revision) => {
+                const view = revisionStatusView(revision, currentRevision);
+                const from = copiedFrom.get(revision.revision);
+                return (
+                  <tr key={revision.id}>
+                    <td>
+                      <span className="pill blue">{revision.code || revisionCode(revision.revision)}</span>
+                      {from ? (
+                        <div className="est-sub">
+                          {copy(`คัดลอกจาก ${revisionCode(from.fromRevision)}`, `Copied from ${revisionCode(from.fromRevision)}`, `${revisionCode(from.fromRevision)} からコピー`)}
+                          {from.note ? ` · ${from.note}` : ""}
+                        </div>
+                      ) : null}
+                    </td>
+                    <td className="wrap">
+                      <strong>{revisionReasonText(revision.reason)}</strong>
+                    </td>
+                    <td>
+                      <Badge tone={view.tone}>
+                        <span>{view.label}</span>
+                      </Badge>
+                    </td>
+                    <td>
+                      {revision.createdByName}
+                      <div className="est-sub">{formatDateTime(revision.createdAt)}</div>
+                    </td>
+                    <td>
+                      {revision.reviewedByName ?? "—"}
+                      {revision.reviewedAt ? <div className="est-sub">{formatDateTime(revision.reviewedAt)}</div> : null}
+                    </td>
+                    <td className="num">
+                      <strong>{formatMoney(revision.total)}</strong>
+                    </td>
+                    <td className="wrap">
+                      <RevisionDescription text={revision.description} />
+                    </td>
+                    {/* The current revision is the workspace itself; only the ones in the history open here. */}
+                    <td>
+                      {revision.id !== -1 && revision.revision !== currentRevision ? (
+                        <button className="btn ghost sm" type="button" data-guide="estimate.revisionOpen" onClick={() => setOpened(revision)}>
+                          <Icon name="eye" />
+                          {copy("ดูรายการ", "View lines", "明細を見る")}
+                        </button>
+                      ) : null}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <EmptyState icon="gitBranch" title="No revision history" message="ยังไม่มี revision record ที่ API ส่งกลับ" />
+      )}
+      {opened ? (
+        <EstimateRevisionView
+          key={opened.revision}
+          estimateId={estimateId}
+          estimateNumber={estimateNumber}
+          revision={opened}
+          currentRevision={currentRevision}
+          rowVersion={rowVersion}
+          canRestore={canRestore}
+          onClose={() => setOpened(null)}
+          onRestored={async (message) => {
+            setOpened(null);
+            await onRestored(message);
+          }}
+        />
+      ) : null}
+    </Panel>
+  );
 }
 
 function EstimateCompareTab({ revisions, currentRevision, currentTotal }: { revisions: EstimateRevision[]; currentRevision: number; currentTotal: number }) {
@@ -2241,16 +6452,80 @@ function EstimateCompareTab({ revisions, currentRevision, currentTotal }: { revi
   const from = rows.find((revision) => revision.revision === fromRevision);
   const to = rows.find((revision) => revision.revision === toRevision);
   const delta = numberOf(to?.total) - numberOf(from?.total);
-  if (rows.length < 2) return <Panel title={uiText("Compare Revision")}><EmptyState icon="compare" title="Comparison is not available yet" message="ต้องมี revision history อย่างน้อยสอง revision; ระบบไม่สร้างข้อมูลเปรียบเทียบจำลอง" /></Panel>;
-  return <><Panel title="Compare Estimate Revision" subtitle="เปรียบเทียบยอดรวมจาก revision history จริง"><div className="row"><Field label="From revision"><select value={fromRevision} onChange={(event) => setFromRevision(Number(event.target.value))}>{rows.map((revision) => <option key={revision.revision} value={revision.revision}>{revision.code || revisionCode(revision.revision)}</option>)}</select></Field><Icon name="arrowRight" /><Field label="To revision"><select value={toRevision} onChange={(event) => setToRevision(Number(event.target.value))}>{rows.map((revision) => <option key={revision.revision} value={revision.revision}>{revision.code || revisionCode(revision.revision)}</option>)}</select></Field></div></Panel><div style={{ height: 14 }} /><section className="grid-3"><Panel title={`${from?.code ?? revisionCode(fromRevision)} Total`}><strong style={{ fontSize: "var(--fs-2xl)" }}>{formatMoney(from?.total)}</strong><p className="muted">{from?.reason}</p></Panel><Panel title={`${to?.code ?? revisionCode(toRevision)} Total`}><strong style={{ fontSize: "var(--fs-2xl)" }}>{formatMoney(to?.total)}</strong><p className="muted">{to?.reason}</p></Panel><Panel title="Difference"><strong style={{ fontSize: "var(--fs-2xl)" }} className={delta > 0 ? "red-text" : delta < 0 ? "green-text" : "muted"}>{delta > 0 ? "+" : delta < 0 ? "−" : ""}{formatMoney(Math.abs(delta))}</strong><p className="muted">{numberOf(from?.total) ? `${(delta / numberOf(from?.total) * 100).toFixed(1)}%` : "No baseline total"}</p></Panel></section><div className="info-strip" style={{ marginTop: 14 }}><Icon name="alertCircle" /><span><LocalizedText text={"Line-by-line historical comparison จะเปิดเมื่อ backend ส่ง revision snapshots; หน้านี้แสดงเฉพาะ revision totals ที่มีอยู่จริง"} /></span></div></>;
+  if (rows.length < 2)
+    return (
+      <Panel title={uiText("Compare Revision")}>
+        <EmptyState icon="compare" title="Comparison is not available yet" message="ต้องมี revision history อย่างน้อยสอง revision; ระบบไม่สร้างข้อมูลเปรียบเทียบจำลอง" />
+      </Panel>
+    );
+  return (
+    <>
+      <Panel title="Compare Estimate Revision" subtitle="เปรียบเทียบยอดรวมจาก revision history จริง">
+        <div className="row">
+          <Field label="From revision">
+            <select value={fromRevision} onChange={(event) => setFromRevision(Number(event.target.value))}>
+              {rows.map((revision) => (
+                <option key={revision.revision} value={revision.revision}>
+                  {revision.code || revisionCode(revision.revision)}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Icon name="arrowRight" />
+          <Field label="To revision">
+            <select value={toRevision} onChange={(event) => setToRevision(Number(event.target.value))}>
+              {rows.map((revision) => (
+                <option key={revision.revision} value={revision.revision}>
+                  {revision.code || revisionCode(revision.revision)}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </div>
+      </Panel>
+      <div style={{ height: 14 }} />
+      <section className="grid-3">
+        <Panel title={`${from?.code ?? revisionCode(fromRevision)} Total`}>
+          <strong style={{ fontSize: "var(--fs-2xl)" }}>{formatMoney(from?.total)}</strong>
+          <p className="muted">{from?.reason}</p>
+        </Panel>
+        <Panel title={`${to?.code ?? revisionCode(toRevision)} Total`}>
+          <strong style={{ fontSize: "var(--fs-2xl)" }}>{formatMoney(to?.total)}</strong>
+          <p className="muted">{to?.reason}</p>
+        </Panel>
+        <Panel title="Difference">
+          <strong style={{ fontSize: "var(--fs-2xl)" }} className={delta > 0 ? "red-text" : delta < 0 ? "green-text" : "muted"}>
+            {delta > 0 ? "+" : delta < 0 ? "−" : ""}
+            {formatMoney(Math.abs(delta))}
+          </strong>
+          <p className="muted">{numberOf(from?.total) ? `${((delta / numberOf(from?.total)) * 100).toFixed(1)}%` : "No baseline total"}</p>
+        </Panel>
+      </section>
+      <div className="info-strip" style={{ marginTop: 14 }}>
+        <Icon name="alertCircle" />
+        <span>
+          <LocalizedText text={"Line-by-line historical comparison จะเปิดเมื่อ backend ส่ง revision snapshots; หน้านี้แสดงเฉพาะ revision totals ที่มีอยู่จริง"} />
+        </span>
+      </div>
+    </>
+  );
 }
 
 /* What a reviewer reads before deciding: where the money is, the biggest lines, the labor by
    discipline, what the system flagged, whether the ERP sheet is classified, and the revisions.
    The decision itself stays in the header (Approve / Request revision). */
-function EstimateReviewSummary({ workspace, erpUnclassified, sheetOpen, onOpenSheet, onOpenTab }: {
-  workspace: EstimateCostWorkspace; erpUnclassified: number | null; sheetOpen: boolean;
-  onOpenSheet: () => void; onOpenTab: (tab: WorkspaceTab) => void;
+function EstimateReviewSummary({
+  workspace,
+  erpUnclassified,
+  sheetOpen,
+  onOpenSheet,
+  onOpenTab,
+}: {
+  workspace: EstimateCostWorkspace;
+  erpUnclassified: number | null;
+  sheetOpen: boolean;
+  onOpenSheet: () => void;
+  onOpenTab: (tab: WorkspaceTab) => void;
 }) {
   const copy = estimateCopy;
   const { header } = workspace;
@@ -2265,78 +6540,258 @@ function EstimateReviewSummary({ workspace, erpUnclassified, sheetOpen, onOpenSh
   ];
   if (numberOf(totals.overhead) > 0) groups.push(["Overhead", numberOf(totals.overhead), "var(--c6)"]);
   groups.push([`Contingency ${formatNumber(header.contingencyRate)}%`, numberOf(totals.contingency), "var(--c8)"]);
-  const share = (value: number) => total > 0 ? value / total * 100 : 0;
+  const share = (value: number) => (total > 0 ? (value / total) * 100 : 0);
   // A price-set component is priced by its header, so only lines that carry their own price rank.
   const priced = [...workspace.costItems].filter((line) => !line.priceSetKey || line.isPriceSet).sort((left, right) => numberOf(right.lineTotal) - numberOf(left.lineTotal));
   const topLines = priced.slice(0, 6);
   const laborRows = [...new Set(workspace.manhourLines.map((line) => line.discipline ?? ""))].map((discipline) => {
     const lines = workspace.manhourLines.filter((line) => (line.discipline ?? "") === discipline);
-    return { discipline, manDays: lines.reduce((sum, line) => sum + numberOf(line.engineers) * numberOf(line.manDays), 0), manHours: lines.reduce((sum, line) => sum + numberOf(line.manHours), 0), cost: lines.reduce((sum, line) => sum + numberOf(line.lineCost), 0) };
+    return {
+      discipline,
+      manDays: lines.reduce((sum, line) => sum + numberOf(line.engineers) * numberOf(line.manDays), 0),
+      manHours: lines.reduce((sum, line) => sum + numberOf(line.manHours), 0),
+      cost: lines.reduce((sum, line) => sum + numberOf(line.lineCost), 0),
+    };
   });
   const laborTotal = laborRows.reduce((sum, row) => ({ manDays: sum.manDays + row.manDays, manHours: sum.manHours + row.manHours, cost: sum.cost + row.cost }), { manDays: 0, manHours: 0, cost: 0 });
   const errors = workspace.validationIssues.filter(isCriticalValidationIssue);
   const warnings = workspace.validationIssues.filter((issue) => !isCriticalValidationIssue(issue));
-  const revisions = [...workspace.revisionHistory].filter((entry) => entry.revision !== header.revision).sort((left, right) => right.revision - left.revision).slice(0, 2);
+  const revisions = [...workspace.revisionHistory]
+    .filter((entry) => entry.revision !== header.revision)
+    .sort((left, right) => right.revision - left.revision)
+    .slice(0, 2);
   const currentStatus = estimateStatusView(header.status);
-  const viewAll = (tab: WorkspaceTab) => <button className="link-btn" type="button" onClick={() => onOpenTab(tab)}>{copy("ดูทั้งหมด", "View all", "すべて表示")}</button>;
-  return <section className="est-review-grid">
-    <div className="stack">
-      <Panel title={copy("ต้นทุนตามกลุ่ม", "Cost by group", "グループ別原価") + " · " + revisionCode(header.revision)} flush>
-        <table className="est-mini-table"><thead><tr><th>{copy("กลุ่ม", "Group", "グループ")}</th><th className="num">{copy("ต้นทุน", "Cost", "原価")}</th><th className="num">{copy("สัดส่วน", "Share", "比率")}</th></tr></thead>
-          <tbody>{groups.map(([label, value, color]) => <tr key={label}><td><span className="est-base-dot" style={{ background: color }} />{label}</td><td className="num">{formatMoney(value)}</td>
-            <td className="num"><span className="est-share"><span className="est-share-bar"><i style={{ width: `${Math.min(100, share(value))}%`, background: color }} /></span>{formatNumber(share(value), 1)}%</span></td></tr>)}</tbody>
-          <tfoot><tr><td>{copy("รวม", "Total", "合計")}</td><td className="num">{formatMoney(total)}</td><td className="num">100%</td></tr></tfoot>
-        </table>
-        <p className="est-review-note"><Icon name="alertCircle" />{copy("การอนุมัติครอบคลุมต้นทุนวิศวกรรมภายในเท่านั้น", "Approval covers internal engineering cost only", "承認対象は社内技術原価のみです")}</p>
-      </Panel>
-    </div>
-    <div className="stack">
-      <Panel title={copy("รายการที่ต้นทุนสูงสุด", "Highest-cost lines", "原価上位の明細")} flush>
-        {topLines.length ? <ul className="est-top-list">{topLines.map((line) => <li key={line.id}>
-          <div><strong>{line.description}</strong><span>{[line.brand, line.model].filter(Boolean).join(" · ") || "—"} · {formatNumber(line.quantity)} {line.unit} · {line.supplierName ?? <span className="soft-warn">{copy("ยังไม่เลือกผู้ขาย", "No supplier", "仕入先未選択")}</span>}</span></div>
-          <strong className="num">{formatMoney(line.lineTotal)}</strong>
-        </li>)}</ul> : <p className="muted est-review-empty">{copy("ยังไม่มีรายการวัสดุ", "No material lines yet", "材料明細はまだありません")}</p>}
-        {priced.length > topLines.length ? <button className="link-btn est-review-more" type="button" onClick={() => onOpenTab("cost")}>{copy(`อีก ${priced.length - topLines.length} รายการ · เปิดแท็บวัสดุ`, `${priced.length - topLines.length} more · open Cost Items`, `他${priced.length - topLines.length}件 · 明細を開く`)}</button> : null}
-      </Panel>
-      <Panel title={copy("ค่าแรงตามสาขา", "Labor by discipline", "分野別労務") + ` · ${formatNumber(laborTotal.manDays)} Man-day`} flush>
-        {laborRows.length ? <table className="est-mini-table"><thead><tr><th>{copy("สาขา", "Discipline", "分野")}</th><th className="num">Man-day</th><th className="num">Man-hour</th><th className="num">{copy("ต้นทุน", "Cost", "原価")}</th></tr></thead>
-          <tbody>{laborRows.map((row) => <tr key={row.discipline || "none"}><td>{row.discipline || copy("ยังไม่ระบุสาขา", "No discipline", "分野未選択")}</td><td className="num">{formatNumber(row.manDays)}</td><td className="num">{formatNumber(row.manHours)}</td><td className="num">{formatMoney(row.cost)}</td></tr>)}</tbody>
-          <tfoot><tr><td>{copy("รวม", "Total", "合計")}</td><td className="num">{formatNumber(laborTotal.manDays)}</td><td className="num">{formatNumber(laborTotal.manHours)}</td><td className="num">{formatMoney(laborTotal.cost)}</td></tr></tfoot>
-        </table> : <p className="muted est-review-empty">{copy("ยังไม่มีค่าแรง", "No labor yet", "工数はまだありません")}</p>}
-      </Panel>
-    </div>
-    <div className="stack">
-      <Panel title={copy("ผลตรวจระบบ", "System checks", "システムチェック")} actions={viewAll("validation")}>
-        <div className="est-review-pills"><span className={errors.length ? "est-pill red" : "est-pill green"}>{copy(`${errors.length} ข้อผิดพลาด`, `${errors.length} error(s)`, `エラー ${errors.length}`)}</span><span className={warnings.length ? "est-pill amber" : "est-pill green"}>{copy(`${warnings.length} คำเตือน`, `${warnings.length} warning(s)`, `警告 ${warnings.length}`)}</span>
-          <span className="muted">{errors.length ? copy("ข้อผิดพลาดปิดกั้นการอนุมัติ", "Errors block approval", "エラーは承認を妨げます") : <LocalizedText text="warning(s) are advisory and do not block workflow." />}</span></div>
-        {workspace.validationIssues.length ? <ul className="est-issue-list">{[...errors, ...warnings].slice(0, 3).map((issue, index) => <li key={`${issue.code}-${issue.entityId}-${index}`} className={isCriticalValidationIssue(issue) ? "err" : "warn"}>
-          <span>{estimateIssueMessage(issue, currentLocale())}</span><button className="link-btn" type="button" onClick={() => onOpenTab("validation")}>{copy("ดู", "View", "表示")}</button>
-        </li>)}</ul> : null}
-      </Panel>
-      <Panel title={copy("ต้นทุนตามหมวด ERP", "Costs by ERP category", "ERP分類別原価")} actions={erpUnclassified === 0 ? <Badge tone="green"><span>{copy("จัดหมวดครบ", "Classified", "分類済み")}</span></Badge> : erpUnclassified ? <Badge tone="amber"><span>{copy(`ยังไม่จัดหมวด ${erpUnclassified}`, `${erpUnclassified} unclassified`, `未分類 ${erpUnclassified}`)}</span></Badge> : undefined}>
-        <p className="est-review-text">{erpUnclassified === 0
-          ? copy(`ทุกบรรทัดรวม Contingency อยู่ในหมวดแล้ว · ยอดบนใบ ${formatMoney(total)} ตรงกับ Estimate`, `Every line, contingency included, has a category · the sheet totals ${formatMoney(total)}, as the estimate does`, `予備費を含む全行が分類済み · 合計 ${formatMoney(total)} は見積と一致`)
-          : copy("ผู้ตรวจจัดหมวดและรวมบรรทัดได้ระหว่างตรวจทาน · ยอดเงินไม่เปลี่ยน", "The reviewer may classify and merge lines during review · amounts do not change", "レビュー中も分類とまとめが可能 · 金額は変わりません")}</p>
-        {sheetOpen ? <p className="muted est-review-text">{copy("ใบจัดหมวดเปิดอยู่ด้านล่าง", "The sheet is open below", "シートは下に表示中")}</p>
-          : <button className="btn default block" type="button" onClick={onOpenSheet}>{copy("เปิดใบจัดหมวด ERP", "Open the ERP sheet", "ERPシートを開く")}<Icon name="arrowRight" /></button>}
-      </Panel>
-      <Panel title={copy("ประวัติ Revision", "Revision history", "改訂履歴")} actions={viewAll("revision")} flush>
-        <ul className="est-rev-list">
-          <li><div className="est-rev-line"><span className="pill blue">{revisionCode(header.revision)}</span><Badge tone="blue"><span>{copy("ปัจจุบัน", "Current", "現行")}</span></Badge><Badge tone={currentStatus.tone}><span>{currentStatus.label}</span></Badge><strong className="num">{formatMoney(total)}</strong></div>
-            <span className="muted">{copy(`แก้ล่าสุด ${formatDate(header.updatedAt)} · ${header.ownerName}`, `Last changed ${formatDate(header.updatedAt)} · ${header.ownerName}`, `最終更新 ${formatDate(header.updatedAt)} · ${header.ownerName}`)}</span></li>
-          {revisions.map((entry) => { const view = revisionStatusView(entry, header.revision); return <li key={entry.id}><div className="est-rev-line"><span className="pill">{entry.code || revisionCode(entry.revision)}</span><Badge tone={view.tone}><span>{view.label}</span></Badge><strong className="num">{formatMoney(entry.total)}</strong></div>
-            <span className="muted">{[entry.reviewedByName, entry.reviewedAt ? formatDate(entry.reviewedAt) : ""].filter(Boolean).join(" · ") || formatDate(entry.createdAt)}</span></li>; })}
-        </ul>
-      </Panel>
-    </div>
-  </section>;
+  const viewAll = (tab: WorkspaceTab) => (
+    <button className="link-btn" type="button" onClick={() => onOpenTab(tab)}>
+      {copy("ดูทั้งหมด", "View all", "すべて表示")}
+    </button>
+  );
+  return (
+    <section className="est-review-grid">
+      <div className="stack">
+        <Panel title={copy("ต้นทุนตามกลุ่ม", "Cost by group", "グループ別原価") + " · " + revisionCode(header.revision)} flush>
+          <table className="est-mini-table">
+            <thead>
+              <tr>
+                <th>{copy("กลุ่ม", "Group", "グループ")}</th>
+                <th className="num">{copy("ต้นทุน", "Cost", "原価")}</th>
+                <th className="num">{copy("สัดส่วน", "Share", "比率")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {groups.map(([label, value, color]) => (
+                <tr key={label}>
+                  <td>
+                    <span className="est-base-dot" style={{ background: color }} />
+                    {label}
+                  </td>
+                  <td className="num">{formatMoney(value)}</td>
+                  <td className="num">
+                    <span className="est-share">
+                      <span className="est-share-bar">
+                        <i style={{ width: `${Math.min(100, share(value))}%`, background: color }} />
+                      </span>
+                      {formatNumber(share(value), 1)}%
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td>{copy("รวม", "Total", "合計")}</td>
+                <td className="num">{formatMoney(total)}</td>
+                <td className="num">100%</td>
+              </tr>
+            </tfoot>
+          </table>
+          <p className="est-review-note">
+            <Icon name="alertCircle" />
+            {copy("การอนุมัติครอบคลุมต้นทุนวิศวกรรมภายในเท่านั้น", "Approval covers internal engineering cost only", "承認対象は社内技術原価のみです")}
+          </p>
+        </Panel>
+      </div>
+      <div className="stack">
+        <Panel title={copy("รายการที่ต้นทุนสูงสุด", "Highest-cost lines", "原価上位の明細")} flush>
+          {topLines.length ? (
+            <ul className="est-top-list">
+              {topLines.map((line) => (
+                <li key={line.id}>
+                  <div>
+                    <strong>{line.description}</strong>
+                    <span>
+                      {[line.brand, line.model].filter(Boolean).join(" · ") || "—"} · {formatNumber(line.quantity)} {line.unit} ·{" "}
+                      {line.supplierName ?? <span className="soft-warn">{copy("ยังไม่เลือกผู้ขาย", "No supplier", "仕入先未選択")}</span>}
+                    </span>
+                  </div>
+                  <strong className="num">{formatMoney(line.lineTotal)}</strong>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="muted est-review-empty">{copy("ยังไม่มีรายการวัสดุ", "No material lines yet", "材料明細はまだありません")}</p>
+          )}
+          {priced.length > topLines.length ? (
+            <button className="link-btn est-review-more" type="button" onClick={() => onOpenTab("cost")}>
+              {copy(`อีก ${priced.length - topLines.length} รายการ · เปิดแท็บวัสดุ`, `${priced.length - topLines.length} more · open Cost Items`, `他${priced.length - topLines.length}件 · 明細を開く`)}
+            </button>
+          ) : null}
+        </Panel>
+        <Panel title={copy("ค่าแรงตามสาขา", "Labor by discipline", "分野別労務") + ` · ${formatNumber(laborTotal.manDays)} Man-day`} flush>
+          {laborRows.length ? (
+            <table className="est-mini-table">
+              <thead>
+                <tr>
+                  <th>{copy("สาขา", "Discipline", "分野")}</th>
+                  <th className="num">Man-day</th>
+                  <th className="num">Man-hour</th>
+                  <th className="num">{copy("ต้นทุน", "Cost", "原価")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {laborRows.map((row) => (
+                  <tr key={row.discipline || "none"}>
+                    <td>{row.discipline || copy("ยังไม่ระบุสาขา", "No discipline", "分野未選択")}</td>
+                    <td className="num">{formatNumber(row.manDays)}</td>
+                    <td className="num">{formatNumber(row.manHours)}</td>
+                    <td className="num">{formatMoney(row.cost)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td>{copy("รวม", "Total", "合計")}</td>
+                  <td className="num">{formatNumber(laborTotal.manDays)}</td>
+                  <td className="num">{formatNumber(laborTotal.manHours)}</td>
+                  <td className="num">{formatMoney(laborTotal.cost)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          ) : (
+            <p className="muted est-review-empty">{copy("ยังไม่มีค่าแรง", "No labor yet", "工数はまだありません")}</p>
+          )}
+        </Panel>
+      </div>
+      <div className="stack">
+        <Panel title={copy("ผลตรวจระบบ", "System checks", "システムチェック")} actions={viewAll("validation")}>
+          <div className="est-review-pills">
+            <span className={errors.length ? "est-pill red" : "est-pill green"}>{copy(`${errors.length} ข้อผิดพลาด`, `${errors.length} error(s)`, `エラー ${errors.length}`)}</span>
+            <span className={warnings.length ? "est-pill amber" : "est-pill green"}>{copy(`${warnings.length} คำเตือน`, `${warnings.length} warning(s)`, `警告 ${warnings.length}`)}</span>
+            <span className="muted">
+              {errors.length ? copy("ข้อผิดพลาดปิดกั้นการอนุมัติ", "Errors block approval", "エラーは承認を妨げます") : <LocalizedText text="warning(s) are advisory and do not block workflow." />}
+            </span>
+          </div>
+          {workspace.validationIssues.length ? (
+            <ul className="est-issue-list">
+              {[...errors, ...warnings].slice(0, 3).map((issue, index) => (
+                <li key={`${issue.code}-${issue.entityId}-${index}`} className={isCriticalValidationIssue(issue) ? "err" : "warn"}>
+                  <span>{estimateIssueMessage(issue, currentLocale())}</span>
+                  <button className="link-btn" type="button" onClick={() => onOpenTab("validation")}>
+                    {copy("ดู", "View", "表示")}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </Panel>
+        <Panel
+          title={copy("ต้นทุนตามหมวด ERP", "Costs by ERP category", "ERP分類別原価")}
+          actions={
+            erpUnclassified === 0 ? (
+              <Badge tone="green">
+                <span>{copy("จัดหมวดครบ", "Classified", "分類済み")}</span>
+              </Badge>
+            ) : erpUnclassified ? (
+              <Badge tone="amber">
+                <span>{copy(`ยังไม่จัดหมวด ${erpUnclassified}`, `${erpUnclassified} unclassified`, `未分類 ${erpUnclassified}`)}</span>
+              </Badge>
+            ) : undefined
+          }
+        >
+          <p className="est-review-text">
+            {erpUnclassified === 0
+              ? copy(
+                  `ทุกบรรทัดรวม Contingency อยู่ในหมวดแล้ว · ยอดบนใบ ${formatMoney(total)} ตรงกับ Estimate`,
+                  `Every line, contingency included, has a category · the sheet totals ${formatMoney(total)}, as the estimate does`,
+                  `予備費を含む全行が分類済み · 合計 ${formatMoney(total)} は見積と一致`,
+                )
+              : copy(
+                  "ผู้ตรวจจัดหมวดและรวมบรรทัดได้ระหว่างตรวจทาน · ยอดเงินไม่เปลี่ยน",
+                  "The reviewer may classify and merge lines during review · amounts do not change",
+                  "レビュー中も分類とまとめが可能 · 金額は変わりません",
+                )}
+          </p>
+          {sheetOpen ? (
+            <p className="muted est-review-text">{copy("ใบจัดหมวดเปิดอยู่ด้านล่าง", "The sheet is open below", "シートは下に表示中")}</p>
+          ) : (
+            <button className="btn default block" type="button" onClick={onOpenSheet}>
+              {copy("เปิดใบจัดหมวด ERP", "Open the ERP sheet", "ERPシートを開く")}
+              <Icon name="arrowRight" />
+            </button>
+          )}
+        </Panel>
+        <Panel title={copy("ประวัติ Revision", "Revision history", "改訂履歴")} actions={viewAll("revision")} flush>
+          <ul className="est-rev-list">
+            <li>
+              <div className="est-rev-line">
+                <span className="pill blue">{revisionCode(header.revision)}</span>
+                <Badge tone="blue">
+                  <span>{copy("ปัจจุบัน", "Current", "現行")}</span>
+                </Badge>
+                <Badge tone={currentStatus.tone}>
+                  <span>{currentStatus.label}</span>
+                </Badge>
+                <strong className="num">{formatMoney(total)}</strong>
+              </div>
+              <span className="muted">
+                {copy(
+                  `แก้ล่าสุด ${formatDate(header.updatedAt)} · ${header.ownerName}`,
+                  `Last changed ${formatDate(header.updatedAt)} · ${header.ownerName}`,
+                  `最終更新 ${formatDate(header.updatedAt)} · ${header.ownerName}`,
+                )}
+              </span>
+            </li>
+            {revisions.map((entry) => {
+              const view = revisionStatusView(entry, header.revision);
+              return (
+                <li key={entry.id}>
+                  <div className="est-rev-line">
+                    <span className="pill">{entry.code || revisionCode(entry.revision)}</span>
+                    <Badge tone={view.tone}>
+                      <span>{view.label}</span>
+                    </Badge>
+                    <strong className="num">{formatMoney(entry.total)}</strong>
+                  </div>
+                  <span className="muted">{[entry.reviewedByName, entry.reviewedAt ? formatDate(entry.reviewedAt) : ""].filter(Boolean).join(" · ") || formatDate(entry.createdAt)}</span>
+                </li>
+              );
+            })}
+          </ul>
+        </Panel>
+      </div>
+    </section>
+  );
 }
 
-function CostItemEditor({ bootstrap, workspace, line, seed = {}, busy, onClose, onSave }: { bootstrap: BootstrapData; workspace: EstimateCostWorkspace; line: EstimateCostItem | null; seed?: CostItemSeed; busy: boolean; onClose: () => void; onSave: (input: CostItemInput, lineId?: number) => Promise<void> }) {
+function CostItemEditor({
+  bootstrap,
+  workspace,
+  line,
+  seed = {},
+  busy,
+  onClose,
+  onSave,
+}: {
+  bootstrap: BootstrapData;
+  workspace: EstimateCostWorkspace;
+  line: EstimateCostItem | null;
+  seed?: CostItemSeed;
+  busy: boolean;
+  onClose: () => void;
+  onSave: (input: CostItemInput, lineId?: number) => Promise<void>;
+}) {
   const allOwners = bootstrap.team.filter((member) => canOwnEstimate(member.role));
-  const owners = workspace.capabilities.canEditAllSections
-    ? allOwners
-    : allOwners.filter((owner) => owner.id === (line?.ownerId ?? bootstrap.user.id));
+  const owners = workspace.capabilities.canEditAllSections ? allOwners : allOwners.filter((owner) => owner.id === (line?.ownerId ?? bootstrap.user.id));
   const defaultOwner = owners.find((owner) => owner.id === workspace.header.ownerId)?.id ?? owners.find((owner) => owner.id === bootstrap.user.id)?.id ?? owners[0]?.id ?? 0;
   const allowedCategories = COST_CATEGORIES.filter(([code]) => workspace.capabilities.canEditAllSections || workspace.capabilities.editableSections.includes(code) || line?.categoryCode === code);
   const initialCategory = allowedCategories[0] ?? COST_CATEGORIES[0];
@@ -2364,41 +6819,183 @@ function CostItemEditor({ bootstrap, workspace, line, seed = {}, busy, onClose, 
     ownerId: line?.ownerId ?? seed.ownerId ?? defaultOwner,
   }));
   const update = <K extends keyof CostItemInput>(key: K, value: CostItemInput[K]) => setForm((current) => ({ ...current, [key]: value }));
-  const valid = form.categoryCode.length === 2 && form.itemCode.trim() && form.description.trim() && Number.isInteger(form.quantity) && validCostItemNumbers(form.quantity, form.unitCost) && form.unit.trim() && form.priceSource && form.ownerId > 0;
-  return <Modal title={line ? `Edit ${line.itemCode}` : "Add cost item"} subtitle={line ? "Save checks both estimate and line row versions" : "New line is written to the current revision and audit trail"} size="xl" onClose={onClose} footer={<><button className="btn ghost" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || !valid} onClick={() => { void onSave(form, line?.id); }}><Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : line ? "Save changes" : "Create item"}</button></>}>
-    <CostItemFields form={form} onChange={(patch) => setForm((current) => ({ ...current, ...patch }))} onLookupPick={(patch) => setForm((current) => ({ ...current, ...patch, priceDate: patch.priceDate ?? current.priceDate }))} suppliers={bootstrap.suppliers} allowedCategories={allowedCategories}
-      moduleField={<Field label="Main module (optional)" hint={estimateUxCopy(currentLocale(), "เลือกโมดูลปลายทาง หรือรายการทั่วไปหากไม่อยู่ในโมดูล", "Choose the destination module, or General items for an ungrouped line", "追加先モジュールまたは一般明細を選択")}>
-        {line ? <input maxLength={200} value={form.module} onChange={event => update("module", event.target.value)} /> : <select value={form.module} onChange={event => update("module", event.target.value)}>
-          <option value="">{estimateUxCopy(currentLocale(), "รายการทั่วไป (ไม่อยู่ในโมดูล)", "General items (no module)", "一般明細（モジュールなし）")}</option>
-          {[...new Set([form.module, ...workspace.costItems.filter(item => item.categoryCode === form.categoryCode).map(item => item.module)].filter(Boolean))].map(name => <option key={name} value={name}>{name}</option>)}
-        </select>}
-      </Field>}
-      ownerField={<Field label="Owner *" hint={workspace.capabilities.canEditAllSections ? "Estimate owner can reassign a cost line" : "Line owner is protected by section permission"}><select disabled={!workspace.capabilities.canEditAllSections && Boolean(line)} value={form.ownerId} onChange={(event) => update("ownerId", Number(event.target.value))}>{owners.map((owner) => <option key={owner.id} value={owner.id}>{owner.name} <LocalizedText text={"·"} /> {owner.department}</option>)}</select></Field>}
-      referenceNumberField={<Field label="Reference number"><input maxLength={200} value={form.referenceNumber ?? ""} onChange={(event) => update("referenceNumber", event.target.value)} /></Field>}
-      referenceProjectField={<Field label="Reference project"><input maxLength={200} value={form.referenceProject ?? ""} onChange={(event) => update("referenceProject", event.target.value)} /></Field>}
-      statusField={line ? <Field label="Line status"><input readOnly value={line.status} /></Field> : null}
-    />
-  </Modal>;
+  const valid =
+    form.categoryCode.length === 2 &&
+    form.itemCode.trim() &&
+    form.description.trim() &&
+    Number.isInteger(form.quantity) &&
+    validCostItemNumbers(form.quantity, form.unitCost) &&
+    form.unit.trim() &&
+    form.priceSource &&
+    form.ownerId > 0;
+  return (
+    <Modal
+      title={line ? `Edit ${line.itemCode}` : "Add cost item"}
+      subtitle={line ? "Save checks both estimate and line row versions" : "New line is written to the current revision and audit trail"}
+      size="xl"
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn ghost" type="button" disabled={busy} onClick={onClose}>
+            <LocalizedText text={"Cancel"} />
+          </button>
+          <button
+            className="btn primary"
+            type="button"
+            disabled={busy || !valid}
+            onClick={() => {
+              void onSave(form, line?.id);
+            }}
+          >
+            <Icon name="check" />
+            {busy ? <LocalizedText text={"Saving…"} /> : line ? "Save changes" : "Create item"}
+          </button>
+        </>
+      }
+    >
+      <CostItemFields
+        form={form}
+        onChange={(patch) => setForm((current) => ({ ...current, ...patch }))}
+        onLookupPick={(patch) => setForm((current) => ({ ...current, ...patch, priceDate: patch.priceDate ?? current.priceDate }))}
+        suppliers={bootstrap.suppliers}
+        allowedCategories={allowedCategories}
+        moduleField={
+          <Field
+            label="Main module (optional)"
+            hint={estimateUxCopy(
+              currentLocale(),
+              "เลือกโมดูลปลายทาง หรือรายการทั่วไปหากไม่อยู่ในโมดูล",
+              "Choose the destination module, or General items for an ungrouped line",
+              "追加先モジュールまたは一般明細を選択",
+            )}
+          >
+            {line ? (
+              <input maxLength={200} value={form.module} onChange={(event) => update("module", event.target.value)} />
+            ) : (
+              <select value={form.module} onChange={(event) => update("module", event.target.value)}>
+                <option value="">{estimateUxCopy(currentLocale(), "รายการทั่วไป (ไม่อยู่ในโมดูล)", "General items (no module)", "一般明細（モジュールなし）")}</option>
+                {[...new Set([form.module, ...workspace.costItems.filter((item) => item.categoryCode === form.categoryCode).map((item) => item.module)].filter(Boolean))].map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </Field>
+        }
+        ownerField={
+          <Field label="Owner *" hint={workspace.capabilities.canEditAllSections ? "Estimate owner can reassign a cost line" : "Line owner is protected by section permission"}>
+            <select disabled={!workspace.capabilities.canEditAllSections && Boolean(line)} value={form.ownerId} onChange={(event) => update("ownerId", Number(event.target.value))}>
+              {owners.map((owner) => (
+                <option key={owner.id} value={owner.id}>
+                  {owner.name} <LocalizedText text={"·"} /> {owner.department}
+                </option>
+              ))}
+            </select>
+          </Field>
+        }
+        referenceNumberField={
+          <Field label="Reference number">
+            <input maxLength={200} value={form.referenceNumber ?? ""} onChange={(event) => update("referenceNumber", event.target.value)} />
+          </Field>
+        }
+        referenceProjectField={
+          <Field label="Reference project">
+            <input maxLength={200} value={form.referenceProject ?? ""} onChange={(event) => update("referenceProject", event.target.value)} />
+          </Field>
+        }
+        statusField={
+          line ? (
+            <Field label="Line status">
+              <input readOnly value={line.status} />
+            </Field>
+          ) : null
+        }
+      />
+    </Modal>
+  );
 }
 
 function WorkPackageEditor({ discipline, busy, onClose, onContinue }: { discipline: EstimateDiscipline; busy: boolean; onClose: () => void; onContinue: (seed: ManhourSeed) => void }) {
   const localizeCopy = useStaticCopy();
   const uiText = useUiText();
   const [name, setName] = useState("");
-  return <Modal title={uiText("New Work Package")} subtitle="ตั้งชื่อ Package แล้วเพิ่ม Activity แรกเพื่อบันทึกลง revision ปัจจุบัน" size="sm" onClose={onClose} footer={<><button className="btn ghost" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || !name.trim()} onClick={() => onContinue({ package: name.trim(), discipline, costType: costTypeOfDiscipline(discipline), provider: "Internal" })}><Icon name="arrowRight" /><LocalizedText text={"Continue to activity"} /></button></>}>
-    <div className="form-grid two"><Field label="Work package name *"><input required maxLength={200} value={name} onChange={(event) => setName(event.target.value)} placeholder={localizeCopy("เช่น Design & Engineering หรือ Site Installation")} /></Field><Field label="Discipline"><input readOnly className="calculated" value={disciplineLabel(discipline)} /></Field></div>
-    <div className="info-strip" style={{ marginTop: 12 }}><Icon name="layers" /><span><LocalizedText text={"Work Package จะเกิดขึ้นจริงเมื่อ Activity แรกถูกบันทึก เพื่อไม่สร้าง Package ว่างในฐานข้อมูล"} /></span></div>
-  </Modal>;
+  return (
+    <Modal
+      title={uiText("New Work Package")}
+      subtitle="ตั้งชื่อ Package แล้วเพิ่ม Activity แรกเพื่อบันทึกลง revision ปัจจุบัน"
+      size="sm"
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn ghost" type="button" disabled={busy} onClick={onClose}>
+            <LocalizedText text={"Cancel"} />
+          </button>
+          <button
+            className="btn primary"
+            type="button"
+            disabled={busy || !name.trim()}
+            onClick={() => onContinue({ package: name.trim(), discipline, costType: costTypeOfDiscipline(discipline), provider: "Internal" })}
+          >
+            <Icon name="arrowRight" />
+            <LocalizedText text={"Continue to activity"} />
+          </button>
+        </>
+      }
+    >
+      <div className="form-grid two">
+        <Field label="Work package name *">
+          <input required maxLength={200} value={name} onChange={(event) => setName(event.target.value)} placeholder={localizeCopy("เช่น Design & Engineering หรือ Site Installation")} />
+        </Field>
+        <Field label="Discipline">
+          <input readOnly className="calculated" value={disciplineLabel(discipline)} />
+        </Field>
+      </div>
+      <div className="info-strip" style={{ marginTop: 12 }}>
+        <Icon name="layers" />
+        <span>
+          <LocalizedText text={"Work Package จะเกิดขึ้นจริงเมื่อ Activity แรกถูกบันทึก เพื่อไม่สร้าง Package ว่างในฐานข้อมูล"} />
+        </span>
+      </div>
+    </Modal>
+  );
 }
 
 function DisciplineSelect({ value, onChange }: { value: EstimateDiscipline | undefined; onChange: (discipline: EstimateDiscipline) => void }) {
-  return <select value={value ?? ""} onChange={(event) => { if (isEstimateDiscipline(event.target.value)) onChange(event.target.value); }}>
-    {value ? null : <option value="">{estimateUxCopy(currentLocale(), "เลือกสาขา", "Choose a discipline", "分野を選択")}</option>}
-    {ESTIMATE_DISCIPLINES.map((discipline) => <option key={discipline} value={discipline}>{disciplineLabel(discipline)}</option>)}
-  </select>;
+  return (
+    <select
+      value={value ?? ""}
+      onChange={(event) => {
+        if (isEstimateDiscipline(event.target.value)) onChange(event.target.value);
+      }}
+    >
+      {value ? null : <option value="">{estimateUxCopy(currentLocale(), "เลือกสาขา", "Choose a discipline", "分野を選択")}</option>}
+      {ESTIMATE_DISCIPLINES.map((discipline) => (
+        <option key={discipline} value={discipline}>
+          {disciplineLabel(discipline)}
+        </option>
+      ))}
+    </select>
+  );
 }
 
-function ManhourEditor({ bootstrap, workspace, line, seed = {}, busy, onClose, onSave }: { bootstrap: BootstrapData; workspace: EstimateCostWorkspace; line: EstimateManhourLine | null; seed?: ManhourSeed; busy: boolean; onClose: () => void; onSave: (input: EstimateManhourInput, lineId?: number) => Promise<void> }) {
+function ManhourEditor({
+  bootstrap,
+  workspace,
+  line,
+  seed = {},
+  busy,
+  onClose,
+  onSave,
+}: {
+  bootstrap: BootstrapData;
+  workspace: EstimateCostWorkspace;
+  line: EstimateManhourLine | null;
+  seed?: ManhourSeed;
+  busy: boolean;
+  onClose: () => void;
+  onSave: (input: EstimateManhourInput, lineId?: number) => Promise<void>;
+}) {
   const copy = (th: string, en: string, ja: string) => estimateUxCopy(currentLocale(), th, en, ja);
   const allOwners = bootstrap.team.filter((member) => canOwnEstimate(member.role));
   const owners = workspace.capabilities.canEditAllSections ? allOwners : allOwners.filter((owner) => owner.id === (line?.ownerId ?? bootstrap.user.id));
@@ -2408,20 +7005,33 @@ function ManhourEditor({ bootstrap, workspace, line, seed = {}, busy, onClose, o
   const importedExcelRate = line?.provider === "Internal" && line.level === "Imported Excel rate";
   const { rates: rateOptions, loading: rateLoading, error: rateLoadError } = useEngineeringRateOptions(!importedExcelRate);
   const supplierRateDraft = useRef(line?.provider === "Supplier" ? numberOf(line.dailyRate) : 0);
-  const initialDiscipline = line ? line.discipline : seed.discipline ?? null;
+  const initialDiscipline = line ? line.discipline : (seed.discipline ?? null);
   const [form, setForm] = useState<EstimateManhourInput>(() => ({
-    estimateRowVersion: workspace.header.rowVersion, lineRowVersion: line?.rowVersion,
-    package: line?.package ?? seed.package ?? (initialDiscipline ? defaultWorkPackage(initialDiscipline) : "Design & Engineering"), activity: line?.activity ?? "", department: line?.department ?? bootstrap.user.department,
+    estimateRowVersion: workspace.header.rowVersion,
+    lineRowVersion: line?.rowVersion,
+    package: line?.package ?? seed.package ?? (initialDiscipline ? defaultWorkPackage(initialDiscipline) : "Design & Engineering"),
+    activity: line?.activity ?? "",
+    department: line?.department ?? bootstrap.user.department,
     level: line?.level ?? bootstrap.team.find((member) => member.id === bootstrap.user.id)?.level ?? "Middle Engineer",
-    costType: line?.costType ?? seed.costType ?? (initialDiscipline ? costTypeOfDiscipline(initialDiscipline) : "Engineering"), discipline: initialDiscipline ?? undefined, provider: line?.provider ?? seed.provider ?? "Internal",
-    supplierId: line?.supplierId ?? undefined, quotationNumber: line?.quotationNumber ?? "", priceDate: line?.priceDate ? dateValue(line.priceDate) : undefined, engineers: numberOf(line?.engineers) || 1, manDays: numberOf(line?.manDays) || 1,
-    hoursPerDay: numberOf(line?.hoursPerDay) || 8, dailyRate: numberOf(line?.dailyRate), ownerId: line?.ownerId ?? defaultOwner, remark: line?.remark ?? "",
+    costType: line?.costType ?? seed.costType ?? (initialDiscipline ? costTypeOfDiscipline(initialDiscipline) : "Engineering"),
+    discipline: initialDiscipline ?? undefined,
+    provider: line?.provider ?? seed.provider ?? "Internal",
+    supplierId: line?.supplierId ?? undefined,
+    quotationNumber: line?.quotationNumber ?? "",
+    priceDate: line?.priceDate ? dateValue(line.priceDate) : undefined,
+    engineers: numberOf(line?.engineers) || 1,
+    manDays: numberOf(line?.manDays) || 1,
+    hoursPerDay: numberOf(line?.hoursPerDay) || 8,
+    dailyRate: numberOf(line?.dailyRate),
+    ownerId: line?.ownerId ?? defaultOwner,
+    remark: line?.remark ?? "",
   }));
   const update = <K extends keyof EstimateManhourInput>(key: K, value: EstimateManhourInput[K]) => setForm((current) => ({ ...current, [key]: value }));
-  const availableRateOptions = form.discipline ? disciplineRates(rateOptions, form.discipline)
+  const availableRateOptions = form.discipline
+    ? disciplineRates(rateOptions, form.discipline)
     : rateOptions.filter((rate) => (form.costType === "Installation" ? rate.installationDaily : rate.engineeringDaily) > 0);
   const selectedRate = availableRateOptions.find((rate) => rate.department === form.department && rate.level === form.level);
-  const rateDaily = (rate: { engineeringDaily: number; installationDaily: number }) => form.costType === "Installation" ? rate.installationDaily : rate.engineeringDaily;
+  const rateDaily = (rate: { engineeringDaily: number; installationDaily: number }) => (form.costType === "Installation" ? rate.installationDaily : rate.engineeringDaily);
   const internal = form.provider === "Internal";
   const choosingRate = internal && !importedExcelRate && !rateLoadError;
   // The server resolves an internal line's rate on save; the form only previews it.
@@ -2429,57 +7039,490 @@ function ManhourEditor({ bootstrap, workspace, line, seed = {}, busy, onClose, o
   const internalRateReady = !choosingRate || (!rateLoading && Boolean(selectedRate));
   const supplierValid = internal || Boolean(form.supplierId && form.quotationNumber?.trim() && form.priceDate);
   const lineCostWithinRange = internal || form.engineers * form.manDays * form.dailyRate <= MAX_LEDGER_LINE_TOTAL;
-  const valid = Boolean(form.discipline && form.package.trim() && form.activity.trim() && form.department.trim() && form.level.trim() && form.engineers > 0 && form.manDays > 0 && form.hoursPerDay > 0 && form.dailyRate >= 0 && form.ownerId && supplierValid && lineCostWithinRange && internalRateReady);
+  const valid = Boolean(
+    form.discipline &&
+    form.package.trim() &&
+    form.activity.trim() &&
+    form.department.trim() &&
+    form.level.trim() &&
+    form.engineers > 0 &&
+    form.manDays > 0 &&
+    form.hoursPerDay > 0 &&
+    form.dailyRate >= 0 &&
+    form.ownerId &&
+    supplierValid &&
+    lineCostWithinRange &&
+    internalRateReady,
+  );
   const chooseRate = (rateId: string) => {
     const rate = availableRateOptions.find((option) => option.id === Number(rateId));
     if (rate) setForm((current) => ({ ...current, department: rate.department, level: rate.level }));
   };
   const changeDiscipline = (discipline: EstimateDiscipline) => setForm((current) => ({ ...current, discipline, costType: costTypeOfDiscipline(discipline) }));
-  return <Modal title={line ? `${copy("แก้ไข", "Edit", "編集")} ${line.activity}` : copy("เพิ่มค่าแรง", "Add labor", "工数を追加")} subtitle={copy("เลือกสาขาและอัตราที่ใช้งานได้ ระบบจะตรวจอัตราอีกครั้งตอนบันทึก", "Choose the discipline and an available rate. The API verifies the rate again on save.", "分野と利用可能な単価を選択してください。保存時にAPIが再確認します。")} size="xl" onClose={onClose} footer={<><button className="btn ghost" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || !valid} onClick={() => { void onSave({ ...form, dailyRate: internal ? 0 : form.dailyRate }, line?.id); }}><Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : line ? <LocalizedText text={"Save changes"} /> : copy("บันทึกค่าแรง", "Save labor", "工数を保存")}</button></>}>
-    {choosingRate && !rateLoading && !availableRateOptions.length ? <div className="info-strip red" role="alert" style={{ marginBottom: 12 }}><Icon name="alertTriangle" /><span><strong>{copy("ยังไม่มีอัตราค่าแรงที่ใช้งานได้", "No available engineering rate", "利用可能な技術単価がありません")}</strong><br />{copy("กรุณาให้ผู้ดูแลเพิ่ม Engineering Rate ที่มีผลวันนี้และมากกว่า 0 ก่อนสร้างรายการค่าแรง", "Ask an administrator to add an Engineering Rate effective today and greater than zero before creating this line.", "この工数を作成する前に、本日有効で0より大きい技術単価を管理者に登録してもらってください。")}</span></div> : null}
-    {internal && rateLoadError ? <div className="info-strip amber" role="alert" style={{ marginBottom: 12 }}><Icon name="alertTriangle" /><span>{copy("โหลด Rate Master ไม่สำเร็จ", "Could not load the Rate Master", "単価マスターを読み込めませんでした")}: {rateLoadError} {copy("กรุณาตรวจ Department และ Level ก่อนลองบันทึก", "Check Department and Level before trying to save.", "保存する前に部門とレベルを確認してください。")}</span></div> : null}
-    {!line?.discipline && line ? <div className="info-strip amber" style={{ marginBottom: 12 }}><Icon name="alertTriangle" /><span>{copy("บรรทัดนี้ยังไม่ระบุสาขา เลือกสาขาแล้วบันทึก", "This line has no discipline yet. Choose one and save.", "この行には分野がありません。選択して保存してください。")}</span></div> : null}
-    {line?.disciplineInferred ? <div className="info-strip" style={{ marginBottom: 12 }}><Icon name="alertTriangle" /><span>{copy("ระบบเดาสาขาจากชื่อ Work Package ตรวจแล้วกดบันทึกเพื่อยืนยัน", "The discipline was read from the package name. Check it and save to confirm.", "分野はパッケージ名から推定しました。確認して保存してください。")}</span></div> : null}
-    <div className="form-grid four">
-      <Field label="Discipline *"><DisciplineSelect value={form.discipline} onChange={changeDiscipline} /></Field>
-      <Field label="Provider *"><select value={form.provider} onChange={(event) => { const provider = event.target.value as EstimateManhourInput["provider"]; setForm((current) => ({ ...current, provider, dailyRate: provider === "Supplier" ? supplierRateDraft.current : current.dailyRate, ...(provider === "Internal" ? { supplierId: undefined, quotationNumber: "", priceDate: undefined } : {}) })); }}><option value="Internal"><LocalizedText text={"Own engineer"} /></option><option value="Supplier"><LocalizedText text={"Supplier man-hour"} /></option></select></Field>
-      <Field label="Work package *"><input required maxLength={200} value={form.package} onChange={(event) => update("package", event.target.value)} /></Field><Field label="Activity *"><input required maxLength={300} value={form.activity} onChange={(event) => update("activity", event.target.value)} /></Field>
-      {choosingRate ? <Field label={copy("แผนกและระดับ *", "Department and level *", "部門とレベル *")} span={2} hint={rateLoading ? copy("กำลังโหลด Rate Master…", "Loading Rate Master…", "単価マスターを読み込み中…") : selectedRate ? `${form.department} · ${form.level}` : copy("เลือกจากอัตราที่มีผลวันนี้เท่านั้น", "Only rates effective today are shown.", "本日有効な単価のみ表示します。")}><select disabled={rateLoading || !availableRateOptions.length} value={selectedRate?.id ?? ""} onChange={(event) => chooseRate(event.target.value)}><option value="">{rateLoading ? copy("กำลังโหลดอัตรา…", "Loading rates…", "単価を読み込み中…") : copy("เลือกอัตราที่ใช้งานได้", "Select an available rate", "利用可能な単価を選択")}</option>{availableRateOptions.map((rate) => <option key={rate.id} value={rate.id}>{rate.department} — {rate.level}{canSeeRates ? ` · ${formatMoney(rateDaily(rate))}/${copy("วัน", "day", "日")}` : ""}</option>)}</select></Field> : <><Field label="Department *"><input required maxLength={100} value={form.department} onChange={(event) => update("department", event.target.value)} /></Field><Field label="Engineer level *"><input required maxLength={100} value={form.level} onChange={(event) => update("level", event.target.value)} /></Field></>}
-      <Field label="Supplier" hint={form.provider === "Supplier" ? "Required" : "Not used for internal rate"}><select disabled={internal} value={form.supplierId ?? ""} onChange={(event) => update("supplierId", event.target.value ? Number(event.target.value) : undefined)}><option value=""><LocalizedText text={"Select supplier"} /></option>{bootstrap.suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.code} — {supplier.name}</option>)}</select></Field><Field label="Quotation number" hint={form.provider === "Supplier" ? "Required" : undefined}><input disabled={internal} maxLength={100} value={form.quotationNumber ?? ""} onChange={(event) => update("quotationNumber", event.target.value)} /></Field><Field label="Quotation date" hint={form.provider === "Supplier" ? "Required" : undefined}><DateInput disabled={internal} value={form.priceDate ?? ""} onChange={(event) => update("priceDate", event.target.value || undefined)} /></Field><Field label="Owner *" hint={workspace.capabilities.canEditAllSections ? "Estimate owner can reassign" : "Assigned line must remain yours"}><select disabled={!workspace.capabilities.canEditAllSections} value={form.ownerId} onChange={(event) => update("ownerId", Number(event.target.value))}>{owners.map((owner) => <option key={owner.id} value={owner.id}>{owner.name} · {owner.department}</option>)}</select></Field>
-      <Field label="Engineer qty *"><input type="number" min="0.01" max="10000" step="0.01" value={form.engineers} onChange={(event) => update("engineers", Number(event.target.value))} /></Field><Field label="Man-days *"><input type="number" min="0.01" max="100000" step="0.01" value={form.manDays} onChange={(event) => update("manDays", Number(event.target.value))} /></Field><Field label="Hours / day *"><input type="number" min="0.01" max="24" step="0.01" value={form.hoursPerDay} onChange={(event) => update("hoursPerDay", Number(event.target.value))} /></Field><Field label={internal ? (importedExcelRate ? "Daily rate (Excel)" : "Daily rate (Rate Master)") : "Daily rate (THB) *"} hint={internal ? (importedExcelRate ? "Original Excel rate is retained when adjusting quantity" : "Server resolves the active rate after save") : "Supplier quotation rate"}><input type="number" readOnly={internal} className={internal ? "calculated" : undefined} min="0" max="1000000000" step="0.0001" value={dailyRate} onChange={(event) => { const next = Number(event.target.value); supplierRateDraft.current = next; update("dailyRate", next); }} /></Field>
-      <Field label="Man-hours"><input className="calculated" readOnly value={formatNumber(form.engineers * form.manDays * form.hoursPerDay)} /></Field><Field label="Line cost" hint={!lineCostWithinRange ? "Exceeds the maximum amount supported by the estimate ledger" : undefined}><input className="calculated" readOnly value={formatMoney(form.engineers * form.manDays * dailyRate)} /></Field><Field label="Remark" span={2}><textarea maxLength={20000} rows={2} value={form.remark ?? ""} onChange={(event) => update("remark", event.target.value)} /></Field>
-    </div>
-  </Modal>;
+  return (
+    <Modal
+      title={line ? `${copy("แก้ไข", "Edit", "編集")} ${line.activity}` : copy("เพิ่มค่าแรง", "Add labor", "工数を追加")}
+      subtitle={copy(
+        "เลือกสาขาและอัตราที่ใช้งานได้ ระบบจะตรวจอัตราอีกครั้งตอนบันทึก",
+        "Choose the discipline and an available rate. The API verifies the rate again on save.",
+        "分野と利用可能な単価を選択してください。保存時にAPIが再確認します。",
+      )}
+      size="xl"
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn ghost" type="button" disabled={busy} onClick={onClose}>
+            <LocalizedText text={"Cancel"} />
+          </button>
+          <button
+            className="btn primary"
+            type="button"
+            disabled={busy || !valid}
+            onClick={() => {
+              void onSave({ ...form, dailyRate: internal ? 0 : form.dailyRate }, line?.id);
+            }}
+          >
+            <Icon name="check" />
+            {busy ? <LocalizedText text={"Saving…"} /> : line ? <LocalizedText text={"Save changes"} /> : copy("บันทึกค่าแรง", "Save labor", "工数を保存")}
+          </button>
+        </>
+      }
+    >
+      {choosingRate && !rateLoading && !availableRateOptions.length ? (
+        <div className="info-strip red" role="alert" style={{ marginBottom: 12 }}>
+          <Icon name="alertTriangle" />
+          <span>
+            <strong>{copy("ยังไม่มีอัตราค่าแรงที่ใช้งานได้", "No available engineering rate", "利用可能な技術単価がありません")}</strong>
+            <br />
+            {copy(
+              "กรุณาให้ผู้ดูแลเพิ่ม Engineering Rate ที่มีผลวันนี้และมากกว่า 0 ก่อนสร้างรายการค่าแรง",
+              "Ask an administrator to add an Engineering Rate effective today and greater than zero before creating this line.",
+              "この工数を作成する前に、本日有効で0より大きい技術単価を管理者に登録してもらってください。",
+            )}
+          </span>
+        </div>
+      ) : null}
+      {internal && rateLoadError ? (
+        <div className="info-strip amber" role="alert" style={{ marginBottom: 12 }}>
+          <Icon name="alertTriangle" />
+          <span>
+            {copy("โหลด Rate Master ไม่สำเร็จ", "Could not load the Rate Master", "単価マスターを読み込めませんでした")}: {rateLoadError}{" "}
+            {copy("กรุณาตรวจ Department และ Level ก่อนลองบันทึก", "Check Department and Level before trying to save.", "保存する前に部門とレベルを確認してください。")}
+          </span>
+        </div>
+      ) : null}
+      {!line?.discipline && line ? (
+        <div className="info-strip amber" style={{ marginBottom: 12 }}>
+          <Icon name="alertTriangle" />
+          <span>{copy("บรรทัดนี้ยังไม่ระบุสาขา เลือกสาขาแล้วบันทึก", "This line has no discipline yet. Choose one and save.", "この行には分野がありません。選択して保存してください。")}</span>
+        </div>
+      ) : null}
+      {line?.disciplineInferred ? (
+        <div className="info-strip" style={{ marginBottom: 12 }}>
+          <Icon name="alertTriangle" />
+          <span>
+            {copy(
+              "ระบบเดาสาขาจากชื่อ Work Package ตรวจแล้วกดบันทึกเพื่อยืนยัน",
+              "The discipline was read from the package name. Check it and save to confirm.",
+              "分野はパッケージ名から推定しました。確認して保存してください。",
+            )}
+          </span>
+        </div>
+      ) : null}
+      <div className="form-grid four">
+        <Field label="Discipline *">
+          <DisciplineSelect value={form.discipline} onChange={changeDiscipline} />
+        </Field>
+        <Field label="Provider *">
+          <select
+            value={form.provider}
+            onChange={(event) => {
+              const provider = event.target.value as EstimateManhourInput["provider"];
+              setForm((current) => ({
+                ...current,
+                provider,
+                dailyRate: provider === "Supplier" ? supplierRateDraft.current : current.dailyRate,
+                ...(provider === "Internal" ? { supplierId: undefined, quotationNumber: "", priceDate: undefined } : {}),
+              }));
+            }}
+          >
+            <option value="Internal">
+              <LocalizedText text={"Own engineer"} />
+            </option>
+            <option value="Supplier">
+              <LocalizedText text={"Supplier man-hour"} />
+            </option>
+          </select>
+        </Field>
+        <Field label="Work package *">
+          <input required maxLength={200} value={form.package} onChange={(event) => update("package", event.target.value)} />
+        </Field>
+        <Field label="Activity *">
+          <input required maxLength={300} value={form.activity} onChange={(event) => update("activity", event.target.value)} />
+        </Field>
+        {choosingRate ? (
+          <Field
+            label={copy("แผนกและระดับ *", "Department and level *", "部門とレベル *")}
+            span={2}
+            hint={
+              rateLoading
+                ? copy("กำลังโหลด Rate Master…", "Loading Rate Master…", "単価マスターを読み込み中…")
+                : selectedRate
+                  ? `${form.department} · ${form.level}`
+                  : copy("เลือกจากอัตราที่มีผลวันนี้เท่านั้น", "Only rates effective today are shown.", "本日有効な単価のみ表示します。")
+            }
+          >
+            <select disabled={rateLoading || !availableRateOptions.length} value={selectedRate?.id ?? ""} onChange={(event) => chooseRate(event.target.value)}>
+              <option value="">{rateLoading ? copy("กำลังโหลดอัตรา…", "Loading rates…", "単価を読み込み中…") : copy("เลือกอัตราที่ใช้งานได้", "Select an available rate", "利用可能な単価を選択")}</option>
+              {availableRateOptions.map((rate) => (
+                <option key={rate.id} value={rate.id}>
+                  {rate.department} — {rate.level}
+                  {canSeeRates ? ` · ${formatMoney(rateDaily(rate))}/${copy("วัน", "day", "日")}` : ""}
+                </option>
+              ))}
+            </select>
+          </Field>
+        ) : (
+          <>
+            <Field label="Department *">
+              <input required maxLength={100} value={form.department} onChange={(event) => update("department", event.target.value)} />
+            </Field>
+            <Field label="Engineer level *">
+              <input required maxLength={100} value={form.level} onChange={(event) => update("level", event.target.value)} />
+            </Field>
+          </>
+        )}
+        <Field label="Supplier" hint={form.provider === "Supplier" ? "Required" : "Not used for internal rate"}>
+          <select disabled={internal} value={form.supplierId ?? ""} onChange={(event) => update("supplierId", event.target.value ? Number(event.target.value) : undefined)}>
+            <option value="">
+              <LocalizedText text={"Select supplier"} />
+            </option>
+            {bootstrap.suppliers.map((supplier) => (
+              <option key={supplier.id} value={supplier.id}>
+                {supplier.code} — {supplier.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Quotation number" hint={form.provider === "Supplier" ? "Required" : undefined}>
+          <input disabled={internal} maxLength={100} value={form.quotationNumber ?? ""} onChange={(event) => update("quotationNumber", event.target.value)} />
+        </Field>
+        <Field label="Quotation date" hint={form.provider === "Supplier" ? "Required" : undefined}>
+          <DateInput disabled={internal} value={form.priceDate ?? ""} onChange={(event) => update("priceDate", event.target.value || undefined)} />
+        </Field>
+        <Field label="Owner *" hint={workspace.capabilities.canEditAllSections ? "Estimate owner can reassign" : "Assigned line must remain yours"}>
+          <select disabled={!workspace.capabilities.canEditAllSections} value={form.ownerId} onChange={(event) => update("ownerId", Number(event.target.value))}>
+            {owners.map((owner) => (
+              <option key={owner.id} value={owner.id}>
+                {owner.name} · {owner.department}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Engineer qty *">
+          <input type="number" min="0.01" max="10000" step="0.01" value={form.engineers} onChange={(event) => update("engineers", Number(event.target.value))} />
+        </Field>
+        <Field label="Man-days *">
+          <input type="number" min="0.01" max="100000" step="0.01" value={form.manDays} onChange={(event) => update("manDays", Number(event.target.value))} />
+        </Field>
+        <Field label="Hours / day *">
+          <input type="number" min="0.01" max="24" step="0.01" value={form.hoursPerDay} onChange={(event) => update("hoursPerDay", Number(event.target.value))} />
+        </Field>
+        <Field
+          label={internal ? (importedExcelRate ? "Daily rate (Excel)" : "Daily rate (Rate Master)") : "Daily rate (THB) *"}
+          hint={internal ? (importedExcelRate ? "Original Excel rate is retained when adjusting quantity" : "Server resolves the active rate after save") : "Supplier quotation rate"}
+        >
+          <input
+            type="number"
+            readOnly={internal}
+            className={internal ? "calculated" : undefined}
+            min="0"
+            max="1000000000"
+            step="0.0001"
+            value={dailyRate}
+            onChange={(event) => {
+              const next = Number(event.target.value);
+              supplierRateDraft.current = next;
+              update("dailyRate", next);
+            }}
+          />
+        </Field>
+        <Field label="Man-hours">
+          <input className="calculated" readOnly value={formatNumber(form.engineers * form.manDays * form.hoursPerDay)} />
+        </Field>
+        <Field label="Line cost" hint={!lineCostWithinRange ? "Exceeds the maximum amount supported by the estimate ledger" : undefined}>
+          <input className="calculated" readOnly value={formatMoney(form.engineers * form.manDays * dailyRate)} />
+        </Field>
+        <Field label="Remark" span={2}>
+          <textarea maxLength={20000} rows={2} value={form.remark ?? ""} onChange={(event) => update("remark", event.target.value)} />
+        </Field>
+      </div>
+    </Modal>
+  );
 }
 
-function ExpenseEditor({ bootstrap, workspace, line, seed = {}, busy, onClose, onSave }: { bootstrap: BootstrapData; workspace: EstimateCostWorkspace; line: EstimateExpenseLine | null; seed?: ExpenseSeed; busy: boolean; onClose: () => void; onSave: (input: EstimateExpenseInput, lineId?: number) => Promise<void> }) {
+function ExpenseEditor({
+  bootstrap,
+  workspace,
+  line,
+  seed = {},
+  busy,
+  onClose,
+  onSave,
+}: {
+  bootstrap: BootstrapData;
+  workspace: EstimateCostWorkspace;
+  line: EstimateExpenseLine | null;
+  seed?: ExpenseSeed;
+  busy: boolean;
+  onClose: () => void;
+  onSave: (input: EstimateExpenseInput, lineId?: number) => Promise<void>;
+}) {
   const uiText = useUiText();
   const copy = (th: string, en: string, ja: string) => estimateUxCopy(currentLocale(), th, en, ja);
   const allOwners = bootstrap.team.filter((member) => canOwnEstimate(member.role));
   const owners = workspace.capabilities.canEditAllSections ? allOwners : allOwners.filter((owner) => owner.id === (line?.ownerId ?? bootstrap.user.id));
   const defaultOwner = owners.find((owner) => owner.id === workspace.header.ownerId)?.id ?? owners.find((owner) => owner.id === bootstrap.user.id)?.id ?? owners[0]?.id ?? 0;
-  const allowedExpenseTypes = EXPENSE_TYPES.filter((expenseType) => workspace.capabilities.canEditAllSections || workspace.capabilities.editableSections.includes(EXPENSE_SECTION_BY_TYPE[expenseType]) || line?.expenseType === expenseType);
-  const initialDiscipline = line ? line.discipline : seed.discipline ?? null;
-  const [form, setForm] = useState<EstimateExpenseInput>(() => ({ estimateRowVersion: workspace.header.rowVersion, lineRowVersion: line?.rowVersion, package: line?.package ?? seed.package ?? (initialDiscipline ? defaultWorkPackage(initialDiscipline) : "Site Installation"), expenseType: line?.expenseType ?? allowedExpenseTypes[0] ?? "Other", description: line?.description ?? "", costType: line?.costType ?? seed.costType ?? (initialDiscipline ? costTypeOfDiscipline(initialDiscipline) : "Installation"), discipline: initialDiscipline ?? undefined, supplierId: line?.supplierId ?? undefined, referenceNumber: line?.referenceNumber ?? "", quantity: numberOf(line?.quantity) || 1, unit: line?.unit ?? "Trip", unitCost: numberOf(line?.unitCost), ownerId: line?.ownerId ?? defaultOwner, remark: line?.remark ?? "" }));
+  const allowedExpenseTypes = EXPENSE_TYPES.filter(
+    (expenseType) => workspace.capabilities.canEditAllSections || workspace.capabilities.editableSections.includes(EXPENSE_SECTION_BY_TYPE[expenseType]) || line?.expenseType === expenseType,
+  );
+  const initialDiscipline = line ? line.discipline : (seed.discipline ?? null);
+  const [form, setForm] = useState<EstimateExpenseInput>(() => ({
+    estimateRowVersion: workspace.header.rowVersion,
+    lineRowVersion: line?.rowVersion,
+    package: line?.package ?? seed.package ?? (initialDiscipline ? defaultWorkPackage(initialDiscipline) : "Site Installation"),
+    expenseType: line?.expenseType ?? allowedExpenseTypes[0] ?? "Other",
+    description: line?.description ?? "",
+    costType: line?.costType ?? seed.costType ?? (initialDiscipline ? costTypeOfDiscipline(initialDiscipline) : "Installation"),
+    discipline: initialDiscipline ?? undefined,
+    supplierId: line?.supplierId ?? undefined,
+    referenceNumber: line?.referenceNumber ?? "",
+    quantity: numberOf(line?.quantity) || 1,
+    unit: line?.unit ?? "Trip",
+    unitCost: numberOf(line?.unitCost),
+    ownerId: line?.ownerId ?? defaultOwner,
+    remark: line?.remark ?? "",
+  }));
   const update = <K extends keyof EstimateExpenseInput>(key: K, value: EstimateExpenseInput[K]) => setForm((current) => ({ ...current, [key]: value }));
-  const valid = Boolean(form.discipline && form.package.trim() && form.description.trim() && form.expenseType && form.quantity > 0 && form.unit && form.unitCost >= 0 && form.quantity * form.unitCost <= MAX_LEDGER_LINE_TOTAL && form.ownerId);
-  return <Modal title={line ? `${copy("แก้ไข", "Edit", "編集")} ${line.description}` : copy("เพิ่มค่าเดินทาง ที่พัก หรือเบี้ยเลี้ยง", "Add travel, hotel or per diem", "旅費・宿泊・日当を追加")} subtitle="Expense is reported under transportation, accommodation or other cost" size="xl" onClose={onClose} footer={<><button className="btn ghost" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || !valid} onClick={() => { void onSave(form, line?.id); }}><Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : line ? <LocalizedText text={"Save changes"} /> : copy("บันทึกค่าใช้จ่าย", "Save expense", "費用を保存")}</button></>}>
-    {!line?.discipline && line ? <div className="info-strip amber" style={{ marginBottom: 12 }}><Icon name="alertTriangle" /><span>{copy("บรรทัดนี้ยังไม่ระบุสาขา เลือกสาขาแล้วบันทึก", "This line has no discipline yet. Choose one and save.", "この行には分野がありません。選択して保存してください。")}</span></div> : null}
-    {line?.disciplineInferred ? <div className="info-strip" style={{ marginBottom: 12 }}><Icon name="alertTriangle" /><span>{copy("ระบบเดาสาขาจากชื่อ Work Package ตรวจแล้วกดบันทึกเพื่อยืนยัน", "The discipline was read from the package name. Check it and save to confirm.", "分野はパッケージ名から推定しました。確認して保存してください。")}</span></div> : null}
-    <div className="form-grid four"><Field label="Discipline *"><DisciplineSelect value={form.discipline} onChange={(discipline) => setForm((current) => ({ ...current, discipline, costType: costTypeOfDiscipline(discipline) }))} /></Field><Field label="Expense type *" hint={workspace.capabilities.canEditAllSections ? "Mapped to canonical section 08, 09 or 10" : "Only expense types assigned to your sections"}><select value={form.expenseType} onChange={(event) => update("expenseType", event.target.value)}>{allowedExpenseTypes.map((type) => <option key={type} value={type}>{uiText(type)}</option>)}</select></Field><Field label="Work package *" span={2}><input required maxLength={200} value={form.package} onChange={(event) => update("package", event.target.value)} /></Field><Field label="Description *" span={2}><input required maxLength={500} value={form.description} onChange={(event) => update("description", event.target.value)} /></Field><Field label="Supplier"><select value={form.supplierId ?? ""} onChange={(event) => update("supplierId", event.target.value ? Number(event.target.value) : undefined)}><option value=""><LocalizedText text={"No supplier"} /></option>{bootstrap.suppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.code} — {supplier.name}</option>)}</select></Field><Field label="Reference number"><input maxLength={200} value={form.referenceNumber ?? ""} onChange={(event) => update("referenceNumber", event.target.value)} /></Field><Field label="Quantity *"><input type="number" min="0.0001" max="1000000000" step="0.0001" value={form.quantity} onChange={(event) => update("quantity", Number(event.target.value))} /></Field><Field label="Unit *"><select value={form.unit} onChange={(event) => update("unit", event.target.value)}>{UNITS.map((unit) => <option key={unit}>{unit}</option>)}</select></Field><Field label="Unit cost (THB) *"><input type="number" min="0" max="1000000000" step="0.0001" value={form.unitCost} onChange={(event) => update("unitCost", Number(event.target.value))} /></Field><Field label="Line total"><input readOnly className="calculated" value={formatMoney(form.quantity * form.unitCost)} /></Field><Field label="Owner *" hint={workspace.capabilities.canEditAllSections ? "Estimate owner can reassign" : "Assigned line must remain yours"}><select disabled={!workspace.capabilities.canEditAllSections} value={form.ownerId} onChange={(event) => update("ownerId", Number(event.target.value))}>{owners.map((owner) => <option key={owner.id} value={owner.id}>{owner.name} · {owner.department}</option>)}</select></Field><Field label="Remark" span={3}><textarea maxLength={20000} rows={2} value={form.remark ?? ""} onChange={(event) => update("remark", event.target.value)} /></Field></div>
-  </Modal>;
+  const valid = Boolean(
+    form.discipline &&
+    form.package.trim() &&
+    form.description.trim() &&
+    form.expenseType &&
+    form.quantity > 0 &&
+    form.unit &&
+    form.unitCost >= 0 &&
+    form.quantity * form.unitCost <= MAX_LEDGER_LINE_TOTAL &&
+    form.ownerId,
+  );
+  return (
+    <Modal
+      title={line ? `${copy("แก้ไข", "Edit", "編集")} ${line.description}` : copy("เพิ่มค่าเดินทาง ที่พัก หรือเบี้ยเลี้ยง", "Add travel, hotel or per diem", "旅費・宿泊・日当を追加")}
+      subtitle="Expense is reported under transportation, accommodation or other cost"
+      size="xl"
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn ghost" type="button" disabled={busy} onClick={onClose}>
+            <LocalizedText text={"Cancel"} />
+          </button>
+          <button
+            className="btn primary"
+            type="button"
+            disabled={busy || !valid}
+            onClick={() => {
+              void onSave(form, line?.id);
+            }}
+          >
+            <Icon name="check" />
+            {busy ? <LocalizedText text={"Saving…"} /> : line ? <LocalizedText text={"Save changes"} /> : copy("บันทึกค่าใช้จ่าย", "Save expense", "費用を保存")}
+          </button>
+        </>
+      }
+    >
+      {!line?.discipline && line ? (
+        <div className="info-strip amber" style={{ marginBottom: 12 }}>
+          <Icon name="alertTriangle" />
+          <span>{copy("บรรทัดนี้ยังไม่ระบุสาขา เลือกสาขาแล้วบันทึก", "This line has no discipline yet. Choose one and save.", "この行には分野がありません。選択して保存してください。")}</span>
+        </div>
+      ) : null}
+      {line?.disciplineInferred ? (
+        <div className="info-strip" style={{ marginBottom: 12 }}>
+          <Icon name="alertTriangle" />
+          <span>
+            {copy(
+              "ระบบเดาสาขาจากชื่อ Work Package ตรวจแล้วกดบันทึกเพื่อยืนยัน",
+              "The discipline was read from the package name. Check it and save to confirm.",
+              "分野はパッケージ名から推定しました。確認して保存してください。",
+            )}
+          </span>
+        </div>
+      ) : null}
+      <div className="form-grid four">
+        <Field label="Discipline *">
+          <DisciplineSelect value={form.discipline} onChange={(discipline) => setForm((current) => ({ ...current, discipline, costType: costTypeOfDiscipline(discipline) }))} />
+        </Field>
+        <Field label="Expense type *" hint={workspace.capabilities.canEditAllSections ? "Mapped to canonical section 08, 09 or 10" : "Only expense types assigned to your sections"}>
+          <select value={form.expenseType} onChange={(event) => update("expenseType", event.target.value)}>
+            {allowedExpenseTypes.map((type) => (
+              <option key={type} value={type}>
+                {uiText(type)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Work package *" span={2}>
+          <input required maxLength={200} value={form.package} onChange={(event) => update("package", event.target.value)} />
+        </Field>
+        <Field label="Description *" span={2}>
+          <input required maxLength={500} value={form.description} onChange={(event) => update("description", event.target.value)} />
+        </Field>
+        <Field label="Supplier">
+          <select value={form.supplierId ?? ""} onChange={(event) => update("supplierId", event.target.value ? Number(event.target.value) : undefined)}>
+            <option value="">
+              <LocalizedText text={"No supplier"} />
+            </option>
+            {bootstrap.suppliers.map((supplier) => (
+              <option key={supplier.id} value={supplier.id}>
+                {supplier.code} — {supplier.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Reference number">
+          <input maxLength={200} value={form.referenceNumber ?? ""} onChange={(event) => update("referenceNumber", event.target.value)} />
+        </Field>
+        <Field label="Quantity *">
+          <input type="number" min="0.0001" max="1000000000" step="0.0001" value={form.quantity} onChange={(event) => update("quantity", Number(event.target.value))} />
+        </Field>
+        <Field label="Unit *">
+          <select value={form.unit} onChange={(event) => update("unit", event.target.value)}>
+            {UNITS.map((unit) => (
+              <option key={unit}>{unit}</option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Unit cost (THB) *">
+          <input type="number" min="0" max="1000000000" step="0.0001" value={form.unitCost} onChange={(event) => update("unitCost", Number(event.target.value))} />
+        </Field>
+        <Field label="Line total">
+          <input readOnly className="calculated" value={formatMoney(form.quantity * form.unitCost)} />
+        </Field>
+        <Field label="Owner *" hint={workspace.capabilities.canEditAllSections ? "Estimate owner can reassign" : "Assigned line must remain yours"}>
+          <select disabled={!workspace.capabilities.canEditAllSections} value={form.ownerId} onChange={(event) => update("ownerId", Number(event.target.value))}>
+            {owners.map((owner) => (
+              <option key={owner.id} value={owner.id}>
+                {owner.name} · {owner.department}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Remark" span={3}>
+          <textarea maxLength={20000} rows={2} value={form.remark ?? ""} onChange={(event) => update("remark", event.target.value)} />
+        </Field>
+      </div>
+    </Modal>
+  );
 }
 
-function OtherCostEditor({ workspace, line, busy, onClose, onSave }: { workspace: EstimateCostWorkspace; line: EstimateOtherCostLine | null; busy: boolean; onClose: () => void; onSave: (input: EstimateOtherCostInput, lineId?: number) => Promise<void> }) {
-  const [form, setForm] = useState<EstimateOtherCostInput>(() => ({ estimateRowVersion: workspace.header.rowVersion, lineRowVersion: line?.rowVersion, category: line?.category ?? "Other Cost", description: line?.description ?? "", quantity: numberOf(line?.quantity) || 1, unit: line?.unit ?? "Lot", unitCost: numberOf(line?.unitCost), remark: line?.remark ?? "" }));
+function OtherCostEditor({
+  workspace,
+  line,
+  busy,
+  onClose,
+  onSave,
+}: {
+  workspace: EstimateCostWorkspace;
+  line: EstimateOtherCostLine | null;
+  busy: boolean;
+  onClose: () => void;
+  onSave: (input: EstimateOtherCostInput, lineId?: number) => Promise<void>;
+}) {
+  const [form, setForm] = useState<EstimateOtherCostInput>(() => ({
+    estimateRowVersion: workspace.header.rowVersion,
+    lineRowVersion: line?.rowVersion,
+    category: line?.category ?? "Other Cost",
+    description: line?.description ?? "",
+    quantity: numberOf(line?.quantity) || 1,
+    unit: line?.unit ?? "Lot",
+    unitCost: numberOf(line?.unitCost),
+    remark: line?.remark ?? "",
+  }));
   const update = <K extends keyof EstimateOtherCostInput>(key: K, value: EstimateOtherCostInput[K]) => setForm((current) => ({ ...current, [key]: value }));
   const valid = Boolean(form.category && form.description.trim() && form.quantity > 0 && form.unit && form.unitCost >= 0 && form.quantity * form.unitCost <= MAX_LEDGER_LINE_TOTAL);
-  return <Modal title={line ? `Edit ${line.description}` : "Add other project cost"} subtitle="Outsource, transportation, accommodation and other project cost" size="lg" onClose={onClose} footer={<><button className="btn ghost" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || !valid} onClick={() => { void onSave(form, line?.id); }}><Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : line ? "Save changes" : "Create line"}</button></>}>
-    <div className="form-grid two"><Field label="Category *"><select value={form.category} onChange={(event) => update("category", event.target.value as EstimateOtherCostInput["category"])}>{OTHER_CATEGORIES.map((category) => <option key={category}>{category}</option>)}</select></Field><Field label="Description *"><input required maxLength={500} value={form.description} onChange={(event) => update("description", event.target.value)} /></Field><Field label="Quantity *"><input type="number" min="0.0001" max="1000000000" step="0.0001" value={form.quantity} onChange={(event) => update("quantity", Number(event.target.value))} /></Field><Field label="Unit *"><select value={form.unit} onChange={(event) => update("unit", event.target.value)}>{UNITS.map((unit) => <option key={unit}>{unit}</option>)}</select></Field><Field label="Unit cost (THB) *"><input type="number" min="0" max="1000000000" step="0.0001" value={form.unitCost} onChange={(event) => update("unitCost", Number(event.target.value))} /></Field><Field label="Line total"><input readOnly className="calculated" value={formatMoney(form.quantity * form.unitCost)} /></Field><Field label="Remark" span={2}><textarea maxLength={20000} rows={2} value={form.remark ?? ""} onChange={(event) => update("remark", event.target.value)} /></Field></div>
-  </Modal>;
+  return (
+    <Modal
+      title={line ? `Edit ${line.description}` : "Add other project cost"}
+      subtitle="Outsource, transportation, accommodation and other project cost"
+      size="lg"
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn ghost" type="button" disabled={busy} onClick={onClose}>
+            <LocalizedText text={"Cancel"} />
+          </button>
+          <button
+            className="btn primary"
+            type="button"
+            disabled={busy || !valid}
+            onClick={() => {
+              void onSave(form, line?.id);
+            }}
+          >
+            <Icon name="check" />
+            {busy ? <LocalizedText text={"Saving…"} /> : line ? "Save changes" : "Create line"}
+          </button>
+        </>
+      }
+    >
+      <div className="form-grid two">
+        <Field label="Category *">
+          <select value={form.category} onChange={(event) => update("category", event.target.value as EstimateOtherCostInput["category"])}>
+            {OTHER_CATEGORIES.map((category) => (
+              <option key={category}>{category}</option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Description *">
+          <input required maxLength={500} value={form.description} onChange={(event) => update("description", event.target.value)} />
+        </Field>
+        <Field label="Quantity *">
+          <input type="number" min="0.0001" max="1000000000" step="0.0001" value={form.quantity} onChange={(event) => update("quantity", Number(event.target.value))} />
+        </Field>
+        <Field label="Unit *">
+          <select value={form.unit} onChange={(event) => update("unit", event.target.value)}>
+            {UNITS.map((unit) => (
+              <option key={unit}>{unit}</option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Unit cost (THB) *">
+          <input type="number" min="0" max="1000000000" step="0.0001" value={form.unitCost} onChange={(event) => update("unitCost", Number(event.target.value))} />
+        </Field>
+        <Field label="Line total">
+          <input readOnly className="calculated" value={formatMoney(form.quantity * form.unitCost)} />
+        </Field>
+        <Field label="Remark" span={2}>
+          <textarea maxLength={20000} rows={2} value={form.remark ?? ""} onChange={(event) => update("remark", event.target.value)} />
+        </Field>
+      </div>
+    </Modal>
+  );
 }
 
-function CreateAssignmentModal({ bootstrap, workspace, busy, onClose, onSave }: { bootstrap: BootstrapData; workspace: EstimateCostWorkspace; busy: boolean; onClose: () => void; onSave: (input: EstimateAssignmentCreateInput) => Promise<void> }) {
+function CreateAssignmentModal({
+  bootstrap,
+  workspace,
+  busy,
+  onClose,
+  onSave,
+}: {
+  bootstrap: BootstrapData;
+  workspace: EstimateCostWorkspace;
+  busy: boolean;
+  onClose: () => void;
+  onSave: (input: EstimateAssignmentCreateInput) => Promise<void>;
+}) {
   const localizeCopy = useStaticCopy();
   const owners = bootstrap.team.filter((member) => canOwnEstimate(member.role));
   const availableSections = ESTIMATE_ASSIGNMENT_SECTIONS.filter(([code]) => !workspace.assignments.some((assignment) => assignment.section.trim().slice(0, 2) === code));
@@ -2494,28 +7537,206 @@ function CreateAssignmentModal({ bootstrap, workspace, busy, onClose, onSave }: 
   });
   const update = <K extends keyof EstimateAssignmentCreateInput>(key: K, value: EstimateAssignmentCreateInput[K]) => setForm((current) => ({ ...current, [key]: value }));
   const valid = Boolean(form.section && form.ownerId && form.dueDate && form.dueDate <= dateValue(workspace.header.dueDate) && form.supportId !== form.ownerId);
-  return <Modal title="Assign estimate section" subtitle={`${workspace.header.number} · ผู้รับผิดชอบจะได้รับอีเมลหลังบันทึกสำเร็จ`} size="lg" onClose={onClose} footer={<><button className="btn ghost" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || !valid} onClick={() => { void onSave(form); }}><Icon name="send" />{busy ? "Assigning…" : "Assign and notify"}</button></>}>
-    <div className="info-strip"><Icon name="bell" /><span><LocalizedText text={"ระบบจะส่งอีเมลให้ Responsible Engineer และ Support Engineer ที่เลือก โดยการบันทึก assignment จะไม่สูญหายหากระบบอีเมลขัดข้อง"} /></span></div>
-    <div className="form-grid two" style={{ marginTop: 14 }}>
-      <Field label="Section *"><select value={form.section} onChange={(event) => update("section", event.target.value)}>{availableSections.map(([code, name]) => <option key={code} value={code}>{code} — {name}</option>)}</select></Field>
-      <Field label="Due date *" hint={`Must not exceed ${formatDate(workspace.header.dueDate)}`}><DateInput max={dateValue(workspace.header.dueDate)} value={form.dueDate} onChange={(event) => update("dueDate", event.target.value)} /></Field>
-      <Field label="Responsible engineer *"><select value={form.ownerId} onChange={(event) => { const ownerId = Number(event.target.value); setForm((current) => ({ ...current, ownerId, supportId: current.supportId === ownerId ? undefined : current.supportId })); }}>{owners.map((owner) => <option key={owner.id} value={owner.id}>{owner.name} <LocalizedText text={"·"} /> {owner.department}</option>)}</select></Field>
-      <Field label="Support engineer"><select value={form.supportId ?? ""} onChange={(event) => update("supportId", event.target.value ? Number(event.target.value) : undefined)}><option value=""><LocalizedText text={"None"} /></option>{owners.filter((owner) => owner.id !== form.ownerId).map((owner) => <option key={owner.id} value={owner.id}>{owner.name} <LocalizedText text={"·"} /> {owner.department}</option>)}</select></Field>
-      <Field label="Assignment note" span={2}><textarea maxLength={20000} rows={3} value={form.comment ?? ""} onChange={(event) => update("comment", event.target.value)} placeholder={localizeCopy("Scope, deliverable or context for the assignee…")} /></Field>
-    </div>
-  </Modal>;
+  return (
+    <Modal
+      title="Assign estimate section"
+      subtitle={`${workspace.header.number} · ผู้รับผิดชอบจะได้รับอีเมลหลังบันทึกสำเร็จ`}
+      size="lg"
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn ghost" type="button" disabled={busy} onClick={onClose}>
+            <LocalizedText text={"Cancel"} />
+          </button>
+          <button
+            className="btn primary"
+            type="button"
+            disabled={busy || !valid}
+            onClick={() => {
+              void onSave(form);
+            }}
+          >
+            <Icon name="send" />
+            {busy ? "Assigning…" : "Assign and notify"}
+          </button>
+        </>
+      }
+    >
+      <div className="info-strip">
+        <Icon name="bell" />
+        <span>
+          <LocalizedText text={"ระบบจะส่งอีเมลให้ Responsible Engineer และ Support Engineer ที่เลือก โดยการบันทึก assignment จะไม่สูญหายหากระบบอีเมลขัดข้อง"} />
+        </span>
+      </div>
+      <div className="form-grid two" style={{ marginTop: 14 }}>
+        <Field label="Section *">
+          <select value={form.section} onChange={(event) => update("section", event.target.value)}>
+            {availableSections.map(([code, name]) => (
+              <option key={code} value={code}>
+                {code} — {name}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Due date *" hint={`Must not exceed ${formatDate(workspace.header.dueDate)}`}>
+          <DateInput max={dateValue(workspace.header.dueDate)} value={form.dueDate} onChange={(event) => update("dueDate", event.target.value)} />
+        </Field>
+        <Field label="Responsible engineer *">
+          <select
+            value={form.ownerId}
+            onChange={(event) => {
+              const ownerId = Number(event.target.value);
+              setForm((current) => ({ ...current, ownerId, supportId: current.supportId === ownerId ? undefined : current.supportId }));
+            }}
+          >
+            {owners.map((owner) => (
+              <option key={owner.id} value={owner.id}>
+                {owner.name} <LocalizedText text={"·"} /> {owner.department}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Support engineer">
+          <select value={form.supportId ?? ""} onChange={(event) => update("supportId", event.target.value ? Number(event.target.value) : undefined)}>
+            <option value="">
+              <LocalizedText text={"None"} />
+            </option>
+            {owners
+              .filter((owner) => owner.id !== form.ownerId)
+              .map((owner) => (
+                <option key={owner.id} value={owner.id}>
+                  {owner.name} <LocalizedText text={"·"} /> {owner.department}
+                </option>
+              ))}
+          </select>
+        </Field>
+        <Field label="Assignment note" span={2}>
+          <textarea
+            maxLength={20000}
+            rows={3}
+            value={form.comment ?? ""}
+            onChange={(event) => update("comment", event.target.value)}
+            placeholder={localizeCopy("Scope, deliverable or context for the assignee…")}
+          />
+        </Field>
+      </div>
+    </Modal>
+  );
 }
 
-function AssignmentEditor({ bootstrap, workspace, assignment, busy, onClose, onSave }: { bootstrap: BootstrapData; workspace: EstimateCostWorkspace; assignment: EstimateAssignment; busy: boolean; onClose: () => void; onSave: (input: EstimateAssignmentInput) => Promise<void> }) {
+function AssignmentEditor({
+  bootstrap,
+  workspace,
+  assignment,
+  busy,
+  onClose,
+  onSave,
+}: {
+  bootstrap: BootstrapData;
+  workspace: EstimateCostWorkspace;
+  assignment: EstimateAssignment;
+  busy: boolean;
+  onClose: () => void;
+  onSave: (input: EstimateAssignmentInput) => Promise<void>;
+}) {
   const owners = bootstrap.team.filter((member) => canOwnEstimate(member.role));
   const canReassign = workspace.capabilities.canManageAssignments;
-  const [form, setForm] = useState<EstimateAssignmentInput>({ estimateRowVersion: workspace.header.rowVersion, lineRowVersion: assignment.rowVersion, ownerId: assignment.ownerId, supportId: assignment.supportId ?? undefined, dueDate: dateValue(assignment.dueDate), status: assignment.status, progress: numberOf(assignment.progress), comment: assignment.comment ?? "" });
+  const [form, setForm] = useState<EstimateAssignmentInput>({
+    estimateRowVersion: workspace.header.rowVersion,
+    lineRowVersion: assignment.rowVersion,
+    ownerId: assignment.ownerId,
+    supportId: assignment.supportId ?? undefined,
+    dueDate: dateValue(assignment.dueDate),
+    status: assignment.status,
+    progress: numberOf(assignment.progress),
+    comment: assignment.comment ?? "",
+  });
   const update = <K extends keyof EstimateAssignmentInput>(key: K, value: EstimateAssignmentInput[K]) => setForm((current) => ({ ...current, [key]: value }));
   const statusMatchesProgress = form.status === "Not Started" ? form.progress === 0 : ["Completed", "Reviewed"].includes(form.status) ? form.progress === 100 : true;
-  const valid = Boolean(form.ownerId && form.dueDate && form.dueDate <= dateValue(workspace.header.dueDate) && form.supportId !== form.ownerId && form.progress >= 0 && form.progress <= 100 && statusMatchesProgress);
-  return <Modal title={`Assignment · ${assignment.section}`} subtitle={canReassign ? "Owner, schedule and progress changes are audited; newly added assignees receive email" : "You may update status, progress and comment for your assigned section"} size="lg" onClose={onClose} footer={<><button className="btn ghost" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || !valid} onClick={() => { void onSave(form); }}><Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : "Save assignment"}</button></>}>
-    <div className="form-grid two"><Field label="Responsible engineer *" hint={canReassign ? undefined : "Only the estimate owner or manager can reassign"}><select disabled={!canReassign} value={form.ownerId} onChange={(event) => { const ownerId = Number(event.target.value); setForm((current) => ({ ...current, ownerId, supportId: current.supportId === ownerId ? undefined : current.supportId })); }}>{owners.map((owner) => <option key={owner.id} value={owner.id}>{owner.name} <LocalizedText text={"·"} /> {owner.department}</option>)}</select></Field><Field label="Support engineer" hint={canReassign ? undefined : "Reassignment is locked for this account"}><select disabled={!canReassign} value={form.supportId ?? ""} onChange={(event) => update("supportId", event.target.value ? Number(event.target.value) : undefined)}><option value=""><LocalizedText text={"None"} /></option>{owners.filter((owner) => owner.id !== form.ownerId).map((owner) => <option key={owner.id} value={owner.id}>{owner.name}</option>)}</select></Field><Field label="Due date *" hint={`Must not exceed ${formatDate(workspace.header.dueDate)}`}><DateInput disabled={!canReassign} max={dateValue(workspace.header.dueDate)} value={form.dueDate} onChange={(event) => update("dueDate", event.target.value)} /></Field><Field label="Status *"><select value={form.status} onChange={(event) => { const status = event.target.value; setForm((current) => ({ ...current, status, progress: status === "Not Started" ? 0 : ["Completed", "Reviewed"].includes(status) ? 100 : current.progress })); }}>{SECTION_STATUSES.map((status) => <option key={status}>{status}</option>)}</select></Field><Field label="Progress %" hint={!statusMatchesProgress ? "Not Started requires 0%; Completed/Reviewed requires 100%" : undefined}><input type="number" min="0" max="100" step="0.01" value={form.progress} onChange={(event) => update("progress", Number(event.target.value))} /></Field><Field label="Comment"><textarea maxLength={20000} rows={2} value={form.comment ?? ""} onChange={(event) => update("comment", event.target.value)} /></Field></div>
-  </Modal>;
+  const valid = Boolean(
+    form.ownerId && form.dueDate && form.dueDate <= dateValue(workspace.header.dueDate) && form.supportId !== form.ownerId && form.progress >= 0 && form.progress <= 100 && statusMatchesProgress,
+  );
+  return (
+    <Modal
+      title={`Assignment · ${assignment.section}`}
+      subtitle={canReassign ? "Owner, schedule and progress changes are audited; newly added assignees receive email" : "You may update status, progress and comment for your assigned section"}
+      size="lg"
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn ghost" type="button" disabled={busy} onClick={onClose}>
+            <LocalizedText text={"Cancel"} />
+          </button>
+          <button
+            className="btn primary"
+            type="button"
+            disabled={busy || !valid}
+            onClick={() => {
+              void onSave(form);
+            }}
+          >
+            <Icon name="check" />
+            {busy ? <LocalizedText text={"Saving…"} /> : "Save assignment"}
+          </button>
+        </>
+      }
+    >
+      <div className="form-grid two">
+        <Field label="Responsible engineer *" hint={canReassign ? undefined : "Only the estimate owner or manager can reassign"}>
+          <select
+            disabled={!canReassign}
+            value={form.ownerId}
+            onChange={(event) => {
+              const ownerId = Number(event.target.value);
+              setForm((current) => ({ ...current, ownerId, supportId: current.supportId === ownerId ? undefined : current.supportId }));
+            }}
+          >
+            {owners.map((owner) => (
+              <option key={owner.id} value={owner.id}>
+                {owner.name} <LocalizedText text={"·"} /> {owner.department}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Support engineer" hint={canReassign ? undefined : "Reassignment is locked for this account"}>
+          <select disabled={!canReassign} value={form.supportId ?? ""} onChange={(event) => update("supportId", event.target.value ? Number(event.target.value) : undefined)}>
+            <option value="">
+              <LocalizedText text={"None"} />
+            </option>
+            {owners
+              .filter((owner) => owner.id !== form.ownerId)
+              .map((owner) => (
+                <option key={owner.id} value={owner.id}>
+                  {owner.name}
+                </option>
+              ))}
+          </select>
+        </Field>
+        <Field label="Due date *" hint={`Must not exceed ${formatDate(workspace.header.dueDate)}`}>
+          <DateInput disabled={!canReassign} max={dateValue(workspace.header.dueDate)} value={form.dueDate} onChange={(event) => update("dueDate", event.target.value)} />
+        </Field>
+        <Field label="Status *">
+          <select
+            value={form.status}
+            onChange={(event) => {
+              const status = event.target.value;
+              setForm((current) => ({ ...current, status, progress: status === "Not Started" ? 0 : ["Completed", "Reviewed"].includes(status) ? 100 : current.progress }));
+            }}
+          >
+            {SECTION_STATUSES.map((status) => (
+              <option key={status}>{status}</option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Progress %" hint={!statusMatchesProgress ? "Not Started requires 0%; Completed/Reviewed requires 100%" : undefined}>
+          <input type="number" min="0" max="100" step="0.01" value={form.progress} onChange={(event) => update("progress", Number(event.target.value))} />
+        </Field>
+        <Field label="Comment">
+          <textarea maxLength={20000} rows={2} value={form.comment ?? ""} onChange={(event) => update("comment", event.target.value)} />
+        </Field>
+      </div>
+    </Modal>
+  );
 }
 
 /* The server keeps a revision reason in NVARCHAR(100) (estimates.ts); a submit or approve comment may be long. */
@@ -2526,44 +7747,165 @@ const SEND_BACK_REASONS = [
   ["ขอบเขตไม่ตรง RFQ", "Scope does not match the RFQ", "範囲がRFQと不一致"],
 ] as const;
 
-function WorkflowModal({ action, workspace, busy, onClose, onConfirm, onShowValidation }: {
-  action: "submit" | "approve" | "request-revision" | "create-revision"; workspace: EstimateCostWorkspace; busy: boolean;
-  onClose: () => void; onConfirm: (comment: string) => Promise<void>; onShowValidation: () => void;
+function WorkflowModal({
+  action,
+  workspace,
+  busy,
+  onClose,
+  onConfirm,
+  onShowValidation,
+}: {
+  action: "submit" | "approve" | "request-revision" | "create-revision";
+  workspace: EstimateCostWorkspace;
+  busy: boolean;
+  onClose: () => void;
+  onConfirm: (comment: string) => Promise<void>;
+  onShowValidation: () => void;
 }) {
   const copy = estimateCopy;
   const { header } = workspace;
   const [comment, setComment] = useState("");
   const requiresComment = action === "request-revision" || action === "create-revision";
   const maxLength = requiresComment ? REVISION_REASON_MAX : 20000;
-  const title = action === "approve" ? copy("อนุมัติต้นทุน Estimate?", "Approve estimate cost?", "見積原価を承認しますか？")
-    : action === "submit" ? copy("ส่งให้ Engineering Review?", "Submit for Engineering Review?", "技術レビューへ提出しますか？")
-      : action === "create-revision" ? copy("สร้าง Revision ใหม่?", "Create a new estimate revision?", "新しい改訂を作成しますか？")
-        : copy("ส่งกลับให้แก้ไข", "Request estimate revision", "修正を依頼");
-  const label = action === "approve" ? copy("อนุมัติและล็อก", "Approve and lock", "承認してロック")
-    : action === "submit" ? copy("ส่งตรวจ", "Submit review", "提出")
-      : action === "create-revision" ? copy("สร้าง Revision", "Create revision", "改訂を作成")
-        : copy("ส่งกลับแก้ไข", "Return for revision", "差し戻す");
-  const note = action === "approve" ? copy("Revision ที่อนุมัติจะอ่านได้อย่างเดียว", "Approved revision becomes read-only.", "承認した改訂は読み取り専用になります。")
-    : action === "request-revision" ? copy(`${revisionCode(header.revision)} ถูกเก็บเป็นประวัติ ระบบเปิด ${revisionCode(header.revision + 1)} ให้แก้ต่อโดยคัดลอกทุกรายการ และเจ้าของ Estimate เห็นเหตุผลนี้บนหน้า Estimate`, `${revisionCode(header.revision)} is kept as history; ${revisionCode(header.revision + 1)} opens with every line copied, and the owner sees this reason on the estimate. A reason is required so the estimate owner knows what to change.`, `${revisionCode(header.revision)}は履歴として保存され、全明細をコピーした${revisionCode(header.revision + 1)}が開きます。`)
-      : action === "create-revision" ? copy("Revision ที่ล็อกไว้จะไม่ถูกแก้ และรายการปัจจุบันจะถูกคัดลอกไป Revision ใหม่", "The locked revision remains immutable and its current lines are copied into the next revision.", "ロック済みの改訂は変更されず、現在の明細が次の改訂へコピーされます。")
-        : copy("ระบบตรวจซ้ำอีกครั้งก่อนเปลี่ยนสถานะ · หลังส่ง Estimate อ่านอย่างเดียวจนผู้ตรวจตัดสิน · ถอนการส่งได้จากเมนู ⋯ › จัดการเอกสาร", "Server validation runs again before the status changes. The estimate is read-only until the reviewer decides; withdraw it from ⋯ › Manage document.", "状態変更前にサーバーが再検証します。提出後はレビュー完了まで読み取り専用です。");
+  const title =
+    action === "approve"
+      ? copy("อนุมัติต้นทุน Estimate?", "Approve estimate cost?", "見積原価を承認しますか？")
+      : action === "submit"
+        ? copy("ส่งให้ Engineering Review?", "Submit for Engineering Review?", "技術レビューへ提出しますか？")
+        : action === "create-revision"
+          ? copy("สร้าง Revision ใหม่?", "Create a new estimate revision?", "新しい改訂を作成しますか？")
+          : copy("ส่งกลับให้แก้ไข", "Request estimate revision", "修正を依頼");
+  const label =
+    action === "approve"
+      ? copy("อนุมัติและล็อก", "Approve and lock", "承認してロック")
+      : action === "submit"
+        ? copy("ส่งตรวจ", "Submit review", "提出")
+        : action === "create-revision"
+          ? copy("สร้าง Revision", "Create revision", "改訂を作成")
+          : copy("ส่งกลับแก้ไข", "Return for revision", "差し戻す");
+  const note =
+    action === "approve"
+      ? copy("Revision ที่อนุมัติจะอ่านได้อย่างเดียว", "Approved revision becomes read-only.", "承認した改訂は読み取り専用になります。")
+      : action === "request-revision"
+        ? copy(
+            `${revisionCode(header.revision)} ถูกเก็บเป็นประวัติ ระบบเปิด ${revisionCode(header.revision + 1)} ให้แก้ต่อโดยคัดลอกทุกรายการ และเจ้าของ Estimate เห็นเหตุผลนี้บนหน้า Estimate`,
+            `${revisionCode(header.revision)} is kept as history; ${revisionCode(header.revision + 1)} opens with every line copied, and the owner sees this reason on the estimate. A reason is required so the estimate owner knows what to change.`,
+            `${revisionCode(header.revision)}は履歴として保存され、全明細をコピーした${revisionCode(header.revision + 1)}が開きます。`,
+          )
+        : action === "create-revision"
+          ? copy(
+              "Revision ที่ล็อกไว้จะไม่ถูกแก้ และรายการปัจจุบันจะถูกคัดลอกไป Revision ใหม่",
+              "The locked revision remains immutable and its current lines are copied into the next revision.",
+              "ロック済みの改訂は変更されず、現在の明細が次の改訂へコピーされます。",
+            )
+          : copy(
+              "ระบบตรวจซ้ำอีกครั้งก่อนเปลี่ยนสถานะ · หลังส่ง Estimate อ่านอย่างเดียวจนผู้ตรวจตัดสิน · ถอนการส่งได้จากเมนู ⋯ › จัดการเอกสาร",
+              "Server validation runs again before the status changes. The estimate is read-only until the reviewer decides; withdraw it from ⋯ › Manage document.",
+              "状態変更前にサーバーが再検証します。提出後はレビュー完了まで読み取り専用です。",
+            );
   const warnings = workspace.validationIssues.filter((issue) => !isCriticalValidationIssue(issue)).length;
   const errors = workspace.validationIssues.length - warnings;
   const sectionsDone = workspace.assignments.filter((assignment) => numberOf(assignment.progress) >= 100 || ["Completed", "Reviewed"].includes(assignment.status)).length;
   const manDays = workspace.manhourLines.reduce((sum, line) => sum + numberOf(line.manDays) * numberOf(line.engineers), 0);
   const addReason = (text: string) => setComment((current) => (current.trim() ? `${current.trim()}; ${text}` : text).slice(0, REVISION_REASON_MAX));
-  return <Modal title={title} subtitle={`${header.number} · ${revisionCode(header.revision)} · ${copy("การตัดสินใจนี้บันทึกในประวัติ", "this workflow decision is written to the audit trail", "この判断は監査証跡に記録されます")}`} size="md" onClose={onClose} footer={<><button className="btn ghost" type="button" disabled={busy} onClick={onClose}><LocalizedText text={"Cancel"} /></button><button className={action === "approve" ? "btn success" : action === "request-revision" ? "btn warn" : "btn primary"} type="button" disabled={busy || (requiresComment && !comment.trim())} onClick={() => { void onConfirm(comment.trim()); }}><Icon name={action === "approve" ? "checkCircle" : action === "submit" ? "send" : action === "create-revision" ? "gitBranch" : "refresh"} />{busy ? "Working…" : label}</button></>}>
-    {action === "submit" || action === "approve" ? <ul className="est-ready" aria-label={copy("ความพร้อม", "Readiness", "準備状況")}>
-      <li className={errors ? "err" : "ok"}><span className="est-ready-icon"><Icon name={errors ? "x" : "check"} /></span>{errors ? copy(`${errors} ข้อผิดพลาดที่ปิดกั้น`, `${errors} blocking error(s)`, `${errors}件のブロックエラー`) : copy("ไม่มีข้อผิดพลาดที่ปิดกั้น", "No blocking errors", "ブロックエラーなし")}</li>
-      <li className={warnings ? "warn" : "ok"}><span className="est-ready-icon"><Icon name={warnings ? "alertTriangle" : "check"} /></span>{warnings ? copy(`${warnings} คำเตือน (ไม่ปิดกั้น)`, `${warnings} warning(s) — advisory`, `警告${warnings}件（ブロックしません）`) : copy("ไม่มีคำเตือน", "No warnings", "警告なし")}{warnings ? <button className="link-btn" type="button" onClick={onShowValidation}>{copy("ดู", "View", "表示")}</button> : null}</li>
-      {workspace.assignments.length ? <li className={sectionsDone === workspace.assignments.length ? "ok" : "warn"}><span className="est-ready-icon"><Icon name={sectionsDone === workspace.assignments.length ? "check" : "clock"} /></span>{copy(`ส่วนงานเสร็จ ${sectionsDone}/${workspace.assignments.length}`, `Sections done ${sectionsDone}/${workspace.assignments.length}`, `セクション完了 ${sectionsDone}/${workspace.assignments.length}`)}</li> : null}
-      <li className="info"><span className="est-ready-icon"><Icon name="file" /></span>{copy("ต้นทุนรวม", "Total cost", "原価合計")} <strong>{formatMoney(header.totals.total)}</strong><span className="muted">· {copy("วัสดุ", "Material", "材料")} {formatMoney(header.totals.material)} · {copy("ค่าแรง", "Labor", "労務")} {formatMoney(header.totals.engineering)} ({formatNumber(manDays)} Man-day)</span></li>
-    </ul> : null}
-    <div className={action === "approve" ? "info-strip green" : action === "request-revision" ? "info-strip amber" : "info-strip"}><Icon name={action === "approve" ? "lock" : action === "request-revision" ? "alertTriangle" : action === "create-revision" ? "copy" : "shield"} /><span>{note}</span></div>
-    {action === "request-revision" ? <div className="est-reason-chips">{SEND_BACK_REASONS.map(([th, en, ja]) => <button key={en} type="button" className="chip" disabled={busy} onClick={() => addReason(copy(th, en, ja))}>+ {copy(th, en, ja)}</button>)}</div> : null}
-    <Field label={requiresComment ? copy("เหตุผล *", "Revision reason *", "理由 *") : copy("ความเห็น (ถ้ามี)", "Workflow comment", "コメント（任意）")}>
-      <textarea maxLength={maxLength} rows={4} value={comment} onChange={(event) => setComment(event.target.value)} placeholder={requiresComment ? copy("ระบุสิ่งที่ต้องแก้ เช่น ขอบเขต ราคา หรือค่าแรง", "Describe the scope, price or effort that must be revised…", "修正が必要な範囲・価格・工数を記入") : copy("บันทึกถึงผู้ตรวจหรือในประวัติ", "Optional note for the audit trail…", "監査証跡への任意メモ")} />
-      {requiresComment ? <span className={comment.length >= REVISION_REASON_MAX ? "est-counter full" : "est-counter"}>{comment.length}/{REVISION_REASON_MAX}</span> : null}
-    </Field>
-  </Modal>;
+  return (
+    <Modal
+      title={title}
+      subtitle={`${header.number} · ${revisionCode(header.revision)} · ${copy("การตัดสินใจนี้บันทึกในประวัติ", "this workflow decision is written to the audit trail", "この判断は監査証跡に記録されます")}`}
+      size="md"
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn ghost" type="button" disabled={busy} onClick={onClose}>
+            <LocalizedText text={"Cancel"} />
+          </button>
+          <button
+            className={action === "approve" ? "btn success" : action === "request-revision" ? "btn warn" : "btn primary"}
+            type="button"
+            disabled={busy || (requiresComment && !comment.trim())}
+            onClick={() => {
+              void onConfirm(comment.trim());
+            }}
+          >
+            <Icon name={action === "approve" ? "checkCircle" : action === "submit" ? "send" : action === "create-revision" ? "gitBranch" : "refresh"} />
+            {busy ? "Working…" : label}
+          </button>
+        </>
+      }
+    >
+      {action === "submit" || action === "approve" ? (
+        <ul className="est-ready" aria-label={copy("ความพร้อม", "Readiness", "準備状況")}>
+          <li className={errors ? "err" : "ok"}>
+            <span className="est-ready-icon">
+              <Icon name={errors ? "x" : "check"} />
+            </span>
+            {errors ? copy(`${errors} ข้อผิดพลาดที่ปิดกั้น`, `${errors} blocking error(s)`, `${errors}件のブロックエラー`) : copy("ไม่มีข้อผิดพลาดที่ปิดกั้น", "No blocking errors", "ブロックエラーなし")}
+          </li>
+          <li className={warnings ? "warn" : "ok"}>
+            <span className="est-ready-icon">
+              <Icon name={warnings ? "alertTriangle" : "check"} />
+            </span>
+            {warnings ? copy(`${warnings} คำเตือน (ไม่ปิดกั้น)`, `${warnings} warning(s) — advisory`, `警告${warnings}件（ブロックしません）`) : copy("ไม่มีคำเตือน", "No warnings", "警告なし")}
+            {warnings ? (
+              <button className="link-btn" type="button" onClick={onShowValidation}>
+                {copy("ดู", "View", "表示")}
+              </button>
+            ) : null}
+          </li>
+          {workspace.assignments.length ? (
+            <li className={sectionsDone === workspace.assignments.length ? "ok" : "warn"}>
+              <span className="est-ready-icon">
+                <Icon name={sectionsDone === workspace.assignments.length ? "check" : "clock"} />
+              </span>
+              {copy(
+                `ส่วนงานเสร็จ ${sectionsDone}/${workspace.assignments.length}`,
+                `Sections done ${sectionsDone}/${workspace.assignments.length}`,
+                `セクション完了 ${sectionsDone}/${workspace.assignments.length}`,
+              )}
+            </li>
+          ) : null}
+          <li className="info">
+            <span className="est-ready-icon">
+              <Icon name="file" />
+            </span>
+            {copy("ต้นทุนรวม", "Total cost", "原価合計")} <strong>{formatMoney(header.totals.total)}</strong>
+            <span className="muted">
+              · {copy("วัสดุ", "Material", "材料")} {formatMoney(header.totals.material)} · {copy("ค่าแรง", "Labor", "労務")} {formatMoney(header.totals.engineering)} ({formatNumber(manDays)} Man-day)
+            </span>
+          </li>
+        </ul>
+      ) : null}
+      <div className={action === "approve" ? "info-strip green" : action === "request-revision" ? "info-strip amber" : "info-strip"}>
+        <Icon name={action === "approve" ? "lock" : action === "request-revision" ? "alertTriangle" : action === "create-revision" ? "copy" : "shield"} />
+        <span>{note}</span>
+      </div>
+      {action === "request-revision" ? (
+        <div className="est-reason-chips">
+          {SEND_BACK_REASONS.map(([th, en, ja]) => (
+            <button key={en} type="button" className="chip" disabled={busy} onClick={() => addReason(copy(th, en, ja))}>
+              + {copy(th, en, ja)}
+            </button>
+          ))}
+        </div>
+      ) : null}
+      <Field label={requiresComment ? copy("เหตุผล *", "Revision reason *", "理由 *") : copy("ความเห็น (ถ้ามี)", "Workflow comment", "コメント（任意）")}>
+        <textarea
+          maxLength={maxLength}
+          rows={4}
+          value={comment}
+          onChange={(event) => setComment(event.target.value)}
+          placeholder={
+            requiresComment
+              ? copy("ระบุสิ่งที่ต้องแก้ เช่น ขอบเขต ราคา หรือค่าแรง", "Describe the scope, price or effort that must be revised…", "修正が必要な範囲・価格・工数を記入")
+              : copy("บันทึกถึงผู้ตรวจหรือในประวัติ", "Optional note for the audit trail…", "監査証跡への任意メモ")
+          }
+        />
+        {requiresComment ? (
+          <span className={comment.length >= REVISION_REASON_MAX ? "est-counter full" : "est-counter"}>
+            {comment.length}/{REVISION_REASON_MAX}
+          </span>
+        ) : null}
+      </Field>
+    </Modal>
+  );
 }

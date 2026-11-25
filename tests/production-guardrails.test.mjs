@@ -586,7 +586,7 @@ test("estimate revisions remain immutable and writes are record-scoped", async (
   assert.match(estimateScreen, /capabilities\.canEditExpenses/);
   assert.match(estimateScreen, /capabilities\.canEditOtherCosts/);
   assert.match(estimateScreen, /const \[pageSize, setPageSize\] = useState\(50\)/);
-  assert.match(estimateScreen, /<TablePageSize value=\{pageSize\}/);
+  assert.match(estimateScreen, /<TablePageSize\s+value=\{pageSize\}/);
   // Status tabs replace the colour legend: they name the statuses and filter by them.
   assert.match(estimateScreen, /ESTIMATE_STATUS_TABS\.map\(\(\[value, th, en, ja\]\)/);
   for (const tab of ["Cost summary", "Cost Items", "Labor", "Other costs", "Assignment", "Validation", "Revision history", "Compare Revision", "Engineering Review"]) {
@@ -1467,7 +1467,7 @@ test("the ERP sheet tab classifies and writes, and never invents a selling figur
   assert.match(exportBlock, /sourceType === "Contingency"/);
   // The ERP sheet is now the only primary summary; secondary workflows remain available.
   // Always mounted, so an unsaved classification survives a tab switch; in review it opens under the reviewer's overview.
-  assert.match(screens, /hidden=\{!onSummary \|\| \(inReview && !sheetOpen\)\}><EstimateErpSheetPanel/);
+  assert.match(screens, /hidden=\{!onSummary \|\| \(inReview && !sheetOpen\)\}>\s*<EstimateErpSheetPanel/);
   assert.doesNotMatch(screens, /id: "erp"|<EstimateErpSummaryPanel/);
   // They are tabs now, visible on every estimate, rather than entries in a "More" menu.
   for (const id of ["assignment", "validation", "revision"]) assert.ok(screens.includes(`{ id: "${id}", label: copy(`), `the ${id} tab is missing from the workspace tabs`);

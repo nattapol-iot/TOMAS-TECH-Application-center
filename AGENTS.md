@@ -44,7 +44,7 @@ These project rules guide both agents; they do not override host/system policies
 <!-- PROJECT-CONTEXT:START -->
 ## Project Context — Engineering Center
 
-จุดเริ่มต้นเดียวสำหรับ AI · Source snapshot: `6a54b857` · เอกสารอ้างโค้ด ไม่ใช่สถานะ live
+จุดเริ่มต้นเดียวสำหรับ AI · Source snapshot: `6faeb5d3` · เอกสารอ้างโค้ด ไม่ใช่สถานะ live
 
 ## อ่านแบบประหยัด Context
 
@@ -65,7 +65,7 @@ These project rules guide both agents; they do not override host/system policies
 | [Site Visit / My Assignments](docs/context/modules/site-visit.md) | นัดหมาย มอบหมาย สำรวจ รายงาน และอนุมัติ |
 | [Estimate Cost](docs/context/modules/estimate.md) | สร้าง revision รายการต้นทุน ค่าใช้จ่าย validation และ workflow |
 | [Copy Estimate / Assignment queue](docs/context/modules/estimate-copy.md) | คัดลอกหลาย ledger และแสดงงานที่ยังไม่เริ่มใน My Work |
-| [ERP Summary / Excel](docs/context/modules/estimate-erp.md) | จัดหมวด ERP สรุปยอด export และ import workbook |
+| [ERP Summary / Excel](docs/context/modules/estimate-erp.md) | จัดหมวด ERP สรุปยอด export และ import workbook รวมนำเข้า Estimate ย้อนหลังให้ Project ที่ยังไม่มี Estimate |
 | [Labor Package / Rate Master](docs/context/modules/labor.md) | เซฟและใช้ชุดค่าแรง version rate และนำกลับมาใช้ |
 | [Module Templates](docs/context/modules/templates.md) | สร้าง template โมดูลและนำเข้า estimate |
 | [Price Library / Supplier Quotation](docs/context/modules/pricing.md) | ราคาย้อนหลัง ใบเสนอราคา PDF parser และติดตามราคาที่ขาด |
@@ -109,5 +109,5 @@ These project rules guide both agents; they do not override host/system policies
 
 Node API ที่ใช้อ้างอิงอยู่ backend-node/; backend/ (.NET), backend-php/ และ worker/ เป็นเส้นทางอีกชุด อย่าแก้โดยสมมติว่าเป็น runtime เดียวกัน. Permission, role, scope และสถานะงานต้องตรวจในโค้ดเส้นทางจริง; requirement ที่ผู้ใช้เคยขอไม่ได้ยืนยันว่า implemented แล้ว.
 
-Generated inventory: 25 modules, 84 route files, 530 literal HTTP operations. ไฟล์ที่ใช้ร่วมกันอาจปรากฏหลาย module; endpoint extraction ไม่ได้แทนการตรวจ runtime.
+Generated inventory: 25 modules, 86 route files, 543 literal HTTP operations. ไฟล์ที่ใช้ร่วมกันอาจปรากฏหลาย module; endpoint extraction ไม่ได้แทนการตรวจ runtime.
 <!-- PROJECT-CONTEXT:END -->

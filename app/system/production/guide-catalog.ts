@@ -738,6 +738,99 @@ const ESTIMATE_REVISION_BACK: Guide = {
   ],
 };
 
+/* Importing an old Excel Estimate Cost afterwards (owner request 2026-11-25): a job costed in Excel before the app runs as a
+   project without an estimate; its workbook becomes that project's Draft estimate. Nothing is saved before the last press. */
+const ESTIMATE_HISTORICAL_IMPORT: Guide = {
+  id: "estimate-historical-import",
+  area: "estimate",
+  title: { th: "นำเข้า Estimate ย้อนหลังจาก Excel เดิม", en: "Import an old estimate from Excel", jp: "旧Excelから過去の見積を取り込む" },
+  summary: {
+    th: "เลือกไฟล์ Estimate Cost เดิมของงานที่เป็น Project แล้วแต่ยังไม่มี Estimate ตรวจรายการและยอดรวม แล้วนำเข้าเป็น Estimate ร่างที่ผูกกับ Project นั้น",
+    en: "Choose the old Estimate Cost workbook of a job that is already a project without an estimate, check its rows and totals, and import it as a Draft estimate linked to that project.",
+    jp: "見積のない既存案件の旧Estimate Costブックを選び、明細と合計を確認して、その案件に紐付く下書き見積として取り込みます。",
+  },
+  minutes: 3,
+  permissions: ["estimate.read", "estimate.write"],
+  views: ["estimates"],
+  steps: [
+    menu(
+      "estimates",
+      { th: "เปิดเมนู Estimate Cost", en: "Open Estimate Cost", jp: "「Estimate Cost」を開く" },
+      { th: "Estimate ทุกใบอยู่ที่เมนูนี้ คลิกที่เมนูที่ไฮไลต์อยู่", en: "Every estimate is here. Click the highlighted menu entry.", jp: "すべての見積はここにあります。強調表示されたメニューをクリックします。" },
+    ),
+    {
+      target: "estimate.historical-import",
+      action: "click",
+      view: "estimates",
+      title: { th: "นำเข้า Estimate ย้อนหลัง", en: "Import old estimate", jp: "過去の見積を取り込む" },
+      body: {
+        th: "กดปุ่ม 'นำเข้า Estimate ย้อนหลัง' ด้านบนของรายการ",
+        en: "Press Import old estimate at the top of the list.",
+        jp: "一覧の上にある「過去の見積を取り込む」を押します。",
+      },
+      missing: {
+        th: "ปุ่มนี้ขึ้นให้ Engineer, Engineering Manager และ Admin ถ้าเปิด Estimate อยู่ ให้กดย้อนกลับด้านบนของหน้าก่อน",
+        en: "The button shows for engineers, engineering managers and admins. If an estimate is open, go back at the top of the page first.",
+        jp: "このボタンはエンジニア、エンジニアリングマネージャー、管理者に表示されます。見積を開いている場合は、先にページ上部から戻ります。",
+      },
+    },
+    {
+      target: "estimate.historical-file",
+      action: "next",
+      view: "estimates",
+      title: { th: "เลือกไฟล์ Excel เดิม", en: "Choose the old workbook", jp: "旧ブックを選ぶ" },
+      body: {
+        th: "เลือกไฟล์ .xlsx ของฟอร์ม Estimate Cost บริษัท (มีชีต Summary cost) ระบบอ่านทุกชีตแล้วตรวจยอดรวมกับชีตรายละเอียด ถ้าชื่องานหรือเลข Project ตรงกับ Project ในระบบ จะเลือก Project ให้เอง",
+        en: "Choose the .xlsx of the company Estimate Cost form (with its Summary cost sheet). Every sheet is read and the totals are checked against the detail sheets; when the job name or project number matches a project, that project is chosen for you.",
+        jp: "会社のEstimate Costフォーム(Summary costシートあり)の.xlsxを選びます。全シートを読み、合計を明細シートと照合します。案件名や案件番号が一致すれば、その案件が自動で選ばれます。",
+      },
+    },
+    {
+      target: "estimate.historical-project",
+      action: "next",
+      view: "estimates",
+      title: { th: "ตรวจ Project ที่จะผูก", en: "Check the project", jp: "紐付ける案件を確認" },
+      body: {
+        th: "รายการนี้มีเฉพาะ Project ที่ยังไม่มี Estimate และคุณเป็น PM หรือ Lead (Engineering Manager และ Admin เห็นทุก Project) ถ้า Project ไม่มี Inquiry ระบบจะสร้าง Inquiry ย้อนหลังให้ 1 รายการ",
+        en: "The list holds only projects without an estimate where you are the manager or lead engineer (engineering managers and admins see every project). A project without an inquiry gets one recorded for it.",
+        jp: "見積がなく、あなたがマネージャーまたはリードエンジニアの案件だけが並びます(エンジニアリングマネージャーと管理者は全案件)。引合のない案件には引合が1件記録されます。",
+      },
+    },
+    {
+      target: "estimate.historical-preview",
+      action: "next",
+      view: "estimates",
+      title: { th: "ตรวจวันที่และยอดรวม", en: "Check the date and totals", jp: "日付と合計を確認" },
+      body: {
+        th: "วันที่มาจากไฟล์เดิม ยอด Summary ต้องเท่ากับยอดที่นำเข้า และตรวจรายการทั้งหมดในตาราง ถ้ามีข้อผิดพลาดสีแดง ปุ่มนำเข้าจะกดไม่ได้ ให้แก้ไฟล์แล้วเลือกใหม่",
+        en: "The date comes from the workbook, the Summary total must equal the imported total, and every row is in the table. While a red error shows, the import button stays off: fix the file and choose it again.",
+        jp: "日付は元のブックから取ります。Summaryの合計と取り込み合計が一致し、全行が表に並びます。赤いエラーがある間は取り込めないので、ファイルを直して選び直します。",
+      },
+      missing: {
+        th: "เลือกไฟล์ก่อน รายการตรวจจะขึ้นหลังอ่านไฟล์เสร็จ",
+        en: "Choose the file first; the check appears once it has been read.",
+        jp: "先にファイルを選びます。読み込みが終わると確認内容が表示されます。",
+      },
+    },
+    {
+      target: "estimate.historical-save",
+      action: "click",
+      view: "estimates",
+      title: { th: "นำเข้า", en: "Import", jp: "取り込む" },
+      body: {
+        th: "กดนำเข้า ได้ Estimate ร่าง R00 ผูกกับ Project ทันที แก้ต่อได้ แล้วส่งตรวจและอนุมัติตามปกติ ถ้าแค่ฝึก ให้กด 'ยกเลิก' แล้วกด 'เสร็จ'",
+        en: "Press Import: a Draft R00 estimate is created and linked to the project at once; change it as needed, then send it for review and approval as usual. Only practising? Press Cancel, then Finish.",
+        jp: "取り込むと下書きR00の見積が作成され、すぐ案件に紐付きます。必要に応じて編集し、通常どおりレビューと承認に進みます。練習だけなら「キャンセル」を押し、「完了」を押します。",
+      },
+      missing: {
+        th: "ปุ่มนำเข้ากดได้เมื่อเลือก Project และไฟล์ที่ไม่มีข้อผิดพลาดแล้ว",
+        en: "The import button turns on once a project and a file without errors are chosen.",
+        jp: "案件とエラーのないファイルを選ぶと、取り込みボタンが押せるようになります。",
+      },
+    },
+  ],
+};
+
 /* Guides for the rest of the app (owner request 2026-11-02): estimating sources, projects and plans, work on site,
    reports and signing, BOM and approvals, and the knowledge and tool screens. */
 const SUPPLIER_QUOTATION: Guide = {
@@ -3482,21 +3575,33 @@ const COMMAND_CENTER: Guide = {
       action: "next",
       view: "command-center",
       title: { th: "ปัญหาล่าสุด", en: "Incident feed", jp: "インシデント" },
-      body: { th: "ปัญหาที่เปิดอยู่ก่อน แล้วปัญหาที่แก้ใน 24 ชั่วโมง พร้อมอายุของปัญหา", en: "Open incidents first, then those fixed in the last 24 hours, with their age.", jp: "未解決を先頭に、過去24時間に解決したものを経過時間付きで表示。" },
+      body: {
+        th: "ปัญหาที่เปิดอยู่ก่อน แล้วปัญหาที่แก้ใน 24 ชั่วโมง พร้อมอายุของปัญหา",
+        en: "Open incidents first, then those fixed in the last 24 hours, with their age.",
+        jp: "未解決を先頭に、過去24時間に解決したものを経過時間付きで表示。",
+      },
     },
     {
       target: "ops.top",
       action: "next",
       view: "command-center",
       title: { th: "เครื่องที่โหลดสูง", en: "Busiest machines", jp: "高負荷のマシン" },
-      body: { th: "สลับ CPU, RAM, Disk (ปุ่ม 1 2 3) เส้นเล็กคือย้อนหลังหนึ่งชั่วโมง", en: "Switch CPU, RAM and disk (keys 1 2 3); the small line is the last hour.", jp: "CPU・RAM・ディスクを切替（1 2 3 キー）。小さな線は直近1時間。" },
+      body: {
+        th: "สลับ CPU, RAM, Disk (ปุ่ม 1 2 3) เส้นเล็กคือย้อนหลังหนึ่งชั่วโมง",
+        en: "Switch CPU, RAM and disk (keys 1 2 3); the small line is the last hour.",
+        jp: "CPU・RAM・ディスクを切替（1 2 3 キー）。小さな線は直近1時間。",
+      },
     },
     {
       target: "ops.spotlight",
       action: "next",
       view: "command-center",
       title: { th: "สปอตไลต์", en: "Spotlight", jp: "スポットライト" },
-      body: { th: "เมื่อไม่มีใครใช้จอ จะวนแสดง Site ที่มีปัญหา ปุ่ม ← → เลื่อนเอง", en: "While nobody uses the screen it steps through the problem sites; ← → step by hand.", jp: "操作がない間は問題サイトを順に表示。← → で手動切替。" },
+      body: {
+        th: "เมื่อไม่มีใครใช้จอ จะวนแสดง Site ที่มีปัญหา ปุ่ม ← → เลื่อนเอง",
+        en: "While nobody uses the screen it steps through the problem sites; ← → step by hand.",
+        jp: "操作がない間は問題サイトを順に表示。← → で手動切替。",
+      },
     },
     {
       target: "ops.tv",
@@ -4650,6 +4755,7 @@ export const GUIDES: readonly Guide[] = [
   BOM_RELEASE,
   ESTIMATE_APPROVE,
   ESTIMATE_REVISION_BACK,
+  ESTIMATE_HISTORICAL_IMPORT,
   ESTIMATE_LOOK_V2,
   PROJECT_LOOK_V2,
   {
