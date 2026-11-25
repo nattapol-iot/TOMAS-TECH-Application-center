@@ -2,28 +2,28 @@
 
 [Module](../modules/site-visit.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `6cd83665`; generated, do not edit. [backend-node/src/routes/site-visits-read.ts](<../../../backend-node/src/routes/site-visits-read.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `c0b7e1fa`; generated, do not edit. [backend-node/src/routes/site-visits-read.ts](<../../../backend-node/src/routes/site-visits-read.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/site-visits/` | 47–85 |
-| GET | `/api/v1/site-visits/calendar` | 87–151 |
-| GET | `/api/v1/site-visits/my-assignments` | 153–197 |
-| GET | `/api/v1/site-visits/dashboard/engineering` | 199–228 |
-| GET | `/api/v1/site-visits/dashboard/management` | 230–265 |
-| GET | `/api/v1/site-visits/:id` | 267–275 |
-| GET | `/api/v1/site-visits/:id/brief` | 276–336 |
-| GET | `/api/v1/site-visits/:id/candidates` | 338–415 |
+| GET | `/api/v1/site-visits/` | 25–63 |
+| GET | `/api/v1/site-visits/calendar` | 65–121 |
+| GET | `/api/v1/site-visits/my-assignments` | 123–159 |
+| GET | `/api/v1/site-visits/dashboard/engineering` | 161–190 |
+| GET | `/api/v1/site-visits/dashboard/management` | 192–225 |
+| GET | `/api/v1/site-visits/:id` | 227–234 |
+| GET | `/api/v1/site-visits/:id/brief` | 235–280 |
+| GET | `/api/v1/site-visits/:id/candidates` | 282–341 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `countRows` | [backend-node/src/routes/site-visits-read.ts](<../../../backend-node/src/routes/site-visits-read.ts>) | 30–35 |
-| `dateAt` | [backend-node/src/routes/site-visits-read.ts](<../../../backend-node/src/routes/site-visits-read.ts>) | 36–39 |
-| `registerSiteVisitReadRoutes` | [backend-node/src/routes/site-visits-read.ts](<../../../backend-node/src/routes/site-visits-read.ts>) | 41–416 |
+| `countRows` | [backend-node/src/routes/site-visits-read.ts](<../../../backend-node/src/routes/site-visits-read.ts>) | 13–18 |
+| `dateAt` | [backend-node/src/routes/site-visits-read.ts](<../../../backend-node/src/routes/site-visits-read.ts>) | 19–22 |
+| `registerSiteVisitReadRoutes` | [backend-node/src/routes/site-visits-read.ts](<../../../backend-node/src/routes/site-visits-read.ts>) | 24–342 |
 
 ## Direct local dependencies
 

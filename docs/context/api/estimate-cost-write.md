@@ -2,38 +2,38 @@
 
 [Module](../modules/estimate.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `6cd83665`; generated, do not edit. [backend-node/src/routes/estimate-cost-write.ts](<../../../backend-node/src/routes/estimate-cost-write.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `c0b7e1fa`; generated, do not edit. [backend-node/src/routes/estimate-cost-write.ts](<../../../backend-node/src/routes/estimate-cost-write.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/estimates/:id/module-details` | 180–188 |
-| PUT | `/api/v1/estimates/:id/module-details` | 189–308 |
-| POST | `/api/v1/estimates/:id/cost-items` | 310–336 |
-| PUT | `/api/v1/estimates/:id/cost-items/:lineId` | 338–364 |
-| POST | `/api/v1/estimates/:id/cost-items/:lineId/remove` | 366–391 |
-| POST | `/api/v1/estimates/:id/cost-modules/copy` | 393–470 |
-| POST | `/api/v1/estimates/:id/cost-modules/remove` | 472–507 |
-| POST | `/api/v1/estimates/:id/apply-template` | 512–588 |
-| POST | `/api/v1/estimates/:id/apply-quotation` | 594–680 |
+| GET | `/api/v1/estimates/:id/module-details` | 255–268 |
+| PUT | `/api/v1/estimates/:id/module-details` | 269–434 |
+| POST | `/api/v1/estimates/:id/cost-items` | 436–469 |
+| PUT | `/api/v1/estimates/:id/cost-items/:lineId` | 471–507 |
+| POST | `/api/v1/estimates/:id/cost-items/:lineId/remove` | 509–545 |
+| POST | `/api/v1/estimates/:id/cost-modules/copy` | 547–644 |
+| POST | `/api/v1/estimates/:id/cost-modules/remove` | 646–696 |
+| POST | `/api/v1/estimates/:id/apply-template` | 701–818 |
+| POST | `/api/v1/estimates/:id/apply-quotation` | 824–963 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `decimal` | [backend-node/src/routes/estimate-cost-write.ts](<../../../backend-node/src/routes/estimate-cost-write.ts>) | 38–47 |
-| `parseCostInput` | [backend-node/src/routes/estimate-cost-write.ts](<../../../backend-node/src/routes/estimate-cost-write.ts>) | 49–77 |
-| `lockEditableEstimate` | [backend-node/src/routes/estimate-cost-write.ts](<../../../backend-node/src/routes/estimate-cost-write.ts>) | 79–91 |
-| `validateReferences` | [backend-node/src/routes/estimate-cost-write.ts](<../../../backend-node/src/routes/estimate-cost-write.ts>) | 93–104 |
-| `estimateAssignees` | [backend-node/src/routes/estimate-cost-write.ts](<../../../backend-node/src/routes/estimate-cost-write.ts>) | 109–119 |
-| `elevated` | [backend-node/src/routes/estimate-cost-write.ts](<../../../backend-node/src/routes/estimate-cost-write.ts>) | 121–123 |
-| `assigned` | [backend-node/src/routes/estimate-cost-write.ts](<../../../backend-node/src/routes/estimate-cost-write.ts>) | 124–126 |
-| `costSnapshot` | [backend-node/src/routes/estimate-cost-write.ts](<../../../backend-node/src/routes/estimate-cost-write.ts>) | 128–140 |
-| `bindCost` | [backend-node/src/routes/estimate-cost-write.ts](<../../../backend-node/src/routes/estimate-cost-write.ts>) | 142–154 |
-| `parseQuotationPicks` | [backend-node/src/routes/estimate-cost-write.ts](<../../../backend-node/src/routes/estimate-cost-write.ts>) | 157–168 |
-| `touchEstimate` | [backend-node/src/routes/estimate-cost-write.ts](<../../../backend-node/src/routes/estimate-cost-write.ts>) | 170–177 |
-| `registerEstimateCostWriteRoutes` | [backend-node/src/routes/estimate-cost-write.ts](<../../../backend-node/src/routes/estimate-cost-write.ts>) | 179–681 |
+| `decimal` | [backend-node/src/routes/estimate-cost-write.ts](<../../../backend-node/src/routes/estimate-cost-write.ts>) | 70–79 |
+| `parseCostInput` | [backend-node/src/routes/estimate-cost-write.ts](<../../../backend-node/src/routes/estimate-cost-write.ts>) | 81–118 |
+| `lockEditableEstimate` | [backend-node/src/routes/estimate-cost-write.ts](<../../../backend-node/src/routes/estimate-cost-write.ts>) | 120–135 |
+| `validateReferences` | [backend-node/src/routes/estimate-cost-write.ts](<../../../backend-node/src/routes/estimate-cost-write.ts>) | 137–152 |
+| `estimateAssignees` | [backend-node/src/routes/estimate-cost-write.ts](<../../../backend-node/src/routes/estimate-cost-write.ts>) | 157–174 |
+| `elevated` | [backend-node/src/routes/estimate-cost-write.ts](<../../../backend-node/src/routes/estimate-cost-write.ts>) | 176–178 |
+| `assigned` | [backend-node/src/routes/estimate-cost-write.ts](<../../../backend-node/src/routes/estimate-cost-write.ts>) | 179–181 |
+| `costSnapshot` | [backend-node/src/routes/estimate-cost-write.ts](<../../../backend-node/src/routes/estimate-cost-write.ts>) | 183–200 |
+| `bindCost` | [backend-node/src/routes/estimate-cost-write.ts](<../../../backend-node/src/routes/estimate-cost-write.ts>) | 202–225 |
+| `parseQuotationPicks` | [backend-node/src/routes/estimate-cost-write.ts](<../../../backend-node/src/routes/estimate-cost-write.ts>) | 228–239 |
+| `touchEstimate` | [backend-node/src/routes/estimate-cost-write.ts](<../../../backend-node/src/routes/estimate-cost-write.ts>) | 241–252 |
+| `registerEstimateCostWriteRoutes` | [backend-node/src/routes/estimate-cost-write.ts](<../../../backend-node/src/routes/estimate-cost-write.ts>) | 254–964 |
 
 ## Direct local dependencies
 

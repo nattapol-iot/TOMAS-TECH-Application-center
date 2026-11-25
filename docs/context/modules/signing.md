@@ -4,7 +4,7 @@
 
 ลงนาม inbox ลายเซ็น ตราบริษัท และตรวจ certificate
 
-Evidence: snapshot `6cd83665`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
+Evidence: snapshot `c0b7e1fa`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
 
 ## Read only the operation you change
 
@@ -69,6 +69,7 @@ Shared screens contain other modules: use the symbol and line range instead of r
 - [backend-node/src/signing-certificate.ts](<../../../backend-node/src/signing-certificate.ts>)
 - [backend-node/src/signing-core.ts](<../../../backend-node/src/signing-core.ts>)
 - [backend-node/src/business-date.ts](<../../../backend-node/src/business-date.ts>)
+- [backend-node/src/user-roles.ts](<../../../backend-node/src/user-roles.ts>)
 - [app/system/screen-link.ts](<../../../app/system/screen-link.ts>)
 - [app/system/i18n.ts](<../../../app/system/i18n.ts>)
 - [app/system/LocalizedText.tsx](<../../../app/system/LocalizedText.tsx>)
