@@ -21,7 +21,7 @@ export function deskState(agent: DeskAgent, now = Date.now()): DeskState {
   const reported = desk.reportedAt ? Date.parse(desk.reportedAt) : Number.NaN;
   if (!Number.isFinite(reported) || now - reported > DESK_STALE_MS) return "stale";
   if (!desk.running) return "stopped";
-  if (desk.health.trim().toLowerCase() !== "ok") return "unhealthy";
+  if (desk.health?.trim().toLowerCase() !== "ok") return "unhealthy";
   return "healthy";
 }
 
@@ -38,12 +38,118 @@ type HostAgent = Pick<MonitorAgent, "host">;
 
 export function memoryPercent(agent: HostAgent): number | null {
   const { memoryUsedBytes: used, memoryTotalBytes: total } = agent.host;
-  return total && used !== null ? Math.min(100, Math.round((used / total) * 100)) : null;
+  return total !== null && total > 0 && Number.isFinite(total) && used !== null && Number.isFinite(used) && used >= 0 ? percent((used / total) * 100) : null;
 }
 
 export function diskPercent(agent: HostAgent): number | null {
   const { diskFreeBytes: free, diskTotalBytes: total } = agent.host;
-  return total && free !== null ? Math.min(100, Math.max(0, Math.round(((total - free) / total) * 100))) : null;
+  return total !== null && total > 0 && Number.isFinite(total) && free !== null && Number.isFinite(free) && free >= 0 ? percent(((total - free) / total) * 100) : null;
+}
+
+export function percent(value: number | null | undefined): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? Math.round(Math.min(100, Math.max(0, value))) : null;
+}
+
+export function hasPosition(site: FleetSite): site is FleetSite & { latitude: number; longitude: number } {
+  return (
+    typeof site.latitude === "number" &&
+    Number.isFinite(site.latitude) &&
+    Math.abs(site.latitude) < 90 &&
+    typeof site.longitude === "number" &&
+    Number.isFinite(site.longitude) &&
+    Math.abs(site.longitude) <= 180
+  );
+}
+
+export function relativeAge(iso: string | null, now: number, locale: string): string {
+  const time = iso ? Date.parse(iso) : Number.NaN;
+  if (!Number.isFinite(time)) return "—";
+  const seconds = Math.max(0, Math.floor((now - time) / 1000));
+  const [size, unit] = seconds < 60 ? ([1, "second"] as const) : seconds < 3600 ? ([60, "minute"] as const) : seconds < 86400 ? ([3600, "hour"] as const) : ([86400, "day"] as const);
+  return new Intl.RelativeTimeFormat(locale, { numeric: "always", style: "short" }).format(-Math.floor(seconds / size), unit);
+}
+
+export type FleetSort = "site" | "name" | "problems" | "cpu" | "mem" | "disk" | "seen";
+export function sortFleet(agents: FleetAgent[], sort: FleetSort, locale: string, now = Date.now()): FleetAgent[] {
+  const score = (agent: FleetAgent) =>
+    sort === "problems"
+      ? agentProblems(agent, now).length
+      : sort === "seen"
+        ? Date.parse(agent.lastSeenAt ?? "") || 0
+        : sort === "cpu" || sort === "mem" || sort === "disk"
+          ? (loadOf(agent, sort) ?? -1)
+          : 0;
+  return [...agents].sort((a, b) => (sort === "site" ? a.site.name.localeCompare(b.site.name, locale) : score(b) - score(a)) || a.name.localeCompare(b.name, locale) || a.id - b.id);
+}
+
+/** Completion-based polling: manual refresh shares the same lock and failures back off to 60s. */
+export function createMonitorPoll(
+  task: () => Promise<void>,
+  interval: number,
+  environment = {
+    visible: () => document.visibilityState === "visible",
+    schedule: (run: () => void, delay: number) => window.setTimeout(run, delay),
+    cancel: (timer: number) => window.clearTimeout(timer),
+    subscribe: (run: () => void) => {
+      document.addEventListener("visibilitychange", run);
+      return () => document.removeEventListener("visibilitychange", run);
+    },
+  },
+) {
+  let stopped = false;
+  let busy = false;
+  let failures = 0;
+  let timer: number | undefined;
+  const clear = () => {
+    if (timer !== undefined) environment.cancel(timer);
+    timer = undefined;
+  };
+  const refresh = async () => {
+    if (stopped || busy || !environment.visible()) return;
+    clear();
+    busy = true;
+    try {
+      await task();
+      failures = 0;
+    } catch {
+      failures += 1;
+    } finally {
+      busy = false;
+      if (!stopped && environment.visible())
+        timer = environment.schedule(
+          () => {
+            void refresh();
+          },
+          Math.min(60_000, interval * 2 ** Math.min(failures, 3)),
+        );
+    }
+  };
+  const unsubscribe = environment.subscribe(() => {
+    clear();
+    if (environment.visible()) void refresh();
+  });
+  void refresh();
+  return {
+    refresh,
+    stop: () => {
+      stopped = true;
+      clear();
+      unsubscribe();
+    },
+  };
+}
+
+/** Counts use the full fleet summaries; the incident feed is deliberately capped by the API. */
+export function fleetKpis(sites: FleetSite[], agents: FleetAgent[], now = Date.now()): (number | null)[] {
+  const watched = sites.filter((site) => site.isActive && site.agentCount > 0);
+  const desks = agents.filter((agent) => agent.tmtdesk);
+  return [
+    watched.filter((site) => site.agentsOnline > 0).length,
+    agents.filter((agent) => agent.isOnline).length,
+    sites.reduce((sum, site) => sum + (Number.isFinite(site.openIncidents) ? site.openIncidents : 0), 0),
+    desks.length ? Math.round((desks.filter((agent) => deskState(agent, now) === "healthy").length / desks.length) * 100) : null,
+    agents.reduce((sum, agent) => sum + (agent.isOnline && Number.isFinite(agent.tmtdesk?.activeSessions) ? agent.tmtdesk!.activeSessions : 0), 0),
+  ];
 }
 
 export type Problem = "offline" | "incident" | "program" | "desk" | "cpu" | "memory" | "disk";
@@ -86,7 +192,7 @@ export function siteSeverity(site: FleetSite, agents: FleetAgent[], incidents: C
   const open = incidents.filter((incident) => incident.siteId === site.id && !incident.resolvedAt);
   if (site.agentsOnline === 0 || open.some((incident) => incident.kind !== "TMTDeskUnhealthy")) return "critical";
   const mine = agents.filter((agent) => agent.site.id === site.id);
-  if (open.length > 0 || site.programsRunning < site.programCount || mine.some((agent) => agentProblems(agent, now).length > 0)) return "warning";
+  if (site.openIncidents > 0 || open.length > 0 || site.programsRunning < site.programCount || mine.some((agent) => agentProblems(agent, now).length > 0)) return "warning";
   return "ok";
 }
 
@@ -100,7 +206,7 @@ export type LoadMetric = "cpu" | "mem" | "disk";
 
 export function loadOf(agent: FleetAgent, metric: LoadMetric): number | null {
   if (!agent.isOnline) return null;
-  return metric === "cpu" ? agent.host.cpuPercent : metric === "mem" ? memoryPercent(agent) : diskPercent(agent);
+  return metric === "cpu" ? percent(agent.host.cpuPercent) : metric === "mem" ? memoryPercent(agent) : diskPercent(agent);
 }
 
 /** The busiest reporting machines for one metric, highest first. */

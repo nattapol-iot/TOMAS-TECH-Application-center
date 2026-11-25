@@ -3453,13 +3453,31 @@ const FLEET_SCRIPT: Guide = {
   steps: [
     menu(
       "monitor",
-      { th: "เปิดเมนู Fleet", en: "Open Fleet", jp: "「フリート」を開く" },
+      { th: "เปิดเมนู Monitor", en: "Open Monitor", jp: "「モニター」を開く" },
       {
         th: "ทุกเครื่องของทุก Site อยู่ในตารางเดียว คลิกที่เมนูที่ไฮไลต์อยู่",
         en: "Every machine of every site is in one table. Click the highlighted menu entry.",
         jp: "全サイトの全マシンが1つの表にあります。強調表示のメニューをクリックします。",
       },
     ),
+    {
+      target: "monitor.fleet",
+      action: "click",
+      view: "monitor",
+      title: { th: "เปิดแท็บ Fleet", en: "Open the Fleet tab", jp: "フリートタブを開く" },
+      body: { th: "คลิก Fleet ในพื้นที่ Monitor", en: "Click Fleet inside the Monitor workspace.", jp: "モニター内のフリートをクリックします。" },
+    },
+    {
+      target: "fleet.sort",
+      action: "next",
+      view: "monitor",
+      title: { th: "เรียงลำดับเครื่อง", en: "Sort machines", jp: "マシンの並べ替え" },
+      body: {
+        th: "เรียงตามชื่อ Site ชื่อเครื่อง ปัญหา โหลด หรือเวลารายงาน การเรียงไม่ล้างเครื่องที่เลือกไว้",
+        en: "Sort by site, machine, problems, load or last report. Sorting keeps your selection.",
+        jp: "サイト・マシン名・問題数・負荷・最終報告順に並べ替えます。選択は維持されます。",
+      },
+    },
     {
       target: "fleet.search",
       action: "next",
@@ -3538,18 +3556,36 @@ const COMMAND_CENTER: Guide = {
   },
   minutes: 2,
   permissions: ["monitor.read"],
-  views: ["monitor"],
+  views: ["monitor", "command-center"],
   browse: true,
   steps: [
     menu(
       "monitor",
-      { th: "เปิดเมนู Command Center", en: "Open Command Center", jp: "「コマンドセンター」を開く" },
+      { th: "เปิดเมนู Monitor", en: "Open Monitor", jp: "「モニター」を開く" },
       { th: "คลิกที่เมนูที่ไฮไลต์อยู่", en: "Click the highlighted menu entry.", jp: "強調表示のメニューをクリックします。" },
     ),
     {
+      target: "monitor.commandCenter",
+      action: "click",
+      view: "monitor",
+      title: { th: "เปิด Command Center", en: "Open Command Center", jp: "コマンドセンターを開く" },
+      body: { th: "กด Command Center ในแถบด้านบนของ Monitor", en: "Press Command Center in the Monitor workspace header.", jp: "モニター上部のコマンドセンターを押します。" },
+    },
+    {
+      target: "ops.help",
+      action: "next",
+      view: "command-center",
+      title: { th: "คีย์ลัดและความสดของข้อมูล", en: "Shortcuts and data freshness", jp: "キーボード操作と更新状況" },
+      body: {
+        th: "กด ? เพื่อดูคีย์ลัด ตัวเลขแนวโน้มเทียบรอบก่อน หากโหลดไม่ได้จะแจ้งข้อมูลเก่า โหมดลดการเคลื่อนไหวจะหยุดสปอตไลต์อัตโนมัติ",
+        en: "Press ? for shortcuts. Trends compare the previous update; failed refreshes show a stale warning. Reduced motion pauses automatic spotlight rotation.",
+        jp: "?で操作一覧を表示。指標は前回更新比です。更新失敗時は警告を表示し、動きを減らす設定では自動切替を停止します。",
+      },
+    },
+    {
       target: "ops.kpis",
       action: "next",
-      view: "monitor",
+      view: "command-center",
       title: { th: "ตัวเลขสำคัญ", en: "Headline numbers", jp: "主要指標" },
       body: {
         th: "Site และเครื่องที่ออนไลน์ ปัญหาที่เปิดอยู่ TMTDesk ที่ปกติ และ Session รีโมตที่เปิดอยู่",
@@ -3560,7 +3596,7 @@ const COMMAND_CENTER: Guide = {
     {
       target: "ops.map",
       action: "next",
-      view: "monitor",
+      view: "command-center",
       title: { th: "แผนที่", en: "The map", jp: "地図" },
       body: {
         th: "จุดเขียวปกติ เหลืองต้องดู แดงวิกฤต จุดที่กระพือมีปัญหาเปิดอยู่ คลิกจุดเพื่อดูรายละเอียดและรีโมต",
@@ -3571,7 +3607,7 @@ const COMMAND_CENTER: Guide = {
     {
       target: "ops.feed",
       action: "next",
-      view: "monitor",
+      view: "command-center",
       title: { th: "ปัญหาล่าสุด", en: "Incident feed", jp: "インシデント" },
       body: {
         th: "ปัญหาที่เปิดอยู่ก่อน แล้วปัญหาที่แก้ใน 24 ชั่วโมง พร้อมอายุของปัญหา",
@@ -3582,7 +3618,7 @@ const COMMAND_CENTER: Guide = {
     {
       target: "ops.top",
       action: "next",
-      view: "monitor",
+      view: "command-center",
       title: { th: "เครื่องที่โหลดสูง", en: "Busiest machines", jp: "高負荷のマシン" },
       body: {
         th: "สลับ CPU, RAM, Disk (ปุ่ม 1 2 3) เส้นเล็กคือย้อนหลังหนึ่งชั่วโมง",
@@ -3593,7 +3629,7 @@ const COMMAND_CENTER: Guide = {
     {
       target: "ops.spotlight",
       action: "next",
-      view: "monitor",
+      view: "command-center",
       title: { th: "สปอตไลต์", en: "Spotlight", jp: "スポットライト" },
       body: {
         th: "เมื่อไม่มีใครใช้จอ จะวนแสดง Site ที่มีปัญหา ปุ่ม ← → เลื่อนเอง",
@@ -3604,7 +3640,7 @@ const COMMAND_CENTER: Guide = {
     {
       target: "ops.tv",
       action: "next",
-      view: "monitor",
+      view: "command-center",
       title: { th: "โหมดทีวี", en: "TV mode", jp: "TV モード" },
       body: { th: "เต็มจอสำหรับทีวีหรือจอติดผนัง (ปุ่ม F) กด Esc เพื่อออก", en: "Full screen for a TV or wall monitor (key F); Esc leaves it.", jp: "テレビや壁掛け画面向けの全画面（F キー）。Esc で終了。" },
     },
