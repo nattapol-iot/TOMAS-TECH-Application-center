@@ -344,7 +344,17 @@ export function CommandCenterScreen(_props: { notify: Notify }) {
                 </a>
               </div>
             ) : (
-              <SiteOverview sites={sites} agents={agents} severityOf={severityOf} incidents={openIncidents} filter={plantFilter} spotlight={spotlightSite?.id ?? null} selected={selected} now={now} onPick={setSelected} />
+              <SiteOverview
+                sites={sites}
+                agents={agents}
+                severityOf={severityOf}
+                incidents={openIncidents}
+                filter={plantFilter}
+                spotlight={spotlightSite?.id ?? null}
+                selected={selected}
+                now={now}
+                onPick={setSelected}
+              />
             )}
             {spotlightSite ? (
               <SpotlightCard site={spotlightSite} severity={severityOf.get(spotlightSite.id)!} incidents={openIncidents} now={now} onOpen={() => setSelected(spotlightSite.id)} />
