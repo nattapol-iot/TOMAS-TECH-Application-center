@@ -32,7 +32,6 @@ import { PlanManHours, type PlanManHoursData } from "./PlanManHours";
 import { PlanPeopleGrid } from "./PlanPeopleGrid";
 import { PlanSheet } from "./PlanSheet";
 import { RowDisclosure, type PortfolioAction } from "./CoreScreens";
-import { useProjectLook } from "./ProjectLook";
 import { SearchSelect } from "./SearchSelect";
 import { peopleShares, sharesTotal } from "../../../lib/plan-people";
 import { remainingForRow } from "../../../lib/manhour-budget";
@@ -4190,8 +4189,6 @@ const PLAN_ISSUE_TONE: Record<IssueState, "amber" | "slate" | "blue" | "green" |
 export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectId, preferredTaskId, onPreferredConsumed, openIssueBatch, lockedProject = false }: ProductionPlanningProps) {
   const uiText = useUiText();
   useActivitySubView("projects-schedule");
-  // V2 edits the plan in one place, the Sheet (task doc 1.10): no table editor dialog, no Team / Master Plan Gantt.
-  const v2 = useProjectLook() === "v2";
   const allowed = bootstrap.permissions.includes("schedule.read");
   const storageKey = planProjectStorageKey(bootstrap.user.id);
   const today = isoToday();
@@ -4208,12 +4205,11 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
   const [zoom, setZoom] = useLinkedState<GanttZoomChoice>("zoom", "fit", PLAN_ZOOM_LINK);
   const [anchor, setAnchor] = useState(today);
   const [filter, setFilter] = useLinkedState<PlanFilter | null>("only", null, PLAN_FILTER_LINK);
-  // V2 opens on the Sheet, the plan typed like the team's Excel Gantt (PlanSheet.tsx, owner 2026-11-24); V1 has no Sheet.
-  const [storedLevel, setLevel] = useLinkedState<PlanLevel>("level", v2 ? "sheet" : "team", PLAN_LEVEL_LINK);
-  // A V2 link to the old Team or Master Plan view opens the Sheet (its Headings only view is the Master Plan).
-  const level: PlanLevel = !v2 && storedLevel === "sheet" ? "team" : v2 && (storedLevel === "team" || storedLevel === "master") ? "sheet" : storedLevel;
+  // The plan is edited in one place, the Sheet, typed like the team's Excel Gantt (PlanSheet.tsx, owner 2026-11-24). An
+  // old link to the Team or Master Plan view opens the Sheet (its Headings only view is the Master Plan).
+  const [storedLevel, setLevel] = useLinkedState<PlanLevel>("level", "sheet", PLAN_LEVEL_LINK);
+  const level: PlanLevel = storedLevel === "team" || storedLevel === "master" ? "sheet" : storedLevel;
   const sheetView = level === "sheet";
-  const masterView = level === "master";
   // The People table: the same rows against the days, people per day typed like a spreadsheet (PlanPeopleGrid.tsx).
   const peopleView = level === "people";
   const [collapsed, setCollapsed] = useState<Set<number>>(() => new Set());
@@ -4409,7 +4405,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
     mine: (task) => isLeafTask(task) && task.pics.some((pic) => pic.id === bootstrap.user.id),
   };
   const filterItems = PLAN_FILTERS.map((item) => ({ ...item, value: rows.filter(filterRules[item.key]).length }));
-  const visible = !activeSchedule ? [] : masterView ? activeSchedule.tasks.filter((task) => task.kind === "phase") : planRows(activeSchedule.tasks, collapsed, filter ? filterRules[filter] : null);
+  const visible = !activeSchedule ? [] : planRows(activeSchedule.tasks, collapsed, filter ? filterRules[filter] : null);
   const target = selectedProject?.targetDelivery ?? null;
   const range =
     zoom === "fit" ? ganttFitWindow([activeSchedule?.summary.planStart, activeSchedule?.summary.planFinish, target, ...rows.map((task) => task.forecastFinish)], today) : ganttWindow(zoom, anchor);
@@ -4612,30 +4608,6 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
         <Badge tone="red">{uiText("Plan.pastMasterPlan")}</Badge>
       ) : null;
     const lock = task.managedByResourcePlan ? <ResourcePlanLock /> : pendingTaskIds.has(task.id) ? <Badge tone="amber">{uiText("Plan.waitingBadge")}</Badge> : headingMark;
-    if (masterView)
-      return {
-        key: `task:${task.id}`,
-        depth: 0,
-        kind: "phase",
-        label: (
-          <>
-            <span className="mono">{task.wbs}</span> {task.name}
-          </>
-        ),
-        meta: [uiText(task.status), `${Math.round(Number(task.percentComplete))}%`].join(" · "),
-        ...(lock ? { status: lock } : {}),
-        onOpen: () => setDrawerTaskId(task.id),
-        start: committed?.start ?? task.planStart,
-        finish: committed?.finish ?? task.planFinish,
-        progress: Number(task.percentComplete),
-        tone: scheduleTone(task, today),
-        baselineStart: task.baselineStart,
-        baselineFinish: task.baselineFinish,
-        forecastFinish: task.planFinish,
-        milestone: false,
-        selected: drawerTaskId === task.id,
-        title: `${task.wbs} ${task.name} · ${committed?.start ?? task.planStart ?? "—"} → ${committed?.finish ?? task.planFinish ?? "—"} · ${Math.round(Number(task.percentComplete))}%`,
-      };
     return {
       key: `task:${task.id}`,
       depth: task.depth,
@@ -4698,8 +4670,8 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
           parent={draftParent}
           busy={draftBusy}
           planPeople={new Set(rows.flatMap((task) => task.pics.map((pic) => pic.id)))}
-          canOut={!masterView && levelOf(-1) !== null}
-          canIn={!masterView && levelOf(1) !== null}
+          canOut={levelOf(-1) !== null}
+          canIn={levelOf(1) !== null}
           onChange={(patch) => setDraft((current) => current && { ...current, ...patch, error: "" })}
           onLevel={(step) => {
             const place = levelOf(step);
@@ -4734,7 +4706,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
     .filter((day): day is string => Boolean(day))
     .sort();
   const issueRows: GanttRowSpec[] =
-    masterView || filter || !projectIssues.length
+    filter || !projectIssues.length
       ? []
       : [
           {
@@ -5144,13 +5116,6 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
           </span>
         ) : null}
         <span className="spacer" />
-        {/* V1 types a new heading into the Team / Master Plan Gantt; V2 adds rows on the Sheet itself (task doc 1.10). */}
-        {canPlan && activeSchedule && !v2 ? (
-          <button className="btn primary" type="button" data-guide="plan.add" disabled={draftBusy} onClick={() => openDraft(null, null)}>
-            <Icon name="plus" />
-            {uiText("Plan.addHeading")}
-          </button>
-        ) : null}
         <RowDisclosure
           label={uiText("Plan.more")}
           triggerClassName="btn default"
@@ -5188,15 +5153,13 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
                 ) : null}
                 <div className="plan-gantt-controls">
                   <div className="seg-control" role="group" aria-label={uiText("Plan.levelLabel")} data-guide="plan.level">
-                    {(v2 ? (["sheet", "member", "people"] as const) : (["team", "master", "member", "people"] as const)).map((value) => (
+                    {(["sheet", "member", "people"] as const).map((value) => (
                       <button key={value} type="button" className={level === value ? "on" : ""} aria-pressed={level === value} onClick={() => setLevel(value)}>
                         {uiText(PLAN_LEVEL_LABEL[value])}
                       </button>
                     ))}
                   </div>
-                  {masterView || memberView || peopleView || sheetView ? null : (
-                    <FilterChips label="Plan.quickFilters" items={filterItems} active={filter} onPick={(key) => setFilter(key as PlanFilter | null)} />
-                  )}
+                  {memberView || peopleView || sheetView ? null : <FilterChips label="Plan.quickFilters" items={filterItems} active={filter} onPick={(key) => setFilter(key as PlanFilter | null)} />}
                   {peopleView || sheetView ? null : (
                     <GanttToolbar
                       zoom={zoom}
@@ -5217,7 +5180,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
                   )}
                   <div className="gantt-nav" data-guide="plan.view">
                     {/* One button that flips: expand while anything is folded, otherwise collapse. */}
-                    {masterView || peopleView || sheetView ? null : (
+                    {peopleView || sheetView ? null : (
                       <button
                         type="button"
                         className="btn ghost sm"

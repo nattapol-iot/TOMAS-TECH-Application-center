@@ -1,128 +1,32 @@
 /*
- * Projects screens, V2: the Pegasus ERP look (owner 2026-11-22, tomastech-ui-design-system).
- * ProjectLook.tsx wraps the Projects tabs (Overview, Plan, Punchlist, Cost) opened in V2 in "pg-skin pg-screen project-v2".
+ * Projects screens: the Pegasus ERP look (owner 2026-11-22, tomastech-ui-design-system), the only look since 2026-11-25.
+ * ProjectScope.tsx wraps the Projects tabs (Overview, Plan, Punchlist, Cost) in "pg-skin pg-screen project-v2".
  * pegasus-skin.css and pegasus-screens.css already draw the shared parts and set the app's tokens to Pegasus values: page
  * header, buttons, panels, tables, badges, tabs, dialogs, summary bar, header funnels. So most of project-portfolio.css,
  * gantt.css and globals.css takes the look without a rule here.
  *
- * This file holds only what the Projects screens add: the V1 / V2 switch, the leaner Overview header (search, segmented
- * filters, More, Create), the health summary bar's tones, and the Plan and Gantt parts drawn with fixed colours.
- *
- * The switch's own rules (.project-look-*) apply in both looks. Every other rule sits under .project-v2, so nothing here
- * reaches a screen opened in V1 or any other screen.
+ * This file holds only what the Projects screens add: the leaner Overview header (search, segmented filters, More,
+ * Create), the health summary bar's tones, and the Plan and Gantt parts drawn with fixed colours. Every rule sits under
+ * .project-v2, so nothing here reaches another screen.
  */
 
-/* ---------- The V1 / V2 switch (both looks) ---------- */
-.project-look-v1 {
-  display: contents;
-}
-.project-look-bar {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-bottom: 6px;
-}
-.project-look-label {
-  color: var(--muted);
-  font-size: var(--fs-xs);
-}
-.project-look-switch {
-  display: inline-flex;
-  gap: 2px;
-  padding: 2px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-sm);
-  background: var(--n-100);
-}
-.project-look-switch button {
-  min-width: 36px;
-  height: 24px;
-  padding: 0 8px;
-  border: 0;
-  border-radius: var(--r-xs);
-  background: none;
-  color: var(--muted);
-  font-size: var(--fs-xs);
-  font-weight: 600;
-  cursor: pointer;
-}
-.project-look-switch button[aria-checked="true"] {
-  background: var(--surface);
-  color: var(--blue-text);
-  box-shadow: var(--shadow-xs);
-}
-.project-look-switch button:focus-visible {
-  outline: 2px solid var(--blue);
-  outline-offset: 1px;
-}
-
-/* The tab's content sits 14px under the tabs (V1 kept the same space as an inline style). */
-.project-look-body {
-  margin-top: 14px;
-  min-width: 0;
-}
-
 /*
- * V2 layout: the switch shares the tabs' row, on the right, instead of a row of its own. The tab's content is a 12px column,
- * the rhythm the Pegasus skin gives its own children: the content sits one level down, so that rhythm does not reach it.
- */
-/*
- * Two classes, not one: the build may link pegasus-skin.css after this sheet (it did on 2026-11-22), and its
- * ".pg-skin { display: flex }" would then win a tie and put the switch back on a row of its own.
+ * Two classes, not one: the build may link pegasus-skin.css after this sheet (it did on 2026-11-22), and a tie with its
+ * ".pg-skin" rule would then decide the layout. The tab's content is a 12px column, the rhythm the Pegasus skin gives its
+ * own children: the content sits one level down, so that rhythm does not reach it.
  */
 .pg-skin.project-v2 {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px 16px;
-}
-.project-v2 > * {
-  grid-column: 1 / -1;
-  min-width: 0;
-}
-.project-v2 > .project-look-bar {
-  grid-column: 2;
-  grid-row: 1;
-  align-self: center;
-  margin: 0;
-}
-.project-v2 > .tabs {
-  grid-column: 1;
-  grid-row: 1;
-}
-.project-v2 > .project-look-body {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  margin-top: 0;
 }
-
-/* In V2 the switch is the ERP's muted segmented control (§5.7). */
-.project-v2 .project-look-switch {
-  padding: 3px;
-  border: 0;
-  border-radius: 6px;
-  background: var(--pg-muted);
+.project-v2 > * {
+  min-width: 0;
 }
-.project-v2 .project-look-label {
-  color: var(--pg-muted-fg);
-  font-size: 12px;
-}
-.project-v2 .project-look-switch button {
-  height: 26px;
-  border-radius: 4px;
-  color: var(--pg-muted-fg);
-  font-size: 13px;
-  font-weight: 500;
-}
-.project-v2 .project-look-switch button[aria-checked="true"] {
-  background: var(--pg-background);
-  color: var(--pg-foreground);
-  box-shadow: 0 1px 2px rgb(0 0 0 / 0.08);
-}
-.project-v2 .project-look-switch button:focus-visible {
-  outline: none;
-  box-shadow: var(--pg-focus);
+.project-v2 > .project-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 /* ---------- Overview: the list title row (§4 B) ---------- */

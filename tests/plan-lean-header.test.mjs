@@ -7,7 +7,7 @@ const root = new URL("../", import.meta.url);
 const source = async (path) => (await readFile(new URL(path, root), "utf8")).replace(/\r\n/g, "\n");
 const count = (text, needle) => text.split(needle).length - 1;
 
-test("the Plan opens on one row: a project box that searches, the plan in brief, Add heading and More", async () => {
+test("the Plan opens on one row: a project box that searches, the plan in brief and More", async () => {
   const plan = await source("app/system/production/PlanningPricingScreens.tsx");
   assert.equal(count(plan, '<PageHeader eyebrow="PROJECT CONTROL"'), 1, "the page title stays only on the no-permission notice");
   assert.match(
@@ -18,7 +18,8 @@ test("the Plan opens on one row: a project box that searches, the plan in brief,
   assert.match(plan, /<span className="plan-brief" aria-label=\{uiText\("Plan\.summary"\)\}>/);
   assert.doesNotMatch(plan, /className="plan-summary"/);
   assert.match(plan, /<Panel flush>\n\s*\{rows\.length \|\| draftAt >= 0 \|\| sheetView \? \(?\s*<div ref=\{fullscreenRef\}/, "the panel no longer repeats the project's name");
-  assert.match(plan, /data-guide="plan\.add"/);
+  // Rows are added on the Sheet itself; the old Add heading button of the Team Plan Gantt is gone (2026-11-25).
+  assert.doesNotMatch(plan, /data-guide="plan\.add"/);
   assert.match(plan, /<RowDisclosure\s+label=\{uiText\("Plan\.more"\)\}\s+triggerClassName="btn default"\s+guide="plan\.more"/);
 });
 

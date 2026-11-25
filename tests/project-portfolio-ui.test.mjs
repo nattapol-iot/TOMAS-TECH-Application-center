@@ -74,12 +74,12 @@ test("rows open worst health first and page on the client with the 10-row defaul
   assert.match(portfolio, /sorted\.slice\(\(currentPage - 1\) \* pageSize, currentPage \* pageSize\)/);
 });
 
-test("SegmentBar and FilterChips are shared components the portfolio uses", () => {
+test("SegmentBar and FilterChips are shared components; the portfolio uses FilterChips", () => {
   assert.match(ui, /export function SegmentBar\(/);
   assert.match(ui, /export function FilterChips\(/);
   assert.doesNotMatch(ui, /import\s+["'][^"']+\.css["']/, "ui.tsx stays loadable without a bundler");
   assert.match(screens, /import "\.\.\/segment-filters\.css";/);
-  assert.match(portfolio, /<SegmentBar\s+label="Portfolio\.healthBar"\s+items=\{healthItems\}\s+active=\{health\}/);
+  // The portfolio's health bar is the Pegasus summary bar (project-scope.test.mjs); SegmentBar serves other screens.
   assert.match(portfolio, /<FilterChips\s+label="Portfolio\.attention"\s+items=\{chipItems\}\s+active=\{chip\}/);
   const css = read("app/system/segment-filters.css");
   assert.doesNotMatch(css, /#[0-9a-fA-F]{3,6}\b/, "tokens only");
@@ -214,7 +214,7 @@ test("Overview has a List | Timeline toggle on the shared Gantt, remembered per 
   const shell = read("app/system/ProductionApp.tsx");
   // The mode is on the link and remembered per person (screen-link.tsx useLinkedState).
   assert.match(portfolio, /const \[mode, changeMode\] = useLinkedState<PortfolioMode>\("view", initialMode \?\? "list", PORTFOLIO_MODE_LINK\)/);
-  assert.match(portfolio, /aria-pressed=\{mode === value\} onClick=\{\(\) => changeMode\(value\)\}/);
+  assert.match(portfolio, /role="radio" aria-checked=\{mode === value\} onClick=\{\(\) => changeMode\(value\)\}/);
   // Timeline draws the same filtered, sorted rows as the list.
   assert.match(portfolio, /<ProjectPortfolioGantt\s+key=\{overview\?\.loadedAt \?\? 0\}\s+rows=\{sorted\}/);
   // The timeline sorts with the same sort as the list (it has no column headers of its own).
@@ -228,10 +228,7 @@ test("Overview has a List | Timeline toggle on the shared Gantt, remembered per 
   assert.match(gantt, /onOpen: \(\) => openPlan\(item\.id, task\.id\)/);
   assert.match(gantt, /const openPlan = openProjectSchedule \? \(id: number, taskId\?: number\) => \{ void fullscreen\.exit\(\); openProjectSchedule\(id, taskId\); \}/);
   // The old Project Timeline menu opens the portfolio in Timeline mode; the old screen is gone.
-  assert.match(
-    shell,
-    /view === "project-timeline" \? \(?\s*<ProjectLookScope userId=\{bootstrap\.user\.id\}>\s*<ProductionProjects key="project-timeline" \{\.\.\.common\} teamTestMode=\{IS_TEAM_TEST_MODE\} initialMode="timeline"/,
-  );
+  assert.match(shell, /view === "project-timeline" \? \(?\s*<ProjectScope>\s*<ProductionProjects key="project-timeline" \{\.\.\.common\} teamTestMode=\{IS_TEAM_TEST_MODE\} initialMode="timeline"/);
   assert.doesNotMatch(shell, /ProductionProjectTimeline/);
 });
 

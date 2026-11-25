@@ -123,8 +123,8 @@ test("the catalog holds the guides the owner chose, in the order the work happen
       "estimate-historical-import",
       // The V1 / V2 switch of the Estimating screens; V2 is the Pegasus ERP look (2026-11-19).
       "estimate-look-v2",
-      // The V1 / V2 switch of the Projects screens; V2 is the Pegasus list and the plan on the Plan tab only (2026-11-22).
-      "project-look-v2",
+      // The Projects overview: summary bar, header funnels, hours and follow-ups (the only look since 2026-11-25).
+      "project-overview",
       "purchase-request",
       "pr-approve",
       // An approved PR the ERP refused or deleted is taken back to Draft or cancelled (2026-11-02).

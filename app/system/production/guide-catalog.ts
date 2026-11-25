@@ -1142,9 +1142,9 @@ const PROJECT_MASTER_PLAN: Guide = {
   area: "project",
   title: { th: "แก้ไข Master Plan ของโปรเจกต์ที่สร้างแล้ว", en: "Edit the Master Plan of an existing project", jp: "作成済み案件のマスタープランを編集" },
   summary: {
-    th: "แก้หัวข้อหลัก (Master Plan) และงานกับฟังก์ชันใต้หัวข้อ (Team Plan) ของโปรเจกต์ที่มีอยู่ เลือก Master Schedule ได้ถ้ายังไม่มีแผน และปรับวันเริ่ม/วันส่งมอบตามแผน",
-    en: "Change the main headings (Master Plan) and the tasks and functions under them (Team Plan) of a project that exists, start from a Master Schedule when it has none, and move its dates to the plan.",
-    jp: "既存案件の大見出し（マスタープラン）とその下のタスク・機能（チームプラン）を変更します。計画がなければマスタースケジュールから始め、日程を計画に合わせます。",
+    th: "Master Plan คือหัวข้อหลักแถวบนสุดของตารางแผนงาน วันที่ของหัวข้อคือกรอบที่ตกลงกับลูกค้า งานและฟังก์ชันใต้หัวข้อคือ Team Plan แก้ทั้งหมดที่แท็บแผนงาน ถ้ายังไม่มีแผนเริ่มจาก Master Schedule",
+    en: "The Master Plan is the top rows of the Plan tab's Sheet: the headings, on the dates agreed with the customer. The tasks and functions under them are the Team Plan. Everything is edited on the Plan tab; with no plan yet, start from a Master Schedule.",
+    jp: "マスタープランは計画タブの表の最上位の行（大見出し）で、日程は顧客と合意した枠です。その下のタスクと機能がチームプランです。すべて計画タブで編集し、計画がなければマスタースケジュールから始めます。",
   },
   minutes: 2,
   permissions: ["project.write", "schedule.plan"],
@@ -1153,7 +1153,7 @@ const PROJECT_MASTER_PLAN: Guide = {
     menu(
       "projects",
       { th: "เปิดเมนูโปรเจกต์", en: "Open Projects", jp: "「プロジェクト」を開く" },
-      { th: "รายการโปรเจกต์อยู่ในเมนูนี้ คลิกที่เมนูที่ไฮไลต์อยู่", en: "The project list is here. Click the highlighted menu entry.", jp: "案件一覧はここにあります。強調表示のメニューをクリックします。" },
+      { th: "รายการโปรเจกต์อยู่ในเมนูนี้ คลิกที่เมนูที่ไฮไลต์อยู่", en: "The project list is here. Click the highlighted menu entry.", jp: "案件一覧はこのメニューにあります。強調表示のメニューをクリックします。" },
     ),
     {
       target: "project.rowMenu",
@@ -1168,53 +1168,64 @@ const PROJECT_MASTER_PLAN: Guide = {
       },
     },
     {
-      target: "project.editPlan",
+      target: "project.openPlan",
       action: "click",
       view: "projects",
-      title: { th: "กด 'แก้ไข Master Plan'", en: "Press Edit Master Plan", jp: "「マスタープランを編集」を押す" },
-      body: { th: "เปิดหน้าต่างที่มีแค่แผนของโปรเจกต์นี้", en: "It opens a window with only this project's plan.", jp: "この案件の計画だけを編集する画面が開きます。" },
-      missing: {
-        th: "เมนูนี้ขึ้นสำหรับ PM ของโปรเจกต์นี้ Engineering Manager หรือ Admin และโปรเจกต์ต้องยังไม่ปิด",
-        en: "It shows for this project's manager, an Engineering Manager or an Admin, while the project is open.",
-        jp: "この案件のPM、エンジニアリングマネージャー、管理者に、案件が未完了の間だけ表示されます。",
-      },
+      title: { th: "เปิดแผนงาน", en: "Open the plan", jp: "計画を開く" },
+      body: { th: "แผนเปิดที่แท็บแผนงาน บนตาราง", en: "The plan opens on the Plan tab, on the Sheet.", jp: "計画タブの表で計画が開きます。" },
     },
     {
-      target: "project.plan",
+      target: "plan.sheet",
       action: "next",
       view: "projects",
       title: { th: "หัวข้อหลัก (Master Plan)", en: "The main headings (Master Plan)", jp: "大見出し（マスタープラン）" },
       body: {
-        th: "แก้ชื่อหรือวันที่ตกลงกับลูกค้าได้ทุกหัวข้อ กด 'เพิ่มหัวข้อหลัก' เพื่อเพิ่ม หรือกด ✕ เพื่อลบหัวข้อพร้อมงานข้างใต้ หัวข้อที่มีงานคืบหน้าแล้วลบไม่ได้ ถ้ายังไม่มีแผน เลือก Master Schedule เป็นต้นแบบได้",
-        en: "Change any heading's name or the dates agreed with the customer, add one, or remove one with ✕ together with the rows under it. A heading with work in progress under it cannot be removed. With no plan yet, start from a Master Schedule.",
-        jp: "各見出しの名前や顧客と合意した日程を変更し、追加、または ✕ で配下の行とともに削除します。進行中の作業がある見出しは削除できません。計画がなければマスタースケジュールから始められます。",
+        th: "แถวตัวหนาระดับบนสุดคือหัวข้อหลัก วันเริ่มและวันจบของหัวข้อคือกรอบที่ตกลงกับลูกค้า คลิกช่องแล้วพิมพ์แก้ชื่อหรือวันที่ได้เลย ระบบบันทึกเมื่อออกจากช่อง กด 'เฉพาะหัวข้อ (Master Plan)' เพื่อดูแค่หัวข้อ",
+        en: "The bold top rows are the main headings; their start and end are the window agreed with the customer. Click a cell and type to change a name or a date; it saves when you leave the cell. Press Headings only (Master Plan) to see just the headings.",
+        jp: "太字の最上位の行が大見出しで、開始日と終了日が顧客と合意した枠です。セルをクリックして名前や日付を入力すると、セルを離れたときに保存されます。「見出しのみ（マスタープラン）」で見出しだけを表示します。",
       },
       missing: {
-        th: "บัญชีนี้แก้แผนของโปรเจกต์นี้ไม่ได้ กด 'จบบทสอน'",
-        en: "This account cannot change this project's plan. Press Finish.",
-        jp: "このアカウントはこの案件の計画を変更できません。「完了」を押します。",
+        th: "บัญชีนี้เปิดแผนของโปรเจกต์นี้ไม่ได้ กด 'จบบทสอน'",
+        en: "This account cannot open this project's plan. Press Finish.",
+        jp: "このアカウントはこの案件の計画を開けません。「完了」を押します。",
       },
     },
     {
-      target: "project.team",
+      target: "plan.sheetAdd",
       action: "next",
       view: "projects",
       title: { th: "งานและฟังก์ชัน (Team Plan)", en: "Tasks and functions (Team Plan)", jp: "タスクと機能（チームプラン）" },
       body: {
-        th: "แต่ละหัวข้อแสดงงานของทีม กด 'เพิ่มงาน' เลือกผู้รับผิดชอบ (ต้องมี) และกด + ที่งานเพื่อเพิ่มฟังก์ชัน งานที่มีฟังก์ชันคิดวันจากฟังก์ชัน แถวที่มีความคืบหน้าแก้ชื่อได้แต่ลบไม่ได้ คนที่ถูกเพิ่มจะได้รับแจ้ง งานที่รอจัดหัวข้ออยู่ใต้ 'ยังไม่จัดหัวข้อ' ลากเข้าหัวข้อที่ถูกใน Project Schedule",
-        en: "Each heading lists the team's tasks. Press Add task, pick its member (required), and press + on a task for its functions. A task with functions takes its dates from them. Rows with progress can be renamed but not removed; anyone newly assigned is told. Rows waiting under ยังไม่จัดหัวข้อ are dragged to the right heading in Project Schedule.",
-        jp: "各見出しにチームのタスクが並びます。「タスクを追加」で担当者（必須）を選び、タスクの + で機能を追加します。機能のあるタスクは日程を機能から算出します。進捗のある行は名前を変更できますが削除できません。新しく割り当てられた人に通知されます。「ยังไม่จัดหัวข้อ」の下で待つ行は、プロジェクトスケジュールで正しい見出しへドラッグします。",
+        th: "แถวใต้หัวข้อคืองานของทีม กด 'แทรกแถว' หรือ + หน้าแถวเพื่อเพิ่ม และ Alt+Shift+→ เพื่อเลื่อนเป็นงานย่อย งานที่มีงานย่อยคิดวันจากงานย่อย แถวที่มีความคืบหน้าแล้วลบไม่ได้",
+        en: "The rows under a heading are the team's tasks. Press Insert row, or + in front of a row, to add one, and Alt+Shift+→ to make it a sub task. A task with sub tasks takes its dates from them. Rows with progress cannot be deleted.",
+        jp: "見出しの下の行がチームのタスクです。「行を挿入」または行頭の + で追加し、Alt+Shift+→ でサブタスクにします。サブタスクのあるタスクは日程をサブタスクから算出します。進捗のある行は削除できません。",
       },
     },
     {
-      target: "project.planSave",
+      target: "plan.sheetTemplate",
+      action: "next",
+      view: "projects",
+      title: { th: "ยังไม่มีแผน: เริ่มจาก Master Schedule", en: "No plan yet: start from a Master Schedule", jp: "計画がない場合：マスタースケジュールから始める" },
+      body: {
+        th: "กด 'Master Schedule' เพื่อเลือกแผนมาตรฐาน ระบบเติมหัวข้อและงานตามแม่แบบ แล้วค่อยแก้วันให้ตรงกับที่ตกลงกับลูกค้า",
+        en: "Press Master Schedule to pick a standard plan. Its headings and tasks fill the Sheet; then set the dates agreed with the customer.",
+        jp: "「マスタースケジュール」を押して標準計画を選びます。見出しとタスクが表に入るので、顧客と合意した日程に合わせます。",
+      },
+    },
+    {
+      target: "plan.sheetFollow",
       action: "click",
       view: "projects",
-      title: { th: "บันทึกแผน", en: "Save the plan", jp: "計画を保存" },
+      title: { th: "ดูสิ่งที่ต้องตาม", en: "See what to follow up", jp: "要フォローを見る" },
       body: {
-        th: "ถ้าแผนเลยวันเดิม ติ๊ก 'ปรับวันเริ่มและวันส่งมอบตามแผน' แล้วกด 'บันทึกแผน' ถ้าแค่ฝึก ให้กด 'ยกเลิก' แล้วกด 'จบบทสอน'",
-        en: "If the plan moved past the old dates, tick Move the project's start and delivery, then press Save plan. Only practising? Press Cancel, then Finish.",
-        jp: "計画が元の日程を超えたら「案件の開始日と納期を計画に合わせる」にチェックし、「計画を保存」を押します。練習だけなら「キャンセル」を押してから「完了」を押します。",
+        th: "กด 'ต้องตาม' เพื่อดูหัวข้อที่ยังไม่แตกงาน งานที่เลยกรอบของหัวข้อ และงานที่ยังไม่มีผู้ทำ กดชื่อเพื่อไปที่แถวนั้น",
+        en: "Press To follow up to see headings not yet broken down, tasks past their heading's window and tasks with nobody on them. Press a name to go to its row.",
+        jp: "「要フォロー」を押すと、未分解の見出し、見出しの枠を超えたタスク、担当者のいないタスクが表示されます。名前を押すとその行へ移動します。",
+      },
+      missing: {
+        th: "ปุ่มนี้กดได้เมื่อมีเรื่องต้องตาม ถ้าไม่มี กด 'จบบทสอน'",
+        en: "The button works when there is something to follow up; if not, press Finish.",
+        jp: "要フォローがあるときに押せます。なければ「完了」を押します。",
       },
     },
   ],
@@ -1256,10 +1267,17 @@ const PROJECT_ERP_NUMBER: Guide = {
       },
     },
     {
-      target: "project.edit",
+      target: "project.openPage",
       action: "click",
       view: "projects",
-      title: { th: "กด 'แก้ไขโปรเจกต์'", en: "Press Edit project", jp: "「案件を編集」を押す" },
+      title: { th: "เปิดหน้าโปรเจกต์", en: "Open the project's page", jp: "案件ページを開く" },
+      body: { th: "การแก้ข้อมูลโปรเจกต์อยู่ที่หน้าของโปรเจกต์", en: "A project's details are edited on its page.", jp: "案件情報は案件ページで編集します。" },
+    },
+    {
+      target: "projectPage.edit",
+      action: "click",
+      view: "projects",
+      title: { th: "กด 'แก้ไขโครงการ'", en: "Press Edit project", jp: "「案件を編集」を押す" },
       body: { th: "เปิดหน้าต่างแก้ข้อมูลของโปรเจกต์นี้", en: "It opens this project's details.", jp: "この案件の情報を編集する画面が開きます。" },
       missing: { th: "บัญชีนี้แก้โปรเจกต์ไม่ได้ กด 'จบบทสอน'", en: "This account cannot edit projects. Press Finish.", jp: "このアカウントは案件を編集できません。「完了」を押します。" },
     },
@@ -1648,9 +1666,9 @@ const PROJECT_PAGE: Guide = {
   views: ["projects"],
   title: { th: "หน้าของโปรเจกต์", en: "A project's own page", jp: "案件のページ" },
   summary: {
-    th: "ใน V2 กดเลขหรือชื่อโปรเจกต์ในรายการเพื่อเปิดหน้าของโปรเจกต์นั้น ด้านบนคือชื่อ ขั้นงาน และข้อมูลหลัก พร้อมปุ่มแก้ไข สมาชิก เปลี่ยนขั้น พัก ปิด และลบ ด้านล่างเป็นแท็บ ภาพรวม แผนงาน ต้นทุน และเอกสาร ลิงก์ของหน้านี้ส่งต่อให้เพื่อนเปิดแท็บเดียวกันได้",
-    en: "In V2, press a project's number or name in the list to open its own page. At the top: its name, stage and main facts, with Edit, Members, stage (hold, close), end user and Delete. Below: the tabs Overview, Plan, Cost and Documents. The page's link opens the same tab for a teammate.",
-    jp: "V2 では一覧の案件番号または名前を押すと案件のページが開きます。上部に名前・段階・主な情報と、編集・メンバー・段階の変更（保留・完了）・エンドユーザー・削除があります。下に「概要」「計画」「コスト」「文書」のタブがあります。このページのリンクで同じタブを共有できます。",
+    th: "กดเลขหรือชื่อโปรเจกต์ในรายการเพื่อเปิดหน้าของโปรเจกต์นั้น ด้านบนคือชื่อ ขั้นงาน และข้อมูลหลัก พร้อมปุ่มแก้ไข สมาชิก เปลี่ยนขั้น พัก ปิด และลบ ด้านล่างเป็นแท็บ ภาพรวม แผนงาน ต้นทุน และเอกสาร ลิงก์ของหน้านี้ส่งต่อให้เพื่อนเปิดแท็บเดียวกันได้",
+    en: "Press a project's number or name in the list to open its own page. At the top: its name, stage and main facts, with Edit, Members, stage (hold, close), end user and Delete. Below: the tabs Overview, Plan, Cost and Documents. The page's link opens the same tab for a teammate.",
+    jp: "一覧の案件番号または名前を押すと案件のページが開きます。上部に名前・段階・主な情報と、編集・メンバー・段階の変更（保留・完了）・エンドユーザー・削除があります。下に「概要」「計画」「コスト」「文書」のタブがあります。このページのリンクで同じタブを共有できます。",
   },
   steps: [
     menu("projects", { th: "เปิดโปรเจกต์", en: "Open Projects", jp: "「案件」を開く" }, { th: "คลิกที่เมนูที่ไฮไลต์อยู่", en: "Click the highlighted menu entry.", jp: "強調表示のメニューをクリックします。" }),
@@ -1664,7 +1682,7 @@ const PROJECT_PAGE: Guide = {
         en: "Press the project's number or name, or the row's ⋯ menu and Open project page. The row menu only opens the page or the plan; the other actions moved to the project's page.",
         jp: "案件番号か名前を押すか、行の ⋯ メニューで「案件ページを開く」を選びます。行メニューはページと計画を開くだけで、他の操作は案件のページに移りました。",
       },
-      missing: { th: "กด V2 ก่อน หน้านี้มีเฉพาะหน้าตาแบบ V2", en: "Press V2 first; the page is part of the V2 look.", jp: "先に「V2」を押します。このページは V2 表示だけです。" },
+      missing: { th: "ถ้ายังไม่มีโปรเจกต์ในรายการ ให้กด 'ถัดไป'", en: "If the list has no project yet, press Next.", jp: "一覧に案件がない場合は「次へ」を押します。" },
     },
     {
       target: "projectPage.header",
@@ -1752,14 +1770,14 @@ const PROJECT_PAGE: Guide = {
       view: "projects",
       title: { th: "สร้างโปรเจกต์เป็นหน้าเต็ม", en: "Create project as a page", jp: "ページで案件を作成" },
       body: {
-        th: "ใน V2 ปุ่ม 'สร้างโปรเจกต์' เปิดเป็นหน้าเต็ม 4 ส่วน: ที่มา ข้อมูลโปรเจกต์ แผนตั้งต้น และการชำระเงิน ด้านขวาบอกช่องที่ยังขาดและสิ่งที่ระบบทำหลังกดสร้าง สิ่งที่พิมพ์เก็บไว้ในเบราว์เซอร์จนกว่าจะสร้าง สร้างเสร็จระบบเปิดแท็บแผนงานของโปรเจกต์ใหม่ทันที",
-        en: "In V2, Create project opens as a page in four parts: where it comes from, project details, the starting plan and payments. The right-hand column lists what is still needed and what Create does. What you type is kept in the browser until the project exists, and the new project opens on its Plan.",
-        jp: "V2 では「案件を作成」がページで開き、由来・案件情報・初期計画・入金の4部構成です。右側に未入力の項目と作成時に行われる処理が表示されます。入力内容は作成までブラウザーに保存され、作成後は新しい案件の計画タブが開きます。",
+        th: "ปุ่ม 'สร้างโปรเจกต์' เปิดเป็นหน้าเต็ม 4 ส่วน: ที่มา ข้อมูลโปรเจกต์ แผนตั้งต้น และการชำระเงิน ด้านขวาบอกช่องที่ยังขาดและสิ่งที่ระบบทำหลังกดสร้าง สิ่งที่พิมพ์เก็บไว้ในเบราว์เซอร์จนกว่าจะสร้าง สร้างเสร็จระบบเปิดแท็บแผนงานของโปรเจกต์ใหม่ทันที",
+        en: "Create project opens as a page in four parts: where it comes from, project details, the starting plan and payments. The right-hand column lists what is still needed and what Create does. What you type is kept in the browser until the project exists, and the new project opens on its Plan.",
+        jp: "「案件を作成」がページで開き、由来・案件情報・初期計画・入金の4部構成です。右側に未入力の項目と作成時に行われる処理が表示されます。入力内容は作成までブラウザーに保存され、作成後は新しい案件の計画タブが開きます。",
       },
       missing: {
-        th: "กด 'สร้างโปรเจกต์' ใน V2 เพื่อเปิดหน้านี้ หรือกด 'ถัดไป'",
-        en: "Press Create project in V2 to open this page, or press Next.",
-        jp: "V2 で「案件を作成」を押すとこのページが開きます。または「次へ」を押します。",
+        th: "กด 'สร้างโปรเจกต์' ในรายการโปรเจกต์เพื่อเปิดหน้านี้ หรือกด 'ถัดไป'",
+        en: "Press Create project on the Projects list to open this page, or press Next.",
+        jp: "案件一覧で「案件を作成」を押すとこのページが開きます。または「次へ」を押します。",
       },
     },
     {
@@ -1993,9 +2011,9 @@ const PROJECT_PLAN: Guide = {
   area: "project",
   title: { th: "วางแผนงานโปรเจกต์บน Gantt", en: "Plan a project on the Gantt", jp: "ガントで案件を計画" },
   summary: {
-    th: "ใน V2 แผนแก้ที่ 'ตาราง' ที่เดียว พิมพ์ทีละช่องเหมือน Excel วางจาก Excel ได้ และกด 'เฉพาะหัวข้อ' เพื่อดู Master Plan ส่วน V1 ดูแผนแบบ Master Plan หรือ Team Plan กด + แล้วพิมพ์เพิ่มงานในแถว ลากแถวเพื่อย้ายหรือเปลี่ยนระดับ และลากแถบบน Gantt เพื่อเลื่อนวัน ขั้นที่เป็นของ V1 จะบอกให้กด 'ถัดไป' เมื่อใช้ V2",
-    en: "In V2 the plan is edited in one place, the Sheet: type it cell by cell like Excel, paste from Excel, and press Headings only to see the Master Plan. In V1 you see the plan as the Master Plan or the Team Plan, press + and type new rows in the plan, drag rows to move them or change their level, and drag bars on the Gantt to move dates. Steps that belong to V1 say to press Next in V2.",
-    jp: "V2 では計画は「表」の一か所で編集します。Excel のようにセルごとに入力し、Excel から貼り付けもでき、「見出しのみ」でマスタープランを表示します。V1 ではマスタープランまたはチームプランで表示し、+ を押して行を入力し、行をドラッグして移動や階層変更を行い、ガントのバーをドラッグして日程を動かします。V1 用の手順は、V2 では「次へ」を押すよう案内します。",
+    th: "แผนแก้ที่ 'ตาราง' ที่เดียว พิมพ์ทีละช่องเหมือน Excel วางจาก Excel ได้ และกด 'เฉพาะหัวข้อ' เพื่อดู Master Plan 'ตามสมาชิก' ดูทีละคน และ 'ตารางคน' ใส่จำนวนคนรายวัน",
+    en: "The plan is edited in one place, the Sheet: type it cell by cell like Excel, paste from Excel, and press Headings only to see the Master Plan. By member shows it person by person, and People takes the head count per day.",
+    jp: "計画は「表」の一か所で編集します。Excel のようにセルごとに入力し、Excel から貼り付けもでき、「見出しのみ」でマスタープランを表示します。「メンバー別」は一人ずつ表示し、「人員表」で日ごとの人数を入力します。",
   },
   minutes: 5,
   permissions: ["schedule.read"],
@@ -2042,9 +2060,9 @@ const PROJECT_PLAN: Guide = {
       view: "projects",
       title: { th: "ตารางคน: ใส่จำนวนคนรายวันแบบ Excel", en: "People table: people per day, typed like Excel", jp: "人員表：Excel のように日ごとの人数を入力" },
       body: {
-        th: "กด 'ตารางคน' ที่แถบมุมมอง แต่ละแถวคืองานในแผน แต่ละช่องคือหนึ่งวัน คลิกช่องวันแล้วพิมพ์จำนวนคน กด Enter หรือลากคลุมหลายวันแล้วพิมพ์ครั้งเดียว กด Delete เพื่อลบ และวางตัวเลขที่คัดลอกจาก Excel ได้ ช่อง 'คน/วัน' ใส่จำนวนคนให้ทุกวันทำงานของแถวนั้น ถ้าคนเดียวทำหลายงานในวันเดียว ให้ใส่งานละเศษ เช่น 0.5 ช่องที่ขึ้นขอบเหลืองคือวันที่คนนั้นถูกใส่งานรวมทุกโปรเจกต์เกินกำลังต่อวันของเขา เลือก 'ของเรา' หรือ 'จ้างนอก' ต่อแถว ถ้าจ้างนอกให้พิมพ์ชื่อบริษัท Manpower ใต้ชื่องาน Man-day ของแถวคิดจากจำนวนคนที่ใส่ ระบบบันทึกให้เอง การเพิ่มงานทำใน 'ตาราง' (V2) หรือ Team Plan (V1)",
-        en: "Press People table on the view bar. Each row is a task of the plan and each cell is one day. Click a day and type the number of people, then press Enter; or drag over several days and type once. Delete clears, and numbers copied from Excel can be pasted in. The People/day box puts that many people on every work day of the row. When one person does several tasks on a day, type a share on each, such as 0.5; an amber edge marks a day where the person's work over every project is more than they have that day. Mark each row as Ours or Hired; for hired manpower, type the company under the task name. The row's man-days are counted from the people typed, and changes save by themselves. Tasks are added in the Sheet (V2), or in the Team Plan view (V1).",
-        jp: "表示切替で「人員表」を押します。各行は計画のタスク、各マスは1日です。日のマスをクリックして人数を入力し Enter、または複数の日をドラッグして一度に入力します。Delete で消去、Excel からコピーした数値の貼り付けもできます。「人/日」はその行の全ての作業日に人数を入れます。1人が同じ日に複数のタスクを行う場合は、それぞれに 0.5 のように按分して入力します。全案件を合わせた割当が本人のその日の稼働可能量を超える日は、黄色の枠で示されます。行ごとに「自社」か「外注」を選び、外注の場合はタスク名の下に会社名を入力します。行の人日は入力した人数から計算され、変更は自動で保存されます。タスクの追加は「表」（V2）または Team Plan（V1）で行います。",
+        th: "กด 'ตารางคน' ที่แถบมุมมอง แต่ละแถวคืองานในแผน แต่ละช่องคือหนึ่งวัน คลิกช่องวันแล้วพิมพ์จำนวนคน กด Enter หรือลากคลุมหลายวันแล้วพิมพ์ครั้งเดียว กด Delete เพื่อลบ และวางตัวเลขที่คัดลอกจาก Excel ได้ ช่อง 'คน/วัน' ใส่จำนวนคนให้ทุกวันทำงานของแถวนั้น ถ้าคนเดียวทำหลายงานในวันเดียว ให้ใส่งานละเศษ เช่น 0.5 ช่องที่ขึ้นขอบเหลืองคือวันที่คนนั้นถูกใส่งานรวมทุกโปรเจกต์เกินกำลังต่อวันของเขา เลือก 'ของเรา' หรือ 'จ้างนอก' ต่อแถว ถ้าจ้างนอกให้พิมพ์ชื่อบริษัท Manpower ใต้ชื่องาน Man-day ของแถวคิดจากจำนวนคนที่ใส่ ระบบบันทึกให้เอง การเพิ่มงานทำใน 'ตาราง'",
+        en: "Press People table on the view bar. Each row is a task of the plan and each cell is one day. Click a day and type the number of people, then press Enter; or drag over several days and type once. Delete clears, and numbers copied from Excel can be pasted in. The People/day box puts that many people on every work day of the row. When one person does several tasks on a day, type a share on each, such as 0.5; an amber edge marks a day where the person's work over every project is more than they have that day. Mark each row as Ours or Hired; for hired manpower, type the company under the task name. The row's man-days are counted from the people typed, and changes save by themselves. Tasks are added in the Sheet.",
+        jp: "表示切替で「人員表」を押します。各行は計画のタスク、各マスは1日です。日のマスをクリックして人数を入力し Enter、または複数の日をドラッグして一度に入力します。Delete で消去、Excel からコピーした数値の貼り付けもできます。「人/日」はその行の全ての作業日に人数を入れます。1人が同じ日に複数のタスクを行う場合は、それぞれに 0.5 のように按分して入力します。全案件を合わせた割当が本人のその日の稼働可能量を超える日は、黄色の枠で示されます。行ごとに「自社」か「外注」を選び、外注の場合はタスク名の下に会社名を入力します。行の人日は入力した人数から計算され、変更は自動で保存されます。タスクの追加は「表」で行います。",
       },
       missing: { th: "ยังไม่ได้เปิดมุมมอง 'ตารางคน' กด 'ถัดไป'", en: "The People table is not open yet. Press Next.", jp: "「人員表」がまだ開かれていません。「次へ」を押します。" },
     },
@@ -2070,9 +2088,9 @@ const PROJECT_PLAN: Guide = {
       view: "projects",
       title: { th: "ตาราง, ตามสมาชิก หรือตารางคน", en: "Sheet, by member or people", jp: "表・メンバー別・人員表" },
       body: {
-        th: "ใน V2 แผนแก้ที่ 'ตาราง' ที่เดียว: พิมพ์ได้ทุกช่องเหมือน Excel (ขั้นถัดไป) และปุ่ม 'เฉพาะหัวข้อ (Master Plan)' ในตารางแสดงเฉพาะหัวข้อหลักตามวันที่ตกลงกับลูกค้า 'ตามสมาชิก' แสดงทีละคนว่าทำงานไหนอยู่ และงานซ้อนกันหรือไม่ 'ตารางคน' คือจำนวนคนต่อวัน ส่วน V1 ยังมี Master Plan และ Team Plan แบบเดิม",
-        en: "In V2 the plan is edited in one place, the Sheet: every cell typed like Excel (next step), and its Headings only (Master Plan) button shows just the headings on the dates agreed with the customer. By member shows, person by person, what each one is on and whether their work overlaps; People is the head count per day. V1 keeps the Master Plan and Team Plan views.",
-        jp: "V2 では計画は「表」の一か所で編集します。Excel のようにすべてのセルに入力でき（次の手順）、表の「見出しのみ（マスタープラン）」で顧客と合意した日程の見出しだけを表示します。「メンバー別」は一人ずつ、今どの作業をしているか、作業が重なっていないかを、「人員表」は日ごとの人数を表示します。V1 には従来のマスタープランとチームプランがあります。",
+        th: "แผนแก้ที่ 'ตาราง' ที่เดียว: พิมพ์ได้ทุกช่องเหมือน Excel (ขั้นถัดไป) และปุ่ม 'เฉพาะหัวข้อ (Master Plan)' ในตารางแสดงเฉพาะหัวข้อหลักตามวันที่ตกลงกับลูกค้า 'ตามสมาชิก' แสดงทีละคนว่าทำงานไหนอยู่ และงานซ้อนกันหรือไม่ 'ตารางคน' คือจำนวนคนต่อวัน",
+        en: "The plan is edited in one place, the Sheet: every cell typed like Excel (next step), and its Headings only (Master Plan) button shows just the headings on the dates agreed with the customer. By member shows, person by person, what each one is on and whether their work overlaps; People is the head count per day.",
+        jp: "計画は「表」の一か所で編集します。Excel のようにすべてのセルに入力でき（次の手順）、表の「見出しのみ（マスタープラン）」で顧客と合意した日程の見出しだけを表示します。「メンバー別」は一人ずつ、今どの作業をしているか、作業が重なっていないかを、「人員表」は日ごとの人数を表示します。",
       },
       missing: { th: "โปรเจกต์นี้ยังไม่มีแผน กด 'ถัดไป'", en: "This project has no plan yet. Press Next.", jp: "この案件にはまだ計画がありません。「次へ」を押します。" },
     },
@@ -2087,9 +2105,9 @@ const PROJECT_PLAN: Guide = {
         jp: "各行が計画のタスクです。セルをクリックしてそのまま入力するか、F2 またはダブルクリックで既存の値を修正します。Enter で下へ、Tab で右へ、Esc で取消。各セルは離れると自動保存され、Ctrl+Z で元に戻す、Ctrl+Y でやり直し、Ctrl+D で上の行から埋めます。日付は 19/11/26・19/11・+1（上の行の終了日の翌日）で入力できます。END か DAYS で期間を決め、WORK DAYS は稼働日のみを数え、% DONE と状態は進捗です（担当者・PM・管理者）。保留中は開いたタスク画面で理由を入力します。PIC は顧客に見せる担当側、担当者は社内の人か外注先で空欄でも構いません。分野を選ぶと責任者の割り当て待ちになります。Ctrl+C で選択範囲を Excel へコピー、Ctrl+V で Excel から貼り付けできます。右側は日ごとのガントで、赤い線が今日、ピンクの日が会社休日です。バーをダブルクリックするとタスクの更新画面が開きます。「見出しのみ」でマスタープランだけを表示し、「今日へ」でガントを今日に移動します。「列を隠す」（または TASK 見出しの «）で PIC〜状態の列を折りたたみ、ガントを広く表示します。もう一度押すと元に戻ります。下のバーに選択中の行、計画の概要、最後に保存した時刻が出ます。",
       },
       missing: {
-        th: "มุมมองตารางมีใน V2: สลับหน้าโปรเจกต์เป็น V2 แล้วกด 'ตาราง' หรือกด 'ถัดไป'",
-        en: "The Sheet is in V2: switch Projects to V2 and press Sheet, or press Next.",
-        jp: "「表」は V2 にあります。プロジェクトを V2 に切り替えて「表」を押すか、「次へ」を押します。",
+        th: "กด 'ตาราง' ที่แถบมุมมองก่อน หรือกด 'ถัดไป'",
+        en: "Press Sheet on the view bar first, or press Next.",
+        jp: "先に表示切替の「表」を押すか、「次へ」を押します。",
       },
     },
     {
@@ -2102,7 +2120,7 @@ const PROJECT_PLAN: Guide = {
         en: "Insert row (Ctrl+Enter) or the + at the start of a row adds a row under the selected one; on a main heading it adds a task at the end of that heading. Point at a task and press + Sub task to add a sub task. The bottom row has + Add task and + Add main heading, or just type a name in it. Type the name and press Enter: the row saves and the next one opens; Esc stops. Pasting from Excel into the WBS cell of the bottom row (columns WBS to WORK DAYS, as in the old file) builds headings and tasks from the WBS numbers. The arrow buttons above (or Alt+Shift+arrow) move a row up or down, in as a sub task, or out. The mouse works too: right-click a row to insert a row above or below, add a sub task, move it, open the task or delete it; drag a row's WBS cell to move it (drop on the middle of another row to put it under that row); drag a column header's edge to change its width. Delete row removes the selected row if its work has not started.",
         jp: "「行を挿入」(Ctrl+Enter) または行頭の + で選択行の下に行を追加します。大見出しではその見出しの最後にタスクを追加します。タスクにカーソルを合わせて「+ サブタスク」を押すとサブタスクを追加できます。最下行の「+ タスクを追加」「+ 大見出しを追加」、またはその行に直接名前を入力しても追加できます。名前を入力して Enter で保存し、次の行が開きます。Esc で終了します。最下行の WBS セルに Excel から貼り付けると（WBS〜WORK DAYS 列、従来のファイルと同じ）、WBS 番号どおりに見出しとタスクを作ります。上の矢印ボタン（または Alt+Shift+矢印）で行を上下に移動、サブタスクへ下げる、上げることができます。マウスでも操作できます：行を右クリックすると上下への行挿入・サブタスク追加・移動・タスクを開く・削除ができ、WBS セルをドラッグすると行を移動します（他の行の中央に置くとその下へ）。列見出しの端をドラッグすると幅を変えられます。「行を削除」は作業が始まっていない選択行を削除します。",
       },
-      missing: { th: "เปิด 'ตาราง' ใน V2 ก่อน หรือกด 'ถัดไป'", en: "Open the Sheet in V2 first, or press Next.", jp: "先に V2 の「表」を開くか、「次へ」を押します。" },
+      missing: { th: "เปิด 'ตาราง' ก่อน หรือกด 'ถัดไป'", en: "Open the Sheet first, or press Next.", jp: "先に「表」を開くか、「次へ」を押します。" },
     },
     {
       target: "plan.sheetImport",
@@ -2114,7 +2132,7 @@ const PROJECT_PLAN: Guide = {
         en: "Choose the Gantt file the team uses. The header row with TASK and START is found by itself, then WBS, PIC, START, END, DAYS and % DONE are read; the file stays in the browser. The preview shows which rows will change, be added or stay the same, matched by WBS. Rows in the plan that are not in the file stay, and members already named are kept. Press Import and each row is saved (changes to existing rows undo with Ctrl+Z). For the plan owner only.",
         jp: "チームで使っている Gantt ファイルを選びます。TASK と START のある見出し行を自動で探し、WBS・PIC・START・END・DAYS・% DONE を読み込みます。ファイルはブラウザ内でのみ扱います。WBS で照合し、変更・追加・同じになる行をプレビューで確認できます。ファイルにない計画の行はそのまま、設定済みの担当者も残ります。「取り込む」で各行を保存します（既存行の変更は Ctrl+Z で戻せます）。計画の担当者のみ使えます。",
       },
-      missing: { th: "เปิด 'ตาราง' ใน V2 ก่อน หรือกด 'ถัดไป'", en: "Open the Sheet in V2 first, or press Next.", jp: "先に V2 の「表」を開くか、「次へ」を押します。" },
+      missing: { th: "เปิด 'ตาราง' ก่อน หรือกด 'ถัดไป'", en: "Open the Sheet first, or press Next.", jp: "先に「表」を開くか、「次へ」を押します。" },
     },
     {
       target: "plan.sheetExport",
@@ -2126,7 +2144,7 @@ const PROJECT_PLAN: Guide = {
         en: "The button at the top right fills the plan into the team's master Gantt workbook, the file the customer gets, with its formulas, colours, Gantt bars and Display Week scroll bar: the project, customer, PJ number and PO, the project start and the project lead. The Plan sheet has the headings and tasks; % DONE is the team's latest progress, and no status, reasons or internal hours go out. Pick the date language, include sub tasks, or add the Task list sheet by person if you want them. Check the preview, then download; a copy is kept in the project's folder 08 Schedule.",
         jp: "右上のボタンで、チームのマスター Gantt ブック（顧客に送るファイル。数式・色・ガントバー・Display Week のスクロールバーはそのまま）に計画を入れます。案件名・顧客・PJ 番号・PO、案件開始日、プロジェクトリーダーが入ります。Plan シートには見出しとタスクが入り、% DONE はチームの最新の進捗で、状態・理由・社内の時間は出しません。日付の言語を選び、必要ならサブタスクや担当者別の Task list シートを加えます。プレビューを確認してダウンロードします。控えは案件のフォルダ 08 Schedule に保存されます。",
       },
-      missing: { th: "เปิด 'ตาราง' ใน V2 ก่อน หรือกด 'ถัดไป'", en: "Open the Sheet in V2 first, or press Next.", jp: "先に V2 の「表」を開くか、「次へ」を押します。" },
+      missing: { th: "เปิด 'ตาราง' ก่อน หรือกด 'ถัดไป'", en: "Open the Sheet first, or press Next.", jp: "先に「表」を開くか、「次へ」を押します。" },
     },
     {
       target: "plan.sheetAfter",
@@ -2138,7 +2156,7 @@ const PROJECT_PLAN: Guide = {
         en: "Type the WBS of the task that must finish first, such as 2.1: the row starts on the next work day after it ends. Add +N for a gap of N work days (weekends and company holidays skipped), such as 2.1+2. To wait for several tasks, separate them with commas, such as 2.1, 3.4+1: the row starts after the latest. Clear the cell to unlink it; typing START yourself also unlinks the row. Links are finish-to-start only, and a main heading has none.",
         jp: "先に終える作業の WBS（例 2.1）を入力すると、その作業が終わった次の稼働日に始まります。+N で N 稼働日あけます（土日と会社休日を除く）。例 2.1+2。複数の作業を待つときはカンマで区切ります（例 2.1, 3.4+1）。いちばん遅く終わる作業の後に始まります。セルを消すと解除、START を直接入力しても解除されます。前工程は「終了後に開始」のみで、大見出しにはありません。",
       },
-      missing: { th: "เปิด 'ตาราง' ใน V2 ก่อน หรือกด 'ถัดไป'", en: "Open the Sheet in V2 first, or press Next.", jp: "先に V2 の「表」を開くか、「次へ」を押します。" },
+      missing: { th: "เปิด 'ตาราง' ก่อน หรือกด 'ถัดไป'", en: "Open the Sheet first, or press Next.", jp: "先に「表」を開くか、「次へ」を押します。" },
     },
     {
       target: "plan.sheetTemplate",
@@ -2150,19 +2168,7 @@ const PROJECT_PLAN: Guide = {
         en: "This button adds a template to the plan: pick one and a start date, and the dates come from its working days, skipping weekends and company holidays; people are assigned afterwards. Or keep this plan as a new template (rows, party, discipline, working days and starting hours; not people or dates). Anyone can make and change templates.",
         jp: "このボタンでテンプレートを計画に追加します。テンプレートと開始日を選ぶと、稼働日から日付を計算します（土日と会社休日を除く）。担当者は後で割り当てます。この計画を新しいテンプレートとして保存することもできます（行・担当側・分野・稼働日・初期時間。担当者や日付は保存しません）。テンプレートは誰でも作成・変更できます。",
       },
-      missing: { th: "เปิด 'ตาราง' ใน V2 ก่อน หรือกด 'ถัดไป'", en: "Open the Sheet in V2 first, or press Next.", jp: "先に V2 の「表」を開くか、「次へ」を押します。" },
-    },
-    {
-      target: "plan.sheetFollow",
-      action: "next",
-      view: "projects",
-      title: { th: "ต้องตาม", en: "To follow up", jp: "要フォロー" },
-      body: {
-        th: "ปุ่มนี้รวมงานที่ต้องตาม: เลยกำหนด ติดปัญหา ถึงวันเริ่มแต่ยังไม่เริ่ม ยังไม่มีผู้ทำ วันที่ผู้ทำยังไม่ยืนยันชั่วโมงใน My Work (ย้อนหลัง 2 สัปดาห์) งานจ้างภายนอกที่ยังไม่ขอซื้อ วันหยุดบริษัทใหม่ที่ตรงกับงาน (กด 'เลื่อนวันจบ' หรือ 'คงไว้' ระบบไม่เลื่อนเอง) และแถวที่แก้หลังส่งไฟล์ลูกค้าครั้งล่าสุด (กด 'ส่งออกไฟล์ใหม่') กดชื่องานเพื่อไปที่แถวนั้นในตาราง",
-        en: "This button gathers what needs following up: late, blocked, due to start but not started, no member yet, days a member has not confirmed in My Work (the last two weeks), outsourced work with no purchase request, a new company holiday on the work (press Move the end or Keep; nothing moves on its own), and rows changed since the customer file was last sent (press Export a new file). Press a task to go to its row.",
-        jp: "このボタンに要フォローの作業をまとめます：遅延、停滞、開始日を過ぎて未着手、担当者なし、担当者が My Work で工数を確定していない日（過去2週間）、購買依頼のない外注作業、作業に重なる新しい会社休日（「終了日を延ばす」か「そのまま」を押します。自動では動きません）、前回の顧客ファイル送付後に変更された行（「新しいファイルを出力」を押します）。作業名を押すとその行に移動します。",
-      },
-      missing: { th: "เปิด 'ตาราง' ใน V2 ก่อน หรือกด 'ถัดไป'", en: "Open the Sheet in V2 first, or press Next.", jp: "先に V2 の「表」を開くか、「次へ」を押します。" },
+      missing: { th: "เปิด 'ตาราง' ก่อน หรือกด 'ถัดไป'", en: "Open the Sheet first, or press Next.", jp: "先に「表」を開くか、「次へ」を押します。" },
     },
     {
       target: "plan.sheetHolidays",
@@ -2174,7 +2180,7 @@ const PROJECT_PLAN: Guide = {
         en: "Press Company holiday in the colour key to see the company calendar's holidays over the plan, with the open work on each. A recently added one is marked New, and the PM gets a bell notification.",
         jp: "凡例の「会社休日」を押すと、計画期間の会社カレンダーの休日と、各日に重なる未完了の作業を表示します。最近追加された休日には「新規」が付き、PM にベル通知が届きます。",
       },
-      missing: { th: "เปิด 'ตาราง' ใน V2 ก่อน หรือกด 'ถัดไป'", en: "Open the Sheet in V2 first, or press Next.", jp: "先に V2 の「表」を開くか、「次へ」を押します。" },
+      missing: { th: "เปิด 'ตาราง' ก่อน หรือกด 'ถัดไป'", en: "Open the Sheet first, or press Next.", jp: "先に「表」を開くか、「次へ」を押します。" },
     },
     {
       target: "plan.sheetHours",
@@ -2186,7 +2192,7 @@ const PROJECT_PLAN: Guide = {
         en: "The Plan h column takes hours (16) or man-days (2 MD); Actual h is what the team confirmed in My Work, and Left h is plan minus actual. This bar adds them up by discipline against the Estimate's labor hours; press a discipline to see only its rows. No money is shown. For outsourced work, pick the supplier in the Member cell (Outsourced to); our member stays on the row to look after it, the bar turns purple, and its hours stay out of the team budget. Link the supplier's purchase request from the row menu; until then the row shows no PR.",
         jp: "「計画 h」には時間（16）か人日（2 MD）を入力します。「実績 h」はチームがマイワークで確定した時間、「残り h」は計画から実績を引いた値です。この帯は分野ごとに見積の工数と比べます。分野を押すとその行だけ表示します。金額は表示しません。外注する作業は「担当」欄で外注先を選びます。社内の担当者は管理者として残り、バーは紫になり、時間はチームの予算に含めません。外注先の購買依頼は行メニューから紐付けます。未紐付けの行には「PR なし」と表示されます。",
       },
-      missing: { th: "เปิด 'ตาราง' ใน V2 ก่อน หรือกด 'ถัดไป'", en: "Open the Sheet in V2 first, or press Next.", jp: "先に V2 の「表」を開くか、「次へ」を押します。" },
+      missing: { th: "เปิด 'ตาราง' ก่อน หรือกด 'ถัดไป'", en: "Open the Sheet first, or press Next.", jp: "先に「表」を開くか、「次へ」を押します。" },
     },
     {
       target: "plan.view",
@@ -2213,101 +2219,6 @@ const PROJECT_PLAN: Guide = {
       missing: { th: "กด 'ตามสมาชิก' ด้านบนเพื่อดูส่วนนี้ หรือกด 'ถัดไป'", en: "Press By member above to see this, or press Next.", jp: "上の「メンバー別」を押すと表示されます。または「次へ」を押します。" },
     },
     {
-      target: "plan.moveRow",
-      action: "next",
-      view: "projects",
-      title: { th: "ลากแถวเพื่อย้ายหรือเปลี่ยนระดับ", en: "Drag a row to move it or change its level", jp: "行をドラッグして移動・階層変更" },
-      body: {
-        th: "จับที่ ⋮⋮ หน้าชื่อแถว ลากขึ้นลงเพื่อย้ายตำแหน่ง ลากไปทางขวาเพื่อเข้าไปอยู่ใต้แถวข้างบน ลากไปทางซ้ายเพื่อออกมาหนึ่งระดับ เส้นสีน้ำเงินบอกตำแหน่งและระดับ ส่วนแถวที่ไฮไลต์คือแถวที่จะไปอยู่ข้างใต้ ลากงานไปไว้ใต้หัวข้อที่ยังว่างได้ แถวบนสุดเป็นหัวข้อหลักเท่านั้น กดที่จับแล้วใช้ปุ่มลูกศรแทนการลากก็ได้",
-        en: "Hold the ⋮⋮ in front of a row's name. Drag up or down to move it, right to put it under the row above, left to bring it one level out. The blue line shows the place and level, and the lit row is the one it will go under. A task can go under a heading that has nothing yet. The top of the plan holds main headings only. On the grip, the arrow keys do the same.",
-        jp: "行名の前の ⋮⋮ をつかみます。上下にドラッグで移動、右で上の行の下へ、左で1階層外へ出します。青い線が位置と階層を、強調された行が入る先の行を示します。まだ何もない見出しの下にもタスクを入れられます。最上位は大見出しのみです。つまみの上で矢印キーでも操作できます。",
-      },
-      missing: {
-        th: "ที่จับขึ้นใน Team Plan ของ V1 สำหรับผู้วางแผนเมื่อไม่ได้กรองแถวอยู่ ใน V2 ย้ายแถวในตารางด้วย Alt+Shift+ลูกศร กด 'ถัดไป'",
-        en: "The grip shows in V1's Team Plan for planners while no quick filter is on; in V2, move rows on the Sheet with Alt+Shift+arrows. Press Next.",
-        jp: "つまみは V1 のチームプランで、絞り込みをしていないとき計画担当者に表示されます。V2 では表で Alt+Shift+矢印キーで行を移動します。「次へ」を押します。",
-      },
-    },
-    {
-      target: "plan.insert",
-      action: "next",
-      view: "projects",
-      title: { th: "เพิ่มงานในแถวด้วย +", en: "Add rows in place with +", jp: "+ でその場に行を追加" },
-      body: {
-        th: "วิศวกรที่เป็นสมาชิกและมีสิทธิ์อัปเดตงานเพิ่มงานย่อยใต้งานที่เป็น PIC งานที่สร้างเอง และแถวลูกได้ แก้หรือลบได้เฉพาะแถวที่สร้างเอง Lead Engineer วางแผนได้เหมือน PM แต่ไม่มีสิทธิ์ baseline หรือตอบคำขอเพิ่มวันเพิ่มขึ้น กด + ที่หัวข้อหลักเพื่อเพิ่มงานใต้หัวข้อ กด + ที่งานเพื่อเพิ่มฟังก์ชันใต้งาน ช่องพิมพ์ขึ้นในแผนตรงที่แถวใหม่จะไปอยู่ ไม่มีหน้าต่างเด้งขึ้นมา บันทึกความคืบหน้าที่แถวล่างสุด เปอร์เซ็นต์ วันที่ และสถานะจะรวมขึ้นทุกระดับ",
-        en: "Engineers with project membership and progress permission can add sub tasks under their PIC tasks, their own created tasks and descendants, and edit or delete only rows they created. Lead Engineers can plan like the PM; baseline and day-request rights stay unchanged. Press + on a main heading to add a task under it, or on a task to add a function under it. The boxes open in the plan where the new row will sit, with no window to fill in. Enter progress on the lowest rows; percentages, dates and status roll up through every level.",
-        jp: "プロジェクトのメンバーで進捗権限を持つエンジニアは、担当タスク・自作タスクとその配下にサブタスクを追加し、自作行のみ編集・削除できます。リードエンジニアはPMと同様に計画できますが、ベースライン・日数依頼の権限は変わりません。大見出しの + でその下にタスクを、タスクの + でその下に機能を追加します。新しい行が入る位置に入力欄が開き、別ウィンドウは出ません。進捗は最下層の行に入力し、進捗率・日程・状態はすべての階層に集計されます。",
-      },
-      missing: {
-        th: "ปุ่ม + ขึ้นสำหรับผู้วางแผนหรือสมาชิกบนงานที่มีสิทธิ์เพิ่มงานย่อย เมื่อแผนมีแถวและไม่ได้กรองแถวอยู่ กด 'ถัดไป'",
-        en: "The + shows for planners or members on tasks where they may add sub tasks, once the plan has rows and no quick filter is on. Press Next.",
-        jp: "+ は計画担当者、またはサブタスクを追加できるメンバーに、行があり絞り込みをしていないときに表示されます。「次へ」を押します。",
-      },
-    },
-    {
-      target: "plan.remove",
-      action: "next",
-      view: "projects",
-      title: { th: "ลบแถวด้วยถังขยะ", en: "Delete a row with the bin", jp: "ごみ箱で行を削除" },
-      body: {
-        th: "กดถังขยะท้ายแถว แล้วยืนยันชื่อกับจำนวนแถวข้างใต้ที่จะถูกลบไปด้วย ลบได้เฉพาะแถวที่แถวนั้นและแถวข้างใต้ยังไม่มีความคืบหน้า ไม่มีงานส่วนตัวของสมาชิก และไม่มีคำขอเพิ่มวันรออยู่ แถวที่ลบไม่ได้จะมีถังขยะจางๆ ชี้หรือกดเพื่อดูเหตุผล แถวที่มีกุญแจมาจากภาพรวมงานทีม ให้ลบที่นั่น",
-        en: "Press the bin at the end of a row and confirm its name and how many rows under it go too. A row can be deleted only while neither it nor anything under it has progress, a member's own task or a day request waiting. A row that cannot be deleted shows a faint bin; point at it or press it to see why. A row with a lock came from the team overview; delete it there.",
-        jp: "行末のごみ箱を押し、名前と一緒に削除される配下の行数を確認します。削除できるのは、その行と配下に進捗・メンバーの個人作業・承認待ちの日数依頼がない行だけです。削除できない行には薄いごみ箱が表示され、ポイントするか押すと理由が分かります。鍵の付いた行はチームの仕事一覧から来た行なので、そちらで削除します。",
-      },
-      missing: {
-        th: "ถังขยะขึ้นสำหรับคนที่แก้แผนของโปรเจกต์นี้ได้ กด 'ถัดไป'",
-        en: "The bin shows for people who can change this project's plan. Press Next.",
-        jp: "ごみ箱は、この案件の計画を変更できる人に表示されます。「次へ」を押します。",
-      },
-    },
-    {
-      target: "plan.add",
-      action: "click",
-      view: "projects",
-      title: { th: "กด 'เพิ่มหัวข้อหลัก'", en: "Press Add main heading", jp: "「大見出しを追加」を押す" },
-      body: { th: "ช่องพิมพ์หัวข้อหลักใหม่จะขึ้นท้ายแผน", en: "Boxes for a new main heading open at the end of the plan.", jp: "計画の最後に新しい大見出しの入力欄が開きます。" },
-      missing: { th: "ปุ่มนี้ขึ้นสำหรับผู้วางแผนของโปรเจกต์นี้ เช่น PM", en: "The button shows for the project's planners, such as the PM.", jp: "このボタンはPMなど案件の計画担当者に表示されます。" },
-    },
-    {
-      target: "plan.quickName",
-      action: "next",
-      view: "projects",
-      title: { th: "พิมพ์ชื่อและวันที่", en: "Type the name and dates", jp: "名前と日付を入力" },
-      body: {
-        th: "พิมพ์ชื่อ หัวข้อหลักใส่วันที่ตกลงกับลูกค้าได้ หรือเว้นไว้ก่อน งานและฟังก์ชันได้วันที่ของแถวแม่ไปก่อน แก้วันในช่องนี้ หรือลากแถบบน Gantt ทีหลังก็ได้",
-        en: "Type the name. A main heading may take the dates agreed with the customer, or leave them for later. A task or function starts with its parent's dates; change them here, or drag its bar on the Gantt later.",
-        jp: "名前を入力します。大見出しには顧客と合意した日程を入れるか、後で入れます。タスクと機能は親の日程で始まります。ここで変更するか、後でガントのバーをドラッグします。",
-      },
-      missing: { th: "กด + ที่แถว หรือ 'เพิ่มหัวข้อหลัก' เพื่อเปิดช่องพิมพ์", en: "Press + on a row, or Add main heading, to open the boxes.", jp: "行の + か「大見出しを追加」で入力欄を開きます。" },
-    },
-    {
-      target: "plan.quickLevel",
-      action: "next",
-      view: "projects",
-      title: { th: "เปลี่ยนระดับด้วย ‹ ›", en: "Change the level with ‹ ›", jp: "‹ › で階層を変更" },
-      body: {
-        th: "› ย้ายแถวใหม่เข้าไปอยู่ใต้แถวข้างบน ‹ ย้ายออกมาหนึ่งระดับ แถวบนสุดเป็นหัวข้อหลัก ใต้หัวข้อเป็นงาน ใต้งานเป็นฟังก์ชัน ป้ายสีหน้าช่องชื่อบอกว่ากำลังเพิ่มอะไร",
-        en: "› puts the new row under the row above; ‹ brings it one level out. The top level is a main heading, under it a task, under a task a function. The tag before the name says which one you are adding.",
-        jp: "› で新しい行を上の行の下へ、‹ で1階層外へ出します。最上位は大見出し、その下がタスク、タスクの下が機能です。名前の前のラベルで何を追加しているか分かります。",
-      },
-    },
-    {
-      target: "plan.quickMember",
-      action: "next",
-      view: "projects",
-      title: { th: "ผู้รับผิดชอบ", en: "The member", jp: "担当者" },
-      body: {
-        th: "งานใต้หัวข้อหลักต้องเลือกผู้รับผิดชอบ หรือเลือก 'รอหัวหน้าจัดคน' พร้อมสายงาน (ไฟฟ้า เครื่องกล ซอฟต์แวร์ งานติดตั้ง) ท้ายรายการ แล้วหัวหน้าจะเลือกคนให้ที่ ภาพรวมงานทีม > จัดคน ฟังก์ชันใช้ผู้รับผิดชอบของงานถ้าไม่เลือกคนอื่น คนที่มีงานในแผนนี้แล้วอยู่ด้านบนของรายการ ผู้รับผิดชอบได้รับอีเมลและเห็นงานใน My Work",
-        en: "A task under a main heading needs a member, or pick Waiting for people with its discipline (Electrical, Mechanical, Software, Installation) at the end of the list and the head names the people on Team overview > Allocation. A function has its task's member unless you pick another. People already in this plan are at the top of the list. The member is emailed and sees the work in My Work.",
-        jp: "大見出しの下のタスクには担当者が必要です。または一覧の最後で職種（電気・機械・ソフトウェア・据付）付きの「担当者の割り当て待ち」を選ぶと、責任者がチーム概要 > 要員配置で担当者を決めます。機能は別の人を選ばなければタスクの担当者になります。この計画の担当者は一覧の上にあります。担当者にはメールが届き、マイワークに表示されます。",
-      },
-      missing: {
-        th: "ช่องนี้ขึ้นเมื่อแถวใหม่เป็นงานหรือฟังก์ชัน กด › ให้แถวเข้าไปอยู่ใต้หัวข้อข้างบน หรือกด 'ถัดไป'",
-        en: "This shows when the new row is a task or a function. Press › to put it under the heading above, or press Next.",
-        jp: "新しい行がタスクか機能のときに表示されます。› で上の見出しの下に入れるか、「次へ」を押します。",
-      },
-    },
-    {
       target: "plan.workDays",
       action: "next",
       view: "projects",
@@ -2324,20 +2235,16 @@ const PROJECT_PLAN: Guide = {
       },
     },
     {
-      target: "plan.save",
+      target: "plan.sheetFollow",
       action: "click",
       view: "projects",
-      title: { th: "บันทึกแล้วเพิ่มต่อ", en: "Save and add the next", jp: "保存して次を追加" },
+      title: { th: "ต้องตาม", en: "To follow up", jp: "要フォロー" },
       body: {
-        th: "กด 'บันทึก' หรือ Enter แถวจะเข้าแผนทันที และช่องพิมพ์แถวถัดไปขึ้นใต้แถวที่เพิ่งเพิ่ม โดยใช้ผู้รับผิดชอบและวันที่เดิม กด Esc หรือ × เพื่อปิด ถ้าแค่ฝึก กด Esc แล้วกด 'เสร็จ'",
-        en: "Press Save, or Enter. The row goes into the plan at once and boxes for the next one open just below it, with the same member and dates. Esc or × closes them. Only practising? Press Esc, then Finish.",
-        jp: "「保存」か Enter を押すと行がすぐ計画に入り、そのすぐ下に同じ担当者と日付で次の入力欄が開きます。Esc か × で閉じます。練習だけなら Esc の後に「完了」を押します。",
+        th: "ปุ่มนี้รวมงานที่ต้องตาม: เลยกำหนด ติดปัญหา ถึงวันเริ่มแต่ยังไม่เริ่ม ยังไม่มีผู้ทำ วันที่ผู้ทำยังไม่ยืนยันชั่วโมงใน My Work (ย้อนหลัง 2 สัปดาห์) งานจ้างภายนอกที่ยังไม่ขอซื้อ วันหยุดบริษัทใหม่ที่ตรงกับงาน (กด 'เลื่อนวันจบ' หรือ 'คงไว้' ระบบไม่เลื่อนเอง) และแถวที่แก้หลังส่งไฟล์ลูกค้าครั้งล่าสุด (กด 'ส่งออกไฟล์ใหม่') กดชื่องานเพื่อไปที่แถวนั้นในตาราง",
+        en: "This button gathers what needs following up: late, blocked, due to start but not started, no member yet, days a member has not confirmed in My Work (the last two weeks), outsourced work with no purchase request, a new company holiday on the work (press Move the end or Keep; nothing moves on its own), and rows changed since the customer file was last sent (press Export a new file). Press a task to go to its row.",
+        jp: "このボタンに要フォローの作業をまとめます：遅延、停滞、開始日を過ぎて未着手、担当者なし、担当者が My Work で工数を確定していない日（過去2週間）、購買依頼のない外注作業、作業に重なる新しい会社休日（「終了日を延ばす」か「そのまま」を押します。自動では動きません）、前回の顧客ファイル送付後に変更された行（「新しいファイルを出力」を押します）。作業名を押すとその行に移動します。",
       },
-      missing: {
-        th: "กด + ที่แถว หรือ 'เพิ่มหัวข้อหลัก' เพื่อเปิดช่องพิมพ์ แล้วกด 'ถัดไป'",
-        en: "Press + on a row, or Add main heading, to open the boxes, then press Next.",
-        jp: "行の + か「大見出しを追加」で入力欄を開き、「次へ」を押します。",
-      },
+      missing: { th: "เปิด 'ตาราง' ก่อน หรือกด 'ถัดไป'", en: "Open the Sheet first, or press Next.", jp: "先に「表」を開くか、「次へ」を押します。" },
     },
   ],
 };
@@ -4160,17 +4067,17 @@ const ESTIMATE_LOOK_V2: Guide = {
 };
 
 /*
- * V1 / V2 look of the Projects screens (owner 2026-11-22): everyone starts on V1. V2 is the Pegasus ERP look, with the
- * Overview as a Pegasus list and the plan edited on the Plan tab only.
+ * The Projects overview in the Pegasus ERP look, the only look since 2026-11-25 (the old two-look switch is gone): the list
+ * filters from its summary bar and column headers, and the plan is edited on the Plan tab only.
  */
-const PROJECT_LOOK_V2: Guide = {
-  id: "project-look-v2",
+const PROJECT_OVERVIEW: Guide = {
+  id: "project-overview",
   area: "project",
-  title: { th: "ใช้หน้าจอ Project แบบ V2 (Pegasus)", en: "Use the V2 (Pegasus) look of Projects", jp: "Projects の V2（Pegasus）表示を使う" },
+  title: { th: "ดูภาพรวมโปรเจกต์", en: "Read the Projects overview", jp: "Projects の概要を見る" },
   summary: {
-    th: "สลับหน้าจอ Project เป็นแบบ V2 หน้าตาเดียวกับ Pegasus ERP หน้าภาพรวมกรองจากแถบสรุปและหัวคอลัมน์ และแก้แผนที่แท็บ Plan ที่เดียว ฟังก์ชันเหมือน V1 ทุกอย่าง กลับไป V1 ได้ทุกเมื่อ",
-    en: "Switch the Projects screens to V2, the Pegasus ERP look. The Overview filters from its summary bar and column headers, and the plan is edited on the Plan tab only. Every function is the same as in V1, and you can go back to V1 at any time.",
-    jp: "Projects 画面を Pegasus ERP と同じ V2 表示に切り替えます。概要はサマリーバーと列見出しで絞り込み、計画は「Plan」タブだけで編集します。機能は V1 と同じで、いつでも V1 に戻せます。",
+    th: "หน้าภาพรวมโปรเจกต์กรองจากแถบสรุปสุขภาพและหัวคอลัมน์ ดูชั่วโมงเทียบงบและเรื่องที่ต้องตาม และเปิดหน้าโปรเจกต์หรือแผนงานจากแต่ละแถว แผนแก้ที่แท็บแผนงานที่เดียว",
+    en: "The Projects overview filters from its health summary bar and column headers, shows hours against budget and what to follow up, and opens each project's page or plan from its row. The plan is edited on the Plan tab only.",
+    jp: "Projects の概要は健全性のサマリーバーと列見出しで絞り込み、予算に対する時間と要フォローを表示し、各行から案件ページや計画を開きます。計画は「Plan」タブだけで編集します。",
   },
   minutes: 3,
   permissions: ["project.read"],
@@ -4181,22 +4088,11 @@ const PROJECT_LOOK_V2: Guide = {
       "projects",
       { th: "เปิดเมนูโปรเจกต์", en: "Open Projects", jp: "「Projects」を開く" },
       {
-        th: "ปุ่มสลับ V1 / V2 อยู่มุมขวาบนของทุกแท็บ (ภาพรวม Plan Punchlist และ Cost) คลิกที่เมนูที่ไฮไลต์อยู่",
-        en: "Every Projects tab (Overview, Plan, Punchlist and Cost) has the V1 / V2 switch at the top right. Click the highlighted menu.",
-        jp: "Projects のすべてのタブ（概要、Plan、Punchlist、Cost）の右上に V1 / V2 の切り替えがあります。強調表示のメニューをクリックします。",
+        th: "คลิกที่เมนูที่ไฮไลต์อยู่ หน้าแรกคือรายการโปรเจกต์ทั้งหมด",
+        en: "Click the highlighted menu. It opens on the list of every project.",
+        jp: "強調表示のメニューをクリックします。すべての案件の一覧が開きます。",
       },
     ),
-    {
-      target: "project.lookV2",
-      action: "click",
-      view: "projects",
-      title: { th: "กด V2", en: "Press V2", jp: "「V2」を押す" },
-      body: {
-        th: "หน้าจอเปลี่ยนเป็นแบบ Pegasus ทันที ระบบจำตัวเลือกไว้ในเครื่องนี้ แยกจากของ Estimating และงานขาย ครั้งหน้าที่เปิดหน้าโปรเจกต์จะเป็น V2",
-        en: "The screen changes to the Pegasus look at once. The choice is kept on this computer, apart from the Estimating and Sales ones, so Projects opens in V2 next time.",
-        jp: "画面がすぐに Pegasus 表示に変わります。選択は Estimating や営業とは別にこのコンピューターに保存され、次回も Projects は V2 で開きます。",
-      },
-    },
     {
       target: "project.summary",
       action: "next",
@@ -4206,11 +4102,6 @@ const PROJECT_LOOK_V2: Guide = {
         th: "ช่องแรกคือโครงการที่ยังเปิดอยู่ทั้งหมด ถัดไปคือ ล่าช้า เสี่ยง ยังไม่มีแผน และตามแผน กดช่องไหนรายการด้านล่างจะแสดงเฉพาะกลุ่มนั้น กดซ้ำเพื่อดูทั้งหมด ชิปใต้แถบคือเรื่องที่ต้องดูแล",
         en: "The first cell is every open project, then Delayed, At Risk, No plan and On Track. Press a cell to list only those projects, and press it again to see them all. The chips under the bar are the things that need attention.",
         jp: "最初のセルは進行中のすべての案件、続いて遅延・リスク・計画なし・順調です。セルを押すとその案件だけを一覧表示し、もう一度押すとすべて表示します。バーの下のチップは要対応の事項です。",
-      },
-      missing: {
-        th: "กด V2 ก่อน แถบนี้มีเฉพาะหน้าตาแบบ V2 และอยู่ในแท็บภาพรวม",
-        en: "Press V2 first; this bar is part of the V2 look, on the Overview tab.",
-        jp: "先に「V2」を押します。このバーは V2 表示の概要タブにだけあります。",
       },
     },
     {
@@ -4222,11 +4113,6 @@ const PROJECT_LOOK_V2: Guide = {
         th: "คอลัมน์ 'ชม.จริง / งบ' คือชั่วโมงที่ทีมยืนยันแล้วเทียบงบจาก Estimate (เป็นสีแดงเมื่อเกิน) คอลัมน์ 'ต้องตาม' คือจำนวนงานในแผนที่เลยกำหนด ติดปัญหา ถึงวันเริ่มแต่ยังไม่เริ่ม ยังไม่มีผู้ทำ หรือจ้างภายนอกแต่ยังไม่ขอซื้อ กดตัวเลขเพื่อเปิดแผนงาน",
         en: "Hours / budget is the hours the team confirmed against the Estimate's budget (red when over). To follow up counts plan rows that are late, blocked, due but not started, have nobody on them, or are outsourced with no purchase request; press the number to open the plan.",
         jp: "「実績時間 / 予算」はチームが確定した時間と見積の予算です（超過すると赤）。「要フォロー」は遅延・停滞・開始日を過ぎて未着手・担当者なし・購買依頼のない外注の行数です。数字を押すと計画を開きます。",
-      },
-      missing: {
-        th: "กด V2 ก่อน คอลัมน์นี้มีเฉพาะหน้าตาแบบ V2 ในมุมมองรายการ",
-        en: "Press V2 first; these columns are part of the V2 list.",
-        jp: "先に「V2」を押します。この列は V2 の一覧にだけあります。",
       },
     },
     {
@@ -4251,25 +4137,14 @@ const PROJECT_LOOK_V2: Guide = {
       view: "projects",
       title: { th: "แก้แผนที่แท็บ Plan ที่เดียว", en: "The plan is edited on the Plan tab only", jp: "計画は「Plan」タブだけで編集します" },
       body: {
-        th: "เมนู ⋯ ของแต่ละโครงการมี 'เปิด Project Schedule' แทน 'แก้ไข Master Plan' และฟอร์มแก้โครงการไม่มีส่วนแผนแล้ว ที่แท็บ Plan แก้แผนบน Gantt ได้เลย หรือกด 'เพิ่มเติม' > 'แก้ไข Master Plan' เพื่อแก้แบบตาราง ใช้แม่แบบแผน และให้วันโครงการตามแผน",
-        en: "Each project's ⋯ menu has Open Project Schedule in place of Edit Master Plan, and Edit project no longer holds the plan. On the Plan tab, edit the plan on the Gantt, or press More > Edit Master Plan for the table, the schedule templates and the project dates that follow the plan.",
-        jp: "各案件の ⋯ メニューには「マスタープランを編集」の代わりに「プロジェクトスケジュールを開く」があり、案件の編集画面には計画がありません。「Plan」タブではガントで計画を編集するか、「その他」>「マスタープランを編集」で表形式、テンプレート、計画に合わせた案件日付を編集します。",
+        th: "เมนู ⋯ ของแต่ละโครงการเปิดหน้าโปรเจกต์หรือแผนงาน หน้าโปรเจกต์มีแก้ไขโครงการ สมาชิก ขั้นงาน และลบ ส่วนแผนแก้ที่แท็บแผนงานบนตาราง Sheet ที่เดียว",
+        en: "Each project's ⋯ menu opens its page or its plan. The page holds Edit project, members, stage and delete; the plan is edited on the Plan tab, on the Sheet, and nowhere else.",
+        jp: "各案件の ⋯ メニューから案件ページまたは計画を開きます。案件ページには編集・メンバー・ステージ・削除があり、計画は「Plan」タブの Sheet だけで編集します。",
       },
       missing: {
         th: "ถ้ายังไม่มีโครงการในรายการ ให้กด 'ถัดไป'",
         en: "If the list has no project yet, press Next.",
         jp: "一覧に案件がない場合は「次へ」を押します。",
-      },
-    },
-    {
-      target: "project.look",
-      action: "next",
-      view: "projects",
-      title: { th: "กลับไปแบบเดิมได้ทุกเมื่อ", en: "Go back to V1 at any time", jp: "いつでも V1 に戻せます" },
-      body: {
-        th: "กด V1 เพื่อกลับไปหน้าตาเดิม งานที่เปิดอยู่ไม่หายและไม่ต้องบันทึกใหม่ เพราะ V1 กับ V2 ใช้ข้อมูลชุดเดียวกัน",
-        en: "Press V1 to return to the look you know. The work you have open stays as it is, because V1 and V2 use the same data.",
-        jp: "V1 を押すと従来の表示に戻ります。V1 と V2 は同じデータを使うので、開いている作業はそのまま残ります。",
       },
     },
   ],
@@ -4791,7 +4666,7 @@ export const GUIDES: readonly Guide[] = [
   ESTIMATE_REVISION_BACK,
   ESTIMATE_HISTORICAL_IMPORT,
   ESTIMATE_LOOK_V2,
-  PROJECT_LOOK_V2,
+  PROJECT_OVERVIEW,
   {
     id: "purchase-request",
     area: "purchase",
