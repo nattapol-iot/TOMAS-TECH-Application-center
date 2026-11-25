@@ -226,6 +226,13 @@ export const FLEET_COPY: Record<string, Copy> = {
   "Ops.plantLabel": { th: "ภาพรวมสถานะของทุก Site", en: "Status overview of every site", jp: "全サイトの状態概要" },
   "Ops.tile.cpu": { th: "CPU สูงสุด", en: "Peak CPU", jp: "最大CPU" },
   "Ops.tile.alarms": { th: "Alarm ค้าง", en: "Open alarms", jp: "未解決アラーム" },
+  "Ops.filterHint": { th: "กดเพื่อแสดงเฉพาะ Site กลุ่มนี้", en: "Show only these sites", jp: "このサイトだけを表示" },
+  "Ops.filterClear": { th: "กดอีกครั้งเพื่อแสดงทุก Site", en: "Press again to show every site", jp: "もう一度押すと全サイトを表示" },
+  "Ops.filterEmpty": {
+    th: "ตอนนี้ไม่มี Site ในกลุ่มนี้ กดตัวกรองอีกครั้งเพื่อแสดงทุก Site",
+    en: "No site is in this group right now. Press the filter again to show every site.",
+    jp: "このグループのサイトは現在ありません。フィルターをもう一度押すと全サイトを表示します。",
+  },
   "Ops.severity.critical": { th: "วิกฤต", en: "Critical", jp: "重大" },
   "Ops.severity.warning": { th: "ต้องดู", en: "Needs attention", jp: "要注意" },
   "Ops.severity.ok": { th: "ปกติ", en: "Normal", jp: "正常" },

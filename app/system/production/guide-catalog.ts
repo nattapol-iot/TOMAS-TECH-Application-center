@@ -3599,9 +3599,9 @@ const COMMAND_CENTER: Guide = {
       view: "command-center",
       title: { th: "ภาพรวม Site", en: "Site overview", jp: "サイト概要" },
       body: {
-        th: "แต่ละ Site เป็นการ์ดแบบหน้าจอ SCADA เรียง Site ที่มีปัญหาไว้ก่อน แถบบนสุดนับจำนวน Site ตามสถานะและ Alarm ที่ค้าง การ์ดปกติเป็นสีเทามีไฟเขียวเล็กๆ เหลืองคือต้องดู แดงคือวิกฤต ในการ์ดมีเครื่องที่ออนไลน์ โปรแกรมที่ทำงาน CPU สูงสุด และ Alarm ค้าง คลิกการ์ดเพื่อดูรายละเอียดและรีโมต",
-        en: "Each site is a SCADA-style faceplate, worst first, under a summary bar that counts sites by state and open alarms. A healthy site stays grey with a small green lamp; amber needs attention, red is critical. A faceplate shows PCs online, programs running, peak CPU and open alarms. Click it for its detail and Remote buttons.",
-        jp: "各サイトは SCADA 風のフェースプレートで、問題のあるサイトが先に並びます。上部のバーは状態別のサイト数と未解決アラームを数えます。正常は灰色に小さな緑ランプ、黄は要注意、赤は重大。オンライン PC・稼働プログラム・最大 CPU・未解決アラームを表示し、クリックで詳細とリモート。",
+        th: "แต่ละ Site เป็นการ์ดแบบหน้าจอ SCADA เรียง Site ที่มีปัญหาไว้ก่อน แถบบนสุดนับจำนวน Site ตามสถานะและ Alarm ที่ค้าง กดชิปเพื่อแสดงเฉพาะกลุ่มนั้น กดซ้ำเพื่อแสดงทั้งหมด การ์ดปกติเป็นสีเทามีไฟเขียวเล็กๆ เหลืองคือต้องดู แดงคือวิกฤต ในการ์ดมีเครื่องที่ออนไลน์ โปรแกรมที่ทำงาน CPU สูงสุด และ Alarm ค้าง คลิกการ์ดเพื่อดูรายละเอียดและรีโมต",
+        en: "Each site is a SCADA-style faceplate, worst first, under a summary bar that counts sites by state and open alarms; press a chip to show only that group, again to show all. A healthy site stays grey with a small green lamp; amber needs attention, red is critical. A faceplate shows PCs online, programs running, peak CPU and open alarms. Click it for its detail and Remote buttons.",
+        jp: "各サイトは SCADA 風のフェースプレートで、問題のあるサイトが先に並びます。上部のバーは状態別のサイト数と未解決アラームを数え、チップを押すとそのグループだけを表示、もう一度で全表示。正常は灰色に小さな緑ランプ、黄は要注意、赤は重大。オンライン PC・稼働プログラム・最大 CPU・未解決アラームを表示し、クリックで詳細とリモート。",
       },
     },
     {
