@@ -1,25 +1,22 @@
-import type { ComponentType } from "react";
-import { DataSection } from "../data/DataSection";
-import { FeedbackSection } from "../feedback/FeedbackSection";
-import { FormsSection } from "../forms/FormsSection";
-import { IconsSection } from "../icons/IconsSection";
-import { NavigationSection } from "../navigation/NavigationSection";
-import { PagesSection } from "../pages/PagesSection";
+import { lazy, type ComponentType } from "react";
 import { PrimitivesSection } from "../primitives/PrimitivesSection";
-import { RecordsSection } from "../records/RecordsSection";
 import type { TomasUiSectionId } from "../types/tomas-ui.types";
-import { UtilitiesSection } from "../utilities/UtilitiesSection";
-import { VisualsSection } from "../visuals/VisualsSection";
 
+// The tab opens on Primitives, so it ships with the tab instead of waiting on a second request. Every other
+// section is its own chunk and loads, with the optional peers of the subpath entries, when it is picked.
 export const TOMAS_UI_SECTION_BODIES: Record<TomasUiSectionId, ComponentType> = {
   primitives: PrimitivesSection,
-  forms: FormsSection,
-  data: DataSection,
-  records: RecordsSection,
-  navigation: NavigationSection,
-  pages: PagesSection,
-  visuals: VisualsSection,
-  feedback: FeedbackSection,
-  icons: IconsSection,
-  utilities: UtilitiesSection,
+  forms: lazy(() => import("../forms/FormsSection").then((module) => ({ default: module.FormsSection }))),
+  controls: lazy(() => import("../controls/ControlsSection").then((module) => ({ default: module.ControlsSection }))),
+  data: lazy(() => import("../data/DataSection").then((module) => ({ default: module.DataSection }))),
+  records: lazy(() => import("../records/RecordsSection").then((module) => ({ default: module.RecordsSection }))),
+  navigation: lazy(() => import("../navigation/NavigationSection").then((module) => ({ default: module.NavigationSection }))),
+  pages: lazy(() => import("../pages/PagesSection").then((module) => ({ default: module.PagesSection }))),
+  visuals: lazy(() => import("../visuals/VisualsSection").then((module) => ({ default: module.VisualsSection }))),
+  feedback: lazy(() => import("../feedback/FeedbackSection").then((module) => ({ default: module.FeedbackSection }))),
+  print: lazy(() => import("../print/PrintSection").then((module) => ({ default: module.PrintSection }))),
+  "file-viewer": lazy(() => import("../file-viewer/FileViewerSection").then((module) => ({ default: module.FileViewerSection }))),
+  "route-map": lazy(() => import("../route-map/RouteMapSection").then((module) => ({ default: module.RouteMapSection }))),
+  icons: lazy(() => import("../icons/IconsSection").then((module) => ({ default: module.IconsSection }))),
+  utilities: lazy(() => import("../utilities/UtilitiesSection").then((module) => ({ default: module.UtilitiesSection }))),
 };

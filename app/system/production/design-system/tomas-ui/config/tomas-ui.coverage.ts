@@ -3,12 +3,16 @@ import type { TomasUiDemoSpec, TomasUiInternal, TomasUiNotShown, TomasUiSectionS
 export const TOMAS_UI_SECTIONS: readonly TomasUiSectionSpec[] = [
   { id: "primitives", title: "TUI.primitives", note: "TUI.primitivesNote" },
   { id: "forms", title: "TUI.forms", note: "TUI.formsNote" },
+  { id: "controls", title: "TUI.controls", note: "TUI.controlsNote" },
   { id: "data", title: "TUI.data", note: "TUI.dataNote" },
   { id: "records", title: "TUI.records", note: "TUI.recordsNote" },
   { id: "navigation", title: "TUI.navigation", note: "TUI.navigationNote" },
   { id: "pages", title: "TUI.pages", note: "TUI.pagesNote" },
   { id: "visuals", title: "TUI.visuals", note: "TUI.visualsNote" },
   { id: "feedback", title: "TUI.feedback", note: "TUI.feedbackNote" },
+  { id: "print", title: "TUI.print", note: "TUI.printNote" },
+  { id: "file-viewer", title: "TUI.fileViewer", note: "TUI.fileViewerNote" },
+  { id: "route-map", title: "TUI.routeMap", note: "TUI.routeMapNote" },
   { id: "icons", title: "TUI.icons", note: "TUI.iconsNote" },
   { id: "utilities", title: "TUI.utilities", note: "TUI.utilitiesNote" },
 ];
@@ -65,17 +69,53 @@ export const TOMAS_UI_DEMOS: readonly TomasUiDemoSpec[] = [
   { id: "search-signature", section: "forms", title: "TUI.demoSearchSignature", exports: ["SearchInput", "SignaturePad"] },
   { id: "form-fields", section: "forms", wide: true, title: "TUI.demoFormFields", exports: ["FormFields", "FormRowsSection", "FormAside", "ValidatedForm"] },
   { id: "form-dialog", section: "forms", title: "TUI.demoFormDialog", exports: ["FormDialog", "useFormScreen", "useFormRows"] },
+  {
+    id: "validation",
+    section: "forms",
+    wide: true,
+    title: "TUI.demoValidation",
+    exports: ["ServerErrorAnchor", "ValidationMirror", "AnchoredBubble", "validationMessage", "claimServerErrors", "takeUnclaimedServerErrors", "resetServerErrorClaims"],
+  },
+  { id: "drafts", section: "forms", title: "TUI.demoDrafts", exports: ["useFormDraft", "useDialogDraft", "idbDraftStore", "readFormDraft", "clearFormDrafts"] },
+  { id: "split-form-dialog", section: "forms", title: "TUI.demoSplitFormDialog", exports: ["SplitFormDialog"] },
+
+  { id: "month-pickers", section: "controls", title: "TUI.demoMonthPickers", exports: ["MonthPicker", "MonthRangePicker", "MonthGrid", "DayOfMonthPicker", "formatMonthLabel"] },
+  {
+    id: "standalone-controls",
+    section: "controls",
+    title: "TUI.demoStandaloneControls",
+    exports: ["NumberControl", "DatePickerControl", "DateTimePickerControl", "TimeRangePickerControl", "YearPickerControl", "ColorPickerControl", "ColorSwatch"],
+  },
+  { id: "text-inputs", section: "controls", title: "TUI.demoTextInputs", exports: ["PhoneInput", "TokenTextarea", "TOKEN_PATTERN", "InlineEditTrigger"] },
+  { id: "file-inputs", section: "controls", title: "TUI.demoFileInputs", exports: ["FileInput", "formatFileSize", "FileDropControl", "ImageInput"] },
 
   { id: "data-table", section: "data", wide: true, title: "TUI.demoDataTable", exports: ["DataTable", "SelectionBar", "Pagination"] },
   { id: "field-cell", section: "data", title: "TUI.demoFieldCell", exports: ["FieldCell", "TONE_BADGE_CLASS", "TONE_FILL_CLASS", "columnScales"] },
   { id: "entity-table", section: "data", wide: true, title: "TUI.demoEntityTable", exports: ["EntityTable", "RestAdapter"] },
   { id: "repeat-view", section: "data", wide: true, title: "TUI.demoRepeatView", exports: ["RepeatView", "RepeatCell"] },
   { id: "view-rows", section: "data", title: "TUI.demoViewRows", exports: ["useViewRows", "selectRows"] },
+  { id: "pivot-table", section: "data", wide: true, title: "TUI.demoPivotTable", exports: ["PivotTable"] },
+  { id: "table-builder", section: "data", wide: true, title: "TUI.demoTableBuilder", exports: ["TableBuilder"] },
+  {
+    id: "grid-cells",
+    section: "data",
+    wide: true,
+    title: "TUI.demoGridCells",
+    exports: ["GridTextCell", "GridNumberCell", "GridSuggestCell", "GridAddButton", "GridAddRow", "GridFillHeader", "GridInsertMenu", "GRID_TABLE_CLASS", "GRID_FRAME_CLASS"],
+  },
+  {
+    id: "numbers",
+    section: "data",
+    wide: true,
+    title: "TUI.demoNumbers",
+    exports: ["CompactNumber", "toNumber", "formatExact", "isCompacted", "formatCompact", "DotRating", "DOT_FILL", "Meter", "SummaryBar"],
+  },
 
   { id: "record-sheet", section: "records", title: "TUI.demoRecordSheet", exports: ["RecordSheet", "useOpenRecord"] },
   { id: "record-detail", section: "records", title: "TUI.demoRecordDetail", exports: ["RecordDetail", "RecordActivity"] },
   { id: "record-pane", section: "records", title: "TUI.demoRecordPane", exports: ["RecordPane"] },
   { id: "record-view", section: "records", title: "TUI.demoRecordView", exports: ["RecordView", "FieldValue", "ProgressValue", "TruncatedText", "COLLECTION_VIEW_LABEL"] },
+  { id: "approval-stepper", section: "records", title: "TUI.demoApprovalStepper", exports: ["ApprovalStepper", "PersonAvatar"] },
 
   {
     id: "sidebar",
@@ -126,11 +166,16 @@ export const TOMAS_UI_DEMOS: readonly TomasUiDemoSpec[] = [
     ],
   },
   { id: "layout", section: "navigation", title: "TUI.demoLayout", exports: ["SplitPanes", "PageFrame", "PAGE_CARD_CLASS", "HeaderActionsMenu"] },
+  { id: "page-jump-links", section: "navigation", title: "TUI.demoPageJumpLinks", exports: ["PageJump", "OpenLinkButton"] },
+  { id: "locale-switcher", section: "navigation", title: "TUI.demoLocaleSwitcher", exports: ["LocaleSwitcher", "UI_LOCALE_OPTIONS", "switchLocaleAndReload"] },
 
+  { id: "page-header", section: "pages", wide: true, title: "TUI.demoPageHeader", exports: ["PageHeader", "PageActions"] },
   { id: "list-page", section: "pages", wide: true, title: "TUI.demoListPage", exports: ["ListPage", "useListScreen", "useListActions"] },
   { id: "dashboard-page", section: "pages", wide: true, title: "TUI.demoDashboardPage", exports: ["DashboardPage"] },
 
   { id: "charts", section: "visuals", wide: true, title: "TUI.demoCharts", exports: ["ChartView"] },
+  { id: "echart", section: "visuals", title: "TUI.demoEChart", exports: ["EChart"] },
+  { id: "images", section: "visuals", title: "TUI.demoImages", exports: ["ImageCard", "FallbackImage"] },
   { id: "stats", section: "visuals", title: "TUI.demoStats", exports: ["StatFigureView"] },
   { id: "cross-filter", section: "visuals", title: "TUI.demoCrossFilter", exports: ["CrossFilterProvider", "CrossFilterContext", "useCrossFilter", "ScreenFilterBar"] },
   {
@@ -224,6 +269,28 @@ export const TOMAS_UI_DEMOS: readonly TomasUiDemoSpec[] = [
     exports: ["Command", "CommandInput", "CommandList", "CommandEmpty", "CommandGroup", "CommandItem", "CommandSeparator", "CommandShortcut", "CommandDialog"],
   },
   { id: "toast", section: "feedback", title: "TUI.demoToast", exports: ["Toaster", "toast"] },
+  { id: "states", section: "feedback", title: "TUI.demoStates", exports: ["EmptyState", "Notice", "LoadingOverlay"] },
+  {
+    id: "server-errors",
+    section: "feedback",
+    title: "TUI.demoServerErrors",
+    exports: ["ErrorDialog", "useServerError", "showServerError", "clearServerError", "serverErrorFromResponse", "serverErrorFromValidation", "serverErrorFromException", "formatServerErrorLog"],
+  },
+  { id: "diagnostics", section: "feedback", title: "TUI.demoDiagnostics", exports: ["installDiagnostics", "recordDiagnostic", "recordClientError"] },
+  { id: "reason-dialog", section: "feedback", title: "TUI.demoReasonDialog", exports: ["ReasonDialog", "TypedConfirmField", "TYPED_CONFIRM_FIELD", "typedConfirmMatches"] },
+  { id: "tooltip-hint", section: "feedback", title: "TUI.demoTooltipHint", exports: ["TooltipHint", "TooltipItemText", "plainTooltipText"] },
+
+  { id: "print-viewer", section: "print", wide: true, title: "TUI.demoPrintViewer", exports: ["PrintViewer", "HtmlSheet", "PrintToggle", "A4_MM", "paginateDocument", "pdfFileName"] },
+  { id: "print-helpers", section: "print", title: "TUI.demoPrintHelpers", exports: ["detachedHtmlSheet", "printDocumentHtml", "printWhenReady", "downloadFile"] },
+  { id: "pdf-controls", section: "print", title: "TUI.demoPdfControls", exports: ["PdfViewerToolbar", "PageThumbnailRail"] },
+
+  { id: "file-viewer", section: "file-viewer", wide: true, title: "TUI.demoFileViewer", entry: "@tomas-tc/ui/file-viewer", exports: ["FileViewer", "fileViewerKind"] },
+  { id: "file-preview", section: "file-viewer", title: "TUI.demoFilePreview", exports: ["FilePreview"] },
+  { id: "pdf-zip", section: "file-viewer", title: "TUI.demoPdfZip", entry: "@tomas-tc/ui/file-viewer", exports: ["savePdfsAsZip"] },
+
+  { id: "route-map", section: "route-map", wide: true, title: "TUI.demoRouteMap", entry: "@tomas-tc/ui/route-map", exports: ["RouteMap", "placeLink"] },
+  { id: "pin-map", section: "route-map", title: "TUI.demoPinMap", entry: "@tomas-tc/ui/route-map", exports: ["PinMap"] },
+  { id: "point-picker", section: "route-map", title: "TUI.demoPointPicker", entry: "@tomas-tc/ui/route-map", exports: ["PointPicker"] },
 
   { id: "named-icon", section: "icons", title: "TUI.demoNamedIcon", exports: ["NamedIcon"] },
 
@@ -257,12 +324,9 @@ export const TOMAS_UI_SHOWN_COUNT = TOMAS_UI_DEMOS.reduce((sum, demo) => sum + d
 export const TOMAS_UI_EXPORT_COUNT = TOMAS_UI_SHOWN_COUNT + TOMAS_UI_NOT_SHOWN.length;
 
 export const TOMAS_UI_INTERNALS: readonly TomasUiInternal[] = [
-  { name: "ApprovalStepper", seenIn: "RecordDetail, FieldValue" },
   { name: "ColumnHead, ColumnResize", seenIn: "DataTable, ListPage, RepeatView" },
   { name: "RowMoves, MoveFieldsDialog", seenIn: "ListPage, RepeatView, useRowTransition" },
-  { name: "FilePreview", seenIn: "FieldCell, FormAside" },
-  { name: "PersonAvatar", seenIn: "RecordDetail header, FieldCell avatar" },
-  { name: "EChart, Sparkline", seenIn: "ChartView, StatFigureView" },
+  { name: "Sparkline", seenIn: "StatFigureView" },
   { name: "LazyIcon, EmojiIcon", seenIn: "NamedIcon, IconPickerControl" },
-  { name: "ColorPickerControl, FileDropControl, YearPickerControl, NumberControl, DatePickerControl", seenIn: "FieldControl" },
+  { name: "PdfView, DocxView, SheetView, MarkdownView", seenIn: "FileViewer" },
 ];

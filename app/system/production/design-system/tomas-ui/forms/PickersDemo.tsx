@@ -6,10 +6,13 @@ import { useState } from "react";
 import { useT } from "../../../../i18n";
 import { DEVICE_OPTIONS, PRIORITY_OPTIONS } from "../fixtures/tomas-ui.screens";
 import { TomasUiDemo } from "../TomasUiDemo";
+import { useSensorSearch } from "../utils/use-sensor-search";
 
 export function PickersDemo() {
   const t = useT();
   const intl = useUiIntl();
+  const sensors = useSensorSearch();
+  const [sensor, setSensor] = useState<string | null>(null);
   const [device, setDevice] = useState<string | null>("dev-1");
   const [devices, setDevices] = useState<string[]>(["dev-1", "dev-2"]);
   const [priority, setPriority] = useState<RowValue>("normal");
@@ -42,6 +45,20 @@ export function PickersDemo() {
         <div className="grid gap-1.5">
           <Label htmlFor="tui-range">DateRangePickerControl</Label>
           <DateRangePickerControl id="tui-range" value={range} onChange={setRange} />
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="tui-combobox-remote">{t("TUI.remoteOptions")}</Label>
+          <ComboboxControl
+            id="tui-combobox-remote"
+            value={sensor}
+            options={sensors.options}
+            loading={sensors.loading}
+            clearable
+            placeholder={`${sensors.total} ${t("TUI.sensors")}`}
+            onSearch={sensors.search}
+            loadMore={sensors.loadMore}
+            onChange={setSensor}
+          />
         </div>
         <div className="grid gap-1.5">
           <Label htmlFor="tui-combobox-off">{t("TUI.disabled")}</Label>
