@@ -1,6 +1,6 @@
 "use client";
 import { confirmDialog } from "../dialogs";
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
+import { Fragment, useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { ApiClientError, apiRequest, listInquiries, listProjects, type BootstrapData } from "../api-client";
 import { Drawer, EmptyState, Icon, Modal, SearchInput, type Tone } from "../ui";
@@ -31,7 +31,8 @@ import {
   type TeamTaskSlot,
   type TeamTaskStatus,
 } from "../resource-workload-client";
-import { dateFromDay, dayNumber, weeklyCapacity, workingDays, type Commitment } from "../../../lib/resource-planning";
+import { dateFromDay, dayNumber, isOpenWork, weeklyCapacity, workingDays, type Commitment } from "../../../lib/resource-planning";
+import { itemManDays } from "../../../lib/capacity-plan";
 import {
   MAX_REPEAT_DAYS,
   boardDays,
@@ -74,7 +75,7 @@ import { DateInput } from "../DateInput";
 export type TeamBoardMode = "board" | "list";
 type Category = "rfq" | "est" | "prj" | "appointment" | "task" | "away";
 /** The planner's summary bar; the list keeps the first four as its attention chips. */
-type Attention = "late" | "unassigned" | "over" | "overlap" | "free" | "pending" | "leave";
+type Attention = "late" | "unassigned" | "over" | "overlap" | "free" | "pending" | "leave" | "noHours";
 type BoardEvent =
   | { kind: "rfq" | "est" | "prj"; key: string; item: Commitment; late: boolean }
   | { kind: "appointment" | "task" | "away"; key: string; task: TeamTask; late: boolean }
@@ -110,6 +111,10 @@ type Person = {
   overDates: string[];
   /** Team planner: each day on show in hours, and the person's total against what they can give. */
   days: PlannerDay[];
+  /** Their open work over the days on show, for the lines a row opens into (owner decisions 2026-11-25). */
+  work: Commitment[];
+  /** Of that work, plan rows with no hours: not counted, listed until someone types their hours. */
+  noHours: number;
   hours: ReturnType<typeof plannerTotals>;
 };
 
@@ -140,6 +145,8 @@ const SUMMARY: readonly { key: Attention; label: string; tone: string }[] = [
   { key: "free", label: "TeamWeek.chipFree", tone: "green" },
   { key: "pending", label: "TeamWeek.chipPending", tone: "amber" },
   { key: "leave", label: "TeamWeek.chipLeave", tone: "violet" },
+  // Owner decisions 2026-11-25: plan work with a member and no hours takes no time; the people who have some.
+  { key: "noHours", label: "TeamBoard.sumNoHours", tone: "slate" },
   { key: "late", label: "TeamBoard.late", tone: "red" },
   { key: "unassigned", label: "TeamBoard.sumWaiting", tone: "blue" },
 ];
@@ -181,7 +188,7 @@ function readView(userId: number): "grid" | "gantt" {
 }
 
 const CATEGORY_LINK = optionalChoiceLink<Category>(["rfq", "est", "prj", "appointment", "task", "away"]);
-const ATTENTION_LINK = optionalChoiceLink<Attention>(["late", "unassigned", "over", "overlap", "free", "pending", "leave"]);
+const ATTENTION_LINK = optionalChoiceLink<Attention>(["late", "unassigned", "over", "overlap", "free", "pending", "leave", "noHours"]);
 /** The attention chips the list keeps; the rest belong to the planner's summary bar. */
 const LIST_ATTENTION: readonly Attention[] = ["late", "unassigned", "over", "overlap"];
 const LIST_TYPES: Record<Category, string> = {
@@ -546,8 +553,13 @@ export function TeamBoard({
             week: weekDays.get(`${user.id}|${day.date}`) ?? null,
           }),
         );
+        const first = days[0]?.date ?? range.from,
+          last = days.at(-1)?.date ?? range.to;
+        const work = items.filter((item) => isOpenWork(item) && item.type !== "Task" && item.start !== null && item.start <= last && (item.end ?? item.start) >= first);
         return {
           days: plannerDays,
+          work,
+          noHours: work.filter((item) => item.type === "Project" && !item.outsourced && !item.byDay && !(item.manDays !== null && item.manDays > 0)).length,
           hours: plannerTotals(plannerDays),
           overlaps,
           overlapOn: new Map(overlaps.filter((day) => shown.has(day.date)).map((day) => [day.date, day])),
@@ -706,7 +718,17 @@ export function TeamBoard({
     .sort((a, b) => (a.end ?? a.start ?? "9999").localeCompare(b.end ?? b.start ?? "9999") || a.key.localeCompare(b.key));
 
   // Team planner's filters over the days on show (owner decision 2026-11-23): one summary bar, each figure a filter.
-  const plannerMatch = (person: Person, key: Exclude<Attention, "unassigned">) => (key === "overlap" ? person.overlapOn.size > 0 : key === "late" ? person.late > 0 : person.hours.flags[key]);
+  const plannerMatch = (person: Person, key: Exclude<Attention, "unassigned">) =>
+    key === "overlap" ? person.overlapOn.size > 0 : key === "late" ? person.late > 0 : key === "noHours" ? person.noHours > 0 : person.hours.flags[key];
+  // A person's row opens into one line per piece of their work, in hours a day (owner decisions 2026-11-25).
+  const [opened, setOpened] = useState<ReadonlySet<number>>(() => new Set());
+  const toggleOpened = (userId: number) =>
+    setOpened((current) => {
+      const next = new Set(current);
+      if (next.has(userId)) next.delete(userId);
+      else next.add(userId);
+      return next;
+    });
   const plannerCount = (key: Exclude<Attention, "unassigned">) => people.filter((person) => inDepartment(person.userId) && plannerMatch(person, key)).length;
   // The grid's people: the team filter, a search on name or team, and the summary bar's filter; the busiest first in a team.
   const byLoad = (a: Person, b: Person) => b.hours.total / Math.max(1, b.hours.capacity) - a.hours.total / Math.max(1, a.hours.capacity) || a.user.name.localeCompare(b.user.name);
@@ -936,6 +958,46 @@ export function TeamBoard({
   };
   /** Where a cell's figure comes from: a tick for confirmed hours, a dot for hours booked on My week, a ring for the plan. */
   const sourceMark = (source: PlannerDay["source"]) => (source === "confirmed" ? <Icon name="check" className="board-src confirmed" /> : <i className={`board-src ${source}`} aria-hidden="true" />);
+  /** One line per piece of a person's work over the days on show: its hours each day, or "?" while it has no hours. */
+  const workLines = (person: Person) =>
+    person.work.map((item) => {
+      const noHours = item.type === "Project" && !item.outsourced && !item.byDay && !(item.manDays !== null && item.manDays > 0);
+      const total = days.reduce((sum, day) => sum + itemManDays(item, day.date, data?.holidays ?? []) * HOURS_PER_DAY, 0);
+      const end = item.end ?? item.start;
+      return (
+        <tr key={`${person.userId}:${item.key}`} className={`board-work-line${noHours ? " no-hours" : ""}`}>
+          <th scope="row" className="board-who">
+            <span className="board-work-name">
+              <strong>{item.hidden ? t("TeamBoard.hiddenWork") : [item.reference, item.title].filter(Boolean).join(" · ")}</strong>
+              <small>
+                {[
+                  item.start === end ? shortDate(item.start) : `${shortDate(item.start)} – ${shortDate(end)}`,
+                  item.outsourced
+                    ? t("TeamBoard.outsourced")
+                    : noHours
+                      ? t("TeamBoard.dayNoHours")
+                      : item.manDays !== null && item.manDays > 0
+                        ? fill(t("TeamBoard.workHours"), { n: fmt(item.manDays * HOURS_PER_DAY) })
+                        : "",
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </small>
+            </span>
+          </th>
+          <td className="board-week">{noHours || item.outsourced ? <span className="board-work-none">{t("TeamBoard.notCounted")}</span> : fill(t("TeamBoard.dayHours"), { n: fmt(total) })}</td>
+          {days.map((day) => {
+            const hours = itemManDays(item, day.date, data?.holidays ?? []) * HOURS_PER_DAY;
+            const inside = item.start !== null && day.date >= item.start && day.date <= (end ?? item.start) && !day.weekend && !day.holiday;
+            return (
+              <td key={day.date} className={`board-work-cell${day.weekend ? " weekend" : ""}${day.holiday ? " holiday" : ""}`}>
+                {hours > 0 ? fmt(hours) : noHours && inside ? <span className="board-work-none">?</span> : null}
+              </td>
+            );
+          })}
+        </tr>
+      );
+    });
   const cell = (person: Person, day: (typeof days)[number], index: number) => {
     const userId = person.userId,
       name = person.user.name;
@@ -1667,30 +1729,46 @@ export function TeamBoard({
                       {[...groups].map(([group, members]) => (
                         <GroupRows key={group} label={`${group} · ${members.length}`} span={days.length + 2} pinned open={!folded.includes(group)} onToggle={() => toggleFold(group)}>
                           {members.map((person) => (
-                            <tr key={person.userId}>
-                              <th scope="row" className="board-who">
-                                <button
-                                  type="button"
-                                  className="board-person"
-                                  onClick={() => {
-                                    setPersonId(person.userId);
-                                    onMode("list");
-                                  }}
-                                >
-                                  <span className="board-avatar" aria-hidden="true">
-                                    {initials(person.user.name)}
-                                  </span>
-                                  <span>
-                                    <strong>{person.user.name}</strong>
-                                    <small className="board-person-meta">{[person.user.department, person.user.role].filter(Boolean).join(" · ")}</small>
-                                    {person.awayDays ? <small>{fill(t("TeamBoard.awayDays"), { n: person.awayDays })}</small> : null}
-                                    {person.overlapOn.size ? <small className="board-overlap-note">{fill(t("TeamBoard.overlapDays"), { n: person.overlapOn.size })}</small> : null}
-                                  </span>
-                                </button>
-                              </th>
-                              <td className="board-week">{rangeLoad(person)}</td>
-                              {days.map((day, index) => cell(person, day, index))}
-                            </tr>
+                            <Fragment key={person.userId}>
+                              <tr className={opened.has(person.userId) ? "board-row-open" : undefined}>
+                                <th scope="row" className="board-who">
+                                  {person.work.length ? (
+                                    <button
+                                      type="button"
+                                      className={`board-row-toggle${opened.has(person.userId) ? " open" : ""}`}
+                                      aria-expanded={opened.has(person.userId)}
+                                      aria-label={fill(t(opened.has(person.userId) ? "TeamBoard.workClose" : "TeamBoard.workOpen"), { name: person.user.name })}
+                                      title={fill(t(opened.has(person.userId) ? "TeamBoard.workClose" : "TeamBoard.workOpen"), { name: person.user.name })}
+                                      data-guide="teamweek.workOpen"
+                                      onClick={() => toggleOpened(person.userId)}
+                                    >
+                                      <Icon name="chevronRight" />
+                                    </button>
+                                  ) : null}
+                                  <button
+                                    type="button"
+                                    className="board-person"
+                                    onClick={() => {
+                                      setPersonId(person.userId);
+                                      onMode("list");
+                                    }}
+                                  >
+                                    <span className="board-avatar" aria-hidden="true">
+                                      {initials(person.user.name)}
+                                    </span>
+                                    <span>
+                                      <strong>{person.user.name}</strong>
+                                      <small className="board-person-meta">{[person.user.department, person.user.role].filter(Boolean).join(" · ")}</small>
+                                      {person.awayDays ? <small>{fill(t("TeamBoard.awayDays"), { n: person.awayDays })}</small> : null}
+                                      {person.overlapOn.size ? <small className="board-overlap-note">{fill(t("TeamBoard.overlapDays"), { n: person.overlapOn.size })}</small> : null}
+                                    </span>
+                                  </button>
+                                </th>
+                                <td className="board-week">{rangeLoad(person)}</td>
+                                {days.map((day, index) => cell(person, day, index))}
+                              </tr>
+                              {opened.has(person.userId) ? workLines(person) : null}
+                            </Fragment>
                           ))}
                         </GroupRows>
                       ))}

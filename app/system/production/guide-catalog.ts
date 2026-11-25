@@ -2369,14 +2369,30 @@ const TEAM_WEEK: Guide = {
       missing: { th: "รอให้ข้อมูลโหลดเสร็จก่อน หรือกด 'ถัดไป'", en: "Wait for the table to load, or press Next.", jp: "読み込みを待つか、「次へ」を押します。" },
     },
     {
+      target: "teamweek.workOpen",
+      action: "next",
+      view: "resources",
+      title: { th: "กางดูงานทีละงาน", en: "Open someone's work, one line each", jp: "作業を1行ずつ表示する" },
+      body: {
+        th: "กดลูกศรหน้าชื่อคนเพื่อกางงานของเขาทีละงาน ทุกโปรเจกต์ แต่ละช่องคือชั่วโมงของงานนั้นในวันนั้น ชั่วโมงงานของงานแบ่งเท่ากันในวันทำงานของช่วงที่ทำได้ งานที่ยังไม่ใส่ชั่วโมงขึ้น '?' และ 'ไม่นับ' เพราะไม่ถูกนับในภาระ งานจ้างภายนอกเป็นของผู้รับเหมา",
+        en: "Press the arrow before a name to open their work, one line each, over every project. Each cell is that work's hours that day: a task's hours are spread over the working days of its window. Work with no hours shows ? and not counted, because it takes no time in the load; outsourced work is the supplier's.",
+        jp: "名前の前の矢印を押すと、その人の作業を全案件で1行ずつ表示します。各セルはその日の作業時間で、作業時間は作業可能期間の稼働日に均等に配分されます。時間未入力の作業は ? と「含めない」で、負荷に数えません。外注の作業は外注先のものです。",
+      },
+      missing: {
+        th: "ลูกศรขึ้นกับคนที่มีงานในช่วงที่ดู ถ้ายังไม่มี กด 'ถัดไป'",
+        en: "The arrow shows for people with work in the days on show. If there is none, press Next.",
+        jp: "表示期間に作業がある人に矢印が表示されます。なければ「次へ」を押します。",
+      },
+    },
+    {
       target: "teamweek.chips",
       action: "next",
       view: "resources",
       title: { th: "กรองคนที่ต้องดู", en: "Filter the people to look at", jp: "確認したい人に絞る" },
       body: {
-        th: "แถบสรุปนับคนในแต่ละเรื่อง: เกินกำลัง งานซ้อน ว่าง 8 ชม. ขึ้นไป ยังไม่ยืนยันชั่วโมง มีวันลา เลยกำหนด และงานรอมอบหมาย กดช่องไหนตารางเหลือเฉพาะคนกลุ่มนั้น กดซ้ำเพื่อดูทุกคน",
-        en: "The summary bar counts people for each: over capacity, overlapping work, 8 h or more free, hours not confirmed, time away, overdue, and work waiting for people. Press one to see only those people; press it again to see everyone.",
-        jp: "まとめバーは、負荷超過・作業の重複・8時間以上空き・時間未確定・休暇あり・期限超過・割り当て待ちの人数を表示します。押すとその人だけを表示し、もう一度押すと全員に戻ります。",
+        th: "แถบสรุปนับคนในแต่ละเรื่อง: เกินกำลัง งานซ้อน ว่าง 8 ชม. ขึ้นไป ยังไม่ยืนยันชั่วโมง มีวันลา มีงานยังไม่ใส่ชั่วโมง เลยกำหนด และงานรอมอบหมาย กดช่องไหนตารางเหลือเฉพาะคนกลุ่มนั้น กดซ้ำเพื่อดูทุกคน",
+        en: "The summary bar counts people for each: over capacity, overlapping work, 8 h or more free, hours not confirmed, time away, work with no hours, overdue, and work waiting for people. Press one to see only those people; press it again to see everyone.",
+        jp: "まとめバーは、負荷超過・作業の重複・8時間以上空き・時間未確定・休暇あり・時間未入力の作業あり・期限超過・割り当て待ちの人数を表示します。押すとその人だけを表示し、もう一度押すと全員に戻ります。",
       },
     },
     {

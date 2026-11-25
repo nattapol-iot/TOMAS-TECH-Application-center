@@ -535,3 +535,70 @@
     box-shadow: var(--shadow-lg);
   }
 }
+
+/* Team planner: a person's row opens into one line per piece of work in hours a day (owner decisions 2026-11-25). */
+.board-row-toggle {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  margin-right: 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--muted);
+  vertical-align: middle;
+  cursor: pointer;
+}
+.board-row-toggle svg {
+  width: 14px;
+  height: 14px;
+  transition: transform 0.15s ease;
+}
+.board-row-toggle.open svg {
+  transform: rotate(90deg);
+}
+.board-row-toggle:hover,
+.board-row-toggle:focus-visible {
+  background: var(--n-100);
+  color: var(--ink);
+}
+.board-who:has(> .board-row-toggle) {
+  white-space: nowrap;
+}
+.board-who:has(> .board-row-toggle) > .board-person {
+  display: inline-flex;
+  max-width: calc(100% - 24px);
+  vertical-align: middle;
+}
+.board-work-line th,
+.board-work-line td {
+  background: var(--surface);
+  font-size: var(--fs-xs);
+}
+.board-work-line .board-who {
+  padding-left: 40px;
+}
+.board-work-name {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+.board-work-name strong {
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.board-work-name small {
+  color: var(--muted);
+}
+.board-work-cell {
+  font-family: var(--font-mono);
+  text-align: center;
+}
+.board-work-line.no-hours strong,
+.board-work-none {
+  color: var(--muted);
+}

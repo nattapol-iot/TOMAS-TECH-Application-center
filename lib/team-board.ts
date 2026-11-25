@@ -122,7 +122,7 @@ export function dayWork(items: readonly Commitment[], date: string, holidays: re
     const span = item.start && end ? workingDays(item.start, end, holidays).length || dayNumber(end) - dayNumber(item.start) + 1 : 0;
     const typed = item.manDays !== null && item.manDays > 0;
     const piece = pieces.get(workGroup(item)) ?? { piece: workGroup(item), rows: [] };
-    piece.rows.push({ item, perDay: typedShare !== null ? typedShare : typed && span ? item.manDays! / span : null, noHours: !typed && item.type === "Project" });
+    piece.rows.push({ item, perDay: typedShare !== null ? typedShare : typed && span ? item.manDays! / span : null, noHours: !typed && item.type === "Project" && !item.outsourced });
     pieces.set(piece.piece, piece);
   }
   const startOf = (piece: DayPiece) => piece.rows.map((row) => row.item.start ?? "").sort()[0] ?? "";

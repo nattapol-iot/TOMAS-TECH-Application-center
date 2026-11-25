@@ -76,3 +76,17 @@ test("rows with no hours take nobody's time on the board, the planner and Alloca
   assert.doesNotMatch(board, /impliedEffort|fullDay/);
   assert.match(board, /noHours: !typed && item\.type === "Project"/);
 });
+
+test("Team planner: a person's row opens into one line per piece of work in hours a day; work with no hours is a filter", async () => {
+  const board = await source("app/system/production/TeamBoard.tsx");
+  assert.match(board, /type Attention = "late" \| "unassigned" \| "over" \| "overlap" \| "free" \| "pending" \| "leave" \| "noHours";/);
+  assert.match(board, /\{ key: "noHours", label: "TeamBoard\.sumNoHours", tone: "slate" \}/);
+  assert.match(board, /key === "noHours" \? person\.noHours > 0/);
+  assert.match(board, /data-guide="teamweek\.workOpen"/);
+  assert.match(board, /\{opened\.has\(person\.userId\) \? workLines\(person\) : null\}/);
+  // A line's hours are the work's share of each day (lib/capacity-plan.ts itemManDays); a supplier's row is not waiting for hours.
+  assert.match(board, /itemManDays\(item, day\.date, data\?\.holidays \?\? \[\]\) \* HOURS_PER_DAY/);
+  assert.match(board, /item\.type === "Project" && !item\.outsourced && !item\.byDay && !\(item\.manDays !== null && item\.manDays > 0\)/);
+  const workload = await source("backend-node/src/resource-workload.ts");
+  assert.match(workload, /\.\.\.\(outsourced \? \{ outsourced: true \} : \{\}\),/);
+});
