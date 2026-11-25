@@ -18,7 +18,7 @@ const views = new Set([...shell.matchAll(/\{ view: "([a-z-]+)"|\{"view":"([a-z-]
 const marked = new Set(screens.flatMap(({ text }) => [...text.matchAll(/(?:data-guide|guide)\s*[=:]\s*"([^"]+)"/g)].map((match) => match[1])));
 const crm = read("app/system/production/CrmScreens.tsx");
 // Screens a guide may name that are not menu entries of their own.
-const subViews = new Set(["sales-intake", "crm-pipeline"]);
+const subViews = new Set(["sales-intake", "crm-pipeline", "command-center"]);
 // Parts of the menus themselves: the star on an entry and the Favourites section (menu-favorites guide), and the
 // "?" help button in the top bar (support-ticket guide).
 const menuParts = new Set(["nav.star", "nav.favorites", "nav.help"]);
