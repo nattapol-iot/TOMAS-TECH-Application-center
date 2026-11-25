@@ -21,7 +21,7 @@ test("going back to an earlier revision opens a new one and keeps the history (o
   // Same gate as Create Revision: estimate.write, the row version, and the owner or a manager.
   assert.match(flow, /demandPermission\(request, "estimate\.write"\)/);
   assert.match(flow, /current\.row_version\.equals\(rowVersion\)/);
-  assert.match(flow, /Number\(current\.owner_id\) !== actor\.id && !managerOverride\(actor\)\) throw new ApiError\(403, "estimate_owner_required"/);
+  assert.match(flow, /Number\(current\.owner_id\) !== actor\.id && !managerOverride\(actor\)\)\s*throw new ApiError\(403, "estimate_owner_required"/);
   // The source must be a revision in this estimate's history, and never the current one.
   assert.match(flow, /fromRevision === current\.revision\) throw new ApiError\(400/);
   assert.match(flow, /FROM dbo\.estimate_revisions WITH\(HOLDLOCK\) WHERE estimate_id=@id AND revision=@revision/);
@@ -43,7 +43,7 @@ test("going back to an earlier revision opens a new one and keeps the history (o
   assert.match(flow, /contingencyRate: Number\(current\.contingency_rate\) \}/);
   assert.match(flow, /contingencyRate: restoredRate \?\? Number\(current\.contingency_rate\)/);
   // The audit reason is never empty, because the ERP Cost Sheet takes its revision description from it.
-  assert.match(flow, /reason: restoreRevisionReason\(fromRevision, comment\), comment \}/);
+  assert.match(flow, /reason: restoreRevisionReason\(fromRevision, comment\),\s*comment,?\s*\}/);
   assert.match(erpRoute, /a\.action IN\(N'Revision created',N'Revision requested',N'Revision restored'\)/);
   // A revision number is a SQL int; a larger one is refused as a bad request.
   assert.match(flow, /requiredInteger\(body\.fromRevision, "Source revision", 0, SQL_INT_MAX\)/);
@@ -55,7 +55,7 @@ test("going back to an earlier revision opens a new one and keeps the history (o
   assert.match(workspace, /canRestoreRevision: open && permissionRow\.can_write && elevated && \(EDITABLE\.has\(header\.status\) \|\| \["Approved", "Locked"\]\.includes\(header\.status\)\)/);
   assert.match(workspace, /a\.action=N'Revision restored'/);
   // The "copied from" rows are the last statement of the workspace batch, read as recordset 11 (after approvers 9 and events 10).
-  const batchEnd = workspace.indexOf("`, (sqlRequest) => { sqlRequest.input(\"id\", sql.BigInt, id); sqlRequest.input(\"actor_user\"");
+  const batchEnd = workspace.indexOf('`, (sqlRequest) => { sqlRequest.input("id", sql.BigInt, id); sqlRequest.input("actor_user"');
   const sourcesAt = workspace.indexOf("a.action=N'Revision restored'");
   assert.ok(batchEnd > sourcesAt && !workspace.slice(sourcesAt, batchEnd).includes("SELECT"), "no statement follows the sources query");
   assert.equal(workspace.slice(0, sourcesAt).split("${ESTIMATE_APPROVERS_SQL}").length, 2, "approvers come before it");
@@ -75,14 +75,31 @@ test("going back to an earlier revision opens a new one and keeps the history (o
 });
 
 test("an earlier revision's cost items group by category and module and show what counted", () => {
-  const line = (id, categoryCode, module, lineTotal, amount) => ({ id, categoryCode, category: categoryCode === "01" ? "Hardware" : "Software", module,
-    itemCode: `I${id}`, description: "", brand: "", model: "", supplierName: null, quantity: 1, unit: "pcs", unitCost: lineTotal, lineTotal, amount });
+  const line = (id, categoryCode, module, lineTotal, amount) => ({
+    id,
+    categoryCode,
+    category: categoryCode === "01" ? "Hardware" : "Software",
+    module,
+    itemCode: `I${id}`,
+    description: "",
+    brand: "",
+    model: "",
+    supplierName: null,
+    quantity: 1,
+    unit: "pcs",
+    unitCost: lineTotal,
+    lineTotal,
+    amount,
+  });
   const groups = revisionCostGroups([line(1, "01", "Conveyor", 100, 300), line(2, "01", "Conveyor ", 50, 150), line(3, "01", "Panel", 40, 40), line(4, "02", "Panel", 10, 10)]);
-  assert.deepEqual(groups.map((group) => [group.title, group.lines.length, group.counted, group.multiplied]), [
-    ["01 · Hardware · Conveyor", 2, 450, true],
-    ["01 · Hardware · Panel", 1, 40, false],
-    ["02 · Software · Panel", 1, 10, false],
-  ]);
+  assert.deepEqual(
+    groups.map((group) => [group.title, group.lines.length, group.counted, group.multiplied]),
+    [
+      ["01 · Hardware · Conveyor", 2, 450, true],
+      ["01 · Hardware · Panel", 1, 40, false],
+      ["02 · Software · Panel", 1, 10, false],
+    ],
+  );
   assert.deepEqual(revisionCostGroups([]), []);
 });
 
@@ -91,7 +108,11 @@ test("a copied revision keeps the ERP summary as it was laid out, and going back
   const start = routes.indexOf("async function cloneRevisionLines");
   const clone = routes.slice(start, routes.indexOf("async function materializeErpMappings", start));
   // A category a person chose by hand stays chosen on the copy: every mapping copy carries manual_override.
-  assert.equal(clone.split("INSERT dbo.estimate_erp_mappings(estimate_id,revision,source_type,source_id,erp_category,manual_override,copied_from_mapping_id,copied_from_revision,created_by,updated_by)").length - 1, 5);
+  assert.equal(
+    clone.split("INSERT dbo.estimate_erp_mappings(estimate_id,revision,source_type,source_id,erp_category,manual_override,copied_from_mapping_id,copied_from_revision,created_by,updated_by)").length -
+      1,
+    5,
+  );
   assert.equal(clone.split("m.erp_category,m.manual_override,m.id,@current_revision,@actor,@actor").length - 1, 5);
   assert.doesNotMatch(clone, /source_id,erp_category,copied_from_mapping_id/);
   // Merged ERP lines follow their members to the copied lines of all four ledgers, in their own order.
@@ -112,14 +133,14 @@ test("a copied revision keeps the ERP summary as it was laid out, and going back
   assert.match(restore, /SELECT policy_id FROM dbo\.estimate_overhead_snapshots WHERE estimate_id=@id AND revision=@revision;/);
   assert.match(restore, /const applied = await snapshotOverheadPolicy\(transaction, id, nextRevision, actor\.id, todayIn\(config\.businessTimeZone\), Number\(sourcePolicy\.policy_id\)\);/);
   // A policy that could not be applied stops the restore; it never passes with a different total.
-  assert.match(restore, /Number\(applied\?\.policy_id\) !== Number\(sourcePolicy\.policy_id\)\) throw new ApiError\(409, "overhead_policy_unavailable"/);
+  assert.match(restore, /Number\(applied\?\.policy_id\) !== Number\(sourcePolicy\.policy_id\)\)\s*throw new ApiError\(409, "overhead_policy_unavailable"/);
   // A source with no policy gives a revision with none, unless overhead is in use: then the policy of the day stands in.
   assert.match(restore, /\} else if \(ESTIMATE_OVERHEAD_ENABLED\) \{\s+\/\/[^\n]*\n\s+await snapshotOverheadPolicy\(transaction, id, nextRevision, actor\.id, todayIn\(config\.businessTimeZone\)\);/);
   assert.equal(restore.split("snapshotOverheadPolicy(").length - 1, 2);
   // Send back and withdraw keep the policy of the day, as Create Revision does.
   const sendBack = routes.slice(routes.indexOf('app.post("/api/v1/estimates/:id/request-revision"'), routes.indexOf('app.get("/api/v1/estimates/:id/revisions/:revision"'));
-  assert.match(sendBack, /snapshotOverheadPolicy\(transaction,id,nextRevision,actor\.id,todayIn\(config\.businessTimeZone\)\);/);
+  assert.match(sendBack, /snapshotOverheadPolicy\(transaction, id, nextRevision, actor\.id, todayIn\(config\.businessTimeZone\)\);/);
   assert.match(routes, /await snapshotOverheadPolicy\(transaction, id, next, actorId, todayIn\(timeZone\)\);/);
   const create = routes.slice(routes.indexOf('app.post("/api/v1/estimates/:id/create-revision"'), routes.indexOf('app.post("/api/v1/estimates/:id/request-revision"'));
-  assert.match(create, /snapshotOverheadPolicy\(transaction,id,nextRevision,actor\.id,todayIn\(config\.businessTimeZone\)\);/);
+  assert.match(create, /snapshotOverheadPolicy\(transaction, id, nextRevision, actor\.id, todayIn\(config\.businessTimeZone\)\);/);
 });

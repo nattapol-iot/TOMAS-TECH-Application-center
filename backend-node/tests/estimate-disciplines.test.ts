@@ -16,7 +16,10 @@ test("labor and site expense have four disciplines, and Installation is exactly 
 test("the front-end copy of the discipline list matches the API's", async () => {
   const shared = await readFile(new URL("../../lib/estimate-disciplines.ts", import.meta.url), "utf8");
   const listed = shared.match(/export const ESTIMATE_DISCIPLINES = \[([^\]]+)\] as const;/)?.[1] ?? "";
-  assert.deepEqual([...listed.matchAll(/"([A-Za-z]+)"/g)].map((match) => match[1]), [...ESTIMATE_DISCIPLINES]);
+  assert.deepEqual(
+    [...listed.matchAll(/"([A-Za-z]+)"/g)].map((match) => match[1]),
+    [...ESTIMATE_DISCIPLINES],
+  );
 });
 
 test("a line without a chosen discipline reads as the one migration 070 backfilled", () => {
@@ -51,8 +54,17 @@ test("a write keeps a chosen discipline only when its cost type allows it", () =
   assert.equal(lineDiscipline("", "Installation"), "Installation");
   assert.equal(lineDiscipline("Mechanical", "Engineering", "Software"), "Mechanical", "the person's choice wins over the department");
   assert.equal(lineDiscipline("Installation", "Installation"), "Installation");
-  for (const [value, costType] of [["Installation", "Engineering"], ["Software", "Installation"], ["Plumbing", "Engineering"], [3, "Engineering"]] as const) {
-    assert.throws(() => lineDiscipline(value, costType), (error: unknown) => error instanceof ApiError && error.statusCode === 400, `${value}/${costType}`);
+  for (const [value, costType] of [
+    ["Installation", "Engineering"],
+    ["Software", "Installation"],
+    ["Plumbing", "Engineering"],
+    [3, "Engineering"],
+  ] as const) {
+    assert.throws(
+      () => lineDiscipline(value, costType),
+      (error: unknown) => error instanceof ApiError && error.statusCode === 400,
+      `${value}/${costType}`,
+    );
   }
 });
 
@@ -65,8 +77,14 @@ test("the ERP labor rule reads the discipline first and keeps the department fal
 });
 
 test("every route that writes a labor or expense line writes its discipline", async () => {
-  const [write, read, estimates, copy, labor, excel] = await Promise.all([route("estimate-workspace-write"), route("estimate-workspace-read"),
-    route("estimates"), route("estimate-copy"), route("labor-packages"), route("estimate-excel-import")]);
+  const [write, read, estimates, copy, labor, excel] = await Promise.all([
+    route("estimate-workspace-write"),
+    route("estimate-workspace-read"),
+    route("estimates"),
+    route("estimate-copy"),
+    route("labor-packages"),
+    route("estimate-excel-import"),
+  ]);
   assert.match(write, /discipline: lineDiscipline\(body\.discipline, costType, department, packageName, activity\)/);
   assert.match(write, /discipline: lineDiscipline\(body\.discipline, costType, null, packageName, description\)/);
   assert.match(write, /INSERT INTO dbo\.manhour_lines\(estimate_id,revision,package,activity,department,level,cost_type,discipline,/);
@@ -93,7 +111,7 @@ test("every route that writes a labor or expense line writes its discipline", as
 
 test("submitting keeps a labor category a person chose on the ERP sheet", async () => {
   const estimates = await route("estimates");
-  const update = estimates.match(/UPDATE mapping SET erp_category=\$\{laborCategorySql\('line'\)\}[\s\S]*?=0;/)?.[0] ?? "";
+  const update = estimates.match(/UPDATE mapping SET erp_category=\$\{laborCategorySql\(["']line["']\)\}[\s\S]*?=0;/)?.[0] ?? "";
   assert.doesNotMatch(update, /INSERT/, "the match stays inside the one UPDATE statement");
   assert.match(update, /COALESCE\(mapping\.manual_override,0\)=0/);
 });
@@ -105,6 +123,9 @@ test("a new estimate can start from a previous one in the same transaction", asy
   const create = estimates.match(/app\.post\("\/api\/v1\/estimates", [\s\S]*?\n {2}\}\);/)?.[0] ?? "";
   assert.match(create, /if \(copyFrom\) await users\.demandPermission\(request, "estimate\.read"\);/);
   // Lock the R00 just inserted, then fill it, before the transaction commits.
-  assert.match(create, /const estimate = await lockEditableEstimate\(transaction, id, row\.row_version\);\s*const copied = await copyEstimateLines\(transaction, \{ actor, targetId: id, estimate, sourceId: copySourceId, ownerId,\s*sections: ESTIMATE_SECTION_CODES, include: copyLedgersFrom\(copyFrom\), today \}\);/);
+  assert.match(
+    create,
+    /const estimate = await lockEditableEstimate\(transaction, id, row\.row_version\);\s*const copied = await copyEstimateLines\(transaction, \{\s*actor,\s*targetId: id,\s*estimate,\s*sourceId: copySourceId,\s*ownerId,\s*sections: ESTIMATE_SECTION_CODES,\s*include: copyLedgersFrom\(copyFrom\),\s*today,?\s*\}\);/,
+  );
   assert.ok(create.indexOf("copyEstimateLines") < create.lastIndexOf("});"), "the copy runs inside database.transaction");
 });

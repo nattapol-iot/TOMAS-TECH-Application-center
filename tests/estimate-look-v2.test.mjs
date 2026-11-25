@@ -81,11 +81,11 @@ test("the six Estimating screens carry the switch, and V1 renders as before", as
   assert.match(look, /data-guide="estimate\.look"/);
   assert.match(look, /data-guide="estimate\.lookV2"/);
   // V1 keeps its status tabs, its status column after the cost and its open arrow.
-  assert.match(screens, /\{v2 \? null : <div className="tabs est-status-tabs" role="tablist"/);
+  assert.match(screens, /\{v2 \? null : \(\s*<div className="tabs est-status-tabs" role="tablist"/);
   assert.match(screens, /\{v2 \? null : statusCell\}/);
-  assert.match(screens, /\{v2 \? null : <td><button className="row-action"/);
+  assert.match(screens, /\{v2 \? null : \(\s*<td>\s*<button\s+className="row-action"/);
   // V1 keeps its header: the V2 header is the other branch of the same condition.
-  assert.match(screens, /\{v2 \? <EstimateHeaderV2[\s\S]*?\/> : <>\s*<header className="est-head">/);
+  assert.match(screens, /\{v2 \? \(\s*<EstimateHeaderV2[\s\S]*?\/>\s*\) : \(\s*<>\s*<header className="est-head">/);
   // The guide marks of the workflow buttons exist in both looks.
   assert.match(screens, /guide: "estimate\.approve"/);
   assert.match(screens, /guide: "estimate\.submit"/);

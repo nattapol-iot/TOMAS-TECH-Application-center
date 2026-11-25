@@ -119,6 +119,8 @@ test("the catalog holds the guides the owner chose, in the order the work happen
       "estimate-approve",
       // Opening an earlier estimate revision and continuing from it (2026-11-18).
       "estimate-revision-back",
+      // An old Excel Estimate Cost imported afterwards as the Draft estimate of its project (2026-11-25).
+      "estimate-historical-import",
       // The V1 / V2 switch of the Estimating screens; V2 is the Pegasus ERP look (2026-11-19).
       "estimate-look-v2",
       // The V1 / V2 switch of the Projects screens; V2 is the Pegasus list and the plan on the Plan tab only (2026-11-22).

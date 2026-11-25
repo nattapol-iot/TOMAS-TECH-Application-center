@@ -27,13 +27,36 @@ import { loadEstimateApprovers, mayDecideEstimate, recipientsOf, submitterOf, wa
 import { notifyUsers } from "../site-visit-common.js";
 
 type EstimateRow = Record<string, unknown> & {
-  id: number | string; estimate_no: string; inquiry_no: string; customer_id: number | string; customer_name: string;
-  project_name: string; project_type: string; owner_id: number | string; owner_name: string; revision: number;
-  due_date: Date | string; status: string; progress: number | string; material_total: number | string;
-  engineering_total: number | string; outsource_total: number | string; transportation_total: number | string;
-  accommodation_total: number | string; other_total: number | string; contingency_total: number | string;
-  overhead_state: string; overhead_total: number | string | null; total: number | string; created_date: Date | string; updated_at: Date | string; row_version: Buffer; total_count: number | string;
-  site_location: string | null; target_delivery: Date | string | null;
+  id: number | string;
+  estimate_no: string;
+  inquiry_no: string;
+  customer_id: number | string;
+  customer_name: string;
+  project_name: string;
+  project_type: string;
+  owner_id: number | string;
+  owner_name: string;
+  revision: number;
+  due_date: Date | string;
+  status: string;
+  progress: number | string;
+  material_total: number | string;
+  engineering_total: number | string;
+  outsource_total: number | string;
+  transportation_total: number | string;
+  accommodation_total: number | string;
+  other_total: number | string;
+  contingency_total: number | string;
+  overhead_state: string;
+  overhead_total: number | string | null;
+  total: number | string;
+  created_date: Date | string;
+  updated_at: Date | string;
+  row_version: Buffer;
+  total_count: number | string;
+  historical_source: string | null;
+  site_location: string | null;
+  target_delivery: Date | string | null;
 };
 
 function todayIn(timeZone: string): string {
@@ -43,11 +66,14 @@ function todayIn(timeZone: string): string {
 }
 
 function addYears(value: string, years: number): string {
-  const date = new Date(`${value}T00:00:00.000Z`); date.setUTCFullYear(date.getUTCFullYear() + years); return date.toISOString().slice(0, 10);
+  const date = new Date(`${value}T00:00:00.000Z`);
+  date.setUTCFullYear(date.getUTCFullYear() + years);
+  return date.toISOString().slice(0, 10);
 }
 
 function optionalNonnegativeInteger(value: unknown, label: string): number | null {
-  const raw = firstQueryValue(value); if (raw === undefined || raw === "") return null;
+  const raw = firstQueryValue(value);
+  if (raw === undefined || raw === "") return null;
   if (!/^\d+$/.test(raw) || !Number.isSafeInteger(Number(raw))) throw new ApiError(400, "validation_failed", `${label} is invalid.`);
   return Number(raw);
 }
@@ -69,11 +95,13 @@ function managerOverride(actor: CurrentUser): boolean {
 // Discarded revisions remain reserved when the active header points back to an older approval.
 async function nextEstimateRevision(transaction: TransactionType, id: number, current: number): Promise<number> {
   const q = new sql.Request(transaction).input("id", sql.BigInt, id).input("current", sql.Int, current);
-  const row = (await q.query<{ next_revision: number }>(`SELECT MAX(revision)+1 next_revision FROM (
+  const row = (
+    await q.query<{ next_revision: number }>(`SELECT MAX(revision)+1 next_revision FROM (
     SELECT @current revision UNION ALL SELECT revision FROM dbo.estimate_revisions WHERE estimate_id=@id
     UNION ALL SELECT TRY_CONVERT(int,JSON_VALUE(before_json,'$.estimate.revision')) FROM dbo.document_lifecycle_events
     WHERE entity_type=N'Estimate' AND entity_id=@id
-  ) revisions;`)).recordset[0];
+  ) revisions;`)
+  ).recordset[0];
   return row!.next_revision;
 }
 
@@ -84,20 +112,29 @@ export function adminSelfDecision(actor: { roles: string[] }): boolean {
 
 async function validationIssues(database: Database, estimateId: number, transaction?: TransactionType): Promise<Array<{ code: string; message: string; entityType: string; entityId: number }>> {
   const statement = `SELECT code,message,entity_type,entity_id FROM dbo.fn_estimate_validation(@estimate_id) ORDER BY code,entity_id;`;
-  const map = (rows: Array<{ code: string; message: string; entity_type: string; entity_id: number | string }>) => withoutLegacyDuplicateErrors(rows).map((row) => ({
-    code: row.code, message: row.message, entityType: row.entity_type, entityId: Number(row.entity_id),
-  }));
+  const map = (rows: Array<{ code: string; message: string; entity_type: string; entity_id: number | string }>) =>
+    withoutLegacyDuplicateErrors(rows).map((row) => ({
+      code: row.code,
+      message: row.message,
+      entityType: row.entity_type,
+      entityId: Number(row.entity_id),
+    }));
   if (transaction) {
-    const request = new sql.Request(transaction); request.input("estimate_id", sql.BigInt, estimateId);
+    const request = new sql.Request(transaction);
+    request.input("estimate_id", sql.BigInt, estimateId);
     return map((await request.query<{ code: string; message: string; entity_type: string; entity_id: number | string }>(statement)).recordset);
   }
-  return map((await database.query<{ code: string; message: string; entity_type: string; entity_id: number | string }>(statement,
-    (request) => request.input("estimate_id", sql.BigInt, estimateId))).recordset);
+  return map(
+    (await database.query<{ code: string; message: string; entity_type: string; entity_id: number | string }>(statement, (request) => request.input("estimate_id", sql.BigInt, estimateId))).recordset,
+  );
 }
 
 async function snapshotSubmission(transaction: TransactionType, estimateId: number, revision: number, actorId: number): Promise<void> {
-  const read = new sql.Request(transaction); read.input("estimate_id",sql.BigInt,estimateId); read.input("revision",sql.Int,revision);
-  const snapshot = (await read.query<{ snapshot_json:string }>(`SELECT (SELECT e.estimate_no estimateNumber,e.inquiry_id inquiryId,e.customer_id customerId,
+  const read = new sql.Request(transaction);
+  read.input("estimate_id", sql.BigInt, estimateId);
+  read.input("revision", sql.Int, revision);
+  const snapshot = (
+    await read.query<{ snapshot_json: string }>(`SELECT (SELECT e.estimate_no estimateNumber,e.inquiry_id inquiryId,e.customer_id customerId,
       e.project_name projectName,e.project_type projectType,e.owner_id ownerId,e.revision,e.created_date createdDate,e.due_date dueDate,e.status,
       e.progress,e.contingency_rate contingencyRate,e.updated_at updatedAt,
       JSON_QUERY((SELECT t.material_total material,t.engineering_total engineering,t.outsource_total outsource,t.transportation_total transportation,
@@ -134,19 +171,26 @@ async function snapshotSubmission(transaction: TransactionType, estimateId: numb
       JSON_QUERY((SELECT JSON_VALUE(a.after_json,'$.sourceName') sourceName,JSON_VALUE(a.after_json,'$.sourceHash') sourceHash,
         JSON_QUERY(a.after_json,'$.sourceFile') sourceFile,a.occurred_at importedAt FROM dbo.audit_log a WHERE a.entity_type=N'Estimate'
         AND a.entity_id=e.id AND a.action=N'Excel imported' AND TRY_CONVERT(int,JSON_VALUE(a.after_json,'$.revision'))=e.revision ORDER BY a.id FOR JSON PATH)) excelImports
-      FROM dbo.estimates e WHERE e.id=@estimate_id AND e.revision=@revision FOR JSON PATH,WITHOUT_ARRAY_WRAPPER) snapshot_json;`)).recordset[0]?.snapshot_json;
-  if (!snapshot) throw new ApiError(409,"submission_snapshot_failed","The submitted estimate could not be snapshotted.");
-  const insert = new sql.Request(transaction); insert.input("estimate_id",sql.BigInt,estimateId); insert.input("revision",sql.Int,revision);
-  insert.input("snapshot",sql.NVarChar(sql.MAX),snapshot); insert.input("hash",sql.Char(64),createHash("sha256").update(snapshot).digest("hex"));
-  insert.input("actor",sql.BigInt,actorId);
+      FROM dbo.estimates e WHERE e.id=@estimate_id AND e.revision=@revision FOR JSON PATH,WITHOUT_ARRAY_WRAPPER) snapshot_json;`)
+  ).recordset[0]?.snapshot_json;
+  if (!snapshot) throw new ApiError(409, "submission_snapshot_failed", "The submitted estimate could not be snapshotted.");
+  const insert = new sql.Request(transaction);
+  insert.input("estimate_id", sql.BigInt, estimateId);
+  insert.input("revision", sql.Int, revision);
+  insert.input("snapshot", sql.NVarChar(sql.MAX), snapshot);
+  insert.input("hash", sql.Char(64), createHash("sha256").update(snapshot).digest("hex"));
+  insert.input("actor", sql.BigInt, actorId);
   await insert.query(`INSERT dbo.estimate_submission_snapshots(estimate_id,revision,snapshot_json,snapshot_sha256,submitted_by)
     VALUES(@estimate_id,@revision,@snapshot,@hash,@actor);`);
 }
 
 async function snapshotRevision(transaction: TransactionType, estimateId: number, revision: number, reason: string, status: string, actorId: number): Promise<void> {
   const request = new sql.Request(transaction);
-  request.input("estimate_id", sql.BigInt, estimateId); request.input("revision", sql.Int, revision);
-  request.input("reason", sql.NVarChar(100), reason); request.input("snapshot_status", sql.NVarChar(50), status); request.input("actor", sql.BigInt, actorId);
+  request.input("estimate_id", sql.BigInt, estimateId);
+  request.input("revision", sql.Int, revision);
+  request.input("reason", sql.NVarChar(100), reason);
+  request.input("snapshot_status", sql.NVarChar(50), status);
+  request.input("actor", sql.BigInt, actorId);
   const result = await request.query<{ id: number | string }>(`
     DECLARE @snapshot nvarchar(max)=(SELECT e.estimate_no estimateNumber,e.inquiry_id inquiryId,e.customer_id customerId,
       e.project_name projectName,e.project_type projectType,e.owner_id ownerId,e.revision,e.created_date createdDate,
@@ -177,23 +221,33 @@ async function snapshotRevision(transaction: TransactionType, estimateId: number
 }
 
 async function updateInquiry(transaction: TransactionType, inquiryId: number, status: string, progress: number, actorId: number): Promise<void> {
-  const request = new sql.Request(transaction); request.input("status", sql.NVarChar(50), status);
-  request.input("progress", sql.Decimal(5, 2), progress); request.input("actor", sql.BigInt, actorId); request.input("id", sql.BigInt, inquiryId);
+  const request = new sql.Request(transaction);
+  request.input("status", sql.NVarChar(50), status);
+  request.input("progress", sql.Decimal(5, 2), progress);
+  request.input("actor", sql.BigInt, actorId);
+  request.input("id", sql.BigInt, inquiryId);
   const result = await request.query(`UPDATE dbo.inquiries SET status=@status,progress=@progress,updated_by=@actor,updated_at=SYSUTCDATETIME() WHERE id=@id AND deleted_at IS NULL;`);
   if (result.rowsAffected[0] !== 1) throw new ApiError(409, "inquiry_update_failed", "The linked inquiry could not be updated.");
 }
 
 async function ensureRevisionSnapshot(transaction: TransactionType, estimateId: number, revision: number, reason: string, status: string, actorId: number): Promise<void> {
-  const lookup = new sql.Request(transaction); lookup.input("estimate_id", sql.BigInt, estimateId); lookup.input("revision", sql.Int, revision);
-  const snapshotExists = (await lookup.query<{ snapshot_exists: boolean }>(`SELECT CASE WHEN EXISTS(
+  const lookup = new sql.Request(transaction);
+  lookup.input("estimate_id", sql.BigInt, estimateId);
+  lookup.input("revision", sql.Int, revision);
+  const snapshotExists = (
+    await lookup.query<{ snapshot_exists: boolean }>(`SELECT CASE WHEN EXISTS(
     SELECT 1 FROM dbo.estimate_revisions WITH(UPDLOCK,HOLDLOCK) WHERE estimate_id=@estimate_id AND revision=@revision
-  ) THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END snapshot_exists;`)).recordset[0]?.snapshot_exists;
+  ) THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END snapshot_exists;`)
+  ).recordset[0]?.snapshot_exists;
   if (!snapshotExists) await snapshotRevision(transaction, estimateId, revision, reason, status, actorId);
 }
 
 async function cloneRevisionLines(transaction: TransactionType, estimateId: number, currentRevision: number, nextRevision: number, actorId: number): Promise<void> {
-  const clone = new sql.Request(transaction); clone.input("estimate_id", sql.BigInt, estimateId); clone.input("current_revision", sql.Int, currentRevision);
-  clone.input("next_revision", sql.Int, nextRevision); clone.input("actor", sql.BigInt, actorId);
+  const clone = new sql.Request(transaction);
+  clone.input("estimate_id", sql.BigInt, estimateId);
+  clone.input("current_revision", sql.Int, currentRevision);
+  clone.input("next_revision", sql.Int, nextRevision);
+  clone.input("actor", sql.BigInt, actorId);
   await clone.query(`
     INSERT dbo.estimate_module_details(estimate_id,revision,module_key,title,remark,updated_by,description_rows,quantity,unit,cost_multiplier)
     SELECT estimate_id,@next_revision,module_key,title,remark,@actor,description_rows,quantity,unit,cost_multiplier FROM dbo.estimate_module_details
@@ -288,17 +342,17 @@ async function materializeErpMappings(transaction: TransactionType, estimateId: 
       AND NOT EXISTS(SELECT 1 FROM dbo.estimate_erp_mappings mapping WITH(UPDLOCK,HOLDLOCK)
         WHERE mapping.estimate_id=@estimate_id AND mapping.revision=@revision AND mapping.source_type=N'CostItem' AND mapping.source_id=line.id);
 
-    UPDATE mapping SET erp_category=${laborCategorySql('line')},updated_by=@actor,updated_at=SYSUTCDATETIME()
+    UPDATE mapping SET erp_category=${laborCategorySql("line")},updated_by=@actor,updated_at=SYSUTCDATETIME()
     FROM dbo.estimate_erp_mappings mapping INNER JOIN dbo.manhour_lines line ON line.id=mapping.source_id
       AND line.estimate_id=mapping.estimate_id AND line.revision=mapping.revision
     WHERE mapping.estimate_id=@estimate_id AND mapping.revision=@revision AND mapping.source_type=N'ManhourLine'
-      AND line.deleted_at IS NULL AND ${laborCategorySql('line')} IS NOT NULL
-      AND mapping.erp_category<>${laborCategorySql('line')}
+      AND line.deleted_at IS NULL AND ${laborCategorySql("line")} IS NOT NULL
+      AND mapping.erp_category<>${laborCategorySql("line")}
       -- A category a person chose on the ERP sheet is what the sheet shows; submitting keeps it.
       AND COALESCE(mapping.manual_override,0)=0;
     INSERT dbo.estimate_erp_mappings(estimate_id,revision,source_type,source_id,erp_category,created_by,updated_by)
     SELECT @estimate_id,@revision,N'ManhourLine',line.id,
-      COALESCE(${laborCategorySql('line')},N'Unmapped'),@actor,@actor
+      COALESCE(${laborCategorySql("line")},N'Unmapped'),@actor,@actor
     FROM dbo.manhour_lines line
     WHERE line.estimate_id=@estimate_id AND line.revision=@revision AND line.deleted_at IS NULL
       AND NOT EXISTS(SELECT 1 FROM dbo.estimate_erp_mappings mapping WITH(UPDLOCK,HOLDLOCK)
@@ -365,6 +419,7 @@ const ESTIMATE_LIST_FROM = `FROM dbo.estimates e INNER JOIN dbo.inquiries i ON i
           SELECT 1 FROM dbo.estimate_assignments a WHERE a.estimate_id=e.id
             AND (a.owner_id=@mine_id OR a.support_id=@mine_id)))
         AND (@department IS NULL OR u.department=@department) AND (@revision IS NULL OR e.revision=@revision)
+        AND (@historical_only=0 OR e.historical_source IS NOT NULL)
         AND (@search IS NULL OR e.estimate_no LIKE N'%'+@search+N'%' OR i.inquiry_no LIKE N'%'+@search+N'%'
           OR e.project_name LIKE N'%'+@search+N'%' OR c.name LIKE N'%'+@search+N'%')`;
 
@@ -393,16 +448,27 @@ export function restoreRevisionReason(fromRevision: number, comment: string | nu
 
 /** What the notices say about an estimate: its project, customer, owner and current total. */
 async function estimateFacts(transaction: TransactionType, id: number) {
-  const request = new sql.Request(transaction); request.input("id", sql.BigInt, id);
-  return (await request.query<{ project_name: string; customer_name: string; owner_name: string; owner_email: string | null; total: number | string }>(`
+  const request = new sql.Request(transaction);
+  request.input("id", sql.BigInt, id);
+  return (
+    await request.query<{ project_name: string; customer_name: string; owner_name: string; owner_email: string | null; total: number | string }>(`
     SELECT e.project_name,c.name customer_name,u.name owner_name,u.email owner_email,t.total FROM dbo.estimates e
     INNER JOIN dbo.customers c ON c.id=e.customer_id INNER JOIN dbo.users u ON u.id=e.owner_id
-    INNER JOIN dbo.v_estimate_totals t ON t.estimate_id=e.id WHERE e.id=@id;`)).recordset[0]!;
+    INNER JOIN dbo.v_estimate_totals t ON t.estimate_id=e.id WHERE e.id=@id;`)
+  ).recordset[0]!;
 }
 
 /* The owner and whoever submitted the revision hear of its decision, never the person who made it; one bell row each. */
-async function noticeDecision(transaction: TransactionType, id: number, estimateNo: string, revision: number, ownerId: number,
-  actor: CurrentUser, decision: "Approved" | "Revision requested", comment: string): Promise<EstimateMail> {
+async function noticeDecision(
+  transaction: TransactionType,
+  id: number,
+  estimateNo: string,
+  revision: number,
+  ownerId: number,
+  actor: CurrentUser,
+  decision: "Approved" | "Revision requested",
+  comment: string,
+): Promise<EstimateMail> {
   const facts = await estimateFacts(transaction, id);
   const submitter = await submitterOf(transaction, id, revision);
   const told = new Map<number, { name: string; email: string }>();
@@ -411,12 +477,30 @@ async function noticeDecision(transaction: TransactionType, id: number, estimate
   }
   if (!told.size) return null;
   const approved = decision === "Approved";
-  await notifyUsers(transaction, told.keys(), "ESTIMATE_DECISION",
+  await notifyUsers(
+    transaction,
+    told.keys(),
+    "ESTIMATE_DECISION",
     `${estimateNo} ${revisionCode(revision)} ${approved ? "อนุมัติแล้ว" : "ส่งกลับให้แก้ไข"}`,
     [facts.project_name, `${approved ? "อนุมัติโดย" : "ส่งกลับโดย"} ${actor.name}`, comment].filter(Boolean).join(" · "),
-    "Estimate", id, `estimate-decision:${id}:r${revision}:${approved ? "approved" : "revision"}`);
-  return { kind: "decision", message: { estimateId: id, estimateNumber: estimateNo, revision, projectName: facts.project_name, decision,
-    decidedBy: actor.name, comment, erp: null, recipients: recipientsOf([...told.values()]) } };
+    "Estimate",
+    id,
+    `estimate-decision:${id}:r${revision}:${approved ? "approved" : "revision"}`,
+  );
+  return {
+    kind: "decision",
+    message: {
+      estimateId: id,
+      estimateNumber: estimateNo,
+      revision,
+      projectName: facts.project_name,
+      decision,
+      decidedBy: actor.name,
+      comment,
+      erp: null,
+      recipients: recipientsOf([...told.values()]),
+    },
+  };
 }
 
 async function transition(
@@ -434,24 +518,41 @@ async function transition(
   database: Database,
   users: CurrentUserService,
 ): Promise<{ response: Record<string, unknown>; mail: EstimateMail }> {
-  await users.demandPermission(request, permission); const actor = await users.required(request);
-  const body = bodyObject(request.body); const rowVersion = parseRowVersion(body.rowVersion);
+  await users.demandPermission(request, permission);
+  const actor = await users.required(request);
+  const body = bodyObject(request.body);
+  const rowVersion = parseRowVersion(body.rowVersion);
   const comment = optionalBodyText(body.comment, 20_000, "Workflow comment");
   return database.transaction(async (transaction) => {
-    const lookup = new sql.Request(transaction); lookup.input("id", sql.BigInt, id);
-    const current = (await lookup.query<{ estimate_no: string; status: string; progress: number | string; revision: number; owner_id: number | string; inquiry_id: number | string; inquiry_no: string; inquiry_status: string; inquiry_progress: number | string }>(`
+    const lookup = new sql.Request(transaction);
+    lookup.input("id", sql.BigInt, id);
+    const current = (
+      await lookup.query<{
+        estimate_no: string;
+        status: string;
+        progress: number | string;
+        revision: number;
+        owner_id: number | string;
+        inquiry_id: number | string;
+        inquiry_no: string;
+        inquiry_status: string;
+        inquiry_progress: number | string;
+      }>(`
       SELECT e.estimate_no,e.status,e.progress,e.revision,e.owner_id,e.inquiry_id,i.inquiry_no,i.status inquiry_status,i.progress inquiry_progress
       FROM dbo.estimates e WITH (UPDLOCK,HOLDLOCK) INNER JOIN dbo.inquiries i WITH (UPDLOCK,HOLDLOCK) ON i.id=e.inquiry_id
       WHERE e.id=@id AND e.deleted_at IS NULL AND i.deleted_at IS NULL AND e.archived_at IS NULL AND i.archived_at IS NULL AND i.status<>N'Cancelled';
-    `)).recordset[0];
+    `)
+    ).recordset[0];
     if (!current) throw new ApiError(404, "estimate_not_found", "Estimate or its linked inquiry was not found.");
     if (!allowedStatuses.some((status) => status.toLowerCase() === current.status.toLowerCase())) {
       throw new ApiError(409, "invalid_transition", `Cannot move an estimate from '${current.status}' to '${targetStatus}'.`);
     }
     const ownerId = Number(current.owner_id);
-    if (requireOwner && ownerId !== actor.id && !managerOverride(actor)) throw new ApiError(403, "estimate_owner_required", "Only the estimate owner, an engineering manager or an administrator can submit this estimate.");
+    if (requireOwner && ownerId !== actor.id && !managerOverride(actor))
+      throw new ApiError(403, "estimate_owner_required", "Only the estimate owner, an engineering manager or an administrator can submit this estimate.");
     // Administrators may decide their own estimates; every other owner needs a second approver.
-    if (forbidOwner && ownerId === actor.id && !adminSelfDecision(actor)) throw new ApiError(403, "self_approval_forbidden", "The estimate owner cannot approve their own estimate. Another approver must decide it.");
+    if (forbidOwner && ownerId === actor.id && !adminSelfDecision(actor))
+      throw new ApiError(403, "self_approval_forbidden", "The estimate owner cannot approve their own estimate. Another approver must decide it.");
     // Only the listed approvers decide (owner 2026-11-06); they need no estimate.approve role.
     const approvers = await loadEstimateApprovers(transaction);
     if (action === "Approved" && !mayDecideEstimate(actor, ownerId, approvers)) {
@@ -465,37 +566,77 @@ async function transition(
       const unmappedCount = await materializeErpMappings(transaction, id, current.revision, actor.id);
       if (unmappedCount > 0) throw new ApiError(422, "estimate_erp_mapping_incomplete", `${unmappedCount} cost line(s) must be assigned to an ERP category before approval.`);
     }
-    const update = new sql.Request(transaction); update.input("status", sql.NVarChar(50), targetStatus);
-    update.input("progress", sql.Decimal(5, 2), targetProgress); update.input("actor", sql.BigInt, actor.id);
-    update.input("lock_estimate", sql.Bit, action === "Approved"); update.input("id", sql.BigInt, id); update.input("row_version", sql.VarBinary(8), rowVersion);
-    const updated = (await update.query<{ row_version: Buffer }>(`
+    const update = new sql.Request(transaction);
+    update.input("status", sql.NVarChar(50), targetStatus);
+    update.input("progress", sql.Decimal(5, 2), targetProgress);
+    update.input("actor", sql.BigInt, actor.id);
+    update.input("lock_estimate", sql.Bit, action === "Approved");
+    update.input("id", sql.BigInt, id);
+    update.input("row_version", sql.VarBinary(8), rowVersion);
+    const updated = (
+      await update.query<{ row_version: Buffer }>(`
       UPDATE dbo.estimates SET status=@status,progress=@progress,
         locked_at=CASE WHEN @lock_estimate=1 THEN SYSUTCDATETIME() ELSE locked_at END,
         locked_by=CASE WHEN @lock_estimate=1 THEN @actor ELSE locked_by END,updated_by=@actor,updated_at=SYSUTCDATETIME()
       OUTPUT inserted.row_version WHERE id=@id AND row_version=@row_version;
-    `)).recordset[0];
+    `)
+    ).recordset[0];
     if (!updated) throw new ApiError(409, "concurrency_conflict", "This estimate was changed by another user. Reload and try again.");
-    if (action === "Submitted") await snapshotSubmission(transaction,id,current.revision,actor.id);
+    if (action === "Submitted") await snapshotSubmission(transaction, id, current.revision, actor.id);
     if (action === "Approved") await snapshotRevision(transaction, id, current.revision, "Approved", "Approved", actor.id);
-    const inquiryId = Number(current.inquiry_id); await updateInquiry(transaction, inquiryId, inquiryStatus, inquiryProgress, actor.id);
-    await insertAudit(transaction, actor.id, "Estimate", id, current.estimate_no, action,
+    const inquiryId = Number(current.inquiry_id);
+    await updateInquiry(transaction, inquiryId, inquiryStatus, inquiryProgress, actor.id);
+    await insertAudit(
+      transaction,
+      actor.id,
+      "Estimate",
+      id,
+      current.estimate_no,
+      action,
       { revision: current.revision, status: current.status, progress: Number(current.progress) },
-      { revision: current.revision, status: targetStatus, progress: targetProgress, comment });
-    await insertAudit(transaction, actor.id, "Inquiry", inquiryId, current.inquiry_no, `Estimate ${action.toLowerCase()}`,
+      { revision: current.revision, status: targetStatus, progress: targetProgress, comment },
+    );
+    await insertAudit(
+      transaction,
+      actor.id,
+      "Inquiry",
+      inquiryId,
+      current.inquiry_no,
+      `Estimate ${action.toLowerCase()}`,
       { status: current.inquiry_status, progress: Number(current.inquiry_progress) },
-      { status: inquiryStatus, progress: inquiryProgress, estimateRevision: current.revision });
+      { status: inquiryStatus, progress: inquiryProgress, estimateRevision: current.revision },
+    );
     let mail: EstimateMail = null;
     if (action === "Submitted") {
       // Every approver hears of it but the owner and the submitter themselves, by the bell here and by mail after the commit.
       const waiting = waitingApprovers(approvers, ownerId, actor.id);
       if (waiting.length) {
         const facts = await estimateFacts(transaction, id);
-        await notifyUsers(transaction, waiting.map((approver) => approver.id), "ESTIMATE_REVIEW",
-          `${current.estimate_no} ${revisionCode(current.revision)} รออนุมัติ`, `${facts.project_name} · ส่งโดย ${actor.name}`,
-          "Estimate", id, `estimate-review:${id}:r${current.revision}`);
-        mail = { kind: "review", message: { estimateId: id, estimateNumber: current.estimate_no, revision: current.revision,
-          projectName: facts.project_name, customerName: facts.customer_name, ownerName: facts.owner_name, submittedBy: actor.name,
-          total: Number(facts.total), comment: comment ?? "", recipients: recipientsOf(waiting) } };
+        await notifyUsers(
+          transaction,
+          waiting.map((approver) => approver.id),
+          "ESTIMATE_REVIEW",
+          `${current.estimate_no} ${revisionCode(current.revision)} รออนุมัติ`,
+          `${facts.project_name} · ส่งโดย ${actor.name}`,
+          "Estimate",
+          id,
+          `estimate-review:${id}:r${current.revision}`,
+        );
+        mail = {
+          kind: "review",
+          message: {
+            estimateId: id,
+            estimateNumber: current.estimate_no,
+            revision: current.revision,
+            projectName: facts.project_name,
+            customerName: facts.customer_name,
+            ownerName: facts.owner_name,
+            submittedBy: actor.name,
+            total: Number(facts.total),
+            comment: comment ?? "",
+            recipients: recipientsOf(waiting),
+          },
+        };
       }
     }
     if (action === "Approved") mail = await noticeDecision(transaction, id, current.estimate_no, current.revision, ownerId, actor, "Approved", comment ?? "");
@@ -503,95 +644,203 @@ async function transition(
   });
 }
 
-export function registerEstimateRoutes(app: FastifyInstance, config: AppConfig, database: Database, users: CurrentUserService, erp: EstimateErpLink | null = null,
-  email: EmailService | null = null): void {
+export function registerEstimateRoutes(
+  app: FastifyInstance,
+  config: AppConfig,
+  database: Database,
+  users: CurrentUserService,
+  erp: EstimateErpLink | null = null,
+  email: EmailService | null = null,
+): void {
   const erpSender = createEstimateErpSender(database, erp);
   /* Mail goes after the commit; the bell rows written in the transaction still tell people when mail is off or Graph fails. */
   const deliver = async (mail: EstimateMail) => {
     if (!mail || !email || !mail.message.recipients.length) return;
-    try { await (mail.kind === "review" ? email.sendEstimateReview(mail.message) : email.sendEstimateDecision(mail.message)); }
-    catch (error) { app.log.warn({ err: error }, "Estimate review email failed"); }
+    try {
+      await (mail.kind === "review" ? email.sendEstimateReview(mail.message) : email.sendEstimateDecision(mail.message));
+    } catch (error) {
+      app.log.warn({ err: error }, "Estimate review email failed");
+    }
   };
   app.get("/api/v1/estimates", async (request) => {
-    await users.demandPermission(request, "estimate.read"); const query = request.query as Record<string, unknown>;
-    const page = clampedInteger(query.page, 1, 1, Number.MAX_SAFE_INTEGER); const pageSize = clampedInteger(query.pageSize, 25, 1, 100);
-    const search = optionalText(query.search, 200, "Search"); const status = optionalText(query.status, 50, "Status");
-    const customerId = optionalPositiveLong(query.customerId, "Customer id"); const projectType = optionalText(query.projectType, 100, "Project type");
-    const ownerId = optionalPositiveLong(query.ownerId, "Owner id"); const department = optionalText(query.department, 100, "Department");
+    await users.demandPermission(request, "estimate.read");
+    const query = request.query as Record<string, unknown>;
+    const page = clampedInteger(query.page, 1, 1, Number.MAX_SAFE_INTEGER);
+    const pageSize = clampedInteger(query.pageSize, 25, 1, 100);
+    const search = optionalText(query.search, 200, "Search");
+    const status = optionalText(query.status, 50, "Status");
+    const customerId = optionalPositiveLong(query.customerId, "Customer id");
+    const projectType = optionalText(query.projectType, 100, "Project type");
+    const ownerId = optionalPositiveLong(query.ownerId, "Owner id");
+    const department = optionalText(query.department, 100, "Department");
     const revision = optionalNonnegativeInteger(query.revision, "Revision");
+    // ?historical=1 lists only the estimates imported afterwards from an old Excel Estimate Cost.
+    const historicalOnly = booleanQuery(query.historical);
     const mineId = booleanQuery(query.mine) ? (await users.required(request)).id : null;
     // ?summary=1 (the V2 list) adds one row per status over every filter but the status itself, for its summary bar.
     const summary = booleanQuery(query.summary);
-    const result = await database.query<EstimateRow>(`
+    const result = await database.query<EstimateRow>(
+      `
       SELECT e.id,e.estimate_no,i.inquiry_no,i.site_location,i.target_delivery,e.customer_id,c.name customer_name,e.project_name,e.project_type,
         e.owner_id,u.name owner_name,e.revision,e.due_date,e.status,e.progress,t.material_total,t.engineering_total,
         t.outsource_total,t.transportation_total,t.accommodation_total,t.other_total,t.overhead_state,t.overhead_total,t.contingency_total,t.total,
-        e.created_date,e.updated_at,e.row_version,COUNT_BIG(*) OVER() total_count
+        e.created_date,e.updated_at,e.row_version,e.historical_source,COUNT_BIG(*) OVER() total_count
       ${ESTIMATE_LIST_FROM} AND (@status IS NULL OR e.status=@status)
       ORDER BY e.updated_at DESC,e.id DESC OFFSET @offset ROWS FETCH NEXT @page_size ROWS ONLY;
       ${summary ? `SELECT e.status,COUNT_BIG(*) estimate_count,SUM(t.total) total_cost ${ESTIMATE_LIST_FROM} GROUP BY e.status;` : ""}
-    `, (sqlRequest) => { sqlRequest.input("status", sql.NVarChar(50), status); sqlRequest.input("search", sql.NVarChar(200), search);
-      sqlRequest.input("customer_id", sql.BigInt, customerId); sqlRequest.input("project_type", sql.NVarChar(100), projectType);
-      sqlRequest.input("mine_id", sql.BigInt, mineId); sqlRequest.input("owner_id", sql.BigInt, ownerId); sqlRequest.input("department", sql.NVarChar(100), department);
-      sqlRequest.input("revision", sql.Int, revision); sqlRequest.input("offset", sql.Int, (page - 1) * pageSize); sqlRequest.input("page_size", sql.Int, pageSize); });
-    return { items: result.recordset.map((row) => ({ id: Number(row.id), number: row.estimate_no, inquiryNumber: row.inquiry_no,
-      customerId: Number(row.customer_id), customerName: row.customer_name, projectName: row.project_name, projectType: row.project_type,
-      siteLocation: row.site_location ?? "", targetDelivery: dateOnly(row.target_delivery),
-      ownerId: Number(row.owner_id), ownerName: row.owner_name, revision: row.revision, createdDate: dateOnly(row.created_date), dueDate: dateOnly(row.due_date),
-      status: row.status, progress: Number(row.progress), materialTotal: Number(row.material_total), engineeringTotal: Number(row.engineering_total),
-      outsourceTotal: Number(row.outsource_total), transportationTotal: Number(row.transportation_total), accommodationTotal: Number(row.accommodation_total),
-      otherTotal: Number(row.other_total), contingencyTotal: Number(row.contingency_total), total: Number(row.total), updatedAt: row.updated_at,
-      overheadState: row.overhead_state, overheadTotal: row.overhead_total === null ? null : Number(row.overhead_total),
-      rowVersion: row.row_version.toString("base64") })), page, pageSize, total: Number(result.recordset[0]?.total_count ?? 0),
-      ...(summary ? { statusSummary: ((result.recordsets as unknown as Array<Array<{ status: string; estimate_count: number | string; total_cost: number | string | null }>>)[1] ?? [])
-        .map((row) => ({ status: row.status, count: Number(row.estimate_count), total: Number(row.total_cost ?? 0) })) } : {}) };
+    `,
+      (sqlRequest) => {
+        sqlRequest.input("status", sql.NVarChar(50), status);
+        sqlRequest.input("search", sql.NVarChar(200), search);
+        sqlRequest.input("customer_id", sql.BigInt, customerId);
+        sqlRequest.input("project_type", sql.NVarChar(100), projectType);
+        sqlRequest.input("mine_id", sql.BigInt, mineId);
+        sqlRequest.input("owner_id", sql.BigInt, ownerId);
+        sqlRequest.input("department", sql.NVarChar(100), department);
+        sqlRequest.input("revision", sql.Int, revision);
+        sqlRequest.input("historical_only", sql.Bit, historicalOnly);
+        sqlRequest.input("offset", sql.Int, (page - 1) * pageSize);
+        sqlRequest.input("page_size", sql.Int, pageSize);
+      },
+    );
+    return {
+      items: result.recordset.map((row) => ({
+        id: Number(row.id),
+        number: row.estimate_no,
+        inquiryNumber: row.inquiry_no,
+        customerId: Number(row.customer_id),
+        customerName: row.customer_name,
+        projectName: row.project_name,
+        projectType: row.project_type,
+        siteLocation: row.site_location ?? "",
+        targetDelivery: dateOnly(row.target_delivery),
+        ownerId: Number(row.owner_id),
+        ownerName: row.owner_name,
+        revision: row.revision,
+        createdDate: dateOnly(row.created_date),
+        dueDate: dateOnly(row.due_date),
+        status: row.status,
+        progress: Number(row.progress),
+        materialTotal: Number(row.material_total),
+        engineeringTotal: Number(row.engineering_total),
+        outsourceTotal: Number(row.outsource_total),
+        transportationTotal: Number(row.transportation_total),
+        accommodationTotal: Number(row.accommodation_total),
+        otherTotal: Number(row.other_total),
+        contingencyTotal: Number(row.contingency_total),
+        total: Number(row.total),
+        updatedAt: row.updated_at,
+        overheadState: row.overhead_state,
+        overheadTotal: row.overhead_total === null ? null : Number(row.overhead_total),
+        historicalSource: row.historical_source ?? null,
+        rowVersion: row.row_version.toString("base64"),
+      })),
+      page,
+      pageSize,
+      total: Number(result.recordset[0]?.total_count ?? 0),
+      ...(summary
+        ? {
+            statusSummary: ((result.recordsets as unknown as Array<Array<{ status: string; estimate_count: number | string; total_cost: number | string | null }>>)[1] ?? []).map((row) => ({
+              status: row.status,
+              count: Number(row.estimate_count),
+              total: Number(row.total_cost ?? 0),
+            })),
+          }
+        : {}),
+    };
   });
 
   app.post("/api/v1/estimates", async (request, reply) => {
-    await users.demandPermission(request, "estimate.write"); const actor = await users.required(request); const body = bodyObject(request.body);
-    const inquiryId = requiredInteger(body.inquiryId, "Inquiry", 1); const ownerId = requiredInteger(body.ownerId, "Owner", 1);
-    const contingencyRate = percentage(body.contingencyRate, "Contingency rate"); const dueDate = parseDateOnly(body.dueDate, "Due date")!;
+    await users.demandPermission(request, "estimate.write");
+    const actor = await users.required(request);
+    const body = bodyObject(request.body);
+    const inquiryId = requiredInteger(body.inquiryId, "Inquiry", 1);
+    const ownerId = requiredInteger(body.ownerId, "Owner", 1);
+    const contingencyRate = percentage(body.contingencyRate, "Contingency rate");
+    const dueDate = parseDateOnly(body.dueDate, "Due date")!;
     if (!managerOverride(actor) && ownerId !== actor.id) throw new ApiError(403, "estimate_owner_required", "Only an engineering manager or administrator can create an estimate for another owner.");
-    const today = todayIn(config.businessTimeZone); if (dueDate < today || dueDate > addYears(today, 5)) throw new ApiError(400, "validation_failed", "Due date must be between today and five years from today.");
+    const today = todayIn(config.businessTimeZone);
+    if (dueDate < today || dueDate > addYears(today, 5)) throw new ApiError(400, "validation_failed", "Due date must be between today and five years from today.");
     // "Start from a previous estimate": the new R00 is filled from the chosen estimate in the same transaction.
     const copyFrom = body.copyFrom === undefined || body.copyFrom === null ? null : bodyObject(body.copyFrom);
     const copySourceId = copyFrom ? requiredInteger(copyFrom.sourceEstimateId, "Source estimate", 1) : null;
     if (copyFrom) await users.demandPermission(request, "estimate.read");
     const created = await database.transaction(async (transaction) => {
-      const lookup = new sql.Request(transaction); lookup.input("id", sql.BigInt, inquiryId);
-      const inquiry = (await lookup.query<{ customer_id: number | string; project_name: string; project_type: string; inquiry_no: string; estimate_owner_id: number | string; status: string; estimate_id: number | string | null }>(`
+      const lookup = new sql.Request(transaction);
+      lookup.input("id", sql.BigInt, inquiryId);
+      const inquiry = (
+        await lookup.query<{
+          customer_id: number | string;
+          project_name: string;
+          project_type: string;
+          inquiry_no: string;
+          estimate_owner_id: number | string;
+          status: string;
+          estimate_id: number | string | null;
+        }>(`
         SELECT customer_id,project_name,project_type,inquiry_no,estimate_owner_id,status,estimate_id FROM dbo.inquiries WITH (UPDLOCK,HOLDLOCK) WHERE id=@id AND deleted_at IS NULL AND archived_at IS NULL;
-      `)).recordset[0];
+      `)
+      ).recordset[0];
       if (!inquiry) throw new ApiError(404, "inquiry_not_found", "Inquiry not found.");
       if (inquiry.status !== "New" || inquiry.estimate_id !== null) throw new ApiError(409, "inquiry_not_eligible", "Only a new inquiry without an existing estimate can be converted to an estimate.");
-      const previous = (await new sql.Request(transaction).input("inquiry",sql.BigInt,inquiryId)
-        .query(`SELECT id FROM dbo.estimates WITH(UPDLOCK,HOLDLOCK) WHERE inquiry_id=@inquiry;`)).recordset[0];
-      if (previous) throw new ApiError(409,"estimate_in_history","This inquiry already has an estimate in document history. Restore that estimate to preserve its number.");
-      if (!managerOverride(actor) && Number(inquiry.estimate_owner_id) !== actor.id) throw new ApiError(403, "inquiry_owner_required", "Only the assigned inquiry owner, an engineering manager or an administrator can create its estimate.");
-      const ownerRequest = new sql.Request(transaction); ownerRequest.input("owner_id", sql.BigInt, ownerId);
-      const validOwner = (await ownerRequest.query<{ allowed: boolean }>(`SELECT CASE WHEN EXISTS(SELECT 1 FROM dbo.users u INNER JOIN dbo.roles r ON r.id=u.role_id
-        WHERE u.id=@owner_id AND u.is_active=1 AND u.deleted_at IS NULL AND r.code IN(N'Engineer',N'Engineering Manager',N'Admin')) THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END allowed;`)).recordset[0]?.allowed;
+      const previous = (await new sql.Request(transaction).input("inquiry", sql.BigInt, inquiryId).query(`SELECT id FROM dbo.estimates WITH(UPDLOCK,HOLDLOCK) WHERE inquiry_id=@inquiry;`))
+        .recordset[0];
+      if (previous) throw new ApiError(409, "estimate_in_history", "This inquiry already has an estimate in document history. Restore that estimate to preserve its number.");
+      if (!managerOverride(actor) && Number(inquiry.estimate_owner_id) !== actor.id)
+        throw new ApiError(403, "inquiry_owner_required", "Only the assigned inquiry owner, an engineering manager or an administrator can create its estimate.");
+      const ownerRequest = new sql.Request(transaction);
+      ownerRequest.input("owner_id", sql.BigInt, ownerId);
+      const validOwner = (
+        await ownerRequest.query<{ allowed: boolean }>(`SELECT CASE WHEN EXISTS(SELECT 1 FROM dbo.users u INNER JOIN dbo.roles r ON r.id=u.role_id
+        WHERE u.id=@owner_id AND u.is_active=1 AND u.deleted_at IS NULL AND r.code IN(N'Engineer',N'Engineering Manager',N'Admin')) THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END allowed;`)
+      ).recordset[0]?.allowed;
       if (!validOwner) throw new ApiError(400, "validation_failed", "The selected estimate owner must be an active engineer, engineering manager or administrator.");
-      const number = await issueDocumentNumber(transaction, "EST", today); const insert = new sql.Request(transaction);
-      insert.input("number", sql.NVarChar(30), number); insert.input("inquiry_id", sql.BigInt, inquiryId); insert.input("customer_id", sql.BigInt, Number(inquiry.customer_id));
-      insert.input("project_name", sql.NVarChar(300), inquiry.project_name); insert.input("project_type", sql.NVarChar(100), inquiry.project_type);
-      insert.input("owner_id", sql.BigInt, ownerId); insert.input("today", sql.Date, today); insert.input("due_date", sql.Date, dueDate);
-      insert.input("contingency_rate", sql.Decimal(9, 4), contingencyRate); insert.input("actor", sql.BigInt, actor.id);
-      const row = (await insert.query<{ id: number | string; row_version: Buffer }>(`INSERT INTO dbo.estimates(estimate_no,inquiry_id,customer_id,project_name,project_type,owner_id,
+      const number = await issueDocumentNumber(transaction, "EST", today);
+      const insert = new sql.Request(transaction);
+      insert.input("number", sql.NVarChar(30), number);
+      insert.input("inquiry_id", sql.BigInt, inquiryId);
+      insert.input("customer_id", sql.BigInt, Number(inquiry.customer_id));
+      insert.input("project_name", sql.NVarChar(300), inquiry.project_name);
+      insert.input("project_type", sql.NVarChar(100), inquiry.project_type);
+      insert.input("owner_id", sql.BigInt, ownerId);
+      insert.input("today", sql.Date, today);
+      insert.input("due_date", sql.Date, dueDate);
+      insert.input("contingency_rate", sql.Decimal(9, 4), contingencyRate);
+      insert.input("actor", sql.BigInt, actor.id);
+      const row = (
+        await insert.query<{ id: number | string; row_version: Buffer }>(`INSERT INTO dbo.estimates(estimate_no,inquiry_id,customer_id,project_name,project_type,owner_id,
         revision,created_date,due_date,status,progress,contingency_rate,created_by,updated_by) OUTPUT inserted.id,inserted.row_version
-        VALUES(@number,@inquiry_id,@customer_id,@project_name,@project_type,@owner_id,0,@today,@due_date,N'Draft',0,@contingency_rate,@actor,@actor);`)).recordset[0]!;
-      const id = Number(row.id); const updateInquiryRequest = new sql.Request(transaction);
-      await snapshotOverheadPolicy(transaction,id,0,actor.id,today);
+        VALUES(@number,@inquiry_id,@customer_id,@project_name,@project_type,@owner_id,0,@today,@due_date,N'Draft',0,@contingency_rate,@actor,@actor);`)
+      ).recordset[0]!;
+      const id = Number(row.id);
+      const updateInquiryRequest = new sql.Request(transaction);
+      await snapshotOverheadPolicy(transaction, id, 0, actor.id, today);
       await assertEstimateTotals(transaction, id);
-      updateInquiryRequest.input("estimate_id", sql.BigInt, id); updateInquiryRequest.input("actor", sql.BigInt, actor.id); updateInquiryRequest.input("inquiry_id", sql.BigInt, inquiryId);
+      updateInquiryRequest.input("estimate_id", sql.BigInt, id);
+      updateInquiryRequest.input("actor", sql.BigInt, actor.id);
+      updateInquiryRequest.input("inquiry_id", sql.BigInt, inquiryId);
       const changed = await updateInquiryRequest.query(`UPDATE dbo.inquiries SET estimate_id=@estimate_id,status=N'Estimating',updated_by=@actor,updated_at=SYSUTCDATETIME()
         WHERE id=@inquiry_id AND status=N'New' AND estimate_id IS NULL AND deleted_at IS NULL;`);
       if (changed.rowsAffected[0] !== 1) throw new ApiError(409, "inquiry_not_eligible", "The inquiry can no longer be converted to an estimate.");
-      await insertAudit(transaction, actor.id, "Estimate", id, number, "Created from inquiry", inquiry.inquiry_no, { inquiryId, ownerId, dueDate, contingencyRate, copiedFromEstimateId: copySourceId });
+      await insertAudit(transaction, actor.id, "Estimate", id, number, "Created from inquiry", inquiry.inquiry_no, {
+        inquiryId,
+        ownerId,
+        dueDate,
+        contingencyRate,
+        copiedFromEstimateId: copySourceId,
+      });
       if (!copyFrom || copySourceId === null) return { id, number, rowVersion: row.row_version.toString("base64"), copied: null };
       const estimate = await lockEditableEstimate(transaction, id, row.row_version);
-      const copied = await copyEstimateLines(transaction, { actor, targetId: id, estimate, sourceId: copySourceId, ownerId,
-        sections: ESTIMATE_SECTION_CODES, include: copyLedgersFrom(copyFrom), today });
+      const copied = await copyEstimateLines(transaction, {
+        actor,
+        targetId: id,
+        estimate,
+        sourceId: copySourceId,
+        ownerId,
+        sections: ESTIMATE_SECTION_CODES,
+        include: copyLedgersFrom(copyFrom),
+        today,
+      });
       const { estimateRowVersion, ...summary } = copied;
       return { id, number, rowVersion: estimateRowVersion, copied: summary };
     });
@@ -599,16 +848,33 @@ export function registerEstimateRoutes(app: FastifyInstance, config: AppConfig, 
   });
 
   app.get("/api/v1/estimates/:id/validation", async (request) => {
-    await users.demandPermission(request, "estimate.read"); const id = positiveLong((request.params as { id?: string }).id, "Estimate id");
-    const exists = await database.query<{ estimate_exists: boolean }>(`SELECT CASE WHEN EXISTS(SELECT 1 FROM dbo.estimates WHERE id=@id AND deleted_at IS NULL) THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END estimate_exists;`,
-      (sqlRequest) => sqlRequest.input("id", sql.BigInt, id));
+    await users.demandPermission(request, "estimate.read");
+    const id = positiveLong((request.params as { id?: string }).id, "Estimate id");
+    const exists = await database.query<{ estimate_exists: boolean }>(
+      `SELECT CASE WHEN EXISTS(SELECT 1 FROM dbo.estimates WHERE id=@id AND deleted_at IS NULL) THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END estimate_exists;`,
+      (sqlRequest) => sqlRequest.input("id", sql.BigInt, id),
+    );
     if (!exists.recordset[0]?.estimate_exists) throw new ApiError(404, "estimate_not_found", "Estimate not found.");
-    const issues = await validationIssues(database, id); return { estimateId: id, valid: issues.length === 0, issues };
+    const issues = await validationIssues(database, id);
+    return { estimateId: id, valid: issues.length === 0, issues };
   });
 
   app.post("/api/v1/estimates/:id/submit", async (request) => {
-    const submitted = await transition(request, positiveLong((request.params as { id?: string }).id, "Estimate id"),
-      "estimate.write", "Engineering Review", 90, "Engineering Review", 90, ["Draft", "Engineering Input", "Revision Required"], "Submitted", true, false, database, users);
+    const submitted = await transition(
+      request,
+      positiveLong((request.params as { id?: string }).id, "Estimate id"),
+      "estimate.write",
+      "Engineering Review",
+      90,
+      "Engineering Review",
+      90,
+      ["Draft", "Engineering Input", "Revision Required"],
+      "Submitted",
+      true,
+      false,
+      database,
+      users,
+    );
     await deliver(submitted.mail);
     return submitted.response;
   });
@@ -616,7 +882,10 @@ export function registerEstimateRoutes(app: FastifyInstance, config: AppConfig, 
   app.post("/api/v1/estimates/:id/approve", async (request) => {
     const id = positiveLong((request.params as { id?: string }).id, "Estimate id");
     const { response: approved, mail } = await transition(request, id, "estimate.read", "Approved", 100, "Approved", 100, ["Engineering Review"], "Approved", false, true, database, users);
-    if (!erpSender.enabled) { await deliver(mail); return approved; }
+    if (!erpSender.enabled) {
+      await deliver(mail);
+      return approved;
+    }
     /* The approver is signed in right now, so their own token sends the Cost Sheet, written from the ERP sheet rows the page
        sent with the approval. A failure leaves the estimate approved; the ERP tab shows why and offers the send again. */
     const erpOutcome: EstimateErpOutcome = await (async () => {
@@ -624,88 +893,189 @@ export function registerEstimateRoutes(app: FastifyInstance, config: AppConfig, 
       return erpSender.send(id, await users.required(request), rows === undefined || rows === null ? null : parseErpSheetRows(rows));
     })().catch((error: unknown) => ({ sent: false, message: error instanceof Error ? error.message : String(error) }));
     // The owner's mail says whether the Cost Sheet reached the ERP, so it goes after the send.
-    await deliver(mail?.kind === "decision" ? { kind: "decision", message: { ...mail.message, erp: { sent: erpOutcome.sent,
-      ...(erpOutcome.costSheetNo !== undefined ? { costSheetNo: erpOutcome.costSheetNo } : {}), ...(erpOutcome.message !== undefined ? { message: erpOutcome.message } : {}) } } } : mail);
+    await deliver(
+      mail?.kind === "decision"
+        ? {
+            kind: "decision",
+            message: {
+              ...mail.message,
+              erp: {
+                sent: erpOutcome.sent,
+                ...(erpOutcome.costSheetNo !== undefined ? { costSheetNo: erpOutcome.costSheetNo } : {}),
+                ...(erpOutcome.message !== undefined ? { message: erpOutcome.message } : {}),
+              },
+            },
+          }
+        : mail,
+    );
     return { ...approved, erp: erpOutcome };
   });
 
   app.post("/api/v1/estimates/:id/create-revision", async (request) => {
-    await users.demandPermission(request, "estimate.write"); const actor = await users.required(request);
-    const id = positiveLong((request.params as { id?: string }).id, "Estimate id"); const body = bodyObject(request.body);
-    const rowVersion = parseRowVersion(body.rowVersion); const reason = optionalBodyText(body.comment, 100, "Revision reason");
+    await users.demandPermission(request, "estimate.write");
+    const actor = await users.required(request);
+    const id = positiveLong((request.params as { id?: string }).id, "Estimate id");
+    const body = bodyObject(request.body);
+    const rowVersion = parseRowVersion(body.rowVersion);
+    const reason = optionalBodyText(body.comment, 100, "Revision reason");
     if (!reason) throw new ApiError(400, "validation_failed", "Revision reason is required.");
     return database.transaction(async (transaction) => {
-      const lookup = new sql.Request(transaction); lookup.input("id", sql.BigInt, id);
-      const current = (await lookup.query<{ estimate_no: string; status: string; progress: number | string; revision: number; inquiry_id: number | string; row_version: Buffer; inquiry_no: string; inquiry_status: string; inquiry_progress: number | string; owner_id: number | string }>(`
+      const lookup = new sql.Request(transaction);
+      lookup.input("id", sql.BigInt, id);
+      const current = (
+        await lookup.query<{
+          estimate_no: string;
+          status: string;
+          progress: number | string;
+          revision: number;
+          inquiry_id: number | string;
+          row_version: Buffer;
+          inquiry_no: string;
+          inquiry_status: string;
+          inquiry_progress: number | string;
+          owner_id: number | string;
+        }>(`
         SELECT e.estimate_no,e.status,e.progress,e.revision,e.inquiry_id,e.row_version,i.inquiry_no,i.status inquiry_status,i.progress inquiry_progress,e.owner_id
         FROM dbo.estimates e WITH(UPDLOCK,HOLDLOCK) INNER JOIN dbo.inquiries i WITH(UPDLOCK,HOLDLOCK) ON i.id=e.inquiry_id
         WHERE e.id=@id AND e.deleted_at IS NULL AND i.deleted_at IS NULL AND e.archived_at IS NULL AND i.archived_at IS NULL AND i.status<>N'Cancelled';
-      `)).recordset[0];
+      `)
+      ).recordset[0];
       if (!current) throw new ApiError(404, "estimate_not_found", "Estimate or its linked inquiry was not found.");
       if (!current.row_version.equals(rowVersion)) throw new ApiError(409, "concurrency_conflict", "This estimate was changed by another user. Reload and try again.");
       if (!["approved", "locked"].includes(current.status.toLowerCase())) throw new ApiError(409, "invalid_transition", `Cannot create a revision while the estimate is '${current.status}'.`);
-      if (Number(current.owner_id) !== actor.id && !managerOverride(actor)) throw new ApiError(403, "estimate_owner_required", "Only the estimate owner, an engineering manager or an administrator can create a revision.");
+      if (Number(current.owner_id) !== actor.id && !managerOverride(actor))
+        throw new ApiError(403, "estimate_owner_required", "Only the estimate owner, an engineering manager or an administrator can create a revision.");
       await assertEstimateTotals(transaction, id);
       await ensureRevisionSnapshot(transaction, id, current.revision, reason, current.status, actor.id);
       const nextRevision = await nextEstimateRevision(transaction, id, current.revision);
-      const update = new sql.Request(transaction); update.input("next_revision", sql.Int, nextRevision); update.input("actor", sql.BigInt, actor.id);
-      update.input("id", sql.BigInt, id); update.input("current_revision", sql.Int, current.revision); update.input("row_version", sql.VarBinary(8), rowVersion);
-      const updated = (await update.query<{ row_version: Buffer }>(`UPDATE dbo.estimates SET revision=@next_revision,status=N'Revision Required',progress=75,
+      const update = new sql.Request(transaction);
+      update.input("next_revision", sql.Int, nextRevision);
+      update.input("actor", sql.BigInt, actor.id);
+      update.input("id", sql.BigInt, id);
+      update.input("current_revision", sql.Int, current.revision);
+      update.input("row_version", sql.VarBinary(8), rowVersion);
+      const updated = (
+        await update.query<{ row_version: Buffer }>(`UPDATE dbo.estimates SET revision=@next_revision,status=N'Revision Required',progress=75,
         locked_at=NULL,locked_by=NULL,updated_by=@actor,updated_at=SYSUTCDATETIME() OUTPUT inserted.row_version
-        WHERE id=@id AND revision=@current_revision AND row_version=@row_version;`)).recordset[0];
+        WHERE id=@id AND revision=@current_revision AND row_version=@row_version;`)
+      ).recordset[0];
       if (!updated) throw new ApiError(409, "concurrency_conflict", "This estimate was changed by another user. Reload and try again.");
-      await snapshotOverheadPolicy(transaction,id,nextRevision,actor.id,todayIn(config.businessTimeZone));
+      await snapshotOverheadPolicy(transaction, id, nextRevision, actor.id, todayIn(config.businessTimeZone));
       await cloneRevisionLines(transaction, id, current.revision, nextRevision, actor.id);
       await assertEstimateTotals(transaction, id);
-      const inquiryId = Number(current.inquiry_id); await updateInquiry(transaction, inquiryId, "Estimating", 75, actor.id);
-      await insertAudit(transaction, actor.id, "Estimate", id, current.estimate_no, "Revision created",
-        { revision: current.revision, status: current.status, progress: Number(current.progress) }, { revision: nextRevision, status: "Revision Required", progress: 75, reason });
-      await insertAudit(transaction, actor.id, "Inquiry", inquiryId, current.inquiry_no, "Estimate revision created",
-        { status: current.inquiry_status, progress: Number(current.inquiry_progress) }, { status: "Estimating", progress: 75, estimateRevision: nextRevision });
+      const inquiryId = Number(current.inquiry_id);
+      await updateInquiry(transaction, inquiryId, "Estimating", 75, actor.id);
+      await insertAudit(
+        transaction,
+        actor.id,
+        "Estimate",
+        id,
+        current.estimate_no,
+        "Revision created",
+        { revision: current.revision, status: current.status, progress: Number(current.progress) },
+        { revision: nextRevision, status: "Revision Required", progress: 75, reason },
+      );
+      await insertAudit(
+        transaction,
+        actor.id,
+        "Inquiry",
+        inquiryId,
+        current.inquiry_no,
+        "Estimate revision created",
+        { status: current.inquiry_status, progress: Number(current.inquiry_progress) },
+        { status: "Estimating", progress: 75, estimateRevision: nextRevision },
+      );
       return { id, revision: nextRevision, status: "Revision Required", progress: 75, rowVersion: updated.row_version.toString("base64") };
     });
   });
 
   app.post("/api/v1/estimates/:id/request-revision", async (request) => {
-    await users.demandPermission(request, "estimate.read"); const actor = await users.required(request);
-    const id = positiveLong((request.params as { id?: string }).id, "Estimate id"); const body = bodyObject(request.body);
-    const rowVersion = parseRowVersion(body.rowVersion); const reason = optionalBodyText(body.comment, 100, "Revision reason");
+    await users.demandPermission(request, "estimate.read");
+    const actor = await users.required(request);
+    const id = positiveLong((request.params as { id?: string }).id, "Estimate id");
+    const body = bodyObject(request.body);
+    const rowVersion = parseRowVersion(body.rowVersion);
+    const reason = optionalBodyText(body.comment, 100, "Revision reason");
     if (!reason) throw new ApiError(400, "validation_failed", "Revision reason is required.");
-    return database.transaction(async (transaction) => {
-      const lookup = new sql.Request(transaction); lookup.input("id", sql.BigInt, id);
-      const current = (await lookup.query<{ estimate_no: string; status: string; progress: number | string; revision: number; inquiry_id: number | string; row_version: Buffer; inquiry_no: string; inquiry_status: string; inquiry_progress: number | string; owner_id: number | string }>(`
+    return database
+      .transaction(async (transaction) => {
+        const lookup = new sql.Request(transaction);
+        lookup.input("id", sql.BigInt, id);
+        const current = (
+          await lookup.query<{
+            estimate_no: string;
+            status: string;
+            progress: number | string;
+            revision: number;
+            inquiry_id: number | string;
+            row_version: Buffer;
+            inquiry_no: string;
+            inquiry_status: string;
+            inquiry_progress: number | string;
+            owner_id: number | string;
+          }>(`
         SELECT e.estimate_no,e.status,e.progress,e.revision,e.inquiry_id,e.row_version,i.inquiry_no,i.status inquiry_status,i.progress inquiry_progress,e.owner_id
         FROM dbo.estimates e WITH(UPDLOCK,HOLDLOCK) INNER JOIN dbo.inquiries i WITH(UPDLOCK,HOLDLOCK) ON i.id=e.inquiry_id
         WHERE e.id=@id AND e.deleted_at IS NULL AND i.deleted_at IS NULL AND e.archived_at IS NULL AND i.archived_at IS NULL AND i.status<>N'Cancelled';
-      `)).recordset[0];
-      if (!current) throw new ApiError(404, "estimate_not_found", "Estimate or its linked inquiry was not found.");
-      if (!current.row_version.equals(rowVersion)) throw new ApiError(409, "concurrency_conflict", "This estimate was changed by another user. Reload and try again.");
-      if (current.status.toLowerCase() !== "engineering review") throw new ApiError(409, "invalid_transition", `Cannot request a revision while the estimate is '${current.status}'.`);
-      if (Number(current.owner_id) === actor.id && !adminSelfDecision(actor)) throw new ApiError(403, "self_revision_forbidden", "The estimate owner cannot request a revision on their own estimate. Another approver must decide it.");
-      const approvers = await loadEstimateApprovers(transaction);
-      if (!mayDecideEstimate(actor, Number(current.owner_id), approvers)) {
-        throw new ApiError(403, "estimate_approver_required", `Only ${approvers.map((approver) => approver.name).join(", ") || "an estimate approver"} can send an estimate back.`);
-      }
-      await assertEstimateTotals(transaction, id);
-      // Told before the revision moves on, so the notice names the revision that was sent back.
-      const mail = await noticeDecision(transaction, id, current.estimate_no, current.revision, Number(current.owner_id), actor, "Revision requested", reason);
-      await snapshotRevision(transaction, id, current.revision, reason, "Revision Required", actor.id); const nextRevision = await nextEstimateRevision(transaction, id, current.revision);
-      const update = new sql.Request(transaction); update.input("next_revision", sql.Int, nextRevision); update.input("actor", sql.BigInt, actor.id);
-      update.input("id", sql.BigInt, id); update.input("current_revision", sql.Int, current.revision); update.input("row_version", sql.VarBinary(8), rowVersion);
-      const updated = (await update.query<{ row_version: Buffer }>(`UPDATE dbo.estimates SET revision=@next_revision,status=N'Revision Required',progress=75,
+      `)
+        ).recordset[0];
+        if (!current) throw new ApiError(404, "estimate_not_found", "Estimate or its linked inquiry was not found.");
+        if (!current.row_version.equals(rowVersion)) throw new ApiError(409, "concurrency_conflict", "This estimate was changed by another user. Reload and try again.");
+        if (current.status.toLowerCase() !== "engineering review") throw new ApiError(409, "invalid_transition", `Cannot request a revision while the estimate is '${current.status}'.`);
+        if (Number(current.owner_id) === actor.id && !adminSelfDecision(actor))
+          throw new ApiError(403, "self_revision_forbidden", "The estimate owner cannot request a revision on their own estimate. Another approver must decide it.");
+        const approvers = await loadEstimateApprovers(transaction);
+        if (!mayDecideEstimate(actor, Number(current.owner_id), approvers)) {
+          throw new ApiError(403, "estimate_approver_required", `Only ${approvers.map((approver) => approver.name).join(", ") || "an estimate approver"} can send an estimate back.`);
+        }
+        await assertEstimateTotals(transaction, id);
+        // Told before the revision moves on, so the notice names the revision that was sent back.
+        const mail = await noticeDecision(transaction, id, current.estimate_no, current.revision, Number(current.owner_id), actor, "Revision requested", reason);
+        await snapshotRevision(transaction, id, current.revision, reason, "Revision Required", actor.id);
+        const nextRevision = await nextEstimateRevision(transaction, id, current.revision);
+        const update = new sql.Request(transaction);
+        update.input("next_revision", sql.Int, nextRevision);
+        update.input("actor", sql.BigInt, actor.id);
+        update.input("id", sql.BigInt, id);
+        update.input("current_revision", sql.Int, current.revision);
+        update.input("row_version", sql.VarBinary(8), rowVersion);
+        const updated = (
+          await update.query<{ row_version: Buffer }>(`UPDATE dbo.estimates SET revision=@next_revision,status=N'Revision Required',progress=75,
         locked_at=NULL,locked_by=NULL,updated_by=@actor,updated_at=SYSUTCDATETIME() OUTPUT inserted.row_version
-        WHERE id=@id AND revision=@current_revision AND row_version=@row_version;`)).recordset[0];
-      if (!updated) throw new ApiError(409, "concurrency_conflict", "This estimate was changed by another user. Reload and try again.");
-      await snapshotOverheadPolicy(transaction,id,nextRevision,actor.id,todayIn(config.businessTimeZone));
-      await cloneRevisionLines(transaction, id, current.revision, nextRevision, actor.id);
-      await assertEstimateTotals(transaction, id);
-      const inquiryId = Number(current.inquiry_id); await updateInquiry(transaction, inquiryId, "Estimating", 75, actor.id);
-      await insertAudit(transaction, actor.id, "Estimate", id, current.estimate_no, "Revision requested",
-        { revision: current.revision, status: current.status, progress: Number(current.progress) }, { revision: nextRevision, status: "Revision Required", progress: 75, reason });
-      await insertAudit(transaction, actor.id, "Inquiry", inquiryId, current.inquiry_no, "Estimate revision requested",
-        { status: current.inquiry_status, progress: Number(current.inquiry_progress) }, { status: "Estimating", progress: 75, estimateRevision: nextRevision });
-      return { response: { id, revision: nextRevision, status: "Revision Required", progress: 75, rowVersion: updated.row_version.toString("base64") }, mail };
-    }).then(async ({ response, mail }) => { await deliver(mail); return response; });
+        WHERE id=@id AND revision=@current_revision AND row_version=@row_version;`)
+        ).recordset[0];
+        if (!updated) throw new ApiError(409, "concurrency_conflict", "This estimate was changed by another user. Reload and try again.");
+        await snapshotOverheadPolicy(transaction, id, nextRevision, actor.id, todayIn(config.businessTimeZone));
+        await cloneRevisionLines(transaction, id, current.revision, nextRevision, actor.id);
+        await assertEstimateTotals(transaction, id);
+        const inquiryId = Number(current.inquiry_id);
+        await updateInquiry(transaction, inquiryId, "Estimating", 75, actor.id);
+        await insertAudit(
+          transaction,
+          actor.id,
+          "Estimate",
+          id,
+          current.estimate_no,
+          "Revision requested",
+          { revision: current.revision, status: current.status, progress: Number(current.progress) },
+          { revision: nextRevision, status: "Revision Required", progress: 75, reason },
+        );
+        await insertAudit(
+          transaction,
+          actor.id,
+          "Inquiry",
+          inquiryId,
+          current.inquiry_no,
+          "Estimate revision requested",
+          { status: current.inquiry_status, progress: Number(current.inquiry_progress) },
+          { status: "Estimating", progress: 75, estimateRevision: nextRevision },
+        );
+        return { response: { id, revision: nextRevision, status: "Revision Required", progress: 75, rowVersion: updated.row_version.toString("base64") }, mail };
+      })
+      .then(async ({ response, mail }) => {
+        await deliver(mail);
+        return response;
+      });
   });
 
   /* The lines of one revision in the history, read-only: what the estimate held before someone goes back to it.
@@ -713,9 +1083,11 @@ export function registerEstimateRoutes(app: FastifyInstance, config: AppConfig, 
   app.get("/api/v1/estimates/:id/revisions/:revision", async (request) => {
     await users.demandPermission(request, "estimate.read");
     const params = request.params as { id?: string; revision?: string };
-    const id = positiveLong(params.id, "Estimate id"); const revision = optionalNonnegativeInteger(params.revision, "Revision");
+    const id = positiveLong(params.id, "Estimate id");
+    const revision = optionalNonnegativeInteger(params.revision, "Revision");
     if (revision === null || revision > SQL_INT_MAX) throw new ApiError(400, "validation_failed", "Revision is invalid.");
-    const result = await database.query<Record<string, unknown>>(`
+    const result = await database.query<Record<string, unknown>>(
+      `
       SELECT r.revision,r.code,r.reason,r.status,r.total,r.created_at,
         CASE WHEN ISJSON(r.description)=1 THEN JSON_QUERY(r.description,'$.totals') END totals_json,
         TRY_CONVERT(decimal(9,4),JSON_VALUE(CASE WHEN ISJSON(r.description)=1 THEN r.description END,'$.contingencyRate')) contingency_rate
@@ -741,97 +1113,212 @@ export function registerEstimateRoutes(app: FastifyInstance, config: AppConfig, 
       SELECT l.id,l.category,l.description,l.qty,l.unit,l.unit_cost,l.line_total
       FROM dbo.other_cost_lines l WHERE l.estimate_id=@id AND l.revision=@revision AND l.deleted_at IS NULL
       ORDER BY MIN(l.sort_order) OVER(PARTITION BY l.category),l.category,l.sort_order,l.id;
-    `, (sqlRequest) => { sqlRequest.input("id", sql.BigInt, id); sqlRequest.input("revision", sql.Int, revision); });
+    `,
+      (sqlRequest) => {
+        sqlRequest.input("id", sql.BigInt, id);
+        sqlRequest.input("revision", sql.Int, revision);
+      },
+    );
     const sets = result.recordsets as unknown as Array<Array<Record<string, unknown>>>;
     const head = sets[0]?.[0];
     if (!head) throw new ApiError(404, "revision_not_found", "That revision is not in this estimate's history.");
     const number = (value: unknown) => Number(value ?? 0);
-    const text = (value: unknown) => value === null || value === undefined ? "" : String(value);
+    const text = (value: unknown) => (value === null || value === undefined ? "" : String(value));
     // Snapshots written before the totals were archived carry only the grand total.
     let totals: Record<string, number | null> | null = null;
     try {
-      const parsed = head.totals_json ? JSON.parse(String(head.totals_json)) as Record<string, unknown> : null;
-      if (parsed) totals = Object.fromEntries(["material", "engineering", "outsource", "transportation", "accommodation", "other", "subtotal", "overhead", "contingency", "total"]
-        .map((key) => [key, parsed[key] === null || parsed[key] === undefined ? null : Number(parsed[key])]));
-    } catch { totals = null; }
+      const parsed = head.totals_json ? (JSON.parse(String(head.totals_json)) as Record<string, unknown>) : null;
+      if (parsed)
+        totals = Object.fromEntries(
+          ["material", "engineering", "outsource", "transportation", "accommodation", "other", "subtotal", "overhead", "contingency", "total"].map((key) => [
+            key,
+            parsed[key] === null || parsed[key] === undefined ? null : Number(parsed[key]),
+          ]),
+        );
+    } catch {
+      totals = null;
+    }
     return {
-      estimateId: id, revision: number(head.revision), code: text(head.code), reason: text(head.reason), status: text(head.status), total: number(head.total),
-      createdAt: head.created_at, contingencyRate: head.contingency_rate === null || head.contingency_rate === undefined ? null : Number(head.contingency_rate), totals,
-      costItems: (sets[1] ?? []).map((row) => ({ id: number(row.id), categoryCode: text(row.category_code), category: text(row.category), module: text(row.module),
-        itemCode: text(row.item_code), description: text(row.description), brand: text(row.brand), model: text(row.model), supplierName: row.supplier_name === null ? null : text(row.supplier_name),
-        quantity: number(row.qty), unit: text(row.unit), unitCost: number(row.unit_cost), lineTotal: number(row.line_total), amount: number(row.amount) })),
-      manhourLines: (sets[2] ?? []).map((row) => ({ id: number(row.id), package: text(row.package), activity: text(row.activity), discipline: row.discipline === null ? null : text(row.discipline),
-        provider: text(row.provider), supplierName: row.supplier_name === null ? null : text(row.supplier_name), engineers: number(row.engineers), manDays: number(row.man_days),
-        hoursPerDay: number(row.hours_per_day), dailyRate: number(row.daily_rate), lineCost: number(row.line_cost) })),
-      expenseLines: (sets[3] ?? []).map((row) => ({ id: number(row.id), package: text(row.package), expenseType: text(row.expense_type), description: text(row.description),
-        quantity: number(row.qty), unit: text(row.unit), unitCost: number(row.unit_cost), lineTotal: number(row.line_total) })),
-      otherCostLines: (sets[4] ?? []).map((row) => ({ id: number(row.id), category: text(row.category), description: text(row.description),
-        quantity: number(row.qty), unit: text(row.unit), unitCost: number(row.unit_cost), lineTotal: number(row.line_total) })),
+      estimateId: id,
+      revision: number(head.revision),
+      code: text(head.code),
+      reason: text(head.reason),
+      status: text(head.status),
+      total: number(head.total),
+      createdAt: head.created_at,
+      contingencyRate: head.contingency_rate === null || head.contingency_rate === undefined ? null : Number(head.contingency_rate),
+      totals,
+      costItems: (sets[1] ?? []).map((row) => ({
+        id: number(row.id),
+        categoryCode: text(row.category_code),
+        category: text(row.category),
+        module: text(row.module),
+        itemCode: text(row.item_code),
+        description: text(row.description),
+        brand: text(row.brand),
+        model: text(row.model),
+        supplierName: row.supplier_name === null ? null : text(row.supplier_name),
+        quantity: number(row.qty),
+        unit: text(row.unit),
+        unitCost: number(row.unit_cost),
+        lineTotal: number(row.line_total),
+        amount: number(row.amount),
+      })),
+      manhourLines: (sets[2] ?? []).map((row) => ({
+        id: number(row.id),
+        package: text(row.package),
+        activity: text(row.activity),
+        discipline: row.discipline === null ? null : text(row.discipline),
+        provider: text(row.provider),
+        supplierName: row.supplier_name === null ? null : text(row.supplier_name),
+        engineers: number(row.engineers),
+        manDays: number(row.man_days),
+        hoursPerDay: number(row.hours_per_day),
+        dailyRate: number(row.daily_rate),
+        lineCost: number(row.line_cost),
+      })),
+      expenseLines: (sets[3] ?? []).map((row) => ({
+        id: number(row.id),
+        package: text(row.package),
+        expenseType: text(row.expense_type),
+        description: text(row.description),
+        quantity: number(row.qty),
+        unit: text(row.unit),
+        unitCost: number(row.unit_cost),
+        lineTotal: number(row.line_total),
+      })),
+      otherCostLines: (sets[4] ?? []).map((row) => ({
+        id: number(row.id),
+        category: text(row.category),
+        description: text(row.description),
+        quantity: number(row.qty),
+        unit: text(row.unit),
+        unitCost: number(row.unit_cost),
+        lineTotal: number(row.line_total),
+      })),
     };
   });
 
   /* Going back to an earlier revision never rewrites history (owner 2026-11-18): the revision in hand is kept as it is,
      and a new revision opens holding a copy of the chosen revision's lines. Going back twice returns to where one was. */
   app.post("/api/v1/estimates/:id/restore-revision", async (request) => {
-    await users.demandPermission(request, "estimate.write"); const actor = await users.required(request);
-    const id = positiveLong((request.params as { id?: string }).id, "Estimate id"); const body = bodyObject(request.body);
-    const rowVersion = parseRowVersion(body.rowVersion); const fromRevision = requiredInteger(body.fromRevision, "Source revision", 0, SQL_INT_MAX);
+    await users.demandPermission(request, "estimate.write");
+    const actor = await users.required(request);
+    const id = positiveLong((request.params as { id?: string }).id, "Estimate id");
+    const body = bodyObject(request.body);
+    const rowVersion = parseRowVersion(body.rowVersion);
+    const fromRevision = requiredInteger(body.fromRevision, "Source revision", 0, SQL_INT_MAX);
     const comment = optionalBodyText(body.comment, RESTORE_COMMENT_MAX, "Reason");
     return database.transaction(async (transaction) => {
-      const lookup = new sql.Request(transaction); lookup.input("id", sql.BigInt, id);
-      const current = (await lookup.query<{ estimate_no: string; status: string; progress: number | string; revision: number; inquiry_id: number | string; row_version: Buffer; inquiry_no: string; inquiry_status: string; inquiry_progress: number | string; owner_id: number | string; contingency_rate: number | string }>(`
+      const lookup = new sql.Request(transaction);
+      lookup.input("id", sql.BigInt, id);
+      const current = (
+        await lookup.query<{
+          estimate_no: string;
+          status: string;
+          progress: number | string;
+          revision: number;
+          inquiry_id: number | string;
+          row_version: Buffer;
+          inquiry_no: string;
+          inquiry_status: string;
+          inquiry_progress: number | string;
+          owner_id: number | string;
+          contingency_rate: number | string;
+        }>(`
         SELECT e.estimate_no,e.status,e.progress,e.revision,e.inquiry_id,e.row_version,i.inquiry_no,i.status inquiry_status,i.progress inquiry_progress,e.owner_id,e.contingency_rate
         FROM dbo.estimates e WITH(UPDLOCK,HOLDLOCK) INNER JOIN dbo.inquiries i WITH(UPDLOCK,HOLDLOCK) ON i.id=e.inquiry_id
         WHERE e.id=@id AND e.deleted_at IS NULL AND i.deleted_at IS NULL AND e.archived_at IS NULL AND i.archived_at IS NULL AND i.status<>N'Cancelled';
-      `)).recordset[0];
+      `)
+      ).recordset[0];
       if (!current) throw new ApiError(404, "estimate_not_found", "Estimate or its linked inquiry was not found.");
       if (!current.row_version.equals(rowVersion)) throw new ApiError(409, "concurrency_conflict", "This estimate was changed by another user. Reload and try again.");
       const plan = restoreRevisionPlan(current.status);
       if (!plan) throw new ApiError(409, "invalid_transition", `Cannot go back to an earlier revision while the estimate is '${current.status}'.`);
-      if (Number(current.owner_id) !== actor.id && !managerOverride(actor)) throw new ApiError(403, "estimate_owner_required", "Only the estimate owner, an engineering manager or an administrator can go back to an earlier revision.");
+      if (Number(current.owner_id) !== actor.id && !managerOverride(actor))
+        throw new ApiError(403, "estimate_owner_required", "Only the estimate owner, an engineering manager or an administrator can go back to an earlier revision.");
       if (fromRevision === current.revision) throw new ApiError(400, "validation_failed", "Choose a revision other than the current one.");
       // Only a revision in the history can be a source; a discarded draft has no snapshot and is not offered.
-      const source = (await new sql.Request(transaction).input("id", sql.BigInt, id).input("revision", sql.Int, fromRevision)
-        .query<{ contingency_rate: number | string | null }>(`SELECT TRY_CONVERT(decimal(9,4),JSON_VALUE(CASE WHEN ISJSON(description)=1 THEN description END,'$.contingencyRate')) contingency_rate
-          FROM dbo.estimate_revisions WITH(HOLDLOCK) WHERE estimate_id=@id AND revision=@revision;`)).recordset[0];
+      const source = (
+        await new sql.Request(transaction).input("id", sql.BigInt, id).input("revision", sql.Int, fromRevision).query<{
+          contingency_rate: number | string | null;
+        }>(`SELECT TRY_CONVERT(decimal(9,4),JSON_VALUE(CASE WHEN ISJSON(description)=1 THEN description END,'$.contingencyRate')) contingency_rate
+          FROM dbo.estimate_revisions WITH(HOLDLOCK) WHERE estimate_id=@id AND revision=@revision;`)
+      ).recordset[0];
       if (!source) throw new ApiError(404, "revision_not_found", "That revision is not in this estimate's history.");
       await assertEstimateTotals(transaction, id);
       await ensureRevisionSnapshot(transaction, id, current.revision, restoreRevisionReason(fromRevision, comment), plan.closedAs, actor.id);
       const nextRevision = await nextEstimateRevision(transaction, id, current.revision);
-      const nextStatus = plan.reopens ? "Revision Required" : current.status; const nextProgress = plan.reopens ? 75 : Number(current.progress);
-      const update = new sql.Request(transaction); update.input("next_revision", sql.Int, nextRevision); update.input("actor", sql.BigInt, actor.id);
-      update.input("status", sql.NVarChar(50), nextStatus); update.input("progress", sql.Decimal(5, 2), nextProgress);
+      const nextStatus = plan.reopens ? "Revision Required" : current.status;
+      const nextProgress = plan.reopens ? 75 : Number(current.progress);
+      const update = new sql.Request(transaction);
+      update.input("next_revision", sql.Int, nextRevision);
+      update.input("actor", sql.BigInt, actor.id);
+      update.input("status", sql.NVarChar(50), nextStatus);
+      update.input("progress", sql.Decimal(5, 2), nextProgress);
       // The contingency rate lives on the header, so it goes back with the lines when the source snapshot recorded it.
       const restoredRate = source.contingency_rate === null ? null : Number(source.contingency_rate);
       update.input("contingency_rate", sql.Decimal(9, 4), restoredRate);
-      update.input("id", sql.BigInt, id); update.input("current_revision", sql.Int, current.revision); update.input("row_version", sql.VarBinary(8), rowVersion);
-      const updated = (await update.query<{ row_version: Buffer }>(`UPDATE dbo.estimates SET revision=@next_revision,status=@status,progress=@progress,
+      update.input("id", sql.BigInt, id);
+      update.input("current_revision", sql.Int, current.revision);
+      update.input("row_version", sql.VarBinary(8), rowVersion);
+      const updated = (
+        await update.query<{ row_version: Buffer }>(`UPDATE dbo.estimates SET revision=@next_revision,status=@status,progress=@progress,
         contingency_rate=COALESCE(@contingency_rate,contingency_rate),locked_at=NULL,locked_by=NULL,updated_by=@actor,updated_at=SYSUTCDATETIME() OUTPUT inserted.row_version
-        WHERE id=@id AND revision=@current_revision AND row_version=@row_version;`)).recordset[0];
+        WHERE id=@id AND revision=@current_revision AND row_version=@row_version;`)
+      ).recordset[0];
       if (!updated) throw new ApiError(409, "concurrency_conflict", "This estimate was changed by another user. Reload and try again.");
       // The new revision is costed with the overhead policy of the revision it copies, not today's, so its total is that
       // revision's total (owner 2026-11-18). A source that had no policy gives a revision with none.
-      const sourcePolicy = (await new sql.Request(transaction).input("id", sql.BigInt, id).input("revision", sql.Int, fromRevision)
-        .query<{ policy_id: number | string }>(`SELECT policy_id FROM dbo.estimate_overhead_snapshots WHERE estimate_id=@id AND revision=@revision;`)).recordset[0];
+      const sourcePolicy = (
+        await new sql.Request(transaction)
+          .input("id", sql.BigInt, id)
+          .input("revision", sql.Int, fromRevision)
+          .query<{ policy_id: number | string }>(`SELECT policy_id FROM dbo.estimate_overhead_snapshots WHERE estimate_id=@id AND revision=@revision;`)
+      ).recordset[0];
       if (sourcePolicy) {
         const applied = await snapshotOverheadPolicy(transaction, id, nextRevision, actor.id, todayIn(config.businessTimeZone), Number(sourcePolicy.policy_id));
         // Policies are append-only, so this always holds; a silent miss would change the total without a word.
-        if (Number(applied?.policy_id) !== Number(sourcePolicy.policy_id)) throw new ApiError(409, "overhead_policy_unavailable", "The overhead policy of that revision could not be applied. Nothing was changed.");
+        if (Number(applied?.policy_id) !== Number(sourcePolicy.policy_id))
+          throw new ApiError(409, "overhead_policy_unavailable", "The overhead policy of that revision could not be applied. Nothing was changed.");
       } else if (ESTIMATE_OVERHEAD_ENABLED) {
         // With overhead in use, an approved estimate without a policy cannot be sent to the ERP, so the policy of the day stands in.
         await snapshotOverheadPolicy(transaction, id, nextRevision, actor.id, todayIn(config.businessTimeZone));
       }
       await cloneRevisionLines(transaction, id, fromRevision, nextRevision, actor.id);
       await assertEstimateTotals(transaction, id);
-      await insertAudit(transaction, actor.id, "Estimate", id, current.estimate_no, "Revision restored",
+      await insertAudit(
+        transaction,
+        actor.id,
+        "Estimate",
+        id,
+        current.estimate_no,
+        "Revision restored",
         { revision: current.revision, status: current.status, progress: Number(current.progress), contingencyRate: Number(current.contingency_rate) },
         // `reason` is what the ERP Cost Sheet carries as the revision description (estimate-erp.ts); `comment` is the person's own note.
-        { revision: nextRevision, fromRevision, status: nextStatus, progress: nextProgress, contingencyRate: restoredRate ?? Number(current.contingency_rate),
-          reason: restoreRevisionReason(fromRevision, comment), comment });
+        {
+          revision: nextRevision,
+          fromRevision,
+          status: nextStatus,
+          progress: nextProgress,
+          contingencyRate: restoredRate ?? Number(current.contingency_rate),
+          reason: restoreRevisionReason(fromRevision, comment),
+          comment,
+        },
+      );
       if (plan.reopens) {
-        const inquiryId = Number(current.inquiry_id); await updateInquiry(transaction, inquiryId, "Estimating", 75, actor.id);
-        await insertAudit(transaction, actor.id, "Inquiry", inquiryId, current.inquiry_no, "Estimate revision created",
-          { status: current.inquiry_status, progress: Number(current.inquiry_progress) }, { status: "Estimating", progress: 75, estimateRevision: nextRevision });
+        const inquiryId = Number(current.inquiry_id);
+        await updateInquiry(transaction, inquiryId, "Estimating", 75, actor.id);
+        await insertAudit(
+          transaction,
+          actor.id,
+          "Inquiry",
+          inquiryId,
+          current.inquiry_no,
+          "Estimate revision created",
+          { status: current.inquiry_status, progress: Number(current.inquiry_progress) },
+          { status: "Estimating", progress: 75, estimateRevision: nextRevision },
+        );
       }
       return { id, revision: nextRevision, fromRevision, status: nextStatus, progress: nextProgress, rowVersion: updated.row_version.toString("base64") };
     });

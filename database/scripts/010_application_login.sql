@@ -911,4 +911,8 @@ GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.monitor_script_jobs TO [iot_team_app
 GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.monitor_script_targets TO [iot_team_app_role];
 GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::dbo.monitor_site_alert_channels TO [iot_team_app_role];
 GO
+
+-- database/migrations/134_estimate_historical_import.sql
+GRANT UPDATE (estimate_id, inquiry_id) ON OBJECT::dbo.projects TO [iot_team_app_role];
+GO
 -- END GENERATED MIGRATION GRANTS

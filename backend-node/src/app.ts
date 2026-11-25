@@ -6,6 +6,7 @@ import { registerExecutiveDashboardRoutes } from "./routes/executive-dashboard.j
 import { registerActivityRoutes } from "./routes/activity.js";
 import { registerSupportRoutes } from "./routes/support.js";
 import { registerEstimateExcelImportRoutes } from "./routes/estimate-excel-import.js";
+import { registerEstimateHistoricalImportRoutes } from "./routes/estimate-historical-import.js";
 import { registerHistoricalPrRoutes } from "./routes/historical-pr.js";
 import { registerUnifiedReportRoutes } from "./routes/unified-reports.js";
 import { registerReportTemplateRoutes } from "./routes/report-templates.js";
@@ -238,6 +239,7 @@ export async function buildApp(config: AppConfig): Promise<Application> {
   registerEstimateOrderRoutes(app, database, users);
   registerEstimatePriceSetRoutes(app, database, users);
   registerEstimateExcelImportRoutes(app, database, users, config);
+  registerEstimateHistoricalImportRoutes(app, database, users, config);
   registerEstimateWorkspaceWriteRoutes(app, config, database, users, email);
   registerEstimateCopyRoutes(app, config, database, users);
   registerEstimateAssignmentReadRoutes(app, database, users);
