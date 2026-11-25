@@ -346,3 +346,16 @@ test("the Sales Manager uses the CRM: a Sales Engineer's permissions plus the te
   const offered = guidesFor(granted).map((guide) => guide.id);
   for (const id of ["crm-deal-create", "crm-activity-followup", "crm-send-estimate"]) assert.ok(offered.includes(id), id);
 });
+
+/*
+ * Owner 2026-11-25: "ลบ role CEO ออกจากโค้ด". No migration creates a CEO role, so the checks that named it matched nobody.
+ * The CEO summary screen and a project's CEO notes are features, not a role, and stay.
+ */
+test("no role check names a CEO role", async () => {
+  const { DASHBOARD_ROLES } = await import("../backend-node/src/executive-dashboard-model.ts");
+  assert.deepEqual(DASHBOARD_ROLES, ["Admin", "Management", "Engineering Manager", "Project Manager", "Sales Manager"]);
+  assert.equal(canViewProjectCost(["Management"]), true);
+  for (const path of ["backend-node/src/executive-dashboard-model.ts", "backend-node/src/project-cost-model.ts", "backend-node/src/routes/executive-dashboard.ts"])
+    assert.doesNotMatch(await source(path), /["'`]CEO["'`]|N'CEO'/, path);
+  assert.match(await source("backend-node/src/routes/executive-dashboard.ts"), /const executive = hasRole\(actor, "Management", "Admin"\);/);
+});

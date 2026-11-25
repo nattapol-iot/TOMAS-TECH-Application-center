@@ -76,7 +76,7 @@ const plan = (change: Partial<PlanFigures> = {}): PlanFigures => ({
 });
 
 test("canViewProjectCost: a Leader and everyone above, by any role held", () => {
-  for (const role of ["Leader", "Project Manager", "Engineering Manager", "Sales Manager", "Management", "CEO", "Admin"]) assert.equal(canViewProjectCost([role]), true, role);
+  for (const role of ["Leader", "Project Manager", "Engineering Manager", "Sales Manager", "Management", "Admin"]) assert.equal(canViewProjectCost([role]), true, role);
   for (const role of ["Engineer", "Sales Engineer", "Purchasing", "Warehouse", "Inventory Controller"]) assert.equal(canViewProjectCost([role]), false, role);
   assert.equal(canViewProjectCost(["Engineer", "Leader"]), true);
   assert.equal(canViewProjectCost([]), false);
