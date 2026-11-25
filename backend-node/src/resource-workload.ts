@@ -57,6 +57,8 @@ export type WorkloadItem = {
   taskId?: number;
   /** A project plan row's discipline (migration 123), set by the PM on a row waiting for the head to name its people. */
   discipline?: string;
+  /** A project plan row done by a supplier (labor_source Outsourced): its man-days are the supplier's, not its PIC's. */
+  outsourced?: boolean;
 };
 
 const FINISHED_SQL = FINISHED_WORK_STATUSES.map((status) => `N'${status}'`).join(",");
@@ -330,6 +332,7 @@ export function workloadItems(sets: Row[][], holidays: ReadonlySet<string>, opti
           // The row's own id, and the discipline a row waiting for people asks for (migration 123): Allocation's queue.
           taskId: task.id,
           ...(task.discipline ? { discipline: task.discipline } : {}),
+          ...(outsourced ? { outsourced: true } : {}),
         });
     }
   }

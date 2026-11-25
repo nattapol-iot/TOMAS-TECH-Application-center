@@ -15,8 +15,19 @@ import type { EmailService } from "../email.js";
 import { calendarActions, repeatText, type CalendarState } from "../team-calendar.js";
 import { boardOutlookEvents, outlookStatus, refreshOutlookIfStale, syncOutlook } from "../outlook-calendar.js";
 import {
-  maskWeekdays, ownState, parseRepeat, parseTemplate, repeatDates, ruleDates, seriesState, templateState, weekdayMask,
-  type Occurrence, type SeriesRecord, type SeriesTemplate, type TeamTaskRepeat,
+  maskWeekdays,
+  ownState,
+  parseRepeat,
+  parseTemplate,
+  repeatDates,
+  ruleDates,
+  seriesState,
+  templateState,
+  weekdayMask,
+  type Occurrence,
+  type SeriesRecord,
+  type SeriesTemplate,
+  type TeamTaskRepeat,
 } from "../team-task-series.js";
 
 // The team board (owner decision 2026-10-21): everyone's work on one page, so that a customer who calls to book can be
@@ -69,13 +80,11 @@ export type TeamTaskInput = {
 const dayNumber = (value: string) => Date.parse(`${value}T00:00:00Z`) / DAY;
 const choice = <T extends string>(value: unknown, allowed: readonly T[], fallback: T, label: string): T => {
   if (value === undefined || value === null || value === "") return fallback;
-  if (typeof value !== "string" || !(allowed as readonly string[]).includes(value))
-    throw new ApiError(400, "validation_failed", `${label} must be one of: ${allowed.join(", ")}.`);
+  if (typeof value !== "string" || !(allowed as readonly string[]).includes(value)) throw new ApiError(400, "validation_failed", `${label} must be one of: ${allowed.join(", ")}.`);
   return value as T;
 };
 /** An id from a JSON body: a whole number, or its digits as text. */
-const optionalId = (value: unknown, label: string) =>
-  value === undefined || value === null || value === "" ? null : positiveLong(typeof value === "number" ? String(value) : value, label);
+const optionalId = (value: unknown, label: string) => (value === undefined || value === null || value === "" ? null : positiveLong(typeof value === "number" ? String(value) : value, label));
 
 /** A team task from a request body; every field but the subject and the start date has a default. */
 export function parseTeamTask(value: unknown): TeamTaskInput {
@@ -84,8 +93,7 @@ export function parseTeamTask(value: unknown): TeamTaskInput {
   const startDate = parseDateOnly(body.startDate, "Start date")!;
   const endDate = parseDateOnly(body.endDate, "End date", true) ?? startDate;
   if (endDate < startDate) throw new ApiError(400, "validation_failed", "The end date cannot be before the start date.");
-  if (dayNumber(endDate) - dayNumber(startDate) > MAX_TASK_DAYS)
-    throw new ApiError(400, "validation_failed", `A team task can span at most ${MAX_TASK_DAYS} days.`);
+  if (dayNumber(endDate) - dayNumber(startDate) > MAX_TASK_DAYS) throw new ApiError(400, "validation_failed", `A team task can span at most ${MAX_TASK_DAYS} days.`);
   // A list of people; a single assigneeId (an older page) is a list of one.
   const people = Array.isArray(body.assigneeIds) ? body.assigneeIds : body.assigneeId === undefined || body.assigneeId === null || body.assigneeId === "" ? [] : [body.assigneeId];
   if (people.length > MAX_PEOPLE) throw new ApiError(400, "validation_failed", `A team task can have at most ${MAX_PEOPLE} people.`);
@@ -101,8 +109,7 @@ export function parseTeamTask(value: unknown): TeamTaskInput {
   const startTime = slot === "Time" ? time(body.startTime, "The start time") : null;
   const endTime = slot === "Time" ? time(body.endTime, "The end time") : null;
   if (slot === "Time" && (!startTime || !endTime)) throw new ApiError(400, "validation_failed", "Enter the time from and until.");
-  if (slot === "Time" && endDate === startDate && endTime! <= startTime!)
-    throw new ApiError(400, "validation_failed", "The end time must be after the start time.");
+  if (slot === "Time" && endDate === startDate && endTime! <= startTime!) throw new ApiError(400, "validation_failed", "The end time must be after the start time.");
   let manDays: number | null = null;
   if (body.manDays !== undefined && body.manDays !== null && body.manDays !== "") {
     const amount = body.manDays;
@@ -111,8 +118,7 @@ export function parseTeamTask(value: unknown): TeamTaskInput {
     manDays = amount;
   }
   // Where a meeting is held; a day away is held nowhere.
-  const meetingMode = kind === "Away" || body.meetingMode === undefined || body.meetingMode === null || body.meetingMode === ""
-    ? null : choice(body.meetingMode, MEETING_MODES, "Online", "Meeting");
+  const meetingMode = kind === "Away" || body.meetingMode === undefined || body.meetingMode === null || body.meetingMode === "" ? null : choice(body.meetingMode, MEETING_MODES, "Online", "Meeting");
   return {
     kind,
     title: requiredText(body.title, 300, "Subject"),
@@ -130,7 +136,7 @@ export function parseTeamTask(value: unknown): TeamTaskInput {
     projectId: optionalId(body.projectId, "Project"),
     note: optionalBodyText(body.note, 2000, "Note") ?? "",
     meetingMode,
-    meetingPlace: meetingMode ? optionalBodyText(body.meetingPlace, 500, "Meeting place") ?? "" : "",
+    meetingPlace: meetingMode ? (optionalBodyText(body.meetingPlace, 500, "Meeting place") ?? "") : "",
     repeat: parseRepeat(body.repeat, startDate, endDate),
   };
 }
@@ -148,9 +154,11 @@ export function defaultManDays(task: Pick<TeamTaskInput, "kind" | "startDate" | 
   if (task.slot === "Time" && task.startDate === task.endDate && task.startTime && task.endTime) return timeRangeManDays(task.startTime, task.endTime);
   const share = task.slot === "AM" || task.slot === "PM" ? 0.5 : 1;
   let working = 0;
-  const from = dayNumber(task.startDate), to = dayNumber(task.endDate);
+  const from = dayNumber(task.startDate),
+    to = dayNumber(task.endDate);
   for (let d = from; d <= to; d++) {
-    const date = new Date(d * DAY), weekday = date.getUTCDay();
+    const date = new Date(d * DAY),
+      weekday = date.getUTCDay();
     if (weekday !== 0 && weekday !== 6 && !holidays.has(date.toISOString().slice(0, 10))) working++;
   }
   return (working || to - from + 1) * share;
@@ -159,7 +167,8 @@ export function defaultManDays(task: Pick<TeamTaskInput, "kind" | "startDate" | 
 const minutesOf = (time: string) => Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5));
 /** Man-days for a time range on one day: its minutes less any lunch hour, over 480, to the nearest quarter (at least 0.25). */
 export function timeRangeManDays(startTime: string, endTime: string) {
-  const from = minutesOf(startTime), until = minutesOf(endTime);
+  const from = minutesOf(startTime),
+    until = minutesOf(endTime);
   const lunch = Math.max(0, Math.min(until, 13 * 60) - Math.max(from, 12 * 60));
   return Math.max(0.25, Math.round(((until - from - lunch) / 480) * 4) / 4);
 }
@@ -182,15 +191,36 @@ export const canChangeTeamTask = (actor: CurrentUser, task: Row, assigneeIds: re
   Number(task.created_by) === actor.id || assigneeIds.includes(actor.id) || isProjectManagerRole(actor);
 
 /** A task's people from STRING_AGG ("7,9"), in the order chosen. */
-const idList = (value: unknown) => (value ? String(value).split(",").map(Number).filter((id) => Number.isSafeInteger(id) && id > 0) : []);
+const idList = (value: unknown) =>
+  value
+    ? String(value)
+        .split(",")
+        .map(Number)
+        .filter((id) => Number.isSafeInteger(id) && id > 0)
+    : [];
 
 /** Work the caller may not open still shows when and how much; what it is, and for whom, is left out. */
 export function redactWork(item: WorkloadItem): WorkloadItem {
   if (!item.hidden) return item;
   return {
-    key: item.key, workKey: item.workKey, ...(item.group ? { group: item.group } : {}), type: item.type, entityId: 0, ownerId: item.ownerId, reference: "", title: "", customer: "",
-    start: item.start, end: item.end, manDays: item.manDays, progress: item.progress, status: item.status, hidden: true,
-    ...(item.tentative ? { tentative: true } : {}), ...(item.byDay ? { byDay: item.byDay } : {}),
+    key: item.key,
+    workKey: item.workKey,
+    ...(item.group ? { group: item.group } : {}),
+    type: item.type,
+    entityId: 0,
+    ownerId: item.ownerId,
+    reference: "",
+    title: "",
+    customer: "",
+    start: item.start,
+    end: item.end,
+    manDays: item.manDays,
+    progress: item.progress,
+    status: item.status,
+    hidden: true,
+    ...(item.tentative ? { tentative: true } : {}),
+    ...(item.byDay ? { byDay: item.byDay } : {}),
+    ...(item.outsourced ? { outsourced: true } : {}),
   };
 }
 
@@ -277,10 +307,13 @@ export function teamTaskDto(r: Row, can: { inquiries: boolean; projects: boolean
  */
 async function prepare(transaction: TransactionType, input: TeamTaskInput) {
   const q = new sql.Request(transaction);
-  q.input("customer", sql.BigInt, input.customerId).input("people", sql.NVarChar(sql.MAX), JSON.stringify(input.assigneeIds))
+  q.input("customer", sql.BigInt, input.customerId)
+    .input("people", sql.NVarChar(sql.MAX), JSON.stringify(input.assigneeIds))
     .input("people_count", sql.Int, input.assigneeIds.length)
-    .input("inquiry", sql.BigInt, input.inquiryId).input("project", sql.BigInt, input.projectId)
-    .input("start", sql.Date, input.startDate).input("end", sql.Date, input.repeat?.until ?? input.endDate);
+    .input("inquiry", sql.BigInt, input.inquiryId)
+    .input("project", sql.BigInt, input.projectId)
+    .input("start", sql.Date, input.startDate)
+    .input("end", sql.Date, input.repeat?.until ?? input.endDate);
   const result = await q.query<Row>(`
     SELECT CASE WHEN @customer IS NULL OR EXISTS(SELECT 1 FROM dbo.customers WHERE id=@customer) THEN 1 ELSE 0 END customer_ok,
       CASE WHEN (SELECT COUNT(*) FROM dbo.users WHERE is_active=1 AND deleted_at IS NULL
@@ -298,15 +331,24 @@ async function prepare(transaction: TransactionType, input: TeamTaskInput) {
   return { task: { ...input, manDays: input.manDays ?? defaultManDays(input, holidays) }, holidays };
 }
 
-const bind = (q: sql.Request, task: TeamTaskInput & { manDays: number }, actor: number) => q
-  .input("kind", sql.NVarChar(20), task.kind).input("title", sql.NVarChar(300), task.title)
-  .input("customer", sql.BigInt, task.customerId)
-  .input("start", sql.Date, task.startDate).input("end", sql.Date, task.endDate)
-  .input("slot", sql.NVarChar(10), task.slot).input("time", sql.NVarChar(5), task.startTime).input("end_time", sql.NVarChar(5), task.endTime)
-  .input("man_days", sql.Decimal(6, 2), task.manDays).input("status", sql.NVarChar(20), task.status)
-  .input("inquiry", sql.BigInt, task.inquiryId).input("project", sql.BigInt, task.projectId)
-  .input("note", sql.NVarChar(2000), task.note).input("mode", sql.NVarChar(10), task.meetingMode).input("place", sql.NVarChar(500), task.meetingPlace)
-  .input("actor", sql.BigInt, actor);
+const bind = (q: sql.Request, task: TeamTaskInput & { manDays: number }, actor: number) =>
+  q
+    .input("kind", sql.NVarChar(20), task.kind)
+    .input("title", sql.NVarChar(300), task.title)
+    .input("customer", sql.BigInt, task.customerId)
+    .input("start", sql.Date, task.startDate)
+    .input("end", sql.Date, task.endDate)
+    .input("slot", sql.NVarChar(10), task.slot)
+    .input("time", sql.NVarChar(5), task.startTime)
+    .input("end_time", sql.NVarChar(5), task.endTime)
+    .input("man_days", sql.Decimal(6, 2), task.manDays)
+    .input("status", sql.NVarChar(20), task.status)
+    .input("inquiry", sql.BigInt, task.inquiryId)
+    .input("project", sql.BigInt, task.projectId)
+    .input("note", sql.NVarChar(2000), task.note)
+    .input("mode", sql.NVarChar(10), task.meetingMode)
+    .input("place", sql.NVarChar(500), task.meetingPlace)
+    .input("actor", sql.BigInt, actor);
 
 /** Sets a task's people, in the order chosen. */
 async function savePeople(transaction: TransactionType, id: number, assigneeIds: readonly number[]) {
@@ -318,8 +360,7 @@ async function savePeople(transaction: TransactionType, id: number, assigneeIds:
 
 /** A task's people as saved, for a change or a removal. */
 async function currentPeople(transaction: TransactionType, id: number) {
-  const rows = (await new sql.Request(transaction).input("id", sql.BigInt, id)
-    .query<Row>("SELECT user_id FROM dbo.team_task_assignees WHERE task_id=@id ORDER BY sort_order,user_id;")).recordset;
+  const rows = (await new sql.Request(transaction).input("id", sql.BigInt, id).query<Row>("SELECT user_id FROM dbo.team_task_assignees WHERE task_id=@id ORDER BY sort_order,user_id;")).recordset;
   return rows.map((r) => Number(r.user_id));
 }
 
@@ -328,24 +369,66 @@ async function tellPeople(transaction: TransactionType, actor: CurrentUser, id: 
   const recipients = userIds.filter((userId) => userId !== actor.id);
   if (!recipients.length || task.status !== "Planned") return;
   const days = when || (task.endDate === task.startDate ? task.startDate : `${task.startDate} → ${task.endDate}`);
-  await notifyUsers(transaction, recipients, "TEAM_TASK_ASSIGNED", task.title.slice(0, 300),
-    `${days}${task.startTime ? ` ${task.startTime}–${task.endTime}` : ""} · ${actor.name}`, "TeamTask", id, `team-task-${id}-${task.startDate}`);
+  await notifyUsers(
+    transaction,
+    recipients,
+    "TEAM_TASK_ASSIGNED",
+    task.title.slice(0, 300),
+    `${days}${task.startTime ? ` ${task.startTime}–${task.endTime}` : ""} · ${actor.name}`,
+    "TeamTask",
+    id,
+    `team-task-${id}-${task.startDate}`,
+  );
 }
 
 /** A task's state as the calendar sees it; the customer by id, so a rename elsewhere sends nothing. */
-const calendarState = (task: { kind: string; title: string; customerId: number | null; note: string; startDate: string; endDate: string; slot: string; startTime: string | null; endTime: string | null; assigneeIds: number[]; status: string; meetingMode: string | null; meetingPlace: string }): CalendarState => ({
-  kind: task.kind as CalendarState["kind"], title: task.title, customer: task.customerId === null ? "" : String(task.customerId), note: task.note,
-  startDate: task.startDate, endDate: task.endDate, slot: task.slot as CalendarState["slot"], startTime: task.startTime, endTime: task.endTime, assigneeIds: task.assigneeIds, status: task.status,
-  meetingMode: (task.meetingMode as CalendarState["meetingMode"]) ?? null, meetingPlace: task.meetingPlace,
+const calendarState = (task: {
+  kind: string;
+  title: string;
+  customerId: number | null;
+  note: string;
+  startDate: string;
+  endDate: string;
+  slot: string;
+  startTime: string | null;
+  endTime: string | null;
+  assigneeIds: number[];
+  status: string;
+  meetingMode: string | null;
+  meetingPlace: string;
+}): CalendarState => ({
+  kind: task.kind as CalendarState["kind"],
+  title: task.title,
+  customer: task.customerId === null ? "" : String(task.customerId),
+  note: task.note,
+  startDate: task.startDate,
+  endDate: task.endDate,
+  slot: task.slot as CalendarState["slot"],
+  startTime: task.startTime,
+  endTime: task.endTime,
+  assigneeIds: task.assigneeIds,
+  status: task.status,
+  meetingMode: (task.meetingMode as CalendarState["meetingMode"]) ?? null,
+  meetingPlace: task.meetingPlace,
 });
 /** A time(0) column as HH:MM; the driver returns it as a Date on 1970-01-01 UTC. */
 const clock = (value: unknown) => (value ? (value instanceof Date ? value.toISOString().slice(11, 16) : String(value).slice(0, 5)) : null);
-const rowState = (r: Row, assigneeIds: number[]) => calendarState({
-  kind: String(r.kind), title: String(r.title), customerId: r.customer_id === null || r.customer_id === undefined ? null : Number(r.customer_id), note: String(r.note ?? ""),
-  startDate: dateOnly(r.start_date as Date)!, endDate: dateOnly(r.end_date as Date)!, slot: String(r.time_slot ?? "Day"),
-  startTime: clock(r.start_time), endTime: clock(r.end_time),
-  assigneeIds, status: String(r.status), meetingMode: r.meeting_mode ? String(r.meeting_mode) : null, meetingPlace: String(r.meeting_place ?? ""),
-});
+const rowState = (r: Row, assigneeIds: number[]) =>
+  calendarState({
+    kind: String(r.kind),
+    title: String(r.title),
+    customerId: r.customer_id === null || r.customer_id === undefined ? null : Number(r.customer_id),
+    note: String(r.note ?? ""),
+    startDate: dateOnly(r.start_date as Date)!,
+    endDate: dateOnly(r.end_date as Date)!,
+    slot: String(r.time_slot ?? "Day"),
+    startTime: clock(r.start_time),
+    endTime: clock(r.end_time),
+    assigneeIds,
+    status: String(r.status),
+    meetingMode: r.meeting_mode ? String(r.meeting_mode) : null,
+    meetingPlace: String(r.meeting_place ?? ""),
+  });
 const seriesOf = (r: Row) => (r.series_id === null || r.series_id === undefined ? null : Number(r.series_id));
 
 /** What the person's Outlook got: "none" when nothing needed sending. */
@@ -358,7 +441,14 @@ type Delivery = { id: number; before: CalendarState | null; after: CalendarState
  * as it is now, and one cancellation to whoever it no longer includes, carrying it as they had it. Delivery never
  * undoes the save. A series' entry (its state carries the rule) goes under the series' own UID.
  */
-async function deliverCalendar(db: Database, email: Pick<EmailService, "sendTeamTaskCalendar">, id: number, before: CalendarState | null, after: CalendarState | null, sentBy: string): Promise<CalendarDelivery> {
+async function deliverCalendar(
+  db: Database,
+  email: Pick<EmailService, "sendTeamTaskCalendar">,
+  id: number,
+  before: CalendarState | null,
+  after: CalendarState | null,
+  sentBy: string,
+): Promise<CalendarDelivery> {
   const { cancel, request } = calendarActions(before, after);
   const actions = [
     ...(cancel.length ? [{ method: "CANCEL" as const, userIds: cancel, state: before! }] : []),
@@ -367,23 +457,41 @@ async function deliverCalendar(db: Database, email: Pick<EmailService, "sendTeam
   if (!actions.length) return "none";
   const userIds = [...new Set([...cancel, ...request])];
   const customerIds = [...new Set([before?.customer, after?.customer].filter((value): value is string => Boolean(value)).map(Number))];
-  const lookup = await db.query<Row>(`
+  const lookup = await db.query<Row>(
+    `
     SELECT id,name,email FROM dbo.users WHERE id IN (SELECT CONVERT(bigint,[value]) FROM OPENJSON(@users));
     SELECT id,name FROM dbo.customers WHERE id IN (SELECT CONVERT(bigint,[value]) FROM OPENJSON(@customers));`,
-  (q) => q.input("users", sql.NVarChar(sql.MAX), JSON.stringify(userIds)).input("customers", sql.NVarChar(sql.MAX), JSON.stringify(customerIds)));
+    (q) => q.input("users", sql.NVarChar(sql.MAX), JSON.stringify(userIds)).input("customers", sql.NVarChar(sql.MAX), JSON.stringify(customerIds)),
+  );
   const [people = [], customers = []] = lookup.recordsets as unknown as Row[][];
   const customerName = (value: string) => (value ? String(customers.find((r) => String(r.id) === value)?.name ?? "") : "");
   const results: CalendarDelivery[] = [];
   for (const { method, userIds: ids, state } of actions) {
     // In the order chosen, and only people with an address.
-    const recipients = ids.map((userId) => people.find((r) => Number(r.id) === userId)).filter((person): person is Row => Boolean(person?.email))
+    const recipients = ids
+      .map((userId) => people.find((r) => Number(r.id) === userId))
+      .filter((person): person is Row => Boolean(person?.email))
       .map((person) => ({ name: String(person.name ?? ""), email: String(person.email) }));
     if (!recipients.length) continue;
     const result = await email.sendTeamTaskCalendar({
-      method, recipients, sentBy,
-      task: { id, kind: state.kind === "Appointment" ? "Appointment" : "Task", title: state.title, customer: customerName(state.customer), note: state.note,
-        startDate: state.startDate, endDate: state.endDate, slot: state.slot, startTime: state.startTime, endTime: state.endTime,
-        meetingMode: state.meetingMode ?? null, meetingPlace: state.meetingPlace ?? "", repeat: state.repeat ?? null },
+      method,
+      recipients,
+      sentBy,
+      task: {
+        id,
+        kind: state.kind === "Appointment" ? "Appointment" : "Task",
+        title: state.title,
+        customer: customerName(state.customer),
+        note: state.note,
+        startDate: state.startDate,
+        endDate: state.endDate,
+        slot: state.slot,
+        startTime: state.startTime,
+        endTime: state.endTime,
+        meetingMode: state.meetingMode ?? null,
+        meetingPlace: state.meetingPlace ?? "",
+        repeat: state.repeat ?? null,
+      },
     });
     results.push(result.status);
   }
@@ -411,7 +519,13 @@ async function readSeries(transaction: TransactionType, seriesId: number): Promi
   const r = seriesRows[0];
   if (!r) return null;
   return {
-    series: { id: Number(r.id), weekdays: maskWeekdays(Number(r.weekdays)), firstDate: dateOnly(r.first_date as Date)!, until: dateOnly(r.until_date as Date)!, template: parseTemplate(r.template_json) },
+    series: {
+      id: Number(r.id),
+      weekdays: maskWeekdays(Number(r.weekdays)),
+      firstDate: dateOnly(r.first_date as Date)!,
+      until: dateOnly(r.until_date as Date)!,
+      template: parseTemplate(r.template_json),
+    },
     days: dayRows.map((day) => ({ ...rowState(day, idList(day.assignee_ids)), id: Number(day.id), occurrenceDate: dateOnly(day.occurrence_date as Date)! })),
   };
 }
@@ -424,7 +538,8 @@ function seriesDeliveries(before: { series: SeriesRecord; days: Occurrence[] } |
   return [
     ...(seriesId === undefined ? [] : [{ id: seriesId, before: before ? seriesState(before.series, before.days) : null, after: after ? seriesState(after.series, after.days) : null }]),
     ...dayIds.map((id) => {
-      const was = day(before, id), now = day(after, id);
+      const was = day(before, id),
+        now = day(after, id);
       return { id, before: was ? ownState(template, was) : null, after: now ? ownState(template, now) : null };
     }),
   ];
@@ -434,10 +549,12 @@ function seriesDeliveries(before: { series: SeriesRecord; days: Occurrence[] } |
 async function createSingle(transaction: TransactionType, actor: CurrentUser, input: TeamTaskInput) {
   const { task } = await prepare(transaction, input);
   const insert = bind(new sql.Request(transaction), task, actor.id);
-  const row = (await insert.query<Row>(`
+  const row = (
+    await insert.query<Row>(`
     INSERT dbo.team_tasks(kind,title,customer_id,start_date,end_date,time_slot,start_time,end_time,man_days,status,inquiry_id,project_id,note,meeting_mode,meeting_place,created_by)
     OUTPUT inserted.id,inserted.row_version
-    VALUES(@kind,@title,@customer,@start,@end,@slot,CONVERT(time(0),@time),CONVERT(time(0),@end_time),@man_days,@status,@inquiry,@project,@note,@mode,@place,@actor);`)).recordset[0]!;
+    VALUES(@kind,@title,@customer,@start,@end,@slot,CONVERT(time(0),@time),CONVERT(time(0),@end_time),@man_days,@status,@inquiry,@project,@note,@mode,@place,@actor);`)
+  ).recordset[0]!;
   const id = Number(row.id);
   await savePeople(transaction, id, task.assigneeIds);
   await insertAudit(transaction, actor.id, ENTITY, id, "", "Created", null, task);
@@ -460,16 +577,29 @@ async function createSeries(transaction: TransactionType, actor: CurrentUser, in
   // Outlook's series starts on the rule's first day, even a holiday (that day is left out of it).
   const firstDate = ruleDates(input.startDate, repeat.until, repeat.weekdays)[0]!;
   const template: SeriesTemplate = {
-    kind: task.kind, title: task.title, customerId: task.customerId, assigneeIds: task.assigneeIds, slot: task.slot, startTime: task.startTime, endTime: task.endTime,
-    manDays: task.manDays, inquiryId: task.inquiryId, projectId: task.projectId, note: task.note, meetingMode: task.meetingMode, meetingPlace: task.meetingPlace,
+    kind: task.kind,
+    title: task.title,
+    customerId: task.customerId,
+    assigneeIds: task.assigneeIds,
+    slot: task.slot,
+    startTime: task.startTime,
+    endTime: task.endTime,
+    manDays: task.manDays,
+    inquiryId: task.inquiryId,
+    projectId: task.projectId,
+    note: task.note,
+    meetingMode: task.meetingMode,
+    meetingPlace: task.meetingPlace,
   };
-  const rows = (await bind(new sql.Request(transaction), task, actor.id)
-    .input("rule", sql.NVarChar(10), repeat.rule).input("weekdays", sql.TinyInt, weekdayMask(repeat.weekdays))
-    .input("first", sql.Date, firstDate).input("until", sql.Date, repeat.until)
-    .input("template", sql.NVarChar(sql.MAX), JSON.stringify(template))
-    .input("dates", sql.NVarChar(sql.MAX), JSON.stringify(dates))
-    .input("people", sql.NVarChar(sql.MAX), JSON.stringify(task.assigneeIds))
-    .query<Row>(`
+  const rows = (
+    await bind(new sql.Request(transaction), task, actor.id)
+      .input("rule", sql.NVarChar(10), repeat.rule)
+      .input("weekdays", sql.TinyInt, weekdayMask(repeat.weekdays))
+      .input("first", sql.Date, firstDate)
+      .input("until", sql.Date, repeat.until)
+      .input("template", sql.NVarChar(sql.MAX), JSON.stringify(template))
+      .input("dates", sql.NVarChar(sql.MAX), JSON.stringify(dates))
+      .input("people", sql.NVarChar(sql.MAX), JSON.stringify(task.assigneeIds)).query<Row>(`
     DECLARE @series TABLE(id bigint NOT NULL);
     DECLARE @made TABLE(id bigint NOT NULL);
     INSERT dbo.team_task_series(repeat_rule,weekdays,first_date,until_date,template_json,created_by)
@@ -483,7 +613,8 @@ async function createSeries(transaction: TransactionType, actor: CurrentUser, in
     INSERT dbo.team_task_assignees(task_id,user_id,sort_order)
     SELECT m.id,CONVERT(bigint,people.[value]),CONVERT(int,people.[key])+1 FROM @made m CROSS JOIN OPENJSON(@people) people;
     SELECT (SELECT id FROM @series) series_id,t.id,t.occurrence_date,t.row_version
-    FROM dbo.team_tasks t JOIN @made m ON m.id=t.id ORDER BY t.occurrence_date;`)).recordset;
+    FROM dbo.team_tasks t JOIN @made m ON m.id=t.id ORDER BY t.occurrence_date;`)
+  ).recordset;
   const first = rows[0];
   if (!first) throw new ApiError(500, "team_task_series_failed", "The repeating task could not be saved.");
   const seriesId = Number(first.series_id);
@@ -502,7 +633,9 @@ async function createSeries(transaction: TransactionType, actor: CurrentUser, in
 
 /** Removes a task (it stays in the database with its people, as its audit trail does). */
 async function removeTask(transaction: TransactionType, actor: CurrentUser, id: number, title: unknown, people: readonly number[]) {
-  await new sql.Request(transaction).input("id", sql.BigInt, id).input("actor", sql.BigInt, actor.id)
+  await new sql.Request(transaction)
+    .input("id", sql.BigInt, id)
+    .input("actor", sql.BigInt, actor.id)
     .query("UPDATE dbo.team_tasks SET deleted_at=SYSUTCDATETIME(),updated_by=@actor,updated_at=SYSUTCDATETIME() WHERE id=@id;");
   await insertAudit(transaction, actor.id, ENTITY, id, "", "Deleted", { title, assigneeIds: people }, null);
 }
@@ -526,7 +659,11 @@ async function endSeries(transaction: TransactionType, actor: CurrentUser, serie
   await insertAudit(transaction, actor.id, SERIES_ENTITY, seriesId, "", "Ended", { until: before?.series.until ?? null }, { from, removed: removed.length });
   const after = await readSeries(transaction, seriesId);
   return {
-    deliveries: seriesDeliveries(before, after, removed.map((day) => day.id)),
+    deliveries: seriesDeliveries(
+      before,
+      after,
+      removed.map((day) => day.id),
+    ),
     kept: new Set((before?.days ?? []).filter((day) => day.occurrenceDate >= from && !goes(day)).map((day) => day.occurrenceDate)),
   };
 }
@@ -534,20 +671,34 @@ async function endSeries(transaction: TransactionType, actor: CurrentUser, serie
 type BoardMail = Pick<EmailService, "sendTeamTaskCalendar"> & Partial<Pick<EmailService, "graphGet" | "graphEnabled" | "graphSender">>;
 /** The Graph reads for Outlook calendars; a mail service without them (a test harness) has Outlook switched off. */
 const graphOf = (email: BoardMail): Pick<EmailService, "graphGet" | "graphEnabled"> & Partial<Pick<EmailService, "graphSender">> =>
-  typeof email.graphGet === "function" ? email as Pick<EmailService, "graphGet" | "graphEnabled"> & Partial<Pick<EmailService, "graphSender">>
+  typeof email.graphGet === "function"
+    ? (email as Pick<EmailService, "graphGet" | "graphEnabled"> & Partial<Pick<EmailService, "graphSender">>)
     : { graphEnabled: false, graphGet: () => Promise.reject(new Error("Microsoft Graph is not configured.")) };
 
 /** The days of repeats on the board, each counted on its own day for each of its people (the workload counts a series as one piece of work). */
 export function seriesDayItems(taskRows: readonly Row[]): WorkloadItem[] {
-  return taskRows.filter((r) => seriesOf(r) !== null && r.status === "Planned" && (r.kind === "Appointment" || r.kind === "Task")).flatMap((r) => {
-    const people = idList(r.assignee_ids);
-    return (people.length ? people : [null]).map((ownerId): WorkloadItem => ({
-      key: `TeamTask-${Number(r.id)}-${ownerId ?? "none"}`, workKey: `TeamTask-${Number(r.id)}`, type: "Task", entityId: Number(r.id), ownerId,
-      reference: "", title: String(r.title ?? ""), customer: String(r.customer_name ?? ""),
-      start: dateOnly(r.start_date as Date), end: dateOnly(r.end_date as Date), manDays: Number(r.man_days ?? 0), progress: 0, status: "Planned",
-      taskKind: r.kind === "Appointment" ? "Appointment" : "Task", repeat: true,
-    }));
-  });
+  return taskRows
+    .filter((r) => seriesOf(r) !== null && r.status === "Planned" && (r.kind === "Appointment" || r.kind === "Task"))
+    .flatMap((r) => {
+      const people = idList(r.assignee_ids);
+      return (people.length ? people : [null]).map((ownerId): WorkloadItem => ({
+        key: `TeamTask-${Number(r.id)}-${ownerId ?? "none"}`,
+        workKey: `TeamTask-${Number(r.id)}`,
+        type: "Task",
+        entityId: Number(r.id),
+        ownerId,
+        reference: "",
+        title: String(r.title ?? ""),
+        customer: String(r.customer_name ?? ""),
+        start: dateOnly(r.start_date as Date),
+        end: dateOnly(r.end_date as Date),
+        manDays: Number(r.man_days ?? 0),
+        progress: 0,
+        status: "Planned",
+        taskKind: r.kind === "Appointment" ? "Appointment" : "Task",
+        repeat: true,
+      }));
+    });
 }
 
 export function registerTeamBoardRoutes(app: FastifyInstance, db: Database, users: CurrentUserService, email: BoardMail) {
@@ -556,17 +707,19 @@ export function registerTeamBoardRoutes(app: FastifyInstance, db: Database, user
     await users.demandPermission(request, "team.board");
     const actor = await users.required(request);
     const query = request.query as Record<string, unknown>;
-    const from = parseDateOnly(query.from, "From")!, to = parseDateOnly(query.to, "To")!;
-    if (to < from || dayNumber(to) - dayNumber(from) > MAX_WINDOW_DAYS)
-      throw new ApiError(400, "validation_failed", `Choose a window of at most ${MAX_WINDOW_DAYS} days.`);
-    const result = await db.query<Row>(TEAM_BOARD_SQL, (q) => q
-      .input("actor", sql.BigInt, actor.id)
-      .input("project_elevated", sql.Bit, isProjectElevated(actor))
-      .input("task_elevated", sql.Bit, elevated(actor) || isProjectManagerRole(actor))
-      // Everyone's work counts on the board; `visible` marks what is the caller's to see.
-      .input("all_work", sql.Bit, true)
-      .input("from", sql.Date, from)
-      .input("to", sql.Date, to));
+    const from = parseDateOnly(query.from, "From")!,
+      to = parseDateOnly(query.to, "To")!;
+    if (to < from || dayNumber(to) - dayNumber(from) > MAX_WINDOW_DAYS) throw new ApiError(400, "validation_failed", `Choose a window of at most ${MAX_WINDOW_DAYS} days.`);
+    const result = await db.query<Row>(TEAM_BOARD_SQL, (q) =>
+      q
+        .input("actor", sql.BigInt, actor.id)
+        .input("project_elevated", sql.Bit, isProjectElevated(actor))
+        .input("task_elevated", sql.Bit, elevated(actor) || isProjectManagerRole(actor))
+        // Everyone's work counts on the board; `visible` marks what is the caller's to see.
+        .input("all_work", sql.Bit, true)
+        .input("from", sql.Date, from)
+        .input("to", sql.Date, to),
+    );
     const sets = result.recordsets as unknown as Row[][];
     // Outlook: the copy read last time, and a fresh read in the background when that one is old.
     refreshOutlookIfStale(db, graph);
@@ -579,14 +732,19 @@ export function registerTeamBoardRoutes(app: FastifyInstance, db: Database, user
     // One visit with two engineers is one row per engineer; the board shows it on each of their rows.
     const visits = new Map<number, { id: number; number: string; status: string; customer: string; start: string | null; end: string | null; time: string | null; engineerIds: number[] }>();
     for (const r of visitRows) {
-      const visitId = Number(r.id), current = visits.get(visitId);
-      if (current) { current.engineerIds.push(Number(r.engineer_id)); continue; }
+      const visitId = Number(r.id),
+        current = visits.get(visitId);
+      if (current) {
+        current.engineerIds.push(Number(r.engineer_id));
+        continue;
+      }
       visits.set(visitId, {
         id: visitId,
         number: granted.has("visit.read") ? String(r.visit_no ?? "") : "",
         status: String(r.status ?? ""),
         customer: granted.has("visit.read") ? String(r.customer_name ?? "") : "",
-        start: dateOnly(r.start_date as Date), end: dateOnly(r.end_date as Date),
+        start: dateOnly(r.start_date as Date),
+        end: dateOnly(r.end_date as Date),
         time: r.start_time ? String(r.start_time).trim() : null,
         engineerIds: [Number(r.engineer_id)],
       });
@@ -637,16 +795,14 @@ export function registerTeamBoardRoutes(app: FastifyInstance, db: Database, user
     const applyTo = parseApplyTo(body.applyTo);
     const input = parseTeamTask(body);
     const saved = await db.transaction(async (transaction) => {
-      const current = (await new sql.Request(transaction).input("id", sql.BigInt, id).query<Row>(
-        "SELECT * FROM dbo.team_tasks WITH(UPDLOCK,HOLDLOCK) WHERE id=@id AND deleted_at IS NULL;")).recordset[0];
+      const current = (await new sql.Request(transaction).input("id", sql.BigInt, id).query<Row>("SELECT * FROM dbo.team_tasks WITH(UPDLOCK,HOLDLOCK) WHERE id=@id AND deleted_at IS NULL;"))
+        .recordset[0];
       if (!current) throw new ApiError(404, "team_task_not_found", "That task no longer exists.");
       const people = await currentPeople(transaction, id);
-      if (!canChangeTeamTask(actor, current, people))
-        throw new ApiError(403, "team_task_forbidden", "Only whoever added the task, someone it is for, or a manager can change it.");
+      if (!canChangeTeamTask(actor, current, people)) throw new ApiError(403, "team_task_forbidden", "Only whoever added the task, someone it is for, or a manager can change it.");
       // People already on it may stay; adding someone else needs an Admin, a Manager or a Leader.
       assertMayAssign(actor, input.assigneeIds, people);
-      if (!(current.row_version as Buffer).equals(expected))
-        throw new ApiError(409, "concurrency_conflict", "Someone changed this task. Reload before saving.");
+      if (!(current.row_version as Buffer).equals(expected)) throw new ApiError(409, "concurrency_conflict", "Someone changed this task. Reload before saving.");
       const seriesId = seriesOf(current);
 
       // This day only: the task itself changes (a day of a repeat keeps its place in the series).
@@ -654,25 +810,36 @@ export function registerTeamBoardRoutes(app: FastifyInstance, db: Database, user
         const before = seriesId === null ? null : await readSeries(transaction, seriesId);
         const { task } = await prepare(transaction, { ...input, repeat: null });
         const update = bind(new sql.Request(transaction), task, actor.id).input("id", sql.BigInt, id);
-        const row = (await update.query<Row>(`
+        const row = (
+          await update.query<Row>(`
           UPDATE dbo.team_tasks SET kind=@kind,title=@title,customer_id=@customer,start_date=@start,end_date=@end,
             time_slot=@slot,start_time=CONVERT(time(0),@time),end_time=CONVERT(time(0),@end_time),man_days=@man_days,status=@status,inquiry_id=@inquiry,project_id=@project,note=@note,
             meeting_mode=@mode,meeting_place=@place,updated_by=@actor,updated_at=SYSUTCDATETIME()
-          OUTPUT inserted.row_version WHERE id=@id;`)).recordset[0]!;
+          OUTPUT inserted.row_version WHERE id=@id;`)
+        ).recordset[0]!;
         await savePeople(transaction, id, task.assigneeIds);
         const was = {
-          kind: current.kind, title: current.title, customerId: current.customer_id, assigneeIds: people,
-          startDate: dateOnly(current.start_date as Date), endDate: dateOnly(current.end_date as Date), slot: current.time_slot, startTime: clock(current.start_time), endTime: clock(current.end_time),
-          manDays: Number(current.man_days), status: current.status, inquiryId: current.inquiry_id, projectId: current.project_id, note: current.note,
-          meetingMode: current.meeting_mode ?? null, meetingPlace: current.meeting_place ?? "",
+          kind: current.kind,
+          title: current.title,
+          customerId: current.customer_id,
+          assigneeIds: people,
+          startDate: dateOnly(current.start_date as Date),
+          endDate: dateOnly(current.end_date as Date),
+          slot: current.time_slot,
+          startTime: clock(current.start_time),
+          endTime: clock(current.end_time),
+          manDays: Number(current.man_days),
+          status: current.status,
+          inquiryId: current.inquiry_id,
+          projectId: current.project_id,
+          note: current.note,
+          meetingMode: current.meeting_mode ?? null,
+          meetingPlace: current.meeting_place ?? "",
         };
         await insertAudit(transaction, actor.id, ENTITY, id, "", "Updated", was, task);
         // Tell the people who joined; everyone, when the day moved.
-        await tellPeople(transaction, actor, id, task,
-          was.startDate !== task.startDate ? task.assigneeIds : task.assigneeIds.filter((userId) => !people.includes(userId)));
-        const deliveries = seriesId === null
-          ? [{ id, before: rowState(current, people), after: calendarState(task) }]
-          : seriesDeliveries(before, await readSeries(transaction, seriesId), [id]);
+        await tellPeople(transaction, actor, id, task, was.startDate !== task.startDate ? task.assigneeIds : task.assigneeIds.filter((userId) => !people.includes(userId)));
+        const deliveries = seriesId === null ? [{ id, before: rowState(current, people), after: calendarState(task) }] : seriesDeliveries(before, await readSeries(transaction, seriesId), [id]);
         return { result: { id, rowVersion: (row.row_version as Buffer).toString("base64"), manDays: task.manDays }, deliveries };
       }
 
@@ -703,14 +870,12 @@ export function registerTeamBoardRoutes(app: FastifyInstance, db: Database, user
     const expected = parseRowVersion(query.rowVersion);
     const applyTo = parseApplyTo(query.applyTo);
     const deliveries = await db.transaction(async (transaction) => {
-      const current = (await new sql.Request(transaction).input("id", sql.BigInt, id).query<Row>(
-        "SELECT * FROM dbo.team_tasks WITH(UPDLOCK,HOLDLOCK) WHERE id=@id AND deleted_at IS NULL;")).recordset[0];
+      const current = (await new sql.Request(transaction).input("id", sql.BigInt, id).query<Row>("SELECT * FROM dbo.team_tasks WITH(UPDLOCK,HOLDLOCK) WHERE id=@id AND deleted_at IS NULL;"))
+        .recordset[0];
       if (!current) throw new ApiError(404, "team_task_not_found", "That task no longer exists.");
       const people = await currentPeople(transaction, id);
-      if (!canChangeTeamTask(actor, current, people))
-        throw new ApiError(403, "team_task_forbidden", "Only whoever added the task, someone it is for, or a manager can remove it.");
-      if (!(current.row_version as Buffer).equals(expected))
-        throw new ApiError(409, "concurrency_conflict", "Someone changed this task. Reload before removing it.");
+      if (!canChangeTeamTask(actor, current, people)) throw new ApiError(403, "team_task_forbidden", "Only whoever added the task, someone it is for, or a manager can remove it.");
+      if (!(current.row_version as Buffer).equals(expected)) throw new ApiError(409, "concurrency_conflict", "Someone changed this task. Reload before removing it.");
       const seriesId = seriesOf(current);
       if (seriesId === null) {
         await removeTask(transaction, actor, id, current.title, people);
@@ -730,16 +895,31 @@ export function registerTeamBoardRoutes(app: FastifyInstance, db: Database, user
   app.get("/api/v1/team-tasks/:id/history", async (request) => {
     await users.demandPermission(request, "team.board");
     const id = positiveLong((request.params as { id?: string }).id, "Task id");
-    const rows = (await db.query<Row>(`
+    const rows = (
+      await db.query<Row>(
+        `
       SELECT TOP(50) a.id,a.entity_type,a.action,a.before_json,a.after_json,a.occurred_at,u.name actor_name
       FROM dbo.audit_log a JOIN dbo.users u ON u.id=a.actor_id
       WHERE (a.entity_type=@type AND a.entity_id=@id)
         OR (a.entity_type=@series_type AND a.entity_id=(SELECT t.series_id FROM dbo.team_tasks t WHERE t.id=@id))
       ORDER BY a.occurred_at DESC,a.id DESC;`,
-    (q) => q.input("type", sql.NVarChar(50), ENTITY).input("series_type", sql.NVarChar(50), SERIES_ENTITY).input("id", sql.BigInt, id))).recordset;
-    const json = (value: unknown) => { try { return value ? JSON.parse(String(value)) : null; } catch { return null; } };
+        (q) => q.input("type", sql.NVarChar(50), ENTITY).input("series_type", sql.NVarChar(50), SERIES_ENTITY).input("id", sql.BigInt, id),
+      )
+    ).recordset;
+    const json = (value: unknown) => {
+      try {
+        return value ? JSON.parse(String(value)) : null;
+      } catch {
+        return null;
+      }
+    };
     return rows.map((r) => ({
-      id: Number(r.id), action: String(r.action), actor: String(r.actor_name ?? ""), at: r.occurred_at, before: json(r.before_json), after: json(r.after_json),
+      id: Number(r.id),
+      action: String(r.action),
+      actor: String(r.actor_name ?? ""),
+      at: r.occurred_at,
+      before: json(r.before_json),
+      after: json(r.after_json),
       ...(r.entity_type === SERIES_ENTITY ? { series: true } : {}),
     }));
   });

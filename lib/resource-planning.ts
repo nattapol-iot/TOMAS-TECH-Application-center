@@ -43,6 +43,8 @@ export type Commitment = {
   taskId?: number;
   /** A project plan row's discipline (migration 123): set on a row waiting for the head to name its people. */
   discipline?: string;
+  /** A project plan row done by a supplier: no time of its PIC's, and not a row waiting for hours. */
+  outsourced?: boolean;
 };
 const DAY = 86400000;
 /** Working days a week for anyone without a saved capacity: Monday to Friday. backend-node/src/resource-workload.ts holds the same default. */
