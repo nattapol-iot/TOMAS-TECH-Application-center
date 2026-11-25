@@ -2065,9 +2065,9 @@ const PROJECT_PLAN: Guide = {
       view: "projects",
       title: { th: "ต้องตาม", en: "To follow up", jp: "要フォロー" },
       body: {
-        th: "ปุ่มนี้รวมงานที่ต้องตาม: เลยกำหนด ติดปัญหา ถึงวันเริ่มแต่ยังไม่เริ่ม ยังไม่มีผู้ทำ งานจ้างภายนอกที่ยังไม่ขอซื้อ และวันหยุดบริษัทใหม่ที่ตรงกับงาน (กด 'เลื่อนวันจบ' หรือ 'คงไว้' ระบบไม่เลื่อนเอง) กดชื่องานเพื่อไปที่แถวนั้นในตาราง",
-        en: "This button gathers what needs following up: late, blocked, due to start but not started, no member yet, outsourced work with no purchase request, and a new company holiday on the work (press Move the end or Keep; nothing moves on its own). Press a task to go to its row.",
-        jp: "このボタンに要フォローの作業をまとめます：遅延、停滞、開始日を過ぎて未着手、担当者なし、購買依頼のない外注作業、作業に重なる新しい会社休日（「終了日を延ばす」か「そのまま」を押します。自動では動きません）。作業名を押すとその行に移動します。",
+        th: "ปุ่มนี้รวมงานที่ต้องตาม: เลยกำหนด ติดปัญหา ถึงวันเริ่มแต่ยังไม่เริ่ม ยังไม่มีผู้ทำ วันที่ผู้ทำยังไม่ยืนยันชั่วโมงใน My Work (ย้อนหลัง 2 สัปดาห์) งานจ้างภายนอกที่ยังไม่ขอซื้อ วันหยุดบริษัทใหม่ที่ตรงกับงาน (กด 'เลื่อนวันจบ' หรือ 'คงไว้' ระบบไม่เลื่อนเอง) และแถวที่แก้หลังส่งไฟล์ลูกค้าครั้งล่าสุด (กด 'ส่งออกไฟล์ใหม่') กดชื่องานเพื่อไปที่แถวนั้นในตาราง",
+        en: "This button gathers what needs following up: late, blocked, due to start but not started, no member yet, days a member has not confirmed in My Work (the last two weeks), outsourced work with no purchase request, a new company holiday on the work (press Move the end or Keep; nothing moves on its own), and rows changed since the customer file was last sent (press Export a new file). Press a task to go to its row.",
+        jp: "このボタンに要フォローの作業をまとめます：遅延、停滞、開始日を過ぎて未着手、担当者なし、担当者が My Work で工数を確定していない日（過去2週間）、購買依頼のない外注作業、作業に重なる新しい会社休日（「終了日を延ばす」か「そのまま」を押します。自動では動きません）、前回の顧客ファイル送付後に変更された行（「新しいファイルを出力」を押します）。作業名を押すとその行に移動します。",
       },
       missing: { th: "เปิด 'ตาราง' ใน V2 ก่อน หรือกด 'ถัดไป'", en: "Open the Sheet in V2 first, or press Next.", jp: "先に V2 の「表」を開くか、「次へ」を押します。" },
     },

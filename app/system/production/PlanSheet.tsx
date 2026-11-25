@@ -539,6 +539,12 @@ export function PlanSheet({
   /** Not-done rows without rows under them that a holiday falls on: the holidays dialog's last column. */
   const rowsOnHoliday = (date: string) =>
     model.rows.filter((row) => !row.parent && row.task.id > 0 && row.status !== "Done" && row.start !== null && row.finish !== null && row.start <= date && date <= row.finish);
+  // Task doc 3.8: a customer file sent from this view, and the file the plan named then. Until the plan names another
+  // file (this one, or an older one when this copy is withdrawn), nothing has changed since the file just sent.
+  const [sentFrom, setSentFrom] = useState<{ file: string | null } | null>(null);
+  const serverFile = schedule.customerFile ?? null;
+  const fileCurrent = sentFrom === null || (serverFile?.sentAt ?? null) !== sentFrom.file;
+  const customerSentAt = fileCurrent ? (serverFile?.sentAt ?? null) : null;
   // Task doc 3.8: what needs following up on this plan, each one a link to its row.
   const followUps = useMemo(() => {
     const groups: { key: string; rows: Row[] }[] = [
@@ -546,10 +552,19 @@ export function PlanSheet({
       { key: "blocked", rows: [] },
       { key: "due", rows: [] },
       { key: "noMember", rows: [] },
+      { key: "noHours", rows: [] },
       { key: "noPr", rows: [] },
       { key: "newHoliday", rows: [] },
+      { key: "customerFile", rows: [] },
     ];
     const at = Object.fromEntries(groups.map((group) => [group.key, group.rows])) as Record<string, Row[]>;
+    /** Rows removed since the customer file was sent that no row on the plan now stands for. */
+    const removed: string[] = [];
+    /** What a row's line says under its name, by "<group>:<row id>". */
+    const notes = new Map<string, string>();
+    // Days of the last two weeks a row's member has not confirmed in My Work, within the row's dates (Team week's rule).
+    const missing = new Map((schedule.unconfirmedHours ?? []).map((item) => [item.userId, item.dates]));
+    const picNames = new Map(model.rows.flatMap((row) => row.task.pics.map((pic) => [pic.id, pic.name] as const)));
     for (const row of model.rows) {
       if (row.parent || row.task.id < 0) continue;
       if (isLate(row, today)) at.late!.push(row);
@@ -557,12 +572,69 @@ export function PlanSheet({
       if (!isLate(row, today) && row.status === "Not Started" && row.start !== null && row.start <= today) at.due!.push(row);
       if (row.task.kind === "task" && row.status !== "Done" && row.task.laborSource !== "Outsourced" && !row.fields.picUserIds.length) at.noMember!.push(row);
       if (row.task.laborSource === "Outsourced" && !row.task.purchaseRequest && row.status !== "Done") at.noPr!.push(row);
+      if (missing.size && row.task.laborSource !== "Outsourced" && row.start !== null && row.finish !== null) {
+        const start = row.start,
+          finish = row.finish;
+        const who = row.fields.picUserIds.flatMap((id) => {
+          const count = (missing.get(id) ?? []).filter((date) => date >= start && date <= finish).length;
+          return count
+            ? [
+                t(count === 1 ? "Sheet.followDay" : "Sheet.followDays")
+                  .replace("{name}", picNames.get(id) ?? String(id))
+                  .replace("{count}", String(count)),
+              ]
+            : [];
+        });
+        if (who.length) {
+          at.noHours!.push(row);
+          notes.set(`noHours:${row.task.id}`, who.join(" · "));
+        }
+      }
     }
     for (const hit of holidayHits) if (!at.newHoliday!.includes(hit.row)) at.newHoliday!.push(hit.row);
-    return groups.filter((group) => group.rows.length);
-  }, [model.rows, today, holidayHits]);
-  // A row in two lists (late and blocked) counts once.
-  const followCount = new Set(followUps.flatMap((group) => group.rows.map((row) => row.task.id))).size;
+    // Rows changed since the customer file was last sent (the plan's change log), and the rows linked after a row whose
+    // dates moved (a heading's dates move with the rows under it); each as the row the file shows (a heading and the
+    // row under it). A deleted row counts against the row it was under; one whose parent went too, or a member's own
+    // detail row, is not listed on its own.
+    if (fileCurrent && serverFile?.changes?.length) {
+      const changed = new Set<number>(),
+        moved = new Set<number>();
+      const gone = new Set(serverFile.changes.filter((change) => change.deleted).map((change) => change.taskId));
+      for (const change of serverFile.changes) {
+        if (change.deleted && change.parentId !== null && gone.has(change.parentId)) continue;
+        const id = change.deleted ? change.parentId : change.taskId;
+        if (id !== null && model.byId.has(id)) {
+          changed.add(id);
+          if (change.moved) moved.add(id);
+        } else if (change.deleted && change.kind !== "detail") removed.push(change.name);
+      }
+      // A row that moves moves the headings above it, so the rows linked after those headings move too.
+      const move = (id: number) => {
+        for (let up: number | null = id; up !== null; up = model.byId.get(up)?.task.parentId ?? null) moved.add(up);
+      };
+      for (const id of [...moved]) move(id);
+      for (let grew = true; grew;) {
+        grew = false;
+        for (const row of model.rows)
+          if (!moved.has(row.task.id) && [row.task.predecessorId, ...(row.task.extraLinks ?? []).map((link) => link.predecessorId)].some((id) => id != null && moved.has(id))) {
+            move(row.task.id);
+            changed.add(row.task.id);
+            grew = true;
+          }
+      }
+      for (const id of changed) {
+        let shown = model.byId.get(id);
+        while (shown && (shown.task.depth > 1 || shown.task.kind === "detail") && shown.task.parentId !== null) shown = model.byId.get(shown.task.parentId);
+        if (shown && !at.customerFile!.includes(shown)) at.customerFile!.push(shown);
+      }
+      at.customerFile!.sort((left, right) => model.rows.indexOf(left) - model.rows.indexOf(right));
+    }
+    return { groups: groups.filter((group) => group.rows.length || (group.key === "customerFile" && removed.length)), notes, removed };
+  }, [model.rows, model.byId, today, holidayHits, schedule.unconfirmedHours, fileCurrent, serverFile, t]);
+  // A row in two lists (late and blocked) counts once; a removed row the customer file still shows counts too.
+  const followCount = new Set(followUps.groups.flatMap((group) => group.rows.map((row) => row.task.id))).size + followUps.removed.length;
+  /** The day a time was on in Bangkok, the business day (a file sent at 06:30 is not the day before). */
+  const businessDay = (instant: string) => new Date(Date.parse(instant) + 7 * 3_600_000).toISOString().slice(0, 10);
   /** Opens the rows above a row, puts the cursor on it and scrolls it into view. */
   const goToRow = (row: Row) => {
     setFollowOpen(false);
@@ -2234,6 +2306,7 @@ export function PlanSheet({
         remark: `Exported from the plan on ${today}`,
       });
       say(t("Sheet.exportKept"));
+      setSentFrom({ file: schedule.customerFile?.sentAt ?? null });
       setExporting(false);
     } catch (failure) {
       setExportFailed({ reason: t(failure instanceof Error ? failure.message : "The request could not be completed."), bytes, name });
@@ -2896,11 +2969,30 @@ export function PlanSheet({
           </button>
           {followOpen ? (
             <div className="ps-follow" role="dialog" aria-label={t("Sheet.follow")}>
-              {followUps.map((group) => (
+              {followUps.groups.map((group) => (
                 <section key={group.key}>
                   <h4>
-                    {t(`Sheet.follow.${group.key}`)} <span className="ps-mono">{group.key === "newHoliday" ? holidayHits.length : group.rows.length}</span>
+                    {t(`Sheet.follow.${group.key}`)}{" "}
+                    <span className="ps-mono">{group.key === "newHoliday" ? holidayHits.length : group.rows.length + (group.key === "customerFile" ? followUps.removed.length : 0)}</span>
                   </h4>
+                  {group.key === "customerFile" && customerSentAt ? (
+                    <p className="ps-follow-file">
+                      <small>
+                        {t("Sheet.followFileSent")
+                          .replace("{name}", serverFile?.name ?? "")
+                          .replace("{date}", dayDate(businessDay(customerSentAt)))}
+                      </small>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFollowOpen(false);
+                          setExporting(true);
+                        }}
+                      >
+                        {t("Sheet.followFileAgain")}
+                      </button>
+                    </p>
+                  ) : null}
                   {group.key === "newHoliday" ? (
                     <ul>
                       {holidayHits.slice(0, 30).map(({ row, holiday }) => (
@@ -2925,14 +3017,25 @@ export function PlanSheet({
                     </ul>
                   ) : (
                     <ul>
-                      {group.rows.slice(0, 30).map((row) => (
-                        <li key={row.task.id}>
-                          <button type="button" onClick={() => goToRow(row)}>
-                            <span className="ps-mono">{row.task.wbs}</span> {row.fields.name}
-                          </button>
-                        </li>
-                      ))}
+                      {group.rows.slice(0, 30).map((row) => {
+                        const note = followUps.notes.get(`${group.key}:${row.task.id}`);
+                        return (
+                          <li key={row.task.id} className={note ? "ps-follow-note" : undefined}>
+                            <button type="button" onClick={() => goToRow(row)}>
+                              <span className="ps-mono">{row.task.wbs}</span> {row.fields.name}
+                              {note ? <small>{note}</small> : null}
+                            </button>
+                          </li>
+                        );
+                      })}
                       {group.rows.length > 30 ? <li className="ps-follow-more">{t("Sheet.followMore").replace("{count}", String(group.rows.length - 30))}</li> : null}
+                      {group.key === "customerFile"
+                        ? followUps.removed.slice(0, 10).map((name, index) => (
+                            <li key={`removed-${index}`} className="ps-follow-more">
+                              {t("Sheet.followRemoved").replace("{name}", name)}
+                            </li>
+                          ))
+                        : null}
                     </ul>
                   )}
                 </section>

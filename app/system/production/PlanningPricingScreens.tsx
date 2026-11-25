@@ -344,6 +344,17 @@ export type ProjectSchedule = {
   holidayList?: { date: string; name: string; addedAt: string | null }[];
   /** What the plan's managers decided about a new holiday on a row. */
   holidayDecisions?: { taskId: number; date: string; decision: string }[];
+  /**
+   * Task doc 3.8: the customer schedule last kept in folder 08 (null when none has been sent), and the rows changed
+   * since, from the plan's change log; a deleted row comes with its parent; moved: a change that can move its dates.
+   */
+  customerFile?: {
+    name: string;
+    sentAt: string;
+    changes?: { taskId: number; parentId: number | null; name: string; kind: string; deleted: boolean; moved: boolean }[];
+  } | null;
+  /** Task doc 3.8: the days of the last two weeks each person named on a row has still to confirm in My Work. */
+  unconfirmedHours?: { userId: number; dates: string[] }[];
 };
 
 type PriceRecord = {

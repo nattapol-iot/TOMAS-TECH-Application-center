@@ -2179,3 +2179,72 @@ test("PUT holiday-decision: a company holiday on a row is answered Shifted or Ke
     });
   }
 });
+
+test("GET schedule: the follow-up facts, the customer file last kept and the days the plan's people have still to confirm", async (t) => {
+  const { app } = harness({ id: MANAGER_ID, role: "Project Manager" });
+  // Person 31 is named on a row but no longer active on the project: never asked to confirm.
+  const base = scheduleAnswers([
+    { task: 5, user: 30 },
+    { task: 5, user: 31, active: false },
+  ]);
+  let confirmAll = false;
+  let awayDay = "";
+  const statements = installSqlMock(t, (statement, params) => {
+    if (!statement.includes("document_type=N'Customer schedule'")) return base(statement);
+    const from = Date.parse(`${String(params.from)}T00:00:00Z`),
+      to = Date.parse(`${String(params.to)}T00:00:00Z`);
+    // Every day in the window confirmed, or none; a holiday-free window in this test.
+    const days: { user_id: number; work_date: string }[] = [];
+    for (let at = from; confirmAll && at <= to; at += 86_400_000) days.push({ user_id: 30, work_date: new Date(at).toISOString().slice(0, 10) });
+    // Away the whole of the window's first weekday, and half of its second one.
+    const weekdays: string[] = [];
+    for (let at = from; at <= to; at += 86_400_000) if (![0, 6].includes(new Date(at).getUTCDay())) weekdays.push(new Date(at).toISOString().slice(0, 10));
+    awayDay = weekdays[0]!;
+    return {
+      recordsets: [
+        [{ name: "P-26-007 Project Schedule v2.xlsx", uploaded_at: new Date("2026-11-20T03:00:00Z") }],
+        [
+          { task_id: 5, parent_id: 1, name: "Wiring", kind: "task", deleted: false, moved: true },
+          { task_id: 99, parent_id: 1, name: "Old step", kind: "task", deleted: true, moved: false },
+        ],
+        days,
+        [{ user_id: 30, start_date: weekdays[0], end_date: weekdays[0] }],
+        [{ user_id: 30, id: 4, start_date: weekdays[1], end_date: weekdays[1], time_slot: "AM", start_time: null, end_time: null }],
+      ],
+    } as Answer;
+  });
+  try {
+    const response = await app.inject({ method: "GET", url: `/api/v1/projects/${PROJECT_ID}/schedule` });
+    assert.equal(response.statusCode, 200, response.body);
+    const body = response.json();
+    assert.deepEqual(body.customerFile, {
+      name: "P-26-007 Project Schedule v2.xlsx",
+      sentAt: "2026-11-20T03:00:00.000Z",
+      changes: [
+        { taskId: 5, parentId: 1, name: "Wiring", kind: "task", deleted: false, moved: true },
+        { taskId: 99, parentId: 1, name: "Old step", kind: "task", deleted: true, moved: false },
+      ],
+    });
+    const read = statements.find((entry) => entry.statement.includes("document_type=N'Customer schedule'"))!;
+    const from = String(read.params.from),
+      to = String(read.params.to);
+    assert.equal((Date.parse(to) - Date.parse(from)) / 86_400_000, 13, "two weeks, ending yesterday");
+    assert.deepEqual(
+      body.unconfirmedHours.map((item: { userId: number }) => item.userId),
+      [30],
+      "only the active person",
+    );
+    const dates = body.unconfirmedHours[0].dates as string[];
+    for (const date of dates) {
+      assert.ok(date >= from && date <= to, date);
+      assert.ok(![0, 6].includes(new Date(`${date}T00:00:00Z`).getUTCDay()), `${date} is a weekend`);
+    }
+    assert.ok(!dates.includes(awayDay), "a whole day away is not asked for");
+    assert.ok(dates.length >= 7, "two weeks back hold at least seven working days besides the day away");
+    confirmAll = true;
+    const again = await app.inject({ method: "GET", url: `/api/v1/projects/${PROJECT_ID}/schedule` });
+    assert.deepEqual(again.json().unconfirmedHours, []);
+  } finally {
+    await app.close();
+  }
+});
