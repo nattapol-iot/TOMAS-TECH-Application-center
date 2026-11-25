@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { byBudgetRisk, factText, thingsToKnow } from "../lib/ceo-summary.ts";
 
@@ -72,4 +73,23 @@ test("a people budget of 0 reads as no budget, never an endless percentage; the 
     thingsToKnow(cost({ labor: labor(40, 50, 30) })).map((fact) => [fact.key, fact.params]),
     [["CEO.people.over", { days: 10, percent: 125 }]],
   );
+});
+
+test("the CEO summary is drawn on @tomas-tc/ui and still prints as it is on screen (task doc 6.3, 6.4)", async () => {
+  const read = async (path) => (await readFile(new URL(`../${path}`, import.meta.url), "utf8")).replace(/\r\n/g, "\n");
+  const screen = await read("app/system/production/CeoSummaryScreen.tsx");
+  const kit = await read("app/system/tomas-ui/CeoSummary.tsx");
+  const print = await read("app/system/production/ceo-summary.css");
+  assert.match(screen, /import \{ CeoSummary, type CeoCard \} from "\.\.\/tomas-ui\/CeoSummary";/);
+  // No old app part inside the kit's root.
+  assert.doesNotMatch(screen, /HealthBadge|PgSelect|from "\.\.\/ui"/);
+  for (const mark of ["ceo.summary", "ceo.downloads", "ceo.focus", "ceo.note"]) assert.ok(kit.includes(`data-guide="${mark}"`), mark);
+  // The print rules hide the buttons and keep each project on one sheet through the kit's ceo-* hooks.
+  for (const hook of ["ceo-summary", "ceo-actions", "ceo-back", "ceo-note", "ceo-item", "ceo-list"]) {
+    assert.ok(print.includes(`.${hook}`), `print rule for .${hook}`);
+    assert.match(kit, new RegExp('className=["{`][^"`]*\\b' + hook + "\\b"), `kit carries .${hook}`);
+  }
+  // The PM's note: saved by the screen, the editor closes only once it is saved.
+  assert.match(kit, /if \(await onSaveNote\(draft\)\) setEditing\(false\);/);
+  assert.match(screen, /canEditNote: canWrite && \(item\.managerId === bootstrap\.user\.id \|\| elevated\)/);
 });
