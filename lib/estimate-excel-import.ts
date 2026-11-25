@@ -85,6 +85,7 @@ export function parseEstimateWorkbook(sheets: WorkbookSheet[], filename: string)
   result.sourceTotal = numeric(summary, totalCell[0]) ?? NaN;
   if (!Number.isFinite(result.sourceTotal)) result.errors.push("ยอดรวมไม่มีค่าที่คำนวณไว้ กรุณาเปิด Excel คำนวณและบันทึกไฟล์ใหม่");
   let group = "Cost";
+  let infrastructureRows = 0;
   const add = (s: WorkbookSheet, r: number, multiplier: number, summaryRow: number, kind: EstimateImportLine["kind"], category: string, module: string, fixed = false) => {
     const q = fixed ? 1 : numeric(s, `K${r}`);
     const p = fixed ? numeric(s, `L${r}`) : numeric(s, `J${r}`);
@@ -164,7 +165,23 @@ export function parseEstimateWorkbook(sheets: WorkbookSheet[], filename: string)
     }
     const labor = /lab[oa]?u?re?|software development/i.test(group) && !/transport|packing|safety|sefety/i.test(desc);
     const outsourced = labor && validName(text(summary, `F${r}`)) && !/TOMAS/i.test(text(summary, `F${r}`));
-    const category = outsourced ? "07" : labor ? "06" : /transport|packing/i.test(desc) ? "08" : /mechan/i.test(group) ? "04" : /elect/i.test(group) ? "03" : /safety|sefety/i.test(desc) ? "10" : "01";
+    // Infrastructure (wiring and installation done by a subcontractor) is outsourced work, category 07 (owner 2026-11-25).
+    const infrastructure = /infra/i.test(group);
+    if (infrastructure) infrastructureRows++;
+    const category =
+      outsourced || infrastructure
+        ? "07"
+        : labor
+          ? "06"
+          : /transport|packing/i.test(desc)
+            ? "08"
+            : /mechan/i.test(group)
+              ? "04"
+              : /elect/i.test(group)
+                ? "03"
+                : /safety|sefety/i.test(desc)
+                  ? "10"
+                  : "01";
     const jRef = reference(summary.cells[`J${r}`]?.formula);
     const detail = jRef && sheets.find((s) => s.name === jRef[1]);
     const detailTotal = detail && jRef ? detail.cells[`${jRef[2]}${jRef[3]}`] : undefined;
@@ -188,6 +205,7 @@ export function parseEstimateWorkbook(sheets: WorkbookSheet[], filename: string)
   if (Math.abs(result.total - result.sourceTotal) > 0.011) result.errors.push("ยอดนำเข้าไม่ตรงกับยอดรวมต้นทุนใน Summary");
   if (result.lines.length > 1000) result.errors.push("รองรับไม่เกิน 1,000 รายการต่อครั้ง");
   result.warnings.push("อัตราค่าแรงใช้ตาม Excel และรอทบทวนก่อนอนุมัติ ไม่เปลี่ยน Rate Master");
+  if (infrastructureRows) result.warnings.push("งาน Infrastructure นำเข้าเป็นหมวด 07 Outsource");
   for (const [ref, c] of Object.entries(summary.cells))
     if (/^D\d+$/.test(ref) && Number(ref.slice(1)) >= end && typeof c.value === "string" && /remark|include|incoude/i.test(c.value)) result.warnings.push(c.value);
   if (Object.values(summary.cells).some((c) => /profit|overhead/i.test(String(c.value)))) result.warnings.push("กำไรและ Overhead หลังยอดรวมต้นทุนไม่ถูกบวกเป็นต้นทุนซ้ำ");

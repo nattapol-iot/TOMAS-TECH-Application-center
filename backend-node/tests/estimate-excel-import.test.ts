@@ -44,7 +44,7 @@ function twoSummaryWorkbook() {
   const cell = (reference: string, value: string | number, formula = "") =>
     `<c r="${reference}"${typeof value === "string" ? ' t="inlineStr"' : ""}>${formula ? `<f>${formula.replace(/'/g, "&apos;")}</f>` : ""}${typeof value === "string" ? `<is><t>${value}</t></is>` : `<v>${value}</v>`}</c>`;
   const presentation = `<worksheet><sheetData><row r="9">${cell("D9", "Hardware")}${cell("E9", "Item", "'001_Summary cost'!E9")}${cell("J9", 100, "'001_Summary cost'!L9")}${cell("K9", 1)}${cell("L9", 100)}</row><row r="10">${cell("L10", 100, "SUM($L9:$L9)")}</row></sheetData></worksheet>`;
-  const full = `<worksheet><sheetData><row r="9">${cell("D9", "Hardware")}${cell("E9", "Item")}${cell("J9", 50)}${cell("K9", 2)}${cell("L9", 100)}</row><row r="10">${cell("E10", "Wiring")}${cell("J10", 200)}${cell("K10", 1)}${cell("L10", 200)}</row><row r="11">${cell("L11", 300, "SUM($L9:$L10)")}</row></sheetData></worksheet>`;
+  const full = `<worksheet><sheetData><row r="9">${cell("D9", "Hardware")}${cell("E9", "Item")}${cell("J9", 50)}${cell("K9", 2)}${cell("L9", 100)}</row><row r="10">${cell("D10", "Infrastructure")}${cell("E10", "Wiring")}${cell("J10", 200)}${cell("K10", 1)}${cell("L10", 200)}</row><row r="11">${cell("L11", 300, "SUM($L9:$L10)")}</row></sheetData></worksheet>`;
   return zipSync({
     "xl/workbook.xml": strToU8('<workbook><sheets><sheet name="Summary cost" sheetId="1" r:id="r1"/><sheet name="001_Summary cost" sheetId="2" r:id="r2"/></sheets></workbook>'),
     "xl/_rels/workbook.xml.rels": strToU8('<Relationships><Relationship Id="r1" Target="worksheets/sheet1.xml"/><Relationship Id="r2" Target="worksheets/sheet2.xml"/></Relationships>'),
@@ -60,6 +60,11 @@ test("the server reads the full Summary, not a presentation copy that takes its 
   assert.deepEqual(
     parsed.lines.map((l) => l.source),
     ["001_Summary cost!9", "001_Summary cost!10"],
+  );
+  // Infrastructure work is outsourced: category 07 (owner 2026-11-25).
+  assert.deepEqual(
+    parsed.lines.map((l) => l.categoryCode),
+    ["01", "07"],
   );
 });
 

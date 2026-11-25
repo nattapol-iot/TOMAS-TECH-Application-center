@@ -117,6 +117,23 @@ test("reads the full Summary when a presentation Summary takes its figures from 
   );
   assert.ok(p.lines.some((l) => l.source === "001_Summary cost!10"));
 });
+test("Infrastructure work comes in as 07 Outsource, its detail lines included, and the preview says so (owner 2026-11-25)", () => {
+  const s = fixture();
+  // The detail-backed row becomes an Infrastructure package; the labour row keeps its own heading.
+  s[0].cells.D9 = c("Infrastructure");
+  const p = parseEstimateWorkbook(s, "x.xlsx");
+  assert.deepEqual(p.errors, []);
+  assert.deepEqual(
+    p.lines.map((l) => [l.source, l.kind, l.categoryCode]),
+    [
+      ["002 EE cost!10", "cost", "07"],
+      ["002 EE cost!11", "cost", "07"],
+      ["Summary cost!10", "manhour", "06"],
+    ],
+  );
+  assert.ok(p.warnings.includes("งาน Infrastructure นำเข้าเป็นหมวด 07 Outsource"));
+  assert.ok(!parseEstimateWorkbook(fixture(), "x.xlsx").warnings.some((w) => w.includes("Infrastructure")));
+});
 test("the Summary sheet to read: the one fed by no other Summary, else the first", () => {
   const sheets = twoSummaries();
   assert.equal(costSummarySheet(sheets).name, "001_Summary cost");

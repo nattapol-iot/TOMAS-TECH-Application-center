@@ -229,19 +229,23 @@ export function parseEstimateWorkbook(bytes: Uint8Array, filename: string): Esti
     }
     const labor = /lab[oa]?u?re?|software development/i.test(group) && !/transport|packing|safety|sefety/i.test(description);
     const outsourced = labor && validName(text(summary, `F${row}`)) && !/TOMAS/i.test(text(summary, `F${row}`));
-    const categoryCode = outsourced
-      ? "07"
-      : labor
-        ? "06"
-        : /transport|packing/i.test(description)
-          ? "08"
-          : /mechan/i.test(group)
-            ? "04"
-            : /elect/i.test(group)
-              ? "03"
-              : /safety|sefety/i.test(description)
-                ? "10"
-                : "01";
+    // Infrastructure (wiring and installation done by a subcontractor) is outsourced work, category 07 (owner 2026-11-25).
+    // Same rule as the browser preview in lib/estimate-excel-import.ts.
+    const infrastructure = /infra/i.test(group);
+    const categoryCode =
+      outsourced || infrastructure
+        ? "07"
+        : labor
+          ? "06"
+          : /transport|packing/i.test(description)
+            ? "08"
+            : /mechan/i.test(group)
+              ? "04"
+              : /elect/i.test(group)
+                ? "03"
+                : /safety|sefety/i.test(description)
+                  ? "10"
+                  : "01";
     const reference = formulaReference(summary.cells[`J${row}`]?.formula),
       detail = reference && sheets.find((sheet) => sheet.name === reference[1]);
     const detailTotal = detail && reference ? detail.cells[`${reference[2]}${reference[3]}`] : undefined;
