@@ -14,8 +14,9 @@
   gap: 8px;
   align-items: center;
 }
-.ceo-focus select {
+.ceo-focus .pg-select {
   min-width: 260px;
+  max-width: 420px;
 }
 .ceo-list {
   display: grid;

@@ -261,16 +261,29 @@ const purchaseTotal = (groups: readonly PurchaseCost[]): PurchaseCost => ({
   ordered: total(groups.map((group) => group.ordered)),
 });
 
+/**
+ * What the rows with no budget plan and forecast. A total compares the plan with the budget only over the rows that have
+ * one (budgeted), or 3,000 planned man-days of projects with no budget would read as 1,250% of the 240 that some have.
+ * budgetedForecastManDays: the forecast of the budgeted rows alone; null when none of them has one.
+ */
+export type Unbudgeted = { unbudgetedManDays: number; unbudgetedForecastManDays: number; budgetedForecastManDays: number | null };
 export type CostTotals = {
   projects: number;
   hardware: PurchaseCost;
   outsource: PurchaseCost;
-  labor: LaborFigures & Pick<LaborCost, "outsourcedManDays">;
+  labor: LaborFigures & Unbudgeted & Pick<LaborCost, "outsourcedManDays">;
   /** People by discipline across the rows; only disciplines some row has. */
-  disciplines: LaborDisciplineCost[];
+  disciplines: (LaborDisciplineCost & Unbudgeted)[];
 };
 
-const laborTotal = (figures: readonly LaborFigures[]): LaborFigures => ({
+/** A total's plan and forecast over the rows that have a budget: what its percentage and budget state compare. */
+export const budgeted = (figures: LaborFigures & Unbudgeted): Pick<LaborFigures, "budgetManDays" | "plannedManDays" | "forecastManDays"> => ({
+  budgetManDays: figures.budgetManDays,
+  plannedManDays: round2(figures.plannedManDays - figures.unbudgetedManDays),
+  forecastManDays: figures.budgetedForecastManDays,
+});
+
+const laborTotal = (figures: readonly LaborFigures[]): LaborFigures & Unbudgeted => ({
   budgetManDays: total(figures.map((item) => item.budgetManDays)),
   plannedManDays: round2(figures.reduce((sum, item) => sum + item.plannedManDays, 0)),
   toDateManDays: total(figures.map((item) => item.toDateManDays)),
@@ -281,6 +294,9 @@ const laborTotal = (figures: readonly LaborFigures[]): LaborFigures => ({
   forecastManDays: total(figures.map((item) => item.forecastManDays)),
   actualCost: total(figures.map((item) => item.actualCost)),
   forecastCost: total(figures.map((item) => item.forecastCost)),
+  unbudgetedManDays: round2(figures.reduce((sum, item) => sum + (item.budgetManDays === null ? item.plannedManDays : 0), 0)),
+  unbudgetedForecastManDays: round2(figures.reduce((sum, item) => sum + (item.budgetManDays === null ? (item.forecastManDays ?? 0) : 0), 0)),
+  budgetedForecastManDays: total(figures.filter((item) => item.budgetManDays !== null).map((item) => item.forecastManDays)),
 });
 
 /** The summary bar: every row on show added up, not only the page in view. */

@@ -1366,9 +1366,15 @@ export function ProductionProjects({
                         void load();
                       },
                     },
-                    ...(openCeoSummary ? [{ key: "ceo", label: "CEO.open", icon: "chart" as const, guide: "project.ceo", onSelect: openCeoSummary }] : []),
                   ]}
                 />
+                {/* Task doc 5.1: the CEO summary is a button of its own on the list, for Leaders and above. */}
+                {openCeoSummary ? (
+                  <button type="button" className="btn default" data-guide="project.ceo" onClick={openCeoSummary}>
+                    <Icon name="chart" />
+                    {uiText("CEO.open")}
+                  </button>
+                ) : null}
                 {createButton}
               </div>
             }
@@ -1670,7 +1676,7 @@ export function ProductionProjects({
                         )}
                       </td>
                       <td className="portfolio-col-project">
-                        <div className="portfolio-project">
+                        <div className="portfolio-project" title={v2 ? `${item.name}\n${customerLine}` : undefined}>
                           {v2 && openProjectPage ? (
                             <button type="button" className="portfolio-project-link" onClick={() => openProjectPage(projectPageKey(item))}>
                               <strong>{item.name}</strong>
