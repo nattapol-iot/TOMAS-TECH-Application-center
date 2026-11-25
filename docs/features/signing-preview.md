@@ -55,7 +55,7 @@ Use a new revision and a new approval round for changes.
   is a follow-up for fully localized appendix text. Original page content is retained.
 - Existing uploaded stamp image storage/authority conventions are unchanged; there
   are no live company stamps and no stamp authority was created by this work.
-- Dependencies: pdf-lib 1.17.1 (Node) and pdfjs-dist 6.3.289 (browser), pinned.
+- Dependencies: pdf-lib 1.17.1 (Node) and pdfjs-dist 6.5.438 (browser), pinned.
   References: [pdf-lib](https://pdf-lib.js.org/docs/api/classes/pdfpage),
   [PDF.js canvas/viewport](https://mozilla.github.io/pdf.js/examples/index.html).
   Frontend bundle-size warning remains; PDF engine loads on demand. Existing root

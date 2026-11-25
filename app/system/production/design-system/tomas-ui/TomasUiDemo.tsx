@@ -14,6 +14,7 @@ export function TomasUiDemo({ id, children }: TomasUiDemoProps) {
       <CardHeader>
         <CardTitle>{t(spec.title)}</CardTitle>
         <CardDescription className="flex flex-wrap gap-1">
+          {spec.entry && <code className="font-mono text-xs">{spec.entry}</code>}
           {spec.exports.map((name) => (
             <code key={name} className="bg-muted rounded px-1.5 py-0.5 font-mono text-xs">
               {name}

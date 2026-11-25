@@ -18,7 +18,7 @@ import type {
 } from "@tomas-tc/blueprint";
 import type { AppNavGroup, CrossFilter, DataTableColumn, FieldCellProps, FieldOption, FormRows, NavCount, RecordTarget, RowScope, ScopeValues, ViewRowsOptions } from "@tomas-tc/ui";
 import { DEVICE, WORK_ORDER, WORK_PART } from "./tomas-ui.entities";
-import { DEVICE_ROWS, TECHNICIAN_ROWS, WORK_ORDER_ROWS, WORK_PART_ROWS } from "./tomas-ui.rows";
+import { DEVICE_ROWS, SITE_ROWS, TECHNICIAN_ROWS, WORK_ORDER_ROWS, WORK_PART_ROWS } from "./tomas-ui.rows";
 
 const fieldOf = (entity: Entity, key: string): Field => {
   const field = entity.fields.find((candidate) => candidate.key === key);
@@ -74,6 +74,8 @@ const optionsOf = (rows: Row[], label: string): FieldOption[] => rows.map((row) 
 export const DEVICE_OPTIONS = optionsOf(DEVICE_ROWS, "code");
 
 export const TECHNICIAN_OPTIONS = optionsOf(TECHNICIAN_ROWS, "name");
+
+export const SITE_OPTIONS = optionsOf(SITE_ROWS, "name");
 
 export const PRIORITY_OPTIONS: FieldOption[] = (fieldOf(WORK_ORDER, "priority").options ?? []).map(({ value, label }) => ({ value, label }));
 

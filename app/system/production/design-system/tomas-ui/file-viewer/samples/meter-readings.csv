@@ -1,0 +1,5 @@
+device,read_at,kwh,status
+GW-A01,2026-11-24 08:00,1204.5,online
+SN-B07,2026-11-24 08:00,88.2,online
+PLC-C03,2026-11-24 08:00,640.0,maintenance
+CAM-D02,2026-11-24 08:00,0,offline

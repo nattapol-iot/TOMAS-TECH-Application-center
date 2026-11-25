@@ -1,5 +1,6 @@
 "use client";
 
+import { ApprovalStepperDemo } from "./ApprovalStepperDemo";
 import { RecordDetailDemo } from "./RecordDetailDemo";
 import { RecordPaneDemo } from "./RecordPaneDemo";
 import { RecordSheetDemo } from "./RecordSheetDemo";
@@ -12,6 +13,7 @@ export function RecordsSection() {
       <RecordDetailDemo />
       <RecordPaneDemo />
       <RecordViewDemo />
+      <ApprovalStepperDemo />
     </>
   );
 }

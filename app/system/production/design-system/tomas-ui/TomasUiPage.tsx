@@ -1,6 +1,7 @@
 "use client";
 
-import { memo } from "react";
+import { Skeleton } from "@tomas-tc/ui";
+import { memo, Suspense } from "react";
 import { TOMAS_UI_SECTION_BODIES } from "./config/tomas-ui.bodies";
 import { TOMAS_UI_SECTIONS } from "./config/tomas-ui.coverage";
 import { TomasUiNotShown } from "./TomasUiNotShown";
@@ -14,7 +15,9 @@ export const TomasUiPage = memo(function TomasUiPage({ view }: TomasUiPageProps)
   const Body = TOMAS_UI_SECTION_BODIES[spec.id];
   return (
     <TomasUiSection spec={spec}>
-      <Body />
+      <Suspense fallback={<Skeleton className="h-64 xl:col-span-2" />}>
+        <Body />
+      </Suspense>
     </TomasUiSection>
   );
 });

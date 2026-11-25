@@ -1,0 +1,32 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+5 0 obj
+<< /Length 322 >>
+stream
+BT /F1 18 Tf 56 780 Td (Work order WO-0103) Tj /F1 11 Tf 0 -22 Td (PLC firmware update, PLC bridge C-03, Hillview Depot) Tj 0 -22 Td (Due 2026-11-28, priority urgent, assignee Somchai Boonmee) Tj 0 -22 Td (Sample document for the @tomas-tc/ui playground. No customer data.) Tj ET 0.15 0.39 0.92 RG 2 w 56 740 m 539 740 l S
+endstream
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000000311 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+684
+%%EOF
