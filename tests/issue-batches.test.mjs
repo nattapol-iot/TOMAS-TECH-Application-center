@@ -167,7 +167,7 @@ test("the Punchlist is the issue batch page alone, Pegasus-styled on this page o
   assert.doesNotMatch(workspace, /issues\?:boolean|isIssue:issue|issues:String\(issues\)/);
   assert.match(screen, /import "\.\/issue-batch\.css";/);
   // Dialogs are portalled into a layer of their own that carries the scope.
-  assert.match(screen, /createPortal\(<div className="pg pg-layer">/);
+  assert.match(screen, /createPortal\(\s*<div className="pg pg-layer">/);
   const css = await source("app/system/production/issue-batch.css");
   // Every rule is under .pg and the tokens are --pg-*, so nothing reaches another screen.
   const selectors =
@@ -192,4 +192,17 @@ test("issues show on the Plan Gantt apart from the plan, in My Work and on the t
   const workload = await source("backend-node/src/resource-workload.ts");
   assert.match(workload, /WHERE i\.state IN\(N'Open',N'Doing'\) AND i\.assignee_id IS NOT NULL AND i\.plan_start IS NOT NULL/);
   assert.match(workload, /manDays: hours === null \? null : Math\.round\(\(hours \/ 8\) \* 100\) \/ 100/);
+});
+
+test("Punchlist's list is drawn on @tomas-tc/ui; the batch's dialogs stay the Pegasus ones (owner 2026-11-25)", async () => {
+  const text = async (path) => (await readFile(new URL(`../${path}`, import.meta.url), "utf8")).replace(/\r\n/g, "\n");
+  const screen = await text("app/system/production/IssueBatchScreen.tsx");
+  const kit = await text("app/system/tomas-ui/IssueBatchList.tsx");
+  assert.match(screen, /import \{ IssueBatchList as BatchListView \} from "\.\.\/tomas-ui\/IssueBatchList";/);
+  for (const mark of ["issues.page", "issues.create", "issues.summary", "issues.batch"]) assert.ok(kit.includes(`data-guide="${mark}"`), mark);
+  // Create only for those who may write; the summary bar is the filter; the dialogs open beside the kit's root, not in it.
+  assert.match(screen, /onCreate=\{list\?\.canWrite \? \(\) => setCreating\(true\) : null\}/);
+  assert.match(screen, /active: tab,\s*onPick: pickTab,/);
+  const tail = screen.slice(screen.indexOf("<BatchListView"));
+  assert.match(tail, /\/>\s*\{creating \? \(\s*<IssueGridDialog[\s\S]*?\{openId \? \(\s*<BatchDialog[\s\S]*?\{exporting \? <ExportDialog[\s\S]*?<\/>\s*\);/);
 });
