@@ -27,9 +27,16 @@ test("the Cost tab: views, four figures that open them, the man-day curve, by ta
   const screen = await source("app/system/production/ProjectCostScreen.tsx");
   assert.match(screen, /const COST_VIEWS: CostView\[\] = \["overview", "tasks", "people", "bought"\];/);
   assert.match(screen, /<ProjectCostPage \{\.\.\.useProjectCostDetail\(projectId\)\} \/>/);
-  for (const mark of ["cost.views", "cost.cells"]) assert.ok(screen.includes(`data-guide="${mark}"`), mark);
+  // Drawn on @tomas-tc/ui (owner 2026-11-25); the breakdown by Module stays the app's, under the bought view.
+  const kit = await source("app/system/tomas-ui/ProjectCostView.tsx");
+  assert.match(screen, /const ProjectCostView = lazy\(\(\) => import\("\.\.\/tomas-ui\/ProjectCostView"\)/);
+  assert.match(screen, /\{view === "bought" \? <ProjectCostBody \{\.\.\.cost\} \/> : null\}/);
+  for (const mark of ["cost.views", "cost.cells"]) assert.ok(kit.includes(`data-guide="${mark}"`), mark);
+  assert.ok(kit.includes(`guide="cost.purchaseCurve"`), "the bought curve's box carries its guide mark");
   // The confirmed line stops at today; the plan runs on.
-  assert.match(screen, /if \(point\.week <= today\) doneUpTo = index;/);
+  assert.match(kit, /if \(point\.week <= curve\.today\) doneUpTo = index;/);
+  // Labor money shows only to those the model lets see it.
+  assert.match(screen, /\.\.\.\(access\.laborMoney \? \[t\("Cost\.colPlannedCost"\)\] : \[\]\)/);
   const copy = await source("app/system/production/project-cost-copy.ts");
   for (const key of ["Cost.view.overview", "Cost.view.tasks", "Cost.view.people", "Cost.view.bought", "Cost.curveTitle", "Cost.noHours"]) assert.ok(copy.includes(`"${key}"`), key);
 });

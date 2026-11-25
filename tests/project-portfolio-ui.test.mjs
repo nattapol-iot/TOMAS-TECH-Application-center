@@ -211,7 +211,7 @@ test("Overview has a List | Timeline toggle on the shared Gantt, remembered per 
   // The mode is on the link and remembered per person (screen-link.tsx useLinkedState).
   assert.match(portfolio, /const \[mode, changeMode\] = useLinkedState<PortfolioMode>\("view", initialMode \?\? "list", PORTFOLIO_MODE_LINK\)/);
   assert.match(portfolio, /value: mode,\s*onChange: changeMode,/);
-  assert.match(kit, /role="radio"\s+aria-checked=\{option\.value === value\}/);
+  assert.match(read("app/system/tomas-ui/Segmented.tsx"), /role="radio"\s+aria-checked=\{option\.value === value\}/);
   // Timeline draws the same filtered, sorted rows as the list.
   assert.match(portfolio, /<ProjectPortfolioGantt\s+key=\{overview\?\.loadedAt \?\? 0\}\s+rows=\{sorted\}/);
   // The timeline sorts with the same sort as the list (it has no column headers of its own).

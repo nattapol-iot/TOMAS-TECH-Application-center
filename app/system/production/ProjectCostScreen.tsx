@@ -8,7 +8,8 @@
    D.5 badge, D.7 data table) through the app's own components under .pg-skin. The API side is
    backend-node/src/project-cost.ts; the shapes and the sums are in project-cost-model.ts. */
 
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import type { CostCell, CostView } from "../tomas-ui/ProjectCostView";
 import { apiRequest, type BootstrapData } from "../api-client";
 import { useT } from "../i18n";
 import { Badge, EmptyState, FilterChips, Icon, Modal, Pagination, Panel, SearchInput, TablePageSize, toneOf, type FilterItem, type Tone } from "../ui";
@@ -707,13 +708,19 @@ export function ProjectCostPanel({ projectId }: { projectId: number }) {
   );
 }
 
-type CostView = "overview" | "tasks" | "people" | "bought";
 const COST_VIEWS: CostView[] = ["overview", "tasks", "people", "bought"];
+
+/** The estimate's bought categories (estimate-assignment-queue.ts names them the same way); "" is a line typed on the request. */
+const PURCHASE_CATEGORY: Record<string, string> = { "01": "Hardware", "02": "Software", "03": "Electrical", "04": "Mechanical", "05": "Robot", "07": "Outsource", "": "Cost.typedLine" };
+
+// The tab's views on @tomas-tc/ui (owner 2026-11-25), loaded with the tab so the kit stays out of the first load.
+const ProjectCostView = lazy(() => import("../tomas-ui/ProjectCostView").then((module) => ({ default: module.ProjectCostView })));
 
 /**
  * Task doc 6.1: the project page's Cost tab. A row of views, four figures that each open their view, the team's man-days
- * over time beside the split by discipline, and tables by task and by person. What was bought keeps the breakdown the
- * cost list's dialog shows. Money appears only where the viewer's access allows it (project-cost-model.ts).
+ * over time beside the split by discipline, and tables by task and by person. What was bought shows over time and by
+ * category (task doc 6.2), with the breakdown the cost list's dialog shows under it. Money appears only where the
+ * viewer's access allows it (project-cost-model.ts). Drawn on @tomas-tc/ui (tomas-ui/ProjectCostView.tsx).
  */
 function ProjectCostPage(cost: ReturnType<typeof useProjectCostDetail>) {
   const t = useT();
@@ -725,342 +732,164 @@ function ProjectCostPage(cost: ReturnType<typeof useProjectCostDetail>) {
   const days = (value: number | null) => (value === null ? DASH : `${Math.round(value * 10) / 10}`);
   const bought = (item: PurchaseCost) => (item.requested === null ? DASH : `${shortAmount(item.requested)}${item.budget ? ` / ${shortAmount(item.budget)}` : ""}`);
   const over = (used: number | null, budget: number | null) => used !== null && budget !== null && budget > 0 && used > budget;
-  const cells: { key: string; label: string; value: string; note: string; to: CostView; tone?: string }[] = [
+  const cells: CostCell[] = [
     {
       key: "hardware",
-      label: "Cost.hardware",
+      label: t("Cost.hardware"),
       value: access.purchases ? bought(project.hardware) : DASH,
       note: t(access.budget ? "Cost.cellRequestedOfBudget" : "Cost.requested"),
-      to: "bought",
-      ...(over(project.hardware.requested, project.hardware.budget) ? { tone: "red" } : {}),
+      view: "bought",
+      ...(over(project.hardware.requested, project.hardware.budget) ? { tone: "red" as const } : {}),
     },
     {
       key: "outsource",
-      label: "Cost.outsource",
+      label: t("Cost.outsource"),
       value: access.purchases ? bought(project.outsource) : DASH,
       note: t(access.budget ? "Cost.cellRequestedOfBudget" : "Cost.requested"),
-      to: "bought",
-      ...(over(project.outsource.requested, project.outsource.budget) ? { tone: "red" } : {}),
+      view: "bought",
+      ...(over(project.outsource.requested, project.outsource.budget) ? { tone: "red" as const } : {}),
     },
     {
       key: "actual",
-      label: "Cost.cellActual",
+      label: t("Cost.cellActual"),
       value: `${days(labor.actualManDays)} / ${days(labor.budgetManDays)}`,
       note: t("Cost.cellManDays"),
-      to: "people",
-      ...(over(labor.actualManDays, labor.budgetManDays) ? { tone: "red" } : {}),
+      view: "people",
+      ...(over(labor.actualManDays, labor.budgetManDays) ? { tone: "red" as const } : {}),
     },
     {
       key: "forecast",
-      label: "Cost.cellForecast",
+      label: t("Cost.cellForecast"),
       value: `${days(labor.forecastManDays)} / ${days(labor.budgetManDays)}`,
       note: t("Cost.cellManDays"),
-      to: "overview",
-      ...(over(labor.forecastManDays, labor.budgetManDays) ? { tone: "amber" } : {}),
+      view: "overview",
+      ...(over(labor.forecastManDays, labor.budgetManDays) ? { tone: "amber" as const } : {}),
     },
   ];
+  const purchases = detail.purchases;
+  const purchaseBudget = access.budget ? (project.hardware.budget ?? 0) + (project.outsource.budget ?? 0) || null : null;
+  const categoryName = (category: string) => t(PURCHASE_CATEGORY[category] ?? category);
+  const splitTotal = purchases ? purchases.categories.reduce((sum, item) => sum + (item.budget ?? 0), 0) : 0;
   return (
-    <div className="pc-page">
-      <div className="pc-page-views" role="group" aria-label={t("Cost.views")} data-guide="cost.views">
-        {COST_VIEWS.map((value) => (
-          <button key={value} type="button" aria-pressed={view === value} className={view === value ? "on" : undefined} onClick={() => setView(value)}>
-            {t(`Cost.view.${value}`)}
-          </button>
-        ))}
-      </div>
-      <div className="pc-page-cells" data-guide="cost.cells">
-        {cells.map((cell) => (
-          <button key={cell.key} type="button" className={`pc-page-cell${cell.tone ? ` tone-${cell.tone}` : ""}${view === cell.to ? " on" : ""}`} onClick={() => setView(cell.to)}>
-            <span className="muted">{t(cell.label)}</span>
-            <strong className="mono">{cell.value}</strong>
-            <small className="muted">{cell.note}</small>
-          </button>
-        ))}
-      </div>
-      {view === "overview" ? (
-        <div className="pc-page-overview">
-          <section className="pc-page-box">
-            <h3>{t("Cost.curveTitle")}</h3>
-            <HoursCurve curve={detail.curve ?? []} today={detail.today} budget={labor.budgetManDays} forecast={labor.forecastManDays} />
-          </section>
-          <section className="pc-page-box">
-            <h3>{t("Cost.byDiscipline")}</h3>
-            {labor.disciplines.length ? (
-              <table className="pc-page-table">
-                <thead>
-                  <tr>
-                    <th />
-                    <th className="num">{t("Cost.budget")}</th>
-                    <th className="num">{t("Cost.planned")}</th>
-                    <th className="num">{t("Cost.actual")}</th>
-                    <th className="num">{t("Cost.forecast")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {labor.disciplines.map((row) => (
-                    <tr key={row.discipline} className={over(row.forecastManDays, row.budgetManDays) ? "over" : undefined}>
-                      <td>{t(`Cost.discipline.${row.discipline}`)}</td>
-                      <td className="num mono">{days(row.budgetManDays)}</td>
-                      <td className="num mono">{days(row.plannedManDays)}</td>
-                      <td className="num mono">{days(row.actualManDays)}</td>
-                      <td className="num mono">{days(row.forecastManDays)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <p className="pc-empty">{t("Cost.noPlan")}</p>
-            )}
-            <p className="muted pc-page-unit">{t("Cost.inManDays").replace("{hours}", String(hoursPerManDay))}</p>
-          </section>
-        </div>
-      ) : null}
-      {view === "tasks" ? (
-        detail.plan.length ? (
-          <table className="pc-page-table">
-            <thead>
-              <tr>
-                <th>{t("Cost.colPlanRow")}</th>
-                <th>{t("Cost.colPeriod")}</th>
-                <th className="num">%</th>
-                <th className="num">{t("Cost.planned")}</th>
-                <th className="num">{t("Cost.toDate")}</th>
-                <th className="num">{t("Cost.outsourcedMd")}</th>
-                {access.laborMoney ? <th className="num">{t("Cost.colPlannedCost")}</th> : null}
-              </tr>
-            </thead>
-            <tbody>
-              {detail.plan.map((row) => (
-                <tr key={row.id}>
-                  <td className="wrap">{row.name}</td>
-                  <td className="mono">{row.planStart && row.planFinish ? `${row.planStart} – ${row.planFinish}` : DASH}</td>
-                  <td className="num mono">{Math.round(row.percentComplete)}%</td>
-                  <td className="num mono">{days(row.plannedManDays)}</td>
-                  <td className="num mono">{days(row.toDateManDays)}</td>
-                  <td className="num mono">{row.outsourcedManDays ? days(row.outsourcedManDays) : DASH}</td>
-                  {access.laborMoney ? <td className="num mono">{row.plannedCost === null ? DASH : shortAmount(row.plannedCost)}</td> : null}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <p className="pc-empty">{t("Cost.noPlan")}</p>
-        )
-      ) : null}
-      {view === "people" ? (
-        (detail.people ?? []).length ? (
-          <table className="pc-page-table">
-            <thead>
-              <tr>
-                <th>{t("Cost.person")}</th>
-                <th>{t("Cost.colDiscipline")}</th>
-                <th className="num">{t("Cost.hours")}</th>
-                <th className="num">{t("Cost.manDays")}</th>
-                <th className="num">{t("Cost.daysConfirmed")}</th>
-                <th>{t("Cost.lastDay")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(detail.people ?? []).map((person) => (
-                <tr key={person.id}>
-                  <td>{person.name}</td>
-                  <td>{t(`Cost.discipline.${person.discipline}`)}</td>
-                  <td className="num mono">{Math.round(person.hours * 10) / 10}</td>
-                  <td className="num mono">{days(person.hours / hoursPerManDay)}</td>
-                  <td className="num mono">{person.days}</td>
-                  <td className="mono">{person.lastDay ?? DASH}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <p className="pc-empty">{t("Cost.noHours")}</p>
-        )
-      ) : null}
-      {view === "bought" ? (
-        <>
-          {detail.purchases ? (
-            <PurchaseView purchases={detail.purchases} budget={access.budget ? (project.hardware.budget ?? 0) + (project.outsource.budget ?? 0) || null : null} today={detail.today} />
-          ) : null}
-          <ProjectCostBody {...cost} />
-        </>
-      ) : null}
-    </div>
-  );
-}
-
-/** The estimate's bought categories (estimate-assignment-queue.ts names them the same way); "" is a line typed on the request. */
-const PURCHASE_CATEGORY: Record<string, string> = { "01": "Hardware", "02": "Software", "03": "Electrical", "04": "Mechanical", "05": "Robot", "07": "Outsource", "": "Cost.typedLine" };
-
-/**
- * Task doc 6.2: what was bought, over time and by category. Requested and ordered added up week by week against the
- * budget, the need-by window of the requests as a band, the budget's split by category and each category against it.
- */
-function PurchaseView({ purchases, budget, today }: { purchases: NonNullable<ProjectCostDetail["purchases"]>; budget: number | null; today: string }) {
-  const t = useT();
-  const { curve, window: span, categories } = purchases;
-  const totalBudget = categories.reduce((sum, item) => sum + (item.budget ?? 0), 0);
-  return (
-    <div className="pc-page-overview">
-      <section className="pc-page-box" data-guide="cost.purchaseCurve">
-        <h3>{t("Cost.purchaseTitle")}</h3>
-        {curve.length ? <PurchaseChart curve={curve} budget={budget} span={span} today={today} /> : <p className="pc-empty">{t("Cost.noRequests")}</p>}
-      </section>
-      <section className="pc-page-box">
-        <h3>{t("Cost.byCategory")}</h3>
-        {totalBudget > 0 ? (
-          <div className="pc-split" role="img" aria-label={t("Cost.budgetSplit")}>
-            {categories
-              .filter((item) => (item.budget ?? 0) > 0)
-              .map((item) => (
-                <i
-                  key={item.category}
-                  className={`cat-${item.category || "typed"}`}
-                  style={{ width: `${((item.budget ?? 0) / totalBudget) * 100}%` }}
-                  title={`${t(PURCHASE_CATEGORY[item.category] ?? item.category)} ${shortAmount(item.budget ?? 0)}`}
-                />
-              ))}
+    <>
+      <Suspense
+        fallback={
+          <div className="empty">
+            <span className="spinner" />
           </div>
-        ) : null}
-        <table className="pc-page-table">
-          <thead>
-            <tr>
-              <th />
-              <th className="num">{t("Cost.budget")}</th>
-              <th className="num">{t("Cost.requested")}</th>
-              <th className="num">{t("Cost.ordered")}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {categories.map((item) => (
-              <tr key={item.category} className={item.budget !== null && item.requested > item.budget ? "over" : undefined}>
-                <td>
-                  <i className={`pc-split-key cat-${item.category || "typed"}`} aria-hidden="true" />
-                  {item.category ? `${item.category} · ` : ""}
-                  {t(PURCHASE_CATEGORY[item.category] ?? item.category)}
-                </td>
-                <td className="num mono">{item.budget === null ? DASH : shortAmount(item.budget)}</td>
-                <td className="num mono">{shortAmount(item.requested)}</td>
-                <td className="num mono">{shortAmount(item.ordered)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
-    </div>
-  );
-}
-
-function PurchaseChart({
-  curve,
-  budget,
-  span,
-  today,
-}: {
-  curve: NonNullable<ProjectCostDetail["purchases"]>["curve"];
-  budget: number | null;
-  span: { from: string; to: string } | null;
-  today: string;
-}) {
-  const t = useT();
-  const width = 560,
-    height = 200,
-    left = 44,
-    bottom = 22;
-  // The band of need-by dates may lie past the last request: the drawing runs to whichever is later.
-  const firstWeek = curve[0]!.week,
-    lastWeek = [curve.at(-1)!.week, span?.to ?? "", today].sort().at(-1)!;
-  const dayOf = (iso: string) => Date.parse(`${iso}T00:00:00Z`) / 86_400_000;
-  const extent = Math.max(1, dayOf(lastWeek) - dayOf(firstWeek));
-  const x = (iso: string) => left + ((Math.min(Math.max(dayOf(iso), dayOf(firstWeek)), dayOf(lastWeek)) - dayOf(firstWeek)) / extent) * (width - left - 8);
-  const top = Math.max(1, budget ?? 0, ...curve.map((point) => Math.max(point.requested, point.ordered)));
-  const y = (value: number) => height - bottom - (value / top) * (height - bottom - 8);
-  const line = (pick: (point: (typeof curve)[number]) => number) => curve.map((point, index) => `${index ? "L" : "M"}${x(point.week).toFixed(1)},${y(pick(point)).toFixed(1)}`).join(" ");
-  return (
-    <figure className="pc-curve">
-      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={t("Cost.purchaseTitle")}>
-        {span ? <rect x={x(span.from)} y={8} width={Math.max(2, x(span.to) - x(span.from))} height={height - bottom - 8} className="window" /> : null}
-        {[0, 0.5, 1].map((share) => (
-          <g key={share}>
-            <line x1={left} x2={width - 8} y1={y(top * share)} y2={y(top * share)} className="grid" />
-            <text x={left - 4} y={y(top * share) + 4} textAnchor="end">
-              {shortAmount(top * share)}
-            </text>
-          </g>
-        ))}
-        {budget ? <line x1={left} x2={width - 8} y1={y(budget)} y2={y(budget)} className="budget" /> : null}
-        <path d={line((point) => point.requested)} className="planned" />
-        <path d={line((point) => point.ordered)} className="actual" />
-        {curve.length === 1 ? <circle cx={x(curve[0]!.week)} cy={y(curve[0]!.requested)} r={3} className="planned-dot" /> : null}
-        {curve.length === 1 ? <circle cx={x(curve[0]!.week)} cy={y(curve[0]!.ordered)} r={3} className="actual-dot" /> : null}
-        <text x={left} y={height - 4}>
-          {firstWeek}
-        </text>
-        <text x={width - 8} y={height - 4} textAnchor="end">
-          {lastWeek}
-        </text>
-      </svg>
-      <figcaption className="pc-curve-key">
-        <span className="planned">{t("Cost.requested")}</span>
-        <span className="actual">{t("Cost.ordered")}</span>
-        {budget ? <span className="budget">{t("Cost.budget")}</span> : null}
-        {span ? <span className="window">{t("Cost.needByWindow")}</span> : null}
-      </figcaption>
-    </figure>
-  );
-}
-
-/** Man-days added up week by week: planned, confirmed (up to today), the budget and the forecast at completion. */
-function HoursCurve({ curve, today, budget, forecast }: { curve: NonNullable<ProjectCostDetail["curve"]>; today: string; budget: number | null; forecast: number | null }) {
-  const t = useT();
-  if (!curve.length) return <p className="pc-empty">{t("Cost.noCurve")}</p>;
-  const width = 560,
-    height = 200,
-    left = 36,
-    bottom = 22;
-  const top = Math.max(1, budget ?? 0, forecast ?? 0, ...curve.map((point) => Math.max(point.plannedManDays, point.actualManDays)));
-  const x = (index: number) => left + (curve.length === 1 ? 0 : (index / (curve.length - 1)) * (width - left - 8));
-  const y = (value: number) => height - bottom - (value / top) * (height - bottom - 8);
-  const line = (points: [number, number][]) => points.map(([px, py], index) => `${index ? "L" : "M"}${px.toFixed(1)},${py.toFixed(1)}`).join(" ");
-  const planned = line(curve.map((point, index) => [x(index), y(point.plannedManDays)]));
-  let doneUpTo = -1;
-  curve.forEach((point, index) => {
-    if (point.week <= today) doneUpTo = index;
-  });
-  const actual = doneUpTo >= 0 ? line(curve.slice(0, doneUpTo + 1).map((point, index) => [x(index), y(point.actualManDays)])) : "";
-  const last = curve.length - 1;
-  return (
-    <figure className="pc-curve">
-      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={t("Cost.curveTitle")}>
-        {[0, 0.5, 1].map((share) => (
-          <g key={share}>
-            <line x1={left} x2={width - 8} y1={y(top * share)} y2={y(top * share)} className="grid" />
-            <text x={left - 4} y={y(top * share) + 4} textAnchor="end">
-              {Math.round(top * share)}
-            </text>
-          </g>
-        ))}
-        {budget ? <line x1={left} x2={width - 8} y1={y(budget)} y2={y(budget)} className="budget" /> : null}
-        <path d={planned} className="planned" />
-        {actual ? <path d={actual} className="actual" /> : null}
-        {forecast !== null ? <circle cx={x(last)} cy={y(forecast)} r={4} className="forecast" /> : null}
-        {/* One week alone draws no line: its points show as dots. */}
-        {curve.length === 1 ? <circle cx={x(0)} cy={y(curve[0]!.plannedManDays)} r={3} className="planned-dot" /> : null}
-        {curve.length === 1 && doneUpTo === 0 ? <circle cx={x(0)} cy={y(curve[0]!.actualManDays)} r={3} className="actual-dot" /> : null}
-        <text x={left} y={height - 4}>
-          {curve[0]!.week}
-        </text>
-        <text x={width - 8} y={height - 4} textAnchor="end">
-          {curve[last]!.week}
-        </text>
-      </svg>
-      <figcaption className="pc-curve-key">
-        <span className="planned">{t("Cost.planned")}</span>
-        <span className="actual">{t("Cost.actual")}</span>
-        {budget ? <span className="budget">{t("Cost.budget")}</span> : null}
-        {forecast !== null ? <span className="forecast">{t("Cost.forecast")}</span> : null}
-      </figcaption>
-    </figure>
+        }
+      >
+        <ProjectCostView
+          views={{ label: t("Cost.views"), options: COST_VIEWS.map((value) => ({ value, label: t(`Cost.view.${value}`) })), value: view, onChange: setView }}
+          cells={cells}
+          curve={{
+            title: t("Cost.curveTitle"),
+            empty: t("Cost.noCurve"),
+            points: (detail.curve ?? []).map((point) => ({ week: point.week, planned: point.plannedManDays, actual: point.actualManDays })),
+            today: detail.today,
+            budget: labor.budgetManDays,
+            forecast: labor.forecastManDays,
+            keys: { planned: t("Cost.planned"), actual: t("Cost.actual"), budget: t("Cost.budget"), forecast: t("Cost.forecast") },
+          }}
+          disciplines={{
+            title: t("Cost.byDiscipline"),
+            unit: t("Cost.inManDays").replace("{hours}", String(hoursPerManDay)),
+            table: {
+              empty: t("Cost.noPlan"),
+              head: ["", t("Cost.budget"), t("Cost.planned"), t("Cost.actual"), t("Cost.forecast")],
+              numbersFrom: 1,
+              rows: labor.disciplines.map((row) => ({
+                key: row.discipline,
+                cells: [t(`Cost.discipline.${row.discipline}`), days(row.budgetManDays), days(row.plannedManDays), days(row.actualManDays), days(row.forecastManDays)],
+                over: over(row.forecastManDays, row.budgetManDays),
+              })),
+            },
+          }}
+          tasks={{
+            empty: t("Cost.noPlan"),
+            head: [t("Cost.colPlanRow"), t("Cost.colPeriod"), "%", t("Cost.planned"), t("Cost.toDate"), t("Cost.outsourcedMd"), ...(access.laborMoney ? [t("Cost.colPlannedCost")] : [])],
+            numbersFrom: 2,
+            rows: detail.plan.map((row) => ({
+              key: String(row.id),
+              cells: [
+                row.name,
+                row.planStart && row.planFinish ? `${row.planStart} – ${row.planFinish}` : DASH,
+                `${Math.round(row.percentComplete)}%`,
+                days(row.plannedManDays),
+                days(row.toDateManDays),
+                row.outsourcedManDays ? days(row.outsourcedManDays) : DASH,
+                ...(access.laborMoney ? [row.plannedCost === null ? DASH : shortAmount(row.plannedCost)] : []),
+              ],
+            })),
+          }}
+          people={{
+            empty: t("Cost.noHours"),
+            head: [t("Cost.person"), t("Cost.colDiscipline"), t("Cost.hours"), t("Cost.manDays"), t("Cost.daysConfirmed"), t("Cost.lastDay")],
+            numbersFrom: 2,
+            rows: (detail.people ?? []).map((person) => ({
+              key: String(person.id),
+              cells: [
+                person.name,
+                t(`Cost.discipline.${person.discipline}`),
+                String(Math.round(person.hours * 10) / 10),
+                days(person.hours / hoursPerManDay),
+                String(person.days),
+                person.lastDay ?? DASH,
+              ],
+            })),
+          }}
+          bought={
+            purchases
+              ? {
+                  amount: shortAmount,
+                  curve: {
+                    title: t("Cost.purchaseTitle"),
+                    empty: t("Cost.noRequests"),
+                    points: purchases.curve.map((point) => ({ week: point.week, requested: point.requested, ordered: point.ordered })),
+                    budget: purchaseBudget,
+                    window: purchases.window,
+                    today: detail.today,
+                    keys: { requested: t("Cost.requested"), ordered: t("Cost.ordered"), budget: t("Cost.budget"), window: t("Cost.needByWindow") },
+                  },
+                  categories: {
+                    title: t("Cost.byCategory"),
+                    splitLabel: t("Cost.budgetSplit"),
+                    split:
+                      splitTotal > 0
+                        ? purchases.categories
+                            .filter((item) => (item.budget ?? 0) > 0)
+                            .map((item) => ({
+                              key: item.category || "typed",
+                              category: item.category,
+                              share: (item.budget ?? 0) / splitTotal,
+                              title: `${categoryName(item.category)} ${shortAmount(item.budget ?? 0)}`,
+                            }))
+                        : [],
+                    table: {
+                      empty: t("Cost.noRequests"),
+                      head: ["", t("Cost.budget"), t("Cost.requested"), t("Cost.ordered")],
+                      numbersFrom: 1,
+                      rows: purchases.categories.map((item) => ({
+                        key: item.category || "typed",
+                        category: item.category,
+                        cells: [
+                          `${item.category ? `${item.category} · ` : ""}${categoryName(item.category)}`,
+                          item.budget === null ? DASH : shortAmount(item.budget),
+                          shortAmount(item.requested),
+                          shortAmount(item.ordered),
+                        ],
+                        over: item.budget !== null && item.requested > item.budget,
+                      })),
+                    },
+                  },
+                }
+              : null
+          }
+        />
+      </Suspense>
+      {/* What was bought by Module, with its purchase requests: the cost list's breakdown, the app's own. */}
+      {view === "bought" ? <ProjectCostBody {...cost} /> : null}
+    </>
   );
 }
 

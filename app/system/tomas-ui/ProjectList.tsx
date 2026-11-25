@@ -30,42 +30,11 @@ import {
 } from "@tomas-tc/ui";
 import type { ReactNode } from "react";
 import { TONE_BADGE, TONE_DOT, TONE_TEXT, type KitTone } from "./tones";
+import { Segmented } from "./Segmented";
 import { TomasUi } from "./TomasUi";
 
 export type ListAction = { key: string; label: string; danger?: boolean; guide?: string; onSelect: () => void };
 type Choice<Value> = { value: Value; label: string };
-
-/** Two to three choices side by side, one pressed (the Pegasus segmented control). */
-function Segmented<Value extends string | boolean>({
-  label,
-  options,
-  value,
-  onChange,
-  guide,
-}: {
-  label: string;
-  options: Choice<Value>[];
-  value: Value;
-  onChange: (value: Value) => void;
-  guide?: string;
-}) {
-  return (
-    <div role="radiogroup" aria-label={label} data-guide={guide} className="inline-flex h-9 items-center gap-0.5 rounded-md bg-muted p-[3px]">
-      {options.map((option) => (
-        <button
-          key={String(option.value)}
-          type="button"
-          role="radio"
-          aria-checked={option.value === value}
-          onClick={() => onChange(option.value)}
-          className="h-full rounded-[4px] px-3 text-sm font-medium text-muted-foreground transition-colors aria-checked:bg-background aria-checked:text-foreground aria-checked:shadow-sm"
-        >
-          {option.label}
-        </button>
-      ))}
-    </div>
-  );
-}
 
 export type ProjectListHeadProps = {
   title: string;
