@@ -584,9 +584,7 @@ function SiteOverview({
   const ageText = useAgeText();
   const openBySite = new Map<number, number>();
   for (const incident of incidents) openBySite.set(incident.siteId, (openBySite.get(incident.siteId) ?? 0) + 1);
-  const ordered = [...sites].sort(
-    (a, b) => SEVERITY_ORDER[severityOf.get(a.id) ?? "idle"] - SEVERITY_ORDER[severityOf.get(b.id) ?? "idle"] || a.name.localeCompare(b.name, "th"),
-  );
+  const ordered = [...sites].sort((a, b) => SEVERITY_ORDER[severityOf.get(a.id) ?? "idle"] - SEVERITY_ORDER[severityOf.get(b.id) ?? "idle"] || a.name.localeCompare(b.name, "th"));
   return (
     <ol className="ops-tiles">
       {ordered.map((site) => {
