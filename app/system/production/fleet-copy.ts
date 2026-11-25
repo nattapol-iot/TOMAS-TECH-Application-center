@@ -5,6 +5,8 @@ type Copy = { th: string; en: string; jp: string };
 export const FLEET_COPY: Record<string, Copy> = {
   Fleet: { th: "Fleet เครื่องทั้งหมด", en: "Fleet", jp: "フリート" },
   "Command Center": { th: "Command Center", en: "Command Center", jp: "コマンドセンター" },
+  "Monitor.tab.sites": { th: "Sites", en: "Sites", jp: "サイト" },
+  "Monitor.tab.fleet": { th: "Fleet", en: "Fleet", jp: "フリート" },
 
   // ── Site Monitor additions ──
   "Monitor.incident.TMTDeskUnhealthy": { th: "TMTDesk ทำงานไม่ปกติ", en: "TMTDesk unhealthy", jp: "TMTDesk の異常" },

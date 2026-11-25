@@ -110,6 +110,7 @@ export const SiteMonitorScreen = dynamic(() => import("./SiteMonitorScreen").the
 export const FleetScreen = dynamic(() => import("./FleetScreen").then((m) => m.FleetScreen), screen);
 // The wall-screen view; its dark stylesheet loads with it and stays scoped to .ops-center.
 export const CommandCenterScreen = dynamic(() => import("./CommandCenterScreen").then((m) => m.CommandCenterScreen), screen);
+export const MonitorScreen = dynamic(() => import("./MonitorScreen").then((m) => m.MonitorScreen), screen);
 export const InstalledBaseScreen = dynamic(() => import("./InstalledBaseScreen").then((m) => m.InstalledBaseScreen), screen);
 export const TeamActivityScreen = dynamic(() => import("./TeamActivityScreen").then((m) => m.TeamActivityScreen), screen);
 // The click-through guides: loaded after the shell, and quiet while loading or if the chunk fails, since no screen depends on them.

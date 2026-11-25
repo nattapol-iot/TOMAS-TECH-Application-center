@@ -1,0 +1,16 @@
+.monitor-wrap {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.monitor-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 0 2px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 20px;
+}
+.monitor-tabs .btn {
+  margin-left: auto;
+}

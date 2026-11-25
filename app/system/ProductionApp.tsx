@@ -76,6 +76,7 @@ import {
   SiteMonitorScreen,
   FleetScreen,
   CommandCenterScreen,
+  MonitorScreen,
   DesignSystemScreen,
   InstalledBaseScreen,
   ProductionMaterialIssues,
@@ -147,6 +148,7 @@ type View =
   | "manual"
   | "support"
   | "downloads"
+  | "monitor"
   | "site-monitor"
   | "fleet"
   | "command-center"
@@ -226,9 +228,7 @@ const NAV: { group?: string; items: NavItem[] }[] = [
       { view: "stamps", label: "Company Stamps", icon: "lock", permission: "signing.read" },
       { view: "schedule-templates", label: "Master Schedule", icon: "calendar" },
       { view: "installed-base", label: "Installed Base", icon: "layers", permission: "asset.read" },
-      { view: "site-monitor", label: "Site Monitor", icon: "cpu", permission: "monitor.read" },
-      { view: "fleet", label: "Fleet", icon: "table", permission: "monitor.read" },
-      { view: "command-center", label: "Command Center", icon: "maximize", permission: "monitor.read" },
+      { view: "monitor", label: "Site Monitor", icon: "cpu", permission: "monitor.read" },
     ],
   },
   // Lean procurement (owner 2026-11-19): one entry for everyone, Approvals for approvers. BOM is a tab of the PR screen. The
@@ -278,7 +278,7 @@ function navItemAllowed(item: NavItem, permissions: readonly string[], role: str
 /** CRM users keep customers in CRM; the old Master destination still resolves. */
 function landingView(next: View, permissions: readonly string[]): View {
   // BOM became a tab of the PR screen (2026-11-19); an old BOM link opens that screen.
-  const target = next === "master" ? "customers" : next === "boms" ? "purchase" : next;
+  const target = next === "master" ? "customers" : next === "boms" ? "purchase" : next === "site-monitor" || next === "fleet" ? "monitor" : next;
   return target === "customers" && permissions.includes("crm.read") ? "crm-customers" : target;
 }
 /** Board and Timeline modes highlight the menu of their parent workspace. */
@@ -1756,8 +1756,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
               {view === "downloads" ? (
                 <DownloadCenterScreen canManage={bootstrap.permissions.includes("master.read")} canManageRepositories={bootstrap.permissions.includes("repository.write")} notify={setToast} />
               ) : null}
-              {view === "site-monitor" ? <SiteMonitorScreen bootstrap={bootstrap} notify={setToast} /> : null}
-              {view === "fleet" ? <FleetScreen bootstrap={bootstrap} notify={setToast} /> : null}
+              {view === "monitor" || view === "site-monitor" || view === "fleet" ? <MonitorScreen bootstrap={bootstrap} notify={setToast} /> : null}
               {view === "command-center" ? <CommandCenterScreen notify={setToast} /> : null}
               {view === "design-system" ? <DesignSystemScreen notify={setToast} /> : null}
               {view === "installed-base" ? (

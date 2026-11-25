@@ -32,7 +32,7 @@ function relativeTime(lang: Lang) {
   };
 }
 
-export function FleetScreen({ bootstrap, notify }: { bootstrap: BootstrapData; notify: Notify }) {
+export function FleetScreen({ bootstrap, notify, embedded = false }: { bootstrap: BootstrapData; notify: Notify; embedded?: boolean }) {
   const t = useT();
   const { lang } = useLanguage();
   const ago = relativeTime(lang);
@@ -87,7 +87,7 @@ export function FleetScreen({ bootstrap, notify }: { bootstrap: BootstrapData; n
   return (
     <div className="stack fleet">
       <PageHeader title="Fleet" subtitle="Fleet.subtitle" actions={<>
-        <a className="btn default" href="#/command-center" data-guide="fleet.commandCenter"><Icon name="maximize" /><LocalizedText text={"Command Center"} /></a>
+        {!embedded ? <a className="btn default" href="#/command-center" data-guide="fleet.commandCenter"><Icon name="maximize" /><LocalizedText text={"Command Center"} /></a> : null}
         <button className="btn default" type="button" onClick={() => setTick((value) => value + 1)}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button>
       </>} />
 
