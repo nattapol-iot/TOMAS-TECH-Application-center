@@ -4,7 +4,7 @@
 
 config database migration authentication และ document storage
 
-Evidence: snapshot `6cd83665`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
+Evidence: snapshot `c0b7e1fa`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
 
 ## Read only the operation you change
 
@@ -27,6 +27,7 @@ Shared screens contain other modules: use the symbol and line range instead of r
 
 - [tests/migration-backup.test.mjs](<../../../tests/migration-backup.test.mjs>)
 - [tests/network-origin.test.mjs](<../../../tests/network-origin.test.mjs>)
+- [tests/role-audit-2026-11-25.test.mjs](<../../../tests/role-audit-2026-11-25.test.mjs>)
 - [backend-node/tests/audit.test.ts](<../../../backend-node/tests/audit.test.ts>)
 - [backend-node/tests/database-read-only.test.ts](<../../../backend-node/tests/database-read-only.test.ts>)
 - [backend-node/tests/http.test.ts](<../../../backend-node/tests/http.test.ts>)

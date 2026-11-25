@@ -65,7 +65,7 @@ type DetailTab = "overview" | "requirement" | "meeting" | "estimate" | "attachme
 const EMPTY_PAGE: PagedResult<InquirySummary> = { items: [], page: 1, pageSize: 10, total: 0 };
 const PROJECT_TYPES = ["Automation", "Robot", "IoT", "Data Collection", "AMR", "WMS", "Traceability", "Electrical", "Machine", "Software", "IoT / Automation"];
 const FILE_CATEGORIES = ["Customer RFQ", "Meeting Record", "Specification", "Drawing", "Layout", "Equipment List", "Customer Standard", "Supplier Document", "Reference Document", "Other"];
-const OWNER_ROLES = ["Engineer", "Engineering Manager", "Admin"];
+const OWNER_ROLES = ["Engineer", "Leader", "Engineering Manager", "Admin"];
 const INTEREST_GRADES = [
   { value: "A", label: "A — Hot / สนใจมาก", description: "Need, budget and timeline are clear" },
   { value: "B", label: "B — Warm / สนใจ", description: "Active interest with some conditions to confirm" },

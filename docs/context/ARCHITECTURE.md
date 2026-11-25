@@ -44,6 +44,8 @@ Part-time planning (2026-11-25): a plan row's hours are spread over its window; 
 
 1. A production screen calls a function in api-client.ts. Navigation may use the ProductionApp view state, so routes.ts alone is not the active-menu inventory.
 2. Fastify applies authentication and configured middleware. Route handlers resolve current user permissions and record scope; visible menus do not confer write authorization.
+   - Roles: a person has a primary role and may hold additional ones (migration 051); every role-gated check reads all of them (`rolesOf` / `hasRole` in `backend-node/src/user-roles.ts`, `dbo.user_effective_roles` in SQL, `bootstrap.user.roles` on screens), never `user.role` alone. Leader (migration 135) is an Engineer's permissions plus team CRM, Site Monitor, installed base and site credentials, and counts as an engineer wherever one is chosen; a migration that grants Engineer a permission names Leader too.
+   - Named people, not roles: PR approvers (migrations 097, 116) and estimate approvers (101) decide without the approve permission; the bootstrap's `approverOf` tells the screens (`app/system/approvers.ts`). The Application team creates a project without an estimate without `project.write` (`backend-node/src/project-create-access.ts`, shared by the API and the screens).
 3. Business helpers validate inputs, workflow and monetary invariants. Writes may use transactions, rowVersion and audit. Inspect the selected path rather than assuming every endpoint enforces identical rules.
 4. Structured records reside in SQL Server. Files use document-storage; their metadata and bytes have different lifecycles.
 5. The screen reloads or updates state from the API result. Changing a DTO requires checking its callers as well as its route.

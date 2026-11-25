@@ -153,11 +153,14 @@ export const PROJECT_HOURS_SQL = `SELECT p.id project_id,
 export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, database: Database, users: CurrentUserService, email?: EmailService): void {
   registerEndUserUpdateRoute(app, database, users, "Project");
   app.get("/api/v1/projects/creation-options", async (request) => {
-    await users.demandPermission(request, "project.write");
     const actor = await users.required(request);
-    // Estimates are listed only to someone who may read them; the Application team, who create
+    // project.write creates from an approved estimate; the Application team creates without one and needs no project.write
+    // (owner 2026-11-25).
+    const writesProjects = await permissionFor(database, actor.id, "project.write");
+    if (!writesProjects && !canCreateWithoutEstimate(actor)) await users.demandPermission(request, "project.write");
+    // Estimates are listed only to someone who may create from them and read them; the Application team, who create
     // projects without an estimate, may have no estimate access at all.
-    const readsEstimates = await permissionFor(database, actor.id, "estimate.read");
+    const readsEstimates = writesProjects && (await permissionFor(database, actor.id, "estimate.read"));
     // Only work the customer has ordered: the linked CRM opportunity is WON, and its order
     // evidence is offered as the PO so it is not typed twice.
     const result = await database.query<Record<string, unknown>>(
@@ -177,9 +180,9 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
       ORDER BY e.updated_at DESC,e.id DESC;
       SELECT u.id,u.name,
         MAX(CASE WHEN r.code IN(N'Project Manager',N'Engineering Manager',N'Admin') THEN 1 ELSE 0 END) canManage,
-        MAX(CASE WHEN r.code IN(N'Engineer',N'Engineering Manager',N'Admin') THEN 1 ELSE 0 END) canLead
+        MAX(CASE WHEN r.code IN(N'Engineer',N'Leader',N'Engineering Manager',N'Admin') THEN 1 ELSE 0 END) canLead
       FROM dbo.users u JOIN dbo.user_effective_roles r ON r.user_id=u.id
-      GROUP BY u.id,u.name HAVING MAX(CASE WHEN r.code IN(N'Project Manager',N'Engineering Manager',N'Admin',N'Engineer') THEN 1 ELSE 0 END)=1
+      GROUP BY u.id,u.name HAVING MAX(CASE WHEN r.code IN(N'Project Manager',N'Engineering Manager',N'Admin',N'Engineer',N'Leader') THEN 1 ELSE 0 END)=1
       ORDER BY u.name;
     `,
       (request) => request.input("reads_estimates", sql.Bit, readsEstimates),
@@ -200,6 +203,7 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
       })),
       people: (sets[1] ?? []).map((r) => ({ ...r, id: Number(r.id), canManage: Boolean(r.canManage), canLead: Boolean(r.canLead) })),
       canCreateWithoutEstimate: canCreateWithoutEstimate(actor),
+      canCreateFromEstimate: writesProjects,
     };
   });
 
@@ -777,9 +781,10 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
   });
 
   app.post("/api/v1/projects", async (request, reply) => {
-    await users.demandPermission(request, "project.write");
     const actor = await users.required(request);
     const body = bodyObject(request.body);
+    // Without an estimate the Application team needs no project.write (owner 2026-11-25); every other project does.
+    if (!(body.withoutEstimate === true && canCreateWithoutEstimate(actor))) await users.demandPermission(request, "project.write");
     const requestedEndUserId = endUserCustomerId(body.endUserCustomerId);
     // The Master Plan headings, each with its team's tasks and their functions.
     const plan = parseInitialPlan(body);
@@ -839,10 +844,14 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
         SELECT (SELECT TOP(1) code FROM dbo.user_effective_roles
           WHERE user_id=@manager_id AND code IN(N'Project Manager',N'Engineering Manager',N'Admin')) AS manager_role,
           (SELECT TOP(1) code FROM dbo.user_effective_roles
-          WHERE user_id=@lead_id AND code IN(N'Engineer',N'Engineering Manager',N'Admin')) AS lead_role;
+          WHERE user_id=@lead_id AND code IN(N'Engineer',N'Leader',N'Engineering Manager',N'Admin')) AS lead_role;
       `)
         ).recordset[0];
-        if (!roles || !["Project Manager", "Engineering Manager", "Admin"].includes(roles.manager_role ?? "") || !["Engineer", "Engineering Manager", "Admin"].includes(roles.lead_role ?? "")) {
+        if (
+          !roles ||
+          !["Project Manager", "Engineering Manager", "Admin"].includes(roles.manager_role ?? "") ||
+          !["Engineer", "Leader", "Engineering Manager", "Admin"].includes(roles.lead_role ?? "")
+        ) {
           throw new ApiError(422, "invalid_reference", "Manager and lead engineer must be active users with eligible roles.");
         }
         // Where the project comes from: an approved estimate on a WON order, or the form itself.
@@ -942,9 +951,13 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
         members.input("manager_id", sql.BigInt, input.managerId);
         members.input("lead_id", sql.BigInt, input.leadEngineerId);
         members.input("actor", sql.BigInt, actor.id);
+        // Someone who sees only their own projects (an Application engineer creating without an estimate) joins as a member,
+        // so the project they just made opens for them.
+        members.input("creator_joins", sql.Bit, !isProjectElevated(actor));
         await members.query(`
         INSERT INTO dbo.project_members(project_id,user_id,role_on_project,created_by) VALUES (@project_id,@manager_id,N'Project Manager',@actor);
         IF @lead_id<>@manager_id INSERT INTO dbo.project_members(project_id,user_id,role_on_project,created_by) VALUES (@project_id,@lead_id,N'Lead Engineer',@actor);
+        IF @creator_joins=1 AND @actor NOT IN (@manager_id,@lead_id) INSERT INTO dbo.project_members(project_id,user_id,role_on_project,created_by) VALUES (@project_id,@actor,N'Member',@actor);
       `);
         await insertInitialPlan(transaction, projectId, plan, actor.id);
         await writeProjectDetails(transaction, projectId, details, actor.id);

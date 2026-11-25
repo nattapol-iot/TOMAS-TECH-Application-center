@@ -4,6 +4,8 @@ import test from "node:test";
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const material = read("app/system/production/MaterialScreens.tsx");
+// MaterialScreens.tsx is oxfmt-formatted (2026-11-25): JSX spans lines, so markup is matched with its line breaks folded.
+const flat = (text) => text.replace(/\s+/g, " ");
 const shell = read("app/system/ProductionApp.tsx");
 const boms = read("backend-node/src/routes/boms.ts");
 const requisitions = read("backend-node/src/routes/purchase-requisitions.ts");
@@ -180,7 +182,7 @@ test("a new PR starts empty; the estimate is a reference to pull from, and price
   // The price is an approximate one, in the sheet and on the PR.
   assert.ok(editor.includes('<LocalizedText text={"ราคาประมาณ"} />'));
   assert.ok(editor.includes('<LocalizedText text={"ยอดขอซื้อ (ประมาณ)"} />'));
-  assert.ok(material.includes('<th className="num"><LocalizedText text={"ราคาประมาณ"} /></th>'));
+  assert.ok(flat(material).includes('<th className="num"> <LocalizedText text={"ราคาประมาณ"} /> </th>'));
   assert.ok(material.includes('const PR_KIND_TONE = { Planned: "blue", Substitute: "violet", Unplanned: "slate" } as const;'));
 });
 
@@ -231,12 +233,12 @@ test("the BOM's lines can be filtered, exported and ticked to start a PR; empty 
   assert.ok(detail.includes('const canRequest = Boolean(onRequest) && canReserve && bom.status === "Released";'));
   assert.ok(detail.includes('data-guide="bom.create-pr" disabled={!chosen.length} onClick={() => onRequest?.({ bomId: id, lineIds: chosen })}'));
   // The Reserve column shows only when a line has stock to reserve; the list's Actions column only when a row has an action.
-  assert.ok(detail.includes('{anyReservable ? <th><LocalizedText text={"Action"} /></th> : null}'));
-  assert.ok(material.includes('{showActions ? <th className="pg-acts"><LocalizedText text={"Actions"} /></th> : null}'));
+  assert.ok(flat(detail).includes('{anyReservable ? ( <th> <LocalizedText text={"Action"} /> </th> ) : null}'));
+  assert.ok(flat(material).includes('{showActions ? ( <th className="pg-acts"> <LocalizedText text={"Actions"} /> </th> ) : null}'));
   assert.ok(material.includes('<RowAction icon="plus" label="สร้าง PR" onClick={() => onRequest?.({ bomId: item.id, lineIds: [] })} />'));
   // The PR screen opens the sheet on that BOM with the ticked lines.
-  assert.ok(material.includes("embedded onRequest={(from) => { setStart(from); setCreating(true); }} />"));
-  assert.ok(material.includes("start={start ?? undefined} onClose={() => { setCreating(false); setStart(null); }}"));
+  assert.ok(flat(material).includes("embedded onRequest={(from) => { setStart(from); setCreating(true); }} />"));
+  assert.ok(flat(material).includes("start={start ?? undefined} onClose={() => { setCreating(false); setStart(null); }}"));
   assert.ok(editor.includes("const [bomId, setBomId] = useState(start?.bomId ?? 0);"));
   // The ERP workbook's sheet name stays the default of the shared writer.
   assert.ok(read("lib/export-xlsx.ts").includes('export function exportXlsx(rows:CellValue[][],filename:string,sheetName="Summary cost",plain=false) {'));
@@ -323,14 +325,14 @@ test("an approved request goes to the ERP as the server is told: one PR, a sheet
   // A recall after sending marks the request; it is never taken back while the ERP's list holds it.
   assert.match(requisitions, /UPDATE dbo\.mat_prs SET erp_cancel_pending=1 WHERE id=@id AND erp_target=N'REQUEST_LIST' AND deleted_at IS NULL;[^]*throw new ApiError\(409, "erp_cancel_pending"/);
   // The screen: where the request is, each line's answer, a refresh, and the sheet.
-  assert.ok(material.includes('if (erp.target === "REQUEST_LIST") return <><span className="mono">Request List</span>'));
-  assert.ok(material.includes('{hasLineAnswers ? <td className="pg-line-erp"><LineErp erp={line.erp} /></td> : null}'));
+  assert.ok(flat(material).includes('if (erp.target === "REQUEST_LIST") return ( <> <span className="mono">Request List</span>'));
+  assert.ok(flat(material).includes('{hasLineAnswers ? ( <td className="pg-line-erp"> <LineErp erp={line.erp} /> </td> ) : null}'));
   // A line the ERP has not answered for shows no status: a sheet waiting to be uploaded is not "waiting for Purchasing".
   assert.ok(material.includes('if (!erp?.status) return <span className="muted">—</span>;'));
-  assert.ok(material.includes("`RequestList_${pr.number}.xlsx`, REQUEST_LIST_SHEET.sheetName, true);"));
+  assert.ok(flat(material).includes("`RequestList_${pr.number}.xlsx`, REQUEST_LIST_SHEET.sheetName, true, );"));
   assert.ok(material.includes('data-guide="pr.request-list"') && material.includes('data-guide="pr.request-list-excel"'));
   // Sending by hand is not offered where the server gives a sheet, or once the list holds the request.
-  assert.ok(material.includes('const canSend = Boolean(erp?.enabled && !erp.prNo && !inRequestList && listMode !== "excel")'));
+  assert.ok(flat(material).includes('const canSend = Boolean(erp?.enabled && !erp.prNo && !inRequestList && listMode !== "excel")'));
   // The shared workbook writer keeps the cost workbook's styling unless told the sheet is plain data.
   assert.ok(read("lib/export-xlsx.ts").includes('export function exportXlsx(rows:CellValue[][],filename:string,sheetName="Summary cost",plain=false) {'));
   // The app role may write a line's ERP answer (migration 112); without it, taking a request back would be refused.

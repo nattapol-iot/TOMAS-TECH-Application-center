@@ -42,11 +42,11 @@ test("Create project keeps what was typed when saving fails", async () => {
 test("Create project offers 'without an estimate' only to those allowed, with customer, name and type", async () => {
   const [screens, client, routes] = await Promise.all([source("app/system/production/CoreScreens.tsx"), source("app/system/api-client.ts"), source("backend-node/src/routes/projects.ts")]);
   const modal = screens.match(/export function CreateProjectModal\([\s\S]*?\n\}\n/)?.[0] ?? "";
-  assert.match(modal, /const canChooseSource = !initialEstimateId && Boolean\(options\.canCreateWithoutEstimate\);/);
+  assert.match(modal, /const canChooseSource = !initialEstimateId && Boolean\(options\.canCreateWithoutEstimate\) && options\.canCreateFromEstimate !== false;/);
   assert.match(modal, /\.\.\.\(standalone \? \{ withoutEstimate: true, customerId: chosenCustomer, projectName: projectName\?\.trim\(\), projectType \} : \{ estimateId \}\)/);
   for (const label of ["Customer \\*", "Project name \\*", "Project type \\*"]) assert.match(modal, new RegExp(`<LocalizedText text=\\{"${label}"\\} />`));
   assert.match(client, /withoutEstimate\?: boolean;/);
-  assert.match(routes, /canCreateWithoutEstimate: canCreateWithoutEstimate\(actor\),?\s*\};/);
+  assert.match(routes, /canCreateWithoutEstimate: canCreateWithoutEstimate\(actor\),\s*canCreateFromEstimate: writesProjects,?\s*\};/);
   // Files and the CRM order only follow a project that came from an inquiry.
   assert.match(routes, /const documentsTransferred =\s*source\.inquiryId === null \|\| input\.estimateId === null\s*\? 0/);
   assert.match(routes, /if \(source\.inquiryId !== null\)\s*await confirmOpportunityOrder\(/);

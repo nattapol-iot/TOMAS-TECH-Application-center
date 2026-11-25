@@ -117,6 +117,8 @@ import { listEmployeesPage, listSuppliersPage, type ListPage, type SupplierListI
 import { ErpProjectNumberField, isPlaceholderProjectNumber } from "./ErpProjectNumber";
 import { SearchSelect } from "./SearchSelect";
 import { canViewEngineeringRates } from "../../../backend-node/src/engineering-rate-access";
+import { mayCreateProject } from "../../../backend-node/src/project-create-access";
+import { approvesEstimates, approvesPurchases } from "../approvers";
 import { BusinessCardScanner } from "./BusinessCardScanner";
 import type { BusinessCardExtraction } from "../../../lib/business-card";
 import { supplierCodeFromName } from "../../../lib/supplier-code";
@@ -271,11 +273,12 @@ export function ProductionDashboard({
   const canReadInquiries = bootstrap.permissions.includes("inquiry.read");
   const canReadEstimates = bootstrap.permissions.includes("estimate.read");
   const canReadProjects = bootstrap.permissions.includes("project.read");
-  const canApproveEstimates = bootstrap.permissions.includes("estimate.approve");
+  // The approve permission, or named as an approver (migrations 097, 101, 116): they decide without that permission.
+  const canApproveEstimates = approvesEstimates(bootstrap);
   const canReadSchedule = bootstrap.permissions.includes("schedule.read") && bootstrap.permissions.includes("schedule.progress");
   const canReadSigning = bootstrap.permissions.includes("signing.read");
   const canReadProcurement = bootstrap.permissions.includes("procurement.read");
-  const canApproveProcurement = bootstrap.permissions.includes("procurement.approve");
+  const canApproveProcurement = approvesPurchases(bootstrap);
   const canReadInventory = bootstrap.permissions.includes("inventory.read");
   const [taskTab, setTaskTab] = useState<"today" | "week" | "done">("today");
   const [workItems, setWorkItems] = useState<DashboardWorkItem[]>([]);
@@ -1159,7 +1162,9 @@ export function ProductionProjects({
           { key: "documents", label: "Documents", icon: "paperclip", onSelect: () => setDocumentsProject(item) },
           ...(canDelete(item) ? [{ key: "delete", label: "CRM.deleteProject", icon: "trash" as const, danger: true, onSelect: () => setDeletingProject(item) }] : []),
         ];
-  const createButton = canWrite ? (
+  // project.write, or the Application team, who create without an estimate and need no project.write (owner 2026-11-25).
+  const canCreate = mayCreateProject(bootstrap.permissions, bootstrap.user.roles ?? [bootstrap.user.role], bootstrap.user.department);
+  const createButton = canCreate ? (
     <button className="btn primary" type="button" data-guide="project.create" onClick={() => (openCreatePage ? openCreatePage() : setCreateOpen(true))}>
       <Icon name="plus" />
       <LocalizedText text={"Create project"} />
@@ -2715,7 +2720,7 @@ function EditProjectModal({
     [bootstrap.team],
   );
   const managers = useMemo(() => eligible(["Project Manager", "Engineering Manager", "Admin"], project.managerId), [eligible, project.managerId]);
-  const engineers = useMemo(() => eligible(["Engineer", "Engineering Manager", "Admin"], project.leadEngineerId), [eligible, project.leadEngineerId]);
+  const engineers = useMemo(() => eligible(["Engineer", "Leader", "Engineering Manager", "Admin"], project.leadEngineerId), [eligible, project.leadEngineerId]);
   const elevated = (bootstrap.user.roles ?? [bootstrap.user.role]).some((role) => ["Admin", "Engineering Manager", "Project Manager"].includes(role));
   const current = project.status as ProjectStatus;
   const statusChoices = useMemo(() => [current, ...allowedProjectTransitions(current, elevated)], [current, elevated]);
@@ -3412,7 +3417,13 @@ type ProjectEstimateOption = {
   purchaseOrderNumber: string;
   purchaseOrderDate: string;
 };
-type ProjectCreationOptions = { estimates: ProjectEstimateOption[]; people: { id: number; name: string; canManage: boolean; canLead: boolean }[]; canCreateWithoutEstimate?: boolean };
+/** canCreateFromEstimate: false for the Application team without project.write (an older API build omits it). */
+type ProjectCreationOptions = {
+  estimates: ProjectEstimateOption[];
+  people: { id: number; name: string; canManage: boolean; canLead: boolean }[];
+  canCreateWithoutEstimate?: boolean;
+  canCreateFromEstimate?: boolean;
+};
 // The same list the estimate screens offer, so a project without an estimate reads like one with.
 const PROJECT_TYPES = ["Automation", "IoT", "PLC", "Software", "Electrical", "Mechanical", "Robot", "AMR", "Auto Warehouse", "WMS", "WCS", "Traceability", "Vision", "Data Collection", "Other"];
 
@@ -3539,6 +3550,8 @@ export function CreateProjectModal({
           leadEngineerId: data.people.some((member) => member.canLead && member.id === current.leadEngineerId) ? current.leadEngineerId : 0,
         }));
         if (!data.canCreateWithoutEstimate) setWithoutEstimate(false);
+        // Without project.write (the Application team) a project is created only without an estimate.
+        if (data.canCreateFromEstimate === false) setWithoutEstimate(true);
         if (defaultsApplied.current) return;
         defaultsApplied.current = true;
         const first = initialEstimateId ? data.estimates.find((item) => item.id === initialEstimateId) : undefined;
@@ -3571,7 +3584,13 @@ export function CreateProjectModal({
   const selectedEstimate = standalone ? undefined : estimates.find((item) => item.id === form.estimateId);
   const customerId = standalone ? (form.customerId ?? 0) : (selectedEstimate?.customerId ?? 0);
   const customer = bootstrap.customers.find((item) => item.id === customerId);
-  const canChooseSource = !initialEstimateId && Boolean(options.canCreateWithoutEstimate);
+  const canChooseSource = !initialEstimateId && Boolean(options.canCreateWithoutEstimate) && options.canCreateFromEstimate !== false;
+  // A starting plan needs schedule.plan, as the API checks. Without it (an Application engineer) the dates are typed and the
+  // project's PM plans it afterwards; rows kept in a draft are not sent.
+  const canPlan = bootstrap.permissions.includes("schedule.plan");
+  useEffect(() => {
+    if (!canPlan && headings.length) setHeadings([]);
+  }, [canPlan, headings.length, setHeadings]);
   // With dated rows the project runs from its first row to its last; otherwise its dates are typed.
   const span = planSpanOf(headings);
   const planned = span !== null;
@@ -3932,24 +3951,30 @@ export function CreateProjectModal({
         </div>
         <ContactPicker customerId={customerId} value={form.contactIds ?? []} onChange={(contactIds) => update({ contactIds })} />
         {step(3, "ProjectCreate.stepPlan")}
-        {page ? <p className="muted pcp-note">{t("ProjectCreate.planExcel")}</p> : null}
-        <MasterPlanSection
-          rows={headings}
-          onChange={(change) => {
-            setSaveError("");
-            setHeadings(change);
-          }}
-          templates={templates}
-        />
-        <TeamPlanSection
-          rows={headings}
-          onChange={(change) => {
-            setSaveError("");
-            setHeadings(change);
-          }}
-          people={bootstrap.team}
-        />
-        <NotBrokenDownNote headings={headings} />
+        {canPlan ? (
+          <>
+            {page ? <p className="muted pcp-note">{t("ProjectCreate.planExcel")}</p> : null}
+            <MasterPlanSection
+              rows={headings}
+              onChange={(change) => {
+                setSaveError("");
+                setHeadings(change);
+              }}
+              templates={templates}
+            />
+            <TeamPlanSection
+              rows={headings}
+              onChange={(change) => {
+                setSaveError("");
+                setHeadings(change);
+              }}
+              people={bootstrap.team}
+            />
+            <NotBrokenDownNote headings={headings} />
+          </>
+        ) : (
+          <p className="muted pcp-note">{t("ProjectCreate.planLater")}</p>
+        )}
         {planned ? (
           <div className="info-strip" role="note">
             <Icon name="calendar" />

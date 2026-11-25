@@ -15,23 +15,9 @@ import { REQUEST_LIST_SHEET, requestListSheetRows } from "../../../lib/request-l
 import { exportXlsx } from "../../../lib/export-xlsx";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { apiRequest, type BootstrapData } from "../api-client";
+import { approvesPurchases } from "../approvers";
 import { useEndpoint } from "./material-endpoint";
-import {
-  Badge,
-  EmptyState,
-  Field,
-  Icon,
-  type IconName,
-  KpiCard,
-  Modal,
-  PageHeader,
-  Pagination,
-  Panel,
-  SearchInput,
-  Select,
-  Tabs,
-  Toolbar,
-} from "../ui";
+import { Badge, EmptyState, Field, Icon, type IconName, KpiCard, Modal, PageHeader, Pagination, Panel, SearchInput, Select, Tabs, Toolbar } from "../ui";
 import { DateInput } from "../DateInput";
 import "./pegasus-skin.css";
 
@@ -146,15 +132,33 @@ type PurchaseRequisition = {
   rowVersion: string;
 };
 
-type ErpView = { ref: string | null; department: string | null; prNo: string | null; status: string | null; statusLabel: string | null; url: string | null;
-  revisionNo: number | null; rejectionReason: string | null; poNo: string | null; syncedAt: string | null; error: string | null;
+type ErpView = {
+  ref: string | null;
+  department: string | null;
+  prNo: string | null;
+  status: string | null;
+  statusLabel: string | null;
+  url: string | null;
+  revisionNo: number | null;
+  rejectionReason: string | null;
+  poNo: string | null;
+  syncedAt: string | null;
+  error: string | null;
   /** Where the request went in the ERP: one PR, or the project's Request List; null while it is not sent. */
-  target?: string | null; cancelPending?: boolean };
+  target?: string | null;
+  cancelPending?: boolean;
+};
 type ErpOutcome = { sent: boolean; prNo?: string; requestList?: boolean; message?: string; pending?: boolean; kind?: string };
 type ErpSync = { synced: boolean; cached?: boolean; status?: string; message?: string; erp: ErpView };
 /** What the ERP did with one line of a request in the project's Request List. */
-type LineErpView = { lineRef: string | null; status: string | null; statusLabel: string | null; cancelledReason: string | null; url: string | null;
-  orders: Array<{ prNo: string | null; poNo: string | null; quantity: number | null; supplierName: string | null; url: string | null }> };
+type LineErpView = {
+  lineRef: string | null;
+  status: string | null;
+  statusLabel: string | null;
+  cancelledReason: string | null;
+  url: string | null;
+  orders: Array<{ prNo: string | null; poNo: string | null; quantity: number | null; supplierName: string | null; url: string | null }>;
+};
 type ErpOptions = { enabled: boolean; departments: Array<{ value: string; label: string }>; suggestedDepartment: string | null; message?: string };
 
 type PurchaseRequisitionDetail = {
@@ -205,7 +209,12 @@ type PurchaseRequisitionDetail = {
     sectionCode?: string | null;
     erp?: LineErpView;
     /** What the PR-Form says of the line (migration 115), and the line of this request it is a part of. */
-    material?: string | null; treatment?: string | null; detail?: string | null; quantityPerSet?: number | null; needBy?: string | null; attachmentUrl?: string | null;
+    material?: string | null;
+    treatment?: string | null;
+    detail?: string | null;
+    quantityPerSet?: number | null;
+    needBy?: string | null;
+    attachmentUrl?: string | null;
     parentLineId?: number | null;
   }>;
   steps: Array<{
@@ -462,49 +471,84 @@ type InventoryItem = {
 };
 
 const EMPTY: never[] = [];
-const toError = (error: unknown) => error instanceof Error ? error.message : "The request could not be completed.";
+const toError = (error: unknown) => (error instanceof Error ? error.message : "The request could not be completed.");
 const body = (value: unknown): RequestInit => ({ method: "POST", body: JSON.stringify(value) });
 const money = (value: number) => new Intl.NumberFormat(currentLocale(), { style: "currency", currency: "THB", maximumFractionDigits: 2 }).format(Number(value));
 const quantity = (value: number) => Number(value).toLocaleString(currentLocale(), { maximumFractionDigits: 4 });
-const date = (value: string | null) => value ? new Intl.DateTimeFormat(currentLocale(), { dateStyle: "medium" }).format(new Date(`${value.slice(0, 10)}T00:00:00`)) : "—";
-const dateTime = (value: string | null) => value ? new Intl.DateTimeFormat(currentLocale(), { dateStyle: "short", timeStyle: "short" }).format(new Date(value)) : "—";
+const date = (value: string | null) => (value ? new Intl.DateTimeFormat(currentLocale(), { dateStyle: "medium" }).format(new Date(`${value.slice(0, 10)}T00:00:00`)) : "—");
+const dateTime = (value: string | null) => (value ? new Intl.DateTimeFormat(currentLocale(), { dateStyle: "short", timeStyle: "short" }).format(new Date(value)) : "—");
 // The business day in the configured zone (no DST in Bangkok, so whole days are exact).
 const isoDate = (offsetDays = 0) => estimateBusinessDate(new Date(Date.now() + offsetDays * 86_400_000), process.env.NEXT_PUBLIC_BUSINESS_TIME_ZONE ?? "Asia/Bangkok");
 const contains = (value: string, search: string) => value.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase());
 const hasPermission = (bootstrap: BootstrapData, permission: string) => bootstrap.permissions.includes(permission);
-const isOpenPurchaseOrder = (item: PurchaseOrder) =>
-  ["Ordered", "Partially Received"].includes(item.status)
-  && Number(item.orderedQuantity) > Number(item.receivedQuantity);
+const isOpenPurchaseOrder = (item: PurchaseOrder) => ["Ordered", "Partially Received"].includes(item.status) && Number(item.orderedQuantity) > Number(item.receivedQuantity);
 
 function LoadError({ message, retry }: { message: string; retry: () => void }) {
   return (
     <div className="callout danger" role="alert">
       <Icon name="alertTriangle" />
-      <span><strong><LocalizedText text={"Could not load"} /></strong>{message}</span>
-      <button className="btn ghost" type="button" onClick={retry}><Icon name="refresh" /><LocalizedText text={"Try again"} /></button>
+      <span>
+        <strong>
+          <LocalizedText text={"Could not load"} />
+        </strong>
+        {message}
+      </span>
+      <button className="btn ghost" type="button" onClick={retry}>
+        <Icon name="refresh" />
+        <LocalizedText text={"Try again"} />
+      </button>
     </div>
   );
 }
 
 function ActionError({ message }: { message: string }) {
-  return message ? <div className="callout danger" role="alert"><Icon name="alertTriangle" /><span><strong><LocalizedText text={"ดำเนินการไม่สำเร็จ"} /></strong>{message}</span></div> : null;
+  return message ? (
+    <div className="callout danger" role="alert">
+      <Icon name="alertTriangle" />
+      <span>
+        <strong>
+          <LocalizedText text={"ดำเนินการไม่สำเร็จ"} />
+        </strong>
+        {message}
+      </span>
+    </div>
+  ) : null;
 }
 
 function Loading() {
-  return <div className="empty"><span className="spinner" /><LocalizedText text={"Loading from production API…"} /></div>;
+  return (
+    <div className="empty">
+      <span className="spinner" />
+      <LocalizedText text={"Loading from production API…"} />
+    </div>
+  );
 }
 
 function RefreshButton({ loading, reload }: { loading: boolean; reload: () => void }) {
-  return <button className="btn ghost" type="button" disabled={loading} onClick={reload}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button>;
+  return (
+    <button className="btn ghost" type="button" disabled={loading} onClick={reload}>
+      <Icon name="refresh" />
+      <LocalizedText text={"Refresh"} />
+    </button>
+  );
 }
 
 // BOM, Purchase Requisition and Approvals wear the Pegasus ERP look (owner 2026-11-19): pegasus-skin.css under .pg-skin.
 type PgTone = "outline" | "soft" | "warning" | "violet" | "pink" | "success" | "danger" | "neutral";
 /** The ERP's status meanings (pegasus-design 0.7): not submitted outline, waiting amber, done green, rejected red, cancelled grey. */
 const PG_STATUS_TONE: Record<string, PgTone> = {
-  Draft: "outline", "In Approval": "warning", Approved: "success", "Converted to PO": "success", Rejected: "danger", Cancelled: "neutral",
-  Released: "success", Superseded: "neutral",
-  Pending: "outline", Current: "warning", Completed: "success", "Not Required": "neutral",
+  Draft: "outline",
+  "In Approval": "warning",
+  Approved: "success",
+  "Converted to PO": "success",
+  Rejected: "danger",
+  Cancelled: "neutral",
+  Released: "success",
+  Superseded: "neutral",
+  Pending: "outline",
+  Current: "warning",
+  Completed: "success",
+  "Not Required": "neutral",
 };
 
 function StatusBadge({ status, label, tone }: { status: string; label?: string; tone?: PgTone }) {
@@ -515,21 +559,37 @@ function StatusBadge({ status, label, tone }: { status: string; label?: string; 
 /** A row action in the ERP's list look: a quiet icon button on the left whose name shows on hover and to screen readers. */
 function RowAction({ icon, label, onClick, disabled, danger, guide }: { icon: IconName; label: string; onClick: () => void; disabled?: boolean; danger?: boolean; guide?: string }) {
   const t = useUiText();
-  return <button className={danger ? "pg-act danger" : "pg-act"} type="button" title={t(label)} aria-label={t(label)} disabled={disabled} data-guide={guide} onClick={onClick}><Icon name={icon} /></button>;
+  return (
+    <button className={danger ? "pg-act danger" : "pg-act"} type="button" title={t(label)} aria-label={t(label)} disabled={disabled} data-guide={guide} onClick={onClick}>
+      <Icon name={icon} />
+    </button>
+  );
 }
 
 /** The ERP's summary bar as the status filter: each cell counts one status and filters to it; pressed again it clears. */
-function StatusSummary({ statuses, rows, value, onChange, label = (status) => status }: {
-  statuses: string[]; rows: { status: string }[]; value: string; onChange: (status: string) => void; label?: (status: string) => string;
+function StatusSummary({
+  statuses,
+  rows,
+  value,
+  onChange,
+  label = (status) => status,
+}: {
+  statuses: string[];
+  rows: { status: string }[];
+  value: string;
+  onChange: (status: string) => void;
+  label?: (status: string) => string;
 }) {
   const t = useUiText();
   const cells = ["All status", ...statuses];
   return (
     <div className="pg-summary" role="group" aria-label={t("Status")}>
-      {cells.map((status) => <button key={status} className="pg-cell" type="button" aria-pressed={value === status} onClick={() => onChange(value === status ? "All status" : status)}>
-        <span className="pg-cell-label">{t(label(status))}</span>
-        <strong className="pg-cell-value">{(status === "All status" ? rows.length : rows.filter((row) => row.status === status).length).toLocaleString("en-US")}</strong>
-      </button>)}
+      {cells.map((status) => (
+        <button key={status} className="pg-cell" type="button" aria-pressed={value === status} onClick={() => onChange(value === status ? "All status" : status)}>
+          <span className="pg-cell-label">{t(label(status))}</span>
+          <strong className="pg-cell-value">{(status === "All status" ? rows.length : rows.filter((row) => row.status === status).length).toLocaleString("en-US")}</strong>
+        </button>
+      ))}
     </div>
   );
 }
@@ -557,7 +617,23 @@ function CommentPrompt({
   const localizeCopy = useStaticCopy();
   const [comment, setComment] = useState("");
   return (
-    <Modal title={title} subtitle={description} size="sm" onClose={onClose} footer={<><button className="btn ghost" type="button" onClick={onClose} disabled={busy}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" onClick={() => onConfirm(comment.trim())} disabled={busy || (requireComment && !comment.trim())}><Icon name="check" />{busy ? <LocalizedText text={"Saving…"} /> : confirmLabel}</button></>}>
+    <Modal
+      title={title}
+      subtitle={description}
+      size="sm"
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn ghost" type="button" onClick={onClose} disabled={busy}>
+            <LocalizedText text={"Cancel"} />
+          </button>
+          <button className="btn primary" type="button" onClick={() => onConfirm(comment.trim())} disabled={busy || (requireComment && !comment.trim())}>
+            <Icon name="check" />
+            {busy ? <LocalizedText text={"Saving…"} /> : confirmLabel}
+          </button>
+        </>
+      }
+    >
       <ActionError message={error ?? ""} />
       <Field label={requireComment ? "Comment (required)" : "Comment / note"}>
         <textarea rows={4} maxLength={20_000} value={comment} onChange={(event) => setComment(event.target.value)} placeholder={localizeCopy("เหตุผลหรือข้อมูลประกอบสำหรับ audit trail")} />
@@ -577,31 +653,113 @@ export function ProductionProcurementDashboard({ bootstrap }: MaterialScreenProp
   const mirs = useEndpoint<MaterialIssue[]>(canInventory ? "/api/v1/material-issues/" : null, EMPTY);
   const error = boms.error || prs.error || pos.error || grns.error || mirs.error;
   const loading = boms.loading || prs.loading || pos.loading || grns.loading || mirs.loading;
-  const reload = () => { boms.reload(); prs.reload(); pos.reload(); grns.reload(); mirs.reload(); };
-  const pendingApproval = prs.data.filter((item) => item.status === "In Approval").length
-    + mirs.data.filter((item) => item.status === "Pending Approval").length;
+  const reload = () => {
+    boms.reload();
+    prs.reload();
+    pos.reload();
+    grns.reload();
+    mirs.reload();
+  };
+  const pendingApproval = prs.data.filter((item) => item.status === "In Approval").length + mirs.data.filter((item) => item.status === "Pending Approval").length;
   const openOrderValue = pos.data.reduce((sum, item) => sum + Number(item.openValue), 0);
   const materialBudget = boms.data.reduce((sum, item) => sum + Number(item.bomBudget), 0);
 
   return (
     <>
-      <PageHeader eyebrow="MATERIAL & PROCUREMENT" title={uiText("Procurement Dashboard")} subtitle="ภาพรวมนี้คำนวณจาก BOM, PR, PO, GRN และ MIR จริงใน SQL Server" actions={<RefreshButton loading={loading} reload={reload} />} />
+      <PageHeader
+        eyebrow="MATERIAL & PROCUREMENT"
+        title={uiText("Procurement Dashboard")}
+        subtitle="ภาพรวมนี้คำนวณจาก BOM, PR, PO, GRN และ MIR จริงใน SQL Server"
+        actions={<RefreshButton loading={loading} reload={reload} />}
+      />
       {error ? <LoadError message={error} retry={reload} /> : null}
       <div className="kpi-grid four">
         <KpiCard label="Released BOM" value={boms.data.filter((item) => item.status === "Released").length} note={money(materialBudget)} icon="layers" tone="blue" />
         <KpiCard label="Waiting approval" value={pendingApproval} note="PR + material issue" icon="checkCircle" tone={pendingApproval ? "amber" : "slate"} />
         <KpiCard label="Open PO value" value={money(openOrderValue)} note={`${pos.data.filter(isOpenPurchaseOrder).length} open orders`} icon="truck" tone="violet" />
-        <KpiCard label="Draft receipts" value={grns.data.filter((item) => item.status === "Draft").length} note={`${mirs.data.filter((item) => item.status === "Approved").length} MIR ready to issue`} icon="download" tone="green" />
+        <KpiCard
+          label="Draft receipts"
+          value={grns.data.filter((item) => item.status === "Draft").length}
+          note={`${mirs.data.filter((item) => item.status === "Approved").length} MIR ready to issue`}
+          icon="download"
+          tone="green"
+        />
       </div>
       <Panel title="Live procurement queue" subtitle={loading ? "Loading from production API…" : "รายการที่ต้องดำเนินการตามสถานะจริง"} flush>
-        {loading && !prs.data.length && !pos.data.length ? <Loading /> : (
+        {loading && !prs.data.length && !pos.data.length ? (
+          <Loading />
+        ) : (
           <div className="table-wrap">
             <table>
-              <thead><tr><th><LocalizedText text={"Document"} /></th><th><LocalizedText text={"Project / supplier"} /></th><th><LocalizedText text={"Stage"} /></th><th><LocalizedText text={"Value / quantity"} /></th><th><LocalizedText text={"Next action"} /></th></tr></thead>
+              <thead>
+                <tr>
+                  <th>
+                    <LocalizedText text={"Document"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Project / supplier"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Stage"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Value / quantity"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Next action"} />
+                  </th>
+                </tr>
+              </thead>
               <tbody>
-                {prs.data.filter((item) => !["Converted to PO", "Rejected"].includes(item.status)).slice(0, 8).map((item) => <tr key={`pr-${item.id}`}><td><strong className="mono">{item.number}</strong><small className="muted"><LocalizedText text={"Purchase Requisition"} /></small></td><td>{item.projectNumber} <LocalizedText text={"·"} /> {item.projectName}</td><td><Badge>{item.status}</Badge></td><td className="num">{money(item.amount)}</td><td>{item.currentStep || (item.status === "Draft" ? "Submit requisition" : "—")}</td></tr>)}
-                {pos.data.filter(isOpenPurchaseOrder).slice(0, 8).map((item) => <tr key={`po-${item.id}`}><td><strong className="mono">{item.number}</strong><small className="muted"><LocalizedText text={"Purchase Order"} /></small></td><td>{item.projectNumber} <LocalizedText text={"·"} /> {item.supplierName}</td><td><Badge>{item.status}</Badge></td><td className="num">{money(item.openValue)}</td><td>{item.expectedDate ? `Expected ${date(item.expectedDate)}` : "Set expected date"}</td></tr>)}
-                {!prs.data.length && !pos.data.length ? <tr><td colSpan={5}><EmptyState icon="package" title="No procurement transaction yet" message="สร้างและ release BOM ก่อนเริ่ม PR และ PO" /></td></tr> : null}
+                {prs.data
+                  .filter((item) => !["Converted to PO", "Rejected"].includes(item.status))
+                  .slice(0, 8)
+                  .map((item) => (
+                    <tr key={`pr-${item.id}`}>
+                      <td>
+                        <strong className="mono">{item.number}</strong>
+                        <small className="muted">
+                          <LocalizedText text={"Purchase Requisition"} />
+                        </small>
+                      </td>
+                      <td>
+                        {item.projectNumber} <LocalizedText text={"·"} /> {item.projectName}
+                      </td>
+                      <td>
+                        <Badge>{item.status}</Badge>
+                      </td>
+                      <td className="num">{money(item.amount)}</td>
+                      <td>{item.currentStep || (item.status === "Draft" ? "Submit requisition" : "—")}</td>
+                    </tr>
+                  ))}
+                {pos.data
+                  .filter(isOpenPurchaseOrder)
+                  .slice(0, 8)
+                  .map((item) => (
+                    <tr key={`po-${item.id}`}>
+                      <td>
+                        <strong className="mono">{item.number}</strong>
+                        <small className="muted">
+                          <LocalizedText text={"Purchase Order"} />
+                        </small>
+                      </td>
+                      <td>
+                        {item.projectNumber} <LocalizedText text={"·"} /> {item.supplierName}
+                      </td>
+                      <td>
+                        <Badge>{item.status}</Badge>
+                      </td>
+                      <td className="num">{money(item.openValue)}</td>
+                      <td>{item.expectedDate ? `Expected ${date(item.expectedDate)}` : "Set expected date"}</td>
+                    </tr>
+                  ))}
+                {!prs.data.length && !pos.data.length ? (
+                  <tr>
+                    <td colSpan={5}>
+                      <EmptyState icon="package" title="No procurement transaction yet" message="สร้างและ release BOM ก่อนเริ่ม PR และ PO" />
+                    </td>
+                  </tr>
+                ) : null}
               </tbody>
             </table>
           </div>
@@ -625,7 +783,10 @@ export function ProductionBoms({ bootstrap, notify, embedded, onRequest }: Mater
   const canGenerate = hasPermission(bootstrap, "procurement.request");
   const canRelease = hasPermission(bootstrap, "procurement.approve");
   // The summary bar counts what the search leaves; its cells then filter by status.
-  const searched = useMemo(() => endpoint.data.filter((item) => !search.trim() || contains(`${item.number} ${item.projectNumber} ${item.projectName} ${item.estimateNumber}`, search)), [endpoint.data, search]);
+  const searched = useMemo(
+    () => endpoint.data.filter((item) => !search.trim() || contains(`${item.number} ${item.projectNumber} ${item.projectName} ${item.estimateNumber}`, search)),
+    [endpoint.data, search],
+  );
   const visible = useMemo(() => searched.filter((item) => status === "All status" || item.status === status), [searched, status]);
 
   // A released BOM starts a PR from its row; the Actions column is there only when some row has something to press.
@@ -634,39 +795,212 @@ export function ProductionBoms({ bootstrap, notify, embedded, onRequest }: Mater
 
   const release = async (comment: string) => {
     if (!action) return;
-    setActionBusy(true); setActionError("");
+    setActionBusy(true);
+    setActionError("");
     try {
       await apiRequest(`/api/v1/boms/${action.id}/release`, body({ rowVersion: action.rowVersion, comment }));
       notify(`${action.number} released`);
       setAction(null);
       endpoint.reload();
-    } catch (error) { setActionError(toError(error)); }
-    finally { setActionBusy(false); }
+    } catch (error) {
+      setActionError(toError(error));
+    } finally {
+      setActionBusy(false);
+    }
   };
 
-  const generate = canGenerate ? <button className={embedded ? "btn ghost" : "btn primary"} type="button" data-guide="bom.generate" onClick={() => setGenerateOpen(true)}><Icon name="plus" /><LocalizedText text={"Generate BOM"} /></button> : undefined;
+  const generate = canGenerate ? (
+    <button className={embedded ? "btn ghost" : "btn primary"} type="button" data-guide="bom.generate" onClick={() => setGenerateOpen(true)}>
+      <Icon name="plus" />
+      <LocalizedText text={"Generate BOM"} />
+    </button>
+  ) : undefined;
   return (
     <div className="pg-skin">
-      {embedded ? null : <PageHeader eyebrow="MATERIAL CONTROL" title={uiText("Bill of Materials")} subtitle="BOM ถูกสร้างจาก Estimate ที่อนุมัติและล็อกแล้ว พร้อมแสดง balance / shortage แบบ live" actions={generate} />}
+      {embedded ? null : (
+        <PageHeader eyebrow="MATERIAL CONTROL" title={uiText("Bill of Materials")} subtitle="BOM ถูกสร้างจาก Estimate ที่อนุมัติและล็อกแล้ว พร้อมแสดง balance / shortage แบบ live" actions={generate} />
+      )}
       <StatusSummary statuses={["Draft", "Released", "Superseded"]} rows={searched} value={status} onChange={setStatus} />
-      <Toolbar><SearchInput link={embedded ? "bq" : "q"} value={search} onChange={setSearch} placeholder="Search BOM, project or estimate…" /><RefreshButton loading={endpoint.loading} reload={endpoint.reload} />{embedded && generate ? <><span className="spacer" />{generate}</> : null}</Toolbar>
+      <Toolbar>
+        <SearchInput link={embedded ? "bq" : "q"} value={search} onChange={setSearch} placeholder="Search BOM, project or estimate…" />
+        <RefreshButton loading={endpoint.loading} reload={endpoint.reload} />
+        {embedded && generate ? (
+          <>
+            <span className="spacer" />
+            {generate}
+          </>
+        ) : null}
+      </Toolbar>
       {endpoint.error ? <LoadError message={endpoint.error} retry={endpoint.reload} /> : null}
       <ActionError message={actionError} />
       <Panel guide="bom.list" title={`${visible.length} BOM revisions`} subtitle={endpoint.loading ? "Loading from production API…" : "Live SQL Server data"} flush>
-        {visible.length ? <div className="table-wrap"><table><thead><tr>{showActions ? <th className="pg-acts"><LocalizedText text={"Actions"} /></th> : null}<th><LocalizedText text={"Status"} /></th><th><LocalizedText text={"BOM"} /></th><th><LocalizedText text={"Project"} /></th><th><LocalizedText text={"Estimate"} /></th><th className="num"><LocalizedText text={"Lines"} /></th><th className="num"><LocalizedText text={"Budget"} /></th><th><LocalizedText text={"Created"} /></th><th><LocalizedText text={"Released"} /></th></tr></thead><tbody>{visible.map((item) => <tr key={item.id}>{showActions ? <td className="pg-acts"><div className="table-actions">{canRelease && item.status === "Draft" ? (item.needsSecondReleaser
-        ? <RowAction icon="lock" label="BOM นี้ถึงเกณฑ์ตรวจ ต้องให้ผู้อนุมัติคนอื่นที่ไม่ใช่ผู้สร้าง Release" guide="bom.release" disabled onClick={() => undefined} />
-        : <RowAction icon="lock" label="Release" guide="bom.release" onClick={() => { setActionError(""); setAction(item); }} />) : null}{canStart && item.status === "Released" ? <RowAction icon="plus" label="สร้าง PR" onClick={() => onRequest?.({ bomId: item.id, lineIds: [] })} /> : null}</div></td> : null}<td><StatusBadge status={item.status} /></td><td><button className="pg-doclink mono" type="button" onClick={() => setSelectedId(item.id)}>{item.number}</button><small className="muted">R{item.revision}</small></td><td><div className="cell-primary"><strong>{item.projectNumber}</strong><span>{item.projectName}</span></div></td><td>{item.estimateNumber} · R{item.estimateRevision}</td><td className="num">{item.lineCount}</td><td className="num">{money(item.bomBudget)}</td><td>{dateTime(item.createdAt)}<small className="muted">{item.createdByName}</small></td><td>{item.releasedAt ? <>{dateTime(item.releasedAt)}<small className="muted">{item.releasedByName}</small></> : "—"}</td></tr>)}</tbody></table></div> : endpoint.loading ? <Loading /> : <EmptyState icon="layers" title="No BOM found" message="Generate BOM from a project whose estimate is approved or locked" />}
+        {visible.length ? (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  {showActions ? (
+                    <th className="pg-acts">
+                      <LocalizedText text={"Actions"} />
+                    </th>
+                  ) : null}
+                  <th>
+                    <LocalizedText text={"Status"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"BOM"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Project"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Estimate"} />
+                  </th>
+                  <th className="num">
+                    <LocalizedText text={"Lines"} />
+                  </th>
+                  <th className="num">
+                    <LocalizedText text={"Budget"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Created"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Released"} />
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {visible.map((item) => (
+                  <tr key={item.id}>
+                    {showActions ? (
+                      <td className="pg-acts">
+                        <div className="table-actions">
+                          {canRelease && item.status === "Draft" ? (
+                            item.needsSecondReleaser ? (
+                              <RowAction icon="lock" label="BOM นี้ถึงเกณฑ์ตรวจ ต้องให้ผู้อนุมัติคนอื่นที่ไม่ใช่ผู้สร้าง Release" guide="bom.release" disabled onClick={() => undefined} />
+                            ) : (
+                              <RowAction
+                                icon="lock"
+                                label="Release"
+                                guide="bom.release"
+                                onClick={() => {
+                                  setActionError("");
+                                  setAction(item);
+                                }}
+                              />
+                            )
+                          ) : null}
+                          {canStart && item.status === "Released" ? <RowAction icon="plus" label="สร้าง PR" onClick={() => onRequest?.({ bomId: item.id, lineIds: [] })} /> : null}
+                        </div>
+                      </td>
+                    ) : null}
+                    <td>
+                      <StatusBadge status={item.status} />
+                    </td>
+                    <td>
+                      <button className="pg-doclink mono" type="button" onClick={() => setSelectedId(item.id)}>
+                        {item.number}
+                      </button>
+                      <small className="muted">R{item.revision}</small>
+                    </td>
+                    <td>
+                      <div className="cell-primary">
+                        <strong>{item.projectNumber}</strong>
+                        <span>{item.projectName}</span>
+                      </div>
+                    </td>
+                    <td>
+                      {item.estimateNumber} · R{item.estimateRevision}
+                    </td>
+                    <td className="num">{item.lineCount}</td>
+                    <td className="num">{money(item.bomBudget)}</td>
+                    <td>
+                      {dateTime(item.createdAt)}
+                      <small className="muted">{item.createdByName}</small>
+                    </td>
+                    <td>
+                      {item.releasedAt ? (
+                        <>
+                          {dateTime(item.releasedAt)}
+                          <small className="muted">{item.releasedByName}</small>
+                        </>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : endpoint.loading ? (
+          <Loading />
+        ) : (
+          <EmptyState icon="layers" title="No BOM found" message="Generate BOM from a project whose estimate is approved or locked" />
+        )}
       </Panel>
-      {selectedId ? <BomDetailModal id={selectedId} bootstrap={bootstrap} notify={notify} onClose={() => setSelectedId(null)} onRequest={canStart ? (start) => { setSelectedId(null); onRequest?.(start); } : undefined} /> : null}
-      {generateOpen ? <GenerateBomModal onClose={() => setGenerateOpen(false)} onCreated={(number) => { setGenerateOpen(false); notify(`${number} generated`); endpoint.reload(); }} /> : null}
-      {action ? <CommentPrompt title={`Release ${action.number}`} description="หลัง release รายการจะถูก freeze และใช้เป็นฐานของ PR / MIR" confirmLabel="Release BOM" busy={actionBusy} onClose={() => setAction(null)} onConfirm={(comment) => { void release(comment); }} /> : null}
+      {selectedId ? (
+        <BomDetailModal
+          id={selectedId}
+          bootstrap={bootstrap}
+          notify={notify}
+          onClose={() => setSelectedId(null)}
+          onRequest={
+            canStart
+              ? (start) => {
+                  setSelectedId(null);
+                  onRequest?.(start);
+                }
+              : undefined
+          }
+        />
+      ) : null}
+      {generateOpen ? (
+        <GenerateBomModal
+          onClose={() => setGenerateOpen(false)}
+          onCreated={(number) => {
+            setGenerateOpen(false);
+            notify(`${number} generated`);
+            endpoint.reload();
+          }}
+        />
+      ) : null}
+      {action ? (
+        <CommentPrompt
+          title={`Release ${action.number}`}
+          description="หลัง release รายการจะถูก freeze และใช้เป็นฐานของ PR / MIR"
+          confirmLabel="Release BOM"
+          busy={actionBusy}
+          onClose={() => setAction(null)}
+          onConfirm={(comment) => {
+            void release(comment);
+          }}
+        />
+      ) : null}
     </div>
   );
 }
 
-function BomDetailModal({ id, bootstrap, notify, onClose, onRequest }: { id: number; bootstrap: BootstrapData; notify: (message: string) => void; onClose: () => void; onRequest?: (start: PrStart) => void }) {
+function BomDetailModal({
+  id,
+  bootstrap,
+  notify,
+  onClose,
+  onRequest,
+}: {
+  id: number;
+  bootstrap: BootstrapData;
+  notify: (message: string) => void;
+  onClose: () => void;
+  onRequest?: (start: PrStart) => void;
+}) {
   const t = useUiText();
-  const endpoint = useEndpoint<BomWorkspace>(`/api/v1/boms/${id}`, { bom: { id, number: "", revision: 0, status: "", projectId: 0, projectNumber: "", projectName: "", estimateId: 0, estimateNumber: "", estimateRevision: 0, rowVersion: "", bomBudget: 0 }, lines: [], modules: [] });
+  const endpoint = useEndpoint<BomWorkspace>(`/api/v1/boms/${id}`, {
+    bom: { id, number: "", revision: 0, status: "", projectId: 0, projectNumber: "", projectName: "", estimateId: 0, estimateNumber: "", estimateRevision: 0, rowVersion: "", bomBudget: 0 },
+    lines: [],
+    modules: [],
+  });
   const [reserveLine, setReserveLine] = useState<BomLine | null>(null);
   const [module, setModule] = useState("");
   const [section, setSection] = useState("");
@@ -691,28 +1025,176 @@ function BomDetailModal({ id, bootstrap, notify, onClose, onRequest }: { id: num
   const anyReservable = shown.some(reservable);
   const download = () => exportXlsx(bomSheetRows(bom, shown, estimateBusinessDate()), `BOM_${bom.number}_R${bom.revision}.xlsx`, "BOM");
   return (
-    <Modal title={bom.number || "BOM workspace"} subtitle={bom.projectNumber ? `${bom.projectNumber} · ${bom.projectName} · R${bom.revision}` : "Loading from production API…"} size="xl" onClose={onClose}
-      footer={<><button className="btn ghost" type="button" onClick={onClose}><LocalizedText text={"Close"} /></button>
-        {canRequest ? <button className="btn primary" type="button" data-guide="bom.create-pr" disabled={!chosen.length} onClick={() => onRequest?.({ bomId: id, lineIds: chosen })}><Icon name="plus" />{t("สร้าง PR จากรายการที่เลือก")} ({chosen.length})</button> : null}</>}>
+    <Modal
+      title={bom.number || "BOM workspace"}
+      subtitle={bom.projectNumber ? `${bom.projectNumber} · ${bom.projectName} · R${bom.revision}` : "Loading from production API…"}
+      size="xl"
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn ghost" type="button" onClick={onClose}>
+            <LocalizedText text={"Close"} />
+          </button>
+          {canRequest ? (
+            <button className="btn primary" type="button" data-guide="bom.create-pr" disabled={!chosen.length} onClick={() => onRequest?.({ bomId: id, lineIds: chosen })}>
+              <Icon name="plus" />
+              {t("สร้าง PR จากรายการที่เลือก")} ({chosen.length})
+            </button>
+          ) : null}
+        </>
+      }
+    >
       {endpoint.error ? <LoadError message={endpoint.error} retry={endpoint.reload} /> : null}
-      {endpoint.loading && !lines.length ? <Loading /> : lines.length ? <>
-        <div className="kpi-grid four"><KpiCard label="Lines" value={lines.length} icon="layers" tone="blue" /><KpiCard label="Budget" value={money(bom.bomBudget)} icon="chart" tone="violet" />
-          <KpiCard label="ขอซื้อแล้ว" value={money(requestedValue)} icon="package" tone="green" />
-          <KpiCard label="ยังต้องซื้อ" value={money(toBuy.reduce((sum, line) => sum + toBuyValue(line), 0))} note={`${toBuy.length} ${t("รายการ")}`} icon="package" tone="amber" /></div>
-        {bom.projectId ? <PurchaseUnitsPanel projectId={bom.projectId} canEdit={canReserve && bom.status !== "Superseded"} notify={notify} /> : null}
-        <Toolbar>
-          <select value={module} aria-label={t("Module")} onChange={(event) => setModule(event.target.value)}><option value="">{t("All modules")}</option>{modules.map((name) => <option key={name} value={name}>{name}</option>)}</select>
-          <select value={section} aria-label={t("Section")} onChange={(event) => setSection(event.target.value)}><option value="">{t("ทุกหมวด")}</option>{sections.map((code) => <option key={code} value={code}>{code}</option>)}</select>
-          <span className="muted">{shown.length} / {lines.length} {t("รายการ")}</span>
-          <span className="spacer" />
-          <button className="btn ghost" type="button" data-guide="bom.export" onClick={download}><Icon name="download" /><LocalizedText text={"ดาวน์โหลด Excel"} /></button>
-        </Toolbar>
-        <div className="table-wrap tall"><table><thead><tr>{canRequest ? <th className="pg-check"><input type="checkbox" checked={allPicked} disabled={!pickable.length} aria-label={t("เลือกรายการที่ยังต้องซื้อทั้งหมด")} onChange={pickAll} /></th> : null}
-          <th><LocalizedText text={"Section / item"} /></th><th><LocalizedText text={"Description"} /></th><th><LocalizedText text={"Required"} /></th><th><LocalizedText text={"Available"} /></th><th><LocalizedText text={"Reserved"} /></th><th><LocalizedText text={"ขอซื้อแล้ว"} /></th><th><LocalizedText text={"Issued"} /></th><th><LocalizedText text={"Purchase required"} /></th><th><LocalizedText text={"Budget"} /></th>{anyReservable ? <th><LocalizedText text={"Action"} /></th> : null}</tr></thead>
-          <tbody>{shown.map((line) => <tr key={line.id}>{canRequest ? <td className="pg-check">{open(line) ? <input type="checkbox" checked={chosen.includes(line.id)} aria-label={`${t("เลือกรายการนี้")} ${line.description}`} onChange={() => pick(line.id)} /> : null}</td> : null}
-            <td><strong className="mono">{line.itemCode || line.estimateItemCode || (line.sectionCode === "OUT" ? "OUTSOURCE" : "NON-STOCK")}</strong><small className="muted">{line.module} <LocalizedText text={"·"} /> {line.sectionCode === "OUT" ? <LocalizedText text={"Outsource"} /> : line.partNumber || "—"}</small></td><td>{line.description}<small className="muted">{line.ownerName}</small></td><td className="num">{quantity(line.quantityRequired)} {line.unit}</td><td className="num">{quantity(line.available)}</td><td className="num">{quantity(line.activeReserved)}</td><td className="num">{quantity(line.requested)}</td><td className="num">{quantity(line.netIssued)}</td><td className="num">{open(line) ? <Badge tone="amber">{quantity(line.purchaseRequired)} {line.unit}</Badge> : <Badge tone="green"><LocalizedText text={"Covered"} /></Badge>}</td><td className="num">{money(line.budget)}</td>
-            {anyReservable ? <td>{reservable(line) ? <button className="btn ghost sm" type="button" onClick={() => setReserveLine(line)}><Icon name="lock" /><LocalizedText text={"Reserve"} /></button> : "—"}</td> : null}</tr>)}</tbody></table></div></> : !endpoint.error ? <EmptyState icon="layers" title="BOM has no lines" message="The linked estimate has no material or outsource lines" /> : null}
-      {reserveLine ? <ReserveStockModal bomId={id} line={reserveLine} onClose={() => setReserveLine(null)} onReserved={(amount) => { setReserveLine(null); notify(`${quantity(amount)} ${reserveLine.unit} of ${reserveLine.itemCode} reserved`); endpoint.reload(); }} /> : null}
+      {endpoint.loading && !lines.length ? (
+        <Loading />
+      ) : lines.length ? (
+        <>
+          <div className="kpi-grid four">
+            <KpiCard label="Lines" value={lines.length} icon="layers" tone="blue" />
+            <KpiCard label="Budget" value={money(bom.bomBudget)} icon="chart" tone="violet" />
+            <KpiCard label="ขอซื้อแล้ว" value={money(requestedValue)} icon="package" tone="green" />
+            <KpiCard label="ยังต้องซื้อ" value={money(toBuy.reduce((sum, line) => sum + toBuyValue(line), 0))} note={`${toBuy.length} ${t("รายการ")}`} icon="package" tone="amber" />
+          </div>
+          {bom.projectId ? <PurchaseUnitsPanel projectId={bom.projectId} canEdit={canReserve && bom.status !== "Superseded"} notify={notify} /> : null}
+          <Toolbar>
+            <select value={module} aria-label={t("Module")} onChange={(event) => setModule(event.target.value)}>
+              <option value="">{t("All modules")}</option>
+              {modules.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+            <select value={section} aria-label={t("Section")} onChange={(event) => setSection(event.target.value)}>
+              <option value="">{t("ทุกหมวด")}</option>
+              {sections.map((code) => (
+                <option key={code} value={code}>
+                  {code}
+                </option>
+              ))}
+            </select>
+            <span className="muted">
+              {shown.length} / {lines.length} {t("รายการ")}
+            </span>
+            <span className="spacer" />
+            <button className="btn ghost" type="button" data-guide="bom.export" onClick={download}>
+              <Icon name="download" />
+              <LocalizedText text={"ดาวน์โหลด Excel"} />
+            </button>
+          </Toolbar>
+          <div className="table-wrap tall">
+            <table>
+              <thead>
+                <tr>
+                  {canRequest ? (
+                    <th className="pg-check">
+                      <input type="checkbox" checked={allPicked} disabled={!pickable.length} aria-label={t("เลือกรายการที่ยังต้องซื้อทั้งหมด")} onChange={pickAll} />
+                    </th>
+                  ) : null}
+                  <th>
+                    <LocalizedText text={"Section / item"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Description"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Required"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Available"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Reserved"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"ขอซื้อแล้ว"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Issued"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Purchase required"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Budget"} />
+                  </th>
+                  {anyReservable ? (
+                    <th>
+                      <LocalizedText text={"Action"} />
+                    </th>
+                  ) : null}
+                </tr>
+              </thead>
+              <tbody>
+                {shown.map((line) => (
+                  <tr key={line.id}>
+                    {canRequest ? (
+                      <td className="pg-check">
+                        {open(line) ? <input type="checkbox" checked={chosen.includes(line.id)} aria-label={`${t("เลือกรายการนี้")} ${line.description}`} onChange={() => pick(line.id)} /> : null}
+                      </td>
+                    ) : null}
+                    <td>
+                      <strong className="mono">{line.itemCode || line.estimateItemCode || (line.sectionCode === "OUT" ? "OUTSOURCE" : "NON-STOCK")}</strong>
+                      <small className="muted">
+                        {line.module} <LocalizedText text={"·"} /> {line.sectionCode === "OUT" ? <LocalizedText text={"Outsource"} /> : line.partNumber || "—"}
+                      </small>
+                    </td>
+                    <td>
+                      {line.description}
+                      <small className="muted">{line.ownerName}</small>
+                    </td>
+                    <td className="num">
+                      {quantity(line.quantityRequired)} {line.unit}
+                    </td>
+                    <td className="num">{quantity(line.available)}</td>
+                    <td className="num">{quantity(line.activeReserved)}</td>
+                    <td className="num">{quantity(line.requested)}</td>
+                    <td className="num">{quantity(line.netIssued)}</td>
+                    <td className="num">
+                      {open(line) ? (
+                        <Badge tone="amber">
+                          {quantity(line.purchaseRequired)} {line.unit}
+                        </Badge>
+                      ) : (
+                        <Badge tone="green">
+                          <LocalizedText text={"Covered"} />
+                        </Badge>
+                      )}
+                    </td>
+                    <td className="num">{money(line.budget)}</td>
+                    {anyReservable ? (
+                      <td>
+                        {reservable(line) ? (
+                          <button className="btn ghost sm" type="button" onClick={() => setReserveLine(line)}>
+                            <Icon name="lock" />
+                            <LocalizedText text={"Reserve"} />
+                          </button>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                    ) : null}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      ) : !endpoint.error ? (
+        <EmptyState icon="layers" title="BOM has no lines" message="The linked estimate has no material or outsource lines" />
+      ) : null}
+      {reserveLine ? (
+        <ReserveStockModal
+          bomId={id}
+          line={reserveLine}
+          onClose={() => setReserveLine(null)}
+          onReserved={(amount) => {
+            setReserveLine(null);
+            notify(`${quantity(amount)} ${reserveLine.unit} of ${reserveLine.itemCode} reserved`);
+            endpoint.reload();
+          }}
+        />
+      ) : null}
     </Modal>
   );
 }
@@ -726,14 +1208,51 @@ function ReserveStockModal({ bomId, line, onClose, onReserved }: { bomId: number
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const submit = async () => {
-    setBusy(true); setError("");
+    setBusy(true);
+    setError("");
     try {
       await apiRequest(`/api/v1/boms/${bomId}/reservations`, body({ bomLineId: line.id, quantity: amount, requiredDate: requiredDate || null }));
       onReserved(amount);
-    } catch (requestError) { setError(toError(requestError)); }
-    finally { setBusy(false); }
+    } catch (requestError) {
+      setError(toError(requestError));
+    } finally {
+      setBusy(false);
+    }
   };
-  return <Modal title={`Reserve ${line.itemCode}`} subtitle={`${quantity(line.available)} ${line.unit} available · ${quantity(remainingDemand)} remaining BOM demand`} size="sm" onClose={onClose} footer={<><button className="btn ghost" type="button" onClick={onClose} disabled={busy}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || amount <= 0 || amount > maximum} onClick={() => { void submit(); }}><Icon name="lock" />{busy ? "Reserving…" : "Reserve stock"}</button></>}><ActionError message={error} /><Field label="Quantity"><input type="number" min="0.0001" max={maximum} step="0.0001" value={amount} onChange={(event) => setAmount(Number(event.target.value))} /></Field><Field label="Required date"><DateInput value={requiredDate} onChange={(event) => setRequiredDate(event.target.value)} /></Field></Modal>;
+  return (
+    <Modal
+      title={`Reserve ${line.itemCode}`}
+      subtitle={`${quantity(line.available)} ${line.unit} available · ${quantity(remainingDemand)} remaining BOM demand`}
+      size="sm"
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn ghost" type="button" onClick={onClose} disabled={busy}>
+            <LocalizedText text={"Cancel"} />
+          </button>
+          <button
+            className="btn primary"
+            type="button"
+            disabled={busy || amount <= 0 || amount > maximum}
+            onClick={() => {
+              void submit();
+            }}
+          >
+            <Icon name="lock" />
+            {busy ? "Reserving…" : "Reserve stock"}
+          </button>
+        </>
+      }
+    >
+      <ActionError message={error} />
+      <Field label="Quantity">
+        <input type="number" min="0.0001" max={maximum} step="0.0001" value={amount} onChange={(event) => setAmount(Number(event.target.value))} />
+      </Field>
+      <Field label="Required date">
+        <DateInput value={requiredDate} onChange={(event) => setRequiredDate(event.target.value)} />
+      </Field>
+    </Modal>
+  );
 }
 
 function GenerateBomModal({ onClose, onCreated }: { onClose: () => void; onCreated: (number: string) => void }) {
@@ -745,18 +1264,57 @@ function GenerateBomModal({ onClose, onCreated }: { onClose: () => void; onCreat
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const submit = async () => {
-    setBusy(true); setError("");
+    setBusy(true);
+    setError("");
     try {
       const created = await apiRequest<{ number: string }>("/api/v1/boms/", body({ projectId: effectiveProjectId }));
       onCreated(created.number);
-    } catch (requestError) { setError(toError(requestError)); }
-    finally { setBusy(false); }
+    } catch (requestError) {
+      setError(toError(requestError));
+    } finally {
+      setBusy(false);
+    }
   };
   return (
-    <Modal title="Generate production BOM" subtitle="ระบบจะคัดลอกรายการจาก Estimate revision ที่อนุมัติและล็อกแล้วของ Project เพียงครั้งเดียว" onClose={onClose} footer={<><button className="btn ghost" type="button" onClick={onClose} disabled={busy}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" data-guide="bom.create" disabled={busy || !effectiveProjectId} onClick={() => { void submit(); }}><Icon name="layers" />{busy ? "Generating…" : "Generate BOM"}</button></>}>
+    <Modal
+      title="Generate production BOM"
+      subtitle="ระบบจะคัดลอกรายการจาก Estimate revision ที่อนุมัติและล็อกแล้วของ Project เพียงครั้งเดียว"
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn ghost" type="button" onClick={onClose} disabled={busy}>
+            <LocalizedText text={"Cancel"} />
+          </button>
+          <button
+            className="btn primary"
+            type="button"
+            data-guide="bom.create"
+            disabled={busy || !effectiveProjectId}
+            onClick={() => {
+              void submit();
+            }}
+          >
+            <Icon name="layers" />
+            {busy ? "Generating…" : "Generate BOM"}
+          </button>
+        </>
+      }
+    >
       {projects.error ? <LoadError message={projects.error} retry={projects.reload} /> : null}
       <ActionError message={error} />
-      <Field label="Project" guide="bom.project"><select value={effectiveProjectId} disabled={projects.loading} onChange={(event) => setProjectId(Number(event.target.value))}><option value={0}><LocalizedText text={"Select project…"} /></option>{projectChoices.map((project) => <option key={project.id} value={project.id}>{project.number} <LocalizedText text={"·"} /> {project.name} ({project.status}<LocalizedText text={")"} /></option>)}</select></Field>
+      <Field label="Project" guide="bom.project">
+        <select value={effectiveProjectId} disabled={projects.loading} onChange={(event) => setProjectId(Number(event.target.value))}>
+          <option value={0}>
+            <LocalizedText text={"Select project…"} />
+          </option>
+          {projectChoices.map((project) => (
+            <option key={project.id} value={project.id}>
+              {project.number} <LocalizedText text={"·"} /> {project.name} ({project.status}
+              <LocalizedText text={")"} />
+            </option>
+          ))}
+        </select>
+      </Field>
       {!projects.loading && !projects.data.items.length ? <EmptyState icon="folder" title="No project available" message="Create a project from an approved or locked estimate first" /> : null}
     </Modal>
   );
@@ -767,7 +1325,7 @@ type PrAction = { item: PurchaseRequisition; decision: "Approve" | "Reject" };
 const PR_KIND_TONE = { Planned: "blue", Substitute: "violet", Unplanned: "slate" } as const;
 const PR_KIND_LABEL = { Planned: "ตรงแผน", Substitute: "ทดแทน", Unplanned: "นอกแผน" } as const;
 // The database keeps "Converted to PO"; the order itself is raised in the company ERP.
-const prStatusLabel = (status: string) => status === "Converted to PO" ? "Ordered in ERP" : status;
+const prStatusLabel = (status: string) => (status === "Converted to PO" ? "Ordered in ERP" : status);
 
 export function ProductionPurchaseRequisitions({ bootstrap, notify }: MaterialScreenProps) {
   const uiText = useUiText();
@@ -789,8 +1347,14 @@ export function ProductionPurchaseRequisitions({ bootstrap, notify }: MaterialSc
   const canRequest = hasPermission(bootstrap, "procurement.request");
   const isAdmin = bootstrap.user.roles.includes("Admin");
   // The summary bar counts what the search leaves; its cells then filter by status.
-  const searched = useMemo(() => endpoint.data.filter((item) => !search.trim()
-    || contains(`${item.number} ${item.projectNumber} ${item.projectName} ${item.bomNumber} ${item.requestedByName} ${item.erpPoRef ?? ""} ${item.erp.prNo ?? ""}`, search)), [endpoint.data, search]);
+  const searched = useMemo(
+    () =>
+      endpoint.data.filter(
+        (item) =>
+          !search.trim() || contains(`${item.number} ${item.projectNumber} ${item.projectName} ${item.bomNumber} ${item.requestedByName} ${item.erpPoRef ?? ""} ${item.erp.prNo ?? ""}`, search),
+      ),
+    [endpoint.data, search],
+  );
   const visible = useMemo(() => searched.filter((item) => status === "All status" || item.status === status), [searched, status]);
 
   // Opening the list reads the ERP status of its open PRs with the viewer's token (the server reads each at most once per 15 minutes),
@@ -801,101 +1365,373 @@ export function ProductionPurchaseRequisitions({ bootstrap, notify }: MaterialSc
     if (listSynced.current || !listed.some((item) => item.erp.prNo && !ERP_FINAL.includes(item.erp.status ?? ""))) return;
     listSynced.current = true;
     void apiRequest<{ checked: number; updated: number }>("/api/v1/purchase-requisitions/erp-sync", { method: "POST", body: "{}" })
-      .then((result) => { if (result.updated) reloadList(); })
+      .then((result) => {
+        if (result.updated) reloadList();
+      })
       .catch(() => undefined);
   }, [listed, reloadList]);
 
   const submit = async (item: PurchaseRequisition) => {
     if (!(await confirmDialog(`${uiText("Submit")} ${item.number}?`))) return;
-    setBusyId(item.id); setActionError("");
+    setBusyId(item.id);
+    setActionError("");
     try {
       await apiRequest(`/api/v1/purchase-requisitions/${item.id}/submit`, body({ rowVersion: item.rowVersion, comment: "Submitted from production workspace" }));
       notify(`${item.number} submitted for approval`);
       endpoint.reload();
-    } catch (error) { setActionError(toError(error)); }
-    finally { setBusyId(null); }
+    } catch (error) {
+      setActionError(toError(error));
+    } finally {
+      setBusyId(null);
+    }
   };
 
   const decide = async (comment: string) => {
     if (!decision) return;
-    setBusyId(decision.item.id); setActionError("");
+    setBusyId(decision.item.id);
+    setActionError("");
     try {
       const result = await apiRequest<{ status: string; erp?: ErpOutcome }>(`/api/v1/purchase-requisitions/${decision.item.id}/decide`, body({ decision: decision.decision, comment }));
       // A fully approved PR goes to the ERP as its requester; when that cannot happen now, the requester was told to send it.
-      notify(`${decision.item.number}: ${uiText(result.status)}${result.erp ? ` · ${result.erp.sent ? `ERP ${result.erp.prNo}` : uiText(result.erp.pending ? "กำลังส่ง ERP · แจ้งผู้ขอถ้าไม่สำเร็จ" : "ยังไม่ได้ส่ง ERP · แจ้งผู้ขอแล้ว")}` : ""}`);
+      notify(
+        `${decision.item.number}: ${uiText(result.status)}${result.erp ? ` · ${result.erp.sent ? `ERP ${result.erp.prNo}` : uiText(result.erp.pending ? "กำลังส่ง ERP · แจ้งผู้ขอถ้าไม่สำเร็จ" : "ยังไม่ได้ส่ง ERP · แจ้งผู้ขอแล้ว")}` : ""}`,
+      );
       setDecision(null);
       endpoint.reload();
-    } catch (error) { setActionError(toError(error)); }
-    finally { setBusyId(null); }
+    } catch (error) {
+      setActionError(toError(error));
+    } finally {
+      setBusyId(null);
+    }
   };
 
   // A draft reopens in the PR sheet with its saved lines: how the requester corrects one taken back from the ERP.
   const openEditor = async (id: number) => {
-    setBusyId(id); setActionError("");
+    setBusyId(id);
+    setActionError("");
     try {
       const detail = await apiRequest<PurchaseRequisitionDetail>(`/api/v1/purchase-requisitions/${id}`);
       const pr = detail.purchaseRequisition;
       setDetailId(null);
-      setEditing({ id: pr.id, number: pr.number, rowVersion: pr.rowVersion, bomId: pr.bomId, priority: pr.priority, requiredDate: String(pr.requiredDate),
-        purpose: pr.purpose ?? "", erpDepartment: detail.erp.department, unitId: detail.unit?.id ?? null, overBudgetReason: pr.overBudgetReason ?? null, lines: detail.lines });
-    } catch (error) { setActionError(toError(error)); }
-    finally { setBusyId(null); }
+      setEditing({
+        id: pr.id,
+        number: pr.number,
+        rowVersion: pr.rowVersion,
+        bomId: pr.bomId,
+        priority: pr.priority,
+        requiredDate: String(pr.requiredDate),
+        purpose: pr.purpose ?? "",
+        erpDepartment: detail.erp.department,
+        unitId: detail.unit?.id ?? null,
+        overBudgetReason: pr.overBudgetReason ?? null,
+        lines: detail.lines,
+      });
+    } catch (error) {
+      setActionError(toError(error));
+    } finally {
+      setBusyId(null);
+    }
   };
 
   const cancel = async (reason: string) => {
     if (!cancelItem) return;
-    setBusyId(cancelItem.id); setActionError("");
+    setBusyId(cancelItem.id);
+    setActionError("");
     try {
       await apiRequest(`/api/v1/purchase-requisitions/${cancelItem.id}/cancel`, body({ rowVersion: cancelItem.rowVersion, reason: reason || undefined }));
       notify(`${cancelItem.number}: ${uiText("Cancelled")}`);
       setCancelItem(null);
       endpoint.reload();
-    } catch (error) { setActionError(toError(error)); }
-    finally { setBusyId(null); }
+    } catch (error) {
+      setActionError(toError(error));
+    } finally {
+      setBusyId(null);
+    }
   };
 
-  const savedNote = (saved: PrSaved) => `${saved.number}: ${saved.submitted ? uiText("ส่งขออนุมัติแล้ว") : saved.submitError ? `${uiText("บันทึกเป็นฉบับร่างแล้ว แต่ส่งขออนุมัติไม่สำเร็จ")} · ${saved.submitError}` : uiText("บันทึกเป็นฉบับร่างแล้ว")}`;
+  const savedNote = (saved: PrSaved) =>
+    `${saved.number}: ${saved.submitted ? uiText("ส่งขออนุมัติแล้ว") : saved.submitError ? `${uiText("บันทึกเป็นฉบับร่างแล้ว แต่ส่งขออนุมัติไม่สำเร็จ")} · ${saved.submitError}` : uiText("บันทึกเป็นฉบับร่างแล้ว")}`;
 
-  if (editing) return (
-    <div className="pg-skin">
-      <PageHeader eyebrow="PROCURE TO PAY" title={uiText("Purchase Requisitions")} subtitle="แก้ไข PR ฉบับร่าง" />
-      <PurchaseRequestEditor bootstrap={bootstrap} released={EMPTY} editing={editing}
-        onClose={() => setEditing(null)} onCreated={(saved) => { setEditing(null); notify(savedNote(saved)); endpoint.reload(); }} />
-    </div>
-  );
+  if (editing)
+    return (
+      <div className="pg-skin">
+        <PageHeader eyebrow="PROCURE TO PAY" title={uiText("Purchase Requisitions")} subtitle="แก้ไข PR ฉบับร่าง" />
+        <PurchaseRequestEditor
+          bootstrap={bootstrap}
+          released={EMPTY}
+          editing={editing}
+          onClose={() => setEditing(null)}
+          onCreated={(saved) => {
+            setEditing(null);
+            notify(savedNote(saved));
+            endpoint.reload();
+          }}
+        />
+      </div>
+    );
 
-  if (creating) return (
-    <div className="pg-skin">
-      <PageHeader eyebrow="PROCURE TO PAY" title={uiText("Purchase Requisitions")} subtitle="สร้าง PR จาก BOM ที่ release แล้ว" />
-      {boms.error ? <LoadError message={boms.error} retry={boms.reload} /> : null}
-      {boms.loading && !boms.data.length ? <Loading /> : <PurchaseRequestEditor bootstrap={bootstrap} released={boms.data.filter((item) => item.status === "Released")}
-        start={start ?? undefined} onClose={() => { setCreating(false); setStart(null); }} onCreated={(saved) => { setCreating(false); setStart(null); notify(savedNote(saved)); endpoint.reload(); }} />}
-    </div>
-  );
+  if (creating)
+    return (
+      <div className="pg-skin">
+        <PageHeader eyebrow="PROCURE TO PAY" title={uiText("Purchase Requisitions")} subtitle="สร้าง PR จาก BOM ที่ release แล้ว" />
+        {boms.error ? <LoadError message={boms.error} retry={boms.reload} /> : null}
+        {boms.loading && !boms.data.length ? (
+          <Loading />
+        ) : (
+          <PurchaseRequestEditor
+            bootstrap={bootstrap}
+            released={boms.data.filter((item) => item.status === "Released")}
+            start={start ?? undefined}
+            onClose={() => {
+              setCreating(false);
+              setStart(null);
+            }}
+            onCreated={(saved) => {
+              setCreating(false);
+              setStart(null);
+              notify(savedNote(saved));
+              endpoint.reload();
+            }}
+          />
+        )}
+      </div>
+    );
 
   return (
     <div className="pg-skin">
-      <PageHeader eyebrow="PROCURE TO PAY" title={uiText("Purchase Requisitions")} subtitle="ขอซื้อจาก BOM อนุมัติตามงบของ Module แล้วส่งเข้า ERP ให้ฝ่ายจัดซื้อเลือก Supplier และออก PO" actions={canRequest ? <button className="btn primary" type="button" data-guide="pr.new" onClick={() => setCreating(true)}><Icon name="plus" /><LocalizedText text={"New PR"} /></button> : undefined} />
-      <Tabs tabs={[{ id: "requests", label: "Purchase Requisitions", count: endpoint.data.length }, { id: "boms", label: "Bill of Materials" }, { id: "history", label: "PR ย้อนหลัง" }]} active={tab} onChange={setTab} />
-      {tab === "boms" ? <ProductionBoms bootstrap={bootstrap} notify={notify} embedded onRequest={(from) => { setStart(from); setCreating(true); }} /> : tab === "history" ? <HistoricalPrPanel canImport={canRequest} notify={notify} /> : <>
-      <StatusSummary statuses={["Draft", "In Approval", "Approved", "Converted to PO", "Rejected"]} rows={searched} value={status} onChange={setStatus} label={prStatusLabel} />
-      <Toolbar><SearchInput link="q" value={search} onChange={setSearch} placeholder="Search PR, project, BOM or requester…" /><RefreshButton loading={endpoint.loading} reload={endpoint.reload} /></Toolbar>
-      {endpoint.error ? <LoadError message={endpoint.error} retry={endpoint.reload} /> : null}
-      <ActionError message={actionError} />
-      <Panel title={`${visible.length} requisitions`} subtitle={endpoint.loading ? "Loading from production API…" : "Live SQL Server data"} flush>
-        {visible.length ? <div className="table-wrap"><table><thead><tr><th className="pg-acts"><LocalizedText text={"Actions"} /></th><th><LocalizedText text={"Status"} /></th><th><LocalizedText text={"PR"} /></th><th><LocalizedText text={"Project / BOM"} /></th><th><LocalizedText text={"Requester"} /></th><th><LocalizedText text={"Required"} /></th><th className="num"><LocalizedText text={"Lines"} /></th><th className="num"><LocalizedText text={"Amount"} /></th><th data-guide="pr.erp">ERP</th><th><LocalizedText text={"Current step"} /></th></tr></thead><tbody>{visible.map((item) => {
-          // The server works it out for every held role: the person a step names (a department head needs no approve right), the
-          // final approver at their own step or in place of a department head, a role holder, an Admin; their own PR only at the final step.
-          const isCurrentApprover = item.canDecide;
-          const isOwnDraft = canRequest && item.status === "Draft" && (item.requestedById === bootstrap.user.id || isAdmin);
-          const mix = [item.substituteLines ? `${uiText(PR_KIND_LABEL.Substitute)} ${item.substituteLines}` : "", item.unplannedLines ? `${uiText(PR_KIND_LABEL.Unplanned)} ${item.unplannedLines}` : ""].filter(Boolean).join(" · ");
-          return <tr key={item.id}><td className="pg-acts"><div className="table-actions">{isOwnDraft ? <><RowAction icon="edit" label="Edit" disabled={busyId === item.id} onClick={() => { void openEditor(item.id); }} /><RowAction icon="send" label="Submit" disabled={busyId === item.id} onClick={() => { void submit(item); }} /><RowAction icon="x" label="Cancel PR" danger disabled={busyId === item.id} onClick={() => { setActionError(""); setCancelItem(item); }} /></> : null}{isCurrentApprover ? <><RowAction icon="check" label="Approve" disabled={busyId === item.id} onClick={() => setDecision({ item, decision: "Approve" })} /><RowAction icon="x" label="Reject" danger disabled={busyId === item.id} onClick={() => setDecision({ item, decision: "Reject" })} /></> : null}{item.status === "Approved" && !item.erp.prNo && item.requestedById === bootstrap.user.id ? <RowAction icon="send" label="ส่งเข้า ERP" onClick={() => setDetailId(item.id)} /> : null}</div></td><td><StatusBadge status={item.status} label={prStatusLabel(item.status)} tone={item.status === "In Approval" && item.currentStep === "Final Approval" ? "violet" : undefined} />{item.erpPoRef ? <small className="muted mono">{item.erpPoRef}</small> : null}</td><td><button className="pg-doclink mono" type="button" onClick={() => setDetailId(item.id)}>{item.number}</button><small className="muted">{item.priority}</small></td><td><div className="cell-primary"><strong>{item.projectNumber}</strong><span>{item.projectName} <LocalizedText text={"·"} /> {item.bomNumber}</span>{item.unitLabel ? <span className="muted">{item.unitLabel}</span> : null}</div></td><td>{item.requestedByName}</td><td>{date(item.requiredDate)}</td><td className="num">{item.lineCount}{mix ? <small className="muted">{mix}</small> : null}</td><td className="num"><strong>{money(item.amount)}</strong><small className="muted"><LocalizedText text={"Budget"} /> {money(item.estimateAmount)}</small></td><td><ErpCell erp={item.erp} status={item.status} /></td><td>{item.currentStep || "—"}<small className="muted">{item.currentApproverName || item.currentApproverRole || ""}</small></td></tr>;
-        })}</tbody></table></div> : endpoint.loading ? <Loading /> : <EmptyState icon="package" title="No purchase requisition found" message="Release a BOM, then create a requisition for its shortage lines" />}
-      </Panel>
-      </>}
-      {detailId ? <PrDetailModal id={detailId} bootstrap={bootstrap} notify={notify} onChanged={endpoint.reload} onEdit={(id) => { void openEditor(id); }} onClose={() => setDetailId(null)} /> : null}
-      {decision ? <CommentPrompt title={`${decision.decision}: ${decision.item.number}`} description={`${decision.item.currentStep || "Current approval step"} · ใส่เหตุผลเพื่อให้ audit trail ครบทุก approval rule`} confirmLabel={decision.decision} requireComment={decision.decision === "Reject"} busy={busyId === decision.item.id} error={actionError} onClose={() => { setDecision(null); setActionError(""); }} onConfirm={(comment) => { void decide(comment); }} /> : null}
-      {cancelItem ? <CommentPrompt title={`${uiText("Cancel PR")} ${cancelItem.number}`} description="PR ร่างนี้จะถูกยกเลิก และไม่นับเป็น PR ที่ค้างอยู่ของ BOM อีก" confirmLabel={uiText("Cancel PR")} busy={busyId === cancelItem.id} error={actionError} onClose={() => { setCancelItem(null); setActionError(""); }} onConfirm={(reason) => { void cancel(reason); }} /> : null}
+      <PageHeader
+        eyebrow="PROCURE TO PAY"
+        title={uiText("Purchase Requisitions")}
+        subtitle="ขอซื้อจาก BOM อนุมัติตามงบของ Module แล้วส่งเข้า ERP ให้ฝ่ายจัดซื้อเลือก Supplier และออก PO"
+        actions={
+          canRequest ? (
+            <button className="btn primary" type="button" data-guide="pr.new" onClick={() => setCreating(true)}>
+              <Icon name="plus" />
+              <LocalizedText text={"New PR"} />
+            </button>
+          ) : undefined
+        }
+      />
+      <Tabs
+        tabs={[
+          { id: "requests", label: "Purchase Requisitions", count: endpoint.data.length },
+          { id: "boms", label: "Bill of Materials" },
+          { id: "history", label: "PR ย้อนหลัง" },
+        ]}
+        active={tab}
+        onChange={setTab}
+      />
+      {tab === "boms" ? (
+        <ProductionBoms
+          bootstrap={bootstrap}
+          notify={notify}
+          embedded
+          onRequest={(from) => {
+            setStart(from);
+            setCreating(true);
+          }}
+        />
+      ) : tab === "history" ? (
+        <HistoricalPrPanel canImport={canRequest} notify={notify} />
+      ) : (
+        <>
+          <StatusSummary statuses={["Draft", "In Approval", "Approved", "Converted to PO", "Rejected"]} rows={searched} value={status} onChange={setStatus} label={prStatusLabel} />
+          <Toolbar>
+            <SearchInput link="q" value={search} onChange={setSearch} placeholder="Search PR, project, BOM or requester…" />
+            <RefreshButton loading={endpoint.loading} reload={endpoint.reload} />
+          </Toolbar>
+          {endpoint.error ? <LoadError message={endpoint.error} retry={endpoint.reload} /> : null}
+          <ActionError message={actionError} />
+          <Panel title={`${visible.length} requisitions`} subtitle={endpoint.loading ? "Loading from production API…" : "Live SQL Server data"} flush>
+            {visible.length ? (
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th className="pg-acts">
+                        <LocalizedText text={"Actions"} />
+                      </th>
+                      <th>
+                        <LocalizedText text={"Status"} />
+                      </th>
+                      <th>
+                        <LocalizedText text={"PR"} />
+                      </th>
+                      <th>
+                        <LocalizedText text={"Project / BOM"} />
+                      </th>
+                      <th>
+                        <LocalizedText text={"Requester"} />
+                      </th>
+                      <th>
+                        <LocalizedText text={"Required"} />
+                      </th>
+                      <th className="num">
+                        <LocalizedText text={"Lines"} />
+                      </th>
+                      <th className="num">
+                        <LocalizedText text={"Amount"} />
+                      </th>
+                      <th data-guide="pr.erp">ERP</th>
+                      <th>
+                        <LocalizedText text={"Current step"} />
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visible.map((item) => {
+                      // The server works it out for every held role: the person a step names (a department head needs no approve right), the
+                      // final approver at their own step or in place of a department head, a role holder, an Admin; their own PR only at the final step.
+                      const isCurrentApprover = item.canDecide;
+                      const isOwnDraft = canRequest && item.status === "Draft" && (item.requestedById === bootstrap.user.id || isAdmin);
+                      const mix = [
+                        item.substituteLines ? `${uiText(PR_KIND_LABEL.Substitute)} ${item.substituteLines}` : "",
+                        item.unplannedLines ? `${uiText(PR_KIND_LABEL.Unplanned)} ${item.unplannedLines}` : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" · ");
+                      return (
+                        <tr key={item.id}>
+                          <td className="pg-acts">
+                            <div className="table-actions">
+                              {isOwnDraft ? (
+                                <>
+                                  <RowAction
+                                    icon="edit"
+                                    label="Edit"
+                                    disabled={busyId === item.id}
+                                    onClick={() => {
+                                      void openEditor(item.id);
+                                    }}
+                                  />
+                                  <RowAction
+                                    icon="send"
+                                    label="Submit"
+                                    disabled={busyId === item.id}
+                                    onClick={() => {
+                                      void submit(item);
+                                    }}
+                                  />
+                                  <RowAction
+                                    icon="x"
+                                    label="Cancel PR"
+                                    danger
+                                    disabled={busyId === item.id}
+                                    onClick={() => {
+                                      setActionError("");
+                                      setCancelItem(item);
+                                    }}
+                                  />
+                                </>
+                              ) : null}
+                              {isCurrentApprover ? (
+                                <>
+                                  <RowAction icon="check" label="Approve" disabled={busyId === item.id} onClick={() => setDecision({ item, decision: "Approve" })} />
+                                  <RowAction icon="x" label="Reject" danger disabled={busyId === item.id} onClick={() => setDecision({ item, decision: "Reject" })} />
+                                </>
+                              ) : null}
+                              {item.status === "Approved" && !item.erp.prNo && item.requestedById === bootstrap.user.id ? (
+                                <RowAction icon="send" label="ส่งเข้า ERP" onClick={() => setDetailId(item.id)} />
+                              ) : null}
+                            </div>
+                          </td>
+                          <td>
+                            <StatusBadge status={item.status} label={prStatusLabel(item.status)} tone={item.status === "In Approval" && item.currentStep === "Final Approval" ? "violet" : undefined} />
+                            {item.erpPoRef ? <small className="muted mono">{item.erpPoRef}</small> : null}
+                          </td>
+                          <td>
+                            <button className="pg-doclink mono" type="button" onClick={() => setDetailId(item.id)}>
+                              {item.number}
+                            </button>
+                            <small className="muted">{item.priority}</small>
+                          </td>
+                          <td>
+                            <div className="cell-primary">
+                              <strong>{item.projectNumber}</strong>
+                              <span>
+                                {item.projectName} <LocalizedText text={"·"} /> {item.bomNumber}
+                              </span>
+                              {item.unitLabel ? <span className="muted">{item.unitLabel}</span> : null}
+                            </div>
+                          </td>
+                          <td>{item.requestedByName}</td>
+                          <td>{date(item.requiredDate)}</td>
+                          <td className="num">
+                            {item.lineCount}
+                            {mix ? <small className="muted">{mix}</small> : null}
+                          </td>
+                          <td className="num">
+                            <strong>{money(item.amount)}</strong>
+                            <small className="muted">
+                              <LocalizedText text={"Budget"} /> {money(item.estimateAmount)}
+                            </small>
+                          </td>
+                          <td>
+                            <ErpCell erp={item.erp} status={item.status} />
+                          </td>
+                          <td>
+                            {item.currentStep || "—"}
+                            <small className="muted">{item.currentApproverName || item.currentApproverRole || ""}</small>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : endpoint.loading ? (
+              <Loading />
+            ) : (
+              <EmptyState icon="package" title="No purchase requisition found" message="Release a BOM, then create a requisition for its shortage lines" />
+            )}
+          </Panel>
+        </>
+      )}
+      {detailId ? (
+        <PrDetailModal
+          id={detailId}
+          bootstrap={bootstrap}
+          notify={notify}
+          onChanged={endpoint.reload}
+          onEdit={(id) => {
+            void openEditor(id);
+          }}
+          onClose={() => setDetailId(null)}
+        />
+      ) : null}
+      {decision ? (
+        <CommentPrompt
+          title={`${decision.decision}: ${decision.item.number}`}
+          description={`${decision.item.currentStep || "Current approval step"} · ใส่เหตุผลเพื่อให้ audit trail ครบทุก approval rule`}
+          confirmLabel={decision.decision}
+          requireComment={decision.decision === "Reject"}
+          busy={busyId === decision.item.id}
+          error={actionError}
+          onClose={() => {
+            setDecision(null);
+            setActionError("");
+          }}
+          onConfirm={(comment) => {
+            void decide(comment);
+          }}
+        />
+      ) : null}
+      {cancelItem ? (
+        <CommentPrompt
+          title={`${uiText("Cancel PR")} ${cancelItem.number}`}
+          description="PR ร่างนี้จะถูกยกเลิก และไม่นับเป็น PR ที่ค้างอยู่ของ BOM อีก"
+          confirmLabel={uiText("Cancel PR")}
+          busy={busyId === cancelItem.id}
+          error={actionError}
+          onClose={() => {
+            setCancelItem(null);
+            setActionError("");
+          }}
+          onConfirm={(reason) => {
+            void cancel(reason);
+          }}
+        />
+      ) : null}
     </div>
   );
 }
@@ -908,10 +1744,27 @@ const ERP_TONE: Record<string, PgTone> = { QUOTES_PENDING: "soft", PENDING_MANAG
 /** Where the PR stands in the ERP: its ERP number (a link into the ERP) and status, or that it still has to be sent. */
 function ErpCell({ erp, status }: { erp: PurchaseRequisition["erp"]; status: string }) {
   // In the project's Request List there is no single ERP PR number: Purchasing raises PRs per supplier from its lines.
-  if (erp.target === "REQUEST_LIST") return <><span className="mono">Request List</span>{erp.error && status === "Approved" ? <StatusBadge status="" label="ถูกลบใน ERP" tone="danger" /> : <small className="muted">{erp.statusLabel ?? ""}</small>}</>;
+  if (erp.target === "REQUEST_LIST")
+    return (
+      <>
+        <span className="mono">Request List</span>
+        {erp.error && status === "Approved" ? <StatusBadge status="" label="ถูกลบใน ERP" tone="danger" /> : <small className="muted">{erp.statusLabel ?? ""}</small>}
+      </>
+    );
   // An error beside an ERP number is the ERP having deleted the PR: the requester can take it back.
-  if (erp.prNo) return <>{erp.url ? <a className="mono" href={erp.url} target="_blank" rel="noreferrer">{erp.prNo}</a> : <span className="mono">{erp.prNo}</span>}
-    {erp.error && status === "Approved" ? <StatusBadge status="" label="ถูกลบใน ERP" tone="danger" /> : <small className="muted">{erp.statusLabel ?? erp.status}</small>}</>;
+  if (erp.prNo)
+    return (
+      <>
+        {erp.url ? (
+          <a className="mono" href={erp.url} target="_blank" rel="noreferrer">
+            {erp.prNo}
+          </a>
+        ) : (
+          <span className="mono">{erp.prNo}</span>
+        )}
+        {erp.error && status === "Approved" ? <StatusBadge status="" label="ถูกลบใน ERP" tone="danger" /> : <small className="muted">{erp.statusLabel ?? erp.status}</small>}
+      </>
+    );
   if (status !== "Approved") return <span className="muted">—</span>;
   return erp.error ? <StatusBadge status="" label="ส่ง ERP ไม่สำเร็จ" tone="danger" /> : <StatusBadge status="" label="รอส่ง ERP" tone="warning" />;
 }
@@ -924,14 +1777,43 @@ function LineErp({ erp }: { erp: LineErpView | undefined }) {
   // No answer from the ERP for this line (its sheet is not uploaded yet, or was uploaded by hand): nothing is claimed.
   if (!erp?.status) return <span className="muted">—</span>;
   const status = erp.status;
-  return <><StatusBadge status="" label={LINE_ERP_LABEL[status] ?? erp.statusLabel ?? status} tone={LINE_ERP_TONE[status] ?? "neutral"} />
-    {erp.orders.map((order, index) => <small className="muted" key={index}>{[order.prNo ? `PR ${order.prNo}` : "", order.poNo ? `PO ${order.poNo}` : "", order.supplierName ?? "",
-      order.quantity === null ? "" : `× ${quantity(order.quantity)}`].filter(Boolean).join(" · ")}</small>)}
-    {erp.cancelledReason ? <small className="muted">{erp.cancelledReason}</small> : null}
-    {erp.url ? <small><a href={erp.url} target="_blank" rel="noreferrer">ERP</a></small> : null}</>;
+  return (
+    <>
+      <StatusBadge status="" label={LINE_ERP_LABEL[status] ?? erp.statusLabel ?? status} tone={LINE_ERP_TONE[status] ?? "neutral"} />
+      {erp.orders.map((order, index) => (
+        <small className="muted" key={index}>
+          {[order.prNo ? `PR ${order.prNo}` : "", order.poNo ? `PO ${order.poNo}` : "", order.supplierName ?? "", order.quantity === null ? "" : `× ${quantity(order.quantity)}`]
+            .filter(Boolean)
+            .join(" · ")}
+        </small>
+      ))}
+      {erp.cancelledReason ? <small className="muted">{erp.cancelledReason}</small> : null}
+      {erp.url ? (
+        <small>
+          <a href={erp.url} target="_blank" rel="noreferrer">
+            ERP
+          </a>
+        </small>
+      ) : null}
+    </>
+  );
 }
 
-function PrDetailModal({ id, bootstrap, notify, onChanged, onEdit, onClose }: { id: number; bootstrap: BootstrapData; notify: (message: string) => void; onChanged: () => void; onEdit: (id: number) => void; onClose: () => void }) {
+function PrDetailModal({
+  id,
+  bootstrap,
+  notify,
+  onChanged,
+  onEdit,
+  onClose,
+}: {
+  id: number;
+  bootstrap: BootstrapData;
+  notify: (message: string) => void;
+  onChanged: () => void;
+  onEdit: (id: number) => void;
+  onClose: () => void;
+}) {
   const t = useUiText();
   const endpoint = useEndpoint<PurchaseRequisitionDetail | null>(`/api/v1/purchase-requisitions/${id}`, null);
   const detail = endpoint.data;
@@ -944,7 +1826,8 @@ function PrDetailModal({ id, bootstrap, notify, onChanged, onEdit, onClose }: { 
   // The project's Request List: the request is in it already, or the server offers a sheet to upload instead of sending.
   const inRequestList = erp?.target === "REQUEST_LIST";
   const listMode = erp?.requestList ?? "off";
-  const canSend = Boolean(erp?.enabled && !erp.prNo && !inRequestList && listMode !== "excel") && detail?.purchaseRequisition.status === "Approved" && detail.purchaseRequisition.requestedBy === bootstrap.user.id;
+  const canSend =
+    Boolean(erp?.enabled && !erp.prNo && !inRequestList && listMode !== "excel") && detail?.purchaseRequisition.status === "Approved" && detail.purchaseRequisition.requestedBy === bootstrap.user.id;
   const [askDepartment, setAskDepartment] = useState(false);
   // After any refusal the department can be changed too: the ERP may have refused the one chosen when the PR was made.
   const wantDepartment = canSend && (askDepartment || !erp?.department || Boolean(erp?.error));
@@ -952,8 +1835,14 @@ function PrDetailModal({ id, bootstrap, notify, onChanged, onEdit, onClose }: { 
   const pr = detail?.purchaseRequisition;
   // An approved PR the ERP has not taken (refused, deleted there, or never sent) goes back to Draft or is cancelled by its requester;
   // the server asks the ERP first and refuses while the ERP still holds it.
-  const canTakeBack = Boolean(pr && erp && pr.status === "Approved" && (!erp.prNo || erp.error) && hasPermission(bootstrap, "procurement.request")
-    && (pr.requestedBy === bootstrap.user.id || bootstrap.user.roles.includes("Admin")));
+  const canTakeBack = Boolean(
+    pr &&
+    erp &&
+    pr.status === "Approved" &&
+    (!erp.prNo || erp.error) &&
+    hasPermission(bootstrap, "procurement.request") &&
+    (pr.requestedBy === bootstrap.user.id || bootstrap.user.roles.includes("Admin")),
+  );
   const [takeBack, setTakeBack] = useState<"withdraw" | "cancel" | null>(null);
   const [department, setDepartment] = useState("");
   const chosenDepartment = department || erp?.department || options.data?.suggestedDepartment || "";
@@ -974,32 +1863,54 @@ function PrDetailModal({ id, bootstrap, notify, onChanged, onEdit, onClose }: { 
     synced.current = true;
     void apiRequest<ErpSync>(`/api/v1/purchase-requisitions/${id}/erp-sync`, { method: "POST", body: "{}" })
       .then((result) => {
-        if (!result.synced) { setSyncNote(result.message ?? ""); return; }
-        if (listOpen ? !result.cached : result.erp.status !== erp.status || result.erp.poNo !== erp.poNo) { reload(); onChanged(); }
+        if (!result.synced) {
+          setSyncNote(result.message ?? "");
+          return;
+        }
+        if (listOpen ? !result.cached : result.erp.status !== erp.status || result.erp.poNo !== erp.poNo) {
+          reload();
+          onChanged();
+        }
       })
       .catch((syncError: unknown) => setSyncNote(toError(syncError)));
   }, [erp, id, reload, onChanged, prStatus]);
 
   const send = async () => {
-    setBusy(true); setError("");
+    setBusy(true);
+    setError("");
     try {
       const result = await apiRequest<ErpOutcome>(`/api/v1/purchase-requisitions/${id}/erp-send`, body({ department: chosenDepartment || undefined }));
-      if (result.sent) { notify(`${detail?.purchaseRequisition.number}: ${result.requestList ? "ERP Request List" : `ERP ${result.prNo}`}`); reload(); onChanged(); return; }
+      if (result.sent) {
+        notify(`${detail?.purchaseRequisition.number}: ${result.requestList ? "ERP Request List" : `ERP ${result.prNo}`}`);
+        reload();
+        onChanged();
+        return;
+      }
       if (result.kind === "department_required") setAskDepartment(true);
-      setError(result.kind === "signed_out" ? t("เข้าสู่ระบบด้วย TMT ID อีกครั้ง แล้วกดส่งเข้า ERP") : result.message ?? t("ส่ง ERP ไม่สำเร็จ"));
+      setError(result.kind === "signed_out" ? t("เข้าสู่ระบบด้วย TMT ID อีกครั้ง แล้วกดส่งเข้า ERP") : (result.message ?? t("ส่ง ERP ไม่สำเร็จ")));
       reload();
-    } catch (sendError) { setError(toError(sendError)); }
-    finally { setBusy(false); }
+    } catch (sendError) {
+      setError(toError(sendError));
+    } finally {
+      setBusy(false);
+    }
   };
   // "Refresh" on a request in the Request List: the same read, pressed by hand. Inside the 15 minutes it says so.
   const refresh = async () => {
-    setBusy(true); setError("");
+    setBusy(true);
+    setError("");
     try {
       const result = await apiRequest<ErpSync>(`/api/v1/purchase-requisitions/${id}/erp-sync`, { method: "POST", body: "{}" });
-      setSyncNote(!result.synced ? result.message ?? "" : result.cached ? t("อ่านสถานะจาก ERP ได้ทุก 15 นาที ตอนนี้แสดงผลล่าสุด") : "");
-      if (result.synced && !result.cached) { reload(); onChanged(); }
-    } catch (refreshError) { setSyncNote(toError(refreshError)); }
-    finally { setBusy(false); }
+      setSyncNote(!result.synced ? (result.message ?? "") : result.cached ? t("อ่านสถานะจาก ERP ได้ทุก 15 นาที ตอนนี้แสดงผลล่าสุด") : "");
+      if (result.synced && !result.cached) {
+        reload();
+        onChanged();
+      }
+    } catch (refreshError) {
+      setSyncNote(toError(refreshError));
+    } finally {
+      setBusy(false);
+    }
   };
   // The sheet for the ERP's Request List page: every line with its line_ref, in the layout of lib/request-list-sheet.ts.
   const hasLineRefs = lines.some((line) => line.erp?.lineRef);
@@ -1009,90 +1920,544 @@ function PrDetailModal({ id, bootstrap, notify, onChanged, onEdit, onClose }: { 
   const orderedOf = /(\d+)\/(\d+) ordered/.exec(erp?.statusLabel ?? "");
   const downloadSheet = () => {
     if (!detail || !pr) return;
-    exportXlsx(requestListSheetRows({ number: pr.number, projectNumber: pr.projectNumber ?? "", neededBy: String(pr.requiredDate).slice(0, 10), requester: pr.requestedByName ?? "" },
-      detail.lines.map((line) => ({ lineRef: line.erp?.lineRef ?? null, lineType: line.lineType, itemCode: line.itemCode, partNumber: line.partNumber, description: line.description, brand: line.brand,
-        quantity: line.quantity, unit: line.unit, unitPrice: line.unitPrice, module: line.module, remark: line.remark, outsource: line.sectionCode === "OUT", originalCode: line.original?.itemCode || line.original?.description || null,
-        material: line.material, treatment: line.treatment, detail: line.detail, needBy: line.needBy,
-        partOf: (() => { const parent = line.parentLineId ? detail.lines.find((item) => item.id === line.parentLineId) : undefined; return parent ? parent.partNumber || parent.itemCode || parent.description : null; })() }))),
-      `RequestList_${pr.number}.xlsx`, REQUEST_LIST_SHEET.sheetName, true);
+    exportXlsx(
+      requestListSheetRows(
+        { number: pr.number, projectNumber: pr.projectNumber ?? "", neededBy: String(pr.requiredDate).slice(0, 10), requester: pr.requestedByName ?? "" },
+        detail.lines.map((line) => ({
+          lineRef: line.erp?.lineRef ?? null,
+          lineType: line.lineType,
+          itemCode: line.itemCode,
+          partNumber: line.partNumber,
+          description: line.description,
+          brand: line.brand,
+          quantity: line.quantity,
+          unit: line.unit,
+          unitPrice: line.unitPrice,
+          module: line.module,
+          remark: line.remark,
+          outsource: line.sectionCode === "OUT",
+          originalCode: line.original?.itemCode || line.original?.description || null,
+          material: line.material,
+          treatment: line.treatment,
+          detail: line.detail,
+          needBy: line.needBy,
+          partOf: (() => {
+            const parent = line.parentLineId ? detail.lines.find((item) => item.id === line.parentLineId) : undefined;
+            return parent ? parent.partNumber || parent.itemCode || parent.description : null;
+          })(),
+        })),
+      ),
+      `RequestList_${pr.number}.xlsx`,
+      REQUEST_LIST_SHEET.sheetName,
+      true,
+    );
   };
   // Sheet mode: the requester says the sheet is in the ERP. The app cannot see that itself.
   const markUploaded = async () => {
-    setBusy(true); setError("");
-    try { await apiRequest(`/api/v1/purchase-requisitions/${id}/request-list-uploaded`, { method: "POST", body: "{}" }); notify(`${pr?.number}: ERP Request List`); reload(); onChanged(); }
-    catch (markError) { setError(toError(markError)); }
-    finally { setBusy(false); }
+    setBusy(true);
+    setError("");
+    try {
+      await apiRequest(`/api/v1/purchase-requisitions/${id}/request-list-uploaded`, { method: "POST", body: "{}" });
+      notify(`${pr?.number}: ERP Request List`);
+      reload();
+      onChanged();
+    } catch (markError) {
+      setError(toError(markError));
+    } finally {
+      setBusy(false);
+    }
   };
   const mayAct = Boolean(pr && (pr.requestedBy === bootstrap.user.id || bootstrap.user.roles.includes("Admin")) && hasPermission(bootstrap, "procurement.request"));
-  const sheetButton = hasLineRefs && listMode !== "off" ? <button className="btn ghost sm" type="button" data-guide="pr.request-list-excel" onClick={downloadSheet}><Icon name="download" /><LocalizedText text={"ดาวน์โหลด Excel สำหรับ Request List"} /></button> : null;
+  const sheetButton =
+    hasLineRefs && listMode !== "off" ? (
+      <button className="btn ghost sm" type="button" data-guide="pr.request-list-excel" onClick={downloadSheet}>
+        <Icon name="download" />
+        <LocalizedText text={"ดาวน์โหลด Excel สำหรับ Request List"} />
+      </button>
+    ) : null;
   const takeBackNow = async (reason: string) => {
     if (!takeBack || !pr) return;
-    setBusy(true); setError("");
+    setBusy(true);
+    setError("");
     try {
       await apiRequest(`/api/v1/purchase-requisitions/${id}/${takeBack}`, body({ rowVersion: pr.rowVersion, reason: reason || undefined }));
-      const action = takeBack; setTakeBack(null); onChanged();
-      if (action === "withdraw") { notify(`${pr.number}: ${t("กลับเป็นฉบับร่างแล้ว")}`); onEdit(id); }
-      else { notify(`${pr.number}: ${t("Cancelled")}`); onClose(); }
-    } catch (takeBackError) { setError(toError(takeBackError)); setTakeBack(null); reload(); onChanged(); }
-    finally { setBusy(false); }
+      const action = takeBack;
+      setTakeBack(null);
+      onChanged();
+      if (action === "withdraw") {
+        notify(`${pr.number}: ${t("กลับเป็นฉบับร่างแล้ว")}`);
+        onEdit(id);
+      } else {
+        notify(`${pr.number}: ${t("Cancelled")}`);
+        onClose();
+      }
+    } catch (takeBackError) {
+      setError(toError(takeBackError));
+      setTakeBack(null);
+      reload();
+      onChanged();
+    } finally {
+      setBusy(false);
+    }
   };
   const showDepartment = wantDepartment && Boolean(options.data?.departments.length);
   return (
     <>
-    <Modal title={detail?.purchaseRequisition.number || "Purchase requisition"} subtitle={detail ? `${detail.purchaseRequisition.priority} · Required ${date(detail.purchaseRequisition.requiredDate)}${erp?.prNo ? ` · ERP ${erp.prNo}` : ""}` : "Loading from production API…"} size="xl" onClose={onClose}
-      footer={<>{canTakeBack ? <span className="table-actions" data-guide="pr.takeback"><button className="btn ghost" type="button" disabled={busy} onClick={() => { setError(""); setTakeBack("withdraw"); }}><Icon name="arrowLeft" /><LocalizedText text={"ดึงกลับไปแก้"} /></button>
-        <button className="btn danger" type="button" disabled={busy} onClick={() => { setError(""); setTakeBack("cancel"); }}><Icon name="x" /><LocalizedText text={"Cancel PR"} /></button></span> : null}
-        <button className="btn ghost" type="button" onClick={onClose}><LocalizedText text={"Close"} /></button>{canSend ? <button className="btn primary" type="button" disabled={busy || (showDepartment && !chosenDepartment)} onClick={() => { void send(); }}><Icon name="send" />{busy ? <LocalizedText text={"กำลังส่ง…"} /> : <LocalizedText text={"ส่งเข้า ERP"} />}</button> : null}</>}>
-      {endpoint.error ? <LoadError message={endpoint.error} retry={endpoint.reload} /> : null}
-      <ActionError message={error} />
-      {endpoint.loading && !detail ? <Loading /> : detail && erp ? <>
-        {inRequestList ? <div className={`info-strip ${detail.purchaseRequisition.status === "Converted to PO" ? "green" : detail.purchaseRequisition.status === "Rejected" ? "red" : ""}`} data-guide="pr.request-list"><Icon name="truck" />
-          <span><strong><LocalizedText text={"อยู่ใน Request List ของโครงการใน ERP"} /></strong>{orderedOf ? <> · <LocalizedText text={"สั่งซื้อแล้ว"} /> {orderedOf[1]}/{orderedOf[2]}</> : null}
-            {erp.cancelPending ? <> · <strong><LocalizedText text={"ขอยกเลิกแล้ว รอฝ่ายจัดซื้อยกเลิกใน ERP"} /></strong></> : null}{erp.error ? <> · <strong>{erp.error}</strong></> : null}</span>
-          <span className="spacer" /><small className="muted">{syncNote || (erp.syncedAt ? `${t("อัปเดตจาก ERP")} ${dateTime(erp.syncedAt)}` : "")}</small>{sheetButton}
-          {listMode === "tool" && detail.purchaseRequisition.status === "Approved" && erp.enabled ? <button className="btn ghost sm" type="button" disabled={busy} onClick={() => { void refresh(); }}><Icon name="refresh" /><LocalizedText text={"รีเฟรชจาก ERP"} /></button> : null}</div>
-        : erp.prNo ? <div className={`info-strip ${erp.status === "CONVERTED" ? "green" : erp.status === "REJECTED" || erp.status === "CANCELLED" ? "red" : ""}`}><Icon name="truck" />
-          <span><strong>ERP {erp.url ? <a className="mono" href={erp.url} target="_blank" rel="noreferrer">{erp.prNo}</a> : erp.prNo}</strong> <StatusBadge status={erp.status ?? ""} label={erp.statusLabel ?? erp.status ?? ""} tone={ERP_TONE[erp.status ?? ""] ?? "soft"} />
-            {erp.poNo ? <> · PO <strong className="mono">{erp.poNo}</strong></> : null}{erp.rejectionReason ? <> · {erp.rejectionReason}</> : null}{erp.error ? <> · <strong>{erp.error}</strong></> : null}</span>
-          <span className="spacer" /><small className="muted">{syncNote || (erp.syncedAt ? `${t("อัปเดตจาก ERP")} ${dateTime(erp.syncedAt)}` : "")}</small></div>
-          : listMode === "excel" && detail.purchaseRequisition.status === "Approved" ? <div className="info-strip amber" data-guide="pr.request-list"><Icon name="alertTriangle" />
-            <span><strong><LocalizedText text={"อนุมัติแล้ว ดาวน์โหลด Excel แล้วอัปโหลดเข้า Request List ของโครงการใน ERP"} /></strong></span><span className="spacer" />{sheetButton}
-            {mayAct && hasLineRefs ? <button className="btn ghost sm" type="button" disabled={busy} onClick={() => { void markUploaded(); }}><Icon name="check" /><LocalizedText text={"อัปโหลดเข้า ERP แล้ว"} /></button> : null}</div>
-          : detail.purchaseRequisition.status === "Approved" && erp.enabled ? <div className={`info-strip ${erp.error ? "red" : "amber"}`}><Icon name="alertTriangle" />
-            <span><strong><LocalizedText text={"ยังไม่ได้ส่งเข้า ERP"} /></strong> {erp.error ?? (canSend ? t("กดส่งเข้า ERP เพื่อให้ฝ่ายจัดซื้อออก PO") : t("รอผู้ขอซื้อส่งเข้า ERP"))}</span>
-            {showDepartment ? <><span className="spacer" /><select value={chosenDepartment} onChange={(event) => setDepartment(event.target.value)} aria-label={t("แผนกใน ERP")}>
-              <option value="">{t("แผนกใน ERP")}</option>{(options.data?.departments ?? []).map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></> : null}</div> : null}
-        {detail.unit ? (() => { const left = detail.unit.budget - detail.unit.requestedElsewhere - detail.unit.thisRequest; return <div className={`info-strip ${left < 0 ? "red" : ""}`} data-guide="pr.unit-budget"><Icon name="layers" />
-          <span><strong>Unit {detail.unit.discipline} · {[detail.unit.drawingNo, detail.unit.unitName].filter(Boolean).join(" ")}</strong> <small className="muted">{detail.unit.module}</small>
-            {" · "}<LocalizedText text={"งบของ Unit"} /> {money(detail.unit.budget)} · <LocalizedText text={"PR ก่อนหน้า"} /> {money(detail.unit.requestedElsewhere)} · <LocalizedText text={"PR นี้"} /> {money(detail.unit.thisRequest)}
-            {" · "}<LocalizedText text={"คงเหลือ"} /> <strong>{money(left)}</strong></span></div>; })() : null}
-        {detail.purchaseRequisition.overBudgetReason ? <div className="callout danger" role="status" data-guide="pr.over-reason"><Icon name="alertTriangle" />
-          <span><strong><LocalizedText text={"เกินงบ · เหตุผลของผู้ขอ"} /></strong>{detail.purchaseRequisition.overBudgetReason}</span></div> : null}
-        {detail.ruleFlags.length ? <div className="callout warning" role="status"><Icon name="alertTriangle" /><span><strong><LocalizedText text={"Approval rules triggered"} /></strong>{detail.ruleFlags.map((flag) => flag.text).join(" · ")}</span></div> : null}
-        {detail.modules.length ? <div className="table-wrap"><table><thead><tr><th><LocalizedText text={"Module"} /></th><th className="num"><LocalizedText text={"งบ Estimate"} /></th><th className="num"><LocalizedText text={"PR ก่อนหน้า"} /></th><th className="num"><LocalizedText text={"PR นี้"} /></th><th className="num"><LocalizedText text={"คงเหลือหลัง PR นี้"} /></th></tr></thead>
-          <tbody>{detail.modules.map((module) => { const left = module.budget - module.requestedElsewhere - module.thisRequest; return <tr key={module.module}><td><strong>{module.module}</strong></td><td className="num">{money(module.budget)}</td><td className="num">{money(module.requestedElsewhere)}</td><td className="num">{money(module.thisRequest)}</td><td className="num">{left < 0 ? <Badge tone="red">{money(left)}</Badge> : money(left)}</td></tr>; })}</tbody></table></div> : null}
-        <Panel title={`${detail.lines.length} lines`} subtitle="ประเภท ตรงแผน / ทดแทน / นอกแผน และ Module ที่ใช้งบ" flush><div className="table-wrap"><table><thead><tr><th><LocalizedText text={"ประเภท"} /></th><th><LocalizedText text={"Item"} /></th><th><LocalizedText text={"Description"} /></th><th><LocalizedText text={"Module"} /></th><th className="num"><LocalizedText text={"Qty"} /></th><th className="num"><LocalizedText text={"ราคาประมาณ"} /></th><th className="num"><LocalizedText text={"Total"} /></th><th className="num"><LocalizedText text={"Estimate"} /></th>{hasLineAnswers ? <th><LocalizedText text={"สถานะใน ERP"} /></th> : null}</tr></thead><tbody>{shown.map((line) => { const partOf = line.parentLineId ? lines.find((item) => item.id === line.parentLineId) : undefined;
-          return <tr key={line.id} className={partOf ? "pr-part" : undefined}>
-          <td><Badge tone={PR_KIND_TONE[line.lineType]}>{t(PR_KIND_LABEL[line.lineType])}</Badge>{line.lineType === "Substitute" && line.original ? <small className="muted"><LocalizedText text={"แทน"} /> {line.original.itemCode || line.original.description} × {quantity(line.coveredQuantity)} {line.original.unit}</small> : null}</td>
-          <td><strong className="mono">{line.itemCode || line.partNumber || "—"}</strong><small className="muted">{[line.partNumber, line.brand].filter(Boolean).join(" · ")}</small>
-            {partOf ? <small className="pr-part-of"><LocalizedText text={"ส่วนของ"} /> {partOf.partNumber || partOf.itemCode || partOf.description}</small> : null}</td>
-          <td>{line.description}
-            {/* What the PR-Form says of it: material, treatment, detail, per set, need-by date, and its drawing or quotation. */}
-            {line.material || line.treatment || line.detail || line.quantityPerSet || line.needBy ? <small className="muted">{[line.material ? `${t("วัสดุ")} ${line.material}` : "",
-              line.treatment ? `${t("การชุบ/ผิว")} ${line.treatment}` : "", line.detail ? `${t("รายละเอียดเพิ่ม")} ${line.detail}` : "", line.quantityPerSet ? `${quantity(line.quantityPerSet)} / set` : "",
-              line.needBy ? `${t("ต้องการภายใน")} ${date(line.needBy)}` : ""].filter(Boolean).join(" · ")}</small> : null}
-            {line.attachmentUrl ? <small><a href={line.attachmentUrl} target="_blank" rel="noopener noreferrer"><Icon name="externalLink" /> <LocalizedText text={"Link แบบ/ใบเสนอราคา"} /></a></small> : null}
-            {line.remark ? <small className="muted">{line.remark}</small> : null}</td><td>{line.module}</td>
-          <td className="num">{quantity(line.quantity)} {line.unit}</td><td className="num">{money(line.unitPrice)}</td><td className="num"><strong>{money(line.lineTotal)}</strong></td><td className="num">{money(line.estimateTotal)}</td>
-          {hasLineAnswers ? <td className="pg-line-erp"><LineErp erp={line.erp} /></td> : null}
-        </tr>; })}</tbody></table></div>
-          {lines.length > PR_DETAIL_PAGE ? <Pagination page={currentPage} pageCount={pageCount} from={(currentPage - 1) * PR_DETAIL_PAGE + 1} to={Math.min(currentPage * PR_DETAIL_PAGE, lines.length)} total={lines.length} onPage={setPage} /> : null}</Panel>
-        <Panel title="Approval route" subtitle="อนุมัติตามลำดับในตาราง · หัวหน้าของ discipline ของ Unit (หรือแผนกของผู้ขอ) แล้วผู้อนุมัติขั้นสุดท้าย · แล้วส่งเข้า ERP" flush><div className="table-wrap"><table><thead><tr><th>#</th><th><LocalizedText text={"Step"} /></th><th><LocalizedText text={"Approver"} /></th><th><LocalizedText text={"Rule"} /></th><th><LocalizedText text={"Status"} /></th><th><LocalizedText text={"Decision"} /></th><th><LocalizedText text={"Comment"} /></th><th><LocalizedText text={"Acted"} /></th></tr></thead><tbody>{detail.steps.map((step) => <tr key={step.id}><td>{step.sequence}</td><td><strong>{step.name}</strong></td><td>{step.approverName || step.approverRole || "—"}</td><td>{step.ruleCode || "—"}</td><td><StatusBadge status={step.status} label={step.status === "Current" ? "In Approval" : step.status} /></td><td>{step.decision || "—"}</td><td>{step.comment || "—"}</td><td>{dateTime(step.actedAt)}</td></tr>)}</tbody></table></div></Panel>
-      </> : null}
-    </Modal>
-    {takeBack && pr ? <CommentPrompt title={`${t(takeBack === "withdraw" ? "ดึงกลับไปแก้" : "Cancel PR")} ${pr.number}`}
-      description={takeBack === "withdraw" ? "PR กลับเป็นฉบับร่าง แก้รายการแล้วส่งอนุมัติใหม่ได้ ระบบถาม ERP ก่อนว่าไม่มี PR ใบนี้" : "PR ถูกยกเลิก และคืนรายการ BOM ให้ขอซื้อใหม่ได้ ระบบถาม ERP ก่อนว่าไม่มี PR ใบนี้"}
-      confirmLabel={t(takeBack === "withdraw" ? "ดึงกลับไปแก้" : "Cancel PR")} busy={busy} error={error} onClose={() => setTakeBack(null)} onConfirm={(reason) => { void takeBackNow(reason); }} /> : null}
+      <Modal
+        title={detail?.purchaseRequisition.number || "Purchase requisition"}
+        subtitle={
+          detail ? `${detail.purchaseRequisition.priority} · Required ${date(detail.purchaseRequisition.requiredDate)}${erp?.prNo ? ` · ERP ${erp.prNo}` : ""}` : "Loading from production API…"
+        }
+        size="xl"
+        onClose={onClose}
+        footer={
+          <>
+            {canTakeBack ? (
+              <span className="table-actions" data-guide="pr.takeback">
+                <button
+                  className="btn ghost"
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    setError("");
+                    setTakeBack("withdraw");
+                  }}
+                >
+                  <Icon name="arrowLeft" />
+                  <LocalizedText text={"ดึงกลับไปแก้"} />
+                </button>
+                <button
+                  className="btn danger"
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    setError("");
+                    setTakeBack("cancel");
+                  }}
+                >
+                  <Icon name="x" />
+                  <LocalizedText text={"Cancel PR"} />
+                </button>
+              </span>
+            ) : null}
+            <button className="btn ghost" type="button" onClick={onClose}>
+              <LocalizedText text={"Close"} />
+            </button>
+            {canSend ? (
+              <button
+                className="btn primary"
+                type="button"
+                disabled={busy || (showDepartment && !chosenDepartment)}
+                onClick={() => {
+                  void send();
+                }}
+              >
+                <Icon name="send" />
+                {busy ? <LocalizedText text={"กำลังส่ง…"} /> : <LocalizedText text={"ส่งเข้า ERP"} />}
+              </button>
+            ) : null}
+          </>
+        }
+      >
+        {endpoint.error ? <LoadError message={endpoint.error} retry={endpoint.reload} /> : null}
+        <ActionError message={error} />
+        {endpoint.loading && !detail ? (
+          <Loading />
+        ) : detail && erp ? (
+          <>
+            {inRequestList ? (
+              <div
+                className={`info-strip ${detail.purchaseRequisition.status === "Converted to PO" ? "green" : detail.purchaseRequisition.status === "Rejected" ? "red" : ""}`}
+                data-guide="pr.request-list"
+              >
+                <Icon name="truck" />
+                <span>
+                  <strong>
+                    <LocalizedText text={"อยู่ใน Request List ของโครงการใน ERP"} />
+                  </strong>
+                  {orderedOf ? (
+                    <>
+                      {" "}
+                      · <LocalizedText text={"สั่งซื้อแล้ว"} /> {orderedOf[1]}/{orderedOf[2]}
+                    </>
+                  ) : null}
+                  {erp.cancelPending ? (
+                    <>
+                      {" "}
+                      ·{" "}
+                      <strong>
+                        <LocalizedText text={"ขอยกเลิกแล้ว รอฝ่ายจัดซื้อยกเลิกใน ERP"} />
+                      </strong>
+                    </>
+                  ) : null}
+                  {erp.error ? (
+                    <>
+                      {" "}
+                      · <strong>{erp.error}</strong>
+                    </>
+                  ) : null}
+                </span>
+                <span className="spacer" />
+                <small className="muted">{syncNote || (erp.syncedAt ? `${t("อัปเดตจาก ERP")} ${dateTime(erp.syncedAt)}` : "")}</small>
+                {sheetButton}
+                {listMode === "tool" && detail.purchaseRequisition.status === "Approved" && erp.enabled ? (
+                  <button
+                    className="btn ghost sm"
+                    type="button"
+                    disabled={busy}
+                    onClick={() => {
+                      void refresh();
+                    }}
+                  >
+                    <Icon name="refresh" />
+                    <LocalizedText text={"รีเฟรชจาก ERP"} />
+                  </button>
+                ) : null}
+              </div>
+            ) : erp.prNo ? (
+              <div className={`info-strip ${erp.status === "CONVERTED" ? "green" : erp.status === "REJECTED" || erp.status === "CANCELLED" ? "red" : ""}`}>
+                <Icon name="truck" />
+                <span>
+                  <strong>
+                    ERP{" "}
+                    {erp.url ? (
+                      <a className="mono" href={erp.url} target="_blank" rel="noreferrer">
+                        {erp.prNo}
+                      </a>
+                    ) : (
+                      erp.prNo
+                    )}
+                  </strong>{" "}
+                  <StatusBadge status={erp.status ?? ""} label={erp.statusLabel ?? erp.status ?? ""} tone={ERP_TONE[erp.status ?? ""] ?? "soft"} />
+                  {erp.poNo ? (
+                    <>
+                      {" "}
+                      · PO <strong className="mono">{erp.poNo}</strong>
+                    </>
+                  ) : null}
+                  {erp.rejectionReason ? <> · {erp.rejectionReason}</> : null}
+                  {erp.error ? (
+                    <>
+                      {" "}
+                      · <strong>{erp.error}</strong>
+                    </>
+                  ) : null}
+                </span>
+                <span className="spacer" />
+                <small className="muted">{syncNote || (erp.syncedAt ? `${t("อัปเดตจาก ERP")} ${dateTime(erp.syncedAt)}` : "")}</small>
+              </div>
+            ) : listMode === "excel" && detail.purchaseRequisition.status === "Approved" ? (
+              <div className="info-strip amber" data-guide="pr.request-list">
+                <Icon name="alertTriangle" />
+                <span>
+                  <strong>
+                    <LocalizedText text={"อนุมัติแล้ว ดาวน์โหลด Excel แล้วอัปโหลดเข้า Request List ของโครงการใน ERP"} />
+                  </strong>
+                </span>
+                <span className="spacer" />
+                {sheetButton}
+                {mayAct && hasLineRefs ? (
+                  <button
+                    className="btn ghost sm"
+                    type="button"
+                    disabled={busy}
+                    onClick={() => {
+                      void markUploaded();
+                    }}
+                  >
+                    <Icon name="check" />
+                    <LocalizedText text={"อัปโหลดเข้า ERP แล้ว"} />
+                  </button>
+                ) : null}
+              </div>
+            ) : detail.purchaseRequisition.status === "Approved" && erp.enabled ? (
+              <div className={`info-strip ${erp.error ? "red" : "amber"}`}>
+                <Icon name="alertTriangle" />
+                <span>
+                  <strong>
+                    <LocalizedText text={"ยังไม่ได้ส่งเข้า ERP"} />
+                  </strong>{" "}
+                  {erp.error ?? (canSend ? t("กดส่งเข้า ERP เพื่อให้ฝ่ายจัดซื้อออก PO") : t("รอผู้ขอซื้อส่งเข้า ERP"))}
+                </span>
+                {showDepartment ? (
+                  <>
+                    <span className="spacer" />
+                    <select value={chosenDepartment} onChange={(event) => setDepartment(event.target.value)} aria-label={t("แผนกใน ERP")}>
+                      <option value="">{t("แผนกใน ERP")}</option>
+                      {(options.data?.departments ?? []).map((item) => (
+                        <option key={item.value} value={item.value}>
+                          {item.label}
+                        </option>
+                      ))}
+                    </select>
+                  </>
+                ) : null}
+              </div>
+            ) : null}
+            {detail.unit
+              ? (() => {
+                  const left = detail.unit.budget - detail.unit.requestedElsewhere - detail.unit.thisRequest;
+                  return (
+                    <div className={`info-strip ${left < 0 ? "red" : ""}`} data-guide="pr.unit-budget">
+                      <Icon name="layers" />
+                      <span>
+                        <strong>
+                          Unit {detail.unit.discipline} · {[detail.unit.drawingNo, detail.unit.unitName].filter(Boolean).join(" ")}
+                        </strong>{" "}
+                        <small className="muted">{detail.unit.module}</small>
+                        {" · "}
+                        <LocalizedText text={"งบของ Unit"} /> {money(detail.unit.budget)} · <LocalizedText text={"PR ก่อนหน้า"} /> {money(detail.unit.requestedElsewhere)} ·{" "}
+                        <LocalizedText text={"PR นี้"} /> {money(detail.unit.thisRequest)}
+                        {" · "}
+                        <LocalizedText text={"คงเหลือ"} /> <strong>{money(left)}</strong>
+                      </span>
+                    </div>
+                  );
+                })()
+              : null}
+            {detail.purchaseRequisition.overBudgetReason ? (
+              <div className="callout danger" role="status" data-guide="pr.over-reason">
+                <Icon name="alertTriangle" />
+                <span>
+                  <strong>
+                    <LocalizedText text={"เกินงบ · เหตุผลของผู้ขอ"} />
+                  </strong>
+                  {detail.purchaseRequisition.overBudgetReason}
+                </span>
+              </div>
+            ) : null}
+            {detail.ruleFlags.length ? (
+              <div className="callout warning" role="status">
+                <Icon name="alertTriangle" />
+                <span>
+                  <strong>
+                    <LocalizedText text={"Approval rules triggered"} />
+                  </strong>
+                  {detail.ruleFlags.map((flag) => flag.text).join(" · ")}
+                </span>
+              </div>
+            ) : null}
+            {detail.modules.length ? (
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>
+                        <LocalizedText text={"Module"} />
+                      </th>
+                      <th className="num">
+                        <LocalizedText text={"งบ Estimate"} />
+                      </th>
+                      <th className="num">
+                        <LocalizedText text={"PR ก่อนหน้า"} />
+                      </th>
+                      <th className="num">
+                        <LocalizedText text={"PR นี้"} />
+                      </th>
+                      <th className="num">
+                        <LocalizedText text={"คงเหลือหลัง PR นี้"} />
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {detail.modules.map((module) => {
+                      const left = module.budget - module.requestedElsewhere - module.thisRequest;
+                      return (
+                        <tr key={module.module}>
+                          <td>
+                            <strong>{module.module}</strong>
+                          </td>
+                          <td className="num">{money(module.budget)}</td>
+                          <td className="num">{money(module.requestedElsewhere)}</td>
+                          <td className="num">{money(module.thisRequest)}</td>
+                          <td className="num">{left < 0 ? <Badge tone="red">{money(left)}</Badge> : money(left)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : null}
+            <Panel title={`${detail.lines.length} lines`} subtitle="ประเภท ตรงแผน / ทดแทน / นอกแผน และ Module ที่ใช้งบ" flush>
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>
+                        <LocalizedText text={"ประเภท"} />
+                      </th>
+                      <th>
+                        <LocalizedText text={"Item"} />
+                      </th>
+                      <th>
+                        <LocalizedText text={"Description"} />
+                      </th>
+                      <th>
+                        <LocalizedText text={"Module"} />
+                      </th>
+                      <th className="num">
+                        <LocalizedText text={"Qty"} />
+                      </th>
+                      <th className="num">
+                        <LocalizedText text={"ราคาประมาณ"} />
+                      </th>
+                      <th className="num">
+                        <LocalizedText text={"Total"} />
+                      </th>
+                      <th className="num">
+                        <LocalizedText text={"Estimate"} />
+                      </th>
+                      {hasLineAnswers ? (
+                        <th>
+                          <LocalizedText text={"สถานะใน ERP"} />
+                        </th>
+                      ) : null}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {shown.map((line) => {
+                      const partOf = line.parentLineId ? lines.find((item) => item.id === line.parentLineId) : undefined;
+                      return (
+                        <tr key={line.id} className={partOf ? "pr-part" : undefined}>
+                          <td>
+                            <Badge tone={PR_KIND_TONE[line.lineType]}>{t(PR_KIND_LABEL[line.lineType])}</Badge>
+                            {line.lineType === "Substitute" && line.original ? (
+                              <small className="muted">
+                                <LocalizedText text={"แทน"} /> {line.original.itemCode || line.original.description} × {quantity(line.coveredQuantity)} {line.original.unit}
+                              </small>
+                            ) : null}
+                          </td>
+                          <td>
+                            <strong className="mono">{line.itemCode || line.partNumber || "—"}</strong>
+                            <small className="muted">{[line.partNumber, line.brand].filter(Boolean).join(" · ")}</small>
+                            {partOf ? (
+                              <small className="pr-part-of">
+                                <LocalizedText text={"ส่วนของ"} /> {partOf.partNumber || partOf.itemCode || partOf.description}
+                              </small>
+                            ) : null}
+                          </td>
+                          <td>
+                            {line.description}
+                            {/* What the PR-Form says of it: material, treatment, detail, per set, need-by date, and its drawing or quotation. */}
+                            {line.material || line.treatment || line.detail || line.quantityPerSet || line.needBy ? (
+                              <small className="muted">
+                                {[
+                                  line.material ? `${t("วัสดุ")} ${line.material}` : "",
+                                  line.treatment ? `${t("การชุบ/ผิว")} ${line.treatment}` : "",
+                                  line.detail ? `${t("รายละเอียดเพิ่ม")} ${line.detail}` : "",
+                                  line.quantityPerSet ? `${quantity(line.quantityPerSet)} / set` : "",
+                                  line.needBy ? `${t("ต้องการภายใน")} ${date(line.needBy)}` : "",
+                                ]
+                                  .filter(Boolean)
+                                  .join(" · ")}
+                              </small>
+                            ) : null}
+                            {line.attachmentUrl ? (
+                              <small>
+                                <a href={line.attachmentUrl} target="_blank" rel="noopener noreferrer">
+                                  <Icon name="externalLink" /> <LocalizedText text={"Link แบบ/ใบเสนอราคา"} />
+                                </a>
+                              </small>
+                            ) : null}
+                            {line.remark ? <small className="muted">{line.remark}</small> : null}
+                          </td>
+                          <td>{line.module}</td>
+                          <td className="num">
+                            {quantity(line.quantity)} {line.unit}
+                          </td>
+                          <td className="num">{money(line.unitPrice)}</td>
+                          <td className="num">
+                            <strong>{money(line.lineTotal)}</strong>
+                          </td>
+                          <td className="num">{money(line.estimateTotal)}</td>
+                          {hasLineAnswers ? (
+                            <td className="pg-line-erp">
+                              <LineErp erp={line.erp} />
+                            </td>
+                          ) : null}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              {lines.length > PR_DETAIL_PAGE ? (
+                <Pagination
+                  page={currentPage}
+                  pageCount={pageCount}
+                  from={(currentPage - 1) * PR_DETAIL_PAGE + 1}
+                  to={Math.min(currentPage * PR_DETAIL_PAGE, lines.length)}
+                  total={lines.length}
+                  onPage={setPage}
+                />
+              ) : null}
+            </Panel>
+            <Panel title="Approval route" subtitle="อนุมัติตามลำดับในตาราง · หัวหน้าของ discipline ของ Unit (หรือแผนกของผู้ขอ) แล้วผู้อนุมัติขั้นสุดท้าย · แล้วส่งเข้า ERP" flush>
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>
+                        <LocalizedText text={"Step"} />
+                      </th>
+                      <th>
+                        <LocalizedText text={"Approver"} />
+                      </th>
+                      <th>
+                        <LocalizedText text={"Rule"} />
+                      </th>
+                      <th>
+                        <LocalizedText text={"Status"} />
+                      </th>
+                      <th>
+                        <LocalizedText text={"Decision"} />
+                      </th>
+                      <th>
+                        <LocalizedText text={"Comment"} />
+                      </th>
+                      <th>
+                        <LocalizedText text={"Acted"} />
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {detail.steps.map((step) => (
+                      <tr key={step.id}>
+                        <td>{step.sequence}</td>
+                        <td>
+                          <strong>{step.name}</strong>
+                        </td>
+                        <td>{step.approverName || step.approverRole || "—"}</td>
+                        <td>{step.ruleCode || "—"}</td>
+                        <td>
+                          <StatusBadge status={step.status} label={step.status === "Current" ? "In Approval" : step.status} />
+                        </td>
+                        <td>{step.decision || "—"}</td>
+                        <td>{step.comment || "—"}</td>
+                        <td>{dateTime(step.actedAt)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Panel>
+          </>
+        ) : null}
+      </Modal>
+      {takeBack && pr ? (
+        <CommentPrompt
+          title={`${t(takeBack === "withdraw" ? "ดึงกลับไปแก้" : "Cancel PR")} ${pr.number}`}
+          description={takeBack === "withdraw" ? "PR กลับเป็นฉบับร่าง แก้รายการแล้วส่งอนุมัติใหม่ได้ ระบบถาม ERP ก่อนว่าไม่มี PR ใบนี้" : "PR ถูกยกเลิก และคืนรายการ BOM ให้ขอซื้อใหม่ได้ ระบบถาม ERP ก่อนว่าไม่มี PR ใบนี้"}
+          confirmLabel={t(takeBack === "withdraw" ? "ดึงกลับไปแก้" : "Cancel PR")}
+          busy={busy}
+          error={error}
+          onClose={() => setTakeBack(null)}
+          onConfirm={(reason) => {
+            void takeBackNow(reason);
+          }}
+        />
+      ) : null}
     </>
   );
 }
@@ -1105,24 +2470,136 @@ export function ProductionPurchaseOrders({ bootstrap, notify }: MaterialScreenPr
   const [detailId, setDetailId] = useLinkedState("open", null, idLink, { remember: false });
   const [receiveId, setReceiveId] = useState<number | null>(null);
   const canReceive = hasPermission(bootstrap, "inventory.receive");
-  const visible = useMemo(() => endpoint.data.filter((item) => (scope === "All orders" || isOpenPurchaseOrder(item))
-    && (!search.trim() || contains(`${item.number} ${item.purchaseRequisitionNumber} ${item.projectNumber} ${item.supplierName}`, search))), [endpoint.data, scope, search]);
-  const totals = useMemo(() => ({
-    ordered: visible.reduce((sum, item) => sum + Number(item.value), 0),
-    open: visible.reduce((sum, item) => sum + Number(item.openValue), 0),
-    outstandingUnits: visible.reduce((sum, item) => sum + Math.max(0, Number(item.orderedQuantity) - Number(item.receivedQuantity)), 0),
-  }), [visible]);
+  const visible = useMemo(
+    () =>
+      endpoint.data.filter(
+        (item) =>
+          (scope === "All orders" || isOpenPurchaseOrder(item)) && (!search.trim() || contains(`${item.number} ${item.purchaseRequisitionNumber} ${item.projectNumber} ${item.supplierName}`, search)),
+      ),
+    [endpoint.data, scope, search],
+  );
+  const totals = useMemo(
+    () => ({
+      ordered: visible.reduce((sum, item) => sum + Number(item.value), 0),
+      open: visible.reduce((sum, item) => sum + Number(item.openValue), 0),
+      outstandingUnits: visible.reduce((sum, item) => sum + Math.max(0, Number(item.orderedQuantity) - Number(item.receivedQuantity)), 0),
+    }),
+    [visible],
+  );
   return (
     <>
       <PageHeader eyebrow="PROCURE TO PAY" title={uiText("Purchase Orders")} subtitle="PO สร้างจาก PR ที่อนุมัติแล้วเท่านั้น และยอดรับคำนวณจาก confirmed GRN" />
-      <div className="kpi-grid three"><KpiCard label="Ordered value" value={money(totals.ordered)} icon="truck" tone="blue" /><KpiCard label="Open commitment" value={money(totals.open)} icon="chart" tone="amber" /><KpiCard label="Outstanding units" value={quantity(totals.outstandingUnits)} icon="package" tone="violet" /></div>
-      <Toolbar><SearchInput link="q" value={search} onChange={setSearch} placeholder="Search PO, PR, project or supplier…" /><Select label="Scope" value={scope} onChange={setScope} options={["Open orders", "All orders"]} /><RefreshButton loading={endpoint.loading} reload={endpoint.reload} /></Toolbar>
+      <div className="kpi-grid three">
+        <KpiCard label="Ordered value" value={money(totals.ordered)} icon="truck" tone="blue" />
+        <KpiCard label="Open commitment" value={money(totals.open)} icon="chart" tone="amber" />
+        <KpiCard label="Outstanding units" value={quantity(totals.outstandingUnits)} icon="package" tone="violet" />
+      </div>
+      <Toolbar>
+        <SearchInput link="q" value={search} onChange={setSearch} placeholder="Search PO, PR, project or supplier…" />
+        <Select label="Scope" value={scope} onChange={setScope} options={["Open orders", "All orders"]} />
+        <RefreshButton loading={endpoint.loading} reload={endpoint.reload} />
+      </Toolbar>
       {endpoint.error ? <LoadError message={endpoint.error} retry={endpoint.reload} /> : null}
       <Panel title={`${visible.length} purchase orders`} subtitle={endpoint.loading ? "Loading from production API…" : "Live SQL Server data"} flush>
-        {visible.length ? <div className="table-wrap"><table><thead><tr><th><LocalizedText text={"PO"} /></th><th><LocalizedText text={"PR / project"} /></th><th><LocalizedText text={"Supplier"} /></th><th><LocalizedText text={"Order date"} /></th><th><LocalizedText text={"Expected"} /></th><th><LocalizedText text={"Qty"} /></th><th><LocalizedText text={"Received"} /></th><th><LocalizedText text={"Value"} /></th><th><LocalizedText text={"Open"} /></th><th><LocalizedText text={"Status"} /></th><th><LocalizedText text={"Actions"} /></th></tr></thead><tbody>{visible.map((item) => <tr key={item.id}><td><strong className="mono">{item.number}</strong></td><td><strong>{item.purchaseRequisitionNumber}</strong><small className="muted">{item.projectNumber}</small></td><td>{item.supplierName}</td><td>{date(item.orderDate)}</td><td>{date(item.expectedDate)}</td><td className="num">{quantity(item.orderedQuantity)}</td><td className="num">{quantity(item.receivedQuantity)}</td><td className="num">{money(item.value)}</td><td className="num"><strong>{money(item.openValue)}</strong></td><td><Badge>{item.status}</Badge></td><td><div className="table-actions"><button className="btn ghost sm" type="button" onClick={() => setDetailId(item.id)}><Icon name="eye" /><LocalizedText text={"View"} /></button>{canReceive && isOpenPurchaseOrder(item) ? <button className="btn primary sm" type="button" onClick={() => setReceiveId(item.id)}><Icon name="download" /><LocalizedText text={"Receive"} /></button> : null}</div></td></tr>)}</tbody></table></div> : endpoint.loading ? <Loading /> : <EmptyState icon="truck" title="No purchase order found" message="Approve a PR and convert it to a PO first" />}
+        {visible.length ? (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>
+                    <LocalizedText text={"PO"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"PR / project"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Supplier"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Order date"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Expected"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Qty"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Received"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Value"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Open"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Status"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Actions"} />
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {visible.map((item) => (
+                  <tr key={item.id}>
+                    <td>
+                      <strong className="mono">{item.number}</strong>
+                    </td>
+                    <td>
+                      <strong>{item.purchaseRequisitionNumber}</strong>
+                      <small className="muted">{item.projectNumber}</small>
+                    </td>
+                    <td>{item.supplierName}</td>
+                    <td>{date(item.orderDate)}</td>
+                    <td>{date(item.expectedDate)}</td>
+                    <td className="num">{quantity(item.orderedQuantity)}</td>
+                    <td className="num">{quantity(item.receivedQuantity)}</td>
+                    <td className="num">{money(item.value)}</td>
+                    <td className="num">
+                      <strong>{money(item.openValue)}</strong>
+                    </td>
+                    <td>
+                      <Badge>{item.status}</Badge>
+                    </td>
+                    <td>
+                      <div className="table-actions">
+                        <button className="btn ghost sm" type="button" onClick={() => setDetailId(item.id)}>
+                          <Icon name="eye" />
+                          <LocalizedText text={"View"} />
+                        </button>
+                        {canReceive && isOpenPurchaseOrder(item) ? (
+                          <button className="btn primary sm" type="button" onClick={() => setReceiveId(item.id)}>
+                            <Icon name="download" />
+                            <LocalizedText text={"Receive"} />
+                          </button>
+                        ) : null}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : endpoint.loading ? (
+          <Loading />
+        ) : (
+          <EmptyState icon="truck" title="No purchase order found" message="Approve a PR and convert it to a PO first" />
+        )}
       </Panel>
       {detailId ? <PoDetailModal id={detailId} onClose={() => setDetailId(null)} /> : null}
-      {receiveId ? <CreateGrnModal purchaseOrderId={receiveId} onClose={() => setReceiveId(null)} onCreated={(number) => { setReceiveId(null); notify(`${number} recorded as draft`); endpoint.reload(); }} /> : null}
+      {receiveId ? (
+        <CreateGrnModal
+          purchaseOrderId={receiveId}
+          onClose={() => setReceiveId(null)}
+          onCreated={(number) => {
+            setReceiveId(null);
+            notify(`${number} recorded as draft`);
+            endpoint.reload();
+          }}
+        />
+      ) : null}
     </>
   );
 }
@@ -1131,9 +2608,89 @@ function PoDetailModal({ id, onClose }: { id: number; onClose: () => void }) {
   const endpoint = useEndpoint<PurchaseOrderDetail | null>(`/api/v1/purchase-orders/${id}`, null);
   const detail = endpoint.data;
   return (
-    <Modal title={detail?.purchaseOrder.number || "Purchase order"} subtitle={detail ? `${detail.purchaseOrder.supplierName} · ${detail.purchaseOrder.projectNumber}` : "Loading from production API…"} size="xl" onClose={onClose} footer={<button className="btn ghost" type="button" onClick={onClose}><LocalizedText text={"Close"} /></button>}>
+    <Modal
+      title={detail?.purchaseOrder.number || "Purchase order"}
+      subtitle={detail ? `${detail.purchaseOrder.supplierName} · ${detail.purchaseOrder.projectNumber}` : "Loading from production API…"}
+      size="xl"
+      onClose={onClose}
+      footer={
+        <button className="btn ghost" type="button" onClick={onClose}>
+          <LocalizedText text={"Close"} />
+        </button>
+      }
+    >
       {endpoint.error ? <LoadError message={endpoint.error} retry={endpoint.reload} /> : null}
-      {endpoint.loading && !detail ? <Loading /> : detail ? <><div className="kpi-grid four"><KpiCard label="Lines" value={detail.lines.length} icon="package" tone="blue" /><KpiCard label="Ordered units" value={quantity(detail.lines.reduce((sum, line) => sum + Number(line.orderedQuantity), 0))} icon="truck" tone="violet" /><KpiCard label="Received units" value={quantity(detail.lines.reduce((sum, line) => sum + Number(line.previouslyReceived), 0))} icon="download" tone="green" /><KpiCard label="Outstanding units" value={quantity(detail.lines.reduce((sum, line) => sum + Number(line.outstandingQuantity), 0))} icon="clock" tone="amber" /></div><div className="table-wrap"><table><thead><tr><th><LocalizedText text={"Item"} /></th><th><LocalizedText text={"Description"} /></th><th><LocalizedText text={"Ordered"} /></th><th><LocalizedText text={"Previously received"} /></th><th><LocalizedText text={"Outstanding"} /></th><th><LocalizedText text={"Unit price"} /></th><th><LocalizedText text={"Line value"} /></th><th><LocalizedText text={"Default location"} /></th></tr></thead><tbody>{detail.lines.map((line) => <tr key={line.id}><td><strong className="mono">{line.itemCode}</strong><small className="muted">{line.partNumber}</small></td><td>{line.description}</td><td className="num">{quantity(line.orderedQuantity)} {line.unit}</td><td className="num">{quantity(line.previouslyReceived)}</td><td className="num">{Number(line.outstandingQuantity) > 0 ? <Badge tone="amber">{quantity(line.outstandingQuantity)}</Badge> : <Badge tone="green"><LocalizedText text={"Complete"} /></Badge>}</td><td className="num">{money(line.unitPrice)}</td><td className="num">{money(Number(line.orderedQuantity) * Number(line.unitPrice))}</td><td>{line.defaultLocation || "—"}</td></tr>)}</tbody></table></div></> : null}
+      {endpoint.loading && !detail ? (
+        <Loading />
+      ) : detail ? (
+        <>
+          <div className="kpi-grid four">
+            <KpiCard label="Lines" value={detail.lines.length} icon="package" tone="blue" />
+            <KpiCard label="Ordered units" value={quantity(detail.lines.reduce((sum, line) => sum + Number(line.orderedQuantity), 0))} icon="truck" tone="violet" />
+            <KpiCard label="Received units" value={quantity(detail.lines.reduce((sum, line) => sum + Number(line.previouslyReceived), 0))} icon="download" tone="green" />
+            <KpiCard label="Outstanding units" value={quantity(detail.lines.reduce((sum, line) => sum + Number(line.outstandingQuantity), 0))} icon="clock" tone="amber" />
+          </div>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>
+                    <LocalizedText text={"Item"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Description"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Ordered"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Previously received"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Outstanding"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Unit price"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Line value"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Default location"} />
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {detail.lines.map((line) => (
+                  <tr key={line.id}>
+                    <td>
+                      <strong className="mono">{line.itemCode}</strong>
+                      <small className="muted">{line.partNumber}</small>
+                    </td>
+                    <td>{line.description}</td>
+                    <td className="num">
+                      {quantity(line.orderedQuantity)} {line.unit}
+                    </td>
+                    <td className="num">{quantity(line.previouslyReceived)}</td>
+                    <td className="num">
+                      {Number(line.outstandingQuantity) > 0 ? (
+                        <Badge tone="amber">{quantity(line.outstandingQuantity)}</Badge>
+                      ) : (
+                        <Badge tone="green">
+                          <LocalizedText text={"Complete"} />
+                        </Badge>
+                      )}
+                    </td>
+                    <td className="num">{money(line.unitPrice)}</td>
+                    <td className="num">{money(Number(line.orderedQuantity) * Number(line.unitPrice))}</td>
+                    <td>{line.defaultLocation || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      ) : null}
     </Modal>
   );
 }
@@ -1174,47 +2731,236 @@ function CreateGrnModal({ purchaseOrderId, onClose, onCreated }: { purchaseOrder
     remark: "",
   });
   const draftFor = (line: PurchaseOrderDetail["lines"][number]) => lines[line.id] ?? defaultLine(line);
-  const updateLine = (line: PurchaseOrderDetail["lines"][number], patch: Partial<ReceiptLineDraft>) => setLines((current) => ({ ...current, [line.id]: { ...defaultLine(line), ...current[line.id], ...patch } }));
-  const selectedCount = endpoint.data?.lines.filter((line) => { const draft = draftFor(line); return draft.selected && draft.received > 0; }).length ?? 0;
-  const invalidSplit = endpoint.data?.lines.some((line) => { const draft = draftFor(line); return draft.selected && Math.abs(draft.accepted + draft.damaged + draft.rejected - draft.received) > 0.00001; }) ?? false;
+  const updateLine = (line: PurchaseOrderDetail["lines"][number], patch: Partial<ReceiptLineDraft>) =>
+    setLines((current) => ({ ...current, [line.id]: { ...defaultLine(line), ...current[line.id], ...patch } }));
+  const selectedCount =
+    endpoint.data?.lines.filter((line) => {
+      const draft = draftFor(line);
+      return draft.selected && draft.received > 0;
+    }).length ?? 0;
+  const invalidSplit =
+    endpoint.data?.lines.some((line) => {
+      const draft = draftFor(line);
+      return draft.selected && Math.abs(draft.accepted + draft.damaged + draft.rejected - draft.received) > 0.00001;
+    }) ?? false;
   const submit = async () => {
     if (!endpoint.data) return;
     const selectedLines = endpoint.data.lines.flatMap((line) => {
       const draft = draftFor(line);
       if (!draft.selected || draft.received <= 0) return [];
-      return [{
-        purchaseOrderLineId: line.id,
-        receivedQuantity: draft.received,
-        acceptedQuantity: draft.accepted,
-        damagedQuantity: draft.damaged,
-        rejectedQuantity: draft.rejected,
-        qcStatus: draft.qcStatus,
-        lotNumber: draft.lotNumber || undefined,
-        serialNumber: draft.serialNumber || undefined,
-        location: draft.location,
-        projectAllocationId: line.itemId ? endpoint.data?.purchaseOrder.projectId : null,
-        allowOverReceipt: draft.allowOverReceipt,
-        remark: draft.remark || undefined,
-      }];
+      return [
+        {
+          purchaseOrderLineId: line.id,
+          receivedQuantity: draft.received,
+          acceptedQuantity: draft.accepted,
+          damagedQuantity: draft.damaged,
+          rejectedQuantity: draft.rejected,
+          qcStatus: draft.qcStatus,
+          lotNumber: draft.lotNumber || undefined,
+          serialNumber: draft.serialNumber || undefined,
+          location: draft.location,
+          projectAllocationId: line.itemId ? endpoint.data?.purchaseOrder.projectId : null,
+          allowOverReceipt: draft.allowOverReceipt,
+          remark: draft.remark || undefined,
+        },
+      ];
     });
-    setBusy(true); setError("");
+    setBusy(true);
+    setError("");
     try {
       const created = await apiRequest<{ number: string }>("/api/v1/goods-receipts/", body({ purchaseOrderId, deliveryNote: deliveryNote || undefined, receivedDate, lines: selectedLines }));
       onCreated(created.number);
-    } catch (requestError) { setError(toError(requestError)); }
-    finally { setBusy(false); }
+    } catch (requestError) {
+      setError(toError(requestError));
+    } finally {
+      setBusy(false);
+    }
   };
   return (
-    <Modal title={`Receive ${endpoint.data?.purchaseOrder.number || "purchase order"}`} subtitle="บันทึกเป็น Draft ก่อน; stock ledger จะเปลี่ยนเมื่อกด Confirm GRN เท่านั้น" size="xl" onClose={onClose} footer={<><button className="btn ghost" type="button" onClick={onClose} disabled={busy}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || !selectedCount || invalidSplit} onClick={() => { void submit(); }}><Icon name="download" />{busy ? "Recording…" : `Record draft GRN (${selectedCount} lines)`}</button></>}>
+    <Modal
+      title={`Receive ${endpoint.data?.purchaseOrder.number || "purchase order"}`}
+      subtitle="บันทึกเป็น Draft ก่อน; stock ledger จะเปลี่ยนเมื่อกด Confirm GRN เท่านั้น"
+      size="xl"
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn ghost" type="button" onClick={onClose} disabled={busy}>
+            <LocalizedText text={"Cancel"} />
+          </button>
+          <button
+            className="btn primary"
+            type="button"
+            disabled={busy || !selectedCount || invalidSplit}
+            onClick={() => {
+              void submit();
+            }}
+          >
+            <Icon name="download" />
+            {busy ? "Recording…" : `Record draft GRN (${selectedCount} lines)`}
+          </button>
+        </>
+      }
+    >
       {endpoint.error ? <LoadError message={endpoint.error} retry={endpoint.reload} /> : null}
       <ActionError message={error} />
-      <div className="form-grid two"><Field label="Delivery note"><input maxLength={200} value={deliveryNote} onChange={(event) => setDeliveryNote(event.target.value)} placeholder={localizeCopy("Supplier delivery note")} /></Field><Field label="Received date"><DateInput value={receivedDate} onChange={(event) => setReceivedDate(event.target.value)} /></Field></div>
-      {invalidSplit ? <div className="callout warning" role="status"><Icon name="alertTriangle" /><span><strong><LocalizedText text={"Quantity split mismatch"} /></strong><LocalizedText text={"Accepted + damaged + rejected ต้องเท่ากับ received quantity ในทุกบรรทัด"} /></span></div> : null}
-      {endpoint.loading ? <Loading /> : endpoint.data?.lines.length ? <div className="table-wrap tall"><table><thead><tr><th><LocalizedText text={"Use"} /></th><th><LocalizedText text={"Item"} /></th><th><LocalizedText text={"Outstanding"} /></th><th><LocalizedText text={"Received"} /></th><th><LocalizedText text={"Accepted"} /></th><th><LocalizedText text={"Damaged"} /></th><th><LocalizedText text={"Rejected"} /></th><th><LocalizedText text={"Location"} /></th><th><LocalizedText text={"QC"} /></th><th><LocalizedText text={"Over"} /></th></tr></thead><tbody>{endpoint.data.lines.map((line) => {
-        const draft = draftFor(line);
-        const setReceived = (value: number) => updateLine(line, { received: value, accepted: value, damaged: 0, rejected: 0 });
-        return <tr key={line.id}><td><input type="checkbox" checked={draft.selected} disabled={Number(line.outstandingQuantity) <= 0} onChange={(event) => updateLine(line, { selected: event.target.checked })} aria-label={`Receive ${line.itemCode}`} /></td><td><strong className="mono">{line.itemCode}</strong><small className="muted">{line.description} <LocalizedText text={"·"} /> {line.unit}</small></td><td className="num">{quantity(line.outstandingQuantity)}</td><td><input style={{ width: 88 }} type="number" min="0" step="0.0001" disabled={!draft.selected} value={draft.received} onChange={(event) => setReceived(Number(event.target.value))} /></td><td><input style={{ width: 88 }} type="number" min="0" step="0.0001" disabled={!draft.selected} value={draft.accepted} onChange={(event) => updateLine(line, { accepted: Number(event.target.value) })} /></td><td><input style={{ width: 88 }} type="number" min="0" step="0.0001" disabled={!draft.selected} value={draft.damaged} onChange={(event) => updateLine(line, { damaged: Number(event.target.value) })} /></td><td><input style={{ width: 88 }} type="number" min="0" step="0.0001" disabled={!draft.selected} value={draft.rejected} onChange={(event) => updateLine(line, { rejected: Number(event.target.value) })} /></td><td><input style={{ width: 120 }} maxLength={100} disabled={!draft.selected} value={draft.location} onChange={(event) => updateLine(line, { location: event.target.value })} /></td><td><select disabled={!draft.selected} value={draft.qcStatus} onChange={(event) => updateLine(line, { qcStatus: event.target.value })}><option value={"Passed"}><LocalizedText text={"Passed"} /></option><option value={"Pending"}><LocalizedText text={"Pending"} /></option><option value={"Failed"}><LocalizedText text={"Failed"} /></option></select></td><td><input type="checkbox" checked={draft.allowOverReceipt} disabled={!draft.selected} onChange={(event) => updateLine(line, { allowOverReceipt: event.target.checked, remark: event.target.checked ? "Approved over-receipt from production workspace" : "" })} aria-label={`Allow over receipt for ${line.itemCode}`} /></td></tr>;
-      })}</tbody></table></div> : !endpoint.error ? <EmptyState icon="truck" title="No PO line" message="This purchase order has no receivable line" /> : null}
+      <div className="form-grid two">
+        <Field label="Delivery note">
+          <input maxLength={200} value={deliveryNote} onChange={(event) => setDeliveryNote(event.target.value)} placeholder={localizeCopy("Supplier delivery note")} />
+        </Field>
+        <Field label="Received date">
+          <DateInput value={receivedDate} onChange={(event) => setReceivedDate(event.target.value)} />
+        </Field>
+      </div>
+      {invalidSplit ? (
+        <div className="callout warning" role="status">
+          <Icon name="alertTriangle" />
+          <span>
+            <strong>
+              <LocalizedText text={"Quantity split mismatch"} />
+            </strong>
+            <LocalizedText text={"Accepted + damaged + rejected ต้องเท่ากับ received quantity ในทุกบรรทัด"} />
+          </span>
+        </div>
+      ) : null}
+      {endpoint.loading ? (
+        <Loading />
+      ) : endpoint.data?.lines.length ? (
+        <div className="table-wrap tall">
+          <table>
+            <thead>
+              <tr>
+                <th>
+                  <LocalizedText text={"Use"} />
+                </th>
+                <th>
+                  <LocalizedText text={"Item"} />
+                </th>
+                <th>
+                  <LocalizedText text={"Outstanding"} />
+                </th>
+                <th>
+                  <LocalizedText text={"Received"} />
+                </th>
+                <th>
+                  <LocalizedText text={"Accepted"} />
+                </th>
+                <th>
+                  <LocalizedText text={"Damaged"} />
+                </th>
+                <th>
+                  <LocalizedText text={"Rejected"} />
+                </th>
+                <th>
+                  <LocalizedText text={"Location"} />
+                </th>
+                <th>
+                  <LocalizedText text={"QC"} />
+                </th>
+                <th>
+                  <LocalizedText text={"Over"} />
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {endpoint.data.lines.map((line) => {
+                const draft = draftFor(line);
+                const setReceived = (value: number) => updateLine(line, { received: value, accepted: value, damaged: 0, rejected: 0 });
+                return (
+                  <tr key={line.id}>
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={draft.selected}
+                        disabled={Number(line.outstandingQuantity) <= 0}
+                        onChange={(event) => updateLine(line, { selected: event.target.checked })}
+                        aria-label={`Receive ${line.itemCode}`}
+                      />
+                    </td>
+                    <td>
+                      <strong className="mono">{line.itemCode}</strong>
+                      <small className="muted">
+                        {line.description} <LocalizedText text={"·"} /> {line.unit}
+                      </small>
+                    </td>
+                    <td className="num">{quantity(line.outstandingQuantity)}</td>
+                    <td>
+                      <input
+                        style={{ width: 88 }}
+                        type="number"
+                        min="0"
+                        step="0.0001"
+                        disabled={!draft.selected}
+                        value={draft.received}
+                        onChange={(event) => setReceived(Number(event.target.value))}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        style={{ width: 88 }}
+                        type="number"
+                        min="0"
+                        step="0.0001"
+                        disabled={!draft.selected}
+                        value={draft.accepted}
+                        onChange={(event) => updateLine(line, { accepted: Number(event.target.value) })}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        style={{ width: 88 }}
+                        type="number"
+                        min="0"
+                        step="0.0001"
+                        disabled={!draft.selected}
+                        value={draft.damaged}
+                        onChange={(event) => updateLine(line, { damaged: Number(event.target.value) })}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        style={{ width: 88 }}
+                        type="number"
+                        min="0"
+                        step="0.0001"
+                        disabled={!draft.selected}
+                        value={draft.rejected}
+                        onChange={(event) => updateLine(line, { rejected: Number(event.target.value) })}
+                      />
+                    </td>
+                    <td>
+                      <input style={{ width: 120 }} maxLength={100} disabled={!draft.selected} value={draft.location} onChange={(event) => updateLine(line, { location: event.target.value })} />
+                    </td>
+                    <td>
+                      <select disabled={!draft.selected} value={draft.qcStatus} onChange={(event) => updateLine(line, { qcStatus: event.target.value })}>
+                        <option value={"Passed"}>
+                          <LocalizedText text={"Passed"} />
+                        </option>
+                        <option value={"Pending"}>
+                          <LocalizedText text={"Pending"} />
+                        </option>
+                        <option value={"Failed"}>
+                          <LocalizedText text={"Failed"} />
+                        </option>
+                      </select>
+                    </td>
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={draft.allowOverReceipt}
+                        disabled={!draft.selected}
+                        onChange={(event) => updateLine(line, { allowOverReceipt: event.target.checked, remark: event.target.checked ? "Approved over-receipt from production workspace" : "" })}
+                        aria-label={`Allow over receipt for ${line.itemCode}`}
+                      />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : !endpoint.error ? (
+        <EmptyState icon="truck" title="No PO line" message="This purchase order has no receivable line" />
+      ) : null}
     </Modal>
   );
 }
@@ -1229,29 +2975,146 @@ export function ProductionGoodsReceiving({ bootstrap, notify }: MaterialScreenPr
   const [busyId, setBusyId] = useState<number | null>(null);
   const [actionError, setActionError] = useState("");
   const canReceive = hasPermission(bootstrap, "inventory.receive");
-  const visible = useMemo(() => endpoint.data.filter((item) => (status === "All status" || item.status === status)
-    && (!search.trim() || contains(`${item.number} ${item.purchaseOrderNumber} ${item.supplierName} ${item.deliveryNote}`, search))), [endpoint.data, search, status]);
+  const visible = useMemo(
+    () =>
+      endpoint.data.filter(
+        (item) => (status === "All status" || item.status === status) && (!search.trim() || contains(`${item.number} ${item.purchaseOrderNumber} ${item.supplierName} ${item.deliveryNote}`, search)),
+      ),
+    [endpoint.data, search, status],
+  );
   const confirm = async (comment: string) => {
     if (!confirmItem) return;
-    setBusyId(confirmItem.id); setActionError("");
+    setBusyId(confirmItem.id);
+    setActionError("");
     try {
-      const result = await apiRequest<{ status: string; accepted: number; quarantined: number }>(`/api/v1/goods-receipts/${confirmItem.id}/confirm`, body({ rowVersion: confirmItem.rowVersion, comment }));
+      const result = await apiRequest<{ status: string; accepted: number; quarantined: number }>(
+        `/api/v1/goods-receipts/${confirmItem.id}/confirm`,
+        body({ rowVersion: confirmItem.rowVersion, comment }),
+      );
       notify(`${confirmItem.number} confirmed · ${quantity(result.accepted)} accepted · ${quantity(result.quarantined)} quarantined`);
       setConfirmItem(null);
       endpoint.reload();
-    } catch (error) { setActionError(toError(error)); }
-    finally { setBusyId(null); }
+    } catch (error) {
+      setActionError(toError(error));
+    } finally {
+      setBusyId(null);
+    }
   };
   return (
     <>
       <PageHeader eyebrow="INBOUND MATERIAL" title={uiText("Goods Receiving")} subtitle="Draft GRN เก็บหลักฐานการรับ; Confirm จะ append stock / quarantine ledger แบบ idempotent" />
-      <Toolbar><SearchInput link="q" value={search} onChange={setSearch} placeholder="Search GRN, PO, supplier or delivery note…" /><Select label="Status" value={status} onChange={setStatus} options={["All status", "Draft", "Confirmed"]} /><RefreshButton loading={endpoint.loading} reload={endpoint.reload} /></Toolbar>
-      {endpoint.error ? <LoadError message={endpoint.error} retry={endpoint.reload} /> : null}<ActionError message={actionError} />
+      <Toolbar>
+        <SearchInput link="q" value={search} onChange={setSearch} placeholder="Search GRN, PO, supplier or delivery note…" />
+        <Select label="Status" value={status} onChange={setStatus} options={["All status", "Draft", "Confirmed"]} />
+        <RefreshButton loading={endpoint.loading} reload={endpoint.reload} />
+      </Toolbar>
+      {endpoint.error ? <LoadError message={endpoint.error} retry={endpoint.reload} /> : null}
+      <ActionError message={actionError} />
       <Panel title={`${visible.length} goods receipts`} subtitle={endpoint.loading ? "Loading from production API…" : "Live SQL Server data"} flush>
-        {visible.length ? <div className="table-wrap"><table><thead><tr><th>GRN</th><th><LocalizedText text={"PO"} /></th><th><LocalizedText text={"Supplier"} /></th><th><LocalizedText text={"Delivery note"} /></th><th><LocalizedText text={"Received date"} /></th><th><LocalizedText text={"Received"} /></th><th><LocalizedText text={"Accepted"} /></th><th><LocalizedText text={"Held"} /></th><th><LocalizedText text={"Received by"} /></th><th><LocalizedText text={"Status"} /></th><th><LocalizedText text={"Actions"} /></th></tr></thead><tbody>{visible.map((item) => <tr key={item.id}><td><strong className="mono">{item.number}</strong></td><td>{item.purchaseOrderNumber}</td><td>{item.supplierName}</td><td>{item.deliveryNote || "—"}</td><td>{date(item.receivedDate)}</td><td className="num">{quantity(item.receivedQuantity)}</td><td className="num">{quantity(item.acceptedQuantity)}</td><td className="num">{Number(item.heldQuantity) > 0 ? <Badge tone="amber">{quantity(item.heldQuantity)}</Badge> : "0"}</td><td>{item.receivedByName}<small className="muted">{item.confirmedByName ? `Confirmed by ${item.confirmedByName}` : ""}</small></td><td><Badge>{item.status}</Badge></td><td><div className="table-actions"><button className="btn ghost sm" type="button" onClick={() => setDetailId(item.id)}><Icon name="eye" /><LocalizedText text={"View"} /></button>{canReceive && item.status === "Draft" ? <button className="btn primary sm" type="button" disabled={busyId === item.id} onClick={() => { setActionError(""); setConfirmItem(item); }}><Icon name="check" /><LocalizedText text={"Confirm"} /></button> : null}</div></td></tr>)}</tbody></table></div> : endpoint.loading ? <Loading /> : <EmptyState icon="download" title="No goods receipt found" message="Open a purchase order and record the first delivery" />}
+        {visible.length ? (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>GRN</th>
+                  <th>
+                    <LocalizedText text={"PO"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Supplier"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Delivery note"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Received date"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Received"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Accepted"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Held"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Received by"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Status"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Actions"} />
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {visible.map((item) => (
+                  <tr key={item.id}>
+                    <td>
+                      <strong className="mono">{item.number}</strong>
+                    </td>
+                    <td>{item.purchaseOrderNumber}</td>
+                    <td>{item.supplierName}</td>
+                    <td>{item.deliveryNote || "—"}</td>
+                    <td>{date(item.receivedDate)}</td>
+                    <td className="num">{quantity(item.receivedQuantity)}</td>
+                    <td className="num">{quantity(item.acceptedQuantity)}</td>
+                    <td className="num">{Number(item.heldQuantity) > 0 ? <Badge tone="amber">{quantity(item.heldQuantity)}</Badge> : "0"}</td>
+                    <td>
+                      {item.receivedByName}
+                      <small className="muted">{item.confirmedByName ? `Confirmed by ${item.confirmedByName}` : ""}</small>
+                    </td>
+                    <td>
+                      <Badge>{item.status}</Badge>
+                    </td>
+                    <td>
+                      <div className="table-actions">
+                        <button className="btn ghost sm" type="button" onClick={() => setDetailId(item.id)}>
+                          <Icon name="eye" />
+                          <LocalizedText text={"View"} />
+                        </button>
+                        {canReceive && item.status === "Draft" ? (
+                          <button
+                            className="btn primary sm"
+                            type="button"
+                            disabled={busyId === item.id}
+                            onClick={() => {
+                              setActionError("");
+                              setConfirmItem(item);
+                            }}
+                          >
+                            <Icon name="check" />
+                            <LocalizedText text={"Confirm"} />
+                          </button>
+                        ) : null}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : endpoint.loading ? (
+          <Loading />
+        ) : (
+          <EmptyState icon="download" title="No goods receipt found" message="Open a purchase order and record the first delivery" />
+        )}
       </Panel>
       {detailId ? <GrnDetailModal id={detailId} onClose={() => setDetailId(null)} /> : null}
-      {confirmItem ? <CommentPrompt title={`Confirm ${confirmItem.number}`} description="Accepted quantity จะเข้า usable stock ส่วน damaged / rejected จะเข้า quarantine" confirmLabel="Confirm receipt" busy={busyId === confirmItem.id} onClose={() => setConfirmItem(null)} onConfirm={(comment) => { void confirm(comment); }} /> : null}
+      {confirmItem ? (
+        <CommentPrompt
+          title={`Confirm ${confirmItem.number}`}
+          description="Accepted quantity จะเข้า usable stock ส่วน damaged / rejected จะเข้า quarantine"
+          confirmLabel="Confirm receipt"
+          busy={busyId === confirmItem.id}
+          onClose={() => setConfirmItem(null)}
+          onConfirm={(comment) => {
+            void confirm(comment);
+          }}
+        />
+      ) : null}
     </>
   );
 }
@@ -1260,9 +3123,95 @@ function GrnDetailModal({ id, onClose }: { id: number; onClose: () => void }) {
   const endpoint = useEndpoint<GoodsReceiptDetail | null>(`/api/v1/goods-receipts/${id}`, null);
   const detail = endpoint.data;
   return (
-    <Modal title={detail?.goodsReceipt.number || "Goods receipt"} subtitle={detail ? `${detail.goodsReceipt.purchaseOrderNumber} · ${detail.goodsReceipt.supplierName}` : "Loading from production API…"} size="xl" onClose={onClose} footer={<button className="btn ghost" type="button" onClick={onClose}><LocalizedText text={"Close"} /></button>}>
+    <Modal
+      title={detail?.goodsReceipt.number || "Goods receipt"}
+      subtitle={detail ? `${detail.goodsReceipt.purchaseOrderNumber} · ${detail.goodsReceipt.supplierName}` : "Loading from production API…"}
+      size="xl"
+      onClose={onClose}
+      footer={
+        <button className="btn ghost" type="button" onClick={onClose}>
+          <LocalizedText text={"Close"} />
+        </button>
+      }
+    >
       {endpoint.error ? <LoadError message={endpoint.error} retry={endpoint.reload} /> : null}
-      {endpoint.loading && !detail ? <Loading /> : detail ? <><div className="kpi-grid four"><KpiCard label="Received" value={quantity(detail.lines.reduce((sum, line) => sum + Number(line.receivedQuantity), 0))} icon="download" tone="blue" /><KpiCard label="Accepted" value={quantity(detail.lines.reduce((sum, line) => sum + Number(line.acceptedQuantity), 0))} icon="checkCircle" tone="green" /><KpiCard label="Damaged" value={quantity(detail.lines.reduce((sum, line) => sum + Number(line.damagedQuantity), 0))} icon="alertTriangle" tone="amber" /><KpiCard label="Rejected" value={quantity(detail.lines.reduce((sum, line) => sum + Number(line.rejectedQuantity), 0))} icon="x" tone="red" /></div><div className="table-wrap"><table><thead><tr><th><LocalizedText text={"Item"} /></th><th><LocalizedText text={"Description"} /></th><th><LocalizedText text={"Ordered"} /></th><th><LocalizedText text={"Previously"} /></th><th><LocalizedText text={"Received"} /></th><th><LocalizedText text={"Accepted"} /></th><th><LocalizedText text={"Held"} /></th><th><LocalizedText text={"Location"} /></th><th><LocalizedText text={"QC"} /></th><th><LocalizedText text={"Lot / serial"} /></th><th><LocalizedText text={"Outstanding"} /></th></tr></thead><tbody>{detail.lines.map((line) => <tr key={line.id}><td><strong className="mono">{line.itemCode}</strong><small className="muted">{line.partNumber}</small></td><td>{line.description}</td><td className="num">{quantity(line.orderedQuantity)} {line.unit}</td><td className="num">{quantity(line.previouslyReceived)}</td><td className="num">{quantity(line.receivedQuantity)}</td><td className="num">{quantity(line.acceptedQuantity)}</td><td className="num">{quantity(Number(line.damagedQuantity) + Number(line.rejectedQuantity))}</td><td>{line.location}</td><td><Badge>{line.qcStatus}</Badge></td><td>{[line.lotNumber, line.serialNumber].filter(Boolean).join(" · ") || "—"}</td><td className="num">{quantity(line.outstandingAfter)}</td></tr>)}</tbody></table></div></> : null}
+      {endpoint.loading && !detail ? (
+        <Loading />
+      ) : detail ? (
+        <>
+          <div className="kpi-grid four">
+            <KpiCard label="Received" value={quantity(detail.lines.reduce((sum, line) => sum + Number(line.receivedQuantity), 0))} icon="download" tone="blue" />
+            <KpiCard label="Accepted" value={quantity(detail.lines.reduce((sum, line) => sum + Number(line.acceptedQuantity), 0))} icon="checkCircle" tone="green" />
+            <KpiCard label="Damaged" value={quantity(detail.lines.reduce((sum, line) => sum + Number(line.damagedQuantity), 0))} icon="alertTriangle" tone="amber" />
+            <KpiCard label="Rejected" value={quantity(detail.lines.reduce((sum, line) => sum + Number(line.rejectedQuantity), 0))} icon="x" tone="red" />
+          </div>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>
+                    <LocalizedText text={"Item"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Description"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Ordered"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Previously"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Received"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Accepted"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Held"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Location"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"QC"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Lot / serial"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Outstanding"} />
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {detail.lines.map((line) => (
+                  <tr key={line.id}>
+                    <td>
+                      <strong className="mono">{line.itemCode}</strong>
+                      <small className="muted">{line.partNumber}</small>
+                    </td>
+                    <td>{line.description}</td>
+                    <td className="num">
+                      {quantity(line.orderedQuantity)} {line.unit}
+                    </td>
+                    <td className="num">{quantity(line.previouslyReceived)}</td>
+                    <td className="num">{quantity(line.receivedQuantity)}</td>
+                    <td className="num">{quantity(line.acceptedQuantity)}</td>
+                    <td className="num">{quantity(Number(line.damagedQuantity) + Number(line.rejectedQuantity))}</td>
+                    <td>{line.location}</td>
+                    <td>
+                      <Badge>{line.qcStatus}</Badge>
+                    </td>
+                    <td>{[line.lotNumber, line.serialNumber].filter(Boolean).join(" · ") || "—"}</td>
+                    <td className="num">{quantity(line.outstandingAfter)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      ) : null}
     </Modal>
   );
 }
@@ -1282,11 +3231,17 @@ export function ProductionMaterialIssues({ bootstrap, notify }: MaterialScreenPr
   const canRequest = hasPermission(bootstrap, "procurement.request");
   const canApprove = hasPermission(bootstrap, "procurement.approve");
   const canIssue = hasPermission(bootstrap, "inventory.issue");
-  const visible = useMemo(() => endpoint.data.filter((item) => (status === "All status" || item.status === status)
-    && (!search.trim() || contains(`${item.number} ${item.projectNumber} ${item.projectName} ${item.requestedByName}`, search))), [endpoint.data, search, status]);
+  const visible = useMemo(
+    () =>
+      endpoint.data.filter(
+        (item) => (status === "All status" || item.status === status) && (!search.trim() || contains(`${item.number} ${item.projectNumber} ${item.projectName} ${item.requestedByName}`, search)),
+      ),
+    [endpoint.data, search, status],
+  );
   const runAction = async (comment: string) => {
     if (!action) return;
-    setBusyId(action.item.id); setActionError("");
+    setBusyId(action.item.id);
+    setActionError("");
     try {
       let result: { status: string };
       if (action.kind === "Approve" || action.kind === "Reject") {
@@ -1299,20 +3254,172 @@ export function ProductionMaterialIssues({ bootstrap, notify }: MaterialScreenPr
       notify(`${action.item.number}: ${result.status}`);
       setAction(null);
       endpoint.reload();
-    } catch (error) { setActionError(toError(error)); }
-    finally { setBusyId(null); }
+    } catch (error) {
+      setActionError(toError(error));
+    } finally {
+      setBusyId(null);
+    }
   };
   return (
     <>
-      <PageHeader eyebrow="OUTBOUND MATERIAL" title={uiText("Material Issues")} subtitle="MIR คุม chain of custody ตั้งแต่ request, approval, issue, receipt ถึง return" actions={canRequest ? <button className="btn primary" type="button" onClick={() => setCreateOpen(true)}><Icon name="plus" /><LocalizedText text={"New MIR"} /></button> : undefined} />
-      <Toolbar><SearchInput link="q" value={search} onChange={setSearch} placeholder="Search MIR, project or requester…" /><Select label="Status" value={status} onChange={setStatus} options={["All status", "Pending Approval", "Approved", "Picking", "Issued", "Received", "Rejected"]} /><RefreshButton loading={endpoint.loading} reload={endpoint.reload} /></Toolbar>
-      {endpoint.error ? <LoadError message={endpoint.error} retry={endpoint.reload} /> : null}<ActionError message={actionError} />
+      <PageHeader
+        eyebrow="OUTBOUND MATERIAL"
+        title={uiText("Material Issues")}
+        subtitle="MIR คุม chain of custody ตั้งแต่ request, approval, issue, receipt ถึง return"
+        actions={
+          canRequest ? (
+            <button className="btn primary" type="button" onClick={() => setCreateOpen(true)}>
+              <Icon name="plus" />
+              <LocalizedText text={"New MIR"} />
+            </button>
+          ) : undefined
+        }
+      />
+      <Toolbar>
+        <SearchInput link="q" value={search} onChange={setSearch} placeholder="Search MIR, project or requester…" />
+        <Select label="Status" value={status} onChange={setStatus} options={["All status", "Pending Approval", "Approved", "Picking", "Issued", "Received", "Rejected"]} />
+        <RefreshButton loading={endpoint.loading} reload={endpoint.reload} />
+      </Toolbar>
+      {endpoint.error ? <LoadError message={endpoint.error} retry={endpoint.reload} /> : null}
+      <ActionError message={actionError} />
       <Panel title={`${visible.length} material issue requests`} subtitle={endpoint.loading ? "Loading from production API…" : "Live SQL Server data"} flush>
-        {visible.length ? <div className="table-wrap"><table><thead><tr><th>MIR</th><th><LocalizedText text={"Project"} /></th><th><LocalizedText text={"Requester"} /></th><th><LocalizedText text={"Requested"} /></th><th><LocalizedText text={"Required"} /></th><th><LocalizedText text={"Lines"} /></th><th><LocalizedText text={"Qty requested"} /></th><th><LocalizedText text={"Issued"} /></th><th><LocalizedText text={"Returned"} /></th><th><LocalizedText text={"Status"} /></th><th><LocalizedText text={"Actions"} /></th></tr></thead><tbody>{visible.map((item) => <tr key={item.id}><td><strong className="mono">{item.number}</strong></td><td><div className="cell-primary"><strong>{item.projectNumber}</strong><span>{item.projectName}</span></div></td><td>{item.requestedByName}</td><td>{dateTime(item.requestedAt)}</td><td>{date(item.requiredDate)}</td><td className="num">{item.lineCount}</td><td className="num">{quantity(item.requestedQuantity)}</td><td className="num">{quantity(item.issuedQuantity)}</td><td className="num">{quantity(item.returnedQuantity)}</td><td><Badge>{item.status}</Badge></td><td><div className="table-actions"><button className="btn ghost sm" type="button" onClick={() => setDetailId(item.id)}><Icon name="eye" /><LocalizedText text={"View"} /></button>{canApprove && item.status === "Pending Approval" && item.requestedById !== bootstrap.user.id ? <><button className="btn success sm" type="button" disabled={busyId === item.id} onClick={() => setAction({ item, kind: "Approve" })}><Icon name="check" /><LocalizedText text={"Approve"} /></button><button className="btn danger sm" type="button" disabled={busyId === item.id} onClick={() => setAction({ item, kind: "Reject" })}><Icon name="x" /><LocalizedText text={"Reject"} /></button></> : null}{canIssue && ["Approved", "Picking"].includes(item.status) ? <button className="btn primary sm" type="button" disabled={busyId === item.id} onClick={() => setAction({ item, kind: "Issue" })}><Icon name="upload" /><LocalizedText text={"Issue"} /></button> : null}{canRequest && item.status === "Issued" && (item.requestedById === bootstrap.user.id || bootstrap.user.role === "Admin") ? <button className="btn primary sm" type="button" disabled={busyId === item.id} onClick={() => setAction({ item, kind: "Receipt" })}><Icon name="checkCircle" /><LocalizedText text={"Confirm receipt"} /></button> : null}</div></td></tr>)}</tbody></table></div> : endpoint.loading ? <Loading /> : <EmptyState icon="upload" title="No material issue request found" message="Release a BOM and create the first material issue request" />}
+        {visible.length ? (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>MIR</th>
+                  <th>
+                    <LocalizedText text={"Project"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Requester"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Requested"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Required"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Lines"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Qty requested"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Issued"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Returned"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Status"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Actions"} />
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {visible.map((item) => (
+                  <tr key={item.id}>
+                    <td>
+                      <strong className="mono">{item.number}</strong>
+                    </td>
+                    <td>
+                      <div className="cell-primary">
+                        <strong>{item.projectNumber}</strong>
+                        <span>{item.projectName}</span>
+                      </div>
+                    </td>
+                    <td>{item.requestedByName}</td>
+                    <td>{dateTime(item.requestedAt)}</td>
+                    <td>{date(item.requiredDate)}</td>
+                    <td className="num">{item.lineCount}</td>
+                    <td className="num">{quantity(item.requestedQuantity)}</td>
+                    <td className="num">{quantity(item.issuedQuantity)}</td>
+                    <td className="num">{quantity(item.returnedQuantity)}</td>
+                    <td>
+                      <Badge>{item.status}</Badge>
+                    </td>
+                    <td>
+                      <div className="table-actions">
+                        <button className="btn ghost sm" type="button" onClick={() => setDetailId(item.id)}>
+                          <Icon name="eye" />
+                          <LocalizedText text={"View"} />
+                        </button>
+                        {canApprove && item.status === "Pending Approval" && item.requestedById !== bootstrap.user.id ? (
+                          <>
+                            <button className="btn success sm" type="button" disabled={busyId === item.id} onClick={() => setAction({ item, kind: "Approve" })}>
+                              <Icon name="check" />
+                              <LocalizedText text={"Approve"} />
+                            </button>
+                            <button className="btn danger sm" type="button" disabled={busyId === item.id} onClick={() => setAction({ item, kind: "Reject" })}>
+                              <Icon name="x" />
+                              <LocalizedText text={"Reject"} />
+                            </button>
+                          </>
+                        ) : null}
+                        {canIssue && ["Approved", "Picking"].includes(item.status) ? (
+                          <button className="btn primary sm" type="button" disabled={busyId === item.id} onClick={() => setAction({ item, kind: "Issue" })}>
+                            <Icon name="upload" />
+                            <LocalizedText text={"Issue"} />
+                          </button>
+                        ) : null}
+                        {canRequest && item.status === "Issued" && (item.requestedById === bootstrap.user.id || bootstrap.user.roles.includes("Admin")) ? (
+                          <button className="btn primary sm" type="button" disabled={busyId === item.id} onClick={() => setAction({ item, kind: "Receipt" })}>
+                            <Icon name="checkCircle" />
+                            <LocalizedText text={"Confirm receipt"} />
+                          </button>
+                        ) : null}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : endpoint.loading ? (
+          <Loading />
+        ) : (
+          <EmptyState icon="upload" title="No material issue request found" message="Release a BOM and create the first material issue request" />
+        )}
       </Panel>
-      {createOpen ? <CreateMirModal onClose={() => setCreateOpen(false)} onCreated={(number) => { setCreateOpen(false); notify(`${number} requested`); endpoint.reload(); }} /> : null}
+      {createOpen ? (
+        <CreateMirModal
+          onClose={() => setCreateOpen(false)}
+          onCreated={(number) => {
+            setCreateOpen(false);
+            notify(`${number} requested`);
+            endpoint.reload();
+          }}
+        />
+      ) : null}
       {detailId ? <MirDetailModal id={detailId} bootstrap={bootstrap} notify={notify} onChanged={endpoint.reload} onClose={() => setDetailId(null)} /> : null}
-      {action ? <CommentPrompt title={`${action.kind}: ${action.item.number}`} description={action.kind === "Issue" ? "การ issue จะ debit stock ledger และ consume reservation ของ project" : action.kind === "Receipt" ? "ยืนยันว่าผู้ขอได้รับวัสดุจริงครบตาม MIR" : "ใส่เหตุผลเพื่อรองรับกรณีที่ระบบตรวจพบการขอเกินยอดคงเหลือของ BOM"} confirmLabel={action.kind === "Receipt" ? "Confirm receipt" : action.kind} requireComment={action.kind === "Reject"} busy={busyId === action.item.id} error={actionError} onClose={() => { setAction(null); setActionError(""); }} onConfirm={(comment) => { void runAction(comment); }} /> : null}
+      {action ? (
+        <CommentPrompt
+          title={`${action.kind}: ${action.item.number}`}
+          description={
+            action.kind === "Issue"
+              ? "การ issue จะ debit stock ledger และ consume reservation ของ project"
+              : action.kind === "Receipt"
+                ? "ยืนยันว่าผู้ขอได้รับวัสดุจริงครบตาม MIR"
+                : "ใส่เหตุผลเพื่อรองรับกรณีที่ระบบตรวจพบการขอเกินยอดคงเหลือของ BOM"
+          }
+          confirmLabel={action.kind === "Receipt" ? "Confirm receipt" : action.kind}
+          requireComment={action.kind === "Reject"}
+          busy={busyId === action.item.id}
+          error={actionError}
+          onClose={() => {
+            setAction(null);
+            setActionError("");
+          }}
+          onConfirm={(comment) => {
+            void runAction(comment);
+          }}
+        />
+      ) : null}
     </>
   );
 }
@@ -1331,32 +3438,188 @@ function CreateMirModal({ onClose, onCreated }: { onClose: () => void; onCreated
   const [lines, setLines] = useState<Record<number, MirLineDraft>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const defaultLine = (line: BomLine): MirLineDraft => ({ selected: false, requested: Math.max(0, Number(line.quantityRequired) - Number(line.customerSuppliedQuantity) - Number(line.netIssued)), location: "", purpose: "" });
+  const defaultLine = (line: BomLine): MirLineDraft => ({
+    selected: false,
+    requested: Math.max(0, Number(line.quantityRequired) - Number(line.customerSuppliedQuantity) - Number(line.netIssued)),
+    location: "",
+    purpose: "",
+  });
   const draftFor = (line: BomLine) => lines[line.id] ?? defaultLine(line);
   const updateLine = (line: BomLine, patch: Partial<MirLineDraft>) => setLines((current) => ({ ...current, [line.id]: { ...defaultLine(line), ...current[line.id], ...patch } }));
-  const selectedCount = workspace.data?.lines.filter((line) => { const draft = draftFor(line); return line.itemId !== null && !line.nonStock && draft.selected && draft.requested > 0; }).length ?? 0;
+  const selectedCount =
+    workspace.data?.lines.filter((line) => {
+      const draft = draftFor(line);
+      return line.itemId !== null && !line.nonStock && draft.selected && draft.requested > 0;
+    }).length ?? 0;
   const submit = async () => {
     if (!workspace.data) return;
     const selectedLines = workspace.data.lines.flatMap((line) => {
       const draft = draftFor(line);
-      return draft.selected && draft.requested > 0 ? [{ bomLineId: line.id, requestedQuantity: draft.requested, location: draft.location || undefined, purpose: draft.purpose || purpose || undefined }] : [];
+      return draft.selected && draft.requested > 0
+        ? [{ bomLineId: line.id, requestedQuantity: draft.requested, location: draft.location || undefined, purpose: draft.purpose || purpose || undefined }]
+        : [];
     });
-    setBusy(true); setError("");
+    setBusy(true);
+    setError("");
     try {
       const created = await apiRequest<{ number: string }>("/api/v1/material-issues/", body({ bomId: effectiveBomId, requiredDate, purpose: purpose || undefined, lines: selectedLines }));
       onCreated(created.number);
-    } catch (requestError) { setError(toError(requestError)); }
-    finally { setBusy(false); }
+    } catch (requestError) {
+      setError(toError(requestError));
+    } finally {
+      setBusy(false);
+    }
   };
   return (
-    <Modal title="New material issue request" subtitle="ขอเบิกได้เฉพาะ stock line ใน released BOM และไม่เกินยอดคงเหลือของ BOM" size="xl" onClose={onClose} footer={<><button className="btn ghost" type="button" onClick={onClose} disabled={busy}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || !selectedCount} onClick={() => { void submit(); }}><Icon name="send" />{busy ? "Requesting…" : `Request material (${selectedCount} lines)`}</button></>}>
-      {boms.error || workspace.error ? <LoadError message={boms.error || workspace.error} retry={() => { boms.reload(); workspace.reload(); }} /> : null}<ActionError message={error} />
-      <div className="form-grid two"><Field label="Released BOM"><select value={effectiveBomId} onChange={(event) => setBomId(Number(event.target.value))}><option value={0}><LocalizedText text={"Select BOM…"} /></option>{released.map((bom) => <option key={bom.id} value={bom.id}>{bom.number} <LocalizedText text={"·"} /> {bom.projectNumber} <LocalizedText text={"·"} /> {bom.projectName}</option>)}</select></Field><Field label="Required date"><DateInput value={requiredDate} onChange={(event) => setRequiredDate(event.target.value)} /></Field><Field label="Purpose" span={2}><input maxLength={500} value={purpose} onChange={(event) => setPurpose(event.target.value)} placeholder={localizeCopy("Installation, assembly, FAT, site work…")} /></Field></div>
-      {workspace.loading ? <Loading /> : workspace.data ? <div className="table-wrap tall"><table><thead><tr><th><LocalizedText text={"Use"} /></th><th><LocalizedText text={"Item"} /></th><th><LocalizedText text={"BOM qty"} /></th><th><LocalizedText text={"Previously issued"} /></th><th><LocalizedText text={"Remaining"} /></th><th><LocalizedText text={"On hand"} /></th><th><LocalizedText text={"Available"} /></th><th><LocalizedText text={"Request qty"} /></th><th><LocalizedText text={"Location override"} /></th></tr></thead><tbody>{workspace.data.lines.filter((line) => line.itemId !== null && !line.nonStock).map((line) => {
-        const draft = draftFor(line);
-        const remaining = Math.max(0, Number(line.quantityRequired) - Number(line.customerSuppliedQuantity) - Number(line.netIssued));
-        return <tr key={line.id}><td><input type="checkbox" checked={draft.selected} disabled={remaining <= 0} onChange={(event) => updateLine(line, { selected: event.target.checked })} aria-label={`Request ${line.itemCode}`} /></td><td><strong className="mono">{line.itemCode}</strong><small className="muted">{line.description} <LocalizedText text={"·"} /> {line.unit}</small></td><td className="num">{quantity(line.quantityRequired)}</td><td className="num">{quantity(line.netIssued)}</td><td className="num">{quantity(remaining)}</td><td className="num">{quantity(line.onHand)}</td><td className="num">{quantity(line.available)}</td><td><input style={{ width: 100 }} type="number" min="0" max={remaining} step="0.0001" disabled={!draft.selected} value={draft.requested} onChange={(event) => updateLine(line, { requested: Number(event.target.value) })} /></td><td><input style={{ width: 130 }} maxLength={100} disabled={!draft.selected} value={draft.location} onChange={(event) => updateLine(line, { location: event.target.value })} placeholder={localizeCopy("Use item default")} /></td></tr>;
-      })}</tbody></table></div> : !released.length && !boms.loading ? <EmptyState icon="layers" title="No released BOM" message="Release a BOM before requesting material" /> : null}
+    <Modal
+      title="New material issue request"
+      subtitle="ขอเบิกได้เฉพาะ stock line ใน released BOM และไม่เกินยอดคงเหลือของ BOM"
+      size="xl"
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn ghost" type="button" onClick={onClose} disabled={busy}>
+            <LocalizedText text={"Cancel"} />
+          </button>
+          <button
+            className="btn primary"
+            type="button"
+            disabled={busy || !selectedCount}
+            onClick={() => {
+              void submit();
+            }}
+          >
+            <Icon name="send" />
+            {busy ? "Requesting…" : `Request material (${selectedCount} lines)`}
+          </button>
+        </>
+      }
+    >
+      {boms.error || workspace.error ? (
+        <LoadError
+          message={boms.error || workspace.error}
+          retry={() => {
+            boms.reload();
+            workspace.reload();
+          }}
+        />
+      ) : null}
+      <ActionError message={error} />
+      <div className="form-grid two">
+        <Field label="Released BOM">
+          <select value={effectiveBomId} onChange={(event) => setBomId(Number(event.target.value))}>
+            <option value={0}>
+              <LocalizedText text={"Select BOM…"} />
+            </option>
+            {released.map((bom) => (
+              <option key={bom.id} value={bom.id}>
+                {bom.number} <LocalizedText text={"·"} /> {bom.projectNumber} <LocalizedText text={"·"} /> {bom.projectName}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Required date">
+          <DateInput value={requiredDate} onChange={(event) => setRequiredDate(event.target.value)} />
+        </Field>
+        <Field label="Purpose" span={2}>
+          <input maxLength={500} value={purpose} onChange={(event) => setPurpose(event.target.value)} placeholder={localizeCopy("Installation, assembly, FAT, site work…")} />
+        </Field>
+      </div>
+      {workspace.loading ? (
+        <Loading />
+      ) : workspace.data ? (
+        <div className="table-wrap tall">
+          <table>
+            <thead>
+              <tr>
+                <th>
+                  <LocalizedText text={"Use"} />
+                </th>
+                <th>
+                  <LocalizedText text={"Item"} />
+                </th>
+                <th>
+                  <LocalizedText text={"BOM qty"} />
+                </th>
+                <th>
+                  <LocalizedText text={"Previously issued"} />
+                </th>
+                <th>
+                  <LocalizedText text={"Remaining"} />
+                </th>
+                <th>
+                  <LocalizedText text={"On hand"} />
+                </th>
+                <th>
+                  <LocalizedText text={"Available"} />
+                </th>
+                <th>
+                  <LocalizedText text={"Request qty"} />
+                </th>
+                <th>
+                  <LocalizedText text={"Location override"} />
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {workspace.data.lines
+                .filter((line) => line.itemId !== null && !line.nonStock)
+                .map((line) => {
+                  const draft = draftFor(line);
+                  const remaining = Math.max(0, Number(line.quantityRequired) - Number(line.customerSuppliedQuantity) - Number(line.netIssued));
+                  return (
+                    <tr key={line.id}>
+                      <td>
+                        <input
+                          type="checkbox"
+                          checked={draft.selected}
+                          disabled={remaining <= 0}
+                          onChange={(event) => updateLine(line, { selected: event.target.checked })}
+                          aria-label={`Request ${line.itemCode}`}
+                        />
+                      </td>
+                      <td>
+                        <strong className="mono">{line.itemCode}</strong>
+                        <small className="muted">
+                          {line.description} <LocalizedText text={"·"} /> {line.unit}
+                        </small>
+                      </td>
+                      <td className="num">{quantity(line.quantityRequired)}</td>
+                      <td className="num">{quantity(line.netIssued)}</td>
+                      <td className="num">{quantity(remaining)}</td>
+                      <td className="num">{quantity(line.onHand)}</td>
+                      <td className="num">{quantity(line.available)}</td>
+                      <td>
+                        <input
+                          style={{ width: 100 }}
+                          type="number"
+                          min="0"
+                          max={remaining}
+                          step="0.0001"
+                          disabled={!draft.selected}
+                          value={draft.requested}
+                          onChange={(event) => updateLine(line, { requested: Number(event.target.value) })}
+                        />
+                      </td>
+                      <td>
+                        <input
+                          style={{ width: 130 }}
+                          maxLength={100}
+                          disabled={!draft.selected}
+                          value={draft.location}
+                          onChange={(event) => updateLine(line, { location: event.target.value })}
+                          placeholder={localizeCopy("Use item default")}
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
+            </tbody>
+          </table>
+        </div>
+      ) : !released.length && !boms.loading ? (
+        <EmptyState icon="layers" title="No released BOM" message="Release a BOM before requesting material" />
+      ) : null}
     </Modal>
   );
 }
@@ -1365,18 +3628,198 @@ function MirDetailModal({ id, bootstrap, notify, onChanged, onClose }: { id: num
   const endpoint = useEndpoint<MaterialIssueDetail | null>(`/api/v1/material-issues/${id}`, null);
   const [returnLine, setReturnLine] = useState<MaterialIssueDetail["lines"][number] | null>(null);
   const canReturn = hasPermission(bootstrap, "inventory.issue");
-  const changed = () => { endpoint.reload(); onChanged(); };
+  const changed = () => {
+    endpoint.reload();
+    onChanged();
+  };
   const detail = endpoint.data;
   return (
-    <Modal title={detail?.materialIssue.number || "Material issue"} subtitle={detail ? `${detail.materialIssue.projectNumber} · ${detail.materialIssue.projectName}` : "Loading from production API…"} size="xl" onClose={onClose} footer={<button className="btn ghost" type="button" onClick={onClose}><LocalizedText text={"Close"} /></button>}>
+    <Modal
+      title={detail?.materialIssue.number || "Material issue"}
+      subtitle={detail ? `${detail.materialIssue.projectNumber} · ${detail.materialIssue.projectName}` : "Loading from production API…"}
+      size="xl"
+      onClose={onClose}
+      footer={
+        <button className="btn ghost" type="button" onClick={onClose}>
+          <LocalizedText text={"Close"} />
+        </button>
+      }
+    >
       {endpoint.error ? <LoadError message={endpoint.error} retry={endpoint.reload} /> : null}
-      {endpoint.loading && !detail ? <Loading /> : detail ? <><div className="kpi-grid four"><KpiCard label="Requested" value={quantity(detail.lines.reduce((sum, line) => sum + Number(line.requestedQuantity), 0))} icon="send" tone="blue" /><KpiCard label="Issued" value={quantity(detail.lines.reduce((sum, line) => sum + Number(line.issuedQuantity), 0))} icon="upload" tone="violet" /><KpiCard label="Returned" value={quantity(detail.lines.reduce((sum, line) => sum + Number(line.returnedQuantity), 0))} icon="refresh" tone="green" /><KpiCard label="Net issued" value={quantity(detail.lines.reduce((sum, line) => sum + Number(line.netIssued), 0))} icon="database" tone="amber" /></div><div className="table-wrap"><table><thead><tr><th><LocalizedText text={"Item"} /></th><th><LocalizedText text={"Description"} /></th><th><LocalizedText text={"BOM qty"} /></th><th><LocalizedText text={"Previously"} /></th><th><LocalizedText text={"Requested"} /></th><th><LocalizedText text={"Issued"} /></th><th><LocalizedText text={"Returned"} /></th><th><LocalizedText text={"Net"} /></th><th><LocalizedText text={"On hand"} /></th><th><LocalizedText text={"Available"} /></th><th><LocalizedText text={"Location"} /></th><th><LocalizedText text={"Action"} /></th></tr></thead><tbody>{detail.lines.map((line) => <tr key={line.id}><td><strong className="mono">{line.itemCode}</strong><small className="muted">{line.partNumber}</small></td><td>{line.description}</td><td className="num">{quantity(line.bomQuantity)} {line.unit}</td><td className="num">{quantity(line.previouslyIssued)}</td><td className="num">{quantity(line.requestedQuantity)}</td><td className="num">{quantity(line.issuedQuantity)}</td><td className="num">{quantity(line.returnedQuantity)}</td><td className="num"><strong>{quantity(line.netIssued)}</strong></td><td className="num">{quantity(line.onHand)}</td><td className="num">{quantity(line.available)}</td><td>{line.location}</td><td>{canReturn && ["Issued", "Received"].includes(detail.materialIssue.status) && Number(line.netIssued) > 0 ? <button className="btn ghost sm" type="button" onClick={() => setReturnLine(line)}><Icon name="refresh" /><LocalizedText text={"Return"} /></button> : "—"}</td></tr>)}</tbody></table></div><Panel title="Chain of custody"><div className="settings-list"><div><span className="setting-icon blue"><Icon name="user" /></span><span><strong><LocalizedText text={"Requested by"} /> {detail.materialIssue.requestedByName}</strong><small>{dateTime(detail.materialIssue.requestedAt)} <LocalizedText text={"· required"} /> {date(detail.materialIssue.requiredDate)}</small></span><Badge>{detail.materialIssue.status}</Badge></div>{detail.materialIssue.approvedByName ? <div><span className="setting-icon green"><Icon name="checkCircle" /></span><span><strong><LocalizedText text={"Approved by"} /> {detail.materialIssue.approvedByName}</strong><small>{dateTime(detail.materialIssue.approvedAt)}</small></span></div> : null}{detail.materialIssue.issuedByName ? <div><span className="setting-icon violet"><Icon name="upload" /></span><span><strong><LocalizedText text={"Issued by"} /> {detail.materialIssue.issuedByName}</strong><small>{dateTime(detail.materialIssue.issuedAt)}</small></span></div> : null}{detail.materialIssue.receivedByName ? <div><span className="setting-icon green"><Icon name="check" /></span><span><strong><LocalizedText text={"Received by"} /> {detail.materialIssue.receivedByName}</strong><small>{dateTime(detail.materialIssue.receivedAt)}</small></span></div> : null}</div></Panel></> : null}
-      {returnLine ? <ReturnMaterialModal materialIssueId={id} line={returnLine} onClose={() => setReturnLine(null)} onReturned={(value) => { setReturnLine(null); notify(`${value} returned to stock`); changed(); }} /> : null}
+      {endpoint.loading && !detail ? (
+        <Loading />
+      ) : detail ? (
+        <>
+          <div className="kpi-grid four">
+            <KpiCard label="Requested" value={quantity(detail.lines.reduce((sum, line) => sum + Number(line.requestedQuantity), 0))} icon="send" tone="blue" />
+            <KpiCard label="Issued" value={quantity(detail.lines.reduce((sum, line) => sum + Number(line.issuedQuantity), 0))} icon="upload" tone="violet" />
+            <KpiCard label="Returned" value={quantity(detail.lines.reduce((sum, line) => sum + Number(line.returnedQuantity), 0))} icon="refresh" tone="green" />
+            <KpiCard label="Net issued" value={quantity(detail.lines.reduce((sum, line) => sum + Number(line.netIssued), 0))} icon="database" tone="amber" />
+          </div>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>
+                    <LocalizedText text={"Item"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Description"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"BOM qty"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Previously"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Requested"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Issued"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Returned"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Net"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"On hand"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Available"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Location"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Action"} />
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {detail.lines.map((line) => (
+                  <tr key={line.id}>
+                    <td>
+                      <strong className="mono">{line.itemCode}</strong>
+                      <small className="muted">{line.partNumber}</small>
+                    </td>
+                    <td>{line.description}</td>
+                    <td className="num">
+                      {quantity(line.bomQuantity)} {line.unit}
+                    </td>
+                    <td className="num">{quantity(line.previouslyIssued)}</td>
+                    <td className="num">{quantity(line.requestedQuantity)}</td>
+                    <td className="num">{quantity(line.issuedQuantity)}</td>
+                    <td className="num">{quantity(line.returnedQuantity)}</td>
+                    <td className="num">
+                      <strong>{quantity(line.netIssued)}</strong>
+                    </td>
+                    <td className="num">{quantity(line.onHand)}</td>
+                    <td className="num">{quantity(line.available)}</td>
+                    <td>{line.location}</td>
+                    <td>
+                      {canReturn && ["Issued", "Received"].includes(detail.materialIssue.status) && Number(line.netIssued) > 0 ? (
+                        <button className="btn ghost sm" type="button" onClick={() => setReturnLine(line)}>
+                          <Icon name="refresh" />
+                          <LocalizedText text={"Return"} />
+                        </button>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <Panel title="Chain of custody">
+            <div className="settings-list">
+              <div>
+                <span className="setting-icon blue">
+                  <Icon name="user" />
+                </span>
+                <span>
+                  <strong>
+                    <LocalizedText text={"Requested by"} /> {detail.materialIssue.requestedByName}
+                  </strong>
+                  <small>
+                    {dateTime(detail.materialIssue.requestedAt)} <LocalizedText text={"· required"} /> {date(detail.materialIssue.requiredDate)}
+                  </small>
+                </span>
+                <Badge>{detail.materialIssue.status}</Badge>
+              </div>
+              {detail.materialIssue.approvedByName ? (
+                <div>
+                  <span className="setting-icon green">
+                    <Icon name="checkCircle" />
+                  </span>
+                  <span>
+                    <strong>
+                      <LocalizedText text={"Approved by"} /> {detail.materialIssue.approvedByName}
+                    </strong>
+                    <small>{dateTime(detail.materialIssue.approvedAt)}</small>
+                  </span>
+                </div>
+              ) : null}
+              {detail.materialIssue.issuedByName ? (
+                <div>
+                  <span className="setting-icon violet">
+                    <Icon name="upload" />
+                  </span>
+                  <span>
+                    <strong>
+                      <LocalizedText text={"Issued by"} /> {detail.materialIssue.issuedByName}
+                    </strong>
+                    <small>{dateTime(detail.materialIssue.issuedAt)}</small>
+                  </span>
+                </div>
+              ) : null}
+              {detail.materialIssue.receivedByName ? (
+                <div>
+                  <span className="setting-icon green">
+                    <Icon name="check" />
+                  </span>
+                  <span>
+                    <strong>
+                      <LocalizedText text={"Received by"} /> {detail.materialIssue.receivedByName}
+                    </strong>
+                    <small>{dateTime(detail.materialIssue.receivedAt)}</small>
+                  </span>
+                </div>
+              ) : null}
+            </div>
+          </Panel>
+        </>
+      ) : null}
+      {returnLine ? (
+        <ReturnMaterialModal
+          materialIssueId={id}
+          line={returnLine}
+          onClose={() => setReturnLine(null)}
+          onReturned={(value) => {
+            setReturnLine(null);
+            notify(`${value} returned to stock`);
+            changed();
+          }}
+        />
+      ) : null}
     </Modal>
   );
 }
 
-function ReturnMaterialModal({ materialIssueId, line, onClose, onReturned }: { materialIssueId: number; line: MaterialIssueDetail["lines"][number]; onClose: () => void; onReturned: (message: string) => void }) {
+function ReturnMaterialModal({
+  materialIssueId,
+  line,
+  onClose,
+  onReturned,
+}: {
+  materialIssueId: number;
+  line: MaterialIssueDetail["lines"][number];
+  onClose: () => void;
+  onReturned: (message: string) => void;
+}) {
   const localizeCopy = useStaticCopy();
   const returnable = Math.max(0, Number(line.issuedQuantity) - Number(line.returnedQuantity));
   const [amount, setAmount] = useState(returnable);
@@ -1384,14 +3827,51 @@ function ReturnMaterialModal({ materialIssueId, line, onClose, onReturned }: { m
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const submit = async () => {
-    setBusy(true); setError("");
+    setBusy(true);
+    setError("");
     try {
       await apiRequest(`/api/v1/material-issues/${materialIssueId}/returns`, body({ lineId: line.id, quantity: amount, reason }));
       onReturned(`${quantity(amount)} ${line.unit} of ${line.itemCode}`);
-    } catch (requestError) { setError(toError(requestError)); }
-    finally { setBusy(false); }
+    } catch (requestError) {
+      setError(toError(requestError));
+    } finally {
+      setBusy(false);
+    }
   };
-  return <Modal title={`Return ${line.itemCode}`} subtitle={`${quantity(returnable)} ${line.unit} is currently returnable`} size="sm" onClose={onClose} footer={<><button className="btn ghost" type="button" onClick={onClose} disabled={busy}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || amount <= 0 || amount > returnable || !reason.trim()} onClick={() => { void submit(); }}><Icon name="refresh" />{busy ? "Returning…" : "Return to stock"}</button></>}><ActionError message={error} /><Field label="Return quantity"><input type="number" min="0.0001" max={returnable} step="0.0001" value={amount} onChange={(event) => setAmount(Number(event.target.value))} /></Field><Field label="Reason"><textarea rows={3} maxLength={20_000} value={reason} onChange={(event) => setReason(event.target.value)} placeholder={localizeCopy("Unused material, wrong part, project complete…")} /></Field></Modal>;
+  return (
+    <Modal
+      title={`Return ${line.itemCode}`}
+      subtitle={`${quantity(returnable)} ${line.unit} is currently returnable`}
+      size="sm"
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn ghost" type="button" onClick={onClose} disabled={busy}>
+            <LocalizedText text={"Cancel"} />
+          </button>
+          <button
+            className="btn primary"
+            type="button"
+            disabled={busy || amount <= 0 || amount > returnable || !reason.trim()}
+            onClick={() => {
+              void submit();
+            }}
+          >
+            <Icon name="refresh" />
+            {busy ? "Returning…" : "Return to stock"}
+          </button>
+        </>
+      }
+    >
+      <ActionError message={error} />
+      <Field label="Return quantity">
+        <input type="number" min="0.0001" max={returnable} step="0.0001" value={amount} onChange={(event) => setAmount(Number(event.target.value))} />
+      </Field>
+      <Field label="Reason">
+        <textarea rows={3} maxLength={20_000} value={reason} onChange={(event) => setReason(event.target.value)} placeholder={localizeCopy("Unused material, wrong part, project complete…")} />
+      </Field>
+    </Modal>
+  );
 }
 
 type ApprovalAction = {
@@ -1405,7 +3885,8 @@ export function ProductionApprovals({ bootstrap, notify }: MaterialScreenProps) 
   const uiText = useUiText();
   const canProcurement = hasPermission(bootstrap, "procurement.approve");
   const canAdjust = hasPermission(bootstrap, "inventory.adjust");
-  const prs = useEndpoint<PurchaseRequisition[]>(canProcurement ? "/api/v1/purchase-requisitions/?waitingForMe=true" : null, EMPTY);
+  // A PR waits for named people (migrations 097, 116), who decide without procurement.approve; material issues still need it.
+  const prs = useEndpoint<PurchaseRequisition[]>(approvesPurchases(bootstrap) ? "/api/v1/purchase-requisitions/?waitingForMe=true" : null, EMPTY);
   const mirs = useEndpoint<MaterialIssue[]>(canProcurement ? "/api/v1/material-issues/?status=Pending%20Approval" : null, EMPTY);
   const adjustments = useEndpoint<StockAdjustment[]>(canAdjust ? "/api/v1/stock-adjustments/?status=Pending%20Approval" : null, EMPTY);
   const [action, setAction] = useState<ApprovalAction | null>(null);
@@ -1413,13 +3894,19 @@ export function ProductionApprovals({ bootstrap, notify }: MaterialScreenProps) 
   const [detailId, setDetailId] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const reload = () => { prs.reload(); mirs.reload(); adjustments.reload(); };
+  const reload = () => {
+    prs.reload();
+    mirs.reload();
+    adjustments.reload();
+  };
   // Material issues and stock adjustments are done in the ERP now (owner 2026-10-08); their panels show only while one still waits.
-  const waitingMirs = mirs.data.filter((item) => item.requestedById !== bootstrap.user.id), waitingAdjustments = adjustments.data.filter((item) => item.requestedById !== bootstrap.user.id);
+  const waitingMirs = mirs.data.filter((item) => item.requestedById !== bootstrap.user.id),
+    waitingAdjustments = adjustments.data.filter((item) => item.requestedById !== bootstrap.user.id);
   const total = prs.data.length + waitingMirs.length + waitingAdjustments.length;
   const decide = async (comment: string) => {
     if (!action) return;
-    setBusy(true); setError("");
+    setBusy(true);
+    setError("");
     try {
       if (action.source === "PR") await apiRequest(`/api/v1/purchase-requisitions/${action.id}/decide`, body({ decision: action.decision, comment }));
       else if (action.source === "MIR") await apiRequest(`/api/v1/material-issues/${action.id}/decide`, body({ decision: action.decision, comment }));
@@ -1427,24 +3914,246 @@ export function ProductionApprovals({ bootstrap, notify }: MaterialScreenProps) 
       notify(`${action.number}: ${action.decision}`);
       setAction(null);
       reload();
-    } catch (requestError) { setError(toError(requestError)); }
-    finally { setBusy(false); }
+    } catch (requestError) {
+      setError(toError(requestError));
+    } finally {
+      setBusy(false);
+    }
   };
   return (
     <div className="pg-skin">
-      <PageHeader eyebrow="CONTROL & GOVERNANCE" title={uiText("Approvals")} subtitle="แสดงเฉพาะรายการจริงที่ role / user ปัจจุบันมีสิทธิ์ตัดสินใจ และห้าม self-approval" actions={<RefreshButton loading={prs.loading || mirs.loading || adjustments.loading} reload={reload} />} />
-      <div className="kpi-grid three"><KpiCard label="Waiting for me" value={total} icon="checkCircle" tone={total ? "amber" : "green"} /><KpiCard label="Purchase requisitions" value={prs.data.length} icon="package" tone="blue" />{waitingMirs.length + waitingAdjustments.length ? <KpiCard label="Stock controls" value={adjustments.data.length} note={`${mirs.data.length} material issue requests`} icon="shield" tone="violet" /> : null}</div>
-      {prs.error || mirs.error || adjustments.error ? <LoadError message={prs.error || mirs.error || adjustments.error} retry={reload} /> : null}<ActionError message={error} />
+      <PageHeader
+        eyebrow="CONTROL & GOVERNANCE"
+        title={uiText("Approvals")}
+        subtitle="แสดงเฉพาะรายการจริงที่ role / user ปัจจุบันมีสิทธิ์ตัดสินใจ และห้าม self-approval"
+        actions={<RefreshButton loading={prs.loading || mirs.loading || adjustments.loading} reload={reload} />}
+      />
+      <div className="kpi-grid three">
+        <KpiCard label="Waiting for me" value={total} icon="checkCircle" tone={total ? "amber" : "green"} />
+        <KpiCard label="Purchase requisitions" value={prs.data.length} icon="package" tone="blue" />
+        {waitingMirs.length + waitingAdjustments.length ? (
+          <KpiCard label="Stock controls" value={adjustments.data.length} note={`${mirs.data.length} material issue requests`} icon="shield" tone="violet" />
+        ) : null}
+      </div>
+      {prs.error || mirs.error || adjustments.error ? <LoadError message={prs.error || mirs.error || adjustments.error} retry={reload} /> : null}
+      <ActionError message={error} />
       <Panel guide="appr.pr" title="Purchase requisition approvals" subtitle="Approval route and current approver are calculated by the API" flush>
-        {prs.data.length ? <div className="table-wrap"><table><thead><tr><th className="pg-acts"><LocalizedText text={"Actions"} /></th><th><LocalizedText text={"PR"} /></th><th><LocalizedText text={"Project"} /></th><th><LocalizedText text={"Requester"} /></th><th className="num"><LocalizedText text={"Amount"} /></th><th><LocalizedText text={"Variance"} /></th><th><LocalizedText text={"Current step"} /></th><th><LocalizedText text={"Required"} /></th></tr></thead><tbody>{prs.data.map((item) => <tr key={item.id}><td className="pg-acts"><div className="table-actions"><RowAction icon="check" label="Approve" guide="appr.approve" onClick={() => setAction({ source: "PR", id: item.id, number: item.number, decision: "Approve" })} /><RowAction icon="x" label="Reject" danger onClick={() => setAction({ source: "PR", id: item.id, number: item.number, decision: "Reject" })} /></div></td><td><button className="pg-doclink mono" type="button" onClick={() => setDetailId(item.id)}>{item.number}</button></td><td>{item.projectNumber} <LocalizedText text={"·"} /> {item.projectName}</td><td>{item.requestedByName}</td><td className="num"><strong>{money(item.amount)}</strong></td><td>{Number(item.variancePercent) > 0 ? <Badge tone="amber">+{quantity(item.variancePercent)}%</Badge> : <Badge tone="green">{quantity(item.variancePercent)}%</Badge>}</td><td>{item.currentStep}<small className="muted">{item.currentApproverName || item.currentApproverRole}</small></td><td>{date(item.requiredDate)}</td></tr>)}</tbody></table></div> : prs.loading ? <Loading /> : <EmptyState icon="checkCircle" title="No purchase requisition waiting" message="ไม่มี PR ที่กำลังรอ user / role ปัจจุบัน" />}
+        {prs.data.length ? (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th className="pg-acts">
+                    <LocalizedText text={"Actions"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"PR"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Project"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Requester"} />
+                  </th>
+                  <th className="num">
+                    <LocalizedText text={"Amount"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Variance"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Current step"} />
+                  </th>
+                  <th>
+                    <LocalizedText text={"Required"} />
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {prs.data.map((item) => (
+                  <tr key={item.id}>
+                    <td className="pg-acts">
+                      <div className="table-actions">
+                        <RowAction icon="check" label="Approve" guide="appr.approve" onClick={() => setAction({ source: "PR", id: item.id, number: item.number, decision: "Approve" })} />
+                        <RowAction icon="x" label="Reject" danger onClick={() => setAction({ source: "PR", id: item.id, number: item.number, decision: "Reject" })} />
+                      </div>
+                    </td>
+                    <td>
+                      <button className="pg-doclink mono" type="button" onClick={() => setDetailId(item.id)}>
+                        {item.number}
+                      </button>
+                    </td>
+                    <td>
+                      {item.projectNumber} <LocalizedText text={"·"} /> {item.projectName}
+                    </td>
+                    <td>{item.requestedByName}</td>
+                    <td className="num">
+                      <strong>{money(item.amount)}</strong>
+                    </td>
+                    <td>{Number(item.variancePercent) > 0 ? <Badge tone="amber">+{quantity(item.variancePercent)}%</Badge> : <Badge tone="green">{quantity(item.variancePercent)}%</Badge>}</td>
+                    <td>
+                      {item.currentStep}
+                      <small className="muted">{item.currentApproverName || item.currentApproverRole}</small>
+                    </td>
+                    <td>{date(item.requiredDate)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : prs.loading ? (
+          <Loading />
+        ) : (
+          <EmptyState icon="checkCircle" title="No purchase requisition waiting" message="ไม่มี PR ที่กำลังรอ user / role ปัจจุบัน" />
+        )}
       </Panel>
-      {waitingMirs.length ? <Panel title="Material issue approvals" subtitle="Requester cannot approve their own MIR" flush>
-        {mirs.data.filter((item) => item.requestedById !== bootstrap.user.id).length ? <div className="table-wrap"><table><thead><tr><th className="pg-acts"><LocalizedText text={"Actions"} /></th><th>MIR</th><th><LocalizedText text={"Project"} /></th><th><LocalizedText text={"Requester"} /></th><th><LocalizedText text={"Required"} /></th><th className="num"><LocalizedText text={"Lines"} /></th><th className="num"><LocalizedText text={"Quantity"} /></th></tr></thead><tbody>{mirs.data.filter((item) => item.requestedById !== bootstrap.user.id).map((item) => <tr key={item.id}><td className="pg-acts"><div className="table-actions"><RowAction icon="check" label="Approve" onClick={() => setAction({ source: "MIR", id: item.id, number: item.number, decision: "Approve" })} /><RowAction icon="x" label="Reject" danger onClick={() => setAction({ source: "MIR", id: item.id, number: item.number, decision: "Reject" })} /></div></td><td><strong className="mono">{item.number}</strong></td><td>{item.projectNumber} <LocalizedText text={"·"} /> {item.projectName}</td><td>{item.requestedByName}</td><td>{date(item.requiredDate)}</td><td className="num">{item.lineCount}</td><td className="num">{quantity(item.requestedQuantity)}</td></tr>)}</tbody></table></div> : mirs.loading ? <Loading /> : <EmptyState icon="upload" title="No material issue waiting" message="ไม่มี MIR ที่รออนุมัติจากผู้ใช้ปัจจุบัน" />}
-      </Panel> : null}
-      {canAdjust && waitingAdjustments.length ? <Panel title="Stock adjustment approvals" subtitle="Stock changes only after Inventory Controller approval" flush>
-        {adjustments.data.filter((item) => item.requestedById !== bootstrap.user.id).length ? <div className="table-wrap"><table><thead><tr><th className="pg-acts"><LocalizedText text={"Actions"} /></th><th><LocalizedText text={"Adjustment"} /></th><th><LocalizedText text={"Item"} /></th><th className="num"><LocalizedText text={"Current usable"} /></th><th className="num"><LocalizedText text={"Change"} /></th><th><LocalizedText text={"Reason"} /></th><th><LocalizedText text={"Requester"} /></th></tr></thead><tbody>{adjustments.data.filter((item) => item.requestedById !== bootstrap.user.id).map((item) => <tr key={item.id}><td className="pg-acts"><div className="table-actions"><RowAction icon="check" label="Approve" onClick={() => setAction({ source: "ADJUSTMENT", id: item.id, number: item.number, decision: "Approve" })} /><RowAction icon="x" label="Reject" danger onClick={() => setAction({ source: "ADJUSTMENT", id: item.id, number: item.number, decision: "Reject" })} /></div></td><td><strong className="mono">{item.number}</strong></td><td><strong>{item.itemCode}</strong><small className="muted">{item.description}</small></td><td className="num">{quantity(item.currentUsable)}</td><td className="num"><Badge tone={Number(item.quantityChange) >= 0 ? "green" : "red"}>{Number(item.quantityChange) >= 0 ? "+" : ""}{quantity(item.quantityChange)}</Badge></td><td>{item.reason}</td><td>{item.requestedByName}</td></tr>)}</tbody></table></div> : adjustments.loading ? <Loading /> : <EmptyState icon="database" title="No stock adjustment waiting" message="ไม่มี stock discrepancy ที่รอ Inventory Controller" />}
-      </Panel> : null}
-      {action ? <CommentPrompt title={`${action.decision}: ${action.number}`} description={`${action.source} decision · ข้อความจะถูกเก็บใน audit trail`} confirmLabel={action.decision} requireComment={action.decision === "Reject"} busy={busy} error={error} onClose={() => { setAction(null); setError(""); }} onConfirm={(comment) => { void decide(comment); }} /> : null}
+      {waitingMirs.length ? (
+        <Panel title="Material issue approvals" subtitle="Requester cannot approve their own MIR" flush>
+          {mirs.data.filter((item) => item.requestedById !== bootstrap.user.id).length ? (
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th className="pg-acts">
+                      <LocalizedText text={"Actions"} />
+                    </th>
+                    <th>MIR</th>
+                    <th>
+                      <LocalizedText text={"Project"} />
+                    </th>
+                    <th>
+                      <LocalizedText text={"Requester"} />
+                    </th>
+                    <th>
+                      <LocalizedText text={"Required"} />
+                    </th>
+                    <th className="num">
+                      <LocalizedText text={"Lines"} />
+                    </th>
+                    <th className="num">
+                      <LocalizedText text={"Quantity"} />
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {mirs.data
+                    .filter((item) => item.requestedById !== bootstrap.user.id)
+                    .map((item) => (
+                      <tr key={item.id}>
+                        <td className="pg-acts">
+                          <div className="table-actions">
+                            <RowAction icon="check" label="Approve" onClick={() => setAction({ source: "MIR", id: item.id, number: item.number, decision: "Approve" })} />
+                            <RowAction icon="x" label="Reject" danger onClick={() => setAction({ source: "MIR", id: item.id, number: item.number, decision: "Reject" })} />
+                          </div>
+                        </td>
+                        <td>
+                          <strong className="mono">{item.number}</strong>
+                        </td>
+                        <td>
+                          {item.projectNumber} <LocalizedText text={"·"} /> {item.projectName}
+                        </td>
+                        <td>{item.requestedByName}</td>
+                        <td>{date(item.requiredDate)}</td>
+                        <td className="num">{item.lineCount}</td>
+                        <td className="num">{quantity(item.requestedQuantity)}</td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          ) : mirs.loading ? (
+            <Loading />
+          ) : (
+            <EmptyState icon="upload" title="No material issue waiting" message="ไม่มี MIR ที่รออนุมัติจากผู้ใช้ปัจจุบัน" />
+          )}
+        </Panel>
+      ) : null}
+      {canAdjust && waitingAdjustments.length ? (
+        <Panel title="Stock adjustment approvals" subtitle="Stock changes only after Inventory Controller approval" flush>
+          {adjustments.data.filter((item) => item.requestedById !== bootstrap.user.id).length ? (
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th className="pg-acts">
+                      <LocalizedText text={"Actions"} />
+                    </th>
+                    <th>
+                      <LocalizedText text={"Adjustment"} />
+                    </th>
+                    <th>
+                      <LocalizedText text={"Item"} />
+                    </th>
+                    <th className="num">
+                      <LocalizedText text={"Current usable"} />
+                    </th>
+                    <th className="num">
+                      <LocalizedText text={"Change"} />
+                    </th>
+                    <th>
+                      <LocalizedText text={"Reason"} />
+                    </th>
+                    <th>
+                      <LocalizedText text={"Requester"} />
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {adjustments.data
+                    .filter((item) => item.requestedById !== bootstrap.user.id)
+                    .map((item) => (
+                      <tr key={item.id}>
+                        <td className="pg-acts">
+                          <div className="table-actions">
+                            <RowAction icon="check" label="Approve" onClick={() => setAction({ source: "ADJUSTMENT", id: item.id, number: item.number, decision: "Approve" })} />
+                            <RowAction icon="x" label="Reject" danger onClick={() => setAction({ source: "ADJUSTMENT", id: item.id, number: item.number, decision: "Reject" })} />
+                          </div>
+                        </td>
+                        <td>
+                          <strong className="mono">{item.number}</strong>
+                        </td>
+                        <td>
+                          <strong>{item.itemCode}</strong>
+                          <small className="muted">{item.description}</small>
+                        </td>
+                        <td className="num">{quantity(item.currentUsable)}</td>
+                        <td className="num">
+                          <Badge tone={Number(item.quantityChange) >= 0 ? "green" : "red"}>
+                            {Number(item.quantityChange) >= 0 ? "+" : ""}
+                            {quantity(item.quantityChange)}
+                          </Badge>
+                        </td>
+                        <td>{item.reason}</td>
+                        <td>{item.requestedByName}</td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          ) : adjustments.loading ? (
+            <Loading />
+          ) : (
+            <EmptyState icon="database" title="No stock adjustment waiting" message="ไม่มี stock discrepancy ที่รอ Inventory Controller" />
+          )}
+        </Panel>
+      ) : null}
+      {action ? (
+        <CommentPrompt
+          title={`${action.decision}: ${action.number}`}
+          description={`${action.source} decision · ข้อความจะถูกเก็บใน audit trail`}
+          confirmLabel={action.decision}
+          requireComment={action.decision === "Reject"}
+          busy={busy}
+          error={error}
+          onClose={() => {
+            setAction(null);
+            setError("");
+          }}
+          onConfirm={(comment) => {
+            void decide(comment);
+          }}
+        />
+      ) : null}
       {detailId ? <PrDetailModal id={detailId} bootstrap={bootstrap} notify={notify} onChanged={reload} onEdit={() => setDetailId(null)} onClose={() => setDetailId(null)} /> : null}
     </div>
   );
@@ -1461,26 +4170,248 @@ export function ProductionInventoryOperations({ bootstrap, notify }: MaterialScr
   const [error, setError] = useState("");
   const canReceive = hasPermission(bootstrap, "inventory.receive");
   const canAdjust = hasPermission(bootstrap, "inventory.adjust");
-  const reload = () => { adjustments.reload(); quarantine.reload(); };
+  const reload = () => {
+    adjustments.reload();
+    quarantine.reload();
+  };
   const decide = async (comment: string) => {
     if (!decision) return;
-    setBusy(true); setError("");
+    setBusy(true);
+    setError("");
     try {
       await apiRequest(`/api/v1/stock-adjustments/${decision.item.id}/decide`, body({ decision: decision.decision, comment }));
       notify(`${decision.item.number}: ${decision.decision}`);
-      setDecision(null); reload();
-    } catch (requestError) { setError(toError(requestError)); }
-    finally { setBusy(false); }
+      setDecision(null);
+      reload();
+    } catch (requestError) {
+      setError(toError(requestError));
+    } finally {
+      setBusy(false);
+    }
   };
   return (
     <>
-      <PageHeader eyebrow="INVENTORY CONTROL" title="Stock Operations" subtitle="Corrections use approval workflow; quarantine releases always carry an outcome and reason" actions={canReceive && tab === "adjustments" ? <button className="btn primary" type="button" onClick={() => setCreateOpen(true)}><Icon name="plus" /><LocalizedText text={"Request adjustment"} /></button> : undefined} />
-      <div className="tabs" role="tablist"><button type="button" role="tab" aria-selected={tab === "adjustments"} className={tab === "adjustments" ? "tab active" : "tab"} onClick={() => setTab("adjustments")}><LocalizedText text={"Stock adjustments"} /> <em>{adjustments.data.length}</em></button><button type="button" role="tab" aria-selected={tab === "quarantine"} className={tab === "quarantine" ? "tab active" : "tab"} onClick={() => setTab("quarantine")}><LocalizedText text={"Quarantine"} /> <em>{quarantine.data.length}</em></button></div>
-      {adjustments.error || quarantine.error ? <LoadError message={adjustments.error || quarantine.error} retry={reload} /> : null}<ActionError message={error} />
-      {tab === "adjustments" ? <Panel title={`${adjustments.data.length} stock adjustments`} subtitle="Approved adjustments append a ledger event; balances are never edited directly" flush>{adjustments.data.length ? <div className="table-wrap"><table><thead><tr><th><LocalizedText text={"Adjustment"} /></th><th><LocalizedText text={"Item"} /></th><th><LocalizedText text={"Current usable"} /></th><th><LocalizedText text={"Change"} /></th><th><LocalizedText text={"Reason"} /></th><th><LocalizedText text={"Requester"} /></th><th><LocalizedText text={"Approver"} /></th><th><LocalizedText text={"Status"} /></th><th><LocalizedText text={"Actions"} /></th></tr></thead><tbody>{adjustments.data.map((item) => <tr key={item.id}><td><strong className="mono">{item.number}</strong></td><td><strong>{item.itemCode}</strong><small className="muted">{item.partNumber} <LocalizedText text={"·"} /> {item.description}</small></td><td className="num">{quantity(item.currentUsable)}</td><td className="num"><Badge tone={Number(item.quantityChange) >= 0 ? "green" : "red"}>{Number(item.quantityChange) >= 0 ? "+" : ""}{quantity(item.quantityChange)}</Badge></td><td>{item.reason}</td><td>{item.requestedByName}</td><td>{item.approvedByName || "—"}</td><td><Badge>{item.status}</Badge></td><td>{canAdjust && item.status === "Pending Approval" && item.requestedById !== bootstrap.user.id ? <div className="table-actions"><button className="btn success sm" type="button" onClick={() => setDecision({ item, decision: "Approve" })}><Icon name="check" /><LocalizedText text={"Approve"} /></button><button className="btn danger sm" type="button" onClick={() => setDecision({ item, decision: "Reject" })}><Icon name="x" /><LocalizedText text={"Reject"} /></button></div> : "—"}</td></tr>)}</tbody></table></div> : adjustments.loading ? <Loading /> : <EmptyState icon="database" title="No stock adjustment" message="No discrepancy has been raised" />}</Panel> : <Panel title={`${quarantine.data.length} items on hold`} subtitle="Damaged / rejected receipts stay unavailable until an explicit decision" flush>{quarantine.data.length ? <div className="table-wrap"><table><thead><tr><th><LocalizedText text={"Item"} /></th><th><LocalizedText text={"Description"} /></th><th><LocalizedText text={"Brand"} /></th><th><LocalizedText text={"Held"} /></th><th><LocalizedText text={"Usable"} /></th><th><LocalizedText text={"Avg. cost"} /></th><th><LocalizedText text={"Held since"} /></th><th><LocalizedText text={"Action"} /></th></tr></thead><tbody>{quarantine.data.map((item) => <tr key={item.itemId}><td><strong className="mono">{item.itemCode}</strong><small className="muted">{item.partNumber}</small></td><td>{item.description}</td><td>{item.brand}</td><td className="num"><Badge tone="amber">{quantity(item.quarantineQuantity)} {item.unit}</Badge></td><td className="num">{quantity(item.usableQuantity)}</td><td className="num">{money(item.averageUnitCost)}</td><td>{dateTime(item.heldSince)}</td><td>{canAdjust ? <button className="btn primary sm" type="button" onClick={() => setReleaseItem(item)}><Icon name="shield" /><LocalizedText text={"Decide"} /></button> : "—"}</td></tr>)}</tbody></table></div> : quarantine.loading ? <Loading /> : <EmptyState icon="shield" title="Quarantine is clear" message="No damaged or rejected material is currently on hold" />}</Panel>}
-      {createOpen ? <CreateAdjustmentModal onClose={() => setCreateOpen(false)} onCreated={(number) => { setCreateOpen(false); notify(`${number} requested`); adjustments.reload(); }} /> : null}
-      {releaseItem ? <ReleaseQuarantineModal item={releaseItem} onClose={() => setReleaseItem(null)} onReleased={(message) => { setReleaseItem(null); notify(message); quarantine.reload(); }} /> : null}
-      {decision ? <CommentPrompt title={`${decision.decision}: ${decision.item.number}`} description="Inventory Controller decision; requester cannot approve their own adjustment" confirmLabel={decision.decision} requireComment={decision.decision === "Reject"} busy={busy} error={error} onClose={() => { setDecision(null); setError(""); }} onConfirm={(comment) => { void decide(comment); }} /> : null}
+      <PageHeader
+        eyebrow="INVENTORY CONTROL"
+        title="Stock Operations"
+        subtitle="Corrections use approval workflow; quarantine releases always carry an outcome and reason"
+        actions={
+          canReceive && tab === "adjustments" ? (
+            <button className="btn primary" type="button" onClick={() => setCreateOpen(true)}>
+              <Icon name="plus" />
+              <LocalizedText text={"Request adjustment"} />
+            </button>
+          ) : undefined
+        }
+      />
+      <div className="tabs" role="tablist">
+        <button type="button" role="tab" aria-selected={tab === "adjustments"} className={tab === "adjustments" ? "tab active" : "tab"} onClick={() => setTab("adjustments")}>
+          <LocalizedText text={"Stock adjustments"} /> <em>{adjustments.data.length}</em>
+        </button>
+        <button type="button" role="tab" aria-selected={tab === "quarantine"} className={tab === "quarantine" ? "tab active" : "tab"} onClick={() => setTab("quarantine")}>
+          <LocalizedText text={"Quarantine"} /> <em>{quarantine.data.length}</em>
+        </button>
+      </div>
+      {adjustments.error || quarantine.error ? <LoadError message={adjustments.error || quarantine.error} retry={reload} /> : null}
+      <ActionError message={error} />
+      {tab === "adjustments" ? (
+        <Panel title={`${adjustments.data.length} stock adjustments`} subtitle="Approved adjustments append a ledger event; balances are never edited directly" flush>
+          {adjustments.data.length ? (
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>
+                      <LocalizedText text={"Adjustment"} />
+                    </th>
+                    <th>
+                      <LocalizedText text={"Item"} />
+                    </th>
+                    <th>
+                      <LocalizedText text={"Current usable"} />
+                    </th>
+                    <th>
+                      <LocalizedText text={"Change"} />
+                    </th>
+                    <th>
+                      <LocalizedText text={"Reason"} />
+                    </th>
+                    <th>
+                      <LocalizedText text={"Requester"} />
+                    </th>
+                    <th>
+                      <LocalizedText text={"Approver"} />
+                    </th>
+                    <th>
+                      <LocalizedText text={"Status"} />
+                    </th>
+                    <th>
+                      <LocalizedText text={"Actions"} />
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {adjustments.data.map((item) => (
+                    <tr key={item.id}>
+                      <td>
+                        <strong className="mono">{item.number}</strong>
+                      </td>
+                      <td>
+                        <strong>{item.itemCode}</strong>
+                        <small className="muted">
+                          {item.partNumber} <LocalizedText text={"·"} /> {item.description}
+                        </small>
+                      </td>
+                      <td className="num">{quantity(item.currentUsable)}</td>
+                      <td className="num">
+                        <Badge tone={Number(item.quantityChange) >= 0 ? "green" : "red"}>
+                          {Number(item.quantityChange) >= 0 ? "+" : ""}
+                          {quantity(item.quantityChange)}
+                        </Badge>
+                      </td>
+                      <td>{item.reason}</td>
+                      <td>{item.requestedByName}</td>
+                      <td>{item.approvedByName || "—"}</td>
+                      <td>
+                        <Badge>{item.status}</Badge>
+                      </td>
+                      <td>
+                        {canAdjust && item.status === "Pending Approval" && item.requestedById !== bootstrap.user.id ? (
+                          <div className="table-actions">
+                            <button className="btn success sm" type="button" onClick={() => setDecision({ item, decision: "Approve" })}>
+                              <Icon name="check" />
+                              <LocalizedText text={"Approve"} />
+                            </button>
+                            <button className="btn danger sm" type="button" onClick={() => setDecision({ item, decision: "Reject" })}>
+                              <Icon name="x" />
+                              <LocalizedText text={"Reject"} />
+                            </button>
+                          </div>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : adjustments.loading ? (
+            <Loading />
+          ) : (
+            <EmptyState icon="database" title="No stock adjustment" message="No discrepancy has been raised" />
+          )}
+        </Panel>
+      ) : (
+        <Panel title={`${quarantine.data.length} items on hold`} subtitle="Damaged / rejected receipts stay unavailable until an explicit decision" flush>
+          {quarantine.data.length ? (
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>
+                      <LocalizedText text={"Item"} />
+                    </th>
+                    <th>
+                      <LocalizedText text={"Description"} />
+                    </th>
+                    <th>
+                      <LocalizedText text={"Brand"} />
+                    </th>
+                    <th>
+                      <LocalizedText text={"Held"} />
+                    </th>
+                    <th>
+                      <LocalizedText text={"Usable"} />
+                    </th>
+                    <th>
+                      <LocalizedText text={"Avg. cost"} />
+                    </th>
+                    <th>
+                      <LocalizedText text={"Held since"} />
+                    </th>
+                    <th>
+                      <LocalizedText text={"Action"} />
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {quarantine.data.map((item) => (
+                    <tr key={item.itemId}>
+                      <td>
+                        <strong className="mono">{item.itemCode}</strong>
+                        <small className="muted">{item.partNumber}</small>
+                      </td>
+                      <td>{item.description}</td>
+                      <td>{item.brand}</td>
+                      <td className="num">
+                        <Badge tone="amber">
+                          {quantity(item.quarantineQuantity)} {item.unit}
+                        </Badge>
+                      </td>
+                      <td className="num">{quantity(item.usableQuantity)}</td>
+                      <td className="num">{money(item.averageUnitCost)}</td>
+                      <td>{dateTime(item.heldSince)}</td>
+                      <td>
+                        {canAdjust ? (
+                          <button className="btn primary sm" type="button" onClick={() => setReleaseItem(item)}>
+                            <Icon name="shield" />
+                            <LocalizedText text={"Decide"} />
+                          </button>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : quarantine.loading ? (
+            <Loading />
+          ) : (
+            <EmptyState icon="shield" title="Quarantine is clear" message="No damaged or rejected material is currently on hold" />
+          )}
+        </Panel>
+      )}
+      {createOpen ? (
+        <CreateAdjustmentModal
+          onClose={() => setCreateOpen(false)}
+          onCreated={(number) => {
+            setCreateOpen(false);
+            notify(`${number} requested`);
+            adjustments.reload();
+          }}
+        />
+      ) : null}
+      {releaseItem ? (
+        <ReleaseQuarantineModal
+          item={releaseItem}
+          onClose={() => setReleaseItem(null)}
+          onReleased={(message) => {
+            setReleaseItem(null);
+            notify(message);
+            quarantine.reload();
+          }}
+        />
+      ) : null}
+      {decision ? (
+        <CommentPrompt
+          title={`${decision.decision}: ${decision.item.number}`}
+          description="Inventory Controller decision; requester cannot approve their own adjustment"
+          confirmLabel={decision.decision}
+          requireComment={decision.decision === "Reject"}
+          busy={busy}
+          error={error}
+          onClose={() => {
+            setDecision(null);
+            setError("");
+          }}
+          onConfirm={(comment) => {
+            void decide(comment);
+          }}
+        />
+      ) : null}
     </>
   );
 }
@@ -1495,19 +4426,68 @@ function CreateAdjustmentModal({ onClose, onCreated }: { onClose: () => void; on
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const submit = async () => {
-    setBusy(true); setError("");
+    setBusy(true);
+    setError("");
     try {
       const result = await apiRequest<{ number: string }>("/api/v1/stock-adjustments/", body({ itemId: effectiveItemId, quantityChange, reason }));
       onCreated(result.number);
-    } catch (requestError) { setError(toError(requestError)); }
-    finally { setBusy(false); }
+    } catch (requestError) {
+      setError(toError(requestError));
+    } finally {
+      setBusy(false);
+    }
   };
-  return <Modal title="Request stock adjustment" subtitle="คำขอนี้ยังไม่เปลี่ยน stock จนกว่า Inventory Controller จะอนุมัติ" size="sm" onClose={onClose} footer={<><button className="btn ghost" type="button" onClick={onClose} disabled={busy}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || !effectiveItemId || !quantityChange || !reason.trim()} onClick={() => { void submit(); }}><Icon name="send" />{busy ? "Requesting…" : "Request adjustment"}</button></>}>
-    {inventory.error ? <LoadError message={inventory.error} retry={inventory.reload} /> : null}<ActionError message={error} />
-    <Field label="Inventory item"><select value={effectiveItemId} onChange={(event) => setItemId(Number(event.target.value))}><option value={0}><LocalizedText text={"Select item…"} /></option>{inventory.data.map((item) => <option key={item.itemId} value={item.itemId}>{item.itemCode} <LocalizedText text={"·"} /> {item.description} <LocalizedText text={"(usable"} /> {quantity(item.usable)}<LocalizedText text={")"} /></option>)}</select></Field>
-    <Field label="Quantity change"><input type="number" step="0.0001" value={quantityChange} onChange={(event) => setQuantityChange(Number(event.target.value))} /><small><LocalizedText text={"ใช้ค่าบวกเพื่อเพิ่ม และค่าลบเพื่อลด"} /></small></Field>
-    <Field label="Reason"><textarea rows={4} maxLength={20_000} value={reason} onChange={(event) => setReason(event.target.value)} placeholder={localizeCopy("Cycle count discrepancy, damaged stock, correction…")} /></Field>
-  </Modal>;
+  return (
+    <Modal
+      title="Request stock adjustment"
+      subtitle="คำขอนี้ยังไม่เปลี่ยน stock จนกว่า Inventory Controller จะอนุมัติ"
+      size="sm"
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn ghost" type="button" onClick={onClose} disabled={busy}>
+            <LocalizedText text={"Cancel"} />
+          </button>
+          <button
+            className="btn primary"
+            type="button"
+            disabled={busy || !effectiveItemId || !quantityChange || !reason.trim()}
+            onClick={() => {
+              void submit();
+            }}
+          >
+            <Icon name="send" />
+            {busy ? "Requesting…" : "Request adjustment"}
+          </button>
+        </>
+      }
+    >
+      {inventory.error ? <LoadError message={inventory.error} retry={inventory.reload} /> : null}
+      <ActionError message={error} />
+      <Field label="Inventory item">
+        <select value={effectiveItemId} onChange={(event) => setItemId(Number(event.target.value))}>
+          <option value={0}>
+            <LocalizedText text={"Select item…"} />
+          </option>
+          {inventory.data.map((item) => (
+            <option key={item.itemId} value={item.itemId}>
+              {item.itemCode} <LocalizedText text={"·"} /> {item.description} <LocalizedText text={"(usable"} /> {quantity(item.usable)}
+              <LocalizedText text={")"} />
+            </option>
+          ))}
+        </select>
+      </Field>
+      <Field label="Quantity change">
+        <input type="number" step="0.0001" value={quantityChange} onChange={(event) => setQuantityChange(Number(event.target.value))} />
+        <small>
+          <LocalizedText text={"ใช้ค่าบวกเพื่อเพิ่ม และค่าลบเพื่อลด"} />
+        </small>
+      </Field>
+      <Field label="Reason">
+        <textarea rows={4} maxLength={20_000} value={reason} onChange={(event) => setReason(event.target.value)} placeholder={localizeCopy("Cycle count discrepancy, damaged stock, correction…")} />
+      </Field>
+    </Modal>
+  );
 }
 
 function ReleaseQuarantineModal({ item, onClose, onReleased }: { item: QuarantineItem; onClose: () => void; onReleased: (message: string) => void }) {
@@ -1518,17 +4498,62 @@ function ReleaseQuarantineModal({ item, onClose, onReleased }: { item: Quarantin
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const submit = async () => {
-    setBusy(true); setError("");
+    setBusy(true);
+    setError("");
     try {
       const result = await apiRequest<{ reference: string }>("/api/v1/quarantine/release", body({ itemId: item.itemId, quantity: amount, outcome, reason }));
       onReleased(`${item.itemCode}: ${outcome} ${quantity(amount)} ${item.unit} · ${result.reference}`);
-    } catch (requestError) { setError(toError(requestError)); }
-    finally { setBusy(false); }
+    } catch (requestError) {
+      setError(toError(requestError));
+    } finally {
+      setBusy(false);
+    }
   };
-  return <Modal title={`Quarantine decision: ${item.itemCode}`} subtitle={`${quantity(item.quarantineQuantity)} ${item.unit} is currently held`} size="sm" onClose={onClose} footer={<><button className="btn ghost" type="button" onClick={onClose} disabled={busy}><LocalizedText text={"Cancel"} /></button><button className="btn primary" type="button" disabled={busy || amount <= 0 || amount > Number(item.quarantineQuantity) || !reason.trim()} onClick={() => { void submit(); }}><Icon name="shield" />{busy ? <LocalizedText text={"Saving…"} /> : <LocalizedText text={"Record decision"} />}</button></>}>
-    <ActionError message={error} />
-    <Field label="Outcome"><select value={outcome} onChange={(event) => setOutcome(event.target.value)}><option value={"Accept"}><LocalizedText text={"Accept"} /></option><option value={"Return to Supplier"}><LocalizedText text={"Return to Supplier"} /></option><option value={"Scrap"}><LocalizedText text={"Scrap"} /></option></select></Field>
-    <Field label="Quantity"><input type="number" min="0.0001" max={item.quarantineQuantity} step="0.0001" value={amount} onChange={(event) => setAmount(Number(event.target.value))} /></Field>
-    <Field label="Reason"><textarea rows={4} maxLength={20_000} value={reason} onChange={(event) => setReason(event.target.value)} placeholder={localizeCopy("QC result and disposition reason")} /></Field>
-  </Modal>;
+  return (
+    <Modal
+      title={`Quarantine decision: ${item.itemCode}`}
+      subtitle={`${quantity(item.quarantineQuantity)} ${item.unit} is currently held`}
+      size="sm"
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn ghost" type="button" onClick={onClose} disabled={busy}>
+            <LocalizedText text={"Cancel"} />
+          </button>
+          <button
+            className="btn primary"
+            type="button"
+            disabled={busy || amount <= 0 || amount > Number(item.quarantineQuantity) || !reason.trim()}
+            onClick={() => {
+              void submit();
+            }}
+          >
+            <Icon name="shield" />
+            {busy ? <LocalizedText text={"Saving…"} /> : <LocalizedText text={"Record decision"} />}
+          </button>
+        </>
+      }
+    >
+      <ActionError message={error} />
+      <Field label="Outcome">
+        <select value={outcome} onChange={(event) => setOutcome(event.target.value)}>
+          <option value={"Accept"}>
+            <LocalizedText text={"Accept"} />
+          </option>
+          <option value={"Return to Supplier"}>
+            <LocalizedText text={"Return to Supplier"} />
+          </option>
+          <option value={"Scrap"}>
+            <LocalizedText text={"Scrap"} />
+          </option>
+        </select>
+      </Field>
+      <Field label="Quantity">
+        <input type="number" min="0.0001" max={item.quarantineQuantity} step="0.0001" value={amount} onChange={(event) => setAmount(Number(event.target.value))} />
+      </Field>
+      <Field label="Reason">
+        <textarea rows={4} maxLength={20_000} value={reason} onChange={(event) => setReason(event.target.value)} placeholder={localizeCopy("QC result and disposition reason")} />
+      </Field>
+    </Modal>
+  );
 }

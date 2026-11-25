@@ -218,7 +218,7 @@ test("the shell opens the guides from the top bar and loads the layer after firs
     shell,
     /<button className="btn default sm topbar-guide" type="button" aria-haspopup="dialog"[^>]*onClick=\{\(\) => setGuideOpen\(true\)\}>\s*<Icon name="play" \/>\s*<span className="label">\{t\("Guide\.open"\)\}<\/span>\s*<\/button>/,
   );
-  assert.match(shell, /<GuideLayer\s+view=\{view\}\s+permissions=\{bootstrap\.permissions\}\s+userId=\{bootstrap\.user\.id\}\s+open=\{guideOpen\}/);
+  assert.match(shell, /<GuideLayer\s+view=\{view\}\s+permissions=\{bootstrap\.permissions\}\s+duties=\{guideDuties\}\s+userId=\{bootstrap\.user\.id\}\s+open=\{guideOpen\}/);
   assert.match(shell, /data-guide="topbar\.report" onClick=\{\(\) => setSupportCreate\(true\)\}/);
   const lazy = read("app/system/production/LazyScreens.tsx");
   // A loading component keeps vinext's error boundary: a missing guide chunk shows nothing instead of blanking the app.
@@ -244,7 +244,7 @@ test("a running guide lights the target without blocking the page and follows a 
   assert.match(layer, /report\(invited, "invite-closed"\)/);
   assert.match(layer, /permissions\.includes\("performance\.manage"\)/);
   // Two dozen guides: the list groups them by area, and the team table shows one area or a summary per area.
-  assert.match(layer, /GUIDE_AREAS\.map\(\(area\) => \{ const list = other\.filter\(\(guide\) => guide\.area === area\)/);
+  assert.match(layer, /GUIDE_AREAS\.map\(\(area\) => \{\s*const list = other\.filter\(\(guide\) => guide\.area === area\)/);
   assert.match(layer, /const \[area, setArea\] = useState<GuideArea \| "all">\("all"\)/);
 });
 

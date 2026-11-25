@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { apiRequest } from "../api-client";
 import { useLanguage, type Lang } from "../i18n";
 import { Drawer, Icon, Modal } from "../ui";
-import { GUIDE_AREAS, GUIDES, guideSelector, guideText, guidesFor, type Guide, type GuideArea } from "./guide-catalog";
+import { GUIDE_AREAS, GUIDES, guideSelector, guideText, guidesFor, type Guide, type GuideArea, type GuideDuty } from "./guide-catalog";
 import { GUIDE_PAD, guideCardPosition } from "./guide-geometry";
 import "./guide.css";
 
@@ -30,39 +30,90 @@ const UI = {
     intro: "เลือกเรื่องที่อยากเรียน ระบบจะพาคลิกบนหน้าจอจริงทีละขั้น หยุดได้ทุกเมื่อ สิ่งที่ทำระหว่างเรียนเป็นงานจริง ถ้าแค่ฝึกให้กดยกเลิกก่อนบันทึก",
     here: "สำหรับหน้านี้",
     areas: { sales: "งานขายและ Inquiry", estimate: "ประมาณราคา", project: "โปรเจกต์และแผนงาน", field: "งานหน้างานและเอกสาร", purchase: "BOM และจัดซื้อ", tools: "ความรู้และเครื่องมือ" },
-    allAreas: "ภาพรวมทุกหมวด", areaFilter: "หมวดบทสอน",
+    allAreas: "ภาพรวมทุกหมวด",
+    areaFilter: "หมวดบทสอน",
     size: (steps: number, minutes: number) => `${steps} ขั้น · ประมาณ ${minutes} นาที`,
-    done: (date: string) => `เรียนจบแล้ว ${date}`, partial: (step: number, count: number) => `ทำถึงขั้น ${step}/${count}`, fresh: "ยังไม่เคยเรียน",
-    start: "เริ่มเรียน", again: "เรียนอีกครั้ง", restart: "เริ่มใหม่",
-    manual: "อ่านคู่มือฉบับเต็ม (มีภาพหน้าจอ)", team: "ความคืบหน้าของทีม", none: "ยังไม่มีบทสอนสำหรับสิทธิ์ของบัญชีนี้",
+    done: (date: string) => `เรียนจบแล้ว ${date}`,
+    partial: (step: number, count: number) => `ทำถึงขั้น ${step}/${count}`,
+    fresh: "ยังไม่เคยเรียน",
+    start: "เริ่มเรียน",
+    again: "เรียนอีกครั้ง",
+    restart: "เริ่มใหม่",
+    manual: "อ่านคู่มือฉบับเต็ม (มีภาพหน้าจอ)",
+    team: "ความคืบหน้าของทีม",
+    none: "ยังไม่มีบทสอนสำหรับสิทธิ์ของบัญชีนี้",
     step: (index: number, count: number) => `ขั้นที่ ${index} จาก ${count}`,
-    back: "ย้อนกลับ", next: "ถัดไป", skip: "ข้ามขั้นนี้", finish: "จบบทสอน", exit: "ออกจากบทสอน",
-    clickHint: "คลิกที่จุดที่ไฮไลต์เพื่อไปต่อ", waiting: "ยังไม่เห็นจุดนี้บนหน้าจอ", go: "ไปที่หน้านี้",
-    inviteTitle: "ครั้งแรกในหน้านี้?", invite: (title: string, minutes: number) => `ให้ระบบสอน "${title}" แบบคลิกตามบนหน้าจอจริง ประมาณ ${minutes} นาที`,
-    inviteStart: "เริ่มเลย", inviteLater: "ไม่ใช่ตอนนี้", inviteNote: "เปิดบทสอนได้ทุกเมื่อที่ปุ่ม 'สอนการใช้งาน' ด้านบน",
-    doneTitle: "เรียนจบแล้ว", doneBody: (title: string) => `จบบท "${title}" แล้ว เลือกบทอื่นได้ที่ปุ่ม 'สอนการใช้งาน' ด้านบน`, more: "ดูบทอื่น", close: "ปิด",
-    teamTitle: "ความคืบหน้าบทสอนของทีม", teamSubtitle: "คนที่คุณดูแลใน Team Activity", person: "พนักงาน",
-    finished: (done: number, total: number) => `จบแล้ว ${done}/${total} คน`, loading: "กำลังโหลด…", failed: "โหลดไม่สำเร็จ", retry: "ลองใหม่", teamEmpty: "ยังไม่มีคนในทีมที่คุณดูแล",
+    back: "ย้อนกลับ",
+    next: "ถัดไป",
+    skip: "ข้ามขั้นนี้",
+    finish: "จบบทสอน",
+    exit: "ออกจากบทสอน",
+    clickHint: "คลิกที่จุดที่ไฮไลต์เพื่อไปต่อ",
+    waiting: "ยังไม่เห็นจุดนี้บนหน้าจอ",
+    go: "ไปที่หน้านี้",
+    inviteTitle: "ครั้งแรกในหน้านี้?",
+    invite: (title: string, minutes: number) => `ให้ระบบสอน "${title}" แบบคลิกตามบนหน้าจอจริง ประมาณ ${minutes} นาที`,
+    inviteStart: "เริ่มเลย",
+    inviteLater: "ไม่ใช่ตอนนี้",
+    inviteNote: "เปิดบทสอนได้ทุกเมื่อที่ปุ่ม 'สอนการใช้งาน' ด้านบน",
+    doneTitle: "เรียนจบแล้ว",
+    doneBody: (title: string) => `จบบท "${title}" แล้ว เลือกบทอื่นได้ที่ปุ่ม 'สอนการใช้งาน' ด้านบน`,
+    more: "ดูบทอื่น",
+    close: "ปิด",
+    teamTitle: "ความคืบหน้าบทสอนของทีม",
+    teamSubtitle: "คนที่คุณดูแลใน Team Activity",
+    person: "พนักงาน",
+    finished: (done: number, total: number) => `จบแล้ว ${done}/${total} คน`,
+    loading: "กำลังโหลด…",
+    failed: "โหลดไม่สำเร็จ",
+    retry: "ลองใหม่",
+    teamEmpty: "ยังไม่มีคนในทีมที่คุณดูแล",
     noRecord: "ยังไม่เริ่ม",
   },
   EN: {
     title: "Click-through guides",
-    intro: "Pick a task to learn. The guide walks you through it on the real screen, one click at a time, and you can stop whenever you like. What you do is real work; when you are only practising, cancel before saving.",
+    intro:
+      "Pick a task to learn. The guide walks you through it on the real screen, one click at a time, and you can stop whenever you like. What you do is real work; when you are only practising, cancel before saving.",
     here: "For this screen",
     areas: { sales: "Sales & inquiries", estimate: "Estimating", project: "Projects & plans", field: "On site & documents", purchase: "BOM & purchasing", tools: "Knowledge & tools" },
-    allAreas: "All areas", areaFilter: "Guide area",
+    allAreas: "All areas",
+    areaFilter: "Guide area",
     size: (steps: number, minutes: number) => `${steps} steps · about ${minutes} min`,
-    done: (date: string) => `Finished ${date}`, partial: (step: number, count: number) => `Reached step ${step}/${count}`, fresh: "Not started",
-    start: "Start", again: "Go through again", restart: "Start again",
-    manual: "Read the full manual (with screenshots)", team: "Team progress", none: "No guide fits this account's permissions yet.",
+    done: (date: string) => `Finished ${date}`,
+    partial: (step: number, count: number) => `Reached step ${step}/${count}`,
+    fresh: "Not started",
+    start: "Start",
+    again: "Go through again",
+    restart: "Start again",
+    manual: "Read the full manual (with screenshots)",
+    team: "Team progress",
+    none: "No guide fits this account's permissions yet.",
     step: (index: number, count: number) => `Step ${index} of ${count}`,
-    back: "Back", next: "Next", skip: "Skip this step", finish: "Finish", exit: "Leave the guide",
-    clickHint: "Click the highlighted spot to carry on", waiting: "This part is not on the screen yet", go: "Go to this screen",
-    inviteTitle: "New to this screen?", invite: (title: string, minutes: number) => `Let the guide show you "${title}" by clicking through it on the real screen. About ${minutes} min.`,
-    inviteStart: "Start now", inviteLater: "Not now", inviteNote: "Guides are always under How-to guides in the top bar.",
-    doneTitle: "Guide finished", doneBody: (title: string) => `You have finished "${title}". More are under How-to guides in the top bar.`, more: "More guides", close: "Close",
-    teamTitle: "Team guide progress", teamSubtitle: "The people you review in Team Activity", person: "Person",
-    finished: (done: number, total: number) => `${done}/${total} finished`, loading: "Loading…", failed: "Could not load", retry: "Try again", teamEmpty: "Nobody on your team yet.",
+    back: "Back",
+    next: "Next",
+    skip: "Skip this step",
+    finish: "Finish",
+    exit: "Leave the guide",
+    clickHint: "Click the highlighted spot to carry on",
+    waiting: "This part is not on the screen yet",
+    go: "Go to this screen",
+    inviteTitle: "New to this screen?",
+    invite: (title: string, minutes: number) => `Let the guide show you "${title}" by clicking through it on the real screen. About ${minutes} min.`,
+    inviteStart: "Start now",
+    inviteLater: "Not now",
+    inviteNote: "Guides are always under How-to guides in the top bar.",
+    doneTitle: "Guide finished",
+    doneBody: (title: string) => `You have finished "${title}". More are under How-to guides in the top bar.`,
+    more: "More guides",
+    close: "Close",
+    teamTitle: "Team guide progress",
+    teamSubtitle: "The people you review in Team Activity",
+    person: "Person",
+    finished: (done: number, total: number) => `${done}/${total} finished`,
+    loading: "Loading…",
+    failed: "Could not load",
+    retry: "Try again",
+    teamEmpty: "Nobody on your team yet.",
     noRecord: "Not started",
   },
   JP: {
@@ -70,19 +121,44 @@ const UI = {
     intro: "学びたい作業を選ぶと、実際の画面で1ステップずつクリックしながら案内します。いつでも中断できます。操作は実際の業務になるため、練習だけの場合は保存前にキャンセルしてください。",
     here: "この画面",
     areas: { sales: "営業・引合", estimate: "見積", project: "案件・計画", field: "現地作業・文書", purchase: "BOM・購買", tools: "ナレッジ・ツール" },
-    allAreas: "全分野の概要", areaFilter: "ガイドの分野",
+    allAreas: "全分野の概要",
+    areaFilter: "ガイドの分野",
     size: (steps: number, minutes: number) => `${steps}ステップ・約${minutes}分`,
-    done: (date: string) => `${date} 完了`, partial: (step: number, count: number) => `ステップ ${step}/${count} まで`, fresh: "未受講",
-    start: "開始", again: "もう一度", restart: "最初から",
-    manual: "マニュアル全文を読む(画面付き)", team: "チームの進捗", none: "このアカウントの権限に合うガイドはまだありません。",
+    done: (date: string) => `${date} 完了`,
+    partial: (step: number, count: number) => `ステップ ${step}/${count} まで`,
+    fresh: "未受講",
+    start: "開始",
+    again: "もう一度",
+    restart: "最初から",
+    manual: "マニュアル全文を読む(画面付き)",
+    team: "チームの進捗",
+    none: "このアカウントの権限に合うガイドはまだありません。",
     step: (index: number, count: number) => `ステップ ${index} / ${count}`,
-    back: "戻る", next: "次へ", skip: "この手順を飛ばす", finish: "完了", exit: "ガイドを終了",
-    clickHint: "強調表示の箇所をクリックして進みます", waiting: "この箇所はまだ画面にありません", go: "この画面へ",
-    inviteTitle: "この画面は初めてですか?", invite: (title: string, minutes: number) => `「${title}」を実際の画面でクリックしながら案内します。約${minutes}分。`,
-    inviteStart: "開始する", inviteLater: "今はしない", inviteNote: "ガイドは上部バーの「使い方ガイド」からいつでも開けます。",
-    doneTitle: "ガイド完了", doneBody: (title: string) => `「${title}」を完了しました。他のガイドは上部バーの「使い方ガイド」から。`, more: "他のガイド", close: "閉じる",
-    teamTitle: "チームのガイド進捗", teamSubtitle: "チーム利用状況で担当しているメンバー", person: "メンバー",
-    finished: (done: number, total: number) => `${done}/${total}人完了`, loading: "読み込み中…", failed: "読み込めませんでした", retry: "再試行", teamEmpty: "担当メンバーはまだいません。",
+    back: "戻る",
+    next: "次へ",
+    skip: "この手順を飛ばす",
+    finish: "完了",
+    exit: "ガイドを終了",
+    clickHint: "強調表示の箇所をクリックして進みます",
+    waiting: "この箇所はまだ画面にありません",
+    go: "この画面へ",
+    inviteTitle: "この画面は初めてですか?",
+    invite: (title: string, minutes: number) => `「${title}」を実際の画面でクリックしながら案内します。約${minutes}分。`,
+    inviteStart: "開始する",
+    inviteLater: "今はしない",
+    inviteNote: "ガイドは上部バーの「使い方ガイド」からいつでも開けます。",
+    doneTitle: "ガイド完了",
+    doneBody: (title: string) => `「${title}」を完了しました。他のガイドは上部バーの「使い方ガイド」から。`,
+    more: "他のガイド",
+    close: "閉じる",
+    teamTitle: "チームのガイド進捗",
+    teamSubtitle: "チーム利用状況で担当しているメンバー",
+    person: "メンバー",
+    finished: (done: number, total: number) => `${done}/${total}人完了`,
+    loading: "読み込み中…",
+    failed: "読み込めませんでした",
+    retry: "再試行",
+    teamEmpty: "担当メンバーはまだいません。",
     noRecord: "未受講",
   },
 } as const;
@@ -91,19 +167,31 @@ type Copy = (typeof UI)[Lang];
 
 const RUN_KEY = (userId: number) => `tomas-tech-guide-run:${userId}`;
 const ANSWERED_KEY = (userId: number) => `tomas-tech-guide-invite:${userId}`;
+const NO_DUTIES: readonly GuideDuty[] = [];
 
 function readSession(key: string): string | null {
-  try { return window.sessionStorage.getItem(key); } catch { return null; }
+  try {
+    return window.sessionStorage.getItem(key);
+  } catch {
+    return null;
+  }
 }
 function writeSession(key: string, value: string | null) {
-  try { if (value === null) window.sessionStorage.removeItem(key); else window.sessionStorage.setItem(key, value); } catch { /* private window: the run just does not survive a reload */ }
+  try {
+    if (value === null) window.sessionStorage.removeItem(key);
+    else window.sessionStorage.setItem(key, value);
+  } catch {
+    /* private window: the run just does not survive a reload */
+  }
 }
 function readRun(userId: number): Run | null {
   try {
     const value = JSON.parse(readSession(RUN_KEY(userId)) ?? "null") as Run | null;
     const guide = GUIDES.find((item) => item.id === value?.guideId);
     return guide && value && Number.isInteger(value.index) && value.index >= 0 && value.index < guide.steps.length ? value : null;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 const shortDate = (iso: string, lang: Lang) => new Date(iso).toLocaleDateString(lang === "TH" ? "th-TH" : lang === "JP" ? "ja-JP" : "en-GB", { day: "numeric", month: "short" });
@@ -111,7 +199,11 @@ const shortDate = (iso: string, lang: Lang) => new Date(iso).toLocaleDateString(
 /** The first element a target names that takes up room on the screen; a closed <details> or a hidden menu has none. */
 function findVisible(target: string): HTMLElement | null {
   let elements: NodeListOf<HTMLElement>;
-  try { elements = document.querySelectorAll<HTMLElement>(guideSelector(target)); } catch { return null; }
+  try {
+    elements = document.querySelectorAll<HTMLElement>(guideSelector(target));
+  } catch {
+    return null;
+  }
   for (const element of elements) {
     if (element.closest(".guide-layer")) continue;
     const rect = element.getBoundingClientRect();
@@ -126,7 +218,8 @@ function place(spot: HTMLElement | null, card: HTMLElement | null, rect: DOMRect
   if (spot) {
     const box = rect ? `translate(${Math.round(rect.left - pad)}px, ${Math.round(rect.top - pad)}px)` : "";
     if (spot.style.transform !== box) spot.style.transform = box;
-    const width = rect ? `${Math.round(rect.width + pad * 2)}px` : "0px", height = rect ? `${Math.round(rect.height + pad * 2)}px` : "0px";
+    const width = rect ? `${Math.round(rect.width + pad * 2)}px` : "0px",
+      height = rect ? `${Math.round(rect.height + pad * 2)}px` : "0px";
     if (spot.style.width !== width) spot.style.width = width;
     if (spot.style.height !== height) spot.style.height = height;
     spot.hidden = !rect;
@@ -137,9 +230,20 @@ function place(spot: HTMLElement | null, card: HTMLElement | null, rect: DOMRect
   if (card.style.transform !== value) card.style.transform = value;
 }
 
-export function GuideLayer({ view, permissions, userId, open, onOpen, onClose, goTo }: {
+export function GuideLayer({
+  view,
+  permissions,
+  duties = NO_DUTIES,
+  userId,
+  open,
+  onOpen,
+  onClose,
+  goTo,
+}: {
   view: string;
   permissions: readonly string[];
+  /** Tasks the person does without their permission: a named approver, the Application team creating a project. */
+  duties?: readonly GuideDuty[];
   userId: number;
   /** The list of guides, opened by the shell's "How-to guides" button. */
   open: boolean;
@@ -149,7 +253,7 @@ export function GuideLayer({ view, permissions, userId, open, onOpen, onClose, g
 }) {
   const { lang } = useLanguage();
   const copy = UI[lang];
-  const available = useMemo(() => guidesFor(permissions), [permissions]);
+  const available = useMemo(() => guidesFor(permissions, duties), [permissions, duties]);
   const [progress, setProgress] = useState<Map<string, GuideProgress> | null>(null);
   const [run, setRunState] = useState<Run | null>(() => readRun(userId));
   const [finished, setFinished] = useState<Guide | null>(null);
@@ -161,10 +265,14 @@ export function GuideLayer({ view, permissions, userId, open, onOpen, onClose, g
   useEffect(() => {
     let cancelled = false;
     void apiRequest<{ items: GuideProgress[] }>("/api/v1/guides/progress")
-      .then((result) => { if (!cancelled) setProgress(new Map(result.items.map((item) => [item.guideId, item]))); })
+      .then((result) => {
+        if (!cancelled) setProgress(new Map(result.items.map((item) => [item.guideId, item])));
+      })
       // Without the record, no screen invites anyone: better silent than asking again every visit.
       .catch(() => undefined);
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const report = useCallback((guide: Guide, event: GuideEvent, step = 0) => {
@@ -173,30 +281,45 @@ export function GuideLayer({ view, permissions, userId, open, onOpen, onClose, g
       .catch(() => undefined);
   }, []);
 
-  const setRun = useCallback((next: Run | null) => {
-    setRunState(next);
-    writeSession(RUN_KEY(userId), next ? JSON.stringify(next) : null);
+  const setRun = useCallback(
+    (next: Run | null) => {
+      setRunState(next);
+      writeSession(RUN_KEY(userId), next ? JSON.stringify(next) : null);
+    },
+    [userId],
+  );
+
+  const answer = useCallback(() => {
+    setAnswered(true);
+    writeSession(ANSWERED_KEY(userId), "1");
   }, [userId]);
 
-  const answer = useCallback(() => { setAnswered(true); writeSession(ANSWERED_KEY(userId), "1"); }, [userId]);
+  const start = useCallback(
+    (guide: Guide) => {
+      reached.current = { guideId: guide.id, step: 0 };
+      setFinished(null);
+      setRun({ guideId: guide.id, index: 0 });
+      report(guide, "start");
+      answer();
+      onClose();
+    },
+    [answer, onClose, report, setRun],
+  );
 
-  const start = useCallback((guide: Guide) => {
-    reached.current = { guideId: guide.id, step: 0 };
-    setFinished(null);
-    setRun({ guideId: guide.id, index: 0 });
-    report(guide, "start");
-    answer();
-    onClose();
-  }, [answer, onClose, report, setRun]);
+  const running = run ? (GUIDES.find((guide) => guide.id === run.guideId) ?? null) : null;
 
-  const running = run ? GUIDES.find((guide) => guide.id === run.guideId) ?? null : null;
-
-  const moveTo = useCallback((index: number) => {
-    if (!running) return;
-    setRun({ guideId: running.id, index });
-    const best = reached.current?.guideId === running.id ? reached.current.step : 0;
-    if (index > best) { reached.current = { guideId: running.id, step: index }; report(running, "step", index); }
-  }, [report, running, setRun]);
+  const moveTo = useCallback(
+    (index: number) => {
+      if (!running) return;
+      setRun({ guideId: running.id, index });
+      const best = reached.current?.guideId === running.id ? reached.current.step : 0;
+      if (index > best) {
+        reached.current = { guideId: running.id, step: index };
+        report(running, "step", index);
+      }
+    },
+    [report, running, setRun],
+  );
 
   const finish = useCallback(() => {
     if (!running) return;
@@ -206,7 +329,7 @@ export function GuideLayer({ view, permissions, userId, open, onOpen, onClose, g
   }, [report, running, setRun]);
 
   // A screen with a guide the person has never seen invites them once, a moment after it opens; one answer per session.
-  const invited = !run && !open && !teamOpen && progress && !answered ? available.find((guide) => guide.invite === view && !progress.has(guide.id)) ?? null : null;
+  const invited = !run && !open && !teamOpen && progress && !answered ? (available.find((guide) => guide.invite === view && !progress.has(guide.id)) ?? null) : null;
   const inviteKey = invited ? `${view}:${invited.id}` : null;
   useEffect(() => {
     if (!inviteKey) return;
@@ -220,76 +343,191 @@ export function GuideLayer({ view, permissions, userId, open, onOpen, onClose, g
     return () => window.clearTimeout(timer);
   }, [finished]);
 
-  return <>
-    {open ? <GuidePanel copy={copy} lang={lang} view={view} guides={available} progress={progress} canSeeTeam={permissions.includes("performance.manage")}
-      onStart={start} onClose={onClose} onTeam={() => { onClose(); setTeamOpen(true); }} onManual={() => { onClose(); goTo("manual"); }} /> : null}
-    {teamOpen ? <GuideTeamModal copy={copy} lang={lang} onClose={() => setTeamOpen(false)} /> : null}
-    {running && run ? <GuideRunner key={running.id} guide={running} index={run.index} copy={copy} lang={lang} view={view}
-      onStep={moveTo} onExit={() => setRun(null)} onFinish={finish} goTo={goTo} /> : null}
-    {invited && inviteShown === inviteKey ? createPortal(<aside className="guide-layer guide-card" role="status" aria-label={copy.inviteTitle}>
-      <Icon name="play" />
-      <div>
-        <strong>{copy.inviteTitle}</strong>
-        <p>{copy.invite(guideText(invited.title, lang), invited.minutes)}</p>
-        <small>{copy.inviteNote}</small>
-        <div className="guide-card-actions">
-          <button className="btn primary sm" type="button" onClick={() => start(invited)}><Icon name="play" />{copy.inviteStart}</button>
-          <button className="btn ghost sm" type="button" onClick={() => { report(invited, "invite-closed"); answer(); }}>{copy.inviteLater}</button>
-        </div>
-      </div>
-    </aside>, document.body) : null}
-    {finished ? createPortal(<aside className="guide-layer guide-card done" role="status" aria-label={copy.doneTitle}>
-      <Icon name="checkCircle" />
-      <div>
-        <strong>{copy.doneTitle}</strong>
-        <p>{copy.doneBody(guideText(finished.title, lang))}</p>
-        <div className="guide-card-actions">
-          <button className="btn default sm" type="button" onClick={() => { setFinished(null); onOpen(); }}>{copy.more}</button>
-          <button className="btn ghost sm" type="button" onClick={() => setFinished(null)}>{copy.close}</button>
-        </div>
-      </div>
-    </aside>, document.body) : null}
-  </>;
+  return (
+    <>
+      {open ? (
+        <GuidePanel
+          copy={copy}
+          lang={lang}
+          view={view}
+          guides={available}
+          progress={progress}
+          canSeeTeam={permissions.includes("performance.manage")}
+          onStart={start}
+          onClose={onClose}
+          onTeam={() => {
+            onClose();
+            setTeamOpen(true);
+          }}
+          onManual={() => {
+            onClose();
+            goTo("manual");
+          }}
+        />
+      ) : null}
+      {teamOpen ? <GuideTeamModal copy={copy} lang={lang} onClose={() => setTeamOpen(false)} /> : null}
+      {running && run ? (
+        <GuideRunner key={running.id} guide={running} index={run.index} copy={copy} lang={lang} view={view} onStep={moveTo} onExit={() => setRun(null)} onFinish={finish} goTo={goTo} />
+      ) : null}
+      {invited && inviteShown === inviteKey
+        ? createPortal(
+            <aside className="guide-layer guide-card" role="status" aria-label={copy.inviteTitle}>
+              <Icon name="play" />
+              <div>
+                <strong>{copy.inviteTitle}</strong>
+                <p>{copy.invite(guideText(invited.title, lang), invited.minutes)}</p>
+                <small>{copy.inviteNote}</small>
+                <div className="guide-card-actions">
+                  <button className="btn primary sm" type="button" onClick={() => start(invited)}>
+                    <Icon name="play" />
+                    {copy.inviteStart}
+                  </button>
+                  <button
+                    className="btn ghost sm"
+                    type="button"
+                    onClick={() => {
+                      report(invited, "invite-closed");
+                      answer();
+                    }}
+                  >
+                    {copy.inviteLater}
+                  </button>
+                </div>
+              </div>
+            </aside>,
+            document.body,
+          )
+        : null}
+      {finished
+        ? createPortal(
+            <aside className="guide-layer guide-card done" role="status" aria-label={copy.doneTitle}>
+              <Icon name="checkCircle" />
+              <div>
+                <strong>{copy.doneTitle}</strong>
+                <p>{copy.doneBody(guideText(finished.title, lang))}</p>
+                <div className="guide-card-actions">
+                  <button
+                    className="btn default sm"
+                    type="button"
+                    onClick={() => {
+                      setFinished(null);
+                      onOpen();
+                    }}
+                  >
+                    {copy.more}
+                  </button>
+                  <button className="btn ghost sm" type="button" onClick={() => setFinished(null)}>
+                    {copy.close}
+                  </button>
+                </div>
+              </div>
+            </aside>,
+            document.body,
+          )
+        : null}
+    </>
+  );
 }
 
 function GuideStatus({ copy, lang, guide, record }: { copy: Copy; lang: Lang; guide: Guide; record: GuideProgress | undefined }) {
-  if (record?.completedAt) return <span className="guide-status done"><Icon name="checkCircle" />{copy.done(shortDate(record.completedAt, lang))}</span>;
+  if (record?.completedAt)
+    return (
+      <span className="guide-status done">
+        <Icon name="checkCircle" />
+        {copy.done(shortDate(record.completedAt, lang))}
+      </span>
+    );
   if (record?.startedAt) return <span className="guide-status partial">{copy.partial(Math.min(record.stepReached + 1, guide.steps.length), guide.steps.length)}</span>;
   return <span className="guide-status">{copy.fresh}</span>;
 }
 
-function GuidePanel({ copy, lang, view, guides, progress, canSeeTeam, onStart, onClose, onTeam, onManual }: {
-  copy: Copy; lang: Lang; view: string; guides: readonly Guide[]; progress: Map<string, GuideProgress> | null; canSeeTeam: boolean;
-  onStart: (guide: Guide) => void; onClose: () => void; onTeam: () => void; onManual: () => void;
+function GuidePanel({
+  copy,
+  lang,
+  view,
+  guides,
+  progress,
+  canSeeTeam,
+  onStart,
+  onClose,
+  onTeam,
+  onManual,
+}: {
+  copy: Copy;
+  lang: Lang;
+  view: string;
+  guides: readonly Guide[];
+  progress: Map<string, GuideProgress> | null;
+  canSeeTeam: boolean;
+  onStart: (guide: Guide) => void;
+  onClose: () => void;
+  onTeam: () => void;
+  onManual: () => void;
 }) {
   const here = guides.filter((guide) => guide.views.includes(view));
   const other = guides.filter((guide) => !guide.views.includes(view));
   const item = (guide: Guide) => {
     const record = progress?.get(guide.id);
-    return <li key={guide.id} className="guide-item">
-      <div>
-        <strong>{guideText(guide.title, lang)}</strong>
-        <p>{guideText(guide.summary, lang)}</p>
-        <div className="guide-item-meta"><span>{copy.size(guide.steps.length, guide.minutes)}</span><GuideStatus copy={copy} lang={lang} guide={guide} record={record} /></div>
-      </div>
-      <button className={record?.completedAt ? "btn default sm" : "btn primary sm"} type="button" onClick={() => onStart(guide)}>
-        <Icon name="play" />{record?.completedAt ? copy.again : record?.startedAt ? copy.restart : copy.start}
-      </button>
-    </li>;
+    return (
+      <li key={guide.id} className="guide-item">
+        <div>
+          <strong>{guideText(guide.title, lang)}</strong>
+          <p>{guideText(guide.summary, lang)}</p>
+          <div className="guide-item-meta">
+            <span>{copy.size(guide.steps.length, guide.minutes)}</span>
+            <GuideStatus copy={copy} lang={lang} guide={guide} record={record} />
+          </div>
+        </div>
+        <button className={record?.completedAt ? "btn default sm" : "btn primary sm"} type="button" onClick={() => onStart(guide)}>
+          <Icon name="play" />
+          {record?.completedAt ? copy.again : record?.startedAt ? copy.restart : copy.start}
+        </button>
+      </li>
+    );
   };
-  return <Drawer title={copy.title} onClose={onClose} width={460} footer={<>
-    <button className="btn ghost" type="button" onClick={onManual}><Icon name="book" />{copy.manual}</button>
-    <span className="spacer" />
-    {canSeeTeam ? <button className="btn default" type="button" onClick={onTeam}><Icon name="users" />{copy.team}</button> : null}
-  </>}>
-    <div className="guide-panel">
-      <p className="guide-intro">{copy.intro}</p>
-      {!guides.length ? <p className="muted">{copy.none}</p> : null}
-      {here.length ? <section><h3>{copy.here}</h3><ul>{here.map(item)}</ul></section> : null}
-      {/* With two dozen guides, the rest are grouped by the part of the work they teach. */}
-      {GUIDE_AREAS.map((area) => { const list = other.filter((guide) => guide.area === area); return list.length ? <section key={area}><h3>{copy.areas[area]}</h3><ul>{list.map(item)}</ul></section> : null; })}
-    </div>
-  </Drawer>;
+  return (
+    <Drawer
+      title={copy.title}
+      onClose={onClose}
+      width={460}
+      footer={
+        <>
+          <button className="btn ghost" type="button" onClick={onManual}>
+            <Icon name="book" />
+            {copy.manual}
+          </button>
+          <span className="spacer" />
+          {canSeeTeam ? (
+            <button className="btn default" type="button" onClick={onTeam}>
+              <Icon name="users" />
+              {copy.team}
+            </button>
+          ) : null}
+        </>
+      }
+    >
+      <div className="guide-panel">
+        <p className="guide-intro">{copy.intro}</p>
+        {!guides.length ? <p className="muted">{copy.none}</p> : null}
+        {here.length ? (
+          <section>
+            <h3>{copy.here}</h3>
+            <ul>{here.map(item)}</ul>
+          </section>
+        ) : null}
+        {/* With two dozen guides, the rest are grouped by the part of the work they teach. */}
+        {GUIDE_AREAS.map((area) => {
+          const list = other.filter((guide) => guide.area === area);
+          return list.length ? (
+            <section key={area}>
+              <h3>{copy.areas[area]}</h3>
+              <ul>{list.map(item)}</ul>
+            </section>
+          ) : null;
+        })}
+      </div>
+    </Drawer>
+  );
 }
 
 function GuideTeamModal({ copy, lang, onClose }: { copy: Copy; lang: Lang; onClose: () => void }) {
@@ -300,50 +538,153 @@ function GuideTeamModal({ copy, lang, onClose }: { copy: Copy; lang: Lang; onClo
   useEffect(() => {
     let cancelled = false;
     void apiRequest<TeamProgress>("/api/v1/guides/team")
-      .then((data) => { if (!cancelled) setState({ data, error: false }); })
-      .catch(() => { if (!cancelled) setState({ data: null, error: true }); });
-    return () => { cancelled = true; };
+      .then((data) => {
+        if (!cancelled) setState({ data, error: false });
+      })
+      .catch(() => {
+        if (!cancelled) setState({ data: null, error: true });
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [attempt]);
   const records = useMemo(() => new Map((state.data?.progress ?? []).map((row) => [`${row.userId}:${row.guideId}`, row])), [state.data]);
   const members = state.data?.members ?? [];
   const done = (memberId: number, guide: Guide) => Boolean(records.get(`${memberId}:${guide.id}`)?.completedAt);
   const inArea = (key: GuideArea) => GUIDES.filter((guide) => guide.area === key);
   const shown = area === "all" ? [] : inArea(area);
-  return <Modal title={copy.teamTitle} subtitle={copy.teamSubtitle} size="xl" onClose={onClose}>
-    {state.error ? <div className="info-strip red" role="alert"><Icon name="alertTriangle" /><span>{copy.failed}</span>
-      <button className="btn default sm" type="button" onClick={() => { setState({ data: null, error: false }); setAttempt((value) => value + 1); }}>{copy.retry}</button></div>
-      : !state.data ? <p className="muted" role="status">{copy.loading}</p>
-        : !members.length ? <p className="muted">{copy.teamEmpty}</p>
-          : <><div className="seg-control guide-team-areas" role="group" aria-label={copy.areaFilter}>
-            {(["all", ...GUIDE_AREAS] as const).map((key) => <button key={key} type="button" className={area === key ? "on" : ""} aria-pressed={area === key} onClick={() => setArea(key)}>{key === "all" ? copy.allAreas : copy.areas[key]}</button>)}
+  return (
+    <Modal title={copy.teamTitle} subtitle={copy.teamSubtitle} size="xl" onClose={onClose}>
+      {state.error ? (
+        <div className="info-strip red" role="alert">
+          <Icon name="alertTriangle" />
+          <span>{copy.failed}</span>
+          <button
+            className="btn default sm"
+            type="button"
+            onClick={() => {
+              setState({ data: null, error: false });
+              setAttempt((value) => value + 1);
+            }}
+          >
+            {copy.retry}
+          </button>
+        </div>
+      ) : !state.data ? (
+        <p className="muted" role="status">
+          {copy.loading}
+        </p>
+      ) : !members.length ? (
+        <p className="muted">{copy.teamEmpty}</p>
+      ) : (
+        <>
+          <div className="seg-control guide-team-areas" role="group" aria-label={copy.areaFilter}>
+            {(["all", ...GUIDE_AREAS] as const).map((key) => (
+              <button key={key} type="button" className={area === key ? "on" : ""} aria-pressed={area === key} onClick={() => setArea(key)}>
+                {key === "all" ? copy.allAreas : copy.areas[key]}
+              </button>
+            ))}
           </div>
-          <div className="table-wrap guide-team"><table>
-            <thead><tr><th>{copy.person}</th>{area === "all"
-              ? GUIDE_AREAS.map((key) => <th key={key} className="wrap">{copy.areas[key]}</th>)
-              : shown.map((guide) => <th key={guide.id} className="wrap">{guideText(guide.title, lang)}</th>)}</tr></thead>
-            <tbody>{members.map((member) => <tr key={member.id}>
-              <td><div className="cell-primary"><strong>{member.name}</strong><span>{member.department} · {member.role}</span></div></td>
-              {area === "all" ? GUIDE_AREAS.map((key) => {
-                const guides = inArea(key), finished = guides.filter((guide) => done(member.id, guide)).length;
-                return <td key={key}><span className={`guide-status${finished === guides.length ? " done" : finished ? " partial" : ""}`}>{finished === guides.length ? <Icon name="checkCircle" /> : null}{finished}/{guides.length}</span></td>;
-              }) : shown.map((guide) => {
-                const record = records.get(`${member.id}:${guide.id}`);
-                return <td key={guide.id}>{record?.completedAt
-                  ? <span className="guide-status done"><Icon name="checkCircle" />{shortDate(record.completedAt, lang)}</span>
-                  : record?.startedAt ? <span className="guide-status partial">{Math.min(record.stepReached + 1, record.stepCount)}/{record.stepCount}</span>
-                    : <span className="guide-status">—</span>}</td>;
-              })}
-            </tr>)}</tbody>
-            <tfoot><tr><th>{copy.person}</th>{area === "all"
-              ? GUIDE_AREAS.map((key) => <th key={key}>{copy.finished(members.filter((member) => inArea(key).every((guide) => done(member.id, guide))).length, members.length)}</th>)
-              : shown.map((guide) => <th key={guide.id}>{copy.finished(members.filter((member) => done(member.id, guide)).length, members.length)}</th>)}</tr></tfoot>
-          </table></div></>}
-  </Modal>;
+          <div className="table-wrap guide-team">
+            <table>
+              <thead>
+                <tr>
+                  <th>{copy.person}</th>
+                  {area === "all"
+                    ? GUIDE_AREAS.map((key) => (
+                        <th key={key} className="wrap">
+                          {copy.areas[key]}
+                        </th>
+                      ))
+                    : shown.map((guide) => (
+                        <th key={guide.id} className="wrap">
+                          {guideText(guide.title, lang)}
+                        </th>
+                      ))}
+                </tr>
+              </thead>
+              <tbody>
+                {members.map((member) => (
+                  <tr key={member.id}>
+                    <td>
+                      <div className="cell-primary">
+                        <strong>{member.name}</strong>
+                        <span>
+                          {member.department} · {member.role}
+                        </span>
+                      </div>
+                    </td>
+                    {area === "all"
+                      ? GUIDE_AREAS.map((key) => {
+                          const guides = inArea(key),
+                            finished = guides.filter((guide) => done(member.id, guide)).length;
+                          return (
+                            <td key={key}>
+                              <span className={`guide-status${finished === guides.length ? " done" : finished ? " partial" : ""}`}>
+                                {finished === guides.length ? <Icon name="checkCircle" /> : null}
+                                {finished}/{guides.length}
+                              </span>
+                            </td>
+                          );
+                        })
+                      : shown.map((guide) => {
+                          const record = records.get(`${member.id}:${guide.id}`);
+                          return (
+                            <td key={guide.id}>
+                              {record?.completedAt ? (
+                                <span className="guide-status done">
+                                  <Icon name="checkCircle" />
+                                  {shortDate(record.completedAt, lang)}
+                                </span>
+                              ) : record?.startedAt ? (
+                                <span className="guide-status partial">
+                                  {Math.min(record.stepReached + 1, record.stepCount)}/{record.stepCount}
+                                </span>
+                              ) : (
+                                <span className="guide-status">—</span>
+                              )}
+                            </td>
+                          );
+                        })}
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <th>{copy.person}</th>
+                  {area === "all"
+                    ? GUIDE_AREAS.map((key) => <th key={key}>{copy.finished(members.filter((member) => inArea(key).every((guide) => done(member.id, guide))).length, members.length)}</th>)
+                    : shown.map((guide) => <th key={guide.id}>{copy.finished(members.filter((member) => done(member.id, guide)).length, members.length)}</th>)}
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </>
+      )}
+    </Modal>
+  );
 }
 
-function GuideRunner({ guide, index, copy, lang, view, onStep, onExit, onFinish, goTo }: {
-  guide: Guide; index: number; copy: Copy; lang: Lang; view: string;
-  onStep: (index: number) => void; onExit: () => void; onFinish: () => void; goTo: (view: string) => void;
+function GuideRunner({
+  guide,
+  index,
+  copy,
+  lang,
+  view,
+  onStep,
+  onExit,
+  onFinish,
+  goTo,
+}: {
+  guide: Guide;
+  index: number;
+  copy: Copy;
+  lang: Lang;
+  view: string;
+  onStep: (index: number) => void;
+  onExit: () => void;
+  onFinish: () => void;
+  goTo: (view: string) => void;
 }) {
   const step = guide.steps[index]!;
   const last = index === guide.steps.length - 1;
@@ -354,19 +695,26 @@ function GuideRunner({ guide, index, copy, lang, view, onStep, onExit, onFinish,
   const steppedBack = useRef<number | null>(null);
   const [host, setHost] = useState<Element | null>(null);
   const [state, setState] = useState<{ index: number; found: boolean; missing: boolean }>({ index, found: false, missing: false });
-  const titleId = useId(), bodyId = useId();
+  const titleId = useId(),
+    bodyId = useId();
 
-  const advance = useCallback(() => { if (last) onFinish(); else onStep(index + 1); }, [index, last, onFinish, onStep]);
+  const advance = useCallback(() => {
+    if (last) onFinish();
+    else onStep(index + 1);
+  }, [index, last, onFinish, onStep]);
 
   useEffect(() => {
-    let frame = 0, lostAt = performance.now(), scrolled = false, checkedAt = 0;
+    let frame = 0,
+      lostAt = performance.now(),
+      scrolled = false,
+      checkedAt = 0;
     const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
     const tick = (now: number) => {
       const element = step.target ? findVisible(step.target) : null;
       targetRef.current = element;
       // A modal <dialog> sits in the browser's top layer, above any z-index: the guide draws inside it instead.
       const nextHost = element?.closest("dialog[open]") ?? document.querySelector("dialog[open]") ?? document.body;
-      setHost((current) => current === nextHost ? current : nextHost);
+      setHost((current) => (current === nextHost ? current : nextHost));
       let missing = false;
       if (element) {
         lostAt = now;
@@ -381,10 +729,13 @@ function GuideRunner({ guide, index, copy, lang, view, onStep, onExit, onFinish,
         if (steppedBack.current !== index && now - checkedAt > 300) {
           checkedAt = now;
           const ahead = guide.steps.findIndex((candidate, at) => at > index && at <= index + 4 && candidate.view === view && candidate.target !== undefined && findVisible(candidate.target) !== null);
-          if (ahead > index) { onStep(ahead); return; }
+          if (ahead > index) {
+            onStep(ahead);
+            return;
+          }
         }
       }
-      setState((current) => current.index === index && current.found === Boolean(element) && current.missing === missing ? current : { index, found: Boolean(element), missing });
+      setState((current) => (current.index === index && current.found === Boolean(element) && current.missing === missing ? current : { index, found: Boolean(element), missing }));
       place(spotRef.current, cardRef.current, element?.getBoundingClientRect() ?? null);
       frame = window.requestAnimationFrame(tick);
     };
@@ -407,28 +758,74 @@ function GuideRunner({ guide, index, copy, lang, view, onStep, onExit, onFinish,
 
   const current = state.index === index ? state : { index, found: false, missing: false };
   const text = (value: { th: string; en: string; jp: string }) => guideText(value, lang);
-  const back = () => { steppedBack.current = index - 1; onStep(index - 1); };
+  const back = () => {
+    steppedBack.current = index - 1;
+    onStep(index - 1);
+  };
   if (!host) return null;
-  return createPortal(<div className="guide-layer">
-    <div ref={spotRef} className={`guide-spot${step.action === "click" ? " click" : ""}`} hidden aria-hidden="true" />
-    <div ref={cardRef} className="guide-pop" role="dialog" aria-modal="false" aria-labelledby={titleId} aria-describedby={bodyId}>
-      <div className="guide-pop-head">
-        <span>{copy.step(index + 1, guide.steps.length)} · {text(guide.title)}</span>
-        <button className="icon-btn" type="button" aria-label={copy.exit} title={copy.exit} onClick={onExit}><Icon name="x" /></button>
+  return createPortal(
+    <div className="guide-layer">
+      <div ref={spotRef} className={`guide-spot${step.action === "click" ? " click" : ""}`} hidden aria-hidden="true" />
+      <div ref={cardRef} className="guide-pop" role="dialog" aria-modal="false" aria-labelledby={titleId} aria-describedby={bodyId}>
+        <div className="guide-pop-head">
+          <span>
+            {copy.step(index + 1, guide.steps.length)} · {text(guide.title)}
+          </span>
+          <button className="icon-btn" type="button" aria-label={copy.exit} title={copy.exit} onClick={onExit}>
+            <Icon name="x" />
+          </button>
+        </div>
+        <div className="guide-pop-bar" aria-hidden="true">
+          <i style={{ width: `${((index + 1) / guide.steps.length) * 100}%` }} />
+        </div>
+        <strong id={titleId}>{text(step.title)}</strong>
+        <p id={bodyId} aria-live="polite">
+          {text(step.body)}
+        </p>
+        {current.missing ? (
+          <p className="guide-pop-missing">
+            <Icon name="alertCircle" />
+            {step.missing ? text(step.missing) : copy.waiting}
+          </p>
+        ) : step.action === "click" && current.found && !last ? (
+          <p className="guide-pop-hint">
+            <Icon name="arrowRight" />
+            {copy.clickHint}
+          </p>
+        ) : null}
+        <div className="guide-pop-actions">
+          {index > 0 ? (
+            <button className="btn ghost sm" type="button" onClick={back}>
+              <Icon name="arrowLeft" />
+              {copy.back}
+            </button>
+          ) : null}
+          {current.missing && step.canGo ? (
+            <button
+              className="btn default sm"
+              type="button"
+              onClick={() => {
+                goTo(step.view);
+                advance();
+              }}
+            >
+              {copy.go}
+            </button>
+          ) : null}
+          <span className="spacer" />
+          {step.action === "click" && !last ? (
+            <button className="btn ghost sm" type="button" onClick={advance}>
+              {copy.skip}
+            </button>
+          ) : (
+            <button className="btn primary sm" type="button" onClick={advance}>
+              {last ? copy.finish : copy.next}
+              {last ? null : <Icon name="arrowRight" />}
+            </button>
+          )}
+        </div>
       </div>
-      <div className="guide-pop-bar" aria-hidden="true"><i style={{ width: `${((index + 1) / guide.steps.length) * 100}%` }} /></div>
-      <strong id={titleId}>{text(step.title)}</strong>
-      <p id={bodyId} aria-live="polite">{text(step.body)}</p>
-      {current.missing ? <p className="guide-pop-missing"><Icon name="alertCircle" />{step.missing ? text(step.missing) : copy.waiting}</p>
-        : step.action === "click" && current.found && !last ? <p className="guide-pop-hint"><Icon name="arrowRight" />{copy.clickHint}</p> : null}
-      <div className="guide-pop-actions">
-        {index > 0 ? <button className="btn ghost sm" type="button" onClick={back}><Icon name="arrowLeft" />{copy.back}</button> : null}
-        {current.missing && step.canGo ? <button className="btn default sm" type="button" onClick={() => { goTo(step.view); advance(); }}>{copy.go}</button> : null}
-        <span className="spacer" />
-        {step.action === "click" && !last
-          ? <button className="btn ghost sm" type="button" onClick={advance}>{copy.skip}</button>
-          : <button className="btn primary sm" type="button" onClick={advance}>{last ? copy.finish : copy.next}{last ? null : <Icon name="arrowRight" />}</button>}
-      </div>
-    </div>
-  </div>, host);
+    </div>,
+    host,
+  );
 }

@@ -2,37 +2,37 @@
 
 [Module](../modules/site-visit.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `6cd83665`; generated, do not edit. [backend-node/src/routes/site-visits-workflow.ts](<../../../backend-node/src/routes/site-visits-workflow.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `c0b7e1fa`; generated, do not edit. [backend-node/src/routes/site-visits-workflow.ts](<../../../backend-node/src/routes/site-visits-workflow.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| POST | `/api/v1/site-visits/` | 81–257 |
-| POST | `/api/v1/site-visits/:id/status` | 259–367 |
-| PUT | `/api/v1/site-visits/:id/schedule` | 369–475 |
-| POST | `/api/v1/site-visits/:id/assignments` | 477–641 |
-| POST | `/api/v1/site-visits/:id/assignments/:assignmentId/response` | 643–751 |
-| DELETE | `/api/v1/site-visits/:id/assignments/:assignmentId` | 753–816 |
-| POST | `/api/v1/site-visits/:id/confirmations` | 818–918 |
-| POST | `/api/v1/site-visits/:id/check-in` | 920–1002 |
-| POST | `/api/v1/site-visits/:id/check-out` | 1004–1102 |
-| PUT | `/api/v1/site-visits/:id/checklist` | 1104–1175 |
-| POST | `/api/v1/site-visits/:id/findings` | 1177–1248 |
-| DELETE | `/api/v1/site-visits/:id/findings/:findingId` | 1249–1278 |
-| POST | `/api/v1/site-visits/:id/action-items` | 1280–1355 |
-| POST | `/api/v1/site-visits/:id/attachments` | 1357–1454 |
-| GET | `/api/v1/site-visits/:id/attachments/:attachmentId/content` | 1455–1485 |
+| POST | `/api/v1/site-visits/` | 50–138 |
+| POST | `/api/v1/site-visits/:id/status` | 140–198 |
+| PUT | `/api/v1/site-visits/:id/schedule` | 200–259 |
+| POST | `/api/v1/site-visits/:id/assignments` | 261–363 |
+| POST | `/api/v1/site-visits/:id/assignments/:assignmentId/response` | 365–420 |
+| DELETE | `/api/v1/site-visits/:id/assignments/:assignmentId` | 422–455 |
+| POST | `/api/v1/site-visits/:id/confirmations` | 457–511 |
+| POST | `/api/v1/site-visits/:id/check-in` | 513–548 |
+| POST | `/api/v1/site-visits/:id/check-out` | 550–608 |
+| PUT | `/api/v1/site-visits/:id/checklist` | 610–643 |
+| POST | `/api/v1/site-visits/:id/findings` | 645–677 |
+| DELETE | `/api/v1/site-visits/:id/findings/:findingId` | 678–698 |
+| POST | `/api/v1/site-visits/:id/action-items` | 700–733 |
+| POST | `/api/v1/site-visits/:id/attachments` | 735–801 |
+| GET | `/api/v1/site-visits/:id/attachments/:attachmentId/content` | 802–821 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `clean` | [backend-node/src/routes/site-visits-workflow.ts](<../../../backend-node/src/routes/site-visits-workflow.ts>) | 52–54 |
-| `optionalId` | [backend-node/src/routes/site-visits-workflow.ts](<../../../backend-node/src/routes/site-visits-workflow.ts>) | 55–57 |
-| `stamp` | [backend-node/src/routes/site-visits-workflow.ts](<../../../backend-node/src/routes/site-visits-workflow.ts>) | 58–63 |
-| `today` | [backend-node/src/routes/site-visits-workflow.ts](<../../../backend-node/src/routes/site-visits-workflow.ts>) | 64–73 |
-| `registerSiteVisitWorkflowRoutes` | [backend-node/src/routes/site-visits-workflow.ts](<../../../backend-node/src/routes/site-visits-workflow.ts>) | 75–1486 |
+| `clean` | [backend-node/src/routes/site-visits-workflow.ts](<../../../backend-node/src/routes/site-visits-workflow.ts>) | 27–29 |
+| `optionalId` | [backend-node/src/routes/site-visits-workflow.ts](<../../../backend-node/src/routes/site-visits-workflow.ts>) | 30–32 |
+| `stamp` | [backend-node/src/routes/site-visits-workflow.ts](<../../../backend-node/src/routes/site-visits-workflow.ts>) | 33–37 |
+| `today` | [backend-node/src/routes/site-visits-workflow.ts](<../../../backend-node/src/routes/site-visits-workflow.ts>) | 38–47 |
+| `registerSiteVisitWorkflowRoutes` | [backend-node/src/routes/site-visits-workflow.ts](<../../../backend-node/src/routes/site-visits-workflow.ts>) | 49–822 |
 
 ## Direct local dependencies
 

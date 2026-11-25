@@ -17,11 +17,7 @@ import {
   type SalesInquiryEvidenceRow,
   type ScheduleEvidenceRow,
 } from "../performance-evidence.js";
-import {
-  canManagePerformanceTarget,
-  frameworkForRole,
-  type PerformanceAreaCode,
-} from "../performance-framework.js";
+import { canManagePerformanceTarget, frameworkForRole, type PerformanceAreaCode } from "../performance-framework.js";
 import { teamOfSql } from "../team-scope.js";
 import type { CurrentUserService } from "../users.js";
 
@@ -80,9 +76,14 @@ type ScoreInput = { areaCode: PerformanceAreaCode; score: number | null; evidenc
 
 const invalid = (message: string) => new ApiError(400, "validation_failed", message);
 const cycleDto = (row: CycleRow) => ({
-  id: Number(row.id), code: row.code, name: row.name,
-  periodStart: dateOnly(row.period_start), periodEnd: dateOnly(row.period_end), reviewDueDate: dateOnly(row.review_due_date),
-  status: row.status, rowVersion: row.row_version.toString("base64"),
+  id: Number(row.id),
+  code: row.code,
+  name: row.name,
+  periodStart: dateOnly(row.period_start),
+  periodEnd: dateOnly(row.period_end),
+  reviewDueDate: dateOnly(row.review_due_date),
+  status: row.status,
+  rowVersion: row.row_version.toString("base64"),
 });
 
 function performanceScores(value: unknown, areaCodes: readonly PerformanceAreaCode[], submit: boolean): ScoreInput[] {
@@ -105,9 +106,9 @@ function performanceScores(value: unknown, areaCodes: readonly PerformanceAreaCo
 
 async function targetRow(transaction: Transaction, employeeId: number, cycleId: number, actorDepartment: string): Promise<TargetRow> {
   const request = new sql.Request(transaction);
-  request.input("employee", sql.BigInt, employeeId).input("cycle", sql.BigInt, cycleId)
-    .input("actor_department", sql.NVarChar(100), actorDepartment.trim());
-  const row = (await request.query<TargetRow>(`
+  request.input("employee", sql.BigInt, employeeId).input("cycle", sql.BigInt, cycleId).input("actor_department", sql.NVarChar(100), actorDepartment.trim());
+  const row = (
+    await request.query<TargetRow>(`
     SELECT employee.user_id,role.code target_role,${teamOfSql("app_user.department")} target_team,${teamOfSql("@actor_department")} actor_team,cycle.status cycle_status,assessment.id assessment_id,assessment.status assessment_status,
            assessment.self_summary,assessment.manager_summary,assessment.development_goal
     FROM dbo.employees employee WITH(UPDLOCK,HOLDLOCK)
@@ -116,7 +117,8 @@ async function targetRow(transaction: Transaction, employeeId: number, cycleId: 
     INNER JOIN dbo.kpi_review_cycles cycle ON cycle.id=@cycle
     LEFT JOIN dbo.kpi_assessments assessment ON assessment.employee_id=employee.id AND assessment.cycle_id=cycle.id
     WHERE employee.id=@employee AND employee.user_id IS NOT NULL AND employee.is_active=1 AND employee.deleted_at IS NULL;
-  `)).recordset[0];
+  `)
+  ).recordset[0];
   if (!row) throw new ApiError(404, "performance_target_not_found", "The employee or KPI cycle was not found.");
   return row;
 }
@@ -133,12 +135,11 @@ export function registerPerformanceRoutes(app: FastifyInstance, database: Databa
       FROM dbo.kpi_review_cycles ORDER BY period_end DESC,id DESC;
     `);
     const cycles = cycleResult.recordset.map(cycleDto);
-    const selectedCycle = requestedCycle
-      ? cycles.find((cycle) => cycle.id === requestedCycle)
-      : cycles.find((cycle) => cycle.status !== "CLOSED") ?? cycles[0];
+    const selectedCycle = requestedCycle ? cycles.find((cycle) => cycle.id === requestedCycle) : (cycles.find((cycle) => cycle.status !== "CLOSED") ?? cycles[0]);
     if (!selectedCycle) throw new ApiError(404, "performance_cycle_not_found", "No KPI review cycle is configured.");
 
-    const result = await database.query<AssessmentRow | AssessmentScoreRow>(`
+    const result = await database.query<AssessmentRow | AssessmentScoreRow>(
+      `
       SELECT employee.id employee_id,app_user.id user_id,employee.name_en name,employee.department,
         employee.position level,role.code role,COALESCE(assessment.status,N'NOT_STARTED') status,
         COALESCE(assessment.self_summary,N'') self_summary,COALESCE(assessment.manager_summary,N'') manager_summary,
@@ -148,10 +149,10 @@ export function registerPerformanceRoutes(app: FastifyInstance, database: Databa
       INNER JOIN dbo.roles role ON role.id=app_user.role_id
       LEFT JOIN dbo.kpi_assessments assessment ON assessment.employee_id=employee.id AND assessment.cycle_id=@cycle
       WHERE employee.is_active=1 AND employee.deleted_at IS NULL
-        AND role.code IN(N'Engineer',N'Project Manager',N'Engineering Manager',N'Sales Engineer',N'Sales Manager')
+        AND role.code IN(N'Engineer',N'Leader',N'Project Manager',N'Engineering Manager',N'Sales Engineer',N'Sales Manager')
         AND (app_user.id=@actor OR EXISTS(SELECT 1 FROM dbo.user_effective_roles er WHERE er.user_id=@actor AND er.code =N'Admin')
           OR (EXISTS(SELECT 1 FROM dbo.user_effective_roles er WHERE er.user_id=@actor AND er.code =N'Sales Manager') AND role.code IN(N'Sales Engineer',N'Sales Manager'))
-          OR (EXISTS(SELECT 1 FROM dbo.user_effective_roles er WHERE er.user_id=@actor AND er.code IN(N'Engineering Manager',N'Project Manager')) AND role.code IN(N'Engineer',N'Project Manager',N'Engineering Manager')
+          OR (EXISTS(SELECT 1 FROM dbo.user_effective_roles er WHERE er.user_id=@actor AND er.code IN(N'Engineering Manager',N'Project Manager')) AND role.code IN(N'Engineer',N'Leader',N'Project Manager',N'Engineering Manager')
             AND @department<>N'' AND ${teamOfSql("app_user.department")}=${teamOfSql("@department")}))
       ORDER BY employee.employee_no;
 
@@ -164,13 +165,15 @@ export function registerPerformanceRoutes(app: FastifyInstance, database: Databa
       INNER JOIN dbo.employees employee ON employee.id=assessment.employee_id AND employee.is_active=1 AND employee.deleted_at IS NULL
       INNER JOIN dbo.users app_user ON app_user.id=employee.user_id AND app_user.is_active=1 AND app_user.deleted_at IS NULL
       INNER JOIN dbo.roles role ON role.id=app_user.role_id
-      WHERE role.code IN(N'Engineer',N'Project Manager',N'Engineering Manager',N'Sales Engineer',N'Sales Manager')
+      WHERE role.code IN(N'Engineer',N'Leader',N'Project Manager',N'Engineering Manager',N'Sales Engineer',N'Sales Manager')
         AND (app_user.id=@actor OR EXISTS(SELECT 1 FROM dbo.user_effective_roles er WHERE er.user_id=@actor AND er.code =N'Admin')
           OR (EXISTS(SELECT 1 FROM dbo.user_effective_roles er WHERE er.user_id=@actor AND er.code =N'Sales Manager') AND role.code IN(N'Sales Engineer',N'Sales Manager'))
-          OR (EXISTS(SELECT 1 FROM dbo.user_effective_roles er WHERE er.user_id=@actor AND er.code IN(N'Engineering Manager',N'Project Manager')) AND role.code IN(N'Engineer',N'Project Manager',N'Engineering Manager')
+          OR (EXISTS(SELECT 1 FROM dbo.user_effective_roles er WHERE er.user_id=@actor AND er.code IN(N'Engineering Manager',N'Project Manager')) AND role.code IN(N'Engineer',N'Leader',N'Project Manager',N'Engineering Manager')
             AND @department<>N'' AND ${teamOfSql("app_user.department")}=${teamOfSql("@department")}));
-    `, (bind) => bind.input("cycle", sql.BigInt, selectedCycle.id).input("manage", sql.Bit, canManage)
-      .input("actor", sql.BigInt, actor.id).input("department", sql.NVarChar(100), actor.department.trim()));
+    `,
+      (bind) =>
+        bind.input("cycle", sql.BigInt, selectedCycle.id).input("manage", sql.Bit, canManage).input("actor", sql.BigInt, actor.id).input("department", sql.NVarChar(100), actor.department.trim()),
+    );
     const rows = result.recordsets[0] as unknown as AssessmentRow[];
     const scoreRows = result.recordsets[1] as unknown as AssessmentScoreRow[];
     const activityAccess = await activityScope(database, actor);
@@ -181,27 +184,49 @@ export function registerPerformanceRoutes(app: FastifyInstance, database: Databa
       const savedScores = scoreRows.filter((score) => Number(score.assessment_id) === Number(row.id));
       const selfScores = framework.areaCodes.map((area) => savedScores.find((score) => score.area_code === area)?.self_score ?? null);
       const visibleManager = (canManage && Number(row.user_id) !== actor.id) || row.status === "COMPLETED";
-      const managerScores = visibleManager
-        ? framework.areaCodes.map((area) => savedScores.find((score) => score.area_code === area)?.manager_score ?? null)
-        : framework.areaCodes.map(() => null);
+      const managerScores = visibleManager ? framework.areaCodes.map((area) => savedScores.find((score) => score.area_code === area)?.manager_score ?? null) : framework.areaCodes.map(() => null);
       const displayScores = managerScores.some((value) => value !== null) ? managerScores : selfScores;
       const selfEvidence = framework.areaCodes.map((area) => savedScores.find((score) => score.area_code === area)?.self_evidence ?? "");
       const managerEvidence = framework.areaCodes.map((area) => savedScores.find((score) => score.area_code === area)?.manager_evidence ?? "");
       const activity = await activityCycleScore(database, Number(row.user_id), Number(selectedCycle.id));
-      const hasActivityAccess = activityMembers.some(member=>member.id===Number(row.user_id)&&fullMember(activityAccess,member));
-      const weights = framework.code === 'SALES' ? [30,25,20,15,10] : [35,25,25,15];
-      const baseScore = displayScores.every(value=>value!==null) ? displayScores.reduce<number>((sum,value,index)=>sum+value!*weights[index]!/100,0) : null;
+      const hasActivityAccess = activityMembers.some((member) => member.id === Number(row.user_id) && fullMember(activityAccess, member));
+      const weights = framework.code === "SALES" ? [30, 25, 20, 15, 10] : [35, 25, 25, 15];
+      const baseScore = displayScores.every((value) => value !== null) ? displayScores.reduce<number>((sum, value, index) => sum + (value! * weights[index]!) / 100, 0) : null;
       assessments.push({
-        id: row.id === null ? 0 : Number(row.id), employeeId: Number(row.employee_id), userId: Number(row.user_id),
-        name: row.name, department: row.department, level: row.level, role: row.role, frameworkCode: framework.code, areaCodes: framework.areaCodes, status: row.status,
-        selfScores, managerScores, displayScores,
+        id: row.id === null ? 0 : Number(row.id),
+        employeeId: Number(row.employee_id),
+        userId: Number(row.user_id),
+        name: row.name,
+        department: row.department,
+        level: row.level,
+        role: row.role,
+        frameworkCode: framework.code,
+        areaCodes: framework.areaCodes,
+        status: row.status,
+        selfScores,
+        managerScores,
+        displayScores,
         evidence: managerScores.some((value) => value !== null) ? managerEvidence : selfEvidence,
-        selfEvidence, managerEvidence,
-        selfSummary: row.self_summary, managerSummary: visibleManager ? row.manager_summary : "",
-        activity: hasActivityAccess ? { mode:activity.mode, weight:activity.weight, eligible:activity.eligible, eligibleDays:activity.eligibleDays, automatic:activity.automatic,
-          total:visibleManager?activity.total:null, rating:visibleManager?activity.rating:null, frozen:activity.frozen } : undefined,
-        overallScore:baseScore===null?null:combineActivityKpi(baseScore,{...activity,rating:hasActivityAccess&&visibleManager?activity.rating:null}),
-        developmentGoal: row.development_goal, updatedAt: row.updated_at, rowVersion: row.row_version?.toString("base64") ?? null,
+        selfEvidence,
+        managerEvidence,
+        selfSummary: row.self_summary,
+        managerSummary: visibleManager ? row.manager_summary : "",
+        activity: hasActivityAccess
+          ? {
+              mode: activity.mode,
+              weight: activity.weight,
+              eligible: activity.eligible,
+              eligibleDays: activity.eligibleDays,
+              automatic: activity.automatic,
+              total: visibleManager ? activity.total : null,
+              rating: visibleManager ? activity.rating : null,
+              frozen: activity.frozen,
+            }
+          : undefined,
+        overallScore: baseScore === null ? null : combineActivityKpi(baseScore, { ...activity, rating: hasActivityAccess && visibleManager ? activity.rating : null }),
+        developmentGoal: row.development_goal,
+        updatedAt: row.updated_at,
+        rowVersion: row.row_version?.toString("base64") ?? null,
       });
     }
     if (!canManage && assessments.length === 0) throw new ApiError(403, "performance_employee_not_linked", "Your account is not linked to an active employee profile.");
@@ -214,25 +239,36 @@ export function registerPerformanceRoutes(app: FastifyInstance, database: Databa
     const employeeId = positiveLong((request.params as { employeeId: string }).employeeId, "Employee id");
     const cycleId = positiveLong((request.query as Record<string, unknown>).cycleId, "Cycle id");
     const targetResult = await database.query<{
-      user_id: number; name_en: string; target_role: string; target_team: string; actor_team: string; cycle_code: string; period_start: Date | string; period_end: Date | string;
-    }>(`
+      user_id: number;
+      name_en: string;
+      target_role: string;
+      target_team: string;
+      actor_team: string;
+      cycle_code: string;
+      period_start: Date | string;
+      period_end: Date | string;
+    }>(
+      `
       SELECT employee.user_id,employee.name_en,role.code target_role,${teamOfSql("app_user.department")} target_team,${teamOfSql("@actor_department")} actor_team,cycle.code cycle_code,cycle.period_start,cycle.period_end
       FROM dbo.employees employee
       INNER JOIN dbo.users app_user ON app_user.id=employee.user_id AND app_user.is_active=1 AND app_user.deleted_at IS NULL
       INNER JOIN dbo.roles role ON role.id=app_user.role_id
       INNER JOIN dbo.kpi_review_cycles cycle ON cycle.id=@cycle
       WHERE employee.id=@employee AND employee.user_id IS NOT NULL AND employee.is_active=1 AND employee.deleted_at IS NULL;
-    `, (bind) => bind.input("employee", sql.BigInt, employeeId).input("cycle", sql.BigInt, cycleId)
-      .input("actor_department", sql.NVarChar(100), actor.department.trim()));
+    `,
+      (bind) => bind.input("employee", sql.BigInt, employeeId).input("cycle", sql.BigInt, cycleId).input("actor_department", sql.NVarChar(100), actor.department.trim()),
+    );
     const target = targetResult.recordset[0];
     if (!target) throw new ApiError(404, "performance_target_not_found", "The employee or KPI cycle was not found.");
     if (Number(target.user_id) !== actor.id) {
       await users.demandPermission(request, "performance.manage");
-      if (!rolesOf(actor).some((role) => canManagePerformanceTarget(role, target.target_role, target.actor_team, target.target_team))) throw new ApiError(403, "performance_scope_denied", "This employee is outside your KPI management scope.");
+      if (!rolesOf(actor).some((role) => canManagePerformanceTarget(role, target.target_role, target.actor_team, target.target_team)))
+        throw new ApiError(403, "performance_scope_denied", "This employee is outside your KPI management scope.");
     }
 
     if (frameworkForRole(target.target_role).code === "SALES") {
-      const salesResult = await database.query<SalesInquiryEvidenceRow>(`
+      const salesResult = await database.query<SalesInquiryEvidenceRow>(
+        `
         SELECT inquiry.id,inquiry.inquiry_no,inquiry.project_name,inquiry.status,inquiry.inquiry_date,inquiry.due_date,inquiry.updated_at,
           inquiry.project_probability,inquiry.customer_interest_grade,
           (SELECT COUNT_BIG(*) FROM dbo.inquiry_meetings meeting
@@ -249,8 +285,9 @@ export function registerPerformanceRoutes(app: FastifyInstance, database: Databa
             SELECT 1 FROM dbo.inquiry_meetings meeting WHERE meeting.inquiry_id=inquiry.id
               AND (meeting.owner_id=@user OR meeting.created_by=@user) AND meeting.meeting_date BETWEEN @period_start AND @period_end))
         ORDER BY inquiry.updated_at DESC,inquiry.id DESC;
-      `, (bind) => bind.input("user", sql.BigInt, target.user_id)
-        .input("period_start", sql.Date, target.period_start).input("period_end", sql.Date, target.period_end));
+      `,
+        (bind) => bind.input("user", sql.BigInt, target.user_id).input("period_start", sql.Date, target.period_start).input("period_end", sql.Date, target.period_end),
+      );
       return buildSalesPerformanceEvidence({
         employeeId,
         employeeName: target.name_en,
@@ -262,7 +299,8 @@ export function registerPerformanceRoutes(app: FastifyInstance, database: Databa
       });
     }
 
-    const result = await database.query<Record<string, unknown>>(`
+    const result = await database.query<Record<string, unknown>>(
+      `
       SELECT project.id,project.project_no,project.name,project.status,project.start_date,project.target_delivery,project.actual_delivery,
         CASE WHEN project.manager_id=@user THEN N'Project manager'
              WHEN project.lead_engineer_id=@user THEN N'Lead engineer'
@@ -304,8 +342,9 @@ export function registerPerformanceRoutes(app: FastifyInstance, database: Databa
           SELECT 1 FROM dbo.inquiry_meetings meeting WHERE meeting.inquiry_id=inquiry.id
             AND (meeting.owner_id=@user OR meeting.created_by=@user) AND meeting.meeting_date BETWEEN @period_start AND @period_end))
       ORDER BY inquiry.updated_at DESC,inquiry.id DESC;
-    `, (bind) => bind.input("user", sql.BigInt, target.user_id)
-      .input("period_start", sql.Date, target.period_start).input("period_end", sql.Date, target.period_end));
+    `,
+      (bind) => bind.input("user", sql.BigInt, target.user_id).input("period_start", sql.Date, target.period_start).input("period_end", sql.Date, target.period_end),
+    );
 
     return buildPerformanceEvidence({
       employeeId,
@@ -323,20 +362,31 @@ export function registerPerformanceRoutes(app: FastifyInstance, database: Databa
 
   app.post("/api/v1/performance/cycles", async (request, reply) => {
     await users.demandPermission(request, "performance.manage");
-    const actor = await users.required(request), body = bodyObject(request.body);
-    const code = requiredText(body.code, 30, "Cycle code"), name = requiredText(body.name, 200, "Cycle name");
-    const periodStart = parseDateOnly(body.periodStart, "Period start")!, periodEnd = parseDateOnly(body.periodEnd, "Period end")!, reviewDueDate = parseDateOnly(body.reviewDueDate, "Review due date")!;
-    if (periodStart <= periodEnd && (new Date(periodEnd).getTime()-new Date(periodStart).getTime())/86400_000 > 365) throw invalid("A KPI cycle may span at most 366 days.");
+    const actor = await users.required(request),
+      body = bodyObject(request.body);
+    const code = requiredText(body.code, 30, "Cycle code"),
+      name = requiredText(body.name, 200, "Cycle name");
+    const periodStart = parseDateOnly(body.periodStart, "Period start")!,
+      periodEnd = parseDateOnly(body.periodEnd, "Period end")!,
+      reviewDueDate = parseDateOnly(body.reviewDueDate, "Review due date")!;
+    if (periodStart <= periodEnd && (new Date(periodEnd).getTime() - new Date(periodStart).getTime()) / 86400_000 > 365) throw invalid("A KPI cycle may span at most 366 days.");
     if (periodStart > periodEnd || periodEnd > reviewDueDate) throw invalid("The cycle dates must be in period-start, period-end, review-due order.");
     try {
       const created = await database.transaction(async (transaction) => {
         const insert = new sql.Request(transaction);
-        insert.input("code", sql.NVarChar(30), code).input("name", sql.NVarChar(200), name)
-          .input("start", sql.Date, periodStart).input("end", sql.Date, periodEnd).input("due", sql.Date, reviewDueDate).input("actor", sql.BigInt, actor.id);
-        const row = (await insert.query<{ id: number; row_version: Buffer }>(`
+        insert
+          .input("code", sql.NVarChar(30), code)
+          .input("name", sql.NVarChar(200), name)
+          .input("start", sql.Date, periodStart)
+          .input("end", sql.Date, periodEnd)
+          .input("due", sql.Date, reviewDueDate)
+          .input("actor", sql.BigInt, actor.id);
+        const row = (
+          await insert.query<{ id: number; row_version: Buffer }>(`
           INSERT dbo.kpi_review_cycles(code,name,period_start,period_end,review_due_date,status,created_by)
           OUTPUT inserted.id,inserted.row_version VALUES(@code,@name,@start,@end,@due,N'OPEN',@actor);
-        `)).recordset[0]!;
+        `)
+        ).recordset[0]!;
         await insertAudit(transaction, actor.id, "KpiCycle", Number(row.id), code, "Created", null, { code, name, periodStart, periodEnd, reviewDueDate });
         return { id: Number(row.id), code, rowVersion: row.row_version.toString("base64") };
       });
@@ -349,44 +399,69 @@ export function registerPerformanceRoutes(app: FastifyInstance, database: Databa
 
   app.put("/api/v1/performance/assessments/:employeeId", async (request) => {
     await users.demandPermission(request, "performance.read");
-    const actor = await users.required(request), employeeId = positiveLong((request.params as { employeeId: string }).employeeId, "Employee id"), body = bodyObject(request.body);
+    const actor = await users.required(request),
+      employeeId = positiveLong((request.params as { employeeId: string }).employeeId, "Employee id"),
+      body = bodyObject(request.body);
     const cycleId = requiredInteger(body.cycleId, "Cycle id", 1);
-    const summary = optionalBodyText(body.summary, 1000, "Summary") ?? "", developmentGoal = optionalBodyText(body.developmentGoal, 1000, "Development goal") ?? "", submit = body.submit === true;
+    const summary = optionalBodyText(body.summary, 1000, "Summary") ?? "",
+      developmentGoal = optionalBodyText(body.developmentGoal, 1000, "Development goal") ?? "",
+      submit = body.submit === true;
     return database.transaction(async (transaction) => {
-      const target = await targetRow(transaction, employeeId, cycleId, actor.department), selfReview = Number(target.user_id) === actor.id;
+      const target = await targetRow(transaction, employeeId, cycleId, actor.department),
+        selfReview = Number(target.user_id) === actor.id;
       if (!selfReview) {
         await users.demandPermission(request, "performance.manage");
-        if (!rolesOf(actor).some((role) => canManagePerformanceTarget(role, target.target_role, target.actor_team, target.target_team))) throw new ApiError(403, "performance_scope_denied", "This employee is outside your KPI management scope.");
+        if (!rolesOf(actor).some((role) => canManagePerformanceTarget(role, target.target_role, target.actor_team, target.target_team)))
+          throw new ApiError(403, "performance_scope_denied", "This employee is outside your KPI management scope.");
       }
       const inputScores = performanceScores(body.scores, frameworkForRole(target.target_role).areaCodes, submit);
       const currentStatus = target.assessment_status ?? "NOT_STARTED";
       if (target.cycle_status === "CLOSED") throw new ApiError(409, "performance_cycle_closed", "This KPI cycle is closed.");
       if (currentStatus === "COMPLETED") throw new ApiError(409, "performance_assessment_completed", "This KPI assessment is already completed.");
       if (selfReview && !["NOT_STARTED", "SELF_REVIEW"].includes(currentStatus)) throw new ApiError(409, "performance_self_review_submitted", "The self review is already submitted to the manager.");
-      if (!selfReview && !["MANAGER_REVIEW", "CALIBRATION"].includes(currentStatus)) throw new ApiError(409, "performance_self_review_required", "The employee must submit the self review before manager scoring.");
-      const nextStatus = selfReview ? (submit ? "MANAGER_REVIEW" : "SELF_REVIEW") : (submit ? "CALIBRATION" : "MANAGER_REVIEW");
+      if (!selfReview && !["MANAGER_REVIEW", "CALIBRATION"].includes(currentStatus))
+        throw new ApiError(409, "performance_self_review_required", "The employee must submit the self review before manager scoring.");
+      const nextStatus = selfReview ? (submit ? "MANAGER_REVIEW" : "SELF_REVIEW") : submit ? "CALIBRATION" : "MANAGER_REVIEW";
       let assessmentId: number, nextVersion: Buffer;
-      const before = target.assessment_id === null ? null : { status: currentStatus, selfSummary: target.self_summary, managerSummary: target.manager_summary, developmentGoal: target.development_goal };
+      const before =
+        target.assessment_id === null ? null : { status: currentStatus, selfSummary: target.self_summary, managerSummary: target.manager_summary, developmentGoal: target.development_goal };
       if (target.assessment_id === null) {
         const insert = new sql.Request(transaction);
-        insert.input("cycle", sql.BigInt, cycleId).input("employee", sql.BigInt, employeeId).input("reviewer", sql.BigInt, selfReview ? null : actor.id)
-          .input("status", sql.NVarChar(30), nextStatus).input("selfSummary", sql.NVarChar(1000), selfReview ? summary : "")
-          .input("managerSummary", sql.NVarChar(1000), selfReview ? "" : summary).input("goal", sql.NVarChar(1000), developmentGoal).input("actor", sql.BigInt, actor.id);
-        const row = (await insert.query<{ id: number; row_version: Buffer }>(`
+        insert
+          .input("cycle", sql.BigInt, cycleId)
+          .input("employee", sql.BigInt, employeeId)
+          .input("reviewer", sql.BigInt, selfReview ? null : actor.id)
+          .input("status", sql.NVarChar(30), nextStatus)
+          .input("selfSummary", sql.NVarChar(1000), selfReview ? summary : "")
+          .input("managerSummary", sql.NVarChar(1000), selfReview ? "" : summary)
+          .input("goal", sql.NVarChar(1000), developmentGoal)
+          .input("actor", sql.BigInt, actor.id);
+        const row = (
+          await insert.query<{ id: number; row_version: Buffer }>(`
           INSERT dbo.kpi_assessments(cycle_id,employee_id,reviewer_id,status,self_summary,manager_summary,development_goal,
             self_submitted_at,manager_submitted_at,updated_by)
           OUTPUT inserted.id,inserted.row_version
           VALUES(@cycle,@employee,@reviewer,@status,@selfSummary,@managerSummary,@goal,
             CASE WHEN @reviewer IS NULL AND @status=N'MANAGER_REVIEW' THEN SYSUTCDATETIME() END,
             CASE WHEN @reviewer IS NOT NULL AND @status=N'CALIBRATION' THEN SYSUTCDATETIME() END,@actor);
-        `)).recordset[0]!;
-        assessmentId = Number(row.id); nextVersion = row.row_version;
+        `)
+        ).recordset[0]!;
+        assessmentId = Number(row.id);
+        nextVersion = row.row_version;
       } else {
-        const version = parseRowVersion(body.rowVersion), update = new sql.Request(transaction);
-        update.input("self", sql.Bit, selfReview).input("actor", sql.BigInt, actor.id).input("status", sql.NVarChar(30), nextStatus)
-          .input("summary", sql.NVarChar(1000), summary).input("goal", sql.NVarChar(1000), developmentGoal).input("submit", sql.Bit, submit)
-          .input("id", sql.BigInt, target.assessment_id).input("version", sql.VarBinary(8), version);
-        const row = (await update.query<{ row_version: Buffer }>(`
+        const version = parseRowVersion(body.rowVersion),
+          update = new sql.Request(transaction);
+        update
+          .input("self", sql.Bit, selfReview)
+          .input("actor", sql.BigInt, actor.id)
+          .input("status", sql.NVarChar(30), nextStatus)
+          .input("summary", sql.NVarChar(1000), summary)
+          .input("goal", sql.NVarChar(1000), developmentGoal)
+          .input("submit", sql.Bit, submit)
+          .input("id", sql.BigInt, target.assessment_id)
+          .input("version", sql.VarBinary(8), version);
+        const row = (
+          await update.query<{ row_version: Buffer }>(`
           DECLARE @updated TABLE(row_version binary(8));
           UPDATE dbo.kpi_assessments SET reviewer_id=CASE WHEN @self=1 THEN reviewer_id ELSE @actor END,status=@status,
             self_summary=CASE WHEN @self=1 THEN @summary ELSE self_summary END,
@@ -397,47 +472,75 @@ export function registerPerformanceRoutes(app: FastifyInstance, database: Databa
             updated_by=@actor,updated_at=SYSUTCDATETIME()
           OUTPUT inserted.row_version INTO @updated WHERE id=@id AND row_version=@version;
           SELECT row_version FROM @updated;
-        `)).recordset[0];
+        `)
+        ).recordset[0];
         if (!row) throw new ApiError(409, "concurrency_conflict", "This KPI assessment changed. Refresh and try again.");
-        assessmentId = Number(target.assessment_id); nextVersion = row.row_version;
+        assessmentId = Number(target.assessment_id);
+        nextVersion = row.row_version;
       }
       for (const score of inputScores) {
         const save = new sql.Request(transaction);
-        save.input("assessment", sql.BigInt, assessmentId).input("area", sql.NVarChar(30), score.areaCode)
-          .input("score", sql.TinyInt, score.score).input("evidence", sql.NVarChar(1000), score.evidence);
-        await save.query(selfReview ? `
+        save
+          .input("assessment", sql.BigInt, assessmentId)
+          .input("area", sql.NVarChar(30), score.areaCode)
+          .input("score", sql.TinyInt, score.score)
+          .input("evidence", sql.NVarChar(1000), score.evidence);
+        await save.query(
+          selfReview
+            ? `
           UPDATE dbo.kpi_assessment_scores SET self_score=@score,self_evidence=@evidence,updated_at=SYSUTCDATETIME() WHERE assessment_id=@assessment AND area_code=@area;
           IF @@ROWCOUNT=0 INSERT dbo.kpi_assessment_scores(assessment_id,area_code,self_score,self_evidence) VALUES(@assessment,@area,@score,@evidence);
-        ` : `
+        `
+            : `
           UPDATE dbo.kpi_assessment_scores SET manager_score=@score,manager_evidence=@evidence,updated_at=SYSUTCDATETIME() WHERE assessment_id=@assessment AND area_code=@area;
           IF @@ROWCOUNT=0 INSERT dbo.kpi_assessment_scores(assessment_id,area_code,manager_score,manager_evidence) VALUES(@assessment,@area,@score,@evidence);
-        `);
+        `,
+        );
       }
-      await insertAudit(transaction, actor.id, "KpiAssessment", assessmentId, `${cycleId}:${employeeId}`,
-        submit ? (selfReview ? "Self review submitted" : "Manager review submitted") : "Draft saved", before,
-        { status: nextStatus, scores: inputScores.map(({ areaCode, score }) => ({ areaCode, score })), summary, developmentGoal });
+      await insertAudit(
+        transaction,
+        actor.id,
+        "KpiAssessment",
+        assessmentId,
+        `${cycleId}:${employeeId}`,
+        submit ? (selfReview ? "Self review submitted" : "Manager review submitted") : "Draft saved",
+        before,
+        { status: nextStatus, scores: inputScores.map(({ areaCode, score }) => ({ areaCode, score })), summary, developmentGoal },
+      );
       return { id: assessmentId, status: nextStatus, rowVersion: nextVersion.toString("base64") };
     });
   });
 
   app.post("/api/v1/performance/assessments/:employeeId/complete", async (request: FastifyRequest) => {
     await users.demandPermission(request, "performance.manage");
-    const actor = await users.required(request), employeeId = positiveLong((request.params as { employeeId: string }).employeeId, "Employee id"), body = bodyObject(request.body);
-    const cycleId = requiredInteger(body.cycleId, "Cycle id", 1), note = requiredText(body.calibrationNote, 1000, "Calibration note"), version = parseRowVersion(body.rowVersion);
+    const actor = await users.required(request),
+      employeeId = positiveLong((request.params as { employeeId: string }).employeeId, "Employee id"),
+      body = bodyObject(request.body);
+    const cycleId = requiredInteger(body.cycleId, "Cycle id", 1),
+      note = requiredText(body.calibrationNote, 1000, "Calibration note"),
+      version = parseRowVersion(body.rowVersion);
     return database.transaction(async (transaction) => {
       const target = await targetRow(transaction, employeeId, cycleId, actor.department);
-      if (!rolesOf(actor).some((role) => canManagePerformanceTarget(role, target.target_role, target.actor_team, target.target_team))) throw new ApiError(403, "performance_scope_denied", "This employee is outside your KPI management scope.");
+      if (!rolesOf(actor).some((role) => canManagePerformanceTarget(role, target.target_role, target.actor_team, target.target_team)))
+        throw new ApiError(403, "performance_scope_denied", "This employee is outside your KPI management scope.");
       if (Number(target.user_id) === actor.id) throw new ApiError(403, "performance_self_completion_denied", "Another review manager must complete your assessment.");
       const requiredAreaCount = frameworkForRole(target.target_role).areaCodes.length;
       const activityAccess = await activityScope(database, actor);
       const activityMembers = await activityRoster(database, activityAccess);
       const activityPolicy = await activityCycleScore(database, Number(target.user_id), cycleId, transaction);
-      if (activityPolicy.mode === "ACTIVE" && !activityMembers.some(member=>member.id===Number(target.user_id)&&fullMember(activityAccess,member))) throw new ApiError(403,"activity_review_scope","A department review manager must finalize an active activity KPI.");
+      if (activityPolicy.mode === "ACTIVE" && !activityMembers.some((member) => member.id === Number(target.user_id) && fullMember(activityAccess, member)))
+        throw new ApiError(403, "activity_review_scope", "A department review manager must finalize an active activity KPI.");
       await freezeActivityScore(database, transaction, Number(target.user_id), cycleId);
       const update = new sql.Request(transaction);
-      update.input("note", sql.NVarChar(1000), note).input("actor", sql.BigInt, actor.id).input("cycle", sql.BigInt, cycleId)
-        .input("employee", sql.BigInt, employeeId).input("version", sql.VarBinary(8), version).input("required_count", sql.Int, requiredAreaCount);
-      const row = (await update.query<{ id: number; row_version: Buffer }>(`
+      update
+        .input("note", sql.NVarChar(1000), note)
+        .input("actor", sql.BigInt, actor.id)
+        .input("cycle", sql.BigInt, cycleId)
+        .input("employee", sql.BigInt, employeeId)
+        .input("version", sql.VarBinary(8), version)
+        .input("required_count", sql.Int, requiredAreaCount);
+      const row = (
+        await update.query<{ id: number; row_version: Buffer }>(`
         DECLARE @completed TABLE(id bigint,row_version binary(8));
         UPDATE assessment SET status=N'COMPLETED',manager_summary=CASE WHEN manager_summary=N'' THEN @note ELSE manager_summary+NCHAR(10)+@note END,
           completed_at=SYSUTCDATETIME(),updated_by=@actor,updated_at=SYSUTCDATETIME()
@@ -448,7 +551,8 @@ export function registerPerformanceRoutes(app: FastifyInstance, database: Databa
           AND EXISTS(SELECT 1 FROM dbo.kpi_review_cycles cycle WHERE cycle.id=assessment.cycle_id AND cycle.status<>N'CLOSED')
           AND (SELECT COUNT(*) FROM dbo.kpi_assessment_scores score WHERE score.assessment_id=assessment.id AND score.manager_score IS NOT NULL)=@required_count;
         SELECT id,row_version FROM @completed;
-      `)).recordset[0];
+      `)
+      ).recordset[0];
       if (!row) throw new ApiError(409, "performance_completion_conflict", "The assessment is not ready for completion or changed. Refresh and try again.");
       await insertAudit(transaction, actor.id, "KpiAssessment", Number(row.id), `${cycleId}:${employeeId}`, "Completed after calibration", null, { status: "COMPLETED", calibrationNote: note });
       return { id: Number(row.id), status: "COMPLETED", rowVersion: row.row_version.toString("base64") };

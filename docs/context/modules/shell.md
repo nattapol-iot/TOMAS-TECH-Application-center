@@ -4,7 +4,7 @@
 
 เมนู ภาษา session bootstrap และโปรไฟล์
 
-Evidence: snapshot `6cd83665`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
+Evidence: snapshot `c0b7e1fa`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
 
 ## Read only the operation you change
 
@@ -17,20 +17,20 @@ Shared screens contain other modules: use the symbol and line range instead of r
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `navItemAllowed` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 266–274 |
-| `landingView` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 277–281 |
-| `navView` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 283–283 |
-| `allowedViews` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 292–305 |
-| `projectTabOf` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 327–344 |
-| `KEEP_PREFERRED` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 347–347 |
-| `projectPageOf` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 348–353 |
-| `projectPagePath` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 354–354 |
-| `ceoFocusOf` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 356–359 |
-| `ProductionApp` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 364–1937 |
-| `ProductionLogin` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 1939–2073 |
-| `initials` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 2075–2084 |
-| `myWorkNeedsAttention` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 2087–2089 |
-| `badgeFor` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 2097–2104 |
+| `navItemAllowed` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 285–296 |
+| `landingView` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 299–303 |
+| `navView` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 305–305 |
+| `allowedViews` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 314–327 |
+| `projectTabOf` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 349–366 |
+| `KEEP_PREFERRED` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 369–369 |
+| `projectPageOf` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 370–375 |
+| `projectPagePath` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 376–376 |
+| `ceoFocusOf` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 378–381 |
+| `ProductionApp` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 386–1968 |
+| `ProductionLogin` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 1970–2104 |
+| `initials` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 2106–2115 |
+| `myWorkNeedsAttention` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 2118–2120 |
+| `badgeFor` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 2128–2135 |
 | `ScreenLoading` | [app/system/production/LazyScreens.tsx](<../../../app/system/production/LazyScreens.tsx>) | 27–77 |
 | `initials` | [app/system/production/ProfileScreen.tsx](<../../../app/system/production/ProfileScreen.tsx>) | 25–27 |
 | `permissionVerb` | [app/system/production/ProfileScreen.tsx](<../../../app/system/production/ProfileScreen.tsx>) | 29–32 |
@@ -53,6 +53,7 @@ Shared screens contain other modules: use the symbol and line range instead of r
 - [backend-node/src/executive-dashboard-model.ts](<../../../backend-node/src/executive-dashboard-model.ts>)
 - [backend-node/src/engineering-rate-access.ts](<../../../backend-node/src/engineering-rate-access.ts>)
 - [backend-node/src/project-cost-model.ts](<../../../backend-node/src/project-cost-model.ts>)
+- [backend-node/src/project-create-access.ts](<../../../backend-node/src/project-create-access.ts>)
 - [app/system/use-activity-presence.ts](<../../../app/system/use-activity-presence.ts>)
 - [lib/remembered-view.ts](<../../../lib/remembered-view.ts>)
 - [app/system/screen-link.ts](<../../../app/system/screen-link.ts>)
@@ -62,6 +63,7 @@ Shared screens contain other modules: use the symbol and line range instead of r
 - [app/system/Brand.tsx](<../../../app/system/Brand.tsx>)
 - [app/system/auth-client.ts](<../../../app/system/auth-client.ts>)
 - [app/system/api-client.ts](<../../../app/system/api-client.ts>)
+- [app/system/approvers.ts](<../../../app/system/approvers.ts>)
 - [app/system/team-test-client.ts](<../../../app/system/team-test-client.ts>)
 - [app/system/tmt-id.constants.ts](<../../../app/system/tmt-id.constants.ts>)
 - [app/system/tmt-id-client.ts](<../../../app/system/tmt-id-client.ts>)
@@ -83,6 +85,7 @@ Shared screens contain other modules: use the symbol and line range instead of r
 - [app/system/production/EstimateLook.tsx](<../../../app/system/production/EstimateLook.tsx>)
 - [app/system/production/SalesLook.tsx](<../../../app/system/production/SalesLook.tsx>)
 - [app/system/production/ProjectScope.tsx](<../../../app/system/production/ProjectScope.tsx>)
+- [app/system/production/guide-catalog.ts](<../../../app/system/production/guide-catalog.ts>)
 - [app/system/production/LazyScreens.tsx](<../../../app/system/production/LazyScreens.tsx>)
 - [app/system/production/CrmScreens.tsx](<../../../app/system/production/CrmScreens.tsx>)
 - [app/system/LocalizedText.tsx](<../../../app/system/LocalizedText.tsx>)

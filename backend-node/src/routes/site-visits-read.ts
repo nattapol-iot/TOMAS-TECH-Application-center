@@ -3,26 +3,9 @@ import type { FastifyInstance } from "fastify";
 import type { AppConfig } from "../config.js";
 import type { Database } from "../db.js";
 import { ApiError } from "../errors.js";
-import {
-  booleanQuery,
-  clampedInteger,
-  optionalPositiveLong,
-  optionalText,
-  parseDateOnly,
-  positiveLong,
-} from "../http.js";
-import {
-  reportSlaState,
-  SITE_VISIT_PERMISSIONS,
-} from "../site-visit-common.js";
-import {
-  loadVisitDetail,
-  requiredSkillCodes,
-  skillMatch,
-  visitSummary,
-  visitSummaryColumns,
-  visitSummaryFrom,
-} from "../site-visit-data.js";
+import { booleanQuery, clampedInteger, optionalPositiveLong, optionalText, parseDateOnly, positiveLong } from "../http.js";
+import { reportSlaState, SITE_VISIT_PERMISSIONS } from "../site-visit-common.js";
+import { loadVisitDetail, requiredSkillCodes, skillMatch, visitSummary, visitSummaryColumns, visitSummaryFrom } from "../site-visit-data.js";
 import { loadSalesIntakeDetail } from "./sales-intakes.js";
 import type { CurrentUserService } from "../users.js";
 
@@ -38,12 +21,7 @@ function dateAt(value: unknown, fallback: Date): Date {
   return text ? new Date(`${text}T00:00:00.000Z`) : fallback;
 }
 
-export function registerSiteVisitReadRoutes(
-  app: FastifyInstance,
-  _config: AppConfig,
-  database: Database,
-  users: CurrentUserService,
-): void {
+export function registerSiteVisitReadRoutes(app: FastifyInstance, _config: AppConfig, database: Database, users: CurrentUserService): void {
   app.get("/api/v1/site-visits/", async (request) => {
     await users.demandPermission(request, SITE_VISIT_PERMISSIONS.visitRead);
     const qv = request.query as Row,
@@ -92,12 +70,7 @@ export function registerSiteVisitReadRoutes(
       to = dateAt(qv.to, new Date(today.valueOf() + 42 * 86_400_000)),
       engineer = optionalPositiveLong(qv.engineerId, "Engineer"),
       department = optionalText(qv.department, 100, "Department");
-    if (to < from || to.valueOf() - from.valueOf() > 400 * 86_400_000)
-      throw new ApiError(
-        400,
-        "validation_failed",
-        "The calendar range is invalid or exceeds 400 days.",
-      );
+    if (to < from || to.valueOf() - from.valueOf() > 400 * 86_400_000) throw new ApiError(400, "validation_failed", "The calendar range is invalid or exceeds 400 days.");
     const end = new Date(to.valueOf() + 86_400_000);
     const [visits, unavailable] = await Promise.all([
       database.query<Row>(
@@ -132,10 +105,7 @@ export function registerSiteVisitReadRoutes(
         endsAt: r.scheduled_end,
         travelMinutesBefore: Number(r.travel_minutes_before),
         travelMinutesAfter: Number(r.travel_minutes_after),
-        engineerIds: String(r.engineer_ids)
-          .split(",")
-          .filter(Boolean)
-          .map(Number),
+        engineerIds: String(r.engineer_ids).split(",").filter(Boolean).map(Number),
         engineerNames: r.engineer_names,
       })),
       unavailable: unavailable.recordset.map((r) => ({
@@ -180,19 +150,11 @@ export function registerSiteVisitReadRoutes(
       checkedInAt: r.checked_in_at,
       checkedOutAt: r.checked_out_at,
       reportDueAt: r.report_due_at,
-      reportSlaState: reportSlaState(
-        r.report_due_at as Date | null,
-        r.report_status as string | null,
-        r.submitted_at as Date | null,
-      ),
+      reportSlaState: reportSlaState(r.report_due_at as Date | null, r.report_status as string | null, r.submitted_at as Date | null),
       reportStatus: r.report_status,
       skillMatchPercent: Number(r.skill_match_percent),
-      rowVersion: Buffer.isBuffer(r.visit_row_version)
-        ? r.visit_row_version.toString("base64")
-        : "",
-      assignmentRowVersion: Buffer.isBuffer(r.assignment_row_version)
-        ? r.assignment_row_version.toString("base64")
-        : "",
+      rowVersion: Buffer.isBuffer(r.visit_row_version) ? r.visit_row_version.toString("base64") : "",
+      assignmentRowVersion: Buffer.isBuffer(r.assignment_row_version) ? r.assignment_row_version.toString("base64") : "",
     }));
   });
 
@@ -242,9 +204,7 @@ export function registerSiteVisitReadRoutes(
       `SELECT TOP(15)NULLIF(v.department,N'') label,COUNT_BIG(*) value FROM dbo.site_visits v WHERE v.deleted_at IS NULL GROUP BY v.department ORDER BY COUNT_BIG(*) DESC;`,
       `SELECT TOP(20)t.name_en label,COUNT_BIG(*) value FROM dbo.site_visits v INNER JOIN dbo.visit_types t ON t.id=v.visit_type_id WHERE v.deleted_at IS NULL GROUP BY t.name_en ORDER BY COUNT_BIG(*) DESC;`,
     ];
-    const groups = await Promise.all(
-      queries.map((x) => database.query<Row>(x)),
-    );
+    const groups = await Promise.all(queries.map((x) => database.query<Row>(x)));
     return {
       totalIntakes: Number(c.intakes),
       totalVisits: Number(c.visits),
@@ -269,8 +229,7 @@ export function registerSiteVisitReadRoutes(
     const actor = await users.required(request),
       id = positiveLong((request.params as { id?: string }).id, "Visit id"),
       detail = await loadVisitDetail(database, id, actor.id, actor.id);
-    if (!detail)
-      throw new ApiError(404, "visit_not_found", "Site visit not found.");
+    if (!detail) throw new ApiError(404, "visit_not_found", "Site visit not found.");
     return detail;
   });
   app.get("/api/v1/site-visits/:id/brief", async (request) => {
@@ -278,15 +237,9 @@ export function registerSiteVisitReadRoutes(
     const actor = await users.required(request),
       id = positiveLong((request.params as { id?: string }).id, "Visit id"),
       visit = await loadVisitDetail(database, id, actor.id, actor.id);
-    if (!visit)
-      throw new ApiError(404, "visit_not_found", "Site visit not found.");
-    const intake = await loadSalesIntakeDetail(
-      database,
-      visit.intakeId,
-      actor.id,
-    );
-    if (!intake)
-      throw new ApiError(404, "intake_not_found", "Sales intake not found.");
+    if (!visit) throw new ApiError(404, "visit_not_found", "Site visit not found.");
+    const intake = await loadSalesIntakeDetail(database, visit.intakeId, actor.id);
+    if (!intake) throw new ApiError(404, "intake_not_found", "Sales intake not found.");
     const previous = await database.query<Row>(
       `SELECT TOP(10)v.id,v.visit_no,t.name_en visit_type_name,v.status,v.scheduled_start,ISNULL((SELECT STRING_AGG(u.name,N', ') FROM dbo.site_visit_assignments a INNER JOIN dbo.users u ON u.id=a.engineer_id WHERE a.visit_id=v.id AND a.is_active=1),N'') engineer_names,r.status report_status FROM dbo.site_visits v INNER JOIN dbo.sales_intakes i ON i.id=v.intake_id INNER JOIN dbo.visit_types t ON t.id=v.visit_type_id LEFT JOIN dbo.site_visit_reports r ON r.visit_id=v.id WHERE v.deleted_at IS NULL AND v.id<>@visit AND i.customer_id=@customer ORDER BY v.scheduled_start DESC,v.id DESC;`,
       (q) => {
@@ -295,9 +248,7 @@ export function registerSiteVisitReadRoutes(
       },
     );
     const questions = [
-      ...intake.readiness.checks
-        .filter((x) => !x.passed)
-        .map((x) => String(x.label)),
+      ...intake.readiness.checks.filter((x) => !x.passed).map((x) => String(x.label)),
       ...intake.reviews
         .filter((x) => Boolean(x.missingInformation))
         .slice(0, 1)
@@ -324,14 +275,7 @@ export function registerSiteVisitReadRoutes(
         engineerNames: r.engineer_names,
         reportStatus: r.report_status,
       })),
-      emergencyContact: [
-        visit.contactName
-          ? `${visit.contactName} ${visit.contactPhone}`.trim()
-          : "",
-        `Sales: ${intake.salesOwnerName}`,
-      ]
-        .filter(Boolean)
-        .join(" · "),
+      emergencyContact: [visit.contactName ? `${visit.contactName} ${visit.contactPhone}`.trim() : "", `Sales: ${intake.salesOwnerName}`].filter(Boolean).join(" · "),
     };
   });
 
@@ -344,14 +288,10 @@ export function registerSiteVisitReadRoutes(
           (q) => q.input("id", sql.BigInt, id),
         )
       ).recordset[0];
-    if (!visit)
-      throw new ApiError(404, "visit_not_found", "Site visit not found.");
-    const required = await requiredSkillCodes(
-        database,
-        Number(visit.intake_id),
-      ),
+    if (!visit) throw new ApiError(404, "visit_not_found", "Site visit not found.");
+    const required = await requiredSkillCodes(database, Number(visit.intake_id)),
       engineers = await database.query<Row>(
-        `SELECT u.id,u.name,u.email,u.department,r.code role,ISNULL((SELECT STRING_AGG(k.code,N',') FROM dbo.engineer_skills es INNER JOIN dbo.visit_skills k ON k.id=es.skill_id WHERE es.user_id=u.id),N'') skills,(SELECT COUNT_BIG(*) FROM dbo.site_visit_assignments a INNER JOIN dbo.site_visits av ON av.id=a.visit_id WHERE a.engineer_id=u.id AND a.is_active=1 AND av.deleted_at IS NULL AND av.status NOT IN(N'Cancelled',N'Closed',N'Completed',N'Customer No-show')) open_assignments,(SELECT ISNULL(SUM(DATEDIFF(minute,av.scheduled_start,av.scheduled_end)),0) FROM dbo.site_visit_assignments a INNER JOIN dbo.site_visits av ON av.id=a.visit_id WHERE a.engineer_id=u.id AND a.is_active=1 AND av.deleted_at IS NULL AND av.scheduled_start IS NOT NULL AND av.status NOT IN(N'Cancelled',N'Closed',N'Customer No-show') AND av.scheduled_start>=DATEADD(day,-7,SYSUTCDATETIME()) AND av.scheduled_start<DATEADD(day,21,SYSUTCDATETIME())) scheduled_minutes,CAST(CASE WHEN EXISTS(SELECT 1 FROM dbo.site_visit_assignments a WHERE a.visit_id=@visit AND a.engineer_id=u.id AND a.is_active=1) THEN 1 ELSE 0 END AS bit) assigned FROM dbo.users u INNER JOIN dbo.roles r ON r.id=u.role_id WHERE u.is_active=1 AND u.deleted_at IS NULL AND r.code IN(N'Engineer',N'Engineering Manager',N'Engineering Coordinator',N'Project Manager',N'Admin') ORDER BY u.name;`,
+        `SELECT u.id,u.name,u.email,u.department,r.code role,ISNULL((SELECT STRING_AGG(k.code,N',') FROM dbo.engineer_skills es INNER JOIN dbo.visit_skills k ON k.id=es.skill_id WHERE es.user_id=u.id),N'') skills,(SELECT COUNT_BIG(*) FROM dbo.site_visit_assignments a INNER JOIN dbo.site_visits av ON av.id=a.visit_id WHERE a.engineer_id=u.id AND a.is_active=1 AND av.deleted_at IS NULL AND av.status NOT IN(N'Cancelled',N'Closed',N'Completed',N'Customer No-show')) open_assignments,(SELECT ISNULL(SUM(DATEDIFF(minute,av.scheduled_start,av.scheduled_end)),0) FROM dbo.site_visit_assignments a INNER JOIN dbo.site_visits av ON av.id=a.visit_id WHERE a.engineer_id=u.id AND a.is_active=1 AND av.deleted_at IS NULL AND av.scheduled_start IS NOT NULL AND av.status NOT IN(N'Cancelled',N'Closed',N'Customer No-show') AND av.scheduled_start>=DATEADD(day,-7,SYSUTCDATETIME()) AND av.scheduled_start<DATEADD(day,21,SYSUTCDATETIME())) scheduled_minutes,CAST(CASE WHEN EXISTS(SELECT 1 FROM dbo.site_visit_assignments a WHERE a.visit_id=@visit AND a.engineer_id=u.id AND a.is_active=1) THEN 1 ELSE 0 END AS bit) assigned FROM dbo.users u INNER JOIN dbo.roles r ON r.id=u.role_id WHERE u.is_active=1 AND u.deleted_at IS NULL AND r.code IN(N'Engineer',N'Leader',N'Engineering Manager',N'Engineering Coordinator',N'Project Manager',N'Admin') ORDER BY u.name;`,
         (q) => q.input("visit", sql.BigInt, id),
       );
     const result = [];
@@ -362,22 +302,12 @@ export function registerSiteVisitReadRoutes(
         conflictDetail = "";
       if (visit.scheduled_start && visit.scheduled_end) {
         const checked = await database.withSession(async (executor) => {
-          const check = new sql.Request(
-            executor as InstanceType<typeof sql.ConnectionPool>,
-          );
+          const check = new sql.Request(executor as InstanceType<typeof sql.ConnectionPool>);
           check.input("engineer_id", sql.BigInt, Number(r.id));
           check.input("starts_at", sql.DateTimeOffset, visit.scheduled_start);
           check.input("ends_at", sql.DateTimeOffset, visit.scheduled_end);
-          check.input(
-            "travel_minutes_before",
-            sql.Int,
-            Number(visit.travel_minutes_before),
-          );
-          check.input(
-            "travel_minutes_after",
-            sql.Int,
-            Number(visit.travel_minutes_after),
-          );
+          check.input("travel_minutes_before", sql.Int, Number(visit.travel_minutes_before));
+          check.input("travel_minutes_after", sql.Int, Number(visit.travel_minutes_after));
           check.input("exclude_visit_id", sql.BigInt, id);
           check.input("allow_conflict", sql.Bit, true);
           check.output("conflict_count", sql.Int);
@@ -406,11 +336,7 @@ export function registerSiteVisitReadRoutes(
       });
     }
     return result.sort(
-      (a, b) =>
-        b.skillMatchPercent - a.skillMatchPercent ||
-        a.conflictCount - b.conflictCount ||
-        a.openAssignments - b.openAssignments ||
-        String(a.name).localeCompare(String(b.name)),
+      (a, b) => b.skillMatchPercent - a.skillMatchPercent || a.conflictCount - b.conflictCount || a.openAssignments - b.openAssignments || String(a.name).localeCompare(String(b.name)),
     );
   });
 }

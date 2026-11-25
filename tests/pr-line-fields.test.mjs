@@ -44,6 +44,6 @@ test("the PR sheet shows the PR-Form's columns on demand and makes a row a part 
   const flatGuides = guides.replace(/\s+/g, " ");
   for (const target of ["pr.form-fields", "pr.part", "pr.import"]) assert.ok(flatGuides.includes(`target: "${target}", action: "next", view: "purchase"`), target);
   // The request page and the Unit overview read them too.
-  assert.match(read("app/system/production/MaterialScreens.tsx"), /line\.attachmentUrl \? <small><a href=\{line\.attachmentUrl\} target="_blank" rel="noopener noreferrer">/);
+  assert.match(read("app/system/production/MaterialScreens.tsx"), /line\.attachmentUrl \? \(\s*<small>\s*<a href=\{line\.attachmentUrl\} target="_blank" rel="noopener noreferrer">/);
   assert.match(read("backend-node/src/routes/purchase-units.ts"), /MIN\(CASE WHEN .* THEN COALESCE\(l\.need_by,pr\.required_date\) END\) need_by/);
 });

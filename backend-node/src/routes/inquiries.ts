@@ -647,7 +647,7 @@ export function registerInquiryRoutes(app: FastifyInstance, config: AppConfig, d
         SELECT CASE WHEN EXISTS (SELECT 1 FROM dbo.customers WHERE id=@customer_id AND is_active=1 AND deleted_at IS NULL) THEN 1 ELSE 0 END AS customer_valid,
           CASE WHEN EXISTS (SELECT 1 FROM dbo.users u INNER JOIN dbo.user_effective_roles r ON r.user_id=u.id
             WHERE u.id=@owner_id AND u.is_active=1 AND u.deleted_at IS NULL
-              AND r.code IN (N'Engineer',N'Engineering Manager',N'Admin')) THEN 1 ELSE 0 END AS owner_valid;
+              AND r.code IN (N'Engineer',N'Leader',N'Engineering Manager',N'Admin')) THEN 1 ELSE 0 END AS owner_valid;
       `);
       if (Number(references.recordset[0]?.customer_valid) !== 1) throw new ApiError(422, "invalid_reference", "The selected customer must be active.");
       if (Number(references.recordset[0]?.owner_valid) !== 1) throw new ApiError(422, "invalid_reference", "The estimate owner must be an active engineer, engineering manager or administrator.");
@@ -808,7 +808,7 @@ export function registerInquiryRoutes(app: FastifyInstance, config: AppConfig, d
         await ownerRequest.query<{ name: string; email: string | null }>(`
         SELECT u.name,u.email FROM dbo.users u INNER JOIN dbo.roles r ON r.id=u.role_id
         WHERE u.id=@owner_id AND u.is_active=1 AND u.deleted_at IS NULL
-          AND r.code IN (N'Engineer',N'Engineering Manager',N'Admin');
+          AND r.code IN (N'Engineer',N'Leader',N'Engineering Manager',N'Admin');
       `)
       ).recordset[0];
       if (!nextOwner) throw new ApiError(422, "invalid_reference", "The estimate owner must be an active engineer, engineering manager or administrator.");
