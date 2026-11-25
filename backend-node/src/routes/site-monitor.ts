@@ -10,12 +10,15 @@ import { resolveStoragePath } from "../document-storage.js";
 import type { EmailService } from "../email.js";
 import { parseByteRange } from "./download-center.js";
 import { ApiError } from "../errors.js";
+import { MonitorAlertSender } from "../monitor-alerts.js";
 import { failedSignInLimit } from "../rate-limits.js";
 import {
   AGENT_FAILED_KEYS_PER_MINUTE,
   AGENT_KEY_PATTERN,
   COMMAND_WAIT_SECONDS,
+  COMPLETE_SCRIPT_JOBS_SQL,
   HEARTBEAT_SECONDS,
+  SAMPLE_SECONDS,
   SiteMonitorSweeper,
   agentKeyHint,
   generateAgentKey,
@@ -24,6 +27,7 @@ import {
   parseHeartbeat,
   startSiteMonitorSweeper,
   stopSiteMonitorSweeper,
+  tmtdeskUnhealthy,
   waitForAgentWake,
   wakeAgent,
   wakeAllAgents,
@@ -46,6 +50,7 @@ const AGENT_BODY_LIMIT_BYTES = 4 * 1024 * 1024;
 
 type AgentIdentity = { id: number; siteId: number; name: string; siteName: string };
 type Verb = "Start" | "Stop" | "Restart";
+type AnyVerb = Verb | "Update" | "RunScript";
 
 const READ = "monitor.read";
 const CONTROL = "monitor.control";
@@ -113,7 +118,29 @@ export type SiteInput = {
   offlineMinutes: number;
   isActive: boolean;
   contacts: { priority: number; userId: number }[];
+  /** Where the site is, for the Command Center map; both or neither. */
+  latitude: number | null;
+  longitude: number | null;
 };
+
+function coordinate(value: unknown, limit: number, field: string): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const number = typeof value === "number" ? value : typeof value === "string" ? Number(value.trim()) : Number.NaN;
+  if (!Number.isFinite(number) || Math.abs(number) > limit) {
+    throw new ApiError(400, "validation_failed", `${field} must be a number from -${limit} to ${limit}.`);
+  }
+  return Math.round(number * 1_000_000) / 1_000_000;
+}
+
+/** A site's position: decimal degrees, both given or both empty. */
+export function parseSitePosition(raw: Record<string, unknown>): { latitude: number | null; longitude: number | null } {
+  const latitude = coordinate(raw.latitude, 90, "Latitude");
+  const longitude = coordinate(raw.longitude, 180, "Longitude");
+  if ((latitude === null) !== (longitude === null)) {
+    throw new ApiError(400, "validation_failed", "Give both latitude and longitude, or leave both empty.");
+  }
+  return { latitude, longitude };
+}
 
 /** The site form: name, place, escalation timing and up to three distinct responsible people. */
 export function parseSiteInput(raw: Record<string, unknown>): SiteInput {
@@ -136,25 +163,38 @@ export function parseSiteInput(raw: Record<string, unknown>): SiteInput {
     offlineMinutes: integerInRange(raw.offlineMinutes ?? 3, 1, 120, "Offline minutes"),
     isActive: raw.isActive !== false,
     contacts: contacts.sort((a, b) => a.priority - b.priority),
+    ...parseSitePosition(raw),
   };
 }
 
 // ── row types ────────────────────────────────────────────────────────────────
 
-type SiteRow = {
+export type SiteRow = {
   id: number | string; name: string; location: string; description: string;
   escalation_minutes: number; offline_minutes: number; is_active: boolean; row_version: Buffer;
+  latitude?: number | string | null; longitude?: number | string | null;
   agent_count?: number; agents_online?: number; program_count?: number; programs_running?: number;
   open_incidents?: number; last_seen_at?: Date | null;
 };
-type ContactRow = { site_id: number | string; priority: number; user_id: number | string; name: string; email: string };
-type AgentRow = {
+export type ContactRow = { site_id: number | string; priority: number; user_id: number | string; name: string; email: string };
+export type AgentRow = {
   id: number | string; name: string; key_hint: string; machine_name: string | null; agent_version: string | null;
   allows_control: boolean; is_online: boolean; last_seen_at: Date | null; status_changed_at: Date | null; created_at: Date;
   host_cpu_percent: number | null; host_memory_used_bytes: number | string | null; host_memory_total_bytes: number | string | null;
   host_disk_free_bytes: number | string | null; host_disk_total_bytes: number | string | null; host_uptime_seconds: number | string | null;
-  tmtdesk_id: string | null;
+  tmtdesk_id: string | null; tmtdesk_id_manual: boolean; tmtdesk_installed: boolean; tmtdesk_running: boolean;
+  tmtdesk_version: string | null; tmtdesk_mode: string | null; tmtdesk_rendezvous: string | null; tmtdesk_helper_running: boolean;
+  tmtdesk_active_sessions: number; tmtdesk_capture_method: string | null; tmtdesk_health: string | null;
+  tmtdesk_last_frame_at: Date | null; tmtdesk_updated_at: Date | null; tmtdesk_reported_at: Date | null; tmtdesk_unhealthy_since: Date | null;
 };
+
+/** The machine columns agentDto reads, for every query that lists machines (a = dbo.monitor_agents). */
+export const AGENT_COLUMNS = `a.id, a.name, a.key_hint, a.machine_name, a.agent_version, a.allows_control, a.is_online, a.last_seen_at,
+  a.status_changed_at, a.created_at, a.tmtdesk_id, a.tmtdesk_id_manual,
+  a.host_cpu_percent, a.host_memory_used_bytes, a.host_memory_total_bytes, a.host_disk_free_bytes, a.host_disk_total_bytes, a.host_uptime_seconds,
+  a.tmtdesk_installed, a.tmtdesk_running, a.tmtdesk_version, a.tmtdesk_mode, a.tmtdesk_rendezvous, a.tmtdesk_helper_running,
+  a.tmtdesk_active_sessions, a.tmtdesk_capture_method, a.tmtdesk_health, a.tmtdesk_last_frame_at, a.tmtdesk_updated_at,
+  a.tmtdesk_reported_at, a.tmtdesk_unhealthy_since`;
 type ProgramRow = {
   id: number | string; agent_id: number | string; program_key: string; name: string; group_label: string;
   run_as_admin: boolean; is_running: boolean; cpu_percent: number | null; memory_bytes: number | string | null;
@@ -168,13 +208,15 @@ type IncidentRow = {
   acknowledged_by_name: string | null; notified_level: number;
 };
 type CommandRow = {
-  id: number | string; program_id: number | string; program_name: string; verb: Verb; status: string;
+  id: number | string; program_id: number | string | null; program_name: string; verb: AnyVerb; status: string;
   requested_by_name: string; requested_at: Date; completed_at: Date | null; result_message: string | null;
+  script_job_id: number | string | null;
 };
 type LogRow = { id: number | string; agent_id: number | string; agent_name: string; level: string; message: string; logged_at: Date };
 
-const SITE_SUMMARY = `
+export const SITE_SUMMARY = `
   SELECT s.id, s.name, s.location, s.description, s.escalation_minutes, s.offline_minutes, s.is_active, s.row_version,
+    s.latitude, s.longitude,
     (SELECT COUNT(*) FROM dbo.monitor_agents a WHERE a.site_id = s.id AND a.revoked_at IS NULL) AS agent_count,
     (SELECT COUNT(*) FROM dbo.monitor_agents a WHERE a.site_id = s.id AND a.revoked_at IS NULL AND a.is_online = 1) AS agents_online,
     (SELECT COUNT(*) FROM dbo.monitor_programs p INNER JOIN dbo.monitor_agents a ON a.id = p.agent_id
@@ -185,7 +227,7 @@ const SITE_SUMMARY = `
     (SELECT MAX(a.last_seen_at) FROM dbo.monitor_agents a WHERE a.site_id = s.id AND a.revoked_at IS NULL) AS last_seen_at
   FROM dbo.monitor_sites s`;
 
-function siteDto(row: SiteRow, contacts: ContactRow[]) {
+export function siteDto(row: SiteRow, contacts: ContactRow[]) {
   return {
     id: Number(row.id),
     name: row.name,
@@ -201,6 +243,8 @@ function siteDto(row: SiteRow, contacts: ContactRow[]) {
     programsRunning: Number(row.programs_running ?? 0),
     openIncidents: Number(row.open_incidents ?? 0),
     lastSeenAt: iso(row.last_seen_at),
+    latitude: numberOrNull(row.latitude),
+    longitude: numberOrNull(row.longitude),
     contacts: contacts.filter((contact) => Number(contact.site_id) === Number(row.id)).map((contact) => ({
       priority: Number(contact.priority), userId: Number(contact.user_id), name: contact.name, email: contact.email,
     })),
@@ -220,7 +264,7 @@ export function parseTmtdeskId(value: unknown): string | null {
   return digits;
 }
 
-function agentDto(row: AgentRow) {
+export function agentDto(row: AgentRow) {
   return {
     id: Number(row.id),
     name: row.name,
@@ -233,6 +277,22 @@ function agentDto(row: AgentRow) {
     statusChangedAt: iso(row.status_changed_at),
     createdAt: iso(row.created_at),
     tmtdeskId: row.tmtdesk_id ? row.tmtdesk_id.trim() : null,
+    tmtdeskIdManual: Boolean(row.tmtdesk_id_manual),
+    // The machine's last TMTDesk report (TMT Control Panel 2.3+); null when it never sent one or TMTDesk is not installed.
+    tmtdesk: row.tmtdesk_installed ? {
+      running: Boolean(row.tmtdesk_running),
+      version: row.tmtdesk_version ?? "",
+      mode: row.tmtdesk_mode ?? "",
+      rendezvous: row.tmtdesk_rendezvous ?? "",
+      helperRunning: Boolean(row.tmtdesk_helper_running),
+      activeSessions: Number(row.tmtdesk_active_sessions ?? 0),
+      captureMethod: row.tmtdesk_capture_method ?? "",
+      health: row.tmtdesk_health ?? "unknown",
+      lastFrameAt: iso(row.tmtdesk_last_frame_at),
+      updatedAt: iso(row.tmtdesk_updated_at),
+      reportedAt: iso(row.tmtdesk_reported_at),
+      unhealthySince: iso(row.tmtdesk_unhealthy_since),
+    } : null,
     host: {
       cpuPercent: numberOrNull(row.host_cpu_percent),
       memoryUsedBytes: numberOrNull(row.host_memory_used_bytes),
@@ -246,22 +306,29 @@ function agentDto(row: AgentRow) {
 
 function commandDto(row: CommandRow) {
   return {
-    id: Number(row.id), programId: Number(row.program_id), programName: row.program_name, verb: row.verb,
+    id: Number(row.id), programId: numberOrNull(row.program_id), programName: row.program_name, verb: row.verb,
+    scriptJobId: numberOrNull(row.script_job_id),
     status: row.status, requestedBy: row.requested_by_name, requestedAt: iso(row.requested_at),
     completedAt: iso(row.completed_at), resultMessage: row.result_message,
   };
 }
 
-const COMMAND_SELECT = `
-  SELECT c.id, c.program_id, p.name AS program_name, c.verb, c.status, u.name AS requested_by_name,
-         c.requested_at, c.completed_at, c.result_message
+/** A command's subject: the program, or for RunScript the script job's title. */
+export const COMMAND_SELECT = `
+  SELECT c.id, c.program_id, COALESCE(p.name, sj.title, N'') AS program_name, c.verb, c.status, u.name AS requested_by_name,
+         c.requested_at, c.completed_at, c.result_message, st.job_id AS script_job_id
   FROM dbo.monitor_commands c
-  INNER JOIN dbo.monitor_programs p ON p.id = c.program_id
+  LEFT JOIN dbo.monitor_programs p ON p.id = c.program_id
+  LEFT JOIN dbo.monitor_script_targets st ON st.command_id = c.id
+  LEFT JOIN dbo.monitor_script_jobs sj ON sj.id = st.job_id
   INNER JOIN dbo.users u ON u.id = c.requested_by`;
 
-/** Claims an agent's pending commands; an Update's deployment is marked delivered with it. */
+/**
+ * Claims an agent's pending commands; an Update's deployment and a RunScript's target are marked delivered with it.
+ * A RunScript carries the approved script, its shell, timeout, the job key and who asked (for the machine's own log).
+ */
 export const CLAIM_COMMANDS_SQL = `
-  DECLARE @claimed TABLE (id bigint NOT NULL, verb nvarchar(10) NOT NULL, program_id bigint NOT NULL, deployment_id bigint NULL);
+  DECLARE @claimed TABLE (id bigint NOT NULL, verb nvarchar(10) NOT NULL, program_id bigint NULL, deployment_id bigint NULL);
   UPDATE c
   SET status = N'Delivered', delivered_at = SYSUTCDATETIME()
   OUTPUT inserted.id, inserted.verb, inserted.program_id, inserted.deployment_id INTO @claimed
@@ -270,18 +337,72 @@ export const CLAIM_COMMANDS_SQL = `
   UPDATE d SET status = N'Delivered'
   FROM dbo.monitor_deployments d INNER JOIN @claimed k ON k.deployment_id = d.id
   WHERE d.status = N'Approved';
-  SELECT k.id, k.verb, p.program_key, k.deployment_id, d.asset_name, d.asset_size, d.sha256
+  UPDATE t SET status = N'Delivered'
+  FROM dbo.monitor_script_targets t INNER JOIN @claimed k ON k.id = t.command_id
+  WHERE t.status = N'Pending';
+  SELECT k.id, k.verb, p.program_key, k.deployment_id, d.asset_name, d.asset_size, d.sha256,
+         j.job_key, j.shell, j.script, j.timeout_seconds, ru.name AS script_requested_by
   FROM @claimed k
-  INNER JOIN dbo.monitor_programs p ON p.id = k.program_id
+  LEFT JOIN dbo.monitor_programs p ON p.id = k.program_id
   LEFT JOIN dbo.monitor_deployments d ON d.id = k.deployment_id
+  LEFT JOIN dbo.monitor_script_targets t ON t.command_id = k.id
+  LEFT JOIN dbo.monitor_script_jobs j ON j.id = t.job_id
+  LEFT JOIN dbo.users ru ON ru.id = j.requested_by
   ORDER BY k.id;`;
+
+/** The RunScript result fields (TMT Control Panel Services/ScriptRunner.cs ScriptResult), cut to the agreed sizes. */
+export type ScriptResultInput = {
+  exitCode: number | null;
+  stdout: string;
+  stderr: string;
+  stdoutTruncated: boolean;
+  stderrTruncated: boolean;
+  durationMs: number | null;
+};
+
+const SCRIPT_OUTPUT_LIMIT_BYTES = 64 * 1024;
+
+/** Cuts text to at most `bytes` of UTF-8 without splitting a character. */
+export function cutUtf8(value: string, bytes: number): { text: string; cut: boolean } {
+  if (Buffer.byteLength(value, "utf8") <= bytes) return { text: value, cut: false };
+  let used = 0;
+  let end = 0;
+  for (const character of value) {
+    const size = Buffer.byteLength(character, "utf8");
+    if (used + size > bytes) break;
+    used += size;
+    end += character.length;
+  }
+  return { text: value.slice(0, end), cut: true };
+}
+
+export function parseScriptResult(input: Record<string, unknown>): ScriptResultInput {
+  const stdout = cutUtf8(typeof input.stdout === "string" ? input.stdout.replaceAll("\u0000", "") : "", SCRIPT_OUTPUT_LIMIT_BYTES);
+  const stderr = cutUtf8(typeof input.stderr === "string" ? input.stderr.replaceAll("\u0000", "") : "", SCRIPT_OUTPUT_LIMIT_BYTES);
+  const exitCode = typeof input.exitCode === "number" && Number.isInteger(input.exitCode) && Math.abs(input.exitCode) <= 2 ** 31 ? input.exitCode : null;
+  const duration = typeof input.durationMs === "number" && Number.isFinite(input.durationMs) && input.durationMs >= 0 ? Math.floor(input.durationMs) : null;
+  return {
+    exitCode,
+    stdout: stdout.text,
+    stderr: stderr.text,
+    stdoutTruncated: input.stdoutTruncated === true || stdout.cut,
+    stderrTruncated: input.stderrTruncated === true || stderr.cut,
+    durationMs: duration,
+  };
+}
+
+/** A script target's status from the agent's answer: an agent with scripts turned off says so in its message. */
+export function scriptTargetStatus(success: boolean, message: string): "Succeeded" | "Failed" | "Rejected" {
+  if (success) return "Succeeded";
+  return /^rejected:/i.test(message.trim()) ? "Rejected" : "Failed";
+}
 
 /**
  * Records a command's result. For an Update it also closes the deployment, and on success sets the
  * program's version and every installed asset linked to that program, with a timeline event.
  */
 export const COMMAND_RESULT_SQL = `
-  DECLARE @done TABLE (program_id bigint NOT NULL, deployment_id bigint NULL);
+  DECLARE @done TABLE (program_id bigint NULL, deployment_id bigint NULL);
   UPDATE dbo.monitor_commands
   SET status = CASE WHEN @success = 1 THEN N'Succeeded' ELSE N'Failed' END,
       completed_at = SYSUTCDATETIME(), result_message = @message
@@ -310,6 +431,22 @@ export const COMMAND_RESULT_SQL = `
     FROM @updated u CROSS JOIN @done k INNER JOIN dbo.monitor_deployments d ON d.id = k.deployment_id;
   END;
 
+  -- A RunScript keeps the machine's exit code, output and duration on its target, and closes the job when it was the last.
+  DECLARE @jobs TABLE (id bigint NOT NULL);
+  IF EXISTS (SELECT 1 FROM @done)
+  BEGIN
+    UPDATE dbo.monitor_script_targets
+    SET status = @script_status, exit_code = @exit_code, stdout = @stdout, stderr = @stderr,
+        stdout_truncated = @stdout_truncated, stderr_truncated = @stderr_truncated, duration_ms = @duration_ms,
+        result_message = @message, completed_at = SYSUTCDATETIME()
+    OUTPUT inserted.job_id INTO @jobs
+    WHERE command_id = @id AND agent_id = @agent AND status IN (N'Pending', N'Delivered');
+    IF EXISTS (SELECT 1 FROM @jobs)
+    BEGIN
+      ${COMPLETE_SCRIPT_JOBS_SQL}
+    END;
+  END;
+
   SELECT COUNT(*) AS updated FROM @done;`;
 
 export function registerSiteMonitorRoutes(
@@ -320,7 +457,8 @@ export function registerSiteMonitorRoutes(
   email: EmailService,
 ): void {
   // One sweeper per process (the API listens once per configured address, all on one database).
-  const sweeper = new SiteMonitorSweeper(database, email, config.businessTimeZone, app.log);
+  const alerts = new MonitorAlertSender(database, config.credentialVault, fetch, app.log, config.email.applicationBaseUrl);
+  const sweeper = new SiteMonitorSweeper(database, email, config.businessTimeZone, app.log, alerts);
   if (startSiteMonitorSweeper(sweeper)) app.addHook("onClose", async () => stopSiteMonitorSweeper(sweeper));
   let closing = false;
   app.addHook("preClose", async () => {
@@ -379,6 +517,11 @@ export function registerSiteMonitorRoutes(
       programKey: event.programKey, kind: event.kind, userInitiated: event.userInitiated ? 1 : 0,
     })));
     const logs = JSON.stringify(input.logs);
+    const desk = input.tmtdesk;
+    const hostMemoryPercent = input.host.memoryTotalBytes && input.host.memoryUsedBytes !== null
+      ? Math.min(100, Math.round((input.host.memoryUsedBytes / input.host.memoryTotalBytes) * 1000) / 10) : null;
+    const hostDiskPercent = input.host.diskTotalBytes && input.host.diskFreeBytes !== null
+      ? Math.min(100, Math.max(0, Math.round(((input.host.diskTotalBytes - input.host.diskFreeBytes) / input.host.diskTotalBytes) * 1000) / 10)) : null;
 
     const outcome = await database.transaction(async (transaction) => {
       const sqlRequest = new sql.Request(transaction);
@@ -396,11 +539,35 @@ export function registerSiteMonitorRoutes(
       sqlRequest.input("programs", sql.NVarChar(sql.MAX), programs);
       sqlRequest.input("events", sql.NVarChar(sql.MAX), events);
       sqlRequest.input("logs", sql.NVarChar(sql.MAX), logs);
-      const result = await sqlRequest.query<{ duplicate: boolean; opened: number }>(`
+      sqlRequest.input("host_mem_pct", sql.Decimal(5, 1), hostMemoryPercent);
+      sqlRequest.input("host_disk_pct", sql.Decimal(5, 1), hostDiskPercent);
+      sqlRequest.input("td_present", sql.Bit, desk !== null);
+      sqlRequest.input("td_installed", sql.Bit, desk?.installed ?? false);
+      sqlRequest.input("td_running", sql.Bit, desk?.running ?? false);
+      sqlRequest.input("td_id", sql.Char(9), desk?.installed ? desk.id : null);
+      sqlRequest.input("td_version", sql.NVarChar(40), desk?.version || null);
+      sqlRequest.input("td_mode", sql.NVarChar(40), desk?.mode || null);
+      sqlRequest.input("td_rendezvous", sql.NVarChar(200), desk?.rendezvous || null);
+      sqlRequest.input("td_helper", sql.Bit, desk?.helperRunning ?? false);
+      sqlRequest.input("td_sessions", sql.Int, desk?.activeSessions ?? 0);
+      sqlRequest.input("td_capture", sql.NVarChar(40), desk?.captureMethod || null);
+      sqlRequest.input("td_health", sql.NVarChar(40), desk?.health ?? null);
+      sqlRequest.input("td_last_frame", sql.DateTimeOffset, desk?.lastFrameAt ? new Date(desk.lastFrameAt) : null);
+      sqlRequest.input("td_updated", sql.DateTimeOffset, desk?.updatedAt ? new Date(desk.updatedAt) : null);
+      sqlRequest.input("td_unhealthy", sql.Bit, tmtdeskUnhealthy(desk));
+      const result = await sqlRequest.query<{ duplicate: boolean; opened: number; tmtdesk_id_filled: string | null }>(`
         DECLARE @now datetimeoffset(0) = SYSUTCDATETIME();
         DECLARE @duplicate bit = 0;
         IF EXISTS (SELECT 1 FROM dbo.monitor_agents WITH (UPDLOCK, HOLDLOCK) WHERE id = @agent AND last_batch_id = @batch)
           SET @duplicate = 1;
+        -- One resource sample a minute for the Command Center sparklines.
+        DECLARE @sample bit = CASE WHEN EXISTS (
+          SELECT 1 FROM dbo.monitor_agents WHERE id = @agent
+            AND (last_sample_at IS NULL OR last_sample_at <= DATEADD(second, -${SAMPLE_SECONDS - 5}, @now))) THEN 1 ELSE 0 END;
+        -- A valid ID the machine reports fills the TMTDesk ID, unless a person set it by hand.
+        DECLARE @tmtdesk_filled char(9) = (
+          SELECT @td_id FROM dbo.monitor_agents
+          WHERE id = @agent AND @td_id IS NOT NULL AND tmtdesk_id_manual = 0 AND (tmtdesk_id IS NULL OR tmtdesk_id <> @td_id));
 
         UPDATE dbo.monitor_agents
         SET machine_name = @machine, agent_version = @version, allows_control = @allows,
@@ -408,8 +575,34 @@ export function registerSiteMonitorRoutes(
             host_disk_free_bytes = @host_disk_free, host_disk_total_bytes = @host_disk_total, host_uptime_seconds = @host_uptime,
             last_batch_id = @batch, last_seen_at = @now,
             status_changed_at = CASE WHEN is_online = 0 THEN @now ELSE status_changed_at END,
-            is_online = 1
+            is_online = 1,
+            -- No block: an older Control Panel, or TMTDesk is not installed. The last details stay for reference.
+            tmtdesk_installed = CASE WHEN @td_present = 1 THEN @td_installed ELSE 0 END,
+            tmtdesk_running = CASE WHEN @td_present = 1 THEN @td_running ELSE 0 END,
+            tmtdesk_version = CASE WHEN @td_present = 1 THEN @td_version ELSE tmtdesk_version END,
+            tmtdesk_mode = CASE WHEN @td_present = 1 THEN @td_mode ELSE tmtdesk_mode END,
+            tmtdesk_rendezvous = CASE WHEN @td_present = 1 THEN @td_rendezvous ELSE tmtdesk_rendezvous END,
+            tmtdesk_helper_running = CASE WHEN @td_present = 1 THEN @td_helper ELSE 0 END,
+            tmtdesk_active_sessions = CASE WHEN @td_present = 1 THEN @td_sessions ELSE 0 END,
+            tmtdesk_capture_method = CASE WHEN @td_present = 1 THEN @td_capture ELSE tmtdesk_capture_method END,
+            tmtdesk_health = CASE WHEN @td_present = 1 THEN @td_health ELSE tmtdesk_health END,
+            tmtdesk_last_frame_at = CASE WHEN @td_present = 1 THEN @td_last_frame ELSE tmtdesk_last_frame_at END,
+            tmtdesk_updated_at = CASE WHEN @td_present = 1 THEN @td_updated ELSE tmtdesk_updated_at END,
+            tmtdesk_reported_at = CASE WHEN @td_present = 1 THEN @now ELSE tmtdesk_reported_at END,
+            tmtdesk_unhealthy_since = CASE WHEN @td_present = 1 AND @td_installed = 1 AND @td_unhealthy = 1
+              THEN COALESCE(tmtdesk_unhealthy_since, @now) ELSE NULL END,
+            tmtdesk_id = COALESCE(@tmtdesk_filled, tmtdesk_id),
+            last_sample_at = CASE WHEN @sample = 1 THEN @now ELSE last_sample_at END
         WHERE id = @agent;
+
+        IF @sample = 1
+          INSERT dbo.monitor_agent_samples (agent_id, sampled_at, cpu_percent, memory_percent, disk_percent)
+          VALUES (@agent, @now, @host_cpu, @host_mem_pct, @host_disk_pct);
+
+        -- TMTDesk is healthy again, or no longer reported.
+        UPDATE dbo.monitor_incidents SET resolved_at = @now
+        WHERE agent_id = @agent AND kind = N'TMTDeskUnhealthy' AND resolved_at IS NULL
+          AND NOT (@td_present = 1 AND @td_installed = 1 AND @td_unhealthy = 1);
 
         DECLARE @reported TABLE (
           program_key nvarchar(64) NOT NULL PRIMARY KEY, name nvarchar(200) NOT NULL, group_label nvarchar(150) NOT NULL,
@@ -482,11 +675,12 @@ export function registerSiteMonitorRoutes(
           FROM OPENJSON(@logs) WITH (level nvarchar(10) '$.level', message nvarchar(2000) '$.message', logged_at datetimeoffset(3) '$.at') l;
         END;
 
-        SELECT @duplicate AS duplicate, @opened AS opened;
+        SELECT @duplicate AS duplicate, @opened AS opened, @tmtdesk_filled AS tmtdesk_id_filled;
       `);
       return result.recordset[0];
     }, sql.ISOLATION_LEVEL.READ_COMMITTED);
 
+    if (outcome?.tmtdesk_id_filled) request.log.info({ agentId: agent.id, tmtdeskId: outcome.tmtdesk_id_filled }, "Site Monitor TMTDesk ID reported by the machine");
     if ((outcome?.opened ?? 0) > 0) kickSiteMonitorSweeper();
     return { ok: true, duplicate: Boolean(outcome?.duplicate), heartbeatSeconds: HEARTBEAT_SECONDS, serverTime: new Date().toISOString() };
   });
@@ -503,12 +697,18 @@ export function registerSiteMonitorRoutes(
 
     for (;;) {
       const claimed = await database.query<{
-        id: number | string; verb: Verb | "Update"; program_key: string;
+        id: number | string; verb: AnyVerb; program_key: string | null;
         deployment_id: number | string | null; asset_name: string | null; asset_size: number | string | null; sha256: string | null;
+        job_key: string | null; shell: string | null; script: string | null; timeout_seconds: number | null; script_requested_by: string | null;
       }>(CLAIM_COMMANDS_SQL, (sqlRequest) => sqlRequest.input("agent", sql.BigInt, agent.id));
-      // An Update names exactly the bytes to install: the agent downloads them and checks the hash.
+      // An Update names exactly the bytes to install: the agent downloads them and checks the hash. A RunScript
+      // carries the approved script; an agent whose owner has not allowed scripts answers "rejected: scripts disabled".
       const commands = claimed.recordset.map((row) => ({
-        id: Number(row.id), verb: row.verb, programKey: row.program_key,
+        id: Number(row.id), verb: row.verb, programKey: row.program_key ?? "",
+        ...(row.verb === "RunScript" ? {
+          jobId: (row.job_key ?? "").toLowerCase(), shell: row.shell ?? "", script: row.script ?? "",
+          timeoutSeconds: Number(row.timeout_seconds ?? 300), requestedBy: row.script_requested_by ?? "",
+        } : {}),
         ...(row.deployment_id === null ? {} : {
           deployment: {
             id: Number(row.deployment_id), fileName: row.asset_name ?? "", sizeBytes: Number(row.asset_size ?? 0), sha256: row.sha256 ?? "",
@@ -516,7 +716,10 @@ export function registerSiteMonitorRoutes(
           },
         }),
       }));
-      if (commands.length > 0) request.log.info({ agentId: agent.id, commands }, "Site Monitor commands delivered");
+      // Never log a script: it can hold credentials.
+      if (commands.length > 0) {
+        request.log.info({ agentId: agent.id, commands: commands.map(({ id, verb, programKey }) => ({ id, verb, programKey })) }, "Site Monitor commands delivered");
+      }
       const remaining = deadline - Date.now();
       if (commands.length > 0 || remaining <= 0 || closing || gone.signal.aborted) return { commands };
       // A command created in this process wakes us at once; one created elsewhere is seen within 10 s.
@@ -533,6 +736,8 @@ export function registerSiteMonitorRoutes(
     // Update results also say whether the agent restored the previous version, and what is installed now.
     const rolledBack = input.outcome === "RolledBack";
     const version = typeof input.version === "string" ? input.version.trim().slice(0, 100) : "";
+    // RunScript results also carry the exit code, output and duration; other commands leave them empty.
+    const script = parseScriptResult(input);
     const updated = await database.transaction(async (transaction) => {
       const result = await new sql.Request(transaction)
         .input("id", sql.BigInt, commandId)
@@ -541,10 +746,20 @@ export function registerSiteMonitorRoutes(
         .input("rolled_back", sql.Bit, rolledBack)
         .input("version", sql.NVarChar(100), version || null)
         .input("message", sql.NVarChar(1000), message || null)
+        .input("script_status", sql.NVarChar(12), scriptTargetStatus(success, message))
+        .input("exit_code", sql.Int, script.exitCode)
+        .input("stdout", sql.NVarChar(sql.MAX), script.stdout)
+        .input("stderr", sql.NVarChar(sql.MAX), script.stderr)
+        .input("stdout_truncated", sql.Bit, script.stdoutTruncated)
+        .input("stderr_truncated", sql.Bit, script.stderrTruncated)
+        .input("duration_ms", sql.BigInt, script.durationMs)
         .query<{ updated: number }>(COMMAND_RESULT_SQL);
       return result.recordset[0]?.updated ?? 0;
     }, sql.ISOLATION_LEVEL.READ_COMMITTED);
-    if (updated > 0) request.log.info({ agentId: agent.id, commandId, success, rolledBack, version: version || undefined }, "Site Monitor command result");
+    if (updated > 0) {
+      request.log.info({ agentId: agent.id, commandId, success, rolledBack, version: version || undefined, exitCode: script.exitCode ?? undefined },
+        "Site Monitor command result");
+    }
     return { ok: updated > 0 };
   });
 
@@ -627,11 +842,10 @@ export function registerSiteMonitorRoutes(
       FROM dbo.monitor_site_contacts c INNER JOIN dbo.users u ON u.id = c.user_id
       WHERE c.site_id = @site ORDER BY c.priority;
 
-      SELECT id, name, key_hint, machine_name, agent_version, allows_control, is_online, last_seen_at, status_changed_at, created_at, tmtdesk_id,
-             host_cpu_percent, host_memory_used_bytes, host_memory_total_bytes, host_disk_free_bytes, host_disk_total_bytes, host_uptime_seconds
-      FROM dbo.monitor_agents
-      WHERE site_id = @site AND revoked_at IS NULL
-      ORDER BY name;
+      SELECT ${AGENT_COLUMNS}
+      FROM dbo.monitor_agents a
+      WHERE a.site_id = @site AND a.revoked_at IS NULL
+      ORDER BY a.name;
 
       SELECT p.id, p.agent_id, p.program_key, p.name, p.group_label, p.run_as_admin, p.is_running, p.cpu_percent, p.memory_bytes,
              p.uptime_seconds, p.process_count, p.status_changed_at, p.reported_at, p.version, p.repository,
@@ -840,11 +1054,13 @@ export function registerSiteMonitorRoutes(
           .input("escalation", sql.Int, input.escalationMinutes)
           .input("offline", sql.Int, input.offlineMinutes)
           .input("active", sql.Bit, input.isActive)
+          .input("latitude", sql.Decimal(9, 6), input.latitude)
+          .input("longitude", sql.Decimal(9, 6), input.longitude)
           .input("user", sql.BigInt, user.id)
           .query<{ id: number | string }>(`
-            INSERT dbo.monitor_sites (name, location, description, escalation_minutes, offline_minutes, is_active, created_by)
+            INSERT dbo.monitor_sites (name, location, description, escalation_minutes, offline_minutes, is_active, latitude, longitude, created_by)
             OUTPUT inserted.id
-            VALUES (@name, @location, @description, @escalation, @offline, @active, @user);
+            VALUES (@name, @location, @description, @escalation, @offline, @active, @latitude, @longitude, @user);
           `);
         const newId = Number(inserted.recordset[0]!.id);
         await writeContacts(transaction, newId, input.contacts);
@@ -869,7 +1085,7 @@ export function registerSiteMonitorRoutes(
     try {
       await database.transaction(async (transaction) => {
         const before = await new sql.Request(transaction).input("site", sql.BigInt, siteId)
-          .query<SiteRow>(`SELECT id, name, location, description, escalation_minutes, offline_minutes, is_active, row_version FROM dbo.monitor_sites WITH (UPDLOCK) WHERE id = @site;`);
+          .query<SiteRow>(`SELECT id, name, location, description, escalation_minutes, offline_minutes, is_active, latitude, longitude, row_version FROM dbo.monitor_sites WITH (UPDLOCK) WHERE id = @site;`);
         const previous = before.recordset[0];
         if (!previous) throw new ApiError(404, "monitor_site_not_found", "The site was not found.");
         if (!previous.row_version.equals(rowVersion)) throw new ApiError(409, "concurrency_conflict", "The site was changed by someone else. Reload it and try again.");
@@ -881,16 +1097,19 @@ export function registerSiteMonitorRoutes(
           .input("escalation", sql.Int, input.escalationMinutes)
           .input("offline", sql.Int, input.offlineMinutes)
           .input("active", sql.Bit, input.isActive)
+          .input("latitude", sql.Decimal(9, 6), input.latitude)
+          .input("longitude", sql.Decimal(9, 6), input.longitude)
           .query(`
             UPDATE dbo.monitor_sites
             SET name = @name, location = @location, description = @description, escalation_minutes = @escalation,
-                offline_minutes = @offline, is_active = @active, updated_at = SYSUTCDATETIME()
+                offline_minutes = @offline, is_active = @active, latitude = @latitude, longitude = @longitude, updated_at = SYSUTCDATETIME()
             WHERE id = @site;
           `);
         await writeContacts(transaction, siteId, input.contacts);
         await insertAudit(transaction, user.id, "MonitorSite", siteId, input.name.slice(0, 50), "Updated", {
           name: previous.name, location: previous.location, description: previous.description,
           escalationMinutes: previous.escalation_minutes, offlineMinutes: previous.offline_minutes, isActive: previous.is_active,
+          latitude: numberOrNull(previous.latitude), longitude: numberOrNull(previous.longitude),
         }, input);
       });
     } catch (error) {
@@ -981,6 +1200,7 @@ export function registerSiteMonitorRoutes(
   });
 
   // The TMTDesk ID only labels the machine for the Remote button; TMTDesk still asks for its own password.
+  // An ID set here wins over the one the machine reports; clearing it lets the machine's report fill it again.
   app.put("/api/v1/monitor/agents/:agentId/tmtdesk", async (request) => {
     await users.demandPermission(request, MANAGE);
     const user = await users.required(request);
@@ -992,7 +1212,8 @@ export function registerSiteMonitorRoutes(
         .input("tmtdesk", sql.Char(9), tmtdeskId)
         .query<{ updated: number; name: string | null; previous: string | null }>(`
           DECLARE @previous char(9) = (SELECT tmtdesk_id FROM dbo.monitor_agents WHERE id = @id AND revoked_at IS NULL);
-          UPDATE dbo.monitor_agents SET tmtdesk_id = @tmtdesk WHERE id = @id AND revoked_at IS NULL;
+          UPDATE dbo.monitor_agents SET tmtdesk_id = @tmtdesk, tmtdesk_id_manual = CASE WHEN @tmtdesk IS NULL THEN 0 ELSE 1 END
+          WHERE id = @id AND revoked_at IS NULL;
           SELECT @@ROWCOUNT AS updated, (SELECT name FROM dbo.monitor_agents WHERE id = @id) AS name, @previous AS previous;
         `);
       const row = updated.recordset[0];

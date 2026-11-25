@@ -103,6 +103,8 @@ const modules = new Set([
   "resources-tasks",
   "resources-workload",
   "resources-week",
+  "fleet",
+  "command-center",
 ]);
 
 export function registerActivityRoutes(app: FastifyInstance, db: Database, users: CurrentUserService) {

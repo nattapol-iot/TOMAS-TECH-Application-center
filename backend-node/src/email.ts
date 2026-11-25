@@ -40,12 +40,14 @@ export type SupportTicketEmail = {
 /** A Site Monitor incident, opened (escalation step 1-3) or resolved. Times are already formatted. */
 export type SiteMonitorEmail = {
   state: "open" | "resolved";
-  kind: "ProgramStopped" | "AgentOffline";
+  kind: "ProgramStopped" | "AgentOffline" | "TMTDeskUnhealthy";
   siteName: string;
   location: string;
   agentName: string;
   machineName: string;
   programName: string;
+  /** TMTDesk's last reported health, for a TMTDeskUnhealthy incident. */
+  tmtdeskHealth?: string;
   openedAt: string;
   resolvedAt: string;
   /** The escalation step this email belongs to (1 = first responsible person). */
@@ -450,13 +452,20 @@ export class EmailService {
   // Sent by the Site Monitor sweeper (site-monitor.ts): escalation step 1 → 2 → 3 while an incident
   // stays open and unacknowledged, then once more to everyone already told when it is resolved.
   async sendSiteMonitorIncident(message: SiteMonitorEmail): Promise<EmailDeliveryResult> {
-    const what = message.kind === "ProgramStopped" ? `${message.programName} stopped` : `${message.agentName} is offline`;
+    const what =
+      message.kind === "ProgramStopped"
+        ? `${message.programName} stopped`
+        : message.kind === "TMTDeskUnhealthy"
+          ? `TMTDesk on ${message.agentName} is unhealthy`
+          : `${message.agentName} is offline`;
     const subject = message.state === "open" ? `[Site Monitor] ${message.siteName}: ${what}` : `[Site Monitor] Resolved · ${message.siteName}: ${what}`;
     const heading =
       message.state === "open"
         ? message.kind === "ProgramStopped"
           ? "โปรแกรมหยุดทำงานโดยไม่คาดคิด / A monitored program stopped unexpectedly."
-          : "เครื่องที่เฝ้าระวังหยุดส่งข้อมูล / A monitored machine stopped reporting."
+          : message.kind === "TMTDeskUnhealthy"
+            ? "TMTDesk บนเครื่องนี้ทำงานไม่ปกติเกิน 5 นาที / TMTDesk on this machine has been unhealthy for over 5 minutes."
+            : "เครื่องที่เฝ้าระวังหยุดส่งข้อมูล / A monitored machine stopped reporting."
         : "ปัญหาได้รับการแก้ไขแล้ว / The problem has been resolved.";
     const row = (label: string, value: string) => (value ? `<tr><td><strong>${label}</strong></td><td>${escapeHtml(value)}</td></tr>` : "");
     const logs =
@@ -473,6 +482,7 @@ export class EmailService {
         `<table>${row("Site", message.siteName)}${row("Location", message.location)}` +
         `${row("Program", message.kind === "ProgramStopped" ? message.programName : "")}` +
         `${row("Agent", message.agentName)}${row("Machine", message.machineName)}` +
+        `${row("TMTDesk health", message.kind === "TMTDeskUnhealthy" ? (message.tmtdeskHealth ?? "") : "")}` +
         `${row("Since", message.openedAt)}${row("Resolved", message.state === "resolved" ? message.resolvedAt : "")}` +
         `${message.state === "open" ? row("Escalation", `ผู้ดูแลลำดับที่ ${message.priority} / Responsible person #${message.priority}`) : ""}</table>` +
         logs +

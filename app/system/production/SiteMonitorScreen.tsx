@@ -13,6 +13,8 @@ import { localeFor, useLanguage, useT, type Lang } from "../i18n";
 import { LocalizedText } from "../LocalizedText";
 import { Badge, EmptyState, Field, FilterChips, Icon, Modal, PageHeader, Panel, Progress, SearchInput, Toolbar, type FilterItem, type Tone } from "../ui";
 import { DeployModal, DeploymentsPanel } from "./MonitorDeployments";
+import { AlertChannelsPanel } from "./MonitorAlerts";
+import { TmtdeskChip } from "./FleetParts";
 
 /**
  * Site Monitor: every customer site's programs as TMT Control Panel reports them — running or not,
@@ -187,6 +189,8 @@ function SiteOverview({ canManage, revision, onOpen, onCreate }: {
   return (
     <>
       <PageHeader title="Site Monitor" subtitle="Monitor.subtitle" actions={<>
+        <a className="btn default" href="#/fleet"><Icon name="table" /><LocalizedText text={"Fleet"} /></a>
+        <a className="btn default" href="#/command-center"><Icon name="maximize" /><LocalizedText text={"Command Center"} /></a>
         <button className="btn default" type="button" onClick={() => setTick((value) => value + 1)}><Icon name="refresh" /><LocalizedText text={"Refresh"} /></button>
         {canManage ? <button className="btn primary" type="button" onClick={onCreate}><Icon name="plus" /><LocalizedText text={"Monitor.addSite"} /></button> : null}
       </>} />
@@ -409,7 +413,7 @@ function SiteDetailView({ siteId, canControl, canManage, canDeploy, revision, no
                 <div>
                   <strong>{incident.kind === "ProgramStopped" ? incident.programName : incident.agentName}</strong>
                   <span>
-                    <LocalizedText text={incident.kind === "ProgramStopped" ? "Monitor.incident.ProgramStopped" : "Monitor.incident.AgentOffline"} />
+                    <LocalizedText text={`Monitor.incident.${incident.kind}`} />
                     {" · "}{ago(incident.openedAt)}
                     {incident.kind === "ProgramStopped" ? <>{" · "}{incident.agentName}</> : null}
                   </span>
@@ -556,6 +560,7 @@ function SiteDetailView({ siteId, canControl, canManage, canDeploy, revision, no
                                 <span className="muted">TMTDesk {tmtdeskIdText(agent.tmtdeskId)}</span>
                               </div>
                             ) : null}
+                            {agent.tmtdesk ? <div className="site-monitor-remote"><TmtdeskChip agent={agent} /></div> : null}
                           </td>
                           <td><Badge tone={agent.isOnline ? "green" : "amber"} dot>{agent.isOnline ? "Monitor.online" : "Monitor.offline"}</Badge></td>
                           <td className="num">{agent.isOnline ? percentText(agent.host.cpuPercent) : "—"}</td>
@@ -616,6 +621,8 @@ function SiteDetailView({ siteId, canControl, canManage, canDeploy, revision, no
             {site.description ? <p className="site-monitor-description">{site.description}</p> : null}
           </Panel>
 
+          {canManage ? <AlertChannelsPanel siteId={site.id} notify={notify} /> : null}
+
           <Panel title="Monitor.recentCommands" flush>
             {commands.length === 0 ? <EmptyState icon="play" title="Monitor.noCommandsTitle" message="Monitor.noCommandsMessage" /> : (
               <ul className="site-monitor-list">
@@ -642,7 +649,7 @@ function SiteDetailView({ siteId, canControl, canManage, canDeploy, revision, no
                   <li key={incident.id}>
                     <div>
                       <strong>{incident.kind === "ProgramStopped" ? incident.programName : incident.agentName}</strong>
-                      <span><LocalizedText text={incident.kind === "ProgramStopped" ? "Monitor.incident.ProgramStopped" : "Monitor.incident.AgentOffline"} /> · {dateTime(incident.openedAt)}</span>
+                      <span><LocalizedText text={`Monitor.incident.${incident.kind}`} /> · {dateTime(incident.openedAt)}</span>
                       <span className="muted">{t("Monitor.resolvedAfter")} {duration(Math.max(0, (new Date(incident.resolvedAt!).getTime() - new Date(incident.openedAt).getTime()) / 1000))}</span>
                     </div>
                   </li>
@@ -858,7 +865,7 @@ function TmtdeskIdModal({ agent, notify, onClose, onSaved }: {
     }
   };
   return (
-    <Modal title="Monitor.tmtdeskId" subtitle="Monitor.tmtdeskIdHint" size="sm" onClose={onClose} footer={<>
+    <Modal title="Monitor.tmtdeskId" subtitle={agent.tmtdesk && !agent.tmtdeskIdManual ? "Monitor.tmtdeskIdAuto" : "Monitor.tmtdeskIdHint"} size="sm" onClose={onClose} footer={<>
       <button className="btn default" type="button" onClick={onClose}><LocalizedText text={"Cancel"} /></button>
       <button className="btn primary" type="button" disabled={busy || !valid} onClick={() => void save()}><LocalizedText text={"Save"} /></button>
     </>}>
@@ -926,6 +933,8 @@ function SiteEditorModal({ site, team, notify, onClose, onSaved }: {
   const [escalation, setEscalation] = useState(String(site?.escalationMinutes ?? 15));
   const [offline, setOffline] = useState(String(site?.offlineMinutes ?? 3));
   const [active, setActive] = useState(site?.isActive ?? true);
+  const [latitude, setLatitude] = useState(site?.latitude === null || site?.latitude === undefined ? "" : String(site.latitude));
+  const [longitude, setLongitude] = useState(site?.longitude === null || site?.longitude === undefined ? "" : String(site.longitude));
   const [contacts, setContacts] = useState<number[]>(() =>
     [1, 2, 3].map((priority) => site?.contacts.find((contact) => contact.priority === priority)?.userId ?? 0));
   const [busy, setBusy] = useState(false);
@@ -934,9 +943,15 @@ function SiteEditorModal({ site, team, notify, onClose, onSaved }: {
   const escalationValue = Number(escalation);
   const offlineValue = Number(offline);
   const chosen = contacts.filter(Boolean);
+  const latitudeValue = latitude.trim() === "" ? null : Number(latitude);
+  const longitudeValue = longitude.trim() === "" ? null : Number(longitude);
+  const positionInvalid = (latitudeValue === null) !== (longitudeValue === null)
+    || (latitudeValue !== null && (!Number.isFinite(latitudeValue) || Math.abs(latitudeValue) > 90))
+    || (longitudeValue !== null && (!Number.isFinite(longitudeValue) || Math.abs(longitudeValue) > 180));
   const problem = !name.trim() ? "Monitor.validation.name"
     : !Number.isInteger(escalationValue) || escalationValue < 0 || escalationValue > 1440 ? "Monitor.validation.escalation"
     : !Number.isInteger(offlineValue) || offlineValue < 1 || offlineValue > 120 ? "Monitor.validation.offline"
+    : positionInvalid ? "Monitor.validation.position"
     : new Set(chosen).size !== chosen.length ? "Monitor.validation.duplicateContact"
     : chosen.length === 0 ? "Monitor.validation.noContact"
     : null;
@@ -945,6 +960,7 @@ function SiteEditorModal({ site, team, notify, onClose, onSaved }: {
     const input: MonitorSiteInput = {
       name: name.trim(), location: location.trim(), description: description.trim(),
       escalationMinutes: escalationValue, offlineMinutes: offlineValue, isActive: active,
+      latitude: latitudeValue, longitude: longitudeValue,
       contacts: contacts.map((userId, index) => ({ priority: index + 1, userId })).filter((contact) => contact.userId > 0),
       ...(site ? { rowVersion: site.rowVersion } : {}),
     };
@@ -1000,6 +1016,12 @@ function SiteEditorModal({ site, team, notify, onClose, onSaved }: {
         </Field>
         <Field label="Monitor.offlineMinutes" hint="Monitor.offlineHint">
           <input type="number" min={1} max={120} value={offline} onChange={(event) => setOffline(event.target.value)} />
+        </Field>
+        <Field label="Monitor.latitude" hint="Monitor.positionHint" guide="mon.position">
+          <input inputMode="decimal" value={latitude} maxLength={12} onChange={(event) => setLatitude(event.target.value)} placeholder="13.7563" />
+        </Field>
+        <Field label="Monitor.longitude">
+          <input inputMode="decimal" value={longitude} maxLength={12} onChange={(event) => setLongitude(event.target.value)} placeholder="100.5018" />
         </Field>
         <Field label="Monitor.siteActive" span={2}>
           <label className="site-monitor-check">

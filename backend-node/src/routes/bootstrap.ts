@@ -99,6 +99,8 @@ export const MENU_VIEWS: readonly string[] = [
   "schedule-templates",
   "installed-base",
   "site-monitor",
+  "fleet",
+  "command-center",
   "purchase",
   "approvals",
   "activity",

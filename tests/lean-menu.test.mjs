@@ -10,7 +10,7 @@ const GROUPS = [
   [null, ["dashboard", "my-work", "resources"]],
   ["NavGroup.sales", ["crm-dashboard", "crm-customers", "crm-contacts", "crm-opportunities", "crm-activities", "inquiries", "site-visits", "my-assignments", "visit-master", "customers"]],
   ["NavGroup.estimating", ["estimates", "price", "quotations", "missing", "module-templates", "labor-packages", "rates"]],
-  ["NavGroup.projects", ["projects", "reports", "signing", "documents", "stamps", "schedule-templates", "installed-base", "site-monitor"]],
+  ["NavGroup.projects", ["projects", "reports", "signing", "documents", "stamps", "schedule-templates", "installed-base", "site-monitor", "fleet", "command-center"]],
   // Lean procurement (owner 2026-11-19): the PR list and Approvals; BOM is a tab of the PR screen, the rest is done in Pegasus ERP.
   ["NavGroup.procurement", ["purchase", "approvals"]],
   ["NavGroup.team", ["activity", "performance", "summary-reports", "knowledge", "downloads"]],
@@ -19,7 +19,7 @@ const GROUPS = [
 const HELP = ["manual", "support"];
 const viewsIn = (text) => [...text.matchAll(/\{ view: "([a-z-]+)"|\{"view":"([a-z-]+)"/g)].map((match) => match[1] ?? match[2]);
 
-test("the sidebar holds the 41 entries in seven work-order groups; nothing is twice", async () => {
+test("the sidebar holds the 43 entries in seven work-order groups; nothing is twice", async () => {
   const shell = await source("app/system/ProductionApp.tsx");
   const nav = shell.slice(shell.indexOf("const NAV:"), shell.indexOf("/** The one rule for which menu entries"));
   const sections = nav.split(/\n {2}\{\s+(?=items: \[|group: ")/).slice(1);
@@ -29,13 +29,13 @@ test("the sidebar holds the 41 entries in seven work-order groups; nothing is tw
     assert.deepEqual(viewsIn(sections[index]), views, group ?? "top");
   }
   const all = viewsIn(nav);
-  assert.equal(all.length, 41);
-  assert.equal(new Set(all).size, 41);
+  assert.equal(all.length, 43);
+  assert.equal(new Set(all).size, 43);
   // The two help screens are entries of the "?" menu, and stay open to everyone.
   const help = shell.slice(shell.indexOf("const HELP_NAV"), shell.indexOf("function allowedViews"));
   assert.deepEqual(viewsIn(help), HELP);
   assert.match(shell, /allowed\.push\("profile", "signature", \.\.\.HELP_NAV\.map\(\(?item\)? => item\.view\)\);/);
-  // Every one of the 43 is still a view the shell knows.
+  // Every one of the 45 is still a view the shell knows.
   const viewType = shell.slice(shell.indexOf("type View ="), shell.indexOf("/** unlessPermission hides"));
   for (const view of [...all, ...HELP]) assert.ok(view.startsWith("crm-") || viewType.includes(`"${view}"`), `unknown view ${view}`);
 });
@@ -57,6 +57,8 @@ test("moving an entry kept its permission rule", async () => {
     '{ view: "schedule-templates", label: "Master Schedule", icon: "calendar" }',
     '{ view: "installed-base", label: "Installed Base", icon: "layers", permission: "asset.read" }',
     '{ view: "site-monitor", label: "Site Monitor", icon: "cpu", permission: "monitor.read" }',
+    '{ view: "fleet", label: "Fleet", icon: "table", permission: "monitor.read" }',
+    '{ view: "command-center", label: "Command Center", icon: "maximize", permission: "monitor.read" }',
     '{ view: "approvals", label: "Approvals", icon: "checkCircle", permission: "procurement.approve" }',
     '{ view: "knowledge", label: "Knowledge Hub", icon: "book", permission: "knowledge.view" }',
     '{ view: "downloads", label: "Download Center", icon: "download" }',

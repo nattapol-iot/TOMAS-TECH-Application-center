@@ -4,6 +4,7 @@ import sql from "mssql";
 import type { Database } from "./db.js";
 import type { EmailService } from "./email.js";
 import { ApiError } from "./errors.js";
+import type { MonitorAlertSender } from "./monitor-alerts.js";
 
 /**
  * Site Monitor core: TMT Control Panel agents report program state, machine resources and log lines;
@@ -37,26 +38,58 @@ export const COMMAND_PICKUP_SECONDS = 120;
 export const COMMAND_RESULT_SECONDS = 180;
 /** An Update downloads, backs up, replaces and test-starts a program, so it has longer to report. */
 export const UPDATE_RESULT_SECONDS = 30 * 60;
+/** A script has its own timeout (at most an hour); the agent then needs a little longer to report. */
+export const SCRIPT_RESULT_GRACE_SECONDS = 120;
+/** A TMTDesk that stays unhealthy this long opens an incident; shorter blips (a restart, an update) do not. */
+export const TMTDESK_UNHEALTHY_MINUTES = 5;
+/** Resource samples for the Command Center sparklines: one a minute per machine, kept two days. */
+export const SAMPLE_SECONDS = 60;
+export const SAMPLE_RETENTION_HOURS = 48;
 
-/** Expires commands nobody picked up or reported on; a deployment follows its command. */
+/**
+ * Closes running script jobs once none of their machines is still waiting, running or about to run the script.
+ * Expects a table variable @jobs (id bigint): when it holds rows only those jobs are checked.
+ */
+export const COMPLETE_SCRIPT_JOBS_SQL = `
+  UPDATE j SET status = N'Completed', completed_at = SYSUTCDATETIME()
+  FROM dbo.monitor_script_jobs j
+  WHERE j.status = N'Running'
+    AND (NOT EXISTS (SELECT 1 FROM @jobs) OR j.id IN (SELECT id FROM @jobs))
+    AND NOT EXISTS (SELECT 1 FROM dbo.monitor_script_targets t WHERE t.job_id = j.id AND t.status IN (N'Waiting', N'Pending', N'Delivered'));`;
+
+/** Expires commands nobody picked up or reported on; a deployment or a script target follows its command. */
 export const EXPIRE_COMMANDS_SQL = `
   UPDATE dbo.monitor_commands
   SET status = N'Expired', completed_at = SYSUTCDATETIME(),
       result_message = N'The agent did not pick up the command in time.'
   WHERE status = N'Pending' AND requested_at < DATEADD(second, -${COMMAND_PICKUP_SECONDS}, SYSUTCDATETIME());
 
-  UPDATE dbo.monitor_commands
+  UPDATE c
   SET status = N'Failed', completed_at = SYSUTCDATETIME(),
       result_message = N'The agent did not report a result.'
-  WHERE status = N'Delivered'
-    AND delivered_at < DATEADD(second, -CASE WHEN verb = N'Update' THEN ${UPDATE_RESULT_SECONDS} ELSE ${COMMAND_RESULT_SECONDS} END, SYSUTCDATETIME());
+  FROM dbo.monitor_commands c
+  WHERE c.status = N'Delivered'
+    AND c.delivered_at < DATEADD(second, -CASE
+      WHEN c.verb = N'Update' THEN ${UPDATE_RESULT_SECONDS}
+      WHEN c.verb = N'RunScript' THEN ISNULL((
+        SELECT TOP (1) j.timeout_seconds FROM dbo.monitor_script_targets t
+        INNER JOIN dbo.monitor_script_jobs j ON j.id = t.job_id WHERE t.command_id = c.id), 3600) + ${SCRIPT_RESULT_GRACE_SECONDS}
+      ELSE ${COMMAND_RESULT_SECONDS} END, SYSUTCDATETIME());
 
   UPDATE d
   SET status = CASE WHEN c.status = N'Expired' THEN N'Expired' ELSE N'Failed' END,
       completed_at = SYSUTCDATETIME(), result_message = c.result_message
   FROM dbo.monitor_deployments d
   INNER JOIN dbo.monitor_commands c ON c.id = d.command_id
-  WHERE d.status IN (N'Approved', N'Delivered') AND c.status IN (N'Expired', N'Failed');`;
+  WHERE d.status IN (N'Approved', N'Delivered') AND c.status IN (N'Expired', N'Failed');
+
+  DECLARE @jobs TABLE (id bigint NOT NULL);
+  UPDATE t
+  SET status = c.status, completed_at = SYSUTCDATETIME(), result_message = c.result_message
+  FROM dbo.monitor_script_targets t
+  INNER JOIN dbo.monitor_commands c ON c.id = t.command_id
+  WHERE t.status IN (N'Pending', N'Delivered') AND c.status IN (N'Expired', N'Failed');
+  ${COMPLETE_SCRIPT_JOBS_SQL}`;
 export const LOG_RETENTION_DAYS = 30;
 
 const MAX_PROGRAMS = 200;
@@ -117,6 +150,26 @@ export type HeartbeatInput = {
   /** Confirmed transitions; userInitiated = started/stopped on purpose (never an incident). */
   events: { programKey: string; kind: "Stopped" | "Recovered"; userInitiated: boolean; at: string }[];
   logs: { level: LogLevel; message: string; at: string }[];
+  /** TMT Control Panel 2.3+: TMTDesk on the machine; null when the agent sent none (older agent, or not installed). */
+  tmtdesk: TmtdeskReport | null;
+};
+
+/** The heartbeat's optional "tmtdesk" block (TMT Control Panel Services/TmtDeskStatus.cs). */
+export type TmtdeskReport = {
+  installed: boolean;
+  running: boolean;
+  /** Nine digits, or null when the agent sent none or something that is not a TMTDesk ID. */
+  id: string | null;
+  version: string;
+  mode: string;
+  rendezvous: string;
+  helperRunning: boolean;
+  activeSessions: number;
+  captureMethod: string;
+  /** "ok" when healthy; TMTDesk's own words otherwise ("unknown" when the agent could not read its status). */
+  health: string;
+  lastFrameAt: string | null;
+  updatedAt: string | null;
 };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -168,6 +221,43 @@ function timestamp(value: unknown, now: Date): string {
   return Number.isFinite(parsed) && Math.abs(parsed - now.getTime()) <= week
     ? new Date(parsed).toISOString()
     : now.toISOString();
+}
+
+/** A timestamp the agent read from TMTDesk: kept when it parses and is not in the future, otherwise null. */
+function optionalTimestamp(value: unknown, now: Date): string | null {
+  const parsed = typeof value === "string" ? Date.parse(value) : Number.NaN;
+  if (!Number.isFinite(parsed) || parsed > now.getTime() + 24 * 3_600_000 || parsed < Date.UTC(2020, 0, 1)) return null;
+  return new Date(parsed).toISOString();
+}
+
+/**
+ * The optional TMTDesk block. It is informational: odd values are dropped or clamped, never a 400, so a newer
+ * TMTDesk or Control Panel cannot make a heartbeat fail (the agent would fall back to the legacy format).
+ */
+export function parseTmtdesk(value: unknown, now = new Date()): TmtdeskReport | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const input = value as Record<string, unknown>;
+  const digits = typeof input.id === "string" ? input.id.replace(/[\s-]/g, "") : "";
+  return {
+    installed: input.installed === true,
+    running: input.running === true,
+    id: /^\d{9}$/.test(digits) ? digits : null,
+    version: text(input.version, 40),
+    mode: text(input.mode, 40),
+    rendezvous: text(input.rendezvous, 200),
+    helperRunning: input.helperRunning === true,
+    activeSessions: wholeNumber(input.activeSessions, 1000) ?? 0,
+    captureMethod: text(input.captureMethod, 40),
+    health: text(input.health, 40) || "unknown",
+    lastFrameAt: optionalTimestamp(input.lastFrameUtc, now),
+    updatedAt: optionalTimestamp(input.updatedUtc, now),
+  };
+}
+
+/** Healthy means running and reporting "ok"; an installed TMTDesk in any other state is a problem once it lasts. */
+export function tmtdeskUnhealthy(report: TmtdeskReport | null): boolean {
+  if (!report?.installed) return false;
+  return !report.running || report.health.trim().toLowerCase() !== "ok";
 }
 
 /** Validates and normalizes a heartbeat. Malformed structure is a 400; odd values are clamped. */
@@ -233,6 +323,7 @@ export function parseHeartbeat(body: unknown, now = new Date()): HeartbeatInput 
     programs,
     events,
     logs,
+    tmtdesk: parseTmtdesk(input.tmtdesk, now),
   };
 }
 
@@ -296,9 +387,12 @@ export function waitForAgentWake(agentId: number, milliseconds: number, signal?:
 
 // ── Background sweeper ──────────────────────────────────────────────────────
 
+export type IncidentKind = "ProgramStopped" | "AgentOffline" | "TMTDeskUnhealthy";
+
 type IncidentRow = {
   id: number | string;
-  kind: "ProgramStopped" | "AgentOffline";
+  kind: IncidentKind;
+  title: string;
   notified_level: number;
   opened_at: Date;
   resolved_at: Date | null;
@@ -306,6 +400,7 @@ type IncidentRow = {
   site_name: string;
   location: string;
   escalation_minutes: number;
+  tmtdesk_health: string | null;
   agent_id: number | string;
   agent_name: string;
   machine_name: string | null;
@@ -359,6 +454,7 @@ export class SiteMonitorSweeper {
     private readonly email: EmailService,
     timeZone: string,
     private readonly log: FastifyBaseLogger,
+    private readonly alerts: MonitorAlertSender | null = null,
   ) {
     this.dateFormat = new Intl.DateTimeFormat("en-GB", { timeZone, dateStyle: "medium", timeStyle: "medium" });
   }
@@ -395,6 +491,7 @@ export class SiteMonitorSweeper {
     this.running = true;
     try {
       await this.step("offline", () => this.markOffline());
+      await this.step("tmtdesk", () => this.openTmtdeskIncidents());
       await this.step("commands", () => this.expireCommands());
       await this.step("escalation", () => this.escalate());
       await this.step("resolution", () => this.notifyResolved());
@@ -448,15 +545,35 @@ export class SiteMonitorSweeper {
     }, sql.ISOLATION_LEVEL.READ_COMMITTED);
   }
 
+  /** A TMTDesk unhealthy for longer than TMTDESK_UNHEALTHY_MINUTES on a reporting machine opens an incident. */
+  async openTmtdeskIncidents(): Promise<void> {
+    const opened = await this.database.query<{ opened: number }>(`
+      INSERT dbo.monitor_incidents(site_id, agent_id, program_id, kind, title, opened_at)
+      SELECT a.site_id, a.id, NULL, N'TMTDeskUnhealthy',
+             LEFT(a.name + N': TMTDesk ' + CASE WHEN a.tmtdesk_running = 0 THEN N'is not running' ELSE N'health ' + ISNULL(a.tmtdesk_health, N'unknown') END, 300),
+             SYSUTCDATETIME()
+      FROM dbo.monitor_agents a
+      INNER JOIN dbo.monitor_sites s ON s.id = a.site_id AND s.is_active = 1
+      WHERE a.revoked_at IS NULL AND a.is_online = 1 AND a.tmtdesk_installed = 1
+        AND a.tmtdesk_unhealthy_since < DATEADD(minute, -${TMTDESK_UNHEALTHY_MINUTES}, SYSUTCDATETIME())
+        AND NOT EXISTS (
+          SELECT 1 FROM dbo.monitor_incidents i
+          WHERE i.agent_id = a.id AND i.kind = N'TMTDeskUnhealthy' AND i.resolved_at IS NULL);
+      SELECT @@ROWCOUNT AS opened;
+    `);
+    const count = opened.recordset[0]?.opened ?? 0;
+    if (count > 0) this.log.info({ opened: count }, "Site Monitor TMTDesk incidents opened");
+  }
+
   async expireCommands(): Promise<void> {
     await this.database.query(EXPIRE_COMMANDS_SQL);
   }
 
   private incidentQuery(where: string): string {
     return `
-      SELECT i.id, i.kind, i.notified_level, i.opened_at, i.resolved_at,
+      SELECT i.id, i.kind, i.title, i.notified_level, i.opened_at, i.resolved_at,
              s.id AS site_id, s.name AS site_name, s.location, s.escalation_minutes,
-             a.id AS agent_id, a.name AS agent_name, a.machine_name, p.name AS program_name
+             a.id AS agent_id, a.name AS agent_name, a.machine_name, a.tmtdesk_health, p.name AS program_name
       FROM dbo.monitor_incidents i
       INNER JOIN dbo.monitor_sites s ON s.id = i.site_id
       INNER JOIN dbo.monitor_agents a ON a.id = i.agent_id
@@ -524,6 +641,23 @@ export class SiteMonitorSweeper {
     });
     const recipients = (details.recordsets as unknown as [ContactRow[], LogRow[]])[0];
     const logs = (details.recordsets as unknown as [ContactRow[], LogRow[]])[1];
+    // LINE and Teams hear every step too, whether or not anyone has an email address. A channel failure never
+    // stops the email.
+    if (this.alerts) {
+      await this.alerts.notifySite(Number(incident.site_id), {
+        state: state === "resolved" ? "resolved" : fromLevel > 0 ? "escalated" : "open",
+        kind: incident.kind,
+        title: incident.title,
+        siteName: incident.site_name,
+        location: incident.location,
+        agentName: incident.agent_name,
+        machineName: incident.machine_name ?? "",
+        programName: incident.program_name ?? "",
+        openedAt: this.format(incident.opened_at),
+        resolvedAt: this.format(incident.resolved_at),
+        priority: state === "resolved" ? toLevel : fromLevel + 1,
+      }).catch((error: unknown) => this.log.warn({ err: error, incidentId: Number(incident.id) }, "Site Monitor alert channels failed"));
+    }
     if (recipients.length === 0) {
       this.log.warn({ incidentId: Number(incident.id), state, fromLevel, toLevel }, "Site Monitor incident has no responsible person to email");
       return;
@@ -536,6 +670,7 @@ export class SiteMonitorSweeper {
       agentName: incident.agent_name,
       machineName: incident.machine_name ?? "",
       programName: incident.program_name ?? "",
+      tmtdeskHealth: incident.tmtdesk_health ?? "",
       openedAt: this.format(incident.opened_at),
       resolvedAt: this.format(incident.resolved_at),
       priority: fromLevel + 1,
@@ -551,7 +686,11 @@ export class SiteMonitorSweeper {
       WHERE received_at < DATEADD(day, -${LOG_RETENTION_DAYS}, SYSUTCDATETIME());
 
       DELETE TOP (5000) FROM dbo.monitor_commands
-      WHERE completed_at < DATEADD(day, -180, SYSUTCDATETIME());
+      WHERE completed_at < DATEADD(day, -180, SYSUTCDATETIME())
+        AND NOT EXISTS (SELECT 1 FROM dbo.monitor_deployments d WHERE d.command_id = dbo.monitor_commands.id);
+
+      DELETE TOP (50000) FROM dbo.monitor_agent_samples
+      WHERE sampled_at < DATEADD(hour, -${SAMPLE_RETENTION_HOURS}, SYSUTCDATETIME());
     `);
   }
 }

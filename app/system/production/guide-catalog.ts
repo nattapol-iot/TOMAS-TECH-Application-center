@@ -3326,6 +3326,185 @@ const SITE_MONITOR: Guide = {
         jp: "TMT Control Panelから届いたログを検索でき、問題前の状況を確認できます。",
       },
     },
+    {
+      target: "mon.alerts",
+      action: "next",
+      view: "site-monitor",
+      title: { th: "แจ้งเตือน LINE / Teams", en: "LINE / Teams alerts", jp: "LINE / Teams 通知" },
+      body: {
+        th: "ผู้ดูแล Site ตั้งให้ปัญหาส่งเข้ากลุ่ม LINE หรือช่อง Teams ได้ กด ส่งทดสอบ เพื่อเช็กว่าข้อความไปถึง",
+        en: "Site managers can send this site's problems to a LINE group or a Teams channel. Send test checks that messages arrive.",
+        jp: "サイト管理者は問題を LINE グループや Teams チャネルへ送れます。「テスト送信」で届くか確認できます。",
+      },
+      missing: {
+        th: "ส่วนนี้เห็นเฉพาะคนที่จัดการ Site ได้ กด 'ถัดไป'",
+        en: "Only people who manage sites see this part. Press Next.",
+        jp: "この部分はサイト管理者だけに表示されます。「次へ」を押します。",
+      },
+    },
+  ],
+};
+
+const FLEET_SCRIPT: Guide = {
+  id: "fleet-run-script",
+  area: "tools",
+  title: { th: "รันสคริปต์บนหลายเครื่องจากหน้า Fleet", en: "Run a script on several machines from Fleet", jp: "フリートから複数マシンでスクリプトを実行" },
+  summary: {
+    th: "เลือกเครื่องลูกค้าหลายเครื่อง เขียนสคริปต์ แล้วส่งให้อีกคนอนุมัติก่อนรัน ผลของแต่ละเครื่องกลับมาที่หน้าเดียวกัน",
+    en: "Pick several customer machines, write a script and send it for someone else to approve; each machine's result comes back on the same screen.",
+    jp: "複数の顧客マシンを選んでスクリプトを書き、別の人の承認後に実行します。各マシンの結果は同じ画面に戻ります。",
+  },
+  minutes: 3,
+  permissions: ["monitor.read", "monitor.script"],
+  views: ["fleet"],
+  invite: "fleet",
+  steps: [
+    menu(
+      "fleet",
+      { th: "เปิดเมนู Fleet", en: "Open Fleet", jp: "「フリート」を開く" },
+      {
+        th: "ทุกเครื่องของทุก Site อยู่ในตารางเดียว คลิกที่เมนูที่ไฮไลต์อยู่",
+        en: "Every machine of every site is in one table. Click the highlighted menu entry.",
+        jp: "全サイトの全マシンが1つの表にあります。強調表示のメニューをクリックします。",
+      },
+    ),
+    {
+      target: "fleet.search",
+      action: "next",
+      view: "fleet",
+      title: { th: "หาเครื่อง", en: "Find the machines", jp: "マシンを探す" },
+      body: {
+        th: "พิมพ์ชื่อเครื่อง Site หรือ TMTDesk ID หรือกรองตาม Site เวอร์ชัน และ เฉพาะที่มีปัญหา",
+        en: "Type a machine, site or TMTDesk ID, or filter by site, version and Problems only.",
+        jp: "マシン名・サイト・TMTDesk ID を入力するか、サイト・バージョン・「問題のみ」で絞り込みます。",
+      },
+    },
+    {
+      target: "fleet.table",
+      action: "click",
+      clickOn: "tbody input",
+      view: "fleet",
+      title: { th: "เลือกเครื่อง", en: "Select machines", jp: "マシンを選ぶ" },
+      body: {
+        th: "ติ๊กช่องหน้าเครื่องที่จะรันสคริปต์ เลือกได้หลายเครื่อง",
+        en: "Tick the box in front of each machine that should run the script; pick as many as you need.",
+        jp: "スクリプトを実行するマシンの先頭のチェックを入れます。複数選べます。",
+      },
+    },
+    {
+      target: "fleet.runScript",
+      action: "click",
+      view: "fleet",
+      title: { th: "รันสคริปต์", en: "Run script", jp: "スクリプトを実行" },
+      body: { th: "กด รันสคริปต์ ในแถบที่ขึ้นมา", en: "Press Run script in the bar that appeared.", jp: "表示されたバーの「スクリプトを実行」を押します。" },
+      missing: {
+        th: "ปุ่มนี้ขึ้นเมื่อเลือกเครื่องอย่างน้อยหนึ่งเครื่อง",
+        en: "This button appears once at least one machine is selected.",
+        jp: "マシンを1台以上選ぶとこのボタンが表示されます。",
+      },
+    },
+    {
+      target: "fleet.scriptTitle",
+      action: "next",
+      view: "fleet",
+      title: { th: "ตั้งชื่องาน", en: "Name the job", jp: "ジョブ名" },
+      body: { th: "ชื่อที่บอกว่าสคริปต์ทำอะไร ผู้อนุมัติจะเห็นชื่อนี้", en: "A name that says what the script does; the approver sees it.", jp: "スクリプトの内容が分かる名前。承認者に表示されます。" },
+    },
+    {
+      target: "fleet.scriptBody",
+      action: "next",
+      view: "fleet",
+      title: { th: "เขียนสคริปต์", en: "Write the script", jp: "スクリプトを書く" },
+      body: {
+        th: "เลือก PowerShell หรือ cmd และเวลาหมด ไม่เกิน 64 KB อย่าใส่รหัสผ่านลงไป",
+        en: "Choose PowerShell or cmd and a timeout; up to 64 KB. Never put passwords in it.",
+        jp: "PowerShell か cmd とタイムアウトを選びます。最大 64 KB。パスワードは書かないでください。",
+      },
+    },
+    {
+      target: "fleet.scriptSend",
+      action: "click",
+      view: "fleet",
+      title: { th: "ส่งขออนุมัติ", en: "Send for approval", jp: "承認を依頼" },
+      body: {
+        th: "กด ส่งขออนุมัติ อีกคนต้องอนุมัติก่อนเครื่องจะรัน ถ้าแค่ฝึก กด ยกเลิก แทน",
+        en: "Press Send for approval; someone else must approve before any machine runs it. If you are only practising, press Cancel instead.",
+        jp: "「承認を依頼」を押します。別の人が承認するまで実行されません。練習のときは「キャンセル」を押します。",
+      },
+    },
+  ],
+};
+
+const COMMAND_CENTER: Guide = {
+  id: "command-center",
+  area: "tools",
+  title: { th: "ใช้ Command Center บนจอใหญ่", en: "Use the Command Center on a big screen", jp: "大型画面でコマンドセンターを使う" },
+  summary: {
+    th: "ภาพรวมสดของทุก Site บนแผนที่ ตัวเลขสำคัญ ปัญหาล่าสุด และโหมดทีวีสำหรับจอติดผนัง",
+    en: "A live view of every site on a map, the headline numbers, the incident feed and a TV mode for a wall screen.",
+    jp: "全サイトの地図・主要指標・インシデントのライブ表示と、壁掛け画面用の TV モード。",
+  },
+  minutes: 2,
+  permissions: ["monitor.read"],
+  views: ["command-center"],
+  invite: "command-center",
+  browse: true,
+  steps: [
+    menu(
+      "command-center",
+      { th: "เปิดเมนู Command Center", en: "Open Command Center", jp: "「コマンドセンター」を開く" },
+      { th: "คลิกที่เมนูที่ไฮไลต์อยู่", en: "Click the highlighted menu entry.", jp: "強調表示のメニューをクリックします。" },
+    ),
+    {
+      target: "ops.kpis",
+      action: "next",
+      view: "command-center",
+      title: { th: "ตัวเลขสำคัญ", en: "Headline numbers", jp: "主要指標" },
+      body: {
+        th: "Site และเครื่องที่ออนไลน์ ปัญหาที่เปิดอยู่ TMTDesk ที่ปกติ และ Session รีโมตที่เปิดอยู่",
+        en: "Sites and machines online, open incidents, healthy TMTDesk and open remote sessions.",
+        jp: "オンラインのサイトとマシン、未解決インシデント、TMTDesk 正常率、接続中のリモート。",
+      },
+    },
+    {
+      target: "ops.map",
+      action: "next",
+      view: "command-center",
+      title: { th: "แผนที่", en: "The map", jp: "地図" },
+      body: {
+        th: "จุดเขียวปกติ เหลืองต้องดู แดงวิกฤต จุดที่กระพือมีปัญหาเปิดอยู่ คลิกจุดเพื่อดูรายละเอียดและรีโมต",
+        en: "Green is normal, amber needs attention, red is critical; a pulsing dot has an open incident. Click a dot for its detail and Remote buttons.",
+        jp: "緑は正常、黄は要注意、赤は重大。脈打つ点は未解決インシデントあり。点をクリックで詳細とリモート。",
+      },
+    },
+    {
+      target: "ops.feed",
+      action: "next",
+      view: "command-center",
+      title: { th: "ปัญหาล่าสุด", en: "Incident feed", jp: "インシデント" },
+      body: { th: "ปัญหาที่เปิดอยู่ก่อน แล้วปัญหาที่แก้ใน 24 ชั่วโมง พร้อมอายุของปัญหา", en: "Open incidents first, then those fixed in the last 24 hours, with their age.", jp: "未解決を先頭に、過去24時間に解決したものを経過時間付きで表示。" },
+    },
+    {
+      target: "ops.top",
+      action: "next",
+      view: "command-center",
+      title: { th: "เครื่องที่โหลดสูง", en: "Busiest machines", jp: "高負荷のマシン" },
+      body: { th: "สลับ CPU, RAM, Disk (ปุ่ม 1 2 3) เส้นเล็กคือย้อนหลังหนึ่งชั่วโมง", en: "Switch CPU, RAM and disk (keys 1 2 3); the small line is the last hour.", jp: "CPU・RAM・ディスクを切替（1 2 3 キー）。小さな線は直近1時間。" },
+    },
+    {
+      target: "ops.spotlight",
+      action: "next",
+      view: "command-center",
+      title: { th: "สปอตไลต์", en: "Spotlight", jp: "スポットライト" },
+      body: { th: "เมื่อไม่มีใครใช้จอ จะวนแสดง Site ที่มีปัญหา ปุ่ม ← → เลื่อนเอง", en: "While nobody uses the screen it steps through the problem sites; ← → step by hand.", jp: "操作がない間は問題サイトを順に表示。← → で手動切替。" },
+    },
+    {
+      target: "ops.tv",
+      action: "next",
+      view: "command-center",
+      title: { th: "โหมดทีวี", en: "TV mode", jp: "TV モード" },
+      body: { th: "เต็มจอสำหรับทีวีหรือจอติดผนัง (ปุ่ม F) กด Esc เพื่อออก", en: "Full screen for a TV or wall monitor (key F); Esc leaves it.", jp: "テレビや壁掛け画面向けの全画面（F キー）。Esc で終了。" },
+    },
   ],
 };
 
@@ -4828,6 +5007,8 @@ export const GUIDES: readonly Guide[] = [
   KNOWLEDGE_FIND,
   DOWNLOADS,
   SITE_MONITOR,
+  FLEET_SCRIPT,
+  COMMAND_CENTER,
   ASSET_REGISTER,
   ERP_MASTER_DATA,
   LIST_COLUMN_FILTER,

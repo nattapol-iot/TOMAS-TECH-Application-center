@@ -1,0 +1,189 @@
+/* Fleet (FleetScreen), script jobs (MonitorScripts) and the TMTDesk chip (FleetParts). Shared tokens only. */
+.fleet-table,
+.fleet-jobs,
+.fleet-results {
+  width: 100%;
+  table-layout: fixed;
+}
+.fleet-table {
+  min-width: 1180px;
+}
+.fleet-jobs {
+  min-width: 900px;
+}
+.fleet-results {
+  min-width: 640px;
+}
+.fleet-table tr.fleet-problem td:first-child {
+  box-shadow: inset 3px 0 0 var(--red);
+}
+.fleet-desk {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.fleet-desk-meta {
+  display: inline-flex;
+  gap: 6px;
+  color: var(--ink-soft);
+  font-size: var(--fs-2xs);
+}
+.fleet-desk-sessions {
+  color: var(--blue-text);
+}
+.fleet-meter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.fleet-meter > :first-child {
+  flex: 1;
+  min-width: 0;
+}
+.fleet-meter span {
+  min-width: 34px;
+  color: var(--ink-soft);
+  font-size: var(--fs-2xs);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.fleet-selection {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--blue-line);
+  border-radius: var(--r-md);
+  background: var(--blue-soft);
+  color: var(--blue-text);
+  font-size: var(--fs-sm);
+}
+.fleet-selection-actions {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+.fleet-job-counts {
+  display: flex;
+  gap: 10px;
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+}
+.fleet-job-counts .ok {
+  color: var(--green-text);
+}
+.fleet-job-counts .bad {
+  color: var(--red-text);
+}
+.fleet-job-counts .warn {
+  color: var(--amber-text);
+}
+.fleet-script-targets {
+  margin-bottom: 12px;
+  font-size: var(--fs-sm);
+}
+.fleet-script-targets ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  max-height: 96px;
+  margin: 6px 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+}
+.fleet-script-targets li {
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--n-25);
+  color: var(--ink-soft);
+  font-size: var(--fs-xs);
+}
+.fleet-script-targets li.offline {
+  border-color: var(--amber-line);
+  color: var(--amber-text);
+}
+.fleet-script-editor {
+  width: 100%;
+  min-height: 220px;
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  tab-size: 4;
+  white-space: pre;
+}
+.fleet-script-size {
+  grid-column: 1 / -1;
+  margin: -6px 0 0;
+  color: var(--muted);
+  font-size: var(--fs-2xs);
+  text-align: right;
+}
+.fleet-script-size.over {
+  color: var(--red-text);
+}
+.fleet-job {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.fleet-job-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.fleet-job-head h3 {
+  margin: 0 0 4px;
+  font-size: var(--fs-lg);
+}
+.fleet-job-head p {
+  margin: 0;
+  font-size: var(--fs-sm);
+}
+.fleet-script-view,
+.fleet-output {
+  max-height: 260px;
+  margin: 0;
+  padding: 10px 12px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--n-25);
+  color: var(--ink);
+  font-size: var(--fs-xs);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.fleet-output.err {
+  border-color: var(--red-line);
+  background: var(--red-soft);
+  color: var(--red-text);
+}
+.fleet-output-row h4 {
+  margin: 8px 0 4px;
+  color: var(--ink-soft);
+  font-size: var(--fs-xs);
+}
+.fleet-cut {
+  color: var(--amber-text);
+  font-weight: 400;
+}
+.fleet-bad {
+  color: var(--red-text);
+}
+@media (max-width: 720px) {
+  .fleet-selection {
+    flex-wrap: wrap;
+  }
+  .fleet-selection-actions {
+    margin-left: 0;
+  }
+}
