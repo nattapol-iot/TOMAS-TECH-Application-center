@@ -11,6 +11,10 @@ const screens = [
   ...readdirSync(new URL("app/system/production/", root))
     .filter((name) => name.endsWith(".tsx"))
     .map((name) => `app/system/production/${name}`),
+  // Parts built on @tomas-tc/ui (app/system/tomas-ui, owner 2026-11-25).
+  ...readdirSync(new URL("app/system/tomas-ui/", root))
+    .filter((name) => name.endsWith(".tsx"))
+    .map((name) => `app/system/tomas-ui/${name}`),
 ].map((path) => ({ path, text: read(path) }));
 const shell = read("app/system/ProductionApp.tsx");
 const views = new Set([...shell.matchAll(/\{ view: "([a-z-]+)"|\{"view":"([a-z-]+)"/g)].map((match) => match[1] ?? match[2]));

@@ -4,7 +4,7 @@
 
 เมนู ภาษา session bootstrap และโปรไฟล์
 
-Evidence: snapshot `6c841029`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
+Evidence: snapshot `6cd83665`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
 
 ## Read only the operation you change
 
@@ -17,16 +17,16 @@ Shared screens contain other modules: use the symbol and line range instead of r
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `navItemAllowed` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 268–276 |
-| `landingView` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 279–283 |
-| `navView` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 285–285 |
-| `allowedViews` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 294–304 |
-| `projectTabOf` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 326–343 |
-| `KEEP_PREFERRED` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 346–346 |
-| `projectPageOf` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 347–352 |
-| `projectPagePath` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 353–353 |
-| `ceoFocusOf` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 355–358 |
-| `ProductionApp` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 363–1937 |
+| `navItemAllowed` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 266–274 |
+| `landingView` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 277–281 |
+| `navView` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 283–283 |
+| `allowedViews` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 292–305 |
+| `projectTabOf` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 327–344 |
+| `KEEP_PREFERRED` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 347–347 |
+| `projectPageOf` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 348–353 |
+| `projectPagePath` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 354–354 |
+| `ceoFocusOf` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 356–359 |
+| `ProductionApp` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 364–1937 |
 | `ProductionLogin` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 1939–2073 |
 | `initials` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 2075–2084 |
 | `myWorkNeedsAttention` | [app/system/ProductionApp.tsx](<../../../app/system/ProductionApp.tsx>) | 2087–2089 |
@@ -82,7 +82,7 @@ Shared screens contain other modules: use the symbol and line range instead of r
 - [app/system/support-copy.ts](<../../../app/system/support-copy.ts>)
 - [app/system/production/EstimateLook.tsx](<../../../app/system/production/EstimateLook.tsx>)
 - [app/system/production/SalesLook.tsx](<../../../app/system/production/SalesLook.tsx>)
-- [app/system/production/ProjectLook.tsx](<../../../app/system/production/ProjectLook.tsx>)
+- [app/system/production/ProjectScope.tsx](<../../../app/system/production/ProjectScope.tsx>)
 - [app/system/production/LazyScreens.tsx](<../../../app/system/production/LazyScreens.tsx>)
 - [app/system/production/CrmScreens.tsx](<../../../app/system/production/CrmScreens.tsx>)
 - [app/system/LocalizedText.tsx](<../../../app/system/LocalizedText.tsx>)

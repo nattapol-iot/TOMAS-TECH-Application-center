@@ -3186,9 +3186,9 @@ export const DICTIONARY: Record<string, Entry> = {
   "Plan.memberLegendOverlap": { en: "Two pieces of work on one day", th: "มี 2 งานขึ้นไปในวันเดียวกัน", jp: "同じ日に2件以上の作業" },
   "Plan.memberLegendOver": { en: "More work than their time", th: "งานเกินเวลาที่มี", jp: "持ち時間を超える作業" },
   "Plan.memberLegendHint": {
-    en: "Grey bars are their work outside this project. Work with no man-days counts a full day; a task's own functions never overlap.",
-    th: "แถบสีเทาคืองานนอกโปรเจกต์นี้ของเขา · งานที่ไม่ได้ใส่ man-days นับเต็มวัน · ฟังก์ชันใต้งานเดียวกันไม่นับว่าซ้อน",
-    jp: "灰色のバーはこの案件以外の作業です。人日のない作業は1日として数え、同じタスクの機能同士は重複としません。",
+    en: "Grey bars are their work outside this project. Work with no hours yet is not counted; a task's own functions never overlap.",
+    th: "แถบสีเทาคืองานนอกโปรเจกต์นี้ของเขา · งานที่ยังไม่ใส่ชั่วโมงไม่นับภาระ · ฟังก์ชันใต้งานเดียวกันไม่นับว่าซ้อน",
+    jp: "灰色のバーはこの案件以外の作業です。時間未入力の作業は負荷に含めず、同じタスクの機能同士は重複としません。",
   },
   "Plan.memberBoardLoading": { en: "Reading their other work…", th: "กำลังโหลดงานอื่นของสมาชิก…", jp: "他の作業を読み込み中…" },
   "Plan.foldFiltered": {

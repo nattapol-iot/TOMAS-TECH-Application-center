@@ -369,25 +369,25 @@ test("a plan row's span is loaded like the grid: effort spread over working days
   assert.equal(spanLoad([], "2026-10-24", "2026-10-25", 5).utilisation, null, "a weekend offers nothing");
 });
 
-test("plan work with no man-days takes a full day per working day, once per task with its functions", () => {
+test("plan work with no hours takes no time on the board (owner 2026-11-25; it was a full day)", () => {
   const days = boardDays("2026-11-02", 1, [], "2026-11-02");
   // Two functions of task 21 with no man-days (Mon-Wed and Tue-Thu), and task 30 with 2 MD on Thursday and Friday.
   const items = [
     work({ key: "f1", workKey: "Project-211", group: "Project-21", start: "2026-11-02", end: "2026-11-04", manDays: 0 }),
     work({ key: "f2", workKey: "Project-212", group: "Project-21", start: "2026-11-03", end: "2026-11-05", manDays: 0 }),
     work({ key: "t3", workKey: "Project-30", group: "Project-30", start: "2026-11-05", end: "2026-11-06", manDays: 2 }),
-    // An RFQ with no effort saved stays unknown, not a full day.
+    // An RFQ with no effort saved stays unknown too.
     work({ key: "rfq", workKey: "Inquiry-5", type: "Inquiry", start: "2026-11-02", end: "2026-11-06", manDays: null }),
   ];
   assert.deepEqual(
     dailyLoad(items, days, 5, []).map((day) => day.manDays),
-    [1, 1, 1, 2, 1, 0, 0],
+    [0, 0, 0, 1, 1, 0, 0],
   );
-  // Once a function of the task has man-days, the task takes those on its days and no extra full day.
+  // Once a function of the task has man-days, the task takes those on its days.
   const typed = [items[0], work({ ...items[1], manDays: 3 })];
   assert.deepEqual(
     dailyLoad(typed, days, 5, []).map((day) => day.manDays),
-    [1, 1, 1, 1, 0, 0, 0],
+    [0, 1, 1, 1, 0, 0, 0],
   );
 });
 
@@ -442,7 +442,7 @@ test("a day lists every piece of work spanning it, not only what falls due, with
   );
   assert.deepEqual(day[0].rows[0].perDay, 1);
   assert.deepEqual(
-    day[1].rows.map((row) => [row.perDay, row.fullDay]),
+    day[1].rows.map((row) => [row.perDay, row.noHours]),
     [
       [null, true],
       [null, true],
@@ -450,7 +450,7 @@ test("a day lists every piece of work spanning it, not only what falls due, with
   );
   // An estimate with no effort saved is listed on its day with nothing assumed.
   assert.deepEqual(
-    dayWork(items, "2026-11-06", []).map((piece) => piece.rows.map((row) => [row.item.key, row.perDay, row.fullDay])),
+    dayWork(items, "2026-11-06", []).map((piece) => piece.rows.map((row) => [row.item.key, row.perDay, row.noHours])),
     [
       [
         ["f1", null, true],

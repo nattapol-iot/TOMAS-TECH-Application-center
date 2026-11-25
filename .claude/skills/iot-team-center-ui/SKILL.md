@@ -47,6 +47,17 @@ Their forms never disable a save because a field is empty: the form gets `noVali
 from `production/form-bubbles.ts`. A failed save goes to its `failureDialog`, never to red text on the page. Reuse both
 rather than adding a second validation style.
 
+### @tomas-tc/ui on the app's page (owner 2026-11-25)
+
+New parts of the Projects screens are built on `@tomas-tc/ui` (the Pegasus design kit), in `app/system/tomas-ui/`.
+- Render them inside `<TomasUi>` (`app/system/tomas-ui/TomasUi.tsx`). Its stylesheet, `tomas-ui-island.css`, is moved under
+  `.tui` and unlayered by `scripts/postcss-tomas-ui-scope.mjs`, so it never reaches another screen.
+- Tailwind classes work only in files under `app/system/tomas-ui/` (the island scans the package and that folder).
+- Never put an old app component inside a `.tui` root: the package's reset and utilities (`grid`, `table`, `hidden` …)
+  would restyle it. Lazy-load a tomas-ui part from an old screen (`lazy(() => import("../tomas-ui/…"))`).
+- Dialogs, sheets and menus portal into a `.tui` root of their own; `TomasUi` provides it.
+- Guide marks (`data-guide`) in that folder count: `tests/guides.test.mjs` scans it.
+
 `Modal` sizes: `sm` 460 · `md` 640 · `lg` 940 · `xl` 1240 · `wide` 92vw · `full`. A dialog with an
 editable table of more than about six columns needs `xl`; `lg` puts the arithmetic behind a
 horizontal scrollbar.

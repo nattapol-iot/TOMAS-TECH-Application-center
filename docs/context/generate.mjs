@@ -3,7 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
-import ts from 'typescript';
+// TypeScript 7 (the native compiler) has no JS API; typescript-api is the 5.x API the repo keeps for tools (package.json).
+import ts from 'typescript-api';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const read = p => fs.readFileSync(path.join(root, p), 'utf8');
