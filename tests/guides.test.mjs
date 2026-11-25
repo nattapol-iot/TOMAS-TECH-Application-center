@@ -134,6 +134,9 @@ test("the catalog holds the guides the owner chose, in the order the work happen
       "knowledge-find",
       "downloads-skill",
       "site-monitor-check",
+      // Fleet with its approved script jobs, and the Command Center wall screen (migration 133, 2026-11-25).
+      "fleet-run-script",
+      "command-center",
       "asset-register",
       // Customers and suppliers from Pegasus ERP (2026-11-05).
       "erp-customers-suppliers",

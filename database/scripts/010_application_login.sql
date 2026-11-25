@@ -904,4 +904,11 @@ GO
 -- database/migrations/132_project_ceo_notes.sql
 GRANT SELECT, INSERT, UPDATE, DELETE ON dbo.project_ceo_notes TO [iot_team_app_role];
 GO
+
+-- database/migrations/133_monitor_fleet_command_center.sql
+GRANT SELECT, INSERT, DELETE ON OBJECT::dbo.monitor_agent_samples TO [iot_team_app_role];
+GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.monitor_script_jobs TO [iot_team_app_role];
+GRANT SELECT, INSERT, UPDATE ON OBJECT::dbo.monitor_script_targets TO [iot_team_app_role];
+GRANT SELECT, INSERT, UPDATE, DELETE ON OBJECT::dbo.monitor_site_alert_channels TO [iot_team_app_role];
+GO
 -- END GENERATED MIGRATION GRANTS

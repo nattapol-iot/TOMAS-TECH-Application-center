@@ -69,6 +69,7 @@ import { registerSkillHubRoutes } from "./routes/skill-hub.js";
 import { registerSourceRepositoryRoutes } from "./routes/source-repositories.js";
 import { registerTmthubRepositoryRoutes } from "./routes/tmthub-repositories.js";
 import { registerSiteMonitorRoutes } from "./routes/site-monitor.js";
+import { registerMonitorFleetRoutes } from "./routes/monitor-fleet.js";
 import { agentHostAllows } from "./site-monitor.js";
 import { registerInstalledAssetRoutes } from "./routes/installed-assets.js";
 import { registerReleaseDeploymentRoutes } from "./routes/release-deployments.js";
@@ -258,6 +259,7 @@ export async function buildApp(config: AppConfig): Promise<Application> {
   if (config.tmthub) registerTmthubRepositoryRoutes(app, config, database, users);
   else registerSourceRepositoryRoutes(app, config, database, users);
   registerSiteMonitorRoutes(app, config, database, users, email);
+  registerMonitorFleetRoutes(app, config, database, users);
   registerInstalledAssetRoutes(app, config, database, users);
   registerReleaseDeploymentRoutes(app, config, database, users);
   registerSiteCredentialRoutes(app, config, database, users);

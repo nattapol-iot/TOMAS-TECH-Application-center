@@ -194,6 +194,7 @@ GO
 :r database/migrations/130_holiday_over_work.sql
 :r database/migrations/131_purchase_order_seen.sql
 :r database/migrations/132_project_ceo_notes.sql
+:r database/migrations/133_monitor_fleet_command_center.sql
 
 USE [$(DatabaseName)];
 GO

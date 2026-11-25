@@ -74,6 +74,8 @@ import {
   DownloadCenterScreen,
   GuideLayer,
   SiteMonitorScreen,
+  FleetScreen,
+  CommandCenterScreen,
   DesignSystemScreen,
   InstalledBaseScreen,
   ProductionMaterialIssues,
@@ -146,6 +148,8 @@ type View =
   | "support"
   | "downloads"
   | "site-monitor"
+  | "fleet"
+  | "command-center"
   | "installed-base"
   | "design-system";
 
@@ -223,6 +227,8 @@ const NAV: { group?: string; items: NavItem[] }[] = [
       { view: "schedule-templates", label: "Master Schedule", icon: "calendar" },
       { view: "installed-base", label: "Installed Base", icon: "layers", permission: "asset.read" },
       { view: "site-monitor", label: "Site Monitor", icon: "cpu", permission: "monitor.read" },
+      { view: "fleet", label: "Fleet", icon: "table", permission: "monitor.read" },
+      { view: "command-center", label: "Command Center", icon: "maximize", permission: "monitor.read" },
     ],
   },
   // Lean procurement (owner 2026-11-19): one entry for everyone, Approvals for approvers. BOM is a tab of the PR screen. The
@@ -1751,6 +1757,8 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
                 <DownloadCenterScreen canManage={bootstrap.permissions.includes("master.read")} canManageRepositories={bootstrap.permissions.includes("repository.write")} notify={setToast} />
               ) : null}
               {view === "site-monitor" ? <SiteMonitorScreen bootstrap={bootstrap} notify={setToast} /> : null}
+              {view === "fleet" ? <FleetScreen bootstrap={bootstrap} notify={setToast} /> : null}
+              {view === "command-center" ? <CommandCenterScreen notify={setToast} /> : null}
               {view === "design-system" ? <DesignSystemScreen notify={setToast} /> : null}
               {view === "installed-base" ? (
                 <InstalledBaseScreen canManage={bootstrap.permissions.includes("asset.manage")} canSeeCredentials={bootstrap.permissions.includes("credential.read")} notify={setToast} />

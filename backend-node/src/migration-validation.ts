@@ -118,6 +118,7 @@ export const REQUIRED_MIGRATIONS: readonly MigrationIdentity[] = [
   { version: 130, fileName: "130_holiday_over_work.sql", name: "Holiday over work" },
   { version: 131, fileName: "131_purchase_order_seen.sql", name: "Purchase order seen" },
   { version: 132, fileName: "132_project_ceo_notes.sql", name: "Project CEO notes" },
+  { version: 133, fileName: "133_monitor_fleet_command_center.sql", name: "Fleet, Command Center, script jobs and alert channels" },
 ] as const;
 
 export const REQUIRED_SCHEMA_VERSION = REQUIRED_MIGRATIONS.at(-1)!.version;

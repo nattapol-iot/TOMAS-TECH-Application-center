@@ -4226,6 +4226,25 @@ export type MonitorSite = {
   openIncidents: number;
   lastSeenAt: string | null;
   contacts: MonitorContact[];
+  /** Position for the Command Center map, in decimal degrees; null until someone sets it. */
+  latitude: number | null;
+  longitude: number | null;
+};
+/** TMTDesk on a monitored machine, as TMT Control Panel 2.3+ reports it. */
+export type MonitorTmtdesk = {
+  running: boolean;
+  version: string;
+  mode: string;
+  rendezvous: string;
+  helperRunning: boolean;
+  activeSessions: number;
+  captureMethod: string;
+  /** "ok" when healthy. */
+  health: string;
+  lastFrameAt: string | null;
+  updatedAt: string | null;
+  reportedAt: string | null;
+  unhealthySince: string | null;
 };
 export type MonitorAgent = {
   id: number;
@@ -4240,6 +4259,10 @@ export type MonitorAgent = {
   createdAt: string | null;
   /** 9-digit TMTDesk ID for the Remote button, or null when not set. */
   tmtdeskId: string | null;
+  /** True when a person set the ID by hand; otherwise the machine's own report fills it. */
+  tmtdeskIdManual: boolean;
+  /** Null when the machine never reported TMTDesk, or it is not installed. */
+  tmtdesk: MonitorTmtdesk | null;
   host: {
     cpuPercent: number | null;
     memoryUsedBytes: number | null;
@@ -4270,9 +4293,10 @@ export type MonitorProgram = {
   /** TMTHub repository the program is built from; enables release updates. */
   repository: string;
 };
+export type MonitorIncidentKind = "ProgramStopped" | "AgentOffline" | "TMTDeskUnhealthy";
 export type MonitorIncident = {
   id: number;
-  kind: "ProgramStopped" | "AgentOffline";
+  kind: MonitorIncidentKind;
   agentId: number;
   agentName: string;
   programId: number | null;
@@ -4285,9 +4309,11 @@ export type MonitorIncident = {
 };
 export type MonitorCommand = {
   id: number;
-  programId: number;
+  programId: number | null;
+  /** The program, or for a RunScript the script job's title. */
   programName: string;
-  verb: MonitorVerb | "Update";
+  scriptJobId: number | null;
+  verb: MonitorVerb | "Update" | "RunScript";
   status: "Pending" | "Delivered" | "Succeeded" | "Failed" | "Expired";
   requestedBy: string;
   requestedAt: string;
@@ -4312,6 +4338,8 @@ export type MonitorSiteInput = {
   offlineMinutes: number;
   isActive: boolean;
   contacts: { priority: number; userId: number }[];
+  latitude: number | null;
+  longitude: number | null;
   rowVersion?: string;
 };
 
@@ -4388,6 +4416,125 @@ export const rotateMonitorAgentKey = (agentId: number) => apiRequest<{ key: stri
 export const setMonitorAgentTmtdeskId = (agentId: number, tmtdeskId: string) =>
   apiRequest<{ tmtdeskId: string | null }>(`/api/v1/monitor/agents/${agentId}/tmtdesk`, { method: "PUT", body: JSON.stringify({ tmtdeskId }) });
 export const revokeMonitorAgent = (agentId: number) => apiRequest<{ ok: boolean }>(`/api/v1/monitor/agents/${agentId}/revoke`, { method: "POST", body: "{}" });
+
+/* Fleet and Command Center: every machine of every site at once (migration 133). */
+export type FleetAgent = Omit<MonitorAgent, "keyHint"> & {
+  site: { id: number; name: string; isActive: boolean };
+  openIncidents: number;
+  programCount: number;
+  programsRunning: number;
+};
+export type FleetSite = Omit<MonitorSite, "contacts">;
+export type FleetData = { generatedAt: string; heartbeatSeconds: number; sites: FleetSite[]; agents: FleetAgent[] };
+export const getMonitorFleet = () => apiRequest<FleetData>("/api/v1/monitor/fleet");
+
+export type CommandCenterIncident = {
+  id: number;
+  kind: MonitorIncidentKind;
+  title: string;
+  siteId: number;
+  siteName: string;
+  agentId: number;
+  agentName: string;
+  programName: string | null;
+  openedAt: string;
+  resolvedAt: string | null;
+  acknowledgedAt: string | null;
+  notifiedLevel: number;
+};
+export type CommandCenterCommand = {
+  id: number;
+  verb: MonitorVerb | "Update" | "RunScript";
+  status: MonitorCommand["status"];
+  requestedAt: string;
+  completedAt: string | null;
+  resultMessage: string | null;
+  requestedBy: string;
+  agentName: string;
+  siteName: string;
+  subject: string;
+};
+export type MonitorSample = { t: string; cpu: number | null; mem: number | null; disk: number | null };
+export type CommandCenterData = {
+  generatedAt: string;
+  incidents: CommandCenterIncident[];
+  commands: CommandCenterCommand[];
+  jobs: MonitorScriptJob[];
+  /** Last hour of per-minute samples, by machine id. */
+  samples: Record<string, MonitorSample[]>;
+};
+export const getMonitorCommandCenter = () => apiRequest<CommandCenterData>("/api/v1/monitor/command-center");
+
+/* Script jobs: one person writes a script for chosen machines, another approves it, then each machine runs it. */
+export type MonitorScriptShell = "powershell" | "cmd";
+export type MonitorScriptJobStatus = "PendingApproval" | "Running" | "Completed" | "Rejected" | "Cancelled";
+export type MonitorScriptJob = {
+  id: number;
+  jobKey: string;
+  title: string;
+  shell: MonitorScriptShell;
+  timeoutSeconds: number;
+  note: string;
+  status: MonitorScriptJobStatus;
+  requestedBy: string;
+  requestedAt: string;
+  decidedBy: string | null;
+  decidedAt: string | null;
+  decisionNote: string;
+  completedAt: string | null;
+  scriptBytes: number;
+  counts: { targets: number; waiting: number; running: number; succeeded: number; failed: number; rejected: number; skipped: number };
+  canDecide: boolean;
+  canCancel: boolean;
+  isOwn: boolean;
+};
+export type MonitorScriptTargetStatus = "Waiting" | "Pending" | "Delivered" | "Succeeded" | "Failed" | "Rejected" | "Skipped" | "Expired" | "Cancelled";
+export type MonitorScriptTarget = {
+  id: number;
+  agentId: number;
+  agentName: string;
+  machineName: string | null;
+  siteId: number;
+  siteName: string;
+  status: MonitorScriptTargetStatus;
+  exitCode: number | null;
+  stdout: string;
+  stderr: string;
+  stdoutTruncated: boolean;
+  stderrTruncated: boolean;
+  durationMs: number | null;
+  resultMessage: string | null;
+  completedAt: string | null;
+};
+export type MonitorScriptJobInput = { title: string; shell: MonitorScriptShell; script: string; timeoutSeconds: number; note: string; agentIds: number[] };
+export const listMonitorScriptJobs = () =>
+  apiRequest<{ items: MonitorScriptJob[]; canRequest: boolean; canApprove: boolean }>("/api/v1/monitor/script-jobs");
+export const getMonitorScriptJob = (jobId: number) =>
+  apiRequest<{ job: MonitorScriptJob; script: string; targets: MonitorScriptTarget[] }>(`/api/v1/monitor/script-jobs/${jobId}`);
+export const requestMonitorScriptJob = (input: MonitorScriptJobInput) =>
+  apiRequest<MonitorScriptJob>("/api/v1/monitor/script-jobs", { method: "POST", body: JSON.stringify(input) });
+export const decideMonitorScriptJob = (jobId: number, decision: "approve" | "reject" | "cancel", note = "") =>
+  apiRequest<{ ok: true; queued?: number }>(`/api/v1/monitor/script-jobs/${jobId}/${decision}`, { method: "POST", body: JSON.stringify({ note }) });
+
+/* Alert channels: a site's incidents also go to LINE and Microsoft Teams. Tokens and URLs never come back. */
+export type MonitorAlertChannelName = "Line" | "Teams";
+export type MonitorAlertChannel = {
+  channel: MonitorAlertChannelName;
+  configured: boolean;
+  enabled: boolean;
+  target: string;
+  secretHint: string;
+  lastSentAt: string | null;
+  lastError: string | null;
+  updatedAt: string | null;
+  updatedBy: string | null;
+};
+export const getMonitorAlertChannels = (siteId: number) =>
+  apiRequest<{ vaultConfigured: boolean; channels: MonitorAlertChannel[] }>(`/api/v1/monitor/sites/${siteId}/alert-channels`);
+export const saveMonitorAlertChannel = (siteId: number, channel: MonitorAlertChannelName, input: { enabled: boolean; target?: string; secret?: string; remove?: boolean }) =>
+  apiRequest<{ ok: true }>(`/api/v1/monitor/sites/${siteId}/alert-channels/${channel}`, { method: "PUT", body: JSON.stringify(input) });
+export const testMonitorAlertChannel = (siteId: number, channel: MonitorAlertChannelName) =>
+  apiRequest<{ ok: true }>(`/api/v1/monitor/sites/${siteId}/alert-channels/${channel}/test`, { method: "POST", body: "{}" });
 
 /**
  * Content-Disposition carries the real file name, which may be Thai. The

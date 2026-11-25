@@ -107,6 +107,9 @@ export const DesignSystemScreen = dynamic(() => import("./design-system/DesignSy
 // The Design System's @tomas-tc/ui tab: the package and its samples load when that tab is first opened.
 export const TomasUiGallery = dynamic(() => import("./design-system/tomas-ui/TomasUiGallery").then((m) => m.TomasUiGallery), screen);
 export const SiteMonitorScreen = dynamic(() => import("./SiteMonitorScreen").then((m) => m.SiteMonitorScreen), screen);
+export const FleetScreen = dynamic(() => import("./FleetScreen").then((m) => m.FleetScreen), screen);
+// The wall-screen view; its dark stylesheet loads with it and stays scoped to .ops-center.
+export const CommandCenterScreen = dynamic(() => import("./CommandCenterScreen").then((m) => m.CommandCenterScreen), screen);
 export const InstalledBaseScreen = dynamic(() => import("./InstalledBaseScreen").then((m) => m.InstalledBaseScreen), screen);
 export const TeamActivityScreen = dynamic(() => import("./TeamActivityScreen").then((m) => m.TeamActivityScreen), screen);
 // The click-through guides: loaded after the shell, and quiet while loading or if the chunk fails, since no screen depends on them.

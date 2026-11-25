@@ -22,6 +22,7 @@ import { DOCUMENT_LIFECYCLE_COPY } from "./document-lifecycle-copy";
 import { CRM_COPY } from "./production/crm-copy";
 import { DOWNLOAD_CENTER_COPY } from "./production/download-center-copy";
 import { SITE_MONITOR_COPY } from "./production/site-monitor-copy";
+import { FLEET_COPY } from "./production/fleet-copy";
 import { INSTALLED_BASE_COPY } from "./production/installed-base-copy";
 import { TEAM_BOARD_COPY } from "./production/team-board-copy";
 import { PROJECT_COST_COPY } from "./production/project-cost-copy";
@@ -2700,6 +2701,7 @@ export const DICTIONARY: Record<string, Entry> = {
   ...DOCUMENT_LIFECYCLE_COPY,
   ...DOWNLOAD_CENTER_COPY,
   ...SITE_MONITOR_COPY,
+  ...FLEET_COPY,
   ...INSTALLED_BASE_COPY,
   ...TEAM_BOARD_COPY,
   ...PROJECT_COST_COPY,
