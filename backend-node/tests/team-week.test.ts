@@ -4,7 +4,7 @@ import Fastify from "fastify";
 import type { Database } from "../src/db.js";
 import { ApiError, registerErrorHandler } from "../src/errors.js";
 import { TEAM_WEEK_SQL, registerTeamWeekRoutes, teamWeekRead } from "../src/routes/team-week.js";
-import { blockLabel, teamDay, teamWeek } from "../src/team-week.js";
+import { blockLabel, teamDay, teamWeek, unconfirmedDates } from "../src/team-week.js";
 import type { CurrentUserService } from "../src/users.js";
 
 const at = (date: string) => new Date(`${date}T00:00:00Z`);
@@ -136,4 +136,22 @@ test("GET team-week: team.board readers only, a window of at most four weeks, pr
   assert.equal((await app.inject({ method: "GET", url: "/api/v1/team-week?from=2026-11-23&to=2026-12-21" })).statusCode, 400);
   const denied = harness(t, false);
   assert.equal((await denied.app.inject({ method: "GET", url: "/api/v1/team-week?from=2026-11-23&to=2026-11-27" })).statusCode, 403);
+});
+
+test("unconfirmedDates: the plan Sheet's days still to confirm follow Team week's rule (no weekend, holiday, confirmed day or whole day away)", () => {
+  const input = {
+    from: "2026-11-16",
+    to: "2026-11-24",
+    holidays: new Set(["2026-11-18"]),
+    blocks: [],
+    meetings: [],
+    tasks: [{ userId: 7, id: 1, kind: "Away" as const, title: "", projectId: null, projectNo: null, start: "2026-11-20", end: "2026-11-20", slot: "AM", startTime: null, endTime: null, manDays: 0 }],
+    away: [{ userId: 7, start: "2026-11-19", end: "2026-11-19" }],
+    confirmed: new Map([["7|2026-11-17", 8]]),
+    visibleProjects: null,
+  };
+  // 16 Mon, 17 confirmed, 18 holiday, 19 away all day, 20 away half a day (still to confirm), 21-22 weekend, 23 Mon, 24 Tue.
+  assert.deepEqual(unconfirmedDates(7, input, "2026-11-25"), ["2026-11-16", "2026-11-20", "2026-11-23", "2026-11-24"]);
+  // Never a day after today.
+  assert.deepEqual(unconfirmedDates(7, input, "2026-11-20"), ["2026-11-16", "2026-11-20"]);
 });

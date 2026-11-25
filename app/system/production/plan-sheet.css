@@ -280,13 +280,36 @@
   background: var(--sh-sel);
 }
 /* Task doc 4.4-4.5: a new holiday on a row, with its two answers; the legend's holiday opens the holidays dialog. */
-.plan-sheet .ps-follow li.ps-follow-hol {
+.plan-sheet .ps-follow li.ps-follow-hol,
+.plan-sheet .ps-follow li.ps-follow-note {
   display: grid;
   gap: 2px;
 }
-.plan-sheet .ps-follow li.ps-follow-hol small {
+.plan-sheet .ps-follow li.ps-follow-hol small,
+.plan-sheet .ps-follow li.ps-follow-note small {
   display: block;
   color: var(--sh-muted, var(--muted));
+}
+/* Task doc 3.8: the customer file the changes are counted from, and a way to send a new one. */
+.plan-sheet .ps-follow .ps-follow-file {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin: 0 0 4px;
+  padding: 0 6px;
+  color: var(--sh-muted, var(--muted));
+}
+.plan-sheet .ps-follow .ps-follow-file button {
+  flex: none;
+  padding: 2px 8px;
+  border: 1px solid var(--sh-line, var(--line));
+  border-radius: 4px;
+  background: var(--sh-bg, #fff);
+  color: var(--sh-fg);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
 }
 .plan-sheet .ps-follow-acts {
   display: flex;

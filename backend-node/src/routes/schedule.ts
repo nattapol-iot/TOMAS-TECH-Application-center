@@ -13,6 +13,8 @@ import { fitPeople, peopleChange, peopleEdits, peopleJson, peopleManDays } from 
 import { businessToday } from "../business-date.js";
 import { normalizeBusinessTimeZone } from "../config.js";
 import { countedLeaves, scheduleLeaves, summarizeProjectSchedule } from "../project-health.js";
+import { unconfirmedDates, type WeekAway, type WeekTask } from "../team-week.js";
+import { addDays } from "../work-days.js";
 import {
   appendUpdate,
   calendarDays,
@@ -47,6 +49,7 @@ import {
   validatePics,
   validateScheduleVersion,
   type PlanInput,
+  type PicRow,
   type TaskRow,
 } from "../schedule-service.js";
 import type { CurrentUser } from "../types.js";
@@ -237,6 +240,7 @@ async function projectSchedule(transaction: TransactionType, database: Database,
     // Company holidays, so the plan screen places a linked row's start the way schedule-calculator.ts does.
     holidays: [...holidays].sort(),
     ...(await readHolidayList(transaction, projectId)),
+    ...(await readFollowUpFacts(transaction, projectId, pics, holidays, today)),
     tasks: calculation.roots.map((item) =>
       taskResponse(item, new Map(tasks.map((task) => [task.id, task])), pics, {
         actorId: actor.id,
@@ -285,6 +289,103 @@ async function readHolidayList(transaction: TransactionType, projectId: number) 
       addedAt: row.added_at ? new Date(row.added_at as Date | string).toISOString() : null,
     })),
     holidayDecisions: (sets[1] ?? []).map((row) => ({ taskId: Number(row.task_id), date: dateOnly(row.holiday_date as Date | string)!, decision: String(row.decision) })),
+  };
+}
+
+/** Task doc 3.8: how far back the plan Sheet's follow-up list looks for days whose hours are not confirmed. */
+export const UNCONFIRMED_DAYS_BACK = 14;
+/**
+ * Task doc 3.8, the rest of the plan Sheet's follow-up list:
+ * - the customer schedule last kept in folder 08, and the rows changed since it was sent. Every plan change is logged
+ *   in dbo.schedule_updates, a deleted row included; what the file does not show is left out: members (assign),
+ *   baselines, day requests and a purchase request link (a "plan" entry of its own). The same second counts as after.
+ *   moved: one of the row's entries can move its dates (plan, plan_days, people, created, deleted), so the rows linked
+ *   after it move too; progress alone (percent, status, actual dates) never does.
+ * - for the active people named on the plan's rows, the days they confirmed and their time away over the last
+ *   UNCONFIRMED_DAYS_BACK days, so the days still to confirm follow Team week's rule (team-week.ts).
+ */
+export const FOLLOW_UP_SQL = `SET NOCOUNT ON;
+  DECLARE @file_name nvarchar(500), @sent datetimeoffset(0);
+  SELECT TOP(1) @file_name=d.name,@sent=d.uploaded_at FROM dbo.project_docs d
+  WHERE d.project_id=@project AND d.folder_code=N'08' AND d.document_type=N'Customer schedule' AND d.deleted_at IS NULL
+  ORDER BY d.uploaded_at DESC,d.id DESC;
+  SELECT @file_name name,@sent uploaded_at WHERE @sent IS NOT NULL;
+  SELECT t.id task_id,t.parent_id,t.name,t.kind,CONVERT(bit,CASE WHEN t.deleted_at IS NULL THEN 0 ELSE 1 END) deleted,
+    CONVERT(bit,MAX(CASE WHEN u.field IN (N'plan',N'plan_days',N'people',N'created',N'deleted') THEN 1 ELSE 0 END)) moved
+  FROM dbo.schedule_updates u INNER JOIN dbo.schedule_tasks t ON t.id=u.task_id AND t.project_id=@project
+  WHERE @sent IS NOT NULL AND u.project_id=@project AND u.occurred_at>=@sent
+    AND u.field NOT IN (N'assign',N'baseline',N'request',N'request_answer')
+    AND NOT (u.field=N'plan' AND u.to_value LIKE N'{"purchaseRequestId":%')
+    AND NOT (t.deleted_at IS NOT NULL AND t.created_at>=@sent)
+  GROUP BY t.id,t.parent_id,t.name,t.kind,t.deleted_at;
+  DECLARE @people TABLE(user_id bigint PRIMARY KEY);
+  INSERT @people(user_id) SELECT DISTINCT pic.user_id FROM dbo.schedule_task_pics pic
+    INNER JOIN dbo.schedule_tasks t ON t.id=pic.task_id
+    INNER JOIN dbo.users u ON u.id=pic.user_id AND u.is_active=1 AND u.deleted_at IS NULL
+    WHERE t.project_id=@project AND t.deleted_at IS NULL;
+  SELECT d.user_id,d.work_date FROM dbo.work_days d INNER JOIN @people p ON p.user_id=d.user_id WHERE d.work_date BETWEEN @from AND @to;
+  SELECT e.user_id,CONVERT(date,SWITCHOFFSET(e.starts_at,'+07:00')) start_date,
+    CONVERT(date,SWITCHOFFSET(DATEADD(second,-1,e.ends_at),'+07:00')) end_date
+  FROM dbo.engineer_availability e INNER JOIN @people p ON p.user_id=e.user_id
+  WHERE e.deleted_at IS NULL AND CONVERT(date,SWITCHOFFSET(e.ends_at,'+07:00'))>=@from AND CONVERT(date,SWITCHOFFSET(e.starts_at,'+07:00'))<=@to;
+  SELECT a.user_id,t.id,t.start_date,t.end_date,t.time_slot,
+    CONVERT(char(5),t.start_time,108) start_time,CONVERT(char(5),t.end_time,108) end_time
+  FROM dbo.team_tasks t JOIN dbo.team_task_assignees a ON a.task_id=t.id INNER JOIN @people p ON p.user_id=a.user_id
+  WHERE t.deleted_at IS NULL AND t.status<>N'Cancelled' AND t.kind=N'Away' AND t.end_date>=@from AND t.start_date<=@to;`;
+async function readFollowUpFacts(transaction: TransactionType, projectId: number, pics: Map<number, PicRow[]>, holidays: Set<string>, today: string) {
+  const from = addDays(today, -UNCONFIRMED_DAYS_BACK),
+    to = addDays(today, -1);
+  const request = new sql.Request(transaction);
+  request.input("project", sql.BigInt, projectId);
+  request.input("from", sql.Date, from);
+  request.input("to", sql.Date, to);
+  const [fileRows = [], changeRows = [], dayRows = [], awayRows = [], taskRows = []] = ((await request.query(FOLLOW_UP_SQL)).recordsets ?? []) as unknown as Record<string, unknown>[][];
+  const day = (row: Record<string, unknown>, key: string) => dateOnly(row[key] as Date | string)!;
+  const file = fileRows[0];
+  const away: WeekAway[] = awayRows.map((row) => ({ userId: Number(row.user_id), start: day(row, "start_date"), end: day(row, "end_date") }));
+  const tasks: WeekTask[] = taskRows.map((row) => ({
+    userId: Number(row.user_id),
+    id: Number(row.id),
+    kind: "Away",
+    title: "",
+    projectId: null,
+    projectNo: null,
+    start: day(row, "start_date"),
+    end: day(row, "end_date"),
+    slot: String(row.time_slot ?? ""),
+    startTime: row.start_time ? String(row.start_time).trim() : null,
+    endTime: row.end_time ? String(row.end_time).trim() : null,
+    manDays: 0,
+  }));
+  const input = {
+    from,
+    to,
+    holidays,
+    blocks: [],
+    meetings: [],
+    tasks,
+    away,
+    confirmed: new Map(dayRows.map((row) => [`${Number(row.user_id)}|${day(row, "work_date")}`, 0] as const)),
+    visibleProjects: null,
+  };
+  // Someone no longer on the project team (or no longer active) is never asked to confirm (ACTIVE_PIC_SQL).
+  const people = [...new Set([...pics.values()].flat().flatMap((pic) => (pic.active ? [pic.id] : [])))];
+  return {
+    customerFile: file
+      ? {
+          name: String(file.name),
+          sentAt: new Date(file.uploaded_at as Date | string).toISOString(),
+          changes: changeRows.map((row) => ({
+            taskId: Number(row.task_id),
+            parentId: row.parent_id === null || row.parent_id === undefined ? null : Number(row.parent_id),
+            name: String(row.name ?? ""),
+            kind: String(row.kind ?? "task"),
+            deleted: Boolean(row.deleted),
+            moved: Boolean(row.moved),
+          })),
+        }
+      : null,
+    unconfirmedHours: people.map((userId) => ({ userId, dates: unconfirmedDates(userId, input, today) })).filter((item) => item.dates.length),
   };
 }
 

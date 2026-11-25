@@ -99,6 +99,12 @@ export function teamDay(userId: number, date: string, input: WeekInput): WeekDay
   };
 }
 
+/** A day whose hours are still to be confirmed: a working day up to today, not confirmed, not away the whole day. */
+export const isUnconfirmed = (day: Pick<WeekDay, "date" | "working" | "confirmed" | "away">, today: string) => day.working && day.date <= today && day.confirmed === null && day.away < HOURS_PER_DAY;
+
+/** The days from..to (up to today) a person has still to confirm, by the same rule as Team week (the plan Sheet's follow-up list). */
+export const unconfirmedDates = (userId: number, input: WeekInput, today: string): string[] => datesBetween(input.from, input.to).filter((date) => isUnconfirmed(teamDay(userId, date, input), today));
+
 /** Everyone's week: one row per person, with the days whose hours are still to be confirmed (working days up to today). */
 export function teamWeek(userIds: readonly number[], input: WeekInput, today: string): WeekRow[] {
   const dates = datesBetween(input.from, input.to);
@@ -112,7 +118,7 @@ export function teamWeek(userIds: readonly number[], input: WeekInput, today: st
       away: round2(days.reduce((sum, day) => sum + day.away, 0)),
       capacity,
       confirmed: round2(days.reduce((sum, day) => sum + (day.confirmed ?? 0), 0)),
-      unconfirmedDays: days.filter((day) => day.working && day.date <= today && day.confirmed === null && day.away < HOURS_PER_DAY).length,
+      unconfirmedDays: days.filter((day) => isUnconfirmed(day, today)).length,
     };
   });
 }

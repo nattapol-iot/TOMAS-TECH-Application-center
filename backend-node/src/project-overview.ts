@@ -21,7 +21,8 @@ export type ProjectScheduleOverview = ProjectScheduleSummary & { scheduleError: 
 /**
  * The rows the plan Sheet lists under To follow up (PlanSheet.tsx followUps), counted once each: late, blocked, due to
  * start but not started, a task with nobody on it, outsourced work with no purchase request. A new holiday on the
- * work is left out: it lasts days and is the plan manager's alone.
+ * work is left out: it lasts days and is the plan manager's alone. So are days whose hours are not confirmed and rows
+ * changed since the customer file was sent: they need each person's days and the project's files, read on the Sheet.
  */
 export function followUpCount(tasks: readonly TaskRow[], leaves: readonly ScheduleLeaf[], withPeople: ReadonlySet<number>, today: string): number {
   const byId = new Map(tasks.map((task) => [task.id, task] as const));
