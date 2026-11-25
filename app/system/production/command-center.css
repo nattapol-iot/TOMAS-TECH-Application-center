@@ -1,24 +1,25 @@
 /*
- * Command Center (CommandCenterScreen): the one dark screen in the app, for a TV or wall monitor. Everything is scoped
+ * Command Center (CommandCenterScreen): the one dark screen in the app, for a TV or wall monitor, styled like a
+ * SCADA / high-performance HMI (ISA-101): neutral grey, flat panels, no glow; colour is kept for abnormal states. Everything is scoped
  * to .ops-center; the "ops" palette below is built from the app's own tokens (the navy sidebar shades and the chart
  * accents), so no global token or shared component changes. Sizes grow with the viewport (clamp) so the same layout
  * reads at 1080p and 4K and still fits a laptop.
  */
 .ops-center {
-  --ops-bg: var(--navy-950);
-  --ops-panel: color-mix(in srgb, var(--navy-900) 88%, transparent);
-  --ops-panel-strong: var(--navy-850);
-  --ops-line: color-mix(in srgb, var(--c2) 22%, transparent);
-  --ops-line-soft: var(--navy-line);
+  --ops-bg: var(--n-900);
+  --ops-panel: var(--n-800);
+  --ops-panel-strong: color-mix(in srgb, var(--n-700) 55%, var(--n-800));
+  --ops-line: var(--n-700);
+  --ops-line-soft: color-mix(in srgb, var(--n-600) 60%, var(--n-800));
   --ops-text: var(--n-100);
-  --ops-dim: color-mix(in srgb, var(--navy-dim) 75%, var(--n-100));
+  --ops-dim: var(--n-400);
   --ops-accent: var(--c2);
   --ops-teal: var(--c7);
   --ops-ok: var(--green);
   --ops-warn: var(--amber);
   --ops-bad: var(--red);
   --ops-idle: var(--n-500);
-  --ops-glow: 0 0 18px color-mix(in srgb, var(--c2) 35%, transparent);
+  --ops-glow: none;
   --ops-fs: clamp(12px, 0.62vw + 4px, 22px);
   --ops-gap: clamp(8px, 0.6vw, 20px);
 
@@ -35,21 +36,9 @@
   padding: var(--ops-gap);
   overflow: hidden;
   border-radius: var(--r-lg);
-  background:
-    linear-gradient(color-mix(in srgb, var(--c2) 5%, transparent) 1px, transparent 1px) 0 0 / 40px 40px,
-    linear-gradient(90deg, color-mix(in srgb, var(--c2) 5%, transparent) 1px, transparent 1px) 0 0 / 40px 40px,
-    radial-gradient(ellipse at 50% 40%, var(--navy-800) 0%, var(--ops-bg) 70%);
+  background: var(--ops-bg);
   color: var(--ops-text);
   font-size: var(--ops-fs);
-}
-/* A faint scanline sweep, the only moving background; off with reduced motion. */
-.ops-center::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: repeating-linear-gradient(0deg, transparent 0 3px, color-mix(in srgb, var(--n-0) 2%, transparent) 3px 4px);
-  mix-blend-mode: overlay;
 }
 .ops-center.ops-tv {
   position: fixed;
@@ -92,7 +81,7 @@
   box-shadow:
     var(--ops-glow),
     inset var(--ops-glow);
-  background: radial-gradient(circle, var(--ops-accent) 0 18%, transparent 20%);
+  background: color-mix(in srgb, var(--ops-accent) 30%, transparent);
 }
 .ops-center .ops-brand h1 {
   margin: 0;
@@ -130,7 +119,6 @@
   height: 0.6em;
   border-radius: 50%;
   background: currentColor;
-  box-shadow: 0 0 8px currentColor;
   animation: ops-blink 2s ease-in-out infinite;
 }
 .ops-center .ops-list .ops-live-dot {
@@ -327,7 +315,6 @@
 }
 .ops-center .ops-kpi.bad strong {
   color: var(--ops-bad);
-  text-shadow: 0 0 14px color-mix(in srgb, var(--red) 50%, transparent);
 }
 .ops-center .ops-kpi.info strong {
   color: var(--ops-accent);
@@ -445,120 +432,239 @@
   stroke: var(--ops-bad);
 }
 
-/* ── map ── */
+/* ── site overview: SCADA-style faceplates (owner request 2026-11-25) ──
+ * Like a high-performance HMI (ISA-101): neutral grey, flat, colour only for what is abnormal. A healthy site keeps
+ * a grey faceplate with a small green lamp; a warning gets an amber bar and lamp; an alarm a red frame and header. */
 .ops-center .ops-map-panel {
   grid-area: map;
   position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ops-gap);
   min-height: 0;
   overflow: hidden;
+  padding: var(--ops-gap);
   border: 1px solid var(--ops-line);
-  border-radius: var(--r-lg);
-  background: radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--c2) 9%, transparent), transparent 65%);
+  border-radius: var(--r-md);
+  background: var(--ops-panel);
 }
-.ops-center .ops-map {
-  display: block;
-  width: 100%;
-  height: 100%;
+.ops-center .ops-plant-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5em 1em;
+  padding-bottom: 0.5em;
+  border-bottom: 1px solid var(--ops-line);
 }
-.ops-center .ops-graticule path {
-  fill: none;
-  stroke: var(--ops-line-soft);
-  stroke-dasharray: 2 6;
-}
-.ops-center .ops-graticule text {
-  fill: var(--ops-dim);
-  font-size: 14px;
-  opacity: 0.6;
-}
-.ops-center .ops-neighbour {
-  fill: var(--ops-dim);
-  font-size: 18px;
-  letter-spacing: 0.3em;
-  opacity: 0.45;
+.ops-center .ops-plant-head h2 {
+  margin: 0;
+  color: var(--ops-dim);
+  font-size: 0.85em;
+  font-weight: 700;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
 }
-.ops-center .ops-land {
-  stroke: var(--ops-accent);
-  stroke-width: 2;
-  stroke-linejoin: round;
-  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--c2) 60%, transparent));
-}
-.ops-center .ops-land-core {
-  stop-color: color-mix(in srgb, var(--c2) 22%, var(--navy-900));
-}
-.ops-center .ops-land-edge {
-  stop-color: color-mix(in srgb, var(--c7) 10%, var(--navy-950));
-}
-.ops-center .ops-site {
+.ops-center .ops-legend {
   --site: var(--ops-ok);
-  cursor: pointer;
-  outline: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4em;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.8em;
 }
-.ops-center .ops-site.warning {
-  --site: var(--ops-warn);
+.ops-center .ops-legend li {
+  display: flex;
+  align-items: center;
+  gap: 0.45em;
+  padding: 0.2em 0.6em;
+  border: 1px solid var(--ops-line);
+  border-radius: var(--r-xs);
+  background: var(--ops-panel-strong);
+  color: var(--ops-text);
 }
-.ops-center .ops-site.critical {
+.ops-center .ops-legend li strong {
+  min-width: 1.4em;
+  text-align: right;
+}
+.ops-center .ops-legend li.zero {
+  color: var(--ops-dim);
+}
+.ops-center .ops-legend li.critical:not(.zero),
+.ops-center .ops-legend li.alarms:not(.zero) {
+  border-color: var(--ops-bad);
+  background: color-mix(in srgb, var(--ops-bad) 22%, var(--ops-panel-strong));
+}
+.ops-center .ops-legend li.warning:not(.zero) {
+  border-color: var(--ops-warn);
+}
+.ops-center .ops-legend li.critical {
   --site: var(--ops-bad);
 }
-.ops-center .ops-site.idle {
+.ops-center .ops-legend li.warning {
+  --site: var(--ops-warn);
+}
+.ops-center .ops-legend li.idle {
   --site: var(--ops-idle);
 }
-.ops-center .ops-dot {
-  fill: var(--site);
-  stroke: var(--n-0);
-  stroke-width: 2;
-  filter: drop-shadow(0 0 6px var(--site));
-  transition: r 0.3s ease;
+.ops-center .ops-legend i,
+.ops-center .ops-lamp {
+  flex: none;
+  width: 0.7em;
+  height: 0.7em;
+  border: 1px solid color-mix(in srgb, var(--n-0) 25%, transparent);
+  border-radius: 2px;
+  background: var(--site);
 }
-.ops-center .ops-halo {
-  fill: color-mix(in srgb, var(--site) 32%, transparent);
-  stroke: color-mix(in srgb, var(--site) 72%, transparent);
-  stroke-width: 1.5;
-  transition: r 0.3s ease;
+.ops-center .ops-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15em, 1fr));
+  align-content: start;
+  gap: var(--ops-gap);
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
 }
-.ops-center .ops-site:hover .ops-halo,
-.ops-center .ops-site:focus-visible .ops-halo,
-.ops-center .ops-site.focus .ops-halo {
-  stroke-width: 2.5;
-  filter: drop-shadow(0 0 12px var(--site));
+.ops-center .ops-tile {
+  --site: var(--ops-ok);
+  --edge: var(--ops-line);
+  display: flex;
+  flex-direction: column;
+  gap: 0.45em;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--edge);
+  border-left: 4px solid var(--edge);
+  border-radius: var(--r-xs);
+  background: var(--ops-panel-strong);
+  color: var(--ops-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
-.ops-center .ops-pulse {
-  fill: none;
-  stroke: var(--site);
-  stroke-width: 2;
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: ops-pulse 2.4s ease-out infinite;
+.ops-center .ops-tile.warning {
+  --site: var(--ops-warn);
+  --edge: var(--ops-warn);
 }
-.ops-center .ops-pulse.late {
-  animation-delay: 1.2s;
+.ops-center .ops-tile.critical {
+  --site: var(--ops-bad);
+  --edge: var(--ops-bad);
 }
-.ops-center .ops-site-label {
-  fill: var(--ops-text);
-  font-size: 18px;
+.ops-center .ops-tile.idle {
+  --site: var(--ops-idle);
+  color: var(--ops-dim);
+}
+.ops-center .ops-tile:hover {
+  background: color-mix(in srgb, var(--n-0) 4%, var(--ops-panel-strong));
+}
+.ops-center .ops-tile.focus {
+  outline: 2px solid var(--ops-accent);
+  outline-offset: 1px;
+}
+.ops-center .ops-tile-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  padding: 0.45em 0.6em;
+  border-bottom: 1px solid var(--ops-line);
+}
+.ops-center .ops-tile.critical .ops-tile-head {
+  background: var(--ops-bad);
+  color: var(--n-0);
+}
+.ops-center .ops-tile.critical .ops-lamp {
+  background: var(--n-0);
+}
+.ops-center .ops-tile-head strong {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 1em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ops-center .ops-tile-state {
+  flex: none;
+  font-size: 0.72em;
   font-weight: 700;
-  paint-order: stroke;
-  stroke: var(--ops-bg);
-  stroke-width: 5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
-.ops-center .ops-site.focus .ops-site-label {
-  fill: var(--site);
-  font-size: 22px;
+.ops-center .ops-tile.warning .ops-tile-state {
+  color: var(--ops-warn);
+}
+.ops-center .ops-tile-loc {
+  padding: 0 0.6em;
+  overflow: hidden;
+  color: var(--ops-dim);
+  font-size: 0.78em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ops-center .ops-tile-values {
+  display: grid;
+  gap: 0.35em;
+  padding: 0 0.6em;
+}
+.ops-center .ops-tile-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 0.15em 0.6em;
+  font-size: 0.82em;
+}
+.ops-center .ops-tile-row > span:first-child {
+  color: var(--ops-dim);
+}
+.ops-center .ops-meter {
+  grid-column: 1 / -1;
+  height: 0.4em;
+  overflow: hidden;
+  border-radius: 1px;
+  background: var(--ops-line-soft);
+}
+.ops-center .ops-meter > span {
+  display: block;
+  height: 100%;
+  background: var(--ops-idle);
+}
+.ops-center .ops-meter.warn > span {
+  background: var(--ops-warn);
+}
+.ops-center .ops-meter.bad > span {
+  background: var(--ops-bad);
+}
+.ops-center .ops-tile-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5em;
+  margin-top: auto;
+  padding: 0.4em 0.6em;
+  border-top: 1px solid var(--ops-line);
+  color: var(--ops-dim);
+  font-size: 0.78em;
+}
+.ops-center .ops-tile-alarms.on {
+  color: var(--ops-bad);
+  font-weight: 700;
 }
 .ops-center .ops-spotlight {
   --site: var(--ops-warn);
-  position: absolute;
-  left: var(--ops-gap);
-  bottom: var(--ops-gap);
-  width: min(30em, 75%);
-  bottom: 3.2em;
-  max-height: 45%;
+  flex: none;
+  max-height: 30%;
   overflow: auto;
-  padding: 0.8em 1em;
+  padding: 0.6em 0.8em;
   border: 1px solid var(--site);
-  border-radius: var(--r-lg);
+  border-left: 4px solid var(--site);
+  border-radius: var(--r-xs);
   background: var(--ops-panel-strong);
-  box-shadow: 0 0 24px color-mix(in srgb, var(--site) 30%, transparent);
   animation: ops-slide-up 0.4s ease;
 }
 .ops-center .ops-spotlight.critical {
@@ -566,7 +672,7 @@
 }
 .ops-center .ops-spotlight h3 {
   margin: 0.2em 0 0;
-  font-size: 1.35em;
+  font-size: 1.15em;
 }
 .ops-center .ops-spotlight p {
   margin: 0.2em 0;
@@ -589,7 +695,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  color: var(--ops-accent);
+  color: var(--ops-dim);
   font-size: 0.7em;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -597,94 +703,6 @@
 .ops-center .ops-spotlight-tag svg {
   width: 1em;
   height: 1em;
-}
-.ops-center .ops-rail {
-  position: absolute;
-  top: var(--ops-gap);
-  right: var(--ops-gap);
-  max-width: 34%;
-  max-height: 45%;
-  padding: 0.6em 0.8em;
-  overflow: auto;
-  border: 1px solid var(--ops-line);
-  border-radius: var(--r-md);
-  background: var(--ops-panel);
-}
-.ops-center .ops-rail h3 {
-  margin: 0 0 0.4em;
-  color: var(--ops-dim);
-  font-size: 0.7em;
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-.ops-center .ops-rail ul {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.ops-center .ops-rail-site {
-  --site: var(--ops-ok);
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-  padding: 2px 0;
-  border: 0;
-  background: none;
-  color: var(--ops-text);
-  font: inherit;
-  font-size: 0.85em;
-  text-align: left;
-  cursor: pointer;
-}
-.ops-center .ops-rail-site.warning {
-  --site: var(--ops-warn);
-}
-.ops-center .ops-rail-site.critical {
-  --site: var(--ops-bad);
-}
-.ops-center .ops-rail-site.idle {
-  --site: var(--ops-idle);
-}
-.ops-center .ops-rail-site i,
-.ops-center .ops-legend i {
-  flex: none;
-  width: 0.6em;
-  height: 0.6em;
-  border-radius: 50%;
-  background: var(--site);
-  box-shadow: 0 0 6px var(--site);
-}
-.ops-center .ops-legend {
-  --site: var(--ops-ok);
-  position: absolute;
-  right: var(--ops-gap);
-  bottom: var(--ops-gap);
-  display: flex;
-  gap: 12px;
-  margin: 0;
-  padding: 0;
-  color: var(--ops-dim);
-  font-size: 0.75em;
-  list-style: none;
-}
-.ops-center .ops-legend li {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-.ops-center .ops-legend li.critical {
-  --site: var(--ops-bad);
-}
-.ops-center .ops-legend li.warning {
-  --site: var(--ops-warn);
-}
-.ops-center .ops-legend li.ok {
-  --site: var(--ops-ok);
-}
-.ops-center .ops-legend li.idle {
-  --site: var(--ops-idle);
 }
 
 /* ── incident feed, lists ── */
@@ -948,16 +966,6 @@
 }
 
 /* ── motion ── */
-@keyframes ops-pulse {
-  from {
-    opacity: 0.9;
-    transform: scale(1);
-  }
-  to {
-    opacity: 0;
-    transform: scale(3.2);
-  }
-}
 @keyframes ops-blink {
   50% {
     opacity: 0.35;
@@ -986,8 +994,7 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .ops-center *,
-  .ops-center *::before,
-  .ops-center::after {
+  .ops-center *::before {
     animation: none !important;
     transition: none !important;
   }
@@ -999,7 +1006,7 @@
   }
 }
 
-/* ── smaller screens: the map on top, panels below ── */
+/* ── smaller screens: the site overview on top, panels below ── */
 @media (max-width: 1180px) {
   .ops-center {
     grid-template-areas:
@@ -1030,10 +1037,6 @@
   .ops-center .ops-live {
     margin-left: 0;
   }
-  .ops-center .ops-spotlight {
-    width: auto;
-    right: var(--ops-gap);
-  }
   .ops-center .ops-controls .ops-btn span {
     display: none;
   }
@@ -1055,13 +1058,6 @@
 }
 .ops-center .ops-top-machines {
   overflow: auto;
-}
-.ops-center .ops-legend {
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  max-width: 95%;
-  padding: 0.5em;
-  background: var(--ops-panel-strong);
 }
 .ops-center .ops-help {
   position: absolute;
@@ -1090,11 +1086,6 @@
   color: var(--ops-accent);
 }
 .ops-center .ops-stale-banner {
-  position: absolute;
-  z-index: 2;
-  top: 0;
-  left: 0;
-  right: 0;
   margin: 0;
   padding: 0.7em;
   background: var(--ops-panel-strong);
@@ -1106,9 +1097,7 @@
   margin-right: 0.5em;
 }
 .ops-center .ops-map-empty {
-  position: absolute;
-  z-index: 1;
-  inset: 25% 8% auto;
+  margin: auto;
   padding: 1.5em;
   text-align: center;
   background: var(--ops-panel-strong);

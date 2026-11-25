@@ -3550,9 +3550,9 @@ const COMMAND_CENTER: Guide = {
   area: "tools",
   title: { th: "ใช้ Command Center บนจอใหญ่", en: "Use the Command Center on a big screen", jp: "大型画面でコマンドセンターを使う" },
   summary: {
-    th: "ภาพรวมสดของทุก Site บนแผนที่ ตัวเลขสำคัญ ปัญหาล่าสุด และโหมดทีวีสำหรับจอติดผนัง",
-    en: "A live view of every site on a map, the headline numbers, the incident feed and a TV mode for a wall screen.",
-    jp: "全サイトの地図・主要指標・インシデントのライブ表示と、壁掛け画面用の TV モード。",
+    th: "ภาพรวมสดของทุก Site แบบหน้าจอ SCADA ตัวเลขสำคัญ ปัญหาล่าสุด และโหมดทีวีสำหรับจอติดผนัง",
+    en: "A live SCADA-style overview of every site, the headline numbers, the incident feed and a TV mode for a wall screen.",
+    jp: "全サイトの SCADA 風概要・主要指標・インシデントのライブ表示と、壁掛け画面用の TV モード。",
   },
   minutes: 2,
   permissions: ["monitor.read"],
@@ -3597,11 +3597,11 @@ const COMMAND_CENTER: Guide = {
       target: "ops.map",
       action: "next",
       view: "command-center",
-      title: { th: "แผนที่", en: "The map", jp: "地図" },
+      title: { th: "ภาพรวม Site", en: "Site overview", jp: "サイト概要" },
       body: {
-        th: "จุดเขียวปกติ เหลืองต้องดู แดงวิกฤต จุดที่กระพือมีปัญหาเปิดอยู่ คลิกจุดเพื่อดูรายละเอียดและรีโมต",
-        en: "Green is normal, amber needs attention, red is critical; a pulsing dot has an open incident. Click a dot for its detail and Remote buttons.",
-        jp: "緑は正常、黄は要注意、赤は重大。脈打つ点は未解決インシデントあり。点をクリックで詳細とリモート。",
+        th: "แต่ละ Site เป็นการ์ดแบบหน้าจอ SCADA เรียง Site ที่มีปัญหาไว้ก่อน แถบบนสุดนับจำนวน Site ตามสถานะและ Alarm ที่ค้าง การ์ดปกติเป็นสีเทามีไฟเขียวเล็กๆ เหลืองคือต้องดู แดงคือวิกฤต ในการ์ดมีเครื่องที่ออนไลน์ โปรแกรมที่ทำงาน CPU สูงสุด และ Alarm ค้าง คลิกการ์ดเพื่อดูรายละเอียดและรีโมต",
+        en: "Each site is a SCADA-style faceplate, worst first, under a summary bar that counts sites by state and open alarms. A healthy site stays grey with a small green lamp; amber needs attention, red is critical. A faceplate shows PCs online, programs running, peak CPU and open alarms. Click it for its detail and Remote buttons.",
+        jp: "各サイトは SCADA 風のフェースプレートで、問題のあるサイトが先に並びます。上部のバーは状態別のサイト数と未解決アラームを数えます。正常は灰色に小さな緑ランプ、黄は要注意、赤は重大。オンライン PC・稼働プログラム・最大 CPU・未解決アラームを表示し、クリックで詳細とリモート。",
       },
     },
     {

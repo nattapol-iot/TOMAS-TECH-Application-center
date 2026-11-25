@@ -298,6 +298,9 @@ function allowedViews(data: BootstrapData): View[] {
   if (data.permissions.includes("crm.read")) allowed.push("crm-pipeline");
   // Older bookmarks still open Timeline mode, with the permissions its former menu required.
   if (data.permissions.includes("project.read") && data.permissions.includes("schedule.read")) allowed.push("project-timeline");
+  // Site Monitor opens these by link (#/command-center from its header) rather than from the menu, so they are not in
+  // NAV; without this the hash guard refused the link and Command Center could not be opened.
+  if (data.permissions.includes("monitor.read")) allowed.push("command-center", "fleet", "site-monitor");
   return allowed;
 }
 
