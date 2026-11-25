@@ -48,7 +48,8 @@
 .project-page-back {
   justify-self: start;
 }
-/* Task doc 5.4: Create project as a page: the form on the left, what is missing and what Create does on the right. */
+/* Task doc 5.4: Create project as a page: the form on the left, what is missing and what Create does on the right.
+   The head and the right-hand column are drawn on @tomas-tc/ui (tomas-ui/ProjectCreateParts.tsx); .pcp-aside is its root. */
 .project-create-page {
   display: grid;
   gap: 12px;
@@ -69,37 +70,6 @@
 .pcp-aside {
   position: sticky;
   top: calc(var(--topbar-h, 56px) + 12px);
-  display: grid;
-  gap: 12px;
-}
-.pcp-box {
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-md);
-  background: var(--surface);
-}
-.pcp-box h4 {
-  margin: 0 0 6px;
-  font-size: var(--fs-sm);
-}
-.pcp-box ul {
-  margin: 0;
-  padding-left: 18px;
-  font-size: var(--fs-sm);
-}
-.pcp-ready {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  margin: 0;
-  color: var(--green-text);
-  font-size: var(--fs-sm);
-}
-.pcp-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: flex-end;
 }
 .pcp-step {
   margin: 18px 0 8px;
