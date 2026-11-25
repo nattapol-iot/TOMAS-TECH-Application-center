@@ -499,20 +499,21 @@
 .ops-dot {
   fill: var(--site);
   stroke: var(--n-0);
-  stroke-width: 1.5;
+  stroke-width: 2;
+  filter: drop-shadow(0 0 6px var(--site));
   transition: r 0.3s ease;
 }
 .ops-halo {
-  fill: color-mix(in srgb, var(--site) 22%, transparent);
-  stroke: color-mix(in srgb, var(--site) 60%, transparent);
-  stroke-width: 1;
+  fill: color-mix(in srgb, var(--site) 32%, transparent);
+  stroke: color-mix(in srgb, var(--site) 72%, transparent);
+  stroke-width: 1.5;
   transition: r 0.3s ease;
 }
 .ops-site:hover .ops-halo,
 .ops-site:focus-visible .ops-halo,
 .ops-site.focus .ops-halo {
-  stroke-width: 2;
-  filter: drop-shadow(0 0 8px var(--site));
+  stroke-width: 2.5;
+  filter: drop-shadow(0 0 12px var(--site));
 }
 .ops-pulse {
   fill: none;
@@ -527,15 +528,15 @@
 }
 .ops-site-label {
   fill: var(--ops-text);
-  font-size: 17px;
-  font-weight: 600;
+  font-size: 18px;
+  font-weight: 700;
   paint-order: stroke;
   stroke: var(--ops-bg);
-  stroke-width: 4px;
+  stroke-width: 5px;
 }
 .ops-site.focus .ops-site-label {
   fill: var(--site);
-  font-size: 20px;
+  font-size: 22px;
 }
 .ops-spotlight {
   --site: var(--ops-warn);

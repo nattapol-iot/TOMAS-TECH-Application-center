@@ -350,8 +350,6 @@ function OpsMap({ sites, severityOf, incidents, spotlight, selected, onPick }: {
   })();
   const openBySite = new Map<number, number>();
   for (const incident of incidents) openBySite.set(incident.siteId, (openBySite.get(incident.siteId) ?? 0) + 1);
-  const showAllLabels = placed.length <= 24;
-
   return (
     <svg className="ops-map" viewBox={`0 0 ${view.map.width.toFixed(0)} ${view.map.height}`} role="img" aria-label={t("Ops.mapLabel")} preserveAspectRatio="xMidYMid meet">
       <defs>
@@ -375,16 +373,15 @@ function OpsMap({ sites, severityOf, incidents, spotlight, selected, onPick }: {
         const severity = severityOf.get(site.id) ?? "idle";
         const open = openBySite.get(site.id) ?? 0;
         const focus = site.id === spotlight || site.id === selected;
-        const label = showAllLabels || focus || severity === "critical";
         return (
           <g key={site.id} className={`ops-site ${severity}${focus ? " focus" : ""}`} transform={`translate(${x.toFixed(1)} ${y.toFixed(1)})`}
             role="button" tabIndex={0} aria-label={`${site.name}: ${t(`Ops.severity.${severity}`)}`}
             onClick={() => onPick(site.id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onPick(site.id); } }}>
-            {open > 0 ? <circle className="ops-pulse" r="12" /> : null}
-            {open > 0 ? <circle className="ops-pulse late" r="12" /> : null}
-            <circle className="ops-halo" r={focus ? 26 : 18} />
-            <circle className="ops-dot" r={focus ? 10 : 8} />
-            {label ? <text className="ops-site-label" x="16" y="5">{site.name}{open > 0 ? ` · ${open}` : ""}</text> : null}
+            {open > 0 ? <circle className="ops-pulse" r="16" /> : null}
+            {open > 0 ? <circle className="ops-pulse late" r="16" /> : null}
+            <circle className="ops-halo" r={focus ? 34 : 24} />
+            <circle className="ops-dot" r={focus ? 14 : 11} />
+            <text className="ops-site-label" x="18" y="5">{site.name}{open > 0 ? ` · ${open}` : ""}</text>
           </g>
         );
       })}
