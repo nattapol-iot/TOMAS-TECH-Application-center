@@ -2,7 +2,7 @@
 
 [Module](../modules/performance.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `d574014e`; generated, do not edit. [backend-node/src/routes/activity.ts](<../../../backend-node/src/routes/activity.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `f890668f`; generated, do not edit. [backend-node/src/routes/activity.ts](<../../../backend-node/src/routes/activity.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
