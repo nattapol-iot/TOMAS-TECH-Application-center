@@ -86,9 +86,10 @@ test("a Leader counts as an engineer wherever one is chosen, and as a lead where
   const performance = await source("backend-node/src/routes/performance.ts");
   assert.equal(performance.match(/role\.code IN\(N'Engineer',N'Leader',N'Project Manager',N'Engineering Manager'/g)?.length, 4);
   for (const [path, pattern] of [
-    ["app/system/production/EstimateScreens.tsx", /const canOwnEstimate = \(role: string\) => \["Engineer", "Leader", "Engineering Manager", "Admin"\]/],
-    ["app/system/production/EstimateLaborSheet.tsx", /const canOwnEstimate = \(role: string\) => \["Engineer", "Leader", "Engineering Manager", "Admin"\]/],
-    ["app/system/production/InquiryScreens.tsx", /const OWNER_ROLES = \["Engineer", "Leader", "Engineering Manager", "Admin"\];/],
+    // The screens pick owners from one list, read on every held role (see the follow-up test below).
+    ["app/system/production/EstimateScreens.tsx", /const canOwnEstimate = \(person: RoleBearer\) => hasRole\(person, \.\.\.ESTIMATE_OWNER_ROLES\);/],
+    ["app/system/production/EstimateLaborSheet.tsx", /const canOwnEstimate = \(person: RoleBearer\) => hasRole\(person, \.\.\.ESTIMATE_OWNER_ROLES\);/],
+    ["app/system/production/InquiryScreens.tsx", /bootstrap\.team\.filter\(\(member\) => hasRole\(member, \.\.\.ESTIMATE_OWNER_ROLES\)\)/],
     ["app/system/production/CoreScreens.tsx", /eligible\(\["Engineer", "Leader", "Engineering Manager", "Admin"\], project\.leadEngineerId\)/],
   ])
     assert.match(await source(path), pattern, path);
@@ -200,4 +201,120 @@ test("signing, the rates menu and the historical PR import read every held role"
   assert.match(historical, /else if \(!hasRole\(actor, "Admin", "Purchasing", "Engineering Manager"\)\) throw/);
   assert.doesNotMatch(executive, /bootstrap\.user\.role!==/);
   assert.doesNotMatch(material, /bootstrap\.user\.role === "Admin"/);
+});
+
+/*
+ * Follow-up the same day (owner: "แก้ข้อ 3 ต่อเลย"): the lists that pick people by role, and the screens' role checks, read
+ * every held role too, as the API's own checks do. The primary role stays what is displayed and what an audit row stamps.
+ */
+test("who may be picked by role reads every held role: estimate owner, site visit engineer, KPI roster", async () => {
+  const { ESTIMATE_OWNER_ROLES, hasRole, rolesOf } = await import("../backend-node/src/user-roles.ts");
+  const { kpiRoleSql } = await import("../backend-node/src/performance-framework.ts");
+  assert.deepEqual([...ESTIMATE_OWNER_ROLES], ["Engineer", "Leader", "Engineering Manager", "Admin"]);
+  assert.equal(hasRole({ role: "Viewer", roles: ["Viewer", "Engineer"] }, ...ESTIMATE_OWNER_ROLES), true, "an additional role counts");
+  assert.equal(hasRole({ role: "Engineer" }, ...ESTIMATE_OWNER_ROLES), true, "a member without a roles list reads its primary role");
+  assert.equal(hasRole({ role: "Viewer", roles: ["Viewer"] }, ...ESTIMATE_OWNER_ROLES), false);
+  assert.deepEqual(rolesOf({ role: "Admin", roles: ["Admin", "Management"] }), ["Admin", "Management"]);
+
+  for (const path of [
+    "backend-node/src/routes/estimate-cost-write.ts",
+    "backend-node/src/routes/estimate-workspace-write.ts",
+    "backend-node/src/routes/estimates.ts",
+    "backend-node/src/routes/estimate-excel-import.ts",
+    "backend-node/src/routes/estimate-historical-import.ts",
+  ]) {
+    const text = await source(path);
+    assert.match(text, /dbo\.users u INNER JOIN dbo\.user_effective_roles r ON r\.user_id=u\.id\s+WHERE u\.id=@owner(_id)? AND u\.is_active=1/, path);
+    assert.doesNotMatch(text, /JOIN dbo\.roles r ON r\.id=u\.role_id\s+WHERE u\.id=@owner/, path);
+  }
+  assert.match(
+    await source("backend-node/src/routes/inquiries.ts"),
+    /SELECT u\.name,u\.email FROM dbo\.users u\s+WHERE u\.id=@owner_id AND u\.is_active=1 AND u\.deleted_at IS NULL\s+AND EXISTS \(SELECT 1 FROM dbo\.user_effective_roles r WHERE r\.user_id=u\.id AND r\.code IN \(N'Engineer',N'Leader',N'Engineering Manager',N'Admin'\)\);/,
+  );
+  const visitRoles = "er\\.code IN\\(N'Engineer',N'Leader',N'Engineering Manager',N'Engineering Coordinator',N'Project Manager',N'Admin'\\)";
+  const [visitRead, visitWorkflow] = await Promise.all([source("backend-node/src/routes/site-visits-read.ts"), source("backend-node/src/routes/site-visits-workflow.ts")]);
+  // The candidate list still shows each person's primary role; who qualifies reads every held role.
+  assert.match(
+    visitRead,
+    new RegExp(
+      "r\\.code role[\\s\\S]*FROM dbo\\.users u INNER JOIN dbo\\.roles r ON r\\.id=u\\.role_id WHERE u\\.is_active=1 AND u\\.deleted_at IS NULL AND EXISTS\\(SELECT 1 FROM dbo\\.user_effective_roles er WHERE er\\.user_id=u\\.id AND " +
+        visitRoles +
+        "\\) ORDER BY u\\.name;",
+    ),
+  );
+  assert.match(
+    visitWorkflow,
+    new RegExp(
+      "SELECT u\\.name FROM dbo\\.users u WHERE u\\.id=@id AND u\\.is_active=1 AND u\\.deleted_at IS NULL AND EXISTS\\(SELECT 1 FROM dbo\\.user_effective_roles er WHERE er\\.user_id=u\\.id AND " +
+        visitRoles +
+        "\\);",
+    ),
+  );
+
+  // KPI: the role a person is reviewed under, primary first, then an additional role with a KPI framework.
+  const performance = await source("backend-node/src/routes/performance.ts");
+  assert.doesNotMatch(performance, /INNER JOIN dbo\.roles role ON role\.id=app_user\.role_id/);
+  assert.equal(performance.match(/\$\{kpiRoleSql\("app_user"\)\}/g)?.length, 4);
+  const kpiRole = kpiRoleSql("app_user");
+  assert.match(kpiRole, /^CROSS APPLY \(SELECT COALESCE\(/);
+  assert.match(
+    kpiRole,
+    /FROM dbo\.user_effective_roles held WHERE held\.user_id=app_user\.id AND held\.code IN\(N'Engineer',N'Leader',N'Project Manager',N'Engineering Manager',N'Sales Engineer',N'Sales Manager'\)/,
+  );
+  assert.match(kpiRole, /ORDER BY CASE WHEN held\.role_id=app_user\.role_id THEN 0 ELSE 1 END,held\.code\)/);
+  assert.match(kpiRole, /\(SELECT primary_role\.code FROM dbo\.roles primary_role WHERE primary_role\.id=app_user\.role_id\)\) code\) role$/);
+});
+
+test("notices and checks that looked people up by their primary role read every held role", async () => {
+  const [common, stamps, reports, dashboard] = await Promise.all([
+    source("backend-node/src/site-visit-common.ts"),
+    source("backend-node/src/routes/signature-master.ts"),
+    source("backend-node/src/unified-report-service.ts"),
+    source("backend-node/src/routes/executive-dashboard.ts"),
+  ]);
+  // Site visit notices go to everyone holding the permission through any role.
+  assert.match(common, /SELECT user_id id FROM dbo\.user_effective_permissions WHERE code=@permission;/);
+  // A new stamp grant is told to everyone holding the custodian role.
+  assert.match(stamps, /INNER JOIN dbo\.user_effective_roles custodian ON custodian\.role_id = s\.custodian_role_id\s+INNER JOIN dbo\.users u ON u\.id = custodian\.user_id/);
+  assert.doesNotMatch(stamps, /u\.role_id = s\.custodian_role_id/);
+  // A report reviewer's or approver's source scope is checked with every role they hold.
+  assert.match(reports, /roles: user\.roles \? user\.roles\.split\("\|"\) : \[user\.role\]/);
+  assert.match(reports, /\(SELECT STRING_AGG\(er\.code,N'\|'\) FROM dbo\.user_effective_roles er WHERE er\.user_id=u\.id\) roles/);
+  // The dashboard's Project Manager filter lists anyone holding the role.
+  assert.match(dashboard, /WHERE EXISTS\(SELECT 1 FROM dbo\.user_effective_roles pm WHERE pm\.user_id=u\.id AND pm\.code=N'Project Manager'\) AND u\.is_active=1/);
+});
+
+test("screens decide on every held role, as the API does", async () => {
+  const [estimates, labor, inquiries, visits, overhead, kpi, signing, shell] = await Promise.all([
+    source("app/system/production/EstimateScreens.tsx"),
+    source("app/system/production/EstimateLaborSheet.tsx"),
+    source("app/system/production/InquiryScreens.tsx"),
+    source("app/system/production/SiteVisitScreens.tsx"),
+    source("app/system/production/EstimateOverheadPanel.tsx"),
+    source("app/system/production/PerformanceScreen.tsx"),
+    source("app/system/production/SigningScreens.tsx"),
+    source("app/system/ProductionApp.tsx"),
+  ]);
+  for (const [name, text] of [
+    ["EstimateScreens", estimates],
+    ["EstimateLaborSheet", labor],
+  ]) {
+    assert.doesNotMatch(text, /canOwnEstimate\((member|bootstrap\.user)\.role\)/, name);
+    assert.match(text, /canOwnEstimate\(member\)/, name);
+  }
+  assert.match(estimates, /const canAssignEstimateOwner = \(person: RoleBearer\) => hasRole\(person, "Engineering Manager", "Admin"\);/);
+  assert.doesNotMatch(estimates, /canAssignEstimateOwner\(bootstrap\.user\.role\)/);
+  assert.doesNotMatch(inquiries, /OWNER_ROLES\.includes|\.includes\(bootstrap\.user\.role\)/);
+  assert.match(inquiries, /const canManageQueue = hasRole\(bootstrap\.user, "Admin", "Engineering Manager", "Project Manager", "Sales Manager"\);/);
+  assert.match(inquiries, /defaultInquiryQueueScope\(rolesOf\(bootstrap\.user\)\)/);
+  // An inquiry created from a site visit picks its owner like any inquiry owner, a Leader included.
+  assert.match(visits, /const engineers = bootstrap\.team\.filter\(\(member\) => hasRole\(member, \.\.\.ESTIMATE_OWNER_ROLES\)\);/);
+  assert.match(overhead, /hasRole\(bootstrap\.user, "Admin", "Engineering Manager"\)/);
+  assert.match(kpi, /const roleCanManage = hasRole\(currentUser, "Admin", "Engineering Manager", "Project Manager", "Sales Manager"\);/);
+  // The document screen finds the step waiting for the person by any role they hold, as the Sign Inbox does.
+  assert.match(signing, /step\.assigneeUserId === null && step\.assigneeRole !== null && rolesOf\(bootstrap\.user\)\.includes\(step\.assigneeRole\)/);
+  assert.doesNotMatch(signing, /step\.assigneeRole === bootstrap\.user\.role/);
+  assert.match(signing, /bootstrap\.team\.flatMap\(\(member\) => rolesOf\(member\)\)/);
+  assert.match(shell, /heldRoles\.some\(\(role\) => DASHBOARD_ROLES\.includes\(role\)\) \? \(/);
+  assert.doesNotMatch(shell, /DASHBOARD_ROLES\.includes\(bootstrap\.user\.role\)/);
 });

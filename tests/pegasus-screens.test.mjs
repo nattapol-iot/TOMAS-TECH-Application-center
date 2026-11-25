@@ -566,7 +566,8 @@ test("every form on the ten screens keeps its draft, asks before closing with ch
   assert.doesNotMatch(core, /defaultValue=\{supplier\./);
   const kpi = sources["app/system/production/PerformanceScreen.tsx"];
   assert.ok(kpi.includes('draftKey={selectedCycle ? `kpi:assessment:${selectedCycle.id}:${editingId}:${editingAsManager ? "manager" : "self"}` : undefined}'));
-  assert.ok(kpi.includes("try { await onSave(scores, evidence, submit, summary, developmentGoal); clearDraft(key); }"));
+  // PerformanceScreen.tsx is oxfmt-formatted (2026-11-25): the block is matched with its line breaks folded.
+  assert.ok(kpi.replace(/\s+/g, " ").includes("try { await onSave(scores, evidence, submit, summary, developmentGoal); clearDraft(key); }"));
   const knowledge = sources["app/system/production/KnowledgeScreens.tsx"];
   assert.match(knowledge, /const closeDrawer = async \(\) => \{\s*if \(await confirmLeave\(draftKeys\(draftPrefix\), leaveCopy\(t\)\)\) onClose\(\);\s*\};/);
   assert.ok(knowledge.includes('const [creating, setCreating] = useState(() => canUpload && hasDraft("knowledge:document:new"));'));

@@ -17,13 +17,14 @@ const s = (r: Row, key: string) => String(r[key] ?? "");
 const d = (r: Row, key: string) => dateOnly(r[key] as Date | string | null) ?? null;
 
 export function registerExecutiveDashboardRoutes(app: FastifyInstance, db: Database, users: CurrentUserService) {
-  app.get("/api/v1/dashboard/management", async request => {
+  app.get("/api/v1/dashboard/management", async (request) => {
     const actor = await users.required(request);
     if (!rolesOf(actor).some((role) => DASHBOARD_ROLES.includes(role))) throw new ApiError(403, "dashboard_forbidden", "Management dashboard access is required.");
     // Since migration 051 an additional role carries its full permission set, so the
     // reporting scope below reads every role the account holds, not only the primary one.
     const executive = hasRole(actor, "Management", "CEO", "Admin");
-    const result = await db.query<Row>(`
+    const result = await db.query<Row>(
+      `
       SET NOCOUNT ON;
       DECLARE @roles TABLE(code nvarchar(50) PRIMARY KEY);
       INSERT @roles SELECT code FROM dbo.user_effective_roles WHERE user_id=@actor;
@@ -110,54 +111,186 @@ export function registerExecutiveDashboardRoutes(app: FastifyInstance, db: Datab
       FROM dbo.resource_tasks t JOIN dbo.users u ON u.id=t.proposed_by
       WHERE t.pending_plan IS NOT NULL AND EXISTS(SELECT 1 FROM @granted WHERE code=N'schedule.plan')
         AND (EXISTS(SELECT 1 FROM @projects p WHERE p.id=t.project_id) OR EXISTS(SELECT 1 FROM @inquiries i WHERE i.id=t.inquiry_id));
-      -- Active primary-role PMs may be filter options even before their first assignment.
+      -- Active PMs (primary or additional role) may be filter options even before their first assignment.
       -- This directory does not expand the project reporting scope above.
-      SELECT u.id,u.name,u.department FROM dbo.users u JOIN dbo.roles r ON r.id=u.role_id
-      WHERE r.code=N'Project Manager' AND u.is_active=1 AND u.deleted_at IS NULL
+      SELECT u.id,u.name,u.department FROM dbo.users u
+      WHERE EXISTS(SELECT 1 FROM dbo.user_effective_roles pm WHERE pm.user_id=u.id AND pm.code=N'Project Manager') AND u.is_active=1 AND u.deleted_at IS NULL
         AND (@executive=1 OR u.id=@actor
           OR (EXISTS(SELECT 1 FROM @roles WHERE code IN(N'Engineering Manager',N'Sales Manager')) AND @department<>N'' AND u.department=@department)
           OR EXISTS(SELECT 1 FROM dbo.projects p JOIN @projects scope ON scope.id=p.id WHERE p.manager_id=u.id))
       ORDER BY u.name,u.id;
       SELECT CAST(CASE WHEN @executive=1 OR EXISTS(SELECT 1 FROM @granted WHERE code=N'schedule.read') THEN 1 ELSE 0 END AS bit) can_read_schedule;
-    `, q => q.input("actor", sql.BigInt, actor.id)
-      .input("department", sql.NVarChar(100), actor.department.trim()).input("executive", sql.Bit, executive));
+    `,
+      (q) => q.input("actor", sql.BigInt, actor.id).input("department", sql.NVarChar(100), actor.department.trim()).input("executive", sql.Bit, executive),
+    );
     const rows = (index: number) => result.recordsets[index] as Row[];
     const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
-    const holidays = new Set(rows(5).map(r => d(r,"holiday_date")!));
+    const holidays = new Set(rows(5).map((r) => d(r, "holiday_date")!));
     const data: ExecutiveData = {
-      asOf: new Date().toISOString(), today, mode: executive ? "executive" : "manager", scope: executive ? "Company" : hasRole(actor, "Project Manager") ? "Managed projects" : actor.department || "Assigned records",
-      projects: rows(0).map(r => ({id:n(r,"id"),inquiryId:n(r,"inquiry_id"),number:s(r,"number"),name:s(r,"name"),customerId:n(r,"customer_id"),customer:s(r,"customer"),department:s(r,"department"),managerId:n(r,"manager_id"),manager:s(r,"manager"),status:s(r,"status"),start:d(r,"start_date")!,due:d(r,"target_delivery")!,progress:n(r,"progress"),budget:r.budget==null?null:n(r,"budget"),forecast:null,overdue:0,blocked:0,taskCount:0,unknownSchedule:false,plannedProgress:null,health:"No plan"})),
-      inquiries:rows(1).map(r=>({id:n(r,"id"),number:s(r,"number"),name:s(r,"name"),customerId:n(r,"customer_id"),customer:s(r,"customer"),department:s(r,"department"),ownerId:n(r,"owner_id"),owner:s(r,"owner"),status:s(r,"status"),date:d(r,"date")!,due:d(r,"due_date")!})),
-      estimates:rows(2).map(r=>({id:n(r,"id"),inquiryId:n(r,"inquiry_id"),number:s(r,"number"),name:s(r,"name"),customerId:n(r,"customer_id"),department:s(r,"department"),owner:s(r,"owner"),status:s(r,"status"),date:d(r,"date")!,due:d(r,"due_date")!,cost:n(r,"cost")})),
-      tasks:[],procurement:rows(6).map(r=>({id:n(r,"id"),projectId:n(r,"project_id"),number:s(r,"number"),kind:s(r,"kind") as "PR"|"PO"|"GRN",supplier:s(r,"supplier"),owner:s(r,"owner"),status:s(r,"status"),date:d(r,"date")!,due:d(r,"due_date"),value:n(r,"value"),openValue:n(r,"open_value"),held:n(r,"held"),waitingMe:Boolean(r.waiting_me)})),
-      team:rows(7).map(r=>({id:n(r,"id"),name:s(r,"name"),department:s(r,"department"),capacity:r.capacity==null?null:n(r,"capacity")})),
-      projectManagers:rows(11).map(r=>({id:n(r,"id"),name:s(r,"name"),department:s(r,"department")})),
-      efforts:rows(8).map(r=>({kind:s(r,"kind") as "Inquiry"|"Estimate",id:n(r,"id"),ownerId:n(r,"owner_id"),start:d(r,"start_date"),end:d(r,"end_date"),manDays:r.man_days==null?null:n(r,"man_days")})),
-      actions:rows(10).map(r=>({key:s(r,"key"),number:s(r,"number"),name:s(r,"name"),owner:s(r,"owner"),kind:s(r,"kind"),destination:s(r,"destination") as "signing"|"resources",projectId:r.project_id==null?null:n(r,"project_id"),inquiryId:r.inquiry_id==null?null:n(r,"inquiry_id"),due:d(r,"due"),since:d(r,"since"),amount:r.amount==null?null:n(r,"amount")})),
-      holidays:[...holidays],warnings:[],
+      asOf: new Date().toISOString(),
+      today,
+      mode: executive ? "executive" : "manager",
+      scope: executive ? "Company" : hasRole(actor, "Project Manager") ? "Managed projects" : actor.department || "Assigned records",
+      projects: rows(0).map((r) => ({
+        id: n(r, "id"),
+        inquiryId: n(r, "inquiry_id"),
+        number: s(r, "number"),
+        name: s(r, "name"),
+        customerId: n(r, "customer_id"),
+        customer: s(r, "customer"),
+        department: s(r, "department"),
+        managerId: n(r, "manager_id"),
+        manager: s(r, "manager"),
+        status: s(r, "status"),
+        start: d(r, "start_date")!,
+        due: d(r, "target_delivery")!,
+        progress: n(r, "progress"),
+        budget: r.budget == null ? null : n(r, "budget"),
+        forecast: null,
+        overdue: 0,
+        blocked: 0,
+        taskCount: 0,
+        unknownSchedule: false,
+        plannedProgress: null,
+        health: "No plan",
+      })),
+      inquiries: rows(1).map((r) => ({
+        id: n(r, "id"),
+        number: s(r, "number"),
+        name: s(r, "name"),
+        customerId: n(r, "customer_id"),
+        customer: s(r, "customer"),
+        department: s(r, "department"),
+        ownerId: n(r, "owner_id"),
+        owner: s(r, "owner"),
+        status: s(r, "status"),
+        date: d(r, "date")!,
+        due: d(r, "due_date")!,
+      })),
+      estimates: rows(2).map((r) => ({
+        id: n(r, "id"),
+        inquiryId: n(r, "inquiry_id"),
+        number: s(r, "number"),
+        name: s(r, "name"),
+        customerId: n(r, "customer_id"),
+        department: s(r, "department"),
+        owner: s(r, "owner"),
+        status: s(r, "status"),
+        date: d(r, "date")!,
+        due: d(r, "due_date")!,
+        cost: n(r, "cost"),
+      })),
+      tasks: [],
+      procurement: rows(6).map((r) => ({
+        id: n(r, "id"),
+        projectId: n(r, "project_id"),
+        number: s(r, "number"),
+        kind: s(r, "kind") as "PR" | "PO" | "GRN",
+        supplier: s(r, "supplier"),
+        owner: s(r, "owner"),
+        status: s(r, "status"),
+        date: d(r, "date")!,
+        due: d(r, "due_date"),
+        value: n(r, "value"),
+        openValue: n(r, "open_value"),
+        held: n(r, "held"),
+        waitingMe: Boolean(r.waiting_me),
+      })),
+      team: rows(7).map((r) => ({ id: n(r, "id"), name: s(r, "name"), department: s(r, "department"), capacity: r.capacity == null ? null : n(r, "capacity") })),
+      projectManagers: rows(11).map((r) => ({ id: n(r, "id"), name: s(r, "name"), department: s(r, "department") })),
+      efforts: rows(8).map((r) => ({
+        kind: s(r, "kind") as "Inquiry" | "Estimate",
+        id: n(r, "id"),
+        ownerId: n(r, "owner_id"),
+        start: d(r, "start_date"),
+        end: d(r, "end_date"),
+        manDays: r.man_days == null ? null : n(r, "man_days"),
+      })),
+      actions: rows(10).map((r) => ({
+        key: s(r, "key"),
+        number: s(r, "number"),
+        name: s(r, "name"),
+        owner: s(r, "owner"),
+        kind: s(r, "kind"),
+        destination: s(r, "destination") as "signing" | "resources",
+        projectId: r.project_id == null ? null : n(r, "project_id"),
+        inquiryId: r.inquiry_id == null ? null : n(r, "inquiry_id"),
+        due: d(r, "due"),
+        since: d(r, "since"),
+        amount: r.amount == null ? null : n(r, "amount"),
+      })),
+      holidays: [...holidays],
+      warnings: [],
     };
-    const schedule = rows(3).map(r=>taskRow(r as Row & {row_version:Buffer}));
+    const schedule = rows(3).map((r) => taskRow(r as Row & { row_version: Buffer }));
     // Progress, plan %, health and the late / blocked counts come from the shared schedule summary,
     // so this dashboard and the Projects portfolio never disagree about a project.
-    const sources = new Map(schedule.map(t=>[t.id,t]));
-    const pics = new Map<number,number[]>();
-    for (const pic of rows(4)) pics.set(n(pic,"task_id"),[...(pics.get(n(pic,"task_id"))??[]),n(pic,"user_id")]);
-    const outcomes = summarizeProjects(data.projects.map(p=>({id:p.id,status:p.status,targetDelivery:p.due})),schedule,holidays,today);
+    const sources = new Map(schedule.map((t) => [t.id, t]));
+    const pics = new Map<number, number[]>();
+    for (const pic of rows(4)) pics.set(n(pic, "task_id"), [...(pics.get(n(pic, "task_id")) ?? []), n(pic, "user_id")]);
+    const outcomes = summarizeProjects(
+      data.projects.map((p) => ({ id: p.id, status: p.status, targetDelivery: p.due })),
+      schedule,
+      holidays,
+      today,
+    );
     const canReadSchedule = Boolean(rows(12)?.[0]?.can_read_schedule);
     for (const p of data.projects) {
-      const {summary,leaves}=outcomes.get(p.id)!;
-      p.health=summary.health;p.taskCount=summary.taskCount;p.overdue=summary.overdueCount;p.blocked=summary.blockedCount;
-      p.forecast=summary.forecastFinish;p.plannedProgress=summary.plannedProgress;if(summary.progress!==null)p.progress=summary.progress;
+      const { summary, leaves } = outcomes.get(p.id)!;
+      p.health = summary.health;
+      p.taskCount = summary.taskCount;
+      p.overdue = summary.overdueCount;
+      p.blocked = summary.blockedCount;
+      p.forecast = summary.forecastFinish;
+      p.plannedProgress = summary.plannedProgress;
+      if (summary.progress !== null) p.progress = summary.progress;
       // A Closed project has no plan comparison by design, so its missing plan % is not an unknown schedule.
-      p.unknownSchedule=summary.scheduleError||(summary.taskCount>0&&summary.plannedProgress===null&&p.status!=="Closed");
-      if(summary.scheduleError){data.warnings.push(p.number);continue;}
-      if(!canReadSchedule)continue;
+      p.unknownSchedule = summary.scheduleError || (summary.taskCount > 0 && summary.plannedProgress === null && p.status !== "Closed");
+      if (summary.scheduleError) {
+        data.warnings.push(p.number);
+        continue;
+      }
+      if (!canReadSchedule) continue;
       // Every leaf stays listed for milestones and drill-down; Master Plan frame rows are flagged so the
       // Overdue tasks KPI and the risk list leave them out, as p.overdue does.
-      const counted=new Set(countedLeaves(leaves).map(l=>l.id));
-      data.tasks.push(...leaves.map(l=>({frame:!counted.has(l.id),id:l.id,projectId:p.id,inquiryId:null,name:l.name,status:l.status,start:l.planStart,due:l.planFinish,baselineDue:l.baselineFinish,forecast:l.forecastFinish,completed:l.actualFinish,milestone:l.isMilestone,progress:l.percentComplete,manDays:sources.get(l.id)!.planManDays,owners:pics.get(l.id)??[]})));
+      const counted = new Set(countedLeaves(leaves).map((l) => l.id));
+      data.tasks.push(
+        ...leaves.map((l) => ({
+          frame: !counted.has(l.id),
+          id: l.id,
+          projectId: p.id,
+          inquiryId: null,
+          name: l.name,
+          status: l.status,
+          start: l.planStart,
+          due: l.planFinish,
+          baselineDue: l.baselineFinish,
+          forecast: l.forecastFinish,
+          completed: l.actualFinish,
+          milestone: l.isMilestone,
+          progress: l.percentComplete,
+          manDays: sources.get(l.id)!.planManDays,
+          owners: pics.get(l.id) ?? [],
+        })),
+      );
     }
-    for(const r of rows(9)) data.tasks.push({id:-n(r,"id"),projectId:null,inquiryId:n(r,"inquiry_id"),name:s(r,"title"),status:s(r,"execution_status"),start:d(r,"plan_start"),due:d(r,"plan_end"),baselineDue:null,forecast:null,completed:d(r,"actual_end"),milestone:false,progress:n(r,"percent_done"),manDays:n(r,"man_days"),owners:[n(r,"assignee_id")]});
+    for (const r of rows(9))
+      data.tasks.push({
+        id: -n(r, "id"),
+        projectId: null,
+        inquiryId: n(r, "inquiry_id"),
+        name: s(r, "title"),
+        status: s(r, "execution_status"),
+        start: d(r, "plan_start"),
+        due: d(r, "plan_end"),
+        baselineDue: null,
+        forecast: null,
+        completed: d(r, "actual_end"),
+        milestone: false,
+        progress: n(r, "percent_done"),
+        manDays: n(r, "man_days"),
+        owners: [n(r, "assignee_id")],
+      });
     return data;
   });
 }

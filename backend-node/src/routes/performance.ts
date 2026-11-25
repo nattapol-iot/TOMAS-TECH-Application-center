@@ -17,7 +17,7 @@ import {
   type SalesInquiryEvidenceRow,
   type ScheduleEvidenceRow,
 } from "../performance-evidence.js";
-import { canManagePerformanceTarget, frameworkForRole, type PerformanceAreaCode } from "../performance-framework.js";
+import { canManagePerformanceTarget, frameworkForRole, kpiRoleSql, type PerformanceAreaCode } from "../performance-framework.js";
 import { teamOfSql } from "../team-scope.js";
 import type { CurrentUserService } from "../users.js";
 
@@ -113,7 +113,7 @@ async function targetRow(transaction: Transaction, employeeId: number, cycleId: 
            assessment.self_summary,assessment.manager_summary,assessment.development_goal
     FROM dbo.employees employee WITH(UPDLOCK,HOLDLOCK)
     INNER JOIN dbo.users app_user ON app_user.id=employee.user_id AND app_user.is_active=1 AND app_user.deleted_at IS NULL
-    INNER JOIN dbo.roles role ON role.id=app_user.role_id
+    ${kpiRoleSql("app_user")}
     INNER JOIN dbo.kpi_review_cycles cycle ON cycle.id=@cycle
     LEFT JOIN dbo.kpi_assessments assessment ON assessment.employee_id=employee.id AND assessment.cycle_id=cycle.id
     WHERE employee.id=@employee AND employee.user_id IS NOT NULL AND employee.is_active=1 AND employee.deleted_at IS NULL;
@@ -146,7 +146,7 @@ export function registerPerformanceRoutes(app: FastifyInstance, database: Databa
         COALESCE(assessment.development_goal,N'') development_goal,assessment.updated_at,assessment.id,assessment.row_version
       FROM dbo.employees employee
       INNER JOIN dbo.users app_user ON app_user.id=employee.user_id AND app_user.is_active=1 AND app_user.deleted_at IS NULL
-      INNER JOIN dbo.roles role ON role.id=app_user.role_id
+      ${kpiRoleSql("app_user")}
       LEFT JOIN dbo.kpi_assessments assessment ON assessment.employee_id=employee.id AND assessment.cycle_id=@cycle
       WHERE employee.is_active=1 AND employee.deleted_at IS NULL
         AND role.code IN(N'Engineer',N'Leader',N'Project Manager',N'Engineering Manager',N'Sales Engineer',N'Sales Manager')
@@ -164,7 +164,7 @@ export function registerPerformanceRoutes(app: FastifyInstance, database: Databa
       INNER JOIN dbo.kpi_assessments assessment ON assessment.id=score.assessment_id AND assessment.cycle_id=@cycle
       INNER JOIN dbo.employees employee ON employee.id=assessment.employee_id AND employee.is_active=1 AND employee.deleted_at IS NULL
       INNER JOIN dbo.users app_user ON app_user.id=employee.user_id AND app_user.is_active=1 AND app_user.deleted_at IS NULL
-      INNER JOIN dbo.roles role ON role.id=app_user.role_id
+      ${kpiRoleSql("app_user")}
       WHERE role.code IN(N'Engineer',N'Leader',N'Project Manager',N'Engineering Manager',N'Sales Engineer',N'Sales Manager')
         AND (app_user.id=@actor OR EXISTS(SELECT 1 FROM dbo.user_effective_roles er WHERE er.user_id=@actor AND er.code =N'Admin')
           OR (EXISTS(SELECT 1 FROM dbo.user_effective_roles er WHERE er.user_id=@actor AND er.code =N'Sales Manager') AND role.code IN(N'Sales Engineer',N'Sales Manager'))
@@ -252,7 +252,7 @@ export function registerPerformanceRoutes(app: FastifyInstance, database: Databa
       SELECT employee.user_id,employee.name_en,role.code target_role,${teamOfSql("app_user.department")} target_team,${teamOfSql("@actor_department")} actor_team,cycle.code cycle_code,cycle.period_start,cycle.period_end
       FROM dbo.employees employee
       INNER JOIN dbo.users app_user ON app_user.id=employee.user_id AND app_user.is_active=1 AND app_user.deleted_at IS NULL
-      INNER JOIN dbo.roles role ON role.id=app_user.role_id
+      ${kpiRoleSql("app_user")}
       INNER JOIN dbo.kpi_review_cycles cycle ON cycle.id=@cycle
       WHERE employee.id=@employee AND employee.user_id IS NOT NULL AND employee.is_active=1 AND employee.deleted_at IS NULL;
     `,

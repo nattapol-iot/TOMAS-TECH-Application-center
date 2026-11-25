@@ -2,7 +2,7 @@
 
 [Module](../modules/performance.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `c0b7e1fa`; generated, do not edit. [backend-node/src/routes/performance.ts](<../../../backend-node/src/routes/performance.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `d574014e`; generated, do not edit. [backend-node/src/routes/performance.ts](<../../../backend-node/src/routes/performance.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
@@ -40,7 +40,7 @@ Evidence: source snapshot `c0b7e1fa`; generated, do not edit. [backend-node/src/
 
 ## SQL references (literal scan, not a complete schema or write-set)
 
-`dbo.employees`, `dbo.estimates`, `dbo.inquiries`, `dbo.inquiry_meetings`, `dbo.kpi_assessment_scores`, `dbo.kpi_assessments`, `dbo.kpi_review_cycles`, `dbo.project_members`, `dbo.projects`, `dbo.resource_tasks`, `dbo.roles`, `dbo.schedule_task_pics`, `dbo.schedule_tasks`, `dbo.user_effective_roles`, `dbo.users`, `dbo.v_estimate_totals`
+`dbo.employees`, `dbo.estimates`, `dbo.inquiries`, `dbo.inquiry_meetings`, `dbo.kpi_assessment_scores`, `dbo.kpi_assessments`, `dbo.kpi_review_cycles`, `dbo.project_members`, `dbo.projects`, `dbo.resource_tasks`, `dbo.schedule_task_pics`, `dbo.schedule_tasks`, `dbo.user_effective_roles`, `dbo.users`, `dbo.v_estimate_totals`
 
 ## Change boundary
 

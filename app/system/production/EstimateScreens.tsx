@@ -101,6 +101,7 @@ import { exportXlsx } from "../../../lib/export-xlsx";
 import { erpEstimateWorkbookFilename } from "../../../lib/erp-estimate-workbook";
 import { readSpreadsheet, type SpreadsheetRow } from "../../../lib/import-spreadsheet";
 import { DateInput } from "../DateInput";
+import { ESTIMATE_OWNER_ROLES, hasRole, type RoleBearer } from "../../../backend-node/src/user-roles";
 
 type Props = {
   bootstrap: BootstrapData;
@@ -263,8 +264,9 @@ const businessDate = (date = new Date()) => {
 };
 const futureDate = (days: number) => businessDate(new Date(Date.now() + days * 86_400_000));
 const normalizeEstimateDueDate = (value: string | undefined, earliest: string, latest: string) => (value && value >= earliest && value <= latest ? value : futureDate(7));
-const canOwnEstimate = (role: string) => ["Engineer", "Leader", "Engineering Manager", "Admin"].includes(role);
-const canAssignEstimateOwner = (role: string) => ["Engineering Manager", "Admin"].includes(role);
+// Every held role counts (migration 051), as the API's owner checks read them.
+const canOwnEstimate = (person: RoleBearer) => hasRole(person, ...ESTIMATE_OWNER_ROLES);
+const canAssignEstimateOwner = (person: RoleBearer) => hasRole(person, "Engineering Manager", "Admin");
 const assignmentResultMessage = (action: "created" | "updated", result: EstimateAssignmentMutationResult) => {
   const saved = `Assignment ${action}`;
   if (result.notification.status === "sent") return `${saved} · email sent to ${result.notification.recipients.length} recipient(s)`;
@@ -392,7 +394,7 @@ export function ProductionEstimates({
   const [status, setStatus] = useState("All status");
   const [customerId, setCustomerId] = useState("All customers");
   const [projectType, setProjectType] = useState("All project types");
-  const [mine, setMine] = useState(() => canOwnEstimate(bootstrap.user.role));
+  const [mine, setMine] = useState(() => canOwnEstimate(bootstrap.user));
   const [ownerId, setOwnerId] = useState("All owners");
   const [department, setDepartment] = useState("All departments");
   const [revision, setRevision] = useState("All revisions");
@@ -468,7 +470,7 @@ export function ProductionEstimates({
   const pageCount = Math.max(1, Math.ceil(result.total / Math.max(result.pageSize, 1)));
   const resetPage = () => setPage(1);
   const departments = [...new Set(bootstrap.team.map((member) => member.department).filter(Boolean))].sort();
-  const owners = bootstrap.team.filter((member) => canOwnEstimate(member.role));
+  const owners = bootstrap.team.filter((member) => canOwnEstimate(member));
   const todayIso = businessDate();
   const copy = estimateCopy;
   const clearFilters = () => {
@@ -524,7 +526,7 @@ export function ProductionEstimates({
                 await refreshBootstrap();
               }}
             />
-            {canCreate && canOwnEstimate(bootstrap.user.role) ? (
+            {canCreate && canOwnEstimate(bootstrap.user) ? (
               <button className="btn default" type="button" data-guide="estimate.historical-import" onClick={() => setHistoricalOpen(true)}>
                 <Icon name="upload" />
                 <LocalizedText text={"Import old estimate"} />
@@ -540,7 +542,7 @@ export function ProductionEstimates({
         }
       />
       <div className="est-toolbar">
-        {canOwnEstimate(bootstrap.user.role) ? (
+        {canOwnEstimate(bootstrap.user) ? (
           <div className="seg-control" role="group" aria-label={copy("ขอบเขต", "Scope", "範囲")}>
             <button
               type="button"
@@ -919,7 +921,7 @@ export function ProductionEstimates({
       {historicalOpen ? (
         <HistoricalEstimateImportModal
           bootstrap={bootstrap}
-          owners={canAssignEstimateOwner(bootstrap.user.role) ? owners : owners.filter((owner) => owner.id === bootstrap.user.id)}
+          owners={canAssignEstimateOwner(bootstrap.user) ? owners : owners.filter((owner) => owner.id === bootstrap.user.id)}
           onClose={() => setHistoricalOpen(false)}
           onImported={async (imported) => {
             setHistoricalOpen(false);
@@ -1099,11 +1101,8 @@ function CreateEstimateModal({
 }) {
   const uiText = useUiText();
   const copy = (th: string, en: string, ja: string) => estimateUxCopy(currentLocale(), th, en, ja);
-  const allOwners = useMemo(() => bootstrap.team.filter((member) => canOwnEstimate(member.role)), [bootstrap.team]);
-  const owners = useMemo(
-    () => (canAssignEstimateOwner(bootstrap.user.role) ? allOwners : allOwners.filter((member) => member.id === bootstrap.user.id)),
-    [allOwners, bootstrap.user.id, bootstrap.user.role],
-  );
+  const allOwners = useMemo(() => bootstrap.team.filter((member) => canOwnEstimate(member)), [bootstrap.team]);
+  const owners = useMemo(() => (canAssignEstimateOwner(bootstrap.user) ? allOwners : allOwners.filter((member) => member.id === bootstrap.user.id)), [allOwners, bootstrap.user]);
   const earliestDueDate = businessDate();
   const latestDueDate = futureDate(365 * 5);
   const [inquiries, setInquiries] = useState<InquirySummary[]>([]);
@@ -1124,7 +1123,7 @@ function CreateEstimateModal({
     setError("");
     try {
       const inquiries = await listAllNewInquiries();
-      const available = inquiries.filter((item) => item.estimateId === null && item.status === "New" && (canAssignEstimateOwner(bootstrap.user.role) || item.estimateOwnerId === bootstrap.user.id));
+      const available = inquiries.filter((item) => item.estimateId === null && item.status === "New" && (canAssignEstimateOwner(bootstrap.user) || item.estimateOwnerId === bootstrap.user.id));
       setInquiries(available);
       setForm((current) => {
         if (available.some((item) => item.id === current.inquiryId)) return current;
@@ -1141,7 +1140,7 @@ function CreateEstimateModal({
     } finally {
       setLoading(false);
     }
-  }, [bootstrap.user.id, bootstrap.user.role, earliestDueDate, latestDueDate, owners, setInquiries]);
+  }, [bootstrap.user, earliestDueDate, latestDueDate, owners, setInquiries]);
   useEffect(() => {
     const timer = window.setTimeout(() => {
       void load();
@@ -3151,7 +3150,7 @@ function EstimateCostItemsTab({
   }, [viewKey, collapsed, dense, viewReady]);
 
   const canAdd = workspace.capabilities.canEditCostItems;
-  const owners = bootstrap.team.filter((member) => canOwnEstimate(member.role));
+  const owners = bootstrap.team.filter((member) => canOwnEstimate(member));
   const defaultOwnerId = owners.find((owner) => owner.id === workspace.header.ownerId)?.id ?? owners.find((owner) => owner.id === bootstrap.user.id)?.id ?? owners[0]?.id ?? 0;
   const presentCategories = COST_CATEGORIES.filter(([code]) => workspace.costItems.some((line) => line.categoryCode === code));
   /* Deleting the last item of the filtered discipline retires its chip, so the
@@ -6790,7 +6789,7 @@ function CostItemEditor({
   onClose: () => void;
   onSave: (input: CostItemInput, lineId?: number) => Promise<void>;
 }) {
-  const allOwners = bootstrap.team.filter((member) => canOwnEstimate(member.role));
+  const allOwners = bootstrap.team.filter((member) => canOwnEstimate(member));
   const owners = workspace.capabilities.canEditAllSections ? allOwners : allOwners.filter((owner) => owner.id === (line?.ownerId ?? bootstrap.user.id));
   const defaultOwner = owners.find((owner) => owner.id === workspace.header.ownerId)?.id ?? owners.find((owner) => owner.id === bootstrap.user.id)?.id ?? owners[0]?.id ?? 0;
   const allowedCategories = COST_CATEGORIES.filter(([code]) => workspace.capabilities.canEditAllSections || workspace.capabilities.editableSections.includes(code) || line?.categoryCode === code);
@@ -6997,7 +6996,7 @@ function ManhourEditor({
   onSave: (input: EstimateManhourInput, lineId?: number) => Promise<void>;
 }) {
   const copy = (th: string, en: string, ja: string) => estimateUxCopy(currentLocale(), th, en, ja);
-  const allOwners = bootstrap.team.filter((member) => canOwnEstimate(member.role));
+  const allOwners = bootstrap.team.filter((member) => canOwnEstimate(member));
   const owners = workspace.capabilities.canEditAllSections ? allOwners : allOwners.filter((owner) => owner.id === (line?.ownerId ?? bootstrap.user.id));
   const defaultOwner = owners.find((owner) => owner.id === workspace.header.ownerId)?.id ?? owners.find((owner) => owner.id === bootstrap.user.id)?.id ?? owners[0]?.id ?? 0;
   // Amounts in the rate list stay with master.read; the list itself only needs estimate.write.
@@ -7280,7 +7279,7 @@ function ExpenseEditor({
 }) {
   const uiText = useUiText();
   const copy = (th: string, en: string, ja: string) => estimateUxCopy(currentLocale(), th, en, ja);
-  const allOwners = bootstrap.team.filter((member) => canOwnEstimate(member.role));
+  const allOwners = bootstrap.team.filter((member) => canOwnEstimate(member));
   const owners = workspace.capabilities.canEditAllSections ? allOwners : allOwners.filter((owner) => owner.id === (line?.ownerId ?? bootstrap.user.id));
   const defaultOwner = owners.find((owner) => owner.id === workspace.header.ownerId)?.id ?? owners.find((owner) => owner.id === bootstrap.user.id)?.id ?? owners[0]?.id ?? 0;
   const allowedExpenseTypes = EXPENSE_TYPES.filter(
@@ -7524,7 +7523,7 @@ function CreateAssignmentModal({
   onSave: (input: EstimateAssignmentCreateInput) => Promise<void>;
 }) {
   const localizeCopy = useStaticCopy();
-  const owners = bootstrap.team.filter((member) => canOwnEstimate(member.role));
+  const owners = bootstrap.team.filter((member) => canOwnEstimate(member));
   const availableSections = ESTIMATE_ASSIGNMENT_SECTIONS.filter(([code]) => !workspace.assignments.some((assignment) => assignment.section.trim().slice(0, 2) === code));
   const defaultOwnerId = owners.find((owner) => owner.id === workspace.header.ownerId)?.id ?? owners[0]?.id ?? 0;
   const [form, setForm] = useState<EstimateAssignmentCreateInput>({
@@ -7639,7 +7638,7 @@ function AssignmentEditor({
   onClose: () => void;
   onSave: (input: EstimateAssignmentInput) => Promise<void>;
 }) {
-  const owners = bootstrap.team.filter((member) => canOwnEstimate(member.role));
+  const owners = bootstrap.team.filter((member) => canOwnEstimate(member));
   const canReassign = workspace.capabilities.canManageAssignments;
   const [form, setForm] = useState<EstimateAssignmentInput>({
     estimateRowVersion: workspace.header.rowVersion,

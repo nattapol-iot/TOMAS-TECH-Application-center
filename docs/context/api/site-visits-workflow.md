@@ -2,7 +2,7 @@
 
 [Module](../modules/site-visit.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `c0b7e1fa`; generated, do not edit. [backend-node/src/routes/site-visits-workflow.ts](<../../../backend-node/src/routes/site-visits-workflow.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `d574014e`; generated, do not edit. [backend-node/src/routes/site-visits-workflow.ts](<../../../backend-node/src/routes/site-visits-workflow.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
@@ -49,7 +49,7 @@ Evidence: source snapshot `c0b7e1fa`; generated, do not edit. [backend-node/src/
 
 ## SQL references (literal scan, not a complete schema or write-set)
 
-`dbo.engineer_skills`, `dbo.roles`, `dbo.sales_intake_skills`, `dbo.sales_intakes`, `dbo.site_visit_action_items`, `dbo.site_visit_assignments`, `dbo.site_visit_attachments`, `dbo.site_visit_checklist_responses`, `dbo.site_visit_confirmations`, `dbo.site_visit_findings`, `dbo.site_visit_reports`, `dbo.site_visit_schedule_history`, `dbo.site_visits`, `dbo.users`, `dbo.visit_checklist_items`, `dbo.visit_checklist_templates`, `dbo.visit_skills`, `dbo.visit_sla_policies`, `dbo.visit_types`
+`dbo.engineer_skills`, `dbo.sales_intake_skills`, `dbo.sales_intakes`, `dbo.site_visit_action_items`, `dbo.site_visit_assignments`, `dbo.site_visit_attachments`, `dbo.site_visit_checklist_responses`, `dbo.site_visit_confirmations`, `dbo.site_visit_findings`, `dbo.site_visit_reports`, `dbo.site_visit_schedule_history`, `dbo.site_visits`, `dbo.user_effective_roles`, `dbo.users`, `dbo.visit_checklist_items`, `dbo.visit_checklist_templates`, `dbo.visit_skills`, `dbo.visit_sla_policies`, `dbo.visit_types`
 
 ## Change boundary
 

@@ -1330,7 +1330,7 @@ test("preparers can discard their own never-submitted report draft, and duplicat
   // ever seen an unsubmitted draft.
   assert.match(routes, /'submit','review','approve','return','revise','void','discard','customer-link','revoke-customer-link'/);
   assert.match(routes, /action==='discard'[\s\S]{0,600}r\.state!=='DRAFT'\|\|Number\(r\.prepared_by\)!==actor\.id/);
-  assert.match(service, /allowedActions\.push\('edit','discard'\)/);
+  assert.match(service, /allowedActions\.push\("edit", "discard"\)/);
 
   // Creating a report inserts a real DRAFT row immediately (before any body content is
   // entered) -- this endpoint lets the "new report" wizard warn about an existing one

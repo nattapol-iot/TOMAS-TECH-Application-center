@@ -806,9 +806,9 @@ export function registerInquiryRoutes(app: FastifyInstance, config: AppConfig, d
       ownerRequest.input("owner_id", sql.BigInt, estimateOwnerId);
       const nextOwner = (
         await ownerRequest.query<{ name: string; email: string | null }>(`
-        SELECT u.name,u.email FROM dbo.users u INNER JOIN dbo.roles r ON r.id=u.role_id
+        SELECT u.name,u.email FROM dbo.users u
         WHERE u.id=@owner_id AND u.is_active=1 AND u.deleted_at IS NULL
-          AND r.code IN (N'Engineer',N'Leader',N'Engineering Manager',N'Admin');
+          AND EXISTS (SELECT 1 FROM dbo.user_effective_roles r WHERE r.user_id=u.id AND r.code IN (N'Engineer',N'Leader',N'Engineering Manager',N'Admin'));
       `)
       ).recordset[0];
       if (!nextOwner) throw new ApiError(422, "invalid_reference", "The estimate owner must be an active engineer, engineering manager or administrator.");

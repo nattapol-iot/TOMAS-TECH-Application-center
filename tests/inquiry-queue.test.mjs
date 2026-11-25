@@ -12,6 +12,10 @@ test("engineers start from owned inquiries while managers retain the team queue"
   assert.equal(defaultInquiryQueueScope("Engineering Manager"), "team");
   assert.equal(defaultInquiryQueueScope("Admin"), "team");
   assert.equal(defaultInquiryQueueScope("Sales Engineer"), "team");
+  // Every held role counts (migration 051): a manager role held as an additional role keeps the team queue.
+  assert.equal(defaultInquiryQueueScope(["Engineer"]), "mine");
+  assert.equal(defaultInquiryQueueScope(["Viewer", "Engineer"]), "mine");
+  assert.equal(defaultInquiryQueueScope(["Engineer", "Project Manager"]), "team");
 });
 
 test("next action follows the recorded workflow state", () => {
@@ -27,25 +31,23 @@ test("next action follows the recorded workflow state", () => {
   assert.equal(inquiryNextAction("Cancelled", true, "Cancelled"), "closed");
 });
 
-
 test("approved costs follow sales evidence and project handover independently", () => {
-  assert.equal(inquiryNextAction("Approved", true, "Approved", {stage:"PROPOSAL"}), "verify_sales");
-  assert.equal(inquiryNextAction("Approved", true, "Approved", {stage:"PROPOSAL",proposalSentOn:"2026-09-24"}), "follow_customer");
-  assert.equal(inquiryNextAction("Approved", true, "Approved", {stage:"WON",wonOn:"2026-09-24"}), "handover_project");
-  assert.equal(inquiryNextAction("Approved", true, "Approved", {stage:"WON"}), "verify_order");
-  assert.equal(inquiryNextAction("Approved", true, "Approved", {stage:"WON",hasProject:true}), "project_created");
-  assert.equal(inquiryNextAction("Approved", true, "Approved", {stage:"LOST"}), "review_cancellation");
-  assert.equal(inquiryNextAction("Approved", true, "Approved", {stage:"ON_HOLD"}), "follow_sales");
-  assert.equal(inquiryNextAction("Estimating", true, "Estimating", {stage:"PROPOSAL"}), "complete_costs");
+  assert.equal(inquiryNextAction("Approved", true, "Approved", { stage: "PROPOSAL" }), "verify_sales");
+  assert.equal(inquiryNextAction("Approved", true, "Approved", { stage: "PROPOSAL", proposalSentOn: "2026-09-24" }), "follow_customer");
+  assert.equal(inquiryNextAction("Approved", true, "Approved", { stage: "WON", wonOn: "2026-09-24" }), "handover_project");
+  assert.equal(inquiryNextAction("Approved", true, "Approved", { stage: "WON" }), "verify_order");
+  assert.equal(inquiryNextAction("Approved", true, "Approved", { stage: "WON", hasProject: true }), "project_created");
+  assert.equal(inquiryNextAction("Approved", true, "Approved", { stage: "LOST" }), "review_cancellation");
+  assert.equal(inquiryNextAction("Approved", true, "Approved", { stage: "ON_HOLD" }), "follow_sales");
+  assert.equal(inquiryNextAction("Estimating", true, "Estimating", { stage: "PROPOSAL" }), "complete_costs");
 });
-
 
 test("Won never bypasses cost approval and an existing project remains the next destination", () => {
   for (const status of ["Draft", "Engineering Input", "Engineering Review", "Revision Required", null]) {
-    assert.equal(inquiryNextAction("Estimating", true, status, {stage:"WON",wonOn:"2026-09-29"}), "await_cost_approval");
-    assert.equal(inquiryNextAction("Approved", true, status, {stage:"WON",wonOn:"2026-09-29"}), "await_cost_approval");
+    assert.equal(inquiryNextAction("Estimating", true, status, { stage: "WON", wonOn: "2026-09-29" }), "await_cost_approval");
+    assert.equal(inquiryNextAction("Approved", true, status, { stage: "WON", wonOn: "2026-09-29" }), "await_cost_approval");
   }
-  assert.equal(inquiryNextAction("Approved", true, "Locked", {stage:"WON",wonOn:"2026-09-29"}), "handover_project");
-  assert.equal(inquiryNextAction("Estimating", true, "Locked", {stage:"WON",wonOn:"2026-09-29"}), "handover_project");
-  assert.equal(inquiryNextAction("Estimating", true, "Revision Required", {stage:"WON",hasProject:true}), "project_created");
+  assert.equal(inquiryNextAction("Approved", true, "Locked", { stage: "WON", wonOn: "2026-09-29" }), "handover_project");
+  assert.equal(inquiryNextAction("Estimating", true, "Locked", { stage: "WON", wonOn: "2026-09-29" }), "handover_project");
+  assert.equal(inquiryNextAction("Estimating", true, "Revision Required", { stage: "WON", hasProject: true }), "project_created");
 });

@@ -106,7 +106,7 @@ export async function validateOwnerSupplier(transaction: TransactionType, ownerI
   request.input("supplier", sql.BigInt, supplierId);
   const row = (
     await request.query<{ owner_valid: boolean; supplier_valid: boolean }>(`SELECT
-    CASE WHEN EXISTS(SELECT 1 FROM dbo.users u INNER JOIN dbo.roles r ON r.id=u.role_id WHERE u.id=@owner AND u.is_active=1
+    CASE WHEN EXISTS(SELECT 1 FROM dbo.users u INNER JOIN dbo.user_effective_roles r ON r.user_id=u.id WHERE u.id=@owner AND u.is_active=1
       AND u.deleted_at IS NULL AND r.code IN(N'Engineer',N'Leader',N'Engineering Manager',N'Admin')) THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END owner_valid,
     CASE WHEN @supplier IS NULL OR EXISTS(SELECT 1 FROM dbo.suppliers WHERE id=@supplier AND is_active=1 AND deleted_at IS NULL)
       THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END supplier_valid;`)

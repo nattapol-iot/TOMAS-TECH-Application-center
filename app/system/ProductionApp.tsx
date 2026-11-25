@@ -1606,7 +1606,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
           <ScreenLinkProvider value={screenLinkValue}>
             <main className="page" key={linkRevision}>
               {view === "dashboard" ? (
-                DASHBOARD_ROLES.includes(bootstrap.user.role) ? (
+                heldRoles.some((role) => DASHBOARD_ROLES.includes(role)) ? (
                   <ExecutiveDashboard
                     bootstrap={bootstrap}
                     personal={personalDashboard}

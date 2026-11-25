@@ -321,7 +321,7 @@ export function registerEstimateExcelImportRoutes(app: FastifyInstance, database
         if (
           !(
             await owner.query(
-              `SELECT u.id FROM dbo.users u JOIN dbo.roles r ON r.id=u.role_id WHERE u.id=@owner AND u.is_active=1 AND u.deleted_at IS NULL AND r.code IN(N'Engineer',N'Leader',N'Engineering Manager',N'Admin');`,
+              `SELECT u.id FROM dbo.users u INNER JOIN dbo.user_effective_roles r ON r.user_id=u.id WHERE u.id=@owner AND u.is_active=1 AND u.deleted_at IS NULL AND r.code IN(N'Engineer',N'Leader',N'Engineering Manager',N'Admin');`,
             )
           ).recordset.length
         )

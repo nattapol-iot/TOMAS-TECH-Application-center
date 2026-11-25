@@ -45,6 +45,7 @@ import {
 } from "../api-client";
 import { Badge, Drawer, EmptyState, Field, GridControls, Icon, PageHeader, Pagination, Panel, Person, Pill, ProgressCell, Select, StatusLegend, Tabs, Toolbar, toneOf } from "../ui";
 import { DateInput } from "../DateInput";
+import { ESTIMATE_OWNER_ROLES, hasRole, rolesOf } from "../../../backend-node/src/user-roles";
 
 type Props = {
   bootstrap: BootstrapData;
@@ -65,7 +66,6 @@ type DetailTab = "overview" | "requirement" | "meeting" | "estimate" | "attachme
 const EMPTY_PAGE: PagedResult<InquirySummary> = { items: [], page: 1, pageSize: 10, total: 0 };
 const PROJECT_TYPES = ["Automation", "Robot", "IoT", "Data Collection", "AMR", "WMS", "Traceability", "Electrical", "Machine", "Software", "IoT / Automation"];
 const FILE_CATEGORIES = ["Customer RFQ", "Meeting Record", "Specification", "Drawing", "Layout", "Equipment List", "Customer Standard", "Supplier Document", "Reference Document", "Other"];
-const OWNER_ROLES = ["Engineer", "Leader", "Engineering Manager", "Admin"];
 const INTEREST_GRADES = [
   { value: "A", label: "A — Hot / สนใจมาก", description: "Need, budget and timeline are clear" },
   { value: "B", label: "B — Warm / สนใจ", description: "Active interest with some conditions to confirm" },
@@ -167,7 +167,7 @@ function InquiryList({ bootstrap, notify, refreshBootstrap, onCreate, onOpen, op
   const [customer, setCustomer] = useState("All customers");
   const [projectType, setProjectType] = useState("All project types");
   const [owner, setOwner] = useState("All owners");
-  const [queueScope, setQueueScope] = useState<InquiryQueueScope>(() => defaultInquiryQueueScope(bootstrap.user.role));
+  const [queueScope, setQueueScope] = useState<InquiryQueueScope>(() => defaultInquiryQueueScope(rolesOf(bootstrap.user)));
   const [status, setStatus] = useState("All status");
   const [priority, setPriority] = useState("All priorities");
   const [interestGrade, setInterestGrade] = useState("All grades");
@@ -220,7 +220,7 @@ function InquiryList({ bootstrap, notify, refreshBootstrap, onCreate, onOpen, op
   const pageCount = Math.max(1, Math.ceil(result.total / Math.max(1, result.pageSize)));
   const types = useMemo(() => Array.from(new Set([...PROJECT_TYPES, ...result.items.map((item) => item.projectType)])).sort(), [result.items]);
   const canWrite = bootstrap.permissions.includes("inquiry.write");
-  const canManageQueue = ["Admin", "Engineering Manager", "Project Manager", "Sales Manager"].includes(bootstrap.user.role);
+  const canManageQueue = hasRole(bootstrap.user, "Admin", "Engineering Manager", "Project Manager", "Sales Manager");
   const queueCopy =
     lang === "TH"
       ? { mine: "งานของฉัน", team: "งานทีม", unassigned: "ยังไม่มอบหมาย", unavailable: "ทุก Inquiry มีผู้รับผิดชอบแล้ว เพราะต้องเลือกผู้รับผิดชอบตอนรับเรื่อง" }
@@ -413,7 +413,7 @@ function InquiryList({ bootstrap, notify, refreshBootstrap, onCreate, onOpen, op
               setOwner(value);
               resetPage();
             }}
-            options={["All owners", ...bootstrap.team.filter((member) => OWNER_ROLES.includes(member.role)).map((member) => member.name)]}
+            options={["All owners", ...bootstrap.team.filter((member) => hasRole(member, ...ESTIMATE_OWNER_ROLES)).map((member) => member.name)]}
           />
         ) : null}
         <Select
@@ -733,7 +733,7 @@ type QueuedFile = { file: File; category: string };
 function InquiryCreate({ bootstrap, notify, refreshBootstrap, onBack, onCreated }: Props & { onBack: () => void; onCreated: (id: number) => void }) {
   const t = useUiText();
   const [source, setSource] = useState<CrmRecord | null>(null);
-  const engineers = bootstrap.team.filter((member) => OWNER_ROLES.includes(member.role));
+  const engineers = bootstrap.team.filter((member) => hasRole(member, ...ESTIMATE_OWNER_ROLES));
   const [form, setForm] = useState<CreateInquiryInput>({
     customerId: 0,
     endUserCustomerId: null,
@@ -2195,7 +2195,7 @@ function MeetingDrawer({ bootstrap, detail, onClose, onSaved }: { bootstrap: Boo
 }
 
 function AssignOwnerDrawer({ bootstrap, detail, onClose, onSaved }: { bootstrap: BootstrapData; detail: InquiryDetail; onClose: () => void; onSaved: (delivery: string) => Promise<void> }) {
-  const owners = bootstrap.team.filter((member) => OWNER_ROLES.includes(member.role));
+  const owners = bootstrap.team.filter((member) => hasRole(member, ...ESTIMATE_OWNER_ROLES));
   const [ownerId, setOwnerId] = useState(detail.estimateOwnerId);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
