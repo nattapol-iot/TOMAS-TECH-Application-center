@@ -197,6 +197,7 @@ GO
 :r database/migrations/133_monitor_fleet_command_center.sql
 :r database/migrations/134_estimate_historical_import.sql
 :r database/migrations/135_leader_role.sql
+:r database/migrations/136_sales_manager_crm.sql
 
 USE [$(DatabaseName)];
 GO

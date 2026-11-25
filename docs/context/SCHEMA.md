@@ -2,7 +2,7 @@
 
 [Context index](../../AGENTS.md)
 
-Evidence: repository migrations at `f890668f`. Highest file number is not proof of the live DB version. No credentials or connection strings are stored here.
+Evidence: repository migrations at `b7bdc97d`. Highest file number is not proof of the live DB version. No credentials or connection strings are stored here.
 
 | Migration | Objects mentioned (literal CREATE TABLE / VIEW only) |
 |---|---|
@@ -141,5 +141,6 @@ Evidence: repository migrations at `f890668f`. Highest file number is not proof 
 | [133_monitor_fleet_command_center.sql](<../../database/migrations/133_monitor_fleet_command_center.sql>) | `dbo.monitor_agent_samples`, `dbo.monitor_script_jobs`, `dbo.monitor_script_targets`, `dbo.monitor_site_alert_channels` |
 | [134_estimate_historical_import.sql](<../../database/migrations/134_estimate_historical_import.sql>) | Inspect migration SQL |
 | [135_leader_role.sql](<../../database/migrations/135_leader_role.sql>) | Inspect migration SQL |
+| [136_sales_manager_crm.sql](<../../database/migrations/136_sales_manager_crm.sql>) | Inspect migration SQL |
 
 Read [backend-node/src/migration-validation.ts](<../../backend-node/src/migration-validation.ts>), [backend-node/src/startup-migrations.ts](<../../backend-node/src/startup-migrations.ts>) and [backend-node/src/migrate.ts](<../../backend-node/src/migrate.ts>) before planning a migration. Applied migration identities and environment flags matter; never rewrite an already applied migration.
