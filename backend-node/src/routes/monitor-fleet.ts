@@ -539,8 +539,8 @@ export function registerMonitorFleetRoutes(
       } else if (secret) {
         const sealed = sealAlertSecret(config.credentialVault!, siteId, channel, secret);
         await write
-          .input("cipher", sql.VarBinary(sql.MAX), sealed.cipher).input("iv", sql.Binary(12), sealed.iv)
-          .input("tag", sql.Binary(16), sealed.tag).input("key", sql.TinyInt, sealed.keyId).input("hint", sql.NVarChar(8), secretHint(secret))
+          .input("cipher", sql.VarBinary(sql.MAX), sealed.cipher).input("iv", sql.VarBinary(12), sealed.iv)
+          .input("tag", sql.VarBinary(16), sealed.tag).input("key", sql.TinyInt, sealed.keyId).input("hint", sql.NVarChar(8), secretHint(secret))
           .query(`
             UPDATE dbo.monitor_site_alert_channels
             SET is_enabled = @enabled, target = @target, secret_cipher = @cipher, secret_iv = @iv, secret_tag = @tag, key_id = @key,
