@@ -6,6 +6,10 @@ export type TomasUiSectionId = "primitives" | "forms" | "data" | "records" | "na
 
 export type TomasUiSectionSpec = { id: TomasUiSectionId; title: string; note: string };
 
+export type TomasUiView = TomasUiSectionId | "not-shown";
+
+export type TomasUiViewSpec = { id: TomasUiView; title: string };
+
 export type TomasUiDemoSpec = {
   id: string;
   section: TomasUiSectionId;
@@ -47,8 +51,12 @@ export type TomasUiStatesProps<State extends string> = {
   onChange: (state: State) => void;
 };
 
+export type TomasUiPageProps = { view: TomasUiView };
+
 export type TomasUiNavProps = {
-  sections: readonly TomasUiSectionSpec[];
+  views: readonly TomasUiViewSpec[];
+  view: TomasUiView;
+  onViewChange: (view: TomasUiView) => void;
   shown: number;
   total: number;
   look: BlueprintPlatform;

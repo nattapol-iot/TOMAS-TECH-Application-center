@@ -29,7 +29,7 @@ export function FieldControlDemo() {
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
         {INSPECTION.fields.map((field) => (
-          <div key={field.key} className="grid min-w-0 gap-1.5">
+          <div key={field.key} className="grid min-w-0 content-start gap-1.5">
             <Label htmlFor={`tui-fc-${field.key}`}>
               {field.label}
               <code className="text-muted-foreground font-mono text-xs">{field.type}</code>
