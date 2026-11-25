@@ -22,7 +22,7 @@ export function registerExecutiveDashboardRoutes(app: FastifyInstance, db: Datab
     if (!rolesOf(actor).some((role) => DASHBOARD_ROLES.includes(role))) throw new ApiError(403, "dashboard_forbidden", "Management dashboard access is required.");
     // Since migration 051 an additional role carries its full permission set, so the
     // reporting scope below reads every role the account holds, not only the primary one.
-    const executive = hasRole(actor, "Management", "CEO", "Admin");
+    const executive = hasRole(actor, "Management", "Admin");
     const result = await db.query<Row>(
       `
       SET NOCOUNT ON;

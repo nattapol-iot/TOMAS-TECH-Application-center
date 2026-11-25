@@ -179,11 +179,10 @@ export type ProjectCostDetail = {
 };
 
 /**
- * Who sees the cost overview (owner 2026-11-21): a Leader and everyone above - a Leader, any manager, Management,
- * the CEO and Admins. The API refuses everyone else and the Projects screen does not offer them the tab.
+ * Who sees the cost overview (owner 2026-11-21): a Leader and everyone above - a Leader, any manager, Management
+ * and Admins. The API refuses everyone else and the Projects screen does not offer them the tab.
  */
-export const canViewProjectCost = (roles: readonly string[]): boolean =>
-  roles.some((role) => role === "Admin" || role === "Leader" || role === "Management" || role === "CEO" || /manager$/i.test(role));
+export const canViewProjectCost = (roles: readonly string[]): boolean => roles.some((role) => role === "Admin" || role === "Leader" || role === "Management" || /manager$/i.test(role));
 
 export const round2 = (value: number): number => Math.round((value + Number.EPSILON) * 100) / 100;
 
