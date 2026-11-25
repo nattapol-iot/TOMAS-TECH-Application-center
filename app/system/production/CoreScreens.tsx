@@ -4,7 +4,7 @@ import { useT as useStaticCopy } from "../i18n";
 
 import { currentLocale, useLanguage, useT as useUiText } from "../i18n";
 import { LocalizedText } from "../LocalizedText";
-import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { lazy, Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import {
   addProjectMember,
   createEmployee,
@@ -1721,6 +1721,9 @@ export const projectPageKey = (project: { id: number; number: string }) => (/^PJ
  * sit in the list's row menu (edit, members, stage, end user, delete), and the tabs Overview, Plan, Cost and Documents.
  * The project is read from the overview, so it is the same row and the same rights as the list.
  */
+// The page's head on @tomas-tc/ui (owner 2026-11-25), loaded with the page so the kit stays out of the first load.
+const ProjectPageHeader = lazy(() => import("../tomas-ui/ProjectPageHeader").then((module) => ({ default: module.ProjectPageHeader })));
+
 export function ProjectPage({
   bootstrap,
   notify,
@@ -1822,6 +1825,7 @@ export function ProjectPage({
     );
   const customerLine = [item.customerName, item.endUserName].filter(Boolean).join(" / ");
   const facts: [string, ReactNode][] = [
+    ...(item.canChangeStatus && item.allowedStatuses.length ? [] : ([["Portfolio.colStage", uiText(item.status)]] as [string, ReactNode][])),
     ["Portfolio.colPm", item.managerName],
     [copy("วิศวกรหลัก", "Lead engineer", "リードエンジニア"), item.leadEngineerName ?? "—"],
     [copy("PO ลูกค้า", "Customer PO", "顧客PO"), item.purchaseOrderNumber || "—"],
@@ -1833,71 +1837,37 @@ export function ProjectPage({
     ...(canWrite && canEditEndUser(item.status) ? [{ key: "end-user", label: "Portfolio.editEndUser", icon: "user" as const, onSelect: () => setEndUser(true) }] : []),
     ...(canDelete(item) ? [{ key: "delete", label: "CRM.deleteProject", icon: "trash" as const, danger: true, onSelect: () => setDeleting(true) }] : []),
   ];
+  const health = item.status === "Closed" ? "Completed" : (item.health ?? "No plan");
   return (
-    <div className="project-page" data-guide="projectPage.header">
-      {back}
-      <PageHeader
-        eyebrow="Projects"
-        title={`${item.number} · ${item.name}`}
-        meta={
-          <span className="project-page-meta">
-            <HealthBadge health={item.health ?? "No plan"} status={item.status} />
-            {customerLine ? <span className="muted">{customerLine}</span> : null}
-          </span>
-        }
-        actions={
-          <div className="project-page-actions">
-            {item.canChangeStatus && item.allowedStatuses.length ? (
-              <RowDisclosure
-                label={`${uiText("Portfolio.changeStage")} ${item.number} · ${uiText(item.status)}`}
-                triggerClassName="btn default"
-                guide="projectPage.stage"
-                disabled={stageBusy}
-                trigger={
-                  <>
-                    <span>{uiText(item.status)}</span>
-                    <Icon name="chevronDown" />
-                  </>
+    <div className="project-page">
+      <Suspense fallback={back}>
+        <ProjectPageHeader
+          backLabel={uiText("ProjectPage.back")}
+          onBack={onBack}
+          title={`${item.number} · ${item.name}`}
+          health={{ label: uiText(`ProjectHealth.${health}`), tone: PROJECT_HEALTH_TONE[health] }}
+          customer={customerLine}
+          stage={
+            item.canChangeStatus && item.allowedStatuses.length
+              ? {
+                  label: uiText(item.status),
+                  menuLabel: `${uiText("Portfolio.changeStage")} ${item.number} · ${uiText(item.status)}`,
+                  busy: stageBusy,
+                  options: item.allowedStatuses.map((value) => ({ value, label: uiText(value), onSelect: () => (value === "Closed" ? setClosing(true) : void saveStage(item, value)) })),
                 }
-                actions={item.allowedStatuses.map((value) => ({
-                  key: value,
-                  label: value,
-                  onSelect: () => (value === "Closed" ? setClosing(true) : void saveStage(item, value)),
-                }))}
-              />
-            ) : (
-              <Badge>{item.status}</Badge>
-            )}
-            {canWrite ? (
-              <button type="button" className="btn primary" data-guide="projectPage.edit" onClick={() => setEditing(true)}>
-                <Icon name="edit" />
-                {uiText("Edit project")}
-              </button>
-            ) : null}
-            <RowDisclosure
-              label={uiText("Plan.more")}
-              triggerClassName="btn default"
-              guide="projectPage.more"
-              trigger={
-                <>
-                  <Icon name="more" />
-                  {uiText("Plan.more")}
-                </>
-              }
-              actions={actions.filter((action) => action.key !== "edit")}
-            />
-          </div>
-        }
-      />
-      <dl className="project-page-facts">
-        {facts.map(([label, value]) => (
-          <div key={label}>
-            <dt>{uiText(label)}</dt>
-            <dd>{value}</dd>
-          </div>
-        ))}
-      </dl>
-      <Tabs<ProjectPageTab> tabs={tabs.map((value) => ({ id: value, label: `ProjectPage.tab.${value}` }))} active={shownTab} onChange={onTab} link={null} />
+              : null
+          }
+          edit={canWrite ? { label: uiText("Edit project"), onSelect: () => setEditing(true) } : null}
+          more={{
+            label: uiText("Plan.more"),
+            actions: actions.filter((action) => action.key !== "edit").map((action) => ({ key: action.key, label: uiText(action.label), danger: Boolean(action.danger), onSelect: action.onSelect })),
+          }}
+          facts={facts.map(([label, value]) => ({ label: uiText(label), value }))}
+          tabs={tabs.map((value) => ({ id: value, label: uiText(`ProjectPage.tab.${value}`) }))}
+          activeTab={shownTab}
+          onTab={(value) => onTab(value as ProjectPageTab)}
+        />
+      </Suspense>
       <div className="project-page-body">
         {shownTab === "overview" ? <ProjectOverviewTab item={item} onTab={onTab} onMembers={() => setMembers(true)} onEdit={canWrite ? () => setEditing(true) : null} seesCost={seesCost} /> : null}
         {shownTab === "plan" ? renderPlan(item.id) : null}
