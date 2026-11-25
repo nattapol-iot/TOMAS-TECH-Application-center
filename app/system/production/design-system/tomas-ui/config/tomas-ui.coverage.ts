@@ -1,4 +1,4 @@
-import type { TomasUiDemoSpec, TomasUiInternal, TomasUiNotShown, TomasUiSectionSpec } from "../types/tomas-ui.types";
+import type { TomasUiDemoSpec, TomasUiInternal, TomasUiNotShown, TomasUiSectionSpec, TomasUiViewSpec } from "../types/tomas-ui.types";
 
 export const TOMAS_UI_SECTIONS: readonly TomasUiSectionSpec[] = [
   { id: "primitives", title: "TUI.primitives", note: "TUI.primitivesNote" },
@@ -12,6 +12,8 @@ export const TOMAS_UI_SECTIONS: readonly TomasUiSectionSpec[] = [
   { id: "icons", title: "TUI.icons", note: "TUI.iconsNote" },
   { id: "utilities", title: "TUI.utilities", note: "TUI.utilitiesNote" },
 ];
+
+export const TOMAS_UI_VIEWS: readonly TomasUiViewSpec[] = [...TOMAS_UI_SECTIONS, { id: "not-shown", title: "TUI.notShown" }];
 
 export const TOMAS_UI_DEMOS: readonly TomasUiDemoSpec[] = [
   { id: "buttons", section: "primitives", title: "TUI.demoButtons", exports: ["Button", "buttonVariants", "Badge", "badgeVariants"] },
