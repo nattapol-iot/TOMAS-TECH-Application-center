@@ -1,137 +1,15 @@
-/* Task doc 6.3: the CEO cost summary, one compact block per project. */
-.ceo-summary {
-  display: grid;
-  gap: 12px;
-}
-.ceo-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-}
-.ceo-focus {
-  display: inline-flex;
-  gap: 8px;
-  align-items: center;
-}
-.ceo-focus .pg-select {
-  min-width: 260px;
-  max-width: 420px;
-}
-.ceo-list {
-  display: grid;
-  gap: 10px;
-}
-.ceo-item {
-  display: grid;
-  gap: 8px;
-  padding: 12px 14px;
-  border: 1px solid var(--line);
-  border-left: 4px solid var(--line);
-  border-radius: var(--r-md);
-  background: var(--surface);
-}
-.ceo-item.state-over {
-  border-left-color: var(--red-text);
-}
-.ceo-item.state-near {
-  border-left-color: var(--amber);
-}
-.ceo-item.state-within {
-  border-left-color: var(--green-text);
-}
-.ceo-item > header {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-}
-.ceo-name {
-  font-weight: 600;
-}
-.ceo-meta {
-  margin-left: auto;
-  font-size: var(--fs-xs);
-}
-.ceo-state {
-  padding: 1px 8px;
-  border-radius: 999px;
-  background: var(--n-100);
-  font-size: var(--fs-xs);
-}
-.ceo-state.over {
-  background: var(--red-soft);
-  color: var(--red-text);
-}
-.ceo-state.near {
-  background: var(--amber-soft);
-  color: var(--amber-text);
-}
-.ceo-state.within {
-  background: var(--green-soft);
-  color: var(--green-text);
-}
-.ceo-figures {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 24px;
-  margin: 0;
-}
-.ceo-figures dt {
-  color: var(--muted);
-  font-size: var(--fs-xs);
-}
-.ceo-figures dd {
-  margin: 0;
-  font-weight: 600;
-}
-.ceo-body {
-  display: grid;
-  grid-template-columns: minmax(0, 3fr) minmax(220px, 2fr);
-  gap: 12px;
-}
-.ceo-body h4 {
-  margin: 0 0 4px;
-  color: var(--muted);
-  font-size: var(--fs-xs);
-}
-.ceo-facts {
-  display: grid;
-  gap: 2px;
-  margin: 0;
-  padding-left: 16px;
-  font-size: var(--fs-sm);
-}
-.ceo-facts .red {
-  color: var(--red-text);
-}
-.ceo-facts .amber {
-  color: var(--amber-text);
-}
-.ceo-facts .green {
-  color: var(--green-text);
-}
-.ceo-facts .muted {
-  color: var(--muted);
-}
-.ceo-note p {
-  margin: 0 0 4px;
-  font-size: var(--fs-sm);
-}
-.ceo-note textarea {
-  width: 100%;
-}
-.ceo-note-actions {
-  display: flex;
-  gap: 6px;
-  justify-content: flex-end;
-  margin-top: 4px;
-}
-/* Task doc 6.4: the summary as it is on screen, on A4 landscape, nothing of the app around it. */
+/*
+ * Task doc 6.4: the CEO cost summary as it is on screen, on A4 landscape, nothing of the app around it. The page itself is
+ * drawn on @tomas-tc/ui (tomas-ui/CeoSummary.tsx); its ceo-* class names are the hooks these print rules use.
+ */
 @media print {
   @page {
     size: A4 landscape;
     margin: 8mm;
+  }
+  /* The kit sizes in rem: a smaller root fits more of the summary on each sheet. */
+  html.print-ceo {
+    font-size: 12px;
   }
   html.print-ceo body * {
     visibility: hidden;
@@ -145,34 +23,18 @@
     top: 0;
     left: 0;
     width: 100%;
-    font-size: 11px;
   }
   html.print-ceo .ceo-actions,
-  html.print-ceo .project-page-back,
+  html.print-ceo .ceo-back,
   html.print-ceo .ceo-note button {
     display: none;
-  }
-  /* inspection-report.css hides every header in print; the summary's title and project lines are headers. */
-  html.print-ceo .ceo-summary .page-header,
-  html.print-ceo .ceo-item > header {
-    display: flex !important;
-  }
-  html.print-ceo .ceo-summary .page-header {
-    position: static;
   }
   html.print-ceo .ceo-item {
     break-inside: avoid;
     padding: 6px 8px;
+    box-shadow: none;
   }
   html.print-ceo .ceo-list {
     gap: 6px;
-  }
-}
-@media (max-width: 760px) {
-  .ceo-body {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .ceo-meta {
-    margin-left: 0;
   }
 }

@@ -6,19 +6,29 @@
  * Each project opens its own page. Leaders and above, as the cost overview it reads.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ApiClientError, apiRequest, type BootstrapData } from "../api-client";
+import { ApiClientError, apiRequest, type BootstrapData, type ProjectHealth } from "../api-client";
 import { useT } from "../i18n";
 import { listProjectOverview, type ProjectOverviewItem } from "../project-overview-client";
-import { EmptyState, Icon, PageHeader } from "../ui";
 import { byBudgetRisk, factText, thingsToKnow } from "../../../lib/ceo-summary";
 import { buildCeoWorkbook, ceoWorkbookName } from "../../../lib/ceo-workbook";
 import { downloadErpEstimateWorkbookBytes } from "../../../lib/erp-estimate-workbook";
-import { projectBudgetStates, shortAmount, type ProjectCostDetail, type ProjectCostItem, type ProjectCostOverview, type PurchaseCost } from "../../../backend-node/src/project-cost-model";
-import { HealthBadge } from "./ProjectPlanFields";
-import { PgSelect } from "./PegasusSelect";
+import {
+  projectBudgetStates,
+  shortAmount,
+  type BudgetState,
+  type ProjectCostDetail,
+  type ProjectCostItem,
+  type ProjectCostOverview,
+  type PurchaseCost,
+} from "../../../backend-node/src/project-cost-model";
+import { PROJECT_HEALTH_TONE } from "./ProjectPlanFields";
+import { CeoSummary, type CeoCard } from "../tomas-ui/CeoSummary";
+import type { KitTone } from "../tomas-ui/tones";
 import "./ceo-summary.css";
 
 const DASH = "–";
+/** A budget's standing as a colour: the card's edge and its badge. */
+const BUDGET_TONE: Record<BudgetState, KitTone> = { over: "red", near: "amber", within: "green", none: "slate" };
 /** The address of a project's page: its number, or its id while the number is the shared placeholder (CoreScreens projectPageKey). */
 const pageKey = (item: { id: number; number: string }) => (/^PJ0+$/i.test(item.number) ? String(item.id) : item.number);
 
@@ -113,190 +123,81 @@ export function CeoSummaryScreen({
       setCost((current) => (current ? { ...current, items: current.items.map((item) => (item.id === id ? { ...item, ceoNote: note } : item)) } : current)),
     [],
   );
-  return (
-    <div className="ceo-summary" data-guide="ceo.summary">
-      <button type="button" className="btn ghost sm project-page-back" onClick={onBack}>
-        <Icon name="chevronLeft" />
-        {t("ProjectPage.back")}
-      </button>
-      <PageHeader
-        title="CEO.title"
-        subtitle="CEO.subtitle"
-        actions={
-          <div className="ceo-actions">
-            <button type="button" className="btn default" data-guide="ceo.downloads" disabled={!cost || !shown.length} onClick={printPdf}>
-              <Icon name="download" />
-              {t("CEO.pdf")}
-            </button>
-            <button type="button" className="btn default" disabled={!cost || !shown.length || exporting} onClick={() => void downloadExcel()}>
-              <Icon name="download" />
-              {exporting ? t("CEO.exporting") : t("CEO.excel")}
-            </button>
-            <label className="ceo-focus">
-              <span className="muted">{t("CEO.show")}</span>
-              <PgSelect value={focus ?? ""} onChange={(event) => onFocus(event.target.value || null)} data-guide="ceo.focus" aria-label={t("CEO.show")}>
-                <option value="">{t("CEO.allProjects")}</option>
-                {items.map((item) => (
-                  <option key={item.id} value={pageKey(item)}>
-                    {item.number} · {item.name}
-                  </option>
-                ))}
-              </PgSelect>
-            </label>
-          </div>
-        }
-      />
-      {error ? (
-        <div className="callout danger" role="alert">
-          <span>{error}</span>
-          <button type="button" className="btn ghost sm" onClick={() => setAttempt((value) => value + 1)}>
-            {t("Try again")}
-          </button>
-        </div>
-      ) : null}
-      {!cost && !error ? <span className="spinner" /> : null}
-      {cost && !shown.length ? <EmptyState icon="folder" title="CEO.none" message="CEO.noneHint" /> : null}
-      <div className="ceo-list">
-        {shown.map((item) => (
-          <CeoProject
-            key={item.id}
-            item={item}
-            schedule={schedule.get(item.id)}
-            canEditNote={canWrite && (item.managerId === bootstrap.user.id || elevated)}
-            onOpen={() => onOpenProject(pageKey(item))}
-            onNote={(note) => setNote(item.id, note)}
-            notify={notify}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function CeoProject({
-  item,
-  schedule,
-  canEditNote,
-  onOpen,
-  onNote,
-  notify,
-}: {
-  item: ProjectCostItem;
-  schedule: ProjectOverviewItem | undefined;
-  canEditNote: boolean;
-  onOpen: () => void;
-  onNote: (note: ProjectCostItem["ceoNote"]) => void;
-  notify: (message: string) => void;
-}) {
-  const t = useT();
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState("");
-  const [busy, setBusy] = useState(false);
-  const facts = thingsToKnow(item, schedule ?? {});
-  const worst = projectBudgetStates(item).worst;
-  const bought = (figures: PurchaseCost) => (figures.requested === null ? DASH : `${shortAmount(figures.requested)}${figures.budget ? ` / ${shortAmount(figures.budget)}` : ""}`);
-  // The plan or the forecast, whichever is more: the figure the things to know weigh (lib/ceo-summary.ts). The forecast
-  // alone reads 0 on a plan whose dates have passed with no hours confirmed, beside a line that says it is over budget.
-  const used = Math.round(Math.max(item.labor.plannedManDays, item.labor.forecastManDays ?? 0));
-  const people = item.labor.budgetManDays === null ? `${used} MD` : `${used} / ${Math.round(item.labor.budgetManDays)} MD`;
-  const save = async () => {
-    setBusy(true);
+  const saveNote = async (id: number, text: string) => {
     try {
-      const saved = await apiRequest<{ note: ProjectCostItem["ceoNote"] }>(`/api/v1/projects/${item.id}/ceo-note`, { method: "PUT", body: JSON.stringify({ note: draft }) });
-      onNote(saved.note);
-      setEditing(false);
+      const saved = await apiRequest<{ note: ProjectCostItem["ceoNote"] }>(`/api/v1/projects/${id}/ceo-note`, { method: "PUT", body: JSON.stringify({ note: text }) });
+      setNote(id, saved.note);
       notify(t("CEO.noteSaved"));
+      return true;
     } catch (failure) {
       notify(failure instanceof ApiClientError ? failure.message : t("CEO.noteFailed"));
-    } finally {
-      setBusy(false);
+      return false;
     }
   };
+  const bought = (figures: PurchaseCost) => (figures.requested === null ? DASH : `${shortAmount(figures.requested)}${figures.budget ? ` / ${shortAmount(figures.budget)}` : ""}`);
+  const cards: CeoCard[] = shown.map((item) => {
+    const plan = schedule.get(item.id);
+    const worst = projectBudgetStates(item).worst;
+    // The plan or the forecast, whichever is more: the figure the things to know weigh (lib/ceo-summary.ts). The forecast
+    // alone reads 0 on a plan whose dates have passed with no hours confirmed, beside a line that says it is over budget.
+    const used = Math.round(Math.max(item.labor.plannedManDays, item.labor.forecastManDays ?? 0));
+    const health: ProjectHealth | null = plan ? (plan.status === "Closed" ? "Completed" : (plan.health ?? "No plan")) : null;
+    return {
+      id: item.id,
+      key: pageKey(item),
+      number: item.number,
+      name: item.name,
+      meta: `${item.customerName} · ${item.managerName}`,
+      health: health ? { label: t(`ProjectHealth.${health}`), tone: PROJECT_HEALTH_TONE[health] } : null,
+      state: { label: t(`Cost.state.${worst}`), tone: BUDGET_TONE[worst] },
+      figures: [
+        { label: t("Cost.hardware"), value: bought(item.hardware) },
+        { label: t("Cost.outsource"), value: bought(item.outsource) },
+        { label: t("CEO.people"), value: item.labor.budgetManDays === null ? `${used} MD` : `${used} / ${Math.round(item.labor.budgetManDays)} MD` },
+      ],
+      facts: thingsToKnow(item, plan ?? {}).map((fact) => ({ key: fact.key, text: factText(fact, t), tone: fact.tone })),
+      note: item.ceoNote ? { text: item.ceoNote.text, by: item.ceoNote.by, at: new Date(item.ceoNote.at).toLocaleDateString() } : null,
+      canEditNote: canWrite && (item.managerId === bootstrap.user.id || elevated),
+    };
+  });
   return (
-    <article className={`ceo-item state-${worst}`}>
-      <header>
-        <button type="button" className="pg-doclink ceo-name" onClick={onOpen} title={t("ProjectPage.open")}>
-          <span className="mono">{item.number}</span> {item.name}
-        </button>
-        {schedule ? <HealthBadge health={schedule.health ?? "No plan"} status={schedule.status} /> : null}
-        <span className={`ceo-state ${worst}`}>{t(`Cost.state.${worst}`)}</span>
-        <span className="muted ceo-meta">
-          {item.customerName} · {item.managerName}
-        </span>
-      </header>
-      <dl className="ceo-figures">
-        <div>
-          <dt>{t("Cost.hardware")}</dt>
-          <dd className="mono">{bought(item.hardware)}</dd>
-        </div>
-        <div>
-          <dt>{t("Cost.outsource")}</dt>
-          <dd className="mono">{bought(item.outsource)}</dd>
-        </div>
-        <div>
-          <dt>{t("CEO.people")}</dt>
-          <dd className="mono">{people}</dd>
-        </div>
-      </dl>
-      <div className="ceo-body">
-        <section>
-          <h4>{t("CEO.toKnow")}</h4>
-          {facts.length ? (
-            <ul className="ceo-facts">
-              {facts.map((fact) => (
-                <li key={fact.key} className={fact.tone}>
-                  {factText(fact, t)}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="muted">{t("CEO.nothing")}</p>
-          )}
-        </section>
-        <section className="ceo-note" data-guide="ceo.note">
-          <h4>{t("CEO.pmNote")}</h4>
-          {editing ? (
-            <>
-              <textarea rows={3} maxLength={2000} value={draft} disabled={busy} onChange={(event) => setDraft(event.target.value)} aria-label={t("CEO.pmNote")} />
-              <div className="ceo-note-actions">
-                <button type="button" className="btn ghost sm" disabled={busy} onClick={() => setEditing(false)}>
-                  {t("Cancel")}
-                </button>
-                <button type="button" className="btn primary sm" disabled={busy} onClick={() => void save()}>
-                  {t("Save")}
-                </button>
-              </div>
-            </>
-          ) : (
-            <>
-              {item.ceoNote ? (
-                <p>
-                  {item.ceoNote.text}
-                  <small className="muted">
-                    {" "}
-                    · {item.ceoNote.by} · {new Date(item.ceoNote.at).toLocaleDateString()}
-                  </small>
-                </p>
-              ) : (
-                <p className="muted">{t("CEO.noNote")}</p>
-              )}
-              {canEditNote ? (
-                <button
-                  type="button"
-                  className="btn ghost sm"
-                  onClick={() => {
-                    setDraft(item.ceoNote?.text ?? "");
-                    setEditing(true);
-                  }}
-                >
-                  <Icon name="edit" />
-                  {t(item.ceoNote ? "CEO.editNote" : "CEO.addNote")}
-                </button>
-              ) : null}
-            </>
-          )}
-        </section>
-      </div>
-    </article>
+    <CeoSummary
+      labels={{
+        back: t("ProjectPage.back"),
+        title: t("CEO.title"),
+        subtitle: t("CEO.subtitle"),
+        pdf: t("CEO.pdf"),
+        excel: t("CEO.excel"),
+        exporting: t("CEO.exporting"),
+        show: t("CEO.show"),
+        allProjects: t("CEO.allProjects"),
+        toKnow: t("CEO.toKnow"),
+        nothing: t("CEO.nothing"),
+        pmNote: t("CEO.pmNote"),
+        noNote: t("CEO.noNote"),
+        addNote: t("CEO.addNote"),
+        editNote: t("CEO.editNote"),
+        open: t("ProjectPage.open"),
+        cancel: t("Cancel"),
+        save: t("Save"),
+        retry: t("Try again"),
+        none: t("CEO.none"),
+        noneHint: t("CEO.noneHint"),
+      }}
+      loading={!cost && !error}
+      error={error}
+      onRetry={() => setAttempt((value) => value + 1)}
+      onBack={onBack}
+      exporting={exporting}
+      canExport={Boolean(cost) && shown.length > 0}
+      onPdf={printPdf}
+      onExcel={() => void downloadExcel()}
+      focus={focus}
+      choices={items.map((item) => ({ key: pageKey(item), label: `${item.number} · ${item.name}` }))}
+      onFocus={onFocus}
+      cards={cost ? cards : []}
+      onOpen={onOpenProject}
+      onSaveNote={saveNote}
+    />
   );
 }
