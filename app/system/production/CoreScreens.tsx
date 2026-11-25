@@ -3198,49 +3198,11 @@ type ProjectCreationOptions = {
 // The same list the estimate screens offer, so a project without an estimate reads like one with.
 const PROJECT_TYPES = ["Automation", "IoT", "PLC", "Software", "Electrical", "Mechanical", "Robot", "AMR", "Auto Warehouse", "WMS", "WCS", "Traceability", "Vision", "Data Collection", "Other"];
 
-/**
- * Task doc 5.4: Create project as a page. The form's four parts carry their numbers, the right-hand column says what is
- * still missing and what the app does on Create, and what is typed is kept in this browser until the project exists.
- */
-function CreateProjectPageShell({
-  title,
-  subtitle,
-  footer,
-  onClose,
-  aside,
-  children,
-}: {
-  title: string;
-  subtitle?: string;
-  size?: string;
-  footer: ReactNode;
-  onClose: () => void;
-  aside: ReactNode;
-  children: ReactNode;
-}) {
-  const t = useUiText();
-  return (
-    <div className="project-create-page" data-guide="projectCreate.page">
-      <button type="button" className="btn ghost sm project-page-back" onClick={onClose}>
-        <Icon name="chevronLeft" />
-        {t("ProjectPage.back")}
-      </button>
-      <PageHeader title={title} {...(subtitle ? { subtitle } : {})} />
-      <div className="pcp-columns">
-        <div className="pcp-main">{children}</div>
-        <aside className="pcp-aside" data-guide="projectCreate.aside">
-          {aside}
-          <div className="pcp-actions">{footer}</div>
-        </aside>
-      </div>
-    </div>
-  );
-}
-
-/** The dialog takes the same props as the page; the page alone has a right-hand column. */
-function CreateProjectModalShell({ aside: _aside, ...props }: Parameters<typeof Modal>[0] & { aside: ReactNode }) {
-  return <Modal {...props} />;
-}
+// Task doc 5.4: Create project as a page. Its head, the source choice and the right-hand column are drawn on @tomas-tc/ui
+// (owner 2026-11-25), loaded with the page; the form between them stays the app's own (tomas-ui/ProjectCreateParts.tsx).
+const ProjectCreateHead = lazy(() => import("../tomas-ui/ProjectCreateParts").then((module) => ({ default: module.ProjectCreateHead })));
+const ProjectCreateSource = lazy(() => import("../tomas-ui/ProjectCreateParts").then((module) => ({ default: module.ProjectCreateSource })));
+const ProjectCreateAside = lazy(() => import("../tomas-ui/ProjectCreateParts").then((module) => ({ default: module.ProjectCreateAside })));
 
 /*
  * A project starts from an approved estimate on a WON order, or -- for the Application team, PMs and
@@ -3410,7 +3372,6 @@ export function CreateProjectModal({
       setBusy(false);
     }
   };
-  const Shell = page ? CreateProjectPageShell : CreateProjectModalShell;
   // Leaving the page with something typed asks to keep editing or discard it (Pegasus 0.6, form-draft.ts).
   const close = () => {
     if (!page) {
@@ -3423,46 +3384,355 @@ export function CreateProjectModal({
   };
   const datesOutOfOrder = !planned && Boolean(form.startDate && form.targetDelivery && form.targetDelivery < form.startDate);
   const step = (number: number, key: string) => (page ? <h3 className="pcp-step">{`${number} · ${t(key)}`}</h3> : null);
-  // The right-hand column of the page: what is still missing, and what Create does.
-  const aside = (
-    <>
-      <section className="pcp-box">
-        <h4>{t("ProjectCreate.missing")}</h4>
-        {loadingOptions ? (
-          <p className="muted">{t("CRM.loading")}</p>
-        ) : missingFields.length || planIssues.length || datesOutOfOrder ? (
-          <ul>
-            {[...missingFields.map((field) => t(field)), ...planIssues, ...(datesOutOfOrder ? [t("ProjectCreate.dateOrder")] : [])].map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-          </ul>
+  const createDisabled = busy || loadingOptions || missingFields.length > 0 || planIssues.length > 0 || datesInvalid;
+  const sourceChoice = canChooseSource ? (
+    <Suspense fallback={null}>
+      <ProjectCreateSource
+        label={t("CRM.projectSource")}
+        fromEstimate={t("CRM.projectFromEstimate")}
+        withoutEstimate={t("CRM.projectWithoutEstimate")}
+        standalone={standalone}
+        disabled={busy}
+        onChange={(value) => {
+          setSaveError("");
+          setWithoutEstimate(value);
+        }}
+      />
+    </Suspense>
+  ) : null;
+  const body = (
+    <div className="project-create">
+      {loadError ? (
+        <LoadError
+          message={t(loadError)}
+          retry={() => {
+            setLoadError("");
+            setLoadingOptions(true);
+            setOptionsRevision((value) => value + 1);
+          }}
+        />
+      ) : null}
+      {step(1, "ProjectCreate.stepSource")}
+      {sourceChoice}
+      {loadingOptions ? (
+        <p role="status">{t("CRM.loading")}</p>
+      ) : standalone ? null : !estimates.length ? (
+        <p className="alert warn">{t("CRM.noEligibleEstimate")}</p>
+      ) : initialEstimateId && !estimates.some((e) => e.id === initialEstimateId) ? (
+        <p className="alert warn">{t("CRM.sourceUnavailable")}</p>
+      ) : null}
+      {step(2, "ProjectCreate.stepInfo")}
+      {!page && !loadingOptions && (missingFields.length || planIssues.length) ? (
+        <p role="status">
+          {t("CRM.missingProjectFields")}: {[...missingFields.map((field) => t(field)), ...planIssues].join(", ")}
+        </p>
+      ) : null}
+      <div className="form-grid">
+        {standalone ? (
+          <>
+            {/* Typed search, not a long select: the customer list runs to hundreds of names. */}
+            <div className="field span-2" data-guide="project.from">
+              <span>
+                <LocalizedText text={"Customer *"} />
+              </span>
+              <SearchSelect
+                value={form.customerId ? String(form.customerId) : ""}
+                required
+                disabled={busy}
+                options={bootstrap.customers.map((item) => ({
+                  value: String(item.id),
+                  label: `${item.code} — ${item.name}`,
+                  detail: [item.nameTh, item.nameEn, item.nameJa].filter((name) => name && name !== item.name).join(" / "),
+                }))}
+                onChange={(value) => update({ customerId: Number(value) || 0, contactIds: [], endUserCustomerId: null })}
+                label={t("Customer *")}
+                placeholder={t("CRM.searchCustomer")}
+                noMatchText={t("CRM.noMatch")}
+                clearLabel={t("CRM.clearChoice")}
+                showLabel={t("CRM.showOptions")}
+                moreText={t("CRM.listCut")}
+              />
+            </div>
+            <label className="field span-2">
+              <span>
+                <LocalizedText text={"Project name *"} />
+              </span>
+              <input required maxLength={300} value={form.projectName ?? ""} onChange={(event) => update({ projectName: event.target.value })} />
+            </label>
+            <label className="field">
+              <span>
+                <LocalizedText text={"Project type *"} />
+              </span>
+              <select disabled={busy} value={form.projectType ?? ""} onChange={(event) => update({ projectType: event.target.value })}>
+                <option value="">{t("CRM.selectProjectType")}</option>
+                {PROJECT_TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {t(type)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </>
         ) : (
-          <p className="pcp-ready">
-            <Icon name="check" />
-            {t("ProjectCreate.ready")}
-          </p>
+          <>
+            <label className="field span-2" data-guide="project.from">
+              <span>
+                <LocalizedText text={"Approved estimate *"} />
+              </span>
+              <select
+                disabled={busy || loadingOptions || Boolean(initialEstimateId)}
+                value={form.estimateId}
+                onChange={(event) => {
+                  const estimate = estimates.find((item) => item.id === Number(event.target.value));
+                  const lead = engineers.some((member) => member.id === estimate?.ownerId) ? Number(estimate?.ownerId) : 0;
+                  update({
+                    estimateId: Number(event.target.value),
+                    leadEngineerId: lead,
+                    department: form.department || departmentOf(lead),
+                    site: estimate?.siteLocation ?? "",
+                    targetDelivery: estimate?.targetDelivery || form.targetDelivery,
+                    purchaseOrderNumber: estimate?.purchaseOrderNumber ?? "",
+                    purchaseOrderDate: estimate?.purchaseOrderDate || today(),
+                    contactIds: [],
+                  });
+                }}
+              >
+                <option value={0}>
+                  <LocalizedText text={"Select approved estimate"} />
+                </option>
+                {estimates.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.opportunityNo} · {item.number} — {item.projectName}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="field span-2">
+              <span>
+                <LocalizedText text={"Customer"} />
+              </span>
+              <div className="info-strip">
+                {customer?.name || selectedEstimate?.customerName || "—"}
+                {!customer && selectedEstimate?.customerClosed ? <span className="muted"> · {t("CRM.customerClosed")}</span> : null}
+              </div>
+            </div>
+          </>
         )}
-      </section>
-      <section className="pcp-box">
-        <h4>{t("ProjectCreate.after")}</h4>
-        <ul>
-          <li>{t("ProjectCreate.afterFolders")}</li>
-          {standalone ? null : <li>{t("ProjectCreate.afterCarry")}</li>}
-          <li>{t("ProjectCreate.afterPlan")}</li>
-          <li>{t("ProjectCreate.afterMail")}</li>
-          <li>{t("ProjectCreate.afterOpen")}</li>
-        </ul>
-        <p className="muted">{t("ProjectCreate.draftKept")}</p>
-      </section>
-    </>
+        <ErpProjectNumberField
+          guide="project.number"
+          required
+          disabled={busy}
+          value={form.projectNumber}
+          onChange={(projectNumber) => update({ projectNumber })}
+          onPick={(hit) =>
+            update({
+              projectNumber: hit.number,
+              ...(standalone && !(form.projectName ?? "").trim() && hit.name ? { projectName: hit.name } : {}),
+              ...(standalone && !form.customerId && hit.customerId && bootstrap.customers.some((item) => item.id === hit.customerId)
+                ? { customerId: hit.customerId, contactIds: [], endUserCustomerId: null }
+                : {}),
+            })
+          }
+        />
+        {standalone ? null : (
+          <div className="field span-2">
+            <span>{t("CRM.projectName")}</span>
+            <div className="info-strip">{selectedEstimate?.projectName || "—"}</div>
+          </div>
+        )}
+        <TeamSelect value={form.department ?? ""} departments={departments} onChange={(department) => update({ department })} />
+        <label className="field" data-guide="project.people">
+          <span>
+            <LocalizedText text={"Project manager *"} />
+          </span>
+          <select value={form.managerId} onChange={(event) => update({ managerId: Number(event.target.value) })}>
+            <option value={0}>{t("CRM.selectProjectManager")}</option>
+            {managers.map((member) => (
+              <option key={member.id} value={member.id}>
+                {member.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
+          <span>
+            <LocalizedText text={"Lead engineer *"} />
+          </span>
+          <select
+            value={form.leadEngineerId}
+            onChange={(event) => {
+              const lead = Number(event.target.value);
+              update({ leadEngineerId: lead, department: form.department || departmentOf(lead) });
+            }}
+          >
+            <option value={0}>{t("CRM.selectLeadEngineer")}</option>
+            {engineers.map((member) => (
+              <option key={member.id} value={member.id}>
+                {member.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="field" data-guide="project.po">
+          <span>
+            <LocalizedText text={"Customer PO number *"} />
+          </span>
+          <input required maxLength={100} value={form.purchaseOrderNumber} onChange={(event) => update({ purchaseOrderNumber: event.target.value })} />
+        </label>
+        <label className="field">
+          <span>
+            <LocalizedText text={"PO date *"} />
+          </span>
+          <DateInput value={form.purchaseOrderDate} onChange={(event) => update({ purchaseOrderDate: event.target.value })} />
+        </label>
+        <label className="field span-4">
+          <span>
+            <LocalizedText text={"Site *"} />
+          </span>
+          <input required maxLength={300} value={form.site} onChange={(event) => update({ site: event.target.value })} />
+        </label>
+        {standalone ? (
+          <EndUserCompanyField
+            bootstrap={bootstrap}
+            customerId={customerId}
+            value={form.endUserCustomerId ?? null}
+            disabled={busy || !customerId}
+            onChange={(endUserCustomerId) => update({ endUserCustomerId })}
+            refreshBootstrap={refreshBootstrap}
+            notify={notify}
+          />
+        ) : null}
+      </div>
+      <ContactPicker customerId={customerId} value={form.contactIds ?? []} onChange={(contactIds) => update({ contactIds })} />
+      {step(3, "ProjectCreate.stepPlan")}
+      {canPlan ? (
+        <>
+          {page ? <p className="muted pcp-note">{t("ProjectCreate.planExcel")}</p> : null}
+          <MasterPlanSection
+            rows={headings}
+            onChange={(change) => {
+              setSaveError("");
+              setHeadings(change);
+            }}
+            templates={templates}
+          />
+          <TeamPlanSection
+            rows={headings}
+            onChange={(change) => {
+              setSaveError("");
+              setHeadings(change);
+            }}
+            people={bootstrap.team}
+          />
+          <NotBrokenDownNote headings={headings} />
+        </>
+      ) : (
+        <p className="muted pcp-note">{t("ProjectCreate.planLater")}</p>
+      )}
+      {planned ? (
+        <div className="info-strip" role="note">
+          <Icon name="calendar" />
+          <span>
+            {t("CRM.projectSpanFromPlan")}
+            {span ? `: ${formatDate(span.start)} – ${formatDate(span.finish)}` : ""}
+          </span>
+        </div>
+      ) : (
+        <div className="form-grid two">
+          <label className="field">
+            <span>
+              <LocalizedText text={"Start date *"} />
+            </span>
+            <DateInput required value={form.startDate} onChange={(event) => update({ startDate: event.target.value })} />
+          </label>
+          <label className="field">
+            <span>
+              <LocalizedText text={"Target delivery *"} />
+            </span>
+            <DateInput required min={form.startDate} value={form.targetDelivery} onChange={(event) => update({ targetDelivery: event.target.value })} />
+          </label>
+        </div>
+      )}
+      {step(4, "ProjectCreate.stepPayments")}
+      <PaymentChecklist value={form.paymentsReceived ?? []} onChange={(paymentsReceived) => update({ paymentsReceived })} />
+      <details>
+        <summary>{t("CRM.projectOptionalDetails")}</summary>
+        <div className="form-grid two">
+          {standalone ? null : (
+            <div className="span-2">
+              <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <input type="checkbox" checked={inheritEndUser} disabled={busy} onChange={(event) => setInheritEndUser(event.target.checked)} />
+                <LocalizedText text={"ใช้ End user จาก Inquiry ต้นทาง / Inherit from Inquiry"} />
+              </label>
+            </div>
+          )}
+          {!standalone && !inheritEndUser ? (
+            <EndUserCompanyField
+              bootstrap={bootstrap}
+              customerId={customerId}
+              value={form.endUserCustomerId ?? null}
+              disabled={busy}
+              onChange={(endUserCustomerId) => update({ endUserCustomerId })}
+              refreshBootstrap={refreshBootstrap}
+              notify={notify}
+            />
+          ) : null}
+          <label className="field span-2">
+            <span>
+              <LocalizedText text={"Remark"} />
+            </span>
+            <textarea rows={3} maxLength={20000} value={form.remark || ""} onChange={(event) => update({ remark: event.target.value })} />
+          </label>
+        </div>
+      </details>
+      <p className="muted">{t("CRM.projectPlanLater")}</p>
+    </div>
   );
+  if (page)
+    return (
+      <div className="project-create-page" data-guide="projectCreate.page">
+        <Suspense fallback={null}>
+          <ProjectCreateHead backLabel={t("ProjectPage.back")} onBack={close} title={t("Create project")} subtitle={t(standalone ? "CRM.projectGateWithoutEstimate" : "CRM.projectGate")} />
+        </Suspense>
+        <div className="pcp-columns">
+          <div className="pcp-main">{body}</div>
+          <Suspense fallback={null}>
+            <ProjectCreateAside
+              labels={{
+                missing: t("ProjectCreate.missing"),
+                loading: t("CRM.loading"),
+                ready: t("ProjectCreate.ready"),
+                after: t("ProjectCreate.after"),
+                draftKept: t("ProjectCreate.draftKept"),
+                cancel: t("Cancel"),
+                create: t("Create project"),
+                saving: t("Saving…"),
+              }}
+              loading={loadingOptions}
+              missing={[...missingFields.map((field) => t(field)), ...planIssues, ...(datesOutOfOrder ? [t("ProjectCreate.dateOrder")] : [])]}
+              after={[
+                t("ProjectCreate.afterFolders"),
+                ...(standalone ? [] : [t("ProjectCreate.afterCarry")]),
+                t("ProjectCreate.afterPlan"),
+                t("ProjectCreate.afterMail"),
+                t("ProjectCreate.afterOpen"),
+              ]}
+              error={saveError ? t(saveError) : ""}
+              busy={busy}
+              disabled={createDisabled}
+              onCancel={close}
+              onCreate={() => void submit()}
+            />
+          </Suspense>
+        </div>
+      </div>
+    );
   return (
-    <Shell
+    <Modal
       title="Create project"
       subtitle={standalone ? "CRM.projectGateWithoutEstimate" : "CRM.projectGate"}
       size="xl"
       onClose={close}
-      aside={aside}
       footer={
         <>
           {saveError ? (
@@ -3480,7 +3750,7 @@ export function CreateProjectModal({
             className="btn primary"
             type="button"
             data-guide="project.save"
-            disabled={busy || loadingOptions || missingFields.length > 0 || planIssues.length > 0 || datesInvalid}
+            disabled={createDisabled}
             onClick={() => {
               void submit();
             }}
@@ -3491,320 +3761,8 @@ export function CreateProjectModal({
         </>
       }
     >
-      <div className="project-create">
-        {loadError ? (
-          <LoadError
-            message={t(loadError)}
-            retry={() => {
-              setLoadError("");
-              setLoadingOptions(true);
-              setOptionsRevision((value) => value + 1);
-            }}
-          />
-        ) : null}
-        {step(1, "ProjectCreate.stepSource")}
-        {canChooseSource ? (
-          <div className="seg-control" role="group" aria-label={t("CRM.projectSource")} data-guide="project.source">
-            <button
-              type="button"
-              className={standalone ? "" : "on"}
-              aria-pressed={!standalone}
-              disabled={busy}
-              onClick={() => {
-                setSaveError("");
-                setWithoutEstimate(false);
-              }}
-            >
-              {t("CRM.projectFromEstimate")}
-            </button>
-            <button
-              type="button"
-              className={standalone ? "on" : ""}
-              aria-pressed={standalone}
-              disabled={busy}
-              onClick={() => {
-                setSaveError("");
-                setWithoutEstimate(true);
-              }}
-            >
-              {t("CRM.projectWithoutEstimate")}
-            </button>
-          </div>
-        ) : null}
-        {loadingOptions ? (
-          <p role="status">{t("CRM.loading")}</p>
-        ) : standalone ? null : !estimates.length ? (
-          <p className="alert warn">{t("CRM.noEligibleEstimate")}</p>
-        ) : initialEstimateId && !estimates.some((e) => e.id === initialEstimateId) ? (
-          <p className="alert warn">{t("CRM.sourceUnavailable")}</p>
-        ) : null}
-        {step(2, "ProjectCreate.stepInfo")}
-        {!page && !loadingOptions && (missingFields.length || planIssues.length) ? (
-          <p role="status">
-            {t("CRM.missingProjectFields")}: {[...missingFields.map((field) => t(field)), ...planIssues].join(", ")}
-          </p>
-        ) : null}
-        <div className="form-grid">
-          {standalone ? (
-            <>
-              {/* Typed search, not a long select: the customer list runs to hundreds of names. */}
-              <div className="field span-2" data-guide="project.from">
-                <span>
-                  <LocalizedText text={"Customer *"} />
-                </span>
-                <SearchSelect
-                  value={form.customerId ? String(form.customerId) : ""}
-                  required
-                  disabled={busy}
-                  options={bootstrap.customers.map((item) => ({
-                    value: String(item.id),
-                    label: `${item.code} — ${item.name}`,
-                    detail: [item.nameTh, item.nameEn, item.nameJa].filter((name) => name && name !== item.name).join(" / "),
-                  }))}
-                  onChange={(value) => update({ customerId: Number(value) || 0, contactIds: [], endUserCustomerId: null })}
-                  label={t("Customer *")}
-                  placeholder={t("CRM.searchCustomer")}
-                  noMatchText={t("CRM.noMatch")}
-                  clearLabel={t("CRM.clearChoice")}
-                  showLabel={t("CRM.showOptions")}
-                  moreText={t("CRM.listCut")}
-                />
-              </div>
-              <label className="field span-2">
-                <span>
-                  <LocalizedText text={"Project name *"} />
-                </span>
-                <input required maxLength={300} value={form.projectName ?? ""} onChange={(event) => update({ projectName: event.target.value })} />
-              </label>
-              <label className="field">
-                <span>
-                  <LocalizedText text={"Project type *"} />
-                </span>
-                <select disabled={busy} value={form.projectType ?? ""} onChange={(event) => update({ projectType: event.target.value })}>
-                  <option value="">{t("CRM.selectProjectType")}</option>
-                  {PROJECT_TYPES.map((type) => (
-                    <option key={type} value={type}>
-                      {t(type)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </>
-          ) : (
-            <>
-              <label className="field span-2" data-guide="project.from">
-                <span>
-                  <LocalizedText text={"Approved estimate *"} />
-                </span>
-                <select
-                  disabled={busy || loadingOptions || Boolean(initialEstimateId)}
-                  value={form.estimateId}
-                  onChange={(event) => {
-                    const estimate = estimates.find((item) => item.id === Number(event.target.value));
-                    const lead = engineers.some((member) => member.id === estimate?.ownerId) ? Number(estimate?.ownerId) : 0;
-                    update({
-                      estimateId: Number(event.target.value),
-                      leadEngineerId: lead,
-                      department: form.department || departmentOf(lead),
-                      site: estimate?.siteLocation ?? "",
-                      targetDelivery: estimate?.targetDelivery || form.targetDelivery,
-                      purchaseOrderNumber: estimate?.purchaseOrderNumber ?? "",
-                      purchaseOrderDate: estimate?.purchaseOrderDate || today(),
-                      contactIds: [],
-                    });
-                  }}
-                >
-                  <option value={0}>
-                    <LocalizedText text={"Select approved estimate"} />
-                  </option>
-                  {estimates.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.opportunityNo} · {item.number} — {item.projectName}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="field span-2">
-                <span>
-                  <LocalizedText text={"Customer"} />
-                </span>
-                <div className="info-strip">
-                  {customer?.name || selectedEstimate?.customerName || "—"}
-                  {!customer && selectedEstimate?.customerClosed ? <span className="muted"> · {t("CRM.customerClosed")}</span> : null}
-                </div>
-              </div>
-            </>
-          )}
-          <ErpProjectNumberField
-            guide="project.number"
-            required
-            disabled={busy}
-            value={form.projectNumber}
-            onChange={(projectNumber) => update({ projectNumber })}
-            onPick={(hit) =>
-              update({
-                projectNumber: hit.number,
-                ...(standalone && !(form.projectName ?? "").trim() && hit.name ? { projectName: hit.name } : {}),
-                ...(standalone && !form.customerId && hit.customerId && bootstrap.customers.some((item) => item.id === hit.customerId)
-                  ? { customerId: hit.customerId, contactIds: [], endUserCustomerId: null }
-                  : {}),
-              })
-            }
-          />
-          {standalone ? null : (
-            <div className="field span-2">
-              <span>{t("CRM.projectName")}</span>
-              <div className="info-strip">{selectedEstimate?.projectName || "—"}</div>
-            </div>
-          )}
-          <TeamSelect value={form.department ?? ""} departments={departments} onChange={(department) => update({ department })} />
-          <label className="field" data-guide="project.people">
-            <span>
-              <LocalizedText text={"Project manager *"} />
-            </span>
-            <select value={form.managerId} onChange={(event) => update({ managerId: Number(event.target.value) })}>
-              <option value={0}>{t("CRM.selectProjectManager")}</option>
-              {managers.map((member) => (
-                <option key={member.id} value={member.id}>
-                  {member.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field">
-            <span>
-              <LocalizedText text={"Lead engineer *"} />
-            </span>
-            <select
-              value={form.leadEngineerId}
-              onChange={(event) => {
-                const lead = Number(event.target.value);
-                update({ leadEngineerId: lead, department: form.department || departmentOf(lead) });
-              }}
-            >
-              <option value={0}>{t("CRM.selectLeadEngineer")}</option>
-              {engineers.map((member) => (
-                <option key={member.id} value={member.id}>
-                  {member.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field" data-guide="project.po">
-            <span>
-              <LocalizedText text={"Customer PO number *"} />
-            </span>
-            <input required maxLength={100} value={form.purchaseOrderNumber} onChange={(event) => update({ purchaseOrderNumber: event.target.value })} />
-          </label>
-          <label className="field">
-            <span>
-              <LocalizedText text={"PO date *"} />
-            </span>
-            <DateInput value={form.purchaseOrderDate} onChange={(event) => update({ purchaseOrderDate: event.target.value })} />
-          </label>
-          <label className="field span-4">
-            <span>
-              <LocalizedText text={"Site *"} />
-            </span>
-            <input required maxLength={300} value={form.site} onChange={(event) => update({ site: event.target.value })} />
-          </label>
-          {standalone ? (
-            <EndUserCompanyField
-              bootstrap={bootstrap}
-              customerId={customerId}
-              value={form.endUserCustomerId ?? null}
-              disabled={busy || !customerId}
-              onChange={(endUserCustomerId) => update({ endUserCustomerId })}
-              refreshBootstrap={refreshBootstrap}
-              notify={notify}
-            />
-          ) : null}
-        </div>
-        <ContactPicker customerId={customerId} value={form.contactIds ?? []} onChange={(contactIds) => update({ contactIds })} />
-        {step(3, "ProjectCreate.stepPlan")}
-        {canPlan ? (
-          <>
-            {page ? <p className="muted pcp-note">{t("ProjectCreate.planExcel")}</p> : null}
-            <MasterPlanSection
-              rows={headings}
-              onChange={(change) => {
-                setSaveError("");
-                setHeadings(change);
-              }}
-              templates={templates}
-            />
-            <TeamPlanSection
-              rows={headings}
-              onChange={(change) => {
-                setSaveError("");
-                setHeadings(change);
-              }}
-              people={bootstrap.team}
-            />
-            <NotBrokenDownNote headings={headings} />
-          </>
-        ) : (
-          <p className="muted pcp-note">{t("ProjectCreate.planLater")}</p>
-        )}
-        {planned ? (
-          <div className="info-strip" role="note">
-            <Icon name="calendar" />
-            <span>
-              {t("CRM.projectSpanFromPlan")}
-              {span ? `: ${formatDate(span.start)} – ${formatDate(span.finish)}` : ""}
-            </span>
-          </div>
-        ) : (
-          <div className="form-grid two">
-            <label className="field">
-              <span>
-                <LocalizedText text={"Start date *"} />
-              </span>
-              <DateInput required value={form.startDate} onChange={(event) => update({ startDate: event.target.value })} />
-            </label>
-            <label className="field">
-              <span>
-                <LocalizedText text={"Target delivery *"} />
-              </span>
-              <DateInput required min={form.startDate} value={form.targetDelivery} onChange={(event) => update({ targetDelivery: event.target.value })} />
-            </label>
-          </div>
-        )}
-        {step(4, "ProjectCreate.stepPayments")}
-        <PaymentChecklist value={form.paymentsReceived ?? []} onChange={(paymentsReceived) => update({ paymentsReceived })} />
-        <details>
-          <summary>{t("CRM.projectOptionalDetails")}</summary>
-          <div className="form-grid two">
-            {standalone ? null : (
-              <div className="span-2">
-                <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <input type="checkbox" checked={inheritEndUser} disabled={busy} onChange={(event) => setInheritEndUser(event.target.checked)} />
-                  <LocalizedText text={"ใช้ End user จาก Inquiry ต้นทาง / Inherit from Inquiry"} />
-                </label>
-              </div>
-            )}
-            {!standalone && !inheritEndUser ? (
-              <EndUserCompanyField
-                bootstrap={bootstrap}
-                customerId={customerId}
-                value={form.endUserCustomerId ?? null}
-                disabled={busy}
-                onChange={(endUserCustomerId) => update({ endUserCustomerId })}
-                refreshBootstrap={refreshBootstrap}
-                notify={notify}
-              />
-            ) : null}
-            <label className="field span-2">
-              <span>
-                <LocalizedText text={"Remark"} />
-              </span>
-              <textarea rows={3} maxLength={20000} value={form.remark || ""} onChange={(event) => update({ remark: event.target.value })} />
-            </label>
-          </div>
-        </details>
-        <p className="muted">{t("CRM.projectPlanLater")}</p>
-      </div>
-    </Shell>
+      {body}
+    </Modal>
   );
 }
 

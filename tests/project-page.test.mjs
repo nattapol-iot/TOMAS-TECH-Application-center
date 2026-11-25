@@ -40,3 +40,17 @@ test("the Cost tab: views, four figures that open them, the man-day curve, by ta
   const copy = await source("app/system/production/project-cost-copy.ts");
   for (const key of ["Cost.view.overview", "Cost.view.tasks", "Cost.view.people", "Cost.view.bought", "Cost.curveTitle", "Cost.noHours"]) assert.ok(copy.includes(`"${key}"`), key);
 });
+
+test("Create project as a page: head, source choice and the right-hand column on @tomas-tc/ui (task doc 5.4)", async () => {
+  const core = await source("app/system/production/CoreScreens.tsx");
+  const kit = await source("app/system/tomas-ui/ProjectCreateParts.tsx");
+  for (const part of ["ProjectCreateHead", "ProjectCreateSource", "ProjectCreateAside"])
+    assert.ok(core.includes(`const ${part} = lazy(() => import("../tomas-ui/ProjectCreateParts")`), `${part} loads with the page`);
+  // The page and the dialog press the same Create, held back by the same missing fields.
+  assert.match(core, /const createDisabled = busy \|\| loadingOptions \|\| missingFields\.length > 0 \|\| planIssues\.length > 0 \|\| datesInvalid;/);
+  assert.match(core, /<ProjectCreateAside[\s\S]*?disabled=\{createDisabled\}[\s\S]*?onCreate=\{\(\) => void submit\(\)\}/);
+  assert.match(core, /data-guide="project\.save"\s+disabled=\{createDisabled\}/, "the dialog keeps its own Create");
+  for (const mark of ["projectCreate.aside", "project.save"]) assert.ok(kit.includes(`data-guide="${mark}"`), mark);
+  assert.ok(kit.includes(`guide="project.source"`), "the source choice keeps its guide mark");
+  assert.match(core, /<div className="project-create-page" data-guide="projectCreate\.page">/);
+});
