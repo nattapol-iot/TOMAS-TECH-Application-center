@@ -193,7 +193,7 @@ test("review fixes: one progress-report definition, a locked signing read and a 
   assert.match(read("backend-node/src/routes/projects.ts"), /u\.field IN\(\$\{PROGRESS_REPORT_FIELDS_SQL\}\) THEN u\.occurred_at END\) last_progress_at/);
   assert.match(read("backend-node/src/routes/signing.ts"), /FROM dbo\.project_docs d\$\{transaction \? " WITH \(UPDLOCK, HOLDLOCK\)" : ""\}/);
   const migration = read("database/migrations/069_withdraw_project_document.sql");
-  assert.match(migration, /IF @document_id IS NULL OR @project_id IS NULL OR @actor IS NULL OR @expected_row_version IS NULL\n\s+THROW 51696,/);
+  assert.match(migration, /IF @document_id IS NULL OR @project_id IS NULL OR @actor IS NULL OR @expected_row_version IS NULL\r?\n\s+THROW 51696,/);
   assert.match(migration, /CREATE INDEX IX_document_files_project_doc ON dbo\.document_files\(project_doc_id\);/);
   assert.match(migration, /CREATE INDEX IX_signature_marks_scan_doc ON dbo\.signature_marks\(scan_project_doc_id\);/);
   assert.equal((migration.match(/THROW 51695,/g) ?? []).length, 1, "each THROW number names one failure");

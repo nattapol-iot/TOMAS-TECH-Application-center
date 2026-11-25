@@ -3353,12 +3353,12 @@ const SITE_MONITOR: Guide = {
   },
   minutes: 2,
   permissions: ["monitor.read"],
-  views: ["site-monitor", "installed-base"],
-  invite: "site-monitor",
+  views: ["monitor", "installed-base"],
+  invite: "monitor",
   browse: true,
   steps: [
     menu(
-      "site-monitor",
+      "monitor",
       { th: "เปิดเมนู Site Monitor", en: "Open Site Monitor", jp: "「サイトモニター」を開く" },
       {
         th: "ทุกไซต์ที่ติดตั้ง TMT Control Panel อยู่ที่นี่ คลิกที่เมนูที่ไฮไลต์อยู่",
@@ -3370,7 +3370,7 @@ const SITE_MONITOR: Guide = {
       target: "mon.sites",
       action: "click",
       clickOn: "tbody tr",
-      view: "site-monitor",
+      view: "monitor",
       title: { th: "เปิดไซต์", en: "Open a site", jp: "サイトを開く" },
       body: {
         th: "คลิกแถวของไซต์ที่จะดู สีบอกว่าไซต์ไหนมีปัญหา",
@@ -3381,7 +3381,7 @@ const SITE_MONITOR: Guide = {
     {
       target: "mon.problems",
       action: "next",
-      view: "site-monitor",
+      view: "monitor",
       title: { th: "ปัญหาที่ยังเปิดอยู่", en: "Open problems", jp: "未解決の問題" },
       body: { th: "ปัญหาที่ระบบเจอและยังไม่ได้แก้ เรียงจากรุนแรงที่สุด", en: "Problems found and not yet fixed, most severe first.", jp: "検出されて未解決の問題が重大度順に並びます。" },
       missing: { th: "ไซต์นี้ไม่มีปัญหาค้าง กด 'ถัดไป'", en: "No open problems at this site. Press Next.", jp: "このサイトに未解決の問題はありません。「次へ」を押します。" },
@@ -3389,7 +3389,7 @@ const SITE_MONITOR: Guide = {
     {
       target: "mon.programs",
       action: "next",
-      view: "site-monitor",
+      view: "monitor",
       title: { th: "โปรแกรมและ Service", en: "Programs & services", jp: "プログラムとサービス" },
       body: {
         th: "สถานะของแต่ละโปรแกรม คนที่มีสิทธิ์สั่ง Start, Stop หรือ Restart จากที่นี่ได้โดยไม่ต้องไปหน้างาน",
@@ -3400,7 +3400,7 @@ const SITE_MONITOR: Guide = {
     {
       target: "mon.responsible",
       action: "next",
-      view: "site-monitor",
+      view: "monitor",
       title: { th: "ผู้ดูแล", en: "Responsible people", jp: "担当者" },
       body: {
         th: "ผู้ดูแลลำดับ 1-2-3 ได้อีเมลตามลำดับเมื่อมีปัญหาและยังไม่มีคนรับเรื่อง",
@@ -3411,7 +3411,7 @@ const SITE_MONITOR: Guide = {
     {
       target: "mon.logs",
       action: "next",
-      view: "site-monitor",
+      view: "monitor",
       title: { th: "Log", en: "Logs", jp: "ログ" },
       body: {
         th: "Log ที่ TMT Control Panel ส่งมา ค้นหาได้ ใช้ดูว่าเกิดอะไรก่อนมีปัญหา",
@@ -3422,7 +3422,7 @@ const SITE_MONITOR: Guide = {
     {
       target: "mon.alerts",
       action: "next",
-      view: "site-monitor",
+      view: "monitor",
       title: { th: "แจ้งเตือน LINE / Teams", en: "LINE / Teams alerts", jp: "LINE / Teams 通知" },
       body: {
         th: "ผู้ดูแล Site ตั้งให้ปัญหาส่งเข้ากลุ่ม LINE หรือช่อง Teams ได้ กด ส่งทดสอบ เพื่อเช็กว่าข้อความไปถึง",
@@ -3449,11 +3449,10 @@ const FLEET_SCRIPT: Guide = {
   },
   minutes: 3,
   permissions: ["monitor.read", "monitor.script"],
-  views: ["fleet"],
-  invite: "fleet",
+  views: ["monitor"],
   steps: [
     menu(
-      "fleet",
+      "monitor",
       { th: "เปิดเมนู Fleet", en: "Open Fleet", jp: "「フリート」を開く" },
       {
         th: "ทุกเครื่องของทุก Site อยู่ในตารางเดียว คลิกที่เมนูที่ไฮไลต์อยู่",
@@ -3464,7 +3463,7 @@ const FLEET_SCRIPT: Guide = {
     {
       target: "fleet.search",
       action: "next",
-      view: "fleet",
+      view: "monitor",
       title: { th: "หาเครื่อง", en: "Find the machines", jp: "マシンを探す" },
       body: {
         th: "พิมพ์ชื่อเครื่อง Site หรือ TMTDesk ID หรือกรองตาม Site เวอร์ชัน และ เฉพาะที่มีปัญหา",
@@ -3476,7 +3475,7 @@ const FLEET_SCRIPT: Guide = {
       target: "fleet.table",
       action: "click",
       clickOn: "tbody input",
-      view: "fleet",
+      view: "monitor",
       title: { th: "เลือกเครื่อง", en: "Select machines", jp: "マシンを選ぶ" },
       body: {
         th: "ติ๊กช่องหน้าเครื่องที่จะรันสคริปต์ เลือกได้หลายเครื่อง",
@@ -3487,7 +3486,7 @@ const FLEET_SCRIPT: Guide = {
     {
       target: "fleet.runScript",
       action: "click",
-      view: "fleet",
+      view: "monitor",
       title: { th: "รันสคริปต์", en: "Run script", jp: "スクリプトを実行" },
       body: { th: "กด รันสคริปต์ ในแถบที่ขึ้นมา", en: "Press Run script in the bar that appeared.", jp: "表示されたバーの「スクリプトを実行」を押します。" },
       missing: {
@@ -3499,14 +3498,14 @@ const FLEET_SCRIPT: Guide = {
     {
       target: "fleet.scriptTitle",
       action: "next",
-      view: "fleet",
+      view: "monitor",
       title: { th: "ตั้งชื่องาน", en: "Name the job", jp: "ジョブ名" },
       body: { th: "ชื่อที่บอกว่าสคริปต์ทำอะไร ผู้อนุมัติจะเห็นชื่อนี้", en: "A name that says what the script does; the approver sees it.", jp: "スクリプトの内容が分かる名前。承認者に表示されます。" },
     },
     {
       target: "fleet.scriptBody",
       action: "next",
-      view: "fleet",
+      view: "monitor",
       title: { th: "เขียนสคริปต์", en: "Write the script", jp: "スクリプトを書く" },
       body: {
         th: "เลือก PowerShell หรือ cmd และเวลาหมด ไม่เกิน 64 KB อย่าใส่รหัสผ่านลงไป",
@@ -3517,7 +3516,7 @@ const FLEET_SCRIPT: Guide = {
     {
       target: "fleet.scriptSend",
       action: "click",
-      view: "fleet",
+      view: "monitor",
       title: { th: "ส่งขออนุมัติ", en: "Send for approval", jp: "承認を依頼" },
       body: {
         th: "กด ส่งขออนุมัติ อีกคนต้องอนุมัติก่อนเครื่องจะรัน ถ้าแค่ฝึก กด ยกเลิก แทน",
@@ -3539,19 +3538,18 @@ const COMMAND_CENTER: Guide = {
   },
   minutes: 2,
   permissions: ["monitor.read"],
-  views: ["command-center"],
-  invite: "command-center",
+  views: ["monitor"],
   browse: true,
   steps: [
     menu(
-      "command-center",
+      "monitor",
       { th: "เปิดเมนู Command Center", en: "Open Command Center", jp: "「コマンドセンター」を開く" },
       { th: "คลิกที่เมนูที่ไฮไลต์อยู่", en: "Click the highlighted menu entry.", jp: "強調表示のメニューをクリックします。" },
     ),
     {
       target: "ops.kpis",
       action: "next",
-      view: "command-center",
+      view: "monitor",
       title: { th: "ตัวเลขสำคัญ", en: "Headline numbers", jp: "主要指標" },
       body: {
         th: "Site และเครื่องที่ออนไลน์ ปัญหาที่เปิดอยู่ TMTDesk ที่ปกติ และ Session รีโมตที่เปิดอยู่",
@@ -3562,7 +3560,7 @@ const COMMAND_CENTER: Guide = {
     {
       target: "ops.map",
       action: "next",
-      view: "command-center",
+      view: "monitor",
       title: { th: "แผนที่", en: "The map", jp: "地図" },
       body: {
         th: "จุดเขียวปกติ เหลืองต้องดู แดงวิกฤต จุดที่กระพือมีปัญหาเปิดอยู่ คลิกจุดเพื่อดูรายละเอียดและรีโมต",
@@ -3573,7 +3571,7 @@ const COMMAND_CENTER: Guide = {
     {
       target: "ops.feed",
       action: "next",
-      view: "command-center",
+      view: "monitor",
       title: { th: "ปัญหาล่าสุด", en: "Incident feed", jp: "インシデント" },
       body: {
         th: "ปัญหาที่เปิดอยู่ก่อน แล้วปัญหาที่แก้ใน 24 ชั่วโมง พร้อมอายุของปัญหา",
@@ -3584,7 +3582,7 @@ const COMMAND_CENTER: Guide = {
     {
       target: "ops.top",
       action: "next",
-      view: "command-center",
+      view: "monitor",
       title: { th: "เครื่องที่โหลดสูง", en: "Busiest machines", jp: "高負荷のマシン" },
       body: {
         th: "สลับ CPU, RAM, Disk (ปุ่ม 1 2 3) เส้นเล็กคือย้อนหลังหนึ่งชั่วโมง",
@@ -3595,7 +3593,7 @@ const COMMAND_CENTER: Guide = {
     {
       target: "ops.spotlight",
       action: "next",
-      view: "command-center",
+      view: "monitor",
       title: { th: "สปอตไลต์", en: "Spotlight", jp: "スポットライト" },
       body: {
         th: "เมื่อไม่มีใครใช้จอ จะวนแสดง Site ที่มีปัญหา ปุ่ม ← → เลื่อนเอง",
@@ -3606,7 +3604,7 @@ const COMMAND_CENTER: Guide = {
     {
       target: "ops.tv",
       action: "next",
-      view: "command-center",
+      view: "monitor",
       title: { th: "โหมดทีวี", en: "TV mode", jp: "TV モード" },
       body: { th: "เต็มจอสำหรับทีวีหรือจอติดผนัง (ปุ่ม F) กด Esc เพื่อออก", en: "Full screen for a TV or wall monitor (key F); Esc leaves it.", jp: "テレビや壁掛け画面向けの全画面（F キー）。Esc で終了。" },
     },

@@ -68,9 +68,7 @@ test("production workspace exposes API-backed menus with Inquiry as the intake e
     "Knowledge Hub",
     "Download Center",
     "Site Monitor",
-    // Fleet and the Command Center wall screen sit beside Site Monitor (migration 133).
-    "Fleet",
-    "Command Center",
+    // Fleet is a tab and Command Center is a separate route inside MonitorScreen (monitor consolidation).
     "Installed Base",
     // Every label is a dictionary key, never a literal in one language: the
     // intake and opportunity entries once carried raw Thai and showed Thai to

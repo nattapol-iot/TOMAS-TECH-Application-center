@@ -114,14 +114,14 @@ test("every Fleet, Script, Ops and Alerts key the screens ask for has Thai, Engl
   for (const [key, copy] of Object.entries(FLEET_COPY)) for (const lang of ["th", "en", "jp"]) assert.ok(copy[lang]?.trim(), `${key} ${lang}`);
 });
 
-test("Fleet and Command Center are lazy menu screens beside Site Monitor, and the dark look stays scoped", async () => {
+test("Fleet is a tab of MonitorScreen and Command Center is a separate route; the dark look stays scoped", async () => {
   const [lazy, shell, css, fleetCss, center] = await Promise.all([
     source("app/system/production/LazyScreens.tsx"), source("app/system/ProductionApp.tsx"), source("app/system/production/command-center.css"),
     source("app/system/production/fleet.css"), source("app/system/production/CommandCenterScreen.tsx"),
   ]);
   assert.match(lazy, /export const FleetScreen = dynamic\(\(\) => import\("\.\/FleetScreen"\)\.then\(\(m\) => m\.FleetScreen\), screen\);/);
   assert.match(lazy, /export const CommandCenterScreen = dynamic\(\(\) => import\("\.\/CommandCenterScreen"\)\.then\(\(m\) => m\.CommandCenterScreen\), screen\);/);
-  assert.match(shell, /\{view === "fleet" \? <FleetScreen bootstrap=\{bootstrap\} notify=\{setToast\} \/> : null\}/);
+  assert.match(shell, /\{view === "monitor" \|\| view === "site-monitor" \|\| view === "fleet" \? <MonitorScreen bootstrap=\{bootstrap\} notify=\{setToast\} \/> : null\}/);
   assert.match(shell, /\{view === "command-center" \? <CommandCenterScreen notify=\{setToast\} \/> : null\}/);
   assert.match(center, /import "\.\/command-center\.css";/);
   // Every rule of the wall screen lives under .ops-center (or a keyframe / media block), and no colour is invented.

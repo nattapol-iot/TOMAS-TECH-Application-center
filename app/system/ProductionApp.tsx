@@ -73,9 +73,8 @@ import {
   ProductionKnowledgeHub,
   DownloadCenterScreen,
   GuideLayer,
-  SiteMonitorScreen,
-  FleetScreen,
   CommandCenterScreen,
+  MonitorScreen,
   DesignSystemScreen,
   InstalledBaseScreen,
   ProductionMaterialIssues,
@@ -147,6 +146,7 @@ type View =
   | "manual"
   | "support"
   | "downloads"
+  | "monitor"
   | "site-monitor"
   | "fleet"
   | "command-center"
@@ -226,9 +226,7 @@ const NAV: { group?: string; items: NavItem[] }[] = [
       { view: "stamps", label: "Company Stamps", icon: "lock", permission: "signing.read" },
       { view: "schedule-templates", label: "Master Schedule", icon: "calendar" },
       { view: "installed-base", label: "Installed Base", icon: "layers", permission: "asset.read" },
-      { view: "site-monitor", label: "Site Monitor", icon: "cpu", permission: "monitor.read" },
-      { view: "fleet", label: "Fleet", icon: "table", permission: "monitor.read" },
-      { view: "command-center", label: "Command Center", icon: "maximize", permission: "monitor.read" },
+      { view: "monitor", label: "Site Monitor", icon: "cpu", permission: "monitor.read" },
     ],
   },
   // Lean procurement (owner 2026-11-19): one entry for everyone, Approvals for approvers. BOM is a tab of the PR screen. The
@@ -1756,8 +1754,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
               {view === "downloads" ? (
                 <DownloadCenterScreen canManage={bootstrap.permissions.includes("master.read")} canManageRepositories={bootstrap.permissions.includes("repository.write")} notify={setToast} />
               ) : null}
-              {view === "site-monitor" ? <SiteMonitorScreen bootstrap={bootstrap} notify={setToast} /> : null}
-              {view === "fleet" ? <FleetScreen bootstrap={bootstrap} notify={setToast} /> : null}
+              {view === "monitor" || view === "site-monitor" || view === "fleet" ? <MonitorScreen bootstrap={bootstrap} notify={setToast} /> : null}
               {view === "command-center" ? <CommandCenterScreen notify={setToast} /> : null}
               {view === "design-system" ? <DesignSystemScreen notify={setToast} /> : null}
               {view === "installed-base" ? (

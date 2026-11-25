@@ -37,6 +37,7 @@ const uuid = (v: unknown) => {
 // "<view>-<tab>" keys are the sub-views screens report through useActivitySubView (app/system/use-activity-presence.ts).
 const modules = new Set([
   "downloads",
+  "monitor",
   "site-monitor",
   "installed-base",
   "design-system",
