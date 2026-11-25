@@ -185,9 +185,9 @@ test("the Punchlist is the issue batch page alone, Pegasus-styled on this page o
   assert.doesNotMatch(css.replace(/--pg-[\w-]+/g, ""), /var\(--(?!pg-)/, "only --pg-* tokens");
 });
 
-test("issues show on the Plan Gantt apart from the plan, in My Work and on the team's load", async () => {
+test("issues show in My Work and on the team's load", async () => {
+  // The Team Plan Gantt that drew them under the plan rows is gone (2026-11-25): the plan is edited on the Sheet.
   const plan = await source("app/system/production/PlanningPricingScreens.tsx");
-  assert.match(plan, /const chartRows = memberView \? memberRows : \[\.\.\.ganttRows, \.\.\.issueRows\];/);
   assert.match(plan, /<MyIssuesPanel notify=\{notify\} openIssueBatch=\{openIssueBatch\} \/>/);
   const workload = await source("backend-node/src/resource-workload.ts");
   assert.match(workload, /WHERE i\.state IN\(N'Open',N'Doing'\) AND i\.assignee_id IS NOT NULL AND i\.plan_start IS NOT NULL/);

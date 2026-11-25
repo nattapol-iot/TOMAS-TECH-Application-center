@@ -10,16 +10,16 @@ const i18n = read("app/system/i18n.ts");
 test("a plan row that cannot be deleted keeps a dimmed bin that says why (SUP-2026-00014)", () => {
   const block = plan.slice(plan.indexOf("const deleteBlock"), plan.indexOf("const deleteRow"));
   assert.ok(block.length > 300, "deleteBlock / binFor moved");
-  for (const key of ["Plan.deleteOthers", "Plan.deleteProgress", "Plan.deleteDetail", "Plan.deletePending", "Plan.deleteResourcePlan", "Plan.deleteFiltered"])
+  for (const key of ["Plan.deleteOthers", "Plan.deleteProgress", "Plan.deleteDetail", "Plan.deletePending", "Plan.deleteResourcePlan"])
     assert.match(block, new RegExp(`"${key.replace(".", "\\.")}"`), key);
   // A blocked row explains instead of deleting; a reader who cannot change the plan sees no bin at all.
   assert.match(block, /if \(block\) \{\s*const reason = uiText\(block\);\s*return \{ label: uiText\("Plan\.deleteRow"\), reason, onRemove: \(\) => notify\(/);
-  assert.match(block, /if \(!changesPlan \|\| movePending \|\| saving \|\| draftBusy\) return undefined;/);
+  assert.match(block, /if \(!changesPlan \|\| saving\) return undefined;/);
   // The chart marks the blocked bin and shows the reason as its tooltip.
   assert.match(gantt, /remove\?: \{ label: string; onRemove: \(\) => void; reason\?: string \}/);
   assert.match(gantt, /className=\{`gantt-remove\$\{row\.remove\.reason \? " blocked" : ""\}`\}/);
   assert.match(gantt, /title=\{row\.remove\.reason \?\? row\.remove\.label\}/);
-  for (const key of ["Plan.deletePending", "Plan.deleteResourcePlan", "Plan.deleteFiltered"]) {
+  for (const key of ["Plan.deletePending", "Plan.deleteResourcePlan"]) {
     // An entry may wrap over several lines; it runs from its key to the closing brace.
     const line = i18n.slice(i18n.indexOf(`"${key}"`), i18n.indexOf("}", i18n.indexOf(`"${key}"`)) + 1);
     assert.ok(line && /en: "/.test(line) && /th: "/.test(line) && /jp: "/.test(line), `${key} in three languages`);

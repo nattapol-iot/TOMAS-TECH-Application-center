@@ -82,7 +82,7 @@ test("the plan is edited in one place: the row opens the Plan tab, Edit project 
   assert.match(core, /const planBody = \(\) => \(planChanged \? \{ \.\.\.planPayload\(headings\), scheduleVersion: plan!\.snapshot\.scheduleVersion \} : \{\}\);/);
   // The Plan tab opens on the Sheet; old links to the Team or Master Plan view open the Sheet too.
   assert.match(plan, /useLinkedState<PlanLevel>\("level", "sheet", PLAN_LEVEL_LINK\)/);
-  assert.match(plan, /const level: PlanLevel = storedLevel === "team" \|\| storedLevel === "master" \? "sheet" : storedLevel;/);
+  assert.match(plan, /const PLAN_LEVEL_LINK = choiceLink<PlanLevel>\(\["sheet", "member", "people"\]\);/);
   assert.match(plan, /\{\(\["sheet", "member", "people"\] as const\)\.map\(/);
   assert.doesNotMatch(plan, /useProjectLook|EditMasterPlanModal|plan-table|setPlanTableOpen|data-guide="plan\.add"/);
 });

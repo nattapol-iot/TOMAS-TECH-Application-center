@@ -105,12 +105,10 @@ test("a task under a heading may wait with no member, with or without a discipli
   assert.match(cost, /const typed = LABOR_DISCIPLINES\.find\(\(discipline\) => discipline !== "Unassigned" && discipline === row\.discipline\);\s*if \(typed\) return \[typed\];/);
 });
 
-test("the Plan asks for people by discipline: the draft row's select and the Edit row field", async () => {
-  const plan = await source("app/system/production/PlanningPricingScreens.tsx");
-  assert.match(plan, /<optgroup label=\{t\("Plan\.waitingForPeople"\)\}>/);
-  assert.match(plan, /onChange=\{\(event\) => onChange\(draftPick\(event\.target\.value\)\)\}/);
+test("the Plan asks for people by discipline: the Sheet's member select and the Edit row field", async () => {
+  const [plan, sheet] = await Promise.all([source("app/system/production/PlanningPricingScreens.tsx"), source("app/system/production/PlanSheet.tsx")]);
+  assert.match(sheet, /<optgroup label=\{t\("Plan\.waitingForPeople"\)\}>/);
   assert.doesNotMatch(plan, /Plan\.memberRequired/, "a member is optional (owner, 2026-11-24)");
-  assert.match(plan, /\.\.\.\(parent && current\.discipline \? \{ discipline: current\.discipline \} : \{\}\),/);
   assert.match(plan, /<label className="field span-2" data-guide="plan\.discipline">/);
 });
 

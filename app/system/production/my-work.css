@@ -22,11 +22,21 @@
   box-shadow: var(--shadow-xs);
 }
 
-.estimate-work-group { border-left: 4px solid var(--n-300); }
-.estimate-work-group.urgency-0 { border-left-color: var(--amber); }
-.estimate-work-group.urgency-1 { border-left-color: var(--red); }
-.estimate-work-group.urgency-2 { border-left-color: var(--navy-800); }
-.estimate-work-group.urgency-3 { border-left-color: var(--blue); }
+.estimate-work-group {
+  border-left: 4px solid var(--n-300);
+}
+.estimate-work-group.urgency-0 {
+  border-left-color: var(--amber);
+}
+.estimate-work-group.urgency-1 {
+  border-left-color: var(--red);
+}
+.estimate-work-group.urgency-2 {
+  border-left-color: var(--navy-800);
+}
+.estimate-work-group.urgency-3 {
+  border-left-color: var(--blue);
+}
 
 .estimate-work-group-head {
   display: flex;
@@ -110,11 +120,21 @@
   box-shadow: var(--shadow-xs);
 }
 
-.schedule-work-group.urgency-0 { border-left-color: var(--amber); }
-.schedule-work-group.urgency-1 { border-left-color: var(--red); }
-.schedule-work-group.urgency-2 { border-left-color: var(--navy-800); }
-.schedule-work-group.urgency-3 { border-left-color: var(--blue); }
-.schedule-work-group.urgency-4 { border-left-color: var(--violet); }
+.schedule-work-group.urgency-0 {
+  border-left-color: var(--amber);
+}
+.schedule-work-group.urgency-1 {
+  border-left-color: var(--red);
+}
+.schedule-work-group.urgency-2 {
+  border-left-color: var(--navy-800);
+}
+.schedule-work-group.urgency-3 {
+  border-left-color: var(--blue);
+}
+.schedule-work-group.urgency-4 {
+  border-left-color: var(--violet);
+}
 
 .schedule-work-group-head {
   display: flex;
@@ -161,7 +181,9 @@
   white-space: nowrap;
 }
 
-.work-group-focus strong { color: var(--ink); }
+.work-group-focus strong {
+  color: var(--ink);
+}
 
 .work-group-owner {
   padding: 7px 12px;
@@ -202,9 +224,17 @@
   list-style: none;
 }
 
-.my-task-more-actions > summary::-webkit-details-marker { display: none; }
-.my-task-more-actions > summary svg { width: 13px; height: 13px; }
-.my-task-more-actions[open] > summary { background: var(--n-100); color: var(--ink); }
+.my-task-more-actions > summary::-webkit-details-marker {
+  display: none;
+}
+.my-task-more-actions > summary svg {
+  width: 13px;
+  height: 13px;
+}
+.my-task-more-actions[open] > summary {
+  background: var(--n-100);
+  color: var(--ink);
+}
 
 .my-task-more-actions > div {
   display: flex;
@@ -328,226 +358,865 @@
 }
 
 @media (max-width: 820px) {
-  .estimate-work-sections { grid-template-columns: minmax(0, 1fr); }
-  .work-group-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .estimate-work-sections {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .work-group-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
   .estimate-work-group-head,
   .new-assignment-main,
-  .schedule-work-group-head { align-items: flex-start; flex-direction: column; }
-  .estimate-work-group-actions { justify-content: flex-start; }
-  .schedule-work-group-actions { justify-content: flex-start; }
-  .work-group-focus { text-align: left; }
-  .my-work-related-links { justify-content: flex-start; flex-wrap: wrap; }
+  .schedule-work-group-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .estimate-work-group-actions {
+    justify-content: flex-start;
+  }
+  .schedule-work-group-actions {
+    justify-content: flex-start;
+  }
+  .work-group-focus {
+    text-align: left;
+  }
+  .my-work-related-links {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
 }
 
 @media (max-width: 520px) {
   .estimate-work-group-actions .btn,
   .new-assignment-main .btn,
   .schedule-work-group-actions .btn,
-  .new-assignment-child .btn { width: 100%; justify-content: center; }
+  .new-assignment-child .btn {
+    width: 100%;
+    justify-content: center;
+  }
   .estimate-work-group-actions,
-  .schedule-work-group-actions { width: 100%; }
-  .work-group-metrics { grid-template-columns: minmax(0, 1fr); }
-  .new-assignment-child { align-items: stretch; flex-direction: column; }
+  .schedule-work-group-actions {
+    width: 100%;
+  }
+  .work-group-metrics {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .new-assignment-child {
+    align-items: stretch;
+    flex-direction: column;
+  }
 }
 
 /* The one-click progress control sits on the card face; a Blocked choice asks for its reason in place. */
-.my-task-card > .quick-controls { padding: 8px 0 2px; }
-.blocked-reason { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.blocked-reason input { height: 28px; min-width: 220px; border: 1px solid var(--red); border-radius: var(--r-sm); padding: 0 8px; font-size: var(--fs-2xs); }
+.my-task-card > .quick-controls {
+  padding: 8px 0 2px;
+}
+.blocked-reason {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.blocked-reason input {
+  height: 28px;
+  min-width: 220px;
+  border: 1px solid var(--red);
+  border-radius: var(--r-sm);
+  padding: 0 8px;
+  font-size: var(--fs-2xs);
+}
 
 /* Progress dialog: the first rule an entry breaks, beside the disabled Save. */
-.progress-problem { display: inline-flex; align-items: center; gap: 6px; color: var(--amber-text, var(--ink-soft)); font-size: var(--fs-xs); }
-.progress-problem .icon { width: 14px; height: 14px; }
+.progress-problem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--amber-text, var(--ink-soft));
+  font-size: var(--fs-xs);
+}
+.progress-problem .icon {
+  width: 14px;
+  height: 14px;
+}
 
 /* Projects > Plan: a compact summary line over the Gantt, not a row of KPI cards. */
-.plan-project-picker { flex: 0 1 380px; min-width: 240px; }
+.plan-project-picker {
+  flex: 0 1 380px;
+  min-width: 240px;
+}
 /* The plan in brief, on the picker's row: health, progress, period and delivery. */
-.plan-brief { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-size: var(--fs-xs); }
-.plan-brief strong { font-variant-numeric: tabular-nums; }
-.plan-brief em { margin-left: 6px; color: var(--muted); font-size: var(--fs-2xs); font-style: normal; }
-.plan-brief em.late { color: var(--red); font-weight: 650; }
-.plan-brief-loading { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
-.gantt-zoom-select select { height: 28px; font-size: var(--fs-xs); }
+.plan-brief {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  font-size: var(--fs-xs);
+}
+.plan-brief strong {
+  font-variant-numeric: tabular-nums;
+}
+.plan-brief em {
+  margin-left: 6px;
+  color: var(--muted);
+  font-size: var(--fs-2xs);
+  font-style: normal;
+}
+.plan-brief em.late {
+  color: var(--red);
+  font-weight: 650;
+}
+.plan-brief-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+}
+.gantt-zoom-select select {
+  height: 28px;
+  font-size: var(--fs-xs);
+}
 /* The man-hour budget line under the summary (PlanManHours.tsx): estimated against planned man-days, one bar and a few figures. */
-.plan-manhours { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 20px; margin: -4px 0 12px; padding: 8px 14px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); font-size: var(--fs-xs); }
-.plan-manhours > span { display: inline-flex; align-items: baseline; gap: 6px; }
-.plan-manhours small { color: var(--muted); font-size: var(--fs-2xs); }
-.plan-manhours strong { font-variant-numeric: tabular-nums; }
-.plan-manhours em { color: var(--muted); font-style: normal; font-size: var(--fs-2xs); }
-.plan-manhours > .plan-manhours-title { align-items: center; font-weight: 650; }
-.plan-manhours > .plan-manhours-bar { align-self: center; width: 160px; height: 8px; overflow: hidden; border-radius: var(--r-pill); background: var(--n-150); }
-.plan-manhours-bar i { display: block; height: 100%; border-radius: var(--r-pill); background: var(--blue); }
-.plan-manhours-bar.over i { background: var(--red); }
-.plan-manhours > .over strong, .plan-manhours > .over small { color: var(--red); }
+.plan-manhours {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 20px;
+  margin: -4px 0 12px;
+  padding: 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  font-size: var(--fs-xs);
+}
+.plan-manhours > span {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.plan-manhours small {
+  color: var(--muted);
+  font-size: var(--fs-2xs);
+}
+.plan-manhours strong {
+  font-variant-numeric: tabular-nums;
+}
+.plan-manhours em {
+  color: var(--muted);
+  font-style: normal;
+  font-size: var(--fs-2xs);
+}
+.plan-manhours > .plan-manhours-title {
+  align-items: center;
+  font-weight: 650;
+}
+.plan-manhours > .plan-manhours-bar {
+  align-self: center;
+  width: 160px;
+  height: 8px;
+  overflow: hidden;
+  border-radius: var(--r-pill);
+  background: var(--n-150);
+}
+.plan-manhours-bar i {
+  display: block;
+  height: 100%;
+  border-radius: var(--r-pill);
+  background: var(--blue);
+}
+.plan-manhours-bar.over i {
+  background: var(--red);
+}
+.plan-manhours > .over strong,
+.plan-manhours > .over small {
+  color: var(--red);
+}
 /* Edit row: the note under Plan man-days once the row takes the plan over the budget (.field small is muted by default). */
-.field small.plan-manhours-over { color: var(--red-text); font-weight: 650; }
-.plan-manhours > .plan-manhours-warn { align-items: center; color: var(--amber-text); }
+.field small.plan-manhours-over {
+  color: var(--red-text);
+  font-weight: 650;
+}
+.plan-manhours > .plan-manhours-warn {
+  align-items: center;
+  color: var(--amber-text);
+}
 /* Hours confirmed in My Work (WorkDaysPanel.tsx). */
-.plan-manhours > .plan-manhours-actual strong { color: var(--green-text); }
-.plan-manhours > .plan-manhours-none { color: var(--muted); }
-.plan-manhours > .plan-manhours-split { gap: 4px 12px; flex-wrap: wrap; color: var(--ink-soft); font-size: var(--fs-2xs); }
-.plan-manhours > .plan-manhours-source { align-items: center; margin-left: auto; }
-@media (max-width: 720px) { .plan-manhours > .plan-manhours-source { margin-left: 0; } }
-.plan-manhours > .plan-manhours-outsourced strong { color: var(--green-text); }
+.plan-manhours > .plan-manhours-actual strong {
+  color: var(--green-text);
+}
+.plan-manhours > .plan-manhours-none {
+  color: var(--muted);
+}
+.plan-manhours > .plan-manhours-split {
+  gap: 4px 12px;
+  flex-wrap: wrap;
+  color: var(--ink-soft);
+  font-size: var(--fs-2xs);
+}
+.plan-manhours > .plan-manhours-source {
+  align-items: center;
+  margin-left: auto;
+}
+@media (max-width: 720px) {
+  .plan-manhours > .plan-manhours-source {
+    margin-left: 0;
+  }
+}
+.plan-manhours > .plan-manhours-outsourced strong {
+  color: var(--green-text);
+}
 
 /* Projects > Plan, People table (PlanPeopleGrid.tsx): the plan rows against the days, people per day typed like a spreadsheet. */
-.people-grid { --people-own: var(--blue); --people-out: #15803d; display: grid; gap: 8px; min-width: 0; padding: 10px 12px 12px; }
-.people-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; font-size: var(--fs-xs); }
-.people-sum { display: inline-flex; align-items: baseline; gap: 6px; }
-.people-sum small, .people-sum em { color: var(--muted); font-size: var(--fs-2xs); font-style: normal; }
-.people-sum strong { font-size: var(--fs-md); font-variant-numeric: tabular-nums; }
-.people-sum strong.own { color: var(--blue-text); }
-.people-sum strong.out { color: var(--green-text); }
-.people-state { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: var(--fs-2xs); }
-.people-state em { font-style: normal; }
-.people-error { color: var(--red-text); }
-.people-bar .gantt-nav { margin-left: auto; }
-.people-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; color: var(--ink-soft); font-size: var(--fs-2xs); }
-.people-legend > span { display: inline-flex; align-items: center; gap: 5px; }
-.people-key { width: 14px; height: 12px; border: 1px solid transparent; border-radius: 3px; }
-.people-key.own { background: var(--people-own); }
-.people-key.out { background: var(--people-out); }
-.people-key.unset { border-color: var(--line); background: repeating-linear-gradient(135deg, var(--n-300) 0 3px, transparent 3px 6px); }
-.people-key.we { border-color: var(--line); background: var(--n-100); }
-.people-key.hol { background: var(--amber-line); }
-.people-key.clash { border: 2px solid var(--amber); background: var(--surface); }
-.people-legend > .people-tips { flex-basis: 100%; color: var(--muted); }
-.people-legend > .people-board-off { color: var(--amber-text); }
-.people-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); }
-.people-table { width: max-content; border-collapse: separate; border-spacing: 0; font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
-.people-table th, .people-table td { box-sizing: border-box; height: 28px; padding: 0; border-right: 1px solid var(--line-soft); border-bottom: 1px solid var(--line-soft); background: var(--surface); font-weight: 400; }
-.people-table thead th { height: 22px; background: var(--n-50); color: var(--ink-soft); font-size: var(--fs-2xs); font-weight: 600; text-align: center; white-space: nowrap; }
-.people-table thead th.people-week { padding-left: 6px; border-right-color: var(--line); text-align: left; }
-.people-table .people-wbs, .people-table .people-name, .people-table .people-src, .people-table .people-ppl, .people-table .people-md { position: sticky; z-index: 2; }
-.people-table .people-wbs { left: 0; width: 52px; min-width: 52px; color: var(--muted); text-align: center; }
-.people-table .people-name { left: 52px; width: 270px; min-width: 270px; max-width: 270px; padding: 3px 8px; text-align: left; }
-.people-table .people-src { left: 322px; width: 104px; min-width: 104px; text-align: center; }
-.people-table .people-ppl { left: 426px; width: 50px; min-width: 50px; text-align: center; }
-.people-table .people-md { left: 476px; width: 60px; min-width: 60px; padding-right: 8px; border-right: 2px solid var(--line); font-weight: 600; text-align: right; }
-.people-table thead .people-name, .people-table thead .people-md { padding: 0; text-align: center; }
-.people-table .people-day { position: relative; width: 24px; min-width: 24px; max-width: 24px; text-align: center; }
-.people-table .people-day.we { background: var(--n-100); }
-.people-table .people-day.hol { background: var(--amber-soft); }
-.people-table .people-day.sun { border-right-color: var(--line); }
-.people-table .people-day.today { box-shadow: inset 2px 0 0 var(--red); }
-.people-table .people-total td { background: var(--n-50); font-weight: 700; }
-.people-table .people-total.own td { color: var(--blue-text); font-weight: 600; }
-.people-table .people-total.out td { border-bottom: 2px solid var(--line); color: var(--green-text); font-weight: 600; }
-.people-table .people-row.heading td { background: var(--n-150); font-weight: 700; }
-.people-table .people-row.rollup td { background: var(--n-50); font-weight: 600; }
-.people-table .people-row.heading td.span { background: var(--n-300); }
-.people-table .people-row.rollup td.span { background: var(--n-200); }
-.people-table .people-row.work td.people-day.edit { cursor: cell; }
-.people-table .people-row.work td.people-day.own { background: var(--people-own); color: #fff; font-weight: 600; }
-.people-table .people-row.work td.people-day.out { background: var(--people-out); color: #fff; font-weight: 600; }
-.people-table .people-row.work td.people-day.unset { background: repeating-linear-gradient(135deg, var(--n-300) 0 3px, var(--surface) 3px 6px); }
-.people-table td.people-day.clash { outline: 2px solid var(--amber); outline-offset: -2px; }
-.people-table .people-day.long { font-size: var(--fs-3xs); letter-spacing: -0.03em; }
-.people-table td.people-day.sel { box-shadow: inset 0 0 0 1px var(--blue-hover); }
-.people-table td.people-day.sel::after { content: ""; position: absolute; inset: 0; background: rgb(37 99 235 / 0.16); pointer-events: none; }
-.people-cell { position: absolute; inset: 0; z-index: 1; box-sizing: border-box; width: 100%; height: 100%; margin: 0; padding: 0; border: 0; border-radius: 0; outline: 2px solid var(--blue-hover); outline-offset: -2px; background: var(--surface); color: var(--ink); font: inherit; font-weight: 700; text-align: center; }
-.people-task { display: block; width: 100%; white-space: normal; padding: 0; border: 0; background: none; color: inherit; font: inherit; line-height: 1.35; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
-.people-task:hover { color: var(--blue-text); }
-.people-task:focus-visible { border-radius: 3px; outline: 2px solid var(--blue); outline-offset: 1px; }
-.people-row.work .people-task { color: var(--ink-soft); }
-.people-supplier { box-sizing: border-box; width: 100%; height: 20px; margin-top: 2px; padding: 0 6px; border: 1px dashed var(--line); border-radius: var(--r-xs); background: transparent; color: var(--green-text); font: inherit; font-size: var(--fs-2xs); }
-.people-supplier-text { display: block; color: var(--green-text); font-size: var(--fs-2xs); }
-.people-seg { display: inline-flex; overflow: hidden; border: 1px solid var(--line); border-radius: var(--r-sm); }
-.people-seg button { padding: 2px 7px; border: 0; background: var(--surface); color: var(--muted); font: inherit; font-size: var(--fs-2xs); line-height: 1.5; cursor: pointer; }
-.people-seg button + button { border-left: 1px solid var(--line); }
-.people-seg button.on.own, .people-mark.own { background: var(--blue-soft); color: var(--blue-text); font-weight: 700; }
-.people-seg button.on.out, .people-mark.out { background: var(--green-soft); color: var(--green-text); font-weight: 700; }
-.people-seg button:focus-visible, .people-usual:focus, .people-supplier:focus { outline: 2px solid var(--blue); outline-offset: -1px; }
-.people-mark { padding: 2px 8px; border-radius: var(--r-pill); font-size: var(--fs-2xs); }
-.people-usual { box-sizing: border-box; width: 34px; height: 22px; padding: 0; border: 1px solid var(--line-soft); border-radius: var(--r-xs); background: var(--surface); color: var(--ink); font: inherit; text-align: center; }
-@media (max-width: 760px) {
-  .people-table .people-wbs { display: none; }
-  .people-table .people-name { left: 0; width: 150px; min-width: 150px; max-width: 150px; }
-  .people-table .people-src, .people-table .people-ppl, .people-table .people-md { position: static; }
+.people-grid {
+  --people-own: var(--blue);
+  --people-out: #15803d;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px 12px 12px;
 }
-.plan-gantt { display: flex; flex-direction: column; gap: 10px; padding: 12px 0 0; }
-.plan-gantt-controls, .plan-gantt > .gantt-legend { padding: 0 14px; }
-.plan-gantt-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
+.people-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 18px;
+  font-size: var(--fs-xs);
+}
+.people-sum {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.people-sum small,
+.people-sum em {
+  color: var(--muted);
+  font-size: var(--fs-2xs);
+  font-style: normal;
+}
+.people-sum strong {
+  font-size: var(--fs-md);
+  font-variant-numeric: tabular-nums;
+}
+.people-sum strong.own {
+  color: var(--blue-text);
+}
+.people-sum strong.out {
+  color: var(--green-text);
+}
+.people-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: var(--fs-2xs);
+}
+.people-state em {
+  font-style: normal;
+}
+.people-error {
+  color: var(--red-text);
+}
+.people-bar .gantt-nav {
+  margin-left: auto;
+}
+.people-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  color: var(--ink-soft);
+  font-size: var(--fs-2xs);
+}
+.people-legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.people-key {
+  width: 14px;
+  height: 12px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+}
+.people-key.own {
+  background: var(--people-own);
+}
+.people-key.out {
+  background: var(--people-out);
+}
+.people-key.unset {
+  border-color: var(--line);
+  background: repeating-linear-gradient(135deg, var(--n-300) 0 3px, transparent 3px 6px);
+}
+.people-key.we {
+  border-color: var(--line);
+  background: var(--n-100);
+}
+.people-key.hol {
+  background: var(--amber-line);
+}
+.people-key.clash {
+  border: 2px solid var(--amber);
+  background: var(--surface);
+}
+.people-legend > .people-tips {
+  flex-basis: 100%;
+  color: var(--muted);
+}
+.people-legend > .people-board-off {
+  color: var(--amber-text);
+}
+.people-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+.people-table {
+  width: max-content;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
+}
+.people-table th,
+.people-table td {
+  box-sizing: border-box;
+  height: 28px;
+  padding: 0;
+  border-right: 1px solid var(--line-soft);
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--surface);
+  font-weight: 400;
+}
+.people-table thead th {
+  height: 22px;
+  background: var(--n-50);
+  color: var(--ink-soft);
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  text-align: center;
+  white-space: nowrap;
+}
+.people-table thead th.people-week {
+  padding-left: 6px;
+  border-right-color: var(--line);
+  text-align: left;
+}
+.people-table .people-wbs,
+.people-table .people-name,
+.people-table .people-src,
+.people-table .people-ppl,
+.people-table .people-md {
+  position: sticky;
+  z-index: 2;
+}
+.people-table .people-wbs {
+  left: 0;
+  width: 52px;
+  min-width: 52px;
+  color: var(--muted);
+  text-align: center;
+}
+.people-table .people-name {
+  left: 52px;
+  width: 270px;
+  min-width: 270px;
+  max-width: 270px;
+  padding: 3px 8px;
+  text-align: left;
+}
+.people-table .people-src {
+  left: 322px;
+  width: 104px;
+  min-width: 104px;
+  text-align: center;
+}
+.people-table .people-ppl {
+  left: 426px;
+  width: 50px;
+  min-width: 50px;
+  text-align: center;
+}
+.people-table .people-md {
+  left: 476px;
+  width: 60px;
+  min-width: 60px;
+  padding-right: 8px;
+  border-right: 2px solid var(--line);
+  font-weight: 600;
+  text-align: right;
+}
+.people-table thead .people-name,
+.people-table thead .people-md {
+  padding: 0;
+  text-align: center;
+}
+.people-table .people-day {
+  position: relative;
+  width: 24px;
+  min-width: 24px;
+  max-width: 24px;
+  text-align: center;
+}
+.people-table .people-day.we {
+  background: var(--n-100);
+}
+.people-table .people-day.hol {
+  background: var(--amber-soft);
+}
+.people-table .people-day.sun {
+  border-right-color: var(--line);
+}
+.people-table .people-day.today {
+  box-shadow: inset 2px 0 0 var(--red);
+}
+.people-table .people-total td {
+  background: var(--n-50);
+  font-weight: 700;
+}
+.people-table .people-total.own td {
+  color: var(--blue-text);
+  font-weight: 600;
+}
+.people-table .people-total.out td {
+  border-bottom: 2px solid var(--line);
+  color: var(--green-text);
+  font-weight: 600;
+}
+.people-table .people-row.heading td {
+  background: var(--n-150);
+  font-weight: 700;
+}
+.people-table .people-row.rollup td {
+  background: var(--n-50);
+  font-weight: 600;
+}
+.people-table .people-row.heading td.span {
+  background: var(--n-300);
+}
+.people-table .people-row.rollup td.span {
+  background: var(--n-200);
+}
+.people-table .people-row.work td.people-day.edit {
+  cursor: cell;
+}
+.people-table .people-row.work td.people-day.own {
+  background: var(--people-own);
+  color: #fff;
+  font-weight: 600;
+}
+.people-table .people-row.work td.people-day.out {
+  background: var(--people-out);
+  color: #fff;
+  font-weight: 600;
+}
+.people-table .people-row.work td.people-day.unset {
+  background: repeating-linear-gradient(135deg, var(--n-300) 0 3px, var(--surface) 3px 6px);
+}
+.people-table td.people-day.clash {
+  outline: 2px solid var(--amber);
+  outline-offset: -2px;
+}
+.people-table .people-day.long {
+  font-size: var(--fs-3xs);
+  letter-spacing: -0.03em;
+}
+.people-table td.people-day.sel {
+  box-shadow: inset 0 0 0 1px var(--blue-hover);
+}
+.people-table td.people-day.sel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgb(37 99 235 / 0.16);
+  pointer-events: none;
+}
+.people-cell {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  outline: 2px solid var(--blue-hover);
+  outline-offset: -2px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+  text-align: center;
+}
+.people-task {
+  display: block;
+  width: 100%;
+  white-space: normal;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  line-height: 1.35;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.people-task:hover {
+  color: var(--blue-text);
+}
+.people-task:focus-visible {
+  border-radius: 3px;
+  outline: 2px solid var(--blue);
+  outline-offset: 1px;
+}
+.people-row.work .people-task {
+  color: var(--ink-soft);
+}
+.people-supplier {
+  box-sizing: border-box;
+  width: 100%;
+  height: 20px;
+  margin-top: 2px;
+  padding: 0 6px;
+  border: 1px dashed var(--line);
+  border-radius: var(--r-xs);
+  background: transparent;
+  color: var(--green-text);
+  font: inherit;
+  font-size: var(--fs-2xs);
+}
+.people-supplier-text {
+  display: block;
+  color: var(--green-text);
+  font-size: var(--fs-2xs);
+}
+.people-seg {
+  display: inline-flex;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+}
+.people-seg button {
+  padding: 2px 7px;
+  border: 0;
+  background: var(--surface);
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--fs-2xs);
+  line-height: 1.5;
+  cursor: pointer;
+}
+.people-seg button + button {
+  border-left: 1px solid var(--line);
+}
+.people-seg button.on.own,
+.people-mark.own {
+  background: var(--blue-soft);
+  color: var(--blue-text);
+  font-weight: 700;
+}
+.people-seg button.on.out,
+.people-mark.out {
+  background: var(--green-soft);
+  color: var(--green-text);
+  font-weight: 700;
+}
+.people-seg button:focus-visible,
+.people-usual:focus,
+.people-supplier:focus {
+  outline: 2px solid var(--blue);
+  outline-offset: -1px;
+}
+.people-mark {
+  padding: 2px 8px;
+  border-radius: var(--r-pill);
+  font-size: var(--fs-2xs);
+}
+.people-usual {
+  box-sizing: border-box;
+  width: 34px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-xs);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  text-align: center;
+}
+@media (max-width: 760px) {
+  .people-table .people-wbs {
+    display: none;
+  }
+  .people-table .people-name {
+    left: 0;
+    width: 150px;
+    min-width: 150px;
+    max-width: 150px;
+  }
+  .people-table .people-src,
+  .people-table .people-ppl,
+  .people-table .people-md {
+    position: static;
+  }
+}
+.plan-gantt {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 0 0;
+}
+.plan-gantt-controls,
+.plan-gantt > .gantt-legend {
+  padding: 0 14px;
+}
+.plan-gantt-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
 /* Full screen is the page's own overlay (useFullscreen overlayOnly): above the top bar and menus, below the task
    drawer and dialogs (.overlay, 100) and toasts (200); the chart scrolls inside it instead of stopping at 70vh. */
-.plan-gantt.is-fullscreen { position: fixed; inset: 0; z-index: 90; overflow: hidden; padding-bottom: 0; background: var(--surface); }
-.plan-gantt.is-fullscreen .gantt { flex: 1; min-height: 0; max-height: none; }
-.plan-gantt-title { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 0 14px; font-size: var(--fs-md); }
-.plan-gantt-title strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 650; }
-/* The last bar dragged to new dates, with its undo. */
-.plan-undo { margin: 0 14px; }
-.plan-undo > span { flex: 1; min-width: 0; }
+.plan-gantt.is-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  overflow: hidden;
+  padding-bottom: 0;
+  background: var(--surface);
+}
+.plan-gantt.is-fullscreen .gantt {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+}
+.plan-gantt-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 0 14px;
+  font-size: var(--fs-md);
+}
+.plan-gantt-title strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 650;
+}
 /* By member: what the amber and red marks under a person's bars mean. */
-.plan-member-note { margin: 0 14px; flex-wrap: wrap; gap: 6px 10px; }
-.plan-member-key { display: inline-block; width: 18px; height: 5px; border-radius: var(--r-pill); }
-.plan-member-key.amber { background: var(--amber); }
-.plan-member-key.red { background: var(--red); }
-.plan-member-other { margin-right: 4px; padding: 0 6px; border-radius: var(--r-pill); background: var(--n-100); color: var(--ink-soft); font-size: var(--fs-3xs); font-weight: 600; }
-/* A row typed in place after a + (PlanRowDraftEditor): level, name, member and dates on one line, wrapping when narrow. */
-.plan-draft { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 0; }
-.plan-draft input, .plan-draft select { min-height: 30px; padding: 4px 8px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); color: var(--ink); font: inherit; font-size: var(--fs-xs); }
-.plan-draft input:focus, .plan-draft select:focus { border-color: var(--blue); outline: 2px solid var(--blue-line); outline-offset: 0; }
-.plan-draft-level { display: inline-flex; gap: 2px; }
-.plan-draft-name { flex: 1 1 220px; min-width: 160px; }
-.plan-draft-member { flex: 0 1 220px; min-width: 150px; }
-.plan-draft-dates { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); }
-.plan-draft-hint { flex-basis: 100%; color: var(--muted); font-size: var(--fs-3xs); }
-.plan-draft-error { flex-basis: 100%; color: var(--red-text); font-size: var(--fs-2xs); font-weight: 600; }
+.plan-member-note {
+  margin: 0 14px;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+.plan-member-key {
+  display: inline-block;
+  width: 18px;
+  height: 5px;
+  border-radius: var(--r-pill);
+}
+.plan-member-key.amber {
+  background: var(--amber);
+}
+.plan-member-key.red {
+  background: var(--red);
+}
+.plan-member-other {
+  margin-right: 4px;
+  padding: 0 6px;
+  border-radius: var(--r-pill);
+  background: var(--n-100);
+  color: var(--ink-soft);
+  font-size: var(--fs-3xs);
+  font-weight: 600;
+}
 
 /* The add and edit forms: a linked row's start, and the PICs' load over the row's dates (PlanPicLoad.tsx). */
-.plan-start-preview { align-self: end; margin: 0 0 8px; }
-.plan-pic-note { display: flex; align-items: center; gap: 8px; margin: 0; }
-.plan-pic-load { margin: 0; }
-.plan-pic-load.info { border-color: var(--blue-line); background: var(--blue-soft); color: var(--blue-text); }
-.plan-pic-load small { color: var(--ink-soft); }
-.plan-pic-loads { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 2px 0; padding: 0; list-style: none; }
-.plan-pic-loads li { white-space: nowrap; }
-.plan-pic-loads li.over { color: var(--red-text); font-weight: 600; }
-.plan-pic-freer { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; flex-direction: row; }
+.plan-start-preview {
+  align-self: end;
+  margin: 0 0 8px;
+}
+.plan-pic-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+.plan-pic-load {
+  margin: 0;
+}
+.plan-pic-load.info {
+  border-color: var(--blue-line);
+  background: var(--blue-soft);
+  color: var(--blue-text);
+}
+.plan-pic-load small {
+  color: var(--ink-soft);
+}
+.plan-pic-loads {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 2px 0;
+  padding: 0;
+  list-style: none;
+}
+.plan-pic-loads li {
+  white-space: nowrap;
+}
+.plan-pic-loads li.over {
+  color: var(--red-text);
+  font-weight: 600;
+}
+.plan-pic-freer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  flex-direction: row;
+}
 
 /* The task drawer. */
-.plan-facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 14px; margin: 0 0 14px; font-size: var(--fs-xs); }
-.plan-facts > div { display: contents; }
-.plan-facts dt { color: var(--muted); }
-.plan-facts dd { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; }
-.plan-facts dd .progress { min-width: 120px; }
-.plan-drawer-section { margin: 0 0 14px; }
-.plan-drawer-section h3 { margin: 0 0 8px; font-size: var(--fs-sm); }
-.plan-drawer-actions { margin: 0 0 16px; }
-.plan-history { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; font-size: var(--fs-xs); }
-.plan-history li { display: flex; flex-direction: column; gap: 3px; padding-bottom: 8px; border-bottom: 1px solid var(--line-soft); }
-.plan-history li > button { align-self: flex-start; }
-.plan-history-when { color: var(--muted); font-size: var(--fs-2xs); }
-.plan-project-history { margin: 0 0 12px; padding: 10px 14px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); }
-.plan-project-history summary { cursor: pointer; font-size: var(--fs-xs); font-weight: 650; }
-.plan-project-history .plan-history { margin-top: 10px; }
+.plan-facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 6px 14px;
+  margin: 0 0 14px;
+  font-size: var(--fs-xs);
+}
+.plan-facts > div {
+  display: contents;
+}
+.plan-facts dt {
+  color: var(--muted);
+}
+.plan-facts dd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+.plan-facts dd .progress {
+  min-width: 120px;
+}
+.plan-drawer-section {
+  margin: 0 0 14px;
+}
+.plan-drawer-section h3 {
+  margin: 0 0 8px;
+  font-size: var(--fs-sm);
+}
+.plan-drawer-actions {
+  margin: 0 0 16px;
+}
+.plan-history {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--fs-xs);
+}
+.plan-history li {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.plan-history li > button {
+  align-self: flex-start;
+}
+.plan-history-when {
+  color: var(--muted);
+  font-size: var(--fs-2xs);
+}
+.plan-project-history {
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+.plan-project-history summary {
+  cursor: pointer;
+  font-size: var(--fs-xs);
+  font-weight: 650;
+}
+.plan-project-history .plan-history {
+  margin-top: 10px;
+}
 
 @media (max-width: 720px) {
-  .plan-project-picker { min-width: 0; width: 100%; }
-  .blocked-reason input { min-width: 0; width: 100%; }
+  .plan-project-picker {
+    min-width: 0;
+    width: 100%;
+  }
+  .blocked-reason input {
+    min-width: 0;
+    width: 100%;
+  }
 }
 
 /* ── My Work in the Pegasus look (owner 2026-11-21, /pegasus-design) ──────────────────────────────────────────
    pegasus-skin.css styles the shared pieces under .pg-skin: page header, summary bar (C.2), tabs (D.6), toolbar,
    panels, buttons, badges and dialogs. These rules fit the blocks only My Work has: one hairline border, 8px radius,
    the urgency as a 3px left edge in the status colours (B.1: late red, blocked amber, waiting violet), 14px titles. */
-.my-work-pg .my-work-summary .pg-cell.red .pg-cell-value { color: var(--pg-red-fg); }
-.my-work-pg .my-work-summary .pg-cell.amber .pg-cell-value { color: var(--pg-amber-fg); }
-.my-work-pg .my-work-summary .pg-cell.violet .pg-cell-value { color: var(--pg-violet-fg); }
-.my-work-pg .my-work-summary .pg-cell[aria-pressed="true"] .pg-cell-value { color: var(--pg-primary); }
+.my-work-pg .my-work-summary .pg-cell.red .pg-cell-value {
+  color: var(--pg-red-fg);
+}
+.my-work-pg .my-work-summary .pg-cell.amber .pg-cell-value {
+  color: var(--pg-amber-fg);
+}
+.my-work-pg .my-work-summary .pg-cell.violet .pg-cell-value {
+  color: var(--pg-violet-fg);
+}
+.my-work-pg .my-work-summary .pg-cell[aria-pressed="true"] .pg-cell-value {
+  color: var(--pg-primary);
+}
 @media (min-width: 640px) and (max-width: 1023px) {
-  .my-work-pg .my-work-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .my-work-pg .my-work-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 /* Toolbar on the canvas: the filters, then the one search box at the right (0.3). */
-.my-work-pg .my-work-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.my-work-pg .my-work-toolbar .select-field { flex: 0 1 200px; min-width: 150px; }
-.my-work-pg .my-work-toolbar .my-work-project-filter { flex-basis: 280px; }
-.my-work-pg .my-work-toolbar .select-field select { width: 100%; max-width: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.my-work-pg .my-work-toolbar .search-field { margin-left: auto; }
+.my-work-pg .my-work-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.my-work-pg .my-work-toolbar .select-field {
+  flex: 0 1 200px;
+  min-width: 150px;
+}
+.my-work-pg .my-work-toolbar .my-work-project-filter {
+  flex-basis: 280px;
+}
+.my-work-pg .my-work-toolbar .select-field select {
+  width: 100%;
+  max-width: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.my-work-pg .my-work-toolbar .search-field {
+  margin-left: auto;
+}
 
 /* Work groups: the header is the toggle (chevron, reference, name), the figures one muted line under it. */
-.my-work-pg .work-group-list { gap: 8px; padding: 12px; }
+.my-work-pg .work-group-list {
+  gap: 8px;
+  padding: 12px;
+}
 .my-work-pg .schedule-work-group,
 .my-work-pg .estimate-work-group {
   border: 1px solid var(--pg-border);
@@ -556,73 +1225,251 @@
   background: var(--pg-background);
   box-shadow: none;
 }
-.my-work-pg :is(.schedule-work-group, .estimate-work-group).urgency-0 { border-left-color: var(--pg-amber-fg); }
-.my-work-pg :is(.schedule-work-group, .estimate-work-group).urgency-1 { border-left-color: var(--pg-red-fg); }
-.my-work-pg :is(.schedule-work-group, .estimate-work-group).urgency-2 { border-left-color: var(--pg-slate-fg); }
-.my-work-pg :is(.schedule-work-group, .estimate-work-group).urgency-3 { border-left-color: var(--pg-primary); }
-.my-work-pg :is(.schedule-work-group, .estimate-work-group).urgency-4 { border-left-color: var(--pg-violet-fg); }
+.my-work-pg :is(.schedule-work-group, .estimate-work-group).urgency-0 {
+  border-left-color: var(--pg-amber-fg);
+}
+.my-work-pg :is(.schedule-work-group, .estimate-work-group).urgency-1 {
+  border-left-color: var(--pg-red-fg);
+}
+.my-work-pg :is(.schedule-work-group, .estimate-work-group).urgency-2 {
+  border-left-color: var(--pg-slate-fg);
+}
+.my-work-pg :is(.schedule-work-group, .estimate-work-group).urgency-3 {
+  border-left-color: var(--pg-primary);
+}
+.my-work-pg :is(.schedule-work-group, .estimate-work-group).urgency-4 {
+  border-left-color: var(--pg-violet-fg);
+}
 .my-work-pg .schedule-work-group-head,
-.my-work-pg .estimate-work-group-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px 4px; border: 0; background: none; }
+.my-work-pg .estimate-work-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px 4px;
+  border: 0;
+  background: none;
+}
 .my-work-pg .schedule-work-group-toggle {
-  display: flex; align-items: flex-start; gap: 8px; flex: 1 1 auto; min-width: 0;
-  margin: -4px; padding: 4px; border: 0; border-radius: 6px; background: none;
-  color: inherit; font: inherit; text-align: left; cursor: pointer;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: -4px;
+  padding: 4px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
   transition: background-color 150ms var(--pg-ease);
 }
-.my-work-pg .schedule-work-group-toggle:hover { background: var(--pg-row-hover); }
-.my-work-pg .schedule-work-group-toggle:focus-visible { outline: none; box-shadow: var(--pg-focus); }
-.my-work-pg .schedule-work-group-toggle > svg { flex: none; width: 16px; height: 16px; margin-top: 3px; color: var(--pg-muted-fg); }
-.my-work-pg .schedule-work-group-title { display: grid; gap: 2px; min-width: 0; }
-.my-work-pg .schedule-work-group-title .estimate-work-reference { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; color: var(--pg-muted-fg); font-size: 12px; }
-.my-work-pg .schedule-work-group-title .estimate-work-reference strong { color: var(--pg-foreground); font-weight: 600; }
-.my-work-pg .schedule-work-group-name { overflow: hidden; color: var(--pg-foreground); font-size: 14px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
-.my-work-pg .schedule-work-group-project { overflow: hidden; color: var(--pg-muted-fg); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-.my-work-pg .schedule-work-group-actions,
-.my-work-pg .estimate-work-group-actions { display: flex; flex: none; align-items: center; gap: 8px; flex-wrap: nowrap; }
-.my-work-pg .work-group-focus { flex-basis: auto; max-width: 380px; color: var(--pg-muted-fg); font-size: 12px; text-align: right; }
-.my-work-pg .work-group-focus .pg-doclink { font-size: 12px; }
-.my-work-pg .work-group-metrics {
-  display: flex; flex-wrap: wrap; gap: 2px 14px;
-  padding: 0 12px 10px 36px; border: 0; background: none;
-  color: var(--pg-muted-fg); font-size: 12px; font-variant-numeric: tabular-nums;
+.my-work-pg .schedule-work-group-toggle:hover {
+  background: var(--pg-row-hover);
 }
-.my-work-pg .work-group-metrics > span { display: inline; min-width: 0; padding: 0; background: none; color: inherit; font-size: inherit; }
-.my-work-pg .work-group-metrics .danger-text { color: var(--pg-red-fg); font-weight: 600; }
-.my-work-pg .work-group-metrics .warning-text { color: var(--pg-amber-fg); font-weight: 600; }
+.my-work-pg .schedule-work-group-toggle:focus-visible {
+  outline: none;
+  box-shadow: var(--pg-focus);
+}
+.my-work-pg .schedule-work-group-toggle > svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-top: 3px;
+  color: var(--pg-muted-fg);
+}
+.my-work-pg .schedule-work-group-title {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.my-work-pg .schedule-work-group-title .estimate-work-reference {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  color: var(--pg-muted-fg);
+  font-size: 12px;
+}
+.my-work-pg .schedule-work-group-title .estimate-work-reference strong {
+  color: var(--pg-foreground);
+  font-weight: 600;
+}
+.my-work-pg .schedule-work-group-name {
+  overflow: hidden;
+  color: var(--pg-foreground);
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.my-work-pg .schedule-work-group-project {
+  overflow: hidden;
+  color: var(--pg-muted-fg);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.my-work-pg .schedule-work-group-actions,
+.my-work-pg .estimate-work-group-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+}
+.my-work-pg .work-group-focus {
+  flex-basis: auto;
+  max-width: 380px;
+  color: var(--pg-muted-fg);
+  font-size: 12px;
+  text-align: right;
+}
+.my-work-pg .work-group-focus .pg-doclink {
+  font-size: 12px;
+}
+.my-work-pg .work-group-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 14px;
+  padding: 0 12px 10px 36px;
+  border: 0;
+  background: none;
+  color: var(--pg-muted-fg);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.my-work-pg .work-group-metrics > span {
+  display: inline;
+  min-width: 0;
+  padding: 0;
+  background: none;
+  color: inherit;
+  font-size: inherit;
+}
+.my-work-pg .work-group-metrics .danger-text {
+  color: var(--pg-red-fg);
+  font-weight: 600;
+}
+.my-work-pg .work-group-metrics .warning-text {
+  color: var(--pg-amber-fg);
+  font-weight: 600;
+}
 .my-work-pg .schedule-work-group-items,
-.my-work-pg .estimate-work-sections { gap: 8px; padding: 10px 12px 12px; border-top: 1px solid var(--pg-divider); background: color-mix(in srgb, var(--pg-muted) 60%, var(--pg-background)); }
+.my-work-pg .estimate-work-sections {
+  gap: 8px;
+  padding: 10px 12px 12px;
+  border-top: 1px solid var(--pg-divider);
+  background: color-mix(in srgb, var(--pg-muted) 60%, var(--pg-background));
+}
 
 /* A task inside a group: the same card language. */
-.my-work-pg .my-task-card { border: 1px solid var(--pg-border); border-left: 3px solid var(--pg-border); border-radius: 8px; background: var(--pg-background); box-shadow: none; }
-.my-work-pg .my-task-card.late { border-left-color: var(--pg-red-fg); }
-.my-work-pg .my-task-card.blocked { border-left-color: var(--pg-amber-fg); }
-.my-work-pg .my-task-card h3 { color: var(--pg-foreground); font-size: 14px; font-weight: 600; }
-.my-work-pg .my-task-meta { color: var(--pg-muted-fg); font-size: 12px; }
+.my-work-pg .my-task-card {
+  border: 1px solid var(--pg-border);
+  border-left: 3px solid var(--pg-border);
+  border-radius: 8px;
+  background: var(--pg-background);
+  box-shadow: none;
+}
+.my-work-pg .my-task-card.late {
+  border-left-color: var(--pg-red-fg);
+}
+.my-work-pg .my-task-card.blocked {
+  border-left-color: var(--pg-amber-fg);
+}
+.my-work-pg .my-task-card h3 {
+  color: var(--pg-foreground);
+  font-size: 14px;
+  font-weight: 600;
+}
+.my-work-pg .my-task-meta {
+  color: var(--pg-muted-fg);
+  font-size: 12px;
+}
 
 /* My hours (WorkDaysPanel) in the same frame. */
-.my-work-pg .work-days { margin: 0; border-color: var(--pg-divider); border-radius: 8px; background: var(--pg-background); }
-.my-work-pg .work-days-title { color: var(--pg-foreground); font-size: 14px; font-weight: 600; }
-.my-work-pg .work-days-title svg { color: var(--pg-primary); }
-.my-work-pg .work-days-hint { color: var(--pg-muted-fg); }
-.my-work-pg .work-day { border-color: var(--pg-border); border-radius: 6px; }
-.my-work-pg .work-day:hover { border-color: color-mix(in srgb, var(--pg-primary) 40%, transparent); }
-.my-work-pg .work-day.confirmed { border-color: color-mix(in srgb, var(--pg-emerald-fg) 30%, transparent); background: var(--pg-success-bg); }
-.my-work-pg .work-day.confirmed .work-day-state { color: var(--pg-emerald-fg); }
-.my-work-pg .work-day.toConfirm { border-color: color-mix(in srgb, var(--pg-primary) 30%, transparent); background: var(--pg-primary-10); }
-.my-work-pg .work-day.toConfirm .work-day-state { color: var(--pg-primary); }
-.my-work-pg .work-day.empty { border-color: color-mix(in srgb, var(--pg-amber-fg) 30%, transparent); background: var(--pg-warning-bg); }
-.my-work-pg .work-day.empty .work-day-state { color: var(--pg-amber-fg); }
-.my-work-pg .work-day.off, .my-work-pg .work-day.future, .my-work-pg .work-day.closed { background: color-mix(in srgb, var(--pg-muted) 50%, var(--pg-background)); }
-.my-work-pg .work-day.today { box-shadow: inset 0 0 0 1px var(--pg-primary); }
+.my-work-pg .work-days {
+  margin: 0;
+  border-color: var(--pg-divider);
+  border-radius: 8px;
+  background: var(--pg-background);
+}
+.my-work-pg .work-days-title {
+  color: var(--pg-foreground);
+  font-size: 14px;
+  font-weight: 600;
+}
+.my-work-pg .work-days-title svg {
+  color: var(--pg-primary);
+}
+.my-work-pg .work-days-hint {
+  color: var(--pg-muted-fg);
+}
+.my-work-pg .work-day {
+  border-color: var(--pg-border);
+  border-radius: 6px;
+}
+.my-work-pg .work-day:hover {
+  border-color: color-mix(in srgb, var(--pg-primary) 40%, transparent);
+}
+.my-work-pg .work-day.confirmed {
+  border-color: color-mix(in srgb, var(--pg-emerald-fg) 30%, transparent);
+  background: var(--pg-success-bg);
+}
+.my-work-pg .work-day.confirmed .work-day-state {
+  color: var(--pg-emerald-fg);
+}
+.my-work-pg .work-day.toConfirm {
+  border-color: color-mix(in srgb, var(--pg-primary) 30%, transparent);
+  background: var(--pg-primary-10);
+}
+.my-work-pg .work-day.toConfirm .work-day-state {
+  color: var(--pg-primary);
+}
+.my-work-pg .work-day.empty {
+  border-color: color-mix(in srgb, var(--pg-amber-fg) 30%, transparent);
+  background: var(--pg-warning-bg);
+}
+.my-work-pg .work-day.empty .work-day-state {
+  color: var(--pg-amber-fg);
+}
+.my-work-pg .work-day.off,
+.my-work-pg .work-day.future,
+.my-work-pg .work-day.closed {
+  background: color-mix(in srgb, var(--pg-muted) 50%, var(--pg-background));
+}
+.my-work-pg .work-day.today {
+  box-shadow: inset 0 0 0 1px var(--pg-primary);
+}
 
 /* Phone width: the toolbar fields and the group header stack. */
 @media (max-width: 720px) {
   .my-work-pg .my-work-toolbar .select-field,
-  .my-work-pg .my-work-toolbar .search-field { flex: 1 1 100%; min-width: 0; margin-left: 0; }
+  .my-work-pg .my-work-toolbar .search-field {
+    flex: 1 1 100%;
+    min-width: 0;
+    margin-left: 0;
+  }
   .my-work-pg .schedule-work-group-head,
-  .my-work-pg .estimate-work-group-head { flex-direction: column; align-items: stretch; gap: 6px; }
+  .my-work-pg .estimate-work-group-head {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
   .my-work-pg .schedule-work-group-actions,
-  .my-work-pg .estimate-work-group-actions { justify-content: space-between; flex-wrap: wrap; padding-left: 24px; }
-  .my-work-pg .work-group-focus { max-width: none; text-align: left; }
-  .my-work-pg .work-group-metrics { padding-left: 36px; }
+  .my-work-pg .estimate-work-group-actions {
+    justify-content: space-between;
+    flex-wrap: wrap;
+    padding-left: 24px;
+  }
+  .my-work-pg .work-group-focus {
+    max-width: none;
+    text-align: left;
+  }
+  .my-work-pg .work-group-metrics {
+    padding-left: 36px;
+  }
 }
