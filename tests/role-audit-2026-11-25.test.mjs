@@ -318,3 +318,31 @@ test("screens decide on every held role, as the API does", async () => {
   assert.match(shell, /heldRoles\.some\(\(role\) => DASHBOARD_ROLES\.includes\(role\)\) \? \(/);
   assert.doesNotMatch(shell, /DASHBOARD_ROLES\.includes\(bootstrap\.user\.role\)/);
 });
+
+/*
+ * Owner 2026-11-25: "ให้ Sales Manager ใช้ CRM ได้ด้วย". Migration 053 granted the CRM to role codes that never existed
+ * ("Sales", "Manager"), so the Sales Manager had no CRM menu and no My Work.
+ */
+test("the Sales Manager uses the CRM: a Sales Engineer's permissions plus the team's deals (migration 136)", async () => {
+  const [migration, rollback, validation, deploy] = await Promise.all([
+    source("database/migrations/136_sales_manager_crm.sql"),
+    source("database/rollback/136_sales_manager_crm.rollback.sql"),
+    source("backend-node/src/migration-validation.ts"),
+    source("database/scripts/020_deploy_fresh_database.sql"),
+  ]);
+  const granted = ["crm.read", "crm.write", "crm.activity.write", "crm.contact.write", "crm.commercial.read", "crm.convert", "crm.read.team"];
+  assert.match(migration, /IF NOT EXISTS \(SELECT 1 FROM dbo\.schema_versions WHERE version = 135\)/);
+  assert.match(migration, /WHERE r\.code = N'Sales Manager'/);
+  assert.match(migration, new RegExp(`AND p\\.code IN \\(${granted.map((code) => `N'${code.replace(/\./g, "\\.")}'`).join(", ")}\\)`));
+  // Company-wide reading stays with Management and Admin, the CRM settings with Admin.
+  assert.doesNotMatch(migration, /N'crm\.read\.all'|N'crm\.configure'/);
+  assert.match(migration, /AND NOT EXISTS \(SELECT 1 FROM dbo\.role_permissions rp WHERE rp\.role_id = r\.id AND rp\.permission_id = p\.id\)/);
+  assert.match(migration, /VALUES \(136, N'Sales Manager CRM'\)/);
+  assert.match(validation, /\{ version: 136, fileName: "136_sales_manager_crm\.sql", name: "Sales Manager CRM" \}/);
+  assert.match(deploy, /:r database\/migrations\/135_leader_role\.sql\n:r database\/migrations\/136_sales_manager_crm\.sql/);
+  assert.match(rollback, /WHERE r\.code = N'Sales Manager'\s+AND p\.code IN \(N'crm\.read', N'crm\.write'/);
+
+  // With those permissions the CRM guides are offered to a Sales Manager too.
+  const offered = guidesFor(granted).map((guide) => guide.id);
+  for (const id of ["crm-deal-create", "crm-activity-followup", "crm-send-estimate"]) assert.ok(offered.includes(id), id);
+});
