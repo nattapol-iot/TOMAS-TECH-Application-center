@@ -1,17 +1,15 @@
-import type { CurrentUser } from "./types.js";
-
-/** Anything that carries at least a primary role code. */
-type RoleBearer = { role: string; roles?: string[] };
+/** Anything that carries at least a primary role code: a signed-in user, a team member on the screen, a stored actor. */
+export type RoleBearer = { role: string; roles?: readonly string[] };
 
 /**
  * Every role the value holds, primary first.
  *
- * `CurrentUserService` always fills `roles` from dbo.user_effective_roles. Actors
- * rebuilt from a stored row — a queued report job, a test double — may carry only the
- * primary role, and those must degrade to that one role rather than throw.
+ * `CurrentUserService` always fills `roles` from dbo.user_effective_roles, and so does the bootstrap for the screen's
+ * user and team. Actors rebuilt from a stored row — a queued report job, a test double — may carry only the primary
+ * role, and those must degrade to that one role rather than throw.
  */
 export function rolesOf(user: RoleBearer): string[] {
-  if (user.roles?.length) return user.roles;
+  if (user.roles?.length) return [...user.roles];
   return user.role ? [user.role] : [];
 }
 
@@ -23,7 +21,10 @@ export function rolesOf(user: RoleBearer): string[] {
  * `user.role` remains the primary role and is still the right value to stamp into
  * an audit row or to route a workflow step by.
  */
-export function hasRole(user: CurrentUser, ...codes: string[]): boolean {
+export function hasRole(user: RoleBearer, ...codes: string[]): boolean {
   const held = rolesOf(user);
   return codes.some((code) => held.includes(code));
 }
+
+/** Who may own an estimate or an inquiry. The routes' SQL names the same roles; the screens pick owners with it. */
+export const ESTIMATE_OWNER_ROLES = ["Engineer", "Leader", "Engineering Manager", "Admin"] as const;

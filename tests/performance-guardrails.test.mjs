@@ -42,7 +42,7 @@ test("production KPI UI is API-backed", async () => {
   assert.doesNotMatch(screen, /apiBacked|seedReviews|KPI summary exported/);
   // The landing tab follows the API's canManage (additional roles count), not the primary role alone:
   // a manager with no assessment of their own must not land on an empty "mine".
-  assert.ok(screen.includes('setTab(current => !data.canManage ? "mine" : current === "mine" && !ownAssessment ? "team" : current)'));
+  assert.ok(screen.includes('setTab((current) => (!data.canManage ? "mine" : current === "mine" && !ownAssessment ? "team" : current))'));
   assert.match(screen, /loadPerformanceOverview/);
   assert.match(screen, /updatePerformanceAssessment/);
   assert.match(screen, /completePerformanceAssessment/);

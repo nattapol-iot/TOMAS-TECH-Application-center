@@ -277,7 +277,7 @@ export function registerSiteVisitWorkflowRoutes(app: FastifyInstance, config: Ap
       user.input("id", sql.BigInt, engineerId);
       const engineer = (
         await user.query<{ name: string }>(
-          `SELECT u.name FROM dbo.users u INNER JOIN dbo.roles r ON r.id=u.role_id WHERE u.id=@id AND u.is_active=1 AND u.deleted_at IS NULL AND r.code IN(N'Engineer',N'Leader',N'Engineering Manager',N'Engineering Coordinator',N'Project Manager',N'Admin');`,
+          `SELECT u.name FROM dbo.users u WHERE u.id=@id AND u.is_active=1 AND u.deleted_at IS NULL AND EXISTS(SELECT 1 FROM dbo.user_effective_roles er WHERE er.user_id=u.id AND er.code IN(N'Engineer',N'Leader',N'Engineering Manager',N'Engineering Coordinator',N'Project Manager',N'Admin'));`,
         )
       ).recordset[0];
       if (!engineer) throw new ApiError(422, "invalid_reference", "The engineer must be an active engineering user.");

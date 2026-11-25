@@ -28,7 +28,7 @@ test("company stamps can be given their artwork from the Company Stamps screen",
   assert.match(imageRoute, /decodePng\(body\.imageBase64, "image_required"\)/);
   assert.match(imageRoute, /parseRowVersion\(body\.rowVersion\)/);
   assert.match(screen, /const canGrant = hasPermission\(bootstrap, "signing\.stamp\.grant"\);/);
-  assert.match(screen, /actions=\{canGrant && stamp\.status === "ACTIVE"[\s\S]{0,400}setArtworkFor\(stamp\)/);
+  assert.match(screen, /actions=\{\s*canGrant && stamp\.status === "ACTIVE"[\s\S]{0,400}setArtworkFor\(stamp\)/);
 
   // The client refuses what the server would refuse, with the same 2 MB limit.
   assert.match(route, /const MAX_IMAGE_BYTES = 2 \* 1024 \* 1024;/);
@@ -36,8 +36,15 @@ test("company stamps can be given their artwork from the Company Stamps screen",
   assert.match(screen, /file\.type !== "image\/png"/);
 
   // Every new string is translated.
-  for (const key of ["Upload artwork", "Replace artwork", "Artwork saved", "Selected artwork", "Only PNG images are accepted.",
-    "The image must be 2 MB or smaller.", "This image is printed wherever this stamp is applied. It cannot be downloaded again after upload, so keep the original file."]) {
+  for (const key of [
+    "Upload artwork",
+    "Replace artwork",
+    "Artwork saved",
+    "Selected artwork",
+    "Only PNG images are accepted.",
+    "The image must be 2 MB or smaller.",
+    "This image is printed wherever this stamp is applied. It cannot be downloaded again after upload, so keep the original file.",
+  ]) {
     assert.ok(screen.includes(`"${key}"`), `${key} is not used`);
     assert.match(copy, new RegExp(`"${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}": \\{\\s*"th": "[^"]+",\\s*"jp": "[^"]+"`), `${key} lacks th/jp`);
   }

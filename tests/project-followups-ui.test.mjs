@@ -94,7 +94,7 @@ test("project pickers list every project in scope instead of the first page of 1
   const signing = read("app/system/production/SigningScreens.tsx");
   const material = read("app/system/production/MaterialScreens.tsx");
   const admin = read("app/system/production/AdminAnalyticsScreens.tsx");
-  assert.match(signing, /useEndpoint<ProjectSummary\[\]>\(useCallback\(\(\) => listAllProjectsByNumber\(\), \[\]\)/);
+  assert.match(signing, /useEndpoint<ProjectSummary\[\]>\(\s*useCallback\(\(\) => listAllProjectsByNumber\(\), \[\]\)/);
   assert.doesNotMatch(signing, /listProjects\(\{ pageSize: 200 \}\)/);
   assert.match(material, /useEndpoint<ProjectPage>\(projectOverviewPath\(true\), \{ items: \[\] \}\)/);
   assert.match(admin, /void listAllProjectsByNumber\(\)/);

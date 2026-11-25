@@ -3,14 +3,7 @@ import sql from "mssql";
 import type { FastifyInstance } from "fastify";
 import type { AppConfig } from "../config.js";
 import { DatabaseCommitOutcomeUnknownError, type Database } from "../db.js";
-import {
-  deleteStoredFile,
-  DOCUMENT_DOWNLOAD_RATE_LIMIT,
-  DOCUMENT_UPLOAD_RATE_LIMIT,
-  resolveStoragePath,
-  storageKey,
-  writeStoredBuffer,
-} from "../document-storage.js";
+import { deleteStoredFile, DOCUMENT_DOWNLOAD_RATE_LIMIT, DOCUMENT_UPLOAD_RATE_LIMIT, resolveStoragePath, storageKey, writeStoredBuffer } from "../document-storage.js";
 import { ApiError } from "../errors.js";
 import { bodyObject, booleanQuery, optionalBodyText, parseDateOnly, parseRowVersion, positiveLong, requiredInteger, requiredText } from "../http.js";
 import { insertAudit } from "../audit.js";
@@ -50,30 +43,29 @@ function decodePng(value: unknown, code: string): Buffer {
     throw new ApiError(413, code, `The image must be ${MAX_IMAGE_BYTES / 1024 / 1024} MB or smaller.`);
   }
   if (bytes.length < PNG_MAGIC.length || !bytes.subarray(0, PNG_MAGIC.length).equals(PNG_MAGIC)) {
-    throw new ApiError(400, code,
-      "Only PNG images are accepted, so a signature can be rendered with a transparent background.");
+    throw new ApiError(400, code, "Only PNG images are accepted, so a signature can be rendered with a transparent background.");
   }
   return bytes;
 }
 
-export function registerSignatureMasterRoutes(
-  app: FastifyInstance,
-  config: AppConfig,
-  database: Database,
-  users: CurrentUserService,
-): void {
+export function registerSignatureMasterRoutes(app: FastifyInstance, config: AppConfig, database: Database, users: CurrentUserService): void {
   // -------------------------------------------------------------------------
   // My signature — a preference, not a security ceremony
   // -------------------------------------------------------------------------
   app.get("/api/v1/me/signature", async (request) => {
     const actor = await users.required(request);
-    const history = (await database.query<Record<string, unknown>>(`
+    const history = (
+      await database.query<Record<string, unknown>>(
+        `
       SELECT s.id, s.version, s.source,
              CASE WHEN s.initials_image_key IS NULL THEN CAST(0 AS bit) ELSE CAST(1 AS bit) END AS has_initials,
              s.initials_text, s.active_from, s.active_to,
              (SELECT COUNT(*) FROM dbo.signature_marks m WHERE m.specimen_id = s.id) AS used_in_documents
       FROM dbo.signature_specimens s WHERE s.user_id = @actor ORDER BY s.version DESC;
-    `, (bind) => bind.input("actor", sql.BigInt, actor.id))).recordset.map((row) => ({
+    `,
+        (bind) => bind.input("actor", sql.BigInt, actor.id),
+      )
+    ).recordset.map((row) => ({
       id: Number(row.id),
       version: Number(row.version),
       source: String(row.source),
@@ -91,101 +83,103 @@ export function registerSignatureMasterRoutes(
    * is retired, not overwritten, and every past mark keeps pointing at the
    * version that was actually used.
    */
-  app.put(
-    "/api/v1/me/signature",
-    { config: { rateLimit: DOCUMENT_UPLOAD_RATE_LIMIT } },
-    async (request) => {
-      const actor = await users.required(request);
-      const body = bodyObject(request.body);
-      const source = String(body.source ?? "");
-      if (source !== "DRAWN" && source !== "UPLOADED" && source !== "TYPED") {
-        throw new ApiError(400, "invalid_source", "The specimen source must be DRAWN, UPLOADED or TYPED.");
+  app.put("/api/v1/me/signature", { config: { rateLimit: DOCUMENT_UPLOAD_RATE_LIMIT } }, async (request) => {
+    const actor = await users.required(request);
+    const body = bodyObject(request.body);
+    const source = String(body.source ?? "");
+    if (source !== "DRAWN" && source !== "UPLOADED" && source !== "TYPED") {
+      throw new ApiError(400, "invalid_source", "The specimen source must be DRAWN, UPLOADED or TYPED.");
+    }
+    const image = decodePng(body.imageBase64, "image_required");
+    const initials = body.initialsBase64 === undefined || body.initialsBase64 === null ? null : decodePng(body.initialsBase64, "invalid_initials_image");
+    const initialsText = optionalBodyText(body.initialsText, 10, "Initials");
+
+    const imageKey = storageKey("signing/specimens", ".png");
+    const initialsKey = initials ? storageKey("signing/specimens", ".png") : null;
+    const written: string[] = [];
+    try {
+      await writeStoredBuffer(config.documentStorage, imageKey, image);
+      written.push(imageKey);
+      if (initials && initialsKey) {
+        await writeStoredBuffer(config.documentStorage, initialsKey, initials);
+        written.push(initialsKey);
       }
-      const image = decodePng(body.imageBase64, "image_required");
-      const initials = body.initialsBase64 === undefined || body.initialsBase64 === null
-        ? null
-        : decodePng(body.initialsBase64, "invalid_initials_image");
-      const initialsText = optionalBodyText(body.initialsText, 10, "Initials");
 
-      const imageKey = storageKey("signing/specimens", ".png");
-      const initialsKey = initials ? storageKey("signing/specimens", ".png") : null;
-      const written: string[] = [];
-      try {
-        await writeStoredBuffer(config.documentStorage, imageKey, image);
-        written.push(imageKey);
-        if (initials && initialsKey) {
-          await writeStoredBuffer(config.documentStorage, initialsKey, initials);
-          written.push(initialsKey);
-        }
-
-        return await database.transaction(async (transaction) => {
-          const current = new sql.Request(transaction);
-          current.input("actor", sql.BigInt, actor.id);
-          const nextVersion = Number((await current.query<{ version: number }>(`
+      return await database.transaction(async (transaction) => {
+        const current = new sql.Request(transaction);
+        current.input("actor", sql.BigInt, actor.id);
+        const nextVersion =
+          Number(
+            (
+              await current.query<{ version: number }>(`
             SELECT ISNULL(MAX(version), 0) AS version FROM dbo.signature_specimens WITH (UPDLOCK, HOLDLOCK)
             WHERE user_id = @actor;
-          `)).recordset[0]!.version) + 1;
+          `)
+            ).recordset[0]!.version,
+          ) + 1;
 
-          const retire = new sql.Request(transaction);
-          retire.input("actor", sql.BigInt, actor.id);
-          await retire.query(`
+        const retire = new sql.Request(transaction);
+        retire.input("actor", sql.BigInt, actor.id);
+        await retire.query(`
             UPDATE dbo.signature_specimens SET active_to = SYSUTCDATETIME()
             WHERE user_id = @actor AND active_to IS NULL;
           `);
 
-          const insert = new sql.Request(transaction);
-          insert.input("actor", sql.BigInt, actor.id);
-          insert.input("version", sql.Int, nextVersion);
-          insert.input("source", sql.NVarChar(20), source);
-          insert.input("image_key", sql.NVarChar(1000), imageKey);
-          insert.input("initials_key", sql.NVarChar(1000), initialsKey);
-          insert.input("initials_text", sql.NVarChar(10), initialsText);
-          const specimenId = Number((await insert.query<{ id: number }>(`
+        const insert = new sql.Request(transaction);
+        insert.input("actor", sql.BigInt, actor.id);
+        insert.input("version", sql.Int, nextVersion);
+        insert.input("source", sql.NVarChar(20), source);
+        insert.input("image_key", sql.NVarChar(1000), imageKey);
+        insert.input("initials_key", sql.NVarChar(1000), initialsKey);
+        insert.input("initials_text", sql.NVarChar(10), initialsText);
+        const specimenId = Number(
+          (
+            await insert.query<{ id: number }>(`
             DECLARE @created TABLE (id bigint NOT NULL);
             INSERT INTO dbo.signature_specimens (user_id, version, source, image_key, initials_image_key, initials_text)
             OUTPUT inserted.id INTO @created(id)
             VALUES (@actor, @version, @source, @image_key, @initials_key, @initials_text);
             SELECT id FROM @created;
-          `)).recordset[0]!.id);
+          `)
+          ).recordset[0]!.id,
+        );
 
-          await insertAudit(transaction, actor.id, "SignatureSpecimen", specimenId, `v${nextVersion}`, "Replaced", null,
-            { source, version: nextVersion, hasInitials: initialsKey !== null });
-          written.length = 0;
-          return { id: specimenId, version: nextVersion, source };
-        }, sql.ISOLATION_LEVEL.READ_COMMITTED);
-      } catch (error) {
-        for (const key of written) {
-          if (error instanceof DatabaseCommitOutcomeUnknownError) {
-            request.log.fatal({ err: error.originalError, storageKey: key },
-              "Specimen commit outcome unknown; preserving storage file");
-          } else {
-            await deleteStoredFile(config.documentStorage, key).catch(() => undefined);
-          }
+        await insertAudit(transaction, actor.id, "SignatureSpecimen", specimenId, `v${nextVersion}`, "Replaced", null, { source, version: nextVersion, hasInitials: initialsKey !== null });
+        written.length = 0;
+        return { id: specimenId, version: nextVersion, source };
+      }, sql.ISOLATION_LEVEL.READ_COMMITTED);
+    } catch (error) {
+      for (const key of written) {
+        if (error instanceof DatabaseCommitOutcomeUnknownError) {
+          request.log.fatal({ err: error.originalError, storageKey: key }, "Specimen commit outcome unknown; preserving storage file");
+        } else {
+          await deleteStoredFile(config.documentStorage, key).catch(() => undefined);
         }
-        throw error;
       }
-    });
+      throw error;
+    }
+  });
 
   /** The caller's own specimen, and nobody else's. There is deliberately no route that takes a user id. */
-  app.get(
-    "/api/v1/me/signature/preview",
-    { config: { rateLimit: DOCUMENT_DOWNLOAD_RATE_LIMIT } },
-    async (request, reply) => {
-      const actor = await users.required(request);
-      const wantInitials = booleanQuery((request.query as Record<string, unknown>).initials);
-      const row = (await database.query<Record<string, unknown>>(`
+  app.get("/api/v1/me/signature/preview", { config: { rateLimit: DOCUMENT_DOWNLOAD_RATE_LIMIT } }, async (request, reply) => {
+    const actor = await users.required(request);
+    const wantInitials = booleanQuery((request.query as Record<string, unknown>).initials);
+    const row = (
+      await database.query<Record<string, unknown>>(
+        `
         SELECT TOP (1) image_key, initials_image_key FROM dbo.signature_specimens
         WHERE user_id = @actor AND active_to IS NULL;
-      `, (bind) => bind.input("actor", sql.BigInt, actor.id))).recordset[0];
-      if (!row) throw new ApiError(404, "specimen_not_found", "You have not created a signature yet.");
-      const key = wantInitials
-        ? (row.initials_image_key === null ? null : String(row.initials_image_key))
-        : String(row.image_key);
-      if (!key) throw new ApiError(404, "specimen_not_found", "No initials have been drawn.");
-      reply.header("Content-Type", "image/png");
-      reply.header("Cache-Control", "no-store");
-      return reply.send(createReadStream(resolveStoragePath(config.documentStorage, key)));
-    });
+      `,
+        (bind) => bind.input("actor", sql.BigInt, actor.id),
+      )
+    ).recordset[0];
+    if (!row) throw new ApiError(404, "specimen_not_found", "You have not created a signature yet.");
+    const key = wantInitials ? (row.initials_image_key === null ? null : String(row.initials_image_key)) : String(row.image_key);
+    if (!key) throw new ApiError(404, "specimen_not_found", "No initials have been drawn.");
+    reply.header("Content-Type", "image/png");
+    reply.header("Cache-Control", "no-store");
+    return reply.send(createReadStream(resolveStoragePath(config.documentStorage, key)));
+  });
 
   // -------------------------------------------------------------------------
   // Company stamps
@@ -193,7 +187,8 @@ export function registerSignatureMasterRoutes(
   app.get("/api/v1/master/company-stamps", async (request) => {
     await users.demandPermission(request, "signing.read");
     const authorities = new Map<number, Record<string, unknown>[]>();
-    for (const row of (await database.query<Record<string, unknown>>(`
+    for (const row of (
+      await database.query<Record<string, unknown>>(`
       SELECT a.company_stamp_id, a.id,
              CASE WHEN a.role_id IS NULL THEN N'USER' ELSE N'ROLE' END AS holder_kind,
              COALESCE(a.role_id, a.user_id) AS holder_id,
@@ -205,7 +200,8 @@ export function registerSignatureMasterRoutes(
       LEFT JOIN dbo.roles r ON r.id = a.role_id
       LEFT JOIN dbo.users u ON u.id = a.user_id
       ORDER BY a.company_stamp_id, CASE WHEN a.role_id IS NULL THEN 1 ELSE 0 END, a.id;
-    `)).recordset) {
+    `)
+    ).recordset) {
       const stampId = Number(row.company_stamp_id);
       const list = authorities.get(stampId) ?? [];
       list.push({
@@ -223,7 +219,8 @@ export function registerSignatureMasterRoutes(
       authorities.set(stampId, list);
     }
 
-    return (await database.query<Record<string, unknown>>(`
+    return (
+      await database.query<Record<string, unknown>>(`
       SELECT s.id, s.code, s.name_th, s.name_en, s.name_ja, s.legal_entity,
              CASE WHEN s.image_key IS NULL THEN CAST(0 AS bit) ELSE CAST(1 AS bit) END AS has_image,
              s.scope_json, r.name AS custodian_role, s.valid_from, s.valid_to, s.status,
@@ -232,7 +229,8 @@ export function registerSignatureMasterRoutes(
       FROM dbo.company_stamps s
       INNER JOIN dbo.roles r ON r.id = s.custodian_role_id
       ORDER BY CASE WHEN s.status = N'ACTIVE' THEN 0 ELSE 1 END, s.code;
-    `)).recordset.map((row) => ({
+    `)
+    ).recordset.map((row) => ({
       id: Number(row.id),
       code: String(row.code),
       nameTh: String(row.name_th),
@@ -277,11 +275,9 @@ export function registerSignatureMasterRoutes(
     const created = await database.transaction(async (transaction) => {
       const role = new sql.Request(transaction);
       role.input("code", sql.NVarChar(50), custodianRole);
-      const roleRow = (await role.query<{ id: number }>(
-        "SELECT id FROM dbo.roles WHERE code = @code AND is_active = 1;")).recordset[0];
+      const roleRow = (await role.query<{ id: number }>("SELECT id FROM dbo.roles WHERE code = @code AND is_active = 1;")).recordset[0];
       if (!roleRow) {
-        throw new ApiError(400, "custodian_role_unknown",
-          "The custodian role does not exist. Somebody must be answerable for a seal in the real world.");
+        throw new ApiError(400, "custodian_role_unknown", "The custodian role does not exist. Somebody must be answerable for a seal in the real world.");
       }
       const insert = new sql.Request(transaction);
       insert.input("code", sql.NVarChar(20), code);
@@ -294,16 +290,19 @@ export function registerSignatureMasterRoutes(
       insert.input("valid_from", sql.Date, validFrom);
       insert.input("valid_to", sql.Date, validTo);
       insert.input("actor", sql.BigInt, actor.id);
-      const id = Number((await insert.query<{ id: number }>(`
+      const id = Number(
+        (
+          await insert.query<{ id: number }>(`
         INSERT INTO dbo.company_stamps (
           code, name_th, name_en, name_ja, legal_entity, scope_json,
           custodian_role_id, valid_from, valid_to, status, created_by)
         OUTPUT inserted.id
         VALUES (@code, @name_th, @name_en, @name_ja, @legal_entity, @scope,
                 @custodian, @valid_from, @valid_to, N'ACTIVE', @actor);
-      `)).recordset[0]!.id);
-      await insertAudit(transaction, actor.id, "CompanyStamp", id, code, "Created", null,
-        { code, legalEntity, scope, custodianRole, validFrom, validTo });
+      `)
+        ).recordset[0]!.id,
+      );
+      await insertAudit(transaction, actor.id, "CompanyStamp", id, code, "Created", null, { code, legalEntity, scope, custodianRole, validFrom, validTo });
       return { id, code };
     }, sql.ISOLATION_LEVEL.READ_COMMITTED);
 
@@ -315,44 +314,40 @@ export function registerSignatureMasterRoutes(
    * own: it is what actually appears on a customer's paper. It requires the
    * Manager permission, and the image is stored where no route can serve it.
    */
-  app.put(
-    "/api/v1/master/company-stamps/:stampId/image",
-    { config: { rateLimit: DOCUMENT_UPLOAD_RATE_LIMIT } },
-    async (request) => {
-      await users.demandPermission(request, "signing.stamp.grant");
-      const actor = await users.required(request);
-      const stampId = positiveLong((request.params as { stampId?: string }).stampId, "Stamp id");
-      const body = bodyObject(request.body);
-      const image = decodePng(body.imageBase64, "image_required");
-      const expected = parseRowVersion(body.rowVersion);
+  app.put("/api/v1/master/company-stamps/:stampId/image", { config: { rateLimit: DOCUMENT_UPLOAD_RATE_LIMIT } }, async (request) => {
+    await users.demandPermission(request, "signing.stamp.grant");
+    const actor = await users.required(request);
+    const stampId = positiveLong((request.params as { stampId?: string }).stampId, "Stamp id");
+    const body = bodyObject(request.body);
+    const image = decodePng(body.imageBase64, "image_required");
+    const expected = parseRowVersion(body.rowVersion);
 
-      const key = storageKey("signing/stamps", ".png");
-      let stored = false;
-      try {
-        await writeStoredBuffer(config.documentStorage, key, image);
-        stored = true;
-        const result = await database.transaction(async (transaction) => {
-          const update = new sql.Request(transaction);
-          update.input("stamp_id", sql.BigInt, stampId);
-          update.input("image_key", sql.NVarChar(1000), key);
-          update.input("row_version", sql.VarBinary(8), expected);
-          const updated = await update.query(`
+    const key = storageKey("signing/stamps", ".png");
+    let stored = false;
+    try {
+      await writeStoredBuffer(config.documentStorage, key, image);
+      stored = true;
+      const result = await database.transaction(async (transaction) => {
+        const update = new sql.Request(transaction);
+        update.input("stamp_id", sql.BigInt, stampId);
+        update.input("image_key", sql.NVarChar(1000), key);
+        update.input("row_version", sql.VarBinary(8), expected);
+        const updated = await update.query(`
             UPDATE dbo.company_stamps SET image_key = @image_key, updated_at = SYSUTCDATETIME()
              WHERE id = @stamp_id AND row_version = @row_version;
           `);
-          if ((updated.rowsAffected[0] ?? 0) === 0) {
-            throw new ApiError(409, "concurrent_update", "The stamp changed since it was loaded. Reload and try again.");
-          }
-          await insertAudit(transaction, actor.id, "CompanyStamp", stampId, String(stampId), "Artwork replaced", null,
-            { sizeBytes: image.length });
-          return { id: stampId };
-        }, sql.ISOLATION_LEVEL.READ_COMMITTED);
-        stored = false;
-        return result;
-      } finally {
-        if (stored) await deleteStoredFile(config.documentStorage, key).catch(() => undefined);
-      }
-    });
+        if ((updated.rowsAffected[0] ?? 0) === 0) {
+          throw new ApiError(409, "concurrent_update", "The stamp changed since it was loaded. Reload and try again.");
+        }
+        await insertAudit(transaction, actor.id, "CompanyStamp", stampId, String(stampId), "Artwork replaced", null, { sizeBytes: image.length });
+        return { id: stampId };
+      }, sql.ISOLATION_LEVEL.READ_COMMITTED);
+      stored = false;
+      return result;
+    } finally {
+      if (stored) await deleteStoredFile(config.documentStorage, key).catch(() => undefined);
+    }
+  });
 
   /**
    * Who may borrow the seal, granted by whom, until when. The physical world
@@ -368,9 +363,7 @@ export function registerSignatureMasterRoutes(
     if (holderKind !== "ROLE" && holderKind !== "USER") {
       throw new ApiError(400, "invalid_holder", "A grant is held by a ROLE or a USER.");
     }
-    const documentClass = body.documentClass === undefined || body.documentClass === null || body.documentClass === ""
-      ? null
-      : demandDocumentClass(body.documentClass);
+    const documentClass = body.documentClass === undefined || body.documentClass === null || body.documentClass === "" ? null : demandDocumentClass(body.documentClass);
     const validFrom = parseDateOnly(body.validFrom, "Valid from")!;
     const validTo = parseDateOnly(body.validTo, "Valid to", true);
     if (validTo && validTo < validFrom) throw new ApiError(400, "invalid_validity", "The validity window ends before it starts.");
@@ -384,13 +377,11 @@ export function registerSignatureMasterRoutes(
         // enforces the same rule so it cannot be bypassed.
         const holderRole = requiredText(body.holderRole, 50, "Role");
         if (holderRole === "Admin") {
-          throw new ApiError(400, "admin_cannot_hold_stamp",
-            "The Admin role cannot hold company stamp authority. Admin configures the system; the business signs.");
+          throw new ApiError(400, "admin_cannot_hold_stamp", "The Admin role cannot hold company stamp authority. Admin configures the system; the business signs.");
         }
         const role = new sql.Request(transaction);
         role.input("code", sql.NVarChar(50), holderRole);
-        const row = (await role.query<{ id: number }>(
-          "SELECT id FROM dbo.roles WHERE code = @code AND is_active = 1;")).recordset[0];
+        const row = (await role.query<{ id: number }>("SELECT id FROM dbo.roles WHERE code = @code AND is_active = 1;")).recordset[0];
         if (!row) throw new ApiError(400, "role_unknown", "That role does not exist.");
         roleId = Number(row.id);
       } else {
@@ -405,13 +396,17 @@ export function registerSignatureMasterRoutes(
       insert.input("actor", sql.BigInt, actor.id);
       insert.input("valid_from", sql.Date, validFrom);
       insert.input("valid_to", sql.Date, validTo);
-      const id = Number((await insert.query<{ id: number }>(`
+      const id = Number(
+        (
+          await insert.query<{ id: number }>(`
         DECLARE @created TABLE (id bigint NOT NULL);
         INSERT INTO dbo.stamp_authorities (company_stamp_id, role_id, user_id, doc_class, granted_by, valid_from, valid_to)
         OUTPUT inserted.id INTO @created(id)
         VALUES (@stamp_id, @role_id, @user_id, @doc_class, @actor, @valid_from, @valid_to);
         SELECT id FROM @created;
-      `)).recordset[0]!.id);
+      `)
+        ).recordset[0]!.id,
+      );
 
       // Granting stamp authority notifies the custodian, so it can never happen
       // quietly.
@@ -424,18 +419,16 @@ export function registerSignatureMasterRoutes(
                CONCAT(N'Stamp ', s.code, N' authority granted by ', granter.name), N'CompanyStamp', s.id
         FROM dbo.company_stamps s
         INNER JOIN dbo.users granter ON granter.id = @actor
-        INNER JOIN dbo.users u ON u.role_id = s.custodian_role_id
+        INNER JOIN dbo.user_effective_roles custodian ON custodian.role_id = s.custodian_role_id
+        INNER JOIN dbo.users u ON u.id = custodian.user_id
         WHERE s.id = @stamp_id AND u.deleted_at IS NULL AND u.is_active = 1;
       `);
 
-      await insertAudit(transaction, actor.id, "StampAuthority", id, String(stampId), "Granted", null,
-        { stampId, holderKind, roleId, userId, documentClass, validFrom, validTo });
+      await insertAudit(transaction, actor.id, "StampAuthority", id, String(stampId), "Granted", null, { stampId, holderKind, roleId, userId, documentClass, validFrom, validTo });
       return { id };
     }, sql.ISOLATION_LEVEL.READ_COMMITTED);
 
-    return reply.status(201)
-      .header("Location", `/api/v1/master/company-stamps/${stampId}/authorities/${created.id}`)
-      .send(created);
+    return reply.status(201).header("Location", `/api/v1/master/company-stamps/${stampId}/authorities/${created.id}`).send(created);
   });
 
   app.post("/api/v1/master/company-stamps/:stampId/authorities/:authorityId/revoke", async (request) => {
@@ -460,8 +453,7 @@ export function registerSignatureMasterRoutes(
       if ((updated.rowsAffected[0] ?? 0) === 0) {
         throw new ApiError(404, "authority_not_found", "That stamp authority does not exist or is already revoked.");
       }
-      await insertAudit(transaction, actor.id, "StampAuthority", authorityId, String(stampId), "Revoked", null,
-        { stampId, reason });
+      await insertAudit(transaction, actor.id, "StampAuthority", authorityId, String(stampId), "Revoked", null, { stampId, reason });
       return { id: authorityId, revoked: true };
     }, sql.ISOLATION_LEVEL.READ_COMMITTED);
   });
@@ -472,7 +464,8 @@ export function registerSignatureMasterRoutes(
   app.get("/api/v1/master/signature-flows", async (request) => {
     await users.demandPermission(request, "signing.read");
     const steps = new Map<number, Record<string, unknown>[]>();
-    for (const row of (await database.query<Record<string, unknown>>(`
+    for (const row of (
+      await database.query<Record<string, unknown>>(`
       SELECT s.template_id, s.id, s.step_no, s.block_code, s.assignee_kind,
              r.code AS assignee_role, u.name AS assignee_name, s.required_mark, stamp.code AS stamp_code,
              s.is_optional, s.parallel_group, s.anchor_code, s.due_days, s.min_amount, s.max_amount
@@ -481,7 +474,8 @@ export function registerSignatureMasterRoutes(
       LEFT JOIN dbo.users u ON u.id = s.assignee_user_id
       LEFT JOIN dbo.company_stamps stamp ON stamp.id = s.company_stamp_id
       ORDER BY s.template_id, s.step_no;
-    `)).recordset) {
+    `)
+    ).recordset) {
       const templateId = Number(row.template_id);
       const list = steps.get(templateId) ?? [];
       list.push({
@@ -505,13 +499,15 @@ export function registerSignatureMasterRoutes(
 
     // A running request pins the template version it started on, so an admin
     // editing a flow can see how many live requests they are not affecting.
-    return (await database.query<Record<string, unknown>>(`
+    return (
+      await database.query<Record<string, unknown>>(`
       SELECT t.id, t.doc_class, t.version, t.ordered, t.no_same_person, t.return_target,
              t.allow_manager_skip, t.status,
              (SELECT COUNT(*) FROM dbo.sign_requests rq
                WHERE rq.template_id = t.id AND rq.state IN (N'PENDING_SIGN', N'PARTIALLY_SIGNED')) AS running
       FROM dbo.sign_flow_templates t ORDER BY t.doc_class, t.version DESC;
-    `)).recordset.map((row) => ({
+    `)
+    ).recordset.map((row) => ({
       id: Number(row.id),
       documentClass: String(row.doc_class),
       version: Number(row.version),

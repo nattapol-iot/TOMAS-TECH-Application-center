@@ -20,6 +20,7 @@ import { ApplyLaborPackageModal, SaveLaborPackageModal } from "./LaborPackagePic
 import { LaborPackageMaster } from "./LaborPackageMaster";
 import { ESTIMATE_DISCIPLINES, costTypeOfDiscipline, ratesForDiscipline, type EstimateDiscipline } from "../../../lib/estimate-disciplines";
 import { estimateBusinessDate, estimateUxCopy } from "../../../lib/estimate-ux";
+import { ESTIMATE_OWNER_ROLES, hasRole, type RoleBearer } from "../../../backend-node/src/user-roles";
 
 /*
  * The labor sheet, one section per discipline: Electrical, Mechanical, Software and
@@ -64,7 +65,8 @@ const numberOf = (value: number | string | null | undefined) => Number(value ?? 
 const formatMoney = (value: number | string | null | undefined) => new Intl.NumberFormat(currentLocale(), { style: "currency", currency: "THB", maximumFractionDigits: 2 }).format(numberOf(value));
 const formatNumber = (value: number | string | null | undefined) => numberOf(value).toLocaleString(currentLocale(), { maximumFractionDigits: 2 });
 const copy = (th: string, en: string, ja: string) => estimateUxCopy(currentLocale(), th, en, ja);
-const canOwnEstimate = (role: string) => ["Engineer", "Leader", "Engineering Manager", "Admin"].includes(role);
+// Every held role counts (migration 051), as the API's owner checks read them.
+const canOwnEstimate = (person: RoleBearer) => hasRole(person, ...ESTIMATE_OWNER_ROLES);
 
 /** The discipline's name in the reader's language. */
 export function disciplineLabel(discipline: SectionKey): string {
@@ -213,7 +215,7 @@ export function EstimateLaborTab({
     if (quickDraftVersion !== undefined) quickActivityRef.current?.focus();
   }, [quickDraftVersion]);
 
-  const owners = bootstrap.team.filter((member) => canOwnEstimate(member.role));
+  const owners = bootstrap.team.filter((member) => canOwnEstimate(member));
   const defaultOwnerId = !workspace.capabilities.canEditAllSections
     ? bootstrap.user.id
     : (owners.find((owner) => owner.id === workspace.header.ownerId)?.id ?? owners.find((owner) => owner.id === bootstrap.user.id)?.id ?? owners[0]?.id ?? 0);

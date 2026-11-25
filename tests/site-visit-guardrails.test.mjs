@@ -193,7 +193,8 @@ test("the status vocabulary is identical in the API and the schema", async () =>
   const [core, migration] = await Promise.all([read("backend-node/src/site-visit-common.ts"), read("database/migrations/016_sales_intake_site_visit.sql")]);
   /** The literal transition table exported by site-visit-common.ts. */
   const table = (name) => {
-    const literal = new RegExp(`export const ${name}[^=]*=\\s*(\\{[^\\n]*\\});`).exec(core);
+    // One line until site-visit-common.ts was oxfmt-formatted (2026-11-25); now the literal ends at a "};" line.
+    const literal = new RegExp(`export const ${name}[^=]*=\\s*(\\{[^\\n]*\\}|\\{[\\s\\S]*?\\n\\});`).exec(core);
     assert.ok(literal, `${name} not found in site-visit-common.ts`);
     return Function(`return (${literal[1]});`)();
   };

@@ -13,6 +13,19 @@ export function frameworkForRole(role: string): { code: PerformanceFrameworkCode
   return isSalesRole(role) ? { code: "SALES", areaCodes: SALES_AREA_CODES } : { code: "ENGINEERING", areaCodes: ENGINEERING_AREA_CODES };
 }
 
+/**
+ * The role a person is reviewed under, as SQL that binds `role.code` for the user row named `user` (2026-11-25): their
+ * primary role when it has a KPI framework; otherwise the first additional role that has one, in name order (an additional
+ * role carries its full meaning since migration 051); otherwise their primary role, which the KPI roster then leaves out.
+ */
+export function kpiRoleSql(user: string): string {
+  const codes = PERFORMANCE_ROLES.map((role) => `N'${role}'`).join(",");
+  return `CROSS APPLY (SELECT COALESCE(
+        (SELECT TOP (1) held.code FROM dbo.user_effective_roles held WHERE held.user_id=${user}.id AND held.code IN(${codes})
+          ORDER BY CASE WHEN held.role_id=${user}.role_id THEN 0 ELSE 1 END,held.code),
+        (SELECT primary_role.code FROM dbo.roles primary_role WHERE primary_role.id=${user}.role_id)) code) role`;
+}
+
 // Engineering Managers and Project Managers review their own team only (see team-scope.ts), so
 // the IoT, Application and Mechanical teams cannot read or score each other's people. Admin
 // reviews everyone.
