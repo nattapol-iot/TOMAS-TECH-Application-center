@@ -25,9 +25,14 @@ test("a project document's source comes from the handover remark or the plan exp
 });
 
 test("the project page's Documents tab: folders with counts, sources, search and many files at once", async () => {
-  const tab = await source("app/system/production/ProjectDocumentsTab.tsx");
+  // Drawn on @tomas-tc/ui (owner 2026-11-25), loaded with the tab so the kit stays out of the first load.
+  const tab = await source("app/system/tomas-ui/ProjectDocumentsTab.tsx");
   const core = await source("app/system/production/CoreScreens.tsx");
+  assert.match(core, /const ProjectDocumentsTab = lazy\(\(\) => import\("\.\.\/tomas-ui\/ProjectDocumentsTab"\)/);
   assert.match(core, /shownTab === "documents" \? <ProjectDocumentsTab project=\{item\} canWrite=\{canWrite\} notify=\{notify\} \/> : null/);
+  // The documents dialog on the list shares the same folders.
+  assert.match(core, /import \{ PROJECT_DOCUMENT_FOLDERS \} from "\.\.\/\.\.\/\.\.\/lib\/project-documents";/);
+  assert.match(tab, /<ReasonDialog[\s\S]*?destructive[\s\S]*?onSubmit=\{\(reason\) => void withdraw\(reason\)\}/, "withdrawing asks why");
   for (const mark of ["projectDocs.folders", "projectDocs.sources", "projectDocs.drop"]) assert.ok(tab.includes(`data-guide="${mark}"`), mark);
   assert.match(tab, /<input\s+ref=\{picker\}\s+type="file"\s+multiple/);
   // One file at a time, each with its own folder and type; a refused one says why and the rest go on.

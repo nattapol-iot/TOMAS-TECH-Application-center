@@ -107,7 +107,7 @@ import {
 } from "./ProjectPlanFields";
 import { ProductionCustomers, ProductionEngineeringRates } from "./AdminAnalyticsScreens";
 import { ProjectCostPanel } from "./ProjectCostScreen";
-import { PROJECT_DOCUMENT_FOLDERS, ProjectDocumentsTab } from "./ProjectDocumentsTab";
+import { PROJECT_DOCUMENT_FOLDERS } from "../../../lib/project-documents";
 import { ErpMasterPanel } from "./ErpMasterPanel";
 import { PegasusScreen } from "./PegasusScreen";
 import { checkFields, failureDialog } from "./form-bubbles";
@@ -1568,6 +1568,7 @@ export const projectPageKey = (project: { id: number; number: string }) => (/^PJ
 // first load.
 const ProjectOverviewBoxes = lazy(() => import("../tomas-ui/ProjectOverviewBoxes").then((module) => ({ default: module.ProjectOverviewBoxes })));
 const ProjectPageHeader = lazy(() => import("../tomas-ui/ProjectPageHeader").then((module) => ({ default: module.ProjectPageHeader })));
+const ProjectDocumentsTab = lazy(() => import("../tomas-ui/ProjectDocumentsTab").then((module) => ({ default: module.ProjectDocumentsTab })));
 
 export function ProjectPage({
   bootstrap,
@@ -1727,7 +1728,15 @@ export function ProjectPage({
             <ProjectCostPanel projectId={item.id} />
           </>
         ) : null}
-        {shownTab === "documents" ? <ProjectDocumentsTab project={item} canWrite={canWrite} notify={notify} /> : null}
+        <Suspense
+          fallback={
+            <div className="empty">
+              <span className="spinner" />
+            </div>
+          }
+        >
+          {shownTab === "documents" ? <ProjectDocumentsTab project={item} canWrite={canWrite} notify={notify} /> : null}
+        </Suspense>
       </div>
       {editing ? (
         <EditProjectModal
