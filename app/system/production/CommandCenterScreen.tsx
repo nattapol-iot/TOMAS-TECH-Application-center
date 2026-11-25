@@ -86,6 +86,8 @@ export function CommandCenterScreen(_props: { notify: Notify }) {
   const [spotlightOn, setSpotlightOn] = useState(true);
   const [spot, setSpot] = useState(0);
   const [metric, setMetric] = useState<LoadMetric>("cpu");
+  // The summary chips filter the faceplates (a state, or sites with open alarms); null shows every site.
+  const [plantFilter, setPlantFilter] = useState<PlantFilter | null>(null);
   const lastInput = useRef(0);
   const root = useRef<HTMLDivElement>(null);
 
@@ -322,7 +324,7 @@ export function CommandCenterScreen(_props: { notify: Notify }) {
           </aside>
 
           <section className="ops-map-panel ops-plant" data-guide="ops.map" aria-label={t("Ops.plantLabel")}>
-            <PlantHeader sites={sites} severityOf={severityOf} alarms={openIncidents.length} />
+            <PlantHeader sites={sites} severityOf={severityOf} incidents={openIncidents} filter={plantFilter} onFilter={setPlantFilter} />
             {stale ? (
               <p className="ops-stale-banner" role="status">
                 <Icon name="alertTriangle" />
@@ -342,7 +344,7 @@ export function CommandCenterScreen(_props: { notify: Notify }) {
                 </a>
               </div>
             ) : (
-              <SiteOverview sites={sites} agents={agents} severityOf={severityOf} incidents={openIncidents} spotlight={spotlightSite?.id ?? null} selected={selected} now={now} onPick={setSelected} />
+              <SiteOverview sites={sites} agents={agents} severityOf={severityOf} incidents={openIncidents} filter={plantFilter} spotlight={spotlightSite?.id ?? null} selected={selected} now={now} onPick={setSelected} />
             )}
             {spotlightSite ? (
               <SpotlightCard site={spotlightSite} severity={severityOf.get(spotlightSite.id)!} incidents={openIncidents} now={now} onOpen={() => setSelected(spotlightSite.id)} />
@@ -521,27 +523,60 @@ function TopMachines({ agents, samples, metric, onMetric }: { agents: FleetAgent
 // ── site overview (SCADA-style faceplates) ─────────────────────────────────
 
 /** The alarm summary across the top of the overview: how many sites stand in each state, and open alarms. */
-function PlantHeader({ sites, severityOf, alarms }: { sites: FleetSite[]; severityOf: Map<number, SiteSeverity>; alarms: number }) {
+type PlantFilter = SiteSeverity | "alarms";
+
+/** Open alarms per site: the larger of the site's own count and the feed, which the API caps at 60 incidents. */
+function alarmsBySite(sites: FleetSite[], incidents: CommandCenterIncident[]): Map<number, number> {
+  const feed = new Map<number, number>();
+  for (const incident of incidents) feed.set(incident.siteId, (feed.get(incident.siteId) ?? 0) + 1);
+  return new Map(sites.map((site) => [site.id, Math.max(site.openIncidents, feed.get(site.id) ?? 0)]));
+}
+
+/**
+ * The alarm summary across the top of the overview: how many sites stand in each state and how many alarms are
+ * open. Each chip filters the faceplates to what it counts; pressing it again shows every site.
+ */
+function PlantHeader({
+  sites,
+  severityOf,
+  incidents,
+  filter,
+  onFilter,
+}: {
+  sites: FleetSite[];
+  severityOf: Map<number, SiteSeverity>;
+  incidents: CommandCenterIncident[];
+  filter: PlantFilter | null;
+  onFilter: (filter: PlantFilter | null) => void;
+}) {
   const t = useT();
-  const counts: Record<SiteSeverity, number> = { critical: 0, warning: 0, ok: 0, idle: 0 };
+  const counts: Record<PlantFilter, number> = { critical: 0, warning: 0, ok: 0, idle: 0, alarms: 0 };
   for (const site of sites) counts[severityOf.get(site.id) ?? "idle"] += 1;
+  for (const value of alarmsBySite(sites, incidents).values()) counts.alarms += value;
+  const chip = (key: PlantFilter, label: string, lamp: boolean) => (
+    <li key={key} className={`${key}${counts[key] ? "" : " zero"}`}>
+      <button
+        type="button"
+        aria-pressed={filter === key}
+        disabled={!counts[key] && filter !== key}
+        title={t(filter === key ? "Ops.filterClear" : "Ops.filterHint")}
+        onClick={() => onFilter(filter === key ? null : key)}
+      >
+        {lamp ? <i aria-hidden="true" /> : null}
+        {label}
+        <strong className="ops-mono">{counts[key]}</strong>
+      </button>
+    </li>
+  );
   return (
     <div className="ops-plant-head">
       <h2>
         <LocalizedText text={"Ops.plant"} />
+        <span className="ops-mono ops-plant-count">{sites.length}</span>
       </h2>
-      <ul className="ops-legend">
-        {(["critical", "warning", "ok", "idle"] as const).map((severity) => (
-          <li key={severity} className={`${severity}${counts[severity] ? "" : " zero"}`}>
-            <i aria-hidden="true" />
-            {t(`Ops.severity.${severity}`)}
-            <strong className="ops-mono">{counts[severity]}</strong>
-          </li>
-        ))}
-        <li className={`alarms${alarms ? "" : " zero"}`}>
-          {t("Ops.tile.alarms")}
-          <strong className="ops-mono">{alarms}</strong>
-        </li>
+      <ul className="ops-legend" aria-label={t("Ops.filterHint")}>
+        {(["critical", "warning", "ok", "idle"] as const).map((severity) => chip(severity, t(`Ops.severity.${severity}`), true))}
+        {chip("alarms", t("Ops.tile.alarms"), false)}
       </ul>
     </div>
   );
@@ -566,6 +601,7 @@ function SiteOverview({
   agents,
   severityOf,
   incidents,
+  filter,
   spotlight,
   selected,
   now,
@@ -575,6 +611,7 @@ function SiteOverview({
   agents: FleetAgent[];
   severityOf: Map<number, SiteSeverity>;
   incidents: CommandCenterIncident[];
+  filter: PlantFilter | null;
   spotlight: number | null;
   selected: number | null;
   now: number;
@@ -582,14 +619,20 @@ function SiteOverview({
 }) {
   const t = useT();
   const ageText = useAgeText();
-  const openBySite = new Map<number, number>();
-  for (const incident of incidents) openBySite.set(incident.siteId, (openBySite.get(incident.siteId) ?? 0) + 1);
-  const ordered = [...sites].sort((a, b) => SEVERITY_ORDER[severityOf.get(a.id) ?? "idle"] - SEVERITY_ORDER[severityOf.get(b.id) ?? "idle"] || a.name.localeCompare(b.name, "th"));
+  const alarmsOf = alarmsBySite(sites, incidents);
+  const shown = filter === null ? sites : sites.filter((site) => (filter === "alarms" ? (alarmsOf.get(site.id) ?? 0) > 0 : (severityOf.get(site.id) ?? "idle") === filter));
+  const ordered = [...shown].sort((a, b) => SEVERITY_ORDER[severityOf.get(a.id) ?? "idle"] - SEVERITY_ORDER[severityOf.get(b.id) ?? "idle"] || a.name.localeCompare(b.name, "th"));
+  if (ordered.length === 0)
+    return (
+      <p className="ops-empty">
+        <LocalizedText text={"Ops.filterEmpty"} />
+      </p>
+    );
   return (
     <ol className="ops-tiles">
       {ordered.map((site) => {
         const severity = severityOf.get(site.id) ?? "idle";
-        const alarms = Math.max(site.openIncidents, openBySite.get(site.id) ?? 0);
+        const alarms = alarmsOf.get(site.id) ?? 0;
         const loads = agents
           .filter((agent) => agent.site.id === site.id)
           .map((agent) => loadOf(agent, "cpu"))
@@ -615,17 +658,13 @@ function SiteOverview({
               <span className="ops-tile-values">
                 <span className="ops-tile-row">
                   <span>{t("Ops.kpi.agents")}</span>
-                  <span className="ops-mono">
-                    {site.agentsOnline}/{site.agentCount}
-                  </span>
-                  <Meter value={site.agentsOnline} total={site.agentCount} tone={pcTone} />
+                  <span className="ops-mono">{site.agentCount ? `${site.agentsOnline}/${site.agentCount}` : "—"}</span>
+                  <Meter value={site.agentCount ? site.agentsOnline : null} total={site.agentCount} tone={pcTone} />
                 </span>
                 <span className="ops-tile-row">
                   <span>{t("Monitor.programsRunning")}</span>
-                  <span className="ops-mono">
-                    {site.programsRunning}/{site.programCount}
-                  </span>
-                  <Meter value={site.programsRunning} total={site.programCount} tone={site.programsRunning < site.programCount ? "warn" : null} />
+                  <span className="ops-mono">{site.programCount ? `${site.programsRunning}/${site.programCount}` : "—"}</span>
+                  <Meter value={site.programCount ? site.programsRunning : null} total={site.programCount} tone={site.programsRunning < site.programCount ? "warn" : null} />
                 </span>
                 <span className="ops-tile-row">
                   <span>{t("Ops.tile.cpu")}</span>
