@@ -73,8 +73,6 @@ import {
   ProductionKnowledgeHub,
   DownloadCenterScreen,
   GuideLayer,
-  SiteMonitorScreen,
-  FleetScreen,
   CommandCenterScreen,
   MonitorScreen,
   DesignSystemScreen,
