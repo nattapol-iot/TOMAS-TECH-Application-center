@@ -7,6 +7,7 @@ import { LocalizedText } from "../LocalizedText";
 import { lazy, Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { ColumnFilterSpec, ProjectListRow } from "../tomas-ui/ProjectList";
 import type { KitTone } from "../tomas-ui/tones";
+import type { OverviewBody, OverviewBox, OverviewCell } from "../tomas-ui/ProjectOverviewBoxes";
 import {
   addProjectMember,
   createEmployee,
@@ -730,31 +731,6 @@ const formatDay = (value: string) => new Intl.DateTimeFormat(currentLocale(), { 
 
 /** Hours as the list shows them: whole numbers with separators, one decimal under ten. */
 const formatHours = (value: number) => (value < 10 && value % 1 ? value.toFixed(1) : Math.round(value).toLocaleString("en-US"));
-
-// Actual against where the plan says the project should be today; the tick is the plan.
-function PortfolioProgress({ item }: { item: ProjectOverviewItem }) {
-  const t = useUiText();
-  const actual = Math.round(Number(item.progress) || 0);
-  const planned = item.plannedProgress === null || item.plannedProgress === undefined ? null : Math.round(item.plannedProgress);
-  const tone: Tone = actual >= 100 ? "green" : planned !== null && actual < planned ? "amber" : "blue";
-  const label = planned === null ? `${actual}%` : `${actual}% · ${t("Portfolio.plannedToday")} ${planned}%`;
-  return (
-    <div className="portfolio-progress" title={planned === null ? undefined : t("Portfolio.actualVsPlanned")}>
-      <span className="portfolio-progress-track">
-        <span className="progress" role="img" aria-label={label}>
-          <b className={tone} style={{ width: `${Math.max(0, Math.min(100, actual))}%` }} />
-        </span>
-        {planned !== null ? <i className="portfolio-progress-tick" aria-hidden="true" style={{ left: `${Math.max(0, Math.min(100, planned))}%` }} /> : null}
-      </span>
-      <span className="portfolio-progress-text">{planned === null ? `${actual}%` : `${actual} / ${planned}`}</span>
-      {item.progressSource === "manual" ? (
-        <small className="portfolio-manual" title={t("Portfolio.manualHint")}>
-          {t("Portfolio.manual")}
-        </small>
-      ) : null}
-    </div>
-  );
-}
 
 export type PortfolioAction = { key: string; label: string; icon?: IconName; danger?: boolean; guide?: string; onSelect: () => void };
 // A row's choices (the overflow actions, the next stages) open as a disclosure: a button with
@@ -1588,7 +1564,9 @@ export const projectPageKey = (project: { id: number; number: string }) => (/^PJ
  * sit in the list's row menu (edit, members, stage, end user, delete), and the tabs Overview, Plan, Cost and Documents.
  * The project is read from the overview, so it is the same row and the same rights as the list.
  */
-// The page's head on @tomas-tc/ui (owner 2026-11-25), loaded with the page so the kit stays out of the first load.
+// The page's head and its Overview on @tomas-tc/ui (owner 2026-11-25), loaded with the page so the kit stays out of the
+// first load.
+const ProjectOverviewBoxes = lazy(() => import("../tomas-ui/ProjectOverviewBoxes").then((module) => ({ default: module.ProjectOverviewBoxes })));
 const ProjectPageHeader = lazy(() => import("../tomas-ui/ProjectPageHeader").then((module) => ({ default: module.ProjectPageHeader })));
 
 export function ProjectPage({
@@ -1824,7 +1802,8 @@ const PAYMENT_STEPS: { code: PaymentMilestone; label: string }[] = [
 
 /**
  * The Overview tab (task doc 5.3): where the project stands, each box a way to the place that handles it. Stage and
- * health sit in the page's header; money is never shown here.
+ * health sit in the page's header; money is never shown here. Drawn on @tomas-tc/ui (tomas-ui/ProjectOverviewBoxes.tsx,
+ * owner 2026-11-25); this reads the data and says what each box shows, in the reader's language.
  */
 function ProjectOverviewTab({
   item,
@@ -1862,6 +1841,7 @@ function ProjectOverviewTab({
       cancelled = true;
     };
   }, [item.id, attempt]);
+  const toPlan = () => onTab("plan");
   const dates: [string, string | null][] = [
     [copy("เริ่มโปรเจกต์", "Project start", "開始日"), item.startDate],
     [copy("PO ลูกค้า", "Customer PO", "顧客PO"), item.purchaseOrderDate],
@@ -1870,246 +1850,166 @@ function ProjectOverviewTab({
     ["Portfolio.colTarget", item.targetDelivery],
   ];
   const paid = new Set(item.paymentsReceived ?? []);
-  // While the read failed, the boxes wait quietly under the error instead of spinning.
-  const waiting = error ? null : <span className="spinner" />;
-  const box = (key: string, title: string, to: (() => void) | null, children: ReactNode) => (
-    <section key={key} className={`po-box po-box-${key}`}>
-      <header>
-        <h3>{title}</h3>
-        {to ? (
-          <button type="button" className="btn ghost sm" onClick={to}>
-            {uiText("ProjectPage.open.short")}
-            <Icon name="arrowRight" />
-          </button>
-        ) : null}
-      </header>
-      {children}
-    </section>
-  );
-  return (
-    <div className="project-overview-tab">
-      <ProjectPageSummary item={item} onTab={onTab} />
-      {error ? <LoadError message={error} retry={() => setAttempt((value) => value + 1)} /> : null}
-      <div className="po-grid" data-guide="projectPage.boxes">
-        {box(
-          "dates",
-          copy("วันสำคัญ", "Key dates", "主要日程"),
-          () => onTab("plan"),
-          <dl className="po-dates">
-            {dates.map(([label, value]) => (
-              <div key={label}>
-                <dt>{uiText(label)}</dt>
-                <dd>{value ? formatDate(value) : "—"}</dd>
-              </div>
-            ))}
-            <div>
-              <dt>{uiText("ProjectPage.nextMilestone")}</dt>
-              <dd>{item.nextMilestone ? `${item.nextMilestone.name} · ${formatDate(item.nextMilestone.date)}` : "—"}</dd>
-            </div>
-          </dl>,
-        )}
-        {box(
-          "headings",
-          copy("ความคืบหน้าตามหัวข้อ", "Progress by heading", "見出し別の進捗"),
-          () => onTab("plan"),
-          data ? (
-            data.headings.length ? (
-              <ul className="po-bars">
-                {data.headings.map((heading) => (
-                  <li key={heading.id} className={heading.late ? "late" : undefined}>
-                    <span className="po-bar-label">
-                      {heading.name}
-                      <small className="muted">
-                        {heading.planStart ? `${formatDate(heading.planStart)} – ${formatDate(heading.planFinish ?? heading.planStart)}` : copy("ยังไม่แตกแผน", "Not broken down", "未展開")}
-                      </small>
-                    </span>
-                    {heading.progress === null ? (
-                      <span className="muted">–</span>
-                    ) : (
-                      <span className="po-bar" title={`${heading.progress}% / ${uiText("Portfolio.plannedToday")} ${heading.plannedProgress ?? 0}%`}>
-                        <i style={{ width: `${Math.min(100, heading.progress)}%` }} />
-                        {heading.plannedProgress !== null ? <b style={{ left: `${Math.min(100, heading.plannedProgress)}%` }} /> : null}
-                      </span>
-                    )}
-                    <span className="mono">{heading.progress === null ? "" : `${Math.round(heading.progress)}%`}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="muted">{uiText("Not planned")}</p>
-            )
-          ) : (
-            waiting
-          ),
-        )}
-        {box(
-          "hours",
-          copy("ชั่วโมงตามสาขา", "Hours by discipline", "分野別の時間"),
-          () => onTab("plan"),
-          data ? (
-            data.disciplines.length ? (
-              <table className="po-table">
-                <thead>
-                  <tr>
-                    <th />
-                    <th className="num">{copy("งบ", "Budget", "予算")}</th>
-                    <th className="num">{copy("แผน", "Plan", "計画")}</th>
-                    <th className="num">{copy("จริง", "Actual", "実績")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.disciplines.map((row) => (
-                    <tr key={row.discipline} className={row.budgetHours && row.actualHours > row.budgetHours ? "over" : undefined}>
-                      <td>{uiText(row.discipline)}</td>
-                      <td className="num mono">{row.budgetHours ? Math.round(row.budgetHours) : "–"}</td>
-                      <td className="num mono">{Math.round(row.planHours)}</td>
-                      <td className="num mono">{Math.round(row.actualHours)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <p className="muted">{copy("ยังไม่มีงบหรือชั่วโมง", "No budget or hours yet", "予算・時間はまだありません")}</p>
-            )
-          ) : (
-            waiting
-          ),
-        )}
-        {box(
-          "purchase",
-          copy("ใบขอซื้อ (PR)", "Purchase requests", "購買依頼"),
-          seesCost ? () => onTab("cost") : null,
-          data ? (
-            data.purchaseRequests.length ? (
-              <ul className="po-counts">
-                {data.purchaseRequests.map((row) => (
-                  <li key={row.status}>
-                    <span>{uiText(row.status)}</span>
-                    <strong className="mono">{row.count}</strong>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="muted">{copy("ยังไม่มีใบขอซื้อ", "No purchase request yet", "購買依頼はまだありません")}</p>
-            )
-          ) : (
-            waiting
-          ),
-        )}
-        {box(
-          "team",
-          copy("ทีมและชั่วโมงสัปดาห์นี้", "Team and hours this week", "チームと今週の時間"),
-          onMembers,
-          data ? (
-            <ul className="po-counts">
-              {data.team.map((person) => (
-                <li key={person.id}>
-                  <span>
-                    {person.name} {person.role !== "Member" ? <small className="muted">{person.role}</small> : null}
-                  </span>
-                  <strong className="mono">{person.weekHours ? `${person.weekHours} ${uiText("Plan.mhHours")}` : "–"}</strong>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            waiting
-          ),
-        )}
-        {box(
-          "documents",
-          copy("เอกสารล่าสุด", "Latest documents", "最新の文書"),
-          () => onTab("documents"),
-          data ? (
-            data.documents.length ? (
-              <ul className="po-list">
-                {data.documents.map((document) => (
-                  <li key={document.id}>
-                    <span>{document.name}</span>
-                    <small className="muted">
-                      {document.folderCode} · {document.documentType} · {document.uploadedBy} · {formatDay(document.uploadedAt)}
-                    </small>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="muted">{copy("ยังไม่มีเอกสาร", "No documents yet", "文書はまだありません")}</p>
-            )
-          ) : (
-            waiting
-          ),
-        )}
-        {box(
-          "payments",
-          uiText("CRM.customerPayments"),
-          onEdit,
-          <ul className="po-counts">
-            {PAYMENT_STEPS.map((step) => (
-              <li key={step.code} className={paid.has(step.code) ? "done" : undefined}>
-                <span>{uiText(step.label)}</span>
-                <strong>{paid.has(step.code) ? <Icon name="check" /> : "–"}</strong>
-              </li>
-            ))}
-          </ul>,
-        )}
-        {box(
-          "activity",
-          copy("ความเคลื่อนไหวล่าสุด", "Latest activity", "最近の動き"),
-          () => onTab("plan"),
-          data ? (
-            data.activity.length ? (
-              <ul className="po-list">
-                {data.activity.map((entry) => (
-                  <li key={entry.id}>
-                    <span>
-                      {entry.actor} · {entry.task ?? copy("ทั้งแผน", "the plan", "計画全体")}
-                    </span>
-                    <small className="muted">
-                      {entry.field}
-                      {entry.comment ? ` · ${entry.comment}` : ""} · {formatDay(entry.at)}
-                    </small>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="muted">{copy("ยังไม่มีความเคลื่อนไหว", "Nothing yet", "まだありません")}</p>
-            )
-          ) : (
-            waiting
-          ),
-        )}
-      </div>
-    </div>
-  );
-}
-
-/** The Overview tab's figures row (task doc 5.2): where the plan stands, each a way to the Plan tab. */
-function ProjectPageSummary({ item, onTab }: { item: ProjectOverviewItem; onTab: (tab: ProjectPageTab) => void }) {
-  const uiText = useUiText();
+  const milestone = item.nextMilestone ? `${item.nextMilestone.name} · ${formatDate(item.nextMilestone.date)}` : "–";
+  // While the read failed, the boxes wait quietly under the error instead of showing a skeleton.
+  const loaded = (build: (answer: PageOverview) => OverviewBody): OverviewBody => (data ? build(data) : error ? { kind: "list", empty: "–", rows: [] } : { kind: "loading" });
+  // The figures row (task doc 5.2): where the plan stands, each a way to the Plan tab.
   const slip = formatSlip(item.status === "Closed" ? null : item.slipDays);
   const over = Boolean(item.budgetHours && (item.actualHours ?? 0) > item.budgetHours);
-  const cells: { key: string; label: string; value: ReactNode; tone?: string; to?: ProjectPageTab }[] = [
-    { key: "progress", label: "Portfolio.colProgress", value: <PortfolioProgress item={item} />, to: "plan" },
+  const actual = Math.round(Number(item.progress) || 0);
+  const planned = item.plannedProgress === null || item.plannedProgress === undefined ? null : Math.round(item.plannedProgress);
+  const cells: OverviewCell[] = [
+    {
+      key: "progress",
+      label: uiText("Portfolio.colProgress"),
+      value: planned === null ? `${actual}%` : `${actual} / ${planned}`,
+      progress: {
+        actual,
+        planned,
+        text: planned === null ? `${actual}%` : `${actual}% · ${uiText("Portfolio.plannedToday")} ${planned}%`,
+        tone: actual >= 100 ? "green" : planned !== null && actual < planned ? "amber" : "blue",
+      },
+      onSelect: toPlan,
+    },
     {
       key: "slip",
-      label: "Portfolio.colSlip",
+      label: uiText("Portfolio.colSlip"),
       value: slip === null ? "–" : uiText("Portfolio.slipDays").replace("{n}", slip),
-      tone: (item.slipDays ?? 0) > 0 && item.status !== "Closed" ? "red" : undefined,
-      to: "plan",
+      ...((item.slipDays ?? 0) > 0 && item.status !== "Closed" ? { tone: "red" as const } : {}),
+      onSelect: toPlan,
     },
-    { key: "follow", label: "Portfolio.colFollow", value: item.followUps ?? 0, tone: item.followUps ? "amber" : undefined, to: "plan" },
-    { key: "hours", label: "Portfolio.colHours", value: `${Math.round(item.actualHours ?? 0)} / ${item.budgetHours ? Math.round(item.budgetHours) : "–"}`, tone: over ? "red" : undefined, to: "plan" },
-    { key: "milestone", label: "ProjectPage.nextMilestone", value: item.nextMilestone ? `${item.nextMilestone.name} · ${formatDate(item.nextMilestone.date)}` : "–", to: "plan" },
-    { key: "requests", label: "ProjectPage.dayRequests", value: item.pendingRequests, tone: item.pendingRequests ? "amber" : undefined, to: "plan" },
+    { key: "follow", label: uiText("Portfolio.colFollow"), value: String(item.followUps ?? 0), ...(item.followUps ? { tone: "amber" as const } : {}), onSelect: toPlan },
+    {
+      key: "hours",
+      label: uiText("Portfolio.colHours"),
+      value: `${Math.round(item.actualHours ?? 0)} / ${item.budgetHours ? Math.round(item.budgetHours) : "–"}`,
+      ...(over ? { tone: "red" as const } : {}),
+      onSelect: toPlan,
+    },
+    { key: "milestone", label: uiText("ProjectPage.nextMilestone"), value: milestone, onSelect: toPlan },
+    { key: "requests", label: uiText("ProjectPage.dayRequests"), value: String(item.pendingRequests), ...(item.pendingRequests ? { tone: "amber" as const } : {}), onSelect: toPlan },
+  ];
+  const boxes: OverviewBox[] = [
+    {
+      key: "dates",
+      title: copy("วันสำคัญ", "Key dates", "主要日程"),
+      onOpen: toPlan,
+      body: {
+        kind: "facts",
+        rows: [
+          ...dates.map(([label, value]) => ({ label: uiText(label), value: value ? formatDate(value) : "—" })),
+          { label: uiText("ProjectPage.nextMilestone"), value: milestone === "–" ? "—" : milestone },
+        ],
+      },
+    },
+    {
+      key: "headings",
+      title: copy("ความคืบหน้าตามหัวข้อ", "Progress by heading", "見出し別の進捗"),
+      onOpen: toPlan,
+      body: loaded((answer) => ({
+        kind: "bars",
+        empty: uiText("Not planned"),
+        rows: answer.headings.map((heading) => ({
+          key: String(heading.id),
+          label: heading.name,
+          sub: heading.planStart ? `${formatDate(heading.planStart)} – ${formatDate(heading.planFinish ?? heading.planStart)}` : copy("ยังไม่แตกแผน", "Not broken down", "未展開"),
+          late: heading.late,
+          progress: heading.progress,
+          planned: heading.plannedProgress,
+          title: `${heading.progress ?? 0}% / ${uiText("Portfolio.plannedToday")} ${heading.plannedProgress ?? 0}%`,
+        })),
+      })),
+    },
+    {
+      key: "hours",
+      title: copy("ชั่วโมงตามสาขา", "Hours by discipline", "分野別の時間"),
+      onOpen: toPlan,
+      body: loaded((answer) => ({
+        kind: "table",
+        empty: copy("ยังไม่มีงบหรือชั่วโมง", "No budget or hours yet", "予算・時間はまだありません"),
+        head: ["", copy("งบ", "Budget", "予算"), copy("แผน", "Plan", "計画"), copy("จริง", "Actual", "実績")],
+        rows: answer.disciplines.map((row) => ({
+          key: row.discipline,
+          cells: [uiText(row.discipline), row.budgetHours ? String(Math.round(row.budgetHours)) : "–", String(Math.round(row.planHours)), String(Math.round(row.actualHours))],
+          over: Boolean(row.budgetHours && row.actualHours > row.budgetHours),
+        })),
+      })),
+    },
+    {
+      key: "purchase",
+      title: copy("ใบขอซื้อ (PR)", "Purchase requests", "購買依頼"),
+      onOpen: seesCost ? () => onTab("cost") : null,
+      body: loaded((answer) => ({
+        kind: "counts",
+        empty: copy("ยังไม่มีใบขอซื้อ", "No purchase request yet", "購買依頼はまだありません"),
+        rows: answer.purchaseRequests.map((row) => ({ key: row.status, label: uiText(row.status), value: String(row.count) })),
+      })),
+    },
+    {
+      key: "team",
+      title: copy("ทีมและชั่วโมงสัปดาห์นี้", "Team and hours this week", "チームと今週の時間"),
+      onOpen: onMembers,
+      body: loaded((answer) => ({
+        kind: "counts",
+        empty: "–",
+        rows: answer.team.map((person) => ({
+          key: String(person.id),
+          label: person.name,
+          ...(person.role !== "Member" ? { sub: person.role } : {}),
+          value: person.weekHours ? `${person.weekHours} ${uiText("Plan.mhHours")}` : "–",
+        })),
+      })),
+    },
+    {
+      key: "documents",
+      title: copy("เอกสารล่าสุด", "Latest documents", "最新の文書"),
+      onOpen: () => onTab("documents"),
+      body: loaded((answer) => ({
+        kind: "list",
+        empty: copy("ยังไม่มีเอกสาร", "No documents yet", "文書はまだありません"),
+        rows: answer.documents.map((document) => ({
+          key: String(document.id),
+          label: document.name,
+          sub: `${document.folderCode} · ${document.documentType} · ${document.uploadedBy} · ${formatDay(document.uploadedAt)}`,
+        })),
+      })),
+    },
+    {
+      key: "payments",
+      title: uiText("CRM.customerPayments"),
+      onOpen: onEdit,
+      body: { kind: "counts", empty: "–", rows: PAYMENT_STEPS.map((step) => ({ key: step.code, label: uiText(step.label), value: "–", done: paid.has(step.code) })) },
+    },
+    {
+      key: "activity",
+      title: copy("ความเคลื่อนไหวล่าสุด", "Latest activity", "最近の動き"),
+      onOpen: toPlan,
+      body: loaded((answer) => ({
+        kind: "list",
+        empty: copy("ยังไม่มีความเคลื่อนไหว", "Nothing yet", "まだありません"),
+        rows: answer.activity.map((entry) => ({
+          key: String(entry.id),
+          label: `${entry.actor} · ${entry.task ?? copy("ทั้งแผน", "the plan", "計画全体")}`,
+          sub: `${entry.field}${entry.comment ? ` · ${entry.comment}` : ""} · ${formatDay(entry.at)}`,
+        })),
+      })),
+    },
   ];
   return (
-    <div className="project-page-summary" data-guide="projectPage.summary">
-      {cells.map((cell) => (
-        <button key={cell.key} type="button" className={`project-page-cell${cell.tone ? ` tone-${cell.tone}` : ""}`} onClick={() => cell.to && onTab(cell.to)}>
-          <span className="muted">{uiText(cell.label)}</span>
-          <strong>{cell.value}</strong>
-        </button>
-      ))}
-    </div>
+    <Suspense
+      fallback={
+        <div className="empty">
+          <span className="spinner" />
+        </div>
+      }
+    >
+      <ProjectOverviewBoxes
+        openLabel={uiText("ProjectPage.open.short")}
+        cells={cells}
+        error={error ? { message: error, retryLabel: uiText("Try again"), onRetry: () => setAttempt((value) => value + 1) } : null}
+        boxes={boxes}
+      />
+    </Suspense>
   );
 }
 

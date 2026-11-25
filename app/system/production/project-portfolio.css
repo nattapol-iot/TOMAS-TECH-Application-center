@@ -1,6 +1,5 @@
-/* Projects portfolio (ProductionProjects in CoreScreens.tsx): health bar, attention chips and the
-   sortable project table. Tokens only. */
-/* The row menu and stage come first so a narrow screen reaches them without scrolling past the name. */
+/* Projects screens' own parts drawn with the app's components: the timeline, the page frame, Create project and the row
+   menus. The list and a project's page head and Overview are on @tomas-tc/ui (app/system/tomas-ui). Tokens only. */
 .th-sort {
   display: inline-flex;
   align-items: center;
@@ -48,29 +47,6 @@
 }
 .project-page-back {
   justify-self: start;
-}
-.project-page-summary {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 8px;
-}
-.project-page-cell {
-  display: grid;
-  gap: 4px;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-md);
-  background: var(--surface);
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.project-page-cell:hover {
-  border-color: var(--blue);
-}
-.project-page-cell strong {
-  font-size: var(--fs-lg);
 }
 /* Task doc 5.4: Create project as a page: the form on the left, what is missing and what Create does on the right. */
 .project-create-page {
@@ -145,163 +121,6 @@
     position: static;
   }
 }
-/* Task doc 5.3: the Overview tab, boxes that each lead to the place that handles them. */
-.project-overview-tab {
-  display: grid;
-  gap: 12px;
-}
-.po-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 12px;
-}
-.po-box {
-  display: grid;
-  align-content: start;
-  gap: 8px;
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-md);
-  background: var(--surface);
-}
-.po-box > header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-.po-box h3 {
-  margin: 0;
-  font-size: var(--fs-sm);
-}
-.po-dates {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px 12px;
-  margin: 0;
-}
-.po-dates dt {
-  color: var(--muted);
-  font-size: var(--fs-xs);
-}
-.po-dates dd {
-  margin: 0;
-  font-weight: 600;
-}
-.po-bars,
-.po-counts,
-.po-list {
-  display: grid;
-  gap: 6px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.po-bars li {
-  display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) 40px;
-  gap: 8px;
-  align-items: center;
-}
-.po-bars li.late .po-bar-label {
-  color: var(--red-text);
-}
-.po-bar-label {
-  display: grid;
-  min-width: 0;
-}
-.po-bar-label small {
-  font-size: var(--fs-xs);
-}
-.po-bar {
-  position: relative;
-  height: 8px;
-  border-radius: 999px;
-  background: var(--n-100);
-}
-.po-bar i {
-  position: absolute;
-  inset: 0 auto 0 0;
-  border-radius: 999px;
-  background: var(--blue);
-}
-.po-bars li.late .po-bar i {
-  background: var(--red);
-}
-.po-bar b {
-  position: absolute;
-  top: -3px;
-  bottom: -3px;
-  width: 2px;
-  background: var(--navy-900);
-}
-.po-counts li,
-.po-list li {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-}
-.po-list li {
-  flex-direction: column;
-  gap: 0;
-}
-.po-counts li.done strong {
-  color: var(--green-text);
-}
-.po-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--fs-sm);
-}
-.po-table th,
-.po-table td {
-  padding: 3px 4px;
-  border-bottom: 1px solid var(--line);
-  text-align: left;
-}
-.po-table .num {
-  text-align: right;
-}
-.po-table tr.over td {
-  color: var(--red-text);
-}
-/* Task doc 5.1: hours against the budget, and the count waiting on the plan's To follow up. */
-
-.portfolio-progress {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  min-width: 150px;
-}
-.portfolio-progress-track {
-  position: relative;
-  flex: 1;
-  min-width: 60px;
-}
-.portfolio-progress-tick {
-  position: absolute;
-  top: -3px;
-  width: 2px;
-  height: 11px;
-  margin-left: -1px;
-  border-radius: 1px;
-  background: var(--ink-soft);
-  pointer-events: none;
-}
-.portfolio-progress-text {
-  color: var(--ink-soft);
-  font-size: var(--fs-2xs);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.portfolio-manual {
-  padding: 0 5px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-pill);
-  color: var(--muted);
-  font-size: var(--fs-3xs);
-}
-
 /* Placed from the trigger's box by RowDisclosure (top or bottom, right, max-height) so the
    table's scroll area cannot clip it. */
 .menu.portfolio-menu {
@@ -322,9 +141,6 @@
   }
   .portfolio-gantt-search input {
     flex-basis: 100%;
-  }
-  .portfolio-progress {
-    min-width: 120px;
   }
 }
 
