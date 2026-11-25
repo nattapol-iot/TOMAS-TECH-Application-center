@@ -4,7 +4,7 @@
 
 เซฟและใช้ชุดค่าแรง version rate และนำกลับมาใช้
 
-Evidence: snapshot `8825cd4a`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
+Evidence: snapshot `cabb1a7f`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
 
 ## Read only the operation you change
 

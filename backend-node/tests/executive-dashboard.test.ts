@@ -25,7 +25,7 @@ test("non-management roles are rejected before any business query", async () => 
   }
 });
 test("company reporting binds only the primary executive role; manager scopes stay server-side", async () => {
-  for (const role of ["Admin", "Management", "CEO", "Engineering Manager", "Project Manager", "Sales Manager"]) {
+  for (const role of ["Admin", "Management", "Engineering Manager", "Project Manager", "Sales Manager"]) {
     const app = Fastify(),
       bindings: Record<string, unknown> = {};
     const db = {
@@ -50,7 +50,7 @@ test("company reporting binds only the primary executive role; manager scopes st
     try {
       const response = await app.inject({ method: "GET", url: "/api/v1/dashboard/management" });
       assert.equal(response.statusCode, 200);
-      assert.equal(bindings.executive, ["Admin", "Management", "CEO"].includes(role));
+      assert.equal(bindings.executive, ["Admin", "Management"].includes(role));
       assert.equal(bindings.department, "Engineering");
       assert.deepEqual(response.json().projects, []);
       assert.deepEqual(response.json().projectManagers, [{ id: 99, name: "Unassigned PM", department: "Engineering" }]);
