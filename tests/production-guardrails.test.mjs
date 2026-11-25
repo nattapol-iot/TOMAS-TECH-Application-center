@@ -253,12 +253,10 @@ test("schedule screens follow the API's progress and Resource Plan flags", async
   assert.match(schedule, /\{canImportDrawing \? \(?\s*<button className="btn sm default" type="button" disabled=\{saving\} onClick=\{onImportDrawing\}>/);
   assert.match(schedule, /saving=\{saving \|\| loadingSchedule\}/);
   assert.match(schedule, /onImportDrawing=\{\(\) => setDrawingTask\(\{ projectId: activeSchedule\.projectId, taskId: drawerTask\.id \}\)\}/);
-  // The plan is a Gantt on the shared component, and a reload keeps it on screen.
-  // The plan by row, or by member (owner request 2026-11-04).
-  // Customer issues are drawn under the plan rows, apart from them (Punchlist batches, 2026-11-18).
-  assert.match(schedule, /const chartRows = memberView \? memberRows : \[\.\.\.ganttRows, \.\.\.issueRows\];/);
-  assert.match(schedule, /<GanttChart\s+rows=\{chartRows\}\s+range=\{range\}/);
-  assert.match(schedule, /onOpen: \(\) => setDrawerTaskId\(task\.id\)/);
+  // The plan is edited on the Sheet; By member (owner request 2026-11-04) is a Gantt on the shared component, and a
+  // reload keeps it on screen. Every view opens a row in the task drawer.
+  assert.match(schedule, /<GanttChart\s+rows=\{memberRows\}\s+range=\{range\}/);
+  assert.match(schedule, /onOpenTask=\{setDrawerTaskId\}/);
   assert.doesNotMatch(schedule.slice(schedule.indexOf("const loadSchedule"), schedule.indexOf("useEffect(")), /setSchedule\(null\);\s*if \(!selectedId\)/, "a reload must not blank the plan");
   // The project picker lists projects by number.
   assert.match(schedule, /\.sort\(byProjectNumber\)/);

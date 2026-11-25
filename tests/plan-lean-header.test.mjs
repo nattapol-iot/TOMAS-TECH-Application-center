@@ -17,7 +17,7 @@ test("the Plan opens on one row: a project box that searches, the plan in brief 
   assert.doesNotMatch(plan, /projectQuery|filteredProjects/, "the separate search box is gone");
   assert.match(plan, /<span className="plan-brief" aria-label=\{uiText\("Plan\.summary"\)\}>/);
   assert.doesNotMatch(plan, /className="plan-summary"/);
-  assert.match(plan, /<Panel flush>\n\s*\{rows\.length \|\| draftAt >= 0 \|\| sheetView \? \(?\s*<div ref=\{fullscreenRef\}/, "the panel no longer repeats the project's name");
+  assert.match(plan, /<Panel flush>\n\s*\{rows\.length \|\| sheetView \? \(?\s*<div ref=\{fullscreenRef\}/, "the panel no longer repeats the project's name");
   // Rows are added on the Sheet itself; the old Add heading button of the Team Plan Gantt is gone (2026-11-25).
   assert.doesNotMatch(plan, /data-guide="plan\.add"/);
   assert.match(plan, /<RowDisclosure\s+label=\{uiText\("Plan\.more"\)\}\s+triggerClassName="btn default"\s+guide="plan\.more"/);
@@ -57,6 +57,6 @@ test("the new words are in three languages and the guide says where things went"
   const guide = await source("app/system/production/guide-catalog.ts");
   const step = guide.slice(guide.indexOf('target: "plan.view"'), guide.indexOf('target: "plan.view"') + 2200);
   assert.match(step, /Export Excel, Create baseline, เต็มจอ และ Refresh อยู่ในปุ่ม 'เพิ่มเติม'/);
-  assert.match(step, /are under More, beside Add heading/);
+  assert.match(step, /Full screen and Refresh are under More\./);
   assert.match(step, /「その他」にあります/);
 });

@@ -4,7 +4,6 @@ import test from "node:test";
 import ts from "typescript-api";
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
-const screen = read("app/system/production/PlanningPricingScreens.tsx");
 const service = read("backend-node/src/schedule-service.ts");
 // Execute the real functions without loading React or the database connection.
 function declaration(source, name) {
@@ -69,24 +68,8 @@ for (const existingChildren of [0, 2]) {
     for (let n = 0; n < existingChildren; n++) rows.push(row(3111 + n, 311, 3, (n + 1) * 10));
     for (const parent of rows) parent.children = rows.filter((child) => child.parentId === parent.id);
     const taskById = new Map(rows.map((task) => [task.id, task]));
-    let draft;
-    const plusFor = new Function(
-      "rows",
-      "taskById",
-      "openDraft",
-      compile(`
-      const canPlan = true, filter = null, movePending = null, saving = false, draftBusy = false, activeSchedule = {};
-      const pendingTaskIds = new Set(), uiText = (key) => key;
-      ${declaration(screen, "MAX_PLAN_DEPTH")}
-      ${declaration(screen, "canTakeSubTasks")}
-      ${declaration(screen, "plusFor")}
-      return plusFor;
-    `),
-    )(rows, taskById, (parentId, beforeId) => {
-      draft = { parentId, beforeId };
-    });
-    plusFor(taskById.get(311)).onInsert();
-    assert.deepEqual(draft, { parentId: 311, beforeId: null });
+    // A new last row under 3.1.1.
+    const draft = { parentId: 311, beforeId: null };
     const sql = {
       BigInt: "bigint",
       Request: class {

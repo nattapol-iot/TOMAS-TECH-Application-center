@@ -319,21 +319,19 @@ test("the Plan folds every row at once and goes full screen over the page, with 
   assert.match(plan, /const \{ ref: fullscreenRef, active: fullscreenActive, toggle: toggleFullscreen \} = useFullscreen<HTMLDivElement>\(\{ overlayOnly: true \}\);/);
   assert.match(plan, /<div ref=\{fullscreenRef\} className=\{`plan-gantt\$\{fullscreenActive \? " is-fullscreen" : ""\}`\} data-guide="plan\.gantt">/);
   assert.match(plan, /<div className="gantt-nav" data-guide="plan\.view">/);
-  // Team Plan folds rows with rows under them; By member folds people; a quick filter shows matches open, so folding is off.
-  assert.match(plan, /const collapseAll = \(\) => \{\s*if \(memberView\) setMemberClosed\(new Set\(memberKeys\)\);\s*else setCollapsed\(new Set\(parentIds\)\);\s*\};/);
-  assert.match(plan, /const foldFiltered = !memberView && filter !== null;/);
+  // By member folds every person at once.
+  assert.match(plan, /const collapseAll = \(\) => setMemberClosed\(new Set\(memberKeys\)\);/);
   const hook = read("app/system/use-fullscreen.ts");
   assert.match(hook, /if \(!overlayOnly && document\.fullscreenEnabled/);
   // Escape that closes a dialog, a drawer, an inline editor or a row drag leaves full screen alone.
   assert.match(hook, /event\.key === "Escape" && !event\.defaultPrevented && !document\.querySelector\(ESCAPE_TAKEN\)/);
   assert.match(hook, /const ESCAPE_TAKEN = "\.overlay, \.swal2-container, \.gantt\.moving-row";/);
-  assert.match(read("app/system/production/my-work.css"), /\.plan-gantt\.is-fullscreen \{ position: fixed; inset: 0; z-index: 90;/);
+  assert.match(read("app/system/production/my-work.css"), /\.plan-gantt\.is-fullscreen \{\s*position: fixed;\s*inset: 0;\s*z-index: 90;/);
   const { translate } = load("app/system/i18n.ts");
   // "Expand all" is its own English; a missing entry shows as the key in Thai and Japanese.
-  for (const key of ["Expand all", "Gantt.collapseAll", "Gantt.fullScreen", "Gantt.exitFullScreen", "Plan.foldFiltered"]) {
+  for (const key of ["Expand all", "Gantt.collapseAll", "Gantt.fullScreen", "Gantt.exitFullScreen"]) {
     for (const lang of ["TH", "JP"]) assert.notEqual(translate(key, lang), key, `${key} has no ${lang}`);
   }
-  assert.notEqual(translate("Plan.foldFiltered", "EN"), "Plan.foldFiltered");
   assert.equal(translate("Expand all", "TH"), "กางทั้งหมด");
 });
 

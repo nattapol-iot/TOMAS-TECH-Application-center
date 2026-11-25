@@ -2094,9 +2094,9 @@ const PROJECT_PLAN: Guide = {
       view: "projects",
       title: { th: "อ่าน Gantt", en: "Reading the Gantt", jp: "ガントの見方" },
       body: {
-        th: "แต่ละแถบคือช่วงงาน ลากแถบเพื่อเลื่อนวัน ลากปลายแถบเพื่อยืดหรือหด แล้วกด 'ย้อนกลับ' ได้ถ้าพลาด เส้นโยงคืองานที่ต้องรออีกงานเสร็จ",
-        en: "Each bar is a task. Drag it to move the dates, drag an end to stretch it, and undo if you slip. A line between bars means one task waits for another.",
-        jp: "各バーが作業です。ドラッグで日程を移動し、端をドラッグで伸縮します。間違えたら元に戻せます。バー間の線は待ち関係です。",
+        th: "แต่ละแถบคือช่วงวันของงาน ดับเบิลคลิกแถบเพื่อเปิดงาน ถ้าจะเลื่อนงาน ให้พิมพ์วันใหม่ในแถวของงานนั้นบน 'ตาราง' (ขั้นถัดไป)",
+        en: "Each bar is a task's dates; double-click a bar to open the task. To move a task, type its new dates in its row on the Sheet (next steps).",
+        jp: "各バーはタスクの日程です。バーをダブルクリックするとタスクが開きます。タスクを動かすには、「表」のその行に新しい日付を入力します（次の手順）。",
       },
       missing: {
         th: "โปรเจกต์นี้ยังไม่มีแผน เพิ่มแถวแรกในขั้นถัดไป",
@@ -2278,9 +2278,9 @@ const PROJECT_PLAN: Guide = {
       view: "projects",
       title: { th: "กาง ยุบ คำอธิบายสี และเมนูเพิ่มเติม", en: "Expand, collapse, the colour key and More", jp: "展開・折りたたみ・色の説明・その他メニュー" },
       body: {
-        th: "ปุ่มเดียวสลับระหว่าง 'กางทั้งหมด' กับ 'ยุบทั้งหมด' เพื่อเปิดหรือปิดทุกหัวข้อในครั้งเดียว (ในมุมมองตามสมาชิกคือทุกคน) กด 'คำอธิบายสี' เพื่อดูว่าสีและสัญลักษณ์ใน Gantt หมายถึงอะไร ระบบจำว่าเปิดหรือปิดไว้ ส่วน Export Excel, Create baseline, เต็มจอ และ Refresh อยู่ในปุ่ม 'เพิ่มเติม' ข้างปุ่มเพิ่มหัวข้อ ตอนเต็มจอ กด Esc หรือ 'ออกจากเต็มจอ' เพื่อกลับ",
-        en: "One button flips between Expand all and Collapse all, opening or closing every heading at once (every member in By member). Colour key shows what the colours and marks on the Gantt mean, and stays the way you left it. Export Excel, Create baseline, Full screen and Refresh are under More, beside Add heading. In full screen, press Esc or Exit full screen to come back.",
-        jp: "1つのボタンで「すべて展開」と「すべて折りたたむ」を切り替え、全見出しを一度に開閉します（メンバー別では全員）。「色の説明」でガントの色と記号の意味を表示し、開閉の状態は記憶されます。Excel 出力・ベースライン作成・全画面表示・更新は、見出し追加の隣の「その他」にあります。全画面では Esc か「全画面を終了」で戻ります。",
+        th: "ในมุมมอง 'ตามสมาชิก' ปุ่มเดียวสลับระหว่าง 'กางทั้งหมด' กับ 'ยุบทั้งหมด' เพื่อเปิดหรือปิดทุกคนในครั้งเดียว และกด 'คำอธิบายสี' เพื่อดูว่าสีและสัญลักษณ์ใน Gantt หมายถึงอะไร ระบบจำว่าเปิดหรือปิดไว้ ส่วน Export Excel, Create baseline, เต็มจอ และ Refresh อยู่ในปุ่ม 'เพิ่มเติม' ตอนเต็มจอ กด Esc หรือ 'ออกจากเต็มจอ' เพื่อกลับ",
+        en: "In By member, one button flips between Expand all and Collapse all, opening or closing every member at once, and Colour key shows what the colours and marks on the Gantt mean; it stays the way you left it. Export Excel, Create baseline, Full screen and Refresh are under More. In full screen, press Esc or Exit full screen to come back.",
+        jp: "「メンバー別」では、1つのボタンで「すべて展開」と「すべて折りたたむ」を切り替えて全員を一度に開閉し、「色の説明」でガントの色と記号の意味を表示します。開閉の状態は記憶されます。Excel 出力・ベースライン作成・全画面表示・更新は「その他」にあります。全画面では Esc か「全画面を終了」で戻ります。",
       },
       missing: { th: "โปรเจกต์นี้ยังไม่มีแผน กด 'ถัดไป'", en: "This project has no plan yet. Press Next.", jp: "この案件にはまだ計画がありません。「次へ」を押します。" },
     },

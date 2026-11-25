@@ -9,23 +9,21 @@ import { CreateSignableDocumentModal } from "./SigningScreens";
 import { ResourceTaskWorkspace, type ResourceTask } from "./ResourceTaskWorkspace";
 import { SearchMultiPicker } from "./SearchMultiPicker";
 import { buildScheduleWorkbook, scheduleWorkbookName } from "../../../lib/schedule-workbook";
-import { PLAN_DISCIPLINES, disciplineLabel, draftPick, draftValue, isPlanDiscipline, type PlanDiscipline } from "../../../lib/plan-discipline";
+import { PLAN_DISCIPLINES, disciplineLabel, isPlanDiscipline, type PlanDiscipline } from "../../../lib/plan-discipline";
 import { MyIssuesPanel } from "./MyIssues";
-import { loadProjectIssues, type ProjectIssue } from "./issue-batch-client";
-import type { IssueState } from "../../../lib/issue-batches";
 import { downloadErpEstimateWorkbookBytes } from "../../../lib/erp-estimate-workbook";
 import { estimateBusinessDate, estimateUxCopy } from "../../../lib/estimate-ux";
 import { useActivitySubView } from "../use-activity-presence";
 import { MyWorkQueue } from "./LazyScreens";
 import { listProjectOverview, type ProjectOverviewItem } from "../project-overview-client";
-import { dayNumber, draggedPlan, ganttFitWindow, ganttShift, ganttWindow, linkedStart, planDatesLoop, shiftGanttAnchor } from "../../../lib/gantt";
-import { GanttChart, GanttLegend, GanttToolbar, scheduleTone, type GanttAlert, type GanttLink, type GanttRowDrop, type GanttRowSpec, type GanttZoomChoice } from "./GanttChart";
+import { dayNumber, ganttFitWindow, ganttShift, ganttWindow, linkedStart, planDatesLoop, shiftGanttAnchor } from "../../../lib/gantt";
+import { GanttChart, GanttLegend, GanttToolbar, scheduleTone, type GanttAlert, type GanttRowSpec, type GanttZoomChoice } from "./GanttChart";
 import { useFullscreen } from "../use-fullscreen";
 import { loadTeamBoard, type TeamBoardData } from "../resource-workload-client";
 import { weeklyCapacity, workingDayFinish, type Commitment } from "../../../lib/resource-planning";
 import { boardDays, dailyLoad, dateRuns, outlookLoad, overlapDays, withOutlook, type Overlap } from "../../../lib/team-board";
 import { PicLoadPanel, useLoadNote, usePicLoads } from "./PlanPicLoad";
-import { choiceLink, optionalChoiceLink, placeId, useLinkedState, useScreenPlace } from "../screen-link";
+import { choiceLink, placeId, useLinkedState, useScreenPlace } from "../screen-link";
 import { HealthBadge } from "./ProjectPlanFields";
 import { ThbRateField } from "./ThbRateField";
 import { PlanManHours, type PlanManHoursData } from "./PlanManHours";
@@ -75,27 +73,7 @@ import {
   type SupplierQuotationRecord,
   type SupplierPriceHistoryRecord,
 } from "../api-client";
-import {
-  CopyLinkButton,
-  Badge,
-  Drawer,
-  EmptyState,
-  Field,
-  FilterChips,
-  Icon,
-  KpiCard,
-  Modal,
-  PageHeader,
-  Pagination,
-  Panel,
-  Pill,
-  ProgressCell,
-  SearchInput,
-  Select,
-  TablePageSize,
-  Tabs,
-  Toolbar,
-} from "../ui";
+import { CopyLinkButton, Badge, Drawer, EmptyState, Field, Icon, KpiCard, Modal, PageHeader, Pagination, Panel, Pill, ProgressCell, SearchInput, Select, TablePageSize, Tabs, Toolbar } from "../ui";
 import { COST_ITEM_LOOKUP_MIN_CHARS } from "../../../lib/cost-item-lookup";
 import { assignmentNextAction, assignmentQueueSummary, assignmentUrgency, isActionableAssignment, sectionName, sortAssignmentQueue } from "../../../lib/estimate-assignment-queue";
 import {
@@ -3207,190 +3185,6 @@ function CustomerPeriodFields({ value, onChange }: { value: { start: string; fin
   );
 }
 
-/**
- * A row being typed in place on the plan (the + on a row, or Add main heading): the row it goes under (none: a main
- * heading), the sibling it goes before (none: last), and what has been typed so far.
- */
-type PlanDraft = { parentId: number | null; beforeId: number | null; name: string; memberId: number | null; discipline?: PlanDiscipline | null; start: string; finish: string; error: string };
-
-/** The dates a new row starts with: its heading's customer dates or its task's dates; a new main heading has none. */
-function draftDates(parent: ScheduleTask | null, today: string): { start: string; finish: string } {
-  if (!parent) return { start: "", finish: "" };
-  return customerPeriod(parent) ?? (parent.planStart && parent.planFinish ? { start: parent.planStart, finish: parent.planFinish } : { start: today, finish: today });
-}
-
-/**
- * The draft moved one level out (just after the row it sat under) or in (under the row just above it), or null where
- * it cannot go: in only under a heading or a task that may take sub tasks, and never under a row waiting on a day request.
- */
-function draftLevel(tasks: ScheduleTask[], rows: ScheduleTask[], draft: PlanDraft, step: -1 | 1, waiting: ReadonlySet<number | null>): Pick<PlanDraft, "parentId" | "beforeId"> | null {
-  const byId = new Map(rows.map((row) => [row.id, row]));
-  const childrenOf = (id: number | null) => (id === null ? tasks : (byId.get(id)?.children ?? []));
-  if (step < 0) {
-    const parent = draft.parentId === null ? null : byId.get(draft.parentId);
-    if (!parent || (parent.parentId !== null && waiting.has(parent.parentId))) return null;
-    const siblings = childrenOf(parent.parentId);
-    return { parentId: parent.parentId, beforeId: siblings[siblings.indexOf(parent) + 1]?.id ?? null };
-  }
-  const siblings = childrenOf(draft.parentId);
-  const above = draft.beforeId === null ? siblings.at(-1) : siblings[siblings.findIndex((row) => row.id === draft.beforeId) - 1];
-  return above && (above.kind === "phase" || canTakeSubTasks(above, rows)) && !waiting.has(above.id) ? { parentId: above.id, beforeId: null } : null;
-}
-
-/**
- * The boxes a + opens in the plan, across the row where the new one will land: its level, name, the member a task
- * under a heading needs (a function has its task's unless another is picked), and its dates. Enter saves and opens the
- * next box just below; Esc closes. A main heading's dates are the customer's and may be left for later.
- */
-function PlanRowDraftEditor({
-  bootstrap,
-  draft,
-  parent,
-  planPeople,
-  ownOnly,
-  busy,
-  canOut,
-  canIn,
-  onChange,
-  onLevel,
-  onSave,
-  onClose,
-}: {
-  bootstrap: BootstrapData;
-  draft: PlanDraft;
-  parent: ScheduleTask | null;
-  planPeople: Set<number>;
-  ownOnly: boolean;
-  busy: boolean;
-  canOut: boolean;
-  canIn: boolean;
-  onChange: (patch: Partial<PlanDraft>) => void;
-  onLevel: (step: -1 | 1) => void;
-  onSave: () => void;
-  onClose: () => void;
-}) {
-  const t = useUiText();
-  const kind = !parent ? "heading" : parent.kind === "phase" ? "task" : "function";
-  const nameInput = useRef<HTMLInputElement>(null);
-  // Back to the name when the box opens, after each save and when its level changes.
-  useEffect(() => {
-    if (!busy) nameInput.current?.focus();
-  }, [busy, draft.parentId, draft.beforeId]);
-  const escape = (event: { key: string; preventDefault: () => void }) => {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      onClose();
-    }
-  };
-  const onPlan = bootstrap.team.filter((member) => planPeople.has(member.id)),
-    others = bootstrap.team.filter((member) => !planPeople.has(member.id));
-  const inherited =
-    parent?.pics
-      .filter((pic) => pic.active !== false)
-      .map((pic) => pic.name)
-      .join(", ") ?? "";
-  const nameLabel = kind === "heading" ? "Plan.headingName" : kind === "task" ? "CRM.taskName" : "CRM.functionName";
-  const person = (member: BootstrapData["team"][number]) => (
-    <option key={member.id} value={member.id}>
-      {member.name}
-      {member.department ? ` · ${member.department}` : ""}
-    </option>
-  );
-  return (
-    <form
-      className="plan-draft"
-      data-guide="plan.draft"
-      aria-label={t(nameLabel)}
-      onSubmit={(event) => {
-        event.preventDefault();
-        onSave();
-      }}
-    >
-      <span className="plan-draft-level" role="group" aria-label={t("Plan.draftLevel")} data-guide="plan.quickLevel">
-        <button type="button" className="icon-btn" disabled={busy || !canOut} aria-label={t("Plan.levelOut")} title={t("Plan.levelOut")} onClick={() => onLevel(-1)}>
-          <Icon name="chevronLeft" />
-        </button>
-        <button type="button" className="icon-btn" disabled={busy || !canIn} aria-label={t("Plan.levelIn")} title={t("Plan.levelIn")} onClick={() => onLevel(1)}>
-          <Icon name="chevronRight" />
-        </button>
-      </span>
-      <Badge tone={kind === "heading" ? "violet" : kind === "task" ? "blue" : "slate"}>
-        {t(kind === "heading" ? "Plan.quickKindHeading" : kind === "task" ? "Plan.kindTask" : "Plan.kindFunction")}
-      </Badge>
-      <input
-        ref={nameInput}
-        className="plan-draft-name"
-        data-guide="plan.quickName"
-        maxLength={500}
-        placeholder={t(nameLabel)}
-        aria-label={t(nameLabel)}
-        value={draft.name}
-        readOnly={busy}
-        onChange={(event) => onChange({ name: event.target.value })}
-        onKeyDown={escape}
-      />
-      {kind === "heading" ? null : (
-        <select
-          className="plan-draft-member"
-          data-guide="plan.quickMember"
-          aria-label={t("Schedule.pics")}
-          value={draftValue(draft)}
-          disabled={busy}
-          onChange={(event) => onChange(draftPick(event.target.value))}
-          onKeyDown={escape}
-        >
-          <option value="">{ownOnly ? t("Plan.creatorPicDefault") : kind === "task" ? `${t("CRM.selectMember")} *` : `${t("CRM.sameAsTask")}${inherited ? ` · ${inherited}` : ""}`}</option>
-          {onPlan.length ? <optgroup label={t("Plan.peopleOnPlan")}>{onPlan.map(person)}</optgroup> : null}
-          <optgroup label={t("Plan.everyoneElse")}>{others.map(person)}</optgroup>
-          {/* A row with no PIC and a discipline waits for the head on Team overview > Allocation (owner, 2026-11-22). */}
-          {!ownOnly && kind === "task" ? (
-            <optgroup label={t("Plan.waitingForPeople")}>
-              {PLAN_DISCIPLINES.map((discipline) => (
-                <option key={discipline} value={`d:${discipline}`}>
-                  {t(disciplineLabel(discipline))}
-                </option>
-              ))}
-            </optgroup>
-          ) : null}
-        </select>
-      )}
-      <span className="plan-draft-dates">
-        <DateInput
-          aria-label={t(kind === "heading" ? "Plan.customerStart" : "CRM.planStart")}
-          title={t(kind === "heading" ? "Plan.customerStart" : "CRM.planStart")}
-          value={draft.start}
-          readOnly={busy}
-          onChange={(event) => onChange({ start: event.target.value, ...(draft.finish && event.target.value > draft.finish ? { finish: event.target.value } : {}) })}
-          onKeyDown={escape}
-        />
-        <span aria-hidden="true">–</span>
-        <DateInput
-          aria-label={t(kind === "heading" ? "Plan.customerFinish" : "CRM.planFinish")}
-          title={t(kind === "heading" ? "Plan.customerFinish" : "CRM.planFinish")}
-          min={draft.start || undefined}
-          value={draft.finish}
-          readOnly={busy}
-          onChange={(event) => onChange({ finish: event.target.value })}
-          onKeyDown={escape}
-        />
-      </span>
-      <button type="submit" className="btn primary sm" data-guide="plan.save" disabled={busy || !draft.name.trim()}>
-        <Icon name="check" />
-        {t(busy ? "Saving…" : "Save")}
-      </button>
-      <button type="button" className="icon-btn" aria-label={t("Close")} title={t("Close")} onClick={onClose}>
-        <Icon name="x" />
-      </button>
-      <small className="plan-draft-hint">{t(ownOnly ? "Plan.memberDraftHint" : "Plan.draftHint")}</small>
-      {draft.error ? (
-        <small className="plan-draft-error" role="alert">
-          {draft.error}
-        </small>
-      ) : null}
-    </form>
-  );
-}
-
 /*
  * Changes one schedule row's plan: name, visibility, its start (a date or after another row),
  * duration, effort and who is responsible. Progress stays where it is. A row whose dates come
@@ -3879,18 +3673,9 @@ function ScheduleDayRequestAnswerModal({
   );
 }
 
-type PlanFilter = "late" | "blocked" | "mine" | "waiting";
-const PLAN_FILTERS: { key: PlanFilter; label: string; tone: "red" | "amber" | "blue" }[] = [
-  { key: "late", label: "Plan.filterLate", tone: "red" },
-  { key: "blocked", label: "Plan.filterBlocked", tone: "red" },
-  { key: "waiting", label: "Plan.filterWaiting", tone: "amber" },
-  { key: "mine", label: "Plan.filterMine", tone: "blue" },
-];
 const planProjectStorageKey = (userId: number) => `tomas-tech-plan-project:${userId}`;
-// The plan's link: "#/projects/plan/<project>/task/<task>?only=late&zoom=quarter" (screen-link.tsx).
-const PLAN_FILTER_LINK = optionalChoiceLink(PLAN_FILTERS.map((item) => item.key));
+// The plan's link: "#/projects/plan/<project>/task/<task>?level=member&zoom=quarter" (screen-link.tsx).
 const PLAN_ZOOM_LINK = choiceLink<GanttZoomChoice>(["fit", "month", "quarter", "half", "year"]);
-/** The whole plan (Team Plan), only the headings on the customer's dates (Master Plan), or the plan by who does it. */
 const LEGEND_KEY = "tomas-tech-plan-legend";
 function readLegendOpen(): boolean {
   try {
@@ -3906,9 +3691,13 @@ function saveLegendOpen(open: boolean) {
     /* storage blocked: the choice lasts for this visit only */
   }
 }
-type PlanLevel = "sheet" | "team" | "master" | "member" | "people";
-const PLAN_LEVEL_LINK = choiceLink<PlanLevel>(["sheet", "team", "master", "member", "people"]);
-const PLAN_LEVEL_LABEL: Record<PlanLevel, string> = { sheet: "Sheet.view", team: "Plan.levelTeam", master: "Plan.levelMaster", member: "Plan.levelMember", people: "People.view" };
+/**
+ * The Sheet, where the plan is edited (PlanSheet.tsx); the plan by who does it; or people per day (PlanPeopleGrid.tsx). An
+ * old link to the Team or Master Plan view names a level this list no longer has, so it opens the Sheet.
+ */
+type PlanLevel = "sheet" | "member" | "people";
+const PLAN_LEVEL_LINK = choiceLink<PlanLevel>(["sheet", "member", "people"]);
+const PLAN_LEVEL_LABEL: Record<PlanLevel, string> = { sheet: "Sheet.view", member: "Plan.levelMember", people: "People.view" };
 
 /**
  * The plan's own work the way the team board counts it (backend-node/src/resource-workload.ts): each row with nothing
@@ -3960,21 +3749,6 @@ function memberWindowOf(schedule: ProjectSchedule, today: string) {
 /** Project numbers in natural order: PJ26009 before PJ26010. */
 const byProjectNumber = (a: { number: string }, b: { number: string }) => a.number.localeCompare(b.number, "en", { numeric: true, sensitivity: "base" });
 const isLeafTask = (task: ScheduleTask) => task.kind !== "phase" && task.children.length === 0;
-const taskOrDescendantMatches = (task: ScheduleTask, matches: (task: ScheduleTask) => boolean): boolean => matches(task) || task.children.some((child) => taskOrDescendantMatches(child, matches));
-
-/** The rows the plan draws: collapsed branches hidden; under a quick filter, matching tasks with their parents. */
-function planRows(tasks: ScheduleTask[], collapsed: Set<number>, matches: ((task: ScheduleTask) => boolean) | null): ScheduleTask[] {
-  const rows: ScheduleTask[] = [];
-  const visit = (list: ScheduleTask[]) => {
-    for (const task of list) {
-      if (matches && !taskOrDescendantMatches(task, matches)) continue;
-      rows.push(task);
-      if (task.children.length && (matches || !collapsed.has(task.id))) visit(task.children);
-    }
-  };
-  visit(tasks);
-  return rows;
-}
 
 /**
  * The plan by member (owner request 2026-11-04): one row per person on the plan, with what they are on now or next, their
@@ -4179,14 +3953,11 @@ function memberGanttRows({
 }
 
 /**
- * Projects > Plan: a project's schedule as a Gantt. The bars come from the API's resolved dates; a
- * bar or a row opens the task drawer, where the PIC, the PM or an Admin updates progress (canProgress)
- * and the plan owner edits the row. Reloads keep the plan on screen instead of blanking it.
+ * Projects > Plan: a project's schedule, edited on the Sheet (PlanSheet.tsx), or read by member or as people per day. A
+ * row opens the task drawer, where the PIC, the PM or an Admin updates progress (canProgress) and the plan owner edits
+ * the row. Reloads keep the plan on screen instead of blanking it.
  */
-/** Customer issues on the Plan Gantt, coloured like their badges on the Punchlist. */
-const PLAN_ISSUE_TONE: Record<IssueState, "amber" | "slate" | "blue" | "green" | "red"> = { Approval: "amber", Open: "slate", Doing: "blue", Done: "green", Cancelled: "slate", Rejected: "red" };
-
-export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectId, preferredTaskId, onPreferredConsumed, openIssueBatch, lockedProject = false }: ProductionPlanningProps) {
+export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectId, preferredTaskId, onPreferredConsumed, lockedProject = false }: ProductionPlanningProps) {
   const uiText = useUiText();
   useActivitySubView("projects-schedule");
   const allowed = bootstrap.permissions.includes("schedule.read");
@@ -4204,15 +3975,12 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
   const linkedTaskId = opened[0] === "plan" && opened[2] === "task" ? placeId(opened, 3) : null;
   const [zoom, setZoom] = useLinkedState<GanttZoomChoice>("zoom", "fit", PLAN_ZOOM_LINK);
   const [anchor, setAnchor] = useState(today);
-  const [filter, setFilter] = useLinkedState<PlanFilter | null>("only", null, PLAN_FILTER_LINK);
-  // The plan is edited in one place, the Sheet, typed like the team's Excel Gantt (PlanSheet.tsx, owner 2026-11-24). An
-  // old link to the Team or Master Plan view opens the Sheet (its Headings only view is the Master Plan).
-  const [storedLevel, setLevel] = useLinkedState<PlanLevel>("level", "sheet", PLAN_LEVEL_LINK);
-  const level: PlanLevel = storedLevel === "team" || storedLevel === "master" ? "sheet" : storedLevel;
+  // The plan is edited in one place, the Sheet, typed like the team's Excel Gantt (PlanSheet.tsx, owner 2026-11-24); its
+  // Headings only view is the Master Plan.
+  const [level, setLevel] = useLinkedState<PlanLevel>("level", "sheet", PLAN_LEVEL_LINK);
   const sheetView = level === "sheet";
   // The People table: the same rows against the days, people per day typed like a spreadsheet (PlanPeopleGrid.tsx).
   const peopleView = level === "people";
-  const [collapsed, setCollapsed] = useState<Set<number>>(() => new Set());
   // The page's own overlay rather than the browser's full screen, so the task drawer, dialogs and toasts still open over it.
   const { ref: fullscreenRef, active: fullscreenActive, toggle: toggleFullscreen } = useFullscreen<HTMLDivElement>({ overlayOnly: true });
   // The colour key is closed until asked for, and stays the way the reader left it.
@@ -4223,9 +3991,6 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
       return !open;
     });
   const [drawerTaskId, setDrawerTaskId] = useState<number | null>(preferredTaskId ?? linkedTaskId);
-  // The row being typed in place (PlanRowDraftEditor), and whether it is saving.
-  const [draft, setDraft] = useState<PlanDraft | null>(null);
-  const [draftBusy, setDraftBusy] = useState(false);
   const [baselineOpen, setBaselineOpen] = useState(false);
   // Dialogs keep the row they opened on, so a background reload never swaps in a newer version unseen.
   const [progressTask, setProgressTask] = useState<ScheduleTask | null>(null);
@@ -4234,9 +3999,6 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
   const [drawingTask, setDrawingTask] = useState<{ projectId: number; taskId: number } | null>(null);
   const [answerRequest, setAnswerRequest] = useState<ScheduleUpdate | null>(null);
   const [saving, setSaving] = useState(false);
-  // A bar dropped on new dates: drawn there while it saves, then offered for undo until the next move.
-  const [movePending, setMovePending] = useState<{ taskId: number; start: string; finish: string } | null>(null);
-  const [lastMove, setLastMove] = useState<{ taskId: number; label: string; rowVersion: string; before: { planStart: string | null; planDays: number; lagDays: number } } | null>(null);
   const scheduleRequestId = useRef(0);
   // The plan as last read, handed to the Sheet so it saves its next edit on that read without waiting for a redraw.
   const lastLoaded = useRef<ProjectSchedule | null>(null);
@@ -4277,10 +4039,6 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
     }
   }, [allowed, preferredProjectId, preferredTaskId, linkedProjectId, onPreferredConsumed, storageKey]);
   // A reload keeps the current plan on screen; only switching projects clears it.
-  // Customer issues of the project (Punchlist batches, owner 2026-11-18): drawn under the plan, apart from it. They
-  // never count in the plan's progress, health or dates; they are read again whenever the plan is.
-  const [planIssues, setPlanIssues] = useState<{ projectId: number; items: ProjectIssue[] } | null>(null);
-  const [issuesOpen, setIssuesOpen] = useState(true);
   const loadSchedule = useCallback(async () => {
     const requestId = ++scheduleRequestId.current;
     if (!selectedId) {
@@ -4317,20 +4075,6 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
       scheduleRequestId.current += 1;
     };
   }, [loadSchedule]);
-  useEffect(() => {
-    if (!selectedId || !allowed) return;
-    let live = true;
-    loadProjectIssues(selectedId)
-      .then((result) => {
-        if (live) setPlanIssues({ projectId: selectedId, items: result.items });
-      })
-      .catch(() => {
-        if (live) setPlanIssues({ projectId: selectedId, items: [] });
-      });
-    return () => {
-      live = false;
-    };
-  }, [selectedId, allowed, schedule]);
   // The address names the open project and task, so it is a link to them.
   useEffect(() => {
     if (selectedId) place(["plan", selectedId, ...(drawerTaskId ? ["task", drawerTaskId] : [])], "replace");
@@ -4362,17 +4106,12 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
     scheduleRequestId.current += 1;
     setSchedule(null);
     setDrawerTaskId(null);
-    setFilter(null);
-    setCollapsed(new Set());
     setZoom("fit");
-    setDraft(null);
     setBaselineOpen(false);
     setProgressTask(null);
     setEditTask(null);
     setAnswerRequest(null);
     setDrawerError("");
-    setMovePending(null);
-    setLastMove(null);
     setLoadingSchedule(Boolean(nextId));
     setSelectedId(nextId);
     try {
@@ -4397,123 +4136,9 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
   const canAnswerRequests = activeSchedule ? canAnswerDayRequests(activeSchedule, bootstrap.permissions.includes("schedule.plan")) : false;
   const pendingDayRequests = activeSchedule?.recentUpdates.filter((update) => update.field === "request" && update.requestDays > 0 && !update.answer) ?? [];
   const pendingTaskIds = new Set(pendingDayRequests.map((request) => request.taskId));
-  const filterRules: Record<PlanFilter, (task: ScheduleTask) => boolean> = {
-    // A Master Plan frame row is left out, as the summary's Overdue and Blocked counts leave it out.
-    late: (task) => isLeafTask(task) && task.countsTowardHealth !== false && isLateAgainstPlan(task, today),
-    blocked: (task) => isLeafTask(task) && task.countsTowardHealth !== false && task.status === "Blocked",
-    waiting: (task) => pendingTaskIds.has(task.id),
-    mine: (task) => isLeafTask(task) && task.pics.some((pic) => pic.id === bootstrap.user.id),
-  };
-  const filterItems = PLAN_FILTERS.map((item) => ({ ...item, value: rows.filter(filterRules[item.key]).length }));
-  const visible = !activeSchedule ? [] : planRows(activeSchedule.tasks, collapsed, filter ? filterRules[filter] : null);
   const target = selectedProject?.targetDelivery ?? null;
   const range =
     zoom === "fit" ? ganttFitWindow([activeSchedule?.summary.planStart, activeSchedule?.summary.planFinish, target, ...rows.map((task) => task.forecastFinish)], today) : ganttWindow(zoom, anchor);
-  const toggleRow = (taskId: number) =>
-    setCollapsed((current) => {
-      const next = new Set(current);
-      if (next.has(taskId)) next.delete(taskId);
-      else next.add(taskId);
-      return next;
-    });
-  // The plan owner drags a leaf row's bar to new dates; the API refuses rows Resource Plan manages and rows waiting on a day request.
-  const canReschedule = (task: ScheduleTask) =>
-    canPlan &&
-    task.kind !== "phase" &&
-    task.children.length === 0 &&
-    !task.managedByResourcePlan &&
-    !pendingTaskIds.has(task.id) &&
-    Boolean(task.planStart && task.planFinish) &&
-    !movePending &&
-    !saving;
-  const visibleIds = new Set(visible.map((task) => task.id));
-  const links: GanttLink[] = visible
-    .filter((task) => task.startMode === "linked" && task.predecessorId !== null && visibleIds.has(task.predecessorId))
-    .map((task) => ({ from: `task:${task.predecessorId}`, to: `task:${task.id}` }));
-  /** Opens the boxes for a new row under `parentId` (none: a main heading), before `beforeId` (none: last), with that row open. */
-  const openDraft = (parentId: number | null, beforeId: number | null) => {
-    if (!canPlan && (parentId === null || !taskById.get(parentId)?.canAddChild)) return;
-    if (parentId !== null)
-      setCollapsed((current) => {
-        if (!current.has(parentId)) return current;
-        const next = new Set(current);
-        next.delete(parentId);
-        return next;
-      });
-    setFilter(null);
-    setDraft({ parentId, beforeId, name: "", memberId: canPlan ? null : bootstrap.user.id, ...draftDates(parentId === null ? null : (taskById.get(parentId) ?? null), today), error: "" });
-  };
-  /**
-   * The + on a row, offered while nothing else is saving and no quick filter hides rows: on a heading it adds a task under
-   * it, on a task that may take sub tasks a function under it, on any other task a row just below; never on a member's
-   * own detail row, nor under a row waiting on a day request.
-   */
-  const plusFor = (task: ScheduleTask): GanttRowSpec["insert"] => {
-    if ((!canPlan && !task.canAddChild) || filter || movePending || saving || draftBusy || task.kind === "detail" || !activeSchedule) return undefined;
-    if (task.kind === "phase" || (canTakeSubTasks(task, rows) && !pendingTaskIds.has(task.id))) {
-      return { label: uiText(task.kind === "phase" ? "Plan.addSubRow" : "Plan.addFunction"), onInsert: () => openDraft(task.id, null) };
-    }
-    if (task.parentId === null || (!canPlan && !taskById.get(task.parentId)?.canAddChild) || pendingTaskIds.has(task.parentId)) return undefined;
-    const siblings = taskById.get(task.parentId)?.children ?? [];
-    return { label: uiText("Plan.insertRow"), onInsert: () => openDraft(task.parentId, siblings[siblings.indexOf(task) + 1]?.id ?? null) };
-  };
-  const saveDraft = async () => {
-    const current = draft;
-    if (!current || !activeSchedule || draftBusy || !current.name.trim()) return;
-    const name = current.name.trim(),
-      parent = current.parentId === null ? null : (taskById.get(current.parentId) ?? null);
-    const refuse = (message: string) => setDraft((value) => value && { ...value, error: message });
-    if (current.parentId !== null && !parent) {
-      setDraft(null);
-      return;
-    }
-    // A row's dates come as a pair, a heading's may wait; a member is optional (owner, 2026-11-24).
-    const dated = Boolean(current.start && current.finish && current.finish >= current.start);
-    if (parent ? !dated : (current.start || current.finish) && !dated) {
-      refuse(uiText("Plan.draftDates"));
-      return;
-    }
-    const memberIds = current.memberId === null ? [] : [current.memberId];
-    setDraftBusy(true);
-    setError("");
-    try {
-      if (parent && canPlan) await ensureScheduleMembers(activeSchedule.projectId, activeSchedule.managerId, memberIds);
-      await apiRequest(`/api/v1/projects/${activeSchedule.projectId}/schedule/tasks`, {
-        method: "POST",
-        body: JSON.stringify({
-          scheduleVersion: activeSchedule.scheduleVersion,
-          parentId: current.parentId,
-          beforeId: current.beforeId,
-          sortOrder: 0,
-          kind: parent ? "task" : "phase",
-          name,
-          isMilestone: false,
-          visibility: parent ? "Internal" : "Customer",
-          planStart: dated ? current.start : null,
-          planDays: dated ? periodDays(current.start, current.finish) : 1,
-          startMode: "manual",
-          predecessorId: null,
-          lagDays: 0,
-          picUserIds: memberIds,
-          picExternal: "",
-          planManDays: 0,
-          ...(parent && current.discipline ? { discipline: current.discipline } : {}),
-        }),
-      });
-      notify(`${activeSchedule.projectNo} · ${name} ${uiText("Plan.quickAdded")}`);
-      // The next box opens just below the new row, keeping the member and dates.
-      setDraft((value) => value && { ...value, name: "", error: "" });
-      await loadSchedule();
-    } catch (failure) {
-      // The typed row stays in the boxes; Enter tries again on the reloaded plan.
-      if (isConcurrencyConflict(failure)) {
-        notify(`${activeSchedule.projectNo} · ${uiText("Plan.changedReloaded")}`);
-        await loadSchedule();
-      } else refuse(toError(failure));
-    } finally {
-      setDraftBusy(false);
-    }
-  };
   /**
    * The bin on a row the plan owner may delete, with the rows under it: none has started, holds a member's own task or
    * waits on a day request. A Resource Plan row is deleted where it was made; the server also refuses a row other work
@@ -4529,10 +4154,10 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
     if (removing.some((row) => row.kind === "detail")) return "Plan.deleteDetail";
     if (removing.some((row) => pendingTaskIds.has(row.id))) return "Plan.deletePending";
     if (removing.some((row) => row.managedByResourcePlan)) return "Plan.deleteResourcePlan";
-    return filter ? "Plan.deleteFiltered" : "";
+    return "";
   };
   const binFor = (task: ScheduleTask): GanttRowSpec["remove"] => {
-    if (!changesPlan || movePending || saving || draftBusy) return undefined;
+    if (!changesPlan || saving) return undefined;
     const block = deleteBlock(task);
     if (block) {
       const reason = uiText(block);
@@ -4558,9 +4183,8 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
     try {
       await apiRequest(`/api/v1/schedule/tasks/${task.id}`, { method: "DELETE", body: JSON.stringify({ scheduleVersion: activeSchedule.scheduleVersion, rowVersion: task.rowVersion }) });
       notify(`${activeSchedule.projectNo} · ${task.name} ${uiText("Plan.rowDeleted")}`);
-      // The drawer and the typing boxes do not stay on a row that is gone.
+      // The drawer does not stay on a row that is gone.
       if (drawerTaskId !== null && removing.includes(drawerTaskId)) setDrawerTaskId(null);
-      setDraft((current) => (current && ((current.parentId !== null && removing.includes(current.parentId)) || (current.beforeId !== null && removing.includes(current.beforeId))) ? null : current));
     } catch (failure) {
       if (isConcurrencyConflict(failure)) notify(`${activeSchedule.projectNo} · ${task.wbs} ${uiText("Plan.changedReloaded")}`);
       else {
@@ -4572,189 +4196,9 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
       setSaving(false);
     }
   };
-  // The draft is drawn where its row will land: before the row it goes before, else after the rows under its parent.
-  const draftParent = draft?.parentId == null ? null : (taskById.get(draft.parentId) ?? null);
-  const draftAt =
-    !draft || (!canPlan && !draftParent?.canAddChild) || level === "member" || (draft.parentId !== null && !draftParent)
-      ? -1
-      : draft.beforeId !== null
-        ? visible.findIndex((task) => task.id === draft.beforeId)
-        : !draftParent
-          ? visible.length
-          : (() => {
-              const at = visible.indexOf(draftParent);
-              let end = at + 1;
-              while (at >= 0 && end < visible.length && visible[end]!.depth > draftParent.depth) end++;
-              return at < 0 ? -1 : end;
-            })();
-  const levelOf = (step: -1 | 1) => {
-    if (!draft || !activeSchedule) return null;
-    const place = draftLevel(activeSchedule.tasks, rows, draft, step, pendingTaskIds);
-    return place && (canPlan || (place.parentId !== null && taskById.get(place.parentId)?.canAddChild)) ? place : null;
-  };
-  // oxlint-disable-next-line react/refs -- the rows only hand out handlers; any ref behind them is touched when one runs, never while rendering.
-  const ganttRows: GanttRowSpec[] = visible.map((task) => {
-    const summaryRow = task.kind === "phase" || task.children.length > 0,
-      insert = plusFor(task),
-      bin = binFor(task);
-    const dropped = movePending?.taskId === task.id ? movePending : null;
-    const movable = canPlan && !filter && !movePending && !saving && !draftBusy;
-    // A heading with nothing under it yet, or whose rows run past the customer's dates, says so.
-    const committed = customerPeriod(task);
-    const headingMark =
-      task.kind !== "phase" || task.parentId !== null ? null : !task.children.length ? (
-        <Badge tone="amber">{uiText("Plan.notBrokenDown")}</Badge>
-      ) : committed && task.planFinish && task.planFinish > committed.finish ? (
-        <Badge tone="red">{uiText("Plan.pastMasterPlan")}</Badge>
-      ) : null;
-    const lock = task.managedByResourcePlan ? <ResourcePlanLock /> : pendingTaskIds.has(task.id) ? <Badge tone="amber">{uiText("Plan.waitingBadge")}</Badge> : headingMark;
-    return {
-      key: `task:${task.id}`,
-      depth: task.depth,
-      kind: summaryRow ? "phase" : "task",
-      label: (
-        <>
-          <span className="mono">{task.wbs}</span> {task.name}
-        </>
-      ),
-      meta: [
-        task.pics.map((pic) => (pic.active === false ? `${pic.name} (${uiText("Plan.picLeft")})` : pic.name)).join(", ") || task.picExternal,
-        uiText(task.status),
-        `${Math.round(Number(task.percentComplete))}%`,
-      ]
-        .filter(Boolean)
-        .join(" · "),
-      ...(lock ? { status: lock } : {}),
-      ...(task.children.length && !filter ? { expandable: true, expanded: !collapsed.has(task.id), onToggle: () => toggleRow(task.id) } : {}),
-      onOpen: () => setDrawerTaskId(task.id),
-      ...(movable ? { movable: true } : {}),
-      ...(insert ? { insert } : {}),
-      ...(bin ? { remove: bin } : {}),
-      ...(canReschedule(task)
-        ? {
-            reschedule: {
-              resize: !task.isMilestone,
-              onChange: (start: string, finish: string) => {
-                void moveTask(task, start, finish);
-              },
-            },
-          }
-        : {}),
-      start: dropped?.start ?? task.planStart,
-      finish: dropped?.finish ?? task.planFinish,
-      progress: Number(task.percentComplete),
-      tone: scheduleTone(task, today),
-      baselineStart: task.baselineStart,
-      baselineFinish: task.baselineFinish,
-      forecastFinish: task.forecastFinish,
-      milestone: task.isMilestone,
-      selected: drawerTaskId === task.id,
-      title: `${task.wbs} ${task.name} · ${task.planStart ?? "—"} → ${task.planFinish ?? "—"} · ${Math.round(Number(task.percentComplete))}%`,
-    };
-  });
-  if (draft && draftAt >= 0 && activeSchedule) {
-    ganttRows.splice(draftAt, 0, {
-      key: "draft",
-      depth: draftParent ? draftParent.depth + 1 : 0,
-      kind: draftParent ? "task" : "phase",
-      label: null,
-      start: null,
-      finish: null,
-      tone: "blue",
-      title: "",
-      editor: (
-        <PlanRowDraftEditor
-          bootstrap={planTeam}
-          ownOnly={!canPlan}
-          draft={draft}
-          parent={draftParent}
-          busy={draftBusy}
-          planPeople={new Set(rows.flatMap((task) => task.pics.map((pic) => pic.id)))}
-          canOut={levelOf(-1) !== null}
-          canIn={levelOf(1) !== null}
-          onChange={(patch) => setDraft((current) => current && { ...current, ...patch, error: "" })}
-          onLevel={(step) => {
-            const place = levelOf(step);
-            if (!place) return;
-            if (place.parentId !== null)
-              setCollapsed((current) => {
-                if (!current.has(place.parentId!)) return current;
-                const next = new Set(current);
-                next.delete(place.parentId!);
-                return next;
-              });
-            setDraft((current) => current && { ...current, ...place, ...draftDates(place.parentId === null ? null : (taskById.get(place.parentId) ?? null), today), error: "" });
-          }}
-          onSave={() => {
-            void saveDraft();
-          }}
-          onClose={() => setDraft(null)}
-        />
-      ),
-    });
-  }
   // By member (owner request 2026-11-04): one row per person on the plan with their rows here, their other work faint,
   // and the days it overlaps (amber) or is more than they have (red) marked under their bars.
   const memberView = level === "member";
-  const projectIssues = planIssues && planIssues.projectId === selectedId ? planIssues.items : [];
-  const issueStarts = projectIssues
-    .map((issue) => issue.planStart)
-    .filter((day): day is string => Boolean(day))
-    .sort();
-  const issueEnds = projectIssues
-    .map((issue) => issue.planEnd ?? issue.planStart)
-    .filter((day): day is string => Boolean(day))
-    .sort();
-  const issueRows: GanttRowSpec[] =
-    filter || !projectIssues.length
-      ? []
-      : [
-          {
-            key: "issues",
-            depth: 0,
-            kind: "phase",
-            label: (
-              <>
-                {uiText("Plan.issuesGroup")} <Badge tone="amber">{projectIssues.length}</Badge>
-              </>
-            ),
-            meta: uiText("Plan.issuesMeta"),
-            expandable: true,
-            expanded: issuesOpen,
-            onToggle: () => setIssuesOpen((open) => !open),
-            start: issueStarts[0] ?? null,
-            finish: issueEnds[issueEnds.length - 1] ?? null,
-            tone: "amber",
-            progress: null,
-            title: `${uiText("Plan.issuesGroup")} · ${projectIssues.length}`,
-          },
-          ...(issuesOpen
-            ? projectIssues.map((issue): GanttRowSpec => {
-                const what = issue.functionName || (issue.description.length > 60 ? `${issue.description.slice(0, 59)}…` : issue.description);
-                return {
-                  key: `issue:${issue.id}`,
-                  depth: 1,
-                  kind: "task",
-                  label: (
-                    <>
-                      <span className="mono">
-                        {issue.batchNo} #{issue.lineNo}
-                      </span>{" "}
-                      {what}
-                    </>
-                  ),
-                  meta: [issue.assigneeName, uiText(`Issues.state.${issue.state}`), issue.planHours === null ? "" : `${issue.planHours} h`].filter(Boolean).join(" · "),
-                  ...(openIssueBatch ? { onOpen: () => openIssueBatch(issue.batchId) } : {}),
-                  start: issue.planStart,
-                  finish: issue.planEnd ?? issue.planStart,
-                  progress: issue.state === "Done" ? 100 : null,
-                  tone: PLAN_ISSUE_TONE[issue.state],
-                  ...(issue.planStart ? {} : { placeholder: uiText("Plan.issueUnplanned") }),
-                  title: `${issue.batchNo} #${issue.lineNo} ${what} · ${issue.planStart ?? "—"} → ${issue.planEnd ?? issue.planStart ?? "—"}`,
-                };
-              })
-            : []),
-        ];
   const memberBoard = memberWork && memberWork.key === memberKey ? memberWork : null;
   const memberRows =
     memberView && activeSchedule && memberSpan
@@ -4776,21 +4220,11 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
             }),
         })
       : [];
-  const chartRows = memberView ? memberRows : [...ganttRows, ...issueRows];
-  // Expand all / Collapse all fold what this view folds: the Team Plan's rows that have rows under them, or the members.
-  // A quick filter shows every match open with its parents (planRows), so folding does nothing there.
-  const parentIds = rows.filter((task) => task.children.length > 0).map((task) => task.id);
+  // Expand all / Collapse all open or close every member at once.
   const memberKeys = memberRows.filter((row) => row.expandable && row.depth === 0).map((row) => row.key.slice("member:".length));
-  const anyFolded = memberView ? memberKeys.some((key) => memberClosed.has(key)) : parentIds.some((id) => collapsed.has(id));
-  const foldFiltered = !memberView && filter !== null;
-  const expandAll = () => {
-    if (memberView) setMemberClosed(new Set());
-    else setCollapsed(new Set());
-  };
-  const collapseAll = () => {
-    if (memberView) setMemberClosed(new Set(memberKeys));
-    else setCollapsed(new Set(parentIds));
-  };
+  const anyFolded = memberKeys.some((key) => memberClosed.has(key));
+  const expandAll = () => setMemberClosed(new Set());
+  const collapseAll = () => setMemberClosed(new Set(memberKeys));
   const drawerTask = drawerTaskId === null ? null : (taskById.get(drawerTaskId) ?? null);
   const saveTaskProgress = async (task: ScheduleTask, patch: Partial<MyWorkProgressInput>, message: string) => {
     if (!activeSchedule) return;
@@ -4824,157 +4258,6 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
         await loadSchedule();
       }
     } finally {
-      setSaving(false);
-    }
-  };
-  /** Saves a row's plan with new dates, everything else as it is; returns the row's new version. */
-  const putDates = async (task: ScheduleTask, plan: { planStart: string | null; planDays: number; lagDays: number }) => {
-    const saved = await apiRequest<{ rowVersion: string }>(`/api/v1/schedule/tasks/${task.id}`, {
-      method: "PUT",
-      body: JSON.stringify({
-        scheduleVersion: activeSchedule?.scheduleVersion ?? null,
-        rowVersion: task.rowVersion,
-        parentId: task.parentId,
-        sortOrder: task.sortOrder,
-        kind: task.kind,
-        name: task.name,
-        isMilestone: task.isMilestone,
-        visibility: task.visibility,
-        planStart: plan.planStart,
-        planDays: plan.planDays,
-        startMode: task.startMode,
-        predecessorId: task.predecessorId,
-        lagDays: plan.lagDays,
-        picUserIds: task.pics.map((pic) => pic.id),
-        picExternal: task.picExternal,
-        planManDays: task.planManDays,
-      }),
-    });
-    return saved.rowVersion;
-  };
-  const moveFailed = async (task: ScheduleTask, failure: unknown) => {
-    if (isConcurrencyConflict(failure)) notify(`${activeSchedule?.projectNo ?? ""} · ${task.wbs} ${uiText("Plan.changedReloaded")}`);
-    else {
-      setError(toError(failure));
-      notify(`${activeSchedule?.projectNo ?? ""} · ${task.wbs} ${uiText("Plan.saveFailed")}`);
-    }
-  };
-  const moveTask = async (task: ScheduleTask, start: string, finish: string) => {
-    if (!activeSchedule) return;
-    // A row waiting for several rows (migration 126) starts after the latest; a drag here moves only the first gap.
-    if (task.startMode === "linked" && task.extraLinks?.length && start !== task.planStart) {
-      notify(`${activeSchedule.projectNo} · ${task.wbs} ${uiText("Plan.manyPredecessors")}`);
-      return;
-    }
-    const predecessorFinish = task.predecessorId === null ? null : (taskById.get(task.predecessorId)?.planFinish ?? null);
-    const plan = draggedPlan(task, start, finish, predecessorFinish, new Set(activeSchedule.holidays ?? []));
-    const label = `${task.wbs} ${task.name}`;
-    setMovePending({ taskId: task.id, start, finish });
-    setSaving(true);
-    setError("");
-    try {
-      const rowVersion = await putDates(task, plan);
-      setLastMove({ taskId: task.id, label, rowVersion, before: { planStart: task.storedPlanStart ?? null, planDays: task.planDays, lagDays: task.lagDays } });
-      notify(`${activeSchedule.projectNo} · ${label} ${uiText("Plan.movedTo")} ${date(start)} – ${date(finish)}`);
-    } catch (failure) {
-      await moveFailed(task, failure);
-    } finally {
-      await loadSchedule();
-      setMovePending(null);
-      setSaving(false);
-    }
-  };
-  const undoMove = async () => {
-    const move = lastMove,
-      task = move ? taskById.get(move.taskId) : null;
-    if (!move || !activeSchedule) return;
-    // Someone changed the row after the move: putting the old dates back would overwrite their change.
-    if (!task || task.rowVersion !== move.rowVersion) {
-      setLastMove(null);
-      notify(`${move.label} ${uiText("Plan.undoStale")}`);
-      return;
-    }
-    setSaving(true);
-    setError("");
-    try {
-      await putDates(task, move.before);
-      setLastMove(null);
-      notify(`${activeSchedule.projectNo} · ${move.label} ${uiText("Plan.undone")}`);
-    } catch (failure) {
-      await moveFailed(task, failure);
-    } finally {
-      await loadSchedule();
-      setSaving(false);
-    }
-  };
-  /**
-   * Where a dropped row lands: under the row one level out above the gap, before the row below it when that one is at
-   * the same level, else last. Null when the row may not go there (main headings only at the top; a task under a
-   * heading or a task that may take sub tasks, at most six levels; details under a task without sub tasks; never under
-   * itself; a Resource Plan row or one waiting on a day request only up or down where it is) or when it would not move.
-   */
-  const placeFor = (drop: GanttRowDrop): { task: ScheduleTask; parentId: number | null; beforeId: number | null } | null => {
-    const rowOf = (key: string | null) => (key === null ? null : (taskById.get(Number(key.replace("task:", ""))) ?? null));
-    const task = rowOf(drop.key),
-      above = rowOf(drop.above),
-      below = rowOf(drop.below);
-    if (!activeSchedule || !task) return null;
-    let parent = drop.depth > 0 ? above : null;
-    while (parent && parent.depth > drop.depth - 1) parent = parent.parentId === null ? null : (taskById.get(parent.parentId) ?? null);
-    if (drop.depth > 0 && parent?.depth !== drop.depth - 1) return null;
-    const parentId = parent?.id ?? null;
-    const beforeId = below && below.depth === drop.depth && below.parentId === parentId ? below.id : null;
-    const childrenOf = (id: number | null) => (id === null ? activeSchedule.tasks : (taskById.get(id)?.children ?? []));
-    const taskHeight = Math.max(
-      0,
-      ...flattenTasks(task.children)
-        .filter((row) => row.kind === "task")
-        .map((row) => row.depth - task.depth),
-    );
-    const fits = (into: ScheduleTask | null) =>
-      task.kind === "phase"
-        ? into === null
-        : task.kind === "task"
-          ? into !== null && (into.kind === "phase" || canTakeSubTasks(into, rows)) && into.depth + 1 + taskHeight <= MAX_PLAN_DEPTH
-          : into?.kind === "task" && !into.children.some((child) => child.kind === "task");
-    if (!fits(parent)) return null;
-    for (let up: ScheduleTask | null = parent; up; up = up.parentId === null ? null : (taskById.get(up.parentId) ?? null)) if (up.id === task.id) return null;
-    if (parentId !== task.parentId && (task.managedByResourcePlan || pendingTaskIds.has(task.id) || (parentId !== null && pendingTaskIds.has(parentId)))) return null;
-    if (parentId === task.parentId) {
-      const siblings = childrenOf(parentId),
-        at = siblings.findIndex((row) => row.id === task.id);
-      if ((siblings[at + 1]?.id ?? null) === beforeId) return null;
-    }
-    return { task, parentId, beforeId };
-  };
-  const moveRow = async (drop: GanttRowDrop) => {
-    const placed = placeFor(drop);
-    if (!placed || !activeSchedule) return;
-    setSaving(true);
-    setError("");
-    try {
-      await apiRequest(`/api/v1/schedule/tasks/${placed.task.id}/move`, {
-        method: "POST",
-        body: JSON.stringify({
-          scheduleVersion: activeSchedule.scheduleVersion,
-          rowVersion: placed.task.rowVersion,
-          parentId: placed.parentId,
-          beforeId: placed.beforeId,
-        }),
-      });
-      notify(`${activeSchedule.projectNo} · ${placed.task.wbs} ${placed.task.name} ${uiText("Plan.rowMoved")}`);
-      // Dropped into a folded row: open it, so the row is seen where it landed.
-      if (placed.parentId !== null)
-        setCollapsed((current) => {
-          if (!current.has(placed.parentId!)) return current;
-          const next = new Set(current);
-          next.delete(placed.parentId!);
-          return next;
-        });
-    } catch (failure) {
-      await moveFailed(placed.task, failure);
-    } finally {
-      await loadSchedule();
       setSaving(false);
     }
   };
@@ -5050,7 +4333,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
           },
         ]
       : []),
-    ...(activeSchedule && (rows.length || draftAt >= 0)
+    ...(activeSchedule && rows.length
       ? [
           {
             key: "fullscreen",
@@ -5141,7 +4424,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
         <>
           {activeSchedule.manHours ? <PlanManHours projectId={activeSchedule.projectId} data={activeSchedule.manHours} onChanged={loadSchedule} /> : null}
           <Panel flush>
-            {rows.length || draftAt >= 0 || sheetView ? (
+            {rows.length || sheetView ? (
               <div ref={fullscreenRef} className={`plan-gantt${fullscreenActive ? " is-fullscreen" : ""}`} data-guide="plan.gantt">
                 {fullscreenActive ? (
                   <div className="plan-gantt-title">
@@ -5159,7 +4442,6 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
                       </button>
                     ))}
                   </div>
-                  {memberView || peopleView || sheetView ? null : <FilterChips label="Plan.quickFilters" items={filterItems} active={filter} onPick={(key) => setFilter(key as PlanFilter | null)} />}
                   {peopleView || sheetView ? null : (
                     <GanttToolbar
                       zoom={zoom}
@@ -5181,13 +4463,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
                   <div className="gantt-nav" data-guide="plan.view">
                     {/* One button that flips: expand while anything is folded, otherwise collapse. */}
                     {peopleView || sheetView ? null : (
-                      <button
-                        type="button"
-                        className="btn ghost sm"
-                        disabled={foldFiltered}
-                        title={foldFiltered ? uiText("Plan.foldFiltered") : undefined}
-                        onClick={anyFolded ? expandAll : collapseAll}
-                      >
+                      <button type="button" className="btn ghost sm" onClick={anyFolded ? expandAll : collapseAll}>
                         <Icon name={anyFolded ? "plus" : "minus"} />
                         {uiText(anyFolded ? "Expand all" : "Gantt.collapseAll")}
                       </button>
@@ -5214,9 +4490,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
                     ) : null}
                   </div>
                 </div>
-                {peopleView || sheetView || !legendOpen ? null : (
-                  <GanttLegend baseline={Boolean(activeSchedule.latestBaseline)} target={Boolean(target)} links={!memberView && links.length > 0} draggable={canPlan && !memberView} />
-                )}
+                {peopleView || sheetView || !legendOpen ? null : <GanttLegend baseline={Boolean(activeSchedule.latestBaseline)} target={Boolean(target)} />}
                 {memberView ? (
                   <div className="info-strip plan-member-note" role="note" data-guide="plan.memberLegend">
                     <i className="plan-member-key amber" aria-hidden="true" />
@@ -5224,28 +4498,6 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
                     <i className="plan-member-key red" aria-hidden="true" />
                     <span>{uiText("Plan.memberLegendOver")}</span>
                     <span className="muted">{memberBoard?.error ? uiText("Plan.memberBoardFailed") : !memberBoard ? uiText("Plan.memberBoardLoading") : uiText("Plan.memberLegendHint")}</span>
-                  </div>
-                ) : null}
-                {lastMove ? (
-                  <div className="info-strip plan-undo" role="status">
-                    <Icon name="calendar" />
-                    <span>
-                      {lastMove.label} {uiText("Plan.movedShort")}
-                    </span>
-                    <button
-                      className="btn ghost sm"
-                      type="button"
-                      disabled={saving || loadingSchedule}
-                      onClick={() => {
-                        void undoMove();
-                      }}
-                    >
-                      <Icon name="refresh" />
-                      {uiText("Plan.undo")}
-                    </button>
-                    <button className="icon-btn" type="button" aria-label={uiText("Close")} title={uiText("Close")} onClick={() => setLastMove(null)}>
-                      <Icon name="x" />
-                    </button>
                   </div>
                 ) : null}
                 {sheetView ? (
@@ -5287,29 +4539,17 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
                     onReload={loadSchedule}
                     onOpenTask={setDrawerTaskId}
                   />
-                ) : chartRows.length ? (
-                  <GanttChart
-                    rows={chartRows}
-                    range={range}
-                    today={today}
-                    sideHeader={memberView ? "Plan.memberColumn" : "Gantt.taskColumn"}
-                    label="Gantt.planLabel"
-                    deliveryTarget={target}
-                    links={memberView ? [] : links}
-                    onMoveRow={(drop) => {
-                      void moveRow(drop);
-                    }}
-                    canMoveRow={(drop) => placeFor(drop) !== null}
-                  />
+                ) : memberRows.length ? (
+                  <GanttChart rows={memberRows} range={range} today={today} sideHeader="Plan.memberColumn" label="Gantt.planLabel" deliveryTarget={target} />
                 ) : (
                   <EmptyState
-                    icon="filter"
-                    title="Plan.noMatch"
-                    message="Plan.noMatchHint"
+                    icon="users"
+                    title="Plan.notBrokenDown"
+                    message="Plan.startWithHeading"
                     action={
-                      <button className="btn ghost sm" type="button" onClick={() => setFilter(null)}>
-                        <Icon name="x" />
-                        {uiText("Portfolio.clearFilters")}
+                      <button className="btn ghost sm" type="button" onClick={() => setLevel("sheet")}>
+                        <Icon name="table" />
+                        {uiText("Sheet.view")}
                       </button>
                     }
                   />
@@ -5327,7 +4567,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
                 message={canPlan ? "Plan.startWithHeading" : "Project Manager หรือ Engineering Manager เป็นผู้สร้างแผน"}
                 action={
                   canPlan ? (
-                    <button className="btn primary sm" type="button" onClick={() => openDraft(null, null)}>
+                    <button className="btn primary sm" type="button" onClick={() => setLevel("sheet")}>
                       <Icon name="plus" />
                       {uiText("Plan.addHeading")}
                     </button>

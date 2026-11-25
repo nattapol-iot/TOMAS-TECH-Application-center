@@ -110,7 +110,8 @@ test("the Sheet is the plan's first view, with its guide marks and copy", async 
   // Task doc 1.10: the Sheet replaces the Team and Master Plan Gantt (Headings only is the Master Plan); an old link opens
   // the Sheet. Since 2026-11-25 there is no V1 to keep them for.
   assert.match(screen, /\{\(\["sheet", "member", "people"\] as const\)\.map\(/);
-  assert.match(screen, /storedLevel === "team" \|\| storedLevel === "master" \? "sheet" : storedLevel/);
+  assert.match(screen, /choiceLink<PlanLevel>\(\["sheet", "member", "people"\]\)/);
+  assert.doesNotMatch(screen, /PlanRowDraftEditor|"Plan\.levelTeam"|"Plan\.levelMaster"/, "the Team and Master Plan Gantt are gone");
   const sheet = await source("app/system/production/PlanSheet.tsx");
   for (const mark of ["plan.sheet", "plan.sheetAdd", "plan.sheetAfter"]) assert.ok(sheet.includes(`data-guide="${mark}"`), mark);
   const keys = [...sheet.matchAll(/"(Sheet\.[A-Za-z]+)"/g)].map((match) => match[1]);

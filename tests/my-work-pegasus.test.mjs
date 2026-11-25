@@ -52,5 +52,5 @@ test("the guide explains the summary bar, and the card rules use the Pegasus tok
   const pegasus = css.slice(css.indexOf("My Work in the Pegasus look"));
   assert.ok(pegasus.length > 1000);
   assert.doesNotMatch(pegasus, /#[0-9a-fA-F]{3,6}\b/, "no raw colours in the Pegasus section");
-  assert.match(pegasus, /\.my-work-pg :is\(\.schedule-work-group, \.estimate-work-group\)\.urgency-1 \{ border-left-color: var\(--pg-red-fg\); \}/);
+  assert.match(pegasus, /\.my-work-pg :is\(\.schedule-work-group, \.estimate-work-group\)\.urgency-1 \{\s*border-left-color: var\(--pg-red-fg\);\s*\}/);
 });
