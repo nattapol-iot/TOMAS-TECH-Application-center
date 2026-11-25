@@ -129,10 +129,9 @@ test("the create route and form follow that rule, and a creator who sees only th
     /IF @creator_joins=1 AND @actor NOT IN \(@manager_id,@lead_id\) INSERT INTO dbo\.project_members\(project_id,user_id,role_on_project,created_by\) VALUES \(@project_id,@actor,N'Member',@actor\);/,
   );
   // The button and the create page read the same rule as the API.
-  assert.match(
-    core,
-    /const canCreate = mayCreateProject\(bootstrap\.permissions, bootstrap\.user\.roles \?\? \[bootstrap\.user\.role\], bootstrap\.user\.department\);\n\s*const createButton = canCreate \?/,
-  );
+  assert.match(core, /const canCreate = mayCreateProject\(bootstrap\.permissions, bootstrap\.user\.roles \?\? \[bootstrap\.user\.role\], bootstrap\.user\.department\);/);
+  // The list's Create button is the @tomas-tc/ui one (tomas-ui/ProjectList.tsx), shown on the same rule.
+  assert.match(core, /create=\{canCreate \? \{ label: uiText\("Create project"\), onSelect:/);
   assert.match(shell, /const canCreateProject = mayCreateProject\(bootstrap\.permissions, heldRoles, bootstrap\.user\.department\);/);
   // Without project.write the form starts without an estimate; without schedule.plan it asks for dates only.
   assert.match(core, /if \(data\.canCreateFromEstimate === false\) setWithoutEstimate\(true\);/);

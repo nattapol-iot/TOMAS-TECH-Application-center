@@ -5,9 +5,9 @@
  * header, buttons, panels, tables, badges, tabs, dialogs, summary bar, header funnels. So most of project-portfolio.css,
  * gantt.css and globals.css takes the look without a rule here.
  *
- * This file holds only what the Projects screens add: the leaner Overview header (search, segmented filters, More,
- * Create), the health summary bar's tones, and the Plan and Gantt parts drawn with fixed colours. Every rule sits under
- * .project-v2, so nothing here reaches another screen.
+ * The Projects list and a project's page head are drawn on @tomas-tc/ui (app/system/tomas-ui, owner 2026-11-25); this
+ * file holds only the frame and what the Plan tab and Edit project add. Every rule sits under .project-v2, so nothing
+ * here reaches another screen.
  */
 
 /*
@@ -29,122 +29,6 @@
   gap: 12px;
 }
 
-/* ---------- Overview: the list title row (§4 B) ---------- */
-/* The title keeps its width; the actions take the rest of the row and drop under it when they do not fit. */
-.project-v2 .page-header-text {
-  flex: 0 0 auto;
-}
-/* One row beside the title while it fits; the whole group drops under the title, then wraps, on a narrow screen. */
-.project-v2 .project-v2-actions {
-  display: flex;
-  flex-wrap: nowrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-}
-.project-v2 .project-v2-actions .search-field {
-  flex: 0 1 240px;
-  min-width: 180px;
-}
-@media (max-width: 1280px) {
-  .project-v2 .project-v2-actions {
-    flex-wrap: wrap;
-  }
-}
-/* Segmented, muted (§5.7): All | Mine and List | Timeline. */
-.project-v2 .project-v2-seg {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px;
-  border-radius: 6px;
-  background: var(--pg-muted);
-}
-.project-v2 .project-v2-seg button {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 28px;
-  padding: 0 12px;
-  border: 0;
-  border-radius: 4px;
-  background: none;
-  color: var(--pg-muted-fg);
-  font: inherit;
-  font-size: 13px;
-  font-weight: 500;
-  white-space: nowrap;
-  cursor: pointer;
-}
-.project-v2 .project-v2-seg button:hover {
-  color: var(--pg-foreground);
-}
-.project-v2 .project-v2-seg button[aria-checked="true"] {
-  background: var(--pg-background);
-  color: var(--pg-primary);
-  box-shadow: 0 1px 2px rgb(0 0 0 / 0.08);
-}
-.project-v2 .project-v2-seg button:focus-visible {
-  outline: none;
-  box-shadow: var(--pg-focus);
-}
-.project-v2 .project-v2-seg .icon {
-  font-size: 15px;
-}
-
-/* The health summary bar: a cell's count takes its health's tone; pressed, it reads in primary like every summary cell. */
-.project-v2 .project-summary .tone-red .pg-cell-value {
-  color: var(--pg-red-fg);
-}
-.project-v2 .project-summary .tone-amber .pg-cell-value {
-  color: var(--pg-amber-fg);
-}
-.project-v2 .project-summary .tone-green .pg-cell-value {
-  color: var(--pg-emerald-fg);
-}
-.project-v2 .project-summary .tone-slate .pg-cell-value {
-  color: var(--pg-slate-fg);
-}
-.project-v2 .project-summary .pg-cell[aria-pressed="true"] .pg-cell-value {
-  color: var(--pg-primary);
-}
-
-/* The attention chips sit under the summary bar, tight to it. */
-.project-v2 .project-summary + .filter-chips {
-  margin-top: -4px;
-}
-
-/* The project cell keeps to its share of the row, its name and customer line cut short with the full text on hover, so
-   the slip, progress, hours and follow-up columns stay on screen instead of past the right edge. */
-.project-v2 .portfolio-table .portfolio-col-project {
-  width: 34%;
-  max-width: 0;
-}
-.project-v2 .portfolio-table .portfolio-project {
-  min-width: 200px;
-}
-@media (max-width: 720px) {
-  .project-v2 .portfolio-table .portfolio-project {
-    min-width: 160px;
-  }
-}
-.project-v2 .portfolio-table .portfolio-project strong,
-.project-v2 .portfolio-table .portfolio-project small {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.project-v2 .portfolio-table .portfolio-project-link {
-  display: block;
-  max-width: 100%;
-}
-
-/* The project number is the record's link (§2: document numbers always render as links). */
-.project-v2 .portfolio-table .pg-doclink {
-  white-space: nowrap;
-}
-
 /* Plan tab: the project box is as tall as the buttons beside it (h-9), and the row centres them. */
 .project-v2 .toolbar:has(> .plan-project-picker) {
   align-items: center;
@@ -163,13 +47,4 @@
 }
 .project-v2 .project-plan-elsewhere .btn {
   margin-left: auto;
-}
-
-@media (max-width: 720px) {
-  .project-v2 .project-v2-actions {
-    justify-content: stretch;
-  }
-  .project-v2 .project-v2-actions .search-field {
-    width: 100%;
-  }
 }

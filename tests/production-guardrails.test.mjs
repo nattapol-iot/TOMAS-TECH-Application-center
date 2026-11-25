@@ -314,7 +314,8 @@ test("production Projects table defaults to 10 rows and supports page-size selec
   // The portfolio loads every project in scope once and pages in memory.
   assert.match(projects, /listProjectOverview\(\{ includeClosed \}\)/);
   assert.match(projects, /sorted\.slice\(\(currentPage - 1\) \* pageSize, currentPage \* pageSize\)/);
-  assert.match(projects, /<TablePageSize\s+value=\{pageSize\}/);
+  // The list's paging is the @tomas-tc/ui Pagination with its rows-per-page choice (owner 2026-11-25).
+  assert.match(projects, /perPage=\{pageSize\}/);
   assert.match(projects, /setPageSize\(value\);\s*setPage\(1\)/);
 });
 

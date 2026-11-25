@@ -1,24 +1,6 @@
 /* Projects portfolio (ProductionProjects in CoreScreens.tsx): health bar, attention chips and the
    sortable project table. Tokens only. */
-
-.portfolio-overview {
-  display: grid;
-  gap: 10px;
-  margin-bottom: 12px;
-  padding: 12px 14px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-lg);
-  background: var(--surface);
-}
-
-.portfolio-table th {
-  vertical-align: bottom;
-}
 /* The row menu and stage come first so a narrow screen reaches them without scrolling past the name. */
-.portfolio-table .portfolio-col-menu {
-  width: 1%;
-  padding-right: 0;
-}
 .th-sort {
   display: inline-flex;
   align-items: center;
@@ -59,43 +41,6 @@
 .th-sort .icon.desc {
   color: var(--ink-soft);
 }
-
-.portfolio-project {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 220px;
-}
-.portfolio-project small {
-  font-size: var(--fs-2xs);
-}
-.portfolio-project-link {
-  border: 0;
-  background: none;
-  padding: 0;
-  color: var(--ink);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.portfolio-project-link:hover strong:last-child {
-  color: var(--blue-text);
-  text-decoration: underline;
-}
-.portfolio-project-link:focus-visible {
-  outline: 2px solid var(--blue);
-  outline-offset: 2px;
-  border-radius: var(--r-xs);
-}
-
-.portfolio-slip {
-  font-variant-numeric: tabular-nums;
-  color: var(--muted);
-}
-.portfolio-slip.late {
-  color: var(--red-text);
-  font-weight: 650;
-}
 /* Task doc 5.2: a project's own page. */
 .project-page {
   display: grid;
@@ -103,32 +48,6 @@
 }
 .project-page-back {
   justify-self: start;
-}
-.project-page-meta {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-}
-.project-page-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-}
-.project-page-facts {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 8px 16px;
-  margin: 0;
-}
-.project-page-facts dt {
-  color: var(--muted);
-  font-size: var(--fs-xs);
-}
-.project-page-facts dd {
-  margin: 0;
-  font-weight: 600;
 }
 .project-page-summary {
   display: grid;
@@ -152,12 +71,6 @@
 }
 .project-page-cell strong {
   font-size: var(--fs-lg);
-}
-.project-page-cell.tone-red strong {
-  color: var(--red-text);
-}
-.project-page-cell.tone-amber strong {
-  color: var(--amber-text);
 }
 /* Task doc 5.4: Create project as a page: the form on the left, what is missing and what Create does on the right. */
 .project-create-page {
@@ -353,38 +266,6 @@
   color: var(--red-text);
 }
 /* Task doc 5.1: hours against the budget, and the count waiting on the plan's To follow up. */
-.portfolio-col-hours {
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
-.portfolio-col-hours.over {
-  color: var(--red-text);
-  font-weight: 650;
-}
-.portfolio-col-follow {
-  text-align: center;
-}
-.portfolio-follow {
-  min-width: 28px;
-  padding: 1px 8px;
-  border: 0;
-  border-radius: 999px;
-  background: var(--amber-soft);
-  color: var(--amber-text);
-  font: inherit;
-  font-weight: 650;
-  cursor: pointer;
-}
-.portfolio-follow:hover {
-  text-decoration: underline;
-}
-
-.portfolio-schedule-error {
-  display: block;
-  margin-top: 2px;
-  color: var(--amber-text);
-  font-size: var(--fs-3xs);
-}
 
 .portfolio-progress {
   display: flex;
@@ -421,36 +302,6 @@
   font-size: var(--fs-3xs);
 }
 
-.portfolio-stage-trigger {
-  display: inline-flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-  min-width: 132px;
-  padding: 5px 8px 5px 10px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-sm);
-  background: var(--surface);
-  color: var(--ink);
-  font-size: var(--fs-sm);
-  cursor: pointer;
-}
-.portfolio-stage-trigger:hover:not(:disabled) {
-  border-color: var(--n-300);
-}
-.portfolio-stage-trigger:focus-visible {
-  outline: 2px solid var(--blue);
-  outline-offset: 2px;
-}
-.portfolio-stage-trigger:disabled {
-  color: var(--muted);
-  cursor: not-allowed;
-}
-.portfolio-stage-trigger .icon {
-  font-size: 12px;
-  color: var(--n-400);
-}
-
 /* Placed from the trigger's box by RowDisclosure (top or bottom, right, max-height) so the
    table's scroll area cannot clip it. */
 .menu.portfolio-menu {
@@ -463,9 +314,6 @@
 }
 
 @media (max-width: 720px) {
-  .portfolio-overview {
-    padding: 10px 12px;
-  }
   .portfolio-waiting li {
     grid-template-columns: minmax(0, 1fr) max-content;
   }
@@ -474,14 +322,6 @@
   }
   .portfolio-gantt-search input {
     flex-basis: 100%;
-  }
-  .portfolio-table .portfolio-col-pm,
-  .portfolio-table .portfolio-col-slip,
-  .portfolio-table .portfolio-col-hours {
-    display: none;
-  }
-  .portfolio-project {
-    min-width: 160px;
   }
   .portfolio-progress {
     min-width: 120px;
