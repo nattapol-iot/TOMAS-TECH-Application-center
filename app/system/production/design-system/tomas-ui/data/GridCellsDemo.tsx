@@ -17,7 +17,7 @@ export function GridCellsDemo() {
   const [added, setAdded] = useState(0);
   const edit = (id: string, change: Partial<GridPartRow>) => setRows((current) => current.map((row) => (row.id === id ? { ...row, ...change } : row)));
   const add = (more: GridPartRow[]) => {
-    setRows((current) => [...current, ...more.map((row) => ({ ...row, id: `${row.id}-${added}` }))]);
+    setRows((current) => [...current, ...more.map((row) => ({ ...row, id: `${row.id}-added-${added}` }))]);
     setAdded(added + 1);
   };
   return (
