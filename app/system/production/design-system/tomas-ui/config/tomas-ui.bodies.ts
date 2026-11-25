@@ -1,10 +1,11 @@
 import { lazy, type ComponentType } from "react";
+import { PrimitivesSection } from "../primitives/PrimitivesSection";
 import type { TomasUiSectionId } from "../types/tomas-ui.types";
 
-// Each section is its own chunk, so opening the tab loads only the first section and a section's samples
-// (and the optional peers of the subpath entries) load when it is picked.
+// The tab opens on Primitives, so it ships with the tab instead of waiting on a second request. Every other
+// section is its own chunk and loads, with the optional peers of the subpath entries, when it is picked.
 export const TOMAS_UI_SECTION_BODIES: Record<TomasUiSectionId, ComponentType> = {
-  primitives: lazy(() => import("../primitives/PrimitivesSection").then((module) => ({ default: module.PrimitivesSection }))),
+  primitives: PrimitivesSection,
   forms: lazy(() => import("../forms/FormsSection").then((module) => ({ default: module.FormsSection }))),
   controls: lazy(() => import("../controls/ControlsSection").then((module) => ({ default: module.ControlsSection }))),
   data: lazy(() => import("../data/DataSection").then((module) => ({ default: module.DataSection }))),
