@@ -130,7 +130,7 @@ import "./master-data.css";
 // eager screen module loads their styles on the first page.
 import "../segment-filters.css";
 import "./project-portfolio.css";
-import { Badge, EmptyState, Field, Icon, KpiCard, Modal, PageHeader, Pagination, Panel, SearchInput, Select, TablePageSize, Tabs, Toolbar, type IconName, type Tone } from "../ui";
+import { Badge, EmptyState, Field, Icon, KpiCard, Modal, PageHeader, Pagination, Panel, SearchInput, TablePageSize, Tabs, Toolbar, type IconName, type Tone } from "../ui";
 import { DateInput } from "../DateInput";
 
 type CommonProps = {
@@ -1109,59 +1109,7 @@ export function ProductionProjects({
         ];
   // project.write, or the Application team, who create without an estimate and need no project.write (owner 2026-11-25).
   const canCreate = mayCreateProject(bootstrap.permissions, bootstrap.user.roles ?? [bootstrap.user.role], bootstrap.user.department);
-  const filterSelects = (
-    <>
-      <label className="select-field">
-        <span className="sr-only">{uiText("Portfolio.pm")}</span>
-        <select
-          value={activeManagerId ?? ""}
-          aria-label={uiText("Portfolio.pm")}
-          onChange={(event) => {
-            setManagerId(event.target.value ? Number(event.target.value) : null);
-            setPage(1);
-          }}
-        >
-          <option value="">{uiText("Portfolio.allPms")}</option>
-          {managers.map(([id, name]) => (
-            <option key={id} value={id}>
-              {name}
-            </option>
-          ))}
-        </select>
-        <Icon name="chevronDown" />
-      </label>
-      <label className="select-field">
-        <span className="sr-only">{uiText("Portfolio.team")}</span>
-        <select
-          value={activeTeam ?? ""}
-          aria-label={uiText("Portfolio.team")}
-          onChange={(event) => {
-            setTeam(event.target.value || null);
-            setPage(1);
-          }}
-        >
-          <option value="">{uiText("Portfolio.allTeams")}</option>
-          {teams.map((value) => (
-            <option key={value} value={value}>
-              {value}
-            </option>
-          ))}
-        </select>
-        <Icon name="chevronDown" />
-      </label>
-      <Select
-        label="Status"
-        value={activeStatus ?? "All status"}
-        onChange={(value) => {
-          setStatus(value);
-          setPage(1);
-          if (value === "Closed") setIncludeClosed(true);
-        }}
-        options={PROJECT_STAGE_FILTERS}
-      />
-    </>
-  );
-  // V2 header funnels over the same single-value filters. Each option counts the projects the list would show if it
+  // The head's PM, team and stage filters, the same in List and Timeline (owner 2026-11-26). Each option counts the projects the list would show if it
   // were picked: every other filter in force (Mine, search, health, chips...), its own set aside (UX audit F12, 2026-11-26:
   // "วางแผน 14" under Mine opened 10 projects).
   const countBy = (patch: Partial<PortfolioFilters>, pick: (item: ProjectOverviewItem) => string) =>
@@ -1172,6 +1120,7 @@ export function ProductionProjects({
   const clearFilter = uiText("Portfolio.clearFilters");
   const stageFilter: ColumnFilterSpec = {
     label: uiText("Portfolio.colStage"),
+    allLabel: uiText("All status"),
     clearLabel: clearFilter,
     options: PROJECT_STAGE_FILTERS.filter((value) => value !== "All status").map((value) => ({ value, label: uiText(value), count: stageCounts[value] ?? 0 })),
     value: activeStatus,
@@ -1184,6 +1133,7 @@ export function ProductionProjects({
   };
   const managerFilter: ColumnFilterSpec = {
     label: uiText("Portfolio.colPm"),
+    allLabel: uiText("Portfolio.allPms"),
     clearLabel: clearFilter,
     options: managers.map(([id, name]) => ({ value: String(id), label: name, count: managerCounts[String(id)] ?? 0 })),
     value: activeManagerId === null ? null : String(activeManagerId),
@@ -1195,7 +1145,9 @@ export function ProductionProjects({
   };
   const teamFilter: ColumnFilterSpec = {
     label: copy("ทีม", "Team", "チーム"),
+    allLabel: uiText("Portfolio.allTeams"),
     clearLabel: clearFilter,
+    guide: "project.teamFilter",
     options: teams.map((value) => ({ value, label: value, count: teamCounts[value] ?? 0 })),
     value: activeTeam,
     onChange: (value) => {
@@ -1325,10 +1277,15 @@ export function ProductionProjects({
               setPage(1);
             },
           }}
+          filters={{
+            label: uiText("Portfolio.filters"),
+            pm: managerFilter,
+            team: teamFilter,
+            stage: stageFilter,
+            clear: filtered ? { label: uiText("Portfolio.clearFilters"), onSelect: clearFilters } : null,
+          }}
         />
       </Suspense>
-      {/* The table carries these in its header funnels; the timeline has no header, so it keeps the three lists. */}
-      {mode === "timeline" ? <Toolbar>{filterSelects}</Toolbar> : null}
       {error ? (
         <LoadError
           message={error}
@@ -1403,7 +1360,6 @@ export function ProductionProjects({
             }}
             sort={sort}
             onSort={changeSort}
-            filters={{ stage: stageFilter, team: teamFilter, pm: managerFilter }}
             rows={listRows}
             page={currentPage}
             perPage={pageSize}

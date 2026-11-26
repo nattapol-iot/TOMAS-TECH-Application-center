@@ -2744,6 +2744,7 @@ export const DICTIONARY: Record<string, Entry> = {
   "Portfolio.allPms": { en: "All PMs", th: "PM ทุกคน", jp: "すべてのPM" },
   "Portfolio.team": { en: "Team filter", th: "กรองตามทีม", jp: "チームで絞り込み" },
   "Portfolio.allTeams": { en: "All teams", th: "ทุกทีม", jp: "すべてのチーム" },
+  "Portfolio.filters": { en: "Project filters", th: "ตัวกรองโครงการ", jp: "案件の絞り込み" },
   "Portfolio.mine": { en: "Mine (PM or lead)", th: "ของฉัน (PM หรือ Lead)", jp: "自分の担当（PM・リード）" },
   "Portfolio.showClosed": { en: "Show closed projects", th: "แสดงโครงการที่ปิดแล้ว", jp: "完了したプロジェクトを表示" },
   "Portfolio.colHealth": { en: "Health", th: "สุขภาพแผน", jp: "健全性" },

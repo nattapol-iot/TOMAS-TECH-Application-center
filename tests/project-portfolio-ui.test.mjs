@@ -186,9 +186,10 @@ test("PM, team and status filters only apply values the controls can show", () =
   assert.match(portfolio, /const activeTeam = effectiveOption\(team, teams\)/);
   assert.match(portfolio, /const activeStatus = effectiveStatusFilter\(status, includeClosed\)/);
   assert.match(portfolio, /managerId: activeManagerId, team: activeTeam, mineUserId: mine \? bootstrap\.user\.id : null, status: activeStatus/);
-  assert.match(portfolio, /<select\s+value=\{activeManagerId \?\? ""\}/);
-  assert.match(portfolio, /<select\s+value=\{activeTeam \?\? ""\}/);
-  assert.match(portfolio, /<Select\s+label="Status"\s+value=\{activeStatus \?\? "All status"\}/);
+  // The head's filter buttons (List and Timeline alike) show the values in force.
+  assert.match(portfolio, /value: activeManagerId === null \? null : String\(activeManagerId\),/);
+  assert.match(portfolio, /value: activeTeam,/);
+  assert.match(portfolio, /value: activeStatus,/);
   assert.match(
     portfolio,
     /const toggleClosed = \(next: boolean\) => \{\s*setIncludeClosed\(next\);\s*if \(!next && status === "Closed"\) setStatus\("All status"\);/,
@@ -240,7 +241,9 @@ test("the row menu and stage come before the project name, so a small screen nee
 
 test("the portfolio's PM, slip and hours columns give way on a phone", () => {
   assert.match(kit, /const PHONE_HIDDEN = "max-\[720px\]:hidden";/);
-  assert.match(kit, /sortHead\("pm", <Funnel filter=\{props\.filters\.pm\} \/>, PHONE_HIDDEN\)/);
+  assert.match(kit, /sortHead\("pm", undefined, PHONE_HIDDEN\)/);
+  // The project's name keeps 12rem on a 1366 px laptop instead of shrinking to its padding; the table scrolls instead.
+  assert.match(kit, /sortHead\("name", undefined, "w-\[34%\] min-w-48 max-w-0"\)/);
   assert.match(kit, /sortHead\("slip", undefined, PHONE_HIDDEN\)/);
   assert.match(kit, /<TableHead className=\{PHONE_HIDDEN\}>\{labels\.hours\}<\/TableHead>/);
   assert.match(kit, /<TableCell className=\{PHONE_HIDDEN\}>\{row\.pm\}<\/TableCell>/);

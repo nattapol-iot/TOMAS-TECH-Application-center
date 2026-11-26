@@ -4343,16 +4343,17 @@ const ESTIMATE_LOOK_V2: Guide = {
 
 /*
  * The Projects overview in the Pegasus ERP look, the only look since 2026-11-25 (the old two-look switch is gone): the list
- * filters from its summary bar and column headers, and the plan is edited on the Plan tab only.
+ * filters from its summary bar and the PM / team / stage buttons (the same in List and Timeline), and the plan is edited
+ * on the Plan tab only.
  */
 const PROJECT_OVERVIEW: Guide = {
   id: "project-overview",
   area: "project",
   title: { th: "ดูภาพรวมโปรเจกต์", en: "Read the Projects overview", jp: "Projects の概要を見る" },
   summary: {
-    th: "หน้าภาพรวมโปรเจกต์กรองจากแถบสรุปสุขภาพและหัวคอลัมน์ ดูชั่วโมงเทียบงบและเรื่องที่ต้องตาม และเปิดหน้าโปรเจกต์หรือแผนงานจากแต่ละแถว แผนแก้ที่แท็บแผนงานที่เดียว",
-    en: "The Projects overview filters from its health summary bar and column headers, shows hours against budget and what to follow up, and opens each project's page or plan from its row. The plan is edited on the Plan tab only.",
-    jp: "Projects の概要は健全性のサマリーバーと列見出しで絞り込み、予算に対する時間と要フォローを表示し、各行から案件ページや計画を開きます。計画は「Plan」タブだけで編集します。",
+    th: "หน้าภาพรวมโปรเจกต์กรองจากแถบสรุปสุขภาพและปุ่มตัวกรอง PM ทีม สถานะ ดูชั่วโมงเทียบงบและเรื่องที่ต้องตาม และเปิดหน้าโปรเจกต์หรือแผนงานจากแต่ละแถว แผนแก้ที่แท็บแผนงานที่เดียว",
+    en: "The Projects overview filters from its health summary bar and the PM, team and stage buttons, shows hours against budget and what to follow up, and opens each project's page or plan from its row. The plan is edited on the Plan tab only.",
+    jp: "Projects の概要は健全性のサマリーバーと PM・チーム・ステータスのボタンで絞り込み、予算に対する時間と要フォローを表示し、各行から案件ページや計画を開きます。計画は「Plan」タブだけで編集します。",
   },
   minutes: 3,
   permissions: ["project.read"],
@@ -4410,16 +4411,11 @@ const PROJECT_OVERVIEW: Guide = {
       target: "project.pmFilter",
       action: "next",
       view: "projects",
-      title: { th: "กรองจากหัวคอลัมน์", en: "Filter from the column headers", jp: "列見出しで絞り込む" },
+      title: { th: "กรอง PM ทีม และสถานะ", en: "Filter by PM, team and status", jp: "PM・チーム・ステータスで絞り込む" },
       body: {
-        th: "กดรูปกรวยข้างหัวคอลัมน์ PM เพื่อเลือกผู้จัดการโครงการ หัวคอลัมน์สถานะและโครงการ (ทีม) ก็มีกรวยแบบเดียวกัน ค้นหา 'ทั้งหมด / ของฉัน' และ 'รายการ / ไทม์ไลน์' อยู่บนหัวหน้า ส่วนรีเฟรชและแสดงโครงการที่ปิดแล้วอยู่ในปุ่ม 'เพิ่มเติม'",
-        en: "Press the funnel beside the PM column to pick a project manager; the Stage and Project (team) columns have the same funnel. Search, All / Mine and List / Timeline sit in the page header; Refresh and Show closed projects are under More.",
-        jp: "PM 列の横の漏斗を押してプロジェクトマネージャーを選びます。ステージ列とプロジェクト（チーム）列にも同じ漏斗があります。検索・すべて／自分・一覧／タイムラインはページ見出しに、更新と完了案件の表示は「その他」にあります。",
-      },
-      missing: {
-        th: "กด 'รายการ' บนหัวหน้า กรวยอยู่บนหัวตาราง ในมุมมองไทม์ไลน์ตัวกรองจะเป็นรายการเลือกเหนือแผนภูมิ",
-        en: "Press List in the page header; the funnels are in the table header. In Timeline the filters are lists above the chart.",
-        jp: "ページ見出しの「一覧」を押します。漏斗は表の見出しにあります。タイムラインではチャートの上に選択リストがあります。",
+        th: "ปุ่ม 'PM ทุกคน' 'ทุกทีม' และ 'ทุกสถานะ' อยู่ขวาของชิป ใช้ได้เหมือนกันทั้งมุมมองรายการและไทม์ไลน์ ตัวเลขข้างแต่ละตัวเลือกคือจำนวนโครงการ ปุ่มที่กรองอยู่เป็นสีน้ำเงินและบอกค่าที่เลือก กด 'ล้างตัวกรอง' เพื่อล้างทุกตัวกรองพร้อมคำค้น ส่วนรีเฟรชและแสดงโครงการที่ปิดแล้วอยู่ในปุ่ม 'เพิ่มเติม'",
+        en: "The All PMs, All teams and All status buttons sit to the right of the chips and work the same in List and Timeline. The number beside each option is how many projects it has. A button that is filtering turns blue and names its value; Clear filters clears every filter and the search. Refresh and Show closed projects are under More.",
+        jp: "「すべてのPM」「すべてのチーム」「すべてのステータス」ボタンはチップの右にあり、一覧とタイムラインで同じように使えます。各選択肢の横の数字は案件数です。絞り込み中のボタンは青くなり選んだ値を表示します。「絞り込みを解除」ですべての絞り込みと検索を解除します。更新と完了案件の表示は「その他」にあります。",
       },
     },
     {
