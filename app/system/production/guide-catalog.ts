@@ -4466,6 +4466,17 @@ const CRM_FIND_WORK: Guide = {
       },
     ),
     {
+      target: "crm.closeRange",
+      action: "next",
+      view: "crm-dashboard",
+      title: { th: "เลือกช่วงวันที่คาดว่าจะปิดงาน", en: "Choose the expected-close period", jp: "受注予定日の期間を選ぶ" },
+      body: {
+        th: "เลือก 'เดือนนี้' 'ไตรมาสนี้' 'ปีนี้' หรือกรอกวันที่เอง ตัวเลขทุกตัวด้านล่างและรายการดีลจะนับเฉพาะดีลที่คาดว่าจะปิดงานในช่วงนั้น ดีลที่ยังไม่ระบุวันปิดจะไม่ถูกนับ ระบบบอกจำนวนไว้ใต้ช่องวันที่ กด 'ทุกช่วง' เพื่อนับทั้งหมด",
+        en: "Pick This month, This quarter, This year or type the dates. Every count below and the deal list then read only deals expected to close in that period; deals with no expected close are left out, and their number shows under the dates. Press All dates to count everything.",
+        jp: "「今月」「今四半期」「今年」を選ぶか日付を入力します。下の数字と商談一覧は、その期間に受注予定の商談だけを数えます。受注予定日が未入力の商談は含まれず、その件数が日付の下に表示されます。「全期間」ですべてを数えます。",
+      },
+    },
+    {
       target: "crm.summary",
       action: "next",
       view: "crm-dashboard",

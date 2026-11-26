@@ -301,6 +301,17 @@ try {
   await call("POST", `/crm/opportunities/${first.items[0].id}/followups`, "Sales", { action: "Call the buyer", ownerId: sales.id, dueDate: today }, 201);
   assert.equal((await call("GET", `/crm/opportunities?attention=DueToday&customerId=${other.id}`, "Sales")).total, 1);
   assert.equal((await call("GET", `/crm/opportunities?sort=due&customerId=${other.id}&pageSize=1`, "Sales")).items[0].id, first.items[0].id, "soonest next action first");
+  // The period (owner 2026-11-26): the dashboard and the list count deals by their expected close; undated ones apart.
+  await run(
+    `UPDATE dbo.crm_opportunities SET expected_close=CASE WHEN CAST(SUBSTRING(opportunity_no,10,3) AS int)<=40 THEN '2031-03-15' WHEN CAST(SUBSTRING(opportunity_no,10,3) AS int)<=60 THEN '2031-08-20' ELSE NULL END WHERE customer_id=${Number(other.id)}`,
+  );
+  const inQ1 = await call("GET", "/crm/dashboard?closeFrom=2031-01-01&closeTo=2031-03-31", "Sales");
+  assert.equal(inQ1.totalOpportunities, 40, "only the deals expected to close in Q1 2031");
+  assert.ok(Number(inQ1.undated) >= 70, "the deals with no close date are counted apart");
+  assert.equal((await call("GET", `/crm/opportunities?customerId=${other.id}&closeFrom=2031-01-01&closeTo=2031-03-31&pageSize=1`, "Sales")).total, 40, "the list lists what the dashboard counts");
+  assert.equal((await call("GET", `/crm/opportunities?customerId=${other.id}&closeFrom=2031-04-01&pageSize=1`, "Sales")).total, 20, "an open end");
+  assert.equal((await call("GET", "/crm/dashboard?closeFrom=2031-01-01&closeTo=2031-12-31", "Sales")).totalOpportunities, 60);
+  await call("GET", "/crm/dashboard?closeFrom=2031-12-31&closeTo=2031-01-01", "Sales", undefined, 400);
   await run(
     `DELETE dbo.crm_followups WHERE opportunity_id IN(SELECT id FROM dbo.crm_opportunities WHERE customer_id=${Number(other.id)}); DELETE dbo.crm_opportunities WHERE customer_id=${Number(other.id)}`,
   );

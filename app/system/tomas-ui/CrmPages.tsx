@@ -8,7 +8,23 @@
  * panel and the new-customer dialog are old app parts: they sit between the kit's roots, never inside one. The calls,
  * permissions, row versions and screen links are the old pages' own.
  */
-import { Badge, Button, Checkbox, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Label, NamedIcon, Notice, SearchInput, Tabs, TabsList, TabsTrigger } from "@tomas-tc/ui";
+import {
+  Badge,
+  Button,
+  Checkbox,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  Input,
+  Label,
+  NamedIcon,
+  Notice,
+  SearchInput,
+  Tabs,
+  TabsList,
+  TabsTrigger,
+} from "@tomas-tc/ui";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ApiClientError, assignmentDeliveryNote, type AssignmentNotificationResult, type BootstrapData } from "../api-client";
 import { useLanguage, useT } from "../i18n";
@@ -50,6 +66,22 @@ const SORTS = [
   { value: "due", label: "CRM.sortDue" },
   { value: "close", label: "CRM.expectedClose" },
 ];
+/* The period of the deal views (owner 2026-11-26): deals whose expected close falls in it. The presets are the business
+   calendar's month, quarter and year of today. */
+const PERIODS = ["all", "month", "quarter", "year"] as const;
+type Period = (typeof PERIODS)[number];
+const lastDay = (year: number, month: number) => new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
+function periodRange(period: Period): { from: string; to: string } {
+  if (period === "all") return { from: "", to: "" };
+  const today = estimateBusinessDate(new Date(), process.env.NEXT_PUBLIC_BUSINESS_TIME_ZONE ?? "Asia/Bangkok"),
+    year = Number(today.slice(0, 4)),
+    month = Number(today.slice(5, 7));
+  if (period === "year") return { from: `${year}-01-01`, to: `${year}-12-31` };
+  const first = period === "month" ? month : Math.floor((month - 1) / 3) * 3 + 1,
+    last = period === "month" ? month : first + 2;
+  return { from: `${year}-${String(first).padStart(2, "0")}-01`, to: lastDay(year, last) };
+}
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const futureDate = (days: number) => estimateBusinessDate(new Date(Date.now() + days * 86_400_000), process.env.NEXT_PUBLIC_BUSINESS_TIME_ZONE ?? "Asia/Bangkok");
 const params = (values: Record<string, string>) => new URLSearchParams(Object.entries(values).filter(([, v]) => v !== ""));
 
@@ -312,17 +344,48 @@ function DealListPage({
     },
     { remember: true, valid: (v) => ATTENTION_FILTERS.includes(v) },
   );
+  // The period: deals expected to close between these dates, on the screen's link too (closeFrom, closeTo).
+  const [closeFrom, setCloseFrom] = useState(""),
+    [closeTo, setCloseTo] = useState("");
+  useLinkedControl(
+    "closeFrom",
+    closeFrom,
+    (v) => {
+      setCloseFrom(v);
+      setPage(1);
+    },
+    { valid: (v) => DAY.test(v) },
+  );
+  useLinkedControl(
+    "closeTo",
+    closeTo,
+    (v) => {
+      setCloseTo(v);
+      setPage(1);
+    },
+    { valid: (v) => DAY.test(v) },
+  );
+  const pickPeriod = (period: Period) => {
+    const range = periodRange(period);
+    setCloseFrom(range.from);
+    setCloseTo(range.to);
+    setPage(1);
+  };
+  const period = PERIODS.find((key) => {
+    const range = periodRange(key);
+    return range.from === closeFrom && range.to === closeTo;
+  });
   const [drag, setDrag] = useState<{ id: number; from: string } | null>(null),
     [over, setOver] = useState(""),
     [moved, setMoved] = useState<{ id: number; stage: string } | null>(null),
     [moveError, setMoveError] = useState("");
-  const filters = { search, stage, attention, open: String(onlyOpen), ownerId: owner, sort };
+  const filters = { search, stage, attention, open: String(onlyOpen), ownerId: owner, sort, closeFrom, closeTo };
   const list = useCrmData<CrmPage>(board ? null : `/api/v1/crm/opportunities?${params({ ...filters, page: String(page), pageSize: String(perPage) })}`);
   // The board reads 100 cards a page and asks for the next 100 on request, so no deal is out of reach (CRM-05).
   const boardBase = board ? `/api/v1/crm/opportunities?${params({ ...filters, pageSize: "100" })}` : null,
     [boardPages, setBoardPages] = useState({ base: "", pages: 1 });
   const boardList = useCrmPages(boardBase, boardPages.base === boardBase ? boardPages.pages : 1);
-  const dashboard = useCrmData<CrmRecord>("/api/v1/crm/dashboard");
+  const dashboard = useCrmData<CrmRecord>(`/api/v1/crm/dashboard?${params({ closeFrom, closeTo })}`);
   const rows = board ? boardList.items : (list.shown?.items ?? []),
     loading = board ? boardList.loading : list.loading,
     failed = board ? boardList.error : list.error;
@@ -385,12 +448,17 @@ function DealListPage({
     setSort(key ? "due" : "updated");
     setPage(1);
   };
-  const filtered = Boolean(search || stage || attention || owner);
-  const clear = () => {
+  // A period narrows the list as much as any filter: an empty list then says nothing matches, and Clear filters drops it too.
+  const filtered = Boolean(search || stage || attention || owner || closeFrom || closeTo);
+  const clear = (keepPeriod = false) => {
     setSearch("");
     setStage("");
     setAttention("");
     setOwner("");
+    if (!keepPeriod) {
+      setCloseFrom("");
+      setCloseTo("");
+    }
     setOnlyOpen(mode !== "crm-opportunities");
     setPage(1);
   };
@@ -399,7 +467,7 @@ function DealListPage({
       title={t("CRM.empty")}
       hint={t("CRM.emptyHint")}
       action={
-        <Button type="button" variant="outline" size="sm" onClick={clear}>
+        <Button type="button" variant="outline" size="sm" onClick={() => clear()}>
           {t("CRM.clearFilters")}
         </Button>
       }
@@ -536,6 +604,60 @@ function DealListPage({
               <Notice tone="error">{t("CRM.loadFailed")}</Notice>
             </div>
           ) : null}
+          {/* The period every count and list below reads (CRM-16: the reference date is the expected close). */}
+          <div className="grid gap-1.5" data-guide="crm.closeRange">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold text-muted-foreground">{t("CRM.closePeriod")}</span>
+              <div role="radiogroup" aria-label={t("CRM.closePeriod")} className="inline-flex h-8 items-center gap-0.5 rounded-md bg-muted p-[3px]">
+                {PERIODS.map((key) => (
+                  <button
+                    key={key}
+                    type="button"
+                    role="radio"
+                    aria-checked={period === key}
+                    onClick={() => pickPeriod(key)}
+                    className="h-full rounded-[4px] px-2.5 text-xs font-medium text-muted-foreground transition-colors aria-checked:bg-background aria-checked:text-foreground aria-checked:shadow-sm"
+                  >
+                    {t(`CRM.period_${key}`)}
+                  </button>
+                ))}
+              </div>
+              <Label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                {t("CRM.from")}
+                <Input
+                  type="date"
+                  className="h-8 w-40"
+                  value={closeFrom}
+                  max={closeTo || undefined}
+                  onChange={(e) => {
+                    setCloseFrom(e.target.value);
+                    setPage(1);
+                  }}
+                />
+              </Label>
+              <Label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                {t("CRM.to")}
+                <Input
+                  type="date"
+                  className="h-8 w-40"
+                  value={closeTo}
+                  min={closeFrom || undefined}
+                  onChange={(e) => {
+                    setCloseTo(e.target.value);
+                    setPage(1);
+                  }}
+                />
+              </Label>
+            </div>
+            {closeFrom || closeTo ? (
+              <p role="status" className="text-xs text-muted-foreground">
+                {t("CRM.periodScope")
+                  .replace("{from}", formatDay(closeFrom, lang) || "…")
+                  .replace("{to}", formatDay(closeTo, lang) || "…")}
+                {Number(dash?.undated ?? 0) ? ` · ${t("CRM.periodUndated").replace("{n}", String(Number(dash?.undated ?? 0)))}` : ""}
+              </p>
+            ) : null}
+          </div>
           <SummaryBar
             label={t("CRM.salesStage")}
             guide="crm.summary"
@@ -555,7 +677,7 @@ function DealListPage({
               { key: "Actionable", label: t("CRM.Actionable"), value: Number(dash?.actionable ?? 0), tone: "amber" },
             ]}
             active={quick}
-            onPick={(key) => (key ? pickQuick(key) : clear())}
+            onPick={(key) => (key ? pickQuick(key) : clear(true))}
           />
           {mode === "crm-dashboard" ? (
             <Section title={t("CRM.pipelineOverview")} subtitle={t("CRM.allScopeHint")}>
@@ -662,7 +784,7 @@ function DealListPage({
               {t("CRM.open")}
             </Label>
             {filtered ? (
-              <Button type="button" variant="ghost" size="sm" onClick={clear}>
+              <Button type="button" variant="ghost" size="sm" onClick={() => clear()}>
                 {t("CRM.clearFilters")}
               </Button>
             ) : null}

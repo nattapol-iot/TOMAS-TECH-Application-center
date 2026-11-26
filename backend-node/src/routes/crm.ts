@@ -64,6 +64,21 @@ export function businessDayStart(day: string, timeZone: string): Date {
   const minutes = match ? (match[1] === "-" ? -1 : 1) * (Number(match[2]) * 60 + Number(match[3] ?? 0)) : 0;
   return new Date(Date.parse(`${day}T00:00:00Z`) - minutes * 60_000);
 }
+/**
+ * The dashboard's period (owner 2026-11-26): deals whose expected close falls in [closeFrom, closeTo], either end open.
+ * A deal with no expected close has no place in a period, so it is left out while one is set (and counted apart).
+ */
+export function closeWindow(query: Record<string, string>) {
+  const from = parseDateOnly(query.closeFrom || null, "Close from", true),
+    to = parseDateOnly(query.closeTo || null, "Close to", true);
+  if (from && to && from > to) throw new ApiError(400, "validation_failed", "Close from must be on or before Close to.");
+  return {
+    from,
+    to,
+    sql: "(@closeFrom IS NULL OR o.expected_close>=@closeFrom) AND (@closeTo IS NULL OR o.expected_close<=@closeTo)",
+    bind: (q: sql.Request) => q.input("closeFrom", sql.Date, from).input("closeTo", sql.Date, to),
+  };
+}
 async function activeOwner(q: sql.Request, id: number) {
   q.input("owner", sql.BigInt, id);
   if (!(await q.query("SELECT id FROM dbo.users WHERE id=@owner AND is_active=1 AND deleted_at IS NULL")).recordset[0]) throw new ApiError(422, "invalid_reference", "Select an active owner.");
@@ -159,7 +174,8 @@ export function registerCrmRoutes(app: FastifyInstance, config: AppConfig, datab
   });
 
   app.get("/api/v1/crm/dashboard", async (request) => {
-    const actor = await crmAccess(database, users, request);
+    const actor = await crmAccess(database, users, request),
+      period = closeWindow(request.query as Record<string, string>);
     // The attention rules are long and are needed more than once, so they are
     // evaluated a single time per opportunity in the CTE and only counted
     // afterwards. CRM_READ_JOINS adds no rows -- its applies are TOP(1) or
@@ -183,7 +199,7 @@ export function registerCrmRoutes(app: FastifyInstance, config: AppConfig, datab
           CASE WHEN o.stage NOT IN('WON','LOST','ON_HOLD') AND f.status='WaitingCustomer' THEN 1 ELSE 0 END waiting_customer,
           CASE WHEN o.stage NOT IN('WON','LOST','ON_HOLD') AND a.last_activity IS NULL THEN 1 ELSE 0 END no_activity,
           CASE WHEN o.stage NOT IN('WON','LOST','ON_HOLD') AND ed.estimate_due<=DATEADD(day,3,@today) THEN 1 ELSE 0 END estimate_due_soon
-        ${CRM_READ_JOINS} WHERE ${CRM_SCOPE})
+        ${CRM_READ_JOINS} WHERE ${CRM_SCOPE} AND ${period.sql})
       SELECT COUNT_BIG(*) total,
         COALESCE(SUM(CASE WHEN stage NOT IN('WON','LOST','ON_HOLD') THEN 1 ELSE 0 END),0) [open],
         COALESCE(SUM(needs_followup),0) needs_followup,
@@ -201,7 +217,7 @@ export function registerCrmRoutes(app: FastifyInstance, config: AppConfig, datab
         COALESCE(SUM(CASE WHEN needs_followup=1 OR due_now=1 THEN 1 ELSE 0 END),0) actionable,
         ${perStage}
       FROM scoped`,
-          (q) => bindAccess(q, actor).input("today", sql.Date, today()),
+          (q) => period.bind(bindAccess(q, actor).input("today", sql.Date, today())),
         )
       ).recordset[0] ?? {};
     // How many opportunities reached each downstream record, over the same
@@ -210,13 +226,14 @@ export function registerCrmRoutes(app: FastifyInstance, config: AppConfig, datab
     const flow =
       (
         await database.query<CrmRow>(
-          `WITH permitted AS (SELECT o.id FROM dbo.crm_opportunities o WHERE ${CRM_SCOPE})
+          `WITH permitted AS (SELECT o.id FROM dbo.crm_opportunities o WHERE ${CRM_SCOPE} AND ${period.sql})
       SELECT (SELECT COUNT_BIG(DISTINCT i.opportunity_id) FROM dbo.inquiries i JOIN permitted scope ON scope.id=i.opportunity_id WHERE i.deleted_at IS NULL) converted_to_inquiry,
         (SELECT COUNT_BIG(DISTINCT i.opportunity_id) FROM dbo.inquiries i JOIN permitted scope ON scope.id=i.opportunity_id JOIN dbo.estimates e ON e.inquiry_id=i.id AND e.deleted_at IS NULL WHERE i.deleted_at IS NULL) converted_to_estimate,
         (SELECT COUNT_BIG(DISTINCT i.opportunity_id) FROM dbo.inquiries i JOIN permitted scope ON scope.id=i.opportunity_id JOIN dbo.projects p ON p.inquiry_id=i.id AND p.deleted_at IS NULL WHERE i.deleted_at IS NULL) converted_to_project,
         (SELECT COUNT_BIG(*) FROM dbo.inquiries direct LEFT JOIN dbo.users direct_owner ON direct_owner.id=direct.estimate_owner_id
-          WHERE direct.opportunity_id IS NULL AND direct.deleted_at IS NULL AND (@all=1 OR direct.created_by=@actor OR direct.estimate_owner_id=@actor OR (@team=1 AND direct_owner.department=@department))) direct_inquiries`,
-          (q) => bindAccess(q, actor),
+          WHERE direct.opportunity_id IS NULL AND direct.deleted_at IS NULL AND (@all=1 OR direct.created_by=@actor OR direct.estimate_owner_id=@actor OR (@team=1 AND direct_owner.department=@department))) direct_inquiries,
+        (SELECT COUNT_BIG(*) FROM dbo.crm_opportunities o WHERE (@closeFrom IS NOT NULL OR @closeTo IS NOT NULL) AND o.expected_close IS NULL AND ${CRM_SCOPE}) undated`,
+          (q) => period.bind(bindAccess(q, actor)),
         )
       ).recordset[0] ?? {};
     // COUNT_BIG and SUM arrive as bigint-shaped values, so each one is forced
@@ -242,6 +259,10 @@ export function registerCrmRoutes(app: FastifyInstance, config: AppConfig, datab
       convertedToEstimate: n(flow, "converted_to_estimate"),
       convertedToProject: n(flow, "converted_to_project"),
       directInquiries: n(flow, "direct_inquiries"),
+      // The period the counts read, and the deals it leaves out for having no expected close.
+      closeFrom: period.from,
+      closeTo: period.to,
+      undated: n(flow, "undated"),
     };
   });
 
@@ -284,7 +305,8 @@ export function registerCrmRoutes(app: FastifyInstance, config: AppConfig, datab
     const actor = await crmAccess(database, users, request),
       query = request.query as Record<string, string>;
     const page = query.page ? requiredInteger(Number(query.page), "Page", 1, 100000) : 1,
-      size = query.pageSize ? requiredInteger(Number(query.pageSize), "Page size", 1, 100) : 30;
+      size = query.pageSize ? requiredInteger(Number(query.pageSize), "Page size", 1, 100) : 30,
+      period = closeWindow(query);
     const result = await database.query<CrmRow>(
       `SELECT o.*,c.name customer_name,c.code customer_code,eu.name end_user_name,eu.code end_user_code,s.name sales_owner_name,t.name technical_owner_name,
       opt.quiet_days,a.last_activity,f.action next_action,f.due_date next_due,f.status next_status,f.owner_id next_owner_id,
@@ -305,10 +327,12 @@ export function registerCrmRoutes(app: FastifyInstance, config: AppConfig, datab
          OR (@attention='NeedsFollowup' AND ${CRM_NEEDS_FOLLOWUP}) OR (@attention='NoNextAction' AND f.action IS NULL)
          OR (@attention='NoActivity' AND a.last_activity IS NULL) OR (@attention='EstimateDueSoon' AND ed.estimate_due<=DATEADD(day,3,@today)))))
       AND (@owner IS NULL OR o.sales_owner_id=@owner OR o.technical_owner_id=@owner) AND (@year IS NULL OR YEAR(o.created_at)=@year)
+      AND ${period.sql}
       AND (@search=N'' OR o.name LIKE @search OR o.opportunity_no LIKE @search OR c.name LIKE @search OR c.code LIKE @search OR c.name_th LIKE @search OR c.name_en LIKE @search OR c.name_ja LIKE @search OR c.short_name LIKE @search OR c.erp_customer_code LIKE @search OR eu.name LIKE @search OR eu.code LIKE @search OR s.name LIKE @search OR t.name LIKE @search OR EXISTS(SELECT 1 FROM dbo.customer_site_contacts co WHERE co.id=o.contact_id AND co.name LIKE @search))
       ORDER BY ${query.sort === "close" ? "CASE WHEN o.expected_close IS NULL THEN 1 ELSE 0 END,o.expected_close" : query.sort === "due" ? "CASE WHEN f.due_date IS NULL THEN 1 ELSE 0 END,f.due_date" : "o.updated_at DESC"},o.id DESC OFFSET @offset ROWS FETCH NEXT @size ROWS ONLY`,
       (q) => {
-        bindAccess(q, actor)
+        period
+          .bind(bindAccess(q, actor))
           .input("customer", sql.BigInt, crmId(query.customerId, "Customer"))
           .input("owner", sql.BigInt, crmId(query.ownerId, "Owner"))
           .input("attention", sql.NVarChar(40), query.attention ?? "")
