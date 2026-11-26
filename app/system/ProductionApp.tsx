@@ -560,6 +560,26 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
     setProjectPage(null);
     placeScreen(tab === "portfolio" ? [] : [PROJECT_TAB_SEGMENT[tab]]);
   };
+  // QA 2026-11-26: back from a project's page opened from the list, the list comes back as it was left: its search,
+  // filters and page (read again as from a link, screen-link.ts useLinkedState) and the place it was scrolled to.
+  const projectListReturn = useRef<{ opened: Record<string, string>; scrollY: number } | null>(null);
+  const backToProjectList = () => {
+    const saved = projectListReturn.current;
+    projectListReturn.current = null;
+    if (saved) screenLink.current = { view: "projects", path: [], params: {}, opened: saved.opened, fromLink: true };
+    changeProjectTab("portfolio");
+    if (!saved?.scrollY) return;
+    // The list draws its rows once they load: scroll back when the page is tall enough, or after two seconds.
+    let tries = 0;
+    const scrollBack = () => {
+      if (document.documentElement.scrollHeight >= saved.scrollY + window.innerHeight / 2 || tries >= 20) window.scrollTo({ top: saved.scrollY });
+      else {
+        tries += 1;
+        window.setTimeout(scrollBack, 100);
+      }
+    };
+    window.setTimeout(scrollBack, 0);
+  };
   // Task doc 6.3: the CEO summary, every project or one.
   const openCeoSummary = useCallback(
     (focus: string | null = null) => {
@@ -1072,6 +1092,9 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
   const openProjectPage = useCallback(
     async (projectNo: string, tab: ProjectPageTab = "overview", how: "push" | "replace" = "push") => {
       const next = { no: projectNo, tab };
+      // Opened from the list: remember how the list was, for the page's way back (backToProjectList).
+      if (view === "projects" && projectTab === "portfolio") projectListReturn.current = { opened: { ...screenLink.current.params }, scrollY: window.scrollY };
+      else if (projectTab !== "page") projectListReturn.current = null;
       // On Projects already: the page is a new history entry, written before the address effect can rewrite the list's.
       if (view === "projects") {
         placeScreen(projectPagePath(next), how);
@@ -1086,7 +1109,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
       screenLink.current = { view: "projects", path: projectPagePath(next), params: {}, opened: {}, fromLink: true };
       window.scrollTo({ top: 0 });
     },
-    [setView, view, placeScreen],
+    [setView, view, placeScreen, projectTab],
   );
   // Opens a customer issue batch on Projects > Punchlist.
   const openIssueBatch = useCallback(
@@ -1697,7 +1720,7 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
                       projectNo={projectPage.no}
                       tab={projectPage.tab}
                       onTab={changeProjectPageTab}
-                      onBack={() => changeProjectTab("portfolio")}
+                      onBack={backToProjectList}
                       seesCost={seesProjectCost && bootstrap.permissions.includes("schedule.read")}
                       onCeoSummary={(key) => openCeoSummary(key)}
                       seesPlan={bootstrap.permissions.includes("schedule.read")}

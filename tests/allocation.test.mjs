@@ -75,7 +75,8 @@ test("a task under a heading may wait with no member, with or without a discipli
     source("backend-node/src/schedule-service.ts"),
     source("backend-node/src/resource-workload.ts"),
     source("backend-node/src/routes/resource-planning.ts"),
-    source("backend-node/src/project-cost.ts"),
+    // The discipline rule lives in project-cost-model.ts since the Plan sheet reads it too (QA 2026-11-26).
+    source("backend-node/src/project-cost-model.ts"),
   ]);
   assert.match(service, /export const PLAN_DISCIPLINES = \["Electrical", "Mechanical", "Software", "Installation"\] as const;/);
   assert.match(service, /if \(kind === "phase" && discipline\) throw new ApiError/);

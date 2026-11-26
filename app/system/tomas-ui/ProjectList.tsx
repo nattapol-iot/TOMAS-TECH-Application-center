@@ -194,7 +194,7 @@ export type ProjectListRow = {
 type SortKey = "health" | "number" | "name" | "pm" | "target" | "slip" | "progress" | "lastUpdate";
 
 export type ProjectListTableProps = {
-  labels: Record<SortKey | "actions" | "stage" | "hours" | "follow", string> & { ascending: string; descending: string };
+  labels: Record<SortKey | "actions" | "stage" | "hours" | "follow" | "followRule", string> & { ascending: string; descending: string };
   sort: { key: SortKey; direction: "asc" | "desc" };
   onSort: (key: SortKey) => void;
   filters: { stage: ColumnFilterSpec; team: ColumnFilterSpec; pm: ColumnFilterSpec };
@@ -248,7 +248,9 @@ export function ProjectListTable(props: ProjectListTableProps) {
               {sortHead("slip", undefined, PHONE_HIDDEN)}
               {sortHead("progress")}
               <TableHead className={PHONE_HIDDEN}>{labels.hours}</TableHead>
-              <TableHead data-guide="project.followCol">{labels.follow}</TableHead>
+              <TableHead data-guide="project.followCol" title={labels.followRule}>
+                {labels.follow}
+              </TableHead>
               {sortHead("lastUpdate")}
             </TableRow>
           </TableHeader>

@@ -10,7 +10,7 @@ import { TomasUi } from "./TomasUi";
 
 export type OverviewProgress = { actual: number; planned: number | null; text: string; tone: KitTone };
 
-export type OverviewCell = { key: string; label: string; value: string; tone?: KitTone; progress?: OverviewProgress; onSelect: () => void };
+export type OverviewCell = { key: string; label: string; value: string; tone?: KitTone; progress?: OverviewProgress; onSelect: () => void; hint?: string };
 
 export type OverviewBody =
   | { kind: "loading" }
@@ -153,7 +153,13 @@ export function ProjectOverviewBoxes(props: ProjectOverviewBoxesProps) {
         {/* The figures row: where the plan stands, each a way to the Plan tab. */}
         <div className="grid grid-cols-[repeat(auto-fit,minmax(11rem,1fr))] overflow-hidden rounded-md border bg-card" data-guide="projectPage.summary">
           {props.cells.map((cell) => (
-            <button key={cell.key} type="button" onClick={cell.onSelect} className="grid content-start gap-1 border-r px-4 py-3 text-left transition-colors last:border-r-0 hover:bg-muted/60">
+            <button
+              key={cell.key}
+              type="button"
+              title={cell.hint}
+              onClick={cell.onSelect}
+              className="grid content-start gap-1 border-r px-4 py-3 text-left transition-colors last:border-r-0 hover:bg-muted/60"
+            >
               <span className="text-xs text-muted-foreground">{cell.label}</span>
               {cell.progress ? (
                 <span className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">

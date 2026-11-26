@@ -193,7 +193,7 @@ type MyWorkUpdate = {
 };
 
 /** active false: the PIC left or was taken off the team, so the row is open to every project member until the PM sets a new PIC. */
-type SchedulePic = { id: number; name: string; email: string; active?: boolean };
+type SchedulePic = { id: number; name: string; email: string; active?: boolean; department?: string };
 
 export type ScheduleTask = {
   id: number;
@@ -297,6 +297,8 @@ export type ProjectSchedule = {
   canAnswerRequests?: boolean;
   /** Estimated against planned man-days (backend-node/src/manhour-budget.ts); an older API omits it. */
   manHours?: PlanManHoursData;
+  /** Confirmed hours by labor discipline, counted as the Overview and Cost tabs count them (project-cost-model.ts actualDiscipline). */
+  actualByDiscipline?: { discipline: string; hours: number }[];
   summary: {
     planStart: string | null;
     planFinish: string | null;

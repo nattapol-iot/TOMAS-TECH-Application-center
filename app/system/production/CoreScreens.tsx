@@ -942,7 +942,8 @@ export function ProductionProjects({
   const timelineMode = mode === "timeline";
   useActivitySubView(timelineMode ? "projects-timeline" : "projects-portfolio");
   const [overview, setOverview] = useState<{ items: ProjectOverviewItem[]; loadedAt: number } | null>(null);
-  const [page, setPage] = useState(1);
+  // On the link, not remembered: back from a project's page the list opens on the page it was on (QA 2026-11-26).
+  const [page, setPage] = useLinkedState("page", 1, numberLink, { remember: false });
   const [pageSize, setPageSize] = useLinkedState("rows", 10, numberLink);
   // The search is on the link but not remembered: a forgotten word would hide projects next time.
   const [search, setSearch] = useLinkedState("q", "", textLink, { remember: false });
@@ -1031,7 +1032,7 @@ export function ProductionProjects({
   const view = useMemo(() => portfolioView(items, filters, overview?.loadedAt ?? 0), [items, filters, overview?.loadedAt]);
   const sorted = useMemo(() => sortPortfolio(view.rows, sort), [view.rows, sort]);
   const pageCount = Math.max(1, Math.ceil(sorted.length / pageSize));
-  const currentPage = Math.min(page, pageCount);
+  const currentPage = Math.max(1, Math.min(Math.floor(page), pageCount));
   const paged = sorted.slice((currentPage - 1) * pageSize, currentPage * pageSize);
   const filtered = filters.search !== "" || filters.managerId !== null || filters.team !== null || mine || filters.status !== null || health !== null || chip !== null;
   const clearFilters = () => {
@@ -1391,6 +1392,7 @@ export function ProductionProjects({
               progress: uiText(PORTFOLIO_SORT_LABEL.progress),
               hours: uiText("Portfolio.colHours"),
               follow: uiText("Portfolio.colFollow"),
+              followRule: uiText("Portfolio.followRule"),
               lastUpdate: uiText(PORTFOLIO_SORT_LABEL.lastUpdate),
               ascending: uiText("Portfolio.sortAscending"),
               descending: uiText("Portfolio.sortDescending"),
@@ -1799,9 +1801,61 @@ type PageOverview = {
   disciplines: { discipline: string; budgetHours: number; planHours: number; actualHours: number }[];
   purchaseRequests: { status: string; count: number }[];
   team: { id: number; name: string; role: string; weekHours: number }[];
-  documents: { id: number; name: string; folderCode: string; documentType: string; uploadedAt: string; uploadedBy: string }[];
-  activity: { id: number; field: string; comment: string | null; at: string; actor: string; task: string | null }[];
+  documents: { id: number; name: string; folderCode: string; documentType: string; uploadedAt: string; uploadedBy: string; copy?: { number: number; of: number } }[];
+  activity: { id: number; field: string; from?: string | null; to?: string | null; comment: string | null; at: string; actor: string; task: string | null }[];
 };
+/**
+ * One plan change in words (QA 2026-11-26: the Overview showed actual_finish, percent_complete and people as stored):
+ * what changed, and what it was and became when that reads as a value. A plan stored as JSON is named, not shown.
+ */
+const ACTIVITY_FIELDS: Record<string, [th: string, en: string, jp: string]> = {
+  percent_complete: ["ความคืบหน้า", "Progress", "進捗"],
+  status: ["สถานะ", "Status", "状態"],
+  actual_start: ["วันเริ่มจริง", "Actual start", "実開始日"],
+  actual_finish: ["วันเสร็จจริง", "Actual finish", "実完了日"],
+  forecast_finish: ["วันที่คาดว่าจะเสร็จ", "Forecast finish", "完了見込み"],
+  blocked_reason: ["เหตุที่ติดขัด", "Blocked reason", "停止理由"],
+  remark: ["หมายเหตุ", "Remark", "備考"],
+  progress: ["รายงานความคืบหน้า", "Progress report", "進捗報告"],
+  people: ["ปรับจำนวนคน", "People changed", "人員を変更"],
+  plan: ["ปรับแผน", "Plan changed", "計画を変更"],
+  plan_days: ["จำนวนวันในแผน", "Plan days", "計画日数"],
+  created: ["เพิ่มแถว", "Row added", "行を追加"],
+  deleted: ["ลบแถว", "Row removed", "行を削除"],
+  request: ["ขอเลื่อนวัน", "Day request", "日程変更依頼"],
+  request_answer: ["ตอบคำขอเลื่อนวัน", "Day request answered", "日程変更依頼に回答"],
+  assign: ["มอบหมายคน", "Assigned", "担当を割当"],
+  baseline: ["บันทึก Baseline", "Baseline saved", "ベースラインを保存"],
+};
+const ACTIVITY_COMMENTS: Record<string, [th: string, en: string, jp: string]> = {
+  "Edited in the People table": ["แก้ในตารางคน", "Edited in the People table", "人員表で編集"],
+};
+const ACTIVITY_DATES = new Set(["actual_start", "actual_finish", "forecast_finish"]);
+function activityText(
+  entry: { field: string; from?: string | null; to?: string | null; comment: string | null },
+  copy: (th: string, en: string, jp: string) => string,
+  uiText: (key: string) => string,
+): string {
+  const named = ACTIVITY_FIELDS[entry.field];
+  const label = named ? copy(...named) : entry.field.replace(/_/g, " ");
+  const value = (raw: string | null | undefined): string | null => {
+    const text = (raw ?? "").trim();
+    if (!text || text === "null") return "–";
+    if (/^[[{]/.test(text)) return null;
+    if (ACTIVITY_DATES.has(entry.field) && /^\d{4}-\d{2}-\d{2}/.test(text)) return formatDay(text.slice(0, 10));
+    if (entry.field === "percent_complete" && Number.isFinite(Number(text))) return `${Math.round(Number(text))}%`;
+    if (entry.field === "status") return uiText(text);
+    return text.length > 40 ? `${text.slice(0, 40)}…` : text;
+  };
+  const before = value(entry.from),
+    after = value(entry.to);
+  // Before and after only when both read as values and say something; a change to nothing shows "–".
+  const change = before !== null && after !== null && before !== after ? `: ${before} → ${after}` : "";
+  const known = entry.comment ? ACTIVITY_COMMENTS[entry.comment] : undefined;
+  const comment = entry.comment ? ` · ${known ? copy(...known) : entry.comment}` : "";
+  return `${label}${change}${comment}`;
+}
+
 const PAYMENT_STEPS: { code: PaymentMilestone; label: string }[] = [
   { code: "AFTER_PO", label: "CRM.paymentAfterPo" },
   { code: "AFTER_DESIGN", label: "CRM.paymentAfterDesign" },
@@ -1887,7 +1941,14 @@ function ProjectOverviewTab({
       ...((item.slipDays ?? 0) > 0 && item.status !== "Closed" ? { tone: "red" as const } : {}),
       onSelect: toPlan,
     },
-    { key: "follow", label: uiText("Portfolio.colFollow"), value: String(item.followUps ?? 0), ...(item.followUps ? { tone: "amber" as const } : {}), onSelect: toPlan },
+    {
+      key: "follow",
+      label: uiText("Portfolio.colFollow"),
+      hint: uiText("Portfolio.followRule"),
+      value: String(item.followUps ?? 0),
+      ...(item.followUps ? { tone: "amber" as const } : {}),
+      onSelect: toPlan,
+    },
     {
       key: "hours",
       label: uiText("Portfolio.colHours"),
@@ -1939,7 +2000,13 @@ function ProjectOverviewTab({
         head: ["", copy("งบ", "Budget", "予算"), copy("แผน", "Plan", "計画"), copy("จริง", "Actual", "実績")],
         rows: answer.disciplines.map((row) => ({
           key: row.discipline,
-          cells: [uiText(row.discipline), row.budgetHours ? String(Math.round(row.budgetHours)) : "–", String(Math.round(row.planHours)), String(Math.round(row.actualHours))],
+          // The Plan sheet's names for the same split (one rule for both: project-cost-model.ts rowDisciplines).
+          cells: [
+            uiText(row.discipline === "Unassigned" ? "Plan.mhDiscipline.Other" : `Discipline.${row.discipline}`),
+            row.budgetHours ? String(Math.round(row.budgetHours)) : "–",
+            String(Math.round(row.planHours)),
+            String(Math.round(row.actualHours)),
+          ],
           over: Boolean(row.budgetHours && row.actualHours > row.budgetHours),
         })),
       })),
@@ -1978,8 +2045,9 @@ function ProjectOverviewTab({
         empty: copy("ยังไม่มีเอกสาร", "No documents yet", "文書はまだありません"),
         rows: answer.documents.map((document) => ({
           key: String(document.id),
-          label: document.name,
-          sub: `${document.folderCode} · ${document.documentType} · ${document.uploadedBy} · ${formatDay(document.uploadedAt)}`,
+          label: document.copy ? `${document.name} · ${copy("ฉบับที่", "copy", "版")} ${document.copy.number}/${document.copy.of}` : document.name,
+          // The time as well as the day: files saved the same day under one name are told apart (QA 2026-11-26).
+          sub: `${document.folderCode} · ${document.documentType} · ${document.uploadedBy} · ${formatDateTime(document.uploadedAt)}`,
         })),
       })),
     },
@@ -1999,7 +2067,7 @@ function ProjectOverviewTab({
         rows: answer.activity.map((entry) => ({
           key: String(entry.id),
           label: `${entry.actor} · ${entry.task ?? copy("ทั้งแผน", "the plan", "計画全体")}`,
-          sub: `${entry.field}${entry.comment ? ` · ${entry.comment}` : ""} · ${formatDay(entry.at)}`,
+          sub: `${activityText(entry, copy, uiText)} · ${formatDay(entry.at)}`,
         })),
       })),
     },

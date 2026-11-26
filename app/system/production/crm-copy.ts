@@ -900,7 +900,7 @@ export const CRM_COPY: Record<string, { en: string; th: string; jp: string }> = 
     ["Plan.mhDiscipline.Mechanical", "Mechanical labor", "เครื่องกล", "機械"],
     ["Plan.mhDiscipline.Software", "Software labor", "ซอฟต์แวร์", "ソフトウェア"],
     ["Plan.mhDiscipline.Installation", "Installation labor", "งานติดตั้ง", "据付"],
-    ["Plan.mhDiscipline.Other", "Unclassified labor", "ยังไม่ระบุสาขา", "未分類"],
+    ["Plan.mhDiscipline.Other", "No discipline", "ยังไม่ระบุสาขา", "分野未設定"],
     ["Plan.more", "More", "เพิ่มเติม", "その他"],
     ["Plan.legendToggle", "Colour key", "คำอธิบายสี", "色の説明"],
     ["Plan.mhOutsourced", "Outsourced manpower", "จ้างภายนอก", "外注人員"],

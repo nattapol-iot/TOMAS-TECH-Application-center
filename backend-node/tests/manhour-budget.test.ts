@@ -257,3 +257,33 @@ test("Outsource (07) cost lines count as labor only when priced by the man-day o
   assert.match(OUTSOURCE_TIME_UNITS_SQL, /N'hour'[^)]*N'ชม\.'[^)]*\) THEN c\.qty\/8\.0/);
   assert.match(OUTSOURCE_TIME_UNITS_SQL, /ELSE 0 END/);
 });
+
+test("GET schedule: confirmed hours by discipline, counted as the Overview and Cost tabs count them (QA 2026-11-26)", async (t) => {
+  const app = harness(["Engineer"]);
+  const base = budgetAnswers({ estimateManDays: 30 });
+  installSqlMock(t, (statement) =>
+    statement.includes("SELECT h.work_key,u.department,SUM(h.hours) hours")
+      ? {
+          recordset: [
+            // A row this plan no longer has, a meeting, nothing named: the worker's department (the rows' own rules are
+            // project-cost-actual.test.ts actualDiscipline's).
+            { work_key: "Project-71", department: "Electrical Engineer Dept.", hours: 6 },
+            { work_key: "Meeting-3", department: "IoT Engineer Dept.", hours: 4 },
+            { work_key: null, department: "Electrical Engineer Dept.", hours: 2 },
+          ],
+        }
+      : statement.includes("FROM dbo.schedule_tasks WHERE project_id=@project AND deleted_at IS NULL ORDER BY")
+        ? { recordset: [] }
+        : base(statement),
+  );
+  try {
+    const response = await app.inject({ method: "GET", url: `/api/v1/projects/${PROJECT_ID}/schedule` });
+    assert.equal(response.statusCode, 200, response.body);
+    assert.deepEqual(response.json().actualByDiscipline, [
+      { discipline: "Electrical", hours: 8 },
+      { discipline: "Software", hours: 4 },
+    ]);
+  } finally {
+    await app.close();
+  }
+});
