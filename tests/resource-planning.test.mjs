@@ -194,7 +194,7 @@ test("the Workload shows a Gantt, a work order per person, and My Work has its o
   // The drawer's order is editable by the person or a manager; only the person asks the PM for more days.
   assert.match(screen, /editable=\{person\.user\.id === bootstrap\.user\.id \|\| manages\}/);
   assert.match(screen, /canRequestDays=\{person\.user\.id === bootstrap\.user\.id && bootstrap\.permissions\.includes\("schedule\.progress"\)\}/);
-  assert.match(screen, /const MANAGER_ROLES = \["Admin", "Engineering Manager", "Project Manager"\];/);
+  assert.match(screen, /const MANAGER_ROLES = \["Admin", "Engineering Manager", "Project Manager", "Leader"\];/);
   // Moving saves the whole order; plan dates move only through the day request the PM answers.
   assert.match(client, /\/api\/v1\/resource-planning\/work-order\/\$\{userId\}`, \{ method: "PUT", body: JSON\.stringify\(\{ keys \}\) \}/);
   assert.match(queue, /\/api\/v1\/schedule\/tasks\/\$\{taskId\}\/day-requests`/);

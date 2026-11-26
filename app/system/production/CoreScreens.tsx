@@ -2490,9 +2490,9 @@ function EditProjectModal({
     (roles: string[], keepId: number | null | undefined) => bootstrap.team.filter((member) => member.id === keepId || (member.roles ?? [member.role]).some((role) => roles.includes(role))),
     [bootstrap.team],
   );
-  const managers = useMemo(() => eligible(["Project Manager", "Engineering Manager", "Admin"], project.managerId), [eligible, project.managerId]);
+  const managers = useMemo(() => eligible(["Project Manager", "Leader", "Engineering Manager", "Admin"], project.managerId), [eligible, project.managerId]);
   const engineers = useMemo(() => eligible(["Engineer", "Leader", "Engineering Manager", "Admin"], project.leadEngineerId), [eligible, project.leadEngineerId]);
-  const elevated = (bootstrap.user.roles ?? [bootstrap.user.role]).some((role) => ["Admin", "Engineering Manager", "Project Manager"].includes(role));
+  const elevated = (bootstrap.user.roles ?? [bootstrap.user.role]).some((role) => ["Admin", "Engineering Manager", "Project Manager", "Leader"].includes(role));
   const current = project.status as ProjectStatus;
   const statusChoices = useMemo(() => [current, ...allowedProjectTransitions(current, elevated)], [current, elevated]);
   // Seeded defensively: an older API build that omits one of these fields must leave the dialog

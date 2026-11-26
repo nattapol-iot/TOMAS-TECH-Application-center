@@ -1,5 +1,6 @@
 /** Read-only management reporting contract. Amounts are costs, never revenue. */
-export const DASHBOARD_ROLES = ["Admin", "Management", "Engineering Manager", "Project Manager", "Sales Manager"];
+// A Leader opens it as a Project Manager does (migration 138).
+export const DASHBOARD_ROLES = ["Admin", "Management", "Engineering Manager", "Project Manager", "Leader", "Sales Manager"];
 /** ProjectHealth from project-health.ts, repeated so the screen that imports this file pulls in no server code. */
 export type ScheduleHealth = "On Track" | "At Risk" | "Delayed" | "No plan" | "On Hold" | "Completed";
 export type DashboardLink = "projects" | "inquiries" | "estimates" | "resources" | "purchase" | "pos" | "receiving" | "signing" | "reports";

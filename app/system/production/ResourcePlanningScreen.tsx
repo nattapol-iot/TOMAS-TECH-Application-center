@@ -62,7 +62,7 @@ const MORE_VIEWS: readonly { id: ResourceTab; label: string; needs: "board" | "r
 const WORKLOAD_VIEW_LINK = choiceLink<WorkloadView>(["table", "gantt"]);
 const WORKLOAD_FOCUS_LINK = optionalChoiceLink<Focus>(["over", "overdue", "late", "missing"]);
 const WORKLOAD_WEEKS_LINK = choiceLink<string>(["8", "12", "16", "24"]);
-const MANAGER_ROLES = ["Admin", "Engineering Manager", "Project Manager"];
+const MANAGER_ROLES = ["Admin", "Engineering Manager", "Project Manager", "Leader"];
 const ALL_DEPARTMENTS = "All departments";
 const PAGE_SIZE = 50;
 const tones: Record<Commitment["type"], Tone> = {
@@ -150,7 +150,7 @@ export function ProductionResourcePlan({ bootstrap, notify, openProjectSchedule,
     [queueDiscipline, setQueueDiscipline] = useState<string>("all"),
     [assigning, setAssigning] = useState<Commitment | null>(null);
   const canPlan = bootstrap.permissions.includes("schedule.plan");
-  // Anyone orders their own work; Admin, Engineering Managers and Project Managers may order anyone's (the API agrees).
+  // Anyone orders their own work; Admin, Engineering Managers, Project Managers and Leaders may order anyone's (the API agrees).
   const manages = (bootstrap.user.roles ?? [bootstrap.user.role]).some((role) => MANAGER_ROLES.includes(role));
   const load = useCallback(async () => {
     if (!canRead) return;

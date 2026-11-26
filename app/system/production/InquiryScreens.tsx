@@ -221,7 +221,7 @@ function InquiryList({ bootstrap, notify, refreshBootstrap, onCreate, onOpen, op
   const pageCount = Math.max(1, Math.ceil(result.total / Math.max(1, result.pageSize)));
   const types = useMemo(() => Array.from(new Set([...PROJECT_TYPES, ...result.items.map((item) => item.projectType)])).sort(), [result.items]);
   const canWrite = bootstrap.permissions.includes("inquiry.write");
-  const canManageQueue = hasRole(bootstrap.user, "Admin", "Engineering Manager", "Project Manager", "Sales Manager");
+  const canManageQueue = hasRole(bootstrap.user, "Admin", "Engineering Manager", "Project Manager", "Leader", "Sales Manager");
   const queueCopy =
     lang === "TH"
       ? { mine: "งานของฉัน", team: "งานทีม", unassigned: "ยังไม่มอบหมาย", unavailable: "ทุก Inquiry มีผู้รับผิดชอบแล้ว เพราะต้องเลือกผู้รับผิดชอบตอนรับเรื่อง" }

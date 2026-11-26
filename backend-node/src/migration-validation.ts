@@ -123,6 +123,7 @@ export const REQUIRED_MIGRATIONS: readonly MigrationIdentity[] = [
   { version: 135, fileName: "135_leader_role.sql", name: "Leader role" },
   { version: 136, fileName: "136_sales_manager_crm.sql", name: "Sales Manager CRM" },
   { version: 137, fileName: "137_leader_team_work.sql", name: "Leader team work" },
+  { version: 138, fileName: "138_leader_project_manager.sql", name: "Leader as Project Manager" },
 ] as const;
 
 export const REQUIRED_SCHEMA_VERSION = REQUIRED_MIGRATIONS.at(-1)!.version;

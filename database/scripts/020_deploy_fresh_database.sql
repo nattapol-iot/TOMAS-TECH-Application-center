@@ -199,6 +199,7 @@ GO
 :r database/migrations/135_leader_role.sql
 :r database/migrations/136_sales_manager_crm.sql
 :r database/migrations/137_leader_team_work.sql
+:r database/migrations/138_leader_project_manager.sql
 
 USE [$(DatabaseName)];
 GO

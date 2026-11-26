@@ -13,11 +13,12 @@
 export const isApplicationTeam = (department: string | null | undefined): boolean => /application/i.test(department ?? "");
 
 /**
- * Creates a project without an estimate: a Project Manager or an Admin (any held role), or a member of the Application team.
+ * Creates a project without an estimate: a Project Manager, a Leader (a Project Manager's rights since migration 138) or
+ * an Admin (any held role), or a member of the Application team.
  * A Viewer stays read-only there too.
  */
 export const mayCreateWithoutEstimate = (roles: readonly string[], department: string | null | undefined): boolean =>
-  roles.some((role) => role === "Project Manager" || role === "Admin") || (isApplicationTeam(department) && roles.some((role) => role !== "Viewer"));
+  roles.some((role) => role === "Project Manager" || role === "Leader" || role === "Admin") || (isApplicationTeam(department) && roles.some((role) => role !== "Viewer"));
 
 /** Creates a project from an approved estimate. */
 export const mayCreateFromEstimate = (permissions: readonly string[]): boolean => permissions.includes("project.write");

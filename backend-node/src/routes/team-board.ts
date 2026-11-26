@@ -173,7 +173,7 @@ export function timeRangeManDays(startTime: string, endTime: string) {
   return Math.max(0.25, Math.round(((until - from - lunch) / 480) * 4) / 4);
 }
 
-/** Who may change or remove a team task: whoever added it, anyone it is for, and Admin / Engineering / Project Managers. */
+/** Who may change or remove a team task: whoever added it, anyone it is for, and Admin / Engineering / Project Managers / Leaders. */
 /**
  * Who may put work on someone else's row. Owner decision 2026-11-19 (ticket SUP-2026-00010): everyone who can add
  * team work may tag colleagues on it. This replaces the 2026-10-28 rule that limited it to Admins, Leaders and managers.
@@ -758,7 +758,7 @@ export function registerTeamBoardRoutes(app: FastifyInstance, db: Database, user
       tasks: taskRows.map((r) => teamTaskDto(r, can)),
       visits: [...visits.values()],
       away: awayRows.map((r) => ({ id: Number(r.id), userId: Number(r.user_id), kind: String(r.kind), start: dateOnly(r.start_date as Date), end: dateOnly(r.end_date as Date) })),
-      /** Admin, Engineering and Project Managers may change anyone's team task. */
+      /** Admin, Engineering and Project Managers and Leaders may change anyone's team task. */
       canChangeAll: isProjectManagerRole(actor),
       /** Admins, Leaders and managers may add work for someone else; everyone else for themselves. */
       canAssignOthers: canAssignOthers(),

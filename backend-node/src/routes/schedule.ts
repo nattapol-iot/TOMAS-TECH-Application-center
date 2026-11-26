@@ -1233,7 +1233,7 @@ export function registerScheduleRoutes(app: FastifyInstance, database: Database,
     await users.demandPermission(request, "schedule.read");
     const actor = await users.required(request);
     const projectId = positiveLong((request.params as { projectId?: string }).projectId, "Project id");
-    if (!isProjectManagerRole(actor)) throw new ApiError(403, "manhour_budget_forbidden", "Only an Admin, an Engineering Manager or a Project Manager sets a project's man-hour budget.");
+    if (!isProjectManagerRole(actor)) throw new ApiError(403, "manhour_budget_forbidden", "Only an Admin, an Engineering Manager, a Project Manager or a Leader sets a project's man-hour budget.");
     const manDays = parseBudgetManDays(bodyObject(request.body).manDays);
     if (manDays === undefined) throw new ApiError(400, "validation_failed", `Man-days must be more than 0 and at most ${MAXIMUM_BUDGET_MAN_DAYS}. Leave it empty to clear the budget.`);
     return database.transaction(async (transaction) => {
