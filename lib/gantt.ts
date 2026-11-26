@@ -8,10 +8,10 @@ const DAY = 86_400_000;
 export const dayNumber = (value: string) => Date.parse(`${value.slice(0, 10)}T00:00:00Z`) / DAY;
 export const dateFromDay = (value: number) => new Date(value * DAY).toISOString().slice(0, 10);
 
-export const GANTT_ZOOMS = ["month", "quarter", "half", "year"] as const;
+export const GANTT_ZOOMS = ["week", "month", "quarter", "half", "year"] as const;
 export type GanttZoom = (typeof GANTT_ZOOMS)[number];
 
-export type GanttColumn = { start: string; end: string; kind: "week" | "month" };
+export type GanttColumn = { start: string; end: string; kind: "day" | "week" | "month" };
 export type GanttWindow = { start: string; end: string; days: number; columns: GanttColumn[] };
 
 const mondayOf = (day: number) => day - ((new Date(day * DAY).getUTCDay() + 6) % 7);
@@ -21,6 +21,11 @@ const addMonths = (iso: string, months: number) => {
   date.setUTCMonth(date.getUTCMonth() + months);
   return date.toISOString().slice(0, 10);
 };
+
+function dayWindow(firstDay: number, days: number): GanttWindow {
+  const columns = Array.from({ length: days }, (_, index): GanttColumn => ({ start: dateFromDay(firstDay + index), end: dateFromDay(firstDay + index), kind: "day" }));
+  return { start: columns[0]!.start, end: columns.at(-1)!.end, days, columns };
+}
 
 function weekWindow(firstMonday: number, weeks: number): GanttWindow {
   const columns = Array.from({ length: weeks }, (_, index): GanttColumn => ({
@@ -43,11 +48,12 @@ function monthWindow(firstMonth: string, months: number): GanttWindow {
 
 /**
  * The window a zoom preset shows around `anchor` (usually today): a little history on the left so a
- * late bar is still visible, most of the room ahead. Month = 6 weeks, quarter = 13 weeks, half-year
- * = 6 months, year = 12 months.
+ * late bar is still visible, most of the room ahead. Week = this week and next, a column a day (UX audit
+ * 2026-11-26); month = 6 weeks, quarter = 13 weeks, half-year = 6 months, year = 12 months.
  */
 export function ganttWindow(zoom: GanttZoom, anchor: string): GanttWindow {
   const day = dayNumber(anchor);
+  if (zoom === "week") return dayWindow(mondayOf(day), 14);
   if (zoom === "month") return weekWindow(mondayOf(day) - 7, 6);
   if (zoom === "quarter") return weekWindow(mondayOf(day) - 14, 13);
   if (zoom === "half") return monthWindow(addMonths(anchor, -1), 6);
@@ -56,6 +62,7 @@ export function ganttWindow(zoom: GanttZoom, anchor: string): GanttWindow {
 
 /** Moves the anchor by most of one window, so the next view overlaps the last one a little. */
 export function shiftGanttAnchor(zoom: GanttZoom, anchor: string, direction: -1 | 1): string {
+  if (zoom === "week") return dateFromDay(dayNumber(anchor) + direction * 7);
   if (zoom === "month") return dateFromDay(dayNumber(anchor) + direction * 28);
   if (zoom === "quarter") return dateFromDay(dayNumber(anchor) + direction * 77);
   // Month windows start on the 1st, so the anchor's day of the month does not matter.

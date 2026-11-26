@@ -257,12 +257,12 @@ test("the portfolio Timeline goes full screen, with an overlay where the browser
 test("the Gantt name column can be dragged wider, keyed, remembered per chart and reset", () => {
   const chart = read("app/system/production/GanttChart.tsx");
   // Only a press on the column edge starts a drag; anywhere else stays a normal click.
-  assert.match(chart, /const onEdge = \(clientX: number\) => \{ const head = sideHead\(\); return head !== null && Math\.abs\(clientX - head\.getBoundingClientRect\(\)\.right\) <= 5; \};/);
+  assert.match(chart, /const onEdge = \(clientX: number\) => \{\s*const head = sideHead\(\);\s*return head !== null && Math\.abs\(clientX - head\.getBoundingClientRect\(\)\.right\) <= 5;\s*\};/);
   assert.match(chart, /if \(event\.button !== 0 \|\| !chart \|\| !head \|\| !onEdge\(event\.clientX\)\) return;/);
   assert.match(chart, /chart\.setPointerCapture\(event\.pointerId\);/);
   // The drag moves only the CSS variable and commits the width on release; the track never drops below TRACK_MIN.
   assert.match(chart, /chart\.style\.setProperty\("--gantt-side", `\$\{width\}px`\);/);
-  assert.match(chart, /setResizing\(false\); setSide\(width\); saveSide\(label, width\);/);
+  assert.match(chart, /setResizing\(false\);\s*setSide\(width\);\s*saveSide\(label, width\);/);
   assert.match(chart, /"--gantt-side": `min\(\$\{side\}px, calc\(100% - \$\{TRACK_MIN\}px\)\)`/);
   assert.match(chart, /const SIDE_MIN = 160;\r?\nconst SIDE_MAX = 900;/);
   // Remembered per chart in this browser, read and written behind try/catch.
@@ -271,7 +271,7 @@ test("the Gantt name column can be dragged wider, keyed, remembered per chart an
   // The grip is a real button: arrow keys, Home and End resize it; a double-click on the edge resets.
   assert.match(chart, /<button type="button" className="gantt-resizer" aria-label=\{t\("Gantt\.resizeColumn"\)\} title=\{t\("Gantt\.resizeColumnHint"\)\} onKeyDown=\{resizeByKey\} \/>/);
   assert.match(chart, /event\.key === "ArrowLeft" \? current - SIDE_STEP : event\.key === "ArrowRight" \? current \+ SIDE_STEP/);
-  assert.match(chart, /onPointerDown=\{startResize\} onDoubleClick=\{resetSide\}/);
+  assert.match(chart, /onPointerDown=\{startResize\}\s+onDoubleClick=\{resetSide\}/);
   // A cut-off name shows in full on hover.
   assert.match(chart, /className="gantt-label" title=\{row\.title\} onClick=\{row\.onOpen\}/);
   const css = read("app/system/production/gantt.css");

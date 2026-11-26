@@ -57,6 +57,10 @@
   font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
+/* Hours planned to date that nobody has confirmed: the forecast cannot see them (UX audit 2026-11-26). */
+.pg-skin .pc-total-sub.pc-unconfirmed {
+  color: var(--pg-amber-fg, var(--amber-text));
+}
 .pg-skin .pc-total.over .pc-total-hint {
   color: var(--pg-red-fg);
   font-weight: 600;

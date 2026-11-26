@@ -918,6 +918,13 @@ export const CRM_COPY: Record<string, { en: string; th: string; jp: string }> = 
     ["People.own", "Our own staff", "คนของเรา", "自社の人員"],
     ["People.out", "Outsourced manpower", "จ้างภายนอก", "外注人員"],
     ["People.ownShort", "Ours", "ของเรา", "自社"],
+    ["People.planTotal", "Plan in all", "แผนงานรวม", "計画の合計"],
+    [
+      "People.basis",
+      "Counted differently: this table counts people × days typed here (a row with none typed keeps its own man-days; a row with rows under it counts theirs), the plan counts each row's planned hours.",
+      "นับคนละแบบ: ตารางนี้นับคน × วันที่กรอกที่นี่ (แถวที่ยังไม่กรอกใช้ man-day ของแถว แถวที่มีงานย่อยนับจากงานย่อย) ส่วนแผนงานนับชั่วโมงแผนของแต่ละแถว",
+      "数え方が違います：この表はここに入力した人数×日数（未入力の行は行の人日、下に行がある行はその合計）、計画は各行の計画時間です。",
+    ],
     ["People.outShort", "Hired", "จ้างนอก", "外注"],
     ["People.whose", "Whose people", "คนของใคร", "人員区分"],
     ["People.perDay", "People/day", "คน/วัน", "人/日"],

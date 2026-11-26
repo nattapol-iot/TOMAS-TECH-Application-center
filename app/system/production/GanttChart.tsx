@@ -9,7 +9,23 @@
    or down, and sideways out of or into a level. */
 
 import { useId, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
-import { GANTT_ZOOMS, dayNumber, ganttDoneWidth, ganttDragDays, ganttDropChoices, ganttDropParent, ganttLanes, ganttLinkPath, ganttPoint, ganttShift, ganttSlip, ganttSpan, type GanttDrop, type GanttWindow, type GanttZoom } from "../../../lib/gantt";
+import {
+  GANTT_ZOOMS,
+  dayNumber,
+  ganttDoneWidth,
+  ganttDragDays,
+  ganttDropChoices,
+  ganttDropParent,
+  ganttLanes,
+  ganttLinkPath,
+  ganttPoint,
+  ganttShift,
+  ganttSlip,
+  ganttSpan,
+  type GanttDrop,
+  type GanttWindow,
+  type GanttZoom,
+} from "../../../lib/gantt";
 import { currentLocale, useT } from "../i18n";
 import { Icon, type Tone } from "../ui";
 import "./gantt.css";
@@ -95,28 +111,63 @@ export function scheduleTone(item: { status: string; planFinish: string | null; 
 }
 
 export type GanttZoomChoice = GanttZoom | "fit";
-const ZOOM_LABEL: Record<GanttZoomChoice, string> = { month: "Gantt.month", quarter: "Gantt.quarter", half: "Gantt.half", year: "Gantt.year", fit: "Gantt.fit" };
+const ZOOM_LABEL: Record<GanttZoomChoice, string> = { week: "Gantt.week", month: "Gantt.month", quarter: "Gantt.quarter", half: "Gantt.half", year: "Gantt.year", fit: "Gantt.fit" };
 
 /** Zoom presets, earlier / later and back to today. "Fit" shows a project's whole plan. */
-export function GanttToolbar({ zoom, onZoom, onShift, onToday, allowFit = false, compact = false }: {
-  zoom: GanttZoomChoice; onZoom: (zoom: GanttZoomChoice) => void; onShift: (direction: -1 | 1) => void; onToday: () => void; allowFit?: boolean;
+export function GanttToolbar({
+  zoom,
+  onZoom,
+  onShift,
+  onToday,
+  allowFit = false,
+  compact = false,
+}: {
+  zoom: GanttZoomChoice;
+  onZoom: (zoom: GanttZoomChoice) => void;
+  onShift: (direction: -1 | 1) => void;
+  onToday: () => void;
+  allowFit?: boolean;
   /** One list instead of a button per range, where the row of controls is short of room (Projects > Plan). */
   compact?: boolean;
 }) {
   const t = useT();
   const choices: GanttZoomChoice[] = allowFit ? ["fit", ...GANTT_ZOOMS] : [...GANTT_ZOOMS];
-  return <div className="gantt-toolbar" role="group" aria-label={t("Gantt.zoom")}>
-    {compact ? <label className="select-field gantt-zoom-select"><select value={zoom} aria-label={t("Gantt.zoom")} onChange={(event) => onZoom(event.target.value as GanttZoomChoice)}>
-      {choices.map((choice) => <option key={choice} value={choice}>{t(ZOOM_LABEL[choice])}</option>)}</select><Icon name="chevronDown" /></label>
-      : <div className="chip-select" role="group" aria-label={t("Gantt.zoom")}>
-        {choices.map((choice) => <button key={choice} type="button" className={zoom === choice ? "chip on" : "chip"} aria-pressed={zoom === choice} onClick={() => onZoom(choice)}>{t(ZOOM_LABEL[choice])}</button>)}
-      </div>}
-    <div className="gantt-nav">
-      <button type="button" className="icon-btn" disabled={zoom === "fit"} onClick={() => onShift(-1)} aria-label={t("Gantt.earlier")} title={t("Gantt.earlier")}><Icon name="chevronLeft" /></button>
-      <button type="button" className="btn ghost sm" onClick={onToday}><Icon name="calendar" />{t("Gantt.today")}</button>
-      <button type="button" className="icon-btn" disabled={zoom === "fit"} onClick={() => onShift(1)} aria-label={t("Gantt.later")} title={t("Gantt.later")}><Icon name="chevronRight" /></button>
+  return (
+    <div className="gantt-toolbar" role="group" aria-label={t("Gantt.zoom")}>
+      {compact ? (
+        <label className="select-field gantt-zoom-select">
+          <select value={zoom} aria-label={t("Gantt.zoom")} onChange={(event) => onZoom(event.target.value as GanttZoomChoice)}>
+            {choices.map((choice) => (
+              <option key={choice} value={choice}>
+                {t(ZOOM_LABEL[choice])}
+              </option>
+            ))}
+          </select>
+          <Icon name="chevronDown" />
+        </label>
+      ) : (
+        <div className="chip-select" role="group" aria-label={t("Gantt.zoom")}>
+          {choices.map((choice) => (
+            <button key={choice} type="button" className={zoom === choice ? "chip on" : "chip"} aria-pressed={zoom === choice} onClick={() => onZoom(choice)}>
+              {t(ZOOM_LABEL[choice])}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="gantt-nav">
+        <button type="button" className="icon-btn" disabled={zoom === "fit"} onClick={() => onShift(-1)} aria-label={t("Gantt.earlier")} title={t("Gantt.earlier")}>
+          <Icon name="chevronLeft" />
+        </button>
+        <button type="button" className="btn ghost sm" onClick={onToday}>
+          <Icon name="calendar" />
+          {t("Gantt.today")}
+        </button>
+        <button type="button" className="icon-btn" disabled={zoom === "fit"} onClick={() => onShift(1)} aria-label={t("Gantt.later")} title={t("Gantt.later")}>
+          <Icon name="chevronRight" />
+        </button>
+      </div>
     </div>
-  </div>;
+  );
 }
 
 /**
@@ -133,19 +184,58 @@ const TONE_KEY: ReadonlyArray<{ tone: Tone; label: string }> = [
 
 export function GanttLegend({ baseline = false, target = false, links = false, draggable = false }: { baseline?: boolean; target?: boolean; links?: boolean; draggable?: boolean }) {
   const t = useT();
-  return <ul className="gantt-legend" aria-label={t("Gantt.legend")}>
-    <li className="gantt-legend-tones">{t("Gantt.legendTone")}
-      {TONE_KEY.map(({ tone, label }) => <span key={tone}><i className={`gantt-key tone ${tone}`} aria-hidden="true" />{t(label)}</span>)}</li>
-    <li><i className="gantt-key bar" aria-hidden="true" />{t("Gantt.legendPlan")}</li>
-    <li><i className="gantt-key done" aria-hidden="true" />{t("Gantt.legendDone")}</li>
-    <li><i className="gantt-key slip" aria-hidden="true" />{t("Gantt.legendSlip")}</li>
-    {baseline ? <li><i className="gantt-key baseline" aria-hidden="true" />{t("Gantt.legendBaseline")}</li> : null}
-    <li><i className="gantt-key milestone" aria-hidden="true" />{t("Gantt.legendMilestone")}</li>
-    {links ? <li><i className="gantt-key link" aria-hidden="true" />{t("Gantt.legendLink")}</li> : null}
-    {target ? <li><i className="gantt-key target" aria-hidden="true" />{t("Gantt.legendTarget")}</li> : null}
-    <li><i className="gantt-key today" aria-hidden="true" />{t("Gantt.today")}</li>
-    {draggable ? <li className="gantt-legend-hint">{t("Gantt.dragHint")}</li> : null}
-  </ul>;
+  return (
+    <ul className="gantt-legend" aria-label={t("Gantt.legend")}>
+      <li className="gantt-legend-tones">
+        {t("Gantt.legendTone")}
+        {TONE_KEY.map(({ tone, label }) => (
+          <span key={tone}>
+            <i className={`gantt-key tone ${tone}`} aria-hidden="true" />
+            {t(label)}
+          </span>
+        ))}
+      </li>
+      <li>
+        <i className="gantt-key bar" aria-hidden="true" />
+        {t("Gantt.legendPlan")}
+      </li>
+      <li>
+        <i className="gantt-key done" aria-hidden="true" />
+        {t("Gantt.legendDone")}
+      </li>
+      <li>
+        <i className="gantt-key slip" aria-hidden="true" />
+        {t("Gantt.legendSlip")}
+      </li>
+      {baseline ? (
+        <li>
+          <i className="gantt-key baseline" aria-hidden="true" />
+          {t("Gantt.legendBaseline")}
+        </li>
+      ) : null}
+      <li>
+        <i className="gantt-key milestone" aria-hidden="true" />
+        {t("Gantt.legendMilestone")}
+      </li>
+      {links ? (
+        <li>
+          <i className="gantt-key link" aria-hidden="true" />
+          {t("Gantt.legendLink")}
+        </li>
+      ) : null}
+      {target ? (
+        <li>
+          <i className="gantt-key target" aria-hidden="true" />
+          {t("Gantt.legendTarget")}
+        </li>
+      ) : null}
+      <li>
+        <i className="gantt-key today" aria-hidden="true" />
+        {t("Gantt.today")}
+      </li>
+      {draggable ? <li className="gantt-legend-hint">{t("Gantt.dragHint")}</li> : null}
+    </ul>
+  );
 }
 
 /** Draws each link as an elbow arrow from the predecessor's bar end to the successor's bar start, measured from the DOM. */
@@ -158,11 +248,14 @@ function drawLinks(chart: HTMLElement, svg: SVGSVGElement, layer: SVGGElement, l
   const byKey = new Map([...rows].map((row) => [row.dataset.ganttRow ?? "", row]));
   const paths: SVGPathElement[] = [];
   for (const link of links) {
-    const fromRow = byKey.get(link.from), toRow = byKey.get(link.to);
-    const fromBar = fromRow?.querySelector<HTMLElement>("[data-gantt-bar]"), toBar = toRow?.querySelector<HTMLElement>("[data-gantt-bar]");
+    const fromRow = byKey.get(link.from),
+      toRow = byKey.get(link.to);
+    const fromBar = fromRow?.querySelector<HTMLElement>("[data-gantt-bar]"),
+      toBar = toRow?.querySelector<HTMLElement>("[data-gantt-bar]");
     // A bar cut off by the window edge has no real end or start to point at.
     if (!fromRow || !fromBar || !toBar || fromBar.classList.contains("clip-end") || toBar.classList.contains("clip-start")) continue;
-    const from = fromBar.getBoundingClientRect(), to = toBar.getBoundingClientRect();
+    const from = fromBar.getBoundingClientRect(),
+      to = toBar.getBoundingClientRect();
     const y = (rect: DOMRect) => rect.top + rect.height / 2 - box.top + chart.scrollTop;
     const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
     path.setAttribute("d", ganttLinkPath({ x: from.right - box.left, y: y(from) }, { x: to.left - box.left, y: y(to) }, fromRow.getBoundingClientRect().height / 2));
@@ -182,16 +275,30 @@ function readSide(label: string): number | null {
   try {
     const value = Number(window.localStorage.getItem(sideStorageKey(label)));
     return Number.isFinite(value) && value >= SIDE_MIN && value <= SIDE_MAX ? value : null;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 function saveSide(label: string, value: number | null) {
   try {
     if (value === null) window.localStorage.removeItem(sideStorageKey(label));
     else window.localStorage.setItem(sideStorageKey(label), String(value));
-  } catch { /* storage blocked: the width lasts for this visit only */ }
+  } catch {
+    /* storage blocked: the width lasts for this visit only */
+  }
 }
 
-export function GanttChart({ rows, range, today, sideHeader, label, links = [], onMoveRow, canMoveRow, deliveryTarget = null }: {
+export function GanttChart({
+  rows,
+  range,
+  today,
+  sideHeader,
+  label,
+  links = [],
+  onMoveRow,
+  canMoveRow,
+  deliveryTarget = null,
+}: {
   rows: GanttRowSpec[];
   range: GanttWindow;
   today: string;
@@ -212,60 +319,93 @@ export function GanttChart({ rows, range, today, sideHeader, label, links = [], 
 }) {
   const t = useT();
   const locale = currentLocale();
-  const columnLabel = (start: string, kind: "week" | "month") => new Intl.DateTimeFormat(locale, kind === "week" ? { day: "numeric", month: "short", timeZone: "UTC" } : { month: "short", year: "2-digit", timeZone: "UTC" }).format(new Date(`${start}T00:00:00Z`));
+  const columnLabel = (start: string, kind: "day" | "week" | "month") =>
+    new Intl.DateTimeFormat(
+      locale,
+      kind === "day"
+        ? { weekday: "short", day: "numeric", timeZone: "UTC" }
+        : kind === "week"
+          ? { day: "numeric", month: "short", timeZone: "UTC" }
+          : { month: "short", year: "2-digit", timeZone: "UTC" },
+    ).format(new Date(`${start}T00:00:00Z`));
   const dayLabel = (date: string) => new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${date}T00:00:00Z`));
   const todayAt = ganttPoint(today, range);
   const deliveryAt = ganttPoint(deliveryTarget, range);
   const chartRef = useRef<HTMLDivElement>(null);
-  const linkSvg = useRef<SVGSVGElement>(null), linkLayer = useRef<SVGGElement>(null);
+  const linkSvg = useRef<SVGSVGElement>(null),
+    linkLayer = useRef<SVGGElement>(null);
   const markerId = `gantt-arrow-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
   // The bar being dragged and by how many days; a drag that moved swallows the click that follows it.
   const [drag, setDrag] = useState<{ key: string; mode: "move" | "resize"; days: number } | null>(null);
   const dragged = useRef(false);
   const startDrag = (event: ReactPointerEvent<HTMLElement>, row: GanttRowSpec) => {
-    const edit = row.reschedule, track = event.currentTarget.closest<HTMLElement>(".gantt-track"), start = row.start, finish = row.finish;
+    const edit = row.reschedule,
+      track = event.currentTarget.closest<HTMLElement>(".gantt-track"),
+      start = row.start,
+      finish = row.finish;
     if (event.button !== 0 || !edit || !track || !start || !finish) return;
     event.stopPropagation();
     const mode = edit.resize && (event.target as HTMLElement).closest(".gantt-bar-grip") ? "resize" : "move";
-    const target = event.currentTarget, width = track.clientWidth, x0 = event.clientX;
+    const target = event.currentTarget,
+      width = track.clientWidth,
+      x0 = event.clientX;
     // A stretch keeps at least one day.
     const shortest = dayNumber(start) - dayNumber(finish);
-    let days = 0, moved = false;
+    let days = 0,
+      moved = false;
     target.setPointerCapture(event.pointerId);
     const move = (moveEvent: PointerEvent) => {
       if (!moved && Math.abs(moveEvent.clientX - x0) < 4) return;
       moved = true;
       const next = ganttDragDays(moveEvent.clientX - x0, width, range.days);
       const clamped = mode === "resize" ? Math.max(shortest, next) : next;
-      if (clamped !== days || !dragged.current) { days = clamped; dragged.current = true; setDrag({ key: row.key, mode, days }); }
+      if (clamped !== days || !dragged.current) {
+        days = clamped;
+        dragged.current = true;
+        setDrag({ key: row.key, mode, days });
+      }
     };
     const stop = (save: boolean) => {
-      target.removeEventListener("pointermove", move); target.removeEventListener("pointerup", up); target.removeEventListener("pointercancel", cancel);
+      target.removeEventListener("pointermove", move);
+      target.removeEventListener("pointerup", up);
+      target.removeEventListener("pointercancel", cancel);
       setDrag(null);
       // The click event comes right after pointerup; let it see the drag, then forget it.
-      window.setTimeout(() => { dragged.current = false; }, 0);
+      window.setTimeout(() => {
+        dragged.current = false;
+      }, 0);
       if (save && moved && days) edit.onChange(mode === "move" ? ganttShift(start, days) : start, ganttShift(finish, days));
     };
-    const up = () => stop(true), cancel = () => stop(false);
-    target.addEventListener("pointermove", move); target.addEventListener("pointerup", up); target.addEventListener("pointercancel", cancel);
+    const up = () => stop(true),
+      cancel = () => stop(false);
+    target.addEventListener("pointermove", move);
+    target.addEventListener("pointerup", up);
+    target.addEventListener("pointercancel", cancel);
   };
-  const open = (row: GanttRowSpec) => { if (!dragged.current) row.onOpen?.(); };
+  const open = (row: GanttRowSpec) => {
+    if (!dragged.current) row.onOpen?.();
+  };
   // A row dragged by its grip: up or down picks the gap it lands in, sideways the level (out to the left, in to the
   // right). The drop place is a line at that level's indent, and the row it would go under is lit.
   const plain = rows.filter((row) => !row.editor);
   const [rowDrop, setRowDrop] = useState<{ key: string; drop: GanttRowDrop | null } | null>(null);
   const firstDrop = (choices: GanttRowDrop[]) => choices.find((choice) => !canMoveRow || canMoveRow(choice)) ?? null;
   const startRowDrag = (event: ReactPointerEvent<HTMLButtonElement>, row: GanttRowSpec) => {
-    const chart = chartRef.current, index = plain.indexOf(row);
+    const chart = chartRef.current,
+      index = plain.indexOf(row);
     if (event.button !== 0 || !onMoveRow || !chart || index < 0) return;
-    event.preventDefault(); event.stopPropagation();
+    event.preventDefault();
+    event.stopPropagation();
     const grip = event.currentTarget;
     grip.setPointerCapture(event.pointerId);
     let end = index + 1;
     while (end < plain.length && plain[end]!.depth > row.depth) end++;
     const lifted = new Set(plain.slice(index, end).map((item) => item.key));
     const others = plain.filter((item) => !lifted.has(item.key));
-    let drop: GanttRowDrop | null = null, x = event.clientX, y = event.clientY, frame = 0;
+    let drop: GanttRowDrop | null = null,
+      x = event.clientX,
+      y = event.clientY,
+      frame = 0;
     const x0 = event.clientX;
     const locate = () => {
       // Rows are found in the name column, so a drag far to the left or right still reads the row it is level with.
@@ -280,23 +420,38 @@ export function GanttChart({ rows, range, today, sideHeader, label, links = [], 
       const gap = lifted.has(target) ? index : y < box.top + box.height / 2 ? at : at + 1;
       return firstDrop(ganttDropChoices(plain, index, gap, row.depth + Math.round((x - x0) / LEVEL_DRAG)));
     };
-    const move = (moveEvent: PointerEvent) => { x = moveEvent.clientX; y = moveEvent.clientY; drop = locate(); setRowDrop({ key: row.key, drop }); };
+    const move = (moveEvent: PointerEvent) => {
+      x = moveEvent.clientX;
+      y = moveEvent.clientY;
+      drop = locate();
+      setRowDrop({ key: row.key, drop });
+    };
     // Near the top or bottom of a long plan, the chart scrolls while the row is held there.
     const scroll = () => {
       const box = chart.getBoundingClientRect();
-      if (y < box.top + 56) chart.scrollTop -= 12; else if (y > box.bottom - 32) chart.scrollTop += 12;
+      if (y < box.top + 56) chart.scrollTop -= 12;
+      else if (y > box.bottom - 32) chart.scrollTop += 12;
       frame = window.requestAnimationFrame(scroll);
     };
     frame = window.requestAnimationFrame(scroll);
     const stop = (save: boolean) => {
       window.cancelAnimationFrame(frame);
-      grip.removeEventListener("pointermove", move); grip.removeEventListener("pointerup", up); grip.removeEventListener("pointercancel", cancel); window.removeEventListener("keydown", escape);
+      grip.removeEventListener("pointermove", move);
+      grip.removeEventListener("pointerup", up);
+      grip.removeEventListener("pointercancel", cancel);
+      window.removeEventListener("keydown", escape);
       setRowDrop(null);
       if (save && drop) onMoveRow(drop);
     };
-    const up = () => stop(true), cancel = () => stop(false);
-    const escape = (keyEvent: globalThis.KeyboardEvent) => { if (keyEvent.key === "Escape") stop(false); };
-    grip.addEventListener("pointermove", move); grip.addEventListener("pointerup", up); grip.addEventListener("pointercancel", cancel); window.addEventListener("keydown", escape);
+    const up = () => stop(true),
+      cancel = () => stop(false);
+    const escape = (keyEvent: globalThis.KeyboardEvent) => {
+      if (keyEvent.key === "Escape") stop(false);
+    };
+    grip.addEventListener("pointermove", move);
+    grip.addEventListener("pointerup", up);
+    grip.addEventListener("pointercancel", cancel);
+    window.addEventListener("keydown", escape);
     setRowDrop({ key: row.key, drop: null });
   };
   // The arrow keys on a grip, for those who do not drag: up and down move the row past its neighbour, left and right
@@ -315,7 +470,9 @@ export function GanttChart({ rows, range, today, sideHeader, label, links = [], 
   const dropParent = dropping ? ganttDropParent(plain, dropping) : null;
   // Links are drawn after layout and again whenever the chart or its label column changes size.
   useLayoutEffect(() => {
-    const chart = chartRef.current, svg = linkSvg.current, layer = linkLayer.current;
+    const chart = chartRef.current,
+      svg = linkSvg.current,
+      layer = linkLayer.current;
     if (!chart || !svg || !layer) return;
     const draw = () => drawLinks(chart, svg, layer, links, markerId);
     draw();
@@ -326,17 +483,29 @@ export function GanttChart({ rows, range, today, sideHeader, label, links = [], 
     return () => observer.disconnect();
   });
   // null keeps the stylesheet's width, which already narrows on small screens.
-  const [side, setSide] = useState<number | null>(() => typeof window === "undefined" ? null : readSide(label));
+  const [side, setSide] = useState<number | null>(() => (typeof window === "undefined" ? null : readSide(label)));
   const [resizing, setResizing] = useState(false);
   const sideHead = () => chartRef.current?.querySelector<HTMLElement>(".gantt-side-head") ?? null;
   const maxSide = () => Math.max(SIDE_MIN, Math.min(SIDE_MAX, (chartRef.current?.clientWidth ?? 0) - TRACK_MIN));
-  const resizeTo = (width: number) => { const next = Math.round(Math.min(maxSide(), Math.max(SIDE_MIN, width))); setSide(next); saveSide(label, next); };
-  const onEdge = (clientX: number) => { const head = sideHead(); return head !== null && Math.abs(clientX - head.getBoundingClientRect().right) <= 5; };
+  const resizeTo = (width: number) => {
+    const next = Math.round(Math.min(maxSide(), Math.max(SIDE_MIN, width)));
+    setSide(next);
+    saveSide(label, next);
+  };
+  const onEdge = (clientX: number) => {
+    const head = sideHead();
+    return head !== null && Math.abs(clientX - head.getBoundingClientRect().right) <= 5;
+  };
   // A drag captures the pointer on the chart, so a double-click lands here rather than on the grip.
-  const resetSide = (event: { clientX: number }) => { if (!onEdge(event.clientX)) return; setSide(null); saveSide(label, null); };
+  const resetSide = (event: { clientX: number }) => {
+    if (!onEdge(event.clientX)) return;
+    setSide(null);
+    saveSide(label, null);
+  };
   // A press on the column edge (each row's 8px edge strip, or the header grip) drags it; anywhere else is a normal click.
   const startResize = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const chart = chartRef.current, head = sideHead();
+    const chart = chartRef.current,
+      head = sideHead();
     if (event.button !== 0 || !chart || !head || !onEdge(event.clientX)) return;
     const box = head.getBoundingClientRect();
     event.preventDefault();
@@ -350,111 +519,225 @@ export function GanttChart({ rows, range, today, sideHeader, label, links = [], 
       chart.style.setProperty("--gantt-side", `${width}px`);
     };
     const end = () => {
-      chart.removeEventListener("pointermove", move); chart.removeEventListener("pointerup", end); chart.removeEventListener("pointercancel", end);
-      setResizing(false); setSide(width); saveSide(label, width);
+      chart.removeEventListener("pointermove", move);
+      chart.removeEventListener("pointerup", end);
+      chart.removeEventListener("pointercancel", end);
+      setResizing(false);
+      setSide(width);
+      saveSide(label, width);
     };
-    chart.addEventListener("pointermove", move); chart.addEventListener("pointerup", end); chart.addEventListener("pointercancel", end);
+    chart.addEventListener("pointermove", move);
+    chart.addEventListener("pointerup", end);
+    chart.addEventListener("pointercancel", end);
   };
   const resizeByKey = (event: KeyboardEvent<HTMLButtonElement>) => {
     const current = side ?? sideHead()?.getBoundingClientRect().width ?? 300;
-    const next = event.key === "ArrowLeft" ? current - SIDE_STEP : event.key === "ArrowRight" ? current + SIDE_STEP
-      : event.key === "Home" ? SIDE_MIN : event.key === "End" ? maxSide() : null;
+    const next = event.key === "ArrowLeft" ? current - SIDE_STEP : event.key === "ArrowRight" ? current + SIDE_STEP : event.key === "Home" ? SIDE_MIN : event.key === "End" ? maxSide() : null;
     if (next === null) return;
     event.preventDefault();
     resizeTo(next);
   };
   // The track keeps TRACK_MIN even when a wide saved width meets a narrower window.
-  const sideStyle = side === null ? undefined : { "--gantt-side": `min(${side}px, calc(100% - ${TRACK_MIN}px))` } as CSSProperties;
-  return <div ref={chartRef} className={`gantt${resizing ? " resizing" : ""}${drag ? " dragging" : ""}${rowDrop ? " moving-row" : ""}`} role="region" aria-label={t(label)} style={sideStyle} onPointerDown={startResize} onDoubleClick={resetSide}>
-    {links.length ? <svg ref={linkSvg} className="gantt-links" aria-hidden="true">
-      <defs><marker id={markerId} viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L8 4L0 8z" /></marker></defs>
-      <g ref={linkLayer} />
-    </svg> : null}
-    <div className="gantt-head">
-      <div className="gantt-side-head">{t(sideHeader)}
-        <button type="button" className="gantt-resizer" aria-label={t("Gantt.resizeColumn")} title={t("Gantt.resizeColumnHint")} onKeyDown={resizeByKey} />
-      </div>
-      <div className="gantt-scale">
-        {range.columns.map((column) => {
-          const span = ganttSpan(column.start, column.end, range);
-          const current = today >= column.start && today <= column.end;
-          return span ? <span key={column.start} className={current ? "current" : undefined} style={{ left: `${span.left}%`, width: `${span.width}%` }}>{columnLabel(column.start, column.kind)}</span> : null;
-        })}
-        {deliveryAt !== null ? <i className="gantt-scale-target" style={{ left: `${deliveryAt}%` }} aria-hidden="true" /> : null}
-      </div>
-    </div>
-    {rows.map((row) => {
-      // While its bar is dragged, a row is drawn at the dates it would be dropped on.
-      const shift = drag?.key === row.key ? drag : null;
-      const start = shift?.mode === "move" && row.start ? ganttShift(row.start, shift.days) : row.start;
-      const finish = shift && row.finish ? ganttShift(row.finish, shift.days) : row.finish;
-      const segments = row.segments ? placeSegments(row.segments, range) : null;
-      const bar = row.milestone || segments ? null : ganttSpan(start, finish, range);
-      const diamond = row.milestone ? ganttPoint(finish ?? start, range) : null;
-      const slip = shift ? null : ganttSlip(row.finish, row.forecastFinish, range);
-      const baseline = ganttSpan(row.baselineStart ?? null, row.baselineFinish ?? null, range);
-      const target = ganttPoint(row.target ?? null, range);
-      const progress = row.progress === null || row.progress === undefined ? null : Math.max(0, Math.min(100, Math.round(Number(row.progress))));
-      const done = progress === 100;
-      // The fill is measured along the whole plan, not the part the window shows (lib/gantt.ts ganttDoneWidth).
-      const doneWidth = progress === null ? null : ganttDoneWidth(start, finish, progress, range) ?? 0;
-      const movable = row.reschedule ? ` movable${shift ? " moving" : ""}` : "";
-      const grab = row.reschedule ? { onPointerDown: (event: ReactPointerEvent<HTMLElement>) => startDrag(event, row) } : {};
-      // Where the dates being dropped on are written: after the bar, or before it near the right edge.
-      const end = bar ? bar.left + bar.width : diamond;
-      const dropLabel = shift && start && finish && end !== null && end !== undefined
-        ? <span className="gantt-drop-label" style={end > 75 ? { right: `calc(${100 - (bar ? bar.left : end)}% + 8px)` } : { left: `calc(${end}% + 8px)` }}>
-          {row.milestone || start === finish ? dayLabel(finish) : `${dayLabel(start)} → ${dayLabel(finish)}`}</span> : null;
-      if (row.editor) return <div key={row.key} className={`gantt-row ${row.kind} editing`}>
-        <div className="gantt-editor" style={{ paddingLeft: 8 + Math.min(row.depth, 6) * 16 }}>{row.editor}</div>
-      </div>;
-      // The line goes above the row below the gap, or under the last row; the row it would land under is lit.
-      const dropLine = !dropping ? null : dropping.below === row.key ? "before" : dropping.below === null && dropping.above === row.key ? "after" : null;
-      return <div key={row.key} data-gantt-row={row.key} className={`gantt-row ${row.kind}${row.selected ? " selected" : ""}${dropParent === row.key ? " drop-into" : ""}${rowDrop?.key === row.key ? " row-moving" : ""}`}>
-        {dropLine && dropping ? <i className={`gantt-drop-line ${dropLine}`} style={{ left: dropIndent(dropping.depth) }} aria-hidden="true" /> : null}
-        <div className="gantt-side" style={{ paddingLeft: 8 + Math.min(row.depth, 6) * 16 }}>
-          {row.movable && onMoveRow ? <button type="button" className="gantt-grip" data-guide="plan.moveRow" aria-label={`${t("Gantt.moveRow")} · ${row.title}`} title={t("Gantt.moveRowHint")}
-            onPointerDown={(event) => startRowDrag(event, row)} onKeyDown={(event) => moveRowByKey(event, row)}><Icon name="grip" /></button> : null}
-          {row.expandable
-            ? <button type="button" className="gantt-toggle" aria-expanded={Boolean(row.expanded)} aria-label={t(row.expanded ? "Collapse" : "Expand")} onClick={row.onToggle}><Icon name={row.expanded ? "chevronDown" : "chevronRight"} /></button>
-            : <span className="gantt-toggle-spacer" />}
-          {row.onOpen
-            ? <button type="button" className="gantt-label" title={row.title} onClick={row.onOpen}><span className="gantt-label-main">{row.label}</span>{row.meta ? <small>{row.meta}</small> : null}</button>
-            : <span className="gantt-label" title={row.title}><span className="gantt-label-main">{row.label}</span>{row.meta ? <small>{row.meta}</small> : null}</span>}
-          {row.status ? <span className="gantt-status">{row.status}</span> : null}
-          {row.insert ? <button type="button" className="gantt-insert" data-guide="plan.insert" aria-label={`${row.insert.label} · ${row.title}`} title={row.insert.label} onClick={row.insert.onInsert}><Icon name="plus" /></button> : null}
-          {row.remove ? <button type="button" className={`gantt-remove${row.remove.reason ? " blocked" : ""}`} data-guide="plan.remove" aria-disabled={row.remove.reason ? true : undefined}
-            aria-label={`${row.remove.label} · ${row.title}${row.remove.reason ? ` · ${row.remove.reason}` : ""}`} title={row.remove.reason ?? row.remove.label} onClick={row.remove.onRemove}><Icon name="trash" /></button> : null}
+  const sideStyle = side === null ? undefined : ({ "--gantt-side": `min(${side}px, calc(100% - ${TRACK_MIN}px))` } as CSSProperties);
+  return (
+    <div
+      ref={chartRef}
+      className={`gantt${resizing ? " resizing" : ""}${drag ? " dragging" : ""}${rowDrop ? " moving-row" : ""}`}
+      role="region"
+      aria-label={t(label)}
+      style={sideStyle}
+      onPointerDown={startResize}
+      onDoubleClick={resetSide}
+    >
+      {links.length ? (
+        <svg ref={linkSvg} className="gantt-links" aria-hidden="true">
+          <defs>
+            <marker id={markerId} viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M0 0L8 4L0 8z" />
+            </marker>
+          </defs>
+          <g ref={linkLayer} />
+        </svg>
+      ) : null}
+      <div className="gantt-head">
+        <div className="gantt-side-head">
+          {t(sideHeader)}
+          <button type="button" className="gantt-resizer" aria-label={t("Gantt.resizeColumn")} title={t("Gantt.resizeColumnHint")} onKeyDown={resizeByKey} />
         </div>
-        <div className="gantt-track" style={segments && segments.count > 1 ? { minHeight: 14 + segments.count * 10 } : undefined}>
+        <div className="gantt-scale">
           {range.columns.map((column) => {
             const span = ganttSpan(column.start, column.end, range);
-            return span ? <span key={column.start} className="gantt-gridline" style={{ left: `${span.left}%` }} aria-hidden="true" /> : null;
+            const current = today >= column.start && today <= column.end;
+            return span ? (
+              <span key={column.start} className={current ? "current" : undefined} style={{ left: `${span.left}%`, width: `${span.width}%` }}>
+                {columnLabel(column.start, column.kind)}
+              </span>
+            ) : null;
           })}
-          {baseline ? <span className="gantt-baseline" style={{ left: `${baseline.left}%`, width: `${baseline.width}%` }} aria-hidden="true" /> : null}
-          {row.alerts?.map((alert) => {
-            const span = ganttSpan(alert.start, alert.finish, range);
-            return span ? <span key={alert.key} className={`gantt-alert ${alert.tone}`} style={{ left: `${span.left}%`, width: `${span.width}%` }} title={alert.title} /> : null;
-          })}
-          {bar ? <button type="button" data-gantt-bar="" className={`gantt-bar ${row.tone}${row.kind === "task" ? "" : " summary"}${done ? " done" : ""}${bar.clippedStart ? " clip-start" : ""}${bar.clippedEnd ? " clip-end" : ""}${movable}`}
-            style={{ left: `${bar.left}%`, width: `${bar.width}%` }} title={row.title} aria-label={row.title} onClick={() => open(row)} disabled={!row.onOpen && !row.reschedule} tabIndex={-1} {...grab}>
-            {doneWidth !== null ? <i style={{ width: `${doneWidth}%` }} /> : null}
-            {progress !== null && bar.width > 6 ? <span>{progress}%</span> : null}
-            {row.reschedule?.resize ? <b className="gantt-bar-grip" title={t("Gantt.stretchHint")} /> : null}
-          </button> : null}
-          {segments?.shown.map(({ segment, span, lane }) => <button key={segment.key} type="button"
-            className={`gantt-bar gantt-segment ${segment.tone}${span.clippedStart ? " clip-start" : ""}${span.clippedEnd ? " clip-end" : ""}`}
-            style={{ left: `${span.left}%`, width: `${span.width}%`, top: segments.count > 1 ? 8 + lane * 10 : 15 }}
-            title={segment.title} aria-label={segment.title} onClick={segment.onOpen} disabled={!segment.onOpen} tabIndex={-1} />)}
-          {slip ? <span className="gantt-slip" style={{ left: `${slip.left}%`, width: `${slip.width}%` }} title={`${t("Gantt.legendSlip")} → ${row.forecastFinish}`} aria-hidden="true" /> : null}
-          {diamond !== null ? <button type="button" data-gantt-bar="" className={`gantt-diamond ${row.tone}${done ? " done" : ""}${movable}`} style={{ left: `${diamond}%` }} title={row.title} aria-label={row.title} onClick={() => open(row)} disabled={!row.onOpen && !row.reschedule} tabIndex={-1} {...grab} /> : null}
-          {dropLabel}
-          {target !== null ? <span className="gantt-target" style={{ left: `${target}%` }} title={`${t("Gantt.legendTarget")} ${row.target}`} aria-hidden="true" /> : null}
-          {deliveryAt !== null ? <span className="gantt-target line" style={{ left: `${deliveryAt}%` }} aria-hidden="true" /> : null}
-          {todayAt !== null ? <span className="gantt-today" style={{ left: `${todayAt}%` }} aria-hidden="true" /> : null}
-          {!bar && diamond === null && !segments?.shown.length ? <span className="gantt-undated">{row.placeholder ?? (row.start || row.finish ? t("Gantt.outside") : t("Gantt.undated"))}</span> : null}
+          {deliveryAt !== null ? <i className="gantt-scale-target" style={{ left: `${deliveryAt}%` }} aria-hidden="true" /> : null}
         </div>
-      </div>;
-    })}
-  </div>;
+      </div>
+      {rows.map((row) => {
+        // While its bar is dragged, a row is drawn at the dates it would be dropped on.
+        const shift = drag?.key === row.key ? drag : null;
+        const start = shift?.mode === "move" && row.start ? ganttShift(row.start, shift.days) : row.start;
+        const finish = shift && row.finish ? ganttShift(row.finish, shift.days) : row.finish;
+        const segments = row.segments ? placeSegments(row.segments, range) : null;
+        const bar = row.milestone || segments ? null : ganttSpan(start, finish, range);
+        const diamond = row.milestone ? ganttPoint(finish ?? start, range) : null;
+        const slip = shift ? null : ganttSlip(row.finish, row.forecastFinish, range);
+        const baseline = ganttSpan(row.baselineStart ?? null, row.baselineFinish ?? null, range);
+        const target = ganttPoint(row.target ?? null, range);
+        const progress = row.progress === null || row.progress === undefined ? null : Math.max(0, Math.min(100, Math.round(Number(row.progress))));
+        const done = progress === 100;
+        // The fill is measured along the whole plan, not the part the window shows (lib/gantt.ts ganttDoneWidth).
+        const doneWidth = progress === null ? null : (ganttDoneWidth(start, finish, progress, range) ?? 0);
+        const movable = row.reschedule ? ` movable${shift ? " moving" : ""}` : "";
+        const grab = row.reschedule ? { onPointerDown: (event: ReactPointerEvent<HTMLElement>) => startDrag(event, row) } : {};
+        // Where the dates being dropped on are written: after the bar, or before it near the right edge.
+        const end = bar ? bar.left + bar.width : diamond;
+        const dropLabel =
+          shift && start && finish && end !== null && end !== undefined ? (
+            <span className="gantt-drop-label" style={end > 75 ? { right: `calc(${100 - (bar ? bar.left : end)}% + 8px)` } : { left: `calc(${end}% + 8px)` }}>
+              {row.milestone || start === finish ? dayLabel(finish) : `${dayLabel(start)} → ${dayLabel(finish)}`}
+            </span>
+          ) : null;
+        if (row.editor)
+          return (
+            <div key={row.key} className={`gantt-row ${row.kind} editing`}>
+              <div className="gantt-editor" style={{ paddingLeft: 8 + Math.min(row.depth, 6) * 16 }}>
+                {row.editor}
+              </div>
+            </div>
+          );
+        // The line goes above the row below the gap, or under the last row; the row it would land under is lit.
+        const dropLine = !dropping ? null : dropping.below === row.key ? "before" : dropping.below === null && dropping.above === row.key ? "after" : null;
+        return (
+          <div
+            key={row.key}
+            data-gantt-row={row.key}
+            className={`gantt-row ${row.kind}${row.selected ? " selected" : ""}${dropParent === row.key ? " drop-into" : ""}${rowDrop?.key === row.key ? " row-moving" : ""}`}
+          >
+            {dropLine && dropping ? <i className={`gantt-drop-line ${dropLine}`} style={{ left: dropIndent(dropping.depth) }} aria-hidden="true" /> : null}
+            <div className="gantt-side" style={{ paddingLeft: 8 + Math.min(row.depth, 6) * 16 }}>
+              {row.movable && onMoveRow ? (
+                <button
+                  type="button"
+                  className="gantt-grip"
+                  data-guide="plan.moveRow"
+                  aria-label={`${t("Gantt.moveRow")} · ${row.title}`}
+                  title={t("Gantt.moveRowHint")}
+                  onPointerDown={(event) => startRowDrag(event, row)}
+                  onKeyDown={(event) => moveRowByKey(event, row)}
+                >
+                  <Icon name="grip" />
+                </button>
+              ) : null}
+              {row.expandable ? (
+                <button type="button" className="gantt-toggle" aria-expanded={Boolean(row.expanded)} aria-label={t(row.expanded ? "Collapse" : "Expand")} onClick={row.onToggle}>
+                  <Icon name={row.expanded ? "chevronDown" : "chevronRight"} />
+                </button>
+              ) : (
+                <span className="gantt-toggle-spacer" />
+              )}
+              {row.onOpen ? (
+                <button type="button" className="gantt-label" title={row.title} onClick={row.onOpen}>
+                  <span className="gantt-label-main">{row.label}</span>
+                  {row.meta ? <small>{row.meta}</small> : null}
+                </button>
+              ) : (
+                <span className="gantt-label" title={row.title}>
+                  <span className="gantt-label-main">{row.label}</span>
+                  {row.meta ? <small>{row.meta}</small> : null}
+                </span>
+              )}
+              {row.status ? <span className="gantt-status">{row.status}</span> : null}
+              {row.insert ? (
+                <button type="button" className="gantt-insert" data-guide="plan.insert" aria-label={`${row.insert.label} · ${row.title}`} title={row.insert.label} onClick={row.insert.onInsert}>
+                  <Icon name="plus" />
+                </button>
+              ) : null}
+              {row.remove ? (
+                <button
+                  type="button"
+                  className={`gantt-remove${row.remove.reason ? " blocked" : ""}`}
+                  data-guide="plan.remove"
+                  aria-disabled={row.remove.reason ? true : undefined}
+                  aria-label={`${row.remove.label} · ${row.title}${row.remove.reason ? ` · ${row.remove.reason}` : ""}`}
+                  title={row.remove.reason ?? row.remove.label}
+                  onClick={row.remove.onRemove}
+                >
+                  <Icon name="trash" />
+                </button>
+              ) : null}
+            </div>
+            <div className="gantt-track" style={segments && segments.count > 1 ? { minHeight: 14 + segments.count * 10 } : undefined}>
+              {range.columns.map((column) => {
+                const span = ganttSpan(column.start, column.end, range);
+                return span ? <span key={column.start} className="gantt-gridline" style={{ left: `${span.left}%` }} aria-hidden="true" /> : null;
+              })}
+              {baseline ? <span className="gantt-baseline" style={{ left: `${baseline.left}%`, width: `${baseline.width}%` }} aria-hidden="true" /> : null}
+              {row.alerts?.map((alert) => {
+                const span = ganttSpan(alert.start, alert.finish, range);
+                return span ? <span key={alert.key} className={`gantt-alert ${alert.tone}`} style={{ left: `${span.left}%`, width: `${span.width}%` }} title={alert.title} /> : null;
+              })}
+              {bar ? (
+                <button
+                  type="button"
+                  data-gantt-bar=""
+                  className={`gantt-bar ${row.tone}${row.kind === "task" ? "" : " summary"}${done ? " done" : ""}${bar.clippedStart ? " clip-start" : ""}${bar.clippedEnd ? " clip-end" : ""}${movable}`}
+                  style={{ left: `${bar.left}%`, width: `${bar.width}%` }}
+                  title={row.title}
+                  aria-label={row.title}
+                  onClick={() => open(row)}
+                  disabled={!row.onOpen && !row.reschedule}
+                  tabIndex={-1}
+                  {...grab}
+                >
+                  {doneWidth !== null ? <i style={{ width: `${doneWidth}%` }} /> : null}
+                  {progress !== null && bar.width > 6 ? <span>{progress}%</span> : null}
+                  {row.reschedule?.resize ? <b className="gantt-bar-grip" title={t("Gantt.stretchHint")} /> : null}
+                </button>
+              ) : null}
+              {segments?.shown.map(({ segment, span, lane }) => (
+                <button
+                  key={segment.key}
+                  type="button"
+                  className={`gantt-bar gantt-segment ${segment.tone}${span.clippedStart ? " clip-start" : ""}${span.clippedEnd ? " clip-end" : ""}`}
+                  style={{ left: `${span.left}%`, width: `${span.width}%`, top: segments.count > 1 ? 8 + lane * 10 : 15 }}
+                  title={segment.title}
+                  aria-label={segment.title}
+                  onClick={segment.onOpen}
+                  disabled={!segment.onOpen}
+                  tabIndex={-1}
+                />
+              ))}
+              {slip ? <span className="gantt-slip" style={{ left: `${slip.left}%`, width: `${slip.width}%` }} title={`${t("Gantt.legendSlip")} → ${row.forecastFinish}`} aria-hidden="true" /> : null}
+              {diamond !== null ? (
+                <button
+                  type="button"
+                  data-gantt-bar=""
+                  className={`gantt-diamond ${row.tone}${done ? " done" : ""}${movable}`}
+                  style={{ left: `${diamond}%` }}
+                  title={row.title}
+                  aria-label={row.title}
+                  onClick={() => open(row)}
+                  disabled={!row.onOpen && !row.reschedule}
+                  tabIndex={-1}
+                  {...grab}
+                />
+              ) : null}
+              {dropLabel}
+              {target !== null ? <span className="gantt-target" style={{ left: `${target}%` }} title={`${t("Gantt.legendTarget")} ${row.target}`} aria-hidden="true" /> : null}
+              {deliveryAt !== null ? <span className="gantt-target line" style={{ left: `${deliveryAt}%` }} aria-hidden="true" /> : null}
+              {todayAt !== null ? <span className="gantt-today" style={{ left: `${todayAt}%` }} aria-hidden="true" /> : null}
+              {!bar && diamond === null && !segments?.shown.length ? (
+                <span className="gantt-undated">{row.placeholder ?? (row.start || row.finish ? t("Gantt.outside") : t("Gantt.undated"))}</span>
+              ) : null}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
 }

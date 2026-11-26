@@ -59,6 +59,8 @@ const money = (value: number | null) => (value === null ? DASH : whole.format(va
 /* People are counted in hours of work (owner 2026-11-23): the API's man-days read as hours, 8 hours a man-day. */
 const HOURS_PER_MAN_DAY = 8;
 const hours = (manDays: number | null) => (manDays === null ? DASH : days.format(manDays * HOURS_PER_MAN_DAY));
+/** Man-days the plan put on or before today that nobody has confirmed: what the forecast cannot see yet (UX audit 2026-11-26). */
+const unconfirmedToDate = (figures: { toDateManDays: number | null; actualManDays: number }) => (figures.toDateManDays === null ? 0 : Math.max(0, figures.toDateManDays - figures.actualManDays));
 const toError = (error: unknown) => (error instanceof Error ? error.message : "The request could not be completed.");
 
 /** A thin bar of the used share with an optional marker on the same scale (C.4); red once over, amber when near. */
@@ -283,6 +285,9 @@ function LaborBar({
             <span className="pc-total-sub pc-actual" title={`${t("Cost.actualHint")} ${t("Cost.forecastHint")}`}>
               {t("Cost.actual")} {hours(figures.actualManDays)} · {t("Cost.forecast")} {hours(figures.forecastManDays)}
             </span>
+            {unconfirmedToDate(figures) >= 1 / HOURS_PER_MAN_DAY ? (
+              <span className="pc-total-sub pc-unconfirmed">{t("Cost.forecastUnconfirmed").replace("{hours}", hours(unconfirmedToDate(figures)))}</span>
+            ) : null}
             {access.laborMoney ? (
               <span
                 className="pc-total-sub"
@@ -761,9 +766,10 @@ function ProjectCostPage(cost: ReturnType<typeof useProjectCostDetail>) {
       key: "forecast",
       label: t("Cost.cellForecast"),
       value: `${days(labor.forecastManDays)} / ${days(labor.budgetManDays)}`,
-      note: t("Cost.cellManDays"),
+      // Hours planned to date that nobody has confirmed: the forecast cannot see them, so the cell says so.
+      note: unconfirmedToDate(labor) >= 1 / HOURS_PER_MAN_DAY ? t("Cost.forecastUnconfirmed").replace("{hours}", hours(unconfirmedToDate(labor))) : t("Cost.cellManDays"),
       view: "overview",
-      ...(over(labor.forecastManDays, labor.budgetManDays) ? { tone: "amber" as const } : {}),
+      ...(over(labor.forecastManDays, labor.budgetManDays) || unconfirmedToDate(labor) >= 1 / HOURS_PER_MAN_DAY ? { tone: "amber" as const } : {}),
     },
   ];
   const purchases = detail.purchases;
@@ -794,6 +800,10 @@ function ProjectCostPage(cost: ReturnType<typeof useProjectCostDetail>) {
           disciplines={{
             title: t("Cost.byDiscipline"),
             unit: t("Cost.inManDays").replace("{hours}", String(hoursPerManDay)),
+            // The Estimate's labor lines with no discipline: where that part of the budget comes from (UX audit 2026-11-26).
+            ...((labor.disciplines.find((row) => row.discipline === "Unassigned")?.budgetManDays ?? 0) > 0
+              ? { note: t("Cost.unclassifiedBudget").replace("{days}", days(labor.disciplines.find((row) => row.discipline === "Unassigned")!.budgetManDays)) }
+              : {}),
             table: {
               empty: t("Cost.noPlan"),
               head: ["", t("Cost.budget"), t("Cost.planned"), t("Cost.actual"), t("Cost.forecast")],

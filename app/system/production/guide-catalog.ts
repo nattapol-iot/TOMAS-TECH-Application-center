@@ -1760,9 +1760,9 @@ const PROJECT_PAGE: Guide = {
       view: "projects",
       title: { th: "แท็บต้นทุน", en: "The Cost tab", jp: "コストタブ" },
       body: {
-        th: "สำหรับ Leader ขึ้นไป แถวบนสลับมุมมอง ภาพรวม ตามงาน ตามคน และซื้อของ สี่ช่องด้านล่างคือ Hardware และ Outsource (ขอซื้อแล้วเทียบงบ) man-day ที่ใช้จริง และที่คาดตอนจบเทียบงบ กดช่องเพื่อไปมุมมองนั้น ภาพรวมมีกราฟ man-day สะสม (เส้นประคือแผน เส้นเขียวคือจริง เส้นแดงคืองบ จุดส้มคือคาดตอนจบ) คู่กับตารางตามสาขา มุมมองซื้อของมีกราฟยอดขอซื้อและสั่งซื้อสะสม (สั่งซื้อนับจากวันที่ระบบเห็น PO) แถบช่วงวันที่ต้องการของ และแยกตามหมวด",
-        en: "For Leaders and above. The top row switches between Overview, By task, By person and Bought. The four figures below are Hardware and Outsource (requested against budget), man-days used and the forecast at completion against budget; press one to open its view. The Overview draws man-days over time (dashed: plan, green: actual, red: budget, orange dot: forecast) beside the split by discipline. Bought draws requested and ordered cost over time (ordered by the date the app first saw the PO), with the need-by dates as a band and the split by category.",
-        jp: "リーダー以上が対象です。上段で「概要」「作業別」「人別」「購買」を切り替えます。その下の4つはハードウェアと外注（予算に対する依頼額）、実績人日、予算に対する完了時見込みで、押すとその表示に移ります。概要には人日の累計グラフ（点線：計画、緑：実績、赤：予算、橙の点：見込み）と分野別の表があります。",
+        th: "สำหรับ Leader ขึ้นไป แถวบนสลับมุมมอง ภาพรวม ตามงาน ตามคน และซื้อของ สี่ช่องด้านล่างคือ Hardware และ Outsource (ขอซื้อแล้วเทียบงบ) man-day ที่ใช้จริง และที่คาดตอนจบเทียบงบ ถ้ามีชั่วโมงที่แผนวางไว้ถึงวันนี้แต่ยังไม่มีใครยืนยัน ช่องคาดตอนจบจะเป็นสีส้มและบอกจำนวนชั่วโมงนั้น เพราะคาดตอนจบยังไม่เห็นชั่วโมงเหล่านั้น ถ้างบบางส่วนมาจากบรรทัดค่าแรงใน Estimate ที่ยังไม่ระบุสาขา ใต้ตารางสาขาจะบอกจำนวน กดช่องเพื่อไปมุมมองนั้น ภาพรวมมีกราฟ man-day สะสม (เส้นประคือแผน เส้นเขียวคือจริง เส้นแดงคืองบ จุดส้มคือคาดตอนจบ) คู่กับตารางตามสาขา มุมมองซื้อของมีกราฟยอดขอซื้อและสั่งซื้อสะสม (สั่งซื้อนับจากวันที่ระบบเห็น PO) แถบช่วงวันที่ต้องการของ และแยกตามหมวด",
+        en: "For Leaders and above. The top row switches between Overview, By task, By person and Bought. The four figures below are Hardware and Outsource (requested against budget), man-days used and the forecast at completion against budget; when hours planned to date are not confirmed yet, the forecast turns amber and says how many, as it cannot see them; when part of the budget is Estimate labor with no discipline, a line under the discipline table says how much. Press a figure to open its view. The Overview draws man-days over time (dashed: plan, green: actual, red: budget, orange dot: forecast) beside the split by discipline. Bought draws requested and ordered cost over time (ordered by the date the app first saw the PO), with the need-by dates as a band and the split by category.",
+        jp: "リーダー以上が対象です。上段で「概要」「作業別」「人別」「購買」を切り替えます。その下の4つはハードウェアと外注（予算に対する依頼額）、実績人日、予算に対する完了時見込みで、本日までの計画で未確定の時間があると、完了時見込みが橙色になりその時間数を表示します（見込みに含まれないため）。予算の一部が分野未設定の見積の工数行なら、分野別の表の下にその量を表示します。押すとその表示に移ります。概要には人日の累計グラフ（点線：計画、緑：実績、赤：予算、橙の点：見込み）と分野別の表があります。",
       },
       missing: {
         th: "เปิดแท็บต้นทุนของโปรเจกต์ก่อน (Leader ขึ้นไป) หรือกด 'ถัดไป'",
@@ -1852,9 +1852,9 @@ const MY_HOURS: Guide = {
       view: "my-work",
       title: { th: "ชั่วโมงของสัปดาห์", en: "Your week's hours", jp: "今週の作業時間" },
       body: {
-        th: "แถบนี้บอกชั่วโมงทำงานของสัปดาห์ ลงเวลาไปแล้วเท่าไร ลาเท่าไร ว่างเท่าไร และยืนยันแล้วเท่าไร ลูกศรด้านบนเลื่อนดูสัปดาห์ก่อนได้",
-        en: "This bar shows the week's working hours: how many are booked, away, free and confirmed. The arrows above move to the previous week.",
-        jp: "この帯は今週の勤務時間（予定済み・不在・空き・確定済み）を示します。上の矢印で前の週に移動できます。",
+        th: "แถบนี้บอกชั่วโมงทำงานของสัปดาห์ ลงเวลาไปแล้วเท่าไร ลาเท่าไร ยังไม่ลงเวลาเท่าไร และยืนยันแล้วเท่าไร 'ยังไม่ลงเวลา' คือชั่วโมงทำงานลบเวลาที่ลงในปฏิทินนี้และวันลา งานในแผนหรืองานทีมที่ยังไม่ได้ลงเวลาที่นี่ยังไม่ถูกหัก ลูกศรด้านบนเลื่อนดูสัปดาห์ก่อนได้",
+        en: "This bar shows the week's working hours: how many are booked, away, not booked yet and confirmed. Not booked yet is the working hours less what is booked on this calendar and time away; planned work and team tasks not booked here are not taken off. The arrows above move to the previous week.",
+        jp: "この帯は今週の勤務時間（予定済み・不在・未予定・確定済み）を示します。「未予定」は勤務時間からこのカレンダーに入れた時間と不在を引いたもので、ここにまだ入れていない計画の作業やチームタスクは引かれていません。上の矢印で前の週に移動できます。",
       },
     },
     {
@@ -2082,9 +2082,9 @@ const PROJECT_PLAN: Guide = {
       view: "projects",
       title: { th: "ตารางคน: ใส่จำนวนคนรายวันแบบ Excel", en: "People table: people per day, typed like Excel", jp: "人員表：Excel のように日ごとの人数を入力" },
       body: {
-        th: "กด 'ตารางคน' ที่แถบมุมมอง แต่ละแถวคืองานในแผน แต่ละช่องคือหนึ่งวัน คลิกช่องวันแล้วพิมพ์จำนวนคน กด Enter หรือลากคลุมหลายวันแล้วพิมพ์ครั้งเดียว กด Delete เพื่อลบ และวางตัวเลขที่คัดลอกจาก Excel ได้ ช่อง 'คน/วัน' ใส่จำนวนคนให้ทุกวันทำงานของแถวนั้น ถ้าคนเดียวทำหลายงานในวันเดียว ให้ใส่งานละเศษ เช่น 0.5 ช่องที่ขึ้นขอบเหลืองคือวันที่คนนั้นถูกใส่งานรวมทุกโปรเจกต์เกินกำลังต่อวันของเขา เลือก 'ของเรา' หรือ 'จ้างนอก' ต่อแถว ถ้าจ้างนอกให้พิมพ์ชื่อบริษัท Manpower ใต้ชื่องาน Man-day ของแถวคิดจากจำนวนคนที่ใส่ ระบบบันทึกให้เอง การเพิ่มงานทำใน 'ตาราง'",
-        en: "Press People table on the view bar. Each row is a task of the plan and each cell is one day. Click a day and type the number of people, then press Enter; or drag over several days and type once. Delete clears, and numbers copied from Excel can be pasted in. The People/day box puts that many people on every work day of the row. When one person does several tasks on a day, type a share on each, such as 0.5; an amber edge marks a day where the person's work over every project is more than they have that day. Mark each row as Ours or Hired; for hired manpower, type the company under the task name. The row's man-days are counted from the people typed, and changes save by themselves. Tasks are added in the Sheet.",
-        jp: "表示切替で「人員表」を押します。各行は計画のタスク、各マスは1日です。日のマスをクリックして人数を入力し Enter、または複数の日をドラッグして一度に入力します。Delete で消去、Excel からコピーした数値の貼り付けもできます。「人/日」はその行の全ての作業日に人数を入れます。1人が同じ日に複数のタスクを行う場合は、それぞれに 0.5 のように按分して入力します。全案件を合わせた割当が本人のその日の稼働可能量を超える日は、黄色の枠で示されます。行ごとに「自社」か「外注」を選び、外注の場合はタスク名の下に会社名を入力します。行の人日は入力した人数から計算され、変更は自動で保存されます。タスクの追加は「表」で行います。",
+        th: "กด 'ตารางคน' ที่แถบมุมมอง แต่ละแถวคืองานในแผน แต่ละช่องคือหนึ่งวัน คลิกช่องวันแล้วพิมพ์จำนวนคน กด Enter หรือลากคลุมหลายวันแล้วพิมพ์ครั้งเดียว กด Delete เพื่อลบ และวางตัวเลขที่คัดลอกจาก Excel ได้ ช่อง 'คน/วัน' ใส่จำนวนคนให้ทุกวันทำงานของแถวนั้น ถ้าคนเดียวทำหลายงานในวันเดียว ให้ใส่งานละเศษ เช่น 0.5 ช่องที่ขึ้นขอบเหลืองคือวันที่คนนั้นถูกใส่งานรวมทุกโปรเจกต์เกินกำลังต่อวันของเขา เลือก 'ของเรา' หรือ 'จ้างนอก' ต่อแถว ถ้าจ้างนอกให้พิมพ์ชื่อบริษัท Manpower ใต้ชื่องาน Man-day ของแถวคิดจากจำนวนคนที่ใส่ ด้านบนมี 'แผนงานรวม' ให้เทียบ ถ้าไม่เท่ากันจะมีบรรทัดบอกว่าสองตัวเลขนับต่างกันอย่างไร ระบบบันทึกให้เอง การเพิ่มงานทำใน 'ตาราง'",
+        en: "Press People table on the view bar. Each row is a task of the plan and each cell is one day. Click a day and type the number of people, then press Enter; or drag over several days and type once. Delete clears, and numbers copied from Excel can be pasted in. The People/day box puts that many people on every work day of the row. When one person does several tasks on a day, type a share on each, such as 0.5; an amber edge marks a day where the person's work over every project is more than they have that day. Mark each row as Ours or Hired; for hired manpower, type the company under the task name. The row's man-days are counted from the people typed. Plan in all, at the top, is the plan's own figure to compare; when they differ, a line says how each is counted. Changes save by themselves. Tasks are added in the Sheet.",
+        jp: "表示切替で「人員表」を押します。各行は計画のタスク、各マスは1日です。日のマスをクリックして人数を入力し Enter、または複数の日をドラッグして一度に入力します。Delete で消去、Excel からコピーした数値の貼り付けもできます。「人/日」はその行の全ての作業日に人数を入れます。1人が同じ日に複数のタスクを行う場合は、それぞれに 0.5 のように按分して入力します。全案件を合わせた割当が本人のその日の稼働可能量を超える日は、黄色の枠で示されます。行ごとに「自社」か「外注」を選び、外注の場合はタスク名の下に会社名を入力します。行の人日は入力した人数から計算されます。上部の「計画の合計」と比べられ、違う場合は数え方の違いを表示します。変更は自動で保存されます。タスクの追加は「表」で行います。",
       },
       missing: { th: "ยังไม่ได้เปิดมุมมอง 'ตารางคน' กด 'ถัดไป'", en: "The People table is not open yet. Press Next.", jp: "「人員表」がまだ開かれていません。「次へ」を押します。" },
     },
@@ -2094,9 +2094,9 @@ const PROJECT_PLAN: Guide = {
       view: "projects",
       title: { th: "อ่าน Gantt", en: "Reading the Gantt", jp: "ガントの見方" },
       body: {
-        th: "แต่ละแถบคือช่วงวันของงาน ดับเบิลคลิกแถบเพื่อเปิดงาน ถ้าจะเลื่อนงาน ให้พิมพ์วันใหม่ในแถวของงานนั้นบน 'ตาราง' (ขั้นถัดไป)",
-        en: "Each bar is a task's dates; double-click a bar to open the task. To move a task, type its new dates in its row on the Sheet (next steps).",
-        jp: "各バーはタスクの日程です。バーをダブルクリックするとタスクが開きます。タスクを動かすには、「表」のその行に新しい日付を入力します（次の手順）。",
+        th: "แต่ละแถบคือช่วงวันของงาน ดับเบิลคลิกแถบเพื่อเปิดงาน ปุ่มช่วงเวลาเลือกดูได้ตั้งแต่ สัปดาห์ (ช่องละวัน) เดือน ไตรมาส ครึ่งปี จนถึงปี ถ้าจะเลื่อนงาน ให้พิมพ์วันใหม่ในแถวของงานนั้นบน 'ตาราง' (ขั้นถัดไป)",
+        en: "Each bar is a task's dates; double-click a bar to open the task. The period buttons go from Week (a column a day) through Month, Quarter and Half-year to Year. To move a task, type its new dates in its row on the Sheet (next steps).",
+        jp: "各バーはタスクの日程です。バーをダブルクリックするとタスクが開きます。期間ボタンで週（1日1列）・月・四半期・半年・年を切り替えます。タスクを動かすには、「表」のその行に新しい日付を入力します（次の手順）。",
       },
       missing: {
         th: "โปรเจกต์นี้ยังไม่มีแผน เพิ่มแถวแรกในขั้นถัดไป",

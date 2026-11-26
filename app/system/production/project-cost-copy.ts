@@ -62,6 +62,18 @@ export const PROJECT_COST_COPY: Record<string, { en: string; th: string; jp: str
       "คาดว่าจะจบที่: ใช้จริงบวกงานที่แผนยังเหลือ (ตามแผนลบส่วนที่แผนวางไว้ถึงวันนี้)",
       "完了見込み：実績に計画の残り（計画から本日までの計画分を引いたもの）を足したもの。",
     ],
+    [
+      "Cost.forecastUnconfirmed",
+      "{hours} h planned to date not confirmed yet: the forecast may be low",
+      "ยังไม่ยืนยัน {hours} ชม. ที่แผนวางไว้ถึงวันนี้ คาดจบจึงอาจต่ำกว่าจริง",
+      "本日までの計画 {hours} 時間が未確定のため、見込みは低めの可能性があります",
+    ],
+    [
+      "Cost.unclassifiedBudget",
+      "{days} MD of the budget are Estimate labor lines with no discipline: give them one in the Estimate to compare by discipline.",
+      "งบ {days} MD มาจากบรรทัดค่าแรงใน Estimate ที่ยังไม่ระบุสาขา ระบุสาขาใน Estimate เพื่อเทียบตามสาขาได้",
+      "予算のうち {days} 人日は分野未設定の見積の工数行です。見積で分野を設定すると分野別に比較できます。",
+    ],
     ["Cost.colActual", "Actual (hours)", "ใช้จริง (ชั่วโมง)", "実績（時間）"],
     ["Cost.colForecast", "Forecast (hours)", "คาดจบ (ชั่วโมง)", "見込み（時間）"],
     ["Cost.colActualCost", "Actual cost", "ต้นทุนจริง", "実績コスト"],

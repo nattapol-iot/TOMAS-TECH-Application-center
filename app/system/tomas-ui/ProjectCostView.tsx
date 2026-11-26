@@ -48,7 +48,8 @@ export type ProjectCostViewProps = {
   views: { label: string; options: { value: CostView; label: string }[]; value: CostView; onChange: (view: CostView) => void };
   cells: CostCell[];
   curve: HoursCurveModel;
-  disciplines: { title: string; table: CostTable; unit: string };
+  /** note: a line under the table, e.g. how much of the budget has no discipline yet. */
+  disciplines: { title: string; table: CostTable; unit: string; note?: string };
   tasks: CostTable;
   people: CostTable;
   bought: PurchaseModel | null;
@@ -250,6 +251,7 @@ export function ProjectCostView(props: ProjectCostViewProps) {
             <Box title={props.disciplines.title}>
               <KitTable table={props.disciplines.table} />
               <p className="text-xs text-muted-foreground">{props.disciplines.unit}</p>
+              {props.disciplines.note ? <p className="text-xs text-amber-800">{props.disciplines.note}</p> : null}
             </Box>
           </div>
         ) : null}
