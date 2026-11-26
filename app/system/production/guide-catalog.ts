@@ -4461,6 +4461,72 @@ export const GUIDES: readonly Guide[] = [
     ],
   },
   {
+    // One owner for an inquiry and its estimate (bug 2026-11-26: EBARA INQ-2611-0019 named Sukanya while its estimate
+    // still named the person it was created with). Assigning the owner on the inquiry now moves the estimate too.
+    id: "inquiry-assign-owner",
+    area: "sales",
+    title: { th: "เปลี่ยนผู้รับผิดชอบประมาณราคา", en: "Change who estimates an inquiry", jp: "引合の見積担当者を変更" },
+    summary: {
+      th: "มอบหมาย Inquiry ให้ผู้ประเมินคนใหม่ ถ้ามี Estimate แล้ว Estimate จะเปลี่ยนผู้รับผิดชอบตามไปด้วย พร้อมงานส่วนที่ยังไม่เสร็จ",
+      en: "Give an inquiry to another estimator. When it already has an estimate, the estimate moves to them too, with the unfinished sections.",
+      jp: "引合を別の見積担当者に割り当てます。見積がすでにある場合は、未完了のセクションとともに見積も移ります。",
+    },
+    minutes: 1,
+    permissions: ["inquiry.write"],
+    views: ["inquiries"],
+    steps: [
+      inquiryMenu,
+      openInquiry({
+        th: "คลิกที่แถวของ Inquiry ที่จะเปลี่ยนผู้รับผิดชอบ",
+        en: "Click the row of the inquiry to give to someone else.",
+        jp: "担当者を変更する引合の行をクリックします。",
+      }),
+      {
+        target: "inquiry.assignOwner",
+        action: "click",
+        view: "inquiries",
+        title: { th: "กด 'มอบหมายผู้รับผิดชอบ'", en: "Press Assign owner", jp: "「担当者を割り当て」を押す" },
+        body: {
+          th: "ปุ่มอยู่ด้านบนของหน้า Inquiry",
+          en: "It is at the top of the inquiry.",
+          jp: "引合画面の上部にあります。",
+        },
+        missing: {
+          th: "ถ้าไม่มีปุ่มนี้ บัญชีนี้ยังไม่มีสิทธิ์แก้ Inquiry",
+          en: "No button means this account cannot change inquiries.",
+          jp: "ボタンがない場合、このアカウントには引合の変更権限がありません。",
+        },
+      },
+      {
+        target: "inquiry.assignOwnerSelect",
+        action: "next",
+        view: "inquiries",
+        title: { th: "เลือกผู้รับผิดชอบคนใหม่", en: "Choose the new owner", jp: "新しい担当者を選ぶ" },
+        body: {
+          th: "ถ้า Inquiry มี Estimate แล้ว ข้อความด้านล่างบอกว่า Estimate จะเปลี่ยนตาม ถ้าขึ้นสีเหลืองว่า Estimate ยังเป็นของคนอื่น ให้กดบันทึกเพื่อให้ตรงกัน",
+          en: "When the inquiry has an estimate, the note below says it moves too. A yellow note saying the estimate still names someone else means saving puts them in line.",
+          jp: "見積がある場合は、下の表示で見積も移ることがわかります。見積の担当者が別の人だと黄色で表示されたら、保存すると揃います。",
+        },
+      },
+      {
+        target: "inquiry.assignOwnerSave",
+        action: "click",
+        view: "inquiries",
+        title: { th: "บันทึก", en: "Save", jp: "保存" },
+        body: {
+          th: "กด 'มอบหมายผู้รับผิดชอบ' ผู้รับผิดชอบคนใหม่ได้อีเมล และ Estimate เปลี่ยนตาม ถ้าแค่ฝึก ให้กด 'ยกเลิก' แล้วกด 'เสร็จ'",
+          en: "Press Assign owner: the new owner gets an email and the estimate follows. Only practising? Press Cancel, then Finish.",
+          jp: "「担当者を割り当て」を押すと新しい担当者にメールが届き、見積も移ります。練習だけなら「キャンセル」を押し、「完了」を押します。",
+        },
+        missing: {
+          th: "ปุ่มบันทึกกดได้เมื่อเลือกคนใหม่ หรือเมื่อ Estimate ยังเป็นของคนอื่น",
+          en: "Save turns on once another person is chosen, or while the estimate names someone else.",
+          jp: "別の担当者を選ぶか、見積の担当者が異なるときに保存できます。",
+        },
+      },
+    ],
+  },
+  {
     id: "site-visit-request",
     area: "sales",
     title: { th: "ขอให้วิศวกรเข้าหน้างาน", en: "Request a site visit", jp: "現地訪問を依頼" },

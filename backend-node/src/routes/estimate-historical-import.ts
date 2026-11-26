@@ -249,8 +249,10 @@ export function registerEstimateHistoricalImportRoutes(app: FastifyInstance, dat
         link.input("inquiry", sql.BigInt, inquiryId);
         link.input("project", sql.BigInt, Number(project.id));
         link.input("actor", sql.BigInt, actor.id);
+        link.input("owner", sql.BigInt, input.ownerId);
+        // One owner for the inquiry and its estimate (estimate-owner.ts).
         const inquiryLinked = await link.query(
-          `UPDATE dbo.inquiries SET estimate_id=@estimate,status=N'Estimating',updated_by=@actor,updated_at=SYSUTCDATETIME() WHERE id=@inquiry AND estimate_id IS NULL AND deleted_at IS NULL;`,
+          `UPDATE dbo.inquiries SET estimate_id=@estimate,estimate_owner_id=@owner,status=N'Estimating',updated_by=@actor,updated_at=SYSUTCDATETIME() WHERE id=@inquiry AND estimate_id IS NULL AND deleted_at IS NULL;`,
         );
         if (inquiryLinked.rowsAffected[0] !== 1) throw new ApiError(409, "inquiry_not_eligible", "The inquiry can no longer take this estimate.");
         const projectLinked = await link.query(

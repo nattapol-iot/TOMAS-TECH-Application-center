@@ -2,31 +2,31 @@
 
 [Module](../modules/inquiry.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `94985f6d`; generated, do not edit. [backend-node/src/routes/inquiries.ts](<../../../backend-node/src/routes/inquiries.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `1af0bcb9`; generated, do not edit. [backend-node/src/routes/inquiries.ts](<../../../backend-node/src/routes/inquiries.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/inquiries` | 245–385 |
-| GET | `/api/v1/inquiries/:id` | 387–546 |
-| GET | `/api/v1/inquiry-duplicates` | 548–561 |
-| POST | `/api/v1/inquiries` | 563–773 |
-| PUT | `/api/v1/inquiries/:id/assignment` | 775–865 |
-| PUT | `/api/v1/inquiries/:id/qualification` | 867–916 |
-| POST | `/api/v1/inquiries/:id/meetings` | 918–980 |
+| GET | `/api/v1/inquiries` | 246–386 |
+| GET | `/api/v1/inquiries/:id` | 388–547 |
+| GET | `/api/v1/inquiry-duplicates` | 549–562 |
+| POST | `/api/v1/inquiries` | 564–774 |
+| PUT | `/api/v1/inquiries/:id/assignment` | 776–878 |
+| PUT | `/api/v1/inquiries/:id/qualification` | 880–929 |
+| POST | `/api/v1/inquiries/:id/meetings` | 931–993 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `optionalInteger` | [backend-node/src/routes/inquiries.ts](<../../../backend-node/src/routes/inquiries.ts>) | 165–172 |
-| `nullableNumber` | [backend-node/src/routes/inquiries.ts](<../../../backend-node/src/routes/inquiries.ts>) | 174–176 |
-| `todayIn` | [backend-node/src/routes/inquiries.ts](<../../../backend-node/src/routes/inquiries.ts>) | 178–187 |
-| `addYears` | [backend-node/src/routes/inquiries.ts](<../../../backend-node/src/routes/inquiries.ts>) | 189–193 |
-| `queueAssignmentNotice` | [backend-node/src/routes/inquiries.ts](<../../../backend-node/src/routes/inquiries.ts>) | 214–237 |
-| `deliverAssignmentEmail` | [backend-node/src/routes/inquiries.ts](<../../../backend-node/src/routes/inquiries.ts>) | 239–241 |
-| `registerInquiryRoutes` | [backend-node/src/routes/inquiries.ts](<../../../backend-node/src/routes/inquiries.ts>) | 243–981 |
+| `optionalInteger` | [backend-node/src/routes/inquiries.ts](<../../../backend-node/src/routes/inquiries.ts>) | 166–173 |
+| `nullableNumber` | [backend-node/src/routes/inquiries.ts](<../../../backend-node/src/routes/inquiries.ts>) | 175–177 |
+| `todayIn` | [backend-node/src/routes/inquiries.ts](<../../../backend-node/src/routes/inquiries.ts>) | 179–188 |
+| `addYears` | [backend-node/src/routes/inquiries.ts](<../../../backend-node/src/routes/inquiries.ts>) | 190–194 |
+| `queueAssignmentNotice` | [backend-node/src/routes/inquiries.ts](<../../../backend-node/src/routes/inquiries.ts>) | 215–238 |
+| `deliverAssignmentEmail` | [backend-node/src/routes/inquiries.ts](<../../../backend-node/src/routes/inquiries.ts>) | 240–242 |
+| `registerInquiryRoutes` | [backend-node/src/routes/inquiries.ts](<../../../backend-node/src/routes/inquiries.ts>) | 244–994 |
 
 ## Direct local dependencies
 
@@ -40,6 +40,7 @@ Evidence: source snapshot `94985f6d`; generated, do not edit. [backend-node/src/
 - [backend-node/src/site-visit-common.ts](<../../../backend-node/src/site-visit-common.ts>)
 - [backend-node/src/users.ts](<../../../backend-node/src/users.ts>)
 - [backend-node/src/crm-sales-evidence.ts](<../../../backend-node/src/crm-sales-evidence.ts>)
+- [backend-node/src/estimate-owner.ts](<../../../backend-node/src/estimate-owner.ts>)
 - [backend-node/src/crm.ts](<../../../backend-node/src/crm.ts>)
 
 ## SQL references (literal scan, not a complete schema or write-set)

@@ -11,6 +11,7 @@ import { ESTIMATE_OVERHEAD_ENABLED } from "../../../lib/feature-flags";
 import { useT as useStaticCopy } from "../i18n";
 
 import { currentLocale, useLanguage, useT as useUiText } from "../i18n";
+import { estimateUxCopy } from "../../../lib/estimate-ux";
 import { LocalizedText } from "../LocalizedText";
 import type { RecordViewer } from "../../../lib/record-live-sync";
 import { RecordViewers, useHeartbeat } from "./RecordPresence";
@@ -1307,7 +1308,7 @@ function InquiryDetailScreen({ id, bootstrap, notify, refreshBootstrap, openEsti
               </button>
             ) : null}
             {canWrite ? (
-              <button className="btn default" type="button" onClick={() => setAssignOpen(true)}>
+              <button className="btn default" type="button" data-guide="inquiry.assignOwner" onClick={() => setAssignOpen(true)}>
                 <Icon name="user" />
                 <LocalizedText text={"Assign owner"} />
               </button>
@@ -2199,12 +2200,25 @@ function AssignOwnerDrawer({ bootstrap, detail, onClose, onSaved }: { bootstrap:
   const [ownerId, setOwnerId] = useState(detail.estimateOwnerId);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const ownerCopy = (th: string, en: string, ja: string) => estimateUxCopy(currentLocale(), th, en, ja);
+  // The inquiry's estimate takes the same owner (backend estimate-owner.ts, bug 2026-11-26). An estimate that still names
+  // someone else is put right by saving the inquiry's owner again, so that save stays open.
+  const estimate = detail.estimate;
+  const estimateDrifted = Boolean(estimate && estimate.ownerId !== detail.estimateOwnerId);
+  const unchanged = ownerId === detail.estimateOwnerId && (!estimate || estimate.ownerId === ownerId);
   const save = async () => {
     setBusy(true);
     setError("");
     try {
       const saved = await assignInquiryOwner(detail.id, ownerId, detail.rowVersion);
-      await onSaved(assignmentDeliveryNote(saved.notification));
+      const moved = saved.estimateOwnerMoved
+        ? ownerCopy(
+            `${saved.estimateOwnerMoved.estimateNumber} เปลี่ยนผู้รับผิดชอบตามแล้ว`,
+            `${saved.estimateOwnerMoved.estimateNumber} now has the same owner`,
+            `${saved.estimateOwnerMoved.estimateNumber} の担当者も変更しました`,
+          )
+        : "";
+      await onSaved([assignmentDeliveryNote(saved.notification), moved].filter(Boolean).join(" · "));
     } catch (requestError) {
       setError(toError(requestError));
     } finally {
@@ -2225,13 +2239,14 @@ function AssignOwnerDrawer({ bootstrap, detail, onClose, onSaved }: { bootstrap:
           <button
             className="btn primary"
             type="button"
-            disabled={busy || ownerId === detail.estimateOwnerId}
+            data-guide="inquiry.assignOwnerSave"
+            disabled={busy || unchanged}
             onClick={() => {
               void save();
             }}
           >
             <Icon name="check" />
-            {busy ? <LocalizedText text={"Saving…"} /> : "Assign owner"}
+            {busy ? <LocalizedText text={"Saving…"} /> : <LocalizedText text={"Assign owner"} />}
           </button>
         </>
       }
@@ -2244,7 +2259,7 @@ function AssignOwnerDrawer({ bootstrap, detail, onClose, onSaved }: { bootstrap:
           }}
         />
       ) : null}
-      <Field label="Estimate Owner">
+      <Field label="Estimate Owner" guide="inquiry.assignOwnerSelect">
         <select value={ownerId} onChange={(event) => setOwnerId(Number(event.target.value))}>
           {owners.map((member) => (
             <option key={member.id} value={member.id}>
@@ -2253,6 +2268,24 @@ function AssignOwnerDrawer({ bootstrap, detail, onClose, onSaved }: { bootstrap:
           ))}
         </select>
       </Field>
+      {estimate ? (
+        <div className={estimateDrifted ? "callout warning" : "info-strip"} role="status" style={{ marginTop: 12 }}>
+          <Icon name={estimateDrifted ? "alertTriangle" : "user"} />
+          <span>
+            {estimateDrifted
+              ? ownerCopy(
+                  `${estimate.number} ยังเป็นของ ${estimate.ownerName} กด 'มอบหมายผู้รับผิดชอบ' เพื่อให้ Estimate เป็นของผู้รับผิดชอบคนเดียวกับ Inquiry`,
+                  `${estimate.number} still names ${estimate.ownerName}. Press Assign owner to give the estimate the inquiry's owner.`,
+                  `${estimate.number} の担当者はまだ ${estimate.ownerName} です。「担当者を割り当て」を押すと引合と同じ担当者になります。`,
+                )
+              : ownerCopy(
+                  `${estimate.number} จะเปลี่ยนผู้รับผิดชอบตามไปด้วย งานส่วนที่ยังไม่เสร็จของผู้รับผิดชอบเดิมจะย้ายมาด้วย`,
+                  `${estimate.number} takes the same owner, with the previous owner's unfinished sections.`,
+                  `${estimate.number} も同じ担当者になり、前任者の未完了セクションも移ります。`,
+                )}
+          </span>
+        </div>
+      ) : null}
     </Drawer>
   );
 }

@@ -1379,7 +1379,15 @@ export const createInquiry = (input: CreateInquiryInput) =>
 export const loadInquiry = (id: number) => apiRequest<InquiryDetail>(`/api/v1/inquiries/${id}`);
 
 export const assignInquiryOwner = (id: number, estimateOwnerId: number, rowVersion: string) =>
-  apiRequest<{ id: number; estimateOwnerId: number; estimateOwnerName: string; rowVersion: string; notification: AssignmentNotificationResult }>(`/api/v1/inquiries/${id}/assignment`, {
+  apiRequest<{
+    id: number;
+    estimateOwnerId: number;
+    estimateOwnerName: string;
+    rowVersion: string;
+    notification: AssignmentNotificationResult;
+    /** The inquiry's estimate took the same owner (null when it had none or already had that owner). */
+    estimateOwnerMoved: { estimateNumber: string; sectionsMoved: number } | null;
+  }>(`/api/v1/inquiries/${id}/assignment`, {
     method: "PUT",
     body: JSON.stringify({ estimateOwnerId, rowVersion }),
   });

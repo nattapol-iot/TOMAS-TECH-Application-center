@@ -1238,7 +1238,7 @@ function CreateEstimateModal({
               <LocalizedText text={"ปรับผู้ประเมิน กำหนดส่ง หรือ Contingency"} />
             </summary>
             <div className="form-grid two" style={{ marginTop: 12 }}>
-              <Field label="Estimate owner *">
+              <Field label="Estimate owner *" hint="Also becomes the inquiry's owner">
                 <select value={form.ownerId} onChange={(event) => setForm((current) => ({ ...current, ownerId: Number(event.target.value) }))}>
                   {owners.map((owner) => (
                     <option key={owner.id} value={owner.id}>

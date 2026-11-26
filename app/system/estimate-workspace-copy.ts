@@ -1,5 +1,9 @@
 /** Estimate workspace interface copy. Business names, part numbers and user input stay unchanged. */
 export const ESTIMATE_WORKSPACE_COPY: Record<string, { th: string; jp: string; en?: string }> = {
+  "Also becomes the inquiry's owner": {
+    th: "ผู้รับผิดชอบของ Inquiry จะเปลี่ยนเป็นคนนี้ด้วย",
+    jp: "引合の担当者もこの人になります",
+  },
   "Import old estimate": {
     th: "นำเข้า Estimate ย้อนหลัง",
     jp: "過去の見積を取り込む",
