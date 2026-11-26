@@ -22,6 +22,17 @@
   padding: 0;
   list-style: none;
 }
+/* The queue's first rows and the way to the rest (UX audit F03, 2026-11-26). */
+.alloc-queue-more {
+  display: flex;
+  justify-content: center;
+  padding: 6px 14px 10px;
+  border-top: 1px solid var(--line-soft);
+}
+.alloc-queue-none {
+  margin: 0;
+  padding: 10px 14px;
+}
 .alloc-queue > li {
   display: flex;
   align-items: center;

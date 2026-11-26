@@ -2,7 +2,8 @@
 import { confirmDialog } from "../dialogs";
 import { useT as useStaticCopy } from "../i18n";
 
-import { currentLocale, useT as useUiText } from "../i18n";
+import { currentLocale, useLanguage, useT as useUiText } from "../i18n";
+import { changeLabel, changeText } from "./schedule-change-text";
 import { LocalizedText } from "../LocalizedText";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { CreateSignableDocumentModal } from "./SigningScreens";
@@ -919,24 +920,22 @@ const quietDays = (updatedAt: string) => {
   return Number.isNaN(updated) ? 0 : Math.max(0, Math.floor((Date.now() - updated) / 86_400_000));
 };
 
-const MY_WORK_AUDIT_FIELD_LABELS: Record<string, string> = {
-  percent_complete: "Progress",
-  actual_start: "Actual start",
-  actual_finish: "Actual finish",
-  forecast_finish: "Forecast finish",
-  status: "Status",
-  blocked_reason: "Blocked reason",
-  remark: "Remark",
-  progress: "Progress",
-  plan: "Plan",
-  plan_days: "Plan days",
-  request_answer: "Request answer",
-  baseline: "Baseline",
-  created: "Created item",
-  deleted: "Deleted",
-};
-
-const myWorkAuditFieldLabel = (field: string) => MY_WORK_AUDIT_FIELD_LABELS[field] ?? field.replaceAll("_", " ");
+/** One plan change in words, in the screen's language (schedule-change-text.ts); members by name where the team knows them. */
+function useChangeWords(team: readonly { id: number; name: string }[]) {
+  const { lang } = useLanguage();
+  const uiText = useUiText();
+  return useCallback(
+    (entry: { field: string; fromValue: string | null; toValue: string | null }) => {
+      const text = changeText(
+        { field: entry.field, from: historyValue(entry.field, entry.fromValue), to: historyValue(entry.field, entry.toValue) },
+        { lang, t: uiText, day: (iso) => date(iso), personName: (id) => team.find((person) => person.id === id)?.name },
+      );
+      const label = changeLabel(entry.field, lang);
+      return { label, detail: text.startsWith(`${label}: `) ? text.slice(label.length + 2) : "" };
+    },
+    [lang, uiText, team],
+  );
+}
 
 type MyWorkProgressInput = {
   percentComplete: number;
@@ -1467,6 +1466,7 @@ export function ProductionMyWork({
 }: ProductionPlanningProps) {
   const localizeCopy = useStaticCopy();
   const uiText = useUiText();
+  const changeWords = useChangeWords(bootstrap.team);
   const hasProgressPermission = bootstrap.permissions.includes("schedule.progress");
   const hasReadPermission = bootstrap.permissions.includes("schedule.read");
   const allowed = hasProgressPermission && hasReadPermission;
@@ -2181,7 +2181,8 @@ export function ProductionMyWork({
                       </>
                     ) : (
                       <>
-                        <LocalizedText text={myWorkAuditFieldLabel(entry.field)} />: {historyValue(entry.field, entry.fromValue) ?? "—"} → {historyValue(entry.field, entry.toValue) ?? "—"}
+                        {changeWords(entry).label}
+                        {changeWords(entry).detail ? `: ${changeWords(entry).detail}` : ""}
                       </>
                     )}
                     {historyReason(entry)}
@@ -3961,6 +3962,7 @@ function memberGanttRows({
  */
 export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectId, preferredTaskId, onPreferredConsumed, lockedProject = false }: ProductionPlanningProps) {
   const uiText = useUiText();
+  const changeWords = useChangeWords(bootstrap.team);
   useActivitySubView("projects-schedule");
   const allowed = bootstrap.permissions.includes("schedule.read");
   const storageKey = planProjectStorageKey(bootstrap.user.id);
@@ -4592,10 +4594,8 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
                         {dateTime(update.occurredAt)} · {update.actor.name}
                       </span>
                       <span>
-                        <strong>
-                          <LocalizedText text={myWorkAuditFieldLabel(update.field)} />
-                        </strong>
-                        {update.fromValue || update.toValue ? ` · ${historyValue(update.field, update.fromValue) ?? "—"} → ${historyValue(update.field, update.toValue) ?? "—"}` : ""}
+                        <strong>{changeWords(update).label}</strong>
+                        {changeWords(update).detail ? ` · ${changeWords(update).detail}` : ""}
                         {historyReason(update)}
                       </span>
                     </li>
@@ -4789,6 +4789,7 @@ function PlanTaskDrawer({
   onReview: (request: ScheduleUpdate) => void;
 }) {
   const uiText = useUiText();
+  const changeWords = useChangeWords(bootstrap.team);
   const canProgress = canProgressScheduleRow(task, {
     scheduleAllowsProgress: activeSchedule.canUpdateProgress,
     hasProgressPermission: bootstrap.permissions.includes("schedule.progress"),
@@ -4931,14 +4932,8 @@ function PlanTaskDrawer({
                     {dateTime(update.occurredAt)} · {update.actor.name}
                   </span>
                   <span>
-                    <strong>
-                      <LocalizedText text={myWorkAuditFieldLabel(update.field)} />
-                    </strong>
-                    {update.requestDays > 0
-                      ? ` · +${update.requestDays} ${uiText("days")}`
-                      : update.field === "plan"
-                        ? ""
-                        : ` · ${historyValue(update.field, update.fromValue) ?? "—"} → ${historyValue(update.field, update.toValue) ?? "—"}`}
+                    <strong>{changeWords(update).label}</strong>
+                    {update.requestDays > 0 ? ` · +${update.requestDays} ${uiText("days")}` : changeWords(update).detail ? ` · ${changeWords(update).detail}` : ""}
                     {historyReason(update)}
                   </span>
                   {pendingRequest && requestedTask && canAnswerRequests ? (

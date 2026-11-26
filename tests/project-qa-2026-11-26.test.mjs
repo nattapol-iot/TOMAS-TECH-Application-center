@@ -85,12 +85,13 @@ test("back from a project's page, the list keeps its search, filters, page and p
 
 test("the Overview's activity says what changed in words, and files under one name are told apart", async () => {
   const core = await source("app/system/production/CoreScreens.tsx");
-  for (const field of ["percent_complete", "actual_finish", "people"]) assert.match(core, new RegExp(`  ${field}: \\["`), field);
+  const words = await source("app/system/production/schedule-change-text.ts");
+  for (const field of ["percent_complete", "actual_finish", "people"]) assert.match(words, new RegExp(`  ${field}: \\["`), field);
   assert.match(core, /"Edited in the People table": \["แก้ในตารางคน"/);
-  assert.match(core, /sub: `\$\{activityText\(entry, copy, uiText\)\} · \$\{formatDay\(entry\.at\)\}`/);
+  assert.ok(core.includes("activityText(entry, copy, { lang, t: uiText, day: formatDay })"), "the Overview reads the shared words");
   assert.match(core, /formatDateTime\(document\.uploadedAt\)/);
   const route = await source("backend-node/src/routes/projects.ts");
-  assert.match(route, /LEFT\(s\.from_value,200\) from_value,LEFT\(s\.to_value,200\) to_value/);
+  assert.ok(route.includes("LEFT(s.from_value,2000) from_value,LEFT(s.to_value,2000) to_value"), "enough of a plan row to say what changed");
   assert.match(route, /ROW_NUMBER\(\) OVER\(PARTITION BY d\.name ORDER BY d\.uploaded_at,d\.id\) copy_no/);
   const docs = await source("app/system/tomas-ui/ProjectDocumentsTab.tsx");
   assert.match(docs, /t\("ProjectDocs\.copyOf"\)/);

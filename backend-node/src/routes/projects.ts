@@ -109,7 +109,7 @@ export const PAGE_OVERVIEW_SQL = `SELECT status,COUNT(*) requests FROM dbo.mat_p
       SELECT d.*,ROW_NUMBER() OVER(PARTITION BY d.name ORDER BY d.uploaded_at,d.id) copy_no,COUNT(*) OVER(PARTITION BY d.name) copies
       FROM dbo.project_docs d WHERE d.project_id=@project AND d.deleted_at IS NULL) d
     INNER JOIN dbo.users u ON u.id=d.uploaded_by ORDER BY d.uploaded_at DESC,d.id DESC;
-  SELECT TOP(8) s.id,s.field,LEFT(s.from_value,200) from_value,LEFT(s.to_value,200) to_value,s.comment,s.occurred_at,a.name actor,t.name task FROM dbo.schedule_updates s
+  SELECT TOP(8) s.id,s.field,LEFT(s.from_value,2000) from_value,LEFT(s.to_value,2000) to_value,s.comment,s.occurred_at,a.name actor,t.name task FROM dbo.schedule_updates s
     INNER JOIN dbo.users a ON a.id=s.actor_id LEFT JOIN dbo.schedule_tasks t ON t.id=s.task_id
     WHERE s.project_id=@project ORDER BY s.occurred_at DESC,s.id DESC;`;
 
@@ -181,11 +181,12 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
         AND i.deleted_at IS NULL AND i.archived_at IS NULL AND i.status<>N'Cancelled'
         AND NOT EXISTS(SELECT 1 FROM dbo.projects p WHERE p.inquiry_id=i.id OR p.estimate_id=e.id)
       ORDER BY e.updated_at DESC,e.id DESC;
-      SELECT u.id,u.name,
+      SELECT u.id,u.name,u.department,
         MAX(CASE WHEN r.code IN(N'Project Manager',N'Leader',N'Engineering Manager',N'Admin') THEN 1 ELSE 0 END) canManage,
         MAX(CASE WHEN r.code IN(N'Engineer',N'Leader',N'Engineering Manager',N'Admin') THEN 1 ELSE 0 END) canLead
       FROM dbo.users u JOIN dbo.user_effective_roles r ON r.user_id=u.id
-      GROUP BY u.id,u.name HAVING MAX(CASE WHEN r.code IN(N'Project Manager',N'Engineering Manager',N'Admin',N'Engineer',N'Leader') THEN 1 ELSE 0 END)=1
+      WHERE u.is_active=1 AND u.deleted_at IS NULL
+      GROUP BY u.id,u.name,u.department HAVING MAX(CASE WHEN r.code IN(N'Project Manager',N'Engineering Manager',N'Admin',N'Engineer',N'Leader') THEN 1 ELSE 0 END)=1
       ORDER BY u.name;
     `,
       (request) => request.input("reads_estimates", sql.Bit, readsEstimates),
@@ -204,7 +205,7 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
         purchaseOrderNumber: typeof wonReference === "string" && wonReference.trim().length <= 100 ? wonReference.trim() : "",
         purchaseOrderDate: dateOnly(wonOn as Date | null) ?? "",
       })),
-      people: (sets[1] ?? []).map((r) => ({ ...r, id: Number(r.id), canManage: Boolean(r.canManage), canLead: Boolean(r.canLead) })),
+      people: (sets[1] ?? []).map((r) => ({ ...r, id: Number(r.id), department: r.department == null ? "" : String(r.department), canManage: Boolean(r.canManage), canLead: Boolean(r.canLead) })),
       canCreateWithoutEstimate: canCreateWithoutEstimate(actor),
       canCreateFromEstimate: writesProjects,
     };
@@ -639,8 +640,8 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
           id: Number(row.id),
           field: String(row.field),
           // What it was and what it became, for the screen to say in words (QA 2026-11-26: it showed actual_finish alone).
-          from: row.from_value == null ? null : String(row.from_value).slice(0, 200),
-          to: row.to_value == null ? null : String(row.to_value).slice(0, 200),
+          from: row.from_value == null ? null : String(row.from_value).slice(0, 2000),
+          to: row.to_value == null ? null : String(row.to_value).slice(0, 2000),
           comment: row.comment == null ? null : String(row.comment).slice(0, 300),
           at: new Date(row.occurred_at as Date | string).toISOString(),
           actor: String(row.actor),
