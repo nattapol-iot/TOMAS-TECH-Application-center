@@ -1462,5 +1462,12 @@ export const CRM_COPY: Record<string, { en: string; th: string; jp: string }> = 
       "ดีลในขั้นตอนนี้ที่ไม่มีกิจกรรมเกินจำนวนวันนี้ จะขึ้นว่า 'ควรติดตาม'",
       "この段階で指定日数活動がない商談は「フォロー要」になります。",
     ],
+    ["CRM.closePeriod", "Expected close", "ช่วงวันที่คาดว่าจะปิดงาน", "受注予定日の期間"],
+    ["CRM.period_all", "All dates", "ทุกช่วง", "全期間"],
+    ["CRM.period_month", "This month", "เดือนนี้", "今月"],
+    ["CRM.period_quarter", "This quarter", "ไตรมาสนี้", "今四半期"],
+    ["CRM.period_year", "This year", "ปีนี้", "今年"],
+    ["CRM.periodScope", "Counting deals expected to close {from} – {to}.", "นับเฉพาะดีลที่คาดว่าจะปิดงานระหว่าง {from} – {to}", "受注予定日が {from} – {to} の商談だけを数えています。"],
+    ["CRM.periodUndated", "{n} deals with no expected close are left out", "ไม่รวม {n} ดีลที่ยังไม่ระบุวันที่คาดว่าจะปิดงาน", "受注予定日が未入力の商談 {n} 件は含みません"],
   ].map(([key, en, th, jp]) => [key, { en, th, jp }]),
 );
