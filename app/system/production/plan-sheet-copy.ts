@@ -16,6 +16,12 @@ export const PLAN_SHEET_COPY: Record<string, { en: string; th: string; jp: strin
     ["Sheet.vendorGroup", "Outsourced to", "จ้างภายนอก", "外注先"],
     ["Sheet.follow", "To follow up", "ต้องตาม", "要フォロー"],
     [
+      "Sheet.budgetUnclassified",
+      "{hours} h of the budget are Estimate labor lines with no discipline. Give those lines a discipline in the Estimate to compare by discipline.",
+      "งบ {hours} ชม. มาจากบรรทัดค่าแรงใน Estimate ที่ยังไม่ระบุสาขา ระบุสาขาให้บรรทัดเหล่านั้นใน Estimate เพื่อเทียบตามสาขาได้",
+      "予算のうち {hours} 時間は分野未設定の見積の工数行です。見積でその行に分野を設定すると分野別に比較できます。",
+    ],
+    [
       "Sheet.followRows",
       "{n} of these are rows to chase (late, blocked, due to start, nobody on it, no purchase request): the figure the project list and Overview show.",
       "ในนี้มี {n} แถวเป็นงานต้องตาม (เลยกำหนด ติดขัด ถึงวันเริ่ม ไม่มีคนทำ ไม่มีใบขอซื้อ) ซึ่งเป็นตัวเลขที่รายการโปรเจกต์และภาพรวมแสดง",

@@ -617,6 +617,11 @@
 .people-bar .gantt-nav {
   margin-left: auto;
 }
+/* How this table and the plan count man-days, when their totals differ (UX audit 2026-11-26). */
+.people-basis {
+  margin: 0;
+  font-size: var(--fs-2xs);
+}
 .people-legend {
   display: flex;
   flex-wrap: wrap;

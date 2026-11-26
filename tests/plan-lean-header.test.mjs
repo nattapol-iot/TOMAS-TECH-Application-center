@@ -46,8 +46,8 @@ test("the controls keep to one row: one range list, one fold button, and a colou
   assert.match(plan, /\{peopleView \|\| sheetView \|\| !legendOpen \? null : \(?\s*<GanttLegend baseline=/);
   assert.match(plan, /aria-expanded=\{legendOpen\} onClick=\{toggleLegend\}/);
   const gantt = await source("app/system/production/GanttChart.tsx");
-  assert.match(gantt, /compact \? <label className="select-field gantt-zoom-select"><select value=\{zoom\} aria-label=\{t\("Gantt\.zoom"\)\}/);
-  assert.match(gantt, /: <div className="chip-select" role="group" aria-label=\{t\("Gantt\.zoom"\)\}>/, "other Gantts keep a button per range");
+  assert.match(gantt, /compact \? \(?\s*<label className="select-field gantt-zoom-select">\s*<select value=\{zoom\} aria-label=\{t\("Gantt\.zoom"\)\}/);
+  assert.match(gantt, /:\s*\(?\s*<div className="chip-select" role="group" aria-label=\{t\("Gantt\.zoom"\)\}>/, "other Gantts keep a button per range");
 });
 
 test("the new words are in three languages and the guide says where things went", async () => {

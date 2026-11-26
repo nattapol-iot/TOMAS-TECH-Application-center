@@ -218,7 +218,7 @@ export function MyWeek({ notify }: { notify: (message: string) => void }) {
           <span className="myweek-figure away">
             {t("MyWeek.awayShort")} <strong>{number(summary.away)}</strong>
           </span>
-          <span className="myweek-figure free">
+          <span className="myweek-figure free" title={t("MyWeek.freeHint")}>
             {t("MyWeek.free")} <strong>{number(summary.free)}</strong>
           </span>
           <span className="myweek-figure done">

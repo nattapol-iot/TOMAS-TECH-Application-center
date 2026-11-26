@@ -3020,6 +3020,7 @@ export const DICTIONARY: Record<string, Entry> = {
   "Projects.tabOverview": { en: "Overview", th: "ภาพรวม", jp: "概要" },
   "Projects.tabPlan": { en: "Plan", th: "แผนงาน", jp: "計画" },
   "Projects.tabPunchlist": { en: "Punchlist · Customer issues", th: "Punchlist · Issue ลูกค้า", jp: "パンチリスト · 顧客課題" },
+  "Gantt.week": { en: "Week", th: "สัปดาห์", jp: "週" },
   "Gantt.month": { en: "Month", th: "เดือน", jp: "月" },
   "Gantt.quarter": { en: "Quarter", th: "ไตรมาส", jp: "四半期" },
   "Gantt.half": { en: "Half-year", th: "ครึ่งปี", jp: "半年" },

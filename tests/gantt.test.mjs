@@ -40,7 +40,7 @@ test("zoom presets: week columns for month and quarter, month columns for half-y
   assert.equal(half.days, 181);
   const year = ganttWindow("year", "2026-10-06");
   assert.deepEqual([year.start, year.end, year.columns.length], ["2026-08-01", "2027-07-31", 12]);
-  assert.deepEqual([...GANTT_ZOOMS], ["month", "quarter", "half", "year"]);
+  assert.deepEqual([...GANTT_ZOOMS], ["week", "month", "quarter", "half", "year"]);
 });
 
 test("a span is placed in percent of the window and clipped at its edges", () => {

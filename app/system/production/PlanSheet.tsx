@@ -3449,7 +3449,7 @@ export function PlanSheet({
                 type="button"
                 className={`ps-budget-item${over ? " over" : ""}`}
                 aria-pressed={disciplineFilter === item.discipline}
-                title={over ? t("Sheet.budgetOver") : undefined}
+                title={over ? t("Sheet.budgetOver") : item.discipline === "Unassigned" && item.budget ? t("Sheet.budgetUnclassified").replace("{hours}", hoursText(item.budget) || "0") : undefined}
                 onClick={() => setDisciplineFilter((current) => (current === item.discipline ? null : item.discipline))}
               >
                 <b>{disciplineLabel(item.discipline)}</b>

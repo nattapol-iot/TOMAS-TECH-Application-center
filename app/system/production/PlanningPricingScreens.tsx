@@ -3678,7 +3678,7 @@ function ScheduleDayRequestAnswerModal({
 
 const planProjectStorageKey = (userId: number) => `tomas-tech-plan-project:${userId}`;
 // The plan's link: "#/projects/plan/<project>/task/<task>?level=member&zoom=quarter" (screen-link.tsx).
-const PLAN_ZOOM_LINK = choiceLink<GanttZoomChoice>(["fit", "month", "quarter", "half", "year"]);
+const PLAN_ZOOM_LINK = choiceLink<GanttZoomChoice>(["fit", "week", "month", "quarter", "half", "year"]);
 const LEGEND_KEY = "tomas-tech-plan-legend";
 function readLegendOpen(): boolean {
   try {
@@ -4535,6 +4535,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
                     projectId={activeSchedule.projectId}
                     scheduleVersion={activeSchedule.scheduleVersion}
                     tasks={activeSchedule.tasks}
+                    planManDays={activeSchedule.manHours ? activeSchedule.manHours.plannedManDays + (activeSchedule.manHours.outsourcedManDays ?? 0) : null}
                     holidays={activeSchedule.holidays ?? []}
                     canEdit={canPlan}
                     lockedIds={pendingTaskIds}
