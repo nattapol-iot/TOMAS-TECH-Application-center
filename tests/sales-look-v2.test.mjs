@@ -119,11 +119,11 @@ test("the V2 lists lay out the Pegasus way while V1 keeps its markup", async () 
     read("app/system/api-client.ts"),
   ]);
   // Deals: summary bar instead of the overview panel on the lists, the dashboard keeps its panel; stage first, edit on the left.
-  assert.match(crm, /const summary=v2&&mode!=="crm-dashboard";/);
+  assert.match(crm, /const summary = v2 && mode !== "crm-dashboard";/);
   assert.match(crm, /data-guide="crm\.summary"/);
   assert.match(
     crm,
-    /\{v2\?<>\{onEdit\?<td className="pg-acts"><button type="button" className="pg-act"[^]*?\{stageCell\}\{dealCell\}\{customerCell\}<\/>:<>\{dealCell\}\{customerCell\}\{stageCell\}<\/>\}/,
+    /\{v2 \? \(\s*<>\s*\{onEdit \? \(\s*<td className="pg-acts">\s*<button type="button" className="pg-act"[^]*?\{stageCell\}\s*\{dealCell\}\s*\{customerCell\}\s*<\/>\s*\) : \(\s*<>\s*\{dealCell\}\s*\{customerCell\}\s*\{stageCell\}\s*<\/>\s*\)\}/,
   );
   // RFQ: the counts come with the page only when V2 asks, over every filter but the status.
   assert.match(inquiry, /summary: v2 \|\| undefined,/);

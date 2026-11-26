@@ -7,91 +7,179 @@ import type { AppConfig } from "../config.js";
 import { isProjectElevated, demandProjectScope } from "../project-scope.js";
 import { insertAudit } from "../audit.js";
 import { ApiError } from "../errors.js";
-import { bodyObject, parseRowVersion, positiveLong, requiredText, requiredInteger } from "../http.js";
-import { CRM_SCOPE, CRM_READ_JOINS, CRM_NEEDS_FOLLOWUP, CRM_ACTIVITY_TYPES, CRM_STAGES, crmAccess, bindAccess, scopedOpportunity, crmDto, opportunityInput, validateCrmReferences, followupInput, crmAttention, crmText, crmId, crmChoice, type CrmRow } from "../crm.js";
+import { bodyObject, parseDateOnly, parseRowVersion, positiveLong, requiredText, requiredInteger } from "../http.js";
+import {
+  CRM_SCOPE,
+  CRM_READ_JOINS,
+  CRM_NEEDS_FOLLOWUP,
+  CRM_ACTIVITY_TYPES,
+  CRM_STAGES,
+  crmAccess,
+  bindAccess,
+  scopedOpportunity,
+  crmDto,
+  opportunityInput,
+  validateCrmReferences,
+  followupInput,
+  crmAttention,
+  crmText,
+  crmId,
+  crmChoice,
+  type CrmRow,
+} from "../crm.js";
 
-const inputFields = { proposalSentOn:sql.Date, proposalReference:sql.NVarChar(1000), wonOn:sql.Date, wonReference:sql.NVarChar(1000), name:sql.NVarChar(300), customerId:sql.BigInt, endUserCustomerId:sql.BigInt, siteId:sql.BigInt, contactId:sql.BigInt, salesOwnerId:sql.BigInt, technicalOwnerId:sql.BigInt, source:sql.NVarChar(40), need:sql.NVarChar(sql.MAX), scope:sql.NVarChar(sql.MAX), expectedValue:sql.Decimal(19,4), expectedClose:sql.Date, stage:sql.NVarChar(40), probability:sql.Int, competitor:sql.NVarChar(300), priority:sql.NVarChar(20), lostReason:sql.NVarChar(40), lostDetail:sql.NVarChar(2000), internalNote:sql.NVarChar(sql.MAX) };
-const column = (name: string) => name.replace(/[A-Z]/g,c=>`_${c.toLowerCase()}`);
+const inputFields = {
+  proposalSentOn: sql.Date,
+  proposalReference: sql.NVarChar(1000),
+  wonOn: sql.Date,
+  wonReference: sql.NVarChar(1000),
+  name: sql.NVarChar(300),
+  customerId: sql.BigInt,
+  endUserCustomerId: sql.BigInt,
+  siteId: sql.BigInt,
+  contactId: sql.BigInt,
+  salesOwnerId: sql.BigInt,
+  technicalOwnerId: sql.BigInt,
+  source: sql.NVarChar(40),
+  need: sql.NVarChar(sql.MAX),
+  scope: sql.NVarChar(sql.MAX),
+  expectedValue: sql.Decimal(19, 4),
+  expectedClose: sql.Date,
+  stage: sql.NVarChar(40),
+  probability: sql.Int,
+  competitor: sql.NVarChar(300),
+  priority: sql.NVarChar(20),
+  lostReason: sql.NVarChar(40),
+  lostDetail: sql.NVarChar(2000),
+  internalNote: sql.NVarChar(sql.MAX),
+};
+const column = (name: string) => name.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
 function stale(row: CrmRow, version: unknown) {
-  if (!(row.row_version as Buffer).equals(parseRowVersion(version))) throw new ApiError(409,"concurrency_conflict","This record changed. Refresh before saving.");
+  if (!(row.row_version as Buffer).equals(parseRowVersion(version))) throw new ApiError(409, "concurrency_conflict", "This record changed. Refresh before saving.");
+}
+/** The instant a business day starts, so a date filter means the business calendar day rather than UTC's. */
+export function businessDayStart(day: string, timeZone: string): Date {
+  const name = new Intl.DateTimeFormat("en-US", { timeZone, timeZoneName: "longOffset" }).formatToParts(new Date(`${day}T12:00:00Z`)).find((part) => part.type === "timeZoneName")?.value ?? "GMT";
+  const match = /GMT([+-])(\d{2}):?(\d{2})?/.exec(name);
+  const minutes = match ? (match[1] === "-" ? -1 : 1) * (Number(match[2]) * 60 + Number(match[3] ?? 0)) : 0;
+  return new Date(Date.parse(`${day}T00:00:00Z`) - minutes * 60_000);
 }
 async function activeOwner(q: sql.Request, id: number) {
-  q.input("owner",sql.BigInt,id);
-  if (!(await q.query("SELECT id FROM dbo.users WHERE id=@owner AND is_active=1 AND deleted_at IS NULL")).recordset[0]) throw new ApiError(422,"invalid_reference","Select an active owner.");
+  q.input("owner", sql.BigInt, id);
+  if (!(await q.query("SELECT id FROM dbo.users WHERE id=@owner AND is_active=1 AND deleted_at IS NULL")).recordset[0]) throw new ApiError(422, "invalid_reference", "Select an active owner.");
 }
 async function addFollowup(tx: sql.Transaction, actor: number, opportunity: number, body: CrmRow, activity: number | null = null) {
-  const input=followupInput(body); await activeOwner(new sql.Request(tx),input.ownerId);
-  const q=new sql.Request(tx); q.input("opportunity",sql.BigInt,opportunity).input("activity",sql.BigInt,activity).input("actor",sql.BigInt,actor);
-  q.input("action",sql.NVarChar(1000),input.action).input("owner",sql.BigInt,input.ownerId).input("due",sql.Date,input.dueDate).input("priority",sql.NVarChar(20),input.priority).input("status",sql.NVarChar(30),input.status);
-  const row=(await q.query(`INSERT dbo.crm_followups(opportunity_id,activity_id,action,owner_id,due_date,priority,status,created_by,updated_by) OUTPUT inserted.* VALUES(@opportunity,@activity,@action,@owner,@due,@priority,@status,@actor,@actor)`)).recordset[0]!;
-  await insertAudit(tx,actor,"CrmOpportunity",opportunity,"","NextActionAdded",null,crmDto(row));
+  const input = followupInput(body);
+  await activeOwner(new sql.Request(tx), input.ownerId);
+  const q = new sql.Request(tx);
+  q.input("opportunity", sql.BigInt, opportunity).input("activity", sql.BigInt, activity).input("actor", sql.BigInt, actor);
+  q.input("action", sql.NVarChar(1000), input.action)
+    .input("owner", sql.BigInt, input.ownerId)
+    .input("due", sql.Date, input.dueDate)
+    .input("priority", sql.NVarChar(20), input.priority)
+    .input("status", sql.NVarChar(30), input.status);
+  const row = (
+    await q.query(
+      `INSERT dbo.crm_followups(opportunity_id,activity_id,action,owner_id,due_date,priority,status,created_by,updated_by) OUTPUT inserted.* VALUES(@opportunity,@activity,@action,@owner,@due,@priority,@status,@actor,@actor)`,
+    )
+  ).recordset[0]!;
+  await insertAudit(tx, actor, "CrmOpportunity", opportunity, "", "NextActionAdded", null, crmDto(row));
   return crmDto(row);
 }
 
 export function registerCrmRoutes(app: FastifyInstance, config: AppConfig, database: Database, users: CurrentUserService) {
-  const today = () => new Intl.DateTimeFormat("en-CA",{timeZone:config.businessTimeZone,year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
+  const today = () => new Intl.DateTimeFormat("en-CA", { timeZone: config.businessTimeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 
   app.post("/api/v1/crm/inquiries/:id/opportunity", async (request, reply) => {
-    await users.demandPermission(request,"inquiry.write");
-    await users.demandPermission(request,"inquiry.read");
-    const actor=await crmAccess(database,users,request,"crm.write");
-    await users.demandPermission(request,"crm.read");
-    const id=positiveLong((request.params as {id:string}).id,"Inquiry"), body=bodyObject(request.body);
-    const opportunityId=crmId(body.opportunityId,"Opportunity");
-    const version=parseRowVersion(body.rowVersion);
-    const result=await database.transaction(async tx => {
-      let opportunity=opportunityId ? await scopedOpportunity(bindAccess(new sql.Request(tx),actor),opportunityId,true) : null;
-      if(opportunity)stale(opportunity,body.opportunityRowVersion);
-      const q=new sql.Request(tx); q.input("inquiry",sql.BigInt,id);
-      const inquiry=(await q.query<CrmRow>(`SELECT * FROM dbo.inquiries WITH(UPDLOCK,HOLDLOCK)
-        WHERE id=@inquiry AND deleted_at IS NULL AND archived_at IS NULL AND status<>N'Cancelled'`)).recordset[0];
-      if(!inquiry)throw new ApiError(404,"inquiry_not_found","Inquiry not found or unavailable.");
-      if(!(inquiry.row_version as Buffer).equals(version))throw new ApiError(409,"concurrency_conflict","This inquiry changed. Refresh before linking.");
-      if(inquiry.opportunity_id)throw new ApiError(409,"crm_already_linked","This inquiry already has an opportunity.");
-      if(opportunity) {
-        if(Number(opportunity.customer_id)!==Number(inquiry.customer_id))throw new ApiError(422,"invalid_reference","Select an opportunity for the same customer.");
-        if(["LOST","ON_HOLD"].includes(String(opportunity.stage)))throw new ApiError(409,"invalid_transition","This opportunity is not active.");
-        const other=new sql.Request(tx); other.input("opportunity",sql.BigInt,opportunity.id);
-        if((await other.query(`SELECT id FROM dbo.inquiries WHERE opportunity_id=@opportunity AND deleted_at IS NULL AND status<>N'Cancelled'`)).recordset[0])throw new ApiError(409,"crm_inquiry_exists","This opportunity already has an inquiry. Open the existing inquiry.");
+    await users.demandPermission(request, "inquiry.write");
+    await users.demandPermission(request, "inquiry.read");
+    const actor = await crmAccess(database, users, request, "crm.write");
+    await users.demandPermission(request, "crm.read");
+    const id = positiveLong((request.params as { id: string }).id, "Inquiry"),
+      body = bodyObject(request.body);
+    const opportunityId = crmId(body.opportunityId, "Opportunity");
+    const version = parseRowVersion(body.rowVersion);
+    const result = await database.transaction(async (tx) => {
+      let opportunity = opportunityId ? await scopedOpportunity(bindAccess(new sql.Request(tx), actor), opportunityId, true) : null;
+      if (opportunity) stale(opportunity, body.opportunityRowVersion);
+      const q = new sql.Request(tx);
+      q.input("inquiry", sql.BigInt, id);
+      const inquiry = (
+        await q.query<CrmRow>(`SELECT * FROM dbo.inquiries WITH(UPDLOCK,HOLDLOCK)
+        WHERE id=@inquiry AND deleted_at IS NULL AND archived_at IS NULL AND status<>N'Cancelled'`)
+      ).recordset[0];
+      if (!inquiry) throw new ApiError(404, "inquiry_not_found", "Inquiry not found or unavailable.");
+      if (!(inquiry.row_version as Buffer).equals(version)) throw new ApiError(409, "concurrency_conflict", "This inquiry changed. Refresh before linking.");
+      if (inquiry.opportunity_id) throw new ApiError(409, "crm_already_linked", "This inquiry already has an opportunity.");
+      if (opportunity) {
+        if (Number(opportunity.customer_id) !== Number(inquiry.customer_id)) throw new ApiError(422, "invalid_reference", "Select an opportunity for the same customer.");
+        if (["LOST", "ON_HOLD"].includes(String(opportunity.stage))) throw new ApiError(409, "invalid_transition", "This opportunity is not active.");
+        const other = new sql.Request(tx);
+        other.input("opportunity", sql.BigInt, opportunity.id);
+        if ((await other.query(`SELECT id FROM dbo.inquiries WHERE opportunity_id=@opportunity AND deleted_at IS NULL AND status<>N'Cancelled'`)).recordset[0])
+          throw new ApiError(409, "crm_inquiry_exists", "This opportunity already has an inquiry. Open the existing inquiry.");
       } else {
-        const input=opportunityInput({name:inquiry.project_name,customerId:Number(inquiry.customer_id),endUserCustomerId:inquiry.end_user_customer_id,
-          salesOwnerId:requiredInteger(body.salesOwnerId,"Sales owner",1),technicalOwnerId:inquiry.estimate_owner_id,
-          need:inquiry.requirement,scope:inquiry.scope_summary,priority:inquiry.priority,
-          stage:inquiry.estimate_id ? "ESTIMATING" : "REQUIREMENT",source:"DirectInquiry"},false);
-        if(!actor.permissions.includes("crm.read.all")&&!actor.permissions.includes("crm.read.team")&&input.salesOwnerId!==actor.id&&Number(input.technicalOwnerId)!==actor.id)throw new ApiError(403,"permission_denied","An owner must be you.");
-        await validateCrmReferences(new sql.Request(tx),input);
-        const insert=new sql.Request(tx); insert.input("actor",sql.BigInt,actor.id);
-        for(const [key,type] of Object.entries(inputFields))insert.input(key,type,input[key as keyof typeof input]);
-        const keys=Object.keys(inputFields);
-        opportunity=(await insert.query<CrmRow>(`DECLARE @number nvarchar(80); SELECT @number=CONCAT(N'OPP-',code,N'-',YEAR(SYSUTCDATETIME()),N'-',NEXT VALUE FOR dbo.crm_opportunity_numbers) FROM dbo.customers WHERE id=@customerId;
-          INSERT dbo.crm_opportunities(opportunity_no,${keys.map(column).join(",")},created_by,updated_by) OUTPUT inserted.* VALUES(@number,${keys.map(k=>`@${k}`).join(",")},@actor,@actor)`)).recordset[0]!;
-        await insertAudit(tx,actor.id,"CrmOpportunity",Number(opportunity.id),String(opportunity.opportunity_no).slice(0,50),"CreatedFromInquiry",null,{inquiryId:id});
-        await scopedOpportunity(bindAccess(new sql.Request(tx),actor),Number(opportunity.id));
+        const input = opportunityInput(
+          {
+            name: inquiry.project_name,
+            customerId: Number(inquiry.customer_id),
+            endUserCustomerId: inquiry.end_user_customer_id,
+            salesOwnerId: requiredInteger(body.salesOwnerId, "Sales owner", 1),
+            technicalOwnerId: inquiry.estimate_owner_id,
+            need: inquiry.requirement,
+            scope: inquiry.scope_summary,
+            priority: inquiry.priority,
+            stage: inquiry.estimate_id ? "ESTIMATING" : "REQUIREMENT",
+            source: "DirectInquiry",
+          },
+          false,
+        );
+        if (!actor.permissions.includes("crm.read.all") && !actor.permissions.includes("crm.read.team") && input.salesOwnerId !== actor.id && Number(input.technicalOwnerId) !== actor.id)
+          throw new ApiError(403, "permission_denied", "An owner must be you.");
+        await validateCrmReferences(new sql.Request(tx), input);
+        const insert = new sql.Request(tx);
+        insert.input("actor", sql.BigInt, actor.id);
+        for (const [key, type] of Object.entries(inputFields)) insert.input(key, type, input[key as keyof typeof input]);
+        const keys = Object.keys(inputFields);
+        opportunity = (
+          await insert.query<CrmRow>(`DECLARE @number nvarchar(80); SELECT @number=CONCAT(N'OPP-',code,N'-',YEAR(SYSUTCDATETIME()),N'-',NEXT VALUE FOR dbo.crm_opportunity_numbers) FROM dbo.customers WHERE id=@customerId;
+          INSERT dbo.crm_opportunities(opportunity_no,${keys.map(column).join(",")},created_by,updated_by) OUTPUT inserted.* VALUES(@number,${keys.map((k) => `@${k}`).join(",")},@actor,@actor)`)
+        ).recordset[0]!;
+        await insertAudit(tx, actor.id, "CrmOpportunity", Number(opportunity.id), String(opportunity.opportunity_no).slice(0, 50), "CreatedFromInquiry", null, { inquiryId: id });
+        await scopedOpportunity(bindAccess(new sql.Request(tx), actor), Number(opportunity.id));
       }
-      const link=new sql.Request(tx); link.input("inquiry",sql.BigInt,id).input("opportunity",sql.BigInt,opportunity.id).input("actor",sql.BigInt,actor.id);
+      const link = new sql.Request(tx);
+      link.input("inquiry", sql.BigInt, id).input("opportunity", sql.BigInt, opportunity.id).input("actor", sql.BigInt, actor.id);
       await link.query(`UPDATE dbo.inquiries SET opportunity_id=@opportunity,updated_by=@actor,updated_at=SYSUTCDATETIME() WHERE id=@inquiry`);
-      await insertAudit(tx,actor.id,"Inquiry",id,String(inquiry.inquiry_no),"OpportunityLinked",null,{opportunityId:Number(opportunity.id)});
-      await insertAudit(tx,actor.id,"CrmOpportunity",Number(opportunity.id),String(opportunity.opportunity_no).slice(0,50),"InquiryLinked",null,{inquiryId:id});
-      return {id:Number(opportunity.id),opportunityNo:opportunity.opportunity_no};
+      await insertAudit(tx, actor.id, "Inquiry", id, String(inquiry.inquiry_no), "OpportunityLinked", null, { opportunityId: Number(opportunity.id) });
+      await insertAudit(tx, actor.id, "CrmOpportunity", Number(opportunity.id), String(opportunity.opportunity_no).slice(0, 50), "InquiryLinked", null, { inquiryId: id });
+      return { id: Number(opportunity.id), opportunityNo: opportunity.opportunity_no };
     });
     return reply.code(201).send(result);
   });
 
-  app.get("/api/v1/crm/dashboard",async request=>{
-    const actor=await crmAccess(database,users,request);
+  app.get("/api/v1/crm/dashboard", async (request) => {
+    const actor = await crmAccess(database, users, request);
     // The attention rules are long and are needed more than once, so they are
     // evaluated a single time per opportunity in the CTE and only counted
     // afterwards. CRM_READ_JOINS adds no rows -- its applies are TOP(1) or
     // aggregates -- so COUNT_BIG(*) over the CTE is the opportunity count.
     // The stage list interpolated below is this module's own constant; no part
     // of it comes from the caller.
-    const perStage=CRM_STAGES.map(code=>`COALESCE(SUM(CASE WHEN stage=N'${code}' THEN 1 ELSE 0 END),0) [stage_${code}]`).join(",");
-    const totals=(await database.query<CrmRow>(`WITH scoped AS (
+    const perStage = CRM_STAGES.map((code) => `COALESCE(SUM(CASE WHEN stage=N'${code}' THEN 1 ELSE 0 END),0) [stage_${code}]`).join(",");
+    const totals =
+      (
+        await database.query<CrmRow>(
+          `WITH scoped AS (
         SELECT o.stage,
           CASE WHEN ${CRM_NEEDS_FOLLOWUP} THEN 1 ELSE 0 END needs_followup,
           CASE WHEN o.stage NOT IN('WON','LOST','ON_HOLD') AND f.action IS NULL THEN 1 ELSE 0 END no_next_action,
           CASE WHEN o.stage NOT IN('WON','LOST','ON_HOLD') AND f.due_date<@today THEN 1 ELSE 0 END overdue,
           CASE WHEN o.stage NOT IN('WON','LOST','ON_HOLD') AND f.due_date<=@today THEN 1 ELSE 0 END due_now,
+          CASE WHEN o.stage NOT IN('WON','LOST','ON_HOLD') AND f.due_date=@today THEN 1 ELSE 0 END due_today,
+          CASE WHEN o.stage NOT IN('WON','LOST','ON_HOLD') AND f.status LIKE N'Waiting%' THEN 1 ELSE 0 END waiting,
+          CASE WHEN o.stage NOT IN('WON','LOST','ON_HOLD') AND (f.action IS NULL OR a.last_activity IS NULL) THEN 1 ELSE 0 END incomplete,
+          CASE WHEN o.stage NOT IN('WON','LOST','ON_HOLD') AND (o.sales_owner_id=@actor OR o.technical_owner_id=@actor) THEN 1 ELSE 0 END mine,
           CASE WHEN o.stage NOT IN('WON','LOST','ON_HOLD') AND f.status='WaitingCustomer' THEN 1 ELSE 0 END waiting_customer,
           CASE WHEN o.stage NOT IN('WON','LOST','ON_HOLD') AND a.last_activity IS NULL THEN 1 ELSE 0 END no_activity,
           CASE WHEN o.stage NOT IN('WON','LOST','ON_HOLD') AND ed.estimate_due<=DATEADD(day,3,@today) THEN 1 ELSE 0 END estimate_due_soon
@@ -104,62 +192,101 @@ export function registerCrmRoutes(app: FastifyInstance, config: AppConfig, datab
         COALESCE(SUM(waiting_customer),0) waiting_customer,
         COALESCE(SUM(no_activity),0) no_activity,
         COALESCE(SUM(estimate_due_soon),0) estimate_due_soon,
-        COALESCE(SUM(CASE WHEN needs_followup=1 OR no_next_action=1 OR due_now=1 THEN 1 ELSE 0 END),0) actionable,
+        COALESCE(SUM(due_today),0) due_today,
+        COALESCE(SUM(waiting),0) waiting,
+        COALESCE(SUM(incomplete),0) incomplete,
+        COALESCE(SUM(mine),0) mine,
+        -- Needs action now: a follow-up due today or late, or a deal gone quiet too long. A deal that only lacks
+        -- data (no next action, no activity yet) is counted under incomplete instead (CRM UX audit CRM-08).
+        COALESCE(SUM(CASE WHEN needs_followup=1 OR due_now=1 THEN 1 ELSE 0 END),0) actionable,
         ${perStage}
-      FROM scoped`,q=>bindAccess(q,actor).input("today",sql.Date,today()))).recordset[0]??{};
+      FROM scoped`,
+          (q) => bindAccess(q, actor).input("today", sql.Date, today()),
+        )
+      ).recordset[0] ?? {};
     // How many opportunities reached each downstream record, over the same
     // permitted set and distinct by opportunity, so two inquiries raised on one
     // opportunity still count once.
-    const flow=(await database.query<CrmRow>(`WITH permitted AS (SELECT o.id FROM dbo.crm_opportunities o WHERE ${CRM_SCOPE})
+    const flow =
+      (
+        await database.query<CrmRow>(
+          `WITH permitted AS (SELECT o.id FROM dbo.crm_opportunities o WHERE ${CRM_SCOPE})
       SELECT (SELECT COUNT_BIG(DISTINCT i.opportunity_id) FROM dbo.inquiries i JOIN permitted scope ON scope.id=i.opportunity_id WHERE i.deleted_at IS NULL) converted_to_inquiry,
         (SELECT COUNT_BIG(DISTINCT i.opportunity_id) FROM dbo.inquiries i JOIN permitted scope ON scope.id=i.opportunity_id JOIN dbo.estimates e ON e.inquiry_id=i.id AND e.deleted_at IS NULL WHERE i.deleted_at IS NULL) converted_to_estimate,
         (SELECT COUNT_BIG(DISTINCT i.opportunity_id) FROM dbo.inquiries i JOIN permitted scope ON scope.id=i.opportunity_id JOIN dbo.projects p ON p.inquiry_id=i.id AND p.deleted_at IS NULL WHERE i.deleted_at IS NULL) converted_to_project,
         (SELECT COUNT_BIG(*) FROM dbo.inquiries direct LEFT JOIN dbo.users direct_owner ON direct_owner.id=direct.estimate_owner_id
           WHERE direct.opportunity_id IS NULL AND direct.deleted_at IS NULL AND (@all=1 OR direct.created_by=@actor OR direct.estimate_owner_id=@actor OR (@team=1 AND direct_owner.department=@department))) direct_inquiries`,
-      q=>bindAccess(q,actor))).recordset[0]??{};
+          (q) => bindAccess(q, actor),
+        )
+      ).recordset[0] ?? {};
     // COUNT_BIG and SUM arrive as bigint-shaped values, so each one is forced
     // to a plain number here: the response stays JSON-serialisable and the
     // client reads one camelCase shape instead of raw column names.
-    const n=(source:CrmRow,key:string)=>Number(source[key]??0);
+    const n = (source: CrmRow, key: string) => Number(source[key] ?? 0);
     return {
-      open:n(totals,"open"),actionable:n(totals,"actionable"),
-      NeedsFollowup:n(totals,"needs_followup"),NoNextAction:n(totals,"no_next_action"),
-      Overdue:n(totals,"overdue"),WaitingCustomer:n(totals,"waiting_customer"),
-      NoActivity:n(totals,"no_activity"),EstimateDueSoon:n(totals,"estimate_due_soon"),
-      stages:Object.fromEntries(CRM_STAGES.map(code=>[code,n(totals,`stage_${code}`)])),
-      totalOpportunities:n(totals,"total"),
-      convertedToInquiry:n(flow,"converted_to_inquiry"),
-      convertedToEstimate:n(flow,"converted_to_estimate"),
-      convertedToProject:n(flow,"converted_to_project"),
-      directInquiries:n(flow,"direct_inquiries"),
+      open: n(totals, "open"),
+      actionable: n(totals, "actionable"),
+      NeedsFollowup: n(totals, "needs_followup"),
+      NoNextAction: n(totals, "no_next_action"),
+      Overdue: n(totals, "overdue"),
+      WaitingCustomer: n(totals, "waiting_customer"),
+      NoActivity: n(totals, "no_activity"),
+      EstimateDueSoon: n(totals, "estimate_due_soon"),
+      DueToday: n(totals, "due_today"),
+      Waiting: n(totals, "waiting"),
+      Incomplete: n(totals, "incomplete"),
+      mine: n(totals, "mine"),
+      stages: Object.fromEntries(CRM_STAGES.map((code) => [code, n(totals, `stage_${code}`)])),
+      totalOpportunities: n(totals, "total"),
+      convertedToInquiry: n(flow, "converted_to_inquiry"),
+      convertedToEstimate: n(flow, "converted_to_estimate"),
+      convertedToProject: n(flow, "converted_to_project"),
+      directInquiries: n(flow, "direct_inquiries"),
     };
   });
 
-  app.get("/api/v1/crm/options",async request=>{
-    await crmAccess(database,users,request);
-    return (await database.query<CrmRow>("SELECT * FROM dbo.crm_options ORDER BY kind,code")).recordset.map(r=>crmDto(r));
+  app.get("/api/v1/crm/options", async (request) => {
+    await crmAccess(database, users, request);
+    return (await database.query<CrmRow>("SELECT * FROM dbo.crm_options ORDER BY kind,code")).recordset.map((r) => crmDto(r));
   });
-  app.put("/api/v1/crm/options/:kind/:code",async request=>{
-    const actor=await crmAccess(database,users,request,"crm.configure"), body=bodyObject(request.body);
-    const params=request.params as {kind:string;code:string};
-    crmChoice(params.kind,["source","lostReason","contactRole","stage"],"Option kind");
-    const code=requiredText(params.code,40,"Code"), en=requiredText(body.labelEn,200,"English label"), th=requiredText(body.labelTh,200,"Thai label"), ja=requiredText(body.labelJa,200,"Japanese label");
-    const quiet=body.quietDays==null || body.quietDays==="" ? null : requiredInteger(body.quietDays,"Quiet days",1,365);
-    return database.transaction(async tx=>{
-      const q=new sql.Request(tx); q.input("kind",sql.VarChar(30),params.kind).input("code",sql.NVarChar(40),code);
-      const before=(await q.query("SELECT * FROM dbo.crm_options WITH(UPDLOCK,HOLDLOCK) WHERE kind=@kind AND code=@code")).recordset[0];
-      if(before) stale(before,body.rowVersion);
-      if(!before && params.kind==="stage") throw new ApiError(400,"validation_failed","Stage codes are fixed.");
-      q.input("en",sql.NVarChar(200),en).input("th",sql.NVarChar(200),th).input("ja",sql.NVarChar(200),ja).input("quiet",sql.Int,quiet).input("active",sql.Bit,body.isActive!==false);
-      await q.query(before ? "UPDATE dbo.crm_options SET label_en=@en,label_th=@th,label_ja=@ja,quiet_days=@quiet,is_active=@active WHERE kind=@kind AND code=@code" : "INSERT dbo.crm_options(kind,code,label_en,label_th,label_ja,quiet_days,is_active) VALUES(@kind,@code,@en,@th,@ja,@quiet,@active)");
-      await insertAudit(tx,actor.id,"CrmConfiguration",0,code,"Updated",before,body); return {saved:true};
+  app.put("/api/v1/crm/options/:kind/:code", async (request) => {
+    const actor = await crmAccess(database, users, request, "crm.configure"),
+      body = bodyObject(request.body);
+    const params = request.params as { kind: string; code: string };
+    crmChoice(params.kind, ["source", "lostReason", "contactRole", "stage"], "Option kind");
+    const code = requiredText(params.code, 40, "Code"),
+      en = requiredText(body.labelEn, 200, "English label"),
+      th = requiredText(body.labelTh, 200, "Thai label"),
+      ja = requiredText(body.labelJa, 200, "Japanese label");
+    const quiet = body.quietDays == null || body.quietDays === "" ? null : requiredInteger(body.quietDays, "Quiet days", 1, 365);
+    return database.transaction(async (tx) => {
+      const q = new sql.Request(tx);
+      q.input("kind", sql.VarChar(30), params.kind).input("code", sql.NVarChar(40), code);
+      const before = (await q.query("SELECT * FROM dbo.crm_options WITH(UPDLOCK,HOLDLOCK) WHERE kind=@kind AND code=@code")).recordset[0];
+      if (before) stale(before, body.rowVersion);
+      if (!before && params.kind === "stage") throw new ApiError(400, "validation_failed", "Stage codes are fixed.");
+      q.input("en", sql.NVarChar(200), en)
+        .input("th", sql.NVarChar(200), th)
+        .input("ja", sql.NVarChar(200), ja)
+        .input("quiet", sql.Int, quiet)
+        .input("active", sql.Bit, body.isActive !== false);
+      await q.query(
+        before
+          ? "UPDATE dbo.crm_options SET label_en=@en,label_th=@th,label_ja=@ja,quiet_days=@quiet,is_active=@active WHERE kind=@kind AND code=@code"
+          : "INSERT dbo.crm_options(kind,code,label_en,label_th,label_ja,quiet_days,is_active) VALUES(@kind,@code,@en,@th,@ja,@quiet,@active)",
+      );
+      await insertAudit(tx, actor.id, "CrmConfiguration", 0, code, "Updated", before, body);
+      return { saved: true };
     });
   });
 
-  app.get("/api/v1/crm/opportunities",async request=>{
-    const actor=await crmAccess(database,users,request), query=request.query as Record<string,string>;
-    const page=query.page?requiredInteger(Number(query.page),"Page",1,100000):1, size=query.pageSize?requiredInteger(Number(query.pageSize),"Page size",1,100):30;
-    const result=await database.query<CrmRow>(`SELECT o.*,c.name customer_name,c.code customer_code,eu.name end_user_name,eu.code end_user_code,s.name sales_owner_name,t.name technical_owner_name,
+  app.get("/api/v1/crm/opportunities", async (request) => {
+    const actor = await crmAccess(database, users, request),
+      query = request.query as Record<string, string>;
+    const page = query.page ? requiredInteger(Number(query.page), "Page", 1, 100000) : 1,
+      size = query.pageSize ? requiredInteger(Number(query.pageSize), "Page size", 1, 100) : 30;
+    const result = await database.query<CrmRow>(
+      `SELECT o.*,c.name customer_name,c.code customer_code,eu.name end_user_name,eu.code end_user_code,s.name sales_owner_name,t.name technical_owner_name,
       opt.quiet_days,a.last_activity,f.action next_action,f.due_date next_due,f.status next_status,f.owner_id next_owner_id,
       ed.estimate_due,linked.inquiry_id,linked.inquiry_no,linked.inquiry_status,COUNT(*) OVER() total_count
       FROM dbo.crm_opportunities o JOIN dbo.customers c ON c.id=o.customer_id LEFT JOIN dbo.customers eu ON eu.id=o.end_user_customer_id JOIN dbo.users s ON s.id=o.sales_owner_id
@@ -173,155 +300,348 @@ export function registerCrmRoutes(app: FastifyInstance, config: AppConfig, datab
       WHERE ${CRM_SCOPE} AND (@customer IS NULL OR o.customer_id=@customer) AND (@stage=N'' OR o.stage=@stage)
       AND (@open=0 OR o.stage NOT IN('WON','LOST','ON_HOLD'))
       AND (@attention=N'' OR (o.stage NOT IN('WON','LOST','ON_HOLD') AND
-        ((@attention='Actionable' AND (${CRM_NEEDS_FOLLOWUP} OR f.action IS NULL OR f.due_date<=@today)) OR (@attention='Overdue' AND f.due_date<@today) OR (@attention='WaitingCustomer' AND f.status='WaitingCustomer')
+        ((@attention='Actionable' AND (${CRM_NEEDS_FOLLOWUP} OR f.due_date<=@today)) OR (@attention='Overdue' AND f.due_date<@today) OR (@attention='WaitingCustomer' AND f.status='WaitingCustomer')
+         OR (@attention='DueToday' AND f.due_date=@today) OR (@attention='Waiting' AND f.status LIKE N'Waiting%') OR (@attention='Incomplete' AND (f.action IS NULL OR a.last_activity IS NULL))
          OR (@attention='NeedsFollowup' AND ${CRM_NEEDS_FOLLOWUP}) OR (@attention='NoNextAction' AND f.action IS NULL)
          OR (@attention='NoActivity' AND a.last_activity IS NULL) OR (@attention='EstimateDueSoon' AND ed.estimate_due<=DATEADD(day,3,@today)))))
       AND (@owner IS NULL OR o.sales_owner_id=@owner OR o.technical_owner_id=@owner) AND (@year IS NULL OR YEAR(o.created_at)=@year)
-      AND (@search=N'' OR o.name LIKE @search OR o.opportunity_no LIKE @search OR c.name LIKE @search OR c.code LIKE @search OR eu.name LIKE @search OR eu.code LIKE @search OR s.name LIKE @search OR t.name LIKE @search OR EXISTS(SELECT 1 FROM dbo.customer_site_contacts co WHERE co.id=o.contact_id AND co.name LIKE @search))
-      ORDER BY ${query.sort === "close" ? "o.expected_close" : "o.updated_at DESC"},o.id DESC OFFSET @offset ROWS FETCH NEXT @size ROWS ONLY`,q=>{
-        bindAccess(q,actor).input("customer",sql.BigInt,crmId(query.customerId,"Customer")).input("owner",sql.BigInt,crmId(query.ownerId,"Owner"))
-          .input("attention",sql.NVarChar(40),query.attention??"").input("today",sql.Date,today())
-          .input("open",sql.Bit,query.open==="true")
-          .input("stage",sql.NVarChar(40),query.stage??"").input("year",sql.Int,query.year ? requiredInteger(Number(query.year),"Year",2000,2200):null)
-          .input("search",sql.NVarChar(400),query.search?`%${crmText(query.search,300)}%`:"").input("offset",sql.Int,(page-1)*size).input("size",sql.Int,size);
-      });
-    return {items:result.recordset.map(r=>{const visible={...r};if(!actor.permissions.includes("inquiry.read"))for(const key of ["inquiry_id","inquiry_no","inquiry_status"])delete visible[key];return {...crmDto(visible,actor.permissions.includes("crm.commercial.read")),attention:crmAttention(r,today())};}),total:Number(result.recordset[0]?.total_count??0),page,pageSize:size};
+      AND (@search=N'' OR o.name LIKE @search OR o.opportunity_no LIKE @search OR c.name LIKE @search OR c.code LIKE @search OR c.name_th LIKE @search OR c.name_en LIKE @search OR c.name_ja LIKE @search OR c.short_name LIKE @search OR c.erp_customer_code LIKE @search OR eu.name LIKE @search OR eu.code LIKE @search OR s.name LIKE @search OR t.name LIKE @search OR EXISTS(SELECT 1 FROM dbo.customer_site_contacts co WHERE co.id=o.contact_id AND co.name LIKE @search))
+      ORDER BY ${query.sort === "close" ? "CASE WHEN o.expected_close IS NULL THEN 1 ELSE 0 END,o.expected_close" : query.sort === "due" ? "CASE WHEN f.due_date IS NULL THEN 1 ELSE 0 END,f.due_date" : "o.updated_at DESC"},o.id DESC OFFSET @offset ROWS FETCH NEXT @size ROWS ONLY`,
+      (q) => {
+        bindAccess(q, actor)
+          .input("customer", sql.BigInt, crmId(query.customerId, "Customer"))
+          .input("owner", sql.BigInt, crmId(query.ownerId, "Owner"))
+          .input("attention", sql.NVarChar(40), query.attention ?? "")
+          .input("today", sql.Date, today())
+          .input("open", sql.Bit, query.open === "true")
+          .input("stage", sql.NVarChar(40), query.stage ?? "")
+          .input("year", sql.Int, query.year ? requiredInteger(Number(query.year), "Year", 2000, 2200) : null)
+          .input("search", sql.NVarChar(400), query.search ? `%${crmText(query.search, 300)}%` : "")
+          .input("offset", sql.Int, (page - 1) * size)
+          .input("size", sql.Int, size);
+      },
+    );
+    return {
+      items: result.recordset.map((r) => {
+        const visible = { ...r };
+        if (!actor.permissions.includes("inquiry.read")) for (const key of ["inquiry_id", "inquiry_no", "inquiry_status"]) delete visible[key];
+        return { ...crmDto(visible, actor.permissions.includes("crm.commercial.read")), attention: crmAttention(r, today()) };
+      }),
+      total: Number(result.recordset[0]?.total_count ?? 0),
+      page,
+      pageSize: size,
+    };
   });
 
-  app.post("/api/v1/crm/opportunities",async(request,reply)=>{
-    const actor=await crmAccess(database,users,request,"crm.write"),body=bodyObject(request.body);
-    const input=opportunityInput(body,actor.permissions.includes("crm.commercial.read"));
-    validateSalesEvidence(input,null,today());
-    if(!actor.permissions.includes("crm.read.all") && !actor.permissions.includes("crm.read.team") && input.salesOwnerId!==actor.id && input.technicalOwnerId!==actor.id) throw new ApiError(403,"permission_denied","An owner must be you.");
-    const row=await database.transaction(async tx=>{
-      await validateCrmReferences(new sql.Request(tx),input);
-      const q=new sql.Request(tx); q.input("actor",sql.BigInt,actor.id);
-      for(const [key,type] of Object.entries(inputFields)) q.input(key,type,input[key as keyof typeof input]);
-      const keys=Object.keys(inputFields);
-      const r=(await q.query(`DECLARE @number nvarchar(80); SELECT @number=CONCAT(N'OPP-',code,N'-',YEAR(SYSUTCDATETIME()),N'-',NEXT VALUE FOR dbo.crm_opportunity_numbers) FROM dbo.customers WHERE id=@customerId;
-        INSERT dbo.crm_opportunities(opportunity_no,${keys.map(column).join(",")},created_by,updated_by) OUTPUT inserted.* VALUES(@number,${keys.map(k=>`@${k}`).join(",")},@actor,@actor)`)).recordset[0]!;
-      await insertAudit(tx,actor.id,"CrmOpportunity",Number(r.id),String(r.opportunity_no).slice(0,50),"Created",null,crmDto(r));
-      await scopedOpportunity(bindAccess(new sql.Request(tx),actor),Number(r.id));
-      if(body.nextAction) await addFollowup(tx,actor.id,Number(r.id),bodyObject(body.nextAction));
-      return crmDto(r,actor.permissions.includes("crm.commercial.read"));
-    }); return reply.code(201).send(row);
+  app.post("/api/v1/crm/opportunities", async (request, reply) => {
+    const actor = await crmAccess(database, users, request, "crm.write"),
+      body = bodyObject(request.body);
+    const input = opportunityInput(body, actor.permissions.includes("crm.commercial.read"));
+    validateSalesEvidence(input, null, today());
+    if (!actor.permissions.includes("crm.read.all") && !actor.permissions.includes("crm.read.team") && input.salesOwnerId !== actor.id && input.technicalOwnerId !== actor.id)
+      throw new ApiError(403, "permission_denied", "An owner must be you.");
+    const row = await database.transaction(async (tx) => {
+      await validateCrmReferences(new sql.Request(tx), input);
+      const q = new sql.Request(tx);
+      q.input("actor", sql.BigInt, actor.id);
+      for (const [key, type] of Object.entries(inputFields)) q.input(key, type, input[key as keyof typeof input]);
+      const keys = Object.keys(inputFields);
+      const r = (
+        await q.query(`DECLARE @number nvarchar(80); SELECT @number=CONCAT(N'OPP-',code,N'-',YEAR(SYSUTCDATETIME()),N'-',NEXT VALUE FOR dbo.crm_opportunity_numbers) FROM dbo.customers WHERE id=@customerId;
+        INSERT dbo.crm_opportunities(opportunity_no,${keys.map(column).join(",")},created_by,updated_by) OUTPUT inserted.* VALUES(@number,${keys.map((k) => `@${k}`).join(",")},@actor,@actor)`)
+      ).recordset[0]!;
+      await insertAudit(tx, actor.id, "CrmOpportunity", Number(r.id), String(r.opportunity_no).slice(0, 50), "Created", null, crmDto(r));
+      await scopedOpportunity(bindAccess(new sql.Request(tx), actor), Number(r.id));
+      if (body.nextAction) await addFollowup(tx, actor.id, Number(r.id), bodyObject(body.nextAction));
+      return crmDto(r, actor.permissions.includes("crm.commercial.read"));
+    });
+    return reply.code(201).send(row);
   });
 
-  app.get("/api/v1/crm/opportunity-duplicates",async request=>{
-    const actor=await crmAccess(database,users,request),query=request.query as Record<string,string>;
-    const customerId=requiredInteger(Number(query.customerId),"Customer",1),name=requiredText(query.name,300,"Opportunity name");
-    return (await database.query<CrmRow>(`SELECT TOP(5) o.id,o.opportunity_no,o.name,o.stage,c.name customer_name
+  app.get("/api/v1/crm/opportunity-duplicates", async (request) => {
+    const actor = await crmAccess(database, users, request),
+      query = request.query as Record<string, string>;
+    const customerId = requiredInteger(Number(query.customerId), "Customer", 1),
+      name = requiredText(query.name, 300, "Opportunity name");
+    return (
+      await database.query<CrmRow>(
+        `SELECT TOP(5) o.id,o.opportunity_no,o.name,o.stage,c.name customer_name
       FROM dbo.crm_opportunities o JOIN dbo.customers c ON c.id=o.customer_id
       WHERE ${CRM_SCOPE} AND o.customer_id=@customer AND o.stage NOT IN(N'WON',N'LOST')
         AND (LOWER(LTRIM(RTRIM(o.name)))=LOWER(LTRIM(RTRIM(@name))) OR DIFFERENCE(o.name,@name)>=3)
-      ORDER BY CASE WHEN LOWER(LTRIM(RTRIM(o.name)))=LOWER(LTRIM(RTRIM(@name))) THEN 0 ELSE 1 END,o.updated_at DESC`,q=>bindAccess(q,actor).input("customer",sql.BigInt,customerId).input("name",sql.NVarChar(300),name))).recordset.map(r=>crmDto(r));
+      ORDER BY CASE WHEN LOWER(LTRIM(RTRIM(o.name)))=LOWER(LTRIM(RTRIM(@name))) THEN 0 ELSE 1 END,o.updated_at DESC`,
+        (q) => bindAccess(q, actor).input("customer", sql.BigInt, customerId).input("name", sql.NVarChar(300), name),
+      )
+    ).recordset.map((r) => crmDto(r));
   });
 
-  app.put("/api/v1/crm/opportunities/:id",async request=>{
-    const actor=await crmAccess(database,users,request,"crm.write"),body=bodyObject(request.body),id=positiveLong((request.params as {id:string}).id,"Opportunity");
-    return database.transaction(async tx=>{
-      const before=await scopedOpportunity(bindAccess(new sql.Request(tx),actor),id,true); stale(before,body.rowVersion);
-      const commercial=actor.permissions.includes("crm.commercial.read"); const input=opportunityInput({...crmDto(before),...body},commercial);
-      validateSalesEvidence(input,before,today());
-      if(input.customerId!==Number(before.customer_id))throw new ApiError(400,"validation_failed","An opportunity keeps its original customer. Create a new opportunity for another customer.");
-      if(!commercial) input.expectedValue=before.expected_value==null?null:Number(before.expected_value);
-      await validateCrmReferences(new sql.Request(tx),input);
-      const q=new sql.Request(tx); q.input("actor",sql.BigInt,actor.id).input("id",sql.BigInt,id);
-      for(const [key,type] of Object.entries(inputFields)) q.input(key,type,input[key as keyof typeof input]);
-      const row=(await q.query(`UPDATE dbo.crm_opportunities SET stage_changed_at=CASE WHEN stage<>@stage THEN SYSUTCDATETIME() ELSE stage_changed_at END,${Object.keys(inputFields).map(k=>`${column(k)}=@${k}`).join(",")},updated_by=@actor,updated_at=SYSUTCDATETIME() OUTPUT inserted.* WHERE id=@id`)).recordset[0]!;
-      await scopedOpportunity(bindAccess(new sql.Request(tx),actor),id);
-      await insertAudit(tx,actor.id,"CrmOpportunity",id,String(row.opportunity_no).slice(0,50),before.stage!==row.stage ? `StageChanged:${row.stage}`:"Updated",crmDto(before),crmDto(row));
-      return crmDto(row,commercial);
+  app.put("/api/v1/crm/opportunities/:id", async (request) => {
+    const actor = await crmAccess(database, users, request, "crm.write"),
+      body = bodyObject(request.body),
+      id = positiveLong((request.params as { id: string }).id, "Opportunity");
+    return database.transaction(async (tx) => {
+      const before = await scopedOpportunity(bindAccess(new sql.Request(tx), actor), id, true);
+      stale(before, body.rowVersion);
+      const commercial = actor.permissions.includes("crm.commercial.read");
+      const input = opportunityInput({ ...crmDto(before), ...body }, commercial);
+      validateSalesEvidence(input, before, today());
+      if (input.customerId !== Number(before.customer_id)) throw new ApiError(400, "validation_failed", "An opportunity keeps its original customer. Create a new opportunity for another customer.");
+      if (!commercial) input.expectedValue = before.expected_value == null ? null : Number(before.expected_value);
+      await validateCrmReferences(new sql.Request(tx), input);
+      const q = new sql.Request(tx);
+      q.input("actor", sql.BigInt, actor.id).input("id", sql.BigInt, id);
+      for (const [key, type] of Object.entries(inputFields)) q.input(key, type, input[key as keyof typeof input]);
+      const row = (
+        await q.query(
+          `UPDATE dbo.crm_opportunities SET stage_changed_at=CASE WHEN stage<>@stage THEN SYSUTCDATETIME() ELSE stage_changed_at END,${Object.keys(inputFields)
+            .map((k) => `${column(k)}=@${k}`)
+            .join(",")},updated_by=@actor,updated_at=SYSUTCDATETIME() OUTPUT inserted.* WHERE id=@id`,
+        )
+      ).recordset[0]!;
+      await scopedOpportunity(bindAccess(new sql.Request(tx), actor), id);
+      await insertAudit(tx, actor.id, "CrmOpportunity", id, String(row.opportunity_no).slice(0, 50), before.stage !== row.stage ? `StageChanged:${row.stage}` : "Updated", crmDto(before), crmDto(row));
+      return crmDto(row, commercial);
     });
   });
 
-  app.get("/api/v1/crm/opportunities/:id",async request=>{
-    const actor=await crmAccess(database,users,request),id=positiveLong((request.params as {id:string}).id,"Opportunity");
-    return database.transaction(async tx=>{
-      const row=await scopedOpportunity(bindAccess(new sql.Request(tx),actor),id),q=new sql.Request(tx); q.input("id",sql.BigInt,id).input("actor",sql.BigInt,actor.id).input("projectElevated",sql.Bit,isProjectElevated(await users.required(request)));
-      const activities=(await q.query("SELECT a.*,u.name owner_name,f.action next_action,f.due_date next_due,fu.name next_owner_name FROM dbo.crm_activities a JOIN dbo.users u ON u.id=a.owner_id OUTER APPLY(SELECT TOP(1) action,due_date,owner_id FROM dbo.crm_followups WHERE activity_id=a.id ORDER BY due_date,id) f LEFT JOIN dbo.users fu ON fu.id=f.owner_id WHERE a.opportunity_id=@id ORDER BY a.occurred_at DESC,a.id DESC")).recordset;
-      const followups=(await q.query("SELECT f.*,u.name owner_name FROM dbo.crm_followups f JOIN dbo.users u ON u.id=f.owner_id WHERE opportunity_id=@id ORDER BY CASE WHEN status IN('Done','Cancelled') THEN 1 ELSE 0 END,due_date,id")).recordset;
-      const history=(await q.query("SELECT a.*,u.name actor_name FROM dbo.audit_log a JOIN dbo.users u ON u.id=a.actor_id WHERE entity_type=N'CrmOpportunity' AND entity_id=@id ORDER BY occurred_at DESC,id DESC")).recordset;
-      const links=actor.permissions.includes("inquiry.read") ? (await q.query(`SELECT i.id inquiry_id,i.inquiry_no,i.status inquiry_status,i.due_date,e.id estimate_id,e.estimate_no,e.revision,e.status estimate_status,totals.total,p.id project_id,p.project_no,p.status project_status FROM dbo.inquiries i LEFT JOIN dbo.estimates e ON e.inquiry_id=i.id AND e.deleted_at IS NULL LEFT JOIN dbo.v_estimate_totals totals ON totals.estimate_id=e.id LEFT JOIN dbo.projects p ON p.estimate_id=e.id AND p.deleted_at IS NULL AND (@projectElevated=1 OR p.manager_id=@actor OR p.lead_engineer_id=@actor OR EXISTS(SELECT 1 FROM dbo.project_members m WHERE m.project_id=p.id AND m.user_id=@actor)) WHERE i.opportunity_id=@id AND i.deleted_at IS NULL ORDER BY i.id DESC`)).recordset:[];
-      const commercial=actor.permissions.includes("crm.commercial.read");
-      const visibleLinks=links.map(r=>{
-        const visible={...r};
-        if(!actor.permissions.includes("estimate.read"))for(const key of ["estimate_id","estimate_no","revision","estimate_status","total"])delete visible[key];
-        if(!actor.permissions.includes("project.read"))for(const key of ["project_id","project_no","project_status"])delete visible[key];
-        return crmDto(visible,commercial);
+  app.get("/api/v1/crm/opportunities/:id", async (request) => {
+    const actor = await crmAccess(database, users, request),
+      id = positiveLong((request.params as { id: string }).id, "Opportunity");
+    return database.transaction(async (tx) => {
+      const row = await scopedOpportunity(bindAccess(new sql.Request(tx), actor), id),
+        q = new sql.Request(tx);
+      q.input("id", sql.BigInt, id)
+        .input("actor", sql.BigInt, actor.id)
+        .input("projectElevated", sql.Bit, isProjectElevated(await users.required(request)));
+      // The deal page names its customer without loading the whole customer record.
+      const named = new sql.Request(tx);
+      named.input("customer", sql.BigInt, row.customer_id);
+      const customer = (await named.query<CrmRow>("SELECT name customer_name,code customer_code FROM dbo.customers WHERE id=@customer")).recordset[0] ?? {};
+      const activities = (
+        await q.query(
+          "SELECT a.*,u.name owner_name,f.action next_action,f.due_date next_due,fu.name next_owner_name FROM dbo.crm_activities a JOIN dbo.users u ON u.id=a.owner_id OUTER APPLY(SELECT TOP(1) action,due_date,owner_id FROM dbo.crm_followups WHERE activity_id=a.id ORDER BY due_date,id) f LEFT JOIN dbo.users fu ON fu.id=f.owner_id WHERE a.opportunity_id=@id ORDER BY a.occurred_at DESC,a.id DESC",
+        )
+      ).recordset;
+      const followups = (
+        await q.query(
+          "SELECT f.*,u.name owner_name FROM dbo.crm_followups f JOIN dbo.users u ON u.id=f.owner_id WHERE opportunity_id=@id ORDER BY CASE WHEN status IN('Done','Cancelled') THEN 1 ELSE 0 END,due_date,id",
+        )
+      ).recordset;
+      const history = (
+        await q.query("SELECT a.*,u.name actor_name FROM dbo.audit_log a JOIN dbo.users u ON u.id=a.actor_id WHERE entity_type=N'CrmOpportunity' AND entity_id=@id ORDER BY occurred_at DESC,id DESC")
+      ).recordset;
+      const links = actor.permissions.includes("inquiry.read")
+        ? (
+            await q.query(
+              `SELECT i.id inquiry_id,i.inquiry_no,i.status inquiry_status,i.due_date,e.id estimate_id,e.estimate_no,e.revision,e.status estimate_status,totals.total,p.id project_id,p.project_no,p.status project_status FROM dbo.inquiries i LEFT JOIN dbo.estimates e ON e.inquiry_id=i.id AND e.deleted_at IS NULL LEFT JOIN dbo.v_estimate_totals totals ON totals.estimate_id=e.id LEFT JOIN dbo.projects p ON p.estimate_id=e.id AND p.deleted_at IS NULL AND (@projectElevated=1 OR p.manager_id=@actor OR p.lead_engineer_id=@actor OR EXISTS(SELECT 1 FROM dbo.project_members m WHERE m.project_id=p.id AND m.user_id=@actor)) WHERE i.opportunity_id=@id AND i.deleted_at IS NULL ORDER BY i.id DESC`,
+            )
+          ).recordset
+        : [];
+      const commercial = actor.permissions.includes("crm.commercial.read");
+      const visibleLinks = links.map((r) => {
+        const visible = { ...r };
+        if (!actor.permissions.includes("estimate.read")) for (const key of ["estimate_id", "estimate_no", "revision", "estimate_status", "total"]) delete visible[key];
+        if (!actor.permissions.includes("project.read")) for (const key of ["project_id", "project_no", "project_status"]) delete visible[key];
+        return crmDto(visible, commercial);
       });
-      return {opportunity:crmDto(row,commercial),activities:activities.map(r=>crmDto(r)),followups:followups.map(r=>crmDto(r)),history:history.map(r=>crmDto(r,commercial)),links:visibleLinks};
+      return {
+        opportunity: crmDto({ ...row, ...customer }, commercial),
+        activities: activities.map((r) => crmDto(r)),
+        followups: followups.map((r) => crmDto(r)),
+        history: history.map((r) => crmDto(r, commercial)),
+        links: visibleLinks,
+      };
     });
   });
 
-  app.post("/api/v1/crm/opportunities/:id/followups",async(request,reply)=>{
-    const actor=await crmAccess(database,users,request,"crm.write"),id=positiveLong((request.params as {id:string}).id,"Opportunity"),body=bodyObject(request.body);
-    const result=await database.transaction(async tx=>{await scopedOpportunity(bindAccess(new sql.Request(tx),actor),id,true);return addFollowup(tx,actor.id,id,body);});return reply.code(201).send(result);
+  app.post("/api/v1/crm/opportunities/:id/followups", async (request, reply) => {
+    const actor = await crmAccess(database, users, request, "crm.write"),
+      id = positiveLong((request.params as { id: string }).id, "Opportunity"),
+      body = bodyObject(request.body);
+    const result = await database.transaction(async (tx) => {
+      await scopedOpportunity(bindAccess(new sql.Request(tx), actor), id, true);
+      return addFollowup(tx, actor.id, id, body);
+    });
+    return reply.code(201).send(result);
   });
-  app.put("/api/v1/crm/opportunities/:id/followups/:followupId",async request=>{
-    const actor=await crmAccess(database,users,request),params=request.params as {id:string;followupId:string},id=positiveLong(params.id,"Opportunity"),fid=positiveLong(params.followupId,"Follow-up"),body=bodyObject(request.body);
-    return database.transaction(async tx=>{
-      await scopedOpportunity(bindAccess(new sql.Request(tx),actor),id,true);
-      const q=new sql.Request(tx);q.input("id",sql.BigInt,id).input("fid",sql.BigInt,fid).input("actor",sql.BigInt,actor.id);
-      const before=(await q.query("SELECT * FROM dbo.crm_followups WITH(UPDLOCK,HOLDLOCK) WHERE id=@fid AND opportunity_id=@id")).recordset[0];
-      if(!before) throw new ApiError(404,"crm_not_found","Follow-up not found.");
-      if(Number(before.owner_id)!==actor.id&&!actor.permissions.includes("crm.write"))throw new ApiError(403,"permission_denied","Only the action owner may update it.");
-      stale(before,body.rowVersion);const input=followupInput({...crmDto(before),...body});
-      if(!actor.permissions.includes("crm.write") && input.ownerId!==Number(before.owner_id))throw new ApiError(403,"permission_denied","Reassigning a follow-up requires CRM write permission.");
-      await activeOwner(new sql.Request(tx),input.ownerId);
-      q.input("action",sql.NVarChar(1000),input.action).input("owner",sql.BigInt,input.ownerId).input("due",sql.Date,input.dueDate).input("priority",sql.NVarChar(20),input.priority).input("status",sql.NVarChar(30),input.status);
-      const row=(await q.query("UPDATE dbo.crm_followups SET action=@action,owner_id=@owner,due_date=@due,priority=@priority,status=@status,updated_by=@actor,updated_at=SYSUTCDATETIME() OUTPUT inserted.* WHERE id=@fid AND opportunity_id=@id")).recordset[0]!;
-      await insertAudit(tx,actor.id,"CrmOpportunity",id,"","NextActionChanged",crmDto(before),crmDto(row));return crmDto(row);
+  app.put("/api/v1/crm/opportunities/:id/followups/:followupId", async (request) => {
+    const actor = await crmAccess(database, users, request),
+      params = request.params as { id: string; followupId: string },
+      id = positiveLong(params.id, "Opportunity"),
+      fid = positiveLong(params.followupId, "Follow-up"),
+      body = bodyObject(request.body);
+    return database.transaction(async (tx) => {
+      await scopedOpportunity(bindAccess(new sql.Request(tx), actor), id, true);
+      const q = new sql.Request(tx);
+      q.input("id", sql.BigInt, id).input("fid", sql.BigInt, fid).input("actor", sql.BigInt, actor.id);
+      const before = (await q.query("SELECT * FROM dbo.crm_followups WITH(UPDLOCK,HOLDLOCK) WHERE id=@fid AND opportunity_id=@id")).recordset[0];
+      if (!before) throw new ApiError(404, "crm_not_found", "Follow-up not found.");
+      if (Number(before.owner_id) !== actor.id && !actor.permissions.includes("crm.write")) throw new ApiError(403, "permission_denied", "Only the action owner may update it.");
+      stale(before, body.rowVersion);
+      const input = followupInput({ ...crmDto(before), ...body });
+      if (!actor.permissions.includes("crm.write") && input.ownerId !== Number(before.owner_id)) throw new ApiError(403, "permission_denied", "Reassigning a follow-up requires CRM write permission.");
+      await activeOwner(new sql.Request(tx), input.ownerId);
+      q.input("action", sql.NVarChar(1000), input.action)
+        .input("owner", sql.BigInt, input.ownerId)
+        .input("due", sql.Date, input.dueDate)
+        .input("priority", sql.NVarChar(20), input.priority)
+        .input("status", sql.NVarChar(30), input.status);
+      const row = (
+        await q.query(
+          "UPDATE dbo.crm_followups SET action=@action,owner_id=@owner,due_date=@due,priority=@priority,status=@status,updated_by=@actor,updated_at=SYSUTCDATETIME() OUTPUT inserted.* WHERE id=@fid AND opportunity_id=@id",
+        )
+      ).recordset[0]!;
+      await insertAudit(tx, actor.id, "CrmOpportunity", id, "", "NextActionChanged", crmDto(before), crmDto(row));
+      return crmDto(row);
     });
   });
 
-  app.get("/api/v1/crm/activities",async request=>{
-    const actor=await crmAccess(database,users,request),query=request.query as Record<string,string>;
-    const page=query.page?requiredInteger(Number(query.page),"Page",1,100000):1;
-    const result=await database.query<CrmRow>(`SELECT a.*,u.name owner_name,c.name customer_name,o.name opportunity_name,COUNT(*) OVER() total_count,
+  /* The activity timeline (CRM UX audit CRM-03, CRM-07): searched and filtered on the server, so every page of the
+     result is reachable, and the type counts above it read the same filters as the list (all but the type itself,
+     because each count is also the filter it names). */
+  app.get("/api/v1/crm/activities", async (request) => {
+    const actor = await crmAccess(database, users, request),
+      query = request.query as Record<string, string>;
+    const page = query.page ? requiredInteger(Number(query.page), "Page", 1, 100000) : 1,
+      size = query.pageSize ? requiredInteger(Number(query.pageSize), "Page size", 1, 100) : 30;
+    const from = parseDateOnly(query.from || null, "From", true),
+      to = parseDateOnly(query.to || null, "To", true);
+    if (from && to && from > to) throw new ApiError(400, "validation_failed", "From must be on or before To.");
+    const type = query.activityType ? crmChoice(query.activityType, CRM_ACTIVITY_TYPES, "Activity type") : "";
+    const nextDay = (day: string) => new Date(Date.parse(`${day}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
+    const joins = `FROM dbo.crm_activities a JOIN dbo.customers c ON c.id=a.customer_id JOIN dbo.users u ON u.id=a.owner_id
+      LEFT JOIN dbo.crm_opportunities o ON o.id=a.opportunity_id`;
+    const filters = `WHERE (a.opportunity_id IS NULL OR ${CRM_SCOPE}) AND (@customer IS NULL OR a.customer_id=@customer) AND (@opportunity IS NULL OR a.opportunity_id=@opportunity)
+      AND (@owner IS NULL OR a.owner_id=@owner) AND (@year IS NULL OR YEAR(a.occurred_at)=@year)
+      AND (@fromAt IS NULL OR a.occurred_at>=@fromAt) AND (@toAt IS NULL OR a.occurred_at<@toAt)
+      AND (@search=N'' OR a.summary LIKE @search OR a.decision LIKE @search OR a.action_items LIKE @search OR a.participants LIKE @search
+        OR c.name LIKE @search OR c.code LIKE @search OR c.name_th LIKE @search OR c.name_en LIKE @search OR c.name_ja LIKE @search OR c.short_name LIKE @search
+        OR o.name LIKE @search OR o.opportunity_no LIKE @search)`;
+    const bind = (q: sql.Request) =>
+      bindAccess(q, actor)
+        .input("customer", sql.BigInt, crmId(query.customerId, "Customer"))
+        .input("opportunity", sql.BigInt, crmId(query.opportunityId, "Opportunity"))
+        .input("owner", sql.BigInt, crmId(query.ownerId, "Owner"))
+        .input("year", sql.Int, query.year ? requiredInteger(Number(query.year), "Year", 2000, 2200) : null)
+        .input("fromAt", sql.DateTimeOffset, from ? businessDayStart(from, config.businessTimeZone) : null)
+        .input("toAt", sql.DateTimeOffset, to ? businessDayStart(nextDay(to), config.businessTimeZone) : null)
+        .input("search", sql.NVarChar(400), query.search ? `%${crmText(query.search, 300)}%` : "")
+        .input("type", sql.NVarChar(40), type);
+    const result = await database.query<CrmRow>(
+      `SELECT a.*,u.name owner_name,c.name customer_name,c.code customer_code,o.name opportunity_name,o.opportunity_no,COUNT(*) OVER() total_count,
       f.action next_action,f.due_date next_due,fu.name next_owner_name
-      FROM dbo.crm_activities a JOIN dbo.customers c ON c.id=a.customer_id JOIN dbo.users u ON u.id=a.owner_id
-      LEFT JOIN dbo.crm_opportunities o ON o.id=a.opportunity_id
+      ${joins}
       OUTER APPLY(SELECT TOP(1) action,due_date,owner_id FROM dbo.crm_followups WHERE activity_id=a.id ORDER BY due_date,id) f
       LEFT JOIN dbo.users fu ON fu.id=f.owner_id
-      WHERE (a.opportunity_id IS NULL OR ${CRM_SCOPE}) AND (@customer IS NULL OR a.customer_id=@customer)
-      AND (@year IS NULL OR YEAR(a.occurred_at)=@year) ORDER BY a.occurred_at DESC,a.id DESC OFFSET @offset ROWS FETCH NEXT 30 ROWS ONLY`,
-      q=>bindAccess(q,actor).input("customer",sql.BigInt,crmId(query.customerId,"Customer")).input("year",sql.Int,query.year?requiredInteger(Number(query.year),"Year",2000,2200):null).input("offset",sql.Int,(page-1)*30));
-    return {items:result.recordset.map(r=>crmDto(r)),total:Number(result.recordset[0]?.total_count??0),page,pageSize:30};
+      ${filters} AND (@type=N'' OR a.activity_type=@type) ORDER BY a.occurred_at DESC,a.id DESC OFFSET @offset ROWS FETCH NEXT @size ROWS ONLY`,
+      (q) =>
+        bind(q)
+          .input("offset", sql.Int, (page - 1) * size)
+          .input("size", sql.Int, size),
+    );
+    const counted = (await database.query<CrmRow>(`SELECT a.activity_type,COUNT_BIG(*) activity_count ${joins} ${filters} GROUP BY a.activity_type`, bind)).recordset;
+    const types = Object.fromEntries(CRM_ACTIVITY_TYPES.map((code) => [code, Number(counted.find((r) => r.activity_type === code)?.activity_count ?? 0)]));
+    return {
+      items: result.recordset.map((r) => crmDto(r)),
+      total: Number(result.recordset[0]?.total_count ?? 0),
+      page,
+      pageSize: size,
+      types,
+      allTypes: Object.values(types).reduce((sum, n) => sum + n, 0),
+    };
   });
-  app.post("/api/v1/crm/activities",async(request,reply)=>{
-    const actor=await crmAccess(database,users,request,"crm.activity.write"),body=bodyObject(request.body);
-    const opportunity=crmId(body.opportunityId,"Opportunity"),customer=requiredInteger(body.customerId,"Customer",1),contact=crmId(body.contactId,"Contact"),owner=requiredInteger(body.ownerId??actor.id,"Owner",1);
-    const occurred=new Date(String(body.occurredAt));if(!Number.isFinite(occurred.getTime())||occurred.getTime()>Date.now()+86400000)throw new ApiError(400,"validation_failed","Activity date is invalid.");
-    const type=crmChoice(body.activityType,CRM_ACTIVITY_TYPES,"Activity type"),summary=requiredText(body.summary,4000,"Summary");
-    const result=await database.transaction(async tx=>{
-      if(opportunity){const o=await scopedOpportunity(bindAccess(new sql.Request(tx),actor),opportunity,true);if(Number(o.customer_id)!==customer)throw new ApiError(422,"invalid_reference","Opportunity and customer do not match.");}
-      await activeOwner(new sql.Request(tx),owner);
-      const q=new sql.Request(tx);q.input("customer",sql.BigInt,customer).input("contact",sql.BigInt,contact);
-      const valid=(await q.query(`SELECT c.id FROM dbo.customers c WHERE c.id=@customer AND c.is_active=1 AND c.deleted_at IS NULL AND (@contact IS NULL OR EXISTS(SELECT 1 FROM dbo.customer_site_contacts co JOIN dbo.customer_sites s ON s.id=co.site_id WHERE co.id=@contact AND s.customer_id=c.id AND co.is_active=1 AND co.deleted_at IS NULL))`)).recordset[0];
-      if(!valid)throw new ApiError(422,"invalid_reference","Customer or contact is invalid.");
-      const inquiry=crmId(body.inquiryId,"Inquiry"),estimate=crmId(body.estimateId,"Estimate"),project=crmId(body.projectId,"Project");
-      for(const [linked,permission] of [[inquiry,"inquiry.read"],[estimate,"estimate.read"],[project,"project.read"]] as const)if(linked&&!actor.permissions.includes(permission))throw new ApiError(403,"permission_denied","The related record is unavailable.");
-      if(project)await demandProjectScope(database,await users.required(request),project,tx);
-      q.input("opportunity",sql.BigInt,opportunity).input("inquiry",sql.BigInt,inquiry).input("estimate",sql.BigInt,estimate).input("project",sql.BigInt,project);
-      const linkQuery=bindAccess(new sql.Request(tx),actor);linkQuery.input("customer",sql.BigInt,customer).input("opportunity",sql.BigInt,opportunity).input("inquiry",sql.BigInt,inquiry).input("estimate",sql.BigInt,estimate).input("project",sql.BigInt,project);
-      const links=(await linkQuery.query(`SELECT CASE WHEN
+  app.post("/api/v1/crm/activities", async (request, reply) => {
+    const actor = await crmAccess(database, users, request, "crm.activity.write"),
+      body = bodyObject(request.body);
+    const opportunity = crmId(body.opportunityId, "Opportunity"),
+      customer = requiredInteger(body.customerId, "Customer", 1),
+      contact = crmId(body.contactId, "Contact"),
+      owner = requiredInteger(body.ownerId ?? actor.id, "Owner", 1);
+    const occurred = new Date(String(body.occurredAt));
+    if (!Number.isFinite(occurred.getTime()) || occurred.getTime() > Date.now() + 86400000) throw new ApiError(400, "validation_failed", "Activity date is invalid.");
+    const type = crmChoice(body.activityType, CRM_ACTIVITY_TYPES, "Activity type"),
+      summary = requiredText(body.summary, 4000, "Summary");
+    const result = await database.transaction(async (tx) => {
+      if (opportunity) {
+        const o = await scopedOpportunity(bindAccess(new sql.Request(tx), actor), opportunity, true);
+        if (Number(o.customer_id) !== customer) throw new ApiError(422, "invalid_reference", "Opportunity and customer do not match.");
+      }
+      await activeOwner(new sql.Request(tx), owner);
+      const q = new sql.Request(tx);
+      q.input("customer", sql.BigInt, customer).input("contact", sql.BigInt, contact);
+      const valid = (
+        await q.query(
+          `SELECT c.id FROM dbo.customers c WHERE c.id=@customer AND c.is_active=1 AND c.deleted_at IS NULL AND (@contact IS NULL OR EXISTS(SELECT 1 FROM dbo.customer_site_contacts co JOIN dbo.customer_sites s ON s.id=co.site_id WHERE co.id=@contact AND s.customer_id=c.id AND co.is_active=1 AND co.deleted_at IS NULL))`,
+        )
+      ).recordset[0];
+      if (!valid) throw new ApiError(422, "invalid_reference", "Customer or contact is invalid.");
+      const inquiry = crmId(body.inquiryId, "Inquiry"),
+        estimate = crmId(body.estimateId, "Estimate"),
+        project = crmId(body.projectId, "Project");
+      for (const [linked, permission] of [
+        [inquiry, "inquiry.read"],
+        [estimate, "estimate.read"],
+        [project, "project.read"],
+      ] as const)
+        if (linked && !actor.permissions.includes(permission)) throw new ApiError(403, "permission_denied", "The related record is unavailable.");
+      if (project) await demandProjectScope(database, await users.required(request), project, tx);
+      q.input("opportunity", sql.BigInt, opportunity).input("inquiry", sql.BigInt, inquiry).input("estimate", sql.BigInt, estimate).input("project", sql.BigInt, project);
+      const linkQuery = bindAccess(new sql.Request(tx), actor);
+      linkQuery
+        .input("customer", sql.BigInt, customer)
+        .input("opportunity", sql.BigInt, opportunity)
+        .input("inquiry", sql.BigInt, inquiry)
+        .input("estimate", sql.BigInt, estimate)
+        .input("project", sql.BigInt, project);
+      const links = (
+        await linkQuery.query(`SELECT CASE WHEN
         (@inquiry IS NULL OR EXISTS(SELECT 1 FROM dbo.inquiries i LEFT JOIN dbo.crm_opportunities o ON o.id=i.opportunity_id WHERE i.id=@inquiry AND i.customer_id=@customer AND i.deleted_at IS NULL AND (@opportunity IS NULL OR i.opportunity_id=@opportunity) AND (i.opportunity_id IS NULL OR ${CRM_SCOPE})))
         AND (@estimate IS NULL OR EXISTS(SELECT 1 FROM dbo.estimates e JOIN dbo.inquiries i ON i.id=e.inquiry_id LEFT JOIN dbo.crm_opportunities o ON o.id=i.opportunity_id WHERE e.id=@estimate AND i.customer_id=@customer AND e.deleted_at IS NULL AND (@opportunity IS NULL OR i.opportunity_id=@opportunity) AND (i.opportunity_id IS NULL OR ${CRM_SCOPE})))
-        AND (@project IS NULL OR EXISTS(SELECT 1 FROM dbo.projects p JOIN dbo.inquiries i ON i.id=p.inquiry_id LEFT JOIN dbo.crm_opportunities o ON o.id=i.opportunity_id WHERE p.id=@project AND p.customer_id=@customer AND p.deleted_at IS NULL AND (@opportunity IS NULL OR i.opportunity_id=@opportunity) AND (i.opportunity_id IS NULL OR ${CRM_SCOPE}))) THEN 1 ELSE 0 END valid`)).recordset[0];
-      if(!links?.valid)throw new ApiError(422,"invalid_reference","Related records must belong to this customer and opportunity.");
-      q.input("owner",sql.BigInt,owner).input("actor",sql.BigInt,actor.id).input("type",sql.NVarChar(40),type).input("occurred",sql.DateTimeOffset,occurred).input("summary",sql.NVarChar(4000),summary).input("participants",sql.NVarChar(2000),crmText(body.participants,2000)).input("decision",sql.NVarChar(4000),crmText(body.decision)).input("actions",sql.NVarChar(4000),crmText(body.actionItems));
-      const row=(await q.query("INSERT dbo.crm_activities(customer_id,opportunity_id,contact_id,inquiry_id,estimate_id,project_id,activity_type,occurred_at,owner_id,participants,summary,decision,action_items,created_by) OUTPUT inserted.* VALUES(@customer,@opportunity,@contact,@inquiry,@estimate,@project,@type,@occurred,@owner,@participants,@summary,@decision,@actions,@actor)")).recordset[0]!;
-      await insertAudit(tx,actor.id,opportunity?"CrmOpportunity":"Customer",opportunity??customer,"","ActivityAdded",null,crmDto(row));
-      if(body.nextAction){if(!opportunity)throw new ApiError(400,"validation_failed","A next action requires an opportunity.");await addFollowup(tx,actor.id,opportunity,bodyObject(body.nextAction),Number(row.id));}
+        AND (@project IS NULL OR EXISTS(SELECT 1 FROM dbo.projects p JOIN dbo.inquiries i ON i.id=p.inquiry_id LEFT JOIN dbo.crm_opportunities o ON o.id=i.opportunity_id WHERE p.id=@project AND p.customer_id=@customer AND p.deleted_at IS NULL AND (@opportunity IS NULL OR i.opportunity_id=@opportunity) AND (i.opportunity_id IS NULL OR ${CRM_SCOPE}))) THEN 1 ELSE 0 END valid`)
+      ).recordset[0];
+      if (!links?.valid) throw new ApiError(422, "invalid_reference", "Related records must belong to this customer and opportunity.");
+      q.input("owner", sql.BigInt, owner)
+        .input("actor", sql.BigInt, actor.id)
+        .input("type", sql.NVarChar(40), type)
+        .input("occurred", sql.DateTimeOffset, occurred)
+        .input("summary", sql.NVarChar(4000), summary)
+        .input("participants", sql.NVarChar(2000), crmText(body.participants, 2000))
+        .input("decision", sql.NVarChar(4000), crmText(body.decision))
+        .input("actions", sql.NVarChar(4000), crmText(body.actionItems));
+      const row = (
+        await q.query(
+          "INSERT dbo.crm_activities(customer_id,opportunity_id,contact_id,inquiry_id,estimate_id,project_id,activity_type,occurred_at,owner_id,participants,summary,decision,action_items,created_by) OUTPUT inserted.* VALUES(@customer,@opportunity,@contact,@inquiry,@estimate,@project,@type,@occurred,@owner,@participants,@summary,@decision,@actions,@actor)",
+        )
+      ).recordset[0]!;
+      await insertAudit(tx, actor.id, opportunity ? "CrmOpportunity" : "Customer", opportunity ?? customer, "", "ActivityAdded", null, crmDto(row));
+      if (body.nextAction) {
+        if (!opportunity) throw new ApiError(400, "validation_failed", "A next action requires an opportunity.");
+        await addFollowup(tx, actor.id, opportunity, bodyObject(body.nextAction), Number(row.id));
+      }
       return crmDto(row);
-    });return reply.code(201).send(result);
+    });
+    return reply.code(201).send(result);
   });
 
-  app.get("/api/v1/crm/my-work",async request=>{
-    const actor=await crmAccess(database,users,request);
-    const rows=(await database.query<CrmRow>(`SELECT f.*,o.name opportunity_name,o.opportunity_no,c.name customer_name FROM dbo.crm_followups f JOIN dbo.crm_opportunities o ON o.id=f.opportunity_id JOIN dbo.customers c ON c.id=o.customer_id WHERE f.owner_id=@actor AND f.status NOT IN('Done','Cancelled') AND o.stage NOT IN('WON','LOST','ON_HOLD') ORDER BY f.due_date,f.id`,q=>q.input("actor",sql.BigInt,actor.id))).recordset;
-    const quiet=(await database.query<CrmRow>(`SELECT o.*,opt.quiet_days,a.last_activity,f.action next_action,f.due_date next_due,f.status next_status FROM dbo.crm_opportunities o LEFT JOIN dbo.crm_options opt ON opt.kind='stage' AND opt.code=o.stage OUTER APPLY(SELECT MAX(occurred_at) last_activity FROM dbo.crm_activities WHERE opportunity_id=o.id) a OUTER APPLY(SELECT TOP(1) action,due_date,status FROM dbo.crm_followups WHERE opportunity_id=o.id AND status NOT IN('Done','Cancelled') ORDER BY due_date,id) f WHERE (o.sales_owner_id=@actor OR o.technical_owner_id=@actor) AND o.stage NOT IN('WON','LOST','ON_HOLD')`,q=>q.input("actor",sql.BigInt,actor.id))).recordset;
-    return {actions:rows.map(r=>crmDto(r)),attention:quiet.map(r=>({...crmDto(r,actor.permissions.includes("crm.commercial.read")),attention:crmAttention(r,today())})).filter(r=>r.attention.some(f=>["NeedsFollowup","NoNextAction"].includes(f)))};
+  app.get("/api/v1/crm/my-work", async (request) => {
+    const actor = await crmAccess(database, users, request);
+    const rows = (
+      await database.query<CrmRow>(
+        `SELECT f.*,o.name opportunity_name,o.opportunity_no,c.name customer_name FROM dbo.crm_followups f JOIN dbo.crm_opportunities o ON o.id=f.opportunity_id JOIN dbo.customers c ON c.id=o.customer_id WHERE f.owner_id=@actor AND f.status NOT IN('Done','Cancelled') AND o.stage NOT IN('WON','LOST','ON_HOLD') ORDER BY f.due_date,f.id`,
+        (q) => q.input("actor", sql.BigInt, actor.id),
+      )
+    ).recordset;
+    const quiet = (
+      await database.query<CrmRow>(
+        `SELECT o.*,opt.quiet_days,a.last_activity,f.action next_action,f.due_date next_due,f.status next_status FROM dbo.crm_opportunities o LEFT JOIN dbo.crm_options opt ON opt.kind='stage' AND opt.code=o.stage OUTER APPLY(SELECT MAX(occurred_at) last_activity FROM dbo.crm_activities WHERE opportunity_id=o.id) a OUTER APPLY(SELECT TOP(1) action,due_date,status FROM dbo.crm_followups WHERE opportunity_id=o.id AND status NOT IN('Done','Cancelled') ORDER BY due_date,id) f WHERE (o.sales_owner_id=@actor OR o.technical_owner_id=@actor) AND o.stage NOT IN('WON','LOST','ON_HOLD')`,
+        (q) => q.input("actor", sql.BigInt, actor.id),
+      )
+    ).recordset;
+    return {
+      actions: rows.map((r) => crmDto(r)),
+      attention: quiet
+        .map((r) => ({ ...crmDto(r, actor.permissions.includes("crm.commercial.read")), attention: crmAttention(r, today()) }))
+        .filter((r) => r.attention.some((f) => ["NeedsFollowup", "NoNextAction"].includes(f))),
+    };
   });
 }

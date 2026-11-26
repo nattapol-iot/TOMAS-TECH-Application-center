@@ -21,6 +21,7 @@ const views = new Set([...shell.matchAll(/\{ view: "([a-z-]+)"|\{"view":"([a-z-]
 // data-guide="x" on an element, guide="x" on Panel/Field/Fields, guide:"x" on a CRM form field.
 const marked = new Set(screens.flatMap(({ text }) => [...text.matchAll(/(?:data-guide|guide)\s*[=:]\s*"([^"]+)"/g)].map((match) => match[1])));
 const crm = read("app/system/production/CrmScreens.tsx");
+const crmForms = read("app/system/tomas-ui/CrmForms.tsx");
 // Screens a guide may name that are not menu entries of their own.
 const subViews = new Set(["sales-intake", "crm-pipeline", "command-center"]);
 // Parts of the menus themselves: the star on an entry and the Favourites section (menu-favorites guide), and the
@@ -47,7 +48,8 @@ test("every guide step points at something a screen still marks", () => {
       } else if (step.target.startsWith("intake.to.")) {
         if (!read("app/system/production/SiteVisitScreens.tsx").includes(`"${step.target.slice(10)}"`)) missing.push(`${where}: no intake status ${step.target}`);
       } else if (step.target.startsWith("crm.tab.")) {
-        const dealTabs = /\{\[((?:"[a-z]+",?)+)\]\.map\(k=><button key=\{k\} type="button" role="tab" aria-selected=\{tab===k\} data-guide=\{`crm\.tab\.\$\{k\}`\}/.exec(crm);
+        const dealTabs =
+          /\{\[((?:"[a-z]+",?\s*)+)\]\.map\(\(?k\)?\s*=>\s*(?:\(\s*)?<button\s+key=\{k\}\s+type="button"\s+role="tab"\s+aria-selected=\{tab\s*===\s*k\}\s+data-guide=\{`crm\.tab\.\$\{k\}`\}/.exec(crm);
         if (!dealTabs?.[1].includes(`"${step.target.slice(8)}"`)) missing.push(`${where}: no deal tab ${step.target}`);
       } else if (!marked.has(step.target)) missing.push(`${where}: nothing marked ${step.target}`);
     }
@@ -55,10 +57,13 @@ test("every guide step points at something a screen still marks", () => {
   // The copy of an entry under Favourites is marked nav.fav.<view>, so nav.<view> names one element.
   assert.match(shell, /data-guide=\{favorite \? `nav\.fav\.\$\{item\.view\}` : `nav\.\$\{item\.view\}`\}/);
   assert.match(read("app/system/production/SiteVisitScreens.tsx"), /data-guide=\{`intake\.to\.\$\{target\}`\}/);
-  // CRM forms mark a field through Field.guide and a group of fields through Fields' guide.
-  assert.match(crm, /<div className="crm-form-grid" data-guide=\{guide\}>/);
-  assert.match(crm, /:<label key=\{f\.key\} className=\{f\.wide\?"crm-full":""\} data-guide=\{f\.guide\}>/);
-  assert.match(crm, /<button className="btn primary" disabled=\{busy\} data-guide="crm\.save">\{t\("Save"\)\}<\/button>/);
+  // CRM forms (on @tomas-tc/ui since the CRM UX audit 2026-11-26) mark a field through its spec's guide, a group of
+  // fields through FieldGrid's guide, and Save through the dialog shell, "crm.save" unless a form names another.
+  assert.match(crmForms, /<div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2" data-guide=\{guide\}>/);
+  assert.match(crmForms, /data-guide=\{field\.guide\}/);
+  assert.match(crmForms, /const DEFAULT_SAVE = \{ guide: "crm\.save" \} as const;/);
+  assert.match(crmForms, /saveGuide = DEFAULT_SAVE\.guide/);
+  assert.match(crmForms, /type="submit" form=\{formId\}[^>]*data-guide=\{saveGuide\}/);
   assert.match(read("app/system/ui.tsx"), /role="tab" type="button" aria-selected=\{active === tab\.id\} data-tab=\{tab\.id\}/);
   assert.match(read("app/system/ui.tsx"), /<div className=\{`field\$\{span \? ` span-\$\{span\}` : ""\}`\} data-guide=\{guide\}>/);
   assert.match(read("app/system/ui.tsx"), /<section className=\{`panel\$\{className \? ` \$\{className\}` : ""\}`\} data-guide=\{guide\}>/);
@@ -83,8 +88,11 @@ test("the catalog holds the guides the owner chose, in the order the work happen
   assert.deepEqual(
     GUIDES.map((guide) => guide.id),
     [
+      // What needs doing now, and finding an activity (CRM UX audit 2026-11-26).
+      "crm-find-work",
       "crm-deal-create",
       "crm-activity-followup",
+      "crm-find-activity",
       "crm-send-estimate",
       "inquiry-create",
       "inquiry-attach",
@@ -205,11 +213,23 @@ test("a guide is offered only to people who can do the task", () => {
   // An engineer reads CRM and logs activities (053_crm.sql); sales also write deals and send them for estimating.
   assert.deepEqual(
     guidesFor(["crm.read", "crm.activity.write"]).map((guide) => guide.id),
-    ["crm-activity-followup", "sales-look-v2", "downloads-skill", "menu-favorites", "support-ticket", "support-follow"],
+    ["crm-find-work", "crm-activity-followup", "crm-find-activity", "sales-look-v2", "downloads-skill", "menu-favorites", "support-ticket", "support-follow"],
   );
   assert.deepEqual(
     guidesFor(["crm.read", "crm.write", "crm.activity.write", "crm.convert"]).map((guide) => guide.id),
-    ["crm-deal-create", "crm-activity-followup", "crm-send-estimate", "crm-proposal-won", "sales-look-v2", "downloads-skill", "menu-favorites", "support-ticket", "support-follow"],
+    [
+      "crm-find-work",
+      "crm-deal-create",
+      "crm-activity-followup",
+      "crm-find-activity",
+      "crm-send-estimate",
+      "crm-proposal-won",
+      "sales-look-v2",
+      "downloads-skill",
+      "menu-favorites",
+      "support-ticket",
+      "support-follow",
+    ],
   );
   // A planner sees the plan guide; a head who approves PRs sees the approval guide.
   assert.ok(guidesFor(["schedule.read", "schedule.plan"]).some((guide) => guide.id === "project-plan"));
@@ -236,7 +256,9 @@ test("the shell opens the guides from the top bar and loads the layer after firs
 test("a running guide lights the target without blocking the page and follows a modal dialog", () => {
   const layer = read("app/system/production/GuideLayer.tsx");
   const css = read("app/system/production/guide.css");
-  assert.match(css, /\.guide-spot \{[^}]*pointer-events: none;[^}]*box-shadow: 0 0 0 3px var\(--blue\), 0 0 0 9999px/s);
+  assert.match(css, /\.guide-spot \{[^}]*pointer-events: none;[^}]*box-shadow:\s*0 0 0 3px var\(--blue\),\s*0 0 0 9999px/s);
+  // A @tomas-tc/ui dialog (Radix) turns pointer events off on <body>; the guide's cards stay clickable over it.
+  assert.match(css, /\.guide-pop,\s*\.guide-card \{\s*pointer-events: auto;\s*\}/);
   // A click step moves on after the page has handled the click.
   assert.match(layer, /document\.addEventListener\("click", onClick, true\)/);
   assert.match(layer, /window\.setTimeout\(advance, 0\)/);
