@@ -3,13 +3,25 @@ import type { Transaction as TransactionType } from "mssql";
 import type { Database } from "./db.js";
 import { ApiError } from "./errors.js";
 import { hasRole } from "./user-roles.js";
+import { leaderPlansProject } from "./leader-scope.js";
 import { bodyObject, optionalBodyText, parseDateOnly, parseRowVersion, requiredInteger, requiredText } from "./http.js";
 import { dateOnly } from "./http.js";
 import { resolveSchedule, type ExtraLink, type ResolvedScheduleTask, type ScheduleCalculationTask } from "./schedule-calculator.js";
 import type { CurrentUser } from "./types.js";
 
 import { fitPeople, storedPeople } from "./plan-people.js";
-export type ProjectRow = { id: number; projectNo: string; name: string; managerId: number; leadEngineerId?: number | null; status: string; targetDelivery: string | null };
+/** team and leadDepartment place the project in a team (leader-scope.ts); a row read elsewhere may leave them out. */
+export type ProjectRow = {
+  id: number;
+  projectNo: string;
+  name: string;
+  managerId: number;
+  leadEngineerId?: number | null;
+  status: string;
+  targetDelivery: string | null;
+  team?: string | null;
+  leadDepartment?: string | null;
+};
 /** active: the PIC can still answer for the row (an active account on the project's team); a PIC who left or was taken off the team does not hold it. */
 export type PicRow = { id: number; name: string; email: string; active: boolean };
 export type TaskRow = {
@@ -294,7 +306,10 @@ export async function readProject(transaction: TransactionType, projectId: numbe
   request.input("project", sql.BigInt, projectId);
   const row = (
     await request.query<Record<string, unknown>>(
-      `SELECT id,project_no,name,manager_id,lead_engineer_id,status,target_delivery FROM dbo.projects${lock ? " WITH (UPDLOCK,HOLDLOCK)" : ""} WHERE id=@project AND deleted_at IS NULL;`,
+      // team and the lead engineer's department place the project in a team, for a Leader's plan rights (leader-scope.ts).
+      `SELECT id,project_no,name,manager_id,lead_engineer_id,status,target_delivery,team,
+        (SELECT team_lead.department FROM dbo.users team_lead WHERE team_lead.id=lead_engineer_id) lead_department
+      FROM dbo.projects${lock ? " WITH (UPDLOCK,HOLDLOCK)" : ""} WHERE id=@project AND deleted_at IS NULL;`,
     )
   ).recordset[0];
   if (!row) throw new ApiError(404, "project_not_found", "Project not found.");
@@ -306,12 +321,15 @@ export async function readProject(transaction: TransactionType, projectId: numbe
     leadEngineerId: row.lead_engineer_id == null ? null : Number(row.lead_engineer_id),
     status: String(row.status),
     targetDelivery: dateOnly((row.target_delivery ?? null) as Date | string | null),
+    team: row.team == null ? null : String(row.team),
+    leadDepartment: row.lead_department == null ? null : String(row.lead_department),
   };
 }
+/** The project's plan owners: its manager, its lead engineer (unless allowLead is off), a Leader of its team, an Engineering Manager or an Admin. */
 export async function demandPlanOwner(transaction: TransactionType, projectId: number, actor: CurrentUser, allowLead = true): Promise<ProjectRow> {
   const project = await readProject(transaction, projectId, true);
   if (project.status === "Closed") throw new ApiError(409, "project_closed", "A closed project's schedule cannot be changed.");
-  if (project.managerId !== actor.id && !(allowLead && project.leadEngineerId === actor.id) && !hasRole(actor, "Engineering Manager", "Admin"))
+  if (project.managerId !== actor.id && !(allowLead && project.leadEngineerId === actor.id) && !leaderPlansProject(actor, project) && !hasRole(actor, "Engineering Manager", "Admin"))
     throw new ApiError(403, "schedule_plan_owner_required", "Only this project's plan owners can change its plan.");
   return project;
 }
@@ -554,8 +572,9 @@ export const PROGRESS_REPORT_FIELDS_SQL = ["percent_complete", "status", "actual
   .map((field) => `N'${field}'`)
   .join(",");
 
-export function canAnswerDayRequests(project: Pick<ProjectRow, "managerId">, actor: CurrentUser): boolean {
-  return project.managerId === actor.id || hasRole(actor, "Engineering Manager", "Admin");
+/** Who answers day requests, sets baselines and plans as a manager: the project's manager, a Leader of its team, an Engineering Manager or an Admin. */
+export function canAnswerDayRequests(project: Pick<ProjectRow, "managerId" | "team" | "leadDepartment">, actor: CurrentUser): boolean {
+  return project.managerId === actor.id || leaderPlansProject(actor, project) || hasRole(actor, "Engineering Manager", "Admin");
 }
 /** A Resource Plan task linked to a schedule row (dbo.resource_tasks.schedule_task_id is unique). */
 export type ManagedTask = { state: string; acknowledged: boolean; assigneeId: number };

@@ -3905,6 +3905,203 @@ const MENU_FAVORITES: Guide = {
  * Menu screens with no guide, and why (owner rule 2026-11-02: a new feature updates the guides). tests/guides.test.mjs
  * fails when a menu screen has neither a guide nor an entry here, so a new screen cannot ship without one or the other.
  */
+/*
+ * Owner 2026-11-26: the Leader role is set on the web. An Admin gives a person a role in User Accounts & Permissions: an
+ * additional role on top of their primary role (migration 051), which keeps everything the primary role gives, or a new
+ * primary role. The button and field names are the role dialog's own (operations-workspace-copy.ts).
+ */
+const USER_ROLE: Guide = {
+  id: "user-role",
+  area: "tools",
+  title: { th: "ตั้ง Role ให้พนักงาน เช่น Leader", en: "Give a person a role, such as Leader", jp: "社員にロールを設定する（例：Leader）" },
+  summary: {
+    th: "เปิดบัญชีผู้ใช้และสิทธิ์ เลือกคน แล้วเพิ่ม Leader เป็น Role เพิ่มเติม (Role เดิมยังอยู่) หรือเปลี่ยน Role หลัก",
+    en: "Open User Accounts & Permissions, pick the person, and add Leader as an additional role (their role stays) or change their primary role.",
+    jp: "「ユーザーアカウントと権限」で社員を選び、Leaderを追加ロールとして付与（元のロールはそのまま）するか、主ロールを変更します。",
+  },
+  minutes: 2,
+  permissions: ["admin.manage_roles"],
+  views: ["user-accounts"],
+  steps: [
+    menu(
+      "user-accounts",
+      { th: "เปิดเมนูบัญชีผู้ใช้และสิทธิ์", en: "Open User Accounts & Permissions", jp: "「ユーザーアカウントと権限」を開く" },
+      {
+        th: "บัญชีและ Role ของทุกคนอยู่ที่นี่ คลิกที่เมนูที่ไฮไลต์อยู่",
+        en: "Everyone's account and role are here. Click the highlighted menu entry.",
+        jp: "全員のアカウントとロールがあります。強調表示のメニューをクリックします。",
+      },
+    ),
+    {
+      target: "role.edit",
+      action: "click",
+      view: "user-accounts",
+      title: { th: "กด 'แก้ไข Role' ของคนนั้น", en: "Press Edit role on the person's row", jp: "その人の行の「ロールを変更」を押す" },
+      body: { th: "ปุ่มทางซ้ายของแต่ละแถว", en: "The button at the left of each row.", jp: "各行の左にあるボタンです。" },
+      missing: {
+        th: "ปุ่มนี้ขึ้นเฉพาะ Admin ถ้าไม่มีชื่อคนที่ต้องการ ให้เพิ่มเขาที่เมนูพนักงานก่อน",
+        en: "Only an Admin sees this button. If the person is not listed, add them in Employees first.",
+        jp: "このボタンは管理者だけに表示されます。対象者がいない場合は、先に社員メニューで追加します。",
+      },
+    },
+    {
+      target: "role.primary",
+      action: "next",
+      view: "user-accounts",
+      title: { th: "Role หลัก", en: "The primary role", jp: "主ロール" },
+      body: {
+        th: "ถ้าจะให้ Leader เป็น Role หลักแทน Role เดิม เลือกที่ 'Role ใหม่' แล้วกด 'บันทึก Role' ใต้ช่องบอกว่า Role นั้นทำอะไรได้ ถ้าจะเพิ่ม Leader โดยเก็บ Role เดิมไว้ ทำขั้นถัดไป",
+        en: "To make Leader the primary role in place of the old one, choose it in New application role and press Save role; the line under the box says what the role can do. To add Leader and keep the old role, go on to the next step.",
+        jp: "Leaderを元のロールの代わりに主ロールにする場合は「新しいアプリケーションロール」で選び「ロールを保存」を押します。欄の下にロールの説明が出ます。元のロールを残してLeaderを加える場合は次の手順へ進みます。",
+      },
+    },
+    {
+      target: "role.extra",
+      action: "next",
+      view: "user-accounts",
+      title: { th: "เพิ่ม Role อีกหนึ่ง", en: "Add another role", jp: "ロールを追加" },
+      body: {
+        th: "เลือก Leader ตรงนี้ คนนั้นได้สิทธิ์ของ Leader เพิ่มจาก Role เดิม และ Role เดิมยังอยู่ครบ แนะนำวิธีนี้สำหรับหัวหน้าทีม Leader วางแผนโปรเจกต์ของทีม ประเมิน KPI ของ Engineer ในทีม และตรวจรายงานได้",
+        en: "Choose Leader here: the person gains the Leader's permissions on top of their role, which stays as it is. This is the way for a team lead. A Leader plans the team's projects, assesses the KPI of its Engineers and reviews reports.",
+        jp: "ここでLeaderを選びます。元のロールはそのままで、Leaderの権限が加わります。チームリーダーにはこの方法を勧めます。Leaderはチームの案件の計画、チームのEngineerのKPI評価、レポートの確認ができます。",
+      },
+    },
+    {
+      target: "role.reason",
+      action: "next",
+      view: "user-accounts",
+      title: { th: "ใส่เหตุผล", en: "Give a reason", jp: "理由を入力" },
+      body: {
+        th: "Role ที่เพิ่มทุกครั้งต้องมีเหตุผล เช่น 'หัวหน้ากลุ่ม Application 1G' ระบบเก็บไว้ในประวัติ",
+        en: "Every additional role needs a reason, such as 'Application 1G group lead'; it is kept in the history.",
+        jp: "追加ロールには理由が必要です（例：「アプリケーション1Gのグループリーダー」）。履歴に残ります。",
+      },
+    },
+    {
+      target: "role.grant",
+      action: "click",
+      view: "user-accounts",
+      title: { th: "กด 'ให้สิทธิ์ Role'", en: "Press Grant role", jp: "「ロールを付与」を押す" },
+      body: {
+        th: "สิทธิ์ใหม่มีผลเมื่อคนนั้นใช้งานครั้งถัดไป ถ้าแค่ฝึก ให้กด 'ถอด Role' ที่เพิ่งเพิ่ม แล้วกด 'จบบทสอน'",
+        en: "The new permissions apply from the person's next request. Only practising? Press Remove role on the role you added, then Finish.",
+        jp: "新しい権限は次の操作から有効です。練習だけなら、追加したロールの「ロールを解除」を押してから「完了」を押します。",
+      },
+    },
+  ],
+};
+
+/*
+ * Owner 2026-11-26: a Leader assesses the KPI of their team's Engineers, as Engineering and Project Managers assess theirs.
+ * The head opens Team progress, picks the person, rates each area with evidence and sends it to calibration.
+ */
+const KPI_REVIEW: Guide = {
+  id: "kpi-review",
+  area: "tools",
+  title: { th: "ประเมิน KPI ของลูกทีม", en: "Assess a team member's KPI", jp: "チームメンバーのKPIを評価する" },
+  summary: {
+    th: "เปิด KPI และการเติบโต แท็บความคืบหน้าของทีม เลือกคน ให้คะแนนแต่ละด้านพร้อมหลักฐาน แล้วส่งไปปรับเทียบ",
+    en: "Open KPI & Growth, Team progress, pick the person, rate each area with evidence, and send it to calibration.",
+    jp: "「KPI・成長」の「チーム進捗」で社員を選び、各項目を根拠付きで評価して調整へ送信します。",
+  },
+  minutes: 4,
+  permissions: ["performance.read", "performance.manage"],
+  views: ["performance"],
+  steps: [
+    menu(
+      "performance",
+      { th: "เปิดเมนู KPI และการเติบโต", en: "Open KPI & Growth", jp: "「KPI・成長」を開く" },
+      {
+        th: "การประเมินของรอบนี้อยู่ที่นี่ คลิกที่เมนูที่ไฮไลต์อยู่",
+        en: "This cycle's reviews are here. Click the highlighted menu entry.",
+        jp: "今回のサイクルの評価があります。強調表示のメニューをクリックします。",
+      },
+    ),
+    {
+      target: '[data-tab="team"]',
+      action: "click",
+      view: "performance",
+      title: { th: "แท็บความคืบหน้าของทีม", en: "Team progress", jp: "チーム進捗" },
+      body: { th: "รายชื่อคนที่คุณประเมินได้ คลิกแท็บนี้", en: "The people you assess. Click this tab.", jp: "評価できる社員の一覧です。このタブをクリックします。" },
+      missing: {
+        th: "แท็บนี้ขึ้นเมื่อบัญชีมีสิทธิ์ประเมินลูกทีม เช่น Leader ที่ประเมิน Engineer ในทีมเดียวกัน",
+        en: "This tab appears for an account that assesses others, such as a Leader assessing the Engineers of their own team.",
+        jp: "このタブは他の社員を評価できるアカウント（例：同じチームのEngineerを評価するLeader）に表示されます。",
+      },
+    },
+    {
+      target: "kpi.member",
+      action: "click",
+      view: "performance",
+      title: { th: "เลือกคน", en: "Pick the person", jp: "社員を選ぶ" },
+      body: {
+        th: "คลิกชื่อในตาราง ด้านขวาจะแสดงคะแนนและสถานะของคนนั้น",
+        en: "Click a name in the table; the side panel shows their scores and status.",
+        jp: "表の名前をクリックすると、右側に評価点と状態が表示されます。",
+      },
+    },
+    {
+      target: "kpi.open",
+      action: "click",
+      view: "performance",
+      title: { th: "กด 'เปิดแบบประเมิน'", en: "Press Open assessment", jp: "「評価を開く」を押す" },
+      body: {
+        th: "เปิดได้หลังจากลูกทีมส่งแบบประเมินตนเองแล้ว",
+        en: "It opens once the person has sent their self review.",
+        jp: "本人が自己評価を提出した後に開けます。",
+      },
+      missing: {
+        th: "ถ้าปุ่มขึ้นว่า 'รอการประเมินตนเอง' ให้รอลูกทีมส่งก่อน กด 'ถัดไป' เพื่อดูขั้นต่อไป",
+        en: "If the button reads Awaiting self review, wait for the person to send theirs. Press Next to see the rest.",
+        jp: "ボタンが「自己評価待ち」なら本人の提出を待ちます。「次へ」で続きを見られます。",
+      },
+    },
+    {
+      target: "kpi.scores",
+      action: "next",
+      view: "performance",
+      title: { th: "ให้คะแนนแต่ละด้าน", en: "Rate each area", jp: "各項目を評価" },
+      body: {
+        th: "เลือก 1–5 ในแต่ละด้าน คะแนน 1, 2 และ 5 ต้องมีหลักฐาน ระบบเสนอหลักฐานจากงานจริงให้เลือกใช้ คะแนนรวมคำนวณตามน้ำหนักเอง",
+        en: "Choose 1–5 for each area; ratings of 1, 2 and 5 need evidence. The app suggests evidence from real work, and the weighted score updates by itself.",
+        jp: "各項目で1〜5を選びます。1・2・5には根拠が必要です。実際の作業から根拠が提案され、加重スコアは自動で更新されます。",
+      },
+      missing: {
+        th: "ส่วนนี้อยู่ในแบบประเมินที่เปิดจากขั้นก่อน กด 'ถัดไป'",
+        en: "This is in the assessment opened in the step before. Press Next.",
+        jp: "前の手順で開いた評価画面にあります。「次へ」を押します。",
+      },
+    },
+    {
+      target: "kpi.send",
+      action: "click",
+      view: "performance",
+      title: { th: "กด 'ส่งไปปรับเทียบ'", en: "Press Send to calibration", jp: "「調整へ送信」を押す" },
+      body: {
+        th: "ส่งคะแนนเข้าการปรับเทียบ ถ้ายังไม่เสร็จ กด 'บันทึกฉบับร่าง' แทน",
+        en: "This sends the scores to calibration. Not finished? Press Save draft instead.",
+        jp: "評価を調整へ送ります。途中なら代わりに「下書き保存」を押します。",
+      },
+    },
+    {
+      target: "kpi.complete",
+      action: "click",
+      view: "performance",
+      title: { th: "กด 'เสร็จสิ้นการปรับเทียบ'", en: "Press Complete calibration", jp: "「調整を完了」を押す" },
+      body: {
+        th: "เมื่อตกลงคะแนนกันแล้ว กดปุ่มนี้ แล้วกด 'เสร็จสิ้นการประเมิน' คะแนนจะล็อกและลูกทีมเห็นผล ถ้าแค่ฝึก ให้กด 'ยกเลิก' แล้วกด 'จบบทสอน'",
+        en: "Once the scores are agreed, press it, then Complete review: the scores lock and the person sees them. Only practising? Press Cancel, then Finish.",
+        jp: "評価が合意できたらこのボタン、続いて「評価を完了」を押します。評価が確定し本人に表示されます。練習だけなら「キャンセル」を押してから「完了」を押します。",
+      },
+      missing: {
+        th: "ปุ่มนี้ขึ้นเมื่อแบบประเมินอยู่ในขั้นปรับเทียบ",
+        en: "This button appears once the assessment is in calibration.",
+        jp: "このボタンは評価が調整段階になると表示されます。",
+      },
+    },
+  ],
+};
+
 export const NO_GUIDE: Readonly<Record<string, string>> = {
   dashboard: "Read-only overview; each tile opens a screen that has its own guide.",
   "crm-contacts": "Contacts are searched and added from the deal form (crm-deal-create).",
@@ -3912,7 +4109,6 @@ export const NO_GUIDE: Readonly<Record<string, string>> = {
   stamps: "Company stamp authority set up by admins.",
   "design-system": "Developer reference of tokens and shared components; nothing to learn as a workflow.",
   activity: "Read-only team activity for heads.",
-  performance: "KPI reviews are written by heads in a review cycle; add a guide when that flow next changes.",
   "summary-reports": "Read-only report analytics.",
   customers: "Master data kept by admins; staff with CRM use the CRM customer screens.",
   "visit-master": "Reference data for site visits, kept by coordinators.",
@@ -3920,7 +4116,6 @@ export const NO_GUIDE: Readonly<Record<string, string>> = {
   "module-templates": "Estimate templates kept by estimating leads; used from estimate-create.",
   "labor-packages": "Labour packages are saved and applied from the estimate's labour tab (estimate-create).",
   rates: "Labour rate master kept by estimating leads.",
-  "user-accounts": "Admin-only account and role management.",
   audit: "Admin-only audit log.",
   settings: "Admin-only settings.",
   manual: "The full illustrated manual, opened from the ? menu in the top bar; the guide list links to it.",
@@ -5374,6 +5569,8 @@ export const GUIDES: readonly Guide[] = [
       },
     ],
   },
+  USER_ROLE,
+  KPI_REVIEW,
 ];
 
 export const guideText = (copy: GuideCopy, lang: "TH" | "EN" | "JP") => (lang === "TH" ? copy.th : lang === "JP" ? copy.jp : copy.en);

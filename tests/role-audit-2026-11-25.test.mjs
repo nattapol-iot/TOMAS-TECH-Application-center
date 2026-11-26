@@ -310,7 +310,7 @@ test("screens decide on every held role, as the API does", async () => {
   // An inquiry created from a site visit picks its owner like any inquiry owner, a Leader included.
   assert.match(visits, /const engineers = bootstrap\.team\.filter\(\(member\) => hasRole\(member, \.\.\.ESTIMATE_OWNER_ROLES\)\);/);
   assert.match(overhead, /hasRole\(bootstrap\.user, "Admin", "Engineering Manager"\)/);
-  assert.match(kpi, /const roleCanManage = hasRole\(currentUser, "Admin", "Engineering Manager", "Project Manager", "Sales Manager"\);/);
+  assert.match(kpi, /const roleCanManage = hasRole\(currentUser, "Admin", "Engineering Manager", "Project Manager", "Sales Manager", "Leader"\);/);
   // The document screen finds the step waiting for the person by any role they hold, as the Sign Inbox does.
   assert.match(signing, /step\.assigneeUserId === null && step\.assigneeRole !== null && rolesOf\(bootstrap\.user\)\.includes\(step\.assigneeRole\)/);
   assert.doesNotMatch(signing, /step\.assigneeRole === bootstrap\.user\.role/);
@@ -358,4 +358,126 @@ test("no role check names a CEO role", async () => {
   for (const path of ["backend-node/src/executive-dashboard-model.ts", "backend-node/src/project-cost-model.ts", "backend-node/src/routes/executive-dashboard.ts"])
     assert.doesNotMatch(await source(path), /["'`]CEO["'`]|N'CEO'/, path);
   assert.match(await source("backend-node/src/routes/executive-dashboard.ts"), /const executive = hasRole\(actor, "Management", "Admin"\);/);
+});
+
+/*
+ * Owner 2026-11-26: a Leader plans every project of their own team, assesses the KPI of the team's Engineers and reviews
+ * reports; the Application groups are one team in KPI and Team Activity; the Leader role is set on the web.
+ */
+test("a Leader leads their team: plans its projects, assesses its Engineers, reviews its reports (migration 137)", async () => {
+  const [migration, rollback, validation, deploy] = await Promise.all([
+    source("database/migrations/137_leader_team_work.sql"),
+    source("database/rollback/137_leader_team_work.rollback.sql"),
+    source("backend-node/src/migration-validation.ts"),
+    source("database/scripts/020_deploy_fresh_database.sql"),
+  ]);
+  assert.match(migration, /IF NOT EXISTS \(SELECT 1 FROM dbo\.schema_versions WHERE version = 136\)/);
+  assert.match(migration, /WHERE r\.code = N'Leader'\s+AND p\.code IN \(N'schedule\.plan', N'performance\.manage', N'report\.review'\)/);
+  assert.match(migration, /UPDATE dbo\.roles\s+SET description = N'Leads a team''s work:/);
+  assert.match(migration, /VALUES \(137, N'Leader team work'\)/);
+  assert.match(validation, /\{ version: 137, fileName: "137_leader_team_work\.sql", name: "Leader team work" \}/);
+  assert.match(deploy, /:r database\/migrations\/136_sales_manager_crm\.sql\n:r database\/migrations\/137_leader_team_work\.sql/);
+  assert.match(rollback, /p\.code IN \(N'schedule\.plan', N'performance\.manage', N'report\.review'\)/);
+
+  // The team rule, the same as the Projects screen's (lib/project-portfolio.ts).
+  const scope = await import("../backend-node/src/leader-scope.ts");
+  const { projectTeamOf } = await import("../lib/project-portfolio.ts");
+  for (const text of [
+    "Application Engineer Dept.",
+    "Application Engineer Dept. 2G",
+    "application 1G",
+    "IoT Engineer Dept.",
+    "IoT Team",
+    "Electrical Engineer Dept.",
+    "Mechanical Engineer Dept.",
+    "Patriot",
+    "System Architect & System Engineer Dept.",
+    "",
+    null,
+  ])
+    assert.equal(scope.projectTeamOf(text), projectTeamOf(text), String(text));
+  const leader = { role: "Engineer", roles: ["Engineer", "Leader"], department: "Application Engineer Dept. 1G" };
+  assert.equal(scope.leaderTeamOf(leader), "Application Team");
+  assert.equal(scope.leaderTeamOf({ role: "Engineer", roles: ["Engineer"], department: "Application Engineer Dept." }), "", "not a Leader");
+  assert.equal(scope.leaderPlansProject(leader, { team: "Application Team" }), true);
+  assert.equal(scope.leaderPlansProject(leader, { team: null, leadDepartment: "Application Engineer Dept. 2G" }), true, "1G and 2G are one team; no team falls back to the lead's department");
+  assert.equal(scope.leaderPlansProject(leader, { team: "IoT Team", leadDepartment: "Application Engineer Dept." }), false, "the project's own team wins");
+  assert.equal(scope.leaderPlansProject({ ...leader, department: "" }, { team: "" }), false);
+  assert.match(scope.projectTeamSql("p"), /COALESCE\(NULLIF\(LTRIM\(RTRIM\(p\.team\)\),N''\),\(SELECT team_lead\.department FROM dbo\.users team_lead WHERE team_lead\.id=p\.lead_engineer_id\),N''\)/);
+  assert.ok(scope.leaderTeamProjectSql("p").startsWith("(@leader_team<>N'' AND "));
+
+  // Plans: the plan owners, and who answers day requests and sets baselines, include a Leader of the project's team.
+  const service = await source("backend-node/src/schedule-service.ts");
+  assert.match(service, /!leaderPlansProject\(actor, project\) && !hasRole\(actor, "Engineering Manager", "Admin"\)/);
+  assert.match(service, /return project\.managerId === actor\.id \|\| leaderPlansProject\(actor, project\) \|\| hasRole\(actor, "Engineering Manager", "Admin"\);/);
+  assert.match(service, /\(SELECT team_lead\.department FROM dbo\.users team_lead WHERE team_lead\.id=lead_engineer_id\) lead_department/);
+  // Sees the team's projects (project pages, the list, the inquiry's link, day requests, Team planner work, reports)...
+  for (const [path, count] of [
+    ["backend-node/src/project-scope.ts", 1],
+    ["backend-node/src/routes/projects.ts", 3],
+    ["backend-node/src/routes/schedule.ts", 1],
+    ["backend-node/src/resource-task-service.ts", 2],
+    ["backend-node/src/unified-report-service.ts", 1],
+  ])
+    assert.equal((await source(path)).match(/leaderTeamProjectSql\("p"\)/g)?.length, count, path);
+  const projectScope = await source("backend-node/src/project-scope.ts");
+  assert.match(projectScope, /request\.input\("leader_team", sql\.NVarChar\(40\), myWork \? "" : leaderTeamOf\(user\)\);/);
+  assert.equal((await source("backend-node/src/routes/projects.ts")).match(/sqlRequest\.input\("leader_team", sql\.NVarChar\(40\), leaderTeamOf\(actor\)\);/g)?.length, 5);
+  // ...but is not project-elevated: other teams' projects, PRs and site credentials stay closed to a Leader.
+  assert.match(projectScope, /const ELEVATED_ROLES = new Set\(\["Admin", "Engineering Manager", "Project Manager", "Purchasing", "Warehouse", "Inventory Controller"\]\);/);
+
+  // KPI: a Leader assesses the Engineers of their own team only.
+  const { canManagePerformanceTarget } = await import("../backend-node/src/performance-framework.ts");
+  assert.equal(canManagePerformanceTarget("Leader", "Engineer", "Application Engineer Dept.", "Application Engineer Dept."), true);
+  assert.equal(canManagePerformanceTarget("Leader", "Leader", "Application Engineer Dept.", "Application Engineer Dept."), false);
+  assert.equal(canManagePerformanceTarget("Leader", "Project Manager", "IoT Engineer Dept.", "IoT Engineer Dept."), false);
+  assert.equal(canManagePerformanceTarget("Leader", "Engineer", "IoT Engineer Dept.", "Application Engineer Dept."), false);
+  // A peer whose Leader role is an additional one on top of Engineer is not a team member to assess.
+  assert.equal(canManagePerformanceTarget("Leader", "Engineer", "Application Engineer Dept.", "Application Engineer Dept.", true), false);
+  const performance = await source("backend-node/src/routes/performance.ts");
+  assert.match(performance, /const MANAGER_ROLES = new Set\(\["Admin", "Engineering Manager", "Project Manager", "Sales Manager", "Leader"\]\);/);
+  assert.equal(performance.match(/er\.code =N'Leader'\) AND role\.code=N'Engineer' AND NOT \$\{leadsOthersSql\("app_user"\)\}/g)?.length, 2);
+  assert.equal(performance.match(/canManagePerformanceTarget\(role, target\.target_role, target\.actor_team, target\.target_team, Boolean\(target\.target_leads\)\)/g)?.length, 3);
+  assert.match(await source("app/system/production/PerformanceScreen.tsx"), /hasRole\(currentUser, "Admin", "Engineering Manager", "Project Manager", "Sales Manager", "Leader"\)/);
+
+  // Reports: reviewer candidates are checked as themselves, every role and their department (a Leader of the team).
+  assert.match(await source("backend-node/src/routes/unified-reports.ts"), /roles: row\.roles \? row\.roles\.split\("\|"\) : \[row\.role\], department: row\.department \?\? ""/);
+});
+
+test("the Application groups are one team in KPI and Team Activity, and a Leader heads their team there", async () => {
+  const { teamOfSql, APPLICATION_TEAM } = await import("../backend-node/src/team-scope.ts");
+  assert.equal(APPLICATION_TEAM, "Application Engineer Dept.");
+  assert.match(teamOfSql("u.department"), /CASE WHEN u\.department LIKE N'%application%' THEN N'Application Engineer Dept\.' ELSE u\.department END/);
+  const service = await source("backend-node/src/activity-service.ts");
+  assert.match(service, /hasRole\(actor, "Engineering Manager", "Sales Manager", "Management", "Leader"\)/);
+  assert.match(service, /\$\{teamOfSql\("u\.department"\)\}=\$\{teamOfSql\("@department"\)\}/);
+  assert.match(
+    service,
+    /export const fullMember = \(scope: ActivityScope, user: \{ id: number; department: string \}\) => scope\.all \|\| scope\.actorId === user\.id \|\| inTeam\(scope, user\.department\);/,
+  );
+  const routes = await source("backend-node/src/routes/activity.ts");
+  assert.doesNotMatch(routes, /scope\.department === row\.department|member\.department === scope\.department|u\.department=@department/);
+  assert.match(routes, /const leads = !head && hasRole\(actor, "Leader"\) && \(await leaderMayReview\(id\)\);/);
+  assert.match(routes, /return row\?\.code === "Engineer" && !row\.leads;/);
+  assert.match(routes, /canReview: hasRole\(actor, "Admin", "Engineering Manager", "Sales Manager", "Leader"\)/);
+});
+
+test("an Admin sets the Leader role on the web, with How-to guides for that and for a head's KPI review", async () => {
+  const { GUIDES, NO_GUIDE } = await import("../app/system/production/guide-catalog.ts");
+  const role = GUIDES.find((guide) => guide.id === "user-role");
+  assert.ok(role);
+  assert.deepEqual(role.permissions, ["admin.manage_roles"]);
+  assert.deepEqual(
+    role.steps.map((step) => step.target),
+    ["nav.user-accounts", "role.edit", "role.primary", "role.extra", "role.reason", "role.grant"],
+  );
+  assert.ok(!("user-accounts" in NO_GUIDE));
+  assert.ok(GUIDES.some((guide) => guide.id === "kpi-review"));
+  assert.ok(!("performance" in NO_GUIDE));
+  assert.ok(guidesFor(["performance.read", "performance.manage"]).some((guide) => guide.id === "kpi-review"));
+  // The dialog lists every active role from the database, Leader included (GET /api/v1/admin/roles).
+  assert.match(await source("backend-node/src/routes/admin.ts"), /SELECT id,code,name,description\s+FROM dbo\.roles\s+WHERE is_active=1/);
+  const core = await source("app/system/production/CoreScreens.tsx");
+  for (const mark of ['data-guide="role.edit"', 'guide="role.primary"', 'guide="role.extra"', 'guide="role.reason"', 'data-guide="role.grant"', 'data-guide="role.save"'])
+    assert.ok(core.includes(mark), mark);
 });

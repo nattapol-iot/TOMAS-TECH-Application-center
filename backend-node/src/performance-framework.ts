@@ -13,6 +13,13 @@ export function frameworkForRole(role: string): { code: PerformanceFrameworkCode
   return isSalesRole(role) ? { code: "SALES", areaCodes: SALES_AREA_CODES } : { code: "ENGINEERING", areaCodes: ENGINEERING_AREA_CODES };
 }
 
+/** Roles that lead others: a Leader assesses only team members who hold none of them. */
+export const LEAD_ROLES = ["Leader", "Project Manager", "Engineering Manager", "Sales Manager", "Management", "Admin"] as const;
+
+/** SQL that is true when the user row aliased `user` holds a role that leads others, primary or additional. */
+export const leadsOthersSql = (user: string): string =>
+  `EXISTS(SELECT 1 FROM dbo.user_effective_roles lead_role WHERE lead_role.user_id=${user}.id AND lead_role.code IN(${LEAD_ROLES.map((role) => `N'${role}'`).join(",")}))`;
+
 /**
  * The role a person is reviewed under, as SQL that binds `role.code` for the user row named `user` (2026-11-25): their
  * primary role when it has a KPI framework; otherwise the first additional role that has one, in name order (an additional
@@ -29,8 +36,12 @@ export function kpiRoleSql(user: string): string {
 // Engineering Managers and Project Managers review their own team only (see team-scope.ts), so
 // the IoT, Application and Mechanical teams cannot read or score each other's people. Admin
 // reviews everyone.
-export function canManagePerformanceTarget(actorRole: string, targetRole: string, actorTeam: string, targetTeam: string): boolean {
+// targetLeads: the target holds a role that leads others (LEAD_ROLES), primary or additional.
+export function canManagePerformanceTarget(actorRole: string, targetRole: string, actorTeam: string, targetTeam: string, targetLeads = false): boolean {
   if (actorRole === "Admin") return true;
   if (actorRole === "Sales Manager") return isSalesRole(targetRole);
+  // A Leader assesses the Engineers of their own team (owner 2026-11-26), not other Leaders or managers - also when a
+  // peer's Leader role is an additional one on top of Engineer.
+  if (actorRole === "Leader") return targetRole === "Engineer" && !targetLeads && sameTeam(actorTeam, targetTeam);
   return ["Engineering Manager", "Project Manager"].includes(actorRole) && !isSalesRole(targetRole) && sameTeam(actorTeam, targetTeam);
 }

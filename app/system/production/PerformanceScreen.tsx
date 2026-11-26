@@ -246,7 +246,7 @@ export default function Performance({ currentUser, notify, openProjectSchedule, 
   const hasOwnAssessment = members.some((member) => String(member.id) === String(currentUser.id));
   const [reviews, setReviews] = useState<ReviewRecord[]>([]);
   // The API decides who manages (canManage); the held roles only pick the landing tab.
-  const roleCanManage = hasRole(currentUser, "Admin", "Engineering Manager", "Project Manager", "Sales Manager");
+  const roleCanManage = hasRole(currentUser, "Admin", "Engineering Manager", "Project Manager", "Sales Manager", "Leader");
   const [managerView, setManagerView] = useState(roleCanManage);
   const [tab, setTab] = useState<"mine" | "team" | "framework">(roleCanManage ? "team" : "mine");
   const [cycle, setCycle] = useState("");
@@ -556,7 +556,7 @@ export default function Performance({ currentUser, notify, openProjectSchedule, 
                       return (
                         <tr key={member.id} className={active ? "selected" : undefined}>
                           <td>
-                            <button className="performance-person" type="button" onClick={() => setSelectedId(memberKey(member))}>
+                            <button className="performance-person" type="button" data-guide="kpi.member" onClick={() => setSelectedId(memberKey(member))}>
                               <span className="avatar md">{initialsFor(member.name)}</span>
                               <span>
                                 <strong>{member.name}</strong>
@@ -640,7 +640,7 @@ export default function Performance({ currentUser, notify, openProjectSchedule, 
                   ))}
                 </div>
                 {selectedReview.status === "Calibration" && selectedCycle?.status !== "CLOSED" && memberKey(selected) !== memberKey(currentMember) ? (
-                  <button className="btn success block" type="button" onClick={() => setCompletingId(memberKey(selected))}>
+                  <button className="btn success block" type="button" data-guide="kpi.complete" onClick={() => setCompletingId(memberKey(selected))}>
                     <Icon name="checkCircle" />
                     <LocalizedText text={"Complete calibration"} />
                   </button>
@@ -648,6 +648,7 @@ export default function Performance({ currentUser, notify, openProjectSchedule, 
                   <button
                     className="btn primary block"
                     type="button"
+                    data-guide="kpi.open"
                     disabled={
                       selectedCycle?.status === "CLOSED" ||
                       memberKey(selected) === memberKey(currentMember) ||
@@ -1231,6 +1232,7 @@ function AssessmentModal({
           <button
             className="btn primary"
             type="button"
+            data-guide="kpi.send"
             disabled={busy}
             onClick={() => {
               void save(true);
@@ -1254,7 +1256,7 @@ function AssessmentModal({
           </p>
         </div>
       </div>
-      <div className="performance-score-editor" ref={editor}>
+      <div className="performance-score-editor" ref={editor} data-guide="kpi.scores">
         {areas.map((area, index) => {
           const suggestion = workEvidence?.areas.find((entry) => entry.areaCode === area.code);
           return (

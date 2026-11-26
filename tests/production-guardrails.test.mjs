@@ -1326,14 +1326,14 @@ test("preparers can discard their own never-submitted report draft, and duplicat
   // 'discard' is a distinct action from the approver-only 'void': the preparer can
   // use it on their own DRAFT only, with no note requirement, since nobody else has
   // ever seen an unsubmitted draft.
-  assert.match(routes, /'submit','review','approve','return','revise','void','discard','customer-link','revoke-customer-link'/);
-  assert.match(routes, /action==='discard'[\s\S]{0,600}r\.state!=='DRAFT'\|\|Number\(r\.prepared_by\)!==actor\.id/);
+  assert.match(routes, /"submit", "review", "approve", "return", "revise", "void", "discard", "customer-link", "revoke-customer-link"/);
+  assert.match(routes, /action === "discard"[\s\S]{0,600}r\.state !== "DRAFT" \|\| Number\(r\.prepared_by\) !== actor\.id/);
   assert.match(service, /allowedActions\.push\("edit", "discard"\)/);
 
   // Creating a report inserts a real DRAFT row immediately (before any body content is
   // entered) -- this endpoint lets the "new report" wizard warn about an existing one
   // of the same preparer/type/source instead of silently letting drafts pile up.
-  assert.match(routes, /app\.get\('\/api\/v1\/reports\/workspace\/existing-draft'/);
+  assert.match(routes, /app\.get\("\/api\/v1\/reports\/workspace\/existing-draft"/);
   assert.match(routes, /r\.state='DRAFT' AND r\.prepared_by=@actor/);
 
   assert.match(screens, /\$\{BASE\}\/existing-draft\?/);

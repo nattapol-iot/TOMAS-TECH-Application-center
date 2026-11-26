@@ -36,6 +36,7 @@ import { scheduleLeaves } from "../project-health.js";
 import { disciplineHours, headingProgress } from "../project-page-overview.js";
 import { hoursCurve, purchaseCurve } from "../project-cost-curve.js";
 import { hasRole, rolesOf } from "../user-roles.js";
+import { leaderTeamOf, leaderTeamProjectSql } from "../leader-scope.js";
 import type { CurrentUser } from "../types.js";
 import type { CurrentUserService } from "../users.js";
 import type { EmailService } from "../email.js";
@@ -218,13 +219,16 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
         e.deleted_at estimateDeletedAt,e.archived_at estimateArchivedAt,
         CASE WHEN p.id IS NULL THEN 0 ELSE 1 END hasProject,
         CASE WHEN EXISTS(SELECT 1 FROM dbo.user_effective_permissions WHERE user_id=@actor AND code=N'project.read') AND p.deleted_at IS NULL AND (@elevated=1 OR p.manager_id=@actor OR p.lead_engineer_id=@actor
-          OR EXISTS(SELECT 1 FROM dbo.project_members m WHERE m.project_id=p.id AND m.user_id=@actor)) THEN p.id END projectId,
+          OR EXISTS(SELECT 1 FROM dbo.project_members m WHERE m.project_id=p.id AND m.user_id=@actor) OR ${leaderTeamProjectSql("p")}) THEN p.id END projectId,
         CASE WHEN EXISTS(SELECT 1 FROM dbo.user_effective_permissions WHERE user_id=@actor AND code=N'project.read') AND p.deleted_at IS NULL AND (@elevated=1 OR p.manager_id=@actor OR p.lead_engineer_id=@actor
-          OR EXISTS(SELECT 1 FROM dbo.project_members m WHERE m.project_id=p.id AND m.user_id=@actor)) THEN p.project_no END projectNo
+          OR EXISTS(SELECT 1 FROM dbo.project_members m WHERE m.project_id=p.id AND m.user_id=@actor) OR ${leaderTeamProjectSql("p")}) THEN p.project_no END projectNo
       FROM dbo.inquiries i LEFT JOIN dbo.estimates e ON e.inquiry_id=i.id
       OUTER APPLY(SELECT TOP(1) * FROM dbo.projects WHERE inquiry_id=i.id ORDER BY id DESC) p
       WHERE i.id=@id AND i.deleted_at IS NULL`,
-      (q) => q.input("id", sql.BigInt, id).input("actor", sql.BigInt, actor.id).input("elevated", sql.Bit, isProjectElevated(actor)),
+      (q) => {
+        q.input("id", sql.BigInt, id).input("actor", sql.BigInt, actor.id).input("elevated", sql.Bit, isProjectElevated(actor));
+        q.input("leader_team", sql.NVarChar(40), leaderTeamOf(actor));
+      },
     );
     const row = result.recordset[0];
     if (!row) throw new ApiError(404, "inquiry_not_found", "Inquiry not found.");
@@ -286,6 +290,7 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
         sqlRequest.input("search", sql.NVarChar(200), search);
         sqlRequest.input("actor", sql.BigInt, actor.id);
         sqlRequest.input("elevated", sql.Bit, seesAllProjects(actor));
+        sqlRequest.input("leader_team", sql.NVarChar(40), leaderTeamOf(actor));
         sqlRequest.input("offset", sql.Int, (page - 1) * pageSize);
         sqlRequest.input("page_size", sql.Int, pageSize);
       },
@@ -314,7 +319,8 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
       LEFT JOIN dbo.customers eu ON eu.id=p.end_user_customer_id
       INNER JOIN dbo.users le ON le.id=p.lead_engineer_id
       WHERE p.deleted_at IS NULL AND (@elevated=1 OR p.manager_id=@actor OR p.lead_engineer_id=@actor
-        OR EXISTS(SELECT 1 FROM dbo.project_members m WHERE m.project_id=p.id AND m.user_id=@actor))`;
+        OR EXISTS(SELECT 1 FROM dbo.project_members m WHERE m.project_id=p.id AND m.user_id=@actor)
+        OR ${leaderTeamProjectSql("p")})`;
   function projectInput(row: ProjectRow) {
     return { id: Number(row.id), status: String(row.status), targetDelivery: dateOnly(row.target_delivery) };
   }
@@ -366,6 +372,7 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
       (sqlRequest) => {
         sqlRequest.input("actor", sql.BigInt, actor.id);
         sqlRequest.input("elevated", sql.Bit, seesAllProjects(actor));
+        sqlRequest.input("leader_team", sql.NVarChar(40), leaderTeamOf(actor));
       },
     );
     const rows = result.recordset;
@@ -400,6 +407,7 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
       (sqlRequest) => {
         sqlRequest.input("actor", sql.BigInt, actor.id);
         sqlRequest.input("elevated", sql.Bit, elevated);
+        sqlRequest.input("leader_team", sql.NVarChar(40), leaderTeamOf(actor));
         sqlRequest.input("include_closed", sql.Bit, includeClosed);
       },
     );
@@ -510,6 +518,7 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
         (sqlRequest) => {
           sqlRequest.input("actor", sql.BigInt, actor.id);
           sqlRequest.input("elevated", sql.Bit, seesAllProjects(actor));
+          sqlRequest.input("leader_team", sql.NVarChar(40), leaderTeamOf(actor));
           sqlRequest.input("include_closed", sql.Bit, includeClosed);
         },
       )
@@ -646,6 +655,7 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
         sqlRequest.input("project", sql.BigInt, id);
         sqlRequest.input("actor", sql.BigInt, actor.id);
         sqlRequest.input("elevated", sql.Bit, seesAllProjects(actor));
+        sqlRequest.input("leader_team", sql.NVarChar(40), leaderTeamOf(actor));
       })
     ).recordset[0];
     if (!row) throw new ApiError(404, "project_not_found", "Project not found.");

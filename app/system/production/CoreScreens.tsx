@@ -5550,7 +5550,7 @@ function TeamReferenceTab({ bootstrap, canManageRoles, notify, refreshBootstrap 
                   <tr key={member.id}>
                     {canManageRoles ? (
                       <td className="master-row-action">
-                        <button className="pg-act" type="button" title={t("Edit role")} aria-label={`${t("Edit role")} ${member.name}`} onClick={() => setEditing(member)}>
+                        <button className="pg-act" type="button" title={t("Edit role")} aria-label={`${t("Edit role")} ${member.name}`} data-guide="role.edit" onClick={() => setEditing(member)}>
                           <Icon name="edit" />
                         </button>
                       </td>
@@ -5727,6 +5727,7 @@ function UserRoleModal({
           <button
             className="btn primary"
             type="button"
+            data-guide="role.save"
             disabled={loading || busy || saved || roleCode === member.role || !selectedRole}
             onClick={() => {
               void submit();
@@ -5745,7 +5746,7 @@ function UserRoleModal({
         </div>
         <Badge tone={member.role === "Admin" ? "violet" : "blue"}>{member.role}</Badge>
       </div>
-      <Field label={t("New application role")}>
+      <Field label={t("New application role")} guide="role.primary">
         <PgSelect disabled={loading || busy || saved} value={roleCode} onChange={(event) => setRoleCode(event.target.value)}>
           {loading ? (
             <option value={member.role}>{t("Loading roles…")}</option>
@@ -5787,7 +5788,7 @@ function UserRoleModal({
           <p className="muted">{t("This account holds its primary role only.")}</p>
         )}
         <div className="form-grid two" ref={grantFields}>
-          <Field label={t("Add another role")}>
+          <Field label={t("Add another role")} guide="role.extra">
             <PgSelect name="extraRole" disabled={loading || busy || saved || extraBusy !== ""} value={extraCode} onChange={(event) => setExtraCode(event.target.value)}>
               <option value="">{t("Select a role")}</option>
               {grantable.map((role) => (
@@ -5798,13 +5799,14 @@ function UserRoleModal({
               ))}
             </PgSelect>
           </Field>
-          <Field label={t("Reason")}>
+          <Field label={t("Reason")} guide="role.reason">
             <input name="extraReason" maxLength={1000} value={extraReason} disabled={loading || busy || saved || extraBusy !== ""} onChange={(event) => setExtraReason(event.target.value)} />
           </Field>
         </div>
         <button
           className="btn default"
           type="button"
+          data-guide="role.grant"
           disabled={loading || busy || saved || extraBusy !== ""}
           onClick={() => {
             void grantExtra();

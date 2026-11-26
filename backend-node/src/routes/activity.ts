@@ -4,6 +4,8 @@ import type { Database } from "../db.js";
 import type { CurrentUserService } from "../users.js";
 import { ApiError } from "../errors.js";
 import { hasRole } from "../user-roles.js";
+import { kpiRoleSql, leadsOthersSql } from "../performance-framework.js";
+import { teamOfSql } from "../team-scope.js";
 import { bodyObject, dateOnly, parseDateOnly, positiveLong, requiredInteger, requiredText, parseRowVersion } from "../http.js";
 import { insertAudit } from "../audit.js";
 import { activityDay, disciplineScore } from "../activity-rules.js";
@@ -11,6 +13,7 @@ import {
   activityScope,
   activityRoster,
   fullMember,
+  inTeam,
   visibleProject,
   memberEvidence,
   activityCycleScore,
@@ -119,10 +122,21 @@ export function registerActivityRoutes(app: FastifyInstance, db: Database, users
     return user;
   };
   const canManage = (scope: ActivityScope) => scope.all || Boolean(scope.department) || scope.projects.length > 0;
+  /** A Leader reviews a person as for their KPI (performance-framework.ts): an Engineer who leads no one. */
+  const leaderMayReview = async (id: number) => {
+    const row = (
+      await db.query<{ code: string; leads: boolean }>(
+        `SELECT role.code,CAST(CASE WHEN ${leadsOthersSql("app_user")} THEN 1 ELSE 0 END AS bit) leads FROM dbo.users app_user ${kpiRoleSql("app_user")} WHERE app_user.id=@id`,
+        (q) => q.input("id", sql.BigInt, id),
+      )
+    ).recordset[0];
+    return row?.code === "Engineer" && !row.leads;
+  };
   const reviewTarget = async (actor: CurrentUser, scope: ActivityScope, id: number) => {
     const user = await targetFor(scope, id);
-    if (actor.id === id || !fullMember(scope, user) || !hasRole(actor, "Admin", "Engineering Manager", "Sales Manager"))
-      throw new ApiError(403, "activity_review_scope", "A different department review manager must review this employee.");
+    const head = hasRole(actor, "Admin", "Engineering Manager", "Sales Manager");
+    const leads = !head && hasRole(actor, "Leader") && (await leaderMayReview(id));
+    if (actor.id === id || !fullMember(scope, user) || !(head || leads)) throw new ApiError(403, "activity_review_scope", "A different department review manager must review this employee.");
     return user;
   };
   const sources = async (userId: number, scope: ActivityScope) => {
@@ -180,7 +194,7 @@ export function registerActivityRoutes(app: FastifyInstance, db: Database, users
       scope = await activityScope(db, actor),
       members = await activityRoster(db, scope);
     const data = await db.query<Row>(
-      `SELECT id,project_no,name,manager_id,lead_engineer_id FROM dbo.projects WHERE deleted_at IS NULL AND (@all=1 OR manager_id=@actor OR lead_engineer_id=@actor OR (@department IS NOT NULL AND EXISTS(SELECT 1 FROM dbo.users u WHERE u.id=manager_id AND u.department=@department)));
+      `SELECT id,project_no,name,manager_id,lead_engineer_id FROM dbo.projects WHERE deleted_at IS NULL AND (@all=1 OR manager_id=@actor OR lead_engineer_id=@actor OR (@department IS NOT NULL AND EXISTS(SELECT 1 FROM dbo.users u WHERE u.id=manager_id AND ${teamOfSql("u.department")}=${teamOfSql("@department")})));
   SELECT c.id,c.code,c.name,c.period_start,c.period_end,c.status,COALESCE(p.mode,N'TRIAL') mode,CASE WHEN p.cycle_id IS NULL THEN 0 ELSE 1 END configured FROM dbo.kpi_review_cycles c LEFT JOIN dbo.activity_cycle_policies p ON p.cycle_id=c.id ORDER BY c.period_end DESC;
   SELECT started_at FROM dbo.activity_settings;`,
       (q) => q.input("all", sql.Bit, scope.all).input("actor", sql.BigInt, actor.id).input("department", sql.NVarChar(100), scope.department),
@@ -190,7 +204,7 @@ export function registerActivityRoutes(app: FastifyInstance, db: Database, users
       members,
       canManage: canManage(scope),
       canConfigure: scope.all,
-      canReview: hasRole(actor, "Admin", "Engineering Manager", "Sales Manager"),
+      canReview: hasRole(actor, "Admin", "Engineering Manager", "Sales Manager", "Leader"),
       selfId: actor.id,
       startedAt: iso(sets[2]![0]!.started_at),
       projects: sets[0]!.map((r) => ({ id: Number(r.id), name: `${r.project_no} · ${r.name}` })),
@@ -278,7 +292,7 @@ export function registerActivityRoutes(app: FastifyInstance, db: Database, users
     if (!source) throw missing();
     // Self access alone does not grant permission to configure a whole reporting policy.
     const member = await targetFor(scope, userId);
-    if (!scope.all && !(scope.department && member.department === scope.department) && !visibleProject(scope, source.projectId)) throw missing();
+    if (!scope.all && !inTeam(scope, member.department) && !visibleProject(scope, source.projectId)) throw missing();
     const start = textDate(b.startsOn, "Start"),
       end = textDate(b.endsOn, "End"),
       mask = requiredInteger(b.weekdayMask, "Weekdays", 1, 127),
@@ -325,7 +339,7 @@ export function registerActivityRoutes(app: FastifyInstance, db: Database, users
         )
       ).recordset[0];
       if (!row) throw missing();
-      if (!scope.all && !(scope.department && scope.department === row.department) && !visibleProject(scope, row.project_id == null ? null : Number(row.project_id))) throw missing();
+      if (!scope.all && !inTeam(scope, String(row.department)) && !visibleProject(scope, row.project_id == null ? null : Number(row.project_id))) throw missing();
       const changed = await queryActivity(db, tx, "UPDATE dbo.activity_rules SET stopped_on=@stop WHERE id=@id AND row_version=@version AND stopped_on IS NULL AND starts_on<=@stop", (q) =>
         q.input("id", sql.BigInt, id).input("stop", sql.Date, stop).input("version", sql.VarBinary(8), version),
       );

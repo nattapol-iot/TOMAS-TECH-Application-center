@@ -7,6 +7,7 @@ import { ApiError, dayRequestAnswerError } from "../errors.js";
 import { hasRole } from "../user-roles.js";
 import { bodyObject, dateOnly, optionalBodyText, parseRowVersion, positiveLong, requiredInteger, requiredText } from "../http.js";
 import { demandProjectScope, isMyWorkElevated, isProjectElevated, isProjectManagerRole } from "../project-scope.js";
+import { leaderTeamOf, leaderTeamProjectSql } from "../leader-scope.js";
 import { manHourBudget, MAXIMUM_BUDGET_MAN_DAYS, parseBudgetManDays, readStoredBudget } from "../manhour-budget.js";
 import { networkDays } from "../schedule-calculator.js";
 import { fitPeople, peopleChange, peopleEdits, peopleJson, peopleManDays } from "../plan-people.js";
@@ -1258,7 +1259,8 @@ export function registerScheduleRoutes(app: FastifyInstance, database: Database,
       read
         .input("actor", sql.BigInt, actor.id)
         .input("answer_all", sql.Bit, hasRole(actor, "Engineering Manager", "Admin"))
-        .input("elevated", sql.Bit, isProjectElevated(actor));
+        .input("elevated", sql.Bit, isProjectElevated(actor))
+        .input("leader_team", sql.NVarChar(40), leaderTeamOf(actor));
       const rows = (
         await read.query<
           Record<string, unknown>
@@ -1268,7 +1270,7 @@ export function registerScheduleRoutes(app: FastifyInstance, database: Database,
         INNER JOIN dbo.schedule_tasks t ON t.id=s.task_id AND t.deleted_at IS NULL
         INNER JOIN dbo.users u ON u.id=s.actor_id
         WHERE s.field=N'request' AND s.request_days>0 AND s.answer IS NULL
-          AND (p.manager_id=@actor OR (@answer_all=1 AND (@elevated=1 OR p.lead_engineer_id=@actor
+          AND (p.manager_id=@actor OR ${leaderTeamProjectSql("p")} OR (@answer_all=1 AND (@elevated=1 OR p.lead_engineer_id=@actor
             OR EXISTS(SELECT 1 FROM dbo.project_members m WHERE m.project_id=p.id AND m.user_id=@actor))))
         ORDER BY s.occurred_at DESC,s.id DESC;`)
       ).recordset;

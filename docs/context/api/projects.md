@@ -2,36 +2,36 @@
 
 [Module](../modules/projects.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `1af0bcb9`; generated, do not edit. [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `64bf1ed9`; generated, do not edit. [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/projects/creation-options` | 155–208 |
-| GET | `/api/v1/projects/handover/:inquiryId` | 210–241 |
-| GET | `/api/v1/projects/contact-options` | 243–263 |
-| GET | `/api/v1/projects` | 265–300 |
-| GET | `/api/v1/projects/attention` | 356–382 |
-| GET | `/api/v1/projects/overview` | 386–469 |
-| GET | `/api/v1/projects/cost-overview` | 498–540 |
-| PUT | `/api/v1/projects/:id/ceo-note` | 544–574 |
-| GET | `/api/v1/projects/:id/page-overview` | 587–635 |
-| GET | `/api/v1/projects/:id/cost` | 637–781 |
-| POST | `/api/v1/projects` | 783–1027 |
-| GET | `/api/v1/projects/:id/members` | 1029–1069 |
-| POST | `/api/v1/projects/:id/members` | 1071–1096 |
-| DELETE | `/api/v1/projects/:id/members/:userId` | 1098–1121 |
-| GET | `/api/v1/projects/:id/deletion` | 1143–1151 |
-| DELETE | `/api/v1/projects/:id` | 1153–1190 |
-| PUT | `/api/v1/projects/:id` | 1192–1366 |
+| GET | `/api/v1/projects/creation-options` | 156–209 |
+| GET | `/api/v1/projects/handover/:inquiryId` | 211–245 |
+| GET | `/api/v1/projects/contact-options` | 247–267 |
+| GET | `/api/v1/projects` | 269–305 |
+| GET | `/api/v1/projects/attention` | 362–389 |
+| GET | `/api/v1/projects/overview` | 393–477 |
+| GET | `/api/v1/projects/cost-overview` | 506–549 |
+| PUT | `/api/v1/projects/:id/ceo-note` | 553–583 |
+| GET | `/api/v1/projects/:id/page-overview` | 596–644 |
+| GET | `/api/v1/projects/:id/cost` | 646–791 |
+| POST | `/api/v1/projects` | 793–1037 |
+| GET | `/api/v1/projects/:id/members` | 1039–1079 |
+| POST | `/api/v1/projects/:id/members` | 1081–1106 |
+| DELETE | `/api/v1/projects/:id/members/:userId` | 1108–1131 |
+| GET | `/api/v1/projects/:id/deletion` | 1153–1161 |
+| DELETE | `/api/v1/projects/:id` | 1163–1200 |
+| PUT | `/api/v1/projects/:id` | 1202–1376 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `shiftDate` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 90–95 |
-| `registerProjectRoutes` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 153–1367 |
+| `shiftDate` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 91–96 |
+| `registerProjectRoutes` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 154–1377 |
 
 ## Direct local dependencies
 
@@ -60,6 +60,7 @@ Evidence: source snapshot `1af0bcb9`; generated, do not edit. [backend-node/src/
 - [backend-node/src/project-page-overview.ts](<../../../backend-node/src/project-page-overview.ts>)
 - [backend-node/src/project-cost-curve.ts](<../../../backend-node/src/project-cost-curve.ts>)
 - [backend-node/src/user-roles.ts](<../../../backend-node/src/user-roles.ts>)
+- [backend-node/src/leader-scope.ts](<../../../backend-node/src/leader-scope.ts>)
 - [backend-node/src/types.ts](<../../../backend-node/src/types.ts>)
 - [backend-node/src/users.ts](<../../../backend-node/src/users.ts>)
 - [backend-node/src/email.ts](<../../../backend-node/src/email.ts>)
