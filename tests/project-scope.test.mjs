@@ -63,11 +63,16 @@ test("the Overview is a Pegasus list on @tomas-tc/ui: count in the title, health
   assert.match(kit, /data-guide="project\.ceo"/);
   assert.match(kit, /data-guide="project\.create"/);
   assert.match(screen, /ceo=\{openCeoSummary \? \{ label: uiText\("CEO\.open"\), onSelect: openCeoSummary \} : null\}/);
-  // The PM, team and stage filters are header funnels in the list, and lists above the chart in Timeline.
-  for (const guide of ["project.stageFilter", "project.pmFilter"]) assert.match(screen, new RegExp(`guide: "${guide.replace(".", "\\.")}"`), guide);
-  assert.match(kit, /sortHead\("name", <Funnel filter=\{props\.filters\.team\} \/>/);
-  assert.match(screen, /filters=\{\{ stage: stageFilter, team: teamFilter, pm: managerFilter \}\}/);
-  assert.match(screen, /\{mode === "timeline" \? <Toolbar>\{filterSelects\}<\/Toolbar> : null\}/);
+  // The PM, team and stage filters are buttons in the head, the same in List and Timeline (owner 2026-11-26): no header
+  // funnels in the table, no second set of lists above the chart.
+  for (const guide of ["project.stageFilter", "project.pmFilter", "project.teamFilter"]) assert.match(screen, new RegExp(`guide: "${guide.replace(".", "\\.")}"`), guide);
+  assert.match(
+    screen,
+    /filters=\{\{\s*label: uiText\("Portfolio\.filters"\),\s*pm: managerFilter,\s*team: teamFilter,\s*stage: stageFilter,\s*clear: filtered \? \{ label: uiText\("Portfolio\.clearFilters"\), onSelect: clearFilters \} : null,\s*\}\}/,
+  );
+  assert.match(kit, /<FilterButton filter=\{props\.filters\.pm\} \/>\s*<FilterButton filter=\{props\.filters\.team\} \/>\s*<FilterButton filter=\{props\.filters\.stage\} \/>/);
+  assert.doesNotMatch(kit, /Funnel/);
+  assert.doesNotMatch(screen, /filterSelects|mode === "timeline" \? <Toolbar>/);
   assert.doesNotMatch(screen, /<label className="checkbox-row">/);
 });
 

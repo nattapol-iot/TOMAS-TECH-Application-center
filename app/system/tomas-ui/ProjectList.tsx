@@ -3,9 +3,9 @@
  * The Projects list (task doc 5.1) on @tomas-tc/ui (owner 2026-11-25: "ใช้ Componance UI @tomas-tc/ui เป็นหลัก").
  * Two parts, each in its own TomasUi root, so the timeline (the app's Gantt) and the app's dialogs stay outside the kit:
  * - ProjectListHead: the title with its count, search, All / Mine, List / Timeline, More, the CEO summary and Create;
- *   the health summary bar, each cell a filter pressed again to clear; the attention chips.
- * - ProjectListTable: the list, sorted from its headers, filtered from the funnels in Stage, Project (team) and PM, a menu
- *   on each row, the stage menu, and paging.
+ *   the health summary bar, each cell a filter pressed again to clear; the attention chips, and on their line the PM,
+ *   team and stage filters. List and Timeline share this head, so they filter the same way (owner 2026-11-26).
+ * - ProjectListTable: the list, sorted from its headers, a menu on each row, the stage menu, and paging.
  * ProductionProjects (CoreScreens.tsx) keeps the data, the filters and the dialogs, and hands these parts what to show.
  */
 import {
@@ -46,6 +46,8 @@ export type ProjectListHeadProps = {
   create: { label: string; onSelect: () => void } | null;
   summary: { label: string; cells: { key: string | null; label: string; value: number; tone: KitTone; pressed: boolean }[]; onPick: (key: string | null) => void };
   chips: { label: string; items: { key: string; label: string; value: number; tone: KitTone }[]; active: string | null; onPick: (key: string | null) => void };
+  /** The PM, team and stage filters, and Clear filters while any filter of the page is on. */
+  filters: { label: string; pm: ColumnFilterSpec; team: ColumnFilterSpec; stage: ColumnFilterSpec; clear: { label: string; onSelect: () => void } | null };
 };
 
 export function ProjectListHead(props: ProjectListHeadProps) {
@@ -105,32 +107,47 @@ export function ProjectListHead(props: ProjectListHeadProps) {
             </button>
           ))}
         </div>
-        <div role="group" aria-label={props.chips.label} className="flex flex-wrap gap-2">
-          {props.chips.items.map((chip) => {
-            const on = props.chips.active === chip.key;
-            return (
-              <button
-                key={chip.key}
-                type="button"
-                aria-pressed={on}
-                disabled={!chip.value && !on}
-                onClick={() => props.chips.onPick(on ? null : chip.key)}
-                className={`inline-flex h-7 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors disabled:opacity-50 ${on ? TONE_BADGE[chip.tone] + " ring-2 ring-primary/40" : "bg-background text-foreground hover:bg-muted"}`}
-              >
-                {chip.label}
-                <b className={`tabular-nums ${chip.value ? TONE_TEXT[chip.tone] : "text-muted-foreground"}`}>{chip.value}</b>
-              </button>
-            );
-          })}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div role="group" aria-label={props.chips.label} className="flex flex-wrap gap-2">
+            {props.chips.items.map((chip) => {
+              const on = props.chips.active === chip.key;
+              return (
+                <button
+                  key={chip.key}
+                  type="button"
+                  aria-pressed={on}
+                  disabled={!chip.value && !on}
+                  onClick={() => props.chips.onPick(on ? null : chip.key)}
+                  className={`inline-flex h-7 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors disabled:opacity-50 ${on ? TONE_BADGE[chip.tone] + " ring-2 ring-primary/40" : "bg-background text-foreground hover:bg-muted"}`}
+                >
+                  {chip.label}
+                  <b className={`tabular-nums ${chip.value ? TONE_TEXT[chip.tone] : "text-muted-foreground"}`}>{chip.value}</b>
+                </button>
+              );
+            })}
+          </div>
+          <div role="group" aria-label={props.filters.label} data-guide="project.filters" className="flex flex-wrap items-center gap-2">
+            <FilterButton filter={props.filters.pm} />
+            <FilterButton filter={props.filters.team} />
+            <FilterButton filter={props.filters.stage} />
+            {props.filters.clear ? (
+              <Button variant="ghost" size="sm" onClick={props.filters.clear.onSelect}>
+                <NamedIcon name="x" />
+                {props.filters.clear.label}
+              </Button>
+            ) : null}
+          </div>
         </div>
       </div>
     </TomasUi>
   );
 }
 
-/** A header funnel over one single-value filter: the options with how many projects each has, ticked last wins. */
+/** One single-value filter: the options with how many projects each has, ticked last wins. */
 export type ColumnFilterSpec = {
   label: string;
+  /** What the button says while nothing is picked, e.g. "All PMs". */
+  allLabel: string;
   clearLabel: string;
   options: { value: string; label: string; count: number }[];
   value: string | null;
@@ -138,21 +155,24 @@ export type ColumnFilterSpec = {
   guide?: string;
 };
 
-function Funnel({ filter }: { filter: ColumnFilterSpec }) {
+/** A small button that names the filter's value ("All PMs" until one is picked) and opens the options with their counts. */
+function FilterButton({ filter }: { filter: ColumnFilterSpec }) {
+  const picked = filter.value === null ? null : (filter.options.find((option) => option.value === filter.value)?.label ?? filter.value);
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          aria-label={filter.label}
+        <Button
+          variant="outline"
+          size="sm"
           title={filter.label}
           data-guide={filter.guide}
-          className={`inline-grid size-6 place-items-center rounded-sm hover:bg-muted ${filter.value !== null ? "text-primary" : "text-muted-foreground"}`}
+          className={`max-w-56 ${picked === null ? "text-muted-foreground" : "border-primary/50 bg-primary/10 text-primary"}`}
         >
-          <NamedIcon name="funnel" className="size-3.5" />
-        </button>
+          <span className="truncate">{picked === null ? filter.allLabel : `${filter.label}: ${picked}`}</span>
+          <NamedIcon name="chevron-down" className="size-3.5 opacity-60" />
+        </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="max-h-80 overflow-y-auto">
+      <DropdownMenuContent align="end" className="max-h-80 overflow-y-auto">
         <DropdownMenuLabel>{filter.label}</DropdownMenuLabel>
         {filter.options.map((option) => (
           <DropdownMenuCheckboxItem key={option.value} checked={filter.value === option.value} onCheckedChange={(checked) => filter.onChange(checked ? option.value : null)}>
@@ -197,7 +217,6 @@ export type ProjectListTableProps = {
   labels: Record<SortKey | "actions" | "stage" | "hours" | "follow" | "followRule", string> & { ascending: string; descending: string };
   sort: { key: SortKey; direction: "asc" | "desc" };
   onSort: (key: SortKey) => void;
-  filters: { stage: ColumnFilterSpec; team: ColumnFilterSpec; pm: ColumnFilterSpec };
   rows: ProjectListRow[];
   page: number;
   perPage: number;
@@ -233,17 +252,12 @@ export function ProjectListTable(props: ProjectListTableProps) {
               <TableHead className="w-10">
                 <span className="sr-only">{labels.actions}</span>
               </TableHead>
-              <TableHead>
-                <span className="inline-flex items-center gap-1">
-                  {labels.stage}
-                  <Funnel filter={props.filters.stage} />
-                </span>
-              </TableHead>
+              <TableHead>{labels.stage}</TableHead>
               {sortHead("health")}
               {sortHead("number")}
-              {sortHead("name", <Funnel filter={props.filters.team} />, "w-[34%] max-w-0")}
+              {sortHead("name", undefined, "w-[34%] min-w-48 max-w-0")}
               {/* PM, slip and hours give way on a phone, so the stage, health and name need no sideways scroll. */}
-              {sortHead("pm", <Funnel filter={props.filters.pm} />, PHONE_HIDDEN)}
+              {sortHead("pm", undefined, PHONE_HIDDEN)}
               {sortHead("target")}
               {sortHead("slip", undefined, PHONE_HIDDEN)}
               {sortHead("progress")}
