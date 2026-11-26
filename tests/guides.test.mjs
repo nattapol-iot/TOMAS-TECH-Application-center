@@ -155,6 +155,10 @@ test("the catalog holds the guides the owner chose, in the order the work happen
       "support-ticket",
       // Following your tickets on Report & Track Issues in the Pegasus look (2026-11-21).
       "support-follow",
+      // Giving a person a role, such as Leader, on User Accounts & Permissions (2026-11-26).
+      "user-role",
+      // A head, a Leader included, assesses a team member's KPI (2026-11-26).
+      "kpi-review",
     ],
   );
   const copies = [];

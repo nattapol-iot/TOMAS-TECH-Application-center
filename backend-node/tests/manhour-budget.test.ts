@@ -134,7 +134,7 @@ function harness(roles: string[]) {
 function budgetAnswers(options: { status?: string; estimateManDays?: number; manual?: number | null } = {}) {
   return (statement: string): Answer | undefined => {
     if (statement.includes("FROM dbo.projects p WHERE p.id=@project_id")) return { recordset: [{ allowed: true }] };
-    if (statement.includes("SELECT id,project_no,name,manager_id,lead_engineer_id,status,target_delivery FROM dbo.projects")) return { recordset: [projectRaw(options.status)] };
+    if (statement.includes("SELECT id,project_no,name,manager_id,lead_engineer_id,status,target_delivery,team,")) return { recordset: [projectRaw(options.status)] };
     if (statement.includes("SELECT p.manhour_budget_days,e.estimate_no"))
       return { recordset: [{ manhour_budget_days: options.manual ?? null, estimate_no: options.estimateManDays ? "EST-26-001" : null }] };
     if (statement.includes("FROM dbo.manhour_lines") || statement.includes("INNER JOIN dbo.manhour_lines")) {

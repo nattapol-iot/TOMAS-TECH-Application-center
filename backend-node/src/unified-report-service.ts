@@ -7,6 +7,7 @@ import type { Database } from "./db.js";
 import type { CurrentUser } from "./types.js";
 import { ApiError } from "./errors.js";
 import { hasRole } from "./user-roles.js";
+import { leaderTeamOf, leaderTeamProjectSql } from "./leader-scope.js";
 import { bodyObject, dateOnly, parseDateOnly, parseRowVersion, positiveLong, requiredText } from "./http.js";
 import { activeSpecimenId, evaluateSigningAssurance, clientIp, clientUserAgent } from "./signing-core.js";
 
@@ -241,9 +242,10 @@ export function reportVersion(r: ReportRow, value: unknown) {
 export async function reportSource(tx: Transaction, actor: CurrentUser, kind: string, id: number, write = false, assigned = false) {
   const q = new sql.Request(tx);
   q.input("id", sql.BigInt, id).input("actor", sql.BigInt, actor.id).input("elevated", sql.Bit, reportElevated(actor)).input("assigned", sql.Bit, assigned);
+  q.input("leader_team", sql.NVarChar(40), leaderTeamOf(actor));
   const predicate =
     kind === "PROJECT"
-      ? `SELECT p.status,p.project_no reference,p.name title,c.name customer,eu.id endUserCustomerId,eu.name endUserName,eu.code endUserCode,CAST(CASE WHEN @elevated=1 OR @assigned=1 OR p.manager_id=@actor OR p.lead_engineer_id=@actor OR EXISTS(SELECT 1 FROM dbo.project_members m WHERE m.project_id=p.id AND m.user_id=@actor) THEN 1 ELSE 0 END AS bit) allowed FROM dbo.projects p JOIN dbo.customers c ON c.id=p.customer_id LEFT JOIN dbo.customers eu ON eu.id=p.end_user_customer_id WHERE p.id=@id AND p.deleted_at IS NULL`
+      ? `SELECT p.status,p.project_no reference,p.name title,c.name customer,eu.id endUserCustomerId,eu.name endUserName,eu.code endUserCode,CAST(CASE WHEN @elevated=1 OR @assigned=1 OR p.manager_id=@actor OR p.lead_engineer_id=@actor OR EXISTS(SELECT 1 FROM dbo.project_members m WHERE m.project_id=p.id AND m.user_id=@actor) OR ${leaderTeamProjectSql("p")} THEN 1 ELSE 0 END AS bit) allowed FROM dbo.projects p JOIN dbo.customers c ON c.id=p.customer_id LEFT JOIN dbo.customers eu ON eu.id=p.end_user_customer_id WHERE p.id=@id AND p.deleted_at IS NULL`
       : `SELECT i.status,i.inquiry_no reference,i.project_name title,c.name customer,eu.id endUserCustomerId,eu.name endUserName,eu.code endUserCode,CAST(CASE WHEN @elevated=1 OR @assigned=1 OR i.created_by=@actor OR i.estimate_owner_id=@actor THEN 1 ELSE 0 END AS bit) allowed FROM dbo.inquiries i JOIN dbo.customers c ON c.id=i.customer_id LEFT JOIN dbo.customers eu ON eu.id=i.end_user_customer_id WHERE i.id=@id AND i.deleted_at IS NULL`;
   const row = (
     await q.query<{ status: string; reference: string; title: string; customer: string; endUserCustomerId: number | null; endUserName: string | null; endUserCode: string | null; allowed: boolean }>(
@@ -281,15 +283,15 @@ export async function eligibleReportSigners(tx: Transaction, r: { project_id: nu
     const q = new sql.Request(tx);
     q.input("id", sql.BigInt, id).input("permission", sql.NVarChar(100), permission);
     const user = (
-      await q.query<{ id: number; role: string; roles: string | null }>(
-        `SELECT u.id,r.code role,(SELECT STRING_AGG(er.code,N'|') FROM dbo.user_effective_roles er WHERE er.user_id=u.id) roles FROM dbo.users u JOIN dbo.roles r ON r.id=u.role_id WHERE u.id=@id AND u.is_active=1 AND u.deleted_at IS NULL AND EXISTS(SELECT 1 FROM dbo.user_effective_permissions WHERE user_id=u.id AND code=@permission)`,
+      await q.query<{ id: number; role: string; roles: string | null; department: string | null }>(
+        `SELECT u.id,r.code role,(SELECT STRING_AGG(er.code,N'|') FROM dbo.user_effective_roles er WHERE er.user_id=u.id) roles,u.department FROM dbo.users u JOIN dbo.roles r ON r.id=u.role_id WHERE u.id=@id AND u.is_active=1 AND u.deleted_at IS NULL AND EXISTS(SELECT 1 FROM dbo.user_effective_permissions WHERE user_id=u.id AND code=@permission)`,
       )
     ).recordset[0];
     if (!user || (permission === "report.approve" && !reportSignerCapabilities(await reportPermissions(tx, Number(user.id))).canApprove))
       throw new ApiError(422, "report_signer_ineligible", "Select an active eligible reviewer or approver.");
     await reportSource(
       tx,
-      { id: Number(user.id), role: user.role, roles: user.roles ? user.roles.split("|") : [user.role] } as CurrentUser,
+      { id: Number(user.id), role: user.role, roles: user.roles ? user.roles.split("|") : [user.role], department: user.department ?? "" } as CurrentUser,
       r.project_id ? "PROJECT" : "INQUIRY",
       Number(r.project_id ?? r.inquiry_id),
     );

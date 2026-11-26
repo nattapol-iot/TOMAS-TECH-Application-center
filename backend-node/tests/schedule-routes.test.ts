@@ -674,7 +674,7 @@ const managedQuery = "SELECT schedule_task_id,state,acknowledged_at,assignee_id 
 function scheduleAnswers(pics: Array<{ task: number; user: number; active?: boolean }>, status = "Design", managed: ManagedRaw = readyManaged) {
   return (statement: string): Answer | undefined => {
     if (statement.includes("FROM dbo.projects p WHERE p.id=@project_id")) return { recordset: [{ allowed: true }] };
-    if (statement.includes("SELECT id,project_no,name,manager_id,lead_engineer_id,status,target_delivery FROM dbo.projects")) return { recordset: [projectRaw(status)] };
+    if (statement.includes("SELECT id,project_no,name,manager_id,lead_engineer_id,status,target_delivery,team,")) return { recordset: [projectRaw(status)] };
     if (statement.includes("FROM dbo.schedule_tasks WHERE project_id=@project AND deleted_at IS NULL ORDER BY")) return { recordset: scheduleRows };
     if (statement.includes("SELECT pic.task_id,u.id"))
       return { recordset: pics.map(({ task, user, active = true }) => ({ task_id: task, id: user, name: `User ${user}`, email: `u${user}@example.test`, active })) };
@@ -1062,7 +1062,9 @@ test("GET day-requests/pending lists requests the user can answer, with their WB
     const query = statements.find((entry) => entry.statement.includes("FROM dbo.schedule_updates s"))!;
     // A project manager answers for the projects they manage; only an Engineering Manager or Admin sees the rest of their scope.
     assert.equal(query.params.answer_all, false);
-    assert.match(query.statement, /p\.manager_id=@actor OR \(@answer_all=1/);
+    assert.match(query.statement, /p\.manager_id=@actor OR \(@leader_team<>N'' AND [\s\S]+=@leader_team\) OR \(@answer_all=1/);
+    // ...and a Leader for their team's projects; this actor holds no Leader role.
+    assert.equal(query.params.leader_team, "");
   } finally {
     await app.close();
   }

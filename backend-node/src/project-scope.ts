@@ -3,6 +3,7 @@ import type { Transaction as TransactionType } from "mssql";
 import type { Database } from "./db.js";
 import { ApiError } from "./errors.js";
 import { mayCreateWithoutEstimate } from "./project-create-access.js";
+import { leaderTeamOf, leaderTeamProjectSql } from "./leader-scope.js";
 import type { CurrentUser } from "./types.js";
 import { rolesOf } from "./user-roles.js";
 
@@ -33,10 +34,13 @@ export async function demandProjectScope(database: Database, user: CurrentUser, 
     request.input("project_id", sql.BigInt, projectId);
     request.input("actor", sql.BigInt, user.id);
     request.input("elevated", sql.Bit, myWork ? isMyWorkElevated(user) : isProjectElevated(user));
+    // A Leader opens every project of the team they lead (leader-scope.ts); My Work keeps its own narrower rule.
+    request.input("leader_team", sql.NVarChar(40), myWork ? "" : leaderTeamOf(user));
   };
   const statement = `
         SELECT CASE WHEN @elevated=1 OR p.manager_id=@actor OR p.lead_engineer_id=@actor
           OR EXISTS(SELECT 1 FROM dbo.project_members m WHERE m.project_id=p.id AND m.user_id=@actor)
+          OR ${leaderTeamProjectSql("p")}
           THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END AS allowed
         FROM dbo.projects p WHERE p.id=@project_id AND p.deleted_at IS NULL;
   `;
