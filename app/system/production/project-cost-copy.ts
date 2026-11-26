@@ -132,7 +132,7 @@ export const PROJECT_COST_COPY: Record<string, { en: string; th: string; jp: str
     ["Cost.discipline.Mechanical", "Mechanical", "Mechanical", "機械"],
     ["Cost.discipline.Software", "Software", "Software", "ソフトウェア"],
     ["Cost.discipline.Installation", "Installation", "Installation", "据付"],
-    ["Cost.discipline.Unassigned", "Unassigned", "ยังไม่ระบุสายงาน", "未割当"],
+    ["Cost.discipline.Unassigned", "No discipline", "ยังไม่ระบุสาขา", "分野未設定"],
     ["Cost.loading", "Loading cost...", "กำลังโหลดต้นทุน...", "コストを読み込み中..."],
     ["Cost.views", "Cost views", "มุมมองต้นทุน", "コストの表示"],
     ["CEO.title", "Cost summary for the CEO", "สรุปต้นทุนสำหรับ CEO", "CEO 向けコスト概要"],

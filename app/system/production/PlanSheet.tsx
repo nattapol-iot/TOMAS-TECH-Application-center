@@ -42,6 +42,7 @@ import {
   type SheetLinkRow,
 } from "../../../lib/plan-sheet";
 import type { ProjectSchedule, ScheduleTask } from "./PlanningPricingScreens";
+import { rowDisciplines, type DisciplineRow, type LaborDiscipline } from "../../../backend-node/src/project-cost-model";
 import "./plan-sheet.css";
 
 // The time of one row (owner decisions 2026-11-25): built on @tomas-tc/ui, loaded when first opened.
@@ -157,6 +158,8 @@ const readWidths = (): Record<string, number> => {
 type Drop = { id: number; where: "before" | "after" | "into" };
 type Menu = { id: number; x: number; y: number };
 const DISCIPLINES = ["Electrical", "Mechanical", "Software", "Installation"] as const;
+/** The To follow up groups the project list and Overview count as rows to chase (project-overview.ts followUpCount). */
+const CHASE_GROUPS = new Set(["late", "blocked", "due", "noMember", "noPr"]);
 const DISCIPLINE_SHORT: Record<string, string> = { EE: "Electrical", ME: "Mechanical", SW: "Software", IN: "Installation" };
 const STATUSES = ["Not Started", "In Progress", "Blocked", "Done"] as const;
 const STATUS_LABEL: Record<string, string> = { "Not Started": "Sheet.stNotStarted", "In Progress": "Sheet.stInProgress", Blocked: "Sheet.stBlocked", Done: "Sheet.stDone" };
@@ -291,7 +294,7 @@ export function PlanSheet({
 }: {
   schedule: ProjectSchedule;
   /** The people a row may be given: everyone for a planner, the project's own people for a member (usePlanTeam). */
-  team: readonly { id: number; name: string; email?: string }[];
+  team: readonly { id: number; name: string; email?: string; department?: string | null }[];
   today: string;
   /** Rows that wait on a day request: the server refuses every plan change on them. */
   lockedIds: ReadonlySet<number | null>;
@@ -316,6 +319,9 @@ export function PlanSheet({
   const [collapsed, setCollapsed] = useState<ReadonlySet<number>>(() => new Set());
   const [headingsOnly, setHeadingsOnly] = useState(false);
   const [disciplineFilter, setDisciplineFilter] = useState<string | null>(null);
+  // The team's departments, kept while they stay the same: the team list is a new array on every render of a member's view.
+  const teamDepartmentsKey = JSON.stringify(team.map((person) => [person.id, person.department ?? ""]));
+  const teamDepartments = useMemo(() => new Map((JSON.parse(teamDepartmentsKey) as [number, string][]).filter(([, department]) => Boolean(department))), [teamDepartmentsKey]);
   const [followOpen, setFollowOpen] = useState(false);
   // Task doc 4.1-4.3: save this plan as a master schedule, or add one to it from a start date.
   const [templateOpen, setTemplateOpen] = useState(false);
@@ -450,6 +456,15 @@ export function PlanSheet({
     for (const row of rows)
       if (isLate(row, today))
         for (let up = row.task.parentId === null ? undefined : byId.get(row.task.parentId); up; up = up.task.parentId === null ? undefined : byId.get(up.task.parentId)) up.lateKids += 1;
+    // Each row's labor disciplines, one rule with the Overview and Cost tabs: typed on the row or above it, an installation
+    // heading, else the departments of the nearest row's PICs (the server's for saved PICs, the team's for new ones).
+    const departmentOf = new Map<number, string>(teamDepartments);
+    for (const row of rows) for (const pic of row.task.pics) if (pic.department) departmentOf.set(pic.id, pic.department);
+    const disciplineRows = new Map<number, DisciplineRow>(
+      rows.map((row) => [row.task.id, { id: row.task.id, parentId: row.task.parentId, kind: row.task.kind, name: row.fields.name, discipline: row.fields.discipline }]),
+    );
+    const picDepartments = new Map(rows.map((row) => [row.task.id, row.fields.picUserIds.map((id) => departmentOf.get(id) ?? "")] as const));
+    const shares = new Map<number, LaborDiscipline[]>(rows.map((row) => [row.task.id, rowDisciplines(row.task.id, disciplineRows, picDepartments)]));
     const visible: Row[] = [];
     let hideBelow: number | null = null;
     for (const row of rows) {
@@ -458,7 +473,9 @@ export function PlanSheet({
       if (
         disciplineFilter &&
         !row.parent &&
-        (disciplineFilter === "Outsourced" ? row.task.laborSource !== "Outsourced" : row.task.laborSource === "Outsourced" || (row.fields.discipline ?? "None") !== disciplineFilter)
+        (disciplineFilter === "Outsourced"
+          ? row.task.laborSource !== "Outsourced"
+          : row.task.laborSource === "Outsourced" || !(shares.get(row.task.id) ?? []).some((value) => value === disciplineFilter))
       )
         continue;
       if (hideBelow !== null) {
@@ -468,8 +485,8 @@ export function PlanSheet({
       visible.push(row);
       if (row.parent && collapsed.has(row.task.id)) hideBelow = row.task.depth;
     }
-    return { rows, byId, visible, linkRows };
-  }, [schedule, pending, collapsed, headingsOnly, holidays, today, disciplineFilter]);
+    return { rows, byId, visible, linkRows, shares };
+  }, [schedule, pending, collapsed, headingsOnly, holidays, today, disciplineFilter, teamDepartments]);
 
   // The Gantt: 20 px days from the Monday of the plan's first day, at least 16 weeks, two weeks past the last END.
   const timeline = useMemo(() => {
@@ -485,12 +502,16 @@ export function PlanSheet({
     const x = (iso: string) => spanDays(from, iso) - 1;
     return { from, days, x, dates: Array.from({ length: days }, (_, index) => shiftDay(from, index)) };
   }, [model.rows, today]);
-  // Task doc 3.1: hours by discipline, planned and confirmed against the Estimate's labor hours; never money.
+  // Task doc 3.1: hours by discipline, planned and confirmed against the Estimate's labor hours; never money. One split
+  // with the Overview and Cost tabs (owner 2026-11-26): the same rule per row (model.shares), the server's confirmed
+  // hours by discipline, and one "no discipline" entry for the Estimate's unclassified labor and the plan's.
   const budget = useMemo(() => {
     const perDay = schedule.manHours?.hoursPerManDay ?? 8;
     const byDiscipline = new Map<string, { budget: number; plan: number; actual: number }>();
     const entry = (key: string) => byDiscipline.get(key) ?? byDiscipline.set(key, { budget: 0, plan: 0, actual: 0 }).get(key)!;
-    for (const line of schedule.manHours?.disciplines ?? []) entry(line.discipline).budget += line.manDays * perDay;
+    for (const line of schedule.manHours?.disciplines ?? []) entry(line.discipline === "Other" ? "Unassigned" : line.discipline).budget += line.manDays * perDay;
+    const serverActual = schedule.actualByDiscipline;
+    for (const line of serverActual ?? []) entry(line.discipline).actual += line.hours;
     // As manhour-budget.ts counts effort: a row's own figure unless its rows carry one; outsourced people stay apart.
     // Outsourced work (task doc 3.7): its own entry, against the Estimate's supplier labor; never the team's budget.
     const outBudget = (schedule.manHours?.outsourceBudgetManDays ?? 0) * perDay;
@@ -503,17 +524,24 @@ export function PlanSheet({
         continue;
       }
       if (row.planFromRows || row.task.kind === "phase" || row.task.laborSource === "Outsourced" || (!row.planHours && !row.actualHours)) continue;
-      // A row with rows under it adds only its own hours here; its rows add theirs.
+      // A row with rows under it adds only its own hours here; its rows add theirs. A row worked by people of two
+      // disciplines splits evenly, as the Cost tab splits it.
       const ownActual = row.rollup ? Number(row.task.actualHours ?? 0) : row.actualHours;
-      const item = entry(row.fields.discipline ?? "None");
-      item.plan += row.planHours;
-      item.actual += ownActual;
+      const split = model.shares.get(row.task.id) ?? ["Unassigned"];
+      for (const discipline of split) {
+        const item = entry(discipline);
+        item.plan += row.planHours / split.length;
+        // An older API sends no confirmed hours by discipline: the row's own, as before.
+        if (!serverActual) item.actual += ownActual / split.length;
+      }
     }
-    const order = [...DISCIPLINES, "Other", "None", "Outsourced"] as string[];
-    return [...byDiscipline.entries()].map(([discipline, value]) => ({ discipline, ...value })).sort((left, right) => order.indexOf(left.discipline) - order.indexOf(right.discipline));
-  }, [model.rows, schedule.manHours]);
-  const disciplineLabel = (key: string) =>
-    key === "None" ? t("Sheet.budgetNone") : key === "Other" ? t("Plan.mhDiscipline.Other") : key === "Outsourced" ? t("Sheet.vendorGroup") : t(`Discipline.${key}`);
+    const order = [...DISCIPLINES, "Unassigned", "Outsourced"] as string[];
+    return [...byDiscipline.entries()]
+      .map(([discipline, value]) => ({ discipline, budget: Math.round(value.budget * 10) / 10, plan: Math.round(value.plan * 10) / 10, actual: Math.round(value.actual * 10) / 10 }))
+      .filter((item) => item.budget || item.plan || item.actual)
+      .sort((left, right) => order.indexOf(left.discipline) - order.indexOf(right.discipline));
+  }, [model.rows, model.shares, schedule.manHours, schedule.actualByDiscipline]);
+  const disciplineLabel = (key: string) => (key === "Unassigned" ? t("Plan.mhDiscipline.Other") : key === "Outsourced" ? t("Sheet.vendorGroup") : t(`Discipline.${key}`));
   const vendorChoices = useMemo(() => {
     const used = model.rows.flatMap((row) => (row.task.laborSource === "Outsourced" && row.task.laborSupplier ? [row.task.laborSupplier] : []));
     return [...new Set([...used.sort((a, b) => a.localeCompare(b)), ...(erpVendors ?? [])])];
@@ -754,6 +782,8 @@ export function PlanSheet({
   }, [model.rows, model.byId, today, holidayHits, schedule.unconfirmedHours, fileCurrent, serverFile, t, fits, headingFits, frameEnd]);
   // A row in two lists (late and blocked) counts once; a removed row the customer file still shows counts too.
   const followCount = new Set(followUps.groups.flatMap((group) => group.rows.map((row) => row.task.id))).size + followUps.removed.length;
+  // The rows the project list and Overview count as rows to chase (project-overview.ts followUpCount): the same five kinds.
+  const chaseCount = new Set(followUps.groups.filter((group) => CHASE_GROUPS.has(group.key)).flatMap((group) => group.rows.map((row) => row.task.id))).size;
   /** The day a time was on in Bangkok, the business day (a file sent at 06:30 is not the day before). */
   const businessDay = (instant: string) => new Date(Date.parse(instant) + 7 * 3_600_000).toISOString().slice(0, 10);
   /** Opens the rows above a row, puts the cursor on it and scrolls it into view. */
@@ -3311,6 +3341,9 @@ export function PlanSheet({
           </button>
           {followOpen ? (
             <div className="ps-follow" role="dialog" aria-label={t("Sheet.follow")}>
+              <p className="ps-follow-rows">
+                <small>{t("Sheet.followRows").replace("{n}", String(chaseCount))}</small>
+              </p>
               {followUps.groups.map((group) => (
                 <section key={group.key}>
                   <h4>

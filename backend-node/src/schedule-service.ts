@@ -23,7 +23,7 @@ export type ProjectRow = {
   leadDepartment?: string | null;
 };
 /** active: the PIC can still answer for the row (an active account on the project's team); a PIC who left or was taken off the team does not hold it. */
-export type PicRow = { id: number; name: string; email: string; active: boolean };
+export type PicRow = { id: number; name: string; email: string; active: boolean; department?: string };
 export type TaskRow = {
   id: number;
   projectId: number;
@@ -407,13 +407,14 @@ export async function readPics(transaction: TransactionType, projectId: number):
   request.input("project", sql.BigInt, projectId);
   return picsByTask((await request.query<Record<string, unknown>>(PICS_SQL)).recordset);
 }
-const PICS_SQL = `SELECT pic.task_id,u.id,u.name,u.email,CAST(CASE WHEN ${ACTIVE_PIC_SQL} THEN 1 ELSE 0 END AS bit) active FROM dbo.schedule_task_pics pic INNER JOIN dbo.schedule_tasks t ON t.id=pic.task_id INNER JOIN dbo.users u ON u.id=pic.user_id WHERE t.project_id=@project AND t.deleted_at IS NULL ORDER BY pic.task_id,u.name,u.id;`;
+const PICS_SQL = `SELECT pic.task_id,u.id,u.name,u.email,u.department,CAST(CASE WHEN ${ACTIVE_PIC_SQL} THEN 1 ELSE 0 END AS bit) active FROM dbo.schedule_task_pics pic INNER JOIN dbo.schedule_tasks t ON t.id=pic.task_id INNER JOIN dbo.users u ON u.id=pic.user_id WHERE t.project_id=@project AND t.deleted_at IS NULL ORDER BY pic.task_id,u.name,u.id;`;
 function picsByTask(rows: Record<string, unknown>[]): Map<number, PicRow[]> {
   const result = new Map<number, PicRow[]>();
   for (const row of rows) {
     const id = Number(row.task_id);
     const list = result.get(id) ?? [];
-    list.push({ id: Number(row.id), name: String(row.name), email: String(row.email), active: row.active !== false });
+    // The department says which discipline the row's hours count for (project-cost-model.ts rowDisciplines).
+    list.push({ id: Number(row.id), name: String(row.name), email: String(row.email), active: row.active !== false, ...(row.department == null ? {} : { department: String(row.department) }) });
     result.set(id, list);
   }
   return result;

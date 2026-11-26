@@ -29,10 +29,10 @@ import { dateOnly } from "./http.js";
 import { budgetSource, countedEffort, type BudgetPlanRow } from "./manhour-budget.js";
 import { REQUESTING_PR_STATUSES } from "./procurement-rules.js";
 import {
-  disciplineOfDepartment,
+  actualDiscipline,
   LABOR_DISCIPLINES,
-  namesInstallation,
   round2,
+  rowDisciplines,
   type CostAccess,
   type CostPlanRow,
   type LaborCost,
@@ -88,41 +88,8 @@ export function elapsedShare(span: RowSpan | undefined, today: string): number {
   return total > 0 ? calendarDays(span.planStart, today) / total : 0;
 }
 
-/**
- * The disciplines a plan row's man-days go to, one entry per equal share. A row under a heading that names
- * installation is Installation work, whoever does it (the estimate counts installation by the work, not the person).
- * Otherwise each PIC's department names a discipline; a row without PICs takes those of the nearest row above it,
- * because a function inherits its task's member. Nobody we can place: Unassigned. A discipline typed on the row or the
- * task above it (migration 123, owner 2026-11-22) says it outright and comes first.
- */
-export function rowDisciplines(id: number, rows: ReadonlyMap<number, PlanRow>, departments: ReadonlyMap<number, readonly string[]>): LaborDiscipline[] {
-  let people: readonly string[] | undefined;
-  const seen = new Set<number>();
-  for (let row = rows.get(id); row && !seen.has(row.id); row = row.parentId === null ? undefined : rows.get(row.parentId)) {
-    seen.add(row.id);
-    const typed = LABOR_DISCIPLINES.find((discipline) => discipline !== "Unassigned" && discipline === row.discipline);
-    if (typed) return [typed];
-    if (row.kind === "phase" && namesInstallation(row.name)) return ["Installation"];
-    if (!people && departments.get(row.id)?.length) people = departments.get(row.id);
-  }
-  return people?.length ? people.map(disciplineOfDepartment) : ["Unassigned"];
-}
-
-/**
- * The discipline confirmed hours count for: the plan row's own (a typed discipline, or an installation heading above
- * it), otherwise the discipline of the department of the person who worked them.
- */
-export function actualDiscipline(line: Pick<ActualLine, "workKey" | "department">, rows: ReadonlyMap<number, PlanRow>): LaborDiscipline {
-  const taskId = line.workKey?.startsWith("Project-") ? Number(line.workKey.slice("Project-".length)) : null;
-  const seen = new Set<number>();
-  for (let row = taskId === null ? undefined : rows.get(taskId); row && !seen.has(row.id); row = row.parentId === null ? undefined : rows.get(row.parentId)) {
-    seen.add(row.id);
-    const typed = LABOR_DISCIPLINES.find((discipline) => discipline !== "Unassigned" && discipline === row.discipline);
-    if (typed) return typed;
-    if (row.kind === "phase" && namesInstallation(row.name)) return "Installation";
-  }
-  return disciplineOfDepartment(line.department);
-}
+// The discipline rule lives in project-cost-model.ts, so the Plan sheet counts hours by discipline the same way.
+export { actualDiscipline, rowDisciplines };
 
 /**
  * The plan's man-days: planned in all, and what falls on or before today. `spans` holds the resolved dates of the

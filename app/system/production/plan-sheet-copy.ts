@@ -15,6 +15,12 @@ export const PLAN_SHEET_COPY: Record<string, { en: string; th: string; jp: strin
     ["Sheet.colPlanHours", "Plan h", "ชม.แผน", "計画 h"],
     ["Sheet.vendorGroup", "Outsourced to", "จ้างภายนอก", "外注先"],
     ["Sheet.follow", "To follow up", "ต้องตาม", "要フォロー"],
+    [
+      "Sheet.followRows",
+      "{n} of these are rows to chase (late, blocked, due to start, nobody on it, no purchase request): the figure the project list and Overview show.",
+      "ในนี้มี {n} แถวเป็นงานต้องตาม (เลยกำหนด ติดขัด ถึงวันเริ่ม ไม่มีคนทำ ไม่มีใบขอซื้อ) ซึ่งเป็นตัวเลขที่รายการโปรเจกต์และภาพรวมแสดง",
+      "うち {n} 行が要対応の作業（遅延・停止・開始日到来・担当者なし・購買依頼なし）で、案件一覧と概要に表示される数です。",
+    ],
     ["Sheet.tpl", "Master schedule", "Master Schedule", "マスタースケジュール"],
     ["Sheet.tplSubtitle", "Start a plan from a template, or keep this plan as one", "เริ่มแผนจาก template หรือเก็บแผนนี้เป็น template", "テンプレートから計画を始めるか、この計画をテンプレートにします"],
     ["Sheet.tplUse", "Add a template to this plan", "ใส่ template ลงในแผนนี้", "この計画にテンプレートを追加"],

@@ -72,6 +72,43 @@ export function disciplineOfDepartment(department: string | null | undefined): L
 /** A plan heading that names installation work; the rows under it are Installation labor, whoever does them. */
 export const namesInstallation = (name: string | null | undefined): boolean => /install|ติดตั้ง/i.test(name ?? "");
 
+/** What the discipline rule reads of a plan row. */
+export type DisciplineRow = { id: number; parentId: number | null; kind: string; name: string; discipline?: string | null };
+
+/**
+ * The disciplines a plan row's man-days count for, one rule for every screen (owner 2026-11-26: Overview, Cost and the
+ * Plan sheet showed different hours by discipline): the discipline typed on the row or a row above it; else Installation
+ * under an installation heading; else the departments of the nearest row's PICs (split evenly); else Unassigned.
+ */
+export function rowDisciplines(id: number, rows: ReadonlyMap<number, DisciplineRow>, departments: ReadonlyMap<number, readonly string[]>): LaborDiscipline[] {
+  let people: readonly string[] | undefined;
+  const seen = new Set<number>();
+  for (let row = rows.get(id); row && !seen.has(row.id); row = row.parentId === null ? undefined : rows.get(row.parentId)) {
+    seen.add(row.id);
+    const typed = LABOR_DISCIPLINES.find((discipline) => discipline !== "Unassigned" && discipline === row.discipline);
+    if (typed) return [typed];
+    if (row.kind === "phase" && namesInstallation(row.name)) return ["Installation"];
+    if (!people && departments.get(row.id)?.length) people = departments.get(row.id);
+  }
+  return people?.length ? people.map(disciplineOfDepartment) : ["Unassigned"];
+}
+
+/**
+ * The discipline confirmed hours count for: the plan row's own (a typed discipline, or an installation heading above
+ * it), otherwise the discipline of the department of the person who worked them.
+ */
+export function actualDiscipline(line: { workKey: string | null; department: string }, rows: ReadonlyMap<number, DisciplineRow>): LaborDiscipline {
+  const taskId = line.workKey?.startsWith("Project-") ? Number(line.workKey.slice("Project-".length)) : null;
+  const seen = new Set<number>();
+  for (let row = taskId === null ? undefined : rows.get(taskId); row && !seen.has(row.id); row = row.parentId === null ? undefined : rows.get(row.parentId)) {
+    seen.add(row.id);
+    const typed = LABOR_DISCIPLINES.find((discipline) => discipline !== "Unassigned" && discipline === row.discipline);
+    if (typed) return typed;
+    if (row.kind === "phase" && namesInstallation(row.name)) return "Installation";
+  }
+  return disciplineOfDepartment(line.department);
+}
+
 export type LaborCost = {
   /** Where the man-day budget comes from: the estimate's internal labor, a figure typed by a manager, or nothing yet. */
   source: "estimate" | "manual" | "none";

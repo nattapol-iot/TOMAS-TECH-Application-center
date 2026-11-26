@@ -43,7 +43,12 @@
 /* Task doc 5.2: a project's own page. */
 .project-page {
   display: grid;
+  /* One column no wider than the page: a wide plan scrolls inside its own sheet, not the whole page (QA 2026-11-26). */
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
+}
+.project-page > * {
+  min-width: 0;
 }
 .project-page-back {
   justify-self: start;

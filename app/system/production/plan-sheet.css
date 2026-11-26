@@ -290,6 +290,13 @@
   display: block;
   color: var(--sh-muted, var(--muted));
 }
+/* Which of these the project list and Overview count as rows to chase (QA 2026-11-26). */
+.plan-sheet .ps-follow .ps-follow-rows {
+  margin: 0;
+  padding: 0 6px 6px;
+  border-bottom: 1px solid var(--sh-line, var(--line));
+  color: var(--sh-muted, var(--muted));
+}
 /* Task doc 3.8: the customer file the changes are counted from, and a way to send a new one. */
 .plan-sheet .ps-follow .ps-follow-file {
   display: flex;

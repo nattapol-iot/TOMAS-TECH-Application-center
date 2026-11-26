@@ -105,9 +105,11 @@ export const PAGE_OVERVIEW_SQL = `SELECT status,COUNT(*) requests FROM dbo.mat_p
     FROM dbo.projects p INNER JOIN dbo.users u ON u.id=p.manager_id OR u.id=p.lead_engineer_id
       OR EXISTS(SELECT 1 FROM dbo.project_members m WHERE m.project_id=p.id AND m.user_id=u.id)
     WHERE p.id=@project AND u.deleted_at IS NULL;
-  SELECT TOP(5) d.id,d.name,d.folder_code,d.document_type,d.uploaded_at,u.name uploaded_by FROM dbo.project_docs d
-    INNER JOIN dbo.users u ON u.id=d.uploaded_by WHERE d.project_id=@project AND d.deleted_at IS NULL ORDER BY d.uploaded_at DESC,d.id DESC;
-  SELECT TOP(8) s.id,s.field,s.comment,s.occurred_at,a.name actor,t.name task FROM dbo.schedule_updates s
+  SELECT TOP(5) d.id,d.name,d.folder_code,d.document_type,d.uploaded_at,u.name uploaded_by,d.copy_no,d.copies FROM (
+      SELECT d.*,ROW_NUMBER() OVER(PARTITION BY d.name ORDER BY d.uploaded_at,d.id) copy_no,COUNT(*) OVER(PARTITION BY d.name) copies
+      FROM dbo.project_docs d WHERE d.project_id=@project AND d.deleted_at IS NULL) d
+    INNER JOIN dbo.users u ON u.id=d.uploaded_by ORDER BY d.uploaded_at DESC,d.id DESC;
+  SELECT TOP(8) s.id,s.field,LEFT(s.from_value,200) from_value,LEFT(s.to_value,200) to_value,s.comment,s.occurred_at,a.name actor,t.name task FROM dbo.schedule_updates s
     INNER JOIN dbo.users a ON a.id=s.actor_id LEFT JOIN dbo.schedule_tasks t ON t.id=s.task_id
     WHERE s.project_id=@project ORDER BY s.occurred_at DESC,s.id DESC;`;
 
@@ -630,10 +632,15 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
           documentType: String(row.document_type),
           uploadedAt: new Date(row.uploaded_at as Date | string).toISOString(),
           uploadedBy: String(row.uploaded_by),
+          // Which of the files with this name it is, oldest first, when there is more than one.
+          ...(Number(row.copies ?? 1) > 1 ? { copy: { number: Number(row.copy_no), of: Number(row.copies) } } : {}),
         })),
         activity: (sets[3] ?? []).map((row) => ({
           id: Number(row.id),
           field: String(row.field),
+          // What it was and what it became, for the screen to say in words (QA 2026-11-26: it showed actual_finish alone).
+          from: row.from_value == null ? null : String(row.from_value).slice(0, 200),
+          to: row.to_value == null ? null : String(row.to_value).slice(0, 200),
           comment: row.comment == null ? null : String(row.comment).slice(0, 300),
           at: new Date(row.occurred_at as Date | string).toISOString(),
           actor: String(row.actor),

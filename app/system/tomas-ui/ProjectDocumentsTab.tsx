@@ -169,6 +169,17 @@ export function ProjectDocumentsTab({ project, canWrite, notify }: { project: Pr
     }
   };
   const folderName = (code: string) => PROJECT_DOCUMENT_FOLDERS.find(([value]) => value === code)?.[1] ?? code;
+  // Files saved under one name are told apart by which copy they are, oldest first (QA 2026-11-26), and by the time.
+  const copies = useMemo(() => {
+    const byName = new Map<string, ProjectDocument[]>();
+    for (const document of documents ?? []) byName.set(document.fileName.toLowerCase(), [...(byName.get(document.fileName.toLowerCase()) ?? []), document]);
+    const result = new Map<number, { number: number; of: number }>();
+    for (const same of byName.values()) {
+      if (same.length < 2) continue;
+      same.sort((left, right) => left.uploadedAt.localeCompare(right.uploadedAt) || left.id - right.id).forEach((document, index) => result.set(document.id, { number: index + 1, of: same.length }));
+    }
+    return result;
+  }, [documents]);
 
   return (
     <TomasUi>
@@ -356,7 +367,14 @@ export function ProjectDocumentsTab({ project, canWrite, notify }: { project: Pr
                           <button type="button" className="text-left font-medium text-primary hover:underline" onClick={() => void download(document)}>
                             {document.fileName}
                           </button>
-                          <small className="block text-xs text-muted-foreground">{sizeText(document.sizeBytes)}</small>
+                          <small className="block text-xs text-muted-foreground">
+                            {sizeText(document.sizeBytes)}
+                            {copies.has(document.id)
+                              ? ` · ${t("ProjectDocs.copyOf")
+                                  .replace("{n}", String(copies.get(document.id)!.number))
+                                  .replace("{of}", String(copies.get(document.id)!.of))}`
+                              : ""}
+                          </small>
                         </TableCell>
                         <TableCell title={folderName(document.folderCode)} className="font-mono">
                           {document.folderCode}
@@ -369,7 +387,7 @@ export function ProjectDocumentsTab({ project, canWrite, notify }: { project: Pr
                         </TableCell>
                         <TableCell>
                           {document.uploadedByName}
-                          <small className="block text-xs text-muted-foreground">{new Date(document.uploadedAt).toLocaleDateString()}</small>
+                          <small className="block text-xs text-muted-foreground">{new Date(document.uploadedAt).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" })}</small>
                         </TableCell>
                         <TableCell className="w-12 text-right">
                           {document.canWithdraw ? (

@@ -9,6 +9,7 @@ import { bodyObject, dateOnly, optionalBodyText, parseRowVersion, positiveLong, 
 import { demandProjectScope, isMyWorkElevated, isProjectElevated, isProjectManagerRole } from "../project-scope.js";
 import { leaderTeamOf, leaderTeamProjectSql } from "../leader-scope.js";
 import { manHourBudget, MAXIMUM_BUDGET_MAN_DAYS, parseBudgetManDays, readStoredBudget } from "../manhour-budget.js";
+import { actualDiscipline, LABOR_DISCIPLINES, type LaborDiscipline } from "../project-cost-model.js";
 import { networkDays } from "../schedule-calculator.js";
 import { fitPeople, peopleChange, peopleEdits, peopleJson, peopleManDays } from "../plan-people.js";
 import { businessToday } from "../business-date.js";
@@ -208,6 +209,7 @@ async function projectSchedule(transaction: TransactionType, database: Database,
   const rowHours = await readRowHours(transaction, projectId);
   const requests = await readProjectRequests(transaction, projectId);
   const manHours = manHourBudget(await readStoredBudget(transaction, projectId), tasks, isProjectManagerRole(actor) && project.status !== "Closed");
+  const actualByDiscipline = await readActualByDiscipline(transaction, projectId, tasks);
   return {
     projectId,
     projectNo: project.projectNo,
@@ -222,6 +224,7 @@ async function projectSchedule(transaction: TransactionType, database: Database,
     canBaseline: canPlanPermission && project.status !== "Closed" && canAnswerDayRequests(project, actor),
     canUpdateProgress: canProgressPermission && project.status !== "Closed",
     manHours,
+    actualByDiscipline,
     summary: {
       planStart: starts[0] ?? null,
       planFinish: finishes.at(-1) ?? null,
@@ -388,6 +391,28 @@ async function readFollowUpFacts(transaction: TransactionType, projectId: number
       : null,
     unconfirmedHours: people.map((userId) => ({ userId, dates: unconfirmedDates(userId, input, today) })).filter((item) => item.dates.length),
   };
+}
+
+/** Confirmed hours by who worked them and on what: the Overview and Cost tabs' split by discipline (project-cost.ts loadPlanFigures). */
+const ACTUAL_BY_PERSON_SQL = `SELECT h.work_key,u.department,SUM(h.hours) hours FROM dbo.work_hours h INNER JOIN dbo.users u ON u.id=h.user_id
+  WHERE h.project_id=@project GROUP BY h.work_key,u.department;`;
+/**
+ * Confirmed hours by labor discipline, counted as the Overview and Cost tabs count them (owner 2026-11-26: the Plan sheet
+ * showed other figures): the plan row's typed discipline or installation heading, else the worker's department.
+ */
+export async function readActualByDiscipline(transaction: TransactionType, projectId: number, tasks: readonly TaskRow[]): Promise<{ discipline: LaborDiscipline; hours: number }[]> {
+  const request = new sql.Request(transaction);
+  request.input("project", sql.BigInt, projectId);
+  const rows = (await request.query<{ work_key: string | null; department: string | null; hours: number | null }>(ACTUAL_BY_PERSON_SQL)).recordset ?? [];
+  const byId = new Map(tasks.map((task) => [task.id, task]));
+  const sums = new Map<LaborDiscipline, number>();
+  for (const row of rows) {
+    const hours = Number(row.hours ?? 0);
+    if (!Number.isFinite(hours) || hours <= 0) continue;
+    const discipline = actualDiscipline({ workKey: row.work_key == null ? null : String(row.work_key), department: String(row.department ?? "") }, byId);
+    sums.set(discipline, (sums.get(discipline) ?? 0) + hours);
+  }
+  return LABOR_DISCIPLINES.flatMap((discipline) => (sums.has(discipline) ? [{ discipline, hours: Math.round(sums.get(discipline)! * 10) / 10 }] : []));
 }
 
 async function readRowHours(transaction: TransactionType, projectId: number): Promise<Map<number, number>> {
