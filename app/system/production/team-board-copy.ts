@@ -10,7 +10,8 @@ export const TEAM_BOARD_COPY: Record<string, { en: string; th: string; jp: strin
     ],
     ["TeamBoard.tabBoard", "Daily grid", "ตารางรายวัน", "日別表"],
     ["TeamBoard.tabList", "Work list", "รายการงาน", "作業リスト"],
-    ["TeamBoard.tabWeekly", "Allocation · 12 weeks", "จัดคน 12 สัปดาห์", "要員配置・12週"],
+    // The period is chosen on the tab (12 to 52 weeks), so its name does not carry one (UX audit F09, 2026-11-26).
+    ["TeamBoard.tabWeekly", "Allocation by week", "จัดคนรายสัปดาห์", "週別の要員配置"],
     // Allocation (owner, 2026-11-22): one head names the people of every project's rows, from the queue of rows waiting for them.
     ["Alloc.queueTitle", "Waiting for people", "งานรอจัดคน", "割り当て待ち"],
     [
@@ -31,6 +32,10 @@ export const TEAM_BOARD_COPY: Record<string, { en: string; th: string; jp: strin
     ["Alloc.actual", "Actual {md}", "จริง {md}", "実績 {md}"],
     ["Alloc.away", "Away {days} d", "ลา {days} วัน", "不在 {days} 日"],
     ["Alloc.empty", "No row is waiting for people.", "ไม่มีงานที่รอจัดคน", "割り当て待ちの行はありません"],
+    ["Alloc.noEffort", "No man-days yet", "ยังไม่มี MD", "人日未入力"],
+    ["Alloc.showAll", "Show all {n}", "แสดงทั้งหมด {n}", "すべて表示（{n}）"],
+    ["Alloc.showLess", "Show fewer", "ย่อรายการ", "折りたたむ"],
+    ["Alloc.noMatch", "No waiting row matches the search.", "ไม่มีงานรอจัดคนที่ตรงกับคำค้น", "検索に合う割り当て待ちはありません"],
     ["Alloc.joinsProject", "Anyone picked who is not on the project's team joins it.", "คนที่เลือกแต่ยังไม่อยู่ในทีมโครงการ ระบบจะเพิ่มเข้าทีมให้", "プロジェクトのチームにいない人を選ぶと、チームに追加されます。"],
     ["Alloc.assigned", "{n} assigned", "จัดคนให้ {n} แล้ว", "{n} に割り当てました"],
     ["Alloc.picked", "Picked", "เลือกแล้ว", "選択済み"],
@@ -218,7 +223,12 @@ export const TEAM_BOARD_COPY: Record<string, { en: string; th: string; jp: strin
     ["TeamBoard.lateDays", "{n} d late", "เลย {n} วัน", "{n}日超過"],
     ["TeamBoard.moreInCell", "+{n} more", "+{n} งาน", "ほか{n}件"],
     ["TeamBoard.addTitle", "Add work", "เพิ่มงาน", "作業を追加"],
-    ["TeamBoard.addHint", "Only the subject and the date are needed. Everything else can be changed later.", "บังคับแค่เรื่องกับวันที่ ที่เหลือแก้ทีหลังได้", "件名と日付だけで登録できます。ほかは後で変更できます。"],
+    [
+      "TeamBoard.addHint",
+      "Needed: the subject, the date, which work it is for and a short detail (time away: the subject, the date and who). Everything else can be changed later.",
+      "ต้องกรอก: เรื่อง วันที่ เป็นงานไหน และรายละเอียดงานเบื้องต้น (ลางาน: เรื่อง วันที่ และผู้ลา) ที่เหลือแก้ทีหลังได้",
+      "必須：件名・日付・どの仕事か・簡単な内容（休暇は件名・日付・本人）。ほかは後で変更できます。",
+    ],
     ["TeamBoard.kind", "Kind", "ประเภท", "種類"],
     ["TeamBoard.kindAppointment", "Appointment or site visit", "นัดหมาย / เข้าหน้างาน", "予定・現地訪問"],
     ["TeamBoard.kindTask", "Task", "งานทั่วไป", "タスク"],

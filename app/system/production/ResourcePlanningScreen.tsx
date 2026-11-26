@@ -65,6 +65,8 @@ const WORKLOAD_WEEKS_LINK = choiceLink<string>(["8", "12", "16", "24"]);
 const MANAGER_ROLES = ["Admin", "Engineering Manager", "Project Manager", "Leader"];
 const ALL_DEPARTMENTS = "All departments";
 const PAGE_SIZE = 50;
+/** Rows of the waiting queue shown before "Show all" (UX audit F03, 2026-11-26). */
+const QUEUE_PREVIEW = 8;
 const tones: Record<Commitment["type"], Tone> = {
   Inquiry: "blue",
   Estimate: "violet",
@@ -148,6 +150,8 @@ export function ProductionResourcePlan({ bootstrap, notify, openProjectSchedule,
     [edit, setEdit] = useState<Commitment | null>(null),
     [capacityUser, setCapacityUser] = useState<number | null>(null),
     [queueDiscipline, setQueueDiscipline] = useState<string>("all"),
+    [queueNoEffort, setQueueNoEffort] = useState(false),
+    [queueAll, setQueueAll] = useState(false),
     [assigning, setAssigning] = useState<Commitment | null>(null);
   const canPlan = bootstrap.permissions.includes("schedule.plan");
   // Anyone orders their own work; Admin, Engineering Managers, Project Managers and Leaders may order anyone's (the API agrees).
@@ -238,9 +242,16 @@ export function ProductionResourcePlan({ bootstrap, notify, openProjectSchedule,
   // Plan rows waiting for the head to name their people (owner, 2026-11-22); the rest stays in the drawer as before.
   const waiting = unassigned.filter((item) => item.type === "Project" && item.taskId !== undefined && isOpenWork(item));
   const otherUnassigned = unassigned.filter((item) => !waiting.includes(item));
-  const waitingShown = waiting
+  // The page's search reaches the queue too; rows with no man-days go last and have a chip of their own.
+  const queueQuery = search.trim().toLocaleLowerCase();
+  const waitingFound = waiting.filter((item) => !queueQuery || [item.reference, item.title, item.customer].join(" ").toLocaleLowerCase().includes(queueQuery));
+  const noEffort = (item: Commitment) => !item.manDays;
+  const waitingShown = waitingFound
     .filter((item) => queueDiscipline === "all" || (queueDiscipline === "none" ? !isPlanDiscipline(item.discipline) : item.discipline === queueDiscipline))
-    .sort((a, b) => (a.start ?? "9999").localeCompare(b.start ?? "9999") || a.reference.localeCompare(b.reference));
+    .filter((item) => !queueNoEffort || noEffort(item))
+    .sort((a, b) => Number(noEffort(a)) - Number(noEffort(b)) || (a.start ?? "9999").localeCompare(b.start ?? "9999") || a.reference.localeCompare(b.reference));
+  // The first rows only, so the team table stays near the top; the rest one press away.
+  const waitingListed = queueAll ? waitingShown : waitingShown.slice(0, QUEUE_PREVIEW);
   // The project's manager, an Engineering Manager or an Admin names people; the API checks the project.
   const canAssign = canPlan && manages;
   const person = personId === null ? null : (rows.find((row) => row.user.id === personId) ?? null);
@@ -308,7 +319,7 @@ export function ProductionResourcePlan({ bootstrap, notify, openProjectSchedule,
     <Panel title="Alloc.queueTitle" subtitle="Alloc.queueSubtitle" guide="alloc.queue" flush>
       <div className="alloc-queue-filter" role="group" aria-label={t("Plan.discipline")}>
         {(["all", ...PLAN_DISCIPLINES, "none"] as const).map((key) => {
-          const count = key === "all" ? waiting.length : waiting.filter((item) => (key === "none" ? !isPlanDiscipline(item.discipline) : item.discipline === key)).length;
+          const count = key === "all" ? waitingFound.length : waitingFound.filter((item) => (key === "none" ? !isPlanDiscipline(item.discipline) : item.discipline === key)).length;
           if (key !== "all" && !count) return null;
           return (
             <button key={key} type="button" className={queueDiscipline === key ? "chip on" : "chip"} aria-pressed={queueDiscipline === key} onClick={() => setQueueDiscipline(key)}>
@@ -317,9 +328,16 @@ export function ProductionResourcePlan({ bootstrap, notify, openProjectSchedule,
             </button>
           );
         })}
+        {waitingFound.some(noEffort) ? (
+          <button type="button" className={queueNoEffort ? "chip on" : "chip"} aria-pressed={queueNoEffort} onClick={() => setQueueNoEffort(!queueNoEffort)}>
+            {t("Alloc.noEffort")}
+            <em>{waitingFound.filter(noEffort).length}</em>
+          </button>
+        ) : null}
       </div>
+      {!waitingShown.length ? <p className="muted alloc-queue-none">{t("Alloc.noMatch")}</p> : null}
       <ul className="alloc-queue">
-        {waitingShown.map((item) => (
+        {waitingListed.map((item) => (
           <li key={item.key}>
             <div className="alloc-queue-main">
               <button type="button" className="workload-item-link" onClick={() => open(item)}>
@@ -341,6 +359,13 @@ export function ProductionResourcePlan({ bootstrap, notify, openProjectSchedule,
           </li>
         ))}
       </ul>
+      {waitingShown.length > QUEUE_PREVIEW ? (
+        <div className="alloc-queue-more">
+          <button type="button" className="btn ghost sm" aria-expanded={queueAll} onClick={() => setQueueAll(!queueAll)}>
+            {queueAll ? t("Alloc.showLess") : t("Alloc.showAll").replace("{n}", String(waitingShown.length))}
+          </button>
+        </div>
+      ) : null}
     </Panel>
   ) : null;
   if (!allowedTabs.length) return <EmptyState icon="shield" title={t("Permission denied")} message="team.board" />;

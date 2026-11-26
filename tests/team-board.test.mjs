@@ -338,8 +338,11 @@ test("only Admins, Leaders and managers add work on other people's rows; new wor
   assert.match(board, /\{canAssignOthers \|\| userId === me \? \(/);
   assert.match(board, /const assignable = useMemo\(\(\) => \(canAssignOthers \? null : \[me\]\), \[canAssignOthers, me\]\);/);
   assert.match(board, /\.filter\(\(user\) => assignable === null \|\| assignable\.includes\(user\.id\) \|\| Boolean\(original\?\.assigneeIds\.includes\(user\.id\)\)\)/);
-  // Which work it is for, chosen every time, and a brief detail; a day away needs neither.
-  assert.match(board, /const\s*draftMissing\s*=\s*\(\s*draft:\s*Draft,?\s*\):\s*string\[\s*,?\s*\]\s*=>\s*draft\.kind\s*===\s*"Away"\s*\?\s*\[\s*,?\s*\]\s*:\s*\[\s*/);
+  // Which work it is for, chosen every time, and a brief detail; a day away needs neither, only who is away (UX audit F07).
+  assert.match(
+    board,
+    /const\s*draftMissing\s*=\s*\(\s*draft:\s*Draft,?\s*\):\s*string\[\s*,?\s*\]\s*=>\s*draft\.kind\s*===\s*"Away"\s*\?\s*draft\.assigneeIds\.length\s*\?\s*\[\s*,?\s*\]\s*:\s*\["TeamBoard\.people"\]\s*:\s*\[\s*/,
+  );
   assert.match(
     board,
     /const\s*draftReady\s*=\s*\(\s*draft:\s*Draft,\s*repeating\s*=\s*true,?\s*\)\s*=>\s*Boolean\(\s*draft\.title\.trim\(\s*,?\s*\)\s*&&\s*draft\.startDate,?\s*\)\s*&&\s*!draftProblem\(\s*draft,\s*repeating,?\s*\)\s*&&\s*!draftMissing\(\s*draft,?\s*\)\.length/,

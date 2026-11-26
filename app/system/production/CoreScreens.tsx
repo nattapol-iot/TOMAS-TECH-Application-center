@@ -3,6 +3,7 @@ import { confirmDialog } from "../dialogs";
 import { useT as useStaticCopy } from "../i18n";
 
 import { currentLocale, useLanguage, useT as useUiText } from "../i18n";
+import { changeText, type ChangeContext } from "./schedule-change-text";
 import { LocalizedText } from "../LocalizedText";
 import { lazy, Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { ColumnFilterSpec, ProjectListRow } from "../tomas-ui/ProjectList";
@@ -1160,11 +1161,14 @@ export function ProductionProjects({
       />
     </>
   );
-  // V2 header funnels over the same single-value filters; the options count the projects loaded.
-  const countBy = (pick: (item: ProjectOverviewItem) => string) => items.reduce<Record<string, number>>((counts, item) => ({ ...counts, [pick(item)]: (counts[pick(item)] ?? 0) + 1 }), {});
-  const stageCounts = countBy((item) => item.status);
-  const managerCounts = countBy((item) => String(item.managerId));
-  const teamCounts = countBy((item) => shownProjectTeam(item.team));
+  // V2 header funnels over the same single-value filters. Each option counts the projects the list would show if it
+  // were picked: every other filter in force (Mine, search, health, chips...), its own set aside (UX audit F12, 2026-11-26:
+  // "วางแผน 14" under Mine opened 10 projects).
+  const countBy = (patch: Partial<PortfolioFilters>, pick: (item: ProjectOverviewItem) => string) =>
+    portfolioView(items, { ...filters, ...patch }, overview?.loadedAt ?? 0).rows.reduce<Record<string, number>>((counts, item) => ({ ...counts, [pick(item)]: (counts[pick(item)] ?? 0) + 1 }), {});
+  const stageCounts = countBy({ status: null }, (item) => item.status);
+  const managerCounts = countBy({ managerId: null }, (item) => String(item.managerId));
+  const teamCounts = countBy({ team: null }, (item) => shownProjectTeam(item.team));
   const clearFilter = uiText("Portfolio.clearFilters");
   const stageFilter: ColumnFilterSpec = {
     label: uiText("Portfolio.colStage"),
@@ -1804,56 +1808,19 @@ type PageOverview = {
   documents: { id: number; name: string; folderCode: string; documentType: string; uploadedAt: string; uploadedBy: string; copy?: { number: number; of: number } }[];
   activity: { id: number; field: string; from?: string | null; to?: string | null; comment: string | null; at: string; actor: string; task: string | null }[];
 };
-/**
- * One plan change in words (QA 2026-11-26: the Overview showed actual_finish, percent_complete and people as stored):
- * what changed, and what it was and became when that reads as a value. A plan stored as JSON is named, not shown.
- */
-const ACTIVITY_FIELDS: Record<string, [th: string, en: string, jp: string]> = {
-  percent_complete: ["ความคืบหน้า", "Progress", "進捗"],
-  status: ["สถานะ", "Status", "状態"],
-  actual_start: ["วันเริ่มจริง", "Actual start", "実開始日"],
-  actual_finish: ["วันเสร็จจริง", "Actual finish", "実完了日"],
-  forecast_finish: ["วันที่คาดว่าจะเสร็จ", "Forecast finish", "完了見込み"],
-  blocked_reason: ["เหตุที่ติดขัด", "Blocked reason", "停止理由"],
-  remark: ["หมายเหตุ", "Remark", "備考"],
-  progress: ["รายงานความคืบหน้า", "Progress report", "進捗報告"],
-  people: ["ปรับจำนวนคน", "People changed", "人員を変更"],
-  plan: ["ปรับแผน", "Plan changed", "計画を変更"],
-  plan_days: ["จำนวนวันในแผน", "Plan days", "計画日数"],
-  created: ["เพิ่มแถว", "Row added", "行を追加"],
-  deleted: ["ลบแถว", "Row removed", "行を削除"],
-  request: ["ขอเลื่อนวัน", "Day request", "日程変更依頼"],
-  request_answer: ["ตอบคำขอเลื่อนวัน", "Day request answered", "日程変更依頼に回答"],
-  assign: ["มอบหมายคน", "Assigned", "担当を割当"],
-  baseline: ["บันทึก Baseline", "Baseline saved", "ベースラインを保存"],
-};
+/** A comment the app writes, in the reader's language; anything typed by a person shows as typed. */
 const ACTIVITY_COMMENTS: Record<string, [th: string, en: string, jp: string]> = {
   "Edited in the People table": ["แก้ในตารางคน", "Edited in the People table", "人員表で編集"],
 };
-const ACTIVITY_DATES = new Set(["actual_start", "actual_finish", "forecast_finish"]);
+/** One plan change in words (schedule-change-text.ts, shared with My Work's history), then its comment. */
 function activityText(
   entry: { field: string; from?: string | null; to?: string | null; comment: string | null },
   copy: (th: string, en: string, jp: string) => string,
-  uiText: (key: string) => string,
+  context: ChangeContext,
 ): string {
-  const named = ACTIVITY_FIELDS[entry.field];
-  const label = named ? copy(...named) : entry.field.replace(/_/g, " ");
-  const value = (raw: string | null | undefined): string | null => {
-    const text = (raw ?? "").trim();
-    if (!text || text === "null") return "–";
-    if (/^[[{]/.test(text)) return null;
-    if (ACTIVITY_DATES.has(entry.field) && /^\d{4}-\d{2}-\d{2}/.test(text)) return formatDay(text.slice(0, 10));
-    if (entry.field === "percent_complete" && Number.isFinite(Number(text))) return `${Math.round(Number(text))}%`;
-    if (entry.field === "status") return uiText(text);
-    return text.length > 40 ? `${text.slice(0, 40)}…` : text;
-  };
-  const before = value(entry.from),
-    after = value(entry.to);
-  // Before and after only when both read as values and say something; a change to nothing shows "–".
-  const change = before !== null && after !== null && before !== after ? `: ${before} → ${after}` : "";
   const known = entry.comment ? ACTIVITY_COMMENTS[entry.comment] : undefined;
   const comment = entry.comment ? ` · ${known ? copy(...known) : entry.comment}` : "";
-  return `${label}${change}${comment}`;
+  return `${changeText(entry, context)}${comment}`;
 }
 
 const PAYMENT_STEPS: { code: PaymentMilestone; label: string }[] = [
@@ -1885,6 +1852,7 @@ function ProjectOverviewTab({
 }) {
   const uiText = useUiText();
   const copy = useProjectCopy();
+  const { lang } = useLanguage();
   const [data, setData] = useState<PageOverview | null>(null);
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
@@ -2067,7 +2035,7 @@ function ProjectOverviewTab({
         rows: answer.activity.map((entry) => ({
           key: String(entry.id),
           label: `${entry.actor} · ${entry.task ?? copy("ทั้งแผน", "the plan", "計画全体")}`,
-          sub: `${activityText(entry, copy, uiText)} · ${formatDay(entry.at)}`,
+          sub: `${activityText(entry, copy, { lang, t: uiText, day: formatDay })} · ${formatDay(entry.at)}`,
         })),
       })),
     },
@@ -2199,6 +2167,9 @@ function ProjectMembersModal({
   notify: (message: string) => void;
   onClose: () => void;
 }) {
+  // Every word in the reader's language (UX audit F10, 2026-11-26).
+  const uiText = useUiText();
+  const copy = useProjectCopy();
   const [members, setMembers] = useState<ProjectMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -2262,8 +2233,8 @@ function ProjectMembersModal({
 
   return (
     <Modal
-      title={`${project.number} · Team`}
-      subtitle={`${project.name} · ทุกคนในรายการนี้จะมองเห็นโปรเจกต์นี้ได้`}
+      title={`${project.number} · ${uiText("Team")}`}
+      subtitle={`${project.name} · ${copy("ทุกคนในรายการนี้จะมองเห็นโปรเจกต์นี้ได้", "everyone on this list can see the project", "この一覧の全員が案件を見られます")}`}
       size="lg"
       onClose={onClose}
       footer={
@@ -2289,7 +2260,7 @@ function ProjectMembersModal({
             <span>
               <LocalizedText text={"Role on the project"} />
             </span>
-            <input maxLength={100} value={addRole} disabled={adding} placeholder="e.g. Support Engineer" onChange={(event) => setAddRole(event.target.value)} />
+            <input maxLength={100} value={addRole} disabled={adding} placeholder={uiText("e.g. Support Engineer")} onChange={(event) => setAddRole(event.target.value)} />
           </label>
           <div className="span-2">
             <button
@@ -2334,7 +2305,7 @@ function ProjectMembersModal({
         />
       ) : null}
 
-      <Panel title={`${members.length} people`} subtitle={loading ? "Loading team…" : "Everyone who can see this project"} flush>
+      <Panel title={`${members.length} ${uiText("people")}`} subtitle={loading ? "Loading team…" : "Everyone who can see this project"} flush>
         {members.length ? (
           <div className="table-wrap">
             <table>
@@ -2552,6 +2523,7 @@ function EditProjectModal({
 }) {
   const t = useUiText();
   const copy = useProjectCopy();
+  const uiText = useUiText();
   // Additional roles count, as they do in the API. The person already on the project stays listed even
   // when no role qualifies them any more, so the dialog shows who is assigned instead of the first name.
   const eligible = useCallback(
@@ -2630,8 +2602,12 @@ function EditProjectModal({
 
   return (
     <Modal
-      title={`Edit ${project.number}`}
-      subtitle="เลื่อนสถานะ อัปเดตความคืบหน้า และแก้ข้อมูลโครงการ พร้อมบันทึก Audit trail"
+      title={`${uiText("Edit project")} · ${project.number}`}
+      subtitle={copy(
+        "เลื่อนสถานะ อัปเดตความคืบหน้า และแก้ข้อมูลโครงการ พร้อมบันทึก Audit trail",
+        "Move the stage, update progress and edit the project; every change is audited",
+        "ステージ・進捗・案件情報を変更します（変更は監査記録に残ります）",
+      )}
       size="xl"
       onClose={onClose}
       footer={
@@ -2721,7 +2697,7 @@ function EditProjectModal({
             <select value={form.status} onChange={(event) => set("status", event.target.value)}>
               {statusChoices.map((value) => (
                 <option key={value} value={value}>
-                  {value}
+                  {uiText(value)}
                 </option>
               ))}
             </select>
@@ -3259,7 +3235,7 @@ type ProjectEstimateOption = {
 /** canCreateFromEstimate: false for the Application team without project.write (an older API build omits it). */
 type ProjectCreationOptions = {
   estimates: ProjectEstimateOption[];
-  people: { id: number; name: string; canManage: boolean; canLead: boolean }[];
+  people: { id: number; name: string; department?: string; canManage: boolean; canLead: boolean }[];
   canCreateWithoutEstimate?: boolean;
   canCreateFromEstimate?: boolean;
 };
@@ -3299,13 +3275,18 @@ export function CreateProjectModal({
   const [options, setOptions] = useState<ProjectCreationOptions>({ estimates: [], people: [] });
   const managers = options.people.filter((member) => member.canManage);
   const engineers = options.people.filter((member) => member.canLead);
+  // A name two people share says whose it is (UX audit F04, 2026-11-26).
+  const personLabel = (member: { id: number; name: string; department?: string }) =>
+    options.people.some((other) => other.id !== member.id && other.name.trim().toLowerCase() === member.name.trim().toLowerCase())
+      ? `${member.name} · ${member.department || `#${member.id}`}`
+      : member.name;
   const estimates = initialEstimateId ? options.estimates.filter((item) => item.id === initialEstimateId) : options.estimates;
   const [loadingOptions, setLoadingOptions] = useState(true);
   const [optionsRevision, setOptionsRevision] = useState(0);
   const t = useUiText();
   // The page keeps what is typed in this browser (form-draft.ts); the dialog does not.
   const draftKey = page ? `project-create:${bootstrap.user.id}` : null;
-  const [form, setForm] = useDraftField<CreateProjectInput>(draftKey, "form", {
+  const [emptyForm] = useState<CreateProjectInput>(() => ({
     projectNumber: "",
     estimateId: 0,
     purchaseOrderNumber: "",
@@ -3322,8 +3303,11 @@ export function CreateProjectModal({
     customerId: 0,
     projectName: "",
     projectType: "",
-  });
-  const [withoutEstimate, setWithoutEstimate] = useDraftField(draftKey, "withoutEstimate", false);
+  }));
+  // The form as it opens once the options have filled their defaults: what is not a change (UX audit F05, 2026-11-26).
+  const [opened, setOpened] = useState<{ form: CreateProjectInput; withoutEstimate: boolean } | null>(null);
+  const [form, setForm] = useDraftField<CreateProjectInput>(draftKey, "form", opened?.form ?? emptyForm);
+  const [withoutEstimate, setWithoutEstimate] = useDraftField(draftKey, "withoutEstimate", opened?.withoutEstimate ?? false);
   const [headings, setHeadings] = useDraftField<PlanHeadingDraft[]>(draftKey, "plan", []);
   const templates = useScheduleTemplates();
   const departments = projectTeamOptions(form.department);
@@ -3357,7 +3341,7 @@ export function CreateProjectModal({
         defaultsApplied.current = true;
         const first = initialEstimateId ? data.estimates.find((item) => item.id === initialEstimateId) : undefined;
         const lead = data.people.find((member) => member.canLead && member.id === first?.ownerId)?.id ?? 0;
-        setForm((current) => ({
+        const withDefaults = (current: CreateProjectInput): CreateProjectInput => ({
           ...current,
           estimateId: current.estimateId || first?.id || 0,
           managerId: current.managerId || data.people.find((member) => member.canManage && member.id === bootstrap.user.id)?.id || 0,
@@ -3367,9 +3351,15 @@ export function CreateProjectModal({
           targetDelivery: first?.targetDelivery || current.targetDelivery,
           purchaseOrderNumber: current.purchaseOrderNumber || first?.purchaseOrderNumber || "",
           purchaseOrderDate: first?.purchaseOrderDate || current.purchaseOrderDate,
-        }));
+        });
+        setForm(withDefaults);
         // Nothing approved to start from: someone allowed to go without an estimate starts there.
-        if (!initialEstimateId && !data.estimates.length && data.canCreateWithoutEstimate) setWithoutEstimate(true);
+        const startsWithout = !initialEstimateId && !data.estimates.length && Boolean(data.canCreateWithoutEstimate);
+        if (startsWithout) setWithoutEstimate(true);
+        setOpened({
+          form: withDefaults(emptyForm),
+          withoutEstimate: data.canCreateFromEstimate === false || (Boolean(data.canCreateWithoutEstimate) && startsWithout),
+        });
       })
       .catch((error) => {
         if (!cancelled) setLoadError(toError(error));
@@ -3380,7 +3370,7 @@ export function CreateProjectModal({
     return () => {
       cancelled = true;
     };
-  }, [initialEstimateId, bootstrap.user.id, bootstrap.team, optionsRevision, setForm, setWithoutEstimate]);
+  }, [initialEstimateId, bootstrap.user.id, bootstrap.team, optionsRevision, setForm, setWithoutEstimate, emptyForm]);
   const standalone = withoutEstimate && !initialEstimateId;
   const selectedEstimate = standalone ? undefined : estimates.find((item) => item.id === form.estimateId);
   const customerId = standalone ? (form.customerId ?? 0) : (selectedEstimate?.customerId ?? 0);
@@ -3617,7 +3607,7 @@ export function CreateProjectModal({
             <option value={0}>{t("CRM.selectProjectManager")}</option>
             {managers.map((member) => (
               <option key={member.id} value={member.id}>
-                {member.name}
+                {personLabel(member)}
               </option>
             ))}
           </select>
@@ -3636,7 +3626,7 @@ export function CreateProjectModal({
             <option value={0}>{t("CRM.selectLeadEngineer")}</option>
             {engineers.map((member) => (
               <option key={member.id} value={member.id}>
-                {member.name}
+                {personLabel(member)}
               </option>
             ))}
           </select>

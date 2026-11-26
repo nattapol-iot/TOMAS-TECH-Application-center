@@ -2465,16 +2465,16 @@ const ALLOCATION_ASSIGN: Guide = {
       "resources",
       { th: "เปิดเมนูภาพรวมงานทีม", en: "Open Team overview", jp: "「チームの仕事一覧」を開く" },
       {
-        th: "การจัดคนอยู่ในแท็บ 'จัดคน 12 สัปดาห์' ของหน้านี้ (คิวรอจัดคนยังอยู่ข้างตารางของแท็บ 'แผนงานทีม' ด้วย) คลิกที่เมนูที่ไฮไลต์อยู่",
-        en: "Allocation is the Allocation · 12 weeks tab of this page (the queue also sits beside the Team planner table). Click the highlighted menu entry.",
-        jp: "要員配置はこのページの「要員配置・12週」タブにあります（割り当て待ちの一覧は「チームプランナー」の表の横にもあります）。強調表示のメニューをクリックします。",
+        th: "การจัดคนอยู่ในแท็บ 'จัดคนรายสัปดาห์' ของหน้านี้ (คิวรอจัดคนยังอยู่ข้างตารางของแท็บ 'แผนงานทีม' ด้วย) คลิกที่เมนูที่ไฮไลต์อยู่",
+        en: "Allocation is the Allocation by week tab of this page (the queue also sits beside the Team planner table). Click the highlighted menu entry.",
+        jp: "要員配置はこのページの「週別の要員配置」タブにあります（割り当て待ちの一覧は「チームプランナー」の表の横にもあります）。強調表示のメニューをクリックします。",
       },
     ),
     {
       target: '[data-tab="workload"]',
       action: "click",
       view: "resources",
-      title: { th: "กดแท็บ 'จัดคน 12 สัปดาห์'", en: "Press the Allocation · 12 weeks tab", jp: "「要員配置・12週」タブを押す" },
+      title: { th: "กดแท็บ 'จัดคนรายสัปดาห์'", en: "Press the Allocation by week tab", jp: "「週別の要員配置」タブを押す" },
       body: {
         th: "ตารางคน × สัปดาห์บอกว่าแต่ละคนมีงานกี่เปอร์เซ็นต์ของเวลาที่มี วันลาถูกหักออกจากเวลาแล้ว ใต้ตัวเลขมี 'จริง' คือชั่วโมงที่ยืนยันใน My Work และ 'ลา' คือจำนวนวันที่ลา",
         en: "The people × weeks table shows each person's planned work as a share of the time they have, with days away already taken off. Under the figures, Actual is the hours confirmed in My Work and Away the days away.",
@@ -2487,9 +2487,9 @@ const ALLOCATION_ASSIGN: Guide = {
       view: "resources",
       title: { th: "คิวงานรอจัดคน", en: "The queue of rows waiting for people", jp: "割り当て待ちの一覧" },
       body: {
-        th: "งานทุกโครงการที่ PM เพิ่มไว้พร้อมสายงานแต่ยังไม่มีคน เรียงตามวันเริ่ม กดชิปสายงานเพื่อดูเฉพาะไฟฟ้า เครื่องกล ซอฟต์แวร์ หรืองานติดตั้ง กดเลขโครงการเพื่อเปิดแผน",
-        en: "Every project's rows a PM added with a discipline and no member, soonest start first. Press a discipline chip to see only Electrical, Mechanical, Software or Installation work, and the project number to open its plan.",
-        jp: "PM が職種だけ指定して担当者を空けた全案件の行で、開始日の早い順です。職種のチップで電気・機械・ソフトウェア・据付だけを表示し、案件番号で計画を開きます。",
+        th: "งานทุกโครงการที่ PM เพิ่มไว้พร้อมสายงานแต่ยังไม่มีคน เรียงตามวันเริ่ม งานที่ยังไม่มี MD อยู่ท้ายสุด ช่องค้นหาของหน้านี้กรองรายการนี้ด้วย แสดง 8 งานแรก กด 'แสดงทั้งหมด' เพื่อดูที่เหลือ กดชิปสายงานเพื่อดูเฉพาะไฟฟ้า เครื่องกล ซอฟต์แวร์ หรืองานติดตั้ง หรือชิป 'ยังไม่มี MD' กดเลขโครงการเพื่อเปิดแผน",
+        en: "Every project's rows a PM added with a discipline and no member, soonest start first, rows with no man-days last. The page's search filters this list too. It shows the first 8; press Show all for the rest. Press a discipline chip to see only Electrical, Mechanical, Software or Installation work, or No man-days yet, and the project number to open its plan.",
+        jp: "PM が職種だけ指定して担当者を空けた全案件の行で、開始日の早い順、人日未入力の行は最後です。ページの検索はこの一覧にも効きます。最初の 8 行を表示し、「すべて表示」で残りを開きます。職種のチップで電気・機械・ソフトウェア・据付、または「人日未入力」だけを表示し、案件番号で計画を開きます。",
       },
       missing: {
         th: "แผงนี้ขึ้นเมื่อมีงานรอจัดคน PM เลือก 'รอหัวหน้าจัดคน' พร้อมสายงานตอนเพิ่มงานในแผน กด 'ถัดไป'",

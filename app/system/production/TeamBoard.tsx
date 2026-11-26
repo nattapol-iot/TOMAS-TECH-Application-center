@@ -2518,7 +2518,9 @@ const draftProblem = (draft: Draft, repeating = true) => {
 /** Required fields still empty: the work it is for and its brief detail (a day away needs neither). */
 const draftMissing = (draft: Draft): string[] =>
   draft.kind === "Away"
-    ? []
+    ? draft.assigneeIds.length
+      ? []
+      : ["TeamBoard.people"]
     : [
         !draft.workType || (draft.workType === "project" && !draft.projectId) || (draft.workType === "inquiry" && !draft.inquiryId) ? "TeamBoard.workFor" : "",
         draft.note.trim() ? "" : "TeamBoard.detail",

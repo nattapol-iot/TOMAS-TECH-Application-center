@@ -410,7 +410,7 @@ export function ProjectDocumentsTab({ project, canWrite, notify }: { project: Pr
             </div>
           ) : (
             <EmptyState className="rounded-md border bg-card py-10 text-center">
-              <p className="font-medium">{t(documents?.length ? "Portfolio.noMatch" : "ProjectDocs.none")}</p>
+              <p className="font-medium">{t(documents?.length ? "ProjectDocs.noMatchTitle" : "ProjectDocs.none")}</p>
               <p className="text-sm text-muted-foreground">{t(documents?.length ? "ProjectDocs.noMatch" : canWrite ? "ProjectDocs.noneHint" : "ProjectDocs.noneRead")}</p>
             </EmptyState>
           )}
