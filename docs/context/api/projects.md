@@ -2,7 +2,7 @@
 
 [Module](../modules/projects.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `9c192c2a`; generated, do not edit. [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `1b09d40e`; generated, do not edit. [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
@@ -13,25 +13,25 @@ Evidence: source snapshot `9c192c2a`; generated, do not edit. [backend-node/src/
 | GET | `/api/v1/projects/contact-options` | 250–270 |
 | GET | `/api/v1/projects` | 272–308 |
 | GET | `/api/v1/projects/attention` | 365–392 |
-| GET | `/api/v1/projects/overview` | 396–480 |
-| GET | `/api/v1/projects/cost-overview` | 509–552 |
-| PUT | `/api/v1/projects/:id/ceo-note` | 556–586 |
-| GET | `/api/v1/projects/:id/page-overview` | 599–652 |
-| GET | `/api/v1/projects/:id/cost` | 654–799 |
-| POST | `/api/v1/projects` | 801–1045 |
-| GET | `/api/v1/projects/:id/members` | 1047–1087 |
-| POST | `/api/v1/projects/:id/members` | 1089–1114 |
-| DELETE | `/api/v1/projects/:id/members/:userId` | 1116–1139 |
-| GET | `/api/v1/projects/:id/deletion` | 1161–1169 |
-| DELETE | `/api/v1/projects/:id` | 1171–1208 |
-| PUT | `/api/v1/projects/:id` | 1210–1384 |
+| GET | `/api/v1/projects/overview` | 396–482 |
+| GET | `/api/v1/projects/cost-overview` | 511–554 |
+| PUT | `/api/v1/projects/:id/ceo-note` | 558–588 |
+| GET | `/api/v1/projects/:id/page-overview` | 601–654 |
+| GET | `/api/v1/projects/:id/cost` | 656–801 |
+| POST | `/api/v1/projects` | 803–1047 |
+| GET | `/api/v1/projects/:id/members` | 1049–1089 |
+| POST | `/api/v1/projects/:id/members` | 1091–1116 |
+| DELETE | `/api/v1/projects/:id/members/:userId` | 1118–1141 |
+| GET | `/api/v1/projects/:id/deletion` | 1163–1171 |
+| DELETE | `/api/v1/projects/:id` | 1173–1210 |
+| PUT | `/api/v1/projects/:id` | 1212–1386 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
 | `shiftDate` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 91–96 |
-| `registerProjectRoutes` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 156–1385 |
+| `registerProjectRoutes` | [backend-node/src/routes/projects.ts](<../../../backend-node/src/routes/projects.ts>) | 156–1387 |
 
 ## Direct local dependencies
 
