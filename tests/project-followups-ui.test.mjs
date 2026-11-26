@@ -124,8 +124,11 @@ test("Edit project lists PMs and leads by effective role and always shows who is
 test("CRM's pipeline bar and attention chips are the shared SegmentBar and FilterChips", () => {
   const crm = read("app/system/production/CrmScreens.tsx");
   const css = read("app/system/production/crm.css");
-  assert.match(crm, /<SegmentBar label="CRM\.pipelineOverview" items=\{items\}/);
-  assert.match(crm, /return <FilterChips items=\{ATTENTION_KEYS\.map/);
+  assert.match(crm, /<SegmentBar\s+label="CRM\.pipelineOverview"\s+items=\{items\}/);
+  // The urgent counts are the shared FilterChips; waiting and missing data sit apart as quiet chips (CRM UX audit CRM-08).
+  assert.match(crm, /<FilterChips\s+items=\{ATTENTION_KEYS\.map/);
+  assert.match(crm, /const ATTENTION_KEYS = \["Overdue", "DueToday", "NeedsFollowup", "EstimateDueSoon"\];/);
+  assert.match(crm, /const QUIET_KEYS = \["Waiting", "Incomplete"\];/);
   assert.match(crm, /import "\.\.\/segment-filters\.css";/);
   assert.doesNotMatch(css, /\.crm-(seg|legend|dot|chip|distribution-bar|distribution-head)\b/, "no second copy of the shared styles");
   assert.doesNotMatch(crm, /crm-(seg|legend|dot|chip)\b/);

@@ -13,7 +13,7 @@ test("Pipeline is the board mode of CRM Opportunities, not a second menu entry",
   assert.match(shell, /if \(data\.permissions\.includes\("crm\.read"\)\) allowed\.push\("crm-pipeline"\);/);
   assert.match(shell, /const navView = \(view: View\): View => \(?view === "crm-pipeline" \? "crm-opportunities" :/);
   assert.match(shell, /<CrmScreen\s[^>]*onViewChange=\{setView\}/);
-  assert.match(crm, /<Tabs<CrmView> tabs=\{\[\{id:"crm-opportunities",label:"CRM\.listView"\},\{id:"crm-pipeline",label:"CRM\.boardView"\}\]\}/);
+  assert.match(crm, /<Tabs<CrmView>\s+tabs=\{\[\s*\{ id: "crm-opportunities", label: "CRM\.listView" \},\s*\{ id: "crm-pipeline", label: "CRM\.boardView" \},?\s*\]\}/);
   for (const key of ["CRM.listView", "CRM.boardView"]) assert.match(copy, new RegExp(`\\[\\s*"${key.replace(".", "\\.")}",\\s*"[^"]+",\\s*"[^"]+",\\s*"[^"]+",?\\s*\\]`));
 });
 

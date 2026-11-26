@@ -28,6 +28,7 @@ type CustomerRow = {
   name_th: string;
   name_en: string;
   name_ja: string;
+  short_name?: string;
   industry: string;
   contact: string;
   contact_title_th: string;
@@ -198,7 +199,7 @@ export function registerBootstrapRoutes(
         ORDER BY is_active DESC, id DESC
       ) employee;
 
-      SELECT c.id, c.code, c.name, c.name_th, c.name_en, c.name_ja, c.industry, c.contact, c.email, c.phone, c.site,
+      SELECT c.id, c.code, c.name, c.name_th, c.name_en, c.name_ja, c.short_name, c.industry, c.contact, c.email, c.phone, c.site,
         COALESCE(primary_contact.title_th,N'') contact_title_th,COALESCE(primary_contact.title_en,N'') contact_title_en,COALESCE(primary_contact.title_ja,N'') contact_title_ja,COALESCE(primary_contact.name_th,N'') contact_name_th,COALESCE(primary_contact.name_en,N'') contact_name_en,COALESCE(primary_contact.name_ja,N'') contact_name_ja,
         COALESCE(primary_contact.department,N'') department,COALESCE(primary_contact.position,N'') position,
         (SELECT COUNT_BIG(*) FROM dbo.inquiries i WHERE i.customer_id = c.id AND i.deleted_at IS NULL) AS inquiry_count,
@@ -264,6 +265,7 @@ export function registerBootstrapRoutes(
         nameTh: row.name_th,
         nameEn: row.name_en,
         nameJa: row.name_ja,
+        shortName: row.short_name ?? "",
         industry: row.industry,
         contact: row.contact,
         contactTitleTh: row.contact_title_th,

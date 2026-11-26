@@ -76,6 +76,8 @@ export type BootstrapData = {
     nameTh: string;
     nameEn: string;
     nameJa: string;
+    /** The customer's short name (CRM), searched by the customer pickers. An older API build omits it. */
+    shortName?: string;
     industry: string;
     contact: string;
     contactNameTh: string;
