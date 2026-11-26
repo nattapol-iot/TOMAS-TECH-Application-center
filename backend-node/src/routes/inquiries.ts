@@ -25,6 +25,7 @@ import {
 import { notifyUsers } from "../site-visit-common.js";
 import type { CurrentUserService } from "../users.js";
 import { inquiryEstimateOwner } from "../crm-sales-evidence.js";
+import { alignEstimateOwner } from "../estimate-owner.js";
 import { crmAccess, bindAccess, scopedOpportunity, CRM_SCOPE, opportunityStageAfterInquiry, TERMINAL_INQUIRY_STATUSES } from "../crm.js";
 
 type InquiryRow = Record<string, unknown> & {
@@ -834,6 +835,9 @@ export function registerInquiryRoutes(app: FastifyInstance, config: AppConfig, d
         { estimateOwnerId: Number(current.estimate_owner_id), estimateOwnerName: current.owner_name },
         { estimateOwnerId, estimateOwnerName: nextOwner.name },
       );
+      // The inquiry's estimate follows its owner (estimate-owner.ts). Saving the same owner again also repairs an estimate
+      // that still names someone else.
+      const estimateMoved = await alignEstimateOwner(transaction, id, estimateOwnerId, actor.id);
       // Re-saving the same owner is not a new assignment, so it must not mail them again.
       const dueDate = dateOnly(current.due_date) ?? "";
       const emailMessage =
@@ -857,7 +861,16 @@ export function registerInquiryRoutes(app: FastifyInstance, config: AppConfig, d
               actor.id,
               `${current.customer_name} · ${current.project_name} — กำหนดส่ง ${dueDate} · ความเร่งด่วน ${current.priority} · มอบหมายโดย ${actor.name}`,
             );
-      return { payload: { id, estimateOwnerId, estimateOwnerName: nextOwner.name, rowVersion: updated.row_version.toString("base64") }, emailMessage };
+      return {
+        payload: {
+          id,
+          estimateOwnerId,
+          estimateOwnerName: nextOwner.name,
+          rowVersion: updated.row_version.toString("base64"),
+          estimateOwnerMoved: estimateMoved ? { estimateNumber: estimateMoved.estimateNumber, sectionsMoved: estimateMoved.sectionsMoved } : null,
+        },
+        emailMessage,
+      };
     }, sql.ISOLATION_LEVEL.READ_COMMITTED);
     if (!response) return reply.status(404).send();
     const notification = await deliverAssignmentEmail(email, response.emailMessage);

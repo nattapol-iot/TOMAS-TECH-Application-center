@@ -819,12 +819,16 @@ export function registerEstimateRoutes(
       updateInquiryRequest.input("estimate_id", sql.BigInt, id);
       updateInquiryRequest.input("actor", sql.BigInt, actor.id);
       updateInquiryRequest.input("inquiry_id", sql.BigInt, inquiryId);
-      const changed = await updateInquiryRequest.query(`UPDATE dbo.inquiries SET estimate_id=@estimate_id,status=N'Estimating',updated_by=@actor,updated_at=SYSUTCDATETIME()
+      updateInquiryRequest.input("owner_id", sql.BigInt, ownerId);
+      // One owner for the inquiry and its estimate (estimate-owner.ts): a manager who picks another estimator here
+      // changes the inquiry's owner too, so the inquiry list and the estimate name the same person.
+      const changed = await updateInquiryRequest.query(`UPDATE dbo.inquiries SET estimate_id=@estimate_id,estimate_owner_id=@owner_id,status=N'Estimating',updated_by=@actor,updated_at=SYSUTCDATETIME()
         WHERE id=@inquiry_id AND status=N'New' AND estimate_id IS NULL AND deleted_at IS NULL;`);
       if (changed.rowsAffected[0] !== 1) throw new ApiError(409, "inquiry_not_eligible", "The inquiry can no longer be converted to an estimate.");
       await insertAudit(transaction, actor.id, "Estimate", id, number, "Created from inquiry", inquiry.inquiry_no, {
         inquiryId,
         ownerId,
+        ...(Number(inquiry.estimate_owner_id) === ownerId ? {} : { inquiryOwnerReplaced: Number(inquiry.estimate_owner_id) }),
         dueDate,
         contingencyRate,
         copiedFromEstimateId: copySourceId,

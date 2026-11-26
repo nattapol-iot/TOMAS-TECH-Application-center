@@ -2,21 +2,21 @@
 
 [Module](../modules/estimate.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `94985f6d`; generated, do not edit. [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `1af0bcb9`; generated, do not edit. [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
 | GET | `/api/v1/estimates` | 665–751 |
-| POST | `/api/v1/estimates` | 753–848 |
-| GET | `/api/v1/estimates/:id/validation` | 850–860 |
-| POST | `/api/v1/estimates/:id/submit` | 862–880 |
-| POST | `/api/v1/estimates/:id/approve` | 882–912 |
-| POST | `/api/v1/estimates/:id/create-revision` | 914–990 |
-| POST | `/api/v1/estimates/:id/request-revision` | 992–1079 |
-| GET | `/api/v1/estimates/:id/revisions/:revision` | 1083–1200 |
-| POST | `/api/v1/estimates/:id/restore-revision` | 1204–1325 |
+| POST | `/api/v1/estimates` | 753–852 |
+| GET | `/api/v1/estimates/:id/validation` | 854–864 |
+| POST | `/api/v1/estimates/:id/submit` | 866–884 |
+| POST | `/api/v1/estimates/:id/approve` | 886–916 |
+| POST | `/api/v1/estimates/:id/create-revision` | 918–994 |
+| POST | `/api/v1/estimates/:id/request-revision` | 996–1083 |
+| GET | `/api/v1/estimates/:id/revisions/:revision` | 1087–1204 |
+| POST | `/api/v1/estimates/:id/restore-revision` | 1208–1329 |
 
 ## Named functions
 
@@ -43,7 +43,7 @@ Evidence: source snapshot `94985f6d`; generated, do not edit. [backend-node/src/
 | `estimateFacts` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 450–459 |
 | `noticeDecision` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 462–504 |
 | `transition` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 506–645 |
-| `registerEstimateRoutes` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 647–1326 |
+| `registerEstimateRoutes` | [backend-node/src/routes/estimates.ts](<../../../backend-node/src/routes/estimates.ts>) | 647–1330 |
 
 ## Direct local dependencies
 

@@ -4,7 +4,7 @@
 
 สร้าง revision รายการต้นทุน ค่าใช้จ่าย validation และ workflow
 
-Evidence: snapshot `94985f6d`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
+Evidence: snapshot `1af0bcb9`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
 
 ## Read only the operation you change
 
@@ -207,6 +207,7 @@ Shared screens contain other modules: use the symbol and line range instead of r
 - [tests/estimate-look-v2.test.mjs](<../../../tests/estimate-look-v2.test.mjs>)
 - [tests/estimate-navigation.test.mjs](<../../../tests/estimate-navigation.test.mjs>)
 - [tests/estimate-order.test.mjs](<../../../tests/estimate-order.test.mjs>)
+- [tests/estimate-owner.test.mjs](<../../../tests/estimate-owner.test.mjs>)
 - [tests/estimate-restore-revision-contract.test.mjs](<../../../tests/estimate-restore-revision-contract.test.mjs>)
 - [tests/estimate-template-selection.test.mjs](<../../../tests/estimate-template-selection.test.mjs>)
 - [tests/estimate-total-guardrails.test.mjs](<../../../tests/estimate-total-guardrails.test.mjs>)
@@ -236,6 +237,7 @@ Shared screens contain other modules: use the symbol and line range instead of r
 - [backend-node/tests/estimate-module-details.test.ts](<../../../backend-node/tests/estimate-module-details.test.ts>)
 - [backend-node/tests/estimate-module-remove.test.ts](<../../../backend-node/tests/estimate-module-remove.test.ts>)
 - [backend-node/tests/estimate-order.test.ts](<../../../backend-node/tests/estimate-order.test.ts>)
+- [backend-node/tests/estimate-owner.test.ts](<../../../backend-node/tests/estimate-owner.test.ts>)
 - [backend-node/tests/estimate-price-sets.test.ts](<../../../backend-node/tests/estimate-price-sets.test.ts>)
 - [backend-node/tests/estimate-product-codes.test.ts](<../../../backend-node/tests/estimate-product-codes.test.ts>)
 - [backend-node/tests/estimate-restore-revision.test.ts](<../../../backend-node/tests/estimate-restore-revision.test.ts>)

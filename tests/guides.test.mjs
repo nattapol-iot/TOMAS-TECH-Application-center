@@ -88,6 +88,8 @@ test("the catalog holds the guides the owner chose, in the order the work happen
       "crm-send-estimate",
       "inquiry-create",
       "inquiry-attach",
+      // Assigning an inquiry's owner moves its estimate too (2026-11-26).
+      "inquiry-assign-owner",
       "site-visit-request",
       "crm-proposal-won",
       // The V1 / V2 switch of the Sales screens; V2 is the Pegasus ERP look (2026-11-21).
@@ -194,7 +196,7 @@ test("a guide is offered only to people who can do the task", () => {
   // Engineers hold inquiry.write since 094_engineer_inquiry_write.sql: they receive RFQs and attach files.
   assert.deepEqual(
     guidesFor(["inquiry.write"]).map((guide) => guide.id),
-    ["inquiry-create", "inquiry-attach", "downloads-skill", "menu-favorites", "support-ticket", "support-follow"],
+    ["inquiry-create", "inquiry-attach", "inquiry-assign-owner", "downloads-skill", "menu-favorites", "support-ticket", "support-follow"],
   );
   // An engineer reads CRM and logs activities (053_crm.sql); sales also write deals and send them for estimating.
   assert.deepEqual(

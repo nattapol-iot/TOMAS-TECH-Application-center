@@ -2,14 +2,14 @@
 
 [Module](../modules/estimate-erp.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `94985f6d`; generated, do not edit. [backend-node/src/routes/estimate-historical-import.ts](<../../../backend-node/src/routes/estimate-historical-import.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `1af0bcb9`; generated, do not edit. [backend-node/src/routes/estimate-historical-import.ts](<../../../backend-node/src/routes/estimate-historical-import.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
 | GET | `/api/v1/estimates/historical-import/projects` | 71–104 |
-| POST | `/api/v1/estimates/historical-import` | 106–286 |
+| POST | `/api/v1/estimates/historical-import` | 106–288 |
 
 ## Named functions
 
@@ -18,7 +18,7 @@ Evidence: source snapshot `94985f6d`; generated, do not edit. [backend-node/src/
 | `addYears` | [backend-node/src/routes/estimate-historical-import.ts](<../../../backend-node/src/routes/estimate-historical-import.ts>) | 27–31 |
 | `mayImportForProject` | [backend-node/src/routes/estimate-historical-import.ts](<../../../backend-node/src/routes/estimate-historical-import.ts>) | 34–36 |
 | `parseHistoricalImport` | [backend-node/src/routes/estimate-historical-import.ts](<../../../backend-node/src/routes/estimate-historical-import.ts>) | 38–53 |
-| `registerEstimateHistoricalImportRoutes` | [backend-node/src/routes/estimate-historical-import.ts](<../../../backend-node/src/routes/estimate-historical-import.ts>) | 69–287 |
+| `registerEstimateHistoricalImportRoutes` | [backend-node/src/routes/estimate-historical-import.ts](<../../../backend-node/src/routes/estimate-historical-import.ts>) | 69–289 |
 
 ## Direct local dependencies
 
