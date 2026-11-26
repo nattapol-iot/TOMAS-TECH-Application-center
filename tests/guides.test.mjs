@@ -20,7 +20,7 @@ const shell = read("app/system/ProductionApp.tsx");
 const views = new Set([...shell.matchAll(/\{ view: "([a-z-]+)"|\{"view":"([a-z-]+)"/g)].map((match) => match[1] ?? match[2]));
 // data-guide="x" on an element, guide="x" on Panel/Field/Fields, guide:"x" on a CRM form field.
 const marked = new Set(screens.flatMap(({ text }) => [...text.matchAll(/(?:data-guide|guide)\s*[=:]\s*"([^"]+)"/g)].map((match) => match[1])));
-const crm = read("app/system/production/CrmScreens.tsx");
+const crm = read("app/system/tomas-ui/CrmPages.tsx");
 const crmForms = read("app/system/tomas-ui/CrmForms.tsx");
 // Screens a guide may name that are not menu entries of their own.
 const subViews = new Set(["sales-intake", "crm-pipeline", "command-center"]);
@@ -48,8 +48,9 @@ test("every guide step points at something a screen still marks", () => {
       } else if (step.target.startsWith("intake.to.")) {
         if (!read("app/system/production/SiteVisitScreens.tsx").includes(`"${step.target.slice(10)}"`)) missing.push(`${where}: no intake status ${step.target}`);
       } else if (step.target.startsWith("crm.tab.")) {
-        const dealTabs =
-          /\{\[((?:"[a-z]+",?\s*)+)\]\.map\(\(?k\)?\s*=>\s*(?:\(\s*)?<button\s+key=\{k\}\s+type="button"\s+role="tab"\s+aria-selected=\{tab\s*===\s*k\}\s+data-guide=\{`crm\.tab\.\$\{k\}`\}/.exec(crm);
+        // The deal page's tabs (CrmPages.tsx) are kit TabsTriggers marked crm.tab.<id>, one per entry of DEAL_TABS.
+        const dealTabs = /const DEAL_TABS = \[((?:"[a-z]+",?\s*)+)\];/.exec(crm);
+        if (!/<TabsTrigger key=\{k\} value=\{k\} data-guide=\{`crm\.tab\.\$\{k\}`\}>/.test(crm)) missing.push(`${where}: the deal tabs are not marked`);
         if (!dealTabs?.[1].includes(`"${step.target.slice(8)}"`)) missing.push(`${where}: no deal tab ${step.target}`);
       } else if (!marked.has(step.target)) missing.push(`${where}: nothing marked ${step.target}`);
     }
@@ -202,7 +203,8 @@ test("a guide is offered only to people who can do the task", () => {
   );
   assert.deepEqual(
     guidesFor(["inquiry.read", "estimate.write"]).map((guide) => guide.id),
-    ["estimate-create", "downloads-skill", "menu-favorites", "support-ticket", "support-follow"],
+    // The Sales V1 / V2 switch lives on the RFQ list since CRM moved to @tomas-tc/ui (2026-11-26).
+    ["sales-look-v2", "estimate-create", "downloads-skill", "menu-favorites", "support-ticket", "support-follow"],
   );
   assert.ok(guidesFor(["inquiry.write", "inquiry.read", "intake.read", "intake.write"]).some((guide) => guide.id === "site-visit-request"));
   // Engineers hold inquiry.write since 094_engineer_inquiry_write.sql: they receive RFQs and attach files.
@@ -213,7 +215,7 @@ test("a guide is offered only to people who can do the task", () => {
   // An engineer reads CRM and logs activities (053_crm.sql); sales also write deals and send them for estimating.
   assert.deepEqual(
     guidesFor(["crm.read", "crm.activity.write"]).map((guide) => guide.id),
-    ["crm-find-work", "crm-activity-followup", "crm-find-activity", "sales-look-v2", "downloads-skill", "menu-favorites", "support-ticket", "support-follow"],
+    ["crm-find-work", "crm-activity-followup", "crm-find-activity", "downloads-skill", "menu-favorites", "support-ticket", "support-follow"],
   );
   assert.deepEqual(
     guidesFor(["crm.read", "crm.write", "crm.activity.write", "crm.convert"]).map((guide) => guide.id),
@@ -224,7 +226,6 @@ test("a guide is offered only to people who can do the task", () => {
       "crm-find-activity",
       "crm-send-estimate",
       "crm-proposal-won",
-      "sales-look-v2",
       "downloads-skill",
       "menu-favorites",
       "support-ticket",

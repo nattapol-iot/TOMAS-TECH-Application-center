@@ -47,14 +47,14 @@ test("assigning to yourself, or re-saving the same owner, notifies nobody", asyn
 test("every screen that assigns an inquiry says whether the mail went out", async () => {
   const [client, crm, core, inquiry, shell] = await Promise.all([
     read("app/system/api-client.ts"),
-    read("app/system/production/CrmScreens.tsx"),
+    read("app/system/tomas-ui/CrmPages.tsx"),
     read("app/system/production/CoreScreens.tsx"),
     read("app/system/production/InquiryScreens.tsx"),
     read("app/system/ProductionApp.tsx"),
   ]);
   assert.match(client, /export const assignmentDeliveryNote = \(notification: AssignmentNotificationResult\)/);
   for (const [name, source] of [
-    ["CrmScreens", crm],
+    ["CrmPages", crm],
     ["CoreScreens", core],
     ["InquiryScreens", inquiry],
   ]) {

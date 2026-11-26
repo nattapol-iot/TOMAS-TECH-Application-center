@@ -22,10 +22,10 @@ test("every screen of the Sales menu group wears the switch", async () => {
   const group = /\{\s*group: "NavGroup\.sales",\s*items: \[([\s\S]*?)\],?\s*\},/.exec(shell)?.[1] ?? "";
   const views = [...group.matchAll(/"?view"?:\s*"([^"]+)"/g)].map((match) => match[1]);
   assert.equal(views.length, 10, "the Sales group was read");
-  for (const view of views) assert.ok(SALES_LOOK_VIEWS.includes(view), `${view} is a Sales look screen`);
-  assert.ok(SALES_LOOK_VIEWS.includes("crm-pipeline"), "the board tab of CRM Opportunities too");
-  // CRM screens share one wrapper; every other Sales view is wrapped where it renders.
-  assert.match(shell, /view\.startsWith\("crm-"\) && bootstrap\.permissions\.includes\("crm\.read"\) \? \(?\s*<SalesLookScope userId=\{bootstrap\.user\.id\}>\s*<CrmScreen\s/);
+  // CRM is built on @tomas-tc/ui for everyone (owner 2026-11-26): its screens left the switch; the rest of the group keeps it.
+  for (const view of views) assert.equal(SALES_LOOK_VIEWS.includes(view), !view.startsWith("crm-"), `${view}`);
+  assert.ok(!SALES_LOOK_VIEWS.includes("crm-pipeline"), "nor the board tab of CRM Opportunities");
+  assert.match(shell, /view\.startsWith\("crm-"\) && bootstrap\.permissions\.includes\("crm\.read"\) \? \(?\s*<CrmScreen\s/);
   for (const view of ["inquiries", "site-visits", "my-assignments", "visit-master", "customers"]) {
     assert.match(shell, new RegExp(`\\{view === "${view}" \\? \\(?\\s*<SalesLookScope userId=\\{bootstrap\\.user\\.id\\}>`), view);
   }
@@ -111,19 +111,21 @@ test("the RFQ summary bar counts what pressing a cell lists", () => {
   assert.equal(inquiryStatusCell(counts, "Cancelled"), 0);
 });
 
-test("the V2 lists lay out the Pegasus way while V1 keeps its markup", async () => {
+test("the deal list leads with its summary bar and the RFQ V2 list lays out the Pegasus way", async () => {
   const [crm, inquiry, route, client] = await Promise.all([
-    read("app/system/production/CrmScreens.tsx"),
+    read("app/system/tomas-ui/CrmPages.tsx"),
     read("app/system/production/InquiryScreens.tsx"),
     read("backend-node/src/routes/inquiries.ts"),
     read("app/system/api-client.ts"),
   ]);
-  // Deals: summary bar instead of the overview panel on the lists, the dashboard keeps its panel; stage first, edit on the left.
-  assert.match(crm, /const summary = v2 && mode !== "crm-dashboard";/);
-  assert.match(crm, /data-guide="crm\.summary"/);
-  assert.match(
-    crm,
-    /\{v2 \? \(\s*<>\s*\{onEdit \? \(\s*<td className="pg-acts">\s*<button type="button" className="pg-act"[^]*?\{stageCell\}\s*\{dealCell\}\s*\{customerCell\}\s*<\/>\s*\) : \(\s*<>\s*\{dealCell\}\s*\{customerCell\}\s*\{stageCell\}\s*<\/>\s*\)\}/,
+  // Deals (on @tomas-tc/ui for everyone since 2026-11-26): the summary bar heads every deal list, the stage comes first
+  // after the row's edit button.
+  assert.match(crm, /<SummaryBar\s+label=\{t\("CRM\.salesStage"\)\}\s+guide="crm\.summary"/);
+  assert.doesNotMatch(crm, /useSalesLook/);
+  const columns = /const columns: Column<CrmRecord>\[\] = \[([^]*?)\n {2}\];/.exec(crm)?.[1] ?? "";
+  assert.deepEqual(
+    [...columns.matchAll(/\bkey: "([a-z]+)"/g)].map((m) => m[1]),
+    ["edit", "stage", "deal", "customer", "value", "owner"],
   );
   // RFQ: the counts come with the page only when V2 asks, over every filter but the status.
   assert.match(inquiry, /summary: v2 \|\| undefined,/);

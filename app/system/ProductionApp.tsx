@@ -1670,21 +1670,20 @@ export default function ProductionApp({ initialVerifyCode }: { initialVerifyCode
                   }
                 />
               ) : null}
+              {/* CRM is built on @tomas-tc/ui for everyone (owner 2026-11-26): no V1 / V2 switch around it. */}
               {view.startsWith("crm-") && bootstrap.permissions.includes("crm.read") ? (
-                <SalesLookScope userId={bootstrap.user.id}>
-                  <CrmScreen
-                    refreshBootstrap={refreshBootstrap}
-                    notify={setToast}
-                    key={view}
-                    bootstrap={bootstrap}
-                    view={view as CrmView}
-                    onViewChange={setView}
-                    preferredOpportunityId={crmOpportunityId}
-                    openInquiry={openInquiry}
-                    openEstimate={openEstimate}
-                    openProject={openProjectSchedule}
-                  />
-                </SalesLookScope>
+                <CrmScreen
+                  refreshBootstrap={refreshBootstrap}
+                  notify={setToast}
+                  key={view}
+                  bootstrap={bootstrap}
+                  view={view as CrmView}
+                  onViewChange={setView}
+                  preferredOpportunityId={crmOpportunityId}
+                  openInquiry={openInquiry}
+                  openEstimate={openEstimate}
+                  openProject={openProjectSchedule}
+                />
               ) : null}
               {view === "inquiries" ? (
                 <SalesLookScope userId={bootstrap.user.id}>

@@ -13,7 +13,14 @@ test("CRM copy provides nonempty Thai, English and Japanese for every key", () =
 
 test("CRM literal UI keys, stages and follow-up statuses have translations", () => {
   // The screens and their forms on @tomas-tc/ui: every literal CRM key, whether t() is called on it or a component translates it.
-  const source = ["../app/system/production/CrmScreens.tsx", "../app/system/tomas-ui/CrmForms.tsx", "../app/system/production/crm-records.ts"]
+  const source = [
+    "../app/system/production/CrmScreens.tsx",
+    "../app/system/tomas-ui/CrmForms.tsx",
+    "../app/system/production/crm-records.ts",
+    "../app/system/tomas-ui/CrmPages.tsx",
+    "../app/system/tomas-ui/CrmPeoplePages.tsx",
+    "../app/system/tomas-ui/CrmKitParts.tsx",
+  ]
     .map((file) => readFileSync(new URL(file, import.meta.url), "utf8"))
     .join("\n");
   const keys = [...source.matchAll(/"(CRM\.[A-Za-z_]+)"/g)].map((match) => match[1]);

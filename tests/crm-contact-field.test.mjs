@@ -11,6 +11,9 @@ import { crmFailure, customerOption, isDirty, matchesSearch, missingFields, norm
  */
 const read = (file) => readFileSync(new URL(`../${file}`, import.meta.url), "utf8");
 const screen = read("app/system/production/CrmScreens.tsx");
+const pages = read("app/system/tomas-ui/CrmPages.tsx");
+const people = read("app/system/tomas-ui/CrmPeoplePages.tsx");
+const parts = read("app/system/tomas-ui/CrmKitParts.tsx");
 const forms = read("app/system/tomas-ui/CrmForms.tsx");
 const records = read("app/system/production/crm-records.ts");
 const crmCss = read("app/system/production/crm.css");
@@ -83,31 +86,32 @@ test("a form is changed only when a value differs, and required fields are check
   assert.deepEqual(missingFields(fields, { customerId: 4, name: "Line 3" }), {});
 });
 
-test("every CRM form and long list is the kit's, not the old app's (CRM-01, CRM-02)", () => {
+test("every CRM form, page and long list is the kit's, not the old app's (CRM-01, CRM-02; pages 2026-11-26)", () => {
   // The kit's searchable list: a search box inside the popup, two lines per entry, keyboard, clear, loading.
   assert.match(forms, /import \{[^}]*\bComboboxControl\b[^}]*\} from "@tomas-tc\/ui";/s);
   assert.match(forms, /<ComboboxControl[^]*?searchPlaceholder=\{t\("CRM\.searchList"\)\}/);
   assert.match(forms, /clearable=\{clearable \?\? !required\}/);
   assert.match(forms, /description: option\.detail \|\| undefined/);
-  // A failed list says so and offers a retry, apart from "nothing found" and "loading".
   assert.match(forms, /\{failed \? \(\s*<p role="alert"[^]*?t\("CRM\.listFailed"\)[^]*?t\("CRM\.retry"\)/);
-  // Word-by-word matching on top of the kit's substring filter.
   assert.match(forms, /keywords: typed && matchesSearch\(option, term\) \? `\$\{option\.keywords \?\? ""\} \$\{typed\}` : option\.keywords/);
-  // Nothing from the old app is rendered inside the kit's root.
   assert.doesNotMatch(forms, /from "\.\.\/ui"|from "\.\.\/production\/(?!crm-records)/);
-  assert.match(forms, /import \{ TomasUi \} from "\.\/TomasUi";/);
-  // The screen loads the kit's parts lazily and imports only their types statically (lazy-screens.test.mjs).
-  assert.doesNotMatch(screen, /from "@tomas-tc\/ui"/);
-  assert.match(screen, /import type \{ FieldSpec \} from "\.\.\/tomas-ui\/CrmForms";/);
-  for (const part of ["OpportunityDialog", "ActivityDialog", "ContactDialog", "CrmFormDialog", "ConfigurationDialog", "RemoveDialog", "PickerIsland", "DealActions"])
-    assert.match(screen, new RegExp(`const ${part} = lazy\\(\\(\\) => crmKit\\(\\)\\.then\\(\\(m\\) => \\(\\{ default: m\\.${part} \\}\\)\\)\\);`), part);
-  assert.doesNotMatch(screen, /SearchSelect|<select disabled=|function Editor\(|function Fields\(/);
-  // The owner, customer and account-owner choices are searchable everywhere (Customer 360's edit included).
-  assert.equal((screen.match(/\{ key: "accountOwnerId", searchable: true, placeholder: "CRM\.searchPerson", options: teamOptions\(/g) ?? []).length, 2);
-  assert.match(screen, /<FilterPicker label="CRM\.ownerId" allLabel="CRM\.allOwners"/);
-  assert.match(screen, /<FilterPicker label="CRM\.customerId" allLabel="CRM\.allCustomers"/);
+  // The pages: the screen loads them lazily, so the kit stays off the first load, and imports nothing of the old CRM pages.
+  assert.match(screen, /const CrmPages = lazy\(\(\) => import\("\.\.\/tomas-ui\/CrmPages"\)\.then\(\(m\) => \(\{ default: m\.CrmPages \}\)\)\);/);
+  assert.doesNotMatch(screen, /from "@tomas-tc\/ui"|SearchSelect|<Modal|function OpportunityList|function DealTable/);
+  for (const source of [pages, people, parts]) {
+    assert.match(source, /from "@tomas-tc\/ui";/);
+    assert.doesNotMatch(source, /from "\.\.\/ui"/, "no old shared component inside a kit page");
+  }
+  // Old app parts render beside the kit's roots, never inside one.
+  assert.match(pages, /<\/TomasUi>\s*\{latestInquiry && bootstrap\.permissions\.includes\("inquiry\.read"\) \? \(\s*<ProjectHandover/);
+  assert.match(people, /<ErpMasterPanel[^]*?\/>\s*<TomasUi>/);
+  // Owners, customers and account owners are searched in their own list everywhere.
+  assert.match(people, /\{ key: "accountOwnerId", searchable: true, placeholder: "CRM\.searchPerson", options: teamOptions\(bootstrap\) \}/);
+  assert.match(pages, /<EntityPicker\s+ariaLabel=\{t\("CRM\.ownerId"\)\}\s+placeholder=\{t\("CRM\.allOwners"\)\}/);
+  assert.match(people, /<EntityPicker\s+ariaLabel=\{t\("CRM\.customerId"\)\}\s+placeholder=\{t\("CRM\.allCustomers"\)\}/);
+  // Loading, failed and empty are three states of every table (CRM-06).
+  assert.match(parts, /loading \? \(\s*<LoadingRows label=\{states\.loading\} \/>\s*\) : failed \? null : \(\s*empty\s*\)/);
 });
-
 test("one dialog shell: Save runs once, a changed form asks before closing, a guide card is not a click outside (CRM-10)", () => {
   assert.match(forms, /const requestClose = \(\) => \{\s*if \(busy\) return;\s*if \(dirty\) setAsking\(true\);\s*else onClose\(\);\s*\};/);
   assert.match(forms, /onOpenChange=\{\(open\) => \{\s*if \(!open\) requestClose\(\);\s*\}\}/);
@@ -148,37 +152,37 @@ test("a contact needs a name in at least one language, and the form says so (CRM
 
 test("activities are searched and filtered on the server, every page reachable, counts over the same scope (CRM-03, CRM-07)", () => {
   assert.match(
-    screen,
-    /`\/api\/v1\/crm\/activities\?\$\{params\(\{ page: String\(page\), pageSize: String\(pageSize\), customerId: customerId \? String\(customerId\) : customer, ownerId: owner, activityType: type, search, from, to, year: year \?\? "" \}\)\}`/,
+    people,
+    /`\/api\/v1\/crm\/activities\?\$\{params\(\{ page: String\(page\), pageSize: String\(perPage\), customerId: customerId \? String\(customerId\) : customer, ownerId: owner, activityType: type, search, from, to, year: year \?\? "" \}\)\}`/,
   );
-  assert.match(screen, /value: Number\(shown\?\.types\?\.\[key\] \?\? 0\)/);
-  assert.doesNotMatch(screen, /rows\.filter\(\(r\) => r\.activityType === type\)\.length/, "no type count from the rows on screen");
-  // Customer and contact lists no longer count "with industry / with email" over one page.
-  assert.doesNotMatch(screen, /CRM\.withIndustry|CRM\.withEmail|CRM\.withOwner|CRM\.withRole/);
+  assert.match(people, /value: Number\(shown\?\.types\?\.\[key\] \?\? 0\)/);
+  assert.doesNotMatch(people, /rows\.filter\(\(r\) => r\.activityType === type\)\.length/, "no type count from the rows on screen");
+  assert.doesNotMatch(people + pages, /CRM\.withIndustry|CRM\.withEmail|CRM\.withOwner|CRM\.withRole/);
   // The board asks for the next 100 instead of stopping at the first page (CRM-05).
-  assert.match(screen, /const boardList = useCrmPages\(boardBase,/);
+  assert.match(pages, /const boardList = useCrmPages\(boardBase,/);
   assert.match(records, /Promise\.all\(Array\.from\(\{ length: pages \}, \(_, index\) => apiRequest<CrmPage>\(`\$\{base\}&page=\$\{index \+ 1\}`\)\)\)/);
   // Loading keeps the last result on screen instead of flashing "nothing found" (CRM-06).
   assert.match(records, /shown: url \? \(result\?\.value \?\? null\) : null/);
 });
-
 test("the deal page leads with one next step; won and lost end the stage rail (CRM-09, CRM-14, CRM-17)", () => {
-  assert.match(screen, /<DealActions primary=\{primary\} others=\{others\} moreLabel=\{t\("CRM\.moreActions"\)\} \/>/);
-  assert.match(forms, /<DropdownMenuItem key=\{action\.id\} data-guide=\{action\.guide\} onSelect=\{action\.onSelect\}>/);
-  assert.match(screen, /className=\{`outcome\$\{stage === "WON" \? " won" : stage === "LOST" \? " lost" : ""\}`\}/);
-  assert.match(screen, /const OPEN_STAGES = stages\.filter\(\(code\) => !\["WON", "LOST", "ON_HOLD"\]\.includes\(code\)\);/);
+  assert.match(pages, /const primaryKey = order\.find\(\(key\) => actions\[key\]\);/);
+  assert.match(pages, /<DropdownMenuItem key=\{item\.id\} data-guide=\{item\.guide\} onSelect=\{item\.onSelect\}>/);
+  assert.match(pages, /<Button type="button" data-guide=\{primary\.guide\} onClick=\{primary\.onSelect\}>/);
+  assert.match(pages, /\{closed \? labelOf\(stage\) : `\$\{labelOf\("WON"\)\} \/ \$\{labelOf\("LOST"\)\}`\}/);
+  assert.match(pages, /const OPEN_STAGES = STAGES\.filter\(\(code\) => !\["WON", "LOST", "ON_HOLD"\]\.includes\(code\)\);/);
   // History and links read in the reader's language and clock, never as raw ISO text or raw status codes.
-  assert.match(screen, /\{text\(r\.actorName\)\} · \{formatMoment\(r\.occurredAt, lang\)\}/);
-  assert.match(screen, /t\(text\(r\.inquiryStatus\) === "Approved" \? "CRM\.costApproved" : text\(r\.inquiryStatus\)\)/);
+  assert.match(pages, /\{text\(r\.actorName\)\} · \{formatMoment\(r\.occurredAt, lang\)\}/);
+  assert.match(pages, /\{text\(r\.inquiryNo\)\} · \{codeLabel\(text\(r\.inquiryStatus\)\)\}/);
   assert.match(records, /timeZone: BUSINESS_TIME_ZONE/);
 });
-
-test("the deal table keeps five columns and says when a value or a date is not given (CRM-15)", () => {
-  assert.match(screen, /t\(commercial \? "CRM\.valueCloseColumn" : "CRM\.expectedClose"\)/);
-  assert.match(screen, /t\("CRM\.valueNotSpecified"\)/);
-  assert.match(screen, /`\$\{t\("CRM\.closeShort"\)\} \$\{formatDay\(r\.expectedClose, lang\) \|\| t\("CRM\.notSpecified"\)\}`/);
-  assert.match(crmCss, /\.crm-deal-table \{\s*table-layout: fixed;\s*\}/);
-  // The old form styles left with the old forms.
-  assert.doesNotMatch(crmCss, /\.crm-form-grid|\.crm-quick-add|\.crm-field-link|\.crm-check-field/);
-  for (const name of ["crm-refreshing", "crm-attention", "crm-next-step", "crm-history-changes", "crm-activity-context", "crm-type-chips"]) assert.match(crmCss, new RegExp(`\\.${name}[ ,{]`), name);
+test("the deal table keeps its columns and says when a value or a date is not given (CRM-15)", () => {
+  assert.match(pages, /label: t\(commercial \? "CRM\.valueCloseColumn" : "CRM\.expectedClose"\)/);
+  assert.match(pages, /t\("CRM\.valueNotSpecified"\)/);
+  assert.match(pages, /\{t\("CRM\.closeShort"\)\} \{formatDay\(r\.expectedClose, lang\) \|\| t\("CRM\.notSpecified"\)\}/);
+  // The guides click a deal by these marks (guide-catalog.ts openDeal).
+  assert.match(pages, /className="crm-deal-name truncate"/);
+  assert.match(pages, /className=\{`crm-opportunity-card /);
+  // The old pages' styles left with them; crm.css keeps only what old markup still uses.
+  assert.doesNotMatch(crmCss, /\.crm-form-grid|\.crm-quick-add|\.crm-deal-table|\.crm-pipeline|\.crm-stagebar/);
+  for (const name of ["crm-workspace", "crm-action", "crm-link", "crm-muted"]) assert.match(crmCss, new RegExp(`\\.${name}[ ,{:]`), name);
 });

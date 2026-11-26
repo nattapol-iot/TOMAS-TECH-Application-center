@@ -15,7 +15,7 @@ test("form defaults take today from the configured business day", async () => {
   // Stamp and grant validity, CRM convert due date, Master Plan start, My Work and procurement dates.
   for (const path of [
     "app/system/production/SigningScreens.tsx",
-    "app/system/production/CrmScreens.tsx",
+    "app/system/tomas-ui/CrmPages.tsx",
     "app/system/production/ProjectPlanFields.tsx",
     "app/system/production/PlanningPricingScreens.tsx",
     "app/system/production/MaterialScreens.tsx",
@@ -30,10 +30,7 @@ test("form defaults take today from the configured business day", async () => {
 });
 
 test("stamp authority is checked against the same business day the stamp forms default to", async () => {
-  const [core, routes] = await Promise.all([
-    readFile(new URL("backend-node/src/signing-core.ts", root), "utf8"),
-    readFile(new URL("backend-node/src/routes/signing.ts", root), "utf8"),
-  ]);
+  const [core, routes] = await Promise.all([readFile(new URL("backend-node/src/signing-core.ts", root), "utf8"), readFile(new URL("backend-node/src/routes/signing.ts", root), "utf8")]);
   const resolver = core.slice(core.indexOf("export async function resolveStampAuthority"), core.indexOf("ORDER BY CASE WHEN a.user_id IS NOT NULL"));
   assert.match(resolver, /today: string,/);
   assert.match(resolver, /request\.input\("today", sql\.Date, today\);/);

@@ -121,17 +121,21 @@ test("Edit project lists PMs and leads by effective role and always shows who is
   assert.match(core, /engineers\.some\(\(member\) => member\.id === project\.leadEngineerId\) \? null : <option value=\{project\.leadEngineerId\}>\{project\.leadEngineerName\}<\/option>/);
 });
 
-test("CRM's pipeline bar and attention chips are the shared SegmentBar and FilterChips", () => {
-  const crm = read("app/system/production/CrmScreens.tsx");
+test("CRM's stage summary and attention chips are the kit pages' shared SummaryBar and Chips (2026-11-26)", () => {
+  const crm = read("app/system/tomas-ui/CrmPages.tsx");
+  const parts = read("app/system/tomas-ui/CrmKitParts.tsx");
   const css = read("app/system/production/crm.css");
-  assert.match(crm, /<SegmentBar\s+label="CRM\.pipelineOverview"\s+items=\{items\}/);
-  // The urgent counts are the shared FilterChips; waiting and missing data sit apart as quiet chips (CRM UX audit CRM-08).
-  assert.match(crm, /<FilterChips\s+items=\{ATTENTION_KEYS\.map/);
+  // Every cell and chip is the filter it names; the stage cells count the whole book (dealSummaryCells).
+  assert.match(crm, /<SummaryBar\s+label=\{t\("CRM\.salesStage"\)\}\s+guide="crm\.summary"/);
+  assert.match(crm, /const cells = dealSummaryCells\(OPEN_STAGES, stageCounts, Number\(dash\?\.open \?\? 0\)\);/);
+  // The urgent counts and the quiet ones (waiting, missing data) sit apart (CRM UX audit CRM-08).
+  assert.match(crm, /<Chips\s+label=\{t\("CRM\.urgentGroup"\)\}\s+items=\{ATTENTION_KEYS\.map/);
+  assert.match(crm, /<Chips\s+label=\{t\("CRM\.notUrgentGroup"\)\}\s+quiet\s+items=\{QUIET_KEYS\.map/);
   assert.match(crm, /const ATTENTION_KEYS = \["Overdue", "DueToday", "NeedsFollowup", "EstimateDueSoon"\];/);
   assert.match(crm, /const QUIET_KEYS = \["Waiting", "Incomplete"\];/);
-  assert.match(crm, /import "\.\.\/segment-filters\.css";/);
-  assert.doesNotMatch(css, /\.crm-(seg|legend|dot|chip|distribution-bar|distribution-head)\b/, "no second copy of the shared styles");
-  assert.doesNotMatch(crm, /crm-(seg|legend|dot|chip)\b/);
+  assert.match(parts, /export function SummaryBar\(/);
+  assert.match(parts, /export function Chips\(/);
+  assert.doesNotMatch(css, /\.crm-(seg|legend|dot|chip|distribution|pipeline|deal-table|stagebar)\b/, "the old pages' styles left with them");
 
   // The stage ramp keeps its chart colours through FilterItem.color.
   const { translate, LanguageContext } = load("app/system/i18n.ts");

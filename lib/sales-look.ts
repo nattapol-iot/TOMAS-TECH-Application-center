@@ -6,11 +6,11 @@
  */
 export type SalesLook = "v1" | "v2";
 
-/** The menu screens of the Sales group that carry the V1 / V2 switch (crm-pipeline is the board tab of CRM Opportunities). */
-export const SALES_LOOK_VIEWS = [
-  "crm-dashboard", "crm-customers", "crm-contacts", "crm-opportunities", "crm-activities", "crm-pipeline",
-  "inquiries", "site-visits", "my-assignments", "visit-master", "customers",
-] as const;
+/**
+ * The menu screens of the Sales group that carry the V1 / V2 switch. The CRM screens left it on 2026-11-26: they are built
+ * on @tomas-tc/ui, the Pegasus look, for everyone (owner's choice).
+ */
+export const SALES_LOOK_VIEWS = ["inquiries", "site-visits", "my-assignments", "visit-master", "customers"] as const;
 
 export const SALES_LOOK_DEFAULT: SalesLook = "v1";
 
