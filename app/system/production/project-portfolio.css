@@ -134,6 +134,19 @@
   gap: 8px 16px;
   padding: 0 14px;
 }
+/* A toggle that is on ("One line"): shown pressed, as the zoom's chosen chip. */
+.portfolio-gantt-bar .gantt-nav .btn[aria-pressed="true"] {
+  border-color: var(--blue);
+  background: var(--blue-soft);
+  color: var(--blue-text);
+}
+/* The timeline's project cards read on white, as the Application team's summary; their edge carries the health. */
+.portfolio-gantt .gantt-row.project.tall {
+  background: var(--surface);
+}
+.portfolio-gantt .gantt-row.project.tall:hover {
+  background: var(--n-25);
+}
 .portfolio-gantt-sort {
   display: flex;
   flex-wrap: wrap;
