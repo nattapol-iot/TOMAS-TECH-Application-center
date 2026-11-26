@@ -15,8 +15,13 @@ export type OverviewProject = { id: number; status: string; targetDelivery: stri
 /**
  * scheduleError: the rows could not be resolved (bad data such as a dependency loop), so nothing was measured.
  * followUps: rows the plan Sheet's "To follow up" list names (task doc 5.1), each once.
+ * phases: the plan's main headings (its top rows) with their dates, for the Projects timeline's one line per project.
  */
-export type ProjectScheduleOverview = ProjectScheduleSummary & { scheduleError: boolean; followUps?: number };
+export type OverviewPhase = { id: number; name: string; start: string; finish: string; progress: number; milestone: boolean };
+export type ProjectScheduleOverview = ProjectScheduleSummary & { scheduleError: boolean; followUps?: number; phases?: OverviewPhase[] };
+
+/** At most this many headings a project: a plan whose top rows are its tasks would otherwise send them all. */
+const PHASE_LIMIT = 24;
 
 /**
  * The rows the plan Sheet lists under To follow up (PlanSheet.tsx followUps), counted once each: late, blocked, due to
@@ -51,9 +56,22 @@ export function summarizeProjects(projects: OverviewProject[], tasks: TaskRow[],
     projects.map((project): [number, ProjectScheduleOutcome] => {
       const rows = byProject.get(project.id)!;
       try {
-        const leaves = rows.length ? scheduleLeaves(rows, resolveTasks(rows, holidays)) : [];
+        const calculation = rows.length ? resolveTasks(rows, holidays) : null;
+        const leaves = calculation ? scheduleLeaves(rows, calculation) : [];
         const followUps = withPeople && project.status !== "Closed" ? followUpCount(rows, leaves, withPeople, today) : undefined;
-        return [project.id, { summary: { ...summarizeProjectSchedule(project, leaves, today), scheduleError: false, ...(followUps === undefined ? {} : { followUps }) }, leaves }];
+        const byId = new Map(rows.map((row) => [row.id, row] as const));
+        const phases: OverviewPhase[] = (calculation?.roots ?? [])
+          .filter((root) => root.planStart && root.planFinish)
+          .slice(0, PHASE_LIMIT)
+          .map((root) => ({
+            id: root.source.id,
+            name: byId.get(root.source.id)?.name ?? "",
+            start: root.planStart!,
+            finish: root.planFinish!,
+            progress: Math.round(Number(root.percentComplete) || 0),
+            milestone: Boolean(byId.get(root.source.id)?.isMilestone),
+          }));
+        return [project.id, { summary: { ...summarizeProjectSchedule(project, leaves, today), scheduleError: false, phases, ...(followUps === undefined ? {} : { followUps }) }, leaves }];
       } catch {
         // One broken schedule must not take the whole list down. The status still decides Completed / On Hold.
         return [project.id, { summary: { ...summarizeProjectSchedule(project, [], today), scheduleError: true }, leaves: [] }];

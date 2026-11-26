@@ -4406,6 +4406,22 @@ const PROJECT_OVERVIEW: Guide = {
       },
     },
     {
+      target: "project.oneLine",
+      action: "next",
+      view: "projects",
+      title: { th: "ไทม์ไลน์: หัวข้อของแต่ละโปรเจกต์ในเส้นเดียว", en: "Timeline: each project's phases on one line", jp: "タイムライン：各案件のフェーズを1行で" },
+      body: {
+        th: "ในมุมมองไทม์ไลน์ แต่ละแถวคือหนึ่งโปรเจกต์ ด้านซ้ายบอกลูกค้า · เลขโปรเจกต์ ชื่อ ช่วงวัน สถานะ และ PM แถบด้านขวาคือหัวข้อหลักของแผน สีตามประเภทงาน (ออกแบบสีคราม ผลิต/สั่งซื้อสีม่วง ซอฟต์แวร์สีชมพู ทดสอบภายในสีแดง ติดตั้งสีเขียว สอนใช้สีเหลืองอำพัน ลูกค้าทดสอบสีส้ม Go Live สีเหลือง) กดแถบเพื่อเปิดแผนที่หัวข้อนั้น ปุ่ม 'เส้นเดียว' สลับระหว่างวางหัวข้อทับกันในเส้นเดียว หรือซ้อนเป็นชั้นเมื่อช่วงวันทับกัน ปุ่มช่วงเวลาเลือกได้ตั้งแต่ สัปดาห์ ถึง ปี",
+        en: "In Timeline each row is a project: on the left the customer · number, name, dates, health and PM; on the right the plan's main headings, coloured by their kind of work (design indigo, building and ordering violet, software pink, internal tests red, installation green, teaching amber, the customer's tests orange, go live yellow). Press a phase to open the plan on it. One line switches between phases drawn on one line and overlapping phases stacked. The period buttons go from Week to Year.",
+        jp: "タイムラインでは各行が1案件です。左は顧客・案件番号、名称、期間、状態、PM。右は計画の主な見出しで、作業の種類で色分けされます（設計は藍、製作・発注は紫、ソフトウェアはピンク、社内試験は赤、据付は緑、教育は琥珀、顧客試験はオレンジ、Go Live は黄）。フェーズを押すとその見出しの計画が開きます。「1行表示」で1行表示と、期間が重なるフェーズの段表示を切り替えます。期間ボタンは週から年まで選べます。",
+      },
+      missing: {
+        th: "กด 'ไทม์ไลน์' บนหัวหน้ารายการโปรเจกต์ก่อน หรือกด 'ถัดไป'",
+        en: "Press Timeline in the project list's header first, or press Next.",
+        jp: "先に案件一覧のヘッダーで「タイムライン」を押すか、「次へ」を押します。",
+      },
+    },
+    {
       target: "project.pmFilter",
       action: "next",
       view: "projects",

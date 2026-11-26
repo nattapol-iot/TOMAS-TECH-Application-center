@@ -3021,6 +3021,12 @@ export const DICTIONARY: Record<string, Entry> = {
   "Projects.tabPlan": { en: "Plan", th: "แผนงาน", jp: "計画" },
   "Projects.tabPunchlist": { en: "Punchlist · Customer issues", th: "Punchlist · Issue ลูกค้า", jp: "パンチリスト · 顧客課題" },
   "Gantt.week": { en: "Week", th: "สัปดาห์", jp: "週" },
+  "Gantt.oneLine": { en: "One line", th: "เส้นเดียว", jp: "1行表示" },
+  "Gantt.oneLineHint": {
+    en: "Each project's phases on one line; off, phases whose dates overlap stack",
+    th: "หัวข้อของแต่ละโปรเจกต์อยู่ในเส้นเดียว ถ้าปิด หัวข้อที่ช่วงวันทับกันจะซ้อนเป็นชั้น",
+    jp: "各案件のフェーズを1行に表示。オフにすると期間が重なるフェーズを段に分けます",
+  },
   "Gantt.month": { en: "Month", th: "เดือน", jp: "月" },
   "Gantt.quarter": { en: "Quarter", th: "ไตรมาส", jp: "四半期" },
   "Gantt.half": { en: "Half-year", th: "ครึ่งปี", jp: "半年" },

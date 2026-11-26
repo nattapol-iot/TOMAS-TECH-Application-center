@@ -470,6 +470,8 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
           scheduleError: summary?.scheduleError ?? false,
           pendingRequests: row.status === "Closed" ? 0 : Number(counts?.pending_requests ?? 0),
           followUps: summary?.followUps ?? 0,
+          // The plan's main headings, drawn as one line on the Projects timeline.
+          phases: summary?.phases ?? [],
           ...projectHours(hours.get(id)),
           lastProgressAt: counts?.last_progress_at ?? null,
           canChangeStatus: canWrite && (manages || Number(row.manager_id) === actor.id || Number(row.lead_engineer_id) === actor.id),

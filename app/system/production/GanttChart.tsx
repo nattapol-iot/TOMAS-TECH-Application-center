@@ -59,6 +59,12 @@ export type GanttRowSpec = {
   placeholder?: string;
   /** Several bars on one row in place of start–finish, e.g. everything one person has on; overlapping ones stack in lanes. */
   segments?: GanttSegment[];
+  /** The segments on one line, overlapping ones drawn over each other (the Projects timeline's "one line"). */
+  oneLane?: boolean;
+  /** A third line under the name and meta, e.g. the project's health and manager. */
+  footer?: ReactNode;
+  /** A coloured edge on the row's name, e.g. the project's health. */
+  accent?: Tone;
   /** The bar drags to new dates by whole days; `resize` also lets its end be pulled. onChange gets the dropped dates. */
   reschedule?: { resize: boolean; onChange: (start: string, finish: string) => void };
   /** The row has a grip to drag it up or down the chart, and sideways out of or into a level (GanttChart onMoveRow). */
@@ -84,14 +90,16 @@ const LEVEL_DRAG = 24;
 const dropIndent = (depth: number) => 8 + Math.min(depth, 6) * 16 + 22;
 /** A finish-to-start link, by row key: `to` starts after `from` finishes. */
 export type GanttLink = { from: string; to: string };
-export type GanttSegment = { key: string; start: string | null; finish: string | null; tone: Tone; title: string; onOpen?: () => void };
+/** label: written on the bar (a phase's name); color: its own fill, in place of the tone's (a phase's kind of work). */
+export type GanttSegment = { key: string; start: string | null; finish: string | null; tone: Tone; title: string; onOpen?: () => void; label?: string; color?: string; ink?: string };
 
 /** A row's segments that fall in the window, each with its lane. */
-function placeSegments(segments: GanttSegment[], range: GanttWindow) {
+function placeSegments(segments: GanttSegment[], range: GanttWindow, oneLane = false) {
   const shown = segments.flatMap((segment) => {
     const span = ganttSpan(segment.start, segment.finish ?? segment.start, range);
     return span && segment.start ? [{ segment, span, start: segment.start, finish: segment.finish ?? segment.start }] : [];
   });
+  if (oneLane) return { shown: shown.map((entry) => ({ ...entry, lane: 0 })), count: 1 };
   const { lanes, count } = ganttLanes(shown);
   return { shown: shown.map((entry, index) => ({ ...entry, lane: lanes[index]! })), count };
 }
@@ -582,7 +590,9 @@ export function GanttChart({
         const shift = drag?.key === row.key ? drag : null;
         const start = shift?.mode === "move" && row.start ? ganttShift(row.start, shift.days) : row.start;
         const finish = shift && row.finish ? ganttShift(row.finish, shift.days) : row.finish;
-        const segments = row.segments ? placeSegments(row.segments, range) : null;
+        const segments = row.segments ? placeSegments(row.segments, range, row.oneLane) : null;
+        // Labelled segments (phases) are taller bars with their name on them.
+        const labelled = Boolean(row.segments?.some((segment) => segment.label));
         const bar = row.milestone || segments ? null : ganttSpan(start, finish, range);
         const diamond = row.milestone ? ganttPoint(finish ?? start, range) : null;
         const slip = shift ? null : ganttSlip(row.finish, row.forecastFinish, range);
@@ -616,7 +626,7 @@ export function GanttChart({
           <div
             key={row.key}
             data-gantt-row={row.key}
-            className={`gantt-row ${row.kind}${row.selected ? " selected" : ""}${dropParent === row.key ? " drop-into" : ""}${rowDrop?.key === row.key ? " row-moving" : ""}`}
+            className={`gantt-row ${row.kind}${row.footer ? " tall" : ""}${row.accent ? ` accent-${row.accent}` : ""}${row.selected ? " selected" : ""}${dropParent === row.key ? " drop-into" : ""}${rowDrop?.key === row.key ? " row-moving" : ""}`}
           >
             {dropLine && dropping ? <i className={`gantt-drop-line ${dropLine}`} style={{ left: dropIndent(dropping.depth) }} aria-hidden="true" /> : null}
             <div className="gantt-side" style={{ paddingLeft: 8 + Math.min(row.depth, 6) * 16 }}>
@@ -644,11 +654,13 @@ export function GanttChart({
                 <button type="button" className="gantt-label" title={row.title} onClick={row.onOpen}>
                   <span className="gantt-label-main">{row.label}</span>
                   {row.meta ? <small>{row.meta}</small> : null}
+                  {row.footer ? <span className="gantt-label-foot">{row.footer}</span> : null}
                 </button>
               ) : (
                 <span className="gantt-label" title={row.title}>
                   <span className="gantt-label-main">{row.label}</span>
                   {row.meta ? <small>{row.meta}</small> : null}
+                  {row.footer ? <span className="gantt-label-foot">{row.footer}</span> : null}
                 </span>
               )}
               {row.status ? <span className="gantt-status">{row.status}</span> : null}
@@ -671,7 +683,7 @@ export function GanttChart({
                 </button>
               ) : null}
             </div>
-            <div className="gantt-track" style={segments && segments.count > 1 ? { minHeight: 14 + segments.count * 10 } : undefined}>
+            <div className="gantt-track" style={segments && segments.count > 1 ? { minHeight: labelled ? 12 + segments.count * 22 : 14 + segments.count * 10 } : undefined}>
               {range.columns.map((column) => {
                 const span = ganttSpan(column.start, column.end, range);
                 return span ? <span key={column.start} className="gantt-gridline" style={{ left: `${span.left}%` }} aria-hidden="true" /> : null;
@@ -703,14 +715,22 @@ export function GanttChart({
                 <button
                   key={segment.key}
                   type="button"
-                  className={`gantt-bar gantt-segment ${segment.tone}${span.clippedStart ? " clip-start" : ""}${span.clippedEnd ? " clip-end" : ""}`}
-                  style={{ left: `${span.left}%`, width: `${span.width}%`, top: segments.count > 1 ? 8 + lane * 10 : 15 }}
+                  className={`gantt-bar gantt-segment ${segment.tone}${segment.label ? " gantt-phase" : ""}${span.clippedStart ? " clip-start" : ""}${span.clippedEnd ? " clip-end" : ""}`}
+                  style={{
+                    left: `${span.left}%`,
+                    width: `${span.width}%`,
+                    top: labelled ? (segments.count > 1 ? 6 + lane * 22 : "calc(50% - 9px)") : segments.count > 1 ? 8 + lane * 10 : 15,
+                    ...(segment.color ? { background: segment.color } : {}),
+                    ...(segment.ink ? { color: segment.ink } : {}),
+                  }}
                   title={segment.title}
                   aria-label={segment.title}
                   onClick={segment.onOpen}
                   disabled={!segment.onOpen}
                   tabIndex={-1}
-                />
+                >
+                  {segment.label ? <span>{segment.label}</span> : null}
+                </button>
               ))}
               {slip ? <span className="gantt-slip" style={{ left: `${slip.left}%`, width: `${slip.width}%` }} title={`${t("Gantt.legendSlip")} → ${row.forecastFinish}`} aria-hidden="true" /> : null}
               {diamond !== null ? (

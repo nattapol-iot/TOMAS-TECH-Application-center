@@ -212,7 +212,7 @@ test("Team overview replaces Resource Plan in the menu and opens on the board fo
   assert.match(boardCss, /\.board-gantt\.is-fullscreen \.gantt \{ flex: 1; min-height: 0; max-height: none; \}/);
   const chart = await read("app/system/production/GanttChart.tsx");
   assert.match(chart, /const bar = row\.milestone \|\| segments \? null : ganttSpan\(start, finish, range\);/);
-  assert.match(chart, /top: segments\.count > 1 \? 8 \+ lane \* 10 : 15/);
+  assert.match(chart, /segments\.count > 1 \? 8 \+ lane \* 10 : 15/, "plain segments stay thin, a lane every 10 px");
   // More than one team at once (2026-10-22); none ticked is everyone, and the choice is remembered per person.
   assert.match(board, /<TeamFilter departments=\{departments\} counts=\{teamCounts\} value=\{teams\} onChange=\{pickTeams\} \/>/);
   assert.match(board, /const inDepartment = \(userId: number\) => !teams\.length \|\| teams\.includes\(/);

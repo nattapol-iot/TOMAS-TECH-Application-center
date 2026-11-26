@@ -39,7 +39,7 @@ test("the Timeline finds tasks across projects and shows only the matches with t
   assert.match(gantt, /disabled=\{searching \|\| taskQuery\.trim\(\)\.length < 2\}/);
   // Only matching projects stay, the first EXPAND_LIMIT of them open, and a task shows when it or a child matches.
   assert.match(gantt, /const visibleRows = hits \? rows\.filter\(\(item\) => hits\.has\(item\.id\)\) : rows;/);
-  assert.match(gantt, /open\(rows\.filter\(\(item\) => matches\.has\(item\.id\)\)\.slice\(0, EXPAND_LIMIT\)/);
+  assert.match(gantt, /open\(\s*rows\s*\.filter\(\(item\) => matches\.has\(item\.id\)\)\s*\.slice\(0, EXPAND_LIMIT\)/);
   assert.match(gantt, /const taskMatches = \(task: ScheduleTask, hits: Set<number>\): boolean => hits\.has\(task\.id\) \|\| task\.children\.some/);
   assert.match(gantt, /if \(projectHits && !taskMatches\(task, projectHits\)\) continue;/);
   // Nothing is dropped silently: hidden-by-filter projects, unopened projects and the API cap are all said.
@@ -176,7 +176,7 @@ test("review fixes: one quiet-days clock, Inquiry cards that only offer what the
 
   // A cleared or superseded search cannot come back, and both counts describe the projects shown.
   assert.match(gantt, /if \(request !== searchSequence\.current\) return;/);
-  assert.match(gantt, /const clearSearch = \(\) => \{ searchSequence\.current \+= 1;/);
+  assert.match(gantt, /const clearSearch = \(\) => \{\s*searchSequence\.current \+= 1;/);
   assert.match(gantt, /visibleRows\.reduce\(\(sum, item\) => sum \+ \(hits\.get\(item\.id\)\?\.size \?\? 0\), 0\)/);
 
   // Edit project's stage choices count additional roles; the waiting list loads once per portfolio load.
@@ -234,7 +234,7 @@ test("the portfolio Timeline goes full screen, with an overlay where the browser
     /<div ref=\{fullscreenRef\} className=\{`portfolio-gantt\$\{fullscreen\.active \? " is-fullscreen" : ""\}\$\{fullscreen\.overlay \? " is-overlay" : ""\}`\}>\r?\n\s+\{controls\}/,
   );
   assert.match(gantt, /aria-pressed=\{fullscreen\.active\}/);
-  assert.match(gantt, /<Icon name=\{fullscreen\.active \? "minimize" : "maximize"\} \/>\{t\(fullscreen\.active \? "Gantt\.exitFullScreen" : "Gantt\.fullScreen"\)\}/);
+  assert.match(gantt, /<Icon name=\{fullscreen\.active \? "minimize" : "maximize"\} \/>\s*\{t\(fullscreen\.active \? "Gantt\.exitFullScreen" : "Gantt\.fullScreen"\)\}/);
   assert.match(core, /controls=\{\s*\/\* The sort sits inside the timeline so it stays at hand in full screen\. \*\/\r?\n\s+<div className="portfolio-gantt-sort">/);
   const ui = read("app/system/ui.tsx");
   assert.match(ui, /^\s+maximize: \(?\s*</m);
@@ -275,7 +275,7 @@ test("the Gantt name column can be dragged wider, keyed, remembered per chart an
   // A cut-off name shows in full on hover.
   assert.match(chart, /className="gantt-label" title=\{row\.title\} onClick=\{row\.onOpen\}/);
   const css = read("app/system/production/gantt.css");
-  assert.match(css, /\.gantt-side::after \{ content: ""; position: absolute; top: 0; right: -4px; bottom: 0; width: 8px; cursor: col-resize;/);
+  assert.match(css, /\.gantt-side::after \{\s*content: "";\s*position: absolute;\s*top: 0;\s*right: -4px;\s*bottom: 0;\s*width: 8px;\s*cursor: col-resize;/);
   assert.match(css, /\.gantt-resizer \{[^}]*touch-action: none;/);
   assert.doesNotMatch(css, /#[0-9a-fA-F]{3,6}\b/, "tokens only");
   const { translate } = load("app/system/i18n.ts");
@@ -343,13 +343,13 @@ test("a project's Plan draws its delivery flag once, in the date header, with a 
   assert.match(scale, /\{deliveryAt !== null \? <i className="gantt-scale-target" style=\{\{ left: `\$\{deliveryAt\}%` \}\} aria-hidden="true" \/> : null\}/);
   assert.match(chart, /\{deliveryAt !== null \? <span className="gantt-target line" style=\{\{ left: `\$\{deliveryAt\}%` \}\} aria-hidden="true" \/> : null\}/);
   const css = read("app/system/production/gantt.css");
-  assert.match(css, /\.gantt-target\.line::before \{ content: none; \}/);
-  assert.match(css, /\.gantt-scale-target::before \{ content: "";/);
+  assert.match(css, /\.gantt-target\.line::before \{\s*content: none;\s*\}/);
+  assert.match(css, /\.gantt-scale-target::before \{\s*content: "";/);
   // The Plan hands the date to the chart, not to every row; the portfolio keeps one flag per project (each has its own date).
   const plan = read("app/system/production/PlanningPricingScreens.tsx");
   assert.match(plan, /label="Gantt\.planLabel"\s+deliveryTarget=\{target\}/);
   assert.doesNotMatch(plan, /, target, selected: drawerTaskId === task\.id/);
-  assert.match(read("app/system/production/ProjectPortfolioGantt.tsx"), /forecastFinish: item\.forecastFinish, target: item\.targetDelivery,/);
+  assert.match(read("app/system/production/ProjectPortfolioGantt.tsx"), /forecastFinish: item\.forecastFinish,\s*target: item\.targetDelivery,/);
 });
 
 test("every new follow-up string has English, Thai and Japanese copy", () => {
