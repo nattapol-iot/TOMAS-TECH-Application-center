@@ -4,7 +4,7 @@
 
 ทะเบียนโครงการ end user เลขโครงการค้นจาก Pegasus ERP และรับส่งเอกสารจาก inquiry/site visit
 
-Evidence: snapshot `1af0bcb9`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
+Evidence: snapshot `64bf1ed9`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
 
 ## Read only the operation you change
 
@@ -72,7 +72,7 @@ Shared screens contain other modules: use the symbol and line range instead of r
 | `EmployeeMasterTab` | [app/system/production/CoreScreens.tsx](<../../../app/system/production/CoreScreens.tsx>) | 4927–5325 |
 | `EmployeeModal` | [app/system/production/CoreScreens.tsx](<../../../app/system/production/CoreScreens.tsx>) | 5327–5511 |
 | `TeamReferenceTab` | [app/system/production/CoreScreens.tsx](<../../../app/system/production/CoreScreens.tsx>) | 5515–5597 |
-| `UserRoleModal` | [app/system/production/CoreScreens.tsx](<../../../app/system/production/CoreScreens.tsx>) | 5599–5827 |
+| `UserRoleModal` | [app/system/production/CoreScreens.tsx](<../../../app/system/production/CoreScreens.tsx>) | 5599–5829 |
 | `isPlaceholderProjectNumber` | [app/system/production/ErpProjectNumber.tsx](<../../../app/system/production/ErpProjectNumber.tsx>) | 21–21 |
 | `sameNumber` | [app/system/production/ErpProjectNumber.tsx](<../../../app/system/production/ErpProjectNumber.tsx>) | 23–23 |
 | `ErpProjectNumberField` | [app/system/production/ErpProjectNumber.tsx](<../../../app/system/production/ErpProjectNumber.tsx>) | 25–103 |
@@ -98,6 +98,7 @@ Shared screens contain other modules: use the symbol and line range instead of r
 - [backend-node/src/project-page-overview.ts](<../../../backend-node/src/project-page-overview.ts>)
 - [backend-node/src/project-cost-curve.ts](<../../../backend-node/src/project-cost-curve.ts>)
 - [backend-node/src/user-roles.ts](<../../../backend-node/src/user-roles.ts>)
+- [backend-node/src/leader-scope.ts](<../../../backend-node/src/leader-scope.ts>)
 - [backend-node/src/email.ts](<../../../backend-node/src/email.ts>)
 - [backend-node/src/crm.ts](<../../../backend-node/src/crm.ts>)
 - [backend-node/src/drawing-workflow.ts](<../../../backend-node/src/drawing-workflow.ts>)

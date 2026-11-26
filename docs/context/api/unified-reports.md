@@ -2,39 +2,39 @@
 
 [Module](../modules/reports.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `1af0bcb9`; generated, do not edit. [backend-node/src/routes/unified-reports.ts](<../../../backend-node/src/routes/unified-reports.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `64bf1ed9`; generated, do not edit. [backend-node/src/routes/unified-reports.ts](<../../../backend-node/src/routes/unified-reports.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/reports/workspace/templates` | 34–37 |
-| GET | `/api/v1/reports/workspace/people` | 38–50 |
-| GET | `/api/v1/reports/workspace/sources` | 51–60 |
-| GET | `/api/v1/reports/workspace` | 61–73 |
-| GET | `/api/v1/reports/workspace/:id` | 74–78 |
-| GET | `/api/v1/reports/workspace/existing-draft` | 84–98 |
-| POST | `/api/v1/reports/workspace` | 99–117 |
-| PUT | `/api/v1/reports/workspace/:id` | 118–126 |
-| POST | `/api/v1/reports/workspace/:id/evidence` | 127–148 |
-| GET | `/api/v1/reports/workspace/:id/evidence/:attachmentId/content` | 149–153 |
-| POST | `/api/v1/reports/workspace/:id/exports` | 154–170 |
-| GET | `/api/v1/reports/workspace/:id/exports` | 171–178 |
-| GET | `/api/v1/reports/workspace/:id/exports/:exportId/content` | 179–183 |
-| POST | `/api/v1/reports/workspace/:id/:action` | 184–245 |
-| GET | `/api/v1/report-acknowledgments/:token` | 247–251 |
-| GET | `/api/v1/report-acknowledgments/:token/evidence/:attachmentId` | 252–261 |
-| POST | `/api/v1/report-acknowledgments/:token` | 262–274 |
+| GET | `/api/v1/reports/workspace/templates` | 80–95 |
+| GET | `/api/v1/reports/workspace/people` | 96–124 |
+| GET | `/api/v1/reports/workspace/sources` | 125–158 |
+| GET | `/api/v1/reports/workspace` | 159–184 |
+| GET | `/api/v1/reports/workspace/:id` | 185–195 |
+| GET | `/api/v1/reports/workspace/existing-draft` | 201–221 |
+| POST | `/api/v1/reports/workspace` | 222–265 |
+| PUT | `/api/v1/reports/workspace/:id` | 266–286 |
+| POST | `/api/v1/reports/workspace/:id/evidence` | 287–344 |
+| GET | `/api/v1/reports/workspace/:id/evidence/:attachmentId/content` | 345–372 |
+| POST | `/api/v1/reports/workspace/:id/exports` | 373–423 |
+| GET | `/api/v1/reports/workspace/:id/exports` | 424–451 |
+| GET | `/api/v1/reports/workspace/:id/exports/:exportId/content` | 452–479 |
+| POST | `/api/v1/reports/workspace/:id/:action` | 480–579 |
+| GET | `/api/v1/report-acknowledgments/:token` | 581–605 |
+| GET | `/api/v1/report-acknowledgments/:token/evidence/:attachmentId` | 606–632 |
+| POST | `/api/v1/report-acknowledgments/:token` | 633–673 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `validateReportEvidenceImage` | [backend-node/src/routes/unified-reports.ts](<../../../backend-node/src/routes/unified-reports.ts>) | 23–26 |
-| `registerUnifiedReportRoutes` | [backend-node/src/routes/unified-reports.ts](<../../../backend-node/src/routes/unified-reports.ts>) | 27–275 |
-| `bindDraft` | [backend-node/src/routes/unified-reports.ts](<../../../backend-node/src/routes/unified-reports.ts>) | 277–279 |
-| `insertRevision` | [backend-node/src/routes/unified-reports.ts](<../../../backend-node/src/routes/unified-reports.ts>) | 280–283 |
-| `customerRevision` | [backend-node/src/routes/unified-reports.ts](<../../../backend-node/src/routes/unified-reports.ts>) | 284–295 |
+| `validateReportEvidenceImage` | [backend-node/src/routes/unified-reports.ts](<../../../backend-node/src/routes/unified-reports.ts>) | 65–69 |
+| `registerUnifiedReportRoutes` | [backend-node/src/routes/unified-reports.ts](<../../../backend-node/src/routes/unified-reports.ts>) | 70–674 |
+| `bindDraft` | [backend-node/src/routes/unified-reports.ts](<../../../backend-node/src/routes/unified-reports.ts>) | 676–684 |
+| `insertRevision` | [backend-node/src/routes/unified-reports.ts](<../../../backend-node/src/routes/unified-reports.ts>) | 685–691 |
+| `customerRevision` | [backend-node/src/routes/unified-reports.ts](<../../../backend-node/src/routes/unified-reports.ts>) | 692–710 |
 
 ## Direct local dependencies
 
@@ -53,7 +53,7 @@ Evidence: source snapshot `1af0bcb9`; generated, do not edit. [backend-node/src/
 
 ## SQL references (literal scan, not a complete schema or write-set)
 
-`dbo.inquiries`, `dbo.permissions`, `dbo.project_members`, `dbo.projects`, `dbo.role_permissions`, `dbo.roles`, `dbo.schedule_tasks`, `dbo.unified_report_acknowledgments`, `dbo.unified_report_customer_links`, `dbo.unified_report_evidence_files`, `dbo.unified_report_exports`, `dbo.unified_report_revisions`, `dbo.unified_reports`, `dbo.users`
+`dbo.inquiries`, `dbo.permissions`, `dbo.project_members`, `dbo.projects`, `dbo.role_permissions`, `dbo.roles`, `dbo.schedule_tasks`, `dbo.unified_report_acknowledgments`, `dbo.unified_report_customer_links`, `dbo.unified_report_evidence_files`, `dbo.unified_report_exports`, `dbo.unified_report_revisions`, `dbo.unified_reports`, `dbo.user_effective_roles`, `dbo.users`
 
 ## Change boundary
 

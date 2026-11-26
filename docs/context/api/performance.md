@@ -2,27 +2,27 @@
 
 [Module](../modules/performance.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `1af0bcb9`; generated, do not edit. [backend-node/src/routes/performance.ts](<../../../backend-node/src/routes/performance.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `64bf1ed9`; generated, do not edit. [backend-node/src/routes/performance.ts](<../../../backend-node/src/routes/performance.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/performance/overview` | 127–234 |
-| GET | `/api/v1/performance/evidence/:employeeId` | 236–361 |
-| POST | `/api/v1/performance/cycles` | 363–398 |
-| PUT | `/api/v1/performance/assessments/:employeeId` | 400–512 |
-| POST | `/api/v1/performance/assessments/:employeeId/complete` | 514–560 |
+| GET | `/api/v1/performance/overview` | 128–239 |
+| GET | `/api/v1/performance/evidence/:employeeId` | 241–367 |
+| POST | `/api/v1/performance/cycles` | 369–404 |
+| PUT | `/api/v1/performance/assessments/:employeeId` | 406–518 |
+| POST | `/api/v1/performance/assessments/:employeeId/complete` | 520–566 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `invalid` | [backend-node/src/routes/performance.ts](<../../../backend-node/src/routes/performance.ts>) | 77–77 |
-| `cycleDto` | [backend-node/src/routes/performance.ts](<../../../backend-node/src/routes/performance.ts>) | 78–87 |
-| `performanceScores` | [backend-node/src/routes/performance.ts](<../../../backend-node/src/routes/performance.ts>) | 89–105 |
-| `targetRow` | [backend-node/src/routes/performance.ts](<../../../backend-node/src/routes/performance.ts>) | 107–124 |
-| `registerPerformanceRoutes` | [backend-node/src/routes/performance.ts](<../../../backend-node/src/routes/performance.ts>) | 126–561 |
+| `invalid` | [backend-node/src/routes/performance.ts](<../../../backend-node/src/routes/performance.ts>) | 78–78 |
+| `cycleDto` | [backend-node/src/routes/performance.ts](<../../../backend-node/src/routes/performance.ts>) | 79–88 |
+| `performanceScores` | [backend-node/src/routes/performance.ts](<../../../backend-node/src/routes/performance.ts>) | 90–106 |
+| `targetRow` | [backend-node/src/routes/performance.ts](<../../../backend-node/src/routes/performance.ts>) | 108–125 |
+| `registerPerformanceRoutes` | [backend-node/src/routes/performance.ts](<../../../backend-node/src/routes/performance.ts>) | 127–567 |
 
 ## Direct local dependencies
 
