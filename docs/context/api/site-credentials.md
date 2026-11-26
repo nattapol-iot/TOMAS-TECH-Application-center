@@ -2,33 +2,33 @@
 
 [Module](../modules/installed-base.md) · [Index](../../../AGENTS.md)
 
-Evidence: source snapshot `64bf1ed9`; generated, do not edit. [backend-node/src/routes/site-credentials.ts](<../../../backend-node/src/routes/site-credentials.ts>). Ranges are hints: search symbol after edits.
+Evidence: source snapshot `45c9e572`; generated, do not edit. [backend-node/src/routes/site-credentials.ts](<../../../backend-node/src/routes/site-credentials.ts>). Ranges are hints: search symbol after edits.
 
 ## API operations
 
 | Method | Path | Source lines |
 |---|---|---|
-| GET | `/api/v1/credentials` | 228–244 |
-| POST | `/api/v1/credentials` | 246–264 |
-| PUT | `/api/v1/credentials/:id` | 266–288 |
-| POST | `/api/v1/credentials/:id/reveal` | 290–310 |
-| DELETE | `/api/v1/credentials/:id` | 312–330 |
-| GET | `/api/v1/credentials/:id/access` | 332–345 |
+| GET | `/api/v1/credentials` | 261–282 |
+| POST | `/api/v1/credentials` | 284–300 |
+| PUT | `/api/v1/credentials/:id` | 302–333 |
+| POST | `/api/v1/credentials/:id/reveal` | 335–355 |
+| DELETE | `/api/v1/credentials/:id` | 357–376 |
+| GET | `/api/v1/credentials/:id/access` | 378–394 |
 
 ## Named functions
 
 | Symbol | Source | Lines |
 |---|---|---|
-| `text` | [backend-node/src/routes/site-credentials.ts](<../../../backend-node/src/routes/site-credentials.ts>) | 40–47 |
-| `idOrNull` | [backend-node/src/routes/site-credentials.ts](<../../../backend-node/src/routes/site-credentials.ts>) | 49–55 |
-| `parseCredentialInput` | [backend-node/src/routes/site-credentials.ts](<../../../backend-node/src/routes/site-credentials.ts>) | 57–79 |
-| `iso` | [backend-node/src/routes/site-credentials.ts](<../../../backend-node/src/routes/site-credentials.ts>) | 153–153 |
-| `credentialDto` | [backend-node/src/routes/site-credentials.ts](<../../../backend-node/src/routes/site-credentials.ts>) | 155–168 |
-| `bindInput` | [backend-node/src/routes/site-credentials.ts](<../../../backend-node/src/routes/site-credentials.ts>) | 170–181 |
-| `checkReferences` | [backend-node/src/routes/site-credentials.ts](<../../../backend-node/src/routes/site-credentials.ts>) | 183–189 |
-| `storeSecret` | [backend-node/src/routes/site-credentials.ts](<../../../backend-node/src/routes/site-credentials.ts>) | 191–200 |
-| `log` | [backend-node/src/routes/site-credentials.ts](<../../../backend-node/src/routes/site-credentials.ts>) | 202–207 |
-| `registerSiteCredentialRoutes` | [backend-node/src/routes/site-credentials.ts](<../../../backend-node/src/routes/site-credentials.ts>) | 209–346 |
+| `text` | [backend-node/src/routes/site-credentials.ts](<../../../backend-node/src/routes/site-credentials.ts>) | 48–55 |
+| `idOrNull` | [backend-node/src/routes/site-credentials.ts](<../../../backend-node/src/routes/site-credentials.ts>) | 57–63 |
+| `parseCredentialInput` | [backend-node/src/routes/site-credentials.ts](<../../../backend-node/src/routes/site-credentials.ts>) | 65–87 |
+| `iso` | [backend-node/src/routes/site-credentials.ts](<../../../backend-node/src/routes/site-credentials.ts>) | 178–178 |
+| `credentialDto` | [backend-node/src/routes/site-credentials.ts](<../../../backend-node/src/routes/site-credentials.ts>) | 180–200 |
+| `bindInput` | [backend-node/src/routes/site-credentials.ts](<../../../backend-node/src/routes/site-credentials.ts>) | 202–213 |
+| `checkReferences` | [backend-node/src/routes/site-credentials.ts](<../../../backend-node/src/routes/site-credentials.ts>) | 215–221 |
+| `storeSecret` | [backend-node/src/routes/site-credentials.ts](<../../../backend-node/src/routes/site-credentials.ts>) | 223–232 |
+| `log` | [backend-node/src/routes/site-credentials.ts](<../../../backend-node/src/routes/site-credentials.ts>) | 234–241 |
+| `registerSiteCredentialRoutes` | [backend-node/src/routes/site-credentials.ts](<../../../backend-node/src/routes/site-credentials.ts>) | 243–395 |
 
 ## Direct local dependencies
 
