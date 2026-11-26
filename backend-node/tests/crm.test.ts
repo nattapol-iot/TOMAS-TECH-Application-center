@@ -271,3 +271,65 @@ test("urgent work is apart from missing data on the dashboard (CRM UX audit CRM-
     await app.close();
   }
 });
+
+test("the dashboard and the deal list read one expected-close period; deals with no close date are counted apart", async () => {
+  const { closeWindow } = await import("../src/routes/crm.js");
+  assert.deepEqual([closeWindow({}).from, closeWindow({}).to], [null, null]);
+  assert.deepEqual([closeWindow({ closeFrom: "2026-10-01", closeTo: "2026-12-31" }).from, closeWindow({ closeFrom: "2026-10-01", closeTo: "2026-12-31" }).to], ["2026-10-01", "2026-12-31"]);
+  for (const bad of [{ closeFrom: "2026-12-31", closeTo: "2026-10-01" }, { closeFrom: "2026-13-01" }]) assert.throws(() => closeWindow(bad), ApiError);
+  const calls: { statement: string; parameters: Map<string, unknown> }[] = [];
+  const database = {
+    async query(statement: string, bind?: (q: sql.Request) => void) {
+      const parameters = new Map<string, unknown>();
+      const q = {
+        input(key: string, _type: unknown, value: unknown) {
+          parameters.set(key, value);
+          return this;
+        },
+      };
+      bind?.(q as unknown as sql.Request);
+      calls.push({ statement, parameters });
+      return { recordset: [/ undated/.test(statement) ? { undated: 7 } : { total: 3 }] };
+    },
+    transaction() {
+      throw Error("Unexpected");
+    },
+  } as unknown as Database;
+  const users = {
+    async demandPermission() {},
+    async required() {
+      return { id: 7, department: "Sales" };
+    },
+  } as unknown as CurrentUserService;
+  const app = Fastify();
+  registerErrorHandler(app);
+  registerCrmRoutes(app, { businessTimeZone: "Asia/Bangkok" } as AppConfig, database, users);
+  try {
+    const body = (await app.inject({ method: "GET", url: "/api/v1/crm/dashboard?closeFrom=2026-10-01&closeTo=2026-12-31" })).json();
+    assert.equal(body.closeFrom, "2026-10-01");
+    assert.equal(body.closeTo, "2026-12-31");
+    assert.equal(body.undated, 7);
+    assert.equal(body.totalOpportunities, 3);
+    const totals = calls.find((c) => / actionable/.test(c.statement))!,
+      flow = calls.find((c) => / undated/.test(c.statement))!;
+    for (const call of [totals, flow]) {
+      assert.match(call.statement, /o\.expected_close>=@closeFrom/);
+      assert.equal(call.parameters.get("closeFrom"), "2026-10-01");
+      assert.equal(call.parameters.get("closeTo"), "2026-12-31");
+    }
+    assert.match(
+      flow.statement,
+      /WITH permitted AS \(SELECT o\.id FROM dbo\.crm_opportunities o WHERE [^]*?AND \(@closeFrom IS NULL OR o\.expected_close>=@closeFrom\)/,
+      "the funnel reads the same period",
+    );
+    calls.length = 0;
+    await app.inject({ method: "GET", url: "/api/v1/crm/opportunities?closeFrom=2026-10-01" });
+    const list = calls.find((c) => /OFFSET @offset/.test(c.statement))!;
+    assert.match(list.statement, /o\.expected_close<=@closeTo/);
+    assert.equal(list.parameters.get("closeFrom"), "2026-10-01");
+    assert.equal(list.parameters.get("closeTo"), null);
+    assert.equal((await app.inject({ method: "GET", url: "/api/v1/crm/dashboard?closeFrom=2026-12-31&closeTo=2026-01-01" })).statusCode, 400);
+  } finally {
+    await app.close();
+  }
+});

@@ -175,6 +175,18 @@ test("the deal page leads with one next step; won and lost end the stage rail (C
   assert.match(pages, /\{text\(r\.inquiryNo\)\} · \{codeLabel\(text\(r\.inquiryStatus\)\)\}/);
   assert.match(records, /timeZone: BUSINESS_TIME_ZONE/);
 });
+test("the deal views count one period of expected close dates, on the link, and say what they leave out (owner 2026-11-26)", () => {
+  assert.match(pages, /const PERIODS = \["all", "month", "quarter", "year"\] as const;/);
+  assert.match(pages, /useLinkedControl\(\s*"closeFrom",/);
+  assert.match(pages, /useLinkedControl\(\s*"closeTo",/);
+  assert.match(pages, /const filters = \{ search, stage, attention, open: String\(onlyOpen\), ownerId: owner, sort, closeFrom, closeTo \};/);
+  assert.match(pages, /useCrmData<CrmRecord>\(`\/api\/v1\/crm\/dashboard\?\$\{params\(\{ closeFrom, closeTo \}\)\}`\)/);
+  assert.match(pages, /data-guide="crm\.closeRange"/);
+  assert.match(pages, /t\("CRM\.periodUndated"\)\.replace\("\{n\}"/);
+  for (const key of ["CRM.closePeriod", "CRM.period_all", "CRM.period_month", "CRM.period_quarter", "CRM.period_year", "CRM.periodScope", "CRM.periodUndated"])
+    for (const language of ["en", "th", "jp"]) assert.ok(CRM_COPY[key]?.[language]?.trim(), `${key}: ${language}`);
+});
+
 test("the deal table keeps its columns and says when a value or a date is not given (CRM-15)", () => {
   assert.match(pages, /label: t\(commercial \? "CRM\.valueCloseColumn" : "CRM\.expectedClose"\)/);
   assert.match(pages, /t\("CRM\.valueNotSpecified"\)/);
