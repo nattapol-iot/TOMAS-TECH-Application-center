@@ -147,9 +147,12 @@
   overflow-y: auto;
   font-size: var(--fs-xs);
 }
+/* The chart is a scrolling flex column, so a row would shrink to its min-height once the rows pass 70vh and the next
+   row would cover its last line. Rows keep the height of what they hold; the chart scrolls instead. */
 .gantt-head,
 .gantt-row {
   display: grid;
+  flex: none;
   grid-template-columns: var(--gantt-side) minmax(0, 1fr);
 }
 /* Above everything a row draws (bars 2-3, drop label 4, drop line 5), so rows scroll under the dates instead of over them. */
