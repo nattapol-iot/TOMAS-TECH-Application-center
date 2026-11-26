@@ -620,14 +620,15 @@ test("legacy project timeline links and remembered views preserve schedule acces
 });
 
 test("master leaves restore directly and legacy master still opens customers", async (t) => {
-  for (const [savedView, destination] of [
-    ["master", "customers"],
-    ["suppliers", "suppliers"],
-    ["employees", "employees"],
-    ["user-accounts", "team"],
+  for (const [savedView, destination, permissions] of [
+    ["master", "customers", ["master.read"]],
+    ["suppliers", "suppliers", ["master.read"]],
+    ["employees", "employees", ["master.read"]],
+    // User Accounts & Permissions is the Access Admin's alone (migration 139).
+    ["user-accounts", "team", ["master.read", "admin.manage_roles"]],
   ]) {
     await t.test(savedView, async () => {
-      const harness = createHarness({ mode: "team-test", savedView, loadBootstrap: async () => ({ ...bootstrap, permissions: ["master.read"] }) });
+      const harness = createHarness({ mode: "team-test", savedView, loadBootstrap: async () => ({ ...bootstrap, permissions }) });
       try {
         harness.render();
         harness.runMountEffects();
@@ -639,6 +640,22 @@ test("master leaves restore directly and legacy master still opens customers", a
       }
     });
   }
+  await t.test("user-accounts without the right to change roles", async () => {
+    const harness = createHarness({ mode: "team-test", savedView: "user-accounts", loadBootstrap: async () => ({ ...bootstrap, permissions: ["master.read"] }) });
+    try {
+      harness.render();
+      harness.runMountEffects();
+      await new Promise((resolve) => setImmediate(resolve));
+      const tree = harness.render();
+      assert.equal(
+        findNode(tree, (n) => n.type === "ProductionMasterData" && n.props.destination === "team"),
+        undefined,
+      );
+      assert.equal(navLeaf(tree, "User Accounts & Permissions"), undefined);
+    } finally {
+      harness.cleanup();
+    }
+  });
 });
 
 test("non-admin estimators see libraries and help without rate or account access", async () => {

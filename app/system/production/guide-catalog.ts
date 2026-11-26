@@ -3906,9 +3906,10 @@ const MENU_FAVORITES: Guide = {
  * fails when a menu screen has neither a guide nor an entry here, so a new screen cannot ship without one or the other.
  */
 /*
- * Owner 2026-11-26: the Leader role is set on the web. An Admin gives a person a role in User Accounts & Permissions: an
- * additional role on top of their primary role (migration 051), which keeps everything the primary role gives, or a new
- * primary role. The button and field names are the role dialog's own (operations-workspace-copy.ts).
+ * Owner 2026-11-26: the Leader role is set on the web. Whoever changes roles (the Access Admin role, which the owner
+ * holds since migration 139) gives a person a role in User Accounts & Permissions: an additional role on top of their
+ * primary role (migration 051), which keeps everything the primary role gives, or a new primary role. The button and
+ * field names are the role dialog's own (operations-workspace-copy.ts).
  */
 const USER_ROLE: Guide = {
   id: "user-role",
@@ -3939,9 +3940,9 @@ const USER_ROLE: Guide = {
       title: { th: "กด 'แก้ไข Role' ของคนนั้น", en: "Press Edit role on the person's row", jp: "その人の行の「ロールを変更」を押す" },
       body: { th: "ปุ่มทางซ้ายของแต่ละแถว", en: "The button at the left of each row.", jp: "各行の左にあるボタンです。" },
       missing: {
-        th: "ปุ่มนี้ขึ้นเฉพาะ Admin ถ้าไม่มีชื่อคนที่ต้องการ ให้เพิ่มเขาที่เมนูพนักงานก่อน",
-        en: "Only an Admin sees this button. If the person is not listed, add them in Employees first.",
-        jp: "このボタンは管理者だけに表示されます。対象者がいない場合は、先に社員メニューで追加します。",
+        th: "ปุ่มนี้ขึ้นเฉพาะผู้ถือ Role Access Admin ถ้าไม่มีชื่อคนที่ต้องการ ให้เพิ่มเขาที่เมนูพนักงานก่อน",
+        en: "Only an Access Admin sees this button. If the person is not listed, add them in Employees first.",
+        jp: "このボタンはAccess Adminだけに表示されます。対象者がいない場合は、先に社員メニューで追加します。",
       },
     },
     {

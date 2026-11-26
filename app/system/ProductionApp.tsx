@@ -271,7 +271,8 @@ const NAV: { group?: string; items: NavItem[] }[] = [
   {
     group: "NavGroup.system",
     items: [
-      { view: "user-accounts", label: "User Accounts & Permissions", icon: "users", permission: "master.read" },
+      // Only whoever changes roles opens it: the Access Admin role, which the owner holds (migration 139).
+      { view: "user-accounts", label: "User Accounts & Permissions", icon: "users", permission: "admin.manage_roles" },
       { view: "employees", label: "Employees", icon: "user", permission: "master.read" },
       { view: "suppliers", label: "Suppliers", icon: "truck", permission: "master.read" },
       { view: "audit", label: "Audit Log", icon: "shield", permission: "audit.read" },

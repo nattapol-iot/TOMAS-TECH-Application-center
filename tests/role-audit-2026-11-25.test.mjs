@@ -542,3 +542,38 @@ test("a Leader has a Project Manager's rights (migration 138), but not every pro
     if (/role_permissions/i.test(text) && /N'(Project Manager|Engineer)'/.test(text)) assert.match(text, /N'Leader'/, `${name} grants Project Manager or Engineer: grant Leader too`);
   }
 });
+
+/*
+ * Owner 2026-11-26: only the owner sees User Accounts & Permissions. Changing roles moves from Admin (which accounts
+ * signed in before 2026-10-05 were given) to the Access Admin role, which the owner holds; the menu needs it too.
+ */
+test("User Accounts & Permissions is the Access Admin's alone, a role the owner holds (migration 139)", async () => {
+  const [migration, rollback, validation, deploy] = await Promise.all([
+    source("database/migrations/139_access_admin.sql"),
+    source("database/rollback/139_access_admin.rollback.sql"),
+    source("backend-node/src/migration-validation.ts"),
+    source("database/scripts/020_deploy_fresh_database.sql"),
+  ]);
+  assert.match(migration, /IF NOT EXISTS \(SELECT 1 FROM dbo\.schema_versions WHERE version = 138\)/);
+  assert.match(migration, /VALUES \(N'Access Admin', N'Access Admin', N'Manages user accounts and roles:/);
+  assert.match(migration, /WHERE r\.code = N'Access Admin' AND p\.code = N'admin\.manage_roles'/);
+  // Only once the owner holds the role does Admin give it up, so roles stay manageable on a database without them.
+  assert.match(migration, /IF @owner IS NOT NULL\s+BEGIN[\s\S]+INSERT dbo\.user_business_roles[\s\S]+WHERE p\.code = N'admin\.manage_roles' AND r\.code <> N'Access Admin';\s+END/);
+  assert.match(migration, /VALUES \(139, N'Access admin'\)/);
+  assert.match(validation, /\{ version: 139, fileName: "139_access_admin\.sql", name: "Access admin" \}/);
+  assert.match(deploy, /:r database\/migrations\/138_leader_project_manager\.sql\n:r database\/migrations\/139_access_admin\.sql/);
+  assert.match(rollback, /WHERE r\.code = N'Admin' AND p\.code = N'admin\.manage_roles'/);
+
+  // The menu entry and the screen's accounts tab need the permission that changes roles, not master.read.
+  const shell = await source("app/system/ProductionApp.tsx");
+  assert.match(shell, /\{ view: "user-accounts", label: "User Accounts & Permissions", icon: "users", permission: "admin\.manage_roles" \}/);
+  const core = await source("app/system/production/CoreScreens.tsx");
+  assert.match(core, /\.\.\.\(canManageRoles \? \[\{ id: "team" as const, label: "User accounts", count: bootstrap\.team\.length \}\] : \[\]\)/);
+  assert.match(core, /\{tab === "team" && canManageRoles \? <TeamReferenceTab /);
+  // Every role change in the API already demands it.
+  const admin = await source("backend-node/src/routes/admin.ts");
+  assert.equal(admin.match(/demandPermission\(request, "admin\.manage_roles"\)/g)?.length, 5);
+  // The How-to guide reaches only those who hold it.
+  assert.ok(guidesFor(["master.read"]).every((guide) => guide.id !== "user-role"));
+  assert.ok(guidesFor(["admin.manage_roles"]).some((guide) => guide.id === "user-role"));
+});

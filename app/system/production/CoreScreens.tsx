@@ -3993,13 +3993,15 @@ export function ProductionMasterData({ bootstrap, notify, refreshBootstrap, onOp
   const tab = destination ?? localTab;
   const canWrite = bootstrap.permissions.includes("master.write");
   const canViewRates = bootstrap.user.roles.some(canViewEngineeringRates);
+  // User accounts are the Access Admin's alone (migration 139), as is the menu entry that opens them.
+  const canManageRoles = bootstrap.permissions.includes("admin.manage_roles");
   const tabs: { id: MasterTab; label: string; count?: number }[] = [
     { id: "customers", label: "Customers", count: bootstrap.customers.length },
     { id: "suppliers", label: "Suppliers", count: bootstrap.suppliers.length },
     { id: "employees", label: "Employees" },
     { id: "inventory", label: "Inventory items" },
     ...(canViewRates ? [{ id: "rates" as const, label: "Engineering rates" }] : []),
-    { id: "team", label: "User accounts", count: bootstrap.team.length },
+    ...(canManageRoles ? [{ id: "team" as const, label: "User accounts", count: bootstrap.team.length }] : []),
   ];
 
   // The System menu's entries here (User Accounts & Permissions, Employees, Suppliers) wear the Pegasus ERP look (owner
@@ -4022,7 +4024,7 @@ export function ProductionMasterData({ bootstrap, notify, refreshBootstrap, onOp
         {tab === "employees" ? <EmployeeMasterTab canWrite={canWrite} notify={notify} /> : null}
         {tab === "inventory" ? <InventoryItemMasterTab bootstrap={bootstrap} canWrite={canWrite} notify={notify} refreshBootstrap={refreshBootstrap} /> : null}
         {tab === "rates" && canViewRates ? <ProductionEngineeringRates embedded bootstrap={bootstrap} notify={notify} refreshBootstrap={refreshBootstrap} /> : null}
-        {tab === "team" ? <TeamReferenceTab bootstrap={bootstrap} canManageRoles={bootstrap.permissions.includes("admin.manage_roles")} notify={notify} refreshBootstrap={refreshBootstrap} /> : null}
+        {tab === "team" && canManageRoles ? <TeamReferenceTab bootstrap={bootstrap} canManageRoles={canManageRoles} notify={notify} refreshBootstrap={refreshBootstrap} /> : null}
       </div>
     </>
   );
