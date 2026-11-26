@@ -36,7 +36,7 @@ export const loadWorkload = (options: { mine?: boolean } = {}) => apiRequest<Wor
 export const assignPlanRow = (taskId: number, userIds: number[]) =>
   apiRequest<{ id: number; scheduleVersion: string; notification?: unknown }>(`/api/v1/schedule/tasks/${taskId}/assign`, { method: "POST", body: JSON.stringify({ userIds }) });
 
-/** Saves a person's order of work; the person themself or an Admin / Engineering Manager / Project Manager. */
+/** Saves a person's order of work; the person themself or an Admin / Engineering Manager / Project Manager / Leader. */
 export const saveWorkOrder = (userId: number, keys: string[]) => apiRequest<WorkOrder>(`/api/v1/resource-planning/work-order/${userId}`, { method: "PUT", body: JSON.stringify({ keys }) });
 
 export type TeamTaskKind = "Appointment" | "Task" | "Away";
@@ -115,7 +115,7 @@ export type TeamBoardData = {
   tasks: TeamTask[];
   visits: BoardVisit[];
   away: BoardAway[];
-  /** Admin, Engineering and Project Managers may change anyone's team task. */
+  /** Admin, Engineering and Project Managers and Leaders may change anyone's team task. */
   canChangeAll: boolean;
   /** Admins, Leaders and managers may add work for someone else; everyone else only for themselves (or nobody yet). */
   canAssignOthers: boolean;

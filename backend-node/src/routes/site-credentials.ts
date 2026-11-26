@@ -7,7 +7,7 @@ import { openSecret, sealSecret, type VaultKeys } from "../credential-vault.js";
 import type { Database } from "../db.js";
 import { ApiError } from "../errors.js";
 import { bodyObject, optionalPositiveLong, optionalText, parseRowVersion, positiveLong } from "../http.js";
-import { isProjectElevated } from "../project-scope.js";
+import { isCredentialElevated } from "../project-scope.js";
 import { permissionFor } from "../schedule-service.js";
 import type { CurrentUser } from "../types.js";
 import type { CurrentUserService } from "../users.js";
@@ -22,7 +22,8 @@ import type { CurrentUserService } from "../users.js";
  *   DELETE /api/v1/credentials/:id               remove (soft; the access log stays)
  *   GET    /api/v1/credentials/:id/access        the access log (credential.manage)
  *
- * A credential tied to a project can be revealed only by that project's people or elevated roles.
+ * A credential tied to a project can be revealed only by that project's people or elevated roles. A Leader's
+ * Project Manager standing does not count here (isCredentialElevated): they reveal those of the projects they work on.
  */
 const READ = "credential.read";
 const REVEAL = "credential.reveal";
@@ -31,8 +32,15 @@ export const CREDENTIAL_KINDS = ["Login", "WiFi", "VPN", "Database", "API", "Lic
 const REVEAL_RATE_LIMIT = { max: 30, timeWindow: "1 minute" } as const;
 
 export type CredentialInput = {
-  customerId: number; customerSiteId: number | null; assetId: number | null; projectId: number | null;
-  kind: (typeof CREDENTIAL_KINDS)[number]; label: string; username: string; host: string; notes: string;
+  customerId: number;
+  customerSiteId: number | null;
+  assetId: number | null;
+  projectId: number | null;
+  kind: (typeof CREDENTIAL_KINDS)[number];
+  label: string;
+  username: string;
+  host: string;
+  notes: string;
   /** Only present when the secret is set or changed. */
   secret: string | null;
 };
@@ -79,11 +87,28 @@ export function parseCredentialInput(raw: Record<string, unknown>, requireSecret
 }
 
 type CredentialRow = {
-  id: number | string; customer_id: number | string; customer_name: string; customer_site_id: number | string | null; customer_site_name: string | null;
-  asset_id: number | string | null; asset_no: string | null; asset_name: string | null; project_id: number | string | null;
-  project_no: string | null; kind: string; label: string; username: string; host: string; notes: string;
-  updated_at: Date; updated_by_name: string; secret_changed_at: Date; last_revealed_at: Date | null; last_revealed_by: string | null;
-  can_reveal_scope: number; row_version: Buffer;
+  id: number | string;
+  customer_id: number | string;
+  customer_name: string;
+  customer_site_id: number | string | null;
+  customer_site_name: string | null;
+  asset_id: number | string | null;
+  asset_no: string | null;
+  asset_name: string | null;
+  project_id: number | string | null;
+  project_no: string | null;
+  kind: string;
+  label: string;
+  username: string;
+  host: string;
+  notes: string;
+  updated_at: Date;
+  updated_by_name: string;
+  secret_changed_at: Date;
+  last_revealed_at: Date | null;
+  last_revealed_by: string | null;
+  can_reveal_scope: number;
+  row_version: Buffer;
 };
 
 export const CREDENTIAL_SELECT = `
@@ -159,9 +184,16 @@ function credentialDto(row: CredentialRow, canReveal: boolean) {
     customerSite: row.customer_site_id === null ? null : { id: Number(row.customer_site_id), name: row.customer_site_name ?? "" },
     asset: row.asset_id === null ? null : { id: Number(row.asset_id), assetNo: row.asset_no ?? "", name: row.asset_name ?? "" },
     project: row.project_id === null ? null : { id: Number(row.project_id), projectNo: row.project_no ?? "" },
-    kind: row.kind, label: row.label, username: row.username, host: row.host, notes: row.notes,
-    updatedAt: iso(row.updated_at), updatedBy: row.updated_by_name, secretChangedAt: iso(row.secret_changed_at),
-    lastRevealedAt: iso(row.last_revealed_at), lastRevealedBy: row.last_revealed_by,
+    kind: row.kind,
+    label: row.label,
+    username: row.username,
+    host: row.host,
+    notes: row.notes,
+    updatedAt: iso(row.updated_at),
+    updatedBy: row.updated_by_name,
+    secretChangedAt: iso(row.secret_changed_at),
+    lastRevealedAt: iso(row.last_revealed_at),
+    lastRevealedBy: row.last_revealed_by,
     canReveal: canReveal && row.can_reveal_scope === 1,
     rowVersion: row.row_version.toString("base64"),
   };
@@ -201,7 +233,9 @@ async function storeSecret(transaction: TransactionType, vault: VaultKeys, id: n
 
 async function log(transaction: TransactionType, id: number, actor: CurrentUser, action: string, ip: string | null): Promise<void> {
   await new sql.Request(transaction)
-    .input("id", sql.BigInt, id).input("actor", sql.BigInt, actor.id).input("action", sql.NVarChar(20), action)
+    .input("id", sql.BigInt, id)
+    .input("actor", sql.BigInt, actor.id)
+    .input("action", sql.NVarChar(20), action)
     .input("ip", sql.NVarChar(64), ip ? ip.slice(0, 64) : null)
     .query(CREDENTIAL_LOG_SQL);
 }
@@ -212,8 +246,7 @@ export function registerSiteCredentialRoutes(app: FastifyInstance, config: AppCo
     return config.credentialVault;
   };
   const credentialId = (request: FastifyRequest) => positiveLong((request.params as Record<string, unknown>).id, "Credential");
-  const scopeInputs = (request: sql.Request, actor: CurrentUser) => request
-    .input("actor", sql.BigInt, actor.id).input("elevated", sql.Bit, isProjectElevated(actor));
+  const scopeInputs = (request: sql.Request, actor: CurrentUser) => request.input("actor", sql.BigInt, actor.id).input("elevated", sql.Bit, isCredentialElevated(actor));
 
   const readOne = async (id: number, actor: CurrentUser, transaction?: TransactionType): Promise<CredentialRow> => {
     const query = `${CREDENTIAL_SELECT} WHERE c.id = @id AND c.deleted_at IS NULL;`;
@@ -230,16 +263,21 @@ export function registerSiteCredentialRoutes(app: FastifyInstance, config: AppCo
     const actor = await users.required(request);
     const query = request.query as Record<string, unknown>;
     const search = optionalText(query.search, 200, "Search");
-    const result = await database.query<CredentialRow>(CREDENTIAL_LIST_SQL, (sqlRequest) => scopeInputs(sqlRequest, actor)
-      .input("customer", sql.BigInt, optionalPositiveLong(query.customerId, "Customer"))
-      .input("customer_site", sql.BigInt, optionalPositiveLong(query.customerSiteId, "Customer site"))
-      .input("asset", sql.BigInt, optionalPositiveLong(query.assetId, "Asset"))
-      .input("include_site_wide", sql.Bit, query.includeSiteWide === "true")
-      .input("search", sql.NVarChar(200), search));
+    const result = await database.query<CredentialRow>(CREDENTIAL_LIST_SQL, (sqlRequest) =>
+      scopeInputs(sqlRequest, actor)
+        .input("customer", sql.BigInt, optionalPositiveLong(query.customerId, "Customer"))
+        .input("customer_site", sql.BigInt, optionalPositiveLong(query.customerSiteId, "Customer site"))
+        .input("asset", sql.BigInt, optionalPositiveLong(query.assetId, "Asset"))
+        .input("include_site_wide", sql.Bit, query.includeSiteWide === "true")
+        .input("search", sql.NVarChar(200), search),
+    );
     const [canReveal, canManage] = await Promise.all([permissionFor(database, actor.id, REVEAL), permissionFor(database, actor.id, MANAGE)]);
     return {
       items: result.recordset.map((row) => credentialDto(row, canReveal)),
-      canManage, canReveal, vaultReady: Boolean(config.credentialVault), kinds: CREDENTIAL_KINDS,
+      canManage,
+      canReveal,
+      vaultReady: Boolean(config.credentialVault),
+      kinds: CREDENTIAL_KINDS,
     };
   });
 
@@ -250,14 +288,12 @@ export function registerSiteCredentialRoutes(app: FastifyInstance, config: AppCo
     const input = parseCredentialInput(bodyObject(request.body), true);
     const id = await database.transaction(async (transaction) => {
       await checkReferences(transaction, input);
-      const inserted = await bindInput(new sql.Request(transaction), input).input("actor", sql.BigInt, actor.id)
-        .query<{ id: number | string }>(CREDENTIAL_INSERT_SQL);
+      const inserted = await bindInput(new sql.Request(transaction), input).input("actor", sql.BigInt, actor.id).query<{ id: number | string }>(CREDENTIAL_INSERT_SQL);
       const newId = Number(inserted.recordset[0]!.id);
       // Sealed after the insert: the row id is bound into the ciphertext.
       await storeSecret(transaction, keys, newId, input.secret!);
       await log(transaction, newId, actor, "Created", request.ip || null);
-      await insertAudit(transaction, actor.id, "SiteCredential", newId, input.label.slice(0, 50), "Created", null,
-        { ...input, secret: "[encrypted]" });
+      await insertAudit(transaction, actor.id, "SiteCredential", newId, input.label.slice(0, 50), "Created", null, { ...input, secret: "[encrypted]" });
       return newId;
     });
     return reply.code(201).send(credentialDto(await readOne(id, actor), await permissionFor(database, actor.id, REVEAL)));
@@ -272,7 +308,8 @@ export function registerSiteCredentialRoutes(app: FastifyInstance, config: AppCo
     const input = parseCredentialInput(raw, false);
     const keys = input.secret ? vault() : null;
     await database.transaction(async (transaction) => {
-      const current = await new sql.Request(transaction).input("id", sql.BigInt, id)
+      const current = await new sql.Request(transaction)
+        .input("id", sql.BigInt, id)
         .query<{ label: string; row_version: Buffer }>(`SELECT label, row_version FROM dbo.site_credentials WITH (UPDLOCK) WHERE id = @id AND deleted_at IS NULL;`);
       const before = current.recordset[0];
       if (!before) throw new ApiError(404, "credential_not_found", "The credential was not found.");
@@ -281,8 +318,16 @@ export function registerSiteCredentialRoutes(app: FastifyInstance, config: AppCo
       await bindInput(new sql.Request(transaction), input).input("id", sql.BigInt, id).input("actor", sql.BigInt, actor.id).query(CREDENTIAL_UPDATE_SQL);
       if (keys && input.secret) await storeSecret(transaction, keys, id, input.secret);
       await log(transaction, id, actor, input.secret ? "SecretChanged" : "Updated", request.ip || null);
-      await insertAudit(transaction, actor.id, "SiteCredential", id, input.label.slice(0, 50), input.secret ? "Secret changed" : "Updated",
-        { label: before.label }, { ...input, secret: input.secret ? "[encrypted]" : undefined });
+      await insertAudit(
+        transaction,
+        actor.id,
+        "SiteCredential",
+        id,
+        input.label.slice(0, 50),
+        input.secret ? "Secret changed" : "Updated",
+        { label: before.label },
+        { ...input, secret: input.secret ? "[encrypted]" : undefined },
+      );
     });
     return credentialDto(await readOne(id, actor), await permissionFor(database, actor.id, REVEAL));
   });
@@ -295,9 +340,9 @@ export function registerSiteCredentialRoutes(app: FastifyInstance, config: AppCo
     const secret = await database.transaction(async (transaction) => {
       const row = await readOne(id, actor, transaction);
       if (row.can_reveal_scope !== 1) throw new ApiError(403, "credential_project_scope", "This credential belongs to a project you are not part of.");
-      const sealed = await new sql.Request(transaction).input("id", sql.BigInt, id)
-        .query<{ secret_cipher: Buffer; secret_iv: Buffer; secret_tag: Buffer; key_id: number }>(
-          `SELECT secret_cipher, secret_iv, secret_tag, key_id FROM dbo.site_credentials WHERE id = @id;`);
+      const sealed = await new sql.Request(transaction)
+        .input("id", sql.BigInt, id)
+        .query<{ secret_cipher: Buffer; secret_iv: Buffer; secret_tag: Buffer; key_id: number }>(`SELECT secret_cipher, secret_iv, secret_tag, key_id FROM dbo.site_credentials WHERE id = @id;`);
       const stored = sealed.recordset[0]!;
       const value = openSecret(keys, id, { cipher: stored.secret_cipher, iv: stored.secret_iv, tag: stored.secret_tag, keyId: Number(stored.key_id) });
       // Logged in the same transaction: a reveal that is not recorded does not happen.
@@ -314,7 +359,8 @@ export function registerSiteCredentialRoutes(app: FastifyInstance, config: AppCo
     const actor = await users.required(request);
     const id = credentialId(request);
     await database.transaction(async (transaction) => {
-      const current = await new sql.Request(transaction).input("id", sql.BigInt, id)
+      const current = await new sql.Request(transaction)
+        .input("id", sql.BigInt, id)
         .query<{ label: string }>(`SELECT label FROM dbo.site_credentials WITH (UPDLOCK) WHERE id = @id AND deleted_at IS NULL;`);
       const row = current.recordset[0];
       if (!row) throw new ApiError(404, "credential_not_found", "The credential was not found.");
@@ -334,14 +380,16 @@ export function registerSiteCredentialRoutes(app: FastifyInstance, config: AppCo
     const actor = await users.required(request);
     const id = credentialId(request);
     await readOne(id, actor);
-    const result = await database.query<{ action: string; occurred_at: Date; user_name: string; client_ip: string | null }>(`
+    const result = await database.query<{ action: string; occurred_at: Date; user_name: string; client_ip: string | null }>(
+      `
       SELECT TOP (100) x.action, x.occurred_at, u.name AS user_name, x.client_ip
       FROM dbo.site_credential_access x INNER JOIN dbo.users u ON u.id = x.user_id
       WHERE x.credential_id = @id ORDER BY x.occurred_at DESC, x.id DESC;
-    `, (sqlRequest) => sqlRequest.input("id", sql.BigInt, id));
+    `,
+      (sqlRequest) => sqlRequest.input("id", sql.BigInt, id),
+    );
     return {
       items: result.recordset.map((row) => ({ action: row.action, at: row.occurred_at.toISOString(), user: row.user_name, ip: row.client_ip })),
     };
   });
 }
-

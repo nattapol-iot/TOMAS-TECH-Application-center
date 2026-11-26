@@ -180,7 +180,7 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
         AND NOT EXISTS(SELECT 1 FROM dbo.projects p WHERE p.inquiry_id=i.id OR p.estimate_id=e.id)
       ORDER BY e.updated_at DESC,e.id DESC;
       SELECT u.id,u.name,
-        MAX(CASE WHEN r.code IN(N'Project Manager',N'Engineering Manager',N'Admin') THEN 1 ELSE 0 END) canManage,
+        MAX(CASE WHEN r.code IN(N'Project Manager',N'Leader',N'Engineering Manager',N'Admin') THEN 1 ELSE 0 END) canManage,
         MAX(CASE WHEN r.code IN(N'Engineer',N'Leader',N'Engineering Manager',N'Admin') THEN 1 ELSE 0 END) canLead
       FROM dbo.users u JOIN dbo.user_effective_roles r ON r.user_id=u.id
       GROUP BY u.id,u.name HAVING MAX(CASE WHEN r.code IN(N'Project Manager',N'Engineering Manager',N'Admin',N'Engineer',N'Leader') THEN 1 ELSE 0 END)=1
@@ -811,7 +811,7 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
         : null;
     if (!standalone) await users.demandPermission(request, "estimate.read");
     if (standalone && !canCreateWithoutEstimate(actor)) {
-      throw new ApiError(403, "project_without_estimate_forbidden", "Only the Application team, a Project Manager or an Admin can create a project without an estimate.");
+      throw new ApiError(403, "project_without_estimate_forbidden", "Only the Application team, a Project Manager, a Leader or an Admin can create a project without an estimate.");
     }
     // With a plan, the project runs from its first row to its last; without one, the dates are typed.
     const span = planSpan(plan);
@@ -852,14 +852,14 @@ export function registerProjectRoutes(app: FastifyInstance, config: AppConfig, d
         const roles = (
           await people.query<{ manager_role: string | null; lead_role: string | null }>(`
         SELECT (SELECT TOP(1) code FROM dbo.user_effective_roles
-          WHERE user_id=@manager_id AND code IN(N'Project Manager',N'Engineering Manager',N'Admin')) AS manager_role,
+          WHERE user_id=@manager_id AND code IN(N'Project Manager',N'Leader',N'Engineering Manager',N'Admin')) AS manager_role,
           (SELECT TOP(1) code FROM dbo.user_effective_roles
           WHERE user_id=@lead_id AND code IN(N'Engineer',N'Leader',N'Engineering Manager',N'Admin')) AS lead_role;
       `)
         ).recordset[0];
         if (
           !roles ||
-          !["Project Manager", "Engineering Manager", "Admin"].includes(roles.manager_role ?? "") ||
+          !["Project Manager", "Leader", "Engineering Manager", "Admin"].includes(roles.manager_role ?? "") ||
           !["Engineer", "Leader", "Engineering Manager", "Admin"].includes(roles.lead_role ?? "")
         ) {
           throw new ApiError(422, "invalid_reference", "Manager and lead engineer must be active users with eligible roles.");

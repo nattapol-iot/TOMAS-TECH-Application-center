@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import test from "node:test";
 import { isApplicationTeam, mayCreateFromEstimate, mayCreateProject, mayCreateWithoutEstimate } from "../backend-node/src/project-create-access.ts";
 import { canViewProjectCost } from "../backend-node/src/project-cost-model.ts";
@@ -281,7 +281,7 @@ test("notices and checks that looked people up by their primary role read every 
   assert.match(reports, /roles: user\.roles \? user\.roles\.split\("\|"\) : \[user\.role\]/);
   assert.match(reports, /\(SELECT STRING_AGG\(er\.code,N'\|'\) FROM dbo\.user_effective_roles er WHERE er\.user_id=u\.id\) roles/);
   // The dashboard's Project Manager filter lists anyone holding the role.
-  assert.match(dashboard, /WHERE EXISTS\(SELECT 1 FROM dbo\.user_effective_roles pm WHERE pm\.user_id=u\.id AND pm\.code=N'Project Manager'\) AND u\.is_active=1/);
+  assert.match(dashboard, /WHERE EXISTS\(SELECT 1 FROM dbo\.user_effective_roles pm WHERE pm\.user_id=u\.id AND pm\.code IN\(N'Project Manager',N'Leader'\)\) AND u\.is_active=1/);
 });
 
 test("screens decide on every held role, as the API does", async () => {
@@ -305,7 +305,7 @@ test("screens decide on every held role, as the API does", async () => {
   assert.match(estimates, /const canAssignEstimateOwner = \(person: RoleBearer\) => hasRole\(person, "Engineering Manager", "Admin"\);/);
   assert.doesNotMatch(estimates, /canAssignEstimateOwner\(bootstrap\.user\.role\)/);
   assert.doesNotMatch(inquiries, /OWNER_ROLES\.includes|\.includes\(bootstrap\.user\.role\)/);
-  assert.match(inquiries, /const canManageQueue = hasRole\(bootstrap\.user, "Admin", "Engineering Manager", "Project Manager", "Sales Manager"\);/);
+  assert.match(inquiries, /const canManageQueue = hasRole\(bootstrap\.user, "Admin", "Engineering Manager", "Project Manager", "Leader", "Sales Manager"\);/);
   assert.match(inquiries, /defaultInquiryQueueScope\(rolesOf\(bootstrap\.user\)\)/);
   // An inquiry created from a site visit picks its owner like any inquiry owner, a Leader included.
   assert.match(visits, /const engineers = bootstrap\.team\.filter\(\(member\) => hasRole\(member, \.\.\.ESTIMATE_OWNER_ROLES\)\);/);
@@ -353,7 +353,7 @@ test("the Sales Manager uses the CRM: a Sales Engineer's permissions plus the te
  */
 test("no role check names a CEO role", async () => {
   const { DASHBOARD_ROLES } = await import("../backend-node/src/executive-dashboard-model.ts");
-  assert.deepEqual(DASHBOARD_ROLES, ["Admin", "Management", "Engineering Manager", "Project Manager", "Sales Manager"]);
+  assert.deepEqual(DASHBOARD_ROLES, ["Admin", "Management", "Engineering Manager", "Project Manager", "Leader", "Sales Manager"]);
   assert.equal(canViewProjectCost(["Management"]), true);
   for (const path of ["backend-node/src/executive-dashboard-model.ts", "backend-node/src/project-cost-model.ts", "backend-node/src/routes/executive-dashboard.ts"])
     assert.doesNotMatch(await source(path), /["'`]CEO["'`]|N'CEO'/, path);
@@ -423,8 +423,10 @@ test("a Leader leads their team: plans its projects, assesses its Engineers, rev
   const projectScope = await source("backend-node/src/project-scope.ts");
   assert.match(projectScope, /request\.input\("leader_team", sql\.NVarChar\(40\), myWork \? "" : leaderTeamOf\(user\)\);/);
   assert.equal((await source("backend-node/src/routes/projects.ts")).match(/sqlRequest\.input\("leader_team", sql\.NVarChar\(40\), leaderTeamOf\(actor\)\);/g)?.length, 5);
-  // ...but is not project-elevated: other teams' projects, PRs and site credentials stay closed to a Leader.
-  assert.match(projectScope, /const ELEVATED_ROLES = new Set\(\["Admin", "Engineering Manager", "Project Manager", "Purchasing", "Warehouse", "Inventory Controller"\]\);/);
+  // Since migration 138 a Leader is also project-elevated, as a Project Manager is; other projects' site credentials stay
+  // closed to them, because the reveal scope leaves a Leader's elevation out.
+  assert.match(projectScope, /const ELEVATED_ROLES = new Set\(\["Admin", "Engineering Manager", "Project Manager", "Leader", "Purchasing", "Warehouse", "Inventory Controller"\]\);/);
+  assert.match(projectScope, /const CREDENTIAL_ELEVATED_ROLES = new Set\(\[\.\.\.ELEVATED_ROLES\]\.filter\(\(role\) => role !== "Leader"\)\);/);
 
   // KPI: a Leader assesses the Engineers of their own team only.
   const { canManagePerformanceTarget } = await import("../backend-node/src/performance-framework.ts");
@@ -480,4 +482,63 @@ test("an Admin sets the Leader role on the web, with How-to guides for that and 
   const core = await source("app/system/production/CoreScreens.tsx");
   for (const mark of ['data-guide="role.edit"', 'guide="role.primary"', 'guide="role.extra"', 'guide="role.reason"', 'data-guide="role.grant"', 'data-guide="role.save"'])
     assert.ok(core.includes(mark), mark);
+});
+
+/*
+ * Owner 2026-11-26: a Leader has a Project Manager's rights too. Migration 138 copies the Project Manager role's permissions
+ * to Leader and the code gives a Leader a Project Manager's standing. A Leader still reveals site credentials only on the
+ * projects they work on, and still assesses the KPI of the team's Engineers only (the owner's own words for KPI).
+ */
+test("a Leader has a Project Manager's rights (migration 138), but not every project's site credentials", async () => {
+  const [migration, rollback, validation, deploy] = await Promise.all([
+    source("database/migrations/138_leader_project_manager.sql"),
+    source("database/rollback/138_leader_project_manager.rollback.sql"),
+    source("backend-node/src/migration-validation.ts"),
+    source("database/scripts/020_deploy_fresh_database.sql"),
+  ]);
+  assert.match(migration, /IF NOT EXISTS \(SELECT 1 FROM dbo\.schema_versions WHERE version = 137\)/);
+  assert.match(migration, /WHERE leader\.code = N'Leader'\s+AND pm\.code = N'Project Manager'/);
+  assert.match(migration, /UPDATE dbo\.roles\s+SET description = N'Leads a team''s work with a Project Manager''s rights:/);
+  assert.match(migration, /VALUES \(138, N'Leader as Project Manager'\)/);
+  assert.match(validation, /\{ version: 138, fileName: "138_leader_project_manager\.sql", name: "Leader as Project Manager" \}/);
+  assert.match(deploy, /:r database\/migrations\/137_leader_team_work\.sql\n:r database\/migrations\/138_leader_project_manager\.sql/);
+  // The undo keeps what an Engineer's permissions, migration 135 and migration 137 gave a Leader.
+  assert.match(rollback, /engineer\.code = N'Engineer'/);
+  assert.match(rollback, /N'credential\.read', N'credential\.reveal', N'credential\.manage'/);
+  assert.match(rollback, /N'schedule\.plan', N'performance\.manage', N'report\.review'\);/);
+
+  // A Project Manager's standing: every project, stage moves, man-hour budgets, anyone's team task, the dashboard.
+  const scope = await source("backend-node/src/project-scope.ts");
+  assert.match(scope, /const PROJECT_MANAGER_ROLES = new Set\(\["Admin", "Engineering Manager", "Project Manager", "Leader"\]\);/);
+  const credentials = await source("backend-node/src/routes/site-credentials.ts");
+  assert.match(credentials, /\.input\("elevated", sql\.Bit, isCredentialElevated\(actor\)\)/);
+  assert.doesNotMatch(credentials, /isProjectElevated/);
+  assert.equal(mayCreateWithoutEstimate(["Engineer", "Leader"], "IoT Engineer Dept."), true);
+  const { DASHBOARD_ROLES } = await import("../backend-node/src/executive-dashboard-model.ts");
+  assert.ok(DASHBOARD_ROLES.includes("Leader"));
+  const { defaultInquiryQueueScope } = await import("../lib/inquiry-queue.ts");
+  assert.equal(defaultInquiryQueueScope(["Engineer", "Leader"]), "team");
+  // May be a project's manager: the create form's choices, the API's check, the edit dialog, the dashboard's PM filter.
+  const projects = await source("backend-node/src/routes/projects.ts");
+  assert.match(projects, /MAX\(CASE WHEN r\.code IN\(N'Project Manager',N'Leader',N'Engineering Manager',N'Admin'\) THEN 1 ELSE 0 END\) canManage,/);
+  assert.match(projects, /code IN\(N'Project Manager',N'Leader',N'Engineering Manager',N'Admin'\)\) AS manager_role,/);
+  assert.match(projects, /!\["Project Manager", "Leader", "Engineering Manager", "Admin"\]\.includes\(roles\.manager_role \?\? ""\)/);
+  const core = await source("app/system/production/CoreScreens.tsx");
+  assert.match(core, /eligible\(\["Project Manager", "Leader", "Engineering Manager", "Admin"\], project\.managerId\)/);
+  assert.match(core, /\["Admin", "Engineering Manager", "Project Manager", "Leader"\]\.includes\(role\)/);
+  assert.match(await source("app/system/production/ResourcePlanningScreen.tsx"), /const MANAGER_ROLES = \["Admin", "Engineering Manager", "Project Manager", "Leader"\];/);
+  assert.match(await source("app/system/production/InquiryScreens.tsx"), /hasRole\(bootstrap\.user, "Admin", "Engineering Manager", "Project Manager", "Leader", "Sales Manager"\)/);
+  const dashboard = await source("backend-node/src/routes/executive-dashboard.ts");
+  assert.match(dashboard, /pm\.code IN\(N'Project Manager',N'Leader'\)/);
+  assert.match(dashboard, /hasRole\(actor, "Project Manager", "Leader"\) \? "Managed projects"/);
+  // KPI stays as the owner put it: a Leader assesses the team's Engineers who lead no one.
+  const { canManagePerformanceTarget } = await import("../backend-node/src/performance-framework.ts");
+  assert.equal(canManagePerformanceTarget("Leader", "Project Manager", "IoT Engineer Dept.", "IoT Engineer Dept."), false);
+
+  // Later grants: a migration that grants Project Manager or Engineer a permission names Leader too.
+  const later = (await readdir(new URL("database/migrations/", root))).filter((file) => /^\d{3}_.+\.sql$/.test(file) && Number(file.slice(0, 3)) > 138);
+  for (const name of later) {
+    const text = await source(`database/migrations/${name}`);
+    if (/role_permissions/i.test(text) && /N'(Project Manager|Engineer)'/.test(text)) assert.match(text, /N'Leader'/, `${name} grants Project Manager or Engineer: grant Leader too`);
+  }
 });

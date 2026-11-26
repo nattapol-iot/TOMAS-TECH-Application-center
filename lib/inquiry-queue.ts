@@ -17,7 +17,7 @@ export type InquiryNextAction =
   | "restore_estimate"
   | "closed";
 
-const TEAM_QUEUE_ROLES = new Set(["Admin", "Engineering Manager", "Project Manager", "Sales Manager"]);
+const TEAM_QUEUE_ROLES = new Set(["Admin", "Engineering Manager", "Project Manager", "Leader", "Sales Manager"]);
 
 /** Engineers land on owned work; coordinators and managers retain the team overview. Every held role counts. */
 export function defaultInquiryQueueScope(roles: string | readonly string[]): InquiryQueueScope {

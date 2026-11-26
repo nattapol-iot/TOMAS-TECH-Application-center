@@ -25,7 +25,7 @@ test("non-management roles are rejected before any business query", async () => 
   }
 });
 test("company reporting binds only the primary executive role; manager scopes stay server-side", async () => {
-  for (const role of ["Admin", "Management", "Engineering Manager", "Project Manager", "Sales Manager"]) {
+  for (const role of ["Admin", "Management", "Engineering Manager", "Project Manager", "Leader", "Sales Manager"]) {
     const app = Fastify(),
       bindings: Record<string, unknown> = {};
     const db = {
@@ -39,7 +39,10 @@ test("company reporting binds only the primary executive role; manager scopes st
         bind(q);
         assert.match(statement, /p\.manager_id=@actor OR p\.lead_engineer_id=@actor/);
         assert.match(statement, /@department<>N''/);
-        assert.match(statement, /EXISTS\(SELECT 1 FROM dbo\.user_effective_roles pm WHERE pm\.user_id=u\.id AND pm\.code=N'Project Manager'\) AND u\.is_active=1 AND u\.deleted_at IS NULL/);
+        assert.match(
+          statement,
+          /EXISTS\(SELECT 1 FROM dbo\.user_effective_roles pm WHERE pm\.user_id=u\.id AND pm\.code IN\(N'Project Manager',N'Leader'\)\) AND u\.is_active=1 AND u\.deleted_at IS NULL/,
+        );
         const recordsets: unknown[][] = Array.from({ length: 12 }, () => []);
         recordsets[11] = [{ id: 99, name: "Unassigned PM", department: "Engineering" }];
         return { recordsets };

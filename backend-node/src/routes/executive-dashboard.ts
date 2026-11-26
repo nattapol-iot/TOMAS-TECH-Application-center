@@ -111,10 +111,10 @@ export function registerExecutiveDashboardRoutes(app: FastifyInstance, db: Datab
       FROM dbo.resource_tasks t JOIN dbo.users u ON u.id=t.proposed_by
       WHERE t.pending_plan IS NOT NULL AND EXISTS(SELECT 1 FROM @granted WHERE code=N'schedule.plan')
         AND (EXISTS(SELECT 1 FROM @projects p WHERE p.id=t.project_id) OR EXISTS(SELECT 1 FROM @inquiries i WHERE i.id=t.inquiry_id));
-      -- Active PMs (primary or additional role) may be filter options even before their first assignment.
+      -- Active PMs and Leaders (primary or additional role) may be filter options even before their first assignment.
       -- This directory does not expand the project reporting scope above.
       SELECT u.id,u.name,u.department FROM dbo.users u
-      WHERE EXISTS(SELECT 1 FROM dbo.user_effective_roles pm WHERE pm.user_id=u.id AND pm.code=N'Project Manager') AND u.is_active=1 AND u.deleted_at IS NULL
+      WHERE EXISTS(SELECT 1 FROM dbo.user_effective_roles pm WHERE pm.user_id=u.id AND pm.code IN(N'Project Manager',N'Leader')) AND u.is_active=1 AND u.deleted_at IS NULL
         AND (@executive=1 OR u.id=@actor
           OR (EXISTS(SELECT 1 FROM @roles WHERE code IN(N'Engineering Manager',N'Sales Manager')) AND @department<>N'' AND u.department=@department)
           OR EXISTS(SELECT 1 FROM dbo.projects p JOIN @projects scope ON scope.id=p.id WHERE p.manager_id=u.id))
@@ -130,7 +130,7 @@ export function registerExecutiveDashboardRoutes(app: FastifyInstance, db: Datab
       asOf: new Date().toISOString(),
       today,
       mode: executive ? "executive" : "manager",
-      scope: executive ? "Company" : hasRole(actor, "Project Manager") ? "Managed projects" : actor.department || "Assigned records",
+      scope: executive ? "Company" : hasRole(actor, "Project Manager", "Leader") ? "Managed projects" : actor.department || "Assigned records",
       projects: rows(0).map((r) => ({
         id: n(r, "id"),
         inquiryId: n(r, "inquiry_id"),

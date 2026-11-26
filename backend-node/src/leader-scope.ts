@@ -3,8 +3,9 @@ import { hasRole, type RoleBearer } from "./user-roles.js";
 /*
  * What a Leader leads (owner 2026-11-26): the work of their own team. A Leader plans every project of the team, as a
  * Project Manager plans their own, answers its day requests and sets its baselines; reviews its reports; and assesses the
- * KPI of its Engineers. A Leader sees the projects of their team, not every project: a Leader may reveal site
- * credentials, so the company-wide project scope of a Project Manager is not theirs.
+ * KPI of its Engineers. Since migration 138 a Leader also has a Project Manager's rights and sees every project
+ * (project-scope.ts); this team rule still decides what they plan. Site credentials they reveal only on the projects they
+ * work on: a Leader holds credential.reveal, which a Project Manager does not.
  *
  * A project's team is its own team, else its lead engineer's department; a Leader's team is their department's. Both
  * read as one of the three project teams, as lib/project-portfolio.ts reads them (the Application groups 1G and 2G are

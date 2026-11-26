@@ -4564,7 +4564,7 @@ export function ProductionProjectSchedule({ bootstrap, notify, preferredProjectI
               <EmptyState
                 icon="calendar"
                 title={uiText("This project has no schedule yet")}
-                message={canPlan ? "Plan.startWithHeading" : "Project Manager หรือ Engineering Manager เป็นผู้สร้างแผน"}
+                message={canPlan ? "Plan.startWithHeading" : "Project Manager, Leader หรือ Engineering Manager เป็นผู้สร้างแผน"}
                 action={
                   canPlan ? (
                     <button className="btn primary sm" type="button" onClick={() => setLevel("sheet")}>
