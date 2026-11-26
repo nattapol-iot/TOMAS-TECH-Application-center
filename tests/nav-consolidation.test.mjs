@@ -6,14 +6,17 @@ const root = new URL("../", import.meta.url);
 const source = (path) => readFile(new URL(path, root), "utf8");
 
 test("Pipeline is the board mode of CRM Opportunities, not a second menu entry", async () => {
-  const [shell, crm, copy] = await Promise.all([source("app/system/ProductionApp.tsx"), source("app/system/production/CrmScreens.tsx"), source("app/system/production/crm-copy.ts")]);
+  const [shell, crm, copy] = await Promise.all([source("app/system/ProductionApp.tsx"), source("app/system/tomas-ui/CrmPages.tsx"), source("app/system/production/crm-copy.ts")]);
   const nav = shell.slice(shell.indexOf("const NAV"), shell.indexOf("const IS_AUTH_CONFIGURED"));
   assert.doesNotMatch(nav, /view: "crm-pipeline"/);
   // The board stays reachable: a remembered board restores, and the sidebar marks Opportunities.
   assert.match(shell, /if \(data\.permissions\.includes\("crm\.read"\)\) allowed\.push\("crm-pipeline"\);/);
   assert.match(shell, /const navView = \(view: View\): View => \(?view === "crm-pipeline" \? "crm-opportunities" :/);
   assert.match(shell, /<CrmScreen\s[^>]*onViewChange=\{setView\}/);
-  assert.match(crm, /<Tabs<CrmView>\s+tabs=\{\[\s*\{ id: "crm-opportunities", label: "CRM\.listView" \},\s*\{ id: "crm-pipeline", label: "CRM\.boardView" \},?\s*\]\}/);
+  // The list and the board are two tabs of one page (CrmPages.tsx), each marked with its view for a guide step.
+  assert.match(crm, /\(\["crm-opportunities", "crm-pipeline"\] as const\)\.map\(\(id\) => \(/);
+  assert.match(crm, /role="tab"\s+data-tab=\{id\}\s+aria-selected=\{view === id\}\s+onClick=\{\(\) => props\.onViewChange\?\.\(id\)\}/);
+  assert.match(crm, /t\(id === "crm-opportunities" \? "CRM\.listView" : "CRM\.boardView"\)/);
   for (const key of ["CRM.listView", "CRM.boardView"]) assert.match(copy, new RegExp(`\\[\\s*"${key.replace(".", "\\.")}",\\s*"[^"]+",\\s*"[^"]+",\\s*"[^"]+",?\\s*\\]`));
 });
 

@@ -24,10 +24,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
   Input,
   Label,
   NamedIcon,
@@ -177,17 +173,6 @@ export function EntityPicker({
         </p>
       ) : null}
     </div>
-  );
-}
-
-/** The picker on an old screen's toolbar (a filter): its own island, so its list portals into the kit's layer. */
-export function PickerIsland(props: PickerProps & { guide?: string }) {
-  return (
-    <TomasUi className="crm-picker-island">
-      <div className="min-w-56" data-guide={props.guide}>
-        <EntityPicker {...props} />
-      </div>
-    </TomasUi>
   );
 }
 
@@ -1277,44 +1262,5 @@ export function RemoveDialog({ title, name, hint, blocked, onRemove, onClose }: 
       <strong className="text-sm">{name}</strong>
       <p className="text-muted-foreground text-sm">{t(hint)}</p>
     </CrmDialog>
-  );
-}
-
-/* ------------------------------------------------------------------ deal actions */
-
-export type DealAction = { id: string; label: string; guide?: string; onSelect: () => void };
-
-/**
- * The deal's buttons (CRM-09): one primary button, the step the deal's stage calls for, and every other action under
- * "More", so the business step never competes with Edit. A guide step finds an action in the menu by its mark.
- */
-export function DealActions({ primary, others, moreLabel }: { primary: DealAction | null; others: DealAction[]; moreLabel: string }) {
-  return (
-    <TomasUi>
-      <div className="flex flex-wrap items-center justify-end gap-2" data-guide="crm.actions">
-        {others.length ? (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button type="button" variant="outline" data-guide="crm.more">
-                {moreLabel}
-                <NamedIcon name="chevron-down" className="size-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="min-w-56">
-              {others.map((action) => (
-                <DropdownMenuItem key={action.id} data-guide={action.guide} onSelect={action.onSelect}>
-                  {action.label}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ) : null}
-        {primary ? (
-          <Button type="button" data-guide={primary.guide} onClick={primary.onSelect}>
-            {primary.label}
-          </Button>
-        ) : null}
-      </div>
-    </TomasUi>
   );
 }

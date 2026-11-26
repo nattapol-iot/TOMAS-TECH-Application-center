@@ -82,3 +82,36 @@
 
 - Unit: `bun test ./tests/crm-contact-field.test.mjs ./tests/crm-i18n.test.mjs ./tests/guides.test.mjs` และ `cd backend-node && bun test tests/crm.test.ts`
 - SQL: สร้าง LocalDB ชื่อ `IoTCrmCI_<16 hex>` deploy `020_deploy_fresh_database.sql` ตั้ง `CRM_TEST_SERVER`/`CRM_TEST_DATABASE` แล้ว `bun backend-node/tests/crm-sql-integration.ts`
+
+## รอบที่ 2: หน้ารายการและรายละเอียดบน @tomas-tc/ui
+
+เจ้าของงานเลือก (26 พ.ย. 2026): หน้า CRM ใช้ kit สำหรับทุกคน และถอดหน้า CRM ออกจากปุ่ม V1/V2 ของกลุ่มงานขาย (หน้า RFQ, Site Visit, งานที่ได้รับมอบหมาย, Visit master และ Customers ยังสลับได้ตามเดิม)
+
+- `app/system/tomas-ui/CrmPages.tsx`: หัวหน้าจอ, แถบสรุปตามขั้น, ชิป "ดีลของฉัน / ต้องดำเนินการ", ชิปเร่งด่วน/ไม่เร่งด่วน, funnel, ตัวกรอง, ตารางดีล, board (โหลดเพิ่ม + ลากการ์ด), หน้าดีล (ปุ่มหลัก + เมนูเพิ่มเติม, ขั้นตอนถัดไป, แถบขั้น, แท็บ, ประวัติเป็นชื่อแทนรหัส)
+- `app/system/tomas-ui/CrmPeoplePages.tsx`: ลูกค้า, Customer 360 (9 แท็บ), ผู้ติดต่อ, กิจกรรม, เอกสาร
+- `app/system/tomas-ui/CrmKitParts.tsx`: ตารางที่มีสถานะ loading / failed / empty และ paging, summary bar, chips, section
+- `CrmScreens.tsx` เหลือ permission gate + My Work; `crm.css` เหลือเฉพาะ markup เดิมที่ยังใช้
+- ProjectHandover, ErpMasterPanel และ CustomerModal (component เดิม) วางคั่นระหว่างเกาะ kit ไม่อยู่ใน `.tui`
+- How-to: บทสอน `sales-look-v2` ย้ายไปหน้า RFQ (3 ภาษา); `crm-find-work` เพิ่มขั้นแถบสรุปตามขั้น
+
+### ผลตรวจรอบที่ 2 (E2E บน LocalDB แยก + API จริง)
+
+| รายการ | ผล |
+|---|---|
+| Dashboard: summary bar / ชิป / toolbar / ตาราง อยู่ใน `.tui`, ไม่มีปุ่ม V1/V2, ไม่มีคีย์ดิบ | PASS |
+| กดช่องขั้น "ประมาณราคา" กรองตารางและค้างสถานะกด; ชิป "ข้อมูลไม่ครบ" กรอง | PASS |
+| Board 100 จาก 132 + แสดงเพิ่มครบ; ลากการ์ด NEW → REQUIREMENT ส่ง PUT ครั้งเดียวพร้อม rowVersion | PASS |
+| หน้าดีล: ปุ่มหลัก + เพิ่มเติม, แถบขั้นจบด้วยผลลัพธ์, ลิงก์ลูกค้า, 6 แท็บเปิดได้พร้อมเนื้อหา | PASS |
+| แก้ดีล → PUT 200 → ประวัติ "คู่แข่ง: — → Keyence", "วันที่คาดว่าจะปิดงาน: — → 24 ธ.ค. 2569" (พบ/แก้: ตอนสร้างเคยแสดงรหัสดิบ) | PASS |
+| บันทึกส่งใบเสนอราคา → ขั้นเลื่อน, ปุ่มหลักเป็นยืนยันสั่งซื้อ; 409 คงค่าที่พิมพ์ + โหลดล่าสุด | PASS |
+| Follow-up POST 201, หัวข้อ "แก้ไขสิ่งที่ต้องทำ"; กิจกรรมจากแท็บดีล POST 201 ผูกดีล | PASS |
+| Customer 360: แท็บ ผู้ติดต่อ/กิจกรรม/โอกาสขาย/เอกสาร, แก้ลูกค้า (ค้นผู้ดูแล) PUT 200, เพิ่มสถานที่ POST 201 | PASS |
+| ลูกค้า: ค้น "isd" เจอ Ishida (Thailand) พร้อมรหัสและ ERP | PASS |
+| ผู้ติดต่อ: ผู้ติดต่อหลักลบไม่ได้ (ปุ่มปิด + เหตุผล), ลบรายอื่น DELETE 200 | PASS |
+| กิจกรรม: ชิปประเภท, ค้น "panel" เจอ 1 พร้อมลิงก์ลูกค้า | PASS |
+| สร้างดีลจากหน้ารายการ: ค้นลูกค้าภาษาไทย + Enter บันทึกครั้งเดียว เปิดดีลใหม่ | PASS |
+| Keyboard: โฟกัสชื่อดีลแล้ว Enter เปิดดีล | PASS |
+| Engineer: ไม่มีปุ่มแก้ไข/ใบเสนอราคา/สั่งซื้อ และไม่มีปุ่มสร้างดีล | PASS |
+| มือถือ 390: dashboard, กิจกรรม, ลูกค้า ไม่ล้น (ตารางเลื่อนในกรอบของตัวเอง) | PASS |
+| EN / JP: ไม่มีคีย์ดิบ | PASS |
+| Screen reader จริง, 768/1920px, staging/production ด้วยบัญชีจริง | NOT TESTED |
