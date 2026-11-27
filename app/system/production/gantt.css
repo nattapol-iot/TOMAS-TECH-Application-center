@@ -12,7 +12,8 @@
   align-items: center;
   gap: 4px;
 }
-/* The calendar-year list beside the ranges (Projects timeline); blue while a year is picked. */
+/* The calendar-year and column-unit lists beside the ranges (Projects timeline); the year list is blue while one is picked. */
+.gantt-unit-select select,
 .gantt-year-select select {
   height: 28px;
   font-size: var(--fs-xs);

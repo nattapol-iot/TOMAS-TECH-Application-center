@@ -9,9 +9,14 @@ export const dayNumber = (value: string) => Date.parse(`${value.slice(0, 10)}T00
 export const dateFromDay = (value: number) => new Date(value * DAY).toISOString().slice(0, 10);
 
 export const GANTT_ZOOMS = ["week", "month", "quarter", "half", "year"] as const;
-export type GanttZoom = (typeof GANTT_ZOOMS)[number];
+/** The Projects timeline's ranges: the zooms and two years (the Application team's summary, owner 2026-11-27). */
+export const GANTT_LONG_ZOOMS = [...GANTT_ZOOMS, "twoYears"] as const;
+export type GanttZoom = (typeof GANTT_LONG_ZOOMS)[number];
 
-export type GanttColumn = { start: string; end: string; kind: "day" | "week" | "month" };
+/** What one column of the chart's header stands for. */
+export const GANTT_UNITS = ["day", "week", "month", "quarter"] as const;
+export type GanttUnit = (typeof GANTT_UNITS)[number];
+export type GanttColumn = { start: string; end: string; kind: GanttUnit };
 export type GanttWindow = { start: string; end: string; days: number; columns: GanttColumn[] };
 
 const mondayOf = (day: number) => day - ((new Date(day * DAY).getUTCDay() + 6) % 7);
@@ -57,12 +62,49 @@ export function ganttWindow(zoom: GanttZoom, anchor: string): GanttWindow {
   if (zoom === "month") return weekWindow(mondayOf(day) - 7, 6);
   if (zoom === "quarter") return weekWindow(mondayOf(day) - 14, 13);
   if (zoom === "half") return monthWindow(addMonths(anchor, -1), 6);
+  if (zoom === "twoYears") return monthWindow(addMonths(anchor, -2), 24);
   return monthWindow(addMonths(anchor, -2), 12);
 }
 
-/** One calendar year, January to December, a column a month (the Projects timeline's year list). */
-export function calendarYearWindow(year: number): GanttWindow {
-  return monthWindow(`${String(year).padStart(4, "0")}-01-01`, 12);
+/** Calendar years from January of `year`, a column a month (the Projects timeline's year list); two with the 2-year range. */
+export function calendarYearWindow(year: number, years = 1): GanttWindow {
+  return monthWindow(`${String(year).padStart(4, "0")}-01-01`, 12 * Math.max(1, Math.min(2, Math.round(years))));
+}
+
+const quarterStart = (iso: string) => `${iso.slice(0, 4)}-${String(Math.floor((Number(iso.slice(5, 7)) - 1) / 3) * 3 + 1).padStart(2, "0")}-01`;
+
+/**
+ * The columns of one unit across a window: days, weeks from Monday, months or quarters. The first and last may reach
+ * past the window's edges; the chart clips them, so a quarter that starts before the window still shows its label.
+ */
+export function ganttColumns(window: Pick<GanttWindow, "start" | "end">, unit: GanttUnit): GanttColumn[] {
+  const first = dayNumber(window.start),
+    last = dayNumber(window.end);
+  const columns: GanttColumn[] = [];
+  if (unit === "day" || unit === "week") {
+    const step = unit === "day" ? 1 : 7;
+    for (let day = unit === "day" ? first : mondayOf(first); day <= last; day += step) columns.push({ start: dateFromDay(day), end: dateFromDay(day + step - 1), kind: unit });
+    return columns;
+  }
+  const months = unit === "month" ? 1 : 3;
+  for (let start = unit === "month" ? monthStart(window.start) : quarterStart(window.start); start <= window.end; start = addMonths(start, months)) {
+    columns.push({ start, end: dateFromDay(dayNumber(addMonths(start, months)) - 1), kind: unit });
+  }
+  return columns;
+}
+
+const UNIT_DAYS: Record<GanttUnit, number> = { day: 1, week: 7, month: 30, quarter: 91 };
+
+/**
+ * The units a window can be drawn in and stay readable: 2 to 31 columns, each at most half the window. A year has no
+ * week columns (52), two weeks no month columns (two half months).
+ */
+export function ganttUnitChoices(window: Pick<GanttWindow, "start" | "end">): GanttUnit[] {
+  const days = dayNumber(window.end) - dayNumber(window.start) + 1;
+  return GANTT_UNITS.filter((unit) => {
+    const count = ganttColumns(window, unit).length;
+    return count >= 2 && count <= 31 && UNIT_DAYS[unit] * 2 <= days;
+  });
 }
 
 /**
@@ -87,7 +129,7 @@ export function shiftGanttAnchor(zoom: GanttZoom, anchor: string, direction: -1 
   if (zoom === "month") return dateFromDay(dayNumber(anchor) + direction * 28);
   if (zoom === "quarter") return dateFromDay(dayNumber(anchor) + direction * 77);
   // Month windows start on the 1st, so the anchor's day of the month does not matter.
-  return addMonths(anchor, direction * (zoom === "half" ? 5 : 10));
+  return addMonths(anchor, direction * (zoom === "half" ? 5 : zoom === "twoYears" ? 20 : 10));
 }
 
 /**

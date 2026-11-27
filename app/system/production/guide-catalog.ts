@@ -4397,9 +4397,9 @@ const PROJECT_OVERVIEW: Guide = {
       view: "projects",
       title: { th: "ไทม์ไลน์: หัวข้อของแต่ละโปรเจกต์ในเส้นเดียว", en: "Timeline: each project's phases on one line", jp: "タイムライン：各案件のフェーズを1行で" },
       body: {
-        th: "ในมุมมองไทม์ไลน์ แต่ละแถวคือหนึ่งโปรเจกต์ ด้านซ้ายบอกลูกค้า · เลขโปรเจกต์ ชื่อ ช่วงวัน สถานะ และ PM แถบด้านขวาคือหัวข้อหลักของแผน สีตามประเภทงาน (ออกแบบสีคราม ผลิต/สั่งซื้อสีม่วง ซอฟต์แวร์สีชมพู ทดสอบภายในสีแดง ติดตั้งสีเขียว สอนใช้สีเหลืองอำพัน ลูกค้าทดสอบสีส้ม Go Live สีเหลือง) กดแถบเพื่อเปิดแผนที่หัวข้อนั้น ปุ่ม 'เส้นเดียว' สลับระหว่างวางหัวข้อทับกันในเส้นเดียว หรือซ้อนเป็นชั้นเมื่อช่วงวันทับกัน ปุ่มช่วงเวลาเลือกได้ตั้งแต่ สัปดาห์ ถึง ปี",
-        en: "In Timeline each row is a project: on the left the customer · number, name, dates, health and PM; on the right the plan's main headings, coloured by their kind of work (design indigo, building and ordering violet, software pink, internal tests red, installation green, teaching amber, the customer's tests orange, go live yellow). Press a phase to open the plan on it. One line switches between phases drawn on one line and overlapping phases stacked. The period buttons go from Week to Year.",
-        jp: "タイムラインでは各行が1案件です。左は顧客・案件番号、名称、期間、状態、PM。右は計画の主な見出しで、作業の種類で色分けされます（設計は藍、製作・発注は紫、ソフトウェアはピンク、社内試験は赤、据付は緑、教育は琥珀、顧客試験はオレンジ、Go Live は黄）。フェーズを押すとその見出しの計画が開きます。「1行表示」で1行表示と、期間が重なるフェーズの段表示を切り替えます。期間ボタンは週から年まで選べます。",
+        th: "ในมุมมองไทม์ไลน์ แต่ละแถวคือหนึ่งโปรเจกต์ ด้านซ้ายบอกลูกค้า · เลขโปรเจกต์ ชื่อ ช่วงวัน สถานะ และ PM แถบด้านขวาคือหัวข้อหลักของแผน สีตามประเภทงาน (ออกแบบสีคราม ผลิต/สั่งซื้อสีม่วง ซอฟต์แวร์สีชมพู ทดสอบภายในสีแดง ติดตั้งสีเขียว สอนใช้สีเหลืองอำพัน ลูกค้าทดสอบสีส้ม Go Live สีเหลือง) กดแถบเพื่อเปิดแผนที่หัวข้อนั้น ปุ่ม 'เส้นเดียว' สลับระหว่างวางหัวข้อทับกันในเส้นเดียว หรือซ้อนเป็นชั้นเมื่อช่วงวันทับกัน ปุ่มช่วงเวลาเลือกได้ตั้งแต่ สัปดาห์ ถึง 2 ปี",
+        en: "In Timeline each row is a project: on the left the customer · number, name, dates, health and PM; on the right the plan's main headings, coloured by their kind of work (design indigo, building and ordering violet, software pink, internal tests red, installation green, teaching amber, the customer's tests orange, go live yellow). Press a phase to open the plan on it. One line switches between phases drawn on one line and overlapping phases stacked. The period buttons go from Week to 2 years.",
+        jp: "タイムラインでは各行が1案件です。左は顧客・案件番号、名称、期間、状態、PM。右は計画の主な見出しで、作業の種類で色分けされます（設計は藍、製作・発注は紫、ソフトウェアはピンク、社内試験は赤、据付は緑、教育は琥珀、顧客試験はオレンジ、Go Live は黄）。フェーズを押すとその見出しの計画が開きます。「1行表示」で1行表示と、期間が重なるフェーズの段表示を切り替えます。期間ボタンは週から2年まで選べます。",
       },
       missing: {
         th: "กด 'ไทม์ไลน์' บนหัวหน้ารายการโปรเจกต์ก่อน หรือกด 'ถัดไป'",
@@ -4413,9 +4413,25 @@ const PROJECT_OVERVIEW: Guide = {
       view: "projects",
       title: { th: "ไทม์ไลน์: แผนเดิมและเลือกปี", en: "Timeline: original plan and year", jp: "タイムライン：当初計画と年の選択" },
       body: {
-        th: "กด 'แผนเดิม' เพื่อแสดงเส้นเทาใต้แต่ละหัวข้อ คือช่วงวันตามแผนตั้งต้น (Baseline) ล่าสุดของแผนงาน ถ้าแถบสีอยู่ทางขวาของเส้นเทา แสดงว่าหัวข้อนั้นช้ากว่าแผนเดิม โปรเจกต์ที่ยังไม่มีแผนตั้งต้นจะไม่มีเส้นเทา (สร้างได้ที่แท็บแผนงาน ปุ่ม 'เพิ่มเติม' > 'สร้างแผนตั้งต้น') รายการ 'เลือกปี' ข้างปุ่มช่วงเวลาแสดงทั้งปีปฏิทินตั้งแต่มกราคมถึงธันวาคม ลูกศรซ้ายขวาเลื่อนทีละปี กดปุ่มช่วงเวลาหรือ 'วันนี้' เพื่อกลับ",
-        en: "Press Original plan to draw a grey line under each phase: its dates in the plan's latest baseline. A coloured bar to the right of its grey line is running later than the original plan. A project with no baseline yet has no grey lines (create one on the Plan tab: More > Create baseline). The Pick a year list beside the range buttons shows one calendar year, January to December; the arrows step a year at a time, and a range button or Today goes back.",
-        jp: "「当初計画」を押すと、各フェーズの下に灰色の線が表示されます。計画の最新の基準計画（ベースライン）の期間です。色のバーが灰色の線より右にあれば、そのフェーズは当初計画より遅れています。基準計画がない案件には灰色の線はありません（「Plan」タブの「その他」>「基準計画を作成」で作成できます）。期間ボタンの横の「年を選択」で1暦年（1月〜12月）を表示し、矢印で1年ずつ移動します。期間ボタンか「今日」で戻ります。",
+        th: "กด 'แผนเดิม' เพื่อแสดงเส้นเทาใต้แต่ละหัวข้อ คือช่วงวันตามแผนตั้งต้น (Baseline) ล่าสุดของแผนงาน ถ้าแถบสีอยู่ทางขวาของเส้นเทา แสดงว่าหัวข้อนั้นช้ากว่าแผนเดิม โปรเจกต์ที่ยังไม่มีแผนตั้งต้นจะไม่มีเส้นเทา (สร้างได้ที่แท็บแผนงาน ปุ่ม 'เพิ่มเติม' > 'สร้างแผนตั้งต้น') รายการ 'เลือกปี' ข้างปุ่มช่วงเวลาแสดงปีปฏิทินตั้งแต่มกราคมถึงธันวาคม (กด '2 ปี' เพื่อดูสองปีต่อกัน) ลูกศรซ้ายขวาเลื่อนทีละปี กดช่วงที่สั้นกว่าหรือ 'วันนี้' เพื่อกลับ",
+        en: "Press Original plan to draw a grey line under each phase: its dates in the plan's latest baseline. A coloured bar to the right of its grey line is running later than the original plan. A project with no baseline yet has no grey lines (create one on the Plan tab: More > Create baseline). The Pick a year list beside the range buttons shows a calendar year from January (press 2 years for two in a row); the arrows step a year at a time, and a shorter range or Today goes back.",
+        jp: "「当初計画」を押すと、各フェーズの下に灰色の線が表示されます。計画の最新の基準計画（ベースライン）の期間です。色のバーが灰色の線より右にあれば、そのフェーズは当初計画より遅れています。基準計画がない案件には灰色の線はありません（「Plan」タブの「その他」>「基準計画を作成」で作成できます）。期間ボタンの横の「年を選択」で1月から1暦年を表示し（「2年」で2暦年続けて表示）、矢印で1年ずつ移動します。短い期間か「今日」で戻ります。",
+      },
+      missing: {
+        th: "กด 'ไทม์ไลน์' บนหัวหน้ารายการโปรเจกต์ก่อน หรือกด 'ถัดไป'",
+        en: "Press Timeline in the project list's header first, or press Next.",
+        jp: "先に案件一覧のヘッダーで「タイムライン」を押すか、「次へ」を押します。",
+      },
+    },
+    {
+      target: "project.unit",
+      action: "next",
+      view: "projects",
+      title: { th: "ไทม์ไลน์: หน่วยคอลัมน์", en: "Timeline: what a column stands for", jp: "タイムライン：列の単位" },
+      body: {
+        th: "รายการข้าง 'เลือกปี' เปลี่ยนหัวคอลัมน์วันที่เป็น รายวัน รายสัปดาห์ รายเดือน หรือรายไตรมาส เช่น ช่วง 2 ปีแบบรายไตรมาสเพื่อดูภาพรวมยาว ๆ หรือช่วงไตรมาสแบบรายเดือน รายการมีเฉพาะหน่วยที่ยังอ่านได้กับช่วงที่แสดง เปลี่ยนช่วงแล้วหน่วยที่ใช้ไม่ได้จะกลับเป็นหน่วยของช่วงนั้นเอง",
+        en: "The list beside Pick a year draws the date columns daily, weekly, monthly or quarterly: for example 2 years by quarter for the long view, or a quarter by month. It lists only units that stay readable over the range shown; after a range change, a unit that no longer fits goes back to the range's own.",
+        jp: "「年を選択」の横のリストで、日付の列を日・週・月・四半期単位に切り替えます。例えば2年を四半期単位で長期を見る、四半期を月単位で見る、などです。表示中の期間で読みやすい単位だけが並び、期間を変えて合わなくなった単位はその期間の既定に戻ります。",
       },
       missing: {
         th: "กด 'ไทม์ไลน์' บนหัวหน้ารายการโปรเจกต์ก่อน หรือกด 'ถัดไป'",

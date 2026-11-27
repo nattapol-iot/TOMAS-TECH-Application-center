@@ -6,10 +6,11 @@
    search (task name or person) finds rows across every project in scope and opens just those. The
    whole block, sort controls included, can go full screen; opening a plan leaves full screen first.
    "Original plan" draws each phase's last frozen baseline as a grey line under it, and the year list shows one calendar
-   year, January to December (owner 2026-11-27). */
+   year, January to December, or two with the 2-year range; the column list draws the range daily to quarterly (owner
+   2026-11-27). */
 
 import { useCallback, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { calendarYearWindow, ganttWindow, ganttYears, shiftGanttAnchor } from "../../../lib/gantt";
+import { calendarYearWindow, GANTT_LONG_ZOOMS, ganttColumns, ganttUnitChoices, ganttWindow, ganttYears, shiftGanttAnchor, type GanttUnit } from "../../../lib/gantt";
 import { customerShort, phaseColor } from "../../../lib/gantt-phase-colors";
 import { apiRequest } from "../api-client";
 import { currentLocale, useT } from "../i18n";
@@ -62,6 +63,8 @@ export function ProjectPortfolioGantt({
   const [showBaseline, setShowBaseline] = useState(false);
   // A calendar year picked from the list, January to December; null is the window around the anchor.
   const [year, setYear] = useState<number | null>(null);
+  // What a column stands for, when picked; null, or a unit the range cannot show readably, is the range's own.
+  const [unit, setUnit] = useState<GanttUnit | null>(null);
   const dayText = useMemo(() => new Intl.DateTimeFormat(currentLocale(), { day: "numeric", month: "short", timeZone: "UTC" }), []);
   const day = (iso: string | null) => (iso ? dayText.format(new Date(`${iso.slice(0, 10)}T00:00:00Z`)) : null);
   const [anchor, setAnchor] = useState(today);
@@ -70,7 +73,10 @@ export function ProjectPortfolioGantt({
   const [taskQuery, setTaskQuery] = useState("");
   const [search, setSearch] = useState<TaskSearch | null>(null);
   const [searching, setSearching] = useState(false);
-  const range = useMemo(() => (year !== null ? calendarYearWindow(year) : ganttWindow(zoom === "fit" ? "year" : zoom, anchor)), [year, zoom, anchor]);
+  const baseWindow = useMemo(() => (year !== null ? calendarYearWindow(year, zoom === "twoYears" ? 2 : 1) : ganttWindow(zoom === "fit" ? "year" : zoom, anchor)), [year, zoom, anchor]);
+  const unitChoices = useMemo(() => ganttUnitChoices(baseWindow), [baseWindow]);
+  const shownUnit: GanttUnit = unit !== null && unitChoices.includes(unit) ? unit : baseWindow.columns[0]!.kind;
+  const range = useMemo(() => (shownUnit === baseWindow.columns[0]!.kind ? baseWindow : { ...baseWindow, columns: ganttColumns(baseWindow, shownUnit) }), [baseWindow, shownUnit]);
   const yearText = useMemo(() => new Intl.DateTimeFormat(currentLocale(), { year: "numeric", timeZone: "UTC" }), []);
   // The years the projects shown run through, this year included; a year the arrows stepped to stays listed.
   const yearOptions = useMemo(() => {
@@ -81,14 +87,15 @@ export function ProjectPortfolioGantt({
     if (year !== null && !years.includes(year)) years.push(year);
     return years.sort((a, b) => a - b).map((value) => ({ value, label: yearText.format(new Date(Date.UTC(value, 0, 1))) }));
   }, [rows, today, yearText, year]);
-  // A range button or Today leaves the picked year; the arrows step a year at a time while one is picked.
+  // A picked year stays for Year and 2 years (one or two calendar years); a shorter range or Today leaves it. The arrows
+  // step a year at a time while one is picked.
   const changeZoom = (next: GanttZoomChoice) => {
-    setYear(null);
+    if (next !== "year" && next !== "twoYears") setYear(null);
     setZoom(next);
   };
   const pickYear = (next: number | null) => {
     setYear(next);
-    if (next !== null) setZoom("year");
+    if (next !== null) setZoom((current) => (current === "twoYears" ? current : "year"));
   };
 
   const load = useCallback(
@@ -279,7 +286,9 @@ export function ProjectPortfolioGantt({
             setYear(null);
             setAnchor(today);
           }}
+          zooms={GANTT_LONG_ZOOMS}
           year={{ value: year, options: yearOptions, onChange: pickYear }}
+          unit={{ value: shownUnit, options: unitChoices, onChange: setUnit }}
         />
         <div className="gantt-nav">
           {canReadSchedule ? (
