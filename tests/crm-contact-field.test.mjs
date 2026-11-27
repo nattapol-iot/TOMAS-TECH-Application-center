@@ -186,6 +186,24 @@ test("the deal views count one period of expected close dates, on the link, and 
   for (const key of ["CRM.closePeriod", "CRM.period_all", "CRM.period_month", "CRM.period_quarter", "CRM.period_year", "CRM.periodScope", "CRM.periodUndated"])
     for (const language of ["en", "th", "jp"]) assert.ok(CRM_COPY[key]?.[language]?.trim(), `${key}: ${language}`);
 });
+test("the deal views' top stays lean: period in the head, one chip row, rarer filters in one menu (owner 2026-11-27)", () => {
+  // The period is one button in the page head; its presets and dates open in a kit Popover.
+  assert.match(pages, /\{head\(periodPicker\)\}/);
+  assert.match(pages, /<PopoverTrigger asChild>\s*<Button type="button" variant="outline" data-guide="crm\.closeRange"/);
+  assert.doesNotMatch(pages, /CRM &amp; SALES/);
+  // What the period leaves out is said over the list, not in a row of its own.
+  assert.match(pages, /subtitle=\{scopeNote \|\| t\("CRM\.filteredResults"\)\}/);
+  // One row of chips; the dashboard's pipeline card is gone and its funnel is one line at the end of that row.
+  assert.equal(pages.match(/data-guide="crm\.attention"/g)?.length, 1);
+  assert.doesNotMatch(pages, /CRM\.pipelineOverview/);
+  assert.match(pages, /title=\{t\("CRM\.funnelBase"\)\.replace\("\{n\}", String\(total\)\)\}/);
+  // Stage, follow-up, sort and open-only live in the Filters menu, which counts the ones in use.
+  assert.match(pages, /const menuFilters = Number\(Boolean\(stage\)\) \+ Number\(Boolean\(attention\)\) \+ Number\(onlyOpen !== defaultOpen\);/);
+  for (const sub of ["CRM.stage", "CRM.followupFilter", "CRM.sort"]) assert.match(pages, new RegExp(`<span className="flex-1">\\{t\\("${sub.replace(".", "\\.")}"\\)\\}</span>`), sub);
+  assert.match(pages, /<DropdownMenuCheckboxItem\s+checked=\{onlyOpen\}/);
+  for (const key of ["CRM.closeWithin", "CRM.filtersMenu", "CRM.followupFilter", "CRM.funnelInquiry", "CRM.funnelEstimate", "CRM.funnelProject"])
+    for (const language of ["en", "th", "jp"]) assert.ok(CRM_COPY[key]?.[language]?.trim(), `${key}: ${language}`);
+});
 
 test("the deal table keeps its columns and says when a value or a date is not given (CRM-15)", () => {
   assert.match(pages, /label: t\(commercial \? "CRM\.valueCloseColumn" : "CRM\.expectedClose"\)/);

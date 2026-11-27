@@ -192,9 +192,6 @@ export const CRM_COPY: Record<string, { en: string; th: string; jp: string }> = 
     ["CRM.flowSummary", "Opportunity conversion", "การส่งต่องานขาย", "商談コンバージョン"],
     ["CRM.flowSummaryHint", "CRM-sourced and direct engineering intake", "แยกงานจาก CRM และงานที่รับตรงเข้าสู่วิศวกรรม", "CRM経由と直接受付"],
     ["CRM.directInquiries", "Direct inquiries", "Inquiry ที่รับตรง", "直接受付"],
-    ["CRM.convertedToInquiry", "CRM → Inquiry", "CRM → Inquiry", "CRM → 引合"],
-    ["CRM.convertedToEstimate", "CRM → Estimate", "CRM → Estimate", "CRM → 見積"],
-    ["CRM.convertedToProject", "CRM → Project", "CRM → Project", "CRM → プロジェクト"],
     ["CRM.projectConversionRate", "Opportunity → Project", "อัตรา Opportunity → Project", "商談 → プロジェクト率"],
     [
       "CRM.autoFilledHint",
@@ -336,7 +333,6 @@ export const CRM_COPY: Record<string, { en: string; th: string; jp: string }> = 
     ["CRM.withOwner", "With account owner", "มีผู้ดูแลบัญชี", "担当者あり"],
     ["CRM.withEmail", "With email", "มีอีเมล", "メールあり"],
     ["CRM.withRole", "With contact role", "ระบุบทบาท", "役割あり"],
-    ["CRM.pipelineOverview", "Pipeline overview", "ภาพรวมไปป์ไลน์", "パイプライン概要"],
     [
       "CRM.pipelineOverviewHint",
       "Open opportunities by stage, what needs attention, and how many reached engineering. Click a stage or a count to filter the list.",
@@ -370,12 +366,6 @@ export const CRM_COPY: Record<string, { en: string; th: string; jp: string }> = 
     ["CRM.inquiryStatus", "Estimating status", "สถานะงานประเมิน", "見積作成状況"],
     ["CRM.latestInquiry", "Open latest inquiry", "เปิด Inquiry ล่าสุด", "最新の引合を開く"],
     ["CRM.additionalInquiry", "Create additional estimating work", "สร้างงานประเมินเพิ่มเติม", "追加の見積作業を作成"],
-    [
-      "CRM.allScopeHint",
-      "Overview of all accessible opportunities; the filters below apply to the table.",
-      "ภาพรวมโอกาสขายทั้งหมดที่คุณเข้าถึงได้ · ตัวกรองด้านล่างใช้กับตาราง",
-      "アクセス可能な商談全体の概要です。下のフィルターは一覧に適用されます。",
-    ],
     ["CRM.totalOpportunities", "All opportunities", "โอกาสขายทั้งหมด", "商談総数"],
     ["CRM.Actionable", "Needs action", "ต้องดำเนินการ", "要対応"],
     ["CRM.filteredResults", "Results matching the selected filters", "รายการตามตัวกรองที่เลือก", "選択した条件に一致する結果"],
@@ -1469,5 +1459,12 @@ export const CRM_COPY: Record<string, { en: string; th: string; jp: string }> = 
     ["CRM.period_year", "This year", "ปีนี้", "今年"],
     ["CRM.periodScope", "Counting deals expected to close {from} – {to}.", "นับเฉพาะดีลที่คาดว่าจะปิดงานระหว่าง {from} – {to}", "受注予定日が {from} – {to} の商談だけを数えています。"],
     ["CRM.periodUndated", "{n} deals with no expected close are left out", "ไม่รวม {n} ดีลที่ยังไม่ระบุวันที่คาดว่าจะปิดงาน", "受注予定日が未入力の商談 {n} 件は含みません"],
+    // The lean dashboard top (owner 2026-11-27): the period button and the Filters menu.
+    ["CRM.closeWithin", "Closing", "ปิดงาน", "受注予定"],
+    ["CRM.filtersMenu", "Filters", "ตัวกรอง", "絞り込み"],
+    ["CRM.followupFilter", "Follow-up", "การติดตาม", "フォロー"],
+    ["CRM.funnelInquiry", "Inquiry", "Inquiry", "引合"],
+    ["CRM.funnelEstimate", "Estimate", "Estimate", "見積"],
+    ["CRM.funnelProject", "Project", "Project", "プロジェクト"],
   ].map(([key, en, th, jp]) => [key, { en, th, jp }]),
 );
