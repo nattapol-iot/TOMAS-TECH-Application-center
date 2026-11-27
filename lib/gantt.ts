@@ -60,6 +60,27 @@ export function ganttWindow(zoom: GanttZoom, anchor: string): GanttWindow {
   return monthWindow(addMonths(anchor, -2), 12);
 }
 
+/** One calendar year, January to December, a column a month (the Projects timeline's year list). */
+export function calendarYearWindow(year: number): GanttWindow {
+  return monthWindow(`${String(year).padStart(4, "0")}-01-01`, 12);
+}
+
+/**
+ * The years a year list offers: every year from the earliest date given to the latest, this year included, at most
+ * `limit` of them kept nearest this year, so one stray date (a typo for 2062) cannot make the list endless.
+ */
+export function ganttYears(dates: readonly (string | null | undefined)[], today: string, limit = 12): number[] {
+  const current = Number(today.slice(0, 4));
+  const years = dates.filter((value): value is string => typeof value === "string" && /^\d{4}-/.test(value)).map((value) => Number(value.slice(0, 4)));
+  const first = Math.min(current, ...years),
+    last = Math.max(current, ...years);
+  const all = Array.from({ length: last - first + 1 }, (_, index) => first + index);
+  return all
+    .sort((a, b) => Math.abs(a - current) - Math.abs(b - current) || a - b)
+    .slice(0, Math.max(1, limit))
+    .sort((a, b) => a - b);
+}
+
 /** Moves the anchor by most of one window, so the next view overlaps the last one a little. */
 export function shiftGanttAnchor(zoom: GanttZoom, anchor: string, direction: -1 | 1): string {
   if (zoom === "week") return dateFromDay(dayNumber(anchor) + direction * 7);

@@ -15,9 +15,19 @@ export type OverviewProject = { id: number; status: string; targetDelivery: stri
 /**
  * scheduleError: the rows could not be resolved (bad data such as a dependency loop), so nothing was measured.
  * followUps: rows the plan Sheet's "To follow up" list names (task doc 5.1), each once.
- * phases: the plan's main headings (its top rows) with their dates, for the Projects timeline's one line per project.
+ * phases: the plan's main headings (its top rows) with their dates, for the Projects timeline's one line per project, and
+ *   the dates of the last frozen baseline (null for a heading added since, or before any baseline) for its "original plan".
  */
-export type OverviewPhase = { id: number; name: string; start: string; finish: string; progress: number; milestone: boolean };
+export type OverviewPhase = {
+  id: number;
+  name: string;
+  start: string;
+  finish: string;
+  progress: number;
+  milestone: boolean;
+  baselineStart: string | null;
+  baselineFinish: string | null;
+};
 export type ProjectScheduleOverview = ProjectScheduleSummary & { scheduleError: boolean; followUps?: number; phases?: OverviewPhase[] };
 
 /** At most this many headings a project: a plan whose top rows are its tasks would otherwise send them all. */
@@ -70,6 +80,8 @@ export function summarizeProjects(projects: OverviewProject[], tasks: TaskRow[],
             finish: root.planFinish!,
             progress: Math.round(Number(root.percentComplete) || 0),
             milestone: Boolean(byId.get(root.source.id)?.isMilestone),
+            baselineStart: byId.get(root.source.id)?.baselineStart ?? null,
+            baselineFinish: byId.get(root.source.id)?.baselineFinish ?? null,
           }));
         return [project.id, { summary: { ...summarizeProjectSchedule(project, leaves, today), scheduleError: false, phases, ...(followUps === undefined ? {} : { followUps }) }, leaves }];
       } catch {

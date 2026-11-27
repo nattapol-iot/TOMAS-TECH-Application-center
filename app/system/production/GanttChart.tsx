@@ -90,8 +90,23 @@ const LEVEL_DRAG = 24;
 const dropIndent = (depth: number) => 8 + Math.min(depth, 6) * 16 + 22;
 /** A finish-to-start link, by row key: `to` starts after `from` finishes. */
 export type GanttLink = { from: string; to: string };
-/** label: written on the bar (a phase's name); color: its own fill, in place of the tone's (a phase's kind of work). */
-export type GanttSegment = { key: string; start: string | null; finish: string | null; tone: Tone; title: string; onOpen?: () => void; label?: string; color?: string; ink?: string };
+/**
+ * label: written on the bar (a phase's name); color: its own fill, in place of the tone's (a phase's kind of work).
+ * baselineStart / baselineFinish: the original plan, a thin grey bar under the phase (the Projects timeline's "original plan").
+ */
+export type GanttSegment = {
+  key: string;
+  start: string | null;
+  finish: string | null;
+  tone: Tone;
+  title: string;
+  onOpen?: () => void;
+  label?: string;
+  color?: string;
+  ink?: string;
+  baselineStart?: string | null;
+  baselineFinish?: string | null;
+};
 
 /** A row's segments that fall in the window, each with its lane. */
 function placeSegments(segments: GanttSegment[], range: GanttWindow, oneLane = false) {
@@ -129,6 +144,7 @@ export function GanttToolbar({
   onToday,
   allowFit = false,
   compact = false,
+  year,
 }: {
   zoom: GanttZoomChoice;
   onZoom: (zoom: GanttZoomChoice) => void;
@@ -137,6 +153,8 @@ export function GanttToolbar({
   allowFit?: boolean;
   /** One list instead of a button per range, where the row of controls is short of room (Projects > Plan). */
   compact?: boolean;
+  /** A list of calendar years beside the ranges; picking one shows January to December (the Projects timeline). */
+  year?: { value: number | null; options: { value: number; label: string }[]; onChange: (year: number | null) => void };
 }) {
   const t = useT();
   const choices: GanttZoomChoice[] = allowFit ? ["fit", ...GANTT_ZOOMS] : [...GANTT_ZOOMS];
@@ -162,6 +180,19 @@ export function GanttToolbar({
           ))}
         </div>
       )}
+      {year ? (
+        <label className={`select-field gantt-year-select${year.value === null ? "" : " on"}`} data-guide="project.year">
+          <select value={year.value ?? ""} aria-label={t("Gantt.yearPick")} title={t("Gantt.yearHint")} onChange={(event) => year.onChange(event.target.value ? Number(event.target.value) : null)}>
+            <option value="">{t("Gantt.yearPick")}</option>
+            {year.options.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <Icon name="chevronDown" />
+        </label>
+      ) : null}
       <div className="gantt-nav">
         <button type="button" className="icon-btn" disabled={zoom === "fit"} onClick={() => onShift(-1)} aria-label={t("Gantt.earlier")} title={t("Gantt.earlier")}>
           <Icon name="chevronLeft" />
@@ -593,6 +624,15 @@ export function GanttChart({
         const segments = row.segments ? placeSegments(row.segments, range, row.oneLane) : null;
         // Labelled segments (phases) are taller bars with their name on them.
         const labelled = Boolean(row.segments?.some((segment) => segment.label));
+        // A phase's original plan is a grey line under it; in one lane every phase's line shows, even one now outside the window.
+        const segmentBaselines = segments
+          ? (row.oneLane ? (row.segments ?? []).map((segment) => ({ segment, lane: 0 })) : segments.shown).flatMap(({ segment, lane }) => {
+              const span = ganttSpan(segment.baselineStart ?? null, segment.baselineFinish ?? null, range);
+              return span ? [{ key: segment.key, span, lane }] : [];
+            })
+          : [];
+        const withBaselines = Boolean(row.segments?.some((segment) => segment.baselineStart && segment.baselineFinish));
+        const laneHeight = labelled ? (withBaselines ? 28 : 22) : 10;
         const bar = row.milestone || segments ? null : ganttSpan(start, finish, range);
         const diamond = row.milestone ? ganttPoint(finish ?? start, range) : null;
         const slip = shift ? null : ganttSlip(row.finish, row.forecastFinish, range);
@@ -683,7 +723,7 @@ export function GanttChart({
                 </button>
               ) : null}
             </div>
-            <div className="gantt-track" style={segments && segments.count > 1 ? { minHeight: labelled ? 12 + segments.count * 22 : 14 + segments.count * 10 } : undefined}>
+            <div className="gantt-track" style={segments && segments.count > 1 ? { minHeight: (labelled ? 12 : 14) + segments.count * laneHeight } : undefined}>
               {range.columns.map((column) => {
                 const span = ganttSpan(column.start, column.end, range);
                 return span ? <span key={column.start} className="gantt-gridline" style={{ left: `${span.left}%` }} aria-hidden="true" /> : null;
@@ -719,7 +759,7 @@ export function GanttChart({
                   style={{
                     left: `${span.left}%`,
                     width: `${span.width}%`,
-                    top: labelled ? (segments.count > 1 ? 6 + lane * 22 : "calc(50% - 9px)") : segments.count > 1 ? 8 + lane * 10 : 15,
+                    top: labelled ? (segments.count > 1 ? 6 + lane * laneHeight : withBaselines ? "calc(50% - 12px)" : "calc(50% - 9px)") : segments.count > 1 ? 8 + lane * 10 : 15,
                     ...(segment.color ? { background: segment.color } : {}),
                     ...(segment.ink ? { color: segment.ink } : {}),
                   }}
@@ -732,6 +772,16 @@ export function GanttChart({
                   {segment.label ? <span>{segment.label}</span> : null}
                 </button>
               ))}
+              {segments
+                ? segmentBaselines.map(({ key, span, lane }) => (
+                    <span
+                      key={`baseline:${key}`}
+                      className="gantt-baseline phase"
+                      style={{ left: `${span.left}%`, width: `${span.width}%`, top: segments.count > 1 ? 6 + lane * laneHeight + 21 : "calc(50% + 9px)" }}
+                      aria-hidden="true"
+                    />
+                  ))
+                : null}
               {slip ? <span className="gantt-slip" style={{ left: `${slip.left}%`, width: `${slip.width}%` }} title={`${t("Gantt.legendSlip")} → ${row.forecastFinish}`} aria-hidden="true" /> : null}
               {diamond !== null ? (
                 <button
