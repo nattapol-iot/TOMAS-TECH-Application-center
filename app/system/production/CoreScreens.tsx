@@ -1397,15 +1397,15 @@ export function ProductionProjects({
                       </select>
                       <Icon name="chevronDown" />
                     </label>
+                    {/* The direction is an arrow; its name is on hover and for screen readers (a lean bar, owner 2026-11-27). */}
                     <button
                       type="button"
-                      className="btn ghost sm"
+                      className="btn ghost sm icon-only"
                       onClick={() => changeSort(sort.key)}
                       aria-label={uiText(sort.direction === "asc" ? "Portfolio.sortAscending" : "Portfolio.sortDescending")}
                       title={uiText(sort.direction === "asc" ? "Portfolio.sortAscending" : "Portfolio.sortDescending")}
                     >
-                      <Icon name="chevronDown" className={sort.direction} />
-                      {uiText(sort.direction === "asc" ? "Portfolio.sortAscending" : "Portfolio.sortDescending")}
+                      <Icon name={sort.direction === "asc" ? "arrowUp" : "arrowDown"} />
                     </button>
                   </div>
                 }

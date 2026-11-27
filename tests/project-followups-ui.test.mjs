@@ -36,7 +36,8 @@ test("the Timeline finds tasks across projects and shows only the matches with t
   assert.match(gantt, /const result = await searchScheduleTasks\(query, includeClosed\);/);
   // At least two characters, the same floor as the API.
   assert.match(gantt, /if \(query\.length < 2\) return;/);
-  assert.match(gantt, /disabled=\{searching \|\| taskQuery\.trim\(\)\.length < 2\}/);
+  // A box in the bar: Enter searches, the hint says the two-letter floor, and it waits while a search runs (owner 2026-11-27).
+  assert.match(gantt, /title=\{t\("Gantt\.taskSearchHint"\)\}\s*disabled=\{searching\}/);
   // Only matching projects stay, the first EXPAND_LIMIT of them open, and a task shows when it or a child matches.
   assert.match(gantt, /const visibleRows = hits \? rows\.filter\(\(item\) => hits\.has\(item\.id\)\) : rows;/);
   assert.match(gantt, /open\(\s*rows\s*\.filter\(\(item\) => matches\.has\(item\.id\)\)\s*\.slice\(0, EXPAND_LIMIT\)/);
@@ -235,13 +236,12 @@ test("the portfolio Timeline goes full screen, with an overlay where the browser
   assert.match(hook, /document\.body\.classList\.remove\(OVERLAY_BODY_CLASS\)/);
   assert.match(read("app/globals.css"), /body\.fullscreen-overlay-open \{\s*overflow: hidden;\s*\}/);
 
-  // The whole block goes full screen, sort included, and the button says which way it goes.
-  assert.match(
-    gantt,
-    /<div ref=\{fullscreenRef\} className=\{`portfolio-gantt\$\{fullscreen\.active \? " is-fullscreen" : ""\}\$\{fullscreen\.overlay \? " is-overlay" : ""\}`\}>\r?\n\s+\{controls\}/,
-  );
+  // The whole block goes full screen, sort included (in the bar's first group), and the button says which way it goes.
+  assert.match(gantt, /<div ref=\{fullscreenRef\} className=\{`portfolio-gantt\$\{fullscreen\.active \? " is-fullscreen" : ""\}\$\{fullscreen\.overlay \? " is-overlay" : ""\}`\}>/);
+  assert.match(gantt, /<div className="portfolio-gantt-group">\s*\{controls\}/);
   assert.match(gantt, /aria-pressed=\{fullscreen\.active\}/);
-  assert.match(gantt, /<Icon name=\{fullscreen\.active \? "minimize" : "maximize"\} \/>\s*\{t\(fullscreen\.active \? "Gantt\.exitFullScreen" : "Gantt\.fullScreen"\)\}/);
+  assert.match(gantt, /aria-label=\{t\(fullscreen\.active \? "Gantt\.exitFullScreen" : "Gantt\.fullScreen"\)\}/);
+  assert.match(gantt, /<Icon name=\{fullscreen\.active \? "minimize" : "maximize"\} \/>/);
   assert.match(core, /controls=\{\s*\/\* The sort sits inside the timeline so it stays at hand in full screen\. \*\/\r?\n\s+<div className="portfolio-gantt-sort">/);
   const ui = read("app/system/ui.tsx");
   assert.match(ui, /^\s+maximize: \(?\s*</m);

@@ -3338,6 +3338,12 @@ export const DICTIONARY: Record<string, Entry> = {
     jp: "ドラッグで名前列の幅を変更、ダブルクリックで元に戻す",
   },
   "Gantt.taskSearch": { en: "Find a task or person in these projects", th: "ค้นหางานหรือผู้รับผิดชอบในโครงการเหล่านี้", jp: "これらのプロジェクトでタスク・担当者を検索" },
+  "Gantt.taskSearchShort": { en: "Find a task or person", th: "ค้นหางาน / ผู้รับผิดชอบ", jp: "作業・担当者を検索" },
+  "Gantt.taskSearchHint": {
+    en: "Finds tasks and people in the projects shown: type at least 2 letters, then press Enter",
+    th: "ค้นหางานและผู้รับผิดชอบในโครงการที่แสดง พิมพ์อย่างน้อย 2 ตัวอักษรแล้วกด Enter",
+    jp: "表示中の案件の作業と担当者を検索します。2文字以上入力して Enter を押します",
+  },
   "Gantt.findTasks": { en: "Find tasks", th: "ค้นหางาน", jp: "タスクを検索" },
   "Gantt.clearSearch": { en: "Clear search", th: "ล้างการค้นหา", jp: "検索をクリア" },
   "Gantt.searchResult": { en: "{tasks} matching tasks in {projects} projects", th: "พบ {tasks} งานใน {projects} โครงการ", jp: "{projects} プロジェクトで {tasks} 件のタスクが一致" },

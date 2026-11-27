@@ -114,8 +114,8 @@
   .portfolio-waiting li .mono {
     grid-column: 1 / -1;
   }
-  .portfolio-gantt-search input {
-    flex-basis: 100%;
+  .portfolio-gantt .portfolio-gantt-search {
+    width: 100%;
   }
 }
 
@@ -126,6 +126,8 @@
   gap: 10px;
   padding-top: 12px;
 }
+/* One row: sort, range, year, columns and the arrows on the left; task search and display toggles on the right. Every
+   list and button is 32 px, so the row reads as one line (the skin's lists are 36 px elsewhere). */
 .portfolio-gantt-bar {
   display: flex;
   flex-wrap: wrap;
@@ -134,11 +136,38 @@
   gap: 8px 16px;
   padding: 0 14px;
 }
-/* A toggle that is on ("One line"): shown pressed, as the zoom's chosen chip. */
-.portfolio-gantt-bar .gantt-nav .btn[aria-pressed="true"] {
+.portfolio-gantt-group,
+.portfolio-gantt-bar .gantt-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.portfolio-gantt .portfolio-gantt-bar .select-field select {
+  height: 32px;
+  font-size: var(--fs-xs);
+}
+.portfolio-gantt .portfolio-gantt-bar .btn.icon-only {
+  width: 32px;
+  padding: 0;
+  justify-content: center;
+}
+/* A toggle that is on ("One line", "Original plan", the colour key, full screen): shown pressed. */
+.portfolio-gantt-bar .btn[aria-pressed="true"] {
   border-color: var(--blue);
   background: var(--blue-soft);
   color: var(--blue-text);
+}
+.portfolio-gantt > .gantt-legend {
+  padding: 0 14px;
+}
+.portfolio-gantt-status {
+  margin: 0;
+  padding: 0 14px;
+  font-size: var(--fs-xs);
+}
+.portfolio-gantt-status .danger-text {
+  color: var(--red-text);
 }
 /* The timeline's project cards read on white, as the Application team's summary; their edge carries the health. */
 .portfolio-gantt .gantt-row.project.tall {
@@ -149,13 +178,11 @@
 }
 .portfolio-gantt-sort {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  padding: 0 14px;
-}
-.portfolio-gantt-sort .icon.asc {
-  transform: rotate(180deg);
+  gap: 6px;
+  margin-right: 6px;
+  padding-right: 12px;
+  border-right: 1px solid var(--line);
 }
 
 /* Full screen, the browser's (:fullscreen) or the page's own overlay where the browser has none: the block
@@ -182,31 +209,36 @@
   max-height: none;
 }
 
-/* Timeline task search: one row under the zoom bar; the result line wraps below the buttons. */
+/* Timeline task search: a box in the bar, Enter searches; the result line shows under the bar (.portfolio-gantt-status). */
+/* A fixed width: a flex-basis is not counted when the group sizes itself, and the group would wrap its last buttons. */
 .portfolio-gantt-search {
+  position: relative;
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  padding: 0 14px;
+  flex: none;
+  width: 240px;
+}
+.portfolio-gantt-search > .icon {
+  position: absolute;
+  left: 9px;
+  color: var(--muted);
+  pointer-events: none;
 }
 .portfolio-gantt-search input {
-  flex: 0 1 340px;
-  min-width: 200px;
+  width: 100%;
   height: 32px;
-  padding: 0 10px;
+  padding: 0 30px 0 30px;
   border: 1px solid var(--line);
   border-radius: var(--r-sm);
   background: var(--surface);
   color: var(--ink);
-  font-size: var(--fs-sm);
-}
-.portfolio-gantt-search .muted,
-.portfolio-gantt-search .danger-text {
   font-size: var(--fs-xs);
 }
-.portfolio-gantt-search .danger-text {
-  color: var(--red-text);
+.portfolio-gantt-search .icon-btn {
+  position: absolute;
+  right: 2px;
+  width: 28px;
+  height: 28px;
 }
 
 /* Day requests waiting for this PM or EM, above the portfolio. */
