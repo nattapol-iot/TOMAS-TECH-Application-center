@@ -4499,9 +4499,9 @@ const CRM_FIND_WORK: Guide = {
       view: "crm-dashboard",
       title: { th: "เลือกช่วงวันที่คาดว่าจะปิดงาน", en: "Choose the expected-close period", jp: "受注予定日の期間を選ぶ" },
       body: {
-        th: "เลือก 'เดือนนี้' 'ไตรมาสนี้' 'ปีนี้' หรือกรอกวันที่เอง ตัวเลขทุกตัวด้านล่างและรายการดีลจะนับเฉพาะดีลที่คาดว่าจะปิดงานในช่วงนั้น ดีลที่ยังไม่ระบุวันปิดจะไม่ถูกนับ ระบบบอกจำนวนไว้ใต้ช่องวันที่ กด 'ทุกช่วง' เพื่อนับทั้งหมด",
-        en: "Pick This month, This quarter, This year or type the dates. Every count below and the deal list then read only deals expected to close in that period; deals with no expected close are left out, and their number shows under the dates. Press All dates to count everything.",
-        jp: "「今月」「今四半期」「今年」を選ぶか日付を入力します。下の数字と商談一覧は、その期間に受注予定の商談だけを数えます。受注予定日が未入力の商談は含まれず、その件数が日付の下に表示されます。「全期間」ですべてを数えます。",
+        th: "กดปุ่ม 'ปิดงาน' มุมขวาบน แล้วเลือก 'เดือนนี้' 'ไตรมาสนี้' 'ปีนี้' หรือกรอกวันที่เอง ตัวเลขทุกตัวด้านล่างและรายการดีลจะนับเฉพาะดีลที่คาดว่าจะปิดงานในช่วงนั้น ดีลที่ยังไม่ระบุวันปิดจะไม่ถูกนับ ระบบบอกจำนวนไว้ในหน้าต่างนั้นและเหนือรายการดีล เลือก 'ทุกช่วง' เพื่อนับทั้งหมด",
+        en: "Press the Closing button at the top right, then pick This month, This quarter, This year or type the dates. Every count below and the deal list then read only deals expected to close in that period; deals with no expected close are left out, and their number shows in that window and over the deal list. Pick All dates to count everything.",
+        jp: "右上の「受注予定」ボタンを押し、「今月」「今四半期」「今年」を選ぶか日付を入力します。下の数字と商談一覧は、その期間に受注予定の商談だけを数えます。受注予定日が未入力の商談は含まれず、その件数がその画面と商談一覧の上に表示されます。「全期間」ですべてを数えます。",
       },
     },
     {
@@ -4521,9 +4521,9 @@ const CRM_FIND_WORK: Guide = {
       view: "crm-dashboard",
       title: { th: "ต้องทำตอนนี้ กับ ไม่เร่งด่วน", en: "Act now, and not urgent", jp: "今すぐ対応と、急ぎではないもの" },
       body: {
-        th: "ชิปสีแดงและเหลืองคืองานที่ต้องทำตอนนี้: เกินกำหนด ครบกำหนดวันนี้ ควรติดตาม และ Estimate ใกล้ครบกำหนด ชิปสีเทาคือ 'รอผู้อื่น' และ 'ข้อมูลไม่ครบ' (ยังไม่มีสิ่งที่ต้องทำหรือยังไม่มีกิจกรรม) กดชิปเพื่อกรองรายการด้านล่าง ระบบเรียงตามกำหนดให้",
-        en: "Red and amber chips are what needs doing now: overdue, due today, needs follow-up and estimate due soon. Grey chips are Waiting on others and Missing data (no next action or no activity yet). Press a chip to filter the list below, sorted by due date.",
-        jp: "赤と黄のチップは今すぐ対応すべきもの(期限切れ・本日期限・フォロー要・見積期限間近)です。灰色は「他者待ち」と「情報不足」(次のアクションや活動がない)です。チップを押すと下の一覧が期限順に絞り込まれます。",
+        th: "แถวชิปนี้เริ่มด้วย 'ดีลของฉัน' (ดีลที่คุณดูแล) ถัดมาสีแดงและเหลืองคืองานที่ต้องทำตอนนี้: เกินกำหนด ครบกำหนดวันนี้ ควรติดตาม และ Estimate ใกล้ครบกำหนด ชิปสีเทาคือ 'รอผู้อื่น' และ 'ข้อมูลไม่ครบ' (ยังไม่มีสิ่งที่ต้องทำหรือยังไม่มีกิจกรรม) กดชิปเพื่อกรองรายการด้านล่าง ระบบเรียงตามกำหนดให้ กดซ้ำเพื่อยกเลิก ท้ายแถวบอกจำนวนดีลที่ไปต่อเป็น Inquiry Estimate และ Project",
+        en: "This row of chips starts with My deals (the deals you own). Red and amber chips are what needs doing now: overdue, due today, needs follow-up and estimate due soon. Grey chips are Waiting on others and Missing data (no next action or no activity yet). Press a chip to filter the list below, sorted by due date, and press it again to undo. The end of the row counts the deals that went on to an inquiry, an estimate and a project.",
+        jp: "このチップの行は「自分の商談」(自分が担当する商談)から始まります。赤と黄のチップは今すぐ対応すべきもの(期限切れ・本日期限・フォロー要・見積期限間近)です。灰色は「他者待ち」と「情報不足」(次のアクションや活動がない)です。チップを押すと下の一覧が期限順に絞り込まれ、もう一度押すと元に戻ります。行の最後は引合・見積・プロジェクトに進んだ商談の数です。",
       },
     },
     {
@@ -4532,9 +4532,9 @@ const CRM_FIND_WORK: Guide = {
       view: "crm-dashboard",
       title: { th: "ค้นหาและกรอง", en: "Search and filter", jp: "検索と絞り込み" },
       body: {
-        th: "พิมพ์ชื่อดีล ลูกค้า (ไทย อังกฤษ ญี่ปุ่น ชื่อย่อ หรือรหัส) หรือผู้รับผิดชอบ ช่องผู้รับผิดชอบพิมพ์ค้นหาในรายการได้ ชิป 'ดีลของฉัน' ด้านบนกรองเฉพาะดีลที่คุณดูแล ปุ่ม 'ล้างตัวกรอง' คืนรายการทั้งหมด",
-        en: "Type a deal, a customer (Thai, English, Japanese, short name or code) or an owner. The Owner list has its own search box. The My deals chip above shows only the deals you own, and Clear filters brings everything back.",
-        jp: "商談名、顧客(タイ語・英語・日本語・略称・コード)、担当者で検索します。担当者の一覧には専用の検索欄があります。上の「自分の商談」チップで自分の商談だけを表示し、「絞り込みを解除」で元に戻します。",
+        th: "พิมพ์ชื่อดีล ลูกค้า (ไทย อังกฤษ ญี่ปุ่น ชื่อย่อ หรือรหัส) หรือผู้รับผิดชอบ ช่องผู้รับผิดชอบพิมพ์ค้นหาในรายการได้ ปุ่ม 'ตัวกรอง' เก็บขั้นตอน การติดตาม การเรียง และ 'โอกาสขายที่ยังเปิด' ไว้ ตัวเลขบนปุ่มบอกว่าใช้อยู่กี่ตัว ปุ่ม 'ล้างตัวกรอง' คืนรายการทั้งหมด",
+        en: "Type a deal, a customer (Thai, English, Japanese, short name or code) or an owner. The Owner list has its own search box. The Filters button holds the stage, the follow-up, the sort order and Open opportunities; its number says how many are in use. Clear filters brings everything back.",
+        jp: "商談名、顧客(タイ語・英語・日本語・略称・コード)、担当者で検索します。担当者の一覧には専用の検索欄があります。「絞り込み」ボタンにはステージ・フォロー・並び順・「進行中の商談」があり、ボタンの数字は使用中の条件の数です。「絞り込みを解除」で元に戻します。",
       },
     },
     {

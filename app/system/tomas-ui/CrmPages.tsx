@@ -11,15 +11,24 @@
 import {
   Badge,
   Button,
-  Checkbox,
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
   Input,
   Label,
   NamedIcon,
   Notice,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
   SearchInput,
   Tabs,
   TabsList,
@@ -35,7 +44,7 @@ import { ProjectHandover } from "../production/ProjectHandover";
 import { CRM_COPY } from "../production/crm-copy";
 import { crmRequest, formatDay, formatMoment, teamOptions, text, useCrmData, useCrmPages, type CrmOption, type CrmPage, type CrmRecord } from "../production/crm-records";
 import { ConfigurationDialog, CrmFormDialog, EntityPicker, OpportunityDialog, type FieldSpec } from "./CrmForms";
-import { Chips, EmptyBlock, FilterSelect, LoadError, LoadingRows, OpenLink, RecordTable, Section, StatusBadge, SummaryBar, Toolbar, money, toneOf, type Column } from "./CrmKitParts";
+import { Chips, EmptyBlock, LoadError, LoadingRows, OpenLink, RecordTable, Section, StatusBadge, SummaryBar, Toolbar, money, toneOf, type Column } from "./CrmKitParts";
 import { ActivitiesPanel, ActivityEditor, ActivityTimeline, ContactsPanel, CustomerListPage, CustomerPage, DocumentsPanel, useCodeLabel, useTableStates } from "./CrmPeoplePages";
 import { TONE_BADGE } from "./tones";
 import { TomasUi } from "./TomasUi";
@@ -135,66 +144,71 @@ export function CrmPages(props: CrmPagesProps) {
     "crm-activities": "CRM.introActivities",
     "crm-pipeline": "CRM.introPipeline",
   };
-  const showNew = list && ["crm-dashboard", "crm-opportunities", "crm-pipeline"].includes(view);
+  // The deal views (dashboard, list, board) draw this head themselves, with their period picker in it.
+  const dealList = list && ["crm-dashboard", "crm-opportunities", "crm-pipeline"].includes(view);
   const back = () => {
     setOpportunityId(null);
     setCustomerId(null);
   };
+  /* One line: the page's name and what it is for on the left, its scope and actions on the right (owner 2026-11-27:
+     the dashboard's top was too busy). */
+  const head = (scope?: ReactNode) => (
+    <TomasUi>
+      <div className="grid gap-3">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div className="grid min-w-0 gap-1">
+            <h1 className="text-xl font-semibold text-foreground">{t(title)}</h1>
+            {list ? <p className="text-sm text-muted-foreground">{t(descriptions[view])}</p> : null}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {!list ? (
+              <Button type="button" variant="outline" onClick={back}>
+                <NamedIcon name="chevron-left" className="size-4" />
+                {t("CRM.back")}
+              </Button>
+            ) : null}
+            {scope}
+            {bootstrap.permissions.includes("crm.configure") && view === "crm-dashboard" && list ? (
+              <Button type="button" variant="ghost" size="icon" title={t("CRM.configuration")} aria-label={t("CRM.configuration")} onClick={() => setConfig(true)}>
+                <NamedIcon name="settings" className="size-4" />
+              </Button>
+            ) : null}
+            {write && dealList ? (
+              <Button type="button" data-guide="crm.new" onClick={() => setCreate(true)}>
+                <NamedIcon name="plus" className="size-4" />
+                {t("CRM.new")}
+              </Button>
+            ) : null}
+          </div>
+        </div>
+        {list && props.onViewChange && (view === "crm-opportunities" || view === "crm-pipeline") ? (
+          <div role="tablist" aria-label={t("CRM Opportunities")} className="inline-flex h-9 w-fit items-center gap-0.5 rounded-md bg-muted p-[3px]">
+            {(["crm-opportunities", "crm-pipeline"] as const).map((id) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                data-tab={id}
+                aria-selected={view === id}
+                onClick={() => props.onViewChange?.(id)}
+                className="h-full rounded-[4px] px-3 text-sm font-medium text-muted-foreground transition-colors aria-selected:bg-background aria-selected:text-foreground aria-selected:shadow-sm"
+              >
+                {t(id === "crm-opportunities" ? "CRM.listView" : "CRM.boardView")}
+              </button>
+            ))}
+          </div>
+        ) : null}
+        {options.error ? (
+          <div role="alert">
+            <Notice tone="error">{t("CRM.loadFailed")}</Notice>
+          </div>
+        ) : null}
+      </div>
+    </TomasUi>
+  );
   return (
     <div className="crm-workspace">
-      <TomasUi>
-        <div className="grid gap-3">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div className="grid min-w-0 gap-1">
-              <span className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">CRM &amp; SALES</span>
-              <h1 className="text-xl font-semibold text-foreground">{t(title)}</h1>
-              {list ? <p className="text-sm text-muted-foreground">{t(descriptions[view])}</p> : null}
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {!list ? (
-                <Button type="button" variant="outline" onClick={back}>
-                  <NamedIcon name="chevron-left" className="size-4" />
-                  {t("CRM.back")}
-                </Button>
-              ) : null}
-              {bootstrap.permissions.includes("crm.configure") && view === "crm-dashboard" && list ? (
-                <Button type="button" variant="outline" onClick={() => setConfig(true)}>
-                  <NamedIcon name="settings" className="size-4" />
-                  {t("CRM.configuration")}
-                </Button>
-              ) : null}
-              {write && showNew ? (
-                <Button type="button" data-guide="crm.new" onClick={() => setCreate(true)}>
-                  <NamedIcon name="plus" className="size-4" />
-                  {t("CRM.new")}
-                </Button>
-              ) : null}
-            </div>
-          </div>
-          {list && props.onViewChange && (view === "crm-opportunities" || view === "crm-pipeline") ? (
-            <div role="tablist" aria-label={t("CRM Opportunities")} className="inline-flex h-9 w-fit items-center gap-0.5 rounded-md bg-muted p-[3px]">
-              {(["crm-opportunities", "crm-pipeline"] as const).map((id) => (
-                <button
-                  key={id}
-                  type="button"
-                  role="tab"
-                  data-tab={id}
-                  aria-selected={view === id}
-                  onClick={() => props.onViewChange?.(id)}
-                  className="h-full rounded-[4px] px-3 text-sm font-medium text-muted-foreground transition-colors aria-selected:bg-background aria-selected:text-foreground aria-selected:shadow-sm"
-                >
-                  {t(id === "crm-opportunities" ? "CRM.listView" : "CRM.boardView")}
-                </button>
-              ))}
-            </div>
-          ) : null}
-          {options.error ? (
-            <div role="alert">
-              <Notice tone="error">{t("CRM.loadFailed")}</Notice>
-            </div>
-          ) : null}
-        </div>
-      </TomasUi>
+      {dealList ? null : head()}
       {opportunityId ? (
         <DealPage
           {...props}
@@ -222,7 +236,15 @@ export function CrmPages(props: CrmPagesProps) {
       ) : view === "crm-activities" ? (
         <ActivitiesPanel bootstrap={bootstrap} openOpportunity={setOpportunityId} openCustomer={setCustomerId} />
       ) : (
-        <DealListPage bootstrap={bootstrap} mode={view} options={options.data ?? []} open={setOpportunityId} openInquiry={props.openInquiry} onNew={write ? () => setCreate(true) : undefined} />
+        <DealListPage
+          bootstrap={bootstrap}
+          mode={view}
+          options={options.data ?? []}
+          head={head}
+          open={setOpportunityId}
+          openInquiry={props.openInquiry}
+          onNew={write ? () => setCreate(true) : undefined}
+        />
       )}
       {create ? <OpportunityEditor bootstrap={bootstrap} options={options.data ?? []} onClose={() => setCreate(false)} onSaved={(r) => setOpportunityId(Number(r.id))} /> : null}
       {config ? (
@@ -291,6 +313,7 @@ function DealListPage({
   bootstrap,
   mode,
   options,
+  head,
   open,
   openInquiry,
   onNew,
@@ -298,6 +321,8 @@ function DealListPage({
   bootstrap: BootstrapData;
   mode: CrmView;
   options: CrmRecord[];
+  /** The page head (CrmPages); the period picker sits in it, beside the page's actions. */
+  head: (scope: ReactNode) => ReactNode;
   open: (id: number) => void;
   openInquiry: (id: number) => void;
   onNew?: () => void;
@@ -429,14 +454,14 @@ function DealListPage({
     setOnlyOpen(cell ? cell.open : mode !== "crm-opportunities");
     setPage(1);
   };
-  const quick = owner === me && !attention ? "mine" : attention === "Actionable" ? "Actionable" : "";
-  const pickQuick = (key: string) => {
+  const mine = owner === me && !attention && !stage && !search;
+  const pickMine = () => {
     setSearch("");
     setStage("");
-    setOwner(key === "mine" ? me : "");
-    setAttention(key === "Actionable" ? "Actionable" : "");
+    setOwner(me);
+    setAttention("");
     setOnlyOpen(true);
-    setSort(key === "Actionable" ? "due" : "updated");
+    setSort("updated");
     setPage(1);
   };
   const pickAttention = (key: string) => {
@@ -488,6 +513,90 @@ function DealListPage({
     />
   );
   const total = Number(dash?.totalOpportunities ?? 0);
+  const undated = Number(dash?.undated ?? 0);
+  const scopeNote =
+    closeFrom || closeTo
+      ? `${t("CRM.periodScope")
+          .replace("{from}", formatDay(closeFrom, lang) || "…")
+          .replace("{to}", formatDay(closeTo, lang) || "…")}${undated ? ` · ${t("CRM.periodUndated").replace("{n}", String(undated))}` : ""}`
+      : "";
+  const periodLabel = period ? t(`CRM.period_${period}`) : `${formatDay(closeFrom, lang) || "…"} – ${formatDay(closeTo, lang) || "…"}`;
+  // The filters kept in the Filters menu; the button counts the ones in use.
+  const defaultOpen = mode !== "crm-opportunities";
+  const menuFilters = Number(Boolean(stage)) + Number(Boolean(attention)) + Number(onlyOpen !== defaultOpen);
+  const stageChoices = choice("stage");
+  const periodPicker = (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button type="button" variant="outline" data-guide="crm.closeRange" aria-label={`${t("CRM.closePeriod")}: ${periodLabel}`}>
+          <NamedIcon name="calendar" className="size-4" />
+          <span className="text-muted-foreground">{t("CRM.closeWithin")}:</span>
+          {periodLabel}
+          <NamedIcon name="chevron-down" className="size-4 text-muted-foreground" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="end"
+        className="grid w-80 max-w-[calc(100vw-2rem)] gap-3"
+        onOpenAutoFocus={(event) => {
+          // Focus lands on the period in use (or the first date when the dates were typed), never on a preset that is not.
+          const current = (event.currentTarget as HTMLElement | null)?.querySelector<HTMLElement>('[aria-checked="true"], input[type="date"]');
+          if (!current) return;
+          event.preventDefault();
+          current.focus();
+        }}
+      >
+        <strong className="text-sm font-semibold">{t("CRM.closePeriod")}</strong>
+        <div role="radiogroup" aria-label={t("CRM.closePeriod")} className="grid grid-cols-2 gap-1">
+          {PERIODS.map((key) => (
+            <button
+              key={key}
+              type="button"
+              role="radio"
+              aria-checked={period === key}
+              onClick={() => pickPeriod(key)}
+              className="h-8 rounded-md border px-2.5 text-left text-sm transition-colors hover:bg-muted aria-checked:border-primary aria-checked:bg-primary/10 aria-checked:font-medium"
+            >
+              {t(`CRM.period_${key}`)}
+            </button>
+          ))}
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <Label className="grid gap-1 text-xs text-muted-foreground">
+            {t("CRM.from")}
+            <Input
+              type="date"
+              className="h-8"
+              value={closeFrom}
+              max={closeTo || undefined}
+              onChange={(e) => {
+                setCloseFrom(e.target.value);
+                setPage(1);
+              }}
+            />
+          </Label>
+          <Label className="grid gap-1 text-xs text-muted-foreground">
+            {t("CRM.to")}
+            <Input
+              type="date"
+              className="h-8"
+              value={closeTo}
+              min={closeFrom || undefined}
+              onChange={(e) => {
+                setCloseTo(e.target.value);
+                setPage(1);
+              }}
+            />
+          </Label>
+        </div>
+        {scopeNote ? (
+          <p role="status" className="text-xs text-muted-foreground">
+            {scopeNote}
+          </p>
+        ) : null}
+      </PopoverContent>
+    </Popover>
+  );
   // Value and close date are two facts: each line says which one it is, and an empty one says "not specified" (CRM-15).
   const columns: Column<CrmRecord>[] = [
     ...(write
@@ -597,6 +706,7 @@ function DealListPage({
   ];
   return (
     <>
+      {head(periodPicker)}
       <TomasUi>
         <div className="grid gap-3">
           {dashboard.error ? (
@@ -604,60 +714,6 @@ function DealListPage({
               <Notice tone="error">{t("CRM.loadFailed")}</Notice>
             </div>
           ) : null}
-          {/* The period every count and list below reads (CRM-16: the reference date is the expected close). */}
-          <div className="grid gap-1.5" data-guide="crm.closeRange">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-semibold text-muted-foreground">{t("CRM.closePeriod")}</span>
-              <div role="radiogroup" aria-label={t("CRM.closePeriod")} className="inline-flex h-8 items-center gap-0.5 rounded-md bg-muted p-[3px]">
-                {PERIODS.map((key) => (
-                  <button
-                    key={key}
-                    type="button"
-                    role="radio"
-                    aria-checked={period === key}
-                    onClick={() => pickPeriod(key)}
-                    className="h-full rounded-[4px] px-2.5 text-xs font-medium text-muted-foreground transition-colors aria-checked:bg-background aria-checked:text-foreground aria-checked:shadow-sm"
-                  >
-                    {t(`CRM.period_${key}`)}
-                  </button>
-                ))}
-              </div>
-              <Label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                {t("CRM.from")}
-                <Input
-                  type="date"
-                  className="h-8 w-40"
-                  value={closeFrom}
-                  max={closeTo || undefined}
-                  onChange={(e) => {
-                    setCloseFrom(e.target.value);
-                    setPage(1);
-                  }}
-                />
-              </Label>
-              <Label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                {t("CRM.to")}
-                <Input
-                  type="date"
-                  className="h-8 w-40"
-                  value={closeTo}
-                  min={closeFrom || undefined}
-                  onChange={(e) => {
-                    setCloseTo(e.target.value);
-                    setPage(1);
-                  }}
-                />
-              </Label>
-            </div>
-            {closeFrom || closeTo ? (
-              <p role="status" className="text-xs text-muted-foreground">
-                {t("CRM.periodScope")
-                  .replace("{from}", formatDay(closeFrom, lang) || "…")
-                  .replace("{to}", formatDay(closeTo, lang) || "…")}
-                {Number(dash?.undated ?? 0) ? ` · ${t("CRM.periodUndated").replace("{n}", String(Number(dash?.undated ?? 0)))}` : ""}
-              </p>
-            ) : null}
-          </div>
           <SummaryBar
             label={t("CRM.salesStage")}
             guide="crm.summary"
@@ -670,67 +726,53 @@ function DealListPage({
             }))}
             onPick={pickCell}
           />
-          <Chips
-            label={t("CRM.pipelineOverview")}
-            items={[
-              { key: "mine", label: t("CRM.mine"), value: Number(dash?.mine ?? 0), tone: "blue" },
-              { key: "Actionable", label: t("CRM.Actionable"), value: Number(dash?.actionable ?? 0), tone: "amber" },
-            ]}
-            active={quick}
-            onPick={(key) => (key ? pickQuick(key) : clear(true))}
-          />
-          {mode === "crm-dashboard" ? (
-            <Section title={t("CRM.pipelineOverview")} subtitle={t("CRM.allScopeHint")}>
-              <div className="grid gap-4">
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-2" data-guide="crm.attention">
-                  <span className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">{t("CRM.urgentGroup")}</span>
-                  <Chips
-                    label={t("CRM.urgentGroup")}
-                    items={ATTENTION_KEYS.map((key) => ({ key, label: t(`CRM.${key}`), value: Number(dash?.[key] ?? 0), tone: toneOf(key) }))}
-                    active={ATTENTION_KEYS.includes(attention) ? attention : ""}
-                    onPick={pickAttention}
-                  />
-                  <span className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">{t("CRM.notUrgentGroup")}</span>
-                  <Chips
-                    label={t("CRM.notUrgentGroup")}
-                    quiet
-                    items={QUIET_KEYS.map((key) => ({ key, label: t(`CRM.${key}`), value: Number(dash?.[key] ?? 0), tone: toneOf(key) }))}
-                    active={QUIET_KEYS.includes(attention) ? attention : ""}
-                    onPick={pickAttention}
-                  />
-                </div>
-                {/* A funnel is only honest against a fixed denominator: each step is a share of every deal in scope. */}
-                <div className="grid gap-3 sm:grid-cols-3">
-                  {[
-                    { label: "CRM.convertedToInquiry", value: Number(dash?.convertedToInquiry ?? 0) },
-                    { label: "CRM.convertedToEstimate", value: Number(dash?.convertedToEstimate ?? 0) },
-                    { label: "CRM.convertedToProject", value: Number(dash?.convertedToProject ?? 0) },
-                  ].map((step) => {
-                    const share = total ? Math.round((step.value / total) * 100) : 0;
-                    return (
-                      <div key={step.label} className="grid gap-1.5">
-                        <span className="text-xs text-muted-foreground">{t(step.label)}</span>
-                        <strong className="flex items-baseline gap-2 text-lg font-semibold tabular-nums">
-                          {step.value}
-                          <em className="text-xs font-normal text-muted-foreground not-italic">{total ? `${share}%` : "—"}</em>
-                        </strong>
-                        <span className="h-1.5 rounded-full bg-muted">
-                          <span className="block h-full rounded-full bg-primary" style={{ width: `${share}%` }} />
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-                <p className="text-xs text-muted-foreground">{t("CRM.funnelBase").replace("{n}", String(total))}</p>
-                <p className="text-xs text-muted-foreground">
-                  {t("CRM.directInquiries")}: <strong className="text-foreground">{Number(dash?.directInquiries ?? 0)}</strong> · {t("CRM.directInquiriesHint")}
-                </p>
-              </div>
-            </Section>
-          ) : null}
+          {/* One row of chips, each the filter it counts: mine, then what needs doing now, then the quiet ones (CRM-08). */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2" data-guide="crm.attention">
+            <Chips
+              label={t("CRM.mine")}
+              items={[{ key: "mine", label: t("CRM.mine"), value: Number(dash?.mine ?? 0), tone: "blue" }]}
+              active={mine ? "mine" : ""}
+              onPick={(key) => (key ? pickMine() : clear(true))}
+            />
+            <span className="h-5 w-px bg-border max-sm:hidden" aria-hidden="true" />
+            <Chips
+              label={t("CRM.urgentGroup")}
+              items={ATTENTION_KEYS.map((key) => ({ key, label: t(`CRM.${key}`), value: Number(dash?.[key] ?? 0), tone: toneOf(key) }))}
+              active={ATTENTION_KEYS.includes(attention) ? attention : ""}
+              onPick={pickAttention}
+            />
+            <span className="h-5 w-px bg-border max-sm:hidden" aria-hidden="true" />
+            <Chips
+              label={t("CRM.notUrgentGroup")}
+              quiet
+              items={QUIET_KEYS.map((key) => ({ key, label: t(`CRM.${key}`), value: Number(dash?.[key] ?? 0), tone: toneOf(key) }))}
+              active={QUIET_KEYS.includes(attention) ? attention : ""}
+              onPick={pickAttention}
+            />
+            {mode === "crm-dashboard" ? (
+              /* A funnel is only honest against a fixed denominator: each step is a share of every deal in scope. */
+              <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground lg:ml-auto" title={t("CRM.funnelBase").replace("{n}", String(total))}>
+                <span className="font-medium">CRM →</span>
+                {[
+                  { label: "CRM.funnelInquiry", value: Number(dash?.convertedToInquiry ?? 0) },
+                  { label: "CRM.funnelEstimate", value: Number(dash?.convertedToEstimate ?? 0) },
+                  { label: "CRM.funnelProject", value: Number(dash?.convertedToProject ?? 0) },
+                ].map((step, index) => (
+                  <span key={step.label}>
+                    {index ? "· " : ""}
+                    {t(step.label)} <strong className="text-foreground tabular-nums">{step.value}</strong>
+                    {total ? ` (${Math.round((step.value / total) * 100)}%)` : ""}
+                  </span>
+                ))}
+                <span title={t("CRM.directInquiriesHint")}>
+                  · {t("CRM.directInquiries")} <strong className="text-foreground tabular-nums">{Number(dash?.directInquiries ?? 0)}</strong>
+                </span>
+              </p>
+            ) : null}
+          </div>
           <Toolbar guide="crm.filters">
             <SearchInput
-              className="w-72"
+              className="w-full sm:w-80"
               value={search}
               placeholder={t("CRM.search")}
               aria-label={t("CRM.search")}
@@ -739,17 +781,7 @@ function DealListPage({
                 setPage(1);
               }}
             />
-            <FilterSelect
-              label={t("CRM.stage")}
-              allLabel={t("CRM.allStages")}
-              value={stage}
-              options={choice("stage")}
-              onChange={(v) => {
-                setStage(v);
-                setPage(1);
-              }}
-            />
-            <div className="w-52">
+            <div className="w-full sm:w-52">
               <EntityPicker
                 ariaLabel={t("CRM.ownerId")}
                 placeholder={t("CRM.allOwners")}
@@ -762,36 +794,100 @@ function DealListPage({
                 }}
               />
             </div>
-            <FilterSelect label={t("CRM.sort")} value={sort} options={SORTS.map((o) => ({ value: o.value, label: t(o.label) }))} onChange={(v) => setSort(v || "updated")} className="w-44" />
-            <FilterSelect
-              label={t("CRM.Actionable")}
-              allLabel={t("CRM.allFollowups")}
-              value={attention}
-              options={ATTENTION_FILTERS.map((key) => ({ value: key, label: t(`CRM.${key}`) }))}
-              onChange={(v) => {
-                setAttention(v);
-                setPage(1);
-              }}
-            />
-            <Label className="flex items-center gap-2 text-sm">
-              <Checkbox
-                checked={onlyOpen}
-                onCheckedChange={(checked) => {
-                  setOnlyOpen(checked === true);
-                  setPage(1);
-                }}
-              />
-              {t("CRM.open")}
-            </Label>
+            {/* Stage, follow-up, sort and open-only: used less than the bar and the chips above, so one menu holds them. */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button type="button" variant="outline">
+                  <NamedIcon name="sliders-horizontal" className="size-4" />
+                  {t("CRM.filtersMenu")}
+                  {menuFilters ? (
+                    <Badge variant="secondary" className="ml-0.5 h-5 min-w-5 justify-center px-1 tabular-nums">
+                      {menuFilters}
+                    </Badge>
+                  ) : null}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-64">
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger>
+                    <span className="flex-1">{t("CRM.stage")}</span>
+                    <span className="truncate text-xs text-muted-foreground">{stage ? (stageChoices.find((o) => o.value === stage)?.label ?? label(stage)) : t("All")}</span>
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent className="max-h-80 overflow-y-auto">
+                    <DropdownMenuRadioGroup
+                      value={stage || "all"}
+                      onValueChange={(v) => {
+                        setStage(v === "all" ? "" : v);
+                        setPage(1);
+                      }}
+                    >
+                      <DropdownMenuRadioItem value="all">{t("All")}</DropdownMenuRadioItem>
+                      {stageChoices.map((o) => (
+                        <DropdownMenuRadioItem key={o.value} value={o.value}>
+                          {o.label}
+                        </DropdownMenuRadioItem>
+                      ))}
+                    </DropdownMenuRadioGroup>
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger>
+                    <span className="flex-1">{t("CRM.followupFilter")}</span>
+                    <span className="truncate text-xs text-muted-foreground">{attention ? t(`CRM.${attention}`) : t("All")}</span>
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent className="max-h-80 overflow-y-auto">
+                    <DropdownMenuRadioGroup
+                      value={attention || "all"}
+                      onValueChange={(v) => {
+                        setAttention(v === "all" ? "" : v);
+                        setPage(1);
+                      }}
+                    >
+                      <DropdownMenuRadioItem value="all">{t("All")}</DropdownMenuRadioItem>
+                      {ATTENTION_FILTERS.map((key) => (
+                        <DropdownMenuRadioItem key={key} value={key}>
+                          {t(`CRM.${key}`)}
+                        </DropdownMenuRadioItem>
+                      ))}
+                    </DropdownMenuRadioGroup>
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger>
+                    <span className="flex-1">{t("CRM.sort")}</span>
+                    <span className="truncate text-xs text-muted-foreground">{t(SORTS.find((o) => o.value === sort)?.label ?? "Last updated")}</span>
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent>
+                    <DropdownMenuRadioGroup value={sort} onValueChange={(v) => setSort(v || "updated")}>
+                      {SORTS.map((o) => (
+                        <DropdownMenuRadioItem key={o.value} value={o.value}>
+                          {t(o.label)}
+                        </DropdownMenuRadioItem>
+                      ))}
+                    </DropdownMenuRadioGroup>
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+                <DropdownMenuSeparator />
+                <DropdownMenuCheckboxItem
+                  checked={onlyOpen}
+                  onSelect={(event) => event.preventDefault()}
+                  onCheckedChange={(checked) => {
+                    setOnlyOpen(checked === true);
+                    setPage(1);
+                  }}
+                >
+                  {t("CRM.open")}
+                </DropdownMenuCheckboxItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             {filtered ? (
               <Button type="button" variant="ghost" size="sm" onClick={() => clear()}>
                 {t("CRM.clearFilters")}
               </Button>
             ) : null}
             <span className="flex-1" />
-            <Button type="button" variant="outline" onClick={refresh}>
+            <Button type="button" variant="ghost" size="icon" title={t("Refresh")} aria-label={t("Refresh")} onClick={refresh}>
               <NamedIcon name="refresh-cw" className="size-4" />
-              {t("Refresh")}
             </Button>
           </Toolbar>
           {board ? (
@@ -818,7 +914,7 @@ function DealListPage({
               empty={empty}
             />
           ) : (
-            <Section title={`${list.shown?.total ?? 0} ${t("CRM Opportunities")}`} subtitle={t("CRM.filteredResults")} guide="crm.deals" flush>
+            <Section title={`${list.shown?.total ?? 0} ${t("CRM Opportunities")}`} subtitle={scopeNote || t("CRM.filteredResults")} guide="crm.deals" flush>
               <RecordTable
                 label={t("CRM Opportunities")}
                 columns={columns}
