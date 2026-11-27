@@ -126,6 +126,22 @@ test("Original plan draws each phase's baseline under it; the year list sits bes
   assert.match(chart, /data-guide="project\.unit"/);
 });
 
+test("the timeline's controls sit on one row of 32 px lists and buttons; the colour key opens from its own button", async () => {
+  // Owner 2026-11-27: "ตรงนี้มันรกๆมากเลย".
+  const gantt = await source("app/system/production/ProjectPortfolioGantt.tsx");
+  assert.match(gantt, /<GanttToolbar\s+compact\s/, "the ranges are one list, not six chips");
+  assert.match(gantt, /const \[showLegend, setShowLegend\] = useState\(false\);/);
+  assert.match(gantt, /\{showLegend \? <GanttLegend /);
+  assert.match(gantt, /data-guide="project\.legend"/);
+  // Open or close the projects: one button that says which it will do.
+  assert.match(gantt, /expanded\.size \? \(\s*<button type="button" className="btn ghost sm" onClick=\{\(\) => setExpanded\(new Set\(\)\)\}>/);
+  const core = await source("app/system/production/CoreScreens.tsx");
+  assert.match(core, /className="btn ghost sm icon-only"\s+onClick=\{\(\) => changeSort\(sort\.key\)\}/);
+  const css = await source("app/system/production/project-portfolio.css");
+  assert.match(css, /\.portfolio-gantt \.portfolio-gantt-bar \.select-field select \{\s*height: 32px;/);
+  assert.match(css, /\.portfolio-gantt-search \{[^}]*flex: none;\s*width: 240px;/, "a fixed width, so the group does not wrap its last buttons");
+});
+
 test("a row keeps the height of its card when the chart scrolls, so the next row never covers the card's last line", async () => {
   // The chart is a flex column capped at 70vh: a row that may shrink is squeezed to its min-height once the projects
   // pass that height (owner 2026-11-26: "ตัวหนังสือมันยังซ้อนกันอยู่").

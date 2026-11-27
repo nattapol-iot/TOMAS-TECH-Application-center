@@ -61,6 +61,8 @@ export function ProjectPortfolioGantt({
   const [oneLine, setOneLine] = useState(true);
   // Each phase's original plan (its last frozen baseline) as a grey line under it.
   const [showBaseline, setShowBaseline] = useState(false);
+  // The colour key, under the bar when asked for; most people know it after a first look.
+  const [showLegend, setShowLegend] = useState(false);
   // A calendar year picked from the list, January to December; null is the window around the anchor.
   const [year, setYear] = useState<number | null>(null);
   // What a column stands for, when picked; null, or a unit the range cannot show readably, is the range's own.
@@ -276,23 +278,60 @@ export function ProjectPortfolioGantt({
 
   return (
     <div ref={fullscreenRef} className={`portfolio-gantt${fullscreen.active ? " is-fullscreen" : ""}${fullscreen.overlay ? " is-overlay" : ""}`}>
-      {controls}
+      {/* One row (owner 2026-11-27: "ตรงนี้มันรกๆมากเลย"): what is shown and in which order on the left, the task search and
+          the display toggles on the right, every control 32 px; the colour key opens from its own button. */}
       <div className="portfolio-gantt-bar">
-        <GanttToolbar
-          zoom={zoom}
-          onZoom={changeZoom}
-          onShift={(direction) => (year !== null ? setYear(year + direction) : setAnchor((value) => shiftGanttAnchor(zoom === "fit" ? "year" : zoom, value, direction)))}
-          onToday={() => {
-            setYear(null);
-            setAnchor(today);
-          }}
-          zooms={GANTT_LONG_ZOOMS}
-          year={{ value: year, options: yearOptions, onChange: pickYear }}
-          unit={{ value: shownUnit, options: unitChoices, onChange: setUnit }}
-        />
-        <div className="gantt-nav">
+        <div className="portfolio-gantt-group">
+          {controls}
+          <GanttToolbar
+            compact
+            zoom={zoom}
+            onZoom={changeZoom}
+            onShift={(direction) => (year !== null ? setYear(year + direction) : setAnchor((value) => shiftGanttAnchor(zoom === "fit" ? "year" : zoom, value, direction)))}
+            onToday={() => {
+              setYear(null);
+              setAnchor(today);
+            }}
+            zooms={GANTT_LONG_ZOOMS}
+            year={{ value: year, options: yearOptions, onChange: pickYear }}
+            unit={{ value: shownUnit, options: unitChoices, onChange: setUnit }}
+          />
+        </div>
+        <div className="portfolio-gantt-group">
           {canReadSchedule ? (
-            <>
+            <form
+              className="portfolio-gantt-search"
+              role="search"
+              onSubmit={(event) => {
+                void runSearch(event);
+              }}
+            >
+              <Icon name="search" />
+              <input
+                type="search"
+                value={taskQuery}
+                maxLength={100}
+                onChange={(event) => setTaskQuery(event.target.value)}
+                placeholder={t("Gantt.taskSearchShort")}
+                aria-label={t("Gantt.taskSearch")}
+                title={t("Gantt.taskSearchHint")}
+                disabled={searching}
+              />
+              {search ? (
+                <button className="icon-btn" type="button" onClick={clearSearch} aria-label={t("Gantt.clearSearch")} title={t("Gantt.clearSearch")}>
+                  <Icon name="x" />
+                </button>
+              ) : null}
+            </form>
+          ) : null}
+          {/* Open the projects shown, or close every open one: one button that says which it will do. */}
+          {canReadSchedule ? (
+            expanded.size ? (
+              <button type="button" className="btn ghost sm" onClick={() => setExpanded(new Set())}>
+                <Icon name="minus" />
+                {t("Gantt.collapseAll")}
+              </button>
+            ) : (
               <button
                 type="button"
                 className="btn ghost sm"
@@ -303,11 +342,7 @@ export function ProjectPortfolioGantt({
                 <Icon name="plus" />
                 {t("Gantt.expandVisible")}
               </button>
-              <button type="button" className="btn ghost sm" disabled={!expanded.size} onClick={() => setExpanded(new Set())}>
-                <Icon name="minus" />
-                {t("Gantt.collapseAll")}
-              </button>
-            </>
+            )
           ) : null}
           <button type="button" className="btn ghost sm" data-guide="project.oneLine" aria-pressed={oneLine} title={t("Gantt.oneLineHint")} onClick={() => setOneLine(!oneLine)}>
             <Icon name="minus" />
@@ -319,52 +354,45 @@ export function ProjectPortfolioGantt({
           </button>
           <button
             type="button"
-            className="btn ghost sm"
+            className="btn ghost sm icon-only"
+            data-guide="project.legend"
+            aria-pressed={showLegend}
+            aria-label={t("Gantt.legend")}
+            title={t("Gantt.legend")}
+            onClick={() => setShowLegend(!showLegend)}
+          >
+            <Icon name="help" />
+          </button>
+          <button
+            type="button"
+            className="btn ghost sm icon-only"
             aria-pressed={fullscreen.active}
+            aria-label={t(fullscreen.active ? "Gantt.exitFullScreen" : "Gantt.fullScreen")}
             title={t(fullscreen.active ? "Gantt.exitFullScreen" : "Gantt.fullScreen")}
             onClick={() => {
               void fullscreen.toggle();
             }}
           >
             <Icon name={fullscreen.active ? "minimize" : "maximize"} />
-            {t(fullscreen.active ? "Gantt.exitFullScreen" : "Gantt.fullScreen")}
           </button>
         </div>
-        <GanttLegend baseline={expanded.size > 0 || showBaseline} target />
       </div>
-      {canReadSchedule ? (
-        <form
-          className="portfolio-gantt-search"
-          role="search"
-          onSubmit={(event) => {
-            void runSearch(event);
-          }}
-        >
-          <input type="search" value={taskQuery} maxLength={100} onChange={(event) => setTaskQuery(event.target.value)} placeholder={t("Gantt.taskSearch")} aria-label={t("Gantt.taskSearch")} />
-          <button className="btn default sm" type="submit" disabled={searching || taskQuery.trim().length < 2}>
-            <Icon name="search" />
-            {t("Gantt.findTasks")}
-          </button>
-          {search ? (
-            <button className="btn ghost sm" type="button" onClick={clearSearch}>
-              <Icon name="x" />
-              {t("Gantt.clearSearch")}
-            </button>
-          ) : null}
-          {search && "error" in search ? (
+      {showLegend ? <GanttLegend baseline={expanded.size > 0 || showBaseline} target /> : null}
+      {search && ("error" in search || hits) ? (
+        <p className="portfolio-gantt-status">
+          {"error" in search ? (
             <span className="danger-text" role="alert">
               {search.error}
             </span>
-          ) : null}
-          {hits ? (
+          ) : (
             <span className="muted" role="status">
               {t("Gantt.searchResult").replace("{tasks}", String(shownTaskMatches)).replace("{projects}", String(visibleRows.length))}
               {hiddenMatches ? ` · ${t("Gantt.searchHidden").replace("{n}", String(hiddenMatches))}` : ""}
               {notOpened ? ` · ${t("Gantt.expandLimit").replace("{n}", String(EXPAND_LIMIT))}` : ""}
-              {search && "truncated" in search && search.truncated ? ` · ${t("Gantt.searchTruncated")}` : ""}
+              {search.truncated ? ` · ${t("Gantt.searchTruncated")}` : ""}
             </span>
-          ) : null}
-        </form>
+          )}
+        </p>
       ) : null}
       <GanttChart rows={ganttRows} range={range} today={today} sideHeader="Gantt.projectColumn" label="Gantt.portfolioLabel" />
     </div>
