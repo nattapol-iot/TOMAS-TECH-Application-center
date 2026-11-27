@@ -4,7 +4,7 @@
 
 ทะเบียนอุปกรณ์และซอฟต์แวร์ที่ติดตั้งให้ลูกค้า ผูกกับลูกค้า site โครงการ Site Monitor และ TMTHub พร้อมประวัติและประกัน
 
-Evidence: snapshot `fd82cb38`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
+Evidence: snapshot `04f7f8fd`; source map, not a live availability claim. Test candidates use filename matching and are not exhaustive coverage.
 
 ## Read only the operation you change
 
