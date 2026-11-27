@@ -89,6 +89,21 @@ test("summaries group task rows by project and weigh progress by work days, leav
   assert.equal(outcomes.get(5)!.summary.scheduleError, false);
 });
 
+test("each phase carries its heading's baseline dates for the timeline's original plan; a heading added since has none", () => {
+  const frozen = [
+    raw({ id: 61, project_id: 6, kind: "phase", name: "Design", plan_start: "2026-10-12", plan_days: 10, baseline_start: "2026-10-01", baseline_end: "2026-10-10", baseline_rev: 1 }),
+    raw({ id: 62, project_id: 6, kind: "phase", sort_order: 2, name: "Extra test", plan_start: "2026-10-26", plan_days: 5 }),
+  ];
+  const phases = summarizeProjects([{ id: 6, status: "Design", targetDelivery: null }], frozen.map(taskRow), new Set(), TODAY).get(6)!.summary.phases!;
+  assert.deepEqual(
+    phases.map((phase) => [phase.name, phase.start, phase.baselineStart, phase.baselineFinish]),
+    [
+      ["Design", "2026-10-12", "2026-10-01", "2026-10-10"],
+      ["Extra test", "2026-10-26", null, null],
+    ],
+  );
+});
+
 test("a project with only headings so far is measured on their dates", () => {
   const second = summarizeProjects(projects, rows.map(taskRow), new Set(), TODAY).get(2)!.summary;
   assert.equal(second.taskCount, 1);

@@ -12,6 +12,17 @@
   align-items: center;
   gap: 4px;
 }
+/* The calendar-year list beside the ranges (Projects timeline); blue while a year is picked. */
+.gantt-year-select select {
+  height: 28px;
+  font-size: var(--fs-xs);
+}
+.gantt-year-select.on select {
+  border-color: var(--blue);
+  color: var(--blue-text);
+  background-color: var(--blue-soft);
+  font-weight: 650;
+}
 
 .gantt-legend {
   display: flex;
@@ -630,6 +641,11 @@ button.gantt-label:focus-visible {
   border-radius: var(--r-pill);
   background: var(--n-300);
   pointer-events: none;
+}
+/* A phase's original plan, just under its bar (GanttSegment baselineStart / baselineFinish); top is set per lane. */
+.gantt-baseline.phase {
+  bottom: auto;
+  background: var(--n-400);
 }
 /* Days marked under a row's bars (GanttRowSpec.alerts): work that overlaps (amber) or is more than the person has (red). */
 .gantt-alert {

@@ -3028,6 +3028,18 @@ export const DICTIONARY: Record<string, Entry> = {
     th: "หัวข้อของแต่ละโปรเจกต์อยู่ในเส้นเดียว ถ้าปิด หัวข้อที่ช่วงวันทับกันจะซ้อนเป็นชั้น",
     jp: "各案件のフェーズを1行に表示。オフにすると期間が重なるフェーズを段に分けます",
   },
+  "Gantt.baseline": { en: "Original plan", th: "แผนเดิม", jp: "当初計画" },
+  "Gantt.baselineHint": {
+    en: "A grey line under each phase: its dates in the latest baseline. A project with no baseline yet has none",
+    th: "เส้นเทาใต้แต่ละหัวข้อคือช่วงวันตามแผนตั้งต้น (Baseline) ล่าสุด โปรเจกต์ที่ยังไม่มีแผนตั้งต้นจะไม่มีเส้นนี้",
+    jp: "各フェーズの下の灰色の線は、最新の基準計画（ベースライン）の期間です。基準計画がない案件には表示されません",
+  },
+  "Gantt.yearPick": { en: "Pick a year", th: "เลือกปี", jp: "年を選択" },
+  "Gantt.yearHint": {
+    en: "Shows one calendar year, January to December; a range button or Today goes back",
+    th: "แสดงทั้งปีปฏิทิน มกราคมถึงธันวาคม กดปุ่มช่วงเวลาหรือวันนี้เพื่อกลับ",
+    jp: "1暦年（1月〜12月）を表示します。期間ボタンか「今日」で戻ります",
+  },
   "Gantt.month": { en: "Month", th: "เดือน", jp: "月" },
   "Gantt.quarter": { en: "Quarter", th: "ไตรมาส", jp: "四半期" },
   "Gantt.half": { en: "Half-year", th: "ครึ่งปี", jp: "半年" },

@@ -31,8 +31,11 @@ export interface ProjectOverviewItem extends ProjectSummary {
   pendingRequests: number;
   /** Task doc 5.1: rows the plan Sheet lists under To follow up, each once (0 on a closed project). An older API omits it. */
   followUps?: number;
-  /** The plan's main headings with their dates (backend-node/src/project-overview.ts), for the timeline's one line. */
-  phases?: { id: number; name: string; start: string; finish: string; progress: number; milestone: boolean }[];
+  /**
+   * The plan's main headings with their dates (backend-node/src/project-overview.ts), for the timeline's one line;
+   * baselineStart / baselineFinish are the latest baseline's dates (null before one), the timeline's original plan.
+   */
+  phases?: { id: number; name: string; start: string; finish: string; progress: number; milestone: boolean; baselineStart?: string | null; baselineFinish?: string | null }[];
   /** Our own people's confirmed hours, and the hours budget (Estimate internal labor, else typed); null budget: none. */
   actualHours?: number;
   budgetHours?: number | null;

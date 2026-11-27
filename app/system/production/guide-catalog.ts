@@ -4408,6 +4408,22 @@ const PROJECT_OVERVIEW: Guide = {
       },
     },
     {
+      target: "project.baseline",
+      action: "next",
+      view: "projects",
+      title: { th: "ไทม์ไลน์: แผนเดิมและเลือกปี", en: "Timeline: original plan and year", jp: "タイムライン：当初計画と年の選択" },
+      body: {
+        th: "กด 'แผนเดิม' เพื่อแสดงเส้นเทาใต้แต่ละหัวข้อ คือช่วงวันตามแผนตั้งต้น (Baseline) ล่าสุดของแผนงาน ถ้าแถบสีอยู่ทางขวาของเส้นเทา แสดงว่าหัวข้อนั้นช้ากว่าแผนเดิม โปรเจกต์ที่ยังไม่มีแผนตั้งต้นจะไม่มีเส้นเทา (สร้างได้ที่แท็บแผนงาน ปุ่ม 'เพิ่มเติม' > 'สร้างแผนตั้งต้น') รายการ 'เลือกปี' ข้างปุ่มช่วงเวลาแสดงทั้งปีปฏิทินตั้งแต่มกราคมถึงธันวาคม ลูกศรซ้ายขวาเลื่อนทีละปี กดปุ่มช่วงเวลาหรือ 'วันนี้' เพื่อกลับ",
+        en: "Press Original plan to draw a grey line under each phase: its dates in the plan's latest baseline. A coloured bar to the right of its grey line is running later than the original plan. A project with no baseline yet has no grey lines (create one on the Plan tab: More > Create baseline). The Pick a year list beside the range buttons shows one calendar year, January to December; the arrows step a year at a time, and a range button or Today goes back.",
+        jp: "「当初計画」を押すと、各フェーズの下に灰色の線が表示されます。計画の最新の基準計画（ベースライン）の期間です。色のバーが灰色の線より右にあれば、そのフェーズは当初計画より遅れています。基準計画がない案件には灰色の線はありません（「Plan」タブの「その他」>「基準計画を作成」で作成できます）。期間ボタンの横の「年を選択」で1暦年（1月〜12月）を表示し、矢印で1年ずつ移動します。期間ボタンか「今日」で戻ります。",
+      },
+      missing: {
+        th: "กด 'ไทม์ไลน์' บนหัวหน้ารายการโปรเจกต์ก่อน หรือกด 'ถัดไป'",
+        en: "Press Timeline in the project list's header first, or press Next.",
+        jp: "先に案件一覧のヘッダーで「タイムライン」を押すか、「次へ」を押します。",
+      },
+    },
+    {
       target: "project.pmFilter",
       action: "next",
       view: "projects",

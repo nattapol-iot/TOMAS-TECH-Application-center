@@ -4,10 +4,12 @@
    headings as coloured, named phases (owner 2026-11-26), or one bar while it has none. A project's tasks load only when it is
    expanded. Clicking a project opens its plan; clicking a task opens the plan on that task. A task
    search (task name or person) finds rows across every project in scope and opens just those. The
-   whole block, sort controls included, can go full screen; opening a plan leaves full screen first. */
+   whole block, sort controls included, can go full screen; opening a plan leaves full screen first.
+   "Original plan" draws each phase's last frozen baseline as a grey line under it, and the year list shows one calendar
+   year, January to December (owner 2026-11-27). */
 
 import { useCallback, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { ganttWindow, shiftGanttAnchor } from "../../../lib/gantt";
+import { calendarYearWindow, ganttWindow, ganttYears, shiftGanttAnchor } from "../../../lib/gantt";
 import { customerShort, phaseColor } from "../../../lib/gantt-phase-colors";
 import { apiRequest } from "../api-client";
 import { currentLocale, useT } from "../i18n";
@@ -56,6 +58,10 @@ export function ProjectPortfolioGantt({
   const [zoom, setZoom] = useState<GanttZoomChoice>("year");
   // The phases on one line, overlapping ones over each other; off, overlapping phases stack.
   const [oneLine, setOneLine] = useState(true);
+  // Each phase's original plan (its last frozen baseline) as a grey line under it.
+  const [showBaseline, setShowBaseline] = useState(false);
+  // A calendar year picked from the list, January to December; null is the window around the anchor.
+  const [year, setYear] = useState<number | null>(null);
   const dayText = useMemo(() => new Intl.DateTimeFormat(currentLocale(), { day: "numeric", month: "short", timeZone: "UTC" }), []);
   const day = (iso: string | null) => (iso ? dayText.format(new Date(`${iso.slice(0, 10)}T00:00:00Z`)) : null);
   const [anchor, setAnchor] = useState(today);
@@ -64,7 +70,26 @@ export function ProjectPortfolioGantt({
   const [taskQuery, setTaskQuery] = useState("");
   const [search, setSearch] = useState<TaskSearch | null>(null);
   const [searching, setSearching] = useState(false);
-  const range = useMemo(() => ganttWindow(zoom === "fit" ? "year" : zoom, anchor), [zoom, anchor]);
+  const range = useMemo(() => (year !== null ? calendarYearWindow(year) : ganttWindow(zoom === "fit" ? "year" : zoom, anchor)), [year, zoom, anchor]);
+  const yearText = useMemo(() => new Intl.DateTimeFormat(currentLocale(), { year: "numeric", timeZone: "UTC" }), []);
+  // The years the projects shown run through, this year included; a year the arrows stepped to stays listed.
+  const yearOptions = useMemo(() => {
+    const years = ganttYears(
+      rows.flatMap((item) => [item.planStart, item.planFinish, item.targetDelivery]),
+      today,
+    );
+    if (year !== null && !years.includes(year)) years.push(year);
+    return years.sort((a, b) => a - b).map((value) => ({ value, label: yearText.format(new Date(Date.UTC(value, 0, 1))) }));
+  }, [rows, today, yearText, year]);
+  // A range button or Today leaves the picked year; the arrows step a year at a time while one is picked.
+  const changeZoom = (next: GanttZoomChoice) => {
+    setYear(null);
+    setZoom(next);
+  };
+  const pickYear = (next: number | null) => {
+    setYear(next);
+    if (next !== null) setZoom("year");
+  };
 
   const load = useCallback(
     async (projectId: number) => {
@@ -174,7 +199,10 @@ export function ProjectPortfolioGantt({
                 label: phase.name,
                 color: color.fill,
                 ink: color.ink,
-                title: `${phase.name} · ${day(phase.start)} – ${day(phase.finish)} · ${phase.progress}%`,
+                title: `${phase.name} · ${day(phase.start)} – ${day(phase.finish)} · ${phase.progress}%${
+                  phase.baselineStart && phase.baselineFinish ? ` · ${t("Gantt.baseline")} ${day(phase.baselineStart)} – ${day(phase.baselineFinish)}` : ""
+                }`,
+                ...(showBaseline ? { baselineStart: phase.baselineStart ?? null, baselineFinish: phase.baselineFinish ?? null } : {}),
                 ...(openPlan ? { onOpen: () => openPlan(item.id, phase.id) } : {}),
               };
             }),
@@ -243,7 +271,16 @@ export function ProjectPortfolioGantt({
     <div ref={fullscreenRef} className={`portfolio-gantt${fullscreen.active ? " is-fullscreen" : ""}${fullscreen.overlay ? " is-overlay" : ""}`}>
       {controls}
       <div className="portfolio-gantt-bar">
-        <GanttToolbar zoom={zoom} onZoom={setZoom} onShift={(direction) => setAnchor((value) => shiftGanttAnchor(zoom === "fit" ? "year" : zoom, value, direction))} onToday={() => setAnchor(today)} />
+        <GanttToolbar
+          zoom={zoom}
+          onZoom={changeZoom}
+          onShift={(direction) => (year !== null ? setYear(year + direction) : setAnchor((value) => shiftGanttAnchor(zoom === "fit" ? "year" : zoom, value, direction)))}
+          onToday={() => {
+            setYear(null);
+            setAnchor(today);
+          }}
+          year={{ value: year, options: yearOptions, onChange: pickYear }}
+        />
         <div className="gantt-nav">
           {canReadSchedule ? (
             <>
@@ -267,6 +304,10 @@ export function ProjectPortfolioGantt({
             <Icon name="minus" />
             {t("Gantt.oneLine")}
           </button>
+          <button type="button" className="btn ghost sm" data-guide="project.baseline" aria-pressed={showBaseline} title={t("Gantt.baselineHint")} onClick={() => setShowBaseline(!showBaseline)}>
+            <Icon name="compare" />
+            {t("Gantt.baseline")}
+          </button>
           <button
             type="button"
             className="btn ghost sm"
@@ -280,7 +321,7 @@ export function ProjectPortfolioGantt({
             {t(fullscreen.active ? "Gantt.exitFullScreen" : "Gantt.fullScreen")}
           </button>
         </div>
-        <GanttLegend baseline={expanded.size > 0} target />
+        <GanttLegend baseline={expanded.size > 0 || showBaseline} target />
       </div>
       {canReadSchedule ? (
         <form
