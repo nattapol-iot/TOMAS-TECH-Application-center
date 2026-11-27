@@ -24,6 +24,7 @@ import {
   ganttSpan,
   type GanttDrop,
   type GanttWindow,
+  type GanttUnit,
   type GanttZoom,
 } from "../../../lib/gantt";
 import { currentLocale, useT } from "../i18n";
@@ -134,7 +135,16 @@ export function scheduleTone(item: { status: string; planFinish: string | null; 
 }
 
 export type GanttZoomChoice = GanttZoom | "fit";
-const ZOOM_LABEL: Record<GanttZoomChoice, string> = { week: "Gantt.week", month: "Gantt.month", quarter: "Gantt.quarter", half: "Gantt.half", year: "Gantt.year", fit: "Gantt.fit" };
+const ZOOM_LABEL: Record<GanttZoomChoice, string> = {
+  week: "Gantt.week",
+  month: "Gantt.month",
+  quarter: "Gantt.quarter",
+  half: "Gantt.half",
+  year: "Gantt.year",
+  twoYears: "Gantt.twoYears",
+  fit: "Gantt.fit",
+};
+const UNIT_LABEL: Record<GanttUnit, string> = { day: "Gantt.unitDay", week: "Gantt.unitWeek", month: "Gantt.unitMonth", quarter: "Gantt.unitQuarter" };
 
 /** Zoom presets, earlier / later and back to today. "Fit" shows a project's whole plan. */
 export function GanttToolbar({
@@ -144,7 +154,9 @@ export function GanttToolbar({
   onToday,
   allowFit = false,
   compact = false,
+  zooms,
   year,
+  unit,
 }: {
   zoom: GanttZoomChoice;
   onZoom: (zoom: GanttZoomChoice) => void;
@@ -153,11 +165,15 @@ export function GanttToolbar({
   allowFit?: boolean;
   /** One list instead of a button per range, where the row of controls is short of room (Projects > Plan). */
   compact?: boolean;
+  /** The range buttons, when not the five zooms (the Projects timeline adds two years). */
+  zooms?: readonly GanttZoomChoice[];
   /** A list of calendar years beside the ranges; picking one shows January to December (the Projects timeline). */
   year?: { value: number | null; options: { value: number; label: string }[]; onChange: (year: number | null) => void };
+  /** What one column stands for (daily … quarterly), among the units that stay readable over the range shown. */
+  unit?: { value: GanttUnit; options: readonly GanttUnit[]; onChange: (unit: GanttUnit) => void };
 }) {
   const t = useT();
-  const choices: GanttZoomChoice[] = allowFit ? ["fit", ...GANTT_ZOOMS] : [...GANTT_ZOOMS];
+  const choices: GanttZoomChoice[] = zooms ? [...zooms] : allowFit ? ["fit", ...GANTT_ZOOMS] : [...GANTT_ZOOMS];
   return (
     <div className="gantt-toolbar" role="group" aria-label={t("Gantt.zoom")}>
       {compact ? (
@@ -187,6 +203,18 @@ export function GanttToolbar({
             {year.options.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
+              </option>
+            ))}
+          </select>
+          <Icon name="chevronDown" />
+        </label>
+      ) : null}
+      {unit ? (
+        <label className="select-field gantt-unit-select" data-guide="project.unit">
+          <select value={unit.value} aria-label={t("Gantt.unit")} title={t("Gantt.unitHint")} onChange={(event) => unit.onChange(event.target.value as GanttUnit)}>
+            {unit.options.map((option) => (
+              <option key={option} value={option}>
+                {t(UNIT_LABEL[option])}
               </option>
             ))}
           </select>
@@ -358,15 +386,20 @@ export function GanttChart({
 }) {
   const t = useT();
   const locale = currentLocale();
-  const columnLabel = (start: string, kind: "day" | "week" | "month") =>
-    new Intl.DateTimeFormat(
-      locale,
-      kind === "day"
-        ? { weekday: "short", day: "numeric", timeZone: "UTC" }
-        : kind === "week"
-          ? { day: "numeric", month: "short", timeZone: "UTC" }
-          : { month: "short", year: "2-digit", timeZone: "UTC" },
-    ).format(new Date(`${start}T00:00:00Z`));
+  const columnLabel = (start: string, kind: GanttUnit) =>
+    kind === "quarter"
+      ? // Q1 70: only the year's digits, the reader's calendar (พ.ศ. 70 would not fit a quarter's column on a phone).
+        `Q${Math.floor((Number(start.slice(5, 7)) - 1) / 3) + 1} ${
+          new Intl.DateTimeFormat(locale, { year: "2-digit", timeZone: "UTC" }).formatToParts(new Date(`${start}T00:00:00Z`)).find((part) => part.type === "year")?.value ?? start.slice(2, 4)
+        }`
+      : new Intl.DateTimeFormat(
+          locale,
+          kind === "day"
+            ? { weekday: "short", day: "numeric", timeZone: "UTC" }
+            : kind === "week"
+              ? { day: "numeric", month: "short", timeZone: "UTC" }
+              : { month: "short", year: "2-digit", timeZone: "UTC" },
+        ).format(new Date(`${start}T00:00:00Z`));
   const dayLabel = (date: string) => new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${date}T00:00:00Z`));
   const todayAt = ganttPoint(today, range);
   const deliveryAt = ganttPoint(deliveryTarget, range);

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { calendarYearWindow, ganttYears } from "../lib/gantt.ts";
+import { calendarYearWindow, ganttColumns, ganttUnitChoices, ganttWindow, ganttYears, shiftGanttAnchor } from "../lib/gantt.ts";
 import { customerShort, phaseColor } from "../lib/gantt-phase-colors.ts";
 
 // The Projects timeline as the Application team's summary (owner 2026-11-26): a card per project and its main headings as
@@ -60,6 +60,40 @@ test("a picked year shows January to December, a column a month", () => {
   assert.equal(calendarYearWindow(2028).days, 366, "a leap year");
 });
 
+test("2 years: 24 months around today, or two calendar years from a picked one; the arrows move 20 months", () => {
+  const rolling = ganttWindow("twoYears", "2026-11-27");
+  assert.equal(rolling.start, "2026-09-01");
+  assert.equal(rolling.end, "2028-08-31");
+  assert.equal(rolling.columns.length, 24);
+  const picked = calendarYearWindow(2026, 2);
+  assert.equal(picked.start, "2026-01-01");
+  assert.equal(picked.end, "2027-12-31");
+  assert.equal(shiftGanttAnchor("twoYears", "2026-11-27", 1), "2028-07-01");
+});
+
+test("a window can be drawn by day, week, month or quarter; only units of 2 to 31 columns are offered", () => {
+  const year = calendarYearWindow(2026);
+  assert.deepEqual(
+    ganttColumns(year, "quarter").map((column) => [column.start, column.end]),
+    [
+      ["2026-01-01", "2026-03-31"],
+      ["2026-04-01", "2026-06-30"],
+      ["2026-07-01", "2026-09-30"],
+      ["2026-10-01", "2026-12-31"],
+    ],
+  );
+  // A window that starts mid-quarter still begins with that whole quarter; the chart clips it.
+  assert.equal(ganttColumns(ganttWindow("year", "2026-11-27"), "quarter")[0].start, "2026-07-01");
+  // Weeks start on Monday, even before the window.
+  assert.equal(ganttColumns({ start: "2026-11-04", end: "2026-11-30" }, "week")[0].start, "2026-11-02");
+  assert.deepEqual(ganttUnitChoices(year), ["month", "quarter"], "52 weeks are too many for a year");
+  assert.deepEqual(ganttUnitChoices(calendarYearWindow(2026, 2)), ["month", "quarter"]);
+  assert.deepEqual(ganttUnitChoices(ganttWindow("week", "2026-11-27")), ["day", "week"], "no half-month columns in two weeks");
+  assert.deepEqual(ganttUnitChoices(ganttWindow("month", "2026-11-27")), ["week"], "42 days are too many day columns");
+  assert.deepEqual(ganttUnitChoices(ganttWindow("quarter", "2026-11-27")), ["week", "month"]);
+  assert.deepEqual(ganttUnitChoices(ganttWindow("half", "2026-11-27")), ["week", "month", "quarter"]);
+});
+
 test("the year list runs from the earliest date to the latest with this year in it, a stray date kept from stretching it", () => {
   assert.deepEqual(ganttYears(["2025-03-01", "2027-06-30", null], "2026-11-27"), [2025, 2026, 2027]);
   assert.deepEqual(ganttYears([], "2026-11-27"), [2026], "no projects: this year alone");
@@ -76,13 +110,20 @@ test("Original plan draws each phase's baseline under it; the year list sits bes
   assert.match(gantt, /<GanttLegend baseline=\{expanded\.size > 0 \|\| showBaseline\} target \/>/);
   assert.match(gantt, /year=\{\{ value: year, options: yearOptions, onChange: pickYear \}\}/);
   // A range button or Today leaves the picked year; the arrows step a year while one is picked.
-  assert.match(gantt, /const changeZoom = \(next: GanttZoomChoice\) => \{\s*setYear\(null\);\s*setZoom\(next\);/);
+  assert.match(gantt, /const changeZoom = \(next: GanttZoomChoice\) => \{\s*if \(next !== "year" && next !== "twoYears"\) setYear\(null\);\s*setZoom\(next\);/);
+  // 2 years and the column unit (owner 2026-11-27).
+  assert.match(gantt, /calendarYearWindow\(year, zoom === "twoYears" \? 2 : 1\)/);
+  assert.match(gantt, /zooms=\{GANTT_LONG_ZOOMS\}/);
+  assert.match(gantt, /unit=\{\{ value: shownUnit, options: unitChoices, onChange: setUnit \}\}/);
+  assert.match(gantt, /const shownUnit: GanttUnit = unit !== null && unitChoices\.includes\(unit\) \? unit : baseWindow\.columns\[0\]!\.kind;/);
   assert.match(gantt, /year !== null \? setYear\(year \+ direction\)/);
   const chart = await source("app/system/production/GanttChart.tsx");
   assert.match(chart, /className="gantt-baseline phase"/);
   assert.match(chart, /<label className=\{`select-field gantt-year-select\$\{year\.value === null \? "" : " on"\}`\} data-guide="project\.year">/);
   const guides = await source("app/system/production/guide-catalog.ts");
   assert.match(guides, /target: "project\.baseline",/);
+  assert.match(guides, /target: "project\.unit",/);
+  assert.match(chart, /data-guide="project\.unit"/);
 });
 
 test("a row keeps the height of its card when the chart scrolls, so the next row never covers the card's last line", async () => {
